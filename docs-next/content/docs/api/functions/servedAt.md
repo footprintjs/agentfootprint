@@ -6,7 +6,7 @@ title: servedAt
 
 > **servedAt**(`source`, `epoch`): [`ServedView`](/docs/api/interfaces/ServedView) \| `undefined`
 
-Defined in: src/lib/time-travel/servedView.ts:1041
+Defined in: [src/lib/time-travel/servedView.ts:1041](https://github.com/footprintjs/agentfootprint/blob/main/src/lib/time-travel/servedView.ts#L1041)
 
 Rebuild what the model was SERVED on epoch `k`, from the run's committed
 pieces alone.

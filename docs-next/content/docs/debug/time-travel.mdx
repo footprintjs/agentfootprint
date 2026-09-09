@@ -32,12 +32,21 @@ cursor.stops.map((s) => `${s.label} · ${milestoneOf(s)?.kind ?? s.kind}`);
 ```
 
 Five kinds, and they are the domain's, not the chart's: `iteration` · `slot` ·
-`llm-turn` · `tool-call` · `decision`. `milestoneOf(stop)` is how you read the
-kind back off a stop — footprintjs's `Stop` has no slot for a consumer's own
-vocabulary, so the kind is re-derived from the stop's `runtimeStageId` by the
-same classifier that put it on the axis. A stage that classifies as none of them
-gets no stop; its commits fold into the stop before it, so nothing is lost from
-`stateAt` — it just stops being a place the slider can land.
+`llm-turn` · `tool-call` · `decision`. The milestone **rides on the stop**: every
+stop this strategy makes is a `Stop<Milestone>`, so `stop.meta?.kind` is typed
+and `milestoneOf(stop)` reads that same slot (and, for a stop from another
+strategy that carries no milestone, falls back to classifying the stop's
+`runtimeStageId`). A stage that classifies as none of them gets no stop; its
+commits fold into the stop before it, so nothing is lost from `stateAt` — it
+just stops being a place the slider can land.
+
+Under the hood the strategy is one filter over footprintjs's own stop grammar —
+`filterStops(commitStops(log, tree), keep)`, the composer footprintjs 9.18
+shipped — so there is exactly one owner of the `[start, …stages, end]`
+contract, the re-partition and the vocabulary slot: the library that returns
+the axis. The axis itself did not move between 9.88 and 9.89; a test drives a
+verbatim copy of the old implementation over every recorded fixture and
+requires agreement on every stop and every fold.
 
 <Callout type="warn" title="What `'start'` means on this axis">
 On footprintjs's own per-stage axis, `'start'` is the fold *base*: the state
@@ -46,7 +55,10 @@ milestone — and an agent seeds a couple of dozen keys in `seed` first. Measure
 on a two-turn run: `commitStops`' start folds no commits and 0 keys; this one
 folds the first commit and 32. So `stateAt(startStop)` is **the state the first
 milestone read**, not the run's raw base. Right for an axis whose stops must
-still partition the log; wrong to assume from `kind === 'start'` alone.
+still partition the log; wrong to assume from `kind === 'start'` alone — so the
+start says it: `cursor.stops[0].prologue === true` whenever it absorbed a stage
+(footprintjs 9.18's flag). A renderer that means "before anything ran" checks
+`kind === 'start' && !prologue`.
 </Callout>
 
 ## Why this and not "one stop per stage"
@@ -187,9 +199,41 @@ of quoted.
 `messageDigestInput(message)` is what a message's hash covers — role, text, the
 join keys that pair a tool result to its call (`toolCallId` *and* `toolName`:
 two shipped providers join on the name), any signed thinking blocks, and, for an
-assistant turn, the calls it asked for. Import them rather than writing a fourth
-copy of the rule: checking a rebuild with your own hash proves your hash, not
-the record.
+assistant turn, the calls it asked for. `toolDigestInput(tool)` is what a tool
+schema's hash covers — the whole `LLMToolSchema` as sorted-key JSON, with a
+schema JSON cannot express marked rather than dropped. Import them rather than
+writing a fourth copy of the rule: checking a rebuild with your own hash proves
+your hash, not the record.
+
+### Verify every row from outside
+
+Each digest takes exactly the object a served view already holds, so a panel
+that shows a receipt can mark every row Verified without reaching into this
+package:
+
+```ts
+import { receiptAt, receiptHash, servedAt, messageDigestInput, toolDigestInput } from 'agentfootprint';
+
+const view = servedAt(snapshot, 1)!;
+const receipt = receiptAt(snapshot, 1)!;
+const hash = (input: string) => receiptHash(receipt.basis.runId, input);
+
+hash(view.system.text) === receipt.system.hash;                                  // system
+view.system.pieces.every((p, i) => hash(p.text) === receipt.system.pieces[i].hash); // pieces
+view.messages.asSent.every((m, i) => hash(messageDigestInput(m)) === receipt.messages.entries[i].hash); // messages
+view.tools.schemas.every((t) => hash(toolDigestInput(t)) === receipt.tools.schemaHashes[t.name]);       // schemas
+```
+
+The last line is new in 9.89.0. Until then a consumer could prove everything
+the model was served *except* the tools' schemas: the receipt hashed each one
+through a serializer the package did not export, so a schema row could never
+read Verified without copying the rule — and a copy is a second owner that
+drifts the day the digest changes. `toolDigestInput` is the only spelling of
+that rule; the receipt builder calls it too. Pass `servedAt(k).tools.schemas[i]`
+— the schema as the port was handed it — not a `Tool` definition, which carries
+fields the model never saw. A forced answer tool is in `schemaHashes` and not
+in `schemas`; its body is the declared `forced-tool-schema` gap, so there is no
+row to check.
 
 A gap is a `ServedGap` — `{ gap, fields, why, cause? }` — and its `gap` is a
 `ServedGapKind`. `fields` is a list because one missing fact can leave several

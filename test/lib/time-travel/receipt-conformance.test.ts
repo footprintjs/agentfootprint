@@ -63,6 +63,7 @@ import {
   receiptHash,
   servedAt,
   servedViews,
+  toolDigestInput,
   RECEIPT_BOUNDARY,
   SERVED_GAPS,
   UNGAPPED_FIELDS,
@@ -287,7 +288,7 @@ function failuresAt(snapshot: Snapshot, epoch: number, request: LLMRequest | und
     note('tools.withheld', `${receipt.tools.withheld} != ${view.tools.withheld ?? null}`);
   }
   for (const schema of view.tools.schemas) {
-    if (receipt.tools.schemaHashes[schema.name] !== hash(stableJson(schema))) {
+    if (receipt.tools.schemaHashes[schema.name] !== hash(toolDigestInput(schema))) {
       note(`tools.schemaHashes[${schema.name}]`, 'schema hash differs');
     }
   }
@@ -1677,5 +1678,57 @@ describe('the receipt off switch', () => {
   it('the default is ON — an agent that says nothing gets one', async () => {
     const r = await run('dynamic', [answer('done')], (a) => a.system('bot'));
     expect(receiptAt(r.snapshot, 1)).toBeDefined();
+  });
+});
+
+// ─── (j) THE SCHEMA LAW — the third digest half, on real runs (9.89.0) ──
+
+describe('the schema law: a consumer can verify every schemaHashes row from outside', () => {
+  // 9.88.0 exported `receiptHash` and `messageDigestInput`, so the system text,
+  // the pieces and the messages of a served view could be proved against the
+  // receipt from outside this package. The tool schemas could not: their rows
+  // were minted through a serializer the barrel did not export. This is the
+  // law for that third row, on the object a consumer actually holds —
+  // `servedAt(k).tools.schemas[i]` — for every tool of every epoch.
+  for (const reactMode of ['dynamic', 'dynamic-grouped'] as const) {
+    it(`${reactMode}: receiptHash(runId, toolDigestInput(tool)) === schemaHashes[tool.name], every tool, every epoch`, async () => {
+      const r = await run(
+        reactMode,
+        [call('c1', 'alpha_tool'), call('c2', 'beta_tool'), answer('done')],
+        (a) => a.system('s').tool(tool('alpha_tool')).tool(tool('beta_tool')),
+      );
+      const views = servedViews(r.snapshot);
+      expect(views.length).toBeGreaterThan(1);
+      let checked = 0;
+      for (const view of views) {
+        const receipt = receiptAt(r.snapshot, view.epoch)!;
+        expect(receipt).toBeDefined();
+        for (const served of view.tools.schemas) {
+          expect(receiptHash(receipt.basis.runId, toolDigestInput(served))).toBe(
+            receipt.tools.schemaHashes[served.name],
+          );
+          checked += 1;
+        }
+        // Nothing hashed that the view cannot show: with no forced tool, the
+        // receipt's rows and the served schemas are the same set of names.
+        expect(Object.keys(receipt.tools.schemaHashes).sort()).toEqual(
+          view.tools.schemas.map((s) => s.name).sort(),
+        );
+      }
+      expect(checked).toBeGreaterThan(0);
+    });
+  }
+
+  it('a schema that changed between two epochs is caught: the row from epoch 1 does not verify epoch 2', async () => {
+    const r = await run('dynamic', [call('c1', 'alpha_tool'), answer('done')], (a) =>
+      a.system('s').tool(tool('alpha_tool')),
+    );
+    const view = servedAt(r.snapshot, 1)!;
+    const receipt = receiptAt(r.snapshot, 1)!;
+    const served = view.tools.schemas[0]!;
+    const edited: LLMToolSchema = { ...served, description: `${served.description} (edited)` };
+    expect(receiptHash(receipt.basis.runId, toolDigestInput(edited))).not.toBe(
+      receipt.tools.schemaHashes[served.name],
+    );
   });
 });

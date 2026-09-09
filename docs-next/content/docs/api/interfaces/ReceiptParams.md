@@ -4,7 +4,7 @@ title: ReceiptParams
 
 # Interface: ReceiptParams
 
-Defined in: src/lib/time-travel/receipt.ts:259
+Defined in: [src/lib/time-travel/receipt.ts:259](https://github.com/footprintjs/agentfootprint/blob/main/src/lib/time-travel/receipt.ts#L259)
 
 The sampling knobs the call went out with — scalars and short strings, no
 bytes, no privacy change.
@@ -46,7 +46,7 @@ receiptAt(snapshot, 1)?.params.stop;        // undefined: none was sent
 
 > `readonly` `optional` **maxTokens?**: `number`
 
-Defined in: src/lib/time-travel/receipt.ts:261
+Defined in: [src/lib/time-travel/receipt.ts:261](https://github.com/footprintjs/agentfootprint/blob/main/src/lib/time-travel/receipt.ts#L261)
 
 ***
 
@@ -54,7 +54,7 @@ Defined in: src/lib/time-travel/receipt.ts:261
 
 > `readonly` `optional` **stop?**: readonly `string`[]
 
-Defined in: src/lib/time-travel/receipt.ts:264
+Defined in: [src/lib/time-travel/receipt.ts:264](https://github.com/footprintjs/agentfootprint/blob/main/src/lib/time-travel/receipt.ts#L264)
 
 ***
 
@@ -62,7 +62,7 @@ Defined in: src/lib/time-travel/receipt.ts:264
 
 > `readonly` `optional` **temperature?**: `number`
 
-Defined in: src/lib/time-travel/receipt.ts:260
+Defined in: [src/lib/time-travel/receipt.ts:260](https://github.com/footprintjs/agentfootprint/blob/main/src/lib/time-travel/receipt.ts#L260)
 
 ***
 
@@ -70,7 +70,7 @@ Defined in: src/lib/time-travel/receipt.ts:260
 
 > `readonly` `optional` **thinkingBudget?**: `number`
 
-Defined in: src/lib/time-travel/receipt.ts:263
+Defined in: [src/lib/time-travel/receipt.ts:263](https://github.com/footprintjs/agentfootprint/blob/main/src/lib/time-travel/receipt.ts#L263)
 
 `LLMRequest.thinking.budget` — the reasoning-token ceiling asked for.
 
@@ -80,7 +80,7 @@ Defined in: src/lib/time-travel/receipt.ts:263
 
 > `readonly` `optional` **toolChoice?**: `object`
 
-Defined in: src/lib/time-travel/receipt.ts:266
+Defined in: [src/lib/time-travel/receipt.ts:266](https://github.com/footprintjs/agentfootprint/blob/main/src/lib/time-travel/receipt.ts#L266)
 
 The forced tool choice, as the port carried it.
 

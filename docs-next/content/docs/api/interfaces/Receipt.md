@@ -4,7 +4,7 @@ title: Receipt
 
 # Interface: Receipt
 
-Defined in: src/lib/time-travel/receipt.ts:290
+Defined in: [src/lib/time-travel/receipt.ts:290](https://github.com/footprintjs/agentfootprint/blob/main/src/lib/time-travel/receipt.ts#L290)
 
 THE RECEIPT. One per composed request, committed at the call-llm stop.
 
@@ -26,7 +26,7 @@ receipt?.params.temperature;    // the dial this turn went out on
 
 > `readonly` **basis**: `object`
 
-Defined in: src/lib/time-travel/receipt.ts:343
+Defined in: [src/lib/time-travel/receipt.ts:343](https://github.com/footprintjs/agentfootprint/blob/main/src/lib/time-travel/receipt.ts#L343)
 
 #### epoch
 
@@ -50,7 +50,7 @@ Defined in: src/lib/time-travel/receipt.ts:343
 
 > `readonly` **cache**: `object`
 
-Defined in: src/lib/time-travel/receipt.ts:309
+Defined in: [src/lib/time-travel/receipt.ts:309](https://github.com/footprintjs/agentfootprint/blob/main/src/lib/time-travel/receipt.ts#L309)
 
 #### markersApplied
 
@@ -89,7 +89,7 @@ Hash of the request the cache strategy handed back, when it differed
 
 > `readonly` **messages**: `object`
 
-Defined in: src/lib/time-travel/receipt.ts:296
+Defined in: [src/lib/time-travel/receipt.ts:296](https://github.com/footprintjs/agentfootprint/blob/main/src/lib/time-travel/receipt.ts#L296)
 
 #### count
 
@@ -109,7 +109,7 @@ Defined in: src/lib/time-travel/receipt.ts:296
 
 > `readonly` `optional` **omittedForAttention?**: `ReceiptAttentionOmission`
 
-Defined in: src/lib/time-travel/receipt.ts:342
+Defined in: [src/lib/time-travel/receipt.ts:342](https://github.com/footprintjs/agentfootprint/blob/main/src/lib/time-travel/receipt.ts#L342)
 
 Absent when no slot reported a drop — which, measured on 9.88.0, is EVERY
 run in both chart shapes: no boundary bubbles `slotCompositions` out of the
@@ -124,7 +124,7 @@ nobody recorded a drop, never that nothing was dropped.
 
 > `readonly` **params**: [`ReceiptParams`](/docs/api/interfaces/ReceiptParams)
 
-Defined in: src/lib/time-travel/receipt.ts:333
+Defined in: [src/lib/time-travel/receipt.ts:333](https://github.com/footprintjs/agentfootprint/blob/main/src/lib/time-travel/receipt.ts#L333)
 
 The sampling knobs the call went out with — see [ReceiptParams](/docs/api/interfaces/ReceiptParams).
 
@@ -134,7 +134,7 @@ The sampling knobs the call went out with — see [ReceiptParams](/docs/api/inte
 
 > `readonly` **system**: `object`
 
-Defined in: src/lib/time-travel/receipt.ts:291
+Defined in: [src/lib/time-travel/receipt.ts:291](https://github.com/footprintjs/agentfootprint/blob/main/src/lib/time-travel/receipt.ts#L291)
 
 #### chars
 
@@ -154,7 +154,7 @@ Defined in: src/lib/time-travel/receipt.ts:291
 
 > `readonly` **tools**: `object`
 
-Defined in: src/lib/time-travel/receipt.ts:301
+Defined in: [src/lib/time-travel/receipt.ts:301](https://github.com/footprintjs/agentfootprint/blob/main/src/lib/time-travel/receipt.ts#L301)
 
 #### forced
 

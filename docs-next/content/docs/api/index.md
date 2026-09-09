@@ -612,6 +612,7 @@ title: agentfootprint
 - [swarm](/docs/api/functions/swarm)
 - [tokenBudget](/docs/api/functions/tokenBudget)
 - [toolContractCheckup](/docs/api/functions/toolContractCheckup)
+- [toolDigestInput](/docs/api/functions/toolDigestInput)
 - [toolSessionKey](/docs/api/functions/toolSessionKey)
 - [toolSessionsOf](/docs/api/functions/toolSessionsOf)
 - [topK](/docs/api/functions/topK)

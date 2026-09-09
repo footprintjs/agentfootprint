@@ -6,7 +6,7 @@ title: UNGAPPED_FIELDS
 
 > `const` **UNGAPPED\_FIELDS**: `Readonly`\<`Record`\<`string`, `string`\>\>
 
-Defined in: src/lib/time-travel/servedView.ts:658
+Defined in: [src/lib/time-travel/servedView.ts:658](https://github.com/footprintjs/agentfootprint/blob/main/src/lib/time-travel/servedView.ts#L658)
 
 The fields no gap names, and the reason each one needs none — the OTHER half
 of the account.

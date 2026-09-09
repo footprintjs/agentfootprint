@@ -6,7 +6,7 @@ title: FoldBasis
 
 > **FoldBasis** = `"initial+log"` \| `"log-only"`
 
-Defined in: src/lib/time-travel/keyedFold.ts:65
+Defined in: [src/lib/time-travel/keyedFold.ts:65](https://github.com/footprintjs/agentfootprint/blob/main/src/lib/time-travel/keyedFold.ts#L65)
 
 How a fold was derived — footprintjs's own two answers, restated here so a
 caller of this module does not have to import the engine's trace barrel to

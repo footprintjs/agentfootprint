@@ -23,6 +23,7 @@ export { keyedFold, type FoldBasis, type FoldSourceLike, type KeyedFold } from '
 export {
   buildReceipt,
   messageDigestInput,
+  toolDigestInput,
   receiptHash,
   stableJson,
   FORCED_OUTPUT_TOOL_KEY,

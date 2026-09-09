@@ -8,16 +8,26 @@
  *        it), and `conventions.ts` · `milestoneFor` for the domain vocabulary.
  * Emits: N/A.
  *
- * WHY THIS FILE EXISTS. footprintjs 9.17 ships the reader's cursor
- * (`timeTravel`) and one stop grammar — `commitStops`, one stop per executed
- * stage — because that is the only grammar the substrate itself knows. It does
- * NOT know what an LLM turn is. agentfootprint does: `milestoneFor` has
- * classified a local stage id into an iteration / slot / llm-turn / tool-call /
- * decision since 9.x, and until now every consumer that wanted a milestone
- * slider mapped that classifier onto commits by hand. The Why Lens did it one
- * way; anyone else with a recording had to write it again. This is that
- * mapping, once, on the strategy seam the port opened — so the agent SUPPLIES
- * the stops for its own runs and every reader gets the same axis.
+ * WHY THIS FILE EXISTS. footprintjs ships the reader's cursor (`timeTravel`)
+ * and one stop grammar — `commitStops`, one stop per executed stage — because
+ * that is the only grammar the substrate itself knows. It does NOT know what an
+ * LLM turn is. agentfootprint does: `milestoneFor` has classified a local stage
+ * id into an iteration / slot / llm-turn / tool-call / decision since 9.x, and
+ * until 9.87 every consumer that wanted a milestone slider mapped that
+ * classifier onto commits by hand. This is that mapping, once, on the strategy
+ * seam the port opened — so the agent SUPPLIES the stops for its own runs and
+ * every reader gets the same axis.
+ *
+ * WHAT IT IS (9.89.0). A FILTER over the port's own axis. footprintjs 9.18
+ * shipped `filterStops(stops, keep)` — the bookend guard, the re-partition and
+ * a `meta` slot on the stop — because two consumers had each re-derived all
+ * three by hand against 9.17, this file among them. The hand-rolled copies are
+ * gone: the one owner of the `[start, …stages, end]` contract is the library
+ * that returns it, and this strategy is one expression over it. The axis is
+ * byte-for-byte the 9.88.0 axis (`test/lib/time-travel/milestone-stops-equivalence.test.ts` pins
+ * that against a verbatim copy of the 9.88.0 implementation); what is new is that the milestone now RIDES on the
+ * stop as `meta`, and that a start which absorbed pre-milestone stages says so
+ * with `prologue: true`.
  *
  * WHAT IT IS NOT. Not a second cursor. A strategy only says where the one
  * cursor may rest; `timeTravel` still owns the position, the folds and the
@@ -27,23 +37,37 @@
  */
 
 import type { CommitBundle, StageSnapshot } from 'footprintjs/advanced';
-import { commitStops } from 'footprintjs/trace';
+import { commitStops, filterStops } from 'footprintjs/trace';
 import type { Stop, TimeTravelStrategy } from 'footprintjs/trace';
-import { milestoneFor, type Milestone } from '../../conventions.js';
+import { milestoneFor, type Milestone, type MilestoneKind } from '../../conventions.js';
+
+const MILESTONE_KINDS: readonly MilestoneKind[] = [
+  'iteration',
+  'slot',
+  'llm-turn',
+  'tool-call',
+  'decision',
+];
+
+/** Is this `meta` a {@link Milestone} — ours, not another strategy's? */
+function isMilestone(meta: unknown): meta is Milestone {
+  if (meta === null || typeof meta !== 'object') return false;
+  const { kind, label } = meta as { kind?: unknown; label?: unknown };
+  return typeof label === 'string' && (MILESTONE_KINDS as readonly unknown[]).includes(kind);
+}
 
 /**
  * The milestone a stop stands for, or `null` when it stands for none (the
  * `'start'` / `'end'` bookends).
  *
- * WHY A FUNCTION AND NOT A FIELD. footprintjs's `Stop` is a closed shape —
- * `step`, `runtimeStageId`, `commitIdx`, `lastCommitIdx`, `stageId`,
- * `subflowPath`, `label`, `kind` — with no extension slot a strategy may write
- * its own vocabulary into, and `kind` is the port's own `StopKind`
- * (`'commit' | 'mount' | 'start' | 'end'`), not ours to overload. So the
- * milestone kind travels the only way it honestly can: re-derived from the
- * stop's `runtimeStageId`, by the same classifier that put the stop on the
- * axis. Same input, same function, same answer — there is no second source of
- * truth here, only a second reading of the one there is.
+ * A stop that {@link milestoneStops} made carries its milestone as
+ * `stop.meta`, and that is what is read — the classification the strategy
+ * made when it put the stop on the axis, not a second run of the classifier.
+ * A stop from ANOTHER strategy — the port's own `commitStops`, or a consumer's
+ * filter that kept the stop without a milestone meta — has none, so the answer
+ * falls back to where it always came from: `milestoneFor` over the stop's
+ * `runtimeStageId`. Same classifier, same answer; a `meta` of some other
+ * vocabulary is not mistaken for ours.
  *
  * @example
  * ```ts
@@ -51,7 +75,8 @@ import { milestoneFor, type Milestone } from '../../conventions.js';
  * milestoneOf(stop)?.kind;   // 'llm-turn'
  * ```
  */
-export function milestoneOf(stop: Stop): Milestone | null {
+export function milestoneOf(stop: Stop<unknown>): Milestone | null {
+  if (isMilestone(stop.meta)) return stop.meta;
   return stop.runtimeStageId ? milestoneFor(stop.runtimeStageId) : null;
 }
 
@@ -67,9 +92,11 @@ export function milestoneOf(stop: Stop): Milestone | null {
  * parallel fork child commits twice and siblings interleave — every repeat is
  * an empty bundle), the authoritative mount set read off the execution tree,
  * the `'start'` / `'end'` bookends, and the id-less leading commit that carries
- * a subflow's `inputMapper` seed. This function calls `commitStops` and filters
- * its result. A second implementation of that collapsing would be a second
- * chance to disagree with the library about what a stage is.
+ * a subflow's `inputMapper` seed. And since 9.89.0 the COMPOSITION itself is
+ * the port's too: `filterStops` checks the `[start, …stages, end]` shape,
+ * keeps what `keep` keeps, and re-partitions the log. A second implementation
+ * of any of that would be a second chance to disagree with the library about
+ * what a stage is.
  *
  * **The survivors re-partition the log.** A stage that classifies `null` is not
  * a stop, but its commits still happened, so they are folded into the stop that
@@ -80,14 +107,21 @@ export function milestoneOf(stop: Stop): Milestone | null {
  * so on a drilled cursor `'start'` reads as "what this subflow began with,
  * after its plumbing ran".
  *
- * **What that costs `'start'`.** On footprintjs's own axis `'start'` is the fold
- * base: the state before ANY stage ran. Here it absorbs every stage that ran
- * before the first milestone, so `stateAt(start)` is the state the first
- * milestone READ, not the run's raw base — a real agent seeds a couple of dozen
- * keys in `seed` before anything a reader would scrub to. That is the right
- * answer for this axis (the stops must still partition the log) and the wrong
- * one to assume from `kind: 'start'` alone, so it is said out loud here, in the
- * folder README, on the docs page and in a test.
+ * **What that costs `'start'`, and the flag that says so.** On footprintjs's
+ * own axis `'start'` is the fold base: the state before ANY stage ran. Here it
+ * absorbs every stage that ran before the first milestone, so `stateAt(start)`
+ * is the state the first milestone READ, not the run's raw base — a real agent
+ * seeds a couple of dozen keys in `seed` before anything a reader would scrub
+ * to. That is the right answer for this axis (the stops must still partition
+ * the log), and since 9.18 the port marks it: the returned start carries
+ * `prologue: true` whenever it absorbed a stage, so a renderer that means
+ * "before anything ran" checks `kind === 'start' && !prologue` instead of
+ * assuming it from the kind.
+ *
+ * **The milestone rides on the stop.** Every kept stop carries its
+ * classification as `meta` — `Stop<Milestone>` — so a reader asks
+ * `stop.meta?.kind` (or {@link milestoneOf}, which reads the same slot) rather
+ * than re-running the classifier over the id. The bookends carry none.
  *
  * **A log with no milestones in it at all.** A non-empty log the classifier
  * recognises nothing in — a non-agent chart handed this strategy — yields the
@@ -115,79 +149,32 @@ export function milestoneOf(stop: Stop): Milestone | null {
  * @example
  * ```ts
  * import { timeTravel } from 'footprintjs/trace';
- * import { milestoneStopsStrategy, milestoneOf } from 'agentfootprint';
+ * import { milestoneStopsStrategy } from 'agentfootprint';
  *
  * const cursor = timeTravel(agent.getSnapshot()!, { strategy: milestoneStopsStrategy });
- * cursor.stops.map((s) => [s.label, milestoneOf(s)?.kind]);
+ * cursor.stops.map((s) => [s.label, s.meta?.kind]);
  * // measured on a two-turn `dynamic` run — 42 commits, 15 stops:
  * // [['Run start', undefined], ['Iteration', 'iteration'],
  * //  ['System prompt', 'slot'], ['Messages', 'slot'], ['Tools', 'slot'],
  * //  ['LLM turn', 'llm-turn'], ['Route', 'decision'], ['Tool call', 'tool-call'],
  * //  … the second turn …, ['Run end', undefined]]
+ * cursor.stops[0].prologue; // true — `seed` and the plumbing ran before the first Iteration
  * ```
  */
 export function milestoneStops(
   commitLog: readonly CommitBundle[],
   executionTree?: StageSnapshot,
-): Stop[] {
-  const perStage = commitStops(commitLog, executionTree);
-  if (perStage.length === 0) return [];
-
-  // `commitStops` guarantees the shape [start, …stages, end] for a non-empty
-  // log. The bookends are kept verbatim in KIND and re-partitioned below; only
-  // the stages in between are filtered.
-  //
-  // CHECK THE PROPERTY, NOT MERE PRESENCE. `Stop[]` does not pin that shape in
-  // the type, and everything below rests on it: `'start'` is the only stop that
-  // may open at `-1` (the fold base no commit index reaches) and `'end'` is the
-  // only one that folds the whole log. If a future `commitStops` returned some
-  // other shape, a presence check would take the first and last STAGE stops for
-  // bookends — the first would silently inherit start's `-1` arithmetic and keep
-  // its raw stage label, and the last milestone would lose its milestone label.
-  // Refusing loudly is the honest answer: an empty axis would be
-  // indistinguishable from "this run committed nothing", which is a different
-  // fact about a different run.
-  const [start, ...rest] = perStage;
-  const end = rest.pop();
-  if (!start || start.kind !== 'start' || !end || end.kind !== 'end') {
-    throw new Error(
-      'milestoneStops: commitStops returned an unexpected shape — expected ' +
-        `[start, …stages, end], got kinds [${perStage.map((s) => s.kind).join(', ')}]. ` +
-        'This is a footprintjs contract change, not something a run can cause.',
-    );
-  }
-
-  const kept = rest
-    .map((stop) => ({ stop, milestone: milestoneFor(stop.runtimeStageId) }))
-    .filter((row): row is { stop: Stop; milestone: Milestone } => row.milestone !== null);
-
-  const first = kept[0];
-  const stops: Stop[] = [
-    {
-      ...start,
-      step: 0,
-      // Everything before the first milestone folds into `'start'`.
-      lastCommitIdx: (first ? first.stop.commitIdx : commitLog.length) - 1,
-    },
-  ];
-
-  for (const [i, { stop, milestone }] of kept.entries()) {
-    const next = kept[i + 1];
-    stops.push({
-      ...stop,
-      step: stops.length,
-      // Absorb the non-milestone stages that ran after this one.
-      lastCommitIdx: next ? next.stop.commitIdx - 1 : commitLog.length - 1,
-      label: milestone.label,
-    });
-  }
-
-  stops.push({ ...end, step: stops.length });
-  return stops;
+): Stop<Milestone>[] {
+  return filterStops<Milestone>(commitStops(commitLog, executionTree), (stop) => {
+    const milestone = milestoneFor(stop.runtimeStageId);
+    return milestone ? { label: milestone.label, meta: milestone } : null;
+  });
 }
 
 /**
  * `milestoneStops` as a footprintjs `TimeTravelStrategy` — what you hand
- * `timeTravel(snapshot, { strategy })`.
+ * `timeTravel(snapshot, { strategy })`. Typed over {@link Milestone}, so the
+ * cursor's stops are `Stop<Milestone>` and `cursor.at()?.meta?.kind` is typed;
+ * it is still assignable wherever a bare `TimeTravelStrategy` is expected.
  */
-export const milestoneStopsStrategy: TimeTravelStrategy = { stopsFor: milestoneStops };
+export const milestoneStopsStrategy: TimeTravelStrategy<Milestone> = { stopsFor: milestoneStops };

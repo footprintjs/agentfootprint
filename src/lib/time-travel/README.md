@@ -27,7 +27,8 @@ import { milestoneStopsStrategy, milestoneOf } from 'agentfootprint';
 
 const cursor = timeTravel(agent.getSnapshot()!, { strategy: milestoneStopsStrategy });
 
-cursor.stops.map((s) => `${s.label} (${milestoneOf(s)?.kind ?? s.kind})`);
+cursor.stops.map((s) => `${s.label} (${s.meta?.kind ?? s.kind})`);
+// `s.meta` IS the milestone — `milestoneOf(s)` reads the same slot.
 // The whole axis of a two-turn run, measured (examples/observability/23-…):
 // ['Run start (start)',
 //  'Iteration (iteration)', 'System prompt (slot)', 'Messages (slot)',
@@ -54,15 +55,39 @@ a live one.
 
 ### 1. Composed from the per-stage axis, never re-derived
 
-`milestoneStops` calls footprintjs's `commitStops` and filters the result. The
-hard parts of that axis are already solved upstream and are deliberately not
-repeated here: **one stop per `runtimeStageId`, at its first commit** (a subflow
-mount commits twice, a parallel fork child commits twice and siblings
+`milestoneStops` is one expression over the port's own stop grammar:
+
+```ts
+filterStops<Milestone>(commitStops(commitLog, executionTree), (stop) => {
+  const m = milestoneFor(stop.runtimeStageId);
+  return m ? { label: m.label, meta: m } : null;
+});
+```
+
+The hard parts of that axis are already solved upstream and are deliberately
+not repeated here: **one stop per `runtimeStageId`, at its first commit** (a
+subflow mount commits twice, a parallel fork child commits twice and siblings
 interleave — every repeat after the first is an empty bundle), the mount set
 read off the execution tree, the `'start'` / `'end'` bookends, and the id-less
 leading commit that carries a subflow's `inputMapper` seed. A second
 implementation of that collapsing would be a second chance to disagree with the
 library about what a stage is.
+
+**Why a filter and not a loop (9.89.0).** Until 9.88.0 this file also carried
+its own bookend guard, its own re-partition loop, and a `milestoneOf` that
+re-ran the classifier at every read — because footprintjs 9.17's `Stop` had no
+slot for a consumer's vocabulary and the `[start, …stages, end]` shape was not
+stated anywhere the type could see. footprintjs 9.18 stated it once
+(its `splitAxis`, in its own `axis.ts`) and shipped `filterStops` as the composition over it,
+with `Stop.meta` for the vocabulary and `Stop.prologue` for the absorbing
+start. Two consumers had re-derived all three by hand against 9.17; this was
+one of them. Now the ONE owner of the axis contract is the library that returns
+the axis, and the strategy here can only say which stages it keeps. The axis a
+9.88.0 consumer scrubbed is byte-for-byte the axis it still scrubs —
+`test/lib/time-travel/milestone-stops-equivalence.test.ts` drives a verbatim
+copy of the 9.88.0 implementation over every recorded fixture and asserts
+agreement on every stop and every fold; the only differences are `meta` and
+`prologue`, and both are asserted present and right.
 
 ### 2. A stage that classifies `null` folds into the stop before it
 
@@ -84,8 +109,19 @@ run's raw base, and a renderer keyed on `kind === 'start'` to show "what the run
 began with" is showing post-seed state. Measured on a two-turn `dynamic` run:
 footprintjs's `'start'` folds commits `-1..-1` and 0 keys; this one folds
 `-1..0` and 32. That is the right answer for an axis whose stops must still
-partition the log, and the wrong thing to assume from the `kind` alone — so it
-is pinned by a test rather than left to be discovered.
+partition the log, and the wrong thing to assume from the `kind` alone — so
+since 9.89.0 the start SAYS so: it carries `prologue: true` whenever it absorbed
+a stage (footprintjs 9.18's flag, set by `filterStops`), and a renderer that
+means "before anything ran" checks `kind === 'start' && !prologue`. On an axis
+where the first stage IS a milestone the flag is absent, and the start is the
+raw base it always was.
+
+```ts
+const start = cursor.stops[0]!;
+start.kind;      // 'start'
+start.prologue;  // true — `seed` and the plumbing ran before the first Iteration
+cursor.stateAt(start).state.userMessage; // 'go' — already seeded
+```
 
 **A log with no milestones in it at all.** A non-empty log the classifier
 recognises nothing in — a non-agent footprintjs chart handed this strategy —
@@ -148,6 +184,51 @@ receipt.basis.model;              // the model that answered
 // the law
 receiptHash(receipt.basis.runId, view.system.text) === receipt.system.hash; // true
 ```
+
+### Verify from outside — the three digest halves
+
+A reader that holds a served view and a receipt can prove every row of the
+receipt without this package's internals, because the three digest rules the
+receipt was minted with are exported beside `receiptHash`. Each takes exactly
+the object a served view already holds:
+
+| receipt row | served object | digest input |
+|---|---|---|
+| `system.hash`, `system.pieces[i].hash` | `view.system.text`, `view.system.pieces[i].text` | the text itself |
+| `messages.entries[i].hash`, `messages.requestOnly[i].hash` | `view.messages.asSent[i]`, `{ role, content: text }` | `messageDigestInput(message)` |
+| `tools.schemaHashes[name]` | `view.tools.schemas[i]` | `toolDigestInput(tool)` (9.89.0) |
+
+```ts
+import { receiptAt, receiptHash, servedAt, messageDigestInput, toolDigestInput } from 'agentfootprint';
+
+const view = servedAt(snapshot, 1)!;
+const receipt = receiptAt(snapshot, 1)!;
+const hash = (input: string) => receiptHash(receipt.basis.runId, input);
+
+hash(view.system.text) === receipt.system.hash;                                  // true
+view.messages.asSent.every((m, i) => hash(messageDigestInput(m)) === receipt.messages.entries[i].hash); // true
+view.tools.schemas.every((t) => hash(toolDigestInput(t)) === receipt.tools.schemaHashes[t.name]);       // true
+```
+
+**Why `toolDigestInput` exists (9.89.0).** 9.88.0 exported the first two rules
+and a consumer could prove everything the model was served except the tools'
+schemas: the receipt hashed each schema through a serializer the barrel did not
+export, so a consumer's schema rows could never read Verified — its only
+options were to copy the serializer (a second owner of the rule, which drifts
+the day the digest gains a field, as the message digest did in 9.88.0) or to
+leave the rows unchecked. The helper is the ONLY spelling of the schema rule:
+`buildReceipt` calls it too. It takes an `LLMToolSchema` — the tool as handed
+to the port, which is what `servedAt(k).tools.schemas` reads back — never a
+`Tool` definition, which carries `execute` and other fields the model never
+saw. A schema JSON cannot express (a `BigInt`; a cycle) digests to the
+`UNSERIALIZABLE` mark on both sides and never throws — the `BigInt` is the
+worked example: a cyclic schema is refused by footprintjs's `deepEqual` in the
+subflow outputMapper before any receipt is minted under `dynamic-grouped`, a
+substrate limit rather than a hole in the rule. A forced answer tool is
+in `schemaHashes` and NOT in `schemas`; its body is the declared
+`forced-tool-schema` gap, so there is no row to check and nothing to claim.
+`stableJson` stays off the root barrel on purpose: `hash(stableJson(tool))`
+would be the rule written a second time.
 
 `epochAt` / `epochLocations` are the one owner of *where* an epoch's pieces
 live — the run's own log under `reactMode: 'dynamic'`, the turn's inner

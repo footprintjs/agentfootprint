@@ -1,20 +1,24 @@
 /**
- * milestoneStops — the ONE assumption it makes about footprintjs.
+ * milestoneStops — the ONE assumption it makes about footprintjs, and whose
+ * guard it is now.
  *
  * `milestoneStops` composes `commitStops` rather than re-deriving the
  * per-stage axis, which is the right trade — and it buys that reuse with a
  * shape assumption the `Stop[]` return type does not pin: for a non-empty log
- * the result is `[start, …stages, end]`. Every index in this file's arithmetic
- * rests on it: `'start'` is the only stop allowed to open at `-1`, and `'end'`
- * is the only one that folds the whole log.
+ * the result is `[start, …stages, end]`. `'start'` is the only stop allowed
+ * to open at `-1`, and `'end'` is the only one that folds the whole log.
  *
- * So the assumption is CHECKED, not assumed, and this file is the check on the
- * check. `commitStops` is mocked to return shapes a future footprintjs could
- * plausibly return, and the claim is that each one is REFUSED loudly rather
- * than silently producing an axis that looks right and reads wrong.
+ * Until 9.89.0 this file's own guard checked that shape. footprintjs 9.18
+ * stated the invariant once, in `axis.ts` · `splitAxis`, and `filterStops`
+ * refuses on it — so the hand-rolled guard is gone and the PORT's is the one
+ * that fires. This file is the check on that check from the consumer's side:
+ * `commitStops` is mocked to return shapes a future footprintjs could
+ * plausibly return, and the claim is that each one is still REFUSED loudly
+ * through `milestoneStops` rather than silently producing an axis that looks
+ * right and reads wrong.
  *
- * Test types (Convention 3): regression (the shape guard) / unit (the guard in
- * isolation, with the substrate mocked).
+ * Test types (Convention 3): regression (the shape guard reaches the consumer)
+ * / unit (the guard in isolation, with the substrate mocked).
  */
 
 import { describe, expect, it, vi } from 'vitest';
@@ -50,14 +54,14 @@ describe('the [start, …stages, end] assumption is checked, not assumed', () =>
     // Without the kind check this would silently take a real STAGE stop for
     // the bookend: it would keep its raw stage label and inherit the -1
     // arithmetic, and no caller could tell.
-    expect(() => milestoneStops(log)).toThrow(/unexpected shape/);
+    expect(() => milestoneStops(log)).toThrow(/bookended axis/);
   });
 
   it('refuses a result whose LAST stop is not the end bookend', () => {
     scripted.stops = [stop({ kind: 'start' }), stop({ step: 1, kind: 'commit' })];
     // Here the last MILESTONE would be eaten as a bookend and lose its
     // milestone label — the axis would be short by one stop, quietly.
-    expect(() => milestoneStops(log)).toThrow(/unexpected shape/);
+    expect(() => milestoneStops(log)).toThrow(/bookended axis/);
   });
 
   it('names what it got, so the message is actionable rather than mysterious', () => {

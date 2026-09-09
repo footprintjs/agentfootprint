@@ -4,9 +4,9 @@ title: milestoneStops
 
 # Function: milestoneStops()
 
-> **milestoneStops**(`commitLog`, `executionTree?`): `Stop`[]
+> **milestoneStops**(`commitLog`, `executionTree?`): `Stop`\<[`Milestone`](/docs/api/interfaces/Milestone)\>[]
 
-Defined in: [src/lib/time-travel/milestoneStops.ts:129](https://github.com/footprintjs/agentfootprint/blob/main/src/lib/time-travel/milestoneStops.ts#L129)
+Defined in: [src/lib/time-travel/milestoneStops.ts:164](https://github.com/footprintjs/agentfootprint/blob/main/src/lib/time-travel/milestoneStops.ts#L164)
 
 Derive one stop per committed MILESTONE from a recorded commit log.
 
@@ -19,9 +19,11 @@ already solved upstream and are not repeated here: one stop per
 parallel fork child commits twice and siblings interleave — every repeat is
 an empty bundle), the authoritative mount set read off the execution tree,
 the `'start'` / `'end'` bookends, and the id-less leading commit that carries
-a subflow's `inputMapper` seed. This function calls `commitStops` and filters
-its result. A second implementation of that collapsing would be a second
-chance to disagree with the library about what a stage is.
+a subflow's `inputMapper` seed. And since 9.89.0 the COMPOSITION itself is
+the port's too: `filterStops` checks the `[start, …stages, end]` shape,
+keeps what `keep` keeps, and re-partitions the log. A second implementation
+of any of that would be a second chance to disagree with the library about
+what a stage is.
 
 **The survivors re-partition the log.** A stage that classifies `null` is not
 a stop, but its commits still happened, so they are folded into the stop that
@@ -32,14 +34,21 @@ Commits before the FIRST milestone belong to `'start'` for the same reason —
 so on a drilled cursor `'start'` reads as "what this subflow began with,
 after its plumbing ran".
 
-**What that costs `'start'`.** On footprintjs's own axis `'start'` is the fold
-base: the state before ANY stage ran. Here it absorbs every stage that ran
-before the first milestone, so `stateAt(start)` is the state the first
-milestone READ, not the run's raw base — a real agent seeds a couple of dozen
-keys in `seed` before anything a reader would scrub to. That is the right
-answer for this axis (the stops must still partition the log) and the wrong
-one to assume from `kind: 'start'` alone, so it is said out loud here, in the
-folder README, on the docs page and in a test.
+**What that costs `'start'`, and the flag that says so.** On footprintjs's
+own axis `'start'` is the fold base: the state before ANY stage ran. Here it
+absorbs every stage that ran before the first milestone, so `stateAt(start)`
+is the state the first milestone READ, not the run's raw base — a real agent
+seeds a couple of dozen keys in `seed` before anything a reader would scrub
+to. That is the right answer for this axis (the stops must still partition
+the log), and since 9.18 the port marks it: the returned start carries
+`prologue: true` whenever it absorbed a stage, so a renderer that means
+"before anything ran" checks `kind === 'start' && !prologue` instead of
+assuming it from the kind.
+
+**The milestone rides on the stop.** Every kept stop carries its
+classification as `meta` — `Stop<Milestone>` — so a reader asks
+`stop.meta?.kind` (or [milestoneOf](/docs/api/functions/milestoneOf), which reads the same slot) rather
+than re-running the classifier over the id. The bookends carry none.
 
 **A log with no milestones in it at all.** A non-empty log the classifier
 recognises nothing in — a non-agent chart handed this strategy — yields the
@@ -77,19 +86,20 @@ the run's `executionTree`, when the caller has it — it
 
 ## Returns
 
-`Stop`[]
+`Stop`\<[`Milestone`](/docs/api/interfaces/Milestone)\>[]
 
 ## Example
 
 ```ts
 import { timeTravel } from 'footprintjs/trace';
-import { milestoneStopsStrategy, milestoneOf } from 'agentfootprint';
+import { milestoneStopsStrategy } from 'agentfootprint';
 
 const cursor = timeTravel(agent.getSnapshot()!, { strategy: milestoneStopsStrategy });
-cursor.stops.map((s) => [s.label, milestoneOf(s)?.kind]);
+cursor.stops.map((s) => [s.label, s.meta?.kind]);
 // measured on a two-turn `dynamic` run — 42 commits, 15 stops:
 // [['Run start', undefined], ['Iteration', 'iteration'],
 //  ['System prompt', 'slot'], ['Messages', 'slot'], ['Tools', 'slot'],
 //  ['LLM turn', 'llm-turn'], ['Route', 'decision'], ['Tool call', 'tool-call'],
 //  … the second turn …, ['Run end', undefined]]
+cursor.stops[0].prologue; // true — `seed` and the plumbing ran before the first Iteration
 ```

@@ -7,6 +7,81 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [9.89.0] - 2026-09-09
+
+**The third digest half, and one owner of the axis.** Two follow-ups to 9.88.0,
+both additive: a 9.88.0 consumer compiles and behaves identically.
+
+### Added
+
+- **`toolDigestInput(tool)` — a consumer can verify the schema rows of a
+  receipt.** 9.88.0 exported `receiptHash` and `messageDigestInput`, so a reader
+  holding `servedAt(k)` and `receiptAt(k)` could prove the system text, every
+  piece and every message against the receipt from outside this package — and
+  could prove everything the model was served EXCEPT the tools' schemas. The
+  receipt hashed each schema through a serializer the root barrel did not
+  export, so a consumer's schema rows could never read Verified; its only
+  options were to copy the serializer (a second owner of the rule, which drifts
+  the day the digest gains a field — the message digest gained two in 9.88.0)
+  or to leave the rows unchecked. The law now holds for the third row on the
+  object a consumer already holds:
+
+  ```ts
+  receiptHash(runId, toolDigestInput(servedAt(k).tools.schemas[i])) === receiptAt(k).tools.schemaHashes[name]
+  ```
+
+  It takes an `LLMToolSchema` — the tool as handed to the provider port, which
+  is what `servedAt(k).tools.schemas` reads back — never a `Tool` definition,
+  which carries `execute` and other fields the model never saw. It is the ONLY
+  spelling of the schema rule: `buildReceipt` calls it too. A schema JSON cannot
+  express (a `BigInt`; a cycle) digests to the `UNSERIALIZABLE` mark on both
+  sides and never throws — the `BigInt` is the worked example, because a
+  cyclic schema is refused by footprintjs's `deepEqual` in the subflow
+  outputMapper before any receipt is minted under `dynamic-grouped` (a
+  substrate limit, not a hole in the rule). `stableJson` stays off the root
+  barrel on purpose —
+  `hash(stableJson(tool))` would be the rule written a second time. Pinned on
+  real runs in both chart shapes, every tool of every epoch
+  (`test/lib/time-travel/receipt-conformance.test.ts`), on the unserializable
+  cases and on the barrel by identity
+  (`test/lib/time-travel/tool-digest-input.test.ts`).
+
+### Changed
+
+- **`milestoneStops` is a filter over footprintjs's own stop grammar.**
+  footprintjs 9.18.0 shipped `filterStops(stops, keep)` — the bookend guard, the
+  re-partition, `Stop.meta` for a strategy's own vocabulary and `Stop.prologue`
+  on a start that absorbed stages — because two consumers had each re-derived
+  all of it by hand against 9.17. This was one of them. The hand-rolled guard,
+  the re-partition loop and `milestoneOf`'s re-derivation are gone;
+  `milestoneStops` is now one expression, `filterStops(commitStops(log, tree),
+  keep)`, and the one owner of the `[start, …stages, end]` contract is the
+  library that returns it. Public names and signatures are unchanged
+  (`milestoneOf`, `milestoneStops`, `milestoneStopsStrategy`); the stops are
+  now typed `Stop<Milestone>`, so `cursor.at()?.meta?.kind` is typed, and
+  `milestoneOf(stop)` reads that `meta` when a stop carries one and falls back
+  to classifying the `runtimeStageId` for a stop from another strategy (a meta
+  of some other vocabulary is not mistaken for a milestone). **Behaviour is
+  identical and proven, not asserted:**
+  `test/lib/time-travel/milestone-stops-equivalence.test.ts` carries the 9.88.0
+  implementation verbatim and drives it beside the new one over every recorded
+  fixture the milestone tests use — both chart shapes, a skill graph, a
+  dynamic-grouped run with its drilled inner histories, a plumbing-only log, an
+  empty log, and a paused-then-resumed run including the 9.18 chained axis —
+  requiring agreement on every stop's step, id, kind, label and commit range and
+  on the `stateAt` fold at every stop. The only differences are the two things
+  9.18 added, and both are asserted present and right: `meta` is the milestone
+  on every milestone stop and absent on the bookends; `prologue: true` is on
+  the start exactly when it absorbed a stage. A renderer that means "before
+  anything ran" can now check `kind === 'start' && !prologue` instead of
+  assuming it from the kind. `footprintjs` peer and dev ranges move to
+  `^9.18.0`. `milestone-stops-contract.test.ts` still mocks a broken
+  `commitStops` and requires the refusal to reach the consumer — it is now the
+  port's refusal (`filterStops: expected a bookended axis …`), not ours.
+  `test/type-regressions/MilestoneStops.assignability.test.ts` pins that the
+  bare 9.88.0 shapes (`TimeTravelStrategy`, `Stop[]`, `milestoneOf(Stop)`)
+  still compile.
+
 ## [9.88.0] - 2026-09-07
 
 **The receipt at the stop.** Stand on an `llm-turn` stop, ask what the model

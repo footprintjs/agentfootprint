@@ -106,6 +106,7 @@ export {
   epochLocations,
   keyedFold,
   messageDigestInput,
+  toolDigestInput,
   receiptAt,
   receiptHash,
   servedAt,
