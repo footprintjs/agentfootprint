@@ -469,9 +469,12 @@ true:
 - **Redaction in this library is EXECUTOR-level**, and reaches an inner run
   through `flowchartAsTool({ redact })` / `runbookAsTool({ redact })`
   (`executor.setRedactionPolicy`). footprintjs scrubs at COMMIT time, so a
-  redacted key never enters that inner **commit log**. Note that the same
-  snapshot's live `sharedState` view is *not* scrubbed — only
-  `getSnapshot({ redact: true })` serves the mirror.
+  redacted key never enters that inner **commit log**. The live `sharedState`
+  view is a different thing — only `getSnapshot({ redact: true })` serves the
+  mirror — and since 9.89.1 both tools serve THAT view for everything they
+  show (the result, the kept record, the recording; `src/core/servableSnapshot.ts`
+  · `servableSnapshot`), so an inner record is scrubbed in every field, not
+  only in its log.
 - A snapshot taken with `redact: true` **omits `initialState`**, so a fold of it
   reports `basis: 'log-only'` and `servedAt` raises the `no-fold-base` gap
   rather than rebuilding a short view in silence.

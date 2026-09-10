@@ -102,6 +102,7 @@ import {
   type InnerRunStore,
   type KeepsInnerRuns,
 } from '../../lib/trace-toolpack/innerRunRecords.js';
+import { servableSnapshot } from '../servableSnapshot.js';
 import { defineTool, type Tool, type ToolExecutionContext } from '../tools.js';
 import {
   carriedProvenanceOf,
@@ -348,7 +349,7 @@ export function runbookAsTool(opts: RunbookAsToolOptions): Tool {
       const keepRecordOf = (outcome: InnerRunOutcome, known?: unknown): void => {
         if (!store) return;
         try {
-          const snapshot = known ?? executor.getSnapshot();
+          const snapshot = known ?? servableSnapshot(executor, opts.redact);
           const commitLog = (snapshot as { commitLog?: readonly unknown[] }).commitLog;
           const lines = (walkRecorder.getEntries() as unknown as NarrativeEntryView[])
             .map((entry) => entry.text)
@@ -406,11 +407,14 @@ export function runbookAsTool(opts: RunbookAsToolOptions): Tool {
         throw err;
       }
 
-      const raw = executor.getSnapshot();
-      keepRecordOf('ok', raw);
+      // ONE view for the record, the envelope's state and the recording:
+      // the redacted mirror when `redact` is set (subflow states refolded),
+      // the raw snapshot otherwise — see `servableSnapshot`.
+      const served = servableSnapshot(executor, opts.redact);
+      keepRecordOf('ok', served);
       const state =
-        (raw as { sharedState?: Readonly<Record<string, unknown>> }).sharedState ??
-        (raw as { values?: Readonly<Record<string, unknown>> }).values ??
+        (served as { sharedState?: Readonly<Record<string, unknown>> }).sharedState ??
+        (served as { values?: Readonly<Record<string, unknown>> }).values ??
         {};
 
       // ── The walk ────────────────────────────────────────────────────────
@@ -426,9 +430,9 @@ export function runbookAsTool(opts: RunbookAsToolOptions): Tool {
       // ── The recording, beside the walk (opt-in) ─────────────────────────
       // The row projection cannot be drawn — `structure` is the only route to
       // a drawable graph and no snapshot carries it. The snapshot here is the
-      // REDACTED mirror, not `raw`: the same `redact` policy that scrubs the
-      // walk must scrub this by the same rule, and `raw` is the live working
-      // memory. With no policy configured the flag is a documented no-op.
+      // SAME served view the kept record and the envelope's state came from:
+      // the redacted mirror under a policy (the walk and the recording are
+      // scrubbed by one rule, at one moment), the raw snapshot without one.
       const walk =
         recordingPolicy === undefined
           ? walkOnly
@@ -436,7 +440,7 @@ export function runbookAsTool(opts: RunbookAsToolOptions): Tool {
               ...walkOnly,
               ...(await mintChartRecording(
                 ctx,
-                chartRecordingOf(executor.getSnapshot({ redact: true }), chart.buildTimeStructure),
+                chartRecordingOf(served, chart.buildTimeStructure),
                 {
                   toolName: opts.name,
                   toolCallId: ctx.toolCallId,

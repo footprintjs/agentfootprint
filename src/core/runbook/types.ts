@@ -124,8 +124,8 @@ export interface RunbookWalkOptions {
    * components mount the runbook's walk as the flowchart it actually ran.
    *
    * ── Redaction, once, for both ───────────────────────────────────────────
-   * The recording's snapshot is read from the REDACTED MIRROR
-   * (`getSnapshot({ redact: true })`), so the `redact` policy that scrubs the
+   * The recording's snapshot is read through `servableSnapshot` (the redacted
+   * mirror, subflow state refolded from scrubbed history), so the `redact` policy that scrubs the
    * walk scrubs the recording by the same rule at the same moment. One policy,
    * one meaning, both artifacts.
    *
@@ -212,7 +212,12 @@ export interface RunbookAsToolOptions {
   readonly keepRecord?: boolean;
   /** Bounded LRU size for kept records (requires `keepRecord: true`). */
   readonly keepRecordLimit?: number;
-  /** Redaction policy for the inner run (commit-time scrub). */
+  /** Redaction policy for the inner run. One rule for everything the tool
+   *  shows (9.89.1): the commit log is scrubbed at write time, and the
+   *  envelope's state, the walk's recording and the kept record are all
+   *  served from footprintjs's redacted view through `servableSnapshot` —
+   *  see `FlowchartAsToolOptions.redact` for what it covers and what the
+   *  substrate leaves in the log. */
   readonly redact?: RedactionPolicy;
 }
 

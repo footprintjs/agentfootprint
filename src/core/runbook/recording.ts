@@ -121,8 +121,9 @@ export function resolveRecordingPolicy(
  * Assemble the `{ snapshot, events, structure }` bundle for one inner chart
  * run. Pure — no store, no clock, no events.
  *
- * @param redactedSnapshot the run snapshot read from the REDACTED mirror
- *   (`executor.getSnapshot({ redact: true })`). Taking the raw one here would
+ * @param redactedSnapshot the run snapshot read through `servableSnapshot`
+ *   (the redacted mirror, each subflow's state refolded from its scrubbed
+ *   history). Taking the raw one here would
  *   file whatever the chart wrote under a policy that was supposed to scrub
  *   it, which is the one mistake this whole module is arranged to prevent.
  * @param structure the chart's `buildTimeStructure` — the only route to a

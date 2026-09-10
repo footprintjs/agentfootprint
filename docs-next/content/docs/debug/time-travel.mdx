@@ -499,7 +499,9 @@ hashes are not redacted either. The run **salt** is what makes that safe to
 ship, not an assumption that something scrubbed it.
 
 Redaction here is **executor-level**: `flowchartAsTool({ redact })` /
-`runbookAsTool({ redact })` scrub an inner run's *commit log* at write time. A
+`runbookAsTool({ redact })` scrub an inner run's *commit log* at write time, and
+(since 9.89.1) serve everything else the tool shows — the result, the kept
+record's `sharedState`, its subflow states — from the same redacted view. A
 snapshot taken with `redact: true` also omits `initialState`, so folding it
 reports `basis: 'log-only'` and `servedAt` raises `no-fold-base` rather than
 quietly rebuilding a short view.

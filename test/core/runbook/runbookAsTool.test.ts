@@ -60,6 +60,7 @@ import {
   type ToolDispatch,
   type ToolExecutionContext,
 } from '../../../src/index.js';
+import { innerRunsOf } from '../../../src/observe.js';
 import { measureArtifactBytes } from '../../../src/artifacts/payload.js';
 import {
   chartRecordingOf,
@@ -1475,6 +1476,35 @@ describe('runbookAsTool — properties and security', () => {
     const { ctx } = ctxWithStore();
     const out = (await tool.execute({}, ctx)) as RunbookEnvelope;
     expect(JSON.stringify(out)).not.toContain('secret-bytes');
+  });
+
+  it('redact + keepRecord: the kept record is the redacted view in EVERY field (9.89.1)', async () => {
+    // Same defect as flowchartAsTool (recorded-not-built entry 6): the kept
+    // record's `sharedState` was the raw heap while its log said REDACTED.
+    // Both tools now file the record from `servableSnapshot`.
+    const tool = runbookAsTool({
+      name: 'redacting_kept',
+      description: 'd',
+      redact: { keys: ['apiKey'] },
+      keepRecord: true,
+      procedure: () =>
+        flowChart<{ apiKey: string; report: unknown }>(
+          'c',
+          (s) => {
+            s.apiKey = 'secret-bytes';
+            s.report = { touched: true };
+          },
+          'a',
+        ).build(),
+    });
+    const { ctx } = ctxWithStore();
+    await tool.execute({}, ctx);
+    const record = innerRunsOf(tool)!.get(ctx.toolCallId)!;
+    expect(record.problem).toBeUndefined();
+    expect(JSON.stringify(record)).not.toContain('secret-bytes');
+    const snapshot = record.recording!.snapshot as { sharedState: Record<string, unknown> };
+    expect(snapshot.sharedState.apiKey).toBe('REDACTED');
+    expect(snapshot.sharedState.report).toEqual({ touched: true });
   });
 });
 

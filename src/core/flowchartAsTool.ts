@@ -114,7 +114,7 @@
  *     flowchart: adviceChart,
  *     keepRecord: true,               // keep each invocation's inner record
  *     keepRecordLimit: 20,            // …bounded (default; LRU)
- *     redact: { keys: ['apiKey'] },   // …scrubbed at commit time, like the outer run
+ *     redact: { keys: ['apiKey'] },   // …one rule: the log, the result, the kept record
  *   });
  *
  *   const agent = Agent.create({ provider })
@@ -139,6 +139,7 @@ import {
   type InnerRunStore,
   type KeepsInnerRuns,
 } from '../lib/trace-toolpack/innerRunRecords.js';
+import { servableSnapshot } from './servableSnapshot.js';
 import { defineTool } from './tools.js';
 import type { Tool, ToolExecutionContext } from './tools.js';
 
@@ -150,8 +151,9 @@ import type { Tool, ToolExecutionContext } from './tools.js';
  */
 export interface FlowchartToolSnapshot {
   /**
-   * Final scope state — the merged result of every stage's writes.
-   * This is what `executor.getSnapshot().values` returns.
+   * Final scope state — the merged result of every stage's writes, as the
+   * tool may SHOW it: `executor.getSnapshot().sharedState` without a
+   * `redact` policy, the redacted mirror with one (`servableSnapshot`).
    */
   readonly values: Readonly<Record<string, unknown>>;
   /**
@@ -271,23 +273,43 @@ export interface FlowchartAsToolOptions {
    * `(redacted by policy)` flag as the outer run; the trace tools pass
    * placeholders through verbatim and never reconstruct around them.
    *
+   * ONE RULE FOR EVERYTHING THE TOOL SHOWS (9.89.1). With a policy set, every
+   * state-bearing thing this tool hands outward is footprintjs's REDACTED
+   * view — `getSnapshot({ redact: true })`, the mirror the engine maintains
+   * beside the raw heap for exactly this — taken through one owner,
+   * `servableSnapshot`:
+   *
+   * - the string this tool RETURNS: `resultMapper` is handed `snapshot.values`
+   *   from that view (`'REDACTED'` where the log says so), so the default
+   *   `JSON.stringify` and a custom mapper see the same thing the log holds;
+   * - a kept record's `sharedState`, `commitLog` and every subflow's final
+   *   state (`subflowResults[*].treeContext.globalContext`, refolded from that
+   *   subflow's own scrubbed `history` — the level footprintjs does not mirror);
+   * - on every exit — ok, error, paused — the record is filed from that view.
+   *
    * Independent of `keepRecord` — a chart handling secrets should carry a
-   * policy whether or not anyone keeps its record — but if you keep the
-   * record, this is the switch that decides what that record's LOG contains.
+   * policy whether or not anyone keeps its record. Without this option the
+   * raw snapshot is served, byte for byte as before.
    *
-   * WHAT IT DOES NOT GOVERN — two things, and neither is a rounding error:
+   * WHAT IT DOES NOT GOVERN — said here so nobody has to rediscover it:
    *
-   * 1. The string this tool RETURNS. `resultMapper` is handed
-   *    `snapshot.values`, which is the run's live state — the same unredacted
-   *    view a stage read. Scrubbing what the LLM sees is the mapper's job.
-   * 2. The `sharedState` of a kept record. A policy scrubs WRITES; the live
-   *    state view is not a write, and the redacted mirror is served only by
-   *    `getSnapshot({ redact: true })`, which this option does not reach. So
-   *    a record kept under `keepRecord` holds the plaintext on
-   *    `recording.snapshot.sharedState` even while its commit log holds
-   *    `REDACTED`. Do not treat a kept record as safe to hand on because a
-   *    policy is set — see `docs/design/2026-09-recorded-not-built.md` ·
-   *    "A kept inner recording carries the secret in `sharedState`".
+   * 1. Fold bases. The redacted view OMITS `initialState` (footprintjs
+   *    `ExecutionRuntime.getSnapshot`: the raw pre-run seed never passed a
+   *    policy, so it is dropped rather than served), and the served view
+   *    drops a subflow's by the same law. A fold of a kept record therefore
+   *    reports `basis: 'log-only'` — partial, and saying so.
+   * 2. The resume checkpoint. A paused run throws with `err.checkpoint`,
+   *    which holds real values because resumption must replay against them;
+   *    it goes to the agent loop, never to a model.
+   * 3. What the LOG itself carries in footprintjs 9.18.0 — a served view is
+   *    as clean as the log beneath it: `fields` (dot-path) redaction scrubs
+   *    recorder views only; a subflow `outputMapper`'s merge-back and an
+   *    `inputMapper`'s seed both bypass the scope facade and land verbatim
+   *    (the seed also as the subflow narrative's `Input:` line); and a stage
+   *    that READS a redacted key keeps the plaintext in its tracked reads
+   *    (`executionTree.*.stageReads`). So "every field" means every field
+   *    the log scrubs (see `servableSnapshot` for the file · symbol of each,
+   *    and `test/core/flowchartAsTool.redact.test.ts` where each is pinned).
    */
   readonly redact?: RedactionPolicy;
 }
@@ -308,7 +330,9 @@ export interface FlowchartAsToolOptions {
  *      (`error.checkpoint`) so the agent loop can surface it. Polished
  *      agent-side pause integration is v2.6 work.
  *   5. If the run completed, calls `resultMapper(snapshot)` (or the
- *      default JSON.stringify) and returns the string.
+ *      default JSON.stringify) and returns the string. The snapshot is
+ *      the SERVED view (`servableSnapshot`): redacted when `redact` is
+ *      set, raw otherwise — the same view the kept record holds.
  *   6. If the run threw, the error propagates — the Agent's
  *      tool-call handler converts it to a synthetic error string for
  *      the LLM to see + recover from.
@@ -386,7 +410,7 @@ export function flowchartAsTool(opts: FlowchartAsToolOptions): Tool {
       const keepRecordOf = (outcome: InnerRunOutcome, known?: unknown): void => {
         if (!store) return;
         try {
-          const snapshot = known ?? executor.getSnapshot();
+          const snapshot = known ?? servableSnapshot(executor, opts.redact);
           const commitLog = (snapshot as { commitLog?: readonly unknown[] }).commitLog;
           const narrative = extractNarrative(snapshot, executor)
             .map((entry) => (typeof entry.text === 'string' ? entry.text : ''))
@@ -432,20 +456,23 @@ export function flowchartAsTool(opts: FlowchartAsToolOptions): Tool {
         (err as Error & { checkpoint?: unknown }).checkpoint = executor.getCheckpoint();
         throw err;
       }
-      const raw = executor.getSnapshot();
+      // ONE view for the record AND the result: with a policy set this is
+      // the redacted mirror (subflow states refolded), otherwise the raw
+      // snapshot — see `servableSnapshot`.
+      const served = servableSnapshot(executor, opts.redact);
       // Kept BEFORE the mapper runs: a mapper that throws still leaves a
       // complete record of the run it was mapping.
-      keepRecordOf('ok', raw);
+      keepRecordOf('ok', served);
       // footprintjs's RuntimeSnapshot exposes `sharedState` for the
       // merged scope. Older betas used `values`; we accept either to
       // remain robust against minor drift.
       const sharedState =
-        (raw as { sharedState?: Readonly<Record<string, unknown>> }).sharedState ??
-        (raw as { values?: Readonly<Record<string, unknown>> }).values ??
+        (served as { sharedState?: Readonly<Record<string, unknown>> }).sharedState ??
+        (served as { values?: Readonly<Record<string, unknown>> }).values ??
         {};
       const snapshot: FlowchartToolSnapshot = {
         values: sharedState,
-        narrative: extractNarrative(raw, executor),
+        narrative: extractNarrative(served, executor),
       };
       try {
         return mapper(snapshot);

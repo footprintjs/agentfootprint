@@ -914,12 +914,12 @@ describe('what a recording actually contains', () => {
     // write time, so the value never entered it.
     expect(JSON.stringify(snapshot.commitLog)).not.toContain('sk-inner-secret');
     expect(JSON.stringify(snapshot.commitLog)).toContain('REDACTED');
-    // `sharedState` is the LIVE runtime view and a policy never touched it —
-    // footprintjs scrubs writes, and the mirror is served only by
-    // `getSnapshot({ redact: true })`. Asserted so the difference is on the
-    // record: a redacted run is redacted in its LOG, not in every field of
-    // every snapshot that log travels inside.
-    expect(snapshot.sharedState.apiKey).toBe('sk-inner-secret');
+    // `sharedState` is served from the redacted MIRROR since 9.89.1
+    // (`servableSnapshot`): until then the kept record held the plaintext here
+    // while its log said REDACTED — recorded-not-built entry 6, now built. The
+    // whole record is asserted as bytes in `test/core/flowchartAsTool.redact.test.ts`.
+    expect(snapshot.sharedState.apiKey).toBe('REDACTED');
+    expect(JSON.stringify(snapshot)).not.toContain('sk-inner-secret');
   });
 });
 

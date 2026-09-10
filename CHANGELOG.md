@@ -7,6 +7,63 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [9.89.1] - 2026-09-10
+
+**What a chart-backed tool may show is one rule.** A patch: no signature
+changes, and a tool without `redact` behaves byte for byte as before.
+
+### Fixed
+
+- **`flowchartAsTool({ redact })` / `runbookAsTool({ redact })` served the
+  secret everywhere except the log.** footprintjs scrubs at COMMIT time, so a
+  policy-redacted key never entered the inner commit log — and the option's
+  own documentation drew the wrong conclusion from that. The live state view
+  is not a commit: it is the run's raw heap, and its scrubbed twin (the
+  *redacted mirror* footprintjs maintains beside it) is served only by
+  `getSnapshot({ redact: true })`. Both tools called `getSnapshot()` bare, so
+  the string the model read (`JSON.stringify(snapshot.values)`, or whatever a
+  `resultMapper` built from it), the envelope's state, and a kept record's
+  `sharedState` all carried the plaintext while the log beside them said
+  `REDACTED` (`docs/design/2026-09-recorded-not-built.md` · entry 6, now
+  built). Fixed at the root, not per field: ONE owner,
+  `src/core/servableSnapshot.ts` · `servableSnapshot`, decides what leaves the
+  executor — the redacted view under a policy, the raw snapshot without one —
+  and every state-bearing exit of both tools (result, envelope, recording,
+  kept record on ok / error / paused) reads from it. One thing that view
+  leaves raw is handled the same way: a subflow's final state
+  (`subflowResults[*].treeContext.globalContext`) is the subflow's own
+  isolated heap, which footprintjs does not mirror, so it is refolded from
+  that subflow's scrubbed `history` through footprintjs's own `stateAt` — the
+  construction the run-level mirror is, done at serve time.
+
+  ```ts
+  const tool = flowchartAsTool({
+    name: 'weather_advice',
+    description: 'Forecast tomorrow and advise on biking.',
+    flowchart: adviceChart,          // writes scope.apiKey = 'sk-…'
+    keepRecord: true,
+    redact: { keys: ['apiKey'] },
+  });
+  await tool.execute({}, ctx);       // → '{"apiKey":"REDACTED","advice":"bike"}'
+  const { snapshot } = innerRunsOf(tool)!.get(ctx.toolCallId)!.recording!;
+  snapshot.sharedState.apiKey;       // 'REDACTED' — was the plaintext
+  JSON.stringify(snapshot).includes('sk-'); // false — in every field the log scrubs
+  ```
+
+  Two consequences, both deliberate. Under a policy a kept record omits
+  `initialState` — footprintjs's own law for the redacted view (the raw
+  pre-run seed never passed a policy) — so a fold of it reports
+  `basis: 'log-only'` and says so. And a served view can only be as clean as
+  the log beneath it: footprintjs 9.18.0 leaves plaintext IN the log for
+  `fields` (dot-path) redaction (recorder views only), for a subflow
+  `outputMapper`'s merge-back and for an `inputMapper`'s seed (both bypass
+  the scope facade; the seed is also narrated as an `Input:` line), and a
+  stage that READS a redacted key keeps the plaintext in its tracked reads
+  (`executionTree.*.stageReads`). Those are named on the option and pinned as they are
+  in `test/core/flowchartAsTool.redact.test.ts`, beside the reproduction
+  (nested objects, patterns, arrays, subflow states, error and paused exits,
+  and the no-option path against a direct `getSnapshot()`).
+
 ## [9.89.0] - 2026-09-09
 
 **The third digest half, and one owner of the axis.** Two follow-ups to 9.88.0,

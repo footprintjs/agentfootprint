@@ -568,6 +568,25 @@ and fixing it is a behaviour change rather than a patch.
 
 ## 6. A kept inner recording carries the secret in `sharedState`
 
+> **Built in 9.89.1 (2026-09-10).** The decision below was taken the third
+> way nobody listed: neither scrub after the fact nor refuse the combination,
+> but serve the view footprintjs already builds for serving. Both tools now
+> take every state-bearing thing they hand outward — the result string, the
+> envelope's state, the recording, the kept record — from ONE owner,
+> `src/core/servableSnapshot.ts` · `servableSnapshot`, which is
+> `getSnapshot({ redact: true })` under a policy (plus each subflow's final
+> state refolded from its own scrubbed `history`, the level footprintjs does
+> not mirror) and the raw `getSnapshot()` without one. A kept record is
+> therefore a TRANSPORT: what it may contain is governed by the policy, and it
+> no longer disagrees with its own log. The cost named below is paid on
+> purpose: under a policy the record omits `initialState` (footprintjs's own
+> law for the redacted view), so a fold of it reports `basis: 'log-only'`.
+> Three places where the substrate leaves plaintext IN the log — `fields`
+> dot-path redaction, an `outputMapper`'s merge-back, an `inputMapper`'s
+> seed — are outside what a served view can scrub and are pinned in
+> `test/core/flowchartAsTool.redact.test.ts`. The reproduction test named
+> below now asserts `'REDACTED'`. The record is kept as written.
+
 **The claim it contradicts.** `flowchartAsTool.ts` · `FlowchartAsToolOptions.redact`
 said, until this pass edited it:
 
