@@ -51,7 +51,7 @@ import {
 import { ArrayMergeMode } from 'footprintjs/advanced';
 import type { GroupMetadata, GroupTranslator } from './translator.js';
 import type { RunnerPauseOutcome } from './pause.js';
-import { SUBFLOW_IDS, STAGE_IDS } from '../conventions.js';
+import { SUBFLOW_IDS, STAGE_IDS, milestoneTagsFor } from '../conventions.js';
 import type { RunContext } from '../bridge/eventMeta.js';
 import { ContextRecorder } from '../recorders/core/ContextRecorder.js';
 import { streamRecorder } from '../recorders/core/StreamRecorder.js';
@@ -547,6 +547,10 @@ export class LLMCall extends RunnerBase<LLMCallInput, LLMCallOutput> {
         }),
         outputMapper: (sfOutput) => ({ systemPromptInjections: sfOutput.systemPromptInjections }),
       })
+      // Declared milestones (9.90.0): these slots are `addSubFlowChartNext`
+      // mounts, so — unlike the Agent charts' selector branches — they CAN
+      // carry the `slot` tag on their first commit bundle.
+      .tag(...milestoneTagsFor(SUBFLOW_IDS.SYSTEM_PROMPT))
       .addSubFlowChartNext(SUBFLOW_IDS.MESSAGES, messagesSubflow, 'Messages', {
         inputMapper: (parent) => {
           // Wrap the single user message as a one-entry history for the
@@ -559,7 +563,10 @@ export class LLMCall extends RunnerBase<LLMCallInput, LLMCallOutput> {
         },
         outputMapper: (sfOutput) => ({ messagesInjections: sfOutput.messagesInjections }),
       })
-      .addFunction('CallLLM', callLLM, STAGE_IDS.CALL_LLM, 'LLM invocation');
+      .tag(...milestoneTagsFor(SUBFLOW_IDS.MESSAGES))
+      .addFunction('CallLLM', callLLM, STAGE_IDS.CALL_LLM, 'LLM invocation')
+      // Declared milestone (9.90.0): the LLM turn.
+      .tag(...milestoneTagsFor(STAGE_IDS.CALL_LLM));
 
     // Conditional sf-thinking — mounted only when a ThinkingHandler
     // resolved (auto-wired by provider.name in the constructor). Same
@@ -596,23 +603,28 @@ export class LLMCall extends RunnerBase<LLMCallInput, LLMCallOutput> {
     // TraversalResult is the answer string, which downstream
     // compositions (Sequence/Parallel/Conditional) read via
     // outputMapper's `sfOutput` parameter.
-    return flowChart<string, TypedScope<LLMCallState>>('Client', client, STAGE_IDS.CLIENT, {
-      ...(this.structureRecorders !== undefined && {
-        structureRecorders: [...this.structureRecorders],
-      }),
-      description: 'LLMCall: one-shot',
-    })
-      .addSubFlowChartNext(SUBFLOW_IDS.LLM_CALL, innerSubflow, 'LLM', {
-        inputMapper: (parent) => ({
-          userMessage: parent.userMessage as string | undefined,
-          iteration: parent.iteration as number | undefined,
+    return (
+      flowChart<string, TypedScope<LLMCallState>>('Client', client, STAGE_IDS.CLIENT, {
+        ...(this.structureRecorders !== undefined && {
+          structureRecorders: [...this.structureRecorders],
         }),
-        outputMapper: (sfOutput) => ({
-          answer: sfOutput.answer,
-        }),
+        description: 'LLMCall: one-shot',
       })
-      .loopTo(STAGE_IDS.CLIENT)
-      .build();
+        .addSubFlowChartNext(SUBFLOW_IDS.LLM_CALL, innerSubflow, 'LLM', {
+          inputMapper: (parent) => ({
+            userMessage: parent.userMessage as string | undefined,
+            iteration: parent.iteration as number | undefined,
+          }),
+          outputMapper: (sfOutput) => ({
+            answer: sfOutput.answer,
+          }),
+        })
+        // Declared milestone (9.90.0): the mount is the iteration boundary on the
+        // outer log — one turn per LLMCall run.
+        .tag(...milestoneTagsFor(SUBFLOW_IDS.LLM_CALL))
+        .loopTo(STAGE_IDS.CLIENT)
+        .build()
+    );
   }
 }
 

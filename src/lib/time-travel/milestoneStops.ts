@@ -39,15 +39,12 @@
 import type { CommitBundle, StageSnapshot } from 'footprintjs/advanced';
 import { commitStops, filterStops } from 'footprintjs/trace';
 import type { Stop, TimeTravelStrategy } from 'footprintjs/trace';
-import { milestoneFor, type Milestone, type MilestoneKind } from '../../conventions.js';
-
-const MILESTONE_KINDS: readonly MilestoneKind[] = [
-  'iteration',
-  'slot',
-  'llm-turn',
-  'tool-call',
-  'decision',
-];
+import {
+  MILESTONE_KINDS,
+  milestoneFor,
+  milestoneFromTags,
+  type Milestone,
+} from '../../conventions.js';
 
 /** Is this `meta` a {@link Milestone} — ours, not another strategy's? */
 function isMilestone(meta: unknown): meta is Milestone {
@@ -166,9 +163,36 @@ export function milestoneStops(
   executionTree?: StageSnapshot,
 ): Stop<Milestone>[] {
   return filterStops<Milestone>(commitStops(commitLog, executionTree), (stop) => {
-    const milestone = milestoneFor(stop.runtimeStageId);
+    const milestone = milestoneAt(commitLog, stop);
     return milestone ? { label: milestone.label, meta: milestone } : null;
   });
+}
+
+/**
+ * The milestone a stop stands for — **the tag is the fact, the id is the
+ * fallback** (9.90.0; law 3 of footprintjs's declared-tags design).
+ *
+ * The stop's FIRST bundle (`stop.commitIdx` — where footprintjs stamps a
+ * stage's declared tags) is read first: when it carries tags, the answer is
+ * whatever `milestone:<kind>` / `milestone-label:<label>` they declare, and a
+ * bundle that is tagged but NOT as a milestone is not a stop, however
+ * recognisable its id — the chart said what this stage is. Only a bundle with
+ * no tags at all is classified from its id: a recording made before the charts
+ * declared their milestones. On a 9.90.0 recording that path runs ZERO times —
+ * every milestone stage is declared, slot branch mounts included (footprintjs
+ * 9.21.1 `SubflowMountOptions.tags`), and
+ * `test/lib/time-travel/milestone-stops-equivalence.test.ts` counts the
+ * fallback on every fixture. Both readings come from the one table in
+ * `conventions.ts`, so they agree wherever both exist.
+ */
+function milestoneAt(log: readonly CommitBundle[], stop: Stop<unknown>): Milestone | null {
+  const raw = log[stop.commitIdx]?.tags;
+  // A stored row is `unknown[]`-shaped until narrowed: only STRINGS count as
+  // declared tags (the same narrowing footprintjs's `tagStops` does), so a
+  // damaged row falls back to the id like an untagged one instead of vanishing.
+  const tags = Array.isArray(raw) ? raw.filter((t): t is string => typeof t === 'string') : [];
+  if (tags.length > 0) return milestoneFromTags(tags, stop.label);
+  return milestoneFor(stop.runtimeStageId);
 }
 
 /**

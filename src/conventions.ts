@@ -381,12 +381,71 @@ export interface Milestone {
   readonly label: string;
 }
 
+/** Every {@link MilestoneKind}, for validating a kind read off a recording. */
+export const MILESTONE_KINDS: readonly MilestoneKind[] = Object.freeze([
+  'iteration',
+  'slot',
+  'llm-turn',
+  'tool-call',
+  'decision',
+]);
+
+const milestone = (kind: MilestoneKind, label: string): Milestone => Object.freeze({ kind, label });
+
+/**
+ * THE milestone table — local stage id → {@link Milestone}. One owner, two
+ * readers: {@link milestoneFor} classifies an id from a recording made BEFORE
+ * the chart declared tags (9.90.0), and {@link milestoneTagsFor} is what every
+ * chart-building site declares from, so the fact stamped on the commit bundle
+ * and the fallback derived from the id can never disagree.
+ */
+const MILESTONES: ReadonlyMap<string, Milestone> = new Map<string, Milestone>([
+  // Loop entry — one per ReAct iteration. INJECTION_ENGINE is the flat loop
+  // target; LLM_CALL is the subflow-shape loop target.
+  [SUBFLOW_IDS.INJECTION_ENGINE, milestone('iteration', 'Iteration')],
+  [SUBFLOW_IDS.LLM_CALL, milestone('iteration', 'Iteration')],
+  // Context slots — one stop per slot that was engineered THIS iteration. In
+  // dynamic mode all three appear every turn; in classic mode only the slot
+  // that actually re-ran (Messages) appears after turn 1 — so scrubbing shows
+  // exactly "which slot got updated."
+  [SUBFLOW_IDS.SYSTEM_PROMPT, milestone('slot', 'System prompt')],
+  [SUBFLOW_IDS.MESSAGES, milestone('slot', 'Messages')],
+  [SUBFLOW_IDS.TOOLS, milestone('slot', 'Tools')],
+  [STAGE_IDS.CALL_LLM, milestone('llm-turn', 'LLM turn')],
+  [STAGE_IDS.MERGE_LLM, milestone('llm-turn', 'LLM turn')],
+  // Tool execution mounts under the bare branch key 'tool-calls'.
+  ['tool-calls', milestone('tool-call', 'Tool call')],
+  [SUBFLOW_IDS.TOOL_CALLS, milestone('tool-call', 'Tool call')],
+  [SUBFLOW_IDS.ROUTE, milestone('decision', 'Route')],
+  // The answer failed its schema and the loop asked again — a stop worth
+  // scrubbing to, because everything after it is a second attempt.
+  [STAGE_IDS.OUTPUT_RETRY, milestone('decision', 'Schema retry')],
+  // The answer left declared steps unrun and the one teaching nudge went
+  // back (9.18.0) — everything after it is the model finishing (or
+  // explaining) its procedure.
+  [STAGE_IDS.STEP_NUDGE, milestone('decision', 'Step nudge')],
+  // The answer stated values no tool result carried and the one revision
+  // went back (9.35.0) — everything after it is the model's second try.
+  [STAGE_IDS.EVIDENCE_RECHECK, milestone('decision', 'Evidence recheck')],
+  // The action budget ran out and the turn was wrapped up (9.56.0) —
+  // everything after it is the model summarizing with no tools to call.
+  [STAGE_IDS.WRAP_UP, milestone('decision', 'Wrap up')],
+]);
+
 /**
  * Classify a stage id into a {@link Milestone}, or `null` when the stage is NOT
  * a milestone boundary (its commits fold into the surrounding milestone's
  * collection). This is the DOMAIN's declaration of which steps are scrub-worthy;
  * the Lens consumes it to build the time-travel slider (see
  * agentfootprint-lens `cursorPositionsAtDrill`).
+ *
+ * **Since 9.90.0 this is the FALLBACK, not the fact.** The charts declare the
+ * same milestones as tags at build time ({@link milestoneTagsFor}), footprintjs
+ * 9.21 stamps them on the stage's first commit bundle (`CommitBundle.tags`), and
+ * `milestoneStops` reads the bundle first — it derives from the id only for a
+ * bundle that carries no tags (a recording made before 9.90.0). Every milestone
+ * stage is declared, slot branch mounts included (footprintjs 9.21.1). Same
+ * table either way, so the two readings agree.
  *
  * Mirrors {@link stageRole}: accepts a runtimeStageId (`call-llm#17`), a
  * path-qualified id (`sf-llm-call/call-llm`), or a bare local id — only the
@@ -398,51 +457,100 @@ export function milestoneFor(id: string): Milestone | null {
   // the path prefix — splitStageId expects the segment before `#`.
   const beforeHash = id.includes('#') ? id.slice(0, id.indexOf('#')) : id;
   const { localStageId } = splitStageId(beforeHash);
-  switch (localStageId) {
-    // Loop entry — one per ReAct iteration. INJECTION_ENGINE is the flat loop
-    // target; LLM_CALL is the subflow-shape loop target.
-    case SUBFLOW_IDS.INJECTION_ENGINE:
-    case SUBFLOW_IDS.LLM_CALL:
-      return { kind: 'iteration', label: 'Iteration' };
-    // Context slots — one stop per slot that was engineered THIS iteration. In
-    // dynamic mode all three appear every turn; in classic mode only the slot
-    // that actually re-ran (Messages) appears after turn 1 — so scrubbing shows
-    // exactly "which slot got updated."
-    case SUBFLOW_IDS.SYSTEM_PROMPT:
-      return { kind: 'slot', label: 'System prompt' };
-    case SUBFLOW_IDS.MESSAGES:
-      return { kind: 'slot', label: 'Messages' };
-    case SUBFLOW_IDS.TOOLS:
-      return { kind: 'slot', label: 'Tools' };
-    case STAGE_IDS.CALL_LLM:
-    case STAGE_IDS.MERGE_LLM:
-      return { kind: 'llm-turn', label: 'LLM turn' };
-    // Tool execution mounts under the bare branch key 'tool-calls'.
-    case 'tool-calls':
-    case SUBFLOW_IDS.TOOL_CALLS:
-      return { kind: 'tool-call', label: 'Tool call' };
-    case SUBFLOW_IDS.ROUTE:
-      return { kind: 'decision', label: 'Route' };
-    // The answer failed its schema and the loop asked again — a stop worth
-    // scrubbing to, because everything after it is a second attempt.
-    case STAGE_IDS.OUTPUT_RETRY:
-      return { kind: 'decision', label: 'Schema retry' };
-    // The answer left declared steps unrun and the one teaching nudge went
-    // back (9.18.0) — everything after it is the model finishing (or
-    // explaining) its procedure.
-    case STAGE_IDS.STEP_NUDGE:
-      return { kind: 'decision', label: 'Step nudge' };
-    // The answer stated values no tool result carried and the one revision
-    // went back (9.35.0) — everything after it is the model's second try.
-    case STAGE_IDS.EVIDENCE_RECHECK:
-      return { kind: 'decision', label: 'Evidence recheck' };
-    // The action budget ran out and the turn was wrapped up (9.56.0) —
-    // everything after it is the model summarizing with no tools to call.
-    case STAGE_IDS.WRAP_UP:
-      return { kind: 'decision', label: 'Wrap up' };
-    default:
-      return null;
+  return MILESTONES.get(localStageId) ?? null;
+}
+
+// ─── Declared milestones — the tag vocabulary (9.90.0) ──────────────────
+//
+// footprintjs 9.21 lets a chart put NAMES on a stage at build time and stamps
+// them on the stage's first commit bundle. footprintjs owns no vocabulary; this
+// is agentfootprint's. Two names per milestone, produced by ONE function and
+// read back by ONE function — no second string literal anywhere:
+//
+//   'milestone:<kind>'         what a reader FILTERS on  (tagStops(['milestone:llm-turn']))
+//   'milestone-label:<label>'  the human word the table gives that stage
+//
+// Law 3 of docs/design/2026-09-declared-tags.md (footprintjs): the tag is the
+// fact; the derivation from the id is the fallback.
+
+/** Prefix of the tag that names a milestone's KIND: `milestone:llm-turn`. */
+export const MILESTONE_TAG_PREFIX = 'milestone:';
+/** Prefix of the tag that names a milestone's LABEL: `milestone-label:LLM turn`. */
+export const MILESTONE_LABEL_TAG_PREFIX = 'milestone-label:';
+
+/** The kind tag for a {@link MilestoneKind} — `'milestone:' + kind`. */
+export function milestoneTag(kind: MilestoneKind): string {
+  return MILESTONE_TAG_PREFIX + kind;
+}
+
+/**
+ * The tags that DECLARE a {@link Milestone} on a stage: its kind tag and its
+ * label tag, in that order. What a declaration site spreads into `.tag(...)`
+ * or `{ tags }`; what {@link milestoneFromTags} reads back.
+ */
+export function milestoneTags(milestone: Milestone): readonly string[] {
+  return [milestoneTag(milestone.kind), MILESTONE_LABEL_TAG_PREFIX + milestone.label];
+}
+
+/**
+ * The tags to declare on the stage with this LOCAL id, from the same table
+ * {@link milestoneFor} reads — so a chart-building site names the id it is
+ * mounting and never spells a kind or a label. Throws at build time for an id
+ * the table does not classify: a declaration site that is not a milestone is
+ * a wiring mistake, and a silent no-op would be a forgotten tag by another name.
+ *
+ * @example
+ * ```ts
+ * builder
+ *   .addFunction('CallLLM', callLLM, STAGE_IDS.CALL_LLM, 'LLM invocation')
+ *   .tag(...milestoneTagsFor(STAGE_IDS.CALL_LLM));   // 'milestone:llm-turn', 'milestone-label:LLM turn'
+ * ```
+ */
+export function milestoneTagsFor(localStageId: string): readonly string[] {
+  const found = MILESTONES.get(localStageId);
+  if (!found) {
+    throw new Error(
+      `milestoneTagsFor('${localStageId}'): not a milestone stage — add it to the MILESTONES table in ` +
+        'conventions.ts (the one owner) before declaring it on a chart.',
+    );
   }
+  return milestoneTags(found);
+}
+
+/**
+ * Read a {@link Milestone} back off a commit bundle's declared `tags`, or
+ * `null` when they carry no milestone kind tag. The kind must be one of
+ * {@link MILESTONE_KINDS}; the label is the `milestone-label:` tag when one was
+ * declared, else `labelWhenUndeclared` (a reader passes the stop's own label —
+ * the chart's word for the stage), else the kind itself. A stored row is
+ * `unknown[]`-shaped until narrowed: non-strings are ignored, never a milestone.
+ *
+ * @example
+ * ```ts
+ * milestoneFromTags(['milestone:llm-turn', 'milestone-label:LLM turn']);
+ * // { kind: 'llm-turn', label: 'LLM turn' }
+ * milestoneFromTags(['audit']);            // null — tagged, but not a milestone
+ * milestoneFromTags(undefined);            // null — an untagged bundle
+ * ```
+ */
+export function milestoneFromTags(
+  tags: readonly unknown[] | undefined,
+  labelWhenUndeclared?: string,
+): Milestone | null {
+  if (!Array.isArray(tags)) return null;
+  const names = tags.filter((t): t is string => typeof t === 'string');
+  // The first VALID kind wins; an unknown `milestone:` name (a foreign chart's
+  // vocabulary) is skipped rather than shadowing a real kind beside it.
+  const kinds = names
+    .filter((t) => t.startsWith(MILESTONE_TAG_PREFIX))
+    .map((t) => t.slice(MILESTONE_TAG_PREFIX.length))
+    .filter((k) => (MILESTONE_KINDS as readonly string[]).includes(k));
+  const kind = kinds[0];
+  if (kind === undefined) return null;
+  const labelTag = names.find((t) => t.startsWith(MILESTONE_LABEL_TAG_PREFIX));
+  const declared = labelTag?.slice(MILESTONE_LABEL_TAG_PREFIX.length);
+  const label = declared && declared.length > 0 ? declared : labelWhenUndeclared ?? kind;
+  return { kind: kind as MilestoneKind, label };
 }
 
 /**

@@ -130,6 +130,61 @@ back out. Both logs are truthful about different questions; scrub the outer axis
 for what settled, drill for what happened.
 </Callout>
 
+## The recording carries its own milestones
+
+Since 9.90.0 the charts DECLARE their milestones as footprintjs tags at build
+time, and footprintjs 9.21 stamps them on the stage's first commit bundle
+(`CommitBundle.tags`). Two tags per stage, one vocabulary, owned by
+`conventions.ts`:
+
+| tag | what it is | example |
+|---|---|---|
+| `milestone:<kind>` | the kind — what you filter on | `milestone:llm-turn` |
+| `milestone-label:<label>` | the human word | `milestone-label:LLM turn` |
+
+**The tag is the fact; the id is the fallback.** `milestoneStops` reads the
+bundle first and classifies from the stage id only for a bundle with no tags —
+a recording made before 9.90.0. Every milestone stage is declared, the three
+context-slot branch mounts included, so on a 9.90.0 recording that fallback
+runs zero times (the test suite counts it). Same table either way, so the
+axis a 9.88 consumer scrubbed is the axis it still scrubs.
+
+What it buys you: a reader needs NO agent id conventions. footprintjs's own
+`tagStops` — a strategy that has never heard of an agent — scrubs a stored
+recording by your word:
+
+```ts
+import { tagStops, timeTravel } from 'footprintjs/trace';
+import { milestoneTag } from 'agentfootprint';
+
+const turns = timeTravel(agent.getSnapshot()!, { strategy: tagStops([milestoneTag('llm-turn')]) });
+turns.stops.map((s) => s.label);   // ['Run start', 'CallLLM', 'CallLLM', 'Run end']
+turns.stops[1].meta;               // ['milestone:llm-turn', 'milestone-label:LLM turn']
+turns.stops[0].prologue;           // true — seeding and context assembly ran before the first turn
+```
+
+And the Map advertises the vocabulary before any run — `buildTimeStructure`
+lists the tags each stage can produce, so a lens draws its legend first.
+
+The vocabulary is exported so no reader spells a string: `MILESTONE_KINDS` is
+every kind the table knows; `MILESTONE_TAG_PREFIX` (`'milestone:'`) and
+`MILESTONE_LABEL_TAG_PREFIX` (`'milestone-label:'`) are the two prefixes;
+`milestoneTag(kind)` builds the kind tag; `milestoneTags(milestone)` builds
+both tags for a `Milestone`; `milestoneTagsFor(localStageId)` builds them
+from the table for one of the agent's own stage ids (and throws for an id the
+table does not classify, so a wiring mistake is loud); and
+`milestoneFromTags(tags, labelWhenUndeclared?)` reads a bundle's `tags` back
+into a `Milestone` — `null` when they carry no milestone kind tag,
+non-strings ignored, the stop's own label used when no label tag was declared.
+
+A **derived** mark is the other kind: computed at read time from what the log
+says happened, never stored. "Stops where `currentSkillId` was written" is a
+keep rule over each stop's own `trace` — the same `filterStops` composition,
+no new API. `examples/observability/25-declared-vs-derived-stops.ts` scrubs one
+real run both ways and measures them: declared 0.016 ms, write-set predicate
+0.020 ms — and a full `stateAt` fold per candidate stop, 11.7 ms (≈ 750×). That
+cost is why the declaration is the fact and the derivation is the fallback.
+
 ## Receipt at the stop
 
 An `llm-turn` stop is where a person actually stands when they ask the question

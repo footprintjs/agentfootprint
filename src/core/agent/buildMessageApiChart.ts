@@ -38,7 +38,7 @@
 import { flowChartSelector, select } from 'footprintjs';
 import type { FlowChart, TypedScope } from 'footprintjs';
 import type { LLMMessage, LLMProvider } from '../../adapters/types.js';
-import { SUBFLOW_IDS } from '../../conventions.js';
+import { SUBFLOW_IDS, STAGE_IDS, milestoneTagsFor } from '../../conventions.js';
 import type { InjectionRecord } from '../../recorders/core/types.js';
 import { typedEmit } from '../../recorders/core/typedEmit.js';
 import { resilienceHooks } from '../../recorders/core/resilienceHooks.js';
@@ -172,6 +172,7 @@ export function buildMessageApiChart(deps: MessageApiChartDeps): FlowChart {
       buildSystemPromptSlot({ prompt: systemPrompt, reason: 'messageAPI proof' }),
       'System Prompt',
       {
+        tags: milestoneTagsFor(SUBFLOW_IDS.SYSTEM_PROMPT),
         inputMapper: (parent) => ({
           userMessage: (parent as MessageApiState).userMessage,
           iteration: (parent as MessageApiState).iteration,
@@ -182,6 +183,7 @@ export function buildMessageApiChart(deps: MessageApiChartDeps): FlowChart {
       },
     )
     .addSubFlowChartBranch(SUBFLOW_IDS.MESSAGES, buildMessagesSlot(), 'Messages', {
+      tags: milestoneTagsFor(SUBFLOW_IDS.MESSAGES),
       inputMapper: (parent) => ({
         messages: (parent as MessageApiState).history,
         iteration: (parent as MessageApiState).iteration,
@@ -196,7 +198,10 @@ export function buildMessageApiChart(deps: MessageApiChartDeps): FlowChart {
       'message-api',
       'Assemble system + messages into the LLM request',
     )
-    .addFunction('CallLLM', callLLM as never, 'call-llm', 'Send the assembled request to the LLM');
+    .addFunction('CallLLM', callLLM as never, 'call-llm', 'Send the assembled request to the LLM')
+    // Declared milestone (9.90.0): the LLM turn (the slot branches above
+    // declare theirs in their mount options).
+    .tag(...milestoneTagsFor(STAGE_IDS.CALL_LLM));
 
   return builder.build();
 }

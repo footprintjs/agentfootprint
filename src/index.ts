@@ -75,6 +75,17 @@ export {
   milestoneFor,
   type Milestone,
   type MilestoneKind,
+  // Declared milestones (9.90.0): the charts put the SAME table on the stage as
+  // footprintjs 9.21 tags — `milestone:<kind>` + `milestone-label:<label>` —
+  // so a recording carries its own milestones and `milestoneFor` above is the
+  // fallback for a bundle with no tags. One writer, one reader, no literal.
+  MILESTONE_KINDS,
+  MILESTONE_TAG_PREFIX,
+  MILESTONE_LABEL_TAG_PREFIX,
+  milestoneTag,
+  milestoneTags,
+  milestoneTagsFor,
+  milestoneFromTags,
   // The reserved subflow namespace (9.49.0): the prefix the framework names its
   // own composition segments with, and the predicate downstream READERS use to
   // tell library plumbing from consumer structure — exported so a viewer or a

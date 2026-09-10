@@ -28,7 +28,7 @@
 import { flowChartSelector, select } from 'footprintjs';
 import type { FlowChart, TypedScope } from 'footprintjs';
 import type { LLMMessage, LLMProvider, LLMToolSchema } from '../../adapters/types.js';
-import { SUBFLOW_IDS } from '../../conventions.js';
+import { SUBFLOW_IDS, STAGE_IDS, milestoneTagsFor } from '../../conventions.js';
 import type { InjectionRecord } from '../../recorders/core/types.js';
 import { typedEmit } from '../../recorders/core/typedEmit.js';
 import { resilienceHooks } from '../../recorders/core/resilienceHooks.js';
@@ -223,6 +223,7 @@ export function buildAgentMessageApiChart(deps: AgentMessageApiChartDeps): FlowC
         buildSystemPromptSlot({ prompt: systemPrompt, reason: 'agent messageAPI' }),
         'System Prompt',
         {
+          tags: milestoneTagsFor(SUBFLOW_IDS.SYSTEM_PROMPT),
           inputMapper: (parent) => ({
             userMessage: (parent as AgentMsgApiState).userMessage,
             iteration: (parent as AgentMsgApiState).iteration,
@@ -233,6 +234,7 @@ export function buildAgentMessageApiChart(deps: AgentMessageApiChartDeps): FlowC
         },
       )
       .addSubFlowChartBranch(SUBFLOW_IDS.MESSAGES, buildMessagesSlot(), 'Messages', {
+        tags: milestoneTagsFor(SUBFLOW_IDS.MESSAGES),
         inputMapper: (parent) => ({
           messages: (parent as AgentMsgApiState).history,
           iteration: (parent as AgentMsgApiState).iteration,
@@ -240,6 +242,7 @@ export function buildAgentMessageApiChart(deps: AgentMessageApiChartDeps): FlowC
         outputMapper: (sf) => ({ messagesInjections: (sf as AgentMsgApiState).messagesInjections }),
       })
       .addSubFlowChartBranch(SUBFLOW_IDS.TOOLS, buildToolsSlot({ tools }), 'Tools', {
+        tags: milestoneTagsFor(SUBFLOW_IDS.TOOLS),
         inputMapper: (parent) => ({ iteration: (parent as AgentMsgApiState).iteration }),
         outputMapper: (sf) => ({ toolSchemas: (sf as AgentMsgApiState).toolSchemas }),
         // tools is a SEPARATE Anthropic wire field — it BYPASSES messageAPI
@@ -265,9 +268,16 @@ export function buildAgentMessageApiChart(deps: AgentMessageApiChartDeps): FlowC
         'call-llm',
         'Send the assembled request + tools to the LLM',
       )
+      // Declared milestones (9.90.0), from the same table `milestoneFor` reads
+      // (the slot branches above declare theirs in their mount options).
+      .tag(...milestoneTagsFor(STAGE_IDS.CALL_LLM))
       // Route → [ToolCalls → loop back to Context] / [Final → terminate].
-      .addDeciderFunction('Route', routeDecider as never, SUBFLOW_IDS.ROUTE, 'ReAct routing')
-      .addFunctionBranch(ROUTE_TOOL_CALLS, 'ToolCalls', toolExec as never, 'Execute tool calls')
+      .addDeciderFunction('Route', routeDecider as never, SUBFLOW_IDS.ROUTE, 'ReAct routing', {
+        tags: milestoneTagsFor(SUBFLOW_IDS.ROUTE),
+      })
+      .addFunctionBranch(ROUTE_TOOL_CALLS, 'ToolCalls', toolExec as never, 'Execute tool calls', {
+        tags: milestoneTagsFor(ROUTE_TOOL_CALLS),
+      })
       // ReAct: the loop is sourced from the TOOL-CALLS branch (after executing
       // tools, re-engineer context next turn) — NOT from the Route decider. Final
       // terminates as a leaf (its $break is the terminal boundary signal).

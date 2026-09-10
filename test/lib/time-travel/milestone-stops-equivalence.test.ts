@@ -22,20 +22,26 @@
  */
 
 import { describe, expect, it } from 'vitest';
-import { commitStops, timeTravel } from 'footprintjs/trace';
+import { commitStops, filterStops, splitStageId, timeTravel } from 'footprintjs/trace';
 import type { Stop, TimeTravel, TimeTravelStrategy } from 'footprintjs/trace';
 import type { CommitBundle, StageSnapshot } from 'footprintjs/advanced';
 import {
   Agent,
+  LLMCall,
+  MILESTONE_TAG_PREFIX,
   defineTool,
   isPaused,
   milestoneFor,
+  milestoneFromTags,
   milestoneOf,
   milestoneStops,
   milestoneStopsStrategy,
+  milestoneTags,
+  milestoneTagsFor,
   pauseHere,
   type Milestone,
 } from '../../../src/index.js';
+import { STAGE_IDS, SUBFLOW_IDS } from '../../../src/conventions.js';
 import { defineSkill, skillGraph } from '../../../src/injection-engine.js';
 import { mock } from '../../../src/llm-providers.js';
 
@@ -375,4 +381,336 @@ describe('what a stop from ANOTHER strategy gets', () => {
     expect(milestoneOf(foreign)).toEqual(milestoneFor('call-llm#1'));
     expect(milestoneOf(foreign)).not.toBe(foreign.meta);
   });
+});
+
+// ─── 9.90.0: the tag is the fact, the id is the fallback ─────────────
+//
+// footprintjs 9.21 lets a chart DECLARE a stage's tags at build time and stamps
+// them on the stage's first commit bundle. agentfootprint's charts now declare
+// every milestone the table in conventions.ts classifies, and `milestoneStops`
+// reads the bundle first — `milestoneFor(id)` only for a bundle that carries no
+// tags. What follows pins that: the TAG-ONLY axis (no id conventions at all) is
+// the id axis on every fixture and the shipped reader took the fallback path
+// ZERO times (footprintjs 9.21.1 tags branch mounts too, so every milestone
+// stage is declared); a recording with its tags stripped is still the id axis;
+// a mixed log reads each stop from wherever the fact is; and the Map lists the
+// vocabulary.
+
+/** The local segment of a stage id — what the milestone table is keyed by. */
+function localIdOf(runtimeStageId: string): string {
+  const beforeHash = runtimeStageId.includes('#')
+    ? runtimeStageId.slice(0, runtimeStageId.indexOf('#'))
+    : runtimeStageId;
+  return splitStageId(beforeHash).localStageId;
+}
+
+/** The TAG-ONLY axis: what a reader with no id conventions at all sees. */
+function taggedMilestoneStops(
+  log: readonly CommitBundle[],
+  tree?: StageSnapshot,
+): Stop<Milestone>[] {
+  return filterStops<Milestone>(commitStops(log, tree), (stop) => {
+    const found = milestoneFromTags(log[stop.commitIdx]?.tags, stop.label);
+    return found ? { label: found.label, meta: found } : null;
+  });
+}
+const taggedStrategy: TimeTravelStrategy<Milestone> = { stopsFor: taggedMilestoneStops };
+
+/** The ID-ONLY axis: 9.88.0's classifier as a `filterStops` keep rule, meta and label on. */
+const idStrategy: TimeTravelStrategy<Milestone> = {
+  stopsFor: (log, tree) =>
+    filterStops<Milestone>(commitStops(log, tree), (stop) => {
+      const found = milestoneFor(stop.runtimeStageId);
+      return found ? { label: found.label, meta: found } : null;
+    }),
+};
+
+const stripTags = (bundle: CommitBundle): CommitBundle => {
+  const { tags: _tags, ...rest } = bundle as CommitBundle & { tags?: unknown };
+  return rest as CommitBundle;
+};
+
+/**
+ * How many milestone stops the SHIPPED reader classified from the id — the
+ * fallback path. It must be ZERO on a 9.90.0 recording: every milestone stage
+ * is declared, so a stop that only the id could explain is a forgotten
+ * declaration, even where the fallback would have hidden it on the axis.
+ */
+function fallbackCount(log: readonly CommitBundle[], tree?: StageSnapshot): number {
+  return milestoneStops(log, tree).filter(
+    (s) =>
+      s.kind !== 'start' && s.kind !== 'end' && milestoneFromTags(log[s.commitIdx]?.tags) === null,
+  ).length;
+}
+
+/**
+ * THE FORGOTTEN-TAG CATCH. Three readers over one log — tag-only, id-only and
+ * the shipped `milestoneStops` — must produce the SAME stops (labels, kinds,
+ * commit ranges, meta, whole) and the same fold at every stop; and the shipped
+ * reader must have taken the fallback path zero times. A declaration site
+ * without its tag makes the tag-only axis miss a stop the id axis has, or the
+ * fallback count go positive — red either way.
+ */
+function expectTagAxisIsIdAxis(source: Source): Stop<Milestone>[] {
+  const log = source.commitLog;
+  const tree = source.executionTree;
+  const tagged = taggedMilestoneStops(log, tree);
+  expect(tagged).toEqual(idStrategy.stopsFor(log, tree));
+  expect(tagged).toEqual(milestoneStops(log, tree));
+  expect(fallbackCount(log, tree)).toBe(0);
+
+  // Every milestone stop's bundle declares exactly what the table says.
+  for (const s of tagged) {
+    if (s.kind === 'start' || s.kind === 'end') continue;
+    expect(log[s.commitIdx]!.tags).toEqual(milestoneTags(milestoneFor(s.runtimeStageId)!));
+  }
+
+  const a = timeTravel(source, { strategy: taggedStrategy });
+  const b = timeTravel(source, { strategy: idStrategy });
+  expectSameFolds(a, b);
+  return tagged;
+}
+
+/** A mount's own isolated log, as `drill()` reads it — the subflow's `history`. */
+function innerSourceOf(snapshot: Snapshot, mountRuntimeStageId: string): Source {
+  const hit = (snapshot.subflowResults as Record<string, { treeContext: { history: unknown[] } }>)[
+    mountRuntimeStageId
+  ];
+  expect(hit, `subflowResults[${mountRuntimeStageId}]`).toBeDefined();
+  return { commitLog: hit!.treeContext.history as CommitBundle[] };
+}
+
+async function recordLLMCall(): Promise<Snapshot> {
+  const call = LLMCall.create({
+    provider: mock({ chunkDelayMs: 0, respond: () => ({ content: 'done', toolCalls: [] }) }),
+    model: 'mock',
+  })
+    .system('s')
+    .build();
+  await call.run({ message: 'go' });
+  return call.getSnapshot()!;
+}
+
+describe('9.90.0: the tag is the fact — the tag-only axis is the id axis on every fixture', () => {
+  for (const reactMode of ['dynamic', 'dynamic-grouped'] as const) {
+    it(`${reactMode}: system + tool — forgotten-tag catch, fallback = 0`, async () => {
+      const snapshot = await record(reactMode, (a) => a.system('s').tool(tool('alpha_tool')));
+      const tagged = expectTagAxisIsIdAxis(snapshot);
+      expect(tagged.filter((s) => s.meta?.kind === 'iteration').length).toBeGreaterThan(0);
+      expect(tagged.filter((s) => s.meta?.kind === 'decision').length).toBeGreaterThan(0);
+      expect(tagged.filter((s) => s.meta?.kind === 'tool-call').length).toBeGreaterThan(0);
+      // The slots are selector-branch mounts: on the outer log in `dynamic`,
+      // inside the drill in `dynamic-grouped` — tagged either way (9.21.1).
+      if (reactMode === 'dynamic')
+        expect(tagged.filter((s) => s.meta?.kind === 'slot').length).toBeGreaterThanOrEqual(3);
+    });
+
+    it(`${reactMode}: skill graph — forgotten-tag catch, fallback = 0`, async () => {
+      const snapshot = await record(reactMode, (a) => a.system('s').skillGraph(graph()));
+      expectTagAxisIsIdAxis(snapshot);
+    });
+  }
+
+  it('dynamic-grouped: every drilled inner history — the llm-turn is tagged one drill down', async () => {
+    const snapshot = await record('dynamic-grouped', (a) => a.system('s').skillGraph(graph()));
+    const outer = timeTravel(snapshot, { strategy: taggedStrategy });
+    let drilled = 0;
+    for (const mount of outer.stops.filter((s) => s.kind === 'mount')) {
+      if (!outer.drill(mount.runtimeStageId)) continue;
+      const tagged = expectTagAxisIsIdAxis(innerSourceOf(snapshot, mount.runtimeStageId));
+      // The slots are selector-branch mounts INSIDE the turn — tagged there too.
+      expect(tagged.filter((s) => s.meta?.kind === 'slot').length).toBeGreaterThanOrEqual(3);
+      expect(tagged.some((s) => s.meta?.kind === 'llm-turn')).toBe(true);
+      drilled += 1;
+    }
+    expect(drilled).toBeGreaterThanOrEqual(2);
+  });
+
+  it('a paused-then-resumed run — both legs, and the chained axis', async () => {
+    const { paused, resumed } = await recordPausedAndResumed('dynamic');
+    expectTagAxisIsIdAxis(paused);
+    expectTagAxisIsIdAxis(resumed);
+    const chained = timeTravel([paused, resumed], { strategy: taggedStrategy });
+    const idChained = timeTravel([paused, resumed], { strategy: idStrategy });
+    expect(chained.stops).toEqual(idChained.stops);
+    expectSameFolds(chained, idChained);
+  });
+
+  it('LLMCall (slots mounted with addSubFlowChartNext) — the tag axis IS the id axis, nothing missing', async () => {
+    const snapshot = await recordLLMCall();
+    const tagged = expectTagAxisIsIdAxis(snapshot);
+    expect(tagged.map((s) => s.meta?.kind ?? s.kind)).toEqual(['start', 'iteration', 'end']);
+    const innerTagged = expectTagAxisIsIdAxis(innerSourceOf(snapshot, tagged[1]!.runtimeStageId));
+    expect(innerTagged.map((s) => s.meta?.kind ?? s.kind)).toEqual([
+      'start',
+      'slot',
+      'slot',
+      'llm-turn',
+      'end',
+    ]);
+    expect(innerTagged.map((s) => s.label)).toEqual([
+      'Run start',
+      'System prompt',
+      'Messages',
+      'LLM turn',
+      'Run end',
+    ]);
+  });
+});
+
+describe('9.90.0: the id is the fallback', () => {
+  it('a stored recording with `tags` stripped from every bundle still yields the id axis', async () => {
+    const snapshot = await record('dynamic', (a) => a.system('s').tool(tool('alpha_tool')));
+    expect(snapshot.commitLog.some((b) => b.tags !== undefined)).toBe(true);
+    const stripped: Source = {
+      commitLog: snapshot.commitLog.map(stripTags),
+      executionTree: snapshot.executionTree,
+    };
+    expect(stripped.commitLog.every((b) => b.tags === undefined)).toBe(true);
+    // The tag-only reader sees nothing…
+    expect(
+      taggedMilestoneStops(stripped.commitLog, stripped.executionTree).map((s) => s.kind),
+    ).toEqual(['start', 'end']);
+    // …and milestoneStops sees the whole 9.88.0 axis, folds included — every
+    // one of its milestone stops from the fallback path this time.
+    const { fresh } = expectEquivalent(stripped);
+    expect(fresh.stops.length).toBeGreaterThan(2);
+    expect(fallbackCount(stripped.commitLog, stripped.executionTree)).toBe(fresh.stops.length - 2);
+    expect(fresh.stops).toEqual(milestoneStops(snapshot.commitLog, snapshot.executionTree));
+  });
+
+  it('a mixed log reads the tag where present and the id where absent — same axis', async () => {
+    const snapshot = await record('dynamic', (a) => a.system('s').skillGraph(graph()));
+    let n = 0;
+    const mixed: Source = {
+      commitLog: snapshot.commitLog.map((b) =>
+        b.tags !== undefined && n++ % 2 === 0 ? stripTags(b) : b,
+      ),
+      executionTree: snapshot.executionTree,
+    };
+    expect(mixed.commitLog.some((b) => b.tags !== undefined)).toBe(true);
+    expect(mixed.commitLog.filter((b) => b.tags === undefined).length).toBeGreaterThan(
+      snapshot.commitLog.filter((b) => b.tags === undefined).length,
+    );
+    const { fresh } = expectEquivalent(mixed);
+    for (const stop of fresh.stops) {
+      if (stop.kind === 'start' || stop.kind === 'end') continue;
+      const bundle = mixed.commitLog[stop.commitIdx]!;
+      if (bundle.tags !== undefined) expect(milestoneFromTags(bundle.tags)).toEqual(stop.meta);
+      else expect(milestoneFor(stop.runtimeStageId)).toEqual(stop.meta);
+    }
+  });
+
+  it('the tag is the fact: a bundle tagged as something ELSE is not a stop, however recognisable its id', async () => {
+    const snapshot = await record('dynamic', (a) => a.system('s').tool(tool('alpha_tool')));
+    const log = snapshot.commitLog;
+    const idx = log.findIndex(
+      (b) => localIdOf((b as { runtimeStageId: string }).runtimeStageId) === STAGE_IDS.CALL_LLM,
+    );
+    expect(idx).toBeGreaterThan(0);
+    const retagged = log.map((b, i) =>
+      i === idx ? ({ ...b, tags: ['audit'] } as CommitBundle) : b,
+    );
+    const fresh = milestoneStops(retagged, snapshot.executionTree);
+    const legacy = legacyMilestoneStops(retagged, snapshot.executionTree);
+    expect(legacy.some((s) => s.commitIdx === idx)).toBe(true);
+    expect(fresh.some((s) => s.commitIdx === idx)).toBe(false);
+    expect(fresh.length).toBe(legacy.length - 1);
+  });
+
+  it('milestoneFromTags: the vocabulary, read back', () => {
+    expect(milestoneFromTags(milestoneTagsFor(STAGE_IDS.CALL_LLM))).toEqual({
+      kind: 'llm-turn',
+      label: 'LLM turn',
+    });
+    expect(milestoneFromTags([`${MILESTONE_TAG_PREFIX}decision`], 'Route')).toEqual({
+      kind: 'decision',
+      label: 'Route',
+    });
+    expect(milestoneFromTags([`${MILESTONE_TAG_PREFIX}decision`])).toEqual({
+      kind: 'decision',
+      label: 'decision',
+    });
+    expect(milestoneFromTags([`${MILESTONE_TAG_PREFIX}beat`])).toBeNull();
+    expect(milestoneFromTags(['audit', 'milestone-label:LLM turn'])).toBeNull();
+    expect(milestoneFromTags([42, null, `${MILESTONE_TAG_PREFIX}slot`], 'Tools')).toEqual({
+      kind: 'slot',
+      label: 'Tools',
+    });
+    expect(milestoneFromTags(undefined)).toBeNull();
+    expect(milestoneFromTags([])).toBeNull();
+    expect(() => milestoneTagsFor('seed')).toThrow(/not a milestone stage/);
+  });
+});
+
+// ─── the Map advertises the vocabulary ───────────────────────────────
+
+interface SpecNode {
+  readonly id: string;
+  readonly tags?: readonly string[];
+  readonly children?: readonly SpecNode[];
+  readonly next?: SpecNode;
+  readonly subflowStructure?: SpecNode;
+  /** A `loopTo` back-edge stub — the target's id twin, not a stage; carries no tags by design. */
+  readonly isLoopReference?: boolean;
+}
+
+function walk(node: SpecNode | undefined, out: SpecNode[] = []): SpecNode[] {
+  if (!node) return out;
+  if (!node.isLoopReference) out.push(node);
+  for (const child of node.children ?? []) walk(child, out);
+  walk(node.subflowStructure, out);
+  walk(node.next, out);
+  return out;
+}
+
+describe('9.90.0: the Map advertises the milestone vocabulary before any run', () => {
+  const build = (reactMode: ReactMode) =>
+    Agent.create({
+      provider: mock({ chunkDelayMs: 0, respond: () => ({ content: 'done', toolCalls: [] }) }),
+      model: 'mock',
+      maxIterations: 6,
+      reactMode,
+    })
+      .system('s')
+      .tool(tool('alpha_tool'))
+      .outputSchema(
+        { safeParse: (v: unknown) => ({ ok: true, value: v }) } as never,
+        {
+          retries: 1,
+        } as never,
+      )
+      .namesAndNumbersFromEvidence({ posture: 'guard' } as never)
+      .build();
+
+  for (const reactMode of ['dynamic', 'dynamic-grouped'] as const) {
+    it(`${reactMode}: every milestone node the table classifies is tagged from the table — slot branch mounts included`, () => {
+      const nodes = walk(build(reactMode).getSpec().buildTimeStructure as unknown as SpecNode);
+      const declared = new Map<string, readonly string[]>();
+      for (const node of nodes) {
+        const local = localIdOf(node.id);
+        const classified = milestoneFor(local);
+        if (classified === null) {
+          expect(node.tags?.some((t) => t.startsWith(MILESTONE_TAG_PREFIX)) ?? false).toBe(false);
+          continue;
+        }
+        expect(node.tags, `Map node ${node.id}`).toEqual(milestoneTagsFor(local));
+        declared.set(local, node.tags!);
+      }
+      const expected = [
+        SUBFLOW_IDS.INJECTION_ENGINE,
+        SUBFLOW_IDS.SYSTEM_PROMPT,
+        SUBFLOW_IDS.MESSAGES,
+        SUBFLOW_IDS.TOOLS,
+        STAGE_IDS.CALL_LLM,
+        SUBFLOW_IDS.ROUTE,
+        'tool-calls',
+        STAGE_IDS.OUTPUT_RETRY,
+        STAGE_IDS.EVIDENCE_RECHECK,
+        STAGE_IDS.WRAP_UP,
+        ...(reactMode === 'dynamic-grouped' ? [SUBFLOW_IDS.LLM_CALL] : []),
+      ];
+      for (const id of expected) expect(declared.has(id), `Map lists ${id}`).toBe(true);
+    });
+  }
 });

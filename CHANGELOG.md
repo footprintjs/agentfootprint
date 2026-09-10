@@ -7,6 +7,80 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [9.90.0] - 2026-09-10
+
+**The recording carries its own milestones.** Until now a stored run could not
+say which of its stops were an LLM turn, a tool call or a decision: every reader
+re-derived that from the stage id — `milestoneFor(runtimeStageId)`, a switch
+that parses `#` and `/`, lives outside the recording, and goes stale the day a
+stage is renamed. footprintjs 9.21 gave a chart a way to DECLARE a stage's
+names at build time and stamp them on its first commit bundle
+(`CommitBundle.tags`). This release puts the agent's milestones there — law 3
+of footprintjs's declared-tags design: **the tag is the fact; the derivation is
+the fallback.**
+
+### Added
+
+- **Declared milestones, one vocabulary, one owner.** `conventions.ts` now
+  holds ONE table (local stage id → `Milestone`) that both `milestoneFor(id)`
+  and the new `milestoneTagsFor(localStageId)` read, so the fact on the bundle
+  and the fallback from the id can never disagree. Every milestone site in
+  `buildAgentChart`, `buildDynamicAgentChart`, `LLMCall` and the two messageAPI
+  charts declares `milestoneTagsFor(<its id>)` — never a literal. The wire
+  form: `milestone:<kind>` (what a reader filters on) and
+  `milestone-label:<label>` (the human word). Exported: `MILESTONE_KINDS`,
+  `MILESTONE_TAG_PREFIX`, `MILESTONE_LABEL_TAG_PREFIX`, `milestoneTag(kind)`,
+  `milestoneTags(milestone)`, `milestoneTagsFor(localStageId)` (throws for an
+  id the table does not classify — a wiring mistake is loud), and
+  `milestoneFromTags(tags, labelWhenUndeclared?)` (reads a bundle's tags back;
+  non-strings ignored; a `milestone:` tag with an unknown kind is `null`).
+- **The Map advertises the vocabulary.** `buildTimeStructure` lists the tags
+  each stage CAN produce before any run — a lens draws its legend first.
+- `examples/observability/25-declared-vs-derived-stops.ts` — one real run
+  scrubbed two ways: `tagStops(['milestone:llm-turn'])` (footprintjs's own
+  strategy, no agent id conventions) and a DERIVED mark (a write-set predicate:
+  stops where `currentSkillId` was written), with the measured cost of each on
+  42 commits — declared 0.016 ms, write-set 0.020 ms, `milestoneStops`
+  0.018 ms, and a `stateAt` fold per candidate stop 11.7 ms (≈ 750×). That
+  ratio is why the declaration is the fact and the derivation is the fallback.
+
+### Changed
+
+- **`milestoneStops` reads the bundle first.** A stop's first bundle
+  (`log[stop.commitIdx]`, where footprintjs stamps the tags) decides: tags
+  present → they are the milestone, and a bundle tagged as something ELSE is
+  not a stop however recognisable its id; no tags at all → `milestoneFor(id)`,
+  exactly as before. A recording made before 9.90.0 therefore yields the same
+  axis it always did; `milestoneOf(stop)`, `Stop<Milestone>` and the labels
+  are unchanged in shape. `test/lib/time-travel/milestone-stops-equivalence.test.ts`
+  now also pins the TAG-ONLY axis against the id axis on every fixture (both
+  chart shapes, every drill, a paused-then-resumed run, an `LLMCall`) — the
+  forgotten-tag catch: a declaration site without its tag goes red — plus a
+  stripped-tags recording (the fallback), a mixed log, and the Map.
+- **footprintjs `^9.21.1` (was `^9.20.0`)** — dev and peer. 9.21.1 is the
+  release that lets a subflow mounted as a decider / selector BRANCH carry
+  declared tags (`SubflowMountOptions.tags`, landing on the mount's FIRST
+  bundle), which is how the three context slots — `sf-system-prompt` /
+  `sf-messages` / `sf-tools`, selector branches in every Agent chart — declare
+  `milestone:slot`. **Every milestone stage is declared.** On a 9.90.0
+  recording the id fallback runs zero times, and the equivalence test counts
+  it on every fixture, so a future undeclared site is caught even where the
+  fallback would have hidden it on the axis.
+
+```ts
+import { tagStops, timeTravel } from 'footprintjs/trace';
+import { milestoneTag, milestoneStopsStrategy } from 'agentfootprint';
+
+// A reader with NO agent id conventions — footprintjs's own strategy, our word:
+const turns = timeTravel(agent.getSnapshot()!, { strategy: tagStops([milestoneTag('llm-turn')]) });
+turns.stops.map((s) => s.label);   // ['Run start', 'CallLLM', 'CallLLM', 'Run end']
+turns.stops[1].meta;               // ['milestone:llm-turn', 'milestone-label:LLM turn']
+
+// The agent's own axis, unchanged in shape — tag first, id fallback:
+const all = timeTravel(agent.getSnapshot()!, { strategy: milestoneStopsStrategy });
+all.stops[5].meta;                 // { kind: 'llm-turn', label: 'LLM turn' } — read off the bundle
+```
+
 ## [9.89.3] - 2026-09-10
 
 **One owner of a subflow's served state.** A patch: no signature changes; a

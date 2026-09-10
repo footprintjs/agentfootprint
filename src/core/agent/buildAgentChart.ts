@@ -47,7 +47,7 @@ import { flowChart, select } from 'footprintjs';
 import type { FlowChart, StructureRecorder, TypedScope } from 'footprintjs';
 import type { LLMMessage } from '../../adapters/types.js';
 import type { CachePolicy } from '../../cache/types.js';
-import { STAGE_IDS, SUBFLOW_IDS } from '../../conventions.js';
+import { STAGE_IDS, SUBFLOW_IDS, milestoneTagsFor } from '../../conventions.js';
 import {
   EMPTY_ACTIVE_BY_SLOT,
   type ActiveBySlot,
@@ -557,7 +557,10 @@ export function buildAgentChart(deps: AgentChartDeps): FlowChart {
         // 8 → 16 → 24 → 32 cumulative injections per turn.
         arrayMerge: ArrayMergeMode.Replace,
       },
-    );
+    )
+    // Declared milestone (9.90.0): the iteration boundary, stamped on the
+    // mount's first commit bundle so a recording carries it without the id.
+    .tag(...milestoneTagsFor(SUBFLOW_IDS.INJECTION_ENGINE));
 
   // ── Messages-slot delivery — conditional mount (7.21) ───────────
   // The one stage that lets declared content INTO the window. It has to sit
@@ -622,7 +625,12 @@ export function buildAgentChart(deps: AgentChartDeps): FlowChart {
     // Each branch keeps its inputMapper + outputMapper + arrayMerge:Replace
     // VERBATIM from the former sequential mounts. Replace (not concat) is
     // load-bearing: the loopTo would otherwise accumulate injections/tools.
+    //
+    // Declared milestones (9.90.0): each slot mount carries `milestone:slot`
+    // via `SubflowMountOptions.tags` (footprintjs 9.21.1 — a branch mount has
+    // no cursor for `.tag()`); it lands on the mount's FIRST bundle.
     .addSubFlowChartBranch(SUBFLOW_IDS.SYSTEM_PROMPT, deps.systemPromptSubflow, 'System Prompt', {
+      tags: milestoneTagsFor(SUBFLOW_IDS.SYSTEM_PROMPT),
       inputMapper: (parent) => ({
         userMessage: parent.userMessage as string | undefined,
         iteration: parent.iteration as number | undefined,
@@ -642,6 +650,7 @@ export function buildAgentChart(deps: AgentChartDeps): FlowChart {
       arrayMerge: ArrayMergeMode.Replace,
     })
     .addSubFlowChartBranch(SUBFLOW_IDS.MESSAGES, deps.messagesSubflow, 'Messages', {
+      tags: milestoneTagsFor(SUBFLOW_IDS.MESSAGES),
       inputMapper: (parent) => ({
         messages: parent.history as readonly LLMMessage[] | undefined,
         iteration: parent.iteration as number | undefined,
@@ -655,6 +664,7 @@ export function buildAgentChart(deps: AgentChartDeps): FlowChart {
       arrayMerge: ArrayMergeMode.Replace,
     })
     .addSubFlowChartBranch(SUBFLOW_IDS.TOOLS, deps.toolsSubflow, 'Tools', {
+      tags: milestoneTagsFor(SUBFLOW_IDS.TOOLS),
       inputMapper: (parent) => ({
         iteration: parent.iteration as number | undefined,
         activeInjections: parent.activeInjections as readonly ActiveInjection[] | undefined,
@@ -774,7 +784,10 @@ export function buildAgentChart(deps: AgentChartDeps): FlowChart {
     })
     // CallLLM emits the per-iteration `iteration_start` marker itself (no
     // dedicated IterationStart stage — emitting is passive observability).
-    .addFunction('CallLLM', deps.callLLM as never, STAGE_IDS.CALL_LLM, 'LLM invocation');
+    .addFunction('CallLLM', deps.callLLM as never, STAGE_IDS.CALL_LLM, 'LLM invocation')
+    // Declared milestone (9.90.0): the LLM turn — `milestone:llm-turn` on the
+    // stage's commit bundle, from the same table `milestoneFor` reads.
+    .tag(...milestoneTagsFor(STAGE_IDS.CALL_LLM));
   // v2.14 — conditional NormalizeThinking sub-subflow. Mounted ONLY
   // when a ThinkingHandler resolved (auto-wired by provider.name OR
   // explicitly set via .thinkingHandler()). When undefined, the stage
@@ -798,8 +811,12 @@ export function buildAgentChart(deps: AgentChartDeps): FlowChart {
       },
     );
   }
+  // Declared milestones (9.90.0) on the decider and its branches — a decider /
+  // branch has no cursor for `.tag()`, so each declares in its own `tags`.
   let decider = builder
-    .addDeciderFunction('Route', deps.routeDecider as never, SUBFLOW_IDS.ROUTE, 'ReAct routing')
+    .addDeciderFunction('Route', deps.routeDecider as never, SUBFLOW_IDS.ROUTE, 'ReAct routing', {
+      tags: milestoneTagsFor(SUBFLOW_IDS.ROUTE),
+    })
     .addPausableFunctionBranch(
       'tool-calls',
       'ToolCalls',
@@ -812,7 +829,7 @@ export function buildAgentChart(deps: AgentChartDeps): FlowChart {
       // terminates. Survives pause/resume (human-in-the-loop tool approval): the
       // engine resolves the subflow loop target on resume — footprintjs
       // FlowChartExecutor.resume + test/lib/pause/resume-branch-loop-subflow.
-      { loopTo: loopTarget },
+      { loopTo: loopTarget, tags: milestoneTagsFor('tool-calls') },
     );
 
   // ── The schema re-ask — conditional mount (7.26) ────────────────
@@ -827,7 +844,7 @@ export function buildAgentChart(deps: AgentChartDeps): FlowChart {
       'SchemaRetry',
       deps.outputRetryStage as never,
       'Answer failed the output schema — put the correction back and ask again',
-      { loopTo: loopTarget },
+      { loopTo: loopTarget, tags: milestoneTagsFor(STAGE_IDS.OUTPUT_RETRY) },
     );
   }
 
@@ -841,7 +858,7 @@ export function buildAgentChart(deps: AgentChartDeps): FlowChart {
       'StepNudge',
       deps.stepNudgeStage as never,
       'Answer left declared steps unrun — one teaching nudge goes back (once per turn)',
-      { loopTo: loopTarget },
+      { loopTo: loopTarget, tags: milestoneTagsFor(STAGE_IDS.STEP_NUDGE) },
     );
   }
 
@@ -856,7 +873,7 @@ export function buildAgentChart(deps: AgentChartDeps): FlowChart {
       'EvidenceRecheck',
       deps.evidenceRecheckStage as never,
       'Answer stated values no tool result carried — naming them back for one revision',
-      { loopTo: loopTarget },
+      { loopTo: loopTarget, tags: milestoneTagsFor(STAGE_IDS.EVIDENCE_RECHECK) },
     );
   }
 
@@ -871,7 +888,7 @@ export function buildAgentChart(deps: AgentChartDeps): FlowChart {
       'WrapUp',
       deps.wrapUpStage as never,
       'Action budget exhausted — one last call with the tools withheld, for a real answer',
-      { loopTo: loopTarget },
+      { loopTo: loopTarget, tags: milestoneTagsFor(STAGE_IDS.WRAP_UP) },
     );
   }
 

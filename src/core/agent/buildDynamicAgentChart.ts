@@ -53,7 +53,7 @@ import { ArrayMergeMode } from 'footprintjs/advanced';
 import { flowChart, select } from 'footprintjs';
 import type { FlowChart, TypedScope } from 'footprintjs';
 import type { LLMMessage } from '../../adapters/types.js';
-import { STAGE_IDS, SUBFLOW_IDS } from '../../conventions.js';
+import { STAGE_IDS, SUBFLOW_IDS, milestoneTagsFor } from '../../conventions.js';
 import {
   EMPTY_ACTIVE_BY_SLOT,
   type ActiveBySlot,
@@ -196,125 +196,129 @@ export function buildDynamicAgentChart(deps: AgentChartDeps): FlowChart {
     // chart's `Agent: ReAct loop` description — so this does NOT mislabel
     // the agent boundary (confirmed in the proposal's 7-person review).
     description: 'LLMCall: invocation internals',
-  }).addSubFlowChartNext(
-    SUBFLOW_IDS.INJECTION_ENGINE,
-    deps.injectionEngineSubflow,
-    'Injection Engine',
-    {
-      // NOTE: `history` here is the writable working key `dynamicTurnSeed`
-      // sets from `priorHistory` — not the frozen boundary input. See the
-      // Deliver mount below for why that indirection exists.
-      inputMapper: (parent) => ({
-        iteration: parent.iteration as number | undefined,
-        // The turn's action budget (9.57.0) — the same line the flat chart
-        // and the cache mount carry, so `ctx` is one shape in both charts.
-        maxIterations: (parent.maxIterations as number | undefined) ?? deps.maxIterations,
-        userMessage: parent.userMessage as string | undefined,
-        history: parent.history as readonly LLMMessage[] | undefined,
-        lastToolResult: parent.lastToolResult as { toolName: string; result: string } | undefined,
-        // The WHOLE batch, in call order (9.16.0) — crossed into sf-llm-call by
-        // the outer boundary below, same as lastToolResult.
-        toolResults: parent.toolResults as
-          | ReadonlyArray<{ toolName: string; result: string; toolCallId: string }>
-          | undefined,
-        activatedInjectionIds:
-          (parent.activatedInjectionIds as readonly string[] | undefined) ?? [],
-        // Last turn's per-slot active set for the engine's Delta stage. In the
-        // grouped chart the sf-llm-call scope re-seeds each turn, so this is
-        // not yet carried across turns — Delta degrades to "all added" here
-        // (the flat/default chart carries it via the persistent parent scope).
-        priorActiveByslot:
-          (parent.activeByslot as ActiveBySlot | undefined) ?? EMPTY_ACTIVE_BY_SLOT,
-        // Skill-graph cursor from the previous iteration (carried into sf-llm-call
-        // by its outer boundary below). The `from`-gate for the route triggers.
-        currentSkillId: parent.currentSkillId as string | undefined,
-        // The `read_skill` pick the gate accepted last iteration — the model's own
-        // move through the graph (one-shot; the tool-calls stage rewrites it).
-        pendingSkillPick: parent.pendingSkillPick as string | undefined,
-        // Relevance entry ranking (from an entry scorer) — read by defineRelevanceHint.
-        entryScores: parent.entryScores as
-          | ReadonlyArray<{ id: string; score: number; relevance: number }>
-          | undefined,
-        entryScorer: parent.entryScorer as string | undefined,
-        // The turn-start verdict (SG-C) — crossed into sf-llm-call by the outer
-        // boundary below; the resolver consumes it on iteration 1.
-        turnRoute: parent.turnRoute as
-          | import('../../lib/injection-engine/routingPolicy.js').TurnRoute
-          | undefined,
-        // The step pointer as of the previous iteration (9.18.0) — the
-        // sf-llm-call boundary's readonly input, for the Evaluate re-key.
-        ...(deps.hasSteps === true && { stepPointer: parent.stepPointer }),
-        // The typed tool-effects carriers (9.19.0) — value-conditional (the
-        // `resolvedModel` precedent): present only after a tool granted one,
-        // crossed into sf-llm-call by the outer boundary below.
-        ...(parent.pendingToolTransition !== undefined && {
-          pendingToolTransition: parent.pendingToolTransition,
-        }),
-        ...(parent.instructionLeases !== undefined && {
-          instructionLeases: parent.instructionLeases,
-        }),
-        // The mount kernel's engagement state (9.58.0) — the sf-llm-call
-        // boundary's readonly input, for the Evaluate advance (the
-        // stepPointer discipline verbatim).
-        ...(deps.engagementPlan !== undefined &&
-          parent.mapEngagement !== undefined && {
-            mapEngagement: parent.mapEngagement,
+  })
+    .addSubFlowChartNext(
+      SUBFLOW_IDS.INJECTION_ENGINE,
+      deps.injectionEngineSubflow,
+      'Injection Engine',
+      {
+        // NOTE: `history` here is the writable working key `dynamicTurnSeed`
+        // sets from `priorHistory` — not the frozen boundary input. See the
+        // Deliver mount below for why that indirection exists.
+        inputMapper: (parent) => ({
+          iteration: parent.iteration as number | undefined,
+          // The turn's action budget (9.57.0) — the same line the flat chart
+          // and the cache mount carry, so `ctx` is one shape in both charts.
+          maxIterations: (parent.maxIterations as number | undefined) ?? deps.maxIterations,
+          userMessage: parent.userMessage as string | undefined,
+          history: parent.history as readonly LLMMessage[] | undefined,
+          lastToolResult: parent.lastToolResult as { toolName: string; result: string } | undefined,
+          // The WHOLE batch, in call order (9.16.0) — crossed into sf-llm-call by
+          // the outer boundary below, same as lastToolResult.
+          toolResults: parent.toolResults as
+            | ReadonlyArray<{ toolName: string; result: string; toolCallId: string }>
+            | undefined,
+          activatedInjectionIds:
+            (parent.activatedInjectionIds as readonly string[] | undefined) ?? [],
+          // Last turn's per-slot active set for the engine's Delta stage. In the
+          // grouped chart the sf-llm-call scope re-seeds each turn, so this is
+          // not yet carried across turns — Delta degrades to "all added" here
+          // (the flat/default chart carries it via the persistent parent scope).
+          priorActiveByslot:
+            (parent.activeByslot as ActiveBySlot | undefined) ?? EMPTY_ACTIVE_BY_SLOT,
+          // Skill-graph cursor from the previous iteration (carried into sf-llm-call
+          // by its outer boundary below). The `from`-gate for the route triggers.
+          currentSkillId: parent.currentSkillId as string | undefined,
+          // The `read_skill` pick the gate accepted last iteration — the model's own
+          // move through the graph (one-shot; the tool-calls stage rewrites it).
+          pendingSkillPick: parent.pendingSkillPick as string | undefined,
+          // Relevance entry ranking (from an entry scorer) — read by defineRelevanceHint.
+          entryScores: parent.entryScores as
+            | ReadonlyArray<{ id: string; score: number; relevance: number }>
+            | undefined,
+          entryScorer: parent.entryScorer as string | undefined,
+          // The turn-start verdict (SG-C) — crossed into sf-llm-call by the outer
+          // boundary below; the resolver consumes it on iteration 1.
+          turnRoute: parent.turnRoute as
+            | import('../../lib/injection-engine/routingPolicy.js').TurnRoute
+            | undefined,
+          // The step pointer as of the previous iteration (9.18.0) — the
+          // sf-llm-call boundary's readonly input, for the Evaluate re-key.
+          ...(deps.hasSteps === true && { stepPointer: parent.stepPointer }),
+          // The typed tool-effects carriers (9.19.0) — value-conditional (the
+          // `resolvedModel` precedent): present only after a tool granted one,
+          // crossed into sf-llm-call by the outer boundary below.
+          ...(parent.pendingToolTransition !== undefined && {
+            pendingToolTransition: parent.pendingToolTransition,
           }),
-        // The kernel's PER-PASS pick feed (9.59.0) — every read_skill pick the
-        // gate accepted last iteration. Threaded beside the engagement state and
-        // under the same gate, so an agent without `.maps()` is unchanged.
-        ...(deps.engagementPlan !== undefined && {
-          acceptedSkillPicks: (parent.acceptedSkillPicks as readonly string[] | undefined) ?? [],
+          ...(parent.instructionLeases !== undefined && {
+            instructionLeases: parent.instructionLeases,
+          }),
+          // The mount kernel's engagement state (9.58.0) — the sf-llm-call
+          // boundary's readonly input, for the Evaluate advance (the
+          // stepPointer discipline verbatim).
+          ...(deps.engagementPlan !== undefined &&
+            parent.mapEngagement !== undefined && {
+              mapEngagement: parent.mapEngagement,
+            }),
+          // The kernel's PER-PASS pick feed (9.59.0) — every read_skill pick the
+          // gate accepted last iteration. Threaded beside the engagement state and
+          // under the same gate, so an agent without `.maps()` is unchanged.
+          ...(deps.engagementPlan !== undefined && {
+            acceptedSkillPicks: (parent.acceptedSkillPicks as readonly string[] | undefined) ?? [],
+          }),
+          // The kernel's SERVED carrier (9.59.0) — what actually reached the
+          // wire last pass, feeding the idle test's first clause. Its own key,
+          // because the Delta round-trip is empty in the grouped chart.
+          ...(deps.engagementPlan !== undefined && {
+            servedInjectionIds: (parent.servedInjectionIds as readonly string[] | undefined) ?? [],
+          }),
         }),
-        // The kernel's SERVED carrier (9.59.0) — what actually reached the
-        // wire last pass, feeding the idle test's first clause. Its own key,
-        // because the Delta round-trip is empty in the grouped chart.
-        ...(deps.engagementPlan !== undefined && {
-          servedInjectionIds: (parent.servedInjectionIds as readonly string[] | undefined) ?? [],
+        outputMapper: (sf) => ({
+          activeInjections: sf.activeInjections,
+          activeByslot: sf.activeByslot,
+          // Advanced cursor — bubbled up under its own key (sf-llm-call's
+          // `currentSkillId` is a readonly input here), then mapped onto the
+          // ReAct parent's mutable currentSkillId by the outer outputMapper.
+          nextSkillCursor: sf.nextSkillCursor,
+          // The re-keyed step pointer (9.18.0) — same alias discipline as the
+          // cursor one line up, same round trip: out under its own key, mapped
+          // onto the ReAct parent's `stepPointer` by the outer outputMapper.
+          // A top-level ARRAY on purpose (Replace sets it wholesale; a bare
+          // object would shallow-merge — see StepPointerCarrier).
+          ...(deps.hasSteps === true && { nextStepPointer: sf.nextStepPointer }),
+          // The lease tenure sweep's survivors (9.19.0) — first hop of the
+          // same round trip (the outer boundary maps them onto the ReAct
+          // parent's `instructionLeases`). The sweep makes lease death
+          // PERMANENT: a cyclic graph must not resurrect a dead lease when
+          // the cursor re-enters the skill that granted it. Value-conditional
+          // — never written before a first grant.
+          ...(sf.nextInstructionLeases !== undefined && {
+            nextInstructionLeases: sf.nextInstructionLeases,
+          }),
+          // The advanced engagement state (9.58.0) — first hop of the same
+          // alias round trip; the outer boundary maps it onto the ReAct
+          // parent's `mapEngagement`. Value-conditional — never written
+          // unless `.maps()` is mounted.
+          ...(sf.nextMapEngagement !== undefined && {
+            nextMapEngagement: sf.nextMapEngagement,
+          }),
+          // The kernel's SERVED carrier (9.59.0) — first hop.
+          ...(sf.nextServedInjectionIds !== undefined && {
+            nextServedInjectionIds: sf.nextServedInjectionIds,
+          }),
+          // The engagement axis's TOOL suppression (9.59.0) — first hop of the
+          // same round trip. Value-conditional, like everything beside it.
+          ...(sf.parkedToolNames !== undefined && {
+            parkedToolNames: sf.parkedToolNames,
+          }),
         }),
-      }),
-      outputMapper: (sf) => ({
-        activeInjections: sf.activeInjections,
-        activeByslot: sf.activeByslot,
-        // Advanced cursor — bubbled up under its own key (sf-llm-call's
-        // `currentSkillId` is a readonly input here), then mapped onto the
-        // ReAct parent's mutable currentSkillId by the outer outputMapper.
-        nextSkillCursor: sf.nextSkillCursor,
-        // The re-keyed step pointer (9.18.0) — same alias discipline as the
-        // cursor one line up, same round trip: out under its own key, mapped
-        // onto the ReAct parent's `stepPointer` by the outer outputMapper.
-        // A top-level ARRAY on purpose (Replace sets it wholesale; a bare
-        // object would shallow-merge — see StepPointerCarrier).
-        ...(deps.hasSteps === true && { nextStepPointer: sf.nextStepPointer }),
-        // The lease tenure sweep's survivors (9.19.0) — first hop of the
-        // same round trip (the outer boundary maps them onto the ReAct
-        // parent's `instructionLeases`). The sweep makes lease death
-        // PERMANENT: a cyclic graph must not resurrect a dead lease when
-        // the cursor re-enters the skill that granted it. Value-conditional
-        // — never written before a first grant.
-        ...(sf.nextInstructionLeases !== undefined && {
-          nextInstructionLeases: sf.nextInstructionLeases,
-        }),
-        // The advanced engagement state (9.58.0) — first hop of the same
-        // alias round trip; the outer boundary maps it onto the ReAct
-        // parent's `mapEngagement`. Value-conditional — never written
-        // unless `.maps()` is mounted.
-        ...(sf.nextMapEngagement !== undefined && {
-          nextMapEngagement: sf.nextMapEngagement,
-        }),
-        // The kernel's SERVED carrier (9.59.0) — first hop.
-        ...(sf.nextServedInjectionIds !== undefined && {
-          nextServedInjectionIds: sf.nextServedInjectionIds,
-        }),
-        // The engagement axis's TOOL suppression (9.59.0) — first hop of the
-        // same round trip. Value-conditional, like everything beside it.
-        ...(sf.parkedToolNames !== undefined && {
-          parkedToolNames: sf.parkedToolNames,
-        }),
-      }),
-      arrayMerge: ArrayMergeMode.Replace,
-    },
-  );
+        arrayMerge: ArrayMergeMode.Replace,
+      },
+    )
+    // Declared milestone (9.90.0): on the inner (drilled) log this mount is the
+    // iteration boundary, exactly as `milestoneFor` classifies it.
+    .tag(...milestoneTagsFor(SUBFLOW_IDS.INJECTION_ENGINE));
 
   // ── Messages-slot delivery — conditional mount (7.21) ───────────
   // Same placement as the flat chart (after the engine, before anything reads
@@ -357,7 +361,12 @@ export function buildDynamicAgentChart(deps: AgentChartDeps): FlowChart {
     )
     // Branch mappers + arrayMerge:Replace VERBATIM from the former sequential
     // mounts (Replace is load-bearing — loopTo would otherwise accumulate).
+    //
+    // Declared milestones (9.90.0): each slot mount carries `milestone:slot`
+    // via `SubflowMountOptions.tags` (footprintjs 9.21.1), on its FIRST bundle
+    // of the inner (drilled) log.
     .addSubFlowChartBranch(SUBFLOW_IDS.SYSTEM_PROMPT, deps.systemPromptSubflow, 'System Prompt', {
+      tags: milestoneTagsFor(SUBFLOW_IDS.SYSTEM_PROMPT),
       inputMapper: (parent) => ({
         userMessage: parent.userMessage as string | undefined,
         iteration: parent.iteration as number | undefined,
@@ -376,6 +385,7 @@ export function buildDynamicAgentChart(deps: AgentChartDeps): FlowChart {
       arrayMerge: ArrayMergeMode.Replace,
     })
     .addSubFlowChartBranch(SUBFLOW_IDS.MESSAGES, deps.messagesSubflow, 'Messages', {
+      tags: milestoneTagsFor(SUBFLOW_IDS.MESSAGES),
       inputMapper: (parent) => ({
         messages: parent.history as readonly LLMMessage[] | undefined,
         iteration: parent.iteration as number | undefined,
@@ -389,6 +399,7 @@ export function buildDynamicAgentChart(deps: AgentChartDeps): FlowChart {
       arrayMerge: ArrayMergeMode.Replace,
     })
     .addSubFlowChartBranch(SUBFLOW_IDS.TOOLS, deps.toolsSubflow, 'Tools', {
+      tags: milestoneTagsFor(SUBFLOW_IDS.TOOLS),
       inputMapper: (parent) => ({
         iteration: parent.iteration as number | undefined,
         activeInjections: parent.activeInjections as readonly ActiveInjection[] | undefined,
@@ -484,7 +495,9 @@ export function buildDynamicAgentChart(deps: AgentChartDeps): FlowChart {
     })
     // CallLLM emits the per-iteration `iteration_start` marker itself (no
     // dedicated IterationStart stage — emitting is passive observability).
-    .addFunction('CallLLM', deps.callLLM as never, STAGE_IDS.CALL_LLM, 'LLM invocation');
+    .addFunction('CallLLM', deps.callLLM as never, STAGE_IDS.CALL_LLM, 'LLM invocation')
+    // Declared milestone (9.90.0): the LLM turn, on the inner log.
+    .tag(...milestoneTagsFor(STAGE_IDS.CALL_LLM));
 
   if (deps.thinkingSubflow) {
     inner = inner.addSubFlowChartNext(
@@ -791,7 +804,12 @@ export function buildDynamicAgentChart(deps: AgentChartDeps): FlowChart {
       // REPLACE (not concat) so each turn overwrites the prior value.
       arrayMerge: ArrayMergeMode.Replace,
     })
-    .addDeciderFunction('Route', deps.routeDecider as never, SUBFLOW_IDS.ROUTE, 'ReAct routing')
+    // Declared milestones (9.90.0): the mount is the iteration boundary on the
+    // OUTER log; the decider and its branches declare in their own `tags`.
+    .tag(...milestoneTagsFor(SUBFLOW_IDS.LLM_CALL))
+    .addDeciderFunction('Route', deps.routeDecider as never, SUBFLOW_IDS.ROUTE, 'ReAct routing', {
+      tags: milestoneTagsFor(SUBFLOW_IDS.ROUTE),
+    })
     .addPausableFunctionBranch(
       'tool-calls',
       'ToolCalls',
@@ -804,7 +822,7 @@ export function buildDynamicAgentChart(deps: AgentChartDeps): FlowChart {
       // Survives pause/resume (human-in-the-loop tool approval): the engine
       // resolves the subflow loop target on resume — footprintjs
       // FlowChartExecutor.resume + test/lib/pause/resume-branch-loop-subflow.
-      { loopTo: loopTarget },
+      { loopTo: loopTarget, tags: milestoneTagsFor('tool-calls') },
     );
 
   // ── The schema re-ask — conditional mount (7.26) ────────────────
@@ -818,7 +836,7 @@ export function buildDynamicAgentChart(deps: AgentChartDeps): FlowChart {
       'SchemaRetry',
       deps.outputRetryStage as never,
       'Answer failed the output schema — put the correction back and ask again',
-      { loopTo: loopTarget },
+      { loopTo: loopTarget, tags: milestoneTagsFor(STAGE_IDS.OUTPUT_RETRY) },
     );
   }
 
@@ -831,7 +849,7 @@ export function buildDynamicAgentChart(deps: AgentChartDeps): FlowChart {
       'StepNudge',
       deps.stepNudgeStage as never,
       'Answer left declared steps unrun — one teaching nudge goes back (once per turn)',
-      { loopTo: loopTarget },
+      { loopTo: loopTarget, tags: milestoneTagsFor(STAGE_IDS.STEP_NUDGE) },
     );
   }
 
@@ -845,7 +863,7 @@ export function buildDynamicAgentChart(deps: AgentChartDeps): FlowChart {
       'EvidenceRecheck',
       deps.evidenceRecheckStage as never,
       'Answer stated values no tool result carried — naming them back for one revision',
-      { loopTo: loopTarget },
+      { loopTo: loopTarget, tags: milestoneTagsFor(STAGE_IDS.EVIDENCE_RECHECK) },
     );
   }
 
@@ -859,7 +877,7 @@ export function buildDynamicAgentChart(deps: AgentChartDeps): FlowChart {
       'WrapUp',
       deps.wrapUpStage as never,
       'Action budget exhausted — one last call with the tools withheld, for a real answer',
-      { loopTo: loopTarget },
+      { loopTo: loopTarget, tags: milestoneTagsFor(STAGE_IDS.WRAP_UP) },
     );
   }
 

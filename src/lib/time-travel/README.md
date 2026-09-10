@@ -540,6 +540,62 @@ The mount is addressed by its `runtimeStageId`, not its path: a subflow inside a
 loop runs many times and every iteration shares one path, so `sf-llm-call#4` and
 `sf-llm-call#9` are two different turns and drill to two different logs.
 
+## The tag is the fact, the id is the fallback (9.90.0)
+
+footprintjs 9.21 lets a chart put NAMES on a stage at build time and stamps
+them on the stage's first commit bundle (`CommitBundle.tags`). agentfootprint's
+charts now declare every milestone the table in `conventions.ts` classifies,
+in the vocabulary that file owns — two tags per stage, produced by ONE function
+and read back by ONE function, no second string literal anywhere:
+
+| tag | what it is | example |
+|---|---|---|
+| `milestone:<kind>` | the kind — what a reader FILTERS on | `milestone:llm-turn` |
+| `milestone-label:<label>` | the human word the table gives that stage | `milestone-label:LLM turn` |
+
+`milestoneTagsFor(localStageId)` is what a declaration site spreads into
+`.tag(...)` or `{ tags }`; `milestoneFromTags(bundle.tags)` reads it back;
+`milestoneFor(id)` reads the SAME table from the id. The rule `milestoneStops`
+follows, in one sentence: **read the stop's first bundle; if it carries tags,
+they are the answer — a bundle tagged as something else is not a stop, however
+recognisable its id — and only a bundle with no tags at all is classified from
+its id.** That fallback is what a recording made before 9.90.0 gets, and
+nothing else: every milestone stage is declared — the three context slots,
+selector BRANCH mounts in every Agent chart, carry `milestone:slot` through
+`SubflowMountOptions.tags` (footprintjs 9.21.1; it lands on the mount's FIRST
+bundle). Both readings come from one table, so they agree wherever both exist;
+`test/lib/time-travel/milestone-stops-equivalence.test.ts` pins the tag-only
+axis against the id axis on every fixture AND counts the fallback path on the
+shipped reader — it must be zero — so a declaration site without its tag goes
+red there even where the fallback would have hidden it on the axis.
+
+The Map advertises the vocabulary before any run: `buildTimeStructure` lists
+the tags each stage CAN produce, so a lens draws its legend first.
+
+```ts
+import { tagStops, timeTravel } from 'footprintjs/trace';
+import { milestoneTag, milestoneStopsStrategy } from 'agentfootprint';
+
+// A reader with NO agent id conventions — footprintjs's own strategy, our word:
+const turns = timeTravel(agent.getSnapshot()!, { strategy: tagStops([milestoneTag('llm-turn')]) });
+turns.stops.map((s) => s.label);   // ['Run start', 'CallLLM', 'CallLLM', 'Run end']
+turns.stops[1].meta;               // ['milestone:llm-turn', 'milestone-label:LLM turn']
+
+// The agent's own axis — tag first, id fallback — same stops as 9.88.0, labelled:
+const all = timeTravel(agent.getSnapshot()!, { strategy: milestoneStopsStrategy });
+all.stops[5].meta;                 // { kind: 'llm-turn', label: 'LLM turn' } — read off the bundle
+```
+
+A DERIVED mark is the other thing: computed at read time from what the log
+says happened, never stored — "the stops where `currentSkillId` was written"
+is a keep rule over each stop's own `trace`, the same `filterStops`
+composition. `examples/observability/25-declared-vs-derived-stops.ts` scrubs
+one real run both ways and measures them (42 commits, mock provider): declared
+`tagStops` 0.016 ms, the write-set predicate 0.020 ms, `milestoneStops` 0.018
+ms — and the derivation everyone reaches for first, one full `stateAt` per
+candidate stop, 11.7 ms (≈ 750×). That cost is why the declaration is the fact
+and the derivation is the fallback.
+
 ## The honest edge: which keys are visible where
 
 A grouped run's outer log carries what crossed the subflow boundary — what the
