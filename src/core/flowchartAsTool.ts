@@ -269,7 +269,8 @@ export interface FlowchartAsToolOptions {
    * (`executor.setRedactionPolicy`).
    *
    * footprintjs scrubs at COMMIT time, so a redacted key never reaches the
-   * inner COMMIT LOG at all. Same mechanism, same placeholders, and the same
+   * inner COMMIT LOG at all — through every path, since footprintjs 9.19.0
+   * (see 3 below). Same mechanism, same placeholders, and the same
    * `(redacted by policy)` flag as the outer run; the trace tools pass
    * placeholders through verbatim and never reconstruct around them.
    *
@@ -301,15 +302,24 @@ export interface FlowchartAsToolOptions {
    * 2. The resume checkpoint. A paused run throws with `err.checkpoint`,
    *    which holds real values because resumption must replay against them;
    *    it goes to the agent loop, never to a model.
-   * 3. What the LOG itself carries in footprintjs 9.18.0 — a served view is
-   *    as clean as the log beneath it: `fields` (dot-path) redaction scrubs
-   *    recorder views only; a subflow `outputMapper`'s merge-back and an
-   *    `inputMapper`'s seed both bypass the scope facade and land verbatim
-   *    (the seed also as the subflow narrative's `Input:` line); and a stage
-   *    that READS a redacted key keeps the plaintext in its tracked reads
-   *    (`executionTree.*.stageReads`). So "every field" means every field
-   *    the log scrubs (see `servableSnapshot` for the file · symbol of each,
-   *    and `test/core/flowchartAsTool.redact.test.ts` where each is pinned).
+   * 3. What the LOG itself carries — footprintjs's law, not this option's,
+   *    and since footprintjs 9.19.0 (this package's floor from 9.89.2) that
+   *    law is one rule: a policy covers everything the run retains or serves
+   *    — the log in both encodings, the mirror, `stageReads`/`stageWrites`,
+   *    the narrative, a subflow's `inputMapper` seed (its `history[0]` and
+   *    its `Input:` line), its `outputMapper` merge-back, `fields` dot-paths
+   *    — and never the live heap or the checkpoint. The five places 9.18
+   *    left plaintext in the record (dot-path fields, merge-back, seed, seed
+   *    narrative, tracked reads) are closed at the root, and each is asserted
+   *    closed in `test/core/flowchartAsTool.redact.test.ts` §6 (red on 9.18).
+   *    So "every field" means every field, and the log agrees. ONE surface
+   *    footprintjs's redacted view still leaves raw —
+   *    `subflowResults[*].treeContext.globalContext` and its `#n` twin, the
+   *    subflow's own heap, since only the run-level runtime keeps a mirror —
+   *    and THIS option answers it: `servableSnapshot` refolds that state from
+   *    the subflow's scrubbed `history` (§7 of the same file pins both the
+   *    limit and the answer). A consumer reading footprintjs's snapshot
+   *    directly, not through this tool, still sees that heap raw.
    */
   readonly redact?: RedactionPolicy;
 }

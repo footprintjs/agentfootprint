@@ -4,7 +4,7 @@ title: RedactionPolicy
 
 # Interface: RedactionPolicy
 
-Defined in: node\_modules/footprintjs/dist/types/lib/scope/types.d.ts:68
+Defined in: node\_modules/footprintjs/dist/types/lib/memory/redaction.d.ts:31
 
 Declarative redaction configuration — define once, applied everywhere.
 
@@ -17,7 +17,7 @@ FlowChartExecutor to apply across all stages.
 
 > `optional` **emitPatterns?**: `RegExp`[]
 
-Defined in: node\_modules/footprintjs/dist/types/lib/scope/types.d.ts:93
+Defined in: node\_modules/footprintjs/dist/types/lib/memory/redaction.d.ts:56
 
 Regex patterns matched against `EmitEvent.name` for `scope.$emit(...)`
 calls. Any emit event whose name matches has its payload replaced with
@@ -35,7 +35,7 @@ Example:
 
 > `optional` **fields?**: `Record`\<`string`, `string`[]\>
 
-Defined in: node\_modules/footprintjs/dist/types/lib/scope/types.d.ts:81
+Defined in: node\_modules/footprintjs/dist/types/lib/memory/redaction.d.ts:44
 
 Field-level redaction within objects — key → array of fields to scrub.
  Supports dot-notation for nested paths (e.g. 'address.zip').
@@ -46,7 +46,7 @@ Field-level redaction within objects — key → array of fields to scrub.
 
 > `optional` **keys?**: `string`[]
 
-Defined in: node\_modules/footprintjs/dist/types/lib/scope/types.d.ts:70
+Defined in: node\_modules/footprintjs/dist/types/lib/memory/redaction.d.ts:33
 
 Exact key names to always redact (e.g. ['ssn', 'creditCard']).
 
@@ -56,7 +56,7 @@ Exact key names to always redact (e.g. ['ssn', 'creditCard']).
 
 > `optional` **patterns?**: `RegExp`[]
 
-Defined in: node\_modules/footprintjs/dist/types/lib/scope/types.d.ts:78
+Defined in: node\_modules/footprintjs/dist/types/lib/memory/redaction.d.ts:41
 
 Regex patterns — any key matching a pattern is auto-redacted.
 

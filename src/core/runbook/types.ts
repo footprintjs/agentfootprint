@@ -213,11 +213,15 @@ export interface RunbookAsToolOptions {
   /** Bounded LRU size for kept records (requires `keepRecord: true`). */
   readonly keepRecordLimit?: number;
   /** Redaction policy for the inner run. One rule for everything the tool
-   *  shows (9.89.1): the commit log is scrubbed at write time, and the
-   *  envelope's state, the walk's recording and the kept record are all
-   *  served from footprintjs's redacted view through `servableSnapshot` —
-   *  see `FlowchartAsToolOptions.redact` for what it covers and what the
-   *  substrate leaves in the log. */
+   *  shows (9.89.1): the commit log is scrubbed at write time — and since
+   *  footprintjs 9.19.0 (the floor from 9.89.2) so is every path that used to
+   *  bypass it: a subflow's seed and merge-back, tracked reads, dot-path
+   *  `fields`, the narrated `Input:` line — and the envelope's state, the
+   *  walk's recording and the kept record are all served from footprintjs's
+   *  redacted view through `servableSnapshot`, which also refolds the one
+   *  surface that view leaves raw (a subflow's own heap) from its scrubbed
+   *  history. See `FlowchartAsToolOptions.redact` for the two things it does
+   *  not govern: fold bases and the resume checkpoint. */
   readonly redact?: RedactionPolicy;
 }
 

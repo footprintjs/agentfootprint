@@ -581,11 +581,20 @@ and fixing it is a behaviour change rather than a patch.
 > no longer disagrees with its own log. The cost named below is paid on
 > purpose: under a policy the record omits `initialState` (footprintjs's own
 > law for the redacted view), so a fold of it reports `basis: 'log-only'`.
-> Three places where the substrate leaves plaintext IN the log — `fields`
+> Three places where the substrate left plaintext IN the log — `fields`
 > dot-path redaction, an `outputMapper`'s merge-back, an `inputMapper`'s
-> seed — are outside what a served view can scrub and are pinned in
-> `test/core/flowchartAsTool.redact.test.ts`. The reproduction test named
-> below now asserts `'REDACTED'`. The record is kept as written.
+> seed (with its narrated `Input:` line; a tracked read's `stageReads` was
+> the fifth) — were outside what a served view could scrub and were pinned
+> as they were in `test/core/flowchartAsTool.redact.test.ts`.
+> **Closed by footprintjs 9.19.1 (2026-09-10; agentfootprint 9.89.2 requires
+> `^9.19.1`)**: one `RedactionRule` per run now decides every staged write
+> and every tracked read, so the same file asserts each of the five ABSENT
+> from the record (red on 9.18). The one limit that remains is
+> `subflowResults[*].treeContext.globalContext` (and its `#n` twin) — the
+> subflow's raw heap under `getSnapshot({ redact: true })` — which the refold
+> above already answers, and which is now pinned beside the answer. The
+> reproduction test named below now asserts `'REDACTED'`. The record is kept
+> as written.
 
 **The claim it contradicts.** `flowchartAsTool.ts` · `FlowchartAsToolOptions.redact`
 said, until this pass edited it:

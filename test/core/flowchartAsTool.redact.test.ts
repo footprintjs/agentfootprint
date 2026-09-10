@@ -1,5 +1,5 @@
 /**
- * flowchartAsTool({ redact }) — what a tool may SHOW is one rule (9.89.1).
+ * flowchartAsTool({ redact }) — what a tool may SHOW is one rule (9.89.1; §6-7 re-stated for footprintjs 9.19.x in 9.89.2).
  *
  * The defect (docs/design/2026-09-recorded-not-built.md · entry 6): the
  * policy scrubbed the inner COMMIT LOG, and every other state-bearing thing
@@ -21,7 +21,9 @@
  *   - a subflow's kept state is refolded from its scrubbed history
  *   - error and paused exits keep a redacted record too
  *   - no-option path: raw snapshot, plaintext, fold base present — unchanged
- *   - three substrate limits (footprintjs 9.18.0) pinned so they are on record
+ *   - the five 9.18 leaks, each CLOSED by footprintjs 9.19.x (red on 9.18):
+ *     dot-path fields, merge-back, seed history[0], seed Input: line, stageReads
+ *   - the ONE limit that remains — a subflow's raw heap — and the refold that answers it
  */
 
 import { describe, expect, it } from 'vitest';
@@ -309,6 +311,9 @@ describe('flowchartAsTool({ redact }) — error and paused exits', () => {
     // loop and is never handed to a model — documented, and pinned here so a
     // change to that is a decision rather than a drift.
     expect(thrown?.checkpoint).toBeDefined();
+    // …and it holds the REAL value — the other half of footprintjs's one law
+    // (9.19.0): resumption replays real values; the served record above does not.
+    expect(JSON.stringify(thrown!.checkpoint)).toContain(SECRET);
   });
 });
 
@@ -346,15 +351,25 @@ describe('flowchartAsTool without `redact` — byte-identical to before', () => 
   });
 });
 
-// ─── 6. SUBSTRATE LIMITS — pinned, not hidden (footprintjs 9.18.0) ────
+// ─── 6. CLOSED BY footprintjs 9.19.x — one policy covers the record ───
 //
-// Each of these is a place where the COMMIT LOG itself carries the plaintext,
-// so no served view built on the log can scrub it. They are asserted as they
-// are so that the day footprintjs closes one, this file says so instead of
-// the JSDoc quietly going stale.
+// On footprintjs 9.18 each of these five was a place where the COMMIT LOG
+// itself carried the plaintext — a write or a read that went PAST the scope
+// facade, which held the verdict alone — so no served view built on the log
+// could scrub it, and 9.89.1 pinned each one as a "substrate limit".
+// footprintjs 9.19.0 gave the verdict ONE owner (`RedactionRule`, asked by
+// `StageContext` on every staged write and every tracked read), so a subflow
+// seed, a merge-back, a tracked read and a dot-path field are retained under
+// the same verdict as `scope.apiKey = …`. Same five charts, assertions
+// inverted: the secret is ABSENT from every served surface each case named
+// (result, kept record bytes, log, mirror, stageReads, narrative, history[0],
+// parent log) and PRESENT where the law keeps it — the live heap the stage
+// computes on (each stage proves it by computing on the real value; §4 pins
+// the resume checkpoint). Every `it` below is RED on footprintjs 9.18.x and
+// green on ^9.19.1, the version this package now requires.
 
-describe('flowchartAsTool({ redact }) — what the substrate does not scrub (pinned)', () => {
-  it('`fields` dot-path redaction scrubs recorder views only; the log and the served view keep the value', async () => {
+describe('flowchartAsTool({ redact }) — closed by footprintjs 9.19.x: the record is as clean as the law says', () => {
+  it('`fields` dot-path redaction reaches the log and the served view; the sibling field survives', async () => {
     const tool = flowchartAsTool({
       name: 'fields_only',
       description: 'd',
@@ -369,13 +384,17 @@ describe('flowchartAsTool({ redact }) — what the substrate does not scrub (pin
       redact: { fields: { profile: ['auth.token'] } },
     });
     const result = (await tool.execute({}, ctxFor('c1'))) as string;
-    // footprintjs `ScopeFacade.setValue`: the field-level scrub is applied to
-    // the value handed to RECORDERS; the commit takes the key-level verdict.
-    expect(result).toContain(SECRET);
-    expect(keptBytes(tool, 'c1')).toContain(SECRET);
+    // 9.18: the field-level scrub reached recorder views only and the commit
+    // took the key-level verdict, so the result and the log kept the value.
+    expect(result).not.toContain(SECRET);
+    expect(JSON.parse(result)).toEqual({ profile: { auth: { token: 'REDACTED' }, name: 'n' } });
+    const snapshot = keptSnapshot(tool, 'c1');
+    expect(JSON.stringify(snapshot.commitLog)).not.toContain(SECRET);
+    expect(snapshot.sharedState).toEqual({ profile: { auth: { token: 'REDACTED' }, name: 'n' } });
+    expect(keptBytes(tool, 'c1')).not.toContain(SECRET);
   });
 
-  it('a value an outputMapper writes BACK into the parent bypasses the policy (footprintjs SubflowInputMapper · applyOutputMapping)', async () => {
+  it('a value an outputMapper writes BACK into the parent is scrubbed in the parent log and the mirror (footprintjs SubflowInputMapper · applyOutputMapping)', async () => {
     const inner = flowChart<{ innerKey: string }>(
       'Inside',
       (scope) => {
@@ -402,26 +421,31 @@ describe('flowchartAsTool({ redact }) — what the substrate does not scrub (pin
       keepRecord: true,
       redact: { keys: ['innerKey'] },
     });
-    await tool.execute({}, ctxFor('c1'));
+    const result = (await tool.execute({}, ctxFor('c1'))) as string;
+    expect(result).not.toContain(SECRET);
+    expect(JSON.parse(result)).toEqual({ start: 1, innerKey: 'REDACTED' });
     const snapshot = keptSnapshot(tool, 'c1');
-    // Inside the subflow the write went through the facade: scrubbed.
+    // Inside the subflow the write went through the facade: scrubbed, as before.
     for (const entry of Object.values(snapshot.subflowResults!)) {
       expect(JSON.stringify(entry.treeContext.history)).not.toContain(SECRET);
     }
-    // The merge-back wrote through `StageContext` directly: the PARENT log
-    // holds the plaintext, and so does the mirror built from it.
-    expect(JSON.stringify(snapshot.commitLog)).toContain(SECRET);
+    // 9.18: the merge-back wrote through `StageContext` directly and the
+    // PARENT log took the key verbatim. Now the same funnel decides.
+    expect(JSON.stringify(snapshot.commitLog)).not.toContain(SECRET);
+    expect(JSON.stringify(snapshot.commitLog)).toContain('REDACTED');
+    expect(snapshot.sharedState.innerKey).toBe('REDACTED');
+    expect(keptBytes(tool, 'c1')).not.toContain(SECRET);
   });
 
-  it('a value an inputMapper carries INTO a subflow is its seed commit, unscrubbed (footprintjs SubflowInputMapper · seedSubflowGlobalStore)', async () => {
-    const inner = flowChart<{ apiKey: string; seen: string }>(
+  function seededChart() {
+    const inner = flowChart<{ apiKey: string; seen: number }>(
       'Inside',
       (scope) => {
-        scope.seen = typeof scope.apiKey;
+        scope.seen = scope.apiKey.length; // computed on the REAL seed — the live heap is never scrubbed
       },
       'inside',
     ).build();
-    const chart = flowChart<{ apiKey: string; seen?: string }>(
+    return flowChart<{ apiKey: string; seen?: number }>(
       'Start',
       (scope) => {
         scope.apiKey = SECRET;
@@ -433,31 +457,51 @@ describe('flowchartAsTool({ redact }) — what the substrate does not scrub (pin
         outputMapper: (out) => ({ seen: out.seen }),
       })
       .build();
+  }
+
+  it('a value an inputMapper carries INTO a subflow is a scrubbed seed commit — history[0] holds the placeholder (footprintjs SubflowInputMapper · seedSubflowGlobalStore)', async () => {
     const tool = flowchartAsTool({
       name: 'seeded',
       description: 'd',
-      flowchart: chart,
+      flowchart: seededChart(),
       keepRecord: true,
       redact: { keys: ['apiKey'] },
     });
     const result = (await tool.execute({}, ctxFor('c1'))) as string;
-    // The run-level view is clean — the parent's write went through the facade.
     expect(result).not.toContain(SECRET);
+    // The subflow computed on the real seed: the live heap is the law's other half.
+    expect(JSON.parse(result)).toEqual({ apiKey: 'REDACTED', seen: SECRET.length });
     const snapshot = keptSnapshot(tool, 'c1');
     expect(JSON.stringify(snapshot.commitLog)).not.toContain(SECRET);
-    // The subflow's `history[0]` is the seed, committed by the runtime, not
-    // the facade — and the served view can only be as clean as the log.
-    for (const entry of Object.values(snapshot.subflowResults!)) {
-      expect(JSON.stringify(entry.treeContext.history[0])).toContain(SECRET);
+    // 9.18: the seed was committed by the subflow's runtime, not a facade, so
+    // `history[0]` carried it raw. Now the seed passes the same rule.
+    const entries = Object.values(snapshot.subflowResults!);
+    expect(entries.length).toBeGreaterThan(0);
+    for (const entry of entries) {
+      const seed = entry.treeContext.history[0] as { overwrite: Record<string, unknown> };
+      expect(seed.overwrite.apiKey).toBe('REDACTED');
+      expect(JSON.stringify(entry.treeContext.history)).not.toContain(SECRET);
     }
-    // …and the seed has a SECOND surface: the subflow's narrative "Input:" line
-    // is generated from the mapped input before any policy sees it
-    // (footprintjs SubflowExecutor · narrativeInput = mappedInput), and it is
-    // kept in the record's narrative with its rawValue.
-    expect(keptBytes(tool, 'c1')).toMatch(/Input: apiKey.{0,12}sk-live-SUPER-SECRET-BYTES/);
+    expect(keptBytes(tool, 'c1')).not.toContain(SECRET);
   });
 
-  it('a stage that READS a redacted key keeps the plaintext in its tracked reads (footprintjs StageContext · getValue → stageReads)', async () => {
+  it('the same seed, narrated as the subflow’s "Input:" line, carries the placeholder (footprintjs SubflowExecutor · narrativeInput)', async () => {
+    const tool = flowchartAsTool({
+      name: 'seeded',
+      description: 'd',
+      flowchart: seededChart(),
+      keepRecord: true,
+      redact: { keys: ['apiKey'] },
+    });
+    await tool.execute({}, ctxFor('c1'));
+    // 9.18: the "Input:" line was generated from the mapped input before any
+    // policy saw it and kept in the record's narrative with its rawValue.
+    const bytes = keptBytes(tool, 'c1');
+    expect(bytes).toMatch(/Input: apiKey.{0,12}\[REDACTED\]/);
+    expect(bytes).not.toContain(SECRET);
+  });
+
+  it('a stage that READS a redacted key retains the placeholder in its tracked reads while it read the real value (footprintjs StageContext · getValue → stageReads)', async () => {
     const chart = flowChart<{ apiKey: string; used: number }>(
       'Write',
       (scope) => {
@@ -468,7 +512,7 @@ describe('flowchartAsTool({ redact }) — what the substrate does not scrub (pin
       .addFunction(
         'Read',
         (scope) => {
-          scope.used = scope.apiKey.length; // a tracked READ — the facade clones the value into `_stageReads`
+          scope.used = scope.apiKey.length; // a tracked READ of the live value
         },
         'read',
       )
@@ -481,13 +525,78 @@ describe('flowchartAsTool({ redact }) — what the substrate does not scrub (pin
       redact: { keys: ['apiKey'] },
     });
     const result = (await tool.execute({}, ctxFor('c1'))) as string;
-    // The served state and the log are clean — the write went through the facade.
     expect(result).not.toContain(SECRET);
-    const snapshot = keptSnapshot(tool, 'c1') as unknown as Record<string, unknown>;
-    expect(JSON.stringify(snapshot['sharedState'])).not.toContain(SECRET);
-    expect(JSON.stringify(snapshot['commitLog'])).not.toContain(SECRET);
-    // Read-tracking retention is not one of the substrate's redaction points:
-    // the execution tree's `stageReads` carries the value the stage read.
-    expect(JSON.stringify(snapshot['executionTree'])).toContain(SECRET);
+    // The stage read the real value (the live heap); the record kept the placeholder.
+    expect(JSON.parse(result)).toEqual({ apiKey: 'REDACTED', used: SECRET.length });
+    const snapshot = keptSnapshot(tool, 'c1') as unknown as {
+      sharedState: unknown;
+      commitLog: unknown;
+      executionTree: { next?: { stageReads?: Record<string, unknown> } };
+    };
+    expect(JSON.stringify(snapshot.sharedState)).not.toContain(SECRET);
+    expect(JSON.stringify(snapshot.commitLog)).not.toContain(SECRET);
+    // 9.18: read-tracking retention was not one of the redaction points, so
+    // `executionTree.*.stageReads` carried the value the stage read.
+    expect(snapshot.executionTree.next?.stageReads?.apiKey).toBe('[REDACTED]');
+    expect(JSON.stringify(snapshot.executionTree)).not.toContain(SECRET);
+    expect(keptBytes(tool, 'c1')).not.toContain(SECRET);
+  });
+});
+
+// ─── 7. THE ONE LIMIT THAT REMAINS — a subflow's raw heap, and the refold ─
+//
+// footprintjs keeps a redacted mirror for the RUN-level runtime only. A
+// subflow's final state (`subflowResults[*].treeContext.globalContext`, and
+// its per-iteration `#n` twin) is that subflow's own isolated heap even under
+// `getSnapshot({ redact: true })` — named as the one remaining limit in the
+// footprintjs 9.19.0 changelog. Its `history` IS scrubbed, which is exactly
+// why `servableSnapshot` refolds that history through `stateAt` (§3 pins the
+// served result; this pins the limit itself, so the day footprintjs mirrors
+// subflows this file says so).
+
+describe('flowchartAsTool({ redact }) — the one served surface footprintjs still leaves raw, and the refold that answers it', () => {
+  it('`getSnapshot({ redact: true }).subflowResults[*].treeContext.globalContext` is the raw heap; `servableSnapshot` serves the fold of its scrubbed history', async () => {
+    const inner = flowChart<{ innerKey: string; derived: string }>(
+      'Use the key inside',
+      (scope) => {
+        scope.innerKey = SECRET;
+        scope.derived = 'ok';
+      },
+      'inner-use',
+    ).build();
+    const chart = flowChart<{ start: number; derived?: string }>(
+      'Start',
+      (scope) => {
+        scope.start = 1;
+      },
+      'start',
+    )
+      .addSubFlowChartNext('sf', inner, 'Sub', {
+        inputMapper: () => ({}),
+        outputMapper: (out) => ({ derived: out.derived }),
+      })
+      .build();
+    const policy = { keys: ['innerKey'] };
+    const executor = new FlowChartExecutor(chart);
+    executor.setRedactionPolicy(policy);
+    await executor.run({ input: {} });
+
+    const raw = executor.getSnapshot({ redact: true })
+      .subflowResults as KeptSnapshot['subflowResults'];
+    const rawEntries = Object.values(raw!);
+    expect(rawEntries.length).toBeGreaterThan(0);
+    for (const entry of rawEntries) {
+      // The limit: the subflow's heap, served raw by the redacted view…
+      expect(entry.treeContext.globalContext.innerKey).toBe(SECRET);
+      // …while the log beside it is scrubbed — the material the refold uses.
+      expect(JSON.stringify(entry.treeContext.history)).not.toContain(SECRET);
+    }
+
+    const served = servableSnapshot(executor, policy)
+      .subflowResults as KeptSnapshot['subflowResults'];
+    for (const entry of Object.values(served!)) {
+      expect(entry.treeContext.globalContext).toEqual({ innerKey: 'REDACTED', derived: 'ok' });
+    }
+    expect(JSON.stringify(served)).not.toContain(SECRET);
   });
 });

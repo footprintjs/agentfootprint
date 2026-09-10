@@ -7,6 +7,64 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [9.89.2] - 2026-09-10
+
+**A redacted tool is as clean as the log, and the log is clean.** A patch: no
+signature changes, no code path changed; a tool without `redact` behaves byte
+for byte as before.
+
+### Changed
+
+- **footprintjs `^9.19.1` (was `^9.18.0`), and the five "substrate limits"
+  9.89.1 could only pin are re-stated as closed.** 9.89.1 made
+  `servableSnapshot` the one owner of what `flowchartAsTool({ redact })` /
+  `runbookAsTool({ redact })` may show, and had to say that a served view is
+  only as clean as the log beneath it — footprintjs 9.18 wrote plaintext INTO
+  the record on five paths that bypassed the scope facade: `fields` (dot-path)
+  redaction reached recorder views only; a subflow `outputMapper`'s merge-back
+  landed in the parent log verbatim; an `inputMapper`'s seed was the subflow's
+  raw `history[0]` and its narrated `Input:` line; and a stage that READ a
+  redacted key kept the plaintext in `executionTree.*.stageReads`. footprintjs
+  9.19.0 closed all five at the root — one `RedactionRule` per run, asked by
+  `StageContext` on every staged write and every tracked read — and 9.19.1
+  fixed a latent net-change defect its CI found, so this package now requires
+  `^9.19.1` (dev and peer). Nothing in this package's code changed to get
+  there: the served view was already built from the log, so it is now exactly
+  as clean as the policy says.
+
+  What a consumer sees now — the same charts 9.89.1 pinned, assertions
+  inverted (`test/core/flowchartAsTool.redact.test.ts` §6; each `it` is red on
+  footprintjs 9.18 and green on 9.19.1):
+
+  ```ts
+  const tool = flowchartAsTool({
+    name: 'seeded',
+    description: 'Seeds a subflow with the key and reads it there.',
+    flowchart: chart,            // parent writes apiKey; the subflow is seeded with it
+    keepRecord: true,
+    redact: { keys: ['apiKey'] },
+  });
+  await tool.execute({}, ctx);   // → '{"apiKey":"REDACTED","seen":26}' — the subflow computed on the real 26-byte key
+  const record = JSON.stringify(innerRunsOf(tool)!.get(ctx.toolCallId)!);
+  record.includes('sk-live-');   // false — result, log, mirror, stageReads, narrative Input: line, history[0], parent log
+  ```
+
+  The law's other half is unchanged and now pinned in the same file: the live
+  heap a stage computes on and the resume checkpoint (`err.checkpoint` on a
+  paused run) hold the real values, because resumption must replay them.
+
+  **The one limit that remains, named.**
+  `subflowResults[*].treeContext.globalContext` (and its per-iteration `#n`
+  twin) is still the subflow's own raw heap under
+  `getSnapshot({ redact: true })` — footprintjs mirrors the run-level runtime
+  only. That is exactly why `servableSnapshot` refolds each subflow's final
+  state from its scrubbed `history`, and the limit and its answer are now
+  pinned side by side (§7 of the same file): the raw view carries the secret,
+  the served view does not. The `redact` JSDoc, `servableSnapshot`'s module
+  note, the runbook option and guide, and entry 6 of
+  `docs/design/2026-09-recorded-not-built.md` say this instead of the 9.18
+  list.
+
 ## [9.89.1] - 2026-09-10
 
 **What a chart-backed tool may show is one rule.** A patch: no signature

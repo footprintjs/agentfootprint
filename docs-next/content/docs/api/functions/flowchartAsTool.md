@@ -6,7 +6,7 @@ title: flowchartAsTool
 
 > **flowchartAsTool**(`opts`): [`Tool`](/docs/api/interfaces/Tool)
 
-Defined in: [src/core/flowchartAsTool.ts:319](https://github.com/footprintjs/agentfootprint/blob/main/src/core/flowchartAsTool.ts#L319)
+Defined in: [src/core/flowchartAsTool.ts:353](https://github.com/footprintjs/agentfootprint/blob/main/src/core/flowchartAsTool.ts#L353)
 
 Wrap a footprintjs `FlowChart` as a `Tool` the Agent's LLM can call.
 
@@ -23,7 +23,9 @@ On execute:
      (`error.checkpoint`) so the agent loop can surface it. Polished
      agent-side pause integration is v2.6 work.
   5. If the run completed, calls `resultMapper(snapshot)` (or the
-     default JSON.stringify) and returns the string.
+     default JSON.stringify) and returns the string. The snapshot is
+     the SERVED view (`servableSnapshot`): redacted when `redact` is
+     set, raw otherwise — the same view the kept record holds.
   6. If the run threw, the error propagates — the Agent's
      tool-call handler converts it to a synthetic error string for
      the LLM to see + recover from.

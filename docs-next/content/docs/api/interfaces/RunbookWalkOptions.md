@@ -53,8 +53,8 @@ graph from them. With the recording filed, the lens/explainable-UI flow
 components mount the runbook's walk as the flowchart it actually ran.
 
 ── Redaction, once, for both ───────────────────────────────────────────
-The recording's snapshot is read from the REDACTED MIRROR
-(`getSnapshot({ redact: true })`), so the `redact` policy that scrubs the
+The recording's snapshot is read through `servableSnapshot` (the redacted
+mirror, subflow state refolded from scrubbed history), so the `redact` policy that scrubs the
 walk scrubs the recording by the same rule at the same moment. One policy,
 one meaning, both artifacts.
 

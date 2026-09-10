@@ -32,33 +32,34 @@
  * mirror is (apply the scrubbed patches in order), done at serve time for the
  * level footprintjs does not mirror. The subflow's fold base is dropped by the
  * same law footprintjs applies to the run's (`ExecutionRuntime.getSnapshot`:
- * the base never passed a policy, so it is omitted rather than served) — in
- * footprintjs 9.18 a subflow runtime is created bare, so that base is `{}`
- * and nothing is lost; the omission is there for the day it is not.
+ * the base never passed a policy, so it is omitted rather than served) — a
+ * subflow runtime is created bare (`SubflowExecutor`, through 9.19.1), so that
+ * base is `{}` and nothing is lost; the omission is there for the day it is not.
  *
  * Without a policy this is `executor.getSnapshot()`, byte for byte: no
  * mirror, no fold, the fold bases present, exactly the path both tools had.
  *
- * WHAT IT CANNOT DO. A served view is as clean as the log it is built from,
- * and footprintjs 9.18.0 leaves the plaintext in the RECORD in these places —
- * each pinned in `test/core/flowchartAsTool.redact.test.ts` so this list
- * goes stale loudly:
- *   - `fields` (dot-path) redaction scrubs the value handed to RECORDERS only;
- *     the commit takes the key-level verdict (`ScopeFacade.setValue`).
- *   - A subflow's `outputMapper` writes back through `StageContext` directly,
- *     not the facade, so the PARENT log takes a policy-redacted key verbatim
- *     (`SubflowInputMapper.applyOutputMapping`).
- *   - An `inputMapper` seed is committed by the subflow's runtime, not a
- *     facade, so it is the subflow's `history[0]` unscrubbed
- *     (`SubflowInputMapper.seedSubflowGlobalStore`) — and the same seed is
- *     narrated as an `Input:` line with its `rawValue` before any policy sees
- *     it (`SubflowExecutor` · narrativeInput = mappedInput).
- *   - A stage that READS a redacted key clones the plaintext into its tracked
- *     reads (`StageContext.getValue`), served as `executionTree.*.stageReads`;
- *     read-tracking retention is not one of the substrate's redaction points.
- * The resume checkpoint (`err.checkpoint` on a paused run) is also not a
- * served view: resumption must replay against real values, and it is handed
- * to the agent loop, never to a model.
+ * WHAT IT CANNOT DO — and what it no longer has to (9.89.2). A served view is
+ * as clean as the log it is built from, and since footprintjs 9.19.0 the log
+ * is clean: ONE policy covers everything the run retains or serves — the
+ * commit log in both encodings, the redacted mirror, `stageReads` /
+ * `stageWrites`, recorder events and the narrative, a subflow's `inputMapper`
+ * seed (its `history[0]` and its narrated `Input:` line) and its
+ * `outputMapper` merge-back into the parent, `fields` dot-paths in the log and
+ * the mirror — and NEVER the live heap the run computes on nor the resume
+ * checkpoint. The five places footprintjs 9.18 left plaintext in the record
+ * (dot-path fields, merge-back, seed, seed narrative, tracked reads — each a
+ * write or a read past the scope facade) are closed at the root by its
+ * `RedactionRule`, which `StageContext` asks on every staged write and every
+ * tracked read; `test/core/flowchartAsTool.redact.test.ts` §6 asserts each
+ * one closed, red on 9.18. ONE limit remains, and it is the one this function
+ * exists for: `subflowResults[*].treeContext.globalContext` (and its `#n`
+ * twin) is the subflow's raw heap even under `getSnapshot({ redact: true })`
+ * — only the run-level runtime keeps a mirror — so the refold above is the
+ * answer, pinned in §7 of the same file. The resume checkpoint
+ * (`err.checkpoint` on a paused run) is not a served view: resumption must
+ * replay against real values, and it is handed to the agent loop, never to a
+ * model.
  */
 
 import type { FlowChartExecutor, RedactionPolicy, RuntimeSnapshot } from 'footprintjs';
