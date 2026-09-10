@@ -25,7 +25,7 @@ Row cap on the minted walk (default 500). When the full walk does not
 
 > `readonly` `optional` **recording?**: `boolean` \| [`RunbookRecordingOptions`](/docs/api/interfaces/RunbookRecordingOptions)
 
-Defined in: [src/core/runbook/types.ts:138](https://github.com/footprintjs/agentfootprint/blob/main/src/core/runbook/types.ts#L138)
+Defined in: [src/core/runbook/types.ts:139](https://github.com/footprintjs/agentfootprint/blob/main/src/core/runbook/types.ts#L139)
 
 ALSO file the inner chart's own RECORDING (9.79.0) — `{ snapshot, events,
 structure }`, the shape `observeRecording()` mounts — under kind
@@ -54,9 +54,10 @@ components mount the runbook's walk as the flowchart it actually ran.
 
 ── Redaction, once, for both ───────────────────────────────────────────
 The recording's snapshot is read through `servableSnapshot` (the redacted
-mirror, subflow state refolded from scrubbed history), so the `redact` policy that scrubs the
-walk scrubs the recording by the same rule at the same moment. One policy,
-one meaning, both artifacts.
+mirror exactly as footprintjs serves it — a subflow's state included,
+since 9.20.0), so the `redact` policy that scrubs the walk scrubs the
+recording by the same rule at the same moment. One policy, one meaning,
+both artifacts.
 
 ── Best-effort, and the absence is STATED ──────────────────────────────
 `mintWalk`'s own law: no store, an over-size refusal, or a failed mint

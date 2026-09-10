@@ -7,6 +7,55 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [9.89.3] - 2026-09-10
+
+**One owner of a subflow's served state.** A patch: no signature changes; a
+tool without `redact` behaves byte for byte as before.
+
+### Changed
+
+- **footprintjs `^9.20.0` (was `^9.19.1`), and the refold in
+  `servableSnapshot` is deleted.** 9.89.1 made `servableSnapshot` the one
+  owner of what `flowchartAsTool({ redact })` / `runbookAsTool({ redact })`
+  may show, and had to refold every subflow's final state from its scrubbed
+  `history` with footprintjs's `stateAt`, because
+  `getSnapshot({ redact: true })` served
+  `subflowResults[*].treeContext.globalContext` (and its `#n` twin) as the
+  subflow's RAW heap — footprintjs mirrored the run-level runtime only, and
+  9.89.2 named it as the one limit left. footprintjs 9.20.0 closed it at the
+  root: a subflow keeps its own redacted mirror whenever the run does, and the
+  redacted view serves that mirror as one object under both keys, equal to the
+  fold over the subflow's scrubbed history. With that, the refold here was a
+  SECOND owner of the same rule — and two owners drift — so it is gone: under
+  a policy `servableSnapshot` returns `executor.getSnapshot({ redact: true })`
+  exactly as the substrate serves it, and without one `executor.getSnapshot()`
+  as before. Removed from `src/core/servableSnapshot.ts`: `refoldSubflowStates`,
+  `refoldOne`, `isSubflowStateEntry`, the `SubflowStateEntry` type and the
+  `footprintjs/trace` import. The five 9.19 proofs of 9.89.2 (§6) stay green.
+
+  What a consumer sees — the same served state, now from the substrate, with
+  ONE byte-level difference under a policy: a subflow entry's
+  `treeContext.initialState` (its pre-seed base, `{}` — the seed is a commit,
+  `history[0]`) is no longer dropped by this package but served as footprintjs
+  serves it. `test/core/flowchartAsTool.redact.test.ts` §7 flips: footprintjs's
+  own redacted view holds the placeholder (red on 9.19.x), and
+  `servableSnapshot`'s view is that very object (identity), not a refold:
+
+  ```ts
+  const executor = new FlowChartExecutor(chart); // mounts a subflow that writes innerKey
+  executor.setRedactionPolicy({ keys: ['innerKey'] });
+  await executor.run({ input: {} });
+  executor.getSnapshot({ redact: true }).subflowResults!['sf'].treeContext.globalContext;
+  // { innerKey: 'REDACTED', derived: 'ok' } — the subflow's own mirror (the raw heap on 9.19.x)
+  servableSnapshot(executor, policy); // the object getSnapshot({ redact: true }) returned — nothing rewritten
+  ```
+
+  The `redact` JSDoc on both options, `servableSnapshot`'s module note, the
+  runbook recording notes, the runbook-as-tool guide and entry 6 of
+  `docs/design/2026-09-recorded-not-built.md` now say the limit closed instead
+  of answering it: nothing left the log carries that the served view does not
+  scrub; the resume checkpoint is, as before, not a served view.
+
 ## [9.89.2] - 2026-09-10
 
 **A redacted tool is as clean as the log, and the log is clean.** A patch: no

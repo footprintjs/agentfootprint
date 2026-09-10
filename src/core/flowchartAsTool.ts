@@ -284,8 +284,8 @@ export interface FlowchartAsToolOptions {
    *   from that view (`'REDACTED'` where the log says so), so the default
    *   `JSON.stringify` and a custom mapper see the same thing the log holds;
    * - a kept record's `sharedState`, `commitLog` and every subflow's final
-   *   state (`subflowResults[*].treeContext.globalContext`, refolded from that
-   *   subflow's own scrubbed `history` — the level footprintjs does not mirror);
+   *   state (`subflowResults[*].treeContext.globalContext` — the subflow's
+   *   own redacted mirror, served by footprintjs itself since 9.20.0);
    * - on every exit — ok, error, paused — the record is filed from that view.
    *
    * Independent of `keepRecord` — a chart handling secrets should carry a
@@ -294,11 +294,13 @@ export interface FlowchartAsToolOptions {
    *
    * WHAT IT DOES NOT GOVERN — said here so nobody has to rediscover it:
    *
-   * 1. Fold bases. The redacted view OMITS `initialState` (footprintjs
-   *    `ExecutionRuntime.getSnapshot`: the raw pre-run seed never passed a
-   *    policy, so it is dropped rather than served), and the served view
-   *    drops a subflow's by the same law. A fold of a kept record therefore
-   *    reports `basis: 'log-only'` — partial, and saying so.
+   * 1. The run's fold base. The redacted view OMITS `initialState`
+   *    (footprintjs `ExecutionRuntime.getSnapshot`: the raw pre-run seed
+   *    never passed a policy, so it is dropped rather than served). A fold of
+   *    a kept record therefore reports `basis: 'log-only'` — partial, and
+   *    saying so. A subflow's `treeContext.initialState` travels as
+   *    footprintjs serves it: its seed is a commit of its own (`history[0]`),
+   *    so that base is the nested runtime's pre-seed state.
    * 2. The resume checkpoint. A paused run throws with `err.checkpoint`,
    *    which holds real values because resumption must replay against them;
    *    it goes to the agent loop, never to a model.
@@ -312,14 +314,18 @@ export interface FlowchartAsToolOptions {
    *    left plaintext in the record (dot-path fields, merge-back, seed, seed
    *    narrative, tracked reads) are closed at the root, and each is asserted
    *    closed in `test/core/flowchartAsTool.redact.test.ts` §6 (red on 9.18).
-   *    So "every field" means every field, and the log agrees. ONE surface
-   *    footprintjs's redacted view still leaves raw —
-   *    `subflowResults[*].treeContext.globalContext` and its `#n` twin, the
-   *    subflow's own heap, since only the run-level runtime keeps a mirror —
-   *    and THIS option answers it: `servableSnapshot` refolds that state from
-   *    the subflow's scrubbed `history` (§7 of the same file pins both the
-   *    limit and the answer). A consumer reading footprintjs's snapshot
-   *    directly, not through this tool, still sees that heap raw.
+   *    So "every field" means every field, and the log agrees. The last
+   *    limit — `subflowResults[*].treeContext.globalContext` and its `#n`
+   *    twin were the subflow's own heap, since only the run-level runtime
+   *    kept a mirror, which `servableSnapshot` refolded from the scrubbed
+   *    `history` — is closed by footprintjs 9.20.0 (this package's floor
+   *    from 9.89.3): a subflow keeps its own mirror whenever the run does,
+   *    and the redacted view serves it, one object under both keys. Nothing
+   *    left the log carries that the served view does not scrub; the
+   *    checkpoint is not a served view. `servableSnapshot` is now that view
+   *    exactly as the substrate serves it, and §7 of the same file pins both
+   *    the placeholder in footprintjs's own view (red on 9.19.x) and the
+   *    identity.
    */
   readonly redact?: RedactionPolicy;
 }
@@ -467,8 +473,8 @@ export function flowchartAsTool(opts: FlowchartAsToolOptions): Tool {
         throw err;
       }
       // ONE view for the record AND the result: with a policy set this is
-      // the redacted mirror (subflow states refolded), otherwise the raw
-      // snapshot — see `servableSnapshot`.
+      // the redacted mirror exactly as footprintjs serves it, otherwise the
+      // raw snapshot — see `servableSnapshot`.
       const served = servableSnapshot(executor, opts.redact);
       // Kept BEFORE the mapper runs: a mapper that throws still leaves a
       // complete record of the run it was mapping.

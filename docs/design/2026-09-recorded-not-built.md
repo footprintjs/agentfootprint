@@ -574,9 +574,10 @@ and fixing it is a behaviour change rather than a patch.
 > take every state-bearing thing they hand outward — the result string, the
 > envelope's state, the recording, the kept record — from ONE owner,
 > `src/core/servableSnapshot.ts` · `servableSnapshot`, which is
-> `getSnapshot({ redact: true })` under a policy (plus each subflow's final
-> state refolded from its own scrubbed `history`, the level footprintjs does
-> not mirror) and the raw `getSnapshot()` without one. A kept record is
+> `getSnapshot({ redact: true })` under a policy (plus, until 9.89.3, each
+> subflow's final state refolded from its own scrubbed `history` — the level
+> footprintjs did not mirror before 9.20.0) and the raw `getSnapshot()`
+> without one. A kept record is
 > therefore a TRANSPORT: what it may contain is governed by the policy, and it
 > no longer disagrees with its own log. The cost named below is paid on
 > purpose: under a policy the record omits `initialState` (footprintjs's own
@@ -589,12 +590,18 @@ and fixing it is a behaviour change rather than a patch.
 > **Closed by footprintjs 9.19.1 (2026-09-10; agentfootprint 9.89.2 requires
 > `^9.19.1`)**: one `RedactionRule` per run now decides every staged write
 > and every tracked read, so the same file asserts each of the five ABSENT
-> from the record (red on 9.18). The one limit that remains is
+> from the record (red on 9.18). The one limit that remained was
 > `subflowResults[*].treeContext.globalContext` (and its `#n` twin) — the
 > subflow's raw heap under `getSnapshot({ redact: true })` — which the refold
-> above already answers, and which is now pinned beside the answer. The
-> reproduction test named below now asserts `'REDACTED'`. The record is kept
-> as written.
+> above answered, pinned beside the answer.
+> **The subflow limit closed by footprintjs 9.20.0 (2026-09-10; agentfootprint
+> 9.89.3 requires `^9.20.0`)**: a subflow keeps its own redacted mirror
+> whenever the run does, and the redacted view serves it as one object under
+> both keys — so the refold is deleted from `servableSnapshot`, which is now
+> the substrate's view exactly as served, the one owner of the rule; §7 of the
+> same test file pins the placeholder in footprintjs's own view (red on
+> 9.19.x) and the identity. The reproduction test named below now asserts
+> `'REDACTED'`. The record is kept as written.
 
 **The claim it contradicts.** `flowchartAsTool.ts` · `FlowchartAsToolOptions.redact`
 said, until this pass edited it:

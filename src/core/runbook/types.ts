@@ -125,9 +125,10 @@ export interface RunbookWalkOptions {
    *
    * ── Redaction, once, for both ───────────────────────────────────────────
    * The recording's snapshot is read through `servableSnapshot` (the redacted
-   * mirror, subflow state refolded from scrubbed history), so the `redact` policy that scrubs the
-   * walk scrubs the recording by the same rule at the same moment. One policy,
-   * one meaning, both artifacts.
+   * mirror exactly as footprintjs serves it — a subflow's state included,
+   * since 9.20.0), so the `redact` policy that scrubs the walk scrubs the
+   * recording by the same rule at the same moment. One policy, one meaning,
+   * both artifacts.
    *
    * ── Best-effort, and the absence is STATED ──────────────────────────────
    * `mintWalk`'s own law: no store, an over-size refusal, or a failed mint
@@ -218,10 +219,13 @@ export interface RunbookAsToolOptions {
    *  bypass it: a subflow's seed and merge-back, tracked reads, dot-path
    *  `fields`, the narrated `Input:` line — and the envelope's state, the
    *  walk's recording and the kept record are all served from footprintjs's
-   *  redacted view through `servableSnapshot`, which also refolds the one
-   *  surface that view leaves raw (a subflow's own heap) from its scrubbed
-   *  history. See `FlowchartAsToolOptions.redact` for the two things it does
-   *  not govern: fold bases and the resume checkpoint. */
+   *  redacted view through `servableSnapshot`, exactly as the substrate
+   *  serves it. The last limit that view had — a subflow's own heap, which
+   *  `servableSnapshot` refolded from its scrubbed history — is closed by
+   *  footprintjs 9.20.0 (the floor from 9.89.3): nothing left the log
+   *  carries that the served view does not scrub; the checkpoint is not a
+   *  served view. See `FlowchartAsToolOptions.redact` for the two things it
+   *  does not govern: the run's fold base and the resume checkpoint. */
   readonly redact?: RedactionPolicy;
 }
 

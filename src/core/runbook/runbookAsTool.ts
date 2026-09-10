@@ -408,8 +408,8 @@ export function runbookAsTool(opts: RunbookAsToolOptions): Tool {
       }
 
       // ONE view for the record, the envelope's state and the recording:
-      // the redacted mirror when `redact` is set (subflow states refolded),
-      // the raw snapshot otherwise — see `servableSnapshot`.
+      // the redacted mirror exactly as footprintjs serves it when `redact`
+      // is set, the raw snapshot otherwise — see `servableSnapshot`.
       const served = servableSnapshot(executor, opts.redact);
       keepRecordOf('ok', served);
       const state =

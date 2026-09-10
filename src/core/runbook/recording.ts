@@ -122,10 +122,11 @@ export function resolveRecordingPolicy(
  * run. Pure — no store, no clock, no events.
  *
  * @param redactedSnapshot the run snapshot read through `servableSnapshot`
- *   (the redacted mirror, each subflow's state refolded from its scrubbed
- *   history). Taking the raw one here would
- *   file whatever the chart wrote under a policy that was supposed to scrub
- *   it, which is the one mistake this whole module is arranged to prevent.
+ *   (the redacted mirror exactly as footprintjs serves it — each subflow's
+ *   state is the subflow's own mirror since footprintjs 9.20.0). Taking the
+ *   raw one here would file whatever the chart wrote under a policy that was
+ *   supposed to scrub it, which is the one mistake this whole module is
+ *   arranged to prevent.
  * @param structure the chart's `buildTimeStructure` — the only route to a
  *   drawable graph, and the reason this bundle beats the row projection.
  */
