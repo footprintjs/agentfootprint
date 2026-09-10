@@ -82,11 +82,11 @@
 
 import { describe, expect, it } from 'vitest';
 
+import { FlowChartExecutor } from 'footprintjs';
 import {
   Agent,
   defineTool,
   inMemoryArtifacts,
-  LLMCall,
   receiptAt,
   servedAt,
   servedViews,
@@ -102,6 +102,10 @@ import type { LLMMessage, LLMRequest, LLMResponse } from '../../../src/adapters/
 // needs to hand it a fact no chart in this library supplies, to tell "nobody
 // reported a drop" from "the shape cannot hold one".
 import { buildReceipt } from '../../../src/lib/time-travel/receipt.js';
+// The receipt-LESS shape a shipped chart still produces (9.91.0): a chart
+// builder run on the caller's own executor with no run id to salt hashes
+// with. The public barrel carries the deps type and not this builder.
+import { buildMessageApiChart } from '../../../src/core/agent/buildMessageApiChart.js';
 import { isPaused, pauseHere } from '../../../src/core/pause.js';
 
 /** Several real runs per test, all of them tiny; the budget is stated. */
@@ -345,14 +349,25 @@ const resumed = once(async () => {
   return { snapshot: agent.getSnapshot()!, wire };
 });
 
-/** A chart that mints no receipt at all. */
-const llmCall = once(async () => {
+/**
+ * A chart that mints no receipt at all.
+ *
+ * It was an `LLMCall` until 9.91.0, where that chart started minting one. The
+ * receipt-less shape that survives on a SHIPPED chart is a message-API chart
+ * builder handed to an executor the caller owns with no run id supplied: every
+ * hash on a receipt is salted with the run id, so a chart that cannot be given
+ * one declines the mint rather than shipping unsalted fingerprints.
+ */
+const receiptless = once(async () => {
   const { provider, wire } = scripted([answer('done')]);
-  const bare = LLMCall.create({ provider: provider as never, model: 'mock' })
-    .system('you are a probe')
-    .build();
-  await bare.run({ message: 'the one turn that went out' });
-  return { snapshot: bare.getSnapshot()!, wire };
+  const chart = buildMessageApiChart({
+    provider: provider as never,
+    model: 'mock',
+    systemPrompt: 'you are a probe',
+  });
+  const executor = new FlowChartExecutor(chart);
+  await executor.run({ input: { message: 'the one turn that went out' } });
+  return { snapshot: executor.getSnapshot()! as never, wire };
 });
 
 // ─── the damages, all of them detached copies ────────────────────────────
@@ -435,7 +450,7 @@ async function everyIntactView(): Promise<
     undialled(),
     decorated(),
     resumed(),
-    llmCall(),
+    receiptless(),
   ]);
   return runs.flatMap(({ snapshot }) =>
     servedViews(snapshot).map((view) => ({ view, receipt: receiptAt(snapshot, view.epoch) })),
@@ -643,7 +658,7 @@ const ACCOUNT: readonly Entry[] = [
             }
           }
           // …and the receipt-less chart really is one of the views walked above.
-          const bare = servedAt((await llmCall()).snapshot, 1)!;
+          const bare = servedAt((await receiptless()).snapshot, 1)!;
           expect(bare.basis).toBeUndefined();
           expect(bare.gaps.some((g) => g.why.includes(RECEIPT_BOUNDARY))).toBe(false);
         },
@@ -888,7 +903,7 @@ const ACCOUNT: readonly Entry[] = [
         quote: 'Nothing on this view has been checked against what went out',
         claim: 'there is no receipt to check against, under either cause, and the call still went',
         assert: async () => {
-          const { snapshot, wire } = await llmCall();
+          const { snapshot, wire } = await receiptless();
           const view = servedAt(snapshot, 1)!;
           expect(receiptAt(snapshot, 1)).toBeUndefined();
           expect(view.gaps.find((g) => g.gap === 'no-receipt-on-chart')!.cause).toBe(
@@ -911,7 +926,7 @@ const ACCOUNT: readonly Entry[] = [
         quote: 'Every field below is missing as a whole',
         claim: 'not one of the fields the gap names is anywhere on the view',
         assert: async () => {
-          const { snapshot } = await llmCall();
+          const { snapshot } = await receiptless();
           const view = servedAt(snapshot, 1)!;
           // MISSING AS A RECORD, not merely missing from the view: `params` and
           // the `cache.*` fields never appear on a view at all, so what makes
@@ -934,7 +949,7 @@ const ACCOUNT: readonly Entry[] = [
         quote: 'and an absence among them says nothing about the call',
         claim: 'the same absence sits on a call that had a model, a provider and a prompt',
         assert: async () => {
-          const { snapshot, wire } = await llmCall();
+          const { snapshot, wire } = await receiptless();
           const view = servedAt(snapshot, 1)!;
           // No basis on the view…
           expect(view.basis).toBeUndefined();
@@ -958,7 +973,7 @@ const ACCOUNT: readonly Entry[] = [
           // temperature 0.9.
           expect(receiptAt((await decorated()).snapshot, 1)!.params).toEqual({});
           expect((await decorated()).wire[0]!.temperature).toBe(0.9);
-          const bare = servedAt((await llmCall()).snapshot, 1)!;
+          const bare = servedAt((await receiptless()).snapshot, 1)!;
           expect((bare as unknown as Record<string, unknown>)['params']).toBeUndefined();
         },
       },

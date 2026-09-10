@@ -199,6 +199,7 @@ import { resolve } from 'node:path';
 
 import ts from 'typescript';
 import { describe, expect, it } from 'vitest';
+import { FlowChartExecutor } from 'footprintjs';
 
 import {
   Agent,
@@ -218,6 +219,9 @@ import {
 } from '../../../src/index.js';
 import type { LLMRequest, LLMResponse } from '../../../src/adapters/types.js';
 import { isPaused, pauseHere } from '../../../src/core/pause.js';
+// The receipt-LESS shape a shipped chart still produces (9.91.0) — the public
+// barrel carries this chart's deps type and not the builder itself.
+import { buildMessageApiChart } from '../../../src/core/agent/buildMessageApiChart.js';
 import {
   codeTokens,
   unprovableGapProse,
@@ -377,10 +381,32 @@ interface Walked {
 }
 
 /**
- * FIVE scenarios, chosen to reach the value-conditional fields: the dials and
+ * THE RECEIPT-LESS RUN — one driver, because four tests below need the same
+ * shape and it moved once already.
+ *
+ * It was an `LLMCall` until 9.91.0, where that chart started minting. What is
+ * left on a SHIPPED chart is a message-API chart builder handed to an executor
+ * the caller owns with no run id supplied: every hash a receipt carries is
+ * salted with the run id, so a chart that cannot be given one declines the
+ * mint. A consumer's own `call-llm` stage is the other way to get here, and it
+ * is not this library's to drive.
+ */
+async function receiptlessRun(): Promise<unknown> {
+  const chart = buildMessageApiChart({
+    provider: scripted([answer('done')]) as never,
+    model: 'mock',
+    systemPrompt: 'you are a probe',
+  });
+  const executor = new FlowChartExecutor(chart);
+  await executor.run({ input: { message: 'the one turn that went out' } });
+  return executor.getSnapshot();
+}
+
+/**
+ * SIX scenarios, chosen to reach the value-conditional fields: the dials and
  * a tool result's join key, a wrap-up that withholds every tool, a forced
- * output tool, the staged-refs request-only line, and a chart that mints no
- * receipt at all.
+ * output tool, the staged-refs request-only line, an `LLMCall` chart, and a
+ * chart that mints no receipt at all.
  */
 async function realRuns(): Promise<readonly Walked[]> {
   const walked: Walked[] = [];
@@ -467,12 +493,19 @@ async function realRuns(): Promise<readonly Walked[]> {
   await nudged.run({ message: 'stage the rows' });
   collect(nudged.getSnapshot()!);
 
-  // (e) an LLMCall chart: a view with no receipt behind it.
+  // (e) an LLMCall chart: its own executor, its own run id, its own receipt
+  // since 9.91.0 — a second chart shape the law runs on.
   const bare = LLMCall.create({ provider: scripted([answer('done')]) as never, model: 'mock' })
     .system('you are a probe')
     .build();
   await bare.run({ message: 'the one turn that went out' });
   collect(bare.getSnapshot()!);
+
+  // (f) a view with NO receipt behind it — the shape a shipped chart still
+  // produces: a chart builder on an executor the caller owns, with no run id
+  // to salt the hashes with, so it declines the mint rather than shipping
+  // unsalted fingerprints.
+  collect(await receiptlessRun());
 
   return walked;
 }
@@ -1047,11 +1080,7 @@ describe('the catalogue and the code that raises it are the same set', () => {
   });
 
   it('the new kind fires on the chart it was written for', WALK_BUDGET, async () => {
-    const bare = LLMCall.create({ provider: scripted([answer('done')]) as never, model: 'mock' })
-      .system('you are a probe')
-      .build();
-    await bare.run({ message: 'hello' });
-    const snapshot = bare.getSnapshot()!;
+    const snapshot = await receiptlessRun();
     const view = servedAt(snapshot, 1)!;
 
     // The chart mints no receipt — declared, not left as a silent `undefined`.
@@ -1085,7 +1114,8 @@ describe('the catalogue and the code that raises it are the same set', () => {
  * table is documentation to `vitest` and a check to those two).
  */
 const CAUSE_DRIVEN: Readonly<Record<ServedGapCause, string>> = {
-  'no-receipt-committed': 'an LLMCall chart, which runs a call-llm stage and mints nothing',
+  'no-receipt-committed':
+    'a message-API chart run with no run id, which serves a model and mints nothing',
   'receipt-shape-rejected': 'a crafted recording whose receipt key holds a value with no basis',
 };
 
@@ -1098,11 +1128,7 @@ describe('the cause of a missing receipt is a value the read computed', () => {
   });
 
   it('a real run that mints none reports no-receipt-committed', WALK_BUDGET, async () => {
-    const bare = LLMCall.create({ provider: scripted([answer('done')]) as never, model: 'mock' })
-      .system('you are a probe')
-      .build();
-    await bare.run({ message: 'hello' });
-    const snapshot = bare.getSnapshot()!;
+    const snapshot = await receiptlessRun();
 
     const gap = servedAt(snapshot, 1)!.gaps.find((g) => g.gap === 'no-receipt-on-chart');
     expect(gap?.cause).toBe('no-receipt-committed');
@@ -1142,11 +1168,7 @@ describe('the cause of a missing receipt is a value the read computed', () => {
     // The point of the release, stated as a comparison: two recordings, the
     // SAME printed sentence, two different values. A sentence cannot do that,
     // which is why it stopped trying.
-    const bare = LLMCall.create({ provider: scripted([answer('done')]) as never, model: 'mock' })
-      .system('you are a probe')
-      .build();
-    await bare.run({ message: 'hello' });
-    const missing = servedAt(bare.getSnapshot()!, 1)!.gaps.find(
+    const missing = servedAt(await receiptlessRun(), 1)!.gaps.find(
       (g) => g.gap === 'no-receipt-on-chart',
     )!;
     const rejected = servedViews(

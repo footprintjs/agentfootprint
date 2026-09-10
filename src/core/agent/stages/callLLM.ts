@@ -39,8 +39,8 @@ import {
   type ExternalGround,
 } from '../../../integrity/unsupported-argument/check.js';
 import { toolNameOfMessage } from '../window/toolNames.js';
-import { contributingPieces, joinSystemPrompt, stripFrameworkFields } from '../composeRequest.js';
-import { buildReceipt, RECEIPT_KEY } from '../../../lib/time-travel/receipt.js';
+import { joinSystemPrompt, stripFrameworkFields } from '../composeRequest.js';
+import { buildReceipt, receiptPieces, RECEIPT_KEY } from '../../../lib/time-travel/receipt.js';
 import { findStagedRefs, stagedRefsNudgeLine } from '../stagedRefs.js';
 import { fileIntegrityFindings } from '../integrityFindings.js';
 import { resilienceHooks } from '../../../recorders/core/resilienceHooks.js';
@@ -502,11 +502,7 @@ export function buildCallLLMStage(
         model,
         provider: provider.name,
         systemText: systemPrompt,
-        systemPieces: contributingPieces(systemPromptInjections).map((r) => ({
-          text: r.rawContent,
-          slot: r.slot,
-          source: r.source,
-        })),
+        systemPieces: receiptPieces(systemPromptInjections),
         messages,
         requestOnly,
         tools: activeToolSchemas,

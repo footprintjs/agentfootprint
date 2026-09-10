@@ -239,6 +239,28 @@ When the two agree, the record is complete: everything the model read is
 derivable from the trace. When they disagree, something reached the model that
 the run never wrote down — a defect in the record, not in the check.
 
+### Which charts mint a receipt
+
+Every chart that hands a model a request mints one (9.91.0). `Agent` and
+`LLMCall` own their executor and salt each run's hashes with that run's own id;
+both take `recordReceipt: false` to decline the mint on a run that does not want
+to pay for it. The two messageAPI charts are chart *builders* handed to an
+executor **you** own, and nothing in a stage's scope carries that executor's run
+id — so they take the salt as a dep:
+
+```ts
+const runId = `run-${Date.now()}`;
+const chart = buildAgentMessageApiChart({ provider, model, systemPrompt, tools, getRunId: () => runId });
+await new FlowChartExecutor(chart).run({ input: { message: 'weather in paris?' } });
+```
+
+Omit `getRunId` and **no receipt is minted** — deliberately. Every hash a
+receipt carries is salted with the run id so a short prompt or a two-word turn
+cannot be fingerprinted across runs, and a receipt travels inside recordings; a
+chart that minted with an empty salt would ship guessable fingerprints by
+default. The view is rebuilt exactly as before and says what it has not got:
+`no-receipt-on-chart`, cause `'no-receipt-committed'`.
+
 ### The shapes, one line each
 
 `servedAt` returns a `ServedView`: its `system.pieces` are `ServedPiece` records

@@ -57,7 +57,7 @@ Neither generated tree is trustworthy as documentation for a second reason: **no
 
 ## What the existing CI docs gate already covers
 
-CI's `docs` job builds docs-next, which twoslash-compiles code blocks marked `ts twoslash` against the real types. That gate is real, and where it applies nothing can drift. It just applies narrowly: **32 of the 574 TypeScript/JavaScript blocks on the site are twoslash-marked**, and **332 `import … from 'agentfootprint…'` lines sit inside blocks the compiler never sees**. Three genuinely broken imports were found in exactly that blind spot while this report was first built (plain `typescript`-tagged fences in `reference/strategy-everywhere.mdx`), which is the concrete argument for checking the export map directly rather than trusting the build to catch it.
+CI's `docs` job builds docs-next, which twoslash-compiles code blocks marked `ts twoslash` against the real types. That gate is real, and where it applies nothing can drift. It just applies narrowly: **32 of the 575 TypeScript/JavaScript blocks on the site are twoslash-marked**, and **332 `import … from 'agentfootprint…'` lines sit inside blocks the compiler never sees**. Three genuinely broken imports were found in exactly that blind spot while this report was first built (plain `typescript`-tagged fences in `reference/strategy-everywhere.mdx`), which is the concrete argument for checking the export map directly rather than trusting the build to catch it.
 
 ## What each column means
 
@@ -535,7 +535,7 @@ Prose about these exists in the repo (`docs/`, `README.md`) but nothing on the s
 | `RunContext` | interface | `agentfootprint` | `docs/MENTAL_MODEL.md` |
 | `SlotComposition` | interface | `agentfootprint` | `docs/MENTAL_MODEL.md` |
 | `SwarmOptions` | interface | `agentfootprint` | `docs/guides/concepts.md` |
-| `TraversalContext` | interface | `agentfootprint` | `docs/proposals/003-per-loop-influence-credit.md`, `docs/proposals/005-trajectory-assembler.md` |
+| `TraversalContext` | interface | `agentfootprint` | `docs/design/2026-09-recorded-not-built.md`, `docs/proposals/003-per-loop-influence-credit.md`, `docs/proposals/005-trajectory-assembler.md` |
 | `BranchOutcome` | type | `agentfootprint` | `docs/MENTAL_MODEL.md`, `docs/guides/concepts.md` |
 | `GroupKind` | type | `agentfootprint` | `docs/MENTAL_MODEL.md` |
 | `ResilienceReport` | type | `agentfootprint` `agentfootprint/providers` | `docs/MENTAL_MODEL.md` |

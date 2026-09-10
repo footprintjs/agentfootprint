@@ -54,39 +54,39 @@
  * unproved, in wording a renderer prints verbatim, and leaves the rest
  * standing.
  *
- * ── A CHART THAT MINTS NO RECEIPT DECLARES, IT DOES NOT MINT ───────────────
- * `buildReceipt` is called from exactly one place: the agent charts' `call-llm`
- * stage (`stages/callLLM.ts`). `LLMCall` and the two message-API charts
- * (`buildMessageApiChart`, `buildAgentMessageApiChart`) run their own `call-llm`
- * stage, so `epochAt` locates their epochs and `servedAt` rebuilds their views
- * — but no receipt is minted there, `ServedView.basis` is dropped, and until
- * 9.88.0 nothing said why. That is the Lens denying: a reader saw a view with
- * no model on it and no sentence explaining the absence.
+ * ── EVERY CHART THAT SERVES A MODEL MINTS, EXCEPT WHERE IT CANNOT SALT ─────
+ * Until 9.91.0 `buildReceipt` was called from exactly one place — the agent
+ * charts' `call-llm` stage (`stages/callLLM.ts`) — and the three other charts
+ * that hand a model a request (`LLMCall.ts` · `callLLM`,
+ * `buildMessageApiChart`, `buildAgentMessageApiChart`) left
+ * `no-receipt-on-chart` on every view they produced. Two reasons were recorded
+ * for that at the time. NEITHER survived.
  *
- * MINTING was the other option and it was refused. The reason that holds is
- * narrow and applies to the two message-API charts alone: they are exported
- * chart BUILDERS run on a consumer's own executor and their deps carry no run
- * id, so their hashes could not be salted. It is NOT true of `LLMCall`, which
- * owns its executor and mints a run id exactly as `Agent` does — a paragraph
- * here said otherwise until 9.88.0, in a sentence a renderer printed verbatim.
+ * The first was the cache verdict: `Receipt.cache.transform` was said to have
+ * no honest value on a chart that runs no cache strategy, because
+ * `'unchanged'` would claim a strategy returned what it was given when none
+ * ran. But an `Agent` running a pass-through strategy records exactly that
+ * today — `buildReceipt` compares the request it was handed against itself —
+ * and `receipt-conformance.test.ts` asserts it and calls it correct. No fourth
+ * enum value was needed, and none was added.
  *
- * A SECOND REASON WAS RECORDED AT THE TIME AND DOES NOT HOLD, and it is left
- * here refuted rather than deleted so nobody argues it again:
- * `Receipt.cache.transform` was said to have no honest value on a chart that
- * runs no cache strategy, because `'unchanged'` would claim a strategy
- * returned what it was given when none ran. But `Agent` runs with no cache
- * strategy record exactly that today — `buildReceipt` compares the request it
- * was handed against itself and writes `'unchanged'` — and
- * `receipt-conformance.test.ts` asserts it and calls it correct. So NO
- * recorded reason survives for `LLMCall`: it has the salt and it needs no
- * fourth enum value. It runs its own `call-llm` (`LLMCall.ts` · `callLLM`),
- * that stage does not call `buildReceipt`, and until somebody makes it the
- * absence is DECLARED rather than argued away.
+ * The second was the SALT, and it survives on exactly two of the three charts
+ * and not for the reason first written down. `LLMCall` owns its executor and
+ * mints a run id per run exactly as `Agent` does (a paragraph here said
+ * otherwise until 9.88.0, in a sentence a renderer printed verbatim), so it
+ * mints. The message-API charts are exported chart BUILDERS handed to an
+ * executor the CALLER owns, and nothing in a stage's scope carries that
+ * executor's run id — so their deps take one (`getRunId`), and they mint when
+ * they are given one. Given none they mint NOTHING rather than salting every
+ * hash with an empty string, because the salt is what makes shipping
+ * fingerprints in a recording safe (`receipt.ts`, the third law).
  *
- * So the absence is DECLARED: `no-receipt-on-chart` names the fields only a
+ * So a receipt-less view is still a shape this library produces — a chart
+ * builder run without a run id, a run that declined with `recordReceipt:
+ * false`, a consumer's own `call-llm` stage, a recording made before 9.88.0 —
+ * and the absence is DECLARED: `no-receipt-on-chart` names the fields only a
  * receipt carries and says what follows for them. The rebuild never needed the
- * receipt to work, and `servedAt`'s own `@param` is true about `LLMCall`
- * because the view it returns declares what it has and what it has not.
+ * receipt to work; what it loses is the WITNESS.
  *
  * ── AND THE CAUSE IS A VALUE, NOT A LIST INSIDE A SENTENCE ────────────────
  * That gap's sentence used to end with the causes that produce it. That is
@@ -350,7 +350,8 @@ export const SERVED_GAPS: Readonly<Record<ServedGapKind, Omit<ServedGap, 'gap'>>
     // AND BEING ON EVERY VIEW IS WHY IT NO LONGER QUOTES `RECEIPT_BOUNDARY`
     // (9.88.0, seventh round). That sentence opens "A receipt describes the
     // request as this library last saw it" — and this entry is printed on views
-    // that have no receipt at all. Measured: an `LLMCall` view carries exactly
+    // that have no receipt at all. Measured: a message-API chart run with no
+    // run id carries exactly
     // `['no-receipt-on-chart', 'cache-transform']`, so the reader was told what
     // a receipt describes beside a view that has none. The boundary CLAIM is
     // not lost — the first sentence below is that claim in the vocabulary of a
@@ -402,8 +403,8 @@ export const SERVED_GAPS: Readonly<Record<ServedGapKind, Omit<ServedGap, 'gap'>>
     // `cache-transform` quoted it too until 9.88.0's seventh round, and
     // `cache-transform` is on every view — including the receipt-less ones,
     // where the reader was told what a receipt describes beside a view that has
-    // none. Measured: an `LLMCall` view carries `no-receipt-on-chart` and
-    // `cache-transform`, and never this entry.
+    // none. Measured: a message-API chart run with no run id carries
+    // `no-receipt-on-chart` and `cache-transform`, and never this entry.
     fields: Object.freeze(['params']),
     why:
       'A dial absent below was not recorded; that is not the same as the model running ' +
@@ -455,7 +456,7 @@ export const SERVED_GAPS: Readonly<Record<ServedGapKind, Omit<ServedGap, 'gap'>>
     // THE PRINTED CLAUSE STOPPED NAMING THE RECEIPT (seventh round). It read
     // "may differ from the one the receipt for this turn carries", and this
     // gap is raised on views that have no receipt to carry anything — a
-    // base-less `LLMCall` recording gets both gaps at once. The fact a reader
+    // base-less recording of a chart that minted none gets both gaps at once. The fact a reader
     // needs is about the NUMBER, not about the witness: it may be the turn's
     // place in run order rather than the count the run kept. Measured on a
     // resumed run with its base and its `iteration` writes gone, the view calls
@@ -504,9 +505,11 @@ export const SERVED_GAPS: Readonly<Record<ServedGapKind, Omit<ServedGap, 'gap'>>
     //
     // MECHANISM (not printed). Raised when `readReceipt` returns no receipt —
     // either nothing was committed under `RECEIPT_KEY` (a recording made before
-    // the receipt existed, a run with `recordReceipt: false`, or a chart whose
-    // `call-llm` stage mints none: `LLMCall` and the two message-API charts) or
-    // something WAS committed there and was refused for carrying no basis.
+    // the receipt existed, a run with `recordReceipt: false`, a message-API
+    // chart handed no run id to salt with, or a consumer's own `call-llm`
+    // stage, which this library does not mint for) or something WAS committed
+    // there and was refused for carrying no basis. Every chart in this library
+    // that CAN salt its hashes mints since 9.91.0.
     // Which of the two is {@link ServedGap.cause}, computed at that read.
     // Everything else on the view is still folded from committed pieces; what
     // it loses is the WITNESS, not the value.
@@ -817,6 +820,13 @@ function readReceipt(location: EpochLocation): ReceiptRead {
   return { receipt: value as Receipt };
 }
 
+/** A committed tool list, or `undefined` when the key held no array — which is
+ *  what makes it a FALLBACK CHAIN and not a merge: the first key that holds a
+ *  list is the list this call served, and an empty array is an answer. */
+function toolListOf(value: unknown): LLMToolSchema[] | undefined {
+  return Array.isArray(value) ? (value as LLMToolSchema[]) : undefined;
+}
+
 /** `toolWantsByName` back as the map `findStagedRefs` takes. It is committed
  *  as a plain record because a `Map` does not survive the scope's write path
  *  (an object write is JSON-round-tripped, and a `Map` round-trips to `{}`). */
@@ -930,8 +940,20 @@ function viewOf(location: EpochLocation): ServedView {
   // `dynamicToolSchemas` is the PRE-assembly list. Two rules run after it and
   // both are on the record: the wrap-up call withholds every tool, and a
   // 'tool-forced' strategy adds one.
+  //
+  // TWO committed sources, for the same reason the conversation above has two
+  // and with the same ordering rule (9.91.0). The agent charts map the tools
+  // slot's output onto `dynamicToolSchemas` at the mount boundary; the
+  // message-API charts carry it out under the slot's own name. Reading only
+  // the first reported an EMPTY tool list on a chart that served three — a
+  // Lens DENYING, about a fact the log holds perfectly well. The agent key is
+  // read first and the fallback is reached only when it holds no array, so no
+  // agent recording changes.
   const withheld = readAtCall(location, 'wrapUpAsked') === true;
-  const dynamic = (readAtCall(location, 'dynamicToolSchemas') ?? []) as LLMToolSchema[];
+  const dynamic =
+    toolListOf(readAtCall(location, 'dynamicToolSchemas')) ??
+    toolListOf(readAtCall(location, 'toolSchemas')) ??
+    [];
   const registered = withheld ? [] : dynamic;
   const forcedRaw = readRunConstant(location, FORCED_OUTPUT_TOOL_KEY);
   const forced = typeof forcedRaw === 'string' && forcedRaw.length > 0 ? forcedRaw : undefined;
@@ -1022,9 +1044,10 @@ function viewOf(location: EpochLocation): ServedView {
  * named entry in `gaps`, never as a missing view and never as a confident
  * empty one.
  *
- * @param source a runner (`Agent`, `LLMCall`) or a snapshot. On `LLMCall` and
- *   the message-API charts the rebuild is complete but UNCHECKED: those charts
- *   mint no receipt, so `basis` is absent and `gaps` carries
+ * @param source a runner (`Agent`, `LLMCall`) or a snapshot. Where no receipt
+ *   was minted — a message-API chart handed no run id, a run that declined with
+ *   `recordReceipt: false`, a chart of the caller's own — the rebuild is
+ *   complete but UNCHECKED: `basis` is absent and `gaps` carries
  *   `no-receipt-on-chart` saying so.
  * @param epoch  the iteration number, 1-based — the run's own count.
  *

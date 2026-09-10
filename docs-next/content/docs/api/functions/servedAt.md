@@ -6,7 +6,7 @@ title: servedAt
 
 > **servedAt**(`source`, `epoch`): [`ServedView`](/docs/api/interfaces/ServedView) \| `undefined`
 
-Defined in: [src/lib/time-travel/servedView.ts:1041](https://github.com/footprintjs/agentfootprint/blob/main/src/lib/time-travel/servedView.ts#L1041)
+Defined in: [src/lib/time-travel/servedView.ts:1064](https://github.com/footprintjs/agentfootprint/blob/main/src/lib/time-travel/servedView.ts#L1064)
 
 Rebuild what the model was SERVED on epoch `k`, from the run's committed
 pieces alone.
@@ -31,9 +31,10 @@ empty one.
 
 `unknown`
 
-a runner (`Agent`, `LLMCall`) or a snapshot. On `LLMCall` and
-  the message-API charts the rebuild is complete but UNCHECKED: those charts
-  mint no receipt, so `basis` is absent and `gaps` carries
+a runner (`Agent`, `LLMCall`) or a snapshot. Where no receipt
+  was minted — a message-API chart handed no run id, a run that declined with
+  `recordReceipt: false`, a chart of the caller's own — the rebuild is
+  complete but UNCHECKED: `basis` is absent and `gaps` carries
   `no-receipt-on-chart` saying so.
 
 ### epoch

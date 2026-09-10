@@ -725,11 +725,22 @@ today is a consumer's own strategy.
 
 ## 8. `cache-transform` is raised on every view, including charts with no strategy
 
+> **Its reproduction moved in 9.91.0 (2026-09-10); the defect did not.** The
+> three charts that served a model and minted nothing now mint (see the
+> appendix below), so an `LLMCall` view reads
+> `['cache-transform', 'provider-defaults']` and carries a receipt saying
+> `cache.transform: 'unchanged'` — a request compared against itself, because
+> nothing rewrote it. The entry stands on that view exactly as it stood on the
+> old one: a sentence about what a cache strategy may have done, printed where
+> none can run. The measurement below is retaken on the receipt-less shape that
+> survives — a message-API chart handed no run id.
+
 **The reproduction.** `servedView.ts` · `viewOf` pushes `gapOf('cache-transform')`
-unconditionally. On an `LLMCall` view the gaps read
-`['no-receipt-on-chart', 'cache-transform']` — the first saying no cache strategy
-runs on this chart, the second describing what a cache strategy may have done.
-Two sentences on one view, one of them about a mechanism that cannot be present.
+unconditionally. On a message-API chart run with no run id the gaps read
+`['no-receipt-on-chart', 'cache-transform']` — the first saying nothing on the
+view was checked against what went out, the second describing what a cache
+strategy may have done. Two sentences on one view, one of them about a
+mechanism that cannot be present.
 
 **What was done here instead.** The printed sentence was made honest about being
 the WEAKEST claim on the view rather than about the mechanism that makes it one.
@@ -844,3 +855,79 @@ catalogue entry, a handful of clauses each. The honest statement of it is in the
 new file's header, in
 `test/helpers/gapProseClaims.ts`, and in the CHANGELOG: **the blind spot is a
 claim nobody wrote an assertion for.**
+
+
+---
+
+# Appended 2026-09-10 — BUILT: the three charts that served a model and minted nothing
+
+> **Built in 9.91.0 (2026-09-10).**
+
+Not an entry — the closing of a standing fact that entries 8 and 9 and
+`servedView.ts`'s own module comment all rested on: **`buildReceipt` was called
+from exactly one place**, the agent charts' `call-llm` stage, while three other
+charts in this library handed a model a request and left `no-receipt-on-chart`
+on every view they produced (`LLMCall.ts` · `callLLM`, `buildMessageApiChart`,
+`buildAgentMessageApiChart`).
+
+**The two recorded reasons, and what happened to them.**
+
+- *The cache verdict.* `Receipt.cache.transform` was said to have no honest
+  value on a chart running no cache strategy, because `'unchanged'` would claim
+  a strategy returned what it was given. Refuted in 9.88.0's fourth round and
+  left refuted in the source: an `Agent` with a pass-through strategy records
+  `'unchanged'` today, `receipt-conformance.test.ts` asserts it, and the value
+  is true for the same reason on a chart with no strategy at all — the request
+  that went out IS the request that was assembled. **No fourth enum value was
+  added.**
+- *The salt.* It never applied to `LLMCall`, which owns its executor and mints a
+  run id per run exactly as `Agent` does (a shipped sentence said otherwise
+  until 9.88.0 measured it). It DOES apply to the two message-API charts, which
+  are exported chart BUILDERS handed to an executor the caller owns — and
+  footprintjs stamps `TraversalContext.runId` on recorder events, not on a
+  stage's scope, so a stage function cannot read it. `ScopeFacade` exposes no
+  `$runId`, and `ExecutionEnv` is a fixed type carrying `traceId` and no run id.
+  **Verified rather than assumed.**
+
+**What was built.** `LLMCall` mints unconditionally (opt out with
+`recordReceipt: false`, the twin of `AgentOptions.recordReceipt`). The two
+message-API charts take a `getRunId` dep and mint when they are given one —
+and mint NOTHING when they are not, rather than salting every hash with an
+empty string, because the salt is what makes shipping fingerprints inside a
+recording safe. All four mints go through one `buildReceipt` and one piece
+rule (`receipt.ts` · `receiptPieces`); the two chart mints share
+`messageApiReceipt.ts`, which owns the no-salt-no-receipt rule.
+
+**One defect found on the way and fixed with it.** `servedView.ts` · `viewOf`
+read the served tool list from `dynamicToolSchemas` alone. The agent charts map
+the tools slot's output onto that key at the mount boundary; the message-API
+charts carry it out under the slot's own name — so `servedAt` reported
+`tools.names: []` on a call that served one. An empty list is not an omission,
+it is a DENIAL, and it went unnoticed for as long as there was no receipt to
+contradict it. The read is now a fallback chain, the agent key first, the same
+shape the conversation has had since 9.88.0.
+
+**What is deliberately still true.** `no-receipt-on-chart` and its cause
+`'no-receipt-committed'` remain reachable on real runs and are still driven by
+one: a message-API chart run with no run id. So are a run that declined with
+`recordReceipt: false`, a recording made before 9.88.0, and a consumer's own
+`call-llm` stage, which this library does not mint for. The gap's printed
+sentence is unchanged — it never named a chart — and
+`gap-sentences.test.ts` still asserts every clause of it against a real
+receipt-less view.
+
+## Follow-up opened by 9.91.0 (2026-09-10)
+
+**`buildAgentMessageApiChart` · the tools slot accumulates across loop turns.** The
+tools-slot outputMapper merges rather than replaces, so on turn 2 the model is
+handed the same tool twice (`['weather','weather']` on the wire). This is not a
+regression and not a receipt defect: the receipt and `servedAt` now record what
+was served TRUTHFULLY, which is how the defect became visible at all — the
+mechanism working as designed. Fix in its own packet: `arrayMerge: Replace` on
+that outputMapper, with a test that asserts the wire's tool list is the declared
+set at every turn.
+
+**`Receipt.tools.schemaHashes` is name-keyed.** Two tools served under one name
+collapse to a single hash while `tools.names` holds both. Harmless today (no
+shipped chart serves a duplicate deliberately) and named here so it is on record
+before someone makes duplicate serving intentional.

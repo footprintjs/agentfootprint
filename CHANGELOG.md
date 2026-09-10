@@ -7,6 +7,96 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [9.91.0] - 2026-09-10
+
+**Every chart that serves a model now mints a receipt.** A receipt is the proof
+of what the model was actually handed, minted at the call and committed in the
+bundle the call already writes — and until this release exactly ONE stage minted
+one. Three other charts in this library handed a model a request and left
+`no-receipt-on-chart` on every view they produced, so a reader of an `LLMCall`
+or messageAPI recording could only ever see Reconstructed, never Verified.
+
+Two reasons were on the record for that. **Neither survived.** The first — that
+`Receipt.cache.transform` has no honest value on a chart running no cache
+strategy — was already refuted in 9.88.0 and left refuted in the source: an
+`Agent` with a pass-through strategy records `'unchanged'` today, and the value
+is true for the same reason where no strategy exists at all, because *the
+request that went out IS the request that was assembled*. **No fourth enum value
+was added.** The second — the salt — never applied to `LLMCall`, which owns its
+executor and mints a run id exactly as `Agent` does. It DOES apply to the two
+messageAPI charts, and that was verified rather than assumed: footprintjs stamps
+`TraversalContext.runId` on recorder events, not on a stage's scope; there is no
+`$runId` on `ScopeFacade`; `ExecutionEnv` is a fixed type carrying `traceId` and
+no run id. A chart builder run on somebody else's executor genuinely cannot
+invent the value — so it is a dep, and a chart given none mints NOTHING rather
+than salting every hash with an empty string.
+
+### Added
+
+- **`LLMCall` mints a receipt** (`LLMCall.ts` · `callLLM`), salted with the run
+  id `createExecutor` already mints per run — read at CALL time, not closed over
+  at build time, so the second run of the same `LLMCall` is not salted with the
+  first run's value. `servedAt` on an `LLMCall` recording now carries
+  `basis.model`, `params` and the cache verdict, and stops raising
+  `no-receipt-on-chart`.
+- **`LLMCallOptions.recordReceipt`** — the twin of `AgentOptions.recordReceipt`,
+  same field, same contract, default ON. `false` declines the mint (one
+  commit-log value and a SHA-256 per piece, per message, per tool schema);
+  `servedAt` still rebuilds the view and declares the missing witness.
+- **`MessageApiChartDeps.getRunId` / `AgentMessageApiChartDeps.getRunId`** —
+  supply the run id and the chart mints on every turn; omit it and it mints
+  none. `src/core/agent/messageApiReceipt.ts` owns that rule for both charts,
+  because the two are deliberate twins and a mint written out in each is two
+  chances to disagree about what the model was handed.
+- **`receipt.ts` · `receiptPieces`** — the injection-record → receipt-piece map,
+  which was about to have four copies. One owner, calling the same
+  `contributingPieces` the system-prompt join calls, so a piece cannot be on the
+  receipt and absent from the string.
+
+### Fixed
+
+- **`servedAt` reported an EMPTY tool list on a call that served tools.**
+  `servedView.ts` · `viewOf` read the served list from `dynamicToolSchemas`
+  alone. The agent charts map the tools slot's output onto that key at the mount
+  boundary; the messageAPI charts carry it out under the slot's own name — so a
+  `buildAgentMessageApiChart` view said `tools.names: []` about a call that
+  served one. An empty list is not an omission, it is a DENIAL, and it went
+  unnoticed for as long as no receipt existed to contradict it. The read is now
+  a fallback chain (the agent key first, so no agent recording changes), the
+  same shape the conversation has had since 9.88.0. Red before, on
+  `test/lib/time-travel/receipt-conformance.test.ts` · *the tool the model was
+  served is hashed by the receipt AND rebuilt from the log*.
+
+### Changed
+
+- **`SERVED_GAPS['no-receipt-on-chart']` is unchanged, and still true.** Its
+  printed sentence never named a chart, so nothing in it went false; the
+  MECHANISM comment beside it now names the shapes that still reach it — a
+  messageAPI chart handed no run id, a run that declined with `recordReceipt:
+  false`, a recording made before 9.88.0, and a consumer's own `call-llm` stage,
+  which this library does not mint for. The cause `'no-receipt-committed'` is
+  still driven by a REAL run in both walks; the driver moved from an `LLMCall`
+  (which now mints) to a messageAPI chart with no run id.
+- **The composed request is assembled once per chart.** Each of the three
+  charts now builds ONE `LLMRequest` object and both sends it and fingerprints
+  it, and each routes its conversation through `stripFrameworkFields` — the
+  third rule of the one assembly — so the mint and the rebuild cannot drift.
+  Every other byte those charts commit is unchanged: measured by dumping each
+  chart's commit log, its per-bundle keys and its final state before and after,
+  and diffing (identical apart from the new `receipt` key).
+
+### Docs
+
+- `src/lib/time-travel/README.md` — a "Which charts mint a receipt" table (chart
+  → mints? → the salt) with the builder example, and every measurement that
+  named an `LLMCall` view as receipt-less retaken on the shape that still is.
+- `docs-next` `debug/time-travel.mdx` — the same section for the site. No new
+  route.
+- `docs/design/2026-09-recorded-not-built.md` — entry 8's reproduction retaken
+  (it still stands; only its driver moved) and an appendix marking the standing
+  no-mint fact BUILT in 9.91.0, with the reasons that died and the one that
+  survives.
+
 ## [9.90.0] - 2026-09-10
 
 **The recording carries its own milestones.** Until now a stored run could not

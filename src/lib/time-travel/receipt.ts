@@ -3,10 +3,10 @@
  * was handed it.
  *
  * Role:  Fold. This module owns the receipt's SHAPE and the one function that
- *        mints one (`buildReceipt`); the agent's request assembly calls it and
- *        commits the result under the scope key `receipt`, so the record lands
- *        in the call-llm bundle that already exists. Nothing here executes,
- *        reads scope, or emits.
+ *        mints one (`buildReceipt`); every chart's request assembly calls it
+ *        and commits the result under the scope key `receipt`, so the record
+ *        lands in the call-llm bundle that already exists. Nothing here
+ *        executes, reads scope, or emits.
  * Reads: its arguments.
  * Emits: N/A.
  *
@@ -26,9 +26,10 @@
  * did it not know that?" needs to see it. Even there the summaries are hashed,
  * never quoted, for the same reason everything else on a receipt is.
  *
- * Measured on 9.88.0, NO chart shape supplies it: a slot writes its drops to
- * `slotCompositions` inside its own subflow and no boundary bubbles that record
- * out, so the agent's request assembly has nothing to pass. The field is on the
+ * Measured on 9.88.0 and re-measured on 9.91.0 across all four minting charts,
+ * NO chart shape supplies it: a slot writes its drops to `slotCompositions`
+ * inside its own subflow and no boundary bubbles that record out, so a chart's
+ * request assembly has nothing to pass. The field is on the
  * shape because `buildReceipt` is a pure exported mint a caller can hand the
  * fact to, and because the law it obeys is worth stating once rather than the
  * day the record starts crossing. What is NOT done is go looking for it: a
@@ -83,7 +84,16 @@
 
 import type { LLMMessage, LLMToolSchema } from '../../adapters/types.js';
 import type { ContextRole, ContextSlot, ContextSource } from '../../events/types.js';
+import { contributingPieces } from '../../core/agent/composeRequest.js';
 import { sha256Hex } from './sha256.js';
+
+/** What {@link receiptPieces} needs from one committed injection record — the
+ *  three fields a receipt keeps of a system piece, and none of the rest. */
+export interface SystemPieceRecord {
+  readonly rawContent?: string;
+  readonly slot: ContextSlot;
+  readonly source: ContextSource;
+}
 
 /**
  * The separator between two fields inside one digest input — ASCII UNIT
@@ -125,9 +135,11 @@ export const UNSERIALIZABLE = '\u001F<unserializable>';
  * screen is rarely the person who read the source. Print it beside the record.
  *
  * ── THE MECHANISM, WHICH THE PRINTED SENTENCE NO LONGER NAMES (9.88.0) ─────
- * `buildReceipt` is called from `stages/callLLM.ts` with the request about to
- * be passed to `LLMProvider.complete` — the PORT, this library's last sight of
- * it. Three things sit downstream of that call and none of them is on the
+ * `buildReceipt` is called with the request about to be passed to
+ * `LLMProvider.complete` — the PORT, this library's last sight of it. Four
+ * stages call it since 9.91.0: the agent charts' (`stages/callLLM.ts`),
+ * `LLMCall.ts` · `callLLM`, and the two message-API charts' through
+ * `messageApiReceipt.ts`. Three things sit downstream of that call and none of them is on the
  * record: a provider decorated by the consumer (`complete()` wrapping
  * `complete()`), a vendor adapter's own serializer, and the vendor's
  * server-side defaults. `test/lib/time-travel/receipt-conformance.test.ts`
@@ -333,9 +345,10 @@ export interface Receipt {
   /** The sampling knobs the call went out with — see {@link ReceiptParams}. */
   readonly params: ReceiptParams;
   /**
-   * Absent when no slot reported a drop — which, measured on 9.88.0, is EVERY
-   * run in both chart shapes: no boundary bubbles `slotCompositions` out of the
-   * slot subflow that writes it, so request assembly has nothing to pass. It is
+   * Absent when no slot reported a drop — which, measured on 9.88.0 and again
+   * on 9.91.0 across every chart that mints, is EVERY run: no boundary bubbles
+   * `slotCompositions` out of the slot subflow that writes it, so request
+   * assembly has nothing to pass. It is
    * a key of `servedView.ts` · `UNGAPPED_FIELDS` for that reason: its absence
    * is universal and says nothing about any particular recording. Absent means
    * nobody recorded a drop, never that nothing was dropped.
@@ -561,6 +574,36 @@ export interface BuildReceiptInput {
   }[];
   /** What a slot's budget dropped, when a slot reported any. */
   readonly omittedForAttention?: { readonly count: number; readonly summaries: readonly string[] };
+}
+
+/**
+ * The system pieces a receipt records, off the injection records a slot
+ * committed — the SURVIVORS of the join, in the order they were joined.
+ *
+ * ONE OWNER, because there are now four mints (9.91.0): the agent's `call-llm`
+ * stage, `LLMCall`'s, and the two message-API charts'. Written out at each of
+ * them, this five-line map is four chances to disagree about which record was
+ * piece 2 — and `servedAt` proves piece 2 against the receipt's piece 2, so a
+ * disagreement here reads as a defect in the record.
+ *
+ * It calls `contributingPieces`, which is also what the join itself calls, so
+ * an empty record cannot be a piece on the receipt and a blank line in the
+ * string, or the other way round.
+ *
+ * @example
+ * ```ts
+ * receiptPieces([{ rawContent: 'You are a bot.', slot: 'systemPrompt', source: 'static' }]);
+ * // [{ text: 'You are a bot.', slot: 'systemPrompt', source: 'static' }]
+ * ```
+ */
+export function receiptPieces(
+  records: readonly SystemPieceRecord[],
+): BuildReceiptInput['systemPieces'] {
+  return contributingPieces(records).map((record) => ({
+    text: record.rawContent,
+    slot: record.slot,
+    source: record.source,
+  }));
 }
 
 /**

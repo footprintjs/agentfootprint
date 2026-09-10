@@ -4,7 +4,7 @@ title: ReceiptParams
 
 # Interface: ReceiptParams
 
-Defined in: [src/lib/time-travel/receipt.ts:260](https://github.com/footprintjs/agentfootprint/blob/main/src/lib/time-travel/receipt.ts#L260)
+Defined in: [src/lib/time-travel/receipt.ts:272](https://github.com/footprintjs/agentfootprint/blob/main/src/lib/time-travel/receipt.ts#L272)
 
 The sampling knobs the call went out with — scalars and short strings, no
 bytes, no privacy change.
@@ -46,7 +46,7 @@ receiptAt(snapshot, 1)?.params.stop;        // undefined: none was sent
 
 > `readonly` `optional` **maxTokens?**: `number`
 
-Defined in: [src/lib/time-travel/receipt.ts:262](https://github.com/footprintjs/agentfootprint/blob/main/src/lib/time-travel/receipt.ts#L262)
+Defined in: [src/lib/time-travel/receipt.ts:274](https://github.com/footprintjs/agentfootprint/blob/main/src/lib/time-travel/receipt.ts#L274)
 
 ***
 
@@ -54,7 +54,7 @@ Defined in: [src/lib/time-travel/receipt.ts:262](https://github.com/footprintjs/
 
 > `readonly` `optional` **stop?**: readonly `string`[]
 
-Defined in: [src/lib/time-travel/receipt.ts:265](https://github.com/footprintjs/agentfootprint/blob/main/src/lib/time-travel/receipt.ts#L265)
+Defined in: [src/lib/time-travel/receipt.ts:277](https://github.com/footprintjs/agentfootprint/blob/main/src/lib/time-travel/receipt.ts#L277)
 
 ***
 
@@ -62,7 +62,7 @@ Defined in: [src/lib/time-travel/receipt.ts:265](https://github.com/footprintjs/
 
 > `readonly` `optional` **temperature?**: `number`
 
-Defined in: [src/lib/time-travel/receipt.ts:261](https://github.com/footprintjs/agentfootprint/blob/main/src/lib/time-travel/receipt.ts#L261)
+Defined in: [src/lib/time-travel/receipt.ts:273](https://github.com/footprintjs/agentfootprint/blob/main/src/lib/time-travel/receipt.ts#L273)
 
 ***
 
@@ -70,7 +70,7 @@ Defined in: [src/lib/time-travel/receipt.ts:261](https://github.com/footprintjs/
 
 > `readonly` `optional` **thinkingBudget?**: `number`
 
-Defined in: [src/lib/time-travel/receipt.ts:264](https://github.com/footprintjs/agentfootprint/blob/main/src/lib/time-travel/receipt.ts#L264)
+Defined in: [src/lib/time-travel/receipt.ts:276](https://github.com/footprintjs/agentfootprint/blob/main/src/lib/time-travel/receipt.ts#L276)
 
 `LLMRequest.thinking.budget` — the reasoning-token ceiling asked for.
 
@@ -80,7 +80,7 @@ Defined in: [src/lib/time-travel/receipt.ts:264](https://github.com/footprintjs/
 
 > `readonly` `optional` **toolChoice?**: `object`
 
-Defined in: [src/lib/time-travel/receipt.ts:267](https://github.com/footprintjs/agentfootprint/blob/main/src/lib/time-travel/receipt.ts#L267)
+Defined in: [src/lib/time-travel/receipt.ts:279](https://github.com/footprintjs/agentfootprint/blob/main/src/lib/time-travel/receipt.ts#L279)
 
 The forced tool choice, as the port carried it.
 

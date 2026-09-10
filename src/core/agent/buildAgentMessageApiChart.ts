@@ -27,7 +27,9 @@
 
 import { flowChartSelector, select } from 'footprintjs';
 import type { FlowChart, TypedScope } from 'footprintjs';
-import type { LLMMessage, LLMProvider, LLMToolSchema } from '../../adapters/types.js';
+import type { LLMMessage, LLMProvider, LLMRequest, LLMToolSchema } from '../../adapters/types.js';
+import { RECEIPT_KEY, type Receipt } from '../../lib/time-travel/receipt.js';
+import { messageApiReceipt } from './messageApiReceipt.js';
 import { SUBFLOW_IDS, STAGE_IDS, milestoneTagsFor } from '../../conventions.js';
 import type { InjectionRecord } from '../../recorders/core/types.js';
 import { typedEmit } from '../../recorders/core/typedEmit.js';
@@ -35,7 +37,7 @@ import { resilienceHooks } from '../../recorders/core/resilienceHooks.js';
 import { buildSystemPromptSlot } from '../slots/buildSystemPromptSlot.js';
 import { buildMessagesSlot } from '../slots/buildMessagesSlot.js';
 import { buildToolsSlot } from '../slots/buildToolsSlot.js';
-import { joinSystemPrompt } from './composeRequest.js';
+import { joinSystemPrompt, stripFrameworkFields } from './composeRequest.js';
 
 /** Route branch ids. */
 const ROUTE_TOOL_CALLS = 'tool-calls';
@@ -57,6 +59,9 @@ interface AgentMsgApiState {
   toolCalls: readonly { id: string; name: string; args: unknown }[];
   /** Written by Final; the agent's result. */
   finalContent: string;
+  /** Written by Call-LLM when the chart was given a run id — see
+   *  {@link AgentMessageApiChartDeps.getRunId}. */
+  receipt?: Receipt;
 }
 
 export interface AgentMessageApiChartDeps {
@@ -66,6 +71,28 @@ export interface AgentMessageApiChartDeps {
   readonly tools: readonly LLMToolSchema[];
   readonly maxIterations?: number;
   readonly structureRecorders?: readonly import('footprintjs').StructureRecorder[];
+  /**
+   * The id of the run this chart is about to make (9.91.0) — supply it and
+   * Call-LLM mints a receipt on every turn of the loop, the fingerprint of
+   * what the model was handed, committed at each call for `receiptAt` and
+   * `servedAt` to read. The twin of `MessageApiChartDeps.getRunId`, and for
+   * the same reason: this is a chart BUILDER handed to an executor the caller
+   * owns, so the salt has to come from whoever starts the run.
+   *
+   * OMIT IT AND NO RECEIPT IS MINTED — never an unsalted one. The rule and its
+   * reason live in `messageApiReceipt.ts`; `servedAt` declares the absence and
+   * rebuilds the view as it always did.
+   *
+   * @example (internal — `buildAgentMessageApiChart` is not on the package's
+   * public surface; the type is, so a caller composing this chart inside the
+   * library reads the contract here)
+   * ```ts
+   * const runId = `run-${Date.now()}`;
+   * const chart = buildAgentMessageApiChart({ ...deps, getRunId: () => runId });
+   * await new FlowChartExecutor(chart).run({ input: { message: 'hi' } });
+   * ```
+   */
+  readonly getRunId?: () => string | undefined;
 }
 
 /**
@@ -112,7 +139,7 @@ export function buildAgentMessageApiChart(deps: AgentMessageApiChartDeps): FlowC
   // ── Call-LLM: send the assembled payload + the tool schemas. ──
   const callLLM = async (scope: TypedScope<AgentMsgApiState>): Promise<void> => {
     const system = scope.assembledSystem;
-    const messages = (scope.assembledMessages ?? []) as readonly LLMMessage[];
+    const messages = stripFrameworkFields((scope.assembledMessages ?? []) as readonly LLMMessage[]);
     const toolSchemas = (scope.toolSchemas ?? []) as readonly LLMToolSchema[];
     typedEmit(scope, 'agentfootprint.stream.llm_start', {
       iteration: scope.iteration,
@@ -129,13 +156,35 @@ export function buildAgentMessageApiChart(deps: AgentMessageApiChartDeps): FlowC
       }),
     });
     const startMs = Date.now();
+    // ONE request object, sent and fingerprinted — never assembled twice.
+    const request: LLMRequest = {
+      ...(system.length > 0 && { systemPrompt: system }),
+      messages,
+      ...(toolSchemas.length > 0 && { tools: toolSchemas }),
+      model,
+    };
+
+    // ── THE RECEIPT (9.91.0) ───────────────────────────────────────────
+    // Minted immediately before the port is called, so it is committed in the
+    // call-llm bundle that already exists — and before rather than after on
+    // purpose: the stage commits on the error path too, so a call that throws
+    // still leaves the record of what it was about to send. No run id ⇒ no
+    // receipt; the rule and its reason live in `messageApiReceipt.ts`.
+    const receipt = messageApiReceipt({
+      runId: deps.getRunId?.(),
+      epoch: scope.iteration,
+      model,
+      provider: provider.name,
+      systemText: system,
+      systemPieces: (scope.systemPromptInjections ?? []) as readonly InjectionRecord[],
+      messages,
+      tools: toolSchemas,
+      request,
+    });
+    if (receipt !== undefined) scope[RECEIPT_KEY] = receipt;
+
     const response = await provider.complete(
-      {
-        ...(system.length > 0 && { systemPrompt: system }),
-        messages,
-        ...(toolSchemas.length > 0 && { tools: toolSchemas }),
-        model,
-      },
+      request,
       // Resilience-report channel: a decorated provider's fallback /
       // retry / recovery becomes an in-run typed event here.
       //

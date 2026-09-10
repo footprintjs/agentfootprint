@@ -6,7 +6,7 @@ title: servedViews
 
 > **servedViews**(`source`): [`ServedView`](/docs/api/interfaces/ServedView)[]
 
-Defined in: [src/lib/time-travel/servedView.ts:1055](https://github.com/footprintjs/agentfootprint/blob/main/src/lib/time-travel/servedView.ts#L1055)
+Defined in: [src/lib/time-travel/servedView.ts:1078](https://github.com/footprintjs/agentfootprint/blob/main/src/lib/time-travel/servedView.ts#L1078)
 
 Every epoch's served view, in run order — `servedAt` for a whole run, with
 one pass over the recording instead of one per epoch.

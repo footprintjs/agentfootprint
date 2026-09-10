@@ -71,7 +71,9 @@ import {
   type ServedGapKind,
   type ServedView,
 } from '../../../src/index.js';
-import { flowChart } from 'footprintjs';
+import { flowChart, FlowChartExecutor, type FlowChart } from 'footprintjs';
+import { buildMessageApiChart } from '../../../src/core/agent/buildMessageApiChart.js';
+import { buildAgentMessageApiChart } from '../../../src/core/agent/buildAgentMessageApiChart.js';
 import { innerRunsOf } from '../../../src/lib/trace-toolpack/index.js';
 import { isPaused, pauseHere } from '../../../src/core/pause.js';
 import { defineSkill, skillGraph } from '../../../src/injection-engine.js';
@@ -721,6 +723,67 @@ describe('an LLMCall chart', () => {
     expect(view.gaps.map((g) => g.gap)).not.toContain('no-conversation-on-record');
   });
 
+  it('mints a receipt salted with its own run id, and the log rebuilds it', async () => {
+    // 9.91.0. `LLMCall` owns its executor and mints a run id per run exactly
+    // as `Agent` does, so the salt was always there for the taking — and a
+    // shipped sentence said otherwise until 9.88.0 measured it. It takes it
+    // now, and the same law the agent charts pass runs on it unchanged.
+    const { provider, wire } = scripted([answer('done')]);
+    const call = LLMCall.create({ provider: provider as never, model: 'mock' })
+      .system('you are a probe')
+      .build();
+    await call.run({ message: 'the one turn that went out' });
+    const snapshot = call.getSnapshot()! as unknown as Snapshot;
+
+    const receipt = receiptAt(snapshot, 1)!;
+    expect(receipt.basis.runId.length).toBeGreaterThan(0);
+    expect(receipt.basis.model).toBe('mock');
+    expect(failuresAt(snapshot, 1, wire[0])).toEqual([]);
+    expect(servedAt(snapshot, 1)!.gaps.map((g) => g.gap)).not.toContain('no-receipt-on-chart');
+  });
+
+  it('salts each run with ITS OWN id: the same prompt fingerprints differently', async () => {
+    // The chart is built once and run many times, so a mint that closed over
+    // the run id at build time would salt every later run with the first
+    // run's value — the exact failure the salt exists to prevent.
+    const { provider } = scripted([answer('done'), answer('done')]);
+    const call = LLMCall.create({ provider: provider as never, model: 'mock' })
+      .system('you are a probe')
+      .build();
+    await call.run({ message: 'same words both times' });
+    const first = receiptAt(call.getSnapshot()! as unknown as Snapshot, 1)!;
+    await call.run({ message: 'same words both times' });
+    const second = receiptAt(call.getSnapshot()! as unknown as Snapshot, 1)!;
+
+    expect(second.basis.runId).not.toBe(first.basis.runId);
+    expect(second.system.hash).not.toBe(first.system.hash);
+    expect(second.messages.entries[0]!.hash).not.toBe(first.messages.entries[0]!.hash);
+    // The same words, though — the CONTENT did not move, only the salt.
+    expect(second.system.chars).toBe(first.system.chars);
+  });
+
+  it('recordReceipt: false declines the mint, and the view declares the absence', async () => {
+    const { provider } = scripted([answer('done')]);
+    const call = LLMCall.create({
+      provider: provider as never,
+      model: 'mock',
+      recordReceipt: false,
+    })
+      .system('you are a probe')
+      .build();
+    await call.run({ message: 'hello' });
+    const snapshot = call.getSnapshot()! as unknown as Snapshot;
+
+    expect(receiptAt(snapshot, 1)).toBeUndefined();
+    const view = servedAt(snapshot, 1)!;
+    expect(view.gaps.find((g) => g.gap === 'no-receipt-on-chart')?.cause).toBe(
+      'no-receipt-committed',
+    );
+    // Declining the witness never costs the rebuild.
+    expect(view.system.text).toBe('you are a probe');
+    expect(view.messages.asSent).toHaveLength(1);
+  });
+
   it('a chart that commits NEITHER source declares the hole instead of an empty list', async () => {
     const { provider, wire } = scripted([answer('done')]);
     const call = LLMCall.create({ provider: provider as never, model: 'mock' })
@@ -742,6 +805,153 @@ describe('an LLMCall chart', () => {
     expect(view.messages.asSent).toEqual([]);
     expect(view.gaps.map((g) => g.gap)).toContain('no-conversation-on-record');
     expect(SERVED_GAPS['no-conversation-on-record'].why).toMatch(/unknown, not empty/i);
+  });
+});
+
+// ─── (c) INTEGRATION — every chart shape that serves a model mints ────
+//
+// 9.91.0. Until this release exactly ONE stage minted a receipt — the agent's
+// `call-llm` — and the other three charts that hand a model a request left
+// `no-receipt-on-chart` on every view they produced. The law below is the same
+// `failuresAt` the agent runs through, driven on each of them, because a
+// receipt that only the chart it was written for can satisfy is not a law.
+
+/** The chart builders are handed to an executor the CALLER owns — the shape a
+ *  consumer runs them in, and the reason their salt is a dep. */
+async function chartRun(chart: FlowChart, message: string): Promise<Snapshot> {
+  const executor = new FlowChartExecutor(chart);
+  await executor.run({ input: { message } });
+  return executor.getSnapshot() as unknown as Snapshot;
+}
+
+const WEATHER: LLMToolSchema = {
+  name: 'weather',
+  description: 'Get weather for a city',
+  inputSchema: { type: 'object', properties: { city: { type: 'string' } } },
+};
+
+describe('a message-API chart', () => {
+  it('mints a receipt when it is handed a run id, and the log rebuilds it', async () => {
+    const { provider, wire } = scripted([answer('done')]);
+    const runId = 'run-message-api-7';
+    const snapshot = await chartRun(
+      buildMessageApiChart({
+        provider: provider as never,
+        model: 'mock',
+        systemPrompt: 'you are a tutor',
+        getRunId: () => runId,
+      }),
+      'the one turn that went out',
+    );
+
+    expect(receiptAt(snapshot, 1)!.basis.runId).toBe(runId);
+    expect(receiptAt(snapshot, 1)!.basis.provider).toBe('conformance-mock');
+    // The whole law, on a chart that had none of it until 9.91.0.
+    expect(failuresAt(snapshot, 1, wire[0])).toEqual([]);
+    // …and the view stops declaring an absence that is no longer there.
+    expect(servedAt(snapshot, 1)!.gaps.map((g) => g.gap)).not.toContain('no-receipt-on-chart');
+  });
+
+  it('mints NONE without one, rather than salting every hash with nothing', async () => {
+    // THE RULE, driven: a receipt's hashes are salted with the run id so a
+    // short prompt cannot be fingerprinted across runs. A builder run on
+    // somebody else's executor cannot invent that value, so it declines the
+    // mint — and the rebuild it never needed is untouched.
+    const { provider } = scripted([answer('done')]);
+    const snapshot = await chartRun(
+      buildMessageApiChart({
+        provider: provider as never,
+        model: 'mock',
+        systemPrompt: 'you are a tutor',
+      }),
+      'hello',
+    );
+
+    expect(receiptAt(snapshot, 1)).toBeUndefined();
+    const view = servedAt(snapshot, 1)!;
+    expect(view.gaps.find((g) => g.gap === 'no-receipt-on-chart')?.cause).toBe(
+      'no-receipt-committed',
+    );
+    expect(view.system.text).toBe('you are a tutor');
+    expect(view.messages.asSent).toHaveLength(1);
+  });
+});
+
+describe('an agent message-API chart', () => {
+  it('every turn of the loop mints, and every epoch is located and conforms', async () => {
+    const { provider, wire } = scripted([call('c1', 'weather'), answer('sunny')]);
+    const runId = 'run-agent-message-api-2';
+    const snapshot = await chartRun(
+      buildAgentMessageApiChart({
+        provider: provider as never,
+        model: 'mock',
+        systemPrompt: 'you are a tutor',
+        tools: [WEATHER],
+        getRunId: () => runId,
+      }),
+      'weather in paris?',
+    );
+
+    // `epochLocations` finds the loop's turns by the run's OWN numbers.
+    const located = epochLocations(snapshot);
+    expect(located.map((l) => l.epoch)).toEqual([1, 2]);
+    for (const [i, location] of located.entries()) {
+      expect(failuresAt(snapshot, location.epoch, wire[i])).toEqual([]);
+    }
+  });
+
+  it('the tool the model was served is hashed by the receipt AND rebuilt from the log', async () => {
+    // RED BEFORE 9.91.0, for the rebuild half: the agent charts commit the
+    // served list as `dynamicToolSchemas` and this chart carries the tools
+    // slot's output out under its own name, so `servedAt` read no array and
+    // reported `tools.names: []` on a call that served one. An empty list is
+    // not an omission, it is a DENIAL — and it went unnoticed while no receipt
+    // existed to contradict it.
+    const { provider } = scripted([answer('sunny')]);
+    const runId = 'run-agent-message-api-3';
+    const snapshot = await chartRun(
+      buildAgentMessageApiChart({
+        provider: provider as never,
+        model: 'mock',
+        systemPrompt: 'you are a tutor',
+        tools: [WEATHER],
+        getRunId: () => runId,
+      }),
+      'weather in paris?',
+    );
+
+    const receipt = receiptAt(snapshot, 1)!;
+    const view = servedAt(snapshot, 1)!;
+    expect(receipt.tools.names).toEqual(['weather']);
+    expect(view.tools.names).toEqual(['weather']);
+    // The third digest half of the law, verified from outside exactly as the
+    // `toolDigestInput` docstring promises a consumer can.
+    for (const schema of view.tools.schemas) {
+      expect(receipt.tools.schemaHashes[schema.name]).toBe(
+        receiptHash(receipt.basis.runId, toolDigestInput(schema)),
+      );
+    }
+  });
+
+  it('mints none without a run id, and the rebuilt tool list still stands', async () => {
+    const { provider } = scripted([answer('sunny')]);
+    const snapshot = await chartRun(
+      buildAgentMessageApiChart({
+        provider: provider as never,
+        model: 'mock',
+        systemPrompt: 'you are a tutor',
+        tools: [WEATHER],
+      }),
+      'weather in paris?',
+    );
+
+    const view = servedAt(snapshot, 1)!;
+    expect(receiptAt(snapshot, 1)).toBeUndefined();
+    expect(view.gaps.find((g) => g.gap === 'no-receipt-on-chart')?.cause).toBe(
+      'no-receipt-committed',
+    );
+    // A missing receipt costs the WITNESS, never the rebuild.
+    expect(view.tools.names).toEqual(['weather']);
   });
 });
 
@@ -1537,9 +1747,10 @@ describe("the cache gap's own wording", () => {
     // THE THIRD, killed in the seventh round: this entry APPENDED
     // `RECEIPT_BOUNDARY`, whose first words are "A receipt describes the
     // request…" — and this entry is raised on EVERY view, including the ones
-    // with no receipt at all. Measured below: an `LLMCall` view carries this
-    // gap and has no receipt behind it, so the reader was told about a thing
-    // that is not there. The boundary CLAIM survives in the entry's own first
+    // with no receipt at all. Measured below: a message-API chart run without
+    // a run id carries this gap and has no receipt behind it, so the reader
+    // was told about a thing that is not there. (It was an `LLMCall` view
+    // until 9.91.0, where that chart started minting.) The boundary CLAIM survives in the entry's own first
     // sentence, in the vocabulary of a view; the QUOTE moved to the one entry
     // that is only ever raised where a receipt was read.
     expect(why).not.toContain(RECEIPT_BOUNDARY);
@@ -1554,12 +1765,18 @@ describe("the cache gap's own wording", () => {
 
   it('and the receipt-less chart really does carry it — the run that made that wrong', async () => {
     // The measurement the assertion above rests on, taken rather than assumed.
+    // The receipt-less shape a SHIPPED chart still produces (9.91.0): a chart
+    // builder run on the caller's own executor with no run id to salt with.
     const { provider } = scripted([answer('done')]);
-    const bare = LLMCall.create({ provider: provider as never, model: 'mock' })
-      .system('you are a probe')
-      .build();
-    await bare.run({ message: 'go' });
-    const view = servedAt(bare.getSnapshot()!, 1)!;
+    const snapshot = await chartRun(
+      buildMessageApiChart({
+        provider: provider as never,
+        model: 'mock',
+        systemPrompt: 'you are a probe',
+      }),
+      'go',
+    );
+    const view = servedAt(snapshot, 1)!;
     expect(view.basis).toBeUndefined();
     expect(view.gaps.map((g) => g.gap)).toContain('cache-transform');
     // Nothing this view prints mentions a receipt describing anything.

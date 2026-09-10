@@ -6,7 +6,7 @@ title: RECEIPT_BOUNDARY
 
 > `const` **RECEIPT\_BOUNDARY**: `string`
 
-Defined in: [src/lib/time-travel/receipt.ts:155](https://github.com/footprintjs/agentfootprint/blob/main/src/lib/time-travel/receipt.ts#L155)
+Defined in: [src/lib/time-travel/receipt.ts:167](https://github.com/footprintjs/agentfootprint/blob/main/src/lib/time-travel/receipt.ts#L167)
 
 The boundary every receipt field is true at, in one sentence — exported so a
 renderer prints the library's own wording instead of inferring a stronger
@@ -18,9 +18,11 @@ unless something on the screen says otherwise, and the person who reads the
 screen is rarely the person who read the source. Print it beside the record.
 
 ── THE MECHANISM, WHICH THE PRINTED SENTENCE NO LONGER NAMES (9.88.0) ─────
-`buildReceipt` is called from `stages/callLLM.ts` with the request about to
-be passed to `LLMProvider.complete` — the PORT, this library's last sight of
-it. Three things sit downstream of that call and none of them is on the
+`buildReceipt` is called with the request about to be passed to
+`LLMProvider.complete` — the PORT, this library's last sight of it. Four
+stages call it since 9.91.0: the agent charts' (`stages/callLLM.ts`),
+`LLMCall.ts` · `callLLM`, and the two message-API charts' through
+`messageApiReceipt.ts`. Three things sit downstream of that call and none of them is on the
 record: a provider decorated by the consumer (`complete()` wrapping
 `complete()`), a vendor adapter's own serializer, and the vendor's
 server-side defaults. `test/lib/time-travel/receipt-conformance.test.ts`

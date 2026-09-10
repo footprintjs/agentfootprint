@@ -64,7 +64,13 @@ import { typedEmit } from '../recorders/core/typedEmit.js';
 import { resilienceHooks } from '../recorders/core/resilienceHooks.js';
 import { resilienceRecorder } from '../recorders/core/ResilienceRecorder.js';
 import type { InjectionRecord } from '../recorders/core/types.js';
-import type { LLMProvider, PricingTable } from '../adapters/types.js';
+import type { LLMProvider, LLMRequest, PricingTable } from '../adapters/types.js';
+import {
+  buildReceipt,
+  receiptPieces,
+  RECEIPT_KEY,
+  type Receipt,
+} from '../lib/time-travel/receipt.js';
 import {
   assertCostBudgetHasPricing,
   emitCostTick,
@@ -78,7 +84,11 @@ import { buildMessagesSlot } from './slots/buildMessagesSlot.js';
 import { buildThinkingSubflow } from './slots/buildThinkingSubflow.js';
 import { findThinkingHandler } from '../thinking/registry.js';
 import type { ThinkingBlock, ThinkingHandler } from '../thinking/types.js';
-import { joinSystemPrompt, messagesFromInjections } from './agent/composeRequest.js';
+import {
+  joinSystemPrompt,
+  messagesFromInjections,
+  stripFrameworkFields,
+} from './agent/composeRequest.js';
 
 export interface LLMCallOptions {
   readonly provider: LLMProvider;
@@ -116,6 +126,22 @@ export interface LLMCallOptions {
    * `systemPromptChars` (the length) is on the record.
    */
   readonly recordSystemPrompt?: boolean;
+  /**
+   * Mint a receipt on the call (9.91.0). Default ON — the LLMCall twin of
+   * `AgentOptions.recordReceipt`, same field, same contract, same default.
+   *
+   * A receipt is the fingerprint of what the model was actually handed,
+   * committed at the call so a reader can check the rebuilt view against it.
+   * `false` declines it, for the reason the agent's switch exists: the mint is
+   * a SHA-256 per system piece, per message and per tool schema, plus one
+   * commit-log value. Declining does not make the log unreadable — `servedAt`
+   * still rebuilds the view; what is gone is the witness, and `servedAt` says
+   * so with the same gap a pre-9.88 recording raises.
+   *
+   * @example decline the receipt in a bulk eval loop
+   *   new LLMCall({ provider, model, recordReceipt: false })
+   */
+  readonly recordReceipt?: boolean;
   /**
    * Pricing adapter. When set, LLMCall emits `agentfootprint.cost.tick`
    * after every LLM response with per-call and cumulative USD. Run-scoped
@@ -184,6 +210,10 @@ interface LLMCallState {
   rawThinking?: unknown;
   /** Normalized thinking blocks written by sf-thinking (when mounted). */
   thinkingBlocks?: readonly ThinkingBlock[];
+  /** The receipt minted at the call (9.91.0) — the same key, the same shape
+   *  and the same mint the agent's `call-llm` commits, so `receiptAt` reads
+   *  one chart's record exactly as it reads the other's. */
+  receipt?: Receipt;
   // Cost accounting (only populated when pricingTable is set).
   cumTokensInput: number;
   cumTokensOutput: number;
@@ -206,6 +236,8 @@ export class LLMCall extends RunnerBase<LLMCallInput, LLMCallOutput> {
   private readonly contextBudget?: LLMCallOptions['contextBudget'];
   /** `LLMCallOptions.recordSystemPrompt` (9.50.0) — opt-in, default OFF. */
   private readonly recordSystemPromptValue: boolean = false;
+  /** `LLMCallOptions.recordReceipt` (9.91.0) — opt-OUT, default ON. */
+  private readonly recordReceiptValue: boolean = true;
   private readonly structureRecorders?: readonly StructureRecorder[];
   private readonly groupTranslator?: GroupTranslator;
   /** Auto-resolved from provider.name at construction time (same
@@ -241,6 +273,7 @@ export class LLMCall extends RunnerBase<LLMCallInput, LLMCallOutput> {
     if (resolvedCostBudget !== undefined) this.costBudget = resolvedCostBudget;
     if (opts.contextBudget !== undefined) this.contextBudget = opts.contextBudget;
     if (opts.recordSystemPrompt === true) this.recordSystemPromptValue = true;
+    if (opts.recordReceipt === false) this.recordReceiptValue = false;
     if (opts.structureRecorders) this.structureRecorders = opts.structureRecorders;
     if (opts.groupTranslator) this.groupTranslator = opts.groupTranslator;
     // v2.14 alignment — auto-wire ThinkingHandler by provider.name. Same
@@ -393,6 +426,12 @@ export class LLMCall extends RunnerBase<LLMCallInput, LLMCallOutput> {
     const pricingTable = this.pricingTable;
     const costBudget = this.costBudget;
     const thinkingHandler = this.thinkingHandler;
+    const recordReceipt = this.recordReceiptValue;
+    // THE SALT (9.91.0). `createExecutor` mints a fresh run id on every run and
+    // every resume, and the chart is built once — so the receipt reads it
+    // through `this` AT CALL TIME rather than closing over a value that would
+    // be one run stale on the second run of the same LLMCall.
+    const getRunId = (): string => this.currentRunContext.runId;
 
     // ─── Outer Client stage ─────────────────────────────────────────
     // First visit: receives args, sets userMessage on outer scope.
@@ -463,7 +502,12 @@ export class LLMCall extends RunnerBase<LLMCallInput, LLMCallOutput> {
       // reason the system-prompt join is one: `LLMCall` has no `history`, so
       // these records ARE the committed conversation, and `servedAt` rebuilds
       // it by calling this identical function over the identical records.
-      const messages = messagesFromInjections(messagesInjections);
+      //
+      // The framework-field strip rides with it (9.91.0) — the third rule of
+      // the one assembly. It is identity on what this slot composes today, and
+      // it is here so the two sides cannot drift the day that changes: the
+      // rebuild applies it, so the mint applies it.
+      const messages = stripFrameworkFields(messagesFromInjections(messagesInjections));
 
       typedEmit(scope, 'agentfootprint.stream.llm_start', {
         iteration,
@@ -479,18 +523,59 @@ export class LLMCall extends RunnerBase<LLMCallInput, LLMCallOutput> {
       });
 
       const startMs = Date.now();
+      // ONE request object, built once and both sent and fingerprinted —
+      // never assembled twice (9.91.0). A second literal at the mint would be
+      // a second assembly, and the whole point of a receipt is that it
+      // describes THIS one.
+      const request: LLMRequest = {
+        systemPrompt: systemPrompt.length > 0 ? systemPrompt : undefined,
+        messages,
+        model,
+        ...(temperature !== undefined && { temperature }),
+        ...(maxTokens !== undefined && { maxTokens }),
+      };
+
+      // ── THE RECEIPT (9.91.0) ─────────────────────────────────────────
+      // Written immediately before the provider is called, so it is committed
+      // in the call-llm bundle that already exists — and before rather than
+      // after on purpose: the stage commits on the error path too, so a call
+      // that throws still leaves the record of what it was about to send.
+      //
+      // The mint is `receipt.ts` · `buildReceipt`, the same one the agent's
+      // `call-llm` calls, salted with this run's own id. There is no cache
+      // strategy on this chart, so the request handed out is the request
+      // assembled: `baseRequest` and `preparedRequest` are the same object and
+      // `cache.transform` records `'unchanged'` — exactly what an agent
+      // running a pass-through strategy records, and true for the same reason.
+      //
+      // NOT HERE: `omittedForAttention`. A slot's budget drops live in
+      // `slotCompositions` inside the slot's own subflow and no boundary
+      // bubbles them out, so the key is absent at this scope. A receipt
+      // records what the run knows; it does not go looking.
+      if (recordReceipt) {
+        scope[RECEIPT_KEY] = buildReceipt({
+          runId: getRunId(),
+          epoch: iteration,
+          model,
+          provider: provider.name,
+          systemText: systemPrompt,
+          systemPieces: receiptPieces(systemPromptInjections),
+          messages,
+          requestOnly: [],
+          tools: [],
+          forced: null,
+          withheld: null,
+          baseRequest: request,
+          preparedRequest: request,
+        });
+      }
+
       // Raw provider errors propagate untouched (reliability + merge
       // layers classify on the raw message). The friendly translation
       // for non-developers happens once at the terminal boundary —
       // ErrorBridge humanizes the `error.fatal` event the monitor reads.
       const response = await provider.complete(
-        {
-          systemPrompt: systemPrompt.length > 0 ? systemPrompt : undefined,
-          messages,
-          model,
-          ...(temperature !== undefined && { temperature }),
-          ...(maxTokens !== undefined && { maxTokens }),
-        },
+        request,
         // Resilience-report channel: a decorated provider's fallback /
         // retry / recovery becomes an in-run typed event here.
         resilienceHooks(scope),
