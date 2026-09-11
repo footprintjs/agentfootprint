@@ -62,7 +62,9 @@ export interface MessageApiReceiptInput {
    * the port, so `cache.transform` records `'unchanged'`. That is the verdict
    * an agent running a pass-through strategy records today, and it is true
    * here for the same reason — the request that went out is the request that
-   * was assembled.
+   * was assembled. `cache.strategy` records `null` beside it (9.93.0), which
+   * is the half the verdict alone cannot say, and is what lets the served view
+   * leave `cache-transform` off these charts.
    */
   readonly request: LLMRequest;
 }
@@ -107,5 +109,6 @@ export function messageApiReceipt(input: MessageApiReceiptInput): Receipt | unde
     withheld: null,
     baseRequest: input.request,
     preparedRequest: input.request,
+    strategy: null,
   });
 }

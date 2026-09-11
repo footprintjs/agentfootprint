@@ -21,20 +21,32 @@
  * here.
  *
  * ATTENTION omissions are a different fact and MAY ride the receipt:
- * `omittedForAttention` says a slot's budget dropped content. Nobody was
- * refused anything — the request simply did not fit — and a reader chasing "why
- * did it not know that?" needs to see it. Even there the summaries are hashed,
- * never quoted, for the same reason everything else on a receipt is.
+ * `omittedForAttention` says a budget dropped content before this request was
+ * composed. Nobody was refused anything — the request simply did not fit — and
+ * a reader chasing "why did it not know that?" needs to see it. Even there the
+ * turns are hashed, never quoted, for the same reason everything else on a
+ * receipt is.
  *
- * Measured on 9.88.0 and re-measured on 9.91.0 across all four minting charts,
- * NO chart shape supplies it: a slot writes its drops to `slotCompositions`
- * inside its own subflow and no boundary bubbles that record out, so a chart's
- * request assembly has nothing to pass. The field is on the
- * shape because `buildReceipt` is a pure exported mint a caller can hand the
- * fact to, and because the law it obeys is worth stating once rather than the
- * day the record starts crossing. What is NOT done is go looking for it: a
- * tracked read of an always-absent key is a read edge the trace then has to
- * explain.
+ * WHO SUPPLIES IT (9.93.0). Measured on 9.88.0 and again on 9.91.0, no chart
+ * supplied it, and the reason recorded was the slots: a slot writes its drops
+ * to `slotCompositions` inside its own subflow, no boundary bubbles that record
+ * out — and, underneath that, the built-in slots never DROP anything
+ * (`slots/helpers.ts` · `slotOverflow` answers over-budget with
+ * `planAction: 'none'`). That was true and it was not the whole measurement.
+ * The agent chart's WINDOW STAGE (`stages/window.ts`) evicts turns for budget
+ * on every run whose strategy engages — `context.evicted` fires with
+ * `reason: 'budget'` — and it never wrote the field. Since 9.93.0 it does: the
+ * window files what left at this iteration's head on an in-memory handle
+ * (`window/evictedTurns.ts`), the same seam the compaction meter already
+ * crosses, and the call-llm mint hands those turns here. NOT a scope read:
+ * a tracked read of `compactions` — absent on every run without a window —
+ * would put a phantom context source on every call-llm stage, the defect
+ * measured when `slotCompositions` was read for one release.
+ *
+ * Each hash is the evicted turn's OWN digest — `messageDigestInput`, the same
+ * formula `messages.entries[].hash` uses — so a dropped turn on epoch k's
+ * receipt pairs by hash with the turn as it was served on an earlier epoch's.
+ * That pairing is a law a test can check, and `gap-sentences.test.ts` does.
  *
  * ── THE SECOND LAW: HASHES AND REFERENCES, NEVER BYTES ─────────────────────
  * A receipt is a fingerprint, not a copy. It records that a piece of a given
@@ -279,10 +291,13 @@ export interface ReceiptParams {
   readonly toolChoice?: { readonly type: string; readonly name?: string };
 }
 
-/** What a slot's budget dropped before the request was composed. */
+/** What a budget dropped before the request was composed — the window's
+ *  evictions at this iteration's head. */
 export interface ReceiptAttentionOmission {
   readonly count: number;
-  /** One hash per dropped summary — see the first law for why not the text. */
+  /** One hash per dropped turn — the turn's own `messages.entries[].hash`, so
+   *  it pairs with the receipt that last served it. See the first law for why
+   *  not the text. */
   readonly hashes: readonly string[];
 }
 
@@ -341,17 +356,42 @@ export interface Receipt {
     /** The breakpoints the strategy actually applied, in the order it applied
      *  them — see {@link ReceiptCacheMarker}. Empty when it applied none. */
     readonly markersApplied: readonly ReceiptCacheMarker[];
+    /**
+     * WHICH strategy stood between assembly and the port, or `null` when none
+     * did (9.93.0). The value is the strategy's declared `providerName` — the
+     * key it registers under (`'anthropic'`, `'openai'`; `'*'` is the built-in
+     * pass-through every agent runs when no provider-specific strategy is
+     * registered).
+     *
+     * `null` is a FACT, not an absence: `LLMCall` and the two message-API
+     * charts hand the port the request assembly built, with nothing in
+     * between, and say so here. `transform` alone could not — `'unchanged'` is
+     * the honest verdict both when a strategy returned what it was given and
+     * when there was no strategy to return anything — which is why the served
+     * view raised `cache-transform` on every view until this field existed.
+     * Now it raises that gap only where a strategy could have rewritten the
+     * request: where this is not `null`, or where no receipt can say.
+     *
+     * A receipt minted before 9.93.0 has no key here; a reader treats that as
+     * "cannot say", never as `null`.
+     */
+    readonly strategy: string | null;
   };
   /** The sampling knobs the call went out with — see {@link ReceiptParams}. */
   readonly params: ReceiptParams;
   /**
-   * Absent when no slot reported a drop — which, measured on 9.88.0 and again
-   * on 9.91.0 across every chart that mints, is EVERY run: no boundary bubbles
-   * `slotCompositions` out of the slot subflow that writes it, so request
-   * assembly has nothing to pass. It is
-   * a key of `servedView.ts` · `UNGAPPED_FIELDS` for that reason: its absence
-   * is universal and says nothing about any particular recording. Absent means
-   * nobody recorded a drop, never that nothing was dropped.
+   * What left the window for budget at this iteration's head, before this
+   * request was composed — one hash per evicted turn, each the turn's own
+   * `messages.entries[].hash` as an earlier receipt served it.
+   *
+   * Absent when nothing was dropped before this call. Since 9.93.0 that is a
+   * claim and not a shrug: the agent chart's window stage is the one shipped
+   * mechanism that drops for attention and it files every eviction here; the
+   * built-in slots drop nothing; `LLMCall` and the message-API charts have no
+   * window. It is named by the `no-receipt-on-chart` entry of `servedView.ts` ·
+   * `SERVED_GAPS` — the one gap that can lose it, by losing the receipt — and it sat in
+   * `UNGAPPED_FIELDS` until this release, when its absence was universal and
+   * meant only that nobody had recorded a drop.
    */
   readonly omittedForAttention?: ReceiptAttentionOmission;
   readonly basis: {
@@ -572,8 +612,14 @@ export interface BuildReceiptInput {
     readonly boundaryIndex: number;
     readonly ttl: 'short' | 'long';
   }[];
-  /** What a slot's budget dropped, when a slot reported any. */
-  readonly omittedForAttention?: { readonly count: number; readonly summaries: readonly string[] };
+  /** The `providerName` of the strategy `preparedRequest` came back from, or
+   *  `null` when no strategy stood between assembly and the port — see
+   *  {@link Receipt.cache.strategy}. A mint must say which; it may not omit. */
+  readonly strategy: string | null;
+  /** The turns a budget dropped before this request was composed — the
+   *  window's evictions at this iteration's head. Absent or empty ⇒ no key on
+   *  the receipt. */
+  readonly omittedForAttention?: readonly LLMMessage[];
 }
 
 /**
@@ -705,17 +751,21 @@ export function buildReceipt(input: BuildReceiptInput): Receipt {
         boundaryIndex: marker.boundaryIndex,
         ttl: marker.ttl,
       })),
+      strategy: input.strategy,
     },
     // The PREPARED request, not the base one: the port is handed what the cache
     // strategy returned, and a strategy that rewrote maxTokens must not leave
     // five receipt fields describing a request nobody sent. See
     // {@link RECEIPT_BOUNDARY} — this is the boundary those fields are true at.
     params: paramsOf(input.preparedRequest),
+    // Value-conditional, like a dial nobody set: a call nothing was dropped
+    // before writes no key. Each hash is the turn's own digest, so it pairs
+    // with `messages.entries[].hash` on the receipt that last served it.
     ...(input.omittedForAttention !== undefined &&
-      input.omittedForAttention.count > 0 && {
+      input.omittedForAttention.length > 0 && {
         omittedForAttention: {
-          count: input.omittedForAttention.count,
-          hashes: input.omittedForAttention.summaries.map((summary) => hash(summary)),
+          count: input.omittedForAttention.length,
+          hashes: input.omittedForAttention.map((turn) => hash(messageDigestInput(turn))),
         },
       }),
     basis: {

@@ -57,15 +57,27 @@
  * assertion and it cannot be added at all — the assertion IS the clause's third
  * field.
  *
- * ── THE ONE BLIND SPOT, SAID PLAINLY ──────────────────────────────────────
+ * ── THE BLIND SPOT, SAID PLAINLY — AND HALF OF IT CLOSED (9.93.0) ─────────
  *
  * A CLAIM NOBODY WROTE AN ASSERTION FOR. The partition guarantees each clause
  * has a test; it cannot guarantee the test is as strong as the clause. An
  * assertion that checks less than its clause says leaves the difference
- * unchecked, and no structure in this file can measure that difference — only a
- * person reading the assertion against the clause. That is a smaller and more
- * honest blind spot than six rounds of rewriting produced, and it is the whole
- * of it.
+ * unchecked. `recorded-not-built.md` entry 10 recorded that, and 9.93.0 split
+ * it in two:
+ *
+ *   • AN ASSERTION THAT DOES NOT DEPEND ON THE FIELD ITS CLAUSE IS ABOUT —
+ *     closed mechanically. Every clause declares the fields it is about
+ *     (`Clause.fields`); every read a clause makes goes through a seam that
+ *     can hand it a view or receipt with one of those fields altered or
+ *     removed; and a contract at the bottom of this file arms each declared
+ *     field in turn and requires the assertion to FAIL. The first run of that
+ *     contract found one: `no-receipt-on-chart`'s first clause declared
+ *     `receipt:basis` on a run with no receipt to mutate, and stayed green.
+ *   • AN ASSERTION THAT CHECKS THE RIGHT FIELD ON FEWER RUNS THAN THE CLAUSE
+ *     QUANTIFIES OVER — still open, and not closable by a generic mutation:
+ *     "every field the gap names" asserted on four, "both chart shapes"
+ *     asserted on one. Each such clause needs its own wider run, written by
+ *     hand, and entry 10 names the three that are known.
  *
  * Two things this file deliberately does NOT do. It does not check that a gap
  * FIRES on the right recording — `receipt-conformance.test.ts` does that per
@@ -87,9 +99,9 @@ import {
   Agent,
   defineTool,
   inMemoryArtifacts,
-  receiptAt,
-  servedAt,
-  servedViews,
+  receiptAt as readReceiptAt,
+  servedAt as readServedAt,
+  servedViews as readServedViews,
   RECEIPT_BOUNDARY,
   SERVED_GAPS,
   UNGAPPED_FIELDS,
@@ -98,10 +110,6 @@ import {
   type ServedView,
 } from '../../../src/index.js';
 import type { LLMMessage, LLMRequest, LLMResponse } from '../../../src/adapters/types.js';
-// The MINT itself, which the public barrel does not carry: one clause below
-// needs to hand it a fact no chart in this library supplies, to tell "nobody
-// reported a drop" from "the shape cannot hold one".
-import { buildReceipt } from '../../../src/lib/time-travel/receipt.js';
 // The receipt-LESS shape a shipped chart still produces (9.91.0): a chart
 // builder run on the caller's own executor with no run id to salt hashes
 // with. The public barrel carries the deps type and not this builder.
@@ -110,6 +118,85 @@ import { isPaused, pauseHere } from '../../../src/core/pause.js';
 
 /** Several real runs per test, all of them tiny; the budget is stated. */
 const BUDGET = { timeout: 60_000 };
+
+// ─── the mutation seam (9.93.0, entry 10's mechanical half) ──────────────
+//
+// Every read a clause makes goes through the three wrappers below. With no
+// mutation armed they hand back exactly what the library returns. With one
+// armed they hand back a detached copy with ONE field altered or removed —
+// and the contract at the bottom of this file arms one per declared field and
+// requires the clause's assertion to FAIL. An assertion that stays green while
+// the field it names is wrong is an assertion checking something else, and
+// that is the class this seam closes: a claim whose test does not depend on
+// the field the claim is about.
+//
+// What it does NOT close — entry 10's other half — is a claim whose test
+// checks the right field on fewer runs than the sentence quantifies over.
+// No generic mutation can find that; the entry says why.
+
+type Mutation = {
+  readonly shape: 'view' | 'receipt';
+  readonly path: string;
+  readonly how: 'alter' | 'remove';
+};
+let armed: Mutation | undefined;
+
+/** A different value of the same kind — enough that any assertion about the
+ *  value, its length, or its emptiness moves. */
+function altered(value: unknown): unknown {
+  if (typeof value === 'string') return `${value}\u0000mutated`;
+  if (typeof value === 'number') return value + 1;
+  if (typeof value === 'boolean') return !value;
+  if (Array.isArray(value))
+    return [...value, value.length > 0 ? structuredClone(value[0]) : 'mutated'];
+  if (value !== null && typeof value === 'object') return { ...(value as object), mutated: true };
+  return 'mutated';
+}
+
+/** Apply `armed` at `path` on a detached copy; arrays along the path are
+ *  traversed element by element. A missing container is left missing — a
+ *  field that is not there cannot be altered, and removing it is a no-op. */
+function mutated<T>(value: T, shape: 'view' | 'receipt'): T {
+  if (value === undefined || value === null || armed === undefined || armed.shape !== shape) {
+    return value;
+  }
+  const copy = structuredClone(value) as unknown;
+  const segments = armed.path.split('.');
+  const how = armed.how;
+  const walk = (node: unknown, i: number): void => {
+    if (Array.isArray(node)) {
+      for (const item of node) walk(item, i);
+      return;
+    }
+    if (node === null || typeof node !== 'object') return;
+    const holder = node as Record<string, unknown>;
+    const key = segments[i]!;
+    if (i === segments.length - 1) {
+      if (how === 'remove') delete holder[key];
+      else holder[key] = altered(holder[key]);
+      return;
+    }
+    walk(holder[key], i + 1);
+  };
+  walk(copy, 0);
+  return copy as T;
+}
+
+const servedAt = (source: unknown, epoch: number): ServedView | undefined =>
+  mutated(readServedAt(source, epoch), 'view');
+const servedViews = (source: unknown): ServedView[] =>
+  readServedViews(source).map((view) => mutated(view, 'view'));
+const receiptAt = (source: unknown, epoch: number): Receipt | undefined =>
+  mutated(readReceiptAt(source, epoch), 'receipt');
+
+async function underMutation(mutation: Mutation, body: () => Promise<void> | void): Promise<void> {
+  armed = mutation;
+  try {
+    await body();
+  } finally {
+    armed = undefined;
+  }
+}
 
 // ─── the provider stub, and the WIRE it records ──────────────────────────
 
@@ -468,6 +555,21 @@ interface Clause {
   /** The check. It drives a real run and asserts what the clause says. */
   readonly assert: () => Promise<void> | void;
   /**
+   * The fields the clause is ABOUT, as `view:<path>` / `receipt:<path>` — the
+   * paths the mutation seam alters or removes one at a time, requiring
+   * `assert` to fail each time (9.93.0). Every clause about the request
+   * declares at least one; a clause about the catalogue itself declares none
+   * and says so with {@link Clause.aboutTheCatalogue}.
+   */
+  readonly fields: readonly string[];
+  /**
+   * Set when the clause is about the CATALOGUE — which gaps exist, what they
+   * name, which sentence quotes what — rather than about any view. There is
+   * no field to mutate, and the label says so rather than a `fields: []`
+   * pretending the seam checked something.
+   */
+  readonly aboutTheCatalogue?: true;
+  /**
    * Set when the clause is about THE ACCOUNT rather than about the request —
    * the category `UNGAPPED_FIELDS.gaps` is in. Such a clause cannot be checked
    * against a view, because it is not a statement about one; what is asserted
@@ -488,8 +590,12 @@ interface Entry {
 const gapSentence = (kind: ServedGapKind): string => SERVED_GAPS[kind].why;
 
 const ACCOUNT: readonly Entry[] = [
-  // ── cache-transform: on EVERY view, so every clause has to hold on one
-  //    with no receipt behind it as well as on one with a cache strategy. ──
+  // ── cache-transform: on every view whose call went through a strategy
+  //    (every agent view) and on every receipt-less view, where the record
+  //    cannot rule one out — so every clause has to hold on both. Since
+  //    9.93.0 it is NOT on a view whose receipt says `cache.strategy: null`
+  //    (`LLMCall`, the message-API charts); `receipt-conformance.test.ts`
+  //    pins those three. ──
   {
     site: 'cache-transform',
     sentence: gapSentence('cache-transform'),
@@ -497,6 +603,7 @@ const ACCOUNT: readonly Entry[] = [
       {
         quote: 'What reached the provider may differ from the fields below',
         claim: 'a decorated provider really changes the request after the record stops',
+        fields: ['view:system.text', 'view:tools.names'],
         assert: async () => {
           const { snapshot, wire } = await decorated();
           const view = servedAt(snapshot, 1)!;
@@ -512,6 +619,7 @@ const ACCOUNT: readonly Entry[] = [
       {
         quote: 'and nothing on this view would show it',
         claim: 'the view carries no trace of the change, whether or not the record does',
+        fields: ['view:system.text', 'receipt:cache.transform'],
         assert: async () => {
           // PAST THE PORT: nothing anywhere shows it. The field whose whole job
           // is to report a rewrite says 'unchanged' — correctly, because the
@@ -539,6 +647,7 @@ const ACCOUNT: readonly Entry[] = [
       {
         quote: 'Where another gap on this view covers one of them, that gap is the stronger claim',
         claim: 'a base-less view carries both gaps on one field, and the other one is the true one',
+        fields: ['view:system.text', 'receipt:system.chars'],
         assert: async () => {
           const { snapshot } = await resumed();
           const baseless = stripBases(snapshot);
@@ -567,6 +676,7 @@ const ACCOUNT: readonly Entry[] = [
       {
         quote: 'The schema body behind the forced answer tool is not on this view',
         claim: 'the view holds no schema for the forced tool, while the receipt hashed one',
+        fields: ['view:tools.forced', 'view:tools.schemas', 'receipt:tools.schemaHashes'],
         assert: async () => {
           const { snapshot } = await forcedGrouped();
           const view = servedAt(snapshot, 1)!;
@@ -581,6 +691,7 @@ const ACCOUNT: readonly Entry[] = [
       {
         quote: 'Its name is',
         claim: 'the forced tool is named on the view, twice over',
+        fields: ['view:tools.forced', 'view:tools.names'],
         assert: async () => {
           const { snapshot } = await forcedGrouped();
           const view = servedAt(snapshot, 1)!;
@@ -591,6 +702,7 @@ const ACCOUNT: readonly Entry[] = [
       {
         quote: 'so the tool list is complete and the schemas beside it are one short',
         claim: 'names match the receipt exactly and the schemas are short by exactly one',
+        fields: ['view:tools.names', 'view:tools.schemas', 'receipt:tools.names'],
         assert: async () => {
           const { snapshot, wire } = await forcedGrouped();
           const view = servedAt(snapshot, 1)!;
@@ -615,6 +727,7 @@ const ACCOUNT: readonly Entry[] = [
       {
         quote: 'A dial absent below was not recorded',
         claim: 'params is value-conditional — a dial nobody set writes no key at all',
+        fields: ['receipt:params.temperature', 'receipt:params.maxTokens', 'receipt:params'],
         assert: async () => {
           const set = await dialled();
           const unset = await undialled();
@@ -630,6 +743,7 @@ const ACCOUNT: readonly Entry[] = [
       {
         quote: 'that is not the same as the model running without one',
         claim: 'the model really ran at a temperature the record does not carry',
+        fields: ['receipt:params'],
         assert: async () => {
           const { snapshot, wire } = await decorated();
           // The record says no dial was set…
@@ -641,6 +755,7 @@ const ACCOUNT: readonly Entry[] = [
       {
         quote: 'A receipt describes the request as this library last saw it',
         claim: 'this sentence is printed only where a receipt exists to describe anything',
+        fields: ['view:basis'],
         assert: async () => {
           // The premise of the quoted boundary, asserted rather than assumed:
           // `cache-transform` carried it until this round and is on EVERY view,
@@ -668,6 +783,12 @@ const ACCOUNT: readonly Entry[] = [
           'Whatever handled it after that could have changed it, and nothing on the receipt ' +
           'would show that',
         claim: 'the receipt reads unchanged while three parts of the request had moved',
+        fields: [
+          'receipt:cache.transform',
+          'receipt:cache.transformHash',
+          'receipt:tools.names',
+          'receipt:params',
+        ],
         assert: async () => {
           const { snapshot, wire } = await decorated();
           const receipt = receiptAt(snapshot, 1)!;
@@ -690,6 +811,7 @@ const ACCOUNT: readonly Entry[] = [
       {
         quote: 'The fields below are unproven and may be SHORT',
         claim: 'a resumed run with its base gone rebuilds less than it sent',
+        fields: ['view:system.text', 'view:messages.asSent', 'view:tools.names'],
         assert: async () => {
           const { snapshot } = await resumed();
           const before = servedViews(snapshot)[0]!;
@@ -704,6 +826,12 @@ const ACCOUNT: readonly Entry[] = [
       {
         quote: 'a count can be lower than what really went out',
         claim: 'the counts the receipt minted are higher than the ones the rebuild reports',
+        fields: [
+          'receipt:system.chars',
+          'receipt:messages.count',
+          'view:system.text',
+          'view:messages.asSent',
+        ],
         assert: async () => {
           const { snapshot, wire } = await resumed();
           const after = servedViews(stripBases(snapshot))[0]!;
@@ -720,6 +848,12 @@ const ACCOUNT: readonly Entry[] = [
       {
         quote: 'and a value that could not be recovered reads as empty rather than as unknown',
         claim: 'the unrecoverable fields come back empty, which is why they need saying',
+        fields: [
+          'view:system.text',
+          'view:system.pieces',
+          'view:tools.names',
+          'view:tools.schemas',
+        ],
         assert: async () => {
           const after = servedViews(stripBases((await resumed()).snapshot))[0]!;
           // Empty containers and an empty string — not `undefined`, not a
@@ -735,6 +869,7 @@ const ACCOUNT: readonly Entry[] = [
           "The turn number below may be this turn's place in run order rather than the number " +
           'the run itself gave it',
         claim: 'the second turn is numbered 1 by position while the run itself called it 2',
+        fields: ['view:epoch', 'receipt:basis.epoch'],
         assert: async () => {
           const { snapshot } = await resumed();
           // Intact: both records agree the resumed snapshot holds turn 2.
@@ -761,6 +896,7 @@ const ACCOUNT: readonly Entry[] = [
       {
         quote: 'The turns that went out are unknown, not empty',
         claim: 'the rebuild reports no turns for a call the wire shows carried three',
+        fields: ['view:messages.asSent', 'receipt:messages.entries'],
         assert: async () => {
           const { snapshot, wire } = await nudgedFlat();
           const damaged = stripKey(stripKey(snapshot, 'history'), 'messagesInjections');
@@ -775,6 +911,7 @@ const ACCOUNT: readonly Entry[] = [
       {
         quote: 'an empty list here is the absence of a record, never a record of absence',
         claim: 'the same run reports three turns when the record is intact',
+        fields: ['view:messages.asSent'],
         assert: async () => {
           const { snapshot } = await nudgedFlat();
           const intact = servedViews(snapshot)[1]!;
@@ -789,6 +926,7 @@ const ACCOUNT: readonly Entry[] = [
       {
         quote: 'The request-only lines are unproved with them',
         claim: 'the nudge that really went out is gone from the rebuild with the conversation',
+        fields: ['view:messages.requestOnly'],
         assert: async () => {
           const { snapshot, wire } = await nudgedFlat();
           const intact = servedViews(snapshot)[1]!;
@@ -812,6 +950,7 @@ const ACCOUNT: readonly Entry[] = [
       {
         quote: 'The fields below may be SHORT',
         claim: 'MAY, and not DID — the same damage costs a name on one run and nothing on another',
+        fields: ['view:tools.names'],
         assert: async () => {
           // THE REGRESSION. This entry shipped "could not be fully recovered
           // here", and this is the run that refutes it: the gap fires and the
@@ -832,6 +971,7 @@ const ACCOUNT: readonly Entry[] = [
       {
         quote: 'a name can be missing from the tool list',
         claim: 'the forced tool goes off the list, and the wire shows it went out',
+        fields: ['view:tools.names', 'view:tools.forced'],
         assert: async () => {
           const { snapshot, wire } = await forcedGrouped();
           const intact = servedViews(snapshot)[0]!;
@@ -846,6 +986,7 @@ const ACCOUNT: readonly Entry[] = [
       {
         quote: 'and a line that went out with the request can be missing too',
         claim: 'the staged-refs line the wire carried is absent from the damaged rebuild',
+        fields: ['view:messages.requestOnly', 'view:messages.asSent'],
         assert: async () => {
           const { snapshot, wire } = await nudgedGrouped();
           const intact = servedViews(snapshot)[1]!;
@@ -863,6 +1004,7 @@ const ACCOUNT: readonly Entry[] = [
       {
         quote: 'An absence below is not evidence that there was nothing there',
         claim: 'two runs raise the gap with identical absences and only one of them lost anything',
+        fields: ['view:tools.forced'],
         assert: async () => {
           const plain = servedViews(emptyRunLog((await plainGrouped()).snapshot))[0]!;
           const forced = servedViews(emptyRunLog((await forcedGrouped()).snapshot))[0]!;
@@ -882,6 +1024,7 @@ const ACCOUNT: readonly Entry[] = [
       {
         quote: 'read the whole recording rather than a piece of it',
         claim: 'the whole recording recovers both, and raises no such gap',
+        fields: ['view:tools.names', 'view:messages.requestOnly'],
         assert: async () => {
           const forced = servedViews((await forcedGrouped()).snapshot)[0]!;
           const nudge = servedViews((await nudgedGrouped()).snapshot)[1]!;
@@ -902,10 +1045,16 @@ const ACCOUNT: readonly Entry[] = [
       {
         quote: 'Nothing on this view has been checked against what went out',
         claim: 'there is no receipt to check against, under either cause, and the call still went',
+        // `receipt:basis` cannot be declared here: on this run there is no
+        // receipt to mutate, which is the claim. The seam found exactly that
+        // (the first field declared was `receipt:basis`, and the assertion
+        // stayed green), so the clause is bound to what the VIEW shows of it.
+        fields: ['view:basis', 'view:gaps.cause'],
         assert: async () => {
           const { snapshot, wire } = await receiptless();
           const view = servedAt(snapshot, 1)!;
           expect(receiptAt(snapshot, 1)).toBeUndefined();
+          expect(view.basis).toBeUndefined();
           expect(view.gaps.find((g) => g.gap === 'no-receipt-on-chart')!.cause).toBe(
             'no-receipt-committed',
           );
@@ -915,6 +1064,7 @@ const ACCOUNT: readonly Entry[] = [
             system: { hash: 'x', chars: 1, pieces: [] },
           });
           const refused = servedViews(damaged)[0]!;
+          expect(refused.basis).toBeUndefined();
           expect(refused.gaps.find((g) => g.gap === 'no-receipt-on-chart')!.cause).toBe(
             'receipt-shape-rejected',
           );
@@ -925,6 +1075,7 @@ const ACCOUNT: readonly Entry[] = [
       {
         quote: 'Every field below is missing as a whole',
         claim: 'not one of the fields the gap names is anywhere on the view',
+        fields: ['view:basis'],
         assert: async () => {
           const { snapshot } = await receiptless();
           const view = servedAt(snapshot, 1)!;
@@ -939,15 +1090,19 @@ const ACCOUNT: readonly Entry[] = [
             expect(holder[head], `${field} is on a view that has no receipt`).toBeUndefined();
           }
           // Spelled out, because a loop over a field list can pass on an empty
-          // list: the three containers a receipt would have brought.
+          // list: the three containers a receipt would have brought, and the
+          // one value-conditional field that joined the list in 9.93.0.
           expect(Object.keys(view)).not.toContain('params');
           expect(Object.keys(view)).not.toContain('cache');
           expect(Object.keys(view)).not.toContain('basis');
+          expect(Object.keys(view)).not.toContain('omittedForAttention');
+          expect(SERVED_GAPS['no-receipt-on-chart'].fields).toContain('omittedForAttention');
         },
       },
       {
         quote: 'and an absence among them says nothing about the call',
         claim: 'the same absence sits on a call that had a model, a provider and a prompt',
+        fields: ['view:basis', 'view:system.text'],
         assert: async () => {
           const { snapshot, wire } = await receiptless();
           const view = servedAt(snapshot, 1)!;
@@ -962,6 +1117,7 @@ const ACCOUNT: readonly Entry[] = [
       {
         quote: 'not even that a dial was left unset',
         claim: 'an unset dial and an unrecorded one look the same, so neither can be read here',
+        fields: ['receipt:params'],
         assert: async () => {
           // A receipt ALWAYS carries `params`, so an absence one level down —
           // no `temperature` key — really is "the call went out without one".
@@ -982,71 +1138,13 @@ const ACCOUNT: readonly Entry[] = [
 
   // ── UNGAPPED_FIELDS ─────────────────────────────────────────────────────
   {
-    site: 'omittedForAttention',
-    sentence: UNGAPPED_FIELDS['omittedForAttention']!,
-    clauses: [
-      {
-        quote: 'Absent means nobody recorded a drop, never that nothing was dropped',
-        claim: 'the mint carries the fact when it is handed one, and no run hands it one',
-        assert: async () => {
-          for (const { receipt } of await everyIntactView()) {
-            expect(receipt?.omittedForAttention).toBeUndefined();
-          }
-          // The field is not vestigial and the shape does not refuse it: hand
-          // the mint a drop and the receipt carries it. So an absence is the
-          // absence of a REPORT, exactly as the sentence says.
-          //
-          // AS STRONG AS THIS LIBRARY LETS IT BE, and no stronger: the run that
-          // would pin the second half outright — something WAS dropped and the
-          // receipt is silent — cannot be driven here, because the built-in
-          // slots evict and truncate nothing. An over-budget slot writes a
-          // pressure record and sends the whole content anyway, so its record
-          // reports zero drops on every run. What is asserted is the shape's
-          // half; the remainder is a claim nobody could write a run for, and
-          // this comment is where that is said.
-          const minted = buildReceipt({
-            runId: 'run-1',
-            epoch: 1,
-            model: 'mock',
-            provider: 'mock',
-            systemText: 'bot',
-            systemPieces: [],
-            messages: [],
-            requestOnly: [],
-            tools: [],
-            forced: null,
-            withheld: null,
-            baseRequest: {},
-            preparedRequest: {},
-            omittedForAttention: { count: 2, summaries: ['a', 'b'] },
-          });
-          expect(minted.omittedForAttention).toBeDefined();
-        },
-      },
-      {
-        quote: 'No limit of this rebuild explains it, so no gap names it',
-        claim: 'it is absent on views that HAVE a receipt too, and no gap claims it',
-        assert: async () => {
-          const withReceipts = (await everyIntactView()).filter((r) => r.receipt !== undefined);
-          expect(withReceipts.length).toBeGreaterThan(0);
-          for (const { receipt } of withReceipts) {
-            expect(receipt!.omittedForAttention).toBeUndefined();
-          }
-          const naming = Object.entries(SERVED_GAPS).filter(([, gap]) =>
-            gap.fields.some((f) => f === 'omittedForAttention'),
-          );
-          expect(naming.map(([kind]) => kind)).toEqual([]);
-        },
-      },
-    ],
-  },
-  {
     site: 'callRuntimeStageId',
     sentence: UNGAPPED_FIELDS['callRuntimeStageId']!,
     clauses: [
       {
         quote: 'Never absent here',
         claim: 'every view of every run carries it, damaged recordings included',
+        fields: ['view:callRuntimeStageId'],
         assert: async () => {
           const intact = (await everyIntactView()).map((r) => r.view);
           const plain = (await plainGrouped()).snapshot;
@@ -1067,6 +1165,8 @@ const ACCOUNT: readonly Entry[] = [
       {
         quote: 'so there is nothing about it for a gap to excuse',
         claim: 'no gap in the catalogue names it',
+        fields: [],
+        aboutTheCatalogue: true,
         assert: () => {
           const naming = Object.entries(SERVED_GAPS).filter(([, gap]) =>
             gap.fields.some((f) => f === 'callRuntimeStageId'),
@@ -1083,6 +1183,7 @@ const ACCOUNT: readonly Entry[] = [
       {
         quote: 'The account itself rather than a fact about the request',
         claim: 'RECORDED, not asserted: this clause is about the account, and the list is real',
+        fields: [],
         aboutTheAccount: true,
         assert: async () => {
           // There is nothing here to check against a request, because the
@@ -1099,6 +1200,7 @@ const ACCOUNT: readonly Entry[] = [
       {
         quote: 'a gap naming this list would be the account excusing its own absence',
         claim: 'no gap names it, on any run',
+        fields: [],
         aboutTheAccount: true,
         assert: async () => {
           const naming = Object.entries(SERVED_GAPS).filter(([, gap]) =>
@@ -1179,7 +1281,94 @@ describe('every printed sentence is decomposed into clauses that are asserted', 
     expect(ACCOUNT.find((e) => e.site === 'gaps')!.clauses.every((c) => c.aboutTheAccount)).toBe(
       true,
     );
+    // The other label (9.93.0): a clause about the CATALOGUE — which gaps
+    // name which field — has no view field to be sensitive to. Exactly one.
+    const catalogue = ACCOUNT.flatMap((e) =>
+      e.clauses.filter((c) => c.aboutTheCatalogue === true).map((c) => `${e.site}: ${c.quote}`),
+    );
+    expect(catalogue).toEqual([
+      'callRuntimeStageId: so there is nothing about it for a gap to excuse',
+    ]);
   });
+});
+
+// ─── Contract: every clause is SENSITIVE to the fields it names ──────────
+//
+// ENTRY 10's MECHANICAL HALF (9.93.0). The partition above guarantees every
+// printed word has an assertion; it cannot guarantee the assertion depends on
+// the field the clause is about. So each clause declares its fields, and for
+// each one the seam at the top of this file hands the assertion a view (or
+// receipt) with that field altered, then removed, and requires the assertion
+// to FAIL under at least one. An assertion that stays green while the field it
+// names is wrong was checking something else — and that is the class this
+// closes. The quantifier class (a claim about "every field" asserted on four;
+// a claim about both chart shapes asserted on one) is NOT closed here and is
+// not closable by a generic mutation; `recorded-not-built.md` entry 10 says
+// why, and what is asserted about it below is only that every clause about the
+// request declares at least one field.
+
+const mutationsOf = (field: string): readonly Mutation[] => {
+  const [shape, path] = field.split(':') as ['view' | 'receipt', string];
+  return [
+    { shape, path, how: 'alter' },
+    { shape, path, how: 'remove' },
+  ];
+};
+
+describe('every clause is sensitive to the fields it names — the assertion fails when the field is wrong', () => {
+  it('every clause about the request declares at least one field, and only catalogue/account clauses declare none', () => {
+    const undeclared: string[] = [];
+    const mislabelled: string[] = [];
+    for (const entry of ACCOUNT) {
+      for (const clause of entry.clauses) {
+        const exempt = clause.aboutTheAccount === true || clause.aboutTheCatalogue === true;
+        if (!exempt && clause.fields.length === 0)
+          undeclared.push(`${entry.site}: "${clause.quote}"`);
+        if (exempt && clause.fields.length > 0)
+          mislabelled.push(`${entry.site}: "${clause.quote}"`);
+      }
+    }
+    expect(undeclared).toEqual([]);
+    expect(mislabelled).toEqual([]);
+  });
+
+  it('every declared field is spelled view:<path> or receipt:<path>', () => {
+    const bad = ACCOUNT.flatMap((e) =>
+      e.clauses.flatMap((c) => c.fields.filter((f) => !/^(view|receipt):[a-zA-Z.]+$/.test(f))),
+    );
+    expect(bad).toEqual([]);
+  });
+
+  for (const entry of ACCOUNT) {
+    for (const clause of entry.clauses) {
+      for (const field of clause.fields) {
+        it(
+          `${entry.site} — "${clause.quote}" fails when ${field} is altered or removed`,
+          BUDGET,
+          async () => {
+            const outcomes: string[] = [];
+            for (const mutation of mutationsOf(field)) {
+              let failed = false;
+              await underMutation(mutation, async () => {
+                try {
+                  await clause.assert();
+                } catch {
+                  failed = true;
+                }
+              });
+              outcomes.push(`${mutation.how}:${failed ? 'failed' : 'PASSED'}`);
+            }
+            expect(
+              outcomes.some((o) => o.endsWith(':failed')),
+              `the assertion stayed green with ${field} wrong (${outcomes.join(
+                ', ',
+              )}) — it is not checking that field`,
+            ).toBe(true);
+          },
+        );
+      }
+    }
+  }
 });
 
 // ─── Contract: one test per clause ───────────────────────────────────────

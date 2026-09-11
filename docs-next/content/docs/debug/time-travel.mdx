@@ -213,7 +213,7 @@ view.messages.requestOnly;       // lines written to no history (the nudge)
 view.tools.names;                // ['read_skill', 'lookup', 'skip_step']
 view.tools.withheld;             // 'wrap-up' on the out-of-budget call
 view.basis?.model;               // which model saw this
-view.gaps.map((g) => g.gap);     // ['cache-transform', 'provider-defaults']
+view.gaps.map((g) => g.gap);     // ['cache-transform', 'provider-defaults'] — an agent; an LLMCall reads ['provider-defaults']
 
 // RECEIPT — hashes and references, written by the call itself.
 const receipt = receiptAt(snapshot, 1)!;
@@ -449,7 +449,7 @@ person reading the two together sees the difference.
   that went out are *unknown*, not empty: an empty `asSent` is the absence of a
   record, never a record of absence. The request-only lines are recomposed
   *from* the conversation, so they are unproved with it.
-- **`no-receipt-on-chart`** → fields: `basis.model`, `basis.provider`, `basis.runId`, `basis.epoch`, `params`, `cache.transform`, `cache.transformHash`, `cache.markersApplied`
+- **`no-receipt-on-chart`** → fields: `basis.model`, `basis.provider`, `basis.runId`, `basis.epoch`, `params`, `cache.transform`, `cache.transformHash`, `cache.markersApplied`, `cache.strategy`, `omittedForAttention`
   No *usable* receipt was read for this epoch, so nothing on the view has been
   checked against what went out. Not "none was written": the causes below differ
   on exactly that point, and the printed sentence used to get it wrong — it
@@ -466,9 +466,12 @@ person reading the two together sees the difference.
   and have none to salt hashes with). Those leave the same record, and the read
   does not separate them. `'receipt-shape-rejected'` means something *was*
   written there and carries no basis, so it was refused — that one says the
-  recording is damaged. `omittedForAttention` is **not** on the list: no chart in this
-  library supplies it on any recording, so it is a key of `UNGAPPED_FIELDS`
-  rather than a casualty of the missing receipt. The sentence also used to close
+  recording is damaged. `omittedForAttention` and `cache.strategy` are on the
+  list since 9.93.0: both are receipt-only facts — what the window dropped
+  before this call, which strategy the request went through — and they go
+  with the receipt. (`omittedForAttention` was a key of
+  `UNGAPPED_FIELDS` until then, on a measurement that no chart supplied it; the
+  agent's window stage does, on every run whose strategy evicts.) The sentence also used to close
   *"their absence here is a gap in the record, never a call made without them"*,
   which holds for each field as a whole and fails one level down: a receipt
   always carries `params` and always carries a `cache.transform` verdict, and an
@@ -486,10 +489,18 @@ person reading the two together sees the difference.
   nothing. The condition is not narrowed to the runs where it *does* cost
   something, because whether the run had one is recorded in the log whose
   absence raises the gap.
-- **`cache-transform`** → fields: `cache.transform`, `cache.transformHash`, `cache.markersApplied`, `system.hash`, `system.chars`, `system.pieces`, `messages.count`, `messages.entries`, `messages.requestOnly`, `tools.names`, `tools.schemaHashes`
-  Raised on **every** view, unconditionally — including the charts that run no
-  cache strategy at all (`LLMCall`, the message-API charts), where it is a
-  boundary rather than a claim that anything was rewritten. Where a strategy did
+- **`cache-transform`** → fields: `cache.transform`, `cache.transformHash`, `cache.markersApplied`, `cache.strategy`, `system.hash`, `system.chars`, `system.pieces`, `messages.count`, `messages.entries`, `messages.requestOnly`, `tools.names`, `tools.schemaHashes`, `tools.forced`, `tools.withheld`
+  Raised where a strategy could have rewritten the request (9.93.0): where the
+  receipt names one (`cache.strategy` — every agent; `'*'` is the built-in
+  pass-through), or where no receipt can say (a receipt-less view, a receipt
+  minted before the field existed). **Not** raised where the receipt says
+  `cache.strategy: null` — `LLMCall` and the message-API charts, which hand the
+  port the request assembly built with nothing in between. Until 9.93.0 it was
+  on every view, because `'unchanged'` could not tell a pass-through strategy
+  from no strategy and the view refuses to infer that from any other key. The
+  list names every field the strategy holds — `tools.forced` and
+  `tools.withheld` joined in 9.93.0, because both are written from assembly's
+  own decision and never from the prepared request. Where a strategy did
   run, its `prepareRequest` rewrites the request after assembly, and the
   strategy is **code**: the commit log holds the request it was handed and never
   the one it handed back. What the *receipt* holds of the output — and the
@@ -505,7 +516,7 @@ person reading the two together sees the difference.
   composition fields the receipt takes from that request — `params` excepted,
   because that one is read off the request the port really got. Where another gap on the same view covers
   one of those fields, that gap is the stronger claim. It no longer quotes
-  `RECEIPT_BOUNDARY`, and being unconditional is exactly why: that sentence
+  `RECEIPT_BOUNDARY`, and being raised on receipt-less views is exactly why: that sentence
   opens "A receipt describes the request…" and this entry prints on views with
   no receipt at all. The boundary claim is now this entry's own first sentence,
   in the vocabulary of a view; the quote moved to `provider-defaults`, which is

@@ -46,6 +46,7 @@ const receiptOver = (tools: readonly LLMToolSchema[]) =>
     withheld: null,
     baseRequest: { tools },
     preparedRequest: { tools },
+    strategy: null,
   });
 
 describe('toolDigestInput is the rule the receipt builder uses', () => {

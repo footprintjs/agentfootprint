@@ -547,11 +547,12 @@ export class LLMCall extends RunnerBase<LLMCallInput, LLMCallOutput> {
       // assembled: `baseRequest` and `preparedRequest` are the same object and
       // `cache.transform` records `'unchanged'` — exactly what an agent
       // running a pass-through strategy records, and true for the same reason.
+      // `cache.strategy: null` is the half `transform` cannot say (9.93.0):
+      // nothing stood between assembly and the port, so the served view
+      // raises no `cache-transform` gap on this chart.
       //
-      // NOT HERE: `omittedForAttention`. A slot's budget drops live in
-      // `slotCompositions` inside the slot's own subflow and no boundary
-      // bubbles them out, so the key is absent at this scope. A receipt
-      // records what the run knows; it does not go looking.
+      // NOT HERE: `omittedForAttention`. This chart has no window, so nothing
+      // is ever dropped before a call, and the absent key says exactly that.
       if (recordReceipt) {
         scope[RECEIPT_KEY] = buildReceipt({
           runId: getRunId(),
@@ -567,6 +568,7 @@ export class LLMCall extends RunnerBase<LLMCallInput, LLMCallOutput> {
           withheld: null,
           baseRequest: request,
           preparedRequest: request,
+          strategy: null,
         });
       }
 

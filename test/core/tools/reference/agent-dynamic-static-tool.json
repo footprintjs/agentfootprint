@@ -452,6 +452,7 @@
           },
           "cache": {
             "markersApplied": [],
+            "strategy": "*",
             "transform": "unchanged",
             "transformHash": null
           },
@@ -798,6 +799,7 @@
           },
           "cache": {
             "markersApplied": [],
+            "strategy": "*",
             "transform": "unchanged",
             "transformHash": null
           },
@@ -925,6 +927,7 @@
               "cache.transform",
               "cache.transformHash",
               "cache.markersApplied",
+              "cache.strategy",
               "system.hash",
               "system.chars",
               "system.pieces",
@@ -932,7 +935,9 @@
               "messages.entries",
               "messages.requestOnly",
               "tools.names",
-              "tools.schemaHashes"
+              "tools.schemaHashes",
+              "tools.forced",
+              "tools.withheld"
             ],
             "gap": "cache-transform",
             "why": "What reached the provider may differ from the fields below, and nothing on this view would show it. Where another gap on this view covers one of them, that gap is the stronger claim."
@@ -997,6 +1002,7 @@
               "cache.transform",
               "cache.transformHash",
               "cache.markersApplied",
+              "cache.strategy",
               "system.hash",
               "system.chars",
               "system.pieces",
@@ -1004,7 +1010,9 @@
               "messages.entries",
               "messages.requestOnly",
               "tools.names",
-              "tools.schemaHashes"
+              "tools.schemaHashes",
+              "tools.forced",
+              "tools.withheld"
             ],
             "gap": "cache-transform",
             "why": "What reached the provider may differ from the fields below, and nothing on this view would show it. Where another gap on this view covers one of them, that gap is the stronger claim."

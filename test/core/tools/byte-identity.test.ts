@@ -13,6 +13,19 @@
  *
  *   AF_TOOLS_REFERENCE=update npx vitest run test/core/tools/byte-identity.test.ts
  *
+ * REGENERATED ON 9.93.0, and the whole delta against the 9.92.1 references is
+ * on record here because a regeneration is a chance to lose the law: the
+ * 9.92.1 references were re-run on the 9.92.1 tree first (16/16 green), the
+ * two sets were diffed field by field, and EVERY moved path is one 9.93.0
+ * moved on purpose — the receipt's new `cache.strategy` key (`'*'` on the
+ * twelve agent fixtures, `null` on the two message-API ones; `llmcall`'s
+ * receipt lives in its subflow log, outside this projection), the
+ * `cache-transform` gap's `fields` growing by `cache.strategy`,
+ * `tools.forced` and `tools.withheld` on every agent view, and that gap
+ * LEAVING the three views whose receipt says no strategy ran
+ * (`llmcall`, `message-api-chart`, `agent-message-api-chart-one-turn`).
+ * No message, no tool, no other key moved on any fixture.
+ *
  * Every scenario is a real run — the receipt-conformance shapes, each in the
  * configuration that has no name collision — and what is compared is the
  * whole `commitLog` plus `servedAt(k)` for every located epoch, after ONE

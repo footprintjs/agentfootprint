@@ -175,7 +175,7 @@ view.system.text;                 // the joined system prompt, as sent
 view.messages.asSent.length;      // the turns that went out
 view.messages.requestOnly;        // lines written to no history (the nudge)
 view.tools.names;                 // ['read_skill', 'lookup', 'skip_step']
-view.gaps.map((g) => g.gap);      // ['cache-transform']
+view.gaps.map((g) => g.gap);      // ['cache-transform', 'provider-defaults']
 
 const receipt = receiptAt(snapshot, 1)!;
 receipt.tools.withheld;           // 'wrap-up' on the out-of-budget call
@@ -209,7 +209,7 @@ const executor = new FlowChartExecutor(chart);
 await executor.run({ input: { message: 'weather in paris?' } });
 
 receiptAt(executor.getSnapshot(), 1)!.basis.runId; // runId
-servedAt(executor.getSnapshot(), 1)!.gaps.map((g) => g.gap); // ['cache-transform', 'provider-defaults']
+servedAt(executor.getSnapshot(), 1)!.gaps.map((g) => g.gap); // ['provider-defaults'] — no strategy on this chart, and the receipt says so
 ```
 
 Omit `getRunId` and **no receipt is minted** — deliberately, not by accident.
@@ -300,15 +300,35 @@ reader that needs those ids reads them from the fold, where reading them is
 governed. ATTENTION omissions are a different fact and the receipt has a place
 for them (`omittedForAttention`): nobody was refused anything, the request
 simply did not fit, and a reader chasing "why did it not know that?" needs to
-see it — hashed, like everything else. **No chart in this library supplies it
-today**, measured
-on 9.88.0 in both shapes: a slot writes its budget drops to `slotCompositions`
-inside its own subflow and no boundary bubbles them out, so `buildReceipt` is
-never handed one. The field is on the shape because the mint is a pure exported
-function a caller CAN hand the fact to. Absent means nobody recorded a drop,
-never that nothing was dropped — which is why it is a key of `UNGAPPED_FIELDS`
-rather than a gap, and why the hole itself is entry 9 of
-`docs/design/2026-09-recorded-not-built.md`.
+see it — hashed, like everything else. **The window stage supplies it (9.93.0).**
+Until this release the field was declared and supplied by nothing, on a
+measurement that had looked at the slots — which drop nothing — and not at the
+agent chart's window stage, which evicts turns for budget on every run whose
+strategy engages (`context.evicted`, `reason: 'budget'`). The window now hands
+what left at this iteration's head to the call-llm mint in memory, on the seam
+the compaction meter already crosses (never a scope read: `compactions` is
+absent on every windowless run, and a tracked read of an absent key is a
+phantom context source on every call-llm stage). Each hash is the evicted
+turn's own `messages.entries[].hash`, so a drop on epoch k's receipt pairs with
+the turn as an earlier receipt served it — a law
+`test/lib/time-travel/receipt-conformance.test.ts` drives on a real sliding
+window. Absent now means nothing was dropped before the call; the field is
+named by `no-receipt-on-chart`, the one gap that can lose it, and left
+`UNGAPPED_FIELDS`. Entry 9 of `docs/design/2026-09-recorded-not-built.md` is
+the history.
+
+```ts
+const agent = Agent.create({ provider, model })
+  .system('bot')
+  .tool(lookup)
+  .window(slidingWindow({ keepRecentTurns: 1 }))
+  .build();
+await agent.run({ message: 'go' });
+
+const third = receiptAt(agent.getSnapshot()!, 3)!;
+third.omittedForAttention;            // { count: 2, hashes: ['…', '…'] } — a call and its result left at this head
+receiptAt(agent.getSnapshot()!, 2)!.messages.entries.some((e) => e.hash === third.omittedForAttention!.hashes[0]); // true
+```
 
 ### Gaps: what this view cannot prove, said out loud
 
@@ -399,9 +419,9 @@ constant (a count of causes, a benignity verdict, a "you can tell which").
 |---|---|---|
 | `no-fold-base` | `system.hash`, `system.chars`, `system.pieces`, `messages.count`, `messages.entries`, `messages.requestOnly`, `tools.schemaHashes`, `tools.names`, `tools.forced`, `tools.withheld`, `epoch` | The recording travelled without a fold base (`RuntimeSnapshot.initialState`), so anything the run inherited rather than set reads as absent — and on a RESUMED run that is most of it. **Either** base counts: the log holding this epoch's call, or the RUN log holding its build-time constants. Under `'dynamic-grouped'` those are separate logs, so a grouped recording can lose the run base alone. The COUNTS move with the things they count — a rebuild that recovered one turn of three reports one — and so does **this view's** `epoch`, because a fold that cannot read `iteration` numbers the turn by its POSITION instead. The *receipt's* `basis.epoch` is not here: it was minted live and rides in the call's own bundle, whatever the base. Re-read the run from a snapshot that carries `initialState` and the gap goes away. The printed clause used to say the view's number "may differ from the one the receipt for this turn carries" — a sentence about a receipt, printed on views that have none (a base-less recording of a chart that minted none raises both gaps at once). It now says what the NUMBER means: it may be the turn's place in run order rather than the count the run kept. |
 | `no-conversation-on-record` | `messages.count`, `messages.entries`, `messages.requestOnly` | This call committed neither `history` nor `messagesInjections`, so the turns that went out are UNKNOWN, not empty: an empty `asSent` is the absence of a record, never a record of absence. The request-only lines are recomposed *from* the conversation, so they are unproved with it. |
-| `no-receipt-on-chart` | `basis.model`, `basis.provider`, `basis.runId`, `basis.epoch`, `params`, `cache.transform`, `cache.transformHash`, `cache.markersApplied` | No USABLE receipt was read for this epoch, so nothing on the view has been checked against what went out. (Not "none was written": the causes below differ on exactly that point, and the printed sentence used to get it wrong — it opened "No receipt was found" and closed "absent here means unrecorded", both false when a receipt WAS written and was refused.) The fields listed are carried only by a receipt; everything else is rebuilt from the log alone, UNVERIFIED. Why there is none is data rather than prose — the gap carries a `cause`. `'no-receipt-committed'`: nothing was written under the receipt key, which is what a pre-9.88 recording, a run with `recordReceipt: false`, a message-API chart handed no run id to salt with, and a consumer's own `call-llm` stage all leave behind, and the read does not separate them. `'receipt-shape-rejected'`: something *was* written there and carries no basis, so it was refused — that one says the recording is damaged. `omittedForAttention` is **not** on this list: no chart in this library supplies it on any recording, so it is a key of `UNGAPPED_FIELDS`, not a casualty of the missing receipt. The printed sentence used to close *"their absence here is a gap in the record, never a call made without them"*, which holds for each field AS A WHOLE and fails one level down: a receipt always carries `params` and always carries a `cache.transform` verdict, and an absence INSIDE `params` — measured, `{}` on an agent that set no dials — really is a call made without one. The sentence now claims nothing about what is inside a field it cannot see. |
+| `no-receipt-on-chart` | `basis.model`, `basis.provider`, `basis.runId`, `basis.epoch`, `params`, `cache.transform`, `cache.transformHash`, `cache.markersApplied`, `cache.strategy`, `omittedForAttention` | No USABLE receipt was read for this epoch, so nothing on the view has been checked against what went out. (Not "none was written": the causes below differ on exactly that point, and the printed sentence used to get it wrong — it opened "No receipt was found" and closed "absent here means unrecorded", both false when a receipt WAS written and was refused.) The fields listed are carried only by a receipt; everything else is rebuilt from the log alone, UNVERIFIED. Why there is none is data rather than prose — the gap carries a `cause`. `'no-receipt-committed'`: nothing was written under the receipt key, which is what a pre-9.88 recording, a run with `recordReceipt: false`, a message-API chart handed no run id to salt with, and a consumer's own `call-llm` stage all leave behind, and the read does not separate them. `'receipt-shape-rejected'`: something *was* written there and carries no basis, so it was refused — that one says the recording is damaged. `omittedForAttention` and `cache.strategy` are on this list since 9.93.0: both are receipt-only facts — what the window dropped before this call, which strategy the request went through — and they go with the receipt. (`omittedForAttention` sat in `UNGAPPED_FIELDS` until then, on the measurement that no chart supplied it; the window stage does.) The printed sentence used to close *"their absence here is a gap in the record, never a call made without them"*, which holds for each field AS A WHOLE and fails one level down: a receipt always carries `params` and always carries a `cache.transform` verdict, and an absence INSIDE `params` — measured, `{}` on an agent that set no dials — really is a call made without one. The sentence now claims nothing about what is inside a field it cannot see. |
 | `no-run-log` | `tools.names`, `tools.forced`, `tools.schemaHashes`, `messages.requestOnly` | A subtree was handed in on its own; run constants live in the run log and only there — the forced output tool's NAME, and the tool `wants` the staged-refs nudge is composed from. Losing the name also loses the `schemaHashes` row the receipt keeps under it, and the request-only line the nudge would have composed. Pass the whole snapshot to read them. **MAY, never DID** — measured on a `'dynamic-grouped'` agent with one plain tool and its `commitLog` emptied, the damaged rebuild is BYTE-IDENTICAL to the intact one: that run has no forced tool and no `wants`, so the gap costs it nothing. The printed sentence said "could not be fully recovered here" for one release and was false on exactly that view. The condition is not narrowed to the runs where it costs something because it cannot be: whether the run had a constant to lose is recorded in the log whose absence raises the gap. |
-| `cache-transform` | `cache.transform`, `cache.transformHash`, `cache.markersApplied`, `system.hash`, `system.chars`, `system.pieces`, `messages.count`, `messages.entries`, `messages.requestOnly`, `tools.names`, `tools.schemaHashes` | Raised on **every** view, unconditionally — including the charts that run no cache strategy at all (`LLMCall`, the message-API charts), where the receipt records `'unchanged'` because the request that went out IS the request that was assembled, and this entry is a boundary rather than a claim that anything was rewritten. Where a strategy did run, its `prepareRequest` rewrites the request after assembly, and the strategy is CODE: the commit log holds the request it was handed and never the one it handed back. **What the receipt holds of the OUTPUT, and the printed sentence used to deny:** `cache.transform` is the verdict of comparing the two, `cache.transformHash` fingerprints the result when they differed, and `cache.markersApplied` is the breakpoints the strategy actually applied (`scope.cacheMarkers` holds the candidates it was offered — those are the inputs). "Only its inputs are on the record" shipped in the printed sentence and was false about three of its own fields on day one. What IS true: the composition fields — `system.*`, `messages.*`, `tools.*` — describe the request handed TO the strategy on both the rebuild and the receipt, so a rewrite can have moved them and nothing shows it. `params` is the exception and the one field read past the strategy: off the request the port really got. Where another gap on the same view covers one of those fields, that gap is the stronger claim. **It no longer quotes `RECEIPT_BOUNDARY`**, and being unconditional is why: that sentence opens "A receipt describes the request…" and this entry is printed on views with no receipt at all (measured — a message-API chart run with no run id carries exactly `no-receipt-on-chart` and this). The boundary claim is now the entry's own first sentence, in the vocabulary of a view; the QUOTE moved to `provider-defaults`, which is raised only where a receipt was read. |
+| `cache-transform` | `cache.transform`, `cache.transformHash`, `cache.markersApplied`, `cache.strategy`, `system.hash`, `system.chars`, `system.pieces`, `messages.count`, `messages.entries`, `messages.requestOnly`, `tools.names`, `tools.schemaHashes`, `tools.forced`, `tools.withheld` | Raised where a strategy could have rewritten the request (9.93.0): where the receipt names one (`cache.strategy` — every agent, `'*'` being the built-in pass-through), or where no receipt can say (a receipt-less view, a receipt minted before the field existed). NOT raised where the receipt says `cache.strategy: null` — `LLMCall` and the message-API charts, which hand the port the request assembly built with nothing in between. Until 9.93.0 it was on every view unconditionally, because `cache.transform: 'unchanged'` could not tell "a strategy returned what it was given" from "there was no strategy", and inferring the second from any other key is the absence-of-evidence reading this file refuses; the receipt now carries the fact. Where a strategy did run, its `prepareRequest` rewrites the request after assembly, and the strategy is CODE: the commit log holds the request it was handed and never the one it handed back. The list names every field the strategy holds — `tools.forced` and `tools.withheld` joined in 9.93.0 (entry 7): both are written from assembly's own decision, never from the prepared request, so a strategy that dropped the answer tool or emptied the list leaves them describing a request the port was not handed. **What the receipt holds of the OUTPUT, and the printed sentence used to deny:** `cache.transform` is the verdict of comparing the two, `cache.transformHash` fingerprints the result when they differed, and `cache.markersApplied` is the breakpoints the strategy actually applied (`scope.cacheMarkers` holds the candidates it was offered — those are the inputs). "Only its inputs are on the record" shipped in the printed sentence and was false about three of its own fields on day one. What IS true: the composition fields — `system.*`, `messages.*`, `tools.*` — describe the request handed TO the strategy on both the rebuild and the receipt, so a rewrite can have moved them and nothing shows it. `params` is the exception and the one field read past the strategy: off the request the port really got. Where another gap on the same view covers one of those fields, that gap is the stronger claim. **It no longer quotes `RECEIPT_BOUNDARY`**, and being raised on receipt-less views is why: that sentence opens "A receipt describes the request…" and this entry is printed on views with no receipt at all (measured — a message-API chart run with no run id carries exactly `no-receipt-on-chart` and this). The boundary claim is now the entry's own first sentence, in the vocabulary of a view; the QUOTE moved to `provider-defaults`, which is raised only where a receipt was read. |
 | `provider-defaults` | `params` | The sampling dials are read off the request the provider PORT was handed — after the cache strategy, so a rewritten dial is recorded as the port's value. What is still past the record is the vendor: an adapter or SDK may resolve a final value the port never saw. |
 | `forced-tool-schema` | `tools.schemaHashes` | Under a `'tool-forced'` output strategy the synthetic answer tool is added at assembly from a build-time schema. Its NAME is on the record, so the tool list rebuilds; its schema body is not. |
 
@@ -453,9 +473,9 @@ sentences: it names no module, no function and no call. It said
 **ONE entry quotes it: `provider-defaults`**, and that is the only one that
 honestly can — it is raised inside `if (receipt !== undefined)`, so a view
 carrying it always has a receipt for the sentence to be about. `cache-transform`
-quoted it too until the seventh round, and `cache-transform` is on every view,
-so a reader of a receipt-less trace was told what a receipt describes beside a
-view that has none.
+quoted it too until the seventh round, and `cache-transform` is raised on the
+receipt-less views, so a reader of a receipt-less trace was told what a receipt
+describes beside a view that has none.
 
 **Where "last saw it" is**, for the reader who can open the file: `buildReceipt`
 is called with the request about to be passed to `LLMProvider.complete` — the

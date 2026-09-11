@@ -63,6 +63,7 @@ import {
   receiptHash,
   servedAt,
   servedViews,
+  slidingWindow,
   toolDigestInput,
   RECEIPT_BOUNDARY,
   SERVED_GAPS,
@@ -167,10 +168,11 @@ const excusedBy = (view: ServedView, field: string): boolean => named(view.gaps,
  * DOES produce these fields and they DO agree with the receipt, but both
  * describe the request handed TO the cache strategy rather than the one the
  * port got. That is a caveat a renderer must show beside `system.text`, which
- * is why the composition fields belong on its list — and it is on EVERY view,
- * so letting it answer "is this missing row explained?" would make the clause
- * below permanently green. Two relations, one list, so the narrow question
- * names the gaps that can answer it.
+ * is why the composition fields belong on its list — and it is on every view
+ * whose call went through a strategy (every agent view), so letting it answer
+ * "is this missing row explained?" would make the clause below green wherever
+ * it matters. Two relations, one list, so the narrow question names the gaps
+ * that can answer it.
  */
 const MISSING_ROW_GAPS: readonly ServedGapKind[] = [
   'forced-tool-schema',
@@ -336,16 +338,43 @@ function failuresAt(snapshot: Snapshot, epoch: number, request: LLMRequest | und
     }
   }
 
-  // ── the cache transform: unrebuildable BY CONSTRUCTION, always gapped ─
-  if (!excusedBy(view, 'cache.transformHash')) {
-    note('cache.transformHash', 'a rewritten request is not derivable from the log, and ungapped');
-  }
-  // …and so is which of the candidate markers the strategy actually applied.
-  if (!excusedBy(view, 'cache.markersApplied')) {
-    note(
-      'cache.markersApplied',
-      'the applied breakpoints are not derivable from the log, ungapped',
-    );
+  // ── the cache transform: unrebuildable BY CONSTRUCTION where a strategy
+  //    ran, and then always gapped; the trivial verdict where none did ────
+  //
+  // `cache.strategy` (9.93.0) is the receipt's own word on which of the two
+  // this call was. Where a strategy stood between assembly and the port, what
+  // it handed back is not in the log and the gap must excuse it. Where the
+  // receipt says NONE did, there is nothing to excuse and the law can check
+  // the verdict outright: the request compared against itself is unchanged,
+  // fingerprints nothing, and applied no breakpoint — a `'rewritten'` here
+  // would be a receipt contradicting its own `strategy: null`.
+  if (receipt.cache.strategy === null) {
+    if (receipt.cache.transform !== 'unchanged') {
+      note('cache.transform', `${receipt.cache.transform} with no strategy on the record`);
+    }
+    if (receipt.cache.transformHash !== null) {
+      note('cache.transformHash', 'a rewrite fingerprinted with no strategy on the record');
+    }
+    if (receipt.cache.markersApplied.length > 0) {
+      note('cache.markersApplied', 'breakpoints applied with no strategy on the record');
+    }
+    if (excusedBy(view, 'cache.transformHash')) {
+      note('cache.transformHash', 'excused by cache-transform on a call no strategy touched');
+    }
+  } else {
+    if (!excusedBy(view, 'cache.transformHash')) {
+      note(
+        'cache.transformHash',
+        'a rewritten request is not derivable from the log, and ungapped',
+      );
+    }
+    // …and so is which of the candidate markers the strategy actually applied.
+    if (!excusedBy(view, 'cache.markersApplied')) {
+      note(
+        'cache.markersApplied',
+        'the applied breakpoints are not derivable from the log, ungapped',
+      );
+    }
   }
   // Every marker it DID record is three scalars and nothing else.
   receipt.cache.markersApplied.forEach((marker, i) => {
@@ -658,6 +687,88 @@ describe('a tool-forced output', () => {
   });
 });
 
+describe('a window that evicts turns for budget (9.93.0)', () => {
+  // THE ONE SHIPPED MECHANISM THAT DROPS FOR ATTENTION, and until this release
+  // the receipt said nothing about it. `omittedForAttention` was declared in
+  // 9.88.0 for exactly this question — "why did the model not know that?" —
+  // and excused as "no chart in this library supplies it" on a measurement
+  // that had looked at the slots (which drop nothing) and not at the window
+  // stage (`stages/window.ts`), which evicts turns with `reason: 'budget'` on
+  // every run whose strategy engages. Verified on the 9.92.1 tree before this
+  // was built: `keepRecentTurns: 1`, four tool calls, `compactions` records
+  // `removedMessageCount: 2` at iterations 3, 4 and 5, and every receipt read
+  // `omittedForAttention: undefined`.
+  const windowed = async (): Promise<Run> => {
+    const { provider, wire } = scripted([
+      call('c1', 'alpha_tool'),
+      call('c2', 'alpha_tool'),
+      call('c3', 'alpha_tool'),
+      answer('done'),
+    ]);
+    const agent = Agent.create({ provider: provider as never, model: 'mock', maxIterations: 8 })
+      .system('bot')
+      .tool(tool('alpha_tool'))
+      .window(slidingWindow({ keepRecentTurns: 1 }))
+      .build();
+    await agent.run({ message: 'go' });
+    return { snapshot: agent.getSnapshot()!, wire };
+  };
+
+  it('files what left at this iteration’s head on this iteration’s receipt, and nothing on the ones before', async () => {
+    const r = await windowed();
+    const epochs = epochLocations(r.snapshot).map((l) => l.epoch);
+    expect(epochs).toEqual([1, 2, 3, 4]);
+    // Iterations 1 and 2: nothing had left the window yet.
+    expect(receiptAt(r.snapshot, 1)!.omittedForAttention).toBeUndefined();
+    expect(receiptAt(r.snapshot, 2)!.omittedForAttention).toBeUndefined();
+    // Iteration 3's head evicted the first call-and-result pair; 4's the next.
+    for (const epoch of [3, 4]) {
+      const dropped = receiptAt(r.snapshot, epoch)!.omittedForAttention;
+      expect(dropped, `epoch ${epoch}`).toBeDefined();
+      expect(dropped!.count).toBe(2);
+      expect(dropped!.hashes).toHaveLength(2);
+    }
+    // The window really did shrink the request: with every turn kept, the
+    // third call would carry the user turn plus two call-and-result pairs
+    // (5); it carried fewer, and the receipt's count is the wire's.
+    expect(r.wire[2]!.messages.length).toBeLessThan(5);
+    expect(receiptAt(r.snapshot, 3)!.messages.count).toBe(r.wire[2]!.messages.length);
+    // …and the law still holds at every stop, wire witness included.
+    clean(r);
+  });
+
+  it('each dropped hash is the turn’s own hash as an earlier receipt served it — the pairing law', async () => {
+    const r = await windowed();
+    for (const epoch of [3, 4]) {
+      const dropped = receiptAt(r.snapshot, epoch)!.omittedForAttention!;
+      // Served earlier: the union of every previous epoch's message hashes.
+      const servedBefore = new Set<string>();
+      for (let k = 1; k < epoch; k += 1) {
+        for (const entry of receiptAt(r.snapshot, k)!.messages.entries)
+          servedBefore.add(entry.hash);
+      }
+      for (const hash of dropped.hashes) {
+        expect(servedBefore.has(hash), `epoch ${epoch}: ${hash} was never served`).toBe(true);
+      }
+      // …and not served on THIS epoch: what left is not in what went out.
+      const servedNow = new Set(receiptAt(r.snapshot, epoch)!.messages.entries.map((e) => e.hash));
+      for (const hash of dropped.hashes) expect(servedNow.has(hash)).toBe(false);
+    }
+  });
+
+  it('an agent with no window never writes the key — and now that means nothing was dropped', async () => {
+    const r = await run('dynamic', [call('c1', 'alpha_tool'), answer('done')], (a) =>
+      a.system('bot').tool(tool('alpha_tool')),
+    );
+    for (const location of epochLocations(r.snapshot)) {
+      expect(receiptAt(r.snapshot, location.epoch)!.omittedForAttention).toBeUndefined();
+    }
+    // The field is named by the one gap that can lose it, and excused by none.
+    expect(SERVED_GAPS['no-receipt-on-chart'].fields).toContain('omittedForAttention');
+    expect(UNGAPPED_FIELDS['omittedForAttention']).toBeUndefined();
+  });
+});
+
 describe('the staged-refs nudge', () => {
   it('the one model-facing line written to no history rebuilds from committed state', async () => {
     const rows = JSON.stringify(Array.from({ length: 200 }, (_, i) => ({ vol: i, gb: 18 })));
@@ -740,6 +851,12 @@ describe('an LLMCall chart', () => {
     expect(receipt.basis.model).toBe('mock');
     expect(failuresAt(snapshot, 1, wire[0])).toEqual([]);
     expect(servedAt(snapshot, 1)!.gaps.map((g) => g.gap)).not.toContain('no-receipt-on-chart');
+    // 9.93.0: the receipt SAYS no strategy stood between assembly and the
+    // port, so the view carries no caveat about what one might have done —
+    // the gap that was on every view until this release (entry 8).
+    expect(receipt.cache.strategy).toBeNull();
+    expect(receipt.cache.transform).toBe('unchanged');
+    expect(servedAt(snapshot, 1)!.gaps.map((g) => g.gap)).toEqual(['provider-defaults']);
   });
 
   it('salts each run with ITS OWN id: the same prompt fingerprints differently', async () => {
@@ -850,6 +967,9 @@ describe('a message-API chart', () => {
     expect(failuresAt(snapshot, 1, wire[0])).toEqual([]);
     // …and the view stops declaring an absence that is no longer there.
     expect(servedAt(snapshot, 1)!.gaps.map((g) => g.gap)).not.toContain('no-receipt-on-chart');
+    // …nor, since 9.93.0, a rewrite that nothing was there to make.
+    expect(receiptAt(snapshot, 1)!.cache.strategy).toBeNull();
+    expect(servedAt(snapshot, 1)!.gaps.map((g) => g.gap)).toEqual(['provider-defaults']);
   });
 
   it('mints NONE without one, rather than salting every hash with nothing', async () => {
@@ -897,6 +1017,12 @@ describe('an agent message-API chart', () => {
     expect(located.map((l) => l.epoch)).toEqual([1, 2]);
     for (const [i, location] of located.entries()) {
       expect(failuresAt(snapshot, location.epoch, wire[i])).toEqual([]);
+      // No strategy on this chart either — said on every turn's receipt, and
+      // read off it by the view (9.93.0).
+      expect(receiptAt(snapshot, location.epoch)!.cache.strategy).toBeNull();
+      expect(servedAt(snapshot, location.epoch)!.gaps.map((g) => g.gap)).toEqual([
+        'provider-defaults',
+      ]);
     }
   });
 
@@ -1049,6 +1175,63 @@ describe('a cache strategy that rewrites the request', () => {
     // The composition is untouched here, so the WIRE witness stays on — and it
     // is the dial clauses of the law that go red without the fix.
     clean(r);
+  });
+
+  it('a strategy that drops the forced answer tool leaves `tools.forced` describing the decision — and the gap names it (9.93.0, entry 7)', async () => {
+    // `callLLM.ts` writes `tools.forced` from `deps.schemaTool?.name` and
+    // `tools.withheld` from `scope.wrapUpAsked` — assembly's own decisions —
+    // never from `preparedRequest`. A strategy holds the whole request, so it
+    // can take the synthetic tool off `tools` and the forcing off `toolChoice`,
+    // and the receipt would still name a forced tool the port never carried.
+    // Until 9.93.0 `cache-transform` named eleven fields and not these two, so
+    // a reader checking `tools.forced` against the wire found a mismatch the
+    // catalogue did not warn about.
+    const { provider, wire } = scripted([call('1', 'respond_with_schema')]);
+    const unforcing = {
+      name: 'unforcing-test-strategy',
+      prepareRequest: async (req: LLMRequest) => {
+        const { toolChoice: _choice, ...rest } = req;
+        return {
+          request: {
+            ...rest,
+            tools: (req.tools ?? []).filter((t) => t.name !== 'respond_with_schema'),
+          },
+          markersApplied: [],
+        };
+      },
+      readCacheMetrics: () => ({ kind: 'notApplicable' as const, reason: 'test strategy' }),
+    };
+    const agent = Agent.create({
+      provider: provider as never,
+      model: 'mock',
+      cacheStrategy: unforcing as never,
+    })
+      .system('bot')
+      .outputSchema({ safeParse: (v: unknown) => ({ ok: true, value: v }) } as never, {
+        strategy: 'tool-forced',
+        jsonSchema: { type: 'object', properties: { ok: { type: 'boolean' } } },
+      })
+      .build();
+    await agent.run({ message: 'go' });
+    const r: Run = { snapshot: agent.getSnapshot()!, wire };
+
+    // The port got no forced tool and no forcing…
+    expect(wire[0]!.tools ?? []).toEqual([]);
+    expect(wire[0]!.toolChoice).toBeUndefined();
+    // …and the receipt still names one, because it records the DECISION.
+    const receipt = receiptAt(r.snapshot, 1)!;
+    expect(receipt.tools.forced).toBe('respond_with_schema');
+    expect(receipt.tools.names).toEqual(['respond_with_schema']);
+    expect(receipt.cache.transform).toBe('rewritten');
+    // The two halves of one fact disagree on one receipt — `params.toolChoice`
+    // IS read past the strategy — and the gap now names the half that is not.
+    expect(receipt.params.toolChoice).toBeUndefined();
+    const cacheGap = servedAt(r.snapshot, 1)!.gaps.find((g) => g.gap === 'cache-transform')!;
+    expect(cacheGap.fields).toEqual(expect.arrayContaining(['tools.forced', 'tools.withheld']));
+    // The strategy's name rides the receipt, which is what raises the gap here.
+    expect(receipt.cache.strategy).toBe('');
+    // Everything except the wire witness still conforms.
+    clean(r, { wire: false });
   });
 });
 
@@ -1746,8 +1929,8 @@ describe("the cache gap's own wording", () => {
     expect(why).toContain('What reached the provider may differ from the fields below');
     // THE THIRD, killed in the seventh round: this entry APPENDED
     // `RECEIPT_BOUNDARY`, whose first words are "A receipt describes the
-    // request…" — and this entry is raised on EVERY view, including the ones
-    // with no receipt at all. Measured below: a message-API chart run without
+    // request…" — and this entry is raised on the receipt-less views too
+    // (on EVERY view until 9.93.0). Measured below: a message-API chart run without
     // a run id carries this gap and has no receipt behind it, so the reader
     // was told about a thing that is not there. (It was an `LLMCall` view
     // until 9.91.0, where that chart started minting.) The boundary CLAIM survives in the entry's own first

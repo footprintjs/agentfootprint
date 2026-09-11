@@ -26,6 +26,12 @@
  *                 withdrawn provider name, and a fresh-instance resume, to the
  *                 never-activated skill; two skills sharing one `Tool` drew
  *                 events. Each pinned against the walk's own cases.
+ *   7. entries 4 + 5, VERIFIED 2026-09-11 against the 9.92.1 dist rather than
+ *                 re-fixed: `.selfExplain()`'s `run_overview` against the three
+ *                 skill shapes a build-time reservation cannot see. The law
+ *                 already held — dispatch followed the offer on every epoch and
+ *                 the losing claim was named — so the entries' verbatim
+ *                 reproductions are pinned here, measured, not rebuilt.
  *
  * Test types (Convention 3): regression (all five, verbatim) / integration
  * (every case is a real agent run) / property (4: the whole family, derived
@@ -36,12 +42,14 @@ import { describe, expect, it } from 'vitest';
 import { FlowChartExecutor } from 'footprintjs';
 import { Agent, defineTool } from '../../../src/index.js';
 import { defineSkill } from '../../../src/injection-engine.js';
-import { staticTools } from '../../../src/tool-providers/index.js';
+import { SKILL_SCOPED_TOOLS_ID_PREFIX, staticTools } from '../../../src/tool-providers/index.js';
+import { SELF_EXPLAIN_SKILL_ID } from '../../../src/lib/trace-toolpack/selfExplain.js';
 import { mock } from '../../../src/llm-providers.js';
 import { buildAgentMessageApiChart } from '../../../src/core/agent/buildAgentMessageApiChart.js';
 import type { LLMRequest, LLMResponse, LLMToolSchema } from '../../../src/adapters/types.js';
 import type { Tool } from '../../../src/core/tools.js';
 import {
+  answeredBy,
   collisionCases,
   contractOf,
   crossEpochCases,
@@ -394,6 +402,122 @@ describe('6. a name off the wire is never handed to a party the model was not sh
     expect(obs.shadowed).toEqual([]);
     expect(obs.swallowed).toEqual([]);
     expect(obs.offWire).toEqual([]);
+  });
+});
+
+// ═════════════════════════════════════════════════════════════════════════
+// 7. entries 4 + 5 — `.selfExplain()`'s `run_overview` against a skill
+// ═════════════════════════════════════════════════════════════════════════
+
+/**
+ * MEASURED 2026-09-11 on the 9.92.1 dist, the entries' three cells verbatim
+ * (`framework/run_overview-vs-skill-static`, `-vs-skill-inactive`,
+ * `-vs-step-skill`), before anything in this packet was edited:
+ *
+ *   skill-static   e1..e3 wire = [contract:skill-static]; e2 answer = [impl:skill-static]
+ *                  shadowed 2× {schemaFrom:skill/desk-static, dispatchTo:skill/desk-static}
+ *                  claim_swallowed 2× {lostBy:provider/skill-scoped:self-explain, wonBy:skill/desk-static}
+ *   skill-inactive e1 wire = ABSENT; e2..e3 wire = the framework's own contract
+ *                  e2 answer = the framework's trace tool (no [impl:] stamp)
+ *                  shadowed 0×; claim_swallowed 2× {lostBy:skill/desk-idle, wonBy:provider/skill-scoped:self-explain}
+ *   step-skill     e1..e4 wire = [contract:step-skill]; e3 answer = [impl:step-skill]
+ *                  shadowed 2× {schemaFrom:skill/desk-stepped, dispatchTo:skill/desk-stepped}
+ *                  claim_swallowed 2× {lostBy:provider/skill-scoped:self-explain, wonBy:skill/desk-stepped}
+ *
+ * Entry 4's worse half — a skill offered on no epoch answering the framework's
+ * own contract — and entry 5 — a shadow report naming
+ * `provider(skill-scoped:self-explain)` as the schema's source on an epoch whose
+ * wire carried the skill's — are both closed by the 9.92.0 law with no
+ * mechanism of their own. What is DELIBERATELY still true: `.selfExplain()`'s
+ * reservation still reads `this.registry` only, so all three configurations
+ * build; the self-explain body still tells the model to start with
+ * `run_overview` in the two cells where the skill holds the name; and the
+ * framework's pack is named by its implementation id
+ * (`skill-scoped:self-explain`) on the PROVIDER channel it rides, not by the
+ * word `framework` — the walk's `claims` map declares exactly that.
+ */
+describe('7. `.selfExplain()`’s `run_overview` against a skill — the offer decides, and the loser is named (entries 4 + 5)', () => {
+  const SELF_EXPLAIN_PACK_ID = `${SKILL_SCOPED_TOOLS_ID_PREFIX}${SELF_EXPLAIN_SKILL_ID}`;
+
+  it('always-visible skill: the skill’s contract rides every epoch, the skill answers, and the framework’s pack is the named loser', async () => {
+    const { obs } = await runWalkCase('framework/run_overview-vs-skill-static');
+    for (const epoch of [1, 2, 3]) {
+      expect(wireContract(obs, epoch, 'run_overview'), `epoch ${epoch}`).toBe('skill-static');
+    }
+    expect(answerImpl(obs, 'e2:run_overview')).toBe('skill-static');
+    // The report's subject is the wire: the skill's contract, the skill's answer.
+    const reports = obs.shadowed.filter((e) => e.toolName === 'run_overview');
+    expect(reports.length).toBeGreaterThan(0);
+    for (const e of reports) {
+      expect(e).toMatchObject({
+        schemaFrom: 'skill',
+        schemaFromId: 'desk-static',
+        dispatchTo: 'skill',
+        dispatchToId: 'desk-static',
+      });
+    }
+    // The dead claim is the framework's own trace pack, named by its
+    // implementation id, once per epoch it lost.
+    const dead = obs.swallowed.filter((e) => e.toolName === 'run_overview');
+    expect(dead.length).toBeGreaterThan(0);
+    for (const e of dead) {
+      expect(e).toMatchObject({
+        lostBy: 'provider',
+        lostById: SELF_EXPLAIN_PACK_ID,
+        wonBy: 'skill',
+        wonById: 'desk-static',
+      });
+    }
+    expect(new Set(dead.map((e) => e.iteration)).size).toBe(dead.length);
+  });
+
+  it('never-activated scoped skill: the framework’s own contract rides once self-explain is active, and the framework — never the idle skill — answers it', async () => {
+    const { obs } = await runWalkCase('framework/run_overview-vs-skill-inactive');
+    // Epoch 1: nobody offers it. Epoch 2: the trace pack's own, unstamped contract.
+    expect(wireContract(obs, 1, 'run_overview')).toBeUndefined();
+    expect(wireContract(obs, 2, 'run_overview')).toBe('framework');
+    // On 9.91.0 this read `[impl:skill-inactive]` — entry 4's worst cell.
+    expect(answerImpl(obs, 'e2:run_overview')).toBeUndefined();
+    expect(answeredBy(obs.answers.get('e2:run_overview') ?? '')).toBe('framework');
+    // The idle skill's contract competed on no epoch, so nothing was shadowed…
+    expect(obs.shadowed.filter((e) => e.toolName === 'run_overview')).toEqual([]);
+    // …and its reserved claim is reported dead, by name, with the winner beside it.
+    const dead = obs.swallowed.filter((e) => e.toolName === 'run_overview');
+    expect(dead.length).toBeGreaterThan(0);
+    for (const e of dead) {
+      expect(e).toMatchObject({
+        lostBy: 'skill',
+        lostById: 'desk-idle',
+        wonBy: 'provider',
+        wonById: SELF_EXPLAIN_PACK_ID,
+      });
+    }
+    expect(obs.offWire).toEqual([]);
+  });
+
+  it('stepped skill: the report names the wire’s party on every epoch — never `provider(skill-scoped:self-explain)` (entry 5)', async () => {
+    const { obs } = await runWalkCase('framework/run_overview-vs-step-skill');
+    for (const epoch of [1, 2, 3, 4]) {
+      expect(wireContract(obs, epoch, 'run_overview'), `epoch ${epoch}`).toBe('step-skill');
+    }
+    expect(answerImpl(obs, 'e3:run_overview')).toBe('step-skill');
+    const reports = obs.shadowed.filter((e) => e.toolName === 'run_overview');
+    expect(reports.length).toBeGreaterThan(0);
+    for (const e of reports) {
+      expect(e).toMatchObject({
+        schemaFrom: 'skill',
+        schemaFromId: 'desk-stepped',
+        dispatchTo: 'skill',
+        dispatchToId: 'desk-stepped',
+      });
+      expect(e.schemaFromId).not.toBe(SELF_EXPLAIN_PACK_ID);
+    }
+    const dead = obs.swallowed.filter((e) => e.toolName === 'run_overview');
+    expect(dead.length).toBeGreaterThan(0);
+    for (const e of dead) {
+      expect(e).toMatchObject({ lostBy: 'provider', lostById: SELF_EXPLAIN_PACK_ID });
+      expect(e).toMatchObject({ wonBy: 'skill', wonById: 'desk-stepped' });
+    }
   });
 });
 

@@ -240,13 +240,18 @@ export interface ServedGap {
    *   excuse to grant — a checker that excused these would stop checking
    *   fields the record proves perfectly well.
    *
-   *   The qualifier is load-bearing and was missing until 9.88.0. Every view
-   *   carries `cache-transform`, including one that also carries
-   *   `no-fold-base`, where the rebuild does NOT agree: measured on a
-   *   base-less recording, the receipt said 27 system chars over 3 turns and
-   *   the rebuild produced 0 over 1. Read this entry as "up to the cache
-   *   strategy" and read the OTHER gaps on the view for whether the rebuild
-   *   got there at all.
+   *   The qualifier is load-bearing and was missing until 9.88.0. A view that
+   *   carries `cache-transform` may also carry `no-fold-base`, and there the
+   *   rebuild does NOT agree: measured on a base-less recording, the receipt
+   *   said 27 system chars over 3 turns and the rebuild produced 0 over 1.
+   *   Read this entry as "up to the cache strategy" and read the OTHER gaps on
+   *   the view for whether the rebuild got there at all.
+   *
+   *   Since 9.93.0 the entry is raised only where a strategy could have
+   *   rewritten anything: where the receipt names one (`cache.strategy`), or
+   *   where no receipt can say. A view whose receipt says `null` — `LLMCall`,
+   *   the message-API charts — does not carry it, because nothing stood
+   *   between assembly and the port for the caveat to be about.
    *
    * `provider-defaults`/`params` is the caveat kind too, and is the one field
    * read past the strategy: it describes the request the port really got, and
@@ -261,8 +266,9 @@ export interface ServedGap {
    * `system.hash` / `system.chars` are the view's `system.text`,
    * `messages.entries` / `messages.count` are its `messages.asSent`, and
    * `tools.schemaHashes` is its `tools.schemas`. The rest — `system.pieces`,
-   * `messages.requestOnly`, `tools.names`, `tools.forced`, `params`, `cache.*`
-   * — are spelled the same on both.
+   * `messages.requestOnly`, `tools.names`, `tools.forced`, `tools.withheld`,
+   * `params`, `cache.*`, `omittedForAttention` — are spelled the same on both,
+   * or exist on the receipt alone.
    *
    * THE ONE EXCEPTION is the epoch number, and it is an exception because the
    * two shapes do not hold one fact there: they hold two RECORDS of it that can
@@ -329,8 +335,31 @@ export const SERVED_GAPS: Readonly<Record<ServedGapKind, Omit<ServedGap, 'gap'>>
     // `prepareRequest` is handed the whole composed request after assembly and
     // hands one back; `buildReceipt` fingerprints the one it was GIVEN. So the
     // field list is everything a rewrite could have touched, not only the
-    // three `cache.*` fields that DESCRIBE the rewrite — listing those alone
-    // named the report and excused nothing it reports on.
+    // `cache.*` fields that DESCRIBE the rewrite — listing those alone named
+    // the report and excused nothing it reports on.
+    //
+    // THE RULE FOR THIS LIST is the request the strategy holds: `systemPrompt`
+    // (→ `system.*`), `messages` (→ `messages.*`), `tools` and `toolChoice`
+    // (→ every `tools.*` field). `tools.forced` and `tools.withheld` were
+    // missing until 9.93.0 (`recorded-not-built.md`, entry 7): `callLLM.ts`
+    // writes both from assembly's own decision — `deps.schemaTool?.name`,
+    // `scope.wrapUpAsked` — and never from `preparedRequest`, so a strategy
+    // that dropped the answer tool from `request.tools` or emptied the list
+    // would leave a receipt whose `forced`/`withheld` describe a request the
+    // port was not handed. `params` is the one field deliberately NOT here:
+    // it is read off `preparedRequest`, past the strategy.
+    //
+    // RAISED WHERE A STRATEGY COULD HAVE REWRITTEN (9.93.0, entry 8). Until
+    // this release `viewOf` pushed it unconditionally — including on charts
+    // that run no strategy at all — because `cache.transform: 'unchanged'`
+    // could not tell "a strategy returned what it was given" from "there was
+    // no strategy", and inferring the second from any other committed key is
+    // the absence-of-evidence reading this whole file refuses. The receipt
+    // now carries the fact (`cache.strategy`, `null` when none ran), so the
+    // condition is: raised when the receipt names a strategy, OR when there is
+    // no receipt to say — a pre-9.93.0 receipt, a receipt-less chart, a
+    // refused shape. Absent only where the record SAYS nothing stood between
+    // assembly and the port.
     //
     // THE DAY-ONE FALSEHOOD THIS ENTRY SHIPPED WITH, killed in 9.88.0's sixth
     // round: the printed sentence said "only its INPUTS are on the record".
@@ -342,16 +371,16 @@ export const SERVED_GAPS: Readonly<Record<ServedGapKind, Omit<ServedGap, 'gap'>>
     // the inputs). A sentence describing the mechanism went false about the
     // mechanism; the sentence below describes only what the fields MEAN.
     //
-    // This entry is on EVERY view, so it is the weakest claim on the list: it
-    // says the rebuild stops before whatever the request met next, never that
-    // the rebuild got that far. Whether it did is what the other gaps on the
-    // same view say — see the qualifier on `ServedGap.fields`.
+    // This entry is the weakest claim on the list wherever it appears: it says
+    // the rebuild stops before whatever the request met next, never that the
+    // rebuild got that far. Whether it did is what the other gaps on the same
+    // view say — see the qualifier on `ServedGap.fields`.
     //
-    // AND BEING ON EVERY VIEW IS WHY IT NO LONGER QUOTES `RECEIPT_BOUNDARY`
-    // (9.88.0, seventh round). That sentence opens "A receipt describes the
-    // request as this library last saw it" — and this entry is printed on views
-    // that have no receipt at all. Measured: a message-API chart run with no
-    // run id carries exactly
+    // AND BEING RAISED ON RECEIPT-LESS VIEWS IS WHY IT DOES NOT QUOTE
+    // `RECEIPT_BOUNDARY` (9.88.0, seventh round). That sentence opens "A
+    // receipt describes the request as this library last saw it" — and this
+    // entry is still printed on views that have no receipt at all. Measured: a
+    // message-API chart run with no run id carries exactly
     // `['no-receipt-on-chart', 'cache-transform']`, so the reader was told what
     // a receipt describes beside a view that has none. The boundary CLAIM is
     // not lost — the first sentence below is that claim in the vocabulary of a
@@ -361,6 +390,7 @@ export const SERVED_GAPS: Readonly<Record<ServedGapKind, Omit<ServedGap, 'gap'>>
       'cache.transform',
       'cache.transformHash',
       'cache.markersApplied',
+      'cache.strategy',
       'system.hash',
       'system.chars',
       'system.pieces',
@@ -369,6 +399,8 @@ export const SERVED_GAPS: Readonly<Record<ServedGapKind, Omit<ServedGap, 'gap'>>
       'messages.requestOnly',
       'tools.names',
       'tools.schemaHashes',
+      'tools.forced',
+      'tools.withheld',
     ]),
     why:
       'What reached the provider may differ from the fields below, and nothing on this view ' +
@@ -401,10 +433,10 @@ export const SERVED_GAPS: Readonly<Record<ServedGapKind, Omit<ServedGap, 'gap'>>
     // honestly can: it is pushed inside `if (receipt !== undefined)`, so a view
     // carrying it always has a receipt for that sentence to be about.
     // `cache-transform` quoted it too until 9.88.0's seventh round, and
-    // `cache-transform` is on every view — including the receipt-less ones,
-    // where the reader was told what a receipt describes beside a view that has
-    // none. Measured: a message-API chart run with no run id carries
-    // `no-receipt-on-chart` and `cache-transform`, and never this entry.
+    // `cache-transform` is raised on the receipt-less views — where the reader
+    // was told what a receipt describes beside a view that has none. Measured:
+    // a message-API chart run with no run id carries `no-receipt-on-chart` and
+    // `cache-transform`, and never this entry.
     fields: Object.freeze(['params']),
     why:
       'A dial absent below was not recorded; that is not the same as the model running ' +
@@ -527,11 +559,19 @@ export const SERVED_GAPS: Readonly<Record<ServedGapKind, Omit<ServedGap, 'gap'>>
     //   • `basis.epoch` JOINED the list. It is a receipt-only field like the
     //     other three on `basis`, and with no receipt it is gone with them. It
     //     used to be named by `no-fold-base` alone, which cannot touch it.
-    //   • `omittedForAttention` LEFT it. It is absent on EVERY view, receipt or
-    //     not — no chart IN THIS LIBRARY supplies it — so a gap about the
+    //   • `omittedForAttention` LEFT it. It was absent on EVERY view, receipt
+    //     or not — no chart IN THIS LIBRARY supplied it — so a gap about the
     //     missing receipt was explaining an absence it does not cause, and on a
-    //     view that HAS a receipt nothing explained it at all. It is in
-    //     `UNGAPPED_FIELDS` now, with the reason that is actually true of it.
+    //     view that HAS a receipt nothing explained it at all. It went to
+    //     `UNGAPPED_FIELDS` with the reason that was true of it then.
+    //   • …AND CAME BACK in 9.93.0, because the measurement behind that reason
+    //     was incomplete: the agent chart's WINDOW STAGE drops turns for budget
+    //     on every run whose strategy engages, and since 9.93.0 it hands them
+    //     to the mint (`window/evictedTurns.ts`). The field is value-
+    //     conditional — absent when nothing was dropped before the call — and
+    //     the one thing that can lose a recorded drop is losing the receipt,
+    //     which is this gap. `cache.strategy` joined for the same reason: a
+    //     receipt-only fact, gone with the receipt.
     //
     // AND THE SEVENTH ROUND SCOPED THE PRINTED CLAIM TO THE LEVEL IT HOLDS AT.
     // It said the absence of these fields is "a gap in the record, never a call
@@ -552,6 +592,8 @@ export const SERVED_GAPS: Readonly<Record<ServedGapKind, Omit<ServedGap, 'gap'>>
       'cache.transform',
       'cache.transformHash',
       'cache.markersApplied',
+      'cache.strategy',
+      'omittedForAttention',
     ]),
     why:
       'Nothing on this view has been checked against what went out. Every field below is ' +
@@ -624,19 +666,23 @@ export const SERVED_GAPS: Readonly<Record<ServedGapKind, Omit<ServedGap, 'gap'>>
  * reviewable as adding one to a gap, and that is the point: both are a claim
  * somebody wrote down.
  *
- * TWO reasons qualify, and they are not the same reason:
+ * TWO reasons qualified when this list was written, and one of them has since
+ * emptied out:
  *
  *   • NO FOLD CAN FAIL TO PRODUCE IT — the field is read straight off the
  *     located epoch, never through a fold. `callRuntimeStageId` is this kind.
  *   • ITS ABSENCE IS UNIVERSAL AND HAS NOTHING TO DO WITH THIS RECORDING — no
  *     chart IN THIS LIBRARY supplies it, on any run, so no gap about a limit of
- *     the rebuild describes it. `omittedForAttention` is this kind, and it was
- *     inside `no-receipt-on-chart` until 9.88.0's fourth review round, where a
- *     gap that fires on some views was carrying an absence that is on all of
- *     them. The narrowing to THIS LIBRARY is load-bearing: `buildReceipt` is a
- *     pure exported mint, so a consumer that calls it can hand it the fact, and
- *     a sentence saying no chart anywhere supplies one would be false the day
- *     somebody did.
+ *     the rebuild describes it. `omittedForAttention` WAS this kind from
+ *     9.88.0's fourth review round to 9.93.0, and is not any more: the
+ *     measurement it rested on ("no chart drops for attention") had missed the
+ *     agent chart's window stage, which evicts turns for budget on every run
+ *     whose strategy engages and now files them on the receipt. A recorded
+ *     drop can be lost in exactly one way — with the receipt — so the field is
+ *     named by `no-receipt-on-chart` and is not here. The kind is kept on this
+ *     list because the next universally-absent field will need it, and because
+ *     a reason that was true for five releases and then measured false is
+ *     worth a sentence where the next person looks.
  *
  * A field a gap DOES name never belongs here, whatever else is also true of it.
  * `epoch` was a key here through three rounds, on the true-but-irrelevant
@@ -644,10 +690,9 @@ export const SERVED_GAPS: Readonly<Record<ServedGapKind, Omit<ServedGap, 'gap'>>
  * what that number MEANS, `servedViews()` returns the fold's number outright,
  * and `no-fold-base` names it now.
  *
- * Paths are spelled as they are on the shape that HAS the field: `ServedView`
- * for a view field, `Receipt` for `omittedForAttention`, which is a receipt
- * field the view has no counterpart for. Gap `fields` are spelled as `Receipt`
- * paths — see {@link ServedGap.fields} for the places the two shapes differ.
+ * Paths are spelled as they are on the shape that HAS the field — both keys
+ * here are `ServedView` fields. Gap `fields` are spelled as `Receipt` paths —
+ * see {@link ServedGap.fields} for the places the two shapes differ.
  *
  * @example
  * ```ts
@@ -659,18 +704,6 @@ export const SERVED_GAPS: Readonly<Record<ServedGapKind, Omit<ServedGap, 'gap'>>
  * ```
  */
 export const UNGAPPED_FIELDS: Readonly<Record<string, string>> = Object.freeze({
-  // MECHANISM (not printed). `Receipt.omittedForAttention` is written from
-  // `buildReceipt`'s `omittedForAttention` input, and measured on 9.88.0 no
-  // chart in this library ever supplies it: no boundary bubbles
-  // `slotCompositions` out of the slot subflow that writes it, so request
-  // assembly has nothing to pass. Its absence is therefore universal and has
-  // nothing to do with any one recording — which is why it is here and not
-  // inside `no-receipt-on-chart`, where it sat until 9.88.0's fourth round.
-  // `buildReceipt` is a pure exported mint, so a CONSUMER that calls it can
-  // hand it the fact; the narrowing to THIS LIBRARY is what keeps that true.
-  omittedForAttention:
-    'Absent means nobody recorded a drop, never that nothing was dropped. No limit of this ' +
-    'rebuild explains it, so no gap names it.',
   // MECHANISM (not printed). Read straight off `EpochLocation.callRuntimeStageId`,
   // which `epochAt` takes from the call's own commit bundle — never through
   // `keyedFold`, so no missing base and no missing run log can touch it. An
@@ -704,7 +737,7 @@ export const UNGAPPED_FIELDS: Readonly<Record<string, string>> = Object.freeze({
  * view.messages.asSent.length; // the turns that went out
  * view.tools.names;            // including a forced answer tool
  * view.basis?.model;           // which model saw it
- * view.gaps.map((g) => g.gap); // ['cache-transform', 'provider-defaults']
+ * view.gaps.map((g) => g.gap); // ['cache-transform', 'provider-defaults'] on an agent
  * ```
  */
 export interface ServedView {
@@ -1000,7 +1033,14 @@ function viewOf(location: EpochLocation): ServedView {
   // committed" from "something was, and it is not a receipt". The gap's
   // sentence says neither — see {@link ServedGap.cause}.
   if (read.receipt === undefined) gaps.push(gapOf('no-receipt-on-chart', read.cause));
-  gaps.push(gapOf('cache-transform'));
+  // A rewrite is possible only where a strategy stood between assembly and
+  // the port. The receipt says whether one did (`cache.strategy`, 9.93.0);
+  // with no receipt, or a receipt minted before the field existed, the record
+  // cannot rule one out and the gap stays — the "you cannot tell" declaration,
+  // never an inference from absence. Only a receipt that SAYS `null` lifts it.
+  if (receipt === undefined || receipt.cache.strategy !== null) {
+    gaps.push(gapOf('cache-transform'));
+  }
   if (receipt !== undefined) gaps.push(gapOf('provider-defaults'));
   if (forced !== undefined) gaps.push(gapOf('forced-tool-schema'));
 

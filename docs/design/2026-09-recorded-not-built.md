@@ -3,7 +3,12 @@
 > **2026-09-11 (9.92.0):** entries 1, 2 and 3, the `claim-swallowed` bullet
 > under entry 1, and the 9.91.0 tools-slot follow-up are **BUILT** — see
 > `docs/design/2026-09-the-offer-and-the-answer.md` and the marks on each entry
-> below. Entries 4–10 stand as recorded.
+> below.
+>
+> **2026-09-11 (9.93.0):** entries 4 and 5 are **BUILT BY 9.92.0's LAW**, verified
+> against the 9.92.1 dist and pinned; entries 7, 8 and 9 are **BUILT**; entry 10 is
+> **ASSESSED**, its mechanical half built and its other half named. Entry 6 stands
+> as recorded. Each mark is on its entry.
 
 Ten things are **real, reproduced, and deliberately not fixed here** — five
 found by the tool-divergence walk, one (entry 6) found from the other side while
@@ -440,6 +445,47 @@ and `:720-737` in entry 2, is at `:743-762` here. Entry 4's table cited
 
 ## 4. `.selfExplain()` reserves its tool names against nothing a skill can hold
 
+> **Built in 9.92.1 (verified 2026-09-11).** Not by a fix of its own: the
+> 9.92.0 law — dispatch follows the offer, a dead claim is reported by name —
+> closes every cell below, and the reservation this entry names is deliberately
+> UNTOUCHED (all three configurations still build). Re-driven verbatim against
+> the 9.92.1 `dist` before anything in 9.93.0 was edited; pinned as
+> `test/core/tools/offer-and-answer.test.ts` §7:
+>
+> ```
+> framework/run_overview-vs-skill-static
+> epoch 1..3  wire[run_overview] = "run_overview tool [contract:skill-static]"
+> answer  e2:run_overview -> "run_overview ran [impl:skill-static]"
+> tools.shadowed        2x {schemaFrom:skill/desk-static, dispatchTo:skill/desk-static}
+> tools.claim_swallowed 2x {lostBy:provider/skill-scoped:self-explain, wonBy:skill/desk-static}
+>
+> framework/run_overview-vs-skill-inactive
+> epoch 1     wire[run_overview] = ABSENT
+> epoch 2..3  wire[run_overview] = "Start here. One bounded summary of the completed run…"
+> answer  e2:run_overview -> "No completed run is available yet — …"   (the framework's own tool)
+> tools.shadowed        0x
+> tools.claim_swallowed 2x {lostBy:skill/desk-idle, wonBy:provider/skill-scoped:self-explain}
+>
+> framework/run_overview-vs-step-skill
+> epoch 1..4  wire[run_overview] = "[…] run_overview tool [contract:step-skill]"
+> answer  e3:run_overview -> "run_overview ran [impl:step-skill]"
+> tools.shadowed        2x {schemaFrom:skill/desk-stepped, dispatchTo:skill/desk-stepped}
+> tools.claim_swallowed 2x {lostBy:provider/skill-scoped:self-explain, wonBy:skill/desk-stepped}
+> ```
+>
+> The worse half — a skill offered on no epoch answering the framework's own
+> contract — no longer happens: the framework's trace tool answers its own
+> contract and the idle skill is the named loser. The always-visible and stepped
+> cells still route `run_overview` to the skill, exactly as the model was
+> offered it, and the framework's pack is the named loser on every epoch it
+> lost. What is DELIBERATELY still true: the self-explain body still tells the
+> model to start with a tool the framework does not own in those two cells (the
+> "not mounting the body for a name it lost" option below is unbuilt), and the
+> framework's pack is named by its implementation id on the provider channel it
+> rides (`provider` / `skill-scoped:self-explain`), not by the word `framework`
+> — the walk's `claims` map declares exactly that. Four baseline rows carry the
+> cells as `claim-swallowed`, reported.
+
 **The reproduction.** Three cells, one shape: a consumer skill declares a tool
 named `run_overview`, and the agent calls `.selfExplain()`. Every one of them
 builds. Each block below is a real run — the framework's trace pack stamps no
@@ -547,6 +593,20 @@ tool that simply returned something unexpected.
 ---
 
 ## 5. A misattributed report can now name the framework's own provider
+
+> **Built in 9.92.1 (verified 2026-09-11).** Entry 2's fix, as predicted: the
+> report's subject is the wire. Measured on the 9.92.1 `dist` (entry 4's third
+> block above): both `tools.shadowed` events on
+> `framework/run_overview-vs-step-skill` read `schemaFrom: 'skill'`,
+> `schemaFromId: 'desk-stepped'`, `dispatchTo: 'skill'`,
+> `dispatchToId: 'desk-stepped'` — the party the wire carried, never
+> `provider(skill-scoped:self-explain)`. The open question below ("may
+> `schemaFromId` name a framework-internal provider at all?") was answered by
+> the build in the diagnostic direction: the internal id appears, but on
+> `tools.claim_swallowed` as the LOSER (`lostById: 'skill-scoped:self-explain'`),
+> where it is the half a reader needs — which pack lost — and never as the
+> shadowing party. Pinned in `test/core/tools/offer-and-answer.test.ts` §7,
+> which asserts `schemaFromId` is not the pack's id on any epoch.
 
 **The reproduction.** A stepped skill declares a tool named `run_overview`; the
 agent calls `.selfExplain()`; the model activates the procedure, then activates
@@ -734,6 +794,24 @@ here instead of in the diff.
 
 ## 7. `cache-transform` does not name `tools.forced` or `tools.withheld`
 
+> **Built in 9.93.0 (2026-09-11).** The list is now the rule it stated:
+> everything the strategy holds — `system.*`, `messages.*`, every `tools.*`
+> field, and the four `cache.*` fields that describe the rewrite (the fourth,
+> `cache.strategy`, is entry 8's). `params` alone stays off it, read past the
+> strategy. The measurement the entry asked for was taken by driving it: a
+> strategy that strips the forced answer tool from `request.tools` and the
+> forcing from `toolChoice` on a `'tool-forced'` agent leaves the wire with no
+> tool and no forcing while the receipt says `tools.forced:
+> 'respond_with_schema'` and `params.toolChoice` absent — the two halves of one
+> fact disagreeing on one receipt, as predicted — and `cache-transform` now
+> names the half that describes the decision
+> (`receipt-conformance.test.ts` · "a strategy that drops the forced answer
+> tool"). The other option — reading `forced`/`withheld` off `preparedRequest`
+> — was NOT taken: those two fields record what assembly DECIDED, and a
+> receipt that quietly switched them to the wire would describe a different
+> fact under the same name. `gap-catalogue-walk.test.ts` proves coverage and
+> resolution on real views; the two doc tables restate the list.
+
 **The reproduction.** `servedView.ts` · `SERVED_GAPS['cache-transform'].fields`
 names eleven fields: the three `cache.*` that describe the rewrite, plus the
 composition it was handed — `system.hash/chars/pieces`,
@@ -769,6 +847,29 @@ today is a consumer's own strategy.
 ---
 
 ## 8. `cache-transform` is raised on every view, including charts with no strategy
+
+> **Built in 9.93.0 (2026-09-11)** — by committing the fact this entry said a
+> conditional raise would need. `Receipt.cache.strategy` (`string | null`) is
+> the `providerName` of the strategy the request went through (`'*'` for the
+> built-in pass-through every agent runs), and `null` where none stood between
+> assembly and the port — `LLMCall`, `buildMessageApiChart`,
+> `buildAgentMessageApiChart`, each saying so at its own mint. One owner,
+> `buildReceipt`, which refuses to mint without the answer. `viewOf` raises
+> the gap when the receipt names a strategy OR when no receipt can say — a
+> receipt-less view, a receipt minted before the field existed (no key ≠
+> `null`), a refused shape — and lifts it only where the record SAYS `null`.
+> That is not the inference this entry refused: absence still raises. Measured:
+> an `LLMCall` view and both message-API views with a run id read
+> `['provider-defaults']`; the receipt-less message-API view still reads
+> `['no-receipt-on-chart', 'cache-transform']`, which is honest there because a
+> consumer's own `call-llm` stage or a `recordReceipt: false` agent leaves the
+> same record and may well have run one. No fourth `transform` value was added
+> (9.91.0's reasoning stands: `'unchanged'` is true); the conformance law now
+> checks the trivial verdict outright where `strategy` is `null`. The printed
+> sentence did not change and every clause of it still holds where it is
+> printed. Byte-identity: the served view of every agent fixture changed only
+> in the gap's `fields` list, and the three no-strategy fixtures only in
+> losing the gap.
 
 > **Its reproduction moved in 9.91.0 (2026-09-10); the defect did not.** The
 > three charts that served a model and minted nothing now mint (see the
@@ -818,6 +919,36 @@ really is short.
 
 ## 9. A slot's attention drops never reach the receipt
 
+> **Built in 9.93.0 (2026-09-11) — and the premise below was wrong.** The
+> entry, the receipt's first law, `UNGAPPED_FIELDS` and both doc tables all
+> said no chart in this library drops content for attention. Re-measured
+> before building: the SLOTS drop nothing (every `composeSlot` call passes no
+> `dropped`; `slotOverflow` answers `planAction: 'none'`); placement STAGES an
+> oversized result behind a reference the model can follow, which is not a
+> drop; the two message-API charts have no window at all; and the AGENT
+> chart's window stage (`stages/window.ts`) evicts turns with
+> `reason: 'budget'` on every run whose strategy engages — `keepRecentTurns:
+> 1`, four tool calls, `compactions` recording `removedMessageCount: 2` at
+> iterations 3, 4 and 5 — and every one of those receipts read
+> `omittedForAttention: undefined`. A shipped chart drops for attention and
+> never wrote the field.
+>
+> The fix is NOT the outputMapper change predicted below, because the drop is
+> not in a slot subflow: the window stage runs on the main chart, at the loop
+> head, before that iteration's call. It hands what left to the call-llm mint
+> on an in-memory handle (`window/evictedTurns.ts`, keyed by iteration —
+> the seam the compaction meter already crosses), never through scope: a
+> tracked read of `compactions` from `call-llm` would be the phantom-source
+> defect this entry records for `slotCompositions`, on every windowless run.
+> `buildReceipt` hashes each evicted turn with `messageDigestInput` — the
+> turn's own `messages.entries[].hash` — so a drop on epoch k's receipt pairs
+> with the turn as an earlier epoch served it: the PAIRING LAW, driven on a
+> real sliding window in `receipt-conformance.test.ts` ("a window that evicts
+> turns for budget"). The field left `UNGAPPED_FIELDS` and is named by
+> `no-receipt-on-chart`, the one gap that can lose it; absent now means
+> nothing was dropped before that call. Agents without a window hand the stage
+> the deps object they always did — byte-identical.
+
 **The reproduction.** `Receipt.omittedForAttention` is declared, documented, and
 supplied by no chart IN THIS LIBRARY — measured on 9.88.0 across both shapes,
 and the walk re-takes that measurement on every run. It is a key of
@@ -855,6 +986,38 @@ nobody recorded a drop, never that nothing was dropped.
 ---
 
 ## 10. An assertion can be weaker than the clause it checks
+
+> **Assessed 2026-09-11 (9.93.0): split in two, one half built.** "Weaker than
+> the clause" turns out to be two different failures, and only one of them has
+> a mechanical shape:
+>
+> - **An assertion that does not depend on the field its clause is about** —
+>   BUILT. Every clause in `gap-sentences.test.ts` now declares the fields it
+>   is about (`Clause.fields`, as `view:<path>` / `receipt:<path>`); every read
+>   a clause makes goes through a seam that can hand it a detached view or
+>   receipt with one declared field ALTERED (a different value of the same
+>   kind) or REMOVED; and a contract arms each declared field in turn and
+>   requires the clause's assertion to fail under at least one. A clause
+>   about the catalogue itself (which gap names which field) declares none and
+>   carries `aboutTheCatalogue` beside `gaps`'s `aboutTheAccount`; the
+>   contract refuses an undeclared clause. No clause was added or rewritten by
+>   hand. The first run of the contract found one insensitivity: the
+>   `no-receipt-on-chart` opening clause declared `receipt:basis` on a run that
+>   has no receipt to mutate and stayed green; it is bound to `view:basis` and
+>   `view:gaps.cause` now, with `view.basis` asserted absent under both causes.
+>   Cost: under a day, as the brief allowed. What it proves: an assertion
+>   checks the field it says it checks. What it does not prove: enough runs.
+> - **An assertion that checks the right field on fewer runs than the clause
+>   quantifies over** — NOT BUILT, and not by a generic mechanism. The three
+>   instances below are all this kind ("four, here" vs "every, always"; one
+>   pairing vs every co-present gap; one chart shape vs both). Each needs its
+>   own wider run — iterate the gap's whole field list on the damaged view;
+>   drive every co-present gap pairing; drive the second chart shape — and
+>   that is per-clause hand-work, which is exactly what the brief said not to
+>   do here and what a mutation cannot substitute for. The honest statement
+>   stands: a claim's quantifier is checked by a person reading the assertion
+>   against the clause. It is now the WHOLE of the blind spot rather than the
+>   larger part of it.
 
 **The reproduction.** `test/lib/time-travel/gap-sentences.test.ts` binds every
 printed gap sentence to a run: each sentence is decomposed into quoted clauses,

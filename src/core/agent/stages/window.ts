@@ -58,6 +58,7 @@ import { removalFacts } from '../window/removal.js';
 import type { WindowStrategy } from '../window/strategy.js';
 import { answeredCallIds, planRemoval, segmentTurns, type RemovalGuards } from '../window/turns.js';
 import { droppedToolNames } from '../window/toolNames.js';
+import type { EvictedTurnsHandle } from '../window/evictedTurns.js';
 import type { FoldedSpan, WindowObservations, WindowRecord } from '../window/types.js';
 import type { AgentState } from '../types.js';
 
@@ -93,6 +94,13 @@ export interface WindowStageDeps {
   readonly keepLastToolResults?: number | false;
   /** Injectable clock (tests pin survivalMs). */
   readonly now?: () => number;
+  /**
+   * Where this visit's evictions are filed for the receipt (9.93.0) — read by
+   * the call-llm mint in the same iteration, never through scope
+   * (`window/evictedTurns.ts` says why). Attached by `Agent.createExecutor`
+   * beside the meter; absent under a test that builds the stage alone.
+   */
+  readonly evictedTurns?: EvictedTurnsHandle;
 }
 
 /**
@@ -225,8 +233,13 @@ export function buildWindowStage(
     });
 
     // `undefined` = this strategy did not engage this iteration. Nothing to
-    // apply, nothing to record — the ledger tracks what a strategy DID.
-    if (result === undefined) return;
+    // apply, nothing to record — the ledger tracks what a strategy DID. The
+    // receipt's seam is still told "nothing left", so this visit stands on
+    // its own rather than on whatever the previous one filed.
+    if (result === undefined) {
+      deps.evictedTurns?.file(iteration, []);
+      return;
+    }
 
     // ── Apply. The stage owns every side effect. ─────────────────────
     if (result.window !== undefined && result.rebase !== undefined) {
@@ -250,6 +263,12 @@ export function buildWindowStage(
     const evicted = result.evictions
       .map((e) => history[e.index])
       .filter((m): m is LLMMessage => m !== undefined);
+    // The same turns, handed to this iteration's receipt (9.93.0): the mint
+    // hashes each one as `messages.entries` hashed it when it was served, so
+    // a drop on epoch k's receipt pairs with the turn on an earlier epoch's.
+    // Filed even when empty, so a stale entry from a visit that removed
+    // something cannot outlive the visit that removed nothing.
+    deps.evictedTurns?.file(iteration, evicted);
     const droppedObservations = droppedToolNames(evicted, history);
     // A stand-down is a decision, so it is filed even though it kept nothing.
     const observations: WindowObservations | undefined = standDown

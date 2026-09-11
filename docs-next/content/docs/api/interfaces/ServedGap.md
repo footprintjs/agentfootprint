@@ -15,7 +15,7 @@ One named limit on the rebuild, with the fields it covers — a hole the log
 
 > `readonly` `optional` **cause?**: [`ServedGapCause`](/docs/api/type-aliases/ServedGapCause)
 
-Defined in: [src/lib/time-travel/servedView.ts:318](https://github.com/footprintjs/agentfootprint/blob/main/src/lib/time-travel/servedView.ts#L318)
+Defined in: [src/lib/time-travel/servedView.ts:324](https://github.com/footprintjs/agentfootprint/blob/main/src/lib/time-travel/servedView.ts#L324)
 
 WHY this gap fired, where the site could establish it — [ServedGapCause](/docs/api/type-aliases/ServedGapCause).
 
@@ -30,7 +30,7 @@ would be the enumeration coming back as a field.
 
 > `readonly` **fields**: readonly `string`[]
 
-Defined in: [src/lib/time-travel/servedView.ts:282](https://github.com/footprintjs/agentfootprint/blob/main/src/lib/time-travel/servedView.ts#L282)
+Defined in: [src/lib/time-travel/servedView.ts:288](https://github.com/footprintjs/agentfootprint/blob/main/src/lib/time-travel/servedView.ts#L288)
 
 The fields this gap covers, in dotted `Receipt` form. A reader that
 renders one of them should render this gap's sentence beside it.
@@ -51,13 +51,18 @@ will draw a wrong conclusion in one direction or the other:
   excuse to grant — a checker that excused these would stop checking
   fields the record proves perfectly well.
 
-  The qualifier is load-bearing and was missing until 9.88.0. Every view
-  carries `cache-transform`, including one that also carries
-  `no-fold-base`, where the rebuild does NOT agree: measured on a
-  base-less recording, the receipt said 27 system chars over 3 turns and
-  the rebuild produced 0 over 1. Read this entry as "up to the cache
-  strategy" and read the OTHER gaps on the view for whether the rebuild
-  got there at all.
+  The qualifier is load-bearing and was missing until 9.88.0. A view that
+  carries `cache-transform` may also carry `no-fold-base`, and there the
+  rebuild does NOT agree: measured on a base-less recording, the receipt
+  said 27 system chars over 3 turns and the rebuild produced 0 over 1.
+  Read this entry as "up to the cache strategy" and read the OTHER gaps on
+  the view for whether the rebuild got there at all.
+
+  Since 9.93.0 the entry is raised only where a strategy could have
+  rewritten anything: where the receipt names one (`cache.strategy`), or
+  where no receipt can say. A view whose receipt says `null` — `LLMCall`,
+  the message-API charts — does not carry it, because nothing stood
+  between assembly and the port for the caveat to be about.
 
 `provider-defaults`/`params` is the caveat kind too, and is the one field
 read past the strategy: it describes the request the port really got, and
@@ -72,8 +77,9 @@ the fields. Three spellings differ and a renderer has to map them:
 `system.hash` / `system.chars` are the view's `system.text`,
 `messages.entries` / `messages.count` are its `messages.asSent`, and
 `tools.schemaHashes` is its `tools.schemas`. The rest — `system.pieces`,
-`messages.requestOnly`, `tools.names`, `tools.forced`, `params`, `cache.*`
-— are spelled the same on both.
+`messages.requestOnly`, `tools.names`, `tools.forced`, `tools.withheld`,
+`params`, `cache.*`, `omittedForAttention` — are spelled the same on both,
+or exist on the receipt alone.
 
 THE ONE EXCEPTION is the epoch number, and it is an exception because the
 two shapes do not hold one fact there: they hold two RECORDS of it that can
@@ -104,7 +110,7 @@ Defined in: [src/lib/time-travel/servedView.ts:222](https://github.com/footprint
 
 > `readonly` **why**: `string`
 
-Defined in: [src/lib/time-travel/servedView.ts:309](https://github.com/footprintjs/agentfootprint/blob/main/src/lib/time-travel/servedView.ts#L309)
+Defined in: [src/lib/time-travel/servedView.ts:315](https://github.com/footprintjs/agentfootprint/blob/main/src/lib/time-travel/servedView.ts#L315)
 
 The gap in the words a renderer prints — WHICH FIELDS it covers, WHAT THEY
 MEAN ON THIS VIEW, WHAT TO DO DIFFERENTLY, and nothing else.

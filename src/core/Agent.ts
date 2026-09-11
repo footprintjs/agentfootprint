@@ -79,6 +79,7 @@ import { reliabilityRecorder } from '../recorders/core/ReliabilityRecorder.js';
 import { resilienceRecorder } from '../recorders/core/ResilienceRecorder.js';
 import { checkInEventsBridge } from '../recorders/core/CheckInRecorder.js';
 import { compactionMeter, type CompactionMeterHandle } from '../recorders/core/CompactionMeter.js';
+import { createEvictedTurnsHandle, type EvictedTurnsHandle } from './agent/window/evictedTurns.js';
 import { pendingDurableWrite } from './durabilityBarrier.js';
 import {
   ToolSessionTier,
@@ -455,6 +456,10 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
   /** The instrument the window stage reads mid-run (adapter-reported usage +
    *  per-message provenance). Only ever created alongside a strategy. */
   private readonly compactionMeterHandle?: CompactionMeterHandle;
+  /** The window stage's seam to the receipt (9.93.0): what left the window at
+   *  this iteration's head, read by the call-llm mint in the same iteration.
+   *  Only ever created alongside a strategy, like the meter. */
+  private readonly evictedTurnsHandle?: EvictedTurnsHandle;
   /** Snapshot read-tracking policy (#18/#14) — forwarded to the internal
    *  executor. Agent default is `'summary'` (cheap markers), NOT
    *  footprintjs's `'full'`. See AgentOptions.readTracking. */
@@ -873,6 +878,7 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
     if (windowStrategy !== undefined) {
       this.windowStrategy = windowStrategy;
       this.compactionMeterHandle = compactionMeter();
+      this.evictedTurnsHandle = createEvictedTurnsHandle();
     }
     // The two governance chains. Empty arrays (not undefined) so every read
     // site is a plain `.length > 0` test rather than an optional dance.
@@ -2598,6 +2604,9 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
     // `conversationId` is deliberately not carried: it is a thread, not a
     // person, and `sessionId` beside it is the fact the transport delivered.
     const actor = runOptions?.identity ?? this.lastRunIdentity;
+    // A fresh run starts with no evictions filed — the previous run's last
+    // visit must not be read as this run's (`window/evictedTurns.ts`).
+    this.evictedTurnsHandle?.clear();
     this.currentRunContext = {
       runStartMs: Date.now(),
       runId: makeRunId(),
@@ -3701,6 +3710,9 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
       // …and its off switch. Value-conditional, so an agent on the default
       // hands `callLLM` exactly the dep bag it always did.
       ...(this.recordReceiptValue === false && { recordReceipt: false }),
+      // …and the window's evictions for `omittedForAttention` (9.93.0) — only
+      // an agent with a window strategy has any, and only it hands the seam.
+      ...(this.evictedTurnsHandle !== undefined && { evictedTurns: this.evictedTurnsHandle }),
       provider,
       model,
       ...(temperature !== undefined && { temperature }),
@@ -3777,6 +3789,9 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
             run: buildWindowStage({
               strategy: this.windowStrategy,
               meter: this.compactionMeterHandle,
+              ...(this.evictedTurnsHandle !== undefined && {
+                evictedTurns: this.evictedTurnsHandle,
+              }),
               agentModel: model,
               providerName: provider.name,
               getRunId: () => this.currentRunContext?.runId,

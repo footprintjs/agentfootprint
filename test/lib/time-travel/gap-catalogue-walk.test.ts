@@ -29,12 +29,13 @@
  *     to leaf paths (`system.chars`, `messages.count`, `params.maxTokens`, …),
  *     descending into any interface DECLARED IN THOSE TWO FILES and stopping at
  *     anything else — an `LLMMessage` is somebody else's shape, and the
- *     catalogue names the container that holds it. This half sees a field no
- *     run produces: `omittedForAttention` is on the shape and, measured, no
- *     chart supplies it.
- *   • AT RUNTIME, from real runs. Five agents are driven by a real provider
+ *     catalogue names the container that holds it. This half would see a
+ *     field no run produces: `omittedForAttention` was that field until 9.93.0,
+ *     when the window stage started supplying it.
+ *   • AT RUNTIME, from real runs. Seven runs are driven by a real provider
  *     stub — tools and dials, a wrap-up call that withholds every tool, a
- *     tool-forced output, a staged-refs nudge, an `LLMCall` chart — and the
+ *     tool-forced output, a staged-refs nudge, an `LLMCall` chart, a receipt-
+ *     less chart, a windowed agent that evicts for budget — and the
  *     receipts and views they actually produce are walked to leaf paths. This
  *     half sees a field the static walk mis-read, and it is what turns the
  *     static list from a claim about the source into a fact about the values.
@@ -112,14 +113,15 @@
  *
  *   no-fold-base                 7 of 11 named fields move
  *   no-conversation-on-record    3 of 3
- *   no-receipt-on-chart          3 of 8
+ *   no-receipt-on-chart          3 of 10
  *   no-run-log                   1 of 4
  *
  * `no-conversation-on-record` is the only row that reaches every field its gap
  * names, and it is also the shortest list. The rest are PARTIAL for structural
  * reasons rather than for want of a better damage: a receipt-only field
  * (`params`, `cache.*`, `basis.epoch`) never appears on a view at all, so
- * removing the receipt cannot MOVE it; `tools.forced` and `tools.withheld` need
+ * removing the receipt cannot MOVE it — `omittedForAttention` and
+ * `cache.strategy` joined that list in 9.93.0; `tools.forced` and `tools.withheld` need
  * a forced output and a wrap-up call, and none of these runs is either;
  * `no-fold-base`'s `epoch` needs a recording whose `iteration` writes are gone
  * TOO, which `receipt-conformance.test.ts` constructs and this damage does not;
@@ -209,6 +211,7 @@ import {
   receiptAt,
   servedAt,
   servedViews,
+  slidingWindow,
   RECEIPT_BOUNDARY,
   SERVED_GAPS,
   UNGAPPED_FIELDS,
@@ -507,7 +510,36 @@ async function realRuns(): Promise<readonly Walked[]> {
   // unsalted fingerprints.
   collect(await receiptlessRun());
 
+  // (g) a WINDOWED agent whose sliding window evicts turns for budget — the
+  // one shipped mechanism that drops content for attention, and since 9.93.0
+  // the one that supplies `omittedForAttention`.
+  collect(await windowedRun());
+
   return walked;
+}
+
+/**
+ * THE RUN THAT DROPS. Four tool calls under `keepRecentTurns: 1`: from the
+ * third iteration's head on, the window evicts the previous turn's call and
+ * result, and that iteration's receipt carries their hashes.
+ */
+async function windowedRun(): Promise<unknown> {
+  const agent = Agent.create({
+    provider: scripted([
+      call('c1', 'alpha_tool'),
+      call('c2', 'alpha_tool'),
+      call('c3', 'alpha_tool'),
+      answer('done'),
+    ]) as never,
+    model: 'mock',
+    maxIterations: 8,
+  })
+    .system('bot')
+    .tool(aTool('alpha_tool'))
+    .window(slidingWindow({ keepRecentTurns: 1 }))
+    .build();
+  await agent.run({ message: 'go' });
+  return agent.getSnapshot()!;
 }
 
 /** Leaf paths of a real value, array indices flattened away. */
@@ -592,13 +624,14 @@ const WALK_BUDGET = { timeout: 60_000 };
 // ─── Unit: the enumerations themselves ───────────────────────────────────
 
 describe('the field list is derived, not written down', () => {
-  it('the declarations expand to leaf paths, including one no run produces', () => {
+  it('the declarations expand to leaf paths, value-conditional ones included', () => {
     const paths = RECEIPT_FIELDS.map((f) => f.path);
     // A spot check that the expander really descends: three levels, an
-    // interface reference, and an optional the shape carries but no chart
-    // supplies (receipt.ts says so in its own first law).
+    // interface reference, and an optional only a windowed run supplies
+    // (`omittedForAttention`, filed by the window stage since 9.93.0).
     expect(paths).toContain('system.pieces.slot');
     expect(paths).toContain('cache.markersApplied.ttl');
+    expect(paths).toContain('cache.strategy');
     expect(paths).toContain('params.maxTokens');
     expect(paths).toContain('omittedForAttention.hashes');
     expect(paths).toContain('basis.epoch');
@@ -670,6 +703,8 @@ describe('the field list is derived, not written down', () => {
       'tools.withheld',
       'tools.forced',
       'basis.runId',
+      'cache.strategy',
+      'omittedForAttention.hashes',
     ]) {
       expect(produced, `no scenario produced ${path}`).toContain(path);
     }
@@ -725,42 +760,51 @@ describe('every field of a Receipt and a ServedView is accounted for', () => {
     expect(coveredBy(UNGAPPED, 'epoch')).toBe(false);
   });
 
-  it('omittedForAttention is excused, not blamed on the missing receipt', () => {
-    // It is absent on EVERY view — no chart in this library supplies it — so a
-    // gap that fires on SOME views cannot be what explains it, and on a view
-    // that HAS a receipt nothing explained it at all.
-    expect(SERVED_GAPS['no-receipt-on-chart'].fields).not.toContain('omittedForAttention');
-    expect(UNGAPPED_FIELDS['omittedForAttention']).toBeDefined();
-    expect(coveredBy(GAPPED, 'omittedForAttention')).toBe(false);
+  it('omittedForAttention is named by the gap that can lose it, and excused by nothing (9.93.0)', () => {
+    // It sat in UNGAPPED_FIELDS from 9.88.0's fourth round on the ground that
+    // no chart in this library supplied it — a measurement that had missed the
+    // agent chart's window stage. The window files its evictions on the
+    // receipt now, so the field is value-conditional like `tools.forced`, and
+    // the one way a recorded drop is lost is with the receipt.
+    expect(SERVED_GAPS['no-receipt-on-chart'].fields).toContain('omittedForAttention');
+    expect(UNGAPPED_FIELDS['omittedForAttention']).toBeUndefined();
+    expect(coveredBy(UNGAPPED, 'omittedForAttention')).toBe(false);
+    // And the same for the strategy's name, a receipt-only fact since 9.93.0.
+    expect(SERVED_GAPS['no-receipt-on-chart'].fields).toContain('cache.strategy');
   });
 
-  it('…and the measurement its comment quotes is re-taken here', WALK_BUDGET, async () => {
-    // THE MEASUREMENT MOVED WITH THE MECHANISM (9.88.0, sixth round). It used
-    // to sit in the printed reason — "measured on 9.88.0, no chart in this
-    // library supplied one" — which named a version and a set of charts, both
-    // of them code, in a sentence a renderer prints to somebody who cannot
-    // check either. It is now in the COMMENT beside the entry, and this test
-    // reads it there.
-    //
-    // The measurement itself is unchanged and still runs: a dated reading is
-    // the honest shape for a fact about the rest of the tree — past tense
-    // cannot go false, only stale — and re-taking it every run is what keeps
-    // it from going stale unnoticed. If a chart starts supplying one, this
-    // fails and the comment gets rewritten with it.
-    // Comment markers and line wraps stripped, so the claim is matched as
-    // PROSE rather than as whatever shape the formatter left it in.
-    const commentProse = readFileSync(SERVED_FILE, 'utf8')
-      .replace(/^\s*(?:\/\/|\*)\s?/gm, '')
-      .replace(/\s+/g, ' ');
-    expect(commentProse).toContain('measured on 9.88.0 no chart in this library ever supplies it');
-    const supplied: string[] = [];
-    for (const { receipts } of await realRuns()) {
-      for (const receipt of receipts) {
-        if (receipt.omittedForAttention !== undefined) supplied.push(receipt.basis.provider);
+  it(
+    '…and the measurement the old excuse rested on is re-taken, the other way round',
+    WALK_BUDGET,
+    async () => {
+      // THE MEASUREMENT MOVED WITH THE MECHANISM (9.88.0, sixth round) and then
+      // WENT THE OTHER WAY (9.93.0). The comment beside the entry used to say
+      // "measured on 9.88.0 no chart in this library ever supplies it", and this
+      // test re-took that reading on every run so the day a chart started
+      // supplying one it would fail and the comment would be rewritten. That
+      // day is this release: the windowed run below supplies it, and the
+      // comment now says so instead.
+      const commentProse = readFileSync(SERVED_FILE, 'utf8')
+        .replace(/^\s*(?:\/\/|\*)\s?/gm, '')
+        .replace(/\s+/g, ' ');
+      expect(commentProse).not.toContain('no chart in this library ever supplies it');
+      expect(commentProse).toContain('window stage');
+      const supplied: string[] = [];
+      let absentOnWindowless = 0;
+      for (const { receipts } of await realRuns()) {
+        for (const receipt of receipts) {
+          if (receipt.omittedForAttention !== undefined) supplied.push(receipt.basis.provider);
+          else absentOnWindowless += 1;
+        }
       }
-    }
-    expect(supplied).toEqual([]);
-  });
+      // Exactly the windowed run supplies it, on the epochs where it dropped…
+      expect(supplied.length).toBeGreaterThan(0);
+      expect(new Set(supplied)).toEqual(new Set(['gap-walk-mock']));
+      // …and every other receipt still leaves the key off, which now MEANS
+      // nothing was dropped before that call.
+      expect(absentOnWindowless).toBeGreaterThan(0);
+    },
+  );
 
   it('every excused field carries a reason a person wrote', () => {
     const thin = Object.entries(UNGAPPED_FIELDS).filter(
@@ -1617,7 +1661,7 @@ describe('each gap names the fields its own damage actually moves', () => {
       expect(measured).toEqual({
         'no-fold-base': '7 of 11',
         'no-conversation-on-record': '3 of 3',
-        'no-receipt-on-chart': '3 of 8',
+        'no-receipt-on-chart': '3 of 10',
         'no-run-log': '1 of 4',
       });
     },

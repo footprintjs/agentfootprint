@@ -7,6 +7,119 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [9.93.0] - 2026-09-11
+
+**The receipt says which strategy, and what the window dropped.** Four of the
+seven standing recorded-not-built entries close, one is verified rather than
+rebuilt, and one is assessed and half-built. Every item below is a behaviour
+change to a shipped record — a new receipt key on every minting chart, a gap
+that stops firing on three of them, a field that starts being written — which
+is why this is a minor and not a patch. Nothing that had no name collision, no
+window and no cache strategy records a different byte except the one new key.
+
+### Added
+
+- **`Receipt.cache.strategy: string | null`** — WHICH cache strategy the
+  request went through (its registry `providerName`; `'*'` is the built-in
+  pass-through every agent runs), or `null` where none stood between assembly
+  and the port. WHY: `cache.transform: 'unchanged'` is the honest verdict both
+  when a strategy returned what it was given and when there was no strategy at
+  all, so the served view had no way to know a rewrite was impossible and
+  raised `cache-transform` on every view — including `LLMCall` and the two
+  message-API charts, where a reader was told what a cache strategy may have
+  done beside a call none could touch (entry 8). No fourth `transform` value
+  was added; the fact is its own field, minted by the one owner
+  (`buildReceipt` refuses to mint without it). A receipt from before this
+  release has no key, and a reader treats that as "cannot say", never as
+  `null`.
+  ```ts
+  receiptAt(agent.getSnapshot()!, 1)!.cache.strategy;   // '*'  — an agent on the mock provider
+  receiptAt(llmCall.getSnapshot()!, 1)!.cache.strategy; // null — nothing between assembly and the port
+  ```
+- **`Receipt.omittedForAttention` is written** — by the agent chart's window
+  stage, for every turn it evicts for budget at an iteration's head. WHY: the
+  field was declared in 9.88.0 for "why did the model not know that?" and
+  excused as "no chart in this library supplies it" (entry 9) — a measurement
+  that had looked at the slots, which drop nothing, and not at the window,
+  which does (`context.evicted`, `reason: 'budget'`), and never wrote it. The
+  window hands what left to the call-llm mint on an in-memory handle
+  (`window/evictedTurns.ts`), the seam the compaction meter already crosses —
+  never a scope read, which on every windowless run would be a tracked read of
+  an absent key and a phantom context source per loop. Each hash is the
+  evicted turn's own `messages.entries[].hash`, so a drop on epoch k's receipt
+  pairs with the turn as an earlier receipt served it — the pairing law,
+  driven on a real sliding window. Absent now means nothing was dropped before
+  that call. The field left `UNGAPPED_FIELDS` and is named by
+  `no-receipt-on-chart`, the one gap that can lose it. An agent without a
+  window hands both stages the deps they always had.
+  ```ts
+  const agent = Agent.create({ provider, model }).system('bot').tool(lookup)
+    .window(slidingWindow({ keepRecentTurns: 1 })).build();
+  await agent.run({ message: 'go' });
+  receiptAt(agent.getSnapshot()!, 3)!.omittedForAttention; // { count: 2, hashes: [...] } — the pair that left at this head
+  ```
+
+### Changed
+
+- **`cache-transform` is raised only where a rewrite was possible** — where
+  the receipt names a strategy, or where no receipt can say (a receipt-less
+  view, a pre-9.93.0 receipt, a refused shape). WHY: entry 8 — a sentence
+  about what a strategy may have done was printed where none could run. Only a
+  receipt that SAYS `null` lifts it; absence still raises, so this is not the
+  inference-from-absence the entry refused. Measured: `LLMCall` and both
+  message-API charts with a run id now read `['provider-defaults']`; the
+  receipt-less message-API view still reads
+  `['no-receipt-on-chart', 'cache-transform']`, honestly. The printed sentence
+  is unchanged and every clause of it still holds where it prints.
+  ```ts
+  servedAt(llmCall.getSnapshot()!, 1)!.gaps.map((g) => g.gap); // ['provider-defaults'] (was ['cache-transform', 'provider-defaults'])
+  ```
+- **`cache-transform` names `tools.forced`, `tools.withheld` and
+  `cache.strategy`** — fourteen fields, the whole request the strategy holds
+  (`params` alone stays off, read past it). WHY: entry 7 — both `tools`
+  fields are written from assembly's own decision and never from
+  `preparedRequest`, so a strategy that drops the forced answer tool from
+  `request.tools` leaves a receipt whose `tools.forced` names a tool the port
+  never carried, and the gap did not warn. Driven: an unforcing strategy on a
+  `'tool-forced'` agent — wire has no tool and no forcing, receipt says
+  `tools.forced: 'respond_with_schema'` and `params.toolChoice` absent, the
+  gap names the half that describes the decision. Reading them off the
+  prepared request instead was NOT done: that would describe a different fact
+  under the same name.
+- **The receipt-conformance law checks the cache verdict outright where no
+  strategy ran** — `transform: 'unchanged'`, `transformHash: null`,
+  `markersApplied: []`, and no `cache-transform` excuse; where one ran, the gap
+  must excuse the unrebuildable fields as before.
+- **Byte-identity references regenerated** (`test/core/tools/reference/`),
+  with the whole delta against the 9.92.1 set on record in the test's header:
+  the new `cache.strategy` key on every minting fixture, the gap's longer
+  field list on every agent view, and the gap leaving the three no-strategy
+  views. No message, tool or other key moved on any fixture.
+
+### Verified
+
+- **Recorded-not-built entries 4 and 5 hold under the 9.92.0 law** and are
+  marked built (verified 2026-09-11 against the 9.92.1 `dist`, before any edit
+  of this release). `.selfExplain()`'s `run_overview` against an always-visible
+  skill, a never-activated scoped skill and a stepped skill: dispatch follows
+  the offer on every epoch (the never-activated skill no longer answers the
+  framework's own contract — the framework does), `tools.shadowed` names the
+  wire's party and never `provider(skill-scoped:self-explain)`, and the losing
+  claim is named by `tools.claim_swallowed` on every epoch it lost. The
+  reservation this entry names is deliberately untouched; the measured output
+  is pasted on the entries and pinned as `offer-and-answer.test.ts` §7.
+
+### Assessed
+
+- **Entry 10 ("an assertion can be weaker than its clause") is split, and the
+  mechanical half is built.** Every clause in `gap-sentences.test.ts` declares
+  the fields it is about; a seam hands its assertion a view or receipt with
+  one declared field altered, then removed; a contract requires the assertion
+  to fail under at least one. The first run found one insensitivity and it is
+  fixed. What remains is the quantifier half — a clause about "every field" or
+  "both chart shapes" asserted on fewer runs — which needs per-clause hand
+  work and is named on the entry rather than faked by a mechanism.
+
 ## [9.92.1] - 2026-09-11
 
 ### Fixed

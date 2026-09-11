@@ -41,6 +41,7 @@ import {
 import { toolNameOfMessage } from '../window/toolNames.js';
 import { joinSystemPrompt, stripFrameworkFields } from '../composeRequest.js';
 import { buildReceipt, receiptPieces, RECEIPT_KEY } from '../../../lib/time-travel/receipt.js';
+import type { EvictedTurnsHandle } from '../window/evictedTurns.js';
 import { findStagedRefs, stagedRefsNudgeLine } from '../stagedRefs.js';
 import { fileIntegrityFindings } from '../integrityFindings.js';
 import { resilienceHooks } from '../../../recorders/core/resilienceHooks.js';
@@ -277,6 +278,14 @@ export interface CallLLMStageDeps {
    * recording.
    */
   readonly recordReceipt?: boolean;
+  /**
+   * The turns the window stage evicted at this iteration's head (9.93.0),
+   * handed across in memory so the receipt can name them without a scope read
+   * — `window/evictedTurns.ts` says why not a read. Attached by
+   * `Agent.createExecutor` only when a window strategy is mounted; every
+   * other agent hands this stage the deps object it always did.
+   */
+  readonly evictedTurns?: EvictedTurnsHandle;
 }
 
 // LENS · system-text + tool-list · request-ephemeral
@@ -487,15 +496,18 @@ export function buildCallLLMStage(
     // authority omissions, run-salted digests — is stated once, at
     // `receipt.ts` · `Receipt`, and enforced by the shape it fills in.
     //
-    // NOT HERE: `omittedForAttention`. A slot's budget drops are in
-    // `slotCompositions`, which a slot writes INSIDE its own subflow and no
-    // boundary bubbles out — so at this scope the key is absent in both chart
-    // shapes. It was read here for one measured pass and the read alone was a
-    // defect: a tracked get of an always-absent key put `slotCompositions` on
+    // `omittedForAttention` comes from the WINDOW, through `deps.evictedTurns`
+    // (9.93.0) — never from a scope read. The slots were the first place this
+    // was looked for, and they drop nothing; the one measured pass that read
+    // `slotCompositions` here put a tracked get of an always-absent key on
     // every call-llm stage's read set, which gave `trajectory.ts` a phantom
-    // context source per loop and moved the localizer's ranking. A receipt
-    // records what the run knows; it does not go looking.
+    // context source per loop and moved the localizer's ranking. The window's
+    // `compactions` key is absent on every run without a window and would do
+    // the same. A receipt records what the run knows; it does not go looking —
+    // so the window hands the turns across, and an agent with no window hands
+    // nothing.
     if (deps.recordReceipt !== false) {
+      const evictedForAttention = deps.evictedTurns?.read(iteration) ?? [];
       scope[RECEIPT_KEY] = buildReceipt({
         runId: deps.getRunId?.() ?? '',
         epoch: iteration,
@@ -515,6 +527,14 @@ export function buildCallLLMStage(
         // them survived the provider's clamp is the half that decides the bill,
         // and it existed only in this local until now.
         markersApplied: cachePrepared.markersApplied,
+        // WHICH strategy the request went through — its registry key. Every
+        // agent has one (`'*'` is the built-in pass-through), so this is never
+        // `null` here; the charts that run none say `null` at their own mints.
+        // A strategy handed in past the type with no `providerName` is still a
+        // strategy, and is recorded as one under the empty name rather than
+        // denied.
+        strategy: typeof cacheStrategy.providerName === 'string' ? cacheStrategy.providerName : '',
+        ...(evictedForAttention.length > 0 && { omittedForAttention: evictedForAttention }),
       });
     }
 

@@ -81,23 +81,6 @@
         "gaps": [
           {
             "fields": [
-              "cache.transform",
-              "cache.transformHash",
-              "cache.markersApplied",
-              "system.hash",
-              "system.chars",
-              "system.pieces",
-              "messages.count",
-              "messages.entries",
-              "messages.requestOnly",
-              "tools.names",
-              "tools.schemaHashes"
-            ],
-            "gap": "cache-transform",
-            "why": "What reached the provider may differ from the fields below, and nothing on this view would show it. Where another gap on this view covers one of them, that gap is the stronger claim."
-          },
-          {
-            "fields": [
               "params"
             ],
             "gap": "provider-defaults",
