@@ -1,0 +1,133 @@
+{
+  "commitLog": [
+    {
+      "idx": 0,
+      "overwrite": {
+        "iteration": 1,
+        "userMessage": "the one turn that went out"
+      },
+      "redactedPaths": [],
+      "runtimeStageId": "client#0",
+      "stage": "Client",
+      "stageId": "client",
+      "trace": [
+        {
+          "path": "userMessage",
+          "verb": "set"
+        },
+        {
+          "path": "iteration",
+          "verb": "set"
+        }
+      ],
+      "untrackedSources": [
+        "args"
+      ],
+      "updates": {}
+    },
+    {
+      "idx": 1,
+      "overwrite": {
+        "answer": "done"
+      },
+      "redactedPaths": [],
+      "runtimeStageId": "sf-llm-call#1",
+      "stage": "LLM",
+      "stageId": "sf-llm-call",
+      "tags": [
+        "milestone:iteration",
+        "milestone-label:Iteration"
+      ],
+      "trace": [
+        {
+          "path": "answer",
+          "verb": "set"
+        }
+      ],
+      "updates": {}
+    },
+    {
+      "idx": 2,
+      "overwrite": {},
+      "redactedPaths": [],
+      "runtimeStageId": "sf-llm-call#1",
+      "stage": "LLM",
+      "stageId": "sf-llm-call",
+      "trace": [],
+      "updates": {}
+    },
+    {
+      "idx": 3,
+      "overwrite": {},
+      "redactedPaths": [],
+      "runtimeStageId": "client#9",
+      "stage": "client",
+      "stageId": "client",
+      "trace": [],
+      "updates": {}
+    }
+  ],
+  "served": [
+    {
+      "epoch": 1,
+      "view": {
+        "basis": {
+          "model": "mock",
+          "provider": "byte-identity-mock",
+          "runId": "<volatile>"
+        },
+        "callRuntimeStageId": "sf-llm-call/call-llm#7",
+        "epoch": 1,
+        "gaps": [
+          {
+            "fields": [
+              "cache.transform",
+              "cache.transformHash",
+              "cache.markersApplied",
+              "system.hash",
+              "system.chars",
+              "system.pieces",
+              "messages.count",
+              "messages.entries",
+              "messages.requestOnly",
+              "tools.names",
+              "tools.schemaHashes"
+            ],
+            "gap": "cache-transform",
+            "why": "What reached the provider may differ from the fields below, and nothing on this view would show it. Where another gap on this view covers one of them, that gap is the stronger claim."
+          },
+          {
+            "fields": [
+              "params"
+            ],
+            "gap": "provider-defaults",
+            "why": "A dial absent below was not recorded; that is not the same as the model running without one. A receipt describes the request as this library last saw it. Whatever handled it after that could have changed it, and nothing on the receipt would show that."
+          }
+        ],
+        "messages": {
+          "asSent": [
+            {
+              "content": "the one turn that went out",
+              "role": "user"
+            }
+          ],
+          "requestOnly": []
+        },
+        "system": {
+          "pieces": [
+            {
+              "slot": "system-prompt",
+              "source": "base",
+              "text": "you are a probe"
+            }
+          ],
+          "text": "you are a probe"
+        },
+        "tools": {
+          "names": [],
+          "schemas": []
+        }
+      }
+    }
+  ]
+}

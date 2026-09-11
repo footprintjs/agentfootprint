@@ -117,15 +117,42 @@ already narrows its own tools with `autoActivate: 'currentSkill'`.
 
 ### When two sources claim one tool name
 
-A provider tool and an active skill's tool can share a name, and they lose in opposite
-directions: the tools slot merges `[static, provider, skill]` first-wins, so the model
-reads the **provider's** description — while dispatch resolves the static registry
-first, which holds every skill tool and no provider tool, so the **skill's**
-implementation runs. The model reads one contract and calls another. Since 8.7.0 the run
-emits `agentfootprint.tools.shadowed` (`ToolsShadowedPayload` — names only, never args or
-results) every iteration it happens, plus one dev-mode console line. It is reported
-rather than refused because a provider's list is resolved per iteration: a dynamic
-provider can begin shadowing mid-run, long after build time.
+**The law (9.92.0):** for every tool name on a call, exactly one party owns the
+OFFER and the same party owns the ANSWER — or the record names the disagreement.
+
+A provider tool and a skill's tool can share a name. The tools slot merges
+`[static, provider, skill, step]` first-occurrence-wins, so the model reads the
+**provider's** description — and since 9.92.0 the provider's implementation is what
+**answers** it: dispatch follows the offer, resolved from the slot's own record of its
+merge rather than from a build-time map. (Until 9.92.0 the static registry was consulted
+first, so the skill's `execute` answered the provider's contract — an inactive skill's,
+even.) A name that is NOT on this call's wire — held out by a step, a park or a
+scoping, or named from a restored transcript — still dispatches, but only to the party
+the model last read it under (or its only holder when it was never served), and the run
+records it as `agentfootprint.tools.answered_off_wire`; a name whose last-served party can
+no longer answer (the provider withdrew it) is refused as a recorded tool result rather
+than handed to a party the model was never shown under that name.
+
+The collision is still reported, not refused, because a provider's list is resolved per
+iteration and can begin colliding mid-run:
+
+- `agentfootprint.tools.shadowed` (`ToolsShadowedPayload`) — once per contested name
+  per iteration when two contracts competed for the wire; `schemaFrom` and `dispatchTo`
+  both name the wire's party and agree.
+- `agentfootprint.tools.claim_swallowed` (`ToolsClaimSwallowedPayload`) — once per
+  iteration for every party whose claim is dead while somebody else holds the name:
+  `{ toolName, lostBy, lostById?, wonBy, wonById?, iteration }`. It fires whether the
+  loser's contract competed (an active skill) or never reached the merge (the same skill
+  while inactive, a provider tool whose name a static `.tool()` owns). Two skills sharing
+  one `Tool` reference are one claim and draw nothing.
+- `agentfootprint.tools.answered_off_wire` (`ToolsAnsweredOffWirePayload`) — once per call
+  the dispatcher answered although the name was not on that call's wire:
+  `{ toolName, toolCallId, iteration, answeredBy, answeredById? }`.
+
+Both carry names only — never args, results or descriptions — plus one dev-mode console
+line per name. `skip_step` is a claimant like any other: the framework's schema merges
+last, so a provider serving that name is the one that answers, and the procedure does
+not advance on a call whose contract the model read from somebody else.
 
 ## When to use this vs flat `agent.tools(arr)`
 

@@ -1,0 +1,651 @@
+{
+  "commitLog": [
+    {
+      "idx": 0,
+      "overwrite": {
+        "activatedInjectionIds": [],
+        "activeInjections": [],
+        "cacheMarkers": [],
+        "cachingDisabled": false,
+        "contextTokensRemaining": 32000,
+        "costBudgetHit": false,
+        "cumEstimatedUsd": 0,
+        "cumTokensInput": 0,
+        "cumTokensOutput": 0,
+        "deliveredMessageKeys": [],
+        "dynamicToolSchemas": [
+          {
+            "description": "the alpha_tool tool",
+            "inputSchema": {
+              "properties": {},
+              "type": "object"
+            },
+            "name": "alpha_tool"
+          }
+        ],
+        "finalContent": "",
+        "history": [
+          {
+            "content": "go",
+            "role": "user"
+          }
+        ],
+        "iteration": 1,
+        "llmLatestContent": "",
+        "llmLatestToolCalls": [],
+        "maxIterations": 6,
+        "messagesInjections": [],
+        "newMessages": [],
+        "pausedToolCallId": "",
+        "pausedToolName": "",
+        "pausedToolStartMs": "<volatile>",
+        "runIdentity": {
+          "conversationId": "<volatile>"
+        },
+        "skillHistory": [],
+        "systemPromptInjections": [],
+        "thinkingBlocks": [],
+        "toolsInjections": [],
+        "totalInputTokens": 0,
+        "totalOutputTokens": 0,
+        "turnNumber": 1,
+        "turnStartMs": "<volatile>",
+        "userMessage": "go"
+      },
+      "redactedPaths": [],
+      "runtimeStageId": "seed#0",
+      "stage": "Initialize",
+      "stageId": "seed",
+      "trace": [
+        {
+          "path": "userMessage",
+          "verb": "set"
+        },
+        {
+          "path": "history",
+          "verb": "set"
+        },
+        {
+          "path": "runIdentity",
+          "verb": "set"
+        },
+        {
+          "path": "newMessages",
+          "verb": "set"
+        },
+        {
+          "path": "turnNumber",
+          "verb": "set"
+        },
+        {
+          "path": "contextTokensRemaining",
+          "verb": "set"
+        },
+        {
+          "path": "iteration",
+          "verb": "set"
+        },
+        {
+          "path": "maxIterations",
+          "verb": "set"
+        },
+        {
+          "path": "finalContent",
+          "verb": "set"
+        },
+        {
+          "path": "totalInputTokens",
+          "verb": "set"
+        },
+        {
+          "path": "totalOutputTokens",
+          "verb": "set"
+        },
+        {
+          "path": "turnStartMs",
+          "verb": "set"
+        },
+        {
+          "path": "systemPromptInjections",
+          "verb": "set"
+        },
+        {
+          "path": "messagesInjections",
+          "verb": "set"
+        },
+        {
+          "path": "toolsInjections",
+          "verb": "set"
+        },
+        {
+          "path": "llmLatestContent",
+          "verb": "set"
+        },
+        {
+          "path": "llmLatestToolCalls",
+          "verb": "set"
+        },
+        {
+          "path": "thinkingBlocks",
+          "verb": "set"
+        },
+        {
+          "path": "pausedToolCallId",
+          "verb": "set"
+        },
+        {
+          "path": "pausedToolName",
+          "verb": "set"
+        },
+        {
+          "path": "pausedToolStartMs",
+          "verb": "set"
+        },
+        {
+          "path": "cumTokensInput",
+          "verb": "set"
+        },
+        {
+          "path": "cumTokensOutput",
+          "verb": "set"
+        },
+        {
+          "path": "cumEstimatedUsd",
+          "verb": "set"
+        },
+        {
+          "path": "costBudgetHit",
+          "verb": "set"
+        },
+        {
+          "path": "activeInjections",
+          "verb": "set"
+        },
+        {
+          "path": "activatedInjectionIds",
+          "verb": "set"
+        },
+        {
+          "path": "dynamicToolSchemas",
+          "verb": "set"
+        },
+        {
+          "path": "deliveredMessageKeys",
+          "verb": "set"
+        },
+        {
+          "path": "cacheMarkers",
+          "verb": "set"
+        },
+        {
+          "path": "cachingDisabled",
+          "verb": "set"
+        },
+        {
+          "path": "skillHistory",
+          "verb": "set"
+        }
+      ],
+      "untrackedSources": [
+        "args"
+      ],
+      "updates": {}
+    },
+    {
+      "idx": 1,
+      "overwrite": {
+        "llmLatestToolCalls": [
+          {
+            "args": {},
+            "id": "c1",
+            "name": "alpha_tool"
+          }
+        ],
+        "receipt": {
+          "basis": {
+            "epoch": 1,
+            "model": "mock",
+            "provider": "byte-identity-mock",
+            "runId": "<volatile>"
+          },
+          "cache": {
+            "markersApplied": [],
+            "transform": "unchanged",
+            "transformHash": null
+          },
+          "messages": {
+            "count": 1,
+            "entries": [
+              {
+                "hash": "<digest>",
+                "role": "user"
+              }
+            ],
+            "requestOnly": []
+          },
+          "params": {},
+          "system": {
+            "chars": 13,
+            "hash": "<digest>",
+            "pieces": [
+              {
+                "hash": "<digest>",
+                "slot": "system-prompt",
+                "source": "base"
+              }
+            ]
+          },
+          "tools": {
+            "forced": null,
+            "names": [
+              "alpha_tool"
+            ],
+            "schemaHashes": {
+              "alpha_tool": "<digest>"
+            },
+            "withheld": null
+          }
+        }
+      },
+      "redactedPaths": [],
+      "runtimeStageId": "sf-llm-call#1",
+      "stage": "LLM",
+      "stageId": "sf-llm-call",
+      "tags": [
+        "milestone:iteration",
+        "milestone-label:Iteration"
+      ],
+      "trace": [
+        {
+          "path": "llmLatestToolCalls",
+          "verb": "append"
+        },
+        {
+          "path": "receipt\u001fsystem",
+          "verb": "set"
+        },
+        {
+          "path": "receipt\u001fmessages",
+          "verb": "set"
+        },
+        {
+          "path": "receipt\u001ftools",
+          "verb": "set"
+        },
+        {
+          "path": "receipt\u001fcache",
+          "verb": "set"
+        },
+        {
+          "path": "receipt\u001fparams",
+          "verb": "set"
+        },
+        {
+          "path": "receipt\u001fbasis",
+          "verb": "set"
+        }
+      ],
+      "updates": {}
+    },
+    {
+      "idx": 2,
+      "overwrite": {},
+      "redactedPaths": [],
+      "runtimeStageId": "sf-llm-call#1",
+      "stage": "LLM",
+      "stageId": "sf-llm-call",
+      "trace": [],
+      "updates": {}
+    },
+    {
+      "idx": 3,
+      "overwrite": {},
+      "redactedPaths": [],
+      "runtimeStageId": "sf-route#21",
+      "stage": "Route",
+      "stageId": "sf-route",
+      "tags": [
+        "milestone:decision",
+        "milestone-label:Route"
+      ],
+      "trace": [],
+      "updates": {}
+    },
+    {
+      "idx": 4,
+      "overwrite": {
+        "history": [
+          {
+            "content": "",
+            "role": "assistant",
+            "toolCalls": [
+              {
+                "args": {},
+                "id": "c1",
+                "name": "alpha_tool"
+              }
+            ]
+          },
+          {
+            "content": "alpha_tool result",
+            "role": "tool",
+            "toolCallId": "c1",
+            "toolName": "alpha_tool"
+          }
+        ],
+        "iteration": 2,
+        "lastToolResult": {
+          "result": "alpha_tool result",
+          "toolName": "alpha_tool"
+        },
+        "toolResults": [
+          {
+            "result": "alpha_tool result",
+            "toolCallId": "c1",
+            "toolName": "alpha_tool"
+          }
+        ]
+      },
+      "redactedPaths": [],
+      "runtimeStageId": "tool-calls#22",
+      "stage": "ToolCalls",
+      "stageId": "tool-calls",
+      "tags": [
+        "milestone:tool-call",
+        "milestone-label:Tool call"
+      ],
+      "trace": [
+        {
+          "path": "lastToolResult",
+          "verb": "set"
+        },
+        {
+          "path": "toolResults",
+          "verb": "set"
+        },
+        {
+          "path": "history",
+          "verb": "append"
+        },
+        {
+          "path": "iteration",
+          "verb": "set"
+        }
+      ],
+      "updates": {}
+    },
+    {
+      "idx": 5,
+      "overwrite": {
+        "llmLatestContent": "done",
+        "llmLatestToolCalls": [],
+        "receipt": {
+          "basis": {
+            "epoch": 2,
+            "model": "mock",
+            "provider": "byte-identity-mock",
+            "runId": "<volatile>"
+          },
+          "messages": {
+            "count": 3,
+            "entries": [
+              {
+                "hash": "<digest>",
+                "role": "user"
+              },
+              {
+                "hash": "<digest>",
+                "role": "assistant"
+              },
+              {
+                "hash": "<digest>",
+                "key": "c1",
+                "role": "tool"
+              }
+            ],
+            "requestOnly": []
+          }
+        }
+      },
+      "redactedPaths": [],
+      "runtimeStageId": "sf-llm-call#23",
+      "stage": "LLM",
+      "stageId": "sf-llm-call",
+      "tags": [
+        "milestone:iteration",
+        "milestone-label:Iteration"
+      ],
+      "trace": [
+        {
+          "path": "llmLatestContent",
+          "verb": "set"
+        },
+        {
+          "path": "llmLatestToolCalls",
+          "verb": "set"
+        },
+        {
+          "path": "receipt\u001fmessages",
+          "verb": "set"
+        },
+        {
+          "path": "receipt\u001fbasis",
+          "verb": "set"
+        }
+      ],
+      "updates": {}
+    },
+    {
+      "idx": 6,
+      "overwrite": {},
+      "redactedPaths": [],
+      "runtimeStageId": "sf-llm-call#23",
+      "stage": "LLM",
+      "stageId": "sf-llm-call",
+      "trace": [],
+      "updates": {}
+    },
+    {
+      "idx": 7,
+      "overwrite": {},
+      "redactedPaths": [],
+      "runtimeStageId": "sf-route#43",
+      "stage": "Route",
+      "stageId": "sf-route",
+      "tags": [
+        "milestone:decision",
+        "milestone-label:Route"
+      ],
+      "trace": [],
+      "updates": {}
+    },
+    {
+      "idx": 8,
+      "overwrite": {},
+      "redactedPaths": [],
+      "runtimeStageId": "sf-route#43",
+      "stage": "Route",
+      "stageId": "sf-route",
+      "trace": [
+        {
+          "path": "finalContent",
+          "verb": "set"
+        }
+      ],
+      "updates": {}
+    },
+    {
+      "idx": 9,
+      "overwrite": {},
+      "redactedPaths": [],
+      "runtimeStageId": "final#44",
+      "stage": "Final",
+      "stageId": "final",
+      "trace": [],
+      "updates": {}
+    }
+  ],
+  "served": [
+    {
+      "epoch": 1,
+      "view": {
+        "basis": {
+          "model": "mock",
+          "provider": "byte-identity-mock",
+          "runId": "<volatile>"
+        },
+        "callRuntimeStageId": "sf-llm-call/call-llm#20",
+        "epoch": 1,
+        "gaps": [
+          {
+            "fields": [
+              "cache.transform",
+              "cache.transformHash",
+              "cache.markersApplied",
+              "system.hash",
+              "system.chars",
+              "system.pieces",
+              "messages.count",
+              "messages.entries",
+              "messages.requestOnly",
+              "tools.names",
+              "tools.schemaHashes"
+            ],
+            "gap": "cache-transform",
+            "why": "What reached the provider may differ from the fields below, and nothing on this view would show it. Where another gap on this view covers one of them, that gap is the stronger claim."
+          },
+          {
+            "fields": [
+              "params"
+            ],
+            "gap": "provider-defaults",
+            "why": "A dial absent below was not recorded; that is not the same as the model running without one. A receipt describes the request as this library last saw it. Whatever handled it after that could have changed it, and nothing on the receipt would show that."
+          }
+        ],
+        "messages": {
+          "asSent": [
+            {
+              "content": "go",
+              "role": "user"
+            }
+          ],
+          "requestOnly": []
+        },
+        "system": {
+          "pieces": [
+            {
+              "slot": "system-prompt",
+              "source": "base",
+              "text": "you are a bot"
+            }
+          ],
+          "text": "you are a bot"
+        },
+        "tools": {
+          "names": [
+            "alpha_tool"
+          ],
+          "schemas": [
+            {
+              "description": "the alpha_tool tool",
+              "inputSchema": {
+                "properties": {},
+                "type": "object"
+              },
+              "name": "alpha_tool"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "epoch": 2,
+      "view": {
+        "basis": {
+          "model": "mock",
+          "provider": "byte-identity-mock",
+          "runId": "<volatile>"
+        },
+        "callRuntimeStageId": "sf-llm-call/call-llm#42",
+        "epoch": 2,
+        "gaps": [
+          {
+            "fields": [
+              "cache.transform",
+              "cache.transformHash",
+              "cache.markersApplied",
+              "system.hash",
+              "system.chars",
+              "system.pieces",
+              "messages.count",
+              "messages.entries",
+              "messages.requestOnly",
+              "tools.names",
+              "tools.schemaHashes"
+            ],
+            "gap": "cache-transform",
+            "why": "What reached the provider may differ from the fields below, and nothing on this view would show it. Where another gap on this view covers one of them, that gap is the stronger claim."
+          },
+          {
+            "fields": [
+              "params"
+            ],
+            "gap": "provider-defaults",
+            "why": "A dial absent below was not recorded; that is not the same as the model running without one. A receipt describes the request as this library last saw it. Whatever handled it after that could have changed it, and nothing on the receipt would show that."
+          }
+        ],
+        "messages": {
+          "asSent": [
+            {
+              "content": "go",
+              "role": "user"
+            },
+            {
+              "content": "",
+              "role": "assistant",
+              "toolCalls": [
+                {
+                  "args": {},
+                  "id": "c1",
+                  "name": "alpha_tool"
+                }
+              ]
+            },
+            {
+              "content": "alpha_tool result",
+              "role": "tool",
+              "toolCallId": "c1",
+              "toolName": "alpha_tool"
+            }
+          ],
+          "requestOnly": []
+        },
+        "system": {
+          "pieces": [
+            {
+              "slot": "system-prompt",
+              "source": "base",
+              "text": "you are a bot"
+            }
+          ],
+          "text": "you are a bot"
+        },
+        "tools": {
+          "names": [
+            "alpha_tool"
+          ],
+          "schemas": [
+            {
+              "description": "the alpha_tool tool",
+              "inputSchema": {
+                "properties": {},
+                "type": "object"
+              },
+              "name": "alpha_tool"
+            }
+          ]
+        }
+      }
+    }
+  ]
+}

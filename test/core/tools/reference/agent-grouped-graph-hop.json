@@ -1,0 +1,972 @@
+{
+  "commitLog": [
+    {
+      "idx": 0,
+      "overwrite": {
+        "activatedInjectionIds": [],
+        "activeInjections": [],
+        "cacheMarkers": [],
+        "cachingDisabled": false,
+        "contextTokensRemaining": 32000,
+        "costBudgetHit": false,
+        "cumEstimatedUsd": 0,
+        "cumTokensInput": 0,
+        "cumTokensOutput": 0,
+        "deliveredMessageKeys": [],
+        "dynamicToolSchemas": [
+          {
+            "description": "Activate a skill for the next iteration. Available skills:\n  - alpha: alpha does things\n  - beta: beta does things\n\nPass the skill's id. The skill's body becomes part of the system prompt and any gated tools become available on the next call.",
+            "inputSchema": {
+              "properties": {
+                "id": {
+                  "description": "The skill id to activate.",
+                  "enum": [
+                    "alpha",
+                    "beta"
+                  ],
+                  "type": "string"
+                }
+              },
+              "required": [
+                "id"
+              ],
+              "type": "object"
+            },
+            "name": "read_skill"
+          },
+          {
+            "description": "the alpha_tool tool",
+            "inputSchema": {
+              "properties": {},
+              "type": "object"
+            },
+            "name": "alpha_tool"
+          },
+          {
+            "description": "the beta_tool tool",
+            "inputSchema": {
+              "properties": {},
+              "type": "object"
+            },
+            "name": "beta_tool"
+          }
+        ],
+        "finalContent": "",
+        "history": [
+          {
+            "content": "go",
+            "role": "user"
+          }
+        ],
+        "iteration": 1,
+        "llmLatestContent": "",
+        "llmLatestToolCalls": [],
+        "maxIterations": 6,
+        "messagesInjections": [],
+        "newMessages": [],
+        "pausedToolCallId": "",
+        "pausedToolName": "",
+        "pausedToolStartMs": "<volatile>",
+        "runIdentity": {
+          "conversationId": "<volatile>"
+        },
+        "skillHistory": [],
+        "systemPromptInjections": [],
+        "thinkingBlocks": [],
+        "toolsInjections": [],
+        "totalInputTokens": 0,
+        "totalOutputTokens": 0,
+        "turnNumber": 1,
+        "turnStartMs": "<volatile>",
+        "userMessage": "go"
+      },
+      "redactedPaths": [],
+      "runtimeStageId": "seed#0",
+      "stage": "Initialize",
+      "stageId": "seed",
+      "trace": [
+        {
+          "path": "userMessage",
+          "verb": "set"
+        },
+        {
+          "path": "history",
+          "verb": "set"
+        },
+        {
+          "path": "runIdentity",
+          "verb": "set"
+        },
+        {
+          "path": "newMessages",
+          "verb": "set"
+        },
+        {
+          "path": "turnNumber",
+          "verb": "set"
+        },
+        {
+          "path": "contextTokensRemaining",
+          "verb": "set"
+        },
+        {
+          "path": "iteration",
+          "verb": "set"
+        },
+        {
+          "path": "maxIterations",
+          "verb": "set"
+        },
+        {
+          "path": "finalContent",
+          "verb": "set"
+        },
+        {
+          "path": "totalInputTokens",
+          "verb": "set"
+        },
+        {
+          "path": "totalOutputTokens",
+          "verb": "set"
+        },
+        {
+          "path": "turnStartMs",
+          "verb": "set"
+        },
+        {
+          "path": "systemPromptInjections",
+          "verb": "set"
+        },
+        {
+          "path": "messagesInjections",
+          "verb": "set"
+        },
+        {
+          "path": "toolsInjections",
+          "verb": "set"
+        },
+        {
+          "path": "llmLatestContent",
+          "verb": "set"
+        },
+        {
+          "path": "llmLatestToolCalls",
+          "verb": "set"
+        },
+        {
+          "path": "thinkingBlocks",
+          "verb": "set"
+        },
+        {
+          "path": "pausedToolCallId",
+          "verb": "set"
+        },
+        {
+          "path": "pausedToolName",
+          "verb": "set"
+        },
+        {
+          "path": "pausedToolStartMs",
+          "verb": "set"
+        },
+        {
+          "path": "cumTokensInput",
+          "verb": "set"
+        },
+        {
+          "path": "cumTokensOutput",
+          "verb": "set"
+        },
+        {
+          "path": "cumEstimatedUsd",
+          "verb": "set"
+        },
+        {
+          "path": "costBudgetHit",
+          "verb": "set"
+        },
+        {
+          "path": "activeInjections",
+          "verb": "set"
+        },
+        {
+          "path": "activatedInjectionIds",
+          "verb": "set"
+        },
+        {
+          "path": "dynamicToolSchemas",
+          "verb": "set"
+        },
+        {
+          "path": "deliveredMessageKeys",
+          "verb": "set"
+        },
+        {
+          "path": "cacheMarkers",
+          "verb": "set"
+        },
+        {
+          "path": "cachingDisabled",
+          "verb": "set"
+        },
+        {
+          "path": "skillHistory",
+          "verb": "set"
+        }
+      ],
+      "untrackedSources": [
+        "args"
+      ],
+      "updates": {}
+    },
+    {
+      "idx": 1,
+      "overwrite": {
+        "activeInjections": [
+          {
+            "cache": "while-active",
+            "description": "alpha does things",
+            "flavor": "skill",
+            "id": "alpha",
+            "inject": {
+              "systemPrompt": "ALPHA_BODY",
+              "tools": [
+                {
+                  "injectionId": "alpha",
+                  "schema": {
+                    "description": "the alpha_tool tool",
+                    "inputSchema": {
+                      "properties": {},
+                      "type": "object"
+                    },
+                    "name": "alpha_tool"
+                  }
+                }
+              ]
+            },
+            "surfaceMode": "auto"
+          }
+        ],
+        "currentSkillId": "alpha",
+        "dynamicToolSchemas": [
+          {
+            "description": "You are in 'alpha'.\n\nActivate a skill for the next iteration.\n\nReachable from here:\n  - beta: beta does things\n\nPass the skill's id. The skill's body becomes part of the system prompt and any gated tools become available on the next call.",
+            "inputSchema": {
+              "properties": {
+                "id": {
+                  "description": "The skill id to activate.",
+                  "enum": [
+                    "alpha",
+                    "beta"
+                  ],
+                  "type": "string"
+                }
+              },
+              "required": [
+                "id"
+              ],
+              "type": "object"
+            },
+            "name": "read_skill"
+          },
+          {
+            "description": "the alpha_tool tool",
+            "inputSchema": {
+              "properties": {},
+              "type": "object"
+            },
+            "name": "alpha_tool"
+          },
+          {
+            "description": "the beta_tool tool",
+            "inputSchema": {
+              "properties": {},
+              "type": "object"
+            },
+            "name": "beta_tool"
+          }
+        ],
+        "llmLatestToolCalls": [
+          {
+            "args": {},
+            "id": "c1",
+            "name": "alpha_tool"
+          }
+        ],
+        "receipt": {
+          "basis": {
+            "epoch": 1,
+            "model": "mock",
+            "provider": "byte-identity-mock",
+            "runId": "<volatile>"
+          },
+          "cache": {
+            "markersApplied": [],
+            "transform": "unchanged",
+            "transformHash": null
+          },
+          "messages": {
+            "count": 1,
+            "entries": [
+              {
+                "hash": "<digest>",
+                "role": "user"
+              }
+            ],
+            "requestOnly": []
+          },
+          "params": {},
+          "system": {
+            "chars": 25,
+            "hash": "<digest>",
+            "pieces": [
+              {
+                "hash": "<digest>",
+                "slot": "system-prompt",
+                "source": "base"
+              },
+              {
+                "hash": "<digest>",
+                "slot": "system-prompt",
+                "source": "skill"
+              }
+            ]
+          },
+          "tools": {
+            "forced": null,
+            "names": [
+              "read_skill",
+              "alpha_tool",
+              "beta_tool"
+            ],
+            "schemaHashes": {
+              "alpha_tool": "<digest>",
+              "beta_tool": "<digest>",
+              "read_skill": "<digest>"
+            },
+            "withheld": null
+          }
+        },
+        "skillHistory": [
+          null
+        ]
+      },
+      "redactedPaths": [],
+      "runtimeStageId": "sf-llm-call#1",
+      "stage": "LLM",
+      "stageId": "sf-llm-call",
+      "tags": [
+        "milestone:iteration",
+        "milestone-label:Iteration"
+      ],
+      "trace": [
+        {
+          "path": "llmLatestToolCalls",
+          "verb": "append"
+        },
+        {
+          "path": "dynamicToolSchemas",
+          "verb": "set"
+        },
+        {
+          "path": "activeInjections",
+          "verb": "append"
+        },
+        {
+          "path": "receipt\u001fsystem",
+          "verb": "set"
+        },
+        {
+          "path": "receipt\u001fmessages",
+          "verb": "set"
+        },
+        {
+          "path": "receipt\u001ftools",
+          "verb": "set"
+        },
+        {
+          "path": "receipt\u001fcache",
+          "verb": "set"
+        },
+        {
+          "path": "receipt\u001fparams",
+          "verb": "set"
+        },
+        {
+          "path": "receipt\u001fbasis",
+          "verb": "set"
+        },
+        {
+          "path": "skillHistory",
+          "verb": "append"
+        },
+        {
+          "path": "currentSkillId",
+          "verb": "set"
+        }
+      ],
+      "updates": {}
+    },
+    {
+      "idx": 2,
+      "overwrite": {},
+      "redactedPaths": [],
+      "runtimeStageId": "sf-llm-call#1",
+      "stage": "LLM",
+      "stageId": "sf-llm-call",
+      "trace": [],
+      "updates": {}
+    },
+    {
+      "idx": 3,
+      "overwrite": {},
+      "redactedPaths": [],
+      "runtimeStageId": "sf-route#22",
+      "stage": "Route",
+      "stageId": "sf-route",
+      "tags": [
+        "milestone:decision",
+        "milestone-label:Route"
+      ],
+      "trace": [],
+      "updates": {}
+    },
+    {
+      "idx": 4,
+      "overwrite": {
+        "history": [
+          {
+            "content": "",
+            "role": "assistant",
+            "toolCalls": [
+              {
+                "args": {},
+                "id": "c1",
+                "name": "alpha_tool"
+              }
+            ]
+          },
+          {
+            "content": "alpha_tool result",
+            "role": "tool",
+            "toolCallId": "c1",
+            "toolName": "alpha_tool"
+          }
+        ],
+        "iteration": 2,
+        "lastToolResult": {
+          "result": "alpha_tool result",
+          "toolName": "alpha_tool"
+        },
+        "toolResults": [
+          {
+            "result": "alpha_tool result",
+            "toolCallId": "c1",
+            "toolName": "alpha_tool"
+          }
+        ]
+      },
+      "redactedPaths": [],
+      "runtimeStageId": "tool-calls#23",
+      "stage": "ToolCalls",
+      "stageId": "tool-calls",
+      "tags": [
+        "milestone:tool-call",
+        "milestone-label:Tool call"
+      ],
+      "trace": [
+        {
+          "path": "lastToolResult",
+          "verb": "set"
+        },
+        {
+          "path": "toolResults",
+          "verb": "set"
+        },
+        {
+          "path": "history",
+          "verb": "append"
+        },
+        {
+          "path": "iteration",
+          "verb": "set"
+        }
+      ],
+      "updates": {}
+    },
+    {
+      "idx": 5,
+      "overwrite": {
+        "activeInjections": [
+          {
+            "cache": "while-active",
+            "description": "beta does things",
+            "flavor": "skill",
+            "id": "beta",
+            "inject": {
+              "systemPrompt": "BETA_BODY",
+              "tools": [
+                {
+                  "injectionId": "beta",
+                  "schema": {
+                    "description": "the beta_tool tool",
+                    "inputSchema": {
+                      "properties": {},
+                      "type": "object"
+                    },
+                    "name": "beta_tool"
+                  }
+                }
+              ]
+            },
+            "surfaceMode": "auto"
+          }
+        ],
+        "currentSkillId": "beta",
+        "dynamicToolSchemas": [
+          {
+            "description": "You are in 'beta'.\n\nActivate a skill for the next iteration.\n\nReachable from here:\n  - alpha: alpha does things\n\nPass the skill's id. The skill's body becomes part of the system prompt and any gated tools become available on the next call.",
+            "inputSchema": {
+              "properties": {
+                "id": {
+                  "description": "The skill id to activate.",
+                  "enum": [
+                    "alpha",
+                    "beta"
+                  ],
+                  "type": "string"
+                }
+              },
+              "required": [
+                "id"
+              ],
+              "type": "object"
+            },
+            "name": "read_skill"
+          },
+          {
+            "description": "the alpha_tool tool",
+            "inputSchema": {
+              "properties": {},
+              "type": "object"
+            },
+            "name": "alpha_tool"
+          },
+          {
+            "description": "the beta_tool tool",
+            "inputSchema": {
+              "properties": {},
+              "type": "object"
+            },
+            "name": "beta_tool"
+          }
+        ],
+        "llmLatestContent": "done",
+        "llmLatestToolCalls": [],
+        "receipt": {
+          "basis": {
+            "epoch": 2,
+            "model": "mock",
+            "provider": "byte-identity-mock",
+            "runId": "<volatile>"
+          },
+          "messages": {
+            "count": 3,
+            "entries": [
+              {
+                "hash": "<digest>",
+                "role": "user"
+              },
+              {
+                "hash": "<digest>",
+                "role": "assistant"
+              },
+              {
+                "hash": "<digest>",
+                "key": "c1",
+                "role": "tool"
+              }
+            ],
+            "requestOnly": []
+          },
+          "system": {
+            "chars": 36,
+            "hash": "<digest>",
+            "pieces": [
+              {
+                "hash": "<digest>",
+                "slot": "system-prompt",
+                "source": "base"
+              },
+              {
+                "hash": "<digest>",
+                "slot": "system-prompt",
+                "source": "skill"
+              },
+              {
+                "hash": "<digest>",
+                "slot": "system-prompt",
+                "source": "skill"
+              }
+            ]
+          },
+          "tools": {
+            "forced": null,
+            "names": [
+              "read_skill",
+              "alpha_tool",
+              "beta_tool"
+            ],
+            "schemaHashes": {
+              "alpha_tool": "<digest>",
+              "beta_tool": "<digest>",
+              "read_skill": "<digest>"
+            },
+            "withheld": null
+          }
+        },
+        "skillHistory": [
+          null
+        ]
+      },
+      "redactedPaths": [],
+      "runtimeStageId": "sf-llm-call#24",
+      "stage": "LLM",
+      "stageId": "sf-llm-call",
+      "tags": [
+        "milestone:iteration",
+        "milestone-label:Iteration"
+      ],
+      "trace": [
+        {
+          "path": "llmLatestContent",
+          "verb": "set"
+        },
+        {
+          "path": "llmLatestToolCalls",
+          "verb": "set"
+        },
+        {
+          "path": "dynamicToolSchemas",
+          "verb": "set"
+        },
+        {
+          "path": "activeInjections",
+          "verb": "append"
+        },
+        {
+          "path": "receipt\u001fsystem",
+          "verb": "set"
+        },
+        {
+          "path": "receipt\u001fmessages",
+          "verb": "set"
+        },
+        {
+          "path": "receipt\u001ftools",
+          "verb": "set"
+        },
+        {
+          "path": "receipt\u001fbasis",
+          "verb": "set"
+        },
+        {
+          "path": "skillHistory",
+          "verb": "append"
+        },
+        {
+          "path": "currentSkillId",
+          "verb": "set"
+        }
+      ],
+      "updates": {}
+    },
+    {
+      "idx": 6,
+      "overwrite": {},
+      "redactedPaths": [],
+      "runtimeStageId": "sf-llm-call#24",
+      "stage": "LLM",
+      "stageId": "sf-llm-call",
+      "trace": [],
+      "updates": {}
+    },
+    {
+      "idx": 7,
+      "overwrite": {},
+      "redactedPaths": [],
+      "runtimeStageId": "sf-route#45",
+      "stage": "Route",
+      "stageId": "sf-route",
+      "tags": [
+        "milestone:decision",
+        "milestone-label:Route"
+      ],
+      "trace": [],
+      "updates": {}
+    },
+    {
+      "idx": 8,
+      "overwrite": {},
+      "redactedPaths": [],
+      "runtimeStageId": "sf-route#45",
+      "stage": "Route",
+      "stageId": "sf-route",
+      "trace": [
+        {
+          "path": "finalContent",
+          "verb": "set"
+        }
+      ],
+      "updates": {}
+    },
+    {
+      "idx": 9,
+      "overwrite": {},
+      "redactedPaths": [],
+      "runtimeStageId": "final#46",
+      "stage": "Final",
+      "stageId": "final",
+      "trace": [],
+      "updates": {}
+    }
+  ],
+  "served": [
+    {
+      "epoch": 1,
+      "view": {
+        "basis": {
+          "model": "mock",
+          "provider": "byte-identity-mock",
+          "runId": "<volatile>"
+        },
+        "callRuntimeStageId": "sf-llm-call/call-llm#21",
+        "epoch": 1,
+        "gaps": [
+          {
+            "fields": [
+              "cache.transform",
+              "cache.transformHash",
+              "cache.markersApplied",
+              "system.hash",
+              "system.chars",
+              "system.pieces",
+              "messages.count",
+              "messages.entries",
+              "messages.requestOnly",
+              "tools.names",
+              "tools.schemaHashes"
+            ],
+            "gap": "cache-transform",
+            "why": "What reached the provider may differ from the fields below, and nothing on this view would show it. Where another gap on this view covers one of them, that gap is the stronger claim."
+          },
+          {
+            "fields": [
+              "params"
+            ],
+            "gap": "provider-defaults",
+            "why": "A dial absent below was not recorded; that is not the same as the model running without one. A receipt describes the request as this library last saw it. Whatever handled it after that could have changed it, and nothing on the receipt would show that."
+          }
+        ],
+        "messages": {
+          "asSent": [
+            {
+              "content": "go",
+              "role": "user"
+            }
+          ],
+          "requestOnly": []
+        },
+        "system": {
+          "pieces": [
+            {
+              "slot": "system-prompt",
+              "source": "base",
+              "text": "you are a bot"
+            },
+            {
+              "slot": "system-prompt",
+              "source": "skill",
+              "text": "ALPHA_BODY"
+            }
+          ],
+          "text": "you are a bot\n\nALPHA_BODY"
+        },
+        "tools": {
+          "names": [
+            "read_skill",
+            "alpha_tool",
+            "beta_tool"
+          ],
+          "schemas": [
+            {
+              "description": "You are in 'alpha'.\n\nActivate a skill for the next iteration.\n\nReachable from here:\n  - beta: beta does things\n\nPass the skill's id. The skill's body becomes part of the system prompt and any gated tools become available on the next call.",
+              "inputSchema": {
+                "properties": {
+                  "id": {
+                    "description": "The skill id to activate.",
+                    "enum": [
+                      "alpha",
+                      "beta"
+                    ],
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "id"
+                ],
+                "type": "object"
+              },
+              "name": "read_skill"
+            },
+            {
+              "description": "the alpha_tool tool",
+              "inputSchema": {
+                "properties": {},
+                "type": "object"
+              },
+              "name": "alpha_tool"
+            },
+            {
+              "description": "the beta_tool tool",
+              "inputSchema": {
+                "properties": {},
+                "type": "object"
+              },
+              "name": "beta_tool"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "epoch": 2,
+      "view": {
+        "basis": {
+          "model": "mock",
+          "provider": "byte-identity-mock",
+          "runId": "<volatile>"
+        },
+        "callRuntimeStageId": "sf-llm-call/call-llm#44",
+        "epoch": 2,
+        "gaps": [
+          {
+            "fields": [
+              "cache.transform",
+              "cache.transformHash",
+              "cache.markersApplied",
+              "system.hash",
+              "system.chars",
+              "system.pieces",
+              "messages.count",
+              "messages.entries",
+              "messages.requestOnly",
+              "tools.names",
+              "tools.schemaHashes"
+            ],
+            "gap": "cache-transform",
+            "why": "What reached the provider may differ from the fields below, and nothing on this view would show it. Where another gap on this view covers one of them, that gap is the stronger claim."
+          },
+          {
+            "fields": [
+              "params"
+            ],
+            "gap": "provider-defaults",
+            "why": "A dial absent below was not recorded; that is not the same as the model running without one. A receipt describes the request as this library last saw it. Whatever handled it after that could have changed it, and nothing on the receipt would show that."
+          }
+        ],
+        "messages": {
+          "asSent": [
+            {
+              "content": "go",
+              "role": "user"
+            },
+            {
+              "content": "",
+              "role": "assistant",
+              "toolCalls": [
+                {
+                  "args": {},
+                  "id": "c1",
+                  "name": "alpha_tool"
+                }
+              ]
+            },
+            {
+              "content": "alpha_tool result",
+              "role": "tool",
+              "toolCallId": "c1",
+              "toolName": "alpha_tool"
+            }
+          ],
+          "requestOnly": []
+        },
+        "system": {
+          "pieces": [
+            {
+              "slot": "system-prompt",
+              "source": "base",
+              "text": "you are a bot"
+            },
+            {
+              "slot": "system-prompt",
+              "source": "skill",
+              "text": "ALPHA_BODY"
+            },
+            {
+              "slot": "system-prompt",
+              "source": "skill",
+              "text": "BETA_BODY"
+            }
+          ],
+          "text": "you are a bot\n\nALPHA_BODY\n\nBETA_BODY"
+        },
+        "tools": {
+          "names": [
+            "read_skill",
+            "alpha_tool",
+            "beta_tool"
+          ],
+          "schemas": [
+            {
+              "description": "You are in 'beta'.\n\nActivate a skill for the next iteration.\n\nReachable from here:\n  - alpha: alpha does things\n\nPass the skill's id. The skill's body becomes part of the system prompt and any gated tools become available on the next call.",
+              "inputSchema": {
+                "properties": {
+                  "id": {
+                    "description": "The skill id to activate.",
+                    "enum": [
+                      "alpha",
+                      "beta"
+                    ],
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "id"
+                ],
+                "type": "object"
+              },
+              "name": "read_skill"
+            },
+            {
+              "description": "the alpha_tool tool",
+              "inputSchema": {
+                "properties": {},
+                "type": "object"
+              },
+              "name": "alpha_tool"
+            },
+            {
+              "description": "the beta_tool tool",
+              "inputSchema": {
+                "properties": {},
+                "type": "object"
+              },
+              "name": "beta_tool"
+            }
+          ]
+        }
+      }
+    }
+  ]
+}

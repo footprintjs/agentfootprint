@@ -1,0 +1,323 @@
+{
+  "commitLog": [
+    {
+      "idx": 0,
+      "overwrite": {
+        "answer": "",
+        "assembledMessages": [],
+        "assembledSystem": "",
+        "history": [
+          {
+            "content": "weather in paris?",
+            "role": "user"
+          }
+        ],
+        "iteration": 1,
+        "messagesInjections": [],
+        "systemPromptInjections": [],
+        "userMessage": "weather in paris?"
+      },
+      "redactedPaths": [],
+      "runtimeStageId": "context#0",
+      "stage": "Context",
+      "stageId": "context",
+      "trace": [
+        {
+          "path": "userMessage",
+          "verb": "set"
+        },
+        {
+          "path": "history",
+          "verb": "set"
+        },
+        {
+          "path": "iteration",
+          "verb": "set"
+        },
+        {
+          "path": "systemPromptInjections",
+          "verb": "set"
+        },
+        {
+          "path": "messagesInjections",
+          "verb": "set"
+        },
+        {
+          "path": "assembledSystem",
+          "verb": "set"
+        },
+        {
+          "path": "assembledMessages",
+          "verb": "set"
+        },
+        {
+          "path": "answer",
+          "verb": "set"
+        }
+      ],
+      "untrackedSources": [
+        "args"
+      ],
+      "updates": {}
+    },
+    {
+      "idx": 1,
+      "overwrite": {
+        "systemPromptInjections": [
+          {
+            "contentHash": "a18becde",
+            "contentSummary": "you are a tutor",
+            "rawContent": "you are a tutor",
+            "reason": "messageAPI proof",
+            "slot": "system-prompt",
+            "source": "base"
+          }
+        ]
+      },
+      "redactedPaths": [],
+      "runtimeStageId": "context#0",
+      "stage": "Context",
+      "stageId": "context",
+      "trace": [
+        {
+          "path": "systemPromptInjections",
+          "verb": "set"
+        }
+      ],
+      "updates": {}
+    },
+    {
+      "idx": 2,
+      "overwrite": {},
+      "redactedPaths": [],
+      "runtimeStageId": "sf-system-prompt#1",
+      "stage": "System Prompt",
+      "stageId": "sf-system-prompt",
+      "tags": [
+        "milestone:slot",
+        "milestone-label:System prompt"
+      ],
+      "trace": [],
+      "updates": {}
+    },
+    {
+      "idx": 3,
+      "overwrite": {
+        "messagesInjections": [
+          {
+            "asRecency": "latest",
+            "asRole": "user",
+            "contentHash": "9ad1f67b",
+            "contentSummary": "weather in paris?",
+            "position": 0,
+            "rawContent": "weather in paris?",
+            "reason": "conversation history [0]",
+            "slot": "messages",
+            "source": "user"
+          }
+        ]
+      },
+      "redactedPaths": [],
+      "runtimeStageId": "context#0",
+      "stage": "Context",
+      "stageId": "context",
+      "trace": [
+        {
+          "path": "messagesInjections",
+          "verb": "set"
+        }
+      ],
+      "updates": {}
+    },
+    {
+      "idx": 4,
+      "overwrite": {},
+      "redactedPaths": [],
+      "runtimeStageId": "sf-messages#3",
+      "stage": "Messages",
+      "stageId": "sf-messages",
+      "tags": [
+        "milestone:slot",
+        "milestone-label:Messages"
+      ],
+      "trace": [],
+      "updates": {}
+    },
+    {
+      "idx": 5,
+      "overwrite": {},
+      "redactedPaths": [],
+      "runtimeStageId": "sf-system-prompt#1",
+      "stage": "System Prompt",
+      "stageId": "sf-system-prompt",
+      "trace": [],
+      "updates": {}
+    },
+    {
+      "idx": 6,
+      "overwrite": {},
+      "redactedPaths": [],
+      "runtimeStageId": "sf-messages#3",
+      "stage": "Messages",
+      "stageId": "sf-messages",
+      "trace": [],
+      "updates": {}
+    },
+    {
+      "idx": 7,
+      "overwrite": {
+        "assembledMessages": [
+          {
+            "content": "weather in paris?",
+            "role": "user"
+          }
+        ],
+        "assembledSystem": "you are a tutor"
+      },
+      "redactedPaths": [],
+      "runtimeStageId": "message-api#5",
+      "stage": "messageAPI",
+      "stageId": "message-api",
+      "trace": [
+        {
+          "path": "assembledSystem",
+          "verb": "set"
+        },
+        {
+          "path": "assembledMessages",
+          "verb": "set"
+        }
+      ],
+      "updates": {}
+    },
+    {
+      "idx": 8,
+      "overwrite": {
+        "answer": "done",
+        "receipt": {
+          "basis": {
+            "epoch": 1,
+            "model": "mock",
+            "provider": "byte-identity-mock",
+            "runId": "<volatile>"
+          },
+          "cache": {
+            "markersApplied": [],
+            "transform": "unchanged",
+            "transformHash": null
+          },
+          "messages": {
+            "count": 1,
+            "entries": [
+              {
+                "hash": "<digest>",
+                "role": "user"
+              }
+            ],
+            "requestOnly": []
+          },
+          "params": {},
+          "system": {
+            "chars": 15,
+            "hash": "<digest>",
+            "pieces": [
+              {
+                "hash": "<digest>",
+                "slot": "system-prompt",
+                "source": "base"
+              }
+            ]
+          },
+          "tools": {
+            "forced": null,
+            "names": [],
+            "schemaHashes": {},
+            "withheld": null
+          }
+        }
+      },
+      "redactedPaths": [],
+      "runtimeStageId": "call-llm#6",
+      "stage": "CallLLM",
+      "stageId": "call-llm",
+      "tags": [
+        "milestone:llm-turn",
+        "milestone-label:LLM turn"
+      ],
+      "trace": [
+        {
+          "path": "receipt",
+          "verb": "set"
+        },
+        {
+          "path": "answer",
+          "verb": "set"
+        }
+      ],
+      "updates": {}
+    }
+  ],
+  "served": [
+    {
+      "epoch": 1,
+      "view": {
+        "basis": {
+          "model": "mock",
+          "provider": "byte-identity-mock",
+          "runId": "<volatile>"
+        },
+        "callRuntimeStageId": "call-llm#6",
+        "epoch": 1,
+        "gaps": [
+          {
+            "fields": [
+              "cache.transform",
+              "cache.transformHash",
+              "cache.markersApplied",
+              "system.hash",
+              "system.chars",
+              "system.pieces",
+              "messages.count",
+              "messages.entries",
+              "messages.requestOnly",
+              "tools.names",
+              "tools.schemaHashes"
+            ],
+            "gap": "cache-transform",
+            "why": "What reached the provider may differ from the fields below, and nothing on this view would show it. Where another gap on this view covers one of them, that gap is the stronger claim."
+          },
+          {
+            "fields": [
+              "params"
+            ],
+            "gap": "provider-defaults",
+            "why": "A dial absent below was not recorded; that is not the same as the model running without one. A receipt describes the request as this library last saw it. Whatever handled it after that could have changed it, and nothing on the receipt would show that."
+          }
+        ],
+        "messages": {
+          "asSent": [
+            {
+              "content": "weather in paris?",
+              "role": "user"
+            }
+          ],
+          "requestOnly": []
+        },
+        "system": {
+          "pieces": [
+            {
+              "slot": "system-prompt",
+              "source": "base",
+              "text": "you are a tutor"
+            }
+          ],
+          "text": "you are a tutor"
+        },
+        "tools": {
+          "names": [],
+          "schemas": []
+        }
+      }
+    }
+  ]
+}

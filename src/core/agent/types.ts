@@ -1134,6 +1134,21 @@ export interface AgentState {
    * `argsForPausedCall` in `stages/toolCalls.ts`).
    */
   pausedToolArgs?: Readonly<Record<string, unknown>>;
+  /**
+   * The party whose contract the paused call was resolved against (9.92.0) —
+   * the wire's party for a name on the wire, the off-wire answering party
+   * otherwise — carried across every pause that re-dispatches on resume (a
+   * middleware ask, a check-in, a credential consent). A resume in a FRESH
+   * Agent instance has an empty served-party record and never re-runs
+   * Compose, so without this the resumed dispatch fell back to the build-time
+   * map and an inactive skill could answer a provider's contract. Written on
+   * the pause paths only: a run that never pauses commits the exact bytes it
+   * always did.
+   */
+  pausedToolParty?: {
+    readonly channel: import('../../events/payloads.js').ToolNameChannel;
+    readonly id?: string;
+  };
   // Check-in checkpoint — set when a tool's `checkIn` demand trips and the
   // run pauses BEFORE execute. `pausedCheckIn` discriminates a check-in pause
   // from a plain `askHuman` pause on resume; `pausedCheckInArgs` carries the

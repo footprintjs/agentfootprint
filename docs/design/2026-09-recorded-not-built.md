@@ -1,5 +1,10 @@
 # Recorded, not built — ten defects, real and deliberately unfixed
 
+> **2026-09-11 (9.92.0):** entries 1, 2 and 3, the `claim-swallowed` bullet
+> under entry 1, and the 9.91.0 tools-slot follow-up are **BUILT** — see
+> `docs/design/2026-09-the-offer-and-the-answer.md` and the marks on each entry
+> below. Entries 4–10 stand as recorded.
+
 Ten things are **real, reproduced, and deliberately not fixed here** — five
 found by the tool-divergence walk, one (entry 6) found from the other side while
 building the receipt at the llm-turn stop, three (entries 7-9) left standing by
@@ -32,6 +37,18 @@ witnessed by a token rather than by a name.
 ---
 
 ## 1. An inactive skill's tool shadows in silence
+
+> **Built in 9.92.0 (2026-09-11).** Dispatch follows the offer: `toolCalls.ts` ·
+> `lookupTool` resolves a name on this epoch's wire to the party whose contract
+> the model read (`buildToolsSlot.ts` · `ServedToolParties`, written by the same
+> `mergeWire` pass that builds the wire). The provider answers; the inactive
+> skill's `execute` answers no call while the provider holds the name — and a
+> call after the provider withdraws it is REFUSED (`toolCalls.ts` ·
+> `notServedResult`), because the skill's contract was never what the model
+> read; `tools.shadowed` fires 0× (no contract competed) and
+> `tools.claim_swallowed` names the skill's dead claim. Pinned by
+> `test/core/tools/offer-and-answer.test.ts` (1, 6) and epoch-laws 1(g), now
+> the seam's CLOSED pin.
 
 **The reproduction.** A `ToolProvider` and a skill both claim `shared_tool`.
 The agent is `.toolsFromActiveSkill()`, and the skill is **never activated** —
@@ -107,7 +124,12 @@ change, and it belongs in a release note rather than in a walk.
 - Deciding whether the event's `dispatchTo`/`dispatchToId` should be able to
   name a source the model was never offered. `dispatchToId` is a skill id
   today; an inactive skill's id is a truthful answer but a surprising one.
-- The same widening decides a fourth family the walk found and this note does
+- **Closed in 9.92.0 (2026-09-11)** — the `claim-swallowed` family is reported:
+  `agentfootprint.tools.claim_swallowed` names loser and winner once per epoch
+  the name was held, for a competing loser and for a claimant that never
+  reached the merge alike; all 22 rows below (and the 11 the closure of the
+  swaps surfaced) carry the event in the walk's `reported` column.
+  The same widening decides a fourth family the walk found and this note does
   not otherwise cover: **`claim-swallowed`**, 22 baseline rows — 18 where a
   provider's or a skill's tool whose name a registry-list holder already owns
   loses the wire *and* dispatch and is simply dead, and 4 where the
@@ -133,6 +155,14 @@ told the report is a subset — which is the part that misleads.
 ---
 
 ## 2. The shadow report names the wrong source
+
+> **Built in 9.92.0 (2026-09-11).** `reportShadowedTools` reads the winner off
+> the merge's own record (`buildToolsSlot.ts` · `mergeWire`) instead of
+> asserting `'provider'`; `schemaFrom`/`dispatchTo` name the wire's party and
+> agree on every epoch (`skill 'desk-stepped'` here). The vocabulary gained
+> `'framework'` (`ToolNameChannel`), so an auto-attach is named as itself. All
+> ten `report-misattributed` rows are gone from the walk's baseline. Pinned by
+> `test/core/tools/offer-and-answer.test.ts` (2).
 
 **The reproduction.** A `ToolProvider` and a **stepped** skill both claim
 `shared_tool`. A stepped skill's tools are always visible, so they ride the
@@ -225,6 +255,19 @@ put on the wire. Ten baseline rows carry it.
 
 ## 3. `skip_step` is shadowable
 
+> **Built in 9.92.0 (2026-09-11).** The framework's `skip_step` is a claimant
+> like any other (`buildToolRegistry.ts` · `toolClaimants`): its schema still
+> merges last, so it rides only when nobody else put the name forward; when a
+> provider does, the provider's contract is the wire's and the provider's tool
+> answers, and the step bookkeeping keys on the framework's own instance having
+> answered (`toolCalls.ts` · `frameworkSkipStepAnswered`) — the procedure does
+> not advance. `tools.shadowed` names the collision on every epoch the tenure
+> is open; `tools.claim_swallowed` names the framework as the loser. The posture
+> chosen is the second of the three below (report; dispatch follows the offer),
+> not the third: hoisting the framework's schema ahead of a provider would take
+> a name away from a party that holds it today. Pinned by
+> `test/core/tools/offer-and-answer.test.ts` (3).
+
 **The reproduction.** A stepped skill is mounted, and a `ToolProvider` serves a
 tool called `skip_step`:
 
@@ -310,6 +353,8 @@ saying so.
 Not defects — prose that the code moved out from under. Both are cheap, and
 both are left alone here only because this pass was not touching behaviour and
 a comment edit in the same diff would blur which is which.
+
+*(Both corrected in 9.92.0, in the same diff as the seam they describe.)*
 
 **`buildToolsSlot.ts:579-588` — "PROVIDER schemas merge unfiltered".** The
 compose-seam backstop's header still describes the world before the park
@@ -917,6 +962,11 @@ sentence is unchanged — it never named a chart — and
 receipt-less view.
 
 ## Follow-up opened by 9.91.0 (2026-09-10)
+
+> **Closed in 9.92.0 (2026-09-11):** `arrayMerge: ArrayMergeMode.Replace` on
+> the chart's tools-slot mount; `test/core/tools/offer-and-answer.test.ts` (5)
+> asserts the wire's tool list equals the declared set on turns 1..3. The
+> name-keyed `schemaHashes` note below stands.
 
 **`buildAgentMessageApiChart` · the tools slot accumulates across loop turns.** The
 tools-slot outputMapper merges rather than replaces, so on turn 2 the model is

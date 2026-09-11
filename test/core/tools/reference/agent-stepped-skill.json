@@ -1,0 +1,2165 @@
+{
+  "commitLog": [
+    {
+      "idx": 0,
+      "overwrite": {
+        "activatedInjectionIds": [],
+        "activeInjections": [],
+        "cacheMarkers": [],
+        "cachingDisabled": false,
+        "contextTokensRemaining": 32000,
+        "costBudgetHit": false,
+        "cumEstimatedUsd": 0,
+        "cumTokensInput": 0,
+        "cumTokensOutput": 0,
+        "deliveredMessageKeys": [],
+        "dynamicToolSchemas": [
+          {
+            "description": "Activate a skill for the next iteration. Available skills:\n  - refund: refunds\n\nPass the skill's id. The skill's body becomes part of the system prompt and any gated tools become available on the next call.",
+            "inputSchema": {
+              "properties": {
+                "id": {
+                  "description": "The skill id to activate.",
+                  "enum": [
+                    "refund"
+                  ],
+                  "type": "string"
+                }
+              },
+              "required": [
+                "id"
+              ],
+              "type": "object"
+            },
+            "name": "read_skill"
+          },
+          {
+            "description": "the lookup tool",
+            "inputSchema": {
+              "properties": {},
+              "type": "object"
+            },
+            "name": "lookup"
+          },
+          {
+            "description": "the charge tool",
+            "inputSchema": {
+              "properties": {},
+              "type": "object"
+            },
+            "name": "charge"
+          }
+        ],
+        "finalContent": "",
+        "history": [
+          {
+            "content": "go",
+            "role": "user"
+          }
+        ],
+        "iteration": 1,
+        "llmLatestContent": "",
+        "llmLatestToolCalls": [],
+        "maxIterations": 6,
+        "messagesInjections": [],
+        "newMessages": [],
+        "pausedToolCallId": "",
+        "pausedToolName": "",
+        "pausedToolStartMs": "<volatile>",
+        "runIdentity": {
+          "conversationId": "<volatile>"
+        },
+        "skillHistory": [],
+        "stepNudgeSpent": false,
+        "stepPointer": [],
+        "systemPromptInjections": [],
+        "thinkingBlocks": [],
+        "toolsInjections": [],
+        "totalInputTokens": 0,
+        "totalOutputTokens": 0,
+        "turnNumber": 1,
+        "turnStartMs": "<volatile>",
+        "userMessage": "go"
+      },
+      "redactedPaths": [],
+      "runtimeStageId": "seed#0",
+      "stage": "Initialize",
+      "stageId": "seed",
+      "trace": [
+        {
+          "path": "userMessage",
+          "verb": "set"
+        },
+        {
+          "path": "history",
+          "verb": "set"
+        },
+        {
+          "path": "runIdentity",
+          "verb": "set"
+        },
+        {
+          "path": "newMessages",
+          "verb": "set"
+        },
+        {
+          "path": "turnNumber",
+          "verb": "set"
+        },
+        {
+          "path": "contextTokensRemaining",
+          "verb": "set"
+        },
+        {
+          "path": "iteration",
+          "verb": "set"
+        },
+        {
+          "path": "maxIterations",
+          "verb": "set"
+        },
+        {
+          "path": "finalContent",
+          "verb": "set"
+        },
+        {
+          "path": "totalInputTokens",
+          "verb": "set"
+        },
+        {
+          "path": "totalOutputTokens",
+          "verb": "set"
+        },
+        {
+          "path": "turnStartMs",
+          "verb": "set"
+        },
+        {
+          "path": "systemPromptInjections",
+          "verb": "set"
+        },
+        {
+          "path": "messagesInjections",
+          "verb": "set"
+        },
+        {
+          "path": "toolsInjections",
+          "verb": "set"
+        },
+        {
+          "path": "llmLatestContent",
+          "verb": "set"
+        },
+        {
+          "path": "llmLatestToolCalls",
+          "verb": "set"
+        },
+        {
+          "path": "thinkingBlocks",
+          "verb": "set"
+        },
+        {
+          "path": "pausedToolCallId",
+          "verb": "set"
+        },
+        {
+          "path": "pausedToolName",
+          "verb": "set"
+        },
+        {
+          "path": "pausedToolStartMs",
+          "verb": "set"
+        },
+        {
+          "path": "cumTokensInput",
+          "verb": "set"
+        },
+        {
+          "path": "cumTokensOutput",
+          "verb": "set"
+        },
+        {
+          "path": "cumEstimatedUsd",
+          "verb": "set"
+        },
+        {
+          "path": "costBudgetHit",
+          "verb": "set"
+        },
+        {
+          "path": "activeInjections",
+          "verb": "set"
+        },
+        {
+          "path": "activatedInjectionIds",
+          "verb": "set"
+        },
+        {
+          "path": "dynamicToolSchemas",
+          "verb": "set"
+        },
+        {
+          "path": "deliveredMessageKeys",
+          "verb": "set"
+        },
+        {
+          "path": "cacheMarkers",
+          "verb": "set"
+        },
+        {
+          "path": "cachingDisabled",
+          "verb": "set"
+        },
+        {
+          "path": "skillHistory",
+          "verb": "set"
+        },
+        {
+          "path": "stepPointer",
+          "verb": "set"
+        },
+        {
+          "path": "stepNudgeSpent",
+          "verb": "set"
+        }
+      ],
+      "untrackedSources": [
+        "args"
+      ],
+      "updates": {}
+    },
+    {
+      "idx": 1,
+      "overwrite": {
+        "activeByslot": {
+          "messages": [],
+          "systemPrompt": [
+            {
+              "id": "refund",
+              "reason": "refunds",
+              "source": "skill"
+            },
+            {
+              "id": "skill-steps-hint",
+              "reason": "Advisory note while a declared skill procedure is in progress",
+              "source": "instructions"
+            }
+          ],
+          "tools": [
+            {
+              "id": "refund",
+              "reason": "refunds",
+              "source": "skill"
+            }
+          ]
+        },
+        "activeInjections": [
+          {
+            "cache": "while-active",
+            "description": "refunds",
+            "flavor": "skill",
+            "id": "refund",
+            "inject": {
+              "systemPrompt": "REFUND_BODY",
+              "tools": [
+                {
+                  "injectionId": "refund",
+                  "schema": {
+                    "description": "the lookup tool",
+                    "inputSchema": {
+                      "properties": {},
+                      "type": "object"
+                    },
+                    "name": "lookup"
+                  }
+                },
+                {
+                  "injectionId": "refund",
+                  "schema": {
+                    "description": "the charge tool",
+                    "inputSchema": {
+                      "properties": {},
+                      "type": "object"
+                    },
+                    "name": "charge"
+                  }
+                }
+              ]
+            },
+            "surfaceMode": "auto"
+          },
+          {
+            "description": "Advisory note while a declared skill procedure is in progress",
+            "flavor": "instructions",
+            "id": "skill-steps-hint",
+            "inject": {
+              "systemPrompt": "This skill declares a step-by-step procedure. The current step leads the matching tool's description (“[Step k of n — …]”). Steps are a declared order, not a cage: skip one with `skip_step(reason)` if it cannot or should not run — the reason goes on the record — and your other tools remain available throughout."
+            }
+          }
+        ],
+        "currentSkillId": "refund",
+        "stepPointer": [
+          {
+            "skillId": "refund",
+            "skipped": [],
+            "step": 1,
+            "total": 2
+          }
+        ]
+      },
+      "redactedPaths": [],
+      "runtimeStageId": "sf-injection-engine#1",
+      "stage": "Injection Engine",
+      "stageId": "sf-injection-engine",
+      "tags": [
+        "milestone:iteration",
+        "milestone-label:Iteration"
+      ],
+      "trace": [
+        {
+          "path": "activeInjections",
+          "verb": "append"
+        },
+        {
+          "path": "activeByslot\u001fsystemPrompt",
+          "verb": "set"
+        },
+        {
+          "path": "activeByslot\u001fmessages",
+          "verb": "set"
+        },
+        {
+          "path": "activeByslot\u001ftools",
+          "verb": "set"
+        },
+        {
+          "path": "currentSkillId",
+          "verb": "set"
+        },
+        {
+          "path": "stepPointer",
+          "verb": "append"
+        }
+      ],
+      "updates": {}
+    },
+    {
+      "idx": 2,
+      "overwrite": {},
+      "redactedPaths": [],
+      "runtimeStageId": "sf-injection-engine#1",
+      "stage": "Injection Engine",
+      "stageId": "sf-injection-engine",
+      "trace": [],
+      "updates": {}
+    },
+    {
+      "idx": 3,
+      "overwrite": {},
+      "redactedPaths": [],
+      "runtimeStageId": "context#6",
+      "stage": "Context",
+      "stageId": "context",
+      "trace": [],
+      "updates": {}
+    },
+    {
+      "idx": 4,
+      "overwrite": {
+        "systemPromptInjections": [
+          {
+            "contentHash": "e168e7e9",
+            "contentSummary": "bot",
+            "rawContent": "bot",
+            "reason": "Agent.system()",
+            "slot": "system-prompt",
+            "source": "base"
+          },
+          {
+            "contentHash": "872a881e",
+            "contentSummary": "REFUND_BODY",
+            "rawContent": "REFUND_BODY",
+            "reason": "refunds",
+            "slot": "system-prompt",
+            "source": "skill",
+            "sourceId": "refund"
+          },
+          {
+            "contentHash": "430f5fc6",
+            "contentSummary": "This skill declares a step-by-step procedure. The current step leads the matchi…",
+            "rawContent": "This skill declares a step-by-step procedure. The current step leads the matching tool's description (“[Step k of n — …]”). Steps are a declared order, not a cage: skip one with `skip_step(reason)` if it cannot or should not run — the reason goes on the record — and your other tools remain available throughout.",
+            "reason": "Advisory note while a declared skill procedure is in progress",
+            "slot": "system-prompt",
+            "source": "instructions",
+            "sourceId": "skill-steps-hint"
+          }
+        ]
+      },
+      "redactedPaths": [],
+      "runtimeStageId": "context#6",
+      "stage": "Context",
+      "stageId": "context",
+      "trace": [
+        {
+          "path": "systemPromptInjections",
+          "verb": "append"
+        }
+      ],
+      "updates": {}
+    },
+    {
+      "idx": 5,
+      "overwrite": {},
+      "redactedPaths": [],
+      "runtimeStageId": "sf-system-prompt#7",
+      "stage": "System Prompt",
+      "stageId": "sf-system-prompt",
+      "tags": [
+        "milestone:slot",
+        "milestone-label:System prompt"
+      ],
+      "trace": [],
+      "updates": {}
+    },
+    {
+      "idx": 6,
+      "overwrite": {
+        "messagesInjections": [
+          {
+            "asRecency": "latest",
+            "asRole": "user",
+            "contentHash": "bce8e74",
+            "contentSummary": "go",
+            "position": 0,
+            "rawContent": "go",
+            "reason": "conversation history [0]",
+            "slot": "messages",
+            "source": "user"
+          }
+        ]
+      },
+      "redactedPaths": [],
+      "runtimeStageId": "context#6",
+      "stage": "Context",
+      "stageId": "context",
+      "trace": [
+        {
+          "path": "messagesInjections",
+          "verb": "append"
+        }
+      ],
+      "updates": {}
+    },
+    {
+      "idx": 7,
+      "overwrite": {},
+      "redactedPaths": [],
+      "runtimeStageId": "sf-messages#9",
+      "stage": "Messages",
+      "stageId": "sf-messages",
+      "tags": [
+        "milestone:slot",
+        "milestone-label:Messages"
+      ],
+      "trace": [],
+      "updates": {}
+    },
+    {
+      "idx": 8,
+      "overwrite": {},
+      "redactedPaths": [],
+      "runtimeStageId": "sf-system-prompt#7",
+      "stage": "System Prompt",
+      "stageId": "sf-system-prompt",
+      "trace": [],
+      "updates": {}
+    },
+    {
+      "idx": 9,
+      "overwrite": {},
+      "redactedPaths": [],
+      "runtimeStageId": "sf-messages#9",
+      "stage": "Messages",
+      "stageId": "sf-messages",
+      "trace": [],
+      "updates": {}
+    },
+    {
+      "idx": 10,
+      "overwrite": {
+        "dynamicToolSchemas": [
+          {
+            "description": "You are in 'refund'.\n\nActivate a skill for the next iteration.\n\nNothing is reachable from here — answer with the skill you are in, or finish.\n\nPass the skill's id. The skill's body becomes part of the system prompt and any gated tools become available on the next call.",
+            "inputSchema": {
+              "properties": {
+                "id": {
+                  "description": "The skill id to activate.",
+                  "enum": [
+                    "refund"
+                  ],
+                  "type": "string"
+                }
+              },
+              "required": [
+                "id"
+              ],
+              "type": "object"
+            },
+            "name": "read_skill"
+          },
+          {
+            "description": "[Step 1 of 2 — find the order first] the lookup tool",
+            "inputSchema": {
+              "properties": {},
+              "type": "object"
+            },
+            "name": "lookup"
+          },
+          {
+            "description": "Skip step 1 of 2 ('lookup' — find the order first) with a recorded reason. 2 step(s) remain in the 'refund' procedure. On skip, the procedure moves to the next step (declared policy: 'advance').",
+            "inputSchema": {
+              "additionalProperties": false,
+              "properties": {
+                "reason": {
+                  "description": "Why this step cannot or should not run. Goes on the record.",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "reason"
+              ],
+              "type": "object"
+            },
+            "name": "skip_step"
+          }
+        ],
+        "toolsInjections": [
+          {
+            "contentHash": "8f9e6f72",
+            "contentSummary": "read_skill: You are in 'refund'.\n\nActivate a skill for the next iteration.\n\nNot…",
+            "position": 0,
+            "rawContent": "read_skill: You are in 'refund'.\n\nActivate a skill for the next iteration.\n\nNothing is reachable from here — answer with the skill you are in, or finish.\n\nPass the skill's id. The skill's body becomes part of the system prompt and any gated tools become available on the next call.",
+            "reason": "tool registry",
+            "slot": "tools",
+            "source": "registry",
+            "sourceId": "read_skill"
+          },
+          {
+            "contentHash": "89273244",
+            "contentSummary": "lookup: [Step 1 of 2 — find the order first] the lookup tool",
+            "position": 1,
+            "rawContent": "lookup: [Step 1 of 2 — find the order first] the lookup tool",
+            "reason": "tool registry",
+            "slot": "tools",
+            "source": "registry",
+            "sourceId": "lookup"
+          },
+          {
+            "contentHash": "e5922fa8",
+            "contentSummary": "lookup: [Step 1 of 2 — find the order first] the lookup tool",
+            "position": 2,
+            "rawContent": "lookup: [Step 1 of 2 — find the order first] the lookup tool",
+            "reason": "skill 'refund' unlocked tool 'lookup'",
+            "slot": "tools",
+            "source": "skill",
+            "sourceId": "refund"
+          },
+          {
+            "contentHash": "959b5a24",
+            "contentSummary": "skip_step: Skip step 1 of 2 ('lookup' — find the order first) with a recorded r…",
+            "position": 3,
+            "rawContent": "skip_step: Skip step 1 of 2 ('lookup' — find the order first) with a recorded reason. 2 step(s) remain in the 'refund' procedure. On skip, the procedure moves to the next step (declared policy: 'advance').",
+            "reason": "skill 'refund' step 1 of 2 — skip_step offered (procedure integrity)",
+            "slot": "tools",
+            "source": "skill",
+            "sourceId": "refund"
+          }
+        ]
+      },
+      "redactedPaths": [],
+      "runtimeStageId": "context#6",
+      "stage": "Context",
+      "stageId": "context",
+      "trace": [
+        {
+          "path": "toolsInjections",
+          "verb": "append"
+        },
+        {
+          "path": "dynamicToolSchemas",
+          "verb": "set"
+        }
+      ],
+      "updates": {}
+    },
+    {
+      "idx": 11,
+      "overwrite": {},
+      "redactedPaths": [],
+      "runtimeStageId": "sf-tools#11",
+      "stage": "Tools",
+      "stageId": "sf-tools",
+      "tags": [
+        "milestone:slot",
+        "milestone-label:Tools"
+      ],
+      "trace": [],
+      "updates": {}
+    },
+    {
+      "idx": 12,
+      "overwrite": {},
+      "redactedPaths": [],
+      "runtimeStageId": "sf-tools#11",
+      "stage": "Tools",
+      "stageId": "sf-tools",
+      "trace": [],
+      "updates": {}
+    },
+    {
+      "idx": 13,
+      "overwrite": {
+        "skillHistory": [
+          null
+        ]
+      },
+      "redactedPaths": [],
+      "runtimeStageId": "update-skill-history#14",
+      "stage": "UpdateSkillHistory",
+      "stageId": "update-skill-history",
+      "trace": [
+        {
+          "path": "skillHistory",
+          "verb": "append"
+        }
+      ],
+      "updates": {}
+    },
+    {
+      "idx": 14,
+      "overwrite": {
+        "cacheMarkers": [
+          {
+            "boundaryIndex": 1,
+            "field": "system",
+            "reason": "system stable prefix (2 entries, ending at skill:refund)",
+            "ttl": "short"
+          },
+          {
+            "boundaryIndex": 0,
+            "field": "tools",
+            "reason": "tools stable prefix (1 entries, ending at skill:refund)",
+            "ttl": "short"
+          }
+        ]
+      },
+      "redactedPaths": [],
+      "runtimeStageId": "sf-cache#15",
+      "stage": "Cache",
+      "stageId": "sf-cache",
+      "trace": [
+        {
+          "path": "cacheMarkers",
+          "verb": "append"
+        }
+      ],
+      "updates": {}
+    },
+    {
+      "idx": 15,
+      "overwrite": {},
+      "redactedPaths": [],
+      "runtimeStageId": "sf-cache#15",
+      "stage": "Cache",
+      "stageId": "sf-cache",
+      "trace": [],
+      "updates": {}
+    },
+    {
+      "idx": 16,
+      "overwrite": {
+        "llmLatestToolCalls": [
+          {
+            "args": {},
+            "id": "c1",
+            "name": "lookup"
+          }
+        ],
+        "receipt": {
+          "basis": {
+            "epoch": 1,
+            "model": "mock",
+            "provider": "byte-identity-mock",
+            "runId": "<volatile>"
+          },
+          "cache": {
+            "markersApplied": [],
+            "transform": "unchanged",
+            "transformHash": null
+          },
+          "messages": {
+            "count": 1,
+            "entries": [
+              {
+                "hash": "<digest>",
+                "role": "user"
+              }
+            ],
+            "requestOnly": []
+          },
+          "params": {},
+          "system": {
+            "chars": 330,
+            "hash": "<digest>",
+            "pieces": [
+              {
+                "hash": "<digest>",
+                "slot": "system-prompt",
+                "source": "base"
+              },
+              {
+                "hash": "<digest>",
+                "slot": "system-prompt",
+                "source": "skill"
+              },
+              {
+                "hash": "<digest>",
+                "slot": "system-prompt",
+                "source": "instructions"
+              }
+            ]
+          },
+          "tools": {
+            "forced": null,
+            "names": [
+              "read_skill",
+              "lookup",
+              "skip_step"
+            ],
+            "schemaHashes": {
+              "lookup": "<digest>",
+              "read_skill": "<digest>",
+              "skip_step": "<digest>"
+            },
+            "withheld": null
+          }
+        }
+      },
+      "redactedPaths": [],
+      "runtimeStageId": "call-llm#19",
+      "stage": "CallLLM",
+      "stageId": "call-llm",
+      "tags": [
+        "milestone:llm-turn",
+        "milestone-label:LLM turn"
+      ],
+      "trace": [
+        {
+          "path": "receipt",
+          "verb": "set"
+        },
+        {
+          "path": "llmLatestToolCalls",
+          "verb": "append"
+        }
+      ],
+      "updates": {}
+    },
+    {
+      "idx": 17,
+      "overwrite": {},
+      "redactedPaths": [],
+      "runtimeStageId": "sf-route#20",
+      "stage": "Route",
+      "stageId": "sf-route",
+      "tags": [
+        "milestone:decision",
+        "milestone-label:Route"
+      ],
+      "trace": [],
+      "updates": {}
+    },
+    {
+      "idx": 18,
+      "overwrite": {
+        "history": [
+          {
+            "content": "",
+            "role": "assistant",
+            "toolCalls": [
+              {
+                "args": {},
+                "id": "c1",
+                "name": "lookup"
+              }
+            ]
+          },
+          {
+            "content": "lookup result Step 1 of 2 done. Now on step 2 of 2: refund the charge (tool: `charge`).",
+            "role": "tool",
+            "toolCallId": "c1",
+            "toolName": "lookup"
+          }
+        ],
+        "iteration": 2,
+        "lastToolResult": {
+          "result": "lookup result Step 1 of 2 done. Now on step 2 of 2: refund the charge (tool: `charge`).",
+          "toolName": "lookup"
+        },
+        "stepPointer": [
+          {
+            "skillId": "refund",
+            "skipped": [],
+            "step": 2,
+            "total": 2
+          }
+        ],
+        "toolResults": [
+          {
+            "result": "lookup result Step 1 of 2 done. Now on step 2 of 2: refund the charge (tool: `charge`).",
+            "toolCallId": "c1",
+            "toolName": "lookup"
+          }
+        ]
+      },
+      "redactedPaths": [],
+      "runtimeStageId": "tool-calls#21",
+      "stage": "ToolCalls",
+      "stageId": "tool-calls",
+      "tags": [
+        "milestone:tool-call",
+        "milestone-label:Tool call"
+      ],
+      "trace": [
+        {
+          "path": "stepPointer",
+          "verb": "set"
+        },
+        {
+          "path": "lastToolResult",
+          "verb": "set"
+        },
+        {
+          "path": "toolResults",
+          "verb": "set"
+        },
+        {
+          "path": "history",
+          "verb": "append"
+        },
+        {
+          "path": "iteration",
+          "verb": "set"
+        }
+      ],
+      "updates": {}
+    },
+    {
+      "idx": 19,
+      "overwrite": {
+        "activeByslot": {
+          "systemPrompt": [
+            {
+              "id": "refund",
+              "reason": "refunds",
+              "source": "skill"
+            },
+            {
+              "id": "skill-steps-hint",
+              "reason": "Advisory note while a declared skill procedure is in progress",
+              "source": "instructions"
+            }
+          ],
+          "tools": [
+            {
+              "id": "refund",
+              "reason": "refunds",
+              "source": "skill"
+            }
+          ]
+        }
+      },
+      "redactedPaths": [],
+      "runtimeStageId": "sf-injection-engine#22",
+      "stage": "Injection Engine",
+      "stageId": "sf-injection-engine",
+      "tags": [
+        "milestone:iteration",
+        "milestone-label:Iteration"
+      ],
+      "trace": [
+        {
+          "path": "activeByslot\u001fsystemPrompt",
+          "verb": "append"
+        },
+        {
+          "path": "activeByslot\u001ftools",
+          "verb": "append"
+        }
+      ],
+      "updates": {}
+    },
+    {
+      "idx": 20,
+      "overwrite": {},
+      "redactedPaths": [],
+      "runtimeStageId": "sf-injection-engine#22",
+      "stage": "Injection Engine",
+      "stageId": "sf-injection-engine",
+      "trace": [],
+      "updates": {}
+    },
+    {
+      "idx": 21,
+      "overwrite": {},
+      "redactedPaths": [],
+      "runtimeStageId": "context#27",
+      "stage": "Context",
+      "stageId": "context",
+      "trace": [],
+      "updates": {}
+    },
+    {
+      "idx": 22,
+      "overwrite": {},
+      "redactedPaths": [],
+      "runtimeStageId": "context#27",
+      "stage": "Context",
+      "stageId": "context",
+      "trace": [],
+      "updates": {}
+    },
+    {
+      "idx": 23,
+      "overwrite": {},
+      "redactedPaths": [],
+      "runtimeStageId": "sf-system-prompt#28",
+      "stage": "System Prompt",
+      "stageId": "sf-system-prompt",
+      "tags": [
+        "milestone:slot",
+        "milestone-label:System prompt"
+      ],
+      "trace": [],
+      "updates": {}
+    },
+    {
+      "idx": 24,
+      "overwrite": {
+        "messagesInjections": [
+          {
+            "asRecency": "earlier",
+            "asRole": "user",
+            "contentHash": "bce8e74",
+            "contentSummary": "go",
+            "position": 0,
+            "rawContent": "go",
+            "reason": "conversation history [0]",
+            "slot": "messages",
+            "source": "user"
+          },
+          {
+            "asRecency": "earlier",
+            "asRole": "assistant",
+            "contentHash": "62db47c8",
+            "contentSummary": "",
+            "position": 1,
+            "rawContent": "",
+            "reason": "conversation history [1]",
+            "slot": "messages",
+            "source": "assistant"
+          },
+          {
+            "asRecency": "latest",
+            "asRole": "tool",
+            "contentHash": "e965f5b8",
+            "contentSummary": "lookup result Step 1 of 2 done. Now on step 2 of 2: refund the charge (tool: `c…",
+            "position": 2,
+            "rawContent": "lookup result Step 1 of 2 done. Now on step 2 of 2: refund the charge (tool: `charge`).",
+            "reason": "conversation history [2]",
+            "slot": "messages",
+            "source": "tool-result",
+            "sourceId": "c1"
+          }
+        ]
+      },
+      "redactedPaths": [],
+      "runtimeStageId": "context#27",
+      "stage": "Context",
+      "stageId": "context",
+      "trace": [
+        {
+          "path": "messagesInjections",
+          "verb": "set"
+        }
+      ],
+      "updates": {}
+    },
+    {
+      "idx": 25,
+      "overwrite": {},
+      "redactedPaths": [],
+      "runtimeStageId": "sf-messages#30",
+      "stage": "Messages",
+      "stageId": "sf-messages",
+      "tags": [
+        "milestone:slot",
+        "milestone-label:Messages"
+      ],
+      "trace": [],
+      "updates": {}
+    },
+    {
+      "idx": 26,
+      "overwrite": {},
+      "redactedPaths": [],
+      "runtimeStageId": "sf-system-prompt#28",
+      "stage": "System Prompt",
+      "stageId": "sf-system-prompt",
+      "trace": [],
+      "updates": {}
+    },
+    {
+      "idx": 27,
+      "overwrite": {},
+      "redactedPaths": [],
+      "runtimeStageId": "sf-messages#30",
+      "stage": "Messages",
+      "stageId": "sf-messages",
+      "trace": [],
+      "updates": {}
+    },
+    {
+      "idx": 28,
+      "overwrite": {
+        "dynamicToolSchemas": [
+          {
+            "description": "You are in 'refund'.\n\nActivate a skill for the next iteration.\n\nNothing is reachable from here — answer with the skill you are in, or finish.\n\nPass the skill's id. The skill's body becomes part of the system prompt and any gated tools become available on the next call.",
+            "inputSchema": {
+              "properties": {
+                "id": {
+                  "description": "The skill id to activate.",
+                  "enum": [
+                    "refund"
+                  ],
+                  "type": "string"
+                }
+              },
+              "required": [
+                "id"
+              ],
+              "type": "object"
+            },
+            "name": "read_skill"
+          },
+          {
+            "description": "[Step 2 of 2 — refund the charge] the charge tool",
+            "inputSchema": {
+              "properties": {},
+              "type": "object"
+            },
+            "name": "charge"
+          },
+          {
+            "description": "Skip step 2 of 2 ('charge' — refund the charge) with a recorded reason. 1 step(s) remain in the 'refund' procedure. On skip, the procedure moves to the next step (declared policy: 'advance').",
+            "inputSchema": {
+              "additionalProperties": false,
+              "properties": {
+                "reason": {
+                  "description": "Why this step cannot or should not run. Goes on the record.",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "reason"
+              ],
+              "type": "object"
+            },
+            "name": "skip_step"
+          }
+        ],
+        "toolsInjections": [
+          {
+            "contentHash": "8f9e6f72",
+            "contentSummary": "read_skill: You are in 'refund'.\n\nActivate a skill for the next iteration.\n\nNot…",
+            "position": 0,
+            "rawContent": "read_skill: You are in 'refund'.\n\nActivate a skill for the next iteration.\n\nNothing is reachable from here — answer with the skill you are in, or finish.\n\nPass the skill's id. The skill's body becomes part of the system prompt and any gated tools become available on the next call.",
+            "reason": "tool registry",
+            "slot": "tools",
+            "source": "registry",
+            "sourceId": "read_skill"
+          },
+          {
+            "contentHash": "a9ca2702",
+            "contentSummary": "charge: [Step 2 of 2 — refund the charge] the charge tool",
+            "position": 1,
+            "rawContent": "charge: [Step 2 of 2 — refund the charge] the charge tool",
+            "reason": "tool registry",
+            "slot": "tools",
+            "source": "registry",
+            "sourceId": "charge"
+          },
+          {
+            "contentHash": "b63cee26",
+            "contentSummary": "charge: [Step 2 of 2 — refund the charge] the charge tool",
+            "position": 2,
+            "rawContent": "charge: [Step 2 of 2 — refund the charge] the charge tool",
+            "reason": "skill 'refund' unlocked tool 'charge'",
+            "slot": "tools",
+            "source": "skill",
+            "sourceId": "refund"
+          },
+          {
+            "contentHash": "959b5a24",
+            "contentSummary": "skip_step: Skip step 2 of 2 ('charge' — refund the charge) with a recorded reas…",
+            "position": 3,
+            "rawContent": "skip_step: Skip step 2 of 2 ('charge' — refund the charge) with a recorded reason. 1 step(s) remain in the 'refund' procedure. On skip, the procedure moves to the next step (declared policy: 'advance').",
+            "reason": "skill 'refund' step 2 of 2 — skip_step offered (procedure integrity)",
+            "slot": "tools",
+            "source": "skill",
+            "sourceId": "refund"
+          }
+        ]
+      },
+      "redactedPaths": [],
+      "runtimeStageId": "context#27",
+      "stage": "Context",
+      "stageId": "context",
+      "trace": [
+        {
+          "path": "toolsInjections",
+          "verb": "set"
+        },
+        {
+          "path": "dynamicToolSchemas",
+          "verb": "set"
+        }
+      ],
+      "updates": {}
+    },
+    {
+      "idx": 29,
+      "overwrite": {},
+      "redactedPaths": [],
+      "runtimeStageId": "sf-tools#32",
+      "stage": "Tools",
+      "stageId": "sf-tools",
+      "tags": [
+        "milestone:slot",
+        "milestone-label:Tools"
+      ],
+      "trace": [],
+      "updates": {}
+    },
+    {
+      "idx": 30,
+      "overwrite": {},
+      "redactedPaths": [],
+      "runtimeStageId": "sf-tools#32",
+      "stage": "Tools",
+      "stageId": "sf-tools",
+      "trace": [],
+      "updates": {}
+    },
+    {
+      "idx": 31,
+      "overwrite": {
+        "skillHistory": [
+          null
+        ]
+      },
+      "redactedPaths": [],
+      "runtimeStageId": "update-skill-history#35",
+      "stage": "UpdateSkillHistory",
+      "stageId": "update-skill-history",
+      "trace": [
+        {
+          "path": "skillHistory",
+          "verb": "append"
+        }
+      ],
+      "updates": {}
+    },
+    {
+      "idx": 32,
+      "overwrite": {},
+      "redactedPaths": [],
+      "runtimeStageId": "sf-cache#36",
+      "stage": "Cache",
+      "stageId": "sf-cache",
+      "trace": [],
+      "updates": {}
+    },
+    {
+      "idx": 33,
+      "overwrite": {},
+      "redactedPaths": [],
+      "runtimeStageId": "sf-cache#36",
+      "stage": "Cache",
+      "stageId": "sf-cache",
+      "trace": [],
+      "updates": {}
+    },
+    {
+      "idx": 34,
+      "overwrite": {
+        "llmLatestContent": "done",
+        "llmLatestToolCalls": [],
+        "receipt": {
+          "basis": {
+            "epoch": 2,
+            "model": "mock",
+            "provider": "byte-identity-mock",
+            "runId": "<volatile>"
+          },
+          "cache": {
+            "markersApplied": [],
+            "transform": "unchanged",
+            "transformHash": null
+          },
+          "messages": {
+            "count": 3,
+            "entries": [
+              {
+                "hash": "<digest>",
+                "role": "user"
+              },
+              {
+                "hash": "<digest>",
+                "role": "assistant"
+              },
+              {
+                "hash": "<digest>",
+                "key": "c1",
+                "role": "tool"
+              }
+            ],
+            "requestOnly": []
+          },
+          "params": {},
+          "system": {
+            "chars": 330,
+            "hash": "<digest>",
+            "pieces": [
+              {
+                "hash": "<digest>",
+                "slot": "system-prompt",
+                "source": "base"
+              },
+              {
+                "hash": "<digest>",
+                "slot": "system-prompt",
+                "source": "skill"
+              },
+              {
+                "hash": "<digest>",
+                "slot": "system-prompt",
+                "source": "instructions"
+              }
+            ]
+          },
+          "tools": {
+            "forced": null,
+            "names": [
+              "read_skill",
+              "charge",
+              "skip_step"
+            ],
+            "schemaHashes": {
+              "charge": "<digest>",
+              "read_skill": "<digest>",
+              "skip_step": "<digest>"
+            },
+            "withheld": null
+          }
+        }
+      },
+      "redactedPaths": [],
+      "runtimeStageId": "call-llm#40",
+      "stage": "CallLLM",
+      "stageId": "call-llm",
+      "tags": [
+        "milestone:llm-turn",
+        "milestone-label:LLM turn"
+      ],
+      "trace": [
+        {
+          "path": "receipt",
+          "verb": "set"
+        },
+        {
+          "path": "llmLatestContent",
+          "verb": "set"
+        },
+        {
+          "path": "llmLatestToolCalls",
+          "verb": "set"
+        }
+      ],
+      "updates": {}
+    },
+    {
+      "idx": 35,
+      "overwrite": {},
+      "redactedPaths": [],
+      "runtimeStageId": "sf-route#41",
+      "stage": "Route",
+      "stageId": "sf-route",
+      "tags": [
+        "milestone:decision",
+        "milestone-label:Route"
+      ],
+      "trace": [],
+      "updates": {}
+    },
+    {
+      "idx": 36,
+      "overwrite": {
+        "history": [
+          {
+            "content": "done",
+            "role": "assistant"
+          },
+          {
+            "content": "[steps unrun — Step 2 of 'refund' had not run when the answer above was given: 2: refund the charge (`charge`). This message asked for them to be run, or for the reason they were not run.]",
+            "role": "user"
+          }
+        ],
+        "iteration": 3,
+        "stepNudgeSpent": true
+      },
+      "redactedPaths": [],
+      "runtimeStageId": "step-nudge#42",
+      "stage": "StepNudge",
+      "stageId": "step-nudge",
+      "tags": [
+        "milestone:decision",
+        "milestone-label:Step nudge"
+      ],
+      "trace": [
+        {
+          "path": "history",
+          "verb": "append"
+        },
+        {
+          "path": "stepNudgeSpent",
+          "verb": "set"
+        },
+        {
+          "path": "iteration",
+          "verb": "set"
+        }
+      ],
+      "updates": {}
+    },
+    {
+      "idx": 37,
+      "overwrite": {
+        "activeByslot": {
+          "systemPrompt": [
+            {
+              "id": "refund",
+              "reason": "refunds",
+              "source": "skill"
+            },
+            {
+              "id": "skill-steps-hint",
+              "reason": "Advisory note while a declared skill procedure is in progress",
+              "source": "instructions"
+            }
+          ],
+          "tools": [
+            {
+              "id": "refund",
+              "reason": "refunds",
+              "source": "skill"
+            }
+          ]
+        }
+      },
+      "redactedPaths": [],
+      "runtimeStageId": "sf-injection-engine#43",
+      "stage": "Injection Engine.1",
+      "stageId": "sf-injection-engine",
+      "tags": [
+        "milestone:iteration",
+        "milestone-label:Iteration"
+      ],
+      "trace": [
+        {
+          "path": "activeByslot\u001fsystemPrompt",
+          "verb": "append"
+        },
+        {
+          "path": "activeByslot\u001ftools",
+          "verb": "append"
+        }
+      ],
+      "updates": {}
+    },
+    {
+      "idx": 38,
+      "overwrite": {},
+      "redactedPaths": [],
+      "runtimeStageId": "sf-injection-engine#43",
+      "stage": "Injection Engine.1",
+      "stageId": "sf-injection-engine",
+      "trace": [],
+      "updates": {}
+    },
+    {
+      "idx": 39,
+      "overwrite": {},
+      "redactedPaths": [],
+      "runtimeStageId": "context#48",
+      "stage": "Context",
+      "stageId": "context",
+      "trace": [],
+      "updates": {}
+    },
+    {
+      "idx": 40,
+      "overwrite": {},
+      "redactedPaths": [],
+      "runtimeStageId": "context#48",
+      "stage": "Context",
+      "stageId": "context",
+      "trace": [],
+      "updates": {}
+    },
+    {
+      "idx": 41,
+      "overwrite": {},
+      "redactedPaths": [],
+      "runtimeStageId": "sf-system-prompt#49",
+      "stage": "System Prompt",
+      "stageId": "sf-system-prompt",
+      "tags": [
+        "milestone:slot",
+        "milestone-label:System prompt"
+      ],
+      "trace": [],
+      "updates": {}
+    },
+    {
+      "idx": 42,
+      "overwrite": {
+        "messagesInjections": [
+          {
+            "asRecency": "earlier",
+            "asRole": "user",
+            "contentHash": "bce8e74",
+            "contentSummary": "go",
+            "position": 0,
+            "rawContent": "go",
+            "reason": "conversation history [0]",
+            "slot": "messages",
+            "source": "user"
+          },
+          {
+            "asRecency": "earlier",
+            "asRole": "assistant",
+            "contentHash": "62db47c8",
+            "contentSummary": "",
+            "position": 1,
+            "rawContent": "",
+            "reason": "conversation history [1]",
+            "slot": "messages",
+            "source": "assistant"
+          },
+          {
+            "asRecency": "earlier",
+            "asRole": "tool",
+            "contentHash": "e965f5b8",
+            "contentSummary": "lookup result Step 1 of 2 done. Now on step 2 of 2: refund the charge (tool: `c…",
+            "position": 2,
+            "rawContent": "lookup result Step 1 of 2 done. Now on step 2 of 2: refund the charge (tool: `charge`).",
+            "reason": "conversation history [2]",
+            "slot": "messages",
+            "source": "tool-result",
+            "sourceId": "c1"
+          },
+          {
+            "asRecency": "earlier",
+            "asRole": "assistant",
+            "contentHash": "91e3ed1a",
+            "contentSummary": "done",
+            "position": 3,
+            "rawContent": "done",
+            "reason": "conversation history [3]",
+            "slot": "messages",
+            "source": "assistant"
+          },
+          {
+            "asRecency": "latest",
+            "asRole": "user",
+            "contentHash": "fa10958e",
+            "contentSummary": "[steps unrun — Step 2 of 'refund' had not run when the answer above was given: …",
+            "position": 4,
+            "rawContent": "[steps unrun — Step 2 of 'refund' had not run when the answer above was given: 2: refund the charge (`charge`). This message asked for them to be run, or for the reason they were not run.]",
+            "reason": "conversation history [4]",
+            "slot": "messages",
+            "source": "user"
+          }
+        ]
+      },
+      "redactedPaths": [],
+      "runtimeStageId": "context#48",
+      "stage": "Context",
+      "stageId": "context",
+      "trace": [
+        {
+          "path": "messagesInjections",
+          "verb": "set"
+        }
+      ],
+      "updates": {}
+    },
+    {
+      "idx": 43,
+      "overwrite": {},
+      "redactedPaths": [],
+      "runtimeStageId": "sf-messages#51",
+      "stage": "Messages",
+      "stageId": "sf-messages",
+      "tags": [
+        "milestone:slot",
+        "milestone-label:Messages"
+      ],
+      "trace": [],
+      "updates": {}
+    },
+    {
+      "idx": 44,
+      "overwrite": {},
+      "redactedPaths": [],
+      "runtimeStageId": "sf-system-prompt#49",
+      "stage": "System Prompt",
+      "stageId": "sf-system-prompt",
+      "trace": [],
+      "updates": {}
+    },
+    {
+      "idx": 45,
+      "overwrite": {},
+      "redactedPaths": [],
+      "runtimeStageId": "sf-messages#51",
+      "stage": "Messages",
+      "stageId": "sf-messages",
+      "trace": [],
+      "updates": {}
+    },
+    {
+      "idx": 46,
+      "overwrite": {},
+      "redactedPaths": [],
+      "runtimeStageId": "context#48",
+      "stage": "Context",
+      "stageId": "context",
+      "trace": [],
+      "updates": {}
+    },
+    {
+      "idx": 47,
+      "overwrite": {},
+      "redactedPaths": [],
+      "runtimeStageId": "sf-tools#53",
+      "stage": "Tools",
+      "stageId": "sf-tools",
+      "tags": [
+        "milestone:slot",
+        "milestone-label:Tools"
+      ],
+      "trace": [],
+      "updates": {}
+    },
+    {
+      "idx": 48,
+      "overwrite": {},
+      "redactedPaths": [],
+      "runtimeStageId": "sf-tools#53",
+      "stage": "Tools",
+      "stageId": "sf-tools",
+      "trace": [],
+      "updates": {}
+    },
+    {
+      "idx": 49,
+      "overwrite": {
+        "skillHistory": [
+          null
+        ]
+      },
+      "redactedPaths": [],
+      "runtimeStageId": "update-skill-history#56",
+      "stage": "UpdateSkillHistory",
+      "stageId": "update-skill-history",
+      "trace": [
+        {
+          "path": "skillHistory",
+          "verb": "append"
+        }
+      ],
+      "updates": {}
+    },
+    {
+      "idx": 50,
+      "overwrite": {},
+      "redactedPaths": [],
+      "runtimeStageId": "sf-cache#57",
+      "stage": "Cache",
+      "stageId": "sf-cache",
+      "trace": [],
+      "updates": {}
+    },
+    {
+      "idx": 51,
+      "overwrite": {},
+      "redactedPaths": [],
+      "runtimeStageId": "sf-cache#57",
+      "stage": "Cache",
+      "stageId": "sf-cache",
+      "trace": [],
+      "updates": {}
+    },
+    {
+      "idx": 52,
+      "overwrite": {
+        "receipt": {
+          "basis": {
+            "epoch": 3,
+            "model": "mock",
+            "provider": "byte-identity-mock",
+            "runId": "<volatile>"
+          },
+          "cache": {
+            "markersApplied": [],
+            "transform": "unchanged",
+            "transformHash": null
+          },
+          "messages": {
+            "count": 5,
+            "entries": [
+              {
+                "hash": "<digest>",
+                "role": "user"
+              },
+              {
+                "hash": "<digest>",
+                "role": "assistant"
+              },
+              {
+                "hash": "<digest>",
+                "key": "c1",
+                "role": "tool"
+              },
+              {
+                "hash": "<digest>",
+                "role": "assistant"
+              },
+              {
+                "hash": "<digest>",
+                "role": "user"
+              }
+            ],
+            "requestOnly": []
+          },
+          "params": {},
+          "system": {
+            "chars": 330,
+            "hash": "<digest>",
+            "pieces": [
+              {
+                "hash": "<digest>",
+                "slot": "system-prompt",
+                "source": "base"
+              },
+              {
+                "hash": "<digest>",
+                "slot": "system-prompt",
+                "source": "skill"
+              },
+              {
+                "hash": "<digest>",
+                "slot": "system-prompt",
+                "source": "instructions"
+              }
+            ]
+          },
+          "tools": {
+            "forced": null,
+            "names": [
+              "read_skill",
+              "charge",
+              "skip_step"
+            ],
+            "schemaHashes": {
+              "charge": "<digest>",
+              "read_skill": "<digest>",
+              "skip_step": "<digest>"
+            },
+            "withheld": null
+          }
+        }
+      },
+      "redactedPaths": [],
+      "runtimeStageId": "call-llm#61",
+      "stage": "CallLLM",
+      "stageId": "call-llm",
+      "tags": [
+        "milestone:llm-turn",
+        "milestone-label:LLM turn"
+      ],
+      "trace": [
+        {
+          "path": "receipt",
+          "verb": "set"
+        }
+      ],
+      "updates": {}
+    },
+    {
+      "idx": 53,
+      "overwrite": {},
+      "redactedPaths": [],
+      "runtimeStageId": "sf-route#62",
+      "stage": "Route",
+      "stageId": "sf-route",
+      "tags": [
+        "milestone:decision",
+        "milestone-label:Route"
+      ],
+      "trace": [],
+      "updates": {}
+    },
+    {
+      "idx": 54,
+      "overwrite": {},
+      "redactedPaths": [],
+      "runtimeStageId": "sf-route#62",
+      "stage": "Route",
+      "stageId": "sf-route",
+      "trace": [
+        {
+          "path": "finalContent",
+          "verb": "set"
+        }
+      ],
+      "updates": {}
+    },
+    {
+      "idx": 55,
+      "overwrite": {},
+      "redactedPaths": [],
+      "runtimeStageId": "final#63",
+      "stage": "Final",
+      "stageId": "final",
+      "trace": [],
+      "updates": {}
+    }
+  ],
+  "served": [
+    {
+      "epoch": 1,
+      "view": {
+        "basis": {
+          "model": "mock",
+          "provider": "byte-identity-mock",
+          "runId": "<volatile>"
+        },
+        "callRuntimeStageId": "call-llm#19",
+        "epoch": 1,
+        "gaps": [
+          {
+            "fields": [
+              "cache.transform",
+              "cache.transformHash",
+              "cache.markersApplied",
+              "system.hash",
+              "system.chars",
+              "system.pieces",
+              "messages.count",
+              "messages.entries",
+              "messages.requestOnly",
+              "tools.names",
+              "tools.schemaHashes"
+            ],
+            "gap": "cache-transform",
+            "why": "What reached the provider may differ from the fields below, and nothing on this view would show it. Where another gap on this view covers one of them, that gap is the stronger claim."
+          },
+          {
+            "fields": [
+              "params"
+            ],
+            "gap": "provider-defaults",
+            "why": "A dial absent below was not recorded; that is not the same as the model running without one. A receipt describes the request as this library last saw it. Whatever handled it after that could have changed it, and nothing on the receipt would show that."
+          }
+        ],
+        "messages": {
+          "asSent": [
+            {
+              "content": "go",
+              "role": "user"
+            }
+          ],
+          "requestOnly": []
+        },
+        "system": {
+          "pieces": [
+            {
+              "slot": "system-prompt",
+              "source": "base",
+              "text": "bot"
+            },
+            {
+              "slot": "system-prompt",
+              "source": "skill",
+              "text": "REFUND_BODY"
+            },
+            {
+              "slot": "system-prompt",
+              "source": "instructions",
+              "text": "This skill declares a step-by-step procedure. The current step leads the matching tool's description (“[Step k of n — …]”). Steps are a declared order, not a cage: skip one with `skip_step(reason)` if it cannot or should not run — the reason goes on the record — and your other tools remain available throughout."
+            }
+          ],
+          "text": "bot\n\nREFUND_BODY\n\nThis skill declares a step-by-step procedure. The current step leads the matching tool's description (“[Step k of n — …]”). Steps are a declared order, not a cage: skip one with `skip_step(reason)` if it cannot or should not run — the reason goes on the record — and your other tools remain available throughout."
+        },
+        "tools": {
+          "names": [
+            "read_skill",
+            "lookup",
+            "skip_step"
+          ],
+          "schemas": [
+            {
+              "description": "You are in 'refund'.\n\nActivate a skill for the next iteration.\n\nNothing is reachable from here — answer with the skill you are in, or finish.\n\nPass the skill's id. The skill's body becomes part of the system prompt and any gated tools become available on the next call.",
+              "inputSchema": {
+                "properties": {
+                  "id": {
+                    "description": "The skill id to activate.",
+                    "enum": [
+                      "refund"
+                    ],
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "id"
+                ],
+                "type": "object"
+              },
+              "name": "read_skill"
+            },
+            {
+              "description": "[Step 1 of 2 — find the order first] the lookup tool",
+              "inputSchema": {
+                "properties": {},
+                "type": "object"
+              },
+              "name": "lookup"
+            },
+            {
+              "description": "Skip step 1 of 2 ('lookup' — find the order first) with a recorded reason. 2 step(s) remain in the 'refund' procedure. On skip, the procedure moves to the next step (declared policy: 'advance').",
+              "inputSchema": {
+                "additionalProperties": false,
+                "properties": {
+                  "reason": {
+                    "description": "Why this step cannot or should not run. Goes on the record.",
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "reason"
+                ],
+                "type": "object"
+              },
+              "name": "skip_step"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "epoch": 2,
+      "view": {
+        "basis": {
+          "model": "mock",
+          "provider": "byte-identity-mock",
+          "runId": "<volatile>"
+        },
+        "callRuntimeStageId": "call-llm#40",
+        "epoch": 2,
+        "gaps": [
+          {
+            "fields": [
+              "cache.transform",
+              "cache.transformHash",
+              "cache.markersApplied",
+              "system.hash",
+              "system.chars",
+              "system.pieces",
+              "messages.count",
+              "messages.entries",
+              "messages.requestOnly",
+              "tools.names",
+              "tools.schemaHashes"
+            ],
+            "gap": "cache-transform",
+            "why": "What reached the provider may differ from the fields below, and nothing on this view would show it. Where another gap on this view covers one of them, that gap is the stronger claim."
+          },
+          {
+            "fields": [
+              "params"
+            ],
+            "gap": "provider-defaults",
+            "why": "A dial absent below was not recorded; that is not the same as the model running without one. A receipt describes the request as this library last saw it. Whatever handled it after that could have changed it, and nothing on the receipt would show that."
+          }
+        ],
+        "messages": {
+          "asSent": [
+            {
+              "content": "go",
+              "role": "user"
+            },
+            {
+              "content": "",
+              "role": "assistant",
+              "toolCalls": [
+                {
+                  "args": {},
+                  "id": "c1",
+                  "name": "lookup"
+                }
+              ]
+            },
+            {
+              "content": "lookup result Step 1 of 2 done. Now on step 2 of 2: refund the charge (tool: `charge`).",
+              "role": "tool",
+              "toolCallId": "c1",
+              "toolName": "lookup"
+            }
+          ],
+          "requestOnly": []
+        },
+        "system": {
+          "pieces": [
+            {
+              "slot": "system-prompt",
+              "source": "base",
+              "text": "bot"
+            },
+            {
+              "slot": "system-prompt",
+              "source": "skill",
+              "text": "REFUND_BODY"
+            },
+            {
+              "slot": "system-prompt",
+              "source": "instructions",
+              "text": "This skill declares a step-by-step procedure. The current step leads the matching tool's description (“[Step k of n — …]”). Steps are a declared order, not a cage: skip one with `skip_step(reason)` if it cannot or should not run — the reason goes on the record — and your other tools remain available throughout."
+            }
+          ],
+          "text": "bot\n\nREFUND_BODY\n\nThis skill declares a step-by-step procedure. The current step leads the matching tool's description (“[Step k of n — …]”). Steps are a declared order, not a cage: skip one with `skip_step(reason)` if it cannot or should not run — the reason goes on the record — and your other tools remain available throughout."
+        },
+        "tools": {
+          "names": [
+            "read_skill",
+            "charge",
+            "skip_step"
+          ],
+          "schemas": [
+            {
+              "description": "You are in 'refund'.\n\nActivate a skill for the next iteration.\n\nNothing is reachable from here — answer with the skill you are in, or finish.\n\nPass the skill's id. The skill's body becomes part of the system prompt and any gated tools become available on the next call.",
+              "inputSchema": {
+                "properties": {
+                  "id": {
+                    "description": "The skill id to activate.",
+                    "enum": [
+                      "refund"
+                    ],
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "id"
+                ],
+                "type": "object"
+              },
+              "name": "read_skill"
+            },
+            {
+              "description": "[Step 2 of 2 — refund the charge] the charge tool",
+              "inputSchema": {
+                "properties": {},
+                "type": "object"
+              },
+              "name": "charge"
+            },
+            {
+              "description": "Skip step 2 of 2 ('charge' — refund the charge) with a recorded reason. 1 step(s) remain in the 'refund' procedure. On skip, the procedure moves to the next step (declared policy: 'advance').",
+              "inputSchema": {
+                "additionalProperties": false,
+                "properties": {
+                  "reason": {
+                    "description": "Why this step cannot or should not run. Goes on the record.",
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "reason"
+                ],
+                "type": "object"
+              },
+              "name": "skip_step"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "epoch": 3,
+      "view": {
+        "basis": {
+          "model": "mock",
+          "provider": "byte-identity-mock",
+          "runId": "<volatile>"
+        },
+        "callRuntimeStageId": "call-llm#61",
+        "epoch": 3,
+        "gaps": [
+          {
+            "fields": [
+              "cache.transform",
+              "cache.transformHash",
+              "cache.markersApplied",
+              "system.hash",
+              "system.chars",
+              "system.pieces",
+              "messages.count",
+              "messages.entries",
+              "messages.requestOnly",
+              "tools.names",
+              "tools.schemaHashes"
+            ],
+            "gap": "cache-transform",
+            "why": "What reached the provider may differ from the fields below, and nothing on this view would show it. Where another gap on this view covers one of them, that gap is the stronger claim."
+          },
+          {
+            "fields": [
+              "params"
+            ],
+            "gap": "provider-defaults",
+            "why": "A dial absent below was not recorded; that is not the same as the model running without one. A receipt describes the request as this library last saw it. Whatever handled it after that could have changed it, and nothing on the receipt would show that."
+          }
+        ],
+        "messages": {
+          "asSent": [
+            {
+              "content": "go",
+              "role": "user"
+            },
+            {
+              "content": "",
+              "role": "assistant",
+              "toolCalls": [
+                {
+                  "args": {},
+                  "id": "c1",
+                  "name": "lookup"
+                }
+              ]
+            },
+            {
+              "content": "lookup result Step 1 of 2 done. Now on step 2 of 2: refund the charge (tool: `charge`).",
+              "role": "tool",
+              "toolCallId": "c1",
+              "toolName": "lookup"
+            },
+            {
+              "content": "done",
+              "role": "assistant"
+            },
+            {
+              "content": "[steps unrun — Step 2 of 'refund' had not run when the answer above was given: 2: refund the charge (`charge`). This message asked for them to be run, or for the reason they were not run.]",
+              "role": "user"
+            }
+          ],
+          "requestOnly": []
+        },
+        "system": {
+          "pieces": [
+            {
+              "slot": "system-prompt",
+              "source": "base",
+              "text": "bot"
+            },
+            {
+              "slot": "system-prompt",
+              "source": "skill",
+              "text": "REFUND_BODY"
+            },
+            {
+              "slot": "system-prompt",
+              "source": "instructions",
+              "text": "This skill declares a step-by-step procedure. The current step leads the matching tool's description (“[Step k of n — …]”). Steps are a declared order, not a cage: skip one with `skip_step(reason)` if it cannot or should not run — the reason goes on the record — and your other tools remain available throughout."
+            }
+          ],
+          "text": "bot\n\nREFUND_BODY\n\nThis skill declares a step-by-step procedure. The current step leads the matching tool's description (“[Step k of n — …]”). Steps are a declared order, not a cage: skip one with `skip_step(reason)` if it cannot or should not run — the reason goes on the record — and your other tools remain available throughout."
+        },
+        "tools": {
+          "names": [
+            "read_skill",
+            "charge",
+            "skip_step"
+          ],
+          "schemas": [
+            {
+              "description": "You are in 'refund'.\n\nActivate a skill for the next iteration.\n\nNothing is reachable from here — answer with the skill you are in, or finish.\n\nPass the skill's id. The skill's body becomes part of the system prompt and any gated tools become available on the next call.",
+              "inputSchema": {
+                "properties": {
+                  "id": {
+                    "description": "The skill id to activate.",
+                    "enum": [
+                      "refund"
+                    ],
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "id"
+                ],
+                "type": "object"
+              },
+              "name": "read_skill"
+            },
+            {
+              "description": "[Step 2 of 2 — refund the charge] the charge tool",
+              "inputSchema": {
+                "properties": {},
+                "type": "object"
+              },
+              "name": "charge"
+            },
+            {
+              "description": "Skip step 2 of 2 ('charge' — refund the charge) with a recorded reason. 1 step(s) remain in the 'refund' procedure. On skip, the procedure moves to the next step (declared policy: 'advance').",
+              "inputSchema": {
+                "additionalProperties": false,
+                "properties": {
+                  "reason": {
+                    "description": "Why this step cannot or should not run. Goes on the record.",
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "reason"
+                ],
+                "type": "object"
+              },
+              "name": "skip_step"
+            }
+          ]
+        }
+      }
+    }
+  ]
+}

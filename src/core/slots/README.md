@@ -123,3 +123,84 @@ New source = new value in `ContextSource` enum + slot builders that produce `Inj
 - `tool-result` — tool outputs with `sourceId` = toolCallId, `asRole = 'tool'`
 
 Adding a new source is non-breaking (the recorder is source-agnostic).
+
+## The offer and the answer — one party per tool name (9.92.0)
+
+**Why.** At every LLM call the model is OFFERED a list of tool contracts (the
+wire; the receipt hashes each one). When the model calls a name, something
+ANSWERS. Until 9.92.0 those two halves could come from different parties: the
+tools slot merges `[static, provider, skill, step]` first-occurrence-wins, while
+dispatch consulted a build-time map first — so a provider's contract on the
+wire could be answered by a skill's `execute` (an inactive skill's, even), a
+provider's `skip_step` by the framework's, and a claimant that lost both could
+be dead with nothing on the record (`docs/design/2026-09-recorded-not-built.md`,
+entries 1–3 and the `claim-swallowed` family).
+
+**The law.** For every tool name on a call, exactly one party owns the OFFER
+and the same party owns the ANSWER — or the record names the disagreement.
+`buildToolsSlot.ts` · `mergeWire` is the one pass that produces the wire AND
+the record of who won each name (`ServedToolParties`); `toolCalls.ts` ·
+`lookupTool` reads that record first. Three consequences, one example each:
+
+1. **Dispatch follows the offer.** A name on the wire resolves to the party
+   whose contract the model read. A name NOT on the wire (held out by a step,
+   a park or a scoping; named from a restored transcript) still dispatches —
+   the capability law's held-out clause (`test/core/agent/epoch-laws.test.ts`
+   1(a)–(e)) — but only to the party the model LAST read the name under, or
+   the name's only holder when it was never served this run; every such
+   dispatch is on the record as `agentfootprint.tools.answered_off_wire`. A
+   name whose last-served party can no longer answer (a provider withdrew it)
+   is refused as a recorded tool result (`toolCalls.ts` · `notServedResult`),
+   never handed to a party the model was not shown under that name.
+
+   ```ts
+   // provider + a scoped skill both claim `shared_tool`; the skill never activates
+   Agent.create({ provider, model })
+     .toolProvider(staticTools([providerShared]))
+     .skill(defineSkill({ id: 'desk', body: 'B', tools: [skillShared] }))
+     .toolsFromActiveSkill();
+   // the wire carries the PROVIDER's contract → the PROVIDER's execute answers.
+   // The skill's execute answers no call while the provider holds the name —
+   // and not after the provider withdraws it either: that call is refused,
+   // because the skill's contract was never what the model read.
+   ```
+
+2. **The report's subject is the wire.** `agentfootprint.tools.shadowed`
+   fires once per contested name per iteration when two contracts COMPETED
+   for the wire; `schemaFrom` and `dispatchTo` both name the wire's party
+   (they agree, by construction). Identity is by implementation: two skills
+   sharing ONE `Tool` reference are one claim and draw nothing.
+
+   ```ts
+   // an always-visible stepped skill and a provider both claim `shared_tool`
+   Agent.create({ provider, model })
+     .skill(defineSkill({ id: 'desk-stepped', body: 'S', tools: [skillShared],
+                          steps: [{ tool: 'shared_tool', note: 'the only step' }] }))
+     .toolProvider(staticTools([providerShared]));
+   agent.on('agentfootprint.tools.shadowed', (e) => console.log(e.payload));
+   // { toolName: 'shared_tool', iteration: 1, schemaFrom: 'skill', schemaFromId: 'desk-stepped',
+   //   dispatchTo: 'skill', dispatchToId: 'desk-stepped' }   — never 'provider', which is
+   // what the pre-9.92.0 report asserted from the wrong list.
+   ```
+
+3. **A dead claim is reported.** `agentfootprint.tools.claim_swallowed`
+   fires once per iteration for every party whose claim to a name is held by
+   somebody else — whether its contract competed (the skill in example 1
+   once activated) or never reached the merge (the same skill while
+   inactive; the framework's `skip_step` between tenures; a provider tool
+   whose name a static `.tool()` owns). `{ toolName, lostBy, lostById?,
+   wonBy, wonById?, iteration }`, names only.
+
+   ```ts
+   agent.on('agentfootprint.tools.claim_swallowed', (e) =>
+     console.log(e.payload); // { toolName: 'shared_tool', lostBy: 'skill', lostById: 'desk', wonBy: 'provider', wonById: 'static', iteration: 1 }
+   );
+   ```
+
+`skip_step` is a claimant like any other: the framework's schema merges LAST,
+so it rides only when nobody else put the name forward; when a provider does,
+the provider answers and the step bookkeeping (`toolCalls.ts` ·
+`frameworkSkipStepAnswered`) does not advance the procedure. A run with no
+name collision commits byte-identical logs and served views
+(`test/core/tools/byte-identity.test.ts`, fifteen references generated on 9.91.0,
+a shared-reference pair among them).

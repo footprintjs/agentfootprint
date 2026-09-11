@@ -108,6 +108,8 @@ import type {
   ToolsDiscoveryCompletedPayload,
   ToolsDiscoveryFailedPayload,
   ToolsShadowedPayload,
+  ToolsClaimSwallowedPayload,
+  ToolsAnsweredOffWirePayload,
   ToolsSessionStartedPayload,
   ToolsSessionReusedPayload,
   ToolsSessionClosedPayload,
@@ -191,6 +193,8 @@ export const EVENT_NAMES = {
     discoveryCompleted: 'agentfootprint.tools.discovery_completed',
     discoveryFailed: 'agentfootprint.tools.discovery_failed',
     shadowed: 'agentfootprint.tools.shadowed',
+    claimSwallowed: 'agentfootprint.tools.claim_swallowed',
+    answeredOffWire: 'agentfootprint.tools.answered_off_wire',
     sessionStarted: 'agentfootprint.tools.session_started',
     sessionReused: 'agentfootprint.tools.session_reused',
     sessionClosed: 'agentfootprint.tools.session_closed',
@@ -489,6 +493,14 @@ export interface AgentfootprintEventMap {
   'agentfootprint.tools.shadowed': AgentfootprintEventEnvelope<
     'agentfootprint.tools.shadowed',
     ToolsShadowedPayload
+  >;
+  'agentfootprint.tools.claim_swallowed': AgentfootprintEventEnvelope<
+    'agentfootprint.tools.claim_swallowed',
+    ToolsClaimSwallowedPayload
+  >;
+  'agentfootprint.tools.answered_off_wire': AgentfootprintEventEnvelope<
+    'agentfootprint.tools.answered_off_wire',
+    ToolsAnsweredOffWirePayload
   >;
   'agentfootprint.tools.session_started': AgentfootprintEventEnvelope<
     'agentfootprint.tools.session_started',
@@ -813,6 +825,8 @@ export const ALL_EVENT_TYPES: readonly AgentfootprintEventType[] = [
   'agentfootprint.tools.discovery_completed',
   'agentfootprint.tools.discovery_failed',
   'agentfootprint.tools.shadowed',
+  'agentfootprint.tools.claim_swallowed',
+  'agentfootprint.tools.answered_off_wire',
   'agentfootprint.tools.session_started',
   'agentfootprint.tools.session_reused',
   'agentfootprint.tools.session_closed',

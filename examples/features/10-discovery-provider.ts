@@ -37,8 +37,8 @@
  * Run:  npx tsx examples/features/10-discovery-provider.ts
  */
 
-import { Agent, defineTool, type LLMToolSchema, type Tool } from '../../src/index.js'
-import { type ToolDispatchContext, type ToolProvider } from '../../src/doors/providers.js'
+import { Agent, defineTool, type LLMToolSchema, type Tool } from '../../src/index.js';
+import { type ToolDispatchContext, type ToolProvider } from '../../src/doors/providers.js';
 import { mock } from '../../src/doors/providers.js';
 import { isCliEntry, type ExampleMeta } from '../helpers/cli.js';
 
@@ -76,11 +76,7 @@ interface ToolHub {
  *   • Sets `id` so observability / `discovery_failed` events route
  *     to the right adapter.
  */
-function discoveryProvider(opts: {
-  hub: ToolHub;
-  ttlMs: number;
-  id?: string;
-}): ToolProvider {
+function discoveryProvider(opts: { hub: ToolHub; ttlMs: number; id?: string }): ToolProvider {
   let cache: { tools: readonly Tool[]; expiresAt: number } | undefined;
   return {
     id: opts.id ?? 'discovery',
@@ -156,10 +152,7 @@ async function scenarioHappy(): Promise<void> {
 
   let calls = 0;
   const llm = mock({
-    respond: (req: {
-      tools?: readonly LLMToolSchema[];
-      messages: readonly { role: string }[];
-    }) => {
+    respond: (req: { tools?: readonly LLMToolSchema[]; messages: readonly { role: string }[] }) => {
       calls += 1;
       const toolNames = (req.tools ?? []).map((t) => t.name).join(', ');
       console.log(`    iter ${calls}: tools visible = [${toolNames}]`);
@@ -177,8 +170,25 @@ async function scenarioHappy(): Promise<void> {
 
   const agent = Agent.create({ provider: llm, model: 'mock', maxIterations: 4 })
     .system('You translate text.')
+    // A local `summarize` beside the hub's `summarize` (9.92.0): the static
+    // registration wins the wire and answers; the hub's claim is dead while
+    // it does. Both facts are on the record — `agentfootprint.tools.shadowed`
+    // names the winner, `agentfootprint.tools.claim_swallowed` names the loser.
+    .tool(
+      defineTool({
+        name: 'summarize',
+        description: 'summarize (local)',
+        inputSchema: { type: 'object' },
+        execute: async () => 'summarize:local',
+      }),
+    )
     .toolProvider(provider)
     .build();
+  agent.on('agentfootprint.tools.claim_swallowed', (e) =>
+    console.log(
+      `    ${e.payload.lostBy} '${e.payload.lostById}' lost '${e.payload.toolName}' to ${e.payload.wonBy}`,
+    ),
+  );
 
   await agent.run({ message: 'translate "hello" to french' });
   console.log(`    hub.fetchCatalog called ${getFetchCount()} time(s) — TTL cached after first`);

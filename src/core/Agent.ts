@@ -155,7 +155,11 @@ import {
 } from '../memory/causal/evidenceRecorder.js';
 import { buildSystemPromptSlot, type SystemPromptSlotArgs } from './slots/buildSystemPromptSlot.js';
 import { buildMessagesSlot } from './slots/buildMessagesSlot.js';
-import { buildToolsSlot, type ProviderToolCache } from './slots/buildToolsSlot.js';
+import {
+  buildToolsSlot,
+  type ProviderToolCache,
+  type ServedToolParties,
+} from './slots/buildToolsSlot.js';
 import { isDevMode } from 'footprintjs';
 import { buildReadSkillTool } from '../lib/injection-engine/skillTools.js';
 import { foldStepPlans } from '../lib/injection-engine/skillSteps.js';
@@ -3400,7 +3404,7 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
     // auto-attached `present` tool when a store is attached, 9.22.0) +
     // skill-supplied tools (with autoActivate scoping); validates
     // name uniqueness; produces the dispatch map.
-    const { registryByName, toolSchemas, toolDeclaringSkills } = buildToolRegistry(
+    const { registryByName, toolSchemas, toolDeclaringSkills, toolClaimants } = buildToolRegistry(
       registry,
       this.injections,
       {
@@ -3572,13 +3576,25 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
     const messagesSubflow = buildMessagesSlot({
       ...(budget?.messages !== undefined && { budgetCap: budget.messages }),
     });
-    // Per-run cache shared between buildToolsSlot (writer, each
-    // iteration) and buildToolCallsHandler (reader, same iteration).
-    // Holds the resolved Tool[] from `provider.list(ctx)` so dispatch
-    // doesn't re-invoke `list()` — vital for async network providers.
-    // A fresh chart (and thus fresh cache) is built per `agent.run()`,
-    // so concurrent runs don't share state.
+    // Cache shared between buildToolsSlot (writer, each iteration) and
+    // buildToolCallsHandler (reader, same iteration). Holds the resolved
+    // Tool[] from `provider.list(ctx)` so dispatch doesn't re-invoke `list()`
+    // — vital for async network providers.
+    //
+    // LIFETIME, stated correctly (9.92.0): the chart is built ONCE, at
+    // construction (`initChart`), and reused by every `run()` and `resume()`
+    // of this Agent — so this cache and the record below outlive a run. They
+    // are safe because one Agent runs one turn at a time and the slot
+    // overwrites them every iteration before dispatch reads them. What that
+    // does NOT cover is a resume in a FRESH instance, whose closure is empty
+    // and whose Compose never re-runs before the resumed dispatch — which is
+    // why the pause paths carry `pausedToolParty` on the checkpoint.
     const providerToolCache: ProviderToolCache = { current: [] };
+    // Who put each name on the wire (9.92.0) — the same closure-shared shape,
+    // written by the tools slot's merge and read by dispatch so the party
+    // whose contract the model read is the party that answers. `lastServed`
+    // is the run's memory of the same fact, for a name that left the wire.
+    const servedTools: ServedToolParties = { current: new Map(), lastServed: new Map() };
     const readSkillFor = this.readSkillOfferFor();
     // Per-role skill visibility. The RESOLVER is handed to the tools slot, which
     // is the fact's one owner: it resolves the ids once per iteration and
@@ -3668,6 +3684,8 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
       integrityLedger: this.integrityLedgerHolder,
       ...(this.externalToolProvider && { toolProvider: this.externalToolProvider }),
       ...(this.externalToolProvider && { providerToolCache }),
+      toolClaimants,
+      servedTools,
       ...(readSkillFor && { readSkillFor }),
       ...(hiddenSkillIds && { hiddenSkillIds }),
       ...(budget?.tools !== undefined && { budgetCap: budget.tools }),
@@ -3854,6 +3872,8 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
         }),
       ...(this.externalToolProvider && { externalToolProvider: this.externalToolProvider }),
       ...(this.externalToolProvider && { providerToolCache }),
+      servedTools,
+      toolClaimants,
       ...(permissionChecker && { permissionChecker }),
       ...(credentialProvider && { credentialProvider }),
       // The claim-check store (9.21.0). Absent → not one new line runs in

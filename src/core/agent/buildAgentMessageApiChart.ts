@@ -27,6 +27,7 @@
 
 import { flowChartSelector, select } from 'footprintjs';
 import type { FlowChart, TypedScope } from 'footprintjs';
+import { ArrayMergeMode } from 'footprintjs/advanced';
 import type { LLMMessage, LLMProvider, LLMRequest, LLMToolSchema } from '../../adapters/types.js';
 import { RECEIPT_KEY, type Receipt } from '../../lib/time-travel/receipt.js';
 import { messageApiReceipt } from './messageApiReceipt.js';
@@ -294,6 +295,15 @@ export function buildAgentMessageApiChart(deps: AgentMessageApiChartDeps): FlowC
         tags: milestoneTagsFor(SUBFLOW_IDS.TOOLS),
         inputMapper: (parent) => ({ iteration: (parent as AgentMsgApiState).iteration }),
         outputMapper: (sf) => ({ toolSchemas: (sf as AgentMsgApiState).toolSchemas }),
+        // REPLACE, never concatenate (9.92.0). footprintjs's default output
+        // mapping CONCATENATES a subflow's array output onto the parent's
+        // existing array, so turn 2 of this loop handed the model
+        // `['weather','weather']` — the same tool twice, and Anthropic rejects
+        // a request whose tool names repeat. The receipt and `servedAt` recorded
+        // the doubled list truthfully, which is how the defect became visible
+        // (9.91.0 follow-up). The agent charts already say this on their own
+        // tools mount; this chart had the same mapper without the same law.
+        arrayMerge: ArrayMergeMode.Replace,
         // tools is a SEPARATE Anthropic wire field — it BYPASSES messageAPI
         // (which assembles only system+messages) and pairs with its output at
         // Call-LLM. `convergeAt` makes the structure edge `sf-tools → call-llm`

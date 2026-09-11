@@ -11,10 +11,14 @@
  *     Treats that answer as the paused tool's result, appends to
  *     history, then continues the ReAct iteration loop.
  *
- * Dispatch resolution order:
- *   1. Static registry built at chart-build time (registryByName).
- *   2. External `ToolProvider.list(ctx).find(...)` if a `.toolProvider()`
- *      was wired and the tool isn't in the static registry.
+ * Dispatch resolution order (9.92.0 — DISPATCH FOLLOWS THE OFFER):
+ *   0. A name on THIS epoch's wire resolves to the party whose contract the
+ *      model read (`servedTools`, written by the tools slot from the same
+ *      merge that built the wire): a provider's schema → the provider's tool
+ *      from `providerToolCache`; anything else → `registryByName`.
+ *   1. A name NOT on the wire this epoch — held out by a step, a park or a
+ *      scoping, or named from a restored transcript — resolves as it always
+ *      did: `registryByName` first, then the provider cache.
  *
  * Permission gate (when `permissionChecker` is configured) runs BEFORE
  * `tool.execute`. Deny → tool not executed; result is a synthetic
@@ -101,7 +105,12 @@ import {
   type CheckInRequest,
   type CheckInDecision,
 } from '../../checkin.js';
-import type { ProviderToolCache } from '../../slots/buildToolsSlot.js';
+import type {
+  ProviderToolCache,
+  ServedToolParties,
+  ToolParty,
+} from '../../slots/buildToolsSlot.js';
+import type { ToolClaim } from '../buildToolRegistry.js';
 import type { Tool, ToolExecutionContext } from '../../tools.js';
 import { agentToolDispatch } from '../toolDispatch.js';
 import type { MemoryIdentity } from '../../../memory/identity/types.js';
@@ -248,6 +257,21 @@ export interface ToolCallsHandlerDeps {
    * within one chart build.
    */
   readonly providerToolCache?: ProviderToolCache;
+  /**
+   * Who put each name on this epoch's wire (9.92.0) — the tools slot's own
+   * record of its merge, shared by reference like `providerToolCache`. The
+   * first thing `lookupTool` consults, so the party whose contract the model
+   * read is the party that answers. Absent (a chart without the slot's
+   * record) → resolution order 1 alone, exactly as before 9.92.0.
+   */
+  readonly servedTools?: ServedToolParties;
+  /**
+   * Every build-time claimant per tool name (9.92.0) — `buildToolRegistry`'s
+   * `toolClaimants`. Read for one thing: which party a registry-routed tool
+   * belongs to, so an off-wire dispatch can be REPORTED with its answering
+   * party (`tools.answered_off_wire`). Absent → `'registry'`.
+   */
+  readonly toolClaimants?: ReadonlyMap<string, readonly ToolClaim[]>;
   /** Optional permission gate. When present, every tool dispatch
    *  awaits `check({capability: 'tool_call', ...})` BEFORE executing.
    *  Throwing checkers are treated as deny-by-default. */
@@ -666,6 +690,30 @@ export function atMountedCursor(args: {
  * Exported for the producer registry, and used by BOTH dispatch doors so they
  * cannot drift.
  */
+/**
+ * What a call gets back when the party whose contract the model read under
+ * this name cannot answer it, and no other party may (9.92.0).
+ *
+ * Two doors reach here. A name that LEFT the wire — the model read a
+ * provider's contract on an earlier call and the provider withdrew the name —
+ * whose only remaining holder is a party the model was never shown under that
+ * name (a scoped skill that never activated): dispatching that holder would
+ * hand the model's belief to a stranger's function, which is the silent
+ * identity swap this release closed. And a resume in a fresh Agent instance
+ * of a provider-served call, where the served party is on the checkpoint but
+ * the provider's list has not been resolved on this instance.
+ *
+ * It names no roster on purpose: `unknownToolResult`'s roster is the DISPATCH
+ * map, and the map here holds exactly the implementation this sentence is
+ * refusing. Anchored past tense, one clause, like every persistent result.
+ */
+export function notServedResult(toolName: string): string {
+  return (
+    `Tool '${toolName}' did not run on that call: the implementation whose contract was ` +
+    `offered under that name was not available to answer it.`
+  );
+}
+
 export function unknownToolResult(toolName: string, dispatchable: SpokenIds): string {
   const head = `Unknown tool '${toolName}' on that call.`;
   if (dispatchable.named.length > 0) {
@@ -948,7 +996,14 @@ const UNSCOPED_RUN = '#no-run-id';
 export function buildToolCallsHandler(
   deps: ToolCallsHandlerDeps,
 ): PausableHandler<TypedScope<AgentState>> {
-  const { registryByName, externalToolProvider, providerToolCache, permissionChecker } = deps;
+  const {
+    registryByName,
+    externalToolProvider,
+    providerToolCache,
+    servedTools,
+    toolClaimants,
+    permissionChecker,
+  } = deps;
   const toolArgValidation = deps.toolArgValidation ?? 'enforce';
   // 8.6.0 — default `'pause'`. Consent is work waiting on a person, and every
   // other place this library needs a person stops the run and asks the caller.
@@ -2432,13 +2487,107 @@ export function buildToolCallsHandler(
   // one resolver. The Tools slot already invoked `provider.list(ctx)` this
   // iteration and cached the resolved Tool[] in `providerToolCache` — read from
   // there to avoid a second discovery call (vital for async network providers).
-  const lookupTool = (toolName: string): Tool | undefined => {
-    const fromRegistry = registryByName.get(toolName);
-    if (fromRegistry) return fromRegistry;
-    if (!externalToolProvider) return undefined;
-    const cached = providerToolCache?.current ?? [];
-    return cached.find((t) => t.schema.name === toolName);
+  //
+  // DISPATCH FOLLOWS THE OFFER (9.92.0). A name on this epoch's wire resolves
+  // to the implementation of the party whose contract the model read — the
+  // slot's own record of its merge (`servedTools`), never a re-derivation.
+  // Before this, `registryByName` was consulted first for every name, so a
+  // provider's contract on the wire could be answered by a skill's `execute`
+  // (an INACTIVE skill's, even) and a provider's `skip_step` by the framework's
+  // — recorded-not-built entries 1 and 3.
+  //
+  // A name NOT on the wire keeps the capability law's held-out clause — a
+  // later step's tool, a parked map's tool, a scoped tool named from a
+  // restored transcript still run — under ONE condition: the party that
+  // answers is the party the model LAST READ the name under (`lastServed`), or
+  // the name's only holder when it was never served this run. A name whose
+  // last-served party can no longer answer (a provider withdrew it) is REFUSED
+  // as a recorded tool result rather than handed to a party the model was
+  // never shown under that name; a never-served name held by two parties is
+  // refused the same way. Every off-wire dispatch that DOES happen is put on
+  // the record by `tools.answered_off_wire`.
+  const fromProviderCache = (toolName: string): Tool | undefined =>
+    externalToolProvider
+      ? (providerToolCache?.current ?? []).find((t) => t.schema.name === toolName)
+      : undefined;
+  const providerParty: ToolParty = {
+    channel: 'provider',
+    ...(externalToolProvider?.id !== undefined && { id: externalToolProvider.id }),
   };
+  /** The party a registry-routed name belongs to — its first build-time claimant. */
+  const registryPartyOf = (toolName: string): ToolParty => {
+    const first = toolClaimants?.get(toolName)?.[0];
+    return first === undefined
+      ? { channel: 'registry' }
+      : { channel: first.channel, ...(first.id !== undefined && { id: first.id }) };
+  };
+  interface Resolution {
+    readonly tool?: Tool;
+    /** The party whose implementation answers. */
+    readonly party?: ToolParty;
+    /** The name was NOT on this epoch's wire and the fallback dispatched it. */
+    readonly offWire?: true;
+    /** Nothing may answer: the sentence the model reads. Absent with no
+     *  `tool` means the name is unknown (`unknownToolResult`). */
+    readonly refusal?: string;
+  }
+  const resolveTool = (toolName: string, pinned?: ToolParty): Resolution => {
+    const wireParty = pinned ?? servedTools?.current.get(toolName);
+    if (wireParty !== undefined) {
+      const owner =
+        wireParty.channel === 'provider'
+          ? fromProviderCache(toolName)
+          : registryByName.get(toolName);
+      return owner !== undefined
+        ? { tool: owner, party: wireParty }
+        : { refusal: notServedResult(toolName) };
+    }
+    const registryHolder = registryByName.get(toolName);
+    const providerHolder = fromProviderCache(toolName);
+    if (registryHolder === undefined && providerHolder === undefined) return {};
+    const last = servedTools?.lastServed.get(toolName);
+    if (last !== undefined) {
+      const owner = last.channel === 'provider' ? providerHolder : registryHolder;
+      return owner !== undefined
+        ? { tool: owner, party: last, offWire: true }
+        : { refusal: notServedResult(toolName) };
+    }
+    if (registryHolder !== undefined && providerHolder !== undefined) {
+      return { refusal: notServedResult(toolName) };
+    }
+    return registryHolder !== undefined
+      ? { tool: registryHolder, party: registryPartyOf(toolName), offWire: true }
+      : // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
+        { tool: providerHolder!, party: providerParty, offWire: true };
+  };
+  const lookupTool = (toolName: string, pinned?: ToolParty): Tool | undefined =>
+    resolveTool(toolName, pinned).tool;
+  /** The record of an off-wire dispatch — once per such call, before it runs. */
+  const noteOffWire = (
+    scope: TypedScope<AgentState>,
+    resolved: Resolution,
+    call: { readonly toolName: string; readonly toolCallId: string; readonly iteration: number },
+  ): void => {
+    if (resolved.offWire !== true || resolved.party === undefined) return;
+    typedEmit(scope, 'agentfootprint.tools.answered_off_wire', {
+      toolName: call.toolName,
+      toolCallId: call.toolCallId,
+      iteration: call.iteration,
+      answeredBy: resolved.party.channel,
+      ...(resolved.party.id !== undefined && { answeredById: resolved.party.id }),
+    });
+  };
+  // The framework's own `skip_step` — `buildToolRegistry` installs it in the
+  // dispatch map whenever a skill declares steps. The step bookkeeping below
+  // keys on THIS instance having answered, not on the name: since 9.92.0 a
+  // provider's `skip_step` on the wire is the provider's to answer, and a
+  // procedure must not advance on a call whose contract the model read from
+  // somebody else (recorded-not-built, entry 3).
+  const frameworkSkipStep = deps.stepPlanFor ? registryByName.get(SKIP_STEP_TOOL_NAME) : undefined;
+  const frameworkSkipStepAnswered = (name: string, answered: Tool | undefined): boolean =>
+    frameworkSkipStep !== undefined &&
+    name === SKIP_STEP_TOOL_NAME &&
+    answered === frameworkSkipStep;
 
   /**
    * Every member id of every map the kernel currently holds PARKED (9.86.0
@@ -2571,7 +2720,7 @@ export function buildToolCallsHandler(
   // resume can't re-pause (resume returns void), so that is surfaced as an error.
   const resolveCredentialAndExecute = async (
     scope: TypedScope<AgentState>,
-    tool: Tool | undefined,
+    resolved: Resolution,
     toolName: string,
     args: Readonly<Record<string, unknown>>,
     toolCallId: string,
@@ -2593,7 +2742,16 @@ export function buildToolCallsHandler(
      *  call again). */
     ceilingRefused?: true;
   }> => {
-    if (!tool) return { result: unknownToolResult(toolName, dispatchRoster(scope)), error: true };
+    const tool = resolved.tool;
+    // The two refusals share one door here too (9.92.0): a name nothing holds,
+    // and a name whose offered party cannot answer on this resume.
+    if (!tool) {
+      return {
+        result: resolved.refusal ?? unknownToolResult(toolName, dispatchRoster(scope)),
+        error: true,
+      };
+    }
+    noteOffWire(scope, resolved, { toolName, toolCallId, iteration });
     // Declared artifact arguments (9.22.0) — the same resolution the batch
     // loop applies, at this door: a resumed call's refs are judged exactly
     // as an inline call's, BEFORE credentials, and a refusal means the tool
@@ -2939,7 +3097,8 @@ export function buildToolCallsHandler(
       const env = scope.$getEnv();
 
       for (const tc of toolCalls) {
-        const tool = lookupTool(tc.name);
+        const resolved = resolveTool(tc.name);
+        const tool = resolved.tool;
         typedEmit(scope, 'agentfootprint.stream.tool_start', {
           toolName: tc.name,
           toolCallId: tc.id,
@@ -3224,6 +3383,10 @@ export function buildToolCallsHandler(
             scope.pausedAskArgs = chain.args;
             scope.pausedAskIndex = chain.index;
             scope.pausedAskMiddleware = chain.middleware;
+            // The party this call was resolved against (9.92.0) — so a resume
+            // in a FRESH instance dispatches to the same party, never to the
+            // build-time map's first holder. Pause-path-only.
+            if (resolved.party !== undefined) scope.pausedToolParty = resolved.party;
             // Which surface will collect the decision — carried so the
             // resume-side ledger rows can say which component ANSWERED.
             // Written only when one exists: a component-less ask's
@@ -3391,6 +3554,8 @@ export function buildToolCallsHandler(
             scope.pausedToolStartMs = startMs;
             scope.pausedCheckIn = true;
             scope.pausedCheckInArgs = callArgs;
+            // Same carrier as the middleware-ask pause (9.92.0).
+            if (resolved.party !== undefined) scope.pausedToolParty = resolved.party;
             // Which surface will collect the decision — read back on resume
             // so `checkin.decision` says which component ANSWERED. Written
             // only when one exists (byte-identical otherwise).
@@ -3487,6 +3652,8 @@ export function buildToolCallsHandler(
                   scope.pausedCredential = true;
                   scope.pausedCredentialArgs = callArgs;
                   scope.pausedCredentialService = need.credential;
+                  // Same carrier as the middleware-ask pause (9.92.0).
+                  if (resolved.party !== undefined) scope.pausedToolParty = resolved.party;
                   // A defined return value triggers the footprintjs pause; this
                   // object becomes the checkpoint's pauseData, and standingAgent's
                   // describePause hands it to the caller as `PendingAsk`.
@@ -3532,7 +3699,15 @@ export function buildToolCallsHandler(
           }
           if (!credentialBlocked && !wantsBlocked) {
             try {
-              if (!tool) throw new Error(unknownToolResult(tc.name, dispatchRoster(scope)));
+              // The two refusals share one door: a name nothing holds, and a
+              // name whose offered party cannot answer (9.92.0). Both land as
+              // an errored tool result the model reads, on the same path.
+              if (!tool) {
+                throw new Error(
+                  resolved.refusal ?? unknownToolResult(tc.name, dispatchRoster(scope)),
+                );
+              }
+              noteOffWire(scope, resolved, { toolName: tc.name, toolCallId: tc.id, iteration });
               // Set BEFORE the await: a tool that throws has still run, and a
               // tool that does not exist has not. This flag is the entire
               // precondition of the after-tool moment below.
@@ -3954,7 +4129,7 @@ export function buildToolCallsHandler(
         // Postures never gate it — skipping is judgment inside a step, not
         // routing. Zero-cost gate: `stepPlanFor` is undefined on every agent
         // without a stepped skill.
-        if (deps.stepPlanFor && tc.name === SKIP_STEP_TOOL_NAME && !error && !denied) {
+        if (frameworkSkipStepAnswered(tc.name, tool) && !error && !denied) {
           result = applySkipStep(scope, { args: callArgs, toolCallId: tc.id, iteration });
         }
 
@@ -4364,7 +4539,12 @@ export function buildToolCallsHandler(
           // continue here must see the same `toolSource` the links before the
           // ask saw. A chain that changed its mind about where a tool came from
           // halfway through one dispatch would be worse than not knowing.
-          const tool = lookupTool(toolName);
+          //
+          // Resolved against the party the CHECKPOINT carries (9.92.0): a
+          // fresh instance has an empty served record and Compose has not
+          // re-run, so without it the build-time map's first holder answered.
+          const resolved = resolveTool(toolName, scope.pausedToolParty as ToolParty | undefined);
+          const tool = resolved.tool;
           const rest = await runToolChain(deps.toolMiddleware ?? [], {
             toolName,
             ...(tool?.source !== undefined && { toolSource: tool.source }),
@@ -4428,7 +4608,7 @@ export function buildToolCallsHandler(
             const env = scope.$getEnv();
             const dispatched = await resolveCredentialAndExecute(
               scope,
-              tool,
+              resolved,
               toolName,
               rest.args,
               toolCallId,
@@ -4449,7 +4629,7 @@ export function buildToolCallsHandler(
             // placeholder just landed — replace it with the authoritative
             // sentence BEFORE the chain's last word, the execute loop's
             // composition kept.
-            if (deps.stepPlanFor && toolName === SKIP_STEP_TOOL_NAME && stepToolRan) {
+            if (frameworkSkipStepAnswered(toolName, tool) && stepToolRan) {
               result = applySkipStep(scope, { args: rest.args, toolCallId, iteration });
             }
             // present behind a middleware ask, approved (9.22.0): same
@@ -4563,6 +4743,10 @@ export function buildToolCallsHandler(
         // run must not inherit this ask's surface, and a run that never
         // carried one must not gain the key (byte-identical).
         if (answeredVia !== undefined) scope.pausedComponentId = undefined;
+        // The served party the checkpoint carried is consumed with it (9.92.0);
+        // written back only when it was there, so an older checkpoint's resume
+        // commits exactly what it always did.
+        if (scope.pausedToolParty !== undefined) scope.pausedToolParty = undefined;
         return;
       }
 
@@ -4608,10 +4792,12 @@ export function buildToolCallsHandler(
         let resumeEnvelope: ReadToolResultEnvelope | undefined;
         if (decision.approved) {
           const env = scope.$getEnv();
-          const tool = lookupTool(toolName);
+          // Resolved against the party the checkpoint carries (9.92.0).
+          const resolved = resolveTool(toolName, scope.pausedToolParty as ToolParty | undefined);
+          const tool = resolved.tool;
           const dispatched = await resolveCredentialAndExecute(
             scope,
-            tool,
+            resolved,
             toolName,
             args,
             toolCallId,
@@ -4714,6 +4900,10 @@ export function buildToolCallsHandler(
         scope.pausedCheckInArgs = undefined;
         // Cleared ONLY when it was set — see the ask path's twin note.
         if (answeredVia !== undefined) scope.pausedComponentId = undefined;
+        // The served party the checkpoint carried is consumed with it (9.92.0);
+        // written back only when it was there, so an older checkpoint's resume
+        // commits exactly what it always did.
+        if (scope.pausedToolParty !== undefined) scope.pausedToolParty = undefined;
         return;
       }
 
@@ -4734,10 +4924,12 @@ export function buildToolCallsHandler(
         const iteration = scope.iteration as number;
         const args = (scope.pausedCredentialArgs ?? {}) as Readonly<Record<string, unknown>>;
         const env = scope.$getEnv();
-        const tool = lookupTool(toolName);
+        // Resolved against the party the checkpoint carries (9.92.0).
+        const resolved = resolveTool(toolName, scope.pausedToolParty as ToolParty | undefined);
+        const tool = resolved.tool;
         const dispatched = await resolveCredentialAndExecute(
           scope,
-          tool,
+          resolved,
           toolName,
           args,
           toolCallId,
@@ -4835,6 +5027,7 @@ export function buildToolCallsHandler(
         scope.pausedCredential = false;
         scope.pausedCredentialArgs = undefined;
         scope.pausedCredentialService = undefined;
+        if (scope.pausedToolParty !== undefined) scope.pausedToolParty = undefined;
         return;
       }
 

@@ -1,25 +1,25 @@
 /**
- * A tool name claimed by two sources stops being silent (8.7.0).
+ * A tool name claimed by two sources stops being silent (8.7.0) — and since
+ * 9.92.0 stops being a divergence at all.
  *
- * A `ToolProvider` and an active Skill can both declare `shared_tool`, and the two
- * lose in OPPOSITE directions — each by a rule of this codebase, not by a race:
- *
- *   • the tools slot merges `[static, provider, skill]` first-wins, and an
- *     `autoActivate: 'currentSkill'` skill's tools are deliberately kept out of the
- *     static registry, so the PROVIDER's schema is what the model reads;
- *   • `lookupTool` resolves `registryByName` first, and every skill tool is in that
- *     map while no provider tool is, so the SKILL's implementation is what runs.
- *
- * The model therefore reads one contract and calls another, and until now the trace
- * said nothing at all. Now: `agentfootprint.tools.shadowed` every iteration (the
- * channel that reaches production, where a dynamic provider can start shadowing on
- * iteration 9), plus one dev-mode console line per name.
+ * A `ToolProvider` and an active Skill can both declare `shared_tool`. The tools
+ * slot merges `[static, provider, skill]` first-wins, and an
+ * `autoActivate: 'currentSkill'` skill's tools are deliberately kept out of the
+ * static registry, so the PROVIDER's schema is what the model reads. Until
+ * 9.92.0 `lookupTool` resolved `registryByName` first, where every skill tool
+ * lives and no provider tool does, so the SKILL's implementation ran: the model
+ * read one contract and called another. Now DISPATCH FOLLOWS THE OFFER — the
+ * provider's tool answers the provider's contract — and the record still says
+ * the name was contested: `agentfootprint.tools.shadowed` every iteration names
+ * the wire's party (both halves agree), `agentfootprint.tools.claim_swallowed`
+ * names the skill whose claim is dead while the provider holds the name, plus
+ * one dev-mode console line per name.
  *
  * 7 test types per Convention 3: unit (the merge + dispatch laws, separately),
- * functional (no shadow → no event), integration (a real run: schema seen vs. result
- * executed), property (the event's dispatchTo always names the source that ran),
- * security (no args/results/bodies in the payload), performance + load (the latch
- * holds a long loop to one line).
+ * functional (no shadow → no event), integration (a real run: schema seen vs.
+ * result executed), property (the event's dispatchTo always names the source
+ * that ran), security (no args/results/bodies in the payload), performance +
+ * load (the latch holds a long loop to one line).
  */
 
 import { describe, it, expect, vi } from 'vitest';
@@ -28,7 +28,7 @@ import { defineTool, Agent } from '../src/index.js';
 import { skillGraph, defineSkill } from '../src/doors/context.js';
 import { mock, staticTools } from '../src/doors/providers.js';
 import type { LLMResponse } from '../src/adapters/types.js';
-import type { ToolsShadowedPayload } from '../src/events/payloads.js';
+import type { ToolsClaimSwallowedPayload, ToolsShadowedPayload } from '../src/events/payloads.js';
 
 // ── helpers ──────────────────────────────────────────────────────────────────
 
@@ -47,6 +47,7 @@ interface Capture {
   readonly offered: { name: string; description: string }[][];
   readonly results: string[];
   readonly shadowed: ToolsShadowedPayload[];
+  readonly swallowed: ToolsClaimSwallowedPayload[];
 }
 
 const capture = (agent: ReturnType<typeof Agent.create> extends never ? never : never): never =>
@@ -66,10 +67,12 @@ const watcher = (out: Capture) => ({
     if (e.name === 'agentfootprint.stream.tool_end') out.results.push(String(e.payload.result));
     if (e.name === 'agentfootprint.tools.shadowed')
       out.shadowed.push(e.payload as unknown as ToolsShadowedPayload);
+    if (e.name === 'agentfootprint.tools.claim_swallowed')
+      out.swallowed.push(e.payload as unknown as ToolsClaimSwallowedPayload);
   },
 });
 
-const fresh = (): Capture => ({ offered: [], results: [], shadowed: [] });
+const fresh = (): Capture => ({ offered: [], results: [], shadowed: [], swallowed: [] });
 
 /** The contested pair: same name, two implementations, two descriptions. */
 const skillImpl = () =>
@@ -108,7 +111,7 @@ const shadowingAgent = (out: Capture, iterations = 3) => {
 
 // ── 1. the two laws, separately ──────────────────────────────────────────────
 
-describe('the shadow is two laws pointing opposite ways', () => {
+describe('the offer and the answer are one party (9.92.0)', () => {
   it('unit: the LLM is shown the PROVIDER description (merge order, first-wins)', async () => {
     const out = fresh();
     await shadowingAgent(out).run({ message: 'hi' });
@@ -116,18 +119,20 @@ describe('the shadow is two laws pointing opposite ways', () => {
     expect(shared!.description).toBe('PROVIDER VERSION');
   });
 
-  it('unit: dispatch runs the SKILL implementation (registryByName wins)', async () => {
+  it('unit: dispatch runs the PROVIDER implementation — the party whose contract was on the wire', async () => {
+    // Until 9.92.0 this asserted FROM-SKILL: `registryByName` was consulted
+    // first, so the skill's execute answered the provider's contract.
     const out = fresh();
     await shadowingAgent(out).run({ message: 'hi' });
-    expect(out.results).toContain('shared_tool:FROM-SKILL');
-    expect(out.results).not.toContain('shared_tool:FROM-PROVIDER');
+    expect(out.results).toContain('shared_tool:FROM-PROVIDER');
+    expect(out.results).not.toContain('shared_tool:FROM-SKILL');
   });
 });
 
 // ── 2. the report ────────────────────────────────────────────────────────────
 
 describe('agentfootprint.tools.shadowed', () => {
-  it('integration: the event names both sides and which one wins which race', async () => {
+  it('integration: the event names the wire’s party in both halves, and claim_swallowed names the loser', async () => {
     const out = fresh();
     await shadowingAgent(out).run({ message: 'hi' });
     expect(out.shadowed.length).toBeGreaterThan(0);
@@ -135,25 +140,37 @@ describe('agentfootprint.tools.shadowed', () => {
     expect(first.toolName).toBe('shared_tool');
     expect(first.schemaFrom).toBe('provider');
     expect(first.schemaFromId).toBe('static');
-    expect(first.dispatchTo).toBe('skill');
-    expect(first.dispatchToId).toBe('alpha');
+    // Since 9.92.0 the party that answers IS the party the model read.
+    expect(first.dispatchTo).toBe('provider');
+    expect(first.dispatchToId).toBe('static');
     expect(first.iteration).toBeGreaterThanOrEqual(1);
+    // The loser is named beside it, once per epoch it lost.
+    expect(out.swallowed.length).toBeGreaterThan(0);
+    const lost = out.swallowed[0]!;
+    expect(lost.toolName).toBe('shared_tool');
+    expect(lost.lostBy).toBe('skill');
+    expect(lost.lostById).toBe('alpha');
+    expect(lost.wonBy).toBe('provider');
+    expect(lost.wonById).toBe('static');
+    expect(lost.iteration).toBe(first.iteration);
   });
 
-  it('property: dispatchToId always names the source whose result actually came back', async () => {
+  it('property: dispatchTo always names the source whose result actually came back', async () => {
     const out = fresh();
     await shadowingAgent(out).run({ message: 'hi' });
-    expect(out.shadowed.every((e) => e.dispatchTo === 'skill')).toBe(true);
+    expect(out.shadowed.every((e) => e.dispatchTo === 'provider')).toBe(true);
+    expect(out.shadowed.every((e) => e.dispatchTo === e.schemaFrom)).toBe(true);
     // and the run agrees
-    expect(out.results.some((r) => r.endsWith('FROM-SKILL'))).toBe(true);
+    expect(out.results.some((r) => r.endsWith('FROM-PROVIDER'))).toBe(true);
   });
 
   it('security: the payload carries NAMES only — no args, no results, no body', async () => {
     const out = fresh();
     await shadowingAgent(out).run({ message: 'hi' });
-    const text = JSON.stringify(out.shadowed);
+    const text = JSON.stringify([out.shadowed, out.swallowed]);
     expect(text).not.toContain('ALPHA BODY');
     expect(text).not.toContain('FROM-SKILL');
+    expect(text).not.toContain('FROM-PROVIDER');
     expect(text).not.toContain('PROVIDER VERSION');
     expect(Object.keys(out.shadowed[0]!).sort()).toEqual([
       'dispatchTo',
@@ -162,6 +179,14 @@ describe('agentfootprint.tools.shadowed', () => {
       'schemaFrom',
       'schemaFromId',
       'toolName',
+    ]);
+    expect(Object.keys(out.swallowed[0]!).sort()).toEqual([
+      'iteration',
+      'lostBy',
+      'lostById',
+      'toolName',
+      'wonBy',
+      'wonById',
     ]);
   });
 
@@ -188,6 +213,7 @@ describe('agentfootprint.tools.shadowed', () => {
         .build();
       await agent.run({ message: 'hi' });
       expect(out.shadowed).toEqual([]);
+      expect(out.swallowed).toEqual([]);
       expect(warn).not.toHaveBeenCalled();
     } finally {
       disableDevMode();
@@ -209,9 +235,9 @@ describe('the dev-mode console line', () => {
         .map((c) => String(c[0]))
         .filter((l) => l.includes('shared_tool'));
       expect(lines).toHaveLength(1);
-      expect(lines[0]).toMatch(/declared by BOTH the tool provider/);
-      expect(lines[0]).toMatch(/active skill 'alpha'/);
-      expect(lines[0]).toMatch(/reads one tool's contract and calls another's/);
+      expect(lines[0]).toMatch(/is claimed by provider 'static' AND by skill 'alpha'/);
+      expect(lines[0]).toMatch(/provider 'static''s implementation answers/);
+      expect(lines[0]).toMatch(/Rename one of them/);
     } finally {
       disableDevMode();
       warn.mockRestore();

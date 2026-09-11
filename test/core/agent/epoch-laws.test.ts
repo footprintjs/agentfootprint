@@ -17,9 +17,10 @@
  *  1. THE CAPABILITY LAW (src/core/agent/buildToolRegistry.ts) — for one
  *     epoch: everything offered dispatches, with stable identity; attention
  *     may alter the offer; omission is not proof of permanent loss. Clause
- *     one is SCOPED to the tools that file routes, and its exception is the
- *     shadow seam — pinned as a counterexample by (g), because a law whose
- *     exception is unpinned is a law a reader will over-read.
+ *     one is SCOPED to the tools that file routes. Its one same-epoch
+ *     exception — the shadow seam — was pinned as a counterexample by (g)
+ *     until 9.92.0 made dispatch follow the offer; (g) now pins the seam
+ *     CLOSED and its collision still reported.
  *  2. THE LENS LAW (src/lib/injection-engine/skillToolDescriptors.ts) — a
  *     Lens may omit; it may claim absence or refusal only from authoritative
  *     evidence for the epoch it describes.
@@ -35,7 +36,7 @@
  * documentation (the three STATED pins) / security-containment (law 1(d),
  * where narrowing DOES reach dispatch and must not be over-promised) /
  * regression (law 1(g), the same-epoch identity divergence the framework
- * reports rather than refuses).
+ * closed in 9.92.0 and still reports rather than refuses).
  */
 
 import { describe, expect, it } from 'vitest';
@@ -585,21 +586,23 @@ describe('LAW 1 — the capability law, epoch-scoped', () => {
     expect(identityDivergences(offered, byCallId)).toEqual([]);
   });
 
-  // ── (g) the exception the law now enumerates ───────────────────────────
+  // ── (g) the seam the law used to enumerate — closed, and still reported ──
 
-  it('(g) COUNTEREXAMPLE — the shadow seam: identity diverges inside one epoch, and is reported', async () => {
-    // The law's clause one is scoped to the tools `buildToolRegistry` routes.
-    // The OFFER is wider than those maps: `buildToolsSlot` merges
-    // `[static, provider, skill, step]` first-occurrence-wins, so a provider
-    // schema reaches the wire ahead of an active skill's tool of the same
-    // name while `lookupTool` still resolves the skill's `execute`. The model
-    // reads one contract and calls another implementation, in ONE epoch.
+  it('(g) THE SHADOW SEAM, CLOSED (9.92.0): identity holds inside one epoch, and the collision is reported', async () => {
+    // Until 9.92.0 this test was the law's COUNTEREXAMPLE: `buildToolsSlot`
+    // merges `[static, provider, skill, step]` first-occurrence-wins, so a
+    // provider schema reached the wire ahead of an active skill's tool of the
+    // same name, while `lookupTool` resolved the skill's `execute` from
+    // `registryByName` — the model read one contract and called another
+    // implementation, inside ONE epoch, and the event said so.
     //
-    // This is deliberate and documented (`reportShadowedTools`), and the fix
-    // is not available at build time: the provider's list is resolved per
-    // iteration and the skill has to be active. So the framework reports it.
-    // The test's job is to keep it REPORTED rather than let it become quiet:
-    // if the event stops firing, the seam is a silent lie again.
+    // Now dispatch FOLLOWS THE OFFER: the tools slot records which party put
+    // each name on the wire and `lookupTool` resolves a served name to that
+    // party's implementation. The collision is still real and still reported —
+    // `tools.shadowed` names the wire's party in both halves, and
+    // `tools.claim_swallowed` names the skill whose claim is dead while the
+    // provider holds the name. The test's job is now the opposite of what it
+    // was: keep the identity clause TRUE here, and keep the report firing.
     const ran: string[] = [];
     const skillSide = stampedTool('shared_tool', 'skill', ran);
     const providerSide = stampedTool('shared_tool', 'provider', ran);
@@ -634,6 +637,7 @@ describe('LAW 1 — the capability law, epoch-scoped', () => {
 
     const byCallId = new Map<string, string>();
     const shadowed: { toolName: string; schemaFrom: string; dispatchTo: string }[] = [];
+    const swallowed: { toolName: string; lostBy: string; lostById?: string; wonBy: string }[] = [];
     agent.on('agentfootprint.stream.tool_end', (e) => {
       const p = e.payload as { toolCallId?: string; result?: unknown };
       byCallId.set(String(p.toolCallId), String(p.result));
@@ -643,27 +647,40 @@ describe('LAW 1 — the capability law, epoch-scoped', () => {
         e.payload as unknown as { toolName: string; schemaFrom: string; dispatchTo: string },
       ),
     );
+    agent.on('agentfootprint.tools.claim_swallowed', (e) =>
+      swallowed.push(
+        e.payload as unknown as {
+          toolName: string;
+          lostBy: string;
+          lostById?: string;
+          wonBy: string;
+        },
+      ),
+    );
     await agent.run({ message: 'hello' });
 
     const epoch = offers[1] ?? [];
     const shared = epoch.find((t) => t.name === 'shared_tool');
-    // Clause one's DISPATCHABILITY half survives: the name resolves, and the
+    // Clause one's DISPATCHABILITY half: the name resolves, and the
     // framework's word for a name it cannot route never appears.
     expect(byCallId.get('shared_tool')).toBeDefined();
     expect(byCallId.get('shared_tool')).not.toContain('Unknown tool');
-    // The IDENTITY half does not. The wire carried the provider's contract…
+    // The wire carried the provider's contract…
     expect(stampOf(shared?.description ?? '', 'contract')).toBe('provider');
-    // …and the skill's implementation answered it.
-    expect(stampOf(byCallId.get('shared_tool') ?? '', 'impl')).toBe('skill');
-    // Which is exactly what (f)'s assertion measures — here it names the seam
-    // instead of returning empty, so the strengthened guard is proven to see a
-    // divergence rather than merely to pass on a fixture that has none.
-    expect(identityDivergences(epoch, byCallId)).toEqual(['shared_tool']);
-    // Reported, not refused: nothing threw, and the epoch is on the record
-    // naming which source won which race.
+    // …and the PROVIDER's implementation answered it. Before 9.92.0 this line
+    // read 'skill', and (f)'s guard named the seam.
+    expect(stampOf(byCallId.get('shared_tool') ?? '', 'impl')).toBe('provider');
+    expect(ran).toEqual(['shared_tool']);
+    expect(identityDivergences(epoch, byCallId)).toEqual([]);
+    // Reported, not refused, and not silent: the wire's party in both halves…
     expect(shadowed.some((e) => e.toolName === 'shared_tool')).toBe(true);
     expect(shadowed[0]?.schemaFrom).toBe('provider');
-    expect(shadowed[0]?.dispatchTo).toBe('skill');
+    expect(shadowed[0]?.dispatchTo).toBe('provider');
+    // …and the party whose claim is dead while the provider holds the name.
+    const dead = swallowed.find((e) => e.toolName === 'shared_tool');
+    expect(dead?.lostBy).toBe('skill');
+    expect(dead?.lostById).toBe('billing');
+    expect(dead?.wonBy).toBe('provider');
   });
 });
 

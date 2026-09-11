@@ -1,0 +1,667 @@
+{
+  "commitLog": [
+    {
+      "idx": 0,
+      "overwrite": {
+        "activatedInjectionIds": [],
+        "activeInjections": [],
+        "cacheMarkers": [],
+        "cachingDisabled": false,
+        "contextTokensRemaining": 32000,
+        "costBudgetHit": false,
+        "cumEstimatedUsd": 0,
+        "cumTokensInput": 0,
+        "cumTokensOutput": 0,
+        "deliveredMessageKeys": [],
+        "dynamicToolSchemas": [],
+        "finalContent": "",
+        "forcedOutputToolName": "respond_with_schema",
+        "history": [
+          {
+            "content": "go",
+            "role": "user"
+          }
+        ],
+        "iteration": 1,
+        "llmLatestContent": "",
+        "llmLatestToolCalls": [],
+        "maxIterations": 10,
+        "messagesInjections": [],
+        "newMessages": [],
+        "pausedToolCallId": "",
+        "pausedToolName": "",
+        "pausedToolStartMs": "<volatile>",
+        "runIdentity": {
+          "conversationId": "<volatile>"
+        },
+        "skillHistory": [],
+        "systemPromptInjections": [],
+        "thinkingBlocks": [],
+        "toolsInjections": [],
+        "totalInputTokens": 0,
+        "totalOutputTokens": 0,
+        "turnNumber": 1,
+        "turnStartMs": "<volatile>",
+        "userMessage": "go"
+      },
+      "redactedPaths": [],
+      "runtimeStageId": "seed#0",
+      "stage": "Initialize",
+      "stageId": "seed",
+      "trace": [
+        {
+          "path": "userMessage",
+          "verb": "set"
+        },
+        {
+          "path": "history",
+          "verb": "set"
+        },
+        {
+          "path": "runIdentity",
+          "verb": "set"
+        },
+        {
+          "path": "newMessages",
+          "verb": "set"
+        },
+        {
+          "path": "turnNumber",
+          "verb": "set"
+        },
+        {
+          "path": "contextTokensRemaining",
+          "verb": "set"
+        },
+        {
+          "path": "iteration",
+          "verb": "set"
+        },
+        {
+          "path": "maxIterations",
+          "verb": "set"
+        },
+        {
+          "path": "finalContent",
+          "verb": "set"
+        },
+        {
+          "path": "totalInputTokens",
+          "verb": "set"
+        },
+        {
+          "path": "totalOutputTokens",
+          "verb": "set"
+        },
+        {
+          "path": "turnStartMs",
+          "verb": "set"
+        },
+        {
+          "path": "systemPromptInjections",
+          "verb": "set"
+        },
+        {
+          "path": "messagesInjections",
+          "verb": "set"
+        },
+        {
+          "path": "toolsInjections",
+          "verb": "set"
+        },
+        {
+          "path": "llmLatestContent",
+          "verb": "set"
+        },
+        {
+          "path": "llmLatestToolCalls",
+          "verb": "set"
+        },
+        {
+          "path": "thinkingBlocks",
+          "verb": "set"
+        },
+        {
+          "path": "pausedToolCallId",
+          "verb": "set"
+        },
+        {
+          "path": "pausedToolName",
+          "verb": "set"
+        },
+        {
+          "path": "pausedToolStartMs",
+          "verb": "set"
+        },
+        {
+          "path": "cumTokensInput",
+          "verb": "set"
+        },
+        {
+          "path": "cumTokensOutput",
+          "verb": "set"
+        },
+        {
+          "path": "cumEstimatedUsd",
+          "verb": "set"
+        },
+        {
+          "path": "costBudgetHit",
+          "verb": "set"
+        },
+        {
+          "path": "activeInjections",
+          "verb": "set"
+        },
+        {
+          "path": "activatedInjectionIds",
+          "verb": "set"
+        },
+        {
+          "path": "dynamicToolSchemas",
+          "verb": "set"
+        },
+        {
+          "path": "forcedOutputToolName",
+          "verb": "set"
+        },
+        {
+          "path": "deliveredMessageKeys",
+          "verb": "set"
+        },
+        {
+          "path": "cacheMarkers",
+          "verb": "set"
+        },
+        {
+          "path": "cachingDisabled",
+          "verb": "set"
+        },
+        {
+          "path": "skillHistory",
+          "verb": "set"
+        }
+      ],
+      "untrackedSources": [
+        "args"
+      ],
+      "updates": {}
+    },
+    {
+      "idx": 1,
+      "overwrite": {
+        "activeByslot": {
+          "messages": [],
+          "systemPrompt": [
+            {
+              "id": "output-schema",
+              "reason": "instructions 'output-schema' active",
+              "source": "instructions"
+            }
+          ],
+          "tools": []
+        },
+        "activeInjections": [
+          {
+            "cache": "never",
+            "flavor": "instructions",
+            "id": "output-schema",
+            "inject": {
+              "systemPrompt": "Respond ONLY with valid JSON matching the output schema. Do NOT include prose, markdown fences, or explanatory text."
+            }
+          }
+        ]
+      },
+      "redactedPaths": [],
+      "runtimeStageId": "sf-injection-engine#1",
+      "stage": "Injection Engine",
+      "stageId": "sf-injection-engine",
+      "tags": [
+        "milestone:iteration",
+        "milestone-label:Iteration"
+      ],
+      "trace": [
+        {
+          "path": "activeInjections",
+          "verb": "append"
+        },
+        {
+          "path": "activeByslot\u001fsystemPrompt",
+          "verb": "set"
+        },
+        {
+          "path": "activeByslot\u001fmessages",
+          "verb": "set"
+        },
+        {
+          "path": "activeByslot\u001ftools",
+          "verb": "set"
+        }
+      ],
+      "updates": {}
+    },
+    {
+      "idx": 2,
+      "overwrite": {},
+      "redactedPaths": [],
+      "runtimeStageId": "sf-injection-engine#1",
+      "stage": "Injection Engine",
+      "stageId": "sf-injection-engine",
+      "trace": [],
+      "updates": {}
+    },
+    {
+      "idx": 3,
+      "overwrite": {},
+      "redactedPaths": [],
+      "runtimeStageId": "context#6",
+      "stage": "Context",
+      "stageId": "context",
+      "trace": [],
+      "updates": {}
+    },
+    {
+      "idx": 4,
+      "overwrite": {
+        "systemPromptInjections": [
+          {
+            "contentHash": "e168e7e9",
+            "contentSummary": "bot",
+            "rawContent": "bot",
+            "reason": "Agent.system()",
+            "slot": "system-prompt",
+            "source": "base"
+          },
+          {
+            "contentHash": "29ac0a0e",
+            "contentSummary": "Respond ONLY with valid JSON matching the output schema. Do NOT include prose, …",
+            "rawContent": "Respond ONLY with valid JSON matching the output schema. Do NOT include prose, markdown fences, or explanatory text.",
+            "reason": "instructions 'output-schema' active",
+            "slot": "system-prompt",
+            "source": "instructions",
+            "sourceId": "output-schema"
+          }
+        ]
+      },
+      "redactedPaths": [],
+      "runtimeStageId": "context#6",
+      "stage": "Context",
+      "stageId": "context",
+      "trace": [
+        {
+          "path": "systemPromptInjections",
+          "verb": "append"
+        }
+      ],
+      "updates": {}
+    },
+    {
+      "idx": 5,
+      "overwrite": {},
+      "redactedPaths": [],
+      "runtimeStageId": "sf-system-prompt#7",
+      "stage": "System Prompt",
+      "stageId": "sf-system-prompt",
+      "tags": [
+        "milestone:slot",
+        "milestone-label:System prompt"
+      ],
+      "trace": [],
+      "updates": {}
+    },
+    {
+      "idx": 6,
+      "overwrite": {
+        "messagesInjections": [
+          {
+            "asRecency": "latest",
+            "asRole": "user",
+            "contentHash": "bce8e74",
+            "contentSummary": "go",
+            "position": 0,
+            "rawContent": "go",
+            "reason": "conversation history [0]",
+            "slot": "messages",
+            "source": "user"
+          }
+        ]
+      },
+      "redactedPaths": [],
+      "runtimeStageId": "context#6",
+      "stage": "Context",
+      "stageId": "context",
+      "trace": [
+        {
+          "path": "messagesInjections",
+          "verb": "append"
+        }
+      ],
+      "updates": {}
+    },
+    {
+      "idx": 7,
+      "overwrite": {},
+      "redactedPaths": [],
+      "runtimeStageId": "sf-messages#9",
+      "stage": "Messages",
+      "stageId": "sf-messages",
+      "tags": [
+        "milestone:slot",
+        "milestone-label:Messages"
+      ],
+      "trace": [],
+      "updates": {}
+    },
+    {
+      "idx": 8,
+      "overwrite": {},
+      "redactedPaths": [],
+      "runtimeStageId": "sf-system-prompt#7",
+      "stage": "System Prompt",
+      "stageId": "sf-system-prompt",
+      "trace": [],
+      "updates": {}
+    },
+    {
+      "idx": 9,
+      "overwrite": {},
+      "redactedPaths": [],
+      "runtimeStageId": "sf-messages#9",
+      "stage": "Messages",
+      "stageId": "sf-messages",
+      "trace": [],
+      "updates": {}
+    },
+    {
+      "idx": 10,
+      "overwrite": {},
+      "redactedPaths": [],
+      "runtimeStageId": "context#6",
+      "stage": "Context",
+      "stageId": "context",
+      "trace": [],
+      "updates": {}
+    },
+    {
+      "idx": 11,
+      "overwrite": {},
+      "redactedPaths": [],
+      "runtimeStageId": "sf-tools#11",
+      "stage": "Tools",
+      "stageId": "sf-tools",
+      "tags": [
+        "milestone:slot",
+        "milestone-label:Tools"
+      ],
+      "trace": [],
+      "updates": {}
+    },
+    {
+      "idx": 12,
+      "overwrite": {},
+      "redactedPaths": [],
+      "runtimeStageId": "sf-tools#11",
+      "stage": "Tools",
+      "stageId": "sf-tools",
+      "trace": [],
+      "updates": {}
+    },
+    {
+      "idx": 13,
+      "overwrite": {
+        "cacheMarkers": [
+          {
+            "boundaryIndex": 0,
+            "field": "system",
+            "reason": "system stable prefix (1 entries, ending at base system prompt)",
+            "ttl": "short"
+          }
+        ]
+      },
+      "redactedPaths": [],
+      "runtimeStageId": "sf-cache#14",
+      "stage": "Cache",
+      "stageId": "sf-cache",
+      "trace": [
+        {
+          "path": "cacheMarkers",
+          "verb": "append"
+        }
+      ],
+      "updates": {}
+    },
+    {
+      "idx": 14,
+      "overwrite": {},
+      "redactedPaths": [],
+      "runtimeStageId": "sf-cache#14",
+      "stage": "Cache",
+      "stageId": "sf-cache",
+      "trace": [],
+      "updates": {}
+    },
+    {
+      "idx": 15,
+      "overwrite": {
+        "llmLatestContent": "{\"ok\":true}",
+        "receipt": {
+          "basis": {
+            "epoch": 1,
+            "model": "mock",
+            "provider": "byte-identity-mock",
+            "runId": "<volatile>"
+          },
+          "cache": {
+            "markersApplied": [],
+            "transform": "unchanged",
+            "transformHash": null
+          },
+          "messages": {
+            "count": 1,
+            "entries": [
+              {
+                "hash": "<digest>",
+                "role": "user"
+              }
+            ],
+            "requestOnly": []
+          },
+          "params": {
+            "toolChoice": {
+              "name": "respond_with_schema",
+              "type": "tool"
+            }
+          },
+          "system": {
+            "chars": 121,
+            "hash": "<digest>",
+            "pieces": [
+              {
+                "hash": "<digest>",
+                "slot": "system-prompt",
+                "source": "base"
+              },
+              {
+                "hash": "<digest>",
+                "slot": "system-prompt",
+                "source": "instructions"
+              }
+            ]
+          },
+          "tools": {
+            "forced": "respond_with_schema",
+            "names": [
+              "respond_with_schema"
+            ],
+            "schemaHashes": {
+              "respond_with_schema": "<digest>"
+            },
+            "withheld": null
+          }
+        }
+      },
+      "redactedPaths": [],
+      "runtimeStageId": "call-llm#18",
+      "stage": "CallLLM",
+      "stageId": "call-llm",
+      "tags": [
+        "milestone:llm-turn",
+        "milestone-label:LLM turn"
+      ],
+      "trace": [
+        {
+          "path": "receipt",
+          "verb": "set"
+        },
+        {
+          "path": "llmLatestContent",
+          "verb": "set"
+        }
+      ],
+      "updates": {}
+    },
+    {
+      "idx": 16,
+      "overwrite": {
+        "outputAttempts": [
+          {
+            "attempt": 1,
+            "error": "parser.parse is not a function",
+            "iteration": 1,
+            "outcome": "exhausted",
+            "stage": "schema-validate"
+          }
+        ],
+        "outputContractUnmet": {
+          "attempts": 1,
+          "error": "parser.parse is not a function",
+          "fallbackConfigured": false,
+          "retriesSpent": 0,
+          "stage": "schema-validate"
+        }
+      },
+      "redactedPaths": [],
+      "runtimeStageId": "sf-route#19",
+      "stage": "Route",
+      "stageId": "sf-route",
+      "tags": [
+        "milestone:decision",
+        "milestone-label:Route"
+      ],
+      "trace": [
+        {
+          "path": "outputAttempts",
+          "verb": "set"
+        },
+        {
+          "path": "outputContractUnmet",
+          "verb": "set"
+        }
+      ],
+      "updates": {}
+    },
+    {
+      "idx": 17,
+      "overwrite": {},
+      "redactedPaths": [],
+      "runtimeStageId": "sf-route#19",
+      "stage": "Route",
+      "stageId": "sf-route",
+      "trace": [
+        {
+          "path": "finalContent",
+          "verb": "set"
+        }
+      ],
+      "updates": {}
+    },
+    {
+      "idx": 18,
+      "overwrite": {},
+      "redactedPaths": [],
+      "runtimeStageId": "final#20",
+      "stage": "Final",
+      "stageId": "final",
+      "trace": [],
+      "updates": {}
+    }
+  ],
+  "served": [
+    {
+      "epoch": 1,
+      "view": {
+        "basis": {
+          "model": "mock",
+          "provider": "byte-identity-mock",
+          "runId": "<volatile>"
+        },
+        "callRuntimeStageId": "call-llm#18",
+        "epoch": 1,
+        "gaps": [
+          {
+            "fields": [
+              "cache.transform",
+              "cache.transformHash",
+              "cache.markersApplied",
+              "system.hash",
+              "system.chars",
+              "system.pieces",
+              "messages.count",
+              "messages.entries",
+              "messages.requestOnly",
+              "tools.names",
+              "tools.schemaHashes"
+            ],
+            "gap": "cache-transform",
+            "why": "What reached the provider may differ from the fields below, and nothing on this view would show it. Where another gap on this view covers one of them, that gap is the stronger claim."
+          },
+          {
+            "fields": [
+              "params"
+            ],
+            "gap": "provider-defaults",
+            "why": "A dial absent below was not recorded; that is not the same as the model running without one. A receipt describes the request as this library last saw it. Whatever handled it after that could have changed it, and nothing on the receipt would show that."
+          },
+          {
+            "fields": [
+              "tools.schemaHashes"
+            ],
+            "gap": "forced-tool-schema",
+            "why": "The schema body behind the forced answer tool is not on this view. Its name is, so the tool list is complete and the schemas beside it are one short."
+          }
+        ],
+        "messages": {
+          "asSent": [
+            {
+              "content": "go",
+              "role": "user"
+            }
+          ],
+          "requestOnly": []
+        },
+        "system": {
+          "pieces": [
+            {
+              "slot": "system-prompt",
+              "source": "base",
+              "text": "bot"
+            },
+            {
+              "slot": "system-prompt",
+              "source": "instructions",
+              "text": "Respond ONLY with valid JSON matching the output schema. Do NOT include prose, markdown fences, or explanatory text."
+            }
+          ],
+          "text": "bot\n\nRespond ONLY with valid JSON matching the output schema. Do NOT include prose, markdown fences, or explanatory text."
+        },
+        "tools": {
+          "forced": "respond_with_schema",
+          "names": [
+            "respond_with_schema"
+          ],
+          "schemas": []
+        }
+      }
+    }
+  ]
+}

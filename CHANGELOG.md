@@ -7,6 +7,115 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [9.92.0] - 2026-09-11
+
+**The offer and the answer are one party.** At every LLM call the model is
+OFFERED a list of tool contracts (the wire; the receipt hashes each one), and
+when it calls a name something ANSWERS. Until this release those two halves
+could come from different parties for one name: the tools slot merges
+`[static, provider, skill, step]` first-occurrence-wins, while dispatch
+consulted the build-time registry first — so a provider's contract on the wire
+was answered by a skill's `execute` (an INACTIVE skill's, even), a provider's
+`skip_step` by the framework's (which then advanced the procedure on a call the
+model made against somebody else's contract), and the report that exists for
+this seam walked `activeInjections` and named the provider on epochs whose wire
+carried the skill's contract. A claimant that lost both the wire and the
+dispatch was simply dead, 22 rows of it in the divergence walk's baseline, with
+nothing on the record. `docs/design/2026-09-the-offer-and-the-answer.md` states
+the law; recorded-not-built entries 1, 2 and 3, the `claim-swallowed` bullet
+under entry 1 and the 9.91.0 tools-slot follow-up are marked built.
+
+**The law:** for every tool name on a call, exactly one party owns the OFFER and
+the same party owns the ANSWER — or the record names the disagreement. Three
+consequences, one example each:
+
+- **Dispatch follows the offer.** `buildToolsSlot.ts` · `mergeWire` is the one
+  pass that produces the wire AND the record of who won each name
+  (`ServedToolParties`, closure-shared like `ProviderToolCache`, never scope
+  state); `toolCalls.ts` · `lookupTool` reads it first. A provider and a
+  never-activated scoped skill both claiming `shared_tool`: the wire carries
+  the provider's contract, the provider's tool answers, and the skill's
+  `execute` answers no call while the provider holds the name — nor after the
+  provider withdraws it, because the skill's contract was never what the
+  model read: that call is REFUSED as a recorded tool result (`toolCalls.ts`
+  · `notServedResult`). A name NOT on this epoch's wire — a held-out step
+  tool, a parked map's tool, a scoped tool named from a restored transcript —
+  still dispatches (the capability law's held-out clause, `epoch-laws.test.ts`
+  1(a)–(e)), but only to the party the model LAST read the name under
+  (`ServedToolParties.lastServed`) or the name's only holder when it was never
+  served; every such dispatch is on the record as the new
+  `agentfootprint.tools.answered_off_wire` (`{ toolName, toolCallId,
+  iteration, answeredBy, answeredById? }`). A pause that re-dispatches on
+  resume (a middleware ask, a check-in, a credential consent) carries the
+  served party on its checkpoint (`pausedToolParty`, pause-path-only), so a
+  resume in a FRESH Agent instance — empty closure, no Compose — cannot fall
+  back to the build-time map's first holder either.
+- **The report's subject is the wire.** `agentfootprint.tools.shadowed` now
+  fires once per contested name per iteration when two contracts COMPETED for
+  the wire, and `schemaFrom`/`dispatchTo` both name the wire's party — they
+  agree by construction. A stepped skill and a provider sharing a name draw
+  `skill 'desk-stepped'` in both halves on every epoch, never `'provider'`.
+  The vocabulary gained `'framework'` (`ToolNameChannel`), so an auto-attach
+  is named as itself.
+- **A dead claim is reported.** New `agentfootprint.tools.claim_swallowed`
+  (`ToolsClaimSwallowedPayload`: `{ toolName, iteration, lostBy, lostById?,
+  wonBy, wonById? }`, names only) fires once per iteration for every party
+  whose claim to a name is held by somebody else — whether its contract
+  competed (an active skill against a provider) or never reached the merge
+  (the same skill while inactive; a provider tool whose name a static
+  `.tool()` owns; the framework's `skip_step` between tenures). Identity is by
+  IMPLEMENTATION: two skills sharing one `Tool` reference (documented-legal)
+  are one claim and draw nothing. Now 111 typed events across 24 domains.
+
+**`skip_step` is a claimant like any other** (`buildToolRegistry.ts` ·
+`toolClaimants`, the registry's new list of every build-time claimant per
+name — a list, not a winner). Its schema still merges last, so it rides the
+wire only when nobody else put the name forward; when a provider serves
+`skip_step`, the provider's tool answers and the step bookkeeping keys on the
+framework's own instance having answered (`toolCalls.ts` ·
+`frameworkSkipStepAnswered`) — the procedure does not advance. The build-time
+refusals (a static `.tool()` or a skill tool named `skip_step`/`present`) stand.
+
+**`buildAgentMessageApiChart` hands the model the declared tool set on every
+turn.** Its tools-slot mount now says `arrayMerge: ArrayMergeMode.Replace`, as
+the agent charts always did; turn 2 no longer serves `['weather','weather']`.
+
+**Byte-identity for every run with no name collision.**
+`test/core/tools/byte-identity.test.ts` drives fifteen collision-free shapes
+(both agent react modes, a skill-graph hop, a stepped skill, a parked map, the
+wrap-up, a tool-forced output, three provider shapes, two skills sharing one
+`Tool` reference, `LLMCall`, both message-API charts) and compares `commitLog`
+and `servedAt(k)` against references under `test/core/tools/reference/`
+generated on the 9.91.0 tree. All fifteen are identical; the
+receipt-conformance suite is unchanged and green on all four chart shapes.
+
+**The divergence walk, re-recorded — and widened.** Every `contract-swap`
+row (12) and every `report-misattributed` row (10) is GONE and ratcheted so
+it cannot reopen quietly; the `claim-swallowed` family is 35 rows, every one
+carrying what `tools.claim_swallowed` said about it. The walk gained the
+cross-epoch × collision cases it never had (walk D: a provider withdrawing a
+name an inactive skill also holds; a fresh-instance resume of a provider's
+call) and a kind for the held-out dispatch the law keeps, `answered-off-wire`
+(4 rows, each carrying the event). The harness moved to
+`test/core/agent/toolDivergenceWalk.harness.ts` so the reproductions in
+`test/core/tools/offer-and-answer.test.ts` — the entries' own, verbatim, each
+red on 9.91.0, plus the review's own shapes — drive the same configurations.
+
+**Consumer-facing changes, stated plainly.** (1) A provider tool that shares a
+name with a skill tool now RUNS where the skill's used to — the contract the
+model read is the one that answers. (2) `tools.shadowed` fires on
+configurations that were silent (a provider against a static `.tool()` or a
+framework auto-attach) and no longer names `'provider'` as `schemaFrom` where
+the wire carried the skill's contract; `dispatchTo` now equals `schemaFrom`.
+(3) Two new events, `tools.claim_swallowed` and `tools.answered_off_wire`.
+(4) A call to a name that left the wire, whose last-served party can no longer
+answer, is refused with a recorded result where it used to be answered by
+whichever party the build-time map held first; the same sentence answers a
+provider-served call resumed in a fresh instance (where it used to read
+`Unknown tool`). (5) Two stale comments in `buildToolsSlot.ts` and
+`buildToolRegistry.ts` corrected in the same diff; `Agent.ts`'s "fresh chart
+per run()" comment corrected — the chart is built once at construction.
+
 ## [9.91.0] - 2026-09-10
 
 **Every chart that serves a model now mints a receipt.** A receipt is the proof

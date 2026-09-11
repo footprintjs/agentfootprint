@@ -86,7 +86,7 @@ describe('event registry — names + exhaustiveness', () => {
   // them by name. Completeness is proven by
   // `test/events/unit/emitted-events-are-registered.test.ts`, which derives
   // the emitted set from src/ instead of trusting a hand-maintained number.
-  it('ALL_EVENT_TYPES has exactly 106 entries (Tier 1+2+3 combined)', () => {
+  it('ALL_EVENT_TYPES has exactly 111 entries (Tier 1+2+3 combined)', () => {
     // 69 = 8 composition + 9 agent + 7 stream + 5 context + 4 memory
     //    + 6 tools + 3 skill (skill.rejected added with the read_skill gate)
     //    + 4 permission + 4 credential + 1 risk + 1 fallback
@@ -207,7 +207,16 @@ describe('event registry — names + exhaustiveness', () => {
     //     refs and the `wants` tool that spends them. The line itself is
     //     request-only, never history, so this event is the ONE record it
     //     existed.)
-    expect(ALL_EVENT_TYPES.length).toBe(109);
+    //    (tools.claim_swallowed added with 9.92.0 — a party whose claim to a
+    //     tool name is dead this iteration: another party holds the name on
+    //     the wire and dispatch follows the offer, so the loser's tool can be
+    //     reached by no call. Fires whether or not the loser's contract
+    //     competed — the `claim-swallowed` family the divergence walk found.)
+    //    (tools.answered_off_wire added with 9.92.0 — the dispatcher handed a
+    //     call to a tool whose name was not on this iteration's wire: the
+    //     held-out, parked and restored-transcript dispatches the capability
+    //     law keeps, now on the record once per such call.)
+    expect(ALL_EVENT_TYPES.length).toBe(111);
   });
 
   it('every entry in ALL_EVENT_TYPES is a key of AgentfootprintEventMap', () => {

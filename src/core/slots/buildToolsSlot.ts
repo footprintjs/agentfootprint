@@ -33,6 +33,8 @@ import {
 } from '../../lib/injection-engine/skillSteps.js';
 import { typedEmit } from '../../recorders/core/typedEmit.js';
 import type { Tool } from '../tools.js';
+import type { ToolClaim } from '../agent/buildToolRegistry.js';
+import type { ToolNameChannel } from '../../events/payloads.js';
 import type { ToolProvider, ToolDispatchContext } from '../../tool-providers/types.js';
 import { composeSlot, fnv1a, formatOverflowWarning, slotOverflow, truncate } from './helpers.js';
 
@@ -47,6 +49,132 @@ import { composeSlot, fnv1a, formatOverflowWarning, slotOverflow, truncate } fro
  */
 export interface ProviderToolCache {
   current: readonly Tool[];
+}
+
+/**
+ * A party that put a tool name forward for the wire (9.92.0) — the vocabulary
+ * `tools.shadowed` and `tools.claim_swallowed` speak. `id` is the provider id or
+ * the skill id when the party has one; a static `.tool()` and a framework
+ * auto-attach carry none.
+ */
+export interface ToolParty {
+  readonly channel: ToolNameChannel;
+  readonly id?: string;
+}
+
+/**
+ * WHO PUT EACH NAME ON THIS EPOCH'S WIRE (9.92.0) — written by Compose from
+ * the same merge that produces `scope.toolSchemas`, read by the tool-calls
+ * handler's `lookupTool` so that DISPATCH FOLLOWS THE OFFER: a name the model
+ * was served resolves to the implementation of the party whose contract it
+ * read, never to whichever map happened to be consulted first.
+ *
+ * The `ProviderToolCache` pattern, and for the same reason: build-closure
+ * plumbing shared by the slot (writer) and the handler (reader) within one
+ * chart, never scope state — so a run with no collision commits the exact
+ * bytes it always did. Overwritten every iteration; a name absent from it was
+ * not on the wire this epoch and dispatch falls back to the build-time map,
+ * which is the capability law's held-out clause unchanged.
+ */
+export interface ServedToolParties {
+  current: ReadonlyMap<string, ToolParty>;
+  /**
+   * The party each name was LAST served under, across the epochs of one run
+   * (cleared on iteration 1). The off-wire fallback reads it: a name that
+   * left the wire may still be answered by the party the model last read it
+   * under — never by a party the model was never shown under that name.
+   */
+  readonly lastServed: Map<string, ToolParty>;
+}
+
+/** One schema put forward for the wire, by whom — and WHICH implementation. */
+interface WireCandidate {
+  readonly schema: LLMToolSchema;
+  readonly party: ToolParty;
+  /**
+   * The implementation behind the contract. Identity is by implementation:
+   * two skills sharing ONE `Tool` reference (documented-legal) are one claim
+   * however many routes it arrives by, and draw nothing. Absent only on a
+   * chart with no claimant record (the message-API charts).
+   */
+  readonly tool?: Tool;
+}
+
+const FRAMEWORK_PARTY: ToolParty = { channel: 'framework' };
+
+const sameParty = (a: ToolParty, b: ToolParty): boolean => a.channel === b.channel && a.id === b.id;
+
+/**
+ * The same CONTRACT arriving twice — an always-visible skill's tool rides the
+ * static list AND, once the skill is active, the injection list. One claim,
+ * two routes; not a loser of itself.
+ */
+const sameContract = (a: LLMToolSchema, b: LLMToolSchema): boolean =>
+  a.name === b.name &&
+  a.description === b.description &&
+  JSON.stringify(a.inputSchema ?? null) === JSON.stringify(b.inputSchema ?? null);
+
+const partyOfClaim = (c: ToolClaim): ToolParty => ({
+  channel: c.channel,
+  ...(c.id !== undefined && { id: c.id }),
+});
+
+/**
+ * THE WIRE MERGE (9.92.0) — first occurrence wins, and the record of who won
+ * and who lost is produced by the SAME pass that produces the list, so the two
+ * cannot disagree about a name.
+ *
+ * Order is the caller's: `[static, provider, skill, step]`. A `registry`
+ * candidate is the static list; a `provider` candidate the resolved
+ * `ToolProvider` list; a `skill` candidate an active skill's `inject.tools`;
+ * a `framework` candidate the step tool. Two candidates from one provider
+ * under one name (a composed provider serving a name twice) lose to each
+ * other by the same rule and are reported the same way. The SAME
+ * implementation put forward twice — an always-visible skill's tool rides the
+ * static list and the active-injection list; two skills may share one `Tool`
+ * reference — is one claim and draws nothing: identity is by `tool`, and only
+ * where no implementation is known (a chart without a claimant record) by
+ * party + contract.
+ *
+ * @example
+ * ```ts
+ * const { merged, winners, losers } = mergeWire([
+ *   { schema: { name: 'x', description: 'a' }, party: { channel: 'provider', id: 'p' } },
+ *   { schema: { name: 'x', description: 'b' }, party: { channel: 'skill', id: 's' } },
+ * ]);
+ * merged.map((t) => t.description);            // ['a']
+ * winners.get('x');                             // { channel: 'provider', id: 'p' }
+ * losers.get('x');                              // [{ channel: 'skill', id: 's' }]
+ * ```
+ */
+export function mergeWire(candidates: readonly WireCandidate[]): {
+  readonly merged: readonly LLMToolSchema[];
+  readonly winners: ReadonlyMap<string, ToolParty>;
+  /** Every candidate that lost its name, in candidate order — competing losers. */
+  readonly losers: ReadonlyMap<string, readonly ToolParty[]>;
+} {
+  const merged: LLMToolSchema[] = [];
+  const winners = new Map<string, ToolParty>();
+  const won = new Map<string, WireCandidate>();
+  const losers = new Map<string, ToolParty[]>();
+  for (const candidate of candidates) {
+    const { schema, party } = candidate;
+    const first = won.get(schema.name);
+    if (first !== undefined) {
+      const sameImplementation =
+        (candidate.tool !== undefined && candidate.tool === first.tool) ||
+        (sameParty(party, first.party) && sameContract(schema, first.schema));
+      if (sameImplementation) continue;
+      const lost = losers.get(schema.name);
+      if (lost === undefined) losers.set(schema.name, [party]);
+      else lost.push(party);
+      continue;
+    }
+    won.set(schema.name, candidate);
+    winners.set(schema.name, party);
+    merged.push(schema);
+  }
+  return { merged, winners, losers };
 }
 
 export interface ToolsSlotConfig {
@@ -92,6 +220,23 @@ export interface ToolsSlotConfig {
    * calling `list()` a second time. Required when `toolProvider` is set.
    */
   readonly providerToolCache?: ProviderToolCache;
+  /**
+   * Every build-time claimant per tool name (9.92.0) — `buildToolRegistry`'s
+   * `toolClaimants`. Read for two things: the party a STATIC-list schema
+   * belongs to (a `.tool()`, a framework auto-attach, an always-visible
+   * skill's tool), and the claimants that never reached this epoch's merge
+   * (a scoped skill's tool while the skill is inactive, a held-out step tool,
+   * the framework's `skip_step` between tenures) so a dead claim can be named.
+   * Absent — the message-API charts — and every static schema is `registry`.
+   */
+  readonly toolClaimants?: ReadonlyMap<string, readonly ToolClaim[]>;
+  /**
+   * The record of who put each name on the wire (9.92.0), written here every
+   * iteration and read by dispatch. Same closure-shared shape and lifetime as
+   * `providerToolCache`. Absent → the record is not kept, and dispatch reads
+   * its build-time map first as it did before 9.92.0.
+   */
+  readonly servedTools?: ServedToolParties;
   /**
    * Rebuild `read_skill`'s SCHEMA for this iteration's cursor (8.5.0).
    *
@@ -195,6 +340,19 @@ export function buildToolsSlot(config: ToolsSlotConfig): FlowChart {
   const providerToolCache = config.providerToolCache;
   const hiddenSkillIdsFor = config.hiddenSkillIds;
   const stepPlanFor = config.stepPlanFor;
+  const toolClaimants = config.toolClaimants;
+  const servedTools = config.servedTools;
+  /** A STATIC-list schema's party and implementation: its first build-time claimant. */
+  const registryCandidate = (schema: LLMToolSchema): WireCandidate => {
+    const first = toolClaimants?.get(schema.name)?.[0];
+    return first === undefined
+      ? { schema, party: { channel: 'registry' } }
+      : { schema, party: partyOfClaim(first), tool: first.tool };
+  };
+  /** The framework's own `skip_step` instance, when any skill declares steps. */
+  const frameworkSkipStep = toolClaimants
+    ?.get(buildSkipStepTool().schema.name)
+    ?.find((c) => c.channel === 'framework')?.tool;
   // The skip_step schema template — description is rebuilt per iteration
   // (it names the current step), everything else is static.
   const skipStepSchemaTemplate = stepPlanFor ? buildSkipStepTool().schema : undefined;
@@ -492,6 +650,11 @@ export function buildToolsSlot(config: ToolsSlotConfig): FlowChart {
     });
 
     const providerSchemas: LLMToolSchema[] = [];
+    const providerCandidates: WireCandidate[] = [];
+    const providerParty: ToolParty = {
+      channel: 'provider',
+      ...(toolProvider?.id !== undefined && { id: toolProvider.id }),
+    };
     if (toolProvider && providerToolCache) {
       for (const t of providerToolCache.current) {
         // PARK HOLD-OUT, the same rule the registry list above and the
@@ -517,6 +680,7 @@ export function buildToolsSlot(config: ToolsSlotConfig): FlowChart {
         // banner the model reads.
         const schema = bannered(t.schema);
         providerSchemas.push(schema);
+        providerCandidates.push({ schema, party: providerParty, tool: t });
         const summary = `${schema.name}: ${schema.description}`;
         injections.push({
           contentSummary: truncate(summary, 80),
@@ -536,6 +700,7 @@ export function buildToolsSlot(config: ToolsSlotConfig): FlowChart {
     // the step hold-out filters this source too — by the same sole-owner
     // rule (a name in stepHoldOut is provably the stepped skill's alone).
     const dynamicSchemas: LLMToolSchema[] = [];
+    const dynamicCandidates: WireCandidate[] = [];
     for (const inj of activeInjections) {
       const injTools = inj.inject.tools;
       if (!injTools || injTools.length === 0) continue;
@@ -545,6 +710,18 @@ export function buildToolsSlot(config: ToolsSlotConfig): FlowChart {
         if (parkHoldOut?.has(tool.schema.name) === true) continue;
         const schema = bannered(tool.schema);
         dynamicSchemas.push(schema);
+        // The implementation is the REGISTRY's reference for (name, skill), not
+        // the object on the active injection: `activeInjections` is committed
+        // state, and what comes back from scope is a copy. Identity has to be
+        // judged on the one reference `buildToolRegistry` kept.
+        const claimed = toolClaimants
+          ?.get(schema.name)
+          ?.find((c) => c.channel === 'skill' && c.id === inj.id)?.tool;
+        dynamicCandidates.push({
+          schema,
+          party: { channel: 'skill', id: inj.id },
+          tool: claimed ?? (tool as unknown as Tool),
+        });
         const summary = `${schema.name}: ${schema.description}`;
         injections.push({
           contentSummary: truncate(summary, 80),
@@ -600,20 +777,37 @@ export function buildToolsSlot(config: ToolsSlotConfig): FlowChart {
     // registry, AND the consumer's toolProvider emits one too. Without
     // dedupe both reach the LLM and Anthropic rejects the request:
     // "tools: Tool names must be unique."
-    const seen = new Set<string>();
-    const merged: LLMToolSchema[] = [];
-    for (const t of [...tools, ...providerSchemas, ...dynamicSchemas, ...stepSchemas]) {
-      if (seen.has(t.name)) continue;
-      seen.add(t.name);
-      merged.push(t);
-    }
+    //
+    // Since 9.92.0 the same pass records WHO won each name and who lost it
+    // (`mergeWire`), because the record of the wire and the wire itself must
+    // come from one loop: dispatch resolves against the winners, and the
+    // report below is computed from the losers — never from a re-derivation.
+    const candidates: readonly WireCandidate[] = [
+      ...tools.map(registryCandidate),
+      ...providerCandidates,
+      ...dynamicCandidates,
+      ...stepSchemas.map((schema) => ({
+        schema,
+        party: FRAMEWORK_PARTY,
+        ...(frameworkSkipStep !== undefined && { tool: frameworkSkipStep }),
+      })),
+    ];
+    const { merged, winners, losers } = mergeWire(candidates);
     scope.toolSchemas = merged;
+    if (servedTools !== undefined) {
+      servedTools.current = winners;
+      // The run's memory of who served what (read by the off-wire fallback).
+      // Iteration 1 is a run's first epoch — `seed` sets it — so the memory
+      // of a previous run on this same built chart is dropped here.
+      if (iteration === 1) servedTools.lastServed.clear();
+      for (const [name, party] of winners) servedTools.lastServed.set(name, party);
+    }
     // ── Compose-seam integrity backstop (9.60.0) ──────────────────────
-    // The park hold-out filters the registry and skill lists, but PROVIDER
-    // schemas merge unfiltered — a provider tool sharing a parked member's
-    // name stays on the wire (the shadowing seam: provider wins the wire,
-    // skill wins dispatch). That is the recorded two-channels contradiction
-    // still reachable today, so the final merged list is checked against
+    // Every list the merge reads is park-filtered — the registry and skill
+    // lists from 9.59.0, the provider list since the 9.60.0 fix pass (the
+    // comment at the provider loop above says why it has to be this layer).
+    // The backstop stays as the check that the MERGED wire agrees with the
+    // park, whatever route a name took: the final list is compared against
     // every parked map's owned names. One finding per defect (identity
     // dedup via a scope-held seen list, written only when something fires),
     // filed as a typed event; the composition itself is never altered —
@@ -667,9 +861,10 @@ export function buildToolsSlot(config: ToolsSlotConfig): FlowChart {
     }
     reportShadowedTools(scope, {
       iteration,
-      ...(toolProvider?.id && { providerId: toolProvider.id }),
-      providerSchemas,
-      activeInjections,
+      winners,
+      losers,
+      candidates,
+      ...(toolClaimants !== undefined && { claimants: toolClaimants }),
       warnedShadow,
     });
     const composition = composeSlot(
@@ -712,71 +907,105 @@ export function buildToolsSlot(config: ToolsSlotConfig): FlowChart {
     .build();
 }
 
+/** How a party is named in a sentence: `provider 'hub'`, `skill 'billing'`, `framework`. */
+const describeParty = (p: ToolParty): string =>
+  p.id === undefined ? p.channel : `${p.channel} '${p.id}'`;
+
 /**
- * Report a tool name a `ToolProvider` and an active SKILL both claim (8.7.0).
+ * Report every tool name more than one party claimed this epoch (8.7.0;
+ * re-subjected 9.92.0).
  *
- * The two sources disagree in opposite directions, and both directions are laws of
- * this codebase rather than races:
+ * The SUBJECT is the wire crossed with dispatch: for each name on the wire,
+ * the party whose contract won it — which, since dispatch follows the offer,
+ * is also the party that answers — against every other party that claimed
+ * the name. Two kinds of loser, two events:
  *
- *   • **The provider wins the LLM's tool list.** The merge above is
- *     `[static, provider, skill]` with first-occurrence-wins, and an
- *     `autoActivate: 'currentSkill'` skill's tools are deliberately kept OUT of the
- *     static registry (`buildToolRegistry`), so the provider's schema — its name, its
- *     description, its `inputSchema` — is the one the model reads.
- *   • **The skill wins dispatch.** `lookupTool` checks `registryByName` first, and
- *     every skill tool is in that map (`buildToolRegistry` adds autoActivate tools
- *     explicitly so dispatch resolves once the skill is active). Provider tools are
- *     not in it. So the skill's `execute` is what runs.
+ *   • a COMPETING loser put a contract forward this epoch and lost the merge
+ *     (`losers`, from `mergeWire`). The name draws ONE
+ *     `agentfootprint.tools.shadowed` naming the wire's party in both halves —
+ *     the shipped event, kept truthful — and one `tools.claim_swallowed` per
+ *     loser;
+ *   • a RESERVED loser is a build-time claimant that never reached the merge
+ *     (`claimants`, from `buildToolRegistry`): a scoped skill's tool while the
+ *     skill is inactive, a held-out step tool, the framework's `skip_step`
+ *     between tenures. Its name is held by somebody else this epoch and its
+ *     implementation cannot be reached by any call, so it draws
+ *     `tools.claim_swallowed` — and NOT `tools.shadowed`, because no contract of
+ *     its competed for the wire.
  *
- * The model therefore reads one contract and calls a different implementation, with
- * nothing in the trace saying so. Reported rather than refused: the provider's list
- * is resolved per iteration (`list(ctx)`) and the skill has to be active, so there is
- * no build-time moment at which this is knowable.
+ * Until 9.92.0 this loop walked `activeInjections` against the pre-merge
+ * provider list and ASSERTED `schemaFrom: 'provider'`, which could not see an
+ * inactive skill, a static `.tool()` or a framework auto-attach, and named the
+ * provider on epochs whose wire carried the skill's contract (recorded-not-
+ * built, entries 1 and 2). Reading the merge's own record is what makes both
+ * sentences true by construction.
  *
- * A static `.tool()` colliding with a skill tool is NOT reported here —
- * `buildToolRegistry` already throws on that pair at build time, which is the better
- * answer when the answer is available that early.
+ * The events fire every iteration — that is the channel that reaches
+ * production, where a dynamic provider can start a collision on iteration 9
+ * of a run nobody is watching. The console line is dev-mode only and latched
+ * per tool name per built chart, so a 20-iteration loop prints once.
  */
 function reportShadowedTools(
   scope: TypedScope<ToolsSubflowState>,
   input: {
     iteration: number;
-    providerId?: string;
-    providerSchemas: readonly LLMToolSchema[];
-    activeInjections: readonly ActiveInjection[];
+    winners: ReadonlyMap<string, ToolParty>;
+    losers: ReadonlyMap<string, readonly ToolParty[]>;
+    candidates: readonly WireCandidate[];
+    claimants?: ReadonlyMap<string, readonly ToolClaim[]>;
     /** Dedup latch for the console line, scoped to ONE built chart. */
     warnedShadow: Set<string>;
   },
 ): void {
-  const { iteration, providerId, providerSchemas, activeInjections, warnedShadow } = input;
-  if (providerSchemas.length === 0) return;
-  const providerNames = new Set(providerSchemas.map((s) => s.name));
-  for (const inj of activeInjections) {
-    for (const tool of inj.inject.tools ?? []) {
-      const toolName = tool.schema.name;
-      if (!providerNames.has(toolName)) continue;
-      // The EVENT fires every iteration — it is the channel that reaches production,
-      // where a dynamic provider can start shadowing on iteration 9 of a run nobody
-      // is watching. The console line is dev-mode only and latched per tool name, so
-      // a 20-iteration loop prints once (same discipline as the overflow warning).
+  const { iteration, winners, losers, candidates, claimants, warnedShadow } = input;
+  for (const [toolName, winner] of winners) {
+    const competing = losers.get(toolName) ?? [];
+    // Reserved: every build-time claimant of the name that is neither the
+    // winner nor one of this epoch's candidates for it.
+    const putForward = candidates.filter((c) => c.schema.name === toolName);
+    const winning = putForward.find((c) => sameParty(c.party, winner));
+    const reserved = (claimants?.get(toolName) ?? [])
+      .filter(
+        (c) =>
+          // The same implementation is the same claim: a second skill sharing
+          // the winner's `Tool` reference lost nothing.
+          c.tool !== winning?.tool &&
+          !putForward.some((p) => p.tool === c.tool) &&
+          !sameParty(partyOfClaim(c), winner) &&
+          !putForward.some((p) => sameParty(p.party, partyOfClaim(c))),
+      )
+      .map(partyOfClaim);
+    if (competing.length === 0 && reserved.length === 0) continue;
+
+    if (competing.length > 0) {
       typedEmit(scope, 'agentfootprint.tools.shadowed', {
         toolName,
         iteration,
-        schemaFrom: 'provider',
-        ...(providerId && { schemaFromId: providerId }),
-        dispatchTo: 'skill',
-        dispatchToId: inj.id,
+        schemaFrom: winner.channel,
+        ...(winner.id !== undefined && { schemaFromId: winner.id }),
+        dispatchTo: winner.channel,
+        ...(winner.id !== undefined && { dispatchToId: winner.id }),
       });
-      if (!isDevMode() || warnedShadow.has(toolName)) continue;
-      warnedShadow.add(toolName);
-      // eslint-disable-next-line no-console
-      console.warn(
-        `agentfootprint tools: '${toolName}' is declared by BOTH the tool provider` +
-          `${providerId ? ` '${providerId}'` : ''} and the active skill '${inj.id}'. The model ` +
-          `is shown the PROVIDER's description, but dispatch always resolves the SKILL's ` +
-          `implementation — so the model reads one tool's contract and calls another's. Rename ` +
-          `one of them, or drop it from the skill's tools:[] if the provider is meant to own it.`,
-      );
     }
+    for (const lost of [...competing, ...reserved]) {
+      typedEmit(scope, 'agentfootprint.tools.claim_swallowed', {
+        toolName,
+        iteration,
+        lostBy: lost.channel,
+        ...(lost.id !== undefined && { lostById: lost.id }),
+        wonBy: winner.channel,
+        ...(winner.id !== undefined && { wonById: winner.id }),
+      });
+    }
+    if (!isDevMode() || warnedShadow.has(toolName)) continue;
+    warnedShadow.add(toolName);
+    const others = [...competing, ...reserved].map(describeParty).join(', ');
+    // eslint-disable-next-line no-console
+    console.warn(
+      `agentfootprint tools: '${toolName}' is claimed by ${describeParty(winner)} AND by ` +
+        `${others}. The model is shown ${describeParty(winner)}'s contract and ` +
+        `${describeParty(winner)}'s implementation answers; the other claim answers no call ` +
+        `while the name is held. Rename one of them, or drop the duplicate.`,
+    );
   }
 }

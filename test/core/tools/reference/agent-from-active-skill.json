@@ -1,0 +1,1881 @@
+{
+  "commitLog": [
+    {
+      "idx": 0,
+      "overwrite": {
+        "activatedInjectionIds": [],
+        "activeInjections": [],
+        "cacheMarkers": [],
+        "cachingDisabled": false,
+        "contextTokensRemaining": 32000,
+        "costBudgetHit": false,
+        "cumEstimatedUsd": 0,
+        "cumTokensInput": 0,
+        "cumTokensOutput": 0,
+        "deliveredMessageKeys": [],
+        "dynamicToolSchemas": [
+          {
+            "description": "Activate a skill for the next iteration. Available skills:\n  - desk: a desk\n\nPass the skill's id. The skill's body becomes part of the system prompt and any gated tools become available on the next call.",
+            "inputSchema": {
+              "properties": {
+                "id": {
+                  "description": "The skill id to activate.",
+                  "enum": [
+                    "desk"
+                  ],
+                  "type": "string"
+                }
+              },
+              "required": [
+                "id"
+              ],
+              "type": "object"
+            },
+            "name": "read_skill"
+          }
+        ],
+        "finalContent": "",
+        "history": [
+          {
+            "content": "go",
+            "role": "user"
+          }
+        ],
+        "iteration": 1,
+        "llmLatestContent": "",
+        "llmLatestToolCalls": [],
+        "maxIterations": 6,
+        "messagesInjections": [],
+        "newMessages": [],
+        "pausedToolCallId": "",
+        "pausedToolName": "",
+        "pausedToolStartMs": "<volatile>",
+        "runIdentity": {
+          "conversationId": "<volatile>"
+        },
+        "skillHistory": [],
+        "systemPromptInjections": [],
+        "thinkingBlocks": [],
+        "toolsInjections": [],
+        "totalInputTokens": 0,
+        "totalOutputTokens": 0,
+        "turnNumber": 1,
+        "turnStartMs": "<volatile>",
+        "userMessage": "go"
+      },
+      "redactedPaths": [],
+      "runtimeStageId": "seed#0",
+      "stage": "Initialize",
+      "stageId": "seed",
+      "trace": [
+        {
+          "path": "userMessage",
+          "verb": "set"
+        },
+        {
+          "path": "history",
+          "verb": "set"
+        },
+        {
+          "path": "runIdentity",
+          "verb": "set"
+        },
+        {
+          "path": "newMessages",
+          "verb": "set"
+        },
+        {
+          "path": "turnNumber",
+          "verb": "set"
+        },
+        {
+          "path": "contextTokensRemaining",
+          "verb": "set"
+        },
+        {
+          "path": "iteration",
+          "verb": "set"
+        },
+        {
+          "path": "maxIterations",
+          "verb": "set"
+        },
+        {
+          "path": "finalContent",
+          "verb": "set"
+        },
+        {
+          "path": "totalInputTokens",
+          "verb": "set"
+        },
+        {
+          "path": "totalOutputTokens",
+          "verb": "set"
+        },
+        {
+          "path": "turnStartMs",
+          "verb": "set"
+        },
+        {
+          "path": "systemPromptInjections",
+          "verb": "set"
+        },
+        {
+          "path": "messagesInjections",
+          "verb": "set"
+        },
+        {
+          "path": "toolsInjections",
+          "verb": "set"
+        },
+        {
+          "path": "llmLatestContent",
+          "verb": "set"
+        },
+        {
+          "path": "llmLatestToolCalls",
+          "verb": "set"
+        },
+        {
+          "path": "thinkingBlocks",
+          "verb": "set"
+        },
+        {
+          "path": "pausedToolCallId",
+          "verb": "set"
+        },
+        {
+          "path": "pausedToolName",
+          "verb": "set"
+        },
+        {
+          "path": "pausedToolStartMs",
+          "verb": "set"
+        },
+        {
+          "path": "cumTokensInput",
+          "verb": "set"
+        },
+        {
+          "path": "cumTokensOutput",
+          "verb": "set"
+        },
+        {
+          "path": "cumEstimatedUsd",
+          "verb": "set"
+        },
+        {
+          "path": "costBudgetHit",
+          "verb": "set"
+        },
+        {
+          "path": "activeInjections",
+          "verb": "set"
+        },
+        {
+          "path": "activatedInjectionIds",
+          "verb": "set"
+        },
+        {
+          "path": "dynamicToolSchemas",
+          "verb": "set"
+        },
+        {
+          "path": "deliveredMessageKeys",
+          "verb": "set"
+        },
+        {
+          "path": "cacheMarkers",
+          "verb": "set"
+        },
+        {
+          "path": "cachingDisabled",
+          "verb": "set"
+        },
+        {
+          "path": "skillHistory",
+          "verb": "set"
+        }
+      ],
+      "untrackedSources": [
+        "args"
+      ],
+      "updates": {}
+    },
+    {
+      "idx": 1,
+      "overwrite": {
+        "activeByslot": {
+          "messages": [],
+          "systemPrompt": [],
+          "tools": []
+        }
+      },
+      "redactedPaths": [],
+      "runtimeStageId": "sf-injection-engine#1",
+      "stage": "Injection Engine",
+      "stageId": "sf-injection-engine",
+      "tags": [
+        "milestone:iteration",
+        "milestone-label:Iteration"
+      ],
+      "trace": [
+        {
+          "path": "activeByslot\u001fsystemPrompt",
+          "verb": "set"
+        },
+        {
+          "path": "activeByslot\u001fmessages",
+          "verb": "set"
+        },
+        {
+          "path": "activeByslot\u001ftools",
+          "verb": "set"
+        }
+      ],
+      "updates": {}
+    },
+    {
+      "idx": 2,
+      "overwrite": {},
+      "redactedPaths": [],
+      "runtimeStageId": "sf-injection-engine#1",
+      "stage": "Injection Engine",
+      "stageId": "sf-injection-engine",
+      "trace": [],
+      "updates": {}
+    },
+    {
+      "idx": 3,
+      "overwrite": {},
+      "redactedPaths": [],
+      "runtimeStageId": "context#6",
+      "stage": "Context",
+      "stageId": "context",
+      "trace": [],
+      "updates": {}
+    },
+    {
+      "idx": 4,
+      "overwrite": {
+        "systemPromptInjections": [
+          {
+            "contentHash": "e168e7e9",
+            "contentSummary": "bot",
+            "rawContent": "bot",
+            "reason": "Agent.system()",
+            "slot": "system-prompt",
+            "source": "base"
+          }
+        ]
+      },
+      "redactedPaths": [],
+      "runtimeStageId": "context#6",
+      "stage": "Context",
+      "stageId": "context",
+      "trace": [
+        {
+          "path": "systemPromptInjections",
+          "verb": "append"
+        }
+      ],
+      "updates": {}
+    },
+    {
+      "idx": 5,
+      "overwrite": {},
+      "redactedPaths": [],
+      "runtimeStageId": "sf-system-prompt#7",
+      "stage": "System Prompt",
+      "stageId": "sf-system-prompt",
+      "tags": [
+        "milestone:slot",
+        "milestone-label:System prompt"
+      ],
+      "trace": [],
+      "updates": {}
+    },
+    {
+      "idx": 6,
+      "overwrite": {
+        "messagesInjections": [
+          {
+            "asRecency": "latest",
+            "asRole": "user",
+            "contentHash": "bce8e74",
+            "contentSummary": "go",
+            "position": 0,
+            "rawContent": "go",
+            "reason": "conversation history [0]",
+            "slot": "messages",
+            "source": "user"
+          }
+        ]
+      },
+      "redactedPaths": [],
+      "runtimeStageId": "context#6",
+      "stage": "Context",
+      "stageId": "context",
+      "trace": [
+        {
+          "path": "messagesInjections",
+          "verb": "append"
+        }
+      ],
+      "updates": {}
+    },
+    {
+      "idx": 7,
+      "overwrite": {},
+      "redactedPaths": [],
+      "runtimeStageId": "sf-messages#9",
+      "stage": "Messages",
+      "stageId": "sf-messages",
+      "tags": [
+        "milestone:slot",
+        "milestone-label:Messages"
+      ],
+      "trace": [],
+      "updates": {}
+    },
+    {
+      "idx": 8,
+      "overwrite": {},
+      "redactedPaths": [],
+      "runtimeStageId": "sf-system-prompt#7",
+      "stage": "System Prompt",
+      "stageId": "sf-system-prompt",
+      "trace": [],
+      "updates": {}
+    },
+    {
+      "idx": 9,
+      "overwrite": {},
+      "redactedPaths": [],
+      "runtimeStageId": "sf-messages#9",
+      "stage": "Messages",
+      "stageId": "sf-messages",
+      "trace": [],
+      "updates": {}
+    },
+    {
+      "idx": 10,
+      "overwrite": {
+        "toolsInjections": [
+          {
+            "contentHash": "2b11a96d",
+            "contentSummary": "read_skill: Activate a skill for the next iteration. Available skills:\n  - desk…",
+            "position": 0,
+            "rawContent": "read_skill: Activate a skill for the next iteration. Available skills:\n  - desk: a desk\n\nPass the skill's id. The skill's body becomes part of the system prompt and any gated tools become available on the next call.",
+            "reason": "tool registry",
+            "slot": "tools",
+            "source": "registry",
+            "sourceId": "read_skill"
+          }
+        ]
+      },
+      "redactedPaths": [],
+      "runtimeStageId": "context#6",
+      "stage": "Context",
+      "stageId": "context",
+      "trace": [
+        {
+          "path": "toolsInjections",
+          "verb": "append"
+        }
+      ],
+      "updates": {}
+    },
+    {
+      "idx": 11,
+      "overwrite": {},
+      "redactedPaths": [],
+      "runtimeStageId": "sf-tools#11",
+      "stage": "Tools",
+      "stageId": "sf-tools",
+      "tags": [
+        "milestone:slot",
+        "milestone-label:Tools"
+      ],
+      "trace": [],
+      "updates": {}
+    },
+    {
+      "idx": 12,
+      "overwrite": {},
+      "redactedPaths": [],
+      "runtimeStageId": "sf-tools#11",
+      "stage": "Tools",
+      "stageId": "sf-tools",
+      "trace": [],
+      "updates": {}
+    },
+    {
+      "idx": 13,
+      "overwrite": {
+        "skillHistory": [
+          null
+        ]
+      },
+      "redactedPaths": [],
+      "runtimeStageId": "update-skill-history#14",
+      "stage": "UpdateSkillHistory",
+      "stageId": "update-skill-history",
+      "trace": [
+        {
+          "path": "skillHistory",
+          "verb": "append"
+        }
+      ],
+      "updates": {}
+    },
+    {
+      "idx": 14,
+      "overwrite": {
+        "cacheMarkers": [
+          {
+            "boundaryIndex": 0,
+            "field": "system",
+            "reason": "system stable prefix (1 entries, ending at base system prompt)",
+            "ttl": "short"
+          }
+        ]
+      },
+      "redactedPaths": [],
+      "runtimeStageId": "sf-cache#15",
+      "stage": "Cache",
+      "stageId": "sf-cache",
+      "trace": [
+        {
+          "path": "cacheMarkers",
+          "verb": "append"
+        }
+      ],
+      "updates": {}
+    },
+    {
+      "idx": 15,
+      "overwrite": {},
+      "redactedPaths": [],
+      "runtimeStageId": "sf-cache#15",
+      "stage": "Cache",
+      "stageId": "sf-cache",
+      "trace": [],
+      "updates": {}
+    },
+    {
+      "idx": 16,
+      "overwrite": {
+        "llmLatestToolCalls": [
+          {
+            "args": {
+              "id": "desk"
+            },
+            "id": "c1",
+            "name": "read_skill"
+          }
+        ],
+        "receipt": {
+          "basis": {
+            "epoch": 1,
+            "model": "mock",
+            "provider": "byte-identity-mock",
+            "runId": "<volatile>"
+          },
+          "cache": {
+            "markersApplied": [],
+            "transform": "unchanged",
+            "transformHash": null
+          },
+          "messages": {
+            "count": 1,
+            "entries": [
+              {
+                "hash": "<digest>",
+                "role": "user"
+              }
+            ],
+            "requestOnly": []
+          },
+          "params": {},
+          "system": {
+            "chars": 3,
+            "hash": "<digest>",
+            "pieces": [
+              {
+                "hash": "<digest>",
+                "slot": "system-prompt",
+                "source": "base"
+              }
+            ]
+          },
+          "tools": {
+            "forced": null,
+            "names": [
+              "read_skill"
+            ],
+            "schemaHashes": {
+              "read_skill": "<digest>"
+            },
+            "withheld": null
+          }
+        }
+      },
+      "redactedPaths": [],
+      "runtimeStageId": "call-llm#19",
+      "stage": "CallLLM",
+      "stageId": "call-llm",
+      "tags": [
+        "milestone:llm-turn",
+        "milestone-label:LLM turn"
+      ],
+      "trace": [
+        {
+          "path": "receipt",
+          "verb": "set"
+        },
+        {
+          "path": "llmLatestToolCalls",
+          "verb": "append"
+        }
+      ],
+      "updates": {}
+    },
+    {
+      "idx": 17,
+      "overwrite": {},
+      "redactedPaths": [],
+      "runtimeStageId": "sf-route#20",
+      "stage": "Route",
+      "stageId": "sf-route",
+      "tags": [
+        "milestone:decision",
+        "milestone-label:Route"
+      ],
+      "trace": [],
+      "updates": {}
+    },
+    {
+      "idx": 18,
+      "overwrite": {
+        "activatedInjectionIds": [
+          "desk"
+        ],
+        "history": [
+          {
+            "content": "",
+            "role": "assistant",
+            "toolCalls": [
+              {
+                "args": {
+                  "id": "desk"
+                },
+                "id": "c1",
+                "name": "read_skill"
+              }
+            ]
+          },
+          {
+            "content": "Skill 'desk' activated for the next iteration.",
+            "role": "tool",
+            "toolCallId": "c1",
+            "toolName": "read_skill"
+          }
+        ],
+        "iteration": 2,
+        "lastToolResult": {
+          "result": "Skill 'desk' activated for the next iteration.",
+          "toolName": "read_skill"
+        },
+        "toolResults": [
+          {
+            "result": "Skill 'desk' activated for the next iteration.",
+            "toolCallId": "c1",
+            "toolName": "read_skill"
+          }
+        ]
+      },
+      "redactedPaths": [],
+      "runtimeStageId": "tool-calls#21",
+      "stage": "ToolCalls",
+      "stageId": "tool-calls",
+      "tags": [
+        "milestone:tool-call",
+        "milestone-label:Tool call"
+      ],
+      "trace": [
+        {
+          "path": "lastToolResult",
+          "verb": "set"
+        },
+        {
+          "path": "toolResults",
+          "verb": "set"
+        },
+        {
+          "path": "activatedInjectionIds",
+          "verb": "append"
+        },
+        {
+          "path": "history",
+          "verb": "append"
+        },
+        {
+          "path": "iteration",
+          "verb": "set"
+        }
+      ],
+      "updates": {}
+    },
+    {
+      "idx": 19,
+      "overwrite": {
+        "activeByslot": {
+          "systemPrompt": [
+            {
+              "id": "desk",
+              "reason": "a desk",
+              "source": "skill"
+            }
+          ],
+          "tools": [
+            {
+              "id": "desk",
+              "reason": "a desk",
+              "source": "skill"
+            }
+          ]
+        },
+        "activeInjections": [
+          {
+            "autoActivate": "currentSkill",
+            "cache": "while-active",
+            "description": "a desk",
+            "flavor": "skill",
+            "id": "desk",
+            "inject": {
+              "systemPrompt": "DESK",
+              "tools": [
+                {
+                  "injectionId": "desk",
+                  "schema": {
+                    "description": "the desk_tool tool",
+                    "inputSchema": {
+                      "properties": {},
+                      "type": "object"
+                    },
+                    "name": "desk_tool"
+                  }
+                }
+              ]
+            },
+            "surfaceMode": "auto"
+          }
+        ]
+      },
+      "redactedPaths": [],
+      "runtimeStageId": "sf-injection-engine#22",
+      "stage": "Injection Engine",
+      "stageId": "sf-injection-engine",
+      "tags": [
+        "milestone:iteration",
+        "milestone-label:Iteration"
+      ],
+      "trace": [
+        {
+          "path": "activeInjections",
+          "verb": "append"
+        },
+        {
+          "path": "activeByslot\u001fsystemPrompt",
+          "verb": "append"
+        },
+        {
+          "path": "activeByslot\u001ftools",
+          "verb": "append"
+        }
+      ],
+      "updates": {}
+    },
+    {
+      "idx": 20,
+      "overwrite": {},
+      "redactedPaths": [],
+      "runtimeStageId": "sf-injection-engine#22",
+      "stage": "Injection Engine",
+      "stageId": "sf-injection-engine",
+      "trace": [],
+      "updates": {}
+    },
+    {
+      "idx": 21,
+      "overwrite": {},
+      "redactedPaths": [],
+      "runtimeStageId": "context#27",
+      "stage": "Context",
+      "stageId": "context",
+      "trace": [],
+      "updates": {}
+    },
+    {
+      "idx": 22,
+      "overwrite": {
+        "systemPromptInjections": [
+          {
+            "contentHash": "7eec262b",
+            "contentSummary": "DESK",
+            "rawContent": "DESK",
+            "reason": "a desk",
+            "slot": "system-prompt",
+            "source": "skill",
+            "sourceId": "desk"
+          }
+        ]
+      },
+      "redactedPaths": [],
+      "runtimeStageId": "context#27",
+      "stage": "Context",
+      "stageId": "context",
+      "trace": [
+        {
+          "path": "systemPromptInjections",
+          "verb": "append"
+        }
+      ],
+      "updates": {}
+    },
+    {
+      "idx": 23,
+      "overwrite": {},
+      "redactedPaths": [],
+      "runtimeStageId": "sf-system-prompt#28",
+      "stage": "System Prompt",
+      "stageId": "sf-system-prompt",
+      "tags": [
+        "milestone:slot",
+        "milestone-label:System prompt"
+      ],
+      "trace": [],
+      "updates": {}
+    },
+    {
+      "idx": 24,
+      "overwrite": {
+        "messagesInjections": [
+          {
+            "asRecency": "earlier",
+            "asRole": "user",
+            "contentHash": "bce8e74",
+            "contentSummary": "go",
+            "position": 0,
+            "rawContent": "go",
+            "reason": "conversation history [0]",
+            "slot": "messages",
+            "source": "user"
+          },
+          {
+            "asRecency": "earlier",
+            "asRole": "assistant",
+            "contentHash": "62db47c8",
+            "contentSummary": "",
+            "position": 1,
+            "rawContent": "",
+            "reason": "conversation history [1]",
+            "slot": "messages",
+            "source": "assistant"
+          },
+          {
+            "asRecency": "latest",
+            "asRole": "tool",
+            "contentHash": "a2026e0e",
+            "contentSummary": "Skill 'desk' activated for the next iteration.",
+            "position": 2,
+            "rawContent": "Skill 'desk' activated for the next iteration.",
+            "reason": "conversation history [2]",
+            "slot": "messages",
+            "source": "tool-result",
+            "sourceId": "c1"
+          }
+        ]
+      },
+      "redactedPaths": [],
+      "runtimeStageId": "context#27",
+      "stage": "Context",
+      "stageId": "context",
+      "trace": [
+        {
+          "path": "messagesInjections",
+          "verb": "set"
+        }
+      ],
+      "updates": {}
+    },
+    {
+      "idx": 25,
+      "overwrite": {},
+      "redactedPaths": [],
+      "runtimeStageId": "sf-messages#30",
+      "stage": "Messages",
+      "stageId": "sf-messages",
+      "tags": [
+        "milestone:slot",
+        "milestone-label:Messages"
+      ],
+      "trace": [],
+      "updates": {}
+    },
+    {
+      "idx": 26,
+      "overwrite": {},
+      "redactedPaths": [],
+      "runtimeStageId": "sf-system-prompt#28",
+      "stage": "System Prompt",
+      "stageId": "sf-system-prompt",
+      "trace": [],
+      "updates": {}
+    },
+    {
+      "idx": 27,
+      "overwrite": {},
+      "redactedPaths": [],
+      "runtimeStageId": "sf-messages#30",
+      "stage": "Messages",
+      "stageId": "sf-messages",
+      "trace": [],
+      "updates": {}
+    },
+    {
+      "idx": 28,
+      "overwrite": {
+        "dynamicToolSchemas": [
+          {
+            "description": "the desk_tool tool",
+            "inputSchema": {
+              "properties": {},
+              "type": "object"
+            },
+            "name": "desk_tool"
+          }
+        ],
+        "toolsInjections": [
+          {
+            "contentHash": "4c040de5",
+            "contentSummary": "desk_tool: the desk_tool tool",
+            "position": 1,
+            "rawContent": "desk_tool: the desk_tool tool",
+            "reason": "skill 'desk' unlocked tool 'desk_tool'",
+            "slot": "tools",
+            "source": "skill",
+            "sourceId": "desk"
+          }
+        ]
+      },
+      "redactedPaths": [],
+      "runtimeStageId": "context#27",
+      "stage": "Context",
+      "stageId": "context",
+      "trace": [
+        {
+          "path": "toolsInjections",
+          "verb": "append"
+        },
+        {
+          "path": "dynamicToolSchemas",
+          "verb": "append"
+        }
+      ],
+      "updates": {}
+    },
+    {
+      "idx": 29,
+      "overwrite": {},
+      "redactedPaths": [],
+      "runtimeStageId": "sf-tools#32",
+      "stage": "Tools",
+      "stageId": "sf-tools",
+      "tags": [
+        "milestone:slot",
+        "milestone-label:Tools"
+      ],
+      "trace": [],
+      "updates": {}
+    },
+    {
+      "idx": 30,
+      "overwrite": {},
+      "redactedPaths": [],
+      "runtimeStageId": "sf-tools#32",
+      "stage": "Tools",
+      "stageId": "sf-tools",
+      "trace": [],
+      "updates": {}
+    },
+    {
+      "idx": 31,
+      "overwrite": {
+        "skillHistory": [
+          "desk"
+        ]
+      },
+      "redactedPaths": [],
+      "runtimeStageId": "update-skill-history#35",
+      "stage": "UpdateSkillHistory",
+      "stageId": "update-skill-history",
+      "trace": [
+        {
+          "path": "skillHistory",
+          "verb": "append"
+        }
+      ],
+      "updates": {}
+    },
+    {
+      "idx": 32,
+      "overwrite": {
+        "cacheMarkers": [
+          {
+            "boundaryIndex": 1,
+            "field": "system",
+            "reason": "system stable prefix (2 entries, ending at skill:desk)",
+            "ttl": "short"
+          },
+          {
+            "boundaryIndex": 0,
+            "field": "tools",
+            "reason": "tools stable prefix (1 entries, ending at skill:desk)",
+            "ttl": "short"
+          }
+        ]
+      },
+      "redactedPaths": [],
+      "runtimeStageId": "sf-cache#36",
+      "stage": "Cache",
+      "stageId": "sf-cache",
+      "trace": [
+        {
+          "path": "cacheMarkers",
+          "verb": "set"
+        }
+      ],
+      "updates": {}
+    },
+    {
+      "idx": 33,
+      "overwrite": {},
+      "redactedPaths": [],
+      "runtimeStageId": "sf-cache#36",
+      "stage": "Cache",
+      "stageId": "sf-cache",
+      "trace": [],
+      "updates": {}
+    },
+    {
+      "idx": 34,
+      "overwrite": {
+        "llmLatestToolCalls": [
+          {
+            "args": {},
+            "id": "c2",
+            "name": "desk_tool"
+          }
+        ],
+        "receipt": {
+          "basis": {
+            "epoch": 2,
+            "model": "mock",
+            "provider": "byte-identity-mock",
+            "runId": "<volatile>"
+          },
+          "cache": {
+            "markersApplied": [],
+            "transform": "unchanged",
+            "transformHash": null
+          },
+          "messages": {
+            "count": 3,
+            "entries": [
+              {
+                "hash": "<digest>",
+                "role": "user"
+              },
+              {
+                "hash": "<digest>",
+                "role": "assistant"
+              },
+              {
+                "hash": "<digest>",
+                "key": "c1",
+                "role": "tool"
+              }
+            ],
+            "requestOnly": []
+          },
+          "params": {},
+          "system": {
+            "chars": 9,
+            "hash": "<digest>",
+            "pieces": [
+              {
+                "hash": "<digest>",
+                "slot": "system-prompt",
+                "source": "base"
+              },
+              {
+                "hash": "<digest>",
+                "slot": "system-prompt",
+                "source": "skill"
+              }
+            ]
+          },
+          "tools": {
+            "forced": null,
+            "names": [
+              "read_skill",
+              "desk_tool"
+            ],
+            "schemaHashes": {
+              "desk_tool": "<digest>",
+              "read_skill": "<digest>"
+            },
+            "withheld": null
+          }
+        }
+      },
+      "redactedPaths": [],
+      "runtimeStageId": "call-llm#40",
+      "stage": "CallLLM",
+      "stageId": "call-llm",
+      "tags": [
+        "milestone:llm-turn",
+        "milestone-label:LLM turn"
+      ],
+      "trace": [
+        {
+          "path": "receipt",
+          "verb": "set"
+        },
+        {
+          "path": "llmLatestToolCalls",
+          "verb": "set"
+        }
+      ],
+      "updates": {}
+    },
+    {
+      "idx": 35,
+      "overwrite": {},
+      "redactedPaths": [],
+      "runtimeStageId": "sf-route#41",
+      "stage": "Route",
+      "stageId": "sf-route",
+      "tags": [
+        "milestone:decision",
+        "milestone-label:Route"
+      ],
+      "trace": [],
+      "updates": {}
+    },
+    {
+      "idx": 36,
+      "overwrite": {
+        "history": [
+          {
+            "content": "",
+            "role": "assistant",
+            "toolCalls": [
+              {
+                "args": {},
+                "id": "c2",
+                "name": "desk_tool"
+              }
+            ]
+          },
+          {
+            "content": "desk_tool result",
+            "role": "tool",
+            "toolCallId": "c2",
+            "toolName": "desk_tool"
+          }
+        ],
+        "iteration": 3,
+        "lastToolResult": {
+          "result": "desk_tool result",
+          "toolName": "desk_tool"
+        },
+        "toolResults": [
+          {
+            "result": "desk_tool result",
+            "toolCallId": "c2",
+            "toolName": "desk_tool"
+          }
+        ]
+      },
+      "redactedPaths": [],
+      "runtimeStageId": "tool-calls#42",
+      "stage": "ToolCalls",
+      "stageId": "tool-calls",
+      "tags": [
+        "milestone:tool-call",
+        "milestone-label:Tool call"
+      ],
+      "trace": [
+        {
+          "path": "lastToolResult",
+          "verb": "set"
+        },
+        {
+          "path": "toolResults",
+          "verb": "set"
+        },
+        {
+          "path": "history",
+          "verb": "append"
+        },
+        {
+          "path": "iteration",
+          "verb": "set"
+        }
+      ],
+      "updates": {}
+    },
+    {
+      "idx": 37,
+      "overwrite": {
+        "activeByslot": {
+          "systemPrompt": [
+            {
+              "id": "desk",
+              "reason": "a desk",
+              "source": "skill"
+            }
+          ],
+          "tools": [
+            {
+              "id": "desk",
+              "reason": "a desk",
+              "source": "skill"
+            }
+          ]
+        }
+      },
+      "redactedPaths": [],
+      "runtimeStageId": "sf-injection-engine#43",
+      "stage": "Injection Engine.1",
+      "stageId": "sf-injection-engine",
+      "tags": [
+        "milestone:iteration",
+        "milestone-label:Iteration"
+      ],
+      "trace": [
+        {
+          "path": "activeByslot\u001fsystemPrompt",
+          "verb": "append"
+        },
+        {
+          "path": "activeByslot\u001ftools",
+          "verb": "append"
+        }
+      ],
+      "updates": {}
+    },
+    {
+      "idx": 38,
+      "overwrite": {},
+      "redactedPaths": [],
+      "runtimeStageId": "sf-injection-engine#43",
+      "stage": "Injection Engine.1",
+      "stageId": "sf-injection-engine",
+      "trace": [],
+      "updates": {}
+    },
+    {
+      "idx": 39,
+      "overwrite": {},
+      "redactedPaths": [],
+      "runtimeStageId": "context#48",
+      "stage": "Context",
+      "stageId": "context",
+      "trace": [],
+      "updates": {}
+    },
+    {
+      "idx": 40,
+      "overwrite": {},
+      "redactedPaths": [],
+      "runtimeStageId": "context#48",
+      "stage": "Context",
+      "stageId": "context",
+      "trace": [],
+      "updates": {}
+    },
+    {
+      "idx": 41,
+      "overwrite": {},
+      "redactedPaths": [],
+      "runtimeStageId": "sf-system-prompt#49",
+      "stage": "System Prompt",
+      "stageId": "sf-system-prompt",
+      "tags": [
+        "milestone:slot",
+        "milestone-label:System prompt"
+      ],
+      "trace": [],
+      "updates": {}
+    },
+    {
+      "idx": 42,
+      "overwrite": {
+        "messagesInjections": [
+          {
+            "asRecency": "earlier",
+            "asRole": "user",
+            "contentHash": "bce8e74",
+            "contentSummary": "go",
+            "position": 0,
+            "rawContent": "go",
+            "reason": "conversation history [0]",
+            "slot": "messages",
+            "source": "user"
+          },
+          {
+            "asRecency": "earlier",
+            "asRole": "assistant",
+            "contentHash": "62db47c8",
+            "contentSummary": "",
+            "position": 1,
+            "rawContent": "",
+            "reason": "conversation history [1]",
+            "slot": "messages",
+            "source": "assistant"
+          },
+          {
+            "asRecency": "earlier",
+            "asRole": "tool",
+            "contentHash": "a2026e0e",
+            "contentSummary": "Skill 'desk' activated for the next iteration.",
+            "position": 2,
+            "rawContent": "Skill 'desk' activated for the next iteration.",
+            "reason": "conversation history [2]",
+            "slot": "messages",
+            "source": "tool-result",
+            "sourceId": "c1"
+          },
+          {
+            "asRecency": "earlier",
+            "asRole": "assistant",
+            "contentHash": "ead60db2",
+            "contentSummary": "",
+            "position": 3,
+            "rawContent": "",
+            "reason": "conversation history [3]",
+            "slot": "messages",
+            "source": "assistant"
+          },
+          {
+            "asRecency": "latest",
+            "asRole": "tool",
+            "contentHash": "ee8abc40",
+            "contentSummary": "desk_tool result",
+            "position": 4,
+            "rawContent": "desk_tool result",
+            "reason": "conversation history [4]",
+            "slot": "messages",
+            "source": "tool-result",
+            "sourceId": "c2"
+          }
+        ]
+      },
+      "redactedPaths": [],
+      "runtimeStageId": "context#48",
+      "stage": "Context",
+      "stageId": "context",
+      "trace": [
+        {
+          "path": "messagesInjections",
+          "verb": "set"
+        }
+      ],
+      "updates": {}
+    },
+    {
+      "idx": 43,
+      "overwrite": {},
+      "redactedPaths": [],
+      "runtimeStageId": "sf-messages#51",
+      "stage": "Messages",
+      "stageId": "sf-messages",
+      "tags": [
+        "milestone:slot",
+        "milestone-label:Messages"
+      ],
+      "trace": [],
+      "updates": {}
+    },
+    {
+      "idx": 44,
+      "overwrite": {},
+      "redactedPaths": [],
+      "runtimeStageId": "sf-system-prompt#49",
+      "stage": "System Prompt",
+      "stageId": "sf-system-prompt",
+      "trace": [],
+      "updates": {}
+    },
+    {
+      "idx": 45,
+      "overwrite": {},
+      "redactedPaths": [],
+      "runtimeStageId": "sf-messages#51",
+      "stage": "Messages",
+      "stageId": "sf-messages",
+      "trace": [],
+      "updates": {}
+    },
+    {
+      "idx": 46,
+      "overwrite": {},
+      "redactedPaths": [],
+      "runtimeStageId": "context#48",
+      "stage": "Context",
+      "stageId": "context",
+      "trace": [],
+      "updates": {}
+    },
+    {
+      "idx": 47,
+      "overwrite": {},
+      "redactedPaths": [],
+      "runtimeStageId": "sf-tools#53",
+      "stage": "Tools",
+      "stageId": "sf-tools",
+      "tags": [
+        "milestone:slot",
+        "milestone-label:Tools"
+      ],
+      "trace": [],
+      "updates": {}
+    },
+    {
+      "idx": 48,
+      "overwrite": {},
+      "redactedPaths": [],
+      "runtimeStageId": "sf-tools#53",
+      "stage": "Tools",
+      "stageId": "sf-tools",
+      "trace": [],
+      "updates": {}
+    },
+    {
+      "idx": 49,
+      "overwrite": {
+        "skillHistory": [
+          "desk"
+        ]
+      },
+      "redactedPaths": [],
+      "runtimeStageId": "update-skill-history#56",
+      "stage": "UpdateSkillHistory",
+      "stageId": "update-skill-history",
+      "trace": [
+        {
+          "path": "skillHistory",
+          "verb": "append"
+        }
+      ],
+      "updates": {}
+    },
+    {
+      "idx": 50,
+      "overwrite": {},
+      "redactedPaths": [],
+      "runtimeStageId": "sf-cache#57",
+      "stage": "Cache",
+      "stageId": "sf-cache",
+      "trace": [],
+      "updates": {}
+    },
+    {
+      "idx": 51,
+      "overwrite": {},
+      "redactedPaths": [],
+      "runtimeStageId": "sf-cache#57",
+      "stage": "Cache",
+      "stageId": "sf-cache",
+      "trace": [],
+      "updates": {}
+    },
+    {
+      "idx": 52,
+      "overwrite": {
+        "llmLatestContent": "done",
+        "llmLatestToolCalls": [],
+        "receipt": {
+          "basis": {
+            "epoch": 3,
+            "model": "mock",
+            "provider": "byte-identity-mock",
+            "runId": "<volatile>"
+          },
+          "cache": {
+            "markersApplied": [],
+            "transform": "unchanged",
+            "transformHash": null
+          },
+          "messages": {
+            "count": 5,
+            "entries": [
+              {
+                "hash": "<digest>",
+                "role": "user"
+              },
+              {
+                "hash": "<digest>",
+                "role": "assistant"
+              },
+              {
+                "hash": "<digest>",
+                "key": "c1",
+                "role": "tool"
+              },
+              {
+                "hash": "<digest>",
+                "role": "assistant"
+              },
+              {
+                "hash": "<digest>",
+                "key": "c2",
+                "role": "tool"
+              }
+            ],
+            "requestOnly": []
+          },
+          "params": {},
+          "system": {
+            "chars": 9,
+            "hash": "<digest>",
+            "pieces": [
+              {
+                "hash": "<digest>",
+                "slot": "system-prompt",
+                "source": "base"
+              },
+              {
+                "hash": "<digest>",
+                "slot": "system-prompt",
+                "source": "skill"
+              }
+            ]
+          },
+          "tools": {
+            "forced": null,
+            "names": [
+              "read_skill",
+              "desk_tool"
+            ],
+            "schemaHashes": {
+              "desk_tool": "<digest>",
+              "read_skill": "<digest>"
+            },
+            "withheld": null
+          }
+        }
+      },
+      "redactedPaths": [],
+      "runtimeStageId": "call-llm#61",
+      "stage": "CallLLM",
+      "stageId": "call-llm",
+      "tags": [
+        "milestone:llm-turn",
+        "milestone-label:LLM turn"
+      ],
+      "trace": [
+        {
+          "path": "receipt",
+          "verb": "set"
+        },
+        {
+          "path": "llmLatestContent",
+          "verb": "set"
+        },
+        {
+          "path": "llmLatestToolCalls",
+          "verb": "set"
+        }
+      ],
+      "updates": {}
+    },
+    {
+      "idx": 53,
+      "overwrite": {},
+      "redactedPaths": [],
+      "runtimeStageId": "sf-route#62",
+      "stage": "Route",
+      "stageId": "sf-route",
+      "tags": [
+        "milestone:decision",
+        "milestone-label:Route"
+      ],
+      "trace": [],
+      "updates": {}
+    },
+    {
+      "idx": 54,
+      "overwrite": {},
+      "redactedPaths": [],
+      "runtimeStageId": "sf-route#62",
+      "stage": "Route",
+      "stageId": "sf-route",
+      "trace": [
+        {
+          "path": "finalContent",
+          "verb": "set"
+        }
+      ],
+      "updates": {}
+    },
+    {
+      "idx": 55,
+      "overwrite": {},
+      "redactedPaths": [],
+      "runtimeStageId": "final#63",
+      "stage": "Final",
+      "stageId": "final",
+      "trace": [],
+      "updates": {}
+    }
+  ],
+  "served": [
+    {
+      "epoch": 1,
+      "view": {
+        "basis": {
+          "model": "mock",
+          "provider": "byte-identity-mock",
+          "runId": "<volatile>"
+        },
+        "callRuntimeStageId": "call-llm#19",
+        "epoch": 1,
+        "gaps": [
+          {
+            "fields": [
+              "cache.transform",
+              "cache.transformHash",
+              "cache.markersApplied",
+              "system.hash",
+              "system.chars",
+              "system.pieces",
+              "messages.count",
+              "messages.entries",
+              "messages.requestOnly",
+              "tools.names",
+              "tools.schemaHashes"
+            ],
+            "gap": "cache-transform",
+            "why": "What reached the provider may differ from the fields below, and nothing on this view would show it. Where another gap on this view covers one of them, that gap is the stronger claim."
+          },
+          {
+            "fields": [
+              "params"
+            ],
+            "gap": "provider-defaults",
+            "why": "A dial absent below was not recorded; that is not the same as the model running without one. A receipt describes the request as this library last saw it. Whatever handled it after that could have changed it, and nothing on the receipt would show that."
+          }
+        ],
+        "messages": {
+          "asSent": [
+            {
+              "content": "go",
+              "role": "user"
+            }
+          ],
+          "requestOnly": []
+        },
+        "system": {
+          "pieces": [
+            {
+              "slot": "system-prompt",
+              "source": "base",
+              "text": "bot"
+            }
+          ],
+          "text": "bot"
+        },
+        "tools": {
+          "names": [
+            "read_skill"
+          ],
+          "schemas": [
+            {
+              "description": "Activate a skill for the next iteration. Available skills:\n  - desk: a desk\n\nPass the skill's id. The skill's body becomes part of the system prompt and any gated tools become available on the next call.",
+              "inputSchema": {
+                "properties": {
+                  "id": {
+                    "description": "The skill id to activate.",
+                    "enum": [
+                      "desk"
+                    ],
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "id"
+                ],
+                "type": "object"
+              },
+              "name": "read_skill"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "epoch": 2,
+      "view": {
+        "basis": {
+          "model": "mock",
+          "provider": "byte-identity-mock",
+          "runId": "<volatile>"
+        },
+        "callRuntimeStageId": "call-llm#40",
+        "epoch": 2,
+        "gaps": [
+          {
+            "fields": [
+              "cache.transform",
+              "cache.transformHash",
+              "cache.markersApplied",
+              "system.hash",
+              "system.chars",
+              "system.pieces",
+              "messages.count",
+              "messages.entries",
+              "messages.requestOnly",
+              "tools.names",
+              "tools.schemaHashes"
+            ],
+            "gap": "cache-transform",
+            "why": "What reached the provider may differ from the fields below, and nothing on this view would show it. Where another gap on this view covers one of them, that gap is the stronger claim."
+          },
+          {
+            "fields": [
+              "params"
+            ],
+            "gap": "provider-defaults",
+            "why": "A dial absent below was not recorded; that is not the same as the model running without one. A receipt describes the request as this library last saw it. Whatever handled it after that could have changed it, and nothing on the receipt would show that."
+          }
+        ],
+        "messages": {
+          "asSent": [
+            {
+              "content": "go",
+              "role": "user"
+            },
+            {
+              "content": "",
+              "role": "assistant",
+              "toolCalls": [
+                {
+                  "args": {
+                    "id": "desk"
+                  },
+                  "id": "c1",
+                  "name": "read_skill"
+                }
+              ]
+            },
+            {
+              "content": "Skill 'desk' activated for the next iteration.",
+              "role": "tool",
+              "toolCallId": "c1",
+              "toolName": "read_skill"
+            }
+          ],
+          "requestOnly": []
+        },
+        "system": {
+          "pieces": [
+            {
+              "slot": "system-prompt",
+              "source": "base",
+              "text": "bot"
+            },
+            {
+              "slot": "system-prompt",
+              "source": "skill",
+              "text": "DESK"
+            }
+          ],
+          "text": "bot\n\nDESK"
+        },
+        "tools": {
+          "names": [
+            "read_skill",
+            "desk_tool"
+          ],
+          "schemas": [
+            {
+              "description": "Activate a skill for the next iteration. Available skills:\n  - desk: a desk\n\nPass the skill's id. The skill's body becomes part of the system prompt and any gated tools become available on the next call.",
+              "inputSchema": {
+                "properties": {
+                  "id": {
+                    "description": "The skill id to activate.",
+                    "enum": [
+                      "desk"
+                    ],
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "id"
+                ],
+                "type": "object"
+              },
+              "name": "read_skill"
+            },
+            {
+              "description": "the desk_tool tool",
+              "inputSchema": {
+                "properties": {},
+                "type": "object"
+              },
+              "name": "desk_tool"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "epoch": 3,
+      "view": {
+        "basis": {
+          "model": "mock",
+          "provider": "byte-identity-mock",
+          "runId": "<volatile>"
+        },
+        "callRuntimeStageId": "call-llm#61",
+        "epoch": 3,
+        "gaps": [
+          {
+            "fields": [
+              "cache.transform",
+              "cache.transformHash",
+              "cache.markersApplied",
+              "system.hash",
+              "system.chars",
+              "system.pieces",
+              "messages.count",
+              "messages.entries",
+              "messages.requestOnly",
+              "tools.names",
+              "tools.schemaHashes"
+            ],
+            "gap": "cache-transform",
+            "why": "What reached the provider may differ from the fields below, and nothing on this view would show it. Where another gap on this view covers one of them, that gap is the stronger claim."
+          },
+          {
+            "fields": [
+              "params"
+            ],
+            "gap": "provider-defaults",
+            "why": "A dial absent below was not recorded; that is not the same as the model running without one. A receipt describes the request as this library last saw it. Whatever handled it after that could have changed it, and nothing on the receipt would show that."
+          }
+        ],
+        "messages": {
+          "asSent": [
+            {
+              "content": "go",
+              "role": "user"
+            },
+            {
+              "content": "",
+              "role": "assistant",
+              "toolCalls": [
+                {
+                  "args": {
+                    "id": "desk"
+                  },
+                  "id": "c1",
+                  "name": "read_skill"
+                }
+              ]
+            },
+            {
+              "content": "Skill 'desk' activated for the next iteration.",
+              "role": "tool",
+              "toolCallId": "c1",
+              "toolName": "read_skill"
+            },
+            {
+              "content": "",
+              "role": "assistant",
+              "toolCalls": [
+                {
+                  "args": {},
+                  "id": "c2",
+                  "name": "desk_tool"
+                }
+              ]
+            },
+            {
+              "content": "desk_tool result",
+              "role": "tool",
+              "toolCallId": "c2",
+              "toolName": "desk_tool"
+            }
+          ],
+          "requestOnly": []
+        },
+        "system": {
+          "pieces": [
+            {
+              "slot": "system-prompt",
+              "source": "base",
+              "text": "bot"
+            },
+            {
+              "slot": "system-prompt",
+              "source": "skill",
+              "text": "DESK"
+            }
+          ],
+          "text": "bot\n\nDESK"
+        },
+        "tools": {
+          "names": [
+            "read_skill",
+            "desk_tool"
+          ],
+          "schemas": [
+            {
+              "description": "Activate a skill for the next iteration. Available skills:\n  - desk: a desk\n\nPass the skill's id. The skill's body becomes part of the system prompt and any gated tools become available on the next call.",
+              "inputSchema": {
+                "properties": {
+                  "id": {
+                    "description": "The skill id to activate.",
+                    "enum": [
+                      "desk"
+                    ],
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "id"
+                ],
+                "type": "object"
+              },
+              "name": "read_skill"
+            },
+            {
+              "description": "the desk_tool tool",
+              "inputSchema": {
+                "properties": {},
+                "type": "object"
+              },
+              "name": "desk_tool"
+            }
+          ]
+        }
+      }
+    }
+  ]
+}

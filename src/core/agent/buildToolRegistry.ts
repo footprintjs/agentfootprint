@@ -61,16 +61,18 @@
  * the autoActivate invariant above exists, and why the name-uniqueness throws
  * below are throws: an identity that is not stable is one the model cannot
  * address. Where a provider schema reaches the wire ahead of a skill tool of
- * the same name, the identity half is the SHADOW SEAM illustrated below.
+ * the same name, the identity half WAS the SHADOW SEAM illustrated below —
+ * closed in 9.92.0 by making dispatch follow the offer.
  *
  * `with stable identity` is kept rather than dropped, and the reason is the
  * event. A law reading only "every offered name resolves to something" would
  * be true everywhere and would leave `agentfootprint.tools.shadowed` reporting
  * a deviation from nothing — the framework spends an event on that seam
  * precisely because reading one contract and calling another implementation is
- * a violation of an expectation worth naming. Scoping a true clause and
- * walking its exceptions keeps the expectation stated; weakening the clause to
- * name resolution would delete it.
+ * a violation of an expectation worth naming. Since 9.92.0 the clause HOLDS
+ * for every name on the wire (dispatch follows the offer); the event now names
+ * the collision that would have broken it, and its companion
+ * `agentfootprint.tools.claim_swallowed` names the party the collision silenced.
  *
  * Clause two is the whole point of the narrowing dials — `autoActivate`,
  * `skillGraph({ scopeTools })`, `.toolsFromActiveSkill()`, a parked map,
@@ -137,33 +139,44 @@
  *     `makeReachableSkills` filters the cursor out of its own successor set,
  *     and under `.tree()` the reachable set is `() => []` outright
  *     (skillGraph.ts) — a tree routes by predicate and has no cursor to move.
- *   • The SHADOW SEAM — a SAME-EPOCH divergence, and the one the framework
- *     TRIES to emit an event for — `claim-swallowed` fires it outside the
- *     shadow seam too, so the event is a signal, never a boundary. A `ToolProvider` and an ACTIVE skill can declare the
- *     same tool name, and the two lose in opposite directions, each by a rule
- *     rather than a race: the wire merge puts provider schemas
- *     ahead of skill injections first-occurrence-wins, so the model reads the
- *     PROVIDER's description and `inputSchema`; `lookupTool` checks
- *     `registryByName` first, where every skill tool lives and no provider
- *     tool does, so the SKILL's `execute` runs. Clause one's dispatchability
- *     survives — the name resolves, there is no `Unknown tool` — but stable
- *     identity does not: the contract offered and the implementation that
- *     answered are different tools, inside ONE epoch. Nothing throws, because
- *     nothing here can see it coming: the provider's list is resolved per
- *     iteration (`list(ctx)`) and the skill has to be active, so there is no
- *     build-time moment at which the pair is knowable. The pair this file CAN
- *     see — a static `.tool()` against a skill tool — is refused below, which
- *     is the better answer whenever the answer is available that early.
- *     Reported rather than refused: `agentfootprint.tools.shadowed` every
- *     iteration plus one dev-mode line (`reportShadowedTools`,
- *     buildToolsSlot.ts). Pinned by `test/toolShadowing.test.ts` and, as a
- *     counterexample to this law, by epoch-laws 1(g).
- *     What the event covers is NARROWER than the seam, which is the reason
- *     this bullet is illustration and the walk is the enumeration: the walk
- *     records the same divergence with an INACTIVE skill winning dispatch and
- *     no event at all, a provider claiming `skip_step` and the framework's own
- *     tool answering, and a configuration where the event fires and names the
- *     wrong schema source. Their reasons are in the baseline.
+ *   • The SHADOW SEAM — the SAME-EPOCH divergence this file's two maps used
+ *     to produce, CLOSED in 9.92.0 and kept here because a reader meeting
+ *     the maps has to know why dispatch no longer reads them first. A
+ *     `ToolProvider` and a skill can declare the same tool name. The wire
+ *     merge puts provider schemas ahead of skill injections
+ *     first-occurrence-wins, so the model reads the PROVIDER's contract; until
+ *     9.92.0 `lookupTool` checked `registryByName` first, where every skill
+ *     tool lives and no provider tool does, so the SKILL's `execute` ran —
+ *     the contract offered and the implementation that answered were
+ *     different tools, inside ONE epoch, and an INACTIVE skill could answer
+ *     a call it was never offered. Now DISPATCH FOLLOWS THE OFFER: the tools
+ *     slot records which party put each name on the wire (`ServedToolParties`,
+ *     buildToolsSlot.ts) and `lookupTool` resolves a name on the wire to THAT
+ *     party's implementation; `registryByName` is the fallback for a name
+ *     that is not on this epoch's wire at all (the held-out, parked and
+ *     restored-transcript cases the capability law keeps dispatchable) —
+ *     reached only for the party the model LAST read the name under, or the
+ *     name's only holder when it was never served, and put on the record by
+ *     `agentfootprint.tools.answered_off_wire`; a name whose last-served
+ *     party can no longer answer is refused (`toolCalls.ts` ·
+ *     `notServedResult`), never handed to a party the model was not shown
+ *     under that name. The
+ *     collision itself is still REPORTED rather than refused, because nothing
+ *     here can see it coming: the provider's list is resolved per iteration
+ *     (`list(ctx)`), so there is no build-time moment at which the pair is
+ *     knowable. The pair this file CAN see — a static `.tool()` against a
+ *     skill tool — is refused upstream (`validators.ts` ·
+ *     `validateToolNameUniqueness`), which is the better answer whenever the
+ *     answer is available that early. `agentfootprint.tools.shadowed` names
+ *     the wire's party (now the same party in both of its halves) every
+ *     iteration two contracts compete, and `agentfootprint.tools.claim_swallowed`
+ *     names every party whose claim is dead that iteration — the loser of a
+ *     competition, and the claimant that never even reached the merge (a
+ *     provider tool whose name a registry holder owns, a skill tool named
+ *     after a framework auto-attach). `toolClaimants` below is what makes the
+ *     second event possible: the list of who claimed a name, kept instead of
+ *     collapsed to a winner. Pinned by `test/toolShadowing.test.ts`,
+ *     `test/core/tools/offer-and-answer.test.ts` and epoch-laws 1(g).
  *
  * MCP does not add a seam of its OWN, and it is worth saying so because it
  * looks like it does: `mcpServe` builds `listing` and `byName` ONCE at
@@ -185,6 +198,21 @@ import type { LLMToolSchema } from '../../adapters/types.js';
 import { PRESENT_TOOL_NAME } from '../../artifacts/present.js';
 import { buildPresentTool } from './presentTool.js';
 import { warnIfInvalidToolName, type Tool, type ToolRegistryEntry } from '../tools.js';
+import type { ToolNameChannel } from '../../events/payloads.js';
+
+/**
+ * One party's claim to a tool name, as declared at build (9.92.0).
+ *
+ * `channel` is the vocabulary `tools.shadowed` / `tools.claim_swallowed` name
+ * parties in; `id` is the skill id for a skill's claim (a static `.tool()` and
+ * a framework auto-attach carry none). `tool` is the implementation that
+ * answers when THIS claim is the one on the wire.
+ */
+export interface ToolClaim {
+  readonly channel: Exclude<ToolNameChannel, 'provider'>;
+  readonly id?: string;
+  readonly tool: Tool;
+}
 
 export interface ToolRegistryArtifacts {
   /** All tools the LLM sees in the static portion of its tool list
@@ -219,6 +247,28 @@ export interface ToolRegistryArtifacts {
    * they are the framework's or the app's, not a skill's.
    */
   readonly toolDeclaringSkills: ReadonlyMap<string, readonly string[]>;
+  /**
+   * EVERY BUILD-TIME CLAIMANT PER TOOL NAME (9.92.0) — a list, not a winner.
+   *
+   * `registryByName` holds one implementation per name and still does: it is
+   * the map dispatch falls back to for a name that is NOT on this epoch's
+   * wire (a held-out step tool, a parked map's tool, a scoped tool named from
+   * a restored transcript — the capability law's "a narrowing takes a name
+   * off the wire, never out of dispatch", qualified since the 9.92.0 review
+   * by "to the party the model last read it under"). What it cannot say is who ELSE
+   * claimed the name, and that is what the tools slot needs to report a
+   * dead claim (`tools.claim_swallowed`) and to name the wire's party
+   * truthfully (`tools.shadowed`). Provider claims are not here — a
+   * `ToolProvider` resolves per iteration and is a runtime fact.
+   *
+   * Order per name: the `augmentedRegistry` holder first (a static `.tool()`,
+   * the framework's `read_skill`/`present`, an always-visible skill's tool),
+   * then every other skill that declares the name (a shared reference is
+   * listed under each declaring skill), then the framework's `skip_step` when
+   * any skill declares steps. Build time decides nothing here: the wire
+   * decides, per epoch, in `buildToolsSlot`.
+   */
+  readonly toolClaimants: ReadonlyMap<string, readonly ToolClaim[]>;
 }
 
 /** The build facts that gate auto-attached tools beyond skills (9.22.0). */
@@ -257,6 +307,14 @@ export function buildToolRegistry(
   // a shared Tool reference is genuinely declared by both skills, and a reader
   // asking "may this name be spoken?" needs both ids to answer.
   const declaringSkills = new Map<string, string[]>();
+  // The claims (9.92.0), in the order the doc on `toolClaimants` states.
+  const claims = new Map<string, ToolClaim[]>();
+  const claim = (name: string, c: ToolClaim): void => {
+    const held = claims.get(name);
+    if (held === undefined) claims.set(name, [c]);
+    else held.push(c);
+  };
+  const skillClaims: { readonly name: string; readonly claim: ToolClaim }[] = [];
   for (const skill of skills) {
     const meta = skill.metadata as { autoActivate?: string } | undefined;
     const isAutoActivate = meta?.autoActivate === 'currentSkill';
@@ -266,6 +324,10 @@ export function buildToolRegistry(
       const declared = declaringSkills.get(name);
       if (declared === undefined) declaringSkills.set(name, [skill.id]);
       else if (!declared.includes(skill.id)) declared.push(skill.id);
+      skillClaims.push({
+        name,
+        claim: { channel: 'skill', id: skill.id, tool: tool as unknown as Tool },
+      });
       // Check EVERY skill tool — including autoActivate ones, which `continue`
       // below and never reach the static registry's gate. (This is the common
       // case: all of Neo's skills are autoActivate, so their scoped tools would
@@ -364,6 +426,22 @@ export function buildToolRegistry(
     seenNames.add(entry.name);
   }
 
+  // Claims, in `toolClaimants` order: the augmentedRegistry holders first
+  // (registry, read_skill, present — every always-visible skill tool is a
+  // skill claim and lands in the next loop, in declaration order, which is
+  // the order `skillToolEntries` was pushed in), then every skill claim.
+  for (const e of registry) {
+    claim(e.name, {
+      channel: 'registry',
+      ...(e.tool.owner && { id: e.tool.owner.id }),
+      tool: e.tool,
+    });
+  }
+  for (const e of [...readSkillEntries, ...presentEntries]) {
+    claim(e.name, { channel: 'framework', tool: e.tool });
+  }
+  for (const { name, claim: c } of skillClaims) claim(name, c);
+
   const registryByName = new Map<string, Tool>(
     augmentedRegistry.map((e) => [e.name, e.tool] as const),
   );
@@ -397,9 +475,23 @@ export function buildToolRegistry(
           `Rename your tool.`,
       );
     }
-    registryByName.set(SKIP_STEP_TOOL_NAME, buildSkipStepTool());
+    const skipStep = buildSkipStepTool();
+    registryByName.set(SKIP_STEP_TOOL_NAME, skipStep);
+    // The framework's own claim (9.92.0): a claimant like any other. It wins
+    // the wire only when no other party puts the name forward that epoch —
+    // the tools slot merges its schema LAST — and when a provider does, the
+    // provider's contract is what the model reads and the provider's tool is
+    // what answers; the procedure does not advance on a call whose contract
+    // the model read from somebody else (recorded-not-built, entry 3).
+    claim(SKIP_STEP_TOOL_NAME, { channel: 'framework', tool: skipStep });
   }
   const toolSchemas = augmentedRegistry.map((e) => e.tool.schema);
 
-  return { augmentedRegistry, registryByName, toolSchemas, toolDeclaringSkills: declaringSkills };
+  return {
+    augmentedRegistry,
+    registryByName,
+    toolSchemas,
+    toolDeclaringSkills: declaringSkills,
+    toolClaimants: claims,
+  };
 }
