@@ -7,6 +7,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [9.92.1] - 2026-09-11
+
+### Fixed
+
+- **9.92.0 never reached npm; this release is the same code.** Its publish job
+  failed the docs site's deferred-demo gzip ceiling by 0.4 KB (421.0 KB against
+  420.6 KB): the interactive demo bundles the library itself, and 9.92.0's
+  tool-resolution family rides the same main-entry graph as the receipt family
+  did in 9.88.0. The ceiling is re-baselined ~2% over the measurement with the
+  reasoning beside the number, and the docs-truth report regenerated. No
+  library code changes between 9.92.0 and 9.92.1. This is the fourth raise of
+  that ceiling for a family the demo never calls; the dynamic-import fix named
+  in 9.61.0 is the next move rather than a fifth raise.
+
 ## [9.92.0] - 2026-09-11
 
 **The offer and the answer are one party.** At every LLM call the model is
