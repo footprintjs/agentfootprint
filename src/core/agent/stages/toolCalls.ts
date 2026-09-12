@@ -1424,7 +1424,13 @@ export function buildToolCallsHandler(
     scope: TypedScope<AgentState>,
   ): { ptr: StepPointer; plan: StepPlan; step: { tool: string; note: string } } | undefined => {
     if (!deps.stepPlanFor) return undefined;
-    const ptr = pointerOf(scope.stepPointer);
+    // A VALUE, not a handle: `scope.stepPointer[0]` is a proxy that reads
+    // live by path (footprintjs 9.22.0), so after `scope.stepPointer = [next]`
+    // below it would already answer with `next` — and the event that names
+    // the step just completed would name the one after it. `$getValue`
+    // hands back the committed/staged object itself, which never changes
+    // once the pointer is replaced (committed state is immutable-after-swap).
+    const ptr = pointerOf(scope.$getValue('stepPointer'));
     if (!stepInProgress(ptr)) return undefined;
     const plan = deps.stepPlanFor(ptr.skillId);
     if (!plan) return undefined;

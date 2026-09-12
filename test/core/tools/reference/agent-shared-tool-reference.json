@@ -1948,7 +1948,20 @@
     {
       "idx": 68,
       "overwrite": {
-        "cacheMarkers": []
+        "cacheMarkers": [
+          {
+            "boundaryIndex": 2,
+            "field": "system",
+            "reason": "system stable prefix (3 entries, ending at skill:desk-b)",
+            "ttl": "short"
+          },
+          {
+            "boundaryIndex": 1,
+            "field": "tools",
+            "reason": "tools stable prefix (2 entries, ending at skill:desk-b)",
+            "ttl": "short"
+          }
+        ]
       },
       "redactedPaths": [],
       "runtimeStageId": "sf-cache#78",

@@ -26,6 +26,17 @@
  * (`llmcall`, `message-api-chart`, `agent-message-api-chart-one-turn`).
  * No message, no tool, no other key moved on any fixture.
  *
+ * ONE REFERENCE REGENERATED ON 9.94.3 (`agent-shared-tool-reference`), and
+ * the delta is one path: `cacheMarkers` at the iteration-4 merge-back,
+ * `[]` → the two markers the cache decision computed. The `[]` was a
+ * PHANTOM: the parent writes `skillHistory` with `undefined` for "no skill
+ * yet", footprintjs < 9.24.0 round-tripped that array through JSON on the
+ * scope write (`undefined` → `null`), and `detectSkillChurn` counted the
+ * `null` as a third skill and switched caching off. The gate ignores every
+ * non-string slot now; the regenerated reference is green on BOTH the
+ * lockfile's footprintjs 9.21.1 and 9.24.0 (verified), so what it pins is
+ * the gate, not the substrate's byte shape.
+ *
  * Every scenario is a real run — the receipt-conformance shapes, each in the
  * configuration that has no name collision — and what is compared is the
  * whole `commitLog` plus `servedAt(k)` for every located epoch, after ONE

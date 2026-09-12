@@ -93,7 +93,13 @@ export function detectSkillChurn(
   const recent = history.slice(-windowSize);
   const uniqueSkills = new Set<string>();
   for (const s of recent) {
-    if (s !== undefined) uniqueSkills.add(s);
+    // A skill id is a string; anything else is "no skill on this turn". The
+    // slot is `undefined` when the run had no skill yet — and it was `null`
+    // in every record written before footprintjs 9.24.0, whose scope
+    // round-tripped the array through JSON. That `null` counted here as a
+    // skill and turned caching OFF on the first turn after two real skills
+    // (a phantom churn; found by the 9.24.0 byte-identity run).
+    if (typeof s === 'string') uniqueSkills.add(s);
   }
   return uniqueSkills.size >= threshold;
 }

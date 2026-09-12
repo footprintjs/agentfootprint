@@ -5,6 +5,38 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Fixed — two behaviours that moved with footprintjs 9.22.0+ and 9.24.0, found by running the suite on them
+
+The lockfile had held footprintjs at 9.21.1, so nothing here had run on the
+9.22–9.23 line. Running the suite on the 9.24.0 build found two defects on
+OUR side; both are fixed so that agentfootprint is correct on every
+footprintjs the range admits (`^9.21.1`).
+
+- **`skill.step_advanced` named the step AFTER the one that completed** on
+  footprintjs ≥ 9.22.0 (and `skip_step`'s pointer moved one too far). The
+  step boundary read `pointerOf(scope.stepPointer)` — since 9.22.0 an array
+  element read through the scope is a handle that reads LIVE by path — then
+  replaced the pointer and only then emitted `ptr.step`, which by then was
+  the new value. It reads the pointer as a VALUE now
+  (`scope.$getValue('stepPointer')`, the committed object, which never
+  changes once replaced). Three `skill-steps` tests were red on 9.22.0,
+  9.22.1, 9.23.0 and 9.23.3 (bisected); green on all of them now.
+- **A phantom skill churn switched caching off.** `detectSkillChurn`
+  counted every slot that was not `undefined`. The parent writes
+  `skillHistory` with `undefined` for "no skill yet"; footprintjs < 9.24.0
+  round-tripped that array through JSON on the scope write, so the gate saw
+  `null`, counted it as a third skill, and took the `skip-caching` branch on
+  the first turn after two real skills — every run with two skills read in
+  sequence lost its cache markers from iteration 4. The gate counts only
+  strings now. One byte-identity reference (`agent-shared-tool-reference`)
+  had recorded the phantom (`cacheMarkers: []` at the iteration-4
+  merge-back) and is regenerated with the delta on record in the test
+  header; it is green on both the lockfile's 9.21.1 and on 9.24.0, so what
+  it pins is the gate, not the substrate. Pinned:
+  `test/cache/CacheGateDecider.test.ts` ("a `null` slot is no skill too").
+
 ## [9.94.2] - 2026-09-12
 
 ### Fixed

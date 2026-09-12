@@ -86,6 +86,16 @@ describe('detectSkillChurn — unit', () => {
     expect(detectSkillChurn([undefined, undefined, 'a', 'b'])).toBe(false);
     expect(detectSkillChurn([undefined, 'a', 'b', 'c'])).toBe(true);
   });
+
+  it('REGRESSION: a `null` slot is "no skill" too — it is what the pre-9.24.0 scope recorded for undefined', () => {
+    // The parent wrote `[undefined, 'desk-a', 'desk-a', 'desk-b']`; footprintjs
+    // < 9.24.0 round-tripped the array through JSON on the way in, so the gate
+    // saw `null` in slot 0, counted it as a third skill, and switched caching
+    // OFF on the first turn after two real skills (the byte-identity reference
+    // `agent-shared-tool-reference` had recorded that phantom).
+    expect(detectSkillChurn([null as unknown as string, 'desk-a', 'desk-a', 'desk-b'])).toBe(false);
+    expect(detectSkillChurn([null as unknown as string, 'a', 'b', 'c'])).toBe(true);
+  });
 });
 
 // ─── 2. Boundary — edge inputs ────────────────────────────────────
