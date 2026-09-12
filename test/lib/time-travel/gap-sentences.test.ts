@@ -276,6 +276,23 @@ const plainGrouped = once(async () => {
 /** A grouped agent whose ONLY tool is the forced answer tool, whose name is a
  *  run constant. A `'tool-forced'` output refuses to coexist with registered
  *  tools, so this list is one name long by construction. */
+/** The forced-output agent on one chart shape; the sentence covers both. */
+function forcedOn(reactMode: 'dynamic-grouped' | 'dynamic'): () => Promise<Run> {
+  return once(async () => {
+    const { provider, wire } = scripted([call('1', 'respond_with_schema')]);
+    const agent = Agent.create({ provider: provider as never, model: 'mock', reactMode })
+      .system('bot')
+      .outputSchema({ safeParse: (v: unknown) => ({ ok: true, value: v }) } as never, {
+        strategy: 'tool-forced',
+        jsonSchema: { type: 'object', properties: { ok: { type: 'boolean' } } },
+      })
+      .build();
+    await agent.run({ message: 'go' });
+    return { snapshot: agent.getSnapshot()!, wire };
+  });
+}
+const forcedFlat = forcedOn('dynamic');
+
 const forcedGrouped = once(async () => {
   const { provider, wire } = scripted([call('1', 'respond_with_schema')]);
   const agent = Agent.create({
@@ -524,6 +541,84 @@ const withoutGaps = (view: ServedView): unknown => {
 
 const kindsOf = (view: ServedView): readonly string[] => view.gaps.map((g) => g.gap);
 
+/**
+ * How each RECEIPT field a gap names is read on the VIEW — the table the
+ * quantified `no-fold-base` clause walks. A catalogue field with no row here
+ * fails that clause by name, so a field added to the catalogue is a field
+ * added here.
+ */
+const VIEW_READING_OF: Readonly<Record<string, (view: ServedView) => unknown>> = {
+  'system.hash': (v) => v.system.text,
+  'system.chars': (v) => v.system.text,
+  'system.pieces': (v) => v.system.pieces,
+  'messages.count': (v) => v.messages.asSent,
+  'messages.entries': (v) => v.messages.asSent,
+  'messages.requestOnly': (v) => v.messages.requestOnly,
+  'tools.schemaHashes': (v) => v.tools.schemas,
+  'tools.names': (v) => v.tools.names,
+  'tools.forced': (v) => v.tools.forced,
+  'tools.withheld': (v) => v.tools.withheld,
+  epoch: (v) => v.epoch,
+};
+
+/** "Reads as empty rather than as unknown": a string, an array, or an absent optional — never a marker word. */
+function readsAsPlain(value: unknown): boolean {
+  if (value === undefined) return true; // an optional scalar the call did not carry
+  if (typeof value === 'number') return Number.isFinite(value);
+  if (typeof value === 'string') return !/unknown|redacted|\?\?/i.test(value);
+  return Array.isArray(value);
+}
+
+/** The size the intact/damaged comparison uses: characters of a string, length of an array, 0 for an absent optional. */
+function sizeOf(value: unknown): number {
+  if (typeof value === 'number') return value;
+  if (typeof value === 'string') return value.length;
+  if (Array.isArray(value)) return value.length;
+  return 0;
+}
+
+/**
+ * What it means, measurably, for each gap to be "the stronger claim" than
+ * `cache-transform` on a field both name: the view reads LESS than the
+ * receipt hashed, in the way that gap says. A gap kind missing here fails
+ * the quantified clause by name when it turns up beside `cache-transform`.
+ */
+const STRONGER_CLAIM_OF: Readonly<
+  Partial<
+    Record<
+      ServedGap['gap'],
+      (view: ServedView, receipt: Receipt | undefined, field: string) => void
+    >
+  >
+> = {
+  'no-fold-base': (view, receipt, field) => {
+    // The rebuild stopped before the strategy: what the view holds for the
+    // field is shorter than what the receipt fingerprinted.
+    // "may be SHORT" — the catalogue's word: never LONGER than the receipt
+    // fingerprinted; shorter on a resumed leg with its base gone (the one
+    // pairing measured above), equal on a fresh run with its base stripped,
+    // where the rebuild recovers everything. Equality is the honest bound.
+    const read = VIEW_READING_OF[field]!(view);
+    expect(readsAsPlain(read)).toBe(true);
+    if (field.startsWith('system.'))
+      expect(sizeOf(read)).toBeLessThanOrEqual(receipt!.system.chars);
+    else if (field === 'messages.count' || field === 'messages.entries')
+      expect(sizeOf(read)).toBeLessThanOrEqual(receipt!.messages.count);
+    else if (field === 'tools.names' || field === 'tools.schemaHashes')
+      expect(sizeOf(read)).toBeLessThanOrEqual(receipt!.tools.names.length);
+    else if (field === 'epoch') expect(sizeOf(read)).toBeLessThanOrEqual(receipt!.basis.epoch);
+  },
+  'forced-tool-schema': (view, receipt, field) => {
+    // One schema is missing from the view — the forced one — while the
+    // receipt hashed it: the schema list is exactly the names minus one.
+    expect(field).toBe('tools.schemaHashes');
+    expect(view.tools.forced).toBeDefined();
+    expect(view.tools.schemas.map((s) => s.name)).not.toContain(view.tools.forced);
+    expect(Object.keys(receipt!.tools.schemaHashes)).toContain(view.tools.forced);
+    expect(view.tools.schemas.length).toBe(view.tools.names.length - 1);
+  },
+};
+
 /** Every view this file's undamaged runs produce, with its receipt. */
 async function everyIntactView(): Promise<
   readonly { readonly view: ServedView; readonly receipt: Receipt | undefined }[]
@@ -647,7 +742,7 @@ const ACCOUNT: readonly Entry[] = [
       {
         quote: 'Where another gap on this view covers one of them, that gap is the stronger claim',
         claim: 'a base-less view carries both gaps on one field, and the other one is the true one',
-        fields: ['view:system.text', 'receipt:system.chars'],
+        fields: ['view:system.text', 'view:tools.schemas', 'receipt:system.chars'],
         assert: async () => {
           const { snapshot } = await resumed();
           const baseless = stripBases(snapshot);
@@ -663,6 +758,55 @@ const ACCOUNT: readonly Entry[] = [
           // there at all — measured, 0 characters against the receipt's 27.
           expect(view.system.text).toBe('');
           expect(receiptAt(snapshot, 2)!.system.chars).toBe(27);
+          // The sentence quantifies over every co-present gap; the clause
+          // above measures ONE pairing (entry 10 of recorded-not-built). This
+          // one walks every view the fixtures can produce — intact and
+          // damaged — collects every (other gap, shared field) pairing that
+          // OCCURS beside `cache-transform`, and measures each against that
+          // gap's own claim. A pairing this file has no measure for fails
+          // loudly instead of passing unmeasured.
+          const views: ServedView[] = [];
+          const sources: unknown[] = [
+            (await resumed()).snapshot,
+            stripBases((await resumed()).snapshot),
+            (await forcedGrouped()).snapshot,
+            (await forcedFlat()).snapshot,
+            stripBases((await forcedGrouped()).snapshot),
+          ];
+          const receipts: (Receipt | undefined)[] = [];
+          for (const source of sources) {
+            for (const view of servedViews(source)) {
+              if (!kindsOf(view).includes('cache-transform')) continue;
+              views.push(view);
+              receipts.push(receiptAt(source, view.epoch));
+            }
+          }
+          expect(views.length).toBeGreaterThan(0);
+          const measured: string[] = [];
+          views.forEach((view, i) => {
+            const receipt = receipts[i];
+            for (const other of view.gaps) {
+              if (other.gap === 'cache-transform') continue;
+              const shared = SERVED_GAPS['cache-transform'].fields.filter((f) =>
+                SERVED_GAPS[other.gap].fields.includes(f),
+              );
+              for (const field of shared) {
+                const measure = STRONGER_CLAIM_OF[other.gap];
+                expect(
+                  measure,
+                  `no measure for '${other.gap}' beside cache-transform on '${field}' — extend STRONGER_CLAIM_OF`,
+                ).toBeDefined();
+                measure!(view, receipt, field);
+                measured.push(`${other.gap}:${field}`);
+              }
+            }
+          });
+          // The pairings this walk actually found — the quantifier is only as
+          // wide as this list, and the list must not be empty.
+          expect(measured.length).toBeGreaterThan(0);
+          expect(new Set(measured.map((m) => m.split(':')[0]))).toEqual(
+            new Set(['no-fold-base', 'forced-tool-schema']),
+          );
         },
       },
     ],
@@ -701,19 +845,26 @@ const ACCOUNT: readonly Entry[] = [
       },
       {
         quote: 'so the tool list is complete and the schemas beside it are one short',
-        claim: 'names match the receipt exactly and the schemas are short by exactly one',
+        claim:
+          'names match the receipt exactly and the schemas are short by exactly one — on BOTH chart shapes',
         fields: ['view:tools.names', 'view:tools.schemas', 'receipt:tools.names'],
         assert: async () => {
-          const { snapshot, wire } = await forcedGrouped();
-          const view = servedAt(snapshot, 1)!;
-          const receipt = receiptAt(snapshot, 1)!;
-          // COMPLETE: every name that went out is on the view.
-          expect([...view.tools.names]).toEqual([...receipt.tools.names]);
-          expect([...view.tools.names]).toEqual(wire[0]!.tools!.map((t) => t.name));
-          // ONE SHORT: the schemas are the names minus the forced one.
-          expect(view.tools.names.length).toBe(1);
-          expect(view.tools.schemas.length).toBe(0);
-          expect(view.tools.schemas.length).toBe(view.tools.names.length - 1);
+          // The sentence covers both chart shapes; until entry 10 of
+          // recorded-not-built was closed it was measured on the grouped one
+          // only. Both now, same assertions, one loop.
+          for (const shape of [forcedGrouped, forcedFlat]) {
+            const { snapshot, wire } = await shape();
+            const view = servedAt(snapshot, 1)!;
+            const receipt = receiptAt(snapshot, 1)!;
+            expect(kindsOf(view)).toContain('forced-tool-schema');
+            // COMPLETE: every name that went out is on the view.
+            expect([...view.tools.names]).toEqual([...receipt.tools.names]);
+            expect([...view.tools.names]).toEqual(wire[0]!.tools!.map((t) => t.name));
+            // ONE SHORT: the schemas are the names minus the forced one.
+            expect(view.tools.names.length).toBe(1);
+            expect(view.tools.schemas.length).toBe(0);
+            expect(view.tools.schemas.length).toBe(view.tools.names.length - 1);
+          }
         },
       },
     ],
@@ -851,17 +1002,51 @@ const ACCOUNT: readonly Entry[] = [
         fields: [
           'view:system.text',
           'view:system.pieces',
+          'view:messages.asSent',
+          'view:messages.requestOnly',
           'view:tools.names',
           'view:tools.schemas',
+          'view:epoch',
         ],
         assert: async () => {
-          const after = servedViews(stripBases((await resumed()).snapshot))[0]!;
-          // Empty containers and an empty string — not `undefined`, not a
-          // marker. Indistinguishable from a call that really sent none.
+          const { snapshot } = await resumed();
+          const before = servedViews(snapshot)[0]!;
+          const after = servedViews(stripBases(snapshot))[0]!;
+          // The clause quantifies over EVERY field the gap names (entry 10 of
+          // recorded-not-built: "four, here" is not "every, always"). So the
+          // walk is the catalogue's own list, each field read on the view
+          // through the one table below — a field the catalogue names that
+          // the table cannot read fails here, not silently.
+          const fields = SERVED_GAPS['no-fold-base'].fields;
+          expect(fields.length).toBeGreaterThanOrEqual(10);
+          for (const field of fields) {
+            const read = VIEW_READING_OF[field];
+            expect(read, `no view reading for '${field}' — extend VIEW_READING_OF`).toBeDefined();
+            const damaged = read!(after);
+            const intact = read!(before);
+            // "empty rather than as unknown": a plain value of the field's
+            // ordinary kind — never a marker, never longer than the intact one.
+            expect(readsAsPlain(damaged), `${field} reads as a marker on the damaged view`).toBe(
+              true,
+            );
+            expect(sizeOf(damaged)).toBeLessThanOrEqual(sizeOf(intact));
+          }
+          // And the four the sentence was first measured on are EXACTLY empty.
           expect(after.system.text).toBe('');
           expect(after.system.pieces).toEqual([]);
           expect(after.tools.names).toEqual([]);
           expect(after.tools.schemas).toEqual([]);
+          // …and the rest of the list reads as exactly what this run left
+          // recoverable — the resumed leg's own tool turn, no request-only
+          // line, the turn number the run gave, no forced or withheld tool.
+          // Each is a value, none a marker; each pinned so the seam that
+          // alters or removes the field is felt.
+          expect(after.messages.asSent).toHaveLength(1);
+          expect(after.messages.asSent[0]!.role).toBe('tool');
+          expect(after.messages.requestOnly).toEqual([]);
+          expect(after.epoch).toBe(2);
+          expect(after.tools.forced).toBeUndefined();
+          expect(after.tools.withheld).toBeUndefined();
         },
       },
       {

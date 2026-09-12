@@ -1008,16 +1008,23 @@ nobody recorded a drop, never that nothing was dropped.
 >   Cost: under a day, as the brief allowed. What it proves: an assertion
 >   checks the field it says it checks. What it does not prove: enough runs.
 > - **An assertion that checks the right field on fewer runs than the clause
->   quantifies over** — NOT BUILT, and not by a generic mechanism. The three
->   instances below are all this kind ("four, here" vs "every, always"; one
->   pairing vs every co-present gap; one chart shape vs both). Each needs its
->   own wider run — iterate the gap's whole field list on the damaged view;
->   drive every co-present gap pairing; drive the second chart shape — and
->   that is per-clause hand-work, which is exactly what the brief said not to
->   do here and what a mutation cannot substitute for. The honest statement
->   stands: a claim's quantifier is checked by a person reading the assertion
->   against the clause. It is now the WHOLE of the blind spot rather than the
->   larger part of it.
+>   quantifies over** — the three named instances BUILT 2026-09-12 (9.94.3),
+>   each as the wider run it asked for, and each one found something the
+>   narrow run had not: (1) `no-fold-base`'s "reads as empty" now walks the
+>   catalogue's WHOLE field list through a reading table (`VIEW_READING_OF`;
+>   a catalogue field the table cannot read fails by name) — the catalogue
+>   also names `epoch`, which the four-field assertion had never touched;
+>   (2) `cache-transform`'s "that gap is the stronger claim" now collects every
+>   (other gap, shared field) pairing that occurs beside it on every fixture
+>   view, intact and damaged, and measures each against that gap's own claim
+>   (`STRONGER_CLAIM_OF`; an unmeasured kind fails by name) — the pairings
+>   that occur are `no-fold-base` and `forced-tool-schema`, and "stronger"
+>   turned out to be *may be short* (≤), not *is short*: on a fresh run with
+>   its base stripped the rebuild recovers everything; (3) `forced-tool-schema`'s
+>   "the tool list is complete" runs on both chart shapes. What still stands
+>   in general: a clause not named here has its quantifier checked by a person
+>   reading the assertion against the sentence; the mutation contract checks
+>   the field, the walks above check the range, and only for these three.
 
 **The reproduction.** `test/lib/time-travel/gap-sentences.test.ts` binds every
 printed gap sentence to a run: each sentence is decomposed into quoted clauses,

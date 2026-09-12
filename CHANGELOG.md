@@ -37,6 +37,20 @@ footprintjs the range admits (`^9.21.1`).
   it pins is the gate, not the substrate. Pinned:
   `test/cache/CacheGateDecider.test.ts` ("a `null` slot is no skill too").
 
+### Tests — recorded-not-built entry 10, the quantifier half, for its three named clauses
+
+- `gap-sentences.test.ts`: `no-fold-base`'s "reads as empty rather than as
+  unknown" walks the catalogue's whole field list (a reading table; a field
+  the table cannot read fails by name — the list also names `epoch`, never
+  touched before); `cache-transform`'s "that gap is the stronger claim" is
+  measured for every (gap, shared field) pairing that occurs beside it on
+  every fixture view, intact and damaged, against that gap's own claim (an
+  unmeasured kind fails by name; "stronger" is *may be short*, ≤ — on a fresh
+  run with its base stripped the rebuild recovers everything);
+  `forced-tool-schema`'s "the tool list is complete" runs on both chart
+  shapes. The design page marks the three built; the general statement — a
+  clause not named there has its quantifier read by a person — stands.
+
 ## [9.94.2] - 2026-09-12
 
 ### Fixed
