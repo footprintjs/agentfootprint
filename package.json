@@ -304,8 +304,11 @@
     }
   },
   "sideEffects": [
+    "./dist/index.js",
+    "./dist/esm/index.js",
     "**/cache/strategies/*.js",
     "**/cache/index.js",
+    "**/lib/injection-engine/index.js",
     "**/lib/injection-engine/devWarnHost.js"
   ],
   "peerDependencies": {

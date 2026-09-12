@@ -390,26 +390,12 @@ export function traceToolpack(
 }
 
 /**
- * The tool names this pack can mount. The Agent builder reserves these at
- * `.selfExplain()` build time — the tools slot dedupes by name with
- * first-occurrence-wins, so a consumer tool sharing a name would silently
- * shadow the trace tool AND the skill body would instruct the model into
- * the wrong one. Exported so the reservation list is DERIVED from the pack
- * rather than typed out beside it (a second list is a list that drifts).
+ * The tool names this pack can mount — declared in `traceToolNames.ts` so the
+ * Agent builder can reserve them WITHOUT loading this module (the pack is
+ * mounted lazily since 9.94.0); re-exported here so the list still reads as
+ * the pack's own.
  */
-export const TRACE_TOOL_NAMES = [
-  'run_overview',
-  'find_context_errors',
-  'find_in_trace',
-  'trace_node',
-  'trace_slice',
-  'backtrack',
-  'who_wrote',
-  'get_value',
-  'inspect_tool_call',
-  'inspect_tool_run',
-  'read_narrative',
-] as const;
+export { TRACE_TOOL_NAMES } from './traceToolNames.js';
 
 // ── Schema fragments ───────────────────────────────────────────────────────
 

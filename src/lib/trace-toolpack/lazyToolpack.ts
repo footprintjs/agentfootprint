@@ -28,12 +28,13 @@ import type { RuntimeSnapshot } from 'footprintjs';
 
 import type { Tool } from '../../core/tools.js';
 import { callTraceTool, traceToolpack } from './traceToolpack.js';
+import { NO_COMPLETED_RUN_MESSAGE } from './traceToolNames.js';
 import type { TraceToolpackArtifacts, TraceToolpackOptions } from './types.js';
 
-/** Model-visible answer when no completed run is available yet. */
-export const NO_COMPLETED_RUN_MESSAGE =
-  'No completed run is available yet — the trace exists only after a turn finishes. ' +
-  'Tell the user there is nothing to explain yet.';
+// Declared in `traceToolNames.ts` (beside the reserved names) so the delegate
+// tool can answer "no run yet" without loading this module; re-exported here
+// because it is this pack's answer.
+export { NO_COMPLETED_RUN_MESSAGE };
 
 /**
  * Model-visible answer when a tool MOUNTED on the catalog has no evidence

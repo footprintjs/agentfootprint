@@ -207,7 +207,52 @@ const OUTPUT_LIMITS = { bytes: 672_000_000, files: 6_990, duplicateRscBytes: 0 }
 // FOURTH time this ceiling has moved for a library family the demo never calls;
 // the dynamic-import fix from 9.61.0 is now overdue, and the next raise should
 // be that fix instead.
-const DEMO_ASYNC_GZIP_LIMIT = 429_400;
+//
+// LOWERED for 9.94.0 — the fix the four paragraphs above kept naming, and one
+// they could not have named. Measured on this commit, same build:
+//   before  421.3 KB  16 async assets   library chunk 199.6 KB
+//   after   382.4 KB  15 async assets   library chunk 171.4 KB
+// Two root causes, both in the library, so every browser consumer gets the same
+// cut (a plain `import { Agent, defineTool }`: 219.3 KB -> 199.7 KB gzip):
+//   1. `.selfExplain()`'s trace toolpack — 47 KB minified, the largest module in
+//      the package — was on the DEFAULT graph: `AgentBuilder` imported it for a
+//      list of eleven names it reserves at build. It is now reached through an
+//      `import()` on the first iteration the skill is active (`selfExplain.ts` ·
+//      `lazilyMountedTraceTools`), and the names live in a module of their own.
+//   2. `sideEffects` NEVER REACHED THE ESM BUILD. A bundler reads that flag from
+//      the closest package.json, and `dist/esm/package.json` was a bare
+//      `{"type":"module"}` — so every module under dist/esm was presumed to run
+//      something at load, kept whenever a barrel named it, and a dynamic
+//      `import()` of a module a barrel also re-exports (the toolpack, through
+//      the `/observe` door the lens imports) landed in the parent chunk instead
+//      of its own. scripts/postbuild-esm.mjs now carries the root list across,
+//      rebased; the list was widened only where it is TRUE (the root entry and
+//      the injection-engine barrel, each of which imports a module-level
+//      registration), and test/lib/trace-toolpack/browserGraph.test.ts proves
+//      at the graph that every registration still survives.
+//
+// THE LAW this number ratchets from here on: AN OPTIONAL FAMILY IS LOADED WHEN
+// ITS OPTION IS ENABLED, NEVER BEFORE — and the demo bundle measures the
+// library's DEFAULT graph, not its whole surface. A family that only exists
+// behind a builder option or a tool declaration reaches the bundle through
+// `import()` at the point that option is enabled, where the enabling path is
+// already async (a tool provider's `list()`, a tool's `execute`, a run). The
+// families this release could NOT move, and why, so the next raise is argued
+// on the record and not rediscovered: the integrity checks (~5 KB gzip upper
+// bound) run inside SYNCHRONOUS helpers of four stages — `callLLM.ts` ·
+// `postValidate`, `route.ts` · `judgeEvidence`/`judgeClaims`, the column/lookup/
+// claim helpers in `toolCalls.ts`, `buildToolsSlot.ts` — and one of them
+// (`wireViolationsOf`) runs unconditionally; the observability recorders
+// (~30 KB minified: BoundaryRecorder, FlowchartRecorder, the voice templates)
+// sit behind `enable.flowchart()` / `enable.localObservability()`, which return
+// their handle SYNCHRONOUSLY, and behind `build()`'s voice defaults. Moving
+// either means a public sync path becomes async — a behaviour change, not a
+// packaging one. When this number climbs again, the question is which family
+// walked onto the default graph and whether its option's path is async; the
+// per-module answer is `DOCS_WEBPACK_STATS=1 EXPORT=true npm run build` then
+// `node scripts/demo-chunk-modules.mjs`. Ceiling ~2% over the measurement, as
+// every entry above.
+const DEMO_ASYNC_GZIP_LIMIT = 390_000;
 
 function formatBytes(bytes) {
   if (bytes < 1_000) return `${bytes} B`;

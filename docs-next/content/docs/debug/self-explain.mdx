@@ -31,6 +31,8 @@ So the cost model is honest: the production catalog stays clean, and the trace t
 
 Eleven definitions is a real bulge on the tools slot for that one iteration. The 2000-char `contextBudget.tools` default is a **signal, not a limiter** (nothing is ever truncated) — an agent that opts into `.selfExplain()` should raise it: `contextBudget: { tools: 7000 }`.
 
+The same is true of the bytes. The toolpack is the largest single module in the library, and since 9.94.0 it is loaded through a dynamic `import()` **on the first iteration the skill is active** — not at `build()`, not on a turn where nobody asked why, and never for an agent that did not call `.selfExplain()`. A bundler puts it in its own chunk, so a browser consumer who imports `Agent` does not ship it; Node loads it through the same `require` one microtask later. Nothing about the run changes with the load: the catalog on an idle iteration is still answered synchronously, and a cold mount and a warm one record the same events in the same order (`test/lib/trace-toolpack/lazyMount.test.ts` pins both; `browserGraph.test.ts` fences the bundle graph).
+
 ## Through the tool boundary
 
 `inspect_tool_call` used to end at a wall:

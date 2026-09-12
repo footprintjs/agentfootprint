@@ -7,6 +7,91 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [9.94.0] - 2026-09-11
+
+**An optional family is loaded when its option is enabled, never before.** What
+`import { Agent, defineTool } from 'agentfootprint'` costs a browser consumer
+is the library's DEFAULT graph, not its whole surface — and for four releases
+it was not: the docs site's demo chunk grew 394 → 421 KB gzip across 9.61,
+9.78, 9.88 and 9.92 for families the demo never calls, and two publishes
+(9.87.0, 9.92.0) were lost to that ceiling. Measured on this commit, same
+webpack build: the demo chunk 421.3 → 382.4 KB gzip (−38.9 KB, 16 → 15 async
+assets; the library's own chunk 199.6 → 171.4 KB), and a plain esbuild bundle
+of the root import 219.3 → 199.7 KB gzip (−19.6 KB, 717.7 → 658.2 KB minified).
+Two root causes, both in the library, so every consumer gets the same cut. A
+minor rather than a patch because a public provider's `list()` changes shape on
+one iteration (below), and because every bundled consumer's output changes.
+
+### Changed
+
+- **`.selfExplain()` mounts the trace toolpack lazily.** The toolpack —
+  eleven tools over a finished trace, at 47 KB minified the largest single
+  module in the package — was on the default graph because `AgentBuilder`
+  imported it for `TRACE_TOOL_NAMES`, the list of names it reserves at
+  `build()`, and `buildSelfExplainToolProvider` composed the pack eagerly.
+  WHY: an agent that never calls `.selfExplain()` was shipping the debugger;
+  one that does was shipping it before a single turn had run. Now the names
+  live in `lib/trace-toolpack/traceToolNames.ts` (with
+  `NO_COMPLETED_RUN_MESSAGE`, the other fact needed before the pack exists —
+  both still re-exported from their old modules), and the inline provider
+  reaches the pack through `import()` on the first iteration the self-explain
+  skill is ACTIVE: not at `build()`, not on a turn where nobody asked why,
+  never for an agent without the option. A bundler splits it into its own
+  chunk; Node loads it through the same `require`, one microtask later. The
+  one visible change: on an active iteration the inline provider's `list(ctx)`
+  answers a `Promise<Tool[]>` where it answered an array — the shape
+  `ToolProvider.list` has always allowed and the composed provider already
+  used; the idle iteration is still a synchronous `[]`, so the tools slot's
+  fast path is untouched. Provider id, the reserved-name refusal, delegate
+  mode and every trace tool are unchanged.
+  `test/lib/trace-toolpack/lazyMount.test.ts` pins load-when-active (the
+  module is evaluated exactly once, on that iteration), end-to-end answering
+  through the lazy path, and cold-mount = warm-mount on the recorded events,
+  catalogs and answers.
+  ```ts
+  const agent = Agent.create({ provider, model }).tool(lookup).selfExplain().build();
+  await agent.run({ message: 'Refund order A-1001?' });   // pack not loaded
+  await agent.run({ message: 'Why did you approve it?' }); // loads on the iteration read_skill opened it
+  ```
+- **The ESM build now carries `sideEffects`.** A bundler reads that flag from
+  the CLOSEST package.json to the module it is deciding about, and
+  `dist/esm/package.json` — written at postbuild to mark the build
+  `type:module` — was a bare `{"type":"module"}`. WHY: the root's honest
+  `sideEffects` list therefore never reached a single ESM module; webpack,
+  Vite and esbuild had to presume every file under `dist/esm` might run
+  something at load, keep each one a barrel named, and could only strip the
+  pure declarations inside — which is also why a dynamic `import()` of a
+  module a barrel re-exports (the toolpack, through the `/observe` door the
+  lens imports) never split into its own chunk. `scripts/postbuild-esm.mjs`
+  now copies the root list across, rebased (`scripts/lib/esmSideEffects.mjs`;
+  `test/esm-packaging.test.ts` pins the shipped file against the same rule).
+  The list was widened only where it is TRUE: `./dist/index.js` /
+  `./dist/esm/index.js` (the root entry imports the three cache strategies for
+  their `registerCacheStrategy` calls) and `**/lib/injection-engine/index.js`
+  (the barrel imports `devWarnHost` to bind footprintjs's dev flag) — a barrel
+  marked side-effect-free is a barrel a bundler may skip, imports and all.
+  `test/lib/trace-toolpack/browserGraph.test.ts` proves at the code-split
+  graph that the toolpack is off the root entry's sync closure, still
+  reachable behind a `dynamic-import` edge, statically present on `/observe`
+  by design, and that every registration survives (the three strategies on
+  the root entry, the dev-warn host on `/context`). footprintjs's own
+  `dist/esm/package.json` has carried its flag all along; this follows it.
+
+### Docs
+
+- `docs-next/scripts/check-site-budget.mjs`: the LAW above the demo ceiling
+  (an optional family loads when its option is enabled; the demo bundle
+  measures the default graph), the two families this release could not move
+  and why — the integrity checks run inside synchronous stage helpers and one
+  (`wireViolationsOf`) is unconditional; the observability recorders sit
+  behind `enable.flowchart()` / `enable.localObservability()`, which return
+  synchronously — and the ceiling LOWERED 429.4 → 390.0 KB (~2% over 382.4).
+  `DOCS_WEBPACK_STATS=1` on the docs build writes per-module webpack stats and
+  `docs-next/scripts/demo-chunk-modules.mjs` names what the demo chunk
+  carries, so the next raise is argued per module, not per ceiling.
+- README "Tree-shakeable & ESM-first" and docs/debug/self-explain: the rule,
+  the example, the fences.
+
 ## [9.93.0] - 2026-09-11
 
 **The receipt says which strategy, and what the window dropped.** Four of the

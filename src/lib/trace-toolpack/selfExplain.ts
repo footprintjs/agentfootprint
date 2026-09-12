@@ -58,7 +58,7 @@ import { skillScopedTools } from '../../tool-providers/skillScopedTools.js';
 import type { ToolProvider } from '../../tool-providers/types.js';
 import { SELF_EXPLAIN_BODY, SELF_EXPLAIN_WHEN } from './debugPrompt.js';
 import type { InnerRunLookup } from './innerRunRecords.js';
-import { lazyTraceToolpack, NO_COMPLETED_RUN_MESSAGE } from './lazyToolpack.js';
+import { NO_COMPLETED_RUN_MESSAGE } from './traceToolNames.js';
 import type { TraceToolpackArtifacts, TraceToolpackOptions } from './types.js';
 
 /**
@@ -320,19 +320,78 @@ export function buildSelfExplainSkill(options: SelfExplainOptions): Injection {
  * when they set one. The iteration after activation, `ctx.activeSkillId`
  * matches and the catalog gains the trace tools (inline) or the single
  * `explain_run` tool (delegate).
+ *
+ * INLINE MODE LOADS THE PACK LAZILY (9.94.0). The toolpack module is the
+ * largest single module on the library's default graph, and until this
+ * release every consumer who imported `Agent` carried it — `.selfExplain()`
+ * or not — because this function reached it statically. Now the pack is
+ * `import()`ed the first time the self-explain skill is ACTIVE on an
+ * iteration, and never before: not at `build()`, not on a turn where the
+ * model never opened the skill, not at all for an agent that did not enable
+ * `.selfExplain()`. A bundler splits it into its own chunk; Node loads it
+ * through the same `require` it always did, one microtask later.
+ *
+ * What the consumer sees: `list(ctx)` still answers `[]` synchronously when
+ * the skill is not active (the sync fast path the tools slot skips the await
+ * for), and a Promise of the same eleven tools when it is — the shape
+ * `ToolProvider.list` has always allowed, and the one the composed provider
+ * below already used. The provider id is unchanged, so `.watch()` output and
+ * the `skill-scoped:` refusal in the builder read exactly as before.
  */
 export function buildSelfExplainToolProvider(
   binding: SelfExplainBinding,
   options: SelfExplainOptions,
   existing?: ToolProvider,
 ): ToolProvider {
-  const tools = options.delegate
-    ? [buildExplainRunTool(binding, options.delegate, options.toolpack)]
-    : lazyTraceToolpack(() => binding.artifacts, options.toolpack);
-  const scoped = skillScopedTools(options.id ?? SELF_EXPLAIN_SKILL_ID, tools);
+  const skillId = options.id ?? SELF_EXPLAIN_SKILL_ID;
+  const scoped = options.delegate
+    ? skillScopedTools(skillId, [buildExplainRunTool(binding, options.delegate, options.toolpack)])
+    : lazilyMountedTraceTools(skillId, binding, options.toolpack);
   if (!existing) return scoped;
   return {
     id: `${existing.id}+${scoped.id}`,
     list: async (ctx) => [...(await existing.list(ctx)), ...(await scoped.list(ctx))],
+  };
+}
+
+/**
+ * The inline-mode provider: `skillScopedTools` semantics, with the tool list
+ * behind an `import()` that runs once, on the first ACTIVE iteration.
+ *
+ * The inactive path delegates to a real `skillScopedTools(skillId, [])` so it
+ * keeps that primitive's exact behaviour — the `[]` answer AND its one-time
+ * dev-mode warning about a skill that is loaded but not by `read_skill` — and
+ * the active path resolves the pack, builds the same scoped provider over it
+ * ONCE, and asks it. A failed load rejects `list()`, which the tools slot
+ * already reports as `tools.discovery_failed` and rethrows; the memo is
+ * cleared so the next iteration retries rather than serving a dead promise.
+ */
+function lazilyMountedTraceTools(
+  skillId: string,
+  binding: SelfExplainBinding,
+  toolpack: TraceToolpackOptions | undefined,
+): ToolProvider {
+  const inactive = skillScopedTools(skillId, []);
+  let mounted: Promise<ToolProvider> | undefined;
+  const mount = (): Promise<ToolProvider> => {
+    mounted ??= import('./lazyToolpack.js').then(
+      ({ lazyTraceToolpack }) =>
+        skillScopedTools(
+          skillId,
+          lazyTraceToolpack(() => binding.artifacts, toolpack),
+        ),
+      (err: unknown) => {
+        mounted = undefined;
+        throw err;
+      },
+    );
+    return mounted;
+  };
+  return {
+    id: inactive.id,
+    list(ctx) {
+      if (ctx.activeSkillId !== skillId) return inactive.list(ctx);
+      return mount().then((provider) => provider.list(ctx));
+    },
   };
 }

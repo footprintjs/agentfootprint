@@ -326,8 +326,15 @@ const LEDGER: Readonly<Record<string, readonly Entry[]>> = {
   'src/lib/trace-toolpack/lazyToolpack.ts': [
     {
       kind: 'unrepaired',
-      count: 2,
-      why: "the two stand-in tool results the lazy pack serves ('No completed run is available yet', 'nothing to read for this run') — the module's own comments call them model-visible, and both are read again on every later call of the turn",
+      count: 1,
+      why: "the stand-in tool result the lazy pack serves for a mounted tool with no evidence this run ('nothing to read for this run') — the module's own comments call it model-visible, and it is read again on every later call of the turn; its sibling ('No completed run is available yet') moved to traceToolNames.ts in 9.94.0 so the delegate tool can serve it without loading the pack",
+    },
+  ],
+  'src/lib/trace-toolpack/traceToolNames.ts': [
+    {
+      kind: 'unrepaired',
+      count: 1,
+      why: "the stand-in tool result every trace tool serves before a turn has finished ('No completed run is available yet') — declared beside the reserved names, the two facts the builder needs before the pack loads (9.94.0); model-visible by design, read again on every later call of the turn",
     },
   ],
 
@@ -1029,13 +1036,17 @@ describe('every model-facing-shaped literal in src/ is accounted for', () => {
         // fields, meaning and what to do, and the reduced sentences are short
         // enough that none of them trips the grammar any more. Net zero, and the
         // census is back where 9.86.1 left it.
-        files: 91,
+        // 9.94.0: one literal MOVED, none added — 'No completed run is available
+        // yet' left lazyToolpack.ts for traceToolNames.ts so the delegate tool
+        // can serve it without loading the pack. Same total; one more file and
+        // one more unrepaired entry, because the ledger is per file.
+        files: 92,
         total: 178,
         registry: 8,
         ephemeral: 18,
         unrepaired: 34,
         notModelFacing: 118,
-        unrepairedEntries: 13,
+        unrepairedEntries: 14,
       });
       // And the ledger's own total is the number of literals the scan flagged —
       // the two halves of the same census, which is what makes the bucket a work

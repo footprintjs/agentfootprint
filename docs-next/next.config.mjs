@@ -1,5 +1,6 @@
 import { createMDX } from 'fumadocs-mdx/next';
 import { resolve } from 'node:path';
+import { writeFileSync } from 'node:fs';
 
 // Static export for GitHub Pages is opt-in via EXPORT=true so local `dev`/`build`
 // stay as a normal Next app. basePath comes from NEXT_PUBLIC_BASE_PATH (also read by
@@ -58,6 +59,38 @@ const config = {
         browserNodeStub,
       ),
     );
+    // DOCS_WEBPACK_STATS=1 writes a per-module stats file per compiler so
+    // scripts/demo-chunk-modules.mjs can say WHICH library modules a chunk
+    // carries — the number check-site-budget.mjs ratchets is only the sum.
+    if (process.env.DOCS_WEBPACK_STATS === '1') {
+      config.plugins.push({
+        apply(compiler) {
+          compiler.hooks.done.tap('DocsWebpackStats', (stats) => {
+            const json = stats.toJson({
+              all: false,
+              assets: true,
+              chunks: true,
+              modules: true,
+              nestedModules: true,
+              ids: true,
+              source: false,
+              // Every module, ungrouped: the defaults collapse anything past
+              // 15 into a "+ N modules" placeholder with no children.
+              modulesSpace: Infinity,
+              nestedModulesSpace: Infinity,
+              groupModulesByPath: false,
+              groupModulesByExtension: false,
+              groupModulesByType: false,
+              groupModulesByCacheStatus: false,
+              groupModulesByAttributes: false,
+              groupModulesByLayer: false,
+            });
+            const name = compiler.name || 'default';
+            writeFileSync(resolve(import.meta.dirname, `.next/webpack-stats-${name}.json`), JSON.stringify(json));
+          });
+        },
+      });
+    }
     return config;
   },
   ...(isExport

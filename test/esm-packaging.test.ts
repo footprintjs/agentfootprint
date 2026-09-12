@@ -1,6 +1,10 @@
 /**
  * ESM packaging guards — protect consumer ergonomics & bundle size:
- *   1. the ESM build is marked `type:module`,
+ *   1. the ESM build is marked `type:module` AND carries the root's
+ *      `sideEffects` list, rebased — a bundler reads that flag from the closest
+ *      package.json, so a bare `{"type":"module"}` (which is what shipped
+ *      through 9.93.0) told every bundler that every ESM module might run
+ *      something at load,
  *   2. the main barrel + EVERY subpath export load as true ESM (no
  *      ERR_MODULE_NOT_FOUND — every relative import carries a `.js` extension),
  *   3. the ESM `lazyRequire` uses `createRequire` (not bare `require`), so
@@ -46,6 +50,33 @@ describe.skipIf(!built)('ESM packaging', () => {
   it('dist/esm is marked type:module', () => {
     const pkg = JSON.parse(readFileSync(resolve(esmDir, 'package.json'), 'utf8'));
     expect(pkg.type).toBe('module');
+  });
+
+  it('dist/esm carries the root sideEffects list, rebased — the closest package.json is the one a bundler reads', async () => {
+    const { esmSideEffects } = (await import('../scripts/lib/esmSideEffects.mjs')) as {
+      esmSideEffects: (root: unknown) => string[];
+    };
+    const root = JSON.parse(readFileSync(resolve(repoRoot, 'package.json'), 'utf8')) as {
+      sideEffects: unknown;
+    };
+    const shipped = JSON.parse(readFileSync(resolve(esmDir, 'package.json'), 'utf8')) as {
+      sideEffects: unknown;
+    };
+    expect(shipped.sideEffects).toEqual(esmSideEffects(root.sideEffects));
+    // The list is TRUE, not merely present: the three module-level
+    // registrations this package has (the cache strategies the root entry and
+    // the cache barrel import for their `registerCacheStrategy` calls; the
+    // dev-warn host the injection-engine barrel imports to bind footprintjs's
+    // dev flag) are each named, as is every barrel that carries one of those
+    // side-effect imports — because a barrel marked side-effect-free is a
+    // barrel a bundler may skip, imports and all.
+    expect(shipped.sideEffects).toEqual([
+      './index.js',
+      '**/cache/strategies/*.js',
+      '**/cache/index.js',
+      '**/lib/injection-engine/index.js',
+      '**/lib/injection-engine/devWarnHost.js',
+    ]);
   });
 
   // Spawns one real `node` per subpath (28 and counting), so its cost is
