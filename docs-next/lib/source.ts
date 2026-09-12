@@ -6,6 +6,9 @@ import { createElement } from 'react';
 export const source = loader({
   baseUrl: '/docs',
   source: docs.toFumadocsSource(),
+  // The shared sidebar is serialized into every route. Its unused source-file
+  // lookup refs repeat thousands of bytes; names, URLs, IDs and content stay intact.
+  pageTree: { noRef: true },
   // Resolve `icon` strings in meta.json (folder groups + sub-section separators) to
   // lucide-react icons, e.g. "icon": "Hammer" or a separator "---[Boxes]Primitives---".
   icon(icon) {

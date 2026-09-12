@@ -8,6 +8,11 @@
  */
 
 import { isDevMode } from 'footprintjs';
+import {
+  resolveAnswerValidation,
+  type AnswerValidationOptions,
+  type ResolvedAnswerValidation,
+} from '../../answer-validation/index.js';
 
 import {
   buildDefaultInstruction,
@@ -307,6 +312,7 @@ export class AgentBuilder {
    * builder, propagated to the Agent at `.build()` time.
    */
   private outputSchemaParser?: OutputSchemaParser<unknown>;
+  private answerValidationConfig?: ResolvedAnswerValidation;
   /** Corrective re-asks the loop may spend. `0` (the default) means the
    *  schema is judged once, at the caller's boundary, exactly as it always
    *  was — and no enforcement is mounted in the chart at all. */
@@ -2530,6 +2536,22 @@ export class AgentBuilder {
     };
   }
 
+  /**
+   * Validate a JSON answer against host-owned evidence before delivering it.
+   * Requires outputSchema. Enforce (default) refuses failed or unverified
+   * checks; observe returns the answer with a recorded verdict. Both modes
+   * withhold draft tokens until this boundary. The callback cannot rewrite
+   * the answer; the schema's JSON-safe output is serialized once for delivery.
+   * Output fallbacks and coverage suffixes are not supported in this version.
+   */
+  answerValidation<T>(options: AnswerValidationOptions<T>): this {
+    if (this.answerValidationConfig !== undefined) {
+      throw new Error('AgentBuilder.answerValidation: already configured.');
+    }
+    this.answerValidationConfig = resolveAnswerValidation(options);
+    return this;
+  }
+
   private resolveOutputEnforcement(): ResolvedOutputEnforcement | undefined {
     const parser = this.outputSchemaParser;
     if (!parser) return undefined;
@@ -2591,12 +2613,23 @@ export class AgentBuilder {
       retries: this.outputSchemaRetries,
       ...(schemaTool !== undefined && { schemaTool }),
       hasFallback: this.outputFallbackCfg !== undefined,
+      ...(this.answerValidationConfig?.mode === 'enforce' && { answerValidationEnforced: true }),
     };
   }
 
   build(): Agent {
     // Settings that are only coherent (or not) once the whole agent exists.
     this.assertOutputFallbackCoherent();
+    if (this.answerValidationConfig !== undefined) {
+      if (this.outputSchemaParser === undefined) {
+        throw new Error('AgentBuilder.answerValidation requires .outputSchema(parser).');
+      }
+      if (this.outputFallbackCfg !== undefined || this.limitsTravelValue) {
+        throw new Error(
+          'AgentBuilder.answerValidation does not support .outputFallback() or .limitsTravelWithTheAnswer(): those can change the checked answer after validation.',
+        );
+      }
+    }
     // Resolve the voice config: bundled defaults + consumer overrides.
     // Templates flow through the same barrel exports the rest of the
     // library uses, so a future locale-pack swap is a single import.
@@ -3039,6 +3072,7 @@ export class AgentBuilder {
       this.skillGraphDeclared,
       mapsPlan,
       claimContract,
+      this.answerValidationConfig,
     );
     // Attach the observers collected by `.watch()` so they receive events
     // from the very first run. Mirrors what consumers would do post-build

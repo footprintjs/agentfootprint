@@ -25,3 +25,15 @@ export const breakFinalStage = (scope: TypedScope<AgentState>): string => {
   scope.$break();
   return scope.finalContent;
 };
+
+/** The configured branch must carry its capture proof across the boundary.
+ * A branch output mapper receives this result, not the child scope. */
+export const breakFinalWithValidationStage = (
+  scope: TypedScope<AgentState>,
+): { finalContent: string; answerValidationCommitted: boolean } => {
+  scope.$break();
+  return {
+    finalContent: scope.finalContent,
+    answerValidationCommitted: scope.answerValidationCommitted === true,
+  };
+};

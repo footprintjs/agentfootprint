@@ -4,7 +4,7 @@ title: FlowSelectedEvent
 
 # Interface: FlowSelectedEvent
 
-Defined in: node\_modules/footprintjs/dist/types/lib/engine/narrative/types.d.ts:209
+Defined in: ../../../../Users/sanjay/Documents/Codex/2026-09-10/referenced-chatgpt-conversation-this-is-an/outputs/agentfootprint-answer-validation/node\_modules/footprintjs/dist/types/lib/engine/narrative/types.d.ts:209
 
 Event passed to FlowRecorder.onSelected.
 
@@ -14,7 +14,7 @@ Event passed to FlowRecorder.onSelected.
 
 > `optional` **evidence?**: `SelectionEvidence`
 
-Defined in: node\_modules/footprintjs/dist/types/lib/engine/narrative/types.d.ts:215
+Defined in: ../../../../Users/sanjay/Documents/Codex/2026-09-10/referenced-chatgpt-conversation-this-is-an/outputs/agentfootprint-answer-validation/node\_modules/footprintjs/dist/types/lib/engine/narrative/types.d.ts:215
 
 Structured selection evidence from select() helper.
 
@@ -24,7 +24,7 @@ Structured selection evidence from select() helper.
 
 > **parent**: `string`
 
-Defined in: node\_modules/footprintjs/dist/types/lib/engine/narrative/types.d.ts:210
+Defined in: ../../../../Users/sanjay/Documents/Codex/2026-09-10/referenced-chatgpt-conversation-this-is-an/outputs/agentfootprint-answer-validation/node\_modules/footprintjs/dist/types/lib/engine/narrative/types.d.ts:210
 
 ***
 
@@ -32,7 +32,7 @@ Defined in: node\_modules/footprintjs/dist/types/lib/engine/narrative/types.d.ts
 
 > **selected**: `string`[]
 
-Defined in: node\_modules/footprintjs/dist/types/lib/engine/narrative/types.d.ts:211
+Defined in: ../../../../Users/sanjay/Documents/Codex/2026-09-10/referenced-chatgpt-conversation-this-is-an/outputs/agentfootprint-answer-validation/node\_modules/footprintjs/dist/types/lib/engine/narrative/types.d.ts:211
 
 ***
 
@@ -40,7 +40,7 @@ Defined in: node\_modules/footprintjs/dist/types/lib/engine/narrative/types.d.ts
 
 > **total**: `number`
 
-Defined in: node\_modules/footprintjs/dist/types/lib/engine/narrative/types.d.ts:212
+Defined in: ../../../../Users/sanjay/Documents/Codex/2026-09-10/referenced-chatgpt-conversation-this-is-an/outputs/agentfootprint-answer-validation/node\_modules/footprintjs/dist/types/lib/engine/narrative/types.d.ts:212
 
 ***
 
@@ -48,4 +48,4 @@ Defined in: node\_modules/footprintjs/dist/types/lib/engine/narrative/types.d.ts
 
 > `optional` **traversalContext?**: [`TraversalContext`](/docs/api/interfaces/TraversalContext)
 
-Defined in: node\_modules/footprintjs/dist/types/lib/engine/narrative/types.d.ts:213
+Defined in: ../../../../Users/sanjay/Documents/Codex/2026-09-10/referenced-chatgpt-conversation-this-is-an/outputs/agentfootprint-answer-validation/node\_modules/footprintjs/dist/types/lib/engine/narrative/types.d.ts:213

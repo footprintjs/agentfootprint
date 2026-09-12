@@ -4,7 +4,7 @@ title: FlowForkEvent
 
 # Interface: FlowForkEvent
 
-Defined in: node\_modules/footprintjs/dist/types/lib/engine/narrative/types.d.ts:203
+Defined in: ../../../../Users/sanjay/Documents/Codex/2026-09-10/referenced-chatgpt-conversation-this-is-an/outputs/agentfootprint-answer-validation/node\_modules/footprintjs/dist/types/lib/engine/narrative/types.d.ts:203
 
 Event passed to FlowRecorder.onFork.
 
@@ -14,7 +14,7 @@ Event passed to FlowRecorder.onFork.
 
 > **children**: `string`[]
 
-Defined in: node\_modules/footprintjs/dist/types/lib/engine/narrative/types.d.ts:205
+Defined in: ../../../../Users/sanjay/Documents/Codex/2026-09-10/referenced-chatgpt-conversation-this-is-an/outputs/agentfootprint-answer-validation/node\_modules/footprintjs/dist/types/lib/engine/narrative/types.d.ts:205
 
 ***
 
@@ -22,7 +22,7 @@ Defined in: node\_modules/footprintjs/dist/types/lib/engine/narrative/types.d.ts
 
 > **parent**: `string`
 
-Defined in: node\_modules/footprintjs/dist/types/lib/engine/narrative/types.d.ts:204
+Defined in: ../../../../Users/sanjay/Documents/Codex/2026-09-10/referenced-chatgpt-conversation-this-is-an/outputs/agentfootprint-answer-validation/node\_modules/footprintjs/dist/types/lib/engine/narrative/types.d.ts:204
 
 ***
 
@@ -30,4 +30,4 @@ Defined in: node\_modules/footprintjs/dist/types/lib/engine/narrative/types.d.ts
 
 > `optional` **traversalContext?**: [`TraversalContext`](/docs/api/interfaces/TraversalContext)
 
-Defined in: node\_modules/footprintjs/dist/types/lib/engine/narrative/types.d.ts:206
+Defined in: ../../../../Users/sanjay/Documents/Codex/2026-09-10/referenced-chatgpt-conversation-this-is-an/outputs/agentfootprint-answer-validation/node\_modules/footprintjs/dist/types/lib/engine/narrative/types.d.ts:206

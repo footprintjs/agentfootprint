@@ -1210,6 +1210,12 @@ export interface AgentState {
    *  `snapshot.sharedState` to see why a run took three turns to answer.
    *  Written only by an agent that opted into `retries`; absent otherwise. */
   outputAttempts?: readonly OutputAttempt[];
+  /** Host-authored checks over the exact terminal answer; absent when disabled. */
+  answerValidation?: import('../../answer-validation/index.js').AnswerValidationReport;
+  /** Refusal carrier: prevents final capture, history, memory and token delivery. */
+  answerValidationBlocked?: boolean;
+  /** Set only at the final capture after a validation report was accepted. */
+  answerValidationCommitted?: boolean;
   /** In-flight hand-off from the Route decider (which judges the answer and
    *  picks the branch) to the retry stage (which writes the correction). Not
    *  a record — the record is `outputAttempts`. Always freshly written by the

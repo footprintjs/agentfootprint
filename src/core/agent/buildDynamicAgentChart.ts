@@ -63,8 +63,12 @@ import { memoryInjectionKey, retrievalEvidenceKey } from '../../memory/define.ty
 import { unwrapMemoryFlowChart } from '../../memory/define.js';
 import { mountMemoryRead, mountMemoryWrite } from '../../memory/wire/mountMemoryPipeline.js';
 import { withMemoryRecall } from './memoryRecallInjections.js';
-import { breakFinalStage } from './stages/breakFinal.js';
-import { prepareFinalStage, prepareFinalWithLimitsStage } from './stages/prepareFinal.js';
+import { breakFinalStage, breakFinalWithValidationStage } from './stages/breakFinal.js';
+import {
+  prepareFinalStage,
+  prepareFinalWithLimitsStage,
+  prepareFinalWithValidationStage,
+} from './stages/prepareFinal.js';
 import { buildCacheSubflow } from './buildCacheSubflow.js';
 import type { AgentChartDeps } from './buildAgentChart.js';
 import type { AgentState } from './types.js';
@@ -148,7 +152,11 @@ export function buildDynamicAgentChart(deps: AgentChartDeps): FlowChart {
     // Same stage id, same position — only the body differs, and only for an
     // agent that asked for its limits to travel. See `stages/prepareFinal.ts`
     // for why the fold happens HERE and not in a stage of its own.
-    deps.attachCoverageLimits === true ? prepareFinalWithLimitsStage : prepareFinalStage,
+    deps.hasAnswerValidation === true
+      ? prepareFinalWithValidationStage
+      : deps.attachCoverageLimits === true
+      ? prepareFinalWithLimitsStage
+      : prepareFinalStage,
     'prepare-final',
     {
       ...(deps.structureRecorders !== undefined && {
@@ -177,7 +185,12 @@ export function buildDynamicAgentChart(deps: AgentChartDeps): FlowChart {
     }
   }
   const finalBranchChart = finalBranchBuilder
-    .addFunction('BreakFinal', breakFinalStage, 'break-final', 'Terminate the ReAct loop')
+    .addFunction(
+      'BreakFinal',
+      deps.hasAnswerValidation === true ? breakFinalWithValidationStage : breakFinalStage,
+      'break-final',
+      'Terminate the ReAct loop',
+    )
     .build();
 
   // ── Inner sf-llm-call subflow ────────────────────────────────
@@ -887,10 +900,19 @@ export function buildDynamicAgentChart(deps: AgentChartDeps): FlowChart {
         const { finalContent: _f, newMessages: _nm, ...rest } = parent;
         void _f;
         void _nm;
+        if (deps.hasAnswerValidation === true) {
+          const { answerValidationCommitted: _committed, ...input } = rest;
+          void _committed;
+          return input;
+        }
         return rest;
       },
       outputMapper: (sf) => ({
         finalContent: sf.finalContent as string,
+        ...(deps.hasAnswerValidation === true &&
+          sf.answerValidationCommitted === true && {
+            answerValidationCommitted: true,
+          }),
       }),
       // `final` is a terminal LEAF under the branch-sourced loop; propagateBreak
       // is kept for the terminal onBreak signal (observability), not loop control.

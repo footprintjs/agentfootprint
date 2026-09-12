@@ -4,7 +4,7 @@ title: FlowErrorEvent
 
 # Interface: FlowErrorEvent
 
-Defined in: node\_modules/footprintjs/dist/types/lib/engine/narrative/types.d.ts:269
+Defined in: ../../../../Users/sanjay/Documents/Codex/2026-09-10/referenced-chatgpt-conversation-this-is-an/outputs/agentfootprint-answer-validation/node\_modules/footprintjs/dist/types/lib/engine/narrative/types.d.ts:269
 
 Event passed to FlowRecorder.onError.
 
@@ -14,7 +14,7 @@ Event passed to FlowRecorder.onError.
 
 > `optional` **channel?**: `"flow"`
 
-Defined in: node\_modules/footprintjs/dist/types/lib/engine/narrative/types.d.ts:281
+Defined in: ../../../../Users/sanjay/Documents/Codex/2026-09-10/referenced-chatgpt-conversation-this-is-an/outputs/agentfootprint-answer-validation/node\_modules/footprintjs/dist/types/lib/engine/narrative/types.d.ts:281
 
 Explicit channel discriminant — `'flow'` on every engine-dispatched
 event. `isFlowEvent()` checks it first (backlog B3); optional so
@@ -27,7 +27,7 @@ back to the legacy pipelineId-absence heuristic.
 
 > **message**: `string`
 
-Defined in: node\_modules/footprintjs/dist/types/lib/engine/narrative/types.d.ts:271
+Defined in: ../../../../Users/sanjay/Documents/Codex/2026-09-10/referenced-chatgpt-conversation-this-is-an/outputs/agentfootprint-answer-validation/node\_modules/footprintjs/dist/types/lib/engine/narrative/types.d.ts:271
 
 ***
 
@@ -35,7 +35,7 @@ Defined in: node\_modules/footprintjs/dist/types/lib/engine/narrative/types.d.ts
 
 > **stageName**: `string`
 
-Defined in: node\_modules/footprintjs/dist/types/lib/engine/narrative/types.d.ts:270
+Defined in: ../../../../Users/sanjay/Documents/Codex/2026-09-10/referenced-chatgpt-conversation-this-is-an/outputs/agentfootprint-answer-validation/node\_modules/footprintjs/dist/types/lib/engine/narrative/types.d.ts:270
 
 ***
 
@@ -43,7 +43,7 @@ Defined in: node\_modules/footprintjs/dist/types/lib/engine/narrative/types.d.ts
 
 > **structuredError**: `StructuredErrorInfo`
 
-Defined in: node\_modules/footprintjs/dist/types/lib/engine/narrative/types.d.ts:273
+Defined in: ../../../../Users/sanjay/Documents/Codex/2026-09-10/referenced-chatgpt-conversation-this-is-an/outputs/agentfootprint-answer-validation/node\_modules/footprintjs/dist/types/lib/engine/narrative/types.d.ts:273
 
 Structured error details — preserves field-level issues, error codes, etc.
 
@@ -53,4 +53,4 @@ Structured error details — preserves field-level issues, error codes, etc.
 
 > `optional` **traversalContext?**: [`TraversalContext`](/docs/api/interfaces/TraversalContext)
 
-Defined in: node\_modules/footprintjs/dist/types/lib/engine/narrative/types.d.ts:274
+Defined in: ../../../../Users/sanjay/Documents/Codex/2026-09-10/referenced-chatgpt-conversation-this-is-an/outputs/agentfootprint-answer-validation/node\_modules/footprintjs/dist/types/lib/engine/narrative/types.d.ts:274

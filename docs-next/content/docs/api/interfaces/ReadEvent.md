@@ -4,7 +4,7 @@ title: ReadEvent
 
 # Interface: ReadEvent
 
-Defined in: node\_modules/footprintjs/dist/types/lib/scope/types.d.ts:17
+Defined in: ../../../../Users/sanjay/Documents/Codex/2026-09-10/referenced-chatgpt-conversation-this-is-an/outputs/agentfootprint-answer-validation/node\_modules/footprintjs/dist/types/lib/scope/types.d.ts:17
 
 ## Extends
 
@@ -16,7 +16,7 @@ Defined in: node\_modules/footprintjs/dist/types/lib/scope/types.d.ts:17
 
 > `optional` **key?**: `string`
 
-Defined in: node\_modules/footprintjs/dist/types/lib/scope/types.d.ts:18
+Defined in: ../../../../Users/sanjay/Documents/Codex/2026-09-10/referenced-chatgpt-conversation-this-is-an/outputs/agentfootprint-answer-validation/node\_modules/footprintjs/dist/types/lib/scope/types.d.ts:18
 
 ***
 
@@ -24,7 +24,7 @@ Defined in: node\_modules/footprintjs/dist/types/lib/scope/types.d.ts:18
 
 > **pipelineId**: `string`
 
-Defined in: node\_modules/footprintjs/dist/types/lib/scope/types.d.ts:14
+Defined in: ../../../../Users/sanjay/Documents/Codex/2026-09-10/referenced-chatgpt-conversation-this-is-an/outputs/agentfootprint-answer-validation/node\_modules/footprintjs/dist/types/lib/scope/types.d.ts:14
 
 #### Inherited from
 
@@ -36,7 +36,7 @@ Defined in: node\_modules/footprintjs/dist/types/lib/scope/types.d.ts:14
 
 > `optional` **redacted?**: `boolean`
 
-Defined in: node\_modules/footprintjs/dist/types/lib/scope/types.d.ts:21
+Defined in: ../../../../Users/sanjay/Documents/Codex/2026-09-10/referenced-chatgpt-conversation-this-is-an/outputs/agentfootprint-answer-validation/node\_modules/footprintjs/dist/types/lib/scope/types.d.ts:21
 
 True when the value has been redacted for PII protection.
 
@@ -46,7 +46,7 @@ True when the value has been redacted for PII protection.
 
 > **runtimeStageId**: `string`
 
-Defined in: node\_modules/footprintjs/dist/types/lib/scope/types.d.ts:13
+Defined in: ../../../../Users/sanjay/Documents/Codex/2026-09-10/referenced-chatgpt-conversation-this-is-an/outputs/agentfootprint-answer-validation/node\_modules/footprintjs/dist/types/lib/scope/types.d.ts:13
 
 Unique per-execution-step identifier. Format: [subflowPath/]stageId#executionIndex
 
@@ -60,7 +60,7 @@ Unique per-execution-step identifier. Format: [subflowPath/]stageId#executionInd
 
 > **stageId**: `string`
 
-Defined in: node\_modules/footprintjs/dist/types/lib/scope/types.d.ts:11
+Defined in: ../../../../Users/sanjay/Documents/Codex/2026-09-10/referenced-chatgpt-conversation-this-is-an/outputs/agentfootprint-answer-validation/node\_modules/footprintjs/dist/types/lib/scope/types.d.ts:11
 
 Stable stage identifier (matches spec node id).
 
@@ -74,7 +74,7 @@ Stable stage identifier (matches spec node id).
 
 > **stageName**: `string`
 
-Defined in: node\_modules/footprintjs/dist/types/lib/scope/types.d.ts:9
+Defined in: ../../../../Users/sanjay/Documents/Codex/2026-09-10/referenced-chatgpt-conversation-this-is-an/outputs/agentfootprint-answer-validation/node\_modules/footprintjs/dist/types/lib/scope/types.d.ts:9
 
 #### Inherited from
 
@@ -86,7 +86,7 @@ Defined in: node\_modules/footprintjs/dist/types/lib/scope/types.d.ts:9
 
 > **timestamp**: `number`
 
-Defined in: node\_modules/footprintjs/dist/types/lib/scope/types.d.ts:15
+Defined in: ../../../../Users/sanjay/Documents/Codex/2026-09-10/referenced-chatgpt-conversation-this-is-an/outputs/agentfootprint-answer-validation/node\_modules/footprintjs/dist/types/lib/scope/types.d.ts:15
 
 #### Inherited from
 
@@ -98,4 +98,4 @@ Defined in: node\_modules/footprintjs/dist/types/lib/scope/types.d.ts:15
 
 > **value**: `unknown`
 
-Defined in: node\_modules/footprintjs/dist/types/lib/scope/types.d.ts:19
+Defined in: ../../../../Users/sanjay/Documents/Codex/2026-09-10/referenced-chatgpt-conversation-this-is-an/outputs/agentfootprint-answer-validation/node\_modules/footprintjs/dist/types/lib/scope/types.d.ts:19

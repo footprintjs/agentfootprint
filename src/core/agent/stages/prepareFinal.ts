@@ -42,7 +42,11 @@ import type { AgentState } from '../types.js';
  * answer is written back over it: the capture is the only place all four
  * readers meet.
  */
-const captureTurnPayload = (scope: TypedScope<AgentState>, answer: string): void => {
+const captureTurnPayload = (
+  scope: TypedScope<AgentState>,
+  answer: string,
+  commitValidated = false,
+): void => {
   const iteration = scope.iteration;
   scope.finalContent = answer;
   // v2.14 — attach thinking blocks to the assistant final message
@@ -62,6 +66,19 @@ const captureTurnPayload = (scope: TypedScope<AgentState>, answer: string): void
       ...(hasThinking && { thinkingBlocks }),
     },
   ];
+
+  if (commitValidated) {
+    scope.answerValidationCommitted = true;
+    // The stream carries exactly the captured candidate, including any
+    // earlier output transformation. Replaying provider chunks would undo it.
+    if (answer.length > 0) {
+      typedEmit(scope, 'agentfootprint.stream.token', {
+        iteration,
+        tokenIndex: 0,
+        content: answer,
+      });
+    }
+  }
 
   typedEmit(scope, 'agentfootprint.agent.iteration_end', {
     turnIndex: 0,
@@ -95,6 +112,30 @@ const captureTurnPayload = (scope: TypedScope<AgentState>, answer: string): void
 
 export const prepareFinalStage = (scope: TypedScope<AgentState>): void => {
   captureTurnPayload(scope, scope.llmLatestContent);
+};
+
+/**
+ * Configured answer validation is the only door that may release its candidate.
+ * The authoritative report lives in the outer Route stage. This defensive
+ * final guard prevents a missing report or prior refusal from reaching the
+ * capture, its public events or the memory writers mounted after it.
+ */
+export const prepareFinalWithValidationStage = (scope: TypedScope<AgentState>): void => {
+  const report = scope.answerValidation;
+  const mayDeliver =
+    report !== undefined &&
+    (report.mode === 'observe' ||
+      (report.mode === 'enforce' && report.status === 'passed' && report.schemaAccepted === true));
+  if (
+    scope.answerValidationBlocked === true ||
+    !mayDeliver ||
+    scope.messageDeniedReason !== undefined ||
+    scope.unsupportedValues?.refused === true
+  ) {
+    scope.$break('answer validation withheld terminal delivery');
+    return;
+  }
+  captureTurnPayload(scope, scope.llmLatestContent, true);
 };
 
 /**

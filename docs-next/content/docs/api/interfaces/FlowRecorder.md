@@ -4,7 +4,7 @@ title: FlowRecorder
 
 # Interface: FlowRecorder
 
-Defined in: node\_modules/footprintjs/dist/types/lib/engine/narrative/types.d.ts:385
+Defined in: ../../../../Users/sanjay/Documents/Codex/2026-09-10/referenced-chatgpt-conversation-this-is-an/outputs/agentfootprint-answer-validation/node\_modules/footprintjs/dist/types/lib/engine/narrative/types.d.ts:385
 
 FlowRecorder — Pluggable observer for control flow events.
 
@@ -30,7 +30,7 @@ executor.attachFlowRecorder(metricsRecorder);
 
 > `readonly` **id**: `string`
 
-Defined in: node\_modules/footprintjs/dist/types/lib/engine/narrative/types.d.ts:386
+Defined in: ../../../../Users/sanjay/Documents/Codex/2026-09-10/referenced-chatgpt-conversation-this-is-an/outputs/agentfootprint-answer-validation/node\_modules/footprintjs/dist/types/lib/engine/narrative/types.d.ts:386
 
 ## Methods
 
@@ -38,7 +38,7 @@ Defined in: node\_modules/footprintjs/dist/types/lib/engine/narrative/types.d.ts
 
 > `optional` **clear**(): `void`
 
-Defined in: node\_modules/footprintjs/dist/types/lib/engine/narrative/types.d.ts:427
+Defined in: ../../../../Users/sanjay/Documents/Codex/2026-09-10/referenced-chatgpt-conversation-this-is-an/outputs/agentfootprint-answer-validation/node\_modules/footprintjs/dist/types/lib/engine/narrative/types.d.ts:427
 
 Called before each run to reset per-run state. Implement for stateful recorders.
 
@@ -52,7 +52,7 @@ Called before each run to reset per-run state. Implement for stateful recorders.
 
 > `optional` **onBreak**(`event`): `void`
 
-Defined in: node\_modules/footprintjs/dist/types/lib/engine/narrative/types.d.ts:397
+Defined in: ../../../../Users/sanjay/Documents/Codex/2026-09-10/referenced-chatgpt-conversation-this-is-an/outputs/agentfootprint-answer-validation/node\_modules/footprintjs/dist/types/lib/engine/narrative/types.d.ts:397
 
 #### Parameters
 
@@ -70,7 +70,7 @@ Defined in: node\_modules/footprintjs/dist/types/lib/engine/narrative/types.d.ts
 
 > `optional` **onDecision**(`event`): `void`
 
-Defined in: node\_modules/footprintjs/dist/types/lib/engine/narrative/types.d.ts:389
+Defined in: ../../../../Users/sanjay/Documents/Codex/2026-09-10/referenced-chatgpt-conversation-this-is-an/outputs/agentfootprint-answer-validation/node\_modules/footprintjs/dist/types/lib/engine/narrative/types.d.ts:389
 
 #### Parameters
 
@@ -88,7 +88,7 @@ Defined in: node\_modules/footprintjs/dist/types/lib/engine/narrative/types.d.ts
 
 > `optional` **onError**(`event`): `void`
 
-Defined in: node\_modules/footprintjs/dist/types/lib/engine/narrative/types.d.ts:398
+Defined in: ../../../../Users/sanjay/Documents/Codex/2026-09-10/referenced-chatgpt-conversation-this-is-an/outputs/agentfootprint-answer-validation/node\_modules/footprintjs/dist/types/lib/engine/narrative/types.d.ts:398
 
 #### Parameters
 
@@ -106,7 +106,7 @@ Defined in: node\_modules/footprintjs/dist/types/lib/engine/narrative/types.d.ts
 
 > `optional` **onFork**(`event`): `void`
 
-Defined in: node\_modules/footprintjs/dist/types/lib/engine/narrative/types.d.ts:390
+Defined in: ../../../../Users/sanjay/Documents/Codex/2026-09-10/referenced-chatgpt-conversation-this-is-an/outputs/agentfootprint-answer-validation/node\_modules/footprintjs/dist/types/lib/engine/narrative/types.d.ts:390
 
 #### Parameters
 
@@ -124,7 +124,7 @@ Defined in: node\_modules/footprintjs/dist/types/lib/engine/narrative/types.d.ts
 
 > `optional` **onLoop**(`event`): `void`
 
-Defined in: node\_modules/footprintjs/dist/types/lib/engine/narrative/types.d.ts:396
+Defined in: ../../../../Users/sanjay/Documents/Codex/2026-09-10/referenced-chatgpt-conversation-this-is-an/outputs/agentfootprint-answer-validation/node\_modules/footprintjs/dist/types/lib/engine/narrative/types.d.ts:396
 
 #### Parameters
 
@@ -142,7 +142,7 @@ Defined in: node\_modules/footprintjs/dist/types/lib/engine/narrative/types.d.ts
 
 > `optional` **onNext**(`event`): `void`
 
-Defined in: node\_modules/footprintjs/dist/types/lib/engine/narrative/types.d.ts:388
+Defined in: ../../../../Users/sanjay/Documents/Codex/2026-09-10/referenced-chatgpt-conversation-this-is-an/outputs/agentfootprint-answer-validation/node\_modules/footprintjs/dist/types/lib/engine/narrative/types.d.ts:388
 
 #### Parameters
 
@@ -160,7 +160,7 @@ Defined in: node\_modules/footprintjs/dist/types/lib/engine/narrative/types.d.ts
 
 > `optional` **onPause**(`event`): `void`
 
-Defined in: node\_modules/footprintjs/dist/types/lib/engine/narrative/types.d.ts:406
+Defined in: ../../../../Users/sanjay/Documents/Codex/2026-09-10/referenced-chatgpt-conversation-this-is-an/outputs/agentfootprint-answer-validation/node\_modules/footprintjs/dist/types/lib/engine/narrative/types.d.ts:406
 
 #### Parameters
 
@@ -178,7 +178,7 @@ Defined in: node\_modules/footprintjs/dist/types/lib/engine/narrative/types.d.ts
 
 > `optional` **onResume**(`event`): `void`
 
-Defined in: node\_modules/footprintjs/dist/types/lib/engine/narrative/types.d.ts:407
+Defined in: ../../../../Users/sanjay/Documents/Codex/2026-09-10/referenced-chatgpt-conversation-this-is-an/outputs/agentfootprint-answer-validation/node\_modules/footprintjs/dist/types/lib/engine/narrative/types.d.ts:407
 
 #### Parameters
 
@@ -196,7 +196,7 @@ Defined in: node\_modules/footprintjs/dist/types/lib/engine/narrative/types.d.ts
 
 > `optional` **onRunEnd**(`event`): `void`
 
-Defined in: node\_modules/footprintjs/dist/types/lib/engine/narrative/types.d.ts:418
+Defined in: ../../../../Users/sanjay/Documents/Codex/2026-09-10/referenced-chatgpt-conversation-this-is-an/outputs/agentfootprint-answer-validation/node\_modules/footprintjs/dist/types/lib/engine/narrative/types.d.ts:418
 
 Called once per top-level `executor.run()` AFTER traversal completes
 cleanly. Carries `event.payload = chart's return value`. NOT fired on
@@ -218,7 +218,7 @@ pause (the run didn't end) or uncaught error.
 
 > `optional` **onRunFailed**(`event`): `void`
 
-Defined in: node\_modules/footprintjs/dist/types/lib/engine/narrative/types.d.ts:425
+Defined in: ../../../../Users/sanjay/Documents/Codex/2026-09-10/referenced-chatgpt-conversation-this-is-an/outputs/agentfootprint-answer-validation/node\_modules/footprintjs/dist/types/lib/engine/narrative/types.d.ts:425
 
 Called once per top-level `executor.run()` when the run throws a
 non-pause error, BEFORE the exception propagates. The TERMINAL
@@ -241,7 +241,7 @@ failure instead of waiting forever. NOT fired on pause.
 
 > `optional` **onRunStart**(`event`): `void`
 
-Defined in: node\_modules/footprintjs/dist/types/lib/engine/narrative/types.d.ts:412
+Defined in: ../../../../Users/sanjay/Documents/Codex/2026-09-10/referenced-chatgpt-conversation-this-is-an/outputs/agentfootprint-answer-validation/node\_modules/footprintjs/dist/types/lib/engine/narrative/types.d.ts:412
 
 Called once per top-level `executor.run()` BEFORE traversal begins.
 Carries `event.payload = run({input})`. Subflow-traversers don't fire it.
@@ -262,7 +262,7 @@ Carries `event.payload = run({input})`. Subflow-traversers don't fire it.
 
 > `optional` **onSelected**(`event`): `void`
 
-Defined in: node\_modules/footprintjs/dist/types/lib/engine/narrative/types.d.ts:391
+Defined in: ../../../../Users/sanjay/Documents/Codex/2026-09-10/referenced-chatgpt-conversation-this-is-an/outputs/agentfootprint-answer-validation/node\_modules/footprintjs/dist/types/lib/engine/narrative/types.d.ts:391
 
 #### Parameters
 
@@ -280,7 +280,7 @@ Defined in: node\_modules/footprintjs/dist/types/lib/engine/narrative/types.d.ts
 
 > `optional` **onStageExecuted**(`event`): `void`
 
-Defined in: node\_modules/footprintjs/dist/types/lib/engine/narrative/types.d.ts:387
+Defined in: ../../../../Users/sanjay/Documents/Codex/2026-09-10/referenced-chatgpt-conversation-this-is-an/outputs/agentfootprint-answer-validation/node\_modules/footprintjs/dist/types/lib/engine/narrative/types.d.ts:387
 
 #### Parameters
 
@@ -298,7 +298,7 @@ Defined in: node\_modules/footprintjs/dist/types/lib/engine/narrative/types.d.ts
 
 > `optional` **onStageRetry**(`event`): `void`
 
-Defined in: node\_modules/footprintjs/dist/types/lib/engine/narrative/types.d.ts:405
+Defined in: ../../../../Users/sanjay/Documents/Codex/2026-09-10/referenced-chatgpt-conversation-this-is-an/outputs/agentfootprint-answer-validation/node\_modules/footprintjs/dist/types/lib/engine/narrative/types.d.ts:405
 
 Called once per failed attempt that WILL be retried, for stages carrying a
 declared `retry` policy. The final failure arrives via `onError` instead,
@@ -321,7 +321,7 @@ FlowStageRetryEvent for the exact event arithmetic.
 
 > `optional` **onSubflowEntry**(`event`): `void`
 
-Defined in: node\_modules/footprintjs/dist/types/lib/engine/narrative/types.d.ts:392
+Defined in: ../../../../Users/sanjay/Documents/Codex/2026-09-10/referenced-chatgpt-conversation-this-is-an/outputs/agentfootprint-answer-validation/node\_modules/footprintjs/dist/types/lib/engine/narrative/types.d.ts:392
 
 #### Parameters
 
@@ -339,7 +339,7 @@ Defined in: node\_modules/footprintjs/dist/types/lib/engine/narrative/types.d.ts
 
 > `optional` **onSubflowExit**(`event`): `void`
 
-Defined in: node\_modules/footprintjs/dist/types/lib/engine/narrative/types.d.ts:393
+Defined in: ../../../../Users/sanjay/Documents/Codex/2026-09-10/referenced-chatgpt-conversation-this-is-an/outputs/agentfootprint-answer-validation/node\_modules/footprintjs/dist/types/lib/engine/narrative/types.d.ts:393
 
 #### Parameters
 
@@ -357,7 +357,7 @@ Defined in: node\_modules/footprintjs/dist/types/lib/engine/narrative/types.d.ts
 
 > `optional` **onSubflowRegistered**(`event`): `void`
 
-Defined in: node\_modules/footprintjs/dist/types/lib/engine/narrative/types.d.ts:395
+Defined in: ../../../../Users/sanjay/Documents/Codex/2026-09-10/referenced-chatgpt-conversation-this-is-an/outputs/agentfootprint-answer-validation/node\_modules/footprintjs/dist/types/lib/engine/narrative/types.d.ts:395
 
 Called when a dynamic subflow is registered during traversal.
 
@@ -377,7 +377,7 @@ Called when a dynamic subflow is registered during traversal.
 
 > `optional` **toSnapshot**(): `object`
 
-Defined in: node\_modules/footprintjs/dist/types/lib/engine/narrative/types.d.ts:429
+Defined in: ../../../../Users/sanjay/Documents/Codex/2026-09-10/referenced-chatgpt-conversation-this-is-an/outputs/agentfootprint-answer-validation/node\_modules/footprintjs/dist/types/lib/engine/narrative/types.d.ts:429
 
 Optional: expose collected data for inclusion in snapshots.
 

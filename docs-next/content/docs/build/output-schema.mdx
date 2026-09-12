@@ -324,3 +324,101 @@ const agent = Agent.create({ provider, model })
 - [Tools guide](doc:tools) — input-schema typing for individual tools (the inverse direction)
 - [Instructions guide](doc:instructions) — the broader Injection primitive `outputSchema` composes with
 - [Dynamic ReAct guide](doc:dynamic-react) — why per-iteration recomposition lets `outputSchema` always be present without special-casing
+
+
+## Check the answer against evidence
+
+`outputSchema` checks shape. Opt-in `.answerValidation()` adds a host-authored
+check of the schema's JSON result before the final answer is delivered.
+The callback receives a frozen, detached candidate and a read-only artifact
+resolver bound to the same tenant, principal and conversation as the run's tools.
+The model cannot supply or widen that scope.
+
+```ts
+import { Agent, inMemoryArtifacts, type AnswerValidationOptions } from 'agentfootprint';
+import { z } from 'zod';
+
+const Answer = z.object({ ref: z.string(), count: z.number(), unit: z.literal('records') });
+const Summary = z.object({ count: z.number(), unit: z.literal('records') });
+type Answer = z.infer<typeof Answer>;
+
+const validation: AnswerValidationOptions<Answer> = {
+  id: 'inventory-count',
+  version: '1',
+  mode: 'enforce', // default; 'observe' records but permits delivery
+  async validate(answer, { artifacts }) {
+    const evidence = await artifacts.resolve(answer.ref, { kind: 'inventory-summary' });
+    if (!evidence.ok) {
+      return { checks: [{ id: 'count', disposition: 'unreachable' }] };
+    }
+    const summary = Summary.parse(evidence.record.data);
+    return {
+      checks: [{
+        id: 'count',
+        disposition: answer.count === summary.count && answer.unit === summary.unit
+          ? 'checked-pass' : 'checked-fail',
+        evidenceRefs: [answer.ref],
+      }],
+    };
+  },
+};
+
+const agent = Agent.create({ provider, model, artifacts: inMemoryArtifacts() })
+  .outputSchema(Answer)
+  .answerValidation(validation)
+  .build();
+```
+
+`AnswerValidationOptions<T>` declares the validator identity, mode, limits and
+callback. Each `AnswerCheck` names one obligation, its disposition, an optional
+path/reason and the references actually used. `AnswerEvidenceResolver` exposes
+only the bounded, scope-bound `resolve(ref, { kind })` operation. The resulting
+`AnswerValidationReport` is metadata for inspection and refusal handling; it
+contains no candidate or artifact payloads.
+
+The app's tool must first put the summary into the configured artifact store
+under the run's scope. The example checks count and unit; a product should also
+check its investigation, dataset version, filter, operation and coverage where
+those affect the answer. Those meanings belong to the adapter or application.
+A successfully resolved reference alone does not validate any claim.
+The framework counts the callback's declared outcomes; the application author
+is responsible for implementing the comparisons and covering the claims it
+allows into an answer.
+
+A report is available from `agent.answerValidation()` and the execution snapshot.
+`undefined` means no terminal validation ran. Reports name the validator and
+version, identify the exact candidate with a digest, and separate `checked-pass`,
+`checked-fail`, `not-applicable` and `unreachable` checks. Empty checks,
+all-unchecked results, missing evidence, callback errors and deadlines cannot
+produce a passing verdict. Enforce mode throws `AnswerValidationError` with the
+report before final capture or memory write. A report counts checked-pass plus
+checked-fail as checked; artifact reads and framework liveness checks do not count.
+
+Both modes suppress draft `stream.token` events. The final capture emits the
+canonical JSON once, including through `standingAgent`'s existing token bridge.
+Observe mode can deliver failed or unverified output: inspect its report before
+presenting an answer as verified. Diagnostic recordings can still contain model
+candidates; this is a delivery contract, not a redaction feature.
+
+Schema transformations that produce JSON values are supported: the transformed
+value is frozen, checked, serialized and returned. `runTyped()` reads that exact
+JSON without running the parser a second time. Non-JSON results such as `Date`,
+functions, cycles and non-finite numbers are refused as unverified in enforce
+mode. `parseOutput()` and `parseOutputAsync()` remain standalone parsing helpers;
+they do not perform scoped evidence validation.
+
+Limits are configured on `.answerValidation({ limits: ... })`, not supplied by
+the model: `maxReads` (16), `maxBytes` (4 MiB total resolved payloads), `maxChecks`
+(100), `maxCandidateBytes` (1 MiB) and `timeoutMs` (5000). Metadata is checked
+before fetching a payload; digest-verifying `get` is used, and returned data is
+checked again before delivery to the callback. A custom store or callback is
+trusted application code; these bounds are not a process memory or CPU sandbox.
+
+This version supports Agent's classic, dynamic and grouped execution paths.
+It rejects combinations with `.outputFallback()` and
+`.limitsTravelWithTheAnswer()` at build time because those can replace or append
+to the checked answer. Automatic correction and the separate
+`buildAgentMessageApiChart` runner are outside this feature. Existing `.claims()`
+checks retain their advisory behavior. Arbitrary prose is not proved correct:
+a host can instead validate a structured finding and render its factual text
+from the validated result.

@@ -4,7 +4,7 @@ title: ReadSummaryMarker
 
 # Interface: ReadSummaryMarker
 
-Defined in: node\_modules/footprintjs/dist/types/lib/capture/summarize.d.ts:41
+Defined in: ../../../../Users/sanjay/Documents/Codex/2026-09-10/referenced-chatgpt-conversation-this-is-an/outputs/agentfootprint-answer-validation/node\_modules/footprintjs/dist/types/lib/capture/summarize.d.ts:41
 
 Marker recorded in `StageSnapshot.stageReads` under `readTracking: 'summary'`.
 
@@ -25,7 +25,7 @@ no preview for the same reason.
 
 > **\_\_readSummary**: `true`
 
-Defined in: node\_modules/footprintjs/dist/types/lib/capture/summarize.d.ts:43
+Defined in: ../../../../Users/sanjay/Documents/Codex/2026-09-10/referenced-chatgpt-conversation-this-is-an/outputs/agentfootprint-answer-validation/node\_modules/footprintjs/dist/types/lib/capture/summarize.d.ts:43
 
 Discriminant — lets snapshot consumers detect marker entries.
 
@@ -35,7 +35,7 @@ Discriminant — lets snapshot consumers detect marker entries.
 
 > `optional` **preview?**: `string`
 
-Defined in: node\_modules/footprintjs/dist/types/lib/capture/summarize.d.ts:29
+Defined in: ../../../../Users/sanjay/Documents/Codex/2026-09-10/referenced-chatgpt-conversation-this-is-an/outputs/agentfootprint-answer-validation/node\_modules/footprintjs/dist/types/lib/capture/summarize.d.ts:29
 
 First SUMMARY\_PREVIEW\_LENGTH chars — primitives and strings only.
 
@@ -49,7 +49,7 @@ First SUMMARY\_PREVIEW\_LENGTH chars — primitives and strings only.
 
 > `optional` **size?**: `number`
 
-Defined in: node\_modules/footprintjs/dist/types/lib/capture/summarize.d.ts:27
+Defined in: ../../../../Users/sanjay/Documents/Codex/2026-09-10/referenced-chatgpt-conversation-this-is-an/outputs/agentfootprint-answer-validation/node\_modules/footprintjs/dist/types/lib/capture/summarize.d.ts:27
 
 Size proxy: string length, array length, or object key count.
 
@@ -63,7 +63,7 @@ Size proxy: string length, array length, or object key count.
 
 > **type**: `SummaryValueType`
 
-Defined in: node\_modules/footprintjs/dist/types/lib/capture/summarize.d.ts:25
+Defined in: ../../../../Users/sanjay/Documents/Codex/2026-09-10/referenced-chatgpt-conversation-this-is-an/outputs/agentfootprint-answer-validation/node\_modules/footprintjs/dist/types/lib/capture/summarize.d.ts:25
 
 `typeof` result, refined to 'array' / 'null' for objects.
 

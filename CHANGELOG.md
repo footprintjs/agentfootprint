@@ -5,6 +5,20 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [9.95.0] - 2026-09-12
+
+### Added
+
+- Opt-in `.answerValidation()` checks schema-parsed JSON against host-owned
+  evidence before final answer delivery. Enforce mode refuses failed or
+  unverified checks; observe mode records them without refusing. Scoped,
+  read-only artifact resolution has per-validation read, byte and time limits.
+  Reports separate actual checks from unavailable evidence and artifact reads.
+- Configured agents withhold draft tokens and deliver the checked canonical
+  value consistently through `run`, `runTyped`, final events and memory.
+  Output fallback and coverage suffix combinations are explicitly refused in
+  this version; automatic repair and free-text entailment are outside scope.
+
 ## [9.94.4] - 2026-09-12
 
 ### Documentation
