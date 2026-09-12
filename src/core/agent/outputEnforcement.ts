@@ -288,6 +288,8 @@ export interface ResolvedOutputEnforcement {
    *  the unmet-contract signal can say that a tier exists which `run()` does
    *  not reach — the fallback itself lives at the caller's boundary. */
   readonly hasFallback: boolean;
+  /** An additional delivery gate exists; do not promise raw output on failure. */
+  readonly answerValidationEnforced?: boolean;
 }
 
 /**

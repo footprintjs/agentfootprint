@@ -58,8 +58,12 @@ import { memoryInjectionKey, retrievalEvidenceKey } from '../../memory/define.ty
 import { unwrapMemoryFlowChart } from '../../memory/define.js';
 import { mountMemoryRead, mountMemoryWrite } from '../../memory/wire/mountMemoryPipeline.js';
 import { withMemoryRecall } from './memoryRecallInjections.js';
-import { breakFinalStage } from './stages/breakFinal.js';
-import { prepareFinalStage, prepareFinalWithLimitsStage } from './stages/prepareFinal.js';
+import { breakFinalStage, breakFinalWithValidationStage } from './stages/breakFinal.js';
+import {
+  prepareFinalStage,
+  prepareFinalWithLimitsStage,
+  prepareFinalWithValidationStage,
+} from './stages/prepareFinal.js';
 import { buildCacheSubflow } from './buildCacheSubflow.js';
 import type { RouteBranch } from './stages/route.js';
 import type { AgentState } from './types.js';
@@ -262,6 +266,9 @@ export interface AgentChartDeps {
    */
   readonly attachCoverageLimits?: boolean;
 
+  /** Opt-in terminal guard and one committed token; absent preserves the original final stage. */
+  readonly hasAnswerValidation?: boolean;
+
   /**
    * An escalation brain is declared (9.19.0). In the GROUPED chart this
    * gates threading `skillEscalated` across the `sf-llm-call` boundary —
@@ -318,7 +325,11 @@ export function buildAgentChart(deps: AgentChartDeps): FlowChart {
     // Same stage id, same position — only the body differs, and only for an
     // agent that asked for its limits to travel. See `stages/prepareFinal.ts`
     // for why the fold happens HERE and not in a stage of its own.
-    deps.attachCoverageLimits === true ? prepareFinalWithLimitsStage : prepareFinalStage,
+    deps.hasAnswerValidation === true
+      ? prepareFinalWithValidationStage
+      : deps.attachCoverageLimits === true
+      ? prepareFinalWithLimitsStage
+      : prepareFinalStage,
     'prepare-final',
     {
       ...(deps.structureRecorders !== undefined && {
@@ -347,7 +358,12 @@ export function buildAgentChart(deps: AgentChartDeps): FlowChart {
     }
   }
   const finalBranchChart = finalBranchBuilder
-    .addFunction('BreakFinal', breakFinalStage, 'break-final', 'Terminate the ReAct loop')
+    .addFunction(
+      'BreakFinal',
+      deps.hasAnswerValidation === true ? breakFinalWithValidationStage : breakFinalStage,
+      'break-final',
+      'Terminate the ReAct loop',
+    )
     .build();
 
   // ── Main chart ──────────────────────────────────────────────
@@ -901,10 +917,21 @@ export function buildAgentChart(deps: AgentChartDeps): FlowChart {
         const { finalContent: _f, newMessages: _nm, ...rest } = parent;
         void _f;
         void _nm;
+        if (deps.hasAnswerValidation === true) {
+          // This stage writes the commit flag; passing it as an argument
+          // would freeze it before capture. The report remains read-only.
+          const { answerValidationCommitted: _committed, ...input } = rest;
+          void _committed;
+          return input;
+        }
         return rest;
       },
       outputMapper: (sf) => ({
         finalContent: sf.finalContent as string,
+        ...(deps.hasAnswerValidation === true &&
+          sf.answerValidationCommitted === true && {
+            answerValidationCommitted: true,
+          }),
       }),
       // With the branch-sourced loop, `final` is a terminal LEAF — it ends the
       // run on its own (no decider `next` to suppress). propagateBreak is kept

@@ -224,6 +224,12 @@ import type {
   WriteProvenanceMode,
 } from './agent/types.js';
 import { buildRouteDeciderStage } from './agent/stages/route.js';
+import { withAnswerValidation } from './agent/stages/answerValidation.js';
+import {
+  AnswerValidationError,
+  type AnswerValidationReport,
+  type ResolvedAnswerValidation,
+} from '../answer-validation/index.js';
 import { buildSeedStage } from './agent/stages/seed.js';
 import type { MessageMiddleware, ToolMiddleware } from './agent/middleware/types.js';
 import { MessageDeniedError } from './agent/middleware/errors.js';
@@ -743,6 +749,7 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
   /** `AgentOptions.recordReceipt` (9.88.0) — ON by default. `false` declines
    *  the mint at `callLLM`; nothing else about the run changes. */
   private readonly recordReceiptValue: boolean = true;
+  private readonly answerValidationConfig?: ResolvedAnswerValidation;
 
   constructor(
     opts: AgentOptions,
@@ -790,8 +797,10 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
     skillGraphDeclared?: SkillGraphDeclaredMap,
     mapsPlan?: import('../maps/engagement/types.js').EngagementPlan,
     claimContract?: readonly import('../integrity/unsupported-claim/check.js').DeclaredClaim[],
+    answerValidationConfig?: ResolvedAnswerValidation,
   ) {
     super();
+    this.answerValidationConfig = answerValidationConfig;
     this.provider = opts.provider;
     this.name = opts.name ?? 'Agent';
     this.id = opts.id ?? 'agent';
@@ -1447,6 +1456,17 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
           'Use agent.run() + agent.parseOutput(...) after resume.',
       );
     }
+    if (this.answerValidationConfig !== undefined) {
+      // The validator judged the schema's JSON output. Do not run a transforming
+      // or stateful parser again and hand back a value the validator never saw.
+      if (this.answerValidation()?.schemaAccepted !== true) {
+        throw new OutputSchemaError('Answer validation could not establish a JSON schema result.', {
+          rawOutput: out,
+          stage: 'schema-validate',
+        });
+      }
+      return JSON.parse(out) as T;
+    }
     return this.parseOutputAsync<T>(out);
   }
 
@@ -1614,6 +1634,7 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
           // named values one `.cause` deep, where the person deciding what to
           // do about them will not look.
           cause instanceof UnsupportedValuesError ||
+          cause instanceof AnswerValidationError ||
           // 9.60.0 — a dead checker is a WIRING verdict on this build, not a
           // recoverable run state: resuming would run the same dead wiring.
           cause.name === 'CheckerDeadError');
@@ -3116,6 +3137,14 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
     return state?.unsupportedValues;
   }
 
+  /** The last run's answer checks, detached from its execution record.
+   * Undefined means no terminal validation ran, never an implicit pass. */
+  answerValidation(): AnswerValidationReport | undefined {
+    const report = (this.getLastSnapshot()?.sharedState as Partial<AgentState> | undefined)
+      ?.answerValidation;
+    return report === undefined ? undefined : structuredClone(report);
+  }
+
   private finalizeResult(
     executor: FlowChartExecutor,
     result: unknown,
@@ -3262,6 +3291,34 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
       }
     }
     if (result instanceof Error) throw result;
+    if (this.answerValidationConfig !== undefined) {
+      const state = executor.getSnapshot().sharedState as Partial<AgentState>;
+      if (state.answerValidationBlocked === true && state.answerValidation !== undefined) {
+        throw new AnswerValidationError(state.answerValidation);
+      }
+      if (
+        state.answerValidation === undefined ||
+        state.answerValidationCommitted !== true ||
+        typeof state.finalContent !== 'string'
+      ) {
+        const config = this.answerValidationConfig;
+        throw new AnswerValidationError({
+          validatorId: config.id,
+          validatorVersion: config.version,
+          mode: config.mode,
+          status: 'unverified',
+          checked: 0,
+          failed: 0,
+          unreachable: 0,
+          notApplicable: 0,
+          checks: [],
+          resolvedRefs: [],
+          schemaAccepted: false,
+          reason: 'delivery-incomplete',
+        });
+      }
+      return state.finalContent;
+    }
     if (typeof result === 'string') return result;
     throw new Error('Agent: unexpected result shape — expected final-answer string');
   }
@@ -3705,6 +3762,7 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
     // callLLM extracted to ./agent/stages/callLLM.ts (v2.11.2). Same
     // late-binding pattern as seed for toolSchemas (computed below).
     const callLLM = buildCallLLMStage({
+      ...(this.answerValidationConfig !== undefined && { suppressDraftTokens: true }),
       // The receipt's salt (9.88.0) — read per call, like seed's own accessor.
       getRunId: () => this.currentRunContext?.runId,
       // …and its off switch. Value-conditional, so an agent on the default
@@ -3836,7 +3894,7 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
     const canCallTools = registryByName.size > 0 || this.externalToolProvider !== undefined;
     const hasWrapUp = canCallTools && this.wrapUpAtMaxIterations !== false;
 
-    const routeDecider = buildRouteDeciderStage(
+    const baseRouteDecider = buildRouteDeciderStage(
       this.messageMiddleware,
       this.outputEnforcement,
       stepPlanFor,
@@ -3851,6 +3909,17 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
       // pre-9.83.0 chart was given.
       this.noticePriorTurnEvidence && this.evidenceGate !== undefined ? true : undefined,
     );
+
+    const routeDecider =
+      this.answerValidationConfig === undefined
+        ? baseRouteDecider
+        : withAnswerValidation(
+            baseRouteDecider,
+            this.answerValidationConfig,
+            this.outputSchemaParser,
+            artifactStore,
+            () => this.consentOutstanding.size > 0,
+          );
 
     // toolCallsHandler extracted to ./agent/stages/toolCalls.ts (v2.11.2).
     const toolCallsHandler = buildToolCallsHandler({
@@ -4066,6 +4135,7 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
       // agent that did not ask, so both builders mount the final-branch stage
       // function they have always mounted.
       ...(this.limitsTravelWithTheAnswerValue && { attachCoverageLimits: true }),
+      ...(this.answerValidationConfig !== undefined && { hasAnswerValidation: true }),
       // The out-of-budget wrap-up branch (9.56.0) — the conditional-mount law
       // above, decided once beside the Route decider that routes to it so the
       // two can never disagree about whether the branch exists.

@@ -1097,3 +1097,12 @@ export {
 // Message Catalog Pattern (v2.5+). `agentfootprint/observe` is the
 // dedicated subpath; the root barrel also re-exports the helpers so
 // existing v2.4 consumers find them at the top level.
+
+// Optional host-authored validation at the final answer delivery boundary.
+export {
+  AnswerValidationError,
+  type AnswerValidationOptions,
+  type AnswerValidationReport,
+  type AnswerCheck,
+  type AnswerEvidenceResolver,
+} from './answer-validation/index.js';

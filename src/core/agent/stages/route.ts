@@ -1032,6 +1032,7 @@ function buildEnforcingDecider(
       attempts: attempt,
       retriesSpent: attempt - 1,
       fallbackConfigured: enforcement.hasFallback,
+      ...(enforcement.answerValidationEnforced === true && { answerValidationEnforced: true }),
       ...(brokenByChain !== undefined && { brokenBy: brokenByChain }),
     });
     // The claim seam cannot read an answer the schema rejected: there is no
@@ -1087,6 +1088,7 @@ function recordContractUnmet(
     readonly attempts: number;
     readonly retriesSpent: number;
     readonly fallbackConfigured: boolean;
+    readonly answerValidationEnforced?: boolean;
     readonly brokenBy?: string;
   },
 ): void {
@@ -1122,11 +1124,14 @@ function recordContractUnmet(
         : retriesSpent > 0
         ? `, after ${retriesSpent} corrective re-ask(s) that were billed.`
         : `. No re-ask was configured — .outputSchema(parser, { retries: 1 }) buys one.`) +
-      ` run() hands back the raw answer as it always has; runTyped() throws OutputSchemaError ` +
-      `on it` +
-      (fallbackConfigured
-        ? `, and this agent's .outputFallback() tiers run there — run() does not reach them.`
-        : `.`) +
+      (facts.answerValidationEnforced === true
+        ? ` The configured .answerValidation() boundary must approve the terminal answer before ` +
+          `either run() or runTyped() can deliver it.`
+        : ` run() hands back the raw answer as it always has; runTyped() throws OutputSchemaError ` +
+          `on it` +
+          (fallbackConfigured
+            ? `, and this agent's .outputFallback() tiers run there — run() does not reach them.`
+            : `.`)) +
       ` Read agent.outputContractUnmet() for the same facts after the run.`,
   );
 }

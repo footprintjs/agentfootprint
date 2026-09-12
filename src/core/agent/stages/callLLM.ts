@@ -91,6 +91,8 @@ export interface CallLLMStageDeps {
   readonly temperature?: number;
   /** Optional max output tokens. */
   readonly maxTokens?: number;
+  /** Answer validation owns committed delivery; keep all provider drafts off the public token channel. */
+  readonly suppressDraftTokens?: boolean;
   /** Optional pricing adapter for cost tracking. */
   readonly pricingTable?: PricingTable;
   /** Optional cumulative USD cap per run. */
@@ -650,11 +652,13 @@ export function buildCallLLMStage(
               firstChunkFired = true;
               hooks.onFirstChunk?.();
             }
-            typedEmit(scope, 'agentfootprint.stream.token', {
-              iteration,
-              tokenIndex: chunk.tokenIndex,
-              content: chunk.content,
-            });
+            if (deps.suppressDraftTokens !== true) {
+              typedEmit(scope, 'agentfootprint.stream.token', {
+                iteration,
+                tokenIndex: chunk.tokenIndex,
+                content: chunk.content,
+              });
+            }
           }
         }
       }
