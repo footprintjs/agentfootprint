@@ -6,7 +6,7 @@ title: ReadTrackingMode
 
 > **ReadTrackingMode** = `RetentionPolicy`
 
-Defined in: node\_modules/footprintjs/dist/types/lib/memory/types.d.ts:155
+Defined in: ../../../../Users/sanjay/Documents/Codex/2026-09-10/referenced-chatgpt-conversation-this-is-an/outputs/agentfootprint-answer-validation/node\_modules/footprintjs/dist/types/lib/memory/types.d.ts:155
 
 Policy for how tracked reads are recorded into `StageSnapshot.stageReads`.
 

@@ -1,21 +1,12 @@
 ---
-title: InvalidAskComponentError
+title: AnswerValidationError
 ---
 
-# Class: InvalidAskComponentError
+# Class: AnswerValidationError
 
-Defined in: [src/core/askComponent.ts:88](https://github.com/footprintjs/agentfootprint/blob/main/src/core/askComponent.ts#L88)
+Defined in: [src/answer-validation/types.ts:111](https://github.com/footprintjs/agentfootprint/blob/main/src/answer-validation/types.ts#L111)
 
-An ask nominated a component this run cannot honor as stated — a malformed
-shape, a `propsRef` with no artifact store attached, or a `propsRef` that
-does not resolve in the run's own scope.
-
-Raised AT THE SOURCE — the moment the ask is raised — and it fails the run
-loudly rather than pausing: a pause whose component the screen cannot
-render is a question a person half-receives, and a consent gate silently
-downgraded to prose (or to nothing) is the accepted-and-silently-wrong
-failure this refusal exists to prevent. The author fixes the ask; nothing
-was executed behind anyone's back.
+An enforcing host refused delivery; diagnostic metadata only, never content.
 
 ## Extends
 
@@ -25,31 +16,19 @@ was executed behind anyone's back.
 
 ### Constructor
 
-> **new InvalidAskComponentError**(`reason`, `door`, `detail`, `ref?`): `InvalidAskComponentError`
+> **new AnswerValidationError**(`report`): `AnswerValidationError`
 
-Defined in: [src/core/askComponent.ts:98](https://github.com/footprintjs/agentfootprint/blob/main/src/core/askComponent.ts#L98)
+Defined in: [src/answer-validation/types.ts:115](https://github.com/footprintjs/agentfootprint/blob/main/src/answer-validation/types.ts#L115)
 
 #### Parameters
 
-##### reason
+##### report
 
-[`AskComponentRefusalReason`](/docs/api/type-aliases/AskComponentRefusalReason)
-
-##### door
-
-`string`
-
-##### detail
-
-`string`
-
-##### ref?
-
-`string`
+[`AnswerValidationReport`](/docs/api/interfaces/AnswerValidationReport)
 
 #### Returns
 
-`InvalidAskComponentError`
+`AnswerValidationError`
 
 #### Overrides
 
@@ -71,20 +50,9 @@ Defined in: ../../../../Users/sanjay/Documents/Codex/2026-09-10/referenced-chatg
 
 ### code
 
-> `readonly` **code**: `"ERR_INVALID_ASK_COMPONENT"`
+> `readonly` **code**: `"ERR_ANSWER_VALIDATION"`
 
-Defined in: [src/core/askComponent.ts:89](https://github.com/footprintjs/agentfootprint/blob/main/src/core/askComponent.ts#L89)
-
-***
-
-### door
-
-> `readonly` **door**: `string`
-
-Defined in: [src/core/askComponent.ts:94](https://github.com/footprintjs/agentfootprint/blob/main/src/core/askComponent.ts#L94)
-
-The door the component arrived through (`askHuman`, `ask middleware '<name>'`,
- `tool '<name>' checkInComponent`, …).
+Defined in: [src/answer-validation/types.ts:112](https://github.com/footprintjs/agentfootprint/blob/main/src/answer-validation/types.ts#L112)
 
 ***
 
@@ -112,23 +80,11 @@ Defined in: ../../../../Users/sanjay/Documents/Codex/2026-09-10/referenced-chatg
 
 ***
 
-### reason
+### report
 
-> `readonly` **reason**: [`AskComponentRefusalReason`](/docs/api/type-aliases/AskComponentRefusalReason)
+> `readonly` **report**: [`AnswerValidationReport`](/docs/api/interfaces/AnswerValidationReport)
 
-Defined in: [src/core/askComponent.ts:91](https://github.com/footprintjs/agentfootprint/blob/main/src/core/askComponent.ts#L91)
-
-Which rule refused.
-
-***
-
-### ref?
-
-> `readonly` `optional` **ref?**: `string`
-
-Defined in: [src/core/askComponent.ts:96](https://github.com/footprintjs/agentfootprint/blob/main/src/core/askComponent.ts#L96)
-
-The ref that could not be honored, when the refusal is about one.
+Defined in: [src/answer-validation/types.ts:113](https://github.com/footprintjs/agentfootprint/blob/main/src/answer-validation/types.ts#L113)
 
 ***
 
