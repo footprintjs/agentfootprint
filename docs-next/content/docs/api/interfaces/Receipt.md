@@ -26,7 +26,7 @@ receipt?.params.temperature;    // the dial this turn went out on
 
 > `readonly` **basis**: `object`
 
-Defined in: [src/lib/time-travel/receipt.ts:397](https://github.com/footprintjs/agentfootprint/blob/main/src/lib/time-travel/receipt.ts#L397)
+Defined in: [src/lib/time-travel/receipt.ts:398](https://github.com/footprintjs/agentfootprint/blob/main/src/lib/time-travel/receipt.ts#L398)
 
 #### epoch
 
@@ -79,7 +79,8 @@ Now it raises that gap only where a strategy could have rewritten the
 request: where this is not `null`, or where no receipt can say.
 
 A receipt minted before 9.93.0 has no key here; a reader treats that as
-"cannot say", never as `null`.
+"cannot say", never as `null` — [StoredReceipt](/docs/api/type-aliases/StoredReceipt) is the shape that
+says so, and the one every reader is handed.
 
 #### transform
 
@@ -131,7 +132,7 @@ Defined in: [src/lib/time-travel/receipt.ts:324](https://github.com/footprintjs/
 
 > `readonly` `optional` **omittedForAttention?**: `ReceiptAttentionOmission`
 
-Defined in: [src/lib/time-travel/receipt.ts:396](https://github.com/footprintjs/agentfootprint/blob/main/src/lib/time-travel/receipt.ts#L396)
+Defined in: [src/lib/time-travel/receipt.ts:397](https://github.com/footprintjs/agentfootprint/blob/main/src/lib/time-travel/receipt.ts#L397)
 
 What left the window for budget at this iteration's head, before this
 request was composed — one hash per evicted turn, each the turn's own
@@ -152,7 +153,7 @@ meant only that nobody had recorded a drop.
 
 > `readonly` **params**: [`ReceiptParams`](/docs/api/interfaces/ReceiptParams)
 
-Defined in: [src/lib/time-travel/receipt.ts:381](https://github.com/footprintjs/agentfootprint/blob/main/src/lib/time-travel/receipt.ts#L381)
+Defined in: [src/lib/time-travel/receipt.ts:382](https://github.com/footprintjs/agentfootprint/blob/main/src/lib/time-travel/receipt.ts#L382)
 
 The sampling knobs the call went out with — see [ReceiptParams](/docs/api/interfaces/ReceiptParams).
 

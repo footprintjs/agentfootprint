@@ -407,6 +407,7 @@ title: agentfootprint
 - [ServedGapCause](/docs/api/type-aliases/ServedGapCause)
 - [ServedGapKind](/docs/api/type-aliases/ServedGapKind)
 - [StageRole](/docs/api/type-aliases/StageRole)
+- [StoredReceipt](/docs/api/type-aliases/StoredReceipt)
 - [StrategyHandle](/docs/api/type-aliases/StrategyHandle)
 - [StreamingArtifactStore](/docs/api/type-aliases/StreamingArtifactStore)
 - [TeardownReason](/docs/api/type-aliases/TeardownReason)

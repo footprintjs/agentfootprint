@@ -330,6 +330,44 @@ third.omittedForAttention;            // { count: 2, hashes: ['…', '…'] } �
 receiptAt(agent.getSnapshot()!, 2)!.messages.entries.some((e) => e.hash === third.omittedForAttention!.hashes[0]); // true
 ```
 
+### The vintage law (9.94.1): a reader reads the receipt it is handed
+
+**A missing container is a fact about the vintage, never a throw.** A
+recording is older than the reader that opens it. `Receipt` is what a MINT
+writes, and every mint writes every container it knows — but what a mint knows
+has grown (`cache` came with the receipt in 9.88.0; `cache.strategy` in
+9.93.0), and a receipt a consumer already holds was written by the release
+that wrote it. So what a reader is handed is a **`StoredReceipt`** — the same
+shape with the containers the narrowing does not check declared optional — and
+`receiptAt` hands it back **as stored**: nothing is repaired, no `cache: {}`
+is fabricated, the record is never written to. Absence reads as *cannot say*:
+`servedAt` raises `cache-transform` on a receipt with no `cache.strategy`
+exactly as it does on a receipt with no `cache` and on no receipt at all; only
+a receipt that SAYS `null` lifts it. The basis is the one container the
+narrowing (`servedView.ts` · `readReceipt`) requires, so `basis.*` and every
+hash row a vintage carries still verify.
+
+Why it is a law and not a habit: 9.93.0 read `receipt.cache.strategy` off the
+minted shape, past that narrowing, and every stored receipt with a basis and
+no `cache` made `servedAt` throw `Cannot read properties of undefined` where
+9.92 built a view — found by the lens the day after, on a recording it already
+held. A Lens may omit, never deny; a reader never throws on a stored recording
+— it names what it could not read. The compiler now holds every reader to it:
+`StoredReceipt` is the only type a reader is handed, and
+`test/lib/time-travel/receipt-vintage.test.ts` ages real recordings three ways
+(no `cache`; `cache` without `strategy`; `strategy: null`) and requires a view,
+the gap, and the hash law on each.
+
+```ts
+import { receiptAt, servedAt, type StoredReceipt } from 'agentfootprint';
+
+// a recording minted by 9.92, opened by this release
+const receipt: StoredReceipt = receiptAt(olderRecording, 1)!;
+receipt.cache?.strategy;                              // undefined — the mint predates the key; not null, not repaired
+receipt.basis.runId;                                  // the one container every vintage carries
+servedAt(olderRecording, 1)!.gaps.map((g) => g.gap);  // ['cache-transform', 'provider-defaults'] — it cannot say, and says so
+```
+
 ### Gaps: what this view cannot prove, said out loud
 
 A rebuild that quietly omits a piece looks exactly like a rebuild that proved

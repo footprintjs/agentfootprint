@@ -112,6 +112,9 @@ export { milestoneOf, milestoneStops, milestoneStopsStrategy } from './lib/time-
 // receiptAt(k).system.hash`; whatever the log cannot rebuild is named in
 // `servedAt(k).gaps` rather than quietly missing. `epochAt` / `epochLocations`
 // are the one owner of where an iteration's pieces live in either chart shape.
+// `receiptAt` answers a `StoredReceipt` (9.94.1): the receipt AS STORED, by
+// the release that minted it — a container a later release added may be
+// absent, and a reader reads it as "cannot say", never as a throw.
 export {
   epochAt,
   epochLocations,
@@ -140,6 +143,7 @@ export {
   type ServedPiece,
   type ServedRequestOnly,
   type ServedView,
+  type StoredReceipt,
 } from './lib/time-travel/index.js';
 // `STAGE_IDS`, `SUBFLOW_IDS`, `isSlotSubflow`, `slotFromSubflowId`,
 // `isKnownStage`, `isKnownSubflow` are intentionally NOT exported — they

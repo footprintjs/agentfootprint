@@ -4,11 +4,19 @@ title: receiptAt
 
 # Function: receiptAt()
 
-> **receiptAt**(`source`, `epoch`): [`Receipt`](/docs/api/interfaces/Receipt) \| `undefined`
+> **receiptAt**(`source`, `epoch`): [`StoredReceipt`](/docs/api/type-aliases/StoredReceipt) \| `undefined`
 
-Defined in: [src/lib/time-travel/servedView.ts:1154](https://github.com/footprintjs/agentfootprint/blob/main/src/lib/time-travel/servedView.ts#L1154)
+Defined in: [src/lib/time-travel/servedView.ts:1187](https://github.com/footprintjs/agentfootprint/blob/main/src/lib/time-travel/servedView.ts#L1187)
 
 The receipt epoch `k`'s call left behind, or `undefined`.
+
+What comes back is a [StoredReceipt](/docs/api/type-aliases/StoredReceipt): the receipt AS STORED, written
+by the release that minted it. A recording is older than the reader that
+opens it, so a container a later release added (`cache.strategy`, 9.93.0)
+may be absent — and it is handed back absent, not repaired, because the
+narrowing checks the basis and promises nothing past it. A reader reads the
+receipt it is handed; a missing container is a fact about the vintage,
+never a throw.
 
 `undefined` means one of two things on the record, and the same epoch's
 `servedAt(...)` view carries which: its `no-receipt-on-chart` gap has a
@@ -44,7 +52,7 @@ detached (`keyedFold.ts` · `freezeDeep`). Copy it if you need to edit one.
 
 ## Returns
 
-[`Receipt`](/docs/api/interfaces/Receipt) \| `undefined`
+[`StoredReceipt`](/docs/api/type-aliases/StoredReceipt) \| `undefined`
 
 ## Example
 

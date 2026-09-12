@@ -164,7 +164,12 @@ import {
 import { findStagedRefs, stagedRefsNudgeLine } from '../../core/agent/stagedRefs.js';
 import { epochAt, epochLocations, readAfterCall, readAtCall, readRunConstant } from './epochs.js';
 import type { EpochLocation } from './epochs.js';
-import { FORCED_OUTPUT_TOOL_KEY, RECEIPT_BOUNDARY, RECEIPT_KEY, type Receipt } from './receipt.js';
+import {
+  FORCED_OUTPUT_TOOL_KEY,
+  RECEIPT_BOUNDARY,
+  RECEIPT_KEY,
+  type StoredReceipt,
+} from './receipt.js';
 
 /** One piece of the composed system string, in wire order. */
 export interface ServedPiece {
@@ -820,13 +825,14 @@ function gapOf(kind: ServedGapKind, cause?: ServedGapCause): ServedGap {
 /** The receipt, or the reason there is none — the shape `readReceipt` answers
  *  in. */
 type ReceiptRead =
-  | { readonly receipt: Receipt; readonly cause?: undefined }
+  | { readonly receipt: StoredReceipt; readonly cause?: undefined }
   | { readonly receipt?: undefined; readonly cause: ServedGapCause };
 
 /**
  * The receipt this epoch's call committed, or WHY there is none. Shared by
- * `receiptAt` and by the rebuild, which reads exactly ONE thing off a receipt —
- * the model/provider/runId basis — and nothing else.
+ * `receiptAt` and by the rebuild, which reads exactly TWO things off a receipt
+ * — the model/provider/runId basis, and whether a cache strategy stood between
+ * assembly and the port — and nothing else.
  *
  * THE ONE PLACE THAT KNOWS. This function is where the difference between
  * "nothing was committed" and "something was committed and it is not a
@@ -835,6 +841,18 @@ type ReceiptRead =
  * afterwards from a list of causes — which is how a shape refusal added in this
  * release became a cause that sentence had already ruled out. So the answer
  * carries the reason out, and {@link ServedGap.cause} is where it lands.
+ *
+ * THE ONE PLACE THAT NARROWS, too — and what it admits is what it says it
+ * admits. The check is the basis and nothing past it, so the value it hands
+ * back is a {@link StoredReceipt}: every container past the basis is what the
+ * MINTING release wrote, and a reader behind this narrowing reads them as
+ * optional, because the type says so and the compiler holds it to that.
+ * 9.93.0 read `receipt.cache.strategy` off a `Receipt` here — the minted
+ * shape, which promises `cache` — and a stored receipt with a basis and no
+ * `cache` made `servedAt` throw where 9.92 built a view. A reader reads the
+ * receipt it is handed; a missing container is a fact about the vintage,
+ * never a throw. It is also never repaired: nothing here fabricates a
+ * `cache: {}` or writes to the record.
  */
 function readReceipt(location: EpochLocation): ReceiptRead {
   const value = readAfterCall(location, RECEIPT_KEY);
@@ -846,11 +864,11 @@ function readReceipt(location: EpochLocation): ReceiptRead {
   // `.basis.runId` off — and REPORT the refusal, because a log that holds a
   // non-receipt under the receipt key is damaged, which is a different fact
   // about the recording from a run that never minted.
-  const candidate = value as Partial<Receipt>;
+  const candidate = value as Partial<StoredReceipt>;
   if (value === null || typeof value !== 'object' || typeof candidate.basis?.epoch !== 'number') {
     return { cause: 'receipt-shape-rejected' };
   }
-  return { receipt: value as Receipt };
+  return { receipt: value as StoredReceipt };
 }
 
 /** A committed tool list, or `undefined` when the key held no array — which is
@@ -930,10 +948,14 @@ function frozenView(view: ServedView): ServedView {
 
 /** Rebuild one epoch's view from a located epoch. */
 function viewOf(location: EpochLocation): ServedView {
-  // The receipt is read for exactly one thing — WHICH model saw this, through
-  // WHICH provider, salted with WHICH run id. Every other field below is
-  // rebuilt from committed pieces and never from the record it is checked
-  // against; a rebuild that read its own answer sheet would prove nothing.
+  // The receipt is read for exactly two things — WHICH model saw this, through
+  // WHICH provider, salted with WHICH run id; and whether a cache strategy
+  // stood between assembly and the port. Every other field below is rebuilt
+  // from committed pieces and never from the record it is checked against; a
+  // rebuild that read its own answer sheet would prove nothing. Both reads go
+  // through `readReceipt`'s narrowing and its type: a stored receipt carries
+  // what its vintage wrote, and nothing below dereferences a container the
+  // narrowing did not check.
   const read = readReceipt(location);
   const receipt = read.receipt;
   // ── the system prompt ──────────────────────────────────────────────────
@@ -1035,10 +1057,13 @@ function viewOf(location: EpochLocation): ServedView {
   if (read.receipt === undefined) gaps.push(gapOf('no-receipt-on-chart', read.cause));
   // A rewrite is possible only where a strategy stood between assembly and
   // the port. The receipt says whether one did (`cache.strategy`, 9.93.0);
-  // with no receipt, or a receipt minted before the field existed, the record
-  // cannot rule one out and the gap stays — the "you cannot tell" declaration,
-  // never an inference from absence. Only a receipt that SAYS `null` lifts it.
-  if (receipt === undefined || receipt.cache.strategy !== null) {
+  // with no receipt, or a receipt minted before the field — or the whole
+  // `cache` container — existed, the record cannot rule one out and the gap
+  // stays — the "you cannot tell" declaration, never an inference from
+  // absence. Only a receipt that SAYS `null` lifts it. The optional chain is
+  // the vintage law, not defensiveness: `StoredReceipt` declares both
+  // containers optional, so this is the one spelling that compiles.
+  if (receipt?.cache?.strategy !== null) {
     gaps.push(gapOf('cache-transform'));
   }
   if (receipt !== undefined) gaps.push(gapOf('provider-defaults'));
@@ -1122,6 +1147,14 @@ export function servedViews(source: unknown): ServedView[] {
 /**
  * The receipt epoch `k`'s call left behind, or `undefined`.
  *
+ * What comes back is a {@link StoredReceipt}: the receipt AS STORED, written
+ * by the release that minted it. A recording is older than the reader that
+ * opens it, so a container a later release added (`cache.strategy`, 9.93.0)
+ * may be absent — and it is handed back absent, not repaired, because the
+ * narrowing checks the basis and promises nothing past it. A reader reads the
+ * receipt it is handed; a missing container is a fact about the vintage,
+ * never a throw.
+ *
  * `undefined` means one of two things on the record, and the same epoch's
  * `servedAt(...)` view carries which: its `no-receipt-on-chart` gap has a
  * {@link ServedGapCause}. Either nothing was committed under the receipt key —
@@ -1151,7 +1184,7 @@ export function servedViews(source: unknown): ServedView[] {
  * receiptAt(agent.getSnapshot()!, 3)?.tools.withheld; // 'wrap-up' on a wrap-up call
  * ```
  */
-export function receiptAt(source: unknown, epoch: number): Receipt | undefined {
+export function receiptAt(source: unknown, epoch: number): StoredReceipt | undefined {
   const location = epochAt(source, epoch);
   return location === undefined ? undefined : readReceipt(location).receipt;
 }

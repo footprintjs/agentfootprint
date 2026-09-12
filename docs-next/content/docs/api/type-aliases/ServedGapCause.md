@@ -6,7 +6,7 @@ title: ServedGapCause
 
 > **ServedGapCause** = `"no-receipt-committed"` \| `"receipt-shape-rejected"`
 
-Defined in: [src/lib/time-travel/servedView.ts:217](https://github.com/footprintjs/agentfootprint/blob/main/src/lib/time-travel/servedView.ts#L217)
+Defined in: [src/lib/time-travel/servedView.ts:222](https://github.com/footprintjs/agentfootprint/blob/main/src/lib/time-travel/servedView.ts#L222)
 
 WHAT STOOD IN THE WAY, as far as the record shows — computed at the read that
 failed, so it is a value and not a sentence.

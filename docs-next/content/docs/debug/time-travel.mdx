@@ -395,6 +395,36 @@ with both.
    even "3 skills withheld" — would restate a permission decision one layer down
    where nobody is checking.
 
+### The vintage law: a reader reads the receipt it is handed
+
+**A missing container is a fact about the vintage, never a throw.** A recording
+is older than the reader that opens it. `Receipt` is what a mint writes, and a
+mint writes every container it knows — but what a mint knows has grown (`cache`
+came with the receipt in 9.88.0; `cache.strategy` in 9.93.0), and a receipt you
+already hold was written by the release that wrote it. So `receiptAt` hands back
+a **`StoredReceipt`**: the same shape with the containers the narrowing does not
+check declared optional, returned *as stored* — nothing repaired, no `cache: {}`
+fabricated, the record never written to. Absence reads as *cannot say*:
+`servedAt` raises `cache-transform` on a receipt with no `cache.strategy` exactly
+as on one with no `cache` and on no receipt at all; only a receipt that *says*
+`null` lifts it. The basis is the one container every vintage carries, so every
+hash row a receipt has still verifies.
+
+Why it is a law: 9.93.0 read `receipt.cache.strategy` past that narrowing, and
+every stored receipt with a basis and no `cache` made `servedAt` throw where
+9.92 built a view — found by the lens the day after, on a recording it already
+held. A Lens may omit, never deny; a reader never throws on a stored recording.
+
+```ts
+import { receiptAt, servedAt, type StoredReceipt } from 'agentfootprint';
+
+// a recording minted by 9.92, opened by this release
+const receipt: StoredReceipt = receiptAt(olderRecording, 1)!;
+receipt.cache?.strategy;                              // undefined — the mint predates the key; not null, not repaired
+receipt.basis.runId;                                  // the one container every vintage carries
+servedAt(olderRecording, 1)!.gaps.map((g) => g.gap);  // ['cache-transform', 'provider-defaults'] — it cannot say, and says so
+```
+
 <Callout type="warn" title="Gaps: what the view cannot prove, said out loud">
 A rebuild that quietly omits a piece looks exactly like a rebuild that proved
 the piece was absent. `servedAt(k).gaps` keeps the two apart, and every entry

@@ -373,7 +373,8 @@ export interface Receipt {
      * request: where this is not `null`, or where no receipt can say.
      *
      * A receipt minted before 9.93.0 has no key here; a reader treats that as
-     * "cannot say", never as `null`.
+     * "cannot say", never as `null` — {@link StoredReceipt} is the shape that
+     * says so, and the one every reader is handed.
      */
     readonly strategy: string | null;
   };
@@ -401,6 +402,40 @@ export interface Receipt {
     readonly provider: string;
   };
 }
+
+/**
+ * A receipt as a READER meets it — what `receiptAt` hands back, and the shape
+ * every rebuild reads through (9.94.1).
+ *
+ * {@link Receipt} is what a MINT writes, and a mint writes every container it
+ * knows. But a recording is older than the reader that opens it: what a
+ * reader is handed is what the MINTING release knew to write, and that has
+ * grown — `cache` came with the receipt in 9.88.0 and gained `strategy` in
+ * 9.93.0; `omittedForAttention` has always been written only when something
+ * was dropped. The narrowing that admits a stored value (`servedView.ts` ·
+ * `readReceipt`) checks the basis and nothing past it, so this type says what
+ * that check leaves open, and the compiler — not a throw on an older
+ * recording — is what meets a reader that forgets.
+ *
+ * THE VINTAGE LAW: a reader reads the receipt it is handed; a missing
+ * container is a fact about the vintage, never a throw. Absence reads as
+ * "cannot say" — `servedAt` raises `cache-transform` on a receipt with no
+ * `cache.strategy` exactly as it does with no receipt at all — never as
+ * `null`, and never as a fabricated `cache: {}`. The record is handed back as
+ * it was stored.
+ *
+ * @example a recording minted by 9.92, read by this release
+ * ```ts
+ * const receipt = receiptAt(olderRecording, 1)!;
+ * receipt.cache?.strategy;                              // undefined — the mint predates the key
+ * servedAt(olderRecording, 1)!.gaps.map((g) => g.gap);  // includes 'cache-transform': it cannot say
+ * ```
+ */
+export type StoredReceipt = Omit<Receipt, 'cache'> & {
+  readonly cache?: Omit<Receipt['cache'], 'strategy'> & {
+    readonly strategy?: Receipt['cache']['strategy'];
+  };
+};
 
 /**
  * The receipt's hash: run-salted SHA-256, first {@link RECEIPT_HASH_CHARS} hex

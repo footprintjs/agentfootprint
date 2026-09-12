@@ -7,6 +7,55 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [9.94.1] - 2026-09-11
+
+### Fixed
+
+- **`servedAt` threw on every recording minted before 9.93.0.** 9.93.0 added
+  `Receipt.cache.strategy` and had the served view read it off the receipt —
+  `receipt.cache.strategy` — PAST the narrowing that admits a stored receipt
+  (`servedView.ts` · `readReceipt`), which checks `basis.epoch` and nothing
+  else. A stored receipt with a `basis` and no `cache` container therefore
+  made `servedAt(snapshot, k)` throw `Cannot read properties of undefined
+  (reading 'strategy')` where 9.92 built a view. WHY it matters: a recording is
+  older than the reader that opens it, and every recording a consumer already
+  held was minted by the release that minted it — the lens found this the day
+  after 9.93.0 shipped, on a recording it already had. That breaks the family's
+  law twice over: a Lens may omit, never deny, and a reader never throws on a
+  stored recording — it names what it could not read.
+  FIX at the root, one owner: the narrowing now says what it admits. It hands
+  back a **`StoredReceipt`** (new, exported) — `Receipt` with the containers
+  the check does not verify declared optional (`cache?`, and `strategy?`
+  within it) — and `receiptAt` answers that type, so the compiler holds every
+  reader to it; `viewOf` reads the strategy through it (`receipt?.cache?.
+  strategy !== null`). A receipt with no `cache` yields a view, its
+  `cache-transform` gap IS raised (the 9.93 rule: absence still raises; only a
+  receipt SAYING `null` lifts it), and its `basis` and every hash row it
+  carries still verify. Nothing is repaired: no `cache: {}` is fabricated and
+  the record is never written to — `receiptAt` returns the stored value
+  byte-for-byte. Every other 9.93/9.94 read of a receipt sub-key
+  (`cache.transform`, `cache.transformHash`, `cache.markersApplied`,
+  `omittedForAttention`) sits behind the same narrowing and the same type; no
+  second reader existed in the library. `Receipt` itself is unchanged — it is
+  the MINTED shape and a mint still writes every container.
+  THE VINTAGE LAW, now in `src/lib/time-travel/README.md`: *a reader reads
+  the receipt it is handed; a missing container is a fact about the vintage,
+  never a throw.* `test/lib/time-travel/receipt-vintage.test.ts` ages real
+  recordings three ways — no `cache` (the shape the lens hit), `cache` without
+  `strategy` (the 9.88.0–9.92.1 mint, byte for byte), `strategy: null` (the
+  9.93.0 mint on a chart with no strategy) — and requires a view, the gap, the
+  hash law, `receiptAt` as stored, and the batch reader on each; the gap
+  catalogue walk, the gap sentences, the receipt conformance suite and the
+  fifteen byte-identity fixtures are unchanged and green. Type-visible change:
+  `receiptAt(...)` now returns `StoredReceipt | undefined`; a caller that read
+  `receiptAt(s, k)!.cache.transform` unguarded must guard the container — the
+  compiler now says on the page what the runtime said with a throw.
+  ```ts
+  const receipt = receiptAt(olderRecording, 1)!;   // minted by 9.92
+  receipt.cache?.strategy;                          // undefined — not null, not repaired
+  servedAt(olderRecording, 1)!.gaps.map((g) => g.gap); // ['cache-transform', 'provider-defaults']
+  ```
+
 ## [9.94.0] - 2026-09-11
 
 **An optional family is loaded when its option is enabled, never before.** What
