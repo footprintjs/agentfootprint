@@ -17,7 +17,11 @@ total=0
 for f in examples/*/*.ts; do
   total=$((total + 1))
   echo "=== $f ==="
-  if ! npx --yes tsx "$f" >/dev/null 2>&1; then
+  # stdin from /dev/null: the sweep is a GATE, never a conversation. An example
+  # that asks a person (34-checkin-coworker prompts when stdin is a TTY) must
+  # take its non-interactive branch here — from a real terminal it otherwise
+  # waited on an invisible prompt, with stdout already in /dev/null (9.94.2).
+  if ! npx --yes tsx "$f" >/dev/null 2>&1 </dev/null; then
     echo "  ✗ FAILED"
     fail=$((fail + 1))
   else
