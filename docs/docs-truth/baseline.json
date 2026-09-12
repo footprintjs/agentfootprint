@@ -2,31 +2,31 @@
   "$schema": "docs-truth baseline v1",
   "note": "Recorded state of the docs-vs-code gap. CI fails only when this gets WORSE. Fixed a gap? Run `npm run docs:truth:baseline` to re-record and regenerate docs/DOCS_TRUTH_REPORT.md. The \"docs-promise-nothing\" class is NEVER baselined — it must always be zero.",
   "documentedMeans": "the symbol name appears in prose (outside any fenced code block) on a hand-written page under docs-next/content/docs. The two generated TypeDoc trees (docs-next/content/docs/api, docs/api-reference) are excluded — they are generated from source, so counting them would mark everything documented.",
-  "recordedAt": "2026-09-03",
+  "recordedAt": "2026-09-12",
   "surface": {
     "subpaths": 15,
-    "declaredSymbols": 2075,
-    "declaredEvents": 109,
-    "eventSource": "src/events/registry.ts:768"
+    "declaredSymbols": 2115,
+    "declaredEvents": 111,
+    "eventSource": "src/events/registry.ts:780"
   },
   "counts": {
     "symbols": {
       "docs-promise-nothing": 0,
-      "documented-never-exercised": 1112,
-      "exercised-undocumented": 34,
-      "undocumented-unexercised": 599,
+      "documented-never-exercised": 1136,
+      "exercised-undocumented": 32,
+      "undocumented-unexercised": 594,
       "site-code-sample-only": 12,
-      "written-but-not-published": 113,
-      "ok": 205
+      "written-but-not-published": 117,
+      "ok": 224
     },
     "events": {
       "docs-promise-nothing": 0,
-      "documented-never-exercised": 16,
+      "documented-never-exercised": 10,
       "exercised-undocumented": 10,
       "undocumented-unexercised": 13,
       "site-code-sample-only": 5,
       "written-but-not-published": 7,
-      "ok": 58
+      "ok": 66
     },
     "phantoms": 0,
     "unregisteredEvents": 0,
@@ -34,10 +34,10 @@
     "docTextViolations": 0
   },
   "exercisedEvidence": {
-    "recordedAt": "2026-08-20",
-    "examplesRun": 156,
-    "examplesPassed": 156,
-    "eventTypesObserved": 78
+    "recordedAt": "2026-09-11",
+    "examplesRun": 163,
+    "examplesPassed": 163,
+    "eventTypesObserved": 86
   },
   "undocumentedSymbols": [
     "ALL_EVENT_TYPES",
@@ -331,7 +331,6 @@
     "LLMFactExtractorConfig",
     "LLMLiveState",
     "LLMProviderName",
-    "LLMToolSchema",
     "LatencyMs",
     "LeanDomainEvent",
     "LedgerJSON",
@@ -394,7 +393,6 @@
     "MergeOutcomesFn",
     "MergeWithLLMOptions",
     "MessageApiChartDeps",
-    "Milestone",
     "MilestoneKind",
     "MissingContextResult",
     "MockEmbedderOptions",
@@ -739,7 +737,6 @@
     "memoryInjectionKey",
     "memoryRecorder",
     "menuOutstanding",
-    "milestoneFor",
     "minimalEvidenceAssembler",
     "mockAnthropicRaw",
     "mockOpenAIRaw",
