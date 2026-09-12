@@ -37,6 +37,12 @@ footprintjs the range admits (`^9.21.1`).
   it pins is the gate, not the substrate. Pinned:
   `test/cache/CacheGateDecider.test.ts` ("a `null` slot is no skill too").
 
+### Changed — the suite runs on the footprintjs consumers get
+
+- The dev pin moves to footprintjs `^9.24.0` (the lockfile had held 9.21.1
+  since 9.85; the peer range stays `^9.21.1`, and the two fixes above make
+  this library correct across it). 10,541 tests green on 9.24.0.
+
 ### Tests — recorded-not-built entry 10, the quantifier half, for its three named clauses
 
 - `gap-sentences.test.ts`: `no-fold-base`'s "reads as empty rather than as
