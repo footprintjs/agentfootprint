@@ -7,6 +7,45 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- **The docs site now runs the lens it documents, on ONE footprintjs.** Docs
+  only — nothing under `src/` moved. `docs-next/package.json` had pinned
+  `agentfootprint-lens ^0.31.1`, `footprint-explainable-ui ^0.28.0` and
+  `footprintjs ^9.10.0` since the 9.x door renames — twenty lens releases
+  behind — so the site's live demos had never shown the Served tab, the
+  Served graph, Bookmarks or the tag picker (lens 0.47–0.52), and every demo
+  bundle carried TWO footprintjs engines: the root's 9.21.1 (the library's
+  peer, reached through `agentfootprint: file:..`) beside docs-next's own
+  9.10.0, because two node_modules directories are two module paths whatever
+  the two versions say. Two engines is not only bytes: a trace the library
+  writes with one and the lens reads with the other shares no class, symbol
+  or WeakMap. Pins now: lens `^0.52.2`, explainable-ui `^0.38.0` (the lens's
+  peer range wants `>=0.28.0 <1.0.0`; ≥0.34 lights the replay chart),
+  footprintjs `^9.21.1` — the root's own range. Matching ranges cannot merge
+  two directories, and a `file:` link to the root's copy is refused by npm
+  (it runs the published package's `prepare` script), so the one-engine rule
+  is `next.config.mjs` · `footprintjsAliases`: every browser request for
+  `footprintjs` or one of its doors is pointed at the root's copy, the doors
+  read from the package's own `exports`. No demo prop moved across
+  0.31→0.52; the demos typecheck and run unchanged, and the Lens demo now
+  shows the rail (What happened · Served · Bookmarks), with every receipt
+  reading Verified — the one-engine identity proof in itself. Measured, same
+  build, three ways: 382.4 KB gzip on the old Lens with two engines; 514.0 KB
+  on the current Lens as first pinned — the dedupe itself was −3.8 KB and the
+  rest was two LENS defects the measurement exposed (no `sideEffects` flag,
+  so a page mounting one component carried the whole Lens; and a bug-report
+  button that imported the entire `agentfootprint/observe` door as a
+  namespace object); agentfootprint-lens 0.52.2 fixed both the same day
+  (audited flag, door opened on click), and the site re-measured on it at
+  413.8 KB across 15 assets, one engine. So the whole Served tab, Served
+  graph, bookmarks and tag picker the site now shows cost 31 KB over the old
+  baseline. The deferred-demo ceiling is set at 422 KB (~2% over) with the
+  three-way story beside it. Also fixed: the webpack stats
+  the module-breakdown tool reads (`DOCS_WEBPACK_STATS=1`) omitted every
+  cached module, so a second build in a row reported 0 modules —
+  `cachedModules: true`.
+
 ## [9.94.1] - 2026-09-11
 
 ### Fixed

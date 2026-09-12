@@ -252,7 +252,55 @@ const OUTPUT_LIMITS = { bytes: 672_000_000, files: 6_990, duplicateRscBytes: 0 }
 // per-module answer is `DOCS_WEBPACK_STATS=1 EXPORT=true npm run build` then
 // `node scripts/demo-chunk-modules.mjs`. Ceiling ~2% over the measurement, as
 // every entry above.
-const DEMO_ASYNC_GZIP_LIMIT = 390_000;
+//
+// Raised after 9.94.1 — the lens catch-up — and this is NOT the law above
+// breaking: no library family walked onto the default graph. What moved is the
+// pins in docs-next/package.json, which had sat at agentfootprint-lens ^0.31.1
+// / footprint-explainable-ui ^0.28.0 / footprintjs ^9.10.0 since the 9.x door
+// renames, twenty lens releases behind. The consequence was worse than bytes:
+// the site's own demos had never shown the Served tab, the Served graph,
+// Bookmarks or the tag picker (lens 0.47–0.52) — the site documented a lens it
+// did not run — and every demo bundle carried TWO footprintjs engines, the
+// root's 9.21.1 (the library's peer, through `agentfootprint: file:..`) and
+// docs-next's own 9.10.0, because two node_modules directories are two module
+// paths whatever the two versions say. Measured on this commit, same build,
+// three ways (`DOCS_WEBPACK_STATS=1 EXPORT=true npm run build`, then
+// `node scripts/demo-chunk-modules.mjs`, split by footprintjs path):
+//   old pins                        382.4 KB  15 assets  fp 9.10.0 (76 mod) + 9.21.1 (76 mod)
+//   new pins, two engines           517.8 KB  18 assets  fp 9.23.1 (18 mod) + 9.21.1 (88 mod)
+//   new pins, ONE engine (shipped)  514.0 KB  18 assets  fp 9.21.1 (94 mod)
+// The one-engine rule lives in next.config.mjs (`footprintjsAliases`: every
+// browser request for footprintjs or one of its doors is pointed at the root's
+// copy, doors read from the package's own `exports`). Its byte saving is 3.8 KB
+// — 9.23.1 tree-shakes to 18 modules where 9.10.0 brought all 76 — its value is
+// that a trace the library writes and the lens reads share one class, one
+// symbol, one WeakMap. So +131.6 KB is the lens itself, 0.31.1 -> 0.52.1, and
+// TWO lens-side defects make it that large for a demo that mounts no <Lens>:
+//   1. agentfootprint-lens declares no `sideEffects`, and `SkillGraphFlow` is
+//      exported ONLY from its root barrel — so this demo's one import keeps
+//      every chunk of the barrel: Lens, Served, Bookmarks, time-travel.
+//   2. `BugReportButton.tsx` does `import * as afObserve from
+//      'agentfootprint/observe'` and hands the NAMESPACE OBJECT to a reader —
+//      webpack must keep every export of `/observe`, which is how the trace
+//      toolpack (155 KB pre-minify, the family the paragraph above moved off
+//      the default graph), context-bisect (178 KB), af time-travel (109 KB)
+//      and bug-report are back on this chunk: af's share went 1.20 MB -> 3.72 MB
+//      pre-minify, all of it reached through the lens, none through the demo.
+// Both are fixed in the lens, not here, and the next move of this number
+// should be that fix DOWN, not another raise: a `sideEffects` flag (or a door
+// that exports `SkillGraphFlow` alone) and named imports from `/observe`.
+// Ceiling ~2% over the 514.0 KB measurement, as every entry above.
+//
+// CORRECTED the same day, before this ever shipped: the 514.0 KB above was the
+// current Lens with NO sideEffects flag and a bug-report button that imported
+// the whole /observe door. agentfootprint-lens 0.52.2 declared the flag (audited
+// across all 196 modules, pinned by a packaging test) and opens that door on
+// click. Re-measured on 0.52.2: 413.8 KB gzip across 15 async assets, ONE
+// footprintjs — i.e. 31 KB ABOVE the 382.4 KB two-engine/old-Lens baseline for
+// the whole Served tab, Served graph, bookmarks and tag picker the site now
+// actually shows. Set ~2% over that. The three-way story: 382.4 (old Lens, two
+// engines) → 514.0 (current Lens, no flag) → 413.8 (current Lens, flagged).
+const DEMO_ASYNC_GZIP_LIMIT = 422_000;
 
 function formatBytes(bytes) {
   if (bytes < 1_000) return `${bytes} B`;
