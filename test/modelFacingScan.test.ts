@@ -259,14 +259,21 @@ const LEDGER: Readonly<Record<string, readonly Entry[]>> = {
   ],
   'src/core/agent/evidence/gate.ts': [
     {
-      kind: 'unrepaired',
+      kind: 'not-model-facing',
       count: 1,
-      why: 'the evidence-check correction frame — a library-authored user turn that stays in `history`, reports what `this run` read, and tells the model to call the tool that provides a value',
+      why: 'the legacy correction helper retained for compatibility; the Agent no longer calls it, using request-scoped recovery.ts instead',
     },
     {
       kind: 'not-model-facing',
       count: 4,
       why: 'the posture-name error thrown at build time, and the refusal/warning sentence handed to the CALLER (it names `posture: assist` and the `shapes` option — nobody but the developer can act on it)',
+    },
+  ],
+  'src/core/agent/evidence/recovery.ts': [
+    {
+      kind: 'ephemeral',
+      count: 1,
+      why: 'one internal evidence-recovery system instruction, composed for the next attempt and never inserted into conversation history or trusted evidence',
     },
   ],
   'src/core/agent/outputEnforcement.ts': [
@@ -1040,13 +1047,15 @@ describe('every model-facing-shaped literal in src/ is accounted for', () => {
         // yet' left lazyToolpack.ts for traceToolNames.ts so the delegate tool
         // can serve it without loading the pack. Same total; one more file and
         // one more unrepaired entry, because the ledger is per file.
-        files: 92,
-        total: 178,
+        // 9.96.0: the legacy correction no longer reaches the model. Its
+        // replacement is one explicitly request-scoped system instruction.
+        files: 93,
+        total: 179,
         registry: 8,
-        ephemeral: 18,
-        unrepaired: 34,
-        notModelFacing: 118,
-        unrepairedEntries: 14,
+        ephemeral: 19,
+        unrepaired: 33,
+        notModelFacing: 119,
+        unrepairedEntries: 13,
       });
       // And the ledger's own total is the number of literals the scan flagged —
       // the two halves of the same census, which is what makes the bucket a work

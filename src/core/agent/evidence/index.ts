@@ -12,6 +12,8 @@ export { EVIDENCE_CHECK_FRAME_PREFIX } from './gate.js';
 export type {
   EvidencePosture,
   EvidenceShape,
+  EvidenceRecoveryContext,
+  EvidenceRecoveryInstruction,
   EvidenceVerdict,
   NamesAndNumbersOptions,
   UnsupportedValue,

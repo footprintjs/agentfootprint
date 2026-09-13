@@ -109,6 +109,7 @@ footprintjs decision-evidence snapshots so cross-run follow-ups
 | 03 | [features/03-permissions.ts](features/03-permissions.ts) | `permissionChecker` gating tool calls |
 | 04 | [features/04-observability.ts](features/04-observability.ts) | `.enable.liveStatus()` + `.enable.observability()` |
 | 05 | [features/05-events.ts](features/05-events.ts) | Typed `.on()` listeners, wildcards, `runner.emit()` |
+| 69 | [features/69-evidence-repair.ts](features/69-evidence-repair.ts) | Evidence repair guidance that asks for missing context; mock only |
 
 ## The closed taxonomy
 

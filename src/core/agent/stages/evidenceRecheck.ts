@@ -12,12 +12,9 @@
  * actually produce the value, because it is a real turn and the tools are
  * still on the wire.
  *
- * What it appends is the conversation as it really went: the answer that
- * stated the values as the assistant turn, then a `role: 'user'` message
- * naming them and saying what would satisfy the check. **At most once per
- * turn** (`evidenceRevisionSpent`) — a model that cannot ground a value on
- * its second try will not ground it on its fifth, and the retry storm that
- * would follow is the exact failure this library exists to remove.
+ * Recovery is one request-scoped system instruction. The rejected draft stays
+ * on the actual call record and in the quoted recovery carrier, never as a
+ * fake assistant/user conversation. At most one revision per turn.
  *
  * Pure function apart from its resolved config — no Agent class state.
  */
@@ -25,7 +22,8 @@
 import type { TypedScope } from 'footprintjs';
 import type { LLMMessage, LLMToolSchema } from '../../../adapters/types.js';
 import { typedEmit } from '../../../recorders/core/typedEmit.js';
-import { buildEvidenceCorrection, MAX_REPORTED_VALUES } from '../evidence/gate.js';
+import { MAX_REPORTED_VALUES } from '../evidence/gate.js';
+import { buildEvidenceRecovery } from '../evidence/recovery.js';
 import type { ResolvedEvidenceGate, UnsupportedValue } from '../evidence/types.js';
 import { findStagedRefs } from '../stagedRefs.js';
 import type { AgentState } from '../types.js';
@@ -44,12 +42,6 @@ export interface EvidenceStagedRefsDeps {
   readonly staticToolNames: () => readonly string[];
 }
 
-// LENS · injected-turn · persistent-history
-// reads: the unsupported values ← scope.evidenceUnsupported, the carrier route.ts wrote onto scope.evidenceUnsupported (copied, not held)
-//        the callable set ← scope.dynamicToolSchemas — the PRE-withholding value, not the wire callLLM.ts · registeredToolSchemas builds
-// known gap: the correction frame is a role:'user' turn that stays in history and is on the record as
-// unrepaired in test/modelFacingScan.test.ts · `LEDGER`, under the key src/core/agent/evidence/gate.ts.
-// law: may omit, never deny; every clause anchored to the call it was composed on.
 /**
  * Build the recheck stage. The decider already found the values and wrote the
  * carrier immediately before routing here — this stage does the work of asking.
@@ -95,17 +87,18 @@ export function buildEvidenceRecheckStage(
               ).values(),
             ),
           );
-    const [answerTurn, correctionTurn] = buildEvidenceCorrection(flaggedAnswer, values, match);
-
-    // The conversation, as it really went. A plain local array — a TypedScope
-    // array read is a live proxy view, and both the commit and the event
-    // payload below must be detached plain data.
-    const newHistory: LLMMessage[] = [
-      ...(scope.history as readonly LLMMessage[]),
-      answerTurn,
-      correctionTurn,
-    ];
-    scope.history = newHistory;
+    scope.evidenceRecovery = buildEvidenceRecovery(
+      {
+        iteration,
+        originalRequest: scope.userMessage as string,
+        rejectedDraft: flaggedAnswer,
+        unsupported: values,
+      },
+      gate.recoveryInstruction,
+      match,
+    );
+    scope.evidenceRecoveryUsed = false;
+    const newHistory: LLMMessage[] = [...(scope.history as readonly LLMMessage[])];
 
     // The one-per-turn latch, spent BEFORE the loop turns: a second flagged
     // answer is recorded and (under `rails`) refused, never re-asked.

@@ -35,6 +35,7 @@ export type ContextSource =
   | 'skill'
   | 'memory'
   | 'instructions'
+  | 'evidence-recovery'
   | 'steering'
   | 'fact'
   | 'custom'

@@ -61,8 +61,17 @@ import {
 } from '../adapters/llm/contextWindow.js';
 import type { MemoryIdentity } from '../memory/identity/types.js';
 import type { FoldedSpan } from './agent/window/types.js';
+import { MAX_EVIDENCE_RECOVERY_CHARS } from './agent/evidence/recovery.js';
 
 // ─── Public types ────────────────────────────────────────────────────
+
+/** Internal repair state kept separately from the human conversation.
+ * Restored only when retrying the same failed request, never on a new turn. */
+export interface EvidenceRecoveryCheckpoint {
+  readonly revisionSpent: true;
+  /** Present only when the request carrying this instruction did not complete. */
+  readonly pending?: { readonly instruction: string };
+}
 
 /**
  * JSON-serializable checkpoint of an in-progress agent run. Persist
@@ -93,6 +102,13 @@ export interface AgentRunCheckpoint {
   readonly originalInput: { readonly message: string };
   /** Wall-clock when the checkpoint was captured. Diagnostic only. */
   readonly checkpointedAt: number;
+  /**
+   * The same request's bounded evidence repair. `resumeOnError` restores this
+   * budget and any unsent feedback; `run({ continueFrom })` adds a new human
+   * turn and deliberately starts a fresh repair budget. Not conversation text.
+   * Absent for checkpoints written before request-scoped recovery.
+   */
+  readonly evidenceRecovery?: EvidenceRecoveryCheckpoint;
   /**
    * Every span this conversation folded into a summary, oldest first — what
    * makes a compacted conversation still a provable one after the process
@@ -509,6 +525,7 @@ export function buildCheckpoint(
    * `continuity: 'conversation'`.
    */
   skillCursor?: string,
+  evidenceRecovery?: EvidenceRecoveryCheckpoint,
 ): AgentRunCheckpoint {
   return {
     version: 1,
@@ -522,6 +539,7 @@ export function buildCheckpoint(
     ...(owner?.identity !== undefined && { identity: owner.identity }),
     ...(owner?.agentId !== undefined && { agent: { id: owner.agentId } }),
     ...(skillCursor !== undefined && { skillCursor }),
+    ...(evidenceRecovery !== undefined && { evidenceRecovery }),
   };
 }
 
@@ -566,6 +584,29 @@ export function validateCheckpoint(value: unknown): AgentRunCheckpoint {
         `(got ${typeof c.skillCursor}). It is written by a graph with ` +
         `continuity: 'conversation' and names the node the stored turn ended on.`,
     );
+  }
+  if (c.evidenceRecovery !== undefined) {
+    const recovery = c.evidenceRecovery;
+    const pending = recovery?.pending;
+    if (
+      recovery === null ||
+      typeof recovery !== 'object' ||
+      Array.isArray(recovery) ||
+      recovery.revisionSpent !== true ||
+      Object.keys(recovery).some((key) => key !== 'revisionSpent' && key !== 'pending') ||
+      (pending !== undefined &&
+        (pending === null ||
+          typeof pending !== 'object' ||
+          Array.isArray(pending) ||
+          Object.keys(pending).some((key) => key !== 'instruction') ||
+          typeof pending.instruction !== 'string' ||
+          pending.instruction.length === 0 ||
+          pending.instruction.length > MAX_EVIDENCE_RECOVERY_CHARS))
+    ) {
+      throw new TypeError(
+        '[resumeOnError] checkpoint evidenceRecovery must carry a spent revision and optional bounded instruction.',
+      );
+    }
   }
   // The conversation itself, message by message (8.18.0). `Array.isArray` was
   // the whole check, one field away from `originalInput.message` — which HAS

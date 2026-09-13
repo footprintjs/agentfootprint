@@ -23,6 +23,7 @@ import type { MemoryStore } from '../../../memory/store/index.js';
 import { resolveTurnNumber } from '../../../memory/turn/index.js';
 import { typedEmit } from '../../../recorders/core/typedEmit.js';
 import type { AgentInput, AgentState, RunConfig } from '../types.js';
+import type { EvidenceRecoveryCheckpoint } from '../../runCheckpoint.js';
 import type { FoldedSpan } from '../window/types.js';
 import type { MessageMiddleware } from '../middleware/types.js';
 import { runMessageChain } from '../middleware/runChain.js';
@@ -53,6 +54,8 @@ export interface SeedStageDeps {
    * `undefined` for the normal (non-resume) path.
    */
   readonly consumePendingResumeHistory: () => readonly LLMMessage[] | undefined;
+  /** Same-request recovery only. A new human turn never supplies this state. */
+  readonly consumePendingEvidenceRecovery?: () => EvidenceRecoveryCheckpoint | undefined;
   /**
    * The same read-AND-CLEAR accessor for the conversation's folded spans.
    *
@@ -455,7 +458,12 @@ function seedFrom(scope: TypedScope<AgentState>, message: string, deps: SeedStag
   // an `'assist'` agent (and every agent without the gate) commits exactly
   // the keys it always did.
   if (deps.hasEvidenceRevision === true) {
-    scope.evidenceRevisionSpent = false;
+    const recovery = deps.consumePendingEvidenceRecovery?.();
+    scope.evidenceRevisionSpent = recovery?.revisionSpent === true;
+    if (recovery?.pending !== undefined) {
+      scope.evidenceRecovery = { instruction: recovery.pending.instruction, iteration: 1 };
+      scope.evidenceRecoveryUsed = false;
+    }
   }
 
   // `.configure()` — resolved ONCE here (seed runs exactly once per run)

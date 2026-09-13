@@ -40,7 +40,7 @@ import type { MessagesDelivery } from './delivery/types.js';
 import type { MiddlewareDecision } from './middleware/types.js';
 import type { Receipt } from '../../lib/time-travel/receipt.js';
 import type { OutputAttempt } from './outputEnforcement.js';
-import type { UnsupportedValue } from './evidence/types.js';
+import type { PendingEvidenceRecovery, UnsupportedValue } from './evidence/types.js';
 import type { AgentRunCheckpoint } from '../runCheckpoint.js';
 
 // ─── PUBLIC types (consumer-facing) ────────────────────────────────
@@ -1277,6 +1277,11 @@ export interface AgentState {
    *  the EvidenceRecheck branch; reset at seed. Absent on an agent without
    *  the gate, and on one whose posture is `'assist'` (which never revises). */
   evidenceRevisionSpent?: boolean;
+  /** Internal recovery text for one iteration. Never a conversation turn. */
+  evidenceRecovery?: PendingEvidenceRecovery;
+  /** Set only after the recovery-bearing provider call succeeds. Kept apart
+   * from its carrier so the pre-call record reconstructs the exact request. */
+  evidenceRecoveryUsed?: boolean;
 
   // ── The out-of-budget wrap-up (`wrapUpAtMaxIterations`, 9.56.0) ─────────
   /**

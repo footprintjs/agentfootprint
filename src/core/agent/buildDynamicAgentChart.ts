@@ -95,6 +95,7 @@ function dynamicTurnSeed(scope: TypedScope<AgentState>): void {
     priorSkillHistory?: readonly (string | undefined)[];
     priorHistory?: readonly LLMMessage[];
     priorDeliveredMessageKeys?: readonly string[];
+    priorEvidenceRecoveryUsed?: boolean;
   }>();
 
   // Cross-iteration accumulators — seed working keys from prior totals
@@ -116,6 +117,9 @@ function dynamicTurnSeed(scope: TypedScope<AgentState>): void {
   // the same trip so a delivered message is not re-delivered next turn.
   scope.history = args.priorHistory ?? [];
   scope.deliveredMessageKeys = args.priorDeliveredMessageKeys ?? [];
+  if (args.priorEvidenceRecoveryUsed !== undefined) {
+    scope.evidenceRecoveryUsed = args.priorEvidenceRecoveryUsed;
+  }
 
   // Per-iteration working keys — fresh each turn (slots + cache + callLLM
   // populate these inside the subflow; nothing outside reads the
@@ -611,6 +615,11 @@ export function buildDynamicAgentChart(deps: AgentChartDeps): FlowChart {
         return {
           // Read-only working inputs (stages read, never write these).
           userMessage: p.userMessage,
+          ...(deps.evidenceRecheckStage !== undefined &&
+            p.evidenceRecovery !== undefined && {
+              evidenceRecovery: p.evidenceRecovery,
+              priorEvidenceRecoveryUsed: p.evidenceRecoveryUsed,
+            }),
           iteration: p.iteration,
           maxIterations: p.maxIterations,
           runIdentity: p.runIdentity,
@@ -729,6 +738,10 @@ export function buildDynamicAgentChart(deps: AgentChartDeps): FlowChart {
           // instead of a doubling concat.
           history: s.history,
           deliveredMessageKeys: s.deliveredMessageKeys,
+          ...(deps.evidenceRecheckStage !== undefined &&
+            s.evidenceRecoveryUsed !== undefined && {
+              evidenceRecoveryUsed: s.evidenceRecoveryUsed,
+            }),
           // The delivery record travels with them. It is the committed answer
           // to "why is my declaration not on the wire?", and its own docs send
           // the reader to `snapshot.sharedState` — which is the OUTER scope. A

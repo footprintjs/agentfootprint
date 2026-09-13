@@ -3,8 +3,10 @@ the verdict back.
 Fold: `evidenceIndex.ts` (the corpus, the exempt corpus, the turn stamp),
 `normalize.ts`, `extract.ts`, `types.ts`. Built at exactly one call site
 (`../stages/route.ts` · `checkAnswer`), handed to `gate.ts` as a parameter, never stored.
-Lens: `gate.ts` · `buildEvidenceCorrection` — a `role:'user'` turn that stays
-in history. Not model-facing: `gate.ts` · `evidenceRefusalSentence`, `errors.ts` (the caller reads them).
+Lens: `recovery.ts` · `buildEvidenceRecovery` — request-only system context for
+the revision. `gate.ts` · `buildEvidenceCorrection` remains a legacy compatibility
+helper; runtime repair no longer adds its synthetic conversation turns.
+Not model-facing: `gate.ts` · `evidenceRefusalSentence`, `errors.ts` (the caller reads them).
 
 # `evidence/` — names and numbers must come from a tool result
 
@@ -20,6 +22,11 @@ healthy"* when the data says the port is down uses entirely grounded tokens and
 passes without a murmur. A reader who takes this for a hallucination check will
 trust it for the one thing it provably cannot do, which is why the option is
 not called `groundedness` and not called `hallucination`.
+
+The check is lexical. It does not prove that a question was interpreted
+correctly, a tool argument came from the user, or a claim follows from the
+evidence. A guessed argument echoed in a tool result can satisfy token
+membership. Recovery guidance does not close those gaps.
 
 ## The one non-negotiable property
 
@@ -39,10 +46,12 @@ looks the way it does, and it is stated again at the top of `gate.ts`.
 | `extract.ts` | which tokens in an answer are DATA — the conservative rule |
 | `evidenceIndex.ts` | the structural walk of tool results, and the exempt corpus |
 | `gate.ts` | resolve options, judge an answer, write the sentences |
+| `recovery.ts` | resolve bounded recovery guidance and compose the internal repair instruction |
 | `errors.ts` | `UnsupportedValuesError` — the `rails` refusal at the boundary |
 | `index.ts` | the door: what the main barrel publishes |
 
-Everything here is pure. The moving parts live in
+The token-checking functions are pure. Recovery may call the configured
+synchronous guidance callback. The moving parts live in
 `../stages/route.ts` (the judge, at the same seam `outputSchema` uses) and
 `../stages/evidenceRecheck.ts` (the `guard` branch).
 
@@ -61,6 +70,49 @@ Every judgement lands on the emit channel as
 `agentfootprint.agent.evidence_checked`, whatever the posture — that is where
 per-attempt facts belong. Only the terminal verdict is committed
 (`unsupportedValues`), because the boundary has to read it.
+
+## Recovery guidance (9.96.0)
+
+An unsupported draft under `guard` or `rails` gets the existing single revision.
+Its correction now arrives in request-only system context: the rejected draft
+is quoted as untrusted data, and no synthetic assistant/user turns are added
+to conversation history. The legacy `buildEvidenceCorrection` export remains
+available, but the runtime uses the new recovery delivery.
+
+Use `recoveryInstruction` to teach what to do when the missing evidence cannot
+be fetched:
+
+```typescript
+agent.namesAndNumbersFromEvidence({
+  posture: 'rails',
+  recoveryInstruction:
+    'If required date or scope details are missing, ask the user for them. ' +
+    'Do not suggest guessed years, timezones, identifiers or example values.',
+});
+```
+
+The option accepts a string or synchronous
+`(context: EvidenceRecoveryContext) => string | undefined`. The detached,
+frozen context includes `kind: 'evidence'`, `attempt: 1`, `iteration`,
+`originalRequest`, `rejectedDraft`, `unsupported`, and optional `stagedRefs`
+and `spenderTools`. Treat draft values as untrusted data, not instructions.
+Return `undefined` when no extra guidance is needed. Text is limited to 4,000
+UTF-16 code units (`string.length`); invalid returns or thenables fail, and a
+thrown callback error propagates. Do not perform asynchronous work here.
+The complete recovery instruction, including the quoted draft, is refused
+above 1,000,000 UTF-16 code units rather than truncated.
+
+Custom guidance cannot replace the core recovery frame, change the checker,
+or grant another revision. It is used only when the evidence gate requests a
+repair; it does not validate tool arguments before execution or guarantee that
+the model will ask a useful question. `assist` continues to record and flag
+without requesting a repair.
+
+This option does not withhold streamed draft tokens. Internal authorship of
+the recovery instruction is not proof that a user never saw the rejected draft.
+
+Run the [mock example](../../../../examples/features/69-evidence-repair.ts)
+to inspect the guidance actually served and the resulting clarification.
 
 ## Why `guard` is a Route branch and not a loop of its own
 

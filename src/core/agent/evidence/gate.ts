@@ -59,6 +59,7 @@
  * mechanism, it costs microseconds, and it is the same on every run.
  */
 
+import { validateRecoveryInstruction } from './recovery.js';
 import type { StagedRefsMatch } from '../stagedRefs.js';
 import { stagedRefsTeachingClause } from '../stagedRefs.js';
 import type { EvidenceCorpus } from './evidenceIndex.js';
@@ -98,6 +99,7 @@ function clip(v: string): string {
  * at run time.
  */
 export function resolveEvidenceGate(opts: NamesAndNumbersOptions = {}): ResolvedEvidenceGate {
+  validateRecoveryInstruction(opts.recoveryInstruction);
   const posture = opts.posture ?? 'assist';
   if (!POSTURES.includes(posture)) {
     throw new Error(
@@ -167,7 +169,17 @@ export function resolveEvidenceGate(opts: NamesAndNumbersOptions = {}): Resolved
     }
   }
 
-  return { posture, shapes, exemptValues, exemptPatterns, minDigits, nudge };
+  return {
+    posture,
+    shapes,
+    exemptValues,
+    exemptPatterns,
+    minDigits,
+    nudge,
+    ...(opts.recoveryInstruction !== undefined && {
+      recoveryInstruction: opts.recoveryInstruction,
+    }),
+  };
 }
 
 /**

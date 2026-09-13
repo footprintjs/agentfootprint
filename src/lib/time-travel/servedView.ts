@@ -162,6 +162,7 @@ import {
   stripFrameworkFields,
 } from '../../core/agent/composeRequest.js';
 import { findStagedRefs, stagedRefsNudgeLine } from '../../core/agent/stagedRefs.js';
+import { evidenceRecoveryPiece } from '../../core/agent/evidence/recovery.js';
 import { epochAt, epochLocations, readAfterCall, readAtCall, readRunConstant } from './epochs.js';
 import type { EpochLocation } from './epochs.js';
 import {
@@ -962,7 +963,13 @@ function viewOf(location: EpochLocation): ServedView {
   // The pieces are committed; the joined string never is. Same function the
   // stage used, over the records as the stage read them.
   const injections = (readAtCall(location, 'systemPromptInjections') ?? []) as InjectionRecord[];
-  const pieces: ServedPiece[] = contributingPieces(injections).map((record) => ({
+  const recovery = evidenceRecoveryPiece(
+    readAtCall(location, 'evidenceRecovery') as Parameters<typeof evidenceRecoveryPiece>[0],
+    readAtCall(location, 'evidenceRecoveryUsed') as boolean | undefined,
+    readAtCall(location, 'iteration') as number,
+  );
+  const composedPieces = recovery === undefined ? injections : [...injections, recovery];
+  const pieces: ServedPiece[] = contributingPieces(composedPieces).map((record) => ({
     text: record.rawContent,
     slot: record.slot,
     source: record.source,
@@ -1079,7 +1086,7 @@ function viewOf(location: EpochLocation): ServedView {
         runId: receipt.basis.runId,
       },
     }),
-    system: { text: joinSystemPrompt(injections), pieces },
+    system: { text: joinSystemPrompt(composedPieces), pieces },
     messages: { asSent: detachedList(asSent), requestOnly },
     tools: {
       names: [...registered.map((t) => t.name), ...(forced !== undefined ? [forced] : [])],

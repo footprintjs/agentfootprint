@@ -14,7 +14,6 @@
 
 import { describe, it, expect } from 'vitest';
 import { Agent, defineTool, UnsupportedValuesError } from '../../../src/index.js';
-import { EVIDENCE_CHECK_FRAME_PREFIX } from '../../../src/index.js';
 import { mock } from '../../../src/llm-providers.js';
 import type { LLMMessage } from '../../../src/adapters/types.js';
 import { TOOL_RESULTS } from './fixtures/sanEvidence.js';
@@ -144,7 +143,7 @@ describe('functional: guard corrects in the loop', () => {
     expect(agent.unsupportedValues()).toBeUndefined();
   });
 
-  it('puts the failed answer AND the correction into the conversation', async () => {
+  it('keeps the rejected draft and internal correction out of the conversation', async () => {
     const { agent } = buildAgent(
       [callFlogi, { content: FABRICATED_ANSWER }, { content: GROUNDED_ANSWER }],
       { posture: 'guard' },
@@ -152,29 +151,15 @@ describe('functional: guard corrects in the loop', () => {
     await agent.run({ message: 'which array port is affected?' });
 
     const history = historyOf(agent);
-    const correction = history.find(
-      (m) => m.role === 'user' && m.content.startsWith(EVIDENCE_CHECK_FRAME_PREFIX),
-    );
-    expect(correction).toBeDefined();
-    // Nothing else writes an answering turn into history, so a correction sent
-    // alone would arrive at a model that cannot see what it said.
-    const answerTurn = history.find(
-      (m) => m.role === 'assistant' && m.content === FABRICATED_ANSWER,
-    );
-    expect(answerTurn).toBeDefined();
-    expect(correction!.content).toContain('0xef0101');
-    expect(correction!.content).toContain('shpmaxdlvap001-fa0');
-    // It teaches rather than scolds: the honest "not collected" answer is
-    // named as acceptable.
-    expect(correction!.content).toContain('not collected');
+    expect(history.filter((m) => m.role === 'user').map((m) => m.content)).toEqual([
+      'which array port is affected?',
+    ]);
+    expect(history.some((m) => m.content === FABRICATED_ANSWER)).toBe(false);
   });
 
   it('does NOT exempt its own correction — the values stay flagged on pass two', async () => {
-    // The correction is a `role: 'user'` turn that quotes the flagged values
-    // back to the model, and user-supplied values are exempt. Index it and the
-    // gate exempts exactly what it just challenged: pass two comes back clean,
-    // `guard` congratulates a repeated fabrication and `rails` never refuses.
-    // This was a real bug on the first end-to-end run; see evidence/frames.ts.
+    // Internal feedback quotes the flagged values but must never become a
+    // source of evidence or an exemption on the next check.
     const { agent, checks } = buildAgent(
       [callFlogi, { content: FABRICATED_ANSWER }, { content: FABRICATED_ANSWER }],
       { posture: 'guard' },

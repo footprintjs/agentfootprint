@@ -596,6 +596,8 @@ export {
   EVIDENCE_CHECK_FRAME_PREFIX,
   type EvidencePosture,
   type EvidenceShape,
+  type EvidenceRecoveryContext,
+  type EvidenceRecoveryInstruction,
   type NamesAndNumbersOptions,
   type UnsupportedValue,
 } from './core/agent/evidence/index.js';

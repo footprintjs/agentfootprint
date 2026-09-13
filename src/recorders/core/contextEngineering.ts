@@ -69,6 +69,7 @@ export const ENGINEERED_SOURCES: ReadonlySet<ContextSource> = new Set<ContextSou
   'skill',
   'memory',
   'instructions',
+  'evidence-recovery',
   'steering',
   'fact',
   'custom',

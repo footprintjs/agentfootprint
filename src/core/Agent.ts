@@ -194,6 +194,7 @@ import {
   RunCheckpointError,
   validateCheckpoint,
   type AgentRunCheckpoint,
+  type EvidenceRecoveryCheckpoint,
   type RunCheckpointTracker,
 } from './runCheckpoint.js';
 import { NoConversationError, PendingQuestionError, RunInFlightError } from './conversation.js';
@@ -631,6 +632,8 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
    *  function restores `scope.history` from this instead of starting
    *  fresh. Cleared on first read so subsequent runs start clean. */
   private pendingResumeHistory?: readonly LLMMessage[];
+  /** Retried request's repair state; never inherited by a new human turn. */
+  private pendingEvidenceRecovery?: EvidenceRecoveryCheckpoint;
 
   /** Its sibling for the folded spans. A restored conversation that dropped
    *  them would carry summaries nobody could unpack — the evidence would be
@@ -1666,6 +1669,7 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
           // …and the same graph cursor (SG-C), from the same snapshot reader —
           // one reader, two carriers, so neither can lose what the other keeps.
           this.continuityCursorOf(this.getLastSnapshot()?.sharedState as Partial<AgentState>),
+          this.evidenceRecoveryOf(this.getLastSnapshot()?.sharedState as Partial<AgentState>),
         );
         throw new RunCheckpointError(cause, checkpoint);
       }
@@ -1687,6 +1691,7 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
       this.pendingResumeHistory = undefined;
       this.pendingResumeFolded = undefined;
       this.pendingResumeSkillCursor = undefined;
+      this.pendingEvidenceRecovery = undefined;
     }
   }
 
@@ -2090,6 +2095,7 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
     const folded = this.foldedSpansOf(state);
     const owner = this.conversationOwner();
     const skillCursor = this.continuityCursorOf(state);
+    const evidenceRecovery = this.evidenceRecoveryOf(state);
     return {
       version: 1,
       runId: this.currentRunContext.runId,
@@ -2108,6 +2114,20 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
       // `continuity: 'conversation'`, so every other checkpoint keeps its
       // exact byte shape.
       ...(skillCursor !== undefined && { skillCursor }),
+      ...(evidenceRecovery !== undefined && { evidenceRecovery }),
+    };
+  }
+
+  /** Both checkpoint doors keep the repair budget separately from conversation text. */
+  private evidenceRecoveryOf(state?: Partial<AgentState>): EvidenceRecoveryCheckpoint | undefined {
+    if (state?.evidenceRevisionSpent !== true) return undefined;
+    const pending = state.evidenceRecovery;
+    return {
+      revisionSpent: true,
+      ...(pending !== undefined &&
+        state.evidenceRecoveryUsed !== true && {
+          pending: { instruction: pending.instruction },
+        }),
     };
   }
 
@@ -2202,6 +2222,12 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
     // continuity graph and continued on a `'turn'` one is consumed and
     // ignored, exactly like a `folded` field on an agent that never folds.
     this.pendingResumeSkillCursor = cp.skillCursor;
+    // Same failed request retains its single repair budget. A new user turn
+    // receives neither the rejected draft nor a spent retry allowance.
+    this.pendingEvidenceRecovery =
+      appendMessage === undefined && cp.evidenceRecovery !== undefined
+        ? structuredClone(cp.evidenceRecovery)
+        : undefined;
   }
 
   /** One turn at a time — see `RunInFlightError`. @internal */
@@ -3406,6 +3432,14 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
         this.pendingResumeHistory = undefined;
         return h;
       },
+      ...(this.evidenceGate !== undefined &&
+        this.evidenceGate.posture !== 'assist' && {
+          consumePendingEvidenceRecovery: () => {
+            const recovery = this.pendingEvidenceRecovery;
+            this.pendingEvidenceRecovery = undefined;
+            return recovery;
+          },
+        }),
       consumePendingResumeFolded: () => {
         const f = this.pendingResumeFolded;
         this.pendingResumeFolded = undefined;
@@ -3762,6 +3796,10 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
     // callLLM extracted to ./agent/stages/callLLM.ts (v2.11.2). Same
     // late-binding pattern as seed for toolSchemas (computed below).
     const callLLM = buildCallLLMStage({
+      ...(this.evidenceGate !== undefined &&
+        this.evidenceGate.posture !== 'assist' && {
+          hasEvidenceRecovery: true,
+        }),
       ...(this.answerValidationConfig !== undefined && { suppressDraftTokens: true }),
       // The receipt's salt (9.88.0) — read per call, like seed's own accessor.
       getRunId: () => this.currentRunContext?.runId,

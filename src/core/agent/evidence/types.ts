@@ -51,6 +51,31 @@ export interface EvidenceShape {
   readonly match: RegExp;
 }
 
+/** Typed, detached context for the ONE internal evidence-recovery request.
+ * This is a token-grounding finding, not a semantic truth judgement. */
+export interface EvidenceRecoveryContext {
+  readonly kind: 'evidence';
+  readonly attempt: 1;
+  readonly iteration: number;
+  /** The authoritative input to this run, not an internally authored turn. */
+  readonly originalRequest: string;
+  readonly rejectedDraft: string;
+  readonly unsupported: readonly UnsupportedValue[];
+  readonly stagedRefs?: readonly { readonly ref: string; readonly kind: string }[];
+  readonly spenderTools?: readonly string[];
+}
+
+/** Additional recovery guidance. Synchronous; undefined adds no guidance. */
+export type EvidenceRecoveryInstruction =
+  | string
+  | ((context: EvidenceRecoveryContext) => string | undefined);
+
+/** The committed request-only carrier. @internal */
+export interface PendingEvidenceRecovery {
+  readonly instruction: string;
+  readonly iteration: number;
+}
+
 /** Options for `.namesAndNumbersFromEvidence()`. */
 export interface NamesAndNumbersOptions {
   /** Default `'assist'` — record and flag, change nothing. */
@@ -99,6 +124,12 @@ export interface NamesAndNumbersOptions {
    * byte-identical requests.
    */
   readonly nudge?: boolean;
+  /** Extra guidance after an evidence check requests revision. At most 4000
+   * UTF-16 code units; callbacks receive a frozen context and must return
+   * synchronously. Invalid output or a thrown callback fails the run.
+   * The library's internal framing and validation remain in force. The text
+   * is request-only and never becomes evidence, user history or an exemption. */
+  readonly recoveryInstruction?: EvidenceRecoveryInstruction;
 }
 
 /** One value in the answer that no tool result carried. */
@@ -129,6 +160,7 @@ export interface ResolvedEvidenceGate {
   readonly minDigits: number;
   /** The staged-refs nudge dial. `false` is today's bytes. */
   readonly nudge: boolean;
+  readonly recoveryInstruction?: EvidenceRecoveryInstruction;
 }
 
 /** The gate's verdict on one answer. */

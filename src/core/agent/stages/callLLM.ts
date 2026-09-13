@@ -39,6 +39,7 @@ import {
   type ExternalGround,
 } from '../../../integrity/unsupported-argument/check.js';
 import { toolNameOfMessage } from '../window/toolNames.js';
+import { evidenceRecoveryPiece } from '../evidence/recovery.js';
 import { joinSystemPrompt, stripFrameworkFields } from '../composeRequest.js';
 import { buildReceipt, receiptPieces, RECEIPT_KEY } from '../../../lib/time-travel/receipt.js';
 import type { EvictedTurnsHandle } from '../window/evictedTurns.js';
@@ -93,6 +94,8 @@ export interface CallLLMStageDeps {
   readonly maxTokens?: number;
   /** Answer validation owns committed delivery; keep all provider drafts off the public token channel. */
   readonly suppressDraftTokens?: boolean;
+  /** Read recovery state only on an agent whose evidence gate can revise. */
+  readonly hasEvidenceRecovery?: boolean;
   /** Optional pricing adapter for cost tracking. */
   readonly pricingTable?: PricingTable;
   /** Optional cumulative USD cap per run. */
@@ -354,7 +357,16 @@ export function buildCallLLMStage(
     // exported function rather than four lines here — a reader rebuilding what
     // the model was served has to apply the identical rule to the identical
     // records (`composeRequest.ts` · `joinSystemPrompt`).
-    const systemPrompt = joinSystemPrompt(systemPromptInjections);
+    const trustedSystemPrompt = joinSystemPrompt(systemPromptInjections);
+    const recoveryPiece =
+      deps.hasEvidenceRecovery === true
+        ? evidenceRecoveryPiece(scope.evidenceRecovery, scope.evidenceRecoveryUsed, iteration)
+        : undefined;
+    const systemPieces =
+      recoveryPiece === undefined
+        ? systemPromptInjections
+        : [...systemPromptInjections, recoveryPiece];
+    const systemPrompt = joinSystemPrompt(systemPieces);
 
     // Read the LLM message stream from `scope.history` directly. The
     // `messagesInjections` projection is for observability — it
@@ -516,7 +528,7 @@ export function buildCallLLMStage(
         model,
         provider: provider.name,
         systemText: systemPrompt,
-        systemPieces: receiptPieces(systemPromptInjections),
+        systemPieces: receiptPieces(systemPieces),
         messages,
         requestOnly,
         tools: activeToolSchemas,
@@ -763,6 +775,9 @@ export function buildCallLLMStage(
     } else {
       response = await singleProviderCall(llmRequest, {});
     }
+    // Preserve the pending carrier if the provider fails, so crash recovery
+    // retries the same instruction. The prior committed value proves delivery.
+    if (recoveryPiece !== undefined) scope.evidenceRecoveryUsed = true;
     const durationMs = Date.now() - startMs;
 
     scope.totalInputTokens = scope.totalInputTokens + response.usage.input;
@@ -867,7 +882,16 @@ export function buildCallLLMStage(
           })),
           {
             grounded: [
-              ...(llmRequest.systemPrompt === undefined ? [] : [llmRequest.systemPrompt]),
+              ...(recoveryPiece === undefined
+                ? llmRequest.systemPrompt === undefined
+                  ? []
+                  : [llmRequest.systemPrompt]
+                : // A cache strategy can rewrite the request. If it rewrote
+                // this mixed-trust system slot, its provenance is unknown;
+                // never credit either the rejected draft or an unsent base.
+                llmRequest.systemPrompt === systemPrompt
+                ? [trustedSystemPrompt]
+                : []),
               ...frameMessages.filter((m) => m.role !== 'assistant').map((m) => m.content),
             ],
             assistant: frameMessages.filter((m) => m.role === 'assistant').map((m) => m.content),

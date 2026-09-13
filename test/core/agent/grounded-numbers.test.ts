@@ -21,7 +21,6 @@ import {
   defineTool,
   inMemoryArtifacts,
   UnsupportedValuesError,
-  EVIDENCE_CHECK_FRAME_PREFIX,
 } from '../../../src/index.js';
 import type { LLMMessage, LLMRequest } from '../../../src/adapters/types.js';
 
@@ -247,7 +246,9 @@ describe('integration: revise teaches the compute route', () => {
   ];
 
   it('quotes the value, names the ref and the spender, and the second answer lands clean', async () => {
-    const { agent, of } = build(reviseScript, { gate: { posture: 'guard', nudge: true } });
+    const { agent, of, requests } = build(reviseScript, {
+      gate: { posture: 'guard', nudge: true },
+    });
     const out = await agent.run({ message: 'total capacity?' }, { sessionId: 'revise' });
 
     // Delivered: the SAME sentence, but the number is now read from a tool.
@@ -264,17 +265,13 @@ describe('integration: revise teaches the compute route', () => {
 
     // The correction itself: the 9.64.0 voice — quote the offending value,
     // state the fact, name the declared route.
-    const correction = historyOf(agent).find(
-      (m) => m.role === 'user' && m.content.startsWith(EVIDENCE_CHECK_FRAME_PREFIX),
-    );
+    const correction = requests[3]!.systemPrompt;
     expect(correction).toBeDefined();
-    expect(correction!.content).toContain('3672'); // the quoted value
-    expect(correction!.content).toContain('appear in NO tool result');
-    expect(correction!.content).toContain(CLAUSE_OPEN);
-    expect(correction!.content).toContain('(dataset/rows)');
-    expect(correction!.content).toContain('`compute`');
-    // The untrusted values still come last — after the authored frame.
-    expect(correction!.content.trim().endsWith('(number)')).toBe(true);
+    expect(correction).toContain('3672'); // the quoted value
+    expect(correction).toContain(CLAUSE_OPEN);
+    expect(correction).toContain('(dataset/rows)');
+    expect(correction).toContain('`compute`');
+    expect(JSON.stringify(historyOf(agent))).not.toContain(CLAUSE_OPEN);
   });
 
   it('still-ungrounded after the one revision: DELIVERED, both attempts on the record', async () => {
@@ -322,18 +319,16 @@ describe('integration: revise teaches the compute route', () => {
 
 describe('edge: the correction without staged refs', () => {
   it('omits the refs clause and keeps the standard frame — nothing dangles', async () => {
-    const { agent, of } = build(
+    const { agent, of, requests } = build(
       [callTool('t1', 'get_sizes'), answer(HEAD_MATH_ANSWER), answer(SAFE_ANSWER)],
       { gate: { posture: 'guard' }, placement: false },
     );
     await agent.run({ message: 'total?' }, { sessionId: 'no-refs-guard' });
 
-    const correction = historyOf(agent).find(
-      (m) => m.role === 'user' && m.content.startsWith(EVIDENCE_CHECK_FRAME_PREFIX),
-    );
+    const correction = requests[2]!.systemPrompt;
     expect(correction).toBeDefined();
-    expect(correction!.content).not.toContain(CLAUSE_OPEN);
-    expect(correction!.content).toContain('call the tool that provides it. If the data');
+    expect(correction).not.toContain(CLAUSE_OPEN);
+    expect(correction).toContain('3672');
 
     const asked = of('agentfootprint.agent.evidence_checked')[0]!;
     expect('stagedRefs' in asked).toBe(false);
@@ -341,17 +336,15 @@ describe('edge: the correction without staged refs', () => {
   });
 
   it('a guard agent with NO wants tool writes the exact same correction', async () => {
-    // The staged-refs deps are threaded only when a `wants` tool exists —
-    // this pins that an agent without one keeps the 9.35.0 bytes.
+    // No staged refs means the same request-only correction, whether a
+    // spender is registered or not.
     const run = async (tools: readonly (typeof getSizes)[]) => {
-      const { agent } = build(
+      const { agent, requests } = build(
         [callTool('t1', 'get_sizes'), answer(HEAD_MATH_ANSWER), answer(SAFE_ANSWER)],
         { gate: { posture: 'guard' }, tools, placement: false },
       );
       await agent.run({ message: 'total?' }, { sessionId: 'twin' });
-      return historyOf(agent).find(
-        (m) => m.role === 'user' && m.content.startsWith(EVIDENCE_CHECK_FRAME_PREFIX),
-      )!.content;
+      return requests[2]!.systemPrompt;
     };
     const withWantsTool = await run([getSizes, compute]);
     const withoutWantsTool = await run([getSizes]);

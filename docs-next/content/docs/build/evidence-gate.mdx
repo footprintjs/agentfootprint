@@ -130,7 +130,21 @@ replacing them, and `exempt` removes what you know is safe.
 
 A `NamesAndNumbersOptions` bag: `posture` (`EvidencePosture`), `shapes`
 (`EvidenceShape[]` — each a `name` plus a `match` pattern, anchored to a whole
-token), `exempt`, `minDigits`, and `nudge`.
+token), `exempt`, `minDigits`, `nudge`, and `recoveryInstruction`.
+
+Since 9.96.0, `recoveryInstruction` accepts the exported
+`EvidenceRecoveryInstruction` type: a string or synchronous callback returning
+a string or `undefined`. The callback receives an exported
+`EvidenceRecoveryContext`, a detached, frozen snapshot of the original request,
+rejected draft, unsupported values, iteration, and available staged refs and
+spender tools. Custom guidance is limited to 4,000 UTF-16 code units; invalid or
+asynchronous returns fail rather than being silently ignored. For example, ask
+the model to clarify missing dates or scope without suggesting invented values.
+The framework appends this guidance to its fixed recovery frame in the next
+request's system prompt, without adding synthetic conversation turns. The
+lexical checker and single-revision budget remain unchanged: this does not prove
+question interpretation or claim semantics, and does not suppress streamed draft
+tokens.
 
 ## The staged-refs nudge
 
