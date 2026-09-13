@@ -6,7 +6,7 @@ title: ContextInjectedListener
 
 > **ContextInjectedListener** = (`event`) => `void`
 
-Defined in: [src/recorders/core/contextEngineering.ts:116](https://github.com/footprintjs/agentfootprint/blob/main/src/recorders/core/contextEngineering.ts#L116)
+Defined in: src/recorders/core/contextEngineering.ts:117
 
 Listener signature for the wrapper helper.
 

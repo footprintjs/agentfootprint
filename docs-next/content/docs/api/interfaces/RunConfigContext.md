@@ -4,7 +4,7 @@ title: RunConfigContext
 
 # Interface: RunConfigContext
 
-Defined in: [src/core/agent/types.ts:943](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/types.ts#L943)
+Defined in: src/core/agent/types.ts:943
 
 What a `.configure(fn)` resolver is given.
 
@@ -14,7 +14,7 @@ What a `.configure(fn)` resolver is given.
 
 > `readonly` **defaults**: `object`
 
-Defined in: [src/core/agent/types.ts:951](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/types.ts#L951)
+Defined in: src/core/agent/types.ts:951
 
 What the agent was BUILT with, so a resolver can decide relative to it.
 
@@ -32,7 +32,7 @@ What the agent was BUILT with, so a resolver can decide relative to it.
 
 > `readonly` `optional` **identity?**: `MemoryIdentity`
 
-Defined in: [src/core/agent/types.ts:947](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/types.ts#L947)
+Defined in: src/core/agent/types.ts:947
 
 The memory identity passed to `run({ identity })`, when there was one.
 
@@ -42,7 +42,7 @@ The memory identity passed to `run({ identity })`, when there was one.
 
 > `readonly` **message**: `string`
 
-Defined in: [src/core/agent/types.ts:945](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/types.ts#L945)
+Defined in: src/core/agent/types.ts:945
 
 The message this run was started with.
 
@@ -52,6 +52,6 @@ The message this run was started with.
 
 > `readonly` **runId**: `string`
 
-Defined in: [src/core/agent/types.ts:949](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/types.ts#L949)
+Defined in: src/core/agent/types.ts:949
 
 This run's id — the same one that stamps every typed event's `meta.runId`.

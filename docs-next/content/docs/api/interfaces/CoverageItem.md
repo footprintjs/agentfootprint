@@ -4,7 +4,7 @@ title: CoverageItem
 
 # Interface: CoverageItem
 
-Defined in: [src/core/agent/coverage/types.ts:22](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/coverage/types.ts#L22)
+Defined in: src/core/agent/coverage/types.ts:22
 
 One piece of ground, and (optionally) why it is where it is.
 
@@ -19,7 +19,7 @@ because the library does not know which of them are real.
 
 > `readonly` **what**: `string`
 
-Defined in: [src/core/agent/coverage/types.ts:24](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/coverage/types.ts#L24)
+Defined in: src/core/agent/coverage/types.ts:24
 
 The source, window, filter or population. Non-empty.
 
@@ -29,7 +29,7 @@ The source, window, filter or population. Non-empty.
 
 > `readonly` `optional` **why?**: `string`
 
-Defined in: [src/core/agent/coverage/types.ts:31](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/coverage/types.ts#L31)
+Defined in: src/core/agent/coverage/types.ts:31
 
 Why it sits where it does. REQUIRED on `cannotCover` (a permanent blind
 spot is a claim about capability, and a claim with no reason cannot be

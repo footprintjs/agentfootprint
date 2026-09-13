@@ -4,7 +4,7 @@ title: AnswerCheck
 
 # Interface: AnswerCheck
 
-Defined in: [src/answer-validation/types.ts:6](https://github.com/footprintjs/agentfootprint/blob/main/src/answer-validation/types.ts#L6)
+Defined in: src/answer-validation/types.ts:6
 
 One named obligation. Only checked-pass/checked-fail count as checks run.
 
@@ -14,7 +14,7 @@ One named obligation. Only checked-pass/checked-fail count as checks run.
 
 > `readonly` **disposition**: `Disposition`
 
-Defined in: [src/answer-validation/types.ts:8](https://github.com/footprintjs/agentfootprint/blob/main/src/answer-validation/types.ts#L8)
+Defined in: src/answer-validation/types.ts:8
 
 ***
 
@@ -22,7 +22,7 @@ Defined in: [src/answer-validation/types.ts:8](https://github.com/footprintjs/ag
 
 > `readonly` `optional` **evidenceRefs?**: readonly `string`[]
 
-Defined in: [src/answer-validation/types.ts:13](https://github.com/footprintjs/agentfootprint/blob/main/src/answer-validation/types.ts#L13)
+Defined in: src/answer-validation/types.ts:13
 
 Must have resolved through this validation's artifact capability.
 
@@ -32,7 +32,7 @@ Must have resolved through this validation's artifact capability.
 
 > `readonly` **id**: `string`
 
-Defined in: [src/answer-validation/types.ts:7](https://github.com/footprintjs/agentfootprint/blob/main/src/answer-validation/types.ts#L7)
+Defined in: src/answer-validation/types.ts:7
 
 ***
 
@@ -40,7 +40,7 @@ Defined in: [src/answer-validation/types.ts:7](https://github.com/footprintjs/ag
 
 > `readonly` `optional` **path?**: `string`
 
-Defined in: [src/answer-validation/types.ts:11](https://github.com/footprintjs/agentfootprint/blob/main/src/answer-validation/types.ts#L11)
+Defined in: src/answer-validation/types.ts:11
 
 ***
 
@@ -48,6 +48,6 @@ Defined in: [src/answer-validation/types.ts:11](https://github.com/footprintjs/a
 
 > `readonly` `optional` **reason?**: `string`
 
-Defined in: [src/answer-validation/types.ts:10](https://github.com/footprintjs/agentfootprint/blob/main/src/answer-validation/types.ts#L10)
+Defined in: src/answer-validation/types.ts:10
 
 Short diagnostic data, never interpreted as an instruction.

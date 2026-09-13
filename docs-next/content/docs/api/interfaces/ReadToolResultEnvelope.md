@@ -4,7 +4,7 @@ title: ReadToolResultEnvelope
 
 # Interface: ReadToolResultEnvelope
 
-Defined in: [src/core/agent/toolEffects.ts:123](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/toolEffects.ts#L123)
+Defined in: src/core/agent/toolEffects.ts:123
 
 A recognized envelope, read: content unwrapped, VALID effects listed,
  malformed ones named (one teaching entry per bad effect).
@@ -15,7 +15,7 @@ A recognized envelope, read: content unwrapped, VALID effects listed,
 
 > `readonly` **content**: `unknown`
 
-Defined in: [src/core/agent/toolEffects.ts:124](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/toolEffects.ts#L124)
+Defined in: src/core/agent/toolEffects.ts:124
 
 ***
 
@@ -23,7 +23,7 @@ Defined in: [src/core/agent/toolEffects.ts:124](https://github.com/footprintjs/a
 
 > `readonly` **effects**: readonly [`ProposedEffect`](/docs/api/type-aliases/ProposedEffect)[]
 
-Defined in: [src/core/agent/toolEffects.ts:125](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/toolEffects.ts#L125)
+Defined in: src/core/agent/toolEffects.ts:125
 
 ***
 
@@ -31,7 +31,7 @@ Defined in: [src/core/agent/toolEffects.ts:125](https://github.com/footprintjs/a
 
 > `readonly` **malformed**: readonly `object`[]
 
-Defined in: [src/core/agent/toolEffects.ts:129](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/toolEffects.ts#L129)
+Defined in: src/core/agent/toolEffects.ts:129
 
 Effects that carried a known `kind` with malformed fields — refused
  loudly (recorded + a teaching sentence), never half-applied.
@@ -42,4 +42,4 @@ Effects that carried a known `kind` with malformed fields — refused
 
 > `readonly` `optional` **status?**: [`ToolResultStatus`](/docs/api/type-aliases/ToolResultStatus)
 
-Defined in: [src/core/agent/toolEffects.ts:126](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/toolEffects.ts#L126)
+Defined in: src/core/agent/toolEffects.ts:126

@@ -6,7 +6,7 @@ title: ColumnType
 
 > **ColumnType** = `"number"` \| `"string"` \| `"boolean"` \| `"date"`
 
-Defined in: [src/integrity/column-types/types.ts:46](https://github.com/footprintjs/agentfootprint/blob/main/src/integrity/column-types/types.ts#L46)
+Defined in: src/integrity/column-types/types.ts:46
 
 What a declared column holds.
 

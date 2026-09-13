@@ -4,7 +4,7 @@ title: ArtifactConformanceKit
 
 # Interface: ArtifactConformanceKit
 
-Defined in: [src/artifacts/conformance/types.ts:138](https://github.com/footprintjs/agentfootprint/blob/main/src/artifacts/conformance/types.ts#L138)
+Defined in: src/artifacts/conformance/types.ts:138
 
 The helpers a case is handed, beside the store.
 
@@ -14,7 +14,7 @@ The helpers a case is handed, beside the store.
 
 > `readonly` **harness**: [`ArtifactStoreHarness`](/docs/api/interfaces/ArtifactStoreHarness)
 
-Defined in: [src/artifacts/conformance/types.ts:167](https://github.com/footprintjs/agentfootprint/blob/main/src/artifacts/conformance/types.ts#L167)
+Defined in: src/artifacts/conformance/types.ts:167
 
 The harness, for a case that wants to name it in a message.
 
@@ -24,7 +24,7 @@ The harness, for a case that wants to name it in a message.
 
 > `readonly` **token**: `string`
 
-Defined in: [src/artifacts/conformance/types.ts:149](https://github.com/footprintjs/agentfootprint/blob/main/src/artifacts/conformance/types.ts#L149)
+Defined in: src/artifacts/conformance/types.ts:149
 
 The unique token behind [scope](/docs/api/interfaces/ArtifactConformanceKit#scope), for the cases that build their own
 scope TUPLES — the confusable pairs mean nothing if a helper rewrites the
@@ -36,7 +36,7 @@ very fields whose spelling is under test.
 
 > **advance**(`store`, `ms`): `Promise`\<`void`\>
 
-Defined in: [src/artifacts/conformance/types.ts:161](https://github.com/footprintjs/agentfootprint/blob/main/src/artifacts/conformance/types.ts#L161)
+Defined in: src/artifacts/conformance/types.ts:161
 
 Move the store's clock. Present only where the case declared the hook.
 
@@ -60,7 +60,7 @@ Move the store's clock. Present only where the case declared the hook.
 
 > **bounded**(`maxBytesPerScope`): `Promise`\<[`ArtifactStore`](/docs/api/interfaces/ArtifactStore)\>
 
-Defined in: [src/artifacts/conformance/types.ts:165](https://github.com/footprintjs/agentfootprint/blob/main/src/artifacts/conformance/types.ts#L165)
+Defined in: src/artifacts/conformance/types.ts:165
 
 A second store with a small byte budget; disposed with the case's own.
 
@@ -80,7 +80,7 @@ A second store with a small byte budget; disposed with the case's own.
 
 > **corrupt**(`store`, `scope`, `ref`): `Promise`\<`void`\>
 
-Defined in: [src/artifacts/conformance/types.ts:163](https://github.com/footprintjs/agentfootprint/blob/main/src/artifacts/conformance/types.ts#L163)
+Defined in: src/artifacts/conformance/types.ts:163
 
 Damage a stored payload. Present only where the case declared the hook.
 
@@ -108,7 +108,7 @@ Damage a stored payload. Present only where the case declared the hook.
 
 > **now**(`store`): `Promise`\<`number`\>
 
-Defined in: [src/artifacts/conformance/types.ts:159](https://github.com/footprintjs/agentfootprint/blob/main/src/artifacts/conformance/types.ts#L159)
+Defined in: src/artifacts/conformance/types.ts:159
 
 The STORE's own idea of now, read the only way the port exposes it: mint a
 throwaway artifact in a private scope and read the `createdAt` it stamped.
@@ -134,7 +134,7 @@ entitled to their own calendar, so a case that computed an expiry from
 
 > **scope**(`suffix`): `MemoryIdentity`
 
-Defined in: [src/artifacts/conformance/types.ts:143](https://github.com/footprintjs/agentfootprint/blob/main/src/artifacts/conformance/types.ts#L143)
+Defined in: src/artifacts/conformance/types.ts:143
 
 A scope nothing else in this run uses. Cases address their own scope so
 two batteries pointed at one shared backend cannot read each other's rows.

@@ -6,7 +6,7 @@ title: ArtifactStoreOutcome
 
 > **ArtifactStoreOutcome** = `object` & \{ `status`: `"passed"`; \} \| \{ `missing`: [`ArtifactStoreMember`](/docs/api/type-aliases/ArtifactStoreMember); `status`: `"not-applicable"`; \} \| \{ `reason`: `string`; `status`: `"declared"`; `stillFails`: `boolean`; \} \| \{ `error`: `Error`; `status`: `"failed"`; \}
 
-Defined in: [src/artifacts/conformance/types.ts:195](https://github.com/footprintjs/agentfootprint/blob/main/src/artifacts/conformance/types.ts#L195)
+Defined in: src/artifacts/conformance/types.ts:195
 
 How one case came out.
 

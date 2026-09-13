@@ -4,7 +4,7 @@ title: ArtifactStreamPutInput
 
 # Interface: ArtifactStreamPutInput
 
-Defined in: [src/artifacts/types.ts:193](https://github.com/footprintjs/agentfootprint/blob/main/src/artifacts/types.ts#L193)
+Defined in: src/artifacts/types.ts:193
 
 What a STREAMED put declares. Everything on [PutArtifactInput](/docs/api/interfaces/PutArtifactInput) the
 caller owns, minus the two things a store cannot honor without holding the
@@ -28,7 +28,7 @@ payload whole:
 
 > `readonly` **bytes**: `number`
 
-Defined in: [src/artifacts/types.ts:197](https://github.com/footprintjs/agentfootprint/blob/main/src/artifacts/types.ts#L197)
+Defined in: src/artifacts/types.ts:197
 
 The payload's exact byte length — stated by the producer, not measured.
 
@@ -38,7 +38,7 @@ The payload's exact byte length — stated by the producer, not measured.
 
 > `readonly` `optional` **expiresAt?**: `number`
 
-Defined in: [src/artifacts/types.ts:200](https://github.com/footprintjs/agentfootprint/blob/main/src/artifacts/types.ts#L200)
+Defined in: src/artifacts/types.ts:200
 
 Caller-stated expiry (unix ms). The store's own ttl may only TIGHTEN it.
 
@@ -48,7 +48,7 @@ Caller-stated expiry (unix ms). The store's own ttl may only TIGHTEN it.
 
 > `readonly` **kind**: `string`
 
-Defined in: [src/artifacts/types.ts:194](https://github.com/footprintjs/agentfootprint/blob/main/src/artifacts/types.ts#L194)
+Defined in: src/artifacts/types.ts:194
 
 ***
 
@@ -56,7 +56,7 @@ Defined in: [src/artifacts/types.ts:194](https://github.com/footprintjs/agentfoo
 
 > `readonly` `optional` **label?**: `string`
 
-Defined in: [src/artifacts/types.ts:198](https://github.com/footprintjs/agentfootprint/blob/main/src/artifacts/types.ts#L198)
+Defined in: src/artifacts/types.ts:198
 
 ***
 
@@ -64,7 +64,7 @@ Defined in: [src/artifacts/types.ts:198](https://github.com/footprintjs/agentfoo
 
 > `readonly` **mediaType**: `string`
 
-Defined in: [src/artifacts/types.ts:195](https://github.com/footprintjs/agentfootprint/blob/main/src/artifacts/types.ts#L195)
+Defined in: src/artifacts/types.ts:195
 
 ***
 
@@ -72,7 +72,7 @@ Defined in: [src/artifacts/types.ts:195](https://github.com/footprintjs/agentfoo
 
 > `readonly` `optional` **origin?**: [`ArtifactOrigin`](/docs/api/interfaces/ArtifactOrigin)
 
-Defined in: [src/artifacts/types.ts:201](https://github.com/footprintjs/agentfootprint/blob/main/src/artifacts/types.ts#L201)
+Defined in: src/artifacts/types.ts:201
 
 ***
 
@@ -80,4 +80,4 @@ Defined in: [src/artifacts/types.ts:201](https://github.com/footprintjs/agentfoo
 
 > `readonly` `optional` **parentRefs?**: readonly `string`[]
 
-Defined in: [src/artifacts/types.ts:202](https://github.com/footprintjs/agentfootprint/blob/main/src/artifacts/types.ts#L202)
+Defined in: src/artifacts/types.ts:202

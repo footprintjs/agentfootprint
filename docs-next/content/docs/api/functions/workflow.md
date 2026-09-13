@@ -8,7 +8,7 @@ title: workflow
 
 > **workflow**\<`A`, `B`\>(`s1`): [`Workflow`](/docs/api/classes/Workflow)\<`A`, `B`\>
 
-Defined in: [src/core-flow/Workflow.ts:301](https://github.com/footprintjs/agentfootprint/blob/main/src/core-flow/Workflow.ts#L301)
+Defined in: src/core-flow/Workflow.ts:301
 
 Chain 1–8 runners into one, with every hand-off checked by the compiler.
 
@@ -62,7 +62,7 @@ await workflow(classify, answer).run({ message: 'my card was declined' });
 
 > **workflow**\<`A`, `B`, `C`\>(`s1`, `s2`): [`Workflow`](/docs/api/classes/Workflow)\<`A`, `C`\>
 
-Defined in: [src/core-flow/Workflow.ts:302](https://github.com/footprintjs/agentfootprint/blob/main/src/core-flow/Workflow.ts#L302)
+Defined in: src/core-flow/Workflow.ts:302
 
 Chain 1–8 runners into one, with every hand-off checked by the compiler.
 
@@ -124,7 +124,7 @@ await workflow(classify, answer).run({ message: 'my card was declined' });
 
 > **workflow**\<`A`, `B`, `C`, `D`\>(`s1`, `s2`, `s3`): [`Workflow`](/docs/api/classes/Workflow)\<`A`, `D`\>
 
-Defined in: [src/core-flow/Workflow.ts:306](https://github.com/footprintjs/agentfootprint/blob/main/src/core-flow/Workflow.ts#L306)
+Defined in: src/core-flow/Workflow.ts:306
 
 Chain 1–8 runners into one, with every hand-off checked by the compiler.
 
@@ -194,7 +194,7 @@ await workflow(classify, answer).run({ message: 'my card was declined' });
 
 > **workflow**\<`A`, `B`, `C`, `D`, `E`\>(`s1`, `s2`, `s3`, `s4`): [`Workflow`](/docs/api/classes/Workflow)\<`A`, `E`\>
 
-Defined in: [src/core-flow/Workflow.ts:311](https://github.com/footprintjs/agentfootprint/blob/main/src/core-flow/Workflow.ts#L311)
+Defined in: src/core-flow/Workflow.ts:311
 
 Chain 1–8 runners into one, with every hand-off checked by the compiler.
 
@@ -272,7 +272,7 @@ await workflow(classify, answer).run({ message: 'my card was declined' });
 
 > **workflow**\<`A`, `B`, `C`, `D`, `E`, `F`\>(`s1`, `s2`, `s3`, `s4`, `s5`): [`Workflow`](/docs/api/classes/Workflow)\<`A`, `F`\>
 
-Defined in: [src/core-flow/Workflow.ts:317](https://github.com/footprintjs/agentfootprint/blob/main/src/core-flow/Workflow.ts#L317)
+Defined in: src/core-flow/Workflow.ts:317
 
 Chain 1–8 runners into one, with every hand-off checked by the compiler.
 
@@ -358,7 +358,7 @@ await workflow(classify, answer).run({ message: 'my card was declined' });
 
 > **workflow**\<`A`, `B`, `C`, `D`, `E`, `F`, `G`\>(`s1`, `s2`, `s3`, `s4`, `s5`, `s6`): [`Workflow`](/docs/api/classes/Workflow)\<`A`, `G`\>
 
-Defined in: [src/core-flow/Workflow.ts:324](https://github.com/footprintjs/agentfootprint/blob/main/src/core-flow/Workflow.ts#L324)
+Defined in: src/core-flow/Workflow.ts:324
 
 Chain 1–8 runners into one, with every hand-off checked by the compiler.
 
@@ -452,7 +452,7 @@ await workflow(classify, answer).run({ message: 'my card was declined' });
 
 > **workflow**\<`A`, `B`, `C`, `D`, `E`, `F`, `G`, `H`\>(`s1`, `s2`, `s3`, `s4`, `s5`, `s6`, `s7`): [`Workflow`](/docs/api/classes/Workflow)\<`A`, `H`\>
 
-Defined in: [src/core-flow/Workflow.ts:332](https://github.com/footprintjs/agentfootprint/blob/main/src/core-flow/Workflow.ts#L332)
+Defined in: src/core-flow/Workflow.ts:332
 
 Chain 1–8 runners into one, with every hand-off checked by the compiler.
 
@@ -554,7 +554,7 @@ await workflow(classify, answer).run({ message: 'my card was declined' });
 
 > **workflow**\<`A`, `B`, `C`, `D`, `E`, `F`, `G`, `H`, `I`\>(`s1`, `s2`, `s3`, `s4`, `s5`, `s6`, `s7`, `s8`): [`Workflow`](/docs/api/classes/Workflow)\<`A`, `I`\>
 
-Defined in: [src/core-flow/Workflow.ts:341](https://github.com/footprintjs/agentfootprint/blob/main/src/core-flow/Workflow.ts#L341)
+Defined in: src/core-flow/Workflow.ts:341
 
 Chain 1–8 runners into one, with every hand-off checked by the compiler.
 

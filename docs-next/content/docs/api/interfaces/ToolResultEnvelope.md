@@ -4,7 +4,7 @@ title: ToolResultEnvelope
 
 # Interface: ToolResultEnvelope
 
-Defined in: [src/core/agent/toolEffects.ts:110](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/toolEffects.ts#L110)
+Defined in: src/core/agent/toolEffects.ts:110
 
 What a tool handler returns to opt into the channel:
 `{ content, effects, status? }`. `content` is what the model reads (any
@@ -24,7 +24,7 @@ explicit marker when only `status` matters.
 
 > `readonly` **content**: `unknown`
 
-Defined in: [src/core/agent/toolEffects.ts:111](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/toolEffects.ts#L111)
+Defined in: src/core/agent/toolEffects.ts:111
 
 ***
 
@@ -32,7 +32,7 @@ Defined in: [src/core/agent/toolEffects.ts:111](https://github.com/footprintjs/a
 
 > `readonly` **effects**: readonly [`ProposedEffect`](/docs/api/type-aliases/ProposedEffect)[]
 
-Defined in: [src/core/agent/toolEffects.ts:112](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/toolEffects.ts#L112)
+Defined in: src/core/agent/toolEffects.ts:112
 
 ***
 
@@ -40,4 +40,4 @@ Defined in: [src/core/agent/toolEffects.ts:112](https://github.com/footprintjs/a
 
 > `readonly` `optional` **status?**: [`ToolResultStatus`](/docs/api/type-aliases/ToolResultStatus)
 
-Defined in: [src/core/agent/toolEffects.ts:113](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/toolEffects.ts#L113)
+Defined in: src/core/agent/toolEffects.ts:113

@@ -4,7 +4,7 @@ title: TopKOptions
 
 # Interface: TopKOptions
 
-Defined in: [src/memory/retrieval/topK.ts:24](https://github.com/footprintjs/agentfootprint/blob/main/src/memory/retrieval/topK.ts#L24)
+Defined in: src/memory/retrieval/topK.ts:24
 
 ## Properties
 
@@ -12,7 +12,7 @@ Defined in: [src/memory/retrieval/topK.ts:24](https://github.com/footprintjs/age
 
 > `readonly` `optional` **k?**: `number`
 
-Defined in: [src/memory/retrieval/topK.ts:30](https://github.com/footprintjs/agentfootprint/blob/main/src/memory/retrieval/topK.ts#L30)
+Defined in: src/memory/retrieval/topK.ts:30
 
 How many chunks may reach the prompt. Default 3 — enough for more
 than one perspective, few enough that the middle of a long context
@@ -24,7 +24,7 @@ does not swallow the answer.
 
 > `readonly` `optional` **rejectWindow?**: `number`
 
-Defined in: [src/memory/retrieval/topK.ts:57](https://github.com/footprintjs/agentfootprint/blob/main/src/memory/retrieval/topK.ts#L57)
+Defined in: src/memory/retrieval/topK.ts:57
 
 How many extra candidates to pull past `k` so that rejected ones can
 be reported. Default 10. Raising it costs one larger read and shows
@@ -36,7 +36,7 @@ more near-misses; it can never change which candidates are admitted.
 
 > `readonly` `optional` **threshold?**: `number` \| `null`
 
-Defined in: [src/memory/retrieval/topK.ts:51](https://github.com/footprintjs/agentfootprint/blob/main/src/memory/retrieval/topK.ts#L51)
+Defined in: src/memory/retrieval/topK.ts:51
 
 Minimum similarity to admit, in the store's score space ([-1, 1]
 cosine for every shipped store). Default 0.7.

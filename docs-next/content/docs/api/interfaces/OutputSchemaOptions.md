@@ -4,7 +4,7 @@ title: OutputSchemaOptions
 
 # Interface: OutputSchemaOptions
 
-Defined in: [src/core/outputSchema.ts:93](https://github.com/footprintjs/agentfootprint/blob/main/src/core/outputSchema.ts#L93)
+Defined in: src/core/outputSchema.ts:93
 
 Optional configuration for `outputSchema`.
 
@@ -14,7 +14,7 @@ Optional configuration for `outputSchema`.
 
 > `readonly` `optional` **instruction?**: `string`
 
-Defined in: [src/core/outputSchema.ts:108](https://github.com/footprintjs/agentfootprint/blob/main/src/core/outputSchema.ts#L108)
+Defined in: src/core/outputSchema.ts:108
 
 Custom system-prompt instruction text. Defaults to a generic
 "Respond with valid JSON matching the output schema. Do not
@@ -28,7 +28,7 @@ domain-specific framing.
 
 > `readonly` `optional` **jsonSchema?**: `Readonly`\<`Record`\<`string`, `unknown`\>\>
 
-Defined in: [src/core/outputSchema.ts:144](https://github.com/footprintjs/agentfootprint/blob/main/src/core/outputSchema.ts#L144)
+Defined in: src/core/outputSchema.ts:144
 
 The JSON Schema for the synthetic tool, required by
 `strategy: 'tool-forced'` unless the parser can produce one itself
@@ -49,7 +49,7 @@ judge.
 
 > `readonly` `optional` **name?**: `string`
 
-Defined in: [src/core/outputSchema.ts:100](https://github.com/footprintjs/agentfootprint/blob/main/src/core/outputSchema.ts#L100)
+Defined in: src/core/outputSchema.ts:100
 
 Injection id for the auto-generated "respond with this shape"
 instruction. Defaults to `'output-schema'`. Override when you
@@ -62,7 +62,7 @@ want the diagnostic events to disambiguate.
 
 > `readonly` `optional` **retries?**: `number`
 
-Defined in: [src/core/outputSchema.ts:124](https://github.com/footprintjs/agentfootprint/blob/main/src/core/outputSchema.ts#L124)
+Defined in: src/core/outputSchema.ts:124
 
 How many corrective re-asks the run may spend when the final answer
 fails the schema. Default `0` — the historical behaviour, where the
@@ -84,7 +84,7 @@ composes on top, unchanged.
 
 > `readonly` `optional` **strategy?**: [`OutputSchemaStrategy`](/docs/api/type-aliases/OutputSchemaStrategy)
 
-Defined in: [src/core/outputSchema.ts:129](https://github.com/footprintjs/agentfootprint/blob/main/src/core/outputSchema.ts#L129)
+Defined in: src/core/outputSchema.ts:129
 
 How the schema reaches the model. Default `'instruct'`.
 See [OutputSchemaStrategy](/docs/api/type-aliases/OutputSchemaStrategy).

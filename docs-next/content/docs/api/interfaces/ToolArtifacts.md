@@ -4,7 +4,7 @@ title: ToolArtifacts
 
 # Interface: ToolArtifacts
 
-Defined in: [src/artifacts/capability.ts:46](https://github.com/footprintjs/agentfootprint/blob/main/src/artifacts/capability.ts#L46)
+Defined in: src/artifacts/capability.ts:46
 
 The capability on `ctx.artifacts` — the store's five verbs with the scope
 already answered.
@@ -15,7 +15,7 @@ already answered.
 
 > **delete**(`ref`): `Promise`\<`void`\>
 
-Defined in: [src/artifacts/capability.ts:54](https://github.com/footprintjs/agentfootprint/blob/main/src/artifacts/capability.ts#L54)
+Defined in: src/artifacts/capability.ts:54
 
 Remove one artifact this scope holds.
 
@@ -35,7 +35,7 @@ Remove one artifact this scope holds.
 
 > **get**(`ref`): `Promise`\<[`ArtifactRecord`](/docs/api/interfaces/ArtifactRecord) \| `null`\>
 
-Defined in: [src/artifacts/capability.ts:52](https://github.com/footprintjs/agentfootprint/blob/main/src/artifacts/capability.ts#L52)
+Defined in: src/artifacts/capability.ts:52
 
 Ticket + payload. `null` for missing-or-expired; a digest mismatch throws.
 
@@ -55,7 +55,7 @@ Ticket + payload. `null` for missing-or-expired; a digest mismatch throws.
 
 > **head**(`ref`): `Promise`\<[`ArtifactMeta`](/docs/api/interfaces/ArtifactMeta) \| `null`\>
 
-Defined in: [src/artifacts/capability.ts:50](https://github.com/footprintjs/agentfootprint/blob/main/src/artifacts/capability.ts#L50)
+Defined in: src/artifacts/capability.ts:50
 
 The ticket without the payload. `null` for missing-or-expired.
 
@@ -75,7 +75,7 @@ The ticket without the payload. `null` for missing-or-expired.
 
 > **list**(`options?`): `Promise`\<[`ArtifactListResult`](/docs/api/interfaces/ArtifactListResult)\>
 
-Defined in: [src/artifacts/capability.ts:56](https://github.com/footprintjs/agentfootprint/blob/main/src/artifacts/capability.ts#L56)
+Defined in: src/artifacts/capability.ts:56
 
 Page through this scope's tickets, newest first.
 
@@ -95,7 +95,7 @@ Page through this scope's tickets, newest first.
 
 > **put**(`input`): `Promise`\<[`ArtifactMeta`](/docs/api/interfaces/ArtifactMeta)\>
 
-Defined in: [src/artifacts/capability.ts:48](https://github.com/footprintjs/agentfootprint/blob/main/src/artifacts/capability.ts#L48)
+Defined in: src/artifacts/capability.ts:48
 
 Store a payload under this run's scope; returns the claim ticket.
 

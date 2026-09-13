@@ -22,6 +22,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Hosted cancellation releases the paused session's run resources without
   executing remaining tools. Run terminals preserve other paused sessions, and
   teardown events retain the actual registration's run and session identity.
+- Keep documentation within existing browser and export budgets: load only the
+  syntax grammars used by interactive code blocks and prepare SkillGraph demo
+  data on the server while retaining its interactive browser view.
 
 ## [9.96.1] - 2026-09-13
 

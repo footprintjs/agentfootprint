@@ -6,7 +6,7 @@ title: PRIOR_TURN_EVIDENCE_CEILING
 
 > `const` **PRIOR\_TURN\_EVIDENCE\_CEILING**: `string`
 
-Defined in: [src/integrity/prior-turn-evidence/check.ts:91](https://github.com/footprintjs/agentfootprint/blob/main/src/integrity/prior-turn-evidence/check.ts#L91)
+Defined in: src/integrity/prior-turn-evidence/check.ts:91
 
 THE CEILING, as one string with one owner.
 

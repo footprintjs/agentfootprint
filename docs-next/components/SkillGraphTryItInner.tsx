@@ -3,8 +3,7 @@
 import '@xyflow/react/dist/style.css';
 import { useMemo, type ReactNode } from 'react';
 import { SkillGraphFlow } from 'agentfootprint-lens';
-import { buildSupportSkillGraph } from './demos/skillGraphDemo';
-import { buildQuickstartSkillGraph } from './demos/skillGraphQuickstartDemo';
+import type { SkillGraphDemoData } from './SkillGraphTryItData';
 import { LIGHT_THEME, DARK_THEME, surfaceColors, useIsDark } from './demos/embedTheme';
 
 /**
@@ -13,38 +12,29 @@ import { LIGHT_THEME, DARK_THEME, surfaceColors, useIsDark } from './demos/embed
  * already carries (`graph.nodes` / `graph.edges`): skill boxes, the synthetic
  * START chip, solid declared edges, and dashed `read_skill`-reachable edges.
  * Click a node to inspect its playbook + tools in the side panel — pulled from
- * the SAME `graph.skills`, not a separate fixture.
+ * the SAME compiled graph's skills, projected to plain data on the server.
  *
- * `demo` picks which single-source demo file backs the embed; each entry pairs
- * the builder with the file path shown in the header, so the shown bytes and the
- * drawn graph can never come from different files.
+ * The server pairs the builder with the source file shown in the header. The
+ * browser loads the interactive view, without the runtime needed to build/run
+ * an agent. The actual runnable demos keep their own client-side builders.
  */
-
-const DEMOS = {
-  support: { build: buildSupportSkillGraph, file: 'components/demos/skillGraphDemo.ts' },
-  quickstart: {
-    build: buildQuickstartSkillGraph,
-    file: 'components/demos/skillGraphQuickstartDemo.ts',
-  },
-} as const;
 
 interface SkillGraphTryItInnerProps {
   /** Server-rendered <CodeFile region="demo"> of the builder, shown above the graph. */
   readonly code?: ReactNode;
-  /** Which single-source demo backs this embed. Default: the support graph. */
-  readonly demo?: keyof typeof DEMOS;
+  /** Plain view data built from the exact documented graph on the server. */
+  readonly data: SkillGraphDemoData;
 }
 
-export default function SkillGraphTryItInner({ code, demo = 'support' }: SkillGraphTryItInnerProps) {
+export default function SkillGraphTryItInner({ code, data }: SkillGraphTryItInnerProps) {
   const isDark = useIsDark();
-  const { build, file } = DEMOS[demo];
-  const graph = useMemo(() => build(), [build]);
+  const { demo, file, graph, skills } = data;
   // Map each drawn node back to the skill it represents — the side-panel detail
-  // is read straight off `graph.skills` (the compiled artifact), so it can never
-  // drift from what the graph draws.
+  // comes from the compiled artifact's projection, so it cannot drift from what
+  // the graph draws. Executors and predicates are not needed for inspection.
   const skillById = useMemo(
-    () => new Map(graph.skills.map((s) => [s.id, s] as const)),
-    [graph],
+    () => new Map(skills.map((s) => [s.id, s] as const)),
+    [skills],
   );
   const c = surfaceColors(isDark);
 
@@ -85,11 +75,11 @@ export default function SkillGraphTryItInner({ code, demo = 'support' }: SkillGr
             if (node.kind !== 'skill') return undefined;
             const s = skillById.get(node.id);
             if (!s) return undefined;
-            const tools = (s.inject.tools ?? []).map((t) => t.schema.name);
+            const tools = s.tools;
             return {
               title: node.label ?? node.id,
               description: s.description,
-              body: s.inject.systemPrompt,
+              body: s.body,
               ...(tools.length > 0 ? { tools } : {}),
             };
           }}

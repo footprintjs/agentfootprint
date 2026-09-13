@@ -6,7 +6,7 @@ title: defineTool
 
 > **defineTool**\<`TArgs`, `TResult`\>(`options`): [`Tool`](/docs/api/interfaces/Tool)\<`TArgs`, `TResult`\>
 
-Defined in: [src/core/tools.ts:1020](https://github.com/footprintjs/agentfootprint/blob/main/src/core/tools.ts#L1020)
+Defined in: src/core/tools.ts:1020
 
 ## Type Parameters
 

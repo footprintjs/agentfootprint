@@ -4,7 +4,7 @@ title: InMemoryArtifacts
 
 # Interface: InMemoryArtifacts
 
-Defined in: [src/artifacts/inMemoryArtifacts.ts:74](https://github.com/footprintjs/agentfootprint/blob/main/src/artifacts/inMemoryArtifacts.ts#L74)
+Defined in: src/artifacts/inMemoryArtifacts.ts:74
 
 The in-memory store, plus the accounting a bounded store owes its owner.
 
@@ -18,7 +18,7 @@ The in-memory store, plus the accounting a bounded store owes its owner.
 
 > `readonly` **dropped**: `number`
 
-Defined in: [src/artifacts/inMemoryArtifacts.ts:78](https://github.com/footprintjs/agentfootprint/blob/main/src/artifacts/inMemoryArtifacts.ts#L78)
+Defined in: src/artifacts/inMemoryArtifacts.ts:78
 
 Artifacts evicted by the byte/row budgets since construction (TTL expiry
  is the calendar doing its job and is not counted here). Non-zero means
@@ -30,7 +30,7 @@ Artifacts evicted by the byte/row budgets since construction (TTL expiry
 
 > `readonly` **retention**: [`ArtifactRetention`](/docs/api/interfaces/ArtifactRetention)
 
-Defined in: [src/artifacts/inMemoryArtifacts.ts:80](https://github.com/footprintjs/agentfootprint/blob/main/src/artifacts/inMemoryArtifacts.ts#L80)
+Defined in: src/artifacts/inMemoryArtifacts.ts:80
 
 The dials in force, defaults included.
 
@@ -40,7 +40,7 @@ The dials in force, defaults included.
 
 > **delete**(`scope`, `ref`): `Promise`\<`void`\>
 
-Defined in: [src/artifacts/types.ts:249](https://github.com/footprintjs/agentfootprint/blob/main/src/artifacts/types.ts#L249)
+Defined in: src/artifacts/types.ts:249
 
 Remove one artifact. No-op when it does not exist — deleting an absence
  is not an error, it is agreement.
@@ -69,7 +69,7 @@ Remove one artifact. No-op when it does not exist — deleting an absence
 
 > **get**(`scope`, `ref`): `Promise`\<[`ArtifactRecord`](/docs/api/interfaces/ArtifactRecord) \| `null`\>
 
-Defined in: [src/artifacts/types.ts:245](https://github.com/footprintjs/agentfootprint/blob/main/src/artifacts/types.ts#L245)
+Defined in: src/artifacts/types.ts:245
 
 The ticket and the payload. `null` for missing-or-expired. When the meta
 carries a `digest`, the payload is re-verified here — a mismatch throws
@@ -99,7 +99,7 @@ carries a `digest`, the payload is re-verified here — a mismatch throws
 
 > `optional` **getStream**(`scope`, `ref`): `Promise`\<[`ArtifactStreamRecord`](/docs/api/interfaces/ArtifactStreamRecord) \| `null`\>
 
-Defined in: [src/artifacts/types.ts:280](https://github.com/footprintjs/agentfootprint/blob/main/src/artifacts/types.ts#L280)
+Defined in: src/artifacts/types.ts:280
 
 OPTIONAL — read a payload as a stream of its canonical bytes. `null` for
 missing-or-expired, exactly like `get`. Absent on stores that would have
@@ -135,7 +135,7 @@ silently traded.
 
 > **head**(`scope`, `ref`): `Promise`\<[`ArtifactMeta`](/docs/api/interfaces/ArtifactMeta) \| `null`\>
 
-Defined in: [src/artifacts/types.ts:238](https://github.com/footprintjs/agentfootprint/blob/main/src/artifacts/types.ts#L238)
+Defined in: src/artifacts/types.ts:238
 
 The ticket without the payload — the render-by-ref decision. `null` for
 missing-or-expired (the deliberate ambiguity; both mean "no data").
@@ -164,7 +164,7 @@ missing-or-expired (the deliberate ambiguity; both mean "no data").
 
 > **list**(`scope`, `options?`): `Promise`\<[`ArtifactListResult`](/docs/api/interfaces/ArtifactListResult)\>
 
-Defined in: [src/artifacts/types.ts:252](https://github.com/footprintjs/agentfootprint/blob/main/src/artifacts/types.ts#L252)
+Defined in: src/artifacts/types.ts:252
 
 Page through this scope's tickets, newest first.
 
@@ -192,7 +192,7 @@ Page through this scope's tickets, newest first.
 
 > **put**(`scope`, `input`): `Promise`\<[`ArtifactPutResult`](/docs/api/interfaces/ArtifactPutResult)\>
 
-Defined in: [src/artifacts/types.ts:232](https://github.com/footprintjs/agentfootprint/blob/main/src/artifacts/types.ts#L232)
+Defined in: src/artifacts/types.ts:232
 
 Store a payload; mint and return the ticket. Validates the input (a
 malformed put is refused by name), validates `parentRefs` resolve in the
@@ -223,7 +223,7 @@ store's retention — and reports what retention swept to make room.
 
 > `optional` **putStream**(`scope`, `input`, `body`): `Promise`\<[`ArtifactPutResult`](/docs/api/interfaces/ArtifactPutResult)\>
 
-Defined in: [src/artifacts/types.ts:263](https://github.com/footprintjs/agentfootprint/blob/main/src/artifacts/types.ts#L263)
+Defined in: src/artifacts/types.ts:263
 
 OPTIONAL — store a payload the caller streams, without either side
 holding it whole. Absent on stores that cannot honor that promise; detect

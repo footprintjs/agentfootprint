@@ -4,7 +4,7 @@ title: ToolAbsence
 
 # Interface: ToolAbsence
 
-Defined in: [src/core/agent/coverage/types.ts:106](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/coverage/types.ts#L106)
+Defined in: src/core/agent/coverage/types.ts:106
 
 The rendered absence — the exact object a tool hands back and the model
 reads. Field names are snake_case and English on purpose: this value is
@@ -22,7 +22,7 @@ other shape as one.
 
 > `readonly` **af\_absent**: `true`
 
-Defined in: [src/core/agent/coverage/types.ts:107](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/coverage/types.ts#L107)
+Defined in: src/core/agent/coverage/types.ts:107
 
 ***
 
@@ -30,7 +30,7 @@ Defined in: [src/core/agent/coverage/types.ts:107](https://github.com/footprintj
 
 > `readonly` `optional` **cannot\_cover?**: readonly [`CoverageItem`](/docs/api/interfaces/CoverageItem)[]
 
-Defined in: [src/core/agent/coverage/types.ts:114](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/coverage/types.ts#L114)
+Defined in: src/core/agent/coverage/types.ts:114
 
 ***
 
@@ -38,7 +38,7 @@ Defined in: [src/core/agent/coverage/types.ts:114](https://github.com/footprintj
 
 > `readonly` **checked**: readonly [`CoverageItem`](/docs/api/interfaces/CoverageItem)[]
 
-Defined in: [src/core/agent/coverage/types.ts:112](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/coverage/types.ts#L112)
+Defined in: src/core/agent/coverage/types.ts:112
 
 ***
 
@@ -46,7 +46,7 @@ Defined in: [src/core/agent/coverage/types.ts:112](https://github.com/footprintj
 
 > `readonly` **looked\_for**: `string`
 
-Defined in: [src/core/agent/coverage/types.ts:111](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/coverage/types.ts#L111)
+Defined in: src/core/agent/coverage/types.ts:111
 
 ***
 
@@ -54,7 +54,7 @@ Defined in: [src/core/agent/coverage/types.ts:111](https://github.com/footprintj
 
 > `readonly` `optional` **not\_checked?**: readonly [`CoverageItem`](/docs/api/interfaces/CoverageItem)[]
 
-Defined in: [src/core/agent/coverage/types.ts:113](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/coverage/types.ts#L113)
+Defined in: src/core/agent/coverage/types.ts:113
 
 ***
 
@@ -62,7 +62,7 @@ Defined in: [src/core/agent/coverage/types.ts:113](https://github.com/footprintj
 
 > `readonly` **note**: `string`
 
-Defined in: [src/core/agent/coverage/types.ts:120](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/coverage/types.ts#L120)
+Defined in: src/core/agent/coverage/types.ts:120
 
 The static sentence. Never interpolated — see `absent.ts`.
 
@@ -72,7 +72,7 @@ The static sentence. Never interpolated — see `absent.ts`.
 
 > `readonly` **outcome**: `"nothing_found"`
 
-Defined in: [src/core/agent/coverage/types.ts:110](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/coverage/types.ts#L110)
+Defined in: src/core/agent/coverage/types.ts:110
 
 The plain-English handle. Present so a model that skims one key still
  reads the outcome rather than inferring it from a missing field.
@@ -83,7 +83,7 @@ The plain-English handle. Present so a model that skims one key still
 
 > `readonly` **retry\_returns\_the\_same**: `true`
 
-Defined in: [src/core/agent/coverage/types.ts:117](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/coverage/types.ts#L117)
+Defined in: src/core/agent/coverage/types.ts:117
 
 Stated as data as well as prose — the note can be skimmed past, a
  `true` in a field named for the question cannot.
@@ -94,4 +94,4 @@ Stated as data as well as prose — the note can be skimmed past, a
 
 > `readonly` `optional` **try\_instead?**: `string`
 
-Defined in: [src/core/agent/coverage/types.ts:118](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/coverage/types.ts#L118)
+Defined in: src/core/agent/coverage/types.ts:118

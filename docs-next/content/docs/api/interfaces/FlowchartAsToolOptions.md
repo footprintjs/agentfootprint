@@ -4,7 +4,7 @@ title: FlowchartAsToolOptions
 
 # Interface: FlowchartAsToolOptions
 
-Defined in: [src/core/flowchartAsTool.ts:182](https://github.com/footprintjs/agentfootprint/blob/main/src/core/flowchartAsTool.ts#L182)
+Defined in: src/core/flowchartAsTool.ts:182
 
 Options for `flowchartAsTool`.
 
@@ -14,7 +14,7 @@ Options for `flowchartAsTool`.
 
 > `readonly` **description**: `string`
 
-Defined in: [src/core/flowchartAsTool.ts:186](https://github.com/footprintjs/agentfootprint/blob/main/src/core/flowchartAsTool.ts#L186)
+Defined in: src/core/flowchartAsTool.ts:186
 
 Tool description shown to the LLM.
 
@@ -24,7 +24,7 @@ Tool description shown to the LLM.
 
 > `readonly` **flowchart**: `FlowChart`
 
-Defined in: [src/core/flowchartAsTool.ts:196](https://github.com/footprintjs/agentfootprint/blob/main/src/core/flowchartAsTool.ts#L196)
+Defined in: src/core/flowchartAsTool.ts:196
 
 The footprintjs flowchart to mount as the tool's body.
 The chart's stages receive args via `scope.$getArgs()`.
@@ -35,7 +35,7 @@ The chart's stages receive args via `scope.$getArgs()`.
 
 > `readonly` `optional` **inputSchema?**: `Readonly`\<`Record`\<`string`, `unknown`\>\>
 
-Defined in: [src/core/flowchartAsTool.ts:191](https://github.com/footprintjs/agentfootprint/blob/main/src/core/flowchartAsTool.ts#L191)
+Defined in: src/core/flowchartAsTool.ts:191
 
 JSON Schema describing the input args the LLM must produce.
 Becomes `flowchart.run({ input: args })`. Default: `{ type: 'object', properties: {} }`.
@@ -46,7 +46,7 @@ Becomes `flowchart.run({ input: args })`. Default: `{ type: 'object', properties
 
 > `readonly` `optional` **keepRecord?**: `boolean`
 
-Defined in: [src/core/flowchartAsTool.ts:259](https://github.com/footprintjs/agentfootprint/blob/main/src/core/flowchartAsTool.ts#L259)
+Defined in: src/core/flowchartAsTool.ts:259
 
 KEEP the inner run's record, so the agent's trace can go THROUGH this
 tool boundary instead of stopping at it.
@@ -84,7 +84,7 @@ the two agents can mint the same id: build the tool twice instead.
 
 > `readonly` `optional` **keepRecordLimit?**: `number`
 
-Defined in: [src/core/flowchartAsTool.ts:266](https://github.com/footprintjs/agentfootprint/blob/main/src/core/flowchartAsTool.ts#L266)
+Defined in: src/core/flowchartAsTool.ts:266
 
 How many invocations `keepRecord` retains. Default
 DEFAULT\_INNER\_RUN\_LIMIT (20) — a debugging window, not an
@@ -97,7 +97,7 @@ refused rather than silently ignored.
 
 > `readonly` **name**: `string`
 
-Defined in: [src/core/flowchartAsTool.ts:184](https://github.com/footprintjs/agentfootprint/blob/main/src/core/flowchartAsTool.ts#L184)
+Defined in: src/core/flowchartAsTool.ts:184
 
 Tool name the LLM dispatches by. Must be unique across the agent's tools.
 
@@ -107,7 +107,7 @@ Tool name the LLM dispatches by. Must be unique across the agent's tools.
 
 > `readonly` `optional` **recorders?**: readonly [`CombinedRecorder`](/docs/api/type-aliases/CombinedRecorder)[]
 
-Defined in: [src/core/flowchartAsTool.ts:227](https://github.com/footprintjs/agentfootprint/blob/main/src/core/flowchartAsTool.ts#L227)
+Defined in: src/core/flowchartAsTool.ts:227
 
 Observers to attach to the tool's INTERNAL `FlowChartExecutor`
 before each run. This is the hook that lets decide()/select()
@@ -139,7 +139,7 @@ detect the boundary via `event.traversalContext.runId !== lastRunId`
 
 > `readonly` `optional` **redact?**: [`RedactionPolicy`](/docs/api/interfaces/RedactionPolicy)
 
-Defined in: [src/core/flowchartAsTool.ts:330](https://github.com/footprintjs/agentfootprint/blob/main/src/core/flowchartAsTool.ts#L330)
+Defined in: src/core/flowchartAsTool.ts:330
 
 Redaction policy for the INNER run, applied before every invocation
 (`executor.setRedactionPolicy`).
@@ -209,7 +209,7 @@ WHAT IT DOES NOT GOVERN — said here so nobody has to rediscover it:
 
 > `readonly` `optional` **resultMapper?**: [`FlowchartResultMapper`](/docs/api/type-aliases/FlowchartResultMapper)
 
-Defined in: [src/core/flowchartAsTool.ts:201](https://github.com/footprintjs/agentfootprint/blob/main/src/core/flowchartAsTool.ts#L201)
+Defined in: src/core/flowchartAsTool.ts:201
 
 Optional shaping function. Default: `JSON.stringify(snapshot.values)`.
 Errors throw into the tool's `[mapper-error: ...]` envelope.

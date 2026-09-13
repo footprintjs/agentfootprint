@@ -4,7 +4,7 @@ title: SqliteArtifactsOptions
 
 # Interface: SqliteArtifactsOptions
 
-Defined in: [src/artifacts/sqliteArtifacts.ts:82](https://github.com/footprintjs/agentfootprint/blob/main/src/artifacts/sqliteArtifacts.ts#L82)
+Defined in: src/artifacts/sqliteArtifacts.ts:82
 
 Options for [sqliteArtifacts](/docs/api/functions/sqliteArtifacts).
 
@@ -14,7 +14,7 @@ Options for [sqliteArtifacts](/docs/api/functions/sqliteArtifacts).
 
 > `readonly` `optional` **busyTimeoutMs?**: `number`
 
-Defined in: [src/artifacts/sqliteArtifacts.ts:91](https://github.com/footprintjs/agentfootprint/blob/main/src/artifacts/sqliteArtifacts.ts#L91)
+Defined in: src/artifacts/sqliteArtifacts.ts:91
 
 How long a write waits for another writer's lock before failing loudly.
  Default 5000 ms.
@@ -25,7 +25,7 @@ How long a write waits for another writer's lock before failing loudly.
 
 > `readonly` **file**: `string`
 
-Defined in: [src/artifacts/sqliteArtifacts.ts:85](https://github.com/footprintjs/agentfootprint/blob/main/src/artifacts/sqliteArtifacts.ts#L85)
+Defined in: src/artifacts/sqliteArtifacts.ts:85
 
 The database file. Created if missing, parent directory included.
  `':memory:'` is refused — use `inMemoryArtifacts()`, it says so in its name.
@@ -36,7 +36,7 @@ The database file. Created if missing, parent directory included.
 
 > `readonly` `optional` **retention?**: [`ArtifactRetention`](/docs/api/interfaces/ArtifactRetention)
 
-Defined in: [src/artifacts/sqliteArtifacts.ts:88](https://github.com/footprintjs/agentfootprint/blob/main/src/artifacts/sqliteArtifacts.ts#L88)
+Defined in: src/artifacts/sqliteArtifacts.ts:88
 
 Retention dials — optional here: disk is a budget the operator owns.
  Budget evictions are least-recently-ACCESSED first (reads refresh recency).

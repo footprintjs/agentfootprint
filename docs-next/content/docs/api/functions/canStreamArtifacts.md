@@ -6,7 +6,7 @@ title: canStreamArtifacts
 
 > **canStreamArtifacts**(`store`): `store is StreamingArtifactStore`
 
-Defined in: [src/artifacts/streaming.ts:103](https://github.com/footprintjs/agentfootprint/blob/main/src/artifacts/streaming.ts#L103)
+Defined in: src/artifacts/streaming.ts:103
 
 Both halves at once — for a consumer that needs the round trip.
 

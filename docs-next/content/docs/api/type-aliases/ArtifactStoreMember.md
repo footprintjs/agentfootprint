@@ -6,7 +6,7 @@ title: ArtifactStoreMember
 
 > **ArtifactStoreMember** = `"putStream"` \| `"getStream"`
 
-Defined in: [src/artifacts/conformance/types.ts:51](https://github.com/footprintjs/agentfootprint/blob/main/src/artifacts/conformance/types.ts#L51)
+Defined in: src/artifacts/conformance/types.ts:51
 
 Members a case cannot run without.
 

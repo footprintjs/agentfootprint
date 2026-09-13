@@ -4,7 +4,7 @@ title: ToolDispatch
 
 # Interface: ToolDispatch
 
-Defined in: [src/core/tools.ts:668](https://github.com/footprintjs/agentfootprint/blob/main/src/core/tools.ts#L668)
+Defined in: src/core/tools.ts:668
 
 The run's own tool dispatch, delivered at execute time as `ctx.tools`
 (9.76.0) — how one tool's body calls ANOTHER registered tool through the
@@ -29,7 +29,7 @@ interactive consent refuses by name — an inner call cannot pause).
 
 > **call**(`name`, `args`, `opts?`): `Promise`\<`unknown`\>
 
-Defined in: [src/core/tools.ts:675](https://github.com/footprintjs/agentfootprint/blob/main/src/core/tools.ts#L675)
+Defined in: src/core/tools.ts:675
 
 Execute a registered tool and return its result exactly as returned —
 a coverage envelope arrives as the envelope, an absence as the absence.
@@ -58,7 +58,7 @@ a coverage envelope arrives as the envelope, an absence as the absence.
 
 > **has**(`name`): `boolean`
 
-Defined in: [src/core/tools.ts:670](https://github.com/footprintjs/agentfootprint/blob/main/src/core/tools.ts#L670)
+Defined in: src/core/tools.ts:670
 
 Is this name in the dispatch map? Provider-delivered tools answer false.
 

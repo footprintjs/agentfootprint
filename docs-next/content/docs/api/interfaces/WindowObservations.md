@@ -4,7 +4,7 @@ title: WindowObservations
 
 # Interface: WindowObservations
 
-Defined in: [src/core/agent/window/types.ts:201](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/window/types.ts#L201)
+Defined in: src/core/agent/window/types.ts:201
 
 What the last-tool-result pin did at one iteration boundary (9.57.0).
 
@@ -20,7 +20,7 @@ was kept is the same defect facing the other way.
 
 > `readonly` **limit**: `number`
 
-Defined in: [src/core/agent/window/types.ts:216](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/window/types.ts#L216)
+Defined in: src/core/agent/window/types.ts:216
 
 The ceiling this visit measured against (`keepLastToolResults`).
 
@@ -30,7 +30,7 @@ The ceiling this visit measured against (`keepLastToolResults`).
 
 > `readonly` **pinned**: readonly `object`[]
 
-Defined in: [src/core/agent/window/types.ts:208](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/window/types.ts#L208)
+Defined in: src/core/agent/window/types.ts:208
 
 The turns the pin held, newest first. `chars` is the whole TURN's content
 length (an assistant's call and its results leave together), so
@@ -43,7 +43,7 @@ the pin — the cost of the feature, computable by any reader.
 
 > `readonly` `optional` **standDown?**: `true`
 
-Defined in: [src/core/agent/window/types.ts:227](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/window/types.ts#L227)
+Defined in: src/core/agent/window/types.ts:227
 
 Present and `true` when the pin STOOD DOWN for this visit: the two
 previous visits both removed nothing AND both named `'last-tool-result'`,
@@ -60,6 +60,6 @@ itself has to say so — a silent reversal is indistinguishable from a bug.
 
 > `readonly` **yielded**: `number`
 
-Defined in: [src/core/agent/window/types.ts:214](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/window/types.ts#L214)
+Defined in: src/core/agent/window/types.ts:214
 
 How many otherwise-pinnable turns the ceiling turned away.

@@ -4,7 +4,7 @@ title: WindowEviction
 
 # Interface: WindowEviction
 
-Defined in: [src/core/agent/window/strategy.ts:49](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/window/strategy.ts#L49)
+Defined in: src/core/agent/window/strategy.ts:49
 
 One message leaving the window, with the facts an eviction event needs.
 
@@ -14,7 +14,7 @@ One message leaving the window, with the facts an eviction event needs.
 
 > `readonly` **index**: `number`
 
-Defined in: [src/core/agent/window/strategy.ts:51](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/window/strategy.ts#L51)
+Defined in: src/core/agent/window/strategy.ts:51
 
 Index in the PRE-change window — the index the content hash was built on.
 
@@ -24,6 +24,6 @@ Index in the PRE-change window — the index the content hash was built on.
 
 > `readonly` **survivalMs**: `number`
 
-Defined in: [src/core/agent/window/strategy.ts:53](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/window/strategy.ts#L53)
+Defined in: src/core/agent/window/strategy.ts:53
 
 How long it lived in the window. Exact; 0 when its birth is unknown.

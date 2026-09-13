@@ -6,7 +6,7 @@ title: DEFAULT_CORPUS_IDENTITY
 
 > `const` **DEFAULT\_CORPUS\_IDENTITY**: `MemoryIdentity`
 
-Defined in: [src/lib/rag/defineRAG.ts:137](https://github.com/footprintjs/agentfootprint/blob/main/src/lib/rag/defineRAG.ts#L137)
+Defined in: src/lib/rag/defineRAG.ts:137
 
 The namespace a corpus lives in unless told otherwise — the same one
 `indexDocuments` writes to by default. The two defaults are one value

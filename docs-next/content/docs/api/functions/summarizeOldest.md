@@ -6,7 +6,7 @@ title: summarizeOldest
 
 > **summarizeOldest**(`options`): [`WindowStrategy`](/docs/api/interfaces/WindowStrategy)
 
-Defined in: [src/core/agent/window/strategies/summarizeOldest.ts:57](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/window/strategies/summarizeOldest.ts#L57)
+Defined in: src/core/agent/window/strategies/summarizeOldest.ts:57
 
 Fold the oldest contiguous run of foldable turns into one summary message,
 keeping the recent turns and stepping over anything unresolved.

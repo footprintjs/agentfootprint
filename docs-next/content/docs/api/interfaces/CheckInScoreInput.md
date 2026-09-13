@@ -4,7 +4,7 @@ title: CheckInScoreInput
 
 # Interface: CheckInScoreInput
 
-Defined in: [src/core/checkin.ts:297](https://github.com/footprintjs/agentfootprint/blob/main/src/core/checkin.ts#L297)
+Defined in: src/core/checkin.ts:297
 
 Input to a [CheckInScorer](/docs/api/type-aliases/CheckInScorer). Mirrors `influence-core`'s attribution
  shape so an embedding-backed scorer (wrapping `explainChoice`) drops in.
@@ -15,7 +15,7 @@ Input to a [CheckInScorer](/docs/api/type-aliases/CheckInScorer). Mirrors `influ
 
 > `readonly` `optional` **signal?**: `AbortSignal`
 
-Defined in: [src/core/checkin.ts:303](https://github.com/footprintjs/agentfootprint/blob/main/src/core/checkin.ts#L303)
+Defined in: src/core/checkin.ts:303
 
 Abort signal for network-backed scorers.
 
@@ -25,7 +25,7 @@ Abort signal for network-backed scorers.
 
 > `readonly` **tool**: `object`
 
-Defined in: [src/core/checkin.ts:299](https://github.com/footprintjs/agentfootprint/blob/main/src/core/checkin.ts#L299)
+Defined in: src/core/checkin.ts:299
 
 The chosen tool. `text` is what gets scored (name + description + args).
 
@@ -43,6 +43,6 @@ The chosen tool. `text` is what gets scored (name + description + args).
 
 > `readonly` **units**: readonly [`AttributionUnit`](/docs/api/interfaces/AttributionUnit)[]
 
-Defined in: [src/core/checkin.ts:301](https://github.com/footprintjs/agentfootprint/blob/main/src/core/checkin.ts#L301)
+Defined in: src/core/checkin.ts:301
 
 The context units to rank against the tool.

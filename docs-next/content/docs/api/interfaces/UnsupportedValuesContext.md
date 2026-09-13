@@ -4,7 +4,7 @@ title: UnsupportedValuesContext
 
 # Interface: UnsupportedValuesContext
 
-Defined in: [src/core/agent/evidence/errors.ts:41](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/evidence/errors.ts#L41)
+Defined in: src/core/agent/evidence/errors.ts:41
 
 ## Properties
 
@@ -12,7 +12,7 @@ Defined in: [src/core/agent/evidence/errors.ts:41](https://github.com/footprintj
 
 > `readonly` **candidates**: `number`
 
-Defined in: [src/core/agent/evidence/errors.ts:45](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/evidence/errors.ts#L45)
+Defined in: src/core/agent/evidence/errors.ts:45
 
 How many distinct values the answer had to ground in total.
 
@@ -22,7 +22,7 @@ How many distinct values the answer had to ground in total.
 
 > `readonly` **message**: `string`
 
-Defined in: [src/core/agent/evidence/errors.ts:49](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/evidence/errors.ts#L49)
+Defined in: src/core/agent/evidence/errors.ts:49
 
 The full teaching sentence, including what would satisfy the check.
 
@@ -32,7 +32,7 @@ The full teaching sentence, including what would satisfy the check.
 
 > `readonly` **revised**: `boolean`
 
-Defined in: [src/core/agent/evidence/errors.ts:47](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/evidence/errors.ts#L47)
+Defined in: src/core/agent/evidence/errors.ts:47
 
 True when a revision was asked for and the values survived it.
 
@@ -42,6 +42,6 @@ True when a revision was asked for and the values survived it.
 
 > `readonly` **values**: readonly [`UnsupportedValue`](/docs/api/interfaces/UnsupportedValue)[]
 
-Defined in: [src/core/agent/evidence/errors.ts:43](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/evidence/errors.ts#L43)
+Defined in: src/core/agent/evidence/errors.ts:43
 
 The flagged values, normalized and truncated.

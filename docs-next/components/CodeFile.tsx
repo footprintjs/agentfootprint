@@ -1,6 +1,6 @@
 import fs from 'node:fs';
 import path from 'node:path';
-import { DynamicCodeBlock } from 'fumadocs-ui/components/dynamic-codeblock';
+import { BrowserCodeBlock } from './BrowserCodeBlock';
 import { extractRegion, extractWholeFile } from '@/lib/regionExtractor';
 
 interface CodeFileProps {
@@ -42,5 +42,5 @@ export function CodeFile({ path: filePath, region, lang }: CodeFileProps) {
             ? 'json'
             : 'text');
 
-  return <DynamicCodeBlock lang={detectedLang} code={code} />;
+  return <BrowserCodeBlock lang={detectedLang} code={code} />;
 }

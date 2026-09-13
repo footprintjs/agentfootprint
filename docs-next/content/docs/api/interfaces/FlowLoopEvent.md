@@ -4,7 +4,7 @@ title: FlowLoopEvent
 
 # Interface: FlowLoopEvent
 
-Defined in: ../../../../Users/sanjay/Documents/Codex/2026-09-10/referenced-chatgpt-conversation-this-is-an/outputs/agentfootprint-answer-validation/node\_modules/footprintjs/dist/types/lib/engine/narrative/types.d.ts:243
+Defined in: node\_modules/footprintjs/dist/types/lib/engine/narrative/types.d.ts:243
 
 Event passed to FlowRecorder.onLoop.
 
@@ -14,7 +14,7 @@ Event passed to FlowRecorder.onLoop.
 
 > `optional` **description?**: `string`
 
-Defined in: ../../../../Users/sanjay/Documents/Codex/2026-09-10/referenced-chatgpt-conversation-this-is-an/outputs/agentfootprint-answer-validation/node\_modules/footprintjs/dist/types/lib/engine/narrative/types.d.ts:246
+Defined in: node\_modules/footprintjs/dist/types/lib/engine/narrative/types.d.ts:246
 
 ***
 
@@ -22,7 +22,7 @@ Defined in: ../../../../Users/sanjay/Documents/Codex/2026-09-10/referenced-chatg
 
 > **iteration**: `number`
 
-Defined in: ../../../../Users/sanjay/Documents/Codex/2026-09-10/referenced-chatgpt-conversation-this-is-an/outputs/agentfootprint-answer-validation/node\_modules/footprintjs/dist/types/lib/engine/narrative/types.d.ts:245
+Defined in: node\_modules/footprintjs/dist/types/lib/engine/narrative/types.d.ts:245
 
 ***
 
@@ -30,7 +30,7 @@ Defined in: ../../../../Users/sanjay/Documents/Codex/2026-09-10/referenced-chatg
 
 > **target**: `string`
 
-Defined in: ../../../../Users/sanjay/Documents/Codex/2026-09-10/referenced-chatgpt-conversation-this-is-an/outputs/agentfootprint-answer-validation/node\_modules/footprintjs/dist/types/lib/engine/narrative/types.d.ts:244
+Defined in: node\_modules/footprintjs/dist/types/lib/engine/narrative/types.d.ts:244
 
 ***
 
@@ -38,4 +38,4 @@ Defined in: ../../../../Users/sanjay/Documents/Codex/2026-09-10/referenced-chatg
 
 > `optional` **traversalContext?**: [`TraversalContext`](/docs/api/interfaces/TraversalContext)
 
-Defined in: ../../../../Users/sanjay/Documents/Codex/2026-09-10/referenced-chatgpt-conversation-this-is-an/outputs/agentfootprint-answer-validation/node\_modules/footprintjs/dist/types/lib/engine/narrative/types.d.ts:247
+Defined in: node\_modules/footprintjs/dist/types/lib/engine/narrative/types.d.ts:247

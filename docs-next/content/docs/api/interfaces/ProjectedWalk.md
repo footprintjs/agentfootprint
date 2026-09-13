@@ -4,7 +4,7 @@ title: ProjectedWalk
 
 # Interface: ProjectedWalk
 
-Defined in: [src/core/runbook/walk.ts:55](https://github.com/footprintjs/agentfootprint/blob/main/src/core/runbook/walk.ts#L55)
+Defined in: src/core/runbook/walk.ts:55
 
 The pure projection result — rows plus truthful counters.
 
@@ -14,7 +14,7 @@ The pure projection result — rows plus truthful counters.
 
 > `readonly` **complete**: `boolean`
 
-Defined in: [src/core/runbook/walk.ts:60](https://github.com/footprintjs/agentfootprint/blob/main/src/core/runbook/walk.ts#L60)
+Defined in: src/core/runbook/walk.ts:60
 
 ***
 
@@ -22,7 +22,7 @@ Defined in: [src/core/runbook/walk.ts:60](https://github.com/footprintjs/agentfo
 
 > `readonly` **projection**: `"full"` \| `"control-flow"`
 
-Defined in: [src/core/runbook/walk.ts:57](https://github.com/footprintjs/agentfootprint/blob/main/src/core/runbook/walk.ts#L57)
+Defined in: src/core/runbook/walk.ts:57
 
 ***
 
@@ -30,7 +30,7 @@ Defined in: [src/core/runbook/walk.ts:57](https://github.com/footprintjs/agentfo
 
 > `readonly` **rows**: readonly [`WalkRow`](/docs/api/interfaces/WalkRow)[]
 
-Defined in: [src/core/runbook/walk.ts:56](https://github.com/footprintjs/agentfootprint/blob/main/src/core/runbook/walk.ts#L56)
+Defined in: src/core/runbook/walk.ts:56
 
 ***
 
@@ -38,7 +38,7 @@ Defined in: [src/core/runbook/walk.ts:56](https://github.com/footprintjs/agentfo
 
 > `readonly` **shown**: `number`
 
-Defined in: [src/core/runbook/walk.ts:58](https://github.com/footprintjs/agentfootprint/blob/main/src/core/runbook/walk.ts#L58)
+Defined in: src/core/runbook/walk.ts:58
 
 ***
 
@@ -46,4 +46,4 @@ Defined in: [src/core/runbook/walk.ts:58](https://github.com/footprintjs/agentfo
 
 > `readonly` **total**: `number`
 
-Defined in: [src/core/runbook/walk.ts:59](https://github.com/footprintjs/agentfootprint/blob/main/src/core/runbook/walk.ts#L59)
+Defined in: src/core/runbook/walk.ts:59

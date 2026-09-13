@@ -4,7 +4,7 @@ title: FlowDecisionEvent
 
 # Interface: FlowDecisionEvent
 
-Defined in: ../../../../Users/sanjay/Documents/Codex/2026-09-10/referenced-chatgpt-conversation-this-is-an/outputs/agentfootprint-answer-validation/node\_modules/footprintjs/dist/types/lib/engine/narrative/types.d.ts:193
+Defined in: node\_modules/footprintjs/dist/types/lib/engine/narrative/types.d.ts:193
 
 Event passed to FlowRecorder.onDecision.
 
@@ -14,7 +14,7 @@ Event passed to FlowRecorder.onDecision.
 
 > **chosen**: `string`
 
-Defined in: ../../../../Users/sanjay/Documents/Codex/2026-09-10/referenced-chatgpt-conversation-this-is-an/outputs/agentfootprint-answer-validation/node\_modules/footprintjs/dist/types/lib/engine/narrative/types.d.ts:195
+Defined in: node\_modules/footprintjs/dist/types/lib/engine/narrative/types.d.ts:195
 
 ***
 
@@ -22,7 +22,7 @@ Defined in: ../../../../Users/sanjay/Documents/Codex/2026-09-10/referenced-chatg
 
 > **decider**: `string`
 
-Defined in: ../../../../Users/sanjay/Documents/Codex/2026-09-10/referenced-chatgpt-conversation-this-is-an/outputs/agentfootprint-answer-validation/node\_modules/footprintjs/dist/types/lib/engine/narrative/types.d.ts:194
+Defined in: node\_modules/footprintjs/dist/types/lib/engine/narrative/types.d.ts:194
 
 ***
 
@@ -30,7 +30,7 @@ Defined in: ../../../../Users/sanjay/Documents/Codex/2026-09-10/referenced-chatg
 
 > `optional` **description?**: `string`
 
-Defined in: ../../../../Users/sanjay/Documents/Codex/2026-09-10/referenced-chatgpt-conversation-this-is-an/outputs/agentfootprint-answer-validation/node\_modules/footprintjs/dist/types/lib/engine/narrative/types.d.ts:197
+Defined in: node\_modules/footprintjs/dist/types/lib/engine/narrative/types.d.ts:197
 
 ***
 
@@ -38,7 +38,7 @@ Defined in: ../../../../Users/sanjay/Documents/Codex/2026-09-10/referenced-chatg
 
 > `optional` **evidence?**: `DecisionEvidence`
 
-Defined in: ../../../../Users/sanjay/Documents/Codex/2026-09-10/referenced-chatgpt-conversation-this-is-an/outputs/agentfootprint-answer-validation/node\_modules/footprintjs/dist/types/lib/engine/narrative/types.d.ts:200
+Defined in: node\_modules/footprintjs/dist/types/lib/engine/narrative/types.d.ts:200
 
 Structured decision evidence from decide() helper.
 
@@ -48,7 +48,7 @@ Structured decision evidence from decide() helper.
 
 > `optional` **rationale?**: `string`
 
-Defined in: ../../../../Users/sanjay/Documents/Codex/2026-09-10/referenced-chatgpt-conversation-this-is-an/outputs/agentfootprint-answer-validation/node\_modules/footprintjs/dist/types/lib/engine/narrative/types.d.ts:196
+Defined in: node\_modules/footprintjs/dist/types/lib/engine/narrative/types.d.ts:196
 
 ***
 
@@ -56,4 +56,4 @@ Defined in: ../../../../Users/sanjay/Documents/Codex/2026-09-10/referenced-chatg
 
 > `optional` **traversalContext?**: [`TraversalContext`](/docs/api/interfaces/TraversalContext)
 
-Defined in: ../../../../Users/sanjay/Documents/Codex/2026-09-10/referenced-chatgpt-conversation-this-is-an/outputs/agentfootprint-answer-validation/node\_modules/footprintjs/dist/types/lib/engine/narrative/types.d.ts:198
+Defined in: node\_modules/footprintjs/dist/types/lib/engine/narrative/types.d.ts:198

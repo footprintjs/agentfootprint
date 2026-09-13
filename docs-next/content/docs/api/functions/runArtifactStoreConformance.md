@@ -6,7 +6,7 @@ title: runArtifactStoreConformance
 
 > **runArtifactStoreConformance**(`harness`): `Promise`\<[`ArtifactStoreReport`](/docs/api/interfaces/ArtifactStoreReport)\>
 
-Defined in: [src/artifacts/conformance/run.ts:197](https://github.com/footprintjs/agentfootprint/blob/main/src/artifacts/conformance/run.ts#L197)
+Defined in: src/artifacts/conformance/run.ts:197
 
 Run the whole battery against one store and report.
 

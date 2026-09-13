@@ -6,7 +6,7 @@ title: ContextEngineeringUnsubscribe
 
 > **ContextEngineeringUnsubscribe** = () => `void`
 
-Defined in: [src/recorders/core/contextEngineering.ts:119](https://github.com/footprintjs/agentfootprint/blob/main/src/recorders/core/contextEngineering.ts#L119)
+Defined in: src/recorders/core/contextEngineering.ts:120
 
 Unsubscribe handle.
 

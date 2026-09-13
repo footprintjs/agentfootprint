@@ -16,11 +16,12 @@
     "prune:export": "node scripts/prune-export.mjs out",
     "predev": "node ../scripts/gen-fumadocs-api.mjs && node scripts/gen-agent-flowchart.mjs && node scripts/gen-replay-trace.mjs",
     "dev": "next dev",
-    "prebuild": "npm run check:page-tree && npm run check:export-prune && node ../scripts/gen-fumadocs-api.mjs && node scripts/gen-agent-flowchart.mjs && node scripts/gen-replay-trace.mjs",
+    "prebuild": "npm run check:page-tree && npm run check:export-prune && npm run check:browser-demos && node ../scripts/gen-fumadocs-api.mjs && node scripts/gen-agent-flowchart.mjs && node scripts/gen-replay-trace.mjs",
     "build": "next build --webpack",
     "postbuild": "npm run prune:export",
     "start": "next start",
-    "postinstall": "fumadocs-mdx"
+    "postinstall": "fumadocs-mdx",
+    "check:browser-demos": "tsx --test scripts/test/browser-highlighter.test.mts scripts/test/skill-graph-projection.test.mts"
   },
   "dependencies": {
     "@tailwindcss/postcss": "^4.3.1",
