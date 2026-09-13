@@ -132,3 +132,37 @@ if (kept.length > 0) {
       (kept.length > 10 ? `\n    … and ${kept.length - 10} more` : ''),
   );
 }
+
+// Next 16.2.9 exports its internal /_not-found route, then copies the same HTML
+// to 404.html and 404/index.html (next/dist/export/index.js). Static hosts use
+// those public error pages; client navigation requests the destination URL,
+// never an internal /_not-found URL. Keep both public pages and their JS chunks.
+// Refuse to prune if the export shape changes or any HTML links to the internal
+// route. This removes duplicate error output, never a documentation route.
+const internalErrorDir = path.join(outputRoot, '_not-found');
+const expectedErrorFiles = new Set([
+  'index.html', 'index.txt', '__next._tree.txt', '__next._head.txt',
+  '__next._index.txt', '__next._not-found.txt', '__next._not-found.__PAGE__.txt',
+]);
+function linksToInternalError(directory) {
+  return readdirSync(directory, { withFileTypes: true }).some((entry) => {
+    const file = path.join(directory, entry.name);
+    return entry.isDirectory() ? linksToInternalError(file)
+      : entry.isFile() && entry.name.endsWith('.html') &&
+        /(?:href|src)=["'][^"']*\/_not-found(?:\/|["'])/.test(readFileSync(file, 'utf8'));
+  });
+}
+if (existsSync(internalErrorDir)) {
+  const entries = readdirSync(internalErrorDir, { withFileTypes: true });
+  const knownShape = entries.length === expectedErrorFiles.size &&
+    entries.every((entry) => entry.isFile() && expectedErrorFiles.has(entry.name));
+  const publicErrors = ['404.html', '404/index.html'].map((file) => path.join(outputRoot, file));
+  const duplicate = knownShape && publicErrors.every((file) => existsSync(file) &&
+    readFileSync(file).equals(readFileSync(path.join(internalErrorDir, 'index.html'))));
+  if (duplicate && !linksToInternalError(outputRoot)) {
+    rmSync(internalErrorDir, { recursive: true });
+    console.log(`Pruned ${entries.length} internal _not-found files; identical public 404 pages retained.`);
+  } else {
+    console.warn('Kept internal _not-found output: its shape, public copies or links require review.');
+  }
+}
