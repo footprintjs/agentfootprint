@@ -100,7 +100,8 @@
 
 import { bindArtifacts, type ArtifactEventFact } from '../artifacts/capability.js';
 import { readAskComponent } from '../core/askComponent.js';
-import { isPaused, type RunnerPauseOutcome } from '../core/pause.js';
+import { applyInputResponse, readAwaitingInput } from '../core/inputRequest.js';
+import { isPaused, pauseDemandsDecision, type RunnerPauseOutcome } from '../core/pause.js';
 import type { AgentRunCheckpoint } from '../core/runCheckpoint.js';
 import type { ArtifactWireRequest, ArtifactWireResult } from './artifactWire.js';
 import { durableWriter, type DurableWriter } from './durability.js';
@@ -759,6 +760,22 @@ export async function standingAgent<TH extends HostHandle>(
     verified: VerifiedIdentity | undefined,
     reply: HostReply,
   ): Promise<void> {
+    if (op.op === 'pending') {
+      // Reloading the current question uses the same session admission as a
+      // reply. It neither enumerates sessions nor exposes a checkpoint.
+      await sessions.onWake?.(op.sessionId, 'transcript');
+      const stored = await sessions.hydrate(op.sessionId);
+      if (stored !== undefined && !mayOpenSession(stored, verified)) {
+        reply.fail(new SessionNotFoundError(op.sessionId));
+        return;
+      }
+      if (stored !== undefined && stored.format !== 'flowchart-v1') readEnvelope(stored);
+      deliverSessions(reply, 'session-pending', {
+        op: 'pending',
+        pending: stored?.format === 'flowchart-v1' ? readPausedRun(stored).pending : null,
+      });
+      return;
+    }
     const opName = op.op === 'list' ? SESSION_LIST_OP : SESSION_TRANSCRIPT_OP;
     if (identityOptions === undefined || verified === undefined) {
       reply.fail(new SessionOpNeedsIdentityError(opName));
@@ -1087,12 +1104,58 @@ export async function standingAgent<TH extends HostHandle>(
           reply.fail(new NoPendingAskError(sessionId ?? '(anonymous)'));
           return;
         }
+        const inputRequest =
+          pauseDemandsDecision(paused.checkpoint.pauseData) === undefined
+            ? readAwaitingInput(paused.checkpoint.pauseData)
+            : undefined;
+        if (inputRequest !== undefined) {
+          const response = applyInputResponse(inputRequest, request.decision);
+          if ('cancel' in response) {
+            // Data collection, never permission: settle unanswered calls
+            // without executing their handlers or consulting the model.
+            const history = [...paused.conversation.history];
+            const outstanding = new Map<string, { id: string; name: string }>();
+            for (const message of paused.conversation.history) {
+              if (message.role === 'tool' && message.toolCallId !== undefined)
+                outstanding.delete(message.toolCallId);
+              if (message.role === 'assistant') {
+                for (const call of message.toolCalls ?? []) outstanding.set(call.id, call);
+              }
+            }
+            for (const call of outstanding.values())
+              history.push({
+                role: 'tool',
+                toolName: call.name,
+                toolCallId: call.id,
+                content: JSON.stringify({
+                  status: 'input_cancelled',
+                  requestId: response.requestId,
+                }),
+              });
+            const output = 'Input request cancelled.';
+            history.push({ role: 'assistant', content: output });
+            const { skillCursor: _cursor, ...conversation } = paused.conversation;
+            void _cursor;
+            await lane.writer?.settle();
+            if (sessionId !== undefined)
+              await store.persist(
+                sessionId,
+                toEnvelope({ ...conversation, history, checkpointedAt: Date.now() }),
+              );
+            runner.abandonPause();
+            if (sessionId !== undefined)
+              await runner.closeToolSessions({ scope: 'run', sessionId });
+            reply.complete(output);
+            return;
+          }
+        }
         await deliver(
           lane,
           await runner.resume(paused.checkpoint, request.decision, runOptions),
           store,
           reply,
           sessionId,
+          paused,
         );
         return;
       }
@@ -1129,6 +1192,7 @@ export async function standingAgent<TH extends HostHandle>(
     store: SessionLifecycle,
     reply: HostReply,
     sessionId: string | undefined,
+    priorPause?: PausedRun,
   ): Promise<void> {
     const runner = lane.agent;
     // Mid-run writes settle FIRST. Ordering, not tidiness: an 'async' write
@@ -1141,7 +1205,13 @@ export async function standingAgent<TH extends HostHandle>(
 
     if (isPaused(output)) {
       const pending = describePause(output, sessionId);
-      const conversation = sessionId === undefined ? undefined : runner.checkpoint();
+      const conversation =
+        sessionId === undefined
+          ? undefined
+          : output.awaitingInput !== undefined &&
+            output.awaitingInput.requestId === priorPause?.pending.awaitingInput?.requestId
+          ? priorPause.conversation
+          : runner.checkpoint();
       try {
         if (sessionId !== undefined && conversation) {
           await store.persist(
@@ -1414,6 +1484,7 @@ function describePause(outcome: RunnerPauseOutcome, sessionId: string | undefine
     ...(question !== undefined && { question }),
     ...(outcome.checkIn !== undefined && { checkIn: outcome.checkIn }),
     ...(outcome.ask !== undefined && { ask: outcome.ask }),
+    ...(outcome.awaitingInput !== undefined && { awaitingInput: outcome.awaitingInput }),
     ...(component !== undefined && { component }),
     pauseData: outcome.pauseData,
   };

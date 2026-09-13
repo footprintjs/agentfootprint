@@ -76,7 +76,7 @@ import {
   type IdentityFailureClass,
 } from './errors.js';
 import { ARTIFACT_GET_OP, ARTIFACT_HEAD_OP } from './artifactWire.js';
-import { SESSION_LIST_OP, SESSION_TRANSCRIPT_OP } from './sessionWire.js';
+import { SESSION_LIST_OP, SESSION_TRANSCRIPT_OP, SESSION_PENDING_OP } from './sessionWire.js';
 import type { HostReply, HostRequest } from './types.js';
 
 /** Which of the composer's three doors this request knocked at. */
@@ -240,7 +240,11 @@ export interface IngressNote {
 /** Which op name a request named, in the spelling a body uses. */
 function opOf(request: HostRequest): string | undefined {
   if (request.session !== undefined) {
-    return request.session.op === 'list' ? SESSION_LIST_OP : SESSION_TRANSCRIPT_OP;
+    return request.session.op === 'list'
+      ? SESSION_LIST_OP
+      : request.session.op === 'pending'
+      ? SESSION_PENDING_OP
+      : SESSION_TRANSCRIPT_OP;
   }
   if (request.artifact !== undefined) {
     return request.artifact.op === 'head' ? ARTIFACT_HEAD_OP : ARTIFACT_GET_OP;
@@ -261,7 +265,10 @@ function doorOf(request: HostRequest): IngressDoor {
  * exactly the refusal the ownership rule produces.
  */
 function sessionOf(request: HostRequest): string | undefined {
-  if (request.session !== undefined && request.session.op === 'transcript') {
+  if (
+    request.session !== undefined &&
+    (request.session.op === 'transcript' || request.session.op === 'pending')
+  ) {
     return request.session.sessionId;
   }
   return request.sessionId;

@@ -83,6 +83,7 @@ import { createEvictedTurnsHandle, type EvictedTurnsHandle } from './agent/windo
 import { pendingDurableWrite } from './durabilityBarrier.js';
 import {
   ToolSessionTier,
+  type ToolSessionOrigin,
   TOOL_TEARDOWN_TIMEOUT_MS,
   type ToolSessionReport,
 } from './toolSessions.js';
@@ -198,6 +199,7 @@ import {
   type RunCheckpointTracker,
 } from './runCheckpoint.js';
 import { NoConversationError, PendingQuestionError, RunInFlightError } from './conversation.js';
+import { applyInputResponse, readAwaitingInput } from './inputRequest.js';
 import { applyOutputSchema, OutputSchemaError, type OutputSchemaParser } from './outputSchema.js';
 import { normalizeRunInput } from './runInput.js';
 import type { ResolvedOutputEnforcement } from './agent/outputEnforcement.js';
@@ -1958,6 +1960,40 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
     // sound question is "what was asked?".
     const gate = pauseDemandsDecision(checkpoint.pauseData);
     if (gate && !isCheckInDecision(input)) throw new DecisionRequiredError(gate, input);
+    // Typed data collection is not consent. Validate before changing any run state.
+    const awaitingInput = gate === undefined ? readAwaitingInput(checkpoint.pauseData) : undefined;
+    if (awaitingInput !== undefined) {
+      this.assertNotRunning('Agent.resume');
+      const answered = applyInputResponse(awaitingInput, input);
+      if ('cancel' in answered) {
+        throw new TypeError(
+          '[input request] Cancel a hosted request through its host, or abandonPause() before starting another run.',
+        );
+      }
+      if (answered.missing.length > 0) {
+        const copy = structuredClone(checkpoint);
+        const pauseData = {
+          ...(copy.pauseData as Record<string, unknown>),
+          awaitingInput: answered,
+        };
+        const outcome: RunnerPauseOutcome = {
+          paused: true,
+          checkpoint: { ...copy, pauseData },
+          pauseData,
+          awaitingInput: answered,
+        };
+        this.recordPendingQuestion(outcome);
+        return outcome;
+      }
+      input = {
+        status: 'input_received',
+        requestId: answered.requestId,
+        values: answered.supplied,
+        origins: answered.origins,
+        origin: answered.origin,
+        ...(answered.context !== undefined && { context: answered.context }),
+      };
+    }
     // And the answer must be about the thing that was asked. Checked HERE, at
     // the same door and before any state moves, because a resume that has begun
     // is a resume that has already used the value.
@@ -2030,7 +2066,7 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
    * Fired for the TURN, not for `currentRunContext.runId` — `resume()` mints a
    * fresh run id, so a pause and its resume are one turn across two runs, and
    * filtering on the id would leave everything a paused turn opened alive
-   * forever. See `ToolSessionTier.fireRun`.
+   * forever. Hosted turns are scoped to their session, preserving other pauses. See `ToolSessionTier.fireRun`.
    *
    * @param outcome what `run()`/`resume()` is about to return, or about to throw.
    */
@@ -2038,7 +2074,9 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
     if (!this.toolSessionTier) return;
     if (isPaused(outcome)) return;
     if (outcome instanceof Error && outcome.name === 'PauseSignal') return;
-    await this.toolSessionTier.fireRun();
+    if (this.currentRunContext.sessionId !== undefined)
+      await this.toolSessionTier.fireSessionRuns(this.currentRunContext.sessionId);
+    else await this.toolSessionTier.fireRun();
   }
 
   /**
@@ -2338,11 +2376,13 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
    * transport really delivered.
    */
   private toolRunFacts(): {
+    readonly runContext: RunContext;
     readonly runId: string;
     readonly sessionId?: string;
     readonly identity?: MemoryIdentity;
   } {
     return {
+      runContext: { ...this.currentRunContext },
       runId: this.currentRunContext.runId,
       ...(this.currentRunContext.sessionId !== undefined && {
         sessionId: this.currentRunContext.sessionId,
@@ -2361,7 +2401,7 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
     if (!this.toolSessionTier) {
       this.toolSessionTier = new ToolSessionTier({
         timeoutMs: this.toolTeardownTimeoutMs,
-        report: (report) => this.emitToolSessionReport(report),
+        report: (report, origin) => this.emitToolSessionReport(report, origin),
       });
     }
     return this.toolSessionTier;
@@ -2381,10 +2421,10 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
    * hardcodes `runId: 'consumer-scope'`, and a teardown event stamped that way
    * cannot be joined to the run that OPENED the session — the exact
    * unjoinability 9.4.0 spent a release fixing for credential events. So the
-   * meta comes from `currentRunContext`, with a STATED pseudo-stage, the same
+   * meta comes from the registration-time run context, with a STATED pseudo-stage, the same
    * move as the `'<stageId>#paused'` stamp at the pause boundary.
    */
-  private emitToolSessionReport(report: ToolSessionReport): void {
+  private emitToolSessionReport(report: ToolSessionReport, origin: ToolSessionOrigin): void {
     const type =
       report.kind === 'closed'
         ? 'agentfootprint.tools.session_closed'
@@ -2395,7 +2435,10 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
     dispatcher.dispatch({
       type,
       payload,
-      meta: buildEventMeta({ runtimeStageId: TOOL_TEARDOWN_STAGE_ID }, this.currentRunContext),
+      meta: buildEventMeta(
+        { runtimeStageId: TOOL_TEARDOWN_STAGE_ID },
+        origin.runContext ?? this.currentRunContext,
+      ),
     } as unknown as AgentfootprintEventMap[typeof type]);
   }
 

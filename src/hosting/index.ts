@@ -246,6 +246,7 @@ export {
   sessionWireBody,
   SESSION_LIST_OP,
   SESSION_TRANSCRIPT_OP,
+  SESSION_PENDING_OP,
 } from './sessionWire.js';
 export type {
   SessionSummary,

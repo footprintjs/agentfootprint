@@ -1,0 +1,134 @@
+---
+title: Collect missing inputs
+description: Pause for typed values, retain the workflow position, and resume the same request.
+---
+
+`requestInput()` gives missing information an explicit `awaiting_input` state.
+It belongs in a dedicated collection tool; the actual query runs after the
+inputs have arrived. It is data collection, separate from `checkIn` and
+middleware `ask`, which collect approval decisions.
+
+`InputRequestDeclaration` is the collection tool's declaration; each `InputField`
+names a supported `InputValue` type and optional choices. `AwaitingInput` is its
+runtime projection with accepted values, missing fields and workflow origin.
+`isInputPause` narrows a run result to the typed input arm. An `InputResponse`
+supplies values, while `InputCancellation` explicitly ends a hosted request.
+A complete response becomes an `InputResponseResult` in the original tool's
+result slot. `InputRequestError` rejects malformed declarations or replies with
+`ERR_INPUT_REQUEST_INVALID`; it does not consume the paused checkpoint.
+
+```ts
+import { Agent, defineTool, requestInput, isInputPause } from 'agentfootprint';
+import { mock } from 'agentfootprint/providers';
+
+const collect = defineTool({
+  name: 'collect_window',
+  description: 'Collect the timezone needed to interpret the query window.',
+  inputSchema: { type: 'object', properties: {} },
+  execute: () => requestInput({
+    id: 'query-window',
+    question: 'Which timezone should this window use?',
+    fields: [
+      { id: 'year', type: 'number', required: false },
+      { id: 'timezone', type: 'string', description: 'An IANA timezone or UTC.' },
+    ],
+    supplied: { year: 2026 },
+    context: { operation: 'query_records', yearPolicy: 'application-default' },
+  }),
+});
+
+const agent = Agent.create({ provider: mock({ replies: [
+  { toolCalls: [{ id: 'input-1', name: 'collect_window', args: {} }] },
+  { content: 'The inputs are ready for the query.' },
+] }), model: 'mock' }).tool(collect).build();
+
+const asked = await agent.run({ message: 'Inspect the requested window.' });
+if (isInputPause(asked)) {
+  await agent.resume(asked.checkpoint, {
+    requestId: asked.awaitingInput.requestId,
+    values: { timezone: 'UTC' },
+  });
+}
+```
+
+The example year is an author-supplied value, not a library date default.
+The application owns date, timezone, site and other domain policies.
+`context` holds bounded JSON metadata from the collection tool. The answer
+cannot replace it. Domain validation, such as whether a timezone exists,
+belongs to that application's adapter; the library validates field types,
+declared choices, unknown fields and the matching request token.
+
+Fields accept `string`, finite `number`, or `boolean`, optional `description`
+and optional `enum`. Fields are required unless `required: false`. There are
+at most 32 fields; strings and descriptions are bounded to 4096 characters,
+choice lists to 100 values, and context to 16384 JSON characters.
+At least one required field must be missing to request input; when all are
+already known, the collecting tool should continue without raising a pause.
+
+The pending value contains `missing`, `supplied`, and `origins`. Origins are
+`declaration` for values the collecting tool supplied and `response` for values
+accepted from a reply. Runtime-stamped `origin` identifies the original
+request, tool call, selected skill and any outstanding skill candidates.
+This is workflow context, not evidence that a collector observed those values.
+
+Partial answers return another input pause without a model call, query or
+step advance. Persist the returned checkpoint: it contains the newly accepted
+values. A complete answer becomes the collecting tool's result:
+
+```ts
+{
+  status: 'input_received',
+  requestId: 'runtime-generated-token',
+  values: { year: 2026, timezone: 'UTC' },
+  origins: { year: 'declaration', timezone: 'response' },
+  context: { operation: 'query_records', yearPolicy: 'application-default' },
+  origin: { originalRequest: 'Inspect the requested window.', toolCallId: 'input-1' }
+}
+```
+
+The existing result middleware, placement, redaction and size limits still
+process that result. The collection tool is not executed again. A complete
+FlowchartCheckpoint retains the selected skill, history and step position
+across a process restart; the resuming agent must mount the same chart.
+Invalid or stale replies leave the checkpoint available for correction.
+`semantic({ clarify: ... })` remains an informational result and does not
+automatically pause a run.
+
+## Hosted chat
+
+`standingAgent` stores the paused run under its session and returns its usual
+`awaiting` response, with `awaiting.awaitingInput` for this arm. The checkpoint
+stays on the server. The existing generic `decision` transport also carries
+data replies:
+
+```json
+{ "input": "", "sessionId": "current-session", "decision": { "requestId": "runtime-generated-token", "values": { "timezone": "UTC" } } }
+```
+
+Reload the current question without a model call:
+
+`SESSION_PENDING_OP`, exported by `agentfootprint/hosting`, names this read-only
+operation in the shared transport grammar.
+
+```json
+{ "op": "session-pending", "sessionId": "current-session" }
+```
+
+The response is `{ pending: PendingAsk | null }`. It uses the same session
+ownership rule as invoking the session, and returns no checkpoint or transcript.
+Cancelling is explicit:
+
+```json
+{ "input": "", "sessionId": "current-session", "decision": { "requestId": "runtime-generated-token", "cancel": true } }
+```
+
+Hosted cancellation records `input_cancelled`, closes the pending input request
+and retains the conversation. Run-scoped resources for that session are released;
+session-scoped resources and other paused sessions remain open. This happens
+without calling a model or running remaining
+tools. It applies only to this data-collection arm, never a consent gate.
+Direct runner users use `abandonPause()` before starting another request;
+discard the old checkpoint if it must no longer be resumable. If resources were
+registered under a hosting session, end the abandoned turn explicitly with
+`await agent.closeToolSessions({ scope: 'run', sessionId })`.
+An ordinary message does not implicitly approve, cancel, or supply typed fields.

@@ -288,6 +288,7 @@ _Run `npm run examples:readme` after adding/editing examples._
 | 67 | [`67-out-of-budget-wrap-up.ts`](features/67-out-of-budget-wrap-up.ts) | Out of budget — the turn ends with a summary, not a fragment | When maxIterations runs out mid-task, the run spends one more LLM call with the tools withheld, asking for a final answer — what was done, what was not, what the person should know. The fact rides agent.stoppedEarly({ wrappedUp }), agentfootprint.agent.budget_exhausted and turn_end, so a dashboard can tell "answered" from "answered after the budget ran out". Opt out with wrapUpAtMaxIterations: false. |
 | 68 | [`68-runbook-as-tool.ts`](features/68-runbook-as-tool.ts) | runbookAsTool — procedures as tools, answers as evidence | Declare a triage procedure once (rules, decider, inner tools) and get back the honesty envelope: coverage folded from inner tools, rule provenance, generated verdict meanings, and the recorded walk as a recording/chart-walk artifact ticket. |
 | 69 | [`69-evidence-repair.ts`](features/69-evidence-repair.ts) | Ask for missing context during evidence repair | A scripted unsupported year triggers one repair; configured guidance asks for the missing year and timezone. |
+| 70 | [`70-typed-input.ts`](features/70-typed-input.ts) | Collect typed inputs without losing the request | A partial reply updates the checkpoint without a model call; the full reply resumes the original collection tool. |
 
 ### [`canonical/`](canonical/) — end-to-end patterns
 

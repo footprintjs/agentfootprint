@@ -5,6 +5,24 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [9.97.0] - 2026-09-13
+
+### Added
+
+- `requestInput()` pauses a collection tool with typed missing fields and a
+  runtime-stamped `awaiting_input` state. Partial replies retain accepted values
+  without model calls; complete replies resume the same tool boundary and skill
+  position through normal result validation, redaction and placement.
+- Hosted typed replies and explicit cancellation preserve session ownership and
+  conversation history. `session-pending` reloads the pending question without
+  exposing the execution checkpoint. Application defaults remain app-owned.
+
+### Fixed
+
+- Hosted cancellation releases the paused session's run resources without
+  executing remaining tools. Run terminals preserve other paused sessions, and
+  teardown events retain the actual registration's run and session identity.
+
 ## [9.96.1] - 2026-09-13
 
 ### Fixed

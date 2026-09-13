@@ -81,7 +81,7 @@ import {
   WireRequestRefusal,
 } from './errors.js';
 import type { SessionWireRequest, SessionWireResult } from './sessionWire.js';
-import { SESSION_LIST_OP, SESSION_TRANSCRIPT_OP } from './sessionWire.js';
+import { SESSION_LIST_OP, SESSION_TRANSCRIPT_OP, SESSION_PENDING_OP } from './sessionWire.js';
 import { lowerCasedHeaders } from './headers.js';
 import type {
   AgentHost,
@@ -582,6 +582,7 @@ const STATUS_BY_CODE: Readonly<Record<string, number>> = {
   ERR_AWAITING_DECISION: 409,
   ERR_NO_PENDING_ASK: 409,
   ERR_DECISION_REQUIRED: 400,
+  ERR_INPUT_REQUEST_INVALID: 400,
   ERR_INVALID_WIRE_OP: 400,
   ERR_ARTIFACT_SESSION_REQUIRED: 400,
   ERR_ARTIFACT_NOT_FOUND: 404,
@@ -1160,7 +1161,11 @@ async function dispatchOne(
       if (!wire.sessions) {
         reply.fail(
           new SessionsNotCarriedError(
-            result.op === 'list' ? SESSION_LIST_OP : SESSION_TRANSCRIPT_OP,
+            result.op === 'list'
+              ? SESSION_LIST_OP
+              : result.op === 'pending'
+              ? SESSION_PENDING_OP
+              : SESSION_TRANSCRIPT_OP,
             hostName,
           ),
         );

@@ -49,6 +49,7 @@ import { isWireOp, refuseUnknownWireOp, WIRE_OPS } from './wireOps.js';
 export const SESSION_LIST_OP = WIRE_OPS.sessionList;
 /** The wire spelling of "one owned session's messages". */
 export const SESSION_TRANSCRIPT_OP = WIRE_OPS.sessionTranscript;
+export const SESSION_PENDING_OP = WIRE_OPS.sessionPending;
 
 /**
  * One session-history operation, as a request carries it — the port-side shape
@@ -61,7 +62,8 @@ export const SESSION_TRANSCRIPT_OP = WIRE_OPS.sessionTranscript;
  */
 export type SessionWireRequest =
   | { readonly op: 'list' }
-  | { readonly op: 'transcript'; readonly sessionId: string };
+  | { readonly op: 'transcript'; readonly sessionId: string }
+  | { readonly op: 'pending'; readonly sessionId: string };
 
 /** One row in a listing — everything a sidebar draws, and nothing from inside
  *  the conversation. */
@@ -99,6 +101,7 @@ export interface TranscriptMessage {
 
 /** What a resolved session operation hands the reply. Exactly one arm. */
 export type SessionWireResult =
+  | { readonly op: 'pending'; readonly pending: import('./types.js').PendingAsk | null }
   | { readonly op: 'list'; readonly sessions: readonly SessionSummary[] }
   | {
       readonly op: 'transcript';
@@ -122,7 +125,7 @@ export function readSessionWireOp(
 ): SessionWireRequest | undefined {
   const op = body.op;
   if (op === undefined) return undefined;
-  if (op !== SESSION_LIST_OP && op !== SESSION_TRANSCRIPT_OP) {
+  if (op !== SESSION_LIST_OP && op !== SESSION_TRANSCRIPT_OP && op !== SESSION_PENDING_OP) {
     if (isWireOp(op)) return undefined;
     refuseUnknownWireOp(op);
   }
@@ -130,12 +133,12 @@ export function readSessionWireOp(
   const sessionId = body.sessionId;
   if (typeof sessionId !== 'string' || sessionId.trim().length === 0) {
     throw new InvalidWireOpError(
-      `'${SESSION_TRANSCRIPT_OP}' needs 'sessionId' — which conversation to read. The ids a ` +
+      `'${String(op)}' needs 'sessionId' — which conversation to read. The ids a ` +
         `caller may read are exactly the ones '${SESSION_LIST_OP}' hands back; a session id ` +
         `from anywhere else answers the same not-found as one that never existed.`,
     );
   }
-  return { op: 'transcript', sessionId };
+  return { op: op === SESSION_PENDING_OP ? 'pending' : 'transcript', sessionId };
 }
 
 /**
@@ -150,5 +153,6 @@ export function readSessionWireOp(
  */
 export function sessionWireBody(result: SessionWireResult): Readonly<Record<string, unknown>> {
   if (result.op === 'list') return { sessions: result.sessions };
+  if (result.op === 'pending') return { pending: result.pending };
   return { transcript: { sessionId: result.sessionId, messages: result.messages } };
 }

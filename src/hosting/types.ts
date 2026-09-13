@@ -27,6 +27,7 @@ import type { AskComponent } from '../core/askComponent.js';
 import type { CheckInRequest } from '../core/checkin.js';
 import type { MiddlewareAsk } from '../core/pause.js';
 import type { AgentRunCheckpoint } from '../core/runCheckpoint.js';
+import type { AwaitingInput } from '../core/inputRequest.js';
 import type { Unsubscribe } from '../events/dispatcher.js';
 import type { ArtifactWireRequest, ArtifactWireResult } from './artifactWire.js';
 import type { IdentityVerificationOptions } from './identityVerification.js';
@@ -579,6 +580,8 @@ export interface PausedRun {
  * the question; the store gets the state.
  */
 export interface PendingAsk {
+  /** Typed missing-input collection. Respond with {requestId, values}; never approval. */
+  readonly awaitingInput?: AwaitingInput;
   /** The session holding the paused run — where the decision has to be sent back. */
   readonly sessionId?: string;
   /** The tool that asked, when the run recorded which one it was. */

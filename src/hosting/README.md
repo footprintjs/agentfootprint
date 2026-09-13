@@ -22,3 +22,10 @@ them slightly differently. Deliberately vendor-neutral — a test greps for it.
 - `memorySessions.ts`, `sqliteSessions.ts` — reference session stores.
 - `browserSession.ts`, `webSocketConversation.ts`, `webSocketFrames.ts`,
   `identityVerification.ts`, `durability.ts`.
+
+Typed input pauses use the existing `decision` transport for `{requestId,
+values}` and expose `PendingAsk.awaitingInput`. Partial replies persist the
+updated pause without a run. `session-pending` reloads that question under the
+same ownership rule as invoke. An explicit `{requestId, cancel:true}` closes
+only an input pause, settles unanswered call messages and preserves history;
+it never approves a consent gate or executes remaining work.

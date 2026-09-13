@@ -37,6 +37,8 @@ export const WIRE_OPS = {
   sessionList: 'session-list',
   /** One owned session's message history (9.26.0). */
   sessionTranscript: 'session-transcript',
+  /** The question currently outstanding on one session, without its checkpoint. */
+  sessionPending: 'session-pending',
 } as const;
 
 /** One wire operation name, as a body spells it. */
@@ -64,6 +66,7 @@ export function refuseUnknownWireOp(op: unknown): never {
       `'${WIRE_OPS.artifactHead}' (a claim ticket's metadata) and '${WIRE_OPS.artifactGet}' ` +
       `(metadata + payload), each taking { ref }; '${WIRE_OPS.sessionList}' (the verified ` +
       `caller's own sessions) and '${WIRE_OPS.sessionTranscript}' (one owned session's ` +
-      `messages, taking { sessionId }). A request without 'op' is an ordinary invoke.`,
+      `messages, taking { sessionId }); '${WIRE_OPS.sessionPending}' (the current question, ` +
+      `taking { sessionId }). A request without 'op' is an ordinary invoke.`,
   );
 }

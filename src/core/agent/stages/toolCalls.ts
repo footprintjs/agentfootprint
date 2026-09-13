@@ -92,6 +92,7 @@ import {
 import type { AuthorizationRequiredMode } from '../../../identity/consent.js';
 import { CONSENT_PAUSE_KEY, consentQuestion, modelRefusal } from '../../../identity/consent.js';
 import { isPauseRequest, PauseAnswerRequiredError } from '../../pause.js';
+import { stampInputRequest, validateInputDeclaration } from '../../inputRequest.js';
 import {
   assertAskComponent,
   InvalidAskComponentError,
@@ -489,6 +490,7 @@ export interface ToolCallsHandlerDeps {
    * @internal
    */
   readonly currentRun?: () => {
+    readonly runContext?: import('../../../bridge/eventMeta.js').RunContext;
     readonly runId: string;
     readonly sessionId?: string;
     readonly identity?: MemoryIdentity;
@@ -1923,6 +1925,7 @@ export function buildToolCallsHandler(
           {
             tool: toolName,
             toolCallId,
+            ...(facts?.runContext !== undefined && { runContext: facts.runContext }),
             ...(facts?.runId !== undefined && { runId: facts.runId }),
             ...(facts?.sessionId !== undefined && { sessionId: facts.sessionId }),
           },
@@ -3866,12 +3869,35 @@ export function buildToolCallsHandler(
                 // after-tool moment on the far side of the pause (8.13.0) —
                 // the same reason the three sibling pauses carry theirs.
                 scope.pausedToolArgs = callArgs;
+                const declaration =
+                  typeof err.data === 'object' && err.data !== null
+                    ? (err.data as { inputRequest?: unknown }).inputRequest
+                    : undefined;
+                const awaitingInput =
+                  declaration === undefined
+                    ? undefined
+                    : stampInputRequest(
+                        validateInputDeclaration(declaration),
+                        `${deps.currentRun?.().runId ?? scope.turnStartMs}:${tc.id}`,
+                        {
+                          originalRequest: scope.userMessage,
+                          toolCallId: tc.id,
+                          ...(scope.currentSkillId !== undefined && {
+                            skillId: scope.currentSkillId,
+                          }),
+                          ...(scope.turnRoute?.offered !== undefined && {
+                            offeredSkillIds: [...scope.turnRoute.offered],
+                          }),
+                        },
+                      );
                 // Returning a defined value triggers footprintjs pause —
                 // the returned object becomes the checkpoint's pauseData.
                 return {
                   toolCallId: tc.id,
                   toolName: tc.name,
-                  ...(typeof err.data === 'object' && err.data !== null
+                  ...(awaitingInput !== undefined
+                    ? { question: awaitingInput.question, awaitingInput }
+                    : typeof err.data === 'object' && err.data !== null
                     ? (err.data as Record<string, unknown>)
                     : { data: err.data }),
                 };

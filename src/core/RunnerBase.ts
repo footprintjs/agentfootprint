@@ -19,6 +19,7 @@ import { EventDispatcher } from '../events/dispatcher.js';
 import { redactConsentUrlForEvent } from '../identity/consent.js';
 import { readAskComponent } from './askComponent.js';
 import { pauseDemandsDecision } from './pause.js';
+import { readAwaitingInput } from './inputRequest.js';
 import type { MiddlewareAsk, RunnerPauseOutcome } from './pause.js';
 import type { CheckInRequest } from './checkin.js';
 import type {
@@ -360,6 +361,7 @@ export abstract class RunnerBase<TIn = unknown, TOut = unknown> implements Runne
     const checkIn =
       gate?.kind === 'checkIn' ? (pauseData as { checkIn?: CheckInRequest }).checkIn : undefined;
     const ask = gate?.kind === 'ask' ? (pauseData as { ask?: MiddlewareAsk }).ask : undefined;
+    const awaitingInput = gate === undefined ? readAwaitingInput(pauseData) : undefined;
 
     return {
       paused: true,
@@ -367,6 +369,7 @@ export abstract class RunnerBase<TIn = unknown, TOut = unknown> implements Runne
       pauseData,
       ...(checkIn && { checkIn }),
       ...(ask && { ask }),
+      ...(awaitingInput && { awaitingInput }),
     };
   }
 
@@ -686,6 +689,9 @@ export abstract class RunnerBase<TIn = unknown, TOut = unknown> implements Runne
 
   /**
    * End the tool sessions held for one hosting session.
+   * Pass `{ scope: 'run', sessionId }` to terminate only its paused turn's
+   * resources, such as after an explicit input cancellation. Session-scoped
+   * resources and other conversations remain open.
    *
    * **The mechanism is the library's; the TIMING is yours.** Nothing in this
    * package can know when a request/reply session is over — a `HostRequest`
@@ -720,9 +726,18 @@ export abstract class RunnerBase<TIn = unknown, TOut = unknown> implements Runne
    *   });
    */
   async closeToolSessions(
-    options: { readonly sessionId?: string; readonly reason?: TeardownReason } = {},
+    options:
+      | {
+          readonly scope?: 'session';
+          readonly sessionId?: string;
+          readonly reason?: TeardownReason;
+        }
+      | { readonly scope: 'run'; readonly sessionId: string } = {},
   ): Promise<number> {
+    if (options.scope === 'run' && (!options.sessionId || typeof options.sessionId !== 'string'))
+      throw new TypeError('Closing run resources requires an explicit sessionId.');
     if (!this.toolSessionTier) return 0;
+    if (options.scope === 'run') return this.toolSessionTier.fireSessionRuns(options.sessionId);
     return this.toolSessionTier.fireSession(options.sessionId, options.reason ?? 'session-end');
   }
 

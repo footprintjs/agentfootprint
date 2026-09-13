@@ -22,8 +22,14 @@ core/
 ├── LLMCall.ts        Primitive: single LLM invocation (no tools, no loop).
 ├── Agent.ts          Primitive: ReAct loop (LLM + tools + iteration).
 ├── tools.ts          Tool<TArgs, TResult> contract.
+├── inputRequest.ts   Typed missing fields, accepted values and response validation; pause.ts supplies requestInput().
 └── slots/            The 3-slot context model (see slots/README.md).
 ```
+
+`requestInput()` is a data-collection arm of the existing pause mechanism.
+Partial typed replies update the returned checkpoint before executor resume;
+full replies use the normal paused-tool result path. It does not share the
+consent decision vocabulary. See the input-requests guide for the wire shape.
 
 ## Architectural decisions
 

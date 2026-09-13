@@ -58,6 +58,7 @@
 import { encodeIdentityField } from '../memory/identity/index.js';
 import { fnv1a } from '../lib/fnv1a.js';
 import { lazyRequire } from '../lib/lazyRequire.js';
+import type { RunContext } from '../bridge/eventMeta.js';
 import type { ToolExecutionContext } from './tools.js';
 
 /**
@@ -113,6 +114,8 @@ export interface TeardownOptions {
 
 /** The call a registration came from — what the firing matrix filters on. */
 export interface ToolSessionOrigin {
+  /** Actual registration-time event context, retained only in memory. */
+  readonly runContext?: RunContext;
   readonly tool: string;
   readonly toolCallId: string;
   /** Absent when the door has no run (`mcpServe`). */
@@ -266,7 +269,7 @@ export interface ToolSessionTierOptions {
   /** Where TEARDOWN reports go. The runner wires this to the typed event
    *  dispatcher. Starts and reuses are the caller's to announce — see
    *  {@link RegisterOutcome}. */
-  readonly report?: (report: ToolSessionReport) => void;
+  readonly report?: (report: ToolSessionReport, origin: ToolSessionOrigin) => void;
   /** Clock seam — tests drive idle and duration without waiting. */
   readonly now?: () => number;
 }
@@ -300,7 +303,7 @@ export class ToolSessionTier {
   private readonly timeoutMs: number;
   private readonly idleMs: number;
   private readonly maxLive: number;
-  private readonly report: (report: ToolSessionReport) => void;
+  private readonly report: (report: ToolSessionReport, origin: ToolSessionOrigin) => void;
   private readonly now: () => number;
   private seq = 0;
 
@@ -406,18 +409,16 @@ export class ToolSessionTier {
    * Called from `Agent.run`/`resume` at a terminal that is NOT a pause — and
    * deliberately not from a `finally`, which also runs on the two pause shapes.
    *
-   * **`runId` is optional, and the Agent omits it.** A `'run'` scope means
+   * **`runId` is optional for unhosted callers.** A `'run'` scope means
    * "release this when the TURN that opened it ends", and a turn is not a
    * runId: a pause and its resume are one turn across two runs (`resume()`
    * builds a fresh executor with a fresh id). Filtering on the id would leave
    * every session a paused turn had opened alive forever — the failure would
    * look like nothing at all, because the run answered fine.
    *
-   * Firing all of them is exactly right under the runner's own
-   * ONE-IN-FLIGHT-RUN-PER-AGENT invariant: at a terminal there is no other turn
-   * whose sessions these could be. An ABANDONED pause is the interesting case
-   * and it lands the right way round too — the next completed turn releases
-   * what the abandoned one left holding.
+   * Hosted agents use `fireSessionRuns` instead: one runner can retain pauses
+   * for several conversations even though only one run executes at a time.
+   * A session terminal must never close another conversation's resources.
    *
    * Pass an id where a caller really does mean one specific run.
    */
@@ -426,6 +427,11 @@ export class ToolSessionTier {
       (r) => r.scope === 'run' && (runId === undefined || r.origin.runId === runId),
       'run-end',
     ).then(() => undefined);
+  }
+
+  /** End run resources for one hosting conversation across pause/resume run IDs. */
+  fireSessionRuns(sessionId: string): Promise<number> {
+    return this.fire((r) => r.scope === 'run' && r.origin.sessionId === sessionId, 'run-end');
   }
 
   /**
@@ -513,20 +519,26 @@ export class ToolSessionTier {
         this.timeoutMs,
         `${registration.tool} teardown`,
       );
-      this.report({
-        ...base,
-        kind: 'closed',
-        durationMs: this.now() - startedAt,
-      });
+      this.report(
+        {
+          ...base,
+          kind: 'closed',
+          durationMs: this.now() - startedAt,
+        },
+        registration.origin,
+      );
     } catch (err) {
       // Law 5: swallowed at the caller, never silent on the wire.
-      this.report({
-        ...base,
-        kind: 'close-failed',
-        durationMs: this.now() - startedAt,
-        error: err instanceof Error ? err.message : String(err),
-        ...(err instanceof Error && { errorClass: err.constructor?.name ?? err.name }),
-      });
+      this.report(
+        {
+          ...base,
+          kind: 'close-failed',
+          durationMs: this.now() - startedAt,
+          error: err instanceof Error ? err.message : String(err),
+          ...(err instanceof Error && { errorClass: err.constructor?.name ?? err.name }),
+        },
+        registration.origin,
+      );
     }
   }
 }

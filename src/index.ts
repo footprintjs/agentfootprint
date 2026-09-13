@@ -207,6 +207,8 @@ export type { GroupKind, GroupMember, GroupMetadata, GroupTranslator } from './c
 export {
   pauseHere,
   askHuman,
+  requestInput,
+  isInputPause,
   isPauseRequest,
   isPaused,
   isCheckInPause,
@@ -229,6 +231,16 @@ export {
   type MiddlewareAsk,
   type RunnerPauseOutcome,
 } from './core/pause.js';
+export type {
+  InputValue,
+  InputField,
+  InputRequestDeclaration,
+  AwaitingInput,
+  InputResponse,
+  InputCancellation,
+  InputResponseResult,
+} from './core/inputRequest.js';
+export { InputRequestError } from './core/inputRequest.js';
 
 // Typed HITL (9.24.0) — the OPTIONAL component half of a human ask: WHICH
 // registered screen component collects the answer, with small `props` inline

@@ -20,6 +20,8 @@ import { readAskComponent } from './askComponent.js';
 import type { FlowchartCheckpoint } from 'footprintjs';
 import type { AskComponent } from './askComponent.js';
 import type { CheckInRequest } from './checkin.js';
+import { InputRequestError, validateInputDeclaration } from './inputRequest.js';
+import type { AwaitingInput, InputRequestDeclaration } from './inputRequest.js';
 
 /**
  * Outcome returned by `runner.run()` / `runner.resume()` when execution
@@ -33,6 +35,8 @@ export interface RunnerPauseOutcome {
   readonly checkpoint: FlowchartCheckpoint;
   /** Data passed to `scope.$pause()` / `pauseHere()`. Consumer-typed. */
   readonly pauseData: unknown;
+  /** Typed data collection; answers are values, never approval decisions. */
+  readonly awaitingInput?: AwaitingInput;
   /**
    * Present ONLY when this pause is an evidence-carrying check-in (a tool
    * declared `checkIn`). Carries the typed ask + evidence pack. Absent for
@@ -81,6 +85,30 @@ export function isPaused<T>(result: T | RunnerPauseOutcome): result is RunnerPau
   return (
     typeof result === 'object' && result !== null && (result as RunnerPauseOutcome).paused === true
   );
+}
+
+/** A missing-input pause, distinct from every consent gate. */
+export function isInputPause(
+  result: unknown,
+): result is RunnerPauseOutcome & { readonly awaitingInput: AwaitingInput } {
+  return isPaused(result) && result.awaitingInput !== undefined;
+}
+
+/** Collect declared fields using a dedicated tool. The query itself runs afterwards. */
+export function requestInput(declaration: InputRequestDeclaration): never {
+  const inputRequest = validateInputDeclaration(declaration);
+  if (
+    !inputRequest.fields.some(
+      (field) =>
+        field.required !== false &&
+        !Object.prototype.hasOwnProperty.call(inputRequest.supplied ?? {}, field.id),
+    )
+  ) {
+    throw new InputRequestError(
+      'no required fields are missing; continue without requesting input',
+    );
+  }
+  return pauseHere({ question: inputRequest.question, inputRequest });
 }
 
 /**
