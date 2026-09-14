@@ -1,15 +1,24 @@
 **Fold** — one typed claim about one subject, and the pure comparison that says
-which two claims cannot both be true.
+which current readings cannot all satisfy their declared single-valued predicate.
 
-## What it reads / what it writes
-- Reads a finite set of assertions the checks collected from the record.
-- Writes nothing: `conflictsOf` returns fresh data. No I/O, no store, no clock.
+## Shared implementation
 
-## The one law here
-A contradiction must be DECIDABLE from the assertions themselves. Two claims
-conflict because their declared exclusion rule says so, never because a
-heuristic thought they looked incompatible.
+`contextfootprint` supplies assertion types, value participation, comparison and
+subject equality. `conflicts.ts` delegates to that implementation with Agent's
+existing key encoding from `types.ts`; recorded keys and witness objects keep
+their existing shape. A recording-key migration is separate work.
 
-## Files
-- `types.ts` — `Assertion`, and the two rules that give the algebra its teeth.
-- `conflicts.ts` — the exclusion comparison, pure.
+The comparator reads a finite assertion set and writes nothing. Quoted history,
+unknown values, different epochs and multi-valued predicates keep their existing
+exclusions. Values retain the existing sorted-key JSON comparison limits.
+
+## Consumer responsibilities
+
+Agent still collects and stamps evidence, runs checks at its existing boundaries,
+records findings and determines dispositions. `.claims()` stays diagnostic;
+`.answerValidation()` retains its configured enforce/observe behavior. No conflict
+is not a passed validation: evidence may be missing or incomparable.
+
+The dependency is commit-pinned and bundled; see `vendor/contextfootprint/README.md`.
+`npm run test:context-package` verifies a packed offline consumer in CJS, ESM and
+both TypeScript modes after `npm run build`.

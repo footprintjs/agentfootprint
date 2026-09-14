@@ -46,3 +46,6 @@ index-claude.html
 *.scratch.*
 # ANCHORED to the repo root — see the note above the other `coverage` rule.
 /coverage
+
+# Reviewed, commit-pinned dependency for the shared assertion extraction.
+!vendor/contextfootprint/*.tgz

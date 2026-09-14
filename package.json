@@ -1,7 +1,7 @@
 {
   "name": "agentfootprint",
   "version": "9.97.0",
-  "description": "The explainable agent framework — backtrack a wrong answer to the exact context that caused it (evidence, not guesses). Built on footprintjs.",
+  "description": "The explainable agent framework \u2014 backtrack a wrong answer to the exact context that caused it (evidence, not guesses). Built on footprintjs.",
   "license": "MIT",
   "type": "commonjs",
   "author": "Sanjay Krishna Anbalagan",
@@ -80,7 +80,8 @@
     "release:minor": "bash scripts/release.sh minor",
     "release:major": "bash scripts/release.sh major",
     "coverage:badge": "npm run test:coverage; node scripts/coverage-badge.mjs",
-    "docs:truth:report": "node scripts/docs-truth-check.mjs --report-only"
+    "docs:truth:report": "node scripts/docs-truth-check.mjs --report-only",
+    "test:context-package": "node scripts/check-context-package.mjs"
   },
   "files": [
     "dist/**/*",
@@ -438,5 +439,11 @@
     "unpdf": "^1.8.0",
     "vitest": "^4.1.5",
     "zod": "^3.25.76"
-  }
+  },
+  "dependencies": {
+    "contextfootprint": "0.1.0"
+  },
+  "bundleDependencies": [
+    "contextfootprint"
+  ]
 }
