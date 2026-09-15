@@ -2,11 +2,12 @@
 
 import { useState, type ReactNode } from 'react';
 import { LiveSlideDeck } from 'storydeck/react';
+import { ContextWalkthrough } from './ContextWalkthrough';
 import { answerSteps, conflictSteps, type StoryStep } from './story';
 import './context-story.css';
 
 type Story = 'answer' | 'conflict';
-type ContextView = 'visual' | 'json';
+type ViewMode = 'visual' | 'json';
 
 function Card({
   label,
@@ -334,7 +335,7 @@ function Slide({
   step: StoryStep;
   index: number;
   story: Story;
-  view: ContextView;
+  view: ViewMode;
 }) {
   return (
     <div className="cx-slide">
@@ -354,7 +355,9 @@ function Slide({
         </div>
       </div>
       <div className="cx-visual">
-        {view === 'json' ? (
+        {view === 'json' && story === 'answer' ? (
+          <ContextWalkthrough stepId={step.id} label={step.label} />
+        ) : view === 'json' ? (
           <div className="cx-json-panel">
             <div className="cx-caption">Context at this step · {step.label}</div>
             <pre tabIndex={0} aria-label={`JSON context: ${step.label}`}>
@@ -377,7 +380,7 @@ function Slide({
 export function ContextStory() {
   const [story, setStory] = useState<Story>('answer');
   const [index, setIndex] = useState(0);
-  const [view, setView] = useState<ContextView>('visual');
+  const [view, setView] = useState<ViewMode>('visual');
   const steps = story === 'answer' ? answerSteps : conflictSteps;
   const step = steps[index];
   const go = (next: number) => setIndex(Math.max(0, Math.min(steps.length - 1, next)));
