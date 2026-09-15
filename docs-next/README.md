@@ -31,8 +31,9 @@ two illustrated stories. It uses the real StoryDeck `LiveSlideDeck` component:
 the page owns its step index, and StoryDeck owns its live slide shells and scoped
 keyboard navigation. The source is split into `components/context-story/story.ts`
 (authored teaching steps), `ContextStory.tsx` (visuals and controls), and scoped CSS.
-The optional JSON inspector is outside the slide container so expanding it cannot
-clip the presentation. No model API is called; all data and model proposals are
+The Visual / JSON toggle preserves the current step and stays selected when
+advancing. The JSON panel has a bounded scroll area so it cannot clip the
+presentation. No model API is called; all data and model proposals are
 synthetic. The JSON is a teaching projection, not executable API configuration.
 
 The StoryDeck dependency is an exact local archive, not an npm release; see

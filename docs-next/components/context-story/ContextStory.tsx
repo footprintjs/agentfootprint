@@ -6,6 +6,7 @@ import { answerSteps, conflictSteps, type StoryStep } from './story';
 import './context-story.css';
 
 type Story = 'answer' | 'conflict';
+type ContextView = 'visual' | 'json';
 
 function Card({
   label,
@@ -324,7 +325,17 @@ function ConflictVisual({ index }: { index: number }) {
   );
 }
 
-function Slide({ step, index, story }: { step: StoryStep; index: number; story: Story }) {
+function Slide({
+  step,
+  index,
+  story,
+  view,
+}: {
+  step: StoryStep;
+  index: number;
+  story: Story;
+  view: ContextView;
+}) {
   return (
     <div className="cx-slide">
       <div className="cx-narrative">
@@ -343,7 +354,21 @@ function Slide({ step, index, story }: { step: StoryStep; index: number; story: 
         </div>
       </div>
       <div className="cx-visual">
-        {story === 'answer' ? <AnswerVisual index={index} /> : <ConflictVisual index={index} />}
+        {view === 'json' ? (
+          <div className="cx-json-panel">
+            <div className="cx-caption">Context at this step · {step.label}</div>
+            <pre tabIndex={0} aria-label={`JSON context: ${step.label}`}>
+              <code>{JSON.stringify(step.context, null, 2)}</code>
+            </pre>
+            <p>
+              Illustrative context projection. Not a provider message or runnable API configuration.
+            </p>
+          </div>
+        ) : story === 'answer' ? (
+          <AnswerVisual index={index} />
+        ) : (
+          <ConflictVisual index={index} />
+        )}
       </div>
     </div>
   );
@@ -352,6 +377,7 @@ function Slide({ step, index, story }: { step: StoryStep; index: number; story: 
 export function ContextStory() {
   const [story, setStory] = useState<Story>('answer');
   const [index, setIndex] = useState(0);
+  const [view, setView] = useState<ContextView>('visual');
   const steps = story === 'answer' ? answerSteps : conflictSteps;
   const step = steps[index];
   const go = (next: number) => setIndex(Math.max(0, Math.min(steps.length - 1, next)));
@@ -395,6 +421,17 @@ export function ContextStory() {
           </button>
         ))}
       </nav>
+      <div className="cx-view-bar">
+        <span>One step. Two views.</span>
+        <div role="group" aria-label="Context representation">
+          <button type="button" aria-pressed={view === 'visual'} onClick={() => setView('visual')}>
+            Visual
+          </button>
+          <button type="button" aria-pressed={view === 'json'} onClick={() => setView('json')}>
+            JSON
+          </button>
+        </div>
+      </div>
       <LiveSlideDeck
         slides={steps}
         index={index}
@@ -410,7 +447,7 @@ export function ContextStory() {
         }
         className="cx-stage"
         renderSlide={({ slide, index: slideIndex }) => (
-          <Slide step={slide} index={slideIndex} story={story} />
+          <Slide step={slide} index={slideIndex} story={story} view={view} />
         )}
       />
       <noscript>
@@ -444,19 +481,6 @@ export function ContextStory() {
           →
         </button>
       </div>
-      <details className="cx-inspector" key={story}>
-        <summary>
-          <span>Inspect context</span>
-          <span>Optional JSON · changes with each step</span>
-        </summary>
-        <p>
-          This simplified teaching view shows the relevant data at this step. It is not a provider
-          message or a runnable API configuration.
-        </p>
-        <pre tabIndex={0} aria-label="Context at the current step">
-          <code>{JSON.stringify(step.context, null, 2)}</code>
-        </pre>
-      </details>
       <div className="cx-deck-credit">
         Slide navigation powered by StoryDeck. Focus the slide, then use ← / →.
       </div>

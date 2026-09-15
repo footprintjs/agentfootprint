@@ -495,38 +495,54 @@
   color: var(--cx-muted);
   font-size: 12px;
 }
-.cx-inspector {
-  margin-top: 14px;
+.cx-view-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 9px 24px;
   background: var(--bg-elev);
   border: 1px solid var(--border);
-  border-radius: 10px;
-}
-.cx-inspector summary {
-  padding: 14px 18px;
-  font-size: 12px;
-  cursor: pointer;
-}
-.cx-inspector summary > span:first-child {
-  font-weight: 650;
-  margin-left: 8px;
-}
-.cx-inspector summary > span:last-child {
-  float: right;
   color: var(--cx-muted);
+  font-size: 11px;
 }
-.cx-inspector > p {
-  padding: 0 20px 12px;
+.cx-view-bar > div {
+  display: flex;
+  gap: 3px;
+  border-radius: 7px;
+  padding: 3px;
+  border: 1px solid var(--border);
+  background: var(--bg-alt);
+}
+.cx-view-bar button {
+  padding: 5px 15px;
+  border-radius: 4px;
   font-size: 12px;
+  font-weight: 600;
+}
+.cx-view-bar button[aria-pressed='true'] {
+  color: var(--fg);
+  background: var(--bg-elev);
+  box-shadow: 0 1px 4px #00000010;
+}
+.cx-json-panel {
+  min-width: 0;
+  width: 100%;
+  background: var(--bg-elev);
+  border: 1px solid var(--border-strong);
+  border-radius: 12px;
+  padding: 18px;
+}
+.cx-json-panel > p {
+  padding-top: 12px;
+  font-size: 10px;
   color: var(--cx-muted);
   line-height: 1.6;
 }
-.cx-inspector pre {
+.cx-json-panel pre {
   overflow: auto;
-  max-height: 330px;
-  padding: 20px;
-  margin: 0 14px 14px;
-  border-radius: 8px;
-  background: var(--bg-alt);
+  max-height: 340px;
+  padding-block: 10px;
+  scrollbar-width: thin;
   font-size: 12px;
   line-height: 1.7;
 }
@@ -750,8 +766,7 @@
   .cx-navigation p {
     font-size: 11px;
   }
-  .cx-navigation p span,
-  .cx-inspector summary > span:last-child {
+  .cx-navigation p span {
     display: none;
   }
   .cx-layer-grid {
