@@ -212,6 +212,36 @@ Because the framework owns the injection, every LLM call backtracks to four type
 
 Those four answers are why contextual errors stop being invisible. See [Why agentfootprint?](doc:why#the-four-backtrack-questions) for the full bug-class argument.
 
+### Opt-in outer JSON context meanings
+
+`CONTEXT_FIELD_MEANINGS` is an immutable record exported from
+`agentfootprint/context`. It defines `facts`, `limitations`, `scope`,
+`evidenceRefs`, `nextSteps`, `domainDefinitions`, `objective` and
+`completionRequirements`. `contextContractForModel()` formats those same
+definitions as compact guidance for an existing `.system(...)` call or
+`defineSteering({ id, prompt })`:
+
+```ts
+import { contextContractForModel } from 'agentfootprint/context';
+
+const call = LLMCall.create({ provider, model })
+  .system(contextContractForModel())
+  .build();
+await call.run({ message: JSON.stringify(context) });
+```
+
+Facts remain sourced and scoped; limitations constrain claims. Absence does
+not mean healthy, and no conflict does not establish completeness. References
+need authorized resolution; proposed steps are neither executed nor authorized
+by their presence. Domain definitions explain terms rather than observations.
+Task goals and completion requirements do not establish completed results.
+
+Nothing is injected automatically. This helper does not parse data, validate
+answers, resolve evidence, select actions or provide prompt-injection protection.
+Applications still own trusted context construction and enforcement. The mock
+example `examples/context-engineering/23-context-contract.ts` checks instruction
+and JSON delivery, not real-model reasoning quality.
+
 ### RAG (worked example)
 
 `defineRAG` is sugar over `defineMemory({ type: SEMANTIC, strategy: TOP_K })` with RAG-friendly defaults — same plumbing, different intent label:

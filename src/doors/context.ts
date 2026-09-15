@@ -4,6 +4,8 @@
  * The injection engine: one `Injection` type, the sugar factories that build
  * one, and the engine subflow that resolves them into the three slots a
  * request is made of (system prompt, messages, tools).
+ * Also exposes opt-in outer JSON field meanings and their model guidance;
+ * callers include it through existing system or steering configuration.
  *
  * Named for the job rather than the machine — through 8.x this was also
  * reachable at `agentfootprint/injection-engine`, which described our
@@ -16,3 +18,4 @@
  */
 
 export * from '../injection-engine.js';
+export { CONTEXT_FIELD_MEANINGS, contextContractForModel } from '../lib/context-contract/index.js';
