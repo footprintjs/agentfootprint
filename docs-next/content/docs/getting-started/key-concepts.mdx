@@ -242,6 +242,15 @@ Applications still own trusted context construction and enforcement. The mock
 example `examples/context-engineering/23-context-contract.ts` checks instruction
 and JSON delivery, not real-model reasoning quality.
 
+`resolveEvidenceNeed(need, routes?, availableInputs?)`, on the same context
+subpath, looks up exact application-declared evidence needs. It distinguishes an
+unconfigured map, no matching route, and proposed routes with missing input
+names. It does not call tools, verify access or prove that a source contains the
+answer. Applications own domain mappings, scoped input validation and execution.
+See the runnable `examples/context-engineering/23-context-contract.ts` example.
+
+`EvidenceNeed` declares the missing evidence by an application-owned ID and description. `EvidenceRoute` declares a possible destination and its required input names. `EvidenceNeedResolution` distinguishes missing configuration, no matching declaration, and matched proposals with any missing inputs. These are metadata contracts, not evidence of access, availability or execution.
+
 ### RAG (worked example)
 
 `defineRAG` is sugar over `defineMemory({ type: SEMANTIC, strategy: TOP_K })` with RAG-friendly defaults — same plumbing, different intent label:

@@ -31,3 +31,35 @@ delivery and opt-in behavior, not improved reasoning by a real model.
 
 Run the credential-free example after building:
 `npm run example -- examples/context-engineering/23-context-contract.ts`.
+
+## Evidence destinations (opt-in)
+
+`resolveEvidenceNeed(need, routes?, availableInputs?)` performs a bounded exact-ID
+lookup over trusted application declarations. An omitted map returns
+`not_configured`; an empty/nonmatching map returns `no_matching_route`; matches
+retain all alternatives with `proposed` or `needs_input` and explicit missing
+input names. The frozen result is detached from the declarations.
+
+```ts
+import { resolveEvidenceNeed } from 'agentfootprint/context';
+const next = resolveEvidenceNeed(
+  { id: 'worker-health', description: 'Worker-health observations for this queue.' },
+  [{ id: 'ops', need: 'worker-health', destination: 'operations team',
+     description: 'Request worker-health observations for the same interval.',
+     requiredInputs: ['queue', 'interval'] }],
+  ['queue'], // validated by the application for this request
+);
+// next.routes[0].status === 'needs_input'; missingInputs === ['interval']
+```
+
+This is a declaration resolver, not an ontology engine or recovery runtime.
+It neither infers a gap from natural language nor checks whether a destination
+exists, is connected, contains data or is authorized. Applications own domain
+relationships, validated inputs, scope, allowed actions and human-facing wording.
+Register a route only from trusted configuration; source prose and model output
+must not install routes. A match is a proposal, never execution evidence.
+Missing map entries say nothing about evidence outside that map. Capabilities
+must still pass normal registration, permission and dispatch checks if invoked.
+Only needs/routes relevant to a validated current scope should enter model
+context; keep data in referenced storage. At most 16 routes and 16 input names
+are accepted, with unique route IDs and bounded nonempty text.

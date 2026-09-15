@@ -1,9 +1,34 @@
 /** Opt-in outer JSON meanings, checked at a mock provider boundary. No network. */
 import { LLMCall } from 'agentfootprint';
-import { CONTEXT_FIELD_MEANINGS, contextContractForModel } from 'agentfootprint/context';
+import {
+  CONTEXT_FIELD_MEANINGS,
+  contextContractForModel,
+  resolveEvidenceNeed,
+} from 'agentfootprint/context';
 import { mock } from 'agentfootprint/providers';
 
 async function main(): Promise<void> {
+  const need = { id: 'worker-health', description: 'Worker-health observations for this queue.' };
+  const navigation = resolveEvidenceNeed(
+    need,
+    [
+      {
+        id: 'ops',
+        need: need.id,
+        destination: 'operations team',
+        description: 'Request worker-health observations.',
+        requiredInputs: ['queue', 'interval'],
+      },
+    ],
+    ['queue'],
+  );
+  if (
+    navigation.routes[0]?.status !== 'needs_input' ||
+    navigation.routes[0].missingInputs[0] !== 'interval'
+  )
+    throw new Error('Missing evidence inputs must stay explicit.');
+  if (resolveEvidenceNeed(need).status !== 'not_configured')
+    throw new Error('Missing map must be explicit.');
   const context = {
     objective: 'Describe this recorded queue state.',
     completionRequirements: ['Retain the worker-health limitation.'],
@@ -11,7 +36,7 @@ async function main(): Promise<void> {
     facts: [{ waiting: 0, oldestAgeSeconds: null }],
     limitations: ['Worker health was not checked.'],
     evidenceRefs: [],
-    nextSteps: ['Inspect worker health if authorized.'],
+    nextSteps: [navigation],
     domainDefinitions: { waiting: 'Queued jobs in this snapshot.' },
   };
   const message = JSON.stringify(context);

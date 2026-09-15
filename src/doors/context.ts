@@ -19,3 +19,11 @@
 
 export * from '../injection-engine.js';
 export { CONTEXT_FIELD_MEANINGS, contextContractForModel } from '../lib/context-contract/index.js';
+
+export type {
+  EvidenceNeed,
+  EvidenceRoute,
+  EvidenceNeedResolution,
+} from '../lib/context-contract/evidence-navigation.js';
+
+export { resolveEvidenceNeed } from '../lib/context-contract/evidence-navigation.js';
