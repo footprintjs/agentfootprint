@@ -146,6 +146,13 @@ const LEDGER: Readonly<Record<string, readonly Entry[]>> = {
   ],
 
   // ── model-facing, but composed for ONE request and never re-read ──
+  'src/lib/injection-engine/factories/defineMenuHint.ts': [
+    {
+      kind: 'ephemeral',
+      count: 1,
+      why: 'the default menu hint is a system-prompt injection, rebuilt for the current request and active only at iteration 1 with a turn menu; it is not appended to conversation history',
+    },
+  ],
   'src/core/agent/presentTool.ts': [
     {
       kind: 'ephemeral',
@@ -1049,10 +1056,12 @@ describe('every model-facing-shaped literal in src/ is accounted for', () => {
         // one more unrepaired entry, because the ledger is per file.
         // 9.96.0: the legacy correction no longer reaches the model. Its
         // replacement is one explicitly request-scoped system instruction.
-        files: 93,
-        total: 179,
+        // Unreleased: the neutral default menu hint now has one imperative
+        // sentence caught by the scan, classified at its system-slot delivery.
+        files: 94,
+        total: 180,
         registry: 8,
-        ephemeral: 19,
+        ephemeral: 20,
         unrepaired: 33,
         notModelFacing: 119,
         unrepairedEntries: 13,

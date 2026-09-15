@@ -41,12 +41,10 @@ export interface MenuHintOptions {
 export const MENU_HINT_METADATA_KEY = 'skillMenuHint' as const;
 
 const DEFAULT_BODY =
-  'Note: no declared start rule or intent decisively matched this message — the routing ' +
-  "scorer left a menu open. The `read_skill` tool's description begins with the closest " +
-  'candidate skills (with advisory relevance where a scorer ran). Read it and activate the ' +
+  "Note: a routing menu is open for this turn. The `read_skill` tool's description begins " +
+  'with candidate skills (with advisory relevance when supplied). Read it and activate the ' +
   'one that actually fits, or answer directly WITHOUT calling read_skill to stay where you ' +
-  'are. The scorer only matches declared intents offline and cannot see the conversation — ' +
-  'your judgment wins.';
+  'are. Use the conversation to decide; the menu is guidance, not an instruction to pick.';
 
 export function defineMenuHint(options: MenuHintOptions = {}): Injection {
   return {

@@ -83,8 +83,8 @@ export interface ReadSkillOffer {
   readonly cursorId?: string;
   /**
    * Turn-start MENU (SG-C): when set, the description LEADS with these
-   * candidates (id + one-line description; advisory relevance %s beside
-   * near-tie candidates), names the cursor, and states STAY as a first-class
+   * candidates (id + one-line description; supplied advisory relevance %s),
+   * names the cursor, and states STAY as a first-class
    * option ("answer without calling read_skill to stay in '<cursor>'").
    *
    * Set only while the turn's menu verdict is outstanding (turn start, before
@@ -94,6 +94,8 @@ export interface ReadSkillOffer {
    * retire four honesty mechanisms), and {@link ReadSkillOffer.hiddenIds}
    * filters menu rows exactly as it filters every other list: a role-hidden
    * skill is never NAMED, menu or no menu.
+   * Descriptions appear once per skill id in this offer. Later catalog or
+   * reachability rows retain the id and refer to its description above.
    */
   readonly menu?: {
     readonly candidates: ReadonlyArray<{ readonly id: string; readonly relevance?: number }>;
@@ -249,6 +251,15 @@ function describeOffer(
   // the "not reachable" list and the plain catalog all read from this.
   const hidden = new Set(offer.hiddenIds ?? []);
   const skills = visibleSkills(allSkills, offer);
+  // One description per id, local to THIS offer. Membership still appears in
+  // every applicable section: relevance is not reachability. Never deduplicate
+  // by description text — distinct skills can legitimately share that text.
+  const described = new Set<string>();
+  const describeOnce = (s: Injection): string => {
+    if (described.has(s.id)) return `  - ${s.id}`;
+    described.add(s.id);
+    return line(s);
+  };
   // The turn-start MENU leads (SG-C) — rendered from the turn verdict, ids
   // resolved against the (hidden-filtered) catalog so an id this description
   // may not name, or one that is not a skill here, is silently skipped rather
@@ -259,7 +270,7 @@ function describeOffer(
     .map((c) => {
       const pct =
         c.relevance !== undefined ? ` (relevance ~${Math.round(c.relevance * 100)}%)` : '';
-      return `${line(byId.get(c.id)!)}${pct}`;
+      return `${describeOnce(byId.get(c.id)!)}${pct}`;
     });
   // ── THE CURSOR IS NAMED ON EVERY CALL THAT HAS ONE (9.84.0) ─────────
   // This used to be the STAY clause and nothing else, so it appeared only while
@@ -325,9 +336,8 @@ function describeOffer(
   // list after the fact.
   const menuLead =
     offer.menu !== undefined && menuRows.length > 0
-      ? `This turn needs a routing choice — no declared rule or intent decisively matched. ` +
-        `Closest candidates (advisory; an offline scorer ranked them and cannot see the ` +
-        `conversation):\n${menuRows.join('\n')}\n` +
+      ? `This turn needs a routing choice. Candidates for this turn ` +
+        `(advisory; use the conversation to choose):\n${menuRows.join('\n')}\n` +
         (staying
           ? cursorLead
           : `Answering WITHOUT calling read_skill is also allowed.\n\n${cursorLead}`)
@@ -339,7 +349,7 @@ function describeOffer(
       ? `Activate a skill for the next iteration. No skills are available to you — ` +
           `answer without one, or say what you are unable to do.\n\n${tail}`
       : `${menuLead}Activate a skill for the next iteration. Available skills:\n${skills
-          .map(line)
+          .map(describeOnce)
           .join('\n')}\n\n${tail}`;
   }
   // The four target classes, from their ONE owner (9.86.0). `grantable` is the
@@ -380,7 +390,7 @@ function describeOffer(
       `${menuLead}Activate a skill for the next iteration. This map is a decision TREE: ` +
       `it routes by predicate on every iteration and keeps no cursor, so read_skill ` +
       `cannot move it — a pick of a routed skill is refused. What a pick CAN open are ` +
-      `the skills the tree does not route:\n${open.map(line).join('\n')}\n\n${tail}`
+      `the skills the tree does not route:\n${open.map(describeOnce).join('\n')}\n\n${tail}`
     );
   }
   // The cursor is never in `grantable` — `makeReachableSkills` filters it out of
@@ -395,7 +405,7 @@ function describeOffer(
   const shut = skills.filter((s) => classOf(s.id) === 'unreachable');
   const parts: string[] = [];
   if (open.length > 0) {
-    parts.push(`Reachable from here:\n${open.map(line).join('\n')}`);
+    parts.push(`Reachable from here:\n${open.map(describeOnce).join('\n')}`);
   } else if (!hopsSpoken.held) {
     // Nothing was wired out of here at all — an absence this description holds
     // evidence for, cursor-relative and epoch-scoped, so it may be stated.
@@ -404,7 +414,7 @@ function describeOffer(
   if (offer.showRefusable !== false && shut.length > 0) {
     parts.push(
       `Not reachable from here (read_skill for these will be refused):\n${shut
-        .map(line)
+        .map(describeOnce)
         .join('\n')}`,
     );
   }

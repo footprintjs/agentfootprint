@@ -567,6 +567,16 @@ with the CONFIGURED scorer (leave-one-out). Everything is zero-cost when
 unused: a graph without `classify`/`continuity` mounts no stage, writes no key
 and emits no new event.
 
+The `read_skill` offer describes each visible skill **once per request**. The
+turn menu keeps its supplied order and relevance; later catalog/reachability
+sections name an already-described skill by id. Off-menu skills still carry
+their descriptions, and reachability, refusals, cursor and role filtering are
+unchanged. Descriptions shared by different skill ids are not deduplicated.
+The system hint and tool describe a menu neutrally: neither asserts that an
+offline scorer ran or that it cannot see the conversation. Supplied relevance
+values remain advisory; equal scores do not establish an unranked directory
+or calibrated confidence. No new routing option or cache policy is introduced.
+
 ---
 
 ## Examples on start rules (SG-G)

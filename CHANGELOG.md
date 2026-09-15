@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- `read_skill` describes each visible skill once when the turn-start menu and
+  the catalog or reachability lists overlap. Later memberships retain the skill
+  id; candidate ordering, supplied relevance, cursor, visibility and admission
+  remain unchanged. The default menu hint and tool wording no longer claim an
+  offline scorer necessarily ranked the menu. No routing option is required.
+
 ### Added
 
 - `receipt.requestMeasurement` records JSON character and UTF-8 byte sizes for
