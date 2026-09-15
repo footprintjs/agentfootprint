@@ -46,7 +46,7 @@ describe('outer context field contract', () => {
       expect(guide.split(`${field}: ${meaning}`)).toHaveLength(2);
     }
     expect(contextContractForModel()).toBe(guide);
-    expect(new TextEncoder().encode(guide).length).toBeLessThan(2200);
+    expect(new TextEncoder().encode(guide).length).toBeLessThan(750);
   });
 
   it('keeps scoped observations, missing evidence and unresolved references distinct', () => {
