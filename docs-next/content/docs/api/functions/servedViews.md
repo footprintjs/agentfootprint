@@ -6,7 +6,7 @@ title: servedViews
 
 > **servedViews**(`source`): [`ServedView`](/docs/api/interfaces/ServedView)[]
 
-Defined in: src/lib/time-travel/servedView.ts:1150
+Defined in: src/lib/time-travel/servedView.ts:1157
 
 Every epoch's served view, in run order — `servedAt` for a whole run, with
 one pass over the recording instead of one per epoch.

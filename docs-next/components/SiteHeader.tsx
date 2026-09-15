@@ -74,9 +74,8 @@ export function SiteHeader() {
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
   }, [menuOpen]);
-  // "Home" is the current page only when we are on neither of the other two — otherwise /features
-  // would light up Home as well (the whole site outside /docs used to be "home").
-  const onHome = !onDocs && !onFeatures && !onHowItWorks;
+  // Only the root is Home; new marketing routes must not light up its link.
+  const onHome = pathname === '/';
 
   return (
     <header id="af-header" className={`af-sh${onDocs ? ' af-sh--docs' : ' af-sh--home'}`}>

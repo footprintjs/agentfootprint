@@ -6,7 +6,7 @@ title: servedAt
 
 > **servedAt**(`source`, `epoch`): [`ServedView`](/docs/api/interfaces/ServedView) \| `undefined`
 
-Defined in: src/lib/time-travel/servedView.ts:1136
+Defined in: src/lib/time-travel/servedView.ts:1143
 
 Rebuild what the model was SERVED on epoch `k`, from the run's committed
 pieces alone.

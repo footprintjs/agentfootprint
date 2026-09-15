@@ -4,7 +4,7 @@ title: ReceiptPiece
 
 # Interface: ReceiptPiece
 
-Defined in: src/lib/time-travel/receipt.ts:199
+Defined in: src/lib/time-travel/receipt.ts:202
 
 One piece of the composed system string.
 
@@ -14,7 +14,7 @@ One piece of the composed system string.
 
 > `readonly` **hash**: `string`
 
-Defined in: src/lib/time-travel/receipt.ts:200
+Defined in: src/lib/time-travel/receipt.ts:203
 
 ***
 
@@ -22,7 +22,7 @@ Defined in: src/lib/time-travel/receipt.ts:200
 
 > `readonly` **slot**: `ContextSlot`
 
-Defined in: src/lib/time-travel/receipt.ts:201
+Defined in: src/lib/time-travel/receipt.ts:204
 
 ***
 
@@ -30,4 +30,4 @@ Defined in: src/lib/time-travel/receipt.ts:201
 
 > `readonly` **source**: `ContextSource`
 
-Defined in: src/lib/time-travel/receipt.ts:202
+Defined in: src/lib/time-travel/receipt.ts:205

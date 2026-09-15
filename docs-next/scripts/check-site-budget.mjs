@@ -20,6 +20,11 @@ const ROUTES = [
     limits: { js: 225_000, css: 25_000, html: 45_000, requests: 21 },
   },
   {
+    name: 'context story',
+    file: 'context-engineering/index.html',
+    limits: { js: 225_000, css: 25_000, html: 45_000, requests: 21 },
+  },
+  {
     name: 'docs',
     file: 'docs/index.html',
     limits: { js: 235_000, css: 20_000, html: 50_000, requests: 22 },
@@ -152,7 +157,10 @@ const SEARCH_LIMITS = { raw: 12_000_000, gzip: 2_000_000, records: 2_000 };
 // since 9.87.1. Same rule as every raise here: ~2% over the measured export,
 // so roughly fourteen more routes before somebody has to look again — and the
 // thing to look at then is still the per-route cost, not the ceiling.
-const OUTPUT_LIMITS = { bytes: 672_000_000, files: 6_990, duplicateRscBytes: 0 };
+// Context walkthrough + regenerated 9.98.0 dataset/reference API documentation:
+// measured 6,998 exported files (the new story route contributes eight). Keep
+// twelve files of headroom; byte, per-route and duplicate-payload limits stay put.
+const OUTPUT_LIMITS = { bytes: 672_000_000, files: 7_010, duplicateRscBytes: 0 };
 // Raised for 9.61.0: 394.1 KB → 400.3 KB. The skill-graph demo imports
 // `defineTool` from 'agentfootprint', so the library's MAIN ENTRY and its
 // whole transitive graph ride this chunk — and this release added the

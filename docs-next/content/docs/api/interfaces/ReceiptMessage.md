@@ -4,7 +4,7 @@ title: ReceiptMessage
 
 # Interface: ReceiptMessage
 
-Defined in: src/lib/time-travel/receipt.ts:206
+Defined in: src/lib/time-travel/receipt.ts:209
 
 One message as it went out.
 
@@ -14,7 +14,7 @@ One message as it went out.
 
 > `readonly` **hash**: `string`
 
-Defined in: src/lib/time-travel/receipt.ts:208
+Defined in: src/lib/time-travel/receipt.ts:211
 
 ***
 
@@ -22,7 +22,7 @@ Defined in: src/lib/time-travel/receipt.ts:208
 
 > `readonly` `optional` **key?**: `string`
 
-Defined in: src/lib/time-travel/receipt.ts:211
+Defined in: src/lib/time-travel/receipt.ts:214
 
 The message's own join key when it has one — a tool result's
  `toolCallId`. Absent for every other message.
@@ -33,4 +33,4 @@ The message's own join key when it has one — a tool result's
 
 > `readonly` **role**: `ContextRole`
 
-Defined in: src/lib/time-travel/receipt.ts:207
+Defined in: src/lib/time-travel/receipt.ts:210

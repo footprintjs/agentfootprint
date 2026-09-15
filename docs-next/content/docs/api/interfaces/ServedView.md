@@ -4,7 +4,7 @@ title: ServedView
 
 # Interface: ServedView
 
-Defined in: src/lib/time-travel/servedView.ts:749
+Defined in: src/lib/time-travel/servedView.ts:756
 
 THE SERVED VIEW: what the model was handed on one epoch, rebuilt.
 
@@ -34,7 +34,7 @@ view.gaps.map((g) => g.gap); // ['cache-transform', 'provider-defaults'] on an a
 
 > `readonly` `optional` **basis?**: `object`
 
-Defined in: src/lib/time-travel/servedView.ts:786
+Defined in: src/lib/time-travel/servedView.ts:793
 
 WHICH MODEL SAW THIS, and through which provider — read off the receipt's
 own `basis`, which is the only place the run records them.
@@ -82,7 +82,7 @@ const view = servedAt(agent.getSnapshot()!, 1)!;
 
 > `readonly` **callRuntimeStageId**: `string`
 
-Defined in: src/lib/time-travel/servedView.ts:759
+Defined in: src/lib/time-travel/servedView.ts:766
 
 ***
 
@@ -90,7 +90,7 @@ Defined in: src/lib/time-travel/servedView.ts:759
 
 > `readonly` **epoch**: `number`
 
-Defined in: src/lib/time-travel/servedView.ts:758
+Defined in: src/lib/time-travel/servedView.ts:765
 
 WHICH TURN THIS IS, as the fold read it — the run's own committed
 `iteration`, and its POSITION in run order when the fold could not read
@@ -105,7 +105,7 @@ recording can number a turn differently from the receipt that turn minted.
 
 > `readonly` **gaps**: readonly [`ServedGap`](/docs/api/interfaces/ServedGap)[]
 
-Defined in: src/lib/time-travel/servedView.ts:817
+Defined in: src/lib/time-travel/servedView.ts:824
 
 What this rebuild could NOT recover, each naming the receipt field it
  explains. Never empty — see [SERVED\_GAPS](/docs/api/variables/SERVED_GAPS).
@@ -116,7 +116,7 @@ What this rebuild could NOT recover, each naming the receipt field it
 
 > `readonly` **messages**: `object`
 
-Defined in: src/lib/time-travel/servedView.ts:796
+Defined in: src/lib/time-travel/servedView.ts:803
 
 #### asSent
 
@@ -138,7 +138,7 @@ Lines composed for this request and written to no history.
 
 > `readonly` **system**: `object`
 
-Defined in: src/lib/time-travel/servedView.ts:792
+Defined in: src/lib/time-travel/servedView.ts:799
 
 #### pieces
 
@@ -154,7 +154,7 @@ Defined in: src/lib/time-travel/servedView.ts:792
 
 > `readonly` **tools**: `object`
 
-Defined in: src/lib/time-travel/servedView.ts:804
+Defined in: src/lib/time-travel/servedView.ts:811
 
 #### forced?
 

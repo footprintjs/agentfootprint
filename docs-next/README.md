@@ -24,6 +24,26 @@ npm run dev      # http://localhost:3000 → /docs
 npm run build    # static/server build
 ```
 
+## Visual context walkthrough
+
+`/context-engineering/` teaches context preparation and conflict handling through
+two illustrated stories. It uses the real StoryDeck `LiveSlideDeck` component:
+the page owns its step index, and StoryDeck owns its live slide shells and scoped
+keyboard navigation. The source is split into `components/context-story/story.ts`
+(authored teaching steps), `ContextStory.tsx` (visuals and controls), and scoped CSS.
+The optional JSON inspector is outside the slide container so expanding it cannot
+clip the presentation. No model API is called; all data and model proposals are
+synthetic. The JSON is a teaching projection, not executable API configuration.
+
+The StoryDeck dependency is an exact local archive, not an npm release; see
+[`vendor/storydeck/README.md`](vendor/storydeck/README.md) for provenance and
+reproducible installation. Ordinary `npm ci` needs no checkout outside this repo.
+
+For this route, verify both stories, step switching, the JSON inspector, focused
+left/right keyboard navigation, and light/dark rendering at desktop and phone
+widths. `EXPORT=true npm run build`, `npm run check:links`, and
+`npm run check:site-budget` include the page in the normal static-site checks.
+
 ## Layout
 
 | Path | What |

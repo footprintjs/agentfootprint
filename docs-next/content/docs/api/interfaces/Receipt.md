@@ -4,7 +4,7 @@ title: Receipt
 
 # Interface: Receipt
 
-Defined in: src/lib/time-travel/receipt.ts:318
+Defined in: src/lib/time-travel/receipt.ts:321
 
 THE RECEIPT. One per composed request, committed at the call-llm stop.
 
@@ -26,7 +26,7 @@ receipt?.params.temperature;    // the dial this turn went out on
 
 > `readonly` **basis**: `object`
 
-Defined in: src/lib/time-travel/receipt.ts:398
+Defined in: src/lib/time-travel/receipt.ts:404
 
 #### epoch
 
@@ -50,7 +50,7 @@ Defined in: src/lib/time-travel/receipt.ts:398
 
 > `readonly` **cache**: `object`
 
-Defined in: src/lib/time-travel/receipt.ts:337
+Defined in: src/lib/time-travel/receipt.ts:343
 
 #### markersApplied
 
@@ -112,7 +112,7 @@ Hash of the request the cache strategy handed back, when it differed
 
 > `readonly` **messages**: `object`
 
-Defined in: src/lib/time-travel/receipt.ts:324
+Defined in: src/lib/time-travel/receipt.ts:330
 
 #### count
 
@@ -132,7 +132,7 @@ Defined in: src/lib/time-travel/receipt.ts:324
 
 > `readonly` `optional` **omittedForAttention?**: `ReceiptAttentionOmission`
 
-Defined in: src/lib/time-travel/receipt.ts:397
+Defined in: src/lib/time-travel/receipt.ts:403
 
 What left the window for budget at this iteration's head, before this
 request was composed — one hash per evicted turn, each the turn's own
@@ -153,9 +153,20 @@ meant only that nobody had recorded a drop.
 
 > `readonly` **params**: [`ReceiptParams`](/docs/api/interfaces/ReceiptParams)
 
-Defined in: src/lib/time-travel/receipt.ts:382
+Defined in: src/lib/time-travel/receipt.ts:388
 
 The sampling knobs the call went out with — see [ReceiptParams](/docs/api/interfaces/ReceiptParams).
+
+***
+
+### requestMeasurement?
+
+> `readonly` `optional` **requestMeasurement?**: [`RequestMeasurement`](/docs/api/type-aliases/RequestMeasurement)
+
+Defined in: src/lib/time-travel/receipt.ts:324
+
+Counts of the initial prepared canonical request, including full schemas.
+Older recordings have no measurement. No payload, tokens or retry totals.
 
 ***
 
@@ -163,7 +174,7 @@ The sampling knobs the call went out with — see [ReceiptParams](/docs/api/inte
 
 > `readonly` **system**: `object`
 
-Defined in: src/lib/time-travel/receipt.ts:319
+Defined in: src/lib/time-travel/receipt.ts:325
 
 #### chars
 
@@ -183,7 +194,7 @@ Defined in: src/lib/time-travel/receipt.ts:319
 
 > `readonly` **tools**: `object`
 
-Defined in: src/lib/time-travel/receipt.ts:329
+Defined in: src/lib/time-travel/receipt.ts:335
 
 #### forced
 

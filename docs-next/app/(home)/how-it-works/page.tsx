@@ -57,6 +57,9 @@ export default function HowItWorksPage() {
             <Link className="af-cta-ghost" href="/docs/debug/localize-context-bug">
               Read the debugging guide →
             </Link>
+            <Link className="af-cta-ghost" href="/context-engineering">
+              See context take shape →
+            </Link>
           </div>
         </section>
         <ChapterRail />

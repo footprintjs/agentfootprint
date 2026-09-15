@@ -4,7 +4,7 @@ title: ReceiptCacheMarker
 
 # Interface: ReceiptCacheMarker
 
-Defined in: src/lib/time-travel/receipt.ts:246
+Defined in: src/lib/time-travel/receipt.ts:249
 
 One `cache_control` breakpoint the cache strategy actually APPLIED — three
 scalars, no bytes.
@@ -38,7 +38,7 @@ at(3) === at(4); // false ⇒ the cached prefix moved, and the bill with it
 
 > `readonly` **boundaryIndex**: `number`
 
-Defined in: src/lib/time-travel/receipt.ts:248
+Defined in: src/lib/time-travel/receipt.ts:251
 
 ***
 
@@ -46,7 +46,7 @@ Defined in: src/lib/time-travel/receipt.ts:248
 
 > `readonly` **field**: `"system"` \| `"messages"` \| `"tools"`
 
-Defined in: src/lib/time-travel/receipt.ts:247
+Defined in: src/lib/time-travel/receipt.ts:250
 
 ***
 
@@ -54,4 +54,4 @@ Defined in: src/lib/time-travel/receipt.ts:247
 
 > `readonly` **ttl**: `"short"` \| `"long"`
 
-Defined in: src/lib/time-travel/receipt.ts:249
+Defined in: src/lib/time-travel/receipt.ts:252

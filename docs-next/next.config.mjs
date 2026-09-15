@@ -38,7 +38,7 @@ const config = {
   reactStrictMode: true,
   // The live "Try it" demos run the REAL agent in the browser with a mock provider.
   // The lens is a sibling package imported client-side, so Turbopack must bundle it.
-  transpilePackages: ['agentfootprint-lens'],
+  transpilePackages: ['agentfootprint-lens', 'storydeck'],
   turbopack: {
     // Root = the agentfootprint repo (the parent), NOT docs-next. The live "Try it"
     // demos import `agentfootprint` client-side, and npm links it as a symlink to the
