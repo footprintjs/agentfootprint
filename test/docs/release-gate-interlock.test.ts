@@ -80,6 +80,31 @@ describe('release interlock — a red gate cannot reach npm', () => {
       'docs:truth must run BEFORE `npm version` in release.sh.',
     ).toBeLessThan(sh.indexOf('npm version'));
   });
+
+  it('publish.yml checks the packed dependency after build and before staging in the required job', () => {
+    const yml = read(PUBLISH_YML);
+    const buildJob = yml.slice(yml.indexOf('  build:'), yml.indexOf('  publish:'));
+    const gate = buildJob.indexOf('      - run: npm run test:context-package\n');
+    expect(
+      gate,
+      'the build job must check the installed ContextFootprint dependency',
+    ).toBeGreaterThan(-1);
+    expect(gate).toBeGreaterThan(buildJob.indexOf('      - run: npm run build\n'));
+    expect(gate).toBeLessThan(buildJob.indexOf('      - name: Stage published package'));
+    expect(yml.slice(yml.indexOf('  publish:'))).toMatch(/needs:\s*build/);
+  });
+
+  it('release.sh checks the packed dependency after build and before the version bump', () => {
+    const sh = read(RELEASE_SH);
+    const gate = sh.search(/^npm run test:context-package$/m);
+    expect(
+      gate,
+      'the local release must reject an unusable packed dependency before versioning',
+    ).toBeGreaterThan(-1);
+    expect(gate).toBeGreaterThan(sh.search(/^npm run build$/m));
+    expect(gate).toBeLessThan(sh.search(/^npm version /m));
+    expect(sh).toMatch(/^set -euo pipefail$/m);
+  });
 });
 
 describe('the docs-truth report is generated, never hand-edited', () => {

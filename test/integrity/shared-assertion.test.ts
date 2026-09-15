@@ -15,6 +15,7 @@ import {
   sameSubject,
   type Assertion,
 } from '../../src/integrity/assertion/types.js';
+import { unsupportedClaimsOf } from '../../src/integrity/unsupported-claim/check.js';
 import { known, unknown } from '../../src/lib/claim/claim.js';
 
 const assertion = (value: unknown, over: Partial<Assertion> = {}): Assertion => ({
@@ -49,6 +50,57 @@ describe('shared assertion dependency boundary', () => {
     expect(assertionKey(assertion(0, { epoch: undefined }))).toBe(
       'tool\u0000inventory\u0000available\u0000',
     );
+  });
+
+  it('compares own __proto__ data without erasing it or changing Agent recording keys', () => {
+    const observedValue = JSON.parse('{"details":{"__proto__":{"count":1},"stable":true}}');
+    const omittedValue = JSON.parse('{"details":{"stable":true}}');
+    const changedValue = JSON.parse('{"details":{"__proto__":{"count":2},"stable":true}}');
+    const equivalentValue = JSON.parse('{"details":{"stable":true,"__proto__":{"count":1}}}');
+    const observed = assertion(known(observedValue, 'stored JSON source'));
+    for (const value of [omittedValue, changedValue]) {
+      const claimed = assertion(value, { provenance: 'typed answer' });
+      const result = conflictsOf([observed, claimed]);
+      expect(result).toHaveLength(1);
+      expect(result[0]?.key).toBe('tool\u0000inventory\u0000available\u00007');
+      expect(result[0]?.assertions[0]).toBe(observed);
+      expect(result[0]?.assertions[1]).toBe(claimed);
+      expect(result).toEqual(sharedConflictsOf([observed, claimed], new Set(), assertionKey));
+    }
+    expect(conflictsOf([observed, assertion(equivalentValue)])).toEqual([]);
+    expect(Object.hasOwn(observedValue.details, '__proto__')).toBe(true);
+    expect(Object.getPrototypeOf(observedValue.details)).toBe(Object.prototype);
+  });
+
+  it('propagates own-key comparison to the existing diagnostic post-call claim check', () => {
+    const value = JSON.parse('{"__proto__":{"count":1},"stable":true}');
+    const answer = { result: JSON.parse('{"stable":true}') };
+    const outcome = unsupportedClaimsOf(
+      [{ answerField: 'result', entity: 'inventory', field: 'details' }],
+      [
+        {
+          entity: 'inventory',
+          field: 'details',
+          value,
+          toolName: 'lookup',
+          toolCallId: 'lookup-1',
+          iteration: 1,
+        },
+      ],
+      answer,
+      7,
+    );
+    expect(outcome.dispositions).toEqual([{ claim: 'result', disposition: 'checked-fail' }]);
+    expect(outcome.findings).toHaveLength(1);
+    expect(outcome.findings[0]).toMatchObject({
+      kind: 'unsupported-claim',
+      seam: 'claim',
+      predicate: 'details',
+    });
+    expect(outcome.findings[0]?.witnesses[0]?.value).toBe(value);
+    expect(outcome.findings[0]?.witnesses[1]?.value).toBe(answer.result);
+    // The check reports the defect; it does not rewrite or enforce the answer.
+    expect(answer).toEqual({ result: { stable: true } });
   });
 
   it('retains the non-comparable boundaries and Agent Claim interoperability', () => {

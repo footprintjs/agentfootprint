@@ -7,12 +7,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [9.97.1] - 2026-09-15
+
 ### Changed
 
 - Reuse ContextFootprint's pure assertion comparison and Claim-face helpers.
   Existing assertion keys, witness identity, diagnostic checks and answer-delivery
-  policies remain unchanged. The reviewed dependency is bundled for clean installs;
-  no separate ContextFootprint registry release is required.
+  policies remain unchanged. Use the published exact `contextfootprint: "0.1.1"`
+  runtime dependency; remove the temporary vendored archive and bundle used before
+  that registry release. Clean online installs and cached offline installs are
+  checked through source and packed consumers.
+
+### Fixed
+
+- Upgrade the shared comparison to ContextFootprint 0.1.1. Distinct JSON data
+  with an own `__proto__` property now produces the expected conflict, including
+  nested objects and known Claim payloads. Legacy recording keys and original
+  witnesses remain unchanged. Pre-call and post-call integration tests exercise
+  the shared implementation. Both release paths now require the packed dependency
+  check before publishing.
 
 ## [9.97.0] - 2026-09-13
 

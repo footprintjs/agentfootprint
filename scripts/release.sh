@@ -130,6 +130,9 @@ if ! npm run docs:truth; then
   exit 1
 fi
 
+echo "==> Packed ContextFootprint dependency (isolated consumers)..."
+npm run test:context-package
+
 echo "==> Packaging correctness (publint + are-the-types-wrong)..."
 npx --yes publint
 npx --yes @arethetypeswrong/cli --pack

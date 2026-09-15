@@ -21,7 +21,8 @@ jobs:
         with:
           node-version: 22
 
-      # No committed lockfile (platform-specific native deps). Build BEFORE test: examples
+      # The tracked lock installs the exact published ContextFootprint dependency.
+      # Build BEFORE test: examples
       # import from the package name 'agentfootprint', resolved via the local package's
       # exports → dist/, so they need an upstream build. This job has NO publish power.
       - run: npm install
@@ -42,6 +43,8 @@ jobs:
       - run: npm run docs:truth
 
       # Packaging-correctness gate — block a publish that would ship broken/masquerading types.
+      # Check the registry dependency through isolated packed consumers before staging.
+      - run: npm run test:context-package
       - run: npx publint
       - run: npx @arethetypeswrong/cli --pack
 
@@ -129,7 +132,8 @@ jobs:
       # provenance path (MODULE_NOT_FOUND: sigstore) that fails `npm publish --provenance`.
       - run: npm install -g npm@11
 
-      # Publishes the pre-built artifact. No node_modules, no dependency resolution.
+      # Publishes the pre-built artifact with its declared registry dependency.
+      # No dependency resolution runs with publishing authority.
       # Trusted publishing: no NODE_AUTH_TOKEN — npm authenticates via the GitHub OIDC token.
       - name: Publish to npm
         run: npm publish --provenance --access public
