@@ -37,6 +37,14 @@
  * lockfile's footprintjs 9.21.1 and 9.24.0 (verified), so what it pins is
  * the gate, not the substrate's byte shape.
  *
+ * REGENERATED FOR REQUEST MEASUREMENT against commit 46ed56a: 14 of 15
+ * fixtures gained 35 `receipt.requestMeasurement` values and four matching
+ * `receipt\u001frequestMeasurement` set-trace rows in grouped commits. A
+ * structural comparison against the committed originals found no other delta
+ * after removing ONLY those additions from a transient audit copy. No message,
+ * tool, cursor, gap or normalizer changed. The running comparison below keeps
+ * all new values and traces, so later measurement drift still fails the test.
+ *
  * Every scenario is a real run — the receipt-conformance shapes, each in the
  * configuration that has no name collision — and what is compared is the
  * whole `commitLog` plus `servedAt(k)` for every located epoch, after ONE

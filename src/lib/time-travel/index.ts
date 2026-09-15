@@ -38,6 +38,8 @@ export {
   type ReceiptParams,
   type ReceiptPiece,
   type ReceiptRequestOnlyMessage,
+  type RequestMeasurement,
+  type RequestJsonSize,
   type StoredReceipt,
 } from './receipt.js';
 export { sha256Hex } from './sha256.js';

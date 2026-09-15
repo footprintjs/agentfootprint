@@ -467,6 +467,29 @@
             "requestOnly": []
           },
           "params": {},
+          "requestMeasurement": {
+            "boundary": "initial-prepared-request",
+            "format": "json-utf8-v1",
+            "slots": {
+              "messages": {
+                "jsonBytes": 32,
+                "jsonChars": 32
+              },
+              "systemPrompt": {
+                "jsonBytes": 5,
+                "jsonChars": 5
+              },
+              "tools": {
+                "jsonBytes": 107,
+                "jsonChars": 107
+              }
+            },
+            "status": "measured",
+            "total": {
+              "jsonBytes": 197,
+              "jsonChars": 197
+            }
+          },
           "system": {
             "chars": 3,
             "hash": "<digest>",
@@ -828,6 +851,29 @@
             "requestOnly": []
           },
           "params": {},
+          "requestMeasurement": {
+            "boundary": "initial-prepared-request",
+            "format": "json-utf8-v1",
+            "slots": {
+              "messages": {
+                "jsonBytes": 210,
+                "jsonChars": 210
+              },
+              "systemPrompt": {
+                "jsonBytes": 5,
+                "jsonChars": 5
+              },
+              "tools": {
+                "jsonBytes": 107,
+                "jsonChars": 107
+              }
+            },
+            "status": "measured",
+            "total": {
+              "jsonBytes": 375,
+              "jsonChars": 375
+            }
+          },
           "system": {
             "chars": 3,
             "hash": "<digest>",
@@ -1189,6 +1235,25 @@
             "requestOnly": []
           },
           "params": {},
+          "requestMeasurement": {
+            "boundary": "initial-prepared-request",
+            "format": "json-utf8-v1",
+            "slots": {
+              "messages": {
+                "jsonBytes": 535,
+                "jsonChars": 533
+              },
+              "systemPrompt": {
+                "jsonBytes": 5,
+                "jsonChars": 5
+              }
+            },
+            "status": "measured",
+            "total": {
+              "jsonBytes": 584,
+              "jsonChars": 582
+            }
+          },
           "system": {
             "chars": 3,
             "hash": "<digest>",

@@ -7,6 +7,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- `receipt.requestMeasurement` records JSON character and UTF-8 byte sizes for
+  the initial prepared canonical request and its separately serialized slots,
+  including complete tool schemas. Unsupported or cyclic values report an
+  unavailable measurement without failing the call. Internal work limits report
+  `measurement-limit` at more than 100,000 visited values, 64 nested containers,
+  or 4,000,000 string/key UTF-16 code units while copying or serialized JSON
+  characters; they never truncate or reject provider input. Older receipts may
+  lack the field. Existing advisory counters are unchanged; these sizes do not represent
+  tokens, later retries or provider HTTP payloads. The measurement records no
+  request content; `RequestMeasurement` and `RequestJsonSize` are public types.
+
 ## [9.97.1] - 2026-09-15
 
 ### Changed

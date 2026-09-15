@@ -518,6 +518,29 @@
             "requestOnly": []
           },
           "params": {},
+          "requestMeasurement": {
+            "boundary": "initial-prepared-request",
+            "format": "json-utf8-v1",
+            "slots": {
+              "messages": {
+                "jsonBytes": 32,
+                "jsonChars": 32
+              },
+              "systemPrompt": {
+                "jsonBytes": 5,
+                "jsonChars": 5
+              },
+              "tools": {
+                "jsonBytes": 533,
+                "jsonChars": 533
+              }
+            },
+            "status": "measured",
+            "total": {
+              "jsonBytes": 623,
+              "jsonChars": 623
+            }
+          },
           "system": {
             "chars": 3,
             "hash": "<digest>",
@@ -1019,6 +1042,29 @@
             "requestOnly": []
           },
           "params": {},
+          "requestMeasurement": {
+            "boundary": "initial-prepared-request",
+            "format": "json-utf8-v1",
+            "slots": {
+              "messages": {
+                "jsonBytes": 254,
+                "jsonChars": 254
+              },
+              "systemPrompt": {
+                "jsonBytes": 10,
+                "jsonChars": 10
+              },
+              "tools": {
+                "jsonBytes": 533,
+                "jsonChars": 533
+              }
+            },
+            "status": "measured",
+            "total": {
+              "jsonBytes": 850,
+              "jsonChars": 850
+            }
+          },
           "system": {
             "chars": 6,
             "hash": "<digest>",
@@ -1466,6 +1512,29 @@
             "requestOnly": []
           },
           "params": {},
+          "requestMeasurement": {
+            "boundary": "initial-prepared-request",
+            "format": "json-utf8-v1",
+            "slots": {
+              "messages": {
+                "jsonBytes": 435,
+                "jsonChars": 435
+              },
+              "systemPrompt": {
+                "jsonBytes": 10,
+                "jsonChars": 10
+              },
+              "tools": {
+                "jsonBytes": 533,
+                "jsonChars": 533
+              }
+            },
+            "status": "measured",
+            "total": {
+              "jsonBytes": 1031,
+              "jsonChars": 1031
+            }
+          },
           "system": {
             "chars": 6,
             "hash": "<digest>",
@@ -2046,6 +2115,29 @@
             "requestOnly": []
           },
           "params": {},
+          "requestMeasurement": {
+            "boundary": "initial-prepared-request",
+            "format": "json-utf8-v1",
+            "slots": {
+              "messages": {
+                "jsonBytes": 657,
+                "jsonChars": 657
+              },
+              "systemPrompt": {
+                "jsonBytes": 15,
+                "jsonChars": 15
+              },
+              "tools": {
+                "jsonBytes": 533,
+                "jsonChars": 533
+              }
+            },
+            "status": "measured",
+            "total": {
+              "jsonBytes": 1258,
+              "jsonChars": 1258
+            }
+          },
           "system": {
             "chars": 9,
             "hash": "<digest>",
@@ -2565,6 +2657,29 @@
             "requestOnly": []
           },
           "params": {},
+          "requestMeasurement": {
+            "boundary": "initial-prepared-request",
+            "format": "json-utf8-v1",
+            "slots": {
+              "messages": {
+                "jsonBytes": 1192,
+                "jsonChars": 1190
+              },
+              "systemPrompt": {
+                "jsonBytes": 15,
+                "jsonChars": 15
+              },
+              "tools": {
+                "jsonBytes": 533,
+                "jsonChars": 533
+              }
+            },
+            "status": "measured",
+            "total": {
+              "jsonBytes": 1793,
+              "jsonChars": 1791
+            }
+          },
           "system": {
             "chars": 9,
             "hash": "<digest>",

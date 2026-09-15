@@ -239,6 +239,43 @@ When the two agree, the record is complete: everything the model read is
 derivable from the trace. When they disagree, something reached the model that
 the run never wrote down — a defect in the record, not in the check.
 
+### Measure the initial prepared request
+
+`receiptAt(snapshot, epoch)?.requestMeasurement` reports the JSON size of the
+complete initial prepared canonical request, including full final tool schemas
+and excluding only the root `signal` field. The shared receipt mint adds it
+whenever recording a receipt is enabled; older receipts can lack the field.
+Its `RequestMeasurement` type and the `RequestJsonSize` type for each size are
+exported from `agentfootprint`. There is no new runtime export or configuration.
+
+```ts
+const measurement = receiptAt(snapshot, 1)?.requestMeasurement;
+if (measurement?.status === 'measured') {
+  console.log(measurement.total.jsonBytes);
+  console.log(measurement.slots.tools?.jsonBytes);
+} else {
+  console.log(measurement?.reason ?? 'Not recorded');
+}
+```
+
+Both result shapes declare `boundary: 'initial-prepared-request'` and
+`format: 'json-utf8-v1'`. A measured result has `total` and separately serialized
+`slots.systemPrompt`, `slots.messages` and `slots.tools` when present. Each size
+contains `jsonChars` (JSON UTF-16 code units) and `jsonBytes` (UTF-8 bytes of that
+JSON). Slot sizes do not sum to the total, which also includes field names,
+delimiters and other request fields. These are counts, without recorded content.
+
+An unavailable result states `unsupported-value`, `cyclic-value` or
+`measurement-limit`. Internal work limits are 100,000 visited values, 64 nested
+containers and 4,000,000 string/key UTF-16 code units while copying or serialized
+JSON characters. Reaching a limit skips the measurement; it never truncates or
+rejects provider input. An absent or unavailable measurement is not zero.
+
+This measures the request after initial preparation, including cache preparation
+where configured. It does not count tokens, HTTP/vendor payloads, provider
+decorator changes or later retry attempts. Existing advisory slot-budget counters
+remain unchanged, and the measurement enforces no request limit.
+
 ### Which charts mint a receipt
 
 Every chart that hands a model a request mints one (9.91.0). `Agent` and
@@ -479,7 +516,7 @@ person reading the two together sees the difference.
   that went out are *unknown*, not empty: an empty `asSent` is the absence of a
   record, never a record of absence. The request-only lines are recomposed
   *from* the conversation, so they are unproved with it.
-- **`no-receipt-on-chart`** → fields: `basis.model`, `basis.provider`, `basis.runId`, `basis.epoch`, `params`, `cache.transform`, `cache.transformHash`, `cache.markersApplied`, `cache.strategy`, `omittedForAttention`
+- **`no-receipt-on-chart`** → fields: `basis.model`, `basis.provider`, `basis.runId`, `basis.epoch`, `params`, `cache.transform`, `cache.transformHash`, `cache.markersApplied`, `cache.strategy`, `omittedForAttention`, `requestMeasurement`
   No *usable* receipt was read for this epoch, so nothing on the view has been
   checked against what went out. Not "none was written": the causes below differ
   on exactly that point, and the printed sentence used to get it wrong — it

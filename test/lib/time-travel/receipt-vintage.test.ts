@@ -144,6 +144,65 @@ function aged(snapshot: Snapshot, paths: readonly string[]): Recording {
 const kinds = (snapshot: Snapshot, epoch: number): string[] =>
   servedAt(snapshot, epoch)!.gaps.map((g) => g.gap);
 
+describe('optional initial request measurement on stored receipts', () => {
+  it('preserves measured counts and their declared boundary without recomputing a served view size', async () => {
+    const snapshot = await agentRun();
+    const measurement = receiptAt(snapshot, 1)!.requestMeasurement;
+    expect(measurement?.status).toBe('measured');
+    if (measurement?.status !== 'measured') throw new Error('fixture did not measure its request');
+    expect(measurement.total.jsonBytes).toBeGreaterThan(0);
+    expect(measurement.boundary).toBe('initial-prepared-request');
+    expect(measurement.format).toBe('json-utf8-v1');
+    expect(Object.isFrozen(measurement)).toBe(true);
+    expect(Object.isFrozen(measurement.total)).toBe(true);
+    expect(servedAt(snapshot, 1)).not.toHaveProperty('requestMeasurement');
+    expect(kinds(snapshot, 1)).not.toContain('no-receipt-on-chart');
+    const stored = committedReceipts(snapshot).find(
+      (r) => (r.basis as { epoch: number }).epoch === 1,
+    );
+    expect(measurement).toEqual(stored!.requestMeasurement);
+  });
+
+  it('leaves an older missing measurement absent while retaining the readable receipt and view', async () => {
+    const fresh = await agentRun();
+    const older = aged(fresh, ['requestMeasurement']);
+    expect(receiptAt(fresh, 1)!.requestMeasurement?.status).toBe('measured');
+    expect(receiptAt(older, 1)).toBeDefined();
+    expect(receiptAt(older, 1)).not.toHaveProperty('requestMeasurement');
+    expect(kinds(older, 1)).not.toContain('no-receipt-on-chart');
+    expect(servedAt(older, 1)).toEqual(servedAt(fresh, 1));
+    everyRowVerifies(older, 1);
+  });
+
+  it('preserves an explicit unavailable reason from a real request without replacing it with zero', async () => {
+    const strategy = {
+      name: 'unmeasurable-request-fixture',
+      prepareRequest: async (request: LLMRequest) => ({
+        request: { ...request, opaqueExtension: () => 'PRIVATE_UNSUPPORTED_VALUE' },
+        markersApplied: [],
+      }),
+      readCacheMetrics: () => ({ kind: 'notApplicable' as const, reason: 'fixture' }),
+    };
+    const agent = Agent.create({
+      provider: scripted([{ content: 'done' }]) as never,
+      model: 'mock',
+      cacheStrategy: strategy as never,
+    }).build();
+    await agent.run({ message: 'go' });
+    const snapshot = agent.getSnapshot()!;
+    expect(receiptAt(snapshot, 1)!.requestMeasurement).toEqual({
+      status: 'unavailable',
+      boundary: 'initial-prepared-request',
+      format: 'json-utf8-v1',
+      reason: 'unsupported-value',
+    });
+    expect(receiptAt(snapshot, 1)!.requestMeasurement).not.toHaveProperty('total');
+    expect(JSON.stringify(receiptAt(snapshot, 1)!.requestMeasurement)).not.toContain('PRIVATE');
+    expect(servedAt(snapshot, 1)).not.toHaveProperty('requestMeasurement');
+    expect(kinds(snapshot, 1)).not.toContain('no-receipt-on-chart');
+  });
+});
+
 /** The hash law, on a receipt of any vintage: every row the aged receipt
  *  still carries verifies against the rebuilt view. */
 function everyRowVerifies(snapshot: Snapshot, epoch: number): void {

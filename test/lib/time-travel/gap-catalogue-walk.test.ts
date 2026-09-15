@@ -113,7 +113,7 @@
  *
  *   no-fold-base                 7 of 11 named fields move
  *   no-conversation-on-record    3 of 3
- *   no-receipt-on-chart          3 of 10
+ *   no-receipt-on-chart          3 of 11
  *   no-run-log                   1 of 4
  *
  * `no-conversation-on-record` is the only row that reaches every field its gap
@@ -771,6 +771,14 @@ describe('every field of a Receipt and a ServedView is accounted for', () => {
     expect(coveredBy(UNGAPPED, 'omittedForAttention')).toBe(false);
     // And the same for the strategy's name, a receipt-only fact since 9.93.0.
     expect(SERVED_GAPS['no-receipt-on-chart'].fields).toContain('cache.strategy');
+  });
+
+  it('request measurement is receipt-only and is named by the gap that loses its witness', () => {
+    expect(SERVED_GAPS['no-receipt-on-chart'].fields).toContain('requestMeasurement');
+    expect(coveredBy(UNGAPPED, 'requestMeasurement')).toBe(false);
+    // Cache rewrites are already INCLUDED in this initial prepared-request
+    // measurement. The composition gap must not claim these counts precede it.
+    expect(SERVED_GAPS['cache-transform'].fields).not.toContain('requestMeasurement');
   });
 
   it(
@@ -1661,7 +1669,7 @@ describe('each gap names the fields its own damage actually moves', () => {
       expect(measured).toEqual({
         'no-fold-base': '7 of 11',
         'no-conversation-on-record': '3 of 3',
-        'no-receipt-on-chart': '3 of 10',
+        'no-receipt-on-chart': '3 of 11',
         'no-run-log': '1 of 4',
       });
     },

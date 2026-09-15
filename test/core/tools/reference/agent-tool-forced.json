@@ -473,6 +473,29 @@
               "type": "tool"
             }
           },
+          "requestMeasurement": {
+            "boundary": "initial-prepared-request",
+            "format": "json-utf8-v1",
+            "slots": {
+              "messages": {
+                "jsonBytes": 32,
+                "jsonChars": 32
+              },
+              "systemPrompt": {
+                "jsonBytes": 125,
+                "jsonChars": 125
+              },
+              "tools": {
+                "jsonBytes": 217,
+                "jsonChars": 217
+              }
+            },
+            "status": "measured",
+            "total": {
+              "jsonBytes": 485,
+              "jsonChars": 485
+            }
+          },
           "system": {
             "chars": 121,
             "hash": "<digest>",

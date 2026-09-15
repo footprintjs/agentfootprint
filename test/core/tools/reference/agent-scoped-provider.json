@@ -497,6 +497,29 @@
             "requestOnly": []
           },
           "params": {},
+          "requestMeasurement": {
+            "boundary": "initial-prepared-request",
+            "format": "json-utf8-v1",
+            "slots": {
+              "messages": {
+                "jsonBytes": 32,
+                "jsonChars": 32
+              },
+              "systemPrompt": {
+                "jsonBytes": 5,
+                "jsonChars": 5
+              },
+              "tools": {
+                "jsonBytes": 409,
+                "jsonChars": 409
+              }
+            },
+            "status": "measured",
+            "total": {
+              "jsonBytes": 499,
+              "jsonChars": 499
+            }
+          },
           "system": {
             "chars": 3,
             "hash": "<digest>",
@@ -879,6 +902,29 @@
             "requestOnly": []
           },
           "params": {},
+          "requestMeasurement": {
+            "boundary": "initial-prepared-request",
+            "format": "json-utf8-v1",
+            "slots": {
+              "messages": {
+                "jsonBytes": 307,
+                "jsonChars": 307
+              },
+              "systemPrompt": {
+                "jsonBytes": 5,
+                "jsonChars": 5
+              },
+              "tools": {
+                "jsonBytes": 409,
+                "jsonChars": 409
+              }
+            },
+            "status": "measured",
+            "total": {
+              "jsonBytes": 774,
+              "jsonChars": 774
+            }
+          },
           "system": {
             "chars": 3,
             "hash": "<digest>",
@@ -1394,6 +1440,29 @@
             "requestOnly": []
           },
           "params": {},
+          "requestMeasurement": {
+            "boundary": "initial-prepared-request",
+            "format": "json-utf8-v1",
+            "slots": {
+              "messages": {
+                "jsonBytes": 531,
+                "jsonChars": 531
+              },
+              "systemPrompt": {
+                "jsonBytes": 10,
+                "jsonChars": 10
+              },
+              "tools": {
+                "jsonBytes": 517,
+                "jsonChars": 517
+              }
+            },
+            "status": "measured",
+            "total": {
+              "jsonBytes": 1111,
+              "jsonChars": 1111
+            }
+          },
           "system": {
             "chars": 6,
             "hash": "<digest>",
@@ -1855,6 +1924,29 @@
             "requestOnly": []
           },
           "params": {},
+          "requestMeasurement": {
+            "boundary": "initial-prepared-request",
+            "format": "json-utf8-v1",
+            "slots": {
+              "messages": {
+                "jsonBytes": 712,
+                "jsonChars": 712
+              },
+              "systemPrompt": {
+                "jsonBytes": 10,
+                "jsonChars": 10
+              },
+              "tools": {
+                "jsonBytes": 517,
+                "jsonChars": 517
+              }
+            },
+            "status": "measured",
+            "total": {
+              "jsonBytes": 1292,
+              "jsonChars": 1292
+            }
+          },
           "system": {
             "chars": 6,
             "hash": "<digest>",

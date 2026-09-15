@@ -48,6 +48,7 @@ import {
   UNGAPPED_FIELDS,
   type LLMRequest,
   type LLMResponse,
+  type RequestMeasurement,
 } from '../../src/index.js';
 import { isCliEntry, type ExampleMeta } from '../helpers/cli.js';
 
@@ -194,6 +195,19 @@ export async function run(): Promise<void> {
         `${view.messages.requestOnly.length > 0 ? `, ${view.messages.requestOnly.length} request-only` : ''})`,
     );
     console.log(`   tools         ${view.tools.names.join(', ') || '(none)'}`);
+    const measurement: RequestMeasurement | undefined = receipt.requestMeasurement;
+    if (measurement?.status !== 'measured') {
+      throw new Error(`Expected this plain mock request to be measurable: ${measurement?.reason}`);
+    }
+    const expectedBytes = new TextEncoder().encode(JSON.stringify(wire[view.epoch - 1])).byteLength;
+    if (measurement.total.jsonBytes !== expectedBytes) {
+      throw new Error('Receipt size differs from the initial request captured by the provider');
+    }
+    console.log(
+      `   request JSON  ${measurement.total.jsonBytes} UTF-8 bytes` +
+        `; tool schemas ${measurement.slots.tools?.jsonBytes ?? 'absent'} bytes` +
+        ' (initial canonical request; not tokens or HTTP bytes)',
+    );
 
     // The one model-facing line that is written to NO history. It exists for a
     // single request and is recomposed each iteration — so the only way a

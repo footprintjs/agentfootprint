@@ -317,6 +317,29 @@
             "requestOnly": []
           },
           "params": {},
+          "requestMeasurement": {
+            "boundary": "initial-prepared-request",
+            "format": "json-utf8-v1",
+            "slots": {
+              "messages": {
+                "jsonBytes": 32,
+                "jsonChars": 32
+              },
+              "systemPrompt": {
+                "jsonBytes": 29,
+                "jsonChars": 29
+              },
+              "tools": {
+                "jsonBytes": 649,
+                "jsonChars": 649
+              }
+            },
+            "status": "measured",
+            "total": {
+              "jsonBytes": 763,
+              "jsonChars": 763
+            }
+          },
           "system": {
             "chars": 25,
             "hash": "<digest>",
@@ -372,6 +395,10 @@
         {
           "path": "activeInjections",
           "verb": "append"
+        },
+        {
+          "path": "receipt\u001frequestMeasurement",
+          "verb": "set"
         },
         {
           "path": "receipt\u001fsystem",
@@ -590,6 +617,29 @@
             ],
             "requestOnly": []
           },
+          "requestMeasurement": {
+            "boundary": "initial-prepared-request",
+            "format": "json-utf8-v1",
+            "slots": {
+              "messages": {
+                "jsonBytes": 210,
+                "jsonChars": 210
+              },
+              "systemPrompt": {
+                "jsonBytes": 42,
+                "jsonChars": 42
+              },
+              "tools": {
+                "jsonBytes": 650,
+                "jsonChars": 650
+              }
+            },
+            "status": "measured",
+            "total": {
+              "jsonBytes": 955,
+              "jsonChars": 955
+            }
+          },
           "system": {
             "chars": 36,
             "hash": "<digest>",
@@ -654,6 +704,10 @@
         {
           "path": "activeInjections",
           "verb": "append"
+        },
+        {
+          "path": "receipt\u001frequestMeasurement",
+          "verb": "set"
         },
         {
           "path": "receipt\u001fsystem",

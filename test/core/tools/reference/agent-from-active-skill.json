@@ -499,6 +499,29 @@
             "requestOnly": []
           },
           "params": {},
+          "requestMeasurement": {
+            "boundary": "initial-prepared-request",
+            "format": "json-utf8-v1",
+            "slots": {
+              "messages": {
+                "jsonBytes": 32,
+                "jsonChars": 32
+              },
+              "systemPrompt": {
+                "jsonBytes": 5,
+                "jsonChars": 5
+              },
+              "tools": {
+                "jsonBytes": 392,
+                "jsonChars": 392
+              }
+            },
+            "status": "measured",
+            "total": {
+              "jsonBytes": 482,
+              "jsonChars": 482
+            }
+          },
           "system": {
             "chars": 3,
             "hash": "<digest>",
@@ -1013,6 +1036,29 @@
             "requestOnly": []
           },
           "params": {},
+          "requestMeasurement": {
+            "boundary": "initial-prepared-request",
+            "format": "json-utf8-v1",
+            "slots": {
+              "messages": {
+                "jsonBytes": 250,
+                "jsonChars": 250
+              },
+              "systemPrompt": {
+                "jsonBytes": 13,
+                "jsonChars": 13
+              },
+              "tools": {
+                "jsonBytes": 496,
+                "jsonChars": 496
+              }
+            },
+            "status": "measured",
+            "total": {
+              "jsonBytes": 812,
+              "jsonChars": 812
+            }
+          },
           "system": {
             "chars": 9,
             "hash": "<digest>",
@@ -1453,6 +1499,29 @@
             "requestOnly": []
           },
           "params": {},
+          "requestMeasurement": {
+            "boundary": "initial-prepared-request",
+            "format": "json-utf8-v1",
+            "slots": {
+              "messages": {
+                "jsonBytes": 425,
+                "jsonChars": 425
+              },
+              "systemPrompt": {
+                "jsonBytes": 13,
+                "jsonChars": 13
+              },
+              "tools": {
+                "jsonBytes": 496,
+                "jsonChars": 496
+              }
+            },
+            "status": "measured",
+            "total": {
+              "jsonBytes": 987,
+              "jsonChars": 987
+            }
+          },
           "system": {
             "chars": 9,
             "hash": "<digest>",

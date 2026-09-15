@@ -137,6 +137,8 @@ export {
   type ReceiptParams,
   type ReceiptPiece,
   type ReceiptRequestOnlyMessage,
+  type RequestMeasurement,
+  type RequestJsonSize,
   type ServedGap,
   type ServedGapCause,
   type ServedGapKind,

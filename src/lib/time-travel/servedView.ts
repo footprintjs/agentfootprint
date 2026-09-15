@@ -428,7 +428,7 @@ export const SERVED_GAPS: Readonly<Record<ServedGapKind, Omit<ServedGap, 'gap'>>
   'provider-defaults': Object.freeze({
     // MECHANISM (not printed). `buildReceipt` reads `params` off the PREPARED
     // request — the object `LLMProvider.complete` is handed, after any cache
-    // strategy has had it — so it is the one part of a receipt read past the
+    // strategy has had it. Like `requestMeasurement`, it is read past the
     // strategy, and `cache-transform` deliberately does not name it. What is
     // still past the record is the vendor: an adapter or SDK can resolve a
     // final value the port never saw. `params` is also VALUE-CONDITIONAL —
@@ -578,6 +578,12 @@ export const SERVED_GAPS: Readonly<Record<ServedGapKind, Omit<ServedGap, 'gap'>>
     //     the one thing that can lose a recorded drop is losing the receipt,
     //     which is this gap. `cache.strategy` joined for the same reason: a
     //     receipt-only fact, gone with the receipt.
+    // `requestMeasurement` is also receipt-only: its counts describe the
+    // initial PREPARED request, not the composition rebuilt by this view.
+    // Losing the whole receipt loses that witness. An older receipt may
+    // itself omit the optional field, and an attempted measurement may say
+    // `unavailable`; receiptAt preserves those states, never zero counts.
+    // Neither state means the receipt is missing or changes this gap's cause.
     //
     // AND THE SEVENTH ROUND SCOPED THE PRINTED CLAIM TO THE LEVEL IT HOLDS AT.
     // It said the absence of these fields is "a gap in the record, never a call
@@ -600,6 +606,7 @@ export const SERVED_GAPS: Readonly<Record<ServedGapKind, Omit<ServedGap, 'gap'>>
       'cache.markersApplied',
       'cache.strategy',
       'omittedForAttention',
+      'requestMeasurement',
     ]),
     why:
       'Nothing on this view has been checked against what went out. Every field below is ' +

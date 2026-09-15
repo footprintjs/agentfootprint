@@ -225,6 +225,29 @@
             "requestOnly": []
           },
           "params": {},
+          "requestMeasurement": {
+            "boundary": "initial-prepared-request",
+            "format": "json-utf8-v1",
+            "slots": {
+              "messages": {
+                "jsonBytes": 32,
+                "jsonChars": 32
+              },
+              "systemPrompt": {
+                "jsonBytes": 15,
+                "jsonChars": 15
+              },
+              "tools": {
+                "jsonBytes": 107,
+                "jsonChars": 107
+              }
+            },
+            "status": "measured",
+            "total": {
+              "jsonBytes": 207,
+              "jsonChars": 207
+            }
+          },
           "system": {
             "chars": 13,
             "hash": "<digest>",
@@ -260,6 +283,10 @@
         {
           "path": "llmLatestToolCalls",
           "verb": "append"
+        },
+        {
+          "path": "receipt\u001frequestMeasurement",
+          "verb": "set"
         },
         {
           "path": "receipt\u001fsystem",
@@ -405,6 +432,29 @@
               }
             ],
             "requestOnly": []
+          },
+          "requestMeasurement": {
+            "boundary": "initial-prepared-request",
+            "format": "json-utf8-v1",
+            "slots": {
+              "messages": {
+                "jsonBytes": 210,
+                "jsonChars": 210
+              },
+              "systemPrompt": {
+                "jsonBytes": 15,
+                "jsonChars": 15
+              },
+              "tools": {
+                "jsonBytes": 107,
+                "jsonChars": 107
+              }
+            },
+            "status": "measured",
+            "total": {
+              "jsonBytes": 385,
+              "jsonChars": 385
+            }
           }
         }
       },
@@ -423,6 +473,10 @@
         },
         {
           "path": "llmLatestToolCalls",
+          "verb": "set"
+        },
+        {
+          "path": "receipt\u001frequestMeasurement",
           "verb": "set"
         },
         {

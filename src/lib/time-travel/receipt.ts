@@ -98,6 +98,9 @@ import type { LLMMessage, LLMToolSchema } from '../../adapters/types.js';
 import type { ContextRole, ContextSlot, ContextSource } from '../../events/types.js';
 import { contributingPieces } from '../../core/agent/composeRequest.js';
 import { sha256Hex } from './sha256.js';
+import { measureRequest, type RequestMeasurement } from './requestMeasurement.js';
+
+export type { RequestMeasurement, RequestJsonSize } from './requestMeasurement.js';
 
 /** What {@link receiptPieces} needs from one committed injection record — the
  *  three fields a receipt keeps of a system piece, and none of the rest. */
@@ -316,6 +319,9 @@ export interface ReceiptAttentionOmission {
  * ```
  */
 export interface Receipt {
+  /** Counts of the initial prepared canonical request, including full schemas.
+   * Older recordings have no measurement. No payload, tokens or retry totals. */
+  readonly requestMeasurement?: RequestMeasurement;
   readonly system: {
     readonly hash: string;
     readonly chars: number;
@@ -750,6 +756,7 @@ export function buildReceipt(input: BuildReceiptInput): Receipt {
     : 'rewritten';
 
   return {
+    requestMeasurement: measureRequest(input.preparedRequest),
     system: {
       hash: hash(input.systemText),
       chars: input.systemText.length,

@@ -678,6 +678,29 @@
             "requestOnly": []
           },
           "params": {},
+          "requestMeasurement": {
+            "boundary": "initial-prepared-request",
+            "format": "json-utf8-v1",
+            "slots": {
+              "messages": {
+                "jsonBytes": 32,
+                "jsonChars": 32
+              },
+              "systemPrompt": {
+                "jsonBytes": 19,
+                "jsonChars": 19
+              },
+              "tools": {
+                "jsonBytes": 649,
+                "jsonChars": 649
+              }
+            },
+            "status": "measured",
+            "total": {
+              "jsonBytes": 753,
+              "jsonChars": 753
+            }
+          },
           "system": {
             "chars": 15,
             "hash": "<digest>",
@@ -1300,6 +1323,29 @@
             "requestOnly": []
           },
           "params": {},
+          "requestMeasurement": {
+            "boundary": "initial-prepared-request",
+            "format": "json-utf8-v1",
+            "slots": {
+              "messages": {
+                "jsonBytes": 210,
+                "jsonChars": 210
+              },
+              "systemPrompt": {
+                "jsonBytes": 32,
+                "jsonChars": 32
+              },
+              "tools": {
+                "jsonBytes": 650,
+                "jsonChars": 650
+              }
+            },
+            "status": "measured",
+            "total": {
+              "jsonBytes": 945,
+              "jsonChars": 945
+            }
+          },
           "system": {
             "chars": 26,
             "hash": "<digest>",

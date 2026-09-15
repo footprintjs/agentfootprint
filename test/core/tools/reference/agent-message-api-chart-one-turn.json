@@ -287,6 +287,29 @@
             "requestOnly": []
           },
           "params": {},
+          "requestMeasurement": {
+            "boundary": "initial-prepared-request",
+            "format": "json-utf8-v1",
+            "slots": {
+              "messages": {
+                "jsonBytes": 47,
+                "jsonChars": 47
+              },
+              "systemPrompt": {
+                "jsonBytes": 17,
+                "jsonChars": 17
+              },
+              "tools": {
+                "jsonBytes": 131,
+                "jsonChars": 131
+              }
+            },
+            "status": "measured",
+            "total": {
+              "jsonBytes": 248,
+              "jsonChars": 248
+            }
+          },
           "system": {
             "chars": 15,
             "hash": "<digest>",

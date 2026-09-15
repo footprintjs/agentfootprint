@@ -691,6 +691,29 @@
             "requestOnly": []
           },
           "params": {},
+          "requestMeasurement": {
+            "boundary": "initial-prepared-request",
+            "format": "json-utf8-v1",
+            "slots": {
+              "messages": {
+                "jsonBytes": 32,
+                "jsonChars": 32
+              },
+              "systemPrompt": {
+                "jsonBytes": 19,
+                "jsonChars": 19
+              },
+              "tools": {
+                "jsonBytes": 839,
+                "jsonChars": 839
+              }
+            },
+            "status": "measured",
+            "total": {
+              "jsonBytes": 943,
+              "jsonChars": 943
+            }
+          },
           "system": {
             "chars": 15,
             "hash": "<digest>",
@@ -1110,6 +1133,29 @@
             "requestOnly": []
           },
           "params": {},
+          "requestMeasurement": {
+            "boundary": "initial-prepared-request",
+            "format": "json-utf8-v1",
+            "slots": {
+              "messages": {
+                "jsonBytes": 195,
+                "jsonChars": 195
+              },
+              "systemPrompt": {
+                "jsonBytes": 19,
+                "jsonChars": 19
+              },
+              "tools": {
+                "jsonBytes": 839,
+                "jsonChars": 839
+              }
+            },
+            "status": "measured",
+            "total": {
+              "jsonBytes": 1106,
+              "jsonChars": 1106
+            }
+          },
           "system": {
             "chars": 15,
             "hash": "<digest>",
@@ -1563,6 +1609,29 @@
             "requestOnly": []
           },
           "params": {},
+          "requestMeasurement": {
+            "boundary": "initial-prepared-request",
+            "format": "json-utf8-v1",
+            "slots": {
+              "messages": {
+                "jsonBytes": 355,
+                "jsonChars": 355
+              },
+              "systemPrompt": {
+                "jsonBytes": 19,
+                "jsonChars": 19
+              },
+              "tools": {
+                "jsonBytes": 839,
+                "jsonChars": 839
+              }
+            },
+            "status": "measured",
+            "total": {
+              "jsonBytes": 1266,
+              "jsonChars": 1266
+            }
+          },
           "system": {
             "chars": 15,
             "hash": "<digest>",
@@ -2043,6 +2112,29 @@
             "requestOnly": []
           },
           "params": {},
+          "requestMeasurement": {
+            "boundary": "initial-prepared-request",
+            "format": "json-utf8-v1",
+            "slots": {
+              "messages": {
+                "jsonBytes": 810,
+                "jsonChars": 808
+              },
+              "systemPrompt": {
+                "jsonBytes": 19,
+                "jsonChars": 19
+              },
+              "tools": {
+                "jsonBytes": 839,
+                "jsonChars": 839
+              }
+            },
+            "status": "measured",
+            "total": {
+              "jsonBytes": 1721,
+              "jsonChars": 1719
+            }
+          },
           "system": {
             "chars": 15,
             "hash": "<digest>",
