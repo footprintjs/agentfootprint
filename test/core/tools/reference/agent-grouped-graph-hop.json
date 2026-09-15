@@ -782,6 +782,10 @@
       "runtimeStageId": "final#46",
       "stage": "Final",
       "stageId": "final",
+      "tags": [
+        "milestone:decision",
+        "milestone-label:Answer"
+      ],
       "trace": [],
       "updates": {}
     }

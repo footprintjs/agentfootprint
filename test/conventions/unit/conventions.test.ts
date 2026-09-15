@@ -49,11 +49,12 @@ describe('SUBFLOW_IDS — single source of truth', () => {
 });
 
 describe('STAGE_IDS — single source of truth', () => {
-  it('has the 21 known stage IDs', () => {
+  it('has the 22 known stage IDs', () => {
     const actual = Object.values(STAGE_IDS).sort();
     expect(actual).toEqual(
       [
         'seed',
+        'prepare-final', // the final branch's first stage — a milestone since 9.98.1
         // Relevance entry router (entryByRelevance):
         'pick-entry',
         // Parallel context-assembly selector (slot fan-out):
@@ -255,6 +256,16 @@ describe('milestoneFor — domain-declared time-travel scrub stops', () => {
   it('classifies tool execution as a tool-call milestone (bare + prefixed forms)', () => {
     expect(milestoneFor('tool-calls')).toEqual({ kind: 'tool-call', label: 'Tool call' });
     expect(milestoneFor(SUBFLOW_IDS.TOOL_CALLS)).toEqual({ kind: 'tool-call', label: 'Tool call' });
+  });
+
+  it("classifies the final branch's answer stage as a decision milestone (9.98.1)", () => {
+    // The answer is captured (and, with `.answerValidation()`, checked) at
+    // `prepare-final` — the one stop a reader scrubs to for "what was answered".
+    expect(milestoneFor(STAGE_IDS.PREPARE_FINAL)).toEqual({ kind: 'decision', label: 'Answer' });
+    expect(STAGE_IDS.PREPARE_FINAL).toBe('prepare-final');
+    // Twin row for the MOUNT (the tool-calls precedent): the parent's axis
+    // stops on the answer without drilling into the final branch.
+    expect(milestoneFor(SUBFLOW_IDS.FINAL)).toEqual({ kind: 'decision', label: 'Answer' });
   });
 
   it('classifies the route decider as a decision milestone', () => {

@@ -161,12 +161,13 @@ export function buildDynamicAgentChart(deps: AgentChartDeps): FlowChart {
       : deps.attachCoverageLimits === true
       ? prepareFinalWithLimitsStage
       : prepareFinalStage,
-    'prepare-final',
+    STAGE_IDS.PREPARE_FINAL,
     {
       ...(deps.structureRecorders !== undefined && {
         structureRecorders: [...deps.structureRecorders],
       }),
       description: 'Capture turn payload (finalContent + newMessages)',
+      tags: milestoneTagsFor(STAGE_IDS.PREPARE_FINAL),
     },
   );
   for (const m of deps.memories) {
@@ -909,6 +910,7 @@ export function buildDynamicAgentChart(deps: AgentChartDeps): FlowChart {
 
   const chart = decider
     .addSubFlowChartBranch(SUBFLOW_IDS.FINAL, finalBranchChart, 'Final', {
+      tags: milestoneTagsFor(SUBFLOW_IDS.FINAL),
       inputMapper: (parent) => {
         const { finalContent: _f, newMessages: _nm, ...rest } = parent;
         void _f;

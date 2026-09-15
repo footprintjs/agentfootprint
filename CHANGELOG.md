@@ -7,6 +7,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [Unreleased]
+
+### Added — the answer is a milestone
+
+- `STAGE_IDS.PREPARE_FINAL` (`'prepare-final'`, the final branch's first stage
+  on the agent charts) and the final branch's MOUNT (`SUBFLOW_IDS.FINAL`,
+  the twin-row precedent of `tool-calls` / `SUBFLOW_IDS.TOOL_CALLS`) join the
+  `MILESTONES` table as `{ kind: 'decision', label: 'Answer' }`; all three
+  chart shapes (static, dynamic, message-API) declare
+  `milestone:decision` / `milestone-label:Answer` there, so the parent axis
+  stops on the answer without drilling and the drilled log stops on the
+  stage. Until now a scrub could stop on every turn, slot, tool call
+  and routing decision but never on the answer itself — and since 9.95.0
+  that stage is also where `.answerValidation()` checks the answer and
+  delivers or withholds it. One row, no new vocabulary: the seven steps a
+  context walkthrough narrates (question · scope · reference · prepare ·
+  model · finding · answer) are milestones the record already carries, plus
+  this one. The fifteen byte-identity references move by exactly one path —
+  `tags` on the final mount's bundle — verified line by line (every other
+  line identical; delta on record in the test header).
+
 ## [9.98.0] - 2026-09-15
 
 ### Added

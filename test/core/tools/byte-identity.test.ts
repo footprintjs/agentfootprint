@@ -45,6 +45,13 @@
  * tool, cursor, gap or normalizer changed. The running comparison below keeps
  * all new values and traces, so later measurement drift still fails the test.
  *
+ * ALL FIFTEEN REGENERATED ON 9.98.1, delta on record: the final branch's
+ * MOUNT (`SUBFLOW_IDS.FINAL`) became a milestone, so its bundle on the parent
+ * log gained `tags: ['milestone:decision', 'milestone-label:Answer']`. The
+ * old and new sets were diffed line by line: on every fixture the only lines
+ * that moved are tag lines (zero non-tag differences). No message, no tool,
+ * no receipt key moved.
+ *
  * Every scenario is a real run — the receipt-conformance shapes, each in the
  * configuration that has no name collision — and what is compared is the
  * whole `commitLog` plus `servedAt(k)` for every located epoch, after ONE

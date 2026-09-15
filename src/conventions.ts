@@ -177,6 +177,8 @@ export const STAGE_IDS = {
    *  a mode). At most once per turn, and that last call cannot loop: with no
    *  tools on the wire there is nothing for the model to ask for. */
   WRAP_UP: 'wrap-up',
+  /** The final branch's first stage: the turn's answer is captured — and, with `.answerValidation()`, checked — here (9.98.1: a milestone, so a scrub can stop on the answer). */
+  PREPARE_FINAL: 'prepare-final',
   FORMAT_MERGE: 'format-merge',
   MERGE_LLM: 'merge-llm',
   EXTRACT_MERGE: 'extract-merge',
@@ -430,6 +432,14 @@ const MILESTONES: ReadonlyMap<string, Milestone> = new Map<string, Milestone>([
   // The action budget ran out and the turn was wrapped up (9.56.0) —
   // everything after it is the model summarizing with no tools to call.
   [STAGE_IDS.WRAP_UP, milestone('decision', 'Wrap up')],
+  // The answer itself (9.98.1). Every chart shape ends here; with
+  // `.answerValidation()` it is also where the answer is checked and
+  // delivered or withheld — a decision a reader scrubs to.
+  [STAGE_IDS.PREPARE_FINAL, milestone('decision', 'Answer')],
+  // …and its MOUNT on the parent chart, the way `tool-calls` and
+  // SUBFLOW_IDS.TOOL_CALLS are twin rows: the parent's own axis stops on the
+  // answer without drilling, and the drilled log stops on the stage.
+  [SUBFLOW_IDS.FINAL, milestone('decision', 'Answer')],
 ]);
 
 /**

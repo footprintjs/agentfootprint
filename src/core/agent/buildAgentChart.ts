@@ -330,12 +330,13 @@ export function buildAgentChart(deps: AgentChartDeps): FlowChart {
       : deps.attachCoverageLimits === true
       ? prepareFinalWithLimitsStage
       : prepareFinalStage,
-    'prepare-final',
+    STAGE_IDS.PREPARE_FINAL,
     {
       ...(deps.structureRecorders !== undefined && {
         structureRecorders: [...deps.structureRecorders],
       }),
       description: 'Capture turn payload (finalContent + newMessages)',
+      tags: milestoneTagsFor(STAGE_IDS.PREPARE_FINAL),
     },
   );
   for (const m of deps.memories) {
@@ -910,6 +911,7 @@ export function buildAgentChart(deps: AgentChartDeps): FlowChart {
 
   builder = decider
     .addSubFlowChartBranch(SUBFLOW_IDS.FINAL, finalBranchChart, 'Final', {
+      tags: milestoneTagsFor(SUBFLOW_IDS.FINAL),
       // Pass through the read-only state the sub-chart needs;
       // OMIT keys the sub-chart writes (finalContent, newMessages)
       // — passing those via inputMapper would freeze them as args.

@@ -346,6 +346,7 @@ export function buildAgentMessageApiChart(deps: AgentMessageApiChartDeps): FlowC
         'Final',
         finalStage as never,
         'Terminate the ReAct loop (response)',
+        { tags: milestoneTagsFor(ROUTE_FINAL) },
       )
       .setDefault(ROUTE_FINAL)
       .end()

@@ -515,15 +515,27 @@ describe('9.90.0: the tag is the fact — the tag-only axis is the id axis on ev
     const snapshot = await record('dynamic-grouped', (a) => a.system('s').skillGraph(graph()));
     const outer = timeTravel(snapshot, { strategy: taggedStrategy });
     let drilled = 0;
+    let answers = 0;
     for (const mount of outer.stops.filter((s) => s.kind === 'mount')) {
       if (!outer.drill(mount.runtimeStageId)) continue;
       const tagged = expectTagAxisIsIdAxis(innerSourceOf(snapshot, mount.runtimeStageId));
+      if (mount.meta?.label === 'Answer') {
+        // The final branch (a milestone mount since 9.98.1) is not a turn: its
+        // inner history stops on the answer stage and holds no slot, no call.
+        expect(tagged.some((s) => s.meta?.kind === 'decision' && s.meta.label === 'Answer')).toBe(
+          true,
+        );
+        expect(tagged.some((s) => s.meta?.kind === 'llm-turn')).toBe(false);
+        answers += 1;
+        continue;
+      }
       // The slots are selector-branch mounts INSIDE the turn — tagged there too.
       expect(tagged.filter((s) => s.meta?.kind === 'slot').length).toBeGreaterThanOrEqual(3);
       expect(tagged.some((s) => s.meta?.kind === 'llm-turn')).toBe(true);
       drilled += 1;
     }
     expect(drilled).toBeGreaterThanOrEqual(2);
+    expect(answers).toBe(1);
   });
 
   it('a paused-then-resumed run — both legs, and the chained axis', async () => {
