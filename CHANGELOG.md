@@ -7,19 +7,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-### Fixed
-
-- Dataset projections preserve original absence, coverage, clarification and
-  semantic declarations, including recognized tool-effect status/effects.
-  `withDatasetArtifacts` refuses removed, changed or unreadable declarations;
-  optional paired `checkSemantics` fixtures apply the same check at build time.
-  This checks declaration preservation, not factual truth, never infers absence
-  from empty data, and leaves `requestInput` pauses unchanged.
-- `read_skill` describes each visible skill once when the turn-start menu and
-  the catalog or reachability lists overlap. Later memberships retain the skill
-  id; candidate ordering, supplied relevance, cursor, visibility and admission
-  remain unchanged. The default menu hint and tool wording no longer claim an
-  offline scorer necessarily ranked the menu. No routing option is required.
+## [9.98.0] - 2026-09-15
 
 ### Added
 
@@ -33,7 +21,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   before dataset adaptation. Structured data survives without text conversion;
   the fallback accepts only one declared JSON-object text block. Default text
   decoding is unchanged, and tool errors remain failures.
-
 - `receipt.requestMeasurement` records JSON character and UTF-8 byte sizes for
   the initial prepared canonical request and its separately serialized slots,
   including complete tool schemas. Unsupported or cyclic values report an
@@ -41,11 +28,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `measurement-limit` at more than 100,000 visited values, 64 nested containers,
   or 4,000,000 string/key UTF-16 code units while copying or serialized JSON
   characters; they never truncate or reject provider input. Older receipts may
-  lack the field. Existing advisory counters are unchanged; these sizes do not represent
-  tokens, later retries or provider HTTP payloads. The measurement records no
-  request content; `RequestMeasurement` and `RequestJsonSize` are public types.
-
-## [9.97.1] - 2026-09-15
+  lack the field. Existing advisory counters are unchanged; these sizes do not
+  represent tokens, later retries or provider HTTP payloads. The measurement
+  records no request content; `RequestMeasurement` and `RequestJsonSize` are public types.
 
 ### Changed
 
@@ -58,6 +43,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Dataset projections preserve original absence, coverage, clarification and
+  semantic declarations, including recognized tool-effect status/effects.
+  `withDatasetArtifacts` refuses removed, changed or unreadable declarations;
+  optional paired `checkSemantics` fixtures apply the same check at build time.
+  This checks declaration preservation, not factual truth, never infers absence
+  from empty data, and leaves `requestInput` pauses unchanged.
+- `read_skill` describes each visible skill once when the turn-start menu and
+  the catalog or reachability lists overlap. Later memberships retain the skill
+  id; candidate ordering, supplied relevance, cursor, visibility and admission
+  remain unchanged. The default menu hint and tool wording no longer claim an
+  offline scorer necessarily ranked the menu. No routing option is required.
 - Upgrade the shared comparison to ContextFootprint 0.1.1. Distinct JSON data
   with an own `__proto__` property now produces the expected conflict, including
   nested objects and known Claim payloads. Legacy recording keys and original
