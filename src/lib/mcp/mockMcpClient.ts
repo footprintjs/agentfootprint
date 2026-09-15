@@ -169,8 +169,12 @@ function wrapMockTool(
       const handler = toolMap.get(mcp.name)?.handler;
       try {
         const result = handler ? await handler(argsObj) : '[mock result]';
-        return readToolResult(typeof result === 'string' ? { content: [{ type: 'text', text: result }] } : result,
-          mcp.name, serverName, resultMode);
+        return readToolResult(
+          typeof result === 'string' ? { content: [{ type: 'text', text: result }] } : result,
+          mcp.name,
+          serverName,
+          resultMode,
+        );
       } catch (err) {
         const msg = err instanceof Error ? err.message : String(err);
         throw new Error(`Mock MCP tool '${mcp.name}' (server '${serverName}') threw: ${msg}`);

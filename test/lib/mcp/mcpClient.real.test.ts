@@ -183,31 +183,52 @@ describe('mcpClient against a real SDK server (streamable HTTP)', () => {
   });
 
   it.each(['text', 'structured', 'structured-or-json'] as const)(
-    'preserves the chosen %s result boundary through real SDK serialization', async resultMode => {
+    'preserves the chosen %s result boundary through real SDK serialization',
+    async (resultMode) => {
       const data = { rows: [{ id: 'synthetic-only', latency: 0, missing: null, present: false }] };
-      const answer = { content: [{ type: 'text', text: JSON.stringify(data) }],
-        ...(resultMode !== 'structured-or-json' && { structuredContent: data }) };
+      const answer = {
+        content: [{ type: 'text', text: JSON.stringify(data) }],
+        ...(resultMode !== 'structured-or-json' && { structuredContent: data }),
+      };
       const server = await startRealServer(answer);
       servers.push(server);
-      const client = await mcpClient({ name: 'structured-http', resultMode,
-        transport: { transport: 'http', url: server.url } });
+      const client = await mcpClient({
+        name: 'structured-http',
+        resultMode,
+        transport: { transport: 'http', url: server.url },
+      });
       try {
-        const tool = (await client.tools()).find(tool => tool.schema.name === 'echoArgs')!;
+        const tool = (await client.tools()).find((tool) => tool.schema.name === 'echoArgs')!;
         expect(tool.source).toBe('structured-http');
         expect(await tool.execute({})).toEqual(resultMode === 'text' ? JSON.stringify(data) : data);
-      } finally { await client.close(); }
-    }, REAL_TRANSPORT_TIMEOUT,
+      } finally {
+        await client.close();
+      }
+    },
+    REAL_TRANSPORT_TIMEOUT,
   );
 
-  it('keeps a structured SDK error an error despite usable structured content', async () => {
-    const server = await startRealServer({ content: [{ type: 'text', text: 'upstream unavailable' }],
-      structuredContent: { rows: [] }, isError: true });
-    servers.push(server);
-    const client = await mcpClient({ resultMode: 'structured', transport: { transport: 'http', url: server.url } });
-    try {
-      await expect((await client.tools())[0]!.execute({})).rejects.toThrow(/returned an error/);
-    } finally { await client.close(); }
-  }, REAL_TRANSPORT_TIMEOUT);
+  it(
+    'keeps a structured SDK error an error despite usable structured content',
+    async () => {
+      const server = await startRealServer({
+        content: [{ type: 'text', text: 'upstream unavailable' }],
+        structuredContent: { rows: [] },
+        isError: true,
+      });
+      servers.push(server);
+      const client = await mcpClient({
+        resultMode: 'structured',
+        transport: { transport: 'http', url: server.url },
+      });
+      try {
+        await expect((await client.tools())[0]!.execute({})).rejects.toThrow(/returned an error/);
+      } finally {
+        await client.close();
+      }
+    },
+    REAL_TRANSPORT_TIMEOUT,
+  );
 
   it(
     'discovers the server tools and preserves each schema',

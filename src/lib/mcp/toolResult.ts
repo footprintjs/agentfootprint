@@ -7,28 +7,44 @@ type ResultMode = NonNullable<McpClientOptions['resultMode']>;
 export function resultModeOf(value: unknown, name: string): ResultMode {
   if (value === undefined) return 'text';
   if (value === 'text' || value === 'structured' || value === 'structured-or-json') return value;
-  throw new Error(`mcpClient[${name}]: resultMode must be 'text', 'structured' or 'structured-or-json'.`);
+  throw new Error(
+    `mcpClient[${name}]: resultMode must be 'text', 'structured' or 'structured-or-json'.`,
+  );
 }
 
 /** Internal shared decoder for the real connection and curated mock. */
-export function readToolResult(result: McpCallToolResult, toolName: string, serverName: string,
-  mode: ResultMode = 'text'): unknown {
+export function readToolResult(
+  result: McpCallToolResult,
+  toolName: string,
+  serverName: string,
+  mode: ResultMode = 'text',
+): unknown {
   if (mode === 'text') return readTextResult(result, toolName, serverName);
   const prefix = `MCP tool '${toolName}' (server '${serverName}')`;
-  const invalid = () => new Error(`${prefix} did not provide valid structuredContent. ` +
-    (mode === 'structured-or-json' ? 'Expected a JSON object in structuredContent or, when absent, exactly one JSON-object text block. ' :
-      'Expected a JSON object in structuredContent. ') +
-    'Malformed, cyclic or over-limit data is refused; result data is not included in this error.');
+  const invalid = () =>
+    new Error(
+      `${prefix} did not provide valid structuredContent. ` +
+        (mode === 'structured-or-json'
+          ? 'Expected a JSON object in structuredContent or, when absent, exactly one JSON-object text block. '
+          : 'Expected a JSON object in structuredContent. ') +
+        'Malformed, cyclic or over-limit data is refused; result data is not included in this error.',
+    );
   if (typeof result !== 'object' || result === null) throw invalid();
   // Error status belongs to the tool, even if it also returned a usable object
   // or a legacy arm. Never launder a failed call into successful data.
   let isError: unknown;
-  try { isError = ownValue(result, 'isError'); } catch { throw invalid(); }
+  try {
+    isError = ownValue(result, 'isError');
+  } catch {
+    throw invalid();
+  }
   if (isError === true) {
     const diagnostic = errorDiagnostic(result);
-    throw new Error(diagnostic === undefined
-      ? `${prefix} returned an error; its structured result was not read.`
-      : `${prefix} returned an error: ${diagnostic}`);
+    throw new Error(
+      diagnostic === undefined
+        ? `${prefix} returned an error; its structured result was not read.`
+        : `${prefix} returned an error: ${diagnostic}`,
+    );
   }
   try {
     const structured = Object.getOwnPropertyDescriptor(result, 'structuredContent');
@@ -40,7 +56,8 @@ export function readToolResult(result: McpCallToolResult, toolName: string, serv
     const content = ownValue(result, 'content');
     if (!Array.isArray(content) || content.length !== 1) throw invalid();
     const block = ownValue(content, '0');
-    if (typeof block !== 'object' || block === null || ownValue(block, 'type') !== 'text') throw invalid();
+    if (typeof block !== 'object' || block === null || ownValue(block, 'type') !== 'text')
+      throw invalid();
     const text = ownValue(block, 'text');
     if (typeof text !== 'string' || text.length > 16_000_000) throw invalid();
     const parsed: unknown = JSON.parse(text);
@@ -67,7 +84,8 @@ function errorDiagnostic(result: object): string | undefined {
     let chars = 0;
     for (let index = 0; index < length; index++) {
       const block = ownValue(content, String(index));
-      if (typeof block !== 'object' || block === null || ownValue(block, 'type') !== 'text') return undefined;
+      if (typeof block !== 'object' || block === null || ownValue(block, 'type') !== 'text')
+        return undefined;
       const text = ownValue(block, 'text');
       if (typeof text !== 'string') return undefined;
       chars += text.length + (index === 0 ? 0 : 1);
@@ -83,7 +101,8 @@ function errorDiagnostic(result: object): string | undefined {
 
 function ownValue(value: object, key: string): unknown {
   const descriptor = Object.getOwnPropertyDescriptor(value, key);
-  if (descriptor !== undefined && !('value' in descriptor)) throw new Error('Accessor is not JSON data');
+  if (descriptor !== undefined && !('value' in descriptor))
+    throw new Error('Accessor is not JSON data');
   return descriptor?.value;
 }
 
@@ -100,7 +119,10 @@ function jsonObject(value: unknown): value is Readonly<Record<string, unknown>> 
     if (typeof item !== 'object' || depth >= 64 || ancestors.has(item)) return false;
     const array = Array.isArray(item);
     const prototype = Object.getPrototypeOf(item);
-    if (array ? prototype !== Array.prototype : prototype !== Object.prototype && prototype !== null) return false;
+    if (
+      array ? prototype !== Array.prototype : prototype !== Object.prototype && prototype !== null
+    )
+      return false;
     ancestors.add(item);
     try {
       const keys = Reflect.ownKeys(item);
@@ -110,10 +132,17 @@ function jsonObject(value: unknown): value is Readonly<Record<string, unknown>> 
         if (typeof key !== 'string') return false;
         if (array && (!/^(0|[1-9]\d*)$/.test(key) || Number(key) >= item.length)) return false;
         const descriptor = Object.getOwnPropertyDescriptor(item, key)!;
-        if (!descriptor.enumerable || !('value' in descriptor) || !visit(descriptor.value, depth + 1)) return false;
+        if (
+          !descriptor.enumerable ||
+          !('value' in descriptor) ||
+          !visit(descriptor.value, depth + 1)
+        )
+          return false;
       }
       return true;
-    } finally { ancestors.delete(item); }
+    } finally {
+      ancestors.delete(item);
+    }
   }
   return visit(value, 0);
 }
