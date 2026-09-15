@@ -20,6 +20,28 @@ and optional `source: ToolArtifactPutInput`. Schema, units, grain and coverage a
 producer metadata; the adapter decides how to represent them in the source and
 projection. No new store or domain vocabulary is introduced.
 
+The wrapper snapshots existing absence, coverage and semantic declarations before
+calling the adapter. After projection, it refuses a removed or changed declaration,
+including a mutating `describe` that returns `undefined`. Recognized effect-envelope
+status and effects must survive too. This uses existing tool failure behavior; it
+never turns `[]` or `null` into absence and does not catch `requestInput` pauses.
+Unrecognized legacy results and the no-store path retain their existing behavior.
+
+Only the documented result-wrapper spine and declared metadata are read, not rows,
+facts or series. The guard permits new unrelated metadata; existing metadata values
+must remain equal (object key order is irrelevant; array order is significant).
+It rejects metadata it cannot safely snapshot, including inherited reserved
+declarations, without invoking getters or serialization hooks. Work is bounded
+to 16 wrapper levels, 16 nested metadata containers, 10,000
+visited metadata values/keys and 65,536 string/key UTF-16 characters. A refused
+projection does not roll back earlier independent artifact writes.
+
+This is preservation at this adapter boundary, not complete semantic-schema or fact
+validation, an all-purpose unknown-value detector, or enforcement over later UI and
+middleware projections. `checkSemantics` accepts optional paired `projections`
+fixtures for the same check at build time; sample coverage remains the author's
+responsibility. See `src/lib/semantics/README.md`.
+
 `stageDatasetArtifacts(datasets, ctx.artifacts)` is the same staging step for a
 tool pipeline that already owns execution and projection. Each publication has a
 `key`, an `artifact` receipt and optional `source` receipt. A receipt is either

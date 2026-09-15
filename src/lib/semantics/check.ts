@@ -31,6 +31,11 @@
 import { readCoverageResult } from '../../core/agent/coverage/read.js';
 import { explainSemantics, readSemantics } from './envelope.js';
 import { RESULT_CLASSES, type ToolResultClass } from './types.js';
+import {
+  projectionSemanticsIssues,
+  snapshotProjectionSemantics,
+  type ProjectionIssue,
+} from './projection.js';
 
 /**
  * One tool's row in the semantics catalog: its name, its DECLARED result
@@ -42,6 +47,8 @@ export interface SemanticsCatalogEntry {
   readonly name: string;
   readonly resultClass?: ToolResultClass;
   readonly results: readonly unknown[];
+  /** Optional paired adapter fixtures. Exact preservation, not inference or factual validation. */
+  readonly projections?: readonly { readonly before: unknown; readonly after: unknown }[];
 }
 
 /** Every code one finding can carry. The four envelope codes are the
@@ -54,7 +61,8 @@ export type SemanticsFindingCode =
   | 'triage-without-coverage'
   | 'inventory-without-coverage'
   | 'inventory-without-render'
-  | 'unsampled-tool-class';
+  | 'unsampled-tool-class'
+  | ProjectionIssue['code'];
 
 /** One finding — names the TOOL and the FIELD, so the build log points at
  *  the line to fix, never at the suite. */
@@ -157,6 +165,31 @@ export function checkSemantics(entries: readonly SemanticsCatalogEntry[]): Seman
           `tool '${entry.name}' is declared '${cls}' but no sample results were given — the ` +
           `gate cannot check what it cannot see, and a class rule with no samples is a promise ` +
           `nobody is keeping. Add one sample result (a mock return is enough).`,
+      });
+    }
+
+    if (entry.projections !== undefined) {
+      if (!Array.isArray(entry.projections))
+        throw new Error(
+          `checkSemantics: tool '${entry.name}' projections must be an array of { before, after } fixtures.`,
+        );
+      entry.projections.forEach((pair, index) => {
+        if (!isPlainObject(pair) || !Object.hasOwn(pair, 'before') || !Object.hasOwn(pair, 'after'))
+          throw new Error(
+            `checkSemantics: tool '${entry.name}' projection ${
+              index + 1
+            } requires before and after values.`,
+          );
+        for (const issue of projectionSemanticsIssues(
+          snapshotProjectionSemantics(pair.before),
+          pair.after,
+        ))
+          findings.push({
+            tool: entry.name,
+            ...issue,
+            field: `projections[${index}].${issue.field}`,
+            severity: 'error',
+          });
       });
     }
 

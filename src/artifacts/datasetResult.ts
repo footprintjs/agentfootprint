@@ -2,6 +2,10 @@
 import type { Tool, ToolExecutionContext } from '../core/tools.js';
 import type { ToolArtifactPutInput, ToolArtifacts } from './capability.js';
 import type { ArtifactMeta } from './types.js';
+import {
+  projectionSemanticsIssues,
+  snapshotProjectionSemantics,
+} from '../lib/semantics/projection.js';
 
 /** Producer-owned payloads. A source is an optional artifact, not an inferred fact. */
 export interface DatasetArtifactInput {
@@ -57,12 +61,22 @@ export function withDatasetArtifacts<TArgs, TResult, TProjected>(
     async execute(args: TArgs, ctx: ToolExecutionContext) {
       const result = await tool.execute(args, ctx);
       if (!ctx.hasArtifacts) return result;
+      const semantics = snapshotProjectionSemantics(result);
       const plan = await adapter.describe(result, args);
-      if (plan === undefined) return result;
+      if (plan === undefined) {
+        const issues = projectionSemanticsIssues(semantics, result);
+        if (issues.length) throw new Error(issues[0]!.message);
+        return result;
+      }
       if (!plan || typeof plan.project !== 'function') {
         throw new TypeError('A dataset result plan requires a project function.');
       }
-      return plan.project(await stageDatasetArtifacts(plan.datasets, ctx.artifacts));
+      const projected = await plan.project(
+        await stageDatasetArtifacts(plan.datasets, ctx.artifacts),
+      );
+      const issues = projectionSemanticsIssues(semantics, projected);
+      if (issues.length) throw new Error(issues[0]!.message);
+      return projected;
     },
   };
 }

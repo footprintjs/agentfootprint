@@ -9,6 +9,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Dataset projections preserve original absence, coverage, clarification and
+  semantic declarations, including recognized tool-effect status/effects.
+  `withDatasetArtifacts` refuses removed, changed or unreadable declarations;
+  optional paired `checkSemantics` fixtures apply the same check at build time.
+  This checks declaration preservation, not factual truth, never infers absence
+  from empty data, and leaves `requestInput` pauses unchanged.
 - `read_skill` describes each visible skill once when the turn-start menu and
   the catalog or reachability lists overlap. Later memberships retain the skill
   id; candidate ordering, supplied relevance, cursor, visibility and admission

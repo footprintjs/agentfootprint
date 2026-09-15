@@ -93,6 +93,9 @@ export function coerceSemanticsCatalog(json: unknown): readonly SemanticsCatalog
         ? { resultClass: entry.resultClass as SemanticsCatalogEntry['resultClass'] }
         : {}),
       results,
+      ...(entry.projections !== undefined
+        ? { projections: entry.projections as SemanticsCatalogEntry['projections'] }
+        : {}),
     };
   });
 }

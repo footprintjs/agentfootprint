@@ -71,6 +71,30 @@ call the adapter. That preserves existing behavior; it does not by itself keep
 rows out of the model. Hosts that need that guarantee must configure a store and
 their normal output policy.
 
+## Keep absence and coverage during projection
+
+A reference replaces the rows, not the declaration of what was observed.
+For a covered producer result, preserve its wrapper while replacing only its
+`result` payload. Returning just `{ dataset }` would drop the declared boundary
+and is refused by `withDatasetArtifacts`.
+
+```ts
+const before = coverage({ rows: [{ id: 'one', amount: 0 }] }, {
+  checked: ['synthetic snapshot'], notChecked: ['live balances'],
+});
+const after = { ...before, result: { dataset: { ref: 'fixture-ticket' } } };
+const report = checkSemantics([{ name: 'lookup_ledger', results: [before],
+  projections: [{ before, after }],
+}]);
+```
+
+Import `coverage` from `agentfootprint` and `checkSemantics` from
+`agentfootprint/observe`. This paired fixture runs without a model, network or
+store; the literal ticket is only a projection fixture, not a usable reference.
+Use actual `absent()` and semantic clarification samples too. A zero, null or
+empty list by itself does not declare absence. The check protects declarations,
+not the truth of a producer's claims or every downstream UI transformation.
+
 ## Optional browser resolution
 
 A frontend is configured with the application's endpoint, not the storage

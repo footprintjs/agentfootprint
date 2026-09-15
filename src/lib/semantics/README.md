@@ -23,6 +23,7 @@ forgot them.
 | `types.ts` | the vocabulary, as a PURE leaf (the `toolOutcome.ts` precedent): marker, field types, the closed `ToolResultClass` set, the counter-word list, the static note. Type-only imports of the coverage vocabulary — absorbed, never duplicated |
 | `envelope.ts` | `semantic()` (mint, refuses at the call site), `readSemantics()` (strict recognition — the zero-cost guarantee), `semanticIssues()`/`explainSemantics()` (ONE rule set for mint, recognition and the gate), `semanticsForModel()` (the model's compact rendering-free projection), `coverageOfSemantics()` (the absorb seam `readCoverageResult` uses) |
 | `check.ts` | `checkSemantics(entries)` — the gate core over sample results; severity follows provability (the skillGraph check-up law) |
+| `projection.ts` | bounded metadata preservation shared by `withDatasetArtifacts` and optional paired gate fixtures; no row scan or fact validation |
 | `format.ts` | terminal rendering; every finding names its tool and its field |
 | `cli.ts` | the humble-shell CLI core behind `bin/agentfootprint-check-semantics.mjs` (exit codes 0/1/2, the tool-lint convention) |
 
@@ -53,3 +54,42 @@ by `scripts/gen-canonical-notes.mjs`, never hand-maintained. See
 wraps, the semantic envelope is the content. `absent()` stays the answer for
 "I looked and found nothing". A semantic envelope carries its own `coverage`
 field; do not wrap it in `coverage()`.
+
+## Check an adapter's before/after projection
+
+An optional `projections` list on each `SemanticsCatalogEntry` adds paired fixtures
+to the existing gate. Existing catalogs stay unchanged. The CLI carries the same
+pairs through from JSON; both `before` and `after` keys are required, including
+when their value is null.
+
+```ts
+const before = coverage({ rows: [{ id: 'one', value: 0 }] }, {
+  checked: ['snapshot A'], notChecked: ['live state'],
+});
+const after = { ...before, result: { dataset: { ref: 'fixture-ticket' } } };
+const report = checkSemantics([{ name: 'lookup', results: [before],
+  projections: [{ before, after }],
+}]);
+if (!report.ok) throw new Error(formatSemanticsReport(report));
+```
+
+The paired check uses the same `projection.ts` helper as `withDatasetArtifacts`.
+It compares only existing reserved absence/coverage/semantic declarations and
+recognized effect-envelope status/effects through documented wrapper locations.
+An erased or changed declaration is an error naming the tool, pair and field;
+unsafe or over-limit metadata is an unreadable-declaration error without values.
+Inherited reserved declarations are refused rather than silently omitted.
+Object key order does not matter; array order does. New unrelated metadata is
+allowed. Empty arrays, null and arbitrary legacy application fields imply nothing.
+The guard snapshots declarations before the adapter can mutate them, using at
+most 16 wrapper levels, 16 nested metadata containers, 10,000 metadata values/keys
+and 65,536 string/key UTF-16 characters; it invokes no getters or `toJSON` hooks.
+
+`semanticIssues` still owns full semantic schema validation. This guard does not
+scan data rows, establish factual truth, require a universal outcome taxonomy,
+or prove that every later renderer or middleware preserves declarations. A build
+gate checks the fixtures supplied to it; include absence, clarification, partial
+coverage and ordinary success samples from the actual adapter. Capture the
+`before` fixture before executing a mutating adapter rather than keeping two
+aliases to the same object. `requestInput` is an exception-based pause and travels
+through the wrapper unchanged, before any result projection takes place.
