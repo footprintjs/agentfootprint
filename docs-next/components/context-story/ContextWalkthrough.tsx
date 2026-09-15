@@ -16,12 +16,13 @@ type Loaded = {
   readonly ContextView: ComponentType<{
     runner: unknown;
     cursor?: unknown;
+    previous?: { runtimeStageId: string; commitIdx: number };
     events?: readonly unknown[];
     initialMode?: 'keys' | 'json';
   }>;
   readonly runner: unknown;
   readonly events: readonly unknown[];
-  readonly positions: readonly { label: string }[];
+  readonly positions: readonly { label: string; runtimeStageId: string; commitIdx: number }[];
   readonly stops: Readonly<Record<string, number>>;
   readonly cursorAt: (step: number) => unknown;
 };
@@ -98,7 +99,12 @@ export function ContextWalkthrough({ stepId, label }: { readonly stepId: string;
       <div className="cx-caption">
         Context at this step · {label} · stop {step + 1} of {loaded.positions.length} · {loaded.positions[step]?.label}
       </div>
-      <ContextView runner={loaded.runner} cursor={loaded.cursorAt(step)} events={loaded.events} />
+      <ContextView
+        runner={loaded.runner}
+        cursor={loaded.cursorAt(step)}
+        previous={step > 0 ? loaded.positions[step - 1] : undefined}
+        events={loaded.events}
+      />
       <p>Recorded on a deterministic mock provider at build time — no live model. Every value above is read from the run’s own record.</p>
     </div>
   );
