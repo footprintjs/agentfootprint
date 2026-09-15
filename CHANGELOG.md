@@ -17,6 +17,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- `withDatasetArtifacts(tool, adapter)` and `stageDatasetArtifacts` publish
+  producer-declared datasets through the existing scoped artifact store. Local,
+  HTTP-backed and structured MCP tools share source lineage, unavailable receipts
+  and retention checks. Storage is configured by the host; a frontend is optional.
+  Includes a chatbot-only example that calculates from the same ref on a later
+  turn. This handles materialized results, not streaming or remote dataset handles.
+- MCP clients can opt into `resultMode: 'structured'` or `'structured-or-json'`
+  before dataset adaptation. Structured data survives without text conversion;
+  the fallback accepts only one declared JSON-object text block. Default text
+  decoding is unchanged, and tool errors remain failures.
+
 - `receipt.requestMeasurement` records JSON character and UTF-8 byte sizes for
   the initial prepared canonical request and its separately serialized slots,
   including complete tool schemas. Unsupported or cyclic values report an

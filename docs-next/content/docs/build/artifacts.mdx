@@ -54,6 +54,83 @@ Runnable version: [`examples/features/56-artifacts.ts`](https://github.com/footp
 
 ## The data legs (9.22.0) — refs the model routes, not just holds
 
+### Declare datasets once, independently of transport
+
+`withDatasetArtifacts` wraps a local, HTTP-backed or MCP tool with a
+`DatasetResultAdapter`. The adapter's `describe(result, args)` returns a
+`DatasetResultPlan`: explicit datasets plus a projection that turns storage
+receipts into the compact result the model receives. Returning `undefined`
+leaves a non-dataset result unchanged. The library does not guess which arrays
+are tables or invent their field meanings.
+
+Each `DatasetArtifactInput` has a unique key, an artifact declaration and an
+optional source artifact. `DatasetPublication` contains the key and a
+`DatasetArtifactReceipt` for each declared artifact. A receipt says either
+`stored` with its metadata, or `unavailable` with a reason. Source references
+join the dataset's existing parent references. `stageDatasetArtifacts` exposes
+the same publication step to pipelines that already own tool execution and
+projection; the wrapper delegates to it.
+
+```ts
+import { withDatasetArtifacts } from 'agentfootprint';
+
+const referencedTool = withDatasetArtifacts(fetchSales, {
+  describe(result) {
+    return {
+      datasets: [{
+        key: 'sales',
+        artifact: { kind: 'dataset/rows', mediaType: 'application/json', data: result.rows },
+        source: { kind: 'evidence/source', mediaType: 'application/json', data: result.source },
+      }],
+      project([publication]) {
+        if (publication.artifact.status !== 'stored') {
+          return { available: false, reason: publication.artifact.reason };
+        }
+        return {
+          dataset: publication.artifact.meta,
+          source: publication.source,
+          rowCount: result.rows.length,
+        };
+      },
+    };
+  },
+});
+```
+
+**Required for references:** configure `Agent.create({ artifacts: store })`
+and supply the producer adapter. A built-in store is sufficient; implementing
+a custom store or exposing storage as an LLM tool is optional. The dispatcher
+provides the scope-bound `ctx.artifacts`; a follow-up tool can redeem a dataset
+through `wants` without refetching its source. Without a store, this wrapper
+does not call the adapter and returns the original tool result. A host that
+requires reference-only context must enforce its normal result projection or
+refusal policy as well.
+
+**A frontend is optional.** A chatbot can complete the whole flow on the
+backend. When a UI is present, its configured artifact resolver calls the host,
+which checks the same authenticated scope. The reference is neither a storage
+URL nor authorization by itself. Existing `httpArtifactResolver` reads an
+artifact through the host; it is not a pagination or database query API.
+Shared deployments must configure identity verification: session IDs alone
+are not authentication.
+
+Writes are independent, not a transaction. A failed source write can leave a
+readable dataset with explicitly unavailable provenance; a failed dataset write
+never produces a ticket. Tickets are rechecked after the batch to detect
+eviction, but may still expire later. The projection decides how to disclose
+each unavailable receipt. Declaration shapes are validated before writing;
+the store retains responsibility for serialization, budgets and parent proofs.
+
+These helpers accept **materialized results**. They do not turn a 2 GB download
+into a bounded-memory query. Streaming storage and server-side query providers
+are separate capabilities; an MCP resource URI is not automatically a local
+artifact reference.
+
+Runnable chatbot-only example, including a second-turn calculation:
+[`examples/artifacts/dataset-result.ts`](https://github.com/footprintjs/agentfootprint/blob/main/examples/artifacts/dataset-result.ts).
+The storage design follows the established
+[claim-check pattern](https://www.enterpriseintegrationpatterns.com/patterns/messaging/StoreInLibrary.html).
+
 The store alone still leaves the model doing the redeeming by hand (`ctx.artifacts.get` inside the tool). Three legs make the ref a first-class citizen of dispatch itself.
 
 ### `wants` — refs as tool arguments, resolved before execute

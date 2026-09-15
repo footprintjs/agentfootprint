@@ -27,6 +27,32 @@ see [governing by server](#which-server-served-this-tool) below.
 
 ## Three transports
 
+### Preserve structured tool results
+
+`mcpClient` defaults to `resultMode: 'text'` for compatibility. For a server
+whose result contract declares structured data, choose `resultMode: 'structured'`.
+The tool returns the validated JSON object in `structuredContent`, preserving
+data for an application adapter such as `withDatasetArtifacts` instead of
+flattening it into prose.
+
+`resultMode: 'structured-or-json'` additionally accepts exactly one text block
+containing one JSON object when structured content is absent. Use it only for
+a server whose declared contract is a JSON envelope. Multiple blocks, scalar
+JSON, arbitrary prose and malformed structured content are refused. A protocol
+error (`isError`) remains an error before dataset handling. The result modes
+also apply to injected connections and the mock client.
+
+In both structured modes, errors retain tool-authored correction text, such as
+`HTTP 422: node must be complete`, from at most 32 text blocks and 8,192 UTF-16
+characters including newline separators. The decoder reads only own data
+properties and never reads the structured error payload or invokes getters or
+`toJSON`. Missing, malformed or oversized diagnostics produce a generic tool
+error; decoding errors likewise omit payload values. A diagnostic is a failed
+tool's explanation, not a successful dataset or validated claim.
+
+This is result decoding after the transport has received the payload. It does
+not stream rows, read remote resource links, or provide a query engine.
+
 | transport | when |
 | --- | --- |
 | `stdio` | a local server you spawn — development, desktop hosts, single user |

@@ -921,6 +921,13 @@ export {
   type SweptArtifact,
   type ToolArtifactPutInput,
   type ToolArtifacts,
+  withDatasetArtifacts,
+  stageDatasetArtifacts,
+  type DatasetArtifactInput,
+  type DatasetArtifactReceipt,
+  type DatasetPublication,
+  type DatasetResultAdapter,
+  type DatasetResultPlan,
 } from './artifacts/index.js';
 // Artifacts, the optional streaming leg (9.25.0) — `putStream`/`getStream` are
 // FEATURE-DETECTED members of the port, so a store that cannot move bytes

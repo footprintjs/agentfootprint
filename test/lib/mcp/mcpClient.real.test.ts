@@ -21,6 +21,7 @@ import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/
 import { CallToolRequestSchema, ListToolsRequestSchema } from '@modelcontextprotocol/sdk/types.js';
 
 import { mcpClient } from '../../../src/tool-providers/index.js';
+import type { McpCallToolResult } from '../../../src/lib/mcp/types.js';
 import { DENIAL_MESSAGE } from './fixtures/servedTools.js';
 import {
   REAL_TRANSPORT_TIMEOUT,
@@ -58,7 +59,7 @@ interface RealServer {
  * The per-request server/transport shape is the SDK's stateless contract:
  * a stateless transport refuses to handle a second request.
  */
-async function startRealServer(): Promise<RealServer> {
+async function startRealServer(answer?: McpCallToolResult): Promise<RealServer> {
   let listCalls = 0;
 
   const build = (): SdkServer => {
@@ -89,6 +90,7 @@ async function startRealServer(): Promise<RealServer> {
       };
     });
     server.setRequestHandler(CallToolRequestSchema, async (request) => {
+      if (answer !== undefined) return answer;
       const { name, arguments: args } = request.params;
       switch (name) {
         case 'search':
@@ -179,6 +181,33 @@ describe('mcpClient against a real SDK server (streamable HTTP)', () => {
   afterAll(async () => {
     while (servers.length) await servers.pop()!.close();
   });
+
+  it.each(['text', 'structured', 'structured-or-json'] as const)(
+    'preserves the chosen %s result boundary through real SDK serialization', async resultMode => {
+      const data = { rows: [{ id: 'synthetic-only', latency: 0, missing: null, present: false }] };
+      const answer = { content: [{ type: 'text', text: JSON.stringify(data) }],
+        ...(resultMode !== 'structured-or-json' && { structuredContent: data }) };
+      const server = await startRealServer(answer);
+      servers.push(server);
+      const client = await mcpClient({ name: 'structured-http', resultMode,
+        transport: { transport: 'http', url: server.url } });
+      try {
+        const tool = (await client.tools()).find(tool => tool.schema.name === 'echoArgs')!;
+        expect(tool.source).toBe('structured-http');
+        expect(await tool.execute({})).toEqual(resultMode === 'text' ? JSON.stringify(data) : data);
+      } finally { await client.close(); }
+    }, REAL_TRANSPORT_TIMEOUT,
+  );
+
+  it('keeps a structured SDK error an error despite usable structured content', async () => {
+    const server = await startRealServer({ content: [{ type: 'text', text: 'upstream unavailable' }],
+      structuredContent: { rows: [] }, isError: true });
+    servers.push(server);
+    const client = await mcpClient({ resultMode: 'structured', transport: { transport: 'http', url: server.url } });
+    try {
+      await expect((await client.tools())[0]!.execute({})).rejects.toThrow(/returned an error/);
+    } finally { await client.close(); }
+  }, REAL_TRANSPORT_TIMEOUT);
 
   it(
     'discovers the server tools and preserves each schema',

@@ -42,7 +42,6 @@
 
 import type { Tool } from '../../core/tools.js';
 import type {
-  McpCallToolResult,
   McpClient,
   McpClientOptions,
   McpConnection,
@@ -53,6 +52,7 @@ import type {
   McpTransport,
 } from './types.js';
 import { readToolExtras } from './toolExtras.js';
+import { readToolResult, resultModeOf } from './toolResult.js';
 import { createVendingFetch } from './gatewayTransport.js';
 import { retryingFetch, type RetryOnThrottle } from './throttleRetry.js';
 import { refuseConflictingOptions } from './connectionRefusals.js';
@@ -92,6 +92,7 @@ const DEFAULT_CLIENT_INFO = {
  */
 export async function mcpClient(opts: McpClientOptions | McpConnectionOptions): Promise<McpClient> {
   const name = opts.name ?? 'mcp';
+  const resultMode = resultModeOf(opts.resultMode, name);
   // Before anything connects: an option that names a behaviour which cannot
   // happen on the chosen arm is a defect, not a preference.
   refuseConflictingOptions(opts, name);
@@ -116,7 +117,7 @@ export async function mcpClient(opts: McpClientOptions | McpConnectionOptions): 
     const listed = opts.signal
       ? await connection.listTools(undefined, { signal: opts.signal })
       : await connection.listTools();
-    return listed.tools.map((t) => wrapMcpTool(name, connection, t, opts.signal));
+    return listed.tools.map((t) => wrapMcpTool(name, connection, t, opts.signal, resultMode));
   };
 
   return {
@@ -298,6 +299,7 @@ function wrapMcpTool(
   connection: McpConnection,
   mcp: McpListedTool,
   signal?: AbortSignal,
+  resultMode?: McpClientOptions['resultMode'],
 ): Tool {
   const tool: Tool = {
     schema: {
@@ -333,108 +335,10 @@ function wrapMcpTool(
       const result = signal
         ? await connection.callTool(params, undefined, { signal })
         : await connection.callTool(params);
-      return readToolResult(result, mcp.name, serverName);
+      return readToolResult(result, mcp.name, serverName, resultMode);
     },
   };
   return tool;
-}
-
-// ─── Reading a tools/call answer (both arms of the protocol) ───────
-
-/**
- * Turn a `tools/call` answer into the text the agent hands the model.
- *
- * Three cases, because the protocol has three and pretending otherwise is what
- * broke on a server that answered the old way:
- *
- *   1. **content blocks** — today's shape. Text blocks are concatenated;
- *      non-text blocks (images, resources) are summarized with their type.
- *      `isError: true` becomes a thrown tool error, exactly as before.
- *   2. **`toolResult`** — the 2024-10-07 shape, which carries no `content` and
- *      no `isError`. The value BECOMES the tool text: a string verbatim,
- *      anything else JSON-stringified. That conversion is stated here and in
- *      the docs rather than left to be inferred from a mangled answer.
- *   3. **neither** — a corrective error naming the SHAPE that arrived (its
- *      type, or its keys) and never the payload: an unrecognised answer is
- *      still somebody's data, and a tool error is read by the model.
- *
- * **Order matters, and here is why the legacy check runs first.** The SDK's
- * default result schema declares `content` with a default of `[]`, so a legacy
- * `{ toolResult }` payload arrives here wearing an empty `content` it never
- * sent. Reading that array first would answer a real result with an empty
- * string — the same silence in a friendlier coat. So a `toolResult` beside an
- * EMPTY `content` is read as the legacy answer it is. A NON-empty `content`
- * always wins: a server that sent blocks meant the blocks.
- */
-function readToolResult(result: McpCallToolResult, toolName: string, serverName: string): string {
-  if (isLegacyResult(result) && !hasNonEmptyContent(result)) {
-    return stringifyLegacyResult(result.toolResult);
-  }
-  if (hasContentBlocks(result)) {
-    const text = result.content
-      .map((c) => (c.type === 'text' && c.text ? c.text : `[${c.type}]`))
-      .join('\n');
-    if (result.isError) {
-      throw new Error(`MCP tool '${toolName}' (server '${serverName}') returned an error: ${text}`);
-    }
-    return text;
-  }
-  throw new Error(
-    `MCP tool '${toolName}' (server '${serverName}') answered with a shape this client does ` +
-      `not understand: ${describeShape(result)}. A tools/call result carries either 'content' ` +
-      `blocks or a legacy 'toolResult'; this had neither.`,
-  );
-}
-
-/**
- * The current arm. Checked on the wire value, not on the declared type — and
- * defensively, because a `null` or a scalar is exactly the kind of answer that
- * has to reach the corrective error rather than crash on the way to it.
- */
-function hasContentBlocks(
-  result: McpCallToolResult,
-): result is Extract<McpCallToolResult, { content: unknown }> {
-  return Array.isArray(contentOf(result));
-}
-
-/** Blocks the server actually sent, as opposed to the schema's default `[]`. */
-function hasNonEmptyContent(result: McpCallToolResult): boolean {
-  const content = contentOf(result);
-  return Array.isArray(content) && content.length > 0;
-}
-
-function contentOf(result: McpCallToolResult): unknown {
-  if (typeof result !== 'object' || result === null) return undefined;
-  return (result as { content?: unknown }).content;
-}
-
-/** The 2024-10-07 arm — the key's PRESENCE is the signal; its value may be anything. */
-function isLegacyResult(result: McpCallToolResult): result is { toolResult: unknown } {
-  return typeof result === 'object' && result !== null && 'toolResult' in result;
-}
-
-/** A legacy `toolResult` as tool text: a string verbatim, anything else as JSON. */
-function stringifyLegacyResult(value: unknown): string {
-  if (typeof value === 'string') return value;
-  if (value === undefined) return '';
-  try {
-    return JSON.stringify(value) ?? String(value);
-  } catch {
-    // Circular or otherwise unserializable — say what we can rather than
-    // throwing from a path whose whole job is to report an answer.
-    return String(value);
-  }
-}
-
-/** Name a value's SHAPE for an error message. Never its contents. */
-function describeShape(value: unknown): string {
-  if (value === null) return 'null';
-  if (Array.isArray(value)) return `an array of ${value.length} item(s)`;
-  if (typeof value !== 'object') return `a ${typeof value}`;
-  const keys = Object.keys(value as Record<string, unknown>);
-  if (keys.length === 0) return 'an object with no keys';
-  const shown = keys.slice(0, 8);
-  return `an object with keys [${shown.join(', ')}${keys.length > shown.length ? ', …' : ''}]`;
 }
 
 // ─── Module shim types (for the lazy-required SDK) ─────────────────

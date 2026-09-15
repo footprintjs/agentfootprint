@@ -296,6 +296,12 @@ _Run `npm run examples:readme` after adding/editing examples._
 |---|---|---|---|
 | — | [`loan-officer-causal.ts`](canonical/loan-officer-causal.ts) | Canonical: Loan officer with causal-memory cross-run replay | Monday: expensive model underwrites loan #42 (REJECT). Friday: cheap model answers "why was loan #42 rejected?" from the recorded decision evidence. Same answer, ~10× cheaper. |
 
+### [`artifacts/`](artifacts/) — examples
+
+| # | File | Title | Description |
+|---|---|---|---|
+| — | [`dataset-result.ts`](artifacts/dataset-result.ts) | Publish a dataset, then follow its reference | Declare producer-owned rowsets, keep source lineage, and redeem the reference on a later turn. |
+
 ### [`deploy/`](deploy/) — examples
 
 | # | File | Title | Description |

@@ -123,3 +123,12 @@ export {
   type ArtifactPlacement,
   type PlacedToolResult,
 } from './placement.js';
+export {
+  withDatasetArtifacts,
+  stageDatasetArtifacts,
+  type DatasetArtifactInput,
+  type DatasetArtifactReceipt,
+  type DatasetPublication,
+  type DatasetResultAdapter,
+  type DatasetResultPlan,
+} from './datasetResult.js';

@@ -31,7 +31,8 @@
 
 import type { Tool } from '../../core/tools.js';
 import { readToolExtras } from './toolExtras.js';
-import type { McpClient } from './types.js';
+import type { McpClient, McpClientOptions, McpCallToolResult } from './types.js';
+import { readToolResult, resultModeOf } from './toolResult.js';
 
 /** A scripted tool exposed by the mock MCP server. */
 export interface MockMcpTool {
@@ -72,13 +73,14 @@ export interface MockMcpTool {
   readonly _meta?: Readonly<Record<string, unknown>>;
   /**
    * Async handler that runs when the agent calls this tool. Receives
-   * the args the LLM produced; returns the string result the agent
-   * sees as the tool-result message.
+   * the args the LLM produced; returns a string or an MCP result envelope.
+   * Strings retain the existing behavior in text mode; envelopes use the
+   * same result decoder as the real client.
    *
    * Defaults to `async () => '[mock result]'` when omitted — useful
    * when the consumer cares about wiring not behavior.
    */
-  readonly handler?: (args: Record<string, unknown>) => Promise<string>;
+  readonly handler?: (args: Record<string, unknown>) => Promise<string | McpCallToolResult>;
 }
 
 export interface MockMcpClientOptions {
@@ -86,6 +88,9 @@ export interface MockMcpClientOptions {
   readonly name?: string;
   /** Tools exposed by the mock server. */
   readonly tools: readonly MockMcpTool[];
+  /** Same result decoding as mcpClient. A string handler becomes one text
+   * block; return McpCallToolResult to exercise structuredContent or isError. */
+  readonly resultMode?: McpClientOptions['resultMode'];
 }
 
 /**
@@ -96,6 +101,7 @@ export interface MockMcpClientOptions {
  */
 export function mockMcpClient(options: MockMcpClientOptions): McpClient {
   const name = options.name ?? 'mock-mcp';
+  const resultMode = resultModeOf(options.resultMode, name);
   const toolMap = new Map<string, MockMcpTool>(options.tools.map((t) => [t.name, t]));
 
   let cache: readonly Tool[] | null = null;
@@ -110,7 +116,7 @@ export function mockMcpClient(options: MockMcpClientOptions): McpClient {
   };
 
   const buildTools = (): readonly Tool[] =>
-    options.tools.map((mcp) => wrapMockTool(name, toolMap, mcp));
+    options.tools.map((mcp) => wrapMockTool(name, toolMap, mcp, resultMode));
 
   return {
     name,
@@ -136,6 +142,7 @@ function wrapMockTool(
   serverName: string,
   toolMap: ReadonlyMap<string, MockMcpTool>,
   mcp: MockMcpTool,
+  resultMode: NonNullable<McpClientOptions['resultMode']>,
 ): Tool {
   const tool: Tool = {
     schema: {
@@ -160,9 +167,10 @@ function wrapMockTool(
       // mutable Map could be supported later. For now `toolMap` is
       // built once at factory time.
       const handler = toolMap.get(mcp.name)?.handler;
-      if (!handler) return '[mock result]';
       try {
-        return await handler(argsObj);
+        const result = handler ? await handler(argsObj) : '[mock result]';
+        return readToolResult(typeof result === 'string' ? { content: [{ type: 'text', text: result }] } : result,
+          mcp.name, serverName, resultMode);
       } catch (err) {
         const msg = err instanceof Error ? err.message : String(err);
         throw new Error(`Mock MCP tool '${mcp.name}' (server '${serverName}') threw: ${msg}`);

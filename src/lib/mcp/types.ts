@@ -165,6 +165,17 @@ export interface McpClientOptions {
    */
   readonly name?: string;
 
+  /** How successful tool results are read. Omitted or `text` preserves the
+   * existing text/legacy reader. `structured` requires a JSON object in
+   * structuredContent. `structured-or-json` also accepts exactly one text
+   * block containing a JSON object when structuredContent is absent. Neither
+   * mode infers datasets, provenance or truth; use an execution adapter for
+   * declared dataset handling. Malformed structured content never falls back.
+   * Validation caps: 64 nested containers, 1,000,000 values; JSON text fallback
+   * additionally caps input at 16,000,000 UTF-16 characters. These are result
+   * decoding limits, not transport/download limits. */
+  readonly resultMode?: 'text' | 'structured' | 'structured-or-json';
+
   /** Transport configuration — stdio or http. */
   readonly transport: McpTransport;
 
@@ -265,6 +276,9 @@ export interface McpConnectionOptions {
    * {@link McpClientOptions}. Defaults to `'mcp'`.
    */
   readonly name?: string;
+
+  /** Same decoding contract as McpClientOptions.resultMode; transport-independent. */
+  readonly resultMode?: McpClientOptions['resultMode'];
 
   /**
    * A connection you already opened. The library never calls `connect()` on it;
@@ -469,6 +483,9 @@ export type McpCallToolResult =
         readonly text?: string;
       }>;
       readonly isError?: boolean;
+      /** MCP's optional object result. Ignored by the default text reader;
+       * validated before return when a structured resultMode is selected. */
+      readonly structuredContent?: Readonly<Record<string, unknown>>;
     }
   /** The 2024-10-07 arm. No `content`, and no `isError` — the shape predates it. */
   | { readonly toolResult: unknown };
