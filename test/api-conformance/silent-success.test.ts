@@ -676,6 +676,10 @@ const REFUSES_A_SECOND_CALL = [
   'claims',
   'compaction',
   'configure',
+  // 9.101.0 — the findings ledger is one ask and one option set per agent: a
+  // second call would register the instruction twice and let the later
+  // options silently win.
+  'findings',
   'limitsTravelWithTheAnswer',
   'maps',
   'namesAndNumbersFromEvidence',
@@ -820,6 +824,7 @@ describe('silent success — the doctrine sweep', () => {
         base()
           .configure(() => ({}))
           .configure(() => ({})),
+      findings: () => base().findings().findings(),
       limitsTravelWithTheAnswer: () =>
         base().limitsTravelWithTheAnswer().limitsTravelWithTheAnswer(),
       maps: () => base().maps().maps(),

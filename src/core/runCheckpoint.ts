@@ -61,6 +61,12 @@ import {
 } from '../adapters/llm/contextWindow.js';
 import type { MemoryIdentity } from '../memory/identity/types.js';
 import type { FoldedSpan } from './agent/window/types.js';
+import {
+  BASIS_VALUES,
+  EXPECT_VALUES,
+  STANDING_VALUES,
+  type FindingsLedger,
+} from './agent/findings/types.js';
 import { MAX_EVIDENCE_RECOVERY_CHARS } from './agent/evidence/recovery.js';
 
 // ─── Public types ────────────────────────────────────────────────────
@@ -132,6 +138,24 @@ export interface AgentRunCheckpoint {
    * the opposite of what the version field is for.
    */
   readonly folded?: readonly FoldedSpan[];
+  /**
+   * The model's standings on its tool results (9.101.0) — the committed
+   * `AgentState.findingsLedger`, carried so a continued conversation keeps
+   * what the model already called a fact, left open, ruled out or dismissed,
+   * instead of re-deriving it from results the store no longer serves whole.
+   *
+   * Written only when the run's ledger is non-empty; absent on every
+   * conversation whose agent never called `.findings()` and on any stored by
+   * a runtime older than 9.101.0 — the {@link folded} rule: an optional field
+   * is not a format change, and a runtime that has never heard of this key
+   * reads the checkpoint, ignores it, and continues correctly. The rows are
+   * plain records and arrays only (the shape `recordFindings` writes), so
+   * they round-trip through JSON and `structuredClone` unchanged.
+   *
+   * **Version 1 still**, by the same documented rule as {@link folded} /
+   * {@link skillCursor}.
+   */
+  readonly findingsLedger?: FindingsLedger;
   /**
    * WHO this conversation belongs to — the `identity` the stored run was
    * given, carried so that continuing it lands in the same namespace it
@@ -526,6 +550,13 @@ export function buildCheckpoint(
    */
   skillCursor?: string,
   evidenceRecovery?: EvidenceRecoveryCheckpoint,
+  /**
+   * The model's standings on its tool results (9.101.0), read from the same
+   * committed snapshot `folded` comes from, by the same one-reader-two-carriers
+   * rule — so a crash checkpoint cannot lose a ledger `checkpoint()` keeps.
+   * Absent unless the run's ledger is non-empty.
+   */
+  findingsLedger?: FindingsLedger,
 ): AgentRunCheckpoint {
   return {
     version: 1,
@@ -540,7 +571,51 @@ export function buildCheckpoint(
     ...(owner?.agentId !== undefined && { agent: { id: owner.agentId } }),
     ...(skillCursor !== undefined && { skillCursor }),
     ...(evidenceRecovery !== undefined && { evidenceRecovery }),
+    ...(findingsLedger !== undefined && findingsLedger.length > 0 && { findingsLedger }),
   };
+}
+
+/**
+ * One ledger row is well-formed when it carries the fields its kind's reader
+ * consumes (`findings/ledger.ts · foldLedger` and the row builders). Shape
+ * only — a standing's `assertions` must be an array, never "an array of
+ * assertions whose values look right" — because the continued run re-seeds
+ * the row verbatim and the fold reads exactly these fields. Every value
+ * vocabulary is the one `findings/types.ts` declares.
+ */
+function ledgerRowIsWellFormed(row: unknown): boolean {
+  if (row === null || typeof row !== 'object' || Array.isArray(row)) return false;
+  const r = row as Record<string, unknown>;
+  const isIn = (value: unknown, vocabulary: readonly string[]) =>
+    typeof value === 'string' && vocabulary.includes(value);
+  const isIdentity = (value: unknown) =>
+    value !== null &&
+    typeof value === 'object' &&
+    typeof (value as { toolCallId?: unknown }).toolCallId === 'string';
+  switch (r.kind) {
+    case 'basis':
+      return (
+        typeof r.toolCallId === 'string' &&
+        typeof r.toolName === 'string' &&
+        typeof r.iteration === 'number' &&
+        isIn(r.basis, BASIS_VALUES) &&
+        (r.expect === undefined || isIn(r.expect, EXPECT_VALUES))
+      );
+    case 'standing':
+      return (
+        typeof r.toolCallId === 'string' &&
+        isIn(r.standing, STANDING_VALUES) &&
+        Array.isArray(r.assertions) &&
+        typeof r.iteration === 'number' &&
+        (r.declaredOn === 'answer' || isIdentity(r.declaredOn))
+      );
+    case 'conflict':
+      return (
+        typeof r.key === 'string' && Array.isArray(r.witnesses) && typeof r.iteration === 'number'
+      );
+    default:
+      return false;
+  }
 }
 
 /**
@@ -605,6 +680,27 @@ export function validateCheckpoint(value: unknown): AgentRunCheckpoint {
     ) {
       throw new TypeError(
         '[resumeOnError] checkpoint evidenceRecovery must carry a spent revision and optional bounded instruction.',
+      );
+    }
+  }
+  // The findings ledger (9.101.0), by the same present-only rule: a checkpoint
+  // without the key is every pre-ledger conversation and deserializes
+  // byte-identically. When present it must be the shape `recordFindings`
+  // writes, because a continued run re-seeds it VERBATIM into
+  // `AgentState.findingsLedger` and the next `foldLedger` reads the fields
+  // below without looking: a row that names a known `kind` but lacks the
+  // fields that kind's reader consumes (`standing` without `assertions`,
+  // say) would fail deep inside that fold. So the door checks the fields the
+  // fold consumes, per kind — never the values the model wrote.
+  if (c.findingsLedger !== undefined) {
+    const ledger = c.findingsLedger as unknown;
+    if (!Array.isArray(ledger) || !ledger.every(ledgerRowIsWellFormed)) {
+      throw new TypeError(
+        '[resumeOnError] checkpoint `findingsLedger` must be an array of ledger rows when ' +
+          "present — each a plain object whose `kind` is 'basis' (with toolCallId, toolName, " +
+          "iteration, basis), 'standing' (with toolCallId, standing, assertions[], declaredOn, " +
+          "iteration) or 'conflict' (with key, witnesses[], iteration). It is written by an agent " +
+          'with `.findings()` and re-seeded verbatim on continuation.',
       );
     }
   }

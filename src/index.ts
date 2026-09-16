@@ -582,6 +582,24 @@ export {
   type OutputSchemaOptions,
   type OutputSchemaStrategy,
 } from './core/outputSchema.js';
+// 9.101.0 — the findings ledger (`.findings()`): the row shapes
+// `agent.findings()` hands back and `AgentState.findingsLedger` /
+// `AgentRunCheckpoint.findingsLedger` carry, plus the reserved argument name
+// so a tool author can avoid it (a registry tool declaring it is refused at
+// build when the ledger is armed). The door itself is `AgentBuilder.findings`.
+export {
+  RESERVED_ARGUMENT,
+  type Basis,
+  type BasisRow,
+  type ConflictRow,
+  type ConflictWitness,
+  type Expect,
+  type FindingsDeclaration,
+  type FindingsLedger,
+  type FindingsRow,
+  type Standing,
+  type StandingRow,
+} from './core/agent/findings/types.js';
 // 8.18.0 — the input boundary every runner's `run()` goes through. A bare
 // string IS the message (`run('go')` ≡ `run({ message: 'go' })`); anything
 // that is not a message is refused by name before the run starts, instead of

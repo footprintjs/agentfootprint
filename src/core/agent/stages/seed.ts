@@ -28,6 +28,8 @@ import type { FoldedSpan } from '../window/types.js';
 import type { MessageMiddleware } from '../middleware/types.js';
 import { runMessageChain } from '../middleware/runChain.js';
 import { recordDecisions } from '../middleware/ledger.js';
+import { withFindingsArgument } from '../findings/reserved.js';
+import type { FindingsLedger } from '../findings/types.js';
 
 export interface SeedStageDeps {
   /** Resolved `clampIterations(opts.maxIterations ?? 10)`. Frozen at
@@ -66,6 +68,23 @@ export interface SeedStageDeps {
    * Undefined for a fresh run, and for any conversation stored before 8.2.
    */
   readonly consumePendingResumeFolded?: () => readonly FoldedSpan[] | undefined;
+  /**
+   * The same read-AND-CLEAR accessor for a continued conversation's findings
+   * ledger (9.101.0, `AgentRunCheckpoint.findingsLedger`). Present only on an
+   * agent with `.findings()`; returns the stored rows once, or `undefined`
+   * for a fresh run and for any conversation stored without the key. The
+   * restore is a plain copy of a stored record (the `foldedSpans` twin) —
+   * never a `recordFindings` call, so it files no row and emits no event.
+   */
+  readonly consumePendingResumeFindingsLedger?: () => FindingsLedger | undefined;
+  /**
+   * THE FINDINGS LEDGER IS ARMED (9.101.0, `.findings()`) — present only
+   * then, only ever `true`. The static tool list seeded for iteration 1 (and
+   * for a hand-composed chart without the tools slot) gains the reserved
+   * `_findings` property through the same `withFindingsArgument` the slot
+   * applies, so the first call's served schemas match every later call's.
+   */
+  readonly findings?: true;
   /**
    * Accessor for the current run's id, used to default the memory
    * identity when consumer didn't pass `agent.run({ identity })`. Set
@@ -310,6 +329,15 @@ function seedFrom(scope: TypedScope<AgentState>, message: string, deps: SeedStag
   if (resumeFolded && resumeFolded.length > 0) {
     scope.foldedSpans = [...resumeFolded];
   }
+  // The findings ledger beside it (9.101.0): the model's own standings on
+  // results this process never saw, carried by `AgentRunCheckpoint.findingsLedger`
+  // and restored as the stored record — a copy, never a `recordFindings`
+  // write, so nothing is re-declared and no event fires. Written only when the
+  // checkpoint carries rows; every other run seeds exactly the keys it always did.
+  const resumeLedger = deps.consumePendingResumeFindingsLedger?.();
+  if (resumeLedger && resumeLedger.length > 0) {
+    scope.findingsLedger = [...resumeLedger];
+  }
 
   // ── WHO this run is for, and where that answer comes from ────────────
   //
@@ -390,7 +418,11 @@ function seedFrom(scope: TypedScope<AgentState>, message: string, deps: SeedStag
   if (deps.costBudgetOnExceed !== undefined) scope.costBudgetOnExceed = deps.costBudgetOnExceed;
   scope.activeInjections = [];
   scope.activatedInjectionIds = [];
-  scope.dynamicToolSchemas = deps.toolSchemas;
+  // The static fallback shares the slot's ONE decorator (9.101.0): armed, the
+  // first call serves decorated schemas exactly as every later call will;
+  // unarmed, the registry list by reference, byte for byte.
+  scope.dynamicToolSchemas =
+    deps.findings === true ? deps.toolSchemas.map(withFindingsArgument) : deps.toolSchemas;
   // The forced-output tool's NAME (9.88.0) — the one fact about it that lands
   // on the record. Value-conditional: an agent on the default `'instruct'`
   // strategy writes nothing here.

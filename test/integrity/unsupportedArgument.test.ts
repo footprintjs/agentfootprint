@@ -37,6 +37,11 @@ import {
 import { Agent, defineTool } from '../../src/index.js';
 import { mock } from '../../src/llm-providers.js';
 import type { CheckReport } from '../../src/integrity/disposition/types.js';
+import type { LLMToolSchema } from '../../src/adapters/types.js';
+import {
+  withFindingsArgument,
+  withoutFindingsArgument,
+} from '../../src/core/agent/findings/reserved.js';
 
 // ---------------------------------------------------------------------------
 // The check, on its own
@@ -409,5 +414,150 @@ describe('contract: the disposition rows land', () => {
     expect(row.checked).toBeGreaterThanOrEqual(1);
     expect(row.findings).toBe(0);
     expect(row.lastFiredAt).toBeUndefined();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// The findings ledger and the choice seam (9.101.0)
+// ---------------------------------------------------------------------------
+
+/**
+ * `unsupportedArgumentsOf` walks every nested string leaf of an ARMED tool's
+ * args (`stringLeaves`), so a model that stands on a fact by naming an id in
+ * `_findings.previous[].assertions` would be judged as if it had CHOSEN that
+ * id as an argument — and file this family's unrecoverable false finding.
+ * `callLLM`'s choice seam therefore reads the PEELED args under `.findings()`
+ * (`splitFindings(c.args).args`). The control below proves the seam is still
+ * live on the armed agent: the same id as the real argument files as before.
+ */
+const declaringTriageAgent = (opts: {
+  /** The value the model puts in `machine` on the armed call. */
+  machine: string;
+  /** What the model declares about the `fleet_report` result on that call. */
+  previous: readonly unknown[];
+}): { agent: Agent; captured: Captured } => {
+  const agent = Agent.create({
+    provider: mock({
+      replies: [
+        {
+          content: RENDERED_ANSWER,
+          toolCalls: [{ id: 'c1', name: 'fleet_report', args: { _findings: { basis: 'direct' } } }],
+          stopReason: 'tool_use' as const,
+        },
+        {
+          content: '',
+          toolCalls: [
+            {
+              id: 'c2',
+              name: 'backup_status',
+              args: {
+                machine: opts.machine,
+                _findings: { basis: 'direct', previous: opts.previous },
+              },
+            },
+          ],
+          stopReason: 'tool_use' as const,
+        },
+        { content: 'done', toolCalls: [], stopReason: 'stop' as const },
+      ],
+    }),
+    model: 'mock',
+    maxIterations: 8,
+  })
+    .system('You are a fleet triage assistant.')
+    .tool(fleetReport())
+    .tool(backupStatus(true))
+    .findings()
+    .build();
+  const captured: Captured = { findings: [], dispositions: [] };
+  agent.on('agentfootprint.integrity.context_error', (e) => {
+    captured.findings.push(e.payload as unknown as Record<string, unknown>);
+  });
+  agent.on('agentfootprint.integrity.disposition', (e) => {
+    captured.dispositions.push(e.payload as unknown as Record<string, unknown>);
+  });
+  return { agent, captured };
+};
+
+describe('the findings ledger and the choice seam (9.101.0)', () => {
+  it('assertion text inside `_findings.previous` on an armed tool files NO unsupported-argument finding', async () => {
+    // The assertion names the very id that, as a real argument, files the
+    // finding (the functional suite above) — grounded only in the model's
+    // own rendered prose. As a declared standing it is the model's word about
+    // a result, not an argument it chose.
+    const { agent, captured } = declaringTriageAgent({
+      machine: 'callisto-02',
+      previous: [
+        {
+          toolCallId: 'c1',
+          standing: 'fact',
+          assertions: [
+            {
+              subject: { kind: 'machine', id: '4417-ganymede' },
+              predicate: 'job',
+              value: 'bkp-4417-ganymede-tier2',
+            },
+          ],
+        },
+      ],
+    });
+    await agent.run({ message: TASK });
+    expect(argumentFindings(captured)).toEqual([]);
+    // …and the declaration landed where it belongs: the ledger.
+    const standings = (agent.findings() ?? []).filter((r) => r.kind === 'standing');
+    expect(standings).toHaveLength(1);
+    expect(standings[0]).toMatchObject({ toolCallId: 'c1', standing: 'fact' });
+    // The checker RAN on the peeled args and agreed — checked-pass, not silence.
+    const rows = captured.dispositions[0]!.rows as CheckReport[];
+    const row = rows.find((r) => r.check === 'unsupported-argument')!;
+    expect(row.checked).toBeGreaterThanOrEqual(1);
+    expect(row.findings).toBe(0);
+  });
+
+  it('the control: the same id as the REAL argument still files the finding on the armed agent', async () => {
+    const { agent, captured } = declaringTriageAgent({ machine: '4417-ganymede', previous: [] });
+    await agent.run({ message: TASK });
+    const found = argumentFindings(captured);
+    expect(found).toHaveLength(1);
+    expect(found[0]).toMatchObject({ seam: 'choice', predicate: 'machine' });
+    // The reserved key never reached the witness: the finding names the argument only.
+    expect(JSON.stringify(found[0])).not.toContain('_findings');
+  });
+  it('the enum fence reads the schema WITHOUT the decoration — the reserved words never excuse an argument', () => {
+    const tool: LLMToolSchema = {
+      name: 'backup_status',
+      description: 'Backup status of one machine.',
+      inputSchema: {
+        type: 'object',
+        properties: { machine: { type: 'string' }, mode: { type: 'string', enum: ['fast'] } },
+      },
+    };
+    const served = withFindingsArgument(tool);
+    // What the model is served declares the reserved vocabulary as enums…
+    expect(declaredEnumValuesOf(served.inputSchema)).toContain('noise');
+    expect(declaredEnumValuesOf(served.inputSchema)).toContain('exploratory');
+    // …and the fence the check applies to the model's ARGUMENTS does not.
+    const fenced = declaredEnumValuesOf(withoutFindingsArgument(served.inputSchema));
+    expect(fenced).toEqual(new Set(['fast']));
+    // Never mutates: the served schema still carries the decoration.
+    expect(declaredEnumValuesOf(served.inputSchema)).toContain('noise');
+    // An author's own `_findings` is NOT the decoration: read as written, same reference.
+    const own: LLMToolSchema = {
+      ...tool,
+      inputSchema: {
+        ...tool.inputSchema,
+        properties: {
+          ...(tool.inputSchema.properties as Record<string, unknown>),
+          _findings: { type: 'string', enum: ['mine'] },
+        },
+      },
+    };
+    expect(withoutFindingsArgument(own.inputSchema)).toBe(own.inputSchema);
+    expect(declaredEnumValuesOf(withoutFindingsArgument(own.inputSchema))).toEqual(
+      new Set(['fast', 'mine']),
+    );
+    // An undecorated schema and a non-object come back as they are.
+    expect(withoutFindingsArgument(tool.inputSchema)).toBe(tool.inputSchema);
+    expect(withoutFindingsArgument(undefined)).toBeUndefined();
   });
 });

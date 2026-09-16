@@ -188,6 +188,71 @@ describe('runCheckpoint — P4 property', () => {
     const validated = validateCheckpoint(JSON.parse(JSON.stringify(cp)));
     expect(validated.failurePoint).toBeUndefined();
   });
+
+  // ── findingsLedger (9.101.0) — value-conditional, the `folded` precedent ──
+  const LEDGER_TRACKER: RunCheckpointTracker = {
+    runId: 'r-ledger',
+    originalInput: { message: 'orig' },
+    history: [{ role: 'user', content: 'hello' } as LLMMessage],
+    lastCompletedIteration: 1,
+  };
+  const LEDGER: AgentRunCheckpoint['findingsLedger'] = [
+    { kind: 'basis', toolCallId: 'tc-1', toolName: 'search', iteration: 1, basis: 'direct' },
+    {
+      kind: 'standing',
+      toolCallId: 'tc-1',
+      toolName: 'search',
+      standing: 'noise',
+      assertions: [],
+      declaredOn: { toolCallId: 'tc-2' },
+      iteration: 2,
+    },
+  ];
+
+  it('P4 findingsLedger is ABSENT when nothing was passed — the pre-ledger key set, byte for byte', () => {
+    const before = Object.keys(buildCheckpoint(LEDGER_TRACKER)).sort();
+    const withUndefined = buildCheckpoint(
+      LEDGER_TRACKER,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+    );
+    expect(Object.keys(withUndefined).sort()).toEqual(before);
+    expect(Object.prototype.hasOwnProperty.call(withUndefined, 'findingsLedger')).toBe(false);
+  });
+
+  it('P4 findingsLedger is ABSENT when the ledger is empty — an empty key is a different claim', () => {
+    const cp = buildCheckpoint(
+      LEDGER_TRACKER,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      [],
+    );
+    expect(Object.prototype.hasOwnProperty.call(cp, 'findingsLedger')).toBe(false);
+  });
+
+  it('P4 findingsLedger is carried verbatim when non-empty and round-trips through JSON', () => {
+    const cp = buildCheckpoint(
+      LEDGER_TRACKER,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      LEDGER,
+    );
+    expect(cp.findingsLedger).toEqual(LEDGER);
+    const validated = validateCheckpoint(JSON.parse(JSON.stringify(cp)));
+    expect(validated.findingsLedger).toEqual(LEDGER);
+    // Version 1 still — an optional field is not a format change.
+    expect(validated.version).toBe(1);
+  });
 });
 
 // ─── P5 Security — validate rejects malformed checkpoints ────────────
@@ -209,6 +274,120 @@ describe('runCheckpoint — P5 security', () => {
       checkpointedAt: 0,
     };
     expect(() => validateCheckpoint(futureCheckpoint)).toThrow(/version/);
+  });
+
+  it('P5 accepts a checkpoint WITHOUT findingsLedger exactly as before (present-only rule)', () => {
+    const cp = buildCheckpoint({
+      runId: 'r-3',
+      originalInput: { message: 'orig' },
+      history: [],
+      lastCompletedIteration: 0,
+    });
+    expect(() => validateCheckpoint(JSON.parse(JSON.stringify(cp)))).not.toThrow();
+  });
+
+  it('P5 rejects a findingsLedger that is not an array', () => {
+    const cp = buildCheckpoint({
+      runId: 'r-4',
+      originalInput: { message: 'orig' },
+      history: [],
+      lastCompletedIteration: 0,
+    });
+    const bad = { ...cp, findingsLedger: { kind: 'basis' } };
+    expect(() => validateCheckpoint(bad)).toThrow(/findingsLedger/);
+  });
+
+  it('P5 rejects a findingsLedger row without a known `kind`', () => {
+    const cp = buildCheckpoint({
+      runId: 'r-5',
+      originalInput: { message: 'orig' },
+      history: [],
+      lastCompletedIteration: 0,
+    });
+    for (const row of [null, 'basis', ['basis'], { kind: 'disposition' }, {}]) {
+      expect(() => validateCheckpoint({ ...cp, findingsLedger: [row] })).toThrow(/findingsLedger/);
+    }
+  });
+
+  it('P5 rejects a well-kinded row missing a field the fold consumes — the door, not the kind tag', () => {
+    const cp = buildCheckpoint({
+      runId: 'r-6',
+      originalInput: { message: 'orig' },
+      history: [],
+      lastCompletedIteration: 0,
+    });
+    // Each of these names a known `kind` and would have passed a kind-only
+    // check; each would then throw inside `foldLedger` / the row readers on
+    // the continued run (`row.assertions is not iterable`, and friends).
+    const corrupt: unknown[] = [
+      { kind: 'standing', standing: 'fact' },
+      {
+        kind: 'standing',
+        toolCallId: 'tc-1',
+        standing: 'fact',
+        declaredOn: 'answer',
+        iteration: 1,
+      },
+      {
+        kind: 'standing',
+        toolCallId: 'tc-1',
+        standing: 'maybe',
+        assertions: [],
+        declaredOn: 'answer',
+        iteration: 1,
+      },
+      {
+        kind: 'standing',
+        toolCallId: 'tc-1',
+        standing: 'fact',
+        assertions: [],
+        declaredOn: { ref: 'x' },
+        iteration: 1,
+      },
+      { kind: 'basis', toolCallId: 'tc-1', toolName: 'search', iteration: 1 },
+      { kind: 'basis', toolCallId: 'tc-1', toolName: 'search', iteration: 1, basis: 'guess' },
+      {
+        kind: 'basis',
+        toolCallId: 'tc-1',
+        toolName: 'search',
+        iteration: 1,
+        basis: 'direct',
+        expect: 9,
+      },
+      { kind: 'conflict', key: 'k', iteration: 1 },
+      { kind: 'conflict', key: 'k', witnesses: 'tc-1', iteration: 1 },
+    ];
+    for (const row of corrupt) {
+      expect(
+        () => validateCheckpoint({ ...cp, findingsLedger: [row] }),
+        JSON.stringify(row),
+      ).toThrow(/findingsLedger/);
+    }
+  });
+
+  it('P5 accepts one well-formed row of each kind — the door refuses shape, never values', () => {
+    const cp = buildCheckpoint({
+      runId: 'r-7',
+      originalInput: { message: 'orig' },
+      history: [],
+      lastCompletedIteration: 0,
+    });
+    const wellFormed = [
+      { kind: 'basis', toolCallId: 'tc-1', toolName: 'search', iteration: 1, basis: 'exploratory' },
+      {
+        kind: 'standing',
+        toolCallId: 'tc-1',
+        standing: 'open',
+        settles: 'a second source',
+        assertions: [],
+        declaredOn: { toolCallId: 'tc-2' },
+        iteration: 2,
+        unknownId: true,
+      },
+      { kind: 'conflict', key: 'k', witnesses: [], iteration: 2 },
+    ];
+    const validated = validateCheckpoint({ ...cp, findingsLedger: wellFormed });
+    expect(validated.findingsLedger).toEqual(wellFormed);
   });
 
   it('P5 rejects checkpoint missing required fields', () => {

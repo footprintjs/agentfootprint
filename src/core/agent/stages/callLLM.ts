@@ -50,6 +50,11 @@ import type { InjectionRecord } from '../../../recorders/core/types.js';
 import { emitCostTick, type ResolvedCostBudget } from '../../cost.js';
 import type { ReliabilityConfig } from '../../../reliability/types.js';
 import { applyOutputSchema, type OutputSchemaParser } from '../../outputSchema.js';
+import {
+  peelAnswerFindings,
+  splitFindings,
+  withoutFindingsArgument,
+} from '../findings/reserved.js';
 import { readSchemaToolAnswer } from '../outputEnforcement.js';
 import {
   executeWithReliability,
@@ -96,6 +101,17 @@ export interface CallLLMStageDeps {
   readonly suppressDraftTokens?: boolean;
   /** Read recovery state only on an agent whose evidence gate can revise. */
   readonly hasEvidenceRecovery?: boolean;
+  /**
+   * THE FINDINGS LEDGER IS ARMED (9.101.0, `.findings()`) — present only
+   * then, only ever `true`. Two reads change and nothing else: the choice
+   * seam hands `unsupportedArgumentsOf` each armed call's args WITHOUT the
+   * reserved `_findings` argument (its assertion text would be judged as
+   * identifiers), and `postValidate` judges the answer with the top-level
+   * `_findings` key peeled (it runs BEFORE the route decider — a strict
+   * schema would otherwise reject a correct answer and loop `outputRetry`).
+   * `systemPieces`, `activeToolSchemas` and the receipt are untouched.
+   */
+  readonly findings?: true;
   /** Optional pricing adapter for cost tracking. */
   readonly pricingTable?: PricingTable;
   /** Optional cumulative USD cap per run. */
@@ -719,7 +735,16 @@ export function buildCallLLMStage(
       const parser = deps.outputSchemaParser;
       postValidate = (response) => {
         try {
-          applyOutputSchema(response.content, parser);
+          // Judged with the reserved answer key peeled under the arm
+          // (9.101.0): this runs BEFORE the route decider's own peel, and a
+          // strict schema must see the answer the model meant, not the
+          // envelope its standings rode in on. Unarmed: the content itself.
+          applyOutputSchema(
+            deps.findings === true
+              ? peelAnswerFindings(response.content).content
+              : response.content,
+            parser,
+          );
         } catch (err) {
           // applyOutputSchema throws OutputSchemaError with
           // {stage, rawOutput, cause}. Convert to ValidationFailure for
@@ -876,9 +901,24 @@ export function buildCallLLMStage(
           armedCalls.map((c) => ({
             toolName: c.name,
             toolCallId: c.id,
-            args: c.args,
+            // Peeled under the arm (9.101.0): `_findings` carries the model's
+            // own assertion subjects and values, and `stringLeaves` walks
+            // every nested leaf — an unpeeled declaration would file that
+            // family's unrecoverable false finding. Unconditional by
+            // construction: `toolGrounding` is harvested from the REGISTRY
+            // alone (`Agent.build`), and an armed registry tool never owns
+            // the name (`buildToolRegistry · assertReservedArgument`), so
+            // the value here is always the model's. Unarmed: `c.args` itself.
+            args: deps.findings === true ? splitFindings(c.args).args : c.args,
             argumentsFrom: grounding.get(c.name) ?? [],
-            declaredEnums: declaredEnumValuesOf(schemaOf.get(c.name)),
+            // The enum fence reads the schema WITHOUT the decoration: the
+            // reserved words (`direct`, `fact`, `noise`, …) are the model's
+            // vocabulary for a declaration, never an excuse for an argument.
+            declaredEnums: declaredEnumValuesOf(
+              deps.findings === true
+                ? withoutFindingsArgument(schemaOf.get(c.name))
+                : schemaOf.get(c.name),
+            ),
           })),
           {
             grounded: [

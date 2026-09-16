@@ -187,3 +187,64 @@ describe('property — each tool_start has a matching tool_end', () => {
     expect(ends).toBe(3);
   });
 });
+
+describe('property — tool_start.args never contains `_findings` on an armed agent (9.101.0)', () => {
+  // Every batch shape from one call to three, over two tool iterations, with
+  // a declaration on every call: the peel is the FIRST read of a call's args
+  // in the dispatch loop, so `tool_start`, the tool and the middleware chain
+  // read the same peeled object — and the emission in history keeps the key.
+  it.each([1, 2, 3])('a fanout of %d declaring calls per batch, twice over', async (fanout) => {
+    const batch = (iter: number) =>
+      resp(
+        '',
+        Array.from({ length: fanout }, (_, i) => ({
+          id: `t${iter}-${i}`,
+          name: 'noop',
+          args: { n: i, _findings: { basis: i % 2 === 0 ? 'direct' : 'exploratory' } },
+        })),
+      );
+    const executed: Record<string, unknown>[] = [];
+    const agent = Agent.create({
+      provider: scripted(batch(1), batch(2), resp('done')),
+      model: 'mock',
+      maxIterations: 10,
+    })
+      .system('')
+      .tool({
+        schema: { name: 'noop', description: '', inputSchema: { type: 'object' } },
+        execute: (args) => {
+          executed.push({ ...(args as Record<string, unknown>) });
+          return 'ok';
+        },
+      })
+      .findings()
+      .build();
+
+    const started: Record<string, unknown>[] = [];
+    let declared = 0;
+    agent.on('agentfootprint.stream.tool_start', (e) => {
+      started.push({ ...(e.payload.args as Record<string, unknown>) });
+    });
+    agent.on('agentfootprint.findings.declared', () => declared++);
+
+    await agent.run({ message: 'go' });
+
+    expect(started).toHaveLength(fanout * 2);
+    expect(executed).toHaveLength(fanout * 2);
+    for (const args of [...started, ...executed]) expect(args).not.toHaveProperty('_findings');
+    expect(started).toEqual(executed);
+    // One basis row per call, and one event per row.
+    expect(declared).toBe(fanout * 2);
+    expect(agent.findings()?.filter((r) => r.kind === 'basis')).toHaveLength(fanout * 2);
+    // The emission keeps every key: the assistant turns in history carry the
+    // declarations verbatim.
+    const history = (agent.getLastSnapshot()?.sharedState as { history: readonly unknown[] })
+      .history as readonly { role: string; toolCalls?: readonly { args: unknown }[] }[];
+    const emitted = history
+      .filter((m) => m.role === 'assistant')
+      .flatMap((m) => m.toolCalls ?? [])
+      .map((c) => c.args as Record<string, unknown>);
+    expect(emitted).toHaveLength(fanout * 2);
+    for (const args of emitted) expect(args).toHaveProperty('_findings');
+  });
+});

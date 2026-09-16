@@ -1674,3 +1674,74 @@ describe('middleware — the after-tool moment', () => {
     expect(raw).toContain('middlewareDecisions');
   });
 });
+
+// ─── 11. the findings ledger's peel (9.101.0) ─────────────────────
+
+/**
+ * LAW 8 under `.findings()`: the `'input'` a link sees is what everything
+ * downstream sees — and under the arm that is the PEELED args. `_findings`
+ * comes off as the first read of the call in the dispatch loop, so no link,
+ * no ledger row and no tool ever meets it; the emission (the assistant turn
+ * the provider re-reads) keeps it verbatim. Unarmed (LAW 6's twin), the same
+ * link reads the author's `_findings` as any other argument.
+ */
+describe('middleware — the onToolCall chain sees the PEELED args under .findings()', () => {
+  const DECLARING = { env: 'prod', _findings: { basis: 'direct' } };
+
+  it('armed: no link, no ledger row and no tool meets `_findings`; the emission keeps it', async () => {
+    const { seen, tool } = recordingTool();
+    const chainSaw: Record<string, unknown>[] = [];
+    const spy = spyProvider(callThen('act', DECLARING));
+    const agent = Agent.create({ provider: spy.provider, model: 'm' })
+      .tools([tool])
+      .findings()
+      .toolMiddleware({
+        name: 'watcher',
+        onToolCall: (call) => {
+          chainSaw.push({ ...call.args });
+          return allow({ ...call.args, note: 'seen' }, 'tagged');
+        },
+      })
+      .build();
+
+    await agent.run({ message: 'go' });
+
+    expect(chainSaw).toEqual([{ env: 'prod' }]);
+    expect(seen).toEqual([{ env: 'prod', note: 'seen' }]);
+    const row = ledger(agent).find((r) => r.middleware === 'watcher');
+    expect(row?.before).toEqual({ env: 'prod' });
+    expect(row?.after).toEqual({ env: 'prod', note: 'seen' });
+    // The emission is untouched: the assistant turn the provider re-reads
+    // carries the declaration, and the ledger holds its basis row.
+    const assistant = spy.requests[1]?.messages.find((m) => m.role === 'assistant');
+    expect(assistant?.toolCalls?.[0]?.args).toEqual(DECLARING);
+    expect(agent.findings()).toEqual([
+      { kind: 'basis', toolCallId: 'c1', toolName: 'act', iteration: 1, basis: 'direct' },
+    ]);
+  });
+
+  it("unarmed: the same link reads the author's `_findings` verbatim, and nothing is recorded", async () => {
+    const { seen, tool } = recordingTool();
+    const chainSaw: Record<string, unknown>[] = [];
+    const agent = Agent.create({
+      provider: mock({ replies: callThen('act', DECLARING) }),
+      model: 'm',
+    })
+      .tools([tool])
+      .toolMiddleware({
+        name: 'watcher',
+        onToolCall: (call) => {
+          chainSaw.push({ ...call.args });
+          return allow();
+        },
+      })
+      .build();
+
+    await agent.run({ message: 'go' });
+
+    expect(chainSaw).toEqual([DECLARING]);
+    expect(seen).toEqual([DECLARING]);
+    expect(committedKeys(agent)).not.toContain('findingsLedger');
+    expect(agent.findings()).toBeUndefined();
+  });
+});

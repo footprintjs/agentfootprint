@@ -92,6 +92,11 @@ import { TRACE_TOOL_NAMES } from '../../lib/trace-toolpack/traceToolNames.js';
 import { Agent } from '../Agent.js';
 import { buildSkillGraphDeclared, type SkillGraphDeclaredMap } from './skillGraphDeclared.js';
 import type { AgentOptions, RunConfigFn } from './types.js';
+import { FINDINGS_INSTRUCTION } from './findings/reserved.js';
+
+/** The id of the always-on instruction `.findings()` registers (9.101.0) —
+ *  the name a receipt's `system.pieces` carries and a test can look for. */
+const FINDINGS_INSTRUCTION_ID = 'findings-ledger';
 import type { CompactionOptions } from './window/types.js';
 import type { WindowStrategy } from './window/strategy.js';
 import type { LLMProvider } from '../../adapters/types.js';
@@ -429,6 +434,10 @@ export class AgentBuilder {
    *  `Map.set` calls and nothing else. */
   private readonly toolSources = new Map<string, RecipeSource>();
   private readonly injectionSources = new Map<string, RecipeSource>();
+  /** The findings ledger's options (9.101.0), set by `.findings()` — the ONE
+   *  door — and undefined on every agent that never called it. Composed into
+   *  the options `build()` hands `Agent` as `AgentOptions.findings`. */
+  private findingsValue?: NonNullable<AgentOptions['findings']>;
 
   constructor(opts: AgentOptions) {
     this.opts = opts;
@@ -437,6 +446,11 @@ export class AgentBuilder {
     // overrides the registry-resolved default.
     if (opts.caching === 'off') this.cachingDisabledValue = true;
     if (opts.cacheStrategy !== undefined) this.cacheStrategyOverride = opts.cacheStrategy;
+    // `findings` given as an option goes through the one door (9.101.0), so
+    // the instruction piece rides with the arm however it was spelled — an
+    // armed agent with no ask would decorate schemas the model was never told
+    // about. A later `.findings()` call is then the second call, and refused.
+    if (opts.findings !== undefined) this.findings(opts.findings);
   }
 
   /**
@@ -1958,6 +1972,92 @@ export class AgentBuilder {
   }
 
   /**
+   * The findings ledger (9.101.0) — the model's OWN standings on its tool
+   * results, on the record, at zero extra calls.
+   *
+   * WHY. A long tool-using run serves every result back in full on every
+   * call, and what the model already stood on, left open, ruled out or found
+   * to be noise is nowhere but in its head. With this door every served tool
+   * schema carries a reserved optional `_findings` argument: the model
+   * declares a `basis` for each call before the result exists ('direct' when
+   * it expects the answer, 'exploratory' when it is looking) and, on its next
+   * tool call or as a top-level `_findings.previous` on a JSON answer, the
+   * STANDING of each previous result by its tool_result id — 'fact' with the
+   * assertions it stands on, 'open' with what would settle it, 'ruled-out'
+   * with one line, 'noise' with nothing. The library peels the argument off
+   * before anything else reads the call (middleware, validation, execute and
+   * every pause carrier see the call as if the key were never there), files
+   * one flat append-only `findingsLedger` on the run's state through ONE
+   * writer, and leaves history verbatim. Read it back with
+   * {@link Agent.findings}. Nothing infers: a call with no declaration files
+   * no row, and a result nobody named has no standing — never 'open'.
+   *
+   * WHAT IT DOES NOT DO YET. `serve` and `keepLedgerFacts` name how the
+   * ledger will be served back to the model; both are inert until the serving
+   * steps land — the option shape is fixed now so no public name ever changes.
+   *
+   * Once per agent (a second call is refused, the `.window()` grammar).
+   * Registers the always-on `findings-ledger` instruction — the byte-for-byte
+   * twin of {@link outputSchema}'s piece, hashed per piece on every receipt,
+   * so a reworded ask is a different hash a bench can name. An agent that
+   * never calls this is byte-identical to one built before the ledger
+   * existed: no decoration, no peel, no key, no piece, no event.
+   *
+   * @example
+   * ```ts
+   * const agent = Agent.create({ provider, model })
+   *   .tool(search)
+   *   .findings()
+   *   .build();
+   * await agent.run({ message: 'which port is down?' });
+   * const ledger = agent.findings() ?? [];
+   * const facts = ledger.filter((r) => r.kind === 'standing' && r.standing === 'fact');
+   * ```
+   */
+  findings(options?: NonNullable<AgentOptions['findings']>): this {
+    if (this.findingsValue !== undefined) {
+      throw new Error(
+        'AgentBuilder.findings: already set. One findings ledger per agent — a second call ' +
+          'would register the ask twice and leave two option sets with the later one silently ' +
+          'winning. Pass every option in the one call.',
+      );
+    }
+    if (options !== undefined && (options === null || typeof options !== 'object')) {
+      throw new Error(
+        `AgentBuilder.findings: expected an options object or nothing, got ${typeof options}.`,
+      );
+    }
+    const serve = options?.serve ?? 'ledger-and-facts';
+    if (serve !== 'ledger-and-facts' && serve !== 'ledger-only') {
+      throw new Error(
+        `AgentBuilder.findings: serve must be 'ledger-and-facts' or 'ledger-only', got ` +
+          `${JSON.stringify(serve)}.`,
+      );
+    }
+    const keep = options?.keepLedgerFacts;
+    if (keep !== undefined && keep !== false && !(Number.isInteger(keep) && keep >= 0)) {
+      throw new Error(
+        `AgentBuilder.findings: keepLedgerFacts must be a non-negative integer or false, got ` +
+          `${JSON.stringify(keep)}.`,
+      );
+    }
+    this.findingsValue = { serve, ...(keep !== undefined && { keepLedgerFacts: keep }) };
+    // The always-on ask — the `outputSchema()` twin: a system-slot instruction
+    // that activates every iteration, so a long run keeps the vocabulary
+    // present, and a system PIECE on the receipt (never an injected turn, so
+    // nothing in it is exempt from the evidence gate and nothing persists).
+    this.injectionList.push(
+      defineInstruction({
+        id: FINDINGS_INSTRUCTION_ID,
+        activeWhen: () => true,
+        prompt: FINDINGS_INSTRUCTION,
+      }),
+    );
+    this.injectionSources.set(FINDINGS_INSTRUCTION_ID, this.currentSource());
+    return this;
+  }
+
+  /**
    * 3-tier degradation for output-schema validation failures. Pairs
    * with `.outputSchema()` — an agent that has one and not the other is
    * refused at `.build()`, in either call order.
@@ -2638,9 +2738,19 @@ export class AgentBuilder {
       commentaryTemplates: { ...defaultCommentaryTemplates, ...this.commentaryOverrides },
       thinkingTemplates: { ...defaultStatusTemplates, ...this.thinkingOverrides },
     };
+    // The SAME options object the builder was given unless a door overrode
+    // something — `maxIterations`, or the findings ledger (9.101.0), whose
+    // normalised value lands as `AgentOptions.findings`. An agent with neither
+    // hands `Agent` its options by reference, exactly as before.
     const opts =
-      this.maxIterationsOverride !== undefined
-        ? { ...this.opts, maxIterations: this.maxIterationsOverride }
+      this.maxIterationsOverride !== undefined || this.findingsValue !== undefined
+        ? {
+            ...this.opts,
+            ...(this.maxIterationsOverride !== undefined && {
+              maxIterations: this.maxIterationsOverride,
+            }),
+            ...(this.findingsValue !== undefined && { findings: this.findingsValue }),
+          }
         : this.opts;
     // .selfExplain(): a fresh binding per build() — two built agents never
     // share evidence. One mounted skill (methodology body only) + the trace

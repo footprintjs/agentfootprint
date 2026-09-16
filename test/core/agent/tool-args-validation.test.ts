@@ -17,6 +17,7 @@ import {
   formatToolArgIssues,
   validateToolArgs,
 } from '../../../src/core/agent/toolArgsValidation.js';
+import { splitFindings, withFindingsArgument } from '../../../src/core/agent/findings/reserved.js';
 
 const weatherSchema = {
   type: 'object',
@@ -219,5 +220,64 @@ describe('#9 — flood cap + security contract', () => {
     ]);
     expect(message).toContain("- 'city' is required but missing");
     expect(message).toContain("- 'days': expected integer, got string");
+  });
+});
+
+/**
+ * 9.101.0 — the reserved `_findings` argument and a strict schema.
+ *
+ * The dispatch loop judges a call against the REGISTRY schema (a shared
+ * reference `mcpServe` serves verbatim), never the decorated served copy.
+ * A tool that closes its object with `additionalProperties: false` would
+ * therefore refuse every declaring call under `'enforce'` — unless the key
+ * comes off first. That is why `splitFindings` is the FIRST read of a call's
+ * args in the loop; the agent-level scenario is in
+ * `test/core/agent/findings-ledger.test.ts`. This is the pure half.
+ */
+describe('#9 validateToolArgs — the reserved `_findings` argument (9.101.0)', () => {
+  const strict = { ...weatherSchema, additionalProperties: false };
+  const raw = { city: 'Reno', _findings: { basis: 'direct', expect: 'high' } };
+
+  it('against the REGISTRY schema the raw args fail at `_findings` — the reason the peel precedes validation', () => {
+    const result = validateToolArgs(raw, strict);
+    expect(result.ok).toBe(false);
+    expect(result.issues).toContainEqual({
+      path: '_findings',
+      expected: 'no additional properties',
+      got: 'object',
+    });
+  });
+
+  it("the peeled args pass the same schema, and the author's own args are exactly what was sent", () => {
+    const { args, findings } = splitFindings(raw);
+    expect(validateToolArgs(args, strict)).toEqual({ ok: true, issues: [] });
+    expect(args).toEqual({ city: 'Reno' });
+    expect(findings).toEqual({ basis: 'direct', expect: 'high' });
+  });
+
+  it('the SERVED (decorated) schema accepts the raw args and still refuses a genuine extra', () => {
+    const served = withFindingsArgument({
+      name: 'weather',
+      description: 'weather',
+      inputSchema: strict,
+    }).inputSchema;
+    // `withFindingsArgument` left the author's closure and `required` alone.
+    expect(served.additionalProperties).toBe(false);
+    expect(served.required).toEqual(['city']);
+    expect(validateToolArgs(raw, served).ok).toBe(true);
+    expect(validateToolArgs({ ...raw, extra: 1 }, served).issues).toContainEqual({
+      path: 'extra',
+      expected: 'no additional properties',
+      got: 'number',
+    });
+    // A bad enum INSIDE the reserved property is a structural issue on the
+    // served schema too: it names the path and the schema's values, never
+    // the value the model supplied.
+    const bad = validateToolArgs({ city: 'Reno', _findings: { basis: 'guess' } }, served);
+    expect(bad.ok).toBe(false);
+    expect(bad.issues.find((i) => i.path === '_findings.basis')?.expected).toBe(
+      'one of "direct", "exploratory"',
+    );
+    expect(JSON.stringify(bad.issues)).not.toContain('guess');
   });
 });

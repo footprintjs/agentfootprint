@@ -140,6 +140,7 @@ import {
 import { CompactionUnmeasurableError } from './agent/window/errors.js';
 import type { WindowStrategy } from './agent/window/strategy.js';
 import type { FoldedSpan } from './agent/window/types.js';
+import type { FindingsLedger } from './agent/findings/types.js';
 import {
   isCheckInDecision,
   resolveCheckInConfig,
@@ -441,6 +442,11 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
   private readonly contextBudget?: AgentOptions['contextBudget'];
   private readonly permissionChecker?: PermissionChecker;
   private readonly toolArgValidation?: ToolArgValidationMode;
+  /** See AgentOptions.findings (9.101.0). Set by `.findings()` and undefined
+   *  on every other agent — the one value every findings gate below is
+   *  conditioned on, so an unarmed agent hands each stage exactly the deps
+   *  it always did. `serve` / `keepLedgerFacts` are inert until served. */
+  private readonly findingsOptions?: NonNullable<AgentOptions['findings']>;
   /** The opt-in tool-result ceiling in characters (9.11.0). Absent → results
    *  are never measured. See {@link AgentOptions.maxToolResultChars}. */
   private readonly maxToolResultChars?: number;
@@ -642,6 +648,11 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
    *  destroyed by the act of continuing, which is the one thing retention
    *  exists to prevent. Cleared on first read, exactly like the history. */
   private pendingResumeFolded?: readonly FoldedSpan[];
+
+  /** Its sibling for the findings ledger (9.101.0) — the model's standings
+   *  on results this process never saw, carried by the checkpoint and
+   *  restored as a stored record. Cleared on first read, like the history. */
+  private pendingResumeFindingsLedger?: FindingsLedger;
 
   /** The last completed run's final answer — see `checkpoint()` for why it is
    *  kept here rather than read back from the recording. Undefined after a run
@@ -875,6 +886,7 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
     if (opts.contextBudget !== undefined) this.contextBudget = opts.contextBudget;
     if (opts.permissionChecker) this.permissionChecker = opts.permissionChecker;
     if (opts.toolArgValidation !== undefined) this.toolArgValidation = opts.toolArgValidation;
+    if (opts.findings !== undefined) this.findingsOptions = opts.findings;
     // The tool-result ceiling (9.11.0). Refused HERE, naming the value, rather
     // than at the first tool call of the first run — a dial that cannot cap
     // anything is a configuration mistake, not a runtime condition.
@@ -1672,6 +1684,9 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
           // one reader, two carriers, so neither can lose what the other keeps.
           this.continuityCursorOf(this.getLastSnapshot()?.sharedState as Partial<AgentState>),
           this.evidenceRecoveryOf(this.getLastSnapshot()?.sharedState as Partial<AgentState>),
+          // …and the findings ledger (9.101.0), from the same snapshot reader
+          // `checkpoint()` uses — one reader, two carriers.
+          this.findingsLedgerOf(this.getLastSnapshot()?.sharedState as Partial<AgentState>),
         );
         throw new RunCheckpointError(cause, checkpoint);
       }
@@ -1692,6 +1707,7 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
       // nobody asked it to. One run, one continuation.
       this.pendingResumeHistory = undefined;
       this.pendingResumeFolded = undefined;
+      this.pendingResumeFindingsLedger = undefined;
       this.pendingResumeSkillCursor = undefined;
       this.pendingEvidenceRecovery = undefined;
     }
@@ -2134,6 +2150,7 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
     const owner = this.conversationOwner();
     const skillCursor = this.continuityCursorOf(state);
     const evidenceRecovery = this.evidenceRecoveryOf(state);
+    const findingsLedger = this.findingsLedgerOf(state);
     return {
       version: 1,
       runId: this.currentRunContext.runId,
@@ -2153,6 +2170,9 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
       // exact byte shape.
       ...(skillCursor !== undefined && { skillCursor }),
       ...(evidenceRecovery !== undefined && { evidenceRecovery }),
+      // The model's standings (9.101.0) — absent unless the run recorded any,
+      // by the `folded` rule: an optional key, never a format change.
+      ...(findingsLedger !== undefined && { findingsLedger }),
     };
   }
 
@@ -2208,6 +2228,20 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
   }
 
   /**
+   * The findings ledger for a checkpoint (9.101.0) — `foldedSpansOf`'s twin:
+   * one reader for `checkpoint()` and the crash carrier, `undefined` when the
+   * run recorded no rows (so the key stays absent), and a detached copy
+   * otherwise, never a reference into the live heap.
+   *
+   * @internal
+   */
+  private findingsLedgerOf(state?: Partial<AgentState>): FindingsLedger | undefined {
+    const ledger = state?.findingsLedger;
+    if (ledger === undefined || ledger.length === 0) return undefined;
+    return structuredClone(ledger) as FindingsLedger;
+  }
+
+  /**
    * The two owner facts every conversation carrier stamps — who the run was
    * for, and which agent ran it (9.2.0).
    *
@@ -2254,6 +2288,11 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
     // and `undefined` is the right answer there — it means "this conversation
     // recorded no folds", which is exactly true.
     this.pendingResumeFolded = cp.folded;
+    // The findings ledger beside it (9.101.0). Stashed whether or not THIS
+    // agent is armed: seed restores it only under `.findings()` (the deps
+    // gate), and an unarmed continuation consumes and ignores it — exactly
+    // like a `folded` field on an agent that never folds.
+    this.pendingResumeFindingsLedger = cp.findingsLedger;
     // The conversation's skill cursor (SG-C). Stashed unconditionally —
     // whether it is HONORED is seed's `restoreSkillCursor` gate, which reads
     // the mounted graph's `continuity` declaration; a checkpoint written by a
@@ -2856,6 +2895,21 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
         }),
       );
     }
+    // Same wiring for `agentfootprint.findings.*` (9.101.0) — the ledger's two
+    // events, filed by `recordFindings` on scope. Attached only under
+    // `.findings()`: an unarmed agent gains no bridge, no listener and no
+    // per-event work, and `agent.on('agentfootprint.findings.*')` can only
+    // ever fire on an agent that could have filed a row.
+    if (this.findingsOptions !== undefined) {
+      attachObserver(
+        new EmitBridge({
+          id: 'agentfootprint.findings-bridge',
+          prefix: 'agentfootprint.findings.',
+          dispatcher,
+          getRunContext: getRunCtx,
+        }),
+      );
+    }
     for (const r of this.attachedRecorders) {
       // A recorder's OWN `delivery` field is more specific than the
       // agent-level default — footprintjs's options bag would override the
@@ -3206,6 +3260,35 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
     return state?.unsupportedValues;
   }
 
+  /**
+   * The last run's findings ledger (9.101.0) — the model's OWN standings on
+   * its tool results, as `.findings()` recorded them: `basis` rows (what a
+   * call was for, declared before it ran), `standing` rows (`fact` with the
+   * assertions stood on, `open`, `ruled-out`, `noise` — the LAST row per
+   * `toolCallId` is the current reading; earlier ones are quotable history)
+   * and `conflict` rows (two stood-on readings that disagree, witnesses by
+   * identity). Undefined when the agent has no `.findings()` OR the model
+   * declared nothing — never an empty array standing in for "no findings",
+   * and an id with no standing row is undeclared, never `open`.
+   *
+   * Detached from the execution record (`structuredClone`), so a caller may
+   * keep or mutate it without touching the run's state.
+   *
+   * @example
+   * ```ts
+   * await agent.run({ message: 'which port is down?' });
+   * const current = new Map<string, string>();
+   * for (const row of agent.findings() ?? []) {
+   *   if (row.kind === 'standing') current.set(row.toolCallId, row.standing);
+   * }
+   * ```
+   */
+  findings(): AgentState['findingsLedger'] {
+    const ledger = (this.getLastSnapshot()?.sharedState as Partial<AgentState> | undefined)
+      ?.findingsLedger;
+    return ledger === undefined ? undefined : structuredClone(ledger);
+  }
+
   /** The last run's answer checks, detached from its execution record.
    * Undefined means no terminal validation ran, never an implicit pass. */
   answerValidation(): AnswerValidationReport | undefined {
@@ -3488,6 +3571,17 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
         this.pendingResumeFolded = undefined;
         return f;
       },
+      // The findings ledger (9.101.0): the arm, and the continued
+      // conversation's rows, both under the one gate — an unarmed agent hands
+      // seed exactly the deps object it always did.
+      ...(this.findingsOptions !== undefined && {
+        findings: true as const,
+        consumePendingResumeFindingsLedger: () => {
+          const l = this.pendingResumeFindingsLedger;
+          this.pendingResumeFindingsLedger = undefined;
+          return l;
+        },
+      }),
       // The conversation's inherited skill cursor (SG-C). Consumed (cleared)
       // on every run; HONORED only when the mounted graph declared
       // `continuity: 'conversation'` — the same one-option-one-behavior gate
@@ -3552,6 +3646,9 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
       this.injections,
       {
         hasArtifactStore: artifactStore !== undefined,
+        // The reserved-argument refusal (9.101.0) — only when the ledger is
+        // armed may a registry tool's own `_findings` be refused.
+        ...(this.findingsOptions !== undefined && { findings: true as const }),
       },
     );
     // A statically registered tool that declares `wants` on an agent with no
@@ -3834,6 +3931,9 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
       ...(budget?.tools !== undefined && { budgetCap: budget.tools }),
       // Steps (9.18.0): per-step narrowing + banner + the skip_step offer.
       ...(stepPlanFor !== undefined && { stepPlanFor }),
+      // The findings ledger (9.101.0): the ONE decoration site is inside this
+      // slot; the gate rides in value-conditionally.
+      ...(this.findingsOptions !== undefined && { findings: true as const }),
     });
 
     // callLLM extracted to ./agent/stages/callLLM.ts (v2.11.2). Same
@@ -3843,6 +3943,9 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
         this.evidenceGate.posture !== 'assist' && {
           hasEvidenceRecovery: true,
         }),
+      // The findings ledger (9.101.0): the choice seam and `postValidate`
+      // read peeled args / content under this gate and nothing else changes.
+      ...(this.findingsOptions !== undefined && { findings: true as const }),
       ...(this.answerValidationConfig !== undefined && { suppressDraftTokens: true }),
       // The receipt's salt (9.88.0) — read per call, like seed's own accessor.
       getRunId: () => this.currentRunContext?.runId,
@@ -3989,6 +4092,10 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
       // no-judge fast path still returns the very function reference every
       // pre-9.83.0 chart was given.
       this.noticePriorTurnEvidence && this.evidenceGate !== undefined ? true : undefined,
+      // THE ANSWER TURN'S STANDINGS (9.101.0) — the same value-conditional
+      // trailing positional, for the same reason: an unarmed agent hands the
+      // builder exactly the arguments it always did.
+      this.findingsOptions !== undefined ? true : undefined,
     );
 
     const routeDecider =
@@ -4014,6 +4121,9 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
       // contract to read it (9.61.0) — value-conditional, so every other
       // agent commits exactly what it always did.
       ...(this.claimContract !== undefined && { collectClaimFacts: true }),
+      // The findings ledger (9.101.0) — the peel, the basis row and the
+      // previous batch's standings all live in this handler under this gate.
+      ...(this.findingsOptions !== undefined && { findings: true as const }),
       // THE WRITE SEAM (9.77.0) — `empty-lookup`. Handed the SAME harvested
       // map callLLM reads at the choice seam, so the two stages agree by
       // construction about which calls are armed. Value-conditional on both

@@ -193,6 +193,8 @@
 
 import { buildReadSkillTool, buildSkipStepTool } from '../../lib/injection-engine/skillTools.js';
 import { stepsOf, SKIP_STEP_TOOL_NAME } from '../../lib/injection-engine/skillSteps.js';
+import { RESERVED_ARGUMENT } from './findings/types.js';
+import { ownsReservedArgument } from './findings/reserved.js';
 import type { Injection } from '../../lib/injection-engine/types.js';
 import type { LLMToolSchema } from '../../adapters/types.js';
 import { PRESENT_TOOL_NAME } from '../../artifacts/present.js';
@@ -280,6 +282,47 @@ export interface BuildToolRegistryOptions {
    * may keep its own `present`.
    */
   readonly hasArtifactStore?: boolean;
+  /**
+   * THE FINDINGS LEDGER IS ARMED (9.101.0, `.findings()`) — present only
+   * then, only ever `true`. Arms `assertReservedArgument`: a REGISTRY schema
+   * that already declares the reserved `_findings` argument is refused at
+   * build, naming the tool. Absent — the default — and not one line runs.
+   */
+  readonly findings?: true;
+}
+
+/**
+ * Refuse, at build and by name, a registry tool whose `inputSchema.properties`
+ * already carries the reserved `_findings` argument (9.101.0).
+ *
+ * The twin of the `SKIP_STEP_TOOL_NAME` refusal one function down, and armed
+ * the same way — only when the feature that reserves the name is on. With
+ * `.findings()` the wire decorator (`findings/reserved.ts ·
+ * withFindingsArgument`) leaves a schema that already has the property
+ * UNTOUCHED (author wins), so a registry tool declaring it would be served
+ * with the author's contract under the reserved name and the model's value on
+ * that call would run as the author's argument and file no row — accepted and
+ * silently wrong, which is why it is refused here instead. Only REGISTRY
+ * schemas: a provider- or MCP-ingested schema is met at dispatch, not at
+ * build, and there the author's property wins, recorded by the committed
+ * schema itself — the dispatch peel (`toolCalls · peelCall`) asks the same
+ * `ownsReservedArgument` and leaves that call's value alone. Never at
+ * `defineTool` — a registry schema is a shared reference `mcpServe` serves
+ * verbatim, and the refusal depends on `.findings()`, which `defineTool`
+ * cannot know.
+ */
+function assertReservedArgument(toolSchemas: readonly LLMToolSchema[]): void {
+  for (const schema of toolSchemas) {
+    if (ownsReservedArgument(schema)) {
+      throw new Error(
+        `Agent: tool '${schema.name}' declares the reserved argument '${RESERVED_ARGUMENT}' — ` +
+          `with .findings() the framework adds that property to every served tool schema so ` +
+          `the model can declare a basis and its standings on it, and an author's property of ` +
+          `the same name would be served in its place and swallow the model's declaration. ` +
+          `Rename the argument.`,
+      );
+    }
+  }
 }
 
 /**
@@ -486,6 +529,10 @@ export function buildToolRegistry(
     claim(SKIP_STEP_TOOL_NAME, { channel: 'framework', tool: skipStep });
   }
   const toolSchemas = augmentedRegistry.map((e) => e.tool.schema);
+  // The reserved-argument refusal (9.101.0) — the harvested registry schemas
+  // are exactly the ones the wire will decorate. Gated on the arm, so an agent
+  // without `.findings()` may keep its own `_findings` argument.
+  if (options.findings === true) assertReservedArgument(toolSchemas);
 
   return {
     augmentedRegistry,

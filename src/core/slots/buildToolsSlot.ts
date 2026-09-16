@@ -37,6 +37,7 @@ import type { ToolClaim } from '../agent/buildToolRegistry.js';
 import type { ToolNameChannel } from '../../events/payloads.js';
 import type { ToolProvider, ToolDispatchContext } from '../../tool-providers/types.js';
 import { composeSlot, fnv1a, formatOverflowWarning, slotOverflow, truncate } from './helpers.js';
+import { withFindingsArgument } from '../agent/findings/reserved.js';
 
 /**
  * Mutable cache shared between `buildToolsSlot` (writer) and
@@ -308,6 +309,15 @@ export interface ToolsSlotConfig {
    * byte-identical to today.
    */
   readonly stepPlanFor?: StepPlanFor;
+  /**
+   * THE FINDINGS LEDGER IS ARMED (9.101.0, `.findings()`) — present ONLY
+   * then, and only ever `true`. When present, every schema on the committed
+   * wire list gains the reserved optional `_findings` property
+   * (`findings/reserved.ts · withFindingsArgument`) at the ONE decoration
+   * site: after `mergeWire`, before `scope.toolSchemas` is written. Absent —
+   * the default — and the committed list is the merged list, byte for byte.
+   */
+  readonly findings?: true;
 }
 
 interface ToolsSubflowState {
@@ -793,7 +803,18 @@ export function buildToolsSlot(config: ToolsSlotConfig): FlowChart {
       })),
     ];
     const { merged, winners, losers } = mergeWire(candidates);
-    scope.toolSchemas = merged;
+    // THE ONE DECORATION SITE (9.101.0). With `.findings()` armed, every
+    // schema on the committed list gains the reserved optional `_findings`
+    // property here — after the merge, so `sameContract` paired UNDECORATED
+    // candidates and an always-visible skill tool still pairs with itself;
+    // before the commit, so what the mount maps to `dynamicToolSchemas`, what
+    // `callLLM · registeredToolSchemas` reads, what `servedView` rebuilds and
+    // what `receipt.tools.schemaHashes` hashes are the SAME bytes by
+    // construction (no new served gap). A rebuilt copy per schema — never an
+    // edit of a registry reference `mcpServe` serves and `validateToolArgs`
+    // judges. `merged` itself stays undecorated for the names-only reads
+    // below. Unarmed: the merged list, byte for byte.
+    scope.toolSchemas = config.findings === true ? merged.map(withFindingsArgument) : merged;
     if (servedTools !== undefined) {
       servedTools.current = winners;
       // The run's memory of who served what (read by the off-wire fallback).

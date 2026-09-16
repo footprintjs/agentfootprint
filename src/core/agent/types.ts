@@ -42,6 +42,7 @@ import type { Receipt } from '../../lib/time-travel/receipt.js';
 import type { OutputAttempt } from './outputEnforcement.js';
 import type { PendingEvidenceRecovery, UnsupportedValue } from './evidence/types.js';
 import type { AgentRunCheckpoint } from '../runCheckpoint.js';
+import type { FindingsLedger } from './findings/types.js';
 
 // ─── PUBLIC types (consumer-facing) ────────────────────────────────
 
@@ -246,6 +247,27 @@ export interface AgentOptions {
    * string" cannot be acted on; every other issue still names types only.
    */
   readonly toolArgValidation?: ToolArgValidationMode;
+  /**
+   * The findings ledger (9.101.0) — set by `.findings()` on the builder and
+   * by nothing else. When present, every SERVED tool schema gains the
+   * reserved optional `_findings` property (`withFindingsArgument`), the
+   * model's `_findings.basis` / `_findings.previous` declarations are peeled
+   * off each call's arguments (`splitFindings`) and filed as rows in
+   * `AgentState.findingsLedger` by `recordFindings`. An agent without this
+   * option is byte-identical to one built before the ledger existed: no
+   * decoration, no peel, no key, no piece, no event.
+   *
+   * `serve` (defaults to `'ledger-and-facts'`) and `keepLedgerFacts` name
+   * how the ledger will be SERVED back to the model. Both are inert until
+   * the serving steps land; the shape is fixed now so no public name ever
+   * changes.
+   */
+  readonly findings?: {
+    /** What the model is served from the ledger — inert until step 3. */
+    readonly serve?: 'ledger-and-facts' | 'ledger-only';
+    /** How many ledger facts stay served, or `false` for all — inert until step 4. */
+    readonly keepLedgerFacts?: number | false;
+  };
   /**
    * The ceiling on ONE tool result, in characters (9.11.0). **Opt-in — there
    * is no default, and there will not be one.**
@@ -1641,6 +1663,31 @@ export interface AgentState {
    * whose tools return none commits exactly what it always did.
    */
   claimFacts?: ReadonlyArray<import('../../integrity/unsupported-claim/check.js').ClaimLedgerRow>;
+
+  // ── The findings ledger (`.findings()`) ────────────────────────
+  /**
+   * The model's own standings on its tool results (9.101.0) — one flat
+   * append-only list of `basis`, `standing` and `conflict` rows, in the
+   * order they were declared. A basis row is what the model said a call was
+   * FOR (`direct` / `exploratory`) before the tool ran; a standing row is
+   * what it later made of one result (`fact` with the assertions it stands
+   * on, `open`, `ruled-out`, `noise`); a conflict row is the assertion
+   * algebra's fact at the write that created it, witnesses by identity only.
+   *
+   * Written ONLY by `recordFindings`, and only when `.findings()` is
+   * configured AND the model actually declared something — ABSENT otherwise,
+   * so every other agent commits exactly the keys it always did (the
+   * `claimFacts` key one line up is the shape and the reason). Plain records
+   * and arrays only, so it survives `structuredClone` and a TypedScope read;
+   * every write assigns a FRESH array, never mutates the committed one.
+   *
+   * Reading it: the LAST standing row per `toolCallId` is the current
+   * reading, every earlier one is quotable history; an id with no standing
+   * row is undeclared — never `open`, never "no findings". A disagreeing
+   * second standing is two rows, not a conflict; conflicts come only from
+   * assertions, and the current conflict set is a fold, not the rows.
+   */
+  findingsLedger?: FindingsLedger;
 
   // ── Per-run configuration (`.configure()`) ─────────────────────
   /** The model `.configure()` resolved for THIS run, written by seed and read

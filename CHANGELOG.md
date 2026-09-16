@@ -5,6 +5,75 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [9.101.0] - 2026-09-16
+
+### Added — the model's own findings, on the record, at zero extra calls
+
+- `.findings()` on the agent builder (`AgentBuilder.findings`) — every
+  SERVED tool schema gains one reserved optional argument, `_findings`
+  (`RESERVED_ARGUMENT`): the model declares a `basis` for each call before
+  the result exists (`direct` when it expects the answer, `exploratory` when
+  it is looking; optional `expect`: `low` / `medium` / `high`) and, on its
+  next tool call or as a top-level `_findings.previous` on a JSON answer,
+  the STANDING of each earlier tool result by its tool_result id — `fact`
+  with the assertions it stands on, `open` with what would settle it,
+  `ruled-out` with one line, `noise` with nothing. The library peels the
+  argument off before the tool, the middleware chain, the argument
+  validator, the permission gate and every pause carrier see the call, files
+  the rows through ONE writer as an append-only `AgentState.findingsLedger`
+  (`basis` / `standing` / `conflict` rows — a conflict is `conflictsOf`'s
+  fact about two stood-on readings that disagree, witnesses by identity),
+  and leaves the assistant turn in history verbatim. Read it back with
+  `Agent.findings()` (detached; `undefined` when unarmed or when the model
+  declared nothing — never an empty array standing in for "no findings").
+  Why: a long tool loop serves every result back in full on every call and
+  what the model already judged is nowhere but in its head; asking a second
+  model would cost a call per result and put a second voice on the record.
+  Nothing is inferred (a call with no declaration files no row; a result
+  nobody names has no standing — undeclared, never `open`), nothing is
+  served differently yet (the ledger is a record; serving is a later, bench-
+  gated step), and the always-on `findings-ledger` instruction is a system
+  piece hashed on every receipt, so a reworded ask is a different hash a
+  bench can name. `serve` and `keepLedgerFacts` are accepted now so no
+  public name changes later; both are inert until the serving steps land.
+- Two typed events — `agentfootprint.findings.declared` (one per basis row)
+  and `agentfootprint.findings.standing` (one per standing row) — carry
+  identities, enums and counts only; assertion values, `settles` and `line`
+  live in the committed key under whatever redaction the run configured.
+- The checkpoint carries `findingsLedger` only when present, and
+  `continueFrom` re-seeds it, so a continued conversation never reports its
+  earlier declarations as undeclared. `validateCheckpoint` checks each row's
+  shape per kind — shape only, never the values.
+- A registry tool that declares its own `_findings` property is refused at
+  build, naming the tool, and only when `.findings()` is armed; a provider-
+  or MCP-ingested schema that carries the name is left undecorated (the
+  author's property wins, recorded by the committed schema itself), and a
+  call to that tool is not peeled — the value runs as the author's argument
+  and files no row.
+- The answer that stands is the peeled JSON; a re-ask (`output-retry`,
+  `step-nudge`, `evidence-recheck`) quotes the emission — the string the
+  provider returned — into the conversation, never the peeled form. A policy
+  halt hands the app the peeled args (`PolicyHaltError.proposed.args`), the
+  same carrier law every pause carrier follows.
+- Exported from the root: `RESERVED_ARGUMENT` and the row types
+  (`FindingsLedger`, `FindingsRow`, `BasisRow`, `StandingRow`,
+  `ConflictRow`, `ConflictWitness`, `FindingsDeclaration`, `Basis`,
+  `Expect`, `Standing`).
+
+### Unchanged — an agent without `.findings()` records the bytes it recorded before
+
+- Every decoration, peel, write, piece and event is gated on the door. The
+  15 byte-identity references under `test/core/tools/reference/` were run on
+  this tree first and pass untouched; ONE new reference, `agent-findings`,
+  was generated alone and its delta against an unarmed twin is on the test
+  file's header. `npm run bench:findings` now runs each configuration armed
+  and unarmed and exits non-zero if any of the six baseline columns moves
+  under the arm — they do not.
+- The name was proved before it shipped: `_findings` survives every
+  provider's `inputSchema` mapping byte-for-byte, `required` untouched —
+  Anthropic, OpenAI, Gemini, Bedrock, Ollama, Foundry (hosted and local) and
+  both browser providers (`test/adapters/reservedArgumentSurvives.test.ts`).
+
 ## [9.100.0] - 2026-09-16
 
 ### Added — the delivered answer names its shape guarantee

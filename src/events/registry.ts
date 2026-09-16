@@ -119,6 +119,8 @@ import type {
   ToolStartPayload,
   ValidationArgsInvalidPayload,
   MiddlewareDecisionPayload,
+  FindingsDeclaredPayload,
+  FindingsStandingPayload,
   ArtifactMintedPayload,
   ArtifactResolvedPayload,
   ArtifactExpiredPayload,
@@ -283,6 +285,10 @@ export const EVENT_NAMES = {
   },
   middleware: {
     decision: 'agentfootprint.middleware.decision',
+  },
+  findings: {
+    declared: 'agentfootprint.findings.declared',
+    standing: 'agentfootprint.findings.standing',
   },
   embedding: {
     generated: 'agentfootprint.embedding.generated',
@@ -719,6 +725,15 @@ export interface AgentfootprintEventMap {
     'agentfootprint.middleware.decision',
     MiddlewareDecisionPayload
   >;
+  // findings (the model's standings on the record — identities, enums, counts)
+  'agentfootprint.findings.declared': AgentfootprintEventEnvelope<
+    'agentfootprint.findings.declared',
+    FindingsDeclaredPayload
+  >;
+  'agentfootprint.findings.standing': AgentfootprintEventEnvelope<
+    'agentfootprint.findings.standing',
+    FindingsStandingPayload
+  >;
   // embedding
   'agentfootprint.embedding.generated': AgentfootprintEventEnvelope<
     'agentfootprint.embedding.generated',
@@ -878,6 +893,8 @@ export const ALL_EVENT_TYPES: readonly AgentfootprintEventType[] = [
   'agentfootprint.checkin.request',
   'agentfootprint.checkin.decision',
   'agentfootprint.middleware.decision',
+  'agentfootprint.findings.declared',
+  'agentfootprint.findings.standing',
   'agentfootprint.embedding.generated',
   'agentfootprint.artifacts.minted',
   'agentfootprint.artifacts.resolved',

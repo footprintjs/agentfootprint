@@ -455,3 +455,160 @@ describe('durability — it is still the same standing agent', () => {
     }
   });
 });
+
+// ─── the findings ledger rides the conversation (9.101.0) ─────────────
+
+/**
+ * `AgentRunCheckpoint.findingsLedger` is value-conditional (the `folded`
+ * precedent): the stored conversation carries the key only after a turn that
+ * recorded a row, a new standing agent over the same store re-seeds it as a
+ * RECORD (no event, no new row), and the key is never written by an agent
+ * without `.findings()` — even one continuing a conversation that holds it.
+ */
+describe('durability — the findings ledger rides the conversation', () => {
+  /** Two declaring tool turns, then an answer — the mock scripts compliance. */
+  function declaringTurns(): LLMProvider {
+    return mock({
+      replies: [
+        {
+          toolCalls: [
+            { id: 'a', name: 'act', args: { step: 'one', _findings: { basis: 'direct' } } },
+          ],
+        },
+        {
+          toolCalls: [
+            {
+              id: 'b',
+              name: 'act',
+              args: {
+                step: 'two',
+                _findings: {
+                  basis: 'exploratory',
+                  previous: [
+                    {
+                      toolCallId: 'a',
+                      standing: 'fact',
+                      assertions: [
+                        { subject: { kind: 'step', id: 'one' }, predicate: 'did', value: true },
+                      ],
+                    },
+                  ],
+                },
+              },
+            },
+          ],
+        },
+        { content: 'both done' },
+      ],
+    });
+  }
+
+  function armedAgentWith(provider: LLMProvider, tool: ReturnType<typeof defineTool>): Agent {
+    return Agent.create({ provider, model: 'test-model', maxIterations: 5 })
+      .system('terse')
+      .tool(tool)
+      .findings()
+      .build();
+  }
+
+  /** Seed a store with one recorded conversation and hand back what it holds. */
+  async function seededStore() {
+    const sessions = recordingSessions();
+    const host = inProcessHost();
+    const handle = await standingAgent({
+      agent: armedAgentWith(declaringTurns(), recordingTool([])),
+      sessions,
+      host,
+      durability: 'sync',
+    });
+    await host.deliver({ input: 'do both', sessionId: 'ledger' });
+    await handle.close();
+    const stored = sessions.writes().map((w) => readEnvelope(w));
+    return { sessions, stored, last: stored.at(-1)! };
+  }
+
+  it('the stored conversation carries the ledger only after a turn that recorded one, as a prefix chain', async () => {
+    const { stored, last } = await seededStore();
+    expect(last.findingsLedger?.map((r) => r.kind)).toEqual(['basis', 'standing', 'basis']);
+    // 'sync' writes where the conversation moves; every earlier write holds a
+    // PREFIX of the final ledger (append-only), or no key at all — never an
+    // empty array standing in for "nothing recorded".
+    for (const s of stored) {
+      if (s.findingsLedger === undefined) continue;
+      expect(s.findingsLedger.length).toBeGreaterThan(0);
+      expect(last.findingsLedger!.slice(0, s.findingsLedger.length)).toEqual(s.findingsLedger);
+    }
+  });
+
+  it('a new ARMED standing agent over the same store re-seeds the ledger and carries it forward', async () => {
+    const { sessions, last } = await seededStore();
+    const second = armedAgentWith(mock({ reply: 'carrying on' }), recordingTool([]));
+    const events: string[] = [];
+    second.on('agentfootprint.findings.declared', () => events.push('declared'));
+    second.on('agentfootprint.findings.standing', () => events.push('standing'));
+    const host = inProcessHost();
+    const handle = await standingAgent({ agent: second, sessions, host, durability: 'sync' });
+    try {
+      const reply = await host.deliver({ input: 'and now?', sessionId: 'ledger' });
+      expect(reply.output).toBe('carrying on');
+      // Restored as a record: the same rows, no event re-fired.
+      expect(second.findings()).toEqual(last.findingsLedger);
+      expect(events).toEqual([]);
+      expect(readEnvelope(sessions.writes().at(-1)!).findingsLedger).toEqual(last.findingsLedger);
+    } finally {
+      await handle.close();
+    }
+  });
+
+  it('an UNARMED standing agent over the same store neither restores nor writes the key', async () => {
+    // The arm gates every read and write: an agent without `.findings()`
+    // continuing this conversation runs exactly as it always did, so the
+    // conversation it stores back carries no `findingsLedger` — the record
+    // stays only in the envelope the armed agent wrote.
+    const { sessions } = await seededStore();
+    const second = Agent.create({
+      provider: mock({ reply: 'plain' }),
+      model: 'm',
+      maxIterations: 3,
+    })
+      .system('terse')
+      .tool(recordingTool([]))
+      .build();
+    const host = inProcessHost();
+    const handle = await standingAgent({ agent: second, sessions, host, durability: 'sync' });
+    try {
+      await host.deliver({ input: 'and now?', sessionId: 'ledger' });
+      expect(second.findings()).toBeUndefined();
+      expect(readEnvelope(sessions.writes().at(-1)!)).not.toHaveProperty('findingsLedger');
+    } finally {
+      await handle.close();
+    }
+  });
+
+  it('a conversation that recorded nothing stores no findingsLedger key, armed or not', async () => {
+    for (const arm of [true, false]) {
+      const sessions = recordingSessions();
+      const host = inProcessHost();
+      const builder = Agent.create({
+        provider: mock({ reply: 'plain' }),
+        model: 'm',
+        maxIterations: 3,
+      }).system('terse');
+      const handle = await standingAgent({
+        agent: arm ? builder.findings().build() : builder.build(),
+        sessions,
+        host,
+        durability: 'exit',
+      });
+      try {
+        await host.deliver({ input: 'hi', sessionId: 's' });
+        expect(sessions.writes().length).toBeGreaterThan(0);
+        for (const w of sessions.writes()) {
+          expect(readEnvelope(w), `armed=${String(arm)}`).not.toHaveProperty('findingsLedger');
+        }
+      } finally {
+        await handle.close();
+      }
+    }
+  });
+});

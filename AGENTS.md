@@ -544,7 +544,7 @@ files `agentfootprint.tools.coverage_declared`; with
 to the final answer, which is how a limit survives a model that would rather not
 mention it.
 
-### Observability — 111 typed events across 24 domains
+### Observability — 113 typed events across 25 domains
 
 ```typescript
 agent.on('agentfootprint.context.injected', (e) =>

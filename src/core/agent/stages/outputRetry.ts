@@ -54,6 +54,11 @@ export function buildOutputRetryStage(
       return;
     }
 
+    // The EMISSION — the string the provider returned. Under `.findings()`
+    // the route decider judged the answer with its reserved `_findings` key
+    // peeled and put the emission back before routing here (`route.ts ·
+    // buildEnforcingDecider · reAsk`), so the assistant turn written below is
+    // one the model actually sent and the next request echoes it verbatim.
     const failedAnswer = scope.llmLatestContent as string;
     const [answerTurn, correctionTurn] = buildCorrectiveTurn(failedAnswer, failure, {
       attempt: failure.attempt,

@@ -26,6 +26,7 @@ import type { ThinkingBlock } from '../thinking/types.js';
 import type { LoopMoment } from '../core/agent/moments.js';
 import type { InstructionDeliveryLease, ToolResultStatus } from '../core/agent/toolEffects.js';
 import type { ToolSemantics } from '../lib/semantics/types.js';
+import type { Basis, Expect, Standing } from '../core/agent/findings/types.js';
 
 // ─── Tier 1+2: Core Domain (library-emitted) ──────────────────────────
 
@@ -728,6 +729,67 @@ export interface MiddlewareDecisionPayload {
   /** The registered component that COLLECTED this decision (9.24.0). Present
    *  only on the resume-side rows of an `ask` that carried one. */
   readonly componentId?: string;
+}
+
+// ─── findings (the model's standings on the record — `.findings()`) ────
+/**
+ * The model declared a BASIS for one tool call — `_findings.basis` peeled
+ * off the call's arguments before anything else read them (9.101.0).
+ *
+ * Identities, enums and counts ONLY, by the `MiddlewareDecisionPayload` law
+ * one screen up: the row itself lives in the committed `findingsLedger`
+ * key under whatever redaction the run configured, and an event stream is
+ * a fan-out to sinks we do not control. `malformed` counts the entries
+ * `splitFindings` dropped from this call's declaration — never coerced,
+ * never inferred — so a sink can see that the model tried and missed
+ * without seeing what it wrote.
+ *
+ * Fired by `recordFindings`, one per basis row, BEFORE `stream.tool_start`
+ * for the same `toolCallId`. Never fired on an agent without `.findings()`.
+ */
+export interface FindingsDeclaredPayload {
+  readonly toolName: string;
+  /** The provider's id for the call — what a reader joins to `tool_start`. */
+  readonly toolCallId: string;
+  readonly iteration: number;
+  readonly basis: Basis;
+  readonly expect?: Expect;
+  /** Malformed `_findings` entries dropped from this call's declaration. */
+  readonly malformed?: number;
+}
+
+/**
+ * The model declared a STANDING for one PREVIOUS tool result — `fact`,
+ * `open`, `ruled-out` or `noise` — on its next tool call or as a top-level
+ * `_findings.previous` on a JSON answer (9.101.0).
+ *
+ * `toolCallId` names the RESULT being stood on, not the call that carried
+ * the declaration; `declaredOn` says which door the declaration came
+ * through. `assertionCount` is the number of assertions the row carries
+ * (always 0 for `noise`); the assertions themselves, `settles`, `line` and
+ * every other word the model wrote stay in the committed key — the same
+ * law as `FindingsDeclaredPayload`. `conflictKeys` lists the assertion keys
+ * whose conflict row THIS write created; a key that already had one is not
+ * repeated. `unknownId` marks a standing for an id the previous batch did
+ * not contain — recorded, never resolved.
+ *
+ * Fired by `recordFindings`, one per standing row, in declaration order.
+ */
+export interface FindingsStandingPayload {
+  /** The id of the tool RESULT this standing is about. */
+  readonly toolCallId: string;
+  /** Absent when `unknownId` — the batch had no result to name. */
+  readonly toolName?: string;
+  /** The DECLARING iteration; the result's own stage is derivable from the
+   *  commit log by `toolCallId`, never guessed here. */
+  readonly iteration: number;
+  readonly standing: Standing;
+  readonly declaredOn: 'tool-call' | 'answer';
+  readonly assertionCount: number;
+  /** Assertion keys whose conflict row this write created. */
+  readonly conflictKeys?: readonly string[];
+  /** The named id was not in the previous batch. */
+  readonly unknownId?: true;
 }
 
 // ─── Tier 3: Observability Layers (recorder-emitted, opt-in) ──────────

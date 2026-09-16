@@ -64,6 +64,10 @@ import {
 import { composeReadSkillRefusal, unknownToolResult } from '../src/core/agent/stages/toolCalls.js';
 import { WRAP_UP_INSTRUCTION } from '../src/core/agent/stages/wrapUp.js';
 import {
+  FINDINGS_ARGUMENT_SCHEMA,
+  FINDINGS_INSTRUCTION,
+} from '../src/core/agent/findings/reserved.js';
+import {
   nudgeTeachingMessage,
   type StepPlan,
   type StepPointer,
@@ -569,6 +573,46 @@ const stepNudges = (): readonly string[] => {
   return [nudgeTeachingMessage(at(1), plan), nudgeTeachingMessage(at(3), plan)];
 };
 
+/**
+ * The findings ledger's two model-facing strings (9.101.0, `.findings()`).
+ *
+ * Both ride the REQUEST, never `history`: the `_findings` property is rebuilt
+ * onto every served schema by `withFindingsArgument` at the committed tool
+ * list (`buildToolsSlot`, the seed fallback), and the instruction is a
+ * system piece registered through `defineInstruction` — recomposed by the
+ * injection engine on every pass. Neither is written into a `role: 'tool'`
+ * or `role: 'user'` message, so a later call re-reads a fresh copy, not a
+ * stale one. `test/core/agent/findings/reserved.test.ts` judges the same two
+ * strings at the STRICTEST lifetime as well; the rows here name the real one.
+ */
+const RESERVED_ARGUMENT_DESCRIPTION: Surface = {
+  channel: 'tool-description',
+  lifetime: 'request-ephemeral',
+};
+const ALWAYS_ON_INSTRUCTION: Surface = {
+  channel: 'system-text',
+  lifetime: 'request-ephemeral',
+};
+
+/** Every `description` in the reserved property's schema tree — each one the
+ *  model reads on every served tool, at whatever depth the provider renders. */
+function findingsSchemaDescriptions(): string[] {
+  const out: string[] = [];
+  const walk = (node: unknown): void => {
+    if (node === null || typeof node !== 'object') return;
+    if (Array.isArray(node)) {
+      for (const item of node) walk(item);
+      return;
+    }
+    for (const [key, value] of Object.entries(node as Record<string, unknown>)) {
+      if (key === 'description' && typeof value === 'string') out.push(value);
+      else walk(value);
+    }
+  };
+  walk(FINDINGS_ARGUMENT_SCHEMA);
+  return out;
+}
+
 // ─── The registry ────────────────────────────────────────────────────
 
 const PRODUCERS: readonly ModelFacingProducer[] = [
@@ -803,6 +847,56 @@ const PRODUCERS: readonly ModelFacingProducer[] = [
     // apart, and only one of them can be reached by any single fixture.
     reaches: [/Steps 1–3 of 'refund' had not run/, /Step 3 of 'refund' had not run/],
     compose: async () => stepNudges(),
+  },
+  {
+    id: 'findings ledger — the reserved `_findings` argument DESCRIPTION',
+    module: 'src/core/agent/findings/reserved.ts',
+    surface: RESERVED_ARGUMENT_DESCRIPTION,
+    lifetimeBecause:
+      'it is a property of the served tool schema, rebuilt onto the committed list by ' +
+      '`withFindingsArgument` for every request (`buildToolsSlot`, the seed fallback) and ' +
+      'never written into `history` — the model reads a fresh copy on each call',
+    drivenBy: [
+      'test/core/agent/findings-ledger.test.ts',
+      'test/adapters/reservedArgumentSurvives.test.ts',
+    ],
+    // One marker per description the schema carries: the versioned head, the
+    // two basis arms, the four standings, and the stratum rule — the sentence
+    // that says what the RECORD does with a declaration, not what serving will.
+    reaches: [
+      /^Findings v1/,
+      /'direct' when you expect the result to answer/,
+      /'exploratory' when you are looking/,
+      /'noise' with nothing/,
+      /a fact's assertions are asserted/,
+      /leave a result unnamed rather than guess/,
+    ],
+    compose: async () => findingsSchemaDescriptions(),
+  },
+  {
+    id: 'findings ledger — the always-on INSTRUCTION piece',
+    module: 'src/core/agent/findings/reserved.ts',
+    surface: ALWAYS_ON_INSTRUCTION,
+    lifetimeBecause:
+      '`.findings()` registers it through `defineInstruction` (the twin of `outputSchema()`), ' +
+      'so it is a system piece the injection engine recomposes on every pass and the receipt ' +
+      'hashes per request — never a `history` turn',
+    drivenBy: [
+      'test/core/agent/findings-ledger.test.ts',
+      'test/lib/time-travel/receipt-conformance.test.ts',
+    ],
+    // The ask's four standings and its one refusal to guess, each a marker so
+    // a rewrite that drops a standing goes red here before it ships.
+    reaches: [
+      /^Findings v1\./,
+      /declare it on your tool calls/,
+      /'fact' with the assertions you stand on/,
+      /'open' with what would settle it/,
+      /'ruled-out' with one line naming what was ruled out/,
+      /'noise' with nothing/,
+      /leave it unnamed rather than guess/,
+    ],
+    compose: async () => [FINDINGS_INSTRUCTION],
   },
 ];
 

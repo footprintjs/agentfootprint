@@ -20,6 +20,8 @@ import type { LLMMessage } from '../../../adapters/types.js';
 import type { MessageMiddleware } from '../middleware/types.js';
 import { runMessageChain } from '../middleware/runChain.js';
 import { recordDecisions } from '../middleware/ledger.js';
+import { peelAnswerFindings } from '../findings/reserved.js';
+import { recordFindings, standingRowsFrom, type PreviousResult } from '../findings/ledger.js';
 import {
   judgeAnswer,
   recordOutputAttempt,
@@ -638,6 +640,13 @@ export function buildRouteDeciderStage(
    *  extractor), so absent OR gate-less → not one row, not one event, and
    *  the decider a pre-9.83.0 chart was handed. */
   noticePriorTurnEvidence?: boolean,
+  /** THE FINDINGS LEDGER IS ARMED (9.101.0, `.findings()`) — the
+   *  `noticePriorTurnEvidence` precedent: a trailing optional the caller passes
+   *  value-conditionally, so an unarmed agent hands this builder exactly the
+   *  arguments it always did and the no-judge fast path returns the same
+   *  function reference. Read by the ENFORCING decider only — the answer turn
+   *  has a JSON envelope to peel there and nowhere else. */
+  findings?: true,
 ): (scope: TypedScope<AgentState>) => RouteBranch | Promise<RouteBranch> {
   const chain = messageMiddleware ?? [];
   if (
@@ -658,6 +667,7 @@ export function buildRouteDeciderStage(
       claims,
       integrityLedger,
       noticePriorTurnEvidence,
+      findings,
     );
   if (stepPlanFor !== undefined || evidence !== undefined)
     return buildJudgingDecider(
@@ -908,6 +918,7 @@ function buildEnforcingDecider(
   claims: readonly DeclaredClaim[] | undefined,
   integrityLedger: { current: DispositionLedger | undefined } | undefined,
   noticePriorTurnEvidence: boolean | undefined,
+  findings?: true,
 ): (scope: TypedScope<AgentState>) => Promise<RouteBranch> {
   return async (scope) => {
     const base = decideBranch(scope);
@@ -953,6 +964,59 @@ function buildEnforcingDecider(
       scope.llmLatestContent = verdict.content;
     }
 
+    // ── THE ANSWER TURN'S STANDINGS (9.101.0, `.findings()`) ────────────
+    // Under 'instruct' + an output schema the answer is a JSON envelope, and
+    // the model may carry the LAST batch's standings as its top-level
+    // `_findings.previous`. Peeled HERE — the decider is on the main chart,
+    // so the write lands (`prepareFinal` runs in the non-merging Final
+    // subflow and cannot write back) — and before every judge below, so
+    // `judgeAnswer`, `judgeEvidence`, `readValidatedAnswer` / `judgeClaims`,
+    // `captureTurnPayload` and `Agent.runTyped` all see the answer the model
+    // meant. Rows are filed only when the model declared standings; the key
+    // is taken off whenever it was there. Unarmed: not one line runs, and a
+    // string that is not JSON is untouched.
+    /** The string the provider returned, held aside when the arm took a key
+     *  off it — what every RE-ASK exit puts back (`reAsk`). */
+    let emission: string | undefined;
+    if (findings === true && typeof scope.llmLatestContent === 'string') {
+      const raw = scope.llmLatestContent;
+      const peeled = peelAnswerFindings(raw);
+      if (peeled.findings?.previous !== undefined) {
+        recordFindings(
+          scope,
+          standingRowsFrom(
+            [...((scope.toolResults ?? []) as readonly PreviousResult[])],
+            peeled.findings,
+            'answer',
+            scope.iteration as number,
+          ),
+        );
+      }
+      if (peeled.content !== raw) {
+        scope.llmLatestContent = peeled.content;
+        emission = raw;
+      }
+    }
+    /**
+     * A branch that asks the model AGAIN quotes `llmLatestContent` back into
+     * the conversation as the turn being corrected — `outputRetry` and
+     * `stepNudge` push it into history as the assistant turn, `evidenceRecheck`
+     * serves it as the rejected draft — so at those exits it must be the
+     * string the provider returned, or history holds a turn the model never
+     * emitted and the next request echoes it (`outputAttempts` records the
+     * verdict, never the text). The judges saw the PEELED answer; the answer
+     * that STANDS — every `'final'` — is the peeled one. Unarmed, or nothing
+     * peeled: the write-free exit it always was.
+     */
+    const reAsk = (
+      branch: 'output-retry' | 'step-nudge' | 'evidence-recheck',
+      rationale: string,
+    ): RouteBranch => {
+      if (emission !== undefined) scope.llmLatestContent = emission;
+      emitRouteDecided(scope, branch, rationale);
+      return branch;
+    };
+
     // A withheld answer is not judged and never re-asked. The app decided
     // nobody gets this string; asking the model for a better-shaped version
     // of it would be the library routing around that decision.
@@ -982,8 +1046,7 @@ function buildEnforcingDecider(
       // The schema verdict ran FIRST (an answer being re-asked is not a
       // stop); the step judge sees only an answer the schema let stand.
       if (judgeUnfinishedSteps(scope, stepPlanFor, base.earlyStop) === 'step-nudge') {
-        emitRouteDecided(scope, 'step-nudge', stepNudgeRationale(scope));
-        return 'step-nudge';
+        return reAsk('step-nudge', stepNudgeRationale(scope));
       }
       // The evidence gate is last of the three judges: it grounds the answer
       // the schema accepted and the procedure finished — the one that is
@@ -992,8 +1055,7 @@ function buildEnforcingDecider(
         judgeEvidence(scope, evidence, base.earlyStop, noticePriorTurnEvidence, integrityLedger) ===
         'evidence-recheck'
       ) {
-        emitRouteDecided(scope, 'evidence-recheck', evidenceRecheckRationale(scope));
-        return 'evidence-recheck';
+        return reAsk('evidence-recheck', evidenceRecheckRationale(scope));
       }
       // LAST, and it re-routes nothing: this answer is the one being handed
       // back, and a claim that disagrees with the run's settled facts is a
@@ -1018,8 +1080,15 @@ function buildEnforcingDecider(
     // The judgement is on the PRE-chain string, and only when a link actually
     // changed something — so a chain that merely inspected the answer costs a
     // second parse of nothing.
+    // The pre-chain string is JUDGED here, never recorded, so under the arm it
+    // is judged with the reserved key peeled (9.101.0) — the same string the
+    // schema would have seen had no link rewritten it. Otherwise a valid armed
+    // answer carrying `_findings` under a strict schema would read as "never
+    // valid" and the chain's mistake would be charged to the model again.
+    const judgedPreChain =
+      findings === true ? peelAnswerFindings(preChainAnswer).content : preChainAnswer;
     const brokenByChain =
-      rewrittenBy !== undefined && judgeAnswer(preChainAnswer, enforcement.parser) === undefined
+      rewrittenBy !== undefined && judgeAnswer(judgedPreChain, enforcement.parser) === undefined
         ? rewrittenBy
         : undefined;
 
@@ -1027,13 +1096,11 @@ function buildEnforcingDecider(
       // The retry stage writes the correction and files the row, because it
       // is the one that knows what it wrote. This is the hand-off.
       scope.outputSchemaFailure = { attempt, ...failure };
-      emitRouteDecided(
-        scope,
+      return reAsk(
         'output-retry',
         `final answer failed the output schema (${failure.stage}) — ` +
           `asking again, attempt ${attempt + 1} of ${enforcement.retries + 1}`,
       );
-      return 'output-retry';
     }
 
     // Out of retries — or holding an answer no retry could fix. The answer
@@ -1065,8 +1132,7 @@ function buildEnforcingDecider(
     // table is unconditional on schema state: steps remaining + nudge
     // unspent → one teaching re-ask (its turn may well fix both).
     if (judgeUnfinishedSteps(scope, stepPlanFor, base.earlyStop) === 'step-nudge') {
-      emitRouteDecided(scope, 'step-nudge', stepNudgeRationale(scope));
-      return 'step-nudge';
+      return reAsk('step-nudge', stepNudgeRationale(scope));
     }
     // The evidence gate deliberately does NOT run here. This answer already
     // failed its own contract and the caller is being told so; grounding the

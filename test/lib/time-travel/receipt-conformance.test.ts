@@ -85,6 +85,11 @@ import {
   stableJson,
 } from '../../../src/lib/time-travel/index.js';
 import { stepOutputText } from '../../../src/lib/context-bisect/index.js';
+import {
+  FINDINGS_ARGUMENT_SCHEMA,
+  FINDINGS_INSTRUCTION,
+  withFindingsArgument,
+} from '../../../src/core/agent/findings/reserved.js';
 import type {
   LLMMessage,
   LLMRequest,
@@ -2130,5 +2135,110 @@ describe('the schema law: a consumer can verify every schemaHashes row from outs
     expect(receiptHash(receipt.basis.runId, toolDigestInput(edited))).not.toBe(
       receipt.tools.schemaHashes[served.name],
     );
+  });
+});
+
+// ─── the findings ledger's arm (9.101.0) ──────────────────────────────
+
+describe('an armed findings ledger: the receipt hashes the DECORATED schema and the instruction piece', () => {
+  // `.findings()` changes two things the receipt covers: every served tool
+  // schema gains the reserved `_findings` property at the ONE decoration
+  // site (the committed list `buildToolsSlot` writes, and the seed fallback),
+  // and the always-on `findings-ledger` instruction becomes a system piece.
+  // Both must satisfy the law with nothing new declared as a gap — the
+  // receipt hashes what the wire carried, and the rebuild from the record
+  // agrees because the committed list IS the decorated list.
+  const DECLARING = [
+    call('c1', 'alpha_tool', { _findings: { basis: 'direct' } }),
+    call('c2', 'beta_tool', {
+      _findings: { basis: 'exploratory', previous: [{ toolCallId: 'c1', standing: 'noise' }] },
+    }),
+    answer('done'),
+  ];
+
+  for (const reactMode of ['dynamic', 'dynamic-grouped'] as const) {
+    it(`${reactMode}: the law holds; schemaHashes[name] is the rebuilt DECORATED schema on every epoch`, async () => {
+      const alpha = tool('alpha_tool');
+      const beta = tool('beta_tool');
+      const r = await run(reactMode, DECLARING, (a) =>
+        a.system('s').tool(alpha).tool(beta).findings(),
+      );
+      clean(r);
+
+      const views = servedViews(r.snapshot);
+      expect(views.length).toBe(3);
+      let checked = 0;
+      for (const view of views) {
+        const receipt = receiptAt(r.snapshot, view.epoch)!;
+        const hash = (content: string): string => receiptHash(receipt.basis.runId, content);
+        for (const served of view.tools.schemas) {
+          // The served schema carries the reserved property, byte for byte.
+          const properties = served.inputSchema.properties as Record<string, unknown>;
+          expect(properties._findings, `${served.name} @ epoch ${view.epoch}`).toEqual(
+            FINDINGS_ARGUMENT_SCHEMA,
+          );
+          expect(served.inputSchema.required ?? []).not.toContain('_findings');
+          // 1. The receipt's row is the served (decorated) schema's digest.
+          expect(hash(toolDigestInput(served))).toBe(receipt.tools.schemaHashes[served.name]);
+          // 2. …and equals the schema REBUILT by the one decorator from the
+          //    undecorated one — decoration is `withFindingsArgument`, and
+          //    nothing else moved on the schema.
+          const { _findings: _peeled, ...rest } = properties;
+          const undecorated: LLMToolSchema = {
+            ...served,
+            inputSchema: { ...served.inputSchema, properties: rest },
+          };
+          expect(hash(toolDigestInput(withFindingsArgument(undecorated)))).toBe(
+            receipt.tools.schemaHashes[served.name],
+          );
+          checked += 1;
+        }
+        // 3. The wire carried the same decorated bytes the receipt describes.
+        const sent = r.wire[view.epoch - 1]!.tools ?? [];
+        for (const wired of sent) {
+          expect(hash(toolDigestInput(wired))).toBe(receipt.tools.schemaHashes[wired.name]);
+        }
+        // 4. The instruction is a system piece, hashed per piece, on every epoch.
+        const pieceHashes = receipt.system.pieces.map((p) => p.hash);
+        expect(pieceHashes).toContain(hash(FINDINGS_INSTRUCTION));
+        const piece = view.system.pieces.find((p) => p.text === FINDINGS_INSTRUCTION);
+        expect(piece?.source).toBe('instructions');
+        expect(view.system.text).toContain(FINDINGS_INSTRUCTION);
+      }
+      expect(checked).toBe(6);
+    });
+  }
+
+  it('the registry schema, decorated by the same function, is the served schema (the decoration site is the committed list)', async () => {
+    const alpha = tool('alpha_tool');
+    const r = await run('dynamic', [call('c1', 'alpha_tool'), answer('done')], (a) =>
+      a.system('s').tool(alpha).findings(),
+    );
+    const view = servedAt(r.snapshot, 1)!;
+    const receipt = receiptAt(r.snapshot, 1)!;
+    const served = view.tools.schemas.find((s) => s.name === 'alpha_tool')!;
+    expect(
+      receiptHash(receipt.basis.runId, toolDigestInput(withFindingsArgument(alpha.schema))),
+    ).toBe(receipt.tools.schemaHashes.alpha_tool);
+    expect(toolDigestInput(served)).toBe(toolDigestInput(withFindingsArgument(alpha.schema)));
+    // The registry's own object was never edited: decoration is a rebuilt copy.
+    expect(Object.keys(alpha.schema.inputSchema.properties as object)).not.toContain('_findings');
+  });
+
+  it('the unarmed twin hashes the undecorated schema and carries no such piece', async () => {
+    const r = await run('dynamic', [call('c1', 'alpha_tool'), answer('done')], (a) =>
+      a.system('s').tool(tool('alpha_tool')),
+    );
+    clean(r);
+    for (const view of servedViews(r.snapshot)) {
+      const receipt = receiptAt(r.snapshot, view.epoch)!;
+      for (const served of view.tools.schemas) {
+        expect(Object.keys(served.inputSchema.properties as object)).not.toContain('_findings');
+      }
+      expect(receipt.system.pieces.map((p) => p.hash)).not.toContain(
+        receiptHash(receipt.basis.runId, FINDINGS_INSTRUCTION),
+      );
+      expect(view.system.text).not.toContain('Findings v1');
+    }
   });
 });

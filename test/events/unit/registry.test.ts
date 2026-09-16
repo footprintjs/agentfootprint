@@ -86,7 +86,7 @@ describe('event registry — names + exhaustiveness', () => {
   // them by name. Completeness is proven by
   // `test/events/unit/emitted-events-are-registered.test.ts`, which derives
   // the emitted set from src/ instead of trusting a hand-maintained number.
-  it('ALL_EVENT_TYPES has exactly 111 entries (Tier 1+2+3 combined)', () => {
+  it('ALL_EVENT_TYPES has exactly 113 entries (Tier 1+2+3 combined)', () => {
     // 69 = 8 composition + 9 agent + 7 stream + 5 context + 4 memory
     //    + 6 tools + 3 skill (skill.rejected added with the read_skill gate)
     //    + 4 permission + 4 credential + 1 risk + 1 fallback
@@ -216,7 +216,14 @@ describe('event registry — names + exhaustiveness', () => {
     //     call to a tool whose name was not on this iteration's wire: the
     //     held-out, parked and restored-transcript dispatches the capability
     //     law keeps, now on the record once per such call.)
-    expect(ALL_EVENT_TYPES.length).toBe(111);
+    //    (findings.declared + findings.standing added in 9.101.0 — the model's
+    //     OWN standings on its tool results, filed by `recordFindings` when
+    //     `.findings()` is armed: a basis (`direct` / `exploratory`) declared
+    //     on a call before it ran, and a standing (`fact` / `open` /
+    //     `ruled-out` / `noise`) declared for a PREVIOUS result. Identities,
+    //     enums and counts only — the `MiddlewareDecisionPayload` law — so the
+    //     assertions the model stands on never leave the run through a sink.)
+    expect(ALL_EVENT_TYPES.length).toBe(113);
   });
 
   it('every entry in ALL_EVENT_TYPES is a key of AgentfootprintEventMap', () => {

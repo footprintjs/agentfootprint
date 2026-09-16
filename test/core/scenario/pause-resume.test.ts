@@ -395,3 +395,91 @@ describe('scenario — runners without pausable stages', () => {
     expect(out).toBe('ok');
   });
 });
+
+/**
+ * 9.101.0 — the findings ledger's peel on the RESUME side.
+ *
+ * A pre-8.13 checkpoint carries no `pausedToolArgs`, so the resume recovers
+ * the paused call's args from the assistant turn in history — where the
+ * model's `_findings` declaration still sits, verbatim, because history is
+ * the emission. `argsForPausedCall` peels that fallback under `.findings()`
+ * (`splitFindings(recovered).args`), so the after-tool chain's
+ * `ToolResultContext.args` never meets the key. Unarmed, the same fallback
+ * hands an author's `_findings` through untouched — the key is not the
+ * library's to remove there.
+ */
+describe('scenario — the history fallback never re-injects `_findings` (9.101.0)', () => {
+  const DECLARED = { topic: 'refund', amount: 500, _findings: { basis: 'direct' } };
+
+  /** The 8.13.0 pausing agent, with the pause call carrying a declaration. */
+  function declaringPausingAgent(armed: boolean, seen: Readonly<Record<string, unknown>>[]) {
+    const builder = Agent.create({
+      provider: scripted(
+        resp('', [{ id: 't1', name: 'ask_person', args: DECLARED }]),
+        resp('all done'),
+      ),
+      model: 'mock',
+    })
+      .system('')
+      .tool({
+        schema: { name: 'ask_person', description: '', inputSchema: { type: 'object' } },
+        execute: () => {
+          pauseHere({ question: 'what should I tell them?' });
+          return '';
+        },
+      })
+      .act({
+        afterTool: [
+          {
+            name: 'reader',
+            onToolResult: (call: { args: Readonly<Record<string, unknown>> }) => {
+              seen.push(call.args);
+              return allow();
+            },
+          },
+        ] as never,
+      });
+    return armed ? builder.findings().build() : builder.build();
+  }
+
+  /** A checkpoint as 8.12.0 wrote it: the key did not exist then. */
+  const asLegacy = (checkpoint: unknown) => {
+    const legacy = JSON.parse(JSON.stringify(checkpoint)) as {
+      sharedState: Record<string, unknown>;
+    };
+    delete legacy.sharedState.pausedToolArgs;
+    return legacy;
+  };
+
+  it('armed: the recovered args are peeled, and the basis row filed before the pause is the only one', async () => {
+    const seen: Readonly<Record<string, unknown>>[] = [];
+    const agent = declaringPausingAgent(true, seen);
+    const paused = await agent.run({ message: 'hi' });
+    if (!isPaused(paused)) return expect.fail('expected paused');
+    // History IS the emission — the declaration is there for the fallback to find.
+    const history = paused.checkpoint.sharedState.history as readonly {
+      role: string;
+      toolCalls?: readonly { args: unknown }[];
+    }[];
+    expect(history.find((m) => m.role === 'assistant')?.toolCalls?.[0]?.args).toEqual(DECLARED);
+
+    await agent.resume(asLegacy(paused.checkpoint) as never, 'answered');
+
+    expect(seen).toEqual([{ topic: 'refund', amount: 500 }]);
+    expect(agent.findings()).toEqual([
+      { kind: 'basis', toolCallId: 't1', toolName: 'ask_person', iteration: 1, basis: 'direct' },
+    ]);
+  });
+
+  it("unarmed: the same fallback hands an author's `_findings` through untouched", async () => {
+    const seen: Readonly<Record<string, unknown>>[] = [];
+    const agent = declaringPausingAgent(false, seen);
+    const paused = await agent.run({ message: 'hi' });
+    if (!isPaused(paused)) return expect.fail('expected paused');
+
+    await agent.resume(asLegacy(paused.checkpoint) as never, 'answered');
+
+    expect(seen).toEqual([DECLARED]);
+    expect(agent.findings()).toBeUndefined();
+  });
+});

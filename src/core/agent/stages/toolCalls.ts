@@ -120,6 +120,13 @@ import type { InjectionRecord } from '../../../recorders/core/types.js';
 import type { ToolMiddleware } from '../middleware/types.js';
 import { runToolChain, runToolAfterChain, type ToolArgs } from '../middleware/runChain.js';
 import { recordDecisions } from '../middleware/ledger.js';
+import { ownsReservedArgument, splitFindings, type SplitFindings } from '../findings/reserved.js';
+import {
+  basisRowFrom,
+  recordFindings,
+  standingRowsFrom,
+  type PreviousResult,
+} from '../findings/ledger.js';
 import { noteRepeatedCall, repeatedCallLedgers } from '../repeatedCall.js';
 import {
   formatToolArgIssues,
@@ -191,6 +198,23 @@ export interface ToolCallsHandlerDeps {
    * checkpoint — bought for nobody.
    */
   readonly collectClaimFacts?: boolean;
+  /**
+   * THE FINDINGS LEDGER IS ARMED (9.101.0, `.findings()`) — present only
+   * then, only ever `true`. Three things happen in `execute` and nowhere
+   * else, each gated on this: the previous batch's STANDINGS are read off
+   * every call's `_findings.previous` before `toolResults` is reset; the
+   * reserved argument is PEELED off each call's args as the first read of
+   * `tc.args` in the loop (`peelCall` — unless the tool answering the name
+   * owns the property, when the value is the author's argument), so
+   * `callArgs` — middleware, validation, check-in evidence, wants,
+   * credentials, execute, the pause and halt carriers — never sees the
+   * model's declaration; and a BASIS row is filed the moment a call
+   * declares one, before `tool_start` and before any pause `return`. The
+   * resume doors file nothing (the pre-pause commit already has the row).
+   * History keeps `toolCalls[].args` verbatim: the emission. Absent — the
+   * default — and not one of those lines runs.
+   */
+  readonly findings?: true;
   /**
    * THE WRITE SEAM (9.77.0, `empty-lookup`) — the declared argument-ground
    * edges (`Tool.argumentsFrom`) by tool name, present ONLY when the operator
@@ -948,16 +972,25 @@ export function composeReadSkillRefusal(args: {
  * folded it away). It is returned rather than skipping the after-tool moment,
  * because a rule that never runs is the bug this release is fixing — but it is
  * genuinely "we do not know", never a claim that the tool ran with none.
+ *
+ * `peel` (9.101.0, `.findings()`): the history fallback recovers the
+ * EMISSION — `toolCalls[].args` keep the reserved `_findings` argument by
+ * design — so under the arm it is peeled here exactly as the dispatch loop
+ * peeled it; `pausedToolArgs` was set from `callArgs` and is already peeled.
  */
 function argsForPausedCall(
   scope: TypedScope<AgentState>,
   toolCallId: string,
+  peel = false,
 ): Readonly<Record<string, unknown>> {
   const carried = scope.pausedToolArgs as Readonly<Record<string, unknown>> | undefined;
   if (carried !== undefined) return { ...carried };
   for (const message of scope.history as readonly LLMMessage[]) {
     for (const call of message.toolCalls ?? []) {
-      if (call.id === toolCallId) return { ...call.args };
+      if (call.id === toolCallId) {
+        const recovered = { ...call.args };
+        return peel ? splitFindings(recovered).args : recovered;
+      }
     }
   }
   return {};
@@ -2571,6 +2604,24 @@ export function buildToolCallsHandler(
   };
   const lookupTool = (toolName: string, pinned?: ToolParty): Tool | undefined =>
     resolveTool(toolName, pinned).tool;
+  /**
+   * THE PER-CALL PEEL (9.101.0, `.findings()`). Under the arm the reserved
+   * `_findings` argument is taken off a call's args — UNLESS the tool that
+   * answers the name OWNS the property (`findings/reserved.ts ·
+   * ownsReservedArgument`). Such a schema was served undecorated
+   * (`withFindingsArgument` returns it by reference; a REGISTRY schema doing
+   * the same was refused at build, so this is a provider- or MCP-ingested
+   * tool), and the model's value on that call is the author's argument: it
+   * runs with the call and files no row, exactly as the committed schema
+   * says. Unarmed: `tc.args` itself, by reference — not one byte moves.
+   */
+  const peelCall = (tc: {
+    readonly name: string;
+    readonly args: Readonly<Record<string, unknown>>;
+  }): SplitFindings =>
+    deps.findings === true && !ownsReservedArgument(resolveTool(tc.name).tool?.schema)
+      ? splitFindings(tc.args)
+      : { args: tc.args };
   /** The record of an off-wire dispatch — once per such call, before it runs. */
   const noteOffWire = (
     scope: TypedScope<AgentState>,
@@ -3090,6 +3141,26 @@ export function buildToolCallsHandler(
         toolCallId: string;
         status?: ToolResultStatus;
       }[] = [];
+      // ── STANDINGS OF THE PREVIOUS BATCH (9.101.0, `.findings()`) ──────
+      // The one place the previous batch's identities still exist on scope:
+      // `toolResults` is about to be reset one line down. Every call in this
+      // batch may carry `_findings.previous`; ALL are recorded, in call
+      // order, by the previous result's id (a served fold takes the last).
+      // Read through the same per-call peel the loop below applies (a tool
+      // that owns the name declares nothing) — this read is about the batch.
+      // Gated: unarmed, not one line runs.
+      if (deps.findings === true) {
+        const previousBatch = [...((scope.toolResults ?? []) as readonly PreviousResult[])];
+        recordFindings(
+          scope,
+          toolCalls.flatMap((tc) => {
+            const declared = peelCall(tc).findings;
+            return declared?.previous !== undefined
+              ? standingRowsFrom(previousBatch, declared, { toolCallId: tc.id }, iteration)
+              : [];
+          }),
+        );
+      }
       scope.toolResults = [];
 
       // ── The batch's transition bookkeeping (9.19.0) ───────────────────
@@ -3108,10 +3179,28 @@ export function buildToolCallsHandler(
       for (const tc of toolCalls) {
         const resolved = resolveTool(tc.name);
         const tool = resolved.tool;
+        // ── THE PEEL (9.101.0, `.findings()`) — the FIRST read of `tc.args`
+        // in this loop. `args` is what the call runs with: `tool_start`, the
+        // permission context and `callArgs` all read it, so `_findings`
+        // never reaches middleware, `validateToolArgs` (a tool with
+        // `additionalProperties: false` would refuse it under 'enforce'),
+        // check-in evidence, wants, credentials, execute or a pause carrier.
+        // A tool that OWNS the name keeps the value (`peelCall`). Unarmed the
+        // same reference — `tc.args` — and not one byte moves.
+        const peeled: SplitFindings = peelCall(tc);
+        const args: ToolArgs = peeled.args;
+        // ── THE BASIS ROW — immediately, so it precedes `tool_start` in the
+        // event log and every pause `return` in program order (a paused
+        // call's row is on the pre-pause partial commit; a denied call keeps
+        // its row — the declaration is a fact about the emission). Filed only
+        // when the model DECLARED a basis; never inferred.
+        if (peeled.findings?.basis !== undefined) {
+          recordFindings(scope, [basisRowFrom(tc, peeled.findings, iteration, peeled.malformed)]);
+        }
         typedEmit(scope, 'agentfootprint.stream.tool_start', {
           toolName: tc.name,
           toolCallId: tc.id,
-          args: tc.args,
+          args,
           ...(toolCalls.length > 1 && { parallelCount: toolCalls.length }),
         });
         const startMs = Date.now();
@@ -3146,8 +3235,9 @@ export function buildToolCallsHandler(
         // replace this; everything downstream (validation, the check-in
         // evidence a human approves, credentials, execute, the read_skill
         // gate) reads `callArgs`, never `tc.args`, so there is exactly one
-        // answer to "what did this call really run with".
-        let callArgs: ToolArgs = tc.args;
+        // answer to "what did this call really run with". Seeded from the
+        // PEELED `args` (9.101.0), which is `tc.args` itself when unarmed.
+        let callArgs: ToolArgs = args;
         let denied = false;
         /** True once `tool.execute` has been entered — see `afterMoment`. */
         let executed = false;
@@ -3171,7 +3261,7 @@ export function buildToolCallsHandler(
               capability: 'tool_call',
               actor: 'agent',
               target: tc.name,
-              context: tc.args,
+              context: args,
               sequence,
               history: newHistory,
               iteration,
@@ -4446,7 +4536,13 @@ export function buildToolCallsHandler(
           scope.policyHaltReason = haltContext.reason;
           scope.policyHaltTellLLM = haltContext.tellLLM;
           scope.policyHaltTarget = tc.name;
-          scope.policyHaltArgs = tc.args;
+          // The carrier law every pause carrier follows (`pausedToolArgs`,
+          // `pausedCheckInArgs`, `pausedCredentialArgs`): what the call would
+          // have RUN with — `callArgs`, peeled under `.findings()` — never the
+          // emission. `PolicyHaltError.proposed.args` hands this to the app as
+          // the arguments the policy refused; the model's declaration is on
+          // the ledger and in history, not in that hand-off.
+          scope.policyHaltArgs = callArgs;
           scope.policyHaltIteration = iteration;
           if (haltContext.checkerId !== undefined) {
             scope.policyHaltCheckerId = haltContext.checkerId;
@@ -5091,7 +5187,13 @@ export function buildToolCallsHandler(
       const iteration = scope.iteration as number;
       const env = scope.$getEnv();
       const tool = lookupTool(toolName);
-      const args = argsForPausedCall(scope, toolCallId);
+      // Peeled under the arm unless the tool owns the name — the same rule as
+      // `peelCall` on the dispatch side, asked of the same schema.
+      const args = argsForPausedCall(
+        scope,
+        toolCallId,
+        deps.findings === true && !ownsReservedArgument(tool?.schema),
+      );
       // No `error` flag: a human's answer is not a tool failure.
       const rawPauseResult = await afterMoment(scope, {
         ...(tool && { tool }),

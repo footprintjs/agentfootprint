@@ -47,7 +47,7 @@ Because the framework owns the loop, observability is just attaching listeners �
 
 <CodeFile path="examples/core/02-agent-with-tools.ts" region="observe" title="examples/core/02-agent-with-tools.ts (region: observe)" />
 
-111 typed events fire across 24 domains during a single `agent.run()`. See the [Observability guide](doc:observability) for the full taxonomy.
+113 typed events fire across 25 domains during a single `agent.run()`. See the [Observability guide](doc:observability) for the full taxonomy.
 
 ## maxIterations
 
@@ -220,6 +220,20 @@ set stay where they were set.
 
 Calling `.configure()` twice throws. A silently-overridden resolver is a config
 that lies.
+
+## Findings on the record — `.findings()`
+
+Call `.findings()` on the builder and every served tool schema gains one reserved, optional argument, `_findings` (the constant `RESERVED_ARGUMENT`). On each tool call the model declares why it is calling — a `Basis` of `direct` or `exploratory`, with an optional `Expect` bucket of `low`, `medium` or `high` — and, on its next tool call or as a top-level key of a JSON answer, the `Standing` of each earlier tool result: `fact`, `open`, `noise` or `ruled-out`. The wire shape of that declaration is `FindingsDeclaration`.
+
+The library peels the argument off before the tool, the permission gate, middleware or any argument validation sees it, and appends what was declared to one state key, `findingsLedger`, typed `FindingsLedger`: a list of `FindingsRow` entries, where a `BasisRow` records a declared call, a `StandingRow` records a declared standing together with the assertions the model stands on, and a `ConflictRow` names, by `ConflictWitness` identities only, two standing facts that disagree. Nothing is inferred: a call that carries no declaration writes no row, and a result the model never names is undeclared — never `open`. Read the ledger back with `agent.findings()`.
+
+```ts
+const agent = Agent.create({ provider, model }).tool(search).tool(fetchPage).findings().build();
+await agent.run({ message: 'Which region is the outage in?' });
+agent.findings(); // basis, standing and conflict rows, in the order they were declared
+```
+
+There are no extra model calls, and an agent that never calls `.findings()` records exactly the bytes it recorded before. What the model is served does not change yet; the ledger is on the record first.
 
 ## Composition with other Agents
 

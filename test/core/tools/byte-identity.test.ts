@@ -52,6 +52,32 @@
  * that moved are tag lines (zero non-tag differences). No message, no tool,
  * no receipt key moved.
  *
+ * 9.101.0: one new reference `agent-findings` (decorated
+ * `dynamicToolSchemas[].inputSchema.properties._findings`, the `findingsLedger`
+ * key, the `findings-ledger` system piece); none of the 15 moved. The 15 were
+ * run on the 9.101.0 tree BEFORE the scenario existed (16/16 green, the
+ * reference directory untouched by git), the one scenario was generated
+ * alone (`-t agent-findings` under `AF_TOOLS_REFERENCE=update`, the 15 files
+ * copied aside first and byte-compared after), and the new reference was
+ * diffed path by path against its UNARMED twin — the same script with the
+ * `_findings` keys removed, no `.findings()` — 104 moved paths, every one in
+ * one of these families: the reserved property on every served schema
+ * (`dynamicToolSchemas`, the served view's `tools.schemas`); the
+ * `findingsLedger` key with its trace rows (`set` on the first write, the
+ * engine's `append` encoding when a fresh array extends the previous one —
+ * basis, then standing + basis, then the answer's standing; no conflict);
+ * the `findings-ledger` piece everywhere a piece is recorded
+ * (`activeInjections`, `activeByslot`, `systemPromptInjections`, the
+ * receipt's `system.pieces` / `system.chars`, the served view's system text);
+ * the EMISSION itself — the assistant turns' `toolCalls[].args` in `history`
+ * / `llmLatestToolCalls` / the served `messages.asSent` carry `_findings`
+ * verbatim, and the answer is raw in `call-llm`'s `llmLatestContent` and
+ * peeled in the route's; and the receipt's `requestMeasurement` sizes, which
+ * grow with the decorated tools slot, the piece and the args. No other key
+ * moved. The scenario also pins the peel: its output-schema parser refuses
+ * every key it does not know, so the run passes only because `_findings`
+ * came off before the judge.
+ *
  * Every scenario is a real run — the receipt-conformance shapes, each in the
  * configuration that has no name collision — and what is compared is the
  * whole `commitLog` plus `servedAt(k)` for every located epoch, after ONE
@@ -325,6 +351,62 @@ const SCENARIOS: Record<string, () => Promise<Snapshot>> = {
             } as never),
           )
           .toolsFromActiveSkill(),
+    ),
+  // The findings ledger (9.101.0) — the ONE armed scenario: a basis on two
+  // calls, the first result's standing on the second call, and a JSON answer
+  // carrying the second result's standing under the top-level `_findings`.
+  // The parser refuses every key it does not know, so the run passes only
+  // because the reserved key was peeled before the judge (the peel is on the
+  // record: `llmLatestContent` is the peeled JSON, `history` is the emission).
+  'agent-findings': () =>
+    agentRun(
+      'dynamic',
+      [
+        call('c1', 'alpha_tool', {
+          q: 'nodes',
+          _findings: { basis: 'exploratory', expect: 'low' },
+        }),
+        call('c2', 'alpha_tool', {
+          q: 'node-1',
+          _findings: {
+            basis: 'direct',
+            expect: 'high',
+            previous: [
+              {
+                toolCallId: 'c1',
+                standing: 'fact',
+                sought: true,
+                assertions: [
+                  { subject: { kind: 'node', id: 'node-1' }, predicate: 'state', value: 'up' },
+                ],
+              },
+            ],
+          },
+        }),
+        answer(
+          JSON.stringify({
+            done: true,
+            _findings: { previous: [{ toolCallId: 'c2', standing: 'noise' }] },
+          }),
+        ),
+      ],
+      (a) =>
+        a
+          .system('bot')
+          .tool(tool('alpha_tool'))
+          .findings()
+          .outputSchema(
+            {
+              parse: (value: unknown) => {
+                if (value === null || typeof value !== 'object' || Array.isArray(value))
+                  throw new Error('not an object');
+                const unknown = Object.keys(value as object).filter((k) => k !== 'done');
+                if (unknown.length > 0) throw new Error(`unknown keys: ${unknown.join(',')}`);
+                return value as { done: boolean };
+              },
+            } as never,
+            { retries: 0 },
+          ),
     ),
   llmcall: async () => {
     const one = LLMCall.create({ provider: scripted([answer('done')]) as never, model: 'mock' })
