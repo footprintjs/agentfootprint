@@ -1,6 +1,11 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+# RELEASE_QUIET=1 silences the progress banners (the gates' own output and
+# every error still print). For a release driven by an agent or a script
+# that only needs the verdict.
+say() { if [ "${RELEASE_QUIET:-0}" != "1" ]; then echo "$@"; fi; }
+
 # agentfootprint release script
 # Mirrors footprintjs release pipeline — 8 gates before version bump.
 #
@@ -36,44 +41,44 @@ if [[ -n "$(git status --porcelain)" ]]; then
   exit 1
 fi
 
-echo "[1/8] Clean working tree ✓"
+say "[1/8] Clean working tree ✓"
 
 # ── Gate 2: Documentation check ─────────────────────────────────────────
 bash scripts/check-docs.sh
 
-echo "[2/8] Documentation check ✓"
+say "[2/8] Documentation check ✓"
 
 # ── Gate 2.5: Duplicate type check ──────────────────────────────────────
-echo "==> Checking for duplicate type definitions..."
+say "==> Checking for duplicate type definitions..."
 node scripts/check-dup-types.mjs
 
-echo "[2.5/8] Duplicate type check ✓"
+say "[2.5/8] Duplicate type check ✓"
 
 # ── Gate 2.75: Format check ────────────────────────────────────────────
-echo "==> Checking code formatting..."
+say "==> Checking code formatting..."
 if ! npm run format; then
   echo "Error: Unformatted files found. Run 'npm run format:fix' to fix."
   exit 1
 fi
-echo "[2.75/8] Format check ✓"
+say "[2.75/8] Format check ✓"
 
 # ── Gate 2.85: Lint check (errors only — warnings tolerated for now) ────
 # CI on main runs eslint and FAILS on any error. Gate it here so the
 # release script catches the same problem before we tag a version that
 # would ship to npm with lint errors. Run with --max-warnings=Infinity
 # so pre-existing warnings don't block; only errors fail the gate.
-echo "==> Checking lint (errors only)..."
+say "==> Checking lint (errors only)..."
 if ! npm run lint --silent -- --max-warnings=99999; then
   echo "Error: Lint errors found. Run 'npm run lint:fix' to auto-fix where possible."
   exit 1
 fi
-echo "[2.85/8] Lint check ✓"
+say "[2.85/8] Lint check ✓"
 
 # ── Gate 3: Build ───────────────────────────────────────────────────────
-echo "==> Building (CJS + ESM)..."
+say "==> Building (CJS + ESM)..."
 npm run build
 
-echo "[3/8] Build ✓"
+say "[3/8] Build ✓"
 
 # ── Gate 4: Full test suite, THE WAY CI'S COVERAGE JOB RUNS IT ──────────
 # `npm run test:coverage` is `npm test` under v8 instrumentation — the same
@@ -84,17 +89,17 @@ echo "[3/8] Build ✓"
 # gate could not see what CI saw because it never ran the command CI ran.
 # One command is the law now: the instrumented run is a superset of the plain
 # one, so nothing the plain run would catch is lost.
-echo "==> Running full test suite (with coverage — the command CI's coverage job runs)..."
+say "==> Running full test suite (with coverage — the command CI's coverage job runs)..."
 npm run test:coverage
 
-echo "[4/8] Full test suite ✓"
+say "[4/8] Full test suite ✓"
 
 # ── Gate 5: Examples (typecheck + run end-to-end) ───────────────────────
 # Source of truth for the consumer-facing surface — every .ts under
 # examples/ is run as a real end-to-end test. `npm run test:examples`
 # does typecheck (tsc -p examples/tsconfig.json) AND the runtime sweep
 # (scripts/run-all-examples.sh).
-echo "==> Running all examples end-to-end (typecheck + tsx sweep)..."
+say "==> Running all examples end-to-end (typecheck + tsx sweep)..."
 if ! npm run test:examples; then
   echo ""
   echo "Error: examples/ failed."
@@ -102,7 +107,7 @@ if ! npm run test:examples; then
   exit 1
 fi
 
-echo "[5/8] Examples ✓"
+say "[5/8] Examples ✓"
 
 # ── Gate 5.5: CI GATE PARITY ────────────────────────────────────────────
 # Everything CI runs on a push that this script used to skip. Before 9.59.0
@@ -118,10 +123,10 @@ echo "[5/8] Examples ✓"
 # The one CI job with no counterpart here is `docs` (the docs-next Fumadocs
 # build): it needs its own `npm install` inside docs-next/ and several
 # minutes. It stays CI-only, on purpose.
-echo "==> Type-regression tests (test/type-regressions/)..."
+say "==> Type-regression tests (test/type-regressions/)..."
 npm run test:types
 
-echo "==> Docs-truth ratchet (new undocumented exports/events)..."
+say "==> Docs-truth ratchet (new undocumented exports/events)..."
 if ! npm run docs:truth; then
   echo ""
   echo "Error: docs:truth is RED. A new export or event has no prose describing it,"
@@ -130,23 +135,23 @@ if ! npm run docs:truth; then
   exit 1
 fi
 
-echo "==> Packed ContextFootprint dependency (isolated consumers)..."
+say "==> Packed ContextFootprint dependency (isolated consumers)..."
 npm run test:context-package
 
-echo "==> Packaging correctness (publint + are-the-types-wrong)..."
+say "==> Packaging correctness (publint + are-the-types-wrong)..."
 npx --yes publint
 npx --yes @arethetypeswrong/cli --pack
 
-echo "==> Doc-link integrity (every doc:<id> cross-reference resolves)..."
+say "==> Doc-link integrity (every doc:<id> cross-reference resolves)..."
 npm install --no-save github-slugger >/dev/null 2>&1 || true
 node scripts/check-doc-links.mjs --strict
 
-echo "[5.5/8] CI gate parity ✓"
+say "[5.5/8] CI gate parity ✓"
 
 # ── Version bump ────────────────────────────────────────────────────────
 npm version "$BUMP" --no-git-tag-version
 VERSION=$(node -p "require('./package.json').version")
-echo "==> Bumped to v$VERSION"
+say "==> Bumped to v$VERSION"
 
 # ── Gate 6: CHANGELOG entry ─────────────────────────────────────────────
 if ! grep -q "## \[$VERSION\]" CHANGELOG.md; then
@@ -156,7 +161,7 @@ if ! grep -q "## \[$VERSION\]" CHANGELOG.md; then
   exit 1
 fi
 
-echo "[6/8] CHANGELOG entry ✓"
+say "[6/8] CHANGELOG entry ✓"
 
 # ── Extract release notes ──────────────────────────────────────────────
 NOTES=$(awk "/^## \[$VERSION\]/{found=1; next} /^## \[/{if(found) exit} found{print}" CHANGELOG.md)
@@ -178,11 +183,11 @@ git tag "v$VERSION"
 git push
 git push --tags
 
-echo "[7/8] Commit + tag + push ✓"
+say "[7/8] Commit + tag + push ✓"
 
 # ── Create GitHub release ─────────────────────────────────────────────
 if command -v gh &> /dev/null; then
-  echo "==> Creating GitHub release (CI will publish to npm with provenance)..."
+  say "==> Creating GitHub release (CI will publish to npm with provenance)..."
   gh release create "v$VERSION" \
     --title "v$VERSION" \
     --notes "$NOTES" \
@@ -194,10 +199,10 @@ else
   echo "Run manually: gh release create v$VERSION --title v$VERSION --latest"
 fi
 
-echo "[8/8] GitHub release ✓"
+say "[8/8] GitHub release ✓"
 
 echo ""
-echo "==> Released v$VERSION"
+say "==> Released v$VERSION"
 echo "    npm: https://www.npmjs.com/package/agentfootprint/v/$VERSION (published by CI)"
 echo "    changelog: CHANGELOG.md"
 echo ""
