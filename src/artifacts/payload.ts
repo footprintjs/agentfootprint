@@ -23,6 +23,7 @@
  */
 
 import { InvalidArtifactError } from './types.js';
+import { stringifySnapshot } from 'footprintjs';
 
 const textEncoder = new TextEncoder();
 const textDecoder = new TextDecoder();
@@ -37,7 +38,10 @@ export function canonicalPayloadBytes(data: unknown): Uint8Array {
   if (typeof data === 'string') return textEncoder.encode(data);
   let serialized: string;
   try {
-    serialized = JSON.stringify(data);
+    // footprintjs's own encoder (9.26.0): the same bytes as JSON.stringify,
+    // with its own stack — a recording of a long linear run nests one level
+    // per stage and the engine's recursive encoder refused it.
+    serialized = stringifySnapshot(data);
   } catch (err) {
     throw new InvalidArtifactError(
       `the payload cannot be JSON-serialized (${

@@ -5,6 +5,19 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [9.99.1] - 2026-09-16
+
+### Changed — artifact bytes are encoded with footprintjs's own encoder
+
+- `canonicalPayloadBytes` — the one place every artifact store turns a JSON
+  payload into bytes — uses footprintjs 9.26.0's `stringifySnapshot`: the
+  same bytes `JSON.stringify` produces, with its own stack. A recording of
+  a long linear run (about ten thousand stages) nests one level per stage
+  and the engine's recursive encoder threw; such a recording could not be
+  minted. Byte-identical for everything that could be minted before, so
+  digests and `bytes` do not change. The file store's envelope already held
+  the payload as encoded text, so it needed nothing. footprintjs `^9.26.0`.
+
 ## [9.99.0] - 2026-09-16
 
 ### Added — the story knows which stage each beat came from
