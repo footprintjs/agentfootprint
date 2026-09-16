@@ -10,10 +10,10 @@ The package publishes **15 import paths** carrying **2148 distinct named exports
 
 **1393 of 2148 exports (65%) are described in prose on the site.** The rest split into five different problems, which is the whole point of keeping the columns apart:
 
-- **32 exist, provably work, and are undocumented.** A reference run exercises them and no page on the site describes them. This is the honest headline number for "features that work and nobody has written about". It is the list to work through.
-- **117 are already written up, just not published.** Prose about them exists inside the repo (`docs/`, `README.md`) but never made it onto the site. These are cheap wins: the writing is done, it needs moving.
+- **31 exist, provably work, and are undocumented.** A reference run exercises them and no page on the site describes them. This is the honest headline number for "features that work and nobody has written about". It is the list to work through.
+- **122 are already written up, just not published.** Prose about them exists inside the repo (`docs/`, `README.md`) but never made it onto the site. These are cheap wins: the writing is done, it needs moving.
 - **12 appear only inside a code sample** and nowhere in the surrounding text. A reader scanning the page never learns they exist, and site search does not find them.
-- **594 are undocumented and no reference run touches them.** This report will not guess whether they work. They are reported as UNKNOWN, which is the honest answer, and they need a human pass.
+- **590 are undocumented and no reference run touches them.** This report will not guess whether they work. They are reported as UNKNOWN, which is the honest answer, and they need a human pass.
 - **1169 are documented but no reference run exercises them.** For a function or a class that is the shape a dead or unimplemented feature has. For a type or an interface it is mostly noise, because a type is used, not called — so read that class by kind, and the tables below split it.
 
 On events: **66** of the 111 typed events are both described on the site and were seen firing in a real run. **10** are described but were never observed firing — that is exactly the shape the resilience events had for months (fully declared, with payload types, and zero emitters), so this number is worth a look every time it moves. **35** are not described in prose on the site at all.
@@ -25,7 +25,7 @@ A previous inventory put the undocumented-feature count at roughly 36. That figu
 | Counting rule | Undocumented |
 |---|---|
 | every named export not in site prose | 755 |
-| … of those, absent from every prose anywhere in the repo | 626 |
+| … of those, absent from every prose anywhere in the repo | 621 |
 | only functions and classes (things you can call) | 174 |
 | only exports on the root barrel | 144 |
 | **functions and classes on the root barrel** | **25** |
@@ -49,7 +49,7 @@ The repo has four documentation locations and they are not equivalent. Getting t
 | `docs-next/content/docs/**.mdx` (hand-written) | 109 | **Yes — the truth source.** This is what the published site renders and what a reader sees. |
 | `docs-next/content/docs/api/**` (TypeDoc-generated) | 638 | **No — excluded.** |
 | `docs/api-reference/**` (TypeDoc-generated) | 510 | **No — excluded.** |
-| `docs/**.md` + `README.md` (repo-internal prose) | 61 | **No** — but tracked as its own state, "written but not published". |
+| `docs/**.md` + `README.md` (repo-internal prose) | 62 | **No** — but tracked as its own state, "written but not published". |
 
 Both generated trees are produced **from the source**, so every exported symbol appears in them by construction. Counting either as documentation would mark **144** currently-undocumented symbols as documented, collapse most of this report to zero, and hand back a clean bill of health that means nothing. False reassurance in the exact place the author is trying to establish trust is worse than having no check, so both are excluded.
 
@@ -87,7 +87,7 @@ This is **ratcheted, not gated**: a *new* one fails the build, but closing an ex
 
 ### 3. Declared + exercised + not documented — the classic doc gap
 
-These provably work — a reference run touches them — and no page on the site describes them. **32 symbols.**
+These provably work — a reference run touches them — and no page on the site describes them. **31 symbols.**
 
 | Symbol | Kind | Exported from |
 |---|---|---|
@@ -109,7 +109,6 @@ These provably work — a reference run touches them — and no page on the site
 | `AblationRerun` | interface | `agentfootprint/observe` |
 | `CapturedEventLike` | interface | `agentfootprint/observe` |
 | `CatalogTool` | interface | `agentfootprint/observe` |
-| `EntryScorer` | interface | `agentfootprint/context` `agentfootprint/skill-graph` |
 | `FindInput` | interface | `agentfootprint/observe` |
 | `InfluenceStrategy` | interface | `agentfootprint/observe` |
 | `OtelSpanLike` | interface | `agentfootprint/observe` |
@@ -521,7 +520,7 @@ The site describes it and it really is exported, but no reference run touches it
 
 ### 5. Written but not published
 
-Prose about these exists in the repo (`docs/`, `README.md`) but nothing on the site mentions them. The writing is already done — this is a publishing job, not an authoring job, which makes it the cheapest class to close. **117 symbols.**
+Prose about these exists in the repo (`docs/`, `README.md`) but nothing on the site mentions them. The writing is already done — this is a publishing job, not an authoring job, which makes it the cheapest class to close. **122 symbols.**
 
 | Symbol | Kind | Exported from | Already written up in |
 |---|---|---|---|
@@ -613,6 +612,11 @@ Prose about these exists in the repo (`docs/`, `README.md`) but nothing on the s
 | `CostVerdict` | interface | `agentfootprint/observe` | `docs/guides/two-score-localization.md` |
 | `DefineSkillOptions` | interface | `agentfootprint/context` | `docs/INSTRUCTION_ARCHITECTURE.md` |
 | `DefineSteeringOptions` | interface | `agentfootprint/context` | `docs/INSTRUCTION_ARCHITECTURE.md` |
+| `EntryCandidate` | interface | `agentfootprint/context` `agentfootprint/skill-graph` | `docs/design/2026-09-scored-choice.md` |
+| `EntryScore` | interface | `agentfootprint/context` `agentfootprint/skill-graph` | `docs/design/2026-09-scored-choice.md` |
+| `EntryScorer` | interface | `agentfootprint/context` `agentfootprint/skill-graph` | `docs/design/2026-09-scored-choice.md` |
+| `EntryScorerInput` | interface | `agentfootprint/context` `agentfootprint/skill-graph` | `docs/design/2026-09-scored-choice.md` |
+| `EntryScoring` | interface | `agentfootprint/context` `agentfootprint/skill-graph` | `docs/design/2026-09-scored-choice.md` |
 | `EvidenceInput` | interface | `agentfootprint/observe` | `docs/proposals/003-per-loop-influence-credit.md`, `docs/proposals/005-trajectory-assembler.md`, `docs/proposals/006-loop-recall-shortlist.md` |
 | `FallbackProviderOptions` | interface | `agentfootprint/resilience` | `docs/guides/security.md` |
 | `HonestyFlag` | interface | `agentfootprint/observe` | `docs/proposals/005-trajectory-assembler.md` |
@@ -664,7 +668,7 @@ The name appears in a fenced block on the site and nowhere in the surrounding te
 
 ### 7. Declared + not documented + not exercised — unknown
 
-Nowhere in any prose, and no reference run covers them, so this report will not claim they work or that they are dead. Some are internal-shaped types that happen to be exported; some may genuinely be dead. **594 symbols.**
+Nowhere in any prose, and no reference run covers them, so this report will not claim they work or that they are dead. Some are internal-shaped types that happen to be exported; some may genuinely be dead. **590 symbols.**
 
 | Symbol | Kind | Exported from |
 |---|---|---|
@@ -788,7 +792,7 @@ Nowhere in any prose, and no reference run covers them, so this report will not 
 | `ToolArgValidationMode` | type | `agentfootprint` |
 | `ToolContractCode` | type | `agentfootprint` |
 | `UntilGuard` | type | `agentfootprint` |
-| … | | _474 more. Every undocumented name is listed in `docs/docs-truth/baseline.json`; for the full classified table run `node scripts/docs-truth-check.mjs --json out.json`_ |
+| … | | _470 more. Every undocumented name is listed in `docs/docs-truth/baseline.json`; for the full classified table run `node scripts/docs-truth-check.mjs --json out.json`_ |
 
 ### 8. Advisory — import paths named in prose that the export map does not expose
 
