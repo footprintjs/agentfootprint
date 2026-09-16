@@ -32,7 +32,7 @@
     "@types/react-dom": "^19.2.3",
     "@xyflow/react": "^12.11.0",
     "agentfootprint": "file:..",
-    "agentfootprint-lens": "^0.54.0",
+    "agentfootprint-lens": "^0.59.0",
     "footprint-explainable-ui": "^0.38.0",
     "footprintjs": "^9.26.0",
     "fumadocs-core": "^16.10.5",
