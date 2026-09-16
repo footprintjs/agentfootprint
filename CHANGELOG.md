@@ -5,6 +5,19 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [9.99.0] - 2026-09-16
+
+### Added — the story knows which stage each beat came from
+
+- `AttTrace.at` (`agentThinkingTrace(...).getTrace()`): index-aligned with
+  `steps`, `at[i]` is the `runtimeStageId` of the emit that produced
+  `steps[i]`; the prompt step carries `''` (it names no stage). Recorded at
+  emit time, never inferred. Why: a debug tool that keeps ONE cursor across
+  its lenses (agentfootprint-lens `useSharedCursor`) can now place a story
+  beat on the run's own axes and move the cursor from a beat — the beat →
+  stage map was the one link that was not data. Steps are byte-identical;
+  a trace read by an older consumer ignores the new field.
+
 ## [9.98.1] - 2026-09-15
 
 ### Added — the answer is a milestone

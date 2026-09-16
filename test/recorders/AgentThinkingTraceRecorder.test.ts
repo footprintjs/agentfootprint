@@ -568,3 +568,24 @@ describe('agentThinkingTrace — routing verdicts lead the beat', () => {
     expect(brain.endsWith('done')).toBe(true);
   });
 });
+
+describe('AttTrace.at — the stage each beat was recorded under (9.99.0)', () => {
+  it('is index-aligned with steps, names no stage for the prompt, and names the recorded stage for every other beat', async () => {
+    const provider: LLMProvider = mock({
+      replies: [
+        { toolCalls: [{ id: 'c1', name: 'echo', args: { text: 'hi' } }] },
+        { content: 'done' },
+      ],
+    });
+    const agent = Agent.create({ provider, model: 'mock', maxIterations: 3 })
+      .tool(defineTool({ name: 'echo', description: 'echo', inputSchema: { type: 'object', properties: { text: { type: 'string' } } }, execute: async (a: { text: string }) => a.text }))
+      .build();
+    const rec = agentThinkingTrace(agent);
+    await agent.run({ message: 'say hi' });
+    const trace = rec.getTrace();
+    expect(trace.at).toBeDefined();
+    expect(trace.at!.length).toBe(trace.steps.length);
+    expect(trace.at![0]).toBe('');
+    for (let i = 1; i < trace.steps.length; i++) expect(trace.at![i]).toMatch(/#\d+$/);
+  });
+});

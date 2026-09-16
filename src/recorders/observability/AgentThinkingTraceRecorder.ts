@@ -108,6 +108,14 @@ export interface AttTrace {
   model: string;
   asker: string;
   steps: AttStep[];
+  /**
+   * The stage each step was recorded under — `at[i]` is the `runtimeStageId`
+   * of the emit that produced `steps[i]` (the prompt step, made by
+   * `getTrace`, carries `''`: it names no stage). Index-aligned with `steps`
+   * so a story beat can be placed on the run's own cursor axes; a trace
+   * recorded before 9.99.0 has no `at`.
+   */
+  at?: readonly string[];
 }
 
 export interface AgentThinkingTraceOptions {
@@ -168,6 +176,8 @@ export function agentThinkingTrace(
   let lastPipelineId: string | undefined;
   let task = '';
   let steps: AttStep[] = [];
+  // Index-aligned with `steps`: the stage each beat was recorded under.
+  let at: string[] = [];
   // The most recent reasoning + its cost, awaiting the iteration's ask step(s).
   let pendingBrain = '';
   let pendingCost: AttCost = { ms: 0, tokens: 0 };
@@ -225,6 +235,7 @@ export function agentThinkingTrace(
   function reset(): void {
     task = '';
     steps = [];
+    at = [];
     pendingBrain = '';
     pendingCost = { ms: 0, tokens: 0 };
     pendingCostUsed = false;
@@ -300,6 +311,7 @@ export function agentThinkingTrace(
         if ((p.toolCallCount ?? 0) === 0) {
           // No tool calls → this is the final answer.
           const content = p.content ?? '';
+          at.push(e.runtimeStageId);
           steps.push({
             kind: 'answer',
             to: options.asker ?? 'you',
@@ -341,6 +353,7 @@ export function agentThinkingTrace(
           ? (p.args as { id?: string } | undefined)?.id ?? undefined
           : undefined;
         byId.set(p.toolCallId, { toolName: p.toolName ?? '(tool)', isSkill, skillId });
+        at.push(e.runtimeStageId);
         steps.push({
           kind: 'ask',
           tool: isSkill ? skillId ?? 'skill' : p.toolName ?? '(tool)',
@@ -370,6 +383,7 @@ export function agentThinkingTrace(
         const started = p?.toolCallId ? byId.get(p.toolCallId) : undefined;
         if (!started) return;
         byId.delete(p!.toolCallId!);
+        at.push(e.runtimeStageId);
         steps.push({
           kind: 'return',
           tool: started.isSkill ? started.skillId ?? 'skill' : started.toolName,
@@ -403,6 +417,7 @@ export function agentThinkingTrace(
         model: overrides.model ?? options.model ?? 'model',
         asker: overrides.asker ?? options.asker ?? 'you',
         steps: [prompt, ...steps],
+        at: ['', ...at],
       };
     },
 
