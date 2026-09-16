@@ -578,7 +578,14 @@ describe('AttTrace.at — the stage each beat was recorded under (9.99.0)', () =
       ],
     });
     const agent = Agent.create({ provider, model: 'mock', maxIterations: 3 })
-      .tool(defineTool({ name: 'echo', description: 'echo', inputSchema: { type: 'object', properties: { text: { type: 'string' } } }, execute: async (a: { text: string }) => a.text }))
+      .tool(
+        defineTool({
+          name: 'echo',
+          description: 'echo',
+          inputSchema: { type: 'object', properties: { text: { type: 'string' } } },
+          execute: async (a: { text: string }) => a.text,
+        }),
+      )
       .build();
     const rec = agentThinkingTrace(agent);
     await agent.run({ message: 'say hi' });
