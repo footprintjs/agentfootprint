@@ -157,8 +157,12 @@ touching any step.
   rather than text: the model reads the reference's meaning, not the rows,
   so "fact" there means "this reference is the one I stand on". Fine, but
   it should be said.
-- ContextFootprint is in the other agent's line. Making agentfootprint
-  depend on it is a decision for both lines.
+- ~~ContextFootprint is in the other agent's line. Making agentfootprint
+  depend on it is a decision for both lines.~~ RESOLVED (2026-09-16):
+  agentfootprint already depends on `contextfootprint` 0.1.1 (published on
+  npm) — `src/integrity/assertion/{types,conflicts}.ts` use it, and the
+  release script has a packed-dependency gate for it. The ledger reuses the
+  same assertion shape and `conflictsOf`; no new dependency.
 
 ## Track
 
