@@ -1,4 +1,8 @@
-# Outer JSON context contract
+# Outer JSON context contract — Mixed
+Map: application-authored field meanings and evidence-route declarations.
+Lens: opt-in model-facing explanations of those meanings. The pure route lookup
+reports declared options and missing inputs; it neither obtains evidence nor
+executes a recovery action.
 
 This pure leaf owns `CONTEXT_FIELD_MEANINGS` and `contextContractForModel()`,
 exported only from `agentfootprint/context`. The frozen string record describes

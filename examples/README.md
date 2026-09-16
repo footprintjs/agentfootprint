@@ -195,6 +195,7 @@ _Run `npm run examples:readme` after adding/editing examples._
 | 20 | [`20-keep-the-evidence.ts`](context-engineering/20-keep-the-evidence.ts) | Keep the evidence — the last-tool-result pin | Runs one screen-driving conversation twice — with the last-tool-result pin off and on — and shows the model inventing an id when the evidence was evicted, then getting it right when the window kept it. |
 | 21 | [`21-park-the-wrong-map.ts`](context-engineering/21-park-the-wrong-map.ts) | Park the wrong map — engagement is orthogonal to the cursor | Reproduces the keyword-trap failure (an entry regex reads a noun as a task) and runs it twice — without and with the .maps() kernel — showing the wrongly-guessed skill parked after three corroboration-free calls, cursor untouched, on the record. |
 | 22 | [`22-mcp-in-a-browser.ts`](context-engineering/22-mcp-in-a-browser.ts) | MCP from a browser — supply the SDK, or the connection | A browser has no Node require loader, so hand mcpClient the two SDK modules (`sdk`) or a client you connected yourself (`connection`). Both produce the same Tool[]; options a transport would have consumed are refused, not ignored. |
+| 23 | [`23-context-contract.ts`](context-engineering/23-context-contract.ts) | _no meta_ | — |
 
 ### [`memory/`](memory/) — defineMemory + 4 types × 7 strategies
 
