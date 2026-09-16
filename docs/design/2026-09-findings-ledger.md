@@ -118,4 +118,22 @@ lost incrementally, and hypothesis data and fact data tangle at the answer.
 
 ## Track
 
-- [x] design · [ ] 1 bench + baseline · [ ] 2 ledger on the record · [ ] 3 served from the ledger · [ ] 4 eviction · [ ] 5 Findings band
+- [x] design · [x] 1 bench + baseline (`npm run bench:findings`, `bench/findings-context.mjs`) · [ ] 2 ledger on the record · [ ] 3 served from the ledger · [ ] 4 eviction · [ ] 5 Findings band
+
+## Baseline (2026-09-16, `bench/findings-context.mjs`, mock provider, 20 tool calls, a planted fact every 3rd)
+
+| window | planted facts | facts present at the answer turn | noise results present | noise share of tool-result bytes | tool messages served | messages served (receipt) |
+|---|---|---|---|---|---|---|
+| none | 6 | 6 | 14 | 93.5% | 20 | 41 |
+| sliding, keep 6 turns | 6 | 2 | 4 | 92.3% | 6 | 13 |
+
+Read: without a window nothing is lost but the answer turn is served a pile
+that is nine-tenths noise; with today's eviction, by recency, four of six
+facts are gone before the model answers. Neither serves the facts and only
+the facts. Step 3 must move both columns: facts present back to 6, noise
+share toward the one-line count.
+
+FACT for the bench's own shape: the bench is plain JavaScript on node,
+importing the package's built doors by self-reference — under tsx's ES
+module loader, footprintjs's `./trace` export resolved to its types file
+(a packaging note for footprintjs: the `exports` condition order).
