@@ -18,6 +18,7 @@ import { Agent } from 'agentfootprint';
 import { recordRun } from 'agentfootprint/observe';
 import { mock } from 'agentfootprint/providers';
 import { tagAxisPositions } from 'agentfootprint-lens/core';
+import { stringifySnapshot } from 'footprintjs';
 import { mkdirSync, writeFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -126,7 +127,9 @@ const result = await agent.run({ message: QUESTION });
 const recording = rec.toRecording();
 rec.stop();
 
-const persisted = JSON.parse(JSON.stringify(recording));
+// Written with footprintjs's own encoder (9.26.0): the same bytes as
+// JSON.stringify, without its recursion limit on a long run's tree.
+const persisted = JSON.parse(stringifySnapshot(recording));
 
 // The seven steps of the page, each pinned to a milestone stop of THIS run by
 // the stop's label (the library's own milestone vocabulary). A label that is
@@ -159,6 +162,6 @@ if (report?.status !== 'passed') {
 }
 
 mkdirSync(dirname(OUT), { recursive: true });
-writeFileSync(OUT, JSON.stringify({ recording: persisted, stops }));
+writeFileSync(OUT, stringifySnapshot({ recording: persisted, stops }));
 const commits = Array.isArray(persisted?.snapshot?.commitLog) ? persisted.snapshot.commitLog.length : 0;
 console.log(`[gen-context-walkthrough] wrote ${OUT} (${commits} commits, ${positions.length} stops; result: ${String(result).slice(0, 60)})`);

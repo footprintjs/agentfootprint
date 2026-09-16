@@ -15,6 +15,7 @@
  *   Run:  npm run gen:replay   (also runs in predev/prebuild)
  */
 import { Agent } from 'agentfootprint'
+import { stringifySnapshot } from 'footprintjs';
 import { mock } from 'agentfootprint/providers';
 import { redactContent } from 'agentfootprint/observe';
 import { structureGraphFromSpec } from 'agentfootprint-lens/core';
@@ -55,7 +56,7 @@ const trace = dev.getTrace();
 
 // Persist + reload exactly as a consumer would — the graph below is rebuilt from the
 // SERIALIZED bytes, not the live object. This is the offline-replay path end to end.
-const persisted = JSON.parse(JSON.stringify(trace));
+const persisted = JSON.parse(stringifySnapshot(trace));
 const graph = structureGraphFromSpec(persisted.structure);
 
 const data = {
@@ -70,7 +71,7 @@ const data = {
 };
 
 mkdirSync(dirname(OUT), { recursive: true });
-writeFileSync(OUT, JSON.stringify(data, null, 2));
+writeFileSync(OUT, stringifySnapshot(data));
 
 console.log(`[replay] wrote ${OUT}`);
 console.log(`[replay] result: ${data.meta.result}`);
