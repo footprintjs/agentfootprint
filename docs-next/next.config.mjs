@@ -1,5 +1,5 @@
 import { createMDX } from 'fumadocs-mdx/next';
-import { resolve } from 'node:path';
+import { relative, resolve } from 'node:path';
 import { readFileSync, writeFileSync } from 'node:fs';
 
 // Static export for GitHub Pages is opt-in via EXPORT=true so local `dev`/`build`
@@ -63,8 +63,16 @@ const config = {
       '@huggingface/transformers': './lib/stubs/embedder-deps.js',
       'fs/promises': './lib/stubs/embedder-deps.js',
       // One footprintjs (see footprintjsAliases above). Exact keys: turbopack
-      // matches a key without `*` against the whole request.
-      ...footprintjsAliases,
+      // matches a key without `*` against the whole request. RELATIVE values:
+      // turbopack reads an absolute value as a "server relative import" and
+      // refuses it (`next dev` was 500 on every route that reached a
+      // footprintjs door), so each file is spelled relative to docs-next.
+      ...Object.fromEntries(
+        Object.entries(footprintjsAliases).map(([request, file]) => {
+          const rel = relative(import.meta.dirname, file);
+          return [request, rel.startsWith('.') ? rel : `./${rel}`];
+        }),
+      ),
     },
   },
   // Keep webpack as a supported verification/fallback path. `node:` requests
