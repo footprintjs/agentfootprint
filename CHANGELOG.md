@@ -5,7 +5,21 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [9.99.1] - 2026-09-16
+## [9.100.0] - 2026-09-16
+
+### Added — the delivered answer names its shape guarantee
+
+- `AgentState.answerGuarantee` — written by the Route decider on the turn
+  it picks `final`: `'tool-forced'` (the provider was forced by name to
+  answer through the output schema's synthetic tool, so the shape held on
+  the wire), `'checked'` (generated as text, parsed by the output schema
+  after), or `'none'` (no output schema, free text). A fact about HOW the
+  answer was obtained, beside `answerValidation`, which is about its
+  content. Why: three different strengths of "the answer has a shape"
+  existed and the record could not say which applied; a lens showing the
+  Answer stop now can. Borrowed from constrained decoding, where the shape
+  holds by construction — that word joins the vocabulary when a provider
+  that constrains its own decoding ships.
 
 ### Changed — artifact bytes are encoded with footprintjs's own encoder
 

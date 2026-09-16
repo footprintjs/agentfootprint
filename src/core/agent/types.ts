@@ -1210,6 +1210,20 @@ export interface AgentState {
    *  `snapshot.sharedState` to see why a run took three turns to answer.
    *  Written only by an agent that opted into `retries`; absent otherwise. */
   outputAttempts?: readonly OutputAttempt[];
+  /**
+   * How the delivered answer's SHAPE was secured (9.100.0) — written by the
+   * Route decider on the turn it picks `final`, absent before:
+   *   - `'tool-forced'` — the provider was forced BY NAME to answer through
+   *     the output schema's synthetic tool, so the shape held on the wire
+   *     (`.outputSchema(s, { strategy: 'tool-forced' })`);
+   *   - `'checked'` — the answer was generated as text and the output schema
+   *     parsed it afterwards (`'instruct'`, the default);
+   *   - `'none'` — no output schema: free text, no shape claimed.
+   * A guarantee is a fact about how the answer was obtained, distinct from
+   * `answerValidation` (host checks over its content). A provider that
+   * constrains its own decoding would add a stronger word when one ships.
+   */
+  answerGuarantee?: 'tool-forced' | 'checked' | 'none';
   /** Host-authored checks over the exact terminal answer; absent when disabled. */
   answerValidation?: import('../../answer-validation/index.js').AnswerValidationReport;
   /** Refusal carrier: prevents final capture, history, memory and token delivery. */

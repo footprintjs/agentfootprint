@@ -272,6 +272,24 @@ function wrapUpRationale(scope: TypedScope<AgentState>): string {
   );
 }
 
+/**
+ * The delivered answer's shape guarantee (9.100.0), recorded by the decider
+ * that judged it, on the turn it picks `final`. Data about HOW the answer was
+ * obtained: forced through the schema's synthetic tool, parsed after, or
+ * free text. See `AgentState.answerGuarantee`.
+ */
+function recordAnswerGuarantee(
+  scope: TypedScope<AgentState>,
+  enforcement: ResolvedOutputEnforcement | undefined,
+): void {
+  scope.answerGuarantee =
+    enforcement === undefined
+      ? 'none'
+      : enforcement.schemaTool !== undefined
+      ? 'tool-forced'
+      : 'checked';
+}
+
 function emitRouteDecided(
   scope: TypedScope<AgentState>,
   chosen: RouteBranch,
@@ -551,6 +569,7 @@ function buildSimpleDecider(hasWrapUp: boolean): (scope: TypedScope<AgentState>)
     }
     emitRouteDecided(scope, chosen, rationale);
     if (chosen === 'final') settleWrapUp(scope, earlyStop, false);
+    if (chosen === 'final') recordAnswerGuarantee(scope, undefined); // no output schema on this decider
     return chosen;
   };
 }
@@ -867,6 +886,7 @@ function buildJudgingDecider(
       emitRouteDecided(scope, 'evidence-recheck', evidenceRecheckRationale(scope));
       return 'evidence-recheck';
     }
+    recordAnswerGuarantee(scope, undefined); // this decider is built without an output schema
     emitRouteDecided(scope, 'final', rationale);
     settleWrapUp(scope, earlyStop, false);
     return 'final';
@@ -944,6 +964,7 @@ function buildEnforcingDecider(
       // receives has no provenance worth reporting, and that is a rule rather
       // than a failure to reach one.
       noteRecency(noticePriorTurnEvidence, integrityLedger, 'not-applicable');
+      recordAnswerGuarantee(scope, enforcement);
       emitRouteDecided(scope, 'final', base.rationale);
       settleWrapUp(scope, base.earlyStop, false);
       return 'final';
@@ -978,6 +999,7 @@ function buildEnforcingDecider(
       // back, and a claim that disagrees with the run's settled facts is a
       // fact about a finished run (see judgeClaims).
       judgeClaims(scope, claims, integrityLedger);
+      recordAnswerGuarantee(scope, enforcement);
       emitRouteDecided(scope, 'final', base.rationale);
       settleWrapUp(scope, base.earlyStop, false);
       return 'final';

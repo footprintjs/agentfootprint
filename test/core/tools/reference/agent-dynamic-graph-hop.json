@@ -1347,7 +1347,9 @@
     },
     {
       "idx": 35,
-      "overwrite": {},
+      "overwrite": {
+        "answerGuarantee": "none"
+      },
       "redactedPaths": [],
       "runtimeStageId": "sf-route#41",
       "stage": "Route",
@@ -1356,7 +1358,12 @@
         "milestone:decision",
         "milestone-label:Route"
       ],
-      "trace": [],
+      "trace": [
+        {
+          "path": "answerGuarantee",
+          "verb": "set"
+        }
+      ],
       "updates": {}
     },
     {

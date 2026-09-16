@@ -1296,6 +1296,7 @@
     {
       "idx": 50,
       "overwrite": {
+        "answerGuarantee": "none",
         "stoppedEarly": {
           "answerWasEmpty": true,
           "iteration": 2,
@@ -1315,6 +1316,10 @@
       "trace": [
         {
           "path": "stoppedEarly",
+          "verb": "set"
+        },
+        {
+          "path": "answerGuarantee",
           "verb": "set"
         }
       ],
