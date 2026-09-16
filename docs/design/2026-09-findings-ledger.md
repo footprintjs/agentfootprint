@@ -39,10 +39,35 @@ lost incrementally, and hypothesis data and fact data tangle at the answer.
 - **Eviction is by budget, not by standing.** When the context fills, turns
   are evicted by size; a noise result can outlive a fact.
 
+## Prior art (checked 2026-09-16)
+
+The three-bucket working memory is published: SLEUTH ("Track, Rank, Crack:
+Epistemic Working Memory Scales Multi-Hop Reasoning in Language Agents",
+arXiv 2607.12267, Jul 2026) keeps Confirmed Facts grounded to sources,
+Active Hypotheses ranked by evidence, and Open Questions after every action,
+by prompting plus a runtime check, and gains +5 to +11 points with task
+difficulty. "From Agent Traces to Trust" (arXiv 2606.04990) types the
+relations support / contradiction / invalidation between observations,
+claims and answers. Recency effects in tool outputs are documented (arXiv
+2510.15955; 2310.01427). What is ours on top: the selection BASIS declared
+before the call and captured deterministically; the ledger as a replayable
+RECORD with provenance refs, read at every stop by the Lens; ruled-out notes
+with disposition-aware eviction; the planted-noise bench. Paper-worthy as a
+systems contribution with numbers; a patent needs counsel's search.
+
 ## The design
 
 **One ledger, kept in the run's state, written as the loop runs.**
 
+- **Basis, before the call.** Every tool request carries a declared
+  selection basis — `direct` (this tool answers the question) or
+  `exploratory` (this tool might; a hypothesis) — and an optional expected
+  usefulness bucket (`low` / `medium` / `high`), a hint for review, never a
+  score. The library records both BEFORE executing the call, so the record
+  proves the declaration happened even though its content is the model's
+  claim. Beside it, after the return, the recorded fact of whether the call
+  brought what it sought (`sought: true | false`, the model's claim again),
+  so a bucket can be judged against outcomes before any threshold exists.
 - After each tool return, the model is asked for the findings that result
   supports — each an assertion in ContextFootprint's shape, with
   `provenance` = the tool result's identity on the record (its entry in
@@ -52,7 +77,9 @@ lost incrementally, and hypothesis data and fact data tangle at the answer.
   - `open`: the result suggests an assertion but does not settle it, and
     names what would;
   - `noise`: the result supports nothing for this task (kept as one line:
-    tried, returned nothing useful).
+    tried, returned nothing useful);
+  - `ruled-out`: an exploratory branch this result closes — the hypothesis
+    was wrong; kept as one line naming what was ruled out, never the detour.
   The disposition is the model's claim, recorded as such. The library never
   infers one.
 - `conflictsOf` runs over the ledger's current assertions on every write.
@@ -60,7 +87,8 @@ lost incrementally, and hypothesis data and fact data tangle at the answer.
   sure" bucket with both witnesses, in their order.
 - **The answer turn is served the ledger, not the pile:** facts with their
   refs, conflicts with their witnesses, open assertions with what would
-  settle them, noise collapsed to its one-line count. The raw results stay
+  settle them, ruled-out branches as their one line, noise collapsed to its
+  count. Disproven detours do not reach the answer; the record keeps them. The raw results stay
   on the record as artifacts, redeemable by ref — nothing is deleted, only
   not served. This is the context contract's `facts` / `limitations` /
   `evidenceRefs` / `nextSteps` filled from the ledger instead of by hand.
@@ -91,7 +119,16 @@ lost incrementally, and hypothesis data and fact data tangle at the answer.
 - The bench decides. Before this ships, a checked-in bench: runs of ten to
   thirty tool calls with planted facts and planted noise, measuring how
   many planted facts reach the answer, and how many noise items are cited,
-  with and without the ledger. No number is quoted before it exists.
+  with and without the ledger. No number is quoted before it exists. On a
+  real model, the SHUFFLE test: the same evidence in shuffled order — an
+  answer that drifts means the served ledger is not yet a sufficient
+  statistic of the evidence.
+- The instruction that asks for findings is a versioned artifact (the
+  receipt already hashes every system piece) and the bench is its metric —
+  a variant is proposed, the bench decides, the record says which version
+  produced which answer. Nothing is tuned blindly (the borrowable half of
+  DSPy's optimizers; the other half, scored fields, is
+  docs/design/2026-09-scored-choice.md).
 
 ## The cut (one at a time, each shippable)
 
@@ -106,6 +143,13 @@ lost incrementally, and hypothesis data and fact data tangle at the answer.
    the baseline: this is the packet that must move the number.
 4. **Standing-aware eviction.** Measured on long runs.
 5. **The Findings band in the Why Lens.**
+
+## Worklog
+
+Running notes, one line per task, newest last, in
+`docs/design/2026-09-findings-ledger-worklog.md` — what was done, what the
+reviews found, what moved on the bench, what is left. Read it before
+touching any step.
 
 ## Open questions for the owner
 
