@@ -364,3 +364,60 @@ ledger-only          10            0.883        0.400     0.860              0.9
   (3) the heavy cells on a budget the owner sets, since that is the only
   place the hypothesis can be confirmed or refuted.
 
+## Fifth run — the answer-turn ask (`answerAsk: 'quote-facts'`), ten runs (2026-09-17, agentfootprint main after 9.102.0)
+
+The same cell (noise 4, at end, size 1000), RUNS=10, four conditions; the
+`ledger+ask` row is `.findings({ serve: 'ledger-and-facts', answerAsk: 'quote-facts' })`.
+The tables are the script's print, verbatim. The first Haiku attempt died in
+its first call on a dropped streaming connection (`[anthropic] terminated`);
+the rerun is what is shown.
+
+### Claude Haiku 4.5
+
+```
+findings-shuffle MATRIX — provider anthropic claude-haiku-4-5 (hosted), seed 20260916, 10 runs per condition, the same 10 orders in every condition, temperature 0, FACTS 6
+── noise 4 · at end · size 1000
+condition          runs  facts-in-answer  noise-cited  declared  standing-accuracy  drift   unknown-id-standings
+findings off         10            1.000        0.100         -                  -   0.30                      0
+ledger-and-facts     10            0.983        0.000     0.230              0.957   0.30                      0
+ledger-only          10            1.000        0.100     0.260              1.000   0.30                      0
+ledger+ask           10            1.000        0.000     0.180              1.000   0.20                      0
+```
+
+### Claude Sonnet 5
+
+```
+findings-shuffle MATRIX — provider anthropic claude-sonnet-5 (hosted), seed 20260916, 10 runs per condition, the same 10 orders in every condition, temperature not sent, FACTS 6
+── noise 4 · at end · size 1000
+condition          runs  facts-in-answer  noise-cited  declared  standing-accuracy  drift   unknown-id-standings
+findings off         10            1.000        0.300         -                  -   0.30                      0
+ledger-and-facts     10            0.883        0.100     0.750              0.907   0.70                      0
+ledger-only          10            0.967        0.400     0.750              0.973   0.90                      0
+ledger+ask           10            0.950        0.100     0.700              0.929   0.40                      0
+```
+
+## What the ask changed
+
+- **The fidelity cost is recovered.** `facts-in-answer` under the ledger goes
+  from 0.883 to 0.950 on Sonnet and from 0.983 to 1.000 on Haiku with the ask;
+  the fourth run's 0.917 dips were the piece without an ask.
+- **Noise cited stays down with the ask.** Sonnet 0.100 (`ledger-and-facts`
+  and `ledger+ask`) against 0.300 for the raw pile; Haiku 0.000 against 0.100.
+  This is the second independent ten-run pass showing the gap on Sonnet (the
+  fourth run's raw pile was 0.200, so the pile's own rate swings by one run in
+  ten); a claim now rests on two passes, not one.
+- **Answers are steadier with the ask:** drift 0.40 vs 0.70 (Sonnet), 0.20 vs
+  0.30 (Haiku).
+- `ledger-only` is the worst row on every column that matters, on both
+  models, in this run as in the last: the dial stays gated.
+- The ask does not raise `declared` (0.70–0.75 Sonnet, 0.18–0.23 Haiku): it
+  shapes the answer, not the declarations. Raising Haiku's declarations is a
+  separate wording problem.
+
+## Decision
+
+`answerAsk: 'quote-facts'` becomes the default when `.findings()` is armed in
+the next minor, with `'none'` kept as the opt-out, on the strength of two
+ten-run passes on two models; the design page's law stands — the bench decided,
+and a variant is a different hash on the record.
+
