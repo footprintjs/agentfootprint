@@ -5,6 +5,70 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [9.106.0] - 2026-09-17
+
+### Added — the ontology: a declared map of what exists and where, never a way to fetch it
+
+- **`agentfootprint/ontology`** — a new door (the seventeenth): `defineOntology(spec)`
+  takes an `OntologySpec` — `nodes` (an `OntologyNode` per term: `meaning`,
+  `unit`, `aliases`, and the `sources` that hold it, each an
+  `OntologyNodeSource` with the registered tools that read it from there
+  (`via`) and the author's `coverage` sentence), `sources` (an
+  `OntologySource` per place data is held: `meaning`, `coverage`,
+  `configured` — a boolean the author wrote, or absent, which means unknown
+  and is never assumed) and `edges` (an `OntologyEdge`: `from`, `to`, the
+  author's `relation` word, `meaning`) — and returns an `Ontology`:
+  validated, detached, deep-frozen, with a `hash`. Every fault is refused
+  by name (an id that is not identifier-safe, an edge to a node nobody
+  declared, a node held by a source nobody declared, an empty or over-long
+  text, a repeated alias / `via` / edge, a count past `ONTOLOGY_LIMITS`). A
+  node with no source is legal: known, nowhere collected here.
+  `ontologyHash` fingerprints the five declared fields through the
+  receipt's own `stableJson` (key-order independent; edge order is part of
+  the identity).
+- **`.ontology(map)`** (`AgentOptions.ontology`, `AgentBuilder.ontology`;
+  once per agent, the option form goes through the same door). At
+  `.build()` every `via` tool name is checked against the agent's tool
+  registry — a name no registry carries is refused, naming the ontology,
+  the tool, the node and the source. At run `seed` writes the whole map
+  ONCE as the run constant `AgentState.ontology` (`OntologyRecord`: `id`,
+  `version`, `hash`, `spec`), so the wire, the rebuild and a lens need
+  nothing but the record.
+- **The served piece.** Every model call is served ONE request-only system
+  piece composed by the pure `ontologyPiece` (`OntologyPiece`, `source:
+  'ontology'` — a new `ContextSource`): a constant header quoting the
+  context contract's `domainDefinitions`, `limitations` and `evidenceRefs`
+  meanings, then `nodes:`, `sources:`, `held by:`, `relations:` and `known,
+  not held here:` — every line the declaration's, nodes and sources sorted
+  by id, edges in declaration order, `ONTOLOGY_PIECE_LIMITS` lines per
+  section with the overflow stated, an empty section omitted, no per-call
+  byte (an unchanged map reuses the cached system prefix). Joined after the
+  recovery piece and before the findings piece — injections → recovery →
+  ontology → findings, fixed — never as an injection; hashed on the receipt
+  and rebuilt byte-equal by `servedAt` in both chart shapes (the grouped
+  chart crosses the key into `sf-llm-call` under the arm).
+- **The ask.** `ONTOLOGY_INSTRUCTION` (`ONTOLOGY_INSTRUCTION_ID`), an
+  always-on instruction the `outputSchema()` way: say which declared
+  source, tool or neighbouring node the map names for a need the results
+  did not meet — as a proposal, never as a claim that data exists there;
+  never invent a value from the map; report a node listed as known but not
+  held here as declared. Judged by `unprovable` in the model-facing
+  inventory, beside the piece.
+- **`agentfootprint.ontology.served`** `{ iteration, id, version, hash,
+  nodes, sources, edges }` — once per call that served the piece;
+  identities and numbers only. A new domain, `ontology`, with its
+  wildcard: 26 → 27 domains, 118 → 119 events.
+- **The law.** The library never decides that a node "has no data": absence
+  is the model's or the tool's to report; the map only lets the model SAY
+  where a need would be met. Nothing is executed or fetched through it;
+  nothing is inferred from it. An agent without `.ontology()` is
+  byte-identical to one built before the map existed — no key, no piece,
+  no instruction, no event (the 19 byte-identity references untouched; one
+  new reference `agent-ontology`). What the map is measured on — tool calls
+  before the honest answer on questions whose data is not collected, and
+  whether that answer names the source — is a bench on the first host after
+  the release, not here (`docs/design/2026-09-ontology.md`).
+
 ## [9.105.0] - 2026-09-17
 
 ### Added — tool choice by classifier: a second reading beside the model's call, and a narrowing dial

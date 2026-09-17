@@ -229,7 +229,11 @@ describe('event registry — names + exhaustiveness', () => {
     //     counts, narrowed, cost) before the call, the outcome (called,
     //     firstAgrees, missed) after it, the failure (status, latency). Tool
     //     names are identities; never a description, never the message.)
-    expect(ALL_EVENT_TYPES.length).toBe(118);
+    //    (ontology.served added in 9.106.0 — the declared map served on a
+    //     model call under `.ontology()`: the map's id, version and hash and
+    //     its three counts. Identities and numbers only — never a meaning, a
+    //     coverage sentence or a node name.)
+    expect(ALL_EVENT_TYPES.length).toBe(119);
   });
 
   it('every entry in ALL_EVENT_TYPES is a key of AgentfootprintEventMap', () => {

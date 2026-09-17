@@ -720,6 +720,13 @@ export function buildDynamicAgentChart(deps: AgentChartDeps): FlowChart {
           // one whose model declared nothing, crosses no new key. Reads only
           // inside (the writes are outside), so no outputMapper line is needed.
           ...(p.findingsLedger !== undefined && { findingsLedger: p.findingsLedger }),
+          // The declared ontology (9.106.0) — the same lesson: `callLLM`
+          // composes the ontology piece from the run constant `ontology`,
+          // which seed wrote on the OUTER scope, and `callLLM` lives INSIDE
+          // this boundary. Gated on the arm AND value-conditional, so an
+          // unarmed agent crosses no new key and reads none. Read-only
+          // inside, so no outputMapper line is needed.
+          ...(deps.hasOntology === true && p.ontology !== undefined && { ontology: p.ontology }),
           // The classifier's rows (9.105.0) — in under the alias, because the
           // call-llm stage WRITES the key inside this boundary (the `history`
           // shape, not the read-only `findingsLedger` one). Value-conditional.

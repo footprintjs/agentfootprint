@@ -65,6 +65,8 @@ import {
 import type { FindingsLedger } from '../findings/types.js';
 import { readSchemaToolAnswer } from '../outputEnforcement.js';
 import type { ToolChoiceLedger } from '../toolChoice/types.js';
+import type { OntologyPiece } from '../../../ontology/serve.js';
+import type { OntologyRecord } from '../../../ontology/types.js';
 import {
   executeWithReliability,
   ValidationFailure,
@@ -160,6 +162,18 @@ export interface CallLLMStageDeps {
    * iteration. An unarmed agent never reads the key.
    */
   readonly toolChoice?: true;
+  /**
+   * THE DECLARED ONTOLOGY IS ARMED (9.106.0, `.ontology()`) — present only
+   * then, only ever `true`. It gates the ONE read of the run constant
+   * `scope.ontology` in this stage: the piece
+   * (`ontology/serve.ts · ontologyPiece`, loaded through `import()` — the
+   * `judgeLanded` precedent — and joined AFTER the recovery piece and BEFORE
+   * the findings piece: injections → recovery → ontology → findings, FIXED,
+   * mirrored by `servedView.ts · viewOf`) and the `ontology.served` event.
+   * An unarmed agent never reads the key — a tracked read of an always-absent
+   * key is the phantom context source `window/evictedTurns.ts` names.
+   */
+  readonly ontology?: true;
   /** Optional pricing adapter for cost tracking. */
   readonly pricingTable?: PricingTable;
   /** Optional cumulative USD cap per run. */
@@ -360,7 +374,8 @@ export interface CallLLMStageDeps {
 // LENS · system-text + tool-list · request-ephemeral
 // reads: systemPrompt ← scope.systemPromptInjections, joined by `systemPrompt` below (the system-prompt slot's output)
 //        messages ← scope.history (`history`; `messages` is its wire-only collapse of judged tool results under `.findings()` — `collapseJudged`); tools ← scope.dynamicToolSchemas (`registeredToolSchemas`), EMPTIED to EMPTY_TOOL_SCHEMAS under scope.wrapUpAsked
-//        findings piece ← scope.findingsLedger (`ledgerPiece`, under `deps.hasFindingsLedger` only), joined after the recovery piece
+//        ontology piece ← scope.ontology (`ontologyPieceRecord`, under `deps.ontology` only), joined after the recovery piece
+//        findings piece ← scope.findingsLedger (`ledgerPiece`, under `deps.hasFindingsLedger` only), joined after the ontology piece
 //        brain ← deps.brainFor(nextSkillCursor ?? currentSkillId)
 // THIS is the wire, and it is assembled inside `buildCallLLMStage` — cite THAT, not this header,
 // when another file points at the assembly. The three slots feed it; they are not it. The staged-refs
@@ -465,7 +480,7 @@ export function buildCallLLMStage(
     // byte — it is a function of the ledger and those ids alone — because it
     // joins the ONE system block the cache marker covers: a re-ask that
     // serves the same ledger over the same ids reuses the cached prefix, and
-    // a call after the ledger moved does not (`serve.ts` · "The cache"). An
+    // a call after the ledger moved does not (`findings/serve.ts` · "The cache"). An
     // unarmed agent reads no key and serves the bytes it always did.
     const ledger =
       deps.hasFindingsLedger === true
@@ -479,18 +494,45 @@ export function buildCallLLMStage(
       deps.hasFindingsLedger === true
         ? findingsLedgerPiece(ledger, servedToolCallIds(history), deps.findingsAnswerAsk ?? 'none')
         : undefined;
-    // The join: injections, then the recovery piece, then the findings piece
-    // — a FIXED order `servedView.ts · viewOf` mirrors. Both request-only
-    // pieces are composed into `systemPieces` ONLY, never pushed into
-    // `systemPromptInjections`: a piece there would be exempt from the
-    // evidence gate (`evidenceIndex.ts · exemptFromRun` indexes every
-    // injection's rawContent), and the ledger quotes the model's own words.
+    // ── the declared ontology, served (9.106.0) ──────────────────────────
+    // ONE gated read of the run constant seed wrote; the piece is a pure
+    // function of the spec and nothing else (no call number, no clock — the
+    // findings piece's cache law), so an unchanged map serves unchanged bytes
+    // on every call of the run. The composer is loaded through `import()` —
+    // the optional-family law of docs-next's site budget (`toolCalls.ts ·
+    // judgeLanded`): an unarmed agent never loads the module. The event
+    // carries identities and counts only.
+    let ontologyPieceRecord: OntologyPiece | undefined;
+    if (deps.ontology === true) {
+      const record = scope.ontology as OntologyRecord | undefined;
+      if (record !== undefined) {
+        const { ontologyPiece } = await import('../../../ontology/serve.js');
+        ontologyPieceRecord = ontologyPiece(record.spec);
+        typedEmit(scope, 'agentfootprint.ontology.served', {
+          iteration,
+          id: record.id,
+          version: record.version,
+          hash: record.hash,
+          nodes: Object.keys(record.spec.nodes).length,
+          sources: Object.keys(record.spec.sources).length,
+          edges: record.spec.edges.length,
+        });
+      }
+    }
+    // The join: injections, then the recovery piece, then the ontology piece,
+    // then the findings piece — a FIXED order `servedView.ts · viewOf`
+    // mirrors. Every request-only piece is composed into `systemPieces` ONLY,
+    // never pushed into `systemPromptInjections`: a piece there would be
+    // exempt from the evidence gate (`evidenceIndex.ts · exemptFromRun`
+    // indexes every injection's rawContent), and the ledger quotes the
+    // model's own words.
     const systemPieces =
-      recoveryPiece === undefined && ledgerPiece === undefined
+      recoveryPiece === undefined && ontologyPieceRecord === undefined && ledgerPiece === undefined
         ? systemPromptInjections
         : [
             ...systemPromptInjections,
             ...(recoveryPiece === undefined ? [] : [recoveryPiece]),
+            ...(ontologyPieceRecord === undefined ? [] : [ontologyPieceRecord]),
             ...(ledgerPiece === undefined ? [] : [ledgerPiece]),
           ];
     const systemPrompt = joinSystemPrompt(systemPieces);

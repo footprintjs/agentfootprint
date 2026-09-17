@@ -1,4 +1,4 @@
-**Mixed** — eleven published doors, each a header plus a re-export, cut by the
+**Mixed** — the published doors, each a header plus a re-export, cut by the
 JOB a consumer has rather than by role. A door therefore usually publishes more
 than one role, and this file says which.
 Map + Fold: `skill-graph.ts` (the graph and its folds, with no framework
@@ -9,8 +9,10 @@ which carries the declarations, the folds, the per-iteration walk AND the
 `read_skill` composers (`readSkillDescriptor`, `buildReadSkillTool`).
 Trace + Fold: `observe.ts` (recorders, `recordRun`, ledger, bisect, toolpack).
 Fold: `maps.ts` (the mount kernel's vocabulary).
+Map + Lens: `ontology.ts` (the declared map — `defineOntology` and the shapes
+are Map; `ontologyPiece` and the always-on ask are Lens).
 Support: `memory.ts`, `providers.ts`, `hosting.ts`, `rag.ts`, `security.ts`,
-`resilience.ts`.
+`resilience.ts`, `classify.ts`.
 
 ## What it reads / what it writes
 Nothing at runtime. Each file is a header stating the door's job plus one or two
@@ -24,4 +26,4 @@ through a door tells you nothing about whether a symbol may compose a sentence.
 ## Files
 One file per door: `skill-graph.ts`, `context.ts`, `observe.ts`, `maps.ts`,
 `recipes.ts`, `memory.ts`, `providers.ts`, `hosting.ts`, `rag.ts`,
-`security.ts`, `resilience.ts`.
+`security.ts`, `resilience.ts`, `classify.ts`, `ontology.ts`.

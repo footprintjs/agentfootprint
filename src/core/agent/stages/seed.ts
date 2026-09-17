@@ -30,6 +30,7 @@ import { runMessageChain } from '../middleware/runChain.js';
 import { recordDecisions } from '../middleware/ledger.js';
 import { withFindingsArgument } from '../findings/reserved.js';
 import type { FindingsLedger } from '../findings/types.js';
+import type { Ontology } from '../../../ontology/types.js';
 
 export interface SeedStageDeps {
   /** Resolved `clampIterations(opts.maxIterations ?? 10)`. Frozen at
@@ -205,6 +206,16 @@ export interface SeedStageDeps {
    * did, reading the dial from the RECORD.
    */
   readonly findingsAnswerAsk?: 'quote-facts';
+  /**
+   * The declared ontology (9.106.0) — present ONLY on an agent built with
+   * `.ontology(map)`, threaded by `Agent.ts` under that one gate. Seeded for
+   * the `findingsServe` reason: the piece the model is served is composed
+   * from the RECORD (`callLLM` reads the key; `servedView.ts · viewOf` reads
+   * it back with `readRunConstant`), and a build-time constant the rebuild
+   * needs must be on the record, not on the receipt it is checking. Absent →
+   * this stage commits exactly the keys it always did.
+   */
+  readonly ontology?: Ontology;
   /**
    * The `Tool.wants` declarations, by tool name (9.88.0) — present ONLY when
    * the evidence gate's nudge is armed and at least one tool declares `wants`,
@@ -475,6 +486,15 @@ function seedFrom(scope: TypedScope<AgentState>, message: string, deps: SeedStag
   // key set it committed in 9.102.0.
   if (deps.findings === true && deps.findingsAnswerAsk !== undefined) {
     scope.findingsAnswerAsk = deps.findingsAnswerAsk;
+  }
+  // The declared ontology (9.106.0) — the fourth such constant, written the
+  // same way and ONCE per run: the identities the served event carries and
+  // the WHOLE spec, so the wire, the rebuild and a lens read one key and
+  // nothing else. The map is declared, not learned — no stage writes it
+  // again. An agent without `.ontology()` writes nothing here.
+  if (deps.ontology !== undefined) {
+    const { id, version, hash, nodes, sources, edges } = deps.ontology;
+    scope.ontology = { id, version, hash, spec: { id, version, nodes, sources, edges } };
   }
   // The `wants` declarations (9.88.0) — the third input to the staged-refs
   // nudge, and the only one that was build-time-only. Value-conditional in the

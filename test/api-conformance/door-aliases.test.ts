@@ -106,6 +106,11 @@ const DOORS = [
   // adapters — a backend you plug in, the `./providers` shape for a model
   // that scores declared candidates instead of generating text.
   './classify',
+  // 9.106.0 — the FIFTEENTH, same argument: `./ontology` carries no run
+  // entry point. It publishes the declared map — `defineOntology`, the
+  // shapes, `ontologyHash`, the pure `ontologyPiece` composer and the
+  // always-on ask — pure data and pure functions, mounted via `.ontology()`.
+  './ontology',
 ] as const;
 
 /** Names an alias exports that its door deliberately does NOT. See header. */

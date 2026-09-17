@@ -55,6 +55,7 @@ import {
   ConversationMismatchError,
 } from '../../src/index.js';
 import { mock } from '../../src/llm-providers.js';
+import { defineOntology } from '../../src/ontology/index.js';
 import { pauseHere } from '../../src/core/pause.js';
 import { unconfiguredCredentialProvider } from '../../src/identity/types.js';
 import type { CodeResult, CodeRunner, LLMRequest } from '../../src/adapters/types.js';
@@ -684,6 +685,10 @@ const REFUSES_A_SECOND_CALL = [
   // per agent; a second call would leave two option sets with the later one
   // silently winning.
   'toolChoice',
+  // 9.106.0 — the declared ontology is one map per agent; a second call would
+  // register the ask twice and leave two maps with the later one silently
+  // winning.
+  'ontology',
   'limitsTravelWithTheAnswer',
   'maps',
   'namesAndNumbersFromEvidence',
@@ -833,6 +838,7 @@ describe('silent success — the doctrine sweep', () => {
         base()
           .toolChoice({ classifier: { name: 'mock', classify: async () => ({}) } as never })
           .toolChoice({ classifier: { name: 'mock', classify: async () => ({}) } as never }),
+      ontology: () => base().ontology(ONTOLOGY_MAP).ontology(ONTOLOGY_MAP),
       limitsTravelWithTheAnswer: () =>
         base().limitsTravelWithTheAnswer().limitsTravelWithTheAnswer(),
       maps: () => base().maps().maps(),
@@ -869,6 +875,13 @@ describe('silent success — the doctrine sweep', () => {
       );
     }
   });
+});
+
+const ONTOLOGY_MAP = defineOntology({
+  id: 'sweep',
+  version: '1',
+  sources: {},
+  nodes: { n: { meaning: 'a node' } },
 });
 
 /* eslint-disable @typescript-eslint/no-explicit-any */

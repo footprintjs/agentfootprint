@@ -900,6 +900,25 @@ export interface ToolChoiceFailedPayload {
   readonly latencyMs: number;
 }
 
+/**
+ * The declared ontology was served on one model call (9.106.0,
+ * `.ontology()`): the map's identities (`id`, `version`, the declaration's
+ * `hash`) and its three counts. The map itself is the run constant
+ * `AgentState.ontology`; the served text is on the receipt and rebuilt by
+ * `servedAt`. This payload carries identities and numbers only — never a
+ * meaning, a coverage sentence or a node name. Fired by `callLLM` at
+ * request assembly, once per call that served the piece.
+ */
+export interface OntologyServedPayload {
+  readonly iteration: number;
+  readonly id: string;
+  readonly version: string;
+  readonly hash: string;
+  readonly nodes: number;
+  readonly sources: number;
+  readonly edges: number;
+}
+
 // ─── Tier 3: Observability Layers (recorder-emitted, opt-in) ──────────
 
 // memory.* (4)

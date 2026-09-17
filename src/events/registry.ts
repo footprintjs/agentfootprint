@@ -126,6 +126,7 @@ import type {
   ToolChoicePickedPayload,
   ToolChoiceOutcomePayload,
   ToolChoiceFailedPayload,
+  OntologyServedPayload,
   ArtifactMintedPayload,
   ArtifactResolvedPayload,
   ArtifactExpiredPayload,
@@ -301,6 +302,9 @@ export const EVENT_NAMES = {
     picked: 'agentfootprint.tool_choice.picked',
     outcome: 'agentfootprint.tool_choice.outcome',
     failed: 'agentfootprint.tool_choice.failed',
+  },
+  ontology: {
+    served: 'agentfootprint.ontology.served',
   },
   embedding: {
     generated: 'agentfootprint.embedding.generated',
@@ -767,6 +771,11 @@ export interface AgentfootprintEventMap {
     'agentfootprint.tool_choice.failed',
     ToolChoiceFailedPayload
   >;
+  // ontology (the declared map served on a call — identities and counts only)
+  'agentfootprint.ontology.served': AgentfootprintEventEnvelope<
+    'agentfootprint.ontology.served',
+    OntologyServedPayload
+  >;
   // embedding
   'agentfootprint.embedding.generated': AgentfootprintEventEnvelope<
     'agentfootprint.embedding.generated',
@@ -933,6 +942,7 @@ export const ALL_EVENT_TYPES: readonly AgentfootprintEventType[] = [
   'agentfootprint.tool_choice.picked',
   'agentfootprint.tool_choice.outcome',
   'agentfootprint.tool_choice.failed',
+  'agentfootprint.ontology.served',
   'agentfootprint.embedding.generated',
   'agentfootprint.artifacts.minted',
   'agentfootprint.artifacts.resolved',

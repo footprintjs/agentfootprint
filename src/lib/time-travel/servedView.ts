@@ -171,6 +171,8 @@ import {
   type FindingsServeMode,
 } from '../../core/agent/findings/serve.js';
 import type { FindingsLedger } from '../../core/agent/findings/types.js';
+import { ontologyPiece } from '../../ontology/serve.js';
+import type { OntologyRecord } from '../../ontology/types.js';
 import { epochAt, epochLocations, readAfterCall, readAtCall, readRunConstant } from './epochs.js';
 import type { EpochLocation } from './epochs.js';
 import {
@@ -926,6 +928,29 @@ function answerAskOf(value: unknown): FindingsAnswerAsk {
   return value === 'quote-facts' ? 'quote-facts' : 'none';
 }
 
+/**
+ * The declared ontology `seed` put on the record (`ontology`, 9.106.0),
+ * narrowed the way every run constant is: only a record carrying a `spec`
+ * with `nodes` and `sources` records composes a piece, and an absent key —
+ * every agent without `.ontology()` — composes nothing, which is what the
+ * wire did (`callLLM.ts · buildCallLLMStage`, under `deps.ontology`).
+ */
+function ontologyOf(value: unknown): OntologyRecord['spec'] | undefined {
+  if (value === null || typeof value !== 'object') return undefined;
+  const spec = (value as { spec?: unknown }).spec;
+  if (spec === null || typeof spec !== 'object') return undefined;
+  const { nodes, sources } = spec as { nodes?: unknown; sources?: unknown };
+  if (
+    nodes === null ||
+    typeof nodes !== 'object' ||
+    sources === null ||
+    typeof sources !== 'object'
+  ) {
+    return undefined;
+  }
+  return spec as OntologyRecord['spec'];
+}
+
 function wantsMapOf(value: unknown): ReadonlyMap<string, readonly string[]> | undefined {
   if (value === null || typeof value !== 'object' || Array.isArray(value)) return undefined;
   const map = new Map<string, readonly string[]>();
@@ -1063,16 +1088,26 @@ function viewOf(location: EpochLocation): ServedView {
     servedModeOf(readRunConstant(location, 'findingsServe')),
   );
 
+  // ── the declared ontology, served (9.106.0) ────────────────────────────
+  // The SAME pure function the stage used, over the run constant `seed`
+  // wrote (the `findingsServe` precedent — a build-time fact read from the
+  // RECORD, never from the receipt this view is checked against). No
+  // `.ontology()` ⇒ no key ⇒ no piece, and the rebuild is the bytes it
+  // always was.
+  const ontologySpec = ontologyOf(readRunConstant(location, 'ontology'));
+  const ontology = ontologySpec === undefined ? undefined : ontologyPiece(ontologySpec);
+
   // ── the system prompt, joined ──────────────────────────────────────────
-  // Injections, then the recovery piece, then the findings piece — the fixed
-  // order the stage joins in. Both request-only pieces are joined, never
-  // committed as injections.
+  // Injections, then the recovery piece, then the ontology piece, then the
+  // findings piece — the fixed order the stage joins in. Every request-only
+  // piece is joined, never committed as an injection.
   const composedPieces =
-    recovery === undefined && findings === undefined
+    recovery === undefined && ontology === undefined && findings === undefined
       ? injections
       : [
           ...injections,
           ...(recovery === undefined ? [] : [recovery]),
+          ...(ontology === undefined ? [] : [ontology]),
           ...(findings === undefined ? [] : [findings]),
         ];
   const pieces: ServedPiece[] = contributingPieces(composedPieces).map((record) => ({

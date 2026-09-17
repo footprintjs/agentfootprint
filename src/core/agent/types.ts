@@ -45,6 +45,7 @@ import type { AgentRunCheckpoint } from '../runCheckpoint.js';
 import type { FindingsLedger } from './findings/types.js';
 import type { ToolChoiceLedger } from './toolChoice/types.js';
 import type { Classifier } from '../../classify/types.js';
+import type { Ontology, OntologyRecord } from '../../ontology/types.js';
 
 // ─── PUBLIC types (consumer-facing) ────────────────────────────────
 
@@ -364,6 +365,33 @@ export interface AgentOptions {
     /** The app's own always-served tool names — never narrowed away, never offered as candidates. */
     readonly alwaysServe?: readonly string[];
   };
+  /**
+   * The declared ontology (9.106.0) — set by `.ontology(map)` on the builder
+   * and by nothing else; the value is what `defineOntology` returned
+   * (`agentfootprint/ontology`). A MAP, not a door: it says what each term
+   * IS, how terms RELATE, which SOURCE holds a term and which registered
+   * TOOL reads it from there — and it never provides a way to get data.
+   * Nothing is executed or fetched through it and the library infers
+   * nothing from it.
+   *
+   * At build every tool name a node's `via` names is checked against the
+   * agent's tool registry (a name no registry carries is refused, naming the
+   * ontology and the tool). At run `seed` writes the whole spec ONCE as the
+   * run constant `AgentState.ontology`; every model call is served ONE
+   * request-only system piece composed from that key
+   * (`ontology/serve.ts · ontologyPiece` — a header quoting the context
+   * contract's `domainDefinitions`, `limitations` and `evidenceRefs`
+   * meanings, then the nodes, the sources, which node is held where and
+   * read by which tool, the relations, and the nodes with no declared
+   * source as `known, not held here`), joined after the recovery piece and
+   * before the findings piece, hashed on the receipt and rebuilt byte-equal
+   * by `servedAt`; and `agentfootprint.ontology.served` fires per call with
+   * identities and counts only. The ask the model reads is the always-on
+   * instruction `ONTOLOGY_INSTRUCTION`. An agent without this option is
+   * byte-identical to one built before it existed: no key, no piece, no
+   * instruction, no event.
+   */
+  readonly ontology?: Ontology;
   /**
    * The ceiling on ONE tool result, in characters (9.11.0). **Opt-in — there
    * is no default, and there will not be one.**
@@ -1863,6 +1891,21 @@ export interface AgentState {
    * the emission; a row here is a second reading, never a substitute.
    */
   toolChoices?: ToolChoiceLedger;
+
+  // ── The declared ontology (`.ontology()`) ──────────────────────
+  /**
+   * The declared map, on the record (9.106.0) — a RUN CONSTANT written
+   * ONCE by `stages/seed.ts` on every run of an agent built with
+   * `.ontology(map)`: the ontology's `id`, `version` and `hash` (the
+   * identities the served event carries) and the WHOLE `spec`, so the piece
+   * the model is served (`ontology/serve.ts · ontologyPiece`), the rebuild
+   * (`servedView.ts · viewOf`, through `readRunConstant`) and a lens need
+   * nothing but the record. Absent for every other agent, which is what
+   * keeps `seed`'s committed key set unchanged for them (the
+   * `findingsServe` shape). Never written again during a run — the map is
+   * declared, not learned.
+   */
+  ontology?: OntologyRecord;
 
   // ── Per-run configuration (`.configure()`) ─────────────────────
   /** The model `.configure()` resolved for THIS run, written by seed and read

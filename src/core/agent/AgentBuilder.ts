@@ -93,6 +93,7 @@ import { Agent } from '../Agent.js';
 import { buildSkillGraphDeclared, type SkillGraphDeclaredMap } from './skillGraphDeclared.js';
 import type { AgentOptions, RunConfigFn } from './types.js';
 import { FINDINGS_INSTRUCTION } from './findings/reserved.js';
+import { ONTOLOGY_INSTRUCTION, ONTOLOGY_INSTRUCTION_ID } from '../../ontology/instruction.js';
 
 /** The id of the always-on instruction `.findings()` registers (9.101.0) —
  *  the name a receipt's `system.pieces` carries and a test can look for. */
@@ -442,6 +443,10 @@ export class AgentBuilder {
    *  door — and undefined on every agent that never called it. Composed into
    *  the options `build()` hands `Agent` as `AgentOptions.toolChoice`. */
   private toolChoiceValue?: NonNullable<AgentOptions['toolChoice']>;
+  /** The declared ontology (9.106.0), set by `.ontology()` — the ONE door —
+   *  and undefined on every agent that never called it. Composed into the
+   *  options `build()` hands `Agent` as `AgentOptions.ontology`. */
+  private ontologyValue?: NonNullable<AgentOptions['ontology']>;
 
   constructor(opts: AgentOptions) {
     this.opts = opts;
@@ -458,6 +463,10 @@ export class AgentBuilder {
     // Same door for `toolChoice` (9.105.0): the option form is validated by
     // the one method, so a misconfigured classifier fails here, not per call.
     if (opts.toolChoice !== undefined) this.toolChoice(opts.toolChoice);
+    // Same door for `ontology` (9.106.0): the option form registers the
+    // always-on ask through the one method, so a map the model was never
+    // told how to read cannot be mounted.
+    if (opts.ontology !== undefined) this.ontology(opts.ontology);
   }
 
   /**
@@ -2218,6 +2227,101 @@ export class AgentBuilder {
   }
 
   /**
+   * The declared ontology (9.106.0) — a MAP of what exists and where, never
+   * a way to fetch it.
+   *
+   * WHY. When a tool result does not hold what a question needs, the model
+   * has nothing to say about where the need WOULD be met — it guesses a
+   * source, or reports the absence as if nothing anywhere held the term. An
+   * ontology lets the application declare, once, what each term IS (its
+   * meaning and unit — the context contract's `domainDefinitions`), how
+   * terms RELATE, which SOURCE holds a term with the author's own coverage
+   * sentence, and which registered TOOL reads it from there. The model is
+   * served that map as data on every call and asked to name the source, the
+   * tool or the neighbouring node a need points at — as a proposal. The
+   * library executes nothing through the map, fetches nothing, and never
+   * decides that a node "has no data": a node with no declared source is
+   * served as `known, not held here`, which is what the declaration says.
+   *
+   * WHAT IT DOES. Takes the frozen `Ontology` `defineOntology` returned
+   * (`agentfootprint/ontology`); at `.build()` every tool name a node's `via`
+   * names is checked against the agent's tool registry and a name no
+   * registry carries is refused, naming the ontology and the tool. At run
+   * `seed` writes the whole spec once as the run constant
+   * `AgentState.ontology`, every model call is served ONE request-only
+   * system piece composed from that key (`ontology/serve.ts ·
+   * ontologyPiece`, joined after the recovery piece and before the findings
+   * piece, hashed on the receipt, rebuilt byte-equal by `servedAt`) and
+   * `agentfootprint.ontology.served` fires per call with identities and
+   * counts only. Registers the always-on `ontology` instruction
+   * (`ONTOLOGY_INSTRUCTION`, the `outputSchema()` twin: a system piece on
+   * the receipt, never an injected turn).
+   *
+   * Once per agent (a second call is refused, the `.findings()` grammar). An
+   * agent that never calls this is byte-identical to one built before the
+   * map existed: no key, no piece, no instruction, no event.
+   *
+   * @example
+   * ```ts
+   * import { defineOntology } from 'agentfootprint/ontology';
+   *
+   * const map = defineOntology({
+   *   id: 'fleet',
+   *   version: '1',
+   *   sources: { inventory: { meaning: 'the switch inventory export', configured: true } },
+   *   nodes: {
+   *     port: { meaning: 'a physical switch port', sources: [{ source: 'inventory', via: ['lookup_port'] }] },
+   *     port_error_rate: { meaning: 'CRC errors per minute on a port', unit: 'errors/min' },
+   *   },
+   *   edges: [{ from: 'port_error_rate', to: 'port', relation: 'measured-on' }],
+   * });
+   * const agent = Agent.create({ provider, model }).tool(lookupPort).ontology(map).build();
+   * ```
+   */
+  ontology(ontology: NonNullable<AgentOptions['ontology']>): this {
+    if (this.ontologyValue !== undefined) {
+      throw new Error(
+        'AgentBuilder.ontology: already set. One map per agent — a second call would register ' +
+          'the ask twice and leave two maps with the later one silently winning. Compose one ' +
+          'declaration and pass it once.',
+      );
+    }
+    if (
+      ontology === null ||
+      typeof ontology !== 'object' ||
+      typeof ontology.id !== 'string' ||
+      typeof ontology.version !== 'string' ||
+      typeof ontology.hash !== 'string' ||
+      ontology.hash.length === 0 ||
+      !Object.isFrozen(ontology) ||
+      ontology.nodes === null ||
+      typeof ontology.nodes !== 'object' ||
+      ontology.sources === null ||
+      typeof ontology.sources !== 'object' ||
+      !Array.isArray(ontology.edges)
+    ) {
+      throw new Error(
+        'AgentBuilder.ontology: expected the frozen Ontology `defineOntology(spec)` returns ' +
+          '(agentfootprint/ontology), not a bare spec — the definition is where the declaration ' +
+          'is validated and fingerprinted.',
+      );
+    }
+    this.ontologyValue = ontology;
+    // The always-on ask — the `outputSchema()` twin: a system-slot instruction
+    // that activates every iteration, so a long run keeps the vocabulary
+    // present, and a system PIECE on the receipt (never an injected turn).
+    this.injectionList.push(
+      defineInstruction({
+        id: ONTOLOGY_INSTRUCTION_ID,
+        activeWhen: () => true,
+        prompt: ONTOLOGY_INSTRUCTION,
+      }),
+    );
+    this.injectionSources.set(ONTOLOGY_INSTRUCTION_ID, this.currentSource());
+    return this;
+  }
+
+  /**
    * 3-tier degradation for output-schema validation failures. Pairs
    * with `.outputSchema()` — an agent that has one and not the other is
    * refused at `.build()`, in either call order.
@@ -2905,7 +3009,8 @@ export class AgentBuilder {
     const opts =
       this.maxIterationsOverride !== undefined ||
       this.findingsValue !== undefined ||
-      this.toolChoiceValue !== undefined
+      this.toolChoiceValue !== undefined ||
+      this.ontologyValue !== undefined
         ? {
             ...this.opts,
             ...(this.maxIterationsOverride !== undefined && {
@@ -2914,6 +3019,8 @@ export class AgentBuilder {
             ...(this.findingsValue !== undefined && { findings: this.findingsValue }),
             // Tool choice by classifier (9.105.0), the same door grammar.
             ...(this.toolChoiceValue !== undefined && { toolChoice: this.toolChoiceValue }),
+            // The declared ontology (9.106.0), the same door grammar.
+            ...(this.ontologyValue !== undefined && { ontology: this.ontologyValue }),
           }
         : this.opts;
     // .selfExplain(): a fresh binding per build() — two built agents never

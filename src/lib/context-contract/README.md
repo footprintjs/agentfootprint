@@ -36,6 +36,20 @@ delivery and opt-in behavior, not improved reasoning by a real model.
 Run the credential-free example after building:
 `npm run example -- examples/context-engineering/23-context-contract.ts`.
 
+## The ontology is the data behind three of these fields (opt-in, 9.106.0)
+
+An agent built with `.ontology(map)` (`agentfootprint/ontology` ·
+`defineOntology`) is served, on every call, a request-only system piece
+headed by this record's `domainDefinitions`, `limitations` and
+`evidenceRefs` meanings — quoted from `CONTEXT_FIELD_MEANINGS`, one owner —
+followed by the declared map: a term and its unit (the data behind
+`domainDefinitions`), which source holds it and the author's coverage
+sentence (what bounds a conclusion — `limitations`), which registered tool
+reads it from where and how terms relate (pointers to resolve, not evidence
+— `evidenceRefs`). The map is declared and served as data; nothing here
+reads it, and `contextContractForModel()` is unchanged. See
+`src/ontology/README.md`.
+
 ## Evidence destinations (opt-in)
 
 `resolveEvidenceNeed(need, routes?, availableInputs?)` performs a bounded exact-ID

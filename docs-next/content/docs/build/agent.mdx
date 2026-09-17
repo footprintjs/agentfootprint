@@ -47,7 +47,7 @@ Because the framework owns the loop, observability is just attaching listeners �
 
 <CodeFile path="examples/core/02-agent-with-tools.ts" region="observe" title="examples/core/02-agent-with-tools.ts (region: observe)" />
 
-118 typed events fire across 26 domains during a single `agent.run()`. See the [Observability guide](doc:observability) for the full taxonomy.
+119 typed events fire across 27 domains during a single `agent.run()`. See the [Observability guide](doc:observability) for the full taxonomy.
 
 ## maxIterations
 
@@ -342,6 +342,40 @@ agent.getSnapshot()?.sharedState.toolChoices; // pick → served → called, per
 The model's call is never overridden and, by default (`serve: 'all'`), nothing is served differently: an advisory agent's requests are byte for byte the unarmed agent's, and the record gains the rows and nothing else. `serve: { top: N }` is the narrowing dial: the tools slot commits the classifier's top-N plus the doors as the served list, at the one site where the served list is built, so the request, the receipt's `tools.schemaHashes` and `servedAt(k).tools.schemas` all name the narrowed list by construction. The doors are never narrowed away and never offered as candidates: `read_skill`, `list_skills`, `skip_step` and `present` — the constant `ALWAYS_SERVED_TOOLS` — plus every name in `alwaysServe`. The full wire is served, with the reason on the row as a `NarrowSkipReason`, when the classifier failed or scored fewer than N names (`unavailable`), fewer than N + 1 candidates were offered (`too-few`), the previous call's outcome carried a miss (`after-miss`), or the call is the out-of-budget wrap-up (`wrap-up`). A miss is a fact, not a refusal: when a narrowed call's reply names a tool outside `served`, the outcome row carries `miss.wanted`, the dispatcher answers the call exactly as it answered an off-wire call before (`agentfootprint.tools.answered_off_wire`), and the next call serves the full wire. `reactMode: 'classic'` is refused at build, as it is for `.findings()`.
 
 The events carry identities, enums and numbers only: `agentfootprint.tool_choice.picked` (the pick, its confidence, how many tools were offered and served, whether the list was narrowed and why not, latency and tokens), `agentfootprint.tool_choice.outcome` (`called`, `firstAgrees`, `missed`) and `agentfootprint.tool_choice.failed` (status, latency) — never a description, never the message. `npm run bench:tool-choice` measures both dials on the mock provider from the record alone — `first-agrees`, `misses`, `extra-calls`, `tools-slot-bytes` from the receipt's `requestMeasurement`, `pick-tokens`, `pick-latency-ms` — and exits non-zero if an unarmed twin's tools-slot bytes move; the design page (`docs/design/2026-09-scored-choice.md` in the repository, step 4) has the print and its reading, and names what the state does not yet carry (the conversation so far).
+
+### The ontology — a map, not a door — `.ontology()`
+
+When a tool result does not hold what a question needs, the model has nothing to say about where the need *would* be met: it guesses a source, or reports the absence as if nothing anywhere held the term. An ontology lets the application declare, once, what each term IS (its meaning and unit — the context contract's `domainDefinitions`), how terms RELATE, which SOURCE holds a term with the author's own coverage sentence, and which registered TOOL reads it from there. It is a map, and only a map: it does not provide a way to get data, nothing is executed or fetched through it, and the library infers nothing from it — it tells the model about each node and how a node is reached, so a model that finds no data can say which node or source would help further.
+
+`defineOntology` (on `agentfootprint/ontology`) takes an `OntologySpec` — `id`, `version`, `nodes` (an `OntologyNode` per term: `meaning`, `unit`, `aliases`, and its `sources`, each an `OntologyNodeSource` naming the source, the tools that read the term from it (`via`) and a `coverage` sentence), `sources` (an `OntologySource` per place data is held: `meaning`, `coverage`, and `configured`, a boolean the author wrote or absent — absent means unknown, never assumed) and `edges` (an `OntologyEdge` per relation: `from`, `to`, the author's `relation` word, an optional `meaning`) — and returns an `Ontology`: validated, detached, deep-frozen, with `edges` always present and a `hash`. Every fault is refused by name at definition: an id that is not identifier-safe, an edge to a node nobody declared, a node held by a source nobody declared, an empty or over-long text, a repeated alias, `via` or edge, or a count past `ONTOLOGY_LIMITS`. A node with no source is legal — known, nowhere collected here. `ontologyHash` is the declaration's fingerprint: SHA-256 over the canonical JSON of the five declared fields (the receipt's own `stableJson`, so key order never moves it; edge order is part of the identity).
+
+```ts
+import { defineOntology } from 'agentfootprint/ontology';
+
+const map = defineOntology({
+  id: 'fleet',
+  version: '1',
+  sources: {
+    inventory: { meaning: 'the switch inventory export', configured: true },
+  },
+  nodes: {
+    port: {
+      meaning: 'a physical switch port',
+      sources: [{ source: 'inventory', via: ['lookup_port'], coverage: 'every port on every switch' }],
+    },
+    port_error_rate: { meaning: 'CRC errors per minute on a port', unit: 'errors/min' },
+  },
+  edges: [{ from: 'port_error_rate', to: 'port', relation: 'measured-on' }],
+});
+
+const agent = Agent.create({ provider, model }).tool(lookupPort).ontology(map).build();
+await agent.run({ message: 'what is the error rate on fc1/7?' });
+agent.getSnapshot()?.sharedState.ontology; // { id, version, hash, spec } — the run constant
+```
+
+`.ontology(map)` (`AgentOptions.ontology`) is the one door and refuses a second call. At `.build()` every tool name a node's `via` names is checked against the agent's tool registry — a `.tool()` name, a skill's tool, the framework's doors — and a name no registry carries is refused, naming the ontology, the tool, the node and the source. At run `seed` writes the whole map ONCE as the run constant `AgentState.ontology`, an `OntologyRecord` — `id`, `version`, `hash` and the whole `spec` — so the served text, the rebuild and a lens need nothing but the record. Every model call is then served ONE request-only system piece, composed by the pure `ontologyPiece` (an `OntologyPiece` with `source: 'ontology'`, a new `ContextSource`): a constant header quoting the contract's `domainDefinitions`, `limitations` and `evidenceRefs` meanings, then `nodes:` (`<id> — <meaning> (<unit>) · aliases: …`, sorted by id), `sources:` (`<id> — <meaning> · coverage: … · configured: yes|no` — an absent `configured` says nothing), `held by:` (`<node> ← <source> via <tool, …> · <coverage>`), `relations:` (`<from> —<relation>→ <to> · <meaning>`, in declaration order) and `known, not held here:` (the nodes with no declared source, as an id list). Every line quotes the declaration; no sentence the library wrote about the domain. Sections cap at `ONTOLOGY_PIECE_LIMITS` lines with the overflow stated, an empty section is omitted, and the piece carries no per-call byte, so an unchanged map serves unchanged bytes and reuses the cached system prefix. It is joined after the recovery piece and before the findings piece (injections → recovery → ontology → findings, fixed), never as an injection; the receipt hashes it per request and `servedAt` rebuilds it byte-equal from the record — the conformance law holds at every epoch, in both chart shapes.
+
+The ask the model reads is the always-on instruction `ONTOLOGY_INSTRUCTION` (registered under `ONTOLOGY_INSTRUCTION_ID`, the `outputSchema()` twin): say which declared source, tool or neighbouring node the map names for a need the results did not meet — as a proposal, never as a claim that data exists there — never invent a value from the map, and report a node listed as known but not held here as declared. The event `agentfootprint.ontology.served` fires once per call that served the piece, with the map's `id`, `version` and `hash` and its node, source and edge counts — identities and numbers only (`Payloads.OntologyServedPayload`); subscribe to the domain with `agentfootprint.ontology.*`. An agent without `.ontology()` is byte-identical to one built before the map existed: no key, no piece, no instruction, no event. What the map is measured on — for questions whose data is not collected, how many tool calls precede the honest answer and whether that answer names the source — is a bench on the first host after the release; the design page (`docs/design/2026-09-ontology.md` in the repository) says what it measures and what it does not.
 
 ## Composition with other Agents
 

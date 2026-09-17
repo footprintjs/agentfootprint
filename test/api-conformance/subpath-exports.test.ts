@@ -52,6 +52,7 @@ import * as hostingDoor from '../../src/doors/hosting.js';
 import * as contextDoor from '../../src/doors/context.js';
 import * as securityDoor from '../../src/doors/security.js';
 import * as classifyDoor from '../../src/doors/classify.js';
+import * as ontologyDoor from '../../src/doors/ontology.js';
 
 // ─── The implementation barrels behind them (no longer subpaths) ───
 
@@ -72,6 +73,7 @@ import * as hostingProviders from '../../src/hosting-providers.js';
 import * as injectionEngine from '../../src/injection-engine.js';
 import * as identity from '../../src/identity.js';
 import * as classify from '../../src/classify/index.js';
+import * as ontology from '../../src/ontology/index.js';
 
 // ─── The two lists ─────────────────────────────────────────────────
 
@@ -248,6 +250,11 @@ const SURVIVING_SUBPATHS = [
   // `./providers`, but one that SCORES declared candidates instead of
   // generating text. No run entry point.
   './classify',
+  // 9.106.0 — also added, also never one of the sixteen. `./ontology`
+  // publishes the declared map (`defineOntology`, `ontologyHash`,
+  // `ontologyPiece`, the shapes, the always-on ask) — pure data and pure
+  // functions, no run entry point; mounted via `.ontology()`.
+  './ontology',
 ] as const;
 
 // ─── Manifest helpers ──────────────────────────────────────────────
@@ -334,6 +341,20 @@ describe('a door added after 9.0.0 is a re-export of its implementation barrel',
     for (const sample of ['typesafe', 'mockClassifier', 'ClassifierError']) {
       expect(impl[sample], `src/classify lost ${sample}`).toBeDefined();
       expect(onDoor[sample], `./classify's ${sample} is a different object`).toBe(impl[sample]);
+    }
+  });
+
+  it('./ontology serves the SAME defineOntology / ontologyHash / ontologyPiece / ONTOLOGY_INSTRUCTION as src/ontology', () => {
+    const impl = ontology as unknown as Record<string, unknown>;
+    const onDoor = ontologyDoor as unknown as Record<string, unknown>;
+    for (const sample of [
+      'defineOntology',
+      'ontologyHash',
+      'ontologyPiece',
+      'ONTOLOGY_INSTRUCTION',
+    ]) {
+      expect(impl[sample], `src/ontology lost ${sample}`).toBeDefined();
+      expect(onDoor[sample], `./ontology's ${sample} is a different object`).toBe(impl[sample]);
     }
   });
 });

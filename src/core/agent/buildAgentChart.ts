@@ -313,6 +313,16 @@ export interface AgentChartDeps {
   readonly hasToolChoice?: boolean;
 
   /**
+   * The declared ontology is armed (`.ontology()`, 9.106.0). The flat chart
+   * needs nothing from it — `callLLM` reads the run constant `ontology` off
+   * the root scope; in the grouped chart `callLLM` lives INSIDE `sf-llm-call`
+   * and the constant is written by seed on the OUTER scope, so the boundary's
+   * `inputMapper` carries it across, under this gate and value-conditionally.
+   * Absent — the default — the boundary maps exactly the keys it always did.
+   */
+  readonly hasOntology?: boolean;
+
+  /**
    * ReAct loop semantics. `'dynamic'` (default) re-runs the InjectionEngine +
    * all 3 slots every iteration (loop → InjectionEngine). `'classic'`
    * engineers context ONCE (InjectionEngine + system-prompt + tools up front)

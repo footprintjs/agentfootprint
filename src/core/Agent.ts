@@ -495,6 +495,14 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
    *  armed agent only — an unarmed agent hands each stage exactly the deps it
    *  always did. */
   private readonly toolChoiceOptions?: NonNullable<AgentOptions['toolChoice']>;
+  /** The declared ontology (9.106.0, `.ontology()`): the frozen map. Threaded
+   *  to seed (the whole map, written once as the run constant `ontology`),
+   *  to call-llm (`ontology: true`, the gate on every read of that key) and
+   *  to both chart builders (`hasOntology`, the grouped boundary's crossing)
+   *  on an armed agent only — an unarmed agent hands each stage exactly the
+   *  deps it always did. The tool names its `via` edges name are checked
+   *  against the registry in `buildChart`, beside `buildToolRegistry`. */
+  private readonly ontology?: NonNullable<AgentOptions['ontology']>;
   /** The opt-in tool-result ceiling in characters (9.11.0). Absent → results
    *  are never measured. See {@link AgentOptions.maxToolResultChars}. */
   private readonly maxToolResultChars?: number;
@@ -943,6 +951,7 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
     if (opts.toolArgValidation !== undefined) this.toolArgValidation = opts.toolArgValidation;
     if (opts.findings !== undefined) this.findingsOptions = opts.findings;
     if (opts.toolChoice !== undefined) this.toolChoiceOptions = opts.toolChoice;
+    if (opts.ontology !== undefined) this.ontology = opts.ontology;
     // The tool-result ceiling (9.11.0). Refused HERE, naming the value, rather
     // than at the first tool call of the first run — a dial that cannot cap
     // anything is a configuration mistake, not a runtime condition.
@@ -3023,6 +3032,19 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
         }),
       );
     }
+    // Same wiring for `agentfootprint.ontology.*` (9.106.0) — the one event
+    // `callLLM` emits when the declared map is served. Attached only under
+    // `.ontology()`, for the same reason.
+    if (this.ontology !== undefined) {
+      attachObserver(
+        new EmitBridge({
+          id: 'agentfootprint.ontology-bridge',
+          prefix: 'agentfootprint.ontology.',
+          dispatcher,
+          getRunContext: getRunCtx,
+        }),
+      );
+    }
     for (const r of this.attachedRecorders) {
       // A recorder's OWN `delivery` field is more specific than the
       // agent-level default — footprintjs's options bag would override the
@@ -3703,6 +3725,11 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
           return l;
         },
       }),
+      // The declared ontology (9.106.0): the whole frozen map, which seed
+      // writes ONCE as the run constant `ontology` — the `findingsServe`
+      // precedent, a build-time fact the rebuild reads from the RECORD. An
+      // unarmed agent hands seed exactly the deps object it always did.
+      ...(this.ontology !== undefined && { ontology: this.ontology }),
       // The conversation's inherited skill cursor (SG-C). Consumed (cleared)
       // on every run; HONORED only when the mounted graph declared
       // `continuity: 'conversation'` — the same one-option-one-behavior gate
@@ -3772,6 +3799,28 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
         ...(this.findingsOptions !== undefined && { findings: true as const }),
       },
     );
+    // The declared ontology's tool edges (9.106.0): every name a node's `via`
+    // names must be a tool this registry can dispatch — the static registry,
+    // the framework's doors and every skill's tools, `registryByName` being
+    // the ONE map that holds all of them. Refused at BUILD, naming the
+    // ontology and the tool: a map that points a need at a tool nobody can
+    // call is a map that lies, and only the operator can fix it. Provider-
+    // served tools are only met at dispatch and cannot be named here.
+    if (this.ontology !== undefined) {
+      for (const [nodeId, node] of Object.entries(this.ontology.nodes)) {
+        for (const held of node.sources ?? []) {
+          for (const toolName of held.via ?? []) {
+            if (!registryByName.has(toolName)) {
+              throw new Error(
+                `Agent: ontology '${this.ontology.id}' names tool '${toolName}' that is not ` +
+                  `registered (node '${nodeId}', source '${held.source}'). Register the tool ` +
+                  `with .tool() or on a skill, or drop it from the node's \`via\`.`,
+              );
+            }
+          }
+        }
+      }
+    }
     // A statically registered tool that declares `wants` on an agent with no
     // store is configuration that lies: every call would be refused at
     // dispatch for a gap only the operator can close. Refused at BUILD,
@@ -4097,6 +4146,10 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
       ...(this.answerValidationConfig !== undefined && { suppressDraftTokens: true }),
       // Tool choice by classifier (9.105.0): the outcome row after the reply.
       ...(this.toolChoiceOptions !== undefined && { toolChoice: true as const }),
+      // The declared ontology (9.106.0): the piece served from the run
+      // constant on every call, under the one gate — an unarmed agent reads
+      // no new key.
+      ...(this.ontology !== undefined && { ontology: true as const }),
       // The receipt's salt (9.88.0) — read per call, like seed's own accessor.
       getRunId: () => this.currentRunContext?.runId,
       // …and its off switch. Value-conditional, so an agent on the default
@@ -4494,6 +4547,9 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
       // Tool choice by classifier (9.105.0): the mount args on the Tools
       // branch and the key across the sf-llm-call boundary, under the arm.
       ...(this.toolChoiceOptions !== undefined && { hasToolChoice: true }),
+      // The declared ontology (9.106.0): the grouped chart carries the run
+      // constant across the sf-llm-call boundary, under the arm.
+      ...(this.ontology !== undefined && { hasOntology: true }),
       // `.limitsTravelWithTheAnswer()` (this release) — value-conditional, the
       // `resolvedModel` precedent: absent from the deps object entirely for an
       // agent that did not ask, so both builders mount the final-branch stage

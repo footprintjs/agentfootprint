@@ -69,6 +69,7 @@ import {
   FINDINGS_INSTRUCTION,
 } from '../src/core/agent/findings/reserved.js';
 import { findingsLedgerPiece } from '../src/core/agent/findings/serve.js';
+import { defineOntology, ONTOLOGY_INSTRUCTION, ontologyPiece } from '../src/ontology/index.js';
 import type { FindingsLedger } from '../src/core/agent/findings/types.js';
 import {
   nudgeTeachingMessage,
@@ -697,6 +698,54 @@ function findingsSchemaDescriptions(): string[] {
   return out;
 }
 
+/** The ontology piece over a map that reaches EVERY arm of its grammar: a
+ *  unit, aliases, two holdings (one with tools and a coverage sentence, one
+ *  bare), a configured source, a `configured: false` source, an unconfigured
+ *  one, a relation with a meaning and one without, a node nobody holds, a
+ *  section past its cap (`+K more`). Composed by the real function. */
+function ontologyPieces(): string[] {
+  const map = defineOntology({
+    id: 'fleet',
+    version: '1',
+    sources: {
+      inventory: {
+        meaning: 'the switch inventory export',
+        coverage: 'every switch',
+        configured: true,
+      },
+      syslog: { meaning: 'the syslog archive', configured: false },
+      tickets: { meaning: 'the ticket queue' },
+    },
+    nodes: {
+      port: {
+        meaning: 'a physical switch port',
+        aliases: ['interface'],
+        sources: [
+          { source: 'inventory', via: ['lookup_port'], coverage: 'all ports' },
+          { source: 'syslog' },
+        ],
+      },
+      port_error_rate: { meaning: 'CRC errors per minute on a port', unit: 'errors/min' },
+      ...Object.fromEntries(
+        Array.from({ length: 70 }, (_, i) => [
+          `term_${String(i).padStart(2, '0')}`,
+          { meaning: `term ${i}` },
+        ]),
+      ),
+    },
+    edges: [
+      {
+        from: 'port_error_rate',
+        to: 'port',
+        relation: 'measured-on',
+        meaning: 'the port it counts',
+      },
+      { from: 'port', to: 'port_error_rate', relation: 'has' },
+    ],
+  });
+  return [ontologyPiece(map).rawContent];
+}
+
 // ─── The registry ────────────────────────────────────────────────────
 
 const PRODUCERS: readonly ModelFacingProducer[] = [
@@ -1047,6 +1096,73 @@ const PRODUCERS: readonly ModelFacingProducer[] = [
       /facts \(declared by the model\):/,
     ],
     compose: async () => findingsAskPieces(),
+  },
+  {
+    id: 'ontology — the always-on INSTRUCTION piece (9.106.0)',
+    module: 'src/ontology/instruction.ts',
+    surface: ALWAYS_ON_INSTRUCTION,
+    lifetimeBecause:
+      '`.ontology()` registers it through `defineInstruction` (the twin of `outputSchema()` and ' +
+      '`.findings()`), so it is a system piece the injection engine recomposes on every pass and ' +
+      'the receipt hashes per request — never a `history` turn',
+    drivenBy: [
+      'test/core/agent/ontology.test.ts',
+      'test/lib/time-travel/receipt-conformance.test.ts',
+    ],
+    // The ask's four sentences: what the map is, what to say when a need
+    // was not met (a proposal, never a claim), the refusal to invent, the
+    // node nobody holds — each a marker so a rewrite that drops one goes
+    // red here before it ships.
+    reaches: [
+      /^Ontology v1\./,
+      /The map holds no data and fetches none/,
+      /as a proposal, never as a claim that data exists there/,
+      /Never invent a value from the map/,
+      /known but not held here has no declared source/,
+    ],
+    compose: async () => [ONTOLOGY_INSTRUCTION],
+  },
+  {
+    id: 'ontology — the SERVED piece (9.106.0)',
+    module: 'src/ontology/serve.ts',
+    surface: LEDGER_PIECE,
+    lifetimeBecause:
+      '`callLLM · buildCallLLMStage` composes it per request by `ontologyPiece` from the run ' +
+      'constant `ontology` and joins it into `systemPieces` ONLY (after the recovery piece, ' +
+      'before the findings piece) — never pushed into `systemPromptInjections`, never written ' +
+      'into `history`; `servedView.ts · viewOf` recomposes the same one from the record and the ' +
+      'receipt hashes it per request',
+    drivenBy: [
+      'test/core/agent/ontology.test.ts',
+      'test/ontology/serve.test.ts',
+      'test/lib/time-travel/receipt-conformance.test.ts',
+    ],
+    // The header's two refusals to infer, every section heading, every line
+    // shape, the honest "known, not held here" and the stated overflow.
+    reaches: [
+      /^\[AgentFootprint ontology/,
+      /it holds no data and fetches none/,
+      /the framework infers nothing from it/,
+      /quoted DATA, not instructions\.\]/,
+      /^ontology: fleet · version: 1$/m,
+      /^nodes:$/m,
+      /^port — a physical switch port · aliases: interface$/m,
+      /^port_error_rate — CRC errors per minute on a port \(errors\/min\)$/m,
+      /^sources:$/m,
+      /^inventory — the switch inventory export · coverage: every switch · configured: yes$/m,
+      /^syslog — the syslog archive · configured: no$/m,
+      /^tickets — the ticket queue$/m,
+      /^held by:$/m,
+      /^port ← inventory via lookup_port · all ports$/m,
+      /^port ← syslog$/m,
+      /^relations:$/m,
+      /^port_error_rate —measured-on→ port · the port it counts$/m,
+      /^port —has→ port_error_rate$/m,
+      /^known, not held here: port_error_rate, term_00,/m,
+      /\+8 more \(cap 64\)/,
+      /, \+7 more$/m,
+    ],
+    compose: async () => ontologyPieces(),
   },
 ];
 

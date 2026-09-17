@@ -39,6 +39,7 @@ export type ContextSource =
   | 'instructions'
   | 'evidence-recovery'
   | 'findings'
+  | 'ontology'
   | 'steering'
   | 'fact'
   | 'custom'

@@ -222,6 +222,21 @@
  * call 2 (`lookup`, narrowed away) is answered off-wire — `history` holds
  * its result as it always would have.
  *
+ * 9.106.0: one new reference `agent-ontology` (`.ontology(map)` over one
+ * tool — two calls, the map's three nodes, two sources, one edge); none of
+ * the 19 moved (the 19 run first on the wired 9.106.0 tree — 20/20 green,
+ * the reference directory untouched by git — copied aside, the one scenario
+ * generated alone with `-t agent-ontology` under `AF_TOOLS_REFERENCE=update`,
+ * `cmp`-equal after). What it holds, read from its bytes: the run constant
+ * `ontology` (`{ id, version, hash, spec }`, the whole spec) on seed's commit
+ * with its one `set` trace row; the always-on `ontology` instruction
+ * everywhere a piece is recorded (`activeInjections`, `activeBySlot`,
+ * `systemPromptInjections`, the receipt's `system.pieces`); the ontology
+ * PIECE — `source: 'ontology'`, last in the join — on every epoch's receipt
+ * (`system.pieces`, `system.chars`/`hash`) and served view (`system.text`);
+ * and the `requestMeasurement` sizes that grow with both. No message, no
+ * tool, no gap, no other key.
+ *
  * Every scenario is a real run — the receipt-conformance shapes, each in the
  * configuration that has no name collision — and what is compared is the
  * whole `commitLog` plus `servedAt(k)` for every located epoch, after ONE
@@ -257,6 +272,7 @@ import { buildAgentMessageApiChart } from '../../../src/core/agent/buildAgentMes
 import { defineSkill, skillGraph } from '../../../src/injection-engine.js';
 import { skillScopedTools, staticTools } from '../../../src/tool-providers/index.js';
 import { mockClassifier, type ClassifyResult } from '../../../src/classify/index.js';
+import { defineOntology } from '../../../src/ontology/index.js';
 import type { LLMRequest, LLMResponse, LLMToolSchema } from '../../../src/adapters/types.js';
 
 // ─── the harness ─────────────────────────────────────────────────────
@@ -763,6 +779,42 @@ const SCENARIOS: Record<string, () => Promise<Snapshot>> = {
             ]),
             serve: { top: 2 },
           }),
+    ),
+  'agent-ontology': () =>
+    agentRun('dynamic', [call('c1', 'lookup_port', { q: 'p1' }), answer('p1 is down')], (a) =>
+      a
+        .system('bot')
+        .tool(tool('lookup_port'))
+        .ontology(
+          defineOntology({
+            id: 'fleet',
+            version: '1',
+            sources: {
+              inventory: { meaning: 'the switch inventory export', configured: true },
+              syslog: { meaning: 'the syslog archive' },
+            },
+            nodes: {
+              port: {
+                meaning: 'a physical switch port',
+                aliases: ['interface'],
+                sources: [{ source: 'inventory', via: ['lookup_port'], coverage: 'all ports' }],
+              },
+              port_error_rate: { meaning: 'CRC errors per minute on a port', unit: 'errors/min' },
+              outage_ticket: {
+                meaning: 'an open incident about a port',
+                sources: [{ source: 'syslog' }],
+              },
+            },
+            edges: [
+              {
+                from: 'port_error_rate',
+                to: 'port',
+                relation: 'measured-on',
+                meaning: 'the port it counts',
+              },
+            ],
+          }),
+        ),
     ),
   llmcall: async () => {
     const one = LLMCall.create({ provider: scripted([answer('done')]) as never, model: 'mock' })

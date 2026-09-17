@@ -79,6 +79,7 @@ import { innerRunsOf } from '../../../src/lib/trace-toolpack/index.js';
 import { isPaused, pauseHere } from '../../../src/core/pause.js';
 import { defineSkill, skillGraph } from '../../../src/injection-engine.js';
 import { mockClassifier, type ClassifyResult } from '../../../src/classify/index.js';
+import { defineOntology, ontologyPiece } from '../../../src/ontology/index.js';
 import {
   buildReceipt,
   messageDigestInput,
@@ -718,6 +719,48 @@ describe('a narrowed tool list (9.105.0, `.toolChoice({ serve: { top } })`)', ()
       expect(r.wire.map((w) => (w.tools ?? []).map((t) => t.name))).toEqual(
         views.map((v) => v.tools.names),
       );
+      clean(r);
+    });
+  }
+});
+
+describe('a declared ontology (9.106.0, `.ontology(map)`)', () => {
+  for (const reactMode of ['dynamic', 'dynamic-grouped'] as const) {
+    it(`${reactMode}: the map's piece is a system piece the receipt hashes and the log rebuilds from the run constant`, async () => {
+      const map = defineOntology({
+        id: 'fleet',
+        version: '1',
+        sources: { inventory: { meaning: 'the switch inventory export', configured: true } },
+        nodes: {
+          port: {
+            meaning: 'a physical switch port',
+            sources: [{ source: 'inventory', via: ['lookup_port'], coverage: 'all ports' }],
+          },
+          port_error_rate: { meaning: 'CRC errors per minute on a port', unit: 'errors/min' },
+        },
+        edges: [{ from: 'port_error_rate', to: 'port', relation: 'measured-on' }],
+      });
+      const r = await run(
+        reactMode,
+        [call('c1', 'lookup_port'), call('c2', 'lookup_port'), answer('done')],
+        (a) => a.system('bot').tool(tool('lookup_port')).ontology(map),
+      );
+      const views = servedViews(r.snapshot);
+      expect(views).toHaveLength(3);
+      for (const view of views) {
+        // One piece, last in the join, rebuilt from the record — the same
+        // bytes the pure composer makes of the frozen map, and the same
+        // bytes the wire carried.
+        const pieces = view.system.pieces.filter((p) => p.source === 'ontology');
+        expect(pieces).toHaveLength(1);
+        expect(pieces[0]!.text).toBe(ontologyPiece(map).rawContent);
+        expect(view.system.pieces[view.system.pieces.length - 1]!.source).toBe('ontology');
+        expect(r.wire[view.epoch - 1]!.systemPrompt).toBe(view.system.text);
+        const receipt = receiptAt(r.snapshot, view.epoch)!;
+        expect(receipt.system.pieces.map((p) => p.source)).toEqual(
+          view.system.pieces.map((p) => p.source),
+        );
+      }
       clean(r);
     });
   }

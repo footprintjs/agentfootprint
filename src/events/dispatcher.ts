@@ -112,7 +112,10 @@ export type DomainWildcard =
   // ("is anything minting, resolving, or being refused?") subscribes here; the
   // credential-domain lesson says the wildcard ships WITH the domain, not
   // eight minors later.
-  | 'agentfootprint.artifacts.*';
+  | 'agentfootprint.artifacts.*'
+  // 9.106.0 — the declared ontology's domain, added WITH its wildcard (the
+  // credential-domain lesson): one event today, `ontology.served`.
+  | 'agentfootprint.ontology.*';
 
 export type AllWildcard = '*';
 
