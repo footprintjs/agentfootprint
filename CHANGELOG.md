@@ -5,6 +5,89 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [9.102.0] - 2026-09-17
+
+### Added — a declared fact stays in the window; noise leaves first
+
+- The window reads the findings ledger. On an agent with `.findings()` and a
+  window strategy, a turn whose tool result the model declared a `fact` is
+  HELD beyond `keepRecentTurns` — newest first, up to `keepLedgerFacts`
+  (default 4; `false` or `0` for no hold) — and the refusal is on the record
+  by name: `WindowRefusalReason` gains `'ledger-fact'`. It is a bounded hold
+  in the refusal engine, the content-aware sibling of the last-tool-result
+  pin (`ledgerFactPinsOf` beside `toolResultPinsOf`, admitted by the same
+  ceiling-spender in `planRemoval`), so `slidingWindow`, `tokenBudget`,
+  `summarizeOldest` and a consumer-written strategy all inherit it through
+  `planRemoval` — no new strategy file, none of the three shipped ones changed
+  a byte, the contiguous span, the drop ladder and the meter's single-seam
+  rebase untouched. 'Noise first' follows with no second mechanism: noise,
+  ruled-out, open and undeclared turns are unpinned and leave oldest-first as
+  they always did, and a judged noise turn that outlives a fact is already a
+  ticket on the wire. Why: the served piece restored a declared fact to the
+  answer turn, but under a window the fact's RESULT still left by recency —
+  the refusal engine saw a declared fact and a declared noise result as the
+  same bytes. By the model's claim only: a turn is the removal unit and its
+  standing is its most valuable result's (`fact > open > undeclared >
+  ruled-out > noise`); a result the model never named is undeclared and is not
+  held; the library reads no result's text to decide otherwise.
+- A fact hold never exists without its ceiling and its stand-down. The
+  ceiling is spent newest first and a held turn already inside
+  `keepRecentTurns` spends no slot (the free-pin law); the turns it turned away
+  are `yielded` on the record; nothing at or before the current request is
+  pinnable. The stand-down is the pin's: when the two previous visits removed
+  nothing and named only pins, the fact pins release for one visit and the
+  record says so. It reads BOTH pin names (`'last-tool-result'` and/or
+  `'ledger-fact'`), because a turn held by both pins is reported under the
+  recency pin's name — a fact stand-down reading only its own would never see
+  that turn blocking, and the two pins would alternate under each other's
+  name with the window never shrinking (derived, pinned by test, never
+  shipped). The recency pin's own stand-down reads only its own name, so its
+  9.57.0 rule is unchanged.
+- The record says what was held and whose standing left. `WindowRecord`
+  gains two optional keys, present only on an armed agent and filed by the
+  STAGE so a consumer-written strategy's record carries them too:
+  `ledgerFacts` (the `WindowObservations` shape — `pinned`, `yielded`,
+  `limit` = `keepLedgerFacts`, `standDown: true` on the visit it released)
+  and `droppedStandings` (`{ toolCallId, standing? }` for every tool result
+  that left; `standing` absent is undeclared, never a verdict the library
+  inferred). `WindowStrategyInput.standingOf?` hands a strategy a turn's
+  declared standing, bound by the stage from ONE read of the ledger and
+  absent on an unarmed agent — a strategy never reads scope for it; it is for
+  ordering or reporting among what the engine left removable, never for
+  inferring. What the model is TOLD about a drop is unchanged: the notice
+  names tools and counts, never a standing, never the model's own line.
+- `keepLedgerFacts` is live: `.findings({ keepLedgerFacts })` and
+  `Agent.create({ keepLedgerFacts })` (the `.findings()` door wins when both
+  are given), resolved once at build and validated there — a negative or
+  non-integer value is refused, never mid-run. Without `.findings()` the
+  option is accepted and does nothing (the keepLastToolResults-without-a-window
+  precedent). Exported from the root: `LedgerFactPin` (the candidate a hold is
+  built from: `toolCallIds`, `toolName`, `turnIndex`, `messageIndex`, `chars`),
+  beside the widened `WindowRefusalReason` and the `WindowRecord` additions.
+- Measured (`npm run bench:findings`, mock provider, 30 tool calls, a planted
+  fact every third, a sliding window keeping 6 turns): the results of 2 of 10
+  planted facts reached the answer turn verbatim by recency alone, 6 under the
+  default ceiling and 8 under a ceiling of 6, while the piece carried 9 of 10
+  on every armed row (the last batch is undeclared by the no-outputSchema law)
+  and the noise share of tool-result bytes on the wire stayed at the collapsed
+  level; every noise result left on every armed row, so the hold changed WHICH
+  facts left, not whether noise did. The design page has the print and its
+  reading; no real-model number exists yet.
+
+### Unchanged — an agent without `.findings()` plans, records and sends the bytes it did before
+
+- The hold, the ledger read, `standingOf`, `ledgerFacts` and `droppedStandings`
+  are all gated on the door: an unarmed window stage never reads
+  `findingsLedger` (pinned by a getter counting reads), hands its strategy the
+  exact input it always did, files the exact record it always did, and sends
+  the same request bytes — even when the model emits `_findings` on its own.
+  The 16 byte-identity references under `test/core/tools/reference/` pass
+  untouched; ONE new reference, `agent-findings-window`, was generated alone,
+  with what it holds read back from its bytes on the test file's header.
+- `keepLedgerFacts: false` plans exactly as the unarmed window (the bench
+  checks it: same facts verbatim, same tool messages, same receipt count, no
+  fact held), so the hold is an addition to the plan, never a rewrite of it.
+
 ## [9.101.1] - 2026-09-16
 
 ### Fixed — the docs site's export-file ceiling

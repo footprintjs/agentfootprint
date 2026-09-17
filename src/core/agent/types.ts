@@ -267,15 +267,23 @@ export interface AgentOptions {
    * results too and is BENCH-GATED: shipped so `bench/findings-shuffle.mjs`
    * can measure it on a real model, not a recommendation, never a default
    * until that run shows the answer does not drift under shuffled evidence.
-   * `keepLedgerFacts` is accepted now so no public name changes later and is
-   * inert until standing-aware eviction lands.
+   * `keepLedgerFacts` is the ceiling of fact turns the WINDOW holds under
+   * standing-aware eviction (9.102.0) — the same dial as
+   * {@link AgentOptions.keepLedgerFacts}, which says why and what it costs;
+   * this door wins when both are given, so ONE resolved value reaches the
+   * window stage (`Agent` resolves it once, at build) and is spent there:
+   * `stages/window.ts · buildWindowStage` admits up to that many
+   * `'ledger-fact'` pins (`turns.ts · admitPins`) and files the hold on
+   * `WindowRecord.ledgerFacts`.
    */
   readonly findings?: {
     /** What the model is served from the ledger: the default keeps fact results
      *  verbatim beside the piece; `'ledger-only'` collapses them too (bench-gated). */
     readonly serve?: 'ledger-and-facts' | 'ledger-only';
-    /** How many ledger facts stay served, or `false` for all — accepted, inert
-     *  until standing-aware eviction lands. */
+    /** The ceiling of fact turns the window holds beyond `keepRecentTurns`, or
+     *  `false` (= `0`) for no hold — the same dial as
+     *  {@link AgentOptions.keepLedgerFacts}; this door wins when both are
+     *  given. Default 4 under `.findings()` with a window strategy. */
     readonly keepLedgerFacts?: number | false;
   };
   /**
@@ -534,6 +542,37 @@ export interface AgentOptions {
    * and the window behaves exactly as it did in 9.56.0.
    */
   readonly keepLastToolResults?: number | false;
+  /**
+   * The ceiling of fact turns the window HOLDS under the findings ledger
+   * (9.102.0) — `keepLastToolResults`'s content-aware sibling. Read only when
+   * `.findings()` and a window strategy are BOTH configured: an agent missing
+   * either pays nothing and hands the window stage exactly the deps it
+   * always did (no ledger → nothing to hold from; no window → no stage).
+   *
+   * WHY. The last-tool-result pin is CONTENT-BLIND: it keeps a tool's most
+   * recent result, which may be a one-word acknowledgement while the
+   * load-bearing one was the call before. The ledger gives the window a
+   * content-aware signal the LIBRARY never infers — the model's own
+   * declaration that a result is a `fact` (`AgentState.findingsLedger`, the
+   * `_findings.previous` standing). A turn the model stood on is held past
+   * `keepRecentTurns`, newest first, up to this many turns, and the refusal
+   * is named on the record; noise, ruled-out, open and undeclared turns
+   * leave oldest-first exactly as they always did. Like the pin, a hold that
+   * has provably blocked two consecutive boundaries stands down ON THE
+   * RECORD rather than let a window grow — a fact hold never exists without
+   * its ceiling and its stand-down.
+   *
+   * Default 4 when `.findings()` and a window strategy are both configured.
+   * `false` (or `0`) switches the hold off: no fact pins, and the window
+   * plans exactly as it did before the ledger existed. Also settable as
+   * `findings({ keepLedgerFacts })` — ONE resolved value, the `.findings()`
+   * door winning when both are given. A negative or non-integer value is
+   * refused at build, never mid-run (the `keepLastToolResults` rule). The
+   * resolved value is spent by `stages/window.ts · buildWindowStage`: it is
+   * the ceiling `turns.ts · admitPins` admits `'ledger-fact'` pins up to,
+   * and the `limit` on the record's `ledgerFacts` block.
+   */
+  readonly keepLedgerFacts?: number | false;
   /**
    * How loud the Context Integrity checkers are about their OWN health
    * (9.60.0). Default `'observe'`.

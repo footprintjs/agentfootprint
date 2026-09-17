@@ -51,15 +51,29 @@ import type { CompactionMeterHandle } from '../../../recorders/core/CompactionMe
 import { typedEmit } from '../../../recorders/core/typedEmit.js';
 import { fnv1a } from '../../slots/helpers.js';
 import { emitCostTick, type ResolvedCostBudget } from '../../cost.js';
+import { foldLedger, type LedgerFold } from '../findings/ledger.js';
+import type { FindingsLedger, Standing } from '../findings/types.js';
 import { currentRequestIndexOf } from '../window/currentRequest.js';
 import { toolResultPinsOf } from '../window/lastToolResult.js';
+import { ledgerFactPinsOf, turnStandingOf } from '../window/ledgerFactPins.js';
 import { DEFAULT_KEEP_LAST_TOOL_RESULTS } from '../window/options.js';
 import { removalFacts } from '../window/removal.js';
 import type { WindowStrategy } from '../window/strategy.js';
-import { answeredCallIds, planRemoval, segmentTurns, type RemovalGuards } from '../window/turns.js';
+import {
+  answeredCallIds,
+  planRemoval,
+  segmentTurns,
+  type RemovalGuards,
+  type Turn,
+} from '../window/turns.js';
 import { droppedToolNames } from '../window/toolNames.js';
 import type { EvictedTurnsHandle } from '../window/evictedTurns.js';
-import type { FoldedSpan, WindowObservations, WindowRecord } from '../window/types.js';
+import type {
+  FoldedSpan,
+  WindowObservations,
+  WindowRecord,
+  WindowRefusalReason,
+} from '../window/types.js';
 import type { AgentState } from '../types.js';
 
 export interface WindowStageDeps {
@@ -92,6 +106,28 @@ export interface WindowStageDeps {
    * object it always did.
    */
   readonly keepLastToolResults?: number | false;
+  /**
+   * The findings ledger is armed on this agent (9.102.0) — `.findings()` was
+   * called. The ONE gate under which this stage may read
+   * `scope.findingsLedger`: on an unarmed agent that key never exists, and a
+   * tracked read of an always-absent key is the phantom-context-source
+   * defect `window/evictedTurns.ts` documents. Threaded value-conditionally
+   * by `Agent` (the `keepLastToolResults` grammar) together with
+   * `keepLedgerFacts` — both or neither — so an unarmed agent hands this
+   * stage exactly the deps object it always did.
+   */
+  readonly hasFindingsLedger?: true;
+  /**
+   * The ceiling of fact turns the window holds beyond `keepRecentTurns`
+   * (9.102.0) — `keepLastToolResults`'s content-aware sibling, by the
+   * MODEL's `fact` standing only, never the library's reading of a result.
+   * Present exactly when `hasFindingsLedger` is, and already RESOLVED by
+   * `Agent` (`findings({ keepLedgerFacts })` over
+   * `AgentOptions.keepLedgerFacts`; `false` → `0`; default 4), so this stage
+   * applies no default of its own: absent means no hold, `0` means the hold
+   * is switched off. See `AgentOptions.keepLedgerFacts` for why.
+   */
+  readonly keepLedgerFacts?: number;
   /** Injectable clock (tests pin survivalMs). */
   readonly now?: () => number;
   /**
@@ -103,10 +139,30 @@ export interface WindowStageDeps {
   readonly evictedTurns?: EvictedTurnsHandle;
 }
 
+/** The last-tool-result pin's own name — what ITS stand-down reads (9.57.0). */
+const LAST_TOOL_RESULT_PIN: ReadonlySet<WindowRefusalReason> = new Set<WindowRefusalReason>([
+  'last-tool-result',
+]);
 /**
- * True when the pin is PROVABLY what is stopping the window from shrinking:
- * the two most recent visits both removed nothing AND both named
- * `'last-tool-result'`.
+ * The whole pin FAMILY — what the ledger-fact pin's stand-down reads
+ * (9.102.0). Both names, because `refusalFor` reports the recency pin first:
+ * a turn held by both pins is named `'last-tool-result'`, and a fact
+ * stand-down that read only its own name would never see that turn blocking.
+ * The two pins would then alternate — the recency pin standing down on a
+ * visit the fact pin does not, the fact pin on a visit the recency pin does
+ * not, each visit's refusal wearing the other's name — and the window would
+ * never shrink. Reading the family closes that: on the visit the recency pin
+ * stands down, the fact pin stands down with it, and the turn leaves.
+ */
+const ANY_PIN: ReadonlySet<WindowRefusalReason> = new Set<WindowRefusalReason>([
+  'last-tool-result',
+  'ledger-fact',
+]);
+
+/**
+ * True when a pin is PROVABLY what is stopping the window from shrinking:
+ * the two most recent visits both removed nothing AND both named one of
+ * `reasons`.
  *
  * Two, not one: a single blocked boundary is ordinary (the next tool result
  * arrives and the pin moves). Two in a row with the pin named in both is
@@ -119,15 +175,51 @@ export interface WindowStageDeps {
  * release-under-budget-pressure one: budget pressure peaks exactly when the
  * model is most likely to fabricate, which is the worst moment to throw its
  * evidence away.
+ *
+ * It reads the REFUSALS, not the observations blocks: a block is absent when
+ * a pin held nothing, while a refusal is present exactly when a pin blocked
+ * a turn — and when nothing left, every candidate's refusal is on the
+ * record, so a blocking pin is always named.
+ *
+ * @param reasons which pin names count — the recency pin reads its own
+ *   (`LAST_TOOL_RESULT_PIN`), the fact pin reads the family (`ANY_PIN`), and
+ *   the constant above says why. On an agent without `.findings()` the
+ *   family never contains a `'ledger-fact'` row, so the two readings agree
+ *   and the recency pin's stand-down is the exact rule it was.
  */
-function pinIsBlocking(records: readonly WindowRecord[]): boolean {
+function pinIsBlocking(
+  records: readonly WindowRecord[],
+  reasons: ReadonlySet<WindowRefusalReason>,
+): boolean {
   const recent = records.slice(-2);
   return (
     recent.length === 2 &&
     recent.every(
-      (r) => r.removedMessageCount === 0 && r.refusals.some((f) => f.reason === 'last-tool-result'),
+      (r) => r.removedMessageCount === 0 && r.refusals.some((f) => reasons.has(f.reason)),
     )
   );
+}
+
+/**
+ * The standing of every tool result that left, as the model had declared it
+ * (9.102.0) — `WindowRecord.droppedStandings`. Absent `standing` is
+ * UNDECLARED, never defaulted. A result with no id cannot be on the ledger
+ * and is not listed; an empty list is `undefined`, so a visit that dropped
+ * no tool result writes no key.
+ */
+function droppedStandingsOf(
+  evicted: readonly LLMMessage[],
+  fold: LedgerFold,
+): readonly { readonly toolCallId: string; readonly standing?: Standing }[] | undefined {
+  const rows: { readonly toolCallId: string; readonly standing?: Standing }[] = [];
+  for (const msg of evicted) {
+    if (msg.role !== 'tool' || msg.toolCallId === undefined || msg.toolCallId.length === 0) {
+      continue;
+    }
+    const standing = fold.standingOf.get(msg.toolCallId)?.standing;
+    rows.push({ toolCallId: msg.toolCallId, ...(standing !== undefined && { standing }) });
+  }
+  return rows.length > 0 ? rows : undefined;
 }
 
 /** Build the window stage. */
@@ -169,8 +261,9 @@ export function buildWindowStage(
       );
     }
     const origins = meter.origins();
-    // Read once, used twice: the append below, and the pin's stand-down check
-    // (9.57.0). One tracked read of the same key either way.
+    // Read once, used three times: the append below, the recency pin's
+    // stand-down check (9.57.0) and the fact pin's (9.102.0). One tracked
+    // read of the same key either way.
     const priorRecords = (scope.compactions as readonly WindowRecord[] | undefined) ?? [];
     const pausedToolCallId = scope.pausedToolCallId as string | undefined;
     // The one message this run is executing (9.55.0). `scope.userMessage` is
@@ -190,9 +283,40 @@ export function buildWindowStage(
       deps.keepLastToolResults === false
         ? 0
         : deps.keepLastToolResults ?? DEFAULT_KEEP_LAST_TOOL_RESULTS;
-    const standDown = limit > 0 && pinIsBlocking(priorRecords);
+    const standDown = limit > 0 && pinIsBlocking(priorRecords, LAST_TOOL_RESULT_PIN);
     const pins =
       limit > 0 && !standDown ? toolResultPinsOf(turns, history, currentRequestIndex) : [];
+
+    // The findings ledger (9.102.0), under the ONE gate. Read once, here,
+    // beside `compactions` — a TypedScope array read is a live proxy view,
+    // so it is spread into a plain array before the fold. Never on an
+    // unarmed agent: that key never exists there, and a tracked read of an
+    // always-absent key is the phantom-context-source defect
+    // `window/evictedTurns.ts` documents. The fold serves three readers
+    // below — the pin's standing, the strategy's `standingOf`, and the
+    // record's `droppedStandings` — all from this one read.
+    const fold: LedgerFold | undefined =
+      deps.hasFindingsLedger === true
+        ? foldLedger([...((scope.findingsLedger as FindingsLedger | undefined) ?? [])])
+        : undefined;
+    // A turn's standing is its most valuable result's — the
+    // `ledgerFactPins.ts · turnStandingOf` rule — and the ONE function is
+    // handed to both the pin and the strategy, so they cannot disagree.
+    const standingOf =
+      fold === undefined
+        ? undefined
+        : (turn: Turn): Standing | undefined =>
+            turnStandingOf(turn, (id) => fold.standingOf.get(id)?.standing);
+    // The ledger-fact pin's ceiling, already resolved by `Agent` (absent =
+    // unarmed = no hold; 0 = the hold is off). Its stand-down reads the whole
+    // pin family — `ANY_PIN` says why — and, like the recency pin's, is a
+    // decision filed on the record even though it kept nothing.
+    const factLimit = fold === undefined ? 0 : deps.keepLedgerFacts ?? 0;
+    const factStandDown = factLimit > 0 && pinIsBlocking(priorRecords, ANY_PIN);
+    const factPins =
+      factLimit > 0 && !factStandDown && standingOf !== undefined
+        ? ledgerFactPinsOf(turns, history, standingOf, currentRequestIndex)
+        : [];
 
     const guards: RemovalGuards = {
       answeredCallIds: answeredCallIds(history),
@@ -202,12 +326,14 @@ export function buildWindowStage(
       // Value-conditional: with no pinnable result the guards are the exact
       // object this stage has always built.
       ...(pins.length > 0 && { toolResultPins: pins, keepLastToolResults: limit }),
+      ...(factPins.length > 0 && { ledgerFactPins: factPins, keepLedgerFacts: factLimit }),
     };
 
-    // What the pin actually did, captured off the plan the strategy asked
+    // What each pin actually did, captured off the plan the strategy asked
     // for. A strategy may ask more than once; the last answer is the one that
     // decided the window.
     let observed: WindowObservations | undefined;
+    let observedFacts: WindowObservations | undefined;
 
     const result = await strategy.plan({
       history,
@@ -227,9 +353,13 @@ export function buildWindowStage(
       planRemoval: (keepRecentTurns, isExistingSummary) => {
         const plan = planRemoval(turns, keepRecentTurns, guards, isExistingSummary);
         if (plan.observations !== undefined) observed = plan.observations;
+        if (plan.ledgerFacts !== undefined) observedFacts = plan.ledgerFacts;
         return plan;
       },
       removalFacts: (indices, atMs) => removalFacts(origins, indices, atMs),
+      // Value-conditional (9.102.0): an unarmed agent's strategy is handed the
+      // exact input object it always was — `keys(on)` = `keys(off)`.
+      ...(standingOf !== undefined && { standingOf }),
     });
 
     // `undefined` = this strategy did not engage this iteration. Nothing to
@@ -274,12 +404,28 @@ export function buildWindowStage(
     const observations: WindowObservations | undefined = standDown
       ? { pinned: [], yielded: 0, limit, standDown: true }
       : observed;
+    // The ledger-fact pin's block (9.102.0), the same law: filed when it held
+    // a turn, turned one away, or stood down — and never on an unarmed agent,
+    // where `factLimit` is 0 and no plan ever carried `ledgerFacts`.
+    const ledgerFacts: WindowObservations | undefined = factStandDown
+      ? { pinned: [], yielded: 0, limit: factLimit, standDown: true }
+      : observedFacts;
+    // WHOSE STANDING left (9.102.0), beside whose evidence: the model's own
+    // claim about each dropped result, joined by id on the one fold read
+    // above. Armed only — `fold` is undefined on every unarmed agent — so an
+    // unarmed record is byte-identical to what this stage always filed.
+    const droppedStandings = fold === undefined ? undefined : droppedStandingsOf(evicted, fold);
     const record: WindowRecord =
-      droppedObservations.length > 0 || observations !== undefined
+      droppedObservations.length > 0 ||
+      observations !== undefined ||
+      ledgerFacts !== undefined ||
+      droppedStandings !== undefined
         ? {
             ...result.record,
             ...(droppedObservations.length > 0 && { droppedObservations }),
             ...(observations !== undefined && { observations }),
+            ...(ledgerFacts !== undefined && { ledgerFacts }),
+            ...(droppedStandings !== undefined && { droppedStandings }),
           }
         : result.record;
 

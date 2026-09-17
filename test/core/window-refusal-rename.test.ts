@@ -151,3 +151,73 @@ describe('drop strategies never name a summary they do not have', () => {
     expect(reasonsOf(agent)).toContain('inside-keep-window');
   });
 });
+
+/**
+ * `chatty`, with the model DECLARING its first result a fact on the second
+ * call (`_findings.previous`, the 9.101.0 wire) — the one thing that can put
+ * `'ledger-fact'` on a record.
+ */
+function declaring(toolCallsUntil: number, inputTokens: number): LLMProvider {
+  let call = 0;
+  return {
+    name: 'main',
+    complete: async (): Promise<LLMResponse> => {
+      call++;
+      const wantsTool = call <= toolCallsUntil;
+      const previous = call === 2 ? { previous: [{ toolCallId: 'c1', standing: 'fact' }] } : {};
+      return {
+        content: wantsTool ? '' : 'FINAL',
+        toolCalls: wantsTool
+          ? [
+              {
+                id: `c${call}`,
+                name: 'look',
+                args: { _findings: { basis: 'direct', ...previous } },
+              },
+            ]
+          : [],
+        usage: { input: inputTokens, output: 5 },
+        stopReason: 'end_turn',
+      };
+    },
+  };
+}
+
+describe("'ledger-fact' (9.102.0) is a refusal only an armed agent can write", () => {
+  it('an agent without .findings() never writes the string anywhere in a run', async () => {
+    vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const agent = Agent.create({ provider: declaring(6, 5000), model: 'm' })
+      .tool(tiny as never)
+      .window(tokenBudget({ thresholdTokens: 10, keepRecentTurns: 2 }))
+      .maxIterations(10)
+      .build();
+    await agent.run({ message: 'hi' });
+
+    // The model declared a fact on the wire; unarmed, that is an author's
+    // argument and nothing more — no hold, no record vocabulary.
+    const serialized = JSON.stringify(agent.getLastSnapshot()?.sharedState ?? {});
+    expect(serialized).not.toContain('ledger-fact');
+    expect(serialized).not.toContain('ledgerFacts');
+    expect(serialized).not.toContain('droppedStandings');
+    expect(reasonsOf(agent)).toContain('inside-keep-window');
+  });
+
+  it('an armed agent names it, beside the reasons it always named', async () => {
+    vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const agent = Agent.create({ provider: declaring(6, 5000), model: 'm' })
+      .tool(tiny as never)
+      .findings()
+      .window(tokenBudget({ thresholdTokens: 10, keepRecentTurns: 2 }))
+      .maxIterations(10)
+      .build();
+    await agent.run({ message: 'hi' });
+
+    const reasons = reasonsOf(agent);
+    expect(reasons).toContain('ledger-fact');
+    expect(reasons).toContain('inside-keep-window');
+    expect(reasons).toContain('current-request');
+    // One fact, one spelling — never the word the disposition module owns.
+    const serialized = JSON.stringify(agent.getLastSnapshot()?.sharedState ?? {});
+    expect(serialized).not.toContain('disposition');
+  });
+});

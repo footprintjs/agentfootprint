@@ -68,6 +68,7 @@ All three resolve what may leave through the same code, so a refusal reason mean
 
 - **the current request** — the message the run is executing. See [The request never leaves](#the-request-never-leaves);
 - **each tool's most recent result** — up to `keepLastToolResults` (default 2) beyond the recent turns. See [The evidence stays too](#the-evidence-stays-too);
+- **a turn whose result the model declared a fact** — on an agent with `.findings()`, up to `keepLedgerFacts` (default 4) beyond the recent turns, by the model's own ledger and nothing else. See [A declared fact stays too](#a-declared-fact-stays-too);
 - **the system envelope** — it never enters the window at all (it rides `systemPrompt`);
 - **the last `keepRecentTurns` turns** — what the model is reasoning over right now;
 - **any turn holding an unresolved tool call** — an assistant `tool_use` with no matching `tool_result`. Removing an unanswered question destroys the referent of an answer that has not arrived yet;
@@ -177,6 +178,84 @@ progress, so it releases for one visit and files
 bound, under any strategy including one you wrote. It is recorded rather than
 done quietly: a policy that reverses itself has to say so.
 
+## A declared fact stays too
+
+**On an agent with [`.findings()`](doc:agent#findings-on-the-record--findings), no
+strategy may drop a turn whose result the model declared a `fact` — up to a
+ceiling, and never without a stand-down.** 9.57.0 kept what the agent had just
+seen; this keeps what the agent says it stands on.
+
+The pin above is content-blind by design. Measured on the checked-in bench
+(`npm run bench:findings`, a sliding window keeping 6 turns, a planted fact
+every third call), the ledger piece carried every declared fact to the answer
+turn while the wire carried two of six verbatim: a result the model had
+declared a fact and one it had declared noise were the same bytes to the
+refusal engine, so recency decided. The ledger already says which is which, by
+the model's own hand, so the engine reads *that* — the one content-aware
+signal that is a claim on the record rather than an inference — and refuses by
+name:
+
+```ts
+{
+  strategy: 'sliding-window',
+  iteration: 5,
+  removedStageIds: ['tool-calls#42'],
+  removedMessageCount: 2,
+  refusals: [
+    { reason: 'current-request',    turnIndex: 0, messageIndex: 0 },
+    { reason: 'ledger-fact',        turnIndex: 1, messageIndex: 1 },  // ← declared a fact, stays
+    { reason: 'inside-keep-window', turnIndex: 3, messageIndex: 5 },
+    { reason: 'inside-keep-window', turnIndex: 4, messageIndex: 7 },
+  ],
+  droppedObservations: ['alpha_tool'],
+  droppedStandings: [{ toolCallId: 'c2', standing: 'noise' }],   // whose STANDING left — the model's claim
+  ledgerFacts: {                                                  // what the hold kept, and what it cost
+    pinned: [{ toolName: 'alpha_tool', turnIndex: 1, chars: 17 }],
+    yielded: 0,
+    limit: 4,
+  },
+}
+```
+
+That record is generated, not typed — it is the fifth visit of
+`test/core/tools/reference/agent-findings-window.json`. Turn 2 sat *between*
+the held fact and the keep window and left anyway: the span starts at the
+oldest removable turn, so a hold shields nothing younger than itself, and
+"noise leaves first" needs no second mechanism — noise, ruled-out, open and
+undeclared turns are unpinned and leave oldest-first exactly as before.
+
+**A turn is the unit, and its standing is its most valuable result's** (`fact`
+over `open` over undeclared over `ruled-out` over `noise`): a parallel batch
+that answered one fact beside two noise results is one slot and the noise stays
+with it. A result the model never named is undeclared and is *not* held; the
+library never reads a result's text to decide otherwise. Three more bounds
+compose, the same three as the pin above: the ceiling is spent newest first and
+a held turn already inside `keepRecentTurns` costs nothing; nothing at or
+before the current request is pinnable; and **a hold that blocks stands down**.
+The stand-down reads *both* pin names — if the two previous visits removed
+nothing and named only `last-tool-result` and/or `ledger-fact`, the fact pins
+release for one visit and file `ledgerFacts.standDown: true`. Both names,
+because a turn held by both pins is reported under the recency pin's name (it
+is the rule that would still be true had the model declared nothing); a fact
+stand-down that read only its own name would never see that turn blocking, and
+the two pins would take turns holding the window forever.
+
+The dial is on the agent, not the strategy — so a strategy **you** wrote
+inherits it, exactly as it inherits the pin:
+
+```ts
+Agent.create({ provider, model, keepLedgerFacts: 4 })  // the default under .findings(); `false` or 0 = no hold
+  .findings()                                           // or .findings({ keepLedgerFacts: 4 }) — this door wins
+  .window(slidingWindow({ keepRecentTurns: 6 }));
+```
+
+Without `.findings()` there is no ledger to hold from: the option is accepted
+and does nothing, the plan is the plan it always was, and the record carries
+neither `ledgerFacts` nor `droppedStandings`. A strategy that wants to *order*
+or *report* among the turns the engine left removable is handed
+`WindowStrategyInput.standingOf` — optional, bound by the stage from one read
+of the ledger, absent on an unarmed agent — and never reads scope for it.
+
 ## A drop says whose results left
 
 When a tool result *does* leave, the model is told which tool it came from — and
@@ -247,6 +326,12 @@ Every strategy appends a `WindowRecord` to `scope.compactions` — including the
   // token-triggered ones; summaryChars/summarizerTokens for summarizeOldest.
 }
 ```
+
+On an agent with `.findings()` two more keys may appear, filed by the stage and
+never by the strategy: `ledgerFacts` (what the [fact hold](#a-declared-fact-stays-too)
+kept, the same shape as `observations` with `limit` = `keepLedgerFacts`) and
+`droppedStandings` (the standing the model had declared for each tool result
+that left, by `toolCallId`; `standing` absent = undeclared).
 
 There is deliberately **no `tokensAfter`**. Nothing can count the tokens of a window that has not been sent yet, and inventing one would be the exact guess this family exists to refuse. The honest "after" is the next call's reported usage.
 
@@ -379,8 +464,9 @@ Everything below comes from the package root, `agentfootprint`:
 | `SlidingWindowRecord` | A `WindowRecord` plus `keepRecentTurns`, `turnsBefore`, `turnsAfter`. |
 | `TokenBudgetRecord` | A `WindowRecord` plus `measuredTokens`, `thresholdTokens`, `overBudget`, `keepRecentTurns`. |
 | `CompactionRecord` | A `WindowRecord` plus the summarizer's facts — see [Compaction](doc:compaction). |
-| `WindowObservations` | What the last-tool-result pin did on one visit: `pinned` (tool, turn, exact chars), `yielded`, `limit`, and `standDown` when it released. |
-| `WindowRefusal` / `WindowRefusalReason` | One named refusal, and the closed set of reasons. (`FoldRefusal` / `FoldRefusalReason` were the 7.16 names; the aliases were removed in 9.0.0.) |
+| `WindowObservations` | What a pin did on one visit: `pinned` (tool, turn, exact chars), `yielded`, `limit`, and `standDown` when it released. On `WindowRecord.observations` for the last-tool-result pin and, since 9.102.0, on `WindowRecord.ledgerFacts` for the declared-fact hold. |
+| `LedgerFactPin` | One candidate the declared-fact hold is built from (9.102.0): the `toolCallIds` the held turn carries, the `toolName` it is named for, its `turnIndex`, `messageIndex` and exact `chars`. What `ledgerFactPinsOf` answers, for a reader reasoning about what a visit could have held. |
+| `WindowRefusal` / `WindowRefusalReason` | One named refusal, and the closed set of reasons — `ledger-fact` joined it in 9.102.0. (`FoldRefusal` / `FoldRefusalReason` were the 7.16 names; the aliases were removed in 9.0.0.) |
 | `WindowEviction` | One message leaving the window: its `index` in the pre-change window and its measured `survivalMs`. |
 | `RemovalPlan` | What `planRemoval` answers: the span `{ from, to }` in turn indices, plus every refusal. `from` is `-1` when nothing may be removed. |
 | `RemovalFacts` | What `removalFacts` answers: `removedStageIds` and one `WindowEviction` per message. |

@@ -15,15 +15,38 @@
  *          way the rebuild reads it (`epochs.ts` · `readRunConstant`). The
  *          runtime block below drives real runs on the mock provider so the
  *          gate is proven, not just typed.
+ *
+ *          Step 4 adds the OPTION and the THREAD for standing-aware eviction:
+ *          `AgentOptions.keepLedgerFacts` beside `keepLastToolResults`, the
+ *          same dial reachable through `findings({ keepLedgerFacts })`, ONE
+ *          resolved value (the `.findings()` door wins; `false` -> 0; default
+ *          4) threaded by `Agent` into `buildWindowStage`'s deps together
+ *          with `hasFindingsLedger: true` — value-conditionally, so an
+ *          unarmed agent hands the stage exactly today's deps. The stage
+ *          does nothing with them yet (the wiring stage does), so the ONE
+ *          observable seam is the deps object itself: `buildChart()` runs at
+ *          `build()`, and the block below wraps the real `buildWindowStage`
+ *          in a pass-through spy to read what it was handed.
  */
 
-import { describe, expect, expectTypeOf, it } from 'vitest';
-import { Agent } from '../../../src/index.js';
+import { describe, expect, expectTypeOf, it, vi } from 'vitest';
+import { Agent, slidingWindow } from '../../../src/index.js';
 import { mock } from '../../../src/llm-providers.js';
 import { epochLocations, readRunConstant } from '../../../src/lib/time-travel/index.js';
+import { buildWindowStage } from '../../../src/core/agent/stages/window.js';
+import type { WindowStageDeps } from '../../../src/core/agent/stages/window.js';
 import type { AgentOptions, AgentState } from '../../../src/core/agent/types.js';
 import type { AgentRunCheckpoint } from '../../../src/core/runCheckpoint.js';
 import type { FindingsLedger, FindingsRow } from '../../../src/core/agent/findings/types.js';
+
+// A pass-through spy on the window stage's factory: the real stage is built
+// and runs unchanged; only the deps object `Agent.buildChart` hands it is
+// recorded. Hoisted by vitest above every import, so `Agent.ts`'s own import
+// of `buildWindowStage` resolves to the spy.
+vi.mock('../../../src/core/agent/stages/window.js', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('../../../src/core/agent/stages/window.js')>();
+  return { ...actual, buildWindowStage: vi.fn(actual.buildWindowStage) };
+});
 
 describe('findings declarations — AgentOptions.findings', () => {
   it('is optional and carries only `serve` and `keepLedgerFacts`', () => {
@@ -120,5 +143,153 @@ describe('findings declarations — AgentRunCheckpoint.findingsLedger', () => {
       AgentState['findingsLedger']
     >();
     expectTypeOf<AgentRunCheckpoint['version']>().toEqualTypeOf<1>();
+  });
+});
+
+// ─── keepLedgerFacts: the option, the door and the thread (step 4) ────────
+
+/** An agent WITH a window strategy, so the window stage exists and is built at
+ *  `build()`; the option rides `Agent.create`, the door rides `.findings()`. */
+const windowed = (keepLedgerFacts?: number | false): Built =>
+  Agent.create({
+    provider: answerOnly(),
+    model: 'm',
+    ...(keepLedgerFacts !== undefined && { keepLedgerFacts }),
+  }).window(slidingWindow({ keepRecentTurns: 2 }));
+
+const stageFactory = () => vi.mocked(buildWindowStage);
+
+/** Build ONE agent and return the deps object its window stage was handed —
+ *  exactly one factory call per build, or the test is reading someone else's. */
+const depsOf = (build: () => Agent): WindowStageDeps => {
+  const before = stageFactory().mock.calls.length;
+  build();
+  const calls = stageFactory().mock.calls;
+  expect(calls.length).toBe(before + 1);
+  return calls[before]![0];
+};
+
+const keysOfDeps = (deps: WindowStageDeps): string[] => Object.keys(deps).sort();
+
+describe('findings declarations — AgentOptions.keepLedgerFacts (step 4: the option)', () => {
+  it('is number | false beside keepLastToolResults — the same shape, the same optionality', () => {
+    expectTypeOf<AgentOptions['keepLedgerFacts']>().toEqualTypeOf<number | false | undefined>();
+    expectTypeOf<AgentOptions['keepLedgerFacts']>().toEqualTypeOf<
+      AgentOptions['keepLastToolResults']
+    >();
+  });
+
+  it('the findings() door still carries only `serve` and `keepLedgerFacts`', () => {
+    expectTypeOf<NonNullable<AgentOptions['findings']>['keepLedgerFacts']>().toEqualTypeOf<
+      number | false | undefined
+    >();
+  });
+
+  it('refuses a negative or non-integer value at BUILD, at either door, never mid-run', () => {
+    for (const bad of [-1, 1.5, 'two', null]) {
+      // The top-level option: refused by the Agent constructor at build()…
+      expect(() =>
+        Agent.create({ provider: answerOnly(), model: 'm', keepLedgerFacts: bad as never }).build(),
+      ).toThrow(/keepLedgerFacts/);
+      // …and refused there whether or not `.findings()` is on, so a dial that
+      // would be ignored is never silently accepted.
+      expect(() =>
+        Agent.create({ provider: answerOnly(), model: 'm', keepLedgerFacts: bad as never })
+          .findings()
+          .build(),
+      ).toThrow(/keepLedgerFacts/);
+      // The `.findings()` door: refused by the builder at the call.
+      expect(() =>
+        Agent.create({ provider: answerOnly(), model: 'm' }).findings({
+          keepLedgerFacts: bad as never,
+        }),
+      ).toThrow(/keepLedgerFacts/);
+    }
+  });
+
+  it('accepts 0, false and a whole number, with or without .findings()', () => {
+    for (const ok of [0, false, 3] as const) {
+      expect(() =>
+        Agent.create({ provider: answerOnly(), model: 'm', keepLedgerFacts: ok }).build(),
+      ).not.toThrow();
+      expect(() =>
+        Agent.create({ provider: answerOnly(), model: 'm', keepLedgerFacts: ok })
+          .findings()
+          .build(),
+      ).not.toThrow();
+      expect(() =>
+        Agent.create({ provider: answerOnly(), model: 'm' })
+          .findings({ keepLedgerFacts: ok })
+          .build(),
+      ).not.toThrow();
+    }
+  });
+});
+
+describe('findings declarations — the thread into the window stage (step 4)', () => {
+  it("unarmed: the stage gets exactly today's deps, whatever the option says", () => {
+    const plain = depsOf(() => windowed().build());
+    const dialled = depsOf(() => windowed(3).build());
+    expect(plain).not.toHaveProperty('hasFindingsLedger');
+    expect(plain).not.toHaveProperty('keepLedgerFacts');
+    // The option without `.findings()` is accepted and threads NOTHING — the
+    // same key set, byte for byte the deps an unarmed agent always built.
+    expect(keysOfDeps(dialled)).toEqual(keysOfDeps(plain));
+    expect(dialled).not.toHaveProperty('keepLedgerFacts');
+  });
+
+  it('armed with a window: hasFindingsLedger: true and the default ceiling 4, and nothing else moves', () => {
+    const off = depsOf(() => windowed().build());
+    const on = depsOf(() => windowed().findings().build());
+    expect(on.hasFindingsLedger).toBe(true);
+    expect(on.keepLedgerFacts).toBe(4);
+    expect(keysOfDeps(on)).toEqual(
+      [...keysOfDeps(off), 'hasFindingsLedger', 'keepLedgerFacts'].sort(),
+    );
+  });
+
+  it('ONE resolved value: the option, the door, and the door winning when both are given', () => {
+    expect(depsOf(() => windowed(3).findings().build()).keepLedgerFacts).toBe(3);
+    expect(depsOf(() => windowed().findings({ keepLedgerFacts: 2 }).build()).keepLedgerFacts).toBe(
+      2,
+    );
+    expect(depsOf(() => windowed(3).findings({ keepLedgerFacts: 2 }).build()).keepLedgerFacts).toBe(
+      2,
+    );
+    // The door wins with `false` too — `??` skips nothing but undefined.
+    expect(
+      depsOf(() => windowed(3).findings({ keepLedgerFacts: false }).build()).keepLedgerFacts,
+    ).toBe(0);
+  });
+
+  it('false and 0 both reach the stage as 0 — a number, never `false`, so the stage applies no default', () => {
+    expect(depsOf(() => windowed(false).findings().build()).keepLedgerFacts).toBe(0);
+    expect(depsOf(() => windowed(0).findings().build()).keepLedgerFacts).toBe(0);
+    expect(depsOf(() => windowed().findings({ keepLedgerFacts: 0 }).build()).keepLedgerFacts).toBe(
+      0,
+    );
+    // The arm still rides beside a switched-off hold: the gate and the
+    // ceiling travel together or not at all.
+    expect(depsOf(() => windowed(false).findings().build()).hasFindingsLedger).toBe(true);
+  });
+
+  it('armed with NO window strategy: there is no window stage, so nothing is threaded', () => {
+    const before = stageFactory().mock.calls.length;
+    Agent.create({ provider: answerOnly(), model: 'm', keepLedgerFacts: 3 }).findings().build();
+    Agent.create({ provider: answerOnly(), model: 'm' }).findings({ keepLedgerFacts: 3 }).build();
+    expect(stageFactory().mock.calls.length).toBe(before);
+  });
+
+  it('the thread is inert on the record until the wiring lands: same committed keys either way', async () => {
+    // The stage carries the deps but acts on nothing yet, so an armed
+    // windowed run commits the SAME key set with the ceiling named or not.
+    const run = async (b: Built): Promise<Agent> => {
+      const agent = b.build();
+      await agent.run({ message: 'hi' });
+      return agent;
+    };
+    const named = await run(windowed(1).findings());
+    const unnamed = await run(windowed().findings());
+    expect(keysOf(named)).toEqual(keysOf(unnamed));
   });
 });

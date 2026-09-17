@@ -2004,9 +2004,14 @@ export class AgentBuilder {
    * piece; `'ledger-only'` collapses fact results too and is BENCH-GATED —
    * shipped so `bench/findings-shuffle.mjs` can measure it on a real model,
    * not a recommendation, never a default until that run shows the answer
-   * does not drift under shuffled evidence. `keepLedgerFacts` is accepted
-   * now so no public name changes later and is inert until standing-aware
-   * eviction lands.
+   * does not drift under shuffled evidence. `keepLedgerFacts` is the ceiling
+   * of fact turns the WINDOW holds under standing-aware eviction (9.102.0) —
+   * the same dial as `AgentOptions.keepLedgerFacts` (that field says why and
+   * what it costs), this door winning when both are given, resolved once by
+   * `Agent` at build and threaded to the window stage on an armed agent with
+   * a window strategy, where `stages/window.ts · buildWindowStage` spends it
+   * as the `'ledger-fact'` pin ceiling; a negative or non-integer value is
+   * refused here.
    *
    * Once per agent (a second call is refused, the `.window()` grammar).
    * Registers the always-on `findings-ledger` instruction — the byte-for-byte

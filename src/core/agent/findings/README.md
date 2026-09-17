@@ -209,6 +209,29 @@ the caps, the same-instance law, a seeded property loop) and
 receipt, the collapse on the real wire). `npm run bench:findings` prints what
 moved; the design page has the table.
 
+## Held in the window (step 4)
+
+Why: the piece restores a declared fact to the answer turn, but under a window
+strategy the fact's RESULT still left by recency — the refusal engine saw a
+fact and a noise result as the same bytes. Since 9.102.0 the window reads the
+ledger's standing and nothing else: a turn whose result the model declared a
+`fact` is held beyond `keepRecentTurns`, newest first, up to `keepLedgerFacts`
+(default 4 under `.findings()` with a window strategy; `false` or `0` for no
+hold), refused by name as `'ledger-fact'`, and released on the record when it
+has provably blocked two consecutive boundaries — a fact hold never exists
+without its ceiling and its stand-down. Noise, ruled-out, open and undeclared
+turns leave oldest-first as they always did, so 'noise first' is the same
+mechanism seen from the other side. The window stage reads `findingsLedger`
+ONCE per visit under the `hasFindingsLedger` gate (never on an unarmed agent),
+binds one `standingOf` for the pin and the strategy, and files what it held
+(`WindowRecord.ledgerFacts`) and whose standing left
+(`WindowRecord.droppedStandings`, `standing` absent = undeclared). This folder
+owns none of that code — `../window/ledgerFactPins.ts` and its README do —
+but it is where the ledger's second reader lives, and the law it reads under
+is this folder's first: never infer; the standing is the model's claim.
+Measured on the long-run table of `npm run bench:findings`; the design page §
+Step 4 has the print.
+
 ## Files
 
 - `types.ts` — `RESERVED_ARGUMENT`, the vocabularies, `FindingsDeclaration`

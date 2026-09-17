@@ -332,6 +332,39 @@ export interface AgentRunOptions extends RunOptions {
 
 // AgentState extracted to ./agent/types.ts (v2.11.1).
 
+/**
+ * The ledger-fact hold's default ceiling (9.102.0): how many fact turns the
+ * window holds beyond `keepRecentTurns` when `.findings()` and a window
+ * strategy are both configured and nobody named a number. Resolved in the
+ * constructor, ONCE, and threaded to `buildWindowStage` as a plain number —
+ * the stage applies no default of its own (absent = unarmed = no hold), so a
+ * reader has one place to look. `window/options.ts ·
+ * DEFAULT_KEEP_LAST_TOOL_RESULTS` is the pin's twin of this constant.
+ */
+const DEFAULT_KEEP_LEDGER_FACTS = 4;
+
+/**
+ * Validate the `keepLedgerFacts` dial — `window/options.ts ·
+ * requireKeepLastToolResults`'s twin: the same rule, the same moment.
+ * Refused at construction, never mid-run.
+ */
+function requireKeepLedgerFacts(value: unknown, label: string): void {
+  if (value === false) return;
+  if (!Number.isInteger(value) || (value as number) < 0) {
+    throw new Error(
+      `${label}: keepLedgerFacts must be a whole number >= 0, or false, got ` +
+        `${String(value)}. It is how many fact turns the window holds beyond ` +
+        `keepRecentTurns under .findings(); 0 and false both switch the hold off.`,
+    );
+  }
+}
+
+/** `false` → `0`; a number as named; nothing named → the default. */
+function resolveKeepLedgerFacts(named: number | false | undefined): number {
+  if (named === false) return 0;
+  return named ?? DEFAULT_KEEP_LEDGER_FACTS;
+}
+
 export class Agent extends RunnerBase<AgentInput, AgentOutput> {
   readonly name: string;
   readonly id: string;
@@ -447,8 +480,11 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
    *  conditioned on, so an unarmed agent hands each stage exactly the deps
    *  it always did. `serve` is threaded to seed (the run constant
    *  `findingsServe`) and to call-llm (`findingsServe` in its deps) on an
-   *  armed agent only. `keepLedgerFacts` is inert until standing-aware
-   *  eviction lands. */
+   *  armed agent only. `keepLedgerFacts` is resolved once, here in the
+   *  constructor (this door over `AgentOptions.keepLedgerFacts`), into the
+   *  `keepLedgerFacts` field below and threaded to the window stage on an
+   *  armed agent with a window, where `stages/window.ts · buildWindowStage`
+   *  spends it as the `'ledger-fact'` pin ceiling. */
   private readonly findingsOptions?: NonNullable<AgentOptions['findings']>;
   /** The opt-in tool-result ceiling in characters (9.11.0). Absent → results
    *  are never measured. See {@link AgentOptions.maxToolResultChars}. */
@@ -512,6 +548,13 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
   /** The last-tool-result pin (9.57.0) — set only when the operator named a
    *  value other than the default 2. See AgentOptions.keepLastToolResults. */
   private readonly keepLastToolResults?: number | false;
+  /** The ledger-fact hold's ceiling (9.102.0), RESOLVED — set exactly when
+   *  `.findings()` is on: `findings({ keepLedgerFacts })` over
+   *  `AgentOptions.keepLedgerFacts`, `false` → `0`, nothing named →
+   *  `DEFAULT_KEEP_LEDGER_FACTS`. Undefined on every unarmed agent, so the
+   *  thread into the window stage reads as the decision it is. See
+   *  AgentOptions.keepLedgerFacts. */
+  private readonly keepLedgerFacts?: number;
   /** See AgentOptions.integrityPosture (9.60.0). Default 'observe'. */
   private readonly integrityPosture: IntegrityPosture = 'observe';
   /**
@@ -953,6 +996,21 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
     if (opts.keepLastToolResults !== undefined) {
       requireKeepLastToolResults(opts.keepLastToolResults, 'Agent');
       this.keepLastToolResults = opts.keepLastToolResults;
+    }
+    // Its content-aware sibling (9.102.0). The top-level door is refused
+    // HERE, whether or not `.findings()` is on — a dial that is silently
+    // ignored is a configuration mistake, not a runtime condition (the
+    // `.findings()` door was refused by the builder). The value is resolved
+    // ONCE, under the arm only: the `.findings()` door wins when both are
+    // given, `false` is `0`, nothing named is the default. Without
+    // `.findings()` there is no ledger to hold facts from, so the option is
+    // accepted and does nothing — the keepLastToolResults-without-a-window
+    // precedent.
+    if (opts.keepLedgerFacts !== undefined) requireKeepLedgerFacts(opts.keepLedgerFacts, 'Agent');
+    if (this.findingsOptions !== undefined) {
+      this.keepLedgerFacts = resolveKeepLedgerFacts(
+        this.findingsOptions.keepLedgerFacts ?? opts.keepLedgerFacts,
+      );
     }
     // Refused at construction, never mid-run — a misspelled posture that was
     // ignored would leave the liveness theorems switched off in an agent
@@ -4057,6 +4115,16 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
               // it always did.
               ...(this.keepLastToolResults !== undefined && {
                 keepLastToolResults: this.keepLastToolResults,
+              }),
+              // The findings ledger (9.102.0): the arm and the RESOLVED
+              // ledger-fact ceiling, together or not at all. `keepLedgerFacts`
+              // is set exactly when `.findings()` is on, so an unarmed agent
+              // hands the stage exactly the deps object it always did; an
+              // armed agent with no window strategy threads nothing, because
+              // this whole stage does not exist for it.
+              ...(this.keepLedgerFacts !== undefined && {
+                hasFindingsLedger: true as const,
+                keepLedgerFacts: this.keepLedgerFacts,
               }),
               ...(pricingTable !== undefined && { pricingTable }),
               ...(costBudget !== undefined && { costBudget }),

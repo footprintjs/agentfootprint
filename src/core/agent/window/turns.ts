@@ -23,6 +23,7 @@
 
 import type { LLMMessage } from '../../../adapters/types.js';
 import type { ToolResultPin } from './lastToolResult.js';
+import type { LedgerFactPin } from './ledgerFactPins.js';
 import type { WindowObservations, WindowRefusal, WindowRefusalReason } from './types.js';
 
 /**
@@ -109,6 +110,24 @@ export interface RemovalGuards {
    * directly to ask `refusalFor` about one turn.
    */
   readonly pinnedTurnIndexes?: ReadonlySet<number>;
+  /**
+   * Candidate LEDGER-FACT pins (9.102.0), newest first, from
+   * `ledgerFactPinsOf` — the turns whose results the MODEL declared facts on
+   * its findings ledger. The same contract as `toolResultPins`: an input to
+   * `planRemoval`, which spends the ceiling and hands `refusalFor` the
+   * answer. Present only on an agent with `.findings()` — the stage never
+   * resolves them otherwise, so an unarmed agent's guards are the object
+   * they always were.
+   */
+  readonly ledgerFactPins?: readonly LedgerFactPin[];
+  /** The ceiling on admitted fact pins (`keepLedgerFacts`). 0 = the hold is off. */
+  readonly keepLedgerFacts?: number;
+  /**
+   * The ADMITTED fact pins, by turn index — the `'ledger-fact'` twin of
+   * `pinnedTurnIndexes`, kept apart because the two pins have different
+   * ceilings and a reader adding up what each one cost needs them apart.
+   */
+  readonly factPinnedTurnIndexes?: ReadonlySet<number>;
 }
 
 /** Every tool_call id that has a matching `role: 'tool'` message. */
@@ -155,11 +174,17 @@ export function refusalFor(turn: Turn, guards: RemovalGuards): WindowRefusalReas
     }
   }
   // LAST, because every reason above is a fact about the WIRE or about a
-  // human, and this one is a policy. A pinned turn that also holds an
+  // human, and these two are policies. A pinned turn that also holds an
   // unanswered call reports the unanswered call: that is the reason a reader
   // needs, and it is the one that would still be true with the pin switched
   // off.
   if (guards.pinnedTurnIndexes?.has(turn.index) === true) return 'last-tool-result';
+  // After the recency pin, because a turn held by both is held by the
+  // content-blind rule first — the one that would still be true if the model
+  // had declared nothing. The stage's stand-down reads both names as one
+  // family (`stages/window.ts · pinIsBlocking`), so nothing hides behind
+  // this order.
+  if (guards.factPinnedTurnIndexes?.has(turn.index) === true) return 'ledger-fact';
   return undefined;
 }
 
@@ -176,28 +201,47 @@ export interface RemovalPlan {
    * window with no pinnable result plans exactly as it did before.
    */
   readonly observations?: WindowObservations;
+  /**
+   * What the ledger-fact pin did on this plan (9.102.0) — the same shape,
+   * with `limit` = `keepLedgerFacts`. Absent when it held nothing, which on
+   * an agent without `.findings()` is always.
+   */
+  readonly ledgerFacts?: WindowObservations;
+}
+
+/** What either pin hands the ceiling: a turn, its name and its cost. */
+interface PinCandidate {
+  readonly toolName: string;
+  readonly turnIndex: number;
+  readonly chars: number;
 }
 
 /**
- * Spend the pin's ceiling, and only on turns that would otherwise leave.
+ * Spend ONE pin's ceiling, and only on turns that would otherwise leave.
  *
  * A pin inside `keepRecentTurns` is already safe — `planRemoval` never even
- * asks about those turns — so it is filtered out here and costs nothing. The
- * rest are admitted newest first, up to the ceiling; the remainder is counted
- * as `yielded` so the record can say the pin wanted more than it was given.
+ * asks about those turns — so it is filtered out here and costs nothing (the
+ * free-pin law). The rest are admitted newest first, up to the ceiling; the
+ * remainder is counted as `yielded` so the record can say the pin wanted more
+ * than it was given. Nothing admitted → nothing returned, so a plan with no
+ * contested pin carries no observations block at all.
+ *
+ * One function for both pins on purpose: the ledger-fact pin (9.102.0) is
+ * the last-tool-result pin's content-aware sibling, and the ceiling is the
+ * ONE grammar they share — a second spender would be a second place for the
+ * free-pin law to drift.
  */
-function admitPins(
-  guards: RemovalGuards,
+function spendCeiling(
+  pins: readonly PinCandidate[],
+  limit: number,
   candidateCount: number,
-): { readonly guards: RemovalGuards; readonly observations?: WindowObservations } {
-  const limit = guards.keepLastToolResults ?? 0;
-  const pins = guards.toolResultPins ?? [];
-  if (limit <= 0 || pins.length === 0) return { guards };
+): { readonly turnIndexes?: ReadonlySet<number>; readonly observations?: WindowObservations } {
+  if (limit <= 0 || pins.length === 0) return {};
   const contested = pins.filter((p) => p.turnIndex < candidateCount);
   const admitted = contested.slice(0, limit);
-  if (admitted.length === 0) return { guards };
+  if (admitted.length === 0) return {};
   return {
-    guards: { ...guards, pinnedTurnIndexes: new Set(admitted.map((p) => p.turnIndex)) },
+    turnIndexes: new Set(admitted.map((p) => p.turnIndex)),
     observations: {
       pinned: admitted.map((p) => ({
         toolName: p.toolName,
@@ -207,6 +251,41 @@ function admitPins(
       yielded: contested.length - admitted.length,
       limit,
     },
+  };
+}
+
+/**
+ * Admit both pins' candidates against their own ceilings and hand back the
+ * guards `refusalFor` reads. Each pin's block is present exactly when that
+ * pin held something, so the guards and the plan of an agent with no
+ * contested pin are the exact shape they were before either pin existed.
+ */
+function admitPins(
+  guards: RemovalGuards,
+  candidateCount: number,
+): {
+  readonly guards: RemovalGuards;
+  readonly observations?: WindowObservations;
+  readonly ledgerFacts?: WindowObservations;
+} {
+  const latest = spendCeiling(
+    guards.toolResultPins ?? [],
+    guards.keepLastToolResults ?? 0,
+    candidateCount,
+  );
+  const facts = spendCeiling(
+    guards.ledgerFactPins ?? [],
+    guards.keepLedgerFacts ?? 0,
+    candidateCount,
+  );
+  return {
+    guards: {
+      ...guards,
+      ...(latest.turnIndexes !== undefined && { pinnedTurnIndexes: latest.turnIndexes }),
+      ...(facts.turnIndexes !== undefined && { factPinnedTurnIndexes: facts.turnIndexes }),
+    },
+    ...(latest.observations !== undefined && { observations: latest.observations }),
+    ...(facts.observations !== undefined && { ledgerFacts: facts.observations }),
   };
 }
 
@@ -255,6 +334,7 @@ export function planRemoval(
   const admission = admitPins(guards, candidateCount);
   const effective = admission.guards;
   const observed = admission.observations;
+  const heldFacts = admission.ledgerFacts;
 
   const before: WindowRefusal[] = [];
   let from = -1;
@@ -289,6 +369,7 @@ export function planRemoval(
         ...refusals,
       ],
       ...(observed !== undefined && { observations: observed }),
+      ...(heldFacts !== undefined && { ledgerFacts: heldFacts }),
     };
   }
 
@@ -297,6 +378,7 @@ export function planRemoval(
     to,
     refusals: [...before, ...refusals],
     ...(observed !== undefined && { observations: observed }),
+    ...(heldFacts !== undefined && { ledgerFacts: heldFacts }),
   };
 }
 

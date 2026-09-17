@@ -529,8 +529,11 @@ describe('served from the ledger — no per-call byte on the piece', () => {
 // `npm run docs:truth` scans docs-next prose, not JSDoc, so the hover text
 // on `AgentOptions.findings`, `AgentBuilder.findings` and `Agent`'s field
 // could keep calling `serve` inert after the wire shipped — and did, for one
-// review round. This pins the three doc sites to the shipped law: `serve` is
-// live; only `keepLedgerFacts` is inert (until standing-aware eviction).
+// review round. Then THIS section kept `keepLedgerFacts` "inert" for a round
+// after the hold landed in `stages/window.ts · buildWindowStage` (9.102.0),
+// because it pinned the waiting sentence instead of the law. It pins the law
+// now: both dials are live, no site says "inert" or "until the hold lands",
+// and every site names where `keepLedgerFacts` is spent.
 
 describe('served from the ledger — the typed surface says what ships', () => {
   const REPO = resolve(__dirname, '../../..');
@@ -544,20 +547,30 @@ describe('served from the ledger — the typed surface says what ships', () => {
   };
   const SITES: ReadonlyArray<readonly [string, string]> = [
     ['src/core/agent/types.ts', '  readonly findings?: {'],
+    // Newline-prefixed so `indexOf` cannot land on the nested
+    // `findings.keepLedgerFacts` field (four spaces) that precedes it.
+    ['src/core/agent/types.ts', '\n  readonly keepLedgerFacts?: number | false;'],
     ['src/core/agent/AgentBuilder.ts', '  findings(options?: NonNullable<'],
     ['src/core/Agent.ts', '  private readonly findingsOptions?:'],
   ];
-  it('no doc site calls `serve` inert, every one says `keepLedgerFacts` is', () => {
+  it('no doc site calls `serve` or `keepLedgerFacts` inert; every one names where the hold is spent', () => {
     for (const [rel, anchor] of SITES) {
       const doc = docBefore(read(rel), anchor);
       expect(doc, rel).not.toMatch(/inert until step 3|both are inert|WHAT IT DOES NOT DO YET/i);
       expect(doc, rel).not.toMatch(/`serve`[^.]*\binert\b/);
-      expect(doc, rel).toMatch(/keepLedgerFacts[^.]*\binert\b/);
+      // 9.102.0: the hold is live — a waiting sentence on any site is a lie.
+      expect(doc, rel).not.toMatch(/keepLedgerFacts[^.]*\binert\b/);
+      expect(doc, rel).not.toMatch(/until the hold lands|not yet acted on/i);
+      expect(doc, rel).toMatch(/keepLedgerFacts[\s\S]*stages\/window\.ts/);
     }
-    // The field-level comment on `serve` itself, the line the hover shows first.
+    // The field-level comments on `serve` and the nested `keepLedgerFacts`,
+    // the lines the hover shows first.
     const types = read('src/core/agent/types.ts');
     const serveField = docBefore(types, "    readonly serve?: 'ledger-and-facts' | 'ledger-only';");
     expect(serveField).not.toMatch(/\binert\b/);
     expect(serveField).toMatch(/ledger-only/);
+    const nestedFactsField = docBefore(types, '    readonly keepLedgerFacts?: number | false;');
+    expect(nestedFactsField).not.toMatch(/\binert\b/);
+    expect(nestedFactsField).toMatch(/keepLedgerFacts/);
   });
 });

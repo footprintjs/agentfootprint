@@ -251,7 +251,28 @@ Agent.create({ provider, model })
 - `'ledger-and-facts'` (default): facts stay verbatim; noise and ruled-out results become tickets.
 - `'ledger-only'`: fact results become tickets too and the model answers from the piece alone. This dial exists for the bench and is not a recommendation: it stays off by default until a run on a real model shows the answer does not drift when the same evidence arrives in a different order.
 
-`keepLedgerFacts` is accepted and inert until standing-aware eviction lands.
+### Held in the window — `keepLedgerFacts`
+
+The piece restores a declared fact to the answer turn, but under a [window strategy](doc:window-strategies) the fact's *result* still left by recency: the refusal engine saw a result the model had declared a `fact` and one it had declared `noise` as the same bytes. Since 9.102.0 the window reads the ledger. A turn whose result the model declared a `fact` is held beyond `keepRecentTurns` — newest first, up to `keepLedgerFacts` turns — and the record names the hold with the refusal reason `ledger-fact`. Noise, ruled-out, open and undeclared turns leave oldest-first exactly as before, so "noise leaves first" is the same rule seen from the other side. The hold lives in the refusal engine, not in a strategy: `slidingWindow`, `tokenBudget`, `summarizeOldest` and a strategy you wrote all get it through `planRemoval`, and none of the three shipped strategies changed a byte.
+
+```ts
+Agent.create({ provider, model })
+  .tool(search)
+  .window(slidingWindow({ keepRecentTurns: 6 }))
+  .findings({ keepLedgerFacts: 6 })   // default 4; `false` or 0 switches the hold off
+  .build();
+```
+
+The same dial is `Agent.create({ keepLedgerFacts })`, beside `keepLastToolResults`; the `.findings()` door wins when both are given, a negative or non-integer value is refused at build, and without `.findings()` there is no ledger to hold from, so the option is accepted and does nothing. Four bounds compose, and none is optional:
+
+- **By the model's claim only.** A turn is the removal unit, so its standing is its most valuable result's (`fact` over `open` over undeclared over `ruled-out` over `noise`): a parallel batch that answered one fact beside two noise results is one slot, and the noise stays with it. Nothing in the library reads a result's text to second-guess a standing; a result the model never named is undeclared and is not held.
+- **The ceiling, spent newest first.** A held turn already inside `keepRecentTurns` costs nothing; the rest are admitted newest first up to the limit, and the ones turned away are counted as `yielded` on the record.
+- **Anchored.** Nothing at or before the current request is pinnable, so a new user turn releases the whole previous loop.
+- **The stand-down.** If the two previous visits both removed nothing and both named only pins (`last-tool-result` and/or `ledger-fact`), the fact pins release for one visit and the record says so. Both names count, because a turn held by both pins is reported under the recency pin's name — a fact stand-down reading only its own name would never see that turn blocking, and the two pins would take turns holding the window forever. A fact hold never exists without its ceiling and its stand-down.
+
+Every visit's `WindowRecord` gains two optional keys, present only on an armed agent: `ledgerFacts` — what the hold kept (`pinned`: tool, turn, exact chars), how many turns the ceiling turned away (`yielded`), the `limit`, and `standDown: true` on the visit it released — and `droppedStandings`, the standing the model had declared for every tool result that left, by `toolCallId`, with `standing` absent for a result it never named. Both are filed by the stage, so a strategy you wrote carries them too, and an agent without `.findings()` files exactly the record it always did. The candidate a hold is built from is exported as `LedgerFactPin` — the tool-call ids a held turn carries, the tool it is named for, its turn and message index, and its exact chars — for a reader that wants to reason about what a visit could have held. What the model is *told* about a drop is unchanged: the notice names tools and counts, never a standing and never the model's own line.
+
+Measured on `npm run bench:findings` (mock provider, 30 tool calls, a planted fact every third, a sliding window keeping 6 turns): the results of 2 of 10 planted facts reached the answer turn verbatim by recency alone, 6 under the default ceiling and 8 under a ceiling of 6, while the piece carried 9 of 10 on every armed row and the noise share of tool-result bytes on the wire stayed at the collapsed level; the design page has the print and its reading.
 
 ## Composition with other Agents
 

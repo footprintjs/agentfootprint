@@ -301,6 +301,8 @@ describe('the window-strategy seam is publicly writable (7.17)', () => {
           return 'no smaller';
         case 'last-tool-result':
           return "a tool's latest result";
+        case 'ledger-fact':
+          return 'a declared fact';
         default: {
           const exhaustive: never = reason;
           return exhaustive;
@@ -309,6 +311,18 @@ describe('the window-strategy seam is publicly writable (7.17)', () => {
     };
     expect(describeReason('last-tool-result')).toBe("a tool's latest result");
     expect(describeReason('current-request')).toBe('the request');
+  });
+
+  it("'ledger-fact' is a member, and the union did not lose one (9.102.0)", () => {
+    // The content-aware half of `'last-tool-result'`: a turn the MODEL
+    // declared a fact on its findings ledger, held up to `keepLedgerFacts`.
+    // Same compile-time break for a narrowing consumer as the 9.57.0 member
+    // above — the `describeReason` switch there has its arm, and this pin is
+    // what fails if the member is ever dropped from the union.
+    const held: WindowRefusalReason = 'ledger-fact';
+    expect(held).toBe('ledger-fact');
+    const older: WindowRefusalReason = 'last-tool-result';
+    expect(older).toBe('last-tool-result');
   });
 
   it('WindowObservations is the record shape the pin writes (9.57.0)', () => {

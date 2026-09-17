@@ -473,6 +473,7 @@ export {
   type CompactionRetention,
   type FoldedConversation,
   type FoldedSpan,
+  type LedgerFactPin,
   type RemovalFacts,
   type RemovalPlan,
   type SlidingWindowOptions,

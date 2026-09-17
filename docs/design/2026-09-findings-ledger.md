@@ -170,7 +170,7 @@ touching any step.
 
 ## Track
 
-- [x] design · [x] 1 bench + baseline (`npm run bench:findings`, `bench/findings-context.mjs`) · [x] 2 ledger on the record (9.101.0) · [x] 3 served from the ledger (9.101.0, same entry; the SHUFFLE run on a real model is still owed) · [ ] 4 eviction · [ ] 5 Findings band
+- [x] design · [x] 1 bench + baseline (`npm run bench:findings`, `bench/findings-context.mjs`) · [x] 2 ledger on the record (9.101.0) · [x] 3 served from the ledger (9.101.0, same entry; the SHUFFLE run on a real model is still owed) · [x] 4 eviction (9.102.0 — the hold, the ceiling, the stand-down, the long-run table; the removable-set plan shape and the receipt rows are NAMED follow-ups, not taken) · [ ] 5 Findings band
 
 ## Baseline (2026-09-16, `bench/findings-context.mjs`, mock provider, 20 tool calls, a planted fact every 3rd)
 
@@ -802,3 +802,258 @@ answer from what it was served, or the columns stop measuring the wire.
 `npm run bench:findings:shuffle` names the harness; the print above is the
 run after the fix, exit 0. **Still no real-model run**; the `serve` default
 is untouched.
+
+## Step 4 (2026-09-17) — facts held, noise leaves first
+
+Built on the 9.101.1 tree; ships as 9.102.0. The spec of record is
+`docs/design/2026-09-findings-ledger-spec.md` § Step 4; every fact found
+while building is in the worklog under `step4`, and where the spec's wording
+met a different shape on the tree the code's shape won and the fact is there.
+
+### The shape decision
+
+'Facts last' is a BOUNDED HOLD in the refusal engine, under every strategy,
+built from the shipped pin grammar — not a fourth strategy file and not a
+non-contiguous plan. `window/ledgerFactPins.ts · ledgerFactPinsOf` is the
+content-aware twin of `lastToolResult.ts · toolResultPinsOf`; `turns.ts ·
+planRemoval` admits its candidates against their own ceiling and `refusalFor`
+names the hold `'ledger-fact'`; `stages/window.ts · buildWindowStage` stands
+it down. Because the hold arrives through `planRemoval`, `slidingWindow`,
+`tokenBudget`, `summarizeOldest` and a consumer-written strategy all get it
+without knowing it exists — none of the three shipped strategies changed a
+byte, and `planRemoval`'s contiguity, `dropOldestSpan`, the notice ladder and
+the meter's single-seam rebase are untouched.
+
+Why a hold and not an ordering: 'noise first' already follows from a hold.
+Noise, ruled-out, open and undeclared turns are unpinned and leave
+oldest-first exactly as they always did, and step 3 shrank a judged noise
+turn to an ~80-byte ticket on the wire, so a noise turn that outlives a fact
+costs bytes the wire no longer pays. The long-run table below confirms it on
+this tree: every noise result left on every armed row (16 of 16), and the
+facts rose by the hold alone. The removable-SET plan shape the spec named
+(`planRemovals → { removable, refusals }` plus a `kept`/`inserted` meter
+rebase) was to be taken only if ordering among unpinned turns still mattered
+after the collapse; it did not, so it is NOT taken (Named follow-ups, below).
+
+### The rank rule
+
+A Turn is the removal unit — an assistant's call and its results leave
+together — so a turn's standing is its most valuable result's:
+`ledgerFactPins.ts · turnStandingOf` folds the turn's tool messages through
+`rankStanding` (`fact` 4 > `open` 3 > undeclared 2 > `ruled-out` 1 > `noise`
+0; a number only to compare, never recorded). Undeclared ranks ABOVE the two
+verdicts on purpose: an absent standing is never defaulted, so a batch with
+one unjudged member is not a noise batch; it ranks below `open` because
+`open` is a declaration. A parallel batch that answered one fact beside two
+noise results is one slot and the noise stays with it — each result's own
+standing is on the ledger by its id, which is why `LedgerFactPin.toolCallIds`
+lists every result the held turn carries, not only the facts. The stage binds
+ONE `standingOf` (`turnStandingOf` over `foldLedger(rows).standingOf`) and
+hands the same function to the pin and to `strategy.plan`, so the two cannot
+disagree.
+
+### The free-pin law and the ceiling
+
+`turns.ts · spendCeiling` is the ONE ceiling-spender, called once per pin:
+candidates at or past `candidateCount` (inside `keepRecentTurns`) spend no
+slot — the free-pin law, in one place so it cannot drift between the two pins
+— the rest are admitted newest first up to the limit, and the remainder is
+`yielded` on the record. The two pins keep separate books
+(`pinnedTurnIndexes` / `factPinnedTurnIndexes`, `observations` /
+`ledgerFacts`) because their ceilings differ and a reader adding up what each
+cost needs them apart. The fact ceiling is spent on every contested fact turn,
+including one the recency pin also holds — the spec's free-pin law names only
+`keepRecentTurns` — so such a turn appears in BOTH blocks. Refusal order in
+`refusalFor`: current-request → system-envelope → paused-tool /
+pending-check-in → unresolved-tool-call → last-tool-result → `'ledger-fact'`:
+every reason before the two pins is a fact about the wire or a human, the
+pins are policy, and a turn held by both reports the content-blind rule first
+(the one that would still be true had the model declared nothing).
+
+The ceiling's default (4) is resolved ONCE, in the `Agent` constructor
+(`resolveKeepLedgerFacts`: `findings({ keepLedgerFacts })` over
+`AgentOptions.keepLedgerFacts`, `false` → `0`, nothing named → the default)
+and threaded to `buildWindowStage` as a plain number beside
+`hasFindingsLedger: true` — both or neither, so an unarmed agent hands the
+stage exactly the deps it always did and the stage applies no default of its
+own (absent = unarmed = no hold; `0` = the hold is off). `0` plans exactly as
+before the hold existed, deep-equal.
+
+### The stand-down
+
+`stages/window.ts · pinIsBlocking(records, reasons)` reads the REFUSALS of
+the last two records — not the observation blocks the spec named, because a
+block is absent when a pin held nothing while a refusal is present exactly
+when a pin blocked a turn, and when nothing left every candidate's refusal is
+on the record. When both visits removed nothing and both named only pins, the
+fact pins stand down for THIS visit and the record says so (`ledgerFacts: {
+pinned: [], yielded: 0, limit, standDown: true }`).
+
+Which names count is load-bearing. The recency pin's stand-down reads only
+its own name (`LAST_TOOL_RESULT_PIN`), so its 9.57.0 rule and the
+`WindowObservations.standDown` doc are unchanged. The fact pin's reads the
+FAMILY (`ANY_PIN` = `'last-tool-result'` and/or `'ledger-fact'`) — because
+`refusalFor` names the recency pin first for a turn both hold, a fact
+stand-down that read only its own name would never see that turn blocking,
+and the two pins would alternate under each other's name: visits 1–2 the turn
+is refused as `'last-tool-result'`, visit 3 the recency pin releases and the
+same turn is refused as `'ledger-fact'`, visits 4–5 the recency pin is back,
+visit 6 it releases again — period 3, the window never shrinks. Derived
+before it was seen, pinned by `test/core/window-ledger-fact.test.ts` "a turn
+held by BOTH pins stands down as ONE family — no alternation, ever" (nine
+visits, streak ≤ 2). When both fire, both blocks carry `standDown: true`. On
+an unarmed agent no `'ledger-fact'` row exists, so the two readings agree.
+
+### What the record holds
+
+- `WindowRecord.ledgerFacts?: WindowObservations` — the hold's block, filed
+  when it held a turn, turned one away, or stood down; `limit` =
+  `keepLedgerFacts`. `WindowRecord.droppedStandings?: { toolCallId,
+  standing? }[]` — the standing the model had declared for every tool result
+  that left; `standing` absent = undeclared, never defaulted. Both armed-only
+  and value-conditional, both filed by the STAGE so a consumer-written
+  strategy's record carries them; the unarmed record expression is the one it
+  was. `WindowStrategyInput.standingOf?` is present exactly when armed
+  (`keys(on)` = `keys(off)` + `standingOf`, pinned).
+- The gate: `scope.findingsLedger` is read ONCE per visit beside
+  `scope.compactions`, only under `deps.hasFindingsLedger === true`, spread
+  into a plain array before `foldLedger`. Pinned by a getter counting reads on
+  an unarmed stage (0) — the phantom-context-source rule.
+- Byte identity: the 16 references passed untouched on the step-4 tree
+  before the new scenario existed; `agent-findings-window` (armed,
+  `slidingWindow({ keepRecentTurns: 2 })`, two declared facts) was generated
+  ALONE, the 16 `cmp`-equal after. Read back from its bytes: seven
+  `compactions` records — iteration 3 no pin (`c1` inside keep), 4
+  `'ledger-fact'`@1 with `ledgerFacts { pinned: [alpha_tool@1], yielded: 0,
+  limit: 4 }`, 5 drops `c2` with `droppedStandings: [{ c2, noise }]`, 6 holds
+  `c1` and `c3` removing nothing, 7–9 drop `c4` (ruled-out), `c5` and `c6`
+  (undeclared, `standing` absent); no `standDown`; no `observations` block
+  (the recency pin's latest result is always inside keep); the last epoch's
+  wire is `user · c1 · c3 · c7 · c8` with two collapse tickets in the served
+  views. An unarmed windowed agent, with or without `keepLedgerFacts: 5`,
+  produces the same keys, records, request bytes and output, and its records
+  never contain `ledger-fact`, `ledgerFacts` or `droppedStandings` even when
+  the model emits `_findings` (`window-refusal-rename.test.ts`).
+- Words: `notice.ts · buildDropNotice` unchanged — tool names and counts;
+  no new `role: 'user'` construction site; the model's words appear only in
+  the ledger piece, marked as the model's. Receipt: UNCHANGED.
+
+### Named follow-ups (not taken)
+
+- **The removable-set plan shape** — `planRemovals → { removable: number[],
+  refusals }` plus a meter rebase form (`kept: readonly number[]`, `inserted:
+  { at, bornAtMs }[]`). Condition: the long-run table shows ordering among
+  unpinned turns still matters after the collapse. It does not (16 of 16
+  noise results left on every armed row); not taken.
+- **Receipt rows** — `ReceiptAttentionOmission.rows?: { hash, standing? }[]`
+  beside `count`/`hashes`, the `SERVED_GAPS['no-receipt-on-chart'].fields`
+  entry, and the lens `EvictedTurn.standing?`. Condition: the join evicted
+  hash → paired epoch's `ReceiptMessage.key` (= toolCallId) → the ledger fold
+  at that stop proves insufficient (unpaired hashes on resumed legs). Until
+  then a dropped turn's standing lives on the committed
+  `WindowRecord.droppedStandings`.
+- **The "inert" sentences — CLOSED (review round 2).** Four JSDoc sentences
+  (`types.ts · AgentOptions.findings` block and the `keepLedgerFacts` field,
+  `AgentBuilder.findings`, `Agent · findingsOptions`) said `keepLedgerFacts`
+  was inert until the hold landed in `stages/window.ts`, and
+  `findings-served.test.ts` §8 PINNED them with
+  `toMatch(/keepLedgerFacts[^.]*\binert\b/)` — green only because the docs
+  were false. Each now says where the value is spent (`stages/window.ts ·
+  buildWindowStage` → `turns.ts · admitPins`, `WindowRecord.ledgerFacts`),
+  and §8 pins the law instead of the waiting sentence: `not.toMatch` on
+  `inert` and on `until the hold lands|not yet acted on`, `toMatch` on
+  `keepLedgerFacts … stages/window.ts`, with the top-level
+  `AgentOptions.keepLedgerFacts` field added as a fourth site (a
+  newline-prefixed anchor, so the nested `findings.keepLedgerFacts` field
+  cannot shadow it). A doc site that pins a "not yet" sentence must name the
+  packet that flips it, or it will be green on the day it lies.
+- Hoists: `requireKeepLedgerFacts` / `DEFAULT_KEEP_LEDGER_FACTS` /
+  `resolveKeepLedgerFacts` from `Agent.ts` to `window/options.ts` beside
+  their twins; `turnChars` (duplicated module-private in both pin files) into
+  `turns.ts`; a one-sentence pointer on `WindowObservations.standDown` that
+  the `ledgerFacts` block's stand-down reads the family.
+
+### Bench — step 4 (2026-09-17, `npm run bench:findings`, mock provider; the first table 20 tool calls, the long-run table 30; a planted fact every 3rd; sliding window keeps 6 turns)
+
+`bench/findings-context.mjs` gained the LONG-RUN table: LONG_N calls (default
+30) under the same sliding window, four rows — `.findings()` off; on with the
+hold off (`keepLedgerFacts: false`); on with the default ceiling (4); on with
+a ceiling of 6 — and two columns read off `scope.compactions` through
+`agent.getLastSnapshot()`: `facts-held` (`ledgerFacts.pinned.length` on the
+LAST record, the visit whose window the answer turn was served) and `dropped
+f/o/n/r/u` (`droppedStandings` summed over every record: fact / open / noise
+/ ruled-out / undeclared). A line under the table prints `yielded` and the
+stand-down count per row. The first table, the step-2 law and the correctness
+check are unchanged, and a step-4 law joins them: `keepLedgerFacts: false`
+must not move `facts-verbatim`, `tool-msgs` or `receipt-msgs` against the
+unarmed `sliding` row and must hold nothing — exit non-zero otherwise. As
+printed (exit 0):
+
+```
+findings-context — 20 tool calls, a fact every 3rd, sliding window keeps 6 turns; read at the answer epoch (21) through servedAt
+window              planted  facts-verbatim  facts-in-piece  noise-verbatim  noise-tickets  noise-share  wire-tool-bytes  tool-msgs  receipt-msgs  basis-rows  standings  conflicts  declared-chars
+none                      6               6               0              14              0        93.5%             2322         20            41           -          -          -               -
+sliding                   6               2               0               4              0        92.3%              676          6            13           -          -          -               -
+none+findings             6               6               6               1             13        15.2%             1028         20            41          20         19          0            2562
+sliding+findings          6               6               6               1              3        32.9%              474         10            21          20         19          0            2562
+none+ledger-only          6               0               6               1             13        12.9%             1205         20            41          20         19          0            2562
+request-only lines at the answer turn: none 0, sliding 0, none+findings 0, sliding+findings 0, none+ledger-only 0
+ledger-only: 6 fact results on the wire as tickets, 0 in full
+
+long run — 30 tool calls, a fact every 3rd, sliding window keeps 6 turns; the ledger-fact hold (keepLedgerFacts) under .findings(); read at the answer epoch (31) through servedAt
+window                    planted  facts-verbatim  facts-in-piece  noise-verbatim  noise-tickets  noise-share  wire-tool-bytes  tool-msgs  receipt-msgs  basis-rows  standings  conflicts  declared-chars  facts-held  dropped f/o/n/r/u
+sliding                        10               2               0               4              0        92.3%              676          6            13           -          -          -               -           0          0/0/0/0/0
+sliding+findings hold=0        10               2               9               0              4         0.0%              276          6            13          30         29          0            3879           0         8/0/16/0/0
+sliding+findings hold=4        10               6               9               0              4         0.0%              380         10            21          30         29          0            3879           4         4/0/16/0/0
+sliding+findings hold=6        10               8               9               0              4         0.0%              430         12            25          30         29          0            3879           6         2/0/16/0/0
+hold at the last visit: sliding held 0 yielded 0 stand-downs 0 (25 visits); sliding+findings hold=0 held 0 yielded 0 stand-downs 0 (25 visits); sliding+findings hold=4 held 4 yielded 1 stand-downs 0 (25 visits); sliding+findings hold=6 held 6 yielded 1 stand-downs 0 (25 visits)
+step-2 law: .findings() armed with nothing declared serves the unarmed bytes — the six baseline columns are unchanged (none, sliding)
+step-4 law: keepLedgerFacts: false plans exactly as the unarmed window — facts-verbatim, tool-msgs and receipt-msgs are unchanged, and no fact was held
+```
+
+Read, numbers from the print only:
+
+- **What moved (the long run).** `facts-verbatim` rises from 2 of 10 on the
+  `sliding` row — and 2 on `hold=0`, the same window with the piece and the
+  collapse but no hold — to 6 under the default ceiling and 8 under a ceiling
+  of 6: the two facts inside the keep window plus the four (six) held turns,
+  `facts-held` 4 and 6 on the last record. `facts-in-piece` is 9 of 10 on every
+  armed row whatever the ceiling — the hold changes the wire, not the piece;
+  the tenth is the last batch's, undeclared by the no-outputSchema law. So
+  "facts present" at the answer turn is 9 in the piece on every armed row,
+  and verbatim 2 → 6 → 8 as the ceiling rises.
+- **What did not move.** `noise-share` is 0.0% on every armed row, hold or
+  no hold: the collapsed level at this length. It is 0.0% rather than the
+  20-call table's 32.9% because at 30 calls the last batch — the one result
+  every row serves in full — is a FACT (30 is a multiple of 3), so no noise
+  result is on the wire in full; `noise-tickets` is 4 (the four noise results
+  inside the keep window) on every armed row. `dropped f/o/n/r/u` says the
+  same thing from the record: 16 noise results left on every armed row — the
+  hold changed WHICH facts left (8 → 4 → 2), never whether noise did. This is
+  the condition the removable-set follow-up was gated on, and it did not hold.
+  `facts-in-piece`, `basis-rows` (30), `standings` (29), `conflicts` (0) and
+  `declared-chars` (3879) are the same on every armed row.
+- **What the hold costs.** `wire-tool-bytes` 276 → 380 → 430 and `tool-msgs`
+  6 → 10 → 12, `receipt-msgs` 13 → 21 → 25: each held turn is its assistant
+  call and its result, served verbatim (a planted fact here is ~26 chars — on
+  a real tool the held bytes are the fact's). `yielded` is 1 on both held rows
+  at the last visit: the oldest held fact was turned away when a newer one
+  crossed out of the keep window, the ceiling doing its job. `stand-downs` is
+  0 on every row: with a fact every third call there is always a noise turn
+  between two held facts, so no two consecutive visits removed nothing and the
+  stand-down never had cause; it is pinned by test (the reference scenario's
+  back-to-back facts, and the nine-visit family test), not by this bench.
+- **The step-4 law held**: `hold=0` matches the unarmed `sliding` row on
+  `facts-verbatim` (2), `tool-msgs` (6) and `receipt-msgs` (13) and held
+  nothing — the hold is an addition to the plan, never a rewrite.
+- **The first table moved on one row, by design.** `sliding+findings` (20
+  calls) is now served under the default ceiling: `facts-verbatim` 2 → 6,
+  `tool-msgs` 6 → 10, `receipt-msgs` 13 → 21, `wire-tool-bytes` 376 → 474,
+  `noise-share` 41.5% → 32.9% (the one full noise result, the undeclared last
+  batch, over a ten-message wire instead of six; `noise-tickets` 3 and
+  `noise-verbatim` 1 unchanged). The other four rows are the step-3 print to
+  the digit, and the step-2 law still holds under the silent arm.
+- **Not measured here.** Whether a real model declares, how often, and what
+  a held fact is worth to its answer against what it costs on the wire; the
+  mock scripts compliance and echoes. The SHUFFLE result from step 3 still
+  gates any change of the `serve` default, and nothing here touches it.

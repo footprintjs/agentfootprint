@@ -64,8 +64,16 @@ interface Scripted {
   readonly requests: LLMRequest[];
 }
 
-/** `req.messages` is a live proxy over `scope.history`; JSON is the snapshot. */
-function scripted(toolRounds: number, usage: () => { input: number; output: number }): Scripted {
+/**
+ * `req.messages` is a live proxy over `scope.history`; JSON is the snapshot.
+ * `argsFor` (9.102.0) lets a script put `_findings` on a call; the default is
+ * the empty args every case before it sent.
+ */
+function scripted(
+  toolRounds: number,
+  usage: () => { input: number; output: number },
+  argsFor: (call: number) => Record<string, unknown> = () => ({}),
+): Scripted {
   const requests: LLMRequest[] = [];
   let call = 0;
   return {
@@ -78,7 +86,7 @@ function scripted(toolRounds: number, usage: () => { input: number; output: numb
         const wantsTool = call <= toolRounds;
         return {
           content: wantsTool ? '' : 'final answer',
-          toolCalls: wantsTool ? [{ id: `c${call}`, name: 'look', args: {} }] : [],
+          toolCalls: wantsTool ? [{ id: `c${call}`, name: 'look', args: argsFor(call) }] : [],
           usage: usage(),
           stopReason: 'end_turn',
         };
@@ -86,6 +94,14 @@ function scripted(toolRounds: number, usage: () => { input: number; output: numb
     },
   };
 }
+
+/** The model declares its FIRST result a fact on the second call (9.101.0 wire). */
+const declaringArgs = (call: number): Record<string, unknown> => ({
+  _findings: {
+    basis: 'direct',
+    ...(call === 2 && { previous: [{ toolCallId: 'c1', standing: 'fact' }] }),
+  },
+});
 
 function summarizerSpy(): LLMProvider {
   return {
@@ -117,13 +133,25 @@ function historyOf(agent: Agent): ReadonlyArray<{ role: string; content: string 
 const doors = ['sliding', 'budget', 'compaction'] as const;
 type Door = (typeof doors)[number];
 
-function agentFor(door: Door): { agent: Agent; script: Scripted } {
+function agentFor(
+  door: Door,
+  options: { armed?: boolean } = {},
+): { agent: Agent; script: Scripted } {
   // 9 tool rounds + a final answer = a 10-iteration walk, the shape the live
   // run had. Usage climbs so the token-triggered strategies engage early.
-  const script = scripted(9, () => ({ input: 5000, output: 10 }));
-  const b = Agent.create({ provider: script.provider, model: 'm', maxIterations: 14 }).tool(
+  // `armed` (9.102.0): the same walk on an agent with `.findings()`, the
+  // model declaring its first result a fact — the default is the walk every
+  // case before it ran, byte for byte.
+  const armed = options.armed === true;
+  const script = scripted(
+    9,
+    () => ({ input: 5000, output: 10 }),
+    ...(armed ? [declaringArgs] : []),
+  );
+  const built = Agent.create({ provider: script.provider, model: 'm', maxIterations: 14 }).tool(
     looker as never,
   );
+  const b = armed ? built.findings() : built;
   const agent = (
     door === 'sliding'
       ? b.window(slidingWindow({ keepRecentTurns: 2 }))
@@ -183,6 +211,21 @@ describe('the window can no longer forget what you asked for', () => {
       await agent.run({ message: TASK });
       const reasons = recordsOf(agent).flatMap((r) => r.refusals.map((f) => f.reason));
       expect(reasons, door).toContain('current-request');
+    }
+  });
+
+  it('every strategy names the fact hold beside it, on an agent with .findings() (9.102.0)', async () => {
+    for (const door of doors) {
+      const { agent, script } = agentFor(door, { armed: true });
+      await agent.run({ message: TASK });
+      const reasons = recordsOf(agent).flatMap((r) => r.refusals.map((f) => f.reason));
+      expect(reasons, door).toContain('current-request');
+      expect(reasons, door).toContain('ledger-fact');
+      // The request is still in EVERY call's context — the hold sits behind it.
+      script.requests.forEach((req, i) => {
+        const said = req.messages.some((m) => m.role === 'user' && m.content === TASK);
+        expect(said, `[${door}] call ${i + 1} lost the request`).toBe(true);
+      });
     }
   });
 });

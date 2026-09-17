@@ -26,6 +26,7 @@
  */
 
 import type { LLMMessage, LLMProvider } from '../../../adapters/types.js';
+import type { Standing } from '../findings/types.js';
 
 // ─────────────────────────────────────────────────────────────────
 // Refusals — shared by every strategy
@@ -87,6 +88,33 @@ export type WindowRefusalReason =
    * record, rather than let a window grow without bound.
    */
   | 'last-tool-result'
+  /**
+   * The model DECLARED a result in this turn a fact (9.102.0), on its own
+   * findings ledger, and the turn is held up to the ceiling
+   * (`keepLedgerFacts`). It is the content-aware half of
+   * `'last-tool-result'`: that rule keeps what the agent has just seen, this
+   * one keeps what the agent says it stands on — by the model's claim only,
+   * never the library's reading of the text.
+   *
+   * Measured, on the checked-in bench: under a sliding window the ledger
+   * piece carried every declared fact to the answer turn while the wire
+   * carried two of six verbatim, because the refusal engine saw a fact and a
+   * noise result as the same bytes and recency decided. 'Noise first'
+   * follows from this hold with no second mechanism — noise, ruled-out, open
+   * and undeclared turns are unpinned and leave oldest-first as they always
+   * did.
+   *
+   * A Turn is the removal unit, so a turn's standing is its most valuable
+   * result's (`ledgerFactPins.ts · turnStandingOf`): a batch that answered
+   * one fact beside two noise results is one slot and the noise stays with
+   * it. Nothing at or before the current request is pinnable, so a new user
+   * turn releases the whole previous loop. And a hold that has provably been
+   * blocking progress for two consecutive boundaries stands down, on the
+   * record (`WindowRecord.ledgerFacts`), rather than let a window full of
+   * declared facts grow without bound: a fact hold never exists without its
+   * ceiling and its stand-down.
+   */
+  | 'ledger-fact'
   /**
    * The only removable candidate is a summary a previous fold wrote. Folding
    * a summary of a summary with nothing new to add spends a call to lose
@@ -187,6 +215,38 @@ export interface WindowRecord {
    * key, so its records are the exact shape they were before 9.57.0.
    */
   readonly observations?: WindowObservations;
+  /**
+   * What the ledger-fact pin did on this visit (9.102.0). Present only when
+   * it did something: held a turn, turned one away at the ceiling, or stood
+   * down — and only on an ARMED agent (`.findings()` configured), so an
+   * unarmed agent's records are the exact shape they were before.
+   *
+   * The same {@link WindowObservations} shape as `observations`, a second
+   * block rather than a merged one: `limit` there is `keepLastToolResults`,
+   * here it is `keepLedgerFacts`, and a reader adding up what each pin cost
+   * needs them apart. The stand-down reads BOTH blocks: when the two previous
+   * visits removed nothing and named only pins (`'last-tool-result'` and/or
+   * `'ledger-fact'`), the fact pins release for this visit and this block
+   * says so (`{ pinned: [], yielded: 0, limit, standDown: true }`).
+   */
+  readonly ledgerFacts?: WindowObservations;
+  /**
+   * The standing of every tool result that LEFT the window on this visit,
+   * by id, as the model had declared it (9.102.0) — beside
+   * `droppedObservations`, which names the tools. Present only on an ARMED
+   * agent (`.findings()` configured) and only when at least one tool result
+   * left; an unarmed agent never carries this key.
+   *
+   * `standing` absent is UNDECLARED — the model said nothing about that
+   * result — never `'open'` and never a verdict the library inferred. It is
+   * the model's claim, and it is filed by the STAGE so a consumer-written
+   * strategy's record carries it too; a reader joining an evicted turn's
+   * hash on the receipt to the ledger fold at that stop gets the same answer.
+   */
+  readonly droppedStandings?: readonly {
+    readonly toolCallId: string;
+    readonly standing?: Standing;
+  }[];
 }
 
 /**
@@ -197,6 +257,10 @@ export interface WindowRecord {
  * removes something. The whole point of this release is that a model was
  * working from evidence nobody could see had gone; evidence nobody can see
  * was kept is the same defect facing the other way.
+ *
+ * Since 9.102.0 the ledger-fact pin files the same shape under
+ * `WindowRecord.ledgerFacts`, with `limit` = `keepLedgerFacts`; every field
+ * below reads the same way there.
  */
 export interface WindowObservations {
   /**

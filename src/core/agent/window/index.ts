@@ -47,6 +47,7 @@ export type {
   WindowStrategyResult,
 } from './strategy.js';
 export type { RemovalPlan, Turn } from './turns.js';
+export { ledgerFactPinsOf, type LedgerFactPin } from './ledgerFactPins.js';
 export { COMPACTED_FRAME_PREFIX, isCompactedSummary } from './summarize.js';
 export { DROP_NOTICE_PREFIX, isDropNotice } from './notice.js';
 export { summarizeOldest } from './strategies/summarizeOldest.js';

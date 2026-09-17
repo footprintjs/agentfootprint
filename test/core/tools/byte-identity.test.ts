@@ -110,6 +110,33 @@
  * that piece's `chars`/`hash`, `receipt.system.chars`/`hash`, and the four
  * `requestMeasurement` sizes. No new path.
  *
+ * 9.102.0: one new reference `agent-findings-window` (the findings ledger
+ * under `slidingWindow({ keepRecentTurns: 2 })` — eight calls, `c1` and `c3`
+ * declared facts, `c2` noise, `c4` ruled-out); none of the 16 moved. The 16
+ * were run on the step-4 tree first (16/16 green, the reference directory
+ * untouched by git), then the one scenario was generated alone
+ * (`-t agent-findings-window` under `AF_TOOLS_REFERENCE=update`, the 16
+ * copied aside first and `cmp`-equal after). What the new reference holds —
+ * read back from its bytes, not from the script: seven `compactions` records
+ * on the compact stage's commits. Iteration 3 removes nothing and names no
+ * pin (`c1` is inside the keep window, so the hold is free); iteration 4
+ * names `'ledger-fact'` for `c1`'s turn and files `ledgerFacts { pinned:
+ * [alpha_tool@1], yielded: 0, limit: 4 }`; iteration 5 drops `c2` and files
+ * `droppedStandings: [{ c2, noise }]` beside `droppedObservations`;
+ * iteration 6 holds `c1` and `c3` (two `'ledger-fact'` rows) and removes
+ * nothing; iterations 7–9 drop `c4` (`ruled-out`), `c5` and `c6` (undeclared
+ * — `standing` absent, never defaulted). No `standDown` anywhere (every
+ * blocked boundary is followed by progress) and no `observations` block (the
+ * recency pin's latest `alpha_tool` result is always inside the keep window
+ * and spends no slot). The wire at the last epoch carries `user · c1 · c3 ·
+ * c7 · c8`: both facts held past the keep window by the model's claim; the
+ * noise and ruled-out results were collapsed to tickets on the epochs that
+ * served them (two tickets in the served views) and then left. The
+ * `'ledger-fact'` refusal, the `ledgerFacts` block and `droppedStandings`
+ * are the ONLY record vocabulary this scenario adds over `agent-findings`;
+ * the ledger rows, the piece and the decorated schemas are that scenario's
+ * families.
+ *
  * Every scenario is a real run — the receipt-conformance shapes, each in the
  * configuration that has no name collision — and what is compared is the
  * whole `commitLog` plus `servedAt(k)` for every located epoch, after ONE
@@ -137,6 +164,7 @@ import {
   epochLocations,
   LLMCall,
   servedAt,
+  slidingWindow,
   type AgentRunResult,
 } from '../../../src/index.js';
 import { buildMessageApiChart } from '../../../src/core/agent/buildMessageApiChart.js';
@@ -439,6 +467,74 @@ const SCENARIOS: Record<string, () => Promise<Snapshot>> = {
             } as never,
             { retries: 0 },
           ),
+    ),
+  // The findings ledger under a WINDOW (9.102.0) — the second armed scenario:
+  // eight calls under `slidingWindow({ keepRecentTurns: 2 })`, two results
+  // declared facts (`c1` on the second call, `c3` on the fourth), one noise
+  // (`c2`) and one ruled-out (`c4`). The fact turns are held by
+  // `'ledger-fact'` past the keep window; the noise and ruled-out turns are
+  // collapsed on the wire and then leave oldest-first, each with its
+  // standing on the record (`droppedStandings`).
+  'agent-findings-window': () =>
+    agentRun(
+      'dynamic',
+      [
+        call('c1', 'alpha_tool', { q: 'nodes', _findings: { basis: 'exploratory' } }),
+        call('c2', 'alpha_tool', {
+          q: 'node-1',
+          _findings: {
+            basis: 'direct',
+            previous: [
+              {
+                toolCallId: 'c1',
+                standing: 'fact',
+                sought: true,
+                assertions: [
+                  { subject: { kind: 'node', id: 'node-1' }, predicate: 'state', value: 'up' },
+                ],
+              },
+            ],
+          },
+        }),
+        call('c3', 'alpha_tool', {
+          q: 'node-2',
+          _findings: { basis: 'direct', previous: [{ toolCallId: 'c2', standing: 'noise' }] },
+        }),
+        call('c4', 'alpha_tool', {
+          q: 'node-3',
+          _findings: {
+            basis: 'direct',
+            previous: [
+              {
+                toolCallId: 'c3',
+                standing: 'fact',
+                sought: true,
+                assertions: [
+                  { subject: { kind: 'node', id: 'node-2' }, predicate: 'state', value: 'down' },
+                ],
+              },
+            ],
+          },
+        }),
+        call('c5', 'alpha_tool', {
+          q: 'node-4',
+          _findings: {
+            basis: 'exploratory',
+            previous: [{ toolCallId: 'c4', standing: 'ruled-out', line: 'node-3 was up' }],
+          },
+        }),
+        call('c6', 'alpha_tool', { q: 'node-5', _findings: { basis: 'exploratory' } }),
+        call('c7', 'alpha_tool', { q: 'node-6', _findings: { basis: 'exploratory' } }),
+        call('c8', 'alpha_tool', { q: 'node-7', _findings: { basis: 'exploratory' } }),
+        answer('done'),
+      ],
+      (a) =>
+        a
+          .system('bot')
+          .tool(tool('alpha_tool'))
+          .findings()
+          .window(slidingWindow({ keepRecentTurns: 2 })),
+      { maxIterations: 10 },
     ),
   llmcall: async () => {
     const one = LLMCall.create({ provider: scripted([answer('done')]) as never, model: 'mock' })

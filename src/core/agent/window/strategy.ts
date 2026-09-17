@@ -42,6 +42,7 @@
  */
 
 import type { LLMMessage, LLMProvider } from '../../../adapters/types.js';
+import type { Standing } from '../findings/types.js';
 import type { Turn, RemovalPlan } from './turns.js';
 import type { FoldedSpan, WindowRecord } from './types.js';
 
@@ -124,6 +125,30 @@ export interface WindowStrategyInput {
    * @param atMs    the moment they leave (usually `input.now()`)
    */
   readonly removalFacts: (indices: readonly number[], atMs: number) => RemovalFacts;
+  /**
+   * What the model DECLARED a turn's results to be, on its findings ledger
+   * (9.102.0) — `fact`, `open`, `noise`, `ruled-out`, or `undefined` when it
+   * said nothing (undeclared; never defaulted to `'open'`). A Turn is the
+   * removal unit, so a turn's standing is its most valuable result's
+   * (`fact > open > undeclared > ruled-out > noise`, the
+   * `ledgerFactPins.ts · turnStandingOf` rule); a turn with no tool result
+   * has none.
+   *
+   * BOUND BY THE STAGE, like `planRemoval` and `removalFacts`: the stage is
+   * the one place that reads scope, and it resolves the ledger ONCE per visit
+   * and hands the answer in. A strategy never reads scope for it — that is
+   * the strategies/README one law, and it is what keeps a consumer-written
+   * strategy honest by construction.
+   *
+   * OPTIONAL, and absent on an agent without `.findings()`: an unarmed agent
+   * has no ledger to ask, and a strategy compiled before this field existed
+   * keeps compiling. A strategy does not NEED it to get 'facts last' — the
+   * hold lives in the refusal engine (`'ledger-fact'`) and arrives through
+   * `planRemoval` under every strategy; this is for one that wants to ORDER
+   * or REPORT among the turns the engine left removable. Never infer a
+   * standing from a result's text: absent here means the model said nothing.
+   */
+  readonly standingOf?: (turn: Turn) => Standing | undefined;
 }
 
 /** What the stage should do next. */
