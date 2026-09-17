@@ -26,6 +26,8 @@ export type ContextSlot = 'system-prompt' | 'messages' | 'tools';
  *   - `steering`     → always-on policy / persona / format rule
  *   - `fact`         → developer-supplied data (user profile, env, …)
  *   - `custom`       → consumer-defined (anything bespoke)
+ *   - `findings`     → the model's own declared standings on its tool results,
+ *                       served back as one system piece (9.101.0, `.findings()`)
  *
  * Adding a new source is NOT a breaking change; removing one IS.
  */
@@ -36,6 +38,7 @@ export type ContextSource =
   | 'memory'
   | 'instructions'
   | 'evidence-recovery'
+  | 'findings'
   | 'steering'
   | 'fact'
   | 'custom'

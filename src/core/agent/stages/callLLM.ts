@@ -55,6 +55,13 @@ import {
   splitFindings,
   withoutFindingsArgument,
 } from '../findings/reserved.js';
+import {
+  collapseJudged,
+  findingsLedgerPiece,
+  servedToolCallIds,
+  type FindingsServeMode,
+} from '../findings/serve.js';
+import type { FindingsLedger } from '../findings/types.js';
 import { readSchemaToolAnswer } from '../outputEnforcement.js';
 import {
   executeWithReliability,
@@ -112,6 +119,26 @@ export interface CallLLMStageDeps {
    * `systemPieces`, `activeToolSchemas` and the receipt are untouched.
    */
   readonly findings?: true;
+  /**
+   * THE LEDGER IS SERVED (9.101.0, step 3) — present only under `.findings()`,
+   * only ever `true`, threaded beside `findings` by `Agent.ts`. It gates
+   * EVERY read of `scope.findingsLedger` in this stage: the piece
+   * (`findings/serve.ts · findingsLedgerPiece`, joined AFTER the recovery
+   * piece — order recovery → findings, FIXED, mirrored by
+   * `servedView.ts · viewOf`) and the collapse (`collapseJudged`, applied to
+   * the message list BEFORE the staged-refs nudge and BEFORE the receipt
+   * mint, so the receipt hashes what was sent). An unarmed agent never
+   * reads the key — a tracked read of an always-absent key is the phantom
+   * context source `window/evictedTurns.ts` names.
+   */
+  readonly hasFindingsLedger?: true;
+  /**
+   * How judged results are served (9.101.0, step 3) — `AgentOptions.findings.serve`,
+   * threaded under the same gate; absent ⇒ `'ledger-and-facts'`. The same
+   * value seed puts on the record as the run constant `findingsServe`, which
+   * is how the rebuild collapses the way the wire did.
+   */
+  readonly findingsServe?: FindingsServeMode;
   /** Optional pricing adapter for cost tracking. */
   readonly pricingTable?: PricingTable;
   /** Optional cumulative USD cap per run. */
@@ -311,7 +338,8 @@ export interface CallLLMStageDeps {
 
 // LENS · system-text + tool-list · request-ephemeral
 // reads: systemPrompt ← scope.systemPromptInjections, joined by `systemPrompt` below (the system-prompt slot's output)
-//        messages ← scope.history (`messages`); tools ← scope.dynamicToolSchemas (`registeredToolSchemas`), EMPTIED to EMPTY_TOOL_SCHEMAS under scope.wrapUpAsked
+//        messages ← scope.history (`history`; `messages` is its wire-only collapse of judged tool results under `.findings()` — `collapseJudged`); tools ← scope.dynamicToolSchemas (`registeredToolSchemas`), EMPTIED to EMPTY_TOOL_SCHEMAS under scope.wrapUpAsked
+//        findings piece ← scope.findingsLedger (`ledgerPiece`, under `deps.hasFindingsLedger` only), joined after the recovery piece
 //        brain ← deps.brainFor(nextSkillCursor ?? currentSkillId)
 // THIS is the wire, and it is assembled inside `buildCallLLMStage` — cite THAT, not this header,
 // when another file points at the assembly. The three slots feed it; they are not it. The staged-refs
@@ -378,11 +406,6 @@ export function buildCallLLMStage(
       deps.hasEvidenceRecovery === true
         ? evidenceRecoveryPiece(scope.evidenceRecovery, scope.evidenceRecoveryUsed, iteration)
         : undefined;
-    const systemPieces =
-      recoveryPiece === undefined
-        ? systemPromptInjections
-        : [...systemPromptInjections, recoveryPiece];
-    const systemPrompt = joinSystemPrompt(systemPieces);
 
     // Read the LLM message stream from `scope.history` directly. The
     // `messagesInjections` projection is for observability — it
@@ -397,9 +420,59 @@ export function buildCallLLMStage(
     // adapter that serializes a message wholesale would otherwise put library
     // internals on someone's wire. Stripping removes a FIELD, never a message,
     // so `messages[i]` is still the message the cache marker's index names.
-    const messages = stripFrameworkFields(
+    const history = stripFrameworkFields(
       (scope.history as readonly LLMMessage[] | undefined) ?? [],
     );
+
+    // ── the findings ledger, served (9.101.0, step 3) ──────────────────
+    // ONE gated read of the committed key, used twice. The COLLAPSE rewrites,
+    // on the wire only, the `content` of `role: 'tool'` messages the model
+    // has already judged noise or ruled-out (facts too under the bench-gated
+    // `'ledger-only'`) to a ticket with no model words in it — the
+    // `placedToolResult` precedent. It runs HERE, before the staged-refs
+    // nudge and before the receipt mint, so `findStagedRefs` reads the
+    // conversation the model reads and the receipt hashes what was sent.
+    // Count, order, `toolCallId` and `toolName` are unchanged, so
+    // `messages[i]` is still the message the cache marker's index names and
+    // the tool_use/tool_result pair stays wire-valid; when nothing collapses
+    // it IS `history`, the same instance. `scope.history` is never written:
+    // the window stage stays its only writer. The PIECE quotes the ledger's
+    // current standings under the context contract's own field meanings and
+    // names every served result no standing covers as undeclared — the ids
+    // come from the SAME list the rebuild derives them from, before or after
+    // the collapse (an id is never rewritten). The piece carries no per-call
+    // byte — it is a function of the ledger and those ids alone — because it
+    // joins the ONE system block the cache marker covers: a re-ask that
+    // serves the same ledger over the same ids reuses the cached prefix, and
+    // a call after the ledger moved does not (`serve.ts` · "The cache"). An
+    // unarmed agent reads no key and serves the bytes it always did.
+    const ledger =
+      deps.hasFindingsLedger === true
+        ? (scope.findingsLedger as FindingsLedger | undefined)
+        : undefined;
+    const messages =
+      deps.hasFindingsLedger === true
+        ? collapseJudged(history, ledger, deps.findingsServe ?? 'ledger-and-facts')
+        : history;
+    const ledgerPiece =
+      deps.hasFindingsLedger === true
+        ? findingsLedgerPiece(ledger, servedToolCallIds(history))
+        : undefined;
+    // The join: injections, then the recovery piece, then the findings piece
+    // — a FIXED order `servedView.ts · viewOf` mirrors. Both request-only
+    // pieces are composed into `systemPieces` ONLY, never pushed into
+    // `systemPromptInjections`: a piece there would be exempt from the
+    // evidence gate (`evidenceIndex.ts · exemptFromRun` indexes every
+    // injection's rawContent), and the ledger quotes the model's own words.
+    const systemPieces =
+      recoveryPiece === undefined && ledgerPiece === undefined
+        ? systemPromptInjections
+        : [
+            ...systemPromptInjections,
+            ...(recoveryPiece === undefined ? [] : [recoveryPiece]),
+            ...(ledgerPiece === undefined ? [] : [ledgerPiece]),
+          ];
+    const systemPrompt = joinSystemPrompt(systemPieces);
 
     // Dynamic schemas — registry tools + injection-supplied tools (Skills'
     // `inject.tools` when their Injection is active). Falls back to the static
@@ -922,7 +995,12 @@ export function buildCallLLMStage(
           })),
           {
             grounded: [
-              ...(recoveryPiece === undefined
+              // The findings piece is mixed-trust for the same reason the
+              // recovery piece is: it quotes the model's OWN declarations,
+              // so a value that exists only there must not excuse an
+              // argument. Either request-only piece narrows the credited
+              // system text to the trusted injections.
+              ...(recoveryPiece === undefined && ledgerPiece === undefined
                 ? llmRequest.systemPrompt === undefined
                   ? []
                   : [llmRequest.systemPrompt]

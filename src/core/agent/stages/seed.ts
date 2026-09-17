@@ -186,6 +186,16 @@ export interface SeedStageDeps {
    */
   readonly forcedOutputToolName?: string;
   /**
+   * How the findings ledger is served on this run (9.101.0) — the
+   * `AgentOptions.findings.serve` dial, threaded beside `findings` and under
+   * the same gate, so it is present ONLY on an armed agent. Seeded for the
+   * `forcedOutputToolName` reason: a rebuild (`servedView.ts` · `viewOf`)
+   * collapses judged tool results the way the wire did, and the mode is a
+   * build-time constant it must read from the RECORD, not from the receipt
+   * it is checking. Absent → this stage commits exactly the keys it always did.
+   */
+  readonly findingsServe?: 'ledger-and-facts' | 'ledger-only';
+  /**
    * The `Tool.wants` declarations, by tool name (9.88.0) — present ONLY when
    * the evidence gate's nudge is armed and at least one tool declares `wants`,
    * which is exactly when request assembly can compose the staged-refs line.
@@ -428,6 +438,19 @@ function seedFrom(scope: TypedScope<AgentState>, message: string, deps: SeedStag
   // strategy writes nothing here.
   if (deps.forcedOutputToolName !== undefined) {
     scope.forcedOutputToolName = deps.forcedOutputToolName;
+  }
+  // The findings ledger's SERVE mode (9.101.0) — the second such constant,
+  // written the same way, and only under the arm: the rebuild reads it with
+  // `readRunConstant` to collapse judged results as the wire did. It is
+  // written on EVERY armed run: `AgentBuilder.findings` normalises `serve` to
+  // `'ledger-and-facts'` before `Agent.ts` threads it, so an armed agent
+  // whose caller named no mode still records the default (an armed agent's
+  // committed key set is the unarmed twin's plus this key, plus
+  // `findingsLedger` once the model declares). The `!== undefined` guard is
+  // defence for a hand-built `SeedStageDeps`, not the common path. An
+  // unarmed agent writes nothing here.
+  if (deps.findings === true && deps.findingsServe !== undefined) {
+    scope.findingsServe = deps.findingsServe;
   }
   // The `wants` declarations (9.88.0) — the third input to the staged-refs
   // nudge, and the only one that was build-time-only. Value-conditional in the

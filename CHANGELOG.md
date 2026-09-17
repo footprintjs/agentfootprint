@@ -30,12 +30,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   what the model already judged is nowhere but in its head; asking a second
   model would cost a call per result and put a second voice on the record.
   Nothing is inferred (a call with no declaration files no row; a result
-  nobody names has no standing — undeclared, never `open`), nothing is
-  served differently yet (the ledger is a record; serving is a later, bench-
-  gated step), and the always-on `findings-ledger` instruction is a system
-  piece hashed on every receipt, so a reworded ask is a different hash a
-  bench can name. `serve` and `keepLedgerFacts` are accepted now so no
-  public name changes later; both are inert until the serving steps land.
+  nobody names has no standing — undeclared, never `open`); what the answer
+  turn is then SERVED from the record is the next block; and the always-on
+  `findings-ledger` instruction is a system piece hashed on every receipt,
+  so a reworded ask is a different hash a bench can name. `keepLedgerFacts`
+  is accepted now so no public name changes later and is inert until
+  standing-aware eviction lands.
 - Two typed events — `agentfootprint.findings.declared` (one per basis row)
   and `agentfootprint.findings.standing` (one per standing row) — carry
   identities, enums and counts only; assertion values, `settles` and `line`
@@ -60,15 +60,79 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `ConflictRow`, `ConflictWitness`, `FindingsDeclaration`, `Basis`,
   `Expect`, `Standing`).
 
+### Added — served from the ledger
+
+- The answer turn reads the ledger. Once the model has declared at least one
+  standing, every later call on an armed agent is served a request-only
+  system piece composed from the folded ledger — `source: 'findings'` on the
+  receipt's `system.pieces` and on `servedAt(snapshot, k).system.pieces` —
+  headed by the context contract's own field meanings and holding `facts`,
+  `limitations`, `evidenceRefs` and `nextSteps`, each bucket marked "declared
+  by the model" and quoting the declaration (a conflict names both witnesses
+  and no verdict; a ruled-out branch is its one line), then `noise` as a count
+  and `undeclared` for the results nobody named — the honest absence, never
+  `open`. Bounded, every overflow stated, an empty bucket omitted. On the
+  wire, and only on the wire, a tool result the model judged `noise` or
+  `ruled-out` is served as a ticket, `{"collapsed":true,"standing":…,
+  "toolCallId":…}`, in place of its content; `open` and undeclared results
+  stay verbatim; nothing is dropped or reordered, and `toolName` /
+  `toolCallId` are untouched, so the tool_use/tool_result pair stays
+  wire-valid. `history` never changes — the window stage stays its only
+  writer — and `servedAt` rebuilds the piece and the collapse with the same
+  functions in the same order, so `receiptAt(k)` agrees by construction on
+  an armed run with a collapsed entry; no new served gap, `withheld`
+  untouched. Why a piece and a ticket rather than a rewritten history: the
+  record must keep the emission, and a judged result's bytes should not be
+  read again at full size on every call after the model said what it was.
+- `.findings({ serve })` chooses how much of the pile stays:
+  `'ledger-and-facts'` (the default — facts, open and undeclared results
+  verbatim beside the piece; noise and ruled-out as tickets) or
+  `'ledger-only'` (fact results as tickets too; the model answers from the
+  piece, its own paraphrase). The second is BENCH-GATED: shipped so
+  `bench/findings-shuffle.mjs` can measure it on a real model, not a
+  recommendation, and never a default until that run shows the answer does
+  not drift when the same evidence arrives in a different order. The run
+  constant `findingsServe` is committed on every armed run so a served view
+  knows which dial produced the wire.
+- The piece carries no per-call byte — it is a function of the folded
+  ledger and the wire's tool ids and nothing else — because it joins the ONE
+  system block the cache marker covers (`systemPromptCachePolicy` is
+  `'always'` by default, and the Anthropic adapters mark the whole joined
+  system prompt as one block). A re-ask is served the same system bytes and
+  the same system hash as the call before it. What that does NOT save: a
+  model that declares on every call moves the ledger on every call, so from
+  the first standing on each such call writes a new system cache entry and
+  reads none, and on Anthropic's wire the message breakpoints behind it miss
+  too. The feature's claim is wire bytes, not cache reads; no bench in the
+  tree counts cache tokens yet, and the design page names the trade.
+- Measured (`npm run bench:findings`, mock provider, 20 tool calls, a
+  planted fact every 3rd): the piece carries all 6 planted facts at the
+  answer turn on every armed row — including under a sliding window that had
+  evicted 4 of them — and 13 of the 14 noise results are tickets, the noise
+  share of tool-result bytes on the wire falling from 93.5% to 15.2% with no
+  window; the fourteenth is the last batch's, undeclared by the
+  no-outputSchema law and served in full. The design page has the printed
+  table and its reading; no real-model number exists yet.
+- Grounding is unchanged: the evidence gate keeps indexing raw history, so a
+  faithful ledger fact grounds through the result it cites and an invented
+  value is flagged. The choice seam no longer credits the whole system prompt
+  while a request-only piece is joined, so a subject id invented in a `fact`
+  assertion cannot excuse an argument equal to it; an unarmed agent takes the
+  branch it always did. The grouped chart carries `findingsLedger` across the
+  call-llm boundary, so both chart shapes serve byte-equal text.
+
 ### Unchanged — an agent without `.findings()` records the bytes it recorded before
 
 - Every decoration, peel, write, piece and event is gated on the door. The
   15 byte-identity references under `test/core/tools/reference/` were run on
   this tree first and pass untouched; ONE new reference, `agent-findings`,
-  was generated alone and its delta against an unarmed twin is on the test
-  file's header. `npm run bench:findings` now runs each configuration armed
-  and unarmed and exits non-zero if any of the six baseline columns moves
-  under the arm — they do not.
+  was generated alone — and regenerated alone for the served piece, its
+  delta (the run constant, the piece on one receipt, nothing else) on the
+  test file's header. `npm run bench:findings` runs each configuration
+  unarmed, armed with the mock declaring, and armed with the mock declaring
+  NOTHING, and exits non-zero if any of the six baseline columns moves under
+  that silent arm — they do not: an armed agent whose model declares no
+  standing is served the bytes it always was, plus the instruction.
 - The name was proved before it shipped: `_findings` survives every
   provider's `inputSchema` mapping byte-for-byte, `required` untouched —
   Anthropic, OpenAI, Gemini, Bedrock, Ollama, Foundry (hosted and local) and

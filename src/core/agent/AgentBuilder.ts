@@ -1992,9 +1992,21 @@ export class AgentBuilder {
    * {@link Agent.findings}. Nothing infers: a call with no declaration files
    * no row, and a result nobody named has no standing — never 'open'.
    *
-   * WHAT IT DOES NOT DO YET. `serve` and `keepLedgerFacts` name how the
-   * ledger will be served back to the model; both are inert until the serving
-   * steps land — the option shape is fixed now so no public name ever changes.
+   * WHAT THE ANSWER TURN IS SERVED. Once the model has declared a standing,
+   * every later call is served a request-only system piece composed from the
+   * folded ledger (`findings/serve.ts · findingsLedgerPiece` — facts,
+   * limitations, evidenceRefs and nextSteps, each marked "declared by the
+   * model"; results nobody named listed as undeclared, never open), and on
+   * the wire only — `history` never changes — a result the model judged
+   * `noise` or `ruled-out` is replaced by a ticket (`collapseJudged`).
+   * `serve` chooses how much of the pile stays: `'ledger-and-facts'` (the
+   * default) keeps fact, open and undeclared results verbatim beside the
+   * piece; `'ledger-only'` collapses fact results too and is BENCH-GATED —
+   * shipped so `bench/findings-shuffle.mjs` can measure it on a real model,
+   * not a recommendation, never a default until that run shows the answer
+   * does not drift under shuffled evidence. `keepLedgerFacts` is accepted
+   * now so no public name changes later and is inert until standing-aware
+   * eviction lands.
    *
    * Once per agent (a second call is refused, the `.window()` grammar).
    * Registers the always-on `findings-ledger` instruction — the byte-for-byte

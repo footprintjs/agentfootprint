@@ -445,7 +445,10 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
   /** See AgentOptions.findings (9.101.0). Set by `.findings()` and undefined
    *  on every other agent — the one value every findings gate below is
    *  conditioned on, so an unarmed agent hands each stage exactly the deps
-   *  it always did. `serve` / `keepLedgerFacts` are inert until served. */
+   *  it always did. `serve` is threaded to seed (the run constant
+   *  `findingsServe`) and to call-llm (`findingsServe` in its deps) on an
+   *  armed agent only. `keepLedgerFacts` is inert until standing-aware
+   *  eviction lands. */
   private readonly findingsOptions?: NonNullable<AgentOptions['findings']>;
   /** The opt-in tool-result ceiling in characters (9.11.0). Absent → results
    *  are never measured. See {@link AgentOptions.maxToolResultChars}. */
@@ -3571,11 +3574,14 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
         this.pendingResumeFolded = undefined;
         return f;
       },
-      // The findings ledger (9.101.0): the arm, and the continued
-      // conversation's rows, both under the one gate — an unarmed agent hands
+      // The findings ledger (9.101.0): the arm, the serve mode it puts on the
+      // record (the `forcedOutputToolName` precedent — a build-time constant
+      // the rebuild reads instead of the receipt), and the continued
+      // conversation's rows, all under the one gate — an unarmed agent hands
       // seed exactly the deps object it always did.
       ...(this.findingsOptions !== undefined && {
         findings: true as const,
+        findingsServe: this.findingsOptions.serve ?? 'ledger-and-facts',
         consumePendingResumeFindingsLedger: () => {
           const l = this.pendingResumeFindingsLedger;
           this.pendingResumeFindingsLedger = undefined;
@@ -3944,8 +3950,17 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
           hasEvidenceRecovery: true,
         }),
       // The findings ledger (9.101.0): the choice seam and `postValidate`
-      // read peeled args / content under this gate and nothing else changes.
-      ...(this.findingsOptions !== undefined && { findings: true as const }),
+      // read peeled args / content under `findings`; the SERVING (step 3) —
+      // the ledger piece after the recovery piece, the wire-only collapse of
+      // judged results — rides `hasFindingsLedger` with its mode, the same
+      // value seed records as the run constant `findingsServe`. One gate,
+      // the `hasEvidenceRecovery` grammar: an unarmed agent hands the stage
+      // exactly the deps it always did and reads no new key.
+      ...(this.findingsOptions !== undefined && {
+        findings: true as const,
+        hasFindingsLedger: true as const,
+        findingsServe: this.findingsOptions.serve ?? 'ledger-and-facts',
+      }),
       ...(this.answerValidationConfig !== undefined && { suppressDraftTokens: true }),
       // The receipt's salt (9.88.0) — read per call, like seed's own accessor.
       getRunId: () => this.currentRunContext?.runId,

@@ -163,6 +163,13 @@ import {
 } from '../../core/agent/composeRequest.js';
 import { findStagedRefs, stagedRefsNudgeLine } from '../../core/agent/stagedRefs.js';
 import { evidenceRecoveryPiece } from '../../core/agent/evidence/recovery.js';
+import {
+  collapseJudged,
+  findingsLedgerPiece,
+  servedToolCallIds,
+  type FindingsServeMode,
+} from '../../core/agent/findings/serve.js';
+import type { FindingsLedger } from '../../core/agent/findings/types.js';
 import { epochAt, epochLocations, readAfterCall, readAtCall, readRunConstant } from './epochs.js';
 import type { EpochLocation } from './epochs.js';
 import {
@@ -618,8 +625,15 @@ export const SERVED_GAPS: Readonly<Record<ServedGapKind, Omit<ServedGap, 'gap'>>
     // handed in on its own, with no run log to read. `readRunConstant` is the
     // only reader that touches that log, and everything it fetches is a
     // build-time fact `stages/seed.ts` wrote once: the forced output tool's
-    // NAME (`FORCED_OUTPUT_TOOL_KEY`) and `toolWantsByName`, which
-    // `findStagedRefs` composes the nudge from.
+    // NAME (`FORCED_OUTPUT_TOOL_KEY`), `toolWantsByName`, which
+    // `findStagedRefs` composes the nudge from, and — 9.101.0 — the findings
+    // ledger's serve mode (`findingsServe`), which `collapseJudged` folds
+    // judged tool results under. Losing that last one costs nothing on the
+    // default mode (`servedModeOf` falls back to it); under the bench-gated
+    // `'ledger-only'` the rebuilt `messages.entries` would carry fact results
+    // verbatim where the receipt hashed tickets — a subtree without its run
+    // log, on a mode no default reaches, recorded here rather than widened
+    // into `fields`.
     //
     // `tools.schemaHashes` is on the list because the forced tool's NAME is the
     // run constant: losing it also loses the row the receipt hashes under that
@@ -889,6 +903,17 @@ function toolListOf(value: unknown): LLMToolSchema[] | undefined {
 /** `toolWantsByName` back as the map `findStagedRefs` takes. It is committed
  *  as a plain record because a `Map` does not survive the scope's write path
  *  (an object write is JSON-round-tripped, and a `Map` round-trips to `{}`). */
+/**
+ * The serve mode `seed` put on the record (`findingsServe`), narrowed the way
+ * every run constant is: only the one non-default literal changes anything,
+ * and an absent or unrecognised value is the default the wire itself falls
+ * back to (`callLLM.ts · buildCallLLMStage`, `deps.findingsServe ?? …`) — so
+ * an unarmed run, which never wrote the key, collapses nothing.
+ */
+function servedModeOf(value: unknown): FindingsServeMode {
+  return value === 'ledger-only' ? 'ledger-only' : 'ledger-and-facts';
+}
+
 function wantsMapOf(value: unknown): ReadonlyMap<string, readonly string[]> | undefined {
   if (value === null || typeof value !== 'object' || Array.isArray(value)) return undefined;
   const map = new Map<string, readonly string[]>();
@@ -970,17 +995,12 @@ function viewOf(location: EpochLocation): ServedView {
   // The pieces are committed; the joined string never is. Same function the
   // stage used, over the records as the stage read them.
   const injections = (readAtCall(location, 'systemPromptInjections') ?? []) as InjectionRecord[];
+  const iteration = readAtCall(location, 'iteration') as number;
   const recovery = evidenceRecoveryPiece(
     readAtCall(location, 'evidenceRecovery') as Parameters<typeof evidenceRecoveryPiece>[0],
     readAtCall(location, 'evidenceRecoveryUsed') as boolean | undefined,
-    readAtCall(location, 'iteration') as number,
+    iteration,
   );
-  const composedPieces = recovery === undefined ? injections : [...injections, recovery];
-  const pieces: ServedPiece[] = contributingPieces(composedPieces).map((record) => ({
-    text: record.rawContent,
-    slot: record.slot,
-    source: record.source,
-  }));
 
   // ── the conversation ───────────────────────────────────────────────────
   // Read BEFORE the call's own bundle: the call appends the assistant turn to
@@ -1003,7 +1023,45 @@ function viewOf(location: EpochLocation): ServedView {
     : Array.isArray(committedInjections)
     ? [...messagesFromInjections(committedInjections as InjectionRecord[])]
     : undefined;
-  const asSent = stripFrameworkFields(conversation ?? []);
+  const history = stripFrameworkFields(conversation ?? []);
+
+  // ── the findings ledger, served (9.101.0, step 3) ──────────────────────
+  // The SAME two pure functions the stage used, over the SAME committed
+  // inputs, in the SAME order (`callLLM.ts · buildCallLLMStage`): the piece
+  // from the ledger at the call and the wire's tool ids (nothing else — no
+  // call number, so a re-ask rebuilds the same bytes it served) — derived
+  // here as the stage derived them, from the stripped conversation
+  // BEFORE the collapse (an id is never rewritten, so either side agrees);
+  // the collapse under the mode `seed` put on the record as the run constant
+  // `findingsServe` (the `forcedOutputToolName` precedent — a build-time fact
+  // read from the RECORD, never from the receipt this view is checked
+  // against). No `.findings()` ⇒ no key ⇒ both are no-ops and the rebuild is
+  // the bytes it always was; no new gap kind, `withheld` untouched.
+  const ledger = readAtCall(location, 'findingsLedger') as FindingsLedger | undefined;
+  const findings = findingsLedgerPiece(ledger, servedToolCallIds(history));
+  const asSent = collapseJudged(
+    history,
+    ledger,
+    servedModeOf(readRunConstant(location, 'findingsServe')),
+  );
+
+  // ── the system prompt, joined ──────────────────────────────────────────
+  // Injections, then the recovery piece, then the findings piece — the fixed
+  // order the stage joins in. Both request-only pieces are joined, never
+  // committed as injections.
+  const composedPieces =
+    recovery === undefined && findings === undefined
+      ? injections
+      : [
+          ...injections,
+          ...(recovery === undefined ? [] : [recovery]),
+          ...(findings === undefined ? [] : [findings]),
+        ];
+  const pieces: ServedPiece[] = contributingPieces(composedPieces).map((record) => ({
+    text: record.rawContent,
+    slot: record.slot,
+    source: record.source,
+  }));
 
   // ── the tools ──────────────────────────────────────────────────────────
   // `dynamicToolSchemas` is the PRE-assembly list. Two rules run after it and

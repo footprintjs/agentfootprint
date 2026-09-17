@@ -257,15 +257,25 @@ export interface AgentOptions {
    * option is byte-identical to one built before the ledger existed: no
    * decoration, no peel, no key, no piece, no event.
    *
-   * `serve` (defaults to `'ledger-and-facts'`) and `keepLedgerFacts` name
-   * how the ledger will be SERVED back to the model. Both are inert until
-   * the serving steps land; the shape is fixed now so no public name ever
-   * changes.
+   * `serve` chooses what the answer turn is SERVED from the ledger
+   * (`findings/serve.ts`): once the model has declared a standing, every
+   * later call gets a request-only system piece composed from the folded
+   * ledger, and on the wire only — `history` never changes — a tool result
+   * the model judged `noise` or `ruled-out` is replaced by a ticket.
+   * `'ledger-and-facts'` (the default) keeps fact, open and undeclared
+   * results verbatim beside the piece; `'ledger-only'` collapses fact
+   * results too and is BENCH-GATED: shipped so `bench/findings-shuffle.mjs`
+   * can measure it on a real model, not a recommendation, never a default
+   * until that run shows the answer does not drift under shuffled evidence.
+   * `keepLedgerFacts` is accepted now so no public name changes later and is
+   * inert until standing-aware eviction lands.
    */
   readonly findings?: {
-    /** What the model is served from the ledger — inert until step 3. */
+    /** What the model is served from the ledger: the default keeps fact results
+     *  verbatim beside the piece; `'ledger-only'` collapses them too (bench-gated). */
     readonly serve?: 'ledger-and-facts' | 'ledger-only';
-    /** How many ledger facts stay served, or `false` for all — inert until step 4. */
+    /** How many ledger facts stay served, or `false` for all — accepted, inert
+     *  until standing-aware eviction lands. */
     readonly keepLedgerFacts?: number | false;
   };
   /**
@@ -1500,6 +1510,25 @@ export interface AgentState {
    * still not on the record — see `servedView.ts` · `SERVED_GAPS`.
    */
   forcedOutputToolName?: string;
+  /**
+   * How the findings ledger is SERVED on this run (9.101.0) — the
+   * `AgentOptions.findings.serve` dial, seeded once by `stages/seed.ts` on
+   * EVERY run of an agent with `.findings()` (`AgentBuilder.findings`
+   * normalises the dial to `'ledger-and-facts'`, so an armed agent whose
+   * caller named no mode records the default) and absent for every other
+   * agent, which is what keeps `seed`'s committed key set unchanged for them
+   * (the `forcedOutputToolName` shape one key up). An armed agent's key set
+   * is therefore the unarmed twin's plus this key, plus `findingsLedger`
+   * once the model declares something.
+   *
+   * It exists for the same reason: a rebuild (`servedView.ts` · `viewOf`)
+   * collapses judged tool results the way the wire did, and the mode it
+   * needs is a build-time constant the receipt it is checking must not be
+   * asked for. `'ledger-and-facts'` serves fact, open and undeclared results
+   * verbatim; `'ledger-only'` collapses fact results too (bench-gated, never
+   * a default).
+   */
+  findingsServe?: 'ledger-and-facts' | 'ledger-only';
   /**
    * The `Tool.wants` declarations by tool name (9.88.0) — seeded once, on an
    * agent whose evidence gate arms the staged-refs nudge. Absent for every

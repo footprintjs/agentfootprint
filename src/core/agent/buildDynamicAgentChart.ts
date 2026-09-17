@@ -673,6 +673,17 @@ export function buildDynamicAgentChart(deps: AgentChartDeps): FlowChart {
           // is worse than not running it at all. Value-conditional: an agent
           // with no window strategy crosses no new key.
           ...(p.compactions !== undefined && { compactions: p.compactions }),
+          // The findings ledger (9.101.0, step 3) — the `compactions` lesson
+          // one line up, again: CallLLM composes the ledger piece and the
+          // wire-only collapse from `findingsLedger`, and CallLLM lives INSIDE
+          // this boundary in the grouped chart, while the key is written by
+          // tool-calls and the Route decider on the OUTER scope. Without this
+          // line the piece is silently empty and nothing collapses — the same
+          // agent, same declarations, served less because of a chart shape it
+          // did not choose. Value-conditional: an unarmed agent, and an armed
+          // one whose model declared nothing, crosses no new key. Reads only
+          // inside (the writes are outside), so no outputMapper line is needed.
+          ...(p.findingsLedger !== undefined && { findingsLedger: p.findingsLedger }),
           // The kernel's PER-PASS pick feed (9.59.0) — written by tool-calls
           // on the OUTER scope, read by the engine mapper INSIDE this
           // boundary. Same gate as the engagement state above.

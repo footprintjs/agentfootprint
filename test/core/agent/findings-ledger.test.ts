@@ -391,7 +391,10 @@ describe('.findings() — the unarmed agent is the agent it always was', () => {
     expect(
       rowsOn.filter((r) => r.type === injected && r.payload.sourceId === 'findings-ledger'),
     ).toHaveLength(extraInjected);
-    expect(keysOf(on)).toEqual(keysOf(off));
+    // …plus the ONE run constant the arm seeds on every run (`findingsServe`,
+    // step 3 — `seed.ts · seedFrom`): the serve mode the rebuild reads. No
+    // ledger, because the model declared nothing.
+    expect(keysOf(on)).toEqual([...keysOf(off), 'findingsServe'].sort());
     expect(keysOf(on)).not.toContain('findingsLedger');
     expect(on.findings()).toBeUndefined();
     expect(rowsOn.filter((r) => r.type.startsWith('agentfootprint.findings.'))).toEqual([]);
@@ -775,8 +778,9 @@ describe('.findings() — the unarmed twin of a declaring model', () => {
     const rowsOff = await runCollecting(off);
 
     // The agent-wrap-up.test.ts pattern: the committed key set differs by
-    // exactly the one key the feature owns.
-    expect(keysOf(on)).toEqual([...keysOf(off), 'findingsLedger'].sort());
+    // exactly the keys the feature owns — the ledger the model wrote, and the
+    // serve-mode run constant seed writes on every armed run (step 3).
+    expect(keysOf(on)).toEqual([...keysOf(off), 'findingsLedger', 'findingsServe'].sort());
     expect(keysOf(off)).not.toContain('findingsLedger');
     expect(off.findings()).toBeUndefined();
 

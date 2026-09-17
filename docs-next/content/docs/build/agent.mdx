@@ -233,7 +233,25 @@ await agent.run({ message: 'Which region is the outage in?' });
 agent.findings(); // basis, standing and conflict rows, in the order they were declared
 ```
 
-There are no extra model calls, and an agent that never calls `.findings()` records exactly the bytes it recorded before. What the model is served does not change yet; the ledger is on the record first.
+There are no extra model calls, and an agent that never calls `.findings()` records exactly the bytes it recorded before.
+
+### What the answer turn is served
+
+Once the model has declared at least one standing, every later call is served the ledger as a system piece composed from the record: the context contract's `facts`, `limitations`, `evidenceRefs` and `nextSteps`, each bucket marked as declared by the model and quoting the declaration, then `noise` as a count and the results nobody named listed as undeclared — never as open. On the wire, and only on the wire, a tool result the model judged `noise` or `ruled-out` is replaced by a short ticket, `{ collapsed: true, standing, toolCallId }`, in place of its content. `open` and undeclared results are served in full, nothing is dropped or reordered, and `history` never changes, so the record still holds every result. `servedAt(snapshot, k)` rebuilds exactly what went out — the piece is the entry with `source: 'findings'` in `system.pieces` — and the receipt hashes it.
+
+The `serve` option chooses how much of the pile stays beside the piece:
+
+```ts
+Agent.create({ provider, model })
+  .tool(search)
+  .findings({ serve: 'ledger-and-facts' }) // the default
+  .build();
+```
+
+- `'ledger-and-facts'` (default): facts stay verbatim; noise and ruled-out results become tickets.
+- `'ledger-only'`: fact results become tickets too and the model answers from the piece alone. This dial exists for the bench and is not a recommendation: it stays off by default until a run on a real model shows the answer does not drift when the same evidence arrives in a different order.
+
+`keepLedgerFacts` is accepted and inert until standing-aware eviction lands.
 
 ## Composition with other Agents
 

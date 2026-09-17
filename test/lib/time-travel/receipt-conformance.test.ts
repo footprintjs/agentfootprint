@@ -90,6 +90,7 @@ import {
   FINDINGS_INSTRUCTION,
   withFindingsArgument,
 } from '../../../src/core/agent/findings/reserved.js';
+import { isCollapsedToolResult } from '../../../src/core/agent/findings/serve.js';
 import type {
   LLMMessage,
   LLMRequest,
@@ -2240,5 +2241,159 @@ describe('an armed findings ledger: the receipt hashes the DECORATED schema and 
       );
       expect(view.system.text).not.toContain('Findings v1');
     }
+  });
+});
+
+// ─── the findings ledger, SERVED (9.101.0, step 3) ─────────────────────
+
+describe('an armed findings ledger, served: the receipt hashes the piece and the COLLAPSED entries', () => {
+  // Step 3 changes two more things the receipt covers, on the wire only:
+  // `callLLM` joins the ledger piece (`findings/serve.ts ·
+  // findingsLedgerPiece`) after the recovery piece, and serves judged tool
+  // results as tickets (`collapseJudged`) BEFORE the receipt mint. The
+  // rebuild (`servedView.ts · viewOf`) recomposes both from the committed key
+  // and the run constant `findingsServe`, with the same functions in the same
+  // order — so the law holds with NOTHING new declared as a gap, and every
+  // `messages.entries[i].hash` is the hash of what went out, ticket included.
+  const FACT = { subject: { kind: 'port', id: 'p1' }, predicate: 'state', value: 'down' };
+  const SERVED = [
+    call('c1', 'alpha_tool', { _findings: { basis: 'direct' } }),
+    call('c2', 'alpha_tool', {
+      _findings: {
+        basis: 'direct',
+        previous: [{ toolCallId: 'c1', standing: 'fact', assertions: [FACT] }],
+      },
+    }),
+    call('c3', 'alpha_tool', {
+      _findings: { basis: 'direct', previous: [{ toolCallId: 'c2', standing: 'noise' }] },
+    }),
+    answer('done'),
+  ];
+  const toolMessage = (messages: readonly LLMMessage[], id: string): LLMMessage | undefined =>
+    messages.find((m) => m.role === 'tool' && m.toolCallId === id);
+
+  for (const reactMode of ['dynamic', 'dynamic-grouped'] as const) {
+    it(`${reactMode}: the law holds; entries[i].hash is the COLLAPSED content's hash; system.pieces carries 'findings'; requestOnly unchanged`, async () => {
+      const r = await run(reactMode, SERVED, (a) =>
+        a.system('s').tool(tool('alpha_tool')).findings(),
+      );
+      clean(r);
+      const views = servedViews(r.snapshot);
+      expect(views.map((v) => v.epoch)).toEqual([1, 2, 3, 4]);
+      const history = r.snapshot.sharedState.history as readonly LLMMessage[];
+      for (const view of views) {
+        const receipt = receiptAt(r.snapshot, view.epoch)!;
+        const hash = (content: string): string => receiptHash(receipt.basis.runId, content);
+        // Nothing request-only was added: the piece is a SYSTEM piece.
+        expect(receipt.messages.requestOnly).toEqual([]);
+        expect(view.messages.requestOnly).toEqual([]);
+        const piece = view.system.pieces.find((p) => p.source === 'findings');
+        if (view.epoch < 3) {
+          // No standing declared yet: no piece, nothing collapsed.
+          expect(piece).toBeUndefined();
+          continue;
+        }
+        expect(piece).toBeDefined();
+        expect(receipt.system.pieces.map((p) => p.hash)).toContain(hash(piece!.text));
+        expect(receipt.system.pieces[receipt.system.pieces.length - 1]!.source).toBe('findings');
+      }
+      // Epoch 4: c2 was declared noise on c3, so the wire carried its ticket
+      // and the receipt hashed THAT — not the raw result history still holds.
+      const at4 = servedAt(r.snapshot, 4)!;
+      const receipt4 = receiptAt(r.snapshot, 4)!;
+      const hash4 = (content: string): string => receiptHash(receipt4.basis.runId, content);
+      const i = at4.messages.asSent.findIndex((m) => m.role === 'tool' && m.toolCallId === 'c2');
+      expect(i).toBeGreaterThanOrEqual(0);
+      const collapsed = at4.messages.asSent[i]!;
+      expect(isCollapsedToolResult(JSON.parse(collapsed.content))).toBe(true);
+      expect(collapsed.toolName).toBe('alpha_tool');
+      expect(receipt4.messages.entries[i]!.hash).toBe(hash4(messageDigestInput(collapsed)));
+      expect(receipt4.messages.entries[i]!.hash).toBe(
+        hash4(messageDigestInput(r.wire[3]!.messages[i]!)),
+      );
+      const raw = toolMessage(history, 'c2')!;
+      expect(raw.content).not.toBe(collapsed.content);
+      expect(receipt4.messages.entries[i]!.hash).not.toBe(hash4(messageDigestInput(raw)));
+      // …and the fact result (c1) went out verbatim under the default mode.
+      expect(toolMessage(at4.messages.asSent, 'c1')!.content).toBe(
+        toolMessage(history, 'c1')!.content,
+      );
+    });
+  }
+
+  it('window evicts + collapse: an evicted turn pairs with the LAST epoch that served it RAW, not the one that served its ticket', async () => {
+    // keepRecentTurns: 2 — c2's turn is served raw at epoch 3 (its standing
+    // is declared ON c3, after that wire), as a ticket at epoch 4, and leaves
+    // the window at epoch 5's head. `omittedForAttention` hashes the RAW turn
+    // (the window files what history holds), so the drop pairs with epoch 3:
+    // the lens's `pairEvictedTurns` walk (latest earlier epoch whose entries
+    // carry the hash) is unaffected by the collapse, and the ticket's epoch
+    // is deliberately NOT a match.
+    const WINDOWED = [
+      call('c1', 'alpha_tool', { _findings: { basis: 'direct' } }),
+      call('c2', 'alpha_tool', {
+        _findings: {
+          basis: 'direct',
+          previous: [{ toolCallId: 'c1', standing: 'fact', assertions: [FACT] }],
+        },
+      }),
+      call('c3', 'alpha_tool', {
+        _findings: { basis: 'direct', previous: [{ toolCallId: 'c2', standing: 'noise' }] },
+      }),
+      call('c4', 'alpha_tool', {
+        _findings: { basis: 'direct', previous: [{ toolCallId: 'c3', standing: 'ruled-out' }] },
+      }),
+      answer('done'),
+    ];
+    const { provider, wire } = scripted(WINDOWED);
+    const agent = Agent.create({ provider: provider as never, model: 'mock', maxIterations: 8 })
+      .system('bot')
+      .tool(tool('alpha_tool'))
+      .window(slidingWindow({ keepRecentTurns: 2 }))
+      .findings()
+      .build();
+    await agent.run({ message: 'go' });
+    const r: Run = { snapshot: agent.getSnapshot()!, wire };
+    clean(r);
+    const epochs = epochLocations(r.snapshot).map((l) => l.epoch);
+    expect(epochs).toEqual([1, 2, 3, 4, 5]);
+    // c2's result: raw at 3, a ticket at 4, gone at 5.
+    const at = (epoch: number) => toolMessage(servedAt(r.snapshot, epoch)!.messages.asSent, 'c2');
+    // The final `history` no longer holds c2 (the window evicted it), so the
+    // raw witness is the wire at epoch 3 — the bytes the provider got.
+    const rawOnWire = toolMessage(r.wire[2]!.messages, 'c2')!.content;
+    expect(rawOnWire.startsWith('{"collapsed"')).toBe(false);
+    expect(at(3)).toBeDefined();
+    expect(at(3)!.content).toBe(rawOnWire);
+    expect(isCollapsedToolResult(JSON.parse(at(4)!.content))).toBe(true);
+    expect(at(5)).toBeUndefined();
+    const dropped5 = receiptAt(r.snapshot, 5)!.omittedForAttention!;
+    expect(dropped5.count).toBe(2);
+    const entriesOf = (epoch: number) =>
+      new Set(receiptAt(r.snapshot, epoch)!.messages.entries.map((e) => e.hash));
+    const rawHash = receiptHash(receiptAt(r.snapshot, 3)!.basis.runId, messageDigestInput(at(3)!));
+    const ticketHash = receiptHash(
+      receiptAt(r.snapshot, 4)!.basis.runId,
+      messageDigestInput(at(4)!),
+    );
+    expect(dropped5.hashes).toContain(rawHash);
+    expect(dropped5.hashes).not.toContain(ticketHash);
+    // The pairing law: served earlier — and the latest earlier epoch that
+    // carries the hash is the one that served it RAW.
+    expect(entriesOf(3).has(rawHash)).toBe(true);
+    expect(entriesOf(4).has(rawHash)).toBe(false);
+    expect(entriesOf(4).has(ticketHash)).toBe(true);
+    expect(entriesOf(5).has(rawHash)).toBe(false);
+    // The assistant turn that asked for c2 was never rewritten, so it pairs
+    // with epoch 4 as before.
+    const asked4 = servedAt(r.snapshot, 4)!.messages.asSent.find(
+      (m) => m.role === 'assistant' && m.toolCalls?.some((c) => c.id === 'c2'),
+    )!;
+    const askedHash = receiptHash(
+      receiptAt(r.snapshot, 4)!.basis.runId,
+      messageDigestInput(asked4),
+    );
+    expect(dropped5.hashes).toContain(askedHash);
+    expect(entriesOf(4).has(askedHash)).toBe(true);
   });
 });

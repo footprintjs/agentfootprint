@@ -78,6 +78,38 @@
  * every key it does not know, so the run passes only because `_findings`
  * came off before the judge.
  *
+ * `agent-findings` REGENERATED ALONE for step 3 (the answer turn served from
+ * the ledger — `findings/serve.ts`, joined by `callLLM · buildCallLLMStage`
+ * and recomposed by `servedView · viewOf`); none of the 15 moved (run on the
+ * step-3 tree first: 16/16 green, then the one scenario under
+ * `AF_TOOLS_REFERENCE=update -t agent-findings` with the 15 copied aside and
+ * `cmp`-equal after). The delta against the step-2 reference is 14 paths in
+ * exactly three families: (1) the run constant `findingsServe:
+ * 'ledger-and-facts'` on seed's commit (`commitLog[0].overwrite`) with its
+ * one `set` trace row (the four "moved" trace paths after it are that row's
+ * insertion shifting the rest); (2) the findings PIECE on the epoch-3 call —
+ * the first call after a standing was declared — `receipt.system.pieces`
+ * 3 → 4 (the new row `source: 'findings'`), `receipt.system.chars`/`hash`,
+ * the served view's `system.text`, and the four `requestMeasurement` sizes
+ * that grow with it; (3) nothing else: no `messages.entries`, no `asSent`,
+ * no tool, no gap, no other key. NO ENTRY COLLAPSED in this reference,
+ * because the scenario's only judged-noise standing (`c2`) is declared on
+ * the ANSWER — after the last wire — and `c1` is a fact, served verbatim
+ * under the default mode; the collapse is pinned by
+ * `test/core/agent/findings-served.test.ts` and the receipt law for a
+ * collapsed entry by `test/lib/time-travel/receipt-conformance.test.ts`.
+ *
+ * `agent-findings` REGENERATED ALONE once more in step 3's second review
+ * (the 15 copied aside and `cmp`-equal after): the piece's header lost its
+ * per-iteration anchor ("composed for iteration N" → a constant — the piece
+ * joins the ONE system block the cache marker covers, so an unchanged
+ * ledger must serve unchanged bytes; `findings/serve.ts` · "The cache").
+ * The moved set against the step-2 reference is the SAME 14 paths listed
+ * above — only the values inside them moved: the header text at its two
+ * sites (the epoch-3 receipt's findings piece and the served `system.text`),
+ * that piece's `chars`/`hash`, `receipt.system.chars`/`hash`, and the four
+ * `requestMeasurement` sizes. No new path.
+ *
  * Every scenario is a real run — the receipt-conformance shapes, each in the
  * configuration that has no name collision — and what is compared is the
  * whole `commitLog` plus `servedAt(k)` for every located epoch, after ONE

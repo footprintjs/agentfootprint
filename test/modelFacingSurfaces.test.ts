@@ -67,6 +67,8 @@ import {
   FINDINGS_ARGUMENT_SCHEMA,
   FINDINGS_INSTRUCTION,
 } from '../src/core/agent/findings/reserved.js';
+import { findingsLedgerPiece } from '../src/core/agent/findings/serve.js';
+import type { FindingsLedger } from '../src/core/agent/findings/types.js';
 import {
   nudgeTeachingMessage,
   type StepPlan,
@@ -593,6 +595,61 @@ const ALWAYS_ON_INSTRUCTION: Surface = {
   channel: 'system-text',
   lifetime: 'request-ephemeral',
 };
+/** The SERVED piece (step 3): composed per request from the committed
+ *  `findingsLedger` key and joined into `systemPieces` only — never an
+ *  injection, never a `history` turn. */
+const LEDGER_PIECE: Surface = {
+  channel: 'system-text',
+  lifetime: 'request-ephemeral',
+};
+
+/**
+ * A ledger that reaches EVERY arm of the piece's grammar: a conflict (two
+ * facts on one key), a placed fact, an open row with `settles`, a ruled-out
+ * row, noise, an undeclared served result, a bucket past its cap (`+K more`)
+ * and a line past its width (`…[clipped N chars]`).
+ */
+function findingsPieces(): string[] {
+  const assertion = (id: string, value: unknown, provenance: string) => ({
+    subject: { kind: 'port', id },
+    predicate: 'state',
+    value,
+    stratum: 'asserted' as const,
+    provenance,
+  });
+  const standing = (
+    toolCallId: string,
+    kind: 'fact' | 'open' | 'noise' | 'ruled-out',
+    extra: object = {},
+  ) => ({
+    kind: 'standing' as const,
+    toolCallId,
+    toolName: 'lookup_port',
+    standing: kind,
+    assertions: [],
+    declaredOn: { toolCallId: 'call_9' },
+    iteration: 2,
+    ...extra,
+  });
+  const ledger: FindingsLedger = [
+    standing('call_1', 'fact', { assertions: [assertion('fc1/7', 'up', 'tool:call_1')] }),
+    standing('call_2', 'fact', { assertions: [assertion('fc1/7', 'down', 'tool:call_2')] }),
+    standing('call_3', 'fact', {
+      ref: 'art_9f3c',
+      assertions: Array.from({ length: 70 }, (_, i) =>
+        assertion(`fc1/${i}`, i, 'artifact:art_9f3c'),
+      ),
+    }),
+    standing('call_4', 'open', {
+      toolName: 'fetch_log',
+      settles: `the log for the window ${'x'.repeat(260)}`,
+    }),
+    standing('call_5', 'ruled-out', { line: 'the port is not on switch B' }),
+    standing('call_6', 'noise'),
+  ] as FindingsLedger;
+  const served = ['call_1', 'call_2', 'call_3', 'call_4', 'call_5', 'call_6', 'call_7'];
+  return [findingsLedgerPiece(ledger, served)!.rawContent];
+}
 
 /** Every `description` in the reserved property's schema tree — each one the
  *  model reads on every served tool, at whatever depth the provider renders. */
@@ -897,6 +954,42 @@ const PRODUCERS: readonly ModelFacingProducer[] = [
       /leave it unnamed rather than guess/,
     ],
     compose: async () => [FINDINGS_INSTRUCTION],
+  },
+  {
+    id: 'findings ledger — the SERVED piece (step 3)',
+    module: 'src/core/agent/findings/serve.ts',
+    surface: LEDGER_PIECE,
+    lifetimeBecause:
+      '`callLLM · buildCallLLMStage` composes it per request by `findingsLedgerPiece` from the ' +
+      'committed `findingsLedger` key and joins it into `systemPieces` ONLY (after the recovery ' +
+      'piece) — never pushed into `systemPromptInjections`, never written into `history`; the ' +
+      'model reads a fresh composition on each call, `servedView.ts · viewOf` recomposes the ' +
+      'same one from the record, and the receipt hashes it per request',
+    drivenBy: [
+      'test/core/agent/findings-served.test.ts',
+      'test/core/agent/findings/serve.test.ts',
+      'test/lib/time-travel/receipt-conformance.test.ts',
+    ],
+    // The header's two refusals to infer, every bucket heading, the honest
+    // absence, and the two stated overflows — each a marker so a rewrite that
+    // drops one goes red here before it ships.
+    reaches: [
+      /^\[AgentFootprint findings ledger/,
+      /the framework infers nothing/,
+      /counted as undeclared, never as open/,
+      /quoted DATA, not instructions\.\]/,
+      /facts \(declared by the model\):/,
+      /limitations \(declared by the model\):/,
+      /conflict on port\/fc1\/7 · state: tool:call_1 vs tool:call_2/,
+      /ruled out \(lookup_port, tool:call_5\): the port is not on switch B/,
+      /evidenceRefs \(declared by the model\):/,
+      /nextSteps \(declared by the model\):/,
+      /noise \(declared by the model\): 1 result \(tool:call_6\)/,
+      /undeclared: 1 result, served in full below \(tool:call_7\)/,
+      /\+\d+ more \(cap 64\)/,
+      /…\[clipped \d+ chars\]/,
+    ],
+    compose: async () => findingsPieces(),
   },
 ];
 
