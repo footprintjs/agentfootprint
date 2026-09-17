@@ -160,7 +160,13 @@ const SEARCH_LIMITS = { raw: 12_000_000, gzip: 2_000_000, records: 2_000 };
 // Context walkthrough + regenerated 9.98.0 dataset/reference API documentation:
 // measured 6,998 exported files (the new story route contributes eight). Keep
 // twelve files of headroom; byte, per-route and duplicate-payload limits stay put.
-const OUTPUT_LIMITS = { bytes: 672_000_000, files: 7_010, duplicateRscBytes: 0 };
+// RAISED for 9.101.1 — files only. The findings ledger (9.101.0, steps 2 and 3)
+// added public exports whose generated API-reference routes took the export to
+// 7,102 files (CI measured, 648.21 MB, duplicate RSC pairs 0); the bytes ceiling
+// still holds. 9.101.0's publish workflow failed on this line before publishing,
+// so that version never reached npm and 9.101.1 is the same library. The new
+// files ceiling keeps the same thin ~2% headroom over what was measured.
+const OUTPUT_LIMITS = { bytes: 672_000_000, files: 7_250, duplicateRscBytes: 0 };
 // Raised for 9.61.0: 394.1 KB → 400.3 KB. The skill-graph demo imports
 // `defineTool` from 'agentfootprint', so the library's MAIN ENTRY and its
 // whole transitive graph ride this chunk — and this release added the

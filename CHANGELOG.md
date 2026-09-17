@@ -5,6 +5,17 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [9.101.1] - 2026-09-16
+
+### Fixed — the docs site's export-file ceiling
+
+- 9.101.0 never reached npm: its publish workflow stopped at the docs site's
+  performance budget (`docs-next/scripts/check-site-budget.mjs`), where the
+  generated API-reference routes for the findings ledger's new exports took the
+  static export past the file-count ceiling. The ceiling is raised to the
+  measured count plus the same thin headroom; no byte ceiling moved. The library
+  is byte-identical to 9.101.0; the entry below is what ships.
+
 ## [9.101.0] - 2026-09-16
 
 ### Added — the model's own findings, on the record, at zero extra calls
