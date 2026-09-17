@@ -157,3 +157,141 @@ ledger-only           3            1.000        0.000     0.133              0.5
 - `facts-in-answer` stays ≈ 1.0: four noise records do not stress the model;
   the 16-noise cells are the ones that were cut off.
 
+## Third run — the 8-cell pass on both models, cut short twice by credit (2026-09-17, agentfootprint 9.102.0)
+
+Both passes were started together after the account was topped up; the
+credit ran out again with 7 of 8 Haiku cells and 5 of 8 Sonnet cells
+complete. The tables are the script's print, verbatim. Three runs per
+condition, so every number below is one of three.
+
+### Claude Haiku 4.5
+
+```
+findings-shuffle MATRIX — provider anthropic claude-haiku-4-5 (hosted), seed 20260916, 3 runs per condition, the same 3 orders in every condition, temperature 0, FACTS 6
+cells: NOISE 4/16 × NOISE_AT end/start × NOISE_SIZE 250/1000 tokens = 8 cells × 3 conditions × 3 runs
+cost: 1224 model calls for this model (nominal: n+1 per run, one per record read plus the answer; ceiling 1368 at maxIterations n+3), none made yet
+
+── noise 4 · at end · size 250
+condition          runs  facts-in-answer  noise-cited  declared  standing-accuracy  drift   unknown-id-standings
+findings off          3            1.000        0.000         -                  -   0.33                      0
+ledger-and-facts      3            1.000        0.000     0.433              1.000   0.33                      0
+ledger-only           3            1.000        0.000     0.267              1.000   0.67                      0
+
+── noise 4 · at end · size 1000
+condition          runs  facts-in-answer  noise-cited  declared  standing-accuracy  drift   unknown-id-standings
+findings off          3            1.000        0.333         -                  -   1.00                      0
+ledger-and-facts      3            0.944        0.000     0.233              0.857   1.00                      0
+ledger-only           3            1.000        0.000     0.367              1.000   1.00                      0
+
+── noise 4 · at start · size 250
+condition          runs  facts-in-answer  noise-cited  declared  standing-accuracy  drift   unknown-id-standings
+findings off          3            1.000        0.000         -                  -   0.33                      0
+ledger-and-facts      3            1.000        0.000     0.000                  -   0.67                      0
+ledger-only           3            1.000        0.000     0.000                  -   0.33                      0
+
+── noise 4 · at start · size 1000
+condition          runs  facts-in-answer  noise-cited  declared  standing-accuracy  drift   unknown-id-standings
+findings off          3            1.000        0.000         -                  -   0.33                      0
+ledger-and-facts      3            1.000        0.000     0.600              0.611   1.00                      0
+ledger-only           3            0.944        0.000     0.300              0.667   1.00                      0
+
+── noise 16 · at end · size 250
+condition          runs  facts-in-answer  noise-cited  declared  standing-accuracy  drift   unknown-id-standings
+findings off          3            1.000        0.000         -                  -   0.67                      0
+ledger-and-facts      3            1.000        0.000     0.121              1.000   0.67                      0
+ledger-only           3            1.000        0.000     0.045              1.000   0.33                      0
+
+── noise 16 · at end · size 1000
+condition          runs  facts-in-answer  noise-cited  declared  standing-accuracy  drift   unknown-id-standings
+findings off          3            1.000        0.000         -                  -   0.33                      0
+ledger-and-facts      3            0.944        0.000     0.212              0.929   0.67                      0
+ledger-only           3            1.000        0.000     0.061              1.000   0.33                      0
+
+── noise 16 · at start · size 250
+condition          runs  facts-in-answer  noise-cited  declared  standing-accuracy  drift   unknown-id-standings
+findings off          3            1.000        0.000         -                  -   0.33                      0
+ledger-and-facts      3            1.000        0.000     0.561              0.865   0.67                      0
+ledger-only           3            1.000        0.000     0.485              0.875   0.67                      0
+```
+
+### Claude Sonnet 5
+
+```
+findings-shuffle MATRIX — provider anthropic claude-sonnet-5 (hosted), seed 20260916, 3 runs per condition, the same 3 orders in every condition, temperature not sent, FACTS 6
+cells: NOISE 4/16 × NOISE_AT end/start × NOISE_SIZE 250/1000 tokens = 8 cells × 3 conditions × 3 runs
+cost: 1224 model calls for this model (nominal: n+1 per run, one per record read plus the answer; ceiling 1368 at maxIterations n+3), none made yet
+
+── noise 4 · at end · size 250
+condition          runs  facts-in-answer  noise-cited  declared  standing-accuracy  drift   unknown-id-standings
+findings off          3            1.000        0.000         -                  -   0.67                      0
+ledger-and-facts      3            0.944        0.333     0.733              0.955   0.67                      0
+ledger-only           3            1.000        0.000     0.567              0.941   1.00                      0
+
+── noise 4 · at end · size 1000
+condition          runs  facts-in-answer  noise-cited  declared  standing-accuracy  drift   unknown-id-standings
+findings off          3            1.000        1.000         -                  -   0.33                      0
+ledger-and-facts      3            0.944        0.000     0.967              0.966   0.67                      0
+ledger-only           3            0.944        0.667     0.733              0.955   1.00                      0
+
+── noise 4 · at start · size 250
+condition          runs  facts-in-answer  noise-cited  declared  standing-accuracy  drift   unknown-id-standings
+findings off          3            1.000        0.000         -                  -   0.67                      0
+ledger-and-facts      3            1.000        0.000     0.667              0.950   0.67                      0
+ledger-only           3            1.000        0.000     0.267              1.000   0.33                      0
+
+── noise 4 · at start · size 1000
+condition          runs  facts-in-answer  noise-cited  declared  standing-accuracy  drift   unknown-id-standings
+findings off          3            1.000        0.000         -                  -   0.67                      0
+ledger-and-facts      3            1.000        0.000     0.533              0.750   0.67                      0
+ledger-only           3            1.000        0.333     0.433              1.000   1.00                      0
+
+── noise 16 · at end · size 250
+condition          runs  facts-in-answer  noise-cited  declared  standing-accuracy  drift   unknown-id-standings
+findings off          3            1.000        0.000         -                  -   0.33                      0
+ledger-and-facts      3            0.944        0.000     0.273              0.944   0.67                      0
+ledger-only           3            0.667        0.000     0.364              1.000   0.67                      0
+```
+
+## What the twelve cells say
+
+- **The offer binds on both models.** `unknown-id-standings` is 0 in all
+  twelve cells; the first run's 77 and 43 are gone.
+- **Declared standings differ by model.** Sonnet 5 declares 0.27–0.97 of its
+  results under `ledger-and-facts` (0.73–0.97 in three of the four noise-4
+  cells); Haiku 4.5 declares 0.00–0.60 and nothing at all in one cell (noise
+  4, at start, size 250). The ask is followed by the stronger model and
+  half-followed by the weaker one; `declared` is still the number to raise for
+  small models.
+- **Standing accuracy is high where standings exist:** Sonnet 0.75–1.00,
+  Haiku 0.61–1.00. When Sonnet judges a result it is right about 19 times in
+  20. A judge would add little for Sonnet on this task; the case for one, if
+  any, is the small model.
+- **The first real signal in the intended direction, one cell, three runs:**
+  Sonnet 5 at noise 4, at END, size 1000 — the recency-plus-mass case —
+  cited a noise value in every run without the ledger (`noise-cited` 1.000)
+  and in no run under `ledger-and-facts` (0.000). Haiku shows the same shape
+  faintly in the same cell (0.333 vs 0.000). Three runs; a hint, not a claim.
+- **`ledger-only` is worse than `ledger-and-facts`, not better.** Under
+  `ledger-only` Sonnet cited noise in the same cell (0.667) and lost a third
+  of the facts at noise 16, at end, size 250 (`facts-in-answer` 0.667); Haiku
+  under `ledger-only` never beat `ledger-and-facts`. Collapsing the facts the
+  model stands on to tickets removes evidence it still uses. The dial stays
+  bench-gated, now with a reason on the record; the default stays
+  `'ledger-and-facts'`.
+- **A small cost to watch:** `facts-in-answer` dips to 0.944 in several ledger
+  cells on both models, one fact value out of eighteen misstated. Whether the
+  piece's own line ("subject · predicate = value") invites a paraphrase is a
+  question for the instruction-variant bench.
+- The 16-noise, 1000-token cells — the heaviest — were mostly cut off; Haiku
+  completed one (noise 16, at end, size 1000: no noise cited in any condition,
+  `declared` 0.212, accuracy 0.929).
+
+## What follows
+
+1. More credit, then the remaining cells (Haiku 1, Sonnet 3) and a repeat of
+   the two signal cells at RUNS=10, so a claim can rest on ten runs, not three.
+2. The instruction-variant bench (the DSPy-style loop): a few wordings of the
+   ask scored on `declared` for Haiku, and on `facts-in-answer` for the 0.944
+   dip.
+3. The judge decision waits on Haiku's standing accuracy over more cells.
+
