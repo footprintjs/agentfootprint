@@ -4,7 +4,7 @@ title: ServedGap
 
 # Interface: ServedGap
 
-Defined in: [src/lib/time-travel/servedView.ts:234](https://github.com/footprintjs/agentfootprint/blob/main/src/lib/time-travel/servedView.ts#L234)
+Defined in: [src/lib/time-travel/servedView.ts:235](https://github.com/footprintjs/agentfootprint/blob/main/src/lib/time-travel/servedView.ts#L235)
 
 One named limit on the rebuild, with the fields it covers — a hole the log
  cannot fill, or a boundary the record cannot see past.
@@ -15,7 +15,7 @@ One named limit on the rebuild, with the fields it covers — a hole the log
 
 > `readonly` `optional` **cause?**: [`ServedGapCause`](/docs/api/type-aliases/ServedGapCause)
 
-Defined in: [src/lib/time-travel/servedView.ts:337](https://github.com/footprintjs/agentfootprint/blob/main/src/lib/time-travel/servedView.ts#L337)
+Defined in: [src/lib/time-travel/servedView.ts:338](https://github.com/footprintjs/agentfootprint/blob/main/src/lib/time-travel/servedView.ts#L338)
 
 WHY this gap fired, where the site could establish it — [ServedGapCause](/docs/api/type-aliases/ServedGapCause).
 
@@ -30,7 +30,7 @@ would be the enumeration coming back as a field.
 
 > `readonly` **fields**: readonly `string`[]
 
-Defined in: [src/lib/time-travel/servedView.ts:301](https://github.com/footprintjs/agentfootprint/blob/main/src/lib/time-travel/servedView.ts#L301)
+Defined in: [src/lib/time-travel/servedView.ts:302](https://github.com/footprintjs/agentfootprint/blob/main/src/lib/time-travel/servedView.ts#L302)
 
 The fields this gap covers, in dotted `Receipt` form. A reader that
 renders one of them should render this gap's sentence beside it.
@@ -102,7 +102,7 @@ the tool list it belongs on, and the request-only lines composed from
 
 > `readonly` **gap**: [`ServedGapKind`](/docs/api/type-aliases/ServedGapKind)
 
-Defined in: [src/lib/time-travel/servedView.ts:235](https://github.com/footprintjs/agentfootprint/blob/main/src/lib/time-travel/servedView.ts#L235)
+Defined in: [src/lib/time-travel/servedView.ts:236](https://github.com/footprintjs/agentfootprint/blob/main/src/lib/time-travel/servedView.ts#L236)
 
 ***
 
@@ -110,7 +110,7 @@ Defined in: [src/lib/time-travel/servedView.ts:235](https://github.com/footprint
 
 > `readonly` **why**: `string`
 
-Defined in: [src/lib/time-travel/servedView.ts:328](https://github.com/footprintjs/agentfootprint/blob/main/src/lib/time-travel/servedView.ts#L328)
+Defined in: [src/lib/time-travel/servedView.ts:329](https://github.com/footprintjs/agentfootprint/blob/main/src/lib/time-travel/servedView.ts#L329)
 
 The gap in the words a renderer prints — WHICH FIELDS it covers, WHAT THEY
 MEAN ON THIS VIEW, WHAT TO DO DIFFERENTLY, and nothing else.

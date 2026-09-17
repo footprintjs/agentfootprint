@@ -192,6 +192,8 @@ title: agentfootprint
 - [InputResponse](/docs/api/interfaces/InputResponse)
 - [InputResponseResult](/docs/api/interfaces/InputResponseResult)
 - [InstructionLease](/docs/api/interfaces/InstructionLease)
+- [JudgmentErrorRow](/docs/api/interfaces/JudgmentErrorRow)
+- [JudgmentRow](/docs/api/interfaces/JudgmentRow)
 - [KeyedFold](/docs/api/interfaces/KeyedFold)
 - [LedgerFactPin](/docs/api/interfaces/LedgerFactPin)
 - [LLMCallHooks](/docs/api/interfaces/LLMCallHooks)
