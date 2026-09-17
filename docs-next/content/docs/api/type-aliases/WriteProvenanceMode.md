@@ -6,7 +6,7 @@ title: WriteProvenanceMode
 
 > **WriteProvenanceMode** = `NonNullable`\<`FlowChartExecutorOptions`\[`"writeProvenance"`\]\>
 
-Defined in: [src/core/agent/types.ts:67](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/types.ts#L67)
+Defined in: [src/core/agent/types.ts:68](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/types.ts#L68)
 
 Per-write read-provenance policy — `AgentOptions.writeProvenance`. Derived
 structurally from footprintjs's executor options (the engine owns the

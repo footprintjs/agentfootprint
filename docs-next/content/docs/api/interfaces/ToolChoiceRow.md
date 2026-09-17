@@ -4,7 +4,7 @@ title: ToolChoiceRow
 
 # Interface: ToolChoiceRow
 
-Defined in: src/core/agent/toolChoice/types.ts:61
+Defined in: [src/core/agent/toolChoice/types.ts:61](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/toolChoice/types.ts#L61)
 
 The classifier's pick for one model call, filed BEFORE the call from the
 tools slot (`buildToolsSlot · composeStage`), so the record holds what was
@@ -17,7 +17,7 @@ that order, on one row.
 
 > `readonly` `optional` **chosen?**: `string`
 
-Defined in: src/core/agent/toolChoice/types.ts:72
+Defined in: [src/core/agent/toolChoice/types.ts:72](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/toolChoice/types.ts#L72)
 
 The provider's own pick; absent when it named nothing offered.
 
@@ -27,7 +27,7 @@ The provider's own pick; absent when it named nothing offered.
 
 > `readonly` **classifier**: `object`
 
-Defined in: src/core/agent/toolChoice/types.ts:66
+Defined in: [src/core/agent/toolChoice/types.ts:66](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/toolChoice/types.ts#L66)
 
 The port name and the provider's resolved model string.
 
@@ -45,7 +45,7 @@ The port name and the provider's resolved model string.
 
 > `readonly` **confidence**: `number`
 
-Defined in: src/core/agent/toolChoice/types.ts:73
+Defined in: [src/core/agent/toolChoice/types.ts:73](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/toolChoice/types.ts#L73)
 
 ***
 
@@ -53,7 +53,7 @@ Defined in: src/core/agent/toolChoice/types.ts:73
 
 > `readonly` **iteration**: `number`
 
-Defined in: src/core/agent/toolChoice/types.ts:63
+Defined in: [src/core/agent/toolChoice/types.ts:63](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/toolChoice/types.ts#L63)
 
 ***
 
@@ -61,7 +61,7 @@ Defined in: src/core/agent/toolChoice/types.ts:63
 
 > `readonly` **kind**: `"pick"`
 
-Defined in: src/core/agent/toolChoice/types.ts:62
+Defined in: [src/core/agent/toolChoice/types.ts:62](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/toolChoice/types.ts#L62)
 
 ***
 
@@ -69,7 +69,7 @@ Defined in: src/core/agent/toolChoice/types.ts:62
 
 > `readonly` **latencyMs**: `number`
 
-Defined in: src/core/agent/toolChoice/types.ts:76
+Defined in: [src/core/agent/toolChoice/types.ts:76](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/toolChoice/types.ts#L76)
 
 Wall-clock milliseconds around the classifier call.
 
@@ -79,7 +79,7 @@ Wall-clock milliseconds around the classifier call.
 
 > `readonly` **narrowed**: `boolean`
 
-Defined in: src/core/agent/toolChoice/types.ts:80
+Defined in: [src/core/agent/toolChoice/types.ts:80](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/toolChoice/types.ts#L80)
 
 Whether `served` is the top-N plus the doors (true) or the full merged wire (false).
 
@@ -89,7 +89,7 @@ Whether `served` is the top-N plus the doors (true) or the full merged wire (fal
 
 > `readonly` `optional` **narrowedSkipped?**: [`NarrowSkipReason`](/docs/api/type-aliases/NarrowSkipReason)
 
-Defined in: src/core/agent/toolChoice/types.ts:82
+Defined in: [src/core/agent/toolChoice/types.ts:82](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/toolChoice/types.ts#L82)
 
 Present exactly when a `serve: { top }` agent served the full set anyway, and why.
 
@@ -99,7 +99,7 @@ Present exactly when a `serve: { top }` agent served the full set anyway, and wh
 
 > `readonly` **offered**: readonly `string`[]
 
-Defined in: src/core/agent/toolChoice/types.ts:68
+Defined in: [src/core/agent/toolChoice/types.ts:68](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/toolChoice/types.ts#L68)
 
 The candidates the classifier was asked about: the merged wire MINUS the always-served doors, in offered order.
 
@@ -109,7 +109,7 @@ The candidates the classifier was asked about: the merged wire MINUS the always-
 
 > `readonly` **ranked**: readonly [`ToolChoiceScore`](/docs/api/interfaces/ToolChoiceScore)[]
 
-Defined in: src/core/agent/toolChoice/types.ts:70
+Defined in: [src/core/agent/toolChoice/types.ts:70](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/toolChoice/types.ts#L70)
 
 The provider's distribution, highest first (ties keep offered order); an unscored name is absent.
 
@@ -119,7 +119,7 @@ The provider's distribution, highest first (ties keep offered order); an unscore
 
 > `readonly` **served**: readonly `string`[]
 
-Defined in: src/core/agent/toolChoice/types.ts:78
+Defined in: [src/core/agent/toolChoice/types.ts:78](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/toolChoice/types.ts#L78)
 
 The names the slot COMMITTED for this call — the list the receipt hashes and `servedView` rebuilds.
 
@@ -129,7 +129,7 @@ The names the slot COMMITTED for this call — the list the receipt hashes and `
 
 > `readonly` **source**: `"classifier"`
 
-Defined in: src/core/agent/toolChoice/types.ts:64
+Defined in: [src/core/agent/toolChoice/types.ts:64](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/toolChoice/types.ts#L64)
 
 ***
 
@@ -137,7 +137,7 @@ Defined in: src/core/agent/toolChoice/types.ts:64
 
 > `readonly` `optional` **usage?**: `object`
 
-Defined in: src/core/agent/toolChoice/types.ts:74
+Defined in: [src/core/agent/toolChoice/types.ts:74](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/toolChoice/types.ts#L74)
 
 #### inputTokens
 

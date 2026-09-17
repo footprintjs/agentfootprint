@@ -4,7 +4,7 @@ title: ToolChoiceOutcomeRow
 
 # Interface: ToolChoiceOutcomeRow
 
-Defined in: src/core/agent/toolChoice/types.ts:115
+Defined in: [src/core/agent/toolChoice/types.ts:115](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/toolChoice/types.ts#L115)
 
 What the model DID, filed after its reply by `callLLM` — the same stage
 that assembled the request the pick was made for — so pick → served →
@@ -16,7 +16,7 @@ called is one triple per call.
 
 > `readonly` **called**: readonly `string`[]
 
-Defined in: src/core/agent/toolChoice/types.ts:119
+Defined in: [src/core/agent/toolChoice/types.ts:119](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/toolChoice/types.ts#L119)
 
 The model's tool calls this turn, in order; empty on an answer.
 
@@ -26,7 +26,7 @@ The model's tool calls this turn, in order; empty on an answer.
 
 > `readonly` `optional` **firstAgrees?**: `boolean`
 
-Defined in: src/core/agent/toolChoice/types.ts:121
+Defined in: [src/core/agent/toolChoice/types.ts:121](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/toolChoice/types.ts#L121)
 
 `chosen === called[0]`; absent when either side is absent.
 
@@ -36,7 +36,7 @@ Defined in: src/core/agent/toolChoice/types.ts:121
 
 > `readonly` **iteration**: `number`
 
-Defined in: src/core/agent/toolChoice/types.ts:117
+Defined in: [src/core/agent/toolChoice/types.ts:117](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/toolChoice/types.ts#L117)
 
 ***
 
@@ -44,7 +44,7 @@ Defined in: src/core/agent/toolChoice/types.ts:117
 
 > `readonly` **kind**: `"outcome"`
 
-Defined in: src/core/agent/toolChoice/types.ts:116
+Defined in: [src/core/agent/toolChoice/types.ts:116](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/toolChoice/types.ts#L116)
 
 ***
 
@@ -52,7 +52,7 @@ Defined in: src/core/agent/toolChoice/types.ts:116
 
 > `readonly` `optional` **miss?**: `object`
 
-Defined in: src/core/agent/toolChoice/types.ts:123
+Defined in: [src/core/agent/toolChoice/types.ts:123](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/toolChoice/types.ts#L123)
 
 Present when the call was NARROWED and the model named a tool outside `served`.
 
