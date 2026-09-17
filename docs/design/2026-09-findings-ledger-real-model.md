@@ -295,3 +295,72 @@ ledger-only           3            0.667        0.000     0.364              1.0
    dip.
 3. The judge decision waits on Haiku's standing accuracy over more cells.
 
+## Fourth run — the signal cell at ten runs: the hint did not hold (2026-09-17)
+
+The one cell that showed the intended effect at three runs (noise 4, at
+end, size 1000) was re-run at RUNS=10 on both models, 330 calls each. The
+tables are the script's print, verbatim.
+
+### Claude Haiku 4.5
+
+```
+findings-shuffle MATRIX — provider anthropic claude-haiku-4-5 (hosted), seed 20260916, 10 runs per condition, the same 10 orders in every condition, temperature 0, FACTS 6
+── noise 4 · at end · size 1000
+condition          runs  facts-in-answer  noise-cited  declared  standing-accuracy  drift   unknown-id-standings
+findings off         10            1.000        0.100         -                  -   0.30                      0
+ledger-and-facts     10            0.917        0.000     0.360              0.861   0.60                      0
+ledger-only          10            1.000        0.000     0.240              1.000   0.20                      0
+```
+
+### Claude Sonnet 5
+
+```
+findings-shuffle MATRIX — provider anthropic claude-sonnet-5 (hosted), seed 20260916, 10 runs per condition, the same 10 orders in every condition, temperature not sent, FACTS 6
+── noise 4 · at end · size 1000
+condition          runs  facts-in-answer  noise-cited  declared  standing-accuracy  drift   unknown-id-standings
+findings off         10            1.000        0.200         -                  -   0.40                      0
+ledger-and-facts     10            0.917        0.200     0.870              0.943   0.60                      0
+ledger-only          10            0.883        0.400     0.860              0.988   0.60                      0
+```
+
+## What ten runs say
+
+- **On Sonnet 5 the three-run signal was noise.** `noise-cited` is 0.200
+  without the ledger and 0.200 under `ledger-and-facts`: no difference. Under
+  `ledger-only` it is 0.400, worse. The 1.000 vs 0.000 of the third run was
+  three runs falling one way.
+- **On Haiku 4.5 a small difference remains:** 0.100 without the ledger, 0.000
+  under either ledger dial — one run in ten. Not a claim either.
+- **The ledger costs fact fidelity in this cell on both models:**
+  `facts-in-answer` 1.000 without the ledger, 0.917 under `ledger-and-facts`
+  (0.883 under `ledger-only` on Sonnet). One fact value in twelve restated
+  when the piece is served. This is now measured, not a dip to watch.
+- **A mechanism the numbers suggest, to be tested, not assumed:** a wrong
+  standing is served as a fact. Sonnet's standing accuracy is 0.943, so about
+  one judgment in seventeen is wrong; a noise record judged `fact` stays
+  verbatim on the wire AND appears in the piece's `facts:` list with its
+  value, which makes the model's own error sticky rather than removing it.
+  The piece may amplify the errors it is meant to filter.
+- **The contamination itself is small in this cell:** without any ledger,
+  both models cite noise in only one or two runs of ten with four noise
+  records. The original hypothesis is about long trajectories with many
+  failed detours; the cheap cells cannot show it. The heavy cells (noise 16,
+  size 4000) are where it would appear, and they cost roughly ten times more
+  per cell.
+
+## What this changes
+
+- Nothing shipped is wrong: the record, the binding and the policy code
+  behave as designed. What is not yet shown is a benefit of the served piece
+  at this task size, and there is a measured cost.
+- The `serve` default stays `'ledger-and-facts'` only because no run shows
+  it worse than the raw pile on facts by more than one value in twelve; a
+  consumer who wants the pile unchanged does not call `.findings()`.
+- Next, in order: (1) the fidelity dip — instruction variants scored on
+  `facts-in-answer` (the DSPy-style bench loop), including a piece grammar
+  that names facts without restating their values; (2) the wrong-fact
+  mechanism — serve a fact from an `exploratory` call marked as such, or
+  hold facts to `declared` results only when the proposition was stated;
+  (3) the heavy cells on a budget the owner sets, since that is the only
+  place the hypothesis can be confirmed or refuted.
+
