@@ -99,3 +99,61 @@ tables go here when a hosted run produces them. The number that must move is
 
 Related: docs/design/2026-09-findings-ledger.md (Steps 2–3, Considered,
 Packet 6), docs/design/2026-09-findings-ledger-spec.md.
+
+## Second run, partial — Claude Haiku 4.5 with the offered ids (2026-09-17, agentfootprint 9.102.0)
+
+The first pass of the matrix (8 of 24 cells: noise 4 and 16, at end and at
+start, sizes 250 and 1000, 3 runs per condition) stopped after 4 cells when
+the account's API credit ran out ("Your credit balance is too low"). The
+completed cells are the script's print, verbatim; the rest of the pass and
+the Sonnet 5 pass are still to be run.
+
+```
+findings-shuffle MATRIX — provider anthropic claude-haiku-4-5 (hosted), seed 20260916, 3 runs per condition, the same 3 orders in every condition, temperature 0, FACTS 6
+cells: NOISE 4/16 × NOISE_AT end/start × NOISE_SIZE 250/1000 tokens = 8 cells × 3 conditions × 3 runs
+cost: 1224 model calls for this model (nominal: n+1 per run, one per record read plus the answer; ceiling 1368 at maxIterations n+3), none made yet
+
+── noise 4 · at end · size 250
+condition          runs  facts-in-answer  noise-cited  declared  standing-accuracy  drift   unknown-id-standings
+findings off          3            1.000        0.000         -                  -   0.67                      0
+ledger-and-facts      3            1.000        0.000     0.300              1.000   0.67                      0
+ledger-only           3            1.000        0.000     0.167              1.000   0.67                      0
+
+── noise 4 · at end · size 1000
+condition          runs  facts-in-answer  noise-cited  declared  standing-accuracy  drift   unknown-id-standings
+findings off          3            1.000        0.333         -                  -   1.00                      0
+ledger-and-facts      3            0.889        0.000     0.533              0.875   1.00                      0
+ledger-only           3            1.000        0.000     0.200              1.000   0.33                      0
+
+── noise 4 · at start · size 250
+condition          runs  facts-in-answer  noise-cited  declared  standing-accuracy  drift   unknown-id-standings
+findings off          3            1.000        0.000         -                  -   0.33                      0
+ledger-and-facts      3            1.000        0.000     0.000                  -   0.33                      0
+ledger-only           3            1.000        0.000     0.000                  -   0.33                      0
+
+── noise 4 · at start · size 1000
+condition          runs  facts-in-answer  noise-cited  declared  standing-accuracy  drift   unknown-id-standings
+findings off          3            1.000        0.000         -                  -   0.33                      0
+ledger-and-facts      3            1.000        0.000     0.300              0.444   0.67                      0
+ledger-only           3            1.000        0.000     0.133              0.500   0.33                      0
+```
+
+## What the 4 cells say
+
+- **The binding works, partly.** `unknown-id-standings` is 0 in every cell
+  (the first run had 77): with the ids offered as an enum the model no longer
+  counts. `declared` moved from 0.000 to 0.30 / 0.53 (noise 4, at end) and
+  0.30 (noise 4, at start, size 1000) — but 0.000 in one cell (noise 4, at
+  start, size 250): the model declared nothing there. So the ask is now
+  copyable and still not always followed; the number to raise is `declared`.
+- **`standing-accuracy` is 1.000 in two cells and 0.444–0.875 in two.** Where
+  the model declares, it is often right, and sometimes calls noise `open` or
+  `fact`. This is the column that decides whether a judge is needed; four
+  cells are not enough to decide.
+- **One hint in the intended direction, too small to claim:** at noise 4,
+  at end, size 1000, `findings off` cited noise in one run of three (0.333)
+  while both ledger conditions cited none, and `ledger-and-facts` lost part
+  of one fact (0.889). Three runs per condition; no conclusion.
+- `facts-in-answer` stays ≈ 1.0: four noise records do not stress the model;
+  the 16-noise cells are the ones that were cut off.
+

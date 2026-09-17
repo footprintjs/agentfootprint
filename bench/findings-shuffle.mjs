@@ -160,9 +160,19 @@ const TEMPERATURE =
 
 const NOISE_AT_VALUES = ['spread', 'end', 'start'];
 /** The matrix's axes, in the order the cells are run (noise outermost). */
-const MATRIX_NOISE = [2, 4, 8, 16];
-const MATRIX_AT = ['end', 'start'];
-const MATRIX_SIZE = [250, 1000, 4000];
+// The full matrix, or a subset named by env: MATRIX_NOISE=4,16 MATRIX_AT=end
+// MATRIX_SIZE=250,1000 — the cost line names the cells this invocation runs.
+const listEnv = (name, fallback, parse) => {
+  const raw = process.env[name];
+  if (!raw) return fallback;
+  const picked = raw.split(',').map((v) => parse(v.trim()));
+  const bad = picked.find((v) => !fallback.includes(v));
+  if (bad !== undefined) throw new Error(`${name}: '${bad}' is not one of ${fallback.join('/')}`);
+  return picked;
+};
+const MATRIX_NOISE = listEnv('MATRIX_NOISE', [2, 4, 8, 16], Number);
+const MATRIX_AT = listEnv('MATRIX_AT', ['end', 'start'], String);
+const MATRIX_SIZE = listEnv('MATRIX_SIZE', [250, 1000, 4000], Number);
 /** The token estimate the padding is sized by: chars per token. */
 const CHARS_PER_TOKEN = 4;
 
