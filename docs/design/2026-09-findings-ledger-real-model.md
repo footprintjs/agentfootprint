@@ -422,3 +422,41 @@ team turns it on knowingly and can compare against `'none'` on its own runs.
 The numbers above are the record for that choice; the design page's law
 stands — the bench decided, and a variant is a different hash on the record.
 
+## Sixth run — the calibrated judge beside the model (agentfootprint 9.104.0, 2026-09-17)
+
+The same cell, RUNS=10, Claude Sonnet 5 as the actor, the hosted System One
+classifier as the judge on every landed tool result (`.findings({ judge })`,
+300 classifier calls). The table is the script's print, verbatim.
+
+```
+findings-shuffle MATRIX — provider anthropic claude-sonnet-5 (hosted), seed 20260916, 10 runs per condition, the same 10 orders in every condition, temperature not sent, judge typesafe (hosted; one classifier call per tool result), FACTS 6
+cost: 440 model calls for this model (nominal: n+1 per run, one per record read plus the answer; ceiling 520 at maxIterations n+3), none made yet
+cost (judge typesafe): 300 classifier calls — one per tool result on every armed condition, none made yet
+── noise 4 · at end · size 1000
+condition          runs  facts-in-answer  noise-cited  declared  standing-accuracy  drift   unknown-id-standings  judge-accuracy  judge-agrees  judge-tokens  judge-latency-ms
+findings off         10            1.000        0.700         -                  -   0.30                      0               -             -             -                 -
+ledger-and-facts     10            0.917        0.300     0.720              0.931   0.60                      0           0.180         0.153         18038             441.5
+ledger-only          10            0.967        0.500     0.740              0.959   0.70                      0           0.208         0.162         18244             412.2
+ledger+ask           10            0.783        0.200     0.620              0.823   0.90                      0           0.230         0.242         17978             339.4
+```
+
+## What it says
+
+- **The judge, as first asked, is not a better source.** `judge-accuracy`
+  0.18–0.23 against the planted truth where the model's own standings score
+  0.82–0.96; `judge-agrees` 0.15–0.24. The cost is as advertised (≈1,800
+  tokens and ≈0.4 s per judgment); the answer is what fails.
+- **Why, most likely:** the judge was handed a raw ≈1,000-token payload and one
+  broad question ("what is this result worth for the proposition"), and most
+  calls declared no proposition, so it judged against the bare question. The
+  provider's own guidance is atomic questions composed in code. The next
+  variant asks two yes/no questions — does the result contain the value the
+  question asks for; does it contradict the proposition — and derives the
+  standing in code, with the derivation on the row.
+- **Policy A stands**: serving is driven by the model's own standing; the judge
+  stays advisory and recorded.
+- Actor rows this run: the raw pile cited noise in 7 of 10 runs, the ledger
+  conditions in 2–3 — the third ten-run pass showing the gap on Sonnet, and the
+  widest; `ledger+ask` lost fact fidelity this time (0.783 against 0.950 in the
+  fifth run), so ten runs still swing by a run or two.
+
