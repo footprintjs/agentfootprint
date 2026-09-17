@@ -53,6 +53,16 @@ export const STANDING_VALUES: readonly Standing[] = Object.freeze([
   'ruled-out',
 ]);
 
+/**
+ * The cap on the two one-line texts a basis row carries (`proposition`,
+ * `predicts`): `ledger.ts · basisRowFrom` cuts a longer declaration here and
+ * STATES the cut on the row (`…[clipped N chars]`), the same law
+ * `serve.ts · FINDINGS_PIECE_LIMITS.lineChars` applies to a served line. The
+ * emission in `history` keeps the model's full text; the row is the record's
+ * bounded copy.
+ */
+export const PROPOSITION_CHARS = 240;
+
 /** One assertion as the model DECLARES it — identity, predicate, value; no stratum yet. */
 export interface DeclaredAssertion {
   readonly subject: { readonly kind: string; readonly id: string };
@@ -83,6 +93,15 @@ export interface PreviousStanding {
 export interface FindingsDeclaration {
   readonly basis?: Basis;
   readonly expect?: Expect;
+  /**
+   * What the call tests — one line, declared BEFORE the result exists, so a
+   * later `ruled-out` or `open` standing on that result can be read against
+   * a proposition the model wrote without seeing the result. Optional; the
+   * schema recommends it when `basis` is `'exploratory'`.
+   */
+  readonly proposition?: string;
+  /** What the result should show if the proposition holds — one line, optional. */
+  readonly predicts?: string;
   readonly previous?: readonly PreviousStanding[];
 }
 
@@ -98,6 +117,13 @@ export interface BasisRow {
   readonly basis: Basis;
   readonly expect?: Expect;
   /**
+   * The declared proposition and prediction, each at most `PROPOSITION_CHARS`
+   * with any cut stated in the text itself. Present only when declared —
+   * never defaulted, never inferred from the call's arguments.
+   */
+  readonly proposition?: string;
+  readonly predicts?: string;
+  /**
    * How many entries of the same `_findings` value `splitFindings` dropped as
    * malformed. A count about the emission, present only when non-zero — it is
    * what `findings.declared` reports, and the row is the only place a count
@@ -111,7 +137,11 @@ export interface StandingRow {
   readonly kind: 'standing';
   /** The PREVIOUS result's id — the result being judged, not the judging call. */
   readonly toolCallId: string;
-  /** From the batch; absent when the id named no result in it (`unknownId`). */
+  /**
+   * From the identified result (`offer.ts · knownResults`: the served
+   * history's tool messages plus the previous batch); absent when the id
+   * named none (`unknownId`), or when the served message carried no name.
+   */
   readonly toolName?: string;
   /** The placement ticket's `art_` ref when the result was placed (`isPlacedToolResult`). */
   readonly ref?: string;
@@ -127,7 +157,12 @@ export interface StandingRow {
    * from the commit log by `toolCallId` and is never guessed here.
    */
   readonly iteration: number;
-  /** Set when `toolCallId` named no result in the previous batch. */
+  /**
+   * Set when `toolCallId` named no result the run could identify — neither a
+   * served `role: 'tool'` message nor an entry of the previous batch
+   * (`offer.ts · knownResults`). An ordinal, a tool name, a typo: recorded
+   * as written, never resolved.
+   */
   readonly unknownId?: true;
 }
 

@@ -1008,6 +1008,23 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
     // precedent.
     if (opts.keepLedgerFacts !== undefined) requireKeepLedgerFacts(opts.keepLedgerFacts, 'Agent');
     if (this.findingsOptions !== undefined) {
+      // The ledger needs the tools slot recomposed every call: from the second
+      // call on, the served `_findings` property binds the ids the model may
+      // name (`findings/offer.ts · offeredResultIds`, bound at the Tools
+      // mount) — and on a hosted model that binding is what makes a standing
+      // resolve at all (docs/design/2026-09-findings-ledger-real-model.md).
+      // `reactMode: 'classic'` selects the Tools branch on turn 1 only, so an
+      // armed classic agent would serve the offer-less base on every call and
+      // file every standing as `unknownId`. Refused loud, here at build, the
+      // `AgentBuilder.selfExplain` twin — never a silent degrade.
+      if (this.reactMode === 'classic') {
+        throw new Error(
+          "Agent: .findings() requires per-iteration slot recomposition — reactMode 'classic' " +
+            'caches the tools slot on turn 1, so the ids the model may name (bound into every ' +
+            'served tool schema from the second call on) would never reach it and every standing ' +
+            "would file as unknownId. Use the default 'dynamic' mode (or 'dynamic-grouped').",
+        );
+      }
       this.keepLedgerFacts = resolveKeepLedgerFacts(
         this.findingsOptions.keepLedgerFacts ?? opts.keepLedgerFacts,
       );
@@ -4404,6 +4421,11 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
       // Escalation (9.19.0): the grouped chart threads `skillEscalated`
       // across the sf-llm-call boundary only when the policy exists.
       ...(this.skillBrains?.escalation !== undefined && { hasEscalation: true }),
+      // The findings ledger (9.102.0): both charts compute the OFFER on the
+      // Tools branch's mount only under the arm — the same value-conditional
+      // grammar as the slot's `findings` and callLLM's `hasFindingsLedger`,
+      // so the three can never disagree about whether the ledger is armed.
+      ...(this.findingsOptions !== undefined && { hasFindingsLedger: true }),
       // `.limitsTravelWithTheAnswer()` (this release) — value-conditional, the
       // `resolvedModel` precedent: absent from the deps object entirely for an
       // agent that did not ask, so both builders mount the final-branch stage

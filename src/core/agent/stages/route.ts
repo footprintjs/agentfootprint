@@ -22,6 +22,7 @@ import { runMessageChain } from '../middleware/runChain.js';
 import { recordDecisions } from '../middleware/ledger.js';
 import { peelAnswerFindings } from '../findings/reserved.js';
 import { recordFindings, standingRowsFrom, type PreviousResult } from '../findings/ledger.js';
+import { knownResults } from '../findings/offer.js';
 import {
   judgeAnswer,
   recordOutputAttempt,
@@ -982,10 +983,18 @@ function buildEnforcingDecider(
       const raw = scope.llmLatestContent;
       const peeled = peelAnswerFindings(raw);
       if (peeled.findings?.previous !== undefined) {
+        // Identified against the results the run can identify (`findings/
+        // offer.ts · knownResults`): the last batch AND every tool message on
+        // `history` as this call was served it — the same list the offer was
+        // read from — so an id copied from the offer resolves whichever batch
+        // it came from (9.102.0).
         recordFindings(
           scope,
           standingRowsFrom(
-            [...((scope.toolResults ?? []) as readonly PreviousResult[])],
+            knownResults(
+              [...((scope.history as readonly LLMMessage[] | undefined) ?? [])],
+              [...((scope.toolResults ?? []) as readonly PreviousResult[])],
+            ),
             peeled.findings,
             'answer',
             scope.iteration as number,

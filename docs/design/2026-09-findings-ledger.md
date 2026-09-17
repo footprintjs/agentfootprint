@@ -1057,3 +1057,237 @@ Read, numbers from the print only:
   a held fact is worth to its answer against what it costs on the wire; the
   mock scripts compliance and echoes. The SHUFFLE result from step 3 still
   gates any change of the `serve` default, and nothing here touches it.
+
+## Packet 6 (2026-09-17) — the id bound in the schema; the proposition before the call; a bench that can measure
+
+Not a numbered step of the cut: it answers the real-model page's finding
+(`docs/design/2026-09-findings-ledger-real-model.md` — on Haiku 4.5 and Sonnet
+5 the models declared a standing for nearly every result and named it by
+ORDINAL, so `declared` was 0.000 / 0.078 and the piece named nothing). Ships
+in the unreleased 9.102.0 entry beside step 4. Nothing in Track is ticked by
+it.
+
+### The binding rule
+
+- The served `_findings` property's `previous.items.properties.toolCallId`
+  carries `enum: <the offer>` when the offer is non-empty, and the
+  description "one of the ids listed; a result not listed cannot be named
+  here". Empty (the first call; everything declared; the seed fallback), the
+  frozen base `FINDINGS_ARGUMENT_SCHEMA` is served by reference — byte-
+  identical to 9.101.0. `reserved.ts · withFindingsArgument(schema, offer)`;
+  the offer copy is rebuilt and deep-frozen per call; the base is never
+  edited; `_findings` is never `required`; an author-owned `_findings` is
+  still the same reference.
+- **The offer** = the `toolCallId`s of the `role: 'tool'` messages on the
+  SERVED history whose current standing (`foldLedger(rows).standingOf`) is
+  absent, `fact` or `open` — the results the model can still READ — newest
+  first, each once. ONE owner, `findings/offer.ts`: `offeredResultIds(messages,
+  rows)` for the enum, `undeclaredIds` for the piece's `undeclared:` line (no
+  standing at all — the honest absence, a subset of the offer, wire order),
+  both over `servedToolCallIds` of the same list, so the schema and the piece
+  cannot disagree about what is undeclared. See "Revision" below for why a
+  declared fact stays listed (second review).
+- **Where the two inputs meet.** The tools slot is an isolated subflow that
+  never sees `history` or `findingsLedger`, so the offer crosses the Tools
+  mount as the per-iteration arg `findingsOffer` — computed in the branch's
+  `inputMapper` in BOTH charts (`buildAgentChart`, `buildDynamicAgentChart`)
+  under the chart dep `AgentChartDeps.hasFindingsLedger` (threaded by
+  `Agent.buildChart` from the same `findingsOptions` that arms the slot and
+  `callLLM`), from `parent.history` as the window stage left it (COMPACT runs
+  before the Context fan-out on both shapes; inside `sf-llm-call` it is
+  `dynamicTurnSeed`'s copy of `priorHistory`, and `findingsLedger` is the
+  boundary's own input) and `parent.findingsLedger` as it stands at the call.
+  The decoration site stays ONE: `buildToolsSlot` after `mergeWire`, `merged
+  .map((s) => withFindingsArgument(s, offer))` under `config.findings`; the
+  seed fallback decorates with no offer. An unarmed agent maps no new key and
+  reads neither.
+- **The record tells the truth by construction.** The committed
+  `dynamicToolSchemas` hold the offer, so `servedView · readAtCall` rebuilds
+  the served schema byte-equal with no recomposition, and
+  `receipt.tools.schemaHashes[name]` moves on every epoch whose offer moved.
+  A consequence on the log: the Tools mount's merge-back now WRITES
+  `dynamicToolSchemas` on every epoch after the first (one `set` row where
+  9.101.0 recorded an empty commit, because an unchanged decorated list was a
+  no-op replace). `sameContract` still pairs UNDECORATED candidates;
+  `validateToolArgs` never sees the key; `withoutFindingsArgument` peels the
+  offer copy and a committed clone of it by the versioned marker.
+
+### The cap
+
+`FINDINGS_OFFER_CAP` = 32, newest first, so the cap cuts the OLDEST
+undeclared results — the ones a window drops first and a standing is least
+likely about. A clipped offer says so in the property's description ("The 32
+newest results without a standing are listed; N older ones are not (cap
+32)"). The answer turn's `_findings.previous` has no schema to bind; the
+instruction's last line asks for the id "exactly as it appears in the tool
+schema's list … never a position or a count", and `declaredOn: 'answer'`
+rows are measured apart.
+
+### The law, kept — at the schema and at the row
+
+The offer is what the model may COPY, never what the library resolves. An id
+outside it — an ordinal, a tool name, a typo — is filed exactly as written
+with `unknownId: true` (`ledger.ts · standingRowsFrom`) and never mapped to
+a position; the served piece names it "(unknown id)". A model that still
+counts is recorded as counting.
+
+And every id INSIDE the offer resolves (second review, blocking finding).
+The first cut identified a named id against `scope.toolResults` — the LAST
+batch, which the dispatch loop resets on every iteration — while the offer
+listed every undeclared result on the WHOLE served history. A model that
+copied an offered id from an earlier batch (exactly what the enum asks) was
+filed `unknownId: true` with no `toolName`, and the row was only LABELLED
+unknown: `collapseJudged` still matched it by id on the wire and its
+assertions still carried `provenance: 'tool:<id>'`, so the record disagreed
+with itself and `declared` — the number the packet exists to move — did not
+move for those standings. Fix: `offer.ts · knownResults(messages,
+previousBatch)` is the identity source both doors pass to `standingRowsFrom`
+(`toolCalls.ts` at the batch read, `route.ts` on the answer turn): the
+previous batch first, then every `role: 'tool'` message on the served
+history read as a result (`toolName`, `content` — a placed ticket resolves
+to `artifact:<ref>` exactly as from the batch), each id once. It is the SAME
+`history` the Tools mount read the offer from (on both chart shapes: the
+window stage runs before the Context fan-out, and the tool-calls handler and
+the Route decider run on the outer chart), so the offer's universe and the
+resolver's coincide by construction. `PreviousResult.toolName` is optional
+now: a served message with no name yields a row with none — nothing is
+invented. Pinned: `findings-ledger.test.ts` § 13 (a model that names every
+offered id at every call, on a call and on the answer, files no `unknownId`
+on `dynamic` and `dynamic-grouped`), `offer.test.ts` (the law at the row,
+incl. a 300-run property with no batch at all), `ledger.test.ts` (a known
+result without a name).
+
+### Revision — what the offer holds (second review)
+
+The first cut removed an id from the offer on ANY standing, and the enum
+says "a result not listed cannot be named here" — so a compliant model could
+never revise: an `open` could not become a `fact` when a later call settled
+it, and a `fact` could not be retired by a later `ruled-out`, although the
+ledger's own fold takes the LAST standing per id and a `ruled-out` is how a
+conflict witness retires. The tradeoff was not named. Decided for the
+library: **the offer is what the model can still read.** A result with no
+standing is served verbatim; a `fact` is stood on in the piece (its
+assertions, under every serve mode) and served verbatim under the default
+mode; an `open` result is served verbatim and carries `settles` — what a
+later call may do. All three stay listed. A `noise` or `ruled-out` result
+leaves (`offer.ts · RETIRING_STANDINGS`): it is a ticket on the wire under
+every mode (`serve.ts · collapses`) and the piece carries a count or one
+line, never the content, so there is nothing left to re-judge — a wrong
+`ruled-out` is answered by a NEW call and a standing on its result, never by
+re-judging from memory. The fold decides in both directions: a retired id
+declared `fact` again is listed again. Costs, named: (a) a fact stays in the
+offer as long as the window serves it — and the window HOLDS facts
+(`keepLedgerFacts`), so a busy run's offer fills with facts until the cap
+(32, newest first) cuts the oldest, which is then not revisable; (b) a model
+that reads the enum as a checklist would restate every fact on every call —
+the instruction's line "Name a result again only to change its standing" is
+the ask against it, and the ask promises nothing; a restated fact is one
+more row the fold collapses. The piece's `undeclared:` line is unchanged
+(no standing at all), so it is now a SUBSET of the offer, not its reverse.
+Pinned: `offer.test.ts` (open → fact keeps the id, fact → ruled-out retires
+it, ruled-out → fact brings it back; the subset relation; the property),
+`findings-ledger.test.ts` § 13 (call 3 lists `['c2', 'c1']` after c1 is a
+fact; a noise or ruled-out result leaves).
+
+### Classic is refused (second review)
+
+`reactMode: 'classic'` selects the Tools branch on turn 1 only (the whole
+Classic-vs-Dynamic difference, `buildAgentChart` · the Context selector), so
+`dynamicToolSchemas` stays at its turn-1 value — the offer-less base — for
+the whole run: the sentence "from the second call on, every served schema
+binds the ids the model may name" was false for a supported public mode,
+and an armed classic agent would have filed every standing as `unknownId`
+with nothing on the record saying why. The house pattern for classic is a
+named refusal (`AgentBuilder.selfExplain`, `.skillGraph()`, `steps`), not a
+silent degrade: the `Agent` constructor refuses `.findings()` under classic
+through both doors (the builder passes `findings` into the constructor), with
+the fix in the message. Pinned by `findings-ledger.test.ts` § 7 (the door).
+The alternative — selecting the Tools branch every turn on an armed classic
+agent — would change what "classic" means for one arm and was not taken.
+
+### The cache (second review)
+
+From the second call on, an armed agent's served tool schemas vary per call
+(the enum moves whenever a result joins or is retired), so a `field:
+'tools'` cache breakpoint (`cache/types.ts`; `AnthropicCacheStrategy` marks
+`system`, `tools` and `messages`; `CacheDecisionSubflow` pushes a `'tools'`
+slot when an injection contributes tools) cannot hit on such a run, and on a
+prefix-cached wire every breakpoint after the tools block misses with it.
+Step 3 recorded that the system piece already moves the system block on
+every declaring call; the offer moves the tools prefix AHEAD of it, so the
+loss is the tools block's own cached tokens on top. Not measured — no bench
+in the tree counts cache tokens (the step-3 note stands: a number waits on a
+real-provider run reading `usage.cacheRead` / `cacheWrite` per epoch). The
+lever not taken: the offer in the request-only findings system piece, below
+the tools breakpoint. Not taken because the piece is prose, and prose is
+what failed on the real model — the enum in the schema is the binding, and
+moving it would trade the number that must move for a cache hit nothing has
+measured. Named here and in `build/agent.mdx`.
+
+### The proposition
+
+`FindingsDeclaration.proposition` (what the call tests) and `predicts` (what
+the result should show if it holds), optional, one line each, declared ON
+THE CALL before its result exists; the schema recommends `proposition` when
+`basis` is `'exploratory'`. `basisRowFrom` files both on the `BasisRow`, cut
+at `PROPOSITION_CHARS` (240) with the cut stated in the text; the
+`findings.declared` event carries `hasProposition: true` — a flag, never the
+text. The served piece quotes the JUDGED call's own proposition on `open` and
+`ruled-out` lines (`ruled out (<tool>, tool:<id>): <line> — tested:
+<proposition>`; the open form after ` · settles: …`), never on a fact line
+and never from the declaring call; `predicts` is record-only.
+
+### What the bench will measure (not yet run on a model)
+
+`bench/findings-shuffle.mjs` gained the axes the real-model page asked for —
+`NOISE_AT=end|start|spread`, `NOISE_SIZE=250|1000|4000`, noise values within
+5% of a fact and never equal — and one column, `standing-accuracy`: of the
+actor's own standings on known ids, the share agreeing with the planted truth
+(pooled over runs, read on the LAST standing row per id; the truth map is the
+paging tool's own served map, no inference). `--matrix` / `AF_SHUFFLE_MATRIX=1`
+runs the 24-cell matrix for ONE model per invocation and prints the cost line
+before the first call. The number that must move is `declared`;
+`standing-accuracy` says whether what moved was right; the judge idea waits
+on it. No hosted run was made in this packet (no key), so no number is quoted
+here — the real-model page carries the pre-offer tables and will carry the
+matrix. The mock smoke is green after the wiring and prints the pre-packet
+default-mode numbers to the digit; `npm run bench:findings` prints the step-4
+tables to the digit and both its laws hold.
+
+### What the record holds (pinned)
+
+- `test/core/agent/findings-ledger.test.ts` § 13: the served schema at call 2
+  lists exactly `['c1']`; after c1 is declared a fact on call 2 it STAYS
+  listed, so call 3 lists `['c2', 'c1']`; the answer call lists
+  `['c3', 'c2', 'c1']` (newest first); a noise or ruled-out result leaves; an
+  ordinal and a tool name both land as `unknownId` and c1 stays offered; a
+  model that names every offered id at every call files no `unknownId` on
+  either chart shape; the served view's `tools.schemas` equal the wire at
+  every epoch; under `slidingWindow({ keepRecentTurns: 2 })` the offer is the
+  wire's undeclared ids reversed and an evicted id is not on it; § 7:
+  classic is refused through both doors.
+- `test/lib/time-travel/receipt-conformance.test.ts` (the armed section):
+  `schemaHashes[name]` on every epoch equals the schema rebuilt by
+  `withFindingsArgument(undecorated, offer)` with the offer derived FROM THE
+  RECORD (`offeredResultIds(view.messages.asSent, rows with iteration <
+  epoch)`), and NOT the offer-less decoration once an offer is served.
+- `test/core/agent/findings-served.test.ts` § 9: the ruled-out and open
+  lines quote the judged call's proposition; facts never; `predicts` never
+  reaches the piece; the basis row holds both; the event holds the flag only.
+- Byte identity: the 16 unarmed references pass untouched; `agent-findings`
+  and `agent-findings-window` regenerated each alone, delta on the header —
+  the enum on every epoch after the first, the `dynamicToolSchemas` write
+  per such epoch, the findings-module stage's shape, and the sizes; and once
+  more, each alone, in the second review: the enum keeps a declared fact
+  (`['c2', 'c1']` at `agent-findings` epoch 3; the two facts on every later
+  epoch of the window scenario) and the instruction's revised line.
+
+### Named, not taken
+
+- Root exports for `FINDINGS_OFFER_CAP` / `offeredResultIds`: not added.
+  The served view's `tools.schemas` carries the offer at every epoch and the
+  clipped description states the cap, so a reader needs no function to know
+  what was offered; a consumer rebuilding an offer from a checkpointed
+  history is the case that would earn the export.
+- The SHUFFLE verdict on `serve` (item 3 on the real-model page) still waits
+  on the matrix.

@@ -316,6 +316,17 @@ export interface ToolsSlotConfig {
    * (`findings/reserved.ts · withFindingsArgument`) at the ONE decoration
    * site: after `mergeWire`, before `scope.toolSchemas` is written. Absent —
    * the default — and the committed list is the merged list, byte for byte.
+   *
+   * THE OFFER (9.102.0) rides in as the per-iteration arg `findingsOffer`:
+   * the ids of the served tool results the model may still name (no
+   * standing, `fact` or `open`), newest first, computed by the ONE producer
+   * `findings/offer.ts · offeredResultIds`
+   * at the mount (`buildAgentChart` / `buildDynamicAgentChart` · the Tools
+   * branch's `inputMapper`, under `AgentChartDeps.hasFindingsLedger`) —
+   * this subflow has an isolated runtime and never sees `history` or
+   * `findingsLedger`; the mount reads both, once, and hands the list in.
+   * Read here under this gate only; absent (a hand-built mount) it is an
+   * empty offer, which serves the base decoration.
    */
   readonly findings?: true;
 }
@@ -326,6 +337,8 @@ interface ToolsSubflowState {
 
 /** Shared empty hold-out — the no-step iterations never allocate. */
 const EMPTY_NAME_SET: ReadonlySet<string> = new Set();
+/** Shared empty offer — an unarmed iteration, or the first call, never allocates. */
+const EMPTY_OFFER: readonly string[] = Object.freeze([]);
 
 // LENS · tool-description + tool-list · request-ephemeral
 // reads: hiddenSkillIds ← resolved and PUBLISHED in `discoverStage` — this slot is that fact's owner
@@ -505,6 +518,7 @@ export function buildToolsSlot(config: ToolsSlotConfig): FlowChart {
       currentSkillId?: string;
       turnRoute?: TurnRoute;
       stepPointer?: StepPointerCarrier;
+      findingsOffer?: readonly string[];
     }>();
     const iteration = args.iteration ?? 1;
 
@@ -814,7 +828,28 @@ export function buildToolsSlot(config: ToolsSlotConfig): FlowChart {
     // edit of a registry reference `mcpServe` serves and `validateToolArgs`
     // judges. `merged` itself stays undecorated for the names-only reads
     // below. Unarmed: the merged list, byte for byte.
-    scope.toolSchemas = config.findings === true ? merged.map(withFindingsArgument) : merged;
+    //
+    // THE OFFER (9.102.0). The decoration binds the ids the model may NAME
+    // into `previous[].toolCallId`'s enum: the served results the model can
+    // still read — no standing, `fact` or `open`; a `noise` or `ruled-out`
+    // result is a ticket and leaves — newest first (`findings/offer.ts ·
+    // offeredResultIds`,
+    // computed at the mount and handed in as `findingsOffer` — see
+    // `ToolsSlotConfig.findings`). An explicit lambda, on purpose: passed
+    // point-free, `.map` would hand the INDEX in as the offer. The committed
+    // list therefore holds the offer, so the rebuild is byte-equal without
+    // recomposition and `receipt.tools.schemaHashes` moves when the offer
+    // does — the record telling the truth. An empty offer (the first call;
+    // everything declared; no mount arg) is the base decoration by reference.
+    // The offer is what the model may COPY, never what the library resolves:
+    // an id outside it still files as written, `unknownId: true`, and every
+    // id inside it resolves — the rows are identified against the same served
+    // history (`findings/ledger.ts · standingRowsFrom` over
+    // `findings/offer.ts · knownResults`).
+    const offer: readonly string[] =
+      config.findings === true ? args.findingsOffer ?? EMPTY_OFFER : EMPTY_OFFER;
+    scope.toolSchemas =
+      config.findings === true ? merged.map((s) => withFindingsArgument(s, offer)) : merged;
     if (servedTools !== undefined) {
       servedTools.current = winners;
       // The run's memory of who served what (read by the off-wire fallback).

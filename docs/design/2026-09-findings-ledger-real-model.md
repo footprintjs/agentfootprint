@@ -71,5 +71,31 @@ ledger-only           5            1.000        0.000     0.056   0.20          
    `'ledger-and-facts'` until a run shows the served ledger is a sufficient
    statistic.
 
-Related: docs/design/2026-09-findings-ledger.md (Steps 2–3, Considered),
-docs/design/2026-09-findings-ledger-spec.md.
+## What changed (2026-09-17, packet 6)
+
+Item 1 above shipped (the unreleased 9.102.0 entry; design page § Packet 6):
+from the second call on, every served `_findings` property binds the ids the
+model may name — `previous[].toolCallId` carries `enum: <the served results
+the model can still read: no standing, fact or open; newest first, at most
+32>` — computed at the Tools mount from the served history and the ledger,
+bound at the one decoration site and committed with the tool list, so the
+served view and the receipt hold exactly what was offered at each epoch. An
+id outside the offer still files as `unknownId`; the library resolves
+nothing — and every id inside it resolves, because a standing is identified
+against the same served history the offer was read from (the second review
+found the first cut resolving against the last batch only, so an offered
+older id filed as `unknownId`; fixed before release). A `noise` or
+`ruled-out` result leaves the offer; a fact or open one stays, so a standing
+can be revised. `reactMode: 'classic'` is refused under `.findings()` — its
+cached tools slot could never carry the offer. The instruction asks the
+answer turn for the id exactly as the schema listed it. Item 2 shipped as the
+harness's axes and columns (`NOISE_AT`, `NOISE_SIZE`, near-fact noise values,
+`standing-accuracy`, `--matrix` per model). The two tables above were printed
+BEFORE the offer existed and stand as the pre-offer baseline; nothing on this
+page is re-quoted. The matrix is to be run — one `AF_SHUFFLE_MATRIX=1`
+invocation per model, the cost line printed before the first call — and its
+tables go here when a hosted run produces them. The number that must move is
+`declared`; `standing-accuracy` says whether what moved was right.
+
+Related: docs/design/2026-09-findings-ledger.md (Steps 2–3, Considered,
+Packet 6), docs/design/2026-09-findings-ledger-spec.md.

@@ -90,6 +90,8 @@ import {
   FINDINGS_INSTRUCTION,
   withFindingsArgument,
 } from '../../../src/core/agent/findings/reserved.js';
+import { offeredResultIds } from '../../../src/core/agent/findings/offer.js';
+import type { FindingsLedger } from '../../../src/core/agent/findings/types.js';
 import { isCollapsedToolResult } from '../../../src/core/agent/findings/serve.js';
 import type {
   LLMMessage,
@@ -2168,30 +2170,72 @@ describe('an armed findings ledger: the receipt hashes the DECORATED schema and 
 
       const views = servedViews(r.snapshot);
       expect(views.length).toBe(3);
+      // The OFFER (9.102.0): from the second call on, the served property
+      // binds the ids the model may name — the served results the model can
+      // still read (no standing, fact or open; a noise or ruled-out result
+      // leaves), newest first — so the served bytes differ per epoch and
+      // the receipt's schema hash moves with them. The rebuild below derives
+      // the offer FROM THE RECORD: the epoch's served messages (an id is never
+      // rewritten by the collapse) and the ledger as it stood at the call —
+      // every row a call before this one filed (`iteration < epoch`; a row's
+      // `iteration` is its declaring call's epoch). By the script: c1's result
+      // is served from epoch 2 and declared noise ON c2, so epoch 2 offers
+      // `['c1']` and epoch 3 offers `['c2']`; epoch 1 serves nothing and
+      // offers nothing — the frozen base by value.
+      const ledger = (r.snapshot.sharedState as { findingsLedger?: FindingsLedger })
+        .findingsLedger!;
+      const offerAt = (view: ServedView): readonly string[] =>
+        offeredResultIds(
+          view.messages.asSent,
+          ledger.filter((row) => row.iteration < view.epoch),
+        );
+      const EXPECTED_OFFER: Record<number, readonly string[]> = { 1: [], 2: ['c1'], 3: ['c2'] };
       let checked = 0;
       for (const view of views) {
         const receipt = receiptAt(r.snapshot, view.epoch)!;
         const hash = (content: string): string => receiptHash(receipt.basis.runId, content);
+        const offer = offerAt(view);
+        expect(offer, `offer @ epoch ${view.epoch}`).toEqual(EXPECTED_OFFER[view.epoch]);
         for (const served of view.tools.schemas) {
-          // The served schema carries the reserved property, byte for byte.
+          // The served schema carries the reserved property, byte for byte:
+          // the base when nothing is offered, the offer copy otherwise.
           const properties = served.inputSchema.properties as Record<string, unknown>;
-          expect(properties._findings, `${served.name} @ epoch ${view.epoch}`).toEqual(
-            FINDINGS_ARGUMENT_SCHEMA,
-          );
+          const planted = properties._findings as {
+            properties: { previous: { items: { properties: { toolCallId: { enum?: unknown } } } } };
+          };
+          if (offer.length === 0) {
+            expect(planted, `${served.name} @ epoch ${view.epoch}`).toEqual(
+              FINDINGS_ARGUMENT_SCHEMA,
+            );
+          } else {
+            expect(
+              planted.properties.previous.items.properties.toolCallId.enum,
+              `${served.name} @ epoch ${view.epoch}`,
+            ).toEqual(offer);
+          }
           expect(served.inputSchema.required ?? []).not.toContain('_findings');
           // 1. The receipt's row is the served (decorated) schema's digest.
           expect(hash(toolDigestInput(served))).toBe(receipt.tools.schemaHashes[served.name]);
           // 2. …and equals the schema REBUILT by the one decorator from the
-          //    undecorated one — decoration is `withFindingsArgument`, and
-          //    nothing else moved on the schema.
+          //    undecorated one WITH THE SAME OFFER — decoration is
+          //    `withFindingsArgument(schema, offer)`, and nothing else moved
+          //    on the schema. A served schema whose offer disagreed with the
+          //    record could not pass this line.
           const { _findings: _peeled, ...rest } = properties;
           const undecorated: LLMToolSchema = {
             ...served,
             inputSchema: { ...served.inputSchema, properties: rest },
           };
-          expect(hash(toolDigestInput(withFindingsArgument(undecorated)))).toBe(
+          expect(hash(toolDigestInput(withFindingsArgument(undecorated, offer)))).toBe(
             receipt.tools.schemaHashes[served.name],
           );
+          // …and NOT the offer-less decoration once an offer is served: the
+          // hash tells the truth about what was offered.
+          if (offer.length > 0) {
+            expect(hash(toolDigestInput(withFindingsArgument(undecorated)))).not.toBe(
+              receipt.tools.schemaHashes[served.name],
+            );
+          }
           checked += 1;
         }
         // 3. The wire carried the same decorated bytes the receipt describes.

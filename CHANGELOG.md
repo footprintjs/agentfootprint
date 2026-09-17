@@ -88,6 +88,122 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   checks it: same facts verbatim, same tool messages, same receipt count, no
   fact held), so the hold is an addition to the plan, never a rewrite of it.
 
+### Added — the ids the model may name are in the schema; the proposition before the call; a bench that can measure
+
+- The offer. On a hosted model the ask "by its tool_result id" produced
+  standings named by ORDINAL (`"0"`, `"1"`), recorded honestly as `unknownId`
+  and settling nothing (`docs/design/2026-09-findings-ledger-real-model.md`).
+  So from the second call on, the reserved `_findings` property on every
+  served schema binds the ids the model may name: `previous[].toolCallId`
+  carries `enum: <the tool results on the wire with no standing yet, newest
+  first, at most 32>` and says "one of the ids listed; a result not listed
+  cannot be named here"; a clipped list states the cap. The list is what the
+  model can still READ: a result with no standing, a `fact` (stood on in the
+  piece, served verbatim under the default mode) and an `open` result (served
+  verbatim, carrying what would settle it) stay listed, so a later call can
+  REVISE a standing — `open` → `fact` when a call settles it, `fact` →
+  `ruled-out` when a conflict resolves; the fold's last-wins law is reachable
+  through the enum. A result the model declared `noise` or `ruled-out` leaves
+  the list: it is a ticket on the wire under every serve mode and the piece
+  carries a count or one line, so there is nothing left to re-judge (a wrong
+  `ruled-out` is answered by a new call). The instruction asks the model to
+  name a result again only to change its standing. An evicted result is not
+  on the list, and the first call — with nothing to name — serves the base
+  property by reference, byte-identical to 9.101.0. ONE owner of the two sets
+  (`findings/offer.ts`: `offeredResultIds` for the enum, `undeclaredIds` for
+  the piece's `undeclared:` line — the honest absence, a subset of the offer),
+  computed at the Tools mount, where the served history and the ledger meet
+  (the slot is an isolated subflow), under the same arm that decorates; bound
+  at the ONE decoration site and committed with the tool list, so
+  `servedAt(k).tools.schemas` holds exactly what was offered and
+  `receipt.tools.schemaHashes` moves when the offer does. The law holds at
+  the schema AND at the row: the offer is what the model may COPY, never what
+  the library resolves — an id outside it still files as written, `unknownId:
+  true`, never mapped to a position or a tool name — and every id INSIDE it
+  resolves, because a standing is identified against the same served history
+  the offer was read from (`findings/offer.ts · knownResults`: the served
+  `role: 'tool'` messages plus the previous batch), so an id copied from the
+  offer files with its tool name whichever batch the result came from (the
+  first cut resolved against the last batch only, and an offered older id
+  filed as `unknownId` — caught in review, never released). The instruction
+  asks the JSON answer, which has no schema to bind, for the id exactly as
+  the schema listed it.
+- Named, not measured: from the second call on, an armed agent's tool schemas
+  vary per call (the enum), so a `'tools'` cache breakpoint cannot hit on such
+  a run and, on a prefix-cached wire, every breakpoint after it misses with
+  it — the system piece already moved the block on every declaring call
+  (step 3's recorded cost); the offer moves the tools prefix ahead of it. No
+  bench in the tree counts cache tokens; the lever not taken (the offer in
+  the request-only system piece, below the tools breakpoint — prose, which is
+  what failed on the real model) is on the design page.
+- The proposition. `FindingsDeclaration` gains `proposition?: string` (what
+  the call tests; the schema recommends it when `basis` is `'exploratory'`)
+  and `predicts?: string` (what the result should show if it holds), declared
+  on the call before its result exists; both land on the `BasisRow`, each cut
+  at 240 chars with the cut stated in the text. `FindingsDeclaredPayload`
+  gains `hasProposition?: true` — a flag, never the text. The served piece
+  quotes the judged call's own proposition on `open` and `ruled-out` lines
+  (`… — tested: <proposition>`), never on a fact line; `predicts` is
+  record-only.
+- The shuffle bench can measure (`bench/findings-shuffle.mjs`): `NOISE_AT`
+  (end / start / spread), `NOISE_SIZE` (about 250 / 1000 / 4000 tokens of
+  padding per noise record), noise values within 5% of a fact and never equal,
+  a `standing-accuracy` column (the share of the actor's standings on known
+  ids that agree with the planted truth — the harness knows the truth, so no
+  judge), and `--matrix` (24 cells for one model per invocation, the cost line
+  printed before the first call). Default mode prints the pre-packet numbers
+  to the digit and the mock smoke stays green. No hosted run was made in
+  this release; the real-model page holds the pre-offer tables and names the
+  number that must move.
+
+### Changed — `.findings()` refuses `reactMode: 'classic'`
+
+- The offer needs the tools slot recomposed every call, so `.findings()` is
+  REFUSED at build under `reactMode: 'classic'` — through both doors
+  (`.findings()` and `Agent.create({ findings })`), the `selfExplain` twin:
+  classic selects the Tools branch on turn 1 only, so an armed classic agent
+  would have served the offer-less base on every call and filed every
+  standing as `unknownId`, the number this packet exists to move silently
+  stuck at zero. 9.101.x accepted the combination and degraded it silently;
+  the message names the fix. `'dynamic'` (the default) and `'dynamic-grouped'`
+  are unchanged.
+
+### Fixed — the choice seam's enum fence read the decorated schema
+
+- Since 9.101.0, `withoutFindingsArgument` recognised the library's
+  decoration by REFERENCE only (`properties._findings ===
+  FINDINGS_ARGUMENT_SCHEMA`), and the reference never holds on the live path:
+  the served list `callLLM` reads is the committed `dynamicToolSchemas`, a
+  `structuredClone` of what the slot planted. So the choice seam's enum fence
+  (`declaredEnumValuesOf(withoutFindingsArgument(schema))`, the
+  `unsupported-argument` check) judged the model's argument values against a
+  schema that still carried `_findings`, and a value equal to one of the
+  findings vocabulary words — `direct`, `exploratory`, `low`, `medium`,
+  `high`, `fact`, `open`, `noise`, `ruled-out` — was excused as a declared
+  enum value the model was entitled to. The decoration is recognised by its
+  versioned marker now (the first sentence of the reserved property's
+  description), so the frozen base, an offer copy and a committed clone of
+  either are all peeled, and an author's own `_findings` is still read as
+  written. An armed agent may therefore file an `unsupported-argument`
+  finding it previously suppressed. Its unit test had passed because it
+  handed the function the live reference; `test/core/agent/findings/
+  reserved.test.ts` now pins the clone.
+
+### Unchanged — the unarmed agent, and the two armed references regenerated alone
+
+- An agent without `.findings()` maps no new key on the Tools mount, reads
+  neither `history` nor `findingsLedger` there, and serves and records the
+  bytes it did before: the 16 unarmed byte-identity references pass
+  untouched. `agent-findings` and `agent-findings-window` were regenerated
+  each alone (the rest copied aside and `cmp`-equal after) and their delta is
+  on the test file's header: the enum on every epoch after the first, a
+  `dynamicToolSchemas` write on each such epoch where an unchanged list used
+  to be an empty commit, the two new properties and the instruction's two new
+  lines, and the sizes that follow; regenerated once more, each alone, in the
+  second review for the revisable offer (a declared fact stays listed) and
+  the instruction's revised line. No message, ticket, ledger row, window
+  record or gap moved.
+
 ## [9.101.1] - 2026-09-16
 
 ### Fixed — the docs site's export-file ceiling

@@ -28,14 +28,15 @@ import {
   type PreviousResult,
 } from '../../../../src/core/agent/findings/ledger.js';
 import { splitFindings } from '../../../../src/core/agent/findings/reserved.js';
-import type {
-  ConflictRow,
-  DeclaredAssertion,
-  FindingsDeclaration,
-  FindingsLedger,
-  FindingsRow,
-  PreviousStanding,
-  StandingRow,
+import {
+  PROPOSITION_CHARS,
+  type ConflictRow,
+  type DeclaredAssertion,
+  type FindingsDeclaration,
+  type FindingsLedger,
+  type FindingsRow,
+  type PreviousStanding,
+  type StandingRow,
 } from '../../../../src/core/agent/findings/types.js';
 import { assertionKey } from '../../../../src/integrity/assertion/types.js';
 
@@ -369,6 +370,18 @@ describe('standingRowsFrom — identity, declaredOn, iteration', () => {
     expect(row.assertions[0].provenance).toBe('tool:call_404');
   });
 
+  it('a known result with no toolName files a row with none — resolved, never named for it', () => {
+    const [row] = standingRowsFrom(
+      [{ result: 'state: up', toolCallId: 'call_7' }],
+      declaring(fact('call_7', state('fc1/7', 'up'))),
+      ON_CALL,
+      2,
+    );
+    expect(row.unknownId).toBeUndefined();
+    expect(Object.prototype.hasOwnProperty.call(row, 'toolName')).toBe(false);
+    expect(row.assertions[0].provenance).toBe('tool:call_7');
+  });
+
   it('declaredOn is a copy of the declaring call, or the literal answer', () => {
     const [onCall] = standingRowsFrom(BATCH, declaring(fact('call_1')), ON_CALL, 2);
     expect(onCall.declaredOn).toEqual({ toolCallId: 'call_9' });
@@ -462,6 +475,78 @@ describe('basisRowFrom', () => {
 
   it('refuses to file a basis the model did not declare (never infer)', () => {
     expect(() => basisRowFrom(tc, { expect: 'high' }, 1)).toThrow(/lookup_port/);
+  });
+});
+
+describe('basisRowFrom — proposition and predicts', () => {
+  const tc = { id: 'call_9', name: 'lookup_port' };
+
+  it('files both on the row, as declared', () => {
+    const row = basisRowFrom(
+      tc,
+      {
+        basis: 'exploratory',
+        proposition: 'the optic was swapped this week',
+        predicts: 'a swap event in the maintenance log',
+      },
+      4,
+    );
+    expect(row).toEqual({
+      kind: 'basis',
+      toolCallId: 'call_9',
+      toolName: 'lookup_port',
+      iteration: 4,
+      basis: 'exploratory',
+      proposition: 'the optic was swapped this week',
+      predicts: 'a swap event in the maintenance log',
+    });
+    expect(Object.keys(row)).toEqual([
+      'kind',
+      'toolCallId',
+      'toolName',
+      'iteration',
+      'basis',
+      'proposition',
+      'predicts',
+    ]);
+  });
+
+  it('absent when not declared — never defaulted, never read off the arguments', () => {
+    const row = basisRowFrom(tc, { basis: 'exploratory' }, 1);
+    expect(Object.prototype.hasOwnProperty.call(row, 'proposition')).toBe(false);
+    expect(Object.prototype.hasOwnProperty.call(row, 'predicts')).toBe(false);
+    const only = basisRowFrom(tc, { basis: 'direct', predicts: 'p' }, 1);
+    expect(only.predicts).toBe('p');
+    expect(Object.prototype.hasOwnProperty.call(only, 'proposition')).toBe(false);
+  });
+
+  it('clips each at PROPOSITION_CHARS (240) and STATES the cut; exactly 240 is kept whole', () => {
+    expect(PROPOSITION_CHARS).toBe(240);
+    const long = 'p'.repeat(300);
+    const row = basisRowFrom(
+      tc,
+      { basis: 'direct', proposition: long, predicts: 'q'.repeat(241) },
+      1,
+    );
+    expect(row.proposition).toBe(`${'p'.repeat(240)} …[clipped 60 chars]`);
+    expect(row.predicts).toBe(`${'q'.repeat(240)} …[clipped 1 chars]`);
+    const exact = 'e'.repeat(240);
+    expect(basisRowFrom(tc, { basis: 'direct', proposition: exact }, 1).proposition).toBe(exact);
+    expect(basisRowFrom(tc, { basis: 'direct', proposition: '' }, 1).proposition).toBe('');
+  });
+
+  it('keeps the model’s newlines on the row — the piece folds them when it quotes the line', () => {
+    const row = basisRowFrom(tc, { basis: 'direct', proposition: 'two\nlines' }, 1);
+    expect(row.proposition).toBe('two\nlines');
+  });
+
+  it('from the wire: the peeled declaration carries them into the row', () => {
+    const { findings } = splitFindings({
+      port: 'fc1/7',
+      _findings: { basis: 'exploratory', proposition: 'P', predicts: 'Q' },
+    });
+    const row = basisRowFrom(tc, findings as FindingsDeclaration, 2);
+    expect([row.basis, row.proposition, row.predicts]).toEqual(['exploratory', 'P', 'Q']);
   });
 });
 
@@ -584,6 +669,40 @@ describe('recordFindings — the one writer', () => {
         },
       },
     ]);
+  });
+
+  it('a basis row with a proposition emits `hasProposition: true` — a flag, never the text', () => {
+    const scope = fakeScope();
+    recordFindings(scope, [
+      basisRowFrom(
+        { id: 'call_1', name: 'lookup_port' },
+        { basis: 'exploratory', proposition: 'SECRET-PROPOSITION', predicts: 'SECRET-PREDICTS' },
+        1,
+      ),
+      basisRowFrom({ id: 'call_2', name: 'lookup_port' }, { basis: 'direct' }, 1),
+      basisRowFrom({ id: 'call_3', name: 'lookup_port' }, { basis: 'direct', predicts: 'P' }, 1),
+    ]);
+    expect(scope.events.map((e) => e.payload)).toEqual([
+      {
+        toolName: 'lookup_port',
+        toolCallId: 'call_1',
+        iteration: 1,
+        basis: 'exploratory',
+        hasProposition: true,
+      },
+      { toolName: 'lookup_port', toolCallId: 'call_2', iteration: 1, basis: 'direct' },
+      { toolName: 'lookup_port', toolCallId: 'call_3', iteration: 1, basis: 'direct' },
+    ]);
+    for (const { payload } of scope.events) {
+      expect(payload).not.toHaveProperty('proposition');
+      expect(payload).not.toHaveProperty('predicts');
+      expect(JSON.stringify(payload)).not.toMatch(/SECRET/);
+    }
+    // the text is on the record, where redaction governs it
+    expect((scope.findingsLedger as FindingsLedger)[0]).toMatchObject({
+      proposition: 'SECRET-PROPOSITION',
+      predicts: 'SECRET-PREDICTS',
+    });
   });
 
   it('never puts an assertion value, settles, line or a ref on the event stream', () => {

@@ -430,9 +430,14 @@ function seedFrom(scope: TypedScope<AgentState>, message: string, deps: SeedStag
   scope.activatedInjectionIds = [];
   // The static fallback shares the slot's ONE decorator (9.101.0): armed, the
   // first call serves decorated schemas exactly as every later call will;
-  // unarmed, the registry list by reference, byte for byte.
+  // unarmed, the registry list by reference, byte for byte. NO OFFER here
+  // (9.102.0): at seed there is no served history and nothing to name, so the
+  // base decoration — an explicit lambda, because passed point-free `.map`
+  // would hand the index in as the offer (`reserved.ts · withFindingsArgument`).
   scope.dynamicToolSchemas =
-    deps.findings === true ? deps.toolSchemas.map(withFindingsArgument) : deps.toolSchemas;
+    deps.findings === true
+      ? deps.toolSchemas.map((s) => withFindingsArgument(s))
+      : deps.toolSchemas;
   // The forced-output tool's NAME (9.88.0) — the one fact about it that lands
   // on the record. Value-conditional: an agent on the default `'instruct'`
   // strategy writes nothing here.

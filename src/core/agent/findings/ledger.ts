@@ -39,15 +39,16 @@ import { isPlacedToolResult } from '../../../artifacts/placement.js';
 import { conflictsOf, type Conflict } from '../../../integrity/assertion/conflicts.js';
 import { assertionKey, type Assertion } from '../../../integrity/assertion/types.js';
 import { typedEmit } from '../../../recorders/core/typedEmit.js';
-import type {
-  BasisRow,
-  ConflictRow,
-  ConflictWitness,
-  DeclaredOn,
-  FindingsDeclaration,
-  FindingsLedger,
-  FindingsRow,
-  StandingRow,
+import {
+  PROPOSITION_CHARS,
+  type BasisRow,
+  type ConflictRow,
+  type ConflictWitness,
+  type DeclaredOn,
+  type FindingsDeclaration,
+  type FindingsLedger,
+  type FindingsRow,
+  type StandingRow,
 } from './types.js';
 
 /** The scope surface this file needs. Structurally a `TypedScope<AgentState>`. */
@@ -56,9 +57,14 @@ export interface FindingsScope {
   $emit(name: string, payload?: unknown): void;
 }
 
-/** One entry of the previous batch, as `AgentState.toolResults` holds it. */
+/**
+ * One result a standing may name: an entry of the previous batch as
+ * `AgentState.toolResults` holds it, or a served `role: 'tool'` message read
+ * as one (`offer.ts · knownResults`). `toolName` is absent only for a served
+ * message that carries none — never invented.
+ */
 export interface PreviousResult {
-  readonly toolName: string;
+  readonly toolName?: string;
   readonly result: string;
   readonly toolCallId: string;
 }
@@ -164,6 +170,9 @@ function emitRow(scope: FindingsScope, row: FindingsRow, newConflicts: readonly 
       iteration: row.iteration,
       basis: row.basis,
       ...(row.expect !== undefined && { expect: row.expect }),
+      // A FLAG, never the text: the proposition is model prose and stays in
+      // the committed key under the run's redaction (the payload law above).
+      ...(row.proposition !== undefined && { hasProposition: true as const }),
       ...(row.malformed !== undefined && { malformed: row.malformed }),
     });
     return;
@@ -203,22 +212,27 @@ function placedRefOf(result: string): string | undefined {
 
 /**
  * One standing row per `previous[]` entry of a declaration. Identity comes
- * from the batch by `toolCallId`; an id the batch does not hold is filed with
- * `unknownId: true` and no `toolName`. Assertions follow the stratum rule:
- * `fact` → asserted, `open` / `ruled-out` → quoted, `noise` → none; the
- * provenance is `tool:<toolCallId>`, or `artifact:<ref>` when the result was
- * placed; `epoch` is never set.
+ * from `known` by `toolCallId` — the results the run can identify, which the
+ * two call sites (the dispatch loop, the route decider) build with
+ * `offer.ts · knownResults`: the served history's tool messages plus the
+ * previous batch, the SAME history the offer was read from, so every id the
+ * offer listed resolves. An id `known` does not hold is filed with
+ * `unknownId: true` and no `toolName` — never resolved by position or by
+ * name. Assertions follow the stratum rule: `fact` → asserted,
+ * `open` / `ruled-out` → quoted, `noise` → none; the provenance is
+ * `tool:<toolCallId>`, or `artifact:<ref>` when the result was placed;
+ * `epoch` is never set.
  */
 export function standingRowsFrom(
-  previousBatch: readonly PreviousResult[],
+  known: readonly PreviousResult[],
   declaration: FindingsDeclaration,
   declaredOn: DeclaredOn,
   iteration: number,
 ): StandingRow[] {
   const on: DeclaredOn = declaredOn === 'answer' ? 'answer' : { toolCallId: declaredOn.toolCallId };
   return (declaration.previous ?? []).map((entry) => {
-    const known = previousBatch.find((r) => r.toolCallId === entry.toolCallId);
-    const ref = known === undefined ? undefined : placedRefOf(known.result);
+    const found = known.find((r) => r.toolCallId === entry.toolCallId);
+    const ref = found === undefined ? undefined : placedRefOf(found.result);
     const provenance = ref !== undefined ? `artifact:${ref}` : `tool:${entry.toolCallId}`;
     const stratum = entry.standing === 'fact' ? 'asserted' : 'quoted';
     const assertions: Assertion[] =
@@ -234,7 +248,7 @@ export function standingRowsFrom(
     return {
       kind: 'standing',
       toolCallId: entry.toolCallId,
-      ...(known !== undefined && { toolName: known.toolName }),
+      ...(found?.toolName !== undefined && { toolName: found.toolName }),
       ...(ref !== undefined && { ref }),
       standing: entry.standing,
       ...(entry.sought !== undefined && { sought: entry.sought }),
@@ -243,7 +257,7 @@ export function standingRowsFrom(
       assertions,
       declaredOn: on,
       iteration,
-      ...(known === undefined && { unknownId: true as const }),
+      ...(found === undefined && { unknownId: true as const }),
     };
   });
 }
@@ -273,6 +287,21 @@ export function basisRowFrom(
     iteration,
     basis: declaration.basis,
     ...(declaration.expect !== undefined && { expect: declaration.expect }),
+    ...(declaration.proposition !== undefined && {
+      proposition: clipText(declaration.proposition),
+    }),
+    ...(declaration.predicts !== undefined && { predicts: clipText(declaration.predicts) }),
     ...(malformed !== undefined && malformed > 0 && { malformed }),
   };
+}
+
+/**
+ * The one cut a basis row's text gets: at most `PROPOSITION_CHARS`, the
+ * overflow STATED in the text (`…[clipped N chars]`), the same statement
+ * `serve.ts · clip` makes on a served line. Nothing is folded here — the row
+ * keeps the model's newlines; the piece folds them when it quotes the line.
+ */
+function clipText(text: string): string {
+  if (text.length <= PROPOSITION_CHARS) return text;
+  return `${text.slice(0, PROPOSITION_CHARS)} …[clipped ${text.length - PROPOSITION_CHARS} chars]`;
 }

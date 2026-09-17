@@ -754,6 +754,12 @@ export interface FindingsDeclaredPayload {
   readonly iteration: number;
   readonly basis: Basis;
   readonly expect?: Expect;
+  /**
+   * The call declared a `proposition` (what it tests) — a FLAG, never the
+   * text, by the same law as `malformed`: the line itself lives on the
+   * `BasisRow` in the committed key. Absent when none was declared.
+   */
+  readonly hasProposition?: true;
   /** Malformed `_findings` entries dropped from this call's declaration. */
   readonly malformed?: number;
 }

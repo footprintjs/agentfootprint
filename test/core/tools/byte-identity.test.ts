@@ -137,6 +137,57 @@
  * the ledger rows, the piece and the decorated schemas are that scenario's
  * families.
  *
+ * 9.102.0 (findings ledger packet 6 — the OFFER): the two ARMED references
+ * `agent-findings` and `agent-findings-window` REGENERATED, each ALONE (the
+ * other 17 files copied aside first and `cmp`-equal after each run; the 16
+ * unarmed references pass untouched on the wired tree, 16/16 before the
+ * regeneration). The delta against the 9.102.0 pair, path by path: (1) the
+ * offer itself — `dynamicToolSchemas[].inputSchema.properties._findings
+ * .properties.previous.items.properties.toolCallId` gains `enum: <the served
+ * results with no standing yet, newest first>` and the "one of the ids
+ * listed" description on EVERY epoch after the first (2 enum entries over
+ * epochs 2–3 in `agent-findings`: `['c1']`, `['c2']`; 11 over epochs 2–9 in
+ * the window scenario, each epoch listing exactly the undeclared ids the
+ * window left on the wire), in the committed `dynamicToolSchemas` and the
+ * served view's `tools.schemas` alike; (2) BECAUSE the offer moves per call,
+ * the Tools mount's merge-back now WRITES `dynamicToolSchemas` on those
+ * epochs — an `overwrite.dynamicToolSchemas` entry plus one `set` trace row
+ * per epoch where 9.102.0 recorded an EMPTY commit (an unchanged decorated
+ * list was a no-op merge-back); the seed's epoch-1 list is still the base
+ * decoration and still the only write at epoch 1; (3) the findings-module
+ * stage's shape: the `proposition` / `predicts` properties on every served
+ * `_findings`, one clause on its top description, and the instruction's two
+ * new lines at every site that records it (`activeInjections`,
+ * `systemPromptInjections` with its `contentHash`, the served `system.text`
+ * and `pieces[].text`); (4) the sizes that follow — `receipt.system.chars`
+ * and the four `requestMeasurement` numbers on every call-llm commit. No
+ * message, no ticket, no ledger row, no window record, no gap and no other
+ * key moved on either reference.
+ *
+ * `agent-findings` and `agent-findings-window` REGENERATED ONCE MORE, each
+ * ALONE, in packet 6's second review (the 15 other files copied aside and
+ * `cmp`-equal after; the 16 unarmed references green before). The offer now
+ * keeps a result the model can still read — a declared FACT or OPEN result
+ * stays listed so a later call can revise it; only `noise` and `ruled-out`
+ * leave (`findings/offer.ts · offeredResultIds`, `RETIRING_STANDINGS`) — and
+ * the instruction's ninth line asks the model to name a result again only
+ * to change its standing. The delta, path by path, in FIVE families and no
+ * other: (1) the enum — `agent-findings` gains `c1` at epoch 3 (`['c2',
+ * 'c1']`, the committed `dynamicToolSchemas` and the served view's
+ * `tools.schemas` alike: 2 paths); the window scenario's enum keeps `c1`
+ * from epoch 3 on and `c3` from epoch 5 on, so `['c2', 'c1']`, then
+ * `['c3', 'c1']` after c2's noise, then `['c4', 'c3', 'c1']`, then
+ * `['c5', 'c3', 'c1']` after c4's ruled-out, and so on while the window
+ * holds both facts (24 paths); (2) the instruction's revised line at every
+ * site that records it (`activeInjections`, `systemPromptInjections` with
+ * its `contentHash`, the served `system.text` and `pieces[].text`); (3)
+ * `receipt.system.chars` / `hash`; (4) the four `requestMeasurement` numbers
+ * on every call-llm commit; (5) nothing else — 28 moved paths on
+ * `agent-findings`, 104 on the window scenario, every one in families 1–4.
+ * No message, no ticket, no ledger row, no window record and no gap moved:
+ * the scenarios' models never named a fact twice, so the record's rows are
+ * the rows they were.
+ *
  * Every scenario is a real run — the receipt-conformance shapes, each in the
  * configuration that has no name collision — and what is compared is the
  * whole `commitLog` plus `servedAt(k)` for every located epoch, after ONE

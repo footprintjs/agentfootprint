@@ -121,6 +121,7 @@ import type { ToolMiddleware } from '../middleware/types.js';
 import { runToolChain, runToolAfterChain, type ToolArgs } from '../middleware/runChain.js';
 import { recordDecisions } from '../middleware/ledger.js';
 import { ownsReservedArgument, splitFindings, type SplitFindings } from '../findings/reserved.js';
+import { knownResults } from '../findings/offer.js';
 import {
   basisRowFrom,
   recordFindings,
@@ -3141,22 +3142,30 @@ export function buildToolCallsHandler(
         toolCallId: string;
         status?: ToolResultStatus;
       }[] = [];
-      // ── STANDINGS OF THE PREVIOUS BATCH (9.101.0, `.findings()`) ──────
-      // The one place the previous batch's identities still exist on scope:
-      // `toolResults` is about to be reset one line down. Every call in this
-      // batch may carry `_findings.previous`; ALL are recorded, in call
-      // order, by the previous result's id (a served fold takes the last).
-      // Read through the same per-call peel the loop below applies (a tool
-      // that owns the name declares nothing) — this read is about the batch.
-      // Gated: unarmed, not one line runs.
+      // ── STANDINGS OF EARLIER RESULTS (9.101.0, `.findings()`) ─────────
+      // Every call in this batch may carry `_findings.previous`; ALL are
+      // recorded, in call order, by the judged result's id (a served fold
+      // takes the last). A named id is identified against the results the
+      // run can identify (`findings/offer.ts · knownResults`): the previous
+      // batch — `toolResults`, about to be reset one line down, so this is
+      // the last read of it — and every tool message on `history` as served
+      // to this call, the SAME list the offer was read from at the Tools
+      // mount, so an id copied from the offer resolves whichever batch it
+      // came from (9.102.0; before, only the last batch resolved and an
+      // offered older id filed as `unknownId`). Read through the same
+      // per-call peel the loop below applies (a tool that owns the name
+      // declares nothing). Gated: unarmed, not one line runs.
       if (deps.findings === true) {
-        const previousBatch = [...((scope.toolResults ?? []) as readonly PreviousResult[])];
+        const known = knownResults(
+          [...((scope.history as readonly LLMMessage[] | undefined) ?? [])],
+          [...((scope.toolResults ?? []) as readonly PreviousResult[])],
+        );
         recordFindings(
           scope,
           toolCalls.flatMap((tc) => {
             const declared = peelCall(tc).findings;
             return declared?.previous !== undefined
-              ? standingRowsFrom(previousBatch, declared, { toolCallId: tc.id }, iteration)
+              ? standingRowsFrom(known, declared, { toolCallId: tc.id }, iteration)
               : [];
           }),
         );

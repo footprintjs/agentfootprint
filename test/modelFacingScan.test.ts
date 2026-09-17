@@ -461,8 +461,8 @@ const LEDGER: Readonly<Record<string, readonly Entry[]>> = {
   'src/core/Agent.ts': [
     {
       kind: 'not-model-facing',
-      count: 7,
-      why: 'typed-output, option-validation and forced-tool errors thrown to the caller, plus one console warning about a cached menu',
+      count: 8,
+      why: "typed-output, option-validation and forced-tool errors thrown to the caller, the build-time refusal of `.findings()` under reactMode 'classic', plus one console warning about a cached menu",
     },
   ],
   'src/core/agent/AgentBuilder.ts': [
@@ -1058,12 +1058,17 @@ describe('every model-facing-shaped literal in src/ is accounted for', () => {
         // replacement is one explicitly request-scoped system instruction.
         // Unreleased: the neutral default menu hint now has one imperative
         // sentence caught by the scan, classified at its system-slot delivery.
+        // 9.102.0 (packet 6, second review): one host-facing refusal added —
+        // `Agent`'s constructor refuses `.findings()` under reactMode 'classic'
+        // (the tools slot is cached on turn 1, so the offer could never reach
+        // the model). Thrown to the caller at build; classified in Agent.ts's
+        // not-model-facing row (7 → 8). Same files.
         files: 94,
-        total: 180,
+        total: 181,
         registry: 8,
         ephemeral: 20,
         unrepaired: 33,
-        notModelFacing: 119,
+        notModelFacing: 120,
         unrepairedEntries: 13,
       });
       // And the ledger's own total is the number of literals the scan flagged —

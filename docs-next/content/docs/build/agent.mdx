@@ -235,6 +235,33 @@ agent.findings(); // basis, standing and conflict rows, in the order they were d
 
 There are no extra model calls, and an agent that never calls `.findings()` records exactly the bytes it recorded before.
 
+### Naming a result — the offer
+
+On a hosted model the ask "by its tool_result id" produced standings named by ordinal — `"0"`, `"1"` — which the ledger records honestly as `unknownId` and which settle nothing: a model does not copy a long opaque id out of prose, it counts. So from the second call on, the reserved `_findings` property on every served schema lists, in `previous[].toolCallId`, the ids the model may name — an `enum` of the tool results on the wire the model can still read, newest first, at most 32, and a clipped list says so in the property's description. A result with no standing, a `fact` and an `open` result stay listed, so a later call can revise a standing (`open` to `fact` once something settles it, `fact` to `ruled-out` when a conflict resolves — the ledger keeps the last standing per result); a result declared `noise` or `ruled-out` leaves the list, because it is a ticket on the wire and there is nothing left to re-judge. A result the window evicted is not on it, and the first call, with nothing to name, serves the base property unchanged. The offer is computed where the served history and the ledger meet, bound into the schema at the one decoration site and committed with the tool list, so `servedAt(snapshot, k).tools.schemas` carries exactly what was offered at call `k` and the receipt's schema hash moves when the offer does. What the model may copy is not what the library resolves: an id outside the offer is still filed as written, with `unknownId: true`, never mapped to a position or a tool name — and every id inside the offer resolves, because a standing is identified against the same served history the offer was read from, whichever call produced the result. A JSON answer has no schema to bind, so the instruction asks for the id exactly as the schema listed it, and standings declared there are counted apart.
+
+Two things this costs. `.findings()` needs the tools slot rebuilt every call, so it is refused at build under `reactMode: 'classic'`, which caches that slot after the first turn; use the default `dynamic` mode or `dynamic-grouped`. And because the enum moves with the run, an armed agent's tool schemas differ from call to call, so a prompt-cache breakpoint placed on the tools block cannot hit on such a run and the breakpoints after it miss with it; no number for that trade has been measured, and the design page names the alternative not taken.
+
+```json
+{ "type": "string", "enum": ["toolu_01X…", "toolu_01W…"],
+  "description": "The tool_result id being judged — one of the ids listed; a result not listed cannot be named here." }
+```
+
+### What the call set out to test — `proposition` and `predicts`
+
+A `FindingsDeclaration` may carry two optional one-line strings on the call itself, written before its result exists: `proposition`, what the call tests (the schema recommends it when `basis` is `exploratory`), and `predicts`, what the result should show if the proposition holds. Both land on the `BasisRow`, each cut at 240 characters with the cut stated in the text; the `agentfootprint.findings.declared` event carries `hasProposition: true` and never the text. On the served piece an `open` or `ruled-out` line quotes the judged call's own proposition after the model's words, so what was ruled out reads against what the model set out to test rather than against hindsight; a fact line does not repeat it, and `predicts` is record-only. Nothing is inferred: no proposition declared, no `tested:` on the line.
+
+```ts
+// The model's third call, as sent: a basis with a proposition, and the previous result's standing.
+{ name: 'search_logs', args: { q: 'fc1/7', _findings: {
+    basis: 'exploratory',
+    proposition: 'the optic was swapped during the maintenance window',
+    predicts: 'a swap entry for fc1/7 in the change log',
+    previous: [{ toolCallId: 'toolu_01W…', standing: 'fact', assertions: [/* … */] }],
+} } }
+// …and the line the answer turn is later served, once the model rules it out:
+// ruled out (search_logs, tool:toolu_01X…): no swap entry this week — tested: the optic was swapped during the maintenance window
+```
+
 ### What the answer turn is served
 
 Once the model has declared at least one standing, every later call is served the ledger as a system piece composed from the record: the context contract's `facts`, `limitations`, `evidenceRefs` and `nextSteps`, each bucket marked as declared by the model and quoting the declaration, then `noise` as a count and the results nobody named listed as undeclared — never as open. On the wire, and only on the wire, a tool result the model judged `noise` or `ruled-out` is replaced by a short ticket, `{ collapsed: true, standing, toolCallId }`, in place of its content. `open` and undeclared results are served in full, nothing is dropped or reordered, and `history` never changes, so the record still holds every result. `servedAt(snapshot, k)` rebuilds exactly what went out — the piece is the entry with `source: 'findings'` in `system.pieces` — and the receipt hashes it.

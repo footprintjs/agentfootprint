@@ -19,6 +19,17 @@
  *   - Never coerce, never infer: a field that fails its enum check is dropped
  *     and COUNTED (`malformed`), never defaulted. An absent declaration stays
  *     absent — `splitFindings` returns no `findings` for it.
+ *   - `FINDINGS_ARGUMENT_SCHEMA` is the frozen base and is never edited. The
+ *     OFFER (`withFindingsArgument`'s second argument — the ids of served
+ *     results the model can still read: no standing, `fact` or `open`,
+ *     newest first; `offer.ts · offeredResultIds`) is a rebuilt copy per call
+ *     whose `previous.items.properties.toolCallId` carries `enum: offer`; an
+ *     empty offer serves the base by reference. The offer is what the model
+ *     may COPY, never what the library resolves: an id outside it is still
+ *     recorded as the model wrote it (`ledger.ts · standingRowsFrom`,
+ *     `unknownId: true`), never mapped to a position — and every id inside
+ *     it resolves, because the rows are identified against the same served
+ *     history the offer was read from (`offer.ts · knownResults`).
  *
  * Both model-facing strings here (`FINDINGS_INSTRUCTION` and the schema's
  * description) say what the model may DO and never what the library
@@ -75,12 +86,33 @@ function deepFreeze<T>(value: T): T {
 const FINDINGS_DESCRIPTION =
   'Findings v1 (reserved by the agent runtime). basis: why you make the call — ' +
   "'direct' when you expect the result to answer what you are after, 'exploratory' " +
-  'when you are looking. expect: how useful you expect the result to be. previous: ' +
+  'when you are looking. expect: how useful you expect the result to be. proposition ' +
+  'and predicts (optional, one line each): what the call tests, and what the result ' +
+  'should show if that holds. previous: ' +
   'the standing of each earlier tool result, by its tool_result id — ' +
   "'fact' with the assertions you stand on (subject kind and id, predicate, value), " +
   "'open' with what would settle it, 'ruled-out' with one line naming what was ruled " +
   "out, 'noise' with nothing. On the record a fact's assertions are asserted, an open " +
   "or ruled-out result's are quoted, and noise carries none.";
+
+/**
+ * The first sentence of `FINDINGS_DESCRIPTION` — the versioned marker by which
+ * `withoutFindingsArgument` recognises the library's decoration when the
+ * reference is gone (a committed tool list is a `structuredClone`; see there).
+ */
+const FINDINGS_MARKER = 'Findings v1 (reserved by the agent runtime).';
+
+/** The description of `previous[].toolCallId` when an offer is served — see `withFindingsArgument`. */
+const OFFERED_ID_DESCRIPTION =
+  'The tool_result id being judged — one of the ids listed; a result not listed cannot be ' +
+  'named here.';
+
+/**
+ * How many ids an offer lists at most: the newest results the model may
+ * still name come first, and a clipped offer says so in the property's
+ * description.
+ */
+export const FINDINGS_OFFER_CAP = 32;
 
 /**
  * The JSON schema of the reserved property — frozen, served as-is, and NEVER
@@ -102,6 +134,18 @@ export const FINDINGS_ARGUMENT_SCHEMA: PlainObject = deepFreeze({
       type: 'string',
       enum: [...EXPECT_VALUES],
       description: 'How useful you expect the result to be.',
+    },
+    proposition: {
+      type: 'string',
+      description:
+        "Optional, recommended when basis is 'exploratory': one line naming what the call " +
+        'tests.',
+    },
+    predicts: {
+      type: 'string',
+      description:
+        'Optional, with proposition: one line naming what the result should show if the ' +
+        'proposition holds.',
     },
     previous: {
       type: 'array',
@@ -154,14 +198,19 @@ export const FINDINGS_INSTRUCTION = [
   "`_findings.basis` on each call: 'direct' when you expect the result to answer what you are " +
     "after, 'exploratory' when you are looking; add `expect` ('low' | 'medium' | 'high') for how " +
     'useful you expect it to be.',
+  'Before an exploratory call, add `proposition` (what the call tests) and `predicts` (what the ' +
+    'result should show if it holds) — optional, one line each.',
   'On your next tool call — or, when you answer in JSON, as a top-level `_findings.previous` — ' +
     'state the standing of each previous tool result by its tool_result id:',
   "- 'fact' with the assertions you stand on (subject kind and id, predicate, value);",
   "- 'open' with what would settle it (`settles`);",
   "- 'ruled-out' with one line naming what was ruled out (`line`);",
   "- 'noise' with nothing.",
-  'Never restate a result in a standing. A result you leave unnamed has no standing; leave it ' +
-    'unnamed rather than guess.',
+  'Never restate a result in a standing. Name a result again only to change its standing; a ' +
+    'result you never name has no standing — leave it unnamed rather than guess.',
+  "Name a result by the id exactly as it appears in the tool schema's list for " +
+    "`previous[].toolCallId` — the provider's tool_result id copied whole, never a position or " +
+    'a count.',
 ].join('\n');
 
 // ─── The decorator ─────────────────────────────────────────────────────
@@ -181,38 +230,115 @@ export function ownsReservedArgument(schema: LLMToolSchema | undefined): boolean
 }
 
 /**
+ * The reserved property with an OFFER bound into it: a rebuilt, deep-frozen
+ * copy of `FINDINGS_ARGUMENT_SCHEMA` whose `previous.items.properties.toolCallId`
+ * carries `enum: <the offer, at most FINDINGS_OFFER_CAP ids>` and a
+ * description saying so — the model copies an allowed value instead of
+ * counting. Key order is the base's (an overwritten key keeps its slot), so
+ * the only bytes that move between two offers are the enum and, when
+ * clipped, the cap sentence. The base constant is never touched.
+ */
+function offeredFindingsSchema(offer: readonly string[]): PlainObject {
+  const listed = offer.slice(0, FINDINGS_OFFER_CAP);
+  const beyond = offer.length - listed.length;
+  const description =
+    beyond === 0
+      ? OFFERED_ID_DESCRIPTION
+      : `${OFFERED_ID_DESCRIPTION} The ${listed.length} newest results you may still name are ` +
+        `listed; ${beyond} older ${beyond === 1 ? 'one is' : 'ones are'} not ` +
+        `(cap ${FINDINGS_OFFER_CAP}).`;
+  const base = FINDINGS_ARGUMENT_SCHEMA.properties as PlainObject;
+  const previous = base.previous as PlainObject;
+  const items = previous.items as PlainObject;
+  const itemProperties = items.properties as PlainObject;
+  return deepFreeze({
+    ...FINDINGS_ARGUMENT_SCHEMA,
+    properties: {
+      ...base,
+      previous: {
+        ...previous,
+        items: {
+          ...items,
+          properties: {
+            ...itemProperties,
+            toolCallId: { type: 'string', enum: listed, description },
+          },
+        },
+      },
+    },
+  });
+}
+
+/**
  * A REBUILT copy of the schema with `_findings` among its properties, leaving
  * `required` and `additionalProperties` exactly as the author wrote them.
  * Returns the SAME reference when `properties._findings` already exists —
  * the author's property wins and is recorded by the committed schema itself;
  * that same rule is what makes the decorator idempotent.
+ *
+ * `offer` — the ids of the served tool results the model may still name (no
+ * standing, `fact` or `open` — never `noise` or `ruled-out`), newest first,
+ * each once (`offer.ts · offeredResultIds` is the one producer). Non-empty,
+ * the planted property is `offeredFindingsSchema(offer)`;
+ * empty or absent (the first call; everything declared; the seed fallback,
+ * which has no history), it is `FINDINGS_ARGUMENT_SCHEMA` by reference —
+ * byte-identical to the offer-less decoration. Always call with an explicit
+ * lambda (`schemas.map((s) => withFindingsArgument(s, offer))`): passed
+ * point-free to `.map`, the index would arrive as the offer — the compiler
+ * refuses that (TS2345), on purpose. At RUNTIME a non-array offer counts as
+ * no offer, so a JavaScript caller that makes that mistake serves the base
+ * decoration instead of crashing every armed run at seed; the compiler is
+ * the guard, this is the floor.
  */
-export function withFindingsArgument(schema: LLMToolSchema): LLMToolSchema {
+export function withFindingsArgument(
+  schema: LLMToolSchema,
+  offer: readonly string[] = [],
+): LLMToolSchema {
   if (ownsReservedArgument(schema)) return schema;
   const properties = schema.inputSchema.properties;
   const existing = isPlainObject(properties) ? properties : undefined;
+  const ids = Array.isArray(offer) ? offer : [];
+  const planted = ids.length === 0 ? FINDINGS_ARGUMENT_SCHEMA : offeredFindingsSchema(ids);
   return {
     ...schema,
     inputSchema: {
       ...schema.inputSchema,
-      properties: { ...(existing ?? {}), [RESERVED_ARGUMENT]: FINDINGS_ARGUMENT_SCHEMA },
+      properties: { ...(existing ?? {}), [RESERVED_ARGUMENT]: planted },
     },
   };
 }
 
 /**
+ * True for the library's decoration and for nothing an author wrote: the
+ * frozen base by reference, or any value — an offer copy, a `structuredClone`
+ * of either — whose description opens with the versioned `FINDINGS_MARKER`.
+ * The reference alone is not enough on the live path: the served list is the
+ * committed `dynamicToolSchemas`, a clone of what `withFindingsArgument`
+ * planted (`callLLM · registeredToolSchemas`), so it never holds there.
+ */
+function isFindingsDecoration(value: unknown): boolean {
+  if (value === FINDINGS_ARGUMENT_SCHEMA) return true;
+  return (
+    isPlainObject(value) &&
+    typeof value.description === 'string' &&
+    value.description.startsWith(FINDINGS_MARKER)
+  );
+}
+
+/**
  * The served `inputSchema` WITHOUT the library's decoration: when
- * `properties._findings` is `FINDINGS_ARGUMENT_SCHEMA` itself (the reference
- * `withFindingsArgument` planted), a rebuilt copy minus that property;
- * otherwise the SAME reference — an author's own `_findings` is not the
- * decoration and is read as written. Asked by readers that judge the model's
- * ARGUMENTS against the schema (`callLLM` · the choice seam's enum fence), so
- * the reserved words (`direct`, `fact`, `noise`, …) never excuse a value.
+ * `properties._findings` is the decoration (`isFindingsDecoration` — the
+ * base, an offer copy, or a committed clone of either), a rebuilt copy minus
+ * that property; otherwise the SAME reference — an author's own `_findings`
+ * is not the decoration and is read as written. Asked by readers that judge
+ * the model's ARGUMENTS against the schema (`callLLM` · the choice seam's
+ * enum fence), so the reserved words (`direct`, `fact`, `noise`, …) and the
+ * offered ids never excuse a value.
  */
 export function withoutFindingsArgument(inputSchema: unknown): unknown {
   if (!isPlainObject(inputSchema)) return inputSchema;
   const properties = inputSchema.properties;
-  if (!isPlainObject(properties) || properties[RESERVED_ARGUMENT] !== FINDINGS_ARGUMENT_SCHEMA) {
+  if (!isPlainObject(properties) || !isFindingsDecoration(properties[RESERVED_ARGUMENT])) {
     return inputSchema;
   }
   const { [RESERVED_ARGUMENT]: _decoration, ...rest } = properties;
@@ -290,13 +416,29 @@ function readPrevious(raw: unknown): { entry?: PreviousStanding; malformed: numb
 function readDeclaration(raw: unknown): ReadDeclaration {
   if (!isPlainObject(raw)) return { malformed: 1 };
   let malformed = 0;
-  const out: { basis?: Basis; expect?: Expect; previous?: PreviousStanding[] } = {};
+  const out: {
+    basis?: Basis;
+    expect?: Expect;
+    proposition?: string;
+    predicts?: string;
+    previous?: PreviousStanding[];
+  } = {};
   if (raw.basis !== undefined) {
     if (isOneOf<Basis>(raw.basis, BASIS_VALUES)) out.basis = raw.basis;
     else malformed += 1;
   }
   if (raw.expect !== undefined) {
     if (isOneOf<Expect>(raw.expect, EXPECT_VALUES)) out.expect = raw.expect;
+    else malformed += 1;
+  }
+  // The two one-line texts: a string is kept as written (the ROW clips, not
+  // the peel — `ledger.ts · basisRowFrom`); anything else is dropped and counted.
+  if (raw.proposition !== undefined) {
+    if (typeof raw.proposition === 'string') out.proposition = raw.proposition;
+    else malformed += 1;
+  }
+  if (raw.predicts !== undefined) {
+    if (typeof raw.predicts === 'string') out.predicts = raw.predicts;
     else malformed += 1;
   }
   if (raw.previous !== undefined) {
@@ -312,7 +454,11 @@ function readDeclaration(raw: unknown): ReadDeclaration {
     }
   }
   const readable =
-    out.basis !== undefined || out.expect !== undefined || out.previous !== undefined;
+    out.basis !== undefined ||
+    out.expect !== undefined ||
+    out.proposition !== undefined ||
+    out.predicts !== undefined ||
+    out.previous !== undefined;
   return { ...(readable && { declaration: out }), malformed };
 }
 

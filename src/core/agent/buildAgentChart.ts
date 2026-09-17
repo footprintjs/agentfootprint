@@ -58,6 +58,8 @@ import { memoryInjectionKey, retrievalEvidenceKey } from '../../memory/define.ty
 import { unwrapMemoryFlowChart } from '../../memory/define.js';
 import { mountMemoryRead, mountMemoryWrite } from '../../memory/wire/mountMemoryPipeline.js';
 import { withMemoryRecall } from './memoryRecallInjections.js';
+import { offeredResultIds } from './findings/offer.js';
+import type { FindingsLedger } from './findings/types.js';
 import { breakFinalStage, breakFinalWithValidationStage } from './stages/breakFinal.js';
 import {
   prepareFinalStage,
@@ -280,6 +282,21 @@ export interface AgentChartDeps {
    * accepted here so both builders take identical deps.
    */
   readonly hasEscalation?: boolean;
+
+  /**
+   * The findings ledger is armed (`.findings()`; 9.102.0 for this dep).
+   * Gates the OFFER on the Tools branch's `inputMapper`: the ids of the
+   * served tool results the model may still name (no standing, `fact` or
+   * `open` — never `noise` or `ruled-out`), newest first, computed by the
+   * ONE producer `findings/offer.ts · offeredResultIds` from
+   * `parent.history` (the served list — the window stage has already run)
+   * and `parent.findingsLedger`, handed to the slot as `findingsOffer`. The
+   * tools slot is an isolated subflow that never sees either key, so the
+   * mount is the only place the two meet. Absent — the default — the mount
+   * maps exactly the keys it always did and reads neither key; the slot's
+   * own gate (`ToolsSlotConfig.findings`) decorates nothing.
+   */
+  readonly hasFindingsLedger?: boolean;
 
   /**
    * ReAct loop semantics. `'dynamic'` (default) re-runs the InjectionEngine +
@@ -694,6 +711,19 @@ export function buildAgentChart(deps: AgentChartDeps): FlowChart {
         // the subflow; the slot writes the fresh list under the base key).
         ...(parent.integrityFindingIds !== undefined && {
           priorIntegrityFindingIds: parent.integrityFindingIds,
+        }),
+        // The findings OFFER (9.102.0), under the arm only: the served
+        // results the model may still name, newest first, from `history` as the
+        // window stage left it (COMPACT runs before this fan-out, so this is
+        // the list `callLLM` serves — the collapse never changes an id) and
+        // the ledger as it stands at this call. The slot binds it into
+        // `previous[].toolCallId`'s enum at the one decoration site. An
+        // unarmed agent maps neither key and this key never exists.
+        ...(deps.hasFindingsLedger === true && {
+          findingsOffer: offeredResultIds(
+            (parent.history as readonly LLMMessage[] | undefined) ?? [],
+            parent.findingsLedger as FindingsLedger | undefined,
+          ),
         }),
         // The slot subflow reads these to build the per-iteration
         // ToolDispatchContext when an external `.toolProvider()` is

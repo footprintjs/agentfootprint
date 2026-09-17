@@ -574,3 +574,89 @@ describe('served from the ledger — the typed surface says what ships', () => {
     expect(nestedFactsField).toMatch(/keepLedgerFacts/);
   });
 });
+
+// ─── 9. the proposition (9.102.0): what the call set out to test ────
+
+describe("served from the ledger — a ruled-out line quotes the judged call's own proposition", () => {
+  // The script above with two calls declaring what they TEST before their
+  // result exists: c3 (`open` later) and c4 (`ruled-out` later). The piece
+  // quotes each judged call's own proposition after the model's words —
+  // `… — tested: <proposition>` — on the open and ruled-out lines only; a
+  // fact line stands on its assertions and `predicts` is record-only.
+  const TESTING: readonly Reply[] = DECLARING.map((reply) => {
+    const tc = reply.toolCalls?.[0];
+    if (tc?.id === 'c3') {
+      const args = tc.args as { _findings: object };
+      return call('c3', 'alpha_tool', {
+        ...tc.args,
+        _findings: { ...args._findings, proposition: 'p2 has a log entry' },
+      });
+    }
+    if (tc?.id === 'c4') {
+      const args = tc.args as { _findings: object };
+      return call('c4', 'alpha_tool', {
+        ...tc.args,
+        _findings: {
+          ...args._findings,
+          proposition: 'p2 is on switch B',
+          predicts: 'the switch inventory lists p2 under B',
+        },
+      });
+    }
+    return reply;
+  });
+
+  it('the piece at the answer call reads `ruled out (…): <line> — tested: <proposition>`; open the same; facts never', async () => {
+    const r = await run('dynamic', TESTING, armed);
+    const at6 = findingsPieceOf(r, 6)!.text;
+    expect(at6).toContain(
+      'ruled out (alpha_tool, tool:c4): p2 is not on switch B — tested: p2 is on switch B',
+    );
+    expect(at6).toContain(
+      'open (alpha_tool, tool:c3) · settles: the log for p2 — tested: p2 has a log entry',
+    );
+    // A fact line does not repeat it; `predicts` never reaches the piece;
+    // the proposition is the JUDGED call's, not the declaring call's (c5
+    // declared c4's standing and wrote no proposition of its own).
+    expect(at6).toContain('port/p1 · state = down ← tool:c1\n');
+    expect(at6).not.toContain('state = down ← tool:c1 — tested');
+    expect(at6).not.toContain('switch inventory');
+    // The nextSteps proposal is the model's `settles`, unadorned.
+    expect(at6).toContain('the log for p2 (to settle tool:c3)\n');
+    // The wire carried the same bytes the rebuild composed.
+    expect(r.wire[5]!.systemPrompt!.endsWith(at6)).toBe(true);
+  });
+
+  it('the record holds both texts on the basis row; the event carries only the flag', async () => {
+    const declared: Array<Record<string, unknown>> = [];
+    const { provider, wire } = scripted(TESTING);
+    const agent = armed(
+      Agent.create({ provider: provider as never, model: 'mock', maxIterations: 8 }),
+    ).build();
+    agent.on('agentfootprint.findings.declared', (e) => {
+      declared.push(e.payload as unknown as Record<string, unknown>);
+    });
+    await agent.run({ message: 'which port is down?' });
+    void wire;
+    const rows = (agent.getSnapshot()!.sharedState as Partial<AgentState>).findingsLedger!;
+    const basis = rows.filter((row) => row.kind === 'basis');
+    expect(basis.find((row) => row.toolCallId === 'c3')).toMatchObject({
+      proposition: 'p2 has a log entry',
+    });
+    expect(basis.find((row) => row.toolCallId === 'c3')).not.toHaveProperty('predicts');
+    expect(basis.find((row) => row.toolCallId === 'c4')).toMatchObject({
+      proposition: 'p2 is on switch B',
+      predicts: 'the switch inventory lists p2 under B',
+    });
+    expect(basis.find((row) => row.toolCallId === 'c1')).not.toHaveProperty('proposition');
+    const c4 = declared.find((p) => p.toolCallId === 'c4')!;
+    expect(c4.hasProposition).toBe(true);
+    expect(JSON.stringify(c4)).not.toContain('switch');
+    expect(declared.find((p) => p.toolCallId === 'c1')).not.toHaveProperty('hasProposition');
+  });
+
+  it('no proposition declared, no `tested:` anywhere on the piece', async () => {
+    const r = await run('dynamic', DECLARING, armed);
+    expect(findingsPieceOf(r, 6)!.text).not.toContain('tested:');
+  });
+});

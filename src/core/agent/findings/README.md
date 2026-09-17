@@ -2,9 +2,12 @@
 call, a standing on each previous result after.
 Map: `types.ts` (the reserved name, the vocabularies, the row shapes).
 Walker: `reserved.ts` — the decorator that adds `_findings` to a served
-schema and the two peels that take it back off before anything else reads
-the model's words; `serve.ts` — the piece and the collapse the wire serves
-from the record.
+schema (with the OFFER of ids the model may name) and the two peels that
+take it back off before anything else reads the model's words; `offer.ts` —
+the one owner of the offer (served results the model can still read: no
+standing, `fact` or `open`), of the piece's `undeclared:` set, and of the
+identity source a standing resolves against; `serve.ts` — the piece and the
+collapse the wire serves from the record.
 Trace: `ledger.ts` — one writer for one committed key
 (`AgentState.findingsLedger`), plus the fold that reads it.
 
@@ -102,9 +105,11 @@ foldLedger(scope.findingsLedger!).standingOf.get('call_1')?.standing; // 'fact'
 ## What it reads / what it writes
 
 - Reads a tool call's args (`splitFindings`), a JSON answer
-  (`peelAnswerFindings`), the previous batch's `toolResults` entries, and a
-  placed result's ticket through `artifacts/placement.ts · isPlacedToolResult`
-  — the one guarded parse, of a string the library minted.
+  (`peelAnswerFindings`), the results the run can identify — the served
+  history's `role: 'tool'` messages plus the previous batch's `toolResults`
+  entries (`offer.ts · knownResults`) — and a placed result's ticket through
+  `artifacts/placement.ts · isPlacedToolResult` — the one guarded parse, of a
+  string the library minted.
 - Writes `findingsLedger` through `recordFindings` only, a fresh array per
   write; emits `agentfootprint.findings.declared` and
   `agentfootprint.findings.standing` — identities, enums and counts, never a
@@ -232,17 +237,107 @@ is this folder's first: never infer; the standing is the model's claim.
 Measured on the long-run table of `npm run bench:findings`; the design page §
 Step 4 has the print.
 
+## The offer (packet 6)
+
+Why: on a hosted model the ask "by its tool_result id" produced standings
+named by ORDINAL — `"0"`, `"1"` — recorded honestly as `unknownId` and
+settling nothing (`docs/design/2026-09-findings-ledger-real-model.md`). A
+model does not copy a long opaque id out of prose; it copies an enum member.
+So `withFindingsArgument(schema, offer)` takes the OFFER — the ids of the
+served tool results the model can still READ, newest first, from the one
+producer `offer.ts · offeredResultIds(messages, rows)` — and, when it is
+non-empty, plants a rebuilt copy of the reserved property whose
+`previous[].toolCallId` carries `enum: offer` and says "one of the ids
+listed; a result not listed cannot be named here". At most
+`FINDINGS_OFFER_CAP` (32) ids are listed and a clipped offer says so in the
+same description. An empty offer (the first call; everything retired; the
+seed fallback, which has no history) serves `FINDINGS_ARGUMENT_SCHEMA` by
+reference, byte-identical to before. The frozen base is never edited.
+
+What the offer holds is what the model can still read, so a standing can be
+REVISED: a result with no standing (served verbatim), a `fact` (its
+assertions in the piece, the result verbatim under the default mode) and an
+`open` result (verbatim, carrying `settles`) stay listed — `open` → `fact`
+when a later call settles it, `fact` → `ruled-out` when a conflict resolves;
+the fold's last-wins law is reachable through the enum. A `noise` or
+`ruled-out` result leaves the offer (`RETIRING_STANDINGS`): it is a ticket on
+the wire under every serve mode and the piece carries a count or one line,
+so there is nothing left to re-judge — a wrong `ruled-out` is answered by a
+new call and a standing on its result. The instruction asks the model to
+name a result again only to change its standing. The piece's `undeclared:`
+line reads a SUBSET of the offer (`offer.ts · undeclaredIds`, wire order —
+the honest absence: no standing at all), from the same served ids, so the
+two cannot disagree about what is undeclared.
+
+The law holds at the schema and at the row. The offer is what the model may
+COPY, never what the library resolves — an id outside it is still filed
+exactly as written, `unknownId: true`, never mapped to a position. And every
+id INSIDE it resolves: `standingRowsFrom` identifies a named id against
+`offer.ts · knownResults(history, previousBatch)` — the served history's
+`role: 'tool'` messages plus the previous batch — the SAME history the offer
+was read from, so an id copied from the offer files with its tool name
+whichever batch the result came from. (The first cut resolved against the
+last batch only; an offered id from an earlier batch filed as `unknownId`.
+Pinned by `findings-ledger.test.ts` § 13: a model that names every offered
+id at every call files no `unknownId`, on both chart shapes.)
+
+```ts
+import { knownResults, offeredResultIds } from './offer.js';
+import { withFindingsArgument } from './reserved.js';
+
+// Call 3: c1 was declared a fact on call 2 (it stays — revisable); c2 has no standing.
+const offer = offeredResultIds(history, scope.findingsLedger); // ['c2', 'c1']
+const served = schemas.map((s) => withFindingsArgument(s, offer)); // enum: ['c2', 'c1']
+
+// The rows resolve against the same history — c1 is two batches back and still resolves.
+recordFindings(scope, standingRowsFrom(knownResults(history, previousBatch), findings, on, iteration));
+```
+
+`.findings()` is refused at build under `reactMode: 'classic'` (both doors,
+the `selfExplain` twin): classic selects the Tools branch on turn 1 only, so
+an armed classic agent would serve the offer-less base on every call and file
+every standing as `unknownId` — a silent degrade of the number the offer
+exists to move. Named, not measured: the enum makes an armed agent's tool
+schemas vary per call from the second call on, so a `'tools'` cache
+breakpoint cannot hit on such a run; the design page § Packet 6 has the
+trade.
+
+## The proposition (packet 6)
+
+Why: a `ruled-out` line says what was ruled out, but not what the call set
+out to test — and a proposition written AFTER the result is hindsight. So a
+declaration may carry two optional one-line strings, declared on the call
+itself before its result exists: `proposition` (what the call tests;
+recommended when `basis` is `'exploratory'`) and `predicts` (what the result
+should show if it holds). `basisRowFrom` files both on the `BasisRow`, each
+cut at `PROPOSITION_CHARS` (240) with the cut stated in the text; the
+`findings.declared` event carries `hasProposition: true` — a flag, never the
+text. On the served piece an `open` or `ruled-out` line quotes the judged
+call's own proposition after the model's words (`… — tested: <proposition>`);
+a fact line does not repeat it, and `predicts` is record-only. Nothing is
+inferred: no proposition declared, no `tested:` on the line.
+
+```
+limitations (declared by the model):
+ruled out (search_logs, tool:call_4): the optic was not swapped this week — tested: the optic was swapped during the maintenance window
+```
+
 ## Files
 
-- `types.ts` — `RESERVED_ARGUMENT`, the vocabularies, `FindingsDeclaration`
-  (the wire), `BasisRow` / `StandingRow` / `ConflictRow` (the record).
-- `reserved.ts` — `FINDINGS_ARGUMENT_SCHEMA`, `withFindingsArgument`,
-  `splitFindings`, `peelAnswerFindings`, `FINDINGS_INSTRUCTION`.
+- `types.ts` — `RESERVED_ARGUMENT`, the vocabularies, `PROPOSITION_CHARS`,
+  `FindingsDeclaration` (the wire), `BasisRow` / `StandingRow` / `ConflictRow`
+  (the record).
+- `reserved.ts` — `FINDINGS_ARGUMENT_SCHEMA`, `FINDINGS_OFFER_CAP`,
+  `withFindingsArgument`, `withoutFindingsArgument`, `splitFindings`,
+  `peelAnswerFindings`, `FINDINGS_INSTRUCTION`.
+- `offer.ts` — `offeredResultIds`, `nameableIds`, `undeclaredIds`,
+  `servedToolCallIds`, `knownResults`, `RETIRING_STANDINGS`.
 - `ledger.ts` — `recordFindings`, `foldLedger`, `standingRowsFrom`,
   `basisRowFrom`.
-- `serve.ts` — `findingsLedgerPiece`, `collapseJudged`, `servedToolCallIds`,
-  `isCollapsedToolResult`, `FINDINGS_PIECE_LIMITS`, `FindingsServeMode`
-  (internal path only; no barrel names them).
+- `serve.ts` — `findingsLedgerPiece`, `collapseJudged`, `servedToolCallIds`
+  (re-exported from `offer.ts`), `isCollapsedToolResult`,
+  `FINDINGS_PIECE_LIMITS`, `FindingsServeMode` (internal path only; no
+  barrel names them).
 
 Design: `docs/design/2026-09-findings-ledger.md`; the spec of record is
 `docs/design/2026-09-findings-ledger-spec.md`.

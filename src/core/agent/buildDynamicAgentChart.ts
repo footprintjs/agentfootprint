@@ -63,6 +63,8 @@ import { memoryInjectionKey, retrievalEvidenceKey } from '../../memory/define.ty
 import { unwrapMemoryFlowChart } from '../../memory/define.js';
 import { mountMemoryRead, mountMemoryWrite } from '../../memory/wire/mountMemoryPipeline.js';
 import { withMemoryRecall } from './memoryRecallInjections.js';
+import { offeredResultIds } from './findings/offer.js';
+import type { FindingsLedger } from './findings/types.js';
 import { breakFinalStage, breakFinalWithValidationStage } from './stages/breakFinal.js';
 import {
   prepareFinalStage,
@@ -430,6 +432,19 @@ export function buildDynamicAgentChart(deps: AgentChartDeps): FlowChart {
         // the subflow; the slot writes the fresh list under the base key).
         ...(parent.integrityFindingIds !== undefined && {
           priorIntegrityFindingIds: parent.integrityFindingIds,
+        }),
+        // The findings OFFER (9.102.0), under the arm only — the flat chart's
+        // line, read INSIDE sf-llm-call: `history` here is `dynamicTurnSeed`'s
+        // copy of the boundary's `priorHistory` (the window stage ran on the
+        // outer chart before the boundary), and `findingsLedger` is the
+        // boundary's own input (threaded value-conditionally below, the
+        // step-3 lesson), so both are this call's. See `AgentChartDeps.
+        // hasFindingsLedger`.
+        ...(deps.hasFindingsLedger === true && {
+          findingsOffer: offeredResultIds(
+            (parent.history as readonly LLMMessage[] | undefined) ?? [],
+            parent.findingsLedger as FindingsLedger | undefined,
+          ),
         }),
         activatedInjectionIds: parent.activatedInjectionIds as readonly string[] | undefined,
         runIdentity: parent.runIdentity as

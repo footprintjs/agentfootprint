@@ -31,7 +31,24 @@
  * (the `role: 'tool'` ids in wire order) as the second argument. Both the
  * wire and the rebuild derive it from the same message list; a caller that
  * passes nothing gets a piece with no `undeclared` line, which is the same
- * omission rule the other buckets follow.
+ * omission rule the other buckets follow. The set itself — served ids minus
+ * ids with a current standing — has ONE owner, `offer.ts · undeclaredIds`.
+ * The schema's OFFER (`offer.ts · offeredResultIds`, newest first) is that
+ * set PLUS the ids the model can still read and revise — a current `fact` or
+ * `open` — read off the same served ids by the same owner, so the piece and
+ * the schema cannot disagree about what is undeclared, and the undeclared
+ * line is always a subset of what the schema lists.
+ *
+ * ## The proposition
+ *
+ * A basis row may carry the `proposition` the model declared BEFORE the call
+ * (`_findings.proposition`, one line: what the call tests). An `open` or
+ * `ruled-out` line quotes it after the model's own words — `… — tested:
+ * <proposition>` — so what was ruled out, or left open, reads against what
+ * the model set out to test rather than against hindsight. It is the model's
+ * text, quoted as declared, under a bucket already headed "declared by the
+ * model"; the piece never composes one. A fact line does not repeat it (a
+ * fact stands on its assertions), and `predicts` is record-only.
  *
  * ## The cache
  *
@@ -71,7 +88,13 @@ import type { LLMMessage } from '../../../adapters/types.js';
 import { CONTEXT_FIELD_MEANINGS } from '../../../lib/context-contract/index.js';
 import { assertionKey, type Assertion } from '../../../integrity/assertion/types.js';
 import { foldLedger, type LedgerFold } from './ledger.js';
+import { servedToolCallIds, undeclaredIds } from './offer.js';
 import type { FindingsLedger, Standing, StandingRow } from './types.js';
+
+// The wire's tool ids live in `offer.ts` since the offer (9.102.0) — the
+// decoration site and the piece read one set — and stay exported from here
+// for the two callers that pair them with the piece (`callLLM`, `servedView`).
+export { servedToolCallIds };
 
 /** How judged results are served: facts verbatim (default) or as tickets too (bench-gated). */
 export type FindingsServeMode = 'ledger-and-facts' | 'ledger-only';
@@ -137,26 +160,6 @@ type Field = (typeof FIELDS)[number];
 
 const DECLARED = 'declared by the model';
 
-// ─── The wire's tool results ───────────────────────────────────────────
-
-/**
- * The `role: 'tool'` ids on a message list, in wire order, each once. The
- * second argument of `findingsLedgerPiece`; the collapse never changes an id,
- * so the list is the same before and after `collapseJudged`.
- */
-export function servedToolCallIds(messages: readonly LLMMessage[]): readonly string[] {
-  const ids: string[] = [];
-  const seen = new Set<string>();
-  for (const m of messages) {
-    if (m.role !== 'tool') continue;
-    const id = m.toolCallId;
-    if (id === undefined || id.length === 0 || seen.has(id)) continue;
-    seen.add(id);
-    ids.push(id);
-  }
-  return ids;
-}
-
 // ─── The piece ─────────────────────────────────────────────────────────
 
 /**
@@ -175,13 +178,14 @@ export function findingsLedgerPiece(
   if (!fold.hasStanding) return undefined;
   // Fold order: the first time each result was named, latest row winning.
   const current = [...fold.standingOf.values()];
+  const tested = propositionsOf(rows);
   const sections = [
     bucket('facts', factLines(current)),
-    bucket('limitations', [...conflictLines(fold), ...ruledOutLines(current)]),
-    bucket('evidenceRefs', openLines(current)),
+    bucket('limitations', [...conflictLines(fold), ...ruledOutLines(current, tested)]),
+    bucket('evidenceRefs', openLines(current, tested)),
     bucket('nextSteps', nextStepLines(current)),
     countLine(`noise (${DECLARED})`, idsWith(current, 'noise'), ''),
-    countLine('undeclared', undeclaredOf(served, fold), ', served in full below'),
+    countLine('undeclared', undeclaredIds(served, fold.standingOf), ', served in full below'),
   ].filter((s): s is string => s !== undefined);
   return {
     rawContent: [HEADER, ...sections].join('\n\n'),
@@ -239,16 +243,26 @@ function idsWith(current: readonly StandingRow[], standing: Standing): string[] 
   return current.filter((row) => row.standing === standing).map((row) => row.toolCallId);
 }
 
-/** The served ids no standing names — each once, in wire order, whatever the caller repeated. */
-function undeclaredOf(served: readonly string[], fold: LedgerFold): string[] {
-  const seen = new Set<string>();
-  const ids: string[] = [];
-  for (const id of served) {
-    if (fold.standingOf.has(id) || seen.has(id)) continue;
-    seen.add(id);
-    ids.push(id);
+/**
+ * The proposition each CALL was made with, by the call's id — read off the
+ * basis rows (one per call; a repeated id keeps the last, the fold's law).
+ * A standing on result X quotes `propositionsOf(rows).get(X)`: the
+ * proposition the model declared on call X itself, before X's result existed.
+ */
+function propositionsOf(rows: FindingsLedger): ReadonlyMap<string, string> {
+  const out = new Map<string, string>();
+  for (const row of rows) {
+    if (row.kind === 'basis' && row.proposition !== undefined) {
+      out.set(row.toolCallId, row.proposition);
+    }
   }
-  return ids;
+  return out;
+}
+
+/** ` — tested: <proposition>` when the judged call declared one; nothing otherwise. */
+function testedSuffix(row: StandingRow, tested: ReadonlyMap<string, string>): string {
+  const proposition = tested.get(row.toolCallId);
+  return proposition === undefined ? '' : ` — tested: ${proposition}`;
 }
 
 // ─── Bucket lines ──────────────────────────────────────────────────────
@@ -294,31 +308,42 @@ function conflictLines(fold: LedgerFold): string[] {
   return lines;
 }
 
-/** `ruled out (<toolName>, tool:<id>): <line>` — the name and the line only when declared. */
-function ruledOutLines(current: readonly StandingRow[]): string[] {
+/**
+ * `ruled out (<toolName>, tool:<id>): <line> — tested: <proposition>` — the
+ * name, the line and the proposition each only when declared.
+ */
+function ruledOutLines(
+  current: readonly StandingRow[],
+  tested: ReadonlyMap<string, string>,
+): string[] {
   return current
     .filter((row) => row.standing === 'ruled-out')
     .map((row) =>
-      clipLine(`ruled out (${whereOf(row)})${row.line === undefined ? '' : `: ${row.line}`}`),
+      clipLine(
+        `ruled out (${whereOf(row)})${row.line === undefined ? '' : `: ${row.line}`}` +
+          testedSuffix(row, tested),
+      ),
     );
 }
 
 /**
- * One line per current open assertion with its ref and `settles`; an open
- * row that quotes nothing yields one line naming the pointer alone.
+ * One line per current open assertion with its ref, `settles` and the
+ * judged call's proposition; an open row that quotes nothing yields one line
+ * naming the pointer alone.
  */
-function openLines(current: readonly StandingRow[]): string[] {
+function openLines(current: readonly StandingRow[], tested: ReadonlyMap<string, string>): string[] {
   const lines: string[] = [];
   for (const row of current) {
     if (row.standing !== 'open') continue;
-    const settles = row.settles === undefined ? '' : ` · settles: ${row.settles}`;
+    const tail =
+      (row.settles === undefined ? '' : ` · settles: ${row.settles}`) + testedSuffix(row, tested);
     if (row.assertions.length === 0) {
-      lines.push(clipLine(`open (${whereOf(row)})${settles}`));
+      lines.push(clipLine(`open (${whereOf(row)})${tail}`));
       continue;
     }
     for (const a of row.assertions) {
       lines.push(
-        clipLine(`open (${whereOf(row)}): ${subjectOf(a)} = ${renderValue(a.value)}${settles}`),
+        clipLine(`open (${whereOf(row)}): ${subjectOf(a)} = ${renderValue(a.value)}${tail}`),
       );
     }
   }

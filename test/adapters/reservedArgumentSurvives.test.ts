@@ -35,6 +35,16 @@
  * after this proof; this file never imports it, because the wire promise must
  * hold for the shape a model is shown, whatever the constant's wording becomes
  * (the mapping is content-agnostic — the description text here is illustrative).
+ *
+ * THE OFFER (packet 6). When served results are nameable (no standing yet,
+ * or a `fact` / `open` standing a later call may revise), the decoration is
+ * a rebuilt copy whose `previous.items.properties.toolCallId` carries
+ * `enum: <those ids, newest first>` (`reserved.ts ·
+ * offeredFindingsSchema`) — the model copies an allowed id instead of
+ * counting. An adapter that dropped, reordered or coerced that enum would
+ * make the offer unanswerable on its wire with no error anywhere, so the
+ * nine wires are driven a second time with the offered shape, through ONE
+ * table (`DRIVERS`) that a drift guard pins to the same nine names.
  */
 
 import { readdirSync, readFileSync } from 'node:fs';
@@ -141,6 +151,60 @@ const REQUEST: LLMRequest = {
   tools: [SERVED_TOOL],
 };
 
+// ─── The same property with an OFFER bound in (packet 6) ───────────
+// Owner: `reserved.ts · offeredFindingsSchema`. The only bytes that differ
+// from FINDINGS_PROPERTY are `previous.items.properties.toolCallId`'s `enum`
+// and its description — pinned by the first test of the offer block below.
+
+const OFFER = ['toolu_01J3', 'toolu_01H2', 'toolu_01G1'] as const;
+
+const OFFERED_PROPERTY = deepFreeze({
+  ...FINDINGS_PROPERTY,
+  properties: {
+    ...FINDINGS_PROPERTY.properties,
+    previous: {
+      ...FINDINGS_PROPERTY.properties.previous,
+      items: {
+        ...FINDINGS_PROPERTY.properties.previous.items,
+        properties: {
+          ...FINDINGS_PROPERTY.properties.previous.items.properties,
+          toolCallId: {
+            type: 'string',
+            enum: [...OFFER],
+            description: 'One of the ids listed; a result not listed cannot be named here.',
+          },
+        },
+      },
+    },
+  },
+});
+
+const SERVED_TOOL_WITH_OFFER: LLMToolSchema = deepFreeze({
+  ...SERVED_TOOL,
+  inputSchema: {
+    ...SERVED_TOOL.inputSchema,
+    properties: {
+      ...(SERVED_TOOL.inputSchema.properties as Record<string, unknown>),
+      [RESERVED_ARGUMENT]: OFFERED_PROPERTY,
+    },
+  },
+});
+const OFFERED_BYTES = JSON.stringify(SERVED_TOOL_WITH_OFFER);
+
+const REQUEST_WITH_OFFER: LLMRequest = {
+  messages: [{ role: 'user', content: 'hi' }],
+  model: 'm',
+  tools: [SERVED_TOOL_WITH_OFFER],
+};
+
+/** What a wire must carry: the reserved property and the whole served inputSchema. */
+interface Fixture {
+  readonly property: unknown;
+  readonly tool: LLMToolSchema;
+}
+const PLAIN: Fixture = { property: FINDINGS_PROPERTY, tool: SERVED_TOOL };
+const OFFERED: Fixture = { property: OFFERED_PROPERTY, tool: SERVED_TOOL_WITH_OFFER };
+
 // ─── Reading the recorded request ──────────────────────────────────
 
 /** Walks `path` into a recorded request; a missing step fails with the path named. */
@@ -156,20 +220,20 @@ function at(root: unknown, ...path: readonly (string | number)[]): unknown {
 }
 
 /** The four promises, read from the mapped parameters object of ONE wire. */
-function expectSurvived(mapped: unknown, wire: string): void {
+function expectSurvived(mapped: unknown, wire: string, fixture: Fixture = PLAIN): void {
   const survivor = at(mapped, 'properties', RESERVED_ARGUMENT);
   // 1. byte-for-byte — the same bytes in the same order …
   expect(JSON.stringify(survivor), `${wire}: _findings bytes`).toBe(
-    JSON.stringify(FINDINGS_PROPERTY),
+    JSON.stringify(fixture.property),
   );
   // … and structurally equal, so a failure names the first differing path.
-  expect(survivor, `${wire}: _findings shape`).toStrictEqual(FINDINGS_PROPERTY);
+  expect(survivor, `${wire}: _findings shape`).toStrictEqual(fixture.property);
   // 2. optional by law — never added to the author's `required`.
   expect(at(mapped, 'required'), `${wire}: required`).toStrictEqual(['query']);
   // 3. the author's own contract untouched — additionalProperties and siblings.
   expect(at(mapped, 'additionalProperties'), `${wire}: additionalProperties`).toBe(false);
   expect(JSON.stringify(mapped), `${wire}: whole inputSchema`).toBe(
-    JSON.stringify(SERVED_TOOL.inputSchema),
+    JSON.stringify(fixture.tool.inputSchema),
   );
 }
 
@@ -369,6 +433,162 @@ describe('_findings survives the Browser mappings (fetch twins of Anthropic and 
   });
 });
 
+// ─── The nine wires again, with the offer bound in (packet 6) ──────
+// ONE table: each driver maps a request through its adapter and hands back
+// the parameters object the wire carries, exactly where the test above for
+// that adapter reads it. A new adapter joins the table AND the list above.
+
+interface Driver {
+  readonly wire: string;
+  readonly drive: (request: LLMRequest) => Promise<unknown>;
+}
+
+const DRIVERS: readonly Driver[] = [
+  {
+    wire: 'anthropic',
+    drive: async (request) => {
+      const params: unknown[] = [];
+      await anthropic({ _client: anthropicClient(params) as never }).complete(request);
+      return at(params[0], 'tools', 0, 'input_schema');
+    },
+  },
+  {
+    wire: 'openai',
+    drive: async (request) => {
+      const params: unknown[] = [];
+      await openai({ _client: openaiClient(params) as never }).complete(request);
+      return at(params[0], 'tools', 0, 'function', 'parameters');
+    },
+  },
+  {
+    wire: 'gemini',
+    drive: async (request) => {
+      const params: unknown[] = [];
+      await gemini({ _client: geminiClient(params) as never }).complete(request);
+      return at(params[0], 'config', 'tools', 0, 'functionDeclarations', 0, 'parametersJsonSchema');
+    },
+  },
+  {
+    wire: 'bedrock',
+    drive: async (request) => {
+      const inputs: unknown[] = [];
+      const fake = bedrockDouble(inputs);
+      await bedrock({ _client: fake.client as never, _commands: fake.Commands as never }).complete(
+        request,
+      );
+      return at(inputs[0], 'toolConfig', 'tools', 0, 'toolSpec', 'inputSchema', 'json');
+    },
+  },
+  {
+    wire: 'ollama',
+    drive: async (request) => {
+      const bodies: unknown[] = [];
+      await ollama('llama3.2', { _fetch: recordingFetch(OLLAMA_REPLY, bodies) }).complete(request);
+      return at(bodies[0], 'tools', 0, 'function', 'parameters');
+    },
+  },
+  {
+    wire: 'foundry',
+    drive: async (request) => {
+      const params: unknown[] = [];
+      await foundry({
+        _client: openaiClient(params) as never,
+        projectEndpoint: 'https://acct.services.ai.azure.com/api/projects/proj-1',
+        deployment: 'dep-a',
+      }).complete(request);
+      return at(params[0], 'tools', 0, 'function', 'parameters');
+    },
+  },
+  {
+    wire: 'foundry-local',
+    drive: async (request) => {
+      const bodies: unknown[] = [];
+      await foundryLocal('qwen2.5-0.5b-instruct-generic-cpu:1', {
+        _fetch: recordingFetch(OPENAI_REPLY, bodies),
+      }).complete(request);
+      return at(bodies[0], 'tools', 0, 'function', 'parameters');
+    },
+  },
+  {
+    wire: 'browser-anthropic',
+    drive: async (request) => {
+      const bodies: unknown[] = [];
+      await browserAnthropic({
+        apiKey: 'sk-test',
+        _fetch: recordingFetch(ANTHROPIC_REPLY, bodies),
+      }).complete(request);
+      return at(bodies[0], 'tools', 0, 'input_schema');
+    },
+  },
+  {
+    wire: 'browser-openai',
+    drive: async (request) => {
+      const bodies: unknown[] = [];
+      await browserOpenai({
+        apiKey: 'sk-test',
+        _fetch: recordingFetch(OPENAI_REPLY, bodies),
+      }).complete(request);
+      return at(bodies[0], 'tools', 0, 'function', 'parameters');
+    },
+  },
+];
+
+const ENUM_PATH = [
+  'properties',
+  RESERVED_ARGUMENT,
+  'properties',
+  'previous',
+  'items',
+  'properties',
+  'toolCallId',
+  'enum',
+] as const;
+
+describe('the offer enum on previous[].toolCallId survives every wire mapping (packet 6)', () => {
+  it('the offered fixture differs from the plain one in the enum and its description ONLY', () => {
+    const plain = JSON.parse(JSON.stringify(FINDINGS_PROPERTY));
+    const offered = JSON.parse(JSON.stringify(OFFERED_PROPERTY));
+    offered.properties.previous.items.properties.toolCallId =
+      plain.properties.previous.items.properties.toolCallId;
+    expect(JSON.stringify(offered)).toBe(JSON.stringify(plain));
+    expect(at(SERVED_TOOL_WITH_OFFER.inputSchema, ...ENUM_PATH)).toStrictEqual([...OFFER]);
+    expect(at(SERVED_TOOL.inputSchema, ...ENUM_PATH.slice(0, -1))).not.toHaveProperty('enum');
+  });
+
+  for (const { wire, drive } of DRIVERS) {
+    it(`${wire}: the decorated schema WITH the offer crosses byte-for-byte, the enum exact and in order`, async () => {
+      const mapped = await drive(REQUEST_WITH_OFFER);
+      expectSurvived(mapped, wire, OFFERED);
+      expect(at(mapped, ...ENUM_PATH), `${wire}: enum`).toStrictEqual([...OFFER]);
+      // and the plain shape still crosses through the same driver
+      expectSurvived(await drive(REQUEST), wire, PLAIN);
+    });
+  }
+
+  it('the table drives the same nine wires the individual tests above drive', () => {
+    expect(DRIVERS.map((d) => d.wire).sort()).toStrictEqual(
+      [
+        'anthropic',
+        'bedrock',
+        'browser-anthropic',
+        'browser-openai',
+        'foundry',
+        'foundry-local',
+        'gemini',
+        'ollama',
+        'openai',
+      ].sort(),
+    );
+  });
+
+  it('no adapter edited the offered schema in place (same bytes after every wire ran)', () => {
+    expect(JSON.stringify(SERVED_TOOL_WITH_OFFER)).toBe(OFFERED_BYTES);
+    expect(Object.isFrozen(OFFERED_PROPERTY.properties.previous.items.properties.toolCallId)).toBe(
+      true,
+    );
+  });
+});
+
 // ─── The reader bites ──────────────────────────────────────────────
 // A green run above means nothing unless the reader refuses a broken wire.
 // Each case is a mapping an adapter COULD write by mistake; each must fail.
@@ -404,6 +624,26 @@ describe('expectSurvived refuses a mapping that breaks the promise', () => {
 
   it('refuses a wire that touched additionalProperties', () => {
     expect(() => expectSurvived({ ...served, additionalProperties: true }, 'ap')).toThrow();
+  });
+
+  it('refuses an offered wire that dropped, reordered or narrowed the enum', () => {
+    const offered = () =>
+      JSON.parse(JSON.stringify(SERVED_TOOL_WITH_OFFER.inputSchema)) as Record<string, any>;
+    expect(() => expectSurvived(offered(), 'control-offered', OFFERED)).not.toThrow();
+    const dropped = offered();
+    delete dropped.properties._findings.properties.previous.items.properties.toolCallId.enum;
+    expect(() => expectSurvived(dropped, 'dropped-enum', OFFERED)).toThrow();
+    const reordered = offered();
+    reordered.properties._findings.properties.previous.items.properties.toolCallId.enum = [
+      ...OFFER,
+    ].reverse();
+    expect(() => expectSurvived(reordered, 'reordered-enum', OFFERED)).toThrow();
+    const narrowed = offered();
+    narrowed.properties._findings.properties.previous.items.properties.toolCallId.enum =
+      OFFER.slice(0, 2);
+    expect(() => expectSurvived(narrowed, 'narrowed-enum', OFFERED)).toThrow();
+    // the plain reader refuses the offered shape too — an enum nobody served is not a survival
+    expect(() => expectSurvived(offered(), 'unexpected-enum', PLAIN)).toThrow();
   });
 });
 
