@@ -416,8 +416,9 @@ ledger+ask           10            0.950        0.100     0.700              0.9
 
 ## Decision
 
-`answerAsk: 'quote-facts'` becomes the default when `.findings()` is armed in
-the next minor, with `'none'` kept as the opt-out, on the strength of two
-ten-run passes on two models; the design page's law stands — the bench decided,
-and a variant is a different hash on the record.
+Owner's ruling (2026-09-17): the ask ships as an OPT-IN a consumer enables —
+`.findings({ answerAsk: 'quote-facts' })` — not as the armed default, so a
+team turns it on knowingly and can compare against `'none'` on its own runs.
+The numbers above are the record for that choice; the design page's law
+stands — the bench decided, and a variant is a different hash on the record.
 

@@ -41,6 +41,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   (the rebuild byte-equal under the dial); all 18 byte-identity references
   pass untouched.
 
+### Measured — the ask on two hosted models (`bench/findings-shuffle.mjs`, noise 4 at the end of the order, 1,000-token payloads, ten runs per condition)
+
+- Claude Sonnet 5: facts in the answer 0.883 with the ledger alone → 0.950 with the ask (1.000 without the ledger); noise cited 0.100 with either → 0.300 without the ledger; drift 0.70 → 0.40.
+- Claude Haiku 4.5: facts 0.983 → 1.000 with the ask; noise cited 0.000 (0.100 without the ledger); drift 0.30 → 0.20.
+- Collapsing facts too (`serve: 'ledger-only'`) was the worst row on both models and stays bench-gated. Full tables: docs/design/2026-09-findings-ledger-real-model.md.
+
 ## [9.102.0] - 2026-09-17
 
 ### Added — a declared fact stays in the window; noise leaves first
