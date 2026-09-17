@@ -86,6 +86,7 @@ import {
 } from '../../../src/lib/time-travel/index.js';
 import { stepOutputText } from '../../../src/lib/context-bisect/index.js';
 import {
+  FINDINGS_ANSWER_ASK,
   FINDINGS_ARGUMENT_SCHEMA,
   FINDINGS_INSTRUCTION,
   withFindingsArgument,
@@ -2361,6 +2362,45 @@ describe('an armed findings ledger, served: the receipt hashes the piece and the
       // …and the fact result (c1) went out verbatim under the default mode.
       expect(toolMessage(at4.messages.asSent, 'c1')!.content).toBe(
         toolMessage(history, 'c1')!.content,
+      );
+    });
+  }
+
+  for (const reactMode of ['dynamic', 'dynamic-grouped'] as const) {
+    it(`${reactMode}: under findings({ answerAsk: 'quote-facts' }) the law holds — the piece the receipt hashed ends with the ask, and the rebuild appends it from the run constant`, async () => {
+      const r = await run(reactMode, SERVED, (a) =>
+        a.system('s').tool(tool('alpha_tool')).findings({ answerAsk: 'quote-facts' }),
+      );
+      clean(r);
+      expect((r.snapshot.sharedState as { findingsAnswerAsk?: unknown }).findingsAnswerAsk).toBe(
+        'quote-facts',
+      );
+      const views = servedViews(r.snapshot);
+      expect(views.map((v) => v.epoch)).toEqual([1, 2, 3, 4]);
+      for (const view of views) {
+        const receipt = receiptAt(r.snapshot, view.epoch)!;
+        const hash = (content: string): string => receiptHash(receipt.basis.runId, content);
+        const piece = view.system.pieces.find((p) => p.source === 'findings');
+        // The wire and the rebuild agree byte for byte, ask included.
+        expect(r.wire[view.epoch - 1]!.systemPrompt).toBe(view.system.text);
+        if (view.epoch < 3) {
+          expect(piece).toBeUndefined();
+          expect(view.system.text).not.toContain(FINDINGS_ANSWER_ASK);
+          continue;
+        }
+        expect(piece!.text.endsWith(`\n\n${FINDINGS_ANSWER_ASK}`)).toBe(true);
+        expect(receipt.system.pieces.map((p) => p.hash)).toContain(hash(piece!.text));
+        expect(receipt.system.pieces[receipt.system.pieces.length - 1]!.source).toBe('findings');
+        expect(receipt.system.hash).toBe(hash(view.system.text));
+        expect(receipt.messages.requestOnly).toEqual([]);
+      }
+      // …and the collapse is the default's: c2 a ticket at epoch 4, c1 verbatim.
+      const at4 = servedAt(r.snapshot, 4)!;
+      expect(
+        isCollapsedToolResult(JSON.parse(toolMessage(at4.messages.asSent, 'c2')!.content)),
+      ).toBe(true);
+      expect(toolMessage(at4.messages.asSent, 'c1')!.content).toBe(
+        toolMessage(r.snapshot.sharedState.history as readonly LLMMessage[], 'c1')!.content,
       );
     });
   }

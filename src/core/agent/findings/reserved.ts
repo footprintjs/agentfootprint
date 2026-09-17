@@ -213,6 +213,29 @@ export const FINDINGS_INSTRUCTION = [
     'a count.',
 ].join('\n');
 
+/**
+ * The answer-turn ask (9.103.0) — appended to the served ledger piece
+ * (`serve.ts · findingsLedgerPiece`) ONLY under
+ * `findings({ answerAsk: 'quote-facts' })`, a bench-gated dial whose default
+ * is `'none'`. It tells the model HOW to answer from the piece: the real-model
+ * page's fourth run measured one fact value in twelve restated when the
+ * piece is served with no such ask (`docs/design/2026-09-findings-ledger-real-model.md`
+ * § Fourth run), and this is the instruction variant that run asked for. It
+ * says what the model may DO with each kind of line and promises nothing
+ * about what the library serves; a constant, so the cache law of the piece
+ * holds with it (`serve.ts` · "The cache"). Judged by `unprovable` at the
+ * strictest lifetime in `test/modelFacingSurfaces.test.ts`.
+ */
+export const FINDINGS_ANSWER_ASK = [
+  'When you answer, answer from the lines under `facts` and copy each value exactly as it is ' +
+    'written there.',
+  'A result listed under `evidenceRefs` or `nextSteps` is unsettled: say so if you draw on it.',
+  'A tool result whose content reads `{"collapsed":true,…}` carries no data: it was judged ' +
+    'noise or ruled out, or its fact is already listed above — do not draw on it.',
+  'A result listed as undeclared is served in full below and may be used.',
+  'Never invent a value that is not in a fact line or in a served result.',
+].join('\n');
+
 // ─── The decorator ─────────────────────────────────────────────────────
 
 /**

@@ -322,6 +322,40 @@ limitations (declared by the model):
 ruled out (search_logs, tool:call_4): the optic was not swapped this week — tested: the optic was swapped during the maintenance window
 ```
 
+## The answer-turn ask (packet 7)
+
+Why: the fourth real-model run (`docs/design/2026-09-findings-ledger-real-model.md`
+§ Fourth run) measured the cost of the served piece — one fact value in
+twelve restated under `'ledger-and-facts'` on both models — and named the
+instruction variant it wanted next: tell the model HOW to answer from the
+piece, not only what the piece is. So `findings({ answerAsk: 'quote-facts' })`
+appends `reserved.ts · FINDINGS_ANSWER_ASK` to the piece as its last
+section (after a blank line, like every section): answer from the `facts`
+lines and copy each value as written; an `evidenceRefs` / `nextSteps` result
+is unsettled, say so; a `{"collapsed":true,…}` ticket carries no data (judged
+noise or ruled out, or its fact already listed), do not draw on it; an undeclared result is served in full and may
+be used; never invent a value. It says what the model may DO and promises
+nothing, and it is a constant, so the piece's cache law holds with it.
+`'none'` is the default and is BENCH-GATED the way `'ledger-only'` is: the
+dial ships so `bench/findings-shuffle.mjs`'s fourth condition, `ledger+ask`,
+can score it on a real model against `ledger-and-facts` on `facts-in-answer`
+(on the mock the two rows are equal to the digit — the scripted model ignores
+prose). The dial rides the `findingsServe` thread exactly — `Agent.ts` to
+seed and to call-llm, value-conditionally — and lands on the record as the
+run constant `findingsAnswerAsk`, written ONLY under `'quote-facts'`, so an
+armed agent on the default commits the key set it committed in 9.102.0 and
+`servedView · viewOf` re-appends the ask from the record by construction.
+The ask never rides alone: a basis-only ledger serves nothing under either
+value.
+
+```ts
+Agent.create({ provider, model })
+  .tool(search)
+  .findings({ answerAsk: 'quote-facts' }) // default 'none'; bench-gated
+  .build();
+// servedAt(snapshot, k).system.text ends with FINDINGS_ANSWER_ASK once a standing exists
+```
+
 ## Files
 
 - `types.ts` — `RESERVED_ARGUMENT`, the vocabularies, `PROPOSITION_CHARS`,
@@ -329,15 +363,15 @@ ruled out (search_logs, tool:call_4): the optic was not swapped this week — te
   (the record).
 - `reserved.ts` — `FINDINGS_ARGUMENT_SCHEMA`, `FINDINGS_OFFER_CAP`,
   `withFindingsArgument`, `withoutFindingsArgument`, `splitFindings`,
-  `peelAnswerFindings`, `FINDINGS_INSTRUCTION`.
+  `peelAnswerFindings`, `FINDINGS_INSTRUCTION`, `FINDINGS_ANSWER_ASK`.
 - `offer.ts` — `offeredResultIds`, `nameableIds`, `undeclaredIds`,
   `servedToolCallIds`, `knownResults`, `RETIRING_STANDINGS`.
 - `ledger.ts` — `recordFindings`, `foldLedger`, `standingRowsFrom`,
   `basisRowFrom`.
 - `serve.ts` — `findingsLedgerPiece`, `collapseJudged`, `servedToolCallIds`
   (re-exported from `offer.ts`), `isCollapsedToolResult`,
-  `FINDINGS_PIECE_LIMITS`, `FindingsServeMode` (internal path only; no
-  barrel names them).
+  `FINDINGS_PIECE_LIMITS`, `FindingsServeMode`, `FindingsAnswerAsk` (internal
+  path only; no barrel names them).
 
 Design: `docs/design/2026-09-findings-ledger.md`; the spec of record is
 `docs/design/2026-09-findings-ledger-spec.md`.

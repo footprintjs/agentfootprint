@@ -480,7 +480,9 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
    *  conditioned on, so an unarmed agent hands each stage exactly the deps
    *  it always did. `serve` is threaded to seed (the run constant
    *  `findingsServe`) and to call-llm (`findingsServe` in its deps) on an
-   *  armed agent only. `keepLedgerFacts` is resolved once, here in the
+   *  armed agent only; `answerAsk` (9.103.0) rides the same two threads
+   *  as `findingsAnswerAsk`, and only when it is `'quote-facts'` — the
+   *  default `'none'` threads nothing. `keepLedgerFacts` is resolved once, here in the
    *  constructor (this door over `AgentOptions.keepLedgerFacts`), into the
    *  `keepLedgerFacts` field below and threaded to the window stage on an
    *  armed agent with a window, where `stages/window.ts · buildWindowStage`
@@ -3657,6 +3659,11 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
       ...(this.findingsOptions !== undefined && {
         findings: true as const,
         findingsServe: this.findingsOptions.serve ?? 'ledger-and-facts',
+        // The answer-turn ask (9.103.0): VALUE-conditional inside the arm —
+        // the default `'none'` threads nothing and writes no key.
+        ...(this.findingsOptions.answerAsk === 'quote-facts' && {
+          findingsAnswerAsk: 'quote-facts' as const,
+        }),
         consumePendingResumeFindingsLedger: () => {
           const l = this.pendingResumeFindingsLedger;
           this.pendingResumeFindingsLedger = undefined;
@@ -4035,6 +4042,11 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
         findings: true as const,
         hasFindingsLedger: true as const,
         findingsServe: this.findingsOptions.serve ?? 'ledger-and-facts',
+        // The answer-turn ask (9.103.0): the same value seed records, so the
+        // wire and the rebuild append it from one fact; absent on `'none'`.
+        ...(this.findingsOptions.answerAsk === 'quote-facts' && {
+          findingsAnswerAsk: 'quote-facts' as const,
+        }),
       }),
       ...(this.answerValidationConfig !== undefined && { suppressDraftTokens: true }),
       // The receipt's salt (9.88.0) — read per call, like seed's own accessor.

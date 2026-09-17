@@ -39,7 +39,10 @@ import { messageDigestInput } from '../../../src/lib/time-travel/index.js';
 import type { LLMMessage, LLMRequest, LLMResponse } from '../../../src/adapters/types.js';
 import type { AgentState } from '../../../src/core/agent/types.js';
 import { isCollapsedToolResult } from '../../../src/core/agent/findings/serve.js';
-import { FINDINGS_INSTRUCTION } from '../../../src/core/agent/findings/reserved.js';
+import {
+  FINDINGS_ANSWER_ASK,
+  FINDINGS_INSTRUCTION,
+} from '../../../src/core/agent/findings/reserved.js';
 import { toolNameOfMessage } from '../../../src/core/agent/window/toolNames.js';
 
 // ─── the harness ─────────────────────────────────────────────────────
@@ -658,5 +661,95 @@ describe("served from the ledger — a ruled-out line quotes the judged call's o
   it('no proposition declared, no `tested:` anywhere on the piece', async () => {
     const r = await run('dynamic', DECLARING, armed);
     expect(findingsPieceOf(r, 6)!.text).not.toContain('tested:');
+  });
+});
+
+// ─── 10. the answer-turn ask (9.103.0): a dial on the piece ─────────
+
+describe('served from the ledger — the answer-turn ask (findings({ answerAsk }))', () => {
+  const asking = (a: ReturnType<typeof Agent.create>) =>
+    a.system('bot').tool(tool('alpha_tool')).findings({ answerAsk: 'quote-facts' });
+  const askingNone = (a: ReturnType<typeof Agent.create>) =>
+    a.system('bot').tool(tool('alpha_tool')).findings({ answerAsk: 'none' });
+
+  for (const reactMode of ['dynamic', 'dynamic-grouped'] as const) {
+    it(`${reactMode}: under 'quote-facts' the served system text ends with the ask at every epoch with a piece, the wire agrees, and the rebuild is byte-equal`, async () => {
+      const r = await run(reactMode, DECLARING, asking);
+      expect(stateOf(r).findingsAnswerAsk).toBe('quote-facts');
+      expect(stateOf(r).findingsServe).toBe('ledger-and-facts');
+      for (const epoch of [1, 2]) {
+        // No standing yet: no piece, so no ask — it never rides alone.
+        expect(findingsPieceOf(r, epoch)).toBeUndefined();
+        expect(r.wire[epoch - 1]!.systemPrompt).not.toContain(FINDINGS_ANSWER_ASK);
+      }
+      for (const epoch of [3, 4, 5, 6]) {
+        const view = servedAt(r.snapshot, epoch)!;
+        const piece = findingsPieceOf(r, epoch)!;
+        expect(piece.text.endsWith(`\n\n${FINDINGS_ANSWER_ASK}`), `epoch ${epoch}`).toBe(true);
+        expect(piece.text.split(FINDINGS_ANSWER_ASK)).toHaveLength(2);
+        expect(view.system.text.endsWith(FINDINGS_ANSWER_ASK)).toBe(true);
+        // The wire carried exactly what the rebuild says, ask included.
+        expect(r.wire[epoch - 1]!.systemPrompt).toBe(view.system.text);
+        expect(r.wire[epoch - 1]!.systemPrompt!.endsWith(FINDINGS_ANSWER_ASK)).toBe(true);
+      }
+    });
+  }
+
+  it('both chart shapes serve byte-equal system text under the dial', async () => {
+    const flat = await run('dynamic', DECLARING, asking);
+    const grouped = await run('dynamic-grouped', DECLARING, asking);
+    for (const epoch of [1, 2, 3, 4, 5, 6]) {
+      expect(servedAt(grouped.snapshot, epoch)!.system.text, `epoch ${epoch}`).toBe(
+        servedAt(flat.snapshot, epoch)!.system.text,
+      );
+      expect(grouped.wire[epoch - 1]!.systemPrompt).toBe(flat.wire[epoch - 1]!.systemPrompt);
+    }
+  });
+
+  it("the dial changes the piece and NOTHING else: same messages, same tickets, and the system text is the default's plus the ask", async () => {
+    const on = await run('dynamic', DECLARING, asking);
+    const off = await run('dynamic', DECLARING, armed);
+    for (const epoch of [1, 2, 3, 4, 5, 6]) {
+      const a = servedAt(on.snapshot, epoch)!;
+      const b = servedAt(off.snapshot, epoch)!;
+      expect(JSON.stringify(a.messages.asSent), `epoch ${epoch} asSent`).toBe(
+        JSON.stringify(b.messages.asSent),
+      );
+      expect(a.system.pieces.map((p) => p.source)).toEqual(b.system.pieces.map((p) => p.source));
+      if (epoch < 3) expect(a.system.text).toBe(b.system.text);
+      else expect(a.system.text).toBe(`${b.system.text}\n\n${FINDINGS_ANSWER_ASK}`);
+    }
+    // The one key the dial adds to the record, and no other.
+    expect(keysOf(on)).toEqual([...keysOf(off), 'findingsAnswerAsk'].sort());
+  });
+
+  it("without the dial — absent or an explicit 'none' — the run is byte-identical to 9.102.0: no ask, no key", async () => {
+    const absent = await run('dynamic', DECLARING, armed);
+    const none = await run('dynamic', DECLARING, askingNone);
+    expect(keysOf(absent)).not.toContain('findingsAnswerAsk');
+    expect(keysOf(none)).toEqual(keysOf(absent));
+    for (const epoch of [1, 2, 3, 4, 5, 6]) {
+      expect(servedAt(none.snapshot, epoch)!.system.text).toBe(
+        servedAt(absent.snapshot, epoch)!.system.text,
+      );
+      expect(absent.wire[epoch - 1]!.systemPrompt).not.toContain(FINDINGS_ANSWER_ASK);
+      expect(none.wire[epoch - 1]!.systemPrompt).toBe(absent.wire[epoch - 1]!.systemPrompt);
+    }
+    // …and an unarmed agent never sees the constant either.
+    const bare = await run('dynamic', DECLARING, unarmed);
+    for (const req of bare.wire) expect(req.systemPrompt).not.toContain(FINDINGS_ANSWER_ASK);
+  });
+
+  it('a basis-only ledger under the dial serves no piece and so no ask, but the run constant is on the record', async () => {
+    const BASIS_ONLY: readonly Reply[] = [
+      call('c1', 'alpha_tool', { q: 'ports', _findings: { basis: 'exploratory' } }),
+      answer('p1 is down'),
+    ];
+    const r = await run('dynamic', BASIS_ONLY, asking);
+    expect(stateOf(r).findingsAnswerAsk).toBe('quote-facts');
+    for (const view of servedViews(r.snapshot)) {
+      expect(view.system.pieces.some((p) => p.source === 'findings')).toBe(false);
+      expect(view.system.text).not.toContain(FINDINGS_ANSWER_ASK);
+    }
   });
 });

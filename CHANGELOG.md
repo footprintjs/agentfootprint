@@ -5,6 +5,42 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [9.103.0] - 2026-09-17
+
+### Added — an answer-turn ask on the served ledger piece, as a dial
+
+- `findings({ answerAsk: 'quote-facts' })` appends a second model-facing ask
+  to the served ledger piece — `FINDINGS_ANSWER_ASK`, its last section after
+  a blank line — telling the model HOW to answer from it: answer from the
+  `facts` lines and copy each value as written; an `evidenceRefs` or
+  `nextSteps` result is unsettled, say so; a `{"collapsed":true,…}` ticket
+  carries no data (judged noise or ruled out, or its fact already listed),
+  do not draw on it; an undeclared result is
+  served in full and may be used; never invent a value. It says what the
+  model may do and promises nothing (judged by `unprovable` at the strictest
+  lifetime, registered in the model-facing inventory), and it is a constant,
+  so the piece's cache law holds with it. The default is `'none'` and the
+  dial is BENCH-GATED like `'ledger-only'`: it ships so
+  `bench/findings-shuffle.mjs`'s new fourth condition, `ledger+ask`, can
+  score it on a real model on `facts-in-answer` against `ledger-and-facts` —
+  the design page's fourth run measured one fact value in twelve restated
+  when the piece is served, and asked for this instruction variant next. On
+  the mock that row equals `ledger-and-facts` to the digit (the scripted
+  model ignores prose; the header says so). The dial rides the
+  `findingsServe` thread exactly — `Agent.ts` to seed and to call-llm,
+  value-conditionally — and lands on the record as the run constant
+  `AgentState.findingsAnswerAsk`, written ONLY under `'quote-facts'`, so an
+  armed agent on the default commits the key set it committed in 9.102.0,
+  every unarmed agent is byte-identical, and `servedAt` re-appends the ask
+  from the record by construction. A bad value is refused at build at either
+  door. Pinned: `findings/serve.test.ts` (the ask appended only under the
+  dial, exact bytes, absent by default, never alone), `findings-served.test.ts`
+  (both chart shapes end the served system text with the ask; without the
+  dial byte-identical), `findings-declarations.test.ts` (the option, the run
+  constant only when armed and on, the refusal), `receipt-conformance.test.ts`
+  (the rebuild byte-equal under the dial); all 18 byte-identity references
+  pass untouched.
+
 ## [9.102.0] - 2026-09-17
 
 ### Added — a declared fact stays in the window; noise leaves first

@@ -23,11 +23,22 @@
  * reading. Every run serves the SAME records in an order drawn from a seeded
  * PRNG — run r's order is the same in every condition (a paired comparison;
  * the seed is printed, and `AF_SHUFFLE_SEED` reproduces it) — and the model
- * answers. Three conditions, RUNS runs each:
+ * answers. Four conditions, RUNS runs each:
  *
  *   findings off       `.findings()` not called — the wire as it is today
  *   ledger-and-facts   `.findings({ serve: 'ledger-and-facts' })` — the default dial
  *   ledger-only        `.findings({ serve: 'ledger-only' })` — the bench-gated dial
+ *   ledger+ask         `.findings({ serve: 'ledger-and-facts', answerAsk: 'quote-facts' })`
+ *                      — the default serve mode plus the answer-turn ask (9.103.0,
+ *                      `FINDINGS_ANSWER_ASK` appended to the piece): the instruction
+ *                      variant the real-model page's fourth run asked for, scored on
+ *                      `facts-in-answer` against `ledger-and-facts` (the fidelity dip:
+ *                      one fact value in twelve restated). ON THE MOCK THIS ROW EQUALS
+ *                      `ledger-and-facts` TO THE DIGIT: the scripted model ignores
+ *                      prose, so the ask changes the system bytes and nothing it
+ *                      echoes — the smoke laws are the armed laws, unchanged, and the
+ *                      only thing the mock proves here is that the row runs and the
+ *                      ask costs the echo nothing. The number is a real-model number.
  *
  * THE AXES (env; the real-model page's matrix — docs/design/2026-09-findings-ledger-real-model.md):
  *
@@ -103,11 +114,11 @@
  *
  * THE MATRIX. `--matrix` (or `AF_SHUFFLE_MATRIX=1`) runs every cell of
  * NOISE 2/4/8/16 × NOISE_AT end/start × NOISE_SIZE 250/1000/4000 (24 cells)
- * for the three conditions with the same FACTS, SEED and RUNS: one table per
+ * for the four conditions with the same FACTS, SEED and RUNS: one table per
  * cell, then ONE summary table (cell × condition → facts-in-answer,
  * noise-cited, declared, standing-accuracy, drift). The cost is stated in the
  * header BEFORE the first call: nominal model calls for this invocation's
- * model = Σ over cells of 3 conditions × RUNS × (FACTS + NOISE + 1) — one
+ * model = Σ over cells of 4 conditions × RUNS × (FACTS + NOISE + 1) — one
  * call per record read plus the answer — and the ceiling every run is capped
  * at, `maxIterations` = FACTS + NOISE + 3. On the mock RUNS defaults to 1 in
  * matrix mode (the whole matrix in under a minute); a real model runs at the
@@ -180,6 +191,9 @@ const CONDITIONS = [
   { label: 'findings off', armed: false },
   { label: 'ledger-and-facts', armed: true, serve: 'ledger-and-facts' },
   { label: 'ledger-only', armed: true, serve: 'ledger-only' },
+  // The default serve mode with the answer-turn ask (9.103.0). On the mock
+  // this row is `ledger-and-facts` to the digit (the header says why).
+  { label: 'ledger+ask', armed: true, serve: 'ledger-and-facts', answerAsk: 'quote-facts' },
 ];
 
 // ─── The cell ──────────────────────────────────────────────────────────
@@ -610,7 +624,12 @@ async function runOnce(condition, run, cell, records) {
     contextBudget: budgetFor(cell, records),
     ...(TEMPERATURE !== undefined && { temperature: TEMPERATURE }),
   }).tool(pagingTool(records, order, served));
-  if (condition.armed) b = b.findings({ serve: condition.serve });
+  if (condition.armed) {
+    b = b.findings({
+      serve: condition.serve,
+      ...(condition.answerAsk !== undefined && { answerAsk: condition.answerAsk }),
+    });
+  }
   const agent = b.build();
   const out = await agent.run({ message: questionFor(cell.n) });
   if (typeof out !== 'string') {
@@ -821,7 +840,7 @@ function smokeCheck(rows, cell, records) {
   return problems;
 }
 
-/** Runs the three conditions on one cell and prints its table; returns the rows. */
+/** Runs the four conditions on one cell and prints its table; returns the rows. */
 async function measureCell(cell) {
   const records = plantRecords(cell);
   assertDistinguishable(records);

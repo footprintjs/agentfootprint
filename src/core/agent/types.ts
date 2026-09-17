@@ -275,11 +275,28 @@ export interface AgentOptions {
    * `stages/window.ts · buildWindowStage` admits up to that many
    * `'ledger-fact'` pins (`turns.ts · admitPins`) and files the hold on
    * `WindowRecord.ledgerFacts`.
+   *
+   * `answerAsk` (9.103.0) appends a second model-facing ask to the served
+   * piece — `findings/reserved.ts · FINDINGS_ANSWER_ASK`, telling the model
+   * HOW to answer from it: copy each fact value as written, name an open
+   * result as unsettled, do not draw on a collapsed ticket, never invent a
+   * value. `'none'` (the default) serves the piece exactly as before, and
+   * `'quote-facts'` is BENCH-GATED: shipped so `bench/findings-shuffle.mjs`
+   * can score it on a real model against the fidelity dip the design page's
+   * fourth run measured (one fact value in twelve restated), not a
+   * recommendation, never a default until that run shows it closes the gap.
+   * Under `'quote-facts'` the record carries the run constant
+   * `AgentState.findingsAnswerAsk` so the rebuild appends the same ask;
+   * under `'none'` no key is written and an armed agent's record is
+   * byte-identical to 9.102.0.
    */
   readonly findings?: {
     /** What the model is served from the ledger: the default keeps fact results
      *  verbatim beside the piece; `'ledger-only'` collapses them too (bench-gated). */
     readonly serve?: 'ledger-and-facts' | 'ledger-only';
+    /** Whether the served piece ends with the answer-turn ask
+     *  (`FINDINGS_ANSWER_ASK`): `'none'` (default) or `'quote-facts'` (bench-gated). */
+    readonly answerAsk?: 'none' | 'quote-facts';
     /** The ceiling of fact turns the window holds beyond `keepRecentTurns`, or
      *  `false` (= `0`) for no hold — the same dial as
      *  {@link AgentOptions.keepLedgerFacts}; this door wins when both are
@@ -1568,6 +1585,20 @@ export interface AgentState {
    * a default).
    */
   findingsServe?: 'ledger-and-facts' | 'ledger-only';
+  /**
+   * The answer-turn ask on this run (9.103.0) — present ONLY when
+   * `AgentOptions.findings.answerAsk` is `'quote-facts'`, seeded by
+   * `stages/seed.ts` beside `findingsServe` under the same arm, and absent
+   * for every other agent — including an armed one on the default `'none'`,
+   * so the dial's default writes no key and an armed record is the bytes
+   * it was before the dial existed (the `forcedOutputToolName` shape:
+   * absent means the default). It exists for the same reason as
+   * `findingsServe`: the rebuild (`servedView.ts` · `viewOf`) appends
+   * `FINDINGS_ANSWER_ASK` to the piece the way the wire did, and the dial
+   * is a build-time constant it must read from the RECORD, not from the
+   * receipt it is checking.
+   */
+  findingsAnswerAsk?: 'quote-facts';
   /**
    * The `Tool.wants` declarations by tool name (9.88.0) — seeded once, on an
    * agent whose evidence gate arms the staged-refs nudge. Absent for every

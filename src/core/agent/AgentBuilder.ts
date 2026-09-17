@@ -2004,7 +2004,12 @@ export class AgentBuilder {
    * piece; `'ledger-only'` collapses fact results too and is BENCH-GATED —
    * shipped so `bench/findings-shuffle.mjs` can measure it on a real model,
    * not a recommendation, never a default until that run shows the answer
-   * does not drift under shuffled evidence. `keepLedgerFacts` is the ceiling
+   * does not drift under shuffled evidence. `answerAsk` (9.103.0) appends
+   * the answer-turn ask (`findings/reserved.ts · FINDINGS_ANSWER_ASK`) to
+   * that piece under `'quote-facts'` — BENCH-GATED the same way, against
+   * the fidelity dip the real-model page's fourth run measured; `'none'`
+   * (the default) writes no key and serves the piece exactly as before.
+   * `keepLedgerFacts` is the ceiling
    * of fact turns the WINDOW holds under standing-aware eviction (9.102.0) —
    * the same dial as `AgentOptions.keepLedgerFacts` (that field says why and
    * what it costs), this door winning when both are given, resolved once by
@@ -2051,6 +2056,13 @@ export class AgentBuilder {
           `${JSON.stringify(serve)}.`,
       );
     }
+    const answerAsk = options?.answerAsk;
+    if (answerAsk !== undefined && answerAsk !== 'none' && answerAsk !== 'quote-facts') {
+      throw new Error(
+        `AgentBuilder.findings: answerAsk must be 'none' or 'quote-facts', got ` +
+          `${JSON.stringify(answerAsk)}.`,
+      );
+    }
     const keep = options?.keepLedgerFacts;
     if (keep !== undefined && keep !== false && !(Number.isInteger(keep) && keep >= 0)) {
       throw new Error(
@@ -2058,7 +2070,14 @@ export class AgentBuilder {
           `${JSON.stringify(keep)}.`,
       );
     }
-    this.findingsValue = { serve, ...(keep !== undefined && { keepLedgerFacts: keep }) };
+    // `answerAsk` is stored as given, never normalised: `'none'` is the
+    // default and `Agent.ts` threads the dial only under `'quote-facts'`, so
+    // an explicit `'none'` and an absent one reach the run as the same thing.
+    this.findingsValue = {
+      serve,
+      ...(answerAsk !== undefined && { answerAsk }),
+      ...(keep !== undefined && { keepLedgerFacts: keep }),
+    };
     // The always-on ask — the `outputSchema()` twin: a system-slot instruction
     // that activates every iteration, so a long run keeps the vocabulary
     // present, and a system PIECE on the receipt (never an injected turn, so

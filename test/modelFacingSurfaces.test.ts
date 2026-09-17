@@ -64,6 +64,7 @@ import {
 import { composeReadSkillRefusal, unknownToolResult } from '../src/core/agent/stages/toolCalls.js';
 import { WRAP_UP_INSTRUCTION } from '../src/core/agent/stages/wrapUp.js';
 import {
+  FINDINGS_ANSWER_ASK,
   FINDINGS_ARGUMENT_SCHEMA,
   FINDINGS_INSTRUCTION,
 } from '../src/core/agent/findings/reserved.js';
@@ -651,6 +652,32 @@ function findingsPieces(): string[] {
   return [findingsLedgerPiece(ledger, served)!.rawContent];
 }
 
+/** The piece under `findings({ answerAsk: 'quote-facts' })` (9.103.0): the
+ *  same ledger with `FINDINGS_ANSWER_ASK` as its last section — composed by
+ *  the real function, so the row reads the ask where the model reads it. */
+function findingsAskPieces(): string[] {
+  const ledger: FindingsLedger = [
+    {
+      kind: 'standing',
+      toolCallId: 'call_1',
+      toolName: 'lookup_port',
+      standing: 'fact',
+      assertions: [
+        {
+          subject: { kind: 'port', id: 'fc1/7' },
+          predicate: 'state',
+          value: 'up',
+          stratum: 'asserted',
+          provenance: 'tool:call_1',
+        },
+      ],
+      declaredOn: { toolCallId: 'call_2' },
+      iteration: 2,
+    },
+  ] as FindingsLedger;
+  return [findingsLedgerPiece(ledger, ['call_1', 'call_2'], 'quote-facts')!.rawContent];
+}
+
 /** Every `description` in the reserved property's schema tree — each one the
  *  model reads on every served tool, at whatever depth the provider renders. */
 function findingsSchemaDescriptions(): string[] {
@@ -990,6 +1017,36 @@ const PRODUCERS: readonly ModelFacingProducer[] = [
       /…\[clipped \d+ chars\]/,
     ],
     compose: async () => findingsPieces(),
+  },
+  {
+    id: 'findings ledger — the answer-turn ASK appended to the served piece (9.103.0)',
+    module: 'src/core/agent/findings/reserved.ts',
+    surface: LEDGER_PIECE,
+    lifetimeBecause:
+      "a constant (`FINDINGS_ANSWER_ASK`) that `findingsLedgerPiece` appends as the piece's last " +
+      "section ONLY under `findings({ answerAsk: 'quote-facts' })` — the same request-only " +
+      'system piece as the row above, composed per request, joined into `systemPieces` only, ' +
+      'never an injection and never a `history` turn; `servedView.ts · viewOf` re-appends it ' +
+      'from the run constant `findingsAnswerAsk`',
+    drivenBy: [
+      'test/core/agent/findings-served.test.ts',
+      'test/core/agent/findings/serve.test.ts',
+      'test/lib/time-travel/receipt-conformance.test.ts',
+    ],
+    // The ask's five sentences: what the model may DO with a fact line, an
+    // open one, a ticket and an undeclared result, and its one refusal to
+    // invent — each a marker so a rewrite that drops one goes red here.
+    reaches: [
+      /copy each value exactly as it is written there/,
+      /`evidenceRefs` or `nextSteps` is unsettled/,
+      /\{"collapsed":true,…\}` carries no data/,
+      /listed as undeclared is served in full below/,
+      /Never invent a value that is not in a fact line/,
+      // …and the piece it rides on is still the real one.
+      /^\[AgentFootprint findings ledger/,
+      /facts \(declared by the model\):/,
+    ],
+    compose: async () => findingsAskPieces(),
   },
 ];
 

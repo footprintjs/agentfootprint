@@ -59,6 +59,7 @@ import {
   collapseJudged,
   findingsLedgerPiece,
   servedToolCallIds,
+  type FindingsAnswerAsk,
   type FindingsServeMode,
 } from '../findings/serve.js';
 import type { FindingsLedger } from '../findings/types.js';
@@ -139,6 +140,14 @@ export interface CallLLMStageDeps {
    * is how the rebuild collapses the way the wire did.
    */
   readonly findingsServe?: FindingsServeMode;
+  /**
+   * The answer-turn ask (9.103.0) — `AgentOptions.findings.answerAsk`,
+   * threaded under the same gate and ONLY when it is `'quote-facts'`; absent
+   * ⇒ `'none'`, the piece as it was. The same value seed puts on the record
+   * as the run constant `findingsAnswerAsk`, which is how the rebuild
+   * appends the ask the way the wire did.
+   */
+  readonly findingsAnswerAsk?: FindingsAnswerAsk;
   /** Optional pricing adapter for cost tracking. */
   readonly pricingTable?: PricingTable;
   /** Optional cumulative USD cap per run. */
@@ -456,7 +465,7 @@ export function buildCallLLMStage(
         : history;
     const ledgerPiece =
       deps.hasFindingsLedger === true
-        ? findingsLedgerPiece(ledger, servedToolCallIds(history))
+        ? findingsLedgerPiece(ledger, servedToolCallIds(history), deps.findingsAnswerAsk ?? 'none')
         : undefined;
     // The join: injections, then the recovery piece, then the findings piece
     // — a FIXED order `servedView.ts · viewOf` mirrors. Both request-only

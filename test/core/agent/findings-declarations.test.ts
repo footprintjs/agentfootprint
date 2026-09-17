@@ -49,10 +49,11 @@ vi.mock('../../../src/core/agent/stages/window.js', async (importOriginal) => {
 });
 
 describe('findings declarations — AgentOptions.findings', () => {
-  it('is optional and carries only `serve` and `keepLedgerFacts`', () => {
+  it('is optional and carries only `serve`, `answerAsk` and `keepLedgerFacts`', () => {
     expectTypeOf<AgentOptions['findings']>().toEqualTypeOf<
       | {
           readonly serve?: 'ledger-and-facts' | 'ledger-only';
+          readonly answerAsk?: 'none' | 'quote-facts';
           readonly keepLedgerFacts?: number | false;
         }
       | undefined
@@ -137,6 +138,85 @@ describe('findings declarations — the run constant `findingsServe` (seed, arme
   });
 });
 
+// ─── the answer-turn ask (9.103.0): the option and its run constant ──────
+
+/** `findingsAnswerAsk` read the way `servedView.ts` · `viewOf` reads it. */
+const answerAskAtEveryEpoch = (agent: Agent): unknown[] =>
+  epochLocations(agent.getLastSnapshot()).map((location) =>
+    readRunConstant(location, 'findingsAnswerAsk'),
+  );
+
+describe('findings declarations — AgentOptions.findings.answerAsk and the run constant `findingsAnswerAsk`', () => {
+  it("the run constant is the ON literal only: 'quote-facts', never 'none' — absent IS the default", () => {
+    expectTypeOf<AgentState['findingsAnswerAsk']>().toEqualTypeOf<'quote-facts' | undefined>();
+    expectTypeOf<NonNullable<AgentOptions['findings']>['answerAsk']>().toEqualTypeOf<
+      'none' | 'quote-facts' | undefined
+    >();
+  });
+
+  it("armed with { answerAsk: 'quote-facts' }: the option is stored and the record carries the key at every epoch", async () => {
+    const agent = await ran((b) => b.findings({ answerAsk: 'quote-facts' }));
+    const state = agent.getLastSnapshot()?.sharedState as Partial<AgentState> | undefined;
+    expect(state?.findingsAnswerAsk).toBe('quote-facts');
+    expect(state?.findingsServe).toBe('ledger-and-facts');
+    expect(new Set(answerAskAtEveryEpoch(agent))).toEqual(new Set(['quote-facts']));
+  });
+
+  it('the option door stores it the same way (`Agent.create({ findings: { answerAsk } })`)', async () => {
+    const agent = Agent.create({
+      provider: answerOnly(),
+      model: 'm',
+      findings: { answerAsk: 'quote-facts' },
+    }).build();
+    await agent.run({ message: 'hi' });
+    expect(new Set(answerAskAtEveryEpoch(agent))).toEqual(new Set(['quote-facts']));
+  });
+
+  it("armed on the default — absent or an explicit 'none' — writes NO key: the armed key set is 9.102.0's", async () => {
+    const off = await ran((b) => b);
+    const absent = await ran((b) => b.findings());
+    const none = await ran((b) => b.findings({ answerAsk: 'none' }));
+    expect(keysOf(absent)).not.toContain('findingsAnswerAsk');
+    expect(keysOf(none)).toEqual(keysOf(absent));
+    expect(keysOf(absent)).toEqual([...keysOf(off), 'findingsServe'].sort());
+    expect(new Set(answerAskAtEveryEpoch(absent))).toEqual(new Set([undefined]));
+    expect(new Set(answerAskAtEveryEpoch(none))).toEqual(new Set([undefined]));
+  });
+
+  it('unarmed: the key is absent and the reader finds nothing', async () => {
+    const agent = await ran((b) => b);
+    expect(keysOf(agent)).not.toContain('findingsAnswerAsk');
+    expect(new Set(answerAskAtEveryEpoch(agent))).toEqual(new Set([undefined]));
+  });
+
+  it('the dial adds exactly one key beside `findingsServe`, and only under the arm', async () => {
+    const off = await ran((b) => b);
+    const on = await ran((b) => b.findings({ answerAsk: 'quote-facts' }));
+    expect(keysOf(on)).toEqual([...keysOf(off), 'findingsAnswerAsk', 'findingsServe'].sort());
+    expect(keysOf(on)).not.toContain('findingsLedger');
+  });
+
+  it('a bad value is refused at build, at either door, like `serve`', () => {
+    for (const bad of ['quote', 'facts', true, null, 1]) {
+      expect(() =>
+        Agent.create({ provider: answerOnly(), model: 'm' }).findings({ answerAsk: bad as never }),
+      ).toThrow(/answerAsk must be 'none' or 'quote-facts'/);
+      expect(() =>
+        Agent.create({
+          provider: answerOnly(),
+          model: 'm',
+          findings: { answerAsk: bad as never },
+        }).build(),
+      ).toThrow(/answerAsk/);
+    }
+    for (const ok of ['none', 'quote-facts'] as const) {
+      expect(() =>
+        Agent.create({ provider: answerOnly(), model: 'm' }).findings({ answerAsk: ok }).build(),
+      ).not.toThrow();
+    }
+  });
+});
+
 describe('findings declarations — AgentRunCheckpoint.findingsLedger', () => {
   it('is the SAME FindingsLedger the state holds, optional, on version 1', () => {
     expectTypeOf<AgentRunCheckpoint['findingsLedger']>().toEqualTypeOf<
@@ -179,7 +259,7 @@ describe('findings declarations — AgentOptions.keepLedgerFacts (step 4: the op
     >();
   });
 
-  it('the findings() door still carries only `serve` and `keepLedgerFacts`', () => {
+  it('the findings() door still carries only `serve`, `answerAsk` and `keepLedgerFacts`', () => {
     expectTypeOf<NonNullable<AgentOptions['findings']>['keepLedgerFacts']>().toEqualTypeOf<
       number | false | undefined
     >();

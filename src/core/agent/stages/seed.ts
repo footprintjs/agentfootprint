@@ -196,6 +196,16 @@ export interface SeedStageDeps {
    */
   readonly findingsServe?: 'ledger-and-facts' | 'ledger-only';
   /**
+   * The answer-turn ask on this run (9.103.0) — present ONLY on an armed
+   * agent whose `findings({ answerAsk })` is `'quote-facts'`; `Agent.ts`
+   * threads nothing for the default `'none'`, so an armed agent on the
+   * default hands this stage exactly the deps it did before the dial and
+   * commits exactly the keys it did. Seeded for the `findingsServe` reason:
+   * the rebuild appends `FINDINGS_ANSWER_ASK` to the piece the way the wire
+   * did, reading the dial from the RECORD.
+   */
+  readonly findingsAnswerAsk?: 'quote-facts';
+  /**
    * The `Tool.wants` declarations, by tool name (9.88.0) — present ONLY when
    * the evidence gate's nudge is armed and at least one tool declares `wants`,
    * which is exactly when request assembly can compose the staged-refs line.
@@ -456,6 +466,15 @@ function seedFrom(scope: TypedScope<AgentState>, message: string, deps: SeedStag
   // unarmed agent writes nothing here.
   if (deps.findings === true && deps.findingsServe !== undefined) {
     scope.findingsServe = deps.findingsServe;
+  }
+  // The answer-turn ask (9.103.0) — the third such constant, under the same
+  // arm, but VALUE-conditional where `findingsServe` is not: the dial's
+  // default `'none'` is never threaded and never written, so the key is on
+  // the record only when the ask went out (absent = the default, the
+  // `forcedOutputToolName` shape). An armed agent on the default commits the
+  // key set it committed in 9.102.0.
+  if (deps.findings === true && deps.findingsAnswerAsk !== undefined) {
+    scope.findingsAnswerAsk = deps.findingsAnswerAsk;
   }
   // The `wants` declarations (9.88.0) — the third input to the staged-refs
   // nudge, and the only one that was build-time-only. Value-conditional in the

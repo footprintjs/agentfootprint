@@ -63,6 +63,11 @@
  * token made an unchanged ledger a cache miss on every call) — and a call
  * that serves the same ledger over the same tool ids (a re-ask:
  * `output-retry`, `step-nudge`, `evidence-recheck`) reuses the cached prefix.
+ * The third argument, the answer-turn ask (9.103.0, `answerAsk`), is a
+ * build-time constant of the run — `'none'` by default, and under
+ * `'quote-facts'` the constant `reserved.ts · FINDINGS_ANSWER_ASK` appended
+ * as the piece's last section — so it moves no byte between two calls of
+ * one run either.
  * A call after the ledger or the wire moved does not: a model that declares
  * on every call writes a new system cache entry on every call. That is the
  * cost the design page records beside the byte saving; the receipt hashes
@@ -89,6 +94,7 @@ import { CONTEXT_FIELD_MEANINGS } from '../../../lib/context-contract/index.js';
 import { assertionKey, type Assertion } from '../../../integrity/assertion/types.js';
 import { foldLedger, type LedgerFold } from './ledger.js';
 import { servedToolCallIds, undeclaredIds } from './offer.js';
+import { FINDINGS_ANSWER_ASK } from './reserved.js';
 import type { FindingsLedger, Standing, StandingRow } from './types.js';
 
 // The wire's tool ids live in `offer.ts` since the offer (9.102.0) — the
@@ -98,6 +104,13 @@ export { servedToolCallIds };
 
 /** How judged results are served: facts verbatim (default) or as tickets too (bench-gated). */
 export type FindingsServeMode = 'ledger-and-facts' | 'ledger-only';
+
+/**
+ * Whether the piece ends with the answer-turn ask (9.103.0): `'none'` (the
+ * default — the piece is the bytes it was before the dial existed) or
+ * `'quote-facts'` (`FINDINGS_ANSWER_ASK` appended, bench-gated).
+ */
+export type FindingsAnswerAsk = 'none' | 'quote-facts';
 
 /** The request-only system piece; `source: 'findings'` names it on the receipt. */
 export interface FindingsLedgerPiece {
@@ -165,13 +178,18 @@ const DECLARED = 'declared by the model';
 /**
  * Compose the findings piece for one request, or `undefined` when no result
  * has a standing. Shared by the live request assembly and the served-view
- * rebuild. The bytes are a function of the two arguments and nothing else —
- * no call number, no clock — so two calls that serve the same ledger over
- * the same tool ids serve the same piece (see "The cache" above).
+ * rebuild. The bytes are a function of the three arguments and nothing else
+ * — no call number, no clock — so two calls that serve the same ledger over
+ * the same tool ids serve the same piece (see "The cache" above). The third
+ * argument is the run's `answerAsk` dial: under `'quote-facts'` the piece's
+ * last section is `FINDINGS_ANSWER_ASK`, after a blank line like every other
+ * section; under `'none'` (the default) nothing is appended and a
+ * basis-only ledger still serves nothing — the ask never rides alone.
  */
 export function findingsLedgerPiece(
   rows: FindingsLedger | undefined,
   served: readonly string[] = [],
+  answerAsk: FindingsAnswerAsk = 'none',
 ): FindingsLedgerPiece | undefined {
   if (rows === undefined) return undefined;
   const fold = foldLedger(rows);
@@ -186,6 +204,7 @@ export function findingsLedgerPiece(
     bucket('nextSteps', nextStepLines(current)),
     countLine(`noise (${DECLARED})`, idsWith(current, 'noise'), ''),
     countLine('undeclared', undeclaredIds(served, fold.standingOf), ', served in full below'),
+    ...(answerAsk === 'quote-facts' ? [FINDINGS_ANSWER_ASK] : []),
   ].filter((s): s is string => s !== undefined);
   return {
     rawContent: [HEADER, ...sections].join('\n\n'),
