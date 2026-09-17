@@ -606,6 +606,23 @@ export {
   type Standing,
   type StandingRow,
 } from './core/agent/findings/types.js';
+// 9.105.0 — tool choice by classifier (`.toolChoice()`): the row shapes
+// `AgentState.toolChoices` carries (a pick before every model call, the
+// outcome after it), the reasons a narrowing was skipped, and the two
+// leaf constants — the question id a record reader looks for and the
+// framework's doors that are never narrowed away. The asker itself is
+// loaded lazily by the tools slot and is deliberately NOT a root export.
+export {
+  ALWAYS_SERVED_TOOLS,
+  TOOL_CHOICE_QUESTION,
+  type NarrowSkipReason,
+  type ToolChoiceEntry,
+  type ToolChoiceErrorRow,
+  type ToolChoiceLedger,
+  type ToolChoiceOutcomeRow,
+  type ToolChoiceRow,
+  type ToolChoiceScore,
+} from './core/agent/toolChoice/types.js';
 // 8.18.0 — the input boundary every runner's `run()` goes through. A bare
 // string IS the message (`run('go')` ≡ `run({ message: 'go' })`); anything
 // that is not a message is refused by name before the run starts, instead of

@@ -223,7 +223,13 @@ describe('event registry — names + exhaustiveness', () => {
     //     `ruled-out` / `noise`) declared for a PREVIOUS result. Identities,
     //     enums and counts only — the `MiddlewareDecisionPayload` law — so the
     //     assertions the model stands on never leave the run through a sink.)
-    expect(ALL_EVENT_TYPES.length).toBe(115);
+    //    (tool_choice.picked + tool_choice.outcome + tool_choice.failed added in
+    //     9.105.0 — a classifier's pick of WHICH TOOL beside every model call
+    //     under `.toolChoice()`: the pick (chosen, confidence, offered/served
+    //     counts, narrowed, cost) before the call, the outcome (called,
+    //     firstAgrees, missed) after it, the failure (status, latency). Tool
+    //     names are identities; never a description, never the message.)
+    expect(ALL_EVENT_TYPES.length).toBe(118);
   });
 
   it('every entry in ALL_EVENT_TYPES is a key of AgentfootprintEventMap', () => {

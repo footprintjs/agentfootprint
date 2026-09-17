@@ -461,8 +461,15 @@ const LEDGER: Readonly<Record<string, readonly Entry[]>> = {
   'src/core/Agent.ts': [
     {
       kind: 'not-model-facing',
-      count: 8,
-      why: "typed-output, option-validation and forced-tool errors thrown to the caller, the build-time refusal of `.findings()` under reactMode 'classic', plus one console warning about a cached menu",
+      count: 9,
+      why: "typed-output, option-validation and forced-tool errors thrown to the caller, the build-time refusals of `.findings()` and `.toolChoice()` under reactMode 'classic', plus one console warning about a cached menu",
+    },
+  ],
+  'src/core/agent/toolChoice/pick.ts': [
+    {
+      kind: 'not-model-facing',
+      count: 1,
+      why: "the tool-choice question's instruction — sent to the `Classifier` port (`agentfootprint/classify`) as the `choice` question's `instructions`, never a message on the model's wire; what the MODEL is served is the narrowed schema list, which the registry already reads",
     },
   ],
   'src/core/agent/AgentBuilder.ts': [
@@ -1063,12 +1070,16 @@ describe('every model-facing-shaped literal in src/ is accounted for', () => {
         // (the tools slot is cached on turn 1, so the offer could never reach
         // the model). Thrown to the caller at build; classified in Agent.ts's
         // not-model-facing row (7 → 8). Same files.
-        files: 94,
-        total: 181,
+        // 9.105.0: two host-facing literals — `Agent`'s refusal of `.toolChoice()`
+        // under reactMode 'classic' (Agent.ts 8 → 9) and the classifier's
+        // instruction in `toolChoice/pick.ts` (a question to the classifier
+        // port, not the model's wire; one new file).
+        files: 95,
+        total: 183,
         registry: 8,
         ephemeral: 20,
         unrepaired: 33,
-        notModelFacing: 120,
+        notModelFacing: 122,
         unrepairedEntries: 13,
       });
       // And the ledger's own total is the number of literals the scan flagged —

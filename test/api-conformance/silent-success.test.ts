@@ -680,6 +680,10 @@ const REFUSES_A_SECOND_CALL = [
   // second call would register the instruction twice and let the later
   // options silently win.
   'findings',
+  // 9.105.0 — tool choice by classifier is one classifier and one serve dial
+  // per agent; a second call would leave two option sets with the later one
+  // silently winning.
+  'toolChoice',
   'limitsTravelWithTheAnswer',
   'maps',
   'namesAndNumbersFromEvidence',
@@ -825,6 +829,10 @@ describe('silent success — the doctrine sweep', () => {
           .configure(() => ({}))
           .configure(() => ({})),
       findings: () => base().findings().findings(),
+      toolChoice: () =>
+        base()
+          .toolChoice({ classifier: { name: 'mock', classify: async () => ({}) } as never })
+          .toolChoice({ classifier: { name: 'mock', classify: async () => ({}) } as never }),
       limitsTravelWithTheAnswer: () =>
         base().limitsTravelWithTheAnswer().limitsTravelWithTheAnswer(),
       maps: () => base().maps().maps(),

@@ -78,6 +78,7 @@ import { buildAgentMessageApiChart } from '../../../src/core/agent/buildAgentMes
 import { innerRunsOf } from '../../../src/lib/trace-toolpack/index.js';
 import { isPaused, pauseHere } from '../../../src/core/pause.js';
 import { defineSkill, skillGraph } from '../../../src/injection-engine.js';
+import { mockClassifier, type ClassifyResult } from '../../../src/classify/index.js';
 import {
   buildReceipt,
   messageDigestInput,
@@ -141,6 +142,19 @@ function scripted(script: readonly Reply[]) {
 }
 
 const answer = (content: string): Reply => ({ content });
+/** A classifier answer ranking `names` highest first — the `tool` question's shape. */
+const rank = (...names: string[]): ClassifyResult => ({
+  model: 'jev-1.13.0',
+  answers: {
+    tool: {
+      type: 'choice',
+      choice: names[0]!,
+      confidence: 0.8,
+      probabilities: Object.fromEntries(names.map((n, i) => [n, 0.9 - i * 0.2])),
+    },
+  },
+  latencyMs: 1,
+});
 const call = (id: string, name: string, args: object = {}): Reply => ({
   content: '',
   toolCalls: [{ id, name, args }],
@@ -663,6 +677,50 @@ describe('the wrap-up call', () => {
     expect(views[0]!.tools.names).toEqual(['alpha_tool']);
     clean(r);
   });
+});
+
+describe('a narrowed tool list (9.105.0, `.toolChoice({ serve: { top } })`)', () => {
+  for (const reactMode of ['dynamic', 'dynamic-grouped'] as const) {
+    it(`${reactMode}: the classifier's top-N plus the doors is what the receipt hashes and the log rebuilds`, async () => {
+      // Four tools and a skill (so `read_skill` is a door on the wire); the
+      // classifier ranks a different pair on every call, so every epoch's
+      // served list is a different narrowing — and every one must conform:
+      // the narrowing happened at the slot's commit, so the receipt, the
+      // served view and the wire agree by construction (no new gap).
+      const classifier = mockClassifier([
+        rank('charge', 'lookup'),
+        rank('ship', 'invoice'),
+        rank('invoice', 'charge'),
+      ]);
+      const r = await run(
+        reactMode,
+        [call('c1', 'charge'), call('c2', 'ship'), answer('done')],
+        (a) =>
+          a
+            .system('bot')
+            .tool(tool('lookup'))
+            .tool(tool('charge'))
+            .tool(tool('ship'))
+            .tool(tool('invoice'))
+            .skill(defineSkill({ id: 'billing', description: 'billing', body: 'B' }))
+            .toolChoice({ classifier, serve: { top: 2 } }),
+      );
+      const views = servedViews(r.snapshot);
+      expect(views.map((v) => v.tools.names)).toEqual([
+        ['lookup', 'charge', 'read_skill'],
+        ['ship', 'invoice', 'read_skill'],
+        ['charge', 'invoice', 'read_skill'],
+      ]);
+      expect(
+        views.map((v) => Object.keys(receiptAt(r.snapshot, v.epoch)!.tools.schemaHashes)),
+      ).toEqual(views.map((v) => v.tools.names));
+      // The wire the provider got is the same three lists.
+      expect(r.wire.map((w) => (w.tools ?? []).map((t) => t.name))).toEqual(
+        views.map((v) => v.tools.names),
+      );
+      clean(r);
+    });
+  }
 });
 
 describe('a tool-forced output', () => {

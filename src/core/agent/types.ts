@@ -43,6 +43,7 @@ import type { OutputAttempt } from './outputEnforcement.js';
 import type { PendingEvidenceRecovery, UnsupportedValue } from './evidence/types.js';
 import type { AgentRunCheckpoint } from '../runCheckpoint.js';
 import type { FindingsLedger } from './findings/types.js';
+import type { ToolChoiceLedger } from './toolChoice/types.js';
 import type { Classifier } from '../../classify/types.js';
 
 // ─── PUBLIC types (consumer-facing) ────────────────────────────────
@@ -319,6 +320,49 @@ export interface AgentOptions {
     /** A calibrated classifier judging every tool result as a second source
      *  (`JudgmentRow`), never served in the model's place. Default none. */
     readonly judge?: Classifier;
+  };
+  /**
+   * Tool choice by classifier (9.105.0) — a SECOND READING of which tool
+   * answers the current step, beside the model's own call. At every model
+   * call the tools slot asks `classifier` ONE `choice` question over the
+   * tools it is about to serve (the merged wire minus the always-served
+   * doors, each by its own description) and files a `ToolChoiceRow` under
+   * `AgentState.toolChoices` — the provider's ranking, its pick, its
+   * confidence, its cost, and what was actually served — BEFORE the call;
+   * after the reply `callLLM` files a `ToolChoiceOutcomeRow` with the tools
+   * the model called, whether the first agrees with the pick, and any miss.
+   * The model's call is never overridden and nothing is served from the pick
+   * unless `serve` says so.
+   *
+   * `serve: 'all'` (the default) is ADVISORY: every call serves the full
+   * wire, byte for byte what it served without the option. `serve: { top: N }`
+   * NARROWS: the slot commits the classifier's top-N plus the doors — the
+   * list the receipt hashes and `servedAt` rebuilds — and serves the full
+   * wire, with the reason on the row, when the classifier failed or scored
+   * fewer than N (`unavailable`), fewer than N + 1 candidates were offered
+   * (`too-few`), the previous call's outcome carried a miss (`after-miss`) or
+   * the call is the out-of-budget wrap-up (`wrap-up`). A model that names a
+   * narrowed-away tool anyway is recorded as a MISS and answered by the
+   * dispatcher's off-wire path exactly as before (`tools.answered_off_wire`);
+   * the next call serves the full wire.
+   *
+   * `alwaysServe` names the app's own doors — served on every call whatever
+   * the ranking says, never offered as candidates. `read_skill`,
+   * `list_skills`, `skip_step` and `present` are doors by law.
+   *
+   * Requires per-call slot recomposition: `reactMode: 'classic'` is refused
+   * at build (the `.findings()` precedent — the slot runs on turn 1 only there,
+   * so a narrowed list would be served on every later call with no pick).
+   * Without this option not one line of it runs and the record is the one it
+   * always was.
+   */
+  readonly toolChoice?: {
+    /** The classifier asked which tool answers the current step. */
+    readonly classifier: Classifier;
+    /** `'all'` (default): advisory only. `{ top: N }`: serve the top-N plus the doors. */
+    readonly serve?: 'all' | { readonly top: number };
+    /** The app's own always-served tool names — never narrowed away, never offered as candidates. */
+    readonly alwaysServe?: readonly string[];
   };
   /**
    * The ceiling on ONE tool result, in characters (9.11.0). **Opt-in — there
@@ -1804,6 +1848,21 @@ export interface AgentState {
    * assertions, and the current conflict set is a fold, not the rows.
    */
   findingsLedger?: FindingsLedger;
+
+  // ── Tool choice by classifier (`.toolChoice()`) ───────────────
+  /**
+   * A classifier's reading of WHICH TOOL answers each step, beside the
+   * model's own call (9.105.0) — one flat append-only list: a `pick` row
+   * (or a `pick-error` row) filed by the tools slot before every model call
+   * with the provider's ranking, its pick, its cost and the names actually
+   * served, and an `outcome` row filed by `callLLM` after the reply with the
+   * tools the model called, `firstAgrees` and any `miss`. Written ONLY by
+   * `recordToolChoice`, and only under `.toolChoice()` — ABSENT otherwise, so
+   * every other agent commits exactly the keys it always did. Plain records
+   * and arrays only; every write assigns a FRESH array. The model's call is
+   * the emission; a row here is a second reading, never a substitute.
+   */
+  toolChoices?: ToolChoiceLedger;
 
   // ── Per-run configuration (`.configure()`) ─────────────────────
   /** The model `.configure()` resolved for THIS run, written by seed and read

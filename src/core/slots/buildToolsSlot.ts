@@ -38,6 +38,8 @@ import type { ToolNameChannel } from '../../events/payloads.js';
 import type { ToolProvider, ToolDispatchContext } from '../../tool-providers/types.js';
 import { composeSlot, fnv1a, formatOverflowWarning, slotOverflow, truncate } from './helpers.js';
 import { withFindingsArgument } from '../agent/findings/reserved.js';
+import type { Classifier } from '../../classify/types.js';
+import type { ToolChoiceEntry } from '../agent/toolChoice/types.js';
 
 /**
  * Mutable cache shared between `buildToolsSlot` (writer) and
@@ -329,6 +331,26 @@ export interface ToolsSlotConfig {
    * empty offer, which serves the base decoration.
    */
   readonly findings?: true;
+  /**
+   * TOOL CHOICE BY CLASSIFIER IS ARMED (9.105.0, `.toolChoice()`) — present
+   * ONLY then. Compose then asks `classifier` which of the merged wire's
+   * tools (minus the doors) answers the current step, files the pick under
+   * `toolChoices` BEFORE `scope.toolSchemas` is written, and — under `top` —
+   * commits the top-N plus the doors as the served list, at the ONE
+   * decoration site, so the receipt hashes and `servedView` rebuilds the
+   * narrowed list by construction. The pick is awaited: the stage returns a
+   * promise under this gate and stays synchronous without it. Reads three
+   * mount args under this gate only: `userMessage`, `priorToolChoices` (the
+   * parent's rows, a frozen input the slot never writes) and `wrapUpAsked`.
+   * The module that asks is loaded through `import()` — an unarmed agent
+   * never loads it.
+   */
+  readonly toolChoice?: {
+    readonly classifier: Classifier;
+    /** Serve the top-N plus the doors; absent = advisory only (the full wire). */
+    readonly top?: number;
+    readonly alwaysServe?: readonly string[];
+  };
 }
 
 interface ToolsSubflowState {
@@ -365,6 +387,7 @@ export function buildToolsSlot(config: ToolsSlotConfig): FlowChart {
   const stepPlanFor = config.stepPlanFor;
   const toolClaimants = config.toolClaimants;
   const servedTools = config.servedTools;
+  const toolChoice = config.toolChoice;
   /** A STATIC-list schema's party and implementation: its first build-time claimant. */
   const registryCandidate = (schema: LLMToolSchema): WireCandidate => {
     const first = toolClaimants?.get(schema.name)?.[0];
@@ -512,13 +535,16 @@ export function buildToolsSlot(config: ToolsSlotConfig): FlowChart {
   // Stage 2 — Compose: merges static + provider + per-skill schemas
   // into the tool slot. Pure compute, sync, fast. Reads provider tools
   // from `providerToolCache.current` populated by the Discover stage.
-  const composeStage = (scope: TypedScope<ToolsSubflowState>): void => {
+  const composeStage = (scope: TypedScope<ToolsSubflowState>): void | Promise<void> => {
     const args = scope.$getArgs<{
       iteration?: number;
       currentSkillId?: string;
       turnRoute?: TurnRoute;
       stepPointer?: StepPointerCarrier;
       findingsOffer?: readonly string[];
+      userMessage?: string;
+      priorToolChoices?: readonly ToolChoiceEntry[];
+      wrapUpAsked?: boolean;
     }>();
     const iteration = args.iteration ?? 1;
 
@@ -649,6 +675,10 @@ export function buildToolsSlot(config: ToolsSlotConfig): FlowChart {
         : steppedTools;
 
     const ownerOf = config.toolOwners ?? new Map<string, import('../tools.js').ToolOwner>();
+    // The tool NAME behind each injection record, by index (9.105.0): a
+    // record's `sourceId` is the owner or the skill, so the narrowing below
+    // needs its own list to know which record is which tool.
+    const injectionNames: string[] = tools.map((t) => t.name);
     const injections: InjectionRecord[] = tools.map((t, i) => {
       const summary = `${t.name}: ${t.description}`;
       // `source: 'registry'` — tools configured at build time via
@@ -706,6 +736,7 @@ export function buildToolsSlot(config: ToolsSlotConfig): FlowChart {
         providerSchemas.push(schema);
         providerCandidates.push({ schema, party: providerParty, tool: t });
         const summary = `${schema.name}: ${schema.description}`;
+        injectionNames.push(schema.name);
         injections.push({
           contentSummary: truncate(summary, 80),
           contentHash: fnv1a(`tool:provider:${schema.name}`),
@@ -747,6 +778,7 @@ export function buildToolsSlot(config: ToolsSlotConfig): FlowChart {
           tool: claimed ?? (tool as unknown as Tool),
         });
         const summary = `${schema.name}: ${schema.description}`;
+        injectionNames.push(schema.name);
         injections.push({
           contentSummary: truncate(summary, 80),
           contentHash: fnv1a(`tool:${inj.flavor}:${inj.id}:${schema.name}`),
@@ -774,6 +806,7 @@ export function buildToolsSlot(config: ToolsSlotConfig): FlowChart {
       };
       stepSchemas.push(skipSchema);
       const summary = `${skipSchema.name}: ${skipSchema.description}`;
+      injectionNames.push(skipSchema.name);
       injections.push({
         contentSummary: truncate(summary, 80),
         contentHash: fnv1a(`tool:skill:${stepPointer.skillId}:${skipSchema.name}`),
@@ -788,7 +821,6 @@ export function buildToolsSlot(config: ToolsSlotConfig): FlowChart {
       });
     }
 
-    scope.$setValue(INJECTION_KEYS.TOOLS, injections);
     // Merge schemas from all three sources, deduping by tool name.
     // Order: static .tool() registry FIRST (auto-attached read_skill /
     // list_skills land here when `.skills(registry)` is wired), then
@@ -817,143 +849,204 @@ export function buildToolsSlot(config: ToolsSlotConfig): FlowChart {
       })),
     ];
     const { merged, winners, losers } = mergeWire(candidates);
-    // THE ONE DECORATION SITE (9.101.0). With `.findings()` armed, every
-    // schema on the committed list gains the reserved optional `_findings`
-    // property here — after the merge, so `sameContract` paired UNDECORATED
-    // candidates and an always-visible skill tool still pairs with itself;
-    // before the commit, so what the mount maps to `dynamicToolSchemas`, what
-    // `callLLM · registeredToolSchemas` reads, what `servedView` rebuilds and
-    // what `receipt.tools.schemaHashes` hashes are the SAME bytes by
-    // construction (no new served gap). A rebuilt copy per schema — never an
-    // edit of a registry reference `mcpServe` serves and `validateToolArgs`
-    // judges. `merged` itself stays undecorated for the names-only reads
-    // below. Unarmed: the merged list, byte for byte.
-    //
-    // THE OFFER (9.102.0). The decoration binds the ids the model may NAME
-    // into `previous[].toolCallId`'s enum: the served results the model can
-    // still read — no standing, `fact` or `open`; a `noise` or `ruled-out`
-    // result is a ticket and leaves — newest first (`findings/offer.ts ·
-    // offeredResultIds`,
-    // computed at the mount and handed in as `findingsOffer` — see
-    // `ToolsSlotConfig.findings`). An explicit lambda, on purpose: passed
-    // point-free, `.map` would hand the INDEX in as the offer. The committed
-    // list therefore holds the offer, so the rebuild is byte-equal without
-    // recomposition and `receipt.tools.schemaHashes` moves when the offer
-    // does — the record telling the truth. An empty offer (the first call;
-    // everything declared; no mount arg) is the base decoration by reference.
-    // The offer is what the model may COPY, never what the library resolves:
-    // an id outside it still files as written, `unknownId: true`, and every
-    // id inside it resolves — the rows are identified against the same served
-    // history (`findings/ledger.ts · standingRowsFrom` over
-    // `findings/offer.ts · knownResults`).
-    const offer: readonly string[] =
-      config.findings === true ? args.findingsOffer ?? EMPTY_OFFER : EMPTY_OFFER;
-    scope.toolSchemas =
-      config.findings === true ? merged.map((s) => withFindingsArgument(s, offer)) : merged;
-    if (servedTools !== undefined) {
-      servedTools.current = winners;
-      // The run's memory of who served what (read by the off-wire fallback).
-      // Iteration 1 is a run's first epoch — `seed` sets it — so the memory
-      // of a previous run on this same built chart is dropped here.
-      if (iteration === 1) servedTools.lastServed.clear();
-      for (const [name, party] of winners) servedTools.lastServed.set(name, party);
-    }
-    // ── Compose-seam integrity backstop (9.60.0) ──────────────────────
-    // Every list the merge reads is park-filtered — the registry and skill
-    // lists from 9.59.0, the provider list since the 9.60.0 fix pass (the
-    // comment at the provider loop above says why it has to be this layer).
-    // The backstop stays as the check that the MERGED wire agrees with the
-    // park, whatever route a name took: the final list is compared against
-    // every parked map's owned names. One finding per defect (identity
-    // dedup via a scope-held seen list, written only when something fires),
-    // filed as a typed event; the composition itself is never altered —
-    // detection converts a silent inconsistency into an attributed one.
-    if (config.mountedMaps !== undefined && parkHoldOut !== undefined) {
-      const servedNames = merged.map((t) => t.name);
-      const seenIds =
-        (scope.$getValue('priorIntegrityFindingIds') as readonly string[] | undefined) ?? [];
-      const newIds: string[] = [...seenIds];
-      let comparedAnyMap = false;
-      let firedThisPass = false;
-      for (const map of config.mountedMaps) {
-        const parkedOwned = map.toolNames.filter((n) => parkHoldOut.has(n));
-        if (parkedOwned.length === 0) continue;
-        comparedAnyMap = true;
-        const findings = invariantViolationsOf(
-          {
-            mapId: map.id,
-            standing: 'parked',
-            iteration,
-            ownedToolNames: parkedOwned,
-          },
-          { names: servedNames, provenance: 'tools slot (merged wire list)' },
+
+    // ── THE COMMIT — everything after the merge, as one closure ─────────
+    // `served` is the list that goes on the record: the merged list itself
+    // (every agent without `.toolChoice({ serve: { top } })`), or the
+    // classifier's top-N plus the doors (9.105.0). The unarmed path calls it
+    // synchronously with `merged`, so every write below lands in the order
+    // it always did; the armed path awaits the pick first and then calls it
+    // with what the pick decided. `servedInjections` is the slot record of
+    // the SAME list — one `InjectionRecord` per tool actually served.
+    const commitWire = (
+      served: readonly LLMToolSchema[],
+      servedInjections: readonly InjectionRecord[],
+      narrowedTo: ReadonlySet<string> | undefined,
+    ): void => {
+      scope.$setValue(INJECTION_KEYS.TOOLS, servedInjections);
+      // THE ONE DECORATION SITE (9.101.0). With `.findings()` armed, every
+      // schema on the committed list gains the reserved optional `_findings`
+      // property here — after the merge, so `sameContract` paired UNDECORATED
+      // candidates and an always-visible skill tool still pairs with itself;
+      // before the commit, so what the mount maps to `dynamicToolSchemas`, what
+      // `callLLM · registeredToolSchemas` reads, what `servedView` rebuilds and
+      // what `receipt.tools.schemaHashes` hashes are the SAME bytes by
+      // construction (no new served gap). A rebuilt copy per schema — never an
+      // edit of a registry reference `mcpServe` serves and `validateToolArgs`
+      // judges. `merged` itself stays undecorated for the names-only reads
+      // below. Unarmed: the merged list, byte for byte.
+      //
+      // THE OFFER (9.102.0). The decoration binds the ids the model may NAME
+      // into `previous[].toolCallId`'s enum: the served results the model can
+      // still read — no standing, `fact` or `open`; a `noise` or `ruled-out`
+      // result is a ticket and leaves — newest first (`findings/offer.ts ·
+      // offeredResultIds`,
+      // computed at the mount and handed in as `findingsOffer` — see
+      // `ToolsSlotConfig.findings`). An explicit lambda, on purpose: passed
+      // point-free, `.map` would hand the INDEX in as the offer. The committed
+      // list therefore holds the offer, so the rebuild is byte-equal without
+      // recomposition and `receipt.tools.schemaHashes` moves when the offer
+      // does — the record telling the truth. An empty offer (the first call;
+      // everything declared; no mount arg) is the base decoration by reference.
+      // The offer is what the model may COPY, never what the library resolves:
+      // an id outside it still files as written, `unknownId: true`, and every
+      // id inside it resolves — the rows are identified against the same served
+      // history (`findings/ledger.ts · standingRowsFrom` over
+      // `findings/offer.ts · knownResults`).
+      //
+      // THE NARROWING (9.105.0) is the SAME site, one step earlier: `served`
+      // is the narrowed list when `.toolChoice({ serve: { top } })` decided
+      // one, so the decoration, the commit, the receipt and the rebuild all
+      // see the narrowed list — nothing downstream learns a new mode.
+      const offer: readonly string[] =
+        config.findings === true ? args.findingsOffer ?? EMPTY_OFFER : EMPTY_OFFER;
+      scope.toolSchemas =
+        config.findings === true ? served.map((s) => withFindingsArgument(s, offer)) : served;
+      if (servedTools !== undefined) {
+        // Dispatch follows the OFFER: a name narrowed off this epoch's wire
+        // was not served, so it is not on `current` and takes the off-wire
+        // path (`toolCalls.ts · resolveTool`) — answered by the party the
+        // model last read it under, and recorded as `tools.answered_off_wire`.
+        const wireWinners =
+          narrowedTo === undefined
+            ? winners
+            : new Map([...winners].filter(([name]) => narrowedTo.has(name)));
+        servedTools.current = wireWinners;
+        // The run's memory of who served what (read by the off-wire fallback).
+        // Iteration 1 is a run's first epoch — `seed` sets it — so the memory
+        // of a previous run on this same built chart is dropped here.
+        if (iteration === 1) servedTools.lastServed.clear();
+        for (const [name, party] of wireWinners) servedTools.lastServed.set(name, party);
+      }
+      // ── Compose-seam integrity backstop (9.60.0) ──────────────────────
+      // Every list the merge reads is park-filtered — the registry and skill
+      // lists from 9.59.0, the provider list since the 9.60.0 fix pass (the
+      // comment at the provider loop above says why it has to be this layer).
+      // The backstop stays as the check that the MERGED wire agrees with the
+      // park, whatever route a name took: the final list is compared against
+      // every parked map's owned names. One finding per defect (identity
+      // dedup via a scope-held seen list, written only when something fires),
+      // filed as a typed event; the composition itself is never altered —
+      // detection converts a silent inconsistency into an attributed one.
+      if (config.mountedMaps !== undefined && parkHoldOut !== undefined) {
+        const servedNames = served.map((t) => t.name);
+        const seenIds =
+          (scope.$getValue('priorIntegrityFindingIds') as readonly string[] | undefined) ?? [];
+        const newIds: string[] = [...seenIds];
+        let comparedAnyMap = false;
+        let firedThisPass = false;
+        for (const map of config.mountedMaps) {
+          const parkedOwned = map.toolNames.filter((n) => parkHoldOut.has(n));
+          if (parkedOwned.length === 0) continue;
+          comparedAnyMap = true;
+          const findings = invariantViolationsOf(
+            {
+              mapId: map.id,
+              standing: 'parked',
+              iteration,
+              ownedToolNames: parkedOwned,
+            },
+            { names: servedNames, provenance: 'tools slot (merged wire list)' },
+          );
+          if (findings.length > 0) firedThisPass = true;
+          for (const f of findings) {
+            const id = contextErrorIdentity({ ...f, epoch: undefined });
+            if (newIds.includes(id)) continue;
+            newIds.push(id);
+            typedEmit(scope, 'agentfootprint.integrity.context_error', {
+              ...f,
+              seam: 'compose',
+              iteration,
+            });
+          }
+        }
+        if (newIds.length > seenIds.length) scope.$setValue('integrityFindingIds', newIds);
+        // The disposition (9.60.0): a pass with no parked map had nothing this
+        // check could violate — stated as not-applicable, never as silence.
+        config.integrityLedger?.current?.note(
+          'invariant-violation',
+          'compose',
+          !comparedAnyMap ? 'not-applicable' : firedThisPass ? 'checked-fail' : 'checked-pass',
+          firedThisPass ? Date.now() : undefined,
         );
-        if (findings.length > 0) firedThisPass = true;
-        for (const f of findings) {
-          const id = contextErrorIdentity({ ...f, epoch: undefined });
-          if (newIds.includes(id)) continue;
-          newIds.push(id);
-          typedEmit(scope, 'agentfootprint.integrity.context_error', {
-            ...f,
-            seam: 'compose',
-            iteration,
-          });
+      } else if (config.mountedMaps !== undefined) {
+        // Maps mounted, nothing parked this pass: the registered check had no
+        // applicable work — stated, so the liveness theorem never mistakes a
+        // run that simply never parked for a dead checker.
+        config.integrityLedger?.current?.note('invariant-violation', 'compose', 'not-applicable');
+      }
+      reportShadowedTools(scope, {
+        iteration,
+        winners,
+        losers,
+        candidates,
+        ...(toolClaimants !== undefined && { claimants: toolClaimants }),
+        warnedShadow,
+      });
+      const composition = composeSlot(
+        'tools',
+        iteration,
+        servedInjections,
+        budgetCap,
+        toolProvider ? 'registry+provider+injections' : 'registry+injections',
+      );
+      scope.$setValue(COMPOSITION_KEYS.SLOT_COMPOSED, composition);
+
+      // Overflow is LOUD. Nothing here truncates — the full tool definitions
+      // always reach the LLM — so an over-budget slot is otherwise invisible
+      // (headroomChars clamps to 0, droppedCount stays 0). Write a FRESH
+      // single-record array: ContextRecorder re-dispatches every record in
+      // the written value on every write, so appending would re-fire prior
+      // iterations.
+      const pressure = slotOverflow(composition);
+      if (pressure) {
+        scope.$setValue(COMPOSITION_KEYS.BUDGET_PRESSURE, [pressure]);
+        if (!warnedOverflow) {
+          warnedOverflow = true;
+          console.warn(
+            formatOverflowWarning({
+              pressure,
+              itemCount: servedInjections.length,
+              itemNoun: 'tool definition',
+              contentNoun: 'definitions',
+              remedy: 'Raise contextBudget.tools on the agent, or trim tool descriptions.',
+            }),
+          );
         }
       }
-      if (newIds.length > seenIds.length) scope.$setValue('integrityFindingIds', newIds);
-      // The disposition (9.60.0): a pass with no parked map had nothing this
-      // check could violate — stated as not-applicable, never as silence.
-      config.integrityLedger?.current?.note(
-        'invariant-violation',
-        'compose',
-        !comparedAnyMap ? 'not-applicable' : firedThisPass ? 'checked-fail' : 'checked-pass',
-        firedThisPass ? Date.now() : undefined,
-      );
-    } else if (config.mountedMaps !== undefined) {
-      // Maps mounted, nothing parked this pass: the registered check had no
-      // applicable work — stated, so the liveness theorem never mistakes a
-      // run that simply never parked for a dead checker.
-      config.integrityLedger?.current?.note('invariant-violation', 'compose', 'not-applicable');
-    }
-    reportShadowedTools(scope, {
-      iteration,
-      winners,
-      losers,
-      candidates,
-      ...(toolClaimants !== undefined && { claimants: toolClaimants }),
-      warnedShadow,
-    });
-    const composition = composeSlot(
-      'tools',
-      iteration,
-      injections,
-      budgetCap,
-      toolProvider ? 'registry+provider+injections' : 'registry+injections',
-    );
-    scope.$setValue(COMPOSITION_KEYS.SLOT_COMPOSED, composition);
+    };
 
-    // Overflow is LOUD. Nothing here truncates — the full tool definitions
-    // always reach the LLM — so an over-budget slot is otherwise invisible
-    // (headroomChars clamps to 0, droppedCount stays 0). Write a FRESH
-    // single-record array: ContextRecorder re-dispatches every record in
-    // the written value on every write, so appending would re-fire prior
-    // iterations.
-    const pressure = slotOverflow(composition);
-    if (pressure) {
-      scope.$setValue(COMPOSITION_KEYS.BUDGET_PRESSURE, [pressure]);
-      if (!warnedOverflow) {
-        warnedOverflow = true;
-        console.warn(
-          formatOverflowWarning({
-            pressure,
-            itemCount: injections.length,
-            itemNoun: 'tool definition',
-            contentNoun: 'definitions',
-            remedy: 'Raise contextBudget.tools on the agent, or trim tool descriptions.',
-          }),
-        );
-      }
+    if (toolChoice === undefined) {
+      commitWire(merged, injections, undefined);
+      return;
     }
+    // ── TOOL CHOICE BY CLASSIFIER (9.105.0) — the armed tail ──────────────
+    // The pick is awaited HERE, after the merge and before the commit, so the
+    // row records the offer the classifier read and the list that was really
+    // served, and the narrowed list — when there is one — is what the mount
+    // maps to `dynamicToolSchemas`. The whole tail (`toolChoice/compose.ts`)
+    // is loaded through `import()`: the optional-family law of docs-next's
+    // site budget (`toolCalls.ts · judgeLanded`). The rows arrive as the
+    // frozen mount arg `priorToolChoices`; the writer is handed them
+    // explicitly and the mount's outputMapper carries the fresh list back.
+    return import('../agent/toolChoice/compose.js').then(({ composeToolChoice }) =>
+      composeToolChoice({
+        scope: scope as unknown as Parameters<typeof composeToolChoice>[0]['scope'],
+        classifier: toolChoice.classifier,
+        ...(toolChoice.top !== undefined && { top: toolChoice.top }),
+        ...(toolChoice.alwaysServe !== undefined && { alwaysServe: toolChoice.alwaysServe }),
+        iteration,
+        merged,
+        injections,
+        injectionNames,
+        userMessage: args.userMessage ?? '',
+        ...(args.currentSkillId !== undefined && { currentSkillId: args.currentSkillId }),
+        prior: args.priorToolChoices ?? [],
+        wrapUpAsked: args.wrapUpAsked === true,
+      }).then(({ served, servedInjections, narrowedTo }) =>
+        commitWire(served, servedInjections, narrowedTo),
+      ),
+    );
   };
 
   return flowChart<ToolsSubflowState>('Discover', discoverStage, 'discover', {

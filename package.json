@@ -65,6 +65,7 @@
     "test:examples:typecheck": "tsc -p examples/tsconfig.json",
     "bench:findings": "node bench/findings-context.mjs",
     "bench:findings:shuffle": "node bench/findings-shuffle.mjs",
+    "bench:tool-choice": "node bench/tool-choice.mjs",
     "test:types": "tsc -p test/type-regressions/tsconfig.json",
     "examples:readme": "node scripts/generate-examples-readme.mjs",
     "examples:readme:check": "node scripts/generate-examples-readme.mjs --check",

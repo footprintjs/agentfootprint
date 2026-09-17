@@ -314,7 +314,19 @@ const OUTPUT_LIMITS = { bytes: 672_000_000, files: 7_250, duplicateRscBytes: 0 }
 // the whole Served tab, Served graph, bookmarks and tag picker the site now
 // actually shows. Set ~2% over that. The three-way story: 382.4 (old Lens, two
 // engines) → 514.0 (current Lens, no flag) → 413.8 (current Lens, flagged).
-const DEMO_ASYNC_GZIP_LIMIT = 422_000;
+//
+// RAISED for 9.105.0 (2026-09-17, owner's call), and measured. 413.8 KB was
+// the flagged Lens before the findings ledger existed. Five minors of
+// DEFAULT-GRAPH wiring since — the ledger (9.101.0), served from the ledger
+// (9.101.1), the hold (9.102.0), the answer ask (9.103.0), the judge (9.104.0)
+// and tool choice (9.105.0) — took the demo chunk to 422.4 KB: builder
+// validation, the charts' mappers, the stages' gates and the registry's event
+// strings, none of it movable behind an import() (the armed tails already are:
+// judge.ts and toolChoice/compose.ts load lazily and are NOT in these assets;
+// the last 0.4 KB is the wiring that decides whether to load them). Ceiling
+// ~2% over the 422.4 KB measurement, as every entry above; the next move is a
+// measured shrink or the next family, never a raise for a single feature.
+const DEMO_ASYNC_GZIP_LIMIT = 431_000;
 
 function formatBytes(bytes) {
   if (bytes < 1_000) return `${bytes} B`;
@@ -371,10 +383,14 @@ function analyzeRoute(route) {
   }
 
   const html = readFileSync(htmlFile, 'utf8');
-  const scriptTags = [...html.matchAll(/<script\b[^>]*\bsrc=["'][^"']+["'][^>]*>/gi)].map((match) => match[0]);
+  const scriptTags = [...html.matchAll(/<script\b[^>]*\bsrc=["'][^"']+["'][^>]*>/gi)].map(
+    (match) => match[0],
+  );
   const modernScripts = scriptTags.filter((tag) => !/\bnomodule\b/i.test(tag));
   const legacyScripts = scriptTags.filter((tag) => /\bnomodule\b/i.test(tag));
-  const styles = [...html.matchAll(/<link\b[^>]*\brel=["']stylesheet["'][^>]*>/gi)].map((match) => match[0]);
+  const styles = [...html.matchAll(/<link\b[^>]*\brel=["']stylesheet["'][^>]*>/gi)].map(
+    (match) => match[0],
+  );
   const imagePreloadTags = [...html.matchAll(/<link\b[^>]*\brel=["']preload["'][^>]*>/gi)]
     .map((match) => match[0])
     .filter((tag) => attribute(tag, 'as')?.toLowerCase() === 'image');
@@ -386,7 +402,8 @@ function analyzeRoute(route) {
   const legacyJsBytes = uniqueAssetBytes(legacyUrls, `${route.name} legacy script`);
   const cssBytes = uniqueAssetBytes(styleUrls, `${route.name} stylesheet`);
   const htmlBytes = gzipSync(html, { level: 9 }).byteLength;
-  const criticalRequests = 1 + new Set(scriptUrls).size + new Set(styleUrls).size + imagePreloadTags.length;
+  const criticalRequests =
+    1 + new Set(scriptUrls).size + new Set(styleUrls).size + imagePreloadTags.length;
 
   routeInitialAssets.set(
     route.name,
@@ -397,9 +414,13 @@ function analyzeRoute(route) {
   if (h1Count !== 1) fail(`${route.name}: expected exactly one H1, found ${h1Count}`);
 
   const images = [...html.matchAll(/<img\b[^>]*>/gi)].map((match) => match[0]);
-  const missingDimensions = images.filter((tag) => !attribute(tag, 'width') || !attribute(tag, 'height'));
+  const missingDimensions = images.filter(
+    (tag) => !attribute(tag, 'width') || !attribute(tag, 'height'),
+  );
   if (missingDimensions.length > 0) {
-    fail(`${route.name}: ${missingDimensions.length}/${images.length} images lack intrinsic width and height`);
+    fail(
+      `${route.name}: ${missingDimensions.length}/${images.length} images lack intrinsic width and height`,
+    );
   }
 
   console.log(
@@ -420,7 +441,9 @@ function analyzeRoute(route) {
       const candidates = [attribute(tag, 'href')];
       const srcSet = attribute(tag, 'imagesrcset');
       if (srcSet) {
-        candidates.push(...srcSet.split(',').map((candidate) => candidate.trim().split(/\s+/, 1)[0]));
+        candidates.push(
+          ...srcSet.split(',').map((candidate) => candidate.trim().split(/\s+/, 1)[0]),
+        );
       }
       const sizes = candidates
         .filter(Boolean)
@@ -429,9 +452,15 @@ function analyzeRoute(route) {
         .map((file) => statSync(file).size);
       preloadBytes += sizes.length > 0 ? Math.max(...sizes) : 0;
     }
-    console.log(`  image preloads: ${imagePreloadTags.length}, up to ${formatBytes(preloadBytes)} transferred`);
+    console.log(
+      `  image preloads: ${imagePreloadTags.length}, up to ${formatBytes(
+        preloadBytes,
+      )} transferred`,
+    );
     if (imagePreloadTags.length > route.imagePreloads.count) {
-      fail(`${route.name} image preloads: ${imagePreloadTags.length} exceeds ${route.imagePreloads.count}`);
+      fail(
+        `${route.name} image preloads: ${imagePreloadTags.length} exceeds ${route.imagePreloads.count}`,
+      );
     }
     assertAtMost(`${route.name} image preload bytes`, preloadBytes, route.imagePreloads.bytes);
   }
@@ -443,7 +472,8 @@ function countSearchRecords(index) {
     return index.internalDocumentIDStore.internalIdToId.length;
   }
   if (Number.isInteger(index?.docs?.count)) return index.docs.count;
-  if (index?.docs?.docs && typeof index.docs.docs === 'object') return Object.keys(index.docs.docs).length;
+  if (index?.docs?.docs && typeof index.docs.docs === 'object')
+    return Object.keys(index.docs.docs).length;
   return undefined;
 }
 
@@ -467,10 +497,16 @@ function analyzeSearch() {
   if (records === undefined || records < 1) {
     fail('search records: unrecognized or empty search-index shape');
   } else if (records > SEARCH_LIMITS.records) {
-    fail(`search records: ${records.toLocaleString()} exceeds ${SEARCH_LIMITS.records.toLocaleString()}`);
+    fail(
+      `search records: ${records.toLocaleString()} exceeds ${SEARCH_LIMITS.records.toLocaleString()}`,
+    );
   }
   const internalCount = index?.internalDocumentIDStore?.internalIdToId?.length;
-  if (Number.isInteger(internalCount) && documentCount !== undefined && internalCount !== documentCount) {
+  if (
+    Number.isInteger(internalCount) &&
+    documentCount !== undefined &&
+    internalCount !== documentCount
+  ) {
     fail(`search records disagree: id store has ${internalCount}, docs store has ${documentCount}`);
   }
 }
@@ -502,10 +538,17 @@ function analyzeOutput() {
     }
   }
 
-  console.log(`export       ${formatBytes(totalBytes)} across ${files.length.toLocaleString()} files`);
-  console.log(`  duplicate sibling RSC payloads: ${duplicatePairs} pairs, ${formatBytes(duplicateRscBytes)}`);
+  console.log(
+    `export       ${formatBytes(totalBytes)} across ${files.length.toLocaleString()} files`,
+  );
+  console.log(
+    `  duplicate sibling RSC payloads: ${duplicatePairs} pairs, ${formatBytes(duplicateRscBytes)}`,
+  );
   assertAtMost('export bytes', totalBytes, OUTPUT_LIMITS.bytes);
-  if (files.length > OUTPUT_LIMITS.files) fail(`export files: ${files.length.toLocaleString()} exceeds ${OUTPUT_LIMITS.files.toLocaleString()}`);
+  if (files.length > OUTPUT_LIMITS.files)
+    fail(
+      `export files: ${files.length.toLocaleString()} exceeds ${OUTPUT_LIMITS.files.toLocaleString()}`,
+    );
   assertAtMost('duplicate sibling RSC bytes', duplicateRscBytes, OUTPUT_LIMITS.duplicateRscBytes);
 }
 
@@ -523,15 +566,20 @@ function analyzeDeferredDemo() {
   }
   const files = [...new Set(entry.files.map((file) => path.join(outputRoot, '_next', file)))];
   for (const file of files) {
-    if (!existsSync(file)) fail(`deferred demo: manifest asset is missing: ${path.relative(outputRoot, file)}`);
+    if (!existsSync(file))
+      fail(`deferred demo: manifest asset is missing: ${path.relative(outputRoot, file)}`);
   }
   const existingFiles = files.filter((file) => existsSync(file));
   const bytes = existingFiles.reduce((sum, file) => sum + gzipFile(file), 0);
   const initialSkillsAssets = routeInitialAssets.get('skills guide') ?? new Set();
   const eagerFiles = existingFiles.filter((file) => initialSkillsAssets.has(file));
-  console.log(`deferred demo ${formatBytes(bytes)} gzip across ${existingFiles.length} async assets`);
+  console.log(
+    `deferred demo ${formatBytes(bytes)} gzip across ${existingFiles.length} async assets`,
+  );
   if (eagerFiles.length > 0) {
-    fail(`deferred demo: ${eagerFiles.length} async assets also appear in the skills page's initial tags`);
+    fail(
+      `deferred demo: ${eagerFiles.length} async assets also appear in the skills page's initial tags`,
+    );
   }
   assertAtMost('deferred demo async payload', bytes, DEMO_ASYNC_GZIP_LIMIT);
 }
@@ -548,7 +596,9 @@ analyzeOutput();
 analyzeDeferredDemo();
 
 if (failures.length > 0) {
-  console.error(`\nSite budget failed with ${failures.length} issue${failures.length === 1 ? '' : 's'}.`);
+  console.error(
+    `\nSite budget failed with ${failures.length} issue${failures.length === 1 ? '' : 's'}.`,
+  );
   process.exit(1);
 }
 

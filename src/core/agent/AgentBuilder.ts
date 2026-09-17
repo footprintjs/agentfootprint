@@ -438,6 +438,10 @@ export class AgentBuilder {
    *  door — and undefined on every agent that never called it. Composed into
    *  the options `build()` hands `Agent` as `AgentOptions.findings`. */
   private findingsValue?: NonNullable<AgentOptions['findings']>;
+  /** Tool choice by classifier (9.105.0), set by `.toolChoice()` — the ONE
+   *  door — and undefined on every agent that never called it. Composed into
+   *  the options `build()` hands `Agent` as `AgentOptions.toolChoice`. */
+  private toolChoiceValue?: NonNullable<AgentOptions['toolChoice']>;
 
   constructor(opts: AgentOptions) {
     this.opts = opts;
@@ -451,6 +455,9 @@ export class AgentBuilder {
     // armed agent with no ask would decorate schemas the model was never told
     // about. A later `.findings()` call is then the second call, and refused.
     if (opts.findings !== undefined) this.findings(opts.findings);
+    // Same door for `toolChoice` (9.105.0): the option form is validated by
+    // the one method, so a misconfigured classifier fails here, not per call.
+    if (opts.toolChoice !== undefined) this.toolChoice(opts.toolChoice);
   }
 
   /**
@@ -2112,6 +2119,105 @@ export class AgentBuilder {
   }
 
   /**
+   * Tool choice by classifier (9.105.0) — a SECOND READING of which tool
+   * answers the current step, filed beside the model's own call, and
+   * optionally a NARROWING of what is served.
+   *
+   * At every model call the tools slot asks `classifier` one `choice`
+   * question over the tools it is about to serve — the merged wire minus the
+   * always-served doors, each by its own description — and files a
+   * `ToolChoiceRow` under `AgentState.toolChoices`: the provider's ranking
+   * (its distribution as sent, an unscored tool absent), its pick, its
+   * confidence, its cost, and the names actually served. After the reply
+   * `callLLM` files a `ToolChoiceOutcomeRow`: the tools the model called,
+   * whether the first is the pick (`firstAgrees`), and any `miss`. The
+   * model's call is never overridden; a failed classifier call is a
+   * `ToolChoiceErrorRow` and the full set is served (fail open).
+   *
+   * `serve: 'all'` (the default) is advisory: the wire is byte for byte what
+   * it was. `serve: { top: N }` narrows the served list to the top-N plus the
+   * doors (`read_skill`, `list_skills`, `skip_step`, `present`, and
+   * `alwaysServe`), and serves the full wire with the reason on the row when
+   * the classifier failed or scored fewer than N (`unavailable`), fewer than
+   * N + 1 candidates were offered (`too-few`), the previous call missed
+   * (`after-miss`) or the call is the wrap-up (`wrap-up`). A miss — the model
+   * naming a narrowed-away tool — is recorded, answered by the dispatcher's
+   * off-wire path as before, and the next call serves the full wire.
+   *
+   * Once per agent (a second call is refused, the `.findings()` grammar);
+   * `reactMode: 'classic'` is refused at build. An agent that never calls
+   * this is byte-identical to one built before the option existed: no
+   * classifier call, no key, no event.
+   *
+   * @example
+   * ```ts
+   * import { mockClassifier } from 'agentfootprint/classify';
+   *
+   * const agent = Agent.create({ provider, model })
+   *   .tool(lookup)
+   *   .tool(charge)
+   *   .toolChoice({ classifier: typesafe(), serve: { top: 2 } })
+   *   .build();
+   * await agent.run({ message: 'refund order 42' });
+   * agent.getSnapshot()?.sharedState.toolChoices; // pick → served → called, per call
+   * ```
+   */
+  toolChoice(options: NonNullable<AgentOptions['toolChoice']>): this {
+    if (this.toolChoiceValue !== undefined) {
+      throw new Error(
+        'AgentBuilder.toolChoice: already set. One classifier per agent — a second call would ' +
+          'leave two option sets with the later one silently winning. Pass every option in the ' +
+          'one call.',
+      );
+    }
+    if (options === null || typeof options !== 'object') {
+      throw new Error(
+        `AgentBuilder.toolChoice: expected an options object, got ${typeof options}.`,
+      );
+    }
+    const classifier = options.classifier;
+    if (
+      classifier === null ||
+      typeof classifier !== 'object' ||
+      typeof classifier.name !== 'string' ||
+      classifier.name === '' ||
+      typeof classifier.classify !== 'function'
+    ) {
+      throw new Error(
+        'AgentBuilder.toolChoice: classifier must be a Classifier — `{ name: string; ' +
+          'classify(request, signal?) }` from agentfootprint/classify (`typesafe()`, ' +
+          '`mockClassifier()`, or your own).',
+      );
+    }
+    const serve = options.serve ?? 'all';
+    if (serve !== 'all') {
+      const top = serve !== null && typeof serve === 'object' ? serve.top : undefined;
+      if (!(Number.isInteger(top) && (top as number) >= 1)) {
+        throw new Error(
+          `AgentBuilder.toolChoice: serve must be 'all' or { top: <integer ≥ 1> }, got ` +
+            `${JSON.stringify(serve)}.`,
+        );
+      }
+    }
+    const alwaysServe = options.alwaysServe;
+    if (
+      alwaysServe !== undefined &&
+      (!Array.isArray(alwaysServe) || alwaysServe.some((n) => typeof n !== 'string' || n === ''))
+    ) {
+      throw new Error(
+        'AgentBuilder.toolChoice: alwaysServe must be an array of non-empty tool names, got ' +
+          `${JSON.stringify(alwaysServe)}.`,
+      );
+    }
+    this.toolChoiceValue = {
+      classifier,
+      serve,
+      ...(alwaysServe !== undefined && { alwaysServe: [...alwaysServe] }),
+    };
+    return this;
+  }
+
+  /**
    * 3-tier degradation for output-schema validation failures. Pairs
    * with `.outputSchema()` — an agent that has one and not the other is
    * refused at `.build()`, in either call order.
@@ -2797,13 +2903,17 @@ export class AgentBuilder {
     // normalised value lands as `AgentOptions.findings`. An agent with neither
     // hands `Agent` its options by reference, exactly as before.
     const opts =
-      this.maxIterationsOverride !== undefined || this.findingsValue !== undefined
+      this.maxIterationsOverride !== undefined ||
+      this.findingsValue !== undefined ||
+      this.toolChoiceValue !== undefined
         ? {
             ...this.opts,
             ...(this.maxIterationsOverride !== undefined && {
               maxIterations: this.maxIterationsOverride,
             }),
             ...(this.findingsValue !== undefined && { findings: this.findingsValue }),
+            // Tool choice by classifier (9.105.0), the same door grammar.
+            ...(this.toolChoiceValue !== undefined && { toolChoice: this.toolChoiceValue }),
           }
         : this.opts;
     // .selfExplain(): a fresh binding per build() — two built agents never

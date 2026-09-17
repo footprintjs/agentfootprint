@@ -488,6 +488,13 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
    *  armed agent with a window, where `stages/window.ts · buildWindowStage`
    *  spends it as the `'ledger-fact'` pin ceiling. */
   private readonly findingsOptions?: NonNullable<AgentOptions['findings']>;
+  /** Tool choice by classifier (9.105.0, `.toolChoice()`): the classifier,
+   *  the serve dial and the app's own doors. Threaded to the tools slot (the
+   *  pick and the narrowing), to call-llm (`toolChoice: true`, the outcome
+   *  row) and to both chart builders (`hasToolChoice`, the mount args) on an
+   *  armed agent only — an unarmed agent hands each stage exactly the deps it
+   *  always did. */
+  private readonly toolChoiceOptions?: NonNullable<AgentOptions['toolChoice']>;
   /** The opt-in tool-result ceiling in characters (9.11.0). Absent → results
    *  are never measured. See {@link AgentOptions.maxToolResultChars}. */
   private readonly maxToolResultChars?: number;
@@ -935,6 +942,7 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
     if (opts.permissionChecker) this.permissionChecker = opts.permissionChecker;
     if (opts.toolArgValidation !== undefined) this.toolArgValidation = opts.toolArgValidation;
     if (opts.findings !== undefined) this.findingsOptions = opts.findings;
+    if (opts.toolChoice !== undefined) this.toolChoiceOptions = opts.toolChoice;
     // The tool-result ceiling (9.11.0). Refused HERE, naming the value, rather
     // than at the first tool call of the first run — a dial that cannot cap
     // anything is a configuration mistake, not a runtime condition.
@@ -1029,6 +1037,18 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
       }
       this.keepLedgerFacts = resolveKeepLedgerFacts(
         this.findingsOptions.keepLedgerFacts ?? opts.keepLedgerFacts,
+      );
+    }
+    // Tool choice by classifier (9.105.0) needs the same per-call recomposition
+    // the ledger does — the pick is made where the served list is built, and
+    // a narrowed list committed on turn 1 would be served on every later call
+    // with no pick behind it. The same refusal, at the same place.
+    if (this.toolChoiceOptions !== undefined && this.reactMode === 'classic') {
+      throw new Error(
+        "Agent: .toolChoice() requires per-iteration slot recomposition — reactMode 'classic' " +
+          'caches the tools slot on turn 1, so the classifier would be asked once and a narrowed ' +
+          "list would be served on every later call. Use the default 'dynamic' mode (or " +
+          "'dynamic-grouped').",
       );
     }
     // Refused at construction, never mid-run — a misspelled posture that was
@@ -2990,6 +3010,19 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
         }),
       );
     }
+    // Same wiring for `agentfootprint.tool_choice.*` (9.105.0) — the three
+    // events `recordToolChoice` files on scope. Attached only under
+    // `.toolChoice()`, for the same reason.
+    if (this.toolChoiceOptions !== undefined) {
+      attachObserver(
+        new EmitBridge({
+          id: 'agentfootprint.tool-choice-bridge',
+          prefix: 'agentfootprint.tool_choice.',
+          dispatcher,
+          getRunContext: getRunCtx,
+        }),
+      );
+    }
     for (const r of this.attachedRecorders) {
       // A recorder's OWN `delivery` field is more specific than the
       // agent-level default — footprintjs's options bag would override the
@@ -4022,6 +4055,19 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
       // The findings ledger (9.101.0): the ONE decoration site is inside this
       // slot; the gate rides in value-conditionally.
       ...(this.findingsOptions !== undefined && { findings: true as const }),
+      // Tool choice by classifier (9.105.0): the pick and the narrowing live
+      // inside this slot too, at the same site; value-conditional.
+      ...(this.toolChoiceOptions !== undefined && {
+        toolChoice: {
+          classifier: this.toolChoiceOptions.classifier,
+          ...(typeof this.toolChoiceOptions.serve === 'object' && {
+            top: this.toolChoiceOptions.serve.top,
+          }),
+          ...(this.toolChoiceOptions.alwaysServe !== undefined && {
+            alwaysServe: this.toolChoiceOptions.alwaysServe,
+          }),
+        },
+      }),
     });
 
     // callLLM extracted to ./agent/stages/callLLM.ts (v2.11.2). Same
@@ -4049,6 +4095,8 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
         }),
       }),
       ...(this.answerValidationConfig !== undefined && { suppressDraftTokens: true }),
+      // Tool choice by classifier (9.105.0): the outcome row after the reply.
+      ...(this.toolChoiceOptions !== undefined && { toolChoice: true as const }),
       // The receipt's salt (9.88.0) — read per call, like seed's own accessor.
       getRunId: () => this.currentRunContext?.runId,
       // …and its off switch. Value-conditional, so an agent on the default
@@ -4443,6 +4491,9 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
       // grammar as the slot's `findings` and callLLM's `hasFindingsLedger`,
       // so the three can never disagree about whether the ledger is armed.
       ...(this.findingsOptions !== undefined && { hasFindingsLedger: true }),
+      // Tool choice by classifier (9.105.0): the mount args on the Tools
+      // branch and the key across the sf-llm-call boundary, under the arm.
+      ...(this.toolChoiceOptions !== undefined && { hasToolChoice: true }),
       // `.limitsTravelWithTheAnswer()` (this release) — value-conditional, the
       // `resolvedModel` precedent: absent from the deps object entirely for an
       // agent that did not ask, so both builders mount the final-branch stage

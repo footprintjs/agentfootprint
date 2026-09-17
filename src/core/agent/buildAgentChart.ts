@@ -299,6 +299,20 @@ export interface AgentChartDeps {
   readonly hasFindingsLedger?: boolean;
 
   /**
+   * Tool choice by classifier is armed (`.toolChoice()`, 9.105.0). Gates
+   * THREE mount args on the Tools branch's `inputMapper` — `userMessage`
+   * (what the classifier reads), `priorToolChoices` (the parent's rows,
+   * under an alias because a mount input is frozen inside the subflow and
+   * the slot writes the fresh list under the base key) and `wrapUpAsked`
+   * (the wrap-up skip) — and ONE line on its `outputMapper`, carrying
+   * `toolChoices` back onto the parent key `callLLM` appends the outcome
+   * row to. In the grouped chart the same key crosses the `sf-llm-call`
+   * boundary both ways. Absent — the default — the mount maps exactly the
+   * keys it always did.
+   */
+  readonly hasToolChoice?: boolean;
+
+  /**
    * ReAct loop semantics. `'dynamic'` (default) re-runs the InjectionEngine +
    * all 3 slots every iteration (loop → InjectionEngine). `'classic'`
    * engineers context ONCE (InjectionEngine + system-prompt + tools up front)
@@ -725,6 +739,16 @@ export function buildAgentChart(deps: AgentChartDeps): FlowChart {
             parent.findingsLedger as FindingsLedger | undefined,
           ),
         }),
+        // Tool choice by classifier (9.105.0), under the arm only: the
+        // message the classifier reads, the rows so far (aliased — a mount
+        // input is frozen inside; the slot writes `toolChoices` fresh) and
+        // the wrap-up latch. Each value-conditional, so an armed agent that
+        // has no rows yet crosses no `priorToolChoices` key.
+        ...(deps.hasToolChoice === true && {
+          userMessage: parent.userMessage as string | undefined,
+          ...(parent.toolChoices !== undefined && { priorToolChoices: parent.toolChoices }),
+          ...(parent.wrapUpAsked === true && { wrapUpAsked: true }),
+        }),
         // The slot subflow reads these to build the per-iteration
         // ToolDispatchContext when an external `.toolProvider()` is
         // configured. Without them the provider sees activeSkillId
@@ -768,6 +792,9 @@ export function buildAgentChart(deps: AgentChartDeps): FlowChart {
         ...(sf.integrityFindingIds !== undefined && {
           integrityFindingIds: sf.integrityFindingIds,
         }),
+        // The classifier's pick (9.105.0), back onto the parent key the
+        // call-llm stage appends the outcome row to. Value-conditional.
+        ...(sf.toolChoices !== undefined && { toolChoices: sf.toolChoices }),
       }),
       // Same array-concat hazard as InjectionEngine — replace, don't
       // concatenate. Without Replace the deduped tool list re-acquires

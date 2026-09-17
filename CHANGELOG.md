@@ -5,6 +5,74 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [9.105.0] - 2026-09-17
+
+### Added — tool choice by classifier: a second reading beside the model's call, and a narrowing dial
+
+- **`.toolChoice({ classifier, serve, alwaysServe })`** (`AgentOptions.toolChoice`,
+  `AgentBuilder.toolChoice`). At every model call the tools slot asks the
+  classifier ONE `choice` question — id `TOOL_CHOICE_QUESTION` (`'tool'`),
+  criteria the tools about to be served by name with their own descriptions
+  (the merged wire minus the always-served doors), state the user's message
+  plus the active skill id — and files a `ToolChoiceRow` under
+  `AgentState.toolChoices` BEFORE the call: `offered`, `ranked` (the
+  provider's distribution as sent, highest first, an unscored tool absent —
+  never padded, never renormalised), `chosen` (the provider's own pick,
+  absent when it named nothing offered), `confidence`, `usage`, `latencyMs`,
+  `served` (the names the slot committed) and `narrowed`. After the reply
+  `callLLM` files a `ToolChoiceOutcomeRow`: `called` (the model's tool calls
+  in order, empty on an answer), `firstAgrees` (`chosen === called[0]`,
+  absent when either is absent) and `miss` (the names called outside a
+  narrowed served list). A failed classifier call is a `ToolChoiceErrorRow`
+  (status, message, latency) and the full set is served — fail open, never
+  fail narrow. The model's call is the emission; the pick is a second
+  reading marked `source: 'classifier'`, never substituted, never merged.
+- **Advisory by default** (`serve: 'all'`): the wire is byte for byte the
+  unarmed agent's — every request equal, every receipt equal; the record
+  gains the rows and nothing else.
+- **The narrowing dial** (`serve: { top: N }`): the slot commits the
+  classifier's top-N plus the doors — `read_skill`, `list_skills`,
+  `skip_step`, `present` (`ALWAYS_SERVED_TOOLS`) and the app's `alwaysServe`
+  — in the merged wire's order, at the ONE decoration site, so
+  `dynamicToolSchemas`, the receipt's `tools.schemaHashes` and
+  `servedAt(k).tools.schemas` are the narrowed list by construction (no new
+  `SERVED_GAPS` kind; `toolsInjections` follows the served set). The full
+  wire is served with the reason on the row (`narrowedSkipped`:
+  `NarrowSkipReason`) when the classifier failed or scored fewer than N
+  (`unavailable`), fewer than N + 1 candidates were offered (`too-few`), the
+  previous call's outcome carried a miss (`after-miss`) or the call is the
+  out-of-budget wrap-up (`wrap-up`). A miss — the model naming a
+  narrowed-away tool — is recorded on the outcome row and answered by the
+  dispatcher's off-wire path exactly as before (`tools.answered_off_wire`);
+  the next call serves the full wire. `reactMode: 'classic'` is refused at
+  build (the `.findings()` precedent).
+- **Three events**, `agentfootprint.tool_choice.picked` (`chosen`,
+  `confidence`, `offered` and `served` as counts, `narrowed`,
+  `narrowedSkipped`, `latencyMs`, tokens), `agentfootprint.tool_choice.outcome`
+  (`called`, `firstAgrees`, `missed`) and `agentfootprint.tool_choice.failed`
+  (`status`, `latencyMs`) — identities, enums, numbers and a boolean only
+  (payloads `ToolChoicePickedPayload`, `ToolChoiceOutcomePayload`,
+  `ToolChoiceFailedPayload`); 115 → 118 typed events, 25 → 26 domains.
+- **Root exports**: `ToolChoiceRow`, `ToolChoiceErrorRow`,
+  `ToolChoiceOutcomeRow`, `ToolChoiceEntry`, `ToolChoiceLedger`,
+  `ToolChoiceScore`, `NarrowSkipReason`, `TOOL_CHOICE_QUESTION`,
+  `ALWAYS_SERVED_TOOLS`. The asker (`src/core/agent/toolChoice/pick.ts`) is
+  loaded through `import()` by the slot and is deliberately not exported.
+- **`npm run bench:tool-choice`** — the mock provider, one skill of eight
+  tools, six scripted steps, a scripted classifier ranking the right tool
+  first / second / a wrong pair, under `advisory` and `top-2`: `first-agrees`,
+  `misses`, `extra-calls`, `tools-slot-bytes` (from the receipt's
+  `requestMeasurement`), `pick-tokens`, `pick-latency-ms`; the cost line
+  first; exits non-zero if the unarmed twin's tools-slot bytes move or an
+  advisory row's differ from the twin's. On 2026-09-17: 1745 bytes unarmed
+  and on every advisory row, 743 under `top-2` with a right ranking, 1172
+  under a wrong pair (three misses, the full wire on the call after each,
+  zero extra calls).
+- Byte identity: the 18 unarmed references untouched; one new reference
+  `agent-tool-choice` (`test/core/tools/byte-identity.test.ts`), generated
+  alone. Design: `docs/design/2026-09-scored-choice.md` § Step 4; README:
+  `src/core/agent/toolChoice/README.md`.
+
 ## [9.104.0] - 2026-09-17
 
 ### Added — a calibrated judge beside the model's own standings

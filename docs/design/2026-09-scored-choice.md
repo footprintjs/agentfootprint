@@ -4,8 +4,9 @@ Status: GATE OPENED 2026-09-17 — a provider that scores is in reach
 (TypeSafe "System One", model `jev`; one real call, quoted below). Steps 1
 and 2 landed in 9.104.0 as `agentfootprint/classify` + `classifierScorer`;
 the judge on the findings ledger (`.findings({ judge })`) landed beside them
-(docs/design/2026-09-findings-ledger.md § Judge). The lens bar (step 3)
-remains. Facts found while reading change this page, not a chat.
+(docs/design/2026-09-findings-ledger.md § Judge). Step 4 — tool choice,
+advisory rows and a bench-gated narrowing dial (`.toolChoice()`) — landed in
+9.105.0 (§ Step 4 below). The lens bar (step 3) remains. Facts found while reading change this page, not a chat.
 
 ## The borrowed idea
 
@@ -124,10 +125,86 @@ through an honest empty result rather than a throw. Step 3, the lens bar, is
 unchanged: the panel already prints `scorer` and `ranked`; a bar per
 candidate is a rendering choice.
 
+## Step 4 — tool choice: the second reading beside the model's call (9.105.0)
+
+The loop's most frequent choice is WHICH TOOL, and the model makes it by
+generating a call. `.toolChoice({ classifier, serve })` asks the classifier
+the same question at every model call — one `choice` question, id `tool`,
+criteria = the offered tools by name with their own descriptions (the merged
+wire MINUS the always-served doors), state = the user's message plus the
+active skill id — and files the answer under `AgentState.toolChoices` as a
+`ToolChoiceRow` BEFORE the call: `offered`, `ranked` (the distribution as
+sent, highest first, an unscored tool absent), `chosen` (the provider's own
+pick, absent when it named nothing offered), `confidence`, `usage`,
+`latencyMs`, and `served` (what the slot committed) with `narrowed`. After
+the reply `callLLM` files a `ToolChoiceOutcomeRow`: `called` in order,
+`firstAgrees` (`chosen === called[0]`, absent when either is absent), and
+`miss` (the names called outside a NARROWED served list). A failed call is a
+`ToolChoiceErrorRow` (status, message, latency) and the full wire is served.
+
+Two dials. **Advisory** (`serve: 'all'`, default): the wire is byte for byte
+the unarmed twin's — every request equal, every receipt equal; the record
+gains the rows and nothing else. **Narrowing** (`serve: { top: N }`): the
+tools slot commits the top-N plus the doors (`read_skill`, `list_skills`,
+`skip_step`, `present`, `alwaysServe`), in the merged wire's order, at the
+ONE decoration site — so `dynamicToolSchemas`, the receipt's
+`tools.schemaHashes` and `servedAt(k).tools.schemas` are the narrowed list
+by construction, and no new `SERVED_GAPS` kind exists. The full wire is
+served, with the reason on the row (`narrowedSkipped`), when the classifier
+failed or scored fewer than N (`unavailable`), fewer than N + 1 candidates
+were offered (`too-few`), the previous outcome carried a miss (`after-miss`)
+or the call is the wrap-up (`wrap-up`).
+
+What a miss is, in the code as found: `toolCalls.ts · resolveTool` does not
+refuse a call for a registry tool that was not on the wire — it dispatches
+it OFF-WIRE under the party the model last read the name under, and records
+`tools.answered_off_wire`. So a narrowed-away tool the model names anyway
+RUNS, the outcome row and `tool_choice.outcome` record the miss, and the
+next call serves the full wire. The brief expected a refusal; the behaviour
+kept is the code's. On a hosted API the wire constrains `tool_use` to the
+served schemas, so a miss as defined cannot occur there — a wrong ranking
+shows up as a wrong pick or an answer, which `firstAgrees` measures.
+
+What the bench measures (`npm run bench:tool-choice`, mock provider, one
+skill of eight tools, six scripted steps; the print on 2026-09-17):
+
+```
+condition   script        first-agrees  misses  extra-calls  tools-slot-bytes  pick-tokens  pick-latency-ms
+unarmed     -             -             0       0            1745.0            -            -
+advisory    right-first   1.000         0       0            1745.0            -            0
+advisory    right-second  0.000         0       0            1745.0            -            0
+advisory    wrong-pair    0.000         0       0            1745.0            -            0
+top-2       right-first   1.000         0       0            743.0             -            0
+top-2       right-second  0.000         0       0            743.0             -            0
+top-2       wrong-pair    0.000         3       0            1172.4            -            0
+```
+
+Read: advisory costs nothing on the wire (1745 bytes of tools slot on every
+row, the twin's to the byte — the bench exits non-zero otherwise); a right
+ranking under top-2 cuts the tools slot to 743 bytes (two tools + `read_skill`
+against eight + `read_skill`); a wrong ranking misses on every narrowed tool
+call and the after-miss law serves the full wire on the call after, so the
+row lands between (1172 bytes) and `extra-calls` stays 0 because the
+off-wire dispatch answers the missed call. `pick-tokens` and
+`pick-latency-ms` are `-` and 0 on the mock — a cost is data only when the
+provider reported it; `AF_TOOL_CHOICE_CLASSIFIER=typesafe` runs the same
+table on the hosted classifier (not run in this packet). The one armed
+byte-identity reference is `agent-tool-choice`; the 18 unarmed references
+did not move.
+
+Open: the state the classifier reads is the message and the skill id, not
+the conversation so far — "the current step" is inferred from the request
+alone, which a real classifier will do poorly on a long procedure. The tools
+subflow never sees `history`; carrying the last assistant line across the
+mount is the next cut, gated on a hosted run of the bench.
+
 ## Track
 
 - [x] design · [x] a provider in reach that exposes scores (2026-09-17,
   TypeSafe `jev`, one real call above) · [x] 1 capability
   (`agentfootprint/classify`: the `Classifier` port, `typesafe()`,
   `mockClassifier()`, 9.104.0) · [x] 2 scorer + fallback (`classifierScorer`,
-  9.104.0; the fallback is the empty ranking) · [ ] 3 lens bar
+  9.104.0; the fallback is the empty ranking) · [ ] 3 lens bar · [x] 4 tool
+  choice — advisory rows + the bench-gated `serve: { top }` narrowing
+  (`.toolChoice()`, 9.105.0; a hosted run of `bench:tool-choice` decides
+  whether narrowing is ever a default)

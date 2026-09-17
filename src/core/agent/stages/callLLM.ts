@@ -64,6 +64,7 @@ import {
 } from '../findings/serve.js';
 import type { FindingsLedger } from '../findings/types.js';
 import { readSchemaToolAnswer } from '../outputEnforcement.js';
+import type { ToolChoiceLedger } from '../toolChoice/types.js';
 import {
   executeWithReliability,
   ValidationFailure,
@@ -148,6 +149,17 @@ export interface CallLLMStageDeps {
    * appends the ask the way the wire did.
    */
   readonly findingsAnswerAsk?: FindingsAnswerAsk;
+  /**
+   * TOOL CHOICE BY CLASSIFIER IS ARMED (9.105.0, `.toolChoice()`) — present
+   * only then, only ever `true`. ONE thing changes: after the reply, this
+   * stage files the `outcome` row under `scope.toolChoices` (the tools the
+   * model called, `firstAgrees` against the pick the tools slot filed for
+   * this iteration, and any `miss` against the narrowed served list) — the
+   * same stage that assembled the request, so pick → served → called is one
+   * triple per call. Written only when a pick was attempted for this
+   * iteration. An unarmed agent never reads the key.
+   */
+  readonly toolChoice?: true;
   /** Optional pricing adapter for cost tracking. */
   readonly pricingTable?: PricingTable;
   /** Optional cumulative USD cap per run. */
@@ -1075,6 +1087,35 @@ export function buildCallLLMStage(
       if (!response.toolCalls.some((c) => declaring.has(c.name))) {
         deps.integrityLedger?.current?.note('column-type-mismatch', 'write', 'not-applicable');
         deps.integrityLedger?.current?.note('missing-column', 'write', 'not-applicable');
+      }
+    }
+
+    // THE OUTCOME (9.105.0, `.toolChoice()`). The tools slot filed the pick
+    // before this call; the reply is in; the comparison is made HERE, the
+    // one moment both readings exist, and filed as its own row — the model's
+    // call stays the emission, the pick stays a second reading, and neither
+    // is rewritten. `called` is what the model asked for, in order (a
+    // `'tool-forced'` answer was already taken off the list at the seam);
+    // a miss is a call outside the NARROWED served list. Gated on the arm,
+    // and on a pick having been attempted for this iteration (a call with
+    // nothing to choose among filed no pick and gets no outcome).
+    if (deps.toolChoice === true) {
+      // `import()` — the optional-family law of docs-next's site budget (the
+      // `toolCalls.ts · judgeLanded` precedent): an unarmed agent never loads
+      // the module; the slot loads the same one under the same gate.
+      const { outcomeRowFor, pickAttemptedFor, pickRowFor, recordToolChoice } = await import(
+        '../toolChoice/record.js'
+      );
+      const rows = scope.toolChoices as ToolChoiceLedger | undefined;
+      if (pickAttemptedFor(rows, iteration)) {
+        recordToolChoice(
+          scope as unknown as Parameters<typeof recordToolChoice>[0],
+          outcomeRowFor(
+            pickRowFor(rows, iteration),
+            response.toolCalls.map((c) => c.name),
+            iteration,
+          ),
+        );
       }
     }
 

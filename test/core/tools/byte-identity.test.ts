@@ -206,6 +206,22 @@
  * the judge — the piece, the collapse and the wire are `agent-findings`'
  * bytes, which is policy A on the record.
  *
+ * 9.105.0: one new reference `agent-tool-choice` (`.toolChoice({ serve: {
+ * top: 2 } })` over four tools and a skill; three narrowed calls, one miss);
+ * none of the 18 moved (the 18 run first on the 9.105.0 tree — 19/19 green,
+ * the reference directory untouched by git — copied aside, the one scenario
+ * generated alone with `-t agent-tool-choice` under
+ * `AF_TOOLS_REFERENCE=update`, `cmp`-equal after). What it holds, read from
+ * its bytes: the `toolChoices` key with a `pick` and an `outcome` row per
+ * call (`set` on the first write, the engine's `append` encoding after);
+ * `dynamicToolSchemas` narrowed to two tools plus `read_skill` on calls 1, 2
+ * and 4 and the full five on call 3 (`after-miss`); the served views'
+ * `tools.schemas` and the receipts' `tools.schemaHashes` naming exactly those
+ * lists; `toolsInjections` re-numbered to the served set; and the
+ * `requestMeasurement` sizes that shrink with the tools slot. The miss on
+ * call 2 (`lookup`, narrowed away) is answered off-wire — `history` holds
+ * its result as it always would have.
+ *
  * Every scenario is a real run — the receipt-conformance shapes, each in the
  * configuration that has no name collision — and what is compared is the
  * whole `commitLog` plus `servedAt(k)` for every located epoch, after ONE
@@ -240,7 +256,7 @@ import { buildMessageApiChart } from '../../../src/core/agent/buildMessageApiCha
 import { buildAgentMessageApiChart } from '../../../src/core/agent/buildAgentMessageApiChart.js';
 import { defineSkill, skillGraph } from '../../../src/injection-engine.js';
 import { skillScopedTools, staticTools } from '../../../src/tool-providers/index.js';
-import { mockClassifier } from '../../../src/classify/index.js';
+import { mockClassifier, type ClassifyResult } from '../../../src/classify/index.js';
 import type { LLMRequest, LLMResponse, LLMToolSchema } from '../../../src/adapters/types.js';
 
 // ─── the harness ─────────────────────────────────────────────────────
@@ -266,6 +282,20 @@ function scripted(script: readonly Reply[]) {
 }
 
 const answer = (content: string): Reply => ({ content });
+/** A classifier answer ranking `names` highest first — the tool-choice question's shape. */
+const rank = (...names: string[]): ClassifyResult => ({
+  model: 'jev-1.13.0',
+  answers: {
+    tool: {
+      type: 'choice',
+      choice: names[0]!,
+      confidence: 0.8,
+      probabilities: Object.fromEntries(names.map((n, i) => [n, 0.9 - i * 0.2])),
+    },
+  },
+  usage: { inputTokens: 100, outputTokens: 8 },
+  latencyMs: 5,
+});
 const call = (id: string, name: string, args: object = {}): Reply => ({
   content: '',
   toolCalls: [{ id, name, args }],
@@ -701,6 +731,38 @@ const SCENARIOS: Record<string, () => Promise<Snapshot>> = {
           .findings()
           .window(slidingWindow({ keepRecentTurns: 2 })),
       { maxIterations: 10 },
+    ),
+  // Tool choice by classifier (9.105.0, `.toolChoice({ serve: { top: 2 } })`)
+  // — the fourth armed scenario: four static tools and a skill (so
+  // `read_skill` is a door), a scripted classifier ranking a different pair
+  // on each of three calls, the model calling a served tool, then a
+  // NARROWED-AWAY tool (a miss: the off-wire dispatch answers it, the next
+  // call serves the full wire), then answering. What it adds over the
+  // unarmed shape is the `toolChoices` key (pick · outcome per call), the
+  // narrowed `dynamicToolSchemas` on the calls that narrowed, and the
+  // sizes that follow. Generated ALONE with the 18 copied aside and
+  // `cmp`-equal after.
+  'agent-tool-choice': () =>
+    agentRun(
+      'dynamic',
+      [call('c1', 'charge'), call('c2', 'lookup'), call('c3', 'ship'), answer('done')],
+      (a) =>
+        a
+          .system('bot')
+          .tool(tool('lookup'))
+          .tool(tool('charge'))
+          .tool(tool('ship'))
+          .tool(tool('invoice'))
+          .skill(defineSkill({ id: 'billing', description: 'billing', body: 'B' }))
+          .toolChoice({
+            classifier: mockClassifier([
+              rank('charge', 'lookup'),
+              rank('ship', 'invoice'),
+              rank('ship', 'charge'),
+              rank('invoice', 'lookup'),
+            ]),
+            serve: { top: 2 },
+          }),
     ),
   llmcall: async () => {
     const one = LLMCall.create({ provider: scripted([answer('done')]) as never, model: 'mock' })

@@ -74,6 +74,7 @@ import {
 import { buildCacheSubflow } from './buildCacheSubflow.js';
 import type { AgentChartDeps } from './buildAgentChart.js';
 import type { AgentState } from './types.js';
+import type { ToolChoiceEntry } from './toolChoice/types.js';
 
 /**
  * Inner seed for the `sf-llm-call` subflow. Initialises the per-turn
@@ -98,6 +99,7 @@ function dynamicTurnSeed(scope: TypedScope<AgentState>): void {
     priorHistory?: readonly LLMMessage[];
     priorDeliveredMessageKeys?: readonly string[];
     priorEvidenceRecoveryUsed?: boolean;
+    priorToolChoices?: readonly ToolChoiceEntry[];
   }>();
 
   // Cross-iteration accumulators — seed working keys from prior totals
@@ -122,6 +124,12 @@ function dynamicTurnSeed(scope: TypedScope<AgentState>): void {
   if (args.priorEvidenceRecoveryUsed !== undefined) {
     scope.evidenceRecoveryUsed = args.priorEvidenceRecoveryUsed;
   }
+  // The classifier's rows (9.105.0), the `history` trip: the Tools branch
+  // inside this boundary reads them, the call-llm stage appends to them, and
+  // the boundary bubbles them out — so they arrive under an alias and become
+  // the writable working key here. Value-conditional: an unarmed agent, and
+  // an armed one on its first call, seeds no key.
+  if (args.priorToolChoices !== undefined) scope.toolChoices = args.priorToolChoices;
 
   // Per-iteration working keys — fresh each turn (slots + cache + callLLM
   // populate these inside the subflow; nothing outside reads the
@@ -446,6 +454,15 @@ export function buildDynamicAgentChart(deps: AgentChartDeps): FlowChart {
             parent.findingsLedger as FindingsLedger | undefined,
           ),
         }),
+        // Tool choice by classifier (9.105.0) — the flat chart's three args,
+        // read INSIDE sf-llm-call: `userMessage` and `wrapUpAsked` are the
+        // boundary's own inputs, `toolChoices` is `dynamicTurnSeed`'s copy
+        // of the boundary's `priorToolChoices`. See `AgentChartDeps.hasToolChoice`.
+        ...(deps.hasToolChoice === true && {
+          userMessage: parent.userMessage as string | undefined,
+          ...(parent.toolChoices !== undefined && { priorToolChoices: parent.toolChoices }),
+          ...(parent.wrapUpAsked === true && { wrapUpAsked: true }),
+        }),
         activatedInjectionIds: parent.activatedInjectionIds as readonly string[] | undefined,
         runIdentity: parent.runIdentity as
           | { tenant?: string; principal?: string; conversationId: string }
@@ -481,6 +498,10 @@ export function buildDynamicAgentChart(deps: AgentChartDeps): FlowChart {
         ...(sf.integrityFindingIds !== undefined && {
           integrityFindingIds: sf.integrityFindingIds,
         }),
+        // The classifier's pick (9.105.0) — first hop, onto the sf-llm-call
+        // working key the call-llm stage appends to; the boundary's own
+        // outputMapper carries it the rest of the way. Value-conditional.
+        ...(sf.toolChoices !== undefined && { toolChoices: sf.toolChoices }),
       }),
       arrayMerge: ArrayMergeMode.Replace,
       // STRUCTURE-ONLY merge target. When skills are off, UpdateSkillHistory
@@ -699,6 +720,10 @@ export function buildDynamicAgentChart(deps: AgentChartDeps): FlowChart {
           // one whose model declared nothing, crosses no new key. Reads only
           // inside (the writes are outside), so no outputMapper line is needed.
           ...(p.findingsLedger !== undefined && { findingsLedger: p.findingsLedger }),
+          // The classifier's rows (9.105.0) — in under the alias, because the
+          // call-llm stage WRITES the key inside this boundary (the `history`
+          // shape, not the read-only `findingsLedger` one). Value-conditional.
+          ...(p.toolChoices !== undefined && { priorToolChoices: p.toolChoices }),
           // The kernel's PER-PASS pick feed (9.59.0) — written by tool-calls
           // on the OUTER scope, read by the engine mapper INSIDE this
           // boundary. Same gate as the engagement state above.
@@ -851,6 +876,10 @@ export function buildDynamicAgentChart(deps: AgentChartDeps): FlowChart {
           ...(s.parkedToolNames !== undefined && {
             parkedToolNames: s.parkedToolNames,
           }),
+          // The classifier's rows (9.105.0), second hop — onto the outer key
+          // the next iteration's boundary reads. Top-level ARRAY +
+          // `arrayMerge: Replace` = set wholesale. Value-conditional.
+          ...(s.toolChoices !== undefined && { toolChoices: s.toolChoices }),
         };
       },
       // llmLatestToolCalls / thinkingBlocks / skillHistory are arrays —
