@@ -43,6 +43,7 @@ import type { OutputAttempt } from './outputEnforcement.js';
 import type { PendingEvidenceRecovery, UnsupportedValue } from './evidence/types.js';
 import type { AgentRunCheckpoint } from '../runCheckpoint.js';
 import type { FindingsLedger } from './findings/types.js';
+import type { Classifier } from '../../classify/types.js';
 
 // ─── PUBLIC types (consumer-facing) ────────────────────────────────
 
@@ -289,6 +290,19 @@ export interface AgentOptions {
    * `AgentState.findingsAnswerAsk` so the rebuild appends the same ask;
    * under `'none'` no key is written and an armed agent's record is
    * byte-identical to 9.102.0.
+   *
+   * `judge` (9.104.0) arms a SECOND SOURCE: a calibrated `Classifier`
+   * (`agentfootprint/classify`) asked, after every tool result lands and
+   * before the next model call, what that result is worth for the
+   * proposition the model declared on the call — or for the user's
+   * question when none was declared. Its answer is filed as a `JudgmentRow`
+   * (standing, the whole distribution, confidence, the provider's model
+   * string, usage, latency) beside the model's own `StandingRow`, never
+   * merged with it and never served in its place in this release (policy A:
+   * the model's own standing is what the answer turn reads); a failed call
+   * files a `JudgmentErrorRow`, never a guessed standing, and the run
+   * continues. One classifier call per tool result — the cost is on the
+   * record. Without `judge` not one line of this runs.
    */
   readonly findings?: {
     /** What the model is served from the ledger: the default keeps fact results
@@ -302,6 +316,9 @@ export interface AgentOptions {
      *  {@link AgentOptions.keepLedgerFacts}; this door wins when both are
      *  given. Default 4 under `.findings()` with a window strategy. */
     readonly keepLedgerFacts?: number | false;
+    /** A calibrated classifier judging every tool result as a second source
+     *  (`JudgmentRow`), never served in the model's place. Default none. */
+    readonly judge?: Classifier;
   };
   /**
    * The ceiling on ONE tool result, in characters (9.11.0). **Opt-in — there

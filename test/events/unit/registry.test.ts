@@ -223,7 +223,7 @@ describe('event registry — names + exhaustiveness', () => {
     //     `ruled-out` / `noise`) declared for a PREVIOUS result. Identities,
     //     enums and counts only — the `MiddlewareDecisionPayload` law — so the
     //     assertions the model stands on never leave the run through a sink.)
-    expect(ALL_EVENT_TYPES.length).toBe(113);
+    expect(ALL_EVENT_TYPES.length).toBe(115);
   });
 
   it('every entry in ALL_EVENT_TYPES is a key of AgentfootprintEventMap', () => {

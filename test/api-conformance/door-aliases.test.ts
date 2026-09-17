@@ -101,6 +101,11 @@ const DOORS = [
   // functions — so a consumer can type the `agentfootprint.map.*` payloads
   // it observes and reason about the lease law directly.
   './maps',
+  // 9.104.0 — the FOURTEENTH, same argument: `./classify` carries no run
+  // entry point. It publishes the calibrated-classifier port and its two
+  // adapters — a backend you plug in, the `./providers` shape for a model
+  // that scores declared candidates instead of generating text.
+  './classify',
 ] as const;
 
 /** Names an alias exports that its door deliberately does NOT. See header. */

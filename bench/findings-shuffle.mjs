@@ -94,6 +94,15 @@
  *                       with the value it gives, plus every SKU it cites, sorted —
  *                       so wording and order do not count and content does.
  *                       1/runs = every order gave the same claims.
+ *   judge-accuracy      (AF_SHUFFLE_JUDGE) of the results the JUDGE ruled on, the share
+ *                       agreeing with the planted truth — the standing-accuracy rule on
+ *                       the last `judgment` row per id. `-` without a judge.
+ *   judge-agrees        of the results BOTH sources ruled on, the share where the judge's
+ *                       standing equals the actor's current one — a fact about the two
+ *                       sources, resolved by nobody.
+ *   judge-tokens        mean per run of input+output tokens the judge reported (the
+ *                       mock reports an estimate of chars/4 + 8, and says so here).
+ *   judge-latency-ms    mean latency per judgment, as the adapter measured it.
  *
  * PROVIDERS. `AF_SHUFFLE_PROVIDER=mock` (the default) SCRIPTS the model: it
  * declares a basis on every call and the previous result's standing (a fact
@@ -138,6 +147,9 @@
  *         node bench/findings-shuffle.mjs --matrix          (the full matrix; read the cost line first)
  *       AF_SHUFFLE_PROVIDER=ollama AF_SHUFFLE_MODEL=qwen3 OLLAMA_HOST=http://localhost:11434 \
  *         RUNS=5 node bench/findings-shuffle.mjs
+ *       AF_SHUFFLE_JUDGE=mock node bench/findings-shuffle.mjs        (the second source; four judge columns)
+ *       AF_SHUFFLE_JUDGE=typesafe TYPESAFE_API_KEY=… AF_SHUFFLE_PROVIDER=anthropic AF_SHUFFLE_MODEL=… \
+ *         node bench/findings-shuffle.mjs                          (one classifier call per tool result)
  *       AF_SHUFFLE_VERBOSE=1 prints every run's order, answer, claim set and standings.
  *       Plain JS on node, the package's own doors by self-reference — `npm run
  *       build` must be current (the build deletes dist/ first: build BEFORE any
@@ -147,6 +159,7 @@
 // ES module and the sources are CommonJS-typed): run `npm run build` first.
 import { Agent, defineTool } from 'agentfootprint';
 import { anthropic, mock, ollama } from 'agentfootprint/providers';
+import { mockClassifier, typesafe } from 'agentfootprint/classify';
 
 const PROVIDER = process.env.AF_SHUFFLE_PROVIDER ?? 'mock';
 const MODEL = process.env.AF_SHUFFLE_MODEL;
@@ -161,6 +174,14 @@ const NOISE_AT = process.env.NOISE_AT ?? 'spread';
 const NOISE_SIZE =
   process.env.NOISE_SIZE === undefined ? undefined : Number(process.env.NOISE_SIZE);
 const VERBOSE = process.env.AF_SHUFFLE_VERBOSE === '1';
+// `AF_SHUFFLE_JUDGE=mock|typesafe` (9.104.0) arms every ARMED condition with a
+// second source, `.findings({ judge })`: one classifier call per tool result,
+// filed as a `JudgmentRow` beside the actor's standing and NEVER served. The
+// mock judge scripts the planted truth at a fixed confidence (the harness,
+// not a model); `typesafe` is the hosted classifier (TYPESAFE_API_KEY). Unset,
+// the bench is byte-for-byte the 9.103.0 bench.
+const JUDGE = process.env.AF_SHUFFLE_JUDGE;
+const JUDGE_CONFIDENCE = 0.9;
 // `AF_SHUFFLE_TEMPERATURE=none` sends no temperature at all: the Claude 5
 // family refuses the parameter ("`temperature` is deprecated for this
 // model"), so a run there rests on the model's own default.
@@ -487,8 +508,52 @@ function scriptedMock(armed, n) {
   });
 }
 
+// ─── The scripted judge (AF_SHUFFLE_JUDGE=mock) ────────────────────────
+
+/**
+ * A judge that scripts the planted truth: a result carrying a reading is
+ * `fact`, anything else `noise`, at a fixed confidence — so on the mock the
+ * judge columns measure the harness (the wiring, the rows, the fold), not a
+ * classifier. Usage is an ESTIMATE (chars/4 in, 8 out) so the token column
+ * exercises its arithmetic; latency is what `mockClassifier` spends (≈0).
+ */
+function scriptedJudge() {
+  return mockClassifier((req) => {
+    const reading = readingIn(String(req.state?.result ?? ''));
+    const choice = reading ? 'fact' : 'noise';
+    const rest = (1 - JUDGE_CONFIDENCE) / 3;
+    const probabilities = { fact: rest, open: rest, noise: rest, 'ruled-out': rest };
+    probabilities[choice] = JUDGE_CONFIDENCE;
+    return {
+      model: 'mock-judge',
+      answers: {
+        standing: { type: 'choice', choice, confidence: JUDGE_CONFIDENCE, probabilities },
+        tests_subject: { type: 'noul', noul: reading ? 0.9 : 0.1 },
+      },
+      usage: {
+        inputTokens: Math.ceil(JSON.stringify(req.state).length / CHARS_PER_TOKEN),
+        outputTokens: 8,
+      },
+      latencyMs: 0,
+    };
+  });
+}
+
+/** A fresh judge per run (the mock records its calls), or the hosted one. */
+function judgeFor() {
+  if (JUDGE === undefined) return undefined;
+  if (JUDGE === 'mock') return scriptedJudge();
+  return typesafe({ timeout: 30_000, maxRetries: 3 });
+}
+
 /** Refuses a provider or axis selection the harness cannot honour BEFORE anything is printed or built. */
 function assertEnv() {
+  if (JUDGE !== undefined && JUDGE !== 'mock' && JUDGE !== 'typesafe') {
+    throw new Error(`AF_SHUFFLE_JUDGE must be 'mock' or 'typesafe', saw '${JUDGE}'`);
+  }
+  if (JUDGE === 'typesafe' && !process.env.TYPESAFE_API_KEY) {
+    throw new Error('AF_SHUFFLE_JUDGE=typesafe needs TYPESAFE_API_KEY in the environment');
+  }
   if (PROVIDER !== 'mock' && PROVIDER !== 'ollama' && PROVIDER !== 'anthropic') {
     throw new Error(
       `AF_SHUFFLE_PROVIDER must be 'mock', 'ollama' or 'anthropic', saw '${PROVIDER}'`,
@@ -591,6 +656,56 @@ function standingsAgainstTruth(standings, served) {
   return { named, right };
 }
 
+/**
+ * The judge's standings against the planted truth and against the actor's —
+ * the LAST `judgment` row per id, the same agreement rule as
+ * `standingsAgainstTruth`, counted only over ids the paging tool served a
+ * record under. `agrees` is counted over ids BOTH sources ruled on. Tokens
+ * and latency are summed over every judgment row (errors spend latency too).
+ */
+function judgmentsAgainstTruth(ledger, served) {
+  const current = new Map();
+  const own = new Map();
+  let tokens = 0;
+  let latencyMs = 0;
+  let count = 0;
+  let errors = 0;
+  for (const row of ledger) {
+    if (row.kind === 'standing' && row.unknownId !== true) own.set(row.toolCallId, row.standing);
+    if (row.kind === 'judgment') {
+      current.set(row.toolCallId, row.standing);
+      tokens += (row.usage?.inputTokens ?? 0) + (row.usage?.outputTokens ?? 0);
+      latencyMs += row.latencyMs;
+      count += 1;
+    }
+    if (row.kind === 'judgment-error') {
+      latencyMs += row.latencyMs;
+      errors += 1;
+    }
+  }
+  let named = 0;
+  let right = 0;
+  let both = 0;
+  let agree = 0;
+  for (const [id, standing] of current) {
+    const record = served.get(id);
+    if (record !== undefined) {
+      named += 1;
+      const agrees =
+        record.kind === 'fact'
+          ? standing === 'fact'
+          : standing === 'noise' || standing === 'ruled-out';
+      if (agrees) right += 1;
+    }
+    const actor = own.get(id);
+    if (actor !== undefined) {
+      both += 1;
+      if (actor === standing) agree += 1;
+    }
+  }
+  return { named, right, both, agree, tokens, latencyMs, count, errors };
+}
+
 // ─── One run, one condition ────────────────────────────────────────────
 
 /**
@@ -624,10 +739,12 @@ async function runOnce(condition, run, cell, records) {
     contextBudget: budgetFor(cell, records),
     ...(TEMPERATURE !== undefined && { temperature: TEMPERATURE }),
   }).tool(pagingTool(records, order, served));
+  const judge = condition.armed ? judgeFor() : undefined;
   if (condition.armed) {
     b = b.findings({
       serve: condition.serve,
       ...(condition.answerAsk !== undefined && { answerAsk: condition.answerAsk }),
+      ...(judge !== undefined && { judge }),
     });
   }
   const agent = b.build();
@@ -651,12 +768,21 @@ async function runOnce(condition, run, cell, records) {
         )} · named ${named.size}`
       : undefined;
   const truth = standingsAgainstTruth(standings, served);
+  const judged = judgmentsAgainstTruth(ledger, served);
   return {
     ...score(out, records),
     declared: named.size / cell.n,
     unknownIds: unknown.size,
     standingsNamed: truth.named,
     standingsRight: truth.right,
+    judgeNamed: judged.named,
+    judgeRight: judged.right,
+    judgeBoth: judged.both,
+    judgeAgree: judged.agree,
+    judgeTokens: judged.tokens,
+    judgeLatencyMs: judged.latencyMs,
+    judgeCount: judged.count,
+    judgeErrors: judged.errors,
     order,
     answer: out,
     idSample,
@@ -677,6 +803,11 @@ async function measure(condition, cell, records) {
         console.log(
           `    standings: ${r.standingsRight} of ${r.standingsNamed} named results agree with the plant`,
         );
+      if (r.judgeCount > 0 || r.judgeErrors > 0)
+        console.log(
+          `    judge: ${r.judgeRight} of ${r.judgeNamed} judged results agree with the plant, ` +
+            `${r.judgeAgree} of ${r.judgeBoth} with the actor, ${r.judgeTokens} tokens, ${r.judgeErrors} errors`,
+        );
     }
   }
   const mean = (key) => runs.reduce((s, r) => s + r[key], 0) / runs.length;
@@ -692,6 +823,11 @@ async function measure(condition, cell, records) {
     unknownIds: sum('unknownIds'),
     standingAccuracy: named > 0 ? sum('standingsRight') / named : undefined,
     drift: new Set(runs.map((r) => r.normal)).size / runs.length,
+    judgeAccuracy: sum('judgeNamed') > 0 ? sum('judgeRight') / sum('judgeNamed') : undefined,
+    judgeAgrees: sum('judgeBoth') > 0 ? sum('judgeAgree') / sum('judgeBoth') : undefined,
+    judgeTokens: sum('judgeCount') > 0 ? mean('judgeTokens') : undefined,
+    judgeLatencyMs: sum('judgeCount') > 0 ? sum('judgeLatencyMs') / sum('judgeCount') : undefined,
+    judgeErrors: sum('judgeErrors'),
   };
 }
 
@@ -700,10 +836,18 @@ async function measure(condition, cell, records) {
 const fmt = (x, d = 3) => (x === undefined ? '-' : x.toFixed(d));
 
 function printTable(rows) {
+  const judgeHead = JUDGE ? '  judge-accuracy  judge-agrees  judge-tokens  judge-latency-ms' : '';
   console.log(
-    'condition          runs  facts-in-answer  noise-cited  declared  standing-accuracy  drift   unknown-id-standings',
+    'condition          runs  facts-in-answer  noise-cited  declared  standing-accuracy  drift   unknown-id-standings' +
+      judgeHead,
   );
   for (const r of rows) {
+    const judgeCols = JUDGE
+      ? `  ${fmt(r.judgeAccuracy).padStart(14)}  ${fmt(r.judgeAgrees).padStart(12)}  ${fmt(
+          r.judgeTokens,
+          0,
+        ).padStart(12)}  ${fmt(r.judgeLatencyMs, 1).padStart(16)}`
+      : '';
     console.log(
       `${r.label.padEnd(18)} ${String(r.runs).padStart(4)}  ${fmt(r.factsInAnswer).padStart(
         15,
@@ -711,7 +855,8 @@ function printTable(rows) {
         `${fmt(r.noiseCited).padStart(11)}  ${fmt(r.declared).padStart(8)}  ${fmt(
           r.standingAccuracy,
         ).padStart(17)}  ${fmt(r.drift, 2).padStart(5)}   ` +
-        `${String(r.unknownIds).padStart(20)}`,
+        `${String(r.unknownIds).padStart(20)}` +
+        judgeCols,
     );
   }
 }
@@ -836,6 +981,34 @@ function smokeCheck(rows, cell, records) {
         )}, expected 1 (the script declares by the planted truth, and the paging tool's ids are the ledger's)`,
       );
     if (r.unknownIds !== 0) problems.push(`${r.label}: ${r.unknownIds} standings named no result`);
+    // The mock judge (AF_SHUFFLE_JUDGE=mock) scripts the truth: every armed
+    // row judges every one of the n results (one call per result, none
+    // failing), agrees with the plant on all of them, and agrees with the
+    // actor on every result both ruled on; the off row has no judge.
+    if (JUDGE === 'mock') {
+      if (!r.armed && r.judgeAccuracy !== undefined)
+        problems.push(
+          `${r.label}: judge-accuracy ${r.judgeAccuracy}, expected '-' (no ledger, no judge)`,
+        );
+      if (r.armed && r.judgeAccuracy !== 1)
+        problems.push(
+          `${r.label}: judge-accuracy ${fmt(
+            r.judgeAccuracy,
+          )}, expected 1 (the mock judge scripts the plant)`,
+        );
+      if (r.armed && r.judgeAgrees !== 1)
+        problems.push(
+          `${r.label}: judge-agrees ${fmt(
+            r.judgeAgrees,
+          )}, expected 1 (both sources script the plant)`,
+        );
+      if (r.armed && r.judgeErrors !== 0)
+        problems.push(`${r.label}: ${r.judgeErrors} judgment errors, expected 0`);
+      if (r.armed && !(r.judgeTokens > 0))
+        problems.push(
+          `${r.label}: judge-tokens ${r.judgeTokens}, expected > 0 (the mock reports an estimate)`,
+        );
+    }
   }
   return problems;
 }
@@ -858,9 +1031,15 @@ function providerLine() {
       : PROVIDER === 'anthropic'
       ? `anthropic ${MODEL} (hosted)`
       : `ollama ${MODEL} at ${host}`;
+  const judge =
+    JUDGE === undefined
+      ? ''
+      : JUDGE === 'mock'
+      ? ', judge mock (scripts the plant)'
+      : ', judge typesafe (hosted; one classifier call per tool result)';
   return `provider ${who}, seed ${SEED}, ${RUNS} runs per condition, the same ${RUNS} orders in every condition, temperature ${
     TEMPERATURE === undefined ? 'not sent' : TEMPERATURE
-  }`;
+  }${judge}`;
 }
 
 /** The mock's verdict on one cell's rows: exit 1 on any problem, named with the cell. */
@@ -885,6 +1064,14 @@ async function runSingle() {
       `order (run 0): ${orderFor(0, cell).join(
         ' ',
       )}   — AF_SHUFFLE_VERBOSE=1 prints every run's order, answer, claims and standings`,
+    );
+  }
+  if (JUDGE !== undefined) {
+    const armedConditions = CONDITIONS.filter((c) => c.armed).length;
+    console.log(
+      `cost (judge ${JUDGE}): ${
+        armedConditions * RUNS * cell.n
+      } classifier calls — one per tool result on every armed condition`,
     );
   }
   const rows = [];
@@ -934,6 +1121,13 @@ async function runMatrix() {
     `cost: ${nominal} model calls for this model (nominal: n+1 per run, one per record read plus the answer; ` +
       `ceiling ${ceiling} at maxIterations n+3), none made yet`,
   );
+  if (JUDGE !== undefined) {
+    const armedConditions = CONDITIONS.filter((c) => c.armed).length;
+    const judgeCalls = cells.reduce((s, c) => s + armedConditions * RUNS * c.n, 0);
+    console.log(
+      `cost (judge ${JUDGE}): ${judgeCalls} classifier calls — one per tool result on every armed condition, none made yet`,
+    );
+  }
   const results = [];
   let green = true;
   for (const cell of cells) {

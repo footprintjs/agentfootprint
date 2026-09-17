@@ -5,6 +5,80 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [9.104.0] - 2026-09-17
+
+### Added — a calibrated judge beside the model's own standings
+
+- **`agentfootprint/classify`** — a new door for a classifier that SCORES
+  declared candidates instead of generating text: the `Classifier` port
+  (`{ name; classify(request, signal?) }`), the request shapes (`choice` over
+  declared options, `noul` as a probability, `score` on a declared scale),
+  the answer shapes (the pick, its confidence and the WHOLE distribution),
+  `ClassifierError` (`status?`, `retryable`), and two adapters —
+  `typesafe()` (TypeSafe "System One", model `jev-latest`; key from
+  `TYPESAFE_API_KEY` or `apiKey`, refused at construction when missing; one
+  `fetch`, no SDK; exponential backoff on 429/529 up to `maxRetries`;
+  `latencyMs` measured around the whole call; the wire mapped field for
+  field, probabilities never renormalised, the key never in an error) and
+  `mockClassifier(script)` for tests and the bench (every request on
+  `calls`). Verified 2026-09-17 by one real call; the suite maps that probe
+  against a stubbed `fetch` and never calls the hosted classifier.
+- **`.findings({ judge })`** — a SECOND SOURCE on the findings ledger. After
+  every tool result lands and before the next model call, the judge is
+  asked what the RESULT is worth for the proposition the model declared on
+  the call, or for the user's question when none was declared (never why
+  the tool was called), and its answer is filed as a `JudgmentRow` beside
+  the model's own `StandingRow`: `source: 'judge'`, the judge's name and
+  the provider's model string, `against: 'proposition' | 'question'`, the
+  standing, the distribution, the confidence, `testsSubject`, usage,
+  latency, `clipped` when the result was cut at 4000 characters, the
+  iteration. A failed call is a `JudgmentErrorRow` (status, the provider's
+  message, latency) — never a guessed standing — and the run continues.
+  `foldLedger` gains `judgments` (last wins) and leaves `standingOf` the
+  model's; nothing is served from a judgment in this release (policy A —
+  the design page names B–D and leaves them to the bench). The probe's
+  disagreement — the model said `ruled-out`, the judge said `noise` at
+  0.69 — is the first recorded fact of the second source. Root exports
+  `JudgmentRow` / `JudgmentErrorRow`; `agent.findings()` returns the rows
+  as before.
+- **Events** `agentfootprint.findings.judged` (`toolCallId`, `toolName`,
+  `iteration`, `against`, `standing`, `confidence`, `latencyMs`,
+  `inputTokens?`, `outputTokens?`) and `agentfootprint.findings.judge_failed`
+  (`toolCallId`, `toolName`, `iteration`, `status?`, `latencyMs`) —
+  identities, enums and numbers, never the state; and
+  `agentfootprint.findings.standing` gains `agrees?: boolean`, the model's
+  standing against the judge's current judgment of the same result, present
+  exactly when a judgment row exists (the judge files before the model call
+  that declares, so the standing event is where both readings exist). 115
+  typed events across 25 domains.
+- Only a result the tool PRODUCED is judged: a permission denial, a halt, a
+  fail-closed refusal or a declined check-in files no judgment row and
+  spends no classifier call — a denial text is not a tool result.
+- `typesafe()` refuses a reply without the provider's `model` string or an
+  answer whose numeric field (`confidence`, `score`, `noul`) is missing or
+  not a finite number, as a `ClassifierError` — never `'unknown'` or `NaN`
+  on the record; a per-attempt `timeout` ends the call after one attempt,
+  not retryable.
+- **`classifierScorer(classifier)`** on `agentfootprint/skill-graph` — an
+  `EntryScorer` whose ranking IS the provider's distribution (the scored
+  choice, design step 2): one `choice` question over the entry candidates
+  with `{ id: description }` as criteria, `score` and `relevance` both the
+  probability as sent (a candidate the provider did not score is absent
+  from the ranking, never a padded 0), `chosen` the provider's own pick,
+  `scorer: 'classifier:<model>'`. A provider failure returns `scorer:
+'classifier:unavailable'` with an empty ranking and no `chosen`, and the
+  existing cold-start entry pick takes over — never a guess.
+- **Bench** `bench/findings-shuffle.mjs`: `AF_SHUFFLE_JUDGE=mock|typesafe`
+  arms every armed condition with a judge and adds `judge-accuracy`,
+  `judge-agrees`, `judge-tokens` and `judge-latency-ms`, with the classifier
+  calls stated on the cost line before the first is made; the mock judge
+  scripts the planted truth at a fixed confidence and the smoke laws pin
+  it. Unset, the bench prints the 9.103.0 table byte for byte.
+- Byte identity: the 17 references pass untouched; `agent-findings-judge`
+  is the one new reference, generated alone with a scripted judge — its
+  delta over `agent-findings` is the two judgment rows and the declared
+  proposition, and nothing under `served.*`.
+
 ## [9.103.0] - 2026-09-17
 
 ### Added — an answer-turn ask on the served ledger piece, as a dial
@@ -70,7 +144,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   the refusal engine saw a declared fact and a declared noise result as the
   same bytes. By the model's claim only: a turn is the removal unit and its
   standing is its most valuable result's (`fact > open > undeclared >
-  ruled-out > noise`); a result the model never named is undeclared and is not
+ruled-out > noise`); a result the model never named is undeclared and is not
   held; the library reads no result's text to decide otherwise.
 - A fact hold never exists without its ceiling and its stand-down. The
   ceiling is spent newest first and a held turn already inside
@@ -138,7 +212,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   So from the second call on, the reserved `_findings` property on every
   served schema binds the ids the model may name: `previous[].toolCallId`
   carries `enum: <the tool results on the wire with no standing yet, newest
-  first, at most 32>` and says "one of the ids listed; a result not listed
+first, at most 32>` and says "one of the ids listed; a result not listed
   cannot be named here"; a clipped list states the cap. The list is what the
   model can still READ: a result with no standing, a `fact` (stood on in the
   piece, served verbatim under the default mode) and an `open` result (served
@@ -161,7 +235,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `receipt.tools.schemaHashes` moves when the offer does. The law holds at
   the schema AND at the row: the offer is what the model may COPY, never what
   the library resolves — an id outside it still files as written, `unknownId:
-  true`, never mapped to a position or a tool name — and every id INSIDE it
+true`, never mapped to a position or a tool name — and every id INSIDE it
   resolves, because a standing is identified against the same served history
   the offer was read from (`findings/offer.ts · knownResults`: the served
   `role: 'tool'` messages plus the previous batch), so an id copied from the
@@ -214,7 +288,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Since 9.101.0, `withoutFindingsArgument` recognised the library's
   decoration by REFERENCE only (`properties._findings ===
-  FINDINGS_ARGUMENT_SCHEMA`), and the reference never holds on the live path:
+FINDINGS_ARGUMENT_SCHEMA`), and the reference never holds on the live path:
   the served list `callLLM` reads is the committed `dynamicToolSchemas`, a
   `structuredClone` of what the slot planted. So the choice seam's enum fence
   (`declaredEnumValuesOf(withoutFindingsArgument(schema))`, the
@@ -229,7 +303,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   written. An armed agent may therefore file an `unsupported-argument`
   finding it previously suppressed. Its unit test had passed because it
   handed the function the live reference; `test/core/agent/findings/
-  reserved.test.ts` now pins the clone.
+reserved.test.ts` now pins the clone.
 
 ### Unchanged — the unarmed agent, and the two armed references regenerated alone
 
@@ -326,7 +400,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `open`. Bounded, every overflow stated, an empty bucket omitted. On the
   wire, and only on the wire, a tool result the model judged `noise` or
   `ruled-out` is served as a ticket, `{"collapsed":true,"standing":…,
-  "toolCallId":…}`, in place of its content; `open` and undeclared results
+"toolCallId":…}`, in place of its content; `open` and undeclared results
   stay verbatim; nothing is dropped or reordered, and `toolName` /
   `toolCallId` are untouched, so the tool_use/tool_result pair stays
   wire-valid. `history` never changes — the window stage stays its only
@@ -620,7 +694,7 @@ footprintjs the range admits (`^9.21.1`).
   touched before); `cache-transform`'s "that gap is the stronger claim" is
   measured for every (gap, shared field) pairing that occurs beside it on
   every fixture view, intact and damaged, against that gap's own claim (an
-  unmeasured kind fails by name; "stronger" is *may be short*, ≤ — on a fresh
+  unmeasured kind fails by name; "stronger" is _may be short_, ≤ — on a fresh
   run with its base stripped the rebuild recovers everything);
   `forced-tool-schema`'s "the tool list is complete" runs on both chart
   shapes. The design page marks the three built; the general statement — a
@@ -677,7 +751,7 @@ footprintjs the range admits (`^9.21.1`).
   (`servedView.ts` · `readReceipt`), which checks `basis.epoch` and nothing
   else. A stored receipt with a `basis` and no `cache` container therefore
   made `servedAt(snapshot, k)` throw `Cannot read properties of undefined
-  (reading 'strategy')` where 9.92 built a view. WHY it matters: a recording is
+(reading 'strategy')` where 9.92 built a view. WHY it matters: a recording is
   older than the reader that opens it, and every recording a consumer already
   held was minted by the release that minted it — the lens found this the day
   after 9.93.0 shipped, on a recording it already had. That breaks the family's
@@ -688,7 +762,7 @@ footprintjs the range admits (`^9.21.1`).
   the check does not verify declared optional (`cache?`, and `strategy?`
   within it) — and `receiptAt` answers that type, so the compiler holds every
   reader to it; `viewOf` reads the strategy through it (`receipt?.cache?.
-  strategy !== null`). A receipt with no `cache` yields a view, its
+strategy !== null`). A receipt with no `cache` yields a view, its
   `cache-transform` gap IS raised (the 9.93 rule: absence still raises; only a
   receipt SAYING `null` lifts it), and its `basis` and every hash row it
   carries still verify. Nothing is repaired: no `cache: {}` is fabricated and
@@ -698,9 +772,9 @@ footprintjs the range admits (`^9.21.1`).
   `omittedForAttention`) sits behind the same narrowing and the same type; no
   second reader existed in the library. `Receipt` itself is unchanged — it is
   the MINTED shape and a mint still writes every container.
-  THE VINTAGE LAW, now in `src/lib/time-travel/README.md`: *a reader reads
+  THE VINTAGE LAW, now in `src/lib/time-travel/README.md`: _a reader reads
   the receipt it is handed; a missing container is a fact about the vintage,
-  never a throw.* `test/lib/time-travel/receipt-vintage.test.ts` ages real
+  never a throw._ `test/lib/time-travel/receipt-vintage.test.ts` ages real
   recordings three ways — no `cache` (the shape the lens hit), `cache` without
   `strategy` (the 9.88.0–9.92.1 mint, byte for byte), `strategy: null` (the
   9.93.0 mint on a chart with no strategy) — and requires a view, the gap, the
@@ -711,8 +785,8 @@ footprintjs the range admits (`^9.21.1`).
   `receiptAt(s, k)!.cache.transform` unguarded must guard the container — the
   compiler now says on the page what the runtime said with a throw.
   ```ts
-  const receipt = receiptAt(olderRecording, 1)!;   // minted by 9.92
-  receipt.cache?.strategy;                          // undefined — not null, not repaired
+  const receipt = receiptAt(olderRecording, 1)!; // minted by 9.92
+  receipt.cache?.strategy; // undefined — not null, not repaired
   servedAt(olderRecording, 1)!.gaps.map((g) => g.gap); // ['cache-transform', 'provider-defaults']
   ```
 
@@ -759,7 +833,7 @@ one iteration (below), and because every bundled consumer's output changes.
   catalogs and answers.
   ```ts
   const agent = Agent.create({ provider, model }).tool(lookup).selfExplain().build();
-  await agent.run({ message: 'Refund order A-1001?' });   // pack not loaded
+  await agent.run({ message: 'Refund order A-1001?' }); // pack not loaded
   await agent.run({ message: 'Why did you approve it?' }); // loads on the iteration read_skill opened it
   ```
 - **The ESM build now carries `sideEffects`.** A bundler reads that flag from
@@ -827,7 +901,7 @@ window and no cache strategy records a different byte except the one new key.
   release has no key, and a reader treats that as "cannot say", never as
   `null`.
   ```ts
-  receiptAt(agent.getSnapshot()!, 1)!.cache.strategy;   // '*'  — an agent on the mock provider
+  receiptAt(agent.getSnapshot()!, 1)!.cache.strategy; // '*'  — an agent on the mock provider
   receiptAt(llmCall.getSnapshot()!, 1)!.cache.strategy; // null — nothing between assembly and the port
   ```
 - **`Receipt.omittedForAttention` is written** — by the agent chart's window
@@ -847,8 +921,11 @@ window and no cache strategy records a different byte except the one new key.
   `no-receipt-on-chart`, the one gap that can lose it. An agent without a
   window hands both stages the deps they always had.
   ```ts
-  const agent = Agent.create({ provider, model }).system('bot').tool(lookup)
-    .window(slidingWindow({ keepRecentTurns: 1 })).build();
+  const agent = Agent.create({ provider, model })
+    .system('bot')
+    .tool(lookup)
+    .window(slidingWindow({ keepRecentTurns: 1 }))
+    .build();
   await agent.run({ message: 'go' });
   receiptAt(agent.getSnapshot()!, 3)!.omittedForAttention; // { count: 2, hashes: [...] } — the pair that left at this head
   ```
@@ -966,7 +1043,7 @@ consequences, one example each:
   (`ServedToolParties.lastServed`) or the name's only holder when it was never
   served; every such dispatch is on the record as the new
   `agentfootprint.tools.answered_off_wire` (`{ toolName, toolCallId,
-  iteration, answeredBy, answeredById? }`). A pause that re-dispatches on
+iteration, answeredBy, answeredById? }`). A pause that re-dispatches on
   resume (a middleware ask, a check-in, a credential consent) carries the
   served party on its checkpoint (`pausedToolParty`, pause-path-only), so a
   resume in a FRESH Agent instance — empty closure, no Compose — cannot fall
@@ -980,7 +1057,7 @@ consequences, one example each:
   is named as itself.
 - **A dead claim is reported.** New `agentfootprint.tools.claim_swallowed`
   (`ToolsClaimSwallowedPayload`: `{ toolName, iteration, lostBy, lostById?,
-  wonBy, wonById? }`, names only) fires once per iteration for every party
+wonBy, wonById? }`, names only) fires once per iteration for every party
   whose claim to a name is held by somebody else — whether its contract
   competed (an active skill against a provider) or never reached the merge
   (the same skill while inactive; a provider tool whose name a static
@@ -1050,8 +1127,8 @@ Two reasons were on the record for that. **Neither survived.** The first — tha
 `Receipt.cache.transform` has no honest value on a chart running no cache
 strategy — was already refuted in 9.88.0 and left refuted in the source: an
 `Agent` with a pass-through strategy records `'unchanged'` today, and the value
-is true for the same reason where no strategy exists at all, because *the
-request that went out IS the request that was assembled*. **No fourth enum value
+is true for the same reason where no strategy exists at all, because _the
+request that went out IS the request that was assembled_. **No fourth enum value
 was added.** The second — the salt — never applied to `LLMCall`, which owns its
 executor and mints a run id exactly as `Agent` does. It DOES apply to the two
 messageAPI charts, and that was verified rather than assumed: footprintjs stamps
@@ -1094,8 +1171,8 @@ than salting every hash with an empty string.
   unnoticed for as long as no receipt existed to contradict it. The read is now
   a fallback chain (the agent key first, so no agent recording changes), the
   same shape the conversation has had since 9.88.0. Red before, on
-  `test/lib/time-travel/receipt-conformance.test.ts` · *the tool the model was
-  served is hashed by the receipt AND rebuilt from the log*.
+  `test/lib/time-travel/receipt-conformance.test.ts` · _the tool the model was
+  served is hashed by the receipt AND rebuilt from the log_.
 
 ### Changed
 
@@ -1103,7 +1180,7 @@ than salting every hash with an empty string.
   printed sentence never named a chart, so nothing in it went false; the
   MECHANISM comment beside it now names the shapes that still reach it — a
   messageAPI chart handed no run id, a run that declined with `recordReceipt:
-  false`, a recording made before 9.88.0, and a consumer's own `call-llm` stage,
+false`, a recording made before 9.88.0, and a consumer's own `call-llm` stage,
   which this library does not mint for. The cause `'no-receipt-committed'` is
   still driven by a REAL run in both walks; the driver moved from an `LLMCall`
   (which now mints) to a messageAPI chart with no run id.
@@ -1193,12 +1270,12 @@ import { milestoneTag, milestoneStopsStrategy } from 'agentfootprint';
 
 // A reader with NO agent id conventions — footprintjs's own strategy, our word:
 const turns = timeTravel(agent.getSnapshot()!, { strategy: tagStops([milestoneTag('llm-turn')]) });
-turns.stops.map((s) => s.label);   // ['Run start', 'CallLLM', 'CallLLM', 'Run end']
-turns.stops[1].meta;               // ['milestone:llm-turn', 'milestone-label:LLM turn']
+turns.stops.map((s) => s.label); // ['Run start', 'CallLLM', 'CallLLM', 'Run end']
+turns.stops[1].meta; // ['milestone:llm-turn', 'milestone-label:LLM turn']
 
 // The agent's own axis, unchanged in shape — tag first, id fallback:
 const all = timeTravel(agent.getSnapshot()!, { strategy: milestoneStopsStrategy });
-all.stops[5].meta;                 // { kind: 'llm-turn', label: 'LLM turn' } — read off the bundle
+all.stops[5].meta; // { kind: 'llm-turn', label: 'LLM turn' } — read off the bundle
 ```
 
 ## [9.89.3] - 2026-09-10
@@ -1283,13 +1360,13 @@ for byte as before.
   const tool = flowchartAsTool({
     name: 'seeded',
     description: 'Seeds a subflow with the key and reads it there.',
-    flowchart: chart,            // parent writes apiKey; the subflow is seeded with it
+    flowchart: chart, // parent writes apiKey; the subflow is seeded with it
     keepRecord: true,
     redact: { keys: ['apiKey'] },
   });
-  await tool.execute({}, ctx);   // → '{"apiKey":"REDACTED","seen":26}' — the subflow computed on the real 26-byte key
+  await tool.execute({}, ctx); // → '{"apiKey":"REDACTED","seen":26}' — the subflow computed on the real 26-byte key
   const record = JSON.stringify(innerRunsOf(tool)!.get(ctx.toolCallId)!);
-  record.includes('sk-live-');   // false — result, log, mirror, stageReads, narrative Input: line, history[0], parent log
+  record.includes('sk-live-'); // false — result, log, mirror, stageReads, narrative Input: line, history[0], parent log
   ```
 
   The law's other half is unchanged and now pinned in the same file: the live
@@ -1320,7 +1397,7 @@ changes, and a tool without `redact` behaves byte for byte as before.
   policy-redacted key never entered the inner commit log — and the option's
   own documentation drew the wrong conclusion from that. The live state view
   is not a commit: it is the run's raw heap, and its scrubbed twin (the
-  *redacted mirror* footprintjs maintains beside it) is served only by
+  _redacted mirror_ footprintjs maintains beside it) is served only by
   `getSnapshot({ redact: true })`. Both tools called `getSnapshot()` bare, so
   the string the model read (`JSON.stringify(snapshot.values)`, or whatever a
   `resultMapper` built from it), the envelope's state, and a kept record's
@@ -1341,13 +1418,13 @@ changes, and a tool without `redact` behaves byte for byte as before.
   const tool = flowchartAsTool({
     name: 'weather_advice',
     description: 'Forecast tomorrow and advise on biking.',
-    flowchart: adviceChart,          // writes scope.apiKey = 'sk-…'
+    flowchart: adviceChart, // writes scope.apiKey = 'sk-…'
     keepRecord: true,
     redact: { keys: ['apiKey'] },
   });
-  await tool.execute({}, ctx);       // → '{"apiKey":"REDACTED","advice":"bike"}'
+  await tool.execute({}, ctx); // → '{"apiKey":"REDACTED","advice":"bike"}'
   const { snapshot } = innerRunsOf(tool)!.get(ctx.toolCallId)!.recording!;
-  snapshot.sharedState.apiKey;       // 'REDACTED' — was the plaintext
+  snapshot.sharedState.apiKey; // 'REDACTED' — was the plaintext
   JSON.stringify(snapshot).includes('sk-'); // false — in every field the log scrubs
   ```
 
@@ -1385,7 +1462,8 @@ both additive: a 9.88.0 consumer compiles and behaves identically.
   object a consumer already holds:
 
   ```ts
-  receiptHash(runId, toolDigestInput(servedAt(k).tools.schemas[i])) === receiptAt(k).tools.schemaHashes[name]
+  receiptHash(runId, toolDigestInput(servedAt(k).tools.schemas[i])) ===
+    receiptAt(k).tools.schemaHashes[name];
   ```
 
   It takes an `LLMToolSchema` — the tool as handed to the provider port, which
@@ -1413,7 +1491,7 @@ both additive: a 9.88.0 consumer compiles and behaves identically.
   all of it by hand against 9.17. This was one of them. The hand-rolled guard,
   the re-partition loop and `milestoneOf`'s re-derivation are gone;
   `milestoneStops` is now one expression, `filterStops(commitStops(log, tree),
-  keep)`, and the one owner of the `[start, …stages, end]` contract is the
+keep)`, and the one owner of the `[start, …stages, end]` contract is the
   library that returns it. Public names and signatures are unchanged
   (`milestoneOf`, `milestoneStops`, `milestoneStopsStrategy`); the stops are
   now typed `Stop<Milestone>`, so `cursor.at()?.meta?.kind` is typed, and
@@ -1543,14 +1621,14 @@ that file now exists. All of it is closed below, at the root, additively.
   strategy actually applied, three scalars each (`field`, `boundaryIndex`,
   `ttl`). `transformHash` is a digest over the whole prepared request: inside a
   run it says only "something changed", and across epochs it is not comparable
-  at all — so it could not answer *did the breakpoints move between call 3 and
-  call 4?*, which is the question that decides an Anthropic bill. Two receipts'
+  at all — so it could not answer _did the breakpoints move between call 3 and
+  call 4?_, which is the question that decides an Anthropic bill. Two receipts'
   `markersApplied` answer it by inspection.
 - **`receipt.cache.transform`** — `'unchanged' | 'rewritten' | 'unknown'`.
   Branch on this, never on `transformHash === null`.
 - **`RECEIPT_BOUNDARY`** — the one sentence every receipt field is true at, so
-  a renderer prints the library's own wording: *a receipt describes the request
-  as this library last saw it.* Where that is — the provider port — is in the
+  a renderer prints the library's own wording: _a receipt describes the request
+  as this library last saw it._ Where that is — the provider port — is in the
   comment beside the constant, because the sentence is printed and the sixth
   round's rule is that a printed sentence names no mechanism.
 - **`ServedView.basis`** — `{ model, provider, runId }`, read off the receipt.
@@ -1689,7 +1767,7 @@ that file now exists. All of it is closed below, at the root, additively.
   terminal, in a diff and in review, and one `sed` away from being eaten. Same
   bytes, same hashes; they can now be read.
 - **`test/lib/time-travel/receipt-conformance.test.ts` · `describe('a redacted
-  run')` was a NO-OP, and two READMEs documented what it pretended to prove.**
+run')` was a NO-OP, and two READMEs documented what it pretended to prove.**
   It passed `redact: [...]` to `Agent.create`, which has no such option;
   `tsconfig.json` excludes `test/`, so the unknown key was never typechecked and
   was silently dropped. The run was not redacted, and the READMEs' "honest edge"
@@ -1862,6 +1940,7 @@ a sentence is TRUE, and three of them were not.
   conditionally instead would mean inferring "no strategy ran" from a recording,
   which is the absence-of-evidence reading this whole feature refuses; recorded
   as entry 8 of `docs/design/2026-09-recorded-not-built.md`.
+
 #### The fifth and sixth rounds — a printed gap sentence stops describing code
 
 Five review rounds, and each one found NEW false prose in the sentences the
@@ -1871,7 +1950,7 @@ composed once and read many times is a PREDICTION** — one surface over: compos
 once, and read against every later version of the code it describes.
 
 The reproduction is one shipped string. `SERVED_GAPS['no-receipt-on-chart'].why`
-said *"THREE causes and none of them is a hole in this view: …"*. A fourth path
+said _"THREE causes and none of them is a hole in this view: …"_. A fourth path
 was then added — a value under the receipt key refused because it carries no
 basis — and BOTH halves went false at once: four causes, and that one IS a hole.
 Nobody edited the string. Nobody had to.
@@ -1883,12 +1962,12 @@ one, and the reason is the whole story of this release.
 
 Five rounds tried to write TRUE mechanism sentences and the rate of new
 falsehoods held constant. So the sixth put one question to all ten printed
-sentences — *could this become false without anyone editing it?* — and NINE
+sentences — _could this become false without anyone editing it?_ — and NINE
 could, two of them being false the day they shipped. Exactly one could not:
 
-> `UNGAPPED_FIELDS.gaps` — *"The account itself rather than a fact about the
+> `UNGAPPED_FIELDS.gaps` — _"The account itself rather than a fact about the
 > request: a gap naming this list would be the account excusing its own
-> absence."*
+> absence."_
 
 It survives because it makes **no claim about code**. It says what the field
 means inside the account, and nothing outside the sentence can falsify it. Every
@@ -1923,8 +2002,8 @@ of them still make a claim a code edit falsifies.** Exactly one does not —
 `UNGAPPED_FIELDS.gaps` — and it does not because it is SELF-REFERENTIAL: it says
 what its field is inside the account, not anything about the request. The other
 ten cannot copy that shape, because a sentence that tells a reader something
-USEFUL — *may be SHORT*, *absent means unknown*, *the tool list is complete and
-the schemas are one short* — is a claim about how the rebuild behaves, and the
+USEFUL — _may be SHORT_, _absent means unknown_, _the tool list is complete and
+the schemas are one short_ — is a claim about how the rebuild behaves, and the
 rebuild is code. **The reduction changed the VOCABULARY of the claims, not their
 CLASS.**
 
@@ -1968,20 +2047,20 @@ spot than six rounds of rewriting produced, and it is the whole of it.
   a doc is FOR; the other three do not, because a cause count goes stale in a
   doc exactly as it does in a constant.
 - **Every printed gap sentence is one or two sentences and names nothing.**
-  `no-receipt-on-chart` now reads in full: *"Nothing on this view has been
+  `no-receipt-on-chart` now reads in full: _"Nothing on this view has been
   checked against what went out. Every field below is missing as a whole, and an
   absence among them says nothing about the call — not even that a dial was left
-  unset."* `forced-tool-schema` is 26 words. `callRuntimeStageId`'s excuse is 12.
+  unset."_ `forced-tool-schema` is 26 words. `callRuntimeStageId`'s excuse is 12.
 - **TWO SENTENCES WERE FALSE THE DAY THEY SHIPPED, and both were mechanism
   claims, so the rule deletes the category rather than the instances.**
-  `cache-transform` said *"only its INPUTS are on the record"* while three of
+  `cache-transform` said _"only its INPUTS are on the record"_ while three of
   the fields it covers are OUTPUTS that are on the record — `cache.transform`
   (the verdict of comparing what the strategy was given against what it handed
   back), `cache.transformHash` (the digest of the result, when they differed)
   and `cache.markersApplied` (the breakpoints actually applied, as against the
   candidates in `scope.cacheMarkers`, which are the inputs). And
-  `no-receipt-on-chart` opened *"No receipt was found for this epoch"* and
-  closed *"absent here means unrecorded"* — both false under
+  `no-receipt-on-chart` opened _"No receipt was found for this epoch"_ and
+  closed _"absent here means unrecorded"_ — both false under
   `'receipt-shape-rejected'`, where a receipt WAS written and the read refused
   it, which is to say the sentence asserted which cause applied and was wrong
   for one of two. Neither can be written under the new rule. Both are corrected
@@ -1990,9 +2069,9 @@ spot than six rounds of rewriting produced, and it is the whole of it.
 - **`RECEIPT_BOUNDARY` was the one printed sentence exempted from the rule, and
   the exemption is gone.** It named `LLMProvider.complete` and `complete()` — a
   module and a call, printed to a reader who cannot open either. It now reads
-  *"A receipt describes the request as this library last saw it. Whatever
+  _"A receipt describes the request as this library last saw it. Whatever
   handled it after that could have changed it, and nothing on the receipt would
-  show that."* The port, the decorated provider, the vendor adapter and the
+  show that."_ The port, the decorated provider, the vendor adapter and the
   vendor's own defaults are in the comment above the constant. One string, one
   rule set: the walk no longer strips it before judging, and asserts it on its
   own as well as inside the two entries that quote it.
@@ -2027,8 +2106,8 @@ spot than six rounds of rewriting produced, and it is the whole of it.
   measurement is unchanged and still re-taken by the walk on every run; it reads
   the claim from the COMMENT beside the entry now, so a chart that starts
   supplying one still fails the suite instead of aging the sentence. What a
-  reader is shown is what the field means: *"Absent means nobody recorded a
-  drop, never that nothing was dropped."*
+  reader is shown is what the field means: _"Absent means nobody recorded a
+  drop, never that nothing was dropped."_
 - **`examples/observability/24-receipt-at-the-stop.ts` clipped a printed reason
   mid-version-number.** It printed `reason.split('.')[0]`, so "measured on
   9.88.0" reached a reader as "measured on 9." — a fragment that reads as a
@@ -2038,8 +2117,7 @@ spot than six rounds of rewriting produced, and it is the whole of it.
   coverage.** The header claimed the vacuous-row guard was closed "by driving
   each row on a run that reaches its own fields". Measured, that clause is
   false: `no-fold-base` moves 7 of the 11 fields it names, `no-run-log` 1 of 4,
-  `no-receipt-on-chart` 3 of 8, and only `no-conversation-on-record` reaches all
-  3. The reasons are structural — a receipt-only field never appears on a view,
+  `no-receipt-on-chart` 3 of 8, and only `no-conversation-on-record` reaches all 3. The reasons are structural — a receipt-only field never appears on a view,
   so removing the receipt cannot MOVE it — so the header names the numbers per
   row, a test pins them so the table cannot go stale, and it says plainly that a
   field claim divergence does not reach is carried by the coverage half and by
@@ -2063,56 +2141,57 @@ each of them, which is how the library closes everything else, and it found a
 different class of defect: not prose that names a mechanism, but prose that is
 plain, short, rule-abiding and UNTRUE OF THE VIEW IT IS PRINTED BESIDE.
 
-- **`no-run-log` claimed a loss that a run says did not happen.** It read *"The
-  fields below could not be fully recovered here"* — an assertion that recovery
+- **`no-run-log` claimed a loss that a run says did not happen.** It read _"The
+  fields below could not be fully recovered here"_ — an assertion that recovery
   DID fail. Measured on the ordinary view that raises it, a
   `'dynamic-grouped'` agent with one plain tool and its `commitLog` emptied:
   `tools.names`, `tools.schemas`, `tools.forced` and `messages.requestOnly` all
   come back BYTE-IDENTICAL to the intact view. The gap fires and costs nothing,
   because that run has no forced tool name and no `wants` to lose. It now reads
-  *"The fields below may be SHORT: a name can be missing from the tool list, and
+  _"The fields below may be SHORT: a name can be missing from the tool list, and
   a line that went out with the request can be missing too. An absence below is
   not evidence that there was nothing there — read the whole recording rather
-  than a piece of it."* **The repair is the sentence and not the condition**,
+  than a piece of it."_ **The repair is the sentence and not the condition**,
   and the reason is that the condition cannot be narrowed by anything the read
   can see: whether the run had a constant to lose is recorded in the log whose
   absence raises the gap. Both directions are asserted — emptying the run log
   takes a forced-output run's tool list from one name to none and a staged-refs
   run's request-only line to nothing, and takes nothing at all from the plain
   run. Its second clause was loose as well: it said a line could go missing
-  *"from the conversation"*, and a request-only line is by construction in no
+  _"from the conversation"_, and a request-only line is by construction in no
   conversation — asserted now against the wire, which carries it as the last
   message of the request while the rebuilt `messages.asSent` does not contain it.
 - **Three sentences were true where they were composed and misleading where they
   were PRINTED.** One sentence, several contexts: the library's own Honest
   Sentence law says it has to hold in all of them.
-  - `cache-transform` ended by quoting `RECEIPT_BOUNDARY` — *"A receipt
-    describes the request as this library last saw it"* — and it is raised on
+
+  - `cache-transform` ended by quoting `RECEIPT_BOUNDARY` — _"A receipt
+    describes the request as this library last saw it"_ — and it is raised on
     EVERY view, including a receipt-less one. Measured: an `LLMCall` view
     carries exactly `no-receipt-on-chart` and `cache-transform`, so the reader
     was told what a receipt describes beside a view that has none. The quote is
     gone from it and the claim survives in the entry's own words, in the
-    vocabulary of a view: *"…and nothing on this view would show it."*
+    vocabulary of a view: _"…and nothing on this view would show it."_
     `provider-defaults` keeps the quote and is the only entry that may have it —
     it is pushed inside `if (receipt !== undefined)`, so a view carrying it
     always has a receipt for the sentence to be about. Asserted across every run
     in the new file: a gap whose `why` includes the boundary appears only on a
     view whose `basis` is defined.
-  - `no-fold-base` said the view's number *"may differ from the one the receipt
-    for this turn carries"* — printed on views that carry no receipt (a
+  - `no-fold-base` said the view's number _"may differ from the one the receipt
+    for this turn carries"_ — printed on views that carry no receipt (a
     base-less `LLMCall` recording raises both gaps at once). It now says what
-    the NUMBER means: *"The turn number below may be this turn's place in run
-    order rather than the number the run itself gave it."* Asserted on the
+    the NUMBER means: _"The turn number below may be this turn's place in run
+    order rather than the number the run itself gave it."_ Asserted on the
     resumed run whose base and `iteration` writes are gone: the view calls the
     second turn 1 while the run's own count for it was 2.
-  - `no-receipt-on-chart` closed *"their absence here is a gap in the record,
-    never a call made without them"*. True of each field AS A WHOLE and false
+  - `no-receipt-on-chart` closed _"their absence here is a gap in the record,
+    never a call made without them"_. True of each field AS A WHOLE and false
     one level down, which is the level a reader reads at: a receipt always
     carries `params` and always carries a `cache.transform` verdict, and an
     absence INSIDE `params` — measured `{}` on an agent that set no dials — IS a
     call made without one. It now claims nothing about what is inside a field it
-    cannot see: *"…an absence among them says nothing about the call — not even
-    that a dial was left unset."*
+    cannot see: _"…an absence among them says nothing about the call — not even
+    that a dial was left unset."_
 
 - **`test/lib/time-travel/gap-sentences.test.ts` — the assertion, beside the
   sentence.** One real run per catalogue entry and per `UNGAPPED_FIELDS` key,
@@ -2201,6 +2280,7 @@ plain, short, rule-abiding and UNTRUE OF THE VIEW IT IS PRINTED BESIDE.
   hand-listed, so a gap whose damage nobody wrote down still gets only the
   account half. Neither half reads a `why`. That is a person's job, and it is
   where this release's last three defects came from.
+
 - `test/lib/time-travel/keyed-fold-equivalence.test.ts` — 9 tests: every key at
   every commit of a real run, checked against `stateAt` itself, including a
   merge with no `set` anchor (which cannot be folded at all without the base),
@@ -2250,9 +2330,9 @@ the examples it pulls in — a repair of its own, not a line item in this releas
 The hole is closed instead in `test/type-regressions/`, which already compiles
 under `npm run test:types`.
 
-`ServedGap.fields` carries TWO relations on one list. Most entries mean *the
-rebuild cannot produce this field*; `cache-transform`'s composition fields mean
-*it can, and both sides agree, but only up to the cache strategy*. A checker
+`ServedGap.fields` carries TWO relations on one list. Most entries mean _the
+rebuild cannot produce this field_; `cache-transform`'s composition fields mean
+_it can, and both sides agree, but only up to the cache strategy_. A checker
 that granted the second as an excuse would stop checking fields the record
 proves perfectly well — which is exactly what happened when the composition
 fields were added, and it silently disabled one clause of the law. The clause
@@ -2396,7 +2476,7 @@ Iteration → … → Run end.
   becomes a one-line reader of it.
 
 - **Which keys are visible where, in the grouped shape.** The settled skill
-  cursor for turn *k* is on the OUTER axis, at iteration *k* (`currentSkillId`).
+  cursor for turn _k_ is on the OUTER axis, at iteration _k_ (`currentSkillId`).
   Inside the drill, `currentSkillId` is the value the turn STARTED from — it
   crosses the mount as a read-only input — and the move the turn made is
   `nextSkillCursor`, merged back out by the outputMapper. Both logs are truthful
@@ -2442,7 +2522,7 @@ Iteration → … → Run end.
 - **17 tests over real runs**, not fixtures: the axis in both chart shapes, the
   partition property (every commit belongs to exactly one stop), a jump that
   lands and a miss that names a nearest without moving, the skill graph read
-  along the commits with the wire as witness (the skill whose body rode turn *k*
+  along the commits with the wire as witness (the skill whose body rode turn _k_
   is the one that iteration's own log settled on), marks that survive jumps and
   never appear in the recording, what `'start'` folds on this axis versus the
   port's, a resumed run's axis, and a log with no milestones in it. One more
@@ -2477,7 +2557,7 @@ Everything else here is one review of 9.86.0, taken finding by finding.
   `TurnRoute.by`'s six values, so the clause was composed for the other four too:
   false for `'continuity'` (the cursor was carried over from the previous turn and
   nothing moved it — the verdict every follow-up produces under `{ strictness:
-  'guard', continuity: 'conversation' }`), false for `'menu'` resolved by the
+'guard', continuity: 'conversation' }`), false for `'menu'` resolved by the
   model's own pick, and unprovable for `'none'`. The composer now takes
   `turnStartedBy: TurnRoute['by']` and says one past fact per value — "the turn's
   start had already been resolved decisively", "the cursor had been carried over
@@ -2570,7 +2650,7 @@ Everything else here is one review of 9.86.0, taken finding by finding.
   The ten 9.86.0 rows cited `buildToolRegistry.ts` line ranges from the 9.85.0 tree
   that the same release had moved by about twenty-nine lines, beside a
   `buildToolsSlot.ts` line from HEAD. They name the checks now (`holders.includes
-  (PRESENT_TOOL_NAME)`, the `seenNames` loop, the `sharedSkillTools` backfill), and
+(PRESENT_TOOL_NAME)`, the `seenNames` loop, the `sharedSkillTools` backfill), and
   the baseline's `note` says so. The `present-vs-mcp` row no longer claims the MCP
   cell proves the blind spot is the provider channel: both claimants mount through
   `staticTools()`, so the cell shows an MCP catalog inherits that seam unchanged and
@@ -2685,11 +2765,11 @@ the cursor?", and one scope key answers "which skill ids may this role see?".
   export inside the tool-calls stage, not on any package door — _corrected in
   9.86.1_), which
   names the dispatch roster: `Unknown tool 'X' on that call. Tool names that
-  resolved to an implementation on that call: …`, or, with an empty roster, that
+resolved to an implementation on that call: …`, or, with an empty roster, that
   none did. The leading `Unknown tool` token is preserved, so every matcher on it
   is untouched.
 
-  It says *resolved*, not *could be dispatched*, because two gates sit between
+  It says _resolved_, not _could be dispatched_, because two gates sit between
   resolution and a tool running — the `tool_call` permission check and the
   middleware chain — and neither is asked to phrase an error. And the roster is
   role-filtered before it is named: it used to read the dispatch map raw and could
@@ -2703,10 +2783,10 @@ the cursor?", and one scope key answers "which skill ids may this role see?".
   Fold holds.** Three sentences branched on `length > 0` over an already-filtered
   array, so "the graph held nothing" and "the role filter emptied it" composed the
   same words. A cursor whose only declared hop was hidden answered `read_skill`
-  with *"No skill was reachable from 'alpha' when that call was made."* while the
+  with _"No skill was reachable from 'alpha' when that call was made."_ while the
   graph was routing `alpha`; a `'guard'` menu whose every id had been hidden since
-  the turn started said *"no menu was outstanding when that call was made.
-  Declared routes moved the cursor instead."* — two false clauses in one breath.
+  the turn started said _"no menu was outstanding when that call was made.
+  Declared routes moved the cursor instead."_ — two false clauses in one breath.
 
   A model told the map is a dead end stops asking for the door it may not be
   shown, and the checker cannot see it: every one of those sentences passes
@@ -2719,8 +2799,8 @@ the cursor?", and one scope key answers "which skill ids may this role see?".
 
   The fourth sentence was the one the model reads to CHOOSE. `describeOffer`
   computed its columns from an already-filtered catalog, so a cursor whose only
-  declared hop is hidden was told *"Nothing is reachable from here — answer with
-  the skill you are in, or finish."* while the graph held that edge. It classifies
+  declared hop is hidden was told _"Nothing is reachable from here — answer with
+  the skill you are in, or finish."_ while the graph held that edge. It classifies
   the hop set over the unfiltered catalog now and drops the clause when the filter
   is what emptied it; with nothing wired out at all the sentence still stands,
   because that absence is one the description has evidence for. Reaching it meant

@@ -1,8 +1,11 @@
 # Scored choice — a distribution over declared candidates, on the record (2026-09-16)
 
-Status: DESIGN, gated. Nothing is built until a provider that exposes
-scores is in reach. Facts found while reading change this page, not a
-chat.
+Status: GATE OPENED 2026-09-17 — a provider that scores is in reach
+(TypeSafe "System One", model `jev`; one real call, quoted below). Steps 1
+and 2 landed in 9.104.0 as `agentfootprint/classify` + `classifierScorer`;
+the judge on the findings ledger (`.findings({ judge })`) landed beside them
+(docs/design/2026-09-findings-ledger.md § Judge). The lens bar (step 3)
+remains. Facts found while reading change this page, not a chat.
 
 ## The borrowed idea
 
@@ -77,7 +80,54 @@ choice would put the distribution on the record instead.
   a panel that shows the winner without the runners-up is denying data
   it has.
 
+## The gate, opened (2026-09-17)
+
+The provider is not an LLM with log-probabilities; it is a classifier that
+SCORES: `POST https://api.typesafe.ai/v1/systemone` with `{ model:
+'jev-latest', state, questions }`, where a question is a `choice` over
+declared options (`criteria: { option: description }`), a `noul` (a yes/no
+as a probability) or a `score` (a rung on a declared scale). One real call
+was made on 2026-09-17, the state a `{ proposition, predicts, tool, result }`
+for a result the MODEL had declared `ruled-out`; the response, verbatim:
+
+```json
+{ "model": "jev-1.13.0",
+  "answers": {
+    "standing": { "type": "choice", "choice": "noise", "confidence": 0.59,
+                  "probabilities": { "fact": 0.0, "noise": 0.69, "open": 0.3, "ruled-out": 0.01 } },
+    "tests_proposition": { "type": "noul", "noul": 0.19 } },
+  "usage": { "input_tokens": 494, "output_tokens": 68 } }
+```
+
+Errors: 401 bad key, 422 validation, 429 rate limit, 529 overloaded (backoff
+on 429/529). Latency about 100–300 ms. The classifier disagreed with the
+model — `noise` at 0.69 against the model's `ruled-out` — and gave 0.19 that
+the result tests the proposition at all. That disagreement is the first
+recorded fact of the second source, and it is resolved by nobody.
+
+What this changed in the cut: step 1's "provider capability" is not
+`LLMProvider.scoreChoices?` after all — a classifier is its own port
+(`Classifier { name; classify(request, signal?) }`, `src/classify/types.ts`),
+because the thing that scores is not the thing that generates and pretending
+otherwise would put a `scoreChoices` on every text provider that cannot.
+Step 2's scorer is `classifierScorer(classifier)` (9.104.0): one `choice`
+question over the entry candidates (criteria = `{ id: description }`),
+`ranked[].score` and `.relevance` BOTH the provider's probability as sent
+(never renormalised — `rankEntries`'s softmax is not applied, there is no raw
+score to soften), `chosen` the provider's own `choice` (never an argmax the
+library took), `scorer: 'classifier:<model>'`. A provider failure is
+`scorer: 'classifier:unavailable'` with an EMPTY ranking and no `chosen`; the
+existing `pickEntry` stage leaves the cursor unset on an undefined `chosen`
+and the cold-start entry pick takes over, so the "fallback scorer handed in"
+of the original cut was not needed — the fallback already existed, reached
+through an honest empty result rather than a throw. Step 3, the lens bar, is
+unchanged: the panel already prints `scorer` and `ranked`; a bar per
+candidate is a rendering choice.
+
 ## Track
 
-- [x] design · [ ] a provider in reach that exposes scores (BE-side, the
-  owner's call) · [ ] 1 capability · [ ] 2 scorer + fallback · [ ] 3 lens bar
+- [x] design · [x] a provider in reach that exposes scores (2026-09-17,
+  TypeSafe `jev`, one real call above) · [x] 1 capability
+  (`agentfootprint/classify`: the `Classifier` port, `typesafe()`,
+  `mockClassifier()`, 9.104.0) · [x] 2 scorer + fallback (`classifierScorer`,
+  9.104.0; the fallback is the empty ranking) · [ ] 3 lens bar

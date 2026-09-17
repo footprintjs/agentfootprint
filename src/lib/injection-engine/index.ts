@@ -248,6 +248,12 @@ export {
   type EntryScorerInput,
   type EntryCandidate,
 } from './entryScorer.js';
+export {
+  classifierScorer,
+  CLASSIFIER_SCORER_QUESTION,
+  CLASSIFIER_SCORER_UNAVAILABLE,
+  type ClassifierScorerOptions,
+} from './classifierScorer.js';
 // The turn-start routing cascade (SG-C, 9.17.0) — the intent-scorer port +
 // the built-in LLM classifier, the tie policy that judges tier 2, and the
 // graph surfaces the agent consumes. keywordScorer/embeddingScorer above ARE

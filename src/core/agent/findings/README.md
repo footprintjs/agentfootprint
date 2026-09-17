@@ -9,7 +9,9 @@ standing, `fact` or `open`), of the piece's `undeclared:` set, and of the
 identity source a standing resolves against; `serve.ts` — the piece and the
 collapse the wire serves from the record.
 Trace: `ledger.ts` — one writer for one committed key
-(`AgentState.findingsLedger`), plus the fold that reads it.
+(`AgentState.findingsLedger`), plus the fold that reads it; `judge.ts` — the
+second source (a calibrated classifier from `agentfootprint/classify`) whose
+rows the same writer files beside the model's.
 
 # `findings/` — ride-along findings
 
@@ -163,7 +165,7 @@ same order, so the receipt agrees with what went out by construction.
   · "The cache"; the design page names the trade).
 - `collapseJudged(messages, rows, mode)` — a result the model judged `noise`
   or `ruled-out` becomes a ticket, `{ collapsed: true, standing, toolCallId,
-  ref? }` (`isCollapsedToolResult` reads one back); `fact` too under
+ref? }` (`isCollapsedToolResult` reads one back); `fact` too under
   `'ledger-only'` (bench-gated, never a default); `open` and undeclared results
   verbatim. Same array instance when nothing collapses; otherwise count,
   order, `toolName`, `toolCallId` and every uncollapsed object are kept, so
@@ -290,7 +292,10 @@ const offer = offeredResultIds(history, scope.findingsLedger); // ['c2', 'c1']
 const served = schemas.map((s) => withFindingsArgument(s, offer)); // enum: ['c2', 'c1']
 
 // The rows resolve against the same history — c1 is two batches back and still resolves.
-recordFindings(scope, standingRowsFrom(knownResults(history, previousBatch), findings, on, iteration));
+recordFindings(
+  scope,
+  standingRowsFrom(knownResults(history, previousBatch), findings, on, iteration),
+);
 ```
 
 `.findings()` is refused at build under `reactMode: 'classic'` (both doors,
@@ -356,18 +361,108 @@ Agent.create({ provider, model })
 // servedAt(snapshot, k).system.text ends with FINDINGS_ANSWER_ASK once a standing exists
 ```
 
+## The judge (9.104.0) — a second source, kept apart
+
+Why: the real-model runs (`docs/design/2026-09-findings-ledger-real-model.md`)
+measured the actor's standing accuracy at 0.94 on the stronger model and
+0.61–1.00 on the weaker one, and named the open question: is a judge worth a
+call per result? Until a calibrated one was in reach the question waited.
+The gate opened 2026-09-17 with one real call to TypeSafe's "System One"
+(`agentfootprint/classify`), so `.findings({ judge })` now spends one
+classifier call per landed tool result — after its `toolResults` entry
+exists and BEFORE the next model call — and files what came back as a
+`JudgmentRow` through `recordFindings`, the one writer:
+
+```ts
+{ kind: 'judgment', toolCallId, toolName, source: 'judge',
+  judge: { name: 'typesafe', model: 'jev-1.13.0' },
+  against: 'proposition' | 'question',   // what the result was judged FOR
+  standing, probabilities, confidence,   // the provider's, as sent
+  testsSubject?,                         // P(the result tests the subject at all)
+  usage?, latencyMs, clipped?, iteration }
+```
+
+The laws:
+
+- **Intent is first-person.** The judge is never asked why the model called
+  a tool. `judge.ts · judgeQuestions` asks what a RESULT is worth for the
+  proposition the model declared on the call (`BasisRow.proposition`), or —
+  when the call declared none — for the user's question, and the row says
+  which (`against`). The state is `{ proposition?, predicts?, question, tool,
+result }`, the result cut at `JUDGE_RESULT_CHARS` (4000) with the cut on the
+  row (`clipped: true`). Two fixed questions: `standing`, a `choice` over the
+  four standings described in the ledger's own words (`STANDING_CRITERIA`),
+  and `tests_subject`, a `noul`.
+- **Two sources, two rows.** The model's `StandingRow` is untouched and
+  `foldLedger(...).standingOf` stays the model's reading;
+  `foldLedger(...).judgments` is the judge's (last wins, the same rule). A
+  disagreement is a fact of the record, resolved by nobody: the probe judged
+  `noise` (0.69) a result the model had called `ruled-out`, and that is two
+  rows. Nothing is served from a judgment in this release — `serve.ts` reads
+  `standingOf` alone (policy A; the design page names B–D and leaves them to
+  the bench).
+- **Never a guessed standing.** A failed call — a status, a network error, an
+  answer outside the vocabulary, an abort — is a `JudgmentErrorRow` (`status?`,
+  the PROVIDER's `message`, `latencyMs`) and the run continues; the judge is
+  advisory. A `judge` that is not a `Classifier` is refused at build.
+- **Cost is data.** `usage` and `latencyMs` are on every row, measured by the
+  adapter, so `bench/findings-shuffle.mjs` (`AF_SHUFFLE_JUDGE=mock|typesafe`)
+  reads `judge-tokens` and `judge-latency-ms` off the record beside
+  `judge-accuracy` (the judge against the plant) and `judge-agrees` (the
+  judge against the actor).
+- **Events carry identities, enums and numbers.** `findings.judged`
+  `{ toolCallId, toolName, iteration, against, standing, confidence,
+latencyMs, inputTokens?, outputTokens? }` and `findings.judge_failed`
+  `{ toolCallId, toolName, iteration, status?, latencyMs }`. Never the state,
+  never the distribution. The comparison of the two sources rides
+  `findings.standing` as `agrees?: boolean` — the judge files BEFORE the
+  model call that declares, so the standing event is the one moment both
+  readings exist; present exactly when a judgment row exists for the result
+  (absent without a judge, after a failed call, for an unknown id), a
+  comparison for the sink never written to a row.
+- **Only a result the TOOL produced is judged.** A permission denial, a
+  halt, a fail-closed refusal, a declined check-in or a chain deny is the
+  library's sentence about a call that never ran — not evidence. The
+  execute loop gates the judge on the nudge's own predicate (the call
+  executed, was not denied, was not skill-rejected); the resume doors on
+  `dispatched.executed`; the `pauseHere` / `askHuman` door judges the
+  person's answer because it IS the tool's result by contract
+  (`stages/toolCalls.ts · judgeLanded`). No judgment row, no classifier
+  call, and the model's own standing on such a call carries no `agrees`.
+- **An agent without a judge is byte-identical.** The 17 references pass
+  untouched; `agent-findings-judge` is the one reference generated with a
+  scripted judge, and its delta over `agent-findings` is the two judgment
+  rows and nothing under `served.*`.
+
+```ts
+import { typesafe } from 'agentfootprint/classify';
+
+const agent = Agent.create({ provider, model })
+  .tool(search)
+  .findings({ judge: typesafe() })
+  .build();
+await agent.run({ message: 'why is fc1/7 down?' });
+const rows = agent.findings() ?? [];
+foldLedger(rows).standingOf.get('c1')?.standing; // the model's: 'ruled-out'
+foldLedger(rows).judgments.get('c1')?.standing; // the judge's: 'noise' — two rows, one record
+```
+
 ## Files
 
 - `types.ts` — `RESERVED_ARGUMENT`, the vocabularies, `PROPOSITION_CHARS`,
-  `FindingsDeclaration` (the wire), `BasisRow` / `StandingRow` / `ConflictRow`
-  (the record).
+  `JUDGE_RESULT_CHARS`, `FindingsDeclaration` (the wire), `BasisRow` /
+  `StandingRow` / `ConflictRow` / `JudgmentRow` / `JudgmentErrorRow` (the
+  record).
+- `judge.ts` — `judgeQuestions` (pure), `judgeResult` (the one caller of
+  `recordFindings` for judgment rows), `STANDING_CRITERIA`,
+  `JUDGE_QUESTION_IDS`.
 - `reserved.ts` — `FINDINGS_ARGUMENT_SCHEMA`, `FINDINGS_OFFER_CAP`,
   `withFindingsArgument`, `withoutFindingsArgument`, `splitFindings`,
   `peelAnswerFindings`, `FINDINGS_INSTRUCTION`, `FINDINGS_ANSWER_ASK`.
 - `offer.ts` — `offeredResultIds`, `nameableIds`, `undeclaredIds`,
   `servedToolCallIds`, `knownResults`, `RETIRING_STANDINGS`.
-- `ledger.ts` — `recordFindings`, `foldLedger`, `standingRowsFrom`,
-  `basisRowFrom`.
+- `ledger.ts` — `recordFindings`, `foldLedger` (`standingOf` the model's,
+  `judgments` the judge's), `standingRowsFrom`, `basisRowFrom`.
 - `serve.ts` — `findingsLedgerPiece`, `collapseJudged`, `servedToolCallIds`
   (re-exported from `offer.ts`), `isCollapsedToolResult`,
   `FINDINGS_PIECE_LIMITS`, `FindingsServeMode`, `FindingsAnswerAsk` (internal

@@ -206,6 +206,17 @@ export {
   type EntryScorer,
   type EntryScorerInput,
 } from '../lib/injection-engine/entryScorer.js';
+// 9.104.0 — the scored choice: an EntryScorer whose ranking IS a calibrated
+// classifier's distribution. The `Classifier` port it takes lives on
+// `agentfootprint/classify`; re-exported here as a type so a graph author
+// can spell the seam without a second import.
+export {
+  classifierScorer,
+  CLASSIFIER_SCORER_QUESTION,
+  CLASSIFIER_SCORER_UNAVAILABLE,
+  type ClassifierScorerOptions,
+} from '../lib/injection-engine/classifierScorer.js';
+export type { Classifier } from '../classify/types.js';
 export {
   validateIntentScores,
   type IntentCandidate,

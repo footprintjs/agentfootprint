@@ -4236,6 +4236,11 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
       // The findings ledger (9.101.0) — the peel, the basis row and the
       // previous batch's standings all live in this handler under this gate.
       ...(this.findingsOptions !== undefined && { findings: true as const }),
+      // The judge (9.104.0) — VALUE-conditional inside the arm: an armed
+      // agent without one hands the handler exactly the deps it did before.
+      ...(this.findingsOptions?.judge !== undefined && {
+        findingsJudge: this.findingsOptions.judge,
+      }),
       // THE WRITE SEAM (9.77.0) — `empty-lookup`. Handed the SAME harvested
       // map callLLM reads at the choice seam, so the two stages agree by
       // construction about which calls are armed. Value-conditional on both

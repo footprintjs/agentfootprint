@@ -598,6 +598,11 @@ export {
   type FindingsDeclaration,
   type FindingsLedger,
   type FindingsRow,
+  // 9.104.0 — the judge's rows (`.findings({ judge })`): a second source
+  // beside the model's standing, never merged. The classifier port itself
+  // is `agentfootprint/classify`.
+  type JudgmentErrorRow,
+  type JudgmentRow,
   type Standing,
   type StandingRow,
 } from './core/agent/findings/types.js';

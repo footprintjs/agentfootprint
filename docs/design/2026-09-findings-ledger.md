@@ -168,9 +168,115 @@ touching any step.
   release script has a packed-dependency gate for it. The ledger reuses the
   same assertion shape and `conflictsOf`; no new dependency.
 
+## Judge (2026-09-17, 9.104.0) — a second source, kept apart
+
+The question every real-model run left open — is a judge worth a call per
+result? (`docs/design/2026-09-findings-ledger-real-model.md` § What follows,
+item 3) — waited on a provider that scores rather than generates. One came in
+reach on 2026-09-17 (docs/design/2026-09-scored-choice.md § The gate,
+opened): TypeSafe's "System One" classifier, model `jev`, asked a `choice`
+over the four standings and a `noul`. So `.findings({ judge })` arms a SECOND
+SOURCE on the ledger: after every tool result lands and before the next model
+call, `findings/judge.ts · judgeResult` spends one classifier call and files
+a `JudgmentRow` — source, the provider's model string, `against`
+(`'proposition'` when the call declared one, else `'question'`), the chosen
+standing, the whole distribution, the confidence, the noul (`testsSubject`),
+usage, latency, iteration — through `recordFindings`, the one writer. A
+failed call is a `JudgmentErrorRow` (status, the provider's message, latency)
+and never a guessed standing.
+
+### The first recorded fact
+
+The probe's state was `{ proposition, predicts, tool, result }` for a result
+the MODEL had declared `ruled-out`. The classifier answered `noise` at 0.69
+(`ruled-out` 0.01, `open` 0.3, `fact` 0.0; confidence 0.59) and gave 0.19
+that the result tests the proposition at all. Two sources, two readings of
+one result. The library records both and resolves nothing — pinned by
+`test/core/agent/findings/judge.test.ts` ("THE PROBE DISAGREEMENT") and on a
+real run by `test/core/agent/findings-judge.test.ts` (the fold keeps
+`standingOf` the model's and `judgments` the judge's; the served piece quotes
+the model's `ruled-out` and carries no byte of the judgment).
+
+### Policies — A in force, B–D named for the bench
+
+What the answer turn is SERVED once two sources exist:
+
+- **A — the model's own standing (in force).** `serve.ts` reads
+  `foldLedger(...).standingOf` alone; a judgment changes nothing on the wire.
+  This packet ships A because the bench has not yet said the judge is better
+  than the actor on the models that matter (Sonnet's own accuracy was 0.94).
+- **B — the judge fills the gaps.** A result the model never named takes the
+  judge's standing on the piece and in the collapse, marked `judged by`, so
+  `declared` stops being the number to raise for small models.
+- **C — the judge overrides on confidence.** Where both ruled and the judge
+  is above a threshold, the judge's standing is served, the model's kept as
+  history. A threshold is a number the bench must produce, never a default.
+- **D — both served, the disagreement stated.** The piece quotes the model's
+  standing and, where the judge differs, the judge's beside it with its
+  confidence, and the model is asked to settle it with a further call.
+
+Each of B–D is a change to `serve.ts` and to the collapse, measured by
+`bench/findings-shuffle.mjs` on `facts-in-answer`, `noise-cited` and
+`judge-accuracy` before any of them becomes a dial. None is built here.
+
+### What the bench measures now
+
+`AF_SHUFFLE_JUDGE=mock|typesafe` arms every armed condition with a judge and
+adds four columns: `judge-accuracy` (the judge's last standing per served id
+against the plant, the `standing-accuracy` rule), `judge-agrees` (the share
+of results both sources ruled on where they agree), `judge-tokens` (mean
+input+output per run, read off the rows) and `judge-latency-ms` (mean per
+judgment). The mock judge scripts the plant at confidence 0.9 and the smoke
+laws pin 1 / 1 / > 0 / 0 errors on the armed rows and `-` on the off row;
+the cost line states the classifier calls before the first is made (one per
+tool result on every armed condition). The mock print, 2026-09-17
+(`AF_SHUFFLE_JUDGE=mock node bench/findings-shuffle.mjs`; the six baseline
+columns are the 9.103.0 print to the digit, and the unjudged invocation
+prints the 9.103.0 table byte for byte):
+
+```
+cost (judge mock): 270 classifier calls — one per tool result on every armed condition
+condition          runs  facts-in-answer  noise-cited  declared  standing-accuracy  drift   unknown-id-standings  judge-accuracy  judge-agrees  judge-tokens  judge-latency-ms
+findings off          5            1.000        1.000         -                  -   0.20                      0               -             -             -                 -
+ledger-and-facts      5            1.000        0.600     0.944              1.000   0.80                      0           1.000         1.000          2273               0.0
+ledger-only           5            1.000        0.600     0.944              1.000   0.80                      0           1.000         1.000          2273               0.0
+ledger+ask            5            1.000        0.600     0.944              1.000   0.80                      0           1.000         1.000          2273               0.0
+```
+
+No hosted judge run was made in this packet (no key in the tree); the
+real-model page will carry the first, and only that run can say whether
+`judge-accuracy` beats the actor's 0.94 / 0.61–1.00 and what
+`judge-tokens` costs against it.
+
+### What the record holds (pinned)
+
+- `test/core/agent/findings/judge.test.ts` (unit): the two question ids, the
+  criteria = the four standings in the ledger's words, the state shape,
+  `against` both ways, the clip at `JUDGE_RESULT_CHARS` with the flag, the
+  row field for field from the probe, the disagreement, `agrees` on the
+  STANDING event (false / true / absent without a judgment; never on the
+  judged event — the judge files first), last-wins in `judgments`, a missing probability absent not
+  zero, the three failure shapes as error rows, the abort as an error row.
+- `test/core/agent/findings-judge.test.ts` (integration): one call per
+  result BEFORE the next model call (the provider snapshots the judge's call
+  count), the row order `basis · judgment · standing · basis · judgment`,
+  the state (never `_findings`), policy A on the wire, the error row with the
+  run still answering, the events' key sets, `agrees` false on the probe
+  disagreement and true on a match (on `findings.standing`), a
+  permission-denied call judged by nobody (no row, no call; the executed
+  sibling still judged), the `pauseHere` resume door judging the person's
+  answer exactly once, an armed agent without a judge making no call, the
+  build refusal.
+- `test/core/tools/byte-identity.test.ts`: the 17 references untouched;
+  `agent-findings-judge` generated alone — 46 paths added over
+  `agent-findings` (the two judgment rows and the declared proposition), 0
+  under `served.*`.
+- `test/events/unit/findings-events.test.ts`: `findings.judged` /
+  `findings.judge_failed` at every registry site; payload key sets closed.
+
 ## Track
 
-- [x] design · [x] 1 bench + baseline (`npm run bench:findings`, `bench/findings-context.mjs`) · [x] 2 ledger on the record (9.101.0) · [x] 3 served from the ledger (9.101.0, same entry; the SHUFFLE run on a real model is still owed) · [x] 4 eviction (9.102.0 — the hold, the ceiling, the stand-down, the long-run table; the removable-set plan shape and the receipt rows are NAMED follow-ups, not taken) · [ ] 5 Findings band
+- [x] design · [x] 1 bench + baseline (`npm run bench:findings`, `bench/findings-context.mjs`) · [x] 2 ledger on the record (9.101.0) · [x] 3 served from the ledger (9.101.0, same entry; the SHUFFLE run on a real model is still owed) · [x] 4 eviction (9.102.0 — the hold, the ceiling, the stand-down, the long-run table; the removable-set plan shape and the receipt rows are NAMED follow-ups, not taken) · [ ] 5 Findings band · [x] judge as a second source (9.104.0, policy A; B–D wait on the bench)
 
 ## Baseline (2026-09-16, `bench/findings-context.mjs`, mock provider, 20 tool calls, a planted fact every 3rd)
 

@@ -51,6 +51,7 @@ import * as observeDoor from '../../src/doors/observe.js';
 import * as hostingDoor from '../../src/doors/hosting.js';
 import * as contextDoor from '../../src/doors/context.js';
 import * as securityDoor from '../../src/doors/security.js';
+import * as classifyDoor from '../../src/doors/classify.js';
 
 // ─── The implementation barrels behind them (no longer subpaths) ───
 
@@ -70,6 +71,7 @@ import * as contextErrorFinders from '../../src/observability/contextError/finde
 import * as hostingProviders from '../../src/hosting-providers.js';
 import * as injectionEngine from '../../src/injection-engine.js';
 import * as identity from '../../src/identity.js';
+import * as classify from '../../src/classify/index.js';
 
 // ─── The two lists ─────────────────────────────────────────────────
 
@@ -240,6 +242,12 @@ const SURVIVING_SUBPATHS = [
   // the mount kernel's vocabulary (engagement, leases, Claim<T>) — pure data
   // and pure functions, no run entry point.
   './maps',
+  // 9.104.0 — also added, also never one of the sixteen. `./classify`
+  // publishes the calibrated-classifier port (`Classifier`) and its two
+  // adapters (`typesafe`, `mockClassifier`) — a backend you plug in, like
+  // `./providers`, but one that SCORES declared candidates instead of
+  // generating text. No run entry point.
+  './classify',
 ] as const;
 
 // ─── Manifest helpers ──────────────────────────────────────────────
@@ -315,6 +323,19 @@ describe('9.0.0 removed import paths, not code — every absorbed barrel is stil
       expect(onDoor[sample], `${door}'s ${sample} is a different object`).toBe(impl[sample]);
     });
   }
+});
+
+// ─── 2b. The doors added since 9.0.0 follow the same law ──────────
+
+describe('a door added after 9.0.0 is a re-export of its implementation barrel', () => {
+  it('./classify serves the SAME typesafe / mockClassifier / ClassifierError as src/classify', () => {
+    const impl = classify as unknown as Record<string, unknown>;
+    const onDoor = classifyDoor as unknown as Record<string, unknown>;
+    for (const sample of ['typesafe', 'mockClassifier', 'ClassifierError']) {
+      expect(impl[sample], `src/classify lost ${sample}`).toBeDefined();
+      expect(onDoor[sample], `./classify's ${sample} is a different object`).toBe(impl[sample]);
+    }
+  });
 });
 
 // ─── 3. The two tables agree, entry for entry ──────────────────────

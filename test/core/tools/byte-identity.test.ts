@@ -188,6 +188,24 @@
  * the scenarios' models never named a fact twice, so the record's rows are
  * the rows they were.
  *
+ * 9.104.0: one new reference `agent-findings-judge` (the `agent-findings`
+ * script with a declared proposition on `c1` and a scripted classifier
+ * judging both results — `.findings({ judge })`); none of the 17 moved (the
+ * 17 run first on the 9.104.0 tree, copied aside, the one scenario generated
+ * alone with `-t agent-findings-judge` under `AF_TOOLS_REFERENCE=update`,
+ * `cmp`-equal after). Its delta against `agent-findings`, read by path: 46
+ * added, 15 moved, 0 removed. Added: the two `JudgmentRow`s on
+ * `findingsLedger` (kind · toolCallId · toolName · source · judge.name ·
+ * judge.model · against · standing · the four `probabilities` · confidence ·
+ * testsSubject · usage.inputTokens · usage.outputTokens · latencyMs ·
+ * iteration — 17 paths each), and the `proposition` / `predicts` the script
+ * declares, where the emission lives (`history`, `llmLatestToolCalls`, the
+ * served `messages.asSent`) and on the basis row. Moved: the model's own
+ * rows shift one index each behind the judgment filed before them, and the
+ * commits that carry them. NOT added: a single path under `served.*` for
+ * the judge — the piece, the collapse and the wire are `agent-findings`'
+ * bytes, which is policy A on the record.
+ *
  * Every scenario is a real run — the receipt-conformance shapes, each in the
  * configuration that has no name collision — and what is compared is the
  * whole `commitLog` plus `servedAt(k)` for every located epoch, after ONE
@@ -222,6 +240,7 @@ import { buildMessageApiChart } from '../../../src/core/agent/buildMessageApiCha
 import { buildAgentMessageApiChart } from '../../../src/core/agent/buildAgentMessageApiChart.js';
 import { defineSkill, skillGraph } from '../../../src/injection-engine.js';
 import { skillScopedTools, staticTools } from '../../../src/tool-providers/index.js';
+import { mockClassifier } from '../../../src/classify/index.js';
 import type { LLMRequest, LLMResponse, LLMToolSchema } from '../../../src/adapters/types.js';
 
 // ─── the harness ─────────────────────────────────────────────────────
@@ -506,6 +525,102 @@ const SCENARIOS: Record<string, () => Promise<Snapshot>> = {
           .system('bot')
           .tool(tool('alpha_tool'))
           .findings()
+          .outputSchema(
+            {
+              parse: (value: unknown) => {
+                if (value === null || typeof value !== 'object' || Array.isArray(value))
+                  throw new Error('not an object');
+                const unknown = Object.keys(value as object).filter((k) => k !== 'done');
+                if (unknown.length > 0) throw new Error(`unknown keys: ${unknown.join(',')}`);
+                return value as { done: boolean };
+              },
+            } as never,
+            { retries: 0 },
+          ),
+    ),
+  // The findings ledger with a JUDGE (9.104.0, `.findings({ judge })`) — the
+  // third armed scenario: the `agent-findings` script with a scripted
+  // classifier judging each of the two results (`c1` noise against the
+  // declared proposition, `c2` fact against the question). What it adds
+  // over `agent-findings` is exactly the second source's rows —
+  // `judgment:c1` after `basis:c1`, `judgment:c2` after `basis:c2` — and
+  // the two `findings.judged` events; the model's own rows, the served
+  // piece and the wire are the bytes `agent-findings` records (policy A:
+  // nothing is served from a judgment). Generated ALONE with the 17 copied
+  // aside and `cmp`-equal after.
+  'agent-findings-judge': () =>
+    agentRun(
+      'dynamic',
+      [
+        call('c1', 'alpha_tool', {
+          q: 'nodes',
+          _findings: {
+            basis: 'exploratory',
+            expect: 'low',
+            proposition: 'every node is up',
+            predicts: 'a list with no down node',
+          },
+        }),
+        call('c2', 'alpha_tool', {
+          q: 'node-1',
+          _findings: {
+            basis: 'direct',
+            expect: 'high',
+            previous: [
+              {
+                toolCallId: 'c1',
+                standing: 'fact',
+                sought: true,
+                assertions: [
+                  { subject: { kind: 'node', id: 'node-1' }, predicate: 'state', value: 'up' },
+                ],
+              },
+            ],
+          },
+        }),
+        answer(
+          JSON.stringify({
+            done: true,
+            _findings: { previous: [{ toolCallId: 'c2', standing: 'noise' }] },
+          }),
+        ),
+      ],
+      (a) =>
+        a
+          .system('bot')
+          .tool(tool('alpha_tool'))
+          .findings({
+            judge: mockClassifier([
+              {
+                model: 'jev-1.13.0',
+                answers: {
+                  standing: {
+                    type: 'choice',
+                    choice: 'noise',
+                    confidence: 0.59,
+                    probabilities: { fact: 0.0, noise: 0.69, open: 0.3, 'ruled-out': 0.01 },
+                  },
+                  tests_subject: { type: 'noul', noul: 0.19 },
+                },
+                usage: { inputTokens: 494, outputTokens: 68 },
+                latencyMs: 212,
+              },
+              {
+                model: 'jev-1.13.0',
+                answers: {
+                  standing: {
+                    type: 'choice',
+                    choice: 'fact',
+                    confidence: 0.81,
+                    probabilities: { fact: 0.9, noise: 0.05, open: 0.05, 'ruled-out': 0.0 },
+                  },
+                  tests_subject: { type: 'noul', noul: 0.88 },
+                },
+                usage: { inputTokens: 480, outputTokens: 66 },
+                latencyMs: 180,
+              },
+            ]),
+          })
           .outputSchema(
             {
               parse: (value: unknown) => {

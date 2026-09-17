@@ -2070,6 +2070,23 @@ export class AgentBuilder {
           `${JSON.stringify(keep)}.`,
       );
     }
+    // The judge (9.104.0) is a port: refused at build unless it has the
+    // port's two members, so a misconfigured classifier fails here rather
+    // than as an error row on every tool result.
+    const judge = options?.judge;
+    if (
+      judge !== undefined &&
+      (judge === null ||
+        typeof judge !== 'object' ||
+        typeof judge.name !== 'string' ||
+        judge.name === '' ||
+        typeof judge.classify !== 'function')
+    ) {
+      throw new Error(
+        'AgentBuilder.findings: judge must be a Classifier — `{ name: string; classify(request, ' +
+          'signal?) }` from agentfootprint/classify (`typesafe()`, `mockClassifier()`, or your own).',
+      );
+    }
     // `answerAsk` is stored as given, never normalised: `'none'` is the
     // default and `Agent.ts` threads the dial only under `'quote-facts'`, so
     // an explicit `'none'` and an absent one reach the run as the same thing.
@@ -2077,6 +2094,7 @@ export class AgentBuilder {
       serve,
       ...(answerAsk !== undefined && { answerAsk }),
       ...(keep !== undefined && { keepLedgerFacts: keep }),
+      ...(judge !== undefined && { judge }),
     };
     // The always-on ask — the `outputSchema()` twin: a system-slot instruction
     // that activates every iteration, so a long run keeps the vocabulary

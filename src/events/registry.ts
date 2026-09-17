@@ -121,6 +121,8 @@ import type {
   MiddlewareDecisionPayload,
   FindingsDeclaredPayload,
   FindingsStandingPayload,
+  FindingsJudgedPayload,
+  FindingsJudgeFailedPayload,
   ArtifactMintedPayload,
   ArtifactResolvedPayload,
   ArtifactExpiredPayload,
@@ -289,6 +291,8 @@ export const EVENT_NAMES = {
   findings: {
     declared: 'agentfootprint.findings.declared',
     standing: 'agentfootprint.findings.standing',
+    judged: 'agentfootprint.findings.judged',
+    judge_failed: 'agentfootprint.findings.judge_failed',
   },
   embedding: {
     generated: 'agentfootprint.embedding.generated',
@@ -734,6 +738,14 @@ export interface AgentfootprintEventMap {
     'agentfootprint.findings.standing',
     FindingsStandingPayload
   >;
+  'agentfootprint.findings.judged': AgentfootprintEventEnvelope<
+    'agentfootprint.findings.judged',
+    FindingsJudgedPayload
+  >;
+  'agentfootprint.findings.judge_failed': AgentfootprintEventEnvelope<
+    'agentfootprint.findings.judge_failed',
+    FindingsJudgeFailedPayload
+  >;
   // embedding
   'agentfootprint.embedding.generated': AgentfootprintEventEnvelope<
     'agentfootprint.embedding.generated',
@@ -895,6 +907,8 @@ export const ALL_EVENT_TYPES: readonly AgentfootprintEventType[] = [
   'agentfootprint.middleware.decision',
   'agentfootprint.findings.declared',
   'agentfootprint.findings.standing',
+  'agentfootprint.findings.judged',
+  'agentfootprint.findings.judge_failed',
   'agentfootprint.embedding.generated',
   'agentfootprint.artifacts.minted',
   'agentfootprint.artifacts.resolved',

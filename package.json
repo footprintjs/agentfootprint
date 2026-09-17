@@ -257,6 +257,16 @@
         "default": "./dist/doors/recipes.js"
       }
     },
+    "./classify": {
+      "import": {
+        "types": "./dist/esm/doors/classify.d.ts",
+        "default": "./dist/esm/doors/classify.js"
+      },
+      "require": {
+        "types": "./dist/types/doors/classify.d.ts",
+        "default": "./dist/doors/classify.js"
+      }
+    },
     "./package.json": "./package.json",
     "./canonical-notes.json": "./canonical-notes.json"
   },
@@ -303,6 +313,9 @@
       ],
       "maps": [
         "./dist/types/doors/maps.d.ts"
+      ],
+      "classify": [
+        "./dist/types/doors/classify.d.ts"
       ]
     }
   },

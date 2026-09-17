@@ -122,6 +122,7 @@ import { runToolChain, runToolAfterChain, type ToolArgs } from '../middleware/ru
 import { recordDecisions } from '../middleware/ledger.js';
 import { ownsReservedArgument, splitFindings, type SplitFindings } from '../findings/reserved.js';
 import { knownResults } from '../findings/offer.js';
+import type { Classifier } from '../../../classify/types.js';
 import {
   basisRowFrom,
   recordFindings,
@@ -216,6 +217,20 @@ export interface ToolCallsHandlerDeps {
    * default — and not one of those lines runs.
    */
   readonly findings?: true;
+  /**
+   * THE JUDGE (9.104.0, `.findings({ judge })`) — present only with the arm
+   * and only when a classifier was configured. After every landed result is
+   * committed to `toolResults` — the execute loop and the four resume doors
+   * alike — `findings/judge.ts · judgeResult` spends one classifier call and
+   * files a `JudgmentRow` (or a `JudgmentErrorRow`) BEFORE the next model
+   * call, so the record carries the second source's reading beside the
+   * model's before anything is served; nothing is served from it in this
+   * release. Only a result the TOOL produced is judged — a denial, a halt,
+   * a fail-closed refusal or a declined check-in is the library's sentence
+   * about a call that never ran, never evidence (`judgeLanded`). Absent —
+   * the default — and not one line runs.
+   */
+  readonly findingsJudge?: Classifier;
   /**
    * THE WRITE SEAM (9.77.0, `empty-lookup`) — the declared argument-ground
    * edges (`Tool.argumentsFrom`) by tool name, present ONLY when the operator
@@ -1015,6 +1030,47 @@ function appendBatchResult(
   entry: { toolName: string; result: string; toolCallId: string; status?: ToolResultStatus },
 ): void {
   scope.toolResults = [...(scope.toolResults ?? []), entry];
+}
+
+/**
+ * The judge's turn on ONE landed result (9.104.0) — called at the five
+ * places a result joins the batch (the execute loop and the four resume
+ * doors), right after the `toolResults` entry exists and before the next
+ * model call. Value-gated on `deps.findingsJudge`: unarmed, or armed with
+ * no judge, this is a no-op that awaits nothing. `judgeResult` never
+ * throws — a failed call is an error row and the run continues.
+ *
+ * `ran` is the caller's word that the TOOL produced this text: a permission
+ * denial, a halt, a fail-closed refusal, a declined check-in, a chain deny
+ * are sentences the library wrote about a call that never ran, and a
+ * denial text is not a tool result — asking a judge what it is worth for
+ * the proposition would file a standing for evidence nobody collected. The
+ * execute loop passes the nudge's own predicate (`executed && !denied &&
+ * !skillRejected`); the resume doors pass `dispatched.executed === true`;
+ * the `pauseHere` / `askHuman` door passes `true` because the person's
+ * answer IS that tool's result by the handler's contract.
+ */
+async function judgeLanded(
+  scope: TypedScope<AgentState>,
+  judge: Classifier | undefined,
+  ran: boolean,
+  entry: { toolName: string; result: string; toolCallId: string },
+  iteration: number,
+): Promise<void> {
+  if (judge === undefined || !ran) return;
+  // Dynamic import — the optional-family law of docs-next's site budget: a
+  // family that exists only behind a builder option reaches the bundle
+  // through `import()` at the point the option is enabled, and dispatch is
+  // already async. An agent without a judge never loads `findings/judge.ts`
+  // (the `selfExplain.ts · lazilyMountedTraceTools` precedent).
+  const { judgeResult } = await import('../findings/judge.js');
+  await judgeResult(
+    scope as unknown as Parameters<typeof judgeResult>[0],
+    judge,
+    entry,
+    iteration,
+    scope.$getEnv().signal,
+  );
 }
 
 /**
@@ -4482,6 +4538,13 @@ export function buildToolCallsHandler(
           ...(toolStatus !== undefined && { status: toolStatus }),
         });
         scope.toolResults = [...batchResults];
+        await judgeLanded(
+          scope,
+          deps.findingsJudge,
+          executed && !denied && !skillRejected,
+          { toolName: tc.name, result: resultStr, toolCallId: tc.id },
+          iteration,
+        );
 
         // (2) `read_skill` is the auto-attached activation tool.
         //     When the LLM calls it with a valid Skill id, append
@@ -4631,6 +4694,8 @@ export function buildToolCallsHandler(
         let stepToolRan = false;
         /** The effects envelope the resumed call returned (9.19.0). */
         let resumeEnvelope: ReadToolResultEnvelope | undefined;
+        /** The tool ran (any outcome) — the judge's gate (9.104.0). */
+        let toolRan = false;
         if (!decision.approved) {
           result = decision.note ? `declined by human: ${decision.note}` : 'declined by human';
           recordDecisions(scope, [
@@ -4754,6 +4819,7 @@ export function buildToolCallsHandler(
             );
             result = dispatched.result;
             error = dispatched.error;
+            toolRan = dispatched.executed === true;
             // A ceiling-refused call RAN but must not advance a step (9.20.0);
             // its envelope — status 'invalid' plus any surviving declared
             // effects — is still picked up and judged below.
@@ -4855,6 +4921,13 @@ export function buildToolCallsHandler(
           toolCallId,
           ...(resumeEnvelope?.status !== undefined && { status: resumeEnvelope.status }),
         });
+        await judgeLanded(
+          scope,
+          deps.findingsJudge,
+          toolRan,
+          { toolName, result: askResultStr, toolCallId },
+          iteration,
+        );
         typedEmit(scope, 'agentfootprint.stream.tool_end', {
           toolCallId,
           result: askCapped.result,
@@ -4927,6 +5000,8 @@ export function buildToolCallsHandler(
         let stepToolRan = false;
         /** The effects envelope the approved call returned (9.19.0). */
         let resumeEnvelope: ReadToolResultEnvelope | undefined;
+        /** The tool ran (any outcome) — the judge's gate (9.104.0). */
+        let toolRan = false;
         if (decision.approved) {
           const env = scope.$getEnv();
           // Resolved against the party the checkpoint carries (9.92.0).
@@ -4943,6 +5018,7 @@ export function buildToolCallsHandler(
           );
           result = dispatched.result;
           error = dispatched.error;
+          toolRan = dispatched.executed === true;
           // Same ceiling law as the ask path: ran ≠ completed a step (9.20.0).
           stepToolRan =
             dispatched.executed === true && error !== true && dispatched.ceilingRefused !== true;
@@ -5015,6 +5091,13 @@ export function buildToolCallsHandler(
           toolCallId,
           ...(resumeEnvelope?.status !== undefined && { status: resumeEnvelope.status }),
         });
+        await judgeLanded(
+          scope,
+          deps.findingsJudge,
+          toolRan,
+          { toolName, result: decisionResultStr, toolCallId },
+          iteration,
+        );
         typedEmit(scope, 'agentfootprint.stream.tool_end', {
           toolCallId,
           result: decisionCapped.result,
@@ -5143,6 +5226,13 @@ export function buildToolCallsHandler(
           toolCallId,
           ...(consentEnvelope?.status !== undefined && { status: consentEnvelope.status }),
         });
+        await judgeLanded(
+          scope,
+          deps.findingsJudge,
+          dispatched.executed === true,
+          { toolName, result: consentResultStr, toolCallId },
+          iteration,
+        );
         typedEmit(scope, 'agentfootprint.stream.tool_end', {
           toolCallId,
           result: consentCapped.result,
@@ -5257,6 +5347,15 @@ export function buildToolCallsHandler(
       // Drives `on-tool-return` triggers, same as every other dispatch path.
       scope.lastToolResult = { toolName, result: resultStr };
       appendBatchResult(scope, { toolName, result: resultStr, toolCallId });
+      // The person's answer IS the tool's result (the handler's contract
+      // above), so it ran by definition.
+      await judgeLanded(
+        scope,
+        deps.findingsJudge,
+        true,
+        { toolName, result: resultStr, toolCallId },
+        iteration,
+      );
 
       typedEmit(scope, 'agentfootprint.stream.tool_end', {
         toolCallId,

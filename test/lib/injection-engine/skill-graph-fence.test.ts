@@ -57,6 +57,7 @@ const IE = 'src/lib/injection-engine';
  * to nothing outside {@link PURE_LEAVES}.
  */
 const PURE_CORE = [
+  `${IE}/classifierScorer.ts`,
   `${IE}/devWarn.ts`,
   `${IE}/entryScorer.ts`,
   `${IE}/evaluator.ts`,
@@ -94,6 +95,12 @@ const PURE_LEAVES: ReadonlyArray<readonly [file: string, why: string]> = [
     'src/events/types.ts',
     "`ContextRole` / `ContextSource` — the observability vocabulary an Injection's " +
       'flavor and messages are spelled in. Pure type declarations, no imports, no runtime.',
+  ],
+  [
+    'src/classify/types.ts',
+    '`Classifier` / `ClassifyRequest` — the calibrated-classifier PORT `classifierScorer` ' +
+      'scores against (9.104.0). Type declarations plus the `ClassifierError` class; no ' +
+      'imports; the adapters live behind `agentfootprint/classify`.',
   ],
   [
     'src/memory/embedding/types.ts',

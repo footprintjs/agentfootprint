@@ -10,10 +10,13 @@
  *          declaration two different ways. `foldLedger` is the read: the
  *          current standing per result and the conflicts among what is
  *          stood on, recomputed from the rows every time.
- * Emits:   `agentfootprint.findings.declared` (one per basis row) and
- *          `agentfootprint.findings.standing` (one per standing row) —
- *          identities, enums and counts only. Assertion values, `settles`
- *          and `line` live in the committed key under whatever redaction the
+ * Emits:   `agentfootprint.findings.declared` (one per basis row),
+ *          `agentfootprint.findings.standing` (one per standing row), and
+ *          since 9.104.0 `agentfootprint.findings.judged` /
+ *          `agentfootprint.findings.judge_failed` (one per judgment /
+ *          judgment-error row, filed by `judge.ts`) — identities, enums and
+ *          numbers only. Assertion values, `settles`, `line` and the judged
+ *          state live in the committed key under whatever redaction the
  *          run configured; an event stream fans out to sinks we do not control.
  *
  * ## Append only, last wins, conflicts are a fold
@@ -48,6 +51,7 @@ import {
   type FindingsDeclaration,
   type FindingsLedger,
   type FindingsRow,
+  type JudgmentRow,
   type StandingRow,
 } from './types.js';
 
@@ -71,8 +75,15 @@ export interface PreviousResult {
 
 /** What `foldLedger` answers about a ledger. */
 export interface LedgerFold {
-  /** The LAST standing row per result id — the current reading of each. */
+  /** The LAST standing row per result id — the MODEL's current reading of each. */
   readonly standingOf: ReadonlyMap<string, StandingRow>;
+  /**
+   * The LAST judgment row per result id — the JUDGE's reading (9.104.0), a
+   * second source kept apart: nothing here folds it into `standingOf`, and
+   * `serve.ts` reads `standingOf` alone (policy A — the model's own standing
+   * is what is served; docs/design/2026-09-findings-ledger.md § Judge).
+   */
+  readonly judgments: ReadonlyMap<string, JudgmentRow>;
   /** The assertions of the current `fact` rows, in fold order. */
   readonly asserted: readonly Assertion[];
   /** `conflictsOf(asserted)` — the current conflict set, not the rows' history. */
@@ -90,8 +101,10 @@ export interface LedgerFold {
  */
 export function foldLedger(rows: readonly FindingsRow[]): LedgerFold {
   const standingOf = new Map<string, StandingRow>();
+  const judgments = new Map<string, JudgmentRow>();
   for (const row of rows) {
     if (row.kind === 'standing') standingOf.set(row.toolCallId, row);
+    else if (row.kind === 'judgment') judgments.set(row.toolCallId, row);
   }
   const asserted: Assertion[] = [];
   for (const row of standingOf.values()) {
@@ -99,6 +112,7 @@ export function foldLedger(rows: readonly FindingsRow[]): LedgerFold {
   }
   return {
     standingOf,
+    judgments,
     asserted,
     conflicts: conflictsOf(asserted),
     hasStanding: standingOf.size > 0,
@@ -159,10 +173,15 @@ export function recordFindings(scope: FindingsScope, rows: readonly FindingsRow[
       iteration,
     }));
   scope.findingsLedger = [...merged, ...newConflicts];
-  for (const row of rows) emitRow(scope, row, newConflicts);
+  for (const row of rows) emitRow(scope, row, newConflicts, fold.judgments);
 }
 
-function emitRow(scope: FindingsScope, row: FindingsRow, newConflicts: readonly ConflictRow[]) {
+function emitRow(
+  scope: FindingsScope,
+  row: FindingsRow,
+  newConflicts: readonly ConflictRow[],
+  judgments: ReadonlyMap<string, JudgmentRow>,
+) {
   if (row.kind === 'basis') {
     typedEmit(scope, 'agentfootprint.findings.declared', {
       toolName: row.toolName,
@@ -177,10 +196,46 @@ function emitRow(scope: FindingsScope, row: FindingsRow, newConflicts: readonly 
     });
     return;
   }
+  if (row.kind === 'judgment') {
+    // No `agrees` here: the judge files BEFORE the next model call, so the
+    // model's standing for this result cannot exist yet — the comparison is
+    // made on the STANDING event below, where both readings exist.
+    typedEmit(scope, 'agentfootprint.findings.judged', {
+      toolCallId: row.toolCallId,
+      toolName: row.toolName,
+      iteration: row.iteration,
+      against: row.against,
+      standing: row.standing,
+      confidence: row.confidence,
+      latencyMs: row.latencyMs,
+      ...(row.usage !== undefined && {
+        inputTokens: row.usage.inputTokens,
+        outputTokens: row.usage.outputTokens,
+      }),
+    });
+    return;
+  }
+  if (row.kind === 'judgment-error') {
+    typedEmit(scope, 'agentfootprint.findings.judge_failed', {
+      toolCallId: row.toolCallId,
+      toolName: row.toolName,
+      iteration: row.iteration,
+      ...(row.status !== undefined && { status: row.status }),
+      latencyMs: row.latencyMs,
+    });
+    return;
+  }
   if (row.kind !== 'standing') return;
   const conflictKeys = newConflicts
     .filter((c) => c.witnesses.some((w) => w.toolCallId === row.toolCallId))
     .map((c) => c.key);
+  // The model's standing beside the judge's CURRENT judgment of the same
+  // result (9.104.0) — `agrees` is a comparison made for the sink at the
+  // one moment both readings exist (the judgment always lands first, before
+  // the model call that declares), never written to a row: the two sources
+  // stay two rows on the record (the second-source law). Absent when no
+  // judgment exists — an unarmed run, a failed call, an unknown id.
+  const judged = judgments.get(row.toolCallId);
   typedEmit(scope, 'agentfootprint.findings.standing', {
     toolCallId: row.toolCallId,
     ...(row.toolName !== undefined && { toolName: row.toolName }),
@@ -190,6 +245,7 @@ function emitRow(scope: FindingsScope, row: FindingsRow, newConflicts: readonly 
     assertionCount: row.assertions.length,
     ...(conflictKeys.length > 0 && { conflictKeys }),
     ...(row.unknownId === true && { unknownId: true }),
+    ...(judged !== undefined && { agrees: judged.standing === row.standing }),
   });
 }
 

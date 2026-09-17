@@ -185,7 +185,73 @@ export interface ConflictRow {
   readonly iteration: number;
 }
 
-export type FindingsRow = BasisRow | StandingRow | ConflictRow;
+/**
+ * The cap on the tool result text handed to the judge (9.104.0): a result
+ * longer than this is cut before it enters the classifier's `state`, and the
+ * cut is STATED on the row (`clipped: true`) — the record says what the judge
+ * was shown, never implies it read the whole result.
+ */
+export const JUDGE_RESULT_CHARS = 4000;
+
+/**
+ * A SECOND SOURCE's reading of one result (9.104.0, `.findings({ judge })`):
+ * a calibrated classifier (`agentfootprint/classify`) asked what the result
+ * is worth for the proposition the model declared before the call — or, when
+ * the call declared none, for the user's question (`against` says which).
+ * Written beside the model's own `StandingRow`, never merged with it and
+ * never served in its place: `foldLedger(...).standingOf` stays the model's
+ * reading, `foldLedger(...).judgments` is the judge's. A disagreement between
+ * the two is a FACT of the record, resolved by nobody.
+ *
+ * Every field is the provider's own data or a measurement around the call —
+ * `probabilities` as sent (never renormalised), `confidence` as sent,
+ * `testsSubject` the provider's probability that the result tests the
+ * proposition at all, `usage` when the provider reported it, `latencyMs`
+ * measured by the adapter. Nothing here is inferred by the library.
+ */
+export interface JudgmentRow {
+  readonly kind: 'judgment';
+  /** The RESULT judged — the tool call's id, the same key `StandingRow` uses. */
+  readonly toolCallId: string;
+  readonly toolName: string;
+  readonly source: 'judge';
+  /** The classifier's port name and the provider's resolved model string. */
+  readonly judge: { readonly name: string; readonly model: string };
+  /** What the result was judged AGAINST: the call's declared proposition, or the user's question. */
+  readonly against: 'proposition' | 'question';
+  readonly standing: Standing;
+  readonly probabilities: Readonly<Record<Standing, number>>;
+  readonly confidence: number;
+  /** The provider's probability that the result tests the proposition / question at all. */
+  readonly testsSubject?: number;
+  readonly usage?: { readonly inputTokens: number; readonly outputTokens: number };
+  readonly latencyMs: number;
+  /** Set when the result text was cut at `JUDGE_RESULT_CHARS` before the judge saw it. */
+  readonly clipped?: true;
+  /** The iteration whose dispatch landed the result. */
+  readonly iteration: number;
+}
+
+/**
+ * The judge was asked and produced no answer (9.104.0): the provider's
+ * status and error text (the PROVIDER's words, not the model's — allowed on
+ * the record) and the latency spent. Never a guessed standing: a failed
+ * judgment is an absent judgment with a reason.
+ */
+export interface JudgmentErrorRow {
+  readonly kind: 'judgment-error';
+  readonly toolCallId: string;
+  readonly toolName: string;
+  readonly source: 'judge';
+  /** The classifier's port name; the model string is unknown when the call failed. */
+  readonly judge: { readonly name: string };
+  readonly status?: number;
+  readonly message: string;
+  readonly latencyMs: number;
+  readonly iteration: number;
+}
+
+export type FindingsRow = BasisRow | StandingRow | ConflictRow | JudgmentRow | JudgmentErrorRow;
 
 /** The committed key: flat, append-only, a fresh array on every write. */
 export type FindingsLedger = readonly FindingsRow[];

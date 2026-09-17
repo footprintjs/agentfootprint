@@ -779,6 +779,14 @@ export interface FindingsDeclaredPayload {
  * repeated. `unknownId` marks a standing for an id the previous batch did
  * not contain — recorded, never resolved.
  *
+ * `agrees` (9.104.0, `.findings({ judge })`) compares this standing with the
+ * JUDGE's current judgment of the same result and is present exactly when
+ * a `JudgmentRow` exists for it: the judge files before the model call
+ * that declares, so this event is the one moment both readings exist. A
+ * comparison made for the sink, never written to the record, where the two
+ * sources stay two rows. Absent without a judge, after a failed judgment,
+ * and for an `unknownId`.
+ *
  * Fired by `recordFindings`, one per standing row, in declaration order.
  */
 export interface FindingsStandingPayload {
@@ -796,6 +804,50 @@ export interface FindingsStandingPayload {
   readonly conflictKeys?: readonly string[];
   /** The named id was not in the previous batch. */
   readonly unknownId?: true;
+  /** Whether this standing equals the judge's current one for the result; present only when one exists. */
+  readonly agrees?: boolean;
+}
+
+/**
+ * A SECOND SOURCE judged one tool result (9.104.0, `.findings({ judge })`):
+ * the calibrated classifier's standing for the result against the call's
+ * declared proposition — or the user's question when none was declared —
+ * with its confidence and cost. The row (`JudgmentRow`) holds the whole
+ * distribution and the provider's model string in the committed
+ * `findingsLedger`; this payload carries identities, enums and NUMBERS only,
+ * never the state the judge read.
+ *
+ * No `agrees` here: the judge files BEFORE the model call that could
+ * declare a standing on this result, so at this event the model's reading
+ * does not exist yet. The comparison rides `FindingsStandingPayload.agrees`
+ * instead, the one moment both readings exist. Fired by `recordFindings`,
+ * one per judgment row, once the result's `toolResults` entry exists and
+ * before the next model call. Never fired without a configured judge.
+ */
+export interface FindingsJudgedPayload {
+  readonly toolCallId: string;
+  readonly toolName: string;
+  readonly iteration: number;
+  readonly against: 'proposition' | 'question';
+  readonly standing: Standing;
+  readonly confidence: number;
+  readonly latencyMs: number;
+  readonly inputTokens?: number;
+  readonly outputTokens?: number;
+}
+
+/**
+ * The judge was asked about one tool result and produced no answer
+ * (9.104.0): the provider's HTTP status when there was one, and the latency
+ * spent. The error text lives on the `JudgmentErrorRow`; no standing is
+ * guessed, and the run continues — the judge is advisory.
+ */
+export interface FindingsJudgeFailedPayload {
+  readonly toolCallId: string;
+  readonly toolName: string;
+  readonly iteration: number;
+  readonly status?: number;
+  readonly latencyMs: number;
 }
 
 // ─── Tier 3: Observability Layers (recorder-emitted, opt-in) ──────────

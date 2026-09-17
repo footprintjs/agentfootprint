@@ -47,7 +47,7 @@ Because the framework owns the loop, observability is just attaching listeners �
 
 <CodeFile path="examples/core/02-agent-with-tools.ts" region="observe" title="examples/core/02-agent-with-tools.ts (region: observe)" />
 
-113 typed events fire across 25 domains during a single `agent.run()`. See the [Observability guide](doc:observability) for the full taxonomy.
+115 typed events fire across 25 domains during a single `agent.run()`. See the [Observability guide](doc:observability) for the full taxonomy.
 
 ## maxIterations
 
@@ -302,6 +302,25 @@ The same dial is `Agent.create({ keepLedgerFacts })`, beside `keepLastToolResult
 Every visit's `WindowRecord` gains two optional keys, present only on an armed agent: `ledgerFacts` — what the hold kept (`pinned`: tool, turn, exact chars), how many turns the ceiling turned away (`yielded`), the `limit`, and `standDown: true` on the visit it released — and `droppedStandings`, the standing the model had declared for every tool result that left, by `toolCallId`, with `standing` absent for a result it never named. Both are filed by the stage, so a strategy you wrote carries them too, and an agent without `.findings()` files exactly the record it always did. The candidate a hold is built from is exported as `LedgerFactPin` — the tool-call ids a held turn carries, the tool it is named for, its turn and message index, and its exact chars — for a reader that wants to reason about what a visit could have held. What the model is *told* about a drop is unchanged: the notice names tools and counts, never a standing and never the model's own line.
 
 Measured on `npm run bench:findings` (mock provider, 30 tool calls, a planted fact every third, a sliding window keeping 6 turns): the results of 2 of 10 planted facts reached the answer turn verbatim by recency alone, 6 under the default ceiling and 8 under a ceiling of 6, while the piece carried 9 of 10 on every armed row and the noise share of tool-result bytes on the wire stayed at the collapsed level; the design page has the print and its reading.
+
+### A second source — `.findings({ judge })`
+
+The ledger's standing is the model's claim, and the real-model runs measured how often that claim was right: about nineteen times in twenty on the stronger model, less on the weaker one. A calibrated classifier can read the same result and say what it is worth, with a probability per standing instead of a word. Pass one as `judge` and, after every tool result lands and before the next model call, the agent spends one classifier call on it and files the answer as a `JudgmentRow` beside the model's own `StandingRow`: the judge's `name` and the provider's `model` string, `against` — `proposition` when the call declared one, `question` when it did not — the chosen standing, the whole distribution in `probabilities`, `confidence`, `testsSubject` (the provider's probability that the result tests the subject at all), `usage`, `latencyMs`, and `clipped: true` when the result text was cut at 4000 characters before the judge saw it. The judge is asked what the *result* is to the declared proposition or the user's question — never why the model called the tool.
+
+```ts
+import { typesafe } from 'agentfootprint/classify';
+
+const agent = Agent.create({ provider, model })
+  .tool(search)
+  .findings({ judge: typesafe() }) // TYPESAFE_API_KEY, or `typesafe({ apiKey })`
+  .build();
+```
+
+Two sources are two rows, never one. The library does not merge the judge's reading with the model's, does not default a standing from a probability, and in this release serves nothing from a judgment: the answer turn still reads the model's own standing, and a result the model called `ruled-out` that the judge called `noise` stays on the record as exactly that disagreement. A failed call — a rate limit, an outage, an answer outside the four standings — is a `JudgmentErrorRow` with the provider's status and message and the run continues; a judge that is not a `Classifier` is refused at build. The events `agentfootprint.findings.judged` (standing, confidence, latency, tokens) and `agentfootprint.findings.judge_failed` carry identities, enums and numbers only; `agentfootprint.findings.standing` gains `agrees` — the model's standing against the judge's, present once a judgment exists for the result. Only a result the tool produced is judged: a denied, halted or declined call spends no classifier call. Without `judge`, nothing runs and an armed agent records the bytes it recorded before.
+
+The classifier itself lives on `agentfootprint/classify`: the `Classifier` port (`name` plus `classify(request, signal?)`), the request and answer shapes — `ClassifyRequest`, `ClassifyQuestion` as `ClassifyChoiceQuestion`, `ClassifyNoulQuestion` or `ClassifyScoreQuestion`, `ClassifyResult`, `ClassifyAnswer` as `ClassifyChoiceAnswer`, `ClassifyNoulAnswer` or `ClassifyScoreAnswer` — and `ClassifierError` with its `status` and `retryable`. Two adapters ship: `typesafe(options)` (`TypesafeClassifierOptions`: `apiKey`, `model`, `baseUrl`, `timeout`, `maxRetries`, `retryDelayMs`) for TypeSafe's System One classifier, which retries 429 and 529 with exponential backoff and never puts the key in an error, and `mockClassifier(script)` (`MockClassifierScript`, a `MockClassifier` with every request on `calls`) for tests and the bench. The same port ranks a skill graph's entries: `classifierScorer(classifier)` on `agentfootprint/skill-graph` (options `ClassifierScorerOptions`) is an `EntryScorer` whose ranking *is* the provider's distribution — one choice question under the id `CLASSIFIER_SCORER_QUESTION`, the provider's pick as `chosen`, and on a provider failure the scorer name `CLASSIFIER_SCORER_UNAVAILABLE` with an empty ranking, so the cold-start entry pick takes over rather than a guess.
+
+`npm run bench:findings:shuffle` measures it under `AF_SHUFFLE_JUDGE=mock|typesafe` — `judge-accuracy` against the planted truth, `judge-agrees` against the model's own standing, `judge-tokens` and `judge-latency-ms` read off the rows — and the design page (`docs/design/2026-09-findings-ledger.md` in the repository) names the serving policies the bench will decide between.
 
 ## Composition with other Agents
 
