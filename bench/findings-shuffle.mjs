@@ -70,6 +70,8 @@
  *
  * Run:  npm run build && node bench/findings-shuffle.mjs
  *       AF_SHUFFLE_SEED=7 RUNS=10 FACTS=6 NOISE=12 node bench/findings-shuffle.mjs
+ *       AF_SHUFFLE_PROVIDER=anthropic AF_SHUFFLE_MODEL=claude-haiku-4-5 node bench/findings-shuffle.mjs
+ *         (the key comes from ANTHROPIC_API_KEY; a hosted model, so this is the run that decides)
  *       AF_SHUFFLE_PROVIDER=ollama AF_SHUFFLE_MODEL=qwen3 OLLAMA_HOST=http://localhost:11434 \
  *         RUNS=5 node bench/findings-shuffle.mjs
  *       AF_SHUFFLE_VERBOSE=1 prints every run's order, answer and claim set.
@@ -80,7 +82,7 @@
 // The package's own doors, by self-reference (the built dist — this is an
 // ES module and the sources are CommonJS-typed): run `npm run build` first.
 import { Agent, defineTool } from 'agentfootprint';
-import { mock, ollama } from 'agentfootprint/providers';
+import { anthropic, mock, ollama } from 'agentfootprint/providers';
 
 const PROVIDER = process.env.AF_SHUFFLE_PROVIDER ?? 'mock';
 const MODEL = process.env.AF_SHUFFLE_MODEL;
@@ -89,6 +91,13 @@ const RUNS = Number(process.env.RUNS ?? 5);
 const FACTS = Number(process.env.FACTS ?? 6);
 const NOISE = Number(process.env.NOISE ?? 12);
 const VERBOSE = process.env.AF_SHUFFLE_VERBOSE === '1';
+// `AF_SHUFFLE_TEMPERATURE=none` sends no temperature at all: the Claude 5
+// family refuses the parameter ("`temperature` is deprecated for this
+// model"), so a run there rests on the model's own default.
+const TEMPERATURE =
+  process.env.AF_SHUFFLE_TEMPERATURE === 'none'
+    ? undefined
+    : Number(process.env.AF_SHUFFLE_TEMPERATURE ?? 0);
 const N = FACTS + NOISE;
 
 const CONDITIONS = [
@@ -277,19 +286,28 @@ function scriptedMock(armed) {
 
 /** Refuses a provider selection the harness cannot honour BEFORE anything is printed or built. */
 function assertProviderEnv() {
-  if (PROVIDER !== 'mock' && PROVIDER !== 'ollama') {
-    throw new Error(`AF_SHUFFLE_PROVIDER must be 'mock' or 'ollama', saw '${PROVIDER}'`);
+  if (PROVIDER !== 'mock' && PROVIDER !== 'ollama' && PROVIDER !== 'anthropic') {
+    throw new Error(
+      `AF_SHUFFLE_PROVIDER must be 'mock', 'ollama' or 'anthropic', saw '${PROVIDER}'`,
+    );
   }
-  if (PROVIDER === 'ollama' && !MODEL) {
-    throw new Error('AF_SHUFFLE_PROVIDER=ollama needs AF_SHUFFLE_MODEL=<model>');
+  if (PROVIDER !== 'mock' && !MODEL) {
+    throw new Error(`AF_SHUFFLE_PROVIDER=${PROVIDER} needs AF_SHUFFLE_MODEL=<model>`);
+  }
+  if (PROVIDER === 'anthropic' && !process.env.ANTHROPIC_API_KEY) {
+    throw new Error('AF_SHUFFLE_PROVIDER=anthropic needs ANTHROPIC_API_KEY in the environment');
   }
 }
 
 /** A fresh provider per run — the mock keeps a call counter, and a real one keeps nothing across runs. */
 function providerFor(armed) {
-  return PROVIDER === 'mock'
-    ? { provider: scriptedMock(armed), model: 'mock' }
-    : { provider: ollama(MODEL), model: MODEL };
+  if (PROVIDER === 'mock') return { provider: scriptedMock(armed), model: 'mock' };
+  if (PROVIDER === 'anthropic') {
+    // The package's own Anthropic adapter; the key is read by the provider
+    // (`AnthropicProvider` · `ANTHROPIC_API_KEY`), never by this script.
+    return { provider: anthropic({ timeout: 120_000, maxRetries: 3 }), model: MODEL };
+  }
+  return { provider: ollama(MODEL), model: MODEL };
 }
 
 // ─── Scoring the answer ────────────────────────────────────────────────
@@ -333,9 +351,12 @@ function score(answer, records) {
 async function runOnce(condition, run, records) {
   const order = orderFor(run);
   const { provider, model } = providerFor(condition.armed);
-  let b = Agent.create({ provider, model, maxIterations: N + 3, temperature: 0 }).tool(
-    pagingTool(records, order),
-  );
+  let b = Agent.create({
+    provider,
+    model,
+    maxIterations: N + 3,
+    ...(TEMPERATURE !== undefined && { temperature: TEMPERATURE }),
+  }).tool(pagingTool(records, order));
   if (condition.armed) b = b.findings({ serve: condition.serve });
   const agent = b.build();
   const out = await agent.run({ message: QUESTION });
@@ -348,12 +369,22 @@ async function runOnce(condition, run, records) {
   const standings = ledger.filter((r) => r.kind === 'standing');
   const named = new Set(standings.filter((r) => r.unknownId !== true).map((r) => r.toolCallId));
   const unknown = new Set(standings.filter((r) => r.unknownId === true).map((r) => r.toolCallId));
+  // The provider's own ids (a basis row carries the id the loop dispatched) beside the
+  // ids the model wrote in `previous[]` that matched nothing — the binding the ask relies on.
+  const basisIds = ledger.filter((r) => r.kind === 'basis').map((r) => r.toolCallId);
+  const idSample =
+    basisIds.length > 0 || unknown.size > 0
+      ? `dispatched ${JSON.stringify(basisIds.slice(0, 3))} · unknown ${JSON.stringify(
+          [...unknown].slice(0, 4),
+        )} · named ${named.size}`
+      : undefined;
   return {
     ...score(out, records),
     declared: named.size / N,
     unknownIds: unknown.size,
     order,
     answer: out,
+    idSample,
   };
 }
 
@@ -366,6 +397,7 @@ async function measure(condition, records) {
       console.log(`  [${condition.label} · run ${run}] order ${r.order.join(' ')}`);
       console.log(`    answer: ${r.answer.replace(/\s+/g, ' ').slice(0, 400)}`);
       console.log(`    claims: ${r.normal}`);
+      if (r.idSample) console.log(`    ids: ${r.idSample}`);
     }
   }
   const mean = (key) => runs.reduce((s, r) => s + r[key], 0) / runs.length;
@@ -481,10 +513,17 @@ async function main() {
   assertProviderEnv();
   const records = plantRecords();
   const host = process.env.OLLAMA_HOST ?? 'http://localhost:11434';
-  const who = PROVIDER === 'mock' ? 'mock (scripted)' : `ollama ${MODEL} at ${host}`;
+  const who =
+    PROVIDER === 'mock'
+      ? 'mock (scripted)'
+      : PROVIDER === 'anthropic'
+      ? `anthropic ${MODEL} (hosted)`
+      : `ollama ${MODEL} at ${host}`;
   console.log(
     `findings-shuffle — provider ${who}, seed ${SEED}, ${RUNS} runs per condition, ` +
-      `${N} records (${FACTS} facts + ${NOISE} noise), the same ${RUNS} orders in every condition, temperature 0`,
+      `${N} records (${FACTS} facts + ${NOISE} noise), the same ${RUNS} orders in every condition, temperature ${
+        TEMPERATURE === undefined ? 'not sent' : TEMPERATURE
+      }`,
   );
   if (!VERBOSE) {
     console.log(
