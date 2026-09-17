@@ -4,7 +4,7 @@ title: SemanticCoverage
 
 # Interface: SemanticCoverage
 
-Defined in: src/lib/semantics/types.ts:160
+Defined in: [src/lib/semantics/types.ts:160](https://github.com/footprintjs/agentfootprint/blob/main/src/lib/semantics/types.ts#L160)
 
 The envelope's coverage, normalized — the SAME three-list vocabulary the
 `coverage()` / `absent()` primitives speak (checked / not checked / cannot
@@ -21,7 +21,7 @@ final-answer limits block) — absorbed, never duplicated.
 
 > `readonly` `optional` **cannot\_cover?**: readonly [`CoverageItem`](/docs/api/interfaces/CoverageItem)[]
 
-Defined in: src/lib/semantics/types.ts:163
+Defined in: [src/lib/semantics/types.ts:163](https://github.com/footprintjs/agentfootprint/blob/main/src/lib/semantics/types.ts#L163)
 
 ***
 
@@ -29,7 +29,7 @@ Defined in: src/lib/semantics/types.ts:163
 
 > `readonly` `optional` **checked?**: readonly [`CoverageItem`](/docs/api/interfaces/CoverageItem)[]
 
-Defined in: src/lib/semantics/types.ts:161
+Defined in: [src/lib/semantics/types.ts:161](https://github.com/footprintjs/agentfootprint/blob/main/src/lib/semantics/types.ts#L161)
 
 ***
 
@@ -37,4 +37,4 @@ Defined in: src/lib/semantics/types.ts:161
 
 > `readonly` `optional` **not\_checked?**: readonly [`CoverageItem`](/docs/api/interfaces/CoverageItem)[]
 
-Defined in: src/lib/semantics/types.ts:162
+Defined in: [src/lib/semantics/types.ts:162](https://github.com/footprintjs/agentfootprint/blob/main/src/lib/semantics/types.ts#L162)

@@ -6,7 +6,7 @@ title: COLUMN_TYPE_CEILING
 
 > `const` **COLUMN\_TYPE\_CEILING**: `string`
 
-Defined in: src/integrity/column-types/check.ts:81
+Defined in: [src/integrity/column-types/check.ts:81](https://github.com/footprintjs/agentfootprint/blob/main/src/integrity/column-types/check.ts#L81)
 
 THE CEILING, as one string with one owner.
 

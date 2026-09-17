@@ -4,7 +4,7 @@ title: ColumnDeclaration
 
 # Interface: ColumnDeclaration
 
-Defined in: src/integrity/column-types/types.ts:52
+Defined in: [src/integrity/column-types/types.ts:52](https://github.com/footprintjs/agentfootprint/blob/main/src/integrity/column-types/types.ts#L52)
 
 The object spelling of one column's declaration.
 
@@ -14,7 +14,7 @@ The object spelling of one column's declaration.
 
 > `readonly` `optional` **nullable?**: `boolean`
 
-Defined in: src/integrity/column-types/types.ts:75
+Defined in: [src/integrity/column-types/types.ts:75](https://github.com/footprintjs/agentfootprint/blob/main/src/integrity/column-types/types.ts#L75)
 
 `true` — a row of this column may legitimately carry NO VALUE (`null`,
 `undefined`, or the key simply not set on that row), and such a row is
@@ -41,6 +41,6 @@ unlisted columns are allowed and unjudged.
 
 > `readonly` **type**: [`ColumnType`](/docs/api/type-aliases/ColumnType)
 
-Defined in: src/integrity/column-types/types.ts:54
+Defined in: [src/integrity/column-types/types.ts:54](https://github.com/footprintjs/agentfootprint/blob/main/src/integrity/column-types/types.ts#L54)
 
 What the column holds.

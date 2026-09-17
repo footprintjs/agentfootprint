@@ -6,7 +6,7 @@ title: readSemantics
 
 > **readSemantics**(`value`): [`ToolSemantics`](/docs/api/interfaces/ToolSemantics) \| `undefined`
 
-Defined in: src/lib/semantics/envelope.ts:765
+Defined in: [src/lib/semantics/envelope.ts:765](https://github.com/footprintjs/agentfootprint/blob/main/src/lib/semantics/envelope.ts#L765)
 
 Recognize (or decline to recognize) a value as a semantic envelope —
 STRICT, and the strictness is the zero-cost guarantee. Only a plain object

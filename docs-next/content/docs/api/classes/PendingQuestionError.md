@@ -4,7 +4,7 @@ title: PendingQuestionError
 
 # Class: PendingQuestionError
 
-Defined in: src/core/conversation.ts:91
+Defined in: [src/core/conversation.ts:91](https://github.com/footprintjs/agentfootprint/blob/main/src/core/conversation.ts#L91)
 
 Thrown when a new message is sent to an agent whose last run PAUSED to ask a
 person something, and that question has not been answered.
@@ -24,7 +24,7 @@ in the record, and silently starting a fresh run was not.
 
 > **new PendingQuestionError**(`door`, `pending`): `PendingQuestionError`
 
-Defined in: src/core/conversation.ts:98
+Defined in: [src/core/conversation.ts:98](https://github.com/footprintjs/agentfootprint/blob/main/src/core/conversation.ts#L98)
 
 #### Parameters
 
@@ -72,7 +72,7 @@ Defined in: node\_modules/typescript/lib/lib.es2022.error.d.ts:24
 
 > `readonly` **code**: `"ERR_PENDING_QUESTION"`
 
-Defined in: src/core/conversation.ts:92
+Defined in: [src/core/conversation.ts:92](https://github.com/footprintjs/agentfootprint/blob/main/src/core/conversation.ts#L92)
 
 ***
 
@@ -138,7 +138,7 @@ not capture any frames.
 
 > `readonly` `optional` **toolCallId?**: `string`
 
-Defined in: src/core/conversation.ts:96
+Defined in: [src/core/conversation.ts:96](https://github.com/footprintjs/agentfootprint/blob/main/src/core/conversation.ts#L96)
 
 The id of the tool call that asked, for joining back to the trace.
 
@@ -148,7 +148,7 @@ The id of the tool call that asked, for joining back to the trace.
 
 > `readonly` `optional` **toolName?**: `string`
 
-Defined in: src/core/conversation.ts:94
+Defined in: [src/core/conversation.ts:94](https://github.com/footprintjs/agentfootprint/blob/main/src/core/conversation.ts#L94)
 
 The tool that asked, when the pause named one.
 

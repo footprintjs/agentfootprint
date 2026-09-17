@@ -4,7 +4,7 @@ title: UnreadableArtifactStoreError
 
 # Class: UnreadableArtifactStoreError
 
-Defined in: src/artifacts/sqliteArtifacts.ts:112
+Defined in: [src/artifacts/sqliteArtifacts.ts:112](https://github.com/footprintjs/agentfootprint/blob/main/src/artifacts/sqliteArtifacts.ts#L112)
 
 Raised when the file exists but this runtime cannot use it as an artifact
 store — never answered with an empty store. Same law, same three cases as
@@ -20,7 +20,7 @@ store — never answered with an empty store. Same law, same three cases as
 
 > **new UnreadableArtifactStoreError**(`file`, `problem`, `detail`): `UnreadableArtifactStoreError`
 
-Defined in: src/artifacts/sqliteArtifacts.ts:117
+Defined in: [src/artifacts/sqliteArtifacts.ts:117](https://github.com/footprintjs/agentfootprint/blob/main/src/artifacts/sqliteArtifacts.ts#L117)
 
 #### Parameters
 
@@ -62,7 +62,7 @@ Defined in: node\_modules/typescript/lib/lib.es2022.error.d.ts:24
 
 > `readonly` **code**: `"ERR_UNREADABLE_ARTIFACT_STORE"`
 
-Defined in: src/artifacts/sqliteArtifacts.ts:113
+Defined in: [src/artifacts/sqliteArtifacts.ts:113](https://github.com/footprintjs/agentfootprint/blob/main/src/artifacts/sqliteArtifacts.ts#L113)
 
 ***
 
@@ -70,7 +70,7 @@ Defined in: src/artifacts/sqliteArtifacts.ts:113
 
 > `readonly` **file**: `string`
 
-Defined in: src/artifacts/sqliteArtifacts.ts:114
+Defined in: [src/artifacts/sqliteArtifacts.ts:114](https://github.com/footprintjs/agentfootprint/blob/main/src/artifacts/sqliteArtifacts.ts#L114)
 
 ***
 
@@ -102,7 +102,7 @@ Defined in: node\_modules/typescript/lib/lib.es5.d.ts:1076
 
 > `readonly` **problem**: `"cannot-open"` \| `"not-our-schema"` \| `"newer-schema"`
 
-Defined in: src/artifacts/sqliteArtifacts.ts:115
+Defined in: [src/artifacts/sqliteArtifacts.ts:115](https://github.com/footprintjs/agentfootprint/blob/main/src/artifacts/sqliteArtifacts.ts#L115)
 
 ***
 

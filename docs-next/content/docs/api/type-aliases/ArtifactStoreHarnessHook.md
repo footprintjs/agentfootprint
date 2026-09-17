@@ -6,7 +6,7 @@ title: ArtifactStoreHarnessHook
 
 > **ArtifactStoreHarnessHook** = `"advanceTime"` \| `"corrupt"` \| `"boundedStore"`
 
-Defined in: src/artifacts/conformance/types.ts:62
+Defined in: [src/artifacts/conformance/types.ts:62](https://github.com/footprintjs/agentfootprint/blob/main/src/artifacts/conformance/types.ts#L62)
 
 Harness hooks a case cannot run without.
 

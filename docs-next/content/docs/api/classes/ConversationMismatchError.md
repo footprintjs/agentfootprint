@@ -4,7 +4,7 @@ title: ConversationMismatchError
 
 # Class: ConversationMismatchError
 
-Defined in: src/core/runCheckpoint.ts:397
+Defined in: [src/core/runCheckpoint.ts:421](https://github.com/footprintjs/agentfootprint/blob/main/src/core/runCheckpoint.ts#L421)
 
 Thrown when a stored conversation is handed to an agent that is provably
 not the one that recorded it (9.2.0).
@@ -26,7 +26,7 @@ deploy is the ordinary case and must keep working.
 
 > **new ConversationMismatchError**(`door`, `storedAgentId`, `agentId`): `ConversationMismatchError`
 
-Defined in: src/core/runCheckpoint.ts:404
+Defined in: [src/core/runCheckpoint.ts:428](https://github.com/footprintjs/agentfootprint/blob/main/src/core/runCheckpoint.ts#L428)
 
 #### Parameters
 
@@ -56,7 +56,7 @@ Defined in: src/core/runCheckpoint.ts:404
 
 > `readonly` **agentId**: `string`
 
-Defined in: src/core/runCheckpoint.ts:402
+Defined in: [src/core/runCheckpoint.ts:426](https://github.com/footprintjs/agentfootprint/blob/main/src/core/runCheckpoint.ts#L426)
 
 The id of the agent it was handed to.
 
@@ -78,7 +78,7 @@ Defined in: node\_modules/typescript/lib/lib.es2022.error.d.ts:24
 
 > `readonly` **code**: `"ERR_CONVERSATION_MISMATCH"`
 
-Defined in: src/core/runCheckpoint.ts:398
+Defined in: [src/core/runCheckpoint.ts:422](https://github.com/footprintjs/agentfootprint/blob/main/src/core/runCheckpoint.ts#L422)
 
 ***
 
@@ -144,7 +144,7 @@ not capture any frames.
 
 > `readonly` **storedAgentId**: `string`
 
-Defined in: src/core/runCheckpoint.ts:400
+Defined in: [src/core/runCheckpoint.ts:424](https://github.com/footprintjs/agentfootprint/blob/main/src/core/runCheckpoint.ts#L424)
 
 The id stamped on the stored conversation.
 

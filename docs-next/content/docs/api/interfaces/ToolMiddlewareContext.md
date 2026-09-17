@@ -4,7 +4,7 @@ title: ToolMiddlewareContext
 
 # Interface: ToolMiddlewareContext
 
-Defined in: src/core/agent/middleware/types.ts:162
+Defined in: [src/core/agent/middleware/types.ts:162](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/middleware/types.ts#L162)
 
 The call a tool middleware is deciding about.
 
@@ -18,7 +18,7 @@ The call a tool middleware is deciding about.
 
 > `readonly` **args**: `Readonly`\<`Record`\<`string`, `unknown`\>\>
 
-Defined in: src/core/agent/middleware/types.ts:185
+Defined in: [src/core/agent/middleware/types.ts:185](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/middleware/types.ts#L185)
 
 The args as THIS middleware sees them — every earlier transform in the
 chain already applied. The first middleware sees what the model asked
@@ -30,7 +30,7 @@ for; the last sees what the tool is about to receive.
 
 > `readonly` **history**: readonly [`LLMMessage`](/docs/api/interfaces/LLMMessage)[]
 
-Defined in: src/core/agent/middleware/types.ts:187
+Defined in: [src/core/agent/middleware/types.ts:187](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/middleware/types.ts#L187)
 
 Conversation so far, including the assistant turn that made this call.
 
@@ -40,7 +40,7 @@ Conversation so far, including the assistant turn that made this call.
 
 > `readonly` `optional` **identity?**: `MemoryIdentity`
 
-Defined in: src/core/agent/middleware/types.ts:189
+Defined in: [src/core/agent/middleware/types.ts:189](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/middleware/types.ts#L189)
 
 Multi-tenant run identity, when the run carried one.
 
@@ -50,7 +50,7 @@ Multi-tenant run identity, when the run carried one.
 
 > `readonly` **iteration**: `number`
 
-Defined in: src/core/agent/middleware/types.ts:179
+Defined in: [src/core/agent/middleware/types.ts:179](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/middleware/types.ts#L179)
 
 ReAct iteration this call belongs to.
 
@@ -60,7 +60,7 @@ ReAct iteration this call belongs to.
 
 > `readonly` `optional` **signal?**: `AbortSignal`
 
-Defined in: src/core/agent/middleware/types.ts:191
+Defined in: [src/core/agent/middleware/types.ts:191](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/middleware/types.ts#L191)
 
 Abort signal from `run({ env: { signal } })`.
 
@@ -70,7 +70,7 @@ Abort signal from `run({ env: { signal } })`.
 
 > `readonly` **toolCallId**: `string`
 
-Defined in: src/core/agent/middleware/types.ts:177
+Defined in: [src/core/agent/middleware/types.ts:177](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/middleware/types.ts#L177)
 
 Matches `stream.tool_start.toolCallId` for this dispatch.
 
@@ -80,7 +80,7 @@ Matches `stream.tool_start.toolCallId` for this dispatch.
 
 > `readonly` **toolName**: `string`
 
-Defined in: src/core/agent/middleware/types.ts:163
+Defined in: [src/core/agent/middleware/types.ts:163](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/middleware/types.ts#L163)
 
 ***
 
@@ -88,7 +88,7 @@ Defined in: src/core/agent/middleware/types.ts:163
 
 > `readonly` `optional` **toolSource?**: `string`
 
-Defined in: src/core/agent/middleware/types.ts:175
+Defined in: [src/core/agent/middleware/types.ts:175](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/middleware/types.ts#L175)
 
 Where the tool being called came from — `Tool.source`, which `mcpClient`
 fills with the server's name.

@@ -4,7 +4,7 @@ title: ArtifactListResult
 
 # Interface: ArtifactListResult
 
-Defined in: src/artifacts/types.ts:170
+Defined in: [src/artifacts/types.ts:170](https://github.com/footprintjs/agentfootprint/blob/main/src/artifacts/types.ts#L170)
 
 One page of tickets. Bytes never ride a listing.
 
@@ -14,7 +14,7 @@ One page of tickets. Bytes never ride a listing.
 
 > `readonly` **artifacts**: readonly [`ArtifactMeta`](/docs/api/interfaces/ArtifactMeta)[]
 
-Defined in: src/artifacts/types.ts:171
+Defined in: [src/artifacts/types.ts:171](https://github.com/footprintjs/agentfootprint/blob/main/src/artifacts/types.ts#L171)
 
 ***
 
@@ -22,6 +22,6 @@ Defined in: src/artifacts/types.ts:171
 
 > `readonly` `optional` **cursor?**: `string`
 
-Defined in: src/artifacts/types.ts:173
+Defined in: [src/artifacts/types.ts:173](https://github.com/footprintjs/agentfootprint/blob/main/src/artifacts/types.ts#L173)
 
 Present iff more pages exist.

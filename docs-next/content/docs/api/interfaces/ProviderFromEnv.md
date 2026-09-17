@@ -4,7 +4,7 @@ title: ProviderFromEnv
 
 # Interface: ProviderFromEnv
 
-Defined in: src/adapters/llm/createProvider.ts:106
+Defined in: [src/adapters/llm/createProvider.ts:106](https://github.com/footprintjs/agentfootprint/blob/main/src/adapters/llm/createProvider.ts#L106)
 
 What `providerFromEnv()` resolved: the provider + the `model` to pass to
  `Agent.create({ provider, model })`, and which `kind` was detected.
@@ -15,7 +15,7 @@ What `providerFromEnv()` resolved: the provider + the `model` to pass to
 
 > `readonly` **kind**: `"mock"` \| `"anthropic"` \| `"openai"` \| `"ollama"` \| `"foundry"` \| `"foundry-local"` \| `"azure-openai"`
 
-Defined in: src/adapters/llm/createProvider.ts:109
+Defined in: [src/adapters/llm/createProvider.ts:109](https://github.com/footprintjs/agentfootprint/blob/main/src/adapters/llm/createProvider.ts#L109)
 
 ***
 
@@ -23,7 +23,7 @@ Defined in: src/adapters/llm/createProvider.ts:109
 
 > `readonly` **model**: `string`
 
-Defined in: src/adapters/llm/createProvider.ts:108
+Defined in: [src/adapters/llm/createProvider.ts:108](https://github.com/footprintjs/agentfootprint/blob/main/src/adapters/llm/createProvider.ts#L108)
 
 ***
 
@@ -31,4 +31,4 @@ Defined in: src/adapters/llm/createProvider.ts:108
 
 > `readonly` **provider**: [`LLMProvider`](/docs/api/interfaces/LLMProvider)
 
-Defined in: src/adapters/llm/createProvider.ts:107
+Defined in: [src/adapters/llm/createProvider.ts:107](https://github.com/footprintjs/agentfootprint/blob/main/src/adapters/llm/createProvider.ts#L107)

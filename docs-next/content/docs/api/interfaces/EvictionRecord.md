@@ -4,7 +4,7 @@ title: EvictionRecord
 
 # Interface: EvictionRecord
 
-Defined in: src/recorders/core/types.ts:82
+Defined in: [src/recorders/core/types.ts:82](https://github.com/footprintjs/agentfootprint/blob/main/src/recorders/core/types.ts#L82)
 
 Eviction record — a piece that was removed from a slot under pressure.
 
@@ -14,7 +14,7 @@ Eviction record — a piece that was removed from a slot under pressure.
 
 > `readonly` **contentHash**: `string`
 
-Defined in: src/recorders/core/types.ts:84
+Defined in: [src/recorders/core/types.ts:84](https://github.com/footprintjs/agentfootprint/blob/main/src/recorders/core/types.ts#L84)
 
 ***
 
@@ -22,7 +22,7 @@ Defined in: src/recorders/core/types.ts:84
 
 > `readonly` **reason**: `"budget"` \| `"stale"` \| `"low_score"` \| `"policy"` \| `"user_revoked"`
 
-Defined in: src/recorders/core/types.ts:85
+Defined in: [src/recorders/core/types.ts:85](https://github.com/footprintjs/agentfootprint/blob/main/src/recorders/core/types.ts#L85)
 
 ***
 
@@ -30,7 +30,7 @@ Defined in: src/recorders/core/types.ts:85
 
 > `readonly` **slot**: `ContextSlot`
 
-Defined in: src/recorders/core/types.ts:83
+Defined in: [src/recorders/core/types.ts:83](https://github.com/footprintjs/agentfootprint/blob/main/src/recorders/core/types.ts#L83)
 
 ***
 
@@ -38,4 +38,4 @@ Defined in: src/recorders/core/types.ts:83
 
 > `readonly` **survivalMs**: `number`
 
-Defined in: src/recorders/core/types.ts:86
+Defined in: [src/recorders/core/types.ts:86](https://github.com/footprintjs/agentfootprint/blob/main/src/recorders/core/types.ts#L86)

@@ -4,7 +4,7 @@ title: WindowRecord
 
 # Interface: WindowRecord
 
-Defined in: src/core/agent/window/types.ts:146
+Defined in: [src/core/agent/window/types.ts:174](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/window/types.ts#L174)
 
 What one visit to the window stage put in the ledger.
 
@@ -36,7 +36,7 @@ guess this family exists to refuse. The honest "after" is the NEXT call's
 
 > `readonly` `optional` **droppedObservations?**: readonly `string`[]
 
-Defined in: src/core/agent/window/types.ts:179
+Defined in: [src/core/agent/window/types.ts:207](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/window/types.ts#L207)
 
 The tools whose RESULTS left the window on this visit, in first-appearance
 order (9.57.0). Present only when at least one did.
@@ -55,13 +55,54 @@ said the evidence had gone.
 
 ***
 
+### droppedStandings?
+
+> `readonly` `optional` **droppedStandings?**: readonly `object`[]
+
+Defined in: [src/core/agent/window/types.ts:246](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/window/types.ts#L246)
+
+The standing of every tool result that LEFT the window on this visit,
+by id, as the model had declared it (9.102.0) — beside
+`droppedObservations`, which names the tools. Present only on an ARMED
+agent (`.findings()` configured) and only when at least one tool result
+left; an unarmed agent never carries this key.
+
+`standing` absent is UNDECLARED — the model said nothing about that
+result — never `'open'` and never a verdict the library inferred. It is
+the model's claim, and it is filed by the STAGE so a consumer-written
+strategy's record carries it too; a reader joining an evicted turn's
+hash on the receipt to the ledger fold at that stop gets the same answer.
+
+***
+
 ### iteration
 
 > `readonly` **iteration**: `number`
 
-Defined in: src/core/agent/window/types.ts:153
+Defined in: [src/core/agent/window/types.ts:181](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/window/types.ts#L181)
 
 ReAct iteration this visit belongs to.
+
+***
+
+### ledgerFacts?
+
+> `readonly` `optional` **ledgerFacts?**: [`WindowObservations`](/docs/api/interfaces/WindowObservations)
+
+Defined in: [src/core/agent/window/types.ts:232](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/window/types.ts#L232)
+
+What the ledger-fact pin did on this visit (9.102.0). Present only when
+it did something: held a turn, turned one away at the ceiling, or stood
+down — and only on an ARMED agent (`.findings()` configured), so an
+unarmed agent's records are the exact shape they were before.
+
+The same [WindowObservations](/docs/api/interfaces/WindowObservations) shape as `observations`, a second
+block rather than a merged one: `limit` there is `keepLastToolResults`,
+here it is `keepLedgerFacts`, and a reader adding up what each pin cost
+needs them apart. The stand-down reads BOTH blocks: when the two previous
+visits removed nothing and named only pins (`'last-tool-result'` and/or
+`'ledger-fact'`), the fact pins release for this visit and this block
+says so (`{ pinned: [], yielded: 0, limit, standDown: true }`).
 
 ***
 
@@ -69,7 +110,7 @@ ReAct iteration this visit belongs to.
 
 > `readonly` `optional` **observations?**: [`WindowObservations`](/docs/api/interfaces/WindowObservations)
 
-Defined in: src/core/agent/window/types.ts:189
+Defined in: [src/core/agent/window/types.ts:217](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/window/types.ts#L217)
 
 What the last-tool-result pin did on this visit (9.57.0). Present only
 when it did something: held a turn, turned one away at the ceiling, or
@@ -85,7 +126,7 @@ key, so its records are the exact shape they were before 9.57.0.
 
 > `readonly` **refusals**: readonly [`WindowRefusal`](/docs/api/interfaces/WindowRefusal)[]
 
-Defined in: src/core/agent/window/types.ts:162
+Defined in: [src/core/agent/window/types.ts:190](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/window/types.ts#L190)
 
 Every turn that refused to leave, named.
 
@@ -95,7 +136,7 @@ Every turn that refused to leave, named.
 
 > `readonly` **removedMessageCount**: `number`
 
-Defined in: src/core/agent/window/types.ts:157
+Defined in: [src/core/agent/window/types.ts:185](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/window/types.ts#L185)
 
 How many messages left the window.
 
@@ -105,7 +146,7 @@ How many messages left the window.
 
 > `readonly` **removedStageIds**: readonly `string`[]
 
-Defined in: src/core/agent/window/types.ts:155
+Defined in: [src/core/agent/window/types.ts:183](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/window/types.ts#L183)
 
 `runtimeStageId`s of the stages that appended the messages that left.
 
@@ -115,7 +156,7 @@ Defined in: src/core/agent/window/types.ts:155
 
 > `readonly` **strategy**: `string`
 
-Defined in: src/core/agent/window/types.ts:151
+Defined in: [src/core/agent/window/types.ts:179](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/window/types.ts#L179)
 
 `WindowStrategy.name` of the strategy that decided — `'summarize-oldest'`,
 `'sliding-window'`, `'token-budget'`, or your own. Narrow on it.
@@ -126,7 +167,7 @@ Defined in: src/core/agent/window/types.ts:151
 
 > `readonly` **windowCharsAfter**: `number`
 
-Defined in: src/core/agent/window/types.ts:160
+Defined in: [src/core/agent/window/types.ts:188](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/window/types.ts#L188)
 
 ***
 
@@ -134,6 +175,6 @@ Defined in: src/core/agent/window/types.ts:160
 
 > `readonly` **windowCharsBefore**: `number`
 
-Defined in: src/core/agent/window/types.ts:159
+Defined in: [src/core/agent/window/types.ts:187](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/window/types.ts#L187)
 
 Window size in chars before / after this visit. Exact, and not tokens.

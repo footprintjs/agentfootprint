@@ -6,7 +6,7 @@ title: ToolResultColumns
 
 > **ToolResultColumns** = `Readonly`\<`Record`\<`string`, [`ColumnType`](/docs/api/type-aliases/ColumnType) \| [`ColumnDeclaration`](/docs/api/interfaces/ColumnDeclaration)\>\>
 
-Defined in: src/integrity/column-types/types.ts:97
+Defined in: [src/integrity/column-types/types.ts:97](https://github.com/footprintjs/agentfootprint/blob/main/src/integrity/column-types/types.ts#L97)
 
 What a tool declares about the columns of its rowset — column name to type.
 

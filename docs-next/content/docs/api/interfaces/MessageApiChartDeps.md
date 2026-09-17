@@ -4,7 +4,7 @@ title: MessageApiChartDeps
 
 # Interface: MessageApiChartDeps
 
-Defined in: src/core/agent/buildMessageApiChart.ts:70
+Defined in: [src/core/agent/buildMessageApiChart.ts:70](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/buildMessageApiChart.ts#L70)
 
 ## Properties
 
@@ -12,7 +12,7 @@ Defined in: src/core/agent/buildMessageApiChart.ts:70
 
 > `readonly` `optional` **getRunId?**: () => `string` \| `undefined`
 
-Defined in: src/core/agent/buildMessageApiChart.ts:106
+Defined in: [src/core/agent/buildMessageApiChart.ts:106](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/buildMessageApiChart.ts#L106)
 
 The id of the run this chart is about to make (9.91.0) — supply it and
 Call-LLM mints a receipt, the fingerprint of what the model was handed,
@@ -57,7 +57,7 @@ receiptAt(executor.getSnapshot(), 1)?.basis.runId; // runId
 
 > `readonly` **model**: `string`
 
-Defined in: src/core/agent/buildMessageApiChart.ts:72
+Defined in: [src/core/agent/buildMessageApiChart.ts:72](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/buildMessageApiChart.ts#L72)
 
 ***
 
@@ -65,7 +65,7 @@ Defined in: src/core/agent/buildMessageApiChart.ts:72
 
 > `readonly` **provider**: [`LLMProvider`](/docs/api/interfaces/LLMProvider)
 
-Defined in: src/core/agent/buildMessageApiChart.ts:71
+Defined in: [src/core/agent/buildMessageApiChart.ts:71](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/buildMessageApiChart.ts#L71)
 
 ***
 
@@ -73,7 +73,7 @@ Defined in: src/core/agent/buildMessageApiChart.ts:71
 
 > `readonly` `optional` **structureRecorders?**: readonly `StructureRecorder`[]
 
-Defined in: src/core/agent/buildMessageApiChart.ts:74
+Defined in: [src/core/agent/buildMessageApiChart.ts:74](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/buildMessageApiChart.ts#L74)
 
 ***
 
@@ -81,4 +81,4 @@ Defined in: src/core/agent/buildMessageApiChart.ts:74
 
 > `readonly` **systemPrompt**: `string`
 
-Defined in: src/core/agent/buildMessageApiChart.ts:73
+Defined in: [src/core/agent/buildMessageApiChart.ts:73](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/buildMessageApiChart.ts#L73)

@@ -6,7 +6,7 @@ title: StoredReceipt
 
 > **StoredReceipt** = `Omit`\<[`Receipt`](/docs/api/interfaces/Receipt), `"cache"`\> & `object`
 
-Defined in: src/lib/time-travel/receipt.ts:440
+Defined in: [src/lib/time-travel/receipt.ts:440](https://github.com/footprintjs/agentfootprint/blob/main/src/lib/time-travel/receipt.ts#L440)
 
 A receipt as a READER meets it — what `receiptAt` hands back, and the shape
 every rebuild reads through (9.94.1).

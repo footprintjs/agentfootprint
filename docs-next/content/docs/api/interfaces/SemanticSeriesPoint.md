@@ -4,7 +4,7 @@ title: SemanticSeriesPoint
 
 # Interface: SemanticSeriesPoint
 
-Defined in: src/lib/semantics/types.ts:55
+Defined in: [src/lib/semantics/types.ts:55](https://github.com/footprintjs/agentfootprint/blob/main/src/lib/semantics/types.ts#L55)
 
 One measured point. `t` is the tool's own clock words (an ISO string or an
 epoch number — the library never reinterprets it), `entity` is what was
@@ -16,7 +16,7 @@ measured, `metric` names the measurement, `value` is the reading.
 
 > `readonly` **entity**: `string`
 
-Defined in: src/lib/semantics/types.ts:57
+Defined in: [src/lib/semantics/types.ts:57](https://github.com/footprintjs/agentfootprint/blob/main/src/lib/semantics/types.ts#L57)
 
 ***
 
@@ -24,7 +24,7 @@ Defined in: src/lib/semantics/types.ts:57
 
 > `readonly` **metric**: `string`
 
-Defined in: src/lib/semantics/types.ts:58
+Defined in: [src/lib/semantics/types.ts:58](https://github.com/footprintjs/agentfootprint/blob/main/src/lib/semantics/types.ts#L58)
 
 ***
 
@@ -32,7 +32,7 @@ Defined in: src/lib/semantics/types.ts:58
 
 > `readonly` **t**: `string` \| `number`
 
-Defined in: src/lib/semantics/types.ts:56
+Defined in: [src/lib/semantics/types.ts:56](https://github.com/footprintjs/agentfootprint/blob/main/src/lib/semantics/types.ts#L56)
 
 ***
 
@@ -40,4 +40,4 @@ Defined in: src/lib/semantics/types.ts:56
 
 > `readonly` **value**: `string` \| `number` \| `boolean` \| `null`
 
-Defined in: src/lib/semantics/types.ts:59
+Defined in: [src/lib/semantics/types.ts:59](https://github.com/footprintjs/agentfootprint/blob/main/src/lib/semantics/types.ts#L59)

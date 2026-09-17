@@ -4,7 +4,7 @@ title: ToolResultMiddleware
 
 # Interface: ToolResultMiddleware
 
-Defined in: src/core/agent/middleware/types.ts:250
+Defined in: [src/core/agent/middleware/types.ts:250](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/middleware/types.ts#L250)
 
 A link that decides only about the RESULT. It takes no part in dispatch.
 
@@ -18,7 +18,7 @@ A link that decides only about the RESULT. It takes no part in dispatch.
 
 > `readonly` **name**: `string`
 
-Defined in: src/core/agent/middleware/types.ts:240
+Defined in: [src/core/agent/middleware/types.ts:240](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/middleware/types.ts#L240)
 
 Identifies this middleware in every ledger row and event it produces.
 
@@ -32,7 +32,7 @@ Identifies this middleware in every ledger row and event it produces.
 
 > `optional` **onToolCall?**: `undefined`
 
-Defined in: src/core/agent/middleware/types.ts:251
+Defined in: [src/core/agent/middleware/types.ts:251](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/middleware/types.ts#L251)
 
 ## Methods
 
@@ -40,7 +40,7 @@ Defined in: src/core/agent/middleware/types.ts:251
 
 > **onToolResult**(`call`): [`ToolResultOutcome`](/docs/api/type-aliases/ToolResultOutcome) \| `Promise`\<[`ToolResultOutcome`](/docs/api/type-aliases/ToolResultOutcome)\>
 
-Defined in: src/core/agent/middleware/types.ts:252
+Defined in: [src/core/agent/middleware/types.ts:252](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/middleware/types.ts#L252)
 
 #### Parameters
 

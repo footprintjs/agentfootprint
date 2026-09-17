@@ -4,7 +4,7 @@ title: EscalationPolicy
 
 # Interface: EscalationPolicy
 
-Defined in: src/core/agent/skillBrains.ts:58
+Defined in: [src/core/agent/skillBrains.ts:58](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/skillBrains.ts#L58)
 
 Escalate-on-evidence policy (see the module header).
 
@@ -18,7 +18,7 @@ Escalate-on-evidence policy (see the module header).
 
 > `readonly` **afterRefusals**: `number`
 
-Defined in: src/core/agent/skillBrains.ts:68
+Defined in: [src/core/agent/skillBrains.ts:68](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/skillBrains.ts#L68)
 
 Gate refusals (`skill.rejected`) in ONE turn that flip the rest of the
  turn onto this brain. Integer ≥ 1.
@@ -36,7 +36,7 @@ Gate refusals (`skill.rejected`) in ONE turn that flip the rest of the
 
 > `readonly` `optional` **model?**: `string`
 
-Defined in: src/core/agent/skillBrains.ts:54
+Defined in: [src/core/agent/skillBrains.ts:54](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/skillBrains.ts#L54)
 
 #### Inherited from
 
@@ -48,7 +48,7 @@ Defined in: src/core/agent/skillBrains.ts:54
 
 > `readonly` **provider**: [`LLMProvider`](/docs/api/interfaces/LLMProvider)
 
-Defined in: src/core/agent/skillBrains.ts:53
+Defined in: [src/core/agent/skillBrains.ts:53](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/skillBrains.ts#L53)
 
 #### Inherited from
 

@@ -4,7 +4,7 @@ title: InvalidAskComponentError
 
 # Class: InvalidAskComponentError
 
-Defined in: src/core/askComponent.ts:88
+Defined in: [src/core/askComponent.ts:88](https://github.com/footprintjs/agentfootprint/blob/main/src/core/askComponent.ts#L88)
 
 An ask nominated a component this run cannot honor as stated — a malformed
 shape, a `propsRef` with no artifact store attached, or a `propsRef` that
@@ -27,7 +27,7 @@ was executed behind anyone's back.
 
 > **new InvalidAskComponentError**(`reason`, `door`, `detail`, `ref?`): `InvalidAskComponentError`
 
-Defined in: src/core/askComponent.ts:98
+Defined in: [src/core/askComponent.ts:98](https://github.com/footprintjs/agentfootprint/blob/main/src/core/askComponent.ts#L98)
 
 #### Parameters
 
@@ -73,7 +73,7 @@ Defined in: node\_modules/typescript/lib/lib.es2022.error.d.ts:24
 
 > `readonly` **code**: `"ERR_INVALID_ASK_COMPONENT"`
 
-Defined in: src/core/askComponent.ts:89
+Defined in: [src/core/askComponent.ts:89](https://github.com/footprintjs/agentfootprint/blob/main/src/core/askComponent.ts#L89)
 
 ***
 
@@ -81,7 +81,7 @@ Defined in: src/core/askComponent.ts:89
 
 > `readonly` **door**: `string`
 
-Defined in: src/core/askComponent.ts:94
+Defined in: [src/core/askComponent.ts:94](https://github.com/footprintjs/agentfootprint/blob/main/src/core/askComponent.ts#L94)
 
 The door the component arrived through (`askHuman`, `ask middleware '<name>'`,
  `tool '<name>' checkInComponent`, …).
@@ -116,7 +116,7 @@ Defined in: node\_modules/typescript/lib/lib.es5.d.ts:1076
 
 > `readonly` **reason**: [`AskComponentRefusalReason`](/docs/api/type-aliases/AskComponentRefusalReason)
 
-Defined in: src/core/askComponent.ts:91
+Defined in: [src/core/askComponent.ts:91](https://github.com/footprintjs/agentfootprint/blob/main/src/core/askComponent.ts#L91)
 
 Which rule refused.
 
@@ -126,7 +126,7 @@ Which rule refused.
 
 > `readonly` `optional` **ref?**: `string`
 
-Defined in: src/core/askComponent.ts:96
+Defined in: [src/core/askComponent.ts:96](https://github.com/footprintjs/agentfootprint/blob/main/src/core/askComponent.ts#L96)
 
 The ref that could not be honored, when the refusal is about one.
 

@@ -4,7 +4,7 @@ title: SwarmOptions
 
 # Interface: SwarmOptions
 
-Defined in: src/patterns/Swarm.ts:35
+Defined in: [src/patterns/Swarm.ts:35](https://github.com/footprintjs/agentfootprint/blob/main/src/patterns/Swarm.ts#L35)
 
 ## Properties
 
@@ -12,7 +12,7 @@ Defined in: src/patterns/Swarm.ts:35
 
 > `readonly` **agents**: readonly [`SwarmAgent`](/docs/api/interfaces/SwarmAgent)[]
 
-Defined in: src/patterns/Swarm.ts:40
+Defined in: [src/patterns/Swarm.ts:40](https://github.com/footprintjs/agentfootprint/blob/main/src/patterns/Swarm.ts#L40)
 
 The fixed agent roster. Must contain >= 2 agents. The order doesn't
 matter — the `route` function selects by id.
@@ -23,7 +23,7 @@ matter — the `route` function selects by id.
 
 > `readonly` `optional` **id?**: `string`
 
-Defined in: src/patterns/Swarm.ts:51
+Defined in: [src/patterns/Swarm.ts:51](https://github.com/footprintjs/agentfootprint/blob/main/src/patterns/Swarm.ts#L51)
 
 ***
 
@@ -31,7 +31,7 @@ Defined in: src/patterns/Swarm.ts:51
 
 > `readonly` `optional` **maxHandoffs?**: `number`
 
-Defined in: src/patterns/Swarm.ts:49
+Defined in: [src/patterns/Swarm.ts:49](https://github.com/footprintjs/agentfootprint/blob/main/src/patterns/Swarm.ts#L49)
 
 Max hand-offs before the loop halts. Default 10.
 
@@ -41,7 +41,7 @@ Max hand-offs before the loop halts. Default 10.
 
 > `readonly` `optional` **name?**: `string`
 
-Defined in: src/patterns/Swarm.ts:50
+Defined in: [src/patterns/Swarm.ts:50](https://github.com/footprintjs/agentfootprint/blob/main/src/patterns/Swarm.ts#L50)
 
 ***
 
@@ -49,7 +49,7 @@ Defined in: src/patterns/Swarm.ts:50
 
 > `readonly` **route**: (`input`) => `string` \| `undefined`
 
-Defined in: src/patterns/Swarm.ts:47
+Defined in: [src/patterns/Swarm.ts:47](https://github.com/footprintjs/agentfootprint/blob/main/src/patterns/Swarm.ts#L47)
 
 Routing function — receives the current message and returns the
 selected agent's id. Pure sync; evaluated before each iteration's

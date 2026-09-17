@@ -4,7 +4,7 @@ title: SemanticEdge
 
 # Interface: SemanticEdge
 
-Defined in: src/lib/semantics/types.ts:73
+Defined in: [src/lib/semantics/types.ts:73](https://github.com/footprintjs/agentfootprint/blob/main/src/lib/semantics/types.ts#L73)
 
 One typed relationship — "this VM rides that datastore", "this zone
  contains that WWPN". `kind` names the relationship in the tool's words.
@@ -19,7 +19,7 @@ One typed relationship — "this VM rides that datastore", "this zone
 
 > `readonly` **from**: `string`
 
-Defined in: src/lib/semantics/types.ts:74
+Defined in: [src/lib/semantics/types.ts:74](https://github.com/footprintjs/agentfootprint/blob/main/src/lib/semantics/types.ts#L74)
 
 ***
 
@@ -27,7 +27,7 @@ Defined in: src/lib/semantics/types.ts:74
 
 > `readonly` **kind**: `string`
 
-Defined in: src/lib/semantics/types.ts:76
+Defined in: [src/lib/semantics/types.ts:76](https://github.com/footprintjs/agentfootprint/blob/main/src/lib/semantics/types.ts#L76)
 
 ***
 
@@ -35,4 +35,4 @@ Defined in: src/lib/semantics/types.ts:76
 
 > `readonly` **to**: `string`
 
-Defined in: src/lib/semantics/types.ts:75
+Defined in: [src/lib/semantics/types.ts:75](https://github.com/footprintjs/agentfootprint/blob/main/src/lib/semantics/types.ts#L75)

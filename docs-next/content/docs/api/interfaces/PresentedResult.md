@@ -4,7 +4,7 @@ title: PresentedResult
 
 # Interface: PresentedResult
 
-Defined in: src/artifacts/present.ts:54
+Defined in: [src/artifacts/present.ts:54](https://github.com/footprintjs/agentfootprint/blob/main/src/artifacts/present.ts#L54)
 
 The one result shape a successful `present` returns (stringified onto the
  `role: 'tool'` message — a reload walks history for exactly this).
@@ -15,7 +15,7 @@ The one result shape a successful `present` returns (stringified onto the
 
 > `readonly` **as**: `string`
 
-Defined in: src/artifacts/present.ts:60
+Defined in: [src/artifacts/present.ts:60](https://github.com/footprintjs/agentfootprint/blob/main/src/artifacts/present.ts#L60)
 
 The consumer vocabulary the model chose — stored as data (the component
  registry that would validate it is a later phase).
@@ -26,7 +26,7 @@ The consumer vocabulary the model chose — stored as data (the component
 
 > `readonly` **presented**: `true`
 
-Defined in: src/artifacts/present.ts:56
+Defined in: [src/artifacts/present.ts:56](https://github.com/footprintjs/agentfootprint/blob/main/src/artifacts/present.ts#L56)
 
 Always `true`. The field a transcript walker branches on.
 
@@ -36,7 +36,7 @@ Always `true`. The field a transcript walker branches on.
 
 > `readonly` **ref**: `string`
 
-Defined in: src/artifacts/present.ts:57
+Defined in: [src/artifacts/present.ts:57](https://github.com/footprintjs/agentfootprint/blob/main/src/artifacts/present.ts#L57)
 
 ***
 
@@ -44,4 +44,4 @@ Defined in: src/artifacts/present.ts:57
 
 > `readonly` **snapshot**: [`PresentSnapshot`](/docs/api/interfaces/PresentSnapshot)
 
-Defined in: src/artifacts/present.ts:61
+Defined in: [src/artifacts/present.ts:61](https://github.com/footprintjs/agentfootprint/blob/main/src/artifacts/present.ts#L61)

@@ -4,7 +4,7 @@ title: OutputSchemaError
 
 # Class: OutputSchemaError
 
-Defined in: src/core/outputSchema.ts:155
+Defined in: [src/core/outputSchema.ts:155](https://github.com/footprintjs/agentfootprint/blob/main/src/core/outputSchema.ts#L155)
 
 Thrown by `agent.parseOutput(...)` / `agent.runTyped(...)` when the
 agent's final answer fails JSON parsing OR schema validation.
@@ -23,7 +23,7 @@ can log / persist the failed response for triage.
 
 > **new OutputSchemaError**(`message`, `opts`): `OutputSchemaError`
 
-Defined in: src/core/outputSchema.ts:160
+Defined in: [src/core/outputSchema.ts:160](https://github.com/footprintjs/agentfootprint/blob/main/src/core/outputSchema.ts#L160)
 
 #### Parameters
 
@@ -59,7 +59,7 @@ Defined in: src/core/outputSchema.ts:160
 
 > `readonly` `optional` **cause?**: `unknown`
 
-Defined in: src/core/outputSchema.ts:158
+Defined in: [src/core/outputSchema.ts:158](https://github.com/footprintjs/agentfootprint/blob/main/src/core/outputSchema.ts#L158)
 
 #### Overrides
 
@@ -95,7 +95,7 @@ Defined in: node\_modules/typescript/lib/lib.es5.d.ts:1076
 
 > `readonly` **rawOutput**: `string`
 
-Defined in: src/core/outputSchema.ts:156
+Defined in: [src/core/outputSchema.ts:156](https://github.com/footprintjs/agentfootprint/blob/main/src/core/outputSchema.ts#L156)
 
 ***
 
@@ -137,7 +137,7 @@ not capture any frames.
 
 > `readonly` **stage**: `"json-parse"` \| `"schema-validate"`
 
-Defined in: src/core/outputSchema.ts:157
+Defined in: [src/core/outputSchema.ts:157](https://github.com/footprintjs/agentfootprint/blob/main/src/core/outputSchema.ts#L157)
 
 ## Methods
 

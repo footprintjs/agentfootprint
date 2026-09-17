@@ -4,7 +4,7 @@ title: UnknownParentRefError
 
 # Class: UnknownParentRefError
 
-Defined in: src/artifacts/types.ts:291
+Defined in: [src/artifacts/types.ts:291](https://github.com/footprintjs/agentfootprint/blob/main/src/artifacts/types.ts#L291)
 
 A `put` named a parent that does not resolve in the same scope — a foreign
 key that would dangle at birth. Refused at mint, because a derivation fact
@@ -21,7 +21,7 @@ inherit the lie.
 
 > **new UnknownParentRefError**(`unresolved`): `UnknownParentRefError`
 
-Defined in: src/artifacts/types.ts:296
+Defined in: [src/artifacts/types.ts:296](https://github.com/footprintjs/agentfootprint/blob/main/src/artifacts/types.ts#L296)
 
 #### Parameters
 
@@ -55,7 +55,7 @@ Defined in: node\_modules/typescript/lib/lib.es2022.error.d.ts:24
 
 > `readonly` **code**: `"ERR_UNKNOWN_PARENT_REF"`
 
-Defined in: src/artifacts/types.ts:292
+Defined in: [src/artifacts/types.ts:292](https://github.com/footprintjs/agentfootprint/blob/main/src/artifacts/types.ts#L292)
 
 ***
 
@@ -121,7 +121,7 @@ not capture any frames.
 
 > `readonly` **unresolved**: readonly `string`[]
 
-Defined in: src/artifacts/types.ts:294
+Defined in: [src/artifacts/types.ts:294](https://github.com/footprintjs/agentfootprint/blob/main/src/artifacts/types.ts#L294)
 
 The parents that failed to resolve.
 

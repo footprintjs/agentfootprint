@@ -4,7 +4,7 @@ title: SweptArtifact
 
 # Interface: SweptArtifact
 
-Defined in: src/artifacts/types.ts:137
+Defined in: [src/artifacts/types.ts:137](https://github.com/footprintjs/agentfootprint/blob/main/src/artifacts/types.ts#L137)
 
 One swept artifact — the fact a retention pass leaves behind.
 
@@ -14,7 +14,7 @@ One swept artifact — the fact a retention pass leaves behind.
 
 > `readonly` **bytes**: `number`
 
-Defined in: src/artifacts/types.ts:141
+Defined in: [src/artifacts/types.ts:141](https://github.com/footprintjs/agentfootprint/blob/main/src/artifacts/types.ts#L141)
 
 ***
 
@@ -22,7 +22,7 @@ Defined in: src/artifacts/types.ts:141
 
 > `readonly` **kind**: `string`
 
-Defined in: src/artifacts/types.ts:140
+Defined in: [src/artifacts/types.ts:140](https://github.com/footprintjs/agentfootprint/blob/main/src/artifacts/types.ts#L140)
 
 ***
 
@@ -30,7 +30,7 @@ Defined in: src/artifacts/types.ts:140
 
 > `readonly` **reason**: [`ArtifactSweepReason`](/docs/api/type-aliases/ArtifactSweepReason)
 
-Defined in: src/artifacts/types.ts:139
+Defined in: [src/artifacts/types.ts:139](https://github.com/footprintjs/agentfootprint/blob/main/src/artifacts/types.ts#L139)
 
 ***
 
@@ -38,4 +38,4 @@ Defined in: src/artifacts/types.ts:139
 
 > `readonly` **ref**: `string`
 
-Defined in: src/artifacts/types.ts:138
+Defined in: [src/artifacts/types.ts:138](https://github.com/footprintjs/agentfootprint/blob/main/src/artifacts/types.ts#L138)

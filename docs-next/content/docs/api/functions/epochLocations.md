@@ -6,7 +6,7 @@ title: epochLocations
 
 > **epochLocations**(`source`): readonly [`EpochLocation`](/docs/api/interfaces/EpochLocation)[]
 
-Defined in: src/lib/time-travel/epochs.ts:217
+Defined in: [src/lib/time-travel/epochs.ts:217](https://github.com/footprintjs/agentfootprint/blob/main/src/lib/time-travel/epochs.ts#L217)
 
 Every epoch in a recording, in run order — the ONE owner of the flat /
 grouped fork.

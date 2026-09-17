@@ -6,7 +6,7 @@ title: codeRunnerTool
 
 > **codeRunnerTool**(`options`): [`Tool`](/docs/api/interfaces/Tool)\<\{ `code`: `string`; \}, `string`\> & [`HoldsToolSessions`](/docs/api/interfaces/HoldsToolSessions) & `RecordsCodeRuns`
 
-Defined in: src/core/codeRunnerTool.ts:236
+Defined in: [src/core/codeRunnerTool.ts:236](https://github.com/footprintjs/agentfootprint/blob/main/src/core/codeRunnerTool.ts#L236)
 
 ## Parameters
 

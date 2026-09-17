@@ -6,7 +6,7 @@ title: EMPTY_LOOKUP_CEILING
 
 > `const` **EMPTY\_LOOKUP\_CEILING**: `string`
 
-Defined in: src/integrity/empty-lookup/check.ts:73
+Defined in: [src/integrity/empty-lookup/check.ts:73](https://github.com/footprintjs/agentfootprint/blob/main/src/integrity/empty-lookup/check.ts#L73)
 
 THE CEILING, as one string with one owner.
 

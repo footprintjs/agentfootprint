@@ -6,7 +6,7 @@ title: readRowset
 
 > **readRowset**(`value`): [`RowsetReading`](/docs/api/interfaces/RowsetReading) \| `undefined`
 
-Defined in: src/integrity/column-types/check.ts:117
+Defined in: [src/integrity/column-types/check.ts:117](https://github.com/footprintjs/agentfootprint/blob/main/src/integrity/column-types/check.ts#L117)
 
 READ a finished result as a rowset, or decline to.
 

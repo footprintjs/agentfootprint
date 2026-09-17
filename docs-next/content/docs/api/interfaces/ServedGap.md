@@ -4,7 +4,7 @@ title: ServedGap
 
 # Interface: ServedGap
 
-Defined in: src/lib/time-travel/servedView.ts:227
+Defined in: [src/lib/time-travel/servedView.ts:234](https://github.com/footprintjs/agentfootprint/blob/main/src/lib/time-travel/servedView.ts#L234)
 
 One named limit on the rebuild, with the fields it covers — a hole the log
  cannot fill, or a boundary the record cannot see past.
@@ -15,7 +15,7 @@ One named limit on the rebuild, with the fields it covers — a hole the log
 
 > `readonly` `optional` **cause?**: [`ServedGapCause`](/docs/api/type-aliases/ServedGapCause)
 
-Defined in: src/lib/time-travel/servedView.ts:330
+Defined in: [src/lib/time-travel/servedView.ts:337](https://github.com/footprintjs/agentfootprint/blob/main/src/lib/time-travel/servedView.ts#L337)
 
 WHY this gap fired, where the site could establish it — [ServedGapCause](/docs/api/type-aliases/ServedGapCause).
 
@@ -30,7 +30,7 @@ would be the enumeration coming back as a field.
 
 > `readonly` **fields**: readonly `string`[]
 
-Defined in: src/lib/time-travel/servedView.ts:294
+Defined in: [src/lib/time-travel/servedView.ts:301](https://github.com/footprintjs/agentfootprint/blob/main/src/lib/time-travel/servedView.ts#L301)
 
 The fields this gap covers, in dotted `Receipt` form. A reader that
 renders one of them should render this gap's sentence beside it.
@@ -102,7 +102,7 @@ the tool list it belongs on, and the request-only lines composed from
 
 > `readonly` **gap**: [`ServedGapKind`](/docs/api/type-aliases/ServedGapKind)
 
-Defined in: src/lib/time-travel/servedView.ts:228
+Defined in: [src/lib/time-travel/servedView.ts:235](https://github.com/footprintjs/agentfootprint/blob/main/src/lib/time-travel/servedView.ts#L235)
 
 ***
 
@@ -110,7 +110,7 @@ Defined in: src/lib/time-travel/servedView.ts:228
 
 > `readonly` **why**: `string`
 
-Defined in: src/lib/time-travel/servedView.ts:321
+Defined in: [src/lib/time-travel/servedView.ts:328](https://github.com/footprintjs/agentfootprint/blob/main/src/lib/time-travel/servedView.ts#L328)
 
 The gap in the words a renderer prints — WHICH FIELDS it covers, WHAT THEY
 MEAN ON THIS VIEW, WHAT TO DO DIFFERENTLY, and nothing else.

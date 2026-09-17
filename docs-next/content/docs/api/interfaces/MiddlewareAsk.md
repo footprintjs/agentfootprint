@@ -4,7 +4,7 @@ title: MiddlewareAsk
 
 # Interface: MiddlewareAsk
 
-Defined in: src/core/pause.ts:67
+Defined in: [src/core/pause.ts:67](https://github.com/footprintjs/agentfootprint/blob/main/src/core/pause.ts#L67)
 
 The question a `toolMiddleware` put to a person, as it rides the checkpoint.
 
@@ -14,7 +14,7 @@ The question a `toolMiddleware` put to a person, as it rides the checkpoint.
 
 > `readonly` `optional` **component?**: [`AskComponent`](/docs/api/interfaces/AskComponent)
 
-Defined in: src/core/pause.ts:78
+Defined in: [src/core/pause.ts:78](https://github.com/footprintjs/agentfootprint/blob/main/src/core/pause.ts#L78)
 
 Which REGISTERED screen component collects the answer (9.24.0) — the
 typed half of the question, carried from `ask({ question, component })`.
@@ -27,7 +27,7 @@ back through the same `CheckInDecision` either way.
 
 > `readonly` `optional` **detail?**: `unknown`
 
-Defined in: src/core/pause.ts:71
+Defined in: [src/core/pause.ts:71](https://github.com/footprintjs/agentfootprint/blob/main/src/core/pause.ts#L71)
 
 Anything else the answering UI should render. Never interpreted here.
 
@@ -37,7 +37,7 @@ Anything else the answering UI should render. Never interpreted here.
 
 > `readonly` **middleware**: `string`
 
-Defined in: src/core/pause.ts:80
+Defined in: [src/core/pause.ts:80](https://github.com/footprintjs/agentfootprint/blob/main/src/core/pause.ts#L80)
 
 `name` of the middleware that asked.
 
@@ -47,6 +47,6 @@ Defined in: src/core/pause.ts:80
 
 > `readonly` **question**: `string`
 
-Defined in: src/core/pause.ts:69
+Defined in: [src/core/pause.ts:69](https://github.com/footprintjs/agentfootprint/blob/main/src/core/pause.ts#L69)
 
 The question, in the middleware author's own words.

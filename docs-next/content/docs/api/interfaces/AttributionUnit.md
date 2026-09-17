@@ -4,7 +4,7 @@ title: AttributionUnit
 
 # Interface: AttributionUnit
 
-Defined in: src/lib/influence-core/types.ts:300
+Defined in: [src/lib/influence-core/types.ts:300](https://github.com/footprintjs/agentfootprint/blob/main/src/lib/influence-core/types.ts#L300)
 
 One piece of the context the chooser saw, tagged by which channel it
 came from. `scoreMargin` asks "which tool best fits ONE context";
@@ -26,7 +26,7 @@ context-bisect's own `ContextUnit`, which is a different subsystem.)
 
 > `readonly` **channel**: `string`
 
-Defined in: src/lib/influence-core/types.ts:304
+Defined in: [src/lib/influence-core/types.ts:304](https://github.com/footprintjs/agentfootprint/blob/main/src/lib/influence-core/types.ts#L304)
 
 Origin group, e.g. `'system' | 'task' | 'result' | 'history'`.
 
@@ -36,7 +36,7 @@ Origin group, e.g. `'system' | 'task' | 'result' | 'history'`.
 
 > `readonly` **id**: `string`
 
-Defined in: src/lib/influence-core/types.ts:302
+Defined in: [src/lib/influence-core/types.ts:302](https://github.com/footprintjs/agentfootprint/blob/main/src/lib/influence-core/types.ts#L302)
 
 Unique id — the citation the attribution points at, e.g. `'rule-1'`.
 
@@ -46,6 +46,6 @@ Unique id — the citation the attribution points at, e.g. `'rule-1'`.
 
 > `readonly` **text**: `string`
 
-Defined in: src/lib/influence-core/types.ts:306
+Defined in: [src/lib/influence-core/types.ts:306](https://github.com/footprintjs/agentfootprint/blob/main/src/lib/influence-core/types.ts#L306)
 
 The text of the unit (a rule sentence, the user task, …).

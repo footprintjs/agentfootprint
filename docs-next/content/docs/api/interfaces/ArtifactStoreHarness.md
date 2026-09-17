@@ -4,7 +4,7 @@ title: ArtifactStoreHarness
 
 # Interface: ArtifactStoreHarness
 
-Defined in: src/artifacts/conformance/types.ts:74
+Defined in: [src/artifacts/conformance/types.ts:74](https://github.com/footprintjs/agentfootprint/blob/main/src/artifacts/conformance/types.ts#L74)
 
 How the battery reaches one store.
 
@@ -21,7 +21,7 @@ directory, an embedded database and a bucket at once.
 
 > `readonly` `optional` **declared?**: `Partial`\<`Record`\<[`ArtifactStoreCaseName`](/docs/api/type-aliases/ArtifactStoreCaseName), `string`\>\>
 
-Defined in: src/artifacts/conformance/types.ts:134
+Defined in: [src/artifacts/conformance/types.ts:134](https://github.com/footprintjs/agentfootprint/blob/main/src/artifacts/conformance/types.ts#L134)
 
 Cases this store cannot satisfy, BY NAME, each with the reason.
 
@@ -41,7 +41,7 @@ catching, and so is a gate nobody needed.
 
 > `readonly` **name**: `string`
 
-Defined in: src/artifacts/conformance/types.ts:76
+Defined in: [src/artifacts/conformance/types.ts:76](https://github.com/footprintjs/agentfootprint/blob/main/src/artifacts/conformance/types.ts#L76)
 
 What this store is called in a report.
 
@@ -51,7 +51,7 @@ What this store is called in a report.
 
 > `optional` **advanceTime**(`store`, `ms`): `void` \| `Promise`\<`void`\>
 
-Defined in: src/artifacts/conformance/types.ts:101
+Defined in: [src/artifacts/conformance/types.ts:101](https://github.com/footprintjs/agentfootprint/blob/main/src/artifacts/conformance/types.ts#L101)
 
 Move THIS store's clock forward by `ms`.
 
@@ -81,7 +81,7 @@ DECLARE the cases below by name.
 
 > `optional` **boundedStore**(`maxBytesPerScope`): [`ArtifactStore`](/docs/api/interfaces/ArtifactStore) \| `Promise`\<[`ArtifactStore`](/docs/api/interfaces/ArtifactStore)\>
 
-Defined in: src/artifacts/conformance/types.ts:120
+Defined in: [src/artifacts/conformance/types.ts:120](https://github.com/footprintjs/agentfootprint/blob/main/src/artifacts/conformance/types.ts#L120)
 
 A fresh, empty store whose per-scope byte budget is `maxBytesPerScope`.
 
@@ -105,7 +105,7 @@ through the port. A store with no configurable ceiling declares the case.
 
 > `optional` **corrupt**(`store`, `scope`, `ref`): `void` \| `Promise`\<`void`\>
 
-Defined in: src/artifacts/conformance/types.ts:112
+Defined in: [src/artifacts/conformance/types.ts:112](https://github.com/footprintjs/agentfootprint/blob/main/src/artifacts/conformance/types.ts#L112)
 
 Replace one artifact's stored PAYLOAD with different, well-formed bytes,
 behind the store's back — the artifact must still be readable, just no
@@ -140,7 +140,7 @@ outside it can reach must DECLARE those cases with the reason.
 
 > **createStore**(): [`ArtifactStore`](/docs/api/interfaces/ArtifactStore) \| `Promise`\<[`ArtifactStore`](/docs/api/interfaces/ArtifactStore)\>
 
-Defined in: src/artifacts/conformance/types.ts:84
+Defined in: [src/artifacts/conformance/types.ts:84](https://github.com/footprintjs/agentfootprint/blob/main/src/artifacts/conformance/types.ts#L84)
 
 A fresh store holding no artifacts. Called once per case.
 
@@ -158,7 +158,7 @@ here to check.
 
 > `optional` **disposeStore**(`store`): `void` \| `Promise`\<`void`\>
 
-Defined in: src/artifacts/conformance/types.ts:91
+Defined in: [src/artifacts/conformance/types.ts:91](https://github.com/footprintjs/agentfootprint/blob/main/src/artifacts/conformance/types.ts#L91)
 
 Release what `createStore` (or [boundedStore](/docs/api/interfaces/ArtifactStoreHarness#boundedstore)) acquired. Called
 after every case, including the ones that failed — a store left open by a

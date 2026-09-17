@@ -6,7 +6,7 @@ title: toolSessionKey
 
 > **toolSessionKey**(`ctx`, `scope`): `string` \| `undefined`
 
-Defined in: src/core/toolSessions.ts:192
+Defined in: [src/core/toolSessions.ts:192](https://github.com/footprintjs/agentfootprint/blob/main/src/core/toolSessions.ts#L192)
 
 Derive the isolation key a tool should hold a session under.
 

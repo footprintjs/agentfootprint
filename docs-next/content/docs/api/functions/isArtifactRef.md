@@ -6,7 +6,7 @@ title: isArtifactRef
 
 > **isArtifactRef**(`candidate`): `candidate is string`
 
-Defined in: src/artifacts/naming.ts:62
+Defined in: [src/artifacts/naming.ts:62](https://github.com/footprintjs/agentfootprint/blob/main/src/artifacts/naming.ts#L62)
 
 Is this string a well-formed artifact ref?
 

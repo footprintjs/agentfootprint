@@ -6,7 +6,7 @@ title: mintArtifactRef
 
 > **mintArtifactRef**(): `string`
 
-Defined in: src/artifacts/naming.ts:38
+Defined in: [src/artifacts/naming.ts:38](https://github.com/footprintjs/agentfootprint/blob/main/src/artifacts/naming.ts#L38)
 
 Mint a fresh, opaque, never-content-derived ref.
 

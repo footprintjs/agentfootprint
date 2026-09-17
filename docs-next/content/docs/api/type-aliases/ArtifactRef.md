@@ -6,7 +6,7 @@ title: ArtifactRef
 
 > **ArtifactRef** = `string`
 
-Defined in: src/artifacts/types.ts:64
+Defined in: [src/artifacts/types.ts:64](https://github.com/footprintjs/agentfootprint/blob/main/src/artifacts/types.ts#L64)
 
 The ref the model speaks — an opaque MINTED string (`art_` + 22 random
 chars, ~26 total). Never content-addressed: the digest is metadata, never
