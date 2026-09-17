@@ -208,3 +208,39 @@ mount is the next cut, gated on a hosted run of the bench.
   choice — advisory rows + the bench-gated `serve: { top }` narrowing
   (`.toolChoice()`, 9.105.0; a hosted run of `bench:tool-choice` decides
   whether narrowing is ever a default)
+
+## Measured on the first host (2026-09-17, agentfootprint 9.105.0) — model-led vs classifier-led tool selection
+
+Eight questions to the host's chatbot (Claude Sonnet 5, real seeded stores,
+a skill graph offering up to twelve tools per skill), one pass per condition,
+the same questions in the same order; every number read from the turns'
+records (`toolChoices` rows and the receipts' tools-slot measurement), none
+from a log. `calls` counts the tool calls in the served history at the answer,
+which the sliding window trims, so it is not a per-turn total.
+
+| condition | classifier picks | first pick = model's call | narrowed calls | misses | tools-slot bytes served, all 8 turns | pick tokens, all 8 | latency per pick |
+|---|---|---|---|---|---|---|---|
+| off | 0 | — | 0 | 0 | 2,242,812 | 0 | — |
+| advisory (`serve: 'all'`) | 32 | 6 of 23 | 0 | 0 | 2,016,575 | 65,831 | ≈300 ms |
+| `top-2` | 33 | 6 of 24 | 26 of 33 | 8 | 960,497 | 67,314 | ≈290 ms |
+
+Read:
+- **The classifier's first pick matched the model's own call about one time
+  in four.** Skill descriptions in this host are long procedures; the pick was
+  made from the request and the skill id alone (the conversation tail does not
+  cross the tools mount — named as the next cut).
+- **Narrowing to two still cut the tools slot by 57%** (2.24 MB → 0.96 MB over
+  the eight turns) **with every answer reaching the same verdict** as the
+  unarmed pass, because the fail-open rules did their job: a call outside the
+  served pair was recorded as a miss (8 in 8 turns) and the full set came back
+  on the next call; no turn lost its answer. The cost of the picks is ≈67k
+  tokens over the eight turns at ≈0.3 s each — against ≈1.3 MB of schema bytes
+  not sent.
+- **So the dial pays on bytes, not on judgment**: the classifier is not a
+  better tool-picker than the model here, but serving its pair first and
+  falling open on a miss is cheaper than serving twelve schemas every call.
+  Whether the misses cost answer quality on harder questions is the next
+  measurement; this pass shows none on these eight.
+- Policy stays: the model's call is never substituted; the dial is off unless
+  the host names it (`SEO_TOOL_CHOICE=advisory|top-2` there).
+
