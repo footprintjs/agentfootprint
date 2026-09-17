@@ -4,7 +4,7 @@ title: ConflictRow
 
 # Interface: ConflictRow
 
-Defined in: [src/core/agent/findings/types.ts:145](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/findings/types.ts#L145)
+Defined in: [src/core/agent/findings/types.ts:180](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/findings/types.ts#L180)
 
 The algebra's fact at the write that created it: two stood-on readings on
 one key disagree. Written from `conflictsOf`'s output only, once per key.
@@ -15,7 +15,7 @@ one key disagree. Written from `conflictsOf`'s output only, once per key.
 
 > `readonly` **iteration**: `number`
 
-Defined in: [src/core/agent/findings/types.ts:150](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/findings/types.ts#L150)
+Defined in: [src/core/agent/findings/types.ts:185](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/findings/types.ts#L185)
 
 ***
 
@@ -23,7 +23,7 @@ Defined in: [src/core/agent/findings/types.ts:150](https://github.com/footprintj
 
 > `readonly` **key**: `string`
 
-Defined in: [src/core/agent/findings/types.ts:148](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/findings/types.ts#L148)
+Defined in: [src/core/agent/findings/types.ts:183](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/findings/types.ts#L183)
 
 The `assertionKey` the readings share.
 
@@ -33,7 +33,7 @@ The `assertionKey` the readings share.
 
 > `readonly` **kind**: `"conflict"`
 
-Defined in: [src/core/agent/findings/types.ts:146](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/findings/types.ts#L146)
+Defined in: [src/core/agent/findings/types.ts:181](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/findings/types.ts#L181)
 
 ***
 
@@ -41,4 +41,4 @@ Defined in: [src/core/agent/findings/types.ts:146](https://github.com/footprintj
 
 > `readonly` **witnesses**: readonly [`ConflictWitness`](/docs/api/interfaces/ConflictWitness)[]
 
-Defined in: [src/core/agent/findings/types.ts:149](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/findings/types.ts#L149)
+Defined in: [src/core/agent/findings/types.ts:184](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/findings/types.ts#L184)

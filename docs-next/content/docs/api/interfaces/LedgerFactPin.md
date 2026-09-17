@@ -4,7 +4,7 @@ title: LedgerFactPin
 
 # Interface: LedgerFactPin
 
-Defined in: src/core/agent/window/ledgerFactPins.ts:81
+Defined in: [src/core/agent/window/ledgerFactPins.ts:81](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/window/ledgerFactPins.ts#L81)
 
 One turn the pin holds, and what holding it costs.
 
@@ -14,7 +14,7 @@ One turn the pin holds, and what holding it costs.
 
 > `readonly` **chars**: `number`
 
-Defined in: src/core/agent/window/ledgerFactPins.ts:104
+Defined in: [src/core/agent/window/ledgerFactPins.ts:104](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/window/ledgerFactPins.ts#L104)
 
 Content characters of the WHOLE turn — the assistant's call and its
 results leave together, so the turn is what the pin actually holds.
@@ -25,7 +25,7 @@ results leave together, so the turn is what the pin actually holds.
 
 > `readonly` **messageIndex**: `number`
 
-Defined in: src/core/agent/window/ledgerFactPins.ts:99
+Defined in: [src/core/agent/window/ledgerFactPins.ts:99](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/window/ledgerFactPins.ts#L99)
 
 Index of the turn's first message in the window.
 
@@ -35,7 +35,7 @@ Index of the turn's first message in the window.
 
 > `readonly` **toolCallIds**: readonly `string`[]
 
-Defined in: src/core/agent/window/ledgerFactPins.ts:88
+Defined in: [src/core/agent/window/ledgerFactPins.ts:88](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/window/ledgerFactPins.ts#L88)
 
 Every tool result the turn holds, in wire order — not only the facts.
 The turn is what the pin actually holds: a noise result answered in the
@@ -48,7 +48,7 @@ the ledger by this id.
 
 > `readonly` **toolName**: `string`
 
-Defined in: src/core/agent/window/ledgerFactPins.ts:95
+Defined in: [src/core/agent/window/ledgerFactPins.ts:95](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/window/ledgerFactPins.ts#L95)
 
 The tool of the newest nameable result in the turn — the name the record
 files under `WindowObservations.pinned`. A turn is usually one tool; a
@@ -61,6 +61,6 @@ a turn for the latest result it holds.
 
 > `readonly` **turnIndex**: `number`
 
-Defined in: src/core/agent/window/ledgerFactPins.ts:97
+Defined in: [src/core/agent/window/ledgerFactPins.ts:97](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/window/ledgerFactPins.ts#L97)
 
 Index of the turn in this iteration's segmentation.

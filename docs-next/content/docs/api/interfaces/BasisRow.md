@@ -4,7 +4,7 @@ title: BasisRow
 
 # Interface: BasisRow
 
-Defined in: [src/core/agent/findings/types.ts:93](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/findings/types.ts#L93)
+Defined in: [src/core/agent/findings/types.ts:112](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/findings/types.ts#L112)
 
 The model's basis for ONE tool call, filed before the call runs.
 
@@ -14,7 +14,7 @@ The model's basis for ONE tool call, filed before the call runs.
 
 > `readonly` **basis**: [`Basis`](/docs/api/type-aliases/Basis)
 
-Defined in: [src/core/agent/findings/types.ts:98](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/findings/types.ts#L98)
+Defined in: [src/core/agent/findings/types.ts:117](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/findings/types.ts#L117)
 
 ***
 
@@ -22,7 +22,7 @@ Defined in: [src/core/agent/findings/types.ts:98](https://github.com/footprintjs
 
 > `readonly` `optional` **expect?**: [`Expect`](/docs/api/type-aliases/Expect)
 
-Defined in: [src/core/agent/findings/types.ts:99](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/findings/types.ts#L99)
+Defined in: [src/core/agent/findings/types.ts:118](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/findings/types.ts#L118)
 
 ***
 
@@ -30,7 +30,7 @@ Defined in: [src/core/agent/findings/types.ts:99](https://github.com/footprintjs
 
 > `readonly` **iteration**: `number`
 
-Defined in: [src/core/agent/findings/types.ts:97](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/findings/types.ts#L97)
+Defined in: [src/core/agent/findings/types.ts:116](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/findings/types.ts#L116)
 
 ***
 
@@ -38,7 +38,7 @@ Defined in: [src/core/agent/findings/types.ts:97](https://github.com/footprintjs
 
 > `readonly` **kind**: `"basis"`
 
-Defined in: [src/core/agent/findings/types.ts:94](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/findings/types.ts#L94)
+Defined in: [src/core/agent/findings/types.ts:113](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/findings/types.ts#L113)
 
 ***
 
@@ -46,7 +46,7 @@ Defined in: [src/core/agent/findings/types.ts:94](https://github.com/footprintjs
 
 > `readonly` `optional` **malformed?**: `number`
 
-Defined in: [src/core/agent/findings/types.ts:106](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/findings/types.ts#L106)
+Defined in: [src/core/agent/findings/types.ts:132](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/findings/types.ts#L132)
 
 How many entries of the same `_findings` value `splitFindings` dropped as
 malformed. A count about the emission, present only when non-zero — it is
@@ -55,11 +55,31 @@ about THIS declaration can live (the writer emits from rows alone).
 
 ***
 
+### predicts?
+
+> `readonly` `optional` **predicts?**: `string`
+
+Defined in: [src/core/agent/findings/types.ts:125](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/findings/types.ts#L125)
+
+***
+
+### proposition?
+
+> `readonly` `optional` **proposition?**: `string`
+
+Defined in: [src/core/agent/findings/types.ts:124](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/findings/types.ts#L124)
+
+The declared proposition and prediction, each at most `PROPOSITION_CHARS`
+with any cut stated in the text itself. Present only when declared —
+never defaulted, never inferred from the call's arguments.
+
+***
+
 ### toolCallId
 
 > `readonly` **toolCallId**: `string`
 
-Defined in: [src/core/agent/findings/types.ts:95](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/findings/types.ts#L95)
+Defined in: [src/core/agent/findings/types.ts:114](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/findings/types.ts#L114)
 
 ***
 
@@ -67,4 +87,4 @@ Defined in: [src/core/agent/findings/types.ts:95](https://github.com/footprintjs
 
 > `readonly` **toolName**: `string`
 
-Defined in: [src/core/agent/findings/types.ts:96](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/findings/types.ts#L96)
+Defined in: [src/core/agent/findings/types.ts:115](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/findings/types.ts#L115)
