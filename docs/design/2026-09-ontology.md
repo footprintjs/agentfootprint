@@ -236,6 +236,33 @@ one fresh session each, map on, `ask: 'use-the-map'` (v2), 2026-09-17 late:
 
 Raw v2 records: the host's `docs/measurements/2026-09-17-ontology-nodata-v2-on.json`.
 
+## 9.108.0 — the map meets the skills
+
+The owner's question (2026-09-17 late): when there is no data, does the
+model look into the topology to find the relation — the skill graph, the
+skills and the tools are mapped; is the map linked to them, and how? Read
+against the record: the map named the TOOL that reads a term
+(`via vm_backup_status`), but on an agent with skills that tool is on the
+wire only once its skill is read, and nothing the model was served said
+which skill that is — the `read_skill` catalog lists ids and descriptions,
+not tools, and a call to a tool not yet on the wire is answered with the
+roster of names, not with the skill. So the model guessed the skill from
+its description (usually right), or stopped and asked the person (the
+replayed restore turn: zero calls, "would you like me to check the backup
+run?").
+
+The join, from declared facts only: at build the agent reads the
+registry's `toolDeclaringSkills` for every `via` name and writes
+`AgentState.ontology.tools` (tool → skill ids); the piece prints
+`via vm_backup_status [skill: backup-check]`; the instruction (v3) says
+that skill id is what `read_skill` takes. Under a role policy the same
+hidden-skill law as every other sentence applies at compose time (never to
+the record), and the served view rebuilds the same bytes from the record's
+join and the epoch's hidden ids. Not built: any inference of relation
+from tool names, any change to routing, any tool-call made by the library.
+
+Measured on the host after the release: the table below.
+
 Raw answers and per-turn numbers: the host keeps them beside its `.dev/`
 bench (`nodata-ontology-{on,off}.json`); this table is the record of them.
 

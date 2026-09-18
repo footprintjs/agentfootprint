@@ -145,6 +145,45 @@ term already held to the term needed.
 The option form is `Agent.create({ ontology, ontologyAsk })`; an
 `ontologyAsk` without an `ontology` is refused at the door.
 
+## The join — a term, its tool, and the skill that declares the tool (9.108.0)
+
+The map says which TOOL reads a term from a source. On an agent with
+skills, most tools are a skill's: they reach the wire only once the model
+has read that skill. The map alone left the model one step short — it
+could see `via vm_backup_status` and not which skill to read, so it guessed
+from the skill catalog's descriptions, or asked the person. The owner's
+question (2026-09-17 late): the skill graph, the skills and the tools are
+mapped — is the map linked to them, and how?
+
+It is now, from declared facts only. At build, beside the `via` check,
+the agent reads the registry's own `toolDeclaringSkills` (which skills'
+`inject.tools` carry each name, in declaration order) for every tool the
+map names and writes the join on the record: `AgentState.ontology.tools`,
+tool → skill ids, present only when some `via` name is a skill's. The
+piece prints it beside the tool:
+
+```
+held by:
+backup_run ← influx_cohesity via vm_backup_status [skill: backup-check], vm_protection_detail [skills: backup-check, vm-protection]
+port ← inventory via lookup_port
+```
+
+and the instruction (v3) says what to do with it: *where that tool is
+named with the skill that declares it, that skill id is what `read_skill`
+takes*. A static `.tool()` name stays bare. Nothing is inferred: the
+registry is the one owner of "which skill declares this tool", and the
+piece quotes it.
+
+The same hidden-skill law every model-facing sentence applies
+(`AgentState.hiddenSkillIds`, the roster's sole-owner rule) applies here,
+at compose time and never to the record: a hidden skill's id is omitted
+from the bracket; a tool EVERY declaring skill of which is hidden is
+omitted whole; a tool no skill declares is never filtered. The served view
+rebuilds the piece from the record's `tools` and the epoch's
+`hiddenSkillIds`, so the receipt agrees byte for byte under a role that
+sees less. Pinned end to end by `test/core/agent/ontology.test.ts` (a
+role that may see one skill and not the other).
+
 ## The laws
 
 - **Declared, once.** `.ontology(map)` on the builder is the one door

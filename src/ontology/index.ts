@@ -16,6 +16,7 @@ export type {
   Ontology,
   OntologyAsk,
   OntologyEdge,
+  OntologyJoin,
   OntologyNode,
   OntologyNodeSource,
   OntologyRecord,

@@ -98,4 +98,27 @@ export interface OntologyRecord {
   readonly version: string;
   readonly hash: string;
   readonly spec: OntologySpec & { readonly edges: readonly OntologyEdge[] };
+  /**
+   * Which skills declare each tool the map names (9.108.0) — tool name → the
+   * ids of the skills whose `inject.tools` carry it, in declaration order;
+   * only the tools some node's `via` names AND some registered skill declares.
+   * Read at build from the tool registry (`toolDeclaringSkills`, the one
+   * owner of that fact), never inferred; ABSENT when no such tool exists (a
+   * map whose `via` names only static `.tool()` registrations), so an agent
+   * without skills writes the key it always did. The served piece prints the
+   * join beside the tool (`via lookup_port [skill: port-lookup]`), through the
+   * same hidden-skill filter every other model-facing sentence applies.
+   */
+  readonly tools?: Readonly<Record<string, readonly string[]>>;
+}
+
+/**
+ * What the served piece needs beyond the spec (9.108.0): the record's
+ * tool → skills join and, per request, the skill ids the caller's role may
+ * not be told about (`AgentState.hiddenSkillIds`). Both optional; absent
+ * means "no join" and "nothing hidden" — the 9.106.0 bytes.
+ */
+export interface OntologyJoin {
+  readonly tools?: Readonly<Record<string, readonly string[]>>;
+  readonly hiddenSkillIds?: readonly string[];
 }

@@ -217,6 +217,14 @@ export interface SeedStageDeps {
    */
   readonly ontology?: Ontology;
   /**
+   * Which skills declare each tool the map names (9.108.0) — read lazily,
+   * because `Agent.buildChart` builds this stage BEFORE the tool registry
+   * that owns the fact (`toolDeclaringSkills`); the thunk answers at run
+   * time, after the build completed. `undefined` when no tool the map's
+   * `via` names is a skill's — then the record carries no `tools` key.
+   */
+  readonly ontologyTools?: () => Readonly<Record<string, readonly string[]>> | undefined;
+  /**
    * The `Tool.wants` declarations, by tool name (9.88.0) — present ONLY when
    * the evidence gate's nudge is armed and at least one tool declares `wants`,
    * which is exactly when request assembly can compose the staged-refs line.
@@ -494,7 +502,16 @@ function seedFrom(scope: TypedScope<AgentState>, message: string, deps: SeedStag
   // again. An agent without `.ontology()` writes nothing here.
   if (deps.ontology !== undefined) {
     const { id, version, hash, nodes, sources, edges } = deps.ontology;
-    scope.ontology = { id, version, hash, spec: { id, version, nodes, sources, edges } };
+    // The tool → skills join (9.108.0), VALUE-conditional: a map naming only
+    // static tools writes the record it wrote in 9.106.0.
+    const tools = deps.ontologyTools?.();
+    scope.ontology = {
+      id,
+      version,
+      hash,
+      spec: { id, version, nodes, sources, edges },
+      ...(tools !== undefined && { tools }),
+    };
   }
   // The `wants` declarations (9.88.0) — the third input to the staged-refs
   // nudge, and the only one that was build-time-only. Value-conditional in the

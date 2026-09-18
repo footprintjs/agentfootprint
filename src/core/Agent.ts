@@ -503,6 +503,10 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
    *  deps it always did. The tool names its `via` edges name are checked
    *  against the registry in `buildChart`, beside `buildToolRegistry`. */
   private readonly ontology?: NonNullable<AgentOptions['ontology']>;
+  /** The map's tool → declaring-skills join (9.108.0), read off the registry
+   *  in `buildChart` beside the `via` check; `undefined` when no `via` name
+   *  is a skill's. Seed reads it through a thunk (the stage is built first). */
+  private ontologyTools?: Readonly<Record<string, readonly string[]>>;
   /** The opt-in tool-result ceiling in characters (9.11.0). Absent → results
    *  are never measured. See {@link AgentOptions.maxToolResultChars}. */
   private readonly maxToolResultChars?: number;
@@ -3729,7 +3733,10 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
       // writes ONCE as the run constant `ontology` — the `findingsServe`
       // precedent, a build-time fact the rebuild reads from the RECORD. An
       // unarmed agent hands seed exactly the deps object it always did.
-      ...(this.ontology !== undefined && { ontology: this.ontology }),
+      ...(this.ontology !== undefined && {
+        ontology: this.ontology,
+        ontologyTools: () => this.ontologyTools,
+      }),
       // The conversation's inherited skill cursor (SG-C). Consumed (cleared)
       // on every run; HONORED only when the mounted graph declared
       // `continuity: 'conversation'` — the same one-option-one-behavior gate
@@ -3807,6 +3814,10 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
     // call is a map that lies, and only the operator can fix it. Provider-
     // served tools are only met at dispatch and cannot be named here.
     if (this.ontology !== undefined) {
+      // The join (9.108.0): the same walk, collecting which skills declare
+      // each `via` name — `toolDeclaringSkills` is the registry's own fact,
+      // in declaration order; a name no skill declares is not in it.
+      const tools: Record<string, readonly string[]> = {};
       for (const [nodeId, node] of Object.entries(this.ontology.nodes)) {
         for (const held of node.sources ?? []) {
           for (const toolName of held.via ?? []) {
@@ -3817,9 +3828,12 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
                   `with .tool() or on a skill, or drop it from the node's \`via\`.`,
               );
             }
+            const owners = toolDeclaringSkills.get(toolName);
+            if (owners !== undefined && owners.length > 0) tools[toolName] = [...owners];
           }
         }
       }
+      this.ontologyTools = Object.keys(tools).length > 0 ? Object.freeze(tools) : undefined;
     }
     // A statically registered tool that declares `wants` on an agent with no
     // store is configuration that lies: every call would be refused at

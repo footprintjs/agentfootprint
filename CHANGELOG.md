@@ -5,6 +5,27 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [9.108.0] - 2026-09-17
+
+### Added — the map meets the skills: which skill declares the tool that reads a term
+
+- **`AgentState.ontology.tools`** — at build, beside the `via` registry check, the agent reads the
+  registry's own `toolDeclaringSkills` for every tool the map names and writes tool → skill ids on
+  the record, present only when some `via` name is a skill's (a map naming only static `.tool()`
+  registrations writes the 9.106.0 record). The served piece prints the join beside the tool —
+  `via vm_backup_status [skill: backup-check]`, `[skills: a, b]` when shared — under one new
+  header sentence stating the convention; `ONTOLOGY_INSTRUCTION` v3 adds: where a tool is named
+  with the skill that declares it, that skill id is what `read_skill` takes. Nothing inferred:
+  the registry is the one owner of the fact and the piece quotes it.
+- **`OntologyJoin`** (`agentfootprint/ontology`) — `ontologyPiece(spec, { tools?, hiddenSkillIds? })`.
+  The hidden-skill law every model-facing sentence applies (`hiddenSkillIds`, the roster's
+  sole-owner rule) applies at compose time, never to the record: a hidden skill's id is omitted,
+  a tool every declaring skill of which is hidden is omitted whole, a static tool is never
+  filtered. `servedAt` rebuilds from the record's `tools` and the epoch's `hiddenSkillIds`, so the
+  receipt agrees byte for byte under a role that sees less (pinned end to end). Reference
+  `agent-ontology` regenerated alone (its one tool is static, so the join is absent and only the
+  header sentence and the instruction moved); the nineteen others untouched.
+
 ## [9.107.0] - 2026-09-17
 
 ### Changed — the ontology's ask is a named value, and its wording no longer makes the model cite the map

@@ -361,3 +361,51 @@ describe('ontologyPiece — no sentence the library wrote about the domain', () 
     }
   });
 });
+
+describe('ontologyPiece — the tool → skill join (9.108.0)', () => {
+  const held = (join: Parameters<typeof ontologyPiece>[1]) =>
+    ontologyPiece(defineOntology(SPEC), join).rawContent.split('\n\n')[4]!.split('\n')[1];
+
+  it('no join: the bare tool names — the 9.106.0 line', () => {
+    expect(held(undefined)).toBe('port ← inventory via lookup_port, list_ports · every port');
+    expect(held({})).toBe('port ← inventory via lookup_port, list_ports · every port');
+  });
+
+  it('a tool one skill declares carries [skill: id]; two skills, [skills: a, b] in declaration order; a static tool stays bare', () => {
+    expect(held({ tools: { lookup_port: ['ports'] } })).toBe(
+      'port ← inventory via lookup_port [skill: ports], list_ports · every port',
+    );
+    expect(held({ tools: { lookup_port: ['ports', 'audit'], list_ports: ['audit'] } })).toBe(
+      'port ← inventory via lookup_port [skills: ports, audit], list_ports [skill: audit] · every port',
+    );
+  });
+
+  it('a hidden skill id is omitted from the bracket; a tool whose every declaring skill is hidden is omitted whole (sole-owner rule)', () => {
+    const tools = { lookup_port: ['ports', 'audit'], list_ports: ['audit'] };
+    expect(held({ tools, hiddenSkillIds: ['audit'] })).toBe(
+      'port ← inventory via lookup_port [skill: ports] · every port',
+    );
+    expect(held({ tools, hiddenSkillIds: ['ports', 'audit'] })).toBe(
+      'port ← inventory · every port',
+    );
+    // Hidden ids never touch a tool no skill declares.
+    expect(held({ tools: { lookup_port: ['ports'] }, hiddenSkillIds: ['ports'] })).toBe(
+      'port ← inventory via list_ports · every port',
+    );
+  });
+
+  it('the header states the bracket convention once, as a constant, naming no skill', () => {
+    const header = ontologyPiece(defineOntology(SPEC), {
+      tools: { lookup_port: ['ports'] },
+    }).rawContent.split('\n\n')[0]!;
+    expect(header).toContain('A tool named with a skill in brackets is declared by that skill.');
+    expect(header).not.toContain('ports');
+  });
+
+  it('is deterministic under a join: the same join serves the same bytes', () => {
+    const join = { tools: { lookup_port: ['ports'] }, hiddenSkillIds: [] };
+    expect(ontologyPiece(defineOntology(SPEC), join).rawContent).toBe(
+      ontologyPiece(defineOntology(SPEC), { ...join }).rawContent,
+    );
+  });
+});

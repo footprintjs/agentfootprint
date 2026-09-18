@@ -935,9 +935,11 @@ function answerAskOf(value: unknown): FindingsAnswerAsk {
  * every agent without `.ontology()` — composes nothing, which is what the
  * wire did (`callLLM.ts · buildCallLLMStage`, under `deps.ontology`).
  */
-function ontologyOf(value: unknown): OntologyRecord['spec'] | undefined {
+function ontologyOf(
+  value: unknown,
+): { spec: OntologyRecord['spec']; tools?: OntologyRecord['tools'] } | undefined {
   if (value === null || typeof value !== 'object') return undefined;
-  const spec = (value as { spec?: unknown }).spec;
+  const { spec, tools } = value as { spec?: unknown; tools?: unknown };
   if (spec === null || typeof spec !== 'object') return undefined;
   const { nodes, sources } = spec as { nodes?: unknown; sources?: unknown };
   if (
@@ -948,7 +950,22 @@ function ontologyOf(value: unknown): OntologyRecord['spec'] | undefined {
   ) {
     return undefined;
   }
-  return spec as OntologyRecord['spec'];
+  // The tool → skills join (9.108.0), taken as the record holds it — a
+  // record without the key (9.106.0, or a map naming only static tools)
+  // composes the bytes it always did.
+  const join = toolsJoinOf(tools);
+  return { spec: spec as OntologyRecord['spec'], ...(join !== undefined && { tools: join }) };
+}
+
+/** `tools` narrowed by shape: string → string[]; anything else is no join. */
+function toolsJoinOf(value: unknown): OntologyRecord['tools'] | undefined {
+  if (value === null || typeof value !== 'object' || Array.isArray(value)) return undefined;
+  const out: Record<string, readonly string[]> = {};
+  for (const [name, ids] of Object.entries(value as Record<string, unknown>)) {
+    if (Array.isArray(ids) && ids.every((id) => typeof id === 'string'))
+      out[name] = ids as string[];
+  }
+  return Object.keys(out).length > 0 ? out : undefined;
 }
 
 function wantsMapOf(value: unknown): ReadonlyMap<string, readonly string[]> | undefined {
@@ -1094,8 +1111,17 @@ function viewOf(location: EpochLocation): ServedView {
   // RECORD, never from the receipt this view is checked against). No
   // `.ontology()` ⇒ no key ⇒ no piece, and the rebuild is the bytes it
   // always was.
-  const ontologySpec = ontologyOf(readRunConstant(location, 'ontology'));
-  const ontology = ontologySpec === undefined ? undefined : ontologyPiece(ontologySpec);
+  const ontologyRecord = ontologyOf(readRunConstant(location, 'ontology'));
+  // The hidden skill ids the call was composed under (9.108.0) — a per-epoch
+  // key the tools slot publishes, read at the call as the stage read it.
+  const hiddenAtCall = readAtCall(location, 'hiddenSkillIds') as readonly string[] | undefined;
+  const ontology =
+    ontologyRecord === undefined
+      ? undefined
+      : ontologyPiece(ontologyRecord.spec, {
+          ...(ontologyRecord.tools !== undefined && { tools: ontologyRecord.tools }),
+          ...(hiddenAtCall !== undefined && { hiddenSkillIds: hiddenAtCall }),
+        });
 
   // ── the system prompt, joined ──────────────────────────────────────────
   // Injections, then the recovery piece, then the ontology piece, then the

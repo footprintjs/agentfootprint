@@ -507,7 +507,14 @@ export function buildCallLLMStage(
       const record = scope.ontology as OntologyRecord | undefined;
       if (record !== undefined) {
         const { ontologyPiece } = await import('../../../ontology/serve.js');
-        ontologyPieceRecord = ontologyPiece(record.spec);
+        // The join (9.108.0): the record's tool → skills map and this
+        // iteration's hidden skill ids — the same filter every model-facing
+        // sentence applies, so the piece names no skill the caller may not see.
+        const hidden = scope.hiddenSkillIds as readonly string[] | undefined;
+        ontologyPieceRecord = ontologyPiece(record.spec, {
+          ...(record.tools !== undefined && { tools: record.tools }),
+          ...(hidden !== undefined && { hiddenSkillIds: hidden }),
+        });
         typedEmit(scope, 'agentfootprint.ontology.served', {
           iteration,
           id: record.id,

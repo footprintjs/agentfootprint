@@ -40,6 +40,7 @@ import {
   servedViews,
 } from '../../../src/index.js';
 import { defineInstruction, defineSkill } from '../../../src/injection-engine.js';
+import { PermissionPolicy } from '../../../src/security/PermissionPolicy.js';
 import { messageDigestInput } from '../../../src/lib/time-travel/index.js';
 import type { LLMRequest, LLMResponse } from '../../../src/adapters/types.js';
 import type { AgentState } from '../../../src/core/agent/types.js';
@@ -505,6 +506,139 @@ describe('the declared ontology — the builder door', () => {
     await agent.run({ message: 'go' });
     expect(wire[0]!.systemPrompt!.endsWith(PIECE)).toBe(true);
     expect(wire[0]!.systemPrompt).not.toContain(ONTOLOGY_INSTRUCTION);
+  });
+});
+
+// ─── 6b. the tool → skill join (9.108.0) ─────────────────────────────
+
+describe('the declared ontology — the tool → skill join', () => {
+  const skillWith = (id: string, ...names: string[]) =>
+    defineSkill({
+      id,
+      description: `${id} skill`,
+      body: `${id.toUpperCase()}_BODY`,
+      tools: names.map(tool),
+    } as never);
+  /** The map's `port` held via a tool a SKILL declares (`skill_lookup`) beside the static `lookup_port`. */
+  const MAP_VIA_SKILL: Ontology = defineOntology({
+    ...SPEC,
+    nodes: {
+      ...SPEC.nodes,
+      port: {
+        meaning: 'a physical switch port',
+        sources: [
+          { source: 'inventory', via: ['lookup_port', 'skill_lookup'], coverage: 'all ports' },
+        ],
+      },
+    },
+  });
+  const joined: Build = (a) =>
+    a
+      .system('bot')
+      .tool(tool('lookup_port'))
+      .skill(skillWith('ports', 'skill_lookup'))
+      .ontology(MAP_VIA_SKILL);
+
+  it('the record carries `tools` — only the via names some skill declares, in declaration order', async () => {
+    const r = await run('dynamic', SCRIPT, joined);
+    expect(stateOf(r).ontology?.tools).toEqual({ skill_lookup: ['ports'] });
+    expect(writesOf(r, 'ontology')).toBe(1);
+  });
+
+  it('the piece names the skill beside the tool on every call, and the rebuild composes the same bytes', async () => {
+    const r = await run('dynamic', SCRIPT, joined);
+    for (const view of servedViews(r.snapshot)) {
+      const text = ontologyPieceOf(r, view.epoch)[0]!.text;
+      expect(text).toContain(
+        'port ← inventory via lookup_port, skill_lookup [skill: ports] · all ports',
+      );
+      const sent = r.wire[view.epoch - 1]!;
+      expect(sent.systemPrompt).toBe(view.system.text);
+      const receipt = receiptAt(r.snapshot, view.epoch)!;
+      expect(receiptHash(receipt.basis.runId, view.system.text)).toBe(receipt.system.hash);
+    }
+  });
+
+  it('a map naming only static tools writes no `tools` key and serves the bare names — the 9.106.0 record', async () => {
+    const r = await run('dynamic', SCRIPT, armed);
+    expect(stateOf(r).ontology).not.toHaveProperty('tools');
+    expect(ontologyPieceOf(r, 1)[0]!.text).toContain(
+      'port ← inventory via lookup_port · all ports',
+    );
+    expect(ontologyPieceOf(r, 1)[0]!.text).not.toContain('[skill');
+  });
+
+  it('a skill two skills share is listed under both, in declaration order', async () => {
+    const shared = tool('skill_lookup');
+    const r = await run('dynamic', SCRIPT, (a) =>
+      a
+        .system('bot')
+        .tool(tool('lookup_port'))
+        .skill(defineSkill({ id: 'ports', description: 'p', body: 'P', tools: [shared] } as never))
+        .skill(defineSkill({ id: 'audit', description: 'a', body: 'A', tools: [shared] } as never))
+        .ontology(MAP_VIA_SKILL),
+    );
+    expect(stateOf(r).ontology?.tools).toEqual({ skill_lookup: ['ports', 'audit'] });
+    expect(ontologyPieceOf(r, 1)[0]!.text).toContain('skill_lookup [skills: ports, audit]');
+  });
+});
+
+describe('the declared ontology — the join under a role that may not see a skill', () => {
+  it('a hidden skill is omitted from the bracket, its sole-owned tool omitted whole, on the wire AND in the rebuild', async () => {
+    const MAP: Ontology = defineOntology({
+      ...SPEC,
+      nodes: {
+        ...SPEC.nodes,
+        port: {
+          meaning: 'a physical switch port',
+          sources: [{ source: 'inventory', via: ['lookup_port', 'open_lookup', 'secret_lookup'] }],
+        },
+      },
+    });
+    const policy = PermissionPolicy.fromRoles(
+      { support: ['read_skill', 'lookup_port', 'open_lookup', 'secret_lookup'] },
+      'support',
+      { skills: { support: ['open'] } },
+    );
+    const { provider, wire } = scripted(SCRIPT);
+    const agent = Agent.create({
+      provider: provider as never,
+      model: 'mock',
+      maxIterations: 8,
+      permissionChecker: policy,
+    })
+      .system('bot')
+      .tool(tool('lookup_port'))
+      .skill(
+        defineSkill({
+          id: 'open',
+          description: 'o',
+          body: 'O',
+          tools: [tool('open_lookup')],
+        } as never),
+      )
+      .skill(
+        defineSkill({
+          id: 'secret',
+          description: 's',
+          body: 'S',
+          tools: [tool('secret_lookup')],
+        } as never),
+      )
+      .ontology(MAP)
+      .build();
+    await agent.run({ message: 'which port is down?' });
+    const snapshot = agent.getSnapshot()!;
+    const state = snapshot.sharedState as Partial<AgentState>;
+    // The record holds the whole join — the filter is applied when the piece is composed, never to the record.
+    expect(state.ontology?.tools).toEqual({ open_lookup: ['open'], secret_lookup: ['secret'] });
+    expect(state.hiddenSkillIds).toEqual(['secret']);
+    for (const view of servedViews(snapshot)) {
+      const text = view.system.pieces.find((p) => p.source === 'ontology')!.text;
+      expect(text).toContain('port ← inventory via lookup_port, open_lookup [skill: open]');
+      expect(text).not.toContain('secret');
+      expect(wire[view.epoch - 1]!.systemPrompt).toBe(view.system.text);
+    }
   });
 });
 
