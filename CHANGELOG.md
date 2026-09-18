@@ -5,6 +5,17 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [9.109.1] - 2026-09-17
+
+### Fixed — the score's word rules, after the first scored arm
+
+- `scoreAbsence` no longer counts `declar…` as a map word: a host's own answer footer says
+  "declared by the tools that produced it", which counted the host's boilerplate as the model
+  citing the map. The map words are `ontology` and its forms and `map`/`maps`.
+- A declared id or alias now also meets its plural (`vmkernel_log` meets "vmkernel logs",
+  `change_record` meets "change records"): a plural is a form of the declared word, not another
+  word. Still whole-word, still declared strings only.
+
 ## [9.109.0] - 2026-09-17
 
 ### Added — the score: how a "no data" answer is measured, by declared strings, with no judge

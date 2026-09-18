@@ -18,7 +18,7 @@
  * THE LAW OF THE SCORE
  *   A check matches DECLARED STRINGS ONLY — a term's or a source's id and
  *   aliases, a tool's name — whole-word, case-insensitive, an `_` in an
- *   id standing for a space or a hyphen. Nothing fuzzier. So an answer that
+ *   id standing for a space or a hyphen, a plural `s` allowed. Nothing fuzzier. So an answer that
  *   says "UCS Manager" when the source's id is `influx_ucs` and no alias says
  *   "UCS Manager" scores NO, and that is the point: the declaration must
  *   carry the words people use, because those are the words the model
@@ -83,9 +83,9 @@ export interface AbsenceScore {
   /** The library's unsupported-values count, as handed in; `undefined` when the record carried none. */
   readonly unsupportedValues: number | undefined;
   /**
-   * The words of the map the answer used on the person — `ontology`, `map`,
-   * `declaration` and their forms, the header's own vocabulary the ask says
-   * to keep from the person. A wording metric, reported as the words found.
+   * The words of the map the answer used on the person — `ontology` and its
+   * forms, `map` and `maps`: the header's own vocabulary the ask says to keep
+   * from the person. A wording metric, reported as the words found.
    */
   readonly mapWords: readonly string[];
 }
@@ -103,11 +103,13 @@ export interface AbsenceSummary {
 
 /**
  * The header's own words, and the ask's: what the piece calls itself and
- * what the person should not hear. Each a stem, matched as a whole word or
- * a word beginning (`ontology`, `ontological`; `map`, `maps` — not `mapping`
- * as a verb is a judgment this list does not make, so `map` is exact).
+ * what the person should not hear. `ontology` and its forms; `map` exact
+ * (with its plural) — `mapping` as a verb is a judgment this list does not
+ * make. NOT `declar…` (9.109.1): a host's own answer footer says "declared
+ * by the tools that produced it", so that stem counted the host's boilerplate
+ * as the model citing the map — a false positive the first scored arm showed.
  */
-const MAP_WORDS: readonly RegExp[] = [/\bontolog\w*/gi, /\bmaps?\b/gi, /\bdeclar\w*/gi];
+const MAP_WORDS: readonly RegExp[] = [/\bontolog\w*/gi, /\bmaps?\b/gi];
 
 /**
  * Score one turn against the served map and the bench's expectation.
@@ -237,12 +239,14 @@ function mentions(answer: string, names: readonly string[]): boolean {
 /**
  * One declared string as a whole-word, case-insensitive pattern; an `_` in
  * the id stands for a space, a hyphen or itself, so `vmkernel_log` meets
- * "vmkernel log" and `esxi_host` meets "ESXi host". Everything else is
- * escaped: a declared string is matched as itself.
+ * "vmkernel log" and `esxi_host` meets "ESXi host"; a trailing `s` is
+ * allowed (9.109.1), so "vmkernel logs" and "change records" meet their
+ * ids — a plural is a form of the declared word, not another word.
+ * Everything else is escaped: a declared string is matched as itself.
  */
 function patternOf(name: string): RegExp {
   const escaped = name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&').replace(/_/g, '[ _-]');
-  return new RegExp(`(?<![\\w])${escaped}(?![\\w])`, 'i');
+  return new RegExp(`(?<![\\w])${escaped}s?(?![\\w])`, 'i');
 }
 
 function wordsOf(answer: string): string[] {

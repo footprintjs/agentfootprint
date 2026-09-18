@@ -210,8 +210,8 @@ and nothing from a model:
 
 - **named the gap** — the answer contains the expected term's or source's id
   or one of its declared aliases, whole-word, case-insensitive, an `_` in an
-  id standing for a space or a hyphen (`vmkernel_log` meets "vmkernel log").
-  Nothing fuzzier.
+  id standing for a space or a hyphen, a plural `s` allowed (`vmkernel_log`
+  meets "vmkernel log" and "vmkernel logs"). Nothing fuzzier.
 - **named where** — the answer contains a declared neighbour of the gap: a
   source holding the term, a tool reading it, a term one relation away; for
   a source, a term it holds or a tool reading through it. `undefined` when
@@ -219,9 +219,10 @@ and nothing from a model:
   the tally counts only the turns that had the check.
 - **tool calls**, **unsupported values** (the library's own
   `AgentState.unsupportedValues` count, when the record carries one) — counts.
-- **map words** — `ontology`, `map`, `declar…`: the header's own vocabulary
-  the ask tells the model to keep from the person, reported as the words
-  found. A wording metric.
+- **map words** — `ontology` and its forms, `map`/`maps`: the header's own
+  vocabulary the ask tells the model to keep from the person, reported as
+  the words found. A wording metric. Not `declar…`: a host's answer footer
+  says "declared by the tools", which is not the model citing the map.
 
 The strictness is the point. An answer that says "Cohesity" when the source
 is `influx_cohesity` scores NO — unless the author declares

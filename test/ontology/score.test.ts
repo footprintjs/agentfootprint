@@ -81,11 +81,18 @@ describe('scoreAbsence — naming the gap', () => {
     expect(scoreAbsence(MAP, turn('the vmkernel-log'), { gap: 'vmkernel_log' }).namedGap).toBe(
       true,
     );
-    // A longer word containing the id is not the id.
+    // A plural is a form of the word (9.109.1); a longer word containing the id is not the id.
+    expect(
+      scoreAbsence(MAP, turn('vmkernel logs are not kept'), { gap: 'vmkernel_log' }).namedGap,
+    ).toBe(true);
     expect(scoreAbsence(MAP, turn('vmkernel_logs_archive'), { gap: 'vmkernel_log' }).namedGap).toBe(
       false,
     );
+    // "host logs" is the plural of the declared alias `host log`; "host logging" is not.
     expect(scoreAbsence(MAP, turn('No host logs here.'), { gap: 'vmkernel_log' }).namedGap).toBe(
+      true,
+    );
+    expect(scoreAbsence(MAP, turn('No host logging here.'), { gap: 'vmkernel_log' }).namedGap).toBe(
       false,
     );
   });
@@ -188,9 +195,15 @@ describe('scoreAbsence — the counts and the map words', () => {
 
   it("the map words: the header's own vocabulary, reported as the words found, once each", () => {
     expect(
-      scoreAbsence(MAP, turn('The ontology declares it; the map says so; the declaration…'))
+      scoreAbsence(MAP, turn('The ontology declares it; the maps say so; the declaration…'))
         .mapWords,
-    ).toEqual(['ontology', 'map', 'declares', 'declaration']);
+    ).toEqual(['ontology', 'maps']);
+    // `declar…` is NOT a map word (9.109.1): a host's answer footer says
+    // "declared by the tools that produced it", which is not the model citing the map.
+    expect(
+      scoreAbsence(MAP, turn('Coverage of this answer — declared by the tools that produced it'))
+        .mapWords,
+    ).toEqual([]);
     expect(scoreAbsence(MAP, turn('Not collected here. Check the ESXi host.')).mapWords).toEqual(
       [],
     );
