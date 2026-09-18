@@ -460,3 +460,41 @@ ledger+ask           10            0.783        0.200     0.620              0.8
   widest; `ledger+ask` lost fact fidelity this time (0.783 against 0.950 in the
   fifth run), so ten runs still swing by a run or two.
 
+## 9.110.0 — the contingent column and cache reads, first hosted run (2026-09-18)
+
+Same harness, seed 7, five runs per condition, 6 facts + 12 noise records,
+Haiku 4.5 at temperature 0 and Sonnet 5 with no temperature sent. The two
+new columns beside the old ones; `contingent` = contingent rows per run
+(9.110.0, both doors armed in every armed condition), `cached %` =
+cache-read tokens over input + cache-read, summed off `stream.llm_end`.
+
+| condition | Haiku: facts / noise cited / declared / standing-acc / contingent / cached % | Sonnet: facts / noise cited / declared / standing-acc / contingent / cached % |
+|---|---|---|
+| findings off | 1.000 / 0.000 / – / – / – / 0.0 | 1.000 / 0.000 / – / – / – / 0.0 |
+| ledger-and-facts | 1.000 / 0.000 / 0.100 / 0.667 / 0.00 / 0.0 | 1.000 / 0.000 / 0.300 / 0.593 / 0.00 / 2.4 |
+| ledger-only | 1.000 / 0.000 / 0.044 / 1.000 / 0.00 / 0.0 | 1.000 / 0.000 / 0.133 / 0.583 / 0.00 / 3.8 |
+| ledger+ask | 1.000 / 0.000 / 0.022 / 1.000 / 0.00 / 0.0 | 1.000 / 0.000 / 0.100 / 0.556 / 0.00 / 4.0 |
+
+Read honestly:
+
+- **The cell is too easy to separate anything**: facts 1.000 and noise cited
+  0.000 in every cell on both models, including with the ledger off. The
+  earlier heavier cells (above) are where the ledger's effect showed.
+- **Contingent 0.00 everywhere.** Neither model used a value from a result
+  it had set aside, so the rule had nothing to flag. This is the check
+  running clean on real output — it is NOT evidence that it catches real
+  towers. That needs a cell built to provoke one: a value the answer needs
+  that appears only in a record the model will declare noise (the mock's
+  `ledger+tower` condition is that shape, scripted). A paid run, not taken
+  here.
+- **Cache reads are near zero** (Haiku 0 %, Sonnet 2.4–4.0 %): the bench
+  sets no cache markers, so nearly every call pays full price. The lever
+  Abramov's 95 % pointed at is unpulled in this harness — the next small
+  change is to arm the library's caching in the bench and re-read the
+  column.
+- **Declared standings are low here** (Haiku 0.02–0.10, Sonnet 0.10–0.30)
+  against 0.9 on Sonnet in the earlier heavy cell. Different cell size and
+  noise shape; recorded, not explained.
+
+Cost of this run: 4 conditions × 5 runs × 19 calls per model, uncached.
+
