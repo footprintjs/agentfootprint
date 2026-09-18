@@ -291,12 +291,20 @@ describe('fromSkos — every refusal is one SkosError with a code, the IRI(s) an
     const doc = fixture();
     (doc['@graph'] as unknown[]).push({
       '@id': `${EX}named-graph-1`,
-      '@graph': [{ '@id': `${EX}hidden`, '@type': 'skos:Concept', 'skos:prefLabel': { '@value': 'Hidden', '@language': 'en' } }],
+      '@graph': [
+        {
+          '@id': `${EX}hidden`,
+          '@type': 'skos:Concept',
+          'skos:prefLabel': { '@value': 'Hidden', '@language': 'en' },
+        },
+      ],
     });
     const error = refusal(() => readSkos(doc));
     expect(error.code).toBe('ERR_SKOS_NAMED_GRAPH');
     expect(error.message).toBe(
-      `ERR_SKOS_NAMED_GRAPH: node ${doc['@graph'].length - 1} ('${EX}named-graph-1') is a named graph; expected a flat "@graph" of node objects — flatten the document first.`,
+      `ERR_SKOS_NAMED_GRAPH: node ${
+        doc['@graph'].length - 1
+      } ('${EX}named-graph-1') is a named graph; expected a flat "@graph" of node objects — flatten the document first.`,
     );
     expect(error.iris).toEqual([`${EX}named-graph-1`]);
   });

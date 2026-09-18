@@ -189,7 +189,9 @@ function checkNodes(raw: readonly unknown[]): readonly JsonLdNode[] {
     if ('@graph' in node) {
       throw new SkosError(
         'ERR_SKOS_NAMED_GRAPH',
-        `node ${i}${typeof node['@id'] === 'string' ? ` ('${node['@id']}')` : ''} is a named graph; expected a flat "@graph" of node objects — flatten the document first.`,
+        `node ${i}${
+          typeof node['@id'] === 'string' ? ` ('${node['@id']}')` : ''
+        } is a named graph; expected a flat "@graph" of node objects — flatten the document first.`,
         typeof node['@id'] === 'string' ? [node['@id']] : [],
       );
     }
