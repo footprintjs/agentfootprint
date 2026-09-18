@@ -237,6 +237,32 @@
  * and the `requestMeasurement` sizes that grow with both. No message, no
  * tool, no gap, no other key.
  *
+ * 9.110.0: one new reference `agent-findings-contingent` (`.findings()`
+ * beside `.namesAndNumbersFromEvidence({ posture: 'assist' })` — the only
+ * reference with BOTH doors — over a probe whose results carry DATA tokens:
+ * call 2 rules `c1` out and passes `c1`'s value `fc1/7` as its own argument;
+ * a JSON answer declares `c2` noise and quotes `c2`'s value `fc2/9`); none
+ * of the 20 moved (the 20 run first on the wired 9.110.0 tree — 21/21 green,
+ * the reference directory untouched by git — copied aside, the one scenario
+ * generated alone with `-t agent-findings-contingent` under
+ * `AF_TOOLS_REFERENCE=update` (1 passed, 21 skipped), `cmp`-equal after).
+ * What it holds, read from its bytes: `findingsLedger` written three times
+ * — `[basis:c1]`, then `[standing:c1 ruled-out, basis:c2, contingent
+ * { declaredOn: { toolCallId: 'c2' }, value: 'fc1/7', carriers: [{ c1,
+ * ruled-out }] }]` (the dispatch moment, after the basis row and before
+ * `tool_start`), then `[standing:c2 noise, contingent { declaredOn:
+ * 'answer', value: 'fc2/9', carriers: [{ c2, noise }] }]` on the route's
+ * commit (the answer moment, after the gate's verdict); the served piece on
+ * epoch 3 carrying `contingent (read off the record):\ntool:c2 used fc1/7
+ * from tool:c1 (ruled-out)` between the `limitations` bucket and the
+ * `undeclared:` line;
+ * the instruction's eleventh line (`FINDINGS_CONTINGENT_LINE`) at every
+ * site a piece is recorded, on every epoch — and on NO `.findings()`-only
+ * reference (`agent-findings`, `-window`, `-judge` carry ten lines still);
+ * no `unsupportedValues` (every value the answer states was read from a
+ * result) and no `totalCacheReadTokens` (the mock reports no cache reads —
+ * the key is value-conditional and absent here by law).
+ *
  * Every scenario is a real run — the receipt-conformance shapes, each in the
  * configuration that has no name collision — and what is compared is the
  * whole `commitLog` plus `servedAt(k)` for every located epoch, after ONE
@@ -748,6 +774,69 @@ const SCENARIOS: Record<string, () => Promise<Snapshot>> = {
           .window(slidingWindow({ keepRecentTurns: 2 })),
       { maxIterations: 10 },
     ),
+  // The towers (9.110.0, `.findings()` beside `.namesAndNumbersFromEvidence()`)
+  // — the fifth armed scenario, and the only one with BOTH doors: a probe
+  // whose results carry DATA tokens; call 2 rules the first result out AND
+  // passes its value as an argument (the dispatch moment: one contingent
+  // row on `c2`, served back on the answer call under `contingent (read off
+  // the record):`);
+  // a JSON answer declaring the second result noise and quoting its value
+  // (the answer moment: one row `declaredOn: 'answer'`). The instruction
+  // carries `FINDINGS_CONTINGENT_LINE` here and on no `.findings()`-only
+  // reference. Generated ALONE with the 20 copied aside and `cmp`-equal after.
+  'agent-findings-contingent': () => {
+    const RESULTS: Record<string, string> = {
+      p1: 'fc1/7 state=down sw-01',
+      'fc1/7': 'fc2/9 state=up sw-01',
+    };
+    const probe = defineTool({
+      name: 'probe',
+      description: 'the probe tool',
+      inputSchema: { type: 'object', properties: { q: { type: 'string' } } },
+      execute: (args: Record<string, unknown>) =>
+        RESULTS[String(args.q)] ?? `nothing for ${String(args.q)}`,
+    } as never);
+    return agentRun(
+      'dynamic',
+      [
+        call('c1', 'probe', { q: 'p1', _findings: { basis: 'exploratory', expect: 'low' } }),
+        call('c2', 'probe', {
+          q: 'fc1/7',
+          _findings: {
+            basis: 'direct',
+            previous: [{ toolCallId: 'c1', standing: 'ruled-out', line: 'p1 is not the port' }],
+          },
+        }),
+        answer(
+          JSON.stringify({
+            done: true,
+            port: 'fc2/9',
+            _findings: { previous: [{ toolCallId: 'c2', standing: 'noise' }] },
+          }),
+        ),
+      ],
+      (a) =>
+        a
+          .system('bot')
+          .tool(probe)
+          .findings()
+          .namesAndNumbersFromEvidence({ posture: 'assist' })
+          .outputSchema(
+            {
+              parse: (value: unknown) => {
+                if (value === null || typeof value !== 'object' || Array.isArray(value))
+                  throw new Error('not an object');
+                const unknown = Object.keys(value as object).filter(
+                  (k) => k !== 'done' && k !== 'port',
+                );
+                if (unknown.length > 0) throw new Error(`unknown keys: ${unknown.join(',')}`);
+                return value as { done: boolean; port: string };
+              },
+            } as never,
+            { retries: 0 },
+          ),
+    );
+  },
   // Tool choice by classifier (9.105.0, `.toolChoice({ serve: { top: 2 } })`)
   // — the fourth armed scenario: four static tools and a skill (so
   // `read_skill` is a door), a scripted classifier ranking a different pair

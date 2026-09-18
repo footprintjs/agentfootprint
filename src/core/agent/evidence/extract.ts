@@ -45,11 +45,17 @@
  * identifiers look like" has better information than these heuristics.
  */
 
-import { countDigits, normalizeToken, tokenize } from './normalize.js';
+import { countDigits, lookupForms, normalizeToken, tokenize } from './normalize.js';
 import type { ResolvedEvidenceGate, UnsupportedValue } from './types.js';
 
-/** A value the answer asserts, and the rule that made it one. */
-export type Candidate = UnsupportedValue;
+/**
+ * A value the answer asserts, and the rule that made it one. `token` is the
+ * glued-unit spelling the value was read off (`1007us` for the value
+ * `1007`), present only when there was one — the lookup meets the result
+ * under that spelling too (`candidateForms`), and the index is never
+ * widened to do it (9.110.0).
+ */
+export type Candidate = UnsupportedValue & { readonly token?: string };
 
 /** Structural punctuation an identifier is allowed to be built from. */
 const STRUCTURAL = /[:_\-/.]/;
@@ -112,8 +118,12 @@ export function classifyToken(token: string, gate: ResolvedEvidenceGate): Candid
     : undefined;
   if (numeric !== undefined) {
     // A quantity — judged on its digits only, so `32G` and `47th` are prose
-    // while `41200iops` is still a reading.
-    return countDigits(numeric) >= gate.minDigits ? { value: numeric, shape: 'number' } : undefined;
+    // while `41200iops` is still a reading. The glued spelling rides along
+    // so the lookup can meet a result that carried it that way.
+    if (countDigits(numeric) < gate.minDigits) return undefined;
+    return withTail !== null && token !== numeric
+      ? { value: numeric, shape: 'number', token }
+      : { value: numeric, shape: 'number' };
   }
 
   // Rule 2 — an identifier: digits mixed with letters or structure, long
@@ -129,6 +139,24 @@ export function classifyToken(token: string, gate: ResolvedEvidenceGate): Candid
  * De-duplicated by value: a port named six times is one claim to ground, and
  * a correction that lists it six times reads like noise.
  */
+/**
+ * The spellings a candidate is looked up under: its value's forms
+ * (`lookupForms` — the `0x` rule), plus the glued-unit token's when the
+ * value was read off one. The LOOKUP side widens, the index never does: a
+ * result carrying `1007us` grounds an answer's `1007us`, while a result
+ * carrying `latency 2024ms` does not ground an answer's prose year `2024`
+ * — that candidate came from a bare token and asks for `2024` alone. The
+ * one place both the gate (`gate.ts · checkAnswer`) and the contingent
+ * check (`findings/contingent.ts`) take a candidate's forms from.
+ */
+export function candidateForms(candidate: Candidate): readonly string[] {
+  const forms = [...lookupForms(candidate.value)];
+  if (candidate.token !== undefined) {
+    for (const f of lookupForms(candidate.token)) if (!forms.includes(f)) forms.push(f);
+  }
+  return forms;
+}
+
 export function extractCandidates(
   answer: string,
   gate: ResolvedEvidenceGate,

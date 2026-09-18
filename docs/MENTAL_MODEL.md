@@ -447,14 +447,14 @@ Swarm — see §1 for their recipes. None add primitives.
 **Pipeline:** footprintjs 3 channels → recorder bridges → **`EventDispatcher`** (one per Runner,
 O(1) hash-dispatch, typed `on/off/once` + domain-wildcards + `'*'`, error-isolated) → consumers/Lens.
 
-**119 typed events / 27 domains**, all `agentfootprint.*`: `composition.*`(8) `agent.*`(14 — incl.
+**120 typed events / 27 domains**, all `agentfootprint.*`: `composition.*`(8) `agent.*`(14 — incl.
 `run_configured`, the run-configuration manifest; `budget_exhausted`, what a
 turn that ran out of budget then DID about it; and `grounding_nudged`, the
 staged-refs nudge's one record — the late line itself is request-only)
 `stream.*`(8 — incl. `tool_progress`, a long tool reporting mid-call) `context.*`(5 — the thesis) `memory.*`(5) `tools.*`(16) `validation.*`(1) `skill.*`(11 — incl. `graph_declared`, the author's map as data) `permission.*`(4)
 `credential.*`(4) `cost.*`(2) `eval.*`(2) `error.*`(4) `reliability.*`(3) `resilience.*`(2 — the
 outputSchema fallback ladder; dispatched directly, not via `typedEmit`) `pause.*`(2)
-`checkin.*`(2) `middleware.*`(1) `findings.*`(4 — the model's own basis and standing on its tool results under `.findings()`, plus a configured judge's verdict and its failure) `tool_choice.*`(3 — a classifier's pick of which tool beside every model call under `.toolChoice()`: the pick, the outcome, the failure) `ontology.*`(1 — the declared map served on a model call under `.ontology()`: its id, version, hash and counts) `embedding.*`(1) `risk.*`(1) `fallback.*`(1) `artifacts.*`(5 — the claim-check lifecycle) `map.*`(2 — the mount kernel's engagement standing: engaged / parked) `integrity.*`(3 — detected context errors filed as findings, the run-boundary disposition rows, plus the external-ground excusals the app vouched for).
+`checkin.*`(2) `middleware.*`(1) `findings.*`(5 — the model's own basis and standing on its tool results under `.findings()`, a configured judge's verdict and its failure, and a contingent value — one the model used that came only from results it had itself set aside — under `.findings()` beside the evidence gate) `tool_choice.*`(3 — a classifier's pick of which tool beside every model call under `.toolChoice()`: the pick, the outcome, the failure) `ontology.*`(1 — the declared map served on a model call under `.ontology()`: its id, version, hash and counts) `embedding.*`(1) `risk.*`(1) `fallback.*`(1) `artifacts.*`(5 — the claim-check lifecycle) `map.*`(2 — the mount kernel's engagement standing: engaged / parked) `integrity.*`(3 — detected context errors filed as findings, the run-boundary disposition rows, plus the external-ground excusals the app vouched for).
 Emitted via `typedEmit(scope,name,payload)` (compile-time-safe) → EmitRecorder →
 **`EmitBridge`** (prefix-match per domain) → `buildEventMeta` enriches
 (`runtimeStageId, subflowPath, runId, wallClockMs, compositionPath, turnIndex, iterIndex`) → dispatch.

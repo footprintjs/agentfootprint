@@ -23,7 +23,7 @@
  * reading. Every run serves the SAME records in an order drawn from a seeded
  * PRNG — run r's order is the same in every condition (a paired comparison;
  * the seed is printed, and `AF_SHUFFLE_SEED` reproduces it) — and the model
- * answers. Four conditions, RUNS runs each:
+ * answers. Four conditions on a real model — five on the mock — RUNS runs each:
  *
  *   findings off       `.findings()` not called — the wire as it is today
  *   ledger-and-facts   `.findings({ serve: 'ledger-and-facts' })` — the default dial
@@ -39,6 +39,17 @@
  *                      echoes — the smoke laws are the armed laws, unchanged, and the
  *                      only thing the mock proves here is that the row runs and the
  *                      ask costs the echo nothing. The number is a real-model number.
+ *   ledger+tower       MOCK ONLY (9.110.0): `ledger-and-facts` with a scripted answer that
+ *                      QUOTES a value from a result the script itself declared noise — the
+ *                      SKU on the header line of the first noise record it set aside (the
+ *                      tower the contingent check exists to record). The `contingent` column
+ *                      reads 1 there and 0 on the clean rows; a real model is not scripted,
+ *                      so the row is not built for one.
+ *
+ * Every ARMED condition also arms `.namesAndNumbersFromEvidence({ posture: 'assist' })`
+ * since 9.110.0 — the contingent check runs under BOTH doors and nowhere else, and
+ * `'assist'` records without changing one wire byte, so the armed rows' other columns
+ * are the numbers they were.
  *
  * THE AXES (env; the real-model page's matrix — docs/design/2026-09-findings-ledger-real-model.md):
  *
@@ -103,6 +114,18 @@
  *   judge-tokens        mean per run of input+output tokens the judge reported (the
  *                       mock reports an estimate of chars/4 + 8, and says so here).
  *   judge-latency-ms    mean latency per judgment, as the adapter measured it.
+ *   contingent          (9.110.0) contingent rows per run — the mean over runs of the
+ *                       `kind: 'contingent'` rows on `agent.findings()`: a value the model
+ *                       USED (in the answer, or as a later call's argument) whose every
+ *                       carrier it had itself declared open, noise or ruled-out. Read off the
+ *                       record; `-` on the off row (no ledger). The TOWER RATE the design
+ *                       page asks for on Haiku vs Sonnet is this column on a hosted run.
+ *   cache-read          (9.110.0) mean per run of `usage.cacheRead` summed over the run's
+ *                       `agentfootprint.stream.llm_end` payloads; `—` when NO call of the
+ *                       condition reported cache reads (the mock, a local model) — never 0,
+ *                       which would claim a measurement nobody made.
+ *   cached %            cacheRead / (input + cacheRead) over the condition's calls, the
+ *                       share of the prompt that came from cache; `—` under the same rule.
  *
  * PROVIDERS. `AF_SHUFFLE_PROVIDER=mock` (the default) SCRIPTS the model: it
  * declares a basis on every call and the previous result's standing (a fact
@@ -215,6 +238,12 @@ const CONDITIONS = [
   // The default serve mode with the answer-turn ask (9.103.0). On the mock
   // this row is `ledger-and-facts` to the digit (the header says why).
   { label: 'ledger+ask', armed: true, serve: 'ledger-and-facts', answerAsk: 'quote-facts' },
+  // The tower (9.110.0), mock only: the scripted answer quotes the SKU of a
+  // result the script declared noise, so the `contingent` column has a row
+  // that must read 1 — the harness proving the column, not a model.
+  ...(PROVIDER === 'mock'
+    ? [{ label: 'ledger+tower', armed: true, serve: 'ledger-and-facts', tower: true }]
+    : []),
 ];
 
 // ─── The cell ──────────────────────────────────────────────────────────
@@ -433,6 +462,12 @@ function readingIn(line) {
   return node && value ? { node: `node-${node[1]}`, value: value[1] } : undefined;
 }
 
+/** The first SKU on a line of served text — a noise record's header value. */
+function skuIn(text) {
+  const m = /SKU-\d+/.exec(text);
+  return m ? m[0] : undefined;
+}
+
 // ─── The scripted model (mock) ─────────────────────────────────────────
 
 /**
@@ -475,7 +510,7 @@ function declarationFor(req, k) {
  * serves it) and the tool messages (verbatim results; a collapsed ticket
  * carries no value). An echo, so the columns say what the wire served.
  */
-function echoAnswer(req) {
+function echoAnswer(req, towerSku) {
   const served = [
     req.systemPrompt ?? '',
     ...req.messages.filter((m) => m.role === 'tool').map((m) => m.content),
@@ -487,23 +522,40 @@ function echoAnswer(req) {
     if (reading) claims.set(reading.node, reading.value);
     for (const m of line.matchAll(/SKU-\d+/g)) skus.add(m[0]);
   }
+  // The tower (9.110.0): a value the script read earlier, set aside as
+  // noise, and quotes anyway — no longer on the wire (its result is a
+  // ticket), remembered from the declaration that set it aside.
+  if (towerSku !== undefined) skus.add(towerSku);
   const parts = [...claims].map(([node, value]) => `${node}: ${value}us`);
   if (skus.size > 0) parts.push(`also seen: ${[...skus].join(', ')}`);
   return parts.length > 0 ? parts.join('; ') : 'no readings were served';
 }
 
-/** A fresh scripted provider per run: n paging calls (declaring when armed), then the echo. */
-function scriptedMock(armed, n) {
+/**
+ * A fresh scripted provider per run: n paging calls (declaring when armed),
+ * then the echo. Under `tower` the script remembers the SKU of the FIRST
+ * result it declares noise and the echo quotes it — the one value in the
+ * answer that came only from a set-aside result.
+ */
+function scriptedMock(armed, n, tower = false) {
   let calls = 0;
+  let towerSku;
   return mock({
     respond: (req) => {
       if (calls < n) {
         calls += 1;
         const args = { cursor: calls - 1 };
-        if (armed) args._findings = declarationFor(req, calls);
+        if (armed) {
+          args._findings = declarationFor(req, calls);
+          const previous = args._findings.previous?.[0];
+          if (tower && towerSku === undefined && previous?.standing === 'noise') {
+            const last = [...req.messages].reverse().find((m) => m.role === 'tool');
+            towerSku = last === undefined ? undefined : skuIn(last.content);
+          }
+        }
         return { toolCalls: [{ id: `c${calls}`, name: 'next_record', args }] };
       }
-      return { content: echoAnswer(req) };
+      return { content: echoAnswer(req, tower ? towerSku : undefined) };
     },
   });
 }
@@ -584,8 +636,8 @@ function assertEnv() {
 }
 
 /** A fresh provider per run — the mock keeps a call counter, and a real one keeps nothing across runs. */
-function providerFor(armed, n) {
-  if (PROVIDER === 'mock') return { provider: scriptedMock(armed, n), model: 'mock' };
+function providerFor(armed, n, tower = false) {
+  if (PROVIDER === 'mock') return { provider: scriptedMock(armed, n, tower), model: 'mock' };
   if (PROVIDER === 'anthropic') {
     // The package's own Anthropic adapter; the key is read by the provider
     // (`AnthropicProvider` · `ANTHROPIC_API_KEY`), never by this script.
@@ -731,7 +783,7 @@ function budgetFor(cell, records) {
 async function runOnce(condition, run, cell, records) {
   const order = orderFor(run, cell);
   const served = new Map();
-  const { provider, model } = providerFor(condition.armed, cell.n);
+  const { provider, model } = providerFor(condition.armed, cell.n, condition.tower === true);
   let b = Agent.create({
     provider,
     model,
@@ -741,13 +793,28 @@ async function runOnce(condition, run, cell, records) {
   }).tool(pagingTool(records, order, served));
   const judge = condition.armed ? judgeFor() : undefined;
   if (condition.armed) {
-    b = b.findings({
-      serve: condition.serve,
-      ...(condition.answerAsk !== undefined && { answerAsk: condition.answerAsk }),
-      ...(judge !== undefined && { judge }),
-    });
+    b = b
+      .findings({
+        serve: condition.serve,
+        ...(condition.answerAsk !== undefined && { answerAsk: condition.answerAsk }),
+        ...(judge !== undefined && { judge }),
+      })
+      // The contingent check's second door (9.110.0): `'assist'` records
+      // and changes no wire byte, so the other columns are what they were.
+      .namesAndNumbersFromEvidence({ posture: 'assist' });
   }
   const agent = b.build();
+  // Cache reads as a cost (9.110.0): summed off the `llm_end` payloads —
+  // `usage.cacheRead` is the provider's own number, absent when it reports
+  // none, and `reported` says whether ANY call of this run carried one.
+  const usage = { input: 0, cacheRead: 0, reported: false };
+  agent.on('agentfootprint.stream.llm_end', (e) => {
+    usage.input += e.payload.usage.input;
+    if (typeof e.payload.usage.cacheRead === 'number') {
+      usage.cacheRead += e.payload.usage.cacheRead;
+      usage.reported = true;
+    }
+  });
   const out = await agent.run({ message: questionFor(cell.n) });
   if (typeof out !== 'string') {
     throw new Error(`${condition.label} run ${run}: the agent paused instead of answering`);
@@ -769,9 +836,15 @@ async function runOnce(condition, run, cell, records) {
       : undefined;
   const truth = standingsAgainstTruth(standings, served);
   const judged = judgmentsAgainstTruth(ledger, served);
+  // The towers on the record (9.110.0): one row per value per moment.
+  const contingent = ledger.filter((r) => r.kind === 'contingent').length;
   return {
     ...score(out, records),
     declared: named.size / cell.n,
+    contingent,
+    inputTokens: usage.input,
+    cacheReadTokens: usage.cacheRead,
+    cacheReported: usage.reported,
     unknownIds: unknown.size,
     standingsNamed: truth.named,
     standingsRight: truth.right,
@@ -808,6 +881,7 @@ async function measure(condition, cell, records) {
           `    judge: ${r.judgeRight} of ${r.judgeNamed} judged results agree with the plant, ` +
             `${r.judgeAgree} of ${r.judgeBoth} with the actor, ${r.judgeTokens} tokens, ${r.judgeErrors} errors`,
         );
+      if (r.contingent > 0) console.log(`    contingent: ${r.contingent} row(s) on the record`);
     }
   }
   const mean = (key) => runs.reduce((s, r) => s + r[key], 0) / runs.length;
@@ -816,6 +890,7 @@ async function measure(condition, cell, records) {
   return {
     label: condition.label,
     armed: condition.armed,
+    tower: condition.tower === true,
     runs: runs.length,
     factsInAnswer: mean('factsInAnswer'),
     noiseCited: mean('noiseCited'),
@@ -828,18 +903,30 @@ async function measure(condition, cell, records) {
     judgeTokens: sum('judgeCount') > 0 ? mean('judgeTokens') : undefined,
     judgeLatencyMs: sum('judgeCount') > 0 ? sum('judgeLatencyMs') / sum('judgeCount') : undefined,
     judgeErrors: sum('judgeErrors'),
+    // `-` on the off row: no ledger, so no row could exist — not a zero.
+    contingent: condition.armed ? mean('contingent') : undefined,
+    // `—` unless some call reported cache reads: a number here is a
+    // measurement, and the mock makes none.
+    cacheRead: runs.some((r) => r.cacheReported) ? mean('cacheReadTokens') : undefined,
+    cachedShare: runs.some((r) => r.cacheReported)
+      ? sum('cacheReadTokens') / Math.max(1, sum('inputTokens') + sum('cacheReadTokens'))
+      : undefined,
   };
 }
 
 // ─── The tables ────────────────────────────────────────────────────────
 
 const fmt = (x, d = 3) => (x === undefined ? '-' : x.toFixed(d));
+/** A cost nobody measured prints as `—`, never as 0 (the cache-read law). */
+const fmtCost = (x, d = 0) => (x === undefined ? '—' : x.toFixed(d));
+const fmtShare = (x) => (x === undefined ? '—' : `${(x * 100).toFixed(1)}%`);
 
 function printTable(rows) {
   const judgeHead = JUDGE ? '  judge-accuracy  judge-agrees  judge-tokens  judge-latency-ms' : '';
   console.log(
     'condition          runs  facts-in-answer  noise-cited  declared  standing-accuracy  drift   unknown-id-standings' +
-      judgeHead,
+      judgeHead +
+      '  contingent  cache-read  cached %',
   );
   for (const r of rows) {
     const judgeCols = JUDGE
@@ -856,15 +943,18 @@ function printTable(rows) {
           r.standingAccuracy,
         ).padStart(17)}  ${fmt(r.drift, 2).padStart(5)}   ` +
         `${String(r.unknownIds).padStart(20)}` +
-        judgeCols,
+        judgeCols +
+        `  ${fmt(r.contingent, 2).padStart(10)}  ${fmtCost(r.cacheRead).padStart(10)}  ${fmtShare(
+          r.cachedShare,
+        ).padStart(8)}`,
     );
   }
 }
 
-/** The matrix's one summary: a row per cell × condition, the five columns the design page reads. */
+/** The matrix's one summary: a row per cell × condition, the columns the design page reads. */
 function printSummary(cells) {
   console.log(
-    'cell                            condition          facts-in-answer  noise-cited  declared  standing-accuracy  drift',
+    'cell                            condition          facts-in-answer  noise-cited  declared  standing-accuracy  drift  contingent  cache-read  cached %',
   );
   for (const { cell, rows } of cells) {
     for (const r of rows) {
@@ -874,7 +964,9 @@ function printSummary(cells) {
         )}  ` +
           `${fmt(r.noiseCited).padStart(11)}  ${fmt(r.declared).padStart(8)}  ${fmt(
             r.standingAccuracy,
-          ).padStart(17)}  ${fmt(r.drift, 2).padStart(5)}`,
+          ).padStart(17)}  ${fmt(r.drift, 2).padStart(5)}  ${fmt(r.contingent, 2).padStart(
+            10,
+          )}  ${fmtCost(r.cacheRead).padStart(10)}  ${fmtShare(r.cachedShare).padStart(8)}`,
       );
     }
   }
@@ -920,12 +1012,42 @@ function plantLine(cell, records) {
  *     distinct SKU at the last position, plus one if any order ends on a
  *     fact (all such runs claim every fact and no SKU) — over runs.
  *
+ *   - contingent (9.110.0): 0 on every clean armed row (the echo cites only
+ *     what it was served, and a served value's carrier is a fact record or
+ *     the undeclared last one); on the `ledger+tower` row exactly 1 per run
+ *     in which some noise record sits before the last position (the script
+ *     declared it noise and the echo quoted its SKU — one value, one row),
+ *     0 in a run whose only noise record is last (undeclared, no tower);
+ *     `-` on the off row;
+ *   - cache-read and cached %: `—` on every row — the mock reports no
+ *     `usage.cacheRead`, and a number here would be a measurement nobody
+ *     made;
+ *   - the tower row's noise-cited and drift follow from the tower SKU
+ *     joining the claim set: cited whenever a tower exists OR the last
+ *     record is noise; distinct claim sets = distinct (last SKU, tower SKU)
+ *     pairs.
+ *
  * A wire that collapsed the undeclared last result, or stopped collapsing
  * declared noise, moves these off their law and the harness exits 1. The
  * first cut pinned drift 1/runs on the armed rows too — written while the
  * dial was inert, and red the moment the wire landed, because an echo's
  * claim set DOES depend on the order through that one undeclared record.
  */
+
+/**
+ * The SKU the tower row quotes in run `run`: the first noise record the
+ * script DECLARES noise — the first noise record before the last position
+ * (the last result is never declared). `undefined` when none.
+ */
+function towerSkuFor(run, cell, records) {
+  const order = orderFor(run, cell);
+  for (let k = 0; k < cell.n - 1; k++) {
+    const r = records[order[k]];
+    if (r.kind === 'noise') return r.sku;
+  }
+  return undefined;
+}
+
 function smokeCheck(rows, cell, records) {
   const problems = [];
   const off = rows.find((r) => !r.armed);
@@ -948,21 +1070,62 @@ function smokeCheck(rows, cell, records) {
   const armedNoiseCited = lastNoise.length / RUNS;
   const armedDrift =
     (new Set(lastNoise.map((r) => r.sku)).size + (lastNoise.length < RUNS ? 1 : 0)) / RUNS;
+  // The tower row (9.110.0): the tower SKU joins each run's claim set.
+  const towers = Array.from({ length: RUNS }, (_, run) => towerSkuFor(run, cell, records));
+  const towerClaimSets = new Set(
+    towers.map((sku, run) =>
+      JSON.stringify(
+        [...new Set([lasts[run].kind === 'noise' ? lasts[run].sku : undefined, sku])]
+          .filter((v) => v !== undefined)
+          .sort(),
+      ),
+    ),
+  );
+  const towerDrift = towerClaimSets.size / RUNS;
+  const towerNoiseCited =
+    towers.filter((sku, run) => sku !== undefined || lasts[run].kind === 'noise').length / RUNS;
+  const towerContingent = towers.filter((sku) => sku !== undefined).length / RUNS;
   const near = (a, b) => Math.abs(a - b) < 1e-9;
   for (const r of rows) {
     if (r.runs !== RUNS) problems.push(`${r.label}: ${r.runs} runs, expected ${RUNS}`);
-    const expectedDrift = r.armed ? armedDrift : 1 / RUNS;
+    const expectedDrift = r.tower ? towerDrift : r.armed ? armedDrift : 1 / RUNS;
     if (!near(r.drift, expectedDrift))
       problems.push(
         `${r.label}: drift ${r.drift}, expected ${expectedDrift} (${
-          r.armed
+          r.tower
+            ? 'the claim set moves with the undeclared last record and the tower SKU'
+            : r.armed
             ? 'the claim set moves only with the undeclared last record of each order'
             : "an echo's claim set does not depend on the order"
         })`,
       );
-    if (r.armed && !near(r.noiseCited, armedNoiseCited))
+    const expectedNoiseCited = r.tower ? towerNoiseCited : armedNoiseCited;
+    if (r.armed && !near(r.noiseCited, expectedNoiseCited))
       problems.push(
-        `${r.label}: noise-cited ${r.noiseCited}, expected ${armedNoiseCited} (${lastNoise.length} of ${RUNS} orders end on a noise record, undeclared and served in full; every other noise result is a ticket)`,
+        `${r.label}: noise-cited ${r.noiseCited}, expected ${expectedNoiseCited} (${
+          r.tower
+            ? 'the tower SKU is cited whenever a noise record was declared, and the undeclared last record when it is noise'
+            : `${lastNoise.length} of ${RUNS} orders end on a noise record, undeclared and served in full; every other noise result is a ticket`
+        })`,
+      );
+    // The contingent column (9.110.0): the record, read back.
+    const expectedContingent = r.tower ? towerContingent : r.armed ? 0 : undefined;
+    if (expectedContingent === undefined) {
+      if (r.contingent !== undefined)
+        problems.push(`${r.label}: contingent ${r.contingent}, expected '-' (no ledger)`);
+    } else if (r.contingent === undefined || !near(r.contingent, expectedContingent)) {
+      problems.push(
+        `${r.label}: contingent ${r.contingent}, expected ${expectedContingent} (${
+          r.tower
+            ? 'one row per run in which the script declared a noise record and quoted its SKU'
+            : 'the echo cites only served values, whose carriers are fact records or the undeclared last one'
+        })`,
+      );
+    }
+    // Cache reads (9.110.0): the mock reports none, so a number is a lie.
+    if (r.cacheRead !== undefined || r.cachedShare !== undefined)
+      problems.push(
+        `${r.label}: cache-read ${r.cacheRead} / cached ${r.cachedShare}, expected '—' (the mock reports no cache reads)`,
       );
     if (r.armed && r.factsInAnswer !== 1)
       problems.push(
@@ -1087,7 +1250,8 @@ async function runSingle() {
     if (judgeMock(smokeCheck(rows, cell, records))) {
       console.log(
         'harness smoke test: green (off echoes everything; armed rows declare n-1 of n by the planted truth, cite noise ' +
-          'exactly when the order ends on an undeclared noise record, and drift by that record alone)',
+          'exactly when the order ends on an undeclared noise record, and drift by that record alone; ' +
+          'contingent 0 on every clean row and 1 per run on ledger+tower; cache-read — on the mock)',
       );
     }
   } else {

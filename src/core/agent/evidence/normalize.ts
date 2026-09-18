@@ -127,10 +127,28 @@ export function tokenize(text: string): string[] {
  * `0xef0101` and quoted back sometimes as `ef0101`. Both sides expand, so the
  * prefix can be dropped by either the tool or the model without either being
  * accused of inventing it.
+ *
+ * Deliberately NOT here (9.110.0): a glued-unit number's bare form. Applied
+ * on the INDEX side it would let a result's `latency 2024ms` ground an
+ * answer's prose year `2024`, which weakens the gate; the glued spelling is
+ * met on the LOOKUP side only, by the candidate that came from one
+ * (`extract.ts · candidateForms`).
  */
 export function lookupForms(normalized: string): readonly string[] {
   if (normalized.startsWith('0x') && normalized.length > 2) {
     return [normalized, normalized.slice(2)];
   }
   return [normalized];
+}
+
+/**
+ * The one spelling every equivalent value shares — the LAST of
+ * `lookupForms`, so `0xef0101` and `ef0101` both canonicalise to `ef0101`.
+ * A reader that must file one thing per VALUE (`findings/contingent.ts`,
+ * one row per value per moment) keys on this rather than on the spelling
+ * the model happened to use.
+ */
+export function canonicalForm(normalized: string): string {
+  const forms = lookupForms(normalized);
+  return forms[forms.length - 1] ?? normalized;
 }

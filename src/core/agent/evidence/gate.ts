@@ -64,12 +64,13 @@ import type { StagedRefsMatch } from '../stagedRefs.js';
 import { stagedRefsTeachingClause } from '../stagedRefs.js';
 import type { EvidenceCorpus } from './evidenceIndex.js';
 import { EVIDENCE_CHECK_FRAME_PREFIX } from './frames.js';
-import { extractCandidates } from './extract.js';
+import { candidateForms, extractCandidates } from './extract.js';
 import { lookupForms, normalizeToken } from './normalize.js';
 import type {
   EvidencePosture,
   EvidenceShape,
   EvidenceVerdict,
+  GroundedValue,
   NamesAndNumbersOptions,
   ResolvedEvidenceGate,
   UnsupportedValue,
@@ -217,11 +218,16 @@ export function checkAnswer(
 ): EvidenceVerdict {
   const candidates = extractCandidates(answer, args.gate);
   const unsupported: UnsupportedValue[] = [];
+  const grounded: GroundedValue[] = [];
   let fromThisTurn = 0;
   let fromPriorTurns = 0;
   let latestPriorTurn: number | undefined;
   for (const candidate of candidates) {
-    const forms = lookupForms(candidate.value);
+    // The value's forms, plus its glued-unit token's when it came from one
+    // (9.110.0): the lookup meets `1007us` under both spellings; the index
+    // was never widened. The exempt check over the same forms is the safe
+    // direction — a person who wrote `2024ms` exempts the answer's `2024ms`.
+    const forms = candidateForms(candidate);
     if (forms.some((f) => args.exempt.has(f))) continue;
     // The NEWEST turn any spelling of this value was served in. Newest,
     // because the question is whether this turn could have supplied it — an
@@ -236,6 +242,9 @@ export function checkAnswer(
       unsupported.push({ value: clip(candidate.value), shape: candidate.shape });
       continue;
     }
+    // Unclipped, with the forms as looked up: the contingent check asks the
+    // corpus the same question, never a wider one.
+    grounded.push({ value: candidate.value, forms });
     if (turn >= args.evidence.currentTurn) {
       fromThisTurn += 1;
       continue;
@@ -246,6 +255,7 @@ export function checkAnswer(
   return {
     unsupported,
     candidates: candidates.length,
+    grounded,
     evidenceTruncated: args.evidence.truncated,
     grounding: {
       fromThisTurn,

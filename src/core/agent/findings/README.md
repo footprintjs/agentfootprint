@@ -11,7 +11,10 @@ collapse the wire serves from the record.
 Trace: `ledger.ts` — one writer for one committed key
 (`AgentState.findingsLedger`), plus the fold that reads it; `judge.ts` — the
 second source (a calibrated classifier from `agentfootprint/classify`) whose
-rows the same writer files beside the model's.
+rows the same writer files beside the model's; `contingent.ts` — the rule
+that joins the model's standings to the evidence corpus's carriers (a value
+used that came only from set-aside results), whose rows the same writer
+files at the answer and at dispatch.
 
 # `findings/` — ride-along findings
 
@@ -113,9 +116,10 @@ foldLedger(scope.findingsLedger!).standingOf.get('call_1')?.standing; // 'fact'
   `artifacts/placement.ts · isPlacedToolResult` — the one guarded parse, of a
   string the library minted.
 - Writes `findingsLedger` through `recordFindings` only, a fresh array per
-  write; emits `agentfootprint.findings.declared` and
-  `agentfootprint.findings.standing` — identities, enums and counts, never a
-  value or a line of model text.
+  write; emits `agentfootprint.findings.declared`,
+  `agentfootprint.findings.standing` and (9.110.0)
+  `agentfootprint.findings.contingent` — identities, enums and counts, never
+  a value or a line of model text.
 
 ## Proved on the wire, measured on the record
 
@@ -447,18 +451,136 @@ foldLedger(rows).standingOf.get('c1')?.standing; // the model's: 'ruled-out'
 foldLedger(rows).judgments.get('c1')?.standing; // the judge's: 'noise' — two rows, one record
 ```
 
+## Contingent (9.110.0) — no towers on unverified lemmas
+
+Why: the owner read an account of agents building "theorem towers" — a
+staircase of results each resting on one below, where the lemma at the
+bottom was never verified, and the whole thing collapsed as circular the
+moment a reader pulled on it. Our loop has the same failure in a smaller
+shape: the model reads a value in step two, declares that result `noise` in
+step three, and uses the value in the answer anyway — where it reads
+exactly like a fact from a result it stood on. The ledger already holds the
+standings the model DECLARED; the evidence gate already knows which result
+carried which value. Joining the two needs no inference, no judge, no second
+model, and the rule is one sentence:
+
+> a value the model USES — in its final answer, or as an argument of a later
+> call — that came from a result the model itself declared `open`, `noise`
+> or `ruled-out` is recorded as CONTINGENT.
+
+`contingent.ts` is the rule; `recordFindings` writes the row
+(`ContingentRow`: `declaredOn`, the normalized `value`, every `carrier` with
+its standing, `iteration`); the event `agentfootprint.findings.contingent`
+carries the moment, the carrier count, their distinct standings and the
+value's length — never the value.
+
+The laws:
+
+- **Declared standings only.** A carrier with no standing row is undeclared,
+  not "unverified" — the rule says nothing about it, and the value stands.
+- **The last standing per result is current** — read off `foldLedger`'s
+  `standingOf`, the ledger's own fold, never a second one. `open` on call 2
+  and `fact` on the answer means the answer stands on it.
+- **Every carrier non-fact.** A value several results carried is contingent
+  only when every one of them holds a set-aside standing; one `fact` carrier
+  and the value stands, and so does one undeclared carrier beside a set-aside
+  one (the mixed case). The corpus lists at most `MAX_CARRIERS` (8) results
+  per value and marks a longer list `truncated`; such a value is not judged
+  — "every carrier" cannot be read off a prefix, and a value nine results
+  carried is a common value, not a tower. And a corpus whose token ceiling
+  was hit (`EvidenceCorpus.truncated`) files NOTHING at either moment: a
+  result past the cut carried nothing into the index, so a fact carrier there
+  is invisible and a row read off the prefix would be false — the same flag
+  under which the gate downgrades itself to record-only.
+- **This turn only.** The carriers are the current turn's results
+  (`EvidenceCorpus.carriers` is cleared at each user-turn boundary). In a
+  continued conversation a turn-1 result declared `noise` whose value the
+  model uses in turn 2 is not contingent and gets no mark — the rule reads
+  the turn being judged, never an earlier one.
+- **One row per value.** Two spellings of one value in one answer
+  (`0xef0101`, `ef0101`) share a canonical form (`normalize.ts ·
+  canonicalForm`) and file once, under the spelling that came first. A
+  grounded value is looked up under exactly the spellings the gate looked it
+  up under (`EvidenceVerdict.grounded[].forms`): a glued-unit answer token
+  (`1007us`) meets a result that carried `1007us`; the index is never
+  widened for it.
+- **The extractor decides what is a value.** Both moments read
+  `evidence/extract.ts`'s DATA rule (a digit and a distinctive shape, or a
+  declared shape) — the same rule, so a word is never a tower and an
+  all-letters name needs the shape the gate would need. A value the person
+  or the app supplied (the exempt corpus) is never contingent.
+- **Two moments, one writer, one row per value per moment.** The ANSWER —
+  `stages/route.ts · judgeEvidence`, after the gate's verdict, over
+  `EvidenceVerdict.grounded` (the candidates a result carried, exempt left
+  out); the row is `declaredOn: 'answer'`. A TOOL CALL's ARGUMENTS —
+  `stages/toolCalls.ts`, at dispatch (the tool-calls stage, not the choice
+  seam), after the call's basis row and before `tool_start`, over the DATA
+  values of its peeled arguments (`groundedArgumentValues`, the
+  `argumentLeaves.ts` walk the two argument checks share); the row is
+  `declaredOn: { toolCallId }` of the call being dispatched. Every standing
+  in the batch's `_findings.previous` is filed BEFORE the check, so a
+  standing declared on this call — or on a sibling call of the same batch —
+  governs this call's arguments. Detection only: no branch changes, no call
+  is blocked, the answer goes out as written.
+- **Both doors, or nothing.** The corpus is the evidence gate's
+  (`.namesAndNumbersFromEvidence()`, built by the same fold at both
+  moments); the standings are the ledger's (`.findings()`). Contingent rows
+  exist under BOTH arms and under neither of them alone — an agent with one
+  door files no row, emits no event, and records the bytes it always did
+  (the twenty byte-identity references are untouched; `agent-findings-contingent`
+  is the one reference with both). The instruction gains its one line
+  (`FINDINGS_CONTINGENT_LINE`) under both doors only — `AgentBuilder.build`
+  rebuilds the `findings-ledger` piece with `findingsInstructionFor` — so a
+  `.findings()`-only agent is never told a sentence its run cannot keep.
+- **Served from the record.** `findingsLedgerPiece` gains a section headed
+  `contingent (read off the record):` after the four buckets — named for
+  what it is, because the piece's header says everything below it is what
+  the model itself declared, and these lines are the library's join of the
+  model's standings to the corpus's provenance: one line per row, capped
+  like a bucket — `<answer | tool:id> used <value> from tool:<id>
+  (<standing>)[, tool:<id> (<standing>)]`. Every row on the ledger is
+  served, not only the last moment's: a re-ask after a contingent answer is
+  the one call that can re-establish the value. `servedView · viewOf`
+  rebuilds it for free.
+
+```ts
+// Call 2 rules c1 out AND passes c1's value as its own argument.
+call('c2', 'probe', {
+  q: 'fc1/7',
+  _findings: { basis: 'direct', previous: [{ toolCallId: 'c1', standing: 'ruled-out', line: '…' }] },
+});
+// → on the record, after basis:c2 and before tool_start:
+//   { kind: 'contingent', declaredOn: { toolCallId: 'c2' }, value: 'fc1/7',
+//     carriers: [{ toolCallId: 'c1', standing: 'ruled-out' }], iteration: 2 }
+// → served on the next call, in the piece, after the buckets:
+//   contingent (read off the record):
+//   tool:c2 used fc1/7 from tool:c1 (ruled-out)
+```
+
+Pinned by `test/core/agent/findings/contingent.test.ts` (both moments on both
+chart shapes, the fold's last-wins, the arms and their key sets, the receipt
+law, the pure rule's bounds) and the reference `agent-findings-contingent`.
+`bench/findings-shuffle.mjs` reads the rows back as the `contingent` column
+— the tower rate the design page will measure on a hosted model — beside
+`cache-read` and `cached %`, summed off the `llm_end` payloads
+(`AgentState.totalCacheReadTokens` is the same number on the record,
+written only when a provider reported one).
+
 ## Files
 
 - `types.ts` — `RESERVED_ARGUMENT`, the vocabularies, `PROPOSITION_CHARS`,
-  `JUDGE_RESULT_CHARS`, `FindingsDeclaration` (the wire), `BasisRow` /
-  `StandingRow` / `ConflictRow` / `JudgmentRow` / `JudgmentErrorRow` (the
-  record).
+  `JUDGE_RESULT_CHARS`, `CONTINGENT_VALUE_CHARS`, `FindingsDeclaration` (the
+  wire), `BasisRow` / `StandingRow` / `ConflictRow` / `JudgmentRow` /
+  `JudgmentErrorRow` / `ContingentRow` (the record).
+- `contingent.ts` — `contingentRowsOf` (the rule), `groundedArgumentValues`
+  (the dispatch moment's values), `hasSetAsideStanding` (the cheap gate).
 - `judge.ts` — `judgeQuestions` (pure), `judgeResult` (the one caller of
   `recordFindings` for judgment rows), `STANDING_CRITERIA`,
   `JUDGE_QUESTION_IDS`.
 - `reserved.ts` — `FINDINGS_ARGUMENT_SCHEMA`, `FINDINGS_OFFER_CAP`,
   `withFindingsArgument`, `withoutFindingsArgument`, `splitFindings`,
-  `peelAnswerFindings`, `FINDINGS_INSTRUCTION`, `FINDINGS_ANSWER_ASK`.
+  `peelAnswerFindings`, `FINDINGS_INSTRUCTION`, `FINDINGS_CONTINGENT_LINE` /
+  `findingsInstructionFor`, `FINDINGS_ANSWER_ASK`.
 - `offer.ts` — `offeredResultIds`, `nameableIds`, `undeclaredIds`,
   `servedToolCallIds`, `knownResults`, `RETIRING_STANDINGS`.
 - `ledger.ts` — `recordFindings`, `foldLedger` (`standingOf` the model's,

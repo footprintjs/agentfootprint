@@ -4356,6 +4356,14 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
       ...(this.findingsOptions?.judge !== undefined && {
         findingsJudge: this.findingsOptions.judge,
       }),
+      // THE TOWERS AT DISPATCH (9.110.0) — the contingent check's second
+      // moment. VALUE-conditional on BOTH doors: the ledger (the standings)
+      // and the evidence gate (the corpus and the extractor's rule); an
+      // agent with one or neither hands the handler exactly the deps it did
+      // before. The same resolved gate the route decider judges the answer
+      // with, so the two moments read one extractor and one set of shapes.
+      ...(this.findingsOptions !== undefined &&
+        this.evidenceGate !== undefined && { evidenceGate: this.evidenceGate }),
       // THE WRITE SEAM (9.77.0) — `empty-lookup`. Handed the SAME harvested
       // map callLLM reads at the choice seam, so the two stages agree by
       // construction about which calls are armed. Value-conditional on both

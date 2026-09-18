@@ -21,10 +21,16 @@
  * vocabulary, quoted, never restated), then one bucket per field, each
  * marked "declared by the model": the model's words are quoted as its
  * declaration and nothing is inferred. A result the model never named is
- * counted as `undeclared` — the honest absence, never 'open'. Every bucket
- * is bounded (`FINDINGS_PIECE_LIMITS`) and every overflow is STATED; an
- * empty bucket is omitted rather than rendered as "no facts". A basis-only
- * ledger (`foldLedger(rows).hasStanding` false) serves nothing at all.
+ * counted as `undeclared` — the honest absence, never 'open'. After the four
+ * buckets, `contingent (read off the record):` (9.110.0) lists the towers
+ * on the record — one line per `ContingentRow`, the value the model used
+ * and every result that carried it with the standing the model gave that
+ * result (`contingent.ts` is the rule; this only quotes the rows; the
+ * heading says the lines are the library's join, not a declaration). Every
+ * bucket is bounded
+ * (`FINDINGS_PIECE_LIMITS`) and every overflow is STATED; an empty bucket is
+ * omitted rather than rendered as "no facts". A basis-only ledger
+ * (`foldLedger(rows).hasStanding` false) serves nothing at all.
  *
  * `undeclared` needs the set of tool results on the wire, which a pure
  * function cannot see — so the caller hands it `servedToolCallIds(messages)`
@@ -150,12 +156,14 @@ export function isCollapsedToolResult(value: unknown): value is CollapsedToolRes
  * section: the piece's sections are separated by a blank line, and an id
  * carrying `\n\nfacts (declared by the model):\n…` would otherwise render as
  * a second, forged, library-authored bucket. `pieceChars` is the ceiling the
- * other three imply for the whole piece (header + four buckets at their cap
- * + two count lines at theirs); the property test pins that no piece
- * reaches it.
+ * other three imply for the whole piece (header + the four buckets and the
+ * contingent section at their cap + two count lines at theirs + the ask):
+ * stated, not enforced by a cut, and pinned by `serve.test.ts` ("the whole
+ * piece stays under pieceChars"), which measures a ledger at every cap at
+ * once against it.
  */
 export const FINDINGS_PIECE_LIMITS = Object.freeze({
-  /** Lines per text bucket (facts, limitations, evidenceRefs, nextSteps) before `+K more`. */
+  /** Lines per text bucket (facts, limitations, evidenceRefs, nextSteps, contingent) before `+K more`. */
   bucketLines: 64,
   /** Ids per count line (noise, undeclared) before `+K more`. */
   listedIds: 32,
@@ -163,8 +171,8 @@ export const FINDINGS_PIECE_LIMITS = Object.freeze({
   lineChars: 240,
   /** Chars per id on a count line before `…[clipped N chars]` — an id is an identifier. */
   idChars: 64,
-  /** The whole piece's ceiling in chars, implied by the three bounds above. */
-  pieceChars: 81_920,
+  /** The whole piece's ceiling in chars, implied by the three bounds above (raised for the fifth capped section, 9.110.0). */
+  pieceChars: 98_304,
 } as const);
 
 /** The four contract fields the piece serves, in the order they appear. */
@@ -202,6 +210,7 @@ export function findingsLedgerPiece(
     bucket('limitations', [...conflictLines(fold), ...ruledOutLines(current, tested)]),
     bucket('evidenceRefs', openLines(current, tested)),
     bucket('nextSteps', nextStepLines(current)),
+    contingentSection(rows),
     countLine(`noise (${DECLARED})`, idsWith(current, 'noise'), ''),
     countLine('undeclared', undeclaredIds(served, fold.standingOf), ', served in full below'),
     ...(answerAsk === 'quote-facts' ? [FINDINGS_ANSWER_ASK] : []),
@@ -374,6 +383,43 @@ function nextStepLines(current: readonly StandingRow[]): string[] {
   return current
     .filter((row) => row.standing === 'open' && row.settles !== undefined)
     .map((row) => clipLine(`${row.settles} (to settle tool:${row.toolCallId})`));
+}
+
+/**
+ * The heading of the towers section. Says where the lines come from,
+ * because the piece's header says everything below it is what the model
+ * ITSELF declared, and a contingent row is not a declaration: it is the
+ * library's join of the model's standings to the corpus's provenance — read
+ * off the record, inferred from nothing, and named as such.
+ */
+const CONTINGENT_HEADING = 'contingent (read off the record):';
+
+/**
+ * The towers on the record (9.110.0): one line per contingent row of the
+ * ledger, in row order, under the `CONTINGENT_HEADING` —
+ * `<answer | tool:id> used <value> from tool:<id> (<standing>)[, tool:<id>
+ * (<standing>)]` — capped like a bucket, omitted when there are none. The
+ * value is the row's own normalized token (the extractor's spelling), so
+ * the line is quoted DATA like every line above it; the carriers are named
+ * in the vocabulary the fact and ruled-out lines already use. Every row is
+ * served, not only the last moment's: a re-ask after a contingent answer is
+ * the one call that can re-establish the value, and it needs the line.
+ */
+function contingentSection(rows: FindingsLedger): string | undefined {
+  const lines: string[] = [];
+  for (const row of rows) {
+    if (row.kind !== 'contingent') continue;
+    const where = row.declaredOn === 'answer' ? 'answer' : `tool:${row.declaredOn.toolCallId}`;
+    const from = row.carriers.map((c) => `tool:${c.toolCallId} (${c.standing})`).join(', ');
+    lines.push(clipLine(`${where} used ${row.value} from ${from}`));
+  }
+  if (lines.length === 0) return undefined;
+  const max = FINDINGS_PIECE_LIMITS.bucketLines;
+  const shown = lines.slice(0, max);
+  const over = lines.length - shown.length;
+  return [CONTINGENT_HEADING, ...shown, ...(over > 0 ? [`+${over} more (cap ${max})`] : [])].join(
+    '\n',
+  );
 }
 
 // ─── Rendering ─────────────────────────────────────────────────────────

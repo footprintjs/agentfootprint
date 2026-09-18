@@ -91,6 +91,7 @@ function dynamicTurnSeed(scope: TypedScope<AgentState>): void {
   const args = scope.$getArgs<{
     priorTotalInputTokens?: number;
     priorTotalOutputTokens?: number;
+    priorTotalCacheReadTokens?: number;
     priorCumTokensInput?: number;
     priorCumTokensOutput?: number;
     priorCumEstimatedUsd?: number;
@@ -106,6 +107,12 @@ function dynamicTurnSeed(scope: TypedScope<AgentState>): void {
   // so they continue to accumulate across loop re-entries.
   scope.totalInputTokens = args.priorTotalInputTokens ?? 0;
   scope.totalOutputTokens = args.priorTotalOutputTokens ?? 0;
+  // Cache reads (9.110.0) — value-conditional both ways: seeded only when a
+  // provider has reported one, so a run on a provider that reports none
+  // crosses no new key.
+  if (args.priorTotalCacheReadTokens !== undefined) {
+    scope.totalCacheReadTokens = args.priorTotalCacheReadTokens;
+  }
   scope.cumTokensInput = args.priorCumTokensInput ?? 0;
   scope.cumTokensOutput = args.priorCumTokensOutput ?? 0;
   scope.cumEstimatedUsd = args.priorCumEstimatedUsd ?? 0;
@@ -776,6 +783,9 @@ export function buildDynamicAgentChart(deps: AgentChartDeps): FlowChart {
           priorDeliveredMessageKeys: p.deliveredMessageKeys,
           priorTotalInputTokens: p.totalInputTokens,
           priorTotalOutputTokens: p.totalOutputTokens,
+          ...(p.totalCacheReadTokens !== undefined && {
+            priorTotalCacheReadTokens: p.totalCacheReadTokens,
+          }),
           priorCumTokensInput: p.cumTokensInput,
           priorCumTokensOutput: p.cumTokensOutput,
           priorCumEstimatedUsd: p.cumEstimatedUsd,
@@ -847,6 +857,10 @@ export function buildDynamicAgentChart(deps: AgentChartDeps): FlowChart {
           // Accumulators bubbled back for the next iteration's inputMapper.
           totalInputTokens: s.totalInputTokens,
           totalOutputTokens: s.totalOutputTokens,
+          // Cache reads (9.110.0), bubbled back only once reported.
+          ...(s.totalCacheReadTokens !== undefined && {
+            totalCacheReadTokens: s.totalCacheReadTokens,
+          }),
           cumTokensInput: s.cumTokensInput,
           cumTokensOutput: s.cumTokensOutput,
           cumEstimatedUsd: s.cumEstimatedUsd,

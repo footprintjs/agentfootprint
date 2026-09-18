@@ -11,13 +11,17 @@
  *          current standing per result and the conflicts among what is
  *          stood on, recomputed from the rows every time.
  * Emits:   `agentfootprint.findings.declared` (one per basis row),
- *          `agentfootprint.findings.standing` (one per standing row), and
+ *          `agentfootprint.findings.standing` (one per standing row),
  *          since 9.104.0 `agentfootprint.findings.judged` /
  *          `agentfootprint.findings.judge_failed` (one per judgment /
- *          judgment-error row, filed by `judge.ts`) — identities, enums and
- *          numbers only. Assertion values, `settles`, `line` and the judged
- *          state live in the committed key under whatever redaction the
- *          run configured; an event stream fans out to sinks we do not control.
+ *          judgment-error row, filed by `judge.ts`), and since 9.110.0
+ *          `agentfootprint.findings.contingent` (one per contingent row,
+ *          filed by the two moments `contingent.ts` serves: the route
+ *          decider's answer and the dispatch loop's call) — identities,
+ *          enums and numbers only. Assertion values, `settles`, `line`, the
+ *          judged state and the contingent VALUE live in the committed key
+ *          under whatever redaction the run configured; an event stream
+ *          fans out to sinks we do not control.
  *
  * ## Append only, last wins, conflicts are a fold
  *
@@ -52,6 +56,7 @@ import {
   type FindingsLedger,
   type FindingsRow,
   type JudgmentRow,
+  type Standing,
   type StandingRow,
 } from './types.js';
 
@@ -222,6 +227,22 @@ function emitRow(
       iteration: row.iteration,
       ...(row.status !== undefined && { status: row.status }),
       latencyMs: row.latencyMs,
+    });
+    return;
+  }
+  if (row.kind === 'contingent') {
+    // The VALUE stays on the row (the payload law): a sink learns which
+    // moment used a value of what size, how many results carried it and
+    // which standings they hold — never the token itself.
+    const standings: Standing[] = [];
+    for (const c of row.carriers) if (!standings.includes(c.standing)) standings.push(c.standing);
+    typedEmit(scope, 'agentfootprint.findings.contingent', {
+      iteration: row.iteration,
+      declaredOn: row.declaredOn === 'answer' ? 'answer' : 'tool-call',
+      ...(row.declaredOn !== 'answer' && { toolCallId: row.declaredOn.toolCallId }),
+      carriers: row.carriers.length,
+      standings,
+      valueChars: row.value.length,
     });
     return;
   }

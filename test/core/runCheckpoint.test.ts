@@ -309,6 +309,91 @@ describe('runCheckpoint — P5 security', () => {
     }
   });
 
+  it('P5 accepts the judge’s rows and a contingent row — every kind the one writer files (9.110.0)', () => {
+    // A checkpoint of a judged run was refused on resume before 9.110.0: the
+    // door named three kinds while `recordFindings` had filed five.
+    const cp = buildCheckpoint({
+      runId: 'r-7',
+      originalInput: { message: 'orig' },
+      history: [],
+      lastCompletedIteration: 0,
+    });
+    const rows: unknown[] = [
+      {
+        kind: 'judgment',
+        toolCallId: 'tc-1',
+        toolName: 'search',
+        source: 'judge',
+        judge: { name: 'mock', model: 'm' },
+        against: 'question',
+        standing: 'noise',
+        probabilities: { fact: 0.1, open: 0.1, noise: 0.7, 'ruled-out': 0.1 },
+        confidence: 0.6,
+        latencyMs: 3,
+        iteration: 1,
+      },
+      {
+        kind: 'judgment-error',
+        toolCallId: 'tc-2',
+        toolName: 'search',
+        source: 'judge',
+        judge: { name: 'mock' },
+        message: 'boom',
+        latencyMs: 2,
+        iteration: 2,
+      },
+      {
+        kind: 'contingent',
+        declaredOn: { toolCallId: 'tc-3' },
+        value: 'fc1/7',
+        carriers: [{ toolCallId: 'tc-1', standing: 'noise' }],
+        iteration: 3,
+      },
+      {
+        kind: 'contingent',
+        declaredOn: 'answer',
+        value: '41200',
+        carriers: [
+          { toolCallId: 'tc-1', standing: 'open' },
+          { toolCallId: 'tc-2', standing: 'ruled-out' },
+        ],
+        iteration: 4,
+      },
+    ];
+    const validated = validateCheckpoint(
+      JSON.parse(JSON.stringify({ ...cp, findingsLedger: rows })),
+    );
+    expect(validated.findingsLedger).toEqual(rows);
+    // …and a contingent row the rule could not have written is refused at
+    // the door: a field the piece reads missing, NO carrier (the rule files
+    // one row per value with at least one), a `fact` carrier (one fact
+    // carrier means the value stands), a standing outside the vocabulary.
+    const one = [{ toolCallId: 'tc-1', standing: 'noise' }];
+    for (const bad of [
+      { kind: 'contingent', declaredOn: 'answer', value: 'x', iteration: 1 },
+      { kind: 'contingent', declaredOn: 'answer', carriers: one, iteration: 1 },
+      { kind: 'contingent', declaredOn: { ref: 'x' }, value: 'x', carriers: one, iteration: 1 },
+      { kind: 'contingent', declaredOn: 'answer', value: 'x', carriers: [], iteration: 1 },
+      {
+        kind: 'contingent',
+        declaredOn: 'answer',
+        value: 'x',
+        carriers: [{ toolCallId: 'tc-1', standing: 'fact' }],
+        iteration: 1,
+      },
+      {
+        kind: 'contingent',
+        declaredOn: 'answer',
+        value: 'x',
+        carriers: [{ toolCallId: 'tc-1', standing: 'maybe' }],
+        iteration: 1,
+      },
+      { kind: 'judgment', toolCallId: 'tc-1', standing: 'maybe', iteration: 1 },
+    ]) {
+      expect(() => validateCheckpoint({ ...cp, findingsLedger: [bad] })).toThrow(/findingsLedger/);
+    }
+  });
+
   it('P5 rejects a well-kinded row missing a field the fold consumes — the door, not the kind tag', () => {
     const cp = buildCheckpoint({
       runId: 'r-6',

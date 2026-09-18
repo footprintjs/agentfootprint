@@ -1397,3 +1397,149 @@ tables to the digit and both its laws hold.
   history is the case that would earn the export.
 - The SHUFFLE verdict on `serve` (item 3 on the real-model page) still waits
   on the matrix.
+
+## Contingent (2026-09-18, 9.110.0) — no towers on unverified lemmas
+
+### The ask, and where it comes from
+
+Dan Abramov's account of a Conway proof (overreacted.io, September 2026):
+agents built "theorem towers" on lemmas nobody had verified, and the whole
+staircase came down as circular the moment a reader pulled on the bottom
+step. Our loop has the same failure in a smaller shape. The model reads a
+value in step two, declares that result `noise` in step three — the ledger
+holds that standing, honestly — and uses the value in the answer anyway,
+where it reads exactly like a fact from a result it stood on. Nothing on the
+record said so, because the two halves that could say it lived apart: the
+ledger knows the standings, the evidence gate knows which result carried
+which value, and neither asked the other.
+
+### The rule (declared standings plus existing provenance — no inference)
+
+> a value the model USES — in its final answer, or as an argument of a later
+> call — that came from a result the model itself declared `open`, `noise`
+> or `ruled-out` is recorded as CONTINGENT.
+
+- Declared standings only; an undeclared carrier is undeclared, not
+  "unverified", and the value stands. The last standing per result is
+  current — `foldLedger`'s own fold, never a second one.
+- Every carrier non-fact: one `fact` carrier among several and the value
+  stands, and so does one undeclared carrier beside a set-aside one. The
+  corpus keeps at most eight carriers per value (`MAX_CARRIERS`) and marks
+  a longer list truncated; such a value is not judged. A corpus whose token
+  ceiling was hit files nothing at either moment — a fact carrier past the
+  cut is invisible, and the gate already downgrades under the same flag.
+- One row per VALUE: two spellings of one value (`0xef0101`, `ef0101`)
+  share a canonical form and file once.
+- The extractor decides what is a value (`evidence/extract.ts`, the gate's
+  own DATA rule) at both moments; exempt values are never contingent.
+- Two moments through the one writer: the answer (`route.ts · judgeEvidence`,
+  after the verdict, `declaredOn: 'answer'`) and dispatch — the tool-calls
+  stage, not the choice seam (`toolCalls.ts`, after the basis row and
+  before `tool_start`, `declaredOn: { toolCallId }`); every standing in the
+  batch's `_findings.previous` is filed before the check, so a standing
+  declared on this call or on a sibling call of the same batch governs this
+  call's arguments. One row per value per moment. Detection only.
+- Both doors, or nothing: `.findings()` for the standings and
+  `.namesAndNumbersFromEvidence()` for the corpus. The instruction gains
+  its one line (`FINDINGS_CONTINGENT_LINE`) under both doors only, composed
+  at `build` — a `.findings()`-only agent is never told a sentence its run
+  cannot keep, and the three `.findings()`-only references are the bytes
+  they were.
+- Served back under `contingent (read off the record):` after the four
+  buckets — named as the library's join, so the piece's header ("what the
+  model itself declared") stays true — one line per row, `tool:c2 used
+  fc1/7 from tool:c1 (ruled-out)`; every row on the ledger, because a re-ask
+  after a contingent answer is the one call that can re-establish the value.
+
+### What the record holds (pinned)
+
+- `test/core/agent/findings/contingent.test.ts`: the answer moment on both
+  chart shapes (one row for the noise carrier; none for a fact carrier, a
+  value two results shared, an undeclared carrier); the dispatch moment with
+  the line served on the next call byte-equal to `servedAt` and the receipt
+  law at every epoch; `open` then `fact` on one result and the answer stands;
+  the arms (one door or neither: no row, no event, no line, the same keys);
+  `totalCacheReadTokens` absent under the mock and summed under a provider
+  reporting `cacheRead`, both shapes; the pure rule's bounds (the cut list,
+  the 120-char clip with the cut stated, one row per value, both `0x`
+  spellings one value); the served section's grammar and cap.
+- `test/core/tools/byte-identity.test.ts`: the 20 references untouched on
+  the wired tree (21/21 before the scenario existed); `agent-findings-contingent`
+  generated alone (1 passed, 21 skipped) with the 20 copied aside and
+  `cmp`-equal after — the header lists what its bytes hold.
+- `test/modelFacingSurfaces.test.ts`: two PRODUCERS rows (the instruction
+  with its line at `ALWAYS_ON_INSTRUCTION`, the piece with a
+  `contingent (read off the record):` section at `LEDGER_PIECE`),
+  `unprovable` green at the strictest lifetime.
+
+### A gate defect the bench exposed, fixed on the lookup side
+
+Arming the evidence gate on the shuffle plant flagged the planted readings.
+The plant writes `node-1: 1007us`; the extractor judges the answer's
+`1007us` on its digits (`1007`) while the index keeps the glued spelling
+(`1007us`), so the two never met. The first cut widened the INDEX (every
+glued token indexed as its bare number too) and the review refused it as a
+gate weakening: a result's `latency 2024ms` then grounded an answer's prose
+year `2024`. The fix that stands widens the LOOKUP only: a candidate read
+off a glued token asks for both spellings (`extract.ts · candidateForms`),
+the index is untouched, and `EvidenceVerdict.grounded` carries the forms
+each value was looked up under so the contingent check asks the same
+question. What `evidence-extractor.test.ts` pins: result `1007us`, answer
+`1007us` → grounded; result `latency 2024ms`, answer `in 2024 we migrated`
+→ flagged; the bare spelling `1,007 us` → flagged (the conservative side of
+the same rule); a reading nothing served → flagged. Without the lookup-side
+meeting the contingent check could not see any unit-glued reading.
+
+### Cache reads as a first-class cost
+
+`AgentState.totalCacheReadTokens` — `usage.cacheRead` summed by `callLLM`
+beside `totalInputTokens`, written only when a provider reported one (the
+mock never does, so its record is the bytes it was); crosses the grouped
+chart's LLM_CALL boundary under the same condition. The shuffle bench reads
+`cache-read` and `cached %` (= cacheRead / (input + cacheRead)) off the
+`llm_end` payloads per arm and prints `—` when no call reported cache reads
+— a number there would be a measurement nobody made.
+
+### What the bench will measure (not yet run on a model)
+
+`bench/findings-shuffle.mjs`, mock, 2026-09-18 (the harness, not a model):
+
+```
+condition          runs  facts-in-answer  noise-cited  declared  standing-accuracy  drift   unknown-id-standings  contingent  cache-read  cached %
+findings off          5            1.000        1.000         -                  -   0.20                      0           -           —         —
+ledger-and-facts      5            1.000        0.600     0.944              1.000   0.80                      0        0.00           —         —
+ledger-only           5            1.000        0.600     0.944              1.000   0.80                      0        0.00           —         —
+ledger+ask            5            1.000        0.600     0.944              1.000   0.80                      0        0.00           —         —
+ledger+tower          5            1.000        1.000     0.944              1.000   1.00                      0        1.00           —         —
+```
+
+Every armed condition now also arms `.namesAndNumbersFromEvidence({ posture:
+'assist' })` — no wire byte moves, and the other columns are the numbers
+they were. `ledger+tower` is mock-only: the scripted answer quotes the SKU of
+the first result it declared noise, so the `contingent` column has a row
+that must read 1, and the smoke test refuses anything else. On a hosted
+model the column is the TOWER RATE: contingent rows per run on Haiku against
+Sonnet, under each serve dial, beside `cache-read` and `cached %` — whether
+the weaker model builds on what it set aside more often, and whether the
+served `contingent (read off the record):` line on a re-ask brings the rate
+down. Nothing is
+quoted before that run prints it.
+
+### Named, not taken
+
+- The instruction line is not versioned in its first word (`Findings v1`
+  stays): the receipt hashes the piece per request and the line rides
+  under both doors only, so the hash is the version; a `v2` marker would
+  move three `.findings()`-only references for no reader.
+- A value carried by more than eight results is not judged. A per-value
+  ceiling above eight buys nothing the rule can use — "every carrier" over a
+  long list is the common-value case, not a tower.
+- Arguments typed as numbers are not read at dispatch (`argumentLeaves.ts`
+  walks string leaves; the unsupported-argument fence, kept). A number the
+  model copied from a noise result into a numeric argument is a tower this
+  check does not see; naming it here rather than widening the shared walk.
+- This turn only. The carriers are the current turn's results; in a
+  continued conversation a turn-1 result declared `noise` whose value the
+  model uses in turn 2 is not contingent and gets no mark. Widening the
+  carriers across turns would mean deciding whose turn a re-served value
+  belongs to — the question the turn stamp's own header declines to answer.

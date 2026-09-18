@@ -123,6 +123,7 @@ import type {
   FindingsStandingPayload,
   FindingsJudgedPayload,
   FindingsJudgeFailedPayload,
+  FindingsContingentPayload,
   ToolChoicePickedPayload,
   ToolChoiceOutcomePayload,
   ToolChoiceFailedPayload,
@@ -297,6 +298,7 @@ export const EVENT_NAMES = {
     standing: 'agentfootprint.findings.standing',
     judged: 'agentfootprint.findings.judged',
     judge_failed: 'agentfootprint.findings.judge_failed',
+    contingent: 'agentfootprint.findings.contingent',
   },
   tool_choice: {
     picked: 'agentfootprint.tool_choice.picked',
@@ -758,6 +760,10 @@ export interface AgentfootprintEventMap {
     'agentfootprint.findings.judge_failed',
     FindingsJudgeFailedPayload
   >;
+  'agentfootprint.findings.contingent': AgentfootprintEventEnvelope<
+    'agentfootprint.findings.contingent',
+    FindingsContingentPayload
+  >;
   // tool_choice (a classifier's pick beside the model's call — identities, numbers, a boolean)
   'agentfootprint.tool_choice.picked': AgentfootprintEventEnvelope<
     'agentfootprint.tool_choice.picked',
@@ -939,6 +945,7 @@ export const ALL_EVENT_TYPES: readonly AgentfootprintEventType[] = [
   'agentfootprint.findings.standing',
   'agentfootprint.findings.judged',
   'agentfootprint.findings.judge_failed',
+  'agentfootprint.findings.contingent',
   'agentfootprint.tool_choice.picked',
   'agentfootprint.tool_choice.outcome',
   'agentfootprint.tool_choice.failed',

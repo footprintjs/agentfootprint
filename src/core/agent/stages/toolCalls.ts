@@ -125,10 +125,23 @@ import { knownResults } from '../findings/offer.js';
 import type { Classifier } from '../../../classify/types.js';
 import {
   basisRowFrom,
+  foldLedger,
   recordFindings,
   standingRowsFrom,
   type PreviousResult,
 } from '../findings/ledger.js';
+import {
+  contingentRowsOf,
+  groundedArgumentValues,
+  hasSetAsideStanding,
+} from '../findings/contingent.js';
+import type { FindingsLedger, StandingRow } from '../findings/types.js';
+import {
+  evidenceFromHistory,
+  exemptFromRun,
+  type EvidenceCorpus,
+} from '../evidence/evidenceIndex.js';
+import type { ResolvedEvidenceGate } from '../evidence/types.js';
 import { noteRepeatedCall, repeatedCallLedgers } from '../repeatedCall.js';
 import {
   formatToolArgIssues,
@@ -231,6 +244,22 @@ export interface ToolCallsHandlerDeps {
    * the default — and not one line runs.
    */
   readonly findingsJudge?: Classifier;
+  /**
+   * THE TOWERS AT DISPATCH (9.110.0, `.findings()` beside
+   * `.namesAndNumbersFromEvidence()`) — the resolved evidence gate, present
+   * ONLY when both doors are armed. Under it, once per batch and only when
+   * the ledger's fold holds a set-aside standing (`open`, `noise`,
+   * `ruled-out`), the batch's evidence corpus is built from the history this
+   * call was served (`evidence/evidenceIndex.ts · evidenceFromHistory` —
+   * the same fold the route decider asks at the answer, one stage earlier)
+   * and every call's peeled arguments are read for DATA values the corpus
+   * holds (`findings/contingent.ts · groundedArgumentValues`); a value whose
+   * every carrier the model itself set aside files a `ContingentRow` through
+   * the one writer, after the call's basis row and before `tool_start`.
+   * Absent — the default, and every agent with one door or neither — and not
+   * one line runs.
+   */
+  readonly evidenceGate?: ResolvedEvidenceGate;
   /**
    * THE WRITE SEAM (9.77.0, `empty-lookup`) — the declared argument-ground
    * edges (`Tool.argumentsFrom`) by tool name, present ONLY when the operator
@@ -1084,6 +1113,50 @@ async function judgeLanded(
  * fingerprints — and the only visible effect is a note arriving one call early.
  */
 const UNSCOPED_RUN = '#no-run-id';
+
+/**
+ * What the dispatch moment of the contingent check needs for one batch
+ * (9.110.0), or `undefined` when nothing can be filed: one of the two doors
+ * is closed, the ledger is absent, or no result holds a set-aside standing.
+ * The corpus and the exempt set are built once per batch — every call of the
+ * batch was served the same history.
+ */
+function towersFor(
+  scope: TypedScope<AgentState>,
+  findings: true | undefined,
+  gate: ResolvedEvidenceGate | undefined,
+):
+  | {
+      readonly gate: ResolvedEvidenceGate;
+      readonly corpus: EvidenceCorpus;
+      readonly exempt: ReadonlySet<string>;
+      readonly standingOf: ReadonlyMap<string, StandingRow>;
+    }
+  | undefined {
+  if (findings !== true || gate === undefined) return undefined;
+  const rows = [...((scope.findingsLedger as FindingsLedger | undefined) ?? [])];
+  const { standingOf } = foldLedger(rows);
+  if (!hasSetAsideStanding(standingOf)) return undefined;
+  const history = [...((scope.history as readonly LLMMessage[] | undefined) ?? [])];
+  const corpus = evidenceFromHistory(history);
+  // The index hit its ceiling: a result past the cut carried nothing into
+  // it, so a fact carrier there is invisible and a row read off the prefix
+  // would be false. The gate downgrades itself under the same flag; the
+  // dispatch moment files nothing (`findings/contingent.ts`, the header).
+  if (corpus.truncated) return undefined;
+  return {
+    gate,
+    corpus,
+    exempt: exemptFromRun({
+      userMessage: scope.userMessage as string | undefined,
+      history,
+      systemPromptInjections: scope.systemPromptInjections as
+        | readonly InjectionRecord[]
+        | undefined,
+    }),
+    standingOf,
+  };
+}
 
 export function buildToolCallsHandler(
   deps: ToolCallsHandlerDeps,
@@ -3227,6 +3300,15 @@ export function buildToolCallsHandler(
         );
       }
       scope.toolResults = [];
+      // ── THE TOWERS AT DISPATCH (9.110.0) — one corpus per batch ────────
+      // Built AFTER the standings above are on the record (a standing the
+      // model declared on THIS batch's calls counts for this batch's
+      // arguments) and only when the fold holds a set-aside standing at
+      // all. The history is the list this call was served — the same one
+      // `knownResults` read one screen up — and `exemptFromRun` reads what
+      // the route decider reads at the answer, so a value the person or the
+      // app supplied is never a tower at either moment.
+      const towers = towersFor(scope, deps.findings, deps.evidenceGate);
 
       // ── The batch's transition bookkeeping (9.19.0) ───────────────────
       // First ACCEPTED `propose-transition` wins (committed at acceptance);
@@ -3261,6 +3343,22 @@ export function buildToolCallsHandler(
         // when the model DECLARED a basis; never inferred.
         if (peeled.findings?.basis !== undefined) {
           recordFindings(scope, [basisRowFrom(tc, peeled.findings, iteration, peeled.malformed)]);
+        }
+        // ── THE CONTINGENT ROWS FOR THIS CALL (9.110.0) — after the basis
+        // row, before `tool_start`: the DATA values of the peeled arguments
+        // that a set-aside result was the only source of. A fact about the
+        // emission, filed whether or not the call then runs.
+        if (towers !== undefined) {
+          recordFindings(
+            scope,
+            contingentRowsOf(
+              groundedArgumentValues(args, towers.gate, towers.corpus, towers.exempt),
+              towers.corpus,
+              towers.standingOf,
+              { toolCallId: tc.id },
+              iteration,
+            ),
+          );
         }
         typedEmit(scope, 'agentfootprint.stream.tool_start', {
           toolName: tc.name,

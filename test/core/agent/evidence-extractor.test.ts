@@ -15,7 +15,11 @@
  */
 
 import { describe, it, expect } from 'vitest';
-import { classifyToken, extractCandidates } from '../../../src/core/agent/evidence/extract.js';
+import {
+  candidateForms,
+  classifyToken,
+  extractCandidates,
+} from '../../../src/core/agent/evidence/extract.js';
 import {
   countDigits,
   lookupForms,
@@ -92,6 +96,53 @@ describe('unit: normalizeToken', () => {
     expect(lookupForms('fc1/3')).toEqual(['fc1/3']);
   });
 
+  it('a glued-unit number is met on the LOOKUP side only (9.110.0): the index is never widened', () => {
+    // The index keeps `1007us` as `1007us`; the candidate that came from a
+    // glued token asks for `1007` AND `1007us` (`candidateForms`), so the
+    // answer's `1007us` meets the result's. A bare candidate asks for its
+    // own spelling alone, so a result's `latency 2024ms` does NOT ground an
+    // answer's prose year `2024` — the gate is not weakened.
+    expect(lookupForms('1007us')).toEqual(['1007us']);
+    expect(lookupForms('1007')).toEqual(['1007']);
+    expect(candidateForms({ value: '1007', shape: 'number', token: '1007us' })).toEqual([
+      '1007',
+      '1007us',
+    ]);
+    expect(candidateForms({ value: '1007', shape: 'number' })).toEqual(['1007']);
+    expect(classifyToken('1007us', GATE)).toEqual({
+      value: '1007',
+      shape: 'number',
+      token: '1007us',
+    });
+    expect(classifyToken('1007', GATE)).toEqual({ value: '1007', shape: 'number' });
+    const history: LLMMessage[] = [
+      { role: 'user', content: 'go' },
+      {
+        role: 'tool',
+        toolCallId: 'c1',
+        toolName: 'next_record',
+        content: 'p95 latency reading — node-1: 1007us (survey probe); latency 2024ms',
+      },
+    ];
+    // (a) result `1007us`, answer `1007us` → grounded (a false accusation before).
+    expect(check('node-1: 1007us', { history }).unsupported).toEqual([]);
+    // (b) result `latency 2024ms`, answer's prose year → FLAGGED: a
+    // millisecond reading does not ground a year.
+    expect(check('in 2024 we migrated', { history }).unsupported).toEqual([
+      { value: '2024', shape: 'number' },
+    ]);
+    // The rule's edge, stated: an answer spelling the reading BARE (`1,007 us`,
+    // unit apart) asks for `1007` alone and is not met by `1007us` — the
+    // conservative side of the same rule that keeps (b) flagged.
+    expect(check('node-1: 1,007 us', { history }).unsupported).toEqual([
+      { value: '1007', shape: 'number' },
+    ]);
+    // …and a reading nothing served is still caught.
+    expect(check('node-1: 1014us', { history }).unsupported).toEqual([
+      { value: '1014', shape: 'number' },
+    ]);
+  });
+
   it('tokenizes markdown and punctuation without merging values', () => {
     expect(tokenize('| **fc1/3** | down |')).toContain('fc1/3');
     expect(tokenize('fc1/3,fc1/4')).toEqual(['fc1/3', 'fc1/4']);
@@ -154,7 +205,13 @@ describe('unit: classifyToken treats data as data', () => {
   ];
   for (const [token, shape] of data) {
     it(`flags '${token}' as ${shape}`, () => {
-      expect(classifyToken(token, GATE)).toEqual({ value: expect.any(String), shape });
+      // A number wearing a unit also carries the glued spelling it was read
+      // off (`token`, 9.110.0) — asserted as the shape, not a blank check.
+      expect(classifyToken(token, GATE)).toEqual(
+        shape === 'number' && /[a-z]/.test(token)
+          ? { value: expect.any(String), shape, token }
+          : { value: expect.any(String), shape },
+      );
     });
   }
 

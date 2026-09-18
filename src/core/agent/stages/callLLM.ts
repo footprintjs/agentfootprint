@@ -950,6 +950,12 @@ export function buildCallLLMStage(
 
     scope.totalInputTokens = scope.totalInputTokens + response.usage.input;
     scope.totalOutputTokens = scope.totalOutputTokens + response.usage.output;
+    // Cache reads as a cost (9.110.0) — VALUE-conditional: the key exists
+    // only once a provider has reported one, so a provider that reports
+    // none (the mock, a local model) writes nothing and keeps its bytes.
+    if (typeof response.usage.cacheRead === 'number') {
+      scope.totalCacheReadTokens = (scope.totalCacheReadTokens ?? 0) + response.usage.cacheRead;
+    }
     scope.llmLatestContent = response.content;
     scope.llmLatestToolCalls = response.toolCalls;
     // v2.14 — hand provider-specific raw thinking data to the

@@ -132,6 +132,17 @@ export interface NamesAndNumbersOptions {
   readonly recoveryInstruction?: EvidenceRecoveryInstruction;
 }
 
+/**
+ * One value a tool result DID carry (9.110.0): the candidate as normalized
+ * and the exact spellings it was looked up under (`extract.ts ·
+ * candidateForms` — the value's forms plus its glued-unit token's), so a
+ * later reader asks the corpus the same question the gate asked.
+ */
+export interface GroundedValue {
+  readonly value: string;
+  readonly forms: readonly string[];
+}
+
 /** One value in the answer that no tool result carried. */
 export interface UnsupportedValue {
   /** The value as it appeared in the answer, normalized and truncated. */
@@ -169,6 +180,18 @@ export interface EvidenceVerdict {
   readonly unsupported: readonly UnsupportedValue[];
   /** How many distinct values the extractor had to ground. */
   readonly candidates: number;
+  /**
+   * The values a tool result DID carry (9.110.0) — every candidate the
+   * corpus holds, normalized, in first-appearance order, exempt values left
+   * out (a value the person or the app supplied was never something the run
+   * had to look up). `unsupported` names the candidates that came from
+   * nowhere; this names the rest, each with the spellings it was looked up
+   * under, so the contingent check (`findings/contingent.ts`) can ask, of
+   * each one, whether every result that carried it was one the model itself
+   * declared open, noise or ruled-out. Computed by the same loop, always;
+   * read only under `.findings()`.
+   */
+  readonly grounded: readonly GroundedValue[];
   /**
    * True when the evidence index hit its ceiling and is INCOMPLETE.
    *

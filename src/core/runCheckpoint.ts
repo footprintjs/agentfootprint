@@ -613,6 +613,38 @@ function ledgerRowIsWellFormed(row: unknown): boolean {
       return (
         typeof r.key === 'string' && Array.isArray(r.witnesses) && typeof r.iteration === 'number'
       );
+    // The judge's two rows (9.104.0) — the door had no arm for them until
+    // 9.110.0, so a checkpoint of a judged run was refused on resume. The
+    // fold reads `toolCallId` and `standing` off a judgment row and nothing
+    // off an error row but its kind.
+    case 'judgment':
+      return (
+        typeof r.toolCallId === 'string' &&
+        isIn(r.standing, STANDING_VALUES) &&
+        typeof r.iteration === 'number'
+      );
+    case 'judgment-error':
+      return typeof r.toolCallId === 'string' && typeof r.iteration === 'number';
+    // The towers (9.110.0): the served piece reads `declaredOn`, `value` and
+    // every carrier's `toolCallId` and `standing`. The rule that writes the
+    // row never files an empty carrier list and never a `fact` carrier (one
+    // fact carrier means the value stands), so the door refuses both — a
+    // row with either is not one `recordFindings` wrote.
+    case 'contingent':
+      return (
+        (r.declaredOn === 'answer' || isIdentity(r.declaredOn)) &&
+        typeof r.value === 'string' &&
+        Array.isArray(r.carriers) &&
+        r.carriers.length >= 1 &&
+        r.carriers.every(
+          (c: unknown) =>
+            c !== null &&
+            typeof c === 'object' &&
+            typeof (c as { toolCallId?: unknown }).toolCallId === 'string' &&
+            isIn((c as { standing?: unknown }).standing, ['open', 'noise', 'ruled-out']),
+        ) &&
+        typeof r.iteration === 'number'
+      );
     default:
       return false;
   }
@@ -699,8 +731,11 @@ export function validateCheckpoint(value: unknown): AgentRunCheckpoint {
         '[resumeOnError] checkpoint `findingsLedger` must be an array of ledger rows when ' +
           "present — each a plain object whose `kind` is 'basis' (with toolCallId, toolName, " +
           "iteration, basis), 'standing' (with toolCallId, standing, assertions[], declaredOn, " +
-          "iteration) or 'conflict' (with key, witnesses[], iteration). It is written by an agent " +
-          'with `.findings()` and re-seeded verbatim on continuation.',
+          "iteration), 'conflict' (with key, witnesses[], iteration), 'judgment' (with " +
+          "toolCallId, standing, iteration), 'judgment-error' (with toolCallId, iteration) or " +
+          "'contingent' (with declaredOn, value, at least one carrier { toolCallId, standing: " +
+          'open | noise | ruled-out }, iteration). It is written by an agent with `.findings()` ' +
+          'and re-seeded verbatim on continuation.',
       );
     }
   }

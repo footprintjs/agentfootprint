@@ -1,8 +1,11 @@
 **Mixed** — what the run can still prove it read, and the sentences that carry
 the verdict back.
-Fold: `evidenceIndex.ts` (the corpus, the exempt corpus, the turn stamp),
-`normalize.ts`, `extract.ts`, `types.ts`. Built at exactly one call site
-(`../stages/route.ts` · `checkAnswer`), handed to `gate.ts` as a parameter, never stored.
+Fold: `evidenceIndex.ts` (the corpus, the exempt corpus, the turn stamp, the
+carriers), `normalize.ts`, `extract.ts`, `types.ts`. One fold, asked at two
+moments and never stored: `../stages/route.ts` · `judgeEvidence` at the
+answer (handed to `gate.ts` as a parameter), and since 9.110.0
+`../stages/toolCalls.ts` · `towersFor` at dispatch, under `.findings()`
+beside the gate only, for the contingent check's second moment.
 Lens: `recovery.ts` · `buildEvidenceRecovery` — request-only system context for
 the revision. `gate.ts` · `buildEvidenceCorrection` remains a legacy compatibility
 helper; runtime repair no longer adds its synthetic conversation turns.
@@ -159,3 +162,46 @@ carries the turn that last served it, and
 grounded entirely in earlier turns as a `prior-turn-evidence` advisory at the
 claim seam. It reports; it never revises or refuses — that stays `posture`'s
 decision. See `src/integrity/prior-turn-evidence/README.md`.
+
+## Which result carried a value — the carriers map (9.110.0)
+
+`EvidenceCorpus.carriers` sits beside `values`: for every indexed form,
+the `toolCallId`s of THIS turn's `role: 'tool'` messages that carried it,
+in wire order, each id once. Written by the same walk at the same leaf —
+`values` says WHEN a value was last read, `carriers` says FROM WHERE — so
+there is no second pass and no second budget: a form the token ceiling
+refused has no carrier either. Two bounds, both stated on the entry:
+
+- **This turn only.** The carriers of an earlier turn are dropped at each
+  user-turn boundary (a value read four turns ago keeps its turn stamp and
+  loses its carriers), so the map answers about the turn being judged.
+- **At most `MAX_CARRIERS` (8) per value, then `truncated: true`.** A value
+  nine results carried is a common value; the reader that needs "every
+  carrier" (`../findings/contingent.ts`) treats a cut list as not judged
+  rather than reading a verdict off a prefix.
+
+- **Nothing past the token ceiling.** When `MAX_INDEX_TOKENS` is exhausted
+  (`truncated: true`) the results after the cut carried nothing into the
+  index, carriers included, so a reader that needs every carrier
+  (`../findings/contingent.ts`) files nothing from such a corpus — the same
+  flag under which the gate downgrades itself to record-only.
+
+`checkAnswer` hands the values a result DID carry back on the verdict as
+`EvidenceVerdict.grounded` — each candidate the corpus holds with the exact
+spellings it was looked up under, exempt values left out, unclipped — the
+answer-moment input of the contingent check; at dispatch
+`groundedArgumentValues` reads the same rule over a call's string leaves. The
+exempt corpus never files a carrier — an exemption names no result.
+
+## A glued-unit number is met on the lookup side only (9.110.0)
+
+The extractor judges an answer's `1007us` on its digits (the value `1007`);
+the index keeps a text result's `1007us` as `1007us`. They meet because the
+CANDIDATE remembers the glued token it came from (`Candidate.token`) and
+`extract.ts · candidateForms` looks it up under both spellings — the value's
+`lookupForms` plus the token's. The index is never widened to do it: a
+result carrying `latency 2024ms` does not ground an answer's prose year
+`2024` (that candidate came from a bare token and asks for `2024` alone),
+and an answer spelling the reading with the unit apart (`1,007 us`) asks for
+`1007` alone. `test/core/agent/evidence-extractor.test.ts` pins both
+directions.

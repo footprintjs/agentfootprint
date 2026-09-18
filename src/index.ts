@@ -594,6 +594,11 @@ export {
   type BasisRow,
   type ConflictRow,
   type ConflictWitness,
+  // 9.110.0 — the towers: a value the model USED that came only from
+  // results it had itself declared open, noise or ruled-out, filed under
+  // `.findings()` beside `.namesAndNumbersFromEvidence()`.
+  type ContingentCarrier,
+  type ContingentRow,
   type Expect,
   type FindingsDeclaration,
   type FindingsLedger,

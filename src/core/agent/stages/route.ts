@@ -21,8 +21,15 @@ import type { MessageMiddleware } from '../middleware/types.js';
 import { runMessageChain } from '../middleware/runChain.js';
 import { recordDecisions } from '../middleware/ledger.js';
 import { peelAnswerFindings } from '../findings/reserved.js';
-import { recordFindings, standingRowsFrom, type PreviousResult } from '../findings/ledger.js';
+import {
+  foldLedger,
+  recordFindings,
+  standingRowsFrom,
+  type PreviousResult,
+} from '../findings/ledger.js';
 import { knownResults } from '../findings/offer.js';
+import { contingentRowsOf, hasSetAsideStanding } from '../findings/contingent.js';
+import type { FindingsLedger } from '../findings/types.js';
 import {
   judgeAnswer,
   recordOutputAttempt,
@@ -398,6 +405,10 @@ function judgeEvidence(
    *  read is computed and never looked at, and no row is ever filed. */
   noticePriorTurnEvidence?: boolean,
   integrityLedger?: { current: DispositionLedger | undefined },
+  /** THE FINDINGS LEDGER IS ARMED (9.110.0): the contingent check runs over
+   *  the gate's grounded values against the ledger's standings. Absent → no
+   *  read of the ledger, no row, no event — the gate as it was. */
+  findings?: true,
 ): 'evidence-recheck' | undefined {
   if (gate === undefined) return undefined;
   const answer = (scope.llmLatestContent as string | undefined) ?? '';
@@ -413,9 +424,10 @@ function judgeEvidence(
   }
 
   const history = scope.history as readonly LLMMessage[];
+  const evidence = evidenceFromHistory(history);
   const verdict = checkAnswer(answer, {
     gate,
-    evidence: evidenceFromHistory(history),
+    evidence,
     exempt: exemptFromRun({
       userMessage: scope.userMessage as string | undefined,
       history,
@@ -442,6 +454,34 @@ function judgeEvidence(
       recency.disposition === 'checked-fail' ? Date.now() : undefined,
     );
     fileIntegrityFindings(scope, recency.findings, iteration);
+  }
+
+  // ── THE TOWERS (9.110.0, `.findings()` beside the gate) ─────────────
+  // Over the values the extractor found AND a tool result carried
+  // (`verdict.grounded`), against the ledger's current standings
+  // (`foldLedger`, the ledger's own fold): a value whose every carrier the
+  // model itself declared open, noise or ruled-out is filed as a contingent
+  // row through the one writer (`findings/contingent.ts` is the rule). The
+  // record's sibling of the recency read above: detection only, it chooses
+  // no branch — the revise/refuse/flag decision below is byte-for-byte the
+  // one it always was, and a draft about to be revised files its rows too,
+  // because the re-ask is the one call that can re-establish the value and
+  // the served piece carries the line to it. Gated on the ledger's arm and
+  // on the fold holding a set-aside standing at all, so a model that
+  // declared only facts, or nothing, reads nothing further — and REFUSED
+  // outright when the index hit its ceiling (`evidence.truncated`, the
+  // same flag that downgrades the gate to record-only below): a result
+  // past the cut carried nothing into the index, so a fact carrier there is
+  // invisible and a row read off the prefix would be a false accusation.
+  if (findings === true && !evidence.truncated && verdict.grounded.length > 0) {
+    const rows = [...((scope.findingsLedger as FindingsLedger | undefined) ?? [])];
+    const { standingOf } = foldLedger(rows);
+    if (hasSetAsideStanding(standingOf)) {
+      recordFindings(
+        scope,
+        contingentRowsOf(verdict.grounded, evidence, standingOf, 'answer', iteration),
+      );
+    }
   }
 
   if (verdict.unsupported.length === 0) {
@@ -645,8 +685,10 @@ export function buildRouteDeciderStage(
    *  `noticePriorTurnEvidence` precedent: a trailing optional the caller passes
    *  value-conditionally, so an unarmed agent hands this builder exactly the
    *  arguments it always did and the no-judge fast path returns the same
-   *  function reference. Read by the ENFORCING decider only — the answer turn
-   *  has a JSON envelope to peel there and nowhere else. */
+   *  function reference. The ENFORCING decider peels the answer's JSON
+   *  envelope under it (the answer turn has one there and nowhere else);
+   *  since 9.110.0 both judging deciders also hand it to `judgeEvidence`,
+   *  where the contingent check reads the ledger's standings. */
   findings?: true,
 ): (scope: TypedScope<AgentState>) => RouteBranch | Promise<RouteBranch> {
   const chain = messageMiddleware ?? [];
@@ -678,6 +720,7 @@ export function buildRouteDeciderStage(
       hasWrapUp,
       noticePriorTurnEvidence,
       integrityLedger,
+      findings,
     );
   return async (scope) => {
     const { chosen, rationale, earlyStop } = decideBranch(scope);
@@ -845,6 +888,7 @@ function buildJudgingDecider(
   hasWrapUp: boolean,
   noticePriorTurnEvidence: boolean | undefined,
   integrityLedger: { current: DispositionLedger | undefined } | undefined,
+  findings?: true,
 ): (scope: TypedScope<AgentState>) => Promise<RouteBranch> {
   return async (scope) => {
     const { chosen, rationale, earlyStop } = decideBranch(scope);
@@ -891,8 +935,14 @@ function buildJudgingDecider(
     // answer, and grounding it would pay for a turn that is being replaced.
     if (
       !denied &&
-      judgeEvidence(scope, evidence, earlyStop, noticePriorTurnEvidence, integrityLedger) ===
-        'evidence-recheck'
+      judgeEvidence(
+        scope,
+        evidence,
+        earlyStop,
+        noticePriorTurnEvidence,
+        integrityLedger,
+        findings,
+      ) === 'evidence-recheck'
     ) {
       emitRouteDecided(scope, 'evidence-recheck', evidenceRecheckRationale(scope));
       return 'evidence-recheck';
@@ -1061,8 +1111,14 @@ function buildEnforcingDecider(
       // the schema accepted and the procedure finished — the one that is
       // really about to be handed back.
       if (
-        judgeEvidence(scope, evidence, base.earlyStop, noticePriorTurnEvidence, integrityLedger) ===
-        'evidence-recheck'
+        judgeEvidence(
+          scope,
+          evidence,
+          base.earlyStop,
+          noticePriorTurnEvidence,
+          integrityLedger,
+          findings,
+        ) === 'evidence-recheck'
       ) {
         return reAsk('evidence-recheck', evidenceRecheckRationale(scope));
       }

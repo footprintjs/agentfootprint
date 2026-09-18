@@ -67,6 +67,7 @@ import {
   FINDINGS_ANSWER_ASK,
   FINDINGS_ARGUMENT_SCHEMA,
   FINDINGS_INSTRUCTION,
+  findingsInstructionFor,
 } from '../src/core/agent/findings/reserved.js';
 import { findingsLedgerPiece } from '../src/core/agent/findings/serve.js';
 import { defineOntology, ONTOLOGY_INSTRUCTION, ontologyPiece } from '../src/ontology/index.js';
@@ -679,6 +680,51 @@ function findingsAskPieces(): string[] {
   return [findingsLedgerPiece(ledger, ['call_1', 'call_2'], 'quote-facts')!.rawContent];
 }
 
+/** The piece with a `contingent:` section (9.110.0): a ledger holding one
+ *  set-aside standing and two contingent rows — one filed at the answer, one
+ *  at a dispatch with two carriers — composed by the real function. */
+function findingsContingentPieces(): string[] {
+  const ledger: FindingsLedger = [
+    {
+      kind: 'standing',
+      toolCallId: 'call_1',
+      toolName: 'lookup_port',
+      standing: 'noise',
+      assertions: [],
+      declaredOn: { toolCallId: 'call_2' },
+      iteration: 2,
+    },
+    {
+      kind: 'standing',
+      toolCallId: 'call_4',
+      toolName: 'fetch_log',
+      standing: 'open',
+      settles: 'a second read',
+      assertions: [],
+      declaredOn: { toolCallId: 'call_5' },
+      iteration: 5,
+    },
+    {
+      kind: 'contingent',
+      declaredOn: { toolCallId: 'call_7' },
+      value: '41200',
+      carriers: [
+        { toolCallId: 'call_1', standing: 'noise' },
+        { toolCallId: 'call_4', standing: 'open' },
+      ],
+      iteration: 7,
+    },
+    {
+      kind: 'contingent',
+      declaredOn: 'answer',
+      value: 'fc1/7',
+      carriers: [{ toolCallId: 'call_1', standing: 'noise' }],
+      iteration: 8,
+    },
+  ] as FindingsLedger;
+  return [findingsLedgerPiece(ledger, ['call_1', 'call_4', 'call_7'])!.rawContent];
+}
+
 /** Every `description` in the reserved property's schema tree — each one the
  *  model reads on every served tool, at whatever depth the provider renders. */
 function findingsSchemaDescriptions(): string[] {
@@ -1096,6 +1142,57 @@ const PRODUCERS: readonly ModelFacingProducer[] = [
       /facts \(declared by the model\):/,
     ],
     compose: async () => findingsAskPieces(),
+  },
+  {
+    id: 'findings ledger — the CONTINGENT line of the instruction (9.110.0)',
+    module: 'src/core/agent/findings/reserved.ts',
+    surface: ALWAYS_ON_INSTRUCTION,
+    lifetimeBecause:
+      'the same `findings-ledger` instruction as the row above — `AgentBuilder.build` rebuilds ' +
+      'it in place with `FINDINGS_CONTINGENT_LINE` as its last line when the evidence gate is ' +
+      'armed beside the ledger (`findingsInstructionFor`), so it is still a system piece the ' +
+      'injection engine recomposes on every pass and the receipt hashes per request — never a ' +
+      '`history` turn; and never registered on an agent with one door, where nothing is recorded ' +
+      'as contingent and the sentence would be a promise the run could not keep',
+    drivenBy: [
+      'test/core/agent/findings/contingent.test.ts',
+      'test/core/tools/byte-identity.test.ts',
+    ],
+    // What the record does with a value taken from a set-aside result, and
+    // the two ways out — each a marker so a rewrite that drops one goes red.
+    reaches: [
+      /^Findings v1\./,
+      /is recorded as contingent; either re-establish it from a result you stand on/,
+      /or say your answer is contingent on it\.$/,
+    ],
+    compose: async () => [findingsInstructionFor({ contingent: true })],
+  },
+  {
+    id: 'findings ledger — the served `contingent:` section (9.110.0)',
+    module: 'src/core/agent/findings/serve.ts',
+    surface: LEDGER_PIECE,
+    lifetimeBecause:
+      'the same request-only system piece as the SERVED piece row: `findingsLedgerPiece` quotes ' +
+      'every `ContingentRow` of the committed `findingsLedger` under the heading `contingent (read ' +
+      'off the record):` — the one section the header\'s "what the model itself declared" does not ' +
+      "cover, named as the library's join so the header stays true — " +
+      'composed per request, joined into `systemPieces` only, never an injection and never a ' +
+      '`history` turn; `servedView.ts · viewOf` recomposes it from the record',
+    drivenBy: [
+      'test/core/agent/findings/contingent.test.ts',
+      'test/core/agent/findings/serve.test.ts',
+    ],
+    // The heading, an answer-moment line, a dispatch-moment line with two
+    // carriers — the grammar's every arm, each a marker.
+    reaches: [
+      /\ncontingent \(read off the record\):\n/,
+      /^answer used fc1\/7 from tool:call_1 \(noise\)$/m,
+      /^tool:call_7 used 41200 from tool:call_1 \(noise\), tool:call_4 \(open\)$/m,
+      // …and the piece it rides on is still the real one.
+      /^\[AgentFootprint findings ledger/,
+      /noise \(declared by the model\): 1 result \(tool:call_1\)/,
+    ],
+    compose: async () => findingsContingentPieces(),
   },
   {
     id: 'ontology — the always-on INSTRUCTION piece (9.106.0; v2 9.107.0; v3 9.108.0)',

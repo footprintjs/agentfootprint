@@ -127,6 +127,8 @@ title: agentfootprint
 - [~~ContextContribution~~](/docs/api/interfaces/ContextContribution)
 - [ContextEngineeringHandle](/docs/api/interfaces/ContextEngineeringHandle)
 - [~~ContextSourceAdapter~~](/docs/api/interfaces/ContextSourceAdapter)
+- [ContingentCarrier](/docs/api/interfaces/ContingentCarrier)
+- [ContingentRow](/docs/api/interfaces/ContingentRow)
 - [Coverage](/docs/api/interfaces/Coverage)
 - [CoverageDeclaration](/docs/api/interfaces/CoverageDeclaration)
 - [CoverageItem](/docs/api/interfaces/CoverageItem)

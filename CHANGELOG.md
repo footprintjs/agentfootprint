@@ -5,6 +5,67 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [9.110.0] - 2026-09-18
+
+### Added — no towers on unverified lemmas: contingent values on the record, and cache reads as a cost
+
+- **`ContingentRow`** (with `ContingentCarrier`) on the findings ledger: a value the model USED —
+  in its final answer, or as an argument of a later tool call — that came only from results the
+  model itself declared `open`, `noise` or `ruled-out`. Declared standings joined to the evidence
+  corpus's provenance, nothing inferred, no judge: the last standing per result is current
+  (`foldLedger`), an undeclared carrier or one `fact` carrier means the value stands, a value the
+  corpus lists more than eight carriers for is not judged, and which tokens are values is the
+  gate's own rule; nothing is judged from a corpus whose token ceiling was hit (a fact carrier
+  past the cut is invisible — the flag under which the gate already downgrades itself); the
+  carriers are the current turn's, so a turn-1 result declared noise whose value is used in
+  turn 2 of a continued conversation is not contingent and gets no mark. One row per VALUE per
+  moment (two spellings of one value share a canonical form), through `recordFindings`; the row
+  holds the normalized value (cut at 120 chars with the cut stated) and every carrier with its
+  standing. Two moments: the answer, after the evidence gate's verdict (`declaredOn: 'answer'`),
+  and dispatch — in the tool-calls stage, after the call's basis row and before it runs
+  (`declaredOn: { toolCallId }`); every standing in the batch's `_findings.previous` is filed
+  before the check, so a standing declared on this call or on a sibling call of the same batch
+  governs this call's arguments. Detection only.
+- **`agentfootprint.findings.contingent`** — the fifth findings event: the moment, the dispatching
+  call's id, the carrier count, the distinct standings and the value's length; never the value.
+  119 → 120 typed events.
+- **Served back** in the ledger piece under the heading `contingent (read off the record):`
+  after the four buckets — named as the library's join, so the piece's header ("what the model
+  itself declared") stays true — one line per row (`tool:c2 used fc1/7 from tool:c1
+  (ruled-out)`), capped like a bucket; `servedAt` rebuilds it. The instruction gains one line (`FINDINGS_CONTINGENT_LINE`, `findingsInstructionFor`)
+  under BOTH `.findings()` and `.namesAndNumbersFromEvidence()`, composed at `build` — a
+  `.findings()`-only agent is never told a sentence its run cannot keep.
+- **`EvidenceCorpus.carriers`** — `value → the tool_result ids of this turn's results that carried
+  it` (at most `MAX_CARRIERS` = 8, then `truncated`), written by the same walk that stamps the
+  turn; **`EvidenceVerdict.grounded`** — the candidates a result did carry, each with the
+  spellings it was looked up under, exempt values left out.
+- **`AgentState.totalCacheReadTokens`** — `usage.cacheRead` summed beside `totalInputTokens`,
+  written only once a provider reported one (the mock never does; the key is absent, not zero);
+  crosses the grouped chart's boundary under the same condition.
+- **`bench/findings-shuffle.mjs`** — every armed condition also arms the evidence gate at
+  `'assist'` (no wire byte moves); three columns read off the record: `contingent` (rows per run —
+  the tower rate a hosted run measures), `cache-read` and `cached %` (summed off `llm_end`,
+  `—` when nothing reported cache reads); a mock-only fifth condition `ledger+tower` whose scripted
+  answer quotes a value from a result it declared noise, so the column is proved to read 1 there
+  and 0 on the clean rows.
+- Reference `agent-findings-contingent` generated alone — the one reference with both doors; the
+  twenty others untouched.
+
+### Fixed — an answer's glued-unit number is met under the spelling the result carried
+
+- A candidate the extractor read off a glued-unit token (`1007us` → the value `1007`) is now
+  looked up under BOTH spellings (`extract.ts · candidateForms`: the value's forms plus the
+  token's), so an answer's `1007us` is grounded by a text result carrying `1007us`. The INDEX is
+  not widened: a result carrying `latency 2024ms` still does not ground an answer's prose year
+  `2024`, and an answer spelling the reading bare with the unit apart (`1,007 us`) asks for
+  `1007` alone. Pinned in `evidence-extractor.test.ts`: (a) result `1007us`, answer `1007us` →
+  grounded; (b) result `latency 2024ms`, answer `in 2024 we migrated` → flagged; the bare
+  spelling flagged; a reading nothing served flagged.
+- The checkpoint door (`validateCheckpoint`) accepts every row kind the one writer files: it
+  named `basis`, `standing` and `conflict` only, so a checkpoint of a run with `.findings({ judge })`
+  — carrying `judgment` / `judgment-error` rows since 9.104.0 — was refused on resume; the new
+  `contingent` rows would have been too. Each arm checks the fields its reader consumes.
+
 ## [9.109.1] - 2026-09-17
 
 ### Fixed — the score's word rules, after the first scored arm

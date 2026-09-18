@@ -1251,6 +1251,20 @@ export interface AgentState {
   finalContent: string;
   totalInputTokens: number;
   totalOutputTokens: number;
+  /**
+   * Cache-read tokens accumulated over the run's model calls (9.110.0) —
+   * `LLMResponse.usage.cacheRead` summed by `callLLM` beside
+   * `totalInputTokens`, so a cache hit is a first-class cost on the record
+   * rather than a number a bench has to re-derive from `llm_end` events.
+   * VALUE-conditional: written only when the provider reported a
+   * `cacheRead` number on a call, so a provider that reports none (the mock,
+   * a local model) never writes the key and its record is the bytes it was.
+   * On the grouped chart it crosses the LLM_CALL boundary under the same
+   * condition (`buildDynamicAgentChart.ts`). Never seeded to zero: absent
+   * means "no provider reported cache reads", which is a different fact
+   * from "zero tokens were read from cache".
+   */
+  totalCacheReadTokens?: number;
   turnStartMs: number;
   // Multi-tenant memory scope. Defaulted in seed when AgentInput.identity
   // is omitted, so non-memory agents work unchanged. Field is named

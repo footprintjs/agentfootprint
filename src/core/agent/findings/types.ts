@@ -251,7 +251,56 @@ export interface JudgmentErrorRow {
   readonly iteration: number;
 }
 
-export type FindingsRow = BasisRow | StandingRow | ConflictRow | JudgmentRow | JudgmentErrorRow;
+/**
+ * The cap on a contingent row's `value` (9.110.0): a normalized DATA token
+ * longer than this is cut and the cut is STATED in the text
+ * (`…[clipped N chars]`), the law `PROPOSITION_CHARS` sets for a basis row's
+ * texts. A token the extractor calls data is an identifier or a number, so
+ * the cut is a floor against a pathological result, not a working bound.
+ */
+export const CONTINGENT_VALUE_CHARS = 120;
+
+/** One result that carried a contingent value, with the standing the model gave it. */
+export interface ContingentCarrier {
+  readonly toolCallId: string;
+  /** The result's CURRENT standing — never `fact` (a fact carrier means the value stands). */
+  readonly standing: Standing;
+}
+
+/**
+ * A value the model USED — in its answer, or as an argument of a later
+ * call — that came only from results the model itself declared `open`,
+ * `noise` or `ruled-out` (9.110.0): a theorem built on a lemma the prover
+ * had already set aside. Declared standings plus the evidence corpus's
+ * carriers (`evidence/evidenceIndex.ts · EvidenceCorpus.carriers`); no
+ * inference, no judge, no second model — `findings/contingent.ts` is the
+ * one rule. One row per contingent VALUE per moment (the answer, or the
+ * call whose arguments used it), never per carrier.
+ *
+ * `value` is the token as the extractor normalized it (`evidence/extract.ts`
+ * decides which tokens are data; `evidence/normalize.ts` the spelling), cut
+ * at `CONTINGENT_VALUE_CHARS` with the cut stated. `carriers` names EVERY
+ * result that carried it, in wire order, each with its standing — the whole
+ * list, because the rule is "every carrier non-fact": a value with one
+ * `fact` carrier, an undeclared carrier, or more carriers than the corpus
+ * lists (`ValueCarriers.truncated`) files no row. `iteration` is the
+ * moment's iteration — the answer's, or the dispatching call's.
+ */
+export interface ContingentRow {
+  readonly kind: 'contingent';
+  readonly declaredOn: DeclaredOn;
+  readonly value: string;
+  readonly carriers: readonly ContingentCarrier[];
+  readonly iteration: number;
+}
+
+export type FindingsRow =
+  | BasisRow
+  | StandingRow
+  | ConflictRow
+  | JudgmentRow
+  | JudgmentErrorRow
+  | ContingentRow;
 
 /** The committed key: flat, append-only, a fresh array on every write. */
 export type FindingsLedger = readonly FindingsRow[];

@@ -19,6 +19,7 @@ import {
   type AgentfootprintEventMap,
 } from '../../../src/events/registry.js';
 import type {
+  FindingsContingentPayload,
   FindingsDeclaredPayload,
   FindingsJudgeFailedPayload,
   FindingsJudgedPayload,
@@ -26,7 +27,7 @@ import type {
 } from '../../../src/events/payloads.js';
 
 describe('findings events — registered at every site', () => {
-  it('EVENT_NAMES.findings names the four events in the three-segment form', () => {
+  it('EVENT_NAMES.findings names the five events in the three-segment form', () => {
     expect(EVENT_NAMES.findings).toEqual({
       declared: 'agentfootprint.findings.declared',
       standing: 'agentfootprint.findings.standing',
@@ -34,10 +35,12 @@ describe('findings events — registered at every site', () => {
       // the registry's form is `agentfootprint.<domain>.<snake_action>`.
       judged: 'agentfootprint.findings.judged',
       judge_failed: 'agentfootprint.findings.judge_failed',
+      // 9.110.0 — the towers: a value used that came only from set-aside results.
+      contingent: 'agentfootprint.findings.contingent',
     });
   });
 
-  it('all four are in ALL_EVENT_TYPES, directly after the middleware domain', () => {
+  it('all five are in ALL_EVENT_TYPES, directly after the middleware domain', () => {
     const list = [...ALL_EVENT_TYPES];
     const at = list.indexOf('agentfootprint.middleware.decision');
     expect(at).toBeGreaterThan(-1);
@@ -45,6 +48,13 @@ describe('findings events — registered at every site', () => {
     expect(list[at + 2]).toBe('agentfootprint.findings.standing');
     expect(list[at + 3]).toBe('agentfootprint.findings.judged');
     expect(list[at + 4]).toBe('agentfootprint.findings.judge_failed');
+    expect(list[at + 5]).toBe('agentfootprint.findings.contingent');
+  });
+
+  it('the contingent event is a key of AgentfootprintEventMap with its own payload type (9.110.0)', () => {
+    expectTypeOf<
+      AgentfootprintEventMap['agentfootprint.findings.contingent']['payload']
+    >().toEqualTypeOf<FindingsContingentPayload>();
   });
 
   it('the judge events are keys of AgentfootprintEventMap with their own payload types', () => {
@@ -144,5 +154,22 @@ describe('findings events — the judge payloads carry identities, enums and num
       'toolCallId' | 'toolName' | 'iteration' | 'status' | 'latencyMs'
     >();
     expectTypeOf<FindingsJudgeFailedPayload['status']>().toEqualTypeOf<number | undefined>();
+  });
+});
+
+describe('findings events — the contingent payload carries the moment, counts and enums only (9.110.0)', () => {
+  it('FindingsContingentPayload carries exactly the six declared keys — never the value', () => {
+    expectTypeOf<keyof FindingsContingentPayload>().toEqualTypeOf<
+      'iteration' | 'declaredOn' | 'toolCallId' | 'carriers' | 'standings' | 'valueChars'
+    >();
+    expectTypeOf<FindingsContingentPayload['declaredOn']>().toEqualTypeOf<'tool-call' | 'answer'>();
+    expectTypeOf<FindingsContingentPayload['toolCallId']>().toEqualTypeOf<string | undefined>();
+    expectTypeOf<FindingsContingentPayload['carriers']>().toEqualTypeOf<number>();
+    expectTypeOf<FindingsContingentPayload['standings']>().toEqualTypeOf<
+      readonly ('fact' | 'open' | 'noise' | 'ruled-out')[]
+    >();
+    expectTypeOf<FindingsContingentPayload['valueChars']>().toEqualTypeOf<number>();
+    // The token itself lives on the `ContingentRow` in the committed key.
+    expectTypeOf<FindingsContingentPayload>().not.toHaveProperty('value');
   });
 });

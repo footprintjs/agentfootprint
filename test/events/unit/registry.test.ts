@@ -233,7 +233,7 @@ describe('event registry — names + exhaustiveness', () => {
     //     model call under `.ontology()`: the map's id, version and hash and
     //     its three counts. Identities and numbers only — never a meaning, a
     //     coverage sentence or a node name.)
-    expect(ALL_EVENT_TYPES.length).toBe(119);
+    expect(ALL_EVENT_TYPES.length).toBe(120);
   });
 
   it('every entry in ALL_EVENT_TYPES is a key of AgentfootprintEventMap', () => {

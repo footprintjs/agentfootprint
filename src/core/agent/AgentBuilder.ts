@@ -92,7 +92,7 @@ import { TRACE_TOOL_NAMES } from '../../lib/trace-toolpack/traceToolNames.js';
 import { Agent } from '../Agent.js';
 import { buildSkillGraphDeclared, type SkillGraphDeclaredMap } from './skillGraphDeclared.js';
 import type { AgentOptions, RunConfigFn } from './types.js';
-import { FINDINGS_INSTRUCTION } from './findings/reserved.js';
+import { FINDINGS_INSTRUCTION, findingsInstructionFor } from './findings/reserved.js';
 import { ONTOLOGY_INSTRUCTION, ONTOLOGY_INSTRUCTION_ID } from '../../ontology/instruction.js';
 
 /** The id of the always-on instruction `.findings()` registers (9.101.0) —
@@ -3081,6 +3081,24 @@ export class AgentBuilder {
             `dedupes by name (first wins), so your tool would silently shadow the trace tool. ` +
             `Rename it, or reserved names: ${reserved.join(', ')}.`,
         );
+      }
+    }
+    // THE CONTINGENT LINE (9.110.0) — the findings instruction gains one
+    // line when the evidence gate is armed beside the ledger, and only then:
+    // `findings/contingent.ts` runs under both doors, so the sentence that
+    // names what it records is registered under both doors. Composed HERE
+    // because the two doors may be called in either order; the injection
+    // registered by `.findings()` is rebuilt in place, same id, same
+    // activation, so an agent with the ledger alone keeps the exact bytes
+    // `.findings()` registered.
+    if (this.findingsValue !== undefined && this.evidenceGate !== undefined) {
+      const at = this.injectionList.findIndex((i) => i.id === FINDINGS_INSTRUCTION_ID);
+      if (at >= 0) {
+        this.injectionList[at] = defineInstruction({
+          id: FINDINGS_INSTRUCTION_ID,
+          activeWhen: () => true,
+          prompt: findingsInstructionFor({ contingent: true }),
+        });
       }
     }
     const selfExplainBinding = this.selfExplainConfig

@@ -214,6 +214,35 @@ export const FINDINGS_INSTRUCTION = [
 ].join('\n');
 
 /**
+ * The one line the instruction gains when the evidence gate is armed beside
+ * the ledger (9.110.0, `findings/contingent.ts`): what the record does with
+ * a value taken from a result the model set aside, and the two ways out —
+ * re-establish it, or say so. Never registered alone, and never on an agent
+ * with `.findings()` only: without `.namesAndNumbersFromEvidence()` there is
+ * no corpus, nothing is recorded as contingent, and a sentence saying it
+ * would be a promise the run cannot keep (`findingsInstructionFor`). It
+ * says what the record holds and what the model may DO; judged by
+ * `unprovable` at the strictest lifetime in `test/modelFacingSurfaces.test.ts`.
+ */
+export const FINDINGS_CONTINGENT_LINE =
+  "A value you take from a result you declared 'open', 'noise' or 'ruled-out' is recorded as " +
+  'contingent; either re-establish it from a result you stand on, or say your answer is ' +
+  'contingent on it.';
+
+/**
+ * The instruction an armed agent registers: `FINDINGS_INSTRUCTION` as it
+ * is, plus `FINDINGS_CONTINGENT_LINE` as one more line when the evidence
+ * gate is armed too. Composed at `AgentBuilder.build` (the two doors may be
+ * called in either order), and byte-identical to the constant when the gate
+ * is absent — so the `.findings()`-only references are the bytes they were.
+ */
+export function findingsInstructionFor(arms: { readonly contingent: boolean }): string {
+  return arms.contingent
+    ? `${FINDINGS_INSTRUCTION}\n${FINDINGS_CONTINGENT_LINE}`
+    : FINDINGS_INSTRUCTION;
+}
+
+/**
  * The answer-turn ask (9.103.0) — appended to the served ledger piece
  * (`serve.ts · findingsLedgerPiece`) ONLY under
  * `findings({ answerAsk: 'quote-facts' })`, a bench-gated dial whose default

@@ -851,6 +851,34 @@ export interface FindingsJudgeFailedPayload {
 }
 
 /**
+ * The model USED a value that came only from results it had itself declared
+ * `open`, `noise` or `ruled-out` (9.110.0, `.findings()` beside
+ * `.namesAndNumbersFromEvidence()`): in its answer (`declaredOn: 'answer'`)
+ * or as an argument of a later tool call (`'tool-call'`, with the call's
+ * `toolCallId`). Declared standings plus the evidence corpus's provenance —
+ * nothing inferred, no judge. The row (`ContingentRow`) holds the value and
+ * every carrier with its standing in the committed `findingsLedger`; this
+ * payload carries the moment, how many results carried the value, the
+ * DISTINCT standings among them and the value's length — identities, enums
+ * and numbers only, never the token. Fired by `recordFindings`, one per
+ * contingent row: at the answer, after the evidence gate's verdict; at
+ * dispatch, after the call's basis row and before `stream.tool_start`.
+ * Never fired unless BOTH doors are armed.
+ */
+export interface FindingsContingentPayload {
+  readonly iteration: number;
+  readonly declaredOn: 'tool-call' | 'answer';
+  /** The dispatching call, when the value rode its arguments; absent for the answer. */
+  readonly toolCallId?: string;
+  /** How many results carried the value — every one judged non-fact. */
+  readonly carriers: number;
+  /** The distinct standings among the carriers, in carrier order. */
+  readonly standings: readonly Standing[];
+  /** The length of the value as the row holds it. */
+  readonly valueChars: number;
+}
+
+/**
  * A classifier picked a tool for one model call (9.105.0, `.toolChoice()`):
  * the provider's pick among the OFFERED tools (the merged wire minus the
  * always-served doors), its confidence, how many were offered and how many
