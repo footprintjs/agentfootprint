@@ -263,6 +263,74 @@ from tool names, any change to routing, any tool-call made by the library.
 
 Measured on the host after the release: the table below.
 
+## Where this sits in the literature (read 2026-09-17, for the paper)
+
+The owner asked how ontologies have been used with LLM agents in research,
+so the design can be placed rather than claimed novel by omission. Read
+against the ruling ("a map that does not provide a way to get data") the
+2025–2026 work falls into four uses, and this packet is a fifth.
+
+| use of the ontology | representative work | what the ontology holds | how it reaches the model | what it is for |
+|---|---|---|---|---|
+| constrain tool ARGUMENTS | *The Semantic Training Gap: Ontology-Grounded Tool Architectures for Industrial AI Agent Systems* (arXiv 2605.11234, 2026) — "unconstrained tool parameters produced a 43% hallucination rate for domain identifiers; ontology-grounded parameters reduced this to 0%" (Qwen3-32B, 72 invocations, 6 configurations) | definitions and relations (equipment ids, process parameters, failure codes), "a typed relational configuration" | a `resolve · contextualize · annotate` contract in the tool layer, at runtime | an identifier the model passes must be one the domain defines |
+| constrain INPUTS and tool VISIBILITY | *Ontology-Constrained Neural Reasoning in Enterprise Agentic Systems* (arXiv 2604.00555, 2026) — role, domain and interaction ontologies; "ontology-coupled agents significantly outperform ungrounded agents on Metric Accuracy (p<.001)"; the gain grows where pretraining is thin ("inversely proportional to LLM training data coverage of the domain") | schema, metric ranges, role patterns, handoff edges — no instances | a prompt injector turns the symbols into prose under a token budget; domain hierarchies filter which tools the agent sees | the agent reasons and picks tools inside the declared domain; the paper's own note: "ontologies constrain inputs but not outputs" |
+| make the ontology EXECUTABLE | *Ontology-to-tools compilation for executable semantic constraint enforcement in LLM agents* (arXiv 2602.03439, 2026) — "ontological specifications are compiled into executable tool interfaces that LLM-based agents must use to create and modify knowledge graph instances" | a schema that becomes the tools | the compiled tools ARE the door | invalid instances cannot be written; proof of principle, no numbers |
+| GROUND answers in a graph that holds the data | ontology-grounded GraphRAG (clinical QA: "98% accuracy … hallucination rate falling from 63% and 48% down to 1.7%", J. Biomedical Informatics 2026); OG-RAG (+55% fact recall); the operational-ontology platforms, where the ontology "models every noun, relationship, rule, action, and permission, and then lets the agent operate on that governed layer, not on the raw data beneath it" | instances: objects, links, properties — the data itself | retrieval over the graph, typed queries, typed actions | the answer is read off a store the ontology types |
+
+What none of them do — a research brief that catalogues 32 of these
+papers (designpattern.fyi, "Research Brief: Ontologies for Agentic AI
+(2025–2026)") reaches the same reading: "**No paper explicitly addresses**
+declaring what the model cannot do or prompting abstention from
+out-of-ontology questions"; the nearest is a 2026 ESWC workshop call for
+"calibrated abstention for uncertain graph links", and a historical note
+that KQML's message envelope carried an `:ontology` field that modern
+agent protocols dropped.
+
+Where this packet stands, in those terms:
+
+- **The map holds no data and is not a door.** It is the fourth row's
+  opposite: no instances, no retrieval over it, no action through it, and
+  — unlike the third row — it compiles into nothing. The tools stay the
+  application's own; the map only says which one reads which term from
+  which source, and (9.108.0) which skill declares the tool.
+- **What it constrains is the ANSWER's account of absence, not the
+  inputs.** The first two rows constrain arguments and visibility; this
+  packet leaves both alone (the `via` check at build is a lie-detector on
+  the declaration, not a runtime constraint on the model) and instead puts
+  a declared boundary in front of the model: the source's own coverage
+  sentence, `configured: no`, and `known, not held here`. That is the
+  fifth use — the one the brief found no paper for — and the measured run
+  is its first number: the source or the declared gap named in 8 of 8
+  armed answers against 6 of 8 unarmed, one of the unarmed answers wrong
+  about what IS collected.
+- **Every served line is the author's.** The grounding papers read
+  definitions and instances into the prompt through a library's own
+  prose or a retriever's ranking; here the piece quotes the declaration
+  and the library writes one constant header. That is the family's
+  sentence-basis law applied to an ontology, and it is what lets the
+  receipt hash the piece and the served view rebuild it byte for byte.
+- **The record, not the prompt, is the unit.** The declaration is a run
+  constant on the record with its hash; the join to the skills is written
+  from the registry's facts; a lens draws the map from the record with no
+  library call. None of the surveyed systems put the ontology on a
+  per-run, per-request-hashed record that a reader can travel.
+
+Two honest limits the literature sharpens: the second row's finding that
+grounding pays most where pretraining is thin suggests the map's value on
+a public domain (VMware, Cisco MDS) is smaller than on a private one — the
+first host's stores are private, its vocabulary is not; and the first
+row's result (identifier hallucination 43% → 0%) is a constraint on
+arguments this map does NOT impose, so a wrong identifier in a tool call
+is still the findings ledger's and the answer validation's to catch, not
+the map's.
+
+Sources: [arXiv 2605.11234](https://arxiv.org/abs/2605.11234) ·
+[arXiv 2604.00555](https://arxiv.org/html/2604.00555v2) ·
+[arXiv 2602.03439](https://arxiv.org/abs/2602.03439) ·
+[the research brief](https://www.designpattern.fyi/ontological-engineering/ontology-agentic-ai-research-brief/) ·
+[an agent-ontology architecture read](https://zerofuturetech.substack.com/p/palantir-aip-agent-ontology-interaction) ·
+[Don't Hallucinate, Abstain (ACL 2024)](https://aclanthology.org/2024.acl-long.786.pdf) — abstention without a declared map, the baseline the fifth use improves on.
+
 Raw answers and per-turn numbers: the host keeps them beside its `.dev/`
 bench (`nodata-ontology-{on,off}.json`); this table is the record of them.
 
