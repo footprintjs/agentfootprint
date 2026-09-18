@@ -261,7 +261,9 @@ the record), and the served view rebuilds the same bytes from the record's
 join and the epoch's hidden ids. Not built: any inference of relation
 from tool names, any change to routing, any tool-call made by the library.
 
-Measured on the host after the release: the table below.
+Measured on the host after the release: the table below — scored by
+`scoreAbsence` (9.109.0), not by a regex: named the gap · named where ·
+tool calls · unsupported values · map words, each off the record.
 
 ## Where this sits in the literature (read 2026-09-17, for the paper)
 

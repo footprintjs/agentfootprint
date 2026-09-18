@@ -376,3 +376,33 @@ describe('ontologyHash — stable, key-order independent, blind to `hash`', () =
     expect(door.ontologyHash(map)).toBe(map.hash);
   });
 });
+
+describe('defineOntology — source aliases (9.109.0)', () => {
+  const withAlias = (aliases: readonly string[], id = 'syslog') =>
+    defineOntology({
+      ...SPEC,
+      sources: { ...SPEC.sources, [id]: { ...SPEC.sources[id]!, aliases } },
+    });
+
+  it('a source may declare aliases; they are frozen on the definition and move the hash', () => {
+    const map = withAlias(['the archive', 'Syslog']);
+    expect(map.sources.syslog!.aliases).toEqual(['the archive', 'Syslog']);
+    expect(Object.isFrozen(map.sources.syslog!.aliases)).toBe(true);
+    expect(map.hash).not.toBe(defineOntology(SPEC).hash);
+  });
+
+  it('refuses a repeated alias, too many, and an alias that is another declared id of either kind', () => {
+    expect(() => withAlias(['a', 'a'])).toThrow(/sources\['syslog'\]\.aliases repeats a name/);
+    expect(() => withAlias(Array.from({ length: 17 }, (_, i) => `a${i}`))).toThrow(
+      /sources\['syslog'\]\.aliases must be an array of at most 16 strings/,
+    );
+    expect(() => withAlias(['inventory'])).toThrow(
+      /source 'syslog' alias 'inventory' collides with a declared id 'inventory'/,
+    );
+    expect(() => withAlias(['port'])).toThrow(
+      /source 'syslog' alias 'port' collides with a declared id 'port'/,
+    );
+    // Its own id is not a collision.
+    expect(() => withAlias(['syslog'])).not.toThrow();
+  });
+});

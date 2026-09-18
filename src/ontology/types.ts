@@ -39,11 +39,13 @@ export interface OntologyNode {
   readonly sources?: readonly OntologyNodeSource[];
 }
 
-/** A place data is held: its meaning, the author's coverage sentence, and whether it is configured — ABSENT means unknown, never assumed. */
+/** A place data is held: its meaning, the author's coverage sentence, whether it is configured — ABSENT means unknown, never assumed — and (9.109.0) the other names people use for it. */
 export interface OntologySource {
   readonly meaning: string;
   readonly coverage?: string;
   readonly configured?: boolean;
+  /** Other names for the source (`'Cohesity'` for `influx_cohesity`): served beside its meaning, and what a bench's scorer matches an answer against — the declaration must carry the words people use. */
+  readonly aliases?: readonly string[];
 }
 
 /** How two nodes RELATE, in the author's own word (`'backed-by'`, `'logs-into'`, …). */

@@ -17,7 +17,7 @@ writes the run constant `AgentState.ontology` and `callLLM` emits
 ## Why
 
 When a tool result does not hold what a question needs, the model has
-nothing to say about where the need *would* be met. It guesses a source, or
+nothing to say about where the need _would_ be met. It guesses a source, or
 it reports the absence as if nothing anywhere held the term — the field
 report this library exists for records a model concluding it could not help
 while the data sat one source over. The application knows its domain: what
@@ -25,11 +25,11 @@ each term means and in what unit, which system holds it, which tool reads
 it from there, how the terms relate. That knowledge was never on the record
 and never in the model's context.
 
-The owner's ruling (2026-09-17): *an ontology is like a map — it does not
+The owner's ruling (2026-09-17): _an ontology is like a map — it does not
 provide a way to get data; it just tells and reasons about each node and how
 to reach a node. The model can understand that if there is no data it can
 tell: if you get data for this node, or this other node, it can help
-further.* So the ontology here is declared, read-only, executed through by
+further._ So the ontology here is declared, read-only, executed through by
 nothing, inferred from by nothing, and served as data.
 
 ## What it is
@@ -40,7 +40,7 @@ detached, deep-frozen and fingerprinted:
 - **nodes** — what a term IS: `meaning`, an optional `unit`, `aliases`, and
   the `sources` that hold it, each with the registered tools (`via`) that
   read it from there and the author's `coverage` sentence. A node with no
-  source is legal: *known, nowhere collected here*.
+  source is legal: _known, nowhere collected here_.
 - **sources** — a place data is held: `meaning`, `coverage`, and
   `configured` — a boolean the author wrote, or absent. Absent means
   unknown; the served line then says nothing about configuration. The
@@ -68,7 +68,9 @@ const map = defineOntology({
   nodes: {
     port: {
       meaning: 'a physical switch port',
-      sources: [{ source: 'inventory', via: ['lookup_port'], coverage: 'every port on every switch' }],
+      sources: [
+        { source: 'inventory', via: ['lookup_port'], coverage: 'every port on every switch' },
+      ],
     },
     port_error_rate: { meaning: 'CRC errors per minute on a port', unit: 'errors/min' },
   },
@@ -168,9 +170,9 @@ backup_run ← influx_cohesity via vm_backup_status [skill: backup-check], vm_pr
 port ← inventory via lookup_port
 ```
 
-and the instruction (v3) says what to do with it: *where that tool is
+and the instruction (v3) says what to do with it: _where that tool is
 named with the skill that declares it, that skill id is what `read_skill`
-takes*. A static `.tool()` name stays bare. Nothing is inferred: the
+takes_. A static `.tool()` name stays bare. Nothing is inferred: the
 registry is the one owner of "which skill declares this tool", and the
 piece quotes it.
 
@@ -183,6 +185,52 @@ rebuilds the piece from the record's `tools` and the epoch's
 `hiddenSkillIds`, so the receipt agrees byte for byte under a role that
 sees less. Pinned end to end by `test/core/agent/ontology.test.ts` (a
 role that may see one skill and not the other).
+
+## The score — how a "no data" answer is measured (9.109.0)
+
+The design page's first number ("the answer names the source") was a
+regex over prose. `scoreAbsence` is the rule that replaces it, so every
+wording change is measured the same way, by the same code, on any host:
+
+```ts
+import { scoreAbsence, summarizeAbsence } from 'agentfootprint/ontology';
+
+const score = scoreAbsence(
+  record.ontology.spec, // the map the run was served
+  { answer, toolCalls: ['read_skill', 'vm_backup_status'], unsupportedValues: 0 },
+  { gap: 'restore_result' }, // declared by the bench author BEFORE the run
+);
+// → { namedGap: true, namedWhere: true, where: ['backup_run'], toolCalls: 2,
+//     unsupportedValues: 0, mapWords: ['ontology'], neighbours: ['backup_run'] }
+summarizeAbsence(scores); // { namedGap: {k, n}, namedWhere: {k, n}, citedMap: {k, n}, toolCalls, unsupportedValues }
+```
+
+Everything is read off the record and the declaration, nothing from a judge
+and nothing from a model:
+
+- **named the gap** — the answer contains the expected term's or source's id
+  or one of its declared aliases, whole-word, case-insensitive, an `_` in an
+  id standing for a space or a hyphen (`vmkernel_log` meets "vmkernel log").
+  Nothing fuzzier.
+- **named where** — the answer contains a declared neighbour of the gap: a
+  source holding the term, a tool reading it, a term one relation away; for
+  a source, a term it holds or a tool reading through it. `undefined` when
+  the map declares no neighbour (a term held nowhere with no relation), so
+  the tally counts only the turns that had the check.
+- **tool calls**, **unsupported values** (the library's own
+  `AgentState.unsupportedValues` count, when the record carries one) — counts.
+- **map words** — `ontology`, `map`, `declar…`: the header's own vocabulary
+  the ask tells the model to keep from the person, reported as the words
+  found. A wording metric.
+
+The strictness is the point. An answer that says "Cohesity" when the source
+is `influx_cohesity` scores NO — unless the author declares
+`aliases: ['Cohesity']` on the source, which is why sources carry `aliases`
+since 9.109.0 (served beside the meaning, validated like a node's: no
+repeats, at most 16, never another declared id). The scorer makes the
+declaration carry the words people use, and those are the words the model
+reads too. An expectation naming a gap the map does not declare is refused,
+naming it: a bench whose oracle lies fails loudly.
 
 ## The laws
 

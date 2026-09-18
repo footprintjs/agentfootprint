@@ -12,6 +12,14 @@
 export { defineOntology, ontologyHash, ONTOLOGY_LIMITS } from './define.js';
 export { ONTOLOGY_INSTRUCTION, ONTOLOGY_INSTRUCTION_ID } from './instruction.js';
 export { ontologyPiece, ONTOLOGY_PIECE_LIMITS, type OntologyPiece } from './serve.js';
+export {
+  scoreAbsence,
+  summarizeAbsence,
+  type AbsenceExpectation,
+  type AbsenceScore,
+  type AbsenceSummary,
+  type AbsenceTurn,
+} from './score.js';
 export type {
   Ontology,
   OntologyAsk,

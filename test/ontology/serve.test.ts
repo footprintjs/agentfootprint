@@ -409,3 +409,18 @@ describe('ontologyPiece — the tool → skill join (9.108.0)', () => {
     );
   });
 });
+
+describe('ontologyPiece — source aliases (9.109.0)', () => {
+  it('a source line carries its aliases after the meaning; a source without them serves the bytes it always did', () => {
+    const withAlias = ontologyPiece(
+      defineOntology({
+        ...SPEC,
+        sources: { ...SPEC.sources, syslog: { ...SPEC.sources.syslog!, aliases: ['the archive'] } },
+      }),
+    ).rawContent;
+    expect(withAlias).toContain(
+      'syslog — the syslog archive · aliases: the archive · coverage: the last 30 days',
+    );
+    expect(withAlias.replace(' · aliases: the archive', '')).toBe(piece.rawContent);
+  });
+});

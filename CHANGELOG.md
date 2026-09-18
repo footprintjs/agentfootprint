@@ -5,6 +5,25 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [9.109.0] - 2026-09-17
+
+### Added — the score: how a "no data" answer is measured, by declared strings, with no judge
+
+- **`scoreAbsence(spec, turn, expected)` / `summarizeAbsence(scores)`** on `agentfootprint/ontology`
+  (`AbsenceTurn`, `AbsenceExpectation`, `AbsenceScore`, `AbsenceSummary`). The design page's first
+  number for "the answer names the source" was a regex over prose; this is the rule that replaces
+  it. Off the record and the declaration only: did the answer name the expected gap (a term's or
+  source's id or declared alias, whole-word, `_` as a space), did it name a declared neighbour (a
+  holding source, a reading tool, a term one relation away — `undefined` when the map declares
+  none), the tool-call and `unsupportedValues` counts, and the map words it used on the person.
+  An expectation naming a gap the map does not declare is refused. `k` of `n` per check in the
+  summary, over the turns that had the check.
+- **`OntologySource.aliases`** — a source may declare the other names people use for it
+  (`['Cohesity']` for `influx_cohesity`), served beside its meaning
+  (`<id> — <meaning> · aliases: …`) and validated like a node's: no repeats, at most 16, never
+  another declared id of either kind. A source without them serves the bytes it always did; the
+  twenty byte-identity references are untouched.
+
 ## [9.108.0] - 2026-09-17
 
 ### Added — the map meets the skills: which skill declares the tool that reads a term

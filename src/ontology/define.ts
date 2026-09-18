@@ -49,6 +49,7 @@ export const ONTOLOGY_LIMITS = Object.freeze({
   nodes: 256,
   sources: 64,
   edges: 512,
+  /** Aliases on one node — and, since 9.109.0, on one source. */
   aliasesPerNode: 16,
   sourcesPerNode: 8,
   viaPerSource: 16,
@@ -58,7 +59,7 @@ export const ONTOLOGY_LIMITS = Object.freeze({
 const ID_RE = /^[A-Za-z][A-Za-z0-9_.-]*$/;
 
 /** The keys each shape accepts — anything else is refused by name, not stripped. */
-const ALLOWED_SOURCE_KEYS = ['meaning', 'coverage', 'configured'] as const;
+const ALLOWED_SOURCE_KEYS = ['meaning', 'coverage', 'configured', 'aliases'] as const;
 const ALLOWED_NODE_SOURCE_KEYS = ['source', 'via', 'coverage'] as const;
 const ALLOWED_NODE_KEYS = ['meaning', 'unit', 'aliases', 'sources'] as const;
 const ALLOWED_EDGE_KEYS = ['from', 'to', 'relation', 'meaning'] as const;
@@ -133,10 +134,15 @@ function checkSource(id: string, value: unknown): OntologySource {
   if (configured !== undefined && typeof configured !== 'boolean') {
     refuse(`sources['${id}'].configured must be a boolean when given.`);
   }
+  const aliases =
+    value.aliases === undefined
+      ? undefined
+      : checkNames(value.aliases, `sources['${id}'].aliases`, ONTOLOGY_LIMITS.aliasesPerNode);
   return Object.freeze({
     meaning,
     ...(coverage !== undefined && { coverage }),
     ...(configured !== undefined && { configured }),
+    ...(aliases !== undefined && { aliases }),
   });
 }
 
@@ -250,6 +256,15 @@ export function defineOntology(spec: OntologySpec): Ontology {
     for (const alias of node.aliases ?? []) {
       if (alias !== nodeId && nodeIds.has(alias)) {
         refuse(`node '${nodeId}' alias '${alias}' collides with node id '${alias}'.`);
+      }
+    }
+  }
+  // A source's alias (9.109.0) must not be another declared id of either
+  // kind: an answer naming it would then name two things.
+  for (const [sourceId, source] of Object.entries(sources)) {
+    for (const alias of source.aliases ?? []) {
+      if (alias !== sourceId && (sourceIds.has(alias) || nodeIds.has(alias))) {
+        refuse(`source '${sourceId}' alias '${alias}' collides with a declared id '${alias}'.`);
       }
     }
   }

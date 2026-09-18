@@ -134,10 +134,13 @@ function nodeLine(id: string, node: OntologyNode): string {
   );
 }
 
-/** `<id> — <meaning>[ · coverage: <coverage>][ · configured: yes|no]` — absent `configured` says nothing. */
+/** `<id> — <meaning>[ · aliases: a, b][ · coverage: <coverage>][ · configured: yes|no]` — absent `configured` says nothing. */
 function sourceLine(id: string, source: OntologySource): string {
   return fold(
     `${id} — ${source.meaning}` +
+      (source.aliases === undefined || source.aliases.length === 0
+        ? ''
+        : ` · aliases: ${source.aliases.join(', ')}`) +
       (source.coverage === undefined ? '' : ` · coverage: ${source.coverage}`) +
       (source.configured === undefined ? '' : ` · configured: ${source.configured ? 'yes' : 'no'}`),
   );
