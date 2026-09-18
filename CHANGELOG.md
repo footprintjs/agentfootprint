@@ -5,6 +5,35 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [9.112.0] - 2026-09-18
+
+### Added — bringing your own taxonomy: SKOS in, our map out
+
+- `fromSkos(input, join)` on `agentfootprint/ontology` reads a customer's SKOS concept scheme —
+  JSON-LD, already parsed (`@graph`, a flat array or one node; full IRIs, the `skos:` prefix, or
+  bare keys under the document's `@context`) — and returns an `OntologySpec` for `defineOntology`,
+  which stays the one shape everything reads. No inference: a concept's id is the last IRI
+  segment (lower-cased, `-`/space → `_`), its meaning `skos:definition` else `scopeNote` else the
+  prefLabel, its aliases every `altLabel`/`hiddenLabel` in the asked language (`join.language`,
+  default `'en'`) plus the prefLabel; `broader`/`narrower` → one `is-a` edge per pair, `related`
+  → `related` once per pair; the scheme node's last segment and `dcterms:modified` /
+  `owl:versionInfo` / `schema:version` give id and version unless the join names them. What SKOS
+  cannot say — which source holds a term, which tool reads it, coverage, units — the host binds by
+  hand (`SkosJoin.sources` + `bind`); an unbound term has no sources, the honest state. Every
+  refusal is one `SkosError` with a `code` (`ERR_SKOS_…`), the IRI(s) and what was expected: no
+  label in the language, two concepts collapsing to one id, a relation to a concept the document
+  does not hold, a `broader` cycle, a missing id or version, a `bind` key the scheme does not hold.
+- `readSkos(input, { language })` — the pure parse (concepts sorted by id, edges sorted, the
+  scheme's identity), for a host that wants to look before it joins.
+- `toSkos(spec)` — the reverse walk to JSON-LD, with unit, sources, via, coverage and any other
+  relation in a `footprint:` namespace declared in the `@context`; `readSkos(toSkos(spec))` gives
+  the spec's terms and edges back (pinned). An export, not a serving: the model still reads
+  `ontologyPiece`.
+- Nothing in the existing ontology moved: `define.ts`, `serve.ts`, `instruction.ts`, `score.ts`
+  and `types.ts` are untouched, and `test/ontology/fromSkos.test.ts` pins the hash and served text
+  of the reference spec to the literals captured before this release. Out of scope by ruling: a
+  Turtle parser, OWL, serving the map in SKOS vocabulary (bench first).
+
 ## [9.111.0] - 2026-09-18
 
 ### Added — the story's ask and return beats carry the tool call id

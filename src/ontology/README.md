@@ -233,6 +233,91 @@ declaration carry the words people use, and those are the words the model
 reads too. An expectation naming a gap the map does not declare is refused,
 naming it: a bench whose oracle lies fails loudly.
 
+## Bringing your own taxonomy — SKOS (9.112.0)
+
+Customers already have taxonomies, almost always as SKOS (the W3C concept
+scheme vocabulary) in JSON-LD or Turtle. The owner's ruling (2026-09-18):
+the library takes THEIRS in and turns it into OUR map — `defineOntology`
+stays the one shape everything reads (the record, the lens, the scorer, the
+skill join). Readers are adapters. `fromSkos` is the first one:
+
+```ts
+import { defineOntology, fromSkos } from 'agentfootprint/ontology';
+
+const scheme = JSON.parse(await readFile('fleet-taxonomy.jsonld', 'utf8'));
+
+const map = defineOntology(
+  fromSkos(scheme, {
+    language: 'en', // the labels to take; default 'en'
+    sources: {
+      inventory: { meaning: 'the switch inventory export', configured: true },
+    },
+    bind: {
+      port: [{ source: 'inventory', via: ['lookup_port'], coverage: 'every port' }],
+    },
+  }),
+);
+```
+
+What the reader does, with no inference:
+
+- **A concept becomes a node.** Its id is the last `/` or `#` segment of
+  its IRI, lower-cased, `-` and space → `_` (`…/terms/io-latency` →
+  `io_latency`); two concepts collapsing to one id are refused with both
+  IRIs. `meaning` is `skos:definition`, else `skos:scopeNote`, else the
+  prefLabel; `aliases` are every `altLabel` and `hiddenLabel` in the asked
+  language plus the prefLabel when it differs from the id (so the scorer can
+  match it). A concept with no prefLabel in the asked language is refused —
+  never guessed from another language; an untagged label serves any.
+- **Relations become edges.** `skos:broader` → `is-a` from the narrower
+  concept to the broader one — `narrower` is its inverse, so the edge is
+  emitted once whichever side wrote it; `skos:related` → `related`, once
+  per pair, ends ordered by id. A cycle in `broader` is refused, named.
+  Each group is sorted, so the same scheme in another node order yields the
+  same edges and the same hash.
+- **The scheme node gives id and version** — the last IRI segment and
+  `dcterms:modified` / `owl:versionInfo` / `schema:version` — unless the
+  join names them; a map without either is refused, naming the field.
+- **Spellings accepted:** full IRIs, the `skos:` prefix (and `dcterms:`,
+  `owl:`, `schema:`), and bare keys or `@type` values under a document
+  `@context` that maps them (term mappings, prefixes, `@vocab`,
+  `@language`). Nodes are read from a `@graph`, a flat array, or a single
+  node object. The input is already parsed — a Turtle reader is a
+  follow-up, not this packet; a `@context` given by URL is not fetched.
+
+**What SKOS cannot say** — and the reader therefore never invents:
+
+- **sources** and **via** — which system holds a term and which registered
+  tool reads it. The host binds them in `SkosJoin.bind`, term by term; a
+  key naming a term the scheme does not hold is refused; a term with no
+  binding has no sources, which is the honest state ("declared, no source
+  holds it").
+- **units** — `unit` is left absent (SKOS has no such property; `toSkos`
+  writes ours as `footprint:unit`, which `readSkos` reads back).
+- **coverage** — the author's sentence per holding: `bind` again.
+- **configured** — a source's wiring: on `SkosJoin.sources`.
+
+Every refusal is one `SkosError` with a `code` (`ERR_SKOS_INPUT`,
+`ERR_SKOS_NAMED_GRAPH` (a nested named graph — flatten first), `ERR_SKOS_UNTYPED`, `ERR_SKOS_NO_CONCEPTS`, `ERR_SKOS_NO_LABEL`,
+`ERR_SKOS_ID`, `ERR_SKOS_ID_COLLISION`, `ERR_SKOS_UNKNOWN_CONCEPT`,
+`ERR_SKOS_CYCLE`, `ERR_SKOS_SCHEME_MISSING`, `ERR_SKOS_SCHEME_AMBIGUOUS`,
+`ERR_SKOS_BIND_UNKNOWN_TERM`), the IRI(s) involved (`iris`) and what was
+expected; the reader never returns a partial map. `fromSkos` returns the
+SPEC — `defineOntology` still validates it, and only it does: a bound
+source the join never declared, or an id that is not identifier-safe, is
+`defineOntology`'s refusal, not a second path.
+
+`readSkos(input, { language })` is the pure parse (concepts, edges, the
+scheme's identity), exported for a host that wants to look before it
+joins. `toSkos(spec)` is the reverse walk — prefLabel = id, definition =
+meaning, altLabel = aliases, `is-a` → `broader`, `related` → `related`, and
+everything SKOS cannot carry (unit, sources, via, coverage, any other
+relation or an edge's meaning) in a `footprint:` namespace declared in the
+`@context`, so nothing of ours is lost; `readSkos(toSkos(spec))` gives the
+spec's terms and edges back (pinned). It is an EXPORT for a host that keeps
+its taxonomy in SKOS; the model is still served `ontologyPiece`. OWL is out
+of scope.
+
 ## The laws
 
 - **Declared, once.** `.ontology(map)` on the builder is the one door
@@ -279,6 +364,7 @@ ontology is the standing map served on every call.
 
 ## Files
 
-`types.ts` · `define.ts` · `serve.ts` · `instruction.ts` · `index.ts`
-(the barrel behind `src/doors/ontology.ts`). Design:
+`types.ts` · `define.ts` · `serve.ts` · `instruction.ts` · `score.ts` ·
+`fromSkos.ts` / `toSkos.ts` / `skosJsonLd.ts` (the SKOS adapter, 9.112.0) ·
+`index.ts` (the barrel behind `src/doors/ontology.ts`). Design:
 `docs/design/2026-09-ontology.md`.

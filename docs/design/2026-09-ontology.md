@@ -381,3 +381,59 @@ bench (`nodata-ontology-{on,off}.json`); this table is the record of them.
   model's to map to the node. The library matches nothing.
 - The Lens: the record carries the whole spec, so a `Served` tab can draw
   the map from `AgentState.ontology` with no library call; not this packet.
+
+## 9.112.0 — SKOS in, our map out
+
+The owner's ruling (2026-09-18): customers already have taxonomies, almost
+always as SKOS (W3C) in JSON-LD or Turtle. The library takes THEIRS in and
+turns it into OUR map. `defineOntology` stays the ONE shape everything
+reads — the record, the lens, the scorer, the skill join — and readers are
+adapters onto it. OWL is out of scope (later, only if this proves out);
+serving the map back in SKOS vocabulary is not this packet (bench first —
+"show it performs first").
+
+`src/ontology/fromSkos.ts` is the first adapter. What it settles:
+
+- **The shape is ours.** `fromSkos(input, join)` returns an `OntologySpec`
+  and the host calls `defineOntology` on it — no second validation path. A
+  fault SKOS can name (no label in the language, two concepts collapsing to
+  one id, a relation to a concept the document does not hold, a `broader`
+  cycle, a missing id or version, a `bind` key the scheme does not hold) is
+  a `SkosError` with a `code`, the IRI(s) and what was expected, and the
+  reader never returns a partial map; a fault only the map can name (a bound
+  source nobody declared, an id that is not identifier-safe) stays
+  `defineOntology`'s.
+- **No inference, again.** The id is the last IRI segment; the meaning is
+  `definition`, else `scopeNote`, else the prefLabel; a label is taken in
+  the asked language or the concept is refused; `broader` is `is-a`,
+  `related` is `related`, and nothing else is read into an edge. A node
+  carrying SKOS properties with no `@type` is refused, not guessed to be a
+  concept. Spellings are resolved by the document's own `@context` when it
+  has one, else by a fixed table — never by a key's look.
+- **What SKOS cannot say, the host says.** SKOS has no notion of which
+  SOURCE holds a term, which TOOL reads it, its unit, or a coverage
+  sentence. `SkosJoin.sources` + `bind` carry them by hand, term by term;
+  a term with no binding has no sources — "declared, no source holds it" —
+  which is exactly the state the map exists to let the model say.
+- **Determinism is a law of the reader, not a happy accident.** Concepts
+  come sorted by id and edges sorted within their group, so the same scheme
+  written with `narrower` instead of `broader`, or with its nodes in another
+  order, hashes the same. Two hosts reading the same taxonomy get the same
+  `hash` on the record.
+- **The reverse walk keeps everything.** `toSkos(spec)` writes prefLabel =
+  id, definition = meaning, altLabel = aliases, `is-a` → `broader`,
+  `related` → `related`, and everything ours in a `footprint:` namespace
+  declared in the `@context` (unit, heldBy with source/via/coverage, a
+  `footprint:Source` node per source, any other relation or an edge's
+  meaning as `footprint:edge`). `readSkos(toSkos(spec))` returns the spec's
+  terms and edges; pinned.
+- **The existing ontology did not move.** `define.ts`, `serve.ts`,
+  `instruction.ts`, `score.ts`, `types.ts` are untouched; the fromSkos test
+  pins the reference spec's hash and served text to literals captured from
+  main before the packet.
+
+Follow-ups, in the order the ruling names them: a Turtle reader (the same
+`readSkos` over a parsed graph — the parser is the only new piece); a bench
+on a host's real taxonomy (does the customer's vocabulary, read this way,
+move the absence score the 9.109.0 scorer measures?); only then serving in
+SKOS vocabulary, and OWL if a host needs class axioms the map cannot state.
