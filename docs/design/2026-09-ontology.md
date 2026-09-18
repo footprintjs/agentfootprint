@@ -112,6 +112,67 @@ are the unarmed twin, the map, and the map with `.findings()`. What the
 mechanism cannot decide — whether a model READS the map rather than probing
 anyway — is exactly what that run is for.
 
+## Measured — the first host, 2026-09-17 (agentfootprint 9.106.0 · lens 0.64.0)
+
+The host's chatbot (Sonnet 5 through the host's own `/invoke` door, one fresh
+session per question, the host's own skills and seed stores) declared a map
+read out of its sidecar's coverage sentences: 44 terms · 20 sources · 47
+relations · 60 holdings; the served piece is 20,582 characters, joined after
+the app's system prompt on every model call. Eight questions whose data no
+registered tool collects, or whose answer turns on a declared gap. Two arms:
+the map declared (`on`) and the same build with the `.ontology(...)` line
+removed (`off`). Numbers read off each turn's record (`history` tool calls,
+`totalInputTokens`, `totalOutputTokens`) and the door's wall clock.
+
+| question | arm | tool calls | input tokens | output tokens | ms | the answer names the source or the declared gap |
+|---|---|---|---|---|---|---|
+| vmkernel log for an ESXi host | off | 1 | 41,564 | 858 | 26,023 | yes ("not collected", a list of what is) |
+| | on | 0 | 14,867 | 440 | 13,386 | yes ("known but not held here") |
+| change record for a switch port | off | 0 | 8,368 | 753 | 21,258 | yes |
+| | on | 0 | 14,880 | 503 | 15,332 | yes |
+| network path VM → array | off | 5 | 152,467 | 1,322 | 31,621 | traced the FC path (5 tools) |
+| | on | 0 | 14,862 | 677 | 16,606 | read the map's `network_path` (the Ethernet path) as the question, said it is not collected, offered the FC trace — **a regression, see below** |
+| AIX HBA tuning attributes | off | 0 | 17,382 | 1,518 | 36,819 | no — "OS-level parameters", no source named |
+| | on | 0 | 30,407 | 1,281 | 32,578 | yes — the AIX ODM, the HMC API does not expose it |
+| UCS blade under Intersight | off | 0 | 8,372 | 389 | 11,761 | **wrong** — "no access to UCS or Intersight data" (UCS Manager IS collected) |
+| | on | 0 | 14,884 | 729 | 17,281 | yes — Intersight `configured: no`, UCS Manager read, what a blade's absence would mean |
+| last restore of a VM | off | 2 | 53,228 | 603 | 16,660 | answered about backups, not restores |
+| | on | 1 | 43,426 | 659 | 19,659 | yes — `restore_result` known, not held; offered the backup copies |
+| Cohesity protection, uncollected cluster | off | 2 | 53,456 | 589 | 17,502 | yes (the tool's own coverage sentence) |
+| | on | 2 | 72,908 | 626 | 18,598 | yes (the same sentence, quoted from the map) |
+| IO profile of an idle port | off | 3 | 46,661 | 734 | 19,311 | same answer both arms |
+| | on | 3 | 66,113 | 654 | 18,879 | same answer both arms |
+| **total** | off | 13 | 381,498 | 6,766 | 180,955 | 6 / 8 |
+| | on | 6 | 272,347 | 5,569 | 152,319 | 8 / 8 named (one of them the regression) |
+
+What the run says:
+
+- **The map is read.** Seven of eight `on` answers quote a meaning, a coverage
+  sentence or the `known, not held here` line; two of the eight `off` answers
+  could not name the source at all, and one was wrong about what IS collected.
+- **Fewer probes on questions with no data.** Tool calls 13 → 6; input tokens
+  −29 % over the eight, although the piece costs ~6,500 input tokens on every
+  call (a single-call turn is 8.4k tokens unarmed, 14.9k armed). The saving is
+  the tool calls the model no longer spends on sources the map says do not
+  hold the term; on a question that DOES need tools the map is pure cost
+  (the Cohesity and IO-profile rows: same calls, +20k tokens).
+- **The regression is the declaration's, not the mechanism's.** The host's
+  `network_path` node means the Ethernet path between an SMB client and a NAS
+  server (the sidecar's own sentence); the model matched the question's words
+  to the node id and answered about that term instead of tracing the FC path
+  the unarmed twin traced. A node id that reads like a common phrase captures
+  questions it was not meant for — the fix is in the map (a narrower id such
+  as `smb_network_path`, or aliases that name what the term is NOT), pinned
+  by the host's own test, not in the library.
+- **The model names the map.** Five of eight `on` answers say "the ontology"
+  or "the domain model" to the person. The instruction asks the model to use
+  the map, not to cite it; a wording change to `ONTOLOGY_INSTRUCTION`
+  ("say which source holds it, never that a map told you") is a versioned
+  candidate for a bench, not shipped here.
+
+Raw answers and per-turn numbers: the host keeps them beside its `.dev/`
+bench (`nodata-ontology-{on,off}.json`); this table is the record of them.
+
 ## Open
 
 - A `configured: false` source is served as declared; nothing withholds the
