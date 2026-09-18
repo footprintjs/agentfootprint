@@ -195,8 +195,46 @@ library:
   value off a definition; and — the line the measured run asked for — speak
   to the person of sources, tools and terms, never of the map.
 
-Measured after the release on the same host and questions (v2, map on):
-see the table appended below once the run is in.
+Measured after the release on the same host, the same eight questions,
+one fresh session each, map on, `ask: 'use-the-map'` (v2), 2026-09-17 late:
+
+| question | tool calls | input tokens | output tokens | ms | names the source or gap | says "the ontology" to the person |
+|---|---|---|---|---|---|---|
+| vmkernel log | 0 | 15,001 | 465 | 12,936 | yes | yes |
+| change record | 0 | 15,014 | 442 | 13,154 | yes | no |
+| network path VM → array (after the `smb_client_network_path` rename) | traced the FC path | no record returned (see below) | | 134,130 | — | no |
+| AIX HBA tuning | 0 | 30,684 | 1,396 | 37,605 | yes (the ODM, the HMC) | no |
+| UCS blade under Intersight | 0 | 15,018 | 768 | 23,302 | yes | yes |
+| last restore | 2 | 73,701 | 758 | 26,136 | yes | yes |
+| Cohesity, uncollected cluster | 2 | 73,817 | 639 | 18,667 | yes | no |
+| IO profile, idle port | 3 | 91,977 | 782 | 27,846 | same as unarmed | no |
+
+- **The map-citing fell from 5 of 8 to 3 of 8, not to zero.** The three
+  that remain all open with "The ontology declares …" and then say the
+  right thing (the term is known and held nowhere here; the source is not
+  configured). The word is in the piece's own header, so the model has it
+  in front of it on every call; the last line of v2 asks it not to repeat
+  it and Sonnet 5 follows that five times in eight. A further iteration
+  would move the "speak of sources" line to the front of the instruction,
+  or reword the served header — each is one more bench run, the owner's
+  call.
+- **Source naming held at 7 of 7 recorded answers**, the same answers as
+  v1 in substance; the network-path question now traces the FC path (four
+  tools, 144,220 input tokens, 32 s when re-asked once for the record).
+- **One turn returned an answer and no recording ticket.** The first ask
+  of the network-path question ran 134 s, answered with a traced path, and
+  the reply carried no `reasoning.ref`; the host's log for that turn holds
+  the library's own warning that the answer stated five identifiers no tool
+  result of the run carried (`shcsanplvsw901/fc1/6`, `stor-array05`,
+  `ct0-fc2` …) and the host's system-prompt slot over its 24k budget
+  (25,430 chars, twelve fragments — the app's prompt, not the map, which
+  is joined after the slot). Re-asked, the same question completed in 32 s
+  with a record and no such warning. The recordings dial mints on a
+  COMPLETED run; whether a run that ends through the answer-validation
+  path counts as completed is the open question this turn raises — not
+  chased tonight, recorded here.
+
+Raw v2 records: the host's `docs/measurements/2026-09-17-ontology-nodata-v2-on.json`.
 
 Raw answers and per-turn numbers: the host keeps them beside its `.dev/`
 bench (`nodata-ontology-{on,off}.json`); this table is the record of them.
