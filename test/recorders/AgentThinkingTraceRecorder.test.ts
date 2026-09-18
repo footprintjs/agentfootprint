@@ -596,3 +596,46 @@ describe('AttTrace.at — the stage each beat was recorded under (9.99.0)', () =
     for (let i = 1; i < trace.steps.length; i++) expect(trace.at![i]).toMatch(/#\d+$/);
   });
 });
+
+describe('the tool call id rides the ask and the return beats (9.111.0)', () => {
+  type Ev = Parameters<ReturnType<typeof agentThinkingTrace>['onEmit']>[0];
+  const ev = (name: string, payload: unknown): Ev =>
+    ({
+      name,
+      payload,
+      pipelineId: 'p1',
+      subflowPath: '',
+      stageName: '',
+      runtimeStageId: 'x#0',
+      timestamp: 0,
+    } as unknown as Ev);
+
+  it('stamps toolCallId on both beats of a call, so a reader can join a beat to its ledger rows without guessing', () => {
+    const att = agentThinkingTrace();
+    att.onEmit(ev('agentfootprint.stream.llm_start', { iteration: 1 }));
+    att.onEmit(
+      ev('agentfootprint.stream.tool_start', {
+        toolName: 'get_status',
+        toolCallId: 'call-42',
+        args: { port: 'fc1/3' },
+      }),
+    );
+    att.onEmit(
+      ev('agentfootprint.stream.tool_end', {
+        toolCallId: 'call-42',
+        result: { ok: true },
+        durationMs: 5,
+      }),
+    );
+    const steps = att.getTrace({ task: 'q' }).steps as ReadonlyArray<{
+      kind: string;
+      toolCallId?: string;
+    }>;
+    const ask = steps.find((s) => s.kind === 'ask');
+    const ret = steps.find((s) => s.kind === 'return');
+    expect(ask?.toolCallId).toBe('call-42');
+    expect(ret?.toolCallId).toBe('call-42');
+    // The prompt beat carries none: it is not a call.
+    expect(steps.find((s) => s.kind === 'prompt')).not.toHaveProperty('toolCallId');
+  });
+});

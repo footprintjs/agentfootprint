@@ -63,6 +63,11 @@ export type AttStep =
       kind: 'ask';
       tool: string;
       toolName?: string;
+      /** The call's id on the record (9.111.0) — the key every ledger row about
+       *  this call carries, so a reader can join the beat to its declarations
+       *  without guessing by name or order. Absent only on a trace recorded
+       *  before the field existed. */
+      toolCallId?: string;
       input: Record<string, unknown>;
       brain: string;
       cost: AttCost;
@@ -77,6 +82,8 @@ export type AttStep =
       kind: 'return';
       tool: string;
       toolName?: string;
+      /** The call this result answers (9.111.0) — the same id as its ask beat. */
+      toolCallId?: string;
       replyType: 'data' | 'instruction' | 'both';
       output: Record<string, unknown>;
       brain: string;
@@ -358,6 +365,7 @@ export function agentThinkingTrace(
           kind: 'ask',
           tool: isSkill ? skillId ?? 'skill' : p.toolName ?? '(tool)',
           toolName: p.toolName,
+          toolCallId: p.toolCallId,
           input: asObject(p.args),
           // First ask of the iteration carries the LLM's own reasoning (and leads
           // with the routing decision); later asks (and the reasoning-less ones)
@@ -388,6 +396,7 @@ export function agentThinkingTrace(
           kind: 'return',
           tool: started.isSkill ? started.skillId ?? 'skill' : started.toolName,
           toolName: started.toolName,
+          toolCallId: p!.toolCallId,
           replyType: started.isSkill ? 'instruction' : 'data',
           output: asObject(p!.result),
           // The tool-result beat has no LLM reasoning of its own — narrate the

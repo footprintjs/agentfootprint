@@ -5,6 +5,15 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [9.111.0] - 2026-09-18
+
+### Added — the story's ask and return beats carry the tool call id
+
+- `agentThinkingTrace()` stamps `toolCallId` on every `ask` and `return` beat (`AttStep`), the same
+  id every findings-ledger row about that call carries — so a reader can join a story beat to the
+  call's declared basis and standing without guessing by tool name or order. Absent only on a
+  trace recorded before the field existed. Nothing else on the trace moves.
+
 ## [9.110.0] - 2026-09-18
 
 ### Added — no towers on unverified lemmas: contingent values on the record, and cache reads as a cost
