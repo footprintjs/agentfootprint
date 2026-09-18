@@ -39,7 +39,7 @@ import {
   servedAt,
   servedViews,
 } from '../../../src/index.js';
-import { defineSkill } from '../../../src/injection-engine.js';
+import { defineInstruction, defineSkill } from '../../../src/injection-engine.js';
 import { messageDigestInput } from '../../../src/lib/time-travel/index.js';
 import type { LLMRequest, LLMResponse } from '../../../src/adapters/types.js';
 import type { AgentState } from '../../../src/core/agent/types.js';
@@ -432,6 +432,79 @@ describe('the declared ontology — the builder door', () => {
     expect(() =>
       Agent.create({ provider: provider as never, model: 'mock', ontology: MAP }).ontology(MAP),
     ).toThrow(/already set/);
+  });
+
+  // ── the ask (9.107.0): a named value, the `answerAsk` grammar ──
+  it("ask 'use-the-map' is the default: the same wire as no option at all", async () => {
+    const a = await run('dynamic', SCRIPT, armed);
+    const b = await run('dynamic', SCRIPT, (x) =>
+      x.system('bot').tool(tool('lookup_port')).ontology(MAP, { ask: 'use-the-map' }),
+    );
+    expect(b.wire.map((w) => w.systemPrompt)).toEqual(a.wire.map((w) => w.systemPrompt));
+  });
+
+  it("ask 'none': the map is served as data on every call and NO ask of the library's is registered", async () => {
+    const r = await run('dynamic', SCRIPT, (x) =>
+      x.system('bot').tool(tool('lookup_port')).ontology(MAP, { ask: 'none' }),
+    );
+    for (const view of servedViews(r.snapshot)) {
+      expect(ontologyPieceOf(r, view.epoch)).toHaveLength(1);
+      expect(view.system.pieces.some((p) => p.text === ONTOLOGY_INSTRUCTION)).toBe(false);
+    }
+    for (const sent of r.wire) {
+      expect(sent.systemPrompt!.endsWith(PIECE)).toBe(true);
+      expect(sent.systemPrompt).not.toContain('Ontology v');
+    }
+    const injections = stateOf(r).systemPromptInjections ?? [];
+    expect(injections.some((i) => i.rawContent === ONTOLOGY_INSTRUCTION)).toBe(false);
+    // The record still carries the map: the ask is the only thing that changed.
+    expect(stateOf(r).ontology?.hash).toBe(MAP.hash);
+    expect(r.served).toHaveLength(r.wire.length);
+  });
+
+  it("ask 'none' leaves room for the application's own instruction through .instruction()", async () => {
+    const own = 'Answer with the source that holds the term, in one line.';
+    const r = await run('dynamic', SCRIPT, (x) =>
+      x
+        .system('bot')
+        .tool(tool('lookup_port'))
+        .ontology(MAP, { ask: 'none' })
+        .instruction(defineInstruction({ id: 'own-ask', activeWhen: () => true, prompt: own })),
+    );
+    for (const sent of r.wire) {
+      expect(sent.systemPrompt).toContain(own);
+      expect(sent.systemPrompt).not.toContain(ONTOLOGY_INSTRUCTION);
+    }
+  });
+
+  it('refuses an ask that is not one of the named values, and an option-form ask without a map', () => {
+    expect(() => base().ontology(MAP, { ask: 'always' as never })).toThrow(
+      /ask must be 'none' or 'use-the-map', got "always"/,
+    );
+    expect(() => base().ontology(MAP, { ask: true as never })).toThrow(/ask must be/);
+    expect(() =>
+      Agent.create({
+        provider: scripted([answer('x')]).provider as never,
+        model: 'mock',
+        ontologyAsk: 'none',
+      }),
+    ).toThrow(/`ontologyAsk` without `ontology`/);
+  });
+
+  it("the option form carries the ask too: `ontologyAsk: 'none'` beside `ontology`", async () => {
+    const { provider, wire } = scripted(SCRIPT);
+    const agent = Agent.create({
+      provider: provider as never,
+      model: 'mock',
+      ontology: MAP,
+      ontologyAsk: 'none',
+    })
+      .system('bot')
+      .tool(tool('lookup_port'))
+      .build();
+    await agent.run({ message: 'go' });
+    expect(wire[0]!.systemPrompt!.endsWith(PIECE)).toBe(true);
+    expect(wire[0]!.systemPrompt).not.toContain(ONTOLOGY_INSTRUCTION);
   });
 });
 

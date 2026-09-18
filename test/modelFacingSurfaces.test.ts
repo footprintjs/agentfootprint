@@ -1098,7 +1098,7 @@ const PRODUCERS: readonly ModelFacingProducer[] = [
     compose: async () => findingsAskPieces(),
   },
   {
-    id: 'ontology — the always-on INSTRUCTION piece (9.106.0)',
+    id: 'ontology — the always-on INSTRUCTION piece (9.106.0, v2 wording 9.107.0)',
     module: 'src/ontology/instruction.ts',
     surface: ALWAYS_ON_INSTRUCTION,
     lifetimeBecause:
@@ -1114,11 +1114,13 @@ const PRODUCERS: readonly ModelFacingProducer[] = [
     // node nobody holds — each a marker so a rewrite that drops one goes
     // red here before it ships.
     reaches: [
-      /^Ontology v1\./,
+      /^Ontology v2\./,
       /The map holds no data and fetches none/,
+      /Read the question in the map's terms and aliases/,
       /as a proposal, never as a claim that data exists there/,
       /Never invent a value from the map/,
-      /known but not held here has no declared source/,
+      /known but held nowhere here has no declared source/,
+      /never of the map, the ontology or a declaration/,
     ],
     compose: async () => [ONTOLOGY_INSTRUCTION],
   },

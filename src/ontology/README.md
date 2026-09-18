@@ -111,6 +111,40 @@ lets it say so honestly: `port_error_rate` is known and not held here; it is
 is the "next step" grammar of the context contract, filled from data the
 application declared — not a sentence the library wrote about the domain.
 
+## The ask — what the model is told to do with the map
+
+The map is data. What the model is asked to DO with it is a separate,
+named thing (9.107.0, the findings ledger's `answerAsk` grammar — a named
+value, never a boolean), because a map serves more than the "no data"
+moment: it is how a question's words become the domain's terms, how a
+source and the tool that reads it are found, how a relation leads from a
+term already held to the term needed.
+
+```ts
+.ontology(map)                          // ask: 'use-the-map' — the default
+.ontology(map, { ask: 'use-the-map' })  // the same
+.ontology(map, { ask: 'none' })         // the map as data; the app writes its own ask
+```
+
+- **`'use-the-map'`** registers `ONTOLOGY_INSTRUCTION` (`instruction.ts`,
+  versioned, at most six lines, judged by `unprovable`): read the question
+  in the map's terms and aliases; where a term is held, the tool named
+  beside it is where to look; a relation is the way from a term held to a
+  term needed; when a need is unmet, name the source, tool or neighbouring
+  term the map declares for it as a proposal; never a value off a
+  definition; and speak to the person of sources, tools and terms — never
+  of the map. That last line is v2 (9.107.0): under v1 the model told the
+  person "the ontology says" in five of eight measured answers
+  (`docs/design/2026-09-ontology.md` § Measured).
+- **`'none'`** serves the same piece on every call and registers nothing:
+  the application's own instruction goes through `.instruction()` as any
+  other. The record, the receipt and the served view show which ask ran —
+  the `ontology` injection is present or absent — so a reader never has to
+  guess.
+
+The option form is `Agent.create({ ontology, ontologyAsk })`; an
+`ontologyAsk` without an `ontology` is refused at the door.
+
 ## The laws
 
 - **Declared, once.** `.ontology(map)` on the builder is the one door

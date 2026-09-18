@@ -166,9 +166,37 @@ What the run says:
   by the host's own test, not in the library.
 - **The model names the map.** Five of eight `on` answers say "the ontology"
   or "the domain model" to the person. The instruction asks the model to use
-  the map, not to cite it; a wording change to `ONTOLOGY_INSTRUCTION`
-  ("say which source holds it, never that a map told you") is a versioned
-  candidate for a bench, not shipped here.
+  the map, not to cite it. → 9.107.0 ships `ONTOLOGY_INSTRUCTION` v2 (below).
+
+## 9.107.0 — the ask is a named value; the wording is the map's whole use
+
+The owner's question (2026-09-17 eve): is the "no data" behaviour a skill
+that is on only when a map is declared, or should the application enable it
+itself — and, thinking as the library, a map is a reference the model can
+use in many ways, not only when data is missing. The ruling, for the
+library:
+
+- The map is data and is served whenever declared (a declared map with no
+  reader is nothing; omit-never-deny says nothing is withheld from a model
+  that has it). There is no separate skill and no skill-graph routing: the
+  gap shows up inside any skill, so the map has to be in front of the model
+  in all of them.
+- What the model is asked to DO with the map is a separate, named thing —
+  `OntologyAsk`, `'use-the-map' | 'none'`, the findings ledger's `answerAsk`
+  grammar. `'use-the-map'` is the default and the measured condition;
+  `'none'` serves the same piece and registers no ask of the library's, for
+  an application that writes its own through `.instruction()`. The record
+  shows which ran.
+- `ONTOLOGY_INSTRUCTION` v2 describes the map's whole use, not the "no data"
+  moment: read the question in the map's terms and aliases; where a term is
+  held, the tool named beside it is where to look; a relation is the way from
+  a term already held to the term needed; an unmet need is answered with the
+  source, tool or neighbouring term the map declares, as a proposal; never a
+  value off a definition; and — the line the measured run asked for — speak
+  to the person of sources, tools and terms, never of the map.
+
+Measured after the release on the same host and questions (v2, map on):
+see the table appended below once the run is in.
 
 Raw answers and per-turn numbers: the host keeps them beside its `.dev/`
 bench (`nodata-ontology-{on,off}.json`); this table is the record of them.

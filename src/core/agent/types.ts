@@ -45,7 +45,7 @@ import type { AgentRunCheckpoint } from '../runCheckpoint.js';
 import type { FindingsLedger } from './findings/types.js';
 import type { ToolChoiceLedger } from './toolChoice/types.js';
 import type { Classifier } from '../../classify/types.js';
-import type { Ontology, OntologyRecord } from '../../ontology/types.js';
+import type { Ontology, OntologyAsk, OntologyRecord } from '../../ontology/types.js';
 
 // ─── PUBLIC types (consumer-facing) ────────────────────────────────
 
@@ -392,6 +392,15 @@ export interface AgentOptions {
    * instruction, no event.
    */
   readonly ontology?: Ontology;
+  /**
+   * What the model is asked to DO with the served map (9.107.0) — the option
+   * form of `.ontology(map, { ask })`. `'use-the-map'` (the default when a
+   * map is declared) registers `ONTOLOGY_INSTRUCTION`; `'none'` serves the
+   * map as data and registers no ask of the library's, for an application
+   * that writes its own through `.instruction()`. Meaningless without
+   * `ontology`, and refused then.
+   */
+  readonly ontologyAsk?: OntologyAsk;
   /**
    * The ceiling on ONE tool result, in characters (9.11.0). **Opt-in — there
    * is no default, and there will not be one.**

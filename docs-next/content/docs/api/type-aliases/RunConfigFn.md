@@ -6,7 +6,7 @@ title: RunConfigFn
 
 > **RunConfigFn** = (`ctx`) => [`RunConfig`](/docs/api/interfaces/RunConfig) \| `undefined`
 
-Defined in: [src/core/agent/types.ts:1138](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/types.ts#L1138)
+Defined in: [src/core/agent/types.ts:1147](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/types.ts#L1147)
 
 Per-run configuration resolver — see `AgentBuilder.configure`. Called
 exactly once per run, synchronously, at the start of the run.

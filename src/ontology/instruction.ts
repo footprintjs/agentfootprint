@@ -18,18 +18,28 @@
 export const ONTOLOGY_INSTRUCTION_ID = 'ontology';
 
 /**
- * Ontology v1 — at most six lines. Every sentence is about the model's own
- * conduct with a map that holds no data: say where a need WOULD be met,
- * never that data exists there, never a value read off a definition.
+ * Ontology v2 — at most six lines. Every sentence is about the model's own
+ * conduct with a map that holds no data: read the question in its terms,
+ * look where a source and its tool are declared, walk a relation from what
+ * is held to what is needed, say where an unmet need WOULD be met, never a
+ * value read off a definition — and speak to the person of sources, tools
+ * and terms, never of the map (v1 made the model cite "the ontology" in five
+ * of eight measured answers; docs/design/2026-09-ontology.md § Measured).
  */
 export const ONTOLOGY_INSTRUCTION = [
-  'Ontology v1. A declared map of the domain is served as a system piece headed ' +
+  'Ontology v2. A declared map of the domain is served as a system piece headed ' +
     '"[AgentFootprint ontology": what each term means, which source holds it, which tool reads ' +
-    'it from there, and how terms relate. The map holds no data and fetches none.',
-  'When the results did not meet a need, say which declared source, tool or neighbouring node ' +
-    'the map names for that need — as a proposal, never as a claim that data exists there.',
+    'it from there, how terms relate, and which terms are known but held nowhere here. The map ' +
+    'holds no data and fetches none.',
+  "Read the question in the map's terms and aliases. Where a term is held by a declared source, " +
+    'the tool named beside it is where to look; a relation is the way from a term already held ' +
+    'to the term needed.',
+  'When the results did not meet a need, say which declared source, tool or neighbouring term ' +
+    'the map names for it — as a proposal, never as a claim that data exists there. A term ' +
+    'known but held nowhere here has no declared source: report that as declared, without ' +
+    'guessing one.',
   'Never invent a value from the map: a meaning, unit or coverage sentence is a definition, ' +
     'not an observation.',
-  'A node listed as known but not held here has no declared source: report that as declared, ' +
-    'without guessing a source for it.',
+  'Speak to the person of sources, tools and terms — never of the map, the ontology or a ' +
+    'declaration. Those are how the answer knows where to look, not what the person asked.',
 ].join('\n');

@@ -466,7 +466,17 @@ export class AgentBuilder {
     // Same door for `ontology` (9.106.0): the option form registers the
     // always-on ask through the one method, so a map the model was never
     // told how to read cannot be mounted.
-    if (opts.ontology !== undefined) this.ontology(opts.ontology);
+    if (opts.ontology !== undefined) {
+      this.ontology(
+        opts.ontology,
+        opts.ontologyAsk === undefined ? undefined : { ask: opts.ontologyAsk },
+      );
+    } else if (opts.ontologyAsk !== undefined) {
+      throw new Error(
+        'Agent.create: `ontologyAsk` without `ontology` — the ask is what the model is told to do ' +
+          'with a declared map, so it needs the map. Pass `ontology` (defineOntology) beside it.',
+      );
+    }
   }
 
   /**
@@ -2261,6 +2271,17 @@ export class AgentBuilder {
    * agent that never calls this is byte-identical to one built before the
    * map existed: no key, no piece, no instruction, no event.
    *
+   * `options.ask` (9.107.0, the `answerAsk` grammar — a named value, never a
+   * boolean): `'use-the-map'` (the default) registers the versioned
+   * `ONTOLOGY_INSTRUCTION` — read the question in the map's terms, look where
+   * a source and its tool are declared, walk a relation from a term held to
+   * a term needed, and when a need is unmet name where it would be met,
+   * never a value off a definition, never the map itself to the person.
+   * `'none'` serves the map as data and registers no ask of the library's,
+   * for an application that writes its own through `.instruction()` — the
+   * map is served either way; only the ask changes, and the served view and
+   * the receipt show which (the `ontology` injection present or absent).
+   *
    * @example
    * ```ts
    * import { defineOntology } from 'agentfootprint/ontology';
@@ -2278,7 +2299,16 @@ export class AgentBuilder {
    * const agent = Agent.create({ provider, model }).tool(lookupPort).ontology(map).build();
    * ```
    */
-  ontology(ontology: NonNullable<AgentOptions['ontology']>): this {
+  ontology(
+    ontology: NonNullable<AgentOptions['ontology']>,
+    options?: { readonly ask?: NonNullable<AgentOptions['ontologyAsk']> },
+  ): this {
+    const ask = options?.ask;
+    if (ask !== undefined && ask !== 'none' && ask !== 'use-the-map') {
+      throw new Error(
+        `AgentBuilder.ontology: ask must be 'none' or 'use-the-map', got ${JSON.stringify(ask)}.`,
+      );
+    }
     if (this.ontologyValue !== undefined) {
       throw new Error(
         'AgentBuilder.ontology: already set. One map per agent — a second call would register ' +
@@ -2307,6 +2337,9 @@ export class AgentBuilder {
       );
     }
     this.ontologyValue = ontology;
+    // `'none'`: the map as data, no ask of the library's — the application
+    // registers its own through `.instruction()`. Nothing else differs.
+    if (ask === 'none') return this;
     // The always-on ask — the `outputSchema()` twin: a system-slot instruction
     // that activates every iteration, so a long run keeps the vocabulary
     // present, and a system PIECE on the receipt (never an injected turn).

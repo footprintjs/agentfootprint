@@ -5,6 +5,28 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [9.107.0] - 2026-09-17
+
+### Changed — the ontology's ask is a named value, and its wording no longer makes the model cite the map
+
+- **`.ontology(map, { ask })`** — `ask: 'use-the-map' | 'none'` (`OntologyAsk`, on
+  `agentfootprint/ontology`; the option form is `Agent.create({ ontology, ontologyAsk })`,
+  refused without the map). `'use-the-map'` is the default and what `.ontology(map)` always
+  did: the versioned always-on `ONTOLOGY_INSTRUCTION`. `'none'` serves the same piece on every
+  call and registers no ask of the library's — for an application that writes its own through
+  `.instruction()`. The findings ledger's `answerAsk` grammar: a named value, never a boolean.
+  The record, the receipt and the served view show which ask ran (the `ontology` injection
+  present or absent).
+- **`ONTOLOGY_INSTRUCTION` v2** — the map is more than the "no data" moment, and the ask now
+  says so: read the question in the map's terms and aliases; where a term is held, the tool
+  named beside it is where to look; a relation is the way from a term already held to the term
+  needed; an unmet need is answered with the source, tool or neighbouring term the map declares,
+  as a proposal; never a value off a definition. New last line: speak to the person of sources,
+  tools and terms — never of the map, the ontology or a declaration. Under v1 the first host's
+  measured run had the model telling the person "the ontology says" in five of eight answers
+  (`docs/design/2026-09-ontology.md` § Measured). The byte-identity reference `agent-ontology`
+  regenerated alone; the nineteen others untouched.
+
 ## [9.106.0] - 2026-09-17
 
 ### Added — the ontology: a declared map of what exists and where, never a way to fetch it

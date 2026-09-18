@@ -14,6 +14,7 @@ export { ONTOLOGY_INSTRUCTION, ONTOLOGY_INSTRUCTION_ID } from './instruction.js'
 export { ontologyPiece, ONTOLOGY_PIECE_LIMITS, type OntologyPiece } from './serve.js';
 export type {
   Ontology,
+  OntologyAsk,
   OntologyEdge,
   OntologyNode,
   OntologyNodeSource,

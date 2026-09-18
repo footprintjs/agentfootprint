@@ -80,6 +80,19 @@ export interface Ontology extends OntologySpec {
  * events carry and the WHOLE spec, so the served piece and a lens need
  * nothing but the record. Absent on every other agent.
  */
+/**
+ * What the model is asked to DO with the served map (9.107.0) — one named
+ * value, the `answerAsk` grammar. `'use-the-map'` (the default) registers the
+ * versioned `ONTOLOGY_INSTRUCTION`: read the question in the map's terms,
+ * look where a source and its tool are declared, walk a relation from a term
+ * held to a term needed, and when a need is unmet name where it would be
+ * met — never a value off a definition, never the map itself to the person.
+ * `'none'` serves the map as data with no ask of the library's — for an
+ * application that registers its own through `.instruction()`. The map is
+ * served either way; the ask is what changes.
+ */
+export type OntologyAsk = 'none' | 'use-the-map';
+
 export interface OntologyRecord {
   readonly id: string;
   readonly version: string;
