@@ -261,9 +261,46 @@ the record), and the served view rebuilds the same bytes from the record's
 join and the epoch's hidden ids. Not built: any inference of relation
 from tool names, any change to routing, any tool-call made by the library.
 
-Measured on the host after the release: the table below — scored by
-`scoreAbsence` (9.109.0), not by a regex: named the gap · named where ·
-tool calls · unsupported values · map words, each off the record.
+Measured on the host after the release, and — because 9.109.x shipped the
+scorer the same night — every stored arm re-scored by the SAME rule
+(`scoreAbsence` 9.109.1: declared strings only, whole word, plural allowed;
+neighbourhood = holding sources, reading tools, one-relation terms; map
+words = `ontology`, `map`). Eight questions, six of which declare a gap;
+`k of n` over the six.
+
+| arm | library | named the gap | named where | cited the map | tool calls (8 q) |
+|---|---|---|---|---|---|
+| map off (baseline) | 9.106.0 | 5 / 6 | 5 / 6 | 0 / 8 | 13 |
+| map on, v1 | 9.106.0 | 6 / 6 | 5 / 6 | 4 / 8 | 6 |
+| map on, v2 (ask: sources, never the map) | 9.107.0 | 6 / 6 | 5 / 6 | 3 / 8 | 7 (one turn's record missing) |
+| map on, v3 (the skill join) | 9.108.0 | 6 / 6 | 5 / 6 | 3 / 8 | 12 (5 of them the data question that traced the FC path) |
+
+What the scorer says that the eye did not:
+
+- **Naming is nearly a wash by the strict rule.** The baseline names the
+  gap 5 of 6 times and a neighbour 5 of 6 — because the QUESTION carries
+  the gap's words ("HBA tuning attributes", "Intersight", "Cohesity") and
+  an answer that echoes the question names the gap. The one baseline miss
+  is the vmkernel question, where the answer said "logs" generically. The
+  rule counts names; it cannot count an echo differently from a finding.
+- **What the eye saw, the scorer cannot.** The baseline's Intersight
+  answer said "no access to UCS or Intersight data" — wrong, UCS Manager IS
+  collected — and its HBA-tuning answer named no source at all. Both score
+  the same as the armed answers that named the ODM and UCS Manager,
+  because naming ≠ correctness. A check that would see it — "the answer
+  DENIES a source the map holds" — is a claim the record can judge, and it
+  is the next rule to write, not a rule to guess at tonight.
+- **The map's measured benefit is in the calls, and in the join.** Six or
+  seven tool calls against thirteen on the same questions; and under v3
+  the restore question walks term → `backup_run` → `vm_backup_status`
+  → its skill (two calls: `read_skill`, `vm_backup_status`), where the
+  replayed v2 turn had stopped and asked the person.
+- **The wording metric stands at 3 of 8** under v2 and v3 — the word is in
+  the piece's own header, and the ask's last line moves it from 4 to 3,
+  not to 0.
+
+Raw arms: the host's `docs/measurements/2026-09-17-ontology-nodata-{off,on,v2-on,v3-on}.json`,
+re-scorable with its `scripts/bench/nodata-score.ts`.
 
 ## Where this sits in the literature (read 2026-09-17, for the paper)
 
