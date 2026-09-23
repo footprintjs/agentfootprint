@@ -19,7 +19,7 @@ those are different facts about a run.
 
 > `readonly` `optional` **after?**: `unknown`
 
-Defined in: [src/core/agent/middleware/types.ts:359](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/middleware/types.ts#L359)
+Defined in: [src/core/agent/middleware/types.ts:361](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/middleware/types.ts#L361)
 
 The value after this middleware. Present only when `changed`.
 
@@ -39,15 +39,17 @@ Which chain this row came from. The older spelling — see `moment`.
 
 > `readonly` `optional` **before?**: `unknown`
 
-Defined in: [src/core/agent/middleware/types.ts:357](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/middleware/types.ts#L357)
+Defined in: [src/core/agent/middleware/types.ts:359](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/middleware/types.ts#L359)
 
 The value before this middleware. Present only when `changed`.
 
 At `'after-tool'` this is the tool's REAL result — including on a
-refusal, where it is the only copy in the run, because the side effect
-happened and a record that dropped it would be a record that lies. If it
-must not survive in the commit log, that is footprintjs redaction over
-this key: the row survives, the value does not.
+refusal, because the side effect happened and a record that dropped it
+would be a record that lies. It is not the only copy: by design
+`agentfootprint.stream.tool_end` reports the same real result. If it must
+not survive in a record, redact it where you keep one (an `Agent`
+exposes no footprintjs redaction policy today): the row survives, the
+value does not.
 
 ***
 
@@ -70,7 +72,7 @@ carry `changed: true` with the real result in `before`.
 
 > `readonly` `optional` **componentId?**: `string`
 
-Defined in: [src/core/agent/middleware/types.ts:365](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/middleware/types.ts#L365)
+Defined in: [src/core/agent/middleware/types.ts:367](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/middleware/types.ts#L367)
 
 The registered component that COLLECTED this decision (9.24.0). Present
 only on the resume-side rows of an `ask` that carried one — the trace

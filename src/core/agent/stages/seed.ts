@@ -8,7 +8,8 @@
  *   • CHART-BUILD-TIME constants (maxIterations, cachingDisabled,
  *     toolSchemas) — passed as direct values to the factory.
  *   • PER-RUN MUTABLE state (pendingResumeHistory from
- *     resumeOnError(), currentRunContext.runId set per run) —
+ *     run({ continueFrom }) / resumeOnError(), currentRunContext.runId
+ *     set per run) —
  *     passed as accessor closures over the Agent instance, since
  *     these change between consecutive `agent.run()` invocations.
  *
@@ -32,6 +33,30 @@ import { withFindingsArgument } from '../findings/reserved.js';
 import type { FindingsLedger } from '../findings/types.js';
 import type { Ontology } from '../../../ontology/types.js';
 
+/**
+ * A stored conversation handed to the next run — what
+ * `Agent.ts · applyContinuation` stashes and `seedFrom` consumes.
+ *
+ * It carries the history EXACTLY as stored and a flag, never a pre-built
+ * user entry: the entry this turn adds is written in ONE place,
+ * `historyForTurn`, from the message the `'input'` chain let through. A
+ * continuation that appended the caller's raw message before the chain ran
+ * would put the unrewritten text in front of the model while the record
+ * (`userMessage`, `middlewareDecisions`) said the rewrite happened — the
+ * bug fixed in 9.112.2.
+ */
+export interface PendingResumeHistory {
+  /** The conversation as stored — no entry for this turn in it. */
+  readonly history: readonly LLMMessage[];
+  /**
+   * `true` for `run({ continueFrom })` (and so `followUp()` and every stored
+   * session behind `standingAgent`): continuing a conversation ADDS this
+   * turn's user message. `false` for `resumeOnError`, whose failing turn's
+   * message is already the last user entry in `history`.
+   */
+  readonly appendsUserTurn: boolean;
+}
+
 export interface SeedStageDeps {
   /** Resolved `clampIterations(opts.maxIterations ?? 10)`. Frozen at
    *  chart-build time. */
@@ -51,12 +76,13 @@ export interface SeedStageDeps {
   readonly toolSchemas: readonly LLMToolSchema[];
   /**
    * Read-AND-CLEAR accessor for the resume side-channel. Called exactly
-   * once per `agent.run()` from inside seed. If `resumeOnError(checkpoint)`
-   * was invoked before `run()`, this returns the checkpointed history
-   * and clears the field so the NEXT `run()` starts fresh. Returns
-   * `undefined` for the normal (non-resume) path.
+   * once per `agent.run()` from inside seed. If `run({ continueFrom })` or
+   * `resumeOnError(checkpoint)` stashed a stored conversation before this
+   * run, this returns it — the history AS STORED plus whether this turn
+   * appends a user entry — and clears the field so the NEXT `run()` starts
+   * fresh. Returns `undefined` for the normal (non-resume) path.
    */
-  readonly consumePendingResumeHistory: () => readonly LLMMessage[] | undefined;
+  readonly consumePendingResumeHistory: () => PendingResumeHistory | undefined;
   /** Same-request recovery only. A new human turn never supplies this state. */
   readonly consumePendingEvidenceRecovery?: () => EvidenceRecoveryCheckpoint | undefined;
   /**
@@ -337,6 +363,34 @@ export function buildSeedStage(
 }
 
 /**
+ * The conversation this run starts from, ending in this turn's user entry —
+ * the ONE place that entry is written (9.112.2).
+ *
+ * `message` is what the `'input'` chain let through (the caller's message
+ * when there is no chain; on a refusal, the content as it stood when it was
+ * refused), so a rewrite — a scrub, a stated quote — is the entry the model
+ * reads on a continued turn exactly as on a first one.
+ *
+ *   • fresh run → `[{ user: message }]`
+ *   • `run({ continueFrom })` → the stored conversation + `{ user: message }`
+ *   • `resumeOnError` → the stored conversation as-is: its last user entry
+ *     IS the failing turn's message, and adding it again would ask twice.
+ *     An empty stored history falls back to the fresh-run entry, as it
+ *     always did.
+ *
+ * With no chain, every arm yields the bytes the earlier releases committed.
+ */
+function historyForTurn(
+  resume: PendingResumeHistory | undefined,
+  message: string,
+): readonly LLMMessage[] {
+  const entry: LLMMessage = { role: 'user', content: message };
+  if (resume === undefined) return [entry];
+  if (resume.appendsUserTurn) return [...resume.history, entry];
+  return resume.history.length > 0 ? [...resume.history] : [entry];
+}
+
+/**
  * Initialise every mutable field of `AgentState` from `message` + the run
  * args. Split out so the message the run proceeds with can come either
  * straight from the caller or from the `'input'` middleware chain — one
@@ -346,16 +400,12 @@ function seedFrom(scope: TypedScope<AgentState>, message: string, deps: SeedStag
   const args = scope.$getArgs<AgentInput>();
   scope.userMessage = message;
 
-  // If `resumeOnError(...)` set the side channel, restore the
-  // checkpointed conversation history. The next iteration sees
-  // the prior messages and continues from the failure point.
-  // Always clear the field after reading so subsequent runs
-  // (without resumeOnError) start fresh.
-  const resumeHistory = deps.consumePendingResumeHistory();
-  const history: readonly LLMMessage[] =
-    resumeHistory && resumeHistory.length > 0
-      ? [...resumeHistory]
-      : [{ role: 'user', content: message }];
+  // If `run({ continueFrom })` or `resumeOnError(...)` set the side channel,
+  // restore the stored conversation; this turn's user entry is `message` —
+  // the input chain's verdict — on every path (`historyForTurn`). The
+  // accessor clears the field, so a later run without a continuation starts
+  // fresh.
+  const history = historyForTurn(deps.consumePendingResumeHistory(), message);
   scope.history = history;
 
   // The window's durable companion. Restored whether or not THIS agent is

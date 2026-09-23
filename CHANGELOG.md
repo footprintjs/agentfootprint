@@ -5,6 +5,73 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [9.112.2] - 2026-09-22
+
+### Fixed
+
+- **Input message middleware now applies on a continued turn, not only on the
+  first one.** On `run({ message, continueFrom })` — and so on `followUp()` and
+  on every stored session behind `standingAgent` — the chain RAN on every turn;
+  its output was discarded before the wire and the stored history. The turn's
+  history was built from the caller's RAW message before the `'input'` chain
+  ran, so the model was sent, and the conversation stored, the original text,
+  while the ledger row and `userMessage` (and so
+  `checkpoint().originalInput.message`) held the rewrite. A rewrite that adds
+  context never reached the model, and a scrub (a PII or redaction middleware)
+  ran, recorded its change, and protected nothing on every turn after the
+  first. **Who is affected:** any app with an `'input'` message rule —
+  `.act({ input: [...] })` or `.messageMiddleware(...)` — that continues a
+  conversation through `continueFrom`, `followUp()` or `standingAgent`. First
+  turns were always correct.
+  **What happens now:** the turn's user entry is the message the chain let
+  through, on every turn — the same string the record names. The stored
+  history (`checkpoint().history`) therefore holds the rewritten user turn,
+  matching `checkpoint().originalInput.message`; that is what the record
+  always claimed. A conversation stored before this release still holds the
+  raw text for those earlier turns, and continuing it does not rewrite them.
+  A refusal on a continued turn now commits the content as it stood when it
+  was refused, as a first turn already did. Unchanged: `resumeOnError` adds
+  no user entry, a continued turn with no middleware carries byte-identical
+  history, and pause/resume (`agent.resume`) never runs the input chain.
+
+### Docs — the ledger row is not the only copy of the pre-scrub text
+
+- The middleware page ("Read this before you scrub secrets") and the
+  `ledger.ts` header said the `'input'` ledger row was the only copy of the
+  pre-scrub text in the run, and that footprintjs redaction over the key
+  removed it. Neither was true for an `Agent`. The original is also in the
+  run's input as passed (the `run.entry` payload every flow recorder
+  receives), in a crash checkpoint's `originalInput`, and in a refused turn's
+  history entry; the ledger row itself is copied into every snapshot,
+  narrative and recording surface, and into a paused run's checkpoint
+  (`RunnerPauseOutcome.checkpoint` — its `sharedState` and `executionTree`),
+  which `standingAgent` stores for a paused session as a `flowchart-v1`
+  envelope under every durability, the default `'exit'` included; and an
+  `Agent` exposes no footprintjs redaction policy. The page and the middleware
+  README now list each surface and what an app must redact itself — for the
+  stored pause, by wrapping the `persist` of the store passed as `sessions`.
+  The page's `'after-tool'` paragraph and the `MiddlewareDecision.before` doc
+  made the same "only copy" claim about a refused tool result; `agentfootprint.stream.tool_end` reports that result by
+  design, and both now say so.
+
+### Known — found in review, not fixed here
+
+- **A refused turn's content reaches the next turn.** `deny` on the `'input'`
+  phase commits the content as it stood when refused into `history`.
+  `checkpoint()` after the refusal carries it, and `followUp()` — or a
+  `standingAgent` session under `durability: 'async'` or `'sync'` (any mode
+  except the default `'exit'`) — sends it to the model on the next turn. The
+  default `durability: 'exit'` does not. This predates
+  9.112.2 and holds for a first turn and a continued one alike.
+- **The two checkpoints disagree about `originalInput`.** A crash checkpoint
+  (`RunCheckpointError.checkpoint`) stores the message as passed, before the
+  chain; `checkpoint()` stores the chain's verdict (`userMessage`).
+  `resumeOnError` runs the chain again on `originalInput.message`, so resuming
+  from `checkpoint()` applies a rewrite twice — a prefix doubles in
+  `userMessage` and the ledger while `history` and the wire keep it once — and
+  a stored crash checkpoint holds the pre-scrub text. An idempotent scrub
+  resumes correctly from either.
+
 ## [9.112.1] - 2026-09-22
 
 ### Fixed

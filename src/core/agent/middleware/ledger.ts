@@ -23,13 +23,16 @@
  * which is not what occurred.
  *
  * This is not a redaction layer, and it is not trying to be one. For the
- * `'input'` phase in particular, the ledger row is the ONLY copy of the
- * pre-scrub text anywhere in the run — the seed stage commits the
- * transformed message and nothing else ever holds the original. If your
- * threat model says the original must not survive in the commit log,
- * configure footprintjs redaction over this key; it scrubs `before` /
- * `after` at write time and the row itself survives, so the run still says
- * a scrub happened and who did it.
+ * `'input'` phase the seed stage commits the transformed message, so the
+ * model and the conversation never hold the original — but this row is NOT
+ * its only copy: the run's input as passed (`run.entry` payload), a crash
+ * checkpoint's `originalInput`, a refused turn's history entry and a paused
+ * run's checkpoint (`RunnerPauseOutcome.checkpoint`, which `standingAgent`
+ * stores for a paused session) keep it too — the full list, and what an app
+ * must redact, is in `./README.md`, the one place it is maintained. An
+ * `Agent` exposes no footprintjs redaction policy today, so an app whose
+ * threat model says the original must not survive strips `before` /
+ * `after` from these rows where it keeps the record.
  */
 
 import { typedEmit } from '../../../recorders/core/typedEmit.js';

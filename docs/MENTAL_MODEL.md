@@ -248,7 +248,10 @@ The loop is **branch-sourced** from the `tool-calls` branch via
 `activeInjections`, `*Injections`, `dynamicToolSchemas`, `cacheMarkers`, `llmLatest*`, `thinkingBlocks`.
 
 **Stage contracts (who reads/writes what):**
-- `seed` — initializes the whole AgentState from `AgentInput`; restores `pendingResumeHistory` if `resumeOnError`.
+- `seed` — initializes the whole AgentState from `AgentInput`; runs the `'input'` message middleware chain, then
+  `historyForTurn` writes `history`: the stored conversation from the `pendingResumeHistory` side channel
+  (`{ history, appendsUserTurn }` — set by `run({ continueFrom })` and `resumeOnError`), plus this turn's user entry
+  (the chain's verdict) when `appendsUserTurn` or when nothing was stored. `resumeOnError` appends none.
 - `callLLM` — reads `systemPromptInjections`+`history`+`dynamicToolSchemas`+`cacheMarkers`; calls
   provider stream()→complete(); writes `llmLatestContent/ToolCalls`, `rawThinking`, accumulates `totalInput/OutputTokens`; `emitCostTick`.
   Also emits the per-iteration `agentfootprint.agent.iteration_start` marker at the top of the stage (folded in from the former dedicated `IterationStart` stage — emit is passive, so no separate stage is warranted).

@@ -234,7 +234,7 @@ import {
   type AnswerValidationReport,
   type ResolvedAnswerValidation,
 } from '../answer-validation/index.js';
-import { buildSeedStage } from './agent/stages/seed.js';
+import { buildSeedStage, type PendingResumeHistory } from './agent/stages/seed.js';
 import type { MessageMiddleware, ToolMiddleware } from './agent/middleware/types.js';
 import { MessageDeniedError } from './agent/middleware/errors.js';
 import { buildCallLLMStage } from './agent/stages/callLLM.js';
@@ -703,10 +703,12 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
    */
   private readonly outputFallbackCfg?: ResolvedOutputFallback<unknown>;
 
-  /** Side-channel for `resumeOnError(...)` — when set, the seed
-   *  function restores `scope.history` from this instead of starting
-   *  fresh. Cleared on first read so subsequent runs start clean. */
-  private pendingResumeHistory?: readonly LLMMessage[];
+  /** Side-channel for `run({ continueFrom })` and `resumeOnError(...)` —
+   *  when set, the seed function restores `scope.history` from this
+   *  instead of starting fresh, and appends this turn's user entry when
+   *  `appendsUserTurn` says so. Cleared on first read so subsequent runs
+   *  start clean. */
+  private pendingResumeHistory?: PendingResumeHistory;
   /** Retried request's repair state; never inherited by a new human turn. */
   private pendingEvidenceRecovery?: EvidenceRecoveryCheckpoint;
 
@@ -1653,11 +1655,12 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
     // A conversation handed in continues through the same side channel
     // `resumeOnError` uses — one restoration path, so the two doors cannot
     // drift about what "continue" means. This turn's message IS appended:
-    // continuing a conversation adds a turn to it.
+    // continuing a conversation adds a turn to it. Seed appends it, AFTER the
+    // input middleware chain, so the entry is the chain's verdict (9.112.2).
     let continued: AgentRunCheckpoint | undefined;
     if (runInput.continueFrom !== undefined) {
       continued = validateCheckpoint(runInput.continueFrom);
-      this.applyContinuation(continued, 'Agent.run({ continueFrom })', runInput.message);
+      this.applyContinuation(continued, 'Agent.run({ continueFrom })', true);
     }
     // Only an EXPLICIT identity is remembered for `checkpoint()`; see the
     // field's note. `input.identity` wins over `options.identity` because the
@@ -1975,7 +1978,7 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
     // reads + clears it before scope.history initializes. No message is
     // appended — the failing run's message is already the last user turn in
     // that history, and adding it again would ask twice.
-    this.applyContinuation(cp, 'Agent.resumeOnError');
+    this.applyContinuation(cp, 'Agent.resumeOnError', false);
     return this.run(
       {
         message: cp.originalInput.message,
@@ -2243,11 +2246,9 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
    * await agent.run({ message: 'Book me a table for two.' });
    * const conversation = agent.checkpoint();          // persist anywhere
    * // …a restart later, on a fresh Agent:
-   * await agent.resumeOnError({
-   *   ...conversation,
-   *   history: [...conversation.history, { role: 'user', content: 'Make it three.' }],
-   *   originalInput: { message: 'Make it three.' },
-   * });
+   * await agent.run({ message: 'Make it three.', continueFrom: conversation });
+   * // `continueFrom` runs the 'input' middleware chain on the new turn; a user
+   * // entry appended to `history` by hand and passed to `resumeOnError` skips it.
    * ```
    */
   checkpoint(): AgentRunCheckpoint | undefined {
@@ -2382,21 +2383,26 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
    * restores history + folded spans, and adopts the conversation's identity so
    * the continued turn writes its memory where the earlier turns are.
    *
-   * `appendMessage` is the difference between the two callers, and it is the
+   * `appendsUserTurn` is the difference between the two callers, and it is the
    * whole difference. Continuing a conversation ADDS this turn's user message
    * to the stored history; resuming after an error does NOT, because there the
    * message is already the last user turn in that history and appending it
    * would ask the same question twice.
    *
+   * Only the FLAG is stashed, never the entry (9.112.2). The entry is written
+   * by `seed.ts · historyForTurn` from the message the `'input'` middleware
+   * chain let through; an entry built here, before that chain has run, is the
+   * caller's raw text — which is what a continued turn served the model
+   * through 9.112.1, while the record said the rewrite had happened.
+   *
    * @internal
    */
-  private applyContinuation(cp: AgentRunCheckpoint, door: string, appendMessage?: string): void {
+  private applyContinuation(cp: AgentRunCheckpoint, door: string, appendsUserTurn: boolean): void {
     assertContinuable(cp, this.explicitId, door);
-    const history = cp.history as readonly LLMMessage[];
-    this.pendingResumeHistory =
-      appendMessage === undefined
-        ? history
-        : [...history, { role: 'user', content: appendMessage }];
+    this.pendingResumeHistory = {
+      history: cp.history as readonly LLMMessage[],
+      appendsUserTurn,
+    };
     // The folded spans beside it. A conversation stored before 8.2 has none,
     // and `undefined` is the right answer there — it means "this conversation
     // recorded no folds", which is exactly true.
@@ -2415,7 +2421,7 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
     // Same failed request retains its single repair budget. A new user turn
     // receives neither the rejected draft nor a spent retry allowance.
     this.pendingEvidenceRecovery =
-      appendMessage === undefined && cp.evidenceRecovery !== undefined
+      !appendsUserTurn && cp.evidenceRecovery !== undefined
         ? structuredClone(cp.evidenceRecovery)
         : undefined;
   }

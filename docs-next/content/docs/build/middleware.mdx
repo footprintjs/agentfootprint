@@ -81,6 +81,8 @@ The regex is a plain regex on purpose. **The seam is the product; the classifier
 
 At the very top of the run, **before the message is committed**. Everything downstream reads the committed history: the [window strategies](doc:window-strategies), the injection engine, all three slots, the bytes on the wire, and every slice taken afterwards. Transform any later than this and those components disagree about what the user said — the trace would show one message while the model answered another.
 
+That holds on **every** turn. A continued conversation — `run({ message, continueFrom })`, `followUp()`, a stored session behind `standingAgent` — appends the message the chain let through, so the stored history keeps the rewritten turn, the same string `checkpoint().originalInput.message` names. (Before 9.112.2 the chain ran on a continued turn but its output was discarded: the model was sent, and the conversation stored, the raw message, while the ledger row and `userMessage` held the rewrite.)
+
 `'output'` runs at the moment the run knows this turn is the final answer, so the caller and the record receive the same string.
 
 ## The ledger: a scrub that hides its scrubbing poisons every slice
@@ -101,13 +103,22 @@ Every decision files a row, including the pass-throughs — "the rule looked and
 
 ### Read this before you scrub secrets
 
-**For the `'input'` phase, the ledger row is the only copy of the pre-scrub text anywhere in the run.** The seed stage commits the transformed message and nothing else holds the original. That is the honest trade this design makes: the transform is legible precisely because the run kept what it replaced.
+**An `'input'` scrub keeps the text away from the model and the conversation — not from every record of the run.** On every turn the chain lets through (first or continued, since 9.112.2) the model reads the scrubbed message, the committed `history` and `checkpoint().history` hold the scrubbed turn, and no `agentfootprint.*` event payload carries the original. The run still keeps what it replaced — that is the honest trade that makes the transform legible — so the pre-scrub text is **not** in one place. It is in these, and an app that must not keep it redacts each one itself before it persists or serves it:
 
-If your threat model says the original must not survive in the commit log, that is a **redaction** question, not a middleware one — and footprintjs already answers it. Configure redaction over the `middlewareDecisions` key and `before` / `after` are scrubbed at write time while the decision row itself survives: the run still says a scrub happened, who did it, and why, without holding what was scrubbed. Honesty and protection are both laws here, and that is where they meet.
+| holds the pre-scrub text | where it shows up |
+| --- | --- |
+| the ledger row, `middlewareDecisions[i].before` | every copy of the run's state: `getLastSnapshot()` (`sharedState`, `commitLog`, `executionTree`, `subflowResults`), `getLastNarrativeEntries()`, a `recordRun(...)` recording, a `BoundaryRecorder` `subflow.entry` payload — and a paused run's checkpoint, `RunnerPauseOutcome.checkpoint` (`sharedState`, `executionTree`), which `standingAgent` itself stores for a paused session as a `flowchart-v1` envelope under **every** durability, the default `'exit'` included |
+| the run's input, as passed | the `run.entry` payload every flow recorder receives — `BoundaryRecorder`, `recordRun`, a Lens — is `{ message }` before the chain ran |
+| a crash checkpoint | `RunCheckpointError.checkpoint.originalInput.message` is the message as passed (`checkpoint().originalInput.message` is the chain's verdict) |
+| a refused turn | `deny` commits the content as it stood when refused — the raw text, unless an earlier link rewrote it — into `history`. `checkpoint()` after the refusal carries it, and a `followUp()` or a `standingAgent` session under `durability: 'async'` or `'sync'` (any mode except the default `'exit'`) sends it to the model on the next turn |
+
+The last two are known gaps, recorded in the 9.112.2 changelog entry, not the design. Until they close: replace a crash checkpoint's `originalInput.message` with the scrubbed text before you store it (safe for a scrub: resuming runs the chain again and it finds nothing to change), and continue a refused conversation from a checkpoint with the refused entry removed — or keep `standingAgent` on its default `durability: 'exit'`, which does not carry a refused turn into the next one (`'async'` and `'sync'` both do). `'exit'` does not keep a paused run's checkpoint out of the store, though — that copy is covered below.
+
+If your threat model says the original must not survive in a record, that is a **redaction** question, not a middleware one. footprintjs's redaction policy answers it at write time — the decision row survives, so the run still says a scrub happened, who did it, and why, without holding what was scrubbed. **An `Agent` does not expose that policy today** (`flowchartAsTool` and `runbookAsTool` take `redact`; an Agent's executor is built without one), so for an Agent the scrubbing happens where you keep the record: strip `before` / `after` from the `middlewareDecisions` rows and the `run.entry` payload before a snapshot or a recording leaves the process. A paused run's checkpoint needs the same strip before it is stored: if you store `out.checkpoint` yourself, strip the rows in its `sharedState` and `executionTree` first; behind `standingAgent` the library stores it, so wrap the store you pass as `sessions` — its `persist` strips those rows from a `flowchart-v1` envelope's `data.checkpoint` and then writes. The ledger is only ever appended to, so a checkpoint stripped this way resumes the same. For a local-observability `Trace`, `serializeTrace(events, { redact: redactContent })` blanks the `run.entry` / `subflow.entry` payloads at the serialize boundary. Honesty and protection are both laws here, and that is where they meet.
 
 For tool args and the output phase the point is moot — the pre-transform value is already in the committed history and in `llmLatestContent`, so the ledger adds no exposure. It just makes the change findable.
 
-The `'after-tool'` moment is the input phase's mirror image: a result the model was **not** allowed to read lives in exactly one place, that row's `before`. Same trade, same answer — redact the key and the refusal survives without the value.
+The `'after-tool'` moment is the input phase's mirror image: a result the model was **not** allowed to read is kept in that row's `before` — and, by design, in the `agentfootprint.stream.tool_end` event, which reports what the tool returned while the history carries what the rules let through. Same trade, same answer as above: redact both where you keep the record and the refusal survives without the value.
 
 ## Tool rules
 

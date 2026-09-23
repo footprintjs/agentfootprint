@@ -148,14 +148,14 @@ const SITES: Readonly<Record<string, readonly Site[]>> = {
 
   // ── (b) person — the content came from somebody ──
   'src/core/agent/stages/seed.ts': [
-    { cls: 'person', why: "the run's request: the message `agent.run({ message })` was given" },
-  ],
-  'src/core/Agent.ts': [
     {
       cls: 'person',
       why:
-        'the continuation: the words a caller passes to `.continue(…, { appendMessage })`, ' +
-        'appended to the restored conversation as the next thing the person said',
+        "the run's request: the message `agent.run({ message })` was given, as the `'input'` " +
+        "middleware chain let it through — the fresh run's only entry AND the turn a " +
+        'continuation (`run({ continueFrom })`) appends to the restored conversation. One ' +
+        'owner since 9.112.2: `seed.ts · historyForTurn`; `Agent.ts · applyContinuation` ' +
+        'used to build the continued entry itself, from the raw message, before the chain ran',
     },
   ],
   'src/core/agent/stages/prepareFinal.ts': [

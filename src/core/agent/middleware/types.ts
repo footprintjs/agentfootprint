@@ -349,10 +349,12 @@ export interface MiddlewareDecision {
    * The value before this middleware. Present only when `changed`.
    *
    * At `'after-tool'` this is the tool's REAL result — including on a
-   * refusal, where it is the only copy in the run, because the side effect
-   * happened and a record that dropped it would be a record that lies. If it
-   * must not survive in the commit log, that is footprintjs redaction over
-   * this key: the row survives, the value does not.
+   * refusal, because the side effect happened and a record that dropped it
+   * would be a record that lies. It is not the only copy: by design
+   * `agentfootprint.stream.tool_end` reports the same real result. If it must
+   * not survive in a record, redact it where you keep one (an `Agent`
+   * exposes no footprintjs redaction policy today): the row survives, the
+   * value does not.
    */
   readonly before?: unknown;
   /** The value after this middleware. Present only when `changed`. */

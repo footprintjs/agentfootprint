@@ -1202,11 +1202,13 @@ export interface AgentInput {
    * starts a new conversation and the model will honestly say it has not
    * spoken to you before.
    *
-   * The stored history is restored, this call's `message` is appended to it as
-   * the next user turn, and the run proceeds. `identity` and the conversation's
-   * folded spans ride along from the checkpoint unless this call overrides
-   * them — a continued turn that silently re-namespaced its own memory would
-   * write turn two somewhere turn one cannot be read from.
+   * The stored history is restored, the next user turn is appended to it, and
+   * the run proceeds. That turn is this call's `message` as the `'input'`
+   * middleware chain let it through — the rewrite when a chain rewrote it (a
+   * scrub, an added quote), not the message as passed. `identity` and the
+   * conversation's folded spans ride along from the checkpoint unless this
+   * call overrides them — a continued turn that silently re-namespaced its
+   * own memory would write turn two somewhere turn one cannot be read from.
    *
    * `agent.followUp(message)` is the same thing for the common case, reading
    * the conversation off this agent's own last completed run.

@@ -53,9 +53,9 @@ resume(scope, humanInput):
 ```
 
 ## M2 — Error-checkpoint replay (`resumeOnError`, history-only memento)
-Files: `core/runCheckpoint.ts` (`AgentRunCheckpoint` :69-97, `RunCheckpointError` :123-145, tracker :156-166, `buildCheckpoint` :174-194, `validateCheckpoint` :204-230) · `Agent.ts` (tracker install :616-622, catch-and-wrap :638-661, `resumeOnError` :711-720, `installCheckpointTracker` :729-752, `pendingResumeHistory` side channel :254-257) · `stages/seed.ts:42` `consumePendingResumeHistory` (read-AND-clear), restore :67-72. Source events: toolCalls.ts:471-481 (execute path) + toolCalls.ts:512-518 (resume path) emit `iteration_end` with PLAIN detached history; prepareFinal.ts:43 emits `iteration_end` WITHOUT a history field — it only advances lastCompletedIteration (the tracker keeps the last toolCalls-provided history, guard Agent.ts:739-747).
+Files: `core/runCheckpoint.ts` (`AgentRunCheckpoint` :69-97, `RunCheckpointError` :123-145, tracker :156-166, `buildCheckpoint` :174-194, `validateCheckpoint` :204-230) · `Agent.ts` (tracker install :616-622, catch-and-wrap :638-661, `resumeOnError` :711-720, `installCheckpointTracker` :729-752, `pendingResumeHistory` side channel, a `PendingResumeHistory` = `{ history, appendsUserTurn }` written by `Agent.ts · applyContinuation`) · `stages/seed.ts · consumePendingResumeHistory` (read-AND-clear) → `stages/seed.ts · historyForTurn` (9.112.2: the ONE writer of the turn's user entry, called after the `'input'` middleware chain). Source events: toolCalls.ts:471-481 (execute path) + toolCalls.ts:512-518 (resume path) emit `iteration_end` with PLAIN detached history; prepareFinal.ts:43 emits `iteration_end` WITHOUT a history field — it only advances lastCompletedIteration (the tracker keeps the last toolCalls-provided history, guard Agent.ts:739-747).
 
-Trace (provider 500s at iteration 3): iterations 1-2 emit iteration_end → tracker snapshots history + lastCompletedIteration → iter 3 throws → catch: not PauseSignal/PolicyHalt/ReliabilityFailFast AND tracker.history nonempty → `throw RunCheckpointError(cause, buildCheckpoint(...))`. Consumer persists `err.checkpoint`; `agent.resumeOnError(cp)` → validate → `pendingResumeHistory = cp.history` → re-`run(cp.originalInput.message)` → seed consumes the side channel and sets `scope.history = [...resumeHistory]` → model re-decides from restored history.
+Trace (provider 500s at iteration 3): iterations 1-2 emit iteration_end → tracker snapshots history + lastCompletedIteration → iter 3 throws → catch: not PauseSignal/PolicyHalt/ReliabilityFailFast AND tracker.history nonempty → `throw RunCheckpointError(cause, buildCheckpoint(...))`. Consumer persists `err.checkpoint`; `agent.resumeOnError(cp)` → validate → `pendingResumeHistory = { history: cp.history, appendsUserTurn: false }` → re-`run(cp.originalInput.message)` → seed runs the `'input'` chain, consumes the side channel and sets `scope.history = historyForTurn(pending, verdict)` = the stored history as-is (no user entry appended: the failing turn's message is already its last one) → model re-decides from restored history. The conversation door `run({ message, continueFrom: cp })` rides the same channel with `appendsUserTurn: true`, so seed appends `{ user: verdict }` — the chain's output, never the raw message.
 
 | Step | SAVED | RESTORED | DISCARDED |
 |---|---|---|---|
@@ -73,8 +73,14 @@ run(input):
   catch cause:
     if recoverable && tracker.history.length: throw RunCheckpointError(cause, buildCheckpoint(tracker))
 resumeOnError(cp):
-  pendingResumeHistory = validateCheckpoint(cp).history
-  return run({message: cp.originalInput.message})   # seed: history = pendingResumeHistory ?? [userMsg]
+  pendingResumeHistory = { history: validateCheckpoint(cp).history, appendsUserTurn: false }
+  return run({message: cp.originalInput.message})
+run({message, continueFrom: cp}):                    # the conversation door
+  pendingResumeHistory = { history: cp.history, appendsUserTurn: true }
+seed(verdict):                                       # verdict = what the 'input' chain let through
+  scope.history = historyForTurn(consume(pendingResumeHistory), verdict)
+    # none → [user(verdict)] · appendsUserTurn → [...history, user(verdict)]
+    # otherwise → history as-is ([user(verdict)] when it is empty)
 ```
 
 ## M3 — Inline reliability retry (retry inside ONE stage)
