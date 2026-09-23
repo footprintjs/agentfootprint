@@ -120,7 +120,9 @@ function pairwiseGap(a: number, b: number): number {
  *
  *   • decisive winner ≠ incumbent → `move`;
  *   • decisive winner = incumbent, or a near-tie WITH an incumbent → `stay`
- *     (ambiguity mid-conversation = stay; the menu is not opened);
+ *     (ambiguity mid-conversation = stay; the menu is not opened) — unless
+ *     the scorer scored that incumbent and put it at/below the floor, when
+ *     the near-tie is between new candidates only → `menu` of the tied cluster;
  *   • near-tie with NO incumbent (cold start) → `menu` of the tied cluster
  *     (every candidate within the margin of the top, capped at `menuSize`);
  *   • every candidate at/below the floor → `unmatched` (the caller offers the
@@ -170,8 +172,19 @@ export function decideTier2(
     return { kind: 'move', to: top.id, ...numbers };
   }
   // Near-tie. Mid-conversation the incumbent holds (ambiguity = stay);
-  // cold start opens the menu of the tied cluster.
-  if (incumbentId !== undefined) return { kind: 'stay', ...numbers };
+  // cold start opens the menu of the tied cluster. ONE exception: the scorer
+  // scored the incumbent ITSELF and put it out (at/below the floor, or
+  // non-finite) — then the ambiguity is between new candidates only, and
+  // staying would cling to a skill the scorer says this message does not
+  // match, so the tied cluster is offered instead. An incumbent the scorer
+  // never scored is UNKNOWN, not out: it still holds. With no floor declared
+  // (the embedding default) every finite score is alive, so a contentless
+  // follow-up ("and yesterday?") still stays exactly as before.
+  const incumbentScoredOut =
+    incumbentId !== undefined &&
+    safeOf.has(incumbentId) &&
+    !alive.some((r) => r.id === incumbentId);
+  if (incumbentId !== undefined && !incumbentScoredOut) return { kind: 'stay', ...numbers };
   const tied = alive
     .filter((r) => pairwiseGap(safeOf.get(top.id)!, safeOf.get(r.id)!) < policy.nearTieMargin)
     .slice(0, Math.max(2, policy.menuSize))

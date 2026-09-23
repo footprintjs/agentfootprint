@@ -558,6 +558,29 @@ worth repeating because it is easy to get backwards: the LLM classifier is a
 `embeddingScorer(e)` / the entry scorer), never tier 3. Tier 3 is the menu the
 model resolves in-band, reached only when tier 2 was NOT decisive.
 
+**A near-tie keeps the incumbent — unless the scorer put the incumbent out
+(9.112.1).** Mid-conversation, ambiguity means *stay*: "these two were too
+close" is no reason to abandon the skill the conversation is in. But when a
+floor is declared and the scorer scored the incumbent itself at or below it,
+the tie is between NEW candidates only, and staying would cling to a skill the
+scorer just said this message does not match — so `decideTier2` offers the
+tied cluster as a `menu` instead (the RouteTurn stage keeps *stay* on that menu
+mid-conversation, exactly as for an `unmatched` turn: the model decides, the
+policy no longer decides silently). Two cases deliberately keep `stay`: an
+incumbent the scorer never scored (not declared as an intent — unknown, not
+out), and any scorer with no floor (the embedding default), where every finite
+score is alive — so a contentless follow-up like *"and yesterday?"* keeps its
+skill exactly as before.
+
+```ts
+decideTier2([s('b', 0.52), s('c', 0.5), s('inc', 0)], 'inc', policy, { floor: 0 });
+// → { kind: 'menu', offered: ['b', 'c'] } — was 'stay' on 'inc' before 9.112.1
+```
+
+A scorer's result must name every candidate exactly once: `validateIntentScores`
+refuses a missing id, a foreign id, and (since 9.112.1) an id scored twice —
+by name, never last-row-wins.
+
 Maintainer facts, which are what this file is for. The cascade runs once per
 turn, off the hot loop (the RouteTurn stage in PickEntry's slot); iterations
 2..N keep the 8.x law byte-for-byte. `routing:` beside `classify` is the ONE

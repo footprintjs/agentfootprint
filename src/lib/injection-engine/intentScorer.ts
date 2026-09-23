@@ -91,16 +91,25 @@ export function validateIntentScores(
 ): readonly IntentScore[] {
   const byId = new Map<string, IntentScore>();
   const foreign: string[] = [];
+  // A candidate scored twice is refused like a missing or foreign one: a Map
+  // would otherwise let the LAST row win silently, and which row that is
+  // depends on the scorer's iteration order (2026-09-22 review, S8).
+  const repeated: string[] = [];
   for (const s of result) {
-    if (candidates.some((c) => c.id === s.id)) byId.set(s.id, s);
-    else foreign.push(s.id);
+    if (!candidates.some((c) => c.id === s.id)) foreign.push(s.id);
+    else if (byId.has(s.id)) {
+      if (!repeated.includes(s.id)) repeated.push(s.id);
+    } else byId.set(s.id, s);
   }
   const missing = candidates.filter((c) => !byId.has(c.id)).map((c) => c.id);
-  if (foreign.length > 0 || missing.length > 0) {
+  if (foreign.length > 0 || missing.length > 0 || repeated.length > 0) {
     const clauses = [
       ...(missing.length > 0 ? [`omitted ${missing.map((m) => `"${m}"`).join(', ')}`] : []),
       ...(foreign.length > 0
         ? [`named ${foreign.map((f) => `"${f}"`).join(', ')} which it was not given`]
+        : []),
+      ...(repeated.length > 0
+        ? [`scored ${repeated.map((r) => `"${r}"`).join(', ')} more than once`]
         : []),
     ];
     throw new Error(

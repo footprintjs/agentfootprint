@@ -536,7 +536,9 @@ make turn two start somewhere nobody declared.
 
 **To make it span the conversation, ask for it**: `.skillGraph(graph, { continuity:
 'conversation' })` restores the inherited cursor and judges it as a candidate — the
-incumbent is beaten only by a decisive verdict, ambiguity means stay, and an inherited id
+incumbent is beaten only by a decisive verdict, ambiguity means stay (unless the scorer
+scored the incumbent itself at or below its floor — then the tie among new candidates is
+offered as a menu, staying still one of the choices), and an inherited id
 the mounted graph does not know is dropped to a cold start, dev-warned, and recorded on
 `turn_routed.droppedResume` rather than silently parked on a node that does not exist.
 

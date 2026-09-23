@@ -377,7 +377,9 @@ ended on. **shipped**
 
 **Per conversation, opt-in.** `.skillGraph(graph, { continuity: 'conversation' })`
 restores the inherited cursor and judges it as a candidate: the incumbent is
-beaten only by a decisive verdict, ambiguity means stay, and an inherited id the
+beaten only by a decisive verdict, ambiguity means stay (unless the scorer scored the
+incumbent itself at or below its floor — then the tie among new candidates is offered as
+a menu, staying still one of the choices), and an inherited id the
 mounted graph does not know is dropped to a cold start, dev-warned, and recorded
 — never silently parked on a node that does not exist. **opt-in**
 

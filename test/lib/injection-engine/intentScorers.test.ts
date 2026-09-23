@@ -218,6 +218,16 @@ describe('security: validateIntentScores — the framework refuses misbehavior',
     ).toThrow(/omitted "shipping" and named "made-up"/);
   });
 
+  it('a candidate scored twice is refused by name, never last-row-wins (S8)', () => {
+    expect(() =>
+      validateIntentScores('custom', candidates, [
+        { id: 'billing', score: 1 },
+        { id: 'shipping', score: 2 },
+        { id: 'billing', score: 9 },
+      ]),
+    ).toThrow(/scored "billing" more than once/);
+  });
+
   it('a complete result is returned in CANDIDATE order, whatever order the scorer used', () => {
     const out = validateIntentScores('custom', candidates, [
       { id: 'shipping', score: 2 },

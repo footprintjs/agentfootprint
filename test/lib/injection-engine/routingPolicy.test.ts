@@ -47,6 +47,24 @@ describe('unit: decideTier2 — the verdict table', () => {
     expect(v.kind).toBe('stay');
   });
 
+  it('mid + near-tie between NEW candidates with the incumbent scored below the floor → menu, not stay (S3)', () => {
+    // The scorer scored the incumbent and put it out; the ambiguity is B vs C only.
+    const v = decideTier2([s('b', 0.52), s('c', 0.5), s('inc', 0)], 'inc', policy, { floor: 0 });
+    expect(v.kind).toBe('menu');
+    expect(v.kind === 'menu' && v.offered).toEqual(['b', 'c']);
+    expect(v.decisive).toBe(false);
+  });
+
+  it('mid + near-tie with an incumbent the scorer never scored → still stay (unknown is not out)', () => {
+    const v = decideTier2([s('b', 0.52), s('c', 0.5)], 'inc', policy, { floor: 0 });
+    expect(v.kind).toBe('stay');
+  });
+
+  it('mid + near-tie with NO floor anywhere → still stay (the contentless follow-up keeps its skill)', () => {
+    const v = decideTier2([s('b', 0.0), s('c', 0.0), s('inc', 0.0)], 'inc', policy, {});
+    expect(v.kind).toBe('stay');
+  });
+
   it('mid + incumbent top → stay; decisive challenger → move', () => {
     expect(decideTier2([s('inc', 0.9), s('x', 0.1)], 'inc', policy, { floor: 0 }).kind).toBe(
       'stay',

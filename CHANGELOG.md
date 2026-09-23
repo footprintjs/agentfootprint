@@ -5,6 +5,25 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [9.112.1] - 2026-09-22
+
+### Fixed
+
+- **A near-tie no longer clings to an incumbent the scorer put out.**
+  `decideTier2` kept the incumbent on ANY near-tie, even when the scorer had
+  scored that incumbent at or below the declared floor and the tie was between
+  two new candidates — so an ambiguous new topic silently stayed on a skill the
+  scorer said the message did not match. It now offers the tied cluster as a
+  `menu` in exactly that case — the same mid-conversation menu an `unmatched`
+  turn already produced, so staying is still offered as an explicit choice; the
+  model decides in-band instead of the policy deciding silently. Unchanged: an incumbent the scorer never scored
+  (unknown, not out) still stays, and a scorer with no floor (the embedding
+  default) still stays on a contentless follow-up.
+- **`validateIntentScores` refuses a candidate scored twice.** It stored rows
+  in a map, so a duplicate id silently replaced the earlier score (last row
+  wins, in whatever order the scorer iterated). A repeated id is now refused by
+  name beside the existing missing / foreign refusals.
+
 ## [9.112.0] - 2026-09-18
 
 ### Added — bringing your own taxonomy: SKOS in, our map out
