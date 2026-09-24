@@ -30,4 +30,5 @@ export type {
   CoveredResult,
   DeclaredCoverage,
   ToolAbsence,
+  TryInsteadTool,
 } from './types.js';

@@ -136,6 +136,13 @@ Q1/Q3) wait for a RUN-TIME reader (page Q4: who reads the row) — none is named
   `notChecked[]` a `kind`, `events/payloads.ts` · `ToolAbsentPayload` carries `tryInstead`
   (§ 10 change 7, first half; devil 1's own verdict item 3). Additive. Test + README example on
   the flagship envelope (`try_instead: 'Widen the window, or check pscale_cluster_inventory …'`).
+  *As shipped in 9.113.0 (a correction, so a producer and the second half read one key):* the
+  object form rides its OWN key — `tryInsteadTool` on the declaration, `try_instead_tool` on the
+  envelope, `ToolAbsentPayload.tryInsteadTool` on the event — and `tryInstead` / `try_instead`
+  stay a string (a union there would break every reader typed against `ToolAbsence` in a minor).
+  Wherever the page reads `tryInstead.tool` (§ 5.2, § 5.3 `source-not-consulted`, § 10 change 7,
+  F15), read `tryInsteadTool.tool`. `notChecked[].kind` did not ship: no reader in the release
+  reads it (coverage README, "Waiting for its reader").
 - **(iii) A law for every library-composed correction, whichever shape ships.** Past-anchored,
   no named destination, registered in `test/modelFacingSurfaces.test.ts` (devil 1 #5 accepted).
   Rows: Lens law 2 (canon lines 257–259: "a present-tense or forward-looking clause is a

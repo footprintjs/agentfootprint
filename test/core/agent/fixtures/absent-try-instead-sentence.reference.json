@@ -1,0 +1,93 @@
+{
+  "envelope": "{\"af_absent\":true,\"outcome\":\"nothing_found\",\"looked_for\":\"FLOGI entries on fc1/3\",\"checked\":[{\"what\":\"shq-fab-a: the live fcns database\"},{\"what\":\"window: the last 24h\"}],\"not_checked\":[{\"what\":\"the archived FLOGI history\",\"why\":\"older than the 24h window\"}],\"cannot_cover\":[{\"what\":\"the peer fabric\",\"why\":\"this collector is scoped to one fabric\"}],\"retry_returns_the_same\":true,\"try_instead\":\"Ask for a different interface, or query the peer fabric by name.\",\"note\":\"The search ran and matched nothing. This is an ANSWER, not an error: nothing failed, nothing was substituted for what was asked, and calling this tool again with the same arguments returns this same result. `checked` is the ground this answer covers; anything under `not_checked` or `cannot_cover` is ground it does NOT cover, and reaching that needs a different question, not a retry.\"}",
+  "flagshipEnvelope": "{\"af_absent\":true,\"outcome\":\"nothing_found\",\"looked_for\":\"latency samples for the named cluster\",\"checked\":[{\"what\":\"collected latency samples over the last 1h\"}],\"not_checked\":[{\"what\":\"whether the cluster exists at all\",\"why\":\"this reads collected samples, not the cluster\"}],\"retry_returns_the_same\":true,\"try_instead\":\"Widen the window, or check cluster_inventory for the collected cluster names.\",\"note\":\"The search ran and matched nothing. This is an ANSWER, not an error: nothing failed, nothing was substituted for what was asked, and calling this tool again with the same arguments returns this same result. `checked` is the ground this answer covers; anything under `not_checked` or `cannot_cover` is ground it does NOT cover, and reaching that needs a different question, not a retry.\"}",
+  "sent": [
+    [
+      {
+        "role": "user",
+        "content": "is the cluster slow?"
+      }
+    ],
+    [
+      {
+        "role": "user",
+        "content": "is the cluster slow?"
+      },
+      {
+        "role": "assistant",
+        "content": "",
+        "toolCalls": [
+          {
+            "id": "t1",
+            "name": "cluster_latency",
+            "args": {}
+          }
+        ]
+      },
+      {
+        "role": "tool",
+        "content": "{\"af_absent\":true,\"outcome\":\"nothing_found\",\"looked_for\":\"FLOGI entries on fc1/3\",\"checked\":[{\"what\":\"shq-fab-a: the live fcns database\"},{\"what\":\"window: the last 24h\"}],\"not_checked\":[{\"what\":\"the archived FLOGI history\",\"why\":\"older than the 24h window\"}],\"cannot_cover\":[{\"what\":\"the peer fabric\",\"why\":\"this collector is scoped to one fabric\"}],\"retry_returns_the_same\":true,\"try_instead\":\"Ask for a different interface, or query the peer fabric by name.\",\"note\":\"The search ran and matched nothing. This is an ANSWER, not an error: nothing failed, nothing was substituted for what was asked, and calling this tool again with the same arguments returns this same result. `checked` is the ground this answer covers; anything under `not_checked` or `cannot_cover` is ground it does NOT cover, and reaching that needs a different question, not a retry.\"}",
+        "toolCallId": "t1",
+        "toolName": "cluster_latency"
+      }
+    ]
+  ],
+  "toolTurn": "{\"af_absent\":true,\"outcome\":\"nothing_found\",\"looked_for\":\"FLOGI entries on fc1/3\",\"checked\":[{\"what\":\"shq-fab-a: the live fcns database\"},{\"what\":\"window: the last 24h\"}],\"not_checked\":[{\"what\":\"the archived FLOGI history\",\"why\":\"older than the 24h window\"}],\"cannot_cover\":[{\"what\":\"the peer fabric\",\"why\":\"this collector is scoped to one fabric\"}],\"retry_returns_the_same\":true,\"try_instead\":\"Ask for a different interface, or query the peer fabric by name.\",\"note\":\"The search ran and matched nothing. This is an ANSWER, not an error: nothing failed, nothing was substituted for what was asked, and calling this tool again with the same arguments returns this same result. `checked` is the ground this answer covers; anything under `not_checked` or `cannot_cover` is ground it does NOT cover, and reaching that needs a different question, not a retry.\"}",
+  "answer": "Nothing was collected for it.\n\n---\n\nCoverage of this answer — declared by the tools that produced it, not by the model:\n\nChecked:\n- shq-fab-a: the live fcns database\n- window: the last 24h\n\nNot checked:\n- the archived FLOGI history — older than the 24h window\n\nCannot cover:\n- the peer fabric — this collector is scoped to one fabric",
+  "coverageDeclared": [
+    {
+      "kind": "absence",
+      "toolName": "cluster_latency",
+      "toolCallId": "t1",
+      "iteration": 1,
+      "lookedFor": "FLOGI entries on fc1/3",
+      "checked": [
+        {
+          "what": "shq-fab-a: the live fcns database"
+        },
+        {
+          "what": "window: the last 24h"
+        }
+      ],
+      "notChecked": [
+        {
+          "what": "the archived FLOGI history",
+          "why": "older than the 24h window"
+        }
+      ],
+      "cannotCover": [
+        {
+          "what": "the peer fabric",
+          "why": "this collector is scoped to one fabric"
+        }
+      ]
+    }
+  ],
+  "absentEvent": {
+    "toolName": "cluster_latency",
+    "toolCallId": "t1",
+    "iteration": 1,
+    "lookedFor": "FLOGI entries on fc1/3",
+    "checked": [
+      {
+        "what": "shq-fab-a: the live fcns database"
+      },
+      {
+        "what": "window: the last 24h"
+      }
+    ],
+    "notChecked": [
+      {
+        "what": "the archived FLOGI history",
+        "why": "older than the 24h window"
+      }
+    ],
+    "cannotCover": [
+      {
+        "what": "the peer fabric",
+        "why": "this collector is scoped to one fabric"
+      }
+    ]
+  },
+  "toolEndStatus": "absent"
+}

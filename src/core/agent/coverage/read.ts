@@ -17,9 +17,14 @@
 
 import type { ToolResultStatus } from '../../../lib/injection-engine/toolOutcome.js';
 import { coverageOfSemantics, readSemantics } from '../../../lib/semantics/envelope.js';
-import { coverageOfAbsence, readAbsence } from './absent.js';
+import {
+  coverageOfAbsence,
+  readAbsence,
+  tryInsteadOfAbsence,
+  tryInsteadToolOfAbsence,
+} from './absent.js';
 import { coverageOfLedger, readCoverageLedger } from './ledger.js';
-import type { Coverage } from './types.js';
+import type { Coverage, ToolAbsence, TryInsteadTool } from './types.js';
 
 /** One coverage statement found in a result, before the caller stamps it with
  *  the call it came from. */
@@ -28,6 +33,28 @@ export interface CoverageFacts {
   readonly coverage: Coverage;
   /** Present for `'absence'` — what the search was for. */
   readonly lookedFor?: string;
+  /**
+   * Present for `'absence'` when it declared a sentence (9.113.0) — trimmed,
+   * as `absent()` mints it, and never parsed for a tool name. Not a piece of
+   * coverage, so it sits beside `coverage` rather than inside it.
+   */
+  readonly tryInstead?: string;
+  /** Present for `'absence'` when it declared a typed tool (9.113.0) — a copy. */
+  readonly tryInsteadTool?: TryInsteadTool;
+}
+
+/** The facts one absence declares — the same for a bare absence and for one
+ *  a ledger bounds, so the two sites cannot drift. */
+function absenceFacts(absence: ToolAbsence): CoverageFacts {
+  const tryInstead = tryInsteadOfAbsence(absence);
+  const tryInsteadTool = tryInsteadToolOfAbsence(absence);
+  return {
+    kind: 'absence',
+    coverage: coverageOfAbsence(absence),
+    lookedFor: absence.looked_for,
+    ...(tryInstead !== undefined && { tryInstead }),
+    ...(tryInsteadTool !== undefined && { tryInsteadTool }),
+  };
 }
 
 /** What one recognized result declares. `undefined` from
@@ -60,12 +87,7 @@ const ABSENT_STATUS: ToolResultStatus = 'absent';
 export function readCoverageResult(value: unknown): CoverageReading | undefined {
   const absence = readAbsence(value);
   if (absence !== undefined) {
-    return {
-      status: ABSENT_STATUS,
-      declared: [
-        { kind: 'absence', coverage: coverageOfAbsence(absence), lookedFor: absence.looked_for },
-      ],
-    };
+    return { status: ABSENT_STATUS, declared: [absenceFacts(absence)] };
   }
   // A semantic envelope's `coverage` field (9.53.0) is ABSORBED here — the
   // one recognizer funnel — so the boundary a semantic tool declared flows
@@ -83,10 +105,6 @@ export function readCoverageResult(value: unknown): CoverageReading | undefined 
   const declared: CoverageFacts[] = [{ kind: 'ledger', coverage: coverageOfLedger(covered) }];
   const inner = readAbsence(covered.result);
   if (inner === undefined) return { declared };
-  declared.push({
-    kind: 'absence',
-    coverage: coverageOfAbsence(inner),
-    lookedFor: inner.looked_for,
-  });
+  declared.push(absenceFacts(inner));
   return { status: ABSENT_STATUS, declared };
 }

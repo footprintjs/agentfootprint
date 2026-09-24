@@ -63,6 +63,30 @@ export interface CoverageDeclaration {
   readonly cannotCover?: readonly CoverageInput[];
 }
 
+/**
+ * The other TOOL a suggestion points at, typed (9.113.0) — `tryInsteadTool`
+ * on the declaration, `try_instead_tool` on the envelope.
+ *
+ * The `tryInstead` sentence puts a tool's name inside prose ("…or check
+ * cluster_inventory for the collected names."), and a reader that wants to
+ * know WHICH tool was suggested could only find out by parsing that sentence.
+ * This library never parses a tool name out of prose, so the name rides here
+ * as data — BESIDE the sentence, never in its place: `try_instead` stays a
+ * string, so every reader of it reads what it always read.
+ *
+ * `tool` is NOT looked up. The tool may be served by a provider that resolves
+ * per iteration, or be offered on a later turn; `absent()` requires a
+ * non-empty name and records it as declared. Which names a provider accepts is
+ * `core/tools.ts` · `assertValidToolName`'s question, and the library only
+ * warns about it (dev mode), here as at `defineTool`.
+ */
+export interface TryInsteadTool {
+  /** The tool's registered name, as a call would name it. */
+  readonly tool: string;
+  /** Why that tool, in the author's words ("it lists the collected names"). */
+  readonly why?: string;
+}
+
 /** What a tool author passes to {@link import('./absent.js').absent}. */
 export interface AbsenceDeclaration {
   /**
@@ -88,8 +112,22 @@ export interface AbsenceDeclaration {
    * `window: '7d'`, or ask for a different interface"). Optional, and the
    * highest-value optional field in the shape: the loop this primitive stops
    * is a model with nowhere else to go.
+   *
+   * Prose for the model. Nothing in this library reads a tool name out of it:
+   * when the sentence points at another tool, name that tool in
+   * {@link AbsenceDeclaration.tryInsteadTool} as well.
    */
   readonly tryInstead?: string;
+  /**
+   * The other TOOL the suggestion points at, as data (9.113.0) —
+   * `{ tool, why? }`. Beside the sentence, not instead of it: the sentence is
+   * what the model is told, this is what a reader reads without parsing
+   * prose. Either may be given without the other; when both are given they
+   * must name the same tool, and the library cannot check that they do — it
+   * would have to read a tool name out of the sentence. ONE tool; a list is
+   * refused (see `absent.ts` · `readToolSuggestion` for why).
+   */
+  readonly tryInsteadTool?: TryInsteadTool;
 }
 
 /**
@@ -115,7 +153,12 @@ export interface ToolAbsence {
   /** Stated as data as well as prose — the note can be skimmed past, a
    *  `true` in a field named for the question cannot. */
   readonly retry_returns_the_same: true;
+  /** The author's sentence. A string, always — the typed tool rides its own
+   *  key, so a reader of this one never has to narrow it. */
   readonly try_instead?: string;
+  /** The typed tool the suggestion points at (9.113.0), as declared — the
+   *  author's words, `{ tool, why? }`. The model reads it as written. */
+  readonly try_instead_tool?: TryInsteadTool;
   /** The static sentence. Never interpolated — see `absent.ts`. */
   readonly note: string;
 }

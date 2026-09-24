@@ -1892,6 +1892,37 @@ export interface ToolAbsentPayload {
   readonly notChecked?: readonly CoverageItemPayload[];
   /** Ground no call to this tool can reach. No retry changes it. */
   readonly cannotCover?: readonly CoverageItemPayload[];
+  /**
+   * Where the tool said to go instead — its `tryInstead` sentence, trimmed as
+   * `absent()` mints it (9.113.0; an envelope minted elsewhere may have
+   * handed the model a padded copy). Prose for the model: never parse a tool
+   * name out of it (a name found inside prose is an inference); read
+   * {@link ToolAbsentPayload.tryInsteadTool}.
+   *
+   * Before 9.113.0 the suggestion was never on this event: it rode only
+   * inside the raw tool result (`agentfootprint.stream.tool_end`'s `result`,
+   * the tool turn in history), where a reader had to recognize the envelope
+   * again to find it.
+   *
+   * Additive and default-omitted: an absence that suggests nothing carries no
+   * `tryInstead` key at all (the `ToolRepeatedCallPayload.mode` precedent).
+   */
+  readonly tryInstead?: string;
+  /**
+   * The other TOOL the suggestion points at, typed (9.113.0) — the tool's
+   * `tryInsteadTool` as declared, copied. The name is not looked up: the tool
+   * may be served by a provider, or never have been offered on this run.
+   * Default-omitted like {@link ToolAbsentPayload.tryInstead}; either may
+   * come without the other.
+   */
+  readonly tryInsteadTool?: TryInsteadToolPayload;
+}
+
+/** A suggestion to try another tool, as it rides an event: detached plain
+ *  data, copied out of the tool's own declaration. */
+export interface TryInsteadToolPayload {
+  readonly tool: string;
+  readonly why?: string;
 }
 
 /**

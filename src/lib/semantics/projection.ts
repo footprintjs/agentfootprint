@@ -138,6 +138,7 @@ export function snapshotProjectionSemantics(result: unknown): ProjectionSnapshot
             ...coverageKeys,
             'retry_returns_the_same',
             'try_instead',
+            'try_instead_tool',
           ])
             capture(value, key, path);
           return;

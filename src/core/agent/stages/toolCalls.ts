@@ -1522,6 +1522,13 @@ export function buildToolCallsHandler(
           checked,
           ...(notChecked.length > 0 && { notChecked }),
           ...(cannotCover.length > 0 && { cannotCover }),
+          // The suggestion, as declared (9.113.0): the sentence, and the
+          // typed tool as a copy (`tryInsteadToolOfAbsence`). The EVENT only:
+          // it is advice about a call not yet made, not ground the answer
+          // stands on, so the tracked row below and the block composed from
+          // it never carry it.
+          ...(facts.tryInstead !== undefined && { tryInstead: facts.tryInstead }),
+          ...(facts.tryInsteadTool !== undefined && { tryInsteadTool: facts.tryInsteadTool }),
         });
       } else {
         typedEmit(scope, 'agentfootprint.tools.coverage_declared', {

@@ -835,6 +835,7 @@ export {
   type CoveredResult,
   type DeclaredCoverage,
   type ToolAbsence,
+  type TryInsteadTool,
 } from './core/agent/coverage/index.js';
 // The semantic tool-result envelope (9.53.0) — typed series/facts/edges with
 // the caveats that make them honest (grain, provenance, coverage) as DATA,

@@ -429,6 +429,31 @@ entries, a `CoverageInput` — a bare string or a `CoverageItem`
 blind spot is a claim about capability and a reader cannot act on, escalate or
 disprove one with no reason.
 
+**When the suggestion is another tool, name it as data (9.113.0).**
+`tryInstead` is one sentence, for the model. When that sentence points at
+another tool, name the tool beside it with `tryInsteadTool` — a
+`TryInsteadTool`, `{ tool, why? }`. A reader that wants to know *which* tool
+was suggested would otherwise have to parse the sentence, and this library
+never parses a tool name out of prose. The tool rides its own key,
+`try_instead_tool`, so `try_instead` stays the string it has always been, and
+the record carries both:
+
+```ts
+return absent({
+  what: `FLOGI entries on ${port}`,
+  checked: [`${sw}: the live fcns database`, 'window: the last 24h'],
+  notChecked: [{ what: 'logins older than 24h', why: 'outside the window this tool keeps' }],
+  tryInstead: 'Ask for a wider window, or check the archived FLOGI history.',
+  tryInsteadTool: { tool: 'flogi_history', why: 'it keeps the archived FLOGI history' },
+});
+```
+
+The name is not looked up — a provider may serve it on a later iteration — and
+it is recorded as declared (a name no provider would accept gets the dev-mode
+warning `defineTool` would give it). One tool, `{ tool, why? }` and nothing
+else: a list, an unknown key or an empty `why` is refused where you typed it.
+Either field may come without the other.
+
 **What the framework does with it.** The returned `ToolAbsence` is
 *recognized*, not merely conventional — a shape the framework does not
 understand cannot stop a retry loop or keep a value out of the evidence corpus:
@@ -436,13 +461,15 @@ understand cannot stop a retry loop or keep a value out of the evidence corpus:
 - the delivered status becomes `'absent'`, the seventh `ToolResultStatus`, so an
   `onToolStatus: 'absent'` route edge can send "we found nothing" somewhere
   other than "the call broke";
-- `agentfootprint.tools.absent` files the coverage on the record;
+- `agentfootprint.tools.absent` files the coverage on the record, and the
+  suggestion as you declared it — `tryInstead` and `tryInsteadTool`;
 - the model reads a frame that says, in prose and as data, that a retry with the
   same arguments returns the same result — the loop this ends is a model
   re-asking an identical question because a mismatch looked like a fluke;
 - and the evidence gate indexes **everything the tool authored except
-  `looked_for`**. The coverage lists, the `tryInstead` sentence, and any extra
-  key you attach to the envelope — a `known_shares` list of the real names on
+  `looked_for`**. The coverage lists, the `tryInstead` sentence, the
+  `tryInsteadTool`'s `tool` and `why`, and any extra key you attach to the
+  envelope — a `known_shares` list of the real names on
   the filer, say — are the tool speaking about the world, so an answer that
   takes the absence's own advice is grounded by it. `looked_for` is the one
   field whose job is to quote what was asked for, which in practice quotes the
@@ -536,6 +563,8 @@ All from `agentfootprint`:
   (`{ what, why? }`), what you may write in a list, and the normalized
   three-list shape everything downstream reads.
 - `AbsenceDeclaration` and `CoverageDeclaration` — what you pass to each door.
+- `TryInsteadTool` — the tool a suggestion points at (`{ tool, why? }`), given
+  as `tryInsteadTool` beside the `tryInstead` sentence.
 - `ToolAbsence` and `CoveredResult` — what each door returns, i.e. the exact
   values your tool hands back.
 - `DeclaredCoverage` — one statement as the RUN recorded it, with the tool, the

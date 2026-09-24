@@ -42,6 +42,59 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   records it yet: the adapter opens a trace on `agent.turn_start`, a resumed
   leg emits none, and a settled call only ever rides a resumed leg. The names
   are fixed now so they do not change on the day resumed legs are traced.
+- **`absent({ tryInsteadTool })` names the tool a suggestion points at, as
+  data, beside the `tryInstead` sentence.** A suggestion to try another tool
+  used to live only inside prose ("Widen the window, or check
+  cluster_inventory for the collected cluster names."), so a reader that
+  wanted to know WHICH tool was suggested could only find out by parsing the
+  sentence, which this library never does. `tryInsteadTool: { tool, why? }`
+  carries the name as data, and the envelope renders it under its OWN key,
+  right after the sentence
+  (`"try_instead_tool":{"tool":"cluster_inventory","why":"it lists the collected cluster names"}`
+  — the author's words; the library composes no sentence for it).
+  `try_instead` stays a string: every reader typed against `ToolAbsence`
+  keeps reading exactly what it read, and a reader that quotes the suggestion
+  as printed keeps the sentence when the tool is named beside it. The two are
+  independent — either, both, or neither. `absent()` refuses a malformed tool
+  where it is typed (no `tool`, a `why` that says nothing, an unknown key so a
+  misspelt `why` cannot vanish, a list) and records the name as declared:
+  never looked up (a provider may serve it on a later iteration), and held to
+  no charset of its own — which names a provider accepts stays
+  `core/tools.ts` · `assertValidToolName`'s question, and `absent()` asks its
+  dev-mode warning, as `defineTool` does. One tool per absence, because every
+  suggestion on record names at most one other tool. The evidence gate grounds
+  `tool` and `why` as it grounds the sentence, and the dataset projection
+  guard keeps `try_instead_tool` among the declarations an adapter may not
+  change. New type `TryInsteadTool`. The rule and the example live in
+  `src/core/agent/coverage/README.md` ("A suggestion to try another tool is
+  typed, never parsed out of prose"). Nothing JOINS the name yet: the reader
+  that would match it against the run's calls (`source-not-consulted`) is the
+  second half of the typed vocabulary; this release carries and renders it.
+- **`agentfootprint.tools.absent` carries the suggestion — `tryInstead` (the
+  sentence) and `tryInsteadTool` (the tool), each as declared.** Before this
+  release neither was on the event: the suggestion rode only inside the raw
+  tool result (`agentfootprint.stream.tool_end`'s `result`, the tool turn in
+  history), where a reader had to recognize the envelope again to find it.
+  Both keys are additive and default-omitted. `readCoverageResult` lifts them
+  onto `CoverageFacts`, read by the rules `absent()` mints by: an envelope
+  minted elsewhere whose suggestion those rules refuse is still an absence;
+  that suggestion is simply not read. Neither reaches `coverageDeclared` or
+  the block `.limitsTravelWithTheAnswer()` appends — a suggestion is advice
+  about a call not yet made, not ground the answer stands on.
+
+### Changed
+
+- **A plain object in `tryInstead` is refused, and pointed at
+  `tryInsteadTool`.** It is the typed form `{ tool, why? }` written into the
+  sentence's slot; 9.112.2 dropped it without a word, and with it the tool
+  the author named. It is the ONE value the sentence slot refuses. Every other
+  value that is not a string still reads as no suggestion, as in 9.112.2 —
+  `null`, `false` from `tryInstead: cond && '…'`, a number, `NaN`, a list, a
+  Date — because `absent()` runs inside a tool's `execute`, where a refusal
+  reaches the model as that call's error result instead of the absence. The
+  declared type has always been `string`, so a typed caller reaches the
+  refusal only through a cast or a value typed `any` (a `JSON.parse` result,
+  an untyped row), which is assignable to `string` without one.
 
 ### Fixed
 
@@ -146,6 +199,38 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `inspect_tool_call` on a run whose provider reused an id; a run whose ids
   are unique reads exactly as before. The step line still names the first
   step that ran under the id.
+
+### Unchanged, pinned
+
+- The sentence form is byte-identical: the envelope the model reads, both
+  requests' messages, the committed tool turn, the `coverageDeclared` rows and
+  the appended block all match a reference generated on the 9.112.2 tree
+  before any source edit
+  (`test/core/agent/fixtures/absent-try-instead-sentence.reference.json`,
+  pinned by `test/core/agent/coverage-try-instead.test.ts`). That fixture is
+  the pin for absences: the references in `test/core/tools/reference/` are
+  unchanged, but none of them contains an absence. The one change a
+  sentence-form absence sees is the new `tryInstead` key, last on its
+  `tools.absent` event — so a stored recording of a sentence-form absence (a
+  lens fixture, a saved event stream) gains that key when it is regenerated
+  against 9.113.0. `ToolAbsence.try_instead` stays exactly
+  `string | undefined`, pinned at compile time by
+  `test/type-regressions/AbsenceSuggestion.assignability.test.ts`.
+- A `tryInstead` that is neither a string nor a plain object (`false`,
+  `true`, `0`, `42`, `NaN`, `['a']`, a list of sentences, a Date) runs as it
+  did on 9.112.2, byte for byte: status `absent`, one `tools.absent` event, and
+  the same envelope the model reads — pinned against a second reference
+  generated on the same 9.112.2 tree
+  (`test/core/agent/fixtures/absent-try-instead-not-a-sentence.reference.json`).
+
+### Not shipped — waiting for its reader
+
+- `notChecked[].kind` and `subject` (the design's
+  `notChecked: [{ kind: 'existence' | 'window' | …, subject?, why }]`).
+  Nothing in this release branches on them; the reader that would earn them
+  — the assessment's `existence-not-checked` join of an EXISTENCE claim to
+  `notChecked[].kind === 'existence'` — does not exist yet. The coverage
+  README records the shape, why it waits, and what lands with it.
 
 ## [9.112.2] - 2026-09-22
 
