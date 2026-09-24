@@ -94,7 +94,19 @@ export function isInputPause(
   return isPaused(result) && result.awaitingInput !== undefined;
 }
 
-/** Collect declared fields using a dedicated tool. The query itself runs afterwards. */
+/**
+ * Collect declared fields using a dedicated tool. The query itself runs afterwards.
+ *
+ * When a lookup does raise about its own miss (the dedicated collection tool
+ * stays the documented shape), it still declares what it looked at
+ * (9.114.0): pass the envelope `absent()` returns as `absence`. The dispatch
+ * door files it at the raise — the rows a returned `absent(…)` files — and it
+ * never rides `awaitingInput`. A value the absence recognizer cannot read
+ * throws `InputRequestError` here (`absence: null` is the field omitted); an
+ * envelope it reads whose lists cannot be copied (a hand-built
+ * `checked: [null]`) errors the call at the door instead of pausing, as the
+ * same value returned would.
+ */
 export function requestInput(declaration: InputRequestDeclaration): never {
   const inputRequest = validateInputDeclaration(declaration);
   if (

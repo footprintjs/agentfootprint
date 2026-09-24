@@ -1,0 +1,465 @@
+{
+  "done": "Not logged in on fabric A.",
+  "pauseData": {
+    "toolCallId": "c2",
+    "toolName": "port_for_device",
+    "question": "Which fabric is the host cabled to?",
+    "awaitingInput": {
+      "id": "fabric",
+      "question": "Which fabric is the host cabled to?",
+      "fields": [
+        {
+          "id": "fabric",
+          "type": "string",
+          "required": true
+        }
+      ],
+      "status": "awaiting_input",
+      "requestId": "<requestId>",
+      "supplied": {},
+      "origins": {},
+      "missing": [
+        "fabric"
+      ],
+      "origin": {
+        "originalRequest": "which port is the first device on?",
+        "toolCallId": "c2"
+      }
+    }
+  },
+  "eventTypes": [
+    "agentfootprint.agent.run_configured",
+    "agentfootprint.agent.turn_start",
+    "agentfootprint.context.evaluated",
+    "agentfootprint.context.injected",
+    "agentfootprint.context.slot_composed",
+    "agentfootprint.context.injected",
+    "agentfootprint.context.slot_composed",
+    "agentfootprint.context.injected",
+    "agentfootprint.context.injected",
+    "agentfootprint.context.slot_composed",
+    "agentfootprint.agent.iteration_start",
+    "agentfootprint.stream.llm_start",
+    "agentfootprint.stream.llm_end",
+    "agentfootprint.agent.route_decided",
+    "agentfootprint.stream.tool_start",
+    "agentfootprint.stream.tool_end",
+    "agentfootprint.agent.iteration_end",
+    "agentfootprint.context.evaluated",
+    "agentfootprint.context.injected",
+    "agentfootprint.context.slot_composed",
+    "agentfootprint.context.injected",
+    "agentfootprint.context.injected",
+    "agentfootprint.context.injected",
+    "agentfootprint.context.slot_composed",
+    "agentfootprint.context.injected",
+    "agentfootprint.context.injected",
+    "agentfootprint.context.slot_composed",
+    "agentfootprint.agent.iteration_start",
+    "agentfootprint.stream.llm_start",
+    "agentfootprint.stream.llm_end",
+    "agentfootprint.agent.route_decided",
+    "agentfootprint.stream.tool_start",
+    "agentfootprint.pause.request",
+    "agentfootprint.integrity.disposition",
+    "agentfootprint.pause.resume",
+    "agentfootprint.agent.run_configured",
+    "agentfootprint.stream.tool_end",
+    "agentfootprint.agent.iteration_end",
+    "agentfootprint.context.evaluated",
+    "agentfootprint.context.injected",
+    "agentfootprint.context.slot_composed",
+    "agentfootprint.context.injected",
+    "agentfootprint.context.injected",
+    "agentfootprint.context.injected",
+    "agentfootprint.context.injected",
+    "agentfootprint.context.injected",
+    "agentfootprint.context.slot_composed",
+    "agentfootprint.context.injected",
+    "agentfootprint.context.injected",
+    "agentfootprint.context.slot_composed",
+    "agentfootprint.agent.iteration_start",
+    "agentfootprint.stream.llm_start",
+    "agentfootprint.stream.llm_end",
+    "agentfootprint.agent.route_decided",
+    "agentfootprint.agent.iteration_end",
+    "agentfootprint.agent.turn_end",
+    "agentfootprint.integrity.disposition"
+  ],
+  "coverage": [
+    {
+      "type": "agentfootprint.integrity.disposition",
+      "payload": {
+        "posture": "observe",
+        "workExisted": true,
+        "rows": [
+          {
+            "check": "invariant-violation",
+            "seam": "wire",
+            "checked": 2,
+            "findings": 0,
+            "notApplicable": 0,
+            "unreachable": 0,
+            "synthetic": 0
+          },
+          {
+            "check": "invariant-violation",
+            "seam": "compose",
+            "checked": 0,
+            "findings": 0,
+            "notApplicable": 1,
+            "unreachable": 0,
+            "synthetic": 0
+          },
+          {
+            "check": "dangling-reference",
+            "seam": "compose",
+            "checked": 0,
+            "findings": 0,
+            "notApplicable": 2,
+            "unreachable": 0,
+            "synthetic": 0
+          },
+          {
+            "check": "unsupported-argument",
+            "seam": "choice",
+            "checked": 1,
+            "findings": 0,
+            "notApplicable": 1,
+            "unreachable": 0,
+            "synthetic": 0
+          },
+          {
+            "check": "unsupported-claim",
+            "seam": "claim",
+            "checked": 0,
+            "findings": 0,
+            "notApplicable": 1,
+            "unreachable": 0,
+            "synthetic": 0
+          },
+          {
+            "check": "empty-lookup",
+            "seam": "write",
+            "checked": 0,
+            "findings": 0,
+            "notApplicable": 1,
+            "unreachable": 0,
+            "synthetic": 0
+          },
+          {
+            "check": "column-type-mismatch",
+            "seam": "write",
+            "checked": 0,
+            "findings": 0,
+            "notApplicable": 1,
+            "unreachable": 0,
+            "synthetic": 0
+          },
+          {
+            "check": "missing-column",
+            "seam": "write",
+            "checked": 0,
+            "findings": 0,
+            "notApplicable": 1,
+            "unreachable": 0,
+            "synthetic": 0
+          },
+          {
+            "check": "prior-turn-evidence",
+            "seam": "claim",
+            "checked": 0,
+            "findings": 0,
+            "notApplicable": 1,
+            "unreachable": 0,
+            "synthetic": 0
+          }
+        ]
+      }
+    },
+    {
+      "type": "agentfootprint.integrity.disposition",
+      "payload": {
+        "posture": "observe",
+        "workExisted": true,
+        "rows": [
+          {
+            "check": "invariant-violation",
+            "seam": "wire",
+            "checked": 1,
+            "findings": 0,
+            "notApplicable": 0,
+            "unreachable": 0,
+            "synthetic": 0
+          },
+          {
+            "check": "invariant-violation",
+            "seam": "compose",
+            "checked": 0,
+            "findings": 0,
+            "notApplicable": 1,
+            "unreachable": 0,
+            "synthetic": 0
+          },
+          {
+            "check": "dangling-reference",
+            "seam": "compose",
+            "checked": 0,
+            "findings": 0,
+            "notApplicable": 1,
+            "unreachable": 0,
+            "synthetic": 0
+          },
+          {
+            "check": "unsupported-argument",
+            "seam": "choice",
+            "checked": 0,
+            "findings": 0,
+            "notApplicable": 1,
+            "unreachable": 0,
+            "synthetic": 0
+          },
+          {
+            "check": "unsupported-claim",
+            "seam": "claim",
+            "checked": 0,
+            "findings": 0,
+            "notApplicable": 1,
+            "unreachable": 0,
+            "synthetic": 0
+          },
+          {
+            "check": "empty-lookup",
+            "seam": "write",
+            "checked": 0,
+            "findings": 0,
+            "notApplicable": 1,
+            "unreachable": 0,
+            "synthetic": 0
+          },
+          {
+            "check": "column-type-mismatch",
+            "seam": "write",
+            "checked": 0,
+            "findings": 0,
+            "notApplicable": 1,
+            "unreachable": 0,
+            "synthetic": 0
+          },
+          {
+            "check": "missing-column",
+            "seam": "write",
+            "checked": 0,
+            "findings": 0,
+            "notApplicable": 1,
+            "unreachable": 0,
+            "synthetic": 0
+          },
+          {
+            "check": "prior-turn-evidence",
+            "seam": "claim",
+            "checked": 0,
+            "findings": 0,
+            "notApplicable": 1,
+            "unreachable": 0,
+            "synthetic": 0
+          }
+        ]
+      }
+    }
+  ],
+  "keysAtPause": [
+    "activatedInjectionIds",
+    "activeByslot",
+    "activeInjections",
+    "cacheMarkers",
+    "cachingDisabled",
+    "contextTokensRemaining",
+    "costBudgetHit",
+    "cumEstimatedUsd",
+    "cumTokensInput",
+    "cumTokensOutput",
+    "deliveredMessageKeys",
+    "dynamicToolSchemas",
+    "finalContent",
+    "history",
+    "iteration",
+    "lastToolResult",
+    "llmLatestContent",
+    "llmLatestToolCalls",
+    "maxIterations",
+    "messagesInjections",
+    "newMessages",
+    "pausedToolArgs",
+    "pausedToolCallId",
+    "pausedToolName",
+    "pausedToolStartMs",
+    "receipt",
+    "runIdentity",
+    "skillHistory",
+    "systemPromptInjections",
+    "thinkingBlocks",
+    "toolResults",
+    "toolsInjections",
+    "totalInputTokens",
+    "totalOutputTokens",
+    "turnNumber",
+    "turnStartMs",
+    "userMessage"
+  ],
+  "keysAfterResume": [
+    "activatedInjectionIds",
+    "activeByslot",
+    "activeInjections",
+    "answerGuarantee",
+    "cacheMarkers",
+    "cachingDisabled",
+    "contextTokensRemaining",
+    "costBudgetHit",
+    "cumEstimatedUsd",
+    "cumTokensInput",
+    "cumTokensOutput",
+    "deliveredMessageKeys",
+    "dynamicToolSchemas",
+    "finalContent",
+    "history",
+    "iteration",
+    "lastToolResult",
+    "llmLatestContent",
+    "llmLatestToolCalls",
+    "maxIterations",
+    "messagesInjections",
+    "newMessages",
+    "pausedToolArgs",
+    "pausedToolCallId",
+    "pausedToolName",
+    "pausedToolStartMs",
+    "receipt",
+    "runIdentity",
+    "skillHistory",
+    "systemPromptInjections",
+    "thinkingBlocks",
+    "toolResults",
+    "toolsInjections",
+    "totalInputTokens",
+    "totalOutputTokens",
+    "turnNumber",
+    "turnStartMs",
+    "userMessage"
+  ],
+  "requests": [
+    [
+      {
+        "role": "user",
+        "content": "which port is the first device on?"
+      }
+    ],
+    [
+      {
+        "role": "user",
+        "content": "which port is the first device on?"
+      },
+      {
+        "role": "assistant",
+        "content": "",
+        "toolCalls": [
+          {
+            "id": "c1",
+            "name": "fabric_inventory",
+            "args": {}
+          }
+        ]
+      },
+      {
+        "role": "tool",
+        "content": "devices: 20:00:00:25:b5:aa:00:1f (host-a), 20:00:00:25:b5:aa:00:2c (host-b)",
+        "toolCallId": "c1",
+        "toolName": "fabric_inventory"
+      }
+    ],
+    [
+      {
+        "role": "user",
+        "content": "which port is the first device on?"
+      },
+      {
+        "role": "assistant",
+        "content": "",
+        "toolCalls": [
+          {
+            "id": "c1",
+            "name": "fabric_inventory",
+            "args": {}
+          }
+        ]
+      },
+      {
+        "role": "tool",
+        "content": "devices: 20:00:00:25:b5:aa:00:1f (host-a), 20:00:00:25:b5:aa:00:2c (host-b)",
+        "toolCallId": "c1",
+        "toolName": "fabric_inventory"
+      },
+      {
+        "role": "assistant",
+        "content": "",
+        "toolCalls": [
+          {
+            "id": "c2",
+            "name": "port_for_device",
+            "args": {
+              "wwpn": "20:00:00:25:b5:aa:00:1f"
+            }
+          }
+        ]
+      },
+      {
+        "role": "tool",
+        "content": "{\"status\":\"input_received\",\"requestId\":\"<requestId>\",\"values\":{\"fabric\":\"A\"},\"origins\":{\"fabric\":\"response\"},\"origin\":{\"originalRequest\":\"which port is the first device on?\",\"toolCallId\":\"c2\"}}",
+        "toolCallId": "c2",
+        "toolName": "port_for_device"
+      }
+    ]
+  ],
+  "history": [
+    {
+      "role": "user",
+      "content": "which port is the first device on?"
+    },
+    {
+      "role": "assistant",
+      "content": "",
+      "toolCalls": [
+        {
+          "id": "c1",
+          "name": "fabric_inventory",
+          "args": {}
+        }
+      ]
+    },
+    {
+      "role": "tool",
+      "content": "devices: 20:00:00:25:b5:aa:00:1f (host-a), 20:00:00:25:b5:aa:00:2c (host-b)",
+      "toolCallId": "c1",
+      "toolName": "fabric_inventory"
+    },
+    {
+      "role": "assistant",
+      "content": "",
+      "toolCalls": [
+        {
+          "id": "c2",
+          "name": "port_for_device",
+          "args": {
+            "wwpn": "20:00:00:25:b5:aa:00:1f"
+          }
+        }
+      ]
+    },
+    {
+      "role": "tool",
+      "content": "{\"status\":\"input_received\",\"requestId\":\"<requestId>\",\"values\":{\"fabric\":\"A\"},\"origins\":{\"fabric\":\"response\"},\"origin\":{\"originalRequest\":\"which port is the first device on?\",\"toolCallId\":\"c2\"}}",
+      "toolCallId": "c2",
+      "toolName": "port_for_device"
+    }
+  ]
+}

@@ -1,3 +1,6 @@
+import { readAbsence } from './agent/coverage/absent.js';
+import type { ToolAbsence } from './agent/coverage/types.js';
+
 /** Typed missing-input values. Collection is distinct from permission or consent. */
 export type InputValue = string | number | boolean;
 export interface InputField {
@@ -15,8 +18,26 @@ export interface InputRequestDeclaration {
   readonly supplied?: Readonly<Record<string, InputValue>>;
   /** Opaque JSON authored by the collecting tool, never editable by the reply. */
   readonly context?: Readonly<Record<string, unknown>>;
+  /**
+   * What the tool LOOKED AT before it asked (9.114.0): the envelope `absent()`
+   * returns, when a lookup found nothing and raises this request about the
+   * miss. Recognized at raise time by the one recognizer
+   * (`agent/coverage/absent.ts` · `readAbsence`) — anything it does not read
+   * is refused, and `null` is the field omitted — and filed by the dispatch
+   * door at the raise, before the
+   * checkpoint is returned: the same `tools.absent` event and
+   * `coverageDeclared` row a RETURNED absence files
+   * (`agent/stages/toolCalls.ts` · `declareRaisedAbsence`). Data for the
+   * record, not for the ask: it never rides the awaiting-input shape or the
+   * paused call's served result, and nothing on resume reads it, so the
+   * pending question says the miss only if `question` says it in words.
+   * Under `.limitsTravelWithTheAnswer()` the final answer's limits block
+   * carries it, as it does a returned miss.
+   */
+  readonly absence?: ToolAbsence;
 }
-export interface AwaitingInput extends InputRequestDeclaration {
+/** The stamped request as the person, the model and the durable pause read it — never the `absence`. */
+export interface AwaitingInput extends Omit<InputRequestDeclaration, 'absence'> {
   readonly status: 'awaiting_input';
   /** Runtime-stamped token, distinct from the author's reusable declaration id. */
   readonly requestId: string;
@@ -119,7 +140,9 @@ export function validateInputDeclaration(raw: unknown): InputRequestDeclaration 
     fail('declare an id, question and between one and 32 fields');
   }
   if (
-    Object.keys(raw).some((k) => !['id', 'question', 'fields', 'supplied', 'context'].includes(k))
+    Object.keys(raw).some(
+      (k) => !['id', 'question', 'fields', 'supplied', 'context', 'absence'].includes(k),
+    )
   )
     fail('unknown declaration field');
   const ids = new Set<string>();
@@ -169,13 +192,41 @@ export function validateInputDeclaration(raw: unknown): InputRequestDeclaration 
     if (json.length > 16384) fail('context exceeds 16384 characters');
     context = JSON.parse(json) as Readonly<Record<string, unknown>>;
   }
+  // `null` is the field omitted — the coverage module's rule for a missing
+  // optional value (`agent/coverage/absent.ts` · `notGiven`): refusing it
+  // would turn a question into a tool error, and it carries no miss to file.
+  const absence = raw.absence == null ? undefined : recognizedAbsence(raw.absence);
   return {
     id: raw.id,
     question: raw.question,
     fields,
     ...(raw.supplied !== undefined && { supplied }),
     ...(context !== undefined && { context }),
+    ...(absence !== undefined && { absence }),
   };
+}
+
+/**
+ * The declaration's `absence`, as the ONE recognizer reads it
+ * (`agent/coverage/absent.ts` · `readAbsence`) — refused, never repaired,
+ * when it reads nothing, so a raise cannot carry a miss the dispatch door
+ * would then drop without a word. Held as handed over: it is read once, at
+ * the raise, and the rows filed from it are copies
+ * (`agent/stages/toolCalls.ts` · `declareCoverage` copies item by item).
+ * An envelope it reads whose lists that copy cannot read (a hand-built
+ * `checked: [null]`) is not refused here: the door meets it at the raise
+ * and errors the call, as it would the same value returned
+ * (`agent/stages/toolCalls.ts` · `declareRaisedAbsence`).
+ */
+function recognizedAbsence(raw: unknown): ToolAbsence {
+  const absence = readAbsence(raw);
+  if (absence === undefined) {
+    fail(
+      'absence must be the envelope absent() returns — absent({ what, checked }) — ' +
+        'so the one recognizer can read what the tool looked at',
+    );
+  }
+  return absence;
 }
 
 /** Runtime-only stamping: a model cannot choose its saved skill or original request. */
@@ -184,7 +235,11 @@ export function stampInputRequest(
   requestId: string,
   origin: AwaitingInput['origin'],
 ): AwaitingInput {
-  const clean = validateInputDeclaration(declaration);
+  // The `absence` is filed at the raise and read by nothing after it — it
+  // never rides the awaiting-input shape the person, the model and the
+  // durable pause read (`readAwaitingInput` re-validates five keys, not six).
+  const { absence: _filedAtTheRaise, ...clean } = validateInputDeclaration(declaration);
+  void _filedAtTheRaise;
   const supplied = { ...clean.supplied };
   return {
     ...clean,

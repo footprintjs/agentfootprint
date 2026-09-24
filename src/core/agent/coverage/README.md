@@ -1,7 +1,8 @@
 **Mixed** — two declarations a tool authors, one reader the walk calls, one
 sentence the model keeps.
 Map: `types.ts`, `items.ts`, `absent.ts`, `ledger.ts` (what a tool declares).
-Walker: `read.ts` — the ONE reader both dispatch boundaries call.
+Walker: `read.ts` — the ONE reader both dispatch boundaries and the raise site
+(`../stages/toolCalls.ts` · `declareRaisedAbsence`) call.
 Fold: `evidence.ts` (`absenceEvidenceProjection` — what an absence may ground).
 Lens: `answer.ts` · `composeAnswerWithCoverage`, the coverage block appended to
 the final answer so the model cannot drop it.
@@ -14,7 +15,7 @@ belongs to the field.
 
 | | says | door |
 |---|---|---|
-| `absent()` | "I looked HERE, and there is nothing" | tool result |
+| `absent()` | "I looked HERE, and there is nothing" | tool result, or a `requestInput` declaration's `absence` (§ 4) |
 | `coverage()` | "my verdict covers THIS and not THAT" | tool result |
 
 ## 1. `absent()` — the direction of the error is the argument
@@ -203,11 +204,133 @@ fields land with it: validated at `absent()` / `coverage()` time like `why`,
 carried on both events, read by the join — and never inferred from `what`.
 How the design's item sits beside today's `{ what, why? }` is decided then.
 
+## 4. A lookup that pauses still declares what it looked at (9.114.0)
+
+Why: some misses cannot be answered without the person — the lookup searched
+one fabric, found nothing, and needs to be told which fabric the host is
+cabled to. So it raises `requestInput` about its miss. (A dedicated
+collection tool that asks BEFORE the query runs stays the documented shape —
+`../../pause.ts` · `requestInput`; this section is the case where a lookup
+has already looked when it asks.) Before this release
+that miss left no record: the dispatch door reads coverage off a RETURNED
+value (`../stages/toolCalls.ts` · `declareCoverage`), and a pause returns its
+checkpoint before the door is reached. No `tools.absent`, no
+`coverageDeclared` row, nothing for a coverage band — and the app could not
+file it, because the declaration's `context` rides to the model on resume,
+never to the record. Only the raise site can. The law:
+
+> **A lookup that pauses still declares what it looked at.** The miss rides
+> the declaration as data — `absence`, the envelope `absent()` returns — and
+> is filed at the raise: byte for byte what the same `absent()`, returned,
+> would file.
+
+```ts
+defineTool({
+  name: 'port_for_device',
+  description: 'Which port a device is logged in to.',
+  inputSchema: { type: 'object', properties: { wwpn: { type: 'string' } }, required: ['wwpn'] },
+  execute: ({ wwpn }) => {
+    const rows = fabricA.logins(wwpn);
+    if (rows.length > 0) return rows;
+    return requestInput({
+      id: 'fabric',
+      question: `No logins for ${wwpn} on fabric A. Which fabric is the host cabled to?`,
+      fields: [{ id: 'fabric', type: 'string', required: true }],
+      absence: absent({
+        what: `port logins for ${wwpn}`,
+        checked: ['the live name-server database on fabric A'],
+        notChecked: [{ what: 'fabric B', why: 'nobody has said the host is cabled there' }],
+      }),
+    });
+  },
+});
+```
+
+- **One recognizer, at raise time.** The declaration's one validator
+  (`../../inputRequest.ts` · `validateInputDeclaration`) asks
+  `absent.ts` · `readAbsence` and refuses what it does not read — an
+  `InputRequestError` naming `absent()`, thrown from `requestInput`, so the
+  call errors like any malformed declaration and nothing pauses. `null` is
+  the field omitted, not a refusal — this module's rule for a missing
+  optional value (`absent.ts` · `notGiven`); it carries no miss to file. A
+  `coverage(absent(…), …)` ledger is not an absence to that reader, so it is
+  refused too: the field carries the miss, not a boundary drawn around it.
+  An envelope that reader DOES read is held as handed over, never repaired —
+  so a hand-built one can carry lists the door cannot copy
+  (`checked: [null]`, `not_checked: 5`). That is not refused at
+  `requestInput`; it meets the door at the raise inside the returned path's
+  containment: the call errors with the text the same value returned would
+  give, nothing pauses, nothing is filed, and the run goes on.
+- **Filed at the raise, by the returned path's readers, before anything is
+  written for the pause.** The batch loop's pause branch
+  (`../stages/toolCalls.ts` · `declareRaisedAbsence`) runs `declareCoverage`
+  over it — the same `tools.absent` payload and `coverageDeclared` row a
+  lookup returning the same `absent(…)` files — and, when the tool is
+  grounded (`argumentsFrom` under `noticeEmptyLookups`), the empty-lookup
+  write seam, with the envelope as the tool's own answer, in that order.
+  Nothing that judges a SERVED result runs at the raise, because nothing is
+  served for the paused call — four things a returned absence gets and a
+  raised one does not: no delivered status (a paused call is not settled, so
+  there is no `tool_end` to carry `'absent'`, and an `onToolStatus` route
+  keyed on `'absent'` does not fire for it); no `resultCeiling` judgment (the
+  tool's ceiling measures a served result — a lookup whose ceiling refuses
+  its returned envelope, which leaves the seam `not-applicable`, is read by
+  the seam at the raise); no column-type contract (`resultColumns` under
+  `checkColumnTypes` — a returned envelope is noted `not-applicable` on
+  `column-type-mismatch` and `missing-column`, a raised one leaves both
+  unnoted); and no evidence (the envelope never enters the corpus, so none
+  of its words ground an answer value).
+- **Read once, then never.** The rows are tracked state, so they ride the
+  checkpoint: under `.limitsTravelWithTheAnswer()` the resumed run's answer
+  carries the same block a returned miss gives. The field does not:
+  `../../inputRequest.ts` · `stampInputRequest` leaves it off, so
+  `awaitingInput` — what the person, the model and the durable pause read —
+  never carries it, and `readAwaitingInput` re-validates the same five keys.
+  Nothing on resume reads it; the paused call's served result is the
+  person's `InputResponseResult`, and the rows are filed once. If the person
+  should hear about the miss, say it in `question`.
+- **A raise inside a composed call is the OUTER call's raise.** A lookup
+  reached through `ctx.tools.call`, a runbook procedure or a
+  `flowchartAsTool` stage throws its request up through the tool that called
+  it, so the batch loop meets it as that outer call pausing: the rows name
+  the OUTER tool and call id, the empty-lookup seam judges it by the outer
+  tool's `argumentsFrom` and the outer call's arguments, and it is filed
+  once. That is the call that paused, and the same place a returned absence
+  lands when an outer tool passes the inner result through as its own. The
+  runbook's and the flowchart's own kept record of that call says `'error'`
+  (they record the throw and rethrow it).
+- **Unchanged without it.** A raise that declares no `absence` (or
+  `absence: null`) records what 9.113.0 recorded, because only a declaration
+  that CARRIES one is judged before the pause writes. That includes a
+  malformed hand raise — a `pauseHere`/`askHuman` whose `inputRequest` never
+  went through `requestInput`: it still fails the run AFTER the pause writes,
+  so the failed run's record keeps the in-flight batch (the assistant turn,
+  every sibling's result, the paused keys). Both pinned against references
+  captured on the 9.113.0 tree.
+- **Not covered, named here so nobody reads it as covered:**
+  - a raise the library refuses — a tool that pauses on any RESUMED dispatch
+    (an approved middleware ask, an approved check-in, granted credential
+    consent — all three run `../stages/toolCalls.ts` ·
+    `resolveCredentialAndExecute`, whose pause catch refuses every pause,
+    worded for a check-in): that call settles as an ERROR, and an errored
+    call files no coverage on any door;
+  - the unsettled-by-absence row (`../findings/README.md`): its rule needs
+    the SERVED result to read as an absence, and a paused lookup is served
+    the person's answer — so a ruling-out on it files no row, although the
+    door's rows now hold its miss. The rule is unchanged;
+  - `pauseHere` / `askHuman`: only an input request carries a declaration,
+    so only it carries the field.
+
+Pinned by `test/core/agent/coverage-paused-lookup.test.ts`.
+
 ## What the framework does with them
 
 Recognition is STRICT (the effects-envelope law): only a plain object carrying
 the reserved `af_absent` / `af_coverage` key is one. Every other shape any tool
 has ever returned takes the path it always took, byte for byte.
+
+The table is what a RETURNED absence gets; a raised one (§ 4) differs in four
+ways — no delivered status, no ceiling, no column-type contract, no evidence.
 
 | | on an **absence** | on a **ledger** |
 |---|---|---|
@@ -225,7 +348,8 @@ has ever returned takes the path it always took, byte for byte.
 - **Nothing fails.** `error: true` is never set, the after-tool chain runs as
   normal, and the step pointer advances — the call ran and answered.
 - **The gate does not flag it.** An absence is not an unsupported value.
-- **The ceiling still measures it**, and coverage is declared BEFORE the
+- **The ceiling still measures it** (a returned one — § 4 for a raised one),
+  and coverage is declared BEFORE the
   measurement, so a limit does not die with an oversized payload (the same law
   the effects channel already has).
 
@@ -284,7 +408,7 @@ stated the limits, and it does not refuse an answer that did not.
 | `items.ts` | normalize and REFUSE a declaration, at the call site |
 | `absent.ts` | `absent()`, the recognizer, the static note, and the ONE rule set for a suggestion (`tryInsteadOfAbsence` and `tryInsteadToolOfAbsence` read by it) |
 | `ledger.ts` | `coverage()`, the recognizer, the static note |
-| `read.ts` | the ONE reader both dispatch boundaries call — lifts the suggestion beside the coverage |
+| `read.ts` | the ONE reader both dispatch boundaries and the raise site (`../stages/toolCalls.ts` · `declareRaisedAbsence`) call — lifts the suggestion beside the coverage |
 | `evidence.ts` | what an absence is allowed to ground |
 | `answer.ts` | folding the run's declarations into one appended block |
 

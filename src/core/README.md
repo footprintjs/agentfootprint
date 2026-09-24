@@ -30,6 +30,9 @@ core/
 Partial typed replies update the returned checkpoint before executor resume;
 full replies use the normal paused-tool result path. It does not share the
 consent decision vocabulary. See the input-requests guide for the wire shape.
+A lookup that pauses still declares what it looked at (9.114.0): the
+declaration's `absence` — the envelope `absent()` returns — is filed at the
+raise and never rides `awaitingInput` (`agent/coverage/README.md` § 4).
 
 ## A batch that pauses settles its un-dispatched siblings (9.113.0)
 

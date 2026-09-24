@@ -34,9 +34,12 @@
  * The fences, because they are the rule's honesty:
  * - TWO FACTS, TWO OWNERS, BOTH REQUIRED. "Did the tool return an absence?"
  *   has one owner: the dispatch door (`stages/toolCalls.ts ·
- *   declareCoverage`), which reads the value the tool RETURNED through the
- *   one recognizer (`coverage/read.ts · readCoverageResult`), delivers the
- *   status `'absent'`, emits `tools.absent` and files the call's rows on
+ *   declareCoverage`), which reads the value the tool RETURNED, or the
+ *   `absence` a `requestInput` it raised declared (9.114.0,
+ *   `stages/toolCalls.ts · declareRaisedAbsence`), through the one
+ *   recognizer (`coverage/read.ts · readCoverageResult`), delivers the
+ *   status `'absent'` (a returned one only — a raised one is not settled),
+ *   emits `tools.absent` and files the call's rows on
  *   `AgentState.coverageDeclared`. This rule never re-reads a result to
  *   decide that: an envelope a tool returned as TEXT (an MCP server in its
  *   default text mode) was no absence at the door (no status, no event, no
@@ -81,7 +84,11 @@
  * `integrity/empty-lookup/check.ts · readLookupResult` declines — a second
  * answer), a result whose door rows are not on this run's state — an
  * earlier turn of a continued conversation, or a run before `resumeOnError`
- * (`coverageDeclared` is per run and not on the `AgentRunCheckpoint`) — and
+ * (`coverageDeclared` is per run and not on the `AgentRunCheckpoint`) — a
+ * lookup that PAUSED on its miss (`requestInput`'s `absence`, 9.114.0): the
+ * door's rows hold its miss, but on resume the model is served the person's
+ * `InputResponseResult` for that call, which is no absence, so a ruling-out
+ * on it files nothing — and
  * the envelope's TYPED suggestion, `try_instead_tool`: the row carries the
  * `try_instead` string alone, because nothing in this release reads a typed
  * tool off the row (the join that would, `source-not-consulted`, is not

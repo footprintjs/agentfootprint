@@ -4,7 +4,9 @@
  * Pattern: one reader, every dispatch door (the `applyResultCeiling`
  *          precedent). The batch loop and the credential/resume execute
  *          boundary both call this at the moment a handler's return lands, so
- *          a resumed call declares its coverage exactly as an inline one.
+ *          a resumed call declares its coverage exactly as an inline one; the
+ *          raise site (`../stages/toolCalls.ts` · `declareRaisedAbsence`)
+ *          calls it on the `absence` a `requestInput` declared (9.114.0).
  * Role:    core/ layer, pure. Recognition and normalization only — the caller
  *          owns the events, the scope write and the delivered status.
  * Emits:   N/A.

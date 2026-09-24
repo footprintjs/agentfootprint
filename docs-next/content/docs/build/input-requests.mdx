@@ -58,6 +58,18 @@ cannot replace it. Domain validation, such as whether a timezone exists,
 belongs to that application's adapter; the library validates field types,
 declared choices, unknown fields and the matching request token.
 
+When a lookup does raise about its own miss (the dedicated collection tool
+stays the documented shape), it still declares what it looked at: pass the
+envelope `absent()` returns as `absence`. It is filed when the request is
+raised, before the checkpoint — the same `tools.absent` event and
+`coverageDeclared` row that `absent(…)`, returned, would file. It never enters
+the pending value and nothing reads it on resume, so say the miss in
+`question` if the person should hear it now. A value the absence recognizer
+cannot read is refused when the request is raised (`absence: null` is the
+field omitted); an envelope whose lists cannot be read errors the call instead
+of pausing, as it would returned. The paused call is answered by the person,
+so it is never delivered an `'absent'` status.
+
 Fields accept `string`, finite `number`, or `boolean`, optional `description`
 and optional `enum`. Fields are required unless `required: false`. There are
 at most 32 fields; strings and descriptions are bounded to 4096 characters,

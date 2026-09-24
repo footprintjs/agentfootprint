@@ -189,6 +189,7 @@ import {
   readCoverageResult,
   type CoverageFacts,
   type DeclaredCoverage,
+  type ToolAbsence,
 } from '../coverage/index.js';
 import {
   explainStatusOnlyNearMiss,
@@ -1626,6 +1627,51 @@ export function buildToolCallsHandler(
       disposition === 'checked-fail' ? Date.now() : undefined,
     );
     fileIntegrityFindings(scope, findings, call.iteration);
+  };
+
+  /**
+   * A lookup that pauses still declares what it looked at (9.114.0) — the
+   * RAISE-SITE reader of `InputRequestDeclaration.absence`.
+   *
+   * A tool that found nothing and raised `requestInput` about the miss used
+   * to leave no record of it: `declareCoverage` reads a RETURNED value, and
+   * the pause branch returns the checkpoint before any of its call sites.
+   * The app could not file it either — the declaration's `context` rides to
+   * the model on resume, never to the record. So the raise site files it,
+   * through the same two readers a returned absence meets: `declareCoverage`
+   * (the one recognizer, `tools.absent`, the `coverageDeclared` row — the
+   * bytes a returned `absent(…)` files) and the empty-lookup write seam, with
+   * the envelope as the tool's own answer — it ran, nothing errored, nothing
+   * denied it, and no ceiling judged a result the model was never served.
+   *
+   * The delivered status `declareCoverage` returns is dropped on purpose: a
+   * paused call is not settled, so there is no `tool_end` for it to ride.
+   * Nothing on resume reads the field (the served result there is the
+   * person's `InputResponseResult`), so the rows are filed once, here.
+   *
+   * CONTAINED the way the returned path contains it. The recognizer reads an
+   * envelope minted elsewhere without repairing it, so its lists can be
+   * something `declareCoverage` cannot copy (`checked: [null]`,
+   * `not_checked: 5`). Returned, that throw lands in the dispatch `try` and
+   * errors the call; here it would land in the `catch` and fail the run. So
+   * the copy is caught here instead, and the error text comes back: the
+   * caller errors the call with it and does not pause. That is what the same
+   * value returned would do. `undefined` means filed.
+   */
+  const declareRaisedAbsence = (
+    scope: TypedScope<AgentState>,
+    call: { readonly toolName: string; readonly toolCallId: string; readonly iteration: number },
+    args: Readonly<Record<string, unknown>>,
+    absence: ToolAbsence,
+    history: readonly LLMMessage[],
+  ): string | undefined => {
+    try {
+      declareCoverage(scope, call, absence);
+    } catch (err) {
+      return err instanceof Error ? err.message : String(err);
+    }
+    noticeEmptyLookup(scope, call, args, absence, history, true);
+    return undefined;
   };
 
   /**
@@ -4356,6 +4402,9 @@ export function buildToolCallsHandler(
               }
               await endCall(tc.id);
             } catch (err) {
+              // Set when a raise declared a miss the door could not file:
+              // the call then errors with this text and does not pause.
+              let raisedMissError: string | undefined;
               if (isPauseRequest(err)) {
                 // The typed half of the question (9.24.0): a tool that raised
                 // `askHuman({ question, component })` nominated a screen
@@ -4378,57 +4427,89 @@ export function buildToolCallsHandler(
                     );
                   }
                 }
-                // A pause has NOT settled this call — it is waiting for a
-                // person, and the resources it opened are what the resume
-                // needs. No `'call'` teardown here, deliberately.
-                //
-                // Commit partial state so resume() can find history intact.
-                scope.history = newHistory;
-                scope.pausedToolCallId = tc.id;
-                scope.pausedToolName = tc.name;
-                scope.pausedToolStartMs = startMs;
-                // The args the tool WAS RUNNING WITH (post-transform), for the
-                // after-tool moment on the far side of the pause (8.13.0) —
-                // the same reason the three sibling pauses carry theirs.
-                scope.pausedToolArgs = callArgs;
                 const declaration =
                   typeof err.data === 'object' && err.data !== null
                     ? (err.data as { inputRequest?: unknown }).inputRequest
                     : undefined;
-                const awaitingInput =
-                  declaration === undefined
+                // A lookup that pauses still declares what it looked at
+                // (9.114.0): the miss it is asking about is filed HERE, the
+                // raise site, FIRST — the one moment the declaration's
+                // `absence` is read. So a declaration that CARRIES one is
+                // judged before anything is written for the pause, and a miss
+                // the door cannot file errors the call below, as the same value
+                // returned would, with nothing written for a pause. Every other
+                // raise keeps the order it always had — the pause writes, THEN
+                // the judgment — so a malformed hand-raised request (a
+                // `pauseHere`/`askHuman` that never went through
+                // `requestInput`) still fails the run with the in-flight batch
+                // on the record, byte-identical. `null` is the field omitted
+                // (`inputRequest.ts` · `validateInputDeclaration`).
+                const carriesAbsence =
+                  typeof declaration === 'object' &&
+                  declaration !== null &&
+                  (declaration as { absence?: unknown }).absence != null;
+                const declared = carriesAbsence ? validateInputDeclaration(declaration) : undefined;
+                raisedMissError =
+                  declared?.absence === undefined
                     ? undefined
-                    : stampInputRequest(
-                        validateInputDeclaration(declaration),
-                        `${deps.currentRun?.().runId ?? scope.turnStartMs}:${tc.id}`,
-                        {
-                          originalRequest: scope.userMessage,
-                          toolCallId: tc.id,
-                          ...(scope.currentSkillId !== undefined && {
-                            skillId: scope.currentSkillId,
-                          }),
-                          ...(scope.turnRoute?.offered !== undefined && {
-                            offeredSkillIds: [...scope.turnRoute.offered],
-                          }),
-                        },
+                    : declareRaisedAbsence(
+                        scope,
+                        { toolName: tc.name, toolCallId: tc.id, iteration },
+                        callArgs,
+                        declared.absence,
+                        newHistory,
                       );
-                // Returning a defined value triggers footprintjs pause —
-                // the returned object becomes the checkpoint's pauseData.
-                return {
-                  toolCallId: tc.id,
-                  toolName: tc.name,
-                  ...(awaitingInput !== undefined
-                    ? { question: awaitingInput.question, awaitingInput }
-                    : typeof err.data === 'object' && err.data !== null
-                    ? (err.data as Record<string, unknown>)
-                    : { data: err.data }),
-                };
+                if (raisedMissError === undefined) {
+                  // A pause has NOT settled this call — it is waiting for a
+                  // person, and the resources it opened are what the resume
+                  // needs. No `'call'` teardown here, deliberately.
+                  //
+                  // Commit partial state so resume() can find history intact.
+                  scope.history = newHistory;
+                  scope.pausedToolCallId = tc.id;
+                  scope.pausedToolName = tc.name;
+                  scope.pausedToolStartMs = startMs;
+                  // The args the tool WAS RUNNING WITH (post-transform), for
+                  // the after-tool moment on the far side of the pause
+                  // (8.13.0) — the same reason the three sibling pauses carry
+                  // theirs.
+                  scope.pausedToolArgs = callArgs;
+                  const awaitingInput =
+                    declaration === undefined
+                      ? undefined
+                      : stampInputRequest(
+                          declared ?? validateInputDeclaration(declaration),
+                          `${deps.currentRun?.().runId ?? scope.turnStartMs}:${tc.id}`,
+                          {
+                            originalRequest: scope.userMessage,
+                            toolCallId: tc.id,
+                            ...(scope.currentSkillId !== undefined && {
+                              skillId: scope.currentSkillId,
+                            }),
+                            ...(scope.turnRoute?.offered !== undefined && {
+                              offeredSkillIds: [...scope.turnRoute.offered],
+                            }),
+                          },
+                        );
+                  // Returning a defined value triggers footprintjs pause —
+                  // the returned object becomes the checkpoint's pauseData.
+                  return {
+                    toolCallId: tc.id,
+                    toolName: tc.name,
+                    ...(awaitingInput !== undefined
+                      ? { question: awaitingInput.question, awaitingInput }
+                      : typeof err.data === 'object' && err.data !== null
+                      ? (err.data as Record<string, unknown>)
+                      : { data: err.data }),
+                  };
+                }
               }
               // A tool that threw still RAN, and may have opened the thing it
-              // was about to close.
+              // was about to close. A raise whose miss could not be filed is
+              // settled here too — the returned path's error, not a pause.
               await endCall(tc.id);
               error = true;
-              result = err instanceof Error ? err.message : String(err);
+              result = raisedMissError ?? (err instanceof Error ? err.message : String(err));
             }
           }
         }
