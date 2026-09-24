@@ -4,7 +4,7 @@ title: JudgmentErrorRow
 
 # Interface: JudgmentErrorRow
 
-Defined in: [src/core/agent/findings/types.ts:241](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/findings/types.ts#L241)
+Defined in: [src/core/agent/findings/types.ts:242](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/findings/types.ts#L242)
 
 The judge was asked and produced no answer (9.104.0): the provider's
 status and error text (the PROVIDER's words, not the model's — allowed on
@@ -17,7 +17,7 @@ judgment is an absent judgment with a reason.
 
 > `readonly` **iteration**: `number`
 
-Defined in: [src/core/agent/findings/types.ts:251](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/findings/types.ts#L251)
+Defined in: [src/core/agent/findings/types.ts:252](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/findings/types.ts#L252)
 
 ***
 
@@ -25,7 +25,7 @@ Defined in: [src/core/agent/findings/types.ts:251](https://github.com/footprintj
 
 > `readonly` **judge**: `object`
 
-Defined in: [src/core/agent/findings/types.ts:247](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/findings/types.ts#L247)
+Defined in: [src/core/agent/findings/types.ts:248](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/findings/types.ts#L248)
 
 The classifier's port name; the model string is unknown when the call failed.
 
@@ -39,7 +39,7 @@ The classifier's port name; the model string is unknown when the call failed.
 
 > `readonly` **kind**: `"judgment-error"`
 
-Defined in: [src/core/agent/findings/types.ts:242](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/findings/types.ts#L242)
+Defined in: [src/core/agent/findings/types.ts:243](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/findings/types.ts#L243)
 
 ***
 
@@ -47,7 +47,7 @@ Defined in: [src/core/agent/findings/types.ts:242](https://github.com/footprintj
 
 > `readonly` **latencyMs**: `number`
 
-Defined in: [src/core/agent/findings/types.ts:250](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/findings/types.ts#L250)
+Defined in: [src/core/agent/findings/types.ts:251](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/findings/types.ts#L251)
 
 ***
 
@@ -55,7 +55,7 @@ Defined in: [src/core/agent/findings/types.ts:250](https://github.com/footprintj
 
 > `readonly` **message**: `string`
 
-Defined in: [src/core/agent/findings/types.ts:249](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/findings/types.ts#L249)
+Defined in: [src/core/agent/findings/types.ts:250](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/findings/types.ts#L250)
 
 ***
 
@@ -63,7 +63,7 @@ Defined in: [src/core/agent/findings/types.ts:249](https://github.com/footprintj
 
 > `readonly` **source**: `"judge"`
 
-Defined in: [src/core/agent/findings/types.ts:245](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/findings/types.ts#L245)
+Defined in: [src/core/agent/findings/types.ts:246](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/findings/types.ts#L246)
 
 ***
 
@@ -71,7 +71,7 @@ Defined in: [src/core/agent/findings/types.ts:245](https://github.com/footprintj
 
 > `readonly` `optional` **status?**: `number`
 
-Defined in: [src/core/agent/findings/types.ts:248](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/findings/types.ts#L248)
+Defined in: [src/core/agent/findings/types.ts:249](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/findings/types.ts#L249)
 
 ***
 
@@ -79,7 +79,7 @@ Defined in: [src/core/agent/findings/types.ts:248](https://github.com/footprintj
 
 > `readonly` **toolCallId**: `string`
 
-Defined in: [src/core/agent/findings/types.ts:243](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/findings/types.ts#L243)
+Defined in: [src/core/agent/findings/types.ts:244](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/findings/types.ts#L244)
 
 ***
 
@@ -87,4 +87,4 @@ Defined in: [src/core/agent/findings/types.ts:243](https://github.com/footprintj
 
 > `readonly` **toolName**: `string`
 
-Defined in: [src/core/agent/findings/types.ts:244](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/findings/types.ts#L244)
+Defined in: [src/core/agent/findings/types.ts:245](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/findings/types.ts#L245)

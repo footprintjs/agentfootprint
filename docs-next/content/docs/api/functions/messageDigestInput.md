@@ -6,7 +6,7 @@ title: messageDigestInput
 
 > **messageDigestInput**(`message`): `string`
 
-Defined in: [src/lib/time-travel/receipt.ts:592](https://github.com/footprintjs/agentfootprint/blob/main/src/lib/time-travel/receipt.ts#L592)
+Defined in: [src/lib/time-travel/receipt.ts:593](https://github.com/footprintjs/agentfootprint/blob/main/src/lib/time-travel/receipt.ts#L593)
 
 The bytes a message's hash covers, each field behind a separator: its role,
 its text, its `toolCallId`, its `toolName`, the calls it asked for (id, name,
@@ -39,9 +39,10 @@ requests were the same when one of them would be rejected. They enter as a
 `stableJson` FINGERPRINT, so nothing quotable is added — a signature is an
 opaque token, not content.
 
-Still deliberately NOT covered: `injectedBy` (stripped before the request
-exists) and `ephemeral` (a persistence flag, invisible to the model). Two
-messages that hash the same are the same thing said to the model.
+Still deliberately NOT covered: `injectedBy` and `notDispatched` (both
+stripped before the request exists) and `ephemeral` (a persistence flag,
+invisible to the model). Two messages that hash the same are the same thing
+said to the model.
 
 ## Parameters
 

@@ -4,7 +4,7 @@ title: StandingRow
 
 # Interface: StandingRow
 
-Defined in: [src/core/agent/findings/types.ts:136](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/findings/types.ts#L136)
+Defined in: [src/core/agent/findings/types.ts:137](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/findings/types.ts#L137)
 
 The model's standing on ONE previous result. The LAST row per `toolCallId` is current.
 
@@ -14,7 +14,7 @@ The model's standing on ONE previous result. The LAST row per `toolCallId` is cu
 
 > `readonly` **assertions**: readonly `Assertion`[]
 
-Defined in: [src/core/agent/findings/types.ts:153](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/findings/types.ts#L153)
+Defined in: [src/core/agent/findings/types.ts:154](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/findings/types.ts#L154)
 
 Mapped by the stratum rule; always present, `[]` for `noise`.
 
@@ -24,7 +24,7 @@ Mapped by the stratum rule; always present, `[]` for `noise`.
 
 > `readonly` **declaredOn**: `DeclaredOn`
 
-Defined in: [src/core/agent/findings/types.ts:154](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/findings/types.ts#L154)
+Defined in: [src/core/agent/findings/types.ts:155](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/findings/types.ts#L155)
 
 ***
 
@@ -32,7 +32,7 @@ Defined in: [src/core/agent/findings/types.ts:154](https://github.com/footprintj
 
 > `readonly` **iteration**: `number`
 
-Defined in: [src/core/agent/findings/types.ts:159](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/findings/types.ts#L159)
+Defined in: [src/core/agent/findings/types.ts:160](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/findings/types.ts#L160)
 
 The DECLARING iteration. The result's own tool-calls stage is derivable
 from the commit log by `toolCallId` and is never guessed here.
@@ -43,7 +43,7 @@ from the commit log by `toolCallId` and is never guessed here.
 
 > `readonly` **kind**: `"standing"`
 
-Defined in: [src/core/agent/findings/types.ts:137](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/findings/types.ts#L137)
+Defined in: [src/core/agent/findings/types.ts:138](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/findings/types.ts#L138)
 
 ***
 
@@ -51,7 +51,7 @@ Defined in: [src/core/agent/findings/types.ts:137](https://github.com/footprintj
 
 > `readonly` `optional` **line?**: `string`
 
-Defined in: [src/core/agent/findings/types.ts:151](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/findings/types.ts#L151)
+Defined in: [src/core/agent/findings/types.ts:152](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/findings/types.ts#L152)
 
 ***
 
@@ -59,7 +59,7 @@ Defined in: [src/core/agent/findings/types.ts:151](https://github.com/footprintj
 
 > `readonly` `optional` **ref?**: `string`
 
-Defined in: [src/core/agent/findings/types.ts:147](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/findings/types.ts#L147)
+Defined in: [src/core/agent/findings/types.ts:148](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/findings/types.ts#L148)
 
 The placement ticket's `art_` ref when the result was placed (`isPlacedToolResult`).
 
@@ -69,7 +69,7 @@ The placement ticket's `art_` ref when the result was placed (`isPlacedToolResul
 
 > `readonly` `optional` **settles?**: `string`
 
-Defined in: [src/core/agent/findings/types.ts:150](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/findings/types.ts#L150)
+Defined in: [src/core/agent/findings/types.ts:151](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/findings/types.ts#L151)
 
 ***
 
@@ -77,7 +77,7 @@ Defined in: [src/core/agent/findings/types.ts:150](https://github.com/footprintj
 
 > `readonly` `optional` **sought?**: `boolean`
 
-Defined in: [src/core/agent/findings/types.ts:149](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/findings/types.ts#L149)
+Defined in: [src/core/agent/findings/types.ts:150](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/findings/types.ts#L150)
 
 ***
 
@@ -85,7 +85,7 @@ Defined in: [src/core/agent/findings/types.ts:149](https://github.com/footprintj
 
 > `readonly` **standing**: [`Standing`](/docs/api/type-aliases/Standing)
 
-Defined in: [src/core/agent/findings/types.ts:148](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/findings/types.ts#L148)
+Defined in: [src/core/agent/findings/types.ts:149](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/findings/types.ts#L149)
 
 ***
 
@@ -93,7 +93,7 @@ Defined in: [src/core/agent/findings/types.ts:148](https://github.com/footprintj
 
 > `readonly` **toolCallId**: `string`
 
-Defined in: [src/core/agent/findings/types.ts:139](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/findings/types.ts#L139)
+Defined in: [src/core/agent/findings/types.ts:140](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/findings/types.ts#L140)
 
 The PREVIOUS result's id — the result being judged, not the judging call.
 
@@ -103,7 +103,7 @@ The PREVIOUS result's id — the result being judged, not the judging call.
 
 > `readonly` `optional` **toolName?**: `string`
 
-Defined in: [src/core/agent/findings/types.ts:145](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/findings/types.ts#L145)
+Defined in: [src/core/agent/findings/types.ts:146](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/findings/types.ts#L146)
 
 From the identified result (`offer.ts · knownResults`: the served
 history's tool messages plus the previous batch); absent when the id
@@ -115,7 +115,7 @@ named none (`unknownId`), or when the served message carried no name.
 
 > `readonly` `optional` **unknownId?**: `true`
 
-Defined in: [src/core/agent/findings/types.ts:166](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/findings/types.ts#L166)
+Defined in: [src/core/agent/findings/types.ts:167](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/findings/types.ts#L167)
 
 Set when `toolCallId` named no result the run could identify — neither a
 served `role: 'tool'` message nor an entry of the previous batch

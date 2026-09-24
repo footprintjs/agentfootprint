@@ -4,7 +4,7 @@ title: FindingsDeclaration
 
 # Interface: FindingsDeclaration
 
-Defined in: [src/core/agent/findings/types.ts:93](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/findings/types.ts#L93)
+Defined in: [src/core/agent/findings/types.ts:94](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/findings/types.ts#L94)
 
 The wire shape under `_findings` — on a tool call's args, or as the top-level
 key of a JSON answer. Every field optional: the model declares what it
@@ -16,7 +16,7 @@ declares, and `reserved.ts · splitFindings` drops what it cannot read.
 
 > `readonly` `optional` **basis?**: [`Basis`](/docs/api/type-aliases/Basis)
 
-Defined in: [src/core/agent/findings/types.ts:94](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/findings/types.ts#L94)
+Defined in: [src/core/agent/findings/types.ts:95](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/findings/types.ts#L95)
 
 ***
 
@@ -24,7 +24,7 @@ Defined in: [src/core/agent/findings/types.ts:94](https://github.com/footprintjs
 
 > `readonly` `optional` **expect?**: [`Expect`](/docs/api/type-aliases/Expect)
 
-Defined in: [src/core/agent/findings/types.ts:95](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/findings/types.ts#L95)
+Defined in: [src/core/agent/findings/types.ts:96](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/findings/types.ts#L96)
 
 ***
 
@@ -32,7 +32,7 @@ Defined in: [src/core/agent/findings/types.ts:95](https://github.com/footprintjs
 
 > `readonly` `optional` **predicts?**: `string`
 
-Defined in: [src/core/agent/findings/types.ts:104](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/findings/types.ts#L104)
+Defined in: [src/core/agent/findings/types.ts:105](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/findings/types.ts#L105)
 
 What the result should show if the proposition holds — one line, optional.
 
@@ -42,7 +42,7 @@ What the result should show if the proposition holds — one line, optional.
 
 > `readonly` `optional` **previous?**: readonly `PreviousStanding`[]
 
-Defined in: [src/core/agent/findings/types.ts:105](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/findings/types.ts#L105)
+Defined in: [src/core/agent/findings/types.ts:106](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/findings/types.ts#L106)
 
 ***
 
@@ -50,7 +50,7 @@ Defined in: [src/core/agent/findings/types.ts:105](https://github.com/footprintj
 
 > `readonly` `optional` **proposition?**: `string`
 
-Defined in: [src/core/agent/findings/types.ts:102](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/findings/types.ts#L102)
+Defined in: [src/core/agent/findings/types.ts:103](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/findings/types.ts#L103)
 
 What the call tests — one line, declared BEFORE the result exists, so a
 later `ruled-out` or `open` standing on that result can be read against

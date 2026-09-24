@@ -4,7 +4,7 @@ title: "~~Interface: ResolveCtx~~"
 
 # ~~Interface: ResolveCtx~~
 
-Defined in: [src/adapters/types.ts:558](https://github.com/footprintjs/agentfootprint/blob/main/src/adapters/types.ts#L558)
+Defined in: [src/adapters/types.ts:604](https://github.com/footprintjs/agentfootprint/blob/main/src/adapters/types.ts#L604)
 
 ## Deprecated
 
@@ -16,7 +16,7 @@ No implementation exists — see [ContextSourceAdapter](/docs/api/interfaces/Con
 
 > `readonly` **availableBudgetTokens**: `number`
 
-Defined in: [src/adapters/types.ts:562](https://github.com/footprintjs/agentfootprint/blob/main/src/adapters/types.ts#L562)
+Defined in: [src/adapters/types.ts:608](https://github.com/footprintjs/agentfootprint/blob/main/src/adapters/types.ts#L608)
 
 ***
 
@@ -24,7 +24,7 @@ Defined in: [src/adapters/types.ts:562](https://github.com/footprintjs/agentfoot
 
 > `readonly` **iterIndex**: `number`
 
-Defined in: [src/adapters/types.ts:561](https://github.com/footprintjs/agentfootprint/blob/main/src/adapters/types.ts#L561)
+Defined in: [src/adapters/types.ts:607](https://github.com/footprintjs/agentfootprint/blob/main/src/adapters/types.ts#L607)
 
 ***
 
@@ -32,7 +32,7 @@ Defined in: [src/adapters/types.ts:561](https://github.com/footprintjs/agentfoot
 
 > `readonly` `optional` **signal?**: `AbortSignal`
 
-Defined in: [src/adapters/types.ts:563](https://github.com/footprintjs/agentfootprint/blob/main/src/adapters/types.ts#L563)
+Defined in: [src/adapters/types.ts:609](https://github.com/footprintjs/agentfootprint/blob/main/src/adapters/types.ts#L609)
 
 ***
 
@@ -40,7 +40,7 @@ Defined in: [src/adapters/types.ts:563](https://github.com/footprintjs/agentfoot
 
 > `readonly` **turnIndex**: `number`
 
-Defined in: [src/adapters/types.ts:560](https://github.com/footprintjs/agentfootprint/blob/main/src/adapters/types.ts#L560)
+Defined in: [src/adapters/types.ts:606](https://github.com/footprintjs/agentfootprint/blob/main/src/adapters/types.ts#L606)
 
 ***
 
@@ -48,4 +48,4 @@ Defined in: [src/adapters/types.ts:560](https://github.com/footprintjs/agentfoot
 
 > `readonly` **userMessage**: `string`
 
-Defined in: [src/adapters/types.ts:559](https://github.com/footprintjs/agentfootprint/blob/main/src/adapters/types.ts#L559)
+Defined in: [src/adapters/types.ts:605](https://github.com/footprintjs/agentfootprint/blob/main/src/adapters/types.ts#L605)
