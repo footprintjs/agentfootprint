@@ -809,6 +809,58 @@ describe('batch settlement — the sentence, and the marker that says the same t
       ).toEqual(['t_a', 'lookup']);
     });
 
+    it('a settlement answers the LATEST turn that proposed its id — never an older proposal nobody answered', () => {
+      // Process A proposed c1 and c2, paused on c1 and was abandoned: neither
+      // call was ever answered. Process B proposed both ids again, for other
+      // tools, and paused on c1; the resume in process C answered c1 and
+      // settled c2. Then the fresh counter minted c1 and c2 again, for calls
+      // that RAN. A pairing that handed each answer to the OLDEST open
+      // proposal of its id (first in, first out across turns) would settle
+      // process A's c2 instead, and count process B's verify — which never
+      // ran — before the transfer.
+      const turn = (...calls: readonly [name: string, id: string][]): LLMMessage => ({
+        role: 'assistant',
+        content: '',
+        toolCalls: calls.map(([name, id]) => ({ id, name, args: {} })),
+      });
+      const ran = (id: string, name: string): LLMMessage => ({
+        role: 'tool',
+        content: `${name} ran`,
+        toolCallId: id,
+        toolName: name,
+      });
+      const history: LLMMessage[] = [
+        { role: 'user', content: 'go' },
+        turn(['collect_x', 'c1'], ['other', 'c2']), // process A: paused on c1, abandoned
+        { role: 'user', content: 'never mind' },
+        turn(['collect', 'c1'], ['verify_identity', 'c2']), // process B: paused on c1
+        ran('c1', 'collect'), // process C: the resume answers c1 …
+        {
+          role: 'tool', // … and settles c2
+          content: notDispatchedResult('verify_identity', {
+            toolName: 'collect',
+            toolCallId: 'c1',
+          }),
+          toolCallId: 'c2',
+          toolName: 'verify_identity',
+          notDispatched: { pausedCall: { toolCallId: 'c1', toolName: 'collect' } },
+        },
+        turn(['lookup', 'c1']),
+        ran('c1', 'lookup'),
+        turn(['lookup', 'c2']), // the fresh counter mints c2 again, for a call that RUNS
+        ran('c2', 'lookup'),
+        turn(['transfer_funds', 'c3']), // in flight: the permission check's view
+      ];
+      expect(names(history)).not.toContain('verify_identity');
+      // The whole sequence, the in-flight limit included: process A's
+      // collect_x and other were never answered, and they count because
+      // calls that ran reuse their ids — the limit stated in
+      // `src/security/extractSequence.ts`'s header, `src/security/README.md`
+      // and `src/core/README.md` · "Not covered yet". Pinned here so those
+      // statements and the code cannot drift apart.
+      expect(names(history)).toEqual(['collect_x', 'other', 'collect', 'lookup', 'lookup']);
+    });
+
     it('with no settlement anywhere, a reused id pairs as it always did — both proposals count', () => {
       // The additive law: a history the settlement never touched reads
       // exactly as it did before 9.113.0, reuse included.

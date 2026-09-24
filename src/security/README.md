@@ -33,6 +33,11 @@ here.
   history with no marker reads exactly as it did before — limits included: a
   call denied at the gate still counts once a later call that runs reuses its
   id, and a call that ran drops out once a later reuse of its id is denied.
+  The in-flight check has the same limit: a call never answered — a halt's
+  later siblings, a paused turn continued after `abandonPause()` — counts
+  once a later call that runs reuses its id. Settling those two doors with
+  the marker is the named follow-up (`src/core/README.md` · "Not covered
+  yet").
 - `skillTarget.ts` — one spelling, one owner.
 - `thinkingRedaction.ts` — the deliberate two-view split: unredacted to the
   provider for signature round-trip, redacted into `scope.history`.

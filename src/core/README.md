@@ -111,9 +111,11 @@ Pinned by `test/core/scenario/batch-pause-settlement.test.ts`: all four doors,
 the count, the sentence word for word, the marker on the message AND on both
 brackets (and on no other bracket), its history readers (the permission
 `sequence` — paired by position, both directions of a reused id, a fresh
-process that mints the settled id again for a call that runs, and seeded
-histories: exactly the calls that ran, and the pre-9.113.0 sequence wherever
-no marker is — a policy halt,
+process that mints the settled id again for a call that runs, an older
+proposal of the id that nobody answered (the settlement answers the LATEST
+turn that proposed it; the in-flight limit under "Not covered yet" below is
+pinned beside it), and seeded histories: exactly the calls that ran, and the
+pre-9.113.0 sequence wherever no marker is — a policy halt,
 the check-in trail, the window's pin, the findings offer, `knownResults`, the
 piece, the collapse, `droppedStandings`, and no marker on any request, the
 collapse path's included), a fresh instance resuming a JSON-restored
@@ -147,9 +149,15 @@ unanswered call — the paused one and the ones after it — with
 `{"status":"input_cancelled","requestId":…}`, which carries no marker, so a
 policy's `sequence` still counts those siblings as dispatched (as it did
 before this release). In the first two the window's LAW 2 refusal
-(`'unresolved-tool-call'`) keeps the unanswered turn from folding. Settling
-all three with `notDispatchedResult` and the marker is a named follow-up; a
-halt needs its own anchor, since "halted" is not "paused".
+(`'unresolved-tool-call'`) keeps the unanswered turn from folding, and a
+permission policy's `sequence` (`security/extractSequence.ts`) reads an
+unanswered call as in flight only until its id has a result: a call never
+answered — a halt's later siblings, a paused turn continued after
+`abandonPause()` — counts once a later call that runs reuses its id. The
+marker is what keeps a call out when its id comes back (it is paired by
+position, never by id), so settling those doors with it is what would close
+that too. Settling all three with `notDispatchedResult` and the marker is a
+named follow-up; a halt needs its own anchor, since "halted" is not "paused".
 
 ### One owner of 'never dispatched' — in history and on the stream
 

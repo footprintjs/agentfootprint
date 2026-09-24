@@ -27,9 +27,14 @@
  *     gate. A settled message is no result, so it answers neither question.
  *     Kept by id on purpose, limits included: a call denied at the gate still
  *     counts once a later call that runs reuses its id, and a call that ran
- *     drops out once a later reuse of its id is denied. Pairing the deny by
- *     position too would change the sequence of runs that never met a
- *     settlement, which this release does not do.
+ *     drops out once a later reuse of its id is denied. The in-flight check
+ *     has the same limit: a call never answered — a halt's later siblings, a
+ *     paused turn continued after `abandonPause()` — counts once a later call
+ *     that runs reuses its id, because the id then has a result. Pairing the
+ *     deny and the in-flight checks by position too would change the
+ *     sequence of runs that never met a settlement, which this release does
+ *     not do; settling those two doors with the marker is the named follow-up
+ *     (`src/core/README.md` · "Not covered yet").
  *   • SETTLED — by position (`settledProposals`, 9.113.0): a settled message
  *     carries `LLMMessage.notDispatched` — the marker, never its sentence —
  *     and it settles the ONE proposal it answers. An id alone cannot say
