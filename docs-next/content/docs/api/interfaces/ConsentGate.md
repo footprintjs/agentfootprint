@@ -4,7 +4,7 @@ title: ConsentGate
 
 # Interface: ConsentGate
 
-Defined in: [src/core/pause.ts:168](https://github.com/footprintjs/agentfootprint/blob/main/src/core/pause.ts#L168)
+Defined in: [src/core/pause.ts:180](https://github.com/footprintjs/agentfootprint/blob/main/src/core/pause.ts#L180)
 
 What [pauseDemandsDecision](/docs/api/functions/pauseDemandsDecision) reports about a pause that is a consent gate.
 
@@ -14,7 +14,7 @@ What [pauseDemandsDecision](/docs/api/functions/pauseDemandsDecision) reports ab
 
 > `readonly` **kind**: [`ConsentGateKind`](/docs/api/type-aliases/ConsentGateKind)
 
-Defined in: [src/core/pause.ts:169](https://github.com/footprintjs/agentfootprint/blob/main/src/core/pause.ts#L169)
+Defined in: [src/core/pause.ts:181](https://github.com/footprintjs/agentfootprint/blob/main/src/core/pause.ts#L181)
 
 ***
 
@@ -22,7 +22,7 @@ Defined in: [src/core/pause.ts:169](https://github.com/footprintjs/agentfootprin
 
 > `readonly` `optional` **middleware?**: `string`
 
-Defined in: [src/core/pause.ts:173](https://github.com/footprintjs/agentfootprint/blob/main/src/core/pause.ts#L173)
+Defined in: [src/core/pause.ts:185](https://github.com/footprintjs/agentfootprint/blob/main/src/core/pause.ts#L185)
 
 `'ask'` only — the `name` of the middleware that asked.
 
@@ -32,6 +32,6 @@ Defined in: [src/core/pause.ts:173](https://github.com/footprintjs/agentfootprin
 
 > `readonly` `optional` **toolName?**: `string`
 
-Defined in: [src/core/pause.ts:171](https://github.com/footprintjs/agentfootprint/blob/main/src/core/pause.ts#L171)
+Defined in: [src/core/pause.ts:183](https://github.com/footprintjs/agentfootprint/blob/main/src/core/pause.ts#L183)
 
 The tool the gate is about, when the pause payload named one.

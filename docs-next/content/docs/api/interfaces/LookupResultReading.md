@@ -30,7 +30,7 @@ Rows counted, for a rowset. Absent for an absence, which declares itself.
 
 ### shape
 
-> `readonly` **shape**: `"rowset"` \| `"absence"`
+> `readonly` **shape**: `"absence"` \| `"rowset"`
 
 Defined in: [src/integrity/empty-lookup/check.ts:80](https://github.com/footprintjs/agentfootprint/blob/main/src/integrity/empty-lookup/check.ts#L80)
 

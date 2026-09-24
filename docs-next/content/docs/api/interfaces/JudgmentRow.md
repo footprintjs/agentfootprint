@@ -25,7 +25,7 @@ measured by the adapter. Nothing here is inferred by the library.
 
 ### against
 
-> `readonly` **against**: `"proposition"` \| `"question"`
+> `readonly` **against**: `"question"` \| `"proposition"`
 
 Defined in: [src/core/agent/findings/types.ts:222](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/findings/types.ts#L222)
 
