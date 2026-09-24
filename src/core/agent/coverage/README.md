@@ -301,12 +301,15 @@ defineTool({
   (they record the throw and rethrow it).
 - **Unchanged without it.** A raise that declares no `absence` (or
   `absence: null`) records what 9.113.0 recorded, because only a declaration
-  that CARRIES one is judged before the pause writes. That includes a
-  malformed hand raise — a `pauseHere`/`askHuman` whose `inputRequest` never
-  went through `requestInput`: it still fails the run AFTER the pause writes,
-  so the failed run's record keeps the in-flight batch (the assistant turn,
-  every sibling's result, the paused keys). Both pinned against references
-  captured on the 9.113.0 tree.
+  that CARRIES one is judged before the pause writes. A malformed hand raise
+  — a `pauseHere`/`askHuman` whose `inputRequest` never went through
+  `requestInput` — leaves the committed record it always left, WHETHER OR NOT
+  it carries `absence`: its error leaves the stage only after the pause
+  writes are made (`../stages/toolCalls.ts` · `writePause`), so the failed
+  run's record keeps the in-flight batch (the assistant turn, every sibling's
+  result, the paused keys). Its error TEXT can differ from 9.113.0's where
+  9.113.0 stopped first at the then-unknown `absence` key. All pinned against
+  references captured on the 9.113.0 tree.
 - **Not covered, named here so nobody reads it as covered:**
   - a raise the library refuses — a tool that pauses on any RESUMED dispatch
     (an approved middleware ask, an approved check-in, granted credential

@@ -9,40 +9,43 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-- **`absence` on a `requestInput` declaration (`InputRequestDeclaration.absence`)**
-  — a lookup that searched, found nothing, and then asks the person about the
-  miss can now say what it looked at: pass the envelope `absent()` returns,
-  as in `requestInput({ id, question, fields, absence: absent({ what, checked }) })`.
-  Until now a lookup that paused left no record of the miss it was asking
-  about — no `agentfootprint.tools.absent` event and no `coverageDeclared`
-  row, because both are filed when a tool RETURNS its result, and a pause
-  returns nothing. The library now files them when the request is raised,
-  before the run pauses: the same event payload and the same row, byte for
-  byte, that the same `absent(…)` files when a tool returns it; and when the
-  tool declares `argumentsFrom` under `noticeEmptyLookups`, the empty-lookup
-  check reads the miss too. Nothing that judges a SERVED result applies at
-  the raise, because nothing is served for the paused call: not the tool's
-  `resultCeiling`, not the column-type contract, not the evidence corpus.
-  The paused call is answered by the person, not delivered an `'absent'`
-  status, so an `onToolStatus` route keyed on `'absent'` does not fire for
-  it. The rows are filed once — nothing on resume reads the field. It is not part of
-  the pending question (`awaitingInput`) or of what the model is served for
-  the paused call, so the question states the miss only if your `question`
-  says so; under `.limitsTravelWithTheAnswer()` the final answer's limits
-  block carries it, as it does a returned miss. A value the absence
-  recognizer cannot read is refused when `requestInput` is called
-  (`InputRequestError`, naming `absent()`), and the call errors instead of
-  pausing; `absence: null` is the field omitted. An envelope built by hand whose lists cannot be read (such as
-  `checked: [null]`) errors the call at the raise with the same message the
-  value would give if returned: the run goes on, nothing pauses and nothing
-  is filed. A lookup reached through another tool (`ctx.tools.call`, a
-  runbook procedure, a `flowchartAsTool` stage) pauses that outer call, so
-  its miss is filed under the outer tool and call id. A lookup a person
-  approved before it ran (a `checkIn`, an approved middleware `ask`, granted
-  interactive consent) cannot pause at all — its raise is refused as an
-  error, as before, and its miss is not filed. A request without `absence`
-  records exactly what it did before, a malformed hand-raised one
-  (`pauseHere`/`askHuman`) included.
+- **`absence` on a `requestInput` declaration
+  (`InputRequestDeclaration.absence`)** — a lookup that searched, found
+  nothing, and then asks the person about the miss can now say what it looked
+  at: pass the envelope `absent()` returns, as in `requestInput({ id,
+  question, fields, absence: absent({ what, checked }) })`. Until now a lookup
+  that paused left no record of the miss it was asking about — no
+  `agentfootprint.tools.absent` event and no `coverageDeclared` row, because
+  both are filed when a tool RETURNS its result, and a pause returns nothing.
+  The library now files them when the request is raised, before the run
+  pauses: the same event payload and the same row, byte for byte, that the
+  same `absent(…)` files when a tool returns it; and when the tool declares
+  `argumentsFrom` under `noticeEmptyLookups`, the empty-lookup check reads the
+  miss too. Nothing that judges a SERVED result applies at the raise, because
+  nothing is served for the paused call: not the tool's `resultCeiling`, not
+  the column-type contract, not the evidence corpus. The paused call is
+  answered by the person, not delivered an `'absent'` status, so an
+  `onToolStatus` route keyed on `'absent'` does not fire for it. The rows are
+  filed once — nothing on resume reads the field. It is not part of the
+  pending question (`awaitingInput`) or of what the model is served for the
+  paused call, so the question states the miss only if your `question` says
+  so; under `.limitsTravelWithTheAnswer()` the final answer's limits block
+  carries it, as it does a returned miss. A value the absence recognizer
+  cannot read is refused when `requestInput` is called (`InputRequestError`,
+  naming `absent()`), and the call errors instead of pausing; `absence: null`
+  is the field omitted. An envelope built by hand whose lists cannot be read
+  (such as `checked: [null]`) errors the call at the raise with the same
+  message the value would give if returned: the run goes on, nothing pauses
+  and nothing is filed. A lookup reached through another tool
+  (`ctx.tools.call`, a runbook procedure, a `flowchartAsTool` stage) pauses
+  that outer call, so its miss is filed under the outer tool and call id. A
+  lookup a person approved before it ran (a `checkIn`, an approved middleware
+  `ask`, granted interactive consent) cannot pause at all — its raise is
+  refused as an error, as before, and its miss is not filed. A request without
+  `absence` records exactly what it did before, and a malformed hand-raised
+  one (`pauseHere`/`askHuman`) leaves the committed record it always left,
+  whether or not it carries `absence` (its error text can differ where 9.113.0
+  stopped first at the then-unknown key).
 
 ## [9.113.0] - 2026-09-23
 

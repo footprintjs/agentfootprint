@@ -93,6 +93,194 @@
     "pausedToolArgs": {},
     "pausedToolStartMs": "<written>"
   },
+  "pauseHere with `absence: null` and no fields, after a sibling ran": {
+    "error": "[input request] declare an id, question and between one and 32 fields. No input was accepted.",
+    "eventTypes": [
+      "agentfootprint.agent.run_configured",
+      "agentfootprint.agent.turn_start",
+      "agentfootprint.context.evaluated",
+      "agentfootprint.context.slot_composed",
+      "agentfootprint.context.injected",
+      "agentfootprint.context.slot_composed",
+      "agentfootprint.context.injected",
+      "agentfootprint.context.injected",
+      "agentfootprint.context.slot_composed",
+      "agentfootprint.agent.iteration_start",
+      "agentfootprint.stream.llm_start",
+      "agentfootprint.stream.llm_end",
+      "agentfootprint.agent.route_decided",
+      "agentfootprint.stream.tool_start",
+      "agentfootprint.stream.tool_end",
+      "agentfootprint.stream.tool_start",
+      "agentfootprint.error.fatal",
+      "agentfootprint.integrity.disposition"
+    ],
+    "keys": [
+      "activatedInjectionIds",
+      "activeByslot",
+      "activeInjections",
+      "cacheMarkers",
+      "cachingDisabled",
+      "contextTokensRemaining",
+      "costBudgetHit",
+      "cumEstimatedUsd",
+      "cumTokensInput",
+      "cumTokensOutput",
+      "deliveredMessageKeys",
+      "dynamicToolSchemas",
+      "finalContent",
+      "history",
+      "iteration",
+      "lastToolResult",
+      "llmLatestContent",
+      "llmLatestToolCalls",
+      "maxIterations",
+      "messagesInjections",
+      "newMessages",
+      "pausedToolArgs",
+      "pausedToolCallId",
+      "pausedToolName",
+      "pausedToolStartMs",
+      "receipt",
+      "runIdentity",
+      "skillHistory",
+      "systemPromptInjections",
+      "thinkingBlocks",
+      "toolResults",
+      "toolsInjections",
+      "totalInputTokens",
+      "totalOutputTokens",
+      "turnNumber",
+      "turnStartMs",
+      "userMessage"
+    ],
+    "history": [
+      {
+        "role": "user",
+        "content": "which port?"
+      },
+      {
+        "role": "assistant",
+        "content": "",
+        "toolCalls": [
+          {
+            "id": "c0",
+            "name": "ok_tool",
+            "args": {}
+          },
+          {
+            "id": "c1",
+            "name": "hand_raised",
+            "args": {}
+          }
+        ]
+      },
+      {
+        "role": "tool",
+        "content": "fine",
+        "toolCallId": "c0",
+        "toolName": "ok_tool"
+      }
+    ],
+    "pausedToolCallId": "c1",
+    "pausedToolName": "hand_raised",
+    "pausedToolArgs": {},
+    "pausedToolStartMs": "<written>"
+  },
+  "pauseHere with an `absence` and no fields, after a sibling ran": {
+    "error": "[input request] declare an id, question and between one and 32 fields. No input was accepted.",
+    "eventTypes": [
+      "agentfootprint.agent.run_configured",
+      "agentfootprint.agent.turn_start",
+      "agentfootprint.context.evaluated",
+      "agentfootprint.context.slot_composed",
+      "agentfootprint.context.injected",
+      "agentfootprint.context.slot_composed",
+      "agentfootprint.context.injected",
+      "agentfootprint.context.injected",
+      "agentfootprint.context.slot_composed",
+      "agentfootprint.agent.iteration_start",
+      "agentfootprint.stream.llm_start",
+      "agentfootprint.stream.llm_end",
+      "agentfootprint.agent.route_decided",
+      "agentfootprint.stream.tool_start",
+      "agentfootprint.stream.tool_end",
+      "agentfootprint.stream.tool_start",
+      "agentfootprint.error.fatal",
+      "agentfootprint.integrity.disposition"
+    ],
+    "keys": [
+      "activatedInjectionIds",
+      "activeByslot",
+      "activeInjections",
+      "cacheMarkers",
+      "cachingDisabled",
+      "contextTokensRemaining",
+      "costBudgetHit",
+      "cumEstimatedUsd",
+      "cumTokensInput",
+      "cumTokensOutput",
+      "deliveredMessageKeys",
+      "dynamicToolSchemas",
+      "finalContent",
+      "history",
+      "iteration",
+      "lastToolResult",
+      "llmLatestContent",
+      "llmLatestToolCalls",
+      "maxIterations",
+      "messagesInjections",
+      "newMessages",
+      "pausedToolArgs",
+      "pausedToolCallId",
+      "pausedToolName",
+      "pausedToolStartMs",
+      "receipt",
+      "runIdentity",
+      "skillHistory",
+      "systemPromptInjections",
+      "thinkingBlocks",
+      "toolResults",
+      "toolsInjections",
+      "totalInputTokens",
+      "totalOutputTokens",
+      "turnNumber",
+      "turnStartMs",
+      "userMessage"
+    ],
+    "history": [
+      {
+        "role": "user",
+        "content": "which port?"
+      },
+      {
+        "role": "assistant",
+        "content": "",
+        "toolCalls": [
+          {
+            "id": "c0",
+            "name": "ok_tool",
+            "args": {}
+          },
+          {
+            "id": "c1",
+            "name": "hand_raised",
+            "args": {}
+          }
+        ]
+      },
+      {
+        "role": "tool",
+        "content": "fine",
+        "toolCallId": "c0",
+        "toolName": "ok_tool"
+      }
+    ],
+    "pausedToolCallId": "c1",
+    "pausedToolName": "hand_raised",
+    "pausedToolArgs": {},
+    "pausedToolStartMs": "<written>"
+  },
   "askHuman with an empty field list": {
     "error": "[input request] declare an id, question and between one and 32 fields. No input was accepted.",
     "eventTypes": [

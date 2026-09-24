@@ -4437,18 +4437,41 @@ export function buildToolCallsHandler(
                 // `absence` is read. So a declaration that CARRIES one is
                 // judged before anything is written for the pause, and a miss
                 // the door cannot file errors the call below, as the same value
-                // returned would, with nothing written for a pause. Every other
-                // raise keeps the order it always had — the pause writes, THEN
-                // the judgment — so a malformed hand-raised request (a
-                // `pauseHere`/`askHuman` that never went through
-                // `requestInput`) still fails the run with the in-flight batch
-                // on the record, byte-identical. `null` is the field omitted
-                // (`inputRequest.ts` · `validateInputDeclaration`).
+                // returned would, with nothing written for a pause. A MALFORMED
+                // declaration still leaves the committed record it always left,
+                // whether or not it carried `absence`: its error leaves the
+                // stage only after the pause writes are made, so a hand-raised
+                // request (a `pauseHere`/`askHuman` that never went through
+                // `requestInput`) fails with the in-flight batch on the record.
+                // `null` is the field omitted (`inputRequest.ts` ·
+                // `validateInputDeclaration`).
+                //
+                // The pause writes: partial state, so resume() can find the
+                // history intact.
+                const writePause = (): void => {
+                  scope.history = newHistory;
+                  scope.pausedToolCallId = tc.id;
+                  scope.pausedToolName = tc.name;
+                  scope.pausedToolStartMs = startMs;
+                  // The args the tool WAS RUNNING WITH (post-transform), for
+                  // the after-tool moment on the far side of the pause
+                  // (8.13.0) — the same reason the three sibling pauses carry
+                  // theirs.
+                  scope.pausedToolArgs = callArgs;
+                };
                 const carriesAbsence =
                   typeof declaration === 'object' &&
                   declaration !== null &&
                   (declaration as { absence?: unknown }).absence != null;
-                const declared = carriesAbsence ? validateInputDeclaration(declaration) : undefined;
+                let declared: ReturnType<typeof validateInputDeclaration> | undefined;
+                if (carriesAbsence) {
+                  try {
+                    declared = validateInputDeclaration(declaration);
+                  } catch (invalid) {
+                    writePause();
+                    throw invalid;
+                  }
+                }
                 raisedMissError =
                   declared?.absence === undefined
                     ? undefined
@@ -4463,17 +4486,7 @@ export function buildToolCallsHandler(
                   // A pause has NOT settled this call — it is waiting for a
                   // person, and the resources it opened are what the resume
                   // needs. No `'call'` teardown here, deliberately.
-                  //
-                  // Commit partial state so resume() can find history intact.
-                  scope.history = newHistory;
-                  scope.pausedToolCallId = tc.id;
-                  scope.pausedToolName = tc.name;
-                  scope.pausedToolStartMs = startMs;
-                  // The args the tool WAS RUNNING WITH (post-transform), for
-                  // the after-tool moment on the far side of the pause
-                  // (8.13.0) — the same reason the three sibling pauses carry
-                  // theirs.
-                  scope.pausedToolArgs = callArgs;
+                  writePause();
                   const awaitingInput =
                     declaration === undefined
                       ? undefined

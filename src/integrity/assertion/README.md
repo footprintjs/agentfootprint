@@ -61,9 +61,10 @@ no code decides anything on them — `conflicts.ts · conflictsOf` compares
 subject, predicate, value, stratum and epoch. The 9.113.0 ledger rule
 (`../../core/agent/findings/unsettled.ts · unsettledRowOf`) reads the standing
 word, the result as the model was served it, and the dispatch door's own record
-that the tool returned an absence (a `kind: 'absence'` row on `coverageDeclared`
-— a tool's return is `observed` by construction, so a tier there would restate
-the door), the served piece reads the rows' own fields, and
+that the tool returned an absence, or raised one through `requestInput`'s
+`absence` since 9.114.0 — a `kind: 'absence'` row on `coverageDeclared` (what a
+tool returns or raises is `observed` by construction, so a tier there would
+restate the door), the served piece reads the rows' own fields, and
 the lens-facing projections copy what the rows hold. A tier nothing reads would
 be a second spelling of the source string that nothing keeps honest.
 

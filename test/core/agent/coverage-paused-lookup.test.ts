@@ -19,7 +19,7 @@
  * Sections (Convention 3): unit (the declaration's refusals, the stamped
  * shape) · integration (byte-identical rows to a returning lookup, the
  * empty-lookup seam, the three-call batch and the unsettled rule) · regression
- * (a raise without `absence`, and a malformed hand raise without it, each
+ * (a raise without `absence`, and a malformed hand raise with or without it, each
  * pinned against a reference captured on the 9.113.0 tree — `git archive`
  * of the release commit — by this file in update mode):
  *
@@ -827,12 +827,16 @@ const MALFORMED_REFERENCE = resolve(__dirname, 'reference/hand-raised-malformed-
 /**
  * A hand raise — `pauseHere`/`askHuman` carrying an `inputRequest` that never
  * went through `requestInput`'s own validation — whose declaration is
- * malformed fails the run at the door. Only a declaration that CARRIES an
- * `absence` is judged before the pause writes (its miss is filed first, and a
- * miss the door cannot file must leave no pause behind); every other raise
- * keeps the 9.113.0 order — the writes, then the judgment — so the failed
+ * malformed fails the run at the door, and leaves the committed record 9.113.0
+ * left WHETHER OR NOT it carries `absence`: a declaration that carries one is
+ * judged before the pause writes (its miss is filed first, and a miss the door
+ * cannot file must leave no pause behind), but when that judgment throws, the
+ * pause writes are made before the error leaves the stage — so the failed
  * run's committed state still holds the in-flight batch: the assistant turn,
- * every sibling's result, the paused keys.
+ * every sibling's result, the paused keys. The real-envelope case pins that
+ * path; the `absence: null` case pins that null is the field omitted. Only the
+ * committed record is compared across versions for a carrying raise — its
+ * error TEXT can differ where 9.113.0 stopped first at the then-unknown key.
  */
 const MALFORMED: Record<
   string,
@@ -848,6 +852,37 @@ const MALFORMED: Record<
       },
     ],
     raise: () => pauseHere({ question: 'q?', inputRequest: { id: 'x' } }),
+  },
+  // Carrying `absence` does not change how a MALFORMED raise fails: the pause
+  // writes land first, as they always did (null is the field omitted).
+  'pauseHere with `absence: null` and no fields, after a sibling ran': {
+    replies: [
+      {
+        toolCalls: [
+          { id: 'c0', name: 'ok_tool', args: {} },
+          { id: 'c1', name: 'hand_raised', args: {} },
+        ],
+      },
+    ],
+    raise: () => pauseHere({ question: 'q?', inputRequest: { id: 'x', absence: null } as never }),
+  },
+  'pauseHere with an `absence` and no fields, after a sibling ran': {
+    replies: [
+      {
+        toolCalls: [
+          { id: 'c0', name: 'ok_tool', args: {} },
+          { id: 'c1', name: 'hand_raised', args: {} },
+        ],
+      },
+    ],
+    raise: () =>
+      pauseHere({
+        question: 'q?',
+        inputRequest: {
+          id: 'x',
+          absence: absent({ what: 'a matching port', checked: ['fabric A'] }),
+        } as never,
+      }),
   },
   'askHuman with an empty field list': {
     replies: [{ toolCalls: [{ id: 'c1', name: 'hand_raised', args: {} }] }],
@@ -902,7 +937,7 @@ async function failedRaiseRecord(
   };
 }
 
-describe('regression: a malformed HAND raise without `absence` fails as 9.113.0 failed', () => {
+describe('regression: a malformed HAND raise fails as 9.113.0 failed, with or without `absence`', () => {
   it('the failed run keeps the in-flight batch — the record matches the reference captured before this release', async () => {
     const record: Record<string, unknown> = {};
     for (const [label, { replies, raise }] of Object.entries(MALFORMED)) {
@@ -918,16 +953,26 @@ describe('regression: a malformed HAND raise without `absence` fails as 9.113.0 
       true,
     );
     expect(snapshot).toEqual(JSON.parse(readFileSync(MALFORMED_REFERENCE, 'utf8')));
-    // What the reference holds is the in-flight batch, not an empty frame.
-    const afterSibling = snapshot['pauseHere with no fields, after a sibling ran'] as {
-      error?: string;
-      history: { role: string; toolCallId?: string }[];
-      pausedToolCallId: string;
-    };
-    expect(afterSibling.error).toContain('declare an id, question and between one and 32 fields');
-    expect(afterSibling.pausedToolCallId).toBe('c1');
-    expect(
-      afterSibling.history.map((m) => `${m.role}${m.toolCallId ? `:${m.toolCallId}` : ''}`),
-    ).toEqual(['user', 'assistant', 'tool:c0']);
+    // What the reference holds is the in-flight batch, not an empty frame —
+    // for every raise after a sibling, whether or not it carried `absence`.
+    for (const label of [
+      'pauseHere with no fields, after a sibling ran',
+      'pauseHere with `absence: null` and no fields, after a sibling ran',
+      'pauseHere with an `absence` and no fields, after a sibling ran',
+    ]) {
+      const afterSibling = snapshot[label] as {
+        error?: string;
+        history: { role: string; toolCallId?: string }[];
+        pausedToolCallId: string;
+      };
+      expect(afterSibling.error, label).toContain(
+        'declare an id, question and between one and 32 fields',
+      );
+      expect(afterSibling.pausedToolCallId, label).toBe('c1');
+      expect(
+        afterSibling.history.map((m) => `${m.role}${m.toolCallId ? `:${m.toolCallId}` : ''}`),
+        label,
+      ).toEqual(['user', 'assistant', 'tool:c0']);
+    }
   });
 });
