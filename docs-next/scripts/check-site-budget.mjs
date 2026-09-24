@@ -166,7 +166,15 @@ const SEARCH_LIMITS = { raw: 12_000_000, gzip: 2_000_000, records: 2_000 };
 // still holds. 9.101.0's publish workflow failed on this line before publishing,
 // so that version never reached npm and 9.101.1 is the same library. The new
 // files ceiling keeps the same thin ~2% headroom over what was measured.
-const OUTPUT_LIMITS = { bytes: 672_000_000, files: 7_250, duplicateRscBytes: 0 };
+// RAISED for 9.113.0 — bytes and files. Measured on the release commit with
+// EXPORT=true: 672.17 MB across 7,249 files (duplicate RSC pairs 0), against
+// 672.00 MB / 7,250 — the byte ceiling had 0.17 MB too little, the file ceiling
+// one file of room. The growth since 9.101.1 is the API-reference routes of
+// 9.102–9.113 (9.113.0 alone adds TryInsteadTool and UnsettledByAbsenceRow and
+// regenerates the pages whose source moved) plus the pages the 9.102–9.112
+// features added. Same rule as every raise here: ~2% over the measured export
+// (686 MB, 7,400 files); the thing to watch is still the per-route cost.
+const OUTPUT_LIMITS = { bytes: 686_000_000, files: 7_400, duplicateRscBytes: 0 };
 // Raised for 9.61.0: 394.1 KB → 400.3 KB. The skill-graph demo imports
 // `defineTool` from 'agentfootprint', so the library's MAIN ENTRY and its
 // whole transitive graph ride this chunk — and this release added the

@@ -151,6 +151,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   declared type has always been `string`, so a typed caller reaches the
   refusal only through a cast or a value typed `any` (a `JSON.parse` result,
   an untyped row), which is assignable to `string` without one.
+- **Docs site budget re-baselined.** The static export measured 672.17 MB
+  across 7,249 files on the release commit, over the 672.00 MB ceiling with
+  one file of room; the ceilings rise ~2% over that measurement to 686 MB and
+  7,400 files, with the reason recorded beside the numbers in
+  `docs-next/scripts/check-site-budget.mjs · OUTPUT_LIMITS`. The API reference
+  is regenerated for this release (two new pages: `TryInsteadTool`,
+  `UnsettledByAbsenceRow`).
 
 ### Fixed
 
