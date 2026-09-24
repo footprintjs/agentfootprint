@@ -6,7 +6,7 @@
 
 # Interface: ScopeRecorder
 
-Defined in: node\_modules/footprintjs/dist/types/lib/scope/types.d.ts:114
+Defined in: node\_modules/footprintjs/dist/types/lib/scope/types.d.ts:76
 
 Pluggable observer for scope operations.
 
@@ -21,7 +21,7 @@ hooks of other recorders; the scope operation continues normally.
 
 > `readonly` **id**: `string`
 
-Defined in: node\_modules/footprintjs/dist/types/lib/scope/types.d.ts:115
+Defined in: node\_modules/footprintjs/dist/types/lib/scope/types.d.ts:77
 
 ## Methods
 
@@ -29,7 +29,7 @@ Defined in: node\_modules/footprintjs/dist/types/lib/scope/types.d.ts:115
 
 > `optional` **clear**(): `void`
 
-Defined in: node\_modules/footprintjs/dist/types/lib/scope/types.d.ts:134
+Defined in: node\_modules/footprintjs/dist/types/lib/scope/types.d.ts:96
 
 Reset state before each executor.run() — prevents cross-run accumulation.
 
@@ -43,7 +43,7 @@ Reset state before each executor.run() — prevents cross-run accumulation.
 
 > `optional` **onCommit**(`event`): `void`
 
-Defined in: node\_modules/footprintjs/dist/types/lib/scope/types.d.ts:118
+Defined in: node\_modules/footprintjs/dist/types/lib/scope/types.d.ts:80
 
 #### Parameters
 
@@ -61,7 +61,7 @@ Defined in: node\_modules/footprintjs/dist/types/lib/scope/types.d.ts:118
 
 > `optional` **onEmit**(`event`): `void`
 
-Defined in: node\_modules/footprintjs/dist/types/lib/scope/types.d.ts:132
+Defined in: node\_modules/footprintjs/dist/types/lib/scope/types.d.ts:94
 
 Fires for every `scope.$emit(name, payload)` call during a stage.
 Optional — implement only if you want to observe consumer-emitted
@@ -88,7 +88,7 @@ EmitRecorder in `src/lib/recorder/EmitRecorder.ts`
 
 > `optional` **onError**(`event`): `void`
 
-Defined in: node\_modules/footprintjs/dist/types/lib/scope/types.d.ts:119
+Defined in: node\_modules/footprintjs/dist/types/lib/scope/types.d.ts:81
 
 #### Parameters
 
@@ -106,7 +106,7 @@ Defined in: node\_modules/footprintjs/dist/types/lib/scope/types.d.ts:119
 
 > `optional` **onPause**(`event`): `void`
 
-Defined in: node\_modules/footprintjs/dist/types/lib/scope/types.d.ts:122
+Defined in: node\_modules/footprintjs/dist/types/lib/scope/types.d.ts:84
 
 #### Parameters
 
@@ -124,7 +124,7 @@ Defined in: node\_modules/footprintjs/dist/types/lib/scope/types.d.ts:122
 
 > `optional` **onRead**(`event`): `void`
 
-Defined in: node\_modules/footprintjs/dist/types/lib/scope/types.d.ts:116
+Defined in: node\_modules/footprintjs/dist/types/lib/scope/types.d.ts:78
 
 #### Parameters
 
@@ -142,7 +142,7 @@ Defined in: node\_modules/footprintjs/dist/types/lib/scope/types.d.ts:116
 
 > `optional` **onResume**(`event`): `void`
 
-Defined in: node\_modules/footprintjs/dist/types/lib/scope/types.d.ts:123
+Defined in: node\_modules/footprintjs/dist/types/lib/scope/types.d.ts:85
 
 #### Parameters
 
@@ -160,7 +160,7 @@ Defined in: node\_modules/footprintjs/dist/types/lib/scope/types.d.ts:123
 
 > `optional` **onStageEnd**(`event`): `void`
 
-Defined in: node\_modules/footprintjs/dist/types/lib/scope/types.d.ts:121
+Defined in: node\_modules/footprintjs/dist/types/lib/scope/types.d.ts:83
 
 #### Parameters
 
@@ -178,7 +178,7 @@ Defined in: node\_modules/footprintjs/dist/types/lib/scope/types.d.ts:121
 
 > `optional` **onStageStart**(`event`): `void`
 
-Defined in: node\_modules/footprintjs/dist/types/lib/scope/types.d.ts:120
+Defined in: node\_modules/footprintjs/dist/types/lib/scope/types.d.ts:82
 
 #### Parameters
 
@@ -196,7 +196,7 @@ Defined in: node\_modules/footprintjs/dist/types/lib/scope/types.d.ts:120
 
 > `optional` **onWrite**(`event`): `void`
 
-Defined in: node\_modules/footprintjs/dist/types/lib/scope/types.d.ts:117
+Defined in: node\_modules/footprintjs/dist/types/lib/scope/types.d.ts:79
 
 #### Parameters
 
@@ -214,7 +214,7 @@ Defined in: node\_modules/footprintjs/dist/types/lib/scope/types.d.ts:117
 
 > `optional` **toSnapshot**(): `object`
 
-Defined in: node\_modules/footprintjs/dist/types/lib/scope/types.d.ts:136
+Defined in: node\_modules/footprintjs/dist/types/lib/scope/types.d.ts:98
 
 Expose collected data for inclusion in executor.getSnapshot().recorders.
 

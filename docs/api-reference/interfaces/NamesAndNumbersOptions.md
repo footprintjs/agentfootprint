@@ -6,7 +6,7 @@
 
 # Interface: NamesAndNumbersOptions
 
-Defined in: [src/core/agent/evidence/types.ts:53](https://github.com/footprintjs/agentfootprint/blob/bf2bb6032a7a77012e83dd190bf46141ff4a3215/src/core/agent/evidence/types.ts#L53)
+Defined in: [src/core/agent/evidence/types.ts:80](https://github.com/footprintjs/agentfootprint/blob/8eb817f55f177662ed213c7b387a5bdc2527c87b/src/core/agent/evidence/types.ts#L80)
 
 Options for `.namesAndNumbersFromEvidence()`.
 
@@ -16,7 +16,7 @@ Options for `.namesAndNumbersFromEvidence()`.
 
 > `readonly` `optional` **exempt?**: readonly (`string` \| `RegExp`)[]
 
-Defined in: [src/core/agent/evidence/types.ts:67](https://github.com/footprintjs/agentfootprint/blob/bf2bb6032a7a77012e83dd190bf46141ff4a3215/src/core/agent/evidence/types.ts#L67)
+Defined in: [src/core/agent/evidence/types.ts:94](https://github.com/footprintjs/agentfootprint/blob/8eb817f55f177662ed213c7b387a5bdc2527c87b/src/core/agent/evidence/types.ts#L94)
 
 Values (or patterns) that are never flagged, whatever the extractor
 thinks. A literal string is compared after normalisation; a RegExp is
@@ -32,7 +32,7 @@ constant your app knows is safe.
 
 > `readonly` `optional` **minDigits?**: `number`
 
-Defined in: [src/core/agent/evidence/types.ts:78](https://github.com/footprintjs/agentfootprint/blob/bf2bb6032a7a77012e83dd190bf46141ff4a3215/src/core/agent/evidence/types.ts#L78)
+Defined in: [src/core/agent/evidence/types.ts:105](https://github.com/footprintjs/agentfootprint/blob/8eb817f55f177662ed213c7b387a5bdc2527c87b/src/core/agent/evidence/types.ts#L105)
 
 How many digits a BARE number needs before it is treated as data rather
 than prose. Default `4`.
@@ -45,13 +45,54 @@ positives that follow.
 
 ***
 
+### nudge?
+
+> `readonly` `optional` **nudge?**: `boolean`
+
+Defined in: [src/core/agent/evidence/types.ts:126](https://github.com/footprintjs/agentfootprint/blob/8eb817f55f177662ed213c7b387a5bdc2527c87b/src/core/agent/evidence/types.ts#L126)
+
+The staged-refs nudge. Default `false` — off, byte-identical.
+
+When an iteration's context carries tool results staged by reference
+(`artifacts.placement` tickets) AND a tool the model can currently call
+declares `wants` over one of their kinds, the library appends ONE short
+line at the END of that request naming the refs and the spender tool:
+derived numbers come from the tool, not from mental arithmetic. Composed
+entirely from declarations (`Tool.resultKind` / `Tool.wants`) — no app
+prose — and placed late because the measured failure was recency: the
+app's own "use the compute tool" instruction sat at the top of the
+context while the numbers sat at the bottom, and the model summed them
+in its head. The line is request-only (never history) and recomposed per
+iteration, so it exists exactly while both conditions hold. Each firing
+lands as `agentfootprint.agent.grounding_nudged`.
+
+Advisory — the postures above stay the guarantee. An agent with no
+artifact placement or no `wants`-declaring tool arms nothing and keeps
+byte-identical requests.
+
+***
+
 ### posture?
 
 > `readonly` `optional` **posture?**: [`EvidencePosture`](/agentfootprint/api/generated/type-aliases/EvidencePosture.md)
 
-Defined in: [src/core/agent/evidence/types.ts:55](https://github.com/footprintjs/agentfootprint/blob/bf2bb6032a7a77012e83dd190bf46141ff4a3215/src/core/agent/evidence/types.ts#L55)
+Defined in: [src/core/agent/evidence/types.ts:82](https://github.com/footprintjs/agentfootprint/blob/8eb817f55f177662ed213c7b387a5bdc2527c87b/src/core/agent/evidence/types.ts#L82)
 
 Default `'assist'` — record and flag, change nothing.
+
+***
+
+### recoveryInstruction?
+
+> `readonly` `optional` **recoveryInstruction?**: [`EvidenceRecoveryInstruction`](/agentfootprint/api/generated/type-aliases/EvidenceRecoveryInstruction.md)
+
+Defined in: [src/core/agent/evidence/types.ts:132](https://github.com/footprintjs/agentfootprint/blob/8eb817f55f177662ed213c7b387a5bdc2527c87b/src/core/agent/evidence/types.ts#L132)
+
+Extra guidance after an evidence check requests revision. At most 4000
+UTF-16 code units; callbacks receive a frozen context and must return
+synchronously. Invalid output or a thrown callback fails the run.
+The library's internal framing and validation remain in force. The text
+is request-only and never becomes evidence, user history or an exemption.
 
 ***
 
@@ -59,6 +100,6 @@ Default `'assist'` — record and flag, change nothing.
 
 > `readonly` `optional` **shapes?**: readonly [`EvidenceShape`](/agentfootprint/api/generated/interfaces/EvidenceShape.md)[]
 
-Defined in: [src/core/agent/evidence/types.ts:57](https://github.com/footprintjs/agentfootprint/blob/bf2bb6032a7a77012e83dd190bf46141ff4a3215/src/core/agent/evidence/types.ts#L57)
+Defined in: [src/core/agent/evidence/types.ts:84](https://github.com/footprintjs/agentfootprint/blob/8eb817f55f177662ed213c7b387a5bdc2527c87b/src/core/agent/evidence/types.ts#L84)
 
 Extra identifier shapes for this domain. Composes with the defaults.

@@ -8,6 +8,6 @@
 
 > `const` **ERR\_CONTEXT\_WINDOW\_EXCEEDED**: `"ERR_CONTEXT_WINDOW_EXCEEDED"`
 
-Defined in: [src/adapters/llm/contextWindow.ts:32](https://github.com/footprintjs/agentfootprint/blob/bf2bb6032a7a77012e83dd190bf46141ff4a3215/src/adapters/llm/contextWindow.ts#L32)
+Defined in: [src/adapters/llm/contextWindow.ts:32](https://github.com/footprintjs/agentfootprint/blob/8eb817f55f177662ed213c7b387a5bdc2527c87b/src/adapters/llm/contextWindow.ts#L32)
 
 Discriminator carried on the error — stable across releases.

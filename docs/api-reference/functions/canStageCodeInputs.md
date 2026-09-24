@@ -8,7 +8,7 @@
 
 > **canStageCodeInputs**(`session`): `session is CodeSession & Required<Pick<CodeSession, "stageInputs">>`
 
-Defined in: [src/adapters/types.ts:1003](https://github.com/footprintjs/agentfootprint/blob/bf2bb6032a7a77012e83dd190bf46141ff4a3215/src/adapters/types.ts#L1003)
+Defined in: [src/adapters/types.ts:1152](https://github.com/footprintjs/agentfootprint/blob/8eb817f55f177662ed213c7b387a5bdc2527c87b/src/adapters/types.ts#L1152)
 
 Can this session accept staged inputs? The feature-detection law: read the
  member, never assume it from the adapter's name.

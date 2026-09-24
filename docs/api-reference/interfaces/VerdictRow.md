@@ -1,0 +1,25 @@
+[**agentfootprint**](../README.md)
+
+***
+
+[agentfootprint](/agentfootprint/api/generated/README.md) / VerdictRow
+
+# Interface: VerdictRow
+
+Defined in: [src/core/runbook/types.ts:302](https://github.com/footprintjs/agentfootprint/blob/8eb817f55f177662ed213c7b387a5bdc2527c87b/src/core/runbook/types.ts#L302)
+
+One verdict row, as the chart wrote it. The bridge reads rows from the
+ final state's `verdicts` key and requires only `verdict`; every other
+ column is the app's own vocabulary.
+
+## Indexable
+
+> \[`column`: `string`\]: `unknown`
+
+## Properties
+
+### verdict
+
+> `readonly` **verdict**: `string`
+
+Defined in: [src/core/runbook/types.ts:303](https://github.com/footprintjs/agentfootprint/blob/8eb817f55f177662ed213c7b387a5bdc2527c87b/src/core/runbook/types.ts#L303)

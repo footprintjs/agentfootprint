@@ -6,7 +6,7 @@
 
 # Interface: WindowObservations
 
-Defined in: [src/core/agent/window/types.ts:201](https://github.com/footprintjs/agentfootprint/blob/bf2bb6032a7a77012e83dd190bf46141ff4a3215/src/core/agent/window/types.ts#L201)
+Defined in: [src/core/agent/window/types.ts:265](https://github.com/footprintjs/agentfootprint/blob/8eb817f55f177662ed213c7b387a5bdc2527c87b/src/core/agent/window/types.ts#L265)
 
 What the last-tool-result pin did at one iteration boundary (9.57.0).
 
@@ -16,13 +16,17 @@ removes something. The whole point of this release is that a model was
 working from evidence nobody could see had gone; evidence nobody can see
 was kept is the same defect facing the other way.
 
+Since 9.102.0 the ledger-fact pin files the same shape under
+`WindowRecord.ledgerFacts`, with `limit` = `keepLedgerFacts`; every field
+below reads the same way there.
+
 ## Properties
 
 ### limit
 
 > `readonly` **limit**: `number`
 
-Defined in: [src/core/agent/window/types.ts:216](https://github.com/footprintjs/agentfootprint/blob/bf2bb6032a7a77012e83dd190bf46141ff4a3215/src/core/agent/window/types.ts#L216)
+Defined in: [src/core/agent/window/types.ts:280](https://github.com/footprintjs/agentfootprint/blob/8eb817f55f177662ed213c7b387a5bdc2527c87b/src/core/agent/window/types.ts#L280)
 
 The ceiling this visit measured against (`keepLastToolResults`).
 
@@ -32,7 +36,7 @@ The ceiling this visit measured against (`keepLastToolResults`).
 
 > `readonly` **pinned**: readonly `object`[]
 
-Defined in: [src/core/agent/window/types.ts:208](https://github.com/footprintjs/agentfootprint/blob/bf2bb6032a7a77012e83dd190bf46141ff4a3215/src/core/agent/window/types.ts#L208)
+Defined in: [src/core/agent/window/types.ts:272](https://github.com/footprintjs/agentfootprint/blob/8eb817f55f177662ed213c7b387a5bdc2527c87b/src/core/agent/window/types.ts#L272)
 
 The turns the pin held, newest first. `chars` is the whole TURN's content
 length (an assistant's call and its results leave together), so
@@ -45,7 +49,7 @@ the pin — the cost of the feature, computable by any reader.
 
 > `readonly` `optional` **standDown?**: `true`
 
-Defined in: [src/core/agent/window/types.ts:227](https://github.com/footprintjs/agentfootprint/blob/bf2bb6032a7a77012e83dd190bf46141ff4a3215/src/core/agent/window/types.ts#L227)
+Defined in: [src/core/agent/window/types.ts:291](https://github.com/footprintjs/agentfootprint/blob/8eb817f55f177662ed213c7b387a5bdc2527c87b/src/core/agent/window/types.ts#L291)
 
 Present and `true` when the pin STOOD DOWN for this visit: the two
 previous visits both removed nothing AND both named `'last-tool-result'`,
@@ -62,6 +66,6 @@ itself has to say so — a silent reversal is indistinguishable from a bug.
 
 > `readonly` **yielded**: `number`
 
-Defined in: [src/core/agent/window/types.ts:214](https://github.com/footprintjs/agentfootprint/blob/bf2bb6032a7a77012e83dd190bf46141ff4a3215/src/core/agent/window/types.ts#L214)
+Defined in: [src/core/agent/window/types.ts:278](https://github.com/footprintjs/agentfootprint/blob/8eb817f55f177662ed213c7b387a5bdc2527c87b/src/core/agent/window/types.ts#L278)
 
 How many otherwise-pinnable turns the ceiling turned away.

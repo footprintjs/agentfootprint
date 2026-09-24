@@ -1,0 +1,27 @@
+[**agentfootprint**](../README.md)
+
+***
+
+[agentfootprint](/agentfootprint/api/generated/README.md) / ToolChoiceScore
+
+# Interface: ToolChoiceScore
+
+Defined in: [src/core/agent/toolChoice/types.ts:50](https://github.com/footprintjs/agentfootprint/blob/8eb817f55f177662ed213c7b387a5bdc2527c87b/src/core/agent/toolChoice/types.ts#L50)
+
+One offered name with the probability the provider gave it.
+
+## Properties
+
+### name
+
+> `readonly` **name**: `string`
+
+Defined in: [src/core/agent/toolChoice/types.ts:51](https://github.com/footprintjs/agentfootprint/blob/8eb817f55f177662ed213c7b387a5bdc2527c87b/src/core/agent/toolChoice/types.ts#L51)
+
+***
+
+### score
+
+> `readonly` **score**: `number`
+
+Defined in: [src/core/agent/toolChoice/types.ts:52](https://github.com/footprintjs/agentfootprint/blob/8eb817f55f177662ed213c7b387a5bdc2527c87b/src/core/agent/toolChoice/types.ts#L52)

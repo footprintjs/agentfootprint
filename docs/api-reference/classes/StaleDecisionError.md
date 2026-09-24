@@ -6,7 +6,7 @@
 
 # Class: StaleDecisionError
 
-Defined in: [src/core/pause.ts:246](https://github.com/footprintjs/agentfootprint/blob/bf2bb6032a7a77012e83dd190bf46141ff4a3215/src/core/pause.ts#L246)
+Defined in: [src/core/pause.ts:286](https://github.com/footprintjs/agentfootprint/blob/8eb817f55f177662ed213c7b387a5bdc2527c87b/src/core/pause.ts#L286)
 
 The person answered about something the ask was not about.
 
@@ -43,7 +43,7 @@ artifact are all byte-identical to every earlier release.
 
 > **new StaleDecisionError**(`asked`, `answered`): `StaleDecisionError`
 
-Defined in: [src/core/pause.ts:253](https://github.com/footprintjs/agentfootprint/blob/bf2bb6032a7a77012e83dd190bf46141ff4a3215/src/core/pause.ts#L253)
+Defined in: [src/core/pause.ts:293](https://github.com/footprintjs/agentfootprint/blob/8eb817f55f177662ed213c7b387a5bdc2527c87b/src/core/pause.ts#L293)
 
 #### Parameters
 
@@ -69,7 +69,7 @@ Defined in: [src/core/pause.ts:253](https://github.com/footprintjs/agentfootprin
 
 > `readonly` **answered**: `string`
 
-Defined in: [src/core/pause.ts:251](https://github.com/footprintjs/agentfootprint/blob/bf2bb6032a7a77012e83dd190bf46141ff4a3215/src/core/pause.ts#L251)
+Defined in: [src/core/pause.ts:291](https://github.com/footprintjs/agentfootprint/blob/8eb817f55f177662ed213c7b387a5bdc2527c87b/src/core/pause.ts#L291)
 
 The artifact the ANSWER was chosen against.
 
@@ -79,7 +79,7 @@ The artifact the ANSWER was chosen against.
 
 > `readonly` **asked**: `string`
 
-Defined in: [src/core/pause.ts:249](https://github.com/footprintjs/agentfootprint/blob/bf2bb6032a7a77012e83dd190bf46141ff4a3215/src/core/pause.ts#L249)
+Defined in: [src/core/pause.ts:289](https://github.com/footprintjs/agentfootprint/blob/8eb817f55f177662ed213c7b387a5bdc2527c87b/src/core/pause.ts#L289)
 
 The artifact the QUESTION was asked against.
 
@@ -101,7 +101,7 @@ Defined in: node\_modules/typescript/lib/lib.es2022.error.d.ts:24
 
 > `readonly` **code**: `"ERR_STALE_DECISION"`
 
-Defined in: [src/core/pause.ts:247](https://github.com/footprintjs/agentfootprint/blob/bf2bb6032a7a77012e83dd190bf46141ff4a3215/src/core/pause.ts#L247)
+Defined in: [src/core/pause.ts:287](https://github.com/footprintjs/agentfootprint/blob/8eb817f55f177662ed213c7b387a5bdc2527c87b/src/core/pause.ts#L287)
 
 ***
 

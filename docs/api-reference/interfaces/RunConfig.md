@@ -1,0 +1,36 @@
+[**agentfootprint**](../README.md)
+
+***
+
+[agentfootprint](/agentfootprint/api/generated/README.md) / RunConfig
+
+# Interface: RunConfig
+
+Defined in: [src/core/agent/types.ts:1121](https://github.com/footprintjs/agentfootprint/blob/8eb817f55f177662ed213c7b387a5bdc2527c87b/src/core/agent/types.ts#L1121)
+
+What `.configure(fn)` may change for one run. Both fields are
+optional; returning `{}` (or nothing) means "use the built defaults",
+which is exactly what an agent without `.configure()` does.
+
+Deliberately NOT the tools axis — `.toolProvider()` already owns that,
+and it is consulted every iteration rather than once per run.
+
+## Properties
+
+### instructions?
+
+> `readonly` `optional` **instructions?**: `string`
+
+Defined in: [src/core/agent/types.ts:1125](https://github.com/footprintjs/agentfootprint/blob/8eb817f55f177662ed213c7b387a5bdc2527c87b/src/core/agent/types.ts#L1125)
+
+Replaces the base system prompt set by `.system(...)` for this run.
+
+***
+
+### model?
+
+> `readonly` `optional` **model?**: `string`
+
+Defined in: [src/core/agent/types.ts:1123](https://github.com/footprintjs/agentfootprint/blob/8eb817f55f177662ed213c7b387a5bdc2527c87b/src/core/agent/types.ts#L1123)
+
+Model id for every LLM call in this run.

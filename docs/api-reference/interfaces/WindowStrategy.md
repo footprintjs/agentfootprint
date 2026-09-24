@@ -6,7 +6,7 @@
 
 # Interface: WindowStrategy
 
-Defined in: [src/core/agent/window/strategy.ts:200](https://github.com/footprintjs/agentfootprint/blob/bf2bb6032a7a77012e83dd190bf46141ff4a3215/src/core/agent/window/strategy.ts#L200)
+Defined in: [src/core/agent/window/strategy.ts:226](https://github.com/footprintjs/agentfootprint/blob/8eb817f55f177662ed213c7b387a5bdc2527c87b/src/core/agent/window/strategy.ts#L226)
 
 A window strategy: what the live window should become at this iteration
 boundary, and what the record must say about the change.
@@ -20,7 +20,7 @@ Pass one to `AgentBuilder.window(...)`. Exactly one per agent —
 
 > `readonly` `optional` **billing?**: `object`
 
-Defined in: [src/core/agent/window/strategy.ts:220](https://github.com/footprintjs/agentfootprint/blob/bf2bb6032a7a77012e83dd190bf46141ff4a3215/src/core/agent/window/strategy.ts#L220)
+Defined in: [src/core/agent/window/strategy.ts:246](https://github.com/footprintjs/agentfootprint/blob/8eb817f55f177662ed213c7b387a5bdc2527c87b/src/core/agent/window/strategy.ts#L246)
 
 What this strategy will BILL, when it bills anything (8.14.0).
 
@@ -48,7 +48,7 @@ things, or the refusal is advice rather than a rule.
 
 > `readonly` **name**: `string`
 
-Defined in: [src/core/agent/window/strategy.ts:206](https://github.com/footprintjs/agentfootprint/blob/bf2bb6032a7a77012e83dd190bf46141ff4a3215/src/core/agent/window/strategy.ts#L206)
+Defined in: [src/core/agent/window/strategy.ts:232](https://github.com/footprintjs/agentfootprint/blob/8eb817f55f177662ed213c7b387a5bdc2527c87b/src/core/agent/window/strategy.ts#L232)
 
 Stable name — it is written onto every record this strategy files
 (`WindowRecord.strategy`), so a reader can tell which policy produced a
@@ -60,7 +60,7 @@ window, and it names the strategy on the chart's `compact` stage.
 
 > **plan**(`input`): `Promise`\<[`WindowStrategyResult`](/agentfootprint/api/generated/interfaces/WindowStrategyResult.md) \| `undefined`\>
 
-Defined in: [src/core/agent/window/strategy.ts:235](https://github.com/footprintjs/agentfootprint/blob/bf2bb6032a7a77012e83dd190bf46141ff4a3215/src/core/agent/window/strategy.ts#L235)
+Defined in: [src/core/agent/window/strategy.ts:261](https://github.com/footprintjs/agentfootprint/blob/8eb817f55f177662ed213c7b387a5bdc2527c87b/src/core/agent/window/strategy.ts#L261)
 
 Decide. Called at EVERY ReAct iteration boundary.
 

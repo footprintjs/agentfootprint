@@ -8,7 +8,7 @@
 
 > **codeRunsOf**(`candidate`): `Map`\<`string`, [`CodeRunFacts`](/agentfootprint/api/generated/interfaces/CodeRunFacts.md)\> \| `undefined`
 
-Defined in: [src/core/codeRunnerTool.ts:223](https://github.com/footprintjs/agentfootprint/blob/bf2bb6032a7a77012e83dd190bf46141ff4a3215/src/core/codeRunnerTool.ts#L223)
+Defined in: [src/core/codeRunnerTool.ts:223](https://github.com/footprintjs/agentfootprint/blob/8eb817f55f177662ed213c7b387a5bdc2527c87b/src/core/codeRunnerTool.ts#L223)
 
 Read the code-run facts off a candidate, or `undefined` when it records none.
 

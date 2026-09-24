@@ -8,7 +8,7 @@
 
 > `const` **STAGED\_INPUTS\_ENV**: `"AF_STAGED_INPUTS"` = `'AF_STAGED_INPUTS'`
 
-Defined in: [src/adapters/types.ts:905](https://github.com/footprintjs/agentfootprint/blob/bf2bb6032a7a77012e83dd190bf46141ff4a3215/src/adapters/types.ts#L905)
+Defined in: [src/adapters/types.ts:1054](https://github.com/footprintjs/agentfootprint/blob/8eb817f55f177662ed213c7b387a5bdc2527c87b/src/adapters/types.ts#L1054)
 
 The environment variable an executing snippet reads its staged inputs from —
 a JSON object mapping each input's NAME to the path it landed at.

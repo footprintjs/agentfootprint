@@ -8,7 +8,7 @@
 
 > **ArtifactOp** = `"put"` \| `"head"` \| `"get"` \| `"delete"` \| `"list"` \| `"dispatch"`
 
-Defined in: [src/artifacts/capability.ts:66](https://github.com/footprintjs/agentfootprint/blob/bf2bb6032a7a77012e83dd190bf46141ff4a3215/src/artifacts/capability.ts#L66)
+Defined in: [src/artifacts/capability.ts:66](https://github.com/footprintjs/agentfootprint/blob/8eb817f55f177662ed213c7b387a5bdc2527c87b/src/artifacts/capability.ts#L66)
 
 Which door a refusal happened at — the five verbs, plus `'dispatch'`:
  the framework's own resolution of a tool's declared `wants` (and the

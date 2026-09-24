@@ -8,7 +8,7 @@
 
 > **MilestoneKind** = `"iteration"` \| `"slot"` \| `"llm-turn"` \| `"tool-call"` \| `"decision"`
 
-Defined in: [src/conventions.ts:368](https://github.com/footprintjs/agentfootprint/blob/bf2bb6032a7a77012e83dd190bf46141ff4a3215/src/conventions.ts#L368)
+Defined in: [src/conventions.ts:370](https://github.com/footprintjs/agentfootprint/blob/8eb817f55f177662ed213c7b387a5bdc2527c87b/src/conventions.ts#L370)
 
 A [Milestone](/agentfootprint/api/generated/interfaces/Milestone.md)'s kind — the domain vocabulary for "meaningful step you'd
 scrub to" in the agent's run.

@@ -6,7 +6,7 @@
 
 # Interface: RecordingMintFacts
 
-Defined in: [src/artifacts/recordingArtifact.ts:45](https://github.com/footprintjs/agentfootprint/blob/bf2bb6032a7a77012e83dd190bf46141ff4a3215/src/artifacts/recordingArtifact.ts#L45)
+Defined in: [src/artifacts/recordingArtifact.ts:54](https://github.com/footprintjs/agentfootprint/blob/8eb817f55f177662ed213c7b387a5bdc2527c87b/src/artifacts/recordingArtifact.ts#L54)
 
 What a recording mint needs to know beyond the recording itself.
 
@@ -16,7 +16,7 @@ What a recording mint needs to know beyond the recording itself.
 
 > `readonly` `optional` **label?**: `string`
 
-Defined in: [src/artifacts/recordingArtifact.ts:59](https://github.com/footprintjs/agentfootprint/blob/bf2bb6032a7a77012e83dd190bf46141ff4a3215/src/artifacts/recordingArtifact.ts#L59)
+Defined in: [src/artifacts/recordingArtifact.ts:77](https://github.com/footprintjs/agentfootprint/blob/8eb817f55f177662ed213c7b387a5bdc2527c87b/src/artifacts/recordingArtifact.ts#L77)
 
 The operator's label, when they set one.
 
@@ -33,7 +33,22 @@ useful honest sentence available at mint time.
 
 > `readonly` `optional` **runId?**: `string`
 
-Defined in: [src/artifacts/recordingArtifact.ts:48](https://github.com/footprintjs/agentfootprint/blob/bf2bb6032a7a77012e83dd190bf46141ff4a3215/src/artifacts/recordingArtifact.ts#L48)
+Defined in: [src/artifacts/recordingArtifact.ts:57](https://github.com/footprintjs/agentfootprint/blob/8eb817f55f177662ed213c7b387a5bdc2527c87b/src/artifacts/recordingArtifact.ts#L57)
 
 The run this recording is OF — stamped on `origin.runId`, which is the
  join back to the trace.
+
+***
+
+### toolCallId?
+
+> `readonly` `optional` **toolCallId?**: `string`
+
+Defined in: [src/artifacts/recordingArtifact.ts:66](https://github.com/footprintjs/agentfootprint/blob/8eb817f55f177662ed213c7b387a5bdc2527c87b/src/artifacts/recordingArtifact.ts#L66)
+
+The tool call this recording is OF, when a TOOL minted it (9.79.0) —
+stamped on `origin.toolCallId`, the join back to the call that produced
+it. Absent for an agent's own run recording, which is a whole turn and
+belongs to no single call. The `chartWalkPutInput` law, verbatim: a walk
+and the recording it projects are two views of ONE call, so they carry
+the same join key or a consumer cannot pair them.

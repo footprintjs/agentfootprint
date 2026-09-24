@@ -8,7 +8,7 @@
 
 > **ContextInjectedEvent** = `AgentfootprintEventMap`\[`"agentfootprint.context.injected"`\]
 
-Defined in: [src/recorders/core/contextEngineering.ts:113](https://github.com/footprintjs/agentfootprint/blob/bf2bb6032a7a77012e83dd190bf46141ff4a3215/src/recorders/core/contextEngineering.ts#L113)
+Defined in: [src/recorders/core/contextEngineering.ts:114](https://github.com/footprintjs/agentfootprint/blob/8eb817f55f177662ed213c7b387a5bdc2527c87b/src/recorders/core/contextEngineering.ts#L114)
 
 The shape of the event passed to `onEngineered` / `onBaseline`
 callbacks. Same as `agentfootprint.context.injected`'s envelope —

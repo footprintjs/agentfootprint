@@ -1,0 +1,39 @@
+[**agentfootprint**](../README.md)
+
+***
+
+[agentfootprint](/agentfootprint/api/generated/README.md) / keyedFold
+
+# Function: keyedFold()
+
+> **keyedFold**(`source`): [`KeyedFold`](/agentfootprint/api/generated/interfaces/KeyedFold.md)
+
+Defined in: [src/lib/time-travel/keyedFold.ts:251](https://github.com/footprintjs/agentfootprint/blob/8eb817f55f177662ed213c7b387a5bdc2527c87b/src/lib/time-travel/keyedFold.ts#L251)
+
+The keyed fold for one source, memoized on the source object.
+
+Memoized because a per-epoch reader asks the same source for the same keys
+at many different commits, and the index is the expensive half: building it
+is one pass over the log, and answering a read afterwards is a binary search
+plus a replay from the nearest full-value write (normally exactly one).
+
+## Parameters
+
+### source
+
+`FoldSourceLike` \| `undefined`
+
+## Returns
+
+[`KeyedFold`](/agentfootprint/api/generated/interfaces/KeyedFold.md)
+
+## Example
+
+```ts
+import { keyedFold } from 'agentfootprint';
+
+const fold = keyedFold(agent.getSnapshot());
+fold.basis;                      // 'initial+log' — the base travelled
+fold.valueAt('history', 12);     // the conversation after the 13th commit
+fold.valueAt('history', -1);     // …and what the run STARTED from
+```

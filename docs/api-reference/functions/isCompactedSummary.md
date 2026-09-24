@@ -8,7 +8,7 @@
 
 > **isCompactedSummary**(`msg`): `boolean`
 
-Defined in: [src/core/agent/window/summarize.ts:128](https://github.com/footprintjs/agentfootprint/blob/bf2bb6032a7a77012e83dd190bf46141ff4a3215/src/core/agent/window/summarize.ts#L128)
+Defined in: [src/lib/saidByPerson.ts:146](https://github.com/footprintjs/agentfootprint/blob/8eb817f55f177662ed213c7b387a5bdc2527c87b/src/lib/saidByPerson.ts#L146)
 
 True when this message is a frame a previous fold wrote.
 
@@ -16,7 +16,7 @@ True when this message is a frame a previous fold wrote.
 
 ### msg
 
-[`LLMMessage`](/agentfootprint/api/generated/interfaces/LLMMessage.md) \| `undefined`
+[`AuthoredMessage`](/agentfootprint/api/generated/interfaces/AuthoredMessage.md) \| `undefined`
 
 ## Returns
 

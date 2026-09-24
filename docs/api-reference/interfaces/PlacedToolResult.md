@@ -6,7 +6,7 @@
 
 # Interface: PlacedToolResult
 
-Defined in: [src/artifacts/placement.ts:91](https://github.com/footprintjs/agentfootprint/blob/bf2bb6032a7a77012e83dd190bf46141ff4a3215/src/artifacts/placement.ts#L91)
+Defined in: [src/artifacts/placement.ts:105](https://github.com/footprintjs/agentfootprint/blob/8eb817f55f177662ed213c7b387a5bdc2527c87b/src/artifacts/placement.ts#L105)
 
 The substitute the model reads in place of the payload — ONE shape, always
 the object (the `TruncatedToolResult` law: a consumer branches on
@@ -19,7 +19,7 @@ the object (the `TruncatedToolResult` law: a consumer branches on
 
 > `readonly` **bytes**: `number`
 
-Defined in: [src/artifacts/placement.ts:99](https://github.com/footprintjs/agentfootprint/blob/bf2bb6032a7a77012e83dd190bf46141ff4a3215/src/artifacts/placement.ts#L99)
+Defined in: [src/artifacts/placement.ts:114](https://github.com/footprintjs/agentfootprint/blob/8eb817f55f177662ed213c7b387a5bdc2527c87b/src/artifacts/placement.ts#L114)
 
 The stored payload's true size — the chars the window did NOT pay.
 
@@ -29,9 +29,10 @@ The stored payload's true size — the chars the window did NOT pay.
 
 > `readonly` **kind**: `string`
 
-Defined in: [src/artifacts/placement.ts:96](https://github.com/footprintjs/agentfootprint/blob/bf2bb6032a7a77012e83dd190bf46141ff4a3215/src/artifacts/placement.ts#L96)
+Defined in: [src/artifacts/placement.ts:111](https://github.com/footprintjs/agentfootprint/blob/8eb817f55f177662ed213c7b387a5bdc2527c87b/src/artifacts/placement.ts#L111)
 
-`tool-result/<toolName>` — what a consumer names to want it.
+The minted kind — what a consumer names to want it. The tool's declared
+ `Tool.resultKind` when it has one, `tool-result/<toolName>` otherwise.
 
 ***
 
@@ -39,7 +40,7 @@ Defined in: [src/artifacts/placement.ts:96](https://github.com/footprintjs/agent
 
 > `readonly` **mediaType**: `string`
 
-Defined in: [src/artifacts/placement.ts:97](https://github.com/footprintjs/agentfootprint/blob/bf2bb6032a7a77012e83dd190bf46141ff4a3215/src/artifacts/placement.ts#L97)
+Defined in: [src/artifacts/placement.ts:112](https://github.com/footprintjs/agentfootprint/blob/8eb817f55f177662ed213c7b387a5bdc2527c87b/src/artifacts/placement.ts#L112)
 
 ***
 
@@ -47,7 +48,7 @@ Defined in: [src/artifacts/placement.ts:97](https://github.com/footprintjs/agent
 
 > `readonly` **placed**: `true`
 
-Defined in: [src/artifacts/placement.ts:93](https://github.com/footprintjs/agentfootprint/blob/bf2bb6032a7a77012e83dd190bf46141ff4a3215/src/artifacts/placement.ts#L93)
+Defined in: [src/artifacts/placement.ts:107](https://github.com/footprintjs/agentfootprint/blob/8eb817f55f177662ed213c7b387a5bdc2527c87b/src/artifacts/placement.ts#L107)
 
 Always `true`. The field a consumer branches on.
 
@@ -57,7 +58,7 @@ Always `true`. The field a consumer branches on.
 
 > `readonly` **reason**: `string`
 
-Defined in: [src/artifacts/placement.ts:101](https://github.com/footprintjs/agentfootprint/blob/bf2bb6032a7a77012e83dd190bf46141ff4a3215/src/artifacts/placement.ts#L101)
+Defined in: [src/artifacts/placement.ts:116](https://github.com/footprintjs/agentfootprint/blob/8eb817f55f177662ed213c7b387a5bdc2527c87b/src/artifacts/placement.ts#L116)
 
 What happened and what to do next: route the ref, never retype.
 
@@ -67,4 +68,4 @@ What happened and what to do next: route the ref, never retype.
 
 > `readonly` **ref**: `string`
 
-Defined in: [src/artifacts/placement.ts:94](https://github.com/footprintjs/agentfootprint/blob/bf2bb6032a7a77012e83dd190bf46141ff4a3215/src/artifacts/placement.ts#L94)
+Defined in: [src/artifacts/placement.ts:108](https://github.com/footprintjs/agentfootprint/blob/8eb817f55f177662ed213c7b387a5bdc2527c87b/src/artifacts/placement.ts#L108)

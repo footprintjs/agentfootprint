@@ -1,0 +1,37 @@
+[**agentfootprint**](../README.md)
+
+***
+
+[agentfootprint](/agentfootprint/api/generated/README.md) / AnswerEvidenceResolver
+
+# Interface: AnswerEvidenceResolver
+
+Defined in: [src/answer-validation/types.ts:35](https://github.com/footprintjs/agentfootprint/blob/8eb817f55f177662ed213c7b387a5bdc2527c87b/src/answer-validation/types.ts#L35)
+
+Read-only, bounded, and pre-bound to the run's artifact scope.
+
+## Methods
+
+### resolve()
+
+> **resolve**(`ref`, `options`): `Promise`\<`AnswerEvidenceResolution`\>
+
+Defined in: [src/answer-validation/types.ts:37](https://github.com/footprintjs/agentfootprint/blob/8eb817f55f177662ed213c7b387a5bdc2527c87b/src/answer-validation/types.ts#L37)
+
+Exact kind match, as with tool wants. No listing or automatic parent walk.
+
+#### Parameters
+
+##### ref
+
+`string`
+
+##### options
+
+###### kind
+
+`string`
+
+#### Returns
+
+`Promise`\<`AnswerEvidenceResolution`\>

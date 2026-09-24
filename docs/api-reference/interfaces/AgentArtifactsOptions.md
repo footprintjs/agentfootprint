@@ -6,7 +6,7 @@
 
 # Interface: AgentArtifactsOptions
 
-Defined in: [src/core/agent/types.ts:70](https://github.com/footprintjs/agentfootprint/blob/bf2bb6032a7a77012e83dd190bf46141ff4a3215/src/core/agent/types.ts#L70)
+Defined in: [src/core/agent/types.ts:85](https://github.com/footprintjs/agentfootprint/blob/8eb817f55f177662ed213c7b387a5bdc2527c87b/src/core/agent/types.ts#L85)
 
 The object form of `AgentOptions.artifacts` (9.22.0): the store plus its
 operator dials. `placement` cannot be spelled without `store` — a
@@ -19,11 +19,12 @@ lies, and the shape refuses it before a runtime check has to.
 
 > `readonly` `optional` **placement?**: [`ArtifactPlacement`](/agentfootprint/api/generated/interfaces/ArtifactPlacement.md)
 
-Defined in: [src/core/agent/types.ts:82](https://github.com/footprintjs/agentfootprint/blob/bf2bb6032a7a77012e83dd190bf46141ff4a3215/src/core/agent/types.ts#L82)
+Defined in: [src/core/agent/types.ts:98](https://github.com/footprintjs/agentfootprint/blob/8eb817f55f177662ed213c7b387a5bdc2527c87b/src/core/agent/types.ts#L98)
 
 The placement threshold. A tool result whose finalized text exceeds
-`maxInlineChars` is checked into the store (kind
-`tool-result/<toolName>`) and the model reads the claim ticket instead.
+`maxInlineChars` is checked into the store (under the tool's declared
+`resultKind`, or `tool-result/<toolName>` when it declares none) and the
+model reads the claim ticket instead.
 Judged AFTER the tool's own `resultCeiling` (the author's refusal comes
 first) and BEFORE the agent-level `maxToolResultChars` truncation net
 (which then measures the ticket, so it should rarely fire). Omitted →
@@ -35,7 +36,7 @@ results are never measured and never placed, exactly as before.
 
 > `readonly` `optional` **recordings?**: `boolean` \| [`AgentRecordingsOptions`](/agentfootprint/api/generated/interfaces/AgentRecordingsOptions.md)
 
-Defined in: [src/core/agent/types.ts:120](https://github.com/footprintjs/agentfootprint/blob/bf2bb6032a7a77012e83dd190bf46141ff4a3215/src/core/agent/types.ts#L120)
+Defined in: [src/core/agent/types.ts:136](https://github.com/footprintjs/agentfootprint/blob/8eb817f55f177662ed213c7b387a5bdc2527c87b/src/core/agent/types.ts#L136)
 
 Check each completed run's RECORDING into the store (9.26.0), so a screen
 can replay the turn later without the deployment inventing a place to keep
@@ -79,6 +80,6 @@ RESUMED run — which is what the recorder saw.
 
 > `readonly` **store**: [`ArtifactStore`](/agentfootprint/api/generated/interfaces/ArtifactStore.md)
 
-Defined in: [src/core/agent/types.ts:72](https://github.com/footprintjs/agentfootprint/blob/bf2bb6032a7a77012e83dd190bf46141ff4a3215/src/core/agent/types.ts#L72)
+Defined in: [src/core/agent/types.ts:87](https://github.com/footprintjs/agentfootprint/blob/8eb817f55f177662ed213c7b387a5bdc2527c87b/src/core/agent/types.ts#L87)
 
 The claim-check store — same seam as the bare `ArtifactStore` form.

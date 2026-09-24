@@ -8,7 +8,7 @@
 
 > `const` **ABSENCE\_MARKER**: `"af_absent"` = `'af_absent'`
 
-Defined in: [src/core/agent/coverage/absent.ts:53](https://github.com/footprintjs/agentfootprint/blob/bf2bb6032a7a77012e83dd190bf46141ff4a3215/src/core/agent/coverage/absent.ts#L53)
+Defined in: [src/core/agent/coverage/absent.ts:71](https://github.com/footprintjs/agentfootprint/blob/8eb817f55f177662ed213c7b387a5bdc2527c87b/src/core/agent/coverage/absent.ts#L71)
 
 The reserved key that makes an absence recognizable. Exported because tests,
 docs and any consumer inspecting a raw tool result match on it — and

@@ -6,7 +6,7 @@
 
 # Interface: SelfExplainInclude
 
-Defined in: [src/lib/trace-toolpack/selfExplain.ts:72](https://github.com/footprintjs/agentfootprint/blob/bf2bb6032a7a77012e83dd190bf46141ff4a3215/src/lib/trace-toolpack/selfExplain.ts#L72)
+Defined in: [src/lib/trace-toolpack/selfExplain.ts:74](https://github.com/footprintjs/agentfootprint/blob/8eb817f55f177662ed213c7b387a5bdc2527c87b/src/lib/trace-toolpack/selfExplain.ts#L74)
 
 How much of a turn's evidence the binding keeps.
 
@@ -23,11 +23,14 @@ narrative would repeat what the structured tools already say.
 
 > `readonly` `optional` **events?**: `boolean`
 
-Defined in: [src/lib/trace-toolpack/selfExplain.ts:80](https://github.com/footprintjs/agentfootprint/blob/bf2bb6032a7a77012e83dd190bf46141ff4a3215/src/lib/trace-toolpack/selfExplain.ts#L80)
+Defined in: [src/lib/trace-toolpack/selfExplain.ts:85](https://github.com/footprintjs/agentfootprint/blob/8eb817f55f177662ed213c7b387a5bdc2527c87b/src/lib/trace-toolpack/selfExplain.ts#L85)
 
 A bounded tail of the run's typed events → tool-call timings and
-outcomes in `inspect_tool_call`. Default true. Off means no wildcard
-event subscription is made at all, not a subscription that is ignored.
+outcomes in `inspect_tool_call`, and the Context Integrity findings
+`find_context_errors` reads. Default true. Off means no wildcard event
+subscription is made at all, not a subscription that is ignored — and
+`find_context_errors` then reports the evidence channel as ABSENT
+rather than reporting a run with no context errors.
 
 ***
 
@@ -35,6 +38,6 @@ event subscription is made at all, not a subscription that is ignored.
 
 > `readonly` `optional` **narrative?**: `boolean`
 
-Defined in: [src/lib/trace-toolpack/selfExplain.ts:74](https://github.com/footprintjs/agentfootprint/blob/bf2bb6032a7a77012e83dd190bf46141ff4a3215/src/lib/trace-toolpack/selfExplain.ts#L74)
+Defined in: [src/lib/trace-toolpack/selfExplain.ts:76](https://github.com/footprintjs/agentfootprint/blob/8eb817f55f177662ed213c7b387a5bdc2527c87b/src/lib/trace-toolpack/selfExplain.ts#L76)
 
 The run's plain-English story → the `read_narrative` tool. Default true.
