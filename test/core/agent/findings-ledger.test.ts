@@ -53,6 +53,7 @@ import {
   FINDINGS_INSTRUCTION,
 } from '../../../src/core/agent/findings/reserved.js';
 import { PolicyHaltError } from '../../../src/security/index.js';
+import { notDispatchedResult } from '../../../src/core/agent/stages/toolCalls.js';
 import { staticTools } from '../../../src/tool-providers/index.js';
 import { defineSkill } from '../../../src/injection-engine.js';
 import { TOOL_RESULTS } from './fixtures/sanEvidence.js';
@@ -906,22 +907,28 @@ describe('.findings() — an ask-human pause mid-batch keeps ONE basis row per c
 
     // Exactly ONE row per call that reached the loop head: c1 (ran before the
     // pause) and c2 (asked). The sibling AFTER the asked call, c3, is never
-    // dispatched on resume — pre-existing batch semantics (`toolCalls.ts`
-    // resumes only the asked call at `pausedAskIndex`) — so it has no tool
-    // message and no row: its declaration lives only in the emission. Never
-    // inferred from history, never filed by the resume door.
+    // dispatched on resume. Since 9.113.0 the resume door SETTLES it — a fixed
+    // result, a bracket and a count (`toolCalls.ts` · `notDispatchedResult`) —
+    // and it still files no row: its declaration lives only in the emission.
+    // Never inferred from history, never filed by the resume door.
     expect(basisRows(ledgerOf(agent)!).map((r) => r.toolCallId)).toEqual(['c1', 'c2']);
     // The resume door filed nothing: no `findings.declared` at all on resume.
     expect(rows.filter((r) => r.type === 'agentfootprint.findings.declared')).toEqual([]);
     // The approved call ran with the PEELED args (the pause carrier was
     // `callArgs`); c3 never ran.
     expect(ran).toEqual([{ q: 'a' }, { amount: 5000 }]);
-    expect(
-      agent
-        .checkpoint()!
-        .history.filter((m) => m.role === 'tool')
-        .map((m) => m.toolCallId),
-    ).toEqual(['c1', 'c2']);
+    // c3's result is the settlement's sentence, so the next request carried a
+    // result for every call the batch proposed (9.113.0).
+    const toolMessages = agent.checkpoint()!.history.filter((m) => m.role === 'tool');
+    expect(toolMessages.map((m) => m.toolCallId)).toEqual(['c1', 'c2', 'c3']);
+    expect(toolMessages[2]!.content).toBe(
+      notDispatchedResult('look', { toolName: 'pay', toolCallId: 'c2' }),
+    );
+    // The settled bracket carries the PEELED args, as the batch loop's would.
+    const settledStart = rows.find(
+      (r) => r.type === 'agentfootprint.stream.tool_start' && r.payload.toolCallId === 'c3',
+    );
+    expect(settledStart?.payload.args).toEqual({ q: 'c' });
   });
 });
 

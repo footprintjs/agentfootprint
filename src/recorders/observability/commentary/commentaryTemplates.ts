@@ -115,6 +115,15 @@ export const defaultCommentaryTemplates: CommentaryTemplates = {
 
   'stream.tool_end': 'The tool returned its result. {{agentName}} will share it with the LLM next.',
 
+  // A call the paused batch never dispatched (9.113.0) — its `tool_start`
+  // carries `notDispatched`. A NEW key, not a split of `stream.tool_start`:
+  // every bracket that routed there before still does, so no override goes
+  // unconsulted (rule 5), and the shipped sentence ("called the tool") would
+  // be false here in any locale. One line per fact: its `tool_end` is skipped.
+  'stream.tool_start.notDispatched':
+    '{{agentName}} did not call the `{{toolName}}` tool. The LLM asked for it together with ' +
+    '`{{pausedToolName}}`, and the run paused at `{{pausedToolName}}` before reaching it.',
+
   'context.injected.rag':
     '{{appName}} retrieved relevant content and added it to the conversation.',
   'context.injected.skill':
@@ -418,12 +427,16 @@ export function selectCommentaryKey(event: AgentfootprintEvent): string | null |
     case 'agentfootprint.stream.llm_end':
       return event.payload.toolCallCount > 0 ? 'stream.llm_end.tools' : 'stream.llm_end.terminal';
 
+    // A bracket carrying `notDispatched` (9.113.0) is a call that never ran:
+    // its start gets the settled key, its end is skipped (the start said it).
     case 'agentfootprint.stream.tool_start':
-      return 'stream.tool_start';
+      return event.payload.notDispatched !== undefined
+        ? 'stream.tool_start.notDispatched'
+        : 'stream.tool_start';
     case 'agentfootprint.stream.tool_progress':
       return 'stream.tool_progress';
     case 'agentfootprint.stream.tool_end':
-      return 'stream.tool_end';
+      return event.payload.notDispatched !== undefined ? null : 'stream.tool_end';
 
     case 'agentfootprint.context.injected':
       switch (event.payload.source) {
@@ -684,6 +697,10 @@ export function extractCommentaryVars(
 
     case 'agentfootprint.stream.tool_start': {
       const toolName = event.payload.toolName;
+      // The settled call's sentence names the call the run paused on — read
+      // off the bracket's own field, never guessed from the batch.
+      const paused = event.payload.notDispatched?.pausedCall;
+      if (paused !== undefined) return { ...base, toolName, pausedToolName: paused.toolName };
       const desc = ctx.getToolDescription?.(toolName);
       const hasDesc = typeof desc === 'string' && desc.trim().length > 0;
       // Pre-render the descClause sub-template so the outer template

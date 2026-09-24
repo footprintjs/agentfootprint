@@ -450,15 +450,16 @@ export function buildCallLLMStage(
     // Anthropic's API contract we need the original LLMMessage with
     // `toolCalls` intact so tool_use → tool_result correlation survives.
     // `stripFrameworkFields` takes off `injectedBy` — the marker the delivery
-    // stage stamps so the messages slot can say WHO put a message here. It is
-    // framework bookkeeping, not conversation, and it is removed BEFORE the
+    // stage stamps so the messages slot can say WHO put a message here — and
+    // `notDispatched`, the batch settlement's marker (9.113.0). Both are
+    // framework bookkeeping, not conversation, and are removed BEFORE the
     // request exists rather than trusted to be ignored: a consumer-authored
     // adapter that serializes a message wholesale would otherwise put library
     // internals on someone's wire. Stripping removes a FIELD, never a message,
     // so `messages[i]` is still the message the cache marker's index names.
-    const history = stripFrameworkFields(
-      (scope.history as readonly LLMMessage[] | undefined) ?? [],
-    );
+    // `committed` keeps both markers for the readers below that must see them.
+    const committed = (scope.history as readonly LLMMessage[] | undefined) ?? [];
+    const history = stripFrameworkFields(committed);
 
     // ── the findings ledger, served (9.101.0, step 3) ──────────────────
     // ONE gated read of the committed key, used twice. The COLLAPSE rewrites,
@@ -482,17 +483,27 @@ export function buildCallLLMStage(
     // serves the same ledger over the same ids reuses the cached prefix, and
     // a call after the ledger moved does not (`findings/serve.ts` · "The cache"). An
     // unarmed agent reads no key and serves the bytes it always did.
+    // Both read the COMMITTED conversation, then the wire is stripped
+    // (9.113.0): a message the batch settlement wrote is no result
+    // (`findings/offer.ts` · `isResultMessage`) and only its marker says so —
+    // the marker `stripFrameworkFields` takes off. Same ids, same order, same
+    // wire; `lib/time-travel/servedView.ts` rebuilds it the same way.
     const ledger =
       deps.hasFindingsLedger === true
         ? (scope.findingsLedger as FindingsLedger | undefined)
         : undefined;
-    const messages =
+    const collapsed =
       deps.hasFindingsLedger === true
-        ? collapseJudged(history, ledger, deps.findingsServe ?? 'ledger-and-facts')
-        : history;
+        ? collapseJudged(committed, ledger, deps.findingsServe ?? 'ledger-and-facts')
+        : committed;
+    const messages = collapsed === committed ? history : stripFrameworkFields(collapsed);
     const ledgerPiece =
       deps.hasFindingsLedger === true
-        ? findingsLedgerPiece(ledger, servedToolCallIds(history), deps.findingsAnswerAsk ?? 'none')
+        ? findingsLedgerPiece(
+            ledger,
+            servedToolCallIds(committed),
+            deps.findingsAnswerAsk ?? 'none',
+          )
         : undefined;
     // ── the declared ontology, served (9.106.0) ──────────────────────────
     // ONE gated read of the run constant seed wrote; the piece is a pure
@@ -740,7 +751,20 @@ export function buildCallLLMStage(
         [];
       const droppedResults = new Set(windowVisits.flatMap((v) => v.droppedObservations ?? []));
       if (servedGrounded.length > 0 && droppedResults.size > 0) {
-        const frame = llmRequest.messages;
+        // The frame's tool messages, named from `committed` — the stage's ONE
+        // read of `scope.history`, at its top — rather than
+        // `llmRequest.messages`: the same messages in the same order
+        // (stripping removes a FIELD, never a message; the collapse rewrites
+        // `content` only; the staged-refs nudge is a `role: 'user'` line that
+        // names no tool), but the wire has lost the batch settlement's marker
+        // (9.113.0), and a settled sentence is no fresh result — the helper
+        // says so only when it can see `LLMMessage.notDispatched`
+        // (`window/toolNames.ts` · "A settled message is not a result at
+        // all"). Never a second `scope.history` read: every tracked read is a
+        // narrative step, and one more here renumbered every step after it on
+        // runs that never settle anything (pinned by
+        // `test/integrity/danglingReference.test.ts` · "the narrative").
+        const frame = committed;
         const presentResults = new Set(
           frame
             .map((m) => toolNameOfMessage(m, frame))

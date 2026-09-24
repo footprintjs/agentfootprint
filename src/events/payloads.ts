@@ -18,7 +18,7 @@ import type {
   LLMProviderName,
   ToolProtocol,
 } from './types.js';
-import type { PermissionCapability } from '../adapters/types.js';
+import type { LLMMessage, PermissionCapability } from '../adapters/types.js';
 import type { MemoryFlavor, MemoryStrategyKind, MemoryType } from '../memory/define.types.js';
 import type { ArtifactOp, ArtifactRefusalReason } from '../artifacts/capability.js';
 import type { ArtifactOrigin, ArtifactSweepReason } from '../artifacts/types.js';
@@ -185,6 +185,15 @@ export interface AgentIterationStartPayload {
 export interface AgentIterationEndPayload {
   readonly turnIndex: number;
   readonly iterIndex: number;
+  /**
+   * On the main loop, the calls the turn proposed. On a resume leg (9.113.0),
+   * the brackets THAT leg closed: the paused call plus each sibling the batch
+   * settlement answered — so a batch of three paused on its middle call
+   * reports 2, and the calls before the pause are counted by no
+   * `iteration_end` (their brackets closed on the leg that paused). For the
+   * batch's size, read `tool_start.parallelCount`. See `src/core/README.md` ·
+   * "A batch that pauses settles its un-dispatched siblings".
+   */
   readonly toolCallCount: number;
   /** Conversation history (LLM messages) at the END of this
    *  iteration. Captured by `agent.run()` for fault-tolerant
@@ -331,6 +340,22 @@ export interface ToolStartPayload {
   readonly args: Readonly<Record<string, unknown>>;
   readonly parallelCount?: number;
   readonly protocol?: ToolProtocol;
+  /**
+   * 9.113.0 — present only on the bracket of a call that was NEVER
+   * DISPATCHED: a batch paused on an earlier call, and the resume answered
+   * this one with a fixed sentence instead of running it
+   * (`core/agent/stages/toolCalls.ts` · `bracketSettled`, the one stamping
+   * site). `pausedCall` names the call in the same batch the run paused on.
+   * No gate judged this call and no tool ran; `args` are the ones it would
+   * have run with.
+   *
+   * The same fact, the same shape, as the history message's marker — typed off
+   * `LLMMessage.notDispatched`, so there is one definition. Read it rather than
+   * inferring anything from the bracket's `durationMs: 0` or its sentence.
+   *
+   * Absent on every other bracket.
+   */
+  readonly notDispatched?: LLMMessage['notDispatched'];
 }
 
 /**
@@ -375,6 +400,26 @@ export interface ToolEndPayload {
    * via `onToolStatus`. Absent for every tool that never opted in.
    */
   readonly status?: ToolResultStatus;
+  /**
+   * 9.113.0 — present only when this call was NEVER DISPATCHED: the batch
+   * settlement closed its bracket (`core/agent/stages/toolCalls.ts` ·
+   * `bracketSettled`). `result` is then the library's fixed sentence (the one
+   * the model read), `durationMs` is `0`, and `error` is ABSENT.
+   *
+   * `error` says a call FAILED — the tool threw or reported a failure, or the
+   * call could not run as written (an args-validation rejection, a `wants`
+   * block, a consent the tool needed and did not get, an unknown tool). A
+   * settled call did not fail: the library decided not to dispatch it, the
+   * way it decides for a call a permission policy denies or halts, whose
+   * brackets carry no `error` either. This field is the owner of WHY there is
+   * no result, and a reader that counts outcomes reads it: a bracket that
+   * carries it is neither a success nor a failure of the tool.
+   *
+   * Same shape as `ToolStartPayload.notDispatched` and as the history
+   * message's marker (typed off `LLMMessage.notDispatched`). Absent on every
+   * other bracket.
+   */
+  readonly notDispatched?: LLMMessage['notDispatched'];
 }
 
 // context.* (5) — THE CORE DOMAIN

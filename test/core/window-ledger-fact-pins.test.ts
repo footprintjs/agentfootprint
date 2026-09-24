@@ -59,6 +59,10 @@ const round = (id: string, name: string, content = 'ok'): LLMMessage[] => [
   asks([{ id, name }]),
   answers(id, name, content),
 ];
+/** The batch settlement's marker (9.113.0): the run paused on call `2`. */
+const SETTLED: LLMMessage['notDispatched'] = {
+  pausedCall: { toolCallId: '2', toolName: 'collect' },
+};
 
 /**
  * A per-turn `standingOf`, as the stage binds it: the ledger's LAST standing
@@ -164,6 +168,36 @@ describe('turnStandingOf', () => {
     expect(asked).toEqual(['1', '2', '3']);
   });
 
+  it('a SETTLED message is no result: it takes no part in the ranking (9.113.0)', () => {
+    // The batch [1 a, 2 collect, 3 c] paused on 2; the resume answered 2 and
+    // SETTLED 3 without running it (`stages/toolCalls.ts` · "── The batch
+    // settlement (9.113.0)"). Counted, the settled message would rank as an
+    // UNDECLARED result and lift a batch the model judged all noise above noise.
+    const settledBatch = segmentTurns([
+      asks([
+        { id: '1', name: 'a' },
+        { id: '2', name: 'collect' },
+        { id: '3', name: 'c' },
+      ]),
+      answers('1', 'a'),
+      answers('2', 'collect'),
+      { ...answers('3', 'c', "Tool 'c' was not executed on that call: …"), notDispatched: SETTLED },
+    ])[0]!;
+    const asked: string[] = [];
+    expect(
+      turnStandingOf(settledBatch, (id) => {
+        asked.push(id);
+        return id === '3' ? undefined : 'noise';
+      }),
+    ).toBe('noise');
+    expect(asked).toEqual(['1', '2']);
+    // A standing the model filed on the settled id anyway (recorded
+    // `unknownId: true`) never ranks the turn either.
+    expect(
+      turnStandingOf(settledBatch, standingOfIds({ '1': 'noise', '2': 'noise', '3': 'fact' })),
+    ).toBe('noise');
+  });
+
   function standingOfIds(rows: Record<string, Standing>): (id: string) => Standing | undefined {
     const byId = new Map(Object.entries(rows));
     return (id) => byId.get(id);
@@ -255,6 +289,35 @@ describe('ledgerFactPinsOf', () => {
     expect(pins[0]!.toolCallIds).toEqual(['1', '2', '3']);
     // Named for its newest nameable result, as the sibling pin names a turn.
     expect(pins[0]!.toolName).toBe('c');
+  });
+
+  it('a SETTLED message is never listed, and a fact filed on its id holds nothing (9.113.0)', () => {
+    // The batch paused on 2 and the resume settled 3 (`notDispatched`). The
+    // model named 3 a fact anyway — the ledger files that `unknownId: true`,
+    // as written — but a sentence about a call that never ran is not evidence
+    // the window may hold.
+    const history: LLMMessage[] = [
+      user(TASK),
+      asks([
+        { id: '1', name: 'a' },
+        { id: '2', name: 'collect' },
+        { id: '3', name: 'c' },
+      ]),
+      answers('1', 'a'),
+      answers('2', 'collect'),
+      { ...answers('3', 'c', "Tool 'c' was not executed on that call: …"), notDispatched: SETTLED },
+      ...round('later', 'd'),
+    ];
+    const turns = segmentTurns(history);
+    expect(
+      ledgerFactPinsOf(turns, history, standingsOf({ '1': 'noise', '2': 'noise', '3': 'fact' }), 0),
+    ).toEqual([]);
+    // A real fact beside it: one pin, whose ids are the turn's RESULTS only,
+    // named for its newest nameable result — never the settled call's tool.
+    const pins = ledgerFactPinsOf(turns, history, standingsOf({ '1': 'fact', '3': 'fact' }), 0);
+    expect(pins).toHaveLength(1);
+    expect(pins[0]!.toolCallIds).toEqual(['1', '2']);
+    expect(pins[0]!.toolName).toBe('collect');
   });
 
   it('a name absent on the result is recovered from the assistant call', () => {

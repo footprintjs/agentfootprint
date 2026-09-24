@@ -1,0 +1,1121 @@
+{
+  "input": {
+    "requests": [
+      [
+        {
+          "role": "user",
+          "content": "go"
+        }
+      ],
+      [
+        {
+          "role": "user",
+          "content": "go"
+        },
+        {
+          "role": "assistant",
+          "content": "",
+          "toolCalls": [
+            {
+              "id": "c1",
+              "name": "first",
+              "args": {}
+            },
+            {
+              "id": "c2",
+              "name": "second",
+              "args": {}
+            },
+            {
+              "id": "c3",
+              "name": "third",
+              "args": {}
+            }
+          ]
+        },
+        {
+          "role": "tool",
+          "content": "first ran",
+          "toolCallId": "c1",
+          "toolName": "first"
+        },
+        {
+          "role": "tool",
+          "content": "second ran",
+          "toolCallId": "c2",
+          "toolName": "second"
+        },
+        {
+          "role": "tool",
+          "content": "{\"status\":\"input_received\",\"requestId\":\"<requestId>\",\"values\":{\"year\":2026},\"origins\":{\"year\":\"response\"},\"origin\":{\"originalRequest\":\"go\",\"toolCallId\":\"c3\"}}",
+          "toolCallId": "c3",
+          "toolName": "third"
+        }
+      ]
+    ],
+    "eventTypes": [
+      "agentfootprint.agent.run_configured",
+      "agentfootprint.agent.turn_start",
+      "agentfootprint.context.evaluated",
+      "agentfootprint.context.slot_composed",
+      "agentfootprint.context.injected",
+      "agentfootprint.context.slot_composed",
+      "agentfootprint.context.injected",
+      "agentfootprint.context.injected",
+      "agentfootprint.context.injected",
+      "agentfootprint.context.slot_composed",
+      "agentfootprint.agent.iteration_start",
+      "agentfootprint.stream.llm_start",
+      "agentfootprint.stream.llm_end",
+      "agentfootprint.agent.route_decided",
+      "agentfootprint.stream.tool_start",
+      "agentfootprint.stream.tool_end",
+      "agentfootprint.stream.tool_start",
+      "agentfootprint.stream.tool_end",
+      "agentfootprint.stream.tool_start",
+      "agentfootprint.pause.request",
+      "agentfootprint.integrity.disposition",
+      "agentfootprint.pause.resume",
+      "agentfootprint.agent.run_configured",
+      "agentfootprint.stream.tool_end",
+      "agentfootprint.agent.iteration_end",
+      "agentfootprint.context.evaluated",
+      "agentfootprint.context.slot_composed",
+      "agentfootprint.context.injected",
+      "agentfootprint.context.injected",
+      "agentfootprint.context.injected",
+      "agentfootprint.context.injected",
+      "agentfootprint.context.injected",
+      "agentfootprint.context.slot_composed",
+      "agentfootprint.context.injected",
+      "agentfootprint.context.injected",
+      "agentfootprint.context.injected",
+      "agentfootprint.context.slot_composed",
+      "agentfootprint.agent.iteration_start",
+      "agentfootprint.stream.llm_start",
+      "agentfootprint.stream.llm_end",
+      "agentfootprint.agent.route_decided",
+      "agentfootprint.agent.iteration_end",
+      "agentfootprint.agent.turn_end",
+      "agentfootprint.integrity.disposition"
+    ],
+    "brackets": [
+      {
+        "type": "agentfootprint.stream.tool_start",
+        "payload": {
+          "toolName": "first",
+          "toolCallId": "c1",
+          "args": {},
+          "parallelCount": 3
+        }
+      },
+      {
+        "type": "agentfootprint.stream.tool_end",
+        "payload": {
+          "toolCallId": "c1",
+          "result": "first ran"
+        }
+      },
+      {
+        "type": "agentfootprint.stream.tool_start",
+        "payload": {
+          "toolName": "second",
+          "toolCallId": "c2",
+          "args": {},
+          "parallelCount": 3
+        }
+      },
+      {
+        "type": "agentfootprint.stream.tool_end",
+        "payload": {
+          "toolCallId": "c2",
+          "result": "second ran"
+        }
+      },
+      {
+        "type": "agentfootprint.stream.tool_start",
+        "payload": {
+          "toolName": "third",
+          "toolCallId": "c3",
+          "args": {},
+          "parallelCount": 3
+        }
+      },
+      {
+        "type": "agentfootprint.stream.tool_end",
+        "payload": {
+          "toolCallId": "c3",
+          "result": {
+            "status": "input_received",
+            "requestId": "<requestId>",
+            "values": {
+              "year": 2026
+            },
+            "origins": {
+              "year": "response"
+            },
+            "origin": {
+              "originalRequest": "go",
+              "toolCallId": "c3"
+            }
+          }
+        }
+      },
+      {
+        "type": "agentfootprint.agent.iteration_end",
+        "payload": {
+          "turnIndex": 0,
+          "iterIndex": 1,
+          "toolCallCount": 1,
+          "history": [
+            {
+              "role": "user",
+              "content": "go"
+            },
+            {
+              "role": "assistant",
+              "content": "",
+              "toolCalls": [
+                {
+                  "id": "c1",
+                  "name": "first",
+                  "args": {}
+                },
+                {
+                  "id": "c2",
+                  "name": "second",
+                  "args": {}
+                },
+                {
+                  "id": "c3",
+                  "name": "third",
+                  "args": {}
+                }
+              ]
+            },
+            {
+              "role": "tool",
+              "content": "first ran",
+              "toolCallId": "c1",
+              "toolName": "first"
+            },
+            {
+              "role": "tool",
+              "content": "second ran",
+              "toolCallId": "c2",
+              "toolName": "second"
+            },
+            {
+              "role": "tool",
+              "content": "{\"status\":\"input_received\",\"requestId\":\"<requestId>\",\"values\":{\"year\":2026},\"origins\":{\"year\":\"response\"},\"origin\":{\"originalRequest\":\"go\",\"toolCallId\":\"c3\"}}",
+              "toolCallId": "c3",
+              "toolName": "third"
+            }
+          ]
+        }
+      },
+      {
+        "type": "agentfootprint.agent.iteration_end",
+        "payload": {
+          "turnIndex": 0,
+          "iterIndex": 2,
+          "toolCallCount": 0
+        }
+      }
+    ],
+    "history": [
+      {
+        "role": "user",
+        "content": "go"
+      },
+      {
+        "role": "assistant",
+        "content": "",
+        "toolCalls": [
+          {
+            "id": "c1",
+            "name": "first",
+            "args": {}
+          },
+          {
+            "id": "c2",
+            "name": "second",
+            "args": {}
+          },
+          {
+            "id": "c3",
+            "name": "third",
+            "args": {}
+          }
+        ]
+      },
+      {
+        "role": "tool",
+        "content": "first ran",
+        "toolCallId": "c1",
+        "toolName": "first"
+      },
+      {
+        "role": "tool",
+        "content": "second ran",
+        "toolCallId": "c2",
+        "toolName": "second"
+      },
+      {
+        "role": "tool",
+        "content": "{\"status\":\"input_received\",\"requestId\":\"<requestId>\",\"values\":{\"year\":2026},\"origins\":{\"year\":\"response\"},\"origin\":{\"originalRequest\":\"go\",\"toolCallId\":\"c3\"}}",
+        "toolCallId": "c3",
+        "toolName": "third"
+      }
+    ],
+    "toolResults": [
+      {
+        "toolName": "first",
+        "result": "first ran",
+        "toolCallId": "c1"
+      },
+      {
+        "toolName": "second",
+        "result": "second ran",
+        "toolCallId": "c2"
+      },
+      {
+        "toolName": "third",
+        "result": "{\"status\":\"input_received\",\"requestId\":\"<requestId>\",\"values\":{\"year\":2026},\"origins\":{\"year\":\"response\"},\"origin\":{\"originalRequest\":\"go\",\"toolCallId\":\"c3\"}}",
+        "toolCallId": "c3"
+      }
+    ]
+  },
+  "ask": {
+    "requests": [
+      [
+        {
+          "role": "user",
+          "content": "go"
+        }
+      ],
+      [
+        {
+          "role": "user",
+          "content": "go"
+        },
+        {
+          "role": "assistant",
+          "content": "",
+          "toolCalls": [
+            {
+              "id": "c1",
+              "name": "first",
+              "args": {}
+            },
+            {
+              "id": "c2",
+              "name": "second",
+              "args": {}
+            },
+            {
+              "id": "c3",
+              "name": "third",
+              "args": {}
+            }
+          ]
+        },
+        {
+          "role": "tool",
+          "content": "first ran",
+          "toolCallId": "c1",
+          "toolName": "first"
+        },
+        {
+          "role": "tool",
+          "content": "second ran",
+          "toolCallId": "c2",
+          "toolName": "second"
+        },
+        {
+          "role": "tool",
+          "content": "third ran",
+          "toolCallId": "c3",
+          "toolName": "third"
+        }
+      ]
+    ],
+    "eventTypes": [
+      "agentfootprint.agent.run_configured",
+      "agentfootprint.agent.turn_start",
+      "agentfootprint.context.evaluated",
+      "agentfootprint.context.slot_composed",
+      "agentfootprint.context.injected",
+      "agentfootprint.context.slot_composed",
+      "agentfootprint.context.injected",
+      "agentfootprint.context.injected",
+      "agentfootprint.context.injected",
+      "agentfootprint.context.slot_composed",
+      "agentfootprint.agent.iteration_start",
+      "agentfootprint.stream.llm_start",
+      "agentfootprint.stream.llm_end",
+      "agentfootprint.agent.route_decided",
+      "agentfootprint.stream.tool_start",
+      "agentfootprint.middleware.decision",
+      "agentfootprint.stream.tool_end",
+      "agentfootprint.stream.tool_start",
+      "agentfootprint.middleware.decision",
+      "agentfootprint.stream.tool_end",
+      "agentfootprint.stream.tool_start",
+      "agentfootprint.middleware.decision",
+      "agentfootprint.pause.request",
+      "agentfootprint.integrity.disposition",
+      "agentfootprint.pause.resume",
+      "agentfootprint.agent.run_configured",
+      "agentfootprint.middleware.decision",
+      "agentfootprint.stream.tool_end",
+      "agentfootprint.agent.iteration_end",
+      "agentfootprint.context.evaluated",
+      "agentfootprint.context.slot_composed",
+      "agentfootprint.context.injected",
+      "agentfootprint.context.injected",
+      "agentfootprint.context.injected",
+      "agentfootprint.context.injected",
+      "agentfootprint.context.injected",
+      "agentfootprint.context.slot_composed",
+      "agentfootprint.context.injected",
+      "agentfootprint.context.injected",
+      "agentfootprint.context.injected",
+      "agentfootprint.context.slot_composed",
+      "agentfootprint.agent.iteration_start",
+      "agentfootprint.stream.llm_start",
+      "agentfootprint.stream.llm_end",
+      "agentfootprint.agent.route_decided",
+      "agentfootprint.agent.iteration_end",
+      "agentfootprint.agent.turn_end",
+      "agentfootprint.integrity.disposition"
+    ],
+    "brackets": [
+      {
+        "type": "agentfootprint.stream.tool_start",
+        "payload": {
+          "toolName": "first",
+          "toolCallId": "c1",
+          "args": {},
+          "parallelCount": 3
+        }
+      },
+      {
+        "type": "agentfootprint.stream.tool_end",
+        "payload": {
+          "toolCallId": "c1",
+          "result": "first ran"
+        }
+      },
+      {
+        "type": "agentfootprint.stream.tool_start",
+        "payload": {
+          "toolName": "second",
+          "toolCallId": "c2",
+          "args": {},
+          "parallelCount": 3
+        }
+      },
+      {
+        "type": "agentfootprint.stream.tool_end",
+        "payload": {
+          "toolCallId": "c2",
+          "result": "second ran"
+        }
+      },
+      {
+        "type": "agentfootprint.stream.tool_start",
+        "payload": {
+          "toolName": "third",
+          "toolCallId": "c3",
+          "args": {},
+          "parallelCount": 3
+        }
+      },
+      {
+        "type": "agentfootprint.stream.tool_end",
+        "payload": {
+          "toolCallId": "c3",
+          "result": "third ran"
+        }
+      },
+      {
+        "type": "agentfootprint.agent.iteration_end",
+        "payload": {
+          "turnIndex": 0,
+          "iterIndex": 1,
+          "toolCallCount": 1,
+          "history": [
+            {
+              "role": "user",
+              "content": "go"
+            },
+            {
+              "role": "assistant",
+              "content": "",
+              "toolCalls": [
+                {
+                  "id": "c1",
+                  "name": "first",
+                  "args": {}
+                },
+                {
+                  "id": "c2",
+                  "name": "second",
+                  "args": {}
+                },
+                {
+                  "id": "c3",
+                  "name": "third",
+                  "args": {}
+                }
+              ]
+            },
+            {
+              "role": "tool",
+              "content": "first ran",
+              "toolCallId": "c1",
+              "toolName": "first"
+            },
+            {
+              "role": "tool",
+              "content": "second ran",
+              "toolCallId": "c2",
+              "toolName": "second"
+            },
+            {
+              "role": "tool",
+              "content": "third ran",
+              "toolCallId": "c3",
+              "toolName": "third"
+            }
+          ]
+        }
+      },
+      {
+        "type": "agentfootprint.agent.iteration_end",
+        "payload": {
+          "turnIndex": 0,
+          "iterIndex": 2,
+          "toolCallCount": 0
+        }
+      }
+    ],
+    "history": [
+      {
+        "role": "user",
+        "content": "go"
+      },
+      {
+        "role": "assistant",
+        "content": "",
+        "toolCalls": [
+          {
+            "id": "c1",
+            "name": "first",
+            "args": {}
+          },
+          {
+            "id": "c2",
+            "name": "second",
+            "args": {}
+          },
+          {
+            "id": "c3",
+            "name": "third",
+            "args": {}
+          }
+        ]
+      },
+      {
+        "role": "tool",
+        "content": "first ran",
+        "toolCallId": "c1",
+        "toolName": "first"
+      },
+      {
+        "role": "tool",
+        "content": "second ran",
+        "toolCallId": "c2",
+        "toolName": "second"
+      },
+      {
+        "role": "tool",
+        "content": "third ran",
+        "toolCallId": "c3",
+        "toolName": "third"
+      }
+    ],
+    "toolResults": [
+      {
+        "toolName": "first",
+        "result": "first ran",
+        "toolCallId": "c1"
+      },
+      {
+        "toolName": "second",
+        "result": "second ran",
+        "toolCallId": "c2"
+      },
+      {
+        "toolName": "third",
+        "result": "third ran",
+        "toolCallId": "c3"
+      }
+    ]
+  },
+  "check-in": {
+    "requests": [
+      [
+        {
+          "role": "user",
+          "content": "go"
+        }
+      ],
+      [
+        {
+          "role": "user",
+          "content": "go"
+        },
+        {
+          "role": "assistant",
+          "content": "",
+          "toolCalls": [
+            {
+              "id": "c1",
+              "name": "first",
+              "args": {}
+            },
+            {
+              "id": "c2",
+              "name": "second",
+              "args": {}
+            },
+            {
+              "id": "c3",
+              "name": "third",
+              "args": {}
+            }
+          ]
+        },
+        {
+          "role": "tool",
+          "content": "first ran",
+          "toolCallId": "c1",
+          "toolName": "first"
+        },
+        {
+          "role": "tool",
+          "content": "second ran",
+          "toolCallId": "c2",
+          "toolName": "second"
+        },
+        {
+          "role": "tool",
+          "content": "third ran",
+          "toolCallId": "c3",
+          "toolName": "third"
+        }
+      ]
+    ],
+    "eventTypes": [
+      "agentfootprint.agent.run_configured",
+      "agentfootprint.agent.turn_start",
+      "agentfootprint.context.evaluated",
+      "agentfootprint.context.slot_composed",
+      "agentfootprint.context.injected",
+      "agentfootprint.context.slot_composed",
+      "agentfootprint.context.injected",
+      "agentfootprint.context.injected",
+      "agentfootprint.context.injected",
+      "agentfootprint.context.slot_composed",
+      "agentfootprint.agent.iteration_start",
+      "agentfootprint.stream.llm_start",
+      "agentfootprint.stream.llm_end",
+      "agentfootprint.agent.route_decided",
+      "agentfootprint.stream.tool_start",
+      "agentfootprint.stream.tool_end",
+      "agentfootprint.stream.tool_start",
+      "agentfootprint.stream.tool_end",
+      "agentfootprint.stream.tool_start",
+      "agentfootprint.checkin.request",
+      "agentfootprint.pause.request",
+      "agentfootprint.integrity.disposition",
+      "agentfootprint.pause.resume",
+      "agentfootprint.agent.run_configured",
+      "agentfootprint.checkin.decision",
+      "agentfootprint.stream.tool_end",
+      "agentfootprint.agent.iteration_end",
+      "agentfootprint.context.evaluated",
+      "agentfootprint.context.slot_composed",
+      "agentfootprint.context.injected",
+      "agentfootprint.context.injected",
+      "agentfootprint.context.injected",
+      "agentfootprint.context.injected",
+      "agentfootprint.context.injected",
+      "agentfootprint.context.slot_composed",
+      "agentfootprint.context.injected",
+      "agentfootprint.context.injected",
+      "agentfootprint.context.injected",
+      "agentfootprint.context.slot_composed",
+      "agentfootprint.agent.iteration_start",
+      "agentfootprint.stream.llm_start",
+      "agentfootprint.stream.llm_end",
+      "agentfootprint.agent.route_decided",
+      "agentfootprint.agent.iteration_end",
+      "agentfootprint.agent.turn_end",
+      "agentfootprint.integrity.disposition"
+    ],
+    "brackets": [
+      {
+        "type": "agentfootprint.stream.tool_start",
+        "payload": {
+          "toolName": "first",
+          "toolCallId": "c1",
+          "args": {},
+          "parallelCount": 3
+        }
+      },
+      {
+        "type": "agentfootprint.stream.tool_end",
+        "payload": {
+          "toolCallId": "c1",
+          "result": "first ran"
+        }
+      },
+      {
+        "type": "agentfootprint.stream.tool_start",
+        "payload": {
+          "toolName": "second",
+          "toolCallId": "c2",
+          "args": {},
+          "parallelCount": 3
+        }
+      },
+      {
+        "type": "agentfootprint.stream.tool_end",
+        "payload": {
+          "toolCallId": "c2",
+          "result": "second ran"
+        }
+      },
+      {
+        "type": "agentfootprint.stream.tool_start",
+        "payload": {
+          "toolName": "third",
+          "toolCallId": "c3",
+          "args": {},
+          "parallelCount": 3
+        }
+      },
+      {
+        "type": "agentfootprint.stream.tool_end",
+        "payload": {
+          "toolCallId": "c3",
+          "result": "third ran"
+        }
+      },
+      {
+        "type": "agentfootprint.agent.iteration_end",
+        "payload": {
+          "turnIndex": 0,
+          "iterIndex": 1,
+          "toolCallCount": 1,
+          "history": [
+            {
+              "role": "user",
+              "content": "go"
+            },
+            {
+              "role": "assistant",
+              "content": "",
+              "toolCalls": [
+                {
+                  "id": "c1",
+                  "name": "first",
+                  "args": {}
+                },
+                {
+                  "id": "c2",
+                  "name": "second",
+                  "args": {}
+                },
+                {
+                  "id": "c3",
+                  "name": "third",
+                  "args": {}
+                }
+              ]
+            },
+            {
+              "role": "tool",
+              "content": "first ran",
+              "toolCallId": "c1",
+              "toolName": "first"
+            },
+            {
+              "role": "tool",
+              "content": "second ran",
+              "toolCallId": "c2",
+              "toolName": "second"
+            },
+            {
+              "role": "tool",
+              "content": "third ran",
+              "toolCallId": "c3",
+              "toolName": "third"
+            }
+          ]
+        }
+      },
+      {
+        "type": "agentfootprint.agent.iteration_end",
+        "payload": {
+          "turnIndex": 0,
+          "iterIndex": 2,
+          "toolCallCount": 0
+        }
+      }
+    ],
+    "history": [
+      {
+        "role": "user",
+        "content": "go"
+      },
+      {
+        "role": "assistant",
+        "content": "",
+        "toolCalls": [
+          {
+            "id": "c1",
+            "name": "first",
+            "args": {}
+          },
+          {
+            "id": "c2",
+            "name": "second",
+            "args": {}
+          },
+          {
+            "id": "c3",
+            "name": "third",
+            "args": {}
+          }
+        ]
+      },
+      {
+        "role": "tool",
+        "content": "first ran",
+        "toolCallId": "c1",
+        "toolName": "first"
+      },
+      {
+        "role": "tool",
+        "content": "second ran",
+        "toolCallId": "c2",
+        "toolName": "second"
+      },
+      {
+        "role": "tool",
+        "content": "third ran",
+        "toolCallId": "c3",
+        "toolName": "third"
+      }
+    ],
+    "toolResults": [
+      {
+        "toolName": "first",
+        "result": "first ran",
+        "toolCallId": "c1"
+      },
+      {
+        "toolName": "second",
+        "result": "second ran",
+        "toolCallId": "c2"
+      },
+      {
+        "toolName": "third",
+        "result": "third ran",
+        "toolCallId": "c3"
+      }
+    ]
+  },
+  "consent": {
+    "requests": [
+      [
+        {
+          "role": "user",
+          "content": "go"
+        }
+      ],
+      [
+        {
+          "role": "user",
+          "content": "go"
+        },
+        {
+          "role": "assistant",
+          "content": "",
+          "toolCalls": [
+            {
+              "id": "c1",
+              "name": "first",
+              "args": {}
+            },
+            {
+              "id": "c2",
+              "name": "second",
+              "args": {}
+            },
+            {
+              "id": "c3",
+              "name": "third",
+              "args": {}
+            }
+          ]
+        },
+        {
+          "role": "tool",
+          "content": "first ran",
+          "toolCallId": "c1",
+          "toolName": "first"
+        },
+        {
+          "role": "tool",
+          "content": "second ran",
+          "toolCallId": "c2",
+          "toolName": "second"
+        },
+        {
+          "role": "tool",
+          "content": "third ran",
+          "toolCallId": "c3",
+          "toolName": "third"
+        }
+      ]
+    ],
+    "eventTypes": [
+      "agentfootprint.agent.run_configured",
+      "agentfootprint.agent.turn_start",
+      "agentfootprint.context.evaluated",
+      "agentfootprint.context.slot_composed",
+      "agentfootprint.context.injected",
+      "agentfootprint.context.slot_composed",
+      "agentfootprint.context.injected",
+      "agentfootprint.context.injected",
+      "agentfootprint.context.injected",
+      "agentfootprint.context.slot_composed",
+      "agentfootprint.agent.iteration_start",
+      "agentfootprint.stream.llm_start",
+      "agentfootprint.stream.llm_end",
+      "agentfootprint.agent.route_decided",
+      "agentfootprint.stream.tool_start",
+      "agentfootprint.stream.tool_end",
+      "agentfootprint.stream.tool_start",
+      "agentfootprint.stream.tool_end",
+      "agentfootprint.stream.tool_start",
+      "agentfootprint.credential.requested",
+      "agentfootprint.credential.authorization_required",
+      "agentfootprint.pause.request",
+      "agentfootprint.integrity.disposition",
+      "agentfootprint.pause.resume",
+      "agentfootprint.agent.run_configured",
+      "agentfootprint.credential.requested",
+      "agentfootprint.credential.acquired",
+      "agentfootprint.stream.tool_end",
+      "agentfootprint.agent.iteration_end",
+      "agentfootprint.context.evaluated",
+      "agentfootprint.context.slot_composed",
+      "agentfootprint.context.injected",
+      "agentfootprint.context.injected",
+      "agentfootprint.context.injected",
+      "agentfootprint.context.injected",
+      "agentfootprint.context.injected",
+      "agentfootprint.context.slot_composed",
+      "agentfootprint.context.injected",
+      "agentfootprint.context.injected",
+      "agentfootprint.context.injected",
+      "agentfootprint.context.slot_composed",
+      "agentfootprint.agent.iteration_start",
+      "agentfootprint.stream.llm_start",
+      "agentfootprint.stream.llm_end",
+      "agentfootprint.agent.route_decided",
+      "agentfootprint.agent.iteration_end",
+      "agentfootprint.agent.turn_end",
+      "agentfootprint.integrity.disposition"
+    ],
+    "brackets": [
+      {
+        "type": "agentfootprint.stream.tool_start",
+        "payload": {
+          "toolName": "first",
+          "toolCallId": "c1",
+          "args": {},
+          "parallelCount": 3
+        }
+      },
+      {
+        "type": "agentfootprint.stream.tool_end",
+        "payload": {
+          "toolCallId": "c1",
+          "result": "first ran"
+        }
+      },
+      {
+        "type": "agentfootprint.stream.tool_start",
+        "payload": {
+          "toolName": "second",
+          "toolCallId": "c2",
+          "args": {},
+          "parallelCount": 3
+        }
+      },
+      {
+        "type": "agentfootprint.stream.tool_end",
+        "payload": {
+          "toolCallId": "c2",
+          "result": "second ran"
+        }
+      },
+      {
+        "type": "agentfootprint.stream.tool_start",
+        "payload": {
+          "toolName": "third",
+          "toolCallId": "c3",
+          "args": {},
+          "parallelCount": 3
+        }
+      },
+      {
+        "type": "agentfootprint.stream.tool_end",
+        "payload": {
+          "toolCallId": "c3",
+          "result": "third ran"
+        }
+      },
+      {
+        "type": "agentfootprint.agent.iteration_end",
+        "payload": {
+          "turnIndex": 0,
+          "iterIndex": 1,
+          "toolCallCount": 1,
+          "history": [
+            {
+              "role": "user",
+              "content": "go"
+            },
+            {
+              "role": "assistant",
+              "content": "",
+              "toolCalls": [
+                {
+                  "id": "c1",
+                  "name": "first",
+                  "args": {}
+                },
+                {
+                  "id": "c2",
+                  "name": "second",
+                  "args": {}
+                },
+                {
+                  "id": "c3",
+                  "name": "third",
+                  "args": {}
+                }
+              ]
+            },
+            {
+              "role": "tool",
+              "content": "first ran",
+              "toolCallId": "c1",
+              "toolName": "first"
+            },
+            {
+              "role": "tool",
+              "content": "second ran",
+              "toolCallId": "c2",
+              "toolName": "second"
+            },
+            {
+              "role": "tool",
+              "content": "third ran",
+              "toolCallId": "c3",
+              "toolName": "third"
+            }
+          ]
+        }
+      },
+      {
+        "type": "agentfootprint.agent.iteration_end",
+        "payload": {
+          "turnIndex": 0,
+          "iterIndex": 2,
+          "toolCallCount": 0
+        }
+      }
+    ],
+    "history": [
+      {
+        "role": "user",
+        "content": "go"
+      },
+      {
+        "role": "assistant",
+        "content": "",
+        "toolCalls": [
+          {
+            "id": "c1",
+            "name": "first",
+            "args": {}
+          },
+          {
+            "id": "c2",
+            "name": "second",
+            "args": {}
+          },
+          {
+            "id": "c3",
+            "name": "third",
+            "args": {}
+          }
+        ]
+      },
+      {
+        "role": "tool",
+        "content": "first ran",
+        "toolCallId": "c1",
+        "toolName": "first"
+      },
+      {
+        "role": "tool",
+        "content": "second ran",
+        "toolCallId": "c2",
+        "toolName": "second"
+      },
+      {
+        "role": "tool",
+        "content": "third ran",
+        "toolCallId": "c3",
+        "toolName": "third"
+      }
+    ],
+    "toolResults": [
+      {
+        "toolName": "first",
+        "result": "first ran",
+        "toolCallId": "c1"
+      },
+      {
+        "toolName": "second",
+        "result": "second ran",
+        "toolCallId": "c2"
+      },
+      {
+        "toolName": "third",
+        "result": "third ran",
+        "toolCallId": "c3"
+      }
+    ]
+  }
+}

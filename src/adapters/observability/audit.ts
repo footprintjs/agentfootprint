@@ -27,6 +27,14 @@
  * the agent identity, and library versions — runs chain back-to-back in
  * one log, so silently DROPPING a whole run breaks the chain too.
  *
+ * A call a paused batch never dispatched (9.113.0) lands as its two
+ * brackets, each carrying `notDispatched: { pausedCall: { toolCallId,
+ * toolName } }` and neither carrying `error` — identifiers only, so the field
+ * rides VERBATIM in both payload modes (it is not in `BOUND_FIELDS`). The
+ * chained record therefore says the call never ran — neither that it
+ * succeeded nor that it failed; the bounded `result` (`[type: string]`) never
+ * had to say it.
+ *
  * High-volume content deltas (`stream.token`, `stream.thinking_delta`)
  * are excluded by default (`includeTokenEvents: true` to include).
  *

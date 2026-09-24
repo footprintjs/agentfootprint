@@ -18,7 +18,11 @@
  *          standingRowsFrom` resolves a named id against. The offer and the
  *          identity source read the SAME served history, so every id the
  *          offer lists resolves: the law "the offer is what the model may
- *          COPY" holds at the row, not only at the schema.
+ *          COPY" holds at the row, not only at the schema. All of them ask
+ *          ONE predicate, `isResultMessage`: a message the batch settlement
+ *          wrote (9.113.0, `LLMMessage.notDispatched`) is served — the model
+ *          reads its sentence — and is no result, so it is never offered,
+ *          resolved or counted undeclared.
  *
  * WHY AN OFFER. On a hosted model the ask "by its tool_result id" produced
  * standings named by ORDINAL ("0", "1"), recorded as `unknownId` and settling
@@ -65,16 +69,30 @@ import type { FindingsLedger, Standing, StandingRow } from './types.js';
 export const RETIRING_STANDINGS: readonly Standing[] = Object.freeze(['noise', 'ruled-out']);
 
 /**
- * The `role: 'tool'` ids on a message list, in wire order, each once. A
- * message without an id, or with an empty one, contributes nothing. The
- * collapse (`serve.ts · collapseJudged`) never changes an id, so the list is
- * the same before and after it.
+ * Is this message a tool's RESULT — the only thing a standing can be about?
+ * A `role: 'tool'` message the batch settlement wrote (9.113.0,
+ * `LLMMessage.notDispatched`) is not: the call never ran, so there is nothing
+ * to stand on. Read off the marker, never the sentence — which is why every
+ * caller hands these functions the COMMITTED conversation, not the wire,
+ * where `stripFrameworkFields` has already removed the marker (ids and order
+ * are the same either way).
+ */
+export function isResultMessage(m: LLMMessage): boolean {
+  return m.role === 'tool' && m.notDispatched === undefined;
+}
+
+/**
+ * The `role: 'tool'` ids on a message list, in wire order, each once — a
+ * settled message excluded (`isResultMessage`). A message without an id, or
+ * with an empty one, contributes nothing. The collapse (`serve.ts ·
+ * collapseJudged`) never changes an id, so the list is the same before and
+ * after it.
  */
 export function servedToolCallIds(messages: readonly LLMMessage[]): readonly string[] {
   const ids: string[] = [];
   const seen = new Set<string>();
   for (const m of messages) {
-    if (m.role !== 'tool') continue;
+    if (!isResultMessage(m)) continue;
     const id = m.toolCallId;
     if (id === undefined || id.length === 0 || seen.has(id)) continue;
     seen.add(id);
@@ -157,7 +175,9 @@ export function offeredResultIds(
  * order changes no row; it is the source the rows resolved against before
  * the history joined). An id in neither is `unknownId`, as written. A tool
  * message with no `toolName` yields a result with none: nothing is invented
- * for it.
+ * for it. A settled message (`isResultMessage`) is no result, so a model that
+ * names its id anyway files `unknownId` — the batch never holds one: a
+ * settled call never joins `toolResults`.
  */
 export function knownResults(
   messages: readonly LLMMessage[],
@@ -172,7 +192,7 @@ export function knownResults(
   };
   for (const r of previousBatch) add(r);
   for (const m of messages) {
-    if (m.role !== 'tool' || m.toolCallId === undefined) continue;
+    if (!isResultMessage(m) || m.toolCallId === undefined) continue;
     add({
       toolCallId: m.toolCallId,
       ...(m.toolName !== undefined && { toolName: m.toolName }),

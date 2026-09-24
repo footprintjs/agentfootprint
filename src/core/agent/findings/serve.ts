@@ -99,7 +99,7 @@ import type { LLMMessage } from '../../../adapters/types.js';
 import { CONTEXT_FIELD_MEANINGS } from '../../../lib/context-contract/index.js';
 import { assertionKey, type Assertion } from '../../../integrity/assertion/types.js';
 import { foldLedger, type LedgerFold } from './ledger.js';
-import { servedToolCallIds, undeclaredIds } from './offer.js';
+import { isResultMessage, servedToolCallIds, undeclaredIds } from './offer.js';
 import { FINDINGS_ANSWER_ASK } from './reserved.js';
 import type { FindingsLedger, Standing, StandingRow } from './types.js';
 
@@ -480,6 +480,12 @@ function clip(text: string, max: number): string {
  * ticket. The SAME array instance when nothing collapses; otherwise a new
  * array of the same length and order in which only the collapsed entries
  * are new objects.
+ *
+ * Hand it the COMMITTED conversation and strip afterwards (9.113.0): a
+ * message the batch settlement wrote is recognised by its marker
+ * (`offer.ts` · `isResultMessage`), which `stripFrameworkFields` removes. A
+ * collapsed entry keeps every other field, so stripping after is the same
+ * wire as stripping before.
  */
 export function collapseJudged(
   messages: readonly LLMMessage[],
@@ -504,7 +510,10 @@ function ticketFor(
   standingOf: ReadonlyMap<string, StandingRow>,
   mode: FindingsServeMode,
 ): string | undefined {
-  if (m.role !== 'tool' || m.toolCallId === undefined) return undefined;
+  // A settled message is no result (`offer.ts` · `isResultMessage`): a
+  // standing that names its id (filed `unknownId`, as written) never turns the
+  // library's sentence about a call that never ran into a ticket.
+  if (!isResultMessage(m) || m.toolCallId === undefined) return undefined;
   const row = standingOf.get(m.toolCallId);
   if (row === undefined || !collapses(row.standing, mode)) return undefined;
   const ticket: CollapsedToolResult = {

@@ -17,7 +17,17 @@
 
 import { describe, expect, it } from 'vitest';
 
-import { Agent, allow, defineTool, deny, type ToolMiddleware } from '../../../src/index.js';
+import {
+  Agent,
+  allow,
+  defineTool,
+  deny,
+  isInputPause,
+  requestInput,
+  slidingWindow,
+  type ToolMiddleware,
+} from '../../../src/index.js';
+import type { LLMMessage } from '../../../src/adapters/types.js';
 import { mock } from '../../../src/llm-providers.js';
 import { recordRun } from '../../../src/observe.js';
 import { callTraceTool, traceToolpack, type TraceToolpackArtifacts } from '../../../src/observe.js';
@@ -197,6 +207,332 @@ describe('inspect_tool_call — outcomes', () => {
       toolCallId: 'c1',
     });
     expect(out).toContain('outcome: error — the tool threw or returned a failure');
+  });
+});
+
+/* ── a call the paused batch never dispatched (9.113.0) ───────────────── */
+
+/**
+ * The model batches three calls and the MIDDLE one asks a person
+ * (`requestInput`). On resume the third call is SETTLED: the library answers it
+ * with a fixed sentence and brackets it (`tool_end { durationMs: 0 }`, the
+ * sentence as its `result`), and never executes it
+ * (`core/agent/stages/toolCalls.ts` · "── The batch settlement (9.113.0)").
+ * Its history message and both halves of its bracket carry `notDispatched`,
+ * the one owner of "this call never ran". The join must read that marker.
+ * Reading the bracket as the record of a call that ran would tell a debugging
+ * model that the call ran with its arguments and returned the sentence in 0ms.
+ *
+ * `evicted`: two more rounds under `slidingWindow({ keepRecentTurns: 1 })`
+ * with the pin off, so the batch turn has left the final history by the
+ * time the run ends. The call's own step still committed it.
+ *
+ * `reused`: after the resume the model proposes a call under the settled
+ * id `c3` again, and that call RUNS — a provider may reuse an id across turns.
+ */
+async function settledBatch(
+  options: { withEvents?: boolean; evicted?: boolean; reused?: 'ran' | 'threw' } = {},
+): Promise<TraceToolpackArtifacts> {
+  const tools = ['first', 'second', 'third', 'move'].map((name) =>
+    defineTool({
+      name,
+      description: `the ${name} tool`,
+      inputSchema: { type: 'object', properties: {} },
+      execute: async () => {
+        if (name === 'second') {
+          return requestInput({
+            id: 'year',
+            question: 'Which year?',
+            fields: [{ id: 'year', type: 'number', required: true }],
+          });
+        }
+        // `third` only ever runs as the REUSED call (the batch's is settled):
+        // slow enough that its bracket's duration is never the settlement's
+        // 0ms, or throwing, so its outcome is its own.
+        if (name === 'third' && options.reused === 'threw') throw new Error('third failed');
+        if (name === 'third') await new Promise((done) => setTimeout(done, 25));
+        return `${name} ran`;
+      },
+    }),
+  );
+  const batch = {
+    toolCalls: [
+      { id: 'c1', name: 'first', args: {} },
+      { id: 'c2', name: 'second', args: {} },
+      { id: 'c3', name: 'third', args: { q: 'x' } },
+    ],
+  };
+  const moves = options.evicted
+    ? [
+        { toolCalls: [{ id: 'm1', name: 'move', args: {} }] },
+        { toolCalls: [{ id: 'm2', name: 'move', args: {} }] },
+      ]
+    : [];
+  const reuse =
+    options.reused !== undefined ? [{ toolCalls: [{ id: 'c3', name: 'third', args: {} }] }] : [];
+  let builder = Agent.create({
+    provider: mock({ replies: [batch, ...moves, ...reuse, { content: 'done' }] }),
+    model: 'mock',
+    maxIterations: 8,
+    ...(options.evicted && { keepLastToolResults: false as const }),
+  }).tools(tools);
+  if (options.evicted) builder = builder.window(slidingWindow({ keepRecentTurns: 1 }));
+  const agent = builder.build();
+
+  const paused = await agent.run({ message: 'go' });
+  if (!isInputPause(paused)) throw new Error('expected an input pause');
+  const recorder = recordRun(agent);
+  await agent.resume(paused.checkpoint, {
+    requestId: paused.awaitingInput.requestId,
+    values: { year: 2026 },
+  });
+  const recording = recorder.toRecording();
+  recorder.stop();
+  return {
+    snapshot: agent.getLastSnapshot()!,
+    ...(options.withEvents !== false && { events: recording.events }),
+  };
+}
+
+/** A detached copy with every `notDispatched` key removed from plain objects,
+ *  at any depth (anything else — a Map, a class instance — is kept as is). */
+function withoutMarker<T>(value: T): T {
+  const scrub = (node: unknown): unknown => {
+    if (Array.isArray(node)) return node.map(scrub);
+    if (node === null || typeof node !== 'object') return node;
+    const proto = Object.getPrototypeOf(node) as unknown;
+    if (proto !== Object.prototype && proto !== null) return node;
+    const out: Record<string, unknown> = {};
+    for (const [key, child] of Object.entries(node as Record<string, unknown>)) {
+      if (key !== 'notDispatched') out[key] = scrub(child);
+    }
+    return out;
+  };
+  return scrub(structuredClone(value)) as T;
+}
+
+/** The lines a settled call must never be described with. */
+function expectNoRunClaims(out: string): void {
+  expect(out).not.toContain('the tool threw or returned a failure');
+  expect(out).not.toContain('ran with: the proposed arguments');
+  expect(out).not.toContain('outcome: ok');
+  expect(out).not.toMatch(/duration: \d+ms/);
+  expect(out).not.toContain('arguments in, result out');
+}
+
+describe('inspect_tool_call — a call the paused batch never dispatched (9.113.0)', () => {
+  const OUTCOME =
+    "outcome: not dispatched — the run paused on call 'c2' to 'second', earlier in the same " +
+    "batch, and resumed without executing call 'c3'";
+
+  it('reads the marker off the history message: never ran, no duration, nothing inside', async () => {
+    const out = await callTraceTool(traceToolpack(await settledBatch()), 'inspect_tool_call', {
+      toolCallId: 'c3',
+    });
+    expect(out).toContain('TOOL CALL c3 — third');
+    expect(out).toContain("ran with: nothing — call 'c3' was never executed.");
+    // The result line is the sentence the model read, verbatim.
+    expect(out).toContain("result: \"Tool 'third' was not executed on that call");
+    expect(out).toContain(OUTCOME);
+    expect(out).toContain("duration: none — call 'c3' was never executed.");
+    expect(out).toContain("inside: nothing — call 'c3' never reached the tool.");
+    expectNoRunClaims(out);
+  });
+
+  it('the paused call itself keeps the join it always had', async () => {
+    const out = await callTraceTool(traceToolpack(await settledBatch()), 'inspect_tool_call', {
+      toolCallId: 'c2',
+    });
+    expect(out).toContain('TOOL CALL c2 — second');
+    expect(out).toContain(
+      "ran with: the proposed arguments — no governance rule filed a row for call 'c2'.",
+    );
+    expect(out).toContain('outcome: ok');
+    expect(out).toMatch(/duration: \d+ms/);
+    expect(out).not.toContain('not dispatched');
+  });
+
+  it('with no event tail the marker still decides — never "ok" for a call that did not run', async () => {
+    const out = await callTraceTool(
+      traceToolpack(await settledBatch({ withEvents: false })),
+      'inspect_tool_call',
+      { toolCallId: 'c3' },
+    );
+    expect(out).toContain(OUTCOME);
+    expect(out).toContain("duration: none — call 'c3' was never executed.");
+    expectNoRunClaims(out);
+  });
+
+  it('the bracket speaks first: with every history marker scrubbed, its typed field alone still says so', async () => {
+    // Since the field rides the stream too (`ToolEndPayload.notDispatched`),
+    // the event tail answers on its own — the history is the fallback, not a
+    // requirement.
+    const artifacts = await settledBatch();
+    const scrubbed = { ...artifacts, snapshot: withoutMarker(artifacts.snapshot) };
+    expect(JSON.stringify(scrubbed.snapshot)).not.toContain('notDispatched');
+    const out = await callTraceTool(traceToolpack(scrubbed), 'inspect_tool_call', {
+      toolCallId: 'c3',
+    });
+    expect(out).toContain(OUTCOME);
+    expect(out).toContain("duration: none — call 'c3' was never executed.");
+    expectNoRunClaims(out);
+  });
+
+  it('a bracket without the field is silence, not a denial: the history marker still decides', async () => {
+    const artifacts = await settledBatch();
+    const events = (artifacts.events ?? []).map((event) => withoutMarker(event));
+    expect(JSON.stringify(events)).not.toContain('notDispatched');
+    const out = await callTraceTool(traceToolpack({ ...artifacts, events }), 'inspect_tool_call', {
+      toolCallId: 'c3',
+    });
+    expect(out).toContain(OUTCOME);
+    expectNoRunClaims(out);
+  });
+
+  it('a window that evicted the batch turn: the bracket answers, with no history message left to read', async () => {
+    const artifacts = await settledBatch({ evicted: true });
+    // The precondition: the final history no longer carries the settled
+    // message, and the event tail still brackets it with the field.
+    const final = (artifacts.snapshot.sharedState as { history?: readonly LLMMessage[] }).history;
+    expect((final ?? []).some((m) => m.toolCallId === 'c3')).toBe(false);
+    const out = await callTraceTool(traceToolpack(artifacts), 'inspect_tool_call', {
+      toolCallId: 'c3',
+    });
+    expect(out).toContain(OUTCOME);
+    expect(out).toContain("ran with: nothing — call 'c3' was never executed.");
+    expect(out).toContain("duration: none — call 'c3' was never executed.");
+    expectNoRunClaims(out);
+  });
+
+  it("evicted, and the bracket's field scrubbed: the marker is read from the history the call's own step committed", async () => {
+    // The history fallback's last arm (`traceToolpack.ts` · `settledInHistory`):
+    // the final history has lost the message and the tail's brackets carry no
+    // field, so the only marker left is in the `history` the resume step
+    // itself committed. The tail still names the call, which is how the join
+    // knows the id at all — with no tail and an evicted history the call is
+    // unknown, and the tool says so rather than guessing.
+    const artifacts = await settledBatch({ evicted: true });
+    const events = (artifacts.events ?? []).map((event) => withoutMarker(event));
+    expect(JSON.stringify(events)).not.toContain('notDispatched');
+    const final = (artifacts.snapshot.sharedState as { history?: readonly LLMMessage[] }).history;
+    expect((final ?? []).some((m) => m.toolCallId === 'c3')).toBe(false);
+    const out = await callTraceTool(traceToolpack({ ...artifacts, events }), 'inspect_tool_call', {
+      toolCallId: 'c3',
+    });
+    expect(out).toContain(OUTCOME);
+    expect(out).toContain("ran with: nothing — call 'c3' was never executed.");
+    expect(out).toContain("duration: none — call 'c3' was never executed.");
+    expectNoRunClaims(out);
+  });
+
+  /** The bracket halves of one kind for `c3`, in tail order. */
+  const bracketsOf = (artifacts: TraceToolpackArtifacts, kind: 'tool_start' | 'tool_end') =>
+    (artifacts.events ?? []).filter(
+      (event) =>
+        event.type === `agentfootprint.stream.${kind}` &&
+        (event.payload as { toolCallId?: string }).toolCallId === 'c3',
+    );
+
+  it('a provider that reuses the settled id for a call that then RAN: that call decides — its step, outcome and duration', async () => {
+    // The join reads the LATEST result for an id; the marker follows the same
+    // rule on the stream and in history, so the call that ran is not reported
+    // as the one that was settled. The outcome and the duration are read off
+    // the LAST `tool_end` for the id (`traceToolpack.ts` ·
+    // `buildInspectToolCall`), and the step off the first bracket of a call
+    // that ran (`bracketsFor`) — never the settlement's, which comes first on
+    // the tail.
+    const artifacts = await settledBatch({ reused: 'ran' });
+    const ends = bracketsOf(artifacts, 'tool_end');
+    const starts = bracketsOf(artifacts, 'tool_start');
+    // The precondition: two brackets for the id, the settled one first, each
+    // on its own step.
+    expect(ends.map((e) => 'notDispatched' in (e.payload as object))).toEqual([true, false]);
+    const [settledStep, ranStep] = starts.map(
+      (e) => (e.meta as { runtimeStageId?: string }).runtimeStageId,
+    );
+    expect(ranStep).toBeDefined();
+    expect(ranStep).not.toBe(settledStep);
+    const out = await callTraceTool(traceToolpack(artifacts), 'inspect_tool_call', {
+      toolCallId: 'c3',
+    });
+    expect(out).not.toContain('not dispatched');
+    expect(out).toContain(`step: ${ranStep} —`);
+    expect(out).toContain('outcome: ok');
+    // The call that ran waited 25ms; the settlement's bracket says 0ms.
+    const ranMs = (ends[1]!.payload as { durationMs: number }).durationMs;
+    expect(ranMs).toBeGreaterThanOrEqual(20);
+    expect(out).toContain(`duration: ${ranMs}ms`);
+    expect(out).not.toContain('duration: 0ms');
+  });
+
+  it('a provider that reuses the settled id for a call that then THREW: the outcome is its error, never the settlement’s silence', async () => {
+    const artifacts = await settledBatch({ reused: 'threw' });
+    const ends = bracketsOf(artifacts, 'tool_end');
+    expect(ends.map((e) => (e.payload as { error?: boolean }).error)).toEqual([undefined, true]);
+    const out = await callTraceTool(traceToolpack(artifacts), 'inspect_tool_call', {
+      toolCallId: 'c3',
+    });
+    expect(out).toContain('outcome: error — the tool threw or returned a failure');
+    expect(out).not.toContain('outcome: ok');
+  });
+});
+
+/* ── an id a provider reused ──────────────────────────────────────────── */
+
+describe('inspect_tool_call — an id a provider reused: the latest call decides', () => {
+  it('two calls under one id and no settlement: the outcome and duration are the LATEST call’s, the one the result line shows', async () => {
+    // A provider may reuse an id across turns. The join reads the LATEST
+    // result for the id, so the outcome and the duration come off the LAST
+    // `tool_end` for it — never a first call's `ok` and its 1ms printed
+    // beside a second call's failure.
+    let calls = 0;
+    const flaky = defineTool({
+      name: 'flaky',
+      description: 'answers once, then fails slowly',
+      inputSchema: { type: 'object', properties: {} },
+      execute: async () => {
+        calls++;
+        if (calls === 1) return 'first answer';
+        await new Promise((done) => setTimeout(done, 25));
+        throw new Error('second call failed');
+      },
+    });
+    const agent = Agent.create({
+      provider: mock({
+        replies: [
+          { toolCalls: [{ id: 'c1', name: 'flaky', args: {} }] },
+          { toolCalls: [{ id: 'c1', name: 'flaky', args: {} }] },
+          { content: 'done' },
+        ],
+      }),
+      model: 'mock',
+      maxIterations: 6,
+    })
+      .tool(flaky)
+      .build();
+    const recorder = recordRun(agent);
+    await agent.run({ message: 'go' });
+    const recording = recorder.toRecording();
+    recorder.stop();
+    const ends = recording.events.filter(
+      (event) =>
+        event.type === 'agentfootprint.stream.tool_end' &&
+        (event.payload as { toolCallId?: string }).toolCallId === 'c1',
+    );
+    // The precondition: two brackets for the id — the first ok, the second
+    // an error — and neither carries the settlement's marker.
+    expect(ends.map((e) => (e.payload as { error?: boolean }).error)).toEqual([undefined, true]);
+    expect(ends.filter((e) => 'notDispatched' in (e.payload as object))).toEqual([]);
+    const out = await callTraceTool(
+      traceToolpack({ snapshot: agent.getLastSnapshot()!, events: recording.events }),
+      'inspect_tool_call',
+      { toolCallId: 'c1' },
+    );
+    expect(out).toContain('second call failed');
+    expect(out).toContain('outcome: error — the tool threw or returned a failure');
+    const lastMs = (ends[1]!.payload as { durationMs: number }).durationMs;
+    expect(lastMs).toBeGreaterThanOrEqual(20);
+    expect(out).toContain(`duration: ${lastMs}ms`);
   });
 });
 

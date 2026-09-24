@@ -333,6 +333,11 @@ export function toolChoiceRecorder(options: ToolChoiceRecorderOptions): ToolChoi
           break;
         }
         case 'agentfootprint.stream.tool_start': {
+          // A bracket carrying `notDispatched` (9.113.0) is counted here on
+          // purpose: this recorder measures what the model CHOSE, and a call a
+          // paused batch never dispatched was still proposed on the call this
+          // entry holds — its settlement bracket is the first time the stream
+          // names it at all. Whether it ran is `notDispatched`'s to say.
           if (openKey === undefined) break;
           const entry = store.get(openKey);
           if (entry === undefined) break;

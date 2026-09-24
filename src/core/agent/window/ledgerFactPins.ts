@@ -73,6 +73,7 @@
  */
 
 import type { LLMMessage } from '../../../adapters/types.js';
+import { isResultMessage } from '../findings/offer.js';
 import type { Standing } from '../findings/types.js';
 import { toolNameOfMessage } from './toolNames.js';
 import type { Turn } from './turns.js';
@@ -83,7 +84,8 @@ export interface LedgerFactPin {
    * Every tool result the turn holds, in wire order — not only the facts.
    * The turn is what the pin actually holds: a noise result answered in the
    * same batch as a fact stays with it, and each result's own standing is on
-   * the ledger by this id.
+   * the ledger by this id. A message the batch settlement wrote (9.113.0) is
+   * no result and is never listed (`findings/offer.ts` · `isResultMessage`).
    */
   readonly toolCallIds: readonly string[];
   /**
@@ -148,6 +150,14 @@ export function rankStanding(standing: Standing | undefined): number {
  * as a turn whose results the model never judged. Both are "the ledger says
  * nothing that holds this turn", which is all a caller may conclude.
  *
+ * A message the batch settlement wrote (9.113.0, `LLMMessage.notDispatched`)
+ * is served and is no RESULT (`findings/offer.ts` · `isResultMessage`), so it
+ * takes no part in the ranking: counted, it would rank as an UNDECLARED
+ * result above the noise and ruled-out results the model really judged, and
+ * a batch it sits in would lose the standing its results earned — and a
+ * standing a model filed on its id anyway (`unknownId: true`) would hold the
+ * turn for a sentence about a call that never ran.
+ *
  * @param turn           the turn to judge
  * @param standingOfCall the LAST standing the ledger holds for a result, by
  *   its `toolCallId` (`foldLedger(rows).standingOf.get(id)?.standing`), or
@@ -160,7 +170,7 @@ export function turnStandingOf(
   let best: Standing | undefined;
   let bestRank = -1;
   for (const msg of turn.messages) {
-    if (msg.role !== 'tool' || msg.toolCallId === undefined || msg.toolCallId.length === 0) {
+    if (!isResultMessage(msg) || msg.toolCallId === undefined || msg.toolCallId.length === 0) {
       continue;
     }
     const standing = standingOfCall(msg.toolCallId);
@@ -209,7 +219,9 @@ export function ledgerFactPinsOf(
     for (let m = 0; m < turn.messages.length; m++) {
       if (turn.start + m <= after) continue;
       const msg = turn.messages[m]!;
-      if (msg.role !== 'tool' || msg.toolCallId === undefined || msg.toolCallId.length === 0) {
+      // A settled message is no result (`isResultMessage`), so the pin never
+      // lists its id — the same predicate `turnStandingOf` ranks by.
+      if (!isResultMessage(msg) || msg.toolCallId === undefined || msg.toolCallId.length === 0) {
         continue;
       }
       toolCallIds.push(msg.toolCallId);

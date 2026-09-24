@@ -52,6 +52,7 @@ import { typedEmit } from '../../../recorders/core/typedEmit.js';
 import { fnv1a } from '../../slots/helpers.js';
 import { emitCostTick, type ResolvedCostBudget } from '../../cost.js';
 import { foldLedger, type LedgerFold } from '../findings/ledger.js';
+import { isResultMessage } from '../findings/offer.js';
 import type { FindingsLedger, Standing } from '../findings/types.js';
 import { currentRequestIndexOf } from '../window/currentRequest.js';
 import { toolResultPinsOf } from '../window/lastToolResult.js';
@@ -205,7 +206,9 @@ function pinIsBlocking(
  * (9.102.0) — `WindowRecord.droppedStandings`. Absent `standing` is
  * UNDECLARED, never defaulted. A result with no id cannot be on the ledger
  * and is not listed; an empty list is `undefined`, so a visit that dropped
- * no tool result writes no key.
+ * no tool result writes no key. A message the batch settlement wrote
+ * (9.113.0) is no result (`findings/offer.ts` · `isResultMessage`): its
+ * leaving drops no standing and no undeclared result, so it is not listed.
  */
 function droppedStandingsOf(
   evicted: readonly LLMMessage[],
@@ -213,7 +216,7 @@ function droppedStandingsOf(
 ): readonly { readonly toolCallId: string; readonly standing?: Standing }[] | undefined {
   const rows: { readonly toolCallId: string; readonly standing?: Standing }[] = [];
   for (const msg of evicted) {
-    if (msg.role !== 'tool' || msg.toolCallId === undefined || msg.toolCallId.length === 0) {
+    if (!isResultMessage(msg) || msg.toolCallId === undefined || msg.toolCallId.length === 0) {
       continue;
     }
     const standing = fold.standingOf.get(msg.toolCallId)?.standing;

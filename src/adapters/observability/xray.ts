@@ -12,6 +12,14 @@
  *     stream.tool_start         ↦  push leaf subsegment (tool call)
  *     stream.tool_end           ↦  close tool subsegment (correlated
  *                                  by toolCallId — parallel-safe)
+ *     a bracket carrying        ↦  nothing: the call never executed
+ *     `notDispatched`              (9.113.0), so no subsegment opens or
+ *                                  closes for it. Moot today: a trace
+ *                                  opens on `agent.turn_start` only, a
+ *                                  resumed leg emits none and carries a
+ *                                  new `meta.runId`, so none of it is
+ *                                  traced — and a settled bracket only
+ *                                  ever rides a resumed leg
  *     error.fatal               ↦  fault on root + close the whole
  *                                  tree (turn_end never arrives)
  *
@@ -414,7 +422,17 @@ export function xrayObservability(opts: XrayObservabilityOptions): Observability
       case 'agentfootprint.stream.tool_start': {
         const t = activeTurns.get(runId);
         if (!t?.sampled) break;
-        const p = event.payload as { toolName?: string; toolCallId?: string };
+        const p = event.payload as {
+          toolName?: string;
+          toolCallId?: string;
+          notDispatched?: unknown;
+        };
+        // A call the batch settlement answered (9.113.0) never executed: no
+        // subsegment, which would claim a unit of work that never happened.
+        // X-Ray has no span-event channel to carry the fact; the event stream,
+        // the history and the audit chain do (`notDispatched`). Moot on the
+        // legs traced today — see the header's mapping.
+        if (p.notDispatched !== undefined) break;
         const toolName = p.toolName ?? 'tool';
         const seg = pushSegment(t, `tool:${toolName}`);
         seg.annotations = { toolName };
@@ -425,7 +443,15 @@ export function xrayObservability(opts: XrayObservabilityOptions): Observability
       case 'agentfootprint.stream.tool_end': {
         const t = activeTurns.get(runId);
         if (!t?.sampled) break;
-        const p = event.payload as { toolCallId?: string; toolName?: string; error?: unknown };
+        const p = event.payload as {
+          toolCallId?: string;
+          toolName?: string;
+          error?: unknown;
+          notDispatched?: unknown;
+        };
+        // Its tool_start opened nothing; the name-less fallback below would
+        // close whatever segment is on top — an iteration, even.
+        if (p.notDispatched !== undefined) break;
         const errored = p.error !== undefined && p.error !== false;
         // Correlate by toolCallId — the only identity ToolEndPayload
         // carries at runtime (it has NO toolName), and parallel tool

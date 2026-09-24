@@ -15,6 +15,23 @@ It never re-runs anything and never reconstructs around a redaction. Where the
 record is bounded or missing, the answer says so rather than filling the gap —
 an attention omission that must stay visible.
 
+## An id a provider reused: the latest call decides
+A provider may reuse a tool-call id across turns (the library's own fallback
+ids are minted per provider instance). `inspect_tool_call` answers for the
+LATEST call under the id: its result is the latest `role: 'tool'` message, its
+outcome and duration come off the LAST `tool_end` for the id
+(`traceToolpack.ts` · `buildInspectToolCall`), and it reads "not dispatched"
+when the latest bracket or message carries the batch settlement's marker
+(9.113.0, `notDispatchedOf`). The step line still names the step of the first
+call under the id that ran (`bracketsFor`).
+
+```text
+c1 answered 'first answer' in 1ms, then — reused — threw 'second call failed' after 27ms:
+  result: "second call failed"
+  outcome: error — the tool threw or returned a failure
+  duration: 27ms
+```
+
 ## Files
 - `traceToolpack.ts` — the eleven trace tools.
 - `bounded.ts` — the one bound every served value passes through.

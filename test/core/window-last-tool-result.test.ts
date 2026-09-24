@@ -196,6 +196,41 @@ describe('toolResultPinsOf', () => {
     expect(pins).toHaveLength(2);
     expect(pins[1]!.turnIndex).toBe(1);
   });
+
+  it('a SETTLED sibling is not the tool answering again — the earlier real result stays pinned (9.113.0)', () => {
+    // The batch [collect_input, whats_here] paused on collect_input; the
+    // resume answered it and SETTLED whats_here without running it
+    // (`stages/toolCalls.ts` · "── The batch settlement (9.113.0)"). That
+    // message has `role: 'tool'` and a `toolName`, and it is still not a
+    // result: `notDispatched` says so. Taken as whats_here's "latest result",
+    // it would move the pin off the evidence onto the library's sentence.
+    const history: LLMMessage[] = [
+      user(TASK),
+      ...round('a1', 'whats_here', HOLDS),
+      asks([
+        { id: 'c1', name: 'collect_input' },
+        { id: 'c2', name: 'whats_here' },
+      ]),
+      answers('c1', 'collect_input', '{"status":"input_received"}'),
+      {
+        ...answers('c2', 'whats_here', "Tool 'whats_here' was not executed on that call: …"),
+        notDispatched: { pausedCall: { toolCallId: 'c1', toolName: 'collect_input' } },
+      },
+    ];
+    const turns = segmentTurns(history);
+    const pins = toolResultPinsOf(turns, history, 0);
+    // The batch turn is collect_input's pin; whats_here's is still the turn
+    // holding its real result — the same pins the unsettled shape gave.
+    expect(pins.map((p) => [p.toolName, p.turnIndex])).toEqual([
+      ['collect_input', 2],
+      ['whats_here', 1],
+    ]);
+    expect(turns[1]!.messages.some((m) => m.content === HOLDS)).toBe(true);
+    const unsettled = history.slice(0, -1);
+    expect(
+      toolResultPinsOf(segmentTurns(unsettled), unsettled, 0).map((p) => [p.toolName, p.turnIndex]),
+    ).toEqual(pins.map((p) => [p.toolName, p.turnIndex]));
+  });
 });
 
 // ─────────────────────────────────────────────────────────────────

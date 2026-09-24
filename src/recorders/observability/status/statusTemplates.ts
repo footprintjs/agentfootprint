@@ -227,7 +227,11 @@ export function selectStatus(events: readonly AgentfootprintEvent[]): StatusStat
         break;
 
       case 'agentfootprint.stream.tool_start': {
-        const p = e.payload as { toolName: string; toolCallId?: string };
+        const p = e.payload as { toolName: string; toolCallId?: string; notDispatched?: unknown };
+        // A call the paused batch never dispatched (9.113.0, `notDispatched`
+        // on the bracket) is not a tool at work: it never joins the in-flight
+        // map, so the bubble never says "Working on" a call that did not run.
+        if (p.notDispatched !== undefined) break;
         // A call with no id still gets a slot — an emitter simpler than this
         // library's own (a hand-built stream, an older recording) must still
         // move the bubble. The synthetic key just cannot be correlated.

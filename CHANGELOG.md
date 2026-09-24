@@ -5,6 +5,148 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [9.113.0] - 2026-09-23
+
+### Added
+
+- **`LLMMessage.notDispatched`** — an optional field on a `role: 'tool'`
+  message that answers a call which never ran:
+  `{ pausedCall: { toolCallId, toolName } }`, the call in the same batch the
+  run paused on. The library writes it on the results described under Fixed
+  below and removes it before any request is sent, the same way it removes
+  `injectedBy`; it is absent on every other message. Read it when your own
+  code needs to know whether a call in the history really ran — never the
+  sentence beside it.
+- **`notDispatched` on `agentfootprint.stream.tool_start` and
+  `agentfootprint.stream.tool_end`** (`Payloads.ToolStartPayload`,
+  `Payloads.ToolEndPayload`) — the same fact, the same shape, typed off
+  `LLMMessage.notDispatched`, on both halves of the bracket of a call that
+  never ran; absent on every other bracket. One definition, one writer, two
+  carriers: the history message and its bracket. The settled `tool_end`
+  carries no `error`: `error` says a call failed, and this one did not — the
+  library decided not to run it, as it does for a call a permission policy
+  denies, whose `tool_end` carries no `error` either. So code that counts
+  successes or failures from `tool_end` reads `notDispatched` first; a bracket
+  that carries it is neither:
+  `agent.on('agentfootprint.stream.tool_end', (e) => { if (e.payload.notDispatched) return; … })`.
+- **Commentary key `stream.tool_start.notDispatched`** — "Chatbot did not call
+  the `fetch_invoices` tool. The LLM asked for it together with
+  `collect_input`, and the run paused at `collect_input` before reaching it."
+  A new key, so every override of `stream.tool_start` keeps applying to the
+  calls it was written for; the settled call's `tool_end` gets no line.
+- **OpenTelemetry span event `agentfootprint.tool.not_dispatched`** —
+  reserved for a settled call: the `otelObservability` adapter records it on
+  the active span, with `gen_ai.tool.name`, `gen_ai.tool.call.id`,
+  `agentfootprint.tool.paused_call.id` and `agentfootprint.tool.paused_call.name`,
+  instead of opening an `execute_tool` span for a call that never ran. No run
+  records it yet: the adapter opens a trace on `agent.turn_start`, a resumed
+  leg emits none, and a settled call only ever rides a resumed leg. The names
+  are fixed now so they do not change on the day resumed legs are traced.
+
+### Fixed
+
+- **When a batch of tool calls pauses, the calls after the pause now get a
+  result.** A model can ask for several tools in one turn, and the agent runs
+  them in order. When one of them paused the run — a middleware `ask`, a
+  tool's `checkIn`, a credential consent, or a tool that called `pauseHere`,
+  `askHuman` or `requestInput` — the calls after it in that batch never ran.
+  On resume the library answered the paused call and nothing else: the next
+  request to the model still carried the later calls, with no result for them
+  (a shape providers such as Anthropic reject), no `tool_start` / `tool_end`
+  was emitted for them, and the resumed `iteration_end` counted one call.
+  **Who is affected:** any agent whose model batches tool calls and that can
+  pause part-way through a batch. A pause on the LAST call of a batch, or on a
+  batch of one, was never affected and records exactly what 9.112.2 recorded.
+  **What happens now:** every resume path settles each call after the paused
+  one without running it. Its result is one fixed sentence the library writes
+  — "Tool 'fetch_invoices' was not executed on that call: the run paused on
+  call 'c2' to 'collect_input', earlier in the same batch, and resumed without
+  executing the calls that followed it in that batch." — past tense, about
+  that call only, and telling the model nothing about what to do next:
+  whether to ask for the call again is the model's decision. Each
+  settled call gets its own `tool_start` and `tool_end` (`durationMs: 0` and
+  no `error` — it produced no result, and it did not fail), and the resumed
+  `iteration_end.toolCallCount` counts every call that leg closed: the paused
+  call plus each settled one (a batch of three paused on the middle call
+  reports 2; on the first, 3). The next request carries one result for every
+  call. Nothing is run on resume, because a resumed call has no way to pause
+  again. A settled call never returned, so it is not in `toolResults` or
+  `lastToolResult`, and no `on-tool-return` trigger or skill-graph route fires
+  on it. It never ran, so its message carries `notDispatched` (see Added), and
+  the readers that ask whether a call ran, or whether a message is a tool's
+  result, read that marker: the `sequence` a
+  `PermissionChecker` is given (and `PolicyHaltError.sequence`) leaves it out,
+  so a policy such as "verify the identity before any transfer" is not
+  satisfied by a verification that never happened — and it pairs each marker
+  with the one call it answers by that call's place in the history, not by id
+  alone, so when a later call that really runs reuses the settled call's id
+  (the library's own fallback ids are minted per provider instance and start
+  again in a new process) the settled call does not come back and the call
+  that ran is not dropped; the empty-lookup check (`noticeEmptyLookups`) takes
+  no producer text from it, so a value that only the sentence carries files no
+  advisory, and a declared ground that was only ever settled reads as
+  `unreachable`; a check-in's evidence `trail` does not list it among the
+  calls already completed; the window's
+  last-tool-result pin, its drop notice and `WindowRecord.droppedObservations`
+  do not take the sentence for that tool's result, so the tool's real earlier
+  result stays pinned; the dangling-reference check does not count it as a
+  re-fetched ground; under `.findings()` it is never offered to the model as a
+  result it may judge, never resolved as one (a model that names its id anyway
+  is recorded as written, `unknownId: true`), never counted undeclared, never
+  collapsed to a ticket, never listed in `WindowRecord.droppedStandings`, and
+  never ranked into its turn's standing — a batch whose results the model
+  judged all noise still reads as noise to `WindowStrategyInput.standingOf`
+  and the window's fact pin; and the trace toolpack's `inspect_tool_call`
+  reports the call as not dispatched, with no arguments, duration or inside —
+  and when a provider reused the id for a later call that ran, it reads that
+  call's step, outcome and duration off its own bracket, never the
+  settlement's. Its two brackets carry the same `notDispatched` (see Added),
+  and every reader of the event stream in the library reads it rather than taking a 0 ms
+  bracket for a call that ran: causal memory files no tool record for it; the
+  audit chain keeps the field on both records; the OpenTelemetry and X-Ray
+  adapters open no span or subsegment for it — though neither traces a
+  resumed leg today (a trace opens on `agent.turn_start`, which a resume does
+  not emit), and a settled call only ever rides one, so in practice they see
+  none of it; the live status line, the chat-bubble status and the live tool
+  tracker never show it as running, returned or failed; the commentary says
+  it was not called; a route hop never names it as the tool that drove it;
+  the step graph draws no tool step for it, a boundary's `toolCalls` rollup
+  does not count it, and the next step shows the last real result; the
+  thinking trace adds no beat for it; and the bug-report transcript keeps the
+  field on its step. The checkpoint is unchanged — the calls are read from
+  the conversation history — so a checkpoint saved by an earlier version
+  settles the same way when it is resumed on this one. An agent that set
+  `anthropic({ parallelToolCalls: false })` only to avoid this on pause and
+  resume no longer needs to.
+  **Still open:** a permission `halt` part-way through a batch, and a paused
+  turn continued after `abandonPause()`, still leave the later calls without a
+  result; and a hosted input request that is cancelled answers them with
+  `input_cancelled` rather than this sentence. Five readers of the history
+  still treat the settled sentence as a tool's result: the evidence corpus
+  (read by the evidence gate and, under `.findings()`, by the contingent rows
+  filed at dispatch) and the prior-turn evidence count built from it, the
+  heuristic memory extractor (which stores it as a "Tool result" beat), the
+  compaction summary's input, and the messages slot's context records, which
+  tag it `source: 'tool-result'` without the marker — so `context.injected`
+  and the views built on it count it as a tool's result. A viewer that reads
+  only a bracket's `error` shows a settled call as a success: the Lens
+  (`agentfootprint-lens`) does today, marking its `tool_end` `ok` and
+  describing it as returned in 0 ms, until it reads `notDispatched` on both
+  halves of the bracket. And under `.findings()`, a settled call's own
+  `_findings` is recorded only in part: the standings it declared are filed,
+  its basis row is not.
+- **`inspect_tool_call` reads a reused id's outcome and duration off its
+  latest call.** A provider may reuse a tool-call id across turns — the
+  library's own fallback ids start again in each provider instance. The trace
+  toolpack answered with the LATEST call's result for the id but took the
+  outcome and the duration from the FIRST `tool_end`, so an id whose first
+  call succeeded and whose second failed read `outcome: ok` beside the
+  failure's result. Both now come off the LAST `tool_end` for the id — the
+  call the result line shows. **Who is affected:** anyone reading
+  `inspect_tool_call` on a run whose provider reused an id; a run whose ids
+  are unique reads exactly as before. The step line still names the first
+  step that ran under the id.
+
 ## [9.112.2] - 2026-09-22
 
 ### Fixed

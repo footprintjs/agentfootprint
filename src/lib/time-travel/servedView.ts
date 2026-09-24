@@ -1077,33 +1077,37 @@ function viewOf(location: EpochLocation): ServedView {
     : Array.isArray(committedInjections)
     ? [...messagesFromInjections(committedInjections as InjectionRecord[])]
     : undefined;
-  const history = stripFrameworkFields(conversation ?? []);
+  const committed: readonly LLMMessage[] = conversation ?? [];
+  const history = stripFrameworkFields(committed);
 
   // ── the findings ledger, served (9.101.0, step 3) ──────────────────────
   // The SAME two pure functions the stage used, over the SAME committed
   // inputs, in the SAME order (`callLLM.ts · buildCallLLMStage`): the piece
   // from the ledger at the call and the wire's tool ids (nothing else — no
   // call number, so a re-ask rebuilds the same bytes it served) — derived
-  // here as the stage derived them, from the stripped conversation
-  // BEFORE the collapse (an id is never rewritten, so either side agrees);
+  // here as the stage derived them, from the COMMITTED conversation BEFORE
+  // the collapse and the strip (an id is never rewritten, so either side
+  // agrees; the batch settlement's marker, 9.113.0, is still on it — a
+  // settled message is no result, `findings/offer.ts` · `isResultMessage`);
   // the collapse under the mode `seed` put on the record as the run constant
   // `findingsServe` (the `forcedOutputToolName` precedent — a build-time fact
   // read from the RECORD, never from the receipt this view is checked
-  // against), and the answer-turn ask under the run constant
-  // `findingsAnswerAsk` (9.103.0), written only when the ask went out. No
-  // `.findings()` ⇒ no key ⇒ all three are no-ops and the rebuild is the
-  // bytes it always was; no new gap kind, `withheld` untouched.
+  // against), stripped after it, and the answer-turn ask under the run
+  // constant `findingsAnswerAsk` (9.103.0), written only when the ask went
+  // out. No `.findings()` ⇒ no key ⇒ all three are no-ops and the rebuild is
+  // the bytes it always was; no new gap kind, `withheld` untouched.
   const ledger = readAtCall(location, 'findingsLedger') as FindingsLedger | undefined;
   const findings = findingsLedgerPiece(
     ledger,
-    servedToolCallIds(history),
+    servedToolCallIds(committed),
     answerAskOf(readRunConstant(location, 'findingsAnswerAsk')),
   );
-  const asSent = collapseJudged(
-    history,
+  const collapsed = collapseJudged(
+    committed,
     ledger,
     servedModeOf(readRunConstant(location, 'findingsServe')),
   );
+  const asSent = collapsed === committed ? history : stripFrameworkFields(collapsed);
 
   // ── the declared ontology, served (9.106.0) ────────────────────────────
   // The SAME pure function the stage used, over the run constant `seed`

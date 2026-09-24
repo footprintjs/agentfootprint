@@ -51,6 +51,8 @@ import {
   codeRunnerTool,
   defineTool,
   inMemoryArtifacts,
+  isInputPause,
+  requestInput,
   type ArtifactScope,
   type CodeRunner,
 } from '../src/index.js';
@@ -61,7 +63,11 @@ import {
   traceToolpack,
   type TraceToolpackArtifacts,
 } from '../src/observe.js';
-import { composeReadSkillRefusal, unknownToolResult } from '../src/core/agent/stages/toolCalls.js';
+import {
+  composeReadSkillRefusal,
+  notDispatchedResult,
+  unknownToolResult,
+} from '../src/core/agent/stages/toolCalls.js';
 import { WRAP_UP_INSTRUCTION } from '../src/core/agent/stages/wrapUp.js';
 import {
   FINDINGS_ANSWER_ASK,
@@ -484,6 +490,57 @@ const unknownToolResults = (): readonly string[] => [
 ];
 
 /**
+ * A real run whose batch paused on its middle call (`requestInput`) and whose
+ * third call the resume SETTLED — the record `inspect_tool_call`'s
+ * never-dispatched arm reads (`traceToolpack.ts` · `notDispatchedOf`).
+ */
+const settledBatchArtifacts = async (): Promise<TraceToolpackArtifacts> => {
+  const agent = Agent.create({
+    provider: mock({
+      replies: [
+        {
+          toolCalls: [
+            { id: 'c1', name: 'first', args: {} },
+            { id: 'c2', name: 'second', args: {} },
+            { id: 'c3', name: 'third', args: {} },
+          ],
+        },
+        { content: 'done' },
+      ],
+    }),
+    model: 'mock',
+  })
+    .tools(
+      ['first', 'second', 'third'].map((name) =>
+        defineTool({
+          name,
+          description: `the ${name} tool`,
+          inputSchema: { type: 'object', properties: {} },
+          execute: () =>
+            name === 'second'
+              ? requestInput({
+                  id: 'year',
+                  question: 'Which year?',
+                  fields: [{ id: 'year', type: 'number', required: true }],
+                })
+              : `${name} ran`,
+        }),
+      ),
+    )
+    .build();
+  const paused = await agent.run({ message: 'go' });
+  if (!isInputPause(paused)) throw new Error('expected an input pause');
+  const recorder = recordRun(agent);
+  await agent.resume(paused.checkpoint, {
+    requestId: paused.awaitingInput.requestId,
+    values: { year: 2026 },
+  });
+  const recording = recorder.toRecording();
+  recorder.stop();
+  return { snapshot: agent.getLastSnapshot()!, events: recording.events };
+};
+
+/**
  * The trace toolpack's model-facing RESULTS, composed through the real
  * `execute` (`callTraceTool` validates args exactly as an Agent dispatch
  * would, so these are the strings a debugging session reads).
@@ -537,6 +594,10 @@ const traceToolpackResults = async (): Promise<readonly string[]> => {
   const stocked = innerRunStore(4);
   stocked.keep({ toolCallId: 'c9', toolName: 'weather_advice', outcome: 'ok', steps: 4 });
   return [
+    // The never-dispatched arm (9.113.0): a call the paused batch settled.
+    await callTraceTool(traceToolpack(await settledBatchArtifacts()), 'inspect_tool_call', {
+      toolCallId: 'c3',
+    }),
     await callTraceTool(traceToolpack(artifacts), 'inspect_tool_call', { toolCallId: 'c1' }),
     await callTraceTool(traceToolpack({ ...artifacts, innerRuns: stocked }), 'inspect_tool_run', {
       toolCallId: 'c1',
@@ -971,6 +1032,25 @@ const PRODUCERS: readonly ModelFacingProducer[] = [
     compose: async () => unknownToolResults(),
   },
   {
+    id: 'dispatch — the batch settlement (a paused batch’s un-dispatched siblings, 9.113.0)',
+    module: 'src/core/agent/stages/toolCalls.ts',
+    surface: TOOL_RESULT,
+    lifetimeBecause:
+      'every resume path appends it as the `role: "tool"` result of a call the paused batch ' +
+      'never dispatched, so it is written into `history` and re-read on every later call of ' +
+      'the turn',
+    drivenBy: ['test/core/scenario/batch-pause-settlement.test.ts'],
+    // One arm, three slots: the settled call's own tool, and the paused call
+    // it is anchored to — by id and by tool. The markers pin the anchor, not
+    // the wording around it (this file's rule for `reaches`); the wording is
+    // pinned word for word in the scenario suite named in `drivenBy`, since
+    // the checker's rows catch only some present-tense shapes.
+    reaches: [/call 'c2' to 'collect_input'/, /Tool 'lookup_rows'/],
+    compose: async () => [
+      notDispatchedResult('lookup_rows', { toolName: 'collect_input', toolCallId: 'c2' }),
+    ],
+  },
+  {
     id: 'trace toolpack — the tool-call inspection results',
     module: 'src/lib/trace-toolpack/traceToolpack.ts',
     surface: TOOL_RESULT,
@@ -981,7 +1061,7 @@ const PRODUCERS: readonly ModelFacingProducer[] = [
       'test/lib/trace-toolpack/inspectToolCall.test.ts',
       'test/lib/trace-toolpack/innerRunRecords.test.ts',
     ],
-    // The three arms this row composes, one marker each. NOT every arm of the
+    // The arms this row composes, one marker each. NOT every arm of the
     // pack: the unknown-id arms of `inspect_tool_call` / `trace_node` carry
     // standing imperatives ("Call run_overview …") that this release did not
     // repair, and they are on the record as such in
@@ -994,6 +1074,9 @@ const PRODUCERS: readonly ModelFacingProducer[] = [
       /Inner runs you CAN open/,
       /the outer run does not record a call with that id/,
       /No inner run was held when inspect_tool_run/,
+      // The never-dispatched arm (9.113.0): anchored to the paused call and to
+      // the settled one, by id.
+      /not dispatched — the run paused on call 'c2' to 'second'.*without executing call 'c3'/,
     ],
     compose: traceToolpackResults,
   },

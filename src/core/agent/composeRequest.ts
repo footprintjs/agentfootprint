@@ -82,14 +82,17 @@ export function contributingPieces<T extends SystemPromptPiece>(
 /**
  * Drop the fields that exist for the library and never for the model.
  *
- * Today that is exactly one: `injectedBy`, the delivery marker (7.21).
- * Messages without it pass through BY REFERENCE, so an agent that delivers
- * nothing allocates nothing — and the array's length and order are untouched
- * either way, which is what keeps `CacheMarker{field:'messages'}` honest.
+ * Today there are two: `injectedBy`, the delivery marker (7.21), and
+ * `notDispatched`, the batch settlement's marker (9.113.0 — the model reads the
+ * settled call's sentence; the marker is that fact for the library's readers).
+ * Messages without either pass through BY REFERENCE, so an agent that delivers
+ * and settles nothing allocates nothing — and the array's length and order are
+ * untouched either way, which is what keeps `CacheMarker{field:'messages'}`
+ * honest.
  *
- * It is removed before the request exists rather than trusted to be ignored: a
- * consumer-authored adapter that serializes a message wholesale would
- * otherwise put library internals on someone's wire. Stripping removes a
+ * They are removed before the request exists rather than trusted to be
+ * ignored: a consumer-authored adapter that serializes a message wholesale
+ * would otherwise put library internals on someone's wire. Stripping removes a
  * FIELD, never a message, so `messages[i]` is still the message a cache
  * marker's index names.
  *
@@ -100,13 +103,19 @@ export function contributingPieces<T extends SystemPromptPiece>(
  * ```
  */
 export function stripFrameworkFields(messages: readonly LLMMessage[]): readonly LLMMessage[] {
-  if (!messages.some((m) => m.injectedBy !== undefined)) return messages;
+  if (!messages.some(carriesFrameworkFields)) return messages;
   return messages.map((m) => {
-    if (m.injectedBy === undefined) return m;
-    const { injectedBy: _marker, ...composed } = m;
-    void _marker;
+    if (!carriesFrameworkFields(m)) return m;
+    const { injectedBy: _delivered, notDispatched: _settled, ...composed } = m;
+    void _delivered;
+    void _settled;
     return composed;
   });
+}
+
+/** Does this message carry a field {@link stripFrameworkFields} removes? */
+function carriesFrameworkFields(message: LLMMessage): boolean {
+  return message.injectedBy !== undefined || message.notDispatched !== undefined;
 }
 
 /** What the messages-slot join needs from an injection record. */

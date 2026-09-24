@@ -128,6 +128,48 @@ free pin, the stand-down family, thirty iterations under both drop strategies,
 the unarmed byte identity); design: `docs/design/2026-09-findings-ledger.md`
 § Step 4.
 
+## A settled message names no tool (9.113.0)
+
+**A `role: 'tool'` message that carries `LLMMessage.notDispatched` is no tool's
+result, so the window names no tool for it** (`toolNames.ts` ·
+`toolNameOfMessage`).
+
+Why: when a batch of calls pauses, the resume answers each call after the
+paused one with the library's fixed sentence and never runs it
+(`../stages/toolCalls.ts` · "── The batch settlement (9.113.0)"). The message
+has a `role: 'tool'` and a `toolName`. Named as that tool's latest result, it
+moved the last-tool-result pin off the tool's real, earlier result and onto
+the sentence, so the evidence the pin exists to keep could leave (the
+measured failure in `lastToolResult.ts`). Every reader of the name inherits
+the answer from the one helper: the pin, the drop notice and
+`WindowRecord.droppedObservations`, and the dangling-reference check in
+`../stages/callLLM.ts`. That check names the frame from the committed history
+the stage already read at its top, because the wire has lost the marker —
+never from a second read, which would add a narrative step to every run it
+checks. A run with no settled message names exactly what it named before.
+
+A settled message has no STANDING either: a turn's standing is its most
+valuable RESULT's, and `ledgerFactPins.ts` · `turnStandingOf` and
+`ledgerFactPinsOf` skip it by `../findings/offer.ts` · `isResultMessage` — so a
+batch whose results the model judged all noise still reads `noise` through
+`WindowStrategyInput.standingOf`, and a `fact` the model filed on the settled
+id (`unknownId`) holds nothing.
+
+```ts
+// whats_here ran once (a1); later the batch [collect_input, whats_here]
+// paused on collect_input, and the resume SETTLED whats_here (c2).
+toolResultPinsOf(segmentTurns(history), history, anchor); // messageIndex, chars omitted
+// → [{ toolName: 'collect_input', turnIndex: 2 }, { toolName: 'whats_here', turnIndex: 1 }]
+//   whats_here's pin stays on turn 1, the real result. The settled c2 would
+//   have taken it: [{ toolName: 'whats_here', turnIndex: 2 }].
+```
+
+Pinned by `test/core/window-last-tool-result.test.ts`,
+`test/core/window-drop-observations.test.ts`,
+`test/core/window-ledger-fact-pins.test.ts`,
+`test/integrity/danglingReference.test.ts` (the narrative too) and, end to
+end, `test/core/scenario/batch-pause-settlement.test.ts`.
+
 ## Files
 - `notice.ts` — the message a DROP leaves behind, and why it must exist.
 - `summarize.ts` — the authored frame around an untrusted summary.

@@ -603,6 +603,75 @@ describe('a run that paused and resumed', () => {
       // And the full law, against the request the provider really received.
       expect(failuresAt(snapshot, view.epoch, sent)).toEqual([]);
     });
+
+    // 9.113.0 — a batch that paused mid-way: the resume SETTLED the call after
+    // the paused one, and its history message carries `notDispatched`, which
+    // the wire never does. Under `.findings()` the live request and the
+    // rebuild both read the served ids and the collapse off the COMMITTED
+    // conversation, where the marker still is — a reader of the stripped
+    // copy would count the settled call undeclared (or ticket its sentence)
+    // on one side and not the other, and the law would go red here.
+    it(`${reactMode}: a batch paused mid-way under .findings() keeps the law at every epoch after the resume`, async () => {
+      const { provider, wire } = scripted([
+        call('x1', 'look', { _findings: { basis: 'direct' } }),
+        {
+          content: '',
+          toolCalls: [
+            {
+              id: 'c1',
+              name: 'look',
+              args: {
+                _findings: { basis: 'direct', previous: [{ toolCallId: 'x1', standing: 'noise' }] },
+              },
+            },
+            { id: 'c2', name: 'ask_human', args: {} },
+            { id: 'c3', name: 'look', args: {} },
+          ],
+        },
+        call('d1', 'look', {
+          _findings: { basis: 'direct', previous: [{ toolCallId: 'c3', standing: 'noise' }] },
+        }),
+        answer('done'),
+      ]);
+      const agent = Agent.create({ provider: provider as never, model: 'mock', reactMode })
+        .tool(tool('look'))
+        .tool({
+          schema: { name: 'ask_human', description: 'ask', inputSchema: { type: 'object' } },
+          execute: () => {
+            pauseHere({ question: 'proceed?' });
+            return '';
+          },
+        })
+        .findings()
+        .build();
+
+      const paused = await agent.run({ message: 'go' });
+      if (!isPaused(paused)) throw new Error('expected a pause');
+      await agent.resume(paused.checkpoint, 'yes');
+
+      const snapshot = agent.getSnapshot()!;
+      const views = servedViews(snapshot);
+      expect(views).toHaveLength(2);
+      views.forEach((view, i) => {
+        const sent = wire[wire.length - views.length + i]!;
+        expect(failuresAt(snapshot, view.epoch, sent), `epoch ${view.epoch}`).toEqual([]);
+      });
+      // What the law just held: the settled call answered on the wire with its
+      // sentence, never collapsed, never counted undeclared.
+      const last = wire[wire.length - 1]!;
+      expect(last.messages.find((m) => m.toolCallId === 'c3')?.content).toContain(
+        'was not executed on that call',
+      );
+      expect(last.systemPrompt).toContain(
+        'undeclared: 3 results, served in full below (tool:c1, tool:c2, tool:d1)',
+      );
+      // And no request the provider received carried the marker: the ones
+      // after the resume were built on the collapse path (x1 judged noise),
+      // which strips after it collapses (`callLLM.ts` · `buildCallLLMStage`).
+      for (const sent of wire) {
+        expect(sent.messages.some((m) => 'notDispatched' in m)).toBe(false);
+      }
+    });
   }
 });
 

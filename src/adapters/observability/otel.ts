@@ -45,12 +45,27 @@
  *   stream.tool_end           ↦  end tool span (ERROR status + `error.type`
  *                                if errored). Correlated by toolCallId so
  *                                PARALLEL tool calls close the right span.
+ *   a bracket carrying        ↦  NO span: the call never executed (9.113.0).
+ *   `notDispatched`              Its tool_start adds ONE span event
+ *                                `agentfootprint.tool.not_dispatched` to the
+ *                                active span — SYNTHESIZED name — with
+ *                                `gen_ai.tool.name`, `gen_ai.tool.call.id` and
+ *                                the paused call's id and name; its tool_end
+ *                                closes nothing. KNOWN LIMIT: only on a leg
+ *                                this adapter traces, and a trace opens on
+ *                                `agent.turn_start` only. A resumed leg emits
+ *                                none and carries a new `meta.runId`, so none
+ *                                of it is traced today — and a settled bracket
+ *                                only ever rides a resumed leg, so no run
+ *                                records this span event yet
  *   cost.tick                 ↦  setAttribute on topmost active span
  *   error.fatal               ↦  ERROR status on root + defensive unwind
  *   context.evaluated         ↦  N span events `agentfootprint.skill.routing`
  *                                — SYNTHESIZED name (one per routing entry),
- *                                not a registry-verbatim forward; all other
- *                                span events use the registry name verbatim
+ *                                not a registry-verbatim forward; apart from
+ *                                it and `agentfootprint.tool.not_dispatched`
+ *                                above, span events use the registry name
+ *                                verbatim
  *
  * ## Decisions = SPAN EVENTS, not attributes (design decision)
  *
@@ -119,11 +134,22 @@
  */
 
 import type { FlowDecisionEvent, FlowSelectedEvent } from 'footprintjs';
+import type { ToolStartPayload } from '../../events/payloads.js';
 import type { AgentfootprintEvent } from '../../events/registry.js';
 import { lazyRequire } from '../../lib/lazyRequire.js';
 import type { ObservabilityStrategy } from '../../strategies/types.js';
 
 import { rateLimitedConsoleSink } from './deliveryErrors.js';
+
+/** The batch settlement's marker (9.113.0), as the canonical field defines it. */
+type SettledMarker = NonNullable<ToolStartPayload['notDispatched']>;
+
+/**
+ * The same marker as an event reaching this adapter carries it — DERIVED from
+ * the canonical field (one definition), every level optional because the
+ * adapter also takes hand-fed streams.
+ */
+type SettledMarkerLike = { readonly [K in keyof SettledMarker]?: Partial<SettledMarker[K]> };
 
 // ─── Public options ──────────────────────────────────────────────────
 
@@ -962,8 +988,31 @@ export function otelObservability(opts: OtelObservabilityOptions): OtelObservabi
           toolCallId?: string;
           args?: Record<string, unknown>;
           protocol?: string;
+          notDispatched?: SettledMarkerLike;
         };
         const toolName = p.toolName ?? 'tool';
+        // A call the batch settlement answered (9.113.0) never executed, so it
+        // gets no `execute_tool` span — one would claim an execution that
+        // never happened. The fact is a library decision, recorded like every
+        // other one here: a span event on the active span (SYNTHESIZED name).
+        // Only on a leg this adapter traces — see the header's KNOWN LIMIT.
+        if (p.notDispatched !== undefined) {
+          const top = topSpan(t);
+          if (top) {
+            const paused = p.notDispatched.pausedCall;
+            recordSpanEvent(top, 'agentfootprint.tool.not_dispatched', {
+              'gen_ai.tool.name': toolName,
+              ...(p.toolCallId !== undefined && { 'gen_ai.tool.call.id': p.toolCallId }),
+              ...(paused?.toolCallId !== undefined && {
+                'agentfootprint.tool.paused_call.id': paused.toolCallId,
+              }),
+              ...(paused?.toolName !== undefined && {
+                'agentfootprint.tool.paused_call.name': paused.toolName,
+              }),
+            });
+          }
+          break;
+        }
         // Tool-execution span per GenAI semconv (`execute_tool`).
         // Args: top-level key NAMES only — `gen_ai.tool.call.arguments`
         // exists in the spec but is opt-in and carries raw values; we
@@ -990,7 +1039,12 @@ export function otelObservability(opts: OtelObservabilityOptions): OtelObservabi
           toolName?: string;
           result?: unknown;
           error?: unknown;
+          notDispatched?: unknown;
         };
+        // A settled call's tool_start opened no span (see tool_start), so its
+        // tool_end closes nothing — and must never reach the name-less
+        // fallback below, which would pop whatever tool span is on top.
+        if (p.notDispatched !== undefined) break;
         const errored = p.error !== undefined && p.error !== false;
         // Correlate by toolCallId (the only identity ToolEndPayload
         // carries) — parallel tool calls end out of LIFO order, so name

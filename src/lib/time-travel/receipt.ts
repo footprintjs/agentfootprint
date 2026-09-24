@@ -585,9 +585,10 @@ export function toolDigestInput(tool: LLMToolSchema): string {
  * `stableJson` FINGERPRINT, so nothing quotable is added — a signature is an
  * opaque token, not content.
  *
- * Still deliberately NOT covered: `injectedBy` (stripped before the request
- * exists) and `ephemeral` (a persistence flag, invisible to the model). Two
- * messages that hash the same are the same thing said to the model.
+ * Still deliberately NOT covered: `injectedBy` and `notDispatched` (both
+ * stripped before the request exists) and `ephemeral` (a persistence flag,
+ * invisible to the model). Two messages that hash the same are the same thing
+ * said to the model.
  */
 export function messageDigestInput(message: LLMMessage): string {
   const calls = (message.toolCalls ?? []).map((call) =>

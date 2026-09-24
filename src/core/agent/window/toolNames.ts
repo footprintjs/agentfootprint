@@ -28,12 +28,27 @@
  * is not called `'unknown'` and it is not counted: a notice that says a tool
  * called `unknown` lost its result teaches the model a tool name that does
  * not exist, which is the exact failure this file exists to prevent.
+ *
+ * ## A settled message is not a result at all (9.113.0)
+ *
+ * When a batch of calls pauses, the resume answers each call after the paused
+ * one with a fixed sentence and never runs it (`../stages/toolCalls.ts` ·
+ * "── The batch settlement (9.113.0)"). That message has `role: 'tool'` and a
+ * `toolName`, and no tool produced it: `LLMMessage.notDispatched` says so, and
+ * this file reads that marker rather than the role. So it names nothing, and
+ * every reader of the name asks the right question for free: the
+ * `'last-tool-result'` pin (`lastToolResult.ts` · `toolResultPinsOf`) is not
+ * moved off a tool's real result onto the sentence, the drop notice and
+ * `WindowRecord.droppedObservations` do not report a result that never
+ * existed, and the closure check (`../stages/callLLM.ts`) does not count the
+ * sentence as a re-fetched ground.
  */
 
 import type { LLMMessage } from '../../../adapters/types.js';
 
 /**
- * The tool a `role: 'tool'` message came from, or `undefined`.
+ * The tool a `role: 'tool'` message came from, or `undefined`. A settled
+ * message (`notDispatched`) came from no tool, so it is `undefined` too.
  *
  * @param msg     the message to name
  * @param context where to look for the assistant turn that asked, when the
@@ -43,7 +58,7 @@ export function toolNameOfMessage(
   msg: LLMMessage,
   context: readonly LLMMessage[],
 ): string | undefined {
-  if (msg.role !== 'tool') return undefined;
+  if (msg.role !== 'tool' || msg.notDispatched !== undefined) return undefined;
   if (msg.toolName !== undefined && msg.toolName.length > 0) return msg.toolName;
   const id = msg.toolCallId;
   if (id === undefined || id.length === 0) return undefined;

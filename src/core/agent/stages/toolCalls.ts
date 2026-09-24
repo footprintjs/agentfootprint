@@ -9,7 +9,10 @@
  *     payload so footprintjs captures a checkpoint.
  *   • `resume` runs after the consumer supplies the human's answer.
  *     Treats that answer as the paused tool's result, appends to
- *     history, then continues the ReAct iteration loop.
+ *     history, then continues the ReAct iteration loop. Calls the model
+ *     batched AFTER the paused one were never dispatched; every resume
+ *     path settles them with one fixed sentence each, a bracket and a
+ *     count, and runs none of them ("── The batch settlement (9.113.0)").
  *
  * Dispatch resolution order (9.92.0 — DISPATCH FOLLOWS THE OFFER):
  *   0. A name on THIS epoch's wire resolves to the party whose contract the
@@ -121,7 +124,7 @@ import type { ToolMiddleware } from '../middleware/types.js';
 import { runToolChain, runToolAfterChain, type ToolArgs } from '../middleware/runChain.js';
 import { recordDecisions } from '../middleware/ledger.js';
 import { ownsReservedArgument, splitFindings, type SplitFindings } from '../findings/reserved.js';
-import { knownResults } from '../findings/offer.js';
+import { isResultMessage, knownResults } from '../findings/offer.js';
 import type { Classifier } from '../../../classify/types.js';
 import {
   basisRowFrom,
@@ -1061,6 +1064,146 @@ function appendBatchResult(
   scope.toolResults = [...(scope.toolResults ?? []), entry];
 }
 
+/** One call the model proposed on an assistant turn (`LLMMessage.toolCalls`). */
+export type ProposedCall = NonNullable<LLMMessage['toolCalls']>[number];
+
+/**
+ * THE PAUSED BATCH (9.113.0) — the turn that proposed the paused call, and
+ * the calls on it that a pause left un-dispatched.
+ *
+ * The batch loop in `execute` dispatches a turn's calls one at a time, in the
+ * order the model proposed them, and every pause RETURNS from inside it: the
+ * checkpoint is taken on call k, and calls k+1..N were never reached — no
+ * gate judged them, no tool ran, no bracket opened. The resume paths used to
+ * answer call k and stop, so the next request carried N `tool_use` blocks and
+ * fewer `tool_result`s (a provider builds results only from `role: 'tool'`
+ * messages), and `iteration_end` counted one call.
+ *
+ * READ FROM `history`, NEVER CARRIED. Every pause site commits
+ * `scope.history = newHistory` before it returns, so the assistant turn that
+ * proposed the batch is on the checkpoint — and it is the very message a
+ * provider turns into the `tool_use` blocks the settlement must answer. It is
+ * therefore the one owner of "which calls does the next request carry", and
+ * the checkpoint gains no key: a checkpoint written before this release
+ * settles the same way. The window never removes the turn holding the paused
+ * call (`../window/turns.ts` · `refusalFor`, its `paused-tool` arm).
+ *
+ * The LATEST turn proposing the id is the paused one — the pause site commits
+ * that turn last, and a provider may reuse an id across turns. No such turn:
+ * `size: 0` and nothing to settle, the only answer a missing turn supports.
+ *
+ * A call after the paused one that history ALREADY answers — a `role: 'tool'`
+ * message for its id after that turn — is not un-dispatched, whoever wrote
+ * the answer. No library door writes one before the resume; a checkpoint is
+ * data, though, and an app may have patched results into a stored one.
+ * Settling such a call again would put a second result for its id on the
+ * next request, a shape a provider rejects.
+ */
+export function pausedBatchOf(
+  history: readonly LLMMessage[],
+  pausedToolCallId: string,
+): { readonly size: number; readonly undispatched: readonly ProposedCall[] } {
+  for (let i = history.length - 1; i >= 0; i--) {
+    const message = history[i];
+    if (message?.role !== 'assistant') continue;
+    const proposed = message.toolCalls ?? [];
+    const at = proposed.findIndex((call) => call.id === pausedToolCallId);
+    if (at < 0) continue;
+    const answered = new Set(
+      history.slice(i + 1).flatMap((m) => (m.role === 'tool' ? [m.toolCallId] : [])),
+    );
+    return {
+      size: proposed.length,
+      undispatched: proposed.slice(at + 1).filter((call) => !answered.has(call.id)),
+    };
+  }
+  return { size: 0, undispatched: [] };
+}
+
+// LENS · tool-result · persistent-history
+// reads: toolName ← the un-dispatched call on the paused turn (`pausedBatchOf`); paused ← scope.pausedToolName + scope.pausedToolCallId, the checkpoint's own carriers
+// law: may omit, never deny; every clause anchored to the call it was composed on; names no destination.
+/**
+ * What a call the paused batch never dispatched gets back (9.113.0) — ONE
+ * fixed sentence, on all four resume paths.
+ *
+ * Every clause is a past fact about one finished event, anchored by name: the
+ * call this result answers ("that call"), the call the run paused on (by id
+ * and by tool), and the resume. It names no destination. The design page's draft
+ * (`docs/design/2026-09-honest-answer-ledger.md`, § 5.5, "The batch
+ * settlement") ended "propose it again if still needed" — an instruction about a LATER call,
+ * re-read on every call after this one, the tool-less wrap-up included.
+ * Whether the call is still needed is the model's to judge from the facts;
+ * the surfaces recomposed per request (the tool list, the system prompt) own
+ * the present tense. Precedents: the 9.86.1 resumed-call refusal in this file
+ * ("was not executed on that call, and the resumed dispatch had no second
+ * checkpoint…") and `../selfCallNotice.ts` · `selfCallNotice`.
+ *
+ * "The run paused ON call …", never "call … paused the run": on two of the
+ * four doors the pause was a gate's, not the call's — a middleware's `ask`, a
+ * credential's consent need — and on all four the run paused AT that call.
+ *
+ * The sentence is for the MODEL. The same fact as data rides the settled
+ * message as `LLMMessage.notDispatched` and both of its brackets as
+ * `notDispatched` (`notDispatchedMarker`), and a reader asking "did this call
+ * run?" reads that — never this text.
+ *
+ * Exported for the producer registry (`test/modelFacingSurfaces.test.ts`).
+ */
+export function notDispatchedResult(
+  toolName: string,
+  paused: { readonly toolName: string; readonly toolCallId: string },
+): string {
+  return (
+    `Tool '${toolName}' was not executed on that call: the run paused on call ` +
+    `'${paused.toolCallId}' to '${paused.toolName}', earlier in the same batch, and resumed ` +
+    `without executing the calls that followed it in that batch.`
+  );
+}
+
+/**
+ * The same fact as DATA (9.113.0) — the ONE composer of the settlement's
+ * marker, `{ pausedCall: { toolCallId, toolName } }`. The settled call's
+ * history message (`LLMMessage.notDispatched`) and both of its brackets
+ * (`ToolStartPayload.notDispatched`, `ToolEndPayload.notDispatched`) each take
+ * a fresh copy from here, so the three carriers can never disagree and no
+ * reader holds an object another reader holds.
+ */
+function notDispatchedMarker(paused: {
+  readonly toolName: string;
+  readonly toolCallId: string;
+}): NonNullable<LLMMessage['notDispatched']> {
+  return { pausedCall: { toolCallId: paused.toolCallId, toolName: paused.toolName } };
+}
+
+/**
+ * The empty-lookup check's PRODUCER CORPUS (9.77.0) — every `role: 'tool'`
+ * RESULT in `history` from a tool the judged one names in `argumentsFrom`,
+ * as the run served it. The caller hands the history the judged call was
+ * served (the call itself is pushed after it), so a producer called earlier in
+ * the same batch is already in it — which is right: the model can only have
+ * taken a value from a result it had already been served.
+ *
+ * A message the batch settlement wrote (9.113.0) is no result: its ground
+ * never ran, so it produced nothing to take a value from. Read off the marker
+ * (`../findings/offer.ts` · `isResultMessage`), never the sentence.
+ *
+ * Exported for its unit test (`test/integrity/emptyLookup.test.ts`).
+ */
+export function producerCorpusOf(
+  history: readonly LLMMessage[],
+  argumentsFrom: readonly string[],
+): ProducedResult[] {
+  const produced: ProducedResult[] = [];
+  for (const message of history) {
+    if (!isResultMessage(message)) continue;
+    const name = message.toolName;
+    if (typeof name !== 'string' || !argumentsFrom.includes(name)) continue;
+    produced.push({ toolName: name, text: message.content });
+  }
+  return produced;
+}
+
 /**
  * The judge's turn on ONE landed result (9.104.0) — called at the five
  * places a result joins the batch (the execute loop and the four resume
@@ -1450,18 +1593,9 @@ export function buildToolCallsHandler(
       ledger?.note('empty-lookup', 'write', 'not-applicable');
       return;
     }
-    // The producer corpus: every earlier `role: 'tool'` message from a tool
-    // THIS tool declares as one of its grounds. `history` here excludes the
-    // call being judged (it is pushed after), and a producer called earlier
-    // in the same batch is already in it — which is right: the model can only
-    // have taken a value from a result it had already been served.
-    const produced: ProducedResult[] = [];
-    for (const message of history) {
-      if (message.role !== 'tool') continue;
-      const name = message.toolName;
-      if (typeof name !== 'string' || !argumentsFrom.includes(name)) continue;
-      produced.push({ toolName: name, text: message.content });
-    }
+    // The producer corpus: the earlier RESULTS from a tool THIS tool declares
+    // as one of its grounds — never a settled message (`producerCorpusOf`).
+    const produced = producerCorpusOf(history, argumentsFrom);
     const { findings, disposition } = emptyLookupOf(
       {
         toolName: call.toolName,
@@ -2899,6 +3033,120 @@ export function buildToolCallsHandler(
     });
     recordDecisions(scope, verdict.decisions);
     return verdict.kind === 'deny' ? verdict.reason : verdict.result;
+  };
+
+  // ── The batch settlement (9.113.0) — ONE implementation, four resume doors ──
+  // A pause returns from inside the batch loop, so the calls the model batched
+  // AFTER the paused one were never dispatched (`pausedBatchOf`). Each resume
+  // path hands its answered history here and gets back the history it commits:
+  // the paused call's result, then one settled result per un-dispatched
+  // sibling, in call order — `notDispatchedResult`, never a dispatch. A resumed
+  // dispatch has no second checkpoint to give (`resolveCredentialAndExecute`
+  // turns a pause raised there into an error result), so a sibling that would
+  // ask a person, meet a check-in or wait on consent could not; the model reads
+  // the fact and decides for itself whether to propose the call again.
+  //
+  // What a settled sibling is NOT: a result that landed. It joins neither
+  // `lastToolResult` nor the `toolResults` batch — `on-tool-return` triggers,
+  // skill-graph routes and map renewal read those as "this tool returned", and
+  // it did not. No gate, no after-tool chain, no judge, no cap: none of them
+  // ever saw the call. Nor a call that DISPATCHED: its message carries
+  // `LLMMessage.notDispatched`, the fact as data, so the readers that ask
+  // "did it run?" or "is this a tool's result?" answer without parsing the
+  // sentence — a permission policy's `sequence` (`extractSequence`, which
+  // pairs the marker with its own proposal by position) and the check-in
+  // trail (`checkin.ts` · `buildTrail`) leave it out, the empty-lookup
+  // check's producer corpus takes no text from it (`producerCorpusOf`), the
+  // window names no tool for it (`../window/toolNames.ts` ·
+  // `toolNameOfMessage`: the last-tool-result pin, the drop notice, the
+  // dangling-reference check), the findings offer, identity source, piece,
+  // collapse and dropped-standings record skip it (`../findings/offer.ts`), so
+  // does a turn's standing (`../window/ledgerFactPins.ts` · `turnStandingOf`),
+  // and the trace toolpack reports it as not dispatched (`traceToolpack.ts` ·
+  // `notDispatchedOf`). Its two brackets carry the same marker
+  // (`bracketSettled`), so the readers of the EVENT stream answer the same
+  // way. The wire never carries the marker (`composeRequest.ts` ·
+  // `stripFrameworkFields`).
+  // Nothing settled → the SAME array comes back, no event fires, and the
+  // resume leg is byte-identical to the release before.
+  interface BatchSettlement {
+    /** What the resume leg commits and reports on `iteration_end`. */
+    readonly history: LLMMessage[];
+    /** The settled siblings, in call order, each with the sentence it got. */
+    readonly settled: readonly { readonly call: ProposedCall; readonly result: string }[];
+    /** How many calls the paused turn proposed — the batch loop's `parallelCount`. */
+    readonly size: number;
+    /** The call the run paused on — what every marker of this settlement names. */
+    readonly paused: { readonly toolName: string; readonly toolCallId: string };
+  }
+
+  const settleBatch = (
+    answered: LLMMessage[],
+    paused: { readonly toolName: string; readonly toolCallId: string },
+  ): BatchSettlement => {
+    const batch = pausedBatchOf(answered, paused.toolCallId);
+    if (batch.undispatched.length === 0)
+      return { history: answered, settled: [], size: batch.size, paused };
+    const settled = batch.undispatched.map((call) => ({
+      call,
+      result: notDispatchedResult(call.name, paused),
+    }));
+    return {
+      history: [
+        ...answered,
+        ...settled.map(
+          ({ call, result }): LLMMessage => ({
+            role: 'tool',
+            content: result,
+            toolCallId: call.id,
+            toolName: call.name,
+            notDispatched: notDispatchedMarker(paused),
+          }),
+        ),
+      ],
+      settled,
+      size: batch.size,
+      paused,
+    };
+  };
+
+  /**
+   * Each settled sibling's bracket, after the paused call's own `tool_end` —
+   * the ONE site that stamps `notDispatched` on the stream: `tool_start` with
+   * the args the call would have run with (the batch loop's peel, so
+   * `_findings` never shows on a bracket), then `tool_end` carrying the
+   * sentence and `durationMs: 0`. Both carry the marker the history message
+   * carries (`notDispatchedMarker`), and no other bracket in the library ever
+   * does.
+   *
+   * No `error`. It says a call FAILED — the tool threw, or the call itself
+   * could not run as written (an args rejection, a `wants` block, a consent
+   * the tool needed and did not get, an unknown name). A settled call did not
+   * fail: the library decided not to dispatch it, as it does for a call a
+   * permission policy denies or halts, and those brackets carry no `error`
+   * either. Stamped here, it would register a tool failure in every
+   * error-rate reader (a span status, a dashboard, an alert) on every
+   * mid-batch pause, and say a second, false thing beside the marker, which
+   * is the one owner of why there is no result (`src/core/README.md` · "One
+   * owner of 'never dispatched' — in history and on the stream", the reader
+   * table). No `status` either: that field is the TOOL's own word.
+   */
+  const bracketSettled = (scope: TypedScope<AgentState>, settlement: BatchSettlement): void => {
+    for (const { call, result } of settlement.settled) {
+      typedEmit(scope, 'agentfootprint.stream.tool_start', {
+        toolName: call.name,
+        toolCallId: call.id,
+        args: peelCall(call).args,
+        parallelCount: settlement.size,
+        notDispatched: notDispatchedMarker(settlement.paused),
+      });
+      typedEmit(scope, 'agentfootprint.stream.tool_end', {
+        toolCallId: call.id,
+        result,
+        durationMs: 0,
+        notDispatched: notDispatchedMarker(settlement.paused),
+      });
+    }
   };
 
   // Resolve a tool's declared credential (declare-and-push) and execute it,
@@ -5003,10 +5251,16 @@ export function buildToolCallsHandler(
           );
           emitTransitionConflict(scope, iteration, askTransition);
         }
-        const askHistory: LLMMessage[] = [
-          ...(scope.history as readonly LLMMessage[]),
-          { role: 'tool', content: askResultStr, toolCallId, toolName },
-        ];
+        // The batch settlement (9.113.0): the answered call's result, then the
+        // siblings the pause left un-dispatched, each settled — never run.
+        const askSettlement = settleBatch(
+          [
+            ...(scope.history as readonly LLMMessage[]),
+            { role: 'tool', content: askResultStr, toolCallId, toolName },
+          ],
+          { toolName, toolCallId },
+        );
+        const askHistory = askSettlement.history;
         scope.history = askHistory;
         scope.lastToolResult = {
           toolName,
@@ -5033,10 +5287,14 @@ export function buildToolCallsHandler(
           ...(error === true && { error: true }),
           ...(resumeEnvelope?.status !== undefined && { status: resumeEnvelope.status }),
         });
+        bracketSettled(scope, askSettlement);
         typedEmit(scope, 'agentfootprint.agent.iteration_end', {
           turnIndex: 0,
           iterIndex: iteration,
-          toolCallCount: 1,
+          // The brackets THIS leg closed: the answered call's, plus one per
+          // settled sibling. The calls before the paused one closed theirs on
+          // the leg that paused, which ended in a checkpoint, not here.
+          toolCallCount: 1 + askSettlement.settled.length,
           history: askHistory,
         });
         scope.iteration = iteration + 1;
@@ -5172,10 +5430,15 @@ export function buildToolCallsHandler(
           );
           emitTransitionConflict(scope, iteration, decisionTransition);
         }
-        const decisionHistory: LLMMessage[] = [
-          ...(scope.history as readonly LLMMessage[]),
-          { role: 'tool', content: decisionResultStr, toolCallId, toolName },
-        ];
+        // The batch settlement (9.113.0) — the ask path's twin.
+        const decisionSettlement = settleBatch(
+          [
+            ...(scope.history as readonly LLMMessage[]),
+            { role: 'tool', content: decisionResultStr, toolCallId, toolName },
+          ],
+          { toolName, toolCallId },
+        );
+        const decisionHistory = decisionSettlement.history;
         scope.history = decisionHistory;
         // Drives `on-tool-return` triggers, same as the execute path.
         scope.lastToolResult = {
@@ -5203,10 +5466,12 @@ export function buildToolCallsHandler(
           ...(error === true && { error: true }),
           ...(resumeEnvelope?.status !== undefined && { status: resumeEnvelope.status }),
         });
+        bracketSettled(scope, decisionSettlement);
         typedEmit(scope, 'agentfootprint.agent.iteration_end', {
           turnIndex: 0,
           iterIndex: iteration,
-          toolCallCount: 1,
+          // The brackets this leg closed — see the ask path's twin.
+          toolCallCount: 1 + decisionSettlement.settled.length,
           history: decisionHistory,
         });
         scope.iteration = iteration + 1;
@@ -5308,10 +5573,15 @@ export function buildToolCallsHandler(
           );
           emitTransitionConflict(scope, iteration, consentTransition);
         }
-        const consentHistory: LLMMessage[] = [
-          ...(scope.history as readonly LLMMessage[]),
-          { role: 'tool', content: consentResultStr, toolCallId, toolName },
-        ];
+        // The batch settlement (9.113.0) — the ask path's twin.
+        const consentSettlement = settleBatch(
+          [
+            ...(scope.history as readonly LLMMessage[]),
+            { role: 'tool', content: consentResultStr, toolCallId, toolName },
+          ],
+          { toolName, toolCallId },
+        );
+        const consentHistory = consentSettlement.history;
         scope.history = consentHistory;
         scope.lastToolResult = {
           toolName,
@@ -5338,10 +5608,12 @@ export function buildToolCallsHandler(
           ...(error === true && { error: true }),
           ...(consentEnvelope?.status !== undefined && { status: consentEnvelope.status }),
         });
+        bracketSettled(scope, consentSettlement);
         typedEmit(scope, 'agentfootprint.agent.iteration_end', {
           turnIndex: 0,
           iterIndex: iteration,
-          toolCallCount: 1,
+          // The brackets this leg closed — see the ask path's twin.
+          toolCallCount: 1 + consentSettlement.settled.length,
           history: consentHistory,
         });
         scope.iteration = iteration + 1;
@@ -5432,15 +5704,22 @@ export function buildToolCallsHandler(
       if (deps.stepPlanFor) {
         resultStr += applyStepReturn(scope, { toolName, toolCallId, iteration });
       }
-      const newHistory: LLMMessage[] = [
-        ...(scope.history as readonly LLMMessage[]),
-        {
-          role: 'tool',
-          content: resultStr,
-          toolCallId,
-          toolName,
-        },
-      ];
+      // The batch settlement (9.113.0) — the door a `requestInput` answer
+      // comes back through, and the one most likely to meet a batch: a tool
+      // that asks a person mid-lookup, batched with the lookups after it.
+      const pauseSettlement = settleBatch(
+        [
+          ...(scope.history as readonly LLMMessage[]),
+          {
+            role: 'tool',
+            content: resultStr,
+            toolCallId,
+            toolName,
+          },
+        ],
+        { toolName, toolCallId },
+      );
+      const newHistory = pauseSettlement.history;
       scope.history = newHistory;
       // Drives `on-tool-return` triggers, same as every other dispatch path.
       scope.lastToolResult = { toolName, result: resultStr };
@@ -5463,10 +5742,12 @@ export function buildToolCallsHandler(
         result: pauseCapped.result,
         durationMs: Date.now() - startMs,
       });
+      bracketSettled(scope, pauseSettlement);
       typedEmit(scope, 'agentfootprint.agent.iteration_end', {
         turnIndex: 0,
         iterIndex: iteration,
-        toolCallCount: 1,
+        // The brackets this leg closed — see the ask path's twin.
+        toolCallCount: 1 + pauseSettlement.settled.length,
         // Plain local array — see the matching note on the execute path.
         history: newHistory,
       });

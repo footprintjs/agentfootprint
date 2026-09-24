@@ -47,6 +47,33 @@ traversal — a pause mid-batch commits the partial batch, resume paths append):
 Any NEW dispatch path must write both (and apply `capResults` — see the note
 on the five `tool_end`-emitting paths in toolCalls.ts).
 
+The batch settlement (9.113.0) is NOT a dispatch path and writes neither key.
+When a call pauses mid-batch, every resume path settles the calls after it
+(`toolCalls.ts` · "── The batch settlement (9.113.0)"): a fixed result in
+`history` that carries `LLMMessage.notDispatched` (stripped before the wire), a
+`tool_start` / `tool_end` bracket carrying the same marker
+(`toolCalls.ts` · `bracketSettled`, the only bracket that ever does), a place
+in `iteration_end`'s count — and nothing else. Those calls never returned, so
+they may not route, trigger or renew a map as if they had; they never
+dispatched, so a reader asking "did it run?" or "is this a tool's result?"
+reads the marker, never the role, the sentence or the bracket's
+`durationMs: 0` — its `tool_end` carries no `error`, since the call did not
+fail (`security/extractSequence.ts`, `../../checkin.ts` · `buildTrail`,
+`toolCalls.ts` · `producerCorpusOf`, the empty-lookup producer corpus,
+`../window/toolNames.ts` · `toolNameOfMessage`, `callLLM.ts`'s closure check,
+`../findings/offer.ts` · `isResultMessage`, `../window/ledgerFactPins.ts` ·
+`turnStandingOf`, `lib/trace-toolpack/traceToolpack.ts` · `notDispatchedOf`,
+and every reader of the stream). A reader that only sees the WIRE has lost
+the marker (`../composeRequest.ts` · `stripFrameworkFields`), so it reads the
+same messages from the committed history, as the closure check, the findings
+piece and the collapse do — from the ONE read of `scope.history` the stage
+already made: every tracked read is a narrative step, so a second one moves
+the record of runs that never settle anything. `capResults` does not measure the sentence: it is
+the library's own, fixed and short, and it never passed through dispatch. The
+law, the reader table and the three-call example are in `../../README.md` · "A
+batch that pauses settles its un-dispatched siblings" and "One owner of 'never
+dispatched' — in history and on the stream".
+
 A new EXECUTE boundary (not a new dispatch path — a new place a handler's
 return first lands) must also call `declareCoverage`, for the same reason it
 must call `refuseOverCeiling`: a limit that only some doors record is a limit
@@ -278,4 +305,10 @@ Two things a new row must carry, because both were assertions with no argument
 before: `lifetimeBecause` (a lifetime is what the rules judge on) and, on the
 checker side, `exemptBecause` beside any `provableWhen` — the two are now one
 discriminated union, so a rule cannot exempt a lifetime without saying why.
+
+What every registered composer here must SAY is stated once, for the whole
+agent folder: `../README.md` · "Every library-composed correction is
+past-anchored and names no destination" (9.113.0) — past tense about one named,
+finished event, and no tool, skill or call named as where to go next. The
+batch settlement's `notDispatchedResult` is its example.
 

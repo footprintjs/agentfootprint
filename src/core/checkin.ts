@@ -475,7 +475,11 @@ function framesFromUnits(units: readonly AttributionUnit[]): CheckInContextFrame
 function buildTrail(history: readonly LLMMessage[], iteration: number): CheckInTrail {
   const toolCalls: { name: string; ok: boolean }[] = [];
   for (const m of history) {
-    if (m.role === 'tool' && m.toolName) {
+    // A call the batch settlement answered was never dispatched (9.113.0) —
+    // not a completed call, so not in the receipts at all. Read off the
+    // marker, never the sentence. Its sentence stays in `read`: the model
+    // did read it (`unitsFromHistory`).
+    if (m.role === 'tool' && m.toolName && m.notDispatched === undefined) {
       // A tool result whose content advertises an error is marked not-ok. The
       // synthetic strings the loop writes ("[permission denied…]", "declined by
       // human…", "credential error…") all read as failures here.

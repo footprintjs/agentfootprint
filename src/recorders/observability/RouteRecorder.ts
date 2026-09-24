@@ -255,6 +255,10 @@ export function routeRecorder(options: RouteRecorderOptions = {}): RouteRecorder
 
       switch (event.name) {
         case 'agentfootprint.stream.tool_start': {
+          // `lastTool` is the tool whose RESULT drove the hop. A bracket
+          // carrying `notDispatched` (9.113.0) is a call the paused batch never
+          // ran — it has no result, so it can never be the one that drove it.
+          if (p.notDispatched !== undefined) break;
           if (typeof p.toolName === 'string') lastTool = p.toolName;
           break;
         }

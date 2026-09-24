@@ -48,8 +48,10 @@ import {
   type ProducedResult,
 } from '../../src/integrity/empty-lookup/check.js';
 import { beginIntegrityRun } from '../../src/integrity/disposition/lifecycle.js';
-import { Agent, absent, defineTool } from '../../src/index.js';
+import { Agent, absent, defineTool, isInputPause, requestInput } from '../../src/index.js';
 import { mock } from '../../src/llm-providers.js';
+import type { LLMMessage } from '../../src/adapters/types.js';
+import { notDispatchedResult, producerCorpusOf } from '../../src/core/agent/stages/toolCalls.js';
 import type { CheckReport } from '../../src/integrity/disposition/types.js';
 import type { ContextError } from '../../src/integrity/finding/types.js';
 
@@ -478,6 +480,118 @@ describe('functional: the field case, through the real loop', () => {
     // The choice seam, meanwhile, has plenty to say about it. That division
     // is the point: one seam owns fabrication, this one owns the empty answer.
     expect(findings.some((f) => f.kind === 'unsupported-argument')).toBe(true);
+  });
+});
+
+describe('unit: the producer corpus holds results from a declared ground, never a settlement (9.113.0)', () => {
+  // The corpus the join reads (`toolCalls.ts` · `producerCorpusOf`): every
+  // RESULT from a tool the judged one names in `argumentsFrom`. A message the
+  // batch settlement wrote is a `role: 'tool'` message too, but it carries
+  // `LLMMessage.notDispatched` — its ground never ran and produced nothing.
+  const settledInventory: LLMMessage = {
+    role: 'tool',
+    content: notDispatchedResult('fabric_inventory', {
+      toolName: 'collect_input',
+      toolCallId: 'c1',
+    }),
+    toolCallId: 'c2',
+    toolName: 'fabric_inventory',
+    notDispatched: { pausedCall: { toolCallId: 'c1', toolName: 'collect_input' } },
+  };
+  const ranInventory: LLMMessage = {
+    role: 'tool',
+    content: INVENTORY_RESULT,
+    toolCallId: 'c5',
+    toolName: 'fabric_inventory',
+  };
+
+  it('a settled message filed under a ground contributes no text; a result from that ground does', () => {
+    const history: LLMMessage[] = [
+      { role: 'user', content: 'fabric_inventory' },
+      settledInventory,
+      ranInventory,
+      { role: 'tool', content: DEVICE, toolCallId: 'c6', toolName: 'unrelated_tool' },
+    ];
+    expect(producerCorpusOf(history, ['fabric_inventory'])).toEqual([
+      { toolName: 'fabric_inventory', text: INVENTORY_RESULT },
+    ]);
+  });
+
+  it('the marker decides, never the words: the same sentence without it is a result', () => {
+    const { notDispatched: _marker, ...wordsOnly } = settledInventory;
+    void _marker;
+    expect(producerCorpusOf([wordsOnly], ['fabric_inventory'])).toEqual([
+      { toolName: 'fabric_inventory', text: wordsOnly.content },
+    ]);
+  });
+});
+
+describe('functional: a ground the paused batch never dispatched served nothing (9.113.0)', () => {
+  it("a settled producer contributes no text — the lookup's row is `unreachable`, and a value only its sentence carries files nothing", async () => {
+    // The model batches [collect_input → asks a person, fabric_inventory]. The
+    // resume SETTLES fabric_inventory without running it: its result is the
+    // library's sentence (`toolCalls.ts` · `notDispatchedResult`), filed under
+    // the producer's name, carrying tool names and call ids. The producer
+    // never ran, so nothing in that sentence is a value this run produced
+    // (`toolCalls.ts` · `producerCorpusOf` reads results by
+    // `findings/offer.ts` · `isResultMessage`). Read as a result, the check
+    // would file an advisory naming 'fabric_inventory' as the source of a
+    // value it never served, and count the encounter as checked.
+    const findings: ContextError[] = [];
+    let rows: CheckReport[] = [];
+    const collect = defineTool({
+      name: 'collect_input',
+      description: 'Ask the person which fabric to look at.',
+      inputSchema: { type: 'object', properties: {} },
+      execute: () =>
+        requestInput({
+          id: 'fabric',
+          question: 'Which fabric?',
+          fields: [{ id: 'fabric', type: 'number', required: true }],
+        }),
+    });
+    const agent = Agent.create({
+      provider: mock({
+        replies: [
+          {
+            content: '',
+            toolCalls: [
+              { id: 'c1', name: 'collect_input', args: {} },
+              { id: 'c2', name: 'fabric_inventory', args: {} },
+            ],
+            stopReason: 'tool_use' as const,
+          },
+          // 'collect_input' appears in the settled sentence, and nowhere else
+          // the producer could have put it.
+          call('c3', 'port_for_device', { wwpn: 'collect_input' }),
+          answered,
+        ],
+      }),
+      model: 'mock',
+      maxIterations: 6,
+      noticeEmptyLookups: true,
+    })
+      .system('You are a fabric triage assistant.')
+      .tool(collect)
+      .tool(inventory())
+      .tool(portLookup(() => []))
+      .build();
+    agent.on('agentfootprint.integrity.context_error', (e) => {
+      findings.push(e.payload as unknown as ContextError);
+    });
+    agent.on('agentfootprint.integrity.disposition', (e) => {
+      rows = e.payload.rows as CheckReport[];
+    });
+    const paused = await agent.run('which port is the first device on?');
+    if (!isInputPause(paused)) throw new Error('expected an input pause');
+    await agent.resume(paused.checkpoint, {
+      requestId: paused.awaitingInput.requestId,
+      values: { fabric: 1 },
+    });
+    expect(findings.filter((f) => f.kind === 'empty-lookup')).toEqual([]);
+    // The resumed leg's row: the armed call met a declared ground that
+    // served nothing — `unreachable`, the family's word for "could not run".
+    expect(emptyRow(rows)).toMatchObject({ checked: 0, findings: 0, unreachable: 1 });
   });
 });
 

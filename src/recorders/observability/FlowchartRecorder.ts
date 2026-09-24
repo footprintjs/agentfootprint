@@ -30,7 +30,10 @@
  *   fork.branch          → StepNode kind='fork-branch'
  *   decision.branch      → StepNode kind='decision-branch'
  *   llm.start            → StepNode kind=actorArrow ('user→llm' | 'tool→llm')
- *   tool.start           → StepNode kind='llm->tool'
+ *   tool.start           → StepNode kind='llm->tool' (none for a
+ *                          `notDispatched` start — a call a paused batch
+ *                          never dispatched, 9.113.0; its end stashes no
+ *                          result either)
  *   llm.end terminal     → StepNode kind='llm->user' (delivery marker)
  *   loop.iteration       → loop-iteration StepEdge
  *   context.injected     → attached to NEXT user→llm / tool→llm StepNode
@@ -639,6 +642,10 @@ export function buildStepGraphFromEvents(events: readonly DomainEvent[]): StepGr
         break;
       }
       case 'tool.start': {
+        // A call a paused batch never dispatched (9.113.0) is no step: the
+        // LLM's call never reached a tool. Its bracket stays on the domain
+        // log, marked `notDispatched`, for a viewer that wants to show it.
+        if (e.notDispatched !== undefined) break;
         const id = `step-tool-start-${e.runtimeStageId}-${e.toolCallId}`;
         const assistantText = pendingAssistantText;
         pendingAssistantText = undefined;
@@ -668,6 +675,9 @@ export function buildStepGraphFromEvents(events: readonly DomainEvent[]): StepGr
         break;
       }
       case 'tool.end': {
+        // The settled call's end closes no step, and its sentence is not a
+        // tool's result — the next tool → llm step shows the last REAL one.
+        if (e.notDispatched !== undefined) break;
         const lastTool = findLastByKind(nodes, ['llm->tool']);
         if (lastTool) {
           (lastTool as { endOffsetMs?: number }).endOffsetMs = t;

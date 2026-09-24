@@ -250,4 +250,42 @@ describe('droppedToolNames', () => {
     ];
     expect(droppedToolNames(repeated)).toEqual(['look']);
   });
+
+  it('a SETTLED message is not a result: it names nothing, and a real one beside it still counts (9.113.0)', () => {
+    // A paused batch's un-dispatched sibling is answered by the library with a
+    // fixed sentence and carries `notDispatched` (`stages/toolCalls.ts` · "──
+    // The batch settlement (9.113.0)"). No tool produced it, so a span whose
+    // only message for `pan_view` is that sentence lost no `pan_view` result.
+    const settled: LLMMessage = {
+      role: 'tool',
+      content: "Tool 'pan_view' was not executed on that call: …",
+      toolCallId: 's',
+      toolName: 'pan_view',
+      notDispatched: { pausedCall: { toolCallId: 'q', toolName: 'collect_input' } },
+    };
+    const batch: readonly LLMMessage[] = [
+      {
+        role: 'assistant',
+        content: '',
+        toolCalls: [
+          { id: 'q', name: 'collect_input', args: {} },
+          { id: 's', name: 'pan_view', args: {} },
+        ],
+      },
+      { role: 'tool', content: 'R', toolCallId: 'q', toolName: 'collect_input' },
+      settled,
+    ];
+    expect(droppedToolNames(batch)).toEqual(['collect_input']);
+    // Nor through the recovery path: a settled message with no `toolName`.
+    const { toolName: _named, ...unnamed } = settled;
+    void _named;
+    expect(droppedToolNames([...batch.slice(0, 2), unnamed])).toEqual(['collect_input']);
+    // A real pan_view result in the same span is named as it always was.
+    expect(
+      droppedToolNames([
+        ...batch,
+        { role: 'tool', content: 'R', toolCallId: 'p', toolName: 'pan_view' },
+      ]),
+    ).toEqual(['collect_input', 'pan_view']);
+  });
 });

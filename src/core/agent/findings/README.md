@@ -311,6 +311,54 @@ schemas vary per call from the second call on, so a `'tools'` cache
 breakpoint cannot hit on such a run; the design page § Packet 6 has the
 trade.
 
+### A settled call is not a result (9.113.0)
+
+**A `role: 'tool'` message the batch settlement wrote — it carries
+`LLMMessage.notDispatched` — is served and is no result: never offered, never
+resolved, never counted undeclared, never collapsed, never listed in
+`WindowRecord.droppedStandings`, never ranked into its turn's standing (the
+`'ledger-fact'` pin and `WindowStrategyInput.standingOf`,
+`../window/ledgerFactPins.ts` · `turnStandingOf`). Every reader here asks ONE
+predicate, `offer.ts · isResultMessage`, and reads the COMMITTED
+conversation, because the wire has lost the marker.**
+
+Why: when a batch pauses, the resume answers each call after the paused one
+with a fixed sentence and runs none of them (`../stages/toolCalls.ts` · "──
+The batch settlement (9.113.0)"). The model reads that sentence, but a
+standing is a judgment of a tool's RESULT, and that call produced none —
+offering it would invite a judgment of the library's own words, and counting
+it undeclared would report an absence that is not one. A model that names the
+id anyway is recorded exactly as written (`unknownId: true`, no tool name),
+and its standing never turns the sentence into a ticket. The live request
+(`../stages/callLLM.ts`) and its rebuild (`lib/time-travel/servedView.ts`)
+both read the served ids and run the collapse on the committed conversation
+and strip AFTER, so the conformance law holds on a settled run.
+
+```ts
+// Batch [c1 look, c2 collect → pauses, c3 look]; the resume settled c3.
+offeredResultIds(history, rows); // ['c2', 'c1'] — c3 is on the wire, not offered
+knownResults(history, batch).some((r) => r.toolCallId === 'c3'); // false → a
+//   standing naming c3 files `unknownId: true`
+servedToolCallIds(history); // ['c1', 'c2'] — the piece's `undeclared:` never lists c3
+```
+
+Pinned by `test/core/scenario/batch-pause-settlement.test.ts` § 5, the
+conformance case in `test/lib/time-travel/receipt-conformance.test.ts`, and
+the settled cases in `test/core/window-ledger-fact-pins.test.ts`.
+
+**What a settled call's OWN `_findings` leaves on the ledger — in part, and
+that is a known gap.** The model may have declared `_findings` on the settled
+call's arguments too. Its `previous` standings ARE filed: the batch loop files
+every call's standings when the batch starts (`../stages/toolCalls.ts` ·
+"STANDINGS OF EARLIER RESULTS"), before any call runs. Its basis row and its
+contingent rows are NOT: the loop files those per call as it reaches the call
+("THE BASIS ROW", "THE CONTINGENT ROWS FOR THIS CALL"), the pause returned
+before it reached this one, and the settlement files nothing. So the ledger
+can hold a standing `declaredOn` a settled call with no basis row for that
+call. Filing them at the settlement is a named follow-up — it has to decide
+how a basis on a call that produced no result reads to the judge and to the
+lens — not something a reader should infer is present.
+
 ## The proposition (packet 6)
 
 Why: a `ruled-out` line says what was ruled out, but not what the call set
@@ -582,7 +630,8 @@ written only when a provider reported one).
   `peelAnswerFindings`, `FINDINGS_INSTRUCTION`, `FINDINGS_CONTINGENT_LINE` /
   `findingsInstructionFor`, `FINDINGS_ANSWER_ASK`.
 - `offer.ts` — `offeredResultIds`, `nameableIds`, `undeclaredIds`,
-  `servedToolCallIds`, `knownResults`, `RETIRING_STANDINGS`.
+  `servedToolCallIds`, `knownResults`, `isResultMessage`,
+  `RETIRING_STANDINGS`.
 - `ledger.ts` — `recordFindings`, `foldLedger` (`standingOf` the model's,
   `judgments` the judge's), `standingRowsFrom`, `basisRowFrom`.
 - `serve.ts` — `findingsLedgerPiece`, `collapseJudged`, `servedToolCallIds`

@@ -12,12 +12,38 @@
  * The sequence reads the assistant turns' `toolCalls` blocks in order.
  * Calls that were denied at the gate (synthetic tool_results in history
  * but no `tool.execute()` invocation) are NOT included — the sequence
- * reflects what actually dispatched, not what was attempted.
+ * reflects what actually dispatched, not what was attempted. Nor are the
+ * calls a paused batch never dispatched (9.113.0): the resume settles each
+ * with a fixed sentence and no gate ever saw it, so counting it would let a
+ * precondition policy ("verify before transfer") be met by a call that never
+ * ran.
  *
- * Detection of "did this call dispatch?" — we look at the matching
- * `tool` message and check its content. Synthetic deny messages match
- * a known prefix; everything else is a real dispatch. This pairs the
- * sender (assistant.toolCalls[i].id) with the receiver (tool.toolCallId).
+ * Detection of "did this call dispatch?" — the `tool` messages are read two
+ * ways, each with the pairing its question needs:
+ *
+ *   • IN FLIGHT or DENIED — by id (`resultsById`, the rule this file always
+ *     had): the latest RESULT for the id decides. None yet → the call is
+ *     still in flight; the synthetic deny prefix → it was refused at the
+ *     gate. A settled message is no result, so it answers neither question.
+ *     Kept by id on purpose, limits included: a call denied at the gate still
+ *     counts once a later call that runs reuses its id, and a call that ran
+ *     drops out once a later reuse of its id is denied. Pairing the deny by
+ *     position too would change the sequence of runs that never met a
+ *     settlement, which this release does not do.
+ *   • SETTLED — by position (`settledProposals`, 9.113.0): a settled message
+ *     carries `LLMMessage.notDispatched` — the marker, never its sentence —
+ *     and it settles the ONE proposal it answers. An id alone cannot say
+ *     which proposal that is: a provider may reuse an id across turns, and
+ *     the library's own fallback ids are minted per provider INSTANCE
+ *     (`adapters/llm/OllamaProvider.ts` · `nextToolCallId`, and its
+ *     Foundry Local and Gemini twins), so a fresh process that resumes a
+ *     stored checkpoint mints the settled call's id again for a call that
+ *     really runs. Paired by id, that real call would bring the settled one
+ *     back into the sequence — a "verify before transfer" policy met by a
+ *     verify that never ran — and a settled reuse would drop a call that
+ *     did run. Paired by position, each proposal is judged by its own answer.
+ *
+ * A history without a settled message pairs exactly as before 9.113.0.
  */
 
 import type { LLMMessage, ToolCallEntry } from '../adapters/types.js';
@@ -54,23 +80,8 @@ export function extractSequence(
 ): ToolCallEntry[] {
   const sequence: ToolCallEntry[] = [];
   const resolveProviderId = options.resolveProviderId;
-
-  // Walk history once and map every tool message by toolCallId so we
-  // know:
-  //   • which proposed calls actually dispatched (have a tool_result
-  //     in history) vs are still in-flight from the current turn
-  //     (no tool_result yet)
-  //   • which dispatches were synthetic denies (filtered out — they
-  //     never executed)
-  // A call is in the sequence only if BOTH a tool_result exists AND
-  // it isn't a synthetic deny.
-  const toolMsgsByCallId = new Map<string, string>();
-  for (const msg of history) {
-    if (msg.role === 'tool' && msg.toolCallId) {
-      const content = typeof msg.content === 'string' ? msg.content : '';
-      toolMsgsByCallId.set(msg.toolCallId, content);
-    }
-  }
+  const results = resultsById(history);
+  const settled = settledProposals(history);
 
   // Track iteration as we walk: each assistant turn with toolCalls
   // increments the iteration counter for the entries it produces. The
@@ -78,13 +89,14 @@ export function extractSequence(
   // per-message, but the sequence ORDER is what matters for governance
   // — iteration is an informational hint.
   let iterCounter = 1;
-  for (const msg of history) {
+  for (const [turnAt, msg] of history.entries()) {
     if (msg.role !== 'assistant' || !msg.toolCalls || msg.toolCalls.length === 0) continue;
-    for (const tc of msg.toolCalls) {
+    for (const [callAt, tc] of msg.toolCalls.entries()) {
       if (!tc.id) continue;
-      const toolMsg = toolMsgsByCallId.get(tc.id);
-      if (toolMsg === undefined) continue; // no tool_result yet → in-flight
-      if (toolMsg.startsWith(SYNTHETIC_DENY_PREFIX)) continue; // denied, never ran
+      const result = results.get(tc.id);
+      if (result === undefined) continue; // no tool_result yet → in-flight
+      if (result.startsWith(SYNTHETIC_DENY_PREFIX)) continue; // denied, never ran
+      if (settled.has(proposalKey(turnAt, callAt))) continue; // settled on resume, never dispatched
       const entry: ToolCallEntry = {
         name: tc.name,
         args: tc.args,
@@ -114,4 +126,56 @@ export function extractSequence(
   }
 
   return sequence;
+}
+
+/** One proposal's place: its assistant turn's index in history, and the call's on that turn. */
+function proposalKey(turnAt: number, callAt: number): string {
+  return `${turnAt}:${callAt}`;
+}
+
+/**
+ * The latest RESULT for each call id — what the in-flight and deny checks
+ * read, paired by id as they always were. A settled message
+ * (`LLMMessage.notDispatched`) is left out: it is the library's sentence for a
+ * call that never ran, not a result, so a settled id is not answered by it —
+ * and a deny the id carried before a later settlement still reads as a deny.
+ */
+function resultsById(history: readonly LLMMessage[]): Map<string, string> {
+  const results = new Map<string, string>();
+  for (const msg of history) {
+    if (msg.role !== 'tool' || !msg.toolCallId || msg.notDispatched !== undefined) continue;
+    results.set(msg.toolCallId, typeof msg.content === 'string' ? msg.content : '');
+  }
+  return results;
+}
+
+/**
+ * The proposals the batch settlement answered (9.113.0), keyed by
+ * {@link proposalKey}. Pairing is POSITIONAL — the rule the settlement itself
+ * writes by (`core/agent/stages/toolCalls.ts` · `pausedBatchOf`: only an
+ * answer AFTER the proposing turn counts): a `role: 'tool'` message answers
+ * the first still-unanswered call of its id on the LATEST assistant turn
+ * before it that proposed that id. A later answer for an id already answered
+ * answers nothing, and a turn that proposes the id again opens a new
+ * proposal — which is how a reused id keeps its two calls apart.
+ */
+function settledProposals(history: readonly LLMMessage[]): Set<string> {
+  const settled = new Set<string>();
+  /** id → the still-unanswered proposals of it on the latest turn that proposed it, in call order. */
+  const open = new Map<string, string[]>();
+  for (const [turnAt, msg] of history.entries()) {
+    if (msg.role === 'assistant') {
+      const proposed = new Map<string, string[]>();
+      for (const [callAt, call] of (msg.toolCalls ?? []).entries()) {
+        if (!call.id) continue;
+        proposed.set(call.id, [...(proposed.get(call.id) ?? []), proposalKey(turnAt, callAt)]);
+      }
+      for (const [id, keys] of proposed) open.set(id, keys);
+      continue;
+    }
+    if (msg.role !== 'tool' || !msg.toolCallId) continue;
+    const answered = open.get(msg.toolCallId)?.shift();
+    if (answered !== undefined && msg.notDispatched !== undefined) settled.add(answered);
+  }
+  return settled;
 }

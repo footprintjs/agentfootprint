@@ -99,7 +99,11 @@ function defaultFormatter(
       return 'Thinking...';
     case 'agentfootprint.agent.iteration_start':
       return `Iteration ${event.payload.iterIndex}`;
+    // A bracket carrying `notDispatched` (9.113.0) is a call the paused batch
+    // never dispatched: "Calling …" and "… failed" would both be false, and a
+    // live status line reports what the agent is doing, so it says nothing.
     case 'agentfootprint.stream.tool_start':
+      if (event.payload.notDispatched !== undefined) return null;
       return `Calling ${event.payload.toolName}(…)`;
     case 'agentfootprint.stream.tool_progress': {
       const message = progressMessageOf(event.payload.payload);
@@ -108,6 +112,7 @@ function defaultFormatter(
       return `${event.payload.toolName} reported progress (${String(n)} so far)`;
     }
     case 'agentfootprint.stream.tool_end':
+      if (event.payload.notDispatched !== undefined) return null;
       return event.payload.error
         ? `Tool ${event.payload.toolCallId} failed`
         : `Got result from ${event.payload.toolCallId}`;

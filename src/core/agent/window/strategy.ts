@@ -132,7 +132,8 @@ export interface WindowStrategyInput {
    * removal unit, so a turn's standing is its most valuable result's
    * (`fact > open > undeclared > ruled-out > noise`, the
    * `ledgerFactPins.ts · turnStandingOf` rule); a turn with no tool result
-   * has none.
+   * has none. A message the batch settlement wrote for a call that never ran
+   * (9.113.0, `LLMMessage.notDispatched`) is no result and takes no part.
    *
    * BOUND BY THE STAGE, like `planRemoval` and `removalFacts`: the stage is
    * the one place that reads scope, and it resolves the ledger ONCE per visit

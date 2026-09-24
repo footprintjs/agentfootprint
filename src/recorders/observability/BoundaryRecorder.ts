@@ -132,6 +132,7 @@ interface FlowRunFailedEvent {
   readonly traversalContext?: TraversalContext;
 }
 import type { AgentfootprintEvent } from '../../events/registry.js';
+import type { ToolEndPayload, ToolStartPayload } from '../../events/payloads.js';
 import type { Unsubscribe } from '../../events/dispatcher.js';
 import { SUBFLOW_IDS, STAGE_IDS, slotFromSubflowId } from '../../conventions.js';
 import type { ContextSlot } from '../../events/types.js';
@@ -317,6 +318,10 @@ export interface DomainToolStartEvent extends DomainEventBase {
   readonly toolName: string;
   readonly toolCallId: string;
   readonly args?: unknown;
+  /** 9.113.0 — copied from `stream.tool_start`: a call a paused batch never
+   *  dispatched. The step graph draws no tool step for it and a boundary's
+   *  rollup does not count it. Absent on every other tool event. */
+  readonly notDispatched?: ToolStartPayload['notDispatched'];
 }
 
 export interface DomainToolEndEvent extends DomainEventBase {
@@ -325,6 +330,9 @@ export interface DomainToolEndEvent extends DomainEventBase {
   readonly result?: unknown;
   readonly durationMs?: number;
   readonly error?: boolean;
+  /** 9.113.0 — copied from `stream.tool_end`: the settled call's bracket
+   *  closing. Its `result` is the library's sentence, not a tool's. */
+  readonly notDispatched?: ToolEndPayload['notDispatched'];
 }
 
 export interface DomainContextInjectedEvent extends DomainEventBase {
@@ -437,7 +445,8 @@ export interface BoundaryAggregate {
   readonly tokens: { readonly input: number; readonly output: number };
   /** Count of `llm.start` events inside this boundary. */
   readonly llmCalls: number;
-  /** Count of `tool.start` events inside this boundary. */
+  /** Count of `tool.start` events inside this boundary — a settled call's
+   *  (`notDispatched`, 9.113.0) excluded: it never ran. */
   readonly toolCalls: number;
   /** Count of `agent.iteration_start` events scoped to this boundary —
    *  ReAct-loop iterations. Always `0` for non-Agent primitives. */
@@ -1094,6 +1103,10 @@ export class BoundaryRecorder implements CombinedRecorder {
           toolName: p.toolName,
           toolCallId: p.toolCallId,
           ...(p.args !== undefined ? { args: p.args } : {}),
+          // The batch settlement's marker (9.113.0), carried as the stream
+          // carries it — the one owner of "this call never ran" for every
+          // projection of this log (the step graph, the rollup, a viewer).
+          ...(p.notDispatched !== undefined ? { notDispatched: p.notDispatched } : {}),
         });
         break;
       }
@@ -1111,6 +1124,7 @@ export class BoundaryRecorder implements CombinedRecorder {
           ...(p.result !== undefined ? { result: p.result } : {}),
           ...(p.durationMs !== undefined ? { durationMs: p.durationMs } : {}),
           ...(p.error !== undefined ? { error: p.error } : {}),
+          ...(p.notDispatched !== undefined ? { notDispatched: p.notDispatched } : {}),
         });
         break;
       }
@@ -1540,7 +1554,9 @@ function foldRollup(
         llmCalls++;
         break;
       case 'tool.start':
-        toolCalls++;
+        // A settled call (9.113.0) was never dispatched: not a tool call of
+        // this boundary — the count it had before the settlement bracketed it.
+        if (e.notDispatched === undefined) toolCalls++;
         break;
       case 'llm.end':
         inputTokens += e.usage.input;

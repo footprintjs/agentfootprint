@@ -16,6 +16,8 @@
  *   stream.tool_start             → `ask`  (read_skill → reaching for a skill).
  *   stream.tool_end               → `return` (read_skill → replyType:'instruction'
  *                                   + skill; any other tool → replyType:'data').
+ *   a bracket carrying            → no beat (9.113.0): a call a paused batch
+ *   `notDispatched`                 never dispatched neither asked nor returned.
  *
  * Commentary (each beat's `brain`): filled from agentfootprint's OWN commentary
  * engine — the SAME `selectCommentaryKey`/`extractCommentaryVars`/`renderCommentary`
@@ -353,8 +355,19 @@ export function agentThinkingTrace(
       }
 
       if (e.name === TOOL_START) {
-        const p = e.payload as { toolName?: string; toolCallId?: string; args?: unknown };
+        const p = e.payload as {
+          toolName?: string;
+          toolCallId?: string;
+          args?: unknown;
+          notDispatched?: unknown;
+        };
         if (!p?.toolCallId) return;
+        // A call a paused batch never dispatched (9.113.0): the story's beats
+        // are the model reaching for a tool and the tool answering, and this
+        // call did neither on the record — no ask, and (since it never joins
+        // `byId`) no return, so never a "tool failed" about a call that did
+        // not run. The trace is what it was before the settlement existed.
+        if (p.notDispatched !== undefined) return;
         const isSkill = p.toolName === 'read_skill';
         const skillId = isSkill
           ? (p.args as { id?: string } | undefined)?.id ?? undefined
@@ -387,7 +400,9 @@ export function agentThinkingTrace(
           result?: unknown;
           durationMs?: number;
           error?: boolean;
+          notDispatched?: unknown;
         };
+        if (p?.notDispatched !== undefined) return; // settled — see TOOL_START
         const started = p?.toolCallId ? byId.get(p.toolCallId) : undefined;
         if (!started) return;
         byId.delete(p!.toolCallId!);

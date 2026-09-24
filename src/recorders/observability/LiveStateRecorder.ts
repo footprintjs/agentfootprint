@@ -234,6 +234,8 @@ export class LiveLLMTracker {
  * Tracks in-flight tool calls. Subscribes to:
  *   - `agentfootprint.stream.tool_start` → opens a boundary
  *   - `agentfootprint.stream.tool_end`   → closes the boundary
+ *   (a bracket carrying `notDispatched` — a call a paused batch never
+ *   dispatched, 9.113.0 — does neither: nothing executed)
  *
  * Boundary key: `toolCallId` (more granular than `runtimeStageId` —
  * parallel tools share one calling stage but have distinct toolCallIds).
@@ -254,6 +256,10 @@ export class LiveToolTracker {
       runner.on('agentfootprint.stream.tool_start', (event) => {
         this.observeRunId(event.meta.runId);
         const p = event.payload;
+        // A call the paused batch never dispatched (9.113.0) opens no
+        // boundary: nothing executes between its start and its end. Its
+        // `tool_end` closes nothing either (below).
+        if (p.notDispatched !== undefined) return;
         this.store.start(p.toolCallId, {
           toolName: p.toolName,
           args: p.args,
@@ -265,6 +271,7 @@ export class LiveToolTracker {
     offs.push(
       runner.on('agentfootprint.stream.tool_end', (event) => {
         this.observeRunId(event.meta.runId);
+        if (event.payload.notDispatched !== undefined) return; // settled — opened nothing
         this.store.stop(event.payload.toolCallId);
       }),
     );

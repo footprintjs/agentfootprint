@@ -48,6 +48,11 @@ export type TranscriptStep =
       readonly args?: unknown;
       readonly result?: unknown;
       readonly error?: boolean;
+      /** 9.113.0 — the bracket's own field, copied as the event carries it:
+       *  a call a paused batch never dispatched. Its `result` is then the
+       *  library's sentence, and it carries no `error`: the call neither
+       *  succeeded nor failed. Absent on every other step. */
+      readonly notDispatched?: unknown;
     };
 
 /** One turn: what the user asked, what happened, what came back. */
@@ -156,6 +161,7 @@ export function deriveTranscript(events: readonly unknown[]): Transcript | undef
           ...(started !== undefined && { args: started.args }),
           ...('result' in payload && { result: payload.result }),
           ...(payload.error === true && { error: true }),
+          ...(payload.notDispatched !== undefined && { notDispatched: payload.notDispatched }),
         });
         break;
       }

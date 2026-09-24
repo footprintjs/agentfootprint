@@ -23,7 +23,12 @@
 import { describe, expect, it, vi } from 'vitest';
 import { commitValueAt } from 'footprintjs/trace';
 
-import { Agent, CompactionUnmeasurableError, COMPACTED_FRAME_PREFIX } from '../../src/index.js';
+import {
+  Agent,
+  CompactionUnmeasurableError,
+  COMPACTED_FRAME_PREFIX,
+  type AgentRunCheckpoint,
+} from '../../src/index.js';
 import { defineTool } from '../../src/core/tools.js';
 import { askHuman, isPaused } from '../../src/core/pause.js';
 import { mock } from '../../src/llm-providers.js';
@@ -479,11 +484,39 @@ describe('.compaction() — chart shapes', () => {
 
 describe('.compaction() — unresolved things refuse to fold', () => {
   it('LAW 2 — a permanently unanswered tool call refuses to fold, by name', async () => {
-    // The model asks for TWO tools in one turn and the FIRST pauses. The
-    // sibling never dispatches, so after resume that turn holds a tool_use
-    // with no tool_result — forever. Folding it would destroy the referent of
-    // an answer that is never coming, so it refuses and the fold takes the
-    // next oldest instead.
+    // A turn holding a tool_use with no tool_result can never fold: folding it
+    // would destroy the referent of an answer that is never coming, so it
+    // refuses and the fold takes the next oldest instead.
+    //
+    // WHERE THE FIXTURE COMES FROM. This test used to MAKE the orphan: the
+    // model asked for two tools in one turn, the first paused, and the resume
+    // answered only that one. Since 9.113.0 every resume path settles the
+    // calls a pause left un-dispatched, so a RESUME no longer produces an
+    // unanswered call (test/core/scenario/batch-pause-settlement.test.ts). A
+    // conversation STORED by an earlier release still holds exactly that
+    // shape, and continuing it is the case this law guards here; the doors a
+    // resume does not cover still produce it (a permission halt mid-batch, a
+    // paused turn continued after `abandonPause()` — src/core/README.md ·
+    // "Not covered yet").
+    const storedBefore9113: AgentRunCheckpoint = {
+      version: 1,
+      runId: 'stored-by-9.112.2',
+      history: [
+        { role: 'user', content: 'go' },
+        {
+          role: 'assistant',
+          content: '',
+          toolCalls: [
+            { id: 'ask1', name: 'ask', args: {} },
+            { id: 'orphan1', name: 'look', args: {} },
+          ],
+        },
+        { role: 'tool', content: 'yes, approved', toolCallId: 'ask1', toolName: 'ask' },
+      ],
+      lastCompletedIteration: 1,
+      originalInput: { message: 'go' },
+      checkpointedAt: 0,
+    };
     const asker = defineTool({
       name: 'ask',
       description: 'ask a human',
@@ -498,22 +531,11 @@ describe('.compaction() — unresolved things refuse to fold', () => {
       complete: async (req) => {
         requests.push(snapshotRequest(req));
         n++;
-        if (n === 1) {
-          return {
-            content: '',
-            toolCalls: [
-              { id: 'ask1', name: 'ask', args: {} },
-              { id: 'orphan1', name: 'look', args: {} },
-            ],
-            usage: { input: 100, output: 5 },
-            stopReason: 'end_turn',
-          };
-        }
-        const wantsTool = n <= 5;
+        const wantsTool = n <= 4;
         return {
           content: wantsTool ? '' : 'final answer',
           toolCalls: wantsTool ? [{ id: `c${n}`, name: 'look', args: {} }] : [],
-          usage: { input: 200 * n, output: 5 },
+          usage: { input: 200 * (n + 1), output: 5 },
           stopReason: 'end_turn',
         };
       },
@@ -530,13 +552,9 @@ describe('.compaction() — unresolved things refuse to fold', () => {
       })
       .build();
 
-    const paused = await agent.run({ message: 'go' });
-    expect(isPaused(paused)).toBe(true);
-    const resumed = await agent.resume(
-      (paused as { checkpoint: never }).checkpoint,
-      'yes, approved',
-    );
-    expect(typeof resumed).toBe('string');
+    const answer = await agent.run({ message: 'and then?', continueFrom: storedBefore9113 });
+    expect(isPaused(answer)).toBe(false);
+    expect(typeof answer).toBe('string');
 
     const reasons = compactionsOf(agent).flatMap((r) => r.refusals.map((x) => x.reason));
     expect(reasons).toContain('unresolved-tool-call');

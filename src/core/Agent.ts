@@ -2039,16 +2039,24 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
         tracker.inFlightPhase = undefined;
       }) as never,
     );
+    // A bracket carrying `notDispatched` (9.113.0) is a call a paused batch
+    // never dispatched: nothing of it was ever in flight, so it neither opens
+    // nor clears the phase. Nothing observable depends on this today — the
+    // settlement emits both halves back to back with no await between them
+    // (`toolCalls.ts` · `bracketSettled`), so a crash can never land inside
+    // one — it keeps the phase true to the marker should that ever change.
     const offToolStart = this.dispatcher.on(
       'agentfootprint.stream.tool_start' as never,
-      ((event: { payload?: { toolName?: string } }) => {
+      ((event: { payload?: { toolName?: string; notDispatched?: unknown } }) => {
+        if (event.payload?.notDispatched !== undefined) return;
         const name = event.payload?.toolName;
         tracker.inFlightPhase = { phase: 'tool', stage: typeof name === 'string' ? name : 'tool' };
       }) as never,
     );
     const offToolEnd = this.dispatcher.on(
       'agentfootprint.stream.tool_end' as never,
-      (() => {
+      ((event: { payload?: { notDispatched?: unknown } }) => {
+        if (event.payload?.notDispatched !== undefined) return;
         tracker.inFlightPhase = undefined;
       }) as never,
     );

@@ -38,6 +38,7 @@ import type { CommitBundle, StageSnapshot } from 'footprintjs/advanced';
 import { causalChain, commitValueAt, findLastWriter, formatCausalChain } from 'footprintjs/trace';
 import { arrayProvenance, elementProvenance, formatSlice, sliceForKey } from 'footprintjs/trace';
 
+import type { LLMMessage } from '../../adapters/types.js';
 import { formatToolArgIssues, validateToolArgs } from '../../core/agent/toolArgsValidation.js';
 import type { CheckReport } from '../../integrity/disposition/types.js';
 import type { ContextError, ContextErrorKind } from '../../integrity/finding/types.js';
@@ -328,6 +329,7 @@ function matchWindow(text: string, needleLower: string, radius: number): string 
 // reads: the completed run ← footprintjs's own owners (causalChain, commitValueAt, findLastWriter, sliceForKey,
 //        arrayProvenance, elementProvenance) — re-derived nowhere; the disposition line ← the recorded event
 //        the bounds ← bounded.ts, through which every value this toolpack serves passes
+//        a never-dispatched call ← the bracket's typed `notDispatched`, else the history message's (`notDispatchedOf`); never `error`/`durationMs`
 // law: may omit, never deny; every clause anchored to the call it was composed on.
 /**
  * Build the introspection toolpack over a COMPLETED run's artifacts.
@@ -1942,6 +1944,26 @@ interface HistoryTurn {
     readonly name?: string;
     readonly args?: Record<string, unknown>;
   }[];
+  /** `LLMMessage.notDispatched` (9.113.0): this `role: 'tool'` message answers
+   *  a call that never ran — the batch settlement wrote it. */
+  readonly notDispatched?: SettledMarker;
+}
+
+/** The batch settlement's marker as the canonical field defines it. */
+type Marker = NonNullable<LLMMessage['notDispatched']>;
+
+/**
+ * The same marker as a recording carries it — DERIVED from the canonical
+ * `LLMMessage.notDispatched` (the one definition; the brackets' field is typed
+ * off it too), every level optional because recorded artifacts are data this
+ * reader does not trust. A field added there appears here; one renamed there
+ * breaks the reads below at compile time.
+ */
+type SettledMarker = { readonly [K in keyof Marker]?: Partial<Marker[K]> };
+
+/** A recorded `notDispatched` value read as the marker — `undefined` unless it is an object. */
+function markerOf(found: unknown): SettledMarker | undefined {
+  return typeof found === 'object' && found !== null ? (found as SettledMarker) : undefined;
 }
 
 /** One committed middleware-ledger row (the 8.13.0 ran-with-args evidence). */
@@ -1963,6 +1985,15 @@ interface ToolCallFacts {
   readonly proposedArgs?: Record<string, unknown>;
   readonly result?: unknown;
   readonly runtimeStageId?: string;
+  /**
+   * Present when the call was NEVER DISPATCHED (9.113.0): its bracket carries
+   * `notDispatched` on the stream, and its `role: 'tool'` message carries
+   * `LLMMessage.notDispatched` — the same fact, one definition, two carriers.
+   * Its `tool_end` says `durationMs: 0` and carries the library's sentence as
+   * its `result` — the bracket of a call that produced no result, never the
+   * record of a tool that ran.
+   */
+  readonly notDispatched?: SettledMarker;
 }
 
 /** The joined view of a run's tool calls, shared by the two tools that read it. */
@@ -2028,6 +2059,26 @@ function buildToolCallReader(
         meta: (event.meta ?? {}) as unknown as Record<string, unknown>,
       }));
 
+  /**
+   * One call's brackets of one kind, those of a call that RAN first (9.113.0).
+   * A settled bracket (`notDispatched`) is no record of a run, so when a
+   * provider reused a settled call's id for a call that did run, the STEP is
+   * read off the call that ran — never off the settlement's bracket, which
+   * stands on the resume step. Tail order within each group, so a tail with
+   * no settled bracket reads exactly as it always did. (The outcome and the
+   * duration read the LAST `tool_end` for the id instead — see
+   * `buildInspectToolCall`.)
+   */
+  const bracketsFor = (
+    type: 'agentfootprint.stream.tool_start' | 'agentfootprint.stream.tool_end',
+    toolCallId: string,
+  ): { payload: Record<string, unknown>; meta: Record<string, unknown> }[] => {
+    const mine = eventsOf(type).filter((event) => event.payload.toolCallId === toolCallId);
+    const settled = (event: (typeof mine)[number]) =>
+      markerOf(event.payload.notDispatched) !== undefined;
+    return [...mine.filter((event) => !settled(event)), ...mine.filter(settled)];
+  };
+
   /** Every tool call id this run recorded, in call order, with its name. */
   let idsMemo: { id: string; name: string }[] | undefined;
   const knownCalls = (): { id: string; name: string }[] => {
@@ -2053,16 +2104,15 @@ function buildToolCallReader(
 
   /**
    * Which STEP ran this call. The event tail knows exactly (every event is
-   * stamped with its `runtimeStageId`); without it, fall back to the first
+   * stamped with its `runtimeStageId`) — a call that RAN before a settlement
+   * under the same id (`bracketsFor`); without it, fall back to the first
    * committed step whose `history` carries the call's result — that is the
    * tool-execution step by construction.
    */
   const stepFor = (toolCallId: string): { id?: string; inferred: boolean } => {
-    for (const start of eventsOf('agentfootprint.stream.tool_start')) {
-      if (start.payload.toolCallId === toolCallId) {
-        const id = start.meta.runtimeStageId;
-        if (typeof id === 'string') return { id, inferred: false };
-      }
+    for (const start of bracketsFor('agentfootprint.stream.tool_start', toolCallId)) {
+      const id = start.meta.runtimeStageId;
+      if (typeof id === 'string') return { id, inferred: false };
     }
     for (let i = 0; i < index.commitLog.length; i++) {
       const bundle = index.commitLog[i];
@@ -2076,6 +2126,77 @@ function buildToolCallReader(
     }
     return { inferred: true };
   };
+
+  /**
+   * The settlement marker on the LATEST `role: 'tool'` message for the id in
+   * `turns` — `undefined` when that message carries none — and whether any
+   * message answered the id at all. The latest decides, as it decides the
+   * result: a provider may reuse an id across turns.
+   */
+  const settledIn = (
+    turns: readonly HistoryTurn[],
+    toolCallId: string,
+  ): { answered: boolean; marker?: SettledMarker } => {
+    let answered = false;
+    let marker: SettledMarker | undefined;
+    for (const turn of turns) {
+      if (turn.role !== 'tool' || turn.toolCallId !== toolCallId) continue;
+      answered = true;
+      marker = markerOf(turn.notDispatched);
+    }
+    return { answered, ...(marker !== undefined && { marker }) };
+  };
+
+  /**
+   * The marker on the LATEST bracket for the id on the event tail — the
+   * stream's own owner of the fact (`ToolStartPayload.notDispatched`,
+   * `ToolEndPayload.notDispatched`, 9.113.0). `undefined` when the tail holds
+   * no bracket for the id or the latest one carries no marker: the latest
+   * decides, as it does in history, because a provider may reuse an id.
+   */
+  const settledOnStream = (toolCallId: string): SettledMarker | undefined => {
+    let marker: SettledMarker | undefined;
+    for (const event of artifacts.events ?? []) {
+      if (
+        event.type !== 'agentfootprint.stream.tool_start' &&
+        event.type !== 'agentfootprint.stream.tool_end'
+      ) {
+        continue;
+      }
+      const payload = (event.payload ?? {}) as { toolCallId?: unknown; notDispatched?: unknown };
+      if (payload.toolCallId !== toolCallId) continue;
+      marker = markerOf(payload.notDispatched);
+    }
+    return marker;
+  };
+
+  /**
+   * The history's answer: the final history decides when it still holds a
+   * message for the id. When a window has evicted it, the history the call's
+   * OWN step committed still does — that step appended it — so that is where
+   * the marker is read; with no step to read, nothing is said.
+   */
+  const settledInHistory = (toolCallId: string, stepId: string | undefined) => {
+    const final = settledIn(history(), toolCallId);
+    if (final.answered || stepId === undefined) return final.marker;
+    const at = index.lastIdxOf.get(stepId);
+    if (at === undefined) return undefined;
+    const committed = commitValueAt(index.commitLog, at, 'history');
+    return Array.isArray(committed)
+      ? settledIn(committed as readonly HistoryTurn[], toolCallId).marker
+      : undefined;
+  };
+
+  /**
+   * Was the call NEVER DISPATCHED (9.113.0)? Read off a marker, never the
+   * sentence and never the bracket's `durationMs: 0`. The
+   * bracket's own field first — the event tail answers alone, even for a
+   * history that no longer holds the message — and the history's marker when
+   * the tail is absent or its bracket carries none (a bracket without the
+   * field is silence, not a denial).
+   */
+  const notDispatchedOf = (toolCallId: string, stepId: string | undefined) =>
+    settledOnStream(toolCallId) ?? settledInHistory(toolCallId, stepId);
 
   const factsFor = (toolCallId: string): ToolCallFacts => {
     let toolName: string | undefined;
@@ -2097,11 +2218,13 @@ function buildToolCallReader(
       toolName = knownCalls().find((call) => call.id === toolCallId)?.name;
     }
     const step = stepFor(toolCallId);
+    const notDispatched = notDispatchedOf(toolCallId, step.id);
     return {
       ...(toolName !== undefined && { toolName }),
       ...(proposedArgs !== undefined && { proposedArgs }),
       ...(result !== undefined && { result }),
       ...(step.id !== undefined && { runtimeStageId: step.id }),
+      ...(notDispatched !== undefined && { notDispatched }),
     };
   };
 
@@ -2189,6 +2312,14 @@ function buildInspectToolCall(artifacts: TraceToolpackArtifacts, reader: ToolCal
               `folded it away).`,
       );
 
+      // A call the paused batch never dispatched (9.113.0) ran with nothing,
+      // has no outcome of its own, no duration and no inside. Read off the
+      // settlement marker (`notDispatchedOf`), each line a past fact anchored
+      // to the call by id. Its `tool_end` is the settlement's bracket
+      // (`durationMs: 0`, the sentence as `result`), never the record of a
+      // tool that ran — read as one, it would be an `ok` in 0ms.
+      const settled = facts.notDispatched;
+
       // Ran-with args: the ledger is the ONLY record of a rule rewriting
       // them. No ledger row means no rule changed anything — say that
       // plainly rather than leaving the reader to assume it.
@@ -2196,7 +2327,9 @@ function buildInspectToolCall(artifacts: TraceToolpackArtifacts, reader: ToolCal
       const rewrite = [...rows]
         .reverse()
         .find((row) => row.changed === true && row.moment === 'before-tool');
-      if (rewrite) {
+      if (settled !== undefined) {
+        lines.push(`ran with: nothing — call '${toolCallId}' was never executed.`);
+      } else if (rewrite) {
         lines.push(
           `ran with: ${displayText(
             renderPreview(boundedPreview(rewrite.after, TOOL_RESULT_PREVIEW_CHARS)),
@@ -2226,11 +2359,15 @@ function buildInspectToolCall(artifacts: TraceToolpackArtifacts, reader: ToolCal
               `it landed.`,
       );
 
-      // Outcome + duration: the event tail is the only clock a run has.
+      // Outcome + duration: the event tail is the only clock a run has. Read
+      // off the LAST `tool_end` for the id — the call the result line shows,
+      // since a provider may reuse an id and the latest message decides the
+      // result. After a settlement that is the call that ran under the id
+      // again; a settled call itself never reaches these lines (`settled`).
       const denial = rows.find((row) => row.outcome === 'deny');
-      const end = eventsOf('agentfootprint.stream.tool_end').find(
-        (event) => event.payload.toolCallId === toolCallId,
-      );
+      const end = eventsOf('agentfootprint.stream.tool_end')
+        .reverse()
+        .find((event) => event.payload.toolCallId === toolCallId);
       const checkIn = eventsOf('agentfootprint.checkin.request').some(
         (event) => event.payload.toolCallId === toolCallId,
       );
@@ -2238,7 +2375,12 @@ function buildInspectToolCall(artifacts: TraceToolpackArtifacts, reader: ToolCal
         (event) => event.payload.toolCallId === toolCallId,
       );
       let outcome: string;
-      if (denial) {
+      if (settled !== undefined) {
+        outcome =
+          `not dispatched — the run paused on call '${settled.pausedCall?.toolCallId ?? '?'}' ` +
+          `to '${settled.pausedCall?.toolName ?? '?'}', earlier in the same batch, and resumed ` +
+          `without executing call '${toolCallId}'`;
+      } else if (denial) {
         outcome = `denied by '${denial.middleware ?? '?'}'${denial.why ? `: "${denial.why}"` : ''}`;
       } else if (end?.payload.error === true) {
         outcome = 'error — the tool threw or returned a failure';
@@ -2261,7 +2403,9 @@ function buildInspectToolCall(artifacts: TraceToolpackArtifacts, reader: ToolCal
         );
       }
 
-      if (artifacts.events === undefined) {
+      if (settled !== undefined) {
+        lines.push(`duration: none — call '${toolCallId}' was never executed.`);
+      } else if (artifacts.events === undefined) {
         lines.push(
           `duration: ⚠ unavailable — these artifacts carry no event tail. The commit log records ` +
             `what each step WROTE and has no clock; timings live only in the event stream.`,
@@ -2282,11 +2426,13 @@ function buildInspectToolCall(artifacts: TraceToolpackArtifacts, reader: ToolCal
       // and it teaches the id it takes: the SAME toolCallId, one level down.
       const inner = artifacts.innerRuns?.get(toolCallId);
       lines.push(
-        inner !== undefined
+        settled !== undefined
+          ? `inside: nothing — call '${toolCallId}' never reached the tool.`
+          : inner !== undefined
           ? `inside: this tool kept its own record of the run — ${inner.steps} step(s), ` +
-              `${inner.outcome}. Descend with inspect_tool_run({ toolCallId: '${toolCallId}' }).`
+            `${inner.outcome}. Descend with inspect_tool_run({ toolCallId: '${toolCallId}' }).`
           : '⚠ boundary: what happened INSIDE the tool is not traced — this is the envelope ' +
-              '(arguments in, result out) plus what the run itself decided about it.',
+            '(arguments in, result out) plus what the run itself decided about it.',
       );
       return lines.join('\n');
     },

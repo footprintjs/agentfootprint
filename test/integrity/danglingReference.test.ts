@@ -22,6 +22,8 @@
  * byte-silent).
  */
 
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { dirname, resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { danglingReferencesOf } from '../../src/integrity/dangling-reference/check.js';
 import { Agent, slidingWindow, defineTool } from '../../src/index.js';
@@ -220,6 +222,58 @@ describe('functional: the evicted ground files ONE finding through the real loop
 });
 
 // ---------------------------------------------------------------------------
+// The narrative: the check adds no step
+// ---------------------------------------------------------------------------
+
+/**
+ * Every tracked scope read is a narrative STEP ("Step 14: Read history = (6
+ * items)"), and the narrative is part of the record: `getLastNarrativeEntries`,
+ * the trace toolpack's `read_narrative` / `find_in_trace` (served to a model
+ * under `.selfExplain()`), recordings and bug reports all carry it. The check
+ * runs on every composition after a ground has left, so a second read of a
+ * key the stage already holds adds a step there and renumbers every step after
+ * it — on runs that never meet anything new. 9.113.0's first cut did exactly
+ * that (it read `scope.history` again to see the batch settlement's marker);
+ * the stage's one read at its top already holds the marker. The commit log's
+ * `stageReads` is a key SET and did not move, which is why only the narrative
+ * can pin this.
+ *
+ * The reference was generated on the 9.112.2 tree (commit f430358b, before any
+ * source edit of 9.113.0) by this file in update mode:
+ *
+ *   AF_DANGLING_NARRATIVE_REFERENCE=update npx vitest run test/integrity/danglingReference.test.ts -t 'narrates'
+ *
+ * The one moving part, the turn's clock (`turnStartMs`), is masked.
+ */
+const NARRATIVE_REFERENCE = resolve(__dirname, 'reference/dangling-trap-narrative.json');
+
+describe('regression: the check adds no step to the narrative', () => {
+  it('the trap run narrates exactly what 9.112.2 narrated, step for step', async () => {
+    const { agent, events } = trapAgent(true);
+    await agent.run({ message: TASK });
+    // The trap is armed: compositions after the drop ran the check.
+    expect(events.filter((e) => e.kind === 'dangling-reference')).toHaveLength(1);
+    const narrative = agent
+      .getLastNarrativeEntries()
+      .map((entry) => entry.text.replace(/turnStartMs = \d+/g, 'turnStartMs = <clock>'));
+    if (process.env.AF_DANGLING_NARRATIVE_REFERENCE === 'update') {
+      mkdirSync(dirname(NARRATIVE_REFERENCE), { recursive: true });
+      writeFileSync(NARRATIVE_REFERENCE, `${JSON.stringify(narrative, null, 1)}\n`);
+      return;
+    }
+    expect(
+      existsSync(NARRATIVE_REFERENCE),
+      'no narrative reference — generate it on the pre-change tree',
+    ).toBe(true);
+    const reference = JSON.parse(readFileSync(NARRATIVE_REFERENCE, 'utf8')) as string[];
+    // The reads first, so a failure names the step that moved.
+    const reads = (lines: readonly string[]) => lines.filter((l) => / Read \w+/.test(l));
+    expect(reads(narrative)).toEqual(reads(reference));
+    expect(narrative).toEqual(reference);
+  });
+});
+
+// ---------------------------------------------------------------------------
 // Both sides must name a message the same way
 // ---------------------------------------------------------------------------
 
@@ -337,5 +391,98 @@ describe('regression: a re-fetched ground stays silent when the window speaks wi
 
     // So the second fence holds: evidence in reach, nothing to accuse.
     expect(events.filter((e) => e.kind === 'dangling-reference')).toEqual([]);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// A settled sibling is not a re-fetch (9.113.0)
+// ---------------------------------------------------------------------------
+
+/**
+ * When a batch of calls pauses, the resume answers each call after the paused
+ * one with a fixed sentence and never runs it (`core/agent/stages/toolCalls.ts`
+ * · "── The batch settlement (9.113.0)"). That message is `role: 'tool'` with a
+ * `toolName`, so a reader that goes by the role would count it as the ground's
+ * fresh result and file nothing. The marker `LLMMessage.notDispatched` says it
+ * is no result. The request's wire never carries the marker
+ * (`composeRequest.ts` · `stripFrameworkFields`), so the present side must
+ * name the SERVED messages from the history, where the marker still is.
+ */
+function settledGroundConversation(): AgentRunCheckpoint {
+  return {
+    version: 1,
+    runId: 'run-with-a-settled-ground',
+    history: [
+      { role: 'user', content: TASK },
+      { role: 'assistant', content: '', toolCalls: [{ id: 'h1', name: 'whats_here', args: {} }] },
+      { role: 'tool', content: WIRE_SHAPE_GROUND, toolCallId: 'h1', toolName: 'whats_here' },
+      { role: 'assistant', content: '', toolCalls: [{ id: 'f1', name: 'screen_fire', args: {} }] },
+      { role: 'tool', content: 'fired', toolCallId: 'f1', toolName: 'screen_fire' },
+      { role: 'assistant', content: '', toolCalls: [{ id: 'f2', name: 'screen_fire', args: {} }] },
+      { role: 'tool', content: 'fired', toolCallId: 'f2', toolName: 'screen_fire' },
+      // The batch paused on q1; the resume answered it and SETTLED h2.
+      {
+        role: 'assistant',
+        content: '',
+        toolCalls: [
+          { id: 'q1', name: 'collect_input', args: {} },
+          { id: 'h2', name: 'whats_here', args: {} },
+        ],
+      },
+      {
+        role: 'tool',
+        content: '{"status":"input_received"}',
+        toolCallId: 'q1',
+        toolName: 'collect_input',
+      },
+      {
+        role: 'tool',
+        content:
+          "Tool 'whats_here' was not executed on that call: the run paused on call 'q1' to " +
+          "'collect_input', earlier in the same batch, and resumed without executing the calls " +
+          'that followed it in that batch.',
+        toolCallId: 'h2',
+        toolName: 'whats_here',
+        notDispatched: { pausedCall: { toolCallId: 'q1', toolName: 'collect_input' } },
+      },
+    ],
+    lastCompletedIteration: 4,
+    originalInput: { message: TASK },
+    checkpointedAt: Date.now(),
+  };
+}
+
+describe('regression: a settled call is not a re-fetched ground', () => {
+  it('the only whats_here left in the frame is a settled sentence → the ground is dangling', async () => {
+    const events: Array<Record<string, unknown>> = [];
+    const agent = Agent.create({
+      provider: answersAtOnce(),
+      model: 'm',
+      maxIterations: 4,
+      keepLastToolResults: false,
+    })
+      .tool(bigGround())
+      .tool(firesAtIds(true))
+      .window(slidingWindow({ keepRecentTurns: 2 }))
+      .build();
+    agent.on('agentfootprint.integrity.context_error', (e) => {
+      events.push(e.payload as unknown as Record<string, unknown>);
+    });
+
+    await agent.run({
+      message: 'Which rack is hottest?',
+      continueFrom: settledGroundConversation(),
+    });
+
+    const { compactions = [], history = [] } = stateOf(agent);
+    // The trap is armed: the real ground left, the settled one stayed.
+    expect(compactions.some((r) => r.droppedObservations?.includes('whats_here'))).toBe(true);
+    expect(history.some((m) => m.toolCallId === 'h1')).toBe(false);
+    expect(history.find((m) => m.toolCallId === 'h2')?.notDispatched).toBeDefined();
+
+    const dangling = events.filter((e) => e.kind === 'dangling-reference');
+    expect(dangling).toHaveLength(1);
+    expect(String(dangling[0]!.message)).toContain('whats_here');
+    expect(String(dangling[0]!.message)).toContain('screen_fire');
   });
 });

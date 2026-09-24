@@ -5,6 +5,8 @@
  * (query, finalContent) — from events the engine already fires:
  *
  *   stream.tool_start/tool_end  → ToolCallRecord (name, args, resultPreview, errored)
+ *                                 — none for a bracket carrying `notDispatched`
+ *                                   (9.113.0): that call never ran
  *   stream.llm_end              → tokenUsage accumulation + iteration high-water
  *   agent.turn_start/turn_end   → durationMs (+ authoritative totals when seen)
  *   FlowRecorder.onDecision     → DecisionRecord with footprintjs decide()/select()
@@ -133,6 +135,14 @@ export function causalEvidenceRecorder(
           turnStartMs = Date.now();
           break;
         case 'agentfootprint.stream.tool_start': {
+          // A call the batch settlement answered (9.113.0) passed no args to a
+          // tool and got no result back — not tool evidence, so no record.
+          // Read off the bracket's typed `notDispatched`, never inferred from
+          // its `durationMs: 0` or its sentence: filed, it would put a call
+          // that never ran into the snapshot as a tool call, with the
+          // library's sentence as its result, and into the DECISIONS
+          // projection a later prompt replays.
+          if (payload.notDispatched !== undefined) break;
           const id = String(payload.toolCallId ?? '');
           pendingTools.set(id, {
             name: String(payload.toolName ?? 'unknown'),
@@ -142,6 +152,7 @@ export function causalEvidenceRecorder(
           break;
         }
         case 'agentfootprint.stream.tool_end': {
+          if (payload.notDispatched !== undefined) break; // settled — see tool_start
           const id = String(payload.toolCallId ?? '');
           const started = pendingTools.get(id);
           pendingTools.delete(id);

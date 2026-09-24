@@ -118,6 +118,52 @@ export interface LLMMessage {
     /** The ReAct iteration whose boundary delivered it. */
     readonly iteration: number;
   };
+  /**
+   * 9.113.0 — this `role: 'tool'` message answers a call that was NEVER
+   * DISPATCHED. The library wrote it; no gate judged the call and no tool ran.
+   *
+   * Stamped by the batch settlement (`core/agent/stages/toolCalls.ts` ·
+   * `settleBatch`, which takes each copy from `notDispatchedMarker`). The
+   * model proposed several calls in one turn, one of them paused the run, and
+   * the resume answered each call after it with a fixed sentence
+   * (`notDispatchedResult`) instead of running it. The sentence is what the
+   * MODEL reads. This field is the same fact as data, for the readers that ask
+   * "did this call run?" or "is this message a tool's result?":
+   * `security/extractSequence.ts` · `extractSequence`, which builds the
+   * `sequence` a permission policy judges (pairing each marker with the ONE
+   * proposal it answers, by position — a provider may reuse an id); the
+   * empty-lookup check's producer corpus (`toolCalls.ts` ·
+   * `producerCorpusOf`); the check-in evidence trail
+   * (`core/checkin.ts` · `CheckInTrail` — its `toolCalls` are the calls
+   * already completed); the window's result naming
+   * (`core/agent/window/toolNames.ts` · `toolNameOfMessage` — the
+   * last-tool-result pin, the drop notice, the dangling-reference check); and
+   * the trace toolpack's `inspect_tool_call`
+   * (`lib/trace-toolpack/traceToolpack.ts` · `notDispatchedOf`); and, under
+   * `.findings()`, the offer, the identity source, the piece's `undeclared:`
+   * line, the collapse, the window's `droppedStandings` and a turn's standing
+   * (`core/agent/findings/offer.ts`, `findings/serve.ts` · `collapseJudged`,
+   * `stages/window.ts`, `core/agent/window/ledgerFactPins.ts` ·
+   * `turnStandingOf` — the `'ledger-fact'` pin and
+   * `WindowStrategyInput.standingOf`) — a settled message is not a result to
+   * judge. None of them parses the sentence.
+   *
+   * **One definition, two carriers.** The settled call's two brackets on the
+   * event stream carry the same fact under the same name, typed off THIS field
+   * (`events/payloads.ts` · `ToolStartPayload.notDispatched`,
+   * `ToolEndPayload.notDispatched`), so a reader of the stream alone never has
+   * to guess from a `durationMs: 0` bracket whether the call ran.
+   *
+   * **Never reaches a provider.** `core/agent/composeRequest.ts` ·
+   * `stripFrameworkFields` removes it with `injectedBy` before a request
+   * exists, so the wire carries the sentence and nothing else.
+   *
+   * Absent on every other message.
+   */
+  readonly notDispatched?: {
+    /** The call in the same batch the run paused on — the one the sentence names. */
+    readonly pausedCall: { readonly toolCallId: string; readonly toolName: string };
+  };
 }
 
 /**
