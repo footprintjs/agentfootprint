@@ -331,7 +331,8 @@ trade.
 resolved, never counted undeclared, never collapsed, never listed in
 `WindowRecord.droppedStandings`, never ranked into its turn's standing (the
 `'ledger-fact'` pin and `WindowStrategyInput.standingOf`,
-`../window/ledgerFactPins.ts` · `turnStandingOf`). Every reader here asks ONE
+`../window/ledgerFactPins.ts` · `turnStandingOf`), never the result an
+`unsettled-by-absence` row is filed beside (below). Every reader here asks ONE
 predicate, `offer.ts · isResultMessage`, and reads the COMMITTED
 conversation, because the wire has lost the marker.**
 
@@ -678,7 +679,10 @@ beside, in the same write, at the two moments that file standings (a call's
   is ever quoted back to the model.
 - **Ruled-out only.** `open` is already unsettled in the model's own word,
   and `noise` says the result held nothing worth reading — which an absence
-  is. An id the run could not identify files nothing.
+  is. An id the run could not identify files nothing — a call the batch
+  settlement answered among them ("A settled call is not a result", above):
+  it is no result, so a standing that names it is `unknownId`, and it never
+  reached the dispatch door, so no coverage row could witness it either.
 - **The envelope's words as the model was served them, read and never
   trusted.** The row's only source of words is the served result's LEADING
   JSON object (a step boundary's, a refused effect's or the repeated-call
@@ -762,6 +766,14 @@ beside, in the same write, at the two moments that file standings (a call's
     nothing, never a guess from the served string;
   - a `fact` standing on an absence (the model standing on "nothing found"
     as a positive) — the design scoped this rule to `ruled-out`;
+  - the TYPED suggestion, `try_instead_tool` (9.113.0,
+    `../coverage/README.md`). The row carries the served `try_instead`
+    STRING and no other part of the suggestion, and the section quotes no
+    typed tool: nothing in this release reads a typed tool off the row (the
+    join that would, `source-not-consulted`, is not built), so the row does
+    not copy it. An absence that names its tool only there files a row with
+    no `tryInstead`, and once its result is a ticket on the wire, the
+    section does not restate that tool;
   - anything the model concludes in prose rather than as a standing.
 
 The case it was written for (F3 in the design page): a model rules out an
@@ -853,8 +865,14 @@ agent filing nothing), the rule's fences by
 `test/core/agent/findings/unsettled-rule.test.ts`, the review's leak probe
 (the deny and the scrub above, on both chart shapes, the withheld word
 asserted absent from every request) by
-`test/core/agent/findings/unsettled-governance.test.ts`, and the
-piece's bounds by `test/core/agent/findings/serve.test.ts`. The 21
+`test/core/agent/findings/unsettled-governance.test.ts`, the
+piece's bounds by `test/core/agent/findings/serve.test.ts`, and where the
+rule meets the batch settlement and the typed suggestion (a settled call
+filing no coverage row, no `tools.absent` and no row — its standing
+`unknownId` — while the call that ran in the same batch gets its row, at
+both moments on both chart shapes; the row and the section carrying
+`try_instead` alone beside a served `try_instead_tool`) by
+`test/core/agent/findings/unsettled-batch-settlement.test.ts`. The 21
 byte-identity references under `test/core/tools/reference/` are unchanged.
 
 ## Files

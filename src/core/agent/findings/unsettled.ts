@@ -79,9 +79,13 @@
  * array (no door records a zero-row reading of the value a tool returned, and
  * counting the SERVED string would count a text `'[]'` that
  * `integrity/empty-lookup/check.ts · readLookupResult` declines — a second
- * answer), and a result whose door rows are not on this run's state — an
+ * answer), a result whose door rows are not on this run's state — an
  * earlier turn of a continued conversation, or a run before `resumeOnError`
- * (`coverageDeclared` is per run and not on the `AgentRunCheckpoint`).
+ * (`coverageDeclared` is per run and not on the `AgentRunCheckpoint`) — and
+ * the envelope's TYPED suggestion, `try_instead_tool`: the row carries the
+ * `try_instead` string alone, because nothing in this release reads a typed
+ * tool off the row (the join that would, `source-not-consulted`, is not
+ * built).
  *
  * `.findings()` must be armed for any of this to run — both call sites sit
  * inside the ledger's gate — and the door's key is read only for a
@@ -156,7 +160,13 @@ export function withUnsettledRows(
   return rows;
 }
 
-/** A `ruled-out` standing on a result the run identified — the only standing the rule reads. */
+/**
+ * A `ruled-out` standing on a result the run identified — the only standing
+ * the rule reads. A call the batch settlement answered
+ * (`LLMMessage.notDispatched`) is no result (`offer.ts · isResultMessage`), so
+ * a standing that names it is `unknownId` and stops here — and it never
+ * reached the dispatch door, so no door row could witness it either.
+ */
 function isReadByTheRule(standing: StandingRow): boolean {
   return standing.standing === 'ruled-out' && standing.unknownId !== true;
 }
