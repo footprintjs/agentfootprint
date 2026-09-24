@@ -645,9 +645,39 @@ function ledgerRowIsWellFormed(row: unknown): boolean {
         ) &&
         typeof r.iteration === 'number'
       );
+    // The row beside a ruled-out standing that rests on an absence
+    // (9.113.0): the fold reads `toolCallId`, the piece reads each list's
+    // items and `tryInstead`. The rule writes a list only when it holds an
+    // item with a string `what`, and `tryInstead` only as a non-empty
+    // string, so the door refuses anything else — a row with an empty list
+    // is not one `recordFindings` wrote.
+    case 'unsettled-by-absence':
+      return (
+        typeof r.toolCallId === 'string' &&
+        (r.notChecked === undefined || isCoverageList(r.notChecked)) &&
+        (r.cannotCover === undefined || isCoverageList(r.cannotCover)) &&
+        (r.tryInstead === undefined || (typeof r.tryInstead === 'string' && r.tryInstead !== '')) &&
+        typeof r.iteration === 'number'
+      );
     default:
       return false;
   }
+}
+
+/** A non-empty list of `{ what, why? }` coverage items, both strings — the shape the rule files. */
+function isCoverageList(value: unknown): boolean {
+  return (
+    Array.isArray(value) &&
+    value.length >= 1 &&
+    value.every(
+      (item: unknown) =>
+        item !== null &&
+        typeof item === 'object' &&
+        typeof (item as { what?: unknown }).what === 'string' &&
+        ((item as { why?: unknown }).why === undefined ||
+          typeof (item as { why?: unknown }).why === 'string'),
+    )
+  );
 }
 
 /**
@@ -734,8 +764,10 @@ export function validateCheckpoint(value: unknown): AgentRunCheckpoint {
           "iteration), 'conflict' (with key, witnesses[], iteration), 'judgment' (with " +
           "toolCallId, standing, iteration), 'judgment-error' (with toolCallId, iteration) or " +
           "'contingent' (with declaredOn, value, at least one carrier { toolCallId, standing: " +
-          'open | noise | ruled-out }, iteration). It is written by an agent with `.findings()` ' +
-          'and re-seeded verbatim on continuation.',
+          "open | noise | ruled-out }, iteration) or 'unsettled-by-absence' (with toolCallId, " +
+          'iteration, and optional non-empty notChecked / cannotCover lists of { what, why? } ' +
+          'and a non-empty tryInstead string). It is written by an agent with `.findings()` and ' +
+          're-seeded verbatim on continuation.',
       );
     }
   }

@@ -1886,6 +1886,11 @@ export interface AgentState {
    * what it later made of one result (`fact` with the assertions it stands
    * on, `open`, `ruled-out`, `noise`); a conflict row is the assertion
    * algebra's fact at the write that created it, witnesses by identity only.
+   * Beside the model's rows, never merged into them: the judge's `judgment`
+   * / `judgment-error` rows (9.104.0), `contingent` rows (9.110.0), and an
+   * `unsettled-by-absence` row after a `ruled-out` standing whose only
+   * witness was an absence (9.113.0) — the library's reading, the model's
+   * row untouched.
    *
    * Written ONLY by `recordFindings`, and only when `.findings()` is
    * configured AND the model actually declared something — ABSENT otherwise,

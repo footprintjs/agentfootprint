@@ -81,6 +81,59 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   that suggestion is simply not read. Neither reaches `coverageDeclared` or
   the block `.limitsTravelWithTheAnswer()` appends — a suggestion is advice
   about a call not yet made, not ground the answer stands on.
+- **A ruled-out standing whose only witness is an absence gets a row beside
+  it; the model's word is never rewritten** (`.findings()`). "Nothing was
+  found" is not "ruled out". When the model declares `ruled-out` on a result
+  that the tool returned as an absence AND the model was served as one — an
+  `absent()` envelope, bare or bounded by `coverage()`, which the dispatch
+  door records (the delivered status `'absent'`, the `tools.absent` event, a
+  `coverageDeclared` row) and which reached the model as returned — the
+  library files an `unsettled-by-absence` row (`UnsettledByAbsenceRow`,
+  exported from the package root) immediately after the model's standing,
+  keyed to its `toolCallId`. The row carries what the served envelope said
+  it did not check (`notChecked`, `cannotCover`) and its `try_instead` byte
+  for byte (`tryInstead`, never parsed). The model's own row is byte for
+  byte what 9.112.2 filed, and it is served exactly as declared. The next
+  call is also served a new section, `unsettled by absence (read off the
+  record):`, with one head line per current row and one line per part of
+  the envelope. Once the ruled-out result is collapsed to a ticket on the
+  wire, that section is where the envelope's boundary still reaches the
+  model. The row is stored because what it is read from does not last: the
+  door's rows are per run and the served result can be evicted from the
+  window. The ledger's fold keeps the last row per result while that
+  result's current standing is still `ruled-out`; a ruled-out id leaves the
+  offer, so in practice a row is served for the rest of the run and on every
+  continued turn. It is filed at both moments that file standings (a call's
+  `_findings.previous` and a JSON answer's), on both chart shapes, and the
+  checkpoint carries it (its door admits the kind on resume). **Nothing is
+  inferred, and nothing the model was not served is quoted:** whether the
+  tool returned an absence is the door's call alone, so an envelope a tool
+  returned as TEXT (an MCP server's default text mode;
+  `mcpClient({ resultMode: 'structured' | 'structured-or-json' })` delivers
+  it as an object) files nothing, as do a zero-row array, a bare wrapper
+  such as `{ hba_count: 0, hbas: [] }` and prose. The door records a return
+  before the after-tool chain, the tool's own ceiling and placement act, so
+  a result an after-tool rule denied, a ceiling's refusal, a placed ticket
+  and a summary file nothing, and an after-tool scrub is honored: the row's
+  words come from the served result alone. An `open`, `noise` or `fact`
+  standing files nothing; a malformed list or item never reaches the row and
+  never fails the run; a framework note joined after the envelope (a stepped
+  skill's step boundary) hides nothing. **Not built in this release:** the
+  design's second witness, a declared-empty result (a top-level zero-row
+  array, `readLookupResult`'s one law). No door records that reading per
+  call, and reading the served string would count a text `'[]'` the law
+  declines; a `.findings()`-gated door record of it is what earns it.
+  **Who is affected:** only an agent with `.findings()` whose model rules
+  out a result it was served as an absence. No event and no instruction
+  line ship with the row (no reader in this release), and the door's key is
+  read only for such a ruling-out, so a run whose model rules out no such
+  result records the bytes it always did; the 21 byte-identity references
+  are unchanged. The committed ledger now also carries a tool's own words on
+  this row, so a redaction policy that hides tool output by key must cover
+  `findingsLedger`. The piece's stated ceiling,
+  `FINDINGS_PIECE_LIMITS.pieceChars`, rises from 98,304 to 114,688 chars for
+  the sixth capped section (the every-cap test in `serve.test.ts` measures
+  the largest piece against it).
 
 ### Changed
 
@@ -231,6 +284,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   — the assessment's `existence-not-checked` join of an EXISTENCE claim to
   `notChecked[].kind === 'existence'` — does not exist yet. The coverage
   README records the shape, why it waits, and what lands with it.
+- **The typed provenance tier waits for its reader.** The integrity assertion
+  README records the tier the honest-answer design proposes for assertion
+  rows (`claimed | answered | given | observed | checked | judged`, rendered
+  by one writer into the `provenance` string as `<tier>:<source>`) and why it
+  is not shipped: no code in this release reads a tier. It ships with the
+  minimum-strength rule that would read it.
 
 ## [9.112.2] - 2026-09-22
 

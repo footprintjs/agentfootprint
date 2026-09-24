@@ -19,9 +19,14 @@
  *          filed by the two moments `contingent.ts` serves: the route
  *          decider's answer and the dispatch loop's call) — identities,
  *          enums and numbers only. Assertion values, `settles`, `line`, the
- *          judged state and the contingent VALUE live in the committed key
- *          under whatever redaction the run configured; an event stream
- *          fans out to sinks we do not control.
+ *          judged state, the contingent VALUE and — on an
+ *          `unsettled-by-absence` row — a TOOL's own words (its envelope's
+ *          `notChecked`, `cannotCover` and `tryInstead`) live in the
+ *          committed key under whatever redaction the run configured; an
+ *          event stream fans out to sinks we do not control. That row
+ *          (9.113.0, filed by the same two moments through
+ *          `unsettled.ts · withUnsettledRows`) emits nothing of its own, as
+ *          a conflict row emits nothing of its own.
  *
  * ## Append only, last wins, conflicts are a fold
  *
@@ -58,6 +63,7 @@ import {
   type JudgmentRow,
   type Standing,
   type StandingRow,
+  type UnsettledByAbsenceRow,
 } from './types.js';
 
 /** The scope surface this file needs. Structurally a `TypedScope<AgentState>`. */
@@ -95,6 +101,16 @@ export interface LedgerFold {
   readonly conflicts: readonly Conflict[];
   /** Whether any result has a standing at all. */
   readonly hasStanding: boolean;
+  /**
+   * The ruled-out standings that rest on an absence (9.113.0): the LAST
+   * `unsettled-by-absence` row per result, kept only while that result's
+   * CURRENT standing (`standingOf`) is still `ruled-out` — a later `fact`,
+   * `open` or `noise` moved the model's word, and a row beside the earlier
+   * word describes a standing that no longer stands. In the order each
+   * result first got a row. The piece's `unsettled by absence` section reads
+   * this and nothing else (`serve.ts · findingsLedgerPiece`).
+   */
+  readonly unsettled: ReadonlyMap<string, UnsettledByAbsenceRow>;
 }
 
 // ─── The fold ──────────────────────────────────────────────────────────
@@ -107,13 +123,19 @@ export interface LedgerFold {
 export function foldLedger(rows: readonly FindingsRow[]): LedgerFold {
   const standingOf = new Map<string, StandingRow>();
   const judgments = new Map<string, JudgmentRow>();
+  const lastUnsettled = new Map<string, UnsettledByAbsenceRow>();
   for (const row of rows) {
     if (row.kind === 'standing') standingOf.set(row.toolCallId, row);
     else if (row.kind === 'judgment') judgments.set(row.toolCallId, row);
+    else if (row.kind === 'unsettled-by-absence') lastUnsettled.set(row.toolCallId, row);
   }
   const asserted: Assertion[] = [];
   for (const row of standingOf.values()) {
     if (row.standing === 'fact') asserted.push(...row.assertions);
+  }
+  const unsettled = new Map<string, UnsettledByAbsenceRow>();
+  for (const [toolCallId, row] of lastUnsettled) {
+    if (standingOf.get(toolCallId)?.standing === 'ruled-out') unsettled.set(toolCallId, row);
   }
   return {
     standingOf,
@@ -121,6 +143,7 @@ export function foldLedger(rows: readonly FindingsRow[]): LedgerFold {
     asserted,
     conflicts: conflictsOf(asserted),
     hasStanding: standingOf.size > 0,
+    unsettled,
   };
 }
 
@@ -153,8 +176,10 @@ function witnessesOf(conflict: Conflict, standingOf: ReadonlyMap<string, Standin
  * key that first disagreed at this write, and emit one event per basis or
  * standing row. No-op on an empty list, so an armed agent whose model
  * declared nothing never writes the key — its commit log is the one it
- * always had. Callers pass basis and standing rows; conflict rows are this
- * function's to write.
+ * always had. Callers pass basis and standing rows — each standing followed
+ * by the `unsettled-by-absence` row the rule files beside it, when it files
+ * one (`unsettled.ts · withUnsettledRows`); conflict rows are this function's
+ * to write.
  */
 export function recordFindings(scope: FindingsScope, rows: readonly FindingsRow[]): void {
   if (rows.length === 0) return;
@@ -246,6 +271,11 @@ function emitRow(
     });
     return;
   }
+  // The row beside a ruled-out standing that rests on an absence (9.113.0)
+  // emits nothing of its own — the conflict row's precedent: it is on the
+  // committed key, the served piece is its reader, and no event field ships
+  // without a reader in the same release.
+  if (row.kind === 'unsettled-by-absence') return;
   if (row.kind !== 'standing') return;
   const conflictKeys = newConflicts
     .filter((c) => c.witnesses.some((w) => w.toolCallId === row.toolCallId))

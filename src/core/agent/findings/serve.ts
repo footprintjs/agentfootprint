@@ -26,7 +26,13 @@
  * on the record — one line per `ContingentRow`, the value the model used
  * and every result that carried it with the standing the model gave that
  * result (`contingent.ts` is the rule; this only quotes the rows; the
- * heading says the lines are the library's join, not a declaration). Every
+ * heading says the lines are the library's join, not a declaration). After
+ * it, `unsettled by absence (read off the record):` (9.113.0) quotes the
+ * rows the fold keeps beside a ruled-out standing whose only witness was an
+ * absence — what the envelope, as the model was served it, said it did not
+ * check and its `try_instead`, in its own field names (`unsettled.ts` is
+ * the rule, and quotes nothing the model was not served; the model's own
+ * ruled-out line stays in `limitations`, exactly as declared). Every
  * bucket is bounded
  * (`FINDINGS_PIECE_LIMITS`) and every overflow is STATED; an empty bucket is
  * omitted rather than rendered as "no facts". A basis-only ledger
@@ -98,6 +104,7 @@
 import type { LLMMessage } from '../../../adapters/types.js';
 import { CONTEXT_FIELD_MEANINGS } from '../../../lib/context-contract/index.js';
 import { assertionKey, type Assertion } from '../../../integrity/assertion/types.js';
+import type { CoverageItem } from '../coverage/types.js';
 import { foldLedger, type LedgerFold } from './ledger.js';
 import { isResultMessage, servedToolCallIds, undeclaredIds } from './offer.js';
 import { FINDINGS_ANSWER_ASK } from './reserved.js';
@@ -156,14 +163,15 @@ export function isCollapsedToolResult(value: unknown): value is CollapsedToolRes
  * section: the piece's sections are separated by a blank line, and an id
  * carrying `\n\nfacts (declared by the model):\n…` would otherwise render as
  * a second, forged, library-authored bucket. `pieceChars` is the ceiling the
- * other three imply for the whole piece (header + the four buckets and the
- * contingent section at their cap + two count lines at theirs + the ask):
+ * other three imply for the whole piece (header + the four buckets, the
+ * contingent section and the unsettled section at their cap + two count
+ * lines at theirs + the ask):
  * stated, not enforced by a cut, and pinned by `serve.test.ts` ("the whole
  * piece stays under pieceChars"), which measures a ledger at every cap at
  * once against it.
  */
 export const FINDINGS_PIECE_LIMITS = Object.freeze({
-  /** Lines per text bucket (facts, limitations, evidenceRefs, nextSteps, contingent) before `+K more`. */
+  /** Lines per text bucket (facts, limitations, evidenceRefs, nextSteps, contingent, unsettled) before `+K more`. */
   bucketLines: 64,
   /** Ids per count line (noise, undeclared) before `+K more`. */
   listedIds: 32,
@@ -171,8 +179,8 @@ export const FINDINGS_PIECE_LIMITS = Object.freeze({
   lineChars: 240,
   /** Chars per id on a count line before `…[clipped N chars]` — an id is an identifier. */
   idChars: 64,
-  /** The whole piece's ceiling in chars, implied by the three bounds above (raised for the fifth capped section, 9.110.0). */
-  pieceChars: 98_304,
+  /** The whole piece's ceiling in chars, implied by the three bounds above (raised for the fifth capped section, 9.110.0, and the sixth, 9.113.0). */
+  pieceChars: 114_688,
 } as const);
 
 /** The four contract fields the piece serves, in the order they appear. */
@@ -211,6 +219,7 @@ export function findingsLedgerPiece(
     bucket('evidenceRefs', openLines(current, tested)),
     bucket('nextSteps', nextStepLines(current)),
     contingentSection(rows),
+    unsettledSection(fold),
     countLine(`noise (${DECLARED})`, idsWith(current, 'noise'), ''),
     countLine('undeclared', undeclaredIds(served, fold.standingOf), ', served in full below'),
     ...(answerAsk === 'quote-facts' ? [FINDINGS_ANSWER_ASK] : []),
@@ -420,6 +429,60 @@ function contingentSection(rows: FindingsLedger): string | undefined {
   return [CONTINGENT_HEADING, ...shown, ...(over > 0 ? [`+${over} more (cap ${max})`] : [])].join(
     '\n',
   );
+}
+
+/**
+ * The heading of the section that quotes the rows beside a ruled-out
+ * standing whose only witness is an absence (9.113.0). It says where the
+ * lines come from for the reason `CONTINGENT_HEADING` does: the piece's
+ * header says everything below it is what the model itself declared, and
+ * these lines are the library's reading of the result the model ruled out
+ * on — its envelope's own words, quoted.
+ */
+const UNSETTLED_HEADING = 'unsettled by absence (read off the record):';
+
+/**
+ * The ruled-out standings that rest on an absence (9.113.0) — for each row
+ * the fold keeps (`ledger.ts · foldLedger`'s `unsettled`: the last row per
+ * result while its current standing is still `ruled-out`), in fold order:
+ * one head line in the ruled-out line's own identity form, `ruled out
+ * (<toolName>, tool:<id>) on an absence`, then one line per part of the
+ * envelope, each anchored to its call by id and keyed by the envelope's own
+ * field name — `tool:<id> not_checked: <what>[ — <why>]`, `tool:<id>
+ * cannot_cover: …`, `tool:<id> try_instead: <the string as printed>`. One
+ * line per part, so no part is cut by another's length (the line cap clips
+ * each on its own); capped like a bucket, by lines, with the overflow
+ * stated; omitted when the fold keeps none. The model's own ruled-out line
+ * stays in `limitations`, as declared.
+ */
+function unsettledSection(fold: LedgerFold): string | undefined {
+  const lines: string[] = [];
+  for (const row of fold.unsettled.values()) {
+    // Always present: the fold keeps a row only beside a current ruled-out standing.
+    const standing = fold.standingOf.get(row.toolCallId);
+    if (standing === undefined) continue;
+    lines.push(clipLine(`ruled out (${whereOf(standing)}) on an absence`));
+    const id = `tool:${row.toolCallId}`;
+    for (const item of row.notChecked ?? []) {
+      lines.push(clipLine(`${id} not_checked: ${itemText(item)}`));
+    }
+    for (const item of row.cannotCover ?? []) {
+      lines.push(clipLine(`${id} cannot_cover: ${itemText(item)}`));
+    }
+    if (row.tryInstead !== undefined) lines.push(clipLine(`${id} try_instead: ${row.tryInstead}`));
+  }
+  if (lines.length === 0) return undefined;
+  const max = FINDINGS_PIECE_LIMITS.bucketLines;
+  const shown = lines.slice(0, max);
+  const over = lines.length - shown.length;
+  return [UNSETTLED_HEADING, ...shown, ...(over > 0 ? [`+${over} more (cap ${max})`] : [])].join(
+    '\n',
+  );
+}
+
+/** `<what>[ — <why>]` — one coverage item as the answer's coverage block renders it. */
+function itemText(item: CoverageItem): string {
+  return `${item.what}${item.why === undefined ? '' : ` — ${item.why}`}`;
 }
 
 // ─── Rendering ─────────────────────────────────────────────────────────

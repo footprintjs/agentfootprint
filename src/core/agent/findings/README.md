@@ -14,7 +14,9 @@ second source (a calibrated classifier from `agentfootprint/classify`) whose
 rows the same writer files beside the model's; `contingent.ts` — the rule
 that joins the model's standings to the evidence corpus's carriers (a value
 used that came only from set-aside results), whose rows the same writer
-files at the answer and at dispatch.
+files at the answer and at dispatch; `unsettled.ts` — the rule that files a
+row BESIDE a `ruled-out` standing whose only witness is an absence, through
+the same writer at the same two moments.
 
 # `findings/` — ride-along findings
 
@@ -114,12 +116,23 @@ foldLedger(scope.findingsLedger!).standingOf.get('call_1')?.standing; // 'fact'
   history's `role: 'tool'` messages plus the previous batch's `toolResults`
   entries (`offer.ts · knownResults`) — and a placed result's ticket through
   `artifacts/placement.ts · isPlacedToolResult` — the one guarded parse, of a
-  string the library minted.
+  string the library minted. Since 9.113.0 also, for the result a
+  `ruled-out` standing names, that result's served string — its leading
+  JSON object, read by the one coverage recognizer, is the only source of
+  the derived row's words — and, only when that object reads as an absence,
+  the dispatch door's coverage rows for the call (`AgentState.coverageDeclared`,
+  written by `stages/toolCalls.ts · declareCoverage`), read for their `kind`
+  alone (`unsettled.ts · withUnsettledRows`).
 - Writes `findingsLedger` through `recordFindings` only, a fresh array per
   write; emits `agentfootprint.findings.declared`,
   `agentfootprint.findings.standing` and (9.110.0)
   `agentfootprint.findings.contingent` — identities, enums and counts, never
-  a value or a line of model text.
+  a value or a line of model text. An `unsettled-by-absence` row (9.113.0)
+  emits nothing of its own, as a conflict row emits nothing of its own. The
+  committed key carries the model's words (lines, `settles`, assertion
+  values) and, on that row, a TOOL's words — the envelope's `notChecked`,
+  `cannotCover` and `try_instead` — so a redaction policy that hides tool
+  output by key must cover `findingsLedger` too.
 
 ## Proved on the wire, measured on the record
 
@@ -614,14 +627,249 @@ law, the pure rule's bounds) and the reference `agent-findings-contingent`.
 (`AgentState.totalCacheReadTokens` is the same number on the record,
 written only when a provider reported one).
 
+## Unsettled by absence (9.113.0) — a row BESIDE the model's word
+
+Why: "nothing was found" is not "ruled out". A lookup that matched nothing
+witnesses no negative, and when its own envelope says it never looked where
+the claim lives, a ruling-out built on it is a guess with the shape of a tool
+call. The owner's goal needs that named — *not sure, and here is why* — and
+the envelope already holds the why (what it did not check) and where the
+settling would be (its `try_instead`). But the `ruled-out` is the MODEL's
+word. Round 1 of the honest-answer design re-filed it as `open`, which made
+the library a second writer of the model's `standing` and would have served
+the model a standing it never declared
+(`docs/design/2026-09-honest-answer-ledger.md` § 14, R12). So the library
+writes nothing over it and files a row beside it instead. The law:
+
+> **A standing whose only witness is an absence gets a row BESIDE it; the
+> model's word is never rewritten.**
+
+`unsettled.ts` is the rule; `recordFindings` writes the row
+(`UnsettledByAbsenceRow`: `toolCallId`, `notChecked?`, `cannotCover?`,
+`tryInstead?`, `iteration`) immediately after the `ruled-out` standing it is
+beside, in the same write, at the two moments that file standings (a call's
+`_findings.previous`, the answer's).
+
+- **Two facts, two owners, both required.** "Did the tool return an
+  absence?" has one owner: the dispatch door
+  (`../stages/toolCalls.ts · declareCoverage`), which reads the value the
+  tool RETURNED through the one recognizer
+  (`../coverage/read.ts · readCoverageResult`), delivers the status
+  `'absent'`, emits `tools.absent` and files the call's rows on
+  `AgentState.coverageDeclared`. The rule files a row only when the door's
+  rows for the standing's `toolCallId` hold one of `kind: 'absence'` (an
+  `absent()` envelope, bare or bounded by `coverage()`), and never re-reads
+  a return to decide that. An envelope a tool returned as TEXT — what an
+  MCP server in its default text mode delivers — was no absence at the door
+  (no status, no event, no row), so it files nothing here: the served
+  string is byte-identical to an object return's, which is exactly why the
+  wire alone cannot be the witness, and the record keeps one answer, not
+  two. (The door that delivers it as an object is
+  `mcpClient({ resultMode: 'structured' | 'structured-or-json' })`: the
+  envelope from `structuredContent`, or — under `'structured-or-json'` —
+  from a lone JSON text block.) "Was the model
+  SERVED an absence?" has another owner: the result as the model was served
+  it (`offer.ts · knownResults`). The door records the return BEFORE the
+  after-tool chain, the tool's own ceiling and placement act, so an
+  after-tool `deny` (whose sentence is the whole of what the model reads), a
+  ceiling's refusal, a placement ticket or a summary leaves the door's rows
+  saying absence while the model read something else. The model rules out
+  on what it READ, so those file nothing — and nothing governance withheld
+  is ever quoted back to the model.
+- **Ruled-out only.** `open` is already unsettled in the model's own word,
+  and `noise` says the result held nothing worth reading — which an absence
+  is. An id the run could not identify files nothing.
+- **The envelope's words as the model was served them, read and never
+  trusted.** The row's only source of words is the served result's LEADING
+  JSON object (a step boundary's, a refused effect's or the repeated-call
+  note joined after the envelope does not hide it), read by the one
+  recognizer — the door's own law, so the two cannot disagree about what an
+  absence looks like. `notChecked` / `cannotCover` are its `not_checked` /
+  `cannot_cover`, a bounding ledger's first, then the absence's, repeats
+  dropped, each present only when non-empty — so an after-tool scrub is
+  honored; an item that names no ground (no non-blank string `what`) is left
+  out, so a foreign envelope's malformed list never reaches the row and
+  every row filed passes the checkpoint door. `tryInstead` is its
+  `try_instead` STRING byte for byte — never parsed, never trimmed, never
+  read for a tool name, present only when non-blank. The door's own copies
+  are the witness that the tool returned an absence and are never quoted.
+  The rule is total: a shape it cannot read files nothing, never throws, and
+  never fails the run.
+- **A record of a check, not a Fold.** The row is written once, when the
+  standing is filed, and never recomputed. The record needs it STORED
+  because what it is read from does not last as long as the standing does:
+  `coverageDeclared` is per run (not on the `AgentRunCheckpoint`, so a
+  continued conversation or a `resumeOnError` starts without it), and the
+  served result leaves `history`
+  when the window evicts it (`../stages/window.ts`). The model needs it
+  SERVED for another reason: from the next call on, a ruled-out result is a
+  ticket on the wire (`serve.ts · collapseJudged`), so the section is where
+  the envelope's boundary still reaches it. Which rows are CURRENT belongs to
+  the ledger's one fold: `foldLedger(rows).unsettled` keeps the last row per
+  result while that result's current standing is still `ruled-out`.
+- **Once filed, served for as long as the ruling-out stands — in practice
+  the rest of the run and every continued turn.** A later `fact`, `open` or
+  `noise` on the same result would move the model's word and retire the
+  row, but a ruled-out id leaves the offer (`offer.ts · RETIRING_STANDINGS`),
+  so the model is not offered that result again, and the checkpoint carries
+  the row. Deliberate: nothing about the absence changed, the ruling-out
+  still rests on it, and the row stays true. A few lines per ruled-out
+  absence, capped like every section.
+- **Served under its own heading; the model's line untouched.**
+  `findingsLedgerPiece` quotes the kept rows after the `contingent` section,
+  under `unsettled by absence (read off the record):` — named for what it
+  is, since the piece's header says everything below it is what the model
+  declared. One head line per row in the ruled-out line's identity form
+  (`ruled out (<toolName>, tool:<id>) on an absence`), then one line per
+  part of the envelope, each anchored to its call by id; capped like a
+  bucket (by lines), each line clipped at `lineChars`, every overflow
+  stated. The model's own `ruled out (…): <line>` stays in `limitations`,
+  exactly as declared. `pieceChars` rose to 114,688 for this sixth capped
+  section; the largest piece — every section at its cap at once — is
+  measured against it by `serve.test.ts` ("the whole piece stays under
+  pieceChars").
+- **No event, no instruction line.** No reader of an event about the row
+  exists in this release, so none ships — a conflict row emits nothing of its
+  own either; `agent.findings()`, the snapshot and the checkpoint carry the
+  row. The instruction is unchanged, so a `.findings()` agent is served the
+  bytes it always was until its model rules out a result it was served as an
+  absence. The door's key is read only then — the served string is read
+  first, and it is strings the moment already held — so a run whose model
+  rules out only results that held something records the bytes it always
+  did, with no new tracked read (no narrative line, no `readKeys` entry).
+- **It survives a continued conversation.** The checkpoint door
+  (`../../runCheckpoint.ts · validateCheckpoint`) admits the kind with the
+  fields the fold and the piece read; without that arm, a checkpoint holding
+  the row would be refused on resume.
+- **Not covered, named here so nobody reads it as covered:**
+  - a ZERO-ROW ARRAY. The design names "an `absent()` or declared-empty
+    result"; a bare `[]` is counted empty, not declared empty, and no door
+    records a zero-row reading of a returned value. Reading the SERVED
+    string instead would count a text `'[]'` that the one law of emptiness
+    (`../../../integrity/empty-lookup/check.ts · readLookupResult`, over
+    "the tool's own answer, as it returned it") declines — a second answer
+    on one record. What earns it: a door that files the one law's reading
+    per call, which this rule would then read the way it reads
+    `coverageDeclared`, beside the served string's own reading;
+  - an absence the model reached some other way than as the result it
+    ruled out — a placed ticket it redeemed later, an envelope an agent cap
+    (`maxToolResultChars`) cut so its JSON no longer closes: the model was
+    served a ticket or a cut, so a ruling-out on that call files nothing;
+  - a result whose door rows are not on THIS run's state — one from an
+    earlier turn of a continued conversation, or from before a
+    `resumeOnError` (both restore from an `AgentRunCheckpoint`, which does
+    not carry `coverageDeclared`): a ruling-out filed on it now files
+    nothing, never a guess from the served string;
+  - a `fact` standing on an absence (the model standing on "nothing found"
+    as a positive) — the design scoped this rule to `ruled-out`;
+  - anything the model concludes in prose rather than as a standing.
+
+The case it was written for (F3 in the design page): a model rules out an
+HBA path because an HBA lookup keyed on a storage cluster's name found
+nothing. As RECORDED, the lookup returned a bare `{ hba_count: 0, hbas: [] }`
+— and that still files nothing: no law of this library says where its rows
+are. The rule speaks once the lookup declares its miss:
+
+```ts
+// The lookup's miss, declared — nothing the model passed is echoed into a
+// field that grounds (`looked_for` is the one field that quotes the request).
+absent({
+  what: 'HBAs on host nas-cluster-06',
+  checked: ['the HBA table of every collected hypervisor host'],
+  notChecked: [{ what: 'whether nas-cluster-06 is a hypervisor host at all',
+                 why: 'this lookup reads HBA rows, never the host inventory' }],
+  cannotCover: [{ what: 'HBAs on hosts outside the collected inventory',
+                  why: 'the collector exports only the hosts it was pointed at' }],
+  tryInstead: 'Look nas-cluster-06 up in cluster_inventory; a storage cluster has no host HBAs.',
+});
+
+// Call c2 carries the model's word on c1:
+//   _findings: { basis: 'direct', previous: [{ toolCallId: 'c1',
+//     standing: 'ruled-out', line: 'the HBA path is not what is slow' }] }
+// → on the record, the model's row byte for byte as before, and beside it:
+//   { kind: 'unsettled-by-absence', toolCallId: 'c1',
+//     notChecked: [{ what: 'whether nas-cluster-06 is a hypervisor host at all', why: '…' }],
+//     cannotCover: [{ what: 'HBAs on hosts outside the collected inventory', why: '…' }],
+//     tryInstead: 'Look nas-cluster-06 up in cluster_inventory; a storage cluster has no host HBAs.',
+//     iteration: 2 }
+```
+
+Served on the next call — the model's line as declared, and the section:
+
+```
+limitations (declared by the model):
+ruled out (host_hbas, tool:c1): the HBA path is not what is slow — tested: nas-cluster-06 is a hypervisor host whose HBA path is slow
+
+unsettled by absence (read off the record):
+ruled out (host_hbas, tool:c1) on an absence
+tool:c1 not_checked: whether nas-cluster-06 is a hypervisor host at all — this lookup reads HBA rows, never the host inventory
+tool:c1 cannot_cover: HBAs on hosts outside the collected inventory — the collector exports only the hosts it was pointed at
+tool:c1 try_instead: Look nas-cluster-06 up in cluster_inventory; a storage cluster has no host HBAs.
+```
+
+The row reads only what the model was served. Put an after-tool rule on the
+same lookup and the same ruling-out files by what the rule let through:
+
+```ts
+// A deny: c1 is served the sentence, and no word of the envelope.
+.toolMiddleware({
+  name: 'hba-governance',
+  onToolResult: (c) =>
+    c.toolName === 'host_hbas' ? deny('HBA data is withheld for this user.') : allow(),
+})
+// → the door still records the absence the tool returned, but the model
+//   ruled out on the sentence, not on an absence it read: the ledger holds
+//   its standing and nothing beside it, and no later call — nor a continued
+//   turn — is served the section or any word the rule withheld.
+
+// A scrub: c1 is served the envelope without `not_checked`, still an absence.
+.toolMiddleware({
+  name: 'hba-scrub',
+  onToolResult: (c) => {
+    if (c.toolName !== 'host_hbas') return allow();
+    const { not_checked: _withheld, ...rest } = c.result as Record<string, unknown>;
+    return allow(rest, 'what the collector did not check is not shown to the model');
+  },
+})
+// → the row is worded from what was served — `cannotCover` and `tryInstead`,
+//   no `notChecked` — and the section quotes those parts, never the one the
+//   scrub took out.
+```
+
+Pinned verbatim by `test/core/agent/findings/unsettled.test.ts` (the model's
+rows compared as the JSON string the 9.112.2 writer filed — read off that
+tree — at both moments on both chart shapes; the served section, its
+rebuild and the receipt; an envelope returned as TEXT filing nothing and
+text whose lists are not lists completing, at both moments on both shapes;
+a stepped skill's note joined after the envelope still filing the row with
+its `try_instead`; a foreign envelope's malformed items left out and the row
+through the checkpoint door into a continued turn; an after-tool `deny`
+filing nothing and serving no withheld word, an after-tool scrub honored,
+prose, a tool's own ceiling and a placed ticket filing nothing — each on
+both chart shapes, the deny and the scrub at both moments; `try_instead`
+carried byte for byte, whitespace included; a ruling-out on rows reading
+nothing new; a real witness, the recorded bare wrapper and an unarmed
+agent filing nothing), the rule's fences by
+`test/core/agent/findings/unsettled-rule.test.ts`, the review's leak probe
+(the deny and the scrub above, on both chart shapes, the withheld word
+asserted absent from every request) by
+`test/core/agent/findings/unsettled-governance.test.ts`, and the
+piece's bounds by `test/core/agent/findings/serve.test.ts`. The 21
+byte-identity references under `test/core/tools/reference/` are unchanged.
+
 ## Files
 
 - `types.ts` — `RESERVED_ARGUMENT`, the vocabularies, `PROPOSITION_CHARS`,
   `JUDGE_RESULT_CHARS`, `CONTINGENT_VALUE_CHARS`, `FindingsDeclaration` (the
   wire), `BasisRow` / `StandingRow` / `ConflictRow` / `JudgmentRow` /
-  `JudgmentErrorRow` / `ContingentRow` (the record).
+  `JudgmentErrorRow` / `ContingentRow` / `UnsettledByAbsenceRow` (the record).
 - `contingent.ts` — `contingentRowsOf` (the rule), `groundedArgumentValues`
   (the dispatch moment's values), `hasSetAsideStanding` (the cheap gate).
+- `unsettled.ts` — `withUnsettledRows` (what both moments hand the writer),
+  `unsettledRowOf` (the rule for one standing: the served result read as
+  an absence, the door's rows for its call as the witness that the tool
+  returned one, the row worded from what was served). Internal — only the
+  row type is exported.
 - `judge.ts` — `judgeQuestions` (pure), `judgeResult` (the one caller of
   `recordFindings` for judgment rows), `STANDING_CRITERIA`,
   `JUDGE_QUESTION_IDS`.
@@ -633,7 +881,8 @@ written only when a provider reported one).
   `servedToolCallIds`, `knownResults`, `isResultMessage`,
   `RETIRING_STANDINGS`.
 - `ledger.ts` — `recordFindings`, `foldLedger` (`standingOf` the model's,
-  `judgments` the judge's), `standingRowsFrom`, `basisRowFrom`.
+  `judgments` the judge's, `unsettled` the rows beside a current
+  `ruled-out`), `standingRowsFrom`, `basisRowFrom`.
 - `serve.ts` — `findingsLedgerPiece`, `collapseJudged`, `servedToolCallIds`
   (re-exported from `offer.ts`), `isCollapsedToolResult`,
   `FINDINGS_PIECE_LIMITS`, `FindingsServeMode`, `FindingsAnswerAsk` (internal

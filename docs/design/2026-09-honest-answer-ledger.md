@@ -1209,7 +1209,12 @@ interface PlacementBecause {
   `open`, which made the library a second writer of the MODEL's word `standing` — the
   one-owner breach F11 had just corrected — and would have served the model a standing it
   never declared. (The case: an HBA lookup returning zero rows "tested" that a PowerScale
-  cluster is an ESXi host, F3.)
+  cluster is an ESXi host, F3.) As shipped in 9.113.0 (`findings/unsettled.ts`): the carried
+  field is `tryInstead`, the envelope's own name — `settles` is the model's word on an `open`
+  standing, so giving it the tool's sentence would be an inference; the absence must also have
+  been SERVED to the model, since the door records a return before the after-tool chain, the
+  ceiling and placement act; and the declared-empty arm is not built — it waits for a door that
+  records `readLookupResult`'s reading per call.
 - Run-level fold: `lookup-empty` carries `{ empty, total }` over the run, so "every lookup this
   run was empty" is one number on one row (F4).
 

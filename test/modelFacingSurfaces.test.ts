@@ -786,6 +786,45 @@ function findingsContingentPieces(): string[] {
   return [findingsLedgerPiece(ledger, ['call_1', 'call_4', 'call_7'])!.rawContent];
 }
 
+/** The piece with an `unsettled by absence:` section (9.113.0): two
+ *  ruled-out standings, each with the row the rule files beside it — an
+ *  absence quoting every part of its envelope, and an absence that declared
+ *  no boundary and no way out — composed by the real function. */
+function findingsUnsettledPieces(): string[] {
+  const ruledOut = (toolCallId: string, toolName: string, iteration: number) => ({
+    kind: 'standing',
+    toolCallId,
+    toolName,
+    standing: 'ruled-out',
+    line: 'not the path',
+    assertions: [],
+    declaredOn: { toolCallId: 'call_9' },
+    iteration,
+  });
+  const ledger = [
+    ruledOut('call_1', 'host_hbas', 2),
+    {
+      kind: 'unsettled-by-absence',
+      toolCallId: 'call_1',
+      notChecked: [
+        {
+          what: 'whether nas-cluster-06 is a hypervisor host',
+          why: 'this lookup reads HBA rows only',
+        },
+        { what: 'the archived HBA history' },
+      ],
+      cannotCover: [
+        { what: 'hosts outside the collected inventory', why: 'one inventory per collector' },
+      ],
+      tryInstead: 'Look nas-cluster-06 up in cluster_inventory first.',
+      iteration: 2,
+    },
+    ruledOut('call_2', 'port_lookup', 3),
+    { kind: 'unsettled-by-absence', toolCallId: 'call_2', iteration: 3 },
+  ] as FindingsLedger;
+  return [findingsLedgerPiece(ledger, ['call_1', 'call_2', 'call_3'])!.rawContent];
+}
+
 /** Every `description` in the reserved property's schema tree — each one the
  *  model reads on every served tool, at whatever depth the provider renders. */
 function findingsSchemaDescriptions(): string[] {
@@ -1276,6 +1315,37 @@ const PRODUCERS: readonly ModelFacingProducer[] = [
       /noise \(declared by the model\): 1 result \(tool:call_1\)/,
     ],
     compose: async () => findingsContingentPieces(),
+  },
+  {
+    id: 'findings ledger — the served `unsettled by absence:` section (9.113.0)',
+    module: 'src/core/agent/findings/serve.ts',
+    surface: LEDGER_PIECE,
+    lifetimeBecause:
+      'the same request-only system piece as the SERVED piece row: `findingsLedgerPiece` quotes ' +
+      'the `UnsettledByAbsenceRow`s the ledger fold keeps (`foldLedger(...).unsettled`) under the ' +
+      "heading `unsettled by absence (read off the record):` — the library's reading of the " +
+      'result a ruled-out standing rests on, named as such so the header stays true — composed ' +
+      'per request, joined into `systemPieces` only, never an injection and never a `history` ' +
+      'turn; `servedView.ts · viewOf` recomposes it from the record',
+    drivenBy: [
+      'test/core/agent/findings/unsettled.test.ts',
+      'test/core/agent/findings/serve.test.ts',
+    ],
+    // The heading, each head line, every part line — each a marker.
+    reaches: [
+      /\nunsettled by absence \(read off the record\):\n/,
+      /^ruled out \(host_hbas, tool:call_1\) on an absence$/m,
+      /^tool:call_1 not_checked: whether nas-cluster-06 is a hypervisor host — this lookup reads HBA rows only$/m,
+      /^tool:call_1 not_checked: the archived HBA history$/m,
+      /^tool:call_1 cannot_cover: hosts outside the collected inventory — one inventory per collector$/m,
+      /^tool:call_1 try_instead: Look nas-cluster-06 up in cluster_inventory first\.$/m,
+      /^ruled out \(port_lookup, tool:call_2\) on an absence$/m,
+      // …and the piece it rides on is still the real one, the model's own
+      // ruled-out line quoted as declared.
+      /^\[AgentFootprint findings ledger/,
+      /^ruled out \(host_hbas, tool:call_1\): not the path$/m,
+    ],
+    compose: async () => findingsUnsettledPieces(),
   },
   {
     id: 'ontology — the always-on INSTRUCTION piece (9.106.0; v2 9.107.0; v3 9.108.0)',

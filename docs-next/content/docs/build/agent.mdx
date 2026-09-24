@@ -342,6 +342,27 @@ Two moments file the row. At the answer, after the gate's verdict, over the valu
 
 Cache reads are a cost the same record now carries: `AgentState.totalCacheReadTokens` sums `usage.cacheRead` over the run's model calls beside `totalInputTokens`, written only once a provider has reported one, so a provider that reports none (the mock, a local model) never writes the key. `npm run bench:findings:shuffle` reads three new columns off the record — `contingent` (rows per run, the tower rate a hosted run measures), `cache-read` and `cached %` (summed off the `llm_end` payloads, `—` when nothing reported cache reads) — and on the mock a fifth condition, `ledger+tower`, scripts an answer that quotes a value from a result it declared noise, so the column is proved to read 1 there and 0 on the clean rows.
 
+### Nothing found is not ruled out — `unsettled-by-absence`
+
+A lookup that matched nothing witnesses no negative. When the model declares a result `ruled-out` and the tool returned an `absent()` envelope for it — bare or bounded by `coverage()`, which the dispatch door records as an absence (the delivered status `'absent'`, the `tools.absent` event, a `coverageDeclared` row) — and the model was served that envelope, the ruling-out rests on "nothing found", and the envelope usually says what the search never checked. The model's standing is its own word and stays exactly as declared. Beside it, `.findings()` files an `UnsettledByAbsenceRow`: the `toolCallId` of the ruled-out result, the `notChecked` and `cannotCover` lists of the envelope as the model was served it, and its `try_instead` byte for byte (`tryInstead`, quoted and never parsed). The row lands immediately after the standing, at both moments that file standings. Whether the tool returned an absence is the door's call alone, never a second reading: an envelope a tool returned as text (an MCP server's default text mode; `mcpClient({ resultMode: 'structured' | 'structured-or-json' })` delivers it as an object) files nothing, and so do a zero-row array, a bare `{ hba_count: 0, hbas: [] }` wrapper, prose, and an `open`, `noise` or `fact` standing. And the model rules out on what it read: the door records a return before the after-tool chain, the tool's own ceiling and placement act, so a result an after-tool `deny` withheld, a ceiling's refusal, a placed ticket or a summary files nothing, and an after-tool scrub is honored — the row never quotes a word the model was not served.
+
+```ts
+const agent = Agent.create({ provider, model })
+  .tool(hostHbas) // returns absent({ …, notChecked, cannotCover, tryInstead }) on a miss
+  .tool(clusterInventory)
+  .findings()
+  .build();
+await agent.run({ message: 'is nas-cluster-06 slow?' });
+agent.findings()?.filter((row) => row.kind === 'unsettled-by-absence');
+// [{ kind: 'unsettled-by-absence', toolCallId: 'c1',
+//    notChecked: [{ what: 'whether nas-cluster-06 is a hypervisor host at all', why: '…' }],
+//    cannotCover: [{ what: 'HBAs on hosts outside the collected inventory', why: '…' }],
+//    tryInstead: 'Look nas-cluster-06 up in cluster_inventory; a storage cluster has no host HBAs.',
+//    iteration: 2 }]
+```
+
+From the next call on, a ruled-out result is a ticket on the wire, so the row is how the envelope's boundary still reaches the model: the ledger piece serves it under `unsettled by absence (read off the record):` after the contingent section — `ruled out (host_hbas, tool:c1) on an absence`, then one line per part of the envelope, `tool:c1 not_checked: …`, `tool:c1 cannot_cover: …`, `tool:c1 try_instead: …`. The model's own ruled-out line stays in `limitations`, quoted as declared, and a row is served only while that result's current standing is still `ruled-out` — in practice for the rest of the run, since a ruled-out result leaves the offer. No event and no instruction line ship with it, and the door's coverage rows are read only for a ruling-out on a result served as an absence, so an agent whose model never rules out such a result records the bytes it always did; the checkpoint carries the row into a continued conversation.
+
 ### Tool choice by classifier — `.toolChoice()`
 
 The loop's most frequent choice is which tool, and the model makes it by generating a call — the record holds the call and nothing about the choice. `.toolChoice({ classifier })` asks the same classifier port a second reading of every one of those choices: at each model call the tools slot puts one `choice` question to it, under the fixed id `TOOL_CHOICE_QUESTION`, whose criteria are the tools about to be served — the merged wire minus the always-served doors, each by its own description — over a state of the user's message and the active skill id. The answer lands on `AgentState.toolChoices` as a `ToolChoiceRow` *before* the call: `offered`, `ranked` (a `ToolChoiceScore` per name the provider scored, highest first, an unscored tool absent rather than zero), `chosen` (the provider's own pick, absent when it named nothing offered), `confidence`, `usage`, `latencyMs`, and `served` with `narrowed`. After the reply the call-llm stage files a `ToolChoiceOutcomeRow`: `called` (the model's tool calls in order, empty on an answer), `firstAgrees` (whether the first call is the pick, absent when either side is absent) and any `miss`. A failed classifier call is a `ToolChoiceErrorRow` with the provider's status and message, and the full set is served. The three row kinds are `ToolChoiceEntry`; the key is a `ToolChoiceLedger` — flat, append-only, a fresh array per write.

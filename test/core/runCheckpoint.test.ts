@@ -394,6 +394,66 @@ describe('runCheckpoint — P5 security', () => {
     }
   });
 
+  it('P5 accepts an unsettled-by-absence row and refuses one the rule could not have written (9.113.0)', () => {
+    // Without the door's arm, every checkpoint of a run that ruled out an
+    // absence would be refused on resume — the 9.104.0 judgment-row fault
+    // over again.
+    const cp = buildCheckpoint({
+      runId: 'r-8',
+      originalInput: { message: 'orig' },
+      history: [],
+      lastCompletedIteration: 0,
+    });
+    const rows: unknown[] = [
+      {
+        kind: 'standing',
+        toolCallId: 'tc-1',
+        standing: 'ruled-out',
+        assertions: [],
+        declaredOn: { toolCallId: 'tc-2' },
+        iteration: 2,
+      },
+      {
+        kind: 'unsettled-by-absence',
+        toolCallId: 'tc-1',
+        notChecked: [
+          { what: 'whether it is a host', why: 'HBA rows only' },
+          { what: 'the archive' },
+        ],
+        cannotCover: [{ what: 'the peer fabric', why: 'one fabric per collector' }],
+        tryInstead: 'Ask the inventory first.',
+        iteration: 2,
+      },
+      { kind: 'unsettled-by-absence', toolCallId: 'tc-3', iteration: 3 },
+    ];
+    const validated = validateCheckpoint(
+      JSON.parse(JSON.stringify({ ...cp, findingsLedger: rows })),
+    );
+    expect(validated.findingsLedger).toEqual(rows);
+    // …and a row the rule could not have written is refused at the door: a
+    // field the fold or the piece reads missing or mistyped, an item without
+    // a string `what`, an empty list or an empty `tryInstead` (the rule
+    // writes each only when it holds something).
+    const row = {
+      kind: 'unsettled-by-absence',
+      toolCallId: 'tc-1',
+      iteration: 1,
+    };
+    for (const bad of [
+      { ...row, toolCallId: undefined },
+      { ...row, iteration: undefined },
+      { ...row, notChecked: 'the archive' },
+      { ...row, notChecked: [] },
+      { ...row, notChecked: [{ why: 'no what' }] },
+      { ...row, cannotCover: [{ what: 'the peer fabric', why: 3 }] },
+      { ...row, cannotCover: ['the peer fabric'] },
+      { ...row, tryInstead: { tool: 'cluster_inventory' } },
+      { ...row, tryInstead: '' },
+    ]) {
+      expect(() => validateCheckpoint({ ...cp, findingsLedger: [bad] })).toThrow(/findingsLedger/);
+    }
+  });
+
   it('P5 rejects a well-kinded row missing a field the fold consumes — the door, not the kind tag', () => {
     const cp = buildCheckpoint({
       runId: 'r-6',

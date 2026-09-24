@@ -610,6 +610,10 @@ export {
   type JudgmentRow,
   type Standing,
   type StandingRow,
+  // 9.113.0 — the row BESIDE a ruled-out standing whose only witness is an
+  // absence: what the envelope said it did not check and its `try_instead`
+  // as printed. The model's own standing row is never rewritten.
+  type UnsettledByAbsenceRow,
 } from './core/agent/findings/types.js';
 // 9.105.0 — tool choice by classifier (`.toolChoice()`): the row shapes
 // `AgentState.toolChoices` carries (a pick before every model call, the

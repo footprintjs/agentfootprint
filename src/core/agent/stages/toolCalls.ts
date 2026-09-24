@@ -138,6 +138,7 @@ import {
   groundedArgumentValues,
   hasSetAsideStanding,
 } from '../findings/contingent.js';
+import { withUnsettledRows } from '../findings/unsettled.js';
 import type { FindingsLedger, StandingRow } from '../findings/types.js';
 import {
   evidenceFromHistory,
@@ -3538,7 +3539,16 @@ export function buildToolCallsHandler(
       // came from (9.102.0; before, only the last batch resolved and an
       // offered older id filed as `unknownId`). Read through the same
       // per-call peel the loop below applies (a tool that owns the name
-      // declares nothing). Gated: unarmed, not one line runs.
+      // declares nothing). A ruled-out standing whose result THIS door
+      // recorded as an absence (`declareCoverage`'s rows on
+      // `coverageDeclared`, never a second reading of a return) AND the
+      // model was served as one (the served string — the door records the
+      // return before the after-tool chain, the ceiling and placement act,
+      // so a denied, refused or ticketed result files nothing) gets its
+      // `unsettled-by-absence` row immediately after it, in the same write,
+      // worded from what was served (9.113.0, `findings/unsettled.ts`; the
+      // key is read only for such a standing); the standing rows pass
+      // through untouched. Gated: unarmed, not one line runs.
       if (deps.findings === true) {
         const known = knownResults(
           [...((scope.history as readonly LLMMessage[] | undefined) ?? [])],
@@ -3546,12 +3556,16 @@ export function buildToolCallsHandler(
         );
         recordFindings(
           scope,
-          toolCalls.flatMap((tc) => {
-            const declared = peelCall(tc).findings;
-            return declared?.previous !== undefined
-              ? standingRowsFrom(known, declared, { toolCallId: tc.id }, iteration)
-              : [];
-          }),
+          withUnsettledRows(
+            toolCalls.flatMap((tc) => {
+              const declared = peelCall(tc).findings;
+              return declared?.previous !== undefined
+                ? standingRowsFrom(known, declared, { toolCallId: tc.id }, iteration)
+                : [];
+            }),
+            known,
+            () => [...((scope.coverageDeclared ?? []) as readonly DeclaredCoverage[])],
+          ),
         );
       }
       scope.toolResults = [];

@@ -29,6 +29,8 @@ import {
 } from '../findings/ledger.js';
 import { knownResults } from '../findings/offer.js';
 import { contingentRowsOf, hasSetAsideStanding } from '../findings/contingent.js';
+import { withUnsettledRows } from '../findings/unsettled.js';
+import type { DeclaredCoverage } from '../coverage/types.js';
 import type { FindingsLedger } from '../findings/types.js';
 import {
   judgeAnswer,
@@ -1037,17 +1039,23 @@ function buildEnforcingDecider(
         // offer.ts · knownResults`): the last batch AND every tool message on
         // `history` as this call was served it — the same list the offer was
         // read from — so an id copied from the offer resolves whichever batch
-        // it came from (9.102.0).
+        // it came from (9.102.0). A ruled-out standing whose result the
+        // dispatch door recorded as an absence (`coverageDeclared`) AND the
+        // model was served as one (the served string — the door records the
+        // return before the after-tool chain acts) gets its
+        // `unsettled-by-absence` row immediately after it, worded from what
+        // was served; the key is read only for such a standing (9.113.0,
+        // `findings/unsettled.ts`).
+        const known = knownResults(
+          [...((scope.history as readonly LLMMessage[] | undefined) ?? [])],
+          [...((scope.toolResults ?? []) as readonly PreviousResult[])],
+        );
         recordFindings(
           scope,
-          standingRowsFrom(
-            knownResults(
-              [...((scope.history as readonly LLMMessage[] | undefined) ?? [])],
-              [...((scope.toolResults ?? []) as readonly PreviousResult[])],
-            ),
-            peeled.findings,
-            'answer',
-            scope.iteration as number,
+          withUnsettledRows(
+            standingRowsFrom(known, peeled.findings, 'answer', scope.iteration as number),
+            known,
+            () => [...((scope.coverageDeclared ?? []) as readonly DeclaredCoverage[])],
           ),
         );
       }
