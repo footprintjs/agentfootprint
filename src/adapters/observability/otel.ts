@@ -195,7 +195,8 @@
  * with every key `tool_end` names in `changedArgKeys` — a rule rewrote it,
  * or the tool's own `redact` policy hides it — withheld as `'REDACTED'`; the
  * result is what the model read (`modelResult`, after the `onToolResult`
- * scrub). Never a raw value a rule replaced, never a value a rule added.
+ * scrub and the removal of the record-only coverage fields `short` / `kind`).
+ * Never a raw value a rule replaced, never a value a rule added.
  *
  * @example Basic — Honeycomb via OTLP
  * ```ts
@@ -871,6 +872,9 @@ function evidenceVerdictAttrs(p: Partial<AgentEvidenceCheckedPayload>, content: 
     ...(typeof p.action === 'string' && { 'agentfootprint.evidence.action': p.action }),
     ...(typeof p.posture === 'string' && { 'agentfootprint.evidence.posture': p.posture }),
     ...(typeof p.candidates === 'number' && { 'agentfootprint.evidence.candidates': p.candidates }),
+    // How many of `candidates` were actually looked up (exempt values are
+    // not) — absent on an event recorded before the field existed.
+    ...(typeof p.lookedUp === 'number' && { 'agentfootprint.evidence.looked_up': p.lookedUp }),
     'agentfootprint.evidence.unsupported.count': unsupported.length,
     ...(typeof p.afterRevision === 'boolean' && {
       'agentfootprint.evidence.after_revision': p.afterRevision,

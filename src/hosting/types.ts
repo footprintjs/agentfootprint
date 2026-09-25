@@ -31,6 +31,7 @@ import type { AwaitingInput } from '../core/inputRequest.js';
 import type { Unsubscribe } from '../events/dispatcher.js';
 import type { ToolArtifacts } from '../artifacts/capability.js';
 import type { ArtifactWireRequest, ArtifactWireResult } from './artifactWire.js';
+import type { AnswerAccountsOptions } from './answerAccounts.js';
 import type { IdentityVerificationOptions } from './identityVerification.js';
 import type { AdmissionPolicy } from './admission.js';
 import type { IngressSink } from './ingressRecord.js';
@@ -1375,7 +1376,52 @@ export interface StandingAgentBaseOptions<TH extends HostHandle = HostHandle> {
    * when the host implements the hook.
    */
   readonly turnArtifactsTimeoutMs?: number;
+  /**
+   * Serve "Explain this answer": the `{ op: 'answer-account', ref }` wire op,
+   * which returns one answer's plain-words account (`AnswerAccount` plus its
+   * allow-listed show-me leaves), computed HERE from the recording the ref
+   * names. The browser never receives the recording through it.
+   *
+   * Off unless given — a host without it answers the op with the unknown-op
+   * refusal before reading anything (`false` says the same). `true` opts in
+   * with every default; the
+   * object form sets the app's `declarations` (validated now, never taken
+   * from a request), the recording ceiling and the cache size. See
+   * {@link AnswerAccountsOptions}.
+   *
+   * The op follows `artifact-get`'s own path — the same ownership check, the
+   * same one not-found, lane-free — and adds one refusal of its own: a
+   * recording over the ceiling (`ERR_RECORDING_TOO_LARGE_FOR_ACCOUNT`, 413).
+   *
+   * @example
+   *   await standingAgent({ agent, sessions, host, answerAccounts: {
+   *     declarations: { tools: { lookup_volumes: { rowsAt: 'volumes' } } },
+   *   } });
+   */
+  readonly answerAccounts?: AnswerAccountsOptions | boolean;
+  /**
+   * How many artifact operations — `artifact-head`, `artifact-get` and
+   * `answer-account`, counted together — ONE session may have in flight at
+   * once. Default {@link DEFAULT_ARTIFACT_OPS_PER_SESSION} (8).
+   *
+   * Artifact ops are lane-free (they never wait behind a run) and turn
+   * admission does not see them, so this is their bound: a session over it is
+   * refused with `ArtifactOpsBusyError` (`ERR_ARTIFACT_OPS_BUSY`, 429) while
+   * every other session is served. Counted after the ownership check, so a
+   * stranger cannot spend another session's slots. A screen that redraws many
+   * panes at once should redeem them a few at a time, or raise this.
+   * `Infinity` means no bound; anything else must be a positive whole number.
+   */
+  readonly artifactOpsPerSession?: number;
 }
+
+/**
+ * How many artifact operations one session may have in flight by default —
+ * enough for a screen redrawing a handful of panes, too few for one session
+ * to crowd the event loop every session shares. See
+ * {@link StandingAgentBaseOptions.artifactOpsPerSession}.
+ */
+export const DEFAULT_ARTIFACT_OPS_PER_SESSION = 8;
 
 /** How many sessions a `agentFactory` pool holds before it evicts the least
  *  recently used one. See {@link StandingAgentPoolOptions.maxActiveSessions}. */

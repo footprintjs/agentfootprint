@@ -416,6 +416,12 @@ export interface Injection {
   readonly id: string;
   /** Human-readable description (Lens / docs / debug). */
   readonly description?: string;
+  /**
+   * A skill's plain name for a person (`defineSkill({ title })`) — carried
+   * onto `skill.graph_declared` `nodes[].title`, never served to the model.
+   * Top-level so it survives every `{ ...injection }` spread.
+   */
+  readonly title?: string;
   /** Observability tag. Drives Lens chip color + ContextRecorder source field. */
   readonly flavor: ContextSource;
   /** WHEN to activate. */

@@ -383,8 +383,9 @@ const BOUND_FIELDS: Readonly<
     blocks: (v) => (Array.isArray(v) ? `[${v.length} blocks]` : charsMarker(v)),
   },
   'agentfootprint.stream.tool_start': { args: keysMarker },
-  // `modelResult` (what a rule let the model read) is the same content as
-  // `result`, from the other side of a rule — bounded the same way.
+  // `modelResult` (what a rule let the model read, or the envelope without
+  // its record-only `short` / `kind`) is the same content as `result`, from
+  // the other side of a rule or that strip — bounded the same way.
   // `changedArgKeys` is names only and rides verbatim, like `args`' keys.
   'agentfootprint.stream.tool_end': {
     result: (v) => `[type: ${typeofOf(v)}]`,

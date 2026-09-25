@@ -4,7 +4,7 @@ title: AbsenceDeclaration
 
 # Interface: AbsenceDeclaration
 
-Defined in: [src/core/agent/coverage/types.ts:91](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/coverage/types.ts#L91)
+Defined in: [src/core/agent/coverage/types.ts:122](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/coverage/types.ts#L122)
 
 What a tool author passes to import('./absent.js').absent.
 
@@ -14,7 +14,7 @@ What a tool author passes to import('./absent.js').absent.
 
 > `readonly` `optional` **cannotCover?**: readonly [`CoverageInput`](/docs/api/type-aliases/CoverageInput)[]
 
-Defined in: [src/core/agent/coverage/types.ts:109](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/coverage/types.ts#L109)
+Defined in: [src/core/agent/coverage/types.ts:140](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/coverage/types.ts#L140)
 
 Ground no search by this tool can reach. Each needs a `why`.
 
@@ -24,7 +24,7 @@ Ground no search by this tool can reach. Each needs a `why`.
 
 > `readonly` **checked**: readonly [`CoverageInput`](/docs/api/type-aliases/CoverageInput)[]
 
-Defined in: [src/core/agent/coverage/types.ts:104](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/coverage/types.ts#L104)
+Defined in: [src/core/agent/coverage/types.ts:135](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/coverage/types.ts#L135)
 
 The coverage of the search — REQUIRED and non-empty. An absence that
 names no coverage is a `null` with extra steps: the reader still cannot
@@ -37,7 +37,7 @@ the entire failure this primitive exists to prevent.
 
 > `readonly` `optional` **notChecked?**: readonly [`CoverageInput`](/docs/api/type-aliases/CoverageInput)[]
 
-Defined in: [src/core/agent/coverage/types.ts:107](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/coverage/types.ts#L107)
+Defined in: [src/core/agent/coverage/types.ts:138](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/coverage/types.ts#L138)
 
 Ground the search did not reach this time — an absence here proves
  nothing about it.
@@ -48,7 +48,7 @@ Ground the search did not reach this time — an absence here proves
 
 > `readonly` `optional` **tryInstead?**: `string`
 
-Defined in: [src/core/agent/coverage/types.ts:120](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/coverage/types.ts#L120)
+Defined in: [src/core/agent/coverage/types.ts:151](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/coverage/types.ts#L151)
 
 Where to go INSTEAD, in one sentence ("widen the window with
 `window: '7d'`, or ask for a different interface"). Optional, and the
@@ -65,7 +65,7 @@ when the sentence points at another tool, name that tool in
 
 > `readonly` `optional` **tryInsteadTool?**: [`TryInsteadTool`](/docs/api/interfaces/TryInsteadTool)
 
-Defined in: [src/core/agent/coverage/types.ts:130](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/coverage/types.ts#L130)
+Defined in: [src/core/agent/coverage/types.ts:161](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/coverage/types.ts#L161)
 
 The other TOOL the suggestion points at, as data (9.113.0) —
 `{ tool, why? }`. Beside the sentence, not instead of it: the sentence is
@@ -81,7 +81,7 @@ refused (see `absent.ts` · `readToolSuggestion` for why).
 
 > `readonly` **what**: `string`
 
-Defined in: [src/core/agent/coverage/types.ts:97](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/coverage/types.ts#L97)
+Defined in: [src/core/agent/coverage/types.ts:128](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/coverage/types.ts#L128)
 
 What was looked for, in the author's own words ("FLOGI entries on
 fc1/3"). Required: an absence that cannot say what it did not find is

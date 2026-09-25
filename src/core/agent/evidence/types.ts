@@ -181,6 +181,15 @@ export interface EvidenceVerdict {
   /** How many distinct values the extractor had to ground. */
   readonly candidates: number;
   /**
+   * How many of those candidates the gate actually LOOKED UP in the tool
+   * results — `grounded.length + unsupported.length`, before any slice.
+   * `candidates` also counts EXEMPT values (the person's message, the
+   * conversation, the app's own instructions — skipped before any lookup),
+   * so `candidates - lookedUp` is how many the run never had to look up. A
+   * report that said "looked up `candidates` values" would overclaim.
+   */
+  readonly lookedUp: number;
+  /**
    * The values a tool result DID carry (9.110.0) — every candidate the
    * corpus holds, normalized, in first-appearance order, exempt values left
    * out (a value the person or the app supplied was never something the run

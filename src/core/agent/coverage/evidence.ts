@@ -74,11 +74,14 @@
  */
 
 import { readAbsence } from './absent.js';
+import { listsWithoutRecordOnly } from './items.js';
 import { readCoverageLedger } from './ledger.js';
 import type { ToolAbsence } from './types.js';
 
 /**
- * The ONE field of an absence that is withheld from the evidence corpus.
+ * The ONE caller-echo field of an absence, withheld from the evidence corpus
+ * (beside it only the record-only item keys are withheld — see
+ * `toolAuthoredOnly` below).
  *
  * Tool-authored knowledge grounds; caller echoes never do. Every other field —
  * the coverage lists, the note, `try_instead`, and any extra key the tool
@@ -94,11 +97,29 @@ import type { ToolAbsence } from './types.js';
  */
 const CALLER_ECHO_FIELD = 'looked_for';
 
-/** One absence, minus the caller's echo. */
+/**
+ * The record-only item keys — `short` and `kind` — are withheld too, on every
+ * coverage list of an absence AND of the ledger around it.
+ *
+ * `short` is the field an author is most tempted to personalise with the
+ * caller's argument ("no disks on SHPSTRPLPCL003"), which would re-open the
+ * `looked_for` hole one field over. And nothing is lost: a true short form
+ * restates `what`, so no value lives ONLY in `short`. `kind` is a word from a
+ * closed vocabulary, not a statement about the world. Neither is served to the
+ * model (`read.ts` · `servedToModel`), so this matters for the value that
+ * reaches history without passing the dispatch strip — a result the tool
+ * returned as JSON TEXT, which no recognizer reads at the door and this
+ * projection parses here. The strip itself is `items.ts` ·
+ * `listsWithoutRecordOnly`, the helper the served value is built with.
+ *
+ * One absence, minus the caller's echo and the record-only item keys.
+ */
 function toolAuthoredOnly(absence: ToolAbsence): unknown {
   // Entries, not fields: a tool may spread `absent(…)` and attach keys the
   // `ToolAbsence` type never named, and those are the point of this widening.
-  const entries: ReadonlyArray<readonly [string, unknown]> = Object.entries(absence);
+  const entries: ReadonlyArray<readonly [string, unknown]> = Object.entries(
+    listsWithoutRecordOnly(absence),
+  );
   return Object.fromEntries(entries.filter(([key]) => key !== CALLER_ECHO_FIELD));
 }
 
@@ -124,7 +145,12 @@ export function absenceEvidenceProjection(parsed: unknown): unknown | undefined 
   if (absence !== undefined) return toolAuthoredOnly(absence);
   const covered = readCoverageLedger(parsed);
   if (covered === undefined) return undefined;
+  const marker = listsWithoutRecordOnly(covered.af_coverage);
   const inner = readAbsence(covered.result);
-  if (inner === undefined) return undefined;
-  return [covered.af_coverage, toolAuthoredOnly(inner)];
+  if (inner === undefined) {
+    // A bare ledger is indexed whole, as it always was — unless an item
+    // carries a record-only key, which is withheld here as on an absence.
+    return marker === covered.af_coverage ? undefined : { ...covered, af_coverage: marker };
+  }
+  return [marker, toolAuthoredOnly(inner)];
 }

@@ -11,12 +11,169 @@
  * Emits:   N/A.
  */
 
+import { isDevMode } from 'footprintjs';
+
+import { plainLineProblem } from '../../../lib/plainLine.js';
+
 import type { CoverageInput, CoverageItem } from './types.js';
 
 /** Section names, as the author spells them — used verbatim in refusals. */
 export type CoverageSection = 'checked' | 'notChecked' | 'cannotCover';
 
 const isPlainString = (v: unknown): v is string => typeof v === 'string' && v.trim().length > 0;
+
+// ── The record-only extras: `short` and `kind` ─────────────────────────────
+//
+// ONE rule set, two doors. `normalizeCoverageList` (the `absent()` /
+// `coverage()` mint) THROWS on a fault, at the line the author just wrote;
+// `readItemExtras` (every envelope the dispatch door reads, including one a
+// Python sidecar minted) DROPS a faulty value — read, never repaired, the
+// `tryInsteadOfAbsence` law — with one dev warning per tool. The two cannot
+// disagree about what a valid value is, because both ask the functions below.
+
+/** The closed kind vocabulary — `CoverageItem.kind`, named for this file. */
+export type CoverageKind = NonNullable<CoverageItem['kind']>;
+
+/** The longest `short` a report prints on one line. */
+export const MAX_SHORT_CHARS = 80;
+
+/** The closed `kind` vocabulary, tied to {@link CoverageKind}: a member the
+ *  union gains, or one listed here it does not have, fails to compile. */
+const COVERAGE_KINDS: readonly string[] = Object.keys({
+  existence: true,
+  scope: true,
+} satisfies Record<CoverageKind, true>);
+
+/** The item keys that are RECORD-ONLY — never served to the model, never
+ *  evidence. `read.ts` · `servedToModel` and `evidence.ts` remove these. */
+export const RECORD_ONLY_ITEM_KEYS: readonly string[] = ['short', 'kind'];
+
+/** What is wrong with a `short`, or `undefined` when it is fine. `what` is the
+ *  item's own (trimmed) `what`. */
+function shortProblem(short: unknown, what: string): string | undefined {
+  if (typeof short !== 'string' || short.trim() === '') {
+    return '`short` must be a non-empty string — or omit it; the report then prints `what`.';
+  }
+  const s = short.trim();
+  const notPlain = plainLineProblem('`short`', s);
+  if (notPlain !== undefined) return notPlain;
+  if (s.length > MAX_SHORT_CHARS) {
+    return `\`short\` is ${s.length} characters; the limit is ${MAX_SHORT_CHARS}.`;
+  }
+  if (s.length > what.length) {
+    return '`short` is longer than `what` — a short form restates `what` in fewer words.';
+  }
+  return undefined;
+}
+
+/** What is wrong with a `kind` in `section`, or `undefined` when it is fine. */
+function kindProblem(kind: unknown, section: CoverageSection): string | undefined {
+  if (section === 'checked') {
+    return (
+      '`kind` is refused on `checked` — it says what kind of ground was NOT reached ' +
+      "('existence' or 'scope'), so it belongs on `notChecked` or `cannotCover`."
+    );
+  }
+  if (typeof kind !== 'string' || !COVERAGE_KINDS.includes(kind)) {
+    return `\`kind\` must be one of ${COVERAGE_KINDS.map((k) => `'${k}'`).join(', ')}.`;
+  }
+  return undefined;
+}
+
+/** The record-only extras a well-formed item may carry. */
+export interface CoverageItemExtras {
+  readonly short?: string;
+  readonly kind?: CoverageKind;
+}
+
+/** Declared = an own key holding a value. `null` reads as omitted: a JSON
+ *  producer writes a missing optional value as `null` (Python's `None`). */
+const has = (item: object, key: string): boolean =>
+  Object.prototype.hasOwnProperty.call(item, key) && (item as Record<string, unknown>)[key] != null;
+
+/** Tools already warned about a dropped extra — one warning per tool name
+ *  per PROCESS (module state; a second agent in a long-lived host is not
+ *  told again — dev mode only, so acceptable). */
+const warnedTools = new Set<string>();
+
+/**
+ * The item's `short` / `kind`, when each is valid — the NON-throwing reader
+ * every dispatch door uses (`../stages/toolCalls.ts` · `declareCoverage`'s
+ * copy), so the event and the tracked row carry the same fields.
+ *
+ * An invalid value is DROPPED, never repaired, and named once per tool in dev
+ * mode: an envelope minted elsewhere (a Python sidecar, a hand-built value)
+ * is read as found, and the absence it carries is still an absence either
+ * way. `{}` when the item declares neither — so a spread of it adds no key.
+ */
+export function readItemExtras(
+  item: unknown,
+  section: CoverageSection,
+  toolName?: string,
+): CoverageItemExtras {
+  if (typeof item !== 'object' || item === null) return {};
+  const rec = item as Record<string, unknown>;
+  const wantsShort = has(rec, 'short');
+  const wantsKind = has(rec, 'kind');
+  if (!wantsShort && !wantsKind) return {};
+  const what = typeof rec.what === 'string' ? rec.what.trim() : '';
+  const problems: string[] = [];
+  let short: string | undefined;
+  let kind: CoverageKind | undefined;
+  if (wantsShort) {
+    const problem = shortProblem(rec.short, what);
+    if (problem === undefined) short = (rec.short as string).trim();
+    else problems.push(problem);
+  }
+  if (wantsKind) {
+    const problem = kindProblem(rec.kind, section);
+    if (problem === undefined) kind = rec.kind as CoverageKind;
+    else problems.push(problem);
+  }
+  const [firstProblem] = problems;
+  if (firstProblem !== undefined) warnDroppedExtra(toolName, section, firstProblem);
+  return { ...(short !== undefined && { short }), ...(kind !== undefined && { kind }) };
+}
+
+function warnDroppedExtra(toolName: string | undefined, section: string, problem: string): void {
+  const key = toolName ?? '';
+  if (warnedTools.has(key) || !isDevMode()) return;
+  warnedTools.add(key);
+  // eslint-disable-next-line no-console
+  console.warn(
+    `agentfootprint coverage: tool '${toolName ?? '(unknown)'}' declared a ${section} item ` +
+      `the record cannot carry, so that field was dropped (the item itself is kept): ` +
+      `${problem} This warning fires once per tool per process.`,
+  );
+}
+
+/**
+ * One coverage list with the record-only keys removed from every item that
+ * has one — the SAME reference when no item has one (the zero-cost law: a
+ * run whose tools declare neither serves exactly the value it always did).
+ * Anything that is not an array, and any item that is not an object, is left
+ * as found.
+ */
+export function listWithoutRecordOnly(list: unknown): unknown {
+  if (!Array.isArray(list)) return list;
+  // Declared = an own key holding a value — the record's reading
+  // (`readItemExtras`), so the two cannot disagree: `"short": None` from a
+  // Python producer is omitted for both, served as written, and stamps
+  // nothing. Any NON-null value under either key is removed, valid or not:
+  // the two names are RESERVED on a recognized envelope's items.
+  const carries = (i: unknown): boolean =>
+    typeof i === 'object' && i !== null && RECORD_ONLY_ITEM_KEYS.some((k) => has(i, k));
+  if (!list.some(carries)) return list;
+  return list.map((i: unknown) =>
+    carries(i)
+      ? Object.fromEntries(
+          Object.entries(i as Record<string, unknown>).filter(
+            ([key, v]) => !(RECORD_ONLY_ITEM_KEYS.includes(key) && v != null),
+          ),
+        )
+      : i,
+  );
+}
 
 /**
  * Normalize one author list into {@link CoverageItem}s, refusing anything a
@@ -81,7 +238,21 @@ export function normalizeCoverageList(
           `spot must say what makes it permanent.`,
       );
     }
-    items.push({ what: item.what.trim(), ...(why !== undefined && { why: why.trim() }) });
+    const what = item.what.trim();
+    // The record-only extras, refused HERE by the same rules the dispatch
+    // door reads them by (`readItemExtras`). `null`/`undefined` = omitted.
+    const short = item.short == null ? undefined : item.short;
+    const kind = item.kind == null ? undefined : item.kind;
+    const shortFault = short === undefined ? undefined : shortProblem(short, what);
+    if (shortFault !== undefined) throw new Error(`${fn}: ${at} ('${what}') — ${shortFault}`);
+    const kindFault = kind === undefined ? undefined : kindProblem(kind, section);
+    if (kindFault !== undefined) throw new Error(`${fn}: ${at} ('${what}') — ${kindFault}`);
+    items.push({
+      what,
+      ...(why !== undefined && { why: why.trim() }),
+      ...(short !== undefined && { short: short.trim() }),
+      ...(kind !== undefined && { kind }),
+    });
   });
   return items;
 }
@@ -103,4 +274,27 @@ export function mergeItems(lists: ReadonlyArray<readonly CoverageItem[]>): reado
     }
   }
   return out;
+}
+
+/** The three coverage lists as the WIRE spells them — an absence's, a
+ *  ledger's `af_coverage` and a semantic envelope's `coverage`. */
+const WIRE_LISTS = ['checked', 'not_checked', 'cannot_cover'] as const;
+
+/**
+ * `holder` (an envelope or a ledger marker) with each wire list stripped of
+ * the record-only keys — the SAME reference when none of its lists carried
+ * one. The one helper `read.ts` · `servedToModel` (what the model is served)
+ * and `evidence.ts` (what may ground) both use, so the two cannot disagree
+ * about which keys are record-only.
+ */
+export function listsWithoutRecordOnly<T extends object>(holder: T): T {
+  let out: Record<string, unknown> | undefined;
+  for (const key of WIRE_LISTS) {
+    const list = (holder as Record<string, unknown>)[key];
+    const kept = listWithoutRecordOnly(list);
+    if (kept === list) continue;
+    out = out ?? { ...(holder as Record<string, unknown>) };
+    out[key] = kept;
+  }
+  return (out as T | undefined) ?? holder;
 }

@@ -1,0 +1,4 @@
+---
+type: changed
+---
+**`tool_end.modelResult` also appears when the framework removed the record-only coverage fields.** It used to mean "a rule made what the model read differ from `result`" (an `onToolResult` link or the result cap). A call whose tool declares a coverage item's `short` or `kind` is now served without them, so its `tool_end` carries the tool's envelope as `result` and what the model read as `modelResult` — the envelope rides the record twice, about 4 KB more for a typical absence and as much as the wrapped payload for a ledger around a large result, in the recording and in any exporter that ships `modelResult` (the OpenTelemetry adapter exports what the model read, as before). Under result placement a difference that is only this removal counts as one value: both channels carry the one ticket and nothing is stamped. A call whose tool declares neither gets no stamp and no new byte.

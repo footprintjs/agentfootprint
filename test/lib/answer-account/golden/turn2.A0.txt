@@ -1,0 +1,32 @@
+You asked:
+  “what applications are running on powerstore SHPSTRPLPCL003”  ⟨asked@1 · person · recorded⟩
+It understood:
+  The library's routing picked the array-inventory skill.  ⟨understood.intent@1 · library · recorded⟩
+  The app's scoring put it first: 1 against 0 for every other skill.  ⟨understood.scores.allOthers@1 · app · recorded⟩
+  The skill was given to the model before it answered.  ⟨understood.delivered@1 · library · recorded · decided = delivered⟩
+  How sure the routing was is not recorded.  ⟨understood.confidence.none@1 · library · not-recorded · not recorded⟩
+It checked:
+  get_array_inventory says it checked:  ⟨checked.declared@1 · tool:get_array_inventory · recorded · declared⟩
+    • the array asked, tested for what this tool can place an array by — a whole PowerMax serial (twelve digits) or the whole name this tool gives a PowerMax array, part of a serial or name in its own table of PowerMax arrays, or part of an array name in the PowerStore volume mapping — which named no array as this sidecar last read it (a read covers the 24 hours before it): it is none of these, so it could not be placed as an array  ⟨checked.item.full@1 · tool:get_array_inventory · recorded⟩
+    • vDisk and vm_rdm_map: every VM disk in the RVTools export dated 2026-09-19 (sync_metadata.source_date) — a VMDK by its datastore's WWN (vDatastore), an RDM by its own — each attributed to the array whose serial its WWN carries (a PowerStore WWN carries none: to the array the PowerStore volume mapping files it under; a WWN with neither: to no array), searched for one attributed to an array whose serial or name equals or contains the array asked  ⟨checked.item.full@1 · tool:get_array_inventory · recorded⟩
+It did not check:
+  get_array_inventory says it did not check:  ⟨notChecked.declared@1 · tool:get_array_inventory · recorded · declared⟩
+    • whether that name is a storage array, and which VM disks are on it  ⟨notChecked.item.full@1 · tool:get_array_inventory · recorded⟩
+    • hosts that are not VMware — AIX LPARs and physical servers  ⟨notChecked.item.full@1 · tool:get_array_inventory · recorded⟩
+    • PowerMax array performance  ⟨notChecked.item.full@1 · tool:get_array_inventory · recorded⟩
+    • VM disks this tool attributes to no array: 4 in this export  ⟨notChecked.item.full@1 · tool:get_array_inventory · recorded⟩
+It found:
+  get_array_inventory looked for a VM disk in the RVTools export attributed to the array asked and found none.  ⟨found.absent@1 · tool:get_array_inventory · recorded⟩
+  The model could also see the result of powerstore_get_volumes from an earlier answer (at least 1 answer back).  ⟨found.inView@1 · library · recorded⟩
+How sure:
+  The record does not rate how sure this answer is.  ⟨howSure.standing.none@1 · library · not-recorded · not recorded⟩
+  Before calling get_array_inventory, the model said it expected this call to answer the question directly, and rated how useful it expected the result to be: high.  ⟨howSure.expected.direct@1 · model · recorded⟩
+  The call found nothing.  ⟨howSure.outcome.nothing@1 · tool:get_array_inventory · recorded⟩
+  The library checked the answer's names and numbers: none was missing from what the tools returned, your message, the conversation or the app's own instructions (recalled memory included).  ⟨howSure.evidence.unsplit@1 · library · recorded⟩
+Anything wrong:
+  No tool call failed or was refused.  ⟨wrong.noErrors@1 · library · recorded⟩
+  The 1 check this report could run found nothing.  ⟨wrong.none@1 · library · recorded · none found⟩
+  2 of the 3 checks could not be run on this record.  ⟨wrong.unreachable@1 · library · not-recorded · not recorded⟩
+    • It cannot be told whether get_array_inventory checked that the thing asked about exists: its not-checked items do not say what kind they are.  ⟨unreachable.existence@1 · library · not-recorded⟩
+    • It cannot be told whether the result of powerstore_get_volumes was empty: its shape is not declared.  ⟨unreachable.empty@1 · library · not-recorded⟩
+In one line (unknown): Nothing this report looks for turned up, but 2 of the 3 checks could not be run on this record.  ⟨library⟩

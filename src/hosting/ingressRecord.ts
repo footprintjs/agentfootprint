@@ -88,7 +88,7 @@ import {
   VerifierUnavailableError,
   type IdentityFailureClass,
 } from './errors.js';
-import { ARTIFACT_GET_OP, ARTIFACT_HEAD_OP } from './artifactWire.js';
+import { artifactOpWireName } from './artifactWire.js';
 import { SESSION_LIST_OP, SESSION_TRANSCRIPT_OP, SESSION_PENDING_OP } from './sessionWire.js';
 import type { ArtifactHandOverFailedPayload } from '../events/payloads.js';
 import type { HostRefusal, HostReply, HostRequest, TurnArtifacts } from './types.js';
@@ -300,7 +300,7 @@ function opOf(request: HostRequest): string | undefined {
       : SESSION_TRANSCRIPT_OP;
   }
   if (request.artifact !== undefined) {
-    return request.artifact.op === 'head' ? ARTIFACT_HEAD_OP : ARTIFACT_GET_OP;
+    return artifactOpWireName(request.artifact.op);
   }
   return undefined;
 }

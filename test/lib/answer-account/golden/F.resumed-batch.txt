@@ -1,0 +1,24 @@
+You asked:
+  This answer continued after a pause. The message, as the run held it: “go”  ⟨asked.resumed@1 · library · recorded⟩
+It understood:
+  This app does not route questions to skills.  ⟨understood.notConfigured@1 · library · not-applicable⟩
+It checked:
+  It ran second. The tool did not say what it checked.  ⟨checked.undeclared@1 · library · recorded · no coverage declared⟩
+  It asked to run third, but the call was not run.  ⟨checked.notDispatched@1 · library · recorded⟩
+  Before the pause it also ran 1 tool (first); what those checked is not in this record.  ⟨checked.beforePause@1 · library · recorded · before a pause — not in this record⟩
+It did not check:
+  second did not say what it left unchecked.  ⟨notChecked.undeclared@1 · library · recorded · no coverage declared⟩
+  What the tools run before the pause did not check is not in this record.  ⟨notChecked.beforePause@1 · library · not-recorded · before a pause — not in this record⟩
+It found:
+  second returned a result.  ⟨found.result@1 · library · recorded⟩
+  third did not run, so it found nothing.  ⟨found.notDispatched@1 · library · recorded⟩
+  What the tools found before the pause is not in this record.  ⟨found.beforePause@1 · library · not-recorded · before a pause — not in this record⟩
+How sure:
+  The record does not rate how sure this answer is.  ⟨howSure.standing.none@1 · library · not-recorded · not recorded⟩
+  The library was not set to check the answer's names and numbers.  ⟨howSure.evidence.off@1 · library · not-applicable⟩
+Anything wrong:
+  1 tool call did not run cleanly: 0 failed, 0 refused by a rule, 0 declined by a person, 1 not run.  ⟨wrong.errors@1 · library · recorded⟩
+  None of the checks this report looks for could be run on this record.  ⟨wrong.unreachable.all@1 · library · not-recorded · not recorded⟩
+    • It cannot be told whether the result of second was empty: its shape is not declared.  ⟨unreachable.empty@1 · library · not-recorded⟩
+  Anything before the pause is not in this record, so these checks cover only the part after it.  ⟨wrong.beforePause@1 · library · not-recorded · before a pause — not in this record⟩
+In one line (unknown): This answer continued after a pause; what happened before the pause is not in this record.  ⟨library⟩

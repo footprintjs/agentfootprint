@@ -4,7 +4,7 @@ title: DeclaredCoverage
 
 # Interface: DeclaredCoverage
 
-Defined in: [src/core/agent/coverage/types.ts:186](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/coverage/types.ts#L186)
+Defined in: [src/core/agent/coverage/types.ts:217](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/coverage/types.ts#L217)
 
 One coverage statement as the RUN recorded it — what the event carries and
 what accumulates in `AgentState.coverageDeclared`.
@@ -23,7 +23,7 @@ what accumulates in `AgentState.coverageDeclared`.
 
 > `readonly` **cannotCover**: readonly [`CoverageItem`](/docs/api/interfaces/CoverageItem)[]
 
-Defined in: [src/core/agent/coverage/types.ts:56](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/coverage/types.ts#L56)
+Defined in: [src/core/agent/coverage/types.ts:87](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/coverage/types.ts#L87)
 
 #### Inherited from
 
@@ -35,7 +35,7 @@ Defined in: [src/core/agent/coverage/types.ts:56](https://github.com/footprintjs
 
 > `readonly` **checked**: readonly [`CoverageItem`](/docs/api/interfaces/CoverageItem)[]
 
-Defined in: [src/core/agent/coverage/types.ts:54](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/coverage/types.ts#L54)
+Defined in: [src/core/agent/coverage/types.ts:85](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/coverage/types.ts#L85)
 
 #### Inherited from
 
@@ -47,7 +47,7 @@ Defined in: [src/core/agent/coverage/types.ts:54](https://github.com/footprintjs
 
 > `readonly` **iteration**: `number`
 
-Defined in: [src/core/agent/coverage/types.ts:190](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/coverage/types.ts#L190)
+Defined in: [src/core/agent/coverage/types.ts:221](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/coverage/types.ts#L221)
 
 ***
 
@@ -55,7 +55,7 @@ Defined in: [src/core/agent/coverage/types.ts:190](https://github.com/footprintj
 
 > `readonly` **kind**: `"absence"` \| `"ledger"`
 
-Defined in: [src/core/agent/coverage/types.ts:187](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/coverage/types.ts#L187)
+Defined in: [src/core/agent/coverage/types.ts:218](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/coverage/types.ts#L218)
 
 ***
 
@@ -63,7 +63,7 @@ Defined in: [src/core/agent/coverage/types.ts:187](https://github.com/footprintj
 
 > `readonly` `optional` **lookedFor?**: `string`
 
-Defined in: [src/core/agent/coverage/types.ts:192](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/coverage/types.ts#L192)
+Defined in: [src/core/agent/coverage/types.ts:223](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/coverage/types.ts#L223)
 
 Present for `'absence'` only — what the search was for.
 
@@ -73,7 +73,7 @@ Present for `'absence'` only — what the search was for.
 
 > `readonly` **notChecked**: readonly [`CoverageItem`](/docs/api/interfaces/CoverageItem)[]
 
-Defined in: [src/core/agent/coverage/types.ts:55](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/coverage/types.ts#L55)
+Defined in: [src/core/agent/coverage/types.ts:86](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/coverage/types.ts#L86)
 
 #### Inherited from
 
@@ -85,7 +85,7 @@ Defined in: [src/core/agent/coverage/types.ts:55](https://github.com/footprintjs
 
 > `readonly` `optional` **toolCallId?**: `string`
 
-Defined in: [src/core/agent/coverage/types.ts:189](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/coverage/types.ts#L189)
+Defined in: [src/core/agent/coverage/types.ts:220](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/coverage/types.ts#L220)
 
 ***
 
@@ -93,4 +93,4 @@ Defined in: [src/core/agent/coverage/types.ts:189](https://github.com/footprintj
 
 > `readonly` **toolName**: `string`
 
-Defined in: [src/core/agent/coverage/types.ts:188](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/coverage/types.ts#L188)
+Defined in: [src/core/agent/coverage/types.ts:219](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/coverage/types.ts#L219)

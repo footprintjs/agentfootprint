@@ -822,6 +822,17 @@ describe('3 · structure — the evidence verdict', () => {
     expect(allEmittedText(cap.spans)).not.toMatch(/SENTINEL/);
   });
 
+  it('UNIT: lookedUp rides as its own count, beside candidates — absent when the event has none', () => {
+    const { cap, strat } = strategy();
+    openTurnWithTool(strat);
+    strat.exportEvent(
+      envelope('agentfootprint.agent.evidence_checked', { ...EVIDENCE, lookedUp: 3 }),
+    );
+    const [ev] = eventsNamed(cap.spans, 'agentfootprint.agent.evidence_checked');
+    expect(ev?.attributes['agentfootprint.evidence.candidates']).toBe(5);
+    expect(ev?.attributes['agentfootprint.evidence.looked_up']).toBe(3);
+  });
+
   it('UNIT: captureContent → the values themselves, bounded', () => {
     const { cap, strat } = strategy({ captureContent: true });
     openTurnWithTool(strat);
