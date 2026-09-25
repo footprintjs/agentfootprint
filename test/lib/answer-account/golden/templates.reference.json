@@ -679,6 +679,15 @@
   ],
   "source": "library"
  },
+ "understood.refused.more@1": {
+  "text": "…and 2 more refusals of the same skill, not listed here.",
+  "parts": [
+   {
+    "text": "…and 2 more refusals of the same skill, not listed here."
+   }
+  ],
+  "source": "library"
+ },
  "understood.rejected@1": {
   "text": "The skill graph refused to open the skill-skill-id skill.",
   "parts": [
@@ -871,6 +880,30 @@
   "parts": [
    {
     "text": "Before the pause it also ran 2 tools (names value); what those checked is not in this record."
+   }
+  ],
+  "source": "library"
+ },
+ "checked.beforePause.many@1": {
+  "text": "Before the pause it also ran 2 tools (among them names value); what those checked is not in this record.",
+  "parts": [
+   {
+    "text": "Before the pause it also ran 2 tools (among them names value); what those checked is not in this record."
+   }
+  ],
+  "source": "library"
+ },
+ "checked.unnamed@1": {
+  "text": "A tool call (id value) is in this record, but no event of it names its tool.",
+  "parts": [
+   {
+    "text": "A tool call ("
+   },
+   {
+    "code": "id value"
+   },
+   {
+    "text": ") is in this record, but no event of it names its tool."
    }
   ],
   "source": "library"
@@ -1228,6 +1261,21 @@
   ],
   "source": "library"
  },
+ "found.unnamed@1": {
+  "text": "What the call id value returned is not told here: no event of it names its tool.",
+  "parts": [
+   {
+    "text": "What the call "
+   },
+   {
+    "code": "id value"
+   },
+   {
+    "text": " returned is not told here: no event of it names its tool."
+   }
+  ],
+  "source": "library"
+ },
  "found.noCalls@1": {
   "text": "No tool ran for this answer.",
   "parts": [
@@ -1557,6 +1605,21 @@
   ],
   "source": "library"
  },
+ "unreachable.unnamed@1": {
+  "text": "It cannot be told what the call id value found: no event of it names its tool.",
+  "parts": [
+   {
+    "text": "It cannot be told what the call "
+   },
+   {
+    "code": "id value"
+   },
+   {
+    "text": " found: no event of it names its tool."
+   }
+  ],
+  "source": "library"
+ },
  "unreachable.empty@1": {
   "text": "It cannot be told whether the result of lookup_volumes was empty: its shape is not declared.",
   "parts": [
@@ -1649,6 +1712,24 @@
   "parts": [
    {
     "text": "Anything before the pause is not in this record, so these checks cover only the part after it."
+   }
+  ],
+  "source": "library"
+ },
+ "scope.noOwnEvents@1": {
+  "text": "None of this record's events belong to the run asked for, so nothing about that run can be told from it.",
+  "parts": [
+   {
+    "text": "None of this record's events belong to the run asked for, so nothing about that run can be told from it."
+   }
+  ],
+  "source": "library"
+ },
+ "row.notInRecord@1": {
+  "text": "Not in this record: none of its events belong to the run asked for.",
+  "parts": [
+   {
+    "text": "Not in this record: none of its events belong to the run asked for."
    }
   ],
   "source": "library"

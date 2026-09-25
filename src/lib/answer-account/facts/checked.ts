@@ -9,11 +9,12 @@
  * message that are not calls of this run) and said to be out of this record.
  */
 
-import { chip, MAX_VAR_CHARS, n, v } from '../render.js';
+import { chip, joinAnd, MAX_VAR_CHARS, n, v } from '../render.js';
 import type { TemplateId } from '../templates.js';
 import type { RecordPointer, Sentence } from '../types.js';
 import { isRecord, str } from '../view.js';
 import {
+  FACT_TEXT_CHARS,
   coverageHead,
   itemAt,
   type CallRead,
@@ -21,7 +22,7 @@ import {
   type CoverageItemRead,
   type CoverageSectionKey,
 } from './calls.js';
-import { at, historyAt, historyOf, takeItem, toolVar, type ReadContext } from './common.js';
+import { at, historyAt, historyOf, takeItem, type ReadContext } from './common.js';
 
 /** Calls listed per row before folding. */
 export const MAX_LISTED_CALLS = 5;
@@ -52,8 +53,10 @@ export function readBeforePause(ctx: ReadContext, calls: CallsRead): BeforePause
   return out;
 }
 
-const toolOf = (call: CallRead): ReturnType<typeof toolVar> =>
-  toolVar(call.fact.toolName, call.toolPointer);
+const toolOf = (call: CallRead) => call.tool;
+
+/** Before-pause names printed inline; more distinct names switch to the "among them" wording. */
+export const MAX_BEFORE_PAUSE_NAMES = 3;
 
 /** The pointer that shows the rule that refused a call. */
 function rulePointer(call: CallRead): RecordPointer | undefined {
@@ -100,7 +103,7 @@ function itemLines(
           item: true,
         });
   });
-  const omitted = (call.coverage?.omitted[section] ?? 0) + (all.length - items.length);
+  const omitted = all.length - items.length;
   if (omitted > 0)
     lines.push(
       ctx.say('items.more', {
@@ -113,7 +116,18 @@ function itemLines(
   return lines;
 }
 
+/** The one line an unnamed call gets: it is in the record, and no event names its tool. */
+function unnamedLine(ctx: ReadContext, call: CallRead): Sentence {
+  return ctx.say('checked.unnamed', {
+    vars: { id: call.tool },
+    status: 'not-recorded',
+    missing: 'unreadable',
+    pointers: call.fact.pointers,
+  });
+}
+
 function checkedBlock(ctx: ReadContext, call: CallRead): Sentence[] {
+  if (call.unnamed) return [unnamedLine(ctx, call)];
   const tool = toolOf(call);
   const by = call.fact.refusedBy;
   const rule = rulePointer(call);
@@ -231,6 +245,7 @@ function notCheckedBlock(ctx: ReadContext, call: CallRead): Sentence[] {
             other.tool,
             `tool:${call.fact.toolName}`,
             at(other.event, 'tryInsteadTool', 'tool'),
+            FACT_TEXT_CHARS,
           ),
         },
       }),
@@ -273,18 +288,22 @@ export function readCheckedRows(
 ): CheckedRows {
   const listed = calls.calls.slice(0, MAX_LISTED_CALLS);
   const checked = listed.flatMap((c) => checkedBlock(ctx, c));
-  const ran = listed.filter((c) => c.fact.outcome === 'ran');
+  const ran = listed.filter((c) => c.fact.outcome === 'ran' && !c.unnamed);
   const notChecked = ran.flatMap((c) => notCheckedBlock(ctx, c));
   if (ctx.resumedLeg) {
-    const names = [...new Set(beforePause.map((c) => c.toolName))];
+    const names = [...new Set(beforePause.map((c) => c.toolName.slice(0, FACT_TEXT_CHARS)))];
+    const shown = names.slice(0, MAX_BEFORE_PAUSE_NAMES);
     const pointers = beforePause.map((c) => historyAt(c.historyIndex, '/toolName', c.toolCallId));
     checked.push(
       names.length > 0
-        ? ctx.say('checked.beforePause', {
-            vars: { n: n(names.length), names: v(names.join(', '), 'library') },
-            pointers,
-            chips: [chip('before-pause', 'chip.beforePause')],
-          })
+        ? ctx.say(
+            names.length > shown.length ? 'checked.beforePause.many' : 'checked.beforePause',
+            {
+              vars: { n: n(names.length), names: v(joinAnd(shown), 'library') },
+              pointers,
+              chips: [chip('before-pause', 'chip.beforePause')],
+            },
+          )
         : ctx.say('checked.beforePause.none', {
             status: 'not-recorded',
             missing: 'before-pause',
@@ -298,7 +317,7 @@ export function readCheckedRows(
         chips: [chip('before-pause', 'chip.beforePause')],
       }),
     );
-  } else if (calls.calls.length === 0) {
+  } else if (calls.all.length === 0) {
     checked.push(ctx.say('checked.noCalls', { pointers: anchorPointer(ctx) }));
     notChecked.push(
       ctx.say('notChecked.noCalls', { status: 'not-applicable', pointers: anchorPointer(ctx) }),

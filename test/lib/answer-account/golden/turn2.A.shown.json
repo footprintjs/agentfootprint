@@ -14,14 +14,14 @@
  "event:192:/finalContent": {
   "value": "**No applications found** on SHPSTRPLPCL003.\n\nThe array inventory tool could not match SHPSTRPLPCL003 to any VM disks in the RVTools export. This means either:\n- The array name is not recognized in the PowerStore volume mapping.\n- No VMs are currently backed by volumes on this array (as reported by the most recent RVTools export from 2026-09-19).\n\n**To verify the array exists and see its volumes directly**, use `powerstore_get_volumes(array_id: \"SHPSTRPLPCL003\")` — which I ran earlier and found zero volumes on record.\n\n**Source disclosure:** This answer uses LOCAL SEED data (synthetic test data, not production measurements)."
  },
- "event:6:/by": {
-  "value": "intent"
- },
  "event:6:/to": {
   "value": "array-inventory"
  },
  "declaration:skills.array-inventory.label:neo-seo": {
   "value": "array estate report"
+ },
+ "event:6:/by": {
+  "value": "intent"
  },
  "event:6:/scores/0/score": {
   "value": 1
@@ -35,10 +35,10 @@
  "declaration:routing.appDecides:neo-seo": {
   "value": true
  },
- "event:51:/toolName": {
+ "event:46:/toolName": {
   "value": "get_array_inventory"
  },
- "event:46:/toolName": {
+ "event:51:/toolName": {
   "value": "get_array_inventory"
  },
  "event:51:/checked/0/what": {
@@ -59,11 +59,14 @@
  "event:51:/notChecked/3/what": {
   "value": "VM disks this tool attributes to no array: 4 in this export"
  },
+ "event:51:/lookedFor": {
+  "value": "a VM disk in the RVTools export attributed to the array asked"
+ },
  "event:59:/status": {
   "value": "absent"
  },
- "event:51:/lookedFor": {
-  "value": "a VM disk in the RVTools export attributed to the array asked"
+ "history:2:/toolName": {
+  "value": "powerstore_get_volumes"
  },
  "event:64:/sourceId": {
   "value": "toolu_01YQPyS4gmUrsi8mv52oj1DE"
@@ -75,14 +78,11 @@
  "declaration:tools.powerstore_get_volumes.rowsAt:neo-seo": {
   "value": "volumes"
  },
- "history:2:/toolName": {
-  "value": "powerstore_get_volumes"
+ "event:45:/expect": {
+  "value": "high"
  },
  "event:45:/basis": {
   "value": "direct"
- },
- "event:45:/expect": {
-  "value": "high"
  },
  "event:189:/candidates": {
   "value": 2

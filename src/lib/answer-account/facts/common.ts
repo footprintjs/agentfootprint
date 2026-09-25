@@ -8,7 +8,7 @@
  * crashes the account.
  */
 
-import { readAbsence } from '../../../core/agent/coverage/absent.js';
+import { readAbsence } from '../../../core/agent/coverage/recognize.js';
 import { sentence, v, type SentenceSpec } from '../render.js';
 import type { TemplateId } from '../templates.js';
 import type {

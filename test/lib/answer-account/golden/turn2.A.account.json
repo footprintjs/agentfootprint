@@ -8,7 +8,6 @@
  "run": {
   "value": {
    "runId": "run-1790361930311-2",
-   "sessionId": "a4fb6d65-130d-4d9c-bede-09a110f04434",
    "turnNumber": 2,
    "model": "claude-haiku-4-5-20251001",
    "resumedLeg": false
@@ -444,13 +443,6 @@
        "kind": "event",
        "index": 6,
        "type": "agentfootprint.skill.turn_routed",
-       "path": "/by",
-       "runtimeStageId": "pick-entry#1"
-      },
-      {
-       "kind": "event",
-       "index": 6,
-       "type": "agentfootprint.skill.turn_routed",
        "path": "/to",
        "runtimeStageId": "pick-entry#1"
       },
@@ -460,6 +452,13 @@
        "field": "skills.array-inventory.label",
        "id": "neo-seo",
        "version": "1"
+      },
+      {
+       "kind": "event",
+       "index": 6,
+       "type": "agentfootprint.skill.turn_routed",
+       "path": "/by",
+       "runtimeStageId": "pick-entry#1"
       }
      ]
     },
@@ -697,15 +696,15 @@
      "pointers": [
       {
        "kind": "event",
-       "index": 51,
-       "type": "agentfootprint.tools.absent",
+       "index": 46,
+       "type": "agentfootprint.stream.tool_start",
        "path": "/toolName",
        "runtimeStageId": "tool-calls#23"
       },
       {
        "kind": "event",
-       "index": 46,
-       "type": "agentfootprint.stream.tool_start",
+       "index": 51,
+       "type": "agentfootprint.tools.absent",
        "path": "/toolName",
        "runtimeStageId": "tool-calls#23"
       }
@@ -897,15 +896,15 @@
      "pointers": [
       {
        "kind": "event",
-       "index": 51,
-       "type": "agentfootprint.tools.absent",
+       "index": 46,
+       "type": "agentfootprint.stream.tool_start",
        "path": "/toolName",
        "runtimeStageId": "tool-calls#23"
       },
       {
        "kind": "event",
-       "index": 46,
-       "type": "agentfootprint.stream.tool_start",
+       "index": 51,
+       "type": "agentfootprint.tools.absent",
        "path": "/toolName",
        "runtimeStageId": "tool-calls#23"
       }
@@ -1218,13 +1217,6 @@
      "pointers": [
       {
        "kind": "event",
-       "index": 59,
-       "type": "agentfootprint.stream.tool_end",
-       "path": "/status",
-       "runtimeStageId": "tool-calls#23"
-      },
-      {
-       "kind": "event",
        "index": 46,
        "type": "agentfootprint.stream.tool_start",
        "path": "/toolName",
@@ -1235,6 +1227,13 @@
        "index": 51,
        "type": "agentfootprint.tools.absent",
        "path": "/lookedFor",
+       "runtimeStageId": "tool-calls#23"
+      },
+      {
+       "kind": "event",
+       "index": 59,
+       "type": "agentfootprint.stream.tool_end",
+       "path": "/status",
        "runtimeStageId": "tool-calls#23"
       }
      ]
@@ -1280,6 +1279,12 @@
      "status": "recorded",
      "pointers": [
       {
+       "kind": "history",
+       "index": 2,
+       "path": "/toolName",
+       "toolCallId": "toolu_01YQPyS4gmUrsi8mv52oj1DE"
+      },
+      {
        "kind": "event",
        "index": 64,
        "type": "agentfootprint.context.injected",
@@ -1298,12 +1303,6 @@
        "field": "tools.powerstore_get_volumes.rowsAt",
        "id": "neo-seo",
        "version": "1"
-      },
-      {
-       "kind": "history",
-       "index": 2,
-       "path": "/toolName",
-       "toolCallId": "toolu_01YQPyS4gmUrsi8mv52oj1DE"
       }
      ],
      "chips": [
@@ -1434,13 +1433,6 @@
      "pointers": [
       {
        "kind": "event",
-       "index": 45,
-       "type": "agentfootprint.findings.declared",
-       "path": "/basis",
-       "runtimeStageId": "tool-calls#23"
-      },
-      {
-       "kind": "event",
        "index": 46,
        "type": "agentfootprint.stream.tool_start",
        "path": "/toolName",
@@ -1451,6 +1443,13 @@
        "index": 45,
        "type": "agentfootprint.findings.declared",
        "path": "/expect",
+       "runtimeStageId": "tool-calls#23"
+      },
+      {
+       "kind": "event",
+       "index": 45,
+       "type": "agentfootprint.findings.declared",
+       "path": "/basis",
        "runtimeStageId": "tool-calls#23"
       }
      ]
@@ -1484,16 +1483,16 @@
      "pointers": [
       {
        "kind": "event",
-       "index": 59,
-       "type": "agentfootprint.stream.tool_end",
-       "path": "/status",
+       "index": 46,
+       "type": "agentfootprint.stream.tool_start",
+       "path": "/toolName",
        "runtimeStageId": "tool-calls#23"
       },
       {
        "kind": "event",
-       "index": 46,
-       "type": "agentfootprint.stream.tool_start",
-       "path": "/toolName",
+       "index": 59,
+       "type": "agentfootprint.stream.tool_end",
+       "path": "/status",
        "runtimeStageId": "tool-calls#23"
       }
      ]
@@ -1621,6 +1620,12 @@
      "status": "recorded",
      "pointers": [
       {
+       "kind": "history",
+       "index": 2,
+       "path": "/toolName",
+       "toolCallId": "toolu_01YQPyS4gmUrsi8mv52oj1DE"
+      },
+      {
        "kind": "event",
        "index": 64,
        "type": "agentfootprint.context.injected",
@@ -1639,12 +1644,6 @@
        "field": "tools.powerstore_get_volumes.rowsAt",
        "id": "neo-seo",
        "version": "1"
-      },
-      {
-       "kind": "history",
-       "index": 2,
-       "path": "/toolName",
-       "toolCallId": "toolu_01YQPyS4gmUrsi8mv52oj1DE"
       }
      ]
     },
@@ -1744,16 +1743,16 @@
      "pointers": [
       {
        "kind": "event",
-       "index": 51,
-       "type": "agentfootprint.tools.absent",
-       "path": "/notChecked/0/what",
+       "index": 46,
+       "type": "agentfootprint.stream.tool_start",
+       "path": "/toolName",
        "runtimeStageId": "tool-calls#23"
       },
       {
        "kind": "event",
-       "index": 46,
-       "type": "agentfootprint.stream.tool_start",
-       "path": "/toolName",
+       "index": 51,
+       "type": "agentfootprint.tools.absent",
+       "path": "/notChecked/0/what",
        "runtimeStageId": "tool-calls#23"
       }
      ],
@@ -1839,6 +1838,12 @@
     "status": "recorded",
     "pointers": [
      {
+      "kind": "history",
+      "index": 2,
+      "path": "/toolName",
+      "toolCallId": "toolu_01YQPyS4gmUrsi8mv52oj1DE"
+     },
+     {
       "kind": "event",
       "index": 64,
       "type": "agentfootprint.context.injected",
@@ -1857,12 +1862,6 @@
       "field": "tools.powerstore_get_volumes.rowsAt",
       "id": "neo-seo",
       "version": "1"
-     },
-     {
-      "kind": "history",
-      "index": 2,
-      "path": "/toolName",
-      "toolCallId": "toolu_01YQPyS4gmUrsi8mv52oj1DE"
      }
     ]
    }
@@ -1907,16 +1906,16 @@
     "pointers": [
      {
       "kind": "event",
-      "index": 51,
-      "type": "agentfootprint.tools.absent",
-      "path": "/notChecked/0/what",
+      "index": 46,
+      "type": "agentfootprint.stream.tool_start",
+      "path": "/toolName",
       "runtimeStageId": "tool-calls#23"
      },
      {
       "kind": "event",
-      "index": 46,
-      "type": "agentfootprint.stream.tool_start",
-      "path": "/toolName",
+      "index": 51,
+      "type": "agentfootprint.tools.absent",
+      "path": "/notChecked/0/what",
       "runtimeStageId": "tool-calls#23"
      }
     ],
@@ -1966,6 +1965,12 @@
    "status": "recorded",
    "pointers": [
     {
+     "kind": "history",
+     "index": 2,
+     "path": "/toolName",
+     "toolCallId": "toolu_01YQPyS4gmUrsi8mv52oj1DE"
+    },
+    {
      "kind": "event",
      "index": 64,
      "type": "agentfootprint.context.injected",
@@ -1984,12 +1989,6 @@
      "field": "tools.powerstore_get_volumes.rowsAt",
      "id": "neo-seo",
      "version": "1"
-    },
-    {
-     "kind": "history",
-     "index": 2,
-     "path": "/toolName",
-     "toolCallId": "toolu_01YQPyS4gmUrsi8mv52oj1DE"
     }
    ]
   },

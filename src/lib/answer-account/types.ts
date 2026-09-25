@@ -43,7 +43,7 @@ export type MissingReason =
  * payload. `path` is an RFC 6901 JSON pointer into the event's PAYLOAD, into the
  * state key's value, or into the history message — except the two derived
  * forms: `#emptiness` (a `{ rows, at }` count the account computed, never the
- * rows themselves) and `#meta/runId` / `#meta/sessionId` (the event's own
+ * rows themselves) and `#meta/runId` (the event's own
  * run identity).
  */
 export type RecordPointer =
@@ -203,8 +203,12 @@ export type CallOutcome =
 export type Emptiness = 'declared-absent' | 'undeclared-empty' | 'non-empty' | 'unknown';
 
 export interface ToolCallFact {
+  /** Cut at 200 characters (a model-chosen id is data, and the account is bounded). */
   readonly toolCallId: string;
+  /** Cut at 200 characters; `''` when no event names the tool (then `unnamed`). */
   readonly toolName: string;
+  /** No event of the call names its tool: the call is counted, judged and said to be unnamed. */
+  readonly unnamed?: true;
   readonly outcome: CallOutcome;
   /** The rule that refused a `refused` call (a middleware, a permission rule id). */
   readonly refusedBy?: string;
@@ -270,11 +274,13 @@ export interface RoutingFacts {
   readonly confidence: Fact<number>;
   readonly appDecision: Fact<{ readonly skillId: string }>;
   readonly delivered: Fact<readonly string[]>;
+  /** ≤ 12, ids and rule names cut at 200 (the model's `read_skill` argument is model-chosen). */
   readonly refusals: readonly {
     readonly requestedId: string;
     readonly by: string;
     readonly kind: 'rule' | 'person';
   }[];
+  readonly refusalsOmitted?: number;
 }
 
 export interface EvidenceFact {
@@ -296,9 +302,12 @@ export interface AnswerFacts {
   readonly calls: readonly ToolCallFact[];
   /** Calls past the 50-call cap, counted, not listed. */
   readonly callsOmitted?: number;
-  /** On a resumed leg: tool calls answered in history before the pause, named only. */
+  /** On a resumed leg: tool calls answered in history before the pause, named only (≤ 50, names cut at 200). */
   readonly beforePause: readonly { readonly toolName: string; readonly toolCallId: string }[];
+  readonly beforePauseOmitted?: number;
+  /** ≤ 50, newest first; every one of them is judged by the checks. */
   readonly inView: readonly InViewFact[];
+  readonly inViewOmitted?: number;
   readonly evidence: Fact<EvidenceFact>;
   readonly standing: Fact<'known' | 'not-sure' | 'ask'>;
   /** The library-appended limits block of the answer, when `.limitsTravelWithTheAnswer()` added one. */
@@ -320,7 +329,6 @@ export interface AnswerFacts {
 /** Facts about the run the account read. */
 export interface RunFact {
   readonly runId: string;
-  readonly sessionId?: string;
   readonly turnNumber?: number;
   readonly model?: string;
   readonly resumedLeg: boolean;

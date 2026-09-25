@@ -25,6 +25,9 @@ import type {
   SentenceVar,
 } from './types.js';
 
+/** Pointers one sentence carries at most (its printed vars' leaves come first). */
+export const MAX_POINTERS = 12;
+
 /** A string var longer than this is clipped, with `part.clipped@1` after it. */
 export const MAX_VAR_CHARS = 2000;
 
@@ -236,10 +239,12 @@ export function sentence(id: TemplateId, spec: SentenceSpec = {}): Sentence {
   const vars = spec.vars ?? {};
   const { text, parts } = textOf(id, vars);
   const template = ANSWER_ACCOUNT_TEMPLATES[id];
+  // The vars' own pointers first (each one is a leaf the sentence printed), then the
+  // sentence's evidence — capped: a sentence about 3,000 rows points at a sample of them.
   const pointers = dedupePointers([
-    ...(spec.pointers ?? []),
     ...Object.values(vars).flatMap((variable) => (variable.from ? [variable.from] : [])),
-  ]);
+    ...(spec.pointers ?? []),
+  ]).slice(0, MAX_POINTERS);
   return {
     text,
     parts,

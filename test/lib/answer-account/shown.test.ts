@@ -19,7 +19,13 @@ import { describe, expect, it } from 'vitest';
 
 import { accountForAnswer } from '../../../src/lib/answer-account/account.js';
 import { pointerKey } from '../../../src/lib/answer-account/render.js';
-import { isShowable, MAX_SHOWN_BYTES, showLeaves } from '../../../src/lib/answer-account/shown.js';
+import {
+  isShowable,
+  MAX_SHOWN_BYTES,
+  SHOW_ME_ALLOW_LIST,
+  SHOWN_MORE_KEY,
+  showLeaves,
+} from '../../../src/lib/answer-account/shown.js';
 import type { AnswerAccount, RecordPointer } from '../../../src/lib/answer-account/types.js';
 import type { Recording } from '../../../src/recorders/observability/recordRun.js';
 import { assertP7, fixtureA, FLAGSHIP_RUN_ID, NEO_DECLARATIONS } from './helpers.js';
@@ -113,7 +119,7 @@ describe('the leaves', () => {
     });
   });
 
-  it('the map stops at 64 KB', () => {
+  it('the map stops at 64 KB: no later pointer adds a key; one #more entry says the rest is withheld', () => {
     const rec = fixtureA() as unknown as {
       events: { type: string; payload: Record<string, unknown>; meta: Record<string, unknown> }[];
     };
@@ -127,10 +133,15 @@ describe('the leaves', () => {
       pointers.push(ev('agent.turn_start', '/userPrompt', rec.events.length - 1));
     }
     const shown = showLeaves(fakeAccount(pointers), rec as unknown as Recording);
-    expect(JSON.stringify(shown).length).toBeLessThanOrEqual(MAX_SHOWN_BYTES + 4096);
-    expect(
-      Object.values(shown).filter((l) => 'withheld' in l && l.withheld === 'too-large').length,
-    ).toBeGreaterThan(40);
+    expect(JSON.stringify(shown).length).toBeLessThanOrEqual(MAX_SHOWN_BYTES);
+    expect(shown[SHOWN_MORE_KEY]).toEqual({ withheld: 'too-large' });
+    const kept = Object.keys(shown).filter((k) => k !== SHOWN_MORE_KEY);
+    expect(kept.length).toBeLessThan(40); // the rest added NO key
+    // A prefix of the pointers is shown; from the first one that did not fit, none is.
+    const present = pointers.map((p) => pointerKey(p) in shown);
+    const cut = present.indexOf(false);
+    expect(cut).toBeGreaterThan(0);
+    expect(present.slice(cut).every((x) => !x)).toBe(true);
   });
 });
 

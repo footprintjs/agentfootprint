@@ -110,11 +110,43 @@ describe('the own-run key', () => {
   });
 
   it('options.runId beats run_configured', () => {
+    const rec = fixtureA() as unknown as { events: E[] };
+    // Another run in the same recording (a pre-3631bf4b shared recording): its own manifest + question.
+    rec.events.push(withRun(rec.events[0]!, 'run-other-2'), {
+      ...withRun(rec.events[5]!, 'run-other-2'),
+      payload: { turnIndex: 0, userPrompt: 'the other person asked this' },
+    });
+    const account = accountForAnswer(rec as unknown as Recording, undefined, {
+      runId: 'run-other-2',
+    });
+    expect(account.run.value!.runId).toBe('run-other-2');
+    expect(account.question.value).toBe('the other person asked this');
+    expect(account.foreign).toBe(rec.events.length - 2);
+  });
+
+  it('S3 — a runId that owns NO event: "not in this record", never "no tools" or "did not finish"', () => {
     const rec = fixtureA();
-    const account = accountForAnswer(rec, undefined, { runId: 'run-someone-else' });
-    expect(account.run.value!.runId).toBe('run-someone-else');
+    const account = accountForAnswer(rec, NEO_DECLARATIONS, { runId: 'run-nope' });
     expect(account.foreign).toBe(rec.events.length);
-    expect(account.question.status).toBe('not-recorded');
+    const ids = account.rows.flatMap((r) => r.lines.map((l) => l.template.id));
+    for (const claim of [
+      'checked.noCalls',
+      'found.noCalls',
+      'summary.unfinished',
+      'notChecked.noCalls',
+    ])
+      expect(ids).not.toContain(claim);
+    expect(account.summary.sentence.text).toBe(
+      "None of this record's events belong to the run asked for, so nothing about that run can be told from it.",
+    );
+    expect(account.summary.tone).toBe('unknown');
+    expect(account.rows.every((r) => r.status === 'not-recorded')).toBe(true);
+    expect([account.run.status, account.question.status, account.answer.status]).toEqual([
+      'not-recorded',
+      'not-recorded',
+      'not-recorded',
+    ]);
+    expect(account.signals).toEqual([]);
   });
 
   it('two run_configured ids: the turn_end owner wins, never simply the first', () => {

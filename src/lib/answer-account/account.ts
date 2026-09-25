@@ -37,7 +37,7 @@ import {
 } from './facts/common.js';
 import { readAsked } from './facts/asked.js';
 import { readUnderstood } from './facts/understood.js';
-import { MAX_CALLS, readCalls } from './facts/calls.js';
+import { FACT_TEXT_CHARS, MAX_CALLS, readCalls } from './facts/calls.js';
 import { answeringIteration, readInView } from './facts/inView.js';
 import { readBeforePause, readCheckedRows } from './facts/checked.js';
 import { readFoundRow } from './facts/found.js';
@@ -159,7 +159,6 @@ function readRun(view: RecordingView, resumedLeg: boolean): Fact<RunFact> {
   return {
     value: {
       runId: view.runId,
-      ...(view.sessionId !== undefined && { sessionId: view.sessionId }),
       ...(turnNumber !== undefined && { turnNumber }),
       ...(model !== undefined && { model }),
       resumedLeg,
@@ -171,6 +170,66 @@ function readRun(view: RecordingView, resumedLeg: boolean): Fact<RunFact> {
       ...(configured !== undefined && model !== undefined ? [at(configured, 'llm', 'model')] : []),
       ...(turnNumber !== undefined ? [stateAt('turnNumber')] : []),
     ],
+  };
+}
+
+/**
+ * The account of a run that owns NO event of this record — an options.runId
+ * that is not this recording's, or a recording with no readable event. The
+ * record's silence is not evidence: every row says the run is not in this
+ * record, nothing is claimed about it (no "did not run any tools", no "did not
+ * finish"), and the hosting op may map it to `summary.notAvailable@1`.
+ */
+function noOwnEventsAccount(
+  view: RecordingView,
+  say: ReadContext['say'],
+  unread: () => number,
+): AnswerAccount {
+  const missing = { status: 'not-recorded' as const, missing: 'no-event' as const };
+  const none = <T>(): Fact<T> => ({ value: null, source: 'library', pointers: [], ...missing });
+  const rows: Row[] = (Object.keys(HEADINGS) as RowId[]).map((id) =>
+    row(id, [
+      id === 'anything-wrong'
+        ? say('scope.noOwnEvents', {
+            ...missing,
+            chips: [chip('not-recorded', 'chip.notRecorded')],
+          })
+        : say('row.notInRecord', missing),
+    ]),
+  );
+  return {
+    kind: 'agentfootprint/answer-account',
+    shape: 1,
+    templates: { set: 'answer-account', version: ANSWER_ACCOUNT_TEMPLATE_SET_VERSION },
+    run: none(),
+    question: none(),
+    answer: none(),
+    facts: {
+      routing: {
+        configured: none(),
+        verdict: none(),
+        scores: none(),
+        confidence: none(),
+        appDecision: none(),
+        delivered: none(),
+        refusals: [],
+      },
+      calls: [],
+      beforePause: [],
+      inView: [],
+      evidence: none(),
+      standing: none(),
+      limitsBlock: none(),
+      errors: { failed: 0, refused: 0, declined: 0, notDispatched: 0, withheld: 0 },
+      checks: { reachable: [], unreachable: [], notApplicable: [] },
+    },
+    rows,
+    signals: [],
+    unreachable: [],
+    summary: { sentence: say('scope.noOwnEvents', missing), tone: 'unknown' },
+    unread: unread(),
+    foreign: view.foreign,
+    scope: view.scope,
   };
 }
 
@@ -192,6 +251,7 @@ export function buildAccount(
   const say = makeSay(internals, () => {
     unread += 1;
   });
+  if (view.events.length === 0) return noOwnEventsAccount(view, say, () => unread);
   const resumedLeg =
     view.ofType('pause.resume').length > 0 ||
     (view.ofType('agent.turn_end').length > 0 && view.ofType('agent.turn_start').length === 0);
@@ -247,7 +307,8 @@ export function buildAccount(
     row('how-sure', howSure.lines),
     row('anything-wrong', wrong, { chips: wrongChips }),
   ];
-  const all = calls.calls.map((c) => c.fact);
+  // Counts are judgements: over EVERY call. Only the listing (`facts.calls`) is capped.
+  const all = calls.all.map((c) => c.fact);
   const count = (o: string) => all.filter((c) => c.outcome === o).length;
   return {
     kind: 'agentfootprint/answer-account',
@@ -261,10 +322,15 @@ export function buildAccount(
     answer,
     facts: {
       routing: understood.routing,
-      calls: all,
+      calls: calls.calls.map((c) => c.fact),
       ...(calls.omitted > 0 && { callsOmitted: calls.omitted }),
-      beforePause: beforePause.map(({ toolName, toolCallId }) => ({ toolName, toolCallId })),
+      beforePause: beforePause.slice(0, MAX_CALLS).map(({ toolName, toolCallId }) => ({
+        toolName: toolName.slice(0, FACT_TEXT_CHARS),
+        toolCallId: toolCallId.slice(0, FACT_TEXT_CHARS),
+      })),
+      ...(beforePause.length > MAX_CALLS && { beforePauseOmitted: beforePause.length - MAX_CALLS }),
       inView: inView.all.slice(0, MAX_CALLS).map((r) => r.fact),
+      ...(inView.all.length > MAX_CALLS && { inViewOmitted: inView.all.length - MAX_CALLS }),
       evidence: howSure.evidence,
       standing: {
         value: null,

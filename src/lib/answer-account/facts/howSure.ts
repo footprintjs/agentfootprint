@@ -12,7 +12,7 @@
  *     event slices `unsupported` at 12, so a full list says "at least".
  */
 
-import { MAX_REPORTED_VALUES } from '../../../core/agent/evidence/gate.js';
+import { MAX_REPORTED_VALUES } from '../../../core/agent/evidence/limits.js';
 import { chip, joinAnd, n, v } from '../render.js';
 import type { EvidenceFact, Fact, Sentence } from '../types.js';
 import { isRecord, num, str, type ViewEvent } from '../view.js';
@@ -28,15 +28,21 @@ export interface HowSureRead {
   readonly evidence: Fact<EvidenceFact>;
 }
 
+/**
+ * The FINAL evidence verdict on THIS answer: the last `agent.evidence_checked`
+ * of the answering iteration, and only when it is a verdict (not the
+ * `revision-asked` row that precedes a revision). Never another iteration's
+ * row — a verdict on a draft is not a verdict on the answer — and nothing at
+ * all when the answering iteration is unknown: the line then says "not
+ * recorded".
+ */
 function evidenceEvent(ctx: ReadContext): ViewEvent | undefined {
-  const rows = ctx.view.ofType('agent.evidence_checked');
-  const ofAnswer =
-    ctx.answeringIteration === undefined
-      ? rows
-      : rows.filter((e) => e.payload.iteration === ctx.answeringIteration);
-  return (ofAnswer.length > 0 ? ofAnswer : rows)[
-    (ofAnswer.length > 0 ? ofAnswer : rows).length - 1
-  ];
+  if (ctx.answeringIteration === undefined) return undefined;
+  const ofAnswer = ctx.view
+    .ofType('agent.evidence_checked')
+    .filter((e) => e.payload.iteration === ctx.answeringIteration);
+  const last = ofAnswer[ofAnswer.length - 1];
+  return last?.payload.action === 'revision-asked' ? undefined : last;
 }
 
 function expectationLines(ctx: ReadContext, calls: CallsRead): Sentence[] {
@@ -45,7 +51,8 @@ function expectationLines(ctx: ReadContext, calls: CallsRead): Sentence[] {
     const f = call.findings;
     const basis = str(f?.payload.basis);
     if (f === undefined || basis === undefined) continue;
-    const tool = v(call.fact.toolName, 'library', call.toolPointer);
+    if (call.unnamed) continue;
+    const tool = call.tool;
     const expect = str(f.payload.expect);
     lines.push(
       basis === 'direct'
@@ -65,7 +72,7 @@ function expectationLines(ctx: ReadContext, calls: CallsRead): Sentence[] {
     if (call.emptiness.emptiness === 'declared-absent') {
       lines.push(
         ctx.say('howSure.outcome.nothing', {
-          vars: { tool: v(call.fact.toolName, 'library', call.toolPointer) },
+          vars: { tool: call.tool },
           pointers: [
             call.end.payload.status !== undefined
               ? at(call.end, 'status')
@@ -186,14 +193,15 @@ export function readHowSure(ctx: ReadContext, calls: CallsRead): HowSureRead {
     e !== undefined &&
     posture !== undefined &&
     candidates !== undefined &&
-    Array.isArray(e.payload.unsupported);
+    Array.isArray(e.payload.unsupported) &&
+    // Every entry must be readable, so a value's index is its index on the record.
+    e.payload.unsupported.every((u) => isRecord(u) && typeof u.value === 'string');
   if (e !== undefined && !readable) ctx.noteUnread();
   if (e !== undefined && readable && posture !== undefined && candidates !== undefined) {
-    const unsupported = Array.isArray(e.payload.unsupported)
-      ? e.payload.unsupported.flatMap((u) =>
-          isRecord(u) && typeof u.value === 'string' ? [u.value] : [],
-        )
-      : [];
+    // The event slices at MAX_REPORTED_VALUES; a longer (hand-built) list is read to the same cap.
+    const unsupported = (e.payload.unsupported as { value: string }[])
+      .slice(0, MAX_REPORTED_VALUES)
+      .map((u) => u.value);
     const lookedUp = num(e.payload.lookedUp);
     const fact: EvidenceFact = {
       posture,

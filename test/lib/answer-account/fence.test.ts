@@ -97,6 +97,11 @@ describe('IMPORT-GRAPH FENCE', () => {
     expect(reached).toContain('core/agent/coverage/items.ts');
   });
 
+  // Still wider than the design's list, named for later: `coverage/read.ts` · `strip` (the one
+  // owner of the record-only strip) imports `coverage/absent.ts` for `coverageOfAbsence` /
+  // `tryInstead*`, and `absent.ts` imports `core/tools.ts` (tool-name checks at the mint). The
+  // recognizer (`recognize.ts`) and the evidence cap (`evidence/limits.ts`) are leaves now; moving
+  // the absence READERS out of the mint is the next cut. No clock, network or provider is reached.
   it('its direct edges out of the folder are exactly the named owners', () => {
     const outside = new Set<string>();
     for (const file of folderFiles()) {
@@ -111,10 +116,11 @@ describe('IMPORT-GRAPH FENCE', () => {
     }
     expect([...outside].sort()).toEqual([
       'bridge/eventMeta.ts', // eventBelongsToRun — the ONE owner of "which run is this event for"
-      'core/agent/coverage/absent.ts', // readAbsence — the ONE recognizer of an absence envelope
       'core/agent/coverage/answer.ts', // COVERAGE_BLOCK_HEADING — the library-owned limits block
-      'core/agent/coverage/read.ts', // servedToModel — what the record-only strip serves
-      'core/agent/evidence/gate.ts', // MAX_REPORTED_VALUES — the event's cap on `unsupported`
+      'core/agent/coverage/read.ts', // strip — the ONE owner of what the record-only strip serves
+      'core/agent/coverage/recognize.ts', // readAbsence — the absence recognizer, a leaf
+      'core/agent/evidence/limits.ts', // MAX_REPORTED_VALUES — the event's cap, a leaf
+      'lib/plainLine.ts', // plainLineProblem — the one "plain visible line" rule for labels
     ]);
   });
 });

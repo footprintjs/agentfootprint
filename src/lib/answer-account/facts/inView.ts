@@ -20,7 +20,9 @@
  * must never become an in-view line.
  */
 
-import type { InViewFact } from '../types.js';
+import { v } from '../render.js';
+import type { InViewFact, SentenceVar } from '../types.js';
+import { FACT_TEXT_CHARS } from './calls.js';
 import { isRecord, num, str, type RecordingView, type ViewEvent } from '../view.js';
 import {
   at,
@@ -36,6 +38,9 @@ export const MAX_IN_VIEW = 3;
 
 export interface InViewRead {
   readonly fact: InViewFact;
+  /** The full tool name (the fact carries it cut at 200) and its sentence var, clipped and pointed. */
+  readonly toolName: string;
+  readonly tool: SentenceVar;
   readonly witness: ViewEvent;
   readonly historyIndex: number;
   readonly reading: EmptinessReading;
@@ -98,8 +103,8 @@ export function readInView(ctx: ReadContext, callIds: ReadonlySet<string>): InVi
     const reading = readEmptiness(message.content, toolName, ctx.declarations, false);
     reads.push({
       fact: {
-        toolName,
-        toolCallId: id,
+        toolName: toolName.slice(0, FACT_TEXT_CHARS),
+        toolCallId: id.slice(0, FACT_TEXT_CHARS),
         distance,
         windowed,
         emptiness: reading.emptiness,
@@ -110,6 +115,8 @@ export function readInView(ctx: ReadContext, callIds: ReadonlySet<string>): InVi
       witness,
       historyIndex,
       reading,
+      toolName,
+      tool: v(toolName, 'library', historyAt(historyIndex, '/toolName', id), FACT_TEXT_CHARS),
     });
   }
   // Newest first: the result nearest the current question.

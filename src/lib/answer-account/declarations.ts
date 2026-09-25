@@ -3,10 +3,12 @@
  * CALLER error and throws (on the server the declarations are the host's, handed
  * in at boot, so it throws when the host boots, never per request).
  *
- * Rules: labels non-empty, at most 60 characters, one line; `rowsAt` a non-empty
+ * Rules: labels non-empty, one plain visible line (`lib/plainLine.ts` ·
+ * `plainLineProblem`, the rule `short` and `title` use), at most 60 characters; `rowsAt` a non-empty
  * top-level key with no `/` or `.`; unknown keys refused by name.
  */
 
+import { plainLineProblem } from '../plainLine.js';
 import type { AnswerAccountDeclarations } from './types.js';
 
 export const MAX_LABEL_CHARS = 60;
@@ -29,9 +31,12 @@ function onlyKeys(where: string, value: Record<string, unknown>, allowed: readon
 function checkLabel(id: string, label: unknown): void {
   if (typeof label !== 'string' || label.trim().length === 0)
     fail(`skills.${id}.label must be a non-empty string`);
+  // The same rule as a coverage item's `short` and a skill's `title`: all three print in
+  // one report, so they must refuse the same characters (controls, separators, format).
+  const problem = plainLineProblem(`skills.${id}.label`, label);
+  if (problem !== undefined) fail(problem);
   if (label.length > MAX_LABEL_CHARS)
     fail(`skills.${id}.label is over ${MAX_LABEL_CHARS} characters`);
-  if (/[\r\n]/.test(label)) fail(`skills.${id}.label must be one line`);
 }
 
 function checkRowsAt(tool: string, rowsAt: unknown): void {

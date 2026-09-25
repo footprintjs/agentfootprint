@@ -25,6 +25,16 @@
  *
  * The rule refuses all four classes, and it runs BEFORE the length is
  * measured, so a length limit is a limit on what a person sees.
+ *
+ * ## Deliberately strict for v1
+ *
+ * `\p{Cf}` also refuses marks that legitimate text uses: U+200E / U+200F
+ * (LEFT-TO-RIGHT / RIGHT-TO-LEFT MARK, in right-to-left labels) and U+200D
+ * (ZERO WIDTH JOINER, in emoji sequences). The report's surfaces are
+ * English-only in v1, so nothing honest is lost today. A later locale packet
+ * that admits right-to-left labels must allow those three explicitly — and
+ * keep refusing the bidi OVERRIDES and isolates (U+202A–U+202E,
+ * U+2066–U+2069), which reorder what a reader sees.
  */
 
 /** The character classes a plain one-line label may not contain. */

@@ -137,7 +137,20 @@ export function strippedOnly(result: unknown, modelResult: unknown): boolean {
   return STRIPPED_FROM.has(modelResult) && STRIPPED_FROM.get(modelResult) === result;
 }
 
-function strip(value: unknown): unknown {
+/**
+ * Pure: the served form of `value`, and nothing remembered (the answer account
+ * reads through this; the dispatch door asks {@link servedToModel}, which also
+ * records the pair for `strippedOnly`).
+ *
+ * `seen` guards a ledger that bounds ITSELF (`v.result = v`, directly or
+ * further down): a holder met twice is returned as found, so a pathological
+ * cycle is served as written instead of overflowing the stack.
+ */
+export function strip(value: unknown, seen: WeakSet<object> = new WeakSet()): unknown {
+  if (typeof value === 'object' && value !== null) {
+    if (seen.has(value)) return value;
+    seen.add(value);
+  }
   const absence = readAbsence(value);
   if (absence !== undefined) return listsWithoutRecordOnly(absence);
   const sem = readSemantics(value);
@@ -153,7 +166,7 @@ function strip(value: unknown): unknown {
   const covered = readCoverageLedger(value);
   if (covered === undefined) return value;
   const marker = listsWithoutRecordOnly(covered.af_coverage);
-  const result = strip(covered.result);
+  const result = strip(covered.result, seen);
   if (marker === covered.af_coverage && result === covered.result) return value;
   return { ...covered, af_coverage: marker, result };
 }

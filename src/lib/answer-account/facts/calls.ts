@@ -21,8 +21,9 @@
  * never judged on a withheld result.
  */
 
-import { servedToModel } from '../../../core/agent/coverage/read.js';
-import type { RecordPointer, ToolCallFact } from '../types.js';
+import { strip } from '../../../core/agent/coverage/read.js';
+import { v } from '../render.js';
+import type { RecordPointer, SentenceVar, ToolCallFact } from '../types.js';
 import { isRecord, str, type ViewEvent } from '../view.js';
 import {
   at,
@@ -37,10 +38,12 @@ import {
 /** A text value a call's FACT carries is cut here (the sentence that prints it carries up to 2,000). */
 export const FACT_TEXT_CHARS = 200;
 
-/** At most this many calls are listed; the rest are counted. */
+/**
+ * At most this many calls are LISTED in `facts.calls`; the rest are counted.
+ * A cap on what is listed, never on what is judged: the checks, the error
+ * counts and the withheld count read every call (`CallsRead.all`).
+ */
 export const MAX_CALLS = 50;
-/** At most this many items per coverage section per call; the rest are counted. */
-export const MAX_ITEMS = 30;
 
 export type CoverageSectionKey = 'checked' | 'notChecked' | 'cannotCover';
 
@@ -58,9 +61,8 @@ export interface CoverageRead {
   readonly kind: 'absent' | 'coverage';
   readonly events: readonly ViewEvent[];
   readonly lookedFor?: { readonly text: string; readonly event: ViewEvent };
+  /** EVERY declared item — the checks judge them all; the rows print what the item budget allows. */
   readonly items: readonly CoverageItemRead[];
-  /** Items past `MAX_ITEMS`, per section. */
-  readonly omitted: Readonly<Record<CoverageSectionKey, number>>;
   readonly tryInsteadTool?: { readonly tool: string; readonly event: ViewEvent };
 }
 
@@ -76,10 +78,20 @@ export interface CallRead {
   readonly findings?: ViewEvent;
   /** Where the tool's NAME is on the record (its start, its declaration, or its history message). */
   readonly toolPointer?: RecordPointer;
+  /** The tool's name as a sentence var — clipped at `FACT_TEXT_CHARS`, pointing at the full name. */
+  readonly tool: SentenceVar;
+  /** The full tool name (`''` when unnamed) — for declaration lookups; never printed unclipped. */
+  readonly toolName: string;
+  /** No event of the call names its tool — counted as unread, never dropped. */
+  readonly unnamed?: true;
 }
 
 export interface CallsRead {
+  /** EVERY call of this run, in call order — what the checks and counts judge. */
+  readonly all: readonly CallRead[];
+  /** The first `MAX_CALLS` of them — what `facts.calls` lists. */
   readonly calls: readonly CallRead[];
+  /** Calls past `MAX_CALLS`, counted, not listed. */
   readonly omitted: number;
   /** Ids of every call of this run (listed or not) — the in-view reader skips them. */
   readonly ids: ReadonlySet<string>;
@@ -99,13 +111,31 @@ function deepEqual(a: unknown, b: unknown): boolean {
   );
 }
 
-const byCall = (events: readonly ViewEvent[], id: string): ViewEvent[] =>
-  events.filter((e) => e.payload.toolCallId === id);
+/** One pass per event type: toolCallId → its events, in recording order. */
+type CallIndex = (type: string, id: string) => readonly ViewEvent[];
+
+function indexByCall(ctx: ReadContext): CallIndex {
+  const cache = new Map<string, Map<string, ViewEvent[]>>();
+  return (type, id) => {
+    let byId = cache.get(type);
+    if (byId === undefined) {
+      byId = new Map();
+      for (const e of ctx.view.ofType(type)) {
+        const key = str(e.payload.toolCallId);
+        if (key === undefined) continue;
+        const list = byId.get(key) ?? [];
+        list.push(e);
+        byId.set(key, list);
+      }
+      cache.set(type, byId);
+    }
+    return byId.get(id) ?? [];
+  };
+}
 
 function readCoverage(events: readonly ViewEvent[]): CoverageRead | undefined {
   if (events.length === 0) return undefined;
   const items: CoverageItemRead[] = [];
-  const omitted: Record<CoverageSectionKey, number> = { checked: 0, notChecked: 0, cannotCover: 0 };
   let lookedFor: CoverageRead['lookedFor'];
   let tryInsteadTool: CoverageRead['tryInsteadTool'];
   for (const event of events) {
@@ -121,13 +151,10 @@ function readCoverage(events: readonly ViewEvent[]): CoverageRead | undefined {
       if (!Array.isArray(list)) continue;
       list.forEach((item: unknown, position) => {
         if (!isRecord(item) || typeof item.what !== 'string') return;
-        const listed = items.filter((i) => i.section === section).length;
-        if (listed >= MAX_ITEMS) {
-          omitted[section] += 1;
-          return;
-        }
         const short =
           typeof item.short === 'string' && item.short.trim().length > 0 ? item.short : undefined;
+        // `kind` is refused on `checked` (a checked item is not a limit), read-never-repaired:
+        // a hand-built envelope that puts one there gets no kind, no chip and no signal.
         const kind =
           section !== 'checked' && (item.kind === 'existence' || item.kind === 'scope')
             ? item.kind
@@ -149,7 +176,6 @@ function readCoverage(events: readonly ViewEvent[]): CoverageRead | undefined {
     events,
     ...(lookedFor !== undefined && { lookedFor }),
     items,
-    omitted,
     ...(tryInsteadTool !== undefined && { tryInsteadTool }),
   };
 }
@@ -189,6 +215,9 @@ function permissionRows(
     .filter((e) => e.index > start.index && e.index < upTo && e.payload.target === toolName);
 }
 
+/** The permission verdicts that stop a call before it runs. */
+export const PERMISSION_REFUSALS: ReadonlySet<unknown> = new Set(['deny', 'halt']);
+
 interface Outcome {
   readonly outcome: ToolCallFact['outcome'];
   readonly refusedBy?: string;
@@ -198,24 +227,25 @@ interface Outcome {
 
 function outcomeOf(
   ctx: ReadContext,
+  byCall: CallIndex,
   id: string,
   toolName: string,
   start?: ViewEvent,
   end?: ViewEvent,
 ): Outcome {
-  const decisions = byCall(ctx.view.ofType('middleware.decision'), id);
+  const decisions = byCall('middleware.decision', id);
   const beforeDeny = decisions.find(
     (e) => e.payload.moment === 'before-tool' && e.payload.outcome === 'deny',
   );
   const afterDeny = decisions.find(
     (e) => e.payload.moment === 'after-tool' && e.payload.outcome === 'deny',
   );
-  const permissionDeny = permissionRows(ctx, toolName, start, end).find(
-    (e) => typeof e.payload.result === 'string' && e.payload.result !== 'allow',
+  // Only `deny` and `halt` stop a call. `gate_open` lets it run (`core/Agent.ts`: allowed =
+  // allow || gate_open), so it is never a refusal.
+  const permissionDeny = permissionRows(ctx, toolName, start, end).find((e) =>
+    PERMISSION_REFUSALS.has(e.payload.result),
   );
-  const checkInDeclined = byCall(ctx.view.ofType('checkin.decision'), id).find(
-    (e) => e.payload.approved === false,
-  );
+  const checkInDeclined = byCall('checkin.decision', id).find((e) => e.payload.approved === false);
   const pausedId = str(ctx.view.state?.pausedToolCallId);
   const isPausedCall =
     ctx.resumedLeg && ((pausedId !== undefined && pausedId === id) || start === undefined);
@@ -263,24 +293,22 @@ export function endPointer(end: ViewEvent, emptiness: EmptinessReading): RecordP
 
 function viewOf(end: ViewEvent): ToolCallFact['view'] {
   if (!('modelResult' in end.payload)) return 'result';
-  return deepEqual(servedToModel(end.payload.result), end.payload.modelResult)
+  return deepEqual(strip(end.payload.result), end.payload.modelResult)
     ? 'model-result-record-only'
     : 'model-result';
 }
 
-function readOne(ctx: ReadContext, id: string): CallRead | undefined {
-  const start = byCall(ctx.view.ofType('stream.tool_start'), id)[0];
-  const ends = byCall(ctx.view.ofType('stream.tool_end'), id);
+function readOne(ctx: ReadContext, byCall: CallIndex, id: string): CallRead {
+  const start = byCall('stream.tool_start', id)[0];
+  const ends = byCall('stream.tool_end', id);
   const end = ends[ends.length - 1];
-  const coverageEvents = [
-    ...byCall(ctx.view.ofType('tools.absent'), id),
-    ...byCall(ctx.view.ofType('tools.coverage_declared'), id),
-  ];
+  const coverageEvents = [...byCall('tools.absent', id), ...byCall('tools.coverage_declared', id)];
   const coverage = readCoverage(coverageEvents);
-  const tool = toolNameFor(ctx, id, start, coverage);
-  if (tool === undefined) return undefined;
-  const toolName = tool.name;
-  const outcome = outcomeOf(ctx, id, toolName, start, end);
+  const named = toolNameFor(ctx, id, start, coverage);
+  // A call no event names is still a call: counted as unread, judged, and said to be unnamed.
+  if (named === undefined) ctx.noteUnread();
+  const toolName = named?.name ?? '';
+  const outcome = outcomeOf(ctx, byCall, id, toolName, start, end);
   const judged = outcome.outcome === 'ran' && outcome.withheldBy === undefined && end !== undefined;
   const emptiness: EmptinessReading = judged
     ? readEmptiness(
@@ -290,13 +318,19 @@ function readOne(ctx: ReadContext, id: string): CallRead | undefined {
         end.payload.status === 'absent' || coverage?.kind === 'absent',
       )
     : { emptiness: 'unknown', undeclaredShape: false };
-  const findings = byCall(ctx.view.ofType('findings.declared'), id)[0];
+  const findings = byCall('findings.declared', id)[0];
   const basis = str(findings?.payload.basis);
   const expect = str(findings?.payload.expect);
-  const pointers: RecordPointer[] = [tool.pointer, ...(end ? [endPointer(end, emptiness)] : [])];
+  const idPointer = start ? at(start, 'toolCallId') : end ? at(end, 'toolCallId') : undefined;
+  const namePointer = named?.pointer ?? idPointer;
+  const pointers: RecordPointer[] = [
+    ...(namePointer ? [namePointer] : []),
+    ...(end ? [endPointer(end, emptiness)] : []),
+  ];
   const fact: ToolCallFact = {
-    toolCallId: id,
-    toolName,
+    toolCallId: id.slice(0, FACT_TEXT_CHARS),
+    toolName: toolName.slice(0, FACT_TEXT_CHARS),
+    ...(named === undefined && { unnamed: true as const }),
     outcome: outcome.outcome,
     ...(outcome.refusedBy !== undefined && { refusedBy: outcome.refusedBy }),
     ...(outcome.withheldBy !== undefined && { withheldBy: outcome.withheldBy }),
@@ -310,17 +344,12 @@ function readOne(ctx: ReadContext, id: string): CallRead | undefined {
         ...(coverage.lookedFor !== undefined && {
           lookedFor: coverage.lookedFor.text.slice(0, FACT_TEXT_CHARS),
         }),
-        checked:
-          coverage.items.filter((i) => i.section === 'checked').length + coverage.omitted.checked,
-        notChecked:
-          coverage.items.filter((i) => i.section === 'notChecked').length +
-          coverage.omitted.notChecked,
-        cannotCover:
-          coverage.items.filter((i) => i.section === 'cannotCover').length +
-          coverage.omitted.cannotCover,
+        checked: coverage.items.filter((i) => i.section === 'checked').length,
+        notChecked: coverage.items.filter((i) => i.section === 'notChecked').length,
+        cannotCover: coverage.items.filter((i) => i.section === 'cannotCover').length,
         kinds: coverage.items.filter((i) => i.kind !== undefined).length,
         ...(coverage.tryInsteadTool !== undefined && {
-          tryInsteadTool: coverage.tryInsteadTool.tool,
+          tryInsteadTool: coverage.tryInsteadTool.tool.slice(0, FACT_TEXT_CHARS),
         }),
       },
     }),
@@ -337,7 +366,12 @@ function readOne(ctx: ReadContext, id: string): CallRead | undefined {
     ...(coverage !== undefined && { coverage }),
     emptiness,
     ...(findings !== undefined && { findings }),
-    toolPointer: tool.pointer,
+    ...(namePointer !== undefined && { toolPointer: namePointer }),
+    tool: named
+      ? v(named.name, 'library', named.pointer, FACT_TEXT_CHARS)
+      : v(id, 'library', idPointer, FACT_TEXT_CHARS),
+    toolName,
+    ...(named === undefined && { unnamed: true as const }),
   };
 }
 
@@ -351,11 +385,10 @@ export function readCalls(ctx: ReadContext): CallsRead {
     }
   }
   const ids = [...firstSeen.entries()].sort((a, b) => a[1] - b[1]).map(([id]) => id);
-  const calls = ids.flatMap((id) => {
-    const read = readOne(ctx, id);
-    return read ? [read] : [];
-  });
+  const byCall = indexByCall(ctx);
+  const calls = ids.map((id) => readOne(ctx, byCall, id));
   return {
+    all: calls,
     calls: calls.slice(0, MAX_CALLS),
     omitted: Math.max(0, calls.length - MAX_CALLS),
     ids: new Set(ids),

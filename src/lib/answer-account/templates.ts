@@ -145,6 +145,9 @@ export const ANSWER_ACCOUNT_TEMPLATES = Object.freeze({
   ),
   'understood.refused': t('A check named {{by:code}} refused to open the {{skill:skill}}.'),
   'understood.refused.unnamed': t('A check refused to open the {{skill:skill}}.'),
+  'understood.refused.more': t(
+    "…and {{count:n,'more refusal','more refusals'}} of the same skill, not listed here.",
+  ),
   'understood.rejected': t('The skill graph refused to open the {{skill:skill}}.'),
   'understood.confidence.none': t('How sure the routing was is not recorded.'),
   'understood.app.notRecorded': t(
@@ -166,6 +169,12 @@ export const ANSWER_ACCOUNT_TEMPLATES = Object.freeze({
   'checked.unknown': t('It started {{tool:code}}; how the call ended is not recorded.'),
   'checked.beforePause': t(
     "Before the pause it also ran {{count:n,'tool','tools'}} ({{names}}); what those checked is not in this record.",
+  ),
+  'checked.beforePause.many': t(
+    "Before the pause it also ran {{count:n,'tool','tools'}} (among them {{names}}); what those checked is not in this record.",
+  ),
+  'checked.unnamed': t(
+    'A tool call ({{id:code}}) is in this record, but no event of it names its tool.',
   ),
   'checked.beforePause.none': t('Anything run before the pause is not in this record.'),
   'checked.noCalls': t('It did not run any tools for this answer.'),
@@ -214,6 +223,9 @@ export const ANSWER_ACCOUNT_TEMPLATES = Object.freeze({
   ),
   'found.inView.more': t(
     "…and {{count:n,'more earlier result','more earlier results'}} the model could also see.",
+  ),
+  'found.unnamed': t(
+    'What the call {{id:code}} returned is not told here: no event of it names its tool.',
   ),
   'found.noCalls': t('No tool ran for this answer.'),
 
@@ -290,6 +302,9 @@ export const ANSWER_ACCOUNT_TEMPLATES = Object.freeze({
   'unreachable.existence': t(
     'It cannot be told whether {{tool:code}} checked that the thing asked about exists: its not-checked items do not say what kind they are.',
   ),
+  'unreachable.unnamed': t(
+    'It cannot be told what the call {{id:code}} found: no event of it names its tool.',
+  ),
   'unreachable.empty': t(
     'It cannot be told whether the result of {{tool:code}} was empty: its shape is not declared.',
   ),
@@ -314,6 +329,10 @@ export const ANSWER_ACCOUNT_TEMPLATES = Object.freeze({
   'wrong.beforePause': t(
     'Anything before the pause is not in this record, so these checks cover only the part after it.',
   ),
+  'scope.noOwnEvents': t(
+    "None of this record's events belong to the run asked for, so nothing about that run can be told from it.",
+  ),
+  'row.notInRecord': t('Not in this record: none of its events belong to the run asked for.'),
   'scope.unfiltered': t(
     'Which run these events belong to is not recorded, so this report reads every event in the record.',
   ),

@@ -240,10 +240,9 @@ function allowedValues(recording: Recording, declarations: AnswerAccountDeclarat
       else if (isObj(value)) Object.entries(value).forEach(([k, v]) => visit(v, `${path}/${k}`));
     };
     if (patterns.length > 0) visit(e.payload, '');
-    // Every event of the run may show its run identity (`#meta/runId`, `#meta/sessionId`).
+    // Every event of the run may show its run id (`#meta/runId`) — never its conversation id.
     const meta = (e as { meta?: Record<string, unknown> }).meta ?? {};
-    for (const key of ['runId', 'sessionId'])
-      if (typeof meta[key] === 'string') out.add(meta[key] as string);
+    for (const key of ['runId']) if (typeof meta[key] === 'string') out.add(meta[key] as string);
   });
   const state = (
     isObj(recording.snapshot) && isObj(recording.snapshot.sharedState)
@@ -276,6 +275,9 @@ export function deniedLeaves(
     payload: Record<string, unknown>;
   }[];
   for (const e of events) {
+    // The conversation id is a key in an `open` door: it never leaves in an account.
+    const sessionId = (e as { meta?: Record<string, unknown> }).meta?.sessionId;
+    if (typeof sessionId === 'string') denied.push(sessionId);
     const p = isObj(e.payload) ? e.payload : {};
     const pick = (...keys: string[]) => keys.forEach((k) => stringLeaves(p[k], denied));
     if (e.type.endsWith('context.injected')) pick('rawContent', 'contentSummary', 'reason');

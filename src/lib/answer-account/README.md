@@ -11,11 +11,15 @@ randomness; the same inputs give the same bytes; it never writes into the run.
 ```ts
 import { accountForAnswer } from 'agentfootprint/observe';
 
-const account = accountForAnswer(recording, {
-  skills: { 'array-inventory': { label: 'array estate report' } },
-  tools: { powerstore_get_volumes: { rowsAt: 'volumes' } }, // where a wrapper result keeps its rows
-  routing: { appDecides: true },
-}, { runId: storedArtifact.meta.origin.runId });
+const account = accountForAnswer(
+  recording,
+  {
+    skills: { 'array-inventory': { label: 'array estate report' } },
+    tools: { powerstore_get_volumes: { rowsAt: 'volumes' } }, // where a wrapper result keeps its rows
+    routing: { appDecides: true },
+  },
+  { runId: storedArtifact.meta.origin.runId },
+);
 
 account.summary.sentence.text;
 // "An empty result that did not declare what it searched, from powerstore_get_volumes
@@ -26,15 +30,15 @@ account.summary.sentence.source; // 'app' — only the app's `rowsAt` made that 
 That is fixture A — the real `recording-turn2.json` — and its whole account is
 pinned in `test/lib/answer-account/golden/turn2.A.txt`:
 
-| row | a line it prints | voucher |
-|---|---|---|
-| You asked | “what applications are running on powerstore SHPSTRPLPCL003” | person |
-| It understood | The library's routing picked the array estate report skill (array-inventory). | library (the label part: app) |
-| | The app's scoring put it first: 1 against 0 for every other skill. | app |
-| It checked | get_array_inventory says it checked: • … | tool:get_array_inventory |
-| It found | get_array_inventory looked for a VM disk … and found none. | tool:get_array_inventory |
-| How sure | The record does not rate how sure this answer is. | library (not recorded) |
-| Anything wrong | 1 of the 3 checks could not be run on this record. | library |
+| row            | a line it prints                                                              | voucher                       |
+| -------------- | ----------------------------------------------------------------------------- | ----------------------------- |
+| You asked      | “what applications are running on powerstore SHPSTRPLPCL003”                  | person                        |
+| It understood  | The library's routing picked the array estate report skill (array-inventory). | library (the label part: app) |
+|                | The app's scoring put it first: 1 against 0 for every other skill.            | app                           |
+| It checked     | get_array_inventory says it checked: • …                                      | tool:get_array_inventory      |
+| It found       | get_array_inventory looked for a VM disk … and found none.                    | tool:get_array_inventory      |
+| How sure       | The record does not rate how sure this answer is.                             | library (not recorded)        |
+| Anything wrong | 1 of the 3 checks could not be run on this record.                            | library                       |
 
 ## The laws
 
@@ -54,6 +58,9 @@ pinned in `test/lib/answer-account/golden/turn2.A.txt`:
    `meta.origin.runId`), else the recording's `run_configured`, else the
    `turn_end` owner; never `snapshot.runId` (another id space). With no id at all
    the account reads everything and says so (`scope.unfiltered@1`).
+   The account names the run by its run id and never carries the conversation
+   (session) id: in an `open` door that id is the conversation's only key, and
+   an account is what people share.
 5. **"In front of the model" is proven by the witness**, not by end-of-run
    state: the `context.injected` tool-result rows of the answering iteration's
    messages compose (`facts/inView.ts` · `witnessesOf`), and only EARLIER
@@ -61,27 +68,42 @@ pinned in `test/lib/answer-account/golden/turn2.A.txt`:
 6. **Signals, not causes.** Three checks (decided-delivered, existence,
    empty-results); a check that could not run is listed as unreachable, and one
    that does not apply is left out of the count.
-7. **Bounded by construction** — ≤ 50 calls in the facts, 5 per row, a shared
+7. **Judge everything; cap only what is listed.** The checks, the error and
+   withheld counts read EVERY call and EVERY declared item
+   (`facts/calls.ts` · `CallsRead.all`); the caps below bound only what is
+   printed or listed, and every fold says "…and N more". A call no event names
+   is counted as unread and kept — said to be unnamed, never dropped. A
+   permission verdict refuses a call only when it is `deny` or `halt`
+   (`gate_open` lets it run). A run id that owns no event of the record gets an
+   account that says so, and claims nothing about that run.
+8. **Bounded by construction** — ≤ 50 calls in the facts, 5 per row, a shared
    item budget and a shared long-text budget (`facts/common.ts` · `ITEM_BUDGET`,
-   `LONG_TEXT_BUDGET`), every string var ≤ 2,000 characters: the account stays
-   ≤ 128 KB, the op's response ≤ 192 KB.
-8. **Show me = allow-listed leaves** (`shown.ts` · `SHOW_ME_ALLOW_LIST`); the
+   `LONG_TEXT_BUDGET`), at most 12 pointers per sentence, model-chosen ids and
+   names cut at 200 characters in the facts (refusals ≤ 12, in-view ≤ 50),
+   every string var ≤ 2,000 characters: the account stays ≤ 128 KB, the op's
+   response ≤ 192 KB.
+9. **Show me = allow-listed leaves** (`shown.ts` · `SHOW_ME_ALLOW_LIST`); the
    deny list (injection bodies, tool args and results, a decision's `why`,
    `resumeInput`, the live heap, history content) wins. An emptiness leaf is a
-   derived `{ rows, at }`, never the rows.
+   derived `{ rows, at }`, never the rows. Past 64 KB no pointer adds a key;
+   one `#more` entry says the rest is withheld.
+10. **A tool's own words are printed as the tool wrote them** — `lookedFor`,
+    `what`, `short`. An author who interpolates the caller's arguments into
+    them puts those arguments in the report too (the af-1 "never interpolate"
+    rule, `core/agent/coverage/README.md`); the report is scoped to its owner.
 
 ## Files
 
-| file | job |
-|---|---|
-| `types.ts` | the `AnswerAccount` shape (one exported name; the family by indexed access) |
-| `view.ts` | `recordingView` — ONE indexed pass, filtered to this run |
-| `facts/` | one reader per row: `asked`, `understood`, `calls` (+ `checked`), `found` (+ `inView`), `howSure` |
-| `signals.ts` | the three checks, the signals, "Anything wrong", the one-liner |
-| `templates.ts` / `render.ts` | the closed table and its filler (grammar: `count` pairs, `allOf`, `joinAnd`, `distance`) |
-| `account.ts` | `accountForAnswer`; the per-sentence catch (`unreadable.line@1`) |
-| `shown.ts` | `showLeaves` + the allow-list — the hosting op's half (af-3), not a door |
-| `declarations.ts` | the app's declared data, validated (a caller error throws) |
+| file                         | job                                                                                               |
+| ---------------------------- | ------------------------------------------------------------------------------------------------- |
+| `types.ts`                   | the `AnswerAccount` shape (one exported name; the family by indexed access)                       |
+| `view.ts`                    | `recordingView` — ONE indexed pass, filtered to this run                                          |
+| `facts/`                     | one reader per row: `asked`, `understood`, `calls` (+ `checked`), `found` (+ `inView`), `howSure` |
+| `signals.ts`                 | the three checks, the signals, "Anything wrong", the one-liner                                    |
+| `templates.ts` / `render.ts` | the closed table and its filler (grammar: `count` pairs, `allOf`, `joinAnd`, `distance`)          |
+| `account.ts`                 | `accountForAnswer`; the per-sentence catch (`unreadable.line@1`)                                  |
+| `shown.ts`                   | `showLeaves` + the allow-list — the hosting op's half (af-3), not a door                          |
+| `declarations.ts`            | the app's declared data, validated (a caller error throws)                                        |
 
 ## Changing the words
 

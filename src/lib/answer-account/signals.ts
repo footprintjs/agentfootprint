@@ -16,8 +16,15 @@
  */
 
 import { chip, dedupePointers, joinSentences, n, v } from './render.js';
-import type { CheckId, Sentence, Signal, Unreachable, RecordPointer } from './types.js';
-import { at, emptinessSource, historyAt, type ReadContext } from './facts/common.js';
+import type {
+  CheckId,
+  RecordPointer,
+  Sentence,
+  SentenceVar,
+  Signal,
+  Unreachable,
+} from './types.js';
+import { at, emptinessSource, type ReadContext } from './facts/common.js';
 import { itemAt, type CallsRead } from './facts/calls.js';
 import { inViewPointers, inViewVars } from './facts/found.js';
 import type { InViewAll } from './facts/inView.js';
@@ -91,11 +98,32 @@ export function runChecks(
   }
   if (understood.check === 'reachable') checkPointers.push(...understood.checkPointers);
 
-  // 2 — existence: every call of this run whose declaration has not-checked / cannot-cover items.
-  for (const call of calls.calls) {
+  // A call no event names cannot be put in a sentence about its tool: every check it would
+  // feed is said to be unreachable for it, by its call id — never silently skipped.
+  const unnamed = (check: CheckId, call: (typeof calls.all)[number]) => {
+    states[check] = 'unreachable';
+    addUnreachable({
+      check,
+      missing: 'unreadable',
+      sentence: ctx.say('unreachable.unnamed', {
+        vars: { id: call.tool },
+        status: 'not-recorded',
+        missing: 'unreadable',
+        pointers: call.fact.pointers,
+      }),
+    });
+  };
+
+  // 2 — existence: EVERY call of this run (the listing cap never limits a check) whose
+  // declaration has not-checked / cannot-cover items — every item, not only the printed ones.
+  for (const call of calls.all) {
     const items = call.coverage?.items.filter((i) => i.section !== 'checked') ?? [];
     if (items.length === 0) continue;
-    const tool = v(call.fact.toolName, 'library', call.toolPointer);
+    if (call.unnamed) {
+      unnamed('existence', call);
+      continue;
+    }
+    const tool = call.tool;
     const withKind = items.filter((i) => i.kind !== undefined);
     if (withKind.length === 0) {
       states.existence = 'unreachable';
@@ -135,17 +163,17 @@ export function runChecks(
 
   // 3 — empty results: this run's results (judged ones) and the earlier ones in view.
   // Used before in-view: this run's results are read first, so their signals land first.
-  const judged = calls.calls.filter(
+  const judged = calls.all.filter(
     (c) => c.fact.outcome === 'ran' && c.fact.withheldBy === undefined && c.end !== undefined,
   );
   if (judged.length > 0 || inView.all.length > 0) states['empty-results'] = 'reachable';
-  const shapeUnknown = (toolName: string, pointer: RecordPointer, toolFrom?: RecordPointer) => {
+  const shapeUnknown = (tool: SentenceVar, pointer: RecordPointer) => {
     states['empty-results'] = 'unreachable';
     addUnreachable({
       check: 'empty-results',
       missing: 'not-declared',
       sentence: ctx.say('unreachable.empty', {
-        vars: { tool: v(toolName, 'library', toolFrom) },
+        vars: { tool },
         status: 'not-recorded',
         missing: 'not-declared',
         pointers: [pointer],
@@ -155,8 +183,12 @@ export function runChecks(
   for (const call of judged) {
     const end = call.end;
     if (end === undefined) continue; // `judged` keeps only calls with an end
+    if (call.unnamed) {
+      unnamed('empty-results', call);
+      continue;
+    }
     if (call.emptiness.undeclaredShape) {
-      shapeUnknown(call.fact.toolName, at(end, 'toolCallId'), call.toolPointer);
+      shapeUnknown(call.tool, at(end, 'toolCallId'));
       continue;
     }
     checkPointers.push(...call.fact.pointers.slice(-1));
@@ -166,7 +198,7 @@ export function runChecks(
       check: 'empty-results',
       tone: 'bad',
       sentence: ctx.say('signal.undeclaredEmptyUsed', {
-        vars: { tool: v(call.fact.toolName, 'library', call.toolPointer) },
+        vars: { tool: call.tool },
         basis: [emptinessSource(call.emptiness)],
         pointers: call.fact.pointers,
       }),
@@ -174,11 +206,7 @@ export function runChecks(
   }
   for (const read of inView.all) {
     if (read.reading.undeclaredShape) {
-      shapeUnknown(
-        read.fact.toolName,
-        at(read.witness, 'sourceId'),
-        historyAt(read.historyIndex, '/toolName', read.fact.toolCallId),
-      );
+      shapeUnknown(read.tool, at(read.witness, 'sourceId'));
       continue;
     }
     checkPointers.push(at(read.witness, 'sourceId'));
@@ -212,7 +240,8 @@ export function runChecks(
 /** The "Anything wrong" row's lines, in order. */
 export function wrongLines(ctx: ReadContext, checks: ChecksRead, calls: CallsRead): Sentence[] {
   const lines: Sentence[] = checks.signals.map((s) => s.sentence);
-  const all = calls.calls;
+  // Every call, not only the listed ones: a count is a judgement.
+  const all = calls.all;
   const count = (o: string) => all.filter((c) => c.fact.outcome === o).length;
   const failed = count('failed');
   const refused = count('refused');

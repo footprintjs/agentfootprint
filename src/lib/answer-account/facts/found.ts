@@ -18,7 +18,7 @@ import type { BeforePauseCall } from './checked.js';
 import { anchorPointer, MAX_LISTED_CALLS } from './checked.js';
 import type { InViewAll, InViewRead } from './inView.js';
 
-const toolOf = (call: CallRead) => v(call.fact.toolName, 'library', call.toolPointer);
+const toolOf = (call: CallRead) => call.tool;
 
 /** The declaration pointer behind an app-counted emptiness. */
 function rowsAtPointers(
@@ -30,6 +30,14 @@ function rowsAtPointers(
 }
 
 function foundForCall(ctx: ReadContext, call: CallRead): Sentence {
+  if (call.unnamed) {
+    return ctx.say('found.unnamed', {
+      vars: { id: call.tool },
+      status: 'not-recorded',
+      missing: 'unreadable',
+      pointers: call.fact.pointers,
+    });
+  }
   const tool = toolOf(call);
   const end = call.end;
   const endPointers = end ? [endPointer(end, call.emptiness)] : [];
@@ -60,7 +68,7 @@ function foundForCall(ctx: ReadContext, call: CallRead): Sentence {
   }
   const reading = call.emptiness;
   const basis: AccountSource[] = [emptinessSource(reading)];
-  const extra = rowsAtPointers(ctx, call.fact.toolName, reading.source);
+  const extra = rowsAtPointers(ctx, call.toolName, reading.source);
   switch (reading.emptiness) {
     case 'declared-absent': {
       const lookedFor = call.coverage?.lookedFor;
@@ -98,11 +106,7 @@ function foundForCall(ctx: ReadContext, call: CallRead): Sentence {
 /** The vars every in-view line shares. */
 export function inViewVars(read: InViewRead) {
   return {
-    tool: v(
-      read.fact.toolName,
-      'library',
-      historyAt(read.historyIndex, '/toolName', read.fact.toolCallId),
-    ),
+    tool: read.tool,
     distance: n(read.fact.distance),
     distanceWindowed: n(read.fact.windowed ? 1 : 0),
   };
@@ -115,7 +119,7 @@ export function inViewPointers(ctx: ReadContext, read: InViewRead): RecordPointe
     ...(read.reading.emptiness === 'unknown'
       ? []
       : [historyAt(read.historyIndex, '#emptiness', read.fact.toolCallId)]),
-    ...rowsAtPointers(ctx, read.fact.toolName, read.reading.source),
+    ...rowsAtPointers(ctx, read.toolName, read.reading.source),
   ];
 }
 
@@ -153,7 +157,7 @@ export function readFoundRow(
       }),
     );
   }
-  if (!ctx.resumedLeg && calls.calls.length === 0) {
+  if (!ctx.resumedLeg && calls.all.length === 0) {
     lines.push(ctx.say('found.noCalls', { pointers: anchorPointer(ctx) }));
   }
   lines.push(...inView.listed.map((read) => inViewLine(ctx, read)));

@@ -23,7 +23,12 @@ import type {
   SentenceVar,
 } from '../types.js';
 import { isRecord, num, str, type RecordingView, type ViewEvent } from '../view.js';
-import { at, declarationAt, derived, skillVars, type ReadContext } from './common.js';
+import { FACT_TEXT_CHARS, PERMISSION_REFUSALS } from './calls.js';
+import { at, declarationAt, derived, skillVars, takeItem, type ReadContext } from './common.js';
+
+/** Refusals listed in `facts.routing.refusals`; refusal LINES (distinct rules) in the row. */
+export const MAX_REFUSALS = 12;
+export const MAX_REFUSAL_LINES = 3;
 
 const LIBRARY_DECISIONS = new Set(['entry', 'intent', 'continuity', 'decider']);
 
@@ -100,10 +105,11 @@ function refusalsOf(ctx: ReadContext, to: string | undefined) {
   }
   for (const e of ctx.view.ofType('permission.check')) {
     const target = str(e.payload.target);
+    // Only `deny` / `halt` refuse; `gate_open` lets the read proceed.
     if (
       e.payload.capability !== 'skill_read' ||
       target === undefined ||
-      e.payload.result === 'allow'
+      !PERMISSION_REFUSALS.has(e.payload.result)
     )
       continue;
     const id = target.startsWith('skill:') ? target.slice('skill:'.length) : target;
@@ -178,10 +184,10 @@ export function readUnderstood(ctx: ReadContext): UnderstoodRead {
       : [];
   const refusals = refusalsOf(ctx, str(routed?.payload.to));
   const deliveredFact: Fact<readonly string[]> = {
-    value: delivered.ids,
+    value: delivered.ids.slice(0, MAX_REFUSALS).map((id) => id.slice(0, FACT_TEXT_CHARS)),
     source: 'library',
     status: 'recorded',
-    pointers: [...delivered.firstRow.values()].map((e) => at(e, 'sourceId')),
+    pointers: [...delivered.firstRow.values()].slice(0, MAX_REFUSALS).map((e) => at(e, 'sourceId')),
   };
   const base = {
     configured,
@@ -190,7 +196,15 @@ export function readUnderstood(ctx: ReadContext): UnderstoodRead {
       ? notRecordedFact<{ skillId: string }>('not-built')
       : { value: null, source: 'app' as const, status: 'not-applicable' as const, pointers: [] },
     delivered: deliveredFact,
-    refusals: refusals.all.map(({ requestedId, by, kind }) => ({ requestedId, by, kind })),
+    // Listed ≤ MAX_REFUSALS, ids cut at 200 — the model chooses both how many and how long.
+    refusals: refusals.all.slice(0, MAX_REFUSALS).map(({ requestedId, by, kind }) => ({
+      requestedId: requestedId.slice(0, FACT_TEXT_CHARS),
+      by: by.slice(0, FACT_TEXT_CHARS),
+      kind,
+    })),
+    ...(refusals.all.length > MAX_REFUSALS && {
+      refusalsOmitted: refusals.all.length - MAX_REFUSALS,
+    }),
   };
 
   // ── a resumed leg of a routed agent: the routing happened before the pause ──
@@ -351,7 +365,16 @@ export function readUnderstood(ctx: ReadContext): UnderstoodRead {
   let signal: Sentence | undefined;
   const checkPointers = [at(routed, 'to')];
   if (LIBRARY_DECISIONS.has(by) && to !== undefined) {
-    for (const r of refusals.ofDecided) {
+    // One line per distinct refusing rule, within the shared item budget; the rest counted.
+    const distinct = [
+      ...new Map(refusals.ofDecided.map((r) => [`${r.event.type}\u0000${r.by}`, r])).values(),
+    ];
+    let listed = 0;
+    for (const r of distinct) {
+      if (listed >= MAX_REFUSAL_LINES || !takeItem(ctx, Math.min(r.by.length, FACT_TEXT_CHARS))) {
+        break;
+      }
+      listed += 1;
       lines.push(
         r.event.type.endsWith('skill.rejected')
           ? say('understood.rejected', {
@@ -360,13 +383,29 @@ export function readUnderstood(ctx: ReadContext): UnderstoodRead {
             })
           : r.named
           ? say('understood.refused', {
-              vars: { ...toVars('skill'), by: v(r.by, 'library', at(r.event, 'policyRuleId')) },
+              vars: {
+                ...toVars('skill'),
+                by: v(r.by, 'library', at(r.event, 'policyRuleId'), FACT_TEXT_CHARS),
+              },
               pointers: [at(r.event, 'target')],
             })
           : say('understood.refused.unnamed', {
               vars: toVars('skill'),
               pointers: [at(r.event, 'target')],
             }),
+      );
+    }
+    const unlisted = refusals.ofDecided.length - listed;
+    if (unlisted > 0) {
+      lines.push(
+        say('understood.refused.more', {
+          vars: { n: n(unlisted) },
+          pointers: refusals.ofDecided
+            .slice(listed, listed + 1)
+            .map((r) =>
+              at(r.event, r.event.type.endsWith('skill.rejected') ? 'requestedId' : 'target'),
+            ),
+        }),
       );
     }
     const row = delivered.firstRow.get(to);

@@ -23,6 +23,7 @@
 import { describe, expect, it } from 'vitest';
 
 import { accountForAnswer } from '../../../../src/lib/answer-account/account.js';
+import { showLeaves } from '../../../../src/lib/answer-account/shown.js';
 import type { AnswerAccount } from '../../../../src/lib/answer-account/types.js';
 import type { Recording } from '../../../../src/recorders/observability/recordRun.js';
 import {
@@ -254,5 +255,143 @@ describe('P6 — another run’s events change nothing but `foreign`', () => {
     const account = explain(rec);
     expect(account.unread).toBe(1);
     expect(dump(account)).toBe(dump(explain(baseA())));
+  });
+});
+
+// ─── Amplified damage: the classes that found B1, B2 and S1 in review ─────
+//
+// Removals cannot find a bug that needs MORE of the record: a permission
+// verdict the fixture never held (B1), more calls than the listing cap (B2),
+// a row type repeated thousands of times with long fields (S1). These add
+// them, seeded, and check P1 + P7 and the bounds, plus the property each
+// class exists to guard.
+
+type Amplify = 'permission-verdict' | 'many-calls' | 'repeat-rows';
+const AMPLIFY: readonly Amplify[] = ['permission-verdict', 'many-calls', 'repeat-rows'];
+const VERDICTS = ['allow', 'gate_open', 'deny', 'halt'] as const;
+const REPEATABLE = [51, 64, 6, 52, 189] as const; // tools.absent, a witness, turn_routed, a decision, evidence
+
+function amplify(seed: number): {
+  rec: Rec;
+  how: string;
+  kind: Amplify;
+  verdict?: string;
+  failed: number;
+  empty: boolean;
+} {
+  const r = rng(seed * 7919);
+  const rec = baseA();
+  const kind = AMPLIFY[seed % AMPLIFY.length]!;
+  const long = (n: number) => 'L'.repeat(n);
+  if (kind === 'permission-verdict') {
+    const verdict = pickOf(r, VERDICTS);
+    rec.events.splice(47, 1, {
+      ...rec.events[47]!,
+      payload: {
+        capability: 'tool_call',
+        actor: 'agent',
+        target: 'get_array_inventory',
+        result: verdict,
+        policyRuleId: 'r-9',
+      },
+    });
+    return { rec, how: `seed ${seed}: verdict ${verdict}`, kind, verdict, failed: 0, empty: false };
+  }
+  if (kind === 'many-calls') {
+    const count = 45 + Math.floor(r() * 40);
+    const failAt = Math.floor(r() * count);
+    const emptyAt = r() < 0.5 ? Math.floor(r() * count) : -1;
+    let failed = 0;
+    for (let i = 0; i < count; i++) {
+      const id = `amp-${i}`;
+      const start = {
+        ...rec.events[46]!,
+        payload: { toolName: 'get_array_inventory', toolCallId: id, args: {} },
+      };
+      const isEmpty = i === emptyAt && i !== failAt;
+      const end = {
+        ...rec.events[59]!,
+        payload: {
+          toolCallId: id,
+          durationMs: 1,
+          result: i === failAt ? 'down' : isEmpty ? [] : [{ id: i }],
+          ...(i === failAt && { error: true }),
+        },
+      };
+      if (i === failAt) failed += 1;
+      rec.events.push(start, end);
+    }
+    return {
+      rec,
+      how: `seed ${seed}: ${count} calls, fail @${failAt}, empty @${emptyAt}`,
+      kind,
+      failed,
+      empty: emptyAt >= 0 && emptyAt !== failAt,
+    };
+  }
+  const at = pickOf(r, REPEATABLE);
+  const times = 100 + Math.floor(r() * 1400);
+  const width = 500 + Math.floor(r() * 2500);
+  const template = rec.events[at]!;
+  for (let i = 0; i < times; i++) {
+    const payload = structuredClone(template.payload) as Record<string, any>;
+    if (at === 51) {
+      payload.toolCallId = `rep-${i}`;
+      payload.toolName = `t${i}-${long(width)}`;
+      payload.notChecked = [{ what: long(width), kind: 'existence', short: 'x' }];
+    }
+    if (at === 64) payload.sourceId = `rep-${i}`;
+    if (at === 6) payload.to = 'array-inventory';
+    if (at === 52) {
+      payload.toolCallId = 'toolu_01HRutzrsmgifaHQm73u6kuX';
+      payload.middleware = `m${i}-${long(width)}`;
+    }
+    if (at === 189) payload.unsupported = [{ value: long(width), shape: 'id' }];
+    rec.events.push({ ...template, payload });
+    if (at === 64) {
+      (rec.snapshot.sharedState.history as unknown[]).unshift({
+        role: 'tool',
+        toolName: long(width),
+        toolCallId: `rep-${i}`,
+        content: '[]',
+      });
+    }
+  }
+  if (at === 64)
+    (rec.snapshot.sharedState.history as unknown[]).unshift({ role: 'user', content: 'q' });
+  return {
+    rec,
+    how: `seed ${seed}: event ${at} × ${times}, fields ${width} chars`,
+    kind,
+    failed: 0,
+    empty: false,
+  };
+}
+
+describe('P1 + P7 + bounds — amplified damage (B1 · B2 · S1)', () => {
+  const AMP_CASES = Number(process.env.AF_ACCOUNT_AMP_CASES ?? 30);
+  it(`${AMP_CASES} seeded amplifications`, LONG, () => {
+    for (let seed = 1; seed <= AMP_CASES; seed++) {
+      const { rec, how, kind, verdict, failed, empty } = amplify(seed);
+      const account = explain(rec);
+      try {
+        assertP1(account, rec as unknown as Recording, NEO_DECLARATIONS);
+        assertP7(account, rec as unknown as Recording, NEO_DECLARATIONS);
+        const shown = showLeaves(account, rec as unknown as Recording, NEO_DECLARATIONS);
+        expect(JSON.stringify(shown).length).toBeLessThanOrEqual(64 * 1024);
+        if (kind === 'permission-verdict') {
+          // B1 — only deny / halt refuse.
+          const refused = verdict === 'deny' || verdict === 'halt';
+          expect(account.facts.calls[0]!.outcome).toBe(refused ? 'refused' : 'ran');
+        }
+        if (kind === 'many-calls') {
+          // B2 — every call is judged, whatever the listing cap.
+          expect(account.facts.errors.failed).toBe(failed);
+          expect(account.signals.some((s) => s.id === 'undeclared-empty-used')).toBe(empty);
+        }
+      } catch (error) {
+        throw new Error(`${how} — ${(error as Error).message}`);
+      }
+    }
   });
 });
