@@ -74,12 +74,21 @@ src/
 ## Pull Request Checklist
 
 - [ ] `npm run build` passes
-- [ ] `npm test` passes (all 4090+ tests)
+- [ ] `npm test` passes
 - [ ] `npm run lint` passes
 - [ ] No `any` casts unless unavoidable (document why)
 - [ ] New features have tests (5+ patterns)
-- [ ] JSDoc on public APIs
-- [ ] CHANGELOG.md updated
+- [ ] JSDoc on public APIs (it IS the API reference — generated, never hand-written)
+- [ ] A `.changes/*.md` fragment when `src/` changed ([format](.changes/README.md)) — never edit `CHANGELOG.md` or the version by hand
+- [ ] `npm run docs:regen` run and its output committed
+
+## Releasing
+
+Maintainers: **Actions → Release → Run workflow** (or `gh workflow run publish.yml -f bump=auto`).
+The workflow computes the version from `.changes/` fragments, writes the CHANGELOG entry,
+regenerates every generated doc, runs every gate — and only then commits, tags, creates the
+GitHub release, publishes to npm with provenance and deploys agentfootprint.dev. A red gate
+leaves nothing tagged. `npm run release` runs the same steps from a local machine.
 
 ## Commit Messages
 

@@ -16,7 +16,8 @@
 - [ ] `npm run lint` passes
 - [ ] Tests added for new functionality
 - [ ] JSDoc on public APIs
-- [ ] CHANGELOG.md updated (if user-facing)
+- [ ] `.changes/*.md` fragment added (if `src/` changed — see `.changes/README.md`; never edit CHANGELOG.md)
+- [ ] `npm run docs:regen` run and committed
 
 ## Test Plan
 

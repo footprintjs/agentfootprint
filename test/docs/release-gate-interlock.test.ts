@@ -36,6 +36,11 @@ const REPORT = join(ROOT, 'docs', 'DOCS_TRUTH_REPORT.md');
 
 const read = (p: string): string => readFileSync(p, 'utf8');
 
+/** `needs: build` or a list naming it (`needs: [build, release]` — tag before publish). */
+const NEEDS_BUILD = /needs:\s*(build\b|\[[^\]]*\bbuild\b[^\]]*\])/;
+/** The one version bump both release paths share. */
+const BUMP_STEP = 'node scripts/release-prepare.mjs';
+
 describe('release interlock — a red gate cannot reach npm', () => {
   it('publish.yml runs the docs:truth ratchet in the job the publish job needs', () => {
     const yml = read(PUBLISH_YML);
@@ -60,12 +65,13 @@ describe('release interlock — a red gate cannot reach npm', () => {
 
     const publishJob = yml.slice(yml.indexOf('  publish:'));
     expect(
-      /needs:\s*build/.test(publishJob),
+      NEEDS_BUILD.test(publishJob),
       'the publish job must `needs: build`, or the gate in `build` blocks nothing.',
     ).toBe(true);
   });
 
   it('release.sh runs the same gate locally, before the version bump', () => {
+    // The bump is scripts/release-prepare.mjs (fragments → version + CHANGELOG).
     const sh = read(RELEASE_SH);
     expect(
       sh.includes('npm run docs:truth'),
@@ -75,10 +81,11 @@ describe('release interlock — a red gate cannot reach npm', () => {
     ).toBe(true);
 
     // Ordering: the gate has to precede the bump, or it fails with a tag already cut.
+    expect(sh.indexOf(BUMP_STEP), 'release.sh no longer calls the bump step').toBeGreaterThan(-1);
     expect(
       sh.indexOf('npm run docs:truth'),
-      'docs:truth must run BEFORE `npm version` in release.sh.',
-    ).toBeLessThan(sh.indexOf('npm version'));
+      'docs:truth must run BEFORE the version bump in release.sh.',
+    ).toBeLessThan(sh.indexOf(BUMP_STEP));
   });
 
   it('publish.yml checks the packed dependency after build and before staging in the required job', () => {
@@ -91,7 +98,7 @@ describe('release interlock — a red gate cannot reach npm', () => {
     ).toBeGreaterThan(-1);
     expect(gate).toBeGreaterThan(buildJob.indexOf('      - run: npm run build\n'));
     expect(gate).toBeLessThan(buildJob.indexOf('      - name: Stage published package'));
-    expect(yml.slice(yml.indexOf('  publish:'))).toMatch(/needs:\s*build/);
+    expect(yml.slice(yml.indexOf('  publish:'))).toMatch(NEEDS_BUILD);
   });
 
   it('release.sh checks the packed dependency after build and before the version bump', () => {
@@ -102,7 +109,7 @@ describe('release interlock — a red gate cannot reach npm', () => {
       'the local release must reject an unusable packed dependency before versioning',
     ).toBeGreaterThan(-1);
     expect(gate).toBeGreaterThan(sh.search(/^npm run build$/m));
-    expect(gate).toBeLessThan(sh.search(/^npm version /m));
+    expect(gate).toBeLessThan(sh.indexOf(BUMP_STEP));
     expect(sh).toMatch(/^set -euo pipefail$/m);
   });
 });

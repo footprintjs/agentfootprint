@@ -1,20 +1,71 @@
-name: Publish to npm
+name: Release
 
+# THE release. One button — Actions → Release → Run workflow (or
+# `gh workflow run publish.yml -f bump=auto`) — and every step after it is automatic:
+#
+#   build    prepare the release IN THE TREE (version from .changes/ fragments,
+#            CHANGELOG entry, capability rows, every generated doc), then run
+#            EVERY gate against that exact tree, then stage the npm tarball.
+#            No write power of any kind.
+#   release  only after every gate is green: commit, tag, push, GitHub release,
+#            deploy the docs site. Runs no npm install — never shares a runtime
+#            with a dependency's install script.
+#   publish  `npm publish --provenance` of the tarball `build` staged. The ONLY
+#            job with an OIDC token.
+#
+# Why the gates come FIRST: the previous flow tagged, pushed and created the
+# GitHub release, and only THEN ran these gates here — a red gate blocked the
+# publish but the version number was already spent (9.72.0/9.73.0 and 9.76.0–
+# 9.78.0 shipped over a red site budget; 9.58.0 over a red docs-truth). Now a
+# red gate means nothing was committed, tagged or published.
+#
+# Nothing to prepare by hand: no version bump, no CHANGELOG edit, no "regenerate
+# the API reference" commit. Pull requests add fragments (.changes/README.md);
+# this workflow does the rest.
+#
+# The file keeps its name, publish.yml, ON PURPOSE: npm trusted publishing is
+# bound to this workflow FILENAME. Renaming it breaks publishing until the
+# trusted-publisher setting on npmjs.com is changed to match.
+#
+# The legacy trigger stays: a GitHub release published by a person (`npm run
+# release:patch`, which runs scripts/release.sh locally) skips `prepare`/`release`
+# and runs the same gates + publish against the tag.
 on:
+  workflow_dispatch:
+    inputs:
+      bump:
+        description: 'Version bump. auto = computed from .changes/ fragments; patch/minor/major may raise it, never lower it.'
+        type: choice
+        options: [auto, patch, minor, major]
+        default: auto
   release:
     types: [published]
 
-# Least privilege: NO id-token at the top level. OIDC publish power is granted ONLY to the
-# `publish` job, which consumes the build job's pre-built artifact and does ZERO dependency
-# resolution — so the unpinned `npm install` (in `build`) never shares a runtime with the
-# registry token or `npm publish --provenance`.
+# Least privilege: nothing at the top level. `release` gets contents/actions
+# write, `publish` gets id-token; `build` — the only job that installs
+# dependencies — gets read.
 permissions:
   contents: read
+
+# Two releases can never race for the same version number.
+concurrency:
+  group: release
+  cancel-in-progress: false
 
 jobs:
   build:
     runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.prepare.outputs.version }}
+    env:
+      PREPARE: ${{ github.event_name == 'workflow_dispatch' }}
     steps:
+      - name: Releases are cut from main only
+        if: env.PREPARE == 'true' && github.ref != 'refs/heads/main'
+        run: |
+          echo "::error::Run the Release workflow on main (got ${{ github.ref }})."
+          exit 1
+
       - uses: actions/checkout@v7
 
       - uses: actions/setup-node@v6
@@ -22,71 +73,73 @@ jobs:
           node-version: 22
 
       # The tracked lock installs the exact published ContextFootprint dependency.
-      # Build BEFORE test: examples
-      # import from the package name 'agentfootprint', resolved via the local package's
-      # exports → dist/, so they need an upstream build. This job has NO publish power.
-      - run: npm install
+      - run: npm ci
+
+      # ── Prepare (automated release only) ────────────────────────────────
+      - name: Prepare version + CHANGELOG from .changes/
+        id: prepare
+        if: env.PREPARE == 'true'
+        run: node scripts/release-prepare.mjs --bump "${{ inputs.bump }}" --notes-out "$RUNNER_TEMP/notes.md"
+
       - run: npm run build
-      - run: npm test
 
-      # Docs-truth RATCHET — the SAME gate CI runs on every push (ci.yml, job
-      # `docs-truth`). It lives here too because CI and the publish are wired to
-      # DIFFERENT triggers: CI runs on `push`, this workflow on `release:
-      # published`, and `release.sh` creates the GitHub release seconds after the
-      # push — so the two run concurrently and npm never waited on a CI verdict.
-      # A red ratchet used to reach the registry unopposed (9.58.0 shipped with
-      # 20 undocumented exports and 2 undocumented events). Running it inside the
-      # job the publish job already `needs:` makes that impossible regardless of
-      # HOW the release was created — the script, the web UI, another machine, a
-      # re-run. Free: this job has already done the `npm install` + `npm run
-      # build` the check requires.
-      - run: npm run docs:truth
+      # Every generated file (API mirror, docs-truth report, examples README,
+      # AI-instruction copies), so the release commit carries docs that match
+      # the version it names.
+      - name: Regenerate docs for the new version
+        if: env.PREPARE == 'true'
+        run: npm run docs:generate
 
-      # Packaging-correctness gate — block a publish that would ship broken/masquerading types.
-      # Check the registry dependency through isolated packed consumers before staging.
+      # Captured BEFORE the gates run, so nothing a gate writes can leak into
+      # the release commit. The gates below then judge exactly these bytes.
+      # Everything lands OUTSIDE the checkout ($RUNNER_TEMP), so the capture
+      # cannot capture itself.
+      - name: Capture the release commit
+        if: env.PREPARE == 'true'
+        run: |
+          mkdir -p "$RUNNER_TEMP/release"
+          mv "$RUNNER_TEMP/notes.md" "$RUNNER_TEMP/release/notes.md"
+          git add -A
+          git diff --cached --binary > "$RUNNER_TEMP/release/commit.patch"
+          echo "${{ steps.prepare.outputs.version }}" > "$RUNNER_TEMP/release/version"
+          git diff --cached --stat
+
+      # ── Gates — the same list scripts/release.sh runs locally ──────────
+      - name: Documentation check (removed API names)
+        run: bash scripts/check-docs.sh
+      - name: Duplicate type check
+        run: node scripts/check-dup-types.mjs
+      - name: Format
+        run: npm run format
+      - name: Lint
+        run: npm run lint
+      - name: Typecheck
+        run: npx tsc --noEmit && npm run test:types
+      # The instrumented run is a superset of `npm test` (see release.sh gate 4).
+      - name: Tests (with coverage — the command CI's coverage job runs)
+        run: npm run test:coverage
+      - name: Examples (typecheck + run every one end-to-end)
+        run: npm run test:examples
+      # Docs-truth RATCHET: no new export or event without prose, and never
+      # docs that tell a reader to import something that does not exist.
+      - name: Docs truth
+        run: npm run docs:truth
+      - name: Doc links
+        run: |
+          npm install --no-save github-slugger
+          node scripts/check-doc-links.mjs --strict
+      # Packaging correctness: the registry dependency through isolated packed
+      # consumers, then dual CJS/ESM types in every consumer mode.
       - run: npm run test:context-package
       - run: npx publint
       - run: npx @arethetypeswrong/cli --pack
 
-      # Site-budget RATCHET — the SAME check the Deploy Docs workflow runs
-      # (docs.yml, step "Enforce site performance budgets"). It lives here for
-      # exactly the reason docs-truth does: Deploy Docs is wired to a different
-      # trigger and gates nothing, so its red has never been able to stop
-      # anything. Twice now it hasn't. 9.72.0 and 9.73.0 shipped to npm over a
-      # red ceiling on 2026-08-26; then 9.76.0 crossed all four ceilings at once
-      # and 9.76.1, 9.77.0 and 9.78.0 shipped over them too, while the published
-      # documentation site sat four days and three releases stale. Every one of
-      # those publishes was green. The measured history is in the comment above
-      # OUTPUT_LIMITS in docs-next/scripts/check-site-budget.mjs.
-      #
-      # WHAT THIS NOW GUARANTEES: no version reaches npm while the docs site is
-      # over budget. This is the job `publish` needs:, so its failure withholds
-      # the registry push, whatever created the release — release.sh, the web
-      # UI, another machine, a re-run. The release stops with the measured bytes
-      # in the log, and the fix is a commit (raise the ceiling with the history,
-      # or trim the export) plus a re-run of this workflow.
-      #
-      # WHAT IT STILL CANNOT DO. (1) It cannot un-cut the tag: the git tag and
-      # the GitHub release exist before this workflow starts, so a red budget
-      # blocks the PUBLISH, not the tagging — recovery is fix + re-run, and the
-      # version number is already spent. (2) It cannot catch a budget that goes
-      # red between releases; ci.yml's docs job runs the same check on every
-      # push and PR for that. (3) It does not deploy the site — Deploy Docs
-      # still owns that and still has to go green on its own; this only makes it
-      # impossible to ship a release while that job is doomed to fail. (4) It
-      # measures THIS commit: a budget that goes red from a docs-only commit
-      # landing after the release is a CI red, not a publish block.
-      #
-      # Cost, measured on CI run 33298113906 (ci.yml's docs job, same steps on
-      # the same runner image): docs-next install 11s + static export 1m27s +
-      # the check itself 1.5s ≈ 1m40s. It runs AFTER publint/attw so the gates
-      # that cost seconds get to fail first, and BEFORE `npm pack` so a red
-      # budget stops the job while nothing has been staged. `files` in
-      # package.json is an allowlist that does not name docs-next, so the
-      # 749 MB export cannot leak into the tarball.
+      # Site-budget RATCHET — no version reaches npm while the docs site is over
+      # budget (the measured history is above OUTPUT_LIMITS in
+      # docs-next/scripts/check-site-budget.mjs). Runs last: it costs ~1m40s.
       - name: Install docs-next deps (site-budget gate)
         working-directory: docs-next
-        run: npm install
+        run: npm ci
       - name: Build docs static export
         working-directory: docs-next
         env:
@@ -96,9 +149,9 @@ jobs:
         working-directory: docs-next
         run: npm run check:site-budget
 
-      # Stage the EXACT publishable package, files-agnostically: npm computes the tarball
-      # (honoring the complex `files` globs/negations), then we extract it. The staged dir
-      # is byte-identical to what `npm pack` produces, so the publish job re-packs the same.
+      # Stage the EXACT publishable package, files-agnostically: npm computes the
+      # tarball (honoring the `files` globs/negations), then we extract it. The
+      # publish job re-packs the same bytes.
       - name: Stage published package
         run: |
           npm pack
@@ -109,10 +162,66 @@ jobs:
         with:
           name: package
           path: pkg/
-          retention-days: 1
+          retention-days: 7
+
+      - uses: actions/upload-artifact@v7
+        if: env.PREPARE == 'true'
+        with:
+          name: release
+          path: ${{ runner.temp }}/release/
+          retention-days: 7
+
+  release:
+    needs: build
+    if: github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write # commit + tag + GitHub release
+      actions: write # start the docs deploy (a push by this token triggers no workflow)
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/download-artifact@v8
+        with:
+          name: release
+          path: ${{ runner.temp }}/release
+
+      - name: Commit, tag, push
+        run: |
+          VERSION="$(cat "$RUNNER_TEMP/release/version")"
+          git config user.name "github-actions[bot]"
+          git config user.email "41898283+github-actions[bot]@users.noreply.github.com"
+          git apply --index "$RUNNER_TEMP/release/commit.patch"
+          git commit -m "chore: release v$VERSION"
+          git tag "v$VERSION"
+          # Fast-forward only. If main moved while the gates ran, this refuses —
+          # the new commits were never gated. Re-run the workflow.
+          if ! git push origin "HEAD:refs/heads/main"; then
+            echo "::error::main moved while the release was being verified. Nothing was tagged or published — run the Release workflow again."
+            exit 1
+          fi
+          git push origin "v$VERSION"
+
+      # A release created with this job's token does not fire `release:
+      # published`, so this workflow is not re-entered.
+      - name: GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          VERSION="$(cat "$RUNNER_TEMP/release/version")"
+          gh release create "v$VERSION" --title "v$VERSION" --notes-file "$RUNNER_TEMP/release/notes.md" --latest
+
+      # The site documents what npm serves: it deploys on a release, not on every
+      # push to main (see docs.yml).
+      - name: Deploy the docs site
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh workflow run docs.yml --ref main
 
   publish:
-    needs: build
+    needs: [build, release]
+    # `release` is skipped on the legacy trigger (the tag already exists).
+    if: ${{ !cancelled() && needs.build.result == 'success' && (needs.release.result == 'success' || needs.release.result == 'skipped') }}
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -135,5 +244,7 @@ jobs:
       # Publishes the pre-built artifact with its declared registry dependency.
       # No dependency resolution runs with publishing authority.
       # Trusted publishing: no NODE_AUTH_TOKEN — npm authenticates via the GitHub OIDC token.
+      # If this step fails, the tag already exists: fix the cause and use
+      # "Re-run failed jobs" — the staged tarball is kept for 7 days.
       - name: Publish to npm
         run: npm publish --provenance --access public

@@ -1,0 +1,22 @@
+---
+paths:
+  - "src/memory/**"
+  - "src/rag/**"
+  - "src/lib/rag/**"
+  - "src/adapters/memory/**"
+---
+# Memory and RAG — seams and blast radius
+
+Loaded only when you work on the paths above — moved verbatim out of the root CLAUDE.md so it costs context only where it applies. **Trust the code** where this disagrees.
+
+## Extension points
+- **Memory store**: implement `MemoryStore` (memory/store/types.ts:113; `search?` REQUIRED for causal memory); pass to `defineMemory({store})`. Memory TYPE/STRATEGY unions are CLOSED (define.types.ts:57/74 — new one edits defineMemory dispatch + a pipeline builder).
+- **Document loader** (8.10.0): implement `DocumentLoader` (rag/types.ts) — `{name, extensions, load}`. `loadDocuments` routes by extension, caller-supplied loaders FIRST, so overriding a built-in is passing yours ahead of it rather than editing `DEFAULT_LOADERS`. A loader MUST NOT rewrite text after offsets are conceivable: the HTML stripper replaces tags with EQUAL-LENGTH whitespace for exactly this reason.
+- **Splitter** (8.10.0): implement `Splitter` (`{name, split(doc) → SplitPiece[]}`), a factory function like the window/retrieval families. THE invariant — `doc.text.slice(charStart, charEnd) === piece.text` — is VERIFIED by `splitDocuments`, not trusted. All offset arithmetic lives once in `splitters/shared.ts`; a strategy that does its own is how the invariant breaks.
+- **Durable store** (8.9.0): `sqliteVectorStore` follows `hosting/sqliteSessions` line for line — lazy `node:sqlite`, WAL read-back on `journalMode`, STRICT tables, schema-identity + schema-version refusals, `':memory:'` refused. TWO things it adds that have no precedent there: `putMany`/`putIfVersion`/`forget` wrap in a transaction (sqliteSessions has none), and the EMBEDDER FINGERPRINT (`'<id>@<dims>'`, one per namespace in `af_index_meta`) is refused at write AND query. `SqliteUnavailableError` is now ONE class in `lib/sqliteUnavailable.ts` re-exported by both doors — a second class of that name is a duplicate type the build refuses.
+- **Retrieval rule** (8.8.0): implement `RetrievalStrategy` (memory/retrieval/types.ts) — `select(pool) → verdict[]`, one verdict per candidate, order preserved; it never touches the store and never embeds. Pass as `defineRAG({retrieval})`. `topK()` is the only shipped one; rerank/MMR are named-but-deferred adapters behind the same interface. `TopKStrategy` is a UNION whose arms exclude (`{topK,threshold}` vs `{retrieval}`) — refused in the type AND at runtime, because two spellings of one rule can disagree.
+
+## Change-impact map
+- **indexCorpus fan-out** (8.10.0) → `maxBranches` on `addParallelForEach` TRUNCATES surplus items rather than queueing them, so the chart fans out over a WINDOW (`take-window` → `embed` → `tally-window` → `more-batches-decider` `{loopTo: 'take-window'}`) that can never exceed the ceiling. A single fan-out over all batches would silently index only the first `maxConcurrentBatches` — pinned by the 12-batches-through-a-window-of-2 test. `embedded` is summed from each branch's `written`, never from the plan's queue, and the fan-out is `failFast: true` because a half-indexed corpus keeps answering.
+- **Embedder fingerprint** (8.9.0) → `Embedder.id` (optional; every shipped embedder sets one, and NONE include dims — the store appends `@<dims>` itself, so an id carrying its own size double-stamps) + `indexDocuments` defaulting `embedderId` to it + `SqliteVectorStore.reconcileFingerprint` (the only comparison site). Rule: dimensions ALWAYS decide, model ids decide only when BOTH sides named themselves — refusing on an absent name would block the majority of callers who never pass `embedderId`.
+- **Retrieval record** (8.8.0) → FOUR stages write one object in sequence: `loadRelevant` (candidates+scores+threshold verdicts) → `pickByBudget` (re-marks admitted→over-budget/over-max-entries) → `formatDefault` (`promptFragment` + `promptPosition`) → the read mount's outputMapper lifts it to root as `retrievalEvidence_<id>`. `memoryRecallInjections` then splits ONE recall into one ActiveInjection PER CHUNK — guarded by a byte-equality check (`fragments.join('\n\n') === systemContent`) that falls back to the single injection rather than change the prompt. `rank` (score order) and `promptPosition` (picker order) are DIFFERENT and both load-bearing: joining fragments in rank order reproduces the right bytes in a sequence the model never saw.

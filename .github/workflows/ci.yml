@@ -33,13 +33,15 @@ jobs:
       # through even with the runtime suite green. Its own tsconfig runs the
       # real compiler over just these files.
       - run: npm run test:types
-      # Build BEFORE test. Examples in test/examples-smoke.test.ts import
-      # from the package name 'agentfootprint' (not relative paths), and
-      # Node's resolver looks up the local package's main/exports which
-      # point to dist/. Without an upstream build, those imports fail
-      # with "Failed to resolve entry for package 'agentfootprint'".
+      # Build BEFORE test: tests and examples import from the package name
+      # 'agentfootprint' (not relative paths), and Node's resolver looks up the
+      # local package's main/exports, which point to dist/.
       - run: npm run build
       - run: npm test
+      # Every example, typechecked AND run end-to-end against mock providers —
+      # the code people copy. Once per commit (the Node 22 leg) is enough.
+      - if: matrix.node-version == 22
+        run: npm run test:examples
       - run: npm run test:context-package
       # Packaging-correctness gate: dual CJS/ESM types resolve in every consumer mode.
       - run: npx publint
@@ -62,7 +64,7 @@ jobs:
   # Docs gate: builds docs-next (Fumadocs), which twoslash-compiles every
   # "ts twoslash" code block against the real agentfootprint types at build.
   # A snippet using a renamed/removed API fails the build -> hand-written doc
-  # code can't drift from the library (the test job proves examples/ run).
+  # code can't drift from the library (the test job runs every example).
   docs:
     runs-on: ubuntu-latest
     steps:
@@ -113,6 +115,41 @@ jobs:
       - name: Enforce site performance budgets
         working-directory: docs-next
         run: npm run check:site-budget
+
+  # Generated files are committed, so they must be regenerated WITH the change
+  # that made them stale: the API mirror, the docs-truth report, the examples
+  # README, the AI-instruction copies. `docs:check` regenerates everything and
+  # fails on any diff — the fix is always `npm run docs:regen` + commit.
+  generated:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 22
+
+      # npm ci, not install: install may rewrite the lockfile, which this job
+      # would then report as a stale generated file.
+      - run: npm ci
+      - run: npm run docs:check
+
+  # Change fragments — every PR that touches src/ adds a .changes/*.md file
+  # (see .changes/README.md). The release folds them into CHANGELOG.md and
+  # picks the version, so nobody edits either by hand.
+  changes:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 22
+
+      - run: node scripts/changes.mjs check --base origin/${{ github.base_ref }}
 
   # Doc-links gate — every internal cross-reference in docs-next must resolve.
   # Hand-written guides link by stable id (doc:<id>, resolved at build by

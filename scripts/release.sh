@@ -18,21 +18,27 @@ say() { if [ "${RELEASE_QUIET:-0}" != "1" ]; then echo "$@"; fi; }
 #   4. Full test suite
 #   5. Examples (typecheck + tsx end-to-end run for every example)
 #   5.5 CI gate parity (test:types, docs:truth, publint, attw, doc-links)
-#   6. CHANGELOG entry exists
-#   Then: version bump → commit + tag + push → GitHub release → CI npm publish
+#   6. Version + CHANGELOG from .changes/ fragments (scripts/release-prepare.mjs),
+#      then every generated doc regenerated (npm run docs:generate)
+#   Then: commit + tag + push → GitHub release → CI npm publish → docs deploy
+#
+# THE PREFERRED RELEASE IS THE GITHUB WORKFLOW (Actions → Release, or
+# `gh workflow run publish.yml -f bump=auto`): it runs these gates on GitHub's
+# runners BEFORE anything is tagged. This script is the local fallback.
 #
 # Usage:
+#   npm run release         # version computed from .changes/ fragments
 #   npm run release:patch   # 1.1.0 → 1.1.1
 #   npm run release:minor   # 1.1.0 → 1.2.0
 #   npm run release:major   # 1.1.0 → 2.0.0
 
-BUMP="${1:?Usage: release.sh <patch|minor|major>}"
+BUMP="${1:?Usage: release.sh <auto|patch|minor|major>}"
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
 
 # ── Gate 1: Clean working tree ──────────────────────────────────────────
-if [[ "$BUMP" != "patch" && "$BUMP" != "minor" && "$BUMP" != "major" ]]; then
-  echo "Error: bump must be patch, minor, or major (got: $BUMP)"
+if [[ "$BUMP" != "auto" && "$BUMP" != "patch" && "$BUMP" != "minor" && "$BUMP" != "major" ]]; then
+  echo "Error: bump must be auto, patch, minor, or major (got: $BUMP)"
   exit 1
 fi
 
@@ -148,36 +154,29 @@ node scripts/check-doc-links.mjs --strict
 
 say "[5.5/8] CI gate parity ✓"
 
-# ── Version bump ────────────────────────────────────────────────────────
-npm version "$BUMP" --no-git-tag-version
-VERSION=$(node -p "require('./package.json').version")
-say "==> Bumped to v$VERSION"
-
-# ── Gate 6: CHANGELOG entry ─────────────────────────────────────────────
-if ! grep -q "## \[$VERSION\]" CHANGELOG.md; then
-  echo "Error: CHANGELOG.md has no entry for [$VERSION]."
-  echo "Add a ## [$VERSION] section before releasing."
-  git checkout package.json
+# ── Version + CHANGELOG + generated docs ────────────────────────────────
+# One script owns the bump: it folds .changes/ fragments into CHANGELOG.md,
+# sets the version (package.json + lock) and fills `unreleased` capability rows.
+# With no fragments it accepts a hand-written `## [X.Y.Z]` entry (the old way).
+NOTES_FILE="$(mktemp)"
+trap 'rm -f "$NOTES_FILE"' EXIT
+if ! node scripts/release-prepare.mjs --bump "$BUMP" --notes-out "$NOTES_FILE" >/dev/null; then
+  echo "Error: release-prepare refused (message above). Nothing was changed."
   exit 1
 fi
+VERSION=$(node -p "require('./package.json').version")
+say "==> Prepared v$VERSION"
 
-say "[6/8] CHANGELOG entry ✓"
+# The generated docs name the version and describe the code — regenerate them
+# so the release commit carries docs that match it.
+say "==> Regenerating docs for v$VERSION..."
+npm run docs:generate >/dev/null
 
-# ── Extract release notes ──────────────────────────────────────────────
-NOTES=$(awk "/^## \[$VERSION\]/{found=1; next} /^## \[/{if(found) exit} found{print}" CHANGELOG.md)
-if [[ -z "$NOTES" ]]; then
-  echo "Warning: CHANGELOG.md entry for [$VERSION] is empty. Continuing anyway."
-fi
-
-# ── Update lockfile (skip if gitignored — platform-specific native deps) ──
-if ! git check-ignore -q package-lock.json 2>/dev/null; then
-  npm install --package-lock-only
-fi
+say "[6/8] Version + CHANGELOG + docs ✓"
 
 # ── Commit + tag + push ───────────────────────────────────────────────
-git add package.json
-# Add lockfile only if tracked
-git add package-lock.json 2>/dev/null || true
+# The tree was clean at gate 1, so everything here is the release's own change.
+git add -A
 git commit -m "chore: release v$VERSION"
 git tag "v$VERSION"
 git push
@@ -190,10 +189,12 @@ if command -v gh &> /dev/null; then
   say "==> Creating GitHub release (CI will publish to npm with provenance)..."
   gh release create "v$VERSION" \
     --title "v$VERSION" \
-    --notes "$NOTES" \
+    --notes-file "$NOTES_FILE" \
     --latest
   echo "    release: https://github.com/footprintjs/agentfootprint/releases/tag/v$VERSION"
   echo "    CI will publish to npm shortly — check Actions tab for status."
+  # The docs site deploys on a release, not on every push (docs.yml).
+  gh workflow run docs.yml --ref main || echo "Warning: could not start the docs deploy — run the Deploy Docs workflow by hand."
 else
   echo "Warning: gh CLI not found. Skipping GitHub release creation."
   echo "Run manually: gh release create v$VERSION --title v$VERSION --latest"
@@ -216,6 +217,6 @@ echo "  3.    Build                   ✓  (CJS + ESM)"
 echo "  4.    Full test suite         ✓"
 echo "  5.    Examples                ✓  (typecheck + tsx end-to-end run)"
 echo "  5.5   CI gate parity          ✓  (types, docs:truth, publint, attw, doc-links)"
-echo "  6.    CHANGELOG               ✓"
+echo "  6.    Version + CHANGELOG     ✓  (from .changes/, docs regenerated)"
 echo "  7.    Commit + tag + push     ✓"
 echo "  8.    GitHub release          ✓"

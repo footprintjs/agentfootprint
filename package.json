@@ -72,6 +72,9 @@
     "example": "TSX_TSCONFIG_PATH=examples/runtime.tsconfig.json npx --yes tsx",
     "test:watch": "vitest --watch",
     "docs:api": "typedoc",
+    "docs:regen": "npm run build && npm run docs:generate",
+    "docs:generate": "node scripts/gen-ai-instructions.mjs && npm run examples:readme && node scripts/gen-fumadocs-api.mjs && npm run docs:truth:report",
+    "docs:check": "npm run docs:regen && node scripts/check-generated.mjs",
     "docs:truth": "node scripts/docs-truth-check.mjs",
     "docs:truth:baseline": "node scripts/docs-truth-check.mjs --update-baseline",
     "docs:truth:exercise": "node scripts/docs-truth-exercise.mjs",
@@ -79,9 +82,13 @@
     "lint:fix": "eslint 'src/**/*.ts' 'test/**/*.ts' --ext .ts --fix",
     "format": "prettier --config .prettierrc.js --list-different 'src/**/*.ts' 'test/**/*.ts'",
     "format:fix": "prettier --config .prettierrc.js --write 'src/**/*.ts' 'test/**/*.ts'",
+    "release": "bash scripts/release.sh auto",
     "release:patch": "bash scripts/release.sh patch",
     "release:minor": "bash scripts/release.sh minor",
     "release:major": "bash scripts/release.sh major",
+    "release:prepare": "node scripts/release-prepare.mjs",
+    "changes:check": "node scripts/changes.mjs check",
+    "changes:preview": "node scripts/changes.mjs preview",
     "coverage:badge": "npm run test:coverage; node scripts/coverage-badge.mjs",
     "docs:truth:report": "node scripts/docs-truth-check.mjs --report-only",
     "test:context-package": "node scripts/check-context-package.mjs"
@@ -92,11 +99,11 @@
     "!dist/**/test-barrel*",
     "!dist/esm/**/test-barrel*",
     "ai-instructions/**/*",
+    "!ai-instructions/_source.md",
     "bin/**/*",
     "canonical-notes.json",
-    "CLAUDE.md",
     "AGENTS.md",
-    "CHANGELOG.md"
+    "CAPABILITIES.md"
   ],
   "bin": {
     "agentfootprint-setup": "ai-instructions/setup.sh",

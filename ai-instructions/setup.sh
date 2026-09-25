@@ -22,10 +22,10 @@ echo ""
 install_claude_code() {
   mkdir -p "$PROJECT_DIR/.claude/skills/agentfootprint"
   cp "$PKG_DIR/claude-code/SKILL.md" "$PROJECT_DIR/.claude/skills/agentfootprint/SKILL.md"
-  # Also copy CLAUDE.md to project root if not present
-  if [ ! -f "$PROJECT_DIR/CLAUDE.md" ]; then
-    cp "$PKG_DIR/../CLAUDE.md" "$PROJECT_DIR/CLAUDE.md" 2>/dev/null || true
-  fi
+  # The skill is all a consumer needs: it loads only when the task is about
+  # agentfootprint. (This used to also copy the library's own CLAUDE.md — a
+  # contributor map of internals — into the project root, where it cost every
+  # session in YOUR project ~23k tokens.)
   echo "  [ok] Claude Code — .claude/skills/agentfootprint/SKILL.md"
 }
 
