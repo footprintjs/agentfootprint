@@ -497,7 +497,7 @@ const translateTool = flowchartAsTool({
 ```
 
 For multi-agent handoff, use the `swarm(...)` pattern (from the patterns layer)
-with a fixed agent roster and a `route` function — see [patterns.md](patterns.md).
+with a fixed agent roster and a `route` function — see [patterns.md](https://agentfootprint.dev/docs/build/patterns/).
 
 ---
 

@@ -103,7 +103,7 @@ const result = await agent.run({ message: 'Weather in Paris?' });
 console.log(result);  // → "I checked: it is 72°F and sunny."
 ```
 
-For production, import a real provider from `agentfootprint/providers` and swap it in — `anthropic(...)` / `openai(...)` / `bedrock(...)` / `gemini(...)` / `ollama(...)`. Only the import line changes; the agent code stays the same. (The vendor-SDK providers live on the `agentfootprint/providers` subpath so the main `agentfootprint` barrel stays free of optional peer-dep requires; `mock`, `browserAnthropic`, and `browserOpenai` are on the main barrel.)
+For production, import a real provider from `agentfootprint/providers` and swap it in — `anthropic(...)` / `openai(...)` / `bedrock(...)` / `gemini(...)` / `ollama(...)`. Only the import line changes; the agent code stays the same. (Every provider — `mock` included — lives on the `agentfootprint/providers` subpath, so the main `agentfootprint` barrel stays free of optional peer-dep requires.)
 
 **No cloud account?** `ollama('llama3.2')` from `agentfootprint/providers` runs the same agent against a local model for $0 — the free rung between the mock and the bill. Full recipes: [Ollama](https://agentfootprint.dev/docs/build/ollama/) · [OpenAI-compatible endpoints](https://agentfootprint.dev/docs/build/openai/#openai-compatible-endpoints-ollama-llamacpp-vllm-together-groq-lm-studio).
 

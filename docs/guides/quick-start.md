@@ -217,7 +217,7 @@ Treat the move from `mock()` to a real provider as a deployment milestone, not a
 ## Next Steps
 
 - [Concepts](concepts.md) — the 5-layer taxonomy (2 primitives, 3 compositions, N patterns, context engineering, features)
-- [Patterns](patterns.md) — Regular vs Dynamic ReAct + 4 composition patterns
+- [Patterns](https://agentfootprint.dev/docs/build/patterns/) — Regular vs Dynamic ReAct + 4 composition patterns
 - [Providers](https://agentfootprint.dev/docs/build/tool-providers/) — customize prompts, messages, and tools
 - [Recorders](recorders.md) — deep dive into all recorder types
 - [Adapters](adapters.md) — connect to real LLMs
