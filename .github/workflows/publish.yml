@@ -1,8 +1,13 @@
 name: Release
 
-# THE release. One button — Actions → Release → Run workflow (or
-# `gh workflow run publish.yml -f bump=auto`) — and every step after it is automatic:
+# THE release. It starts itself: every push to main that carries a .changes/
+# fragment (a merged PR that changed src/) releases. It can also be started by
+# hand — Actions → Release → Run workflow, or `gh workflow run publish.yml
+# -f bump=auto` — e.g. to force a minor. Every step after the start is automatic:
 #
+#   plan     is there anything to release? Validates the fragments and pins the
+#            exact commit every later job works on. Zero fragments = the run
+#            ends here, green, having released nothing.
 #   build    prepare the release IN THE TREE (version from .changes/ fragments,
 #            CHANGELOG entry, capability rows, every generated doc), then run
 #            EVERY gate against that exact tree, then stage the npm tarball.
@@ -31,6 +36,11 @@ name: Release
 # release:patch`, which runs scripts/release.sh locally) skips `prepare`/`release`
 # and runs the same gates + publish against the tag.
 on:
+  # Auto-release. The release commit itself is pushed with GITHUB_TOKEN, which
+  # triggers no workflow — so a release can never start another release.
+  push:
+    branches: [main]
+    paths: ['.changes/**']
   workflow_dispatch:
     inputs:
       bump:
@@ -53,20 +63,55 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
-  build:
+  plan:
     runs-on: ubuntu-latest
     outputs:
-      version: ${{ steps.prepare.outputs.version }}
-    env:
-      PREPARE: ${{ github.event_name == 'workflow_dispatch' }}
+      pending: ${{ steps.plan.outputs.pending }}
+      sha: ${{ steps.plan.outputs.sha }}
     steps:
       - name: Releases are cut from main only
-        if: env.PREPARE == 'true' && github.ref != 'refs/heads/main'
+        if: github.event_name != 'release' && github.ref != 'refs/heads/main'
         run: |
           echo "::error::Run the Release workflow on main (got ${{ github.ref }})."
           exit 1
 
+      # The TIP of main, not the commit that triggered this run: runs queue
+      # behind each other (concurrency below), and by the time this one starts
+      # an earlier run may have pushed a release commit that already folded
+      # this push's fragments. Working from the tip means that case finds zero
+      # fragments and ends green, instead of releasing twice or failing a
+      # non-fast-forward push.
       - uses: actions/checkout@v7
+        with:
+          ref: ${{ github.event_name == 'release' && github.ref || 'main' }}
+
+      - id: plan
+        run: |
+          echo "sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+          if [ "${{ github.event_name }}" = "release" ]; then
+            echo "pending=true" >> "$GITHUB_OUTPUT"; exit 0
+          fi
+          node scripts/changes.mjs check
+          count=$(find .changes -maxdepth 1 -name '*.md' ! -name README.md | wc -l)
+          if [ "$count" -gt 0 ] || [ "${{ inputs.bump || 'auto' }}" != "auto" ]; then
+            echo "pending=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "pending=false" >> "$GITHUB_OUTPUT"
+            echo "No .changes/ fragments on main — nothing to release." >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+  build:
+    needs: plan
+    if: needs.plan.outputs.pending == 'true'
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.prepare.outputs.version }}
+    env:
+      PREPARE: ${{ github.event_name != 'release' }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ needs.plan.outputs.sha }}
 
       - uses: actions/setup-node@v6
         with:
@@ -79,7 +124,7 @@ jobs:
       - name: Prepare version + CHANGELOG from .changes/
         id: prepare
         if: env.PREPARE == 'true'
-        run: node scripts/release-prepare.mjs --bump "${{ inputs.bump }}" --notes-out "$RUNNER_TEMP/notes.md"
+        run: node scripts/release-prepare.mjs --bump "${{ inputs.bump || 'auto' }}" --notes-out "$RUNNER_TEMP/notes.md"
 
       - run: npm run build
 
@@ -172,14 +217,17 @@ jobs:
           retention-days: 7
 
   release:
-    needs: build
-    if: github.event_name == 'workflow_dispatch'
+    needs: [plan, build]
+    if: github.event_name != 'release'
     runs-on: ubuntu-latest
     permissions:
       contents: write # commit + tag + GitHub release
       actions: write # start the docs deploy (a push by this token triggers no workflow)
     steps:
+      # The commit the gates judged — the patch applies to exactly this tree.
       - uses: actions/checkout@v7
+        with:
+          ref: ${{ needs.plan.outputs.sha }}
 
       - uses: actions/download-artifact@v8
         with:
@@ -195,9 +243,11 @@ jobs:
           git commit -m "chore: release v$VERSION"
           git tag "v$VERSION"
           # Fast-forward only. If main moved while the gates ran, this refuses —
-          # the new commits were never gated. Re-run the workflow.
+          # the new commits were never gated. Nothing is lost: a push that
+          # moved main with a fragment has queued its own run, which releases
+          # from the new tip. A push without one: run the workflow by hand.
           if ! git push origin "HEAD:refs/heads/main"; then
-            echo "::error::main moved while the release was being verified. Nothing was tagged or published — run the Release workflow again."
+            echo "::error::main moved while the release was being verified. Nothing was tagged or published — the queued run (or a manual one) releases from the new tip."
             exit 1
           fi
           git push origin "v$VERSION"
