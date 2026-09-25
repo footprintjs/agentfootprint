@@ -527,6 +527,36 @@ export interface McpHttpServeTransport {
   readonly host?: string;
   /** URL path the MCP endpoint answers on. Default `'/mcp'`. */
   readonly path?: string;
+  /**
+   * The page origins allowed to reach this endpoint from a browser — the
+   * hosting door guard's own rule (`CrossSiteOptions.allowedOrigins`).
+   *
+   * The transport specification requires it: servers "MUST validate the
+   * `Origin` header on all incoming connections to prevent DNS rebinding
+   * attacks". A request whose `Origin` is not allowed — `null` included — or
+   * that the browser marked `Sec-Fetch-Site: cross-site` without a listed
+   * origin is refused with 403 before any tool runs. A request with no `Origin`
+   * is a native client or a server and is served as before.
+   *
+   * Unset: a browser page may reach it only from this endpoint's own host —
+   * which a DNS-rebinding page also satisfies, so set `allowedHosts` too.
+   * `'any'` turns the check off.
+   */
+  readonly allowedOrigins?: readonly string[] | 'any';
+  /**
+   * The names this endpoint answers for — `['tools.corp.example']`. Any other
+   * `Host` is refused with 421 before any tool runs: the DNS-rebinding
+   * defence. Unset on a LOOPBACK `host` (`127.0.0.1`, `::1`, `localhost`):
+   * the loopback names only, silently — such a socket has no other name.
+   * Unset on any other bind (including the all-interfaces default): every Host
+   * is served and ONE warning at start names this option. `'any'` serves every
+   * Host on purpose and prints nothing.
+   *
+   * The hosting guard's JSON rule applies too: a POST that does not say
+   * `content-type: application/json` is refused with 415 by this library,
+   * whatever the installed SDK version would have done.
+   */
+  readonly allowedHosts?: readonly string[] | 'any';
 }
 
 export type McpServeTransport = McpStdioServeTransport | McpHttpServeTransport;

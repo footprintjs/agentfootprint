@@ -934,6 +934,187 @@ export class WireRequestRefusal extends Error {
   }
 }
 
+// ─── The door guard ──────────────────────────────────────────────────
+//
+// Four refusals the HOST makes before any handler sees a request — see
+// `doorGuard.ts` for the rules and `docs/design/2026-09-door-hardening.md` for
+// the threat. Each carries its own HTTP `status`, because the conversation door
+// answers a pre-101 socket by hand and an application route calling the same
+// guard answers with its own response writer; a status only `httpHost` could
+// look up would leave both of them guessing.
+//
+// **None of them ever repeats what the caller sent.** Not the content type,
+// not the Origin, not the Host, not one character of a session id — the
+// refusal names the rule and the option that changes it, nothing else. A
+// session id in a refusal is a session id in every log line and trace span the
+// refusal reaches, which is the exposure the fourth one exists to close.
+
+/**
+ * A request that changes something did not say `content-type: application/json`.
+ *
+ * The door is a JSON API, and that is only half the reason. The other half is
+ * the web: a page on ANY site can make a browser send `text/plain`,
+ * `application/x-www-form-urlencoded` or `multipart/form-data` — or no content
+ * type at all — without asking the server first (a CORS "simple" request). A
+ * browser must ask first (a preflight, which this host never approves) before
+ * it sends `application/json` across origins. Requiring it is what turns a
+ * forged request into one the browser refuses to send.
+ */
+export class UnsupportedMediaTypeError extends Error {
+  readonly code = 'ERR_UNSUPPORTED_MEDIA_TYPE' as const;
+  /** 415 Unsupported Media Type. */
+  readonly status = 415 as const;
+
+  constructor(hostName: string) {
+    super(
+      `[hosting] the '${hostName}' host takes JSON: a request that changes anything must say ` +
+        `content-type: application/json. Other content types are refused because a web page on ` +
+        `any site can make a browser send them without asking first — this is the cross-site ` +
+        `request defence, not a parser preference. Send the header; an integration that ` +
+        `genuinely cannot is named on the host with requireJsonContentType: false.`,
+    );
+    this.name = 'UnsupportedMediaTypeError';
+  }
+}
+
+/**
+ * Which browser fact refused an {@link OriginNotAllowedError}.
+ *
+ *  - `'same-host'` — `allowedOrigins` is unset and the page's Origin is not
+ *    this door's own name.
+ *  - `'listed'` — the page's Origin is not in `allowedOrigins`.
+ *  - `'fetch-metadata'` — the browser marked the request `Sec-Fetch-Site:
+ *    cross-site` and its Origin is not one `allowedOrigins` lists. This is the
+ *    one that still fires when a proxy strips `Origin` but forwards the Fetch
+ *    metadata beside it.
+ */
+export type OriginRefusalRule = 'same-host' | 'listed' | 'fetch-metadata';
+
+/**
+ * A browser request came from a page whose origin this door does not allow —
+ * or from an opaque origin (`Origin: null`), which any sandboxed frame on any
+ * site can produce and which is therefore never allowed — or the browser said
+ * outright that it was sent cross-site.
+ *
+ * Only BROWSERS send `Origin` (on every request that changes something, and on
+ * every WebSocket handshake), so a request without one is a script or a
+ * server — unless the same request carries the browser's own `Sec-Fetch-Site:
+ * cross-site`, which is how a stripped `Origin` still gets caught.
+ */
+export class OriginNotAllowedError extends Error {
+  readonly code = 'ERR_ORIGIN_NOT_ALLOWED' as const;
+  /** 403 Forbidden. */
+  readonly status = 403 as const;
+  /** Which browser fact refused it. */
+  readonly rule: OriginRefusalRule;
+
+  constructor(hostName: string, rule: OriginRefusalRule) {
+    super(
+      `[hosting] the '${hostName}' host refuses a request sent by a web page from an origin it ` +
+        `does not allow. ` +
+        (rule === 'listed'
+          ? `Only the origins listed in allowedOrigins may drive it from a browser — add the ` +
+            `page's origin there if it should.`
+          : rule === 'same-host'
+          ? `With allowedOrigins unset, a page may drive it only from this host's own name ` +
+            `(the request's Host, or X-Forwarded-Host from a proxy). Serve the page from this ` +
+            `host, or list its origin in allowedOrigins.`
+          : `The browser marked it cross-site (Sec-Fetch-Site) and its Origin is not one ` +
+            `allowedOrigins lists. If this is your own page, a reverse proxy in front of this ` +
+            `host is stripping or rewriting headers: it must forward Origin and Sec-Fetch-* ` +
+            `unchanged. Otherwise list the page's origin in allowedOrigins.`),
+    );
+    this.name = 'OriginNotAllowedError';
+    this.rule = rule;
+  }
+}
+
+/**
+ * A request named a Host this door was not configured to answer for.
+ *
+ * The DNS-rebinding defence: a page on an attacker's domain re-points its OWN
+ * name at this server's address, and from then on the browser treats it as
+ * same-origin with the door — so every other check passes, and the Host header
+ * (which no page can set) is the one fact that still names the attacker.
+ * 421 is the status HTTP defines for exactly this (RFC 9110 §15.5.20: a target
+ * "that does not match an origin for which the server has been configured").
+ */
+export class HostNotAllowedError extends Error {
+  readonly code = 'ERR_HOST_NOT_ALLOWED' as const;
+  /** 421 Misdirected Request. */
+  readonly status = 421 as const;
+  /**
+   * Where the list came from: `'listed'` — the deployment's own
+   * `allowedHosts`; `'loopback-default'` — nobody set one, and the door is
+   * bound to a loopback address, so it answers the loopback names only.
+   */
+  readonly rule: 'listed' | 'loopback-default';
+
+  constructor(hostName: string, rule: 'listed' | 'loopback-default' = 'listed') {
+    super(
+      rule === 'loopback-default'
+        ? `[hosting] the '${hostName}' host is bound to a loopback address, so with allowedHosts ` +
+            `unset it answers only localhost, 127.0.0.1 and [::1] — the defence against a page ` +
+            `on another domain re-pointing its own name at this machine (DNS rebinding). Behind ` +
+            `a reverse proxy that forwards the public name in Host (nginx ` +
+            `proxy_set_header Host $host), list that name in allowedHosts.`
+        : `[hosting] the '${hostName}' host is not configured to answer for the name this ` +
+            `request was sent to. It answers only the names in allowedHosts — the defence ` +
+            `against a page on another domain re-pointing its own name at this server (DNS ` +
+            `rebinding). Reach it by one of its configured names, or add this one to ` +
+            `allowedHosts.`,
+    );
+    this.name = 'HostNotAllowedError';
+    this.rule = rule;
+  }
+}
+
+/**
+ * A session id the door will not carry: empty, longer than the ceiling, or
+ * holding anything but visible ASCII (0x21–0x7E).
+ *
+ * A session id is caller data that travels everywhere the conversation does —
+ * the store's key, every log line, every exported trace span of every turn.
+ * Unbounded, one caller with no credentials could make every span of a turn
+ * carry megabytes; with a control, a line separator or a bidi override, it
+ * could forge or disguise a line in any log that prints it; with non-ASCII,
+ * the same id read from a header (latin1) and from a body (UTF-8) would be two
+ * different conversations. So it is bounded at the door, before any of that
+ * happens. The refusal says how long the id was, never what it said.
+ */
+export class InvalidSessionIdError extends Error {
+  readonly code = 'ERR_INVALID_SESSION_ID' as const;
+  /** 400 Bad Request — the caller can send a valid id and continue. */
+  readonly status = 400 as const;
+  /** Which rule the id broke. Never the id. */
+  readonly reason: 'empty' | 'too-long' | 'invalid-character';
+
+  constructor(
+    reason: 'empty' | 'too-long' | 'invalid-character',
+    hostName: string,
+    length: number,
+    limit: number,
+  ) {
+    super(
+      reason === 'too-long'
+        ? `[hosting] the '${hostName}' host refuses a session id of ${String(length)} ` +
+            `characters; the ceiling is ${String(limit)}. A session id travels into every ` +
+            `stored row, log line and trace span of the conversation, so it is bounded at the ` +
+            `door. Send a shorter one — a UUID is 36.`
+        : reason === 'empty'
+        ? `[hosting] the '${hostName}' host refuses an empty session id: every caller that ` +
+          `sent one would share a single conversation. Send an id, or leave the field out ` +
+          `to have no session.`
+        : `[hosting] the '${hostName}' host refuses a session id containing a character ` +
+          `outside visible ASCII (0x21–0x7E). A session id is printed wherever the ` +
+          `conversation is logged and read from headers and bodies alike, so it is limited ` +
+          `to characters every one of them spells the same way — a UUID fits.`,
+    );
+    this.name = 'InvalidSessionIdError';
+    this.reason = reason;
+  }
+}
+
 export function requireCapability(
   host: AgentHost | ConversationHost,
   capability: HostCapability,

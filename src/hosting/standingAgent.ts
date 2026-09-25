@@ -136,7 +136,7 @@ import {
 } from './errors.js';
 import { verifyRequestIdentity, type VerifiedIdentity } from './identityVerification.js';
 import { spendKeyFor, spendLedger, type SpendLedger } from './admission.js';
-import { beginIngress, type IngressNote } from './ingressRecord.js';
+import { beginIngress, recordHostRefusal, type IngressNote } from './ingressRecord.js';
 import { openTurnArtifacts } from './turnArtifacts.js';
 import type { SessionWireRequest, SessionWireResult } from './sessionWire.js';
 import { SESSION_LIST_OP, SESSION_TRANSCRIPT_OP } from './sessionWire.js';
@@ -1391,7 +1391,22 @@ export async function standingAgent<TH extends HostHandle>(
     reply.complete(typeof output === 'string' ? output : String(output));
   }
 
-  const handle = await host.serve(handler);
+  // The HOST's own refusals — a forged request its door guard turned away, a
+  // session id over the bound — never reach `handler`, so they would never
+  // reach the record either. Subscribed only when a sink is set (the zero-delta
+  // path stays zero), and only on a host that reports them (feature-detected).
+  // Before `serve`, so a refusal in the first instant of serving is not lost.
+  const stopHostRefusals =
+    ingressSink !== undefined && typeof host.onRefusal === 'function'
+      ? host.onRefusal((refusal) => recordHostRefusal(refusal, ingressSink))
+      : undefined;
+  let handle: HostHandle;
+  try {
+    handle = await host.serve(handler);
+  } catch (err) {
+    stopHostRefusals?.();
+    throw err;
+  }
 
   // ── Shutdown ────────────────────────────────────────────────────────
   //
@@ -1420,6 +1435,7 @@ export async function standingAgent<TH extends HostHandle>(
   function closeOnce(): Promise<void> {
     closing ??= (async () => {
       await handle.close();
+      stopHostRefusals?.();
       if (shared !== undefined) {
         shared.detach();
         if (shutdownMode !== 'none') {

@@ -12,9 +12,64 @@ me, outlive the request — plus local adapters that prove the ports work.
 Admission, ownership and retention are decided once, here, so no store can get
 them slightly differently. Deliberately vendor-neutral — a test greps for it.
 
+## The door guard (`doorGuard.ts`)
+Every door `httpHost` serves checks a request before any handler sees it, with
+or without an identity verifier. Being able to reach the port is not
+permission: every browser inside the network can be steered by any page it
+opens.
+
+- A request that changes something (any method but GET/HEAD/OPTIONS) must say
+  `content-type: application/json`, or it is refused with 415. A page on any
+  site can make a browser send `text/plain`, a form, or no content type without
+  a preflight; it cannot send JSON across origins without one, and this host
+  never approves a preflight. The refused body is never parsed. If it is small
+  (at most 1 MiB, within 2 s) it is drained first, so the sender reads the 415
+  instead of a connection reset. `Expect: 100-continue` gets the 415, never a
+  100.
+- A browser `Origin` the door does not allow is refused with 403, on requests
+  and on WebSocket handshakes. `Origin: null` is always refused. Unset
+  `allowedOrigins` means "this door's own host" (`Host` or `X-Forwarded-Host`).
+  A request the browser marked `Sec-Fetch-Site: cross-site` is refused unless
+  its Origin is listed, and so is a WebSocket handshake with `Sec-Fetch-Site`
+  but no `Origin`. A proxy must forward `Origin` and `Sec-Fetch-*` unchanged.
+- With `allowedHosts`, a `Host` the door was not configured for is refused with
+  421: the DNS-rebinding defence the default Origin rule cannot give (under
+  rebinding the page's Origin and the request's Host both carry the attacker's
+  name). Only the `Host` header counts, never `X-Forwarded-Host`. On a loopback
+  bind, unset means `localhost`, `127.0.0.1` and `[::1]`, so a same-box reverse
+  proxy that forwards the public name in `Host` must list that name (the 421
+  says so). On any other bind, unset means one warning at boot. Health probes
+  are never judged.
+- A session id must be 1 to `MAX_SESSION_ID_LENGTH` (400) characters of
+  visible ASCII (`!` to `~`), or it is refused with 400 at both doors, whichever
+  field the dialect read it from. `nodeHost` caps a body at 1 MiB by default,
+  so the check never waits on an unbounded read.
+- Every refusal names the rule, never the value, and is recorded in the ingress
+  record through the host's `onRefusal`.
+
+```ts
+nodeHost({ port: 8080, allowedHosts: ['neo.corp.example'] });
+
+// An application route beside the door (on `onUnhandled`) keeps the same rule:
+const guard = doorGuard({ name: 'sign-in', allowedHosts: ['neo.corp.example'] });
+const refusal = guard.check(req); // IncomingMessage works as-is
+if (refusal) return reply(refusal.status, { error: refusal.message, code: refusal.code });
+```
+
+The library never redirects a short host name to a canonical one. List every
+name the door answers to in `allowedHosts`; redirecting belongs to the proxy or
+the application. The hosted-runtime adapters (`agentCoreRuntimeHost`,
+`agentCoreA2AHost`, `foundryResponsesHost`) leave the browser rules off unless
+you set them, on a non-loopback bind: a platform's front door, which demands its
+own credential, is the only way to their port. They print one line at boot when
+the rules are off. On a loopback bind (a laptop) they keep every default. The
+session-id bound applies to them too. See
+`docs/design/2026-09-door-hardening.md`.
+
 ## Files
 - `types.ts` — the three ports.
 - `httpHost.ts`, `nodeHost.ts`, `standingAgent.ts` — the hosts.
+- `doorGuard.ts` — what a request has to be before any handler sees it.
 - `admission.ts` — refuse before it costs anything.
 - `ingressRecord.ts` — what the door decided for requests that never ran.
 - `turnArtifacts.ts` — the artifact hand-over a turn gives its host, and its

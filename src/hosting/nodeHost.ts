@@ -52,6 +52,7 @@
  */
 
 import { artifactWireBody, readArtifactWireOp } from './artifactWire.js';
+import type { CrossSiteOptions } from './doorGuard.js';
 import { readSessionWireOp, sessionWireBody } from './sessionWire.js';
 import {
   headerValue,
@@ -62,8 +63,21 @@ import {
 } from './httpHost.js';
 import type { ConversationLimits } from './types.js';
 
-/** Options for {@link nodeHost}. */
-export interface NodeHostOptions {
+/**
+ * Options for {@link nodeHost}.
+ *
+ * The three cross-site fields — `allowedOrigins`, `allowedHosts`,
+ * `requireJsonContentType` — are `httpHost`'s own door guard, on both of this
+ * adapter's doors, with the safe defaults: a request that changes something
+ * must say it is JSON, a browser may drive the door only from its own host,
+ * and with `allowedHosts` unset the host says once at boot that it answers any
+ * name. Behind a proxy, list every name the door is reached by — the library
+ * never redirects a short name to a canonical one; that is the proxy's job.
+ *
+ * @example  A door on a company network, reached by one name
+ *   nodeHost({ port: 8080, allowedHosts: ['neo.corp.example'] });
+ */
+export interface NodeHostOptions extends CrossSiteOptions {
   /** Port to bind. Default `8080`. Pass `0` for an ephemeral port. Refused alongside `server`. */
   readonly port?: number;
   /** Interface to bind. Default `'0.0.0.0'`. Refused alongside `server`. */
@@ -150,7 +164,24 @@ export interface NodeHostOptions {
    * is behind TLS.
    */
   readonly sessionCookie?: string;
+  /**
+   * Ceiling on a request body, in bytes. Default {@link DEFAULT_NODE_MAX_BODY_BYTES}
+   * (one mebibyte) — the same number the hosted-runtime adapters default to.
+   *
+   * `httpHost` itself keeps no default (a number chosen there would be
+   * inherited by every adapter built on it); this adapter chooses one, because
+   * without it a caller with no credentials could make the door buffer and
+   * parse a body of any size before a single rule about it — the session-id
+   * bound included — could say no. A body over the line is refused with
+   * `ERR_REQUEST_TOO_LARGE` (413) at the byte that crossed it. One mebibyte is
+   * about a quarter of a million tokens of input, more than any context window
+   * serves in one message; raise it if this deployment genuinely carries more.
+   */
+  readonly maxBodyBytes?: number;
 }
+
+/** {@link NodeHostOptions.maxBodyBytes}'s default: one mebibyte. */
+export const DEFAULT_NODE_MAX_BODY_BYTES = 1_048_576;
 
 /**
  * What {@link nodeHost}'s `serve()` resolves to — a `HostHandle` that also
@@ -381,5 +412,13 @@ export function nodeHost(options: NodeHostOptions = {}): NodeHost {
     // this hook is refused BY NAME rather than dropped, so a caller who asked
     // for both learns which one this host cannot honour.
     ...(options.onUnhandled !== undefined && { onUnhandled: options.onUnhandled }),
+    maxBodyBytes: options.maxBodyBytes ?? DEFAULT_NODE_MAX_BODY_BYTES,
+    // The door guard's three rules, as given — unset keeps `httpHost`'s safe
+    // defaults, which is the whole point of not restating them here.
+    ...(options.allowedOrigins !== undefined && { allowedOrigins: options.allowedOrigins }),
+    ...(options.allowedHosts !== undefined && { allowedHosts: options.allowedHosts }),
+    ...(options.requireJsonContentType !== undefined && {
+      requireJsonContentType: options.requireJsonContentType,
+    }),
   });
 }

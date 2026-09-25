@@ -95,6 +95,11 @@ export interface HostRequest {
    * anyone who can reach the host can put any string here, including someone
    * else's. Authenticate the caller by your own means, then check that the
    * authenticated principal is allowed this session, before you serve it.
+   *
+   * Bounded at every door the library ships: an id longer than
+   * `MAX_SESSION_ID_LENGTH` or holding a control character is refused before
+   * any handler sees the request, because it travels into every stored row,
+   * log line and trace span of the conversation.
    */
   readonly sessionId?: string;
   /**
@@ -382,6 +387,34 @@ export interface HostHandle {
 }
 
 /**
+ * A request the HOST refused before any handler saw it — the door guard's
+ * decision about a caller: a cross-site shape, a Host this door does not answer
+ * for, a session id it will not carry.
+ *
+ * Only decisions travel here. A body that is merely malformed (unparseable
+ * JSON, an unknown wire op, a body over the ceiling) is a broken request, not a
+ * decision about who is knocking, and stays the transport's own 4xx.
+ *
+ * Carries the refusal's class and the fact of a credential — never a header,
+ * never the credential, never the session id. It is what
+ * {@link AgentHost.onRefusal} hands a listener, and a listener is free to log
+ * all of it.
+ */
+export interface HostRefusal {
+  /**
+   * Which door refused: `'request'` — the one-exchange door, refused before
+   * the body was read or before the handler was called (which of the
+   * composer's turn / session-op / artifact doors it was headed for is not
+   * recorded) — or `'conversation'`, an upgrade refused before the 101.
+   */
+  readonly door: 'request' | 'conversation';
+  /** The named refusal the caller was answered with. Its `code` is stable. */
+  readonly error: Error & { readonly code: string };
+  /** Whether an `authorization: Bearer …` credential was PRESENT. Never its value. */
+  readonly bearerPresent: boolean;
+}
+
+/**
  * The port: something that can carry requests to one handler and carry its
  * replies back.
  */
@@ -395,6 +428,20 @@ export interface AgentHost {
   readonly capabilities: readonly HostCapability[];
   /** Start serving. Resolves once the host is actually live. */
   serve(handler: HostHandler): Promise<HostHandle>;
+  /**
+   * Hear about every request this host refuses BEFORE a handler sees it — on
+   * any of its doors, the conversation door included. Returns the way to stop
+   * listening.
+   *
+   * Optional, and feature-detected: a host that refuses nothing on its own
+   * has nothing to report. Every host built on `httpHost` has it, and
+   * `standingAgent` subscribes whenever `onIngressDecision` is set — which is
+   * how a forged request the host turned away still lands in the ingress
+   * record, though no run, no handler and no verifier ever saw it.
+   *
+   * A listener that throws is contained: the refusal is still answered.
+   */
+  onRefusal?(listener: (refusal: HostRefusal) => void): Unsubscribe;
 }
 
 // ─── The conversation port ───────────────────────────────────────────
@@ -1236,10 +1283,17 @@ export interface StandingAgentBaseOptions<TH extends HostHandle = HostHandle> {
    * header, never a claim set, never an error's message. See
    * {@link IngressRecord} for the field-by-field contract and for the one thing
    * it deliberately does not cover (a body the transport's own wire grammar
-   * refused before this composer ever saw it).
+   * refused as malformed before this composer ever saw it).
    *
-   * Unset — the default — nothing is built, nothing is wrapped, and the reply
-   * the handler uses is the host's own object, to the byte.
+   * The HOST's own refusals are on it too: set this, and the composer
+   * subscribes to the host's `onRefusal`, so a forged request the door guard
+   * turned away, or a session id over the bound, is recorded
+   * (`'cross-site-refused'` / `'refused'`, door `'request'` or
+   * `'conversation'`) though no handler ever saw it.
+   *
+   * Unset — the default — nothing is built, nothing is wrapped, nothing is
+   * subscribed, and the reply the handler uses is the host's own object, to the
+   * byte.
    *
    * @example
    *   onIngressDecision: (record) => {

@@ -12,6 +12,19 @@ A tool is two things at once — execution and declaration — and both must sur
 the wire (`toolExtras.ts`). A refusal here names WHY, because "install it" is
 only one of the reasons a connection fails.
 
+`mcpServe` over HTTP runs the hosting door guard (`src/hosting/doorGuard.ts`)
+before any tool runs. A browser `Origin` it does not allow gets 403. A POST that
+does not say `content-type: application/json` gets 415 from this library, not
+from whichever SDK version is installed. A `Host` it was not configured for gets
+421, which is the DNS-rebinding defence the MCP transport spec requires. On a
+loopback `host` with `allowedHosts` unset, only the loopback names are answered.
+
+```ts
+await mcpServe(tools, {
+  transport: { transport: 'http', port: 8931, allowedHosts: ['tools.corp.example'] },
+});
+```
+
 ## Files
 - `mcpClient.ts`, `mockMcpClient.ts` — inbound.
 - `mcpServe.ts` — outbound.

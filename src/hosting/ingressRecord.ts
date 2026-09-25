@@ -55,12 +55,22 @@
  *     concurrent-run refusal, an artifact ref that did not resolve;
  *   - and a request that was SERVED.
  *
+ * The HOST's own decisions land here too, though no handler ever saw them: a
+ * request its door guard turned away (a content type any page can send, a
+ * foreign Origin, a Host it was not configured for — `'cross-site-refused'`)
+ * and a session id over the bound (`'refused'`), at the request door and the
+ * conversation door alike. They arrive through the host's `onRefusal`, which
+ * the composer subscribes to whenever a sink is set, and they carry the same
+ * classes and nothing more — door `'request'` or `'conversation'`, because a
+ * forged request is refused before its body says which of the three doors it
+ * wanted.
+ *
  * What it does not carry, stated rather than implied: a body the TRANSPORT
- * refused before the composer ever saw it — unparseable JSON, or an `op` this
- * host's wire grammar does not speak (`InvalidWireOpError`, answered 400 by
- * `httpHost` inside its own request reader). That is a malformed request rather
- * than a decision about a caller, and the composer does not claim it. Your HTTP
- * access log has it.
+ * refused as MALFORMED — unparseable JSON, a body over `maxBodyBytes`, or an
+ * `op` this host's wire grammar does not speak (`InvalidWireOpError`, answered
+ * 400 by `httpHost` inside its own request reader). That is a broken request
+ * rather than a decision about a caller, and the composer does not claim it.
+ * Your HTTP access log has it.
  *
  * Pattern: Observer at a composition boundary. Zero-cost when unset — with no
  * sink configured nothing is built, nothing is wrapped, and the reply object the
@@ -70,18 +80,33 @@
 import { bearerToken, type VerifiedIdentity } from './identityVerification.js';
 import {
   AdmissionRefusedError,
+  HostNotAllowedError,
   IdentityNotVerifiedError,
+  OriginNotAllowedError,
   SessionNotFoundError,
+  UnsupportedMediaTypeError,
   VerifierUnavailableError,
   type IdentityFailureClass,
 } from './errors.js';
 import { ARTIFACT_GET_OP, ARTIFACT_HEAD_OP } from './artifactWire.js';
 import { SESSION_LIST_OP, SESSION_TRANSCRIPT_OP, SESSION_PENDING_OP } from './sessionWire.js';
 import type { ArtifactHandOverFailedPayload } from '../events/payloads.js';
-import type { HostReply, HostRequest, TurnArtifacts } from './types.js';
+import type { HostRefusal, HostReply, HostRequest, TurnArtifacts } from './types.js';
 
-/** Which of the composer's three doors this request knocked at. */
-export type IngressDoor = 'turn' | 'session-op' | 'artifact';
+/**
+ * Which door this request knocked at.
+ *
+ *  - `'turn'`, `'session-op'`, `'artifact'` — the composer's three doors, for
+ *    every request the host handed on.
+ *  - `'request'` — the host's one-exchange door, for a request the HOST refused
+ *    before the composer saw it (the door guard; the session-id bound). Which
+ *    of the three it was headed for is deliberately not recorded: a forged
+ *    request is refused on its headers, and its body is never parsed.
+ *  - `'conversation'` — a conversation upgrade the host refused before the 101.
+ *    Recorded here because it is the same host's door and the same census,
+ *    though the composer itself never serves conversations.
+ */
+export type IngressDoor = 'turn' | 'session-op' | 'artifact' | 'request' | 'conversation';
 
 /**
  * How the door answered — coarse on purpose, because this is the field a
@@ -107,9 +132,16 @@ export type IngressDoor = 'turn' | 'session-op' | 'artifact';
  *  - `'admission-refused'` — 429. A policy said no before any work started.
  *  - `'session-refused'` — the one indistinguishable not-found: a session that
  *    does not exist, belongs to somebody else, or names no owner.
+ *  - `'cross-site-refused'` — the host's door guard turned it away before any
+ *    handler saw it: a content type a page on any site can send (415), a
+ *    browser Origin this door does not allow (403), a Host it was not
+ *    configured for (421). `errorCode` says which. Not proof of an attack — a
+ *    script that forgot `content-type: application/json` lands here too — but
+ *    the shape every forged request has, counted where it can be seen.
  *  - `'refused'` — every other refusal the door made by name (a session op with
  *    no verifier configured, a store with no owner index, a concurrent run, an
- *    artifact ref that did not resolve, a pause the wire could not carry).
+ *    artifact ref that did not resolve, a pause the wire could not carry, a
+ *    session id over the ceiling).
  *  - `'failed'` — the request ended in an error that is not one of the door's
  *    own refusals. Usually the run, the store or the provider — which is why
  *    an admitted request that then broke lands HERE and not in `'served'`.
@@ -120,6 +152,7 @@ export type IngressOutcome =
   | 'verifier-unavailable'
   | 'admission-refused'
   | 'session-refused'
+  | 'cross-site-refused'
   | 'refused'
   | 'failed';
 
@@ -216,6 +249,13 @@ function classify(err: unknown): {
   if (err instanceof SessionNotFoundError) {
     return { outcome: 'session-refused', errorCode: err.code, errorName: err.name };
   }
+  if (
+    err instanceof UnsupportedMediaTypeError ||
+    err instanceof OriginNotAllowedError ||
+    err instanceof HostNotAllowedError
+  ) {
+    return { outcome: 'cross-site-refused', errorCode: err.code, errorName: err.name };
+  }
   const code = (err as { code?: unknown } | undefined)?.code;
   const name = (err as { name?: unknown } | undefined)?.name;
   // A hosting refusal names itself with an `ERR_…` code. Anything else is a
@@ -301,6 +341,34 @@ function warnSink(err: unknown): void {
       `door's ingress decisions are not being recorded. Reported once per process. Cause: ` +
       `${(err as { name?: string } | undefined)?.name ?? 'unknown'}`,
   );
+}
+
+/**
+ * File the record for a request the HOST refused before the composer saw it —
+ * what `standingAgent` hands to the host's `onRefusal` when a sink is set.
+ *
+ * Built from the refusal's class and the fact of a credential, exactly as a
+ * composer refusal is: no message, no header, no session id (a session id the
+ * bound refused is the one thing this record must never carry), no user —
+ * nothing was verified, because nothing got that far.
+ *
+ * @internal — the option is public, this bookkeeping is not.
+ */
+export function recordHostRefusal(refusal: HostRefusal, sink: IngressSink): void {
+  const detail = classify(refusal.error);
+  const record: IngressRecord = {
+    at: Date.now(),
+    door: refusal.door,
+    outcome: detail.outcome,
+    ...(detail.errorCode !== undefined && { errorCode: detail.errorCode }),
+    ...(detail.errorName !== undefined && { errorName: detail.errorName }),
+    bearerPresent: refusal.bearerPresent,
+  };
+  try {
+    sink(record);
+  } catch (sinkErr) {
+    warnSink(sinkErr);
+  }
 }
 
 /**

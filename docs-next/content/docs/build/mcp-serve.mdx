@@ -166,6 +166,45 @@ exported for the same reason `McpSdkClient` is, so a test can inject one.
 apps that never serve pay nothing. Missing, you get an install hint rather than a
 stack trace.
 
+### Origin and Host on the HTTP transport
+
+The MCP transport specification says servers "MUST validate the `Origin` header
+on all incoming connections to prevent DNS rebinding attacks". The HTTP
+transport now does, with the same door guard the
+[hosting doors](doc:hosting-and-runtime) use, before any tool runs:
+
+```ts
+await mcpServe(tools, {
+  transport: {
+    transport: 'http',
+    port: 8931,
+    allowedHosts: ['tools.corp.example'],        // every name clients use to reach it
+    // allowedOrigins: ['https://app.corp.example'], // only for a browser page on another origin
+  },
+});
+```
+
+- A browser `Origin` that is not allowed (including `null`) gets 403. So does a
+  request the browser marked `Sec-Fetch-Site: cross-site` whose Origin is not
+  listed. Unset, `allowedOrigins` allows a page on the endpoint's own host only.
+  `'any'` turns the check off.
+- A `Host` the endpoint was not configured for gets 421. That is the
+  DNS-rebinding defence: a rebinding page's Origin and Host both carry the
+  attacker's name, so only a Host list can tell. On a loopback `host`
+  (`127.0.0.1`, `::1`, `localhost`) with `allowedHosts` unset, the endpoint
+  answers `localhost`, `127.0.0.1` and `[::1]` only, as the SDK's own
+  `createMcpExpressApp` does. On any other bind, unset, the server prints one
+  warning when it starts.
+- A POST that does not say `content-type: application/json` gets 415 from this
+  library, whatever SDK version is installed (the SDK is a peer at any version,
+  and older ones matched the type as a substring).
+- A native client (the SDK's own, an IDE, a desktop host) sends no `Origin` and
+  is served as before.
+
+Refusals use the SDK's JSON-RPC error shape (`error.data.code` is
+`ERR_ORIGIN_NOT_ALLOWED`, `ERR_HOST_NOT_ALLOWED` or `ERR_UNSUPPORTED_MEDIA_TYPE`),
+and they never repeat what the caller sent.
+
 <Callout type="info" title="The MCP endpoint is not a container contract — settled by a test">
 The streamable-HTTP transport serves MCP, statelessly, on the path and port you
 choose, and **nothing else**: it answers neither of the routes the managed

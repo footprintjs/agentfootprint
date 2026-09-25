@@ -49,6 +49,7 @@
 
 import type { IncomingMessage, Server, ServerResponse } from 'node:http';
 
+import { platformFrontedDoor, type CrossSiteOptions } from '../../hosting/doorGuard.js';
 import { httpHost, type HttpHost } from '../../hosting/httpHost.js';
 import { responsesWire } from './responsesWire.js';
 
@@ -80,7 +81,20 @@ export const FOUNDRY_SESSION_FIELDS: readonly string[] = [
  */
 const DEFAULT_MAX_BODY_BYTES = 1_048_576;
 
-export interface FoundryResponsesHostOptions {
+/**
+ * Options for {@link foundryResponsesHost}.
+ *
+ * The three cross-site fields are the door guard every `httpHost` keeps, with
+ * this adapter's defaults INVERTED — off unless set: the platform's front door
+ * is the only way to this port and demands a credential no web page holds, so
+ * the browser rules would protect nothing here, and a local inspector talking
+ * to the container is not something this library should start refusing (see
+ * `platformFrontedDoor` in `src/hosting/doorGuard.ts`). Set any of them to
+ * enforce it. On a LOOPBACK `hostname` every plain-host default applies
+ * instead; with the rules off the host says so once at boot. The session-id
+ * bound applies regardless.
+ */
+export interface FoundryResponsesHostOptions extends CrossSiteOptions {
   /** Port to bind. Default {@link DEFAULT_FOUNDRY_PORT}. Pass `0` for an ephemeral test port. */
   readonly port?: number;
   /** Interface to bind. Default `'0.0.0.0'` — a container's door has to be reachable from outside it. */
@@ -129,6 +143,10 @@ export function foundryResponsesHost(options: FoundryResponsesHostOptions = {}):
     // The Inspector asks whether the door is there before it uses it.
     invokeHeadProbe: true,
     maxBodyBytes: options.maxBodyBytes ?? DEFAULT_MAX_BODY_BYTES,
+    // The platform fronts this port: browser rules off unless the deployment
+    // sets them (see the options' doc) — except on a LOOPBACK bind, which no
+    // platform fronts, where every plain-host default applies.
+    ...platformFrontedDoor(options, server === undefined ? hostname : undefined),
     ...socket,
   });
 }

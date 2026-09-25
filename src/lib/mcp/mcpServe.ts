@@ -78,6 +78,7 @@ import type {
   McpServeOptions,
   McpServeTransport,
 } from './types.js';
+import { doorGuard, warnAllowedHostsUnset } from '../../hosting/doorGuard.js';
 import { lazyRequire } from '../lazyRequire.js';
 import { sdkLoadFailure } from './sdkLoadFailure.js';
 import { MCP_TOOL_EXTRAS_KEY, toolExtrasOf } from './toolExtras.js';
@@ -596,7 +597,7 @@ async function connectTransport(
   // HTTP deliberately does not use `sdk`: it mints a server per request
   // (see connectHttp). The root server stays unconnected, which makes the
   // handle's `sdk.close()` a harmless no-op on this path.
-  return connectHttp(transport, newServer);
+  return connectHttp(transport, newServer, opts.name ?? DEFAULT_SERVER_NAME);
 }
 
 /**
@@ -618,7 +619,26 @@ async function connectTransport(
 async function connectHttp(
   transport: McpHttpServeTransport,
   newServer: () => Promise<McpSdkServer>,
+  serverName: string,
 ): Promise<Connection> {
+  // The hosting door guard, built before the SDK is even loaded so a
+  // configuration it could only misread is refused by name first. All three
+  // rules are the LIBRARY's, the JSON content type included: the SDK is a peer
+  // at any version, and an older one matched `application/json` as a
+  // substring, so leaving that rule to it would make its owner a version this
+  // package does not pin. (The SDK's own 415 is then simply unreachable.)
+  //
+  // A loopback bind with `allowedHosts` unset answers the loopback names only
+  // — exactly what the SDK's own `createMcpExpressApp` does for a localhost
+  // bind, and what the transport spec's "MUST validate … to prevent DNS
+  // rebinding" needs on the machine that is its classic victim.
+  const doorName = `mcpServe('${serverName}')`;
+  const guard = doorGuard({
+    name: doorName,
+    ...(transport.host !== undefined && { bindHost: transport.host }),
+    ...(transport.allowedOrigins !== undefined && { allowedOrigins: transport.allowedOrigins }),
+    ...(transport.allowedHosts !== undefined && { allowedHosts: transport.allowedHosts }),
+  });
   let httpMod: McpHttpServerExports;
   try {
     httpMod = lazyRequire<McpHttpServerExports>(
@@ -662,6 +682,22 @@ async function connectHttp(
       res.end();
       return;
     }
+    // Before any server or transport exists for this request: a page on
+    // another site, or one that re-pointed its own name here, never reaches
+    // a tool. Answered in the SDK's own JSON-RPC error shape, so an MCP
+    // client reads it the way it reads the transport's other refusals.
+    const refusal = guard.check(req);
+    if (refusal !== undefined) {
+      res.writeHead(refusal.status, { 'content-type': 'application/json', connection: 'close' });
+      res.end(
+        JSON.stringify({
+          jsonrpc: '2.0',
+          error: { code: -32000, message: refusal.message, data: { code: refusal.code } },
+          id: null,
+        }),
+      );
+      return;
+    }
     // One failed request must not take the listener down. The client is
     // told (500 is a protocol-level error it surfaces); the next request
     // is served normally.
@@ -678,6 +714,9 @@ async function connectHttp(
     if (transport.host !== undefined) listener.listen(transport.port, transport.host, resolve);
     else listener.listen(transport.port, resolve);
   });
+  // The staged default, said once: with no `allowedHosts` this endpoint
+  // answers any name, which is exactly what DNS rebinding needs.
+  if (guard.allowedHostsUnset) warnAllowedHostsUnset(doorName);
 
   // Read the socket AFTER listen resolves — before that, `port: 0` is still
   // 0 and the address is null. A pipe/socket-path bind reports a string
