@@ -8,7 +8,7 @@
 
 > **StoredReceipt** = `Omit`\<[`Receipt`](/agentfootprint/api/generated/interfaces/Receipt.md), `"cache"`\> & `object`
 
-Defined in: [src/lib/time-travel/receipt.ts:440](https://github.com/footprintjs/agentfootprint/blob/8eb817f55f177662ed213c7b387a5bdc2527c87b/src/lib/time-travel/receipt.ts#L440)
+Defined in: [src/lib/time-travel/receipt.ts:440](https://github.com/footprintjs/agentfootprint/blob/f5cabfd85eeae981c1a9a9dd20edaa7a4ced5063/src/lib/time-travel/receipt.ts#L440)
 
 A receipt as a READER meets it — what `receiptAt` hands back, and the shape
 every rebuild reads through (9.94.1).

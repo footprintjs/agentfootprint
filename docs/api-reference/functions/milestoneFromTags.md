@@ -8,7 +8,7 @@
 
 > **milestoneFromTags**(`tags`, `labelWhenUndeclared?`): [`Milestone`](/agentfootprint/api/generated/interfaces/Milestone.md) \| `null`
 
-Defined in: [src/conventions.ts:546](https://github.com/footprintjs/agentfootprint/blob/8eb817f55f177662ed213c7b387a5bdc2527c87b/src/conventions.ts#L546)
+Defined in: [src/conventions.ts:546](https://github.com/footprintjs/agentfootprint/blob/f5cabfd85eeae981c1a9a9dd20edaa7a4ced5063/src/conventions.ts#L546)
 
 Read a [Milestone](/agentfootprint/api/generated/interfaces/Milestone.md) back off a commit bundle's declared `tags`, or
 `null` when they carry no milestone kind tag. The kind must be one of

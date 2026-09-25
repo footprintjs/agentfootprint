@@ -8,7 +8,7 @@
 
 > **canGetArtifactStream**(`store`): `store is GetStreamingArtifactStore`
 
-Defined in: [src/artifacts/streaming.ts:98](https://github.com/footprintjs/agentfootprint/blob/8eb817f55f177662ed213c7b387a5bdc2527c87b/src/artifacts/streaming.ts#L98)
+Defined in: [src/artifacts/streaming.ts:98](https://github.com/footprintjs/agentfootprint/blob/f5cabfd85eeae981c1a9a9dd20edaa7a4ced5063/src/artifacts/streaming.ts#L98)
 
 Can this store hand back a stream? Narrowing type guard.
 

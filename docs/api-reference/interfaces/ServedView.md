@@ -6,7 +6,7 @@
 
 # Interface: ServedView
 
-Defined in: [src/lib/time-travel/servedView.ts:773](https://github.com/footprintjs/agentfootprint/blob/8eb817f55f177662ed213c7b387a5bdc2527c87b/src/lib/time-travel/servedView.ts#L773)
+Defined in: [src/lib/time-travel/servedView.ts:773](https://github.com/footprintjs/agentfootprint/blob/f5cabfd85eeae981c1a9a9dd20edaa7a4ced5063/src/lib/time-travel/servedView.ts#L773)
 
 THE SERVED VIEW: what the model was handed on one epoch, rebuilt.
 
@@ -36,7 +36,7 @@ view.gaps.map((g) => g.gap); // ['cache-transform', 'provider-defaults'] on an a
 
 > `readonly` `optional` **basis?**: `object`
 
-Defined in: [src/lib/time-travel/servedView.ts:810](https://github.com/footprintjs/agentfootprint/blob/8eb817f55f177662ed213c7b387a5bdc2527c87b/src/lib/time-travel/servedView.ts#L810)
+Defined in: [src/lib/time-travel/servedView.ts:810](https://github.com/footprintjs/agentfootprint/blob/f5cabfd85eeae981c1a9a9dd20edaa7a4ced5063/src/lib/time-travel/servedView.ts#L810)
 
 WHICH MODEL SAW THIS, and through which provider — read off the receipt's
 own `basis`, which is the only place the run records them.
@@ -84,7 +84,7 @@ const view = servedAt(agent.getSnapshot()!, 1)!;
 
 > `readonly` **callRuntimeStageId**: `string`
 
-Defined in: [src/lib/time-travel/servedView.ts:783](https://github.com/footprintjs/agentfootprint/blob/8eb817f55f177662ed213c7b387a5bdc2527c87b/src/lib/time-travel/servedView.ts#L783)
+Defined in: [src/lib/time-travel/servedView.ts:783](https://github.com/footprintjs/agentfootprint/blob/f5cabfd85eeae981c1a9a9dd20edaa7a4ced5063/src/lib/time-travel/servedView.ts#L783)
 
 ***
 
@@ -92,7 +92,7 @@ Defined in: [src/lib/time-travel/servedView.ts:783](https://github.com/footprint
 
 > `readonly` **epoch**: `number`
 
-Defined in: [src/lib/time-travel/servedView.ts:782](https://github.com/footprintjs/agentfootprint/blob/8eb817f55f177662ed213c7b387a5bdc2527c87b/src/lib/time-travel/servedView.ts#L782)
+Defined in: [src/lib/time-travel/servedView.ts:782](https://github.com/footprintjs/agentfootprint/blob/f5cabfd85eeae981c1a9a9dd20edaa7a4ced5063/src/lib/time-travel/servedView.ts#L782)
 
 WHICH TURN THIS IS, as the fold read it — the run's own committed
 `iteration`, and its POSITION in run order when the fold could not read
@@ -107,7 +107,7 @@ recording can number a turn differently from the receipt that turn minted.
 
 > `readonly` **gaps**: readonly [`ServedGap`](/agentfootprint/api/generated/interfaces/ServedGap.md)[]
 
-Defined in: [src/lib/time-travel/servedView.ts:841](https://github.com/footprintjs/agentfootprint/blob/8eb817f55f177662ed213c7b387a5bdc2527c87b/src/lib/time-travel/servedView.ts#L841)
+Defined in: [src/lib/time-travel/servedView.ts:841](https://github.com/footprintjs/agentfootprint/blob/f5cabfd85eeae981c1a9a9dd20edaa7a4ced5063/src/lib/time-travel/servedView.ts#L841)
 
 What this rebuild could NOT recover, each naming the receipt field it
  explains. Never empty — see [SERVED\_GAPS](/agentfootprint/api/generated/variables/SERVED_GAPS.md).
@@ -118,7 +118,7 @@ What this rebuild could NOT recover, each naming the receipt field it
 
 > `readonly` **messages**: `object`
 
-Defined in: [src/lib/time-travel/servedView.ts:820](https://github.com/footprintjs/agentfootprint/blob/8eb817f55f177662ed213c7b387a5bdc2527c87b/src/lib/time-travel/servedView.ts#L820)
+Defined in: [src/lib/time-travel/servedView.ts:820](https://github.com/footprintjs/agentfootprint/blob/f5cabfd85eeae981c1a9a9dd20edaa7a4ced5063/src/lib/time-travel/servedView.ts#L820)
 
 #### asSent
 
@@ -140,7 +140,7 @@ Lines composed for this request and written to no history.
 
 > `readonly` **system**: `object`
 
-Defined in: [src/lib/time-travel/servedView.ts:816](https://github.com/footprintjs/agentfootprint/blob/8eb817f55f177662ed213c7b387a5bdc2527c87b/src/lib/time-travel/servedView.ts#L816)
+Defined in: [src/lib/time-travel/servedView.ts:816](https://github.com/footprintjs/agentfootprint/blob/f5cabfd85eeae981c1a9a9dd20edaa7a4ced5063/src/lib/time-travel/servedView.ts#L816)
 
 #### pieces
 
@@ -156,7 +156,7 @@ Defined in: [src/lib/time-travel/servedView.ts:816](https://github.com/footprint
 
 > `readonly` **tools**: `object`
 
-Defined in: [src/lib/time-travel/servedView.ts:828](https://github.com/footprintjs/agentfootprint/blob/8eb817f55f177662ed213c7b387a5bdc2527c87b/src/lib/time-travel/servedView.ts#L828)
+Defined in: [src/lib/time-travel/servedView.ts:828](https://github.com/footprintjs/agentfootprint/blob/f5cabfd85eeae981c1a9a9dd20edaa7a4ced5063/src/lib/time-travel/servedView.ts#L828)
 
 #### forced?
 

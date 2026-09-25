@@ -6,7 +6,7 @@
 
 # Interface: ExternalGround
 
-Defined in: [src/integrity/unsupported-argument/check.ts:92](https://github.com/footprintjs/agentfootprint/blob/8eb817f55f177662ed213c7b387a5bdc2527c87b/src/integrity/unsupported-argument/check.ts#L92)
+Defined in: [src/integrity/unsupported-argument/check.ts:92](https://github.com/footprintjs/agentfootprint/blob/f5cabfd85eeae981c1a9a9dd20edaa7a4ced5063/src/integrity/unsupported-argument/check.ts#L92)
 
 One value the APP verified against ground the run itself never observed
 (9.72.0). `value` is the verified text; `source` is the app's short label
@@ -19,7 +19,7 @@ travels onto the record whenever this entry excuses an argument.
 
 > `readonly` **source**: `string`
 
-Defined in: [src/integrity/unsupported-argument/check.ts:94](https://github.com/footprintjs/agentfootprint/blob/8eb817f55f177662ed213c7b387a5bdc2527c87b/src/integrity/unsupported-argument/check.ts#L94)
+Defined in: [src/integrity/unsupported-argument/check.ts:94](https://github.com/footprintjs/agentfootprint/blob/f5cabfd85eeae981c1a9a9dd20edaa7a4ced5063/src/integrity/unsupported-argument/check.ts#L94)
 
 ***
 
@@ -27,4 +27,4 @@ Defined in: [src/integrity/unsupported-argument/check.ts:94](https://github.com/
 
 > `readonly` **value**: `string`
 
-Defined in: [src/integrity/unsupported-argument/check.ts:93](https://github.com/footprintjs/agentfootprint/blob/8eb817f55f177662ed213c7b387a5bdc2527c87b/src/integrity/unsupported-argument/check.ts#L93)
+Defined in: [src/integrity/unsupported-argument/check.ts:93](https://github.com/footprintjs/agentfootprint/blob/f5cabfd85eeae981c1a9a9dd20edaa7a4ced5063/src/integrity/unsupported-argument/check.ts#L93)

@@ -8,7 +8,7 @@
 
 > **receiptAt**(`source`, `epoch`): [`StoredReceipt`](/agentfootprint/api/generated/type-aliases/StoredReceipt.md) \| `undefined`
 
-Defined in: [src/lib/time-travel/servedView.ts:1342](https://github.com/footprintjs/agentfootprint/blob/8eb817f55f177662ed213c7b387a5bdc2527c87b/src/lib/time-travel/servedView.ts#L1342)
+Defined in: [src/lib/time-travel/servedView.ts:1342](https://github.com/footprintjs/agentfootprint/blob/f5cabfd85eeae981c1a9a9dd20edaa7a4ced5063/src/lib/time-travel/servedView.ts#L1342)
 
 The receipt epoch `k`'s call left behind, or `undefined`.
 

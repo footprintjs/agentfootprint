@@ -6,7 +6,7 @@
 
 # Interface: InnerCallRecord
 
-Defined in: [src/core/runbook/dispatch.ts:27](https://github.com/footprintjs/agentfootprint/blob/8eb817f55f177662ed213c7b387a5bdc2527c87b/src/core/runbook/dispatch.ts#L27)
+Defined in: [src/core/runbook/dispatch.ts:27](https://github.com/footprintjs/agentfootprint/blob/f5cabfd85eeae981c1a9a9dd20edaa7a4ced5063/src/core/runbook/dispatch.ts#L27)
 
 One inner call, as the bridge recorded it.
 
@@ -16,7 +16,7 @@ One inner call, as the bridge recorded it.
 
 > `readonly` **outcome**: `"ok"` \| `"absent"` \| `"error"`
 
-Defined in: [src/core/runbook/dispatch.ts:29](https://github.com/footprintjs/agentfootprint/blob/8eb817f55f177662ed213c7b387a5bdc2527c87b/src/core/runbook/dispatch.ts#L29)
+Defined in: [src/core/runbook/dispatch.ts:29](https://github.com/footprintjs/agentfootprint/blob/f5cabfd85eeae981c1a9a9dd20edaa7a4ced5063/src/core/runbook/dispatch.ts#L29)
 
 ***
 
@@ -24,7 +24,7 @@ Defined in: [src/core/runbook/dispatch.ts:29](https://github.com/footprintjs/age
 
 > `readonly` `optional` **result?**: `unknown`
 
-Defined in: [src/core/runbook/dispatch.ts:31](https://github.com/footprintjs/agentfootprint/blob/8eb817f55f177662ed213c7b387a5bdc2527c87b/src/core/runbook/dispatch.ts#L31)
+Defined in: [src/core/runbook/dispatch.ts:31](https://github.com/footprintjs/agentfootprint/blob/f5cabfd85eeae981c1a9a9dd20edaa7a4ced5063/src/core/runbook/dispatch.ts#L31)
 
 The raw returned value (`'ok'` and `'absent'` outcomes).
 
@@ -34,4 +34,4 @@ The raw returned value (`'ok'` and `'absent'` outcomes).
 
 > `readonly` **tool**: `string`
 
-Defined in: [src/core/runbook/dispatch.ts:28](https://github.com/footprintjs/agentfootprint/blob/8eb817f55f177662ed213c7b387a5bdc2527c87b/src/core/runbook/dispatch.ts#L28)
+Defined in: [src/core/runbook/dispatch.ts:28](https://github.com/footprintjs/agentfootprint/blob/f5cabfd85eeae981c1a9a9dd20edaa7a4ced5063/src/core/runbook/dispatch.ts#L28)

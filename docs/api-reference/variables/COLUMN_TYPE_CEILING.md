@@ -8,7 +8,7 @@
 
 > `const` **COLUMN\_TYPE\_CEILING**: `string`
 
-Defined in: [src/integrity/column-types/check.ts:81](https://github.com/footprintjs/agentfootprint/blob/8eb817f55f177662ed213c7b387a5bdc2527c87b/src/integrity/column-types/check.ts#L81)
+Defined in: [src/integrity/column-types/check.ts:81](https://github.com/footprintjs/agentfootprint/blob/f5cabfd85eeae981c1a9a9dd20edaa7a4ced5063/src/integrity/column-types/check.ts#L81)
 
 THE CEILING, as one string with one owner.
 

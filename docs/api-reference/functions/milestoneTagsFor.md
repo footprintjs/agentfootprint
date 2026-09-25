@@ -8,7 +8,7 @@
 
 > **milestoneTagsFor**(`localStageId`): readonly `string`[]
 
-Defined in: [src/conventions.ts:519](https://github.com/footprintjs/agentfootprint/blob/8eb817f55f177662ed213c7b387a5bdc2527c87b/src/conventions.ts#L519)
+Defined in: [src/conventions.ts:519](https://github.com/footprintjs/agentfootprint/blob/f5cabfd85eeae981c1a9a9dd20edaa7a4ced5063/src/conventions.ts#L519)
 
 The tags to declare on the stage with this LOCAL id, from the same table
 [milestoneFor](/agentfootprint/api/generated/functions/milestoneFor.md) reads — so a chart-building site names the id it is

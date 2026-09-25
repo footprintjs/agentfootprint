@@ -6,7 +6,7 @@
 
 # Interface: AgentRecordingsOptions
 
-Defined in: [src/core/agent/types.ts:140](https://github.com/footprintjs/agentfootprint/blob/8eb817f55f177662ed213c7b387a5bdc2527c87b/src/core/agent/types.ts#L140)
+Defined in: [src/core/agent/types.ts:140](https://github.com/footprintjs/agentfootprint/blob/f5cabfd85eeae981c1a9a9dd20edaa7a4ced5063/src/core/agent/types.ts#L140)
 
 The object form of [AgentArtifactsOptions.recordings](/agentfootprint/api/generated/interfaces/AgentArtifactsOptions.md#recordings).
 
@@ -16,7 +16,7 @@ The object form of [AgentArtifactsOptions.recordings](/agentfootprint/api/genera
 
 > `readonly` `optional` **label?**: `string`
 
-Defined in: [src/core/agent/types.ts:149](https://github.com/footprintjs/agentfootprint/blob/8eb817f55f177662ed213c7b387a5bdc2527c87b/src/core/agent/types.ts#L149)
+Defined in: [src/core/agent/types.ts:149](https://github.com/footprintjs/agentfootprint/blob/f5cabfd85eeae981c1a9a9dd20edaa7a4ced5063/src/core/agent/types.ts#L149)
 
 The label every minted recording carries, verbatim.
 

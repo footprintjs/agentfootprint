@@ -8,7 +8,7 @@
 
 > **PermissionCapability** = [`ToolCapability`](/agentfootprint/api/generated/type-aliases/ToolCapability.md) \| `"tool_call"` \| `"skill_read"`
 
-Defined in: [src/adapters/types.ts:769](https://github.com/footprintjs/agentfootprint/blob/8eb817f55f177662ed213c7b387a5bdc2527c87b/src/adapters/types.ts#L769)
+Defined in: [src/adapters/types.ts:769](https://github.com/footprintjs/agentfootprint/blob/f5cabfd85eeae981c1a9a9dd20edaa7a4ced5063/src/adapters/types.ts#L769)
 
 The full vocabulary a [PermissionRequest](/agentfootprint/api/generated/interfaces/PermissionRequest.md) can carry.
 

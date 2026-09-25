@@ -8,7 +8,7 @@
 
 > **RunbookPresentation** = `"prose"` \| `"panel"`
 
-Defined in: [src/core/runbook/types.ts:93](https://github.com/footprintjs/agentfootprint/blob/8eb817f55f177662ed213c7b387a5bdc2527c87b/src/core/runbook/types.ts#L93)
+Defined in: [src/core/runbook/types.ts:93](https://github.com/footprintjs/agentfootprint/blob/f5cabfd85eeae981c1a9a9dd20edaa7a4ced5063/src/core/runbook/types.ts#L93)
 
 WHO RENDERS THE ROWSET — the one thing about its client a runbook cannot
 work out for itself.

@@ -6,7 +6,7 @@
 
 # Interface: RunbookEnvelope
 
-Defined in: [src/core/runbook/types.ts:311](https://github.com/footprintjs/agentfootprint/blob/8eb817f55f177662ed213c7b387a5bdc2527c87b/src/core/runbook/types.ts#L311)
+Defined in: [src/core/runbook/types.ts:311](https://github.com/footprintjs/agentfootprint/blob/f5cabfd85eeae981c1a9a9dd20edaa7a4ced5063/src/core/runbook/types.ts#L311)
 
 The mandatory-spine + optional-projection envelope every runbook returns
  (unless an inner absence passed through — then the answer IS that absence,
@@ -19,7 +19,7 @@ The mandatory-spine + optional-projection envelope every runbook returns
 
 > `readonly` **af\_coverage**: `object`
 
-Defined in: [src/core/runbook/types.ts:312](https://github.com/footprintjs/agentfootprint/blob/8eb817f55f177662ed213c7b387a5bdc2527c87b/src/core/runbook/types.ts#L312)
+Defined in: [src/core/runbook/types.ts:312](https://github.com/footprintjs/agentfootprint/blob/f5cabfd85eeae981c1a9a9dd20edaa7a4ced5063/src/core/runbook/types.ts#L312)
 
 #### cannot\_cover?
 
@@ -51,7 +51,7 @@ The run's own sentence — names the rule set and version.
 
 > `readonly` **result**: `object`
 
-Defined in: [src/core/runbook/types.ts:321](https://github.com/footprintjs/agentfootprint/blob/8eb817f55f177662ed213c7b387a5bdc2527c87b/src/core/runbook/types.ts#L321)
+Defined in: [src/core/runbook/types.ts:321](https://github.com/footprintjs/agentfootprint/blob/f5cabfd85eeae981c1a9a9dd20edaa7a4ced5063/src/core/runbook/types.ts#L321)
 
 #### Index Signature
 

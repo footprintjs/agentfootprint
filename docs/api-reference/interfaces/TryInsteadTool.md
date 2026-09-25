@@ -6,7 +6,7 @@
 
 # Interface: TryInsteadTool
 
-Defined in: [src/core/agent/coverage/types.ts:83](https://github.com/footprintjs/agentfootprint/blob/8eb817f55f177662ed213c7b387a5bdc2527c87b/src/core/agent/coverage/types.ts#L83)
+Defined in: [src/core/agent/coverage/types.ts:83](https://github.com/footprintjs/agentfootprint/blob/f5cabfd85eeae981c1a9a9dd20edaa7a4ced5063/src/core/agent/coverage/types.ts#L83)
 
 The other TOOL a suggestion points at, typed (9.113.0) — `tryInsteadTool`
 on the declaration, `try_instead_tool` on the envelope.
@@ -30,7 +30,7 @@ warns about it (dev mode), here as at `defineTool`.
 
 > `readonly` **tool**: `string`
 
-Defined in: [src/core/agent/coverage/types.ts:85](https://github.com/footprintjs/agentfootprint/blob/8eb817f55f177662ed213c7b387a5bdc2527c87b/src/core/agent/coverage/types.ts#L85)
+Defined in: [src/core/agent/coverage/types.ts:85](https://github.com/footprintjs/agentfootprint/blob/f5cabfd85eeae981c1a9a9dd20edaa7a4ced5063/src/core/agent/coverage/types.ts#L85)
 
 The tool's registered name, as a call would name it.
 
@@ -40,6 +40,6 @@ The tool's registered name, as a call would name it.
 
 > `readonly` `optional` **why?**: `string`
 
-Defined in: [src/core/agent/coverage/types.ts:87](https://github.com/footprintjs/agentfootprint/blob/8eb817f55f177662ed213c7b387a5bdc2527c87b/src/core/agent/coverage/types.ts#L87)
+Defined in: [src/core/agent/coverage/types.ts:87](https://github.com/footprintjs/agentfootprint/blob/f5cabfd85eeae981c1a9a9dd20edaa7a4ced5063/src/core/agent/coverage/types.ts#L87)
 
 Why that tool, in the author's words ("it lists the collected names").

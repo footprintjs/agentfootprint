@@ -6,7 +6,7 @@
 
 # Interface: EscalationPolicy
 
-Defined in: [src/core/agent/skillBrains.ts:58](https://github.com/footprintjs/agentfootprint/blob/8eb817f55f177662ed213c7b387a5bdc2527c87b/src/core/agent/skillBrains.ts#L58)
+Defined in: [src/core/agent/skillBrains.ts:58](https://github.com/footprintjs/agentfootprint/blob/f5cabfd85eeae981c1a9a9dd20edaa7a4ced5063/src/core/agent/skillBrains.ts#L58)
 
 Escalate-on-evidence policy (see the module header).
 
@@ -20,7 +20,7 @@ Escalate-on-evidence policy (see the module header).
 
 > `readonly` **afterRefusals**: `number`
 
-Defined in: [src/core/agent/skillBrains.ts:68](https://github.com/footprintjs/agentfootprint/blob/8eb817f55f177662ed213c7b387a5bdc2527c87b/src/core/agent/skillBrains.ts#L68)
+Defined in: [src/core/agent/skillBrains.ts:68](https://github.com/footprintjs/agentfootprint/blob/f5cabfd85eeae981c1a9a9dd20edaa7a4ced5063/src/core/agent/skillBrains.ts#L68)
 
 Gate refusals (`skill.rejected`) in ONE turn that flip the rest of the
  turn onto this brain. Integer ≥ 1.
@@ -38,7 +38,7 @@ Gate refusals (`skill.rejected`) in ONE turn that flip the rest of the
 
 > `readonly` `optional` **model?**: `string`
 
-Defined in: [src/core/agent/skillBrains.ts:54](https://github.com/footprintjs/agentfootprint/blob/8eb817f55f177662ed213c7b387a5bdc2527c87b/src/core/agent/skillBrains.ts#L54)
+Defined in: [src/core/agent/skillBrains.ts:54](https://github.com/footprintjs/agentfootprint/blob/f5cabfd85eeae981c1a9a9dd20edaa7a4ced5063/src/core/agent/skillBrains.ts#L54)
 
 #### Inherited from
 
@@ -50,7 +50,7 @@ Defined in: [src/core/agent/skillBrains.ts:54](https://github.com/footprintjs/ag
 
 > `readonly` **provider**: [`LLMProvider`](/agentfootprint/api/generated/interfaces/LLMProvider.md)
 
-Defined in: [src/core/agent/skillBrains.ts:53](https://github.com/footprintjs/agentfootprint/blob/8eb817f55f177662ed213c7b387a5bdc2527c87b/src/core/agent/skillBrains.ts#L53)
+Defined in: [src/core/agent/skillBrains.ts:53](https://github.com/footprintjs/agentfootprint/blob/f5cabfd85eeae981c1a9a9dd20edaa7a4ced5063/src/core/agent/skillBrains.ts#L53)
 
 #### Inherited from
 

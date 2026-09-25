@@ -6,7 +6,7 @@
 
 # Interface: ReceiptRequestOnlyMessage
 
-Defined in: [src/lib/time-travel/receipt.ts:218](https://github.com/footprintjs/agentfootprint/blob/8eb817f55f177662ed213c7b387a5bdc2527c87b/src/lib/time-travel/receipt.ts#L218)
+Defined in: [src/lib/time-travel/receipt.ts:218](https://github.com/footprintjs/agentfootprint/blob/f5cabfd85eeae981c1a9a9dd20edaa7a4ced5063/src/lib/time-travel/receipt.ts#L218)
 
 A line that existed on the request only and was never written to history.
 
@@ -16,7 +16,7 @@ A line that existed on the request only and was never written to history.
 
 > `readonly` **hash**: `string`
 
-Defined in: [src/lib/time-travel/receipt.ts:220](https://github.com/footprintjs/agentfootprint/blob/8eb817f55f177662ed213c7b387a5bdc2527c87b/src/lib/time-travel/receipt.ts#L220)
+Defined in: [src/lib/time-travel/receipt.ts:220](https://github.com/footprintjs/agentfootprint/blob/f5cabfd85eeae981c1a9a9dd20edaa7a4ced5063/src/lib/time-travel/receipt.ts#L220)
 
 ***
 
@@ -24,7 +24,7 @@ Defined in: [src/lib/time-travel/receipt.ts:220](https://github.com/footprintjs/
 
 > `readonly` **reason**: `string`
 
-Defined in: [src/lib/time-travel/receipt.ts:222](https://github.com/footprintjs/agentfootprint/blob/8eb817f55f177662ed213c7b387a5bdc2527c87b/src/lib/time-travel/receipt.ts#L222)
+Defined in: [src/lib/time-travel/receipt.ts:222](https://github.com/footprintjs/agentfootprint/blob/f5cabfd85eeae981c1a9a9dd20edaa7a4ced5063/src/lib/time-travel/receipt.ts#L222)
 
 Which library mechanism composed it. `'staged-refs-nudge'` today.
 
@@ -34,4 +34,4 @@ Which library mechanism composed it. `'staged-refs-nudge'` today.
 
 > `readonly` **role**: `ContextRole`
 
-Defined in: [src/lib/time-travel/receipt.ts:219](https://github.com/footprintjs/agentfootprint/blob/8eb817f55f177662ed213c7b387a5bdc2527c87b/src/lib/time-travel/receipt.ts#L219)
+Defined in: [src/lib/time-travel/receipt.ts:219](https://github.com/footprintjs/agentfootprint/blob/f5cabfd85eeae981c1a9a9dd20edaa7a4ced5063/src/lib/time-travel/receipt.ts#L219)

@@ -6,7 +6,7 @@
 
 # Interface: RunbookRecordingOptions
 
-Defined in: [src/core/runbook/types.ts:143](https://github.com/footprintjs/agentfootprint/blob/8eb817f55f177662ed213c7b387a5bdc2527c87b/src/core/runbook/types.ts#L143)
+Defined in: [src/core/runbook/types.ts:143](https://github.com/footprintjs/agentfootprint/blob/f5cabfd85eeae981c1a9a9dd20edaa7a4ced5063/src/core/runbook/types.ts#L143)
 
 The object form of [RunbookWalkOptions.recording](/agentfootprint/api/generated/interfaces/RunbookWalkOptions.md#recording).
 
@@ -16,7 +16,7 @@ The object form of [RunbookWalkOptions.recording](/agentfootprint/api/generated/
 
 > `readonly` `optional` **label?**: `string`
 
-Defined in: [src/core/runbook/types.ts:152](https://github.com/footprintjs/agentfootprint/blob/8eb817f55f177662ed213c7b387a5bdc2527c87b/src/core/runbook/types.ts#L152)
+Defined in: [src/core/runbook/types.ts:152](https://github.com/footprintjs/agentfootprint/blob/f5cabfd85eeae981c1a9a9dd20edaa7a4ced5063/src/core/runbook/types.ts#L152)
 
 The label the minted recording carries, verbatim.
 
@@ -31,7 +31,7 @@ make it unique would be overruling you (the `recordingPutInput` law).
 
 > `readonly` `optional` **maxBytes?**: `number`
 
-Defined in: [src/core/runbook/types.ts:165](https://github.com/footprintjs/agentfootprint/blob/8eb817f55f177662ed213c7b387a5bdc2527c87b/src/core/runbook/types.ts#L165)
+Defined in: [src/core/runbook/types.ts:165](https://github.com/footprintjs/agentfootprint/blob/f5cabfd85eeae981c1a9a9dd20edaa7a4ced5063/src/core/runbook/types.ts#L165)
 
 The size ceiling, in bytes of the serialized recording. Default
 `DEFAULT_RECORDING_MAX_BYTES` (5,000,000).

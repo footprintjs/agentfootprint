@@ -8,6 +8,6 @@
 
 > `const` **MILESTONE\_KINDS**: readonly [`MilestoneKind`](/agentfootprint/api/generated/type-aliases/MilestoneKind.md)[]
 
-Defined in: [src/conventions.ts:387](https://github.com/footprintjs/agentfootprint/blob/8eb817f55f177662ed213c7b387a5bdc2527c87b/src/conventions.ts#L387)
+Defined in: [src/conventions.ts:387](https://github.com/footprintjs/agentfootprint/blob/f5cabfd85eeae981c1a9a9dd20edaa7a4ced5063/src/conventions.ts#L387)
 
 Every [MilestoneKind](/agentfootprint/api/generated/type-aliases/MilestoneKind.md), for validating a kind read off a recording.

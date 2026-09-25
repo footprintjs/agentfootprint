@@ -8,6 +8,6 @@
 
 > `const` **ARTIFACT\_REF\_PREFIX**: `"art_"` = `'art_'`
 
-Defined in: [src/artifacts/naming.ts:21](https://github.com/footprintjs/agentfootprint/blob/8eb817f55f177662ed213c7b387a5bdc2527c87b/src/artifacts/naming.ts#L21)
+Defined in: [src/artifacts/naming.ts:21](https://github.com/footprintjs/agentfootprint/blob/f5cabfd85eeae981c1a9a9dd20edaa7a4ced5063/src/artifacts/naming.ts#L21)
 
 The prefix every minted ref carries.

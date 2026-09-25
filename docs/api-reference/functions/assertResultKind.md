@@ -8,7 +8,7 @@
 
 > **assertResultKind**(`toolName`, `resultKind`): `void`
 
-Defined in: [src/core/tools.ts:488](https://github.com/footprintjs/agentfootprint/blob/8eb817f55f177662ed213c7b387a5bdc2527c87b/src/core/tools.ts#L488)
+Defined in: [src/core/tools.ts:488](https://github.com/footprintjs/agentfootprint/blob/f5cabfd85eeae981c1a9a9dd20edaa7a4ced5063/src/core/tools.ts#L488)
 
 Refuse a `resultKind` that could never be redeemed, at definition time —
 naming the tool and the fix (the `assertResultCeiling` / `assertResultClass`

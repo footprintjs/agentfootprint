@@ -6,7 +6,7 @@
 
 # Interface: InputRequestDeclaration
 
-Defined in: [src/core/inputRequest.ts:13](https://github.com/footprintjs/agentfootprint/blob/8eb817f55f177662ed213c7b387a5bdc2527c87b/src/core/inputRequest.ts#L13)
+Defined in: [src/core/inputRequest.ts:13](https://github.com/footprintjs/agentfootprint/blob/f5cabfd85eeae981c1a9a9dd20edaa7a4ced5063/src/core/inputRequest.ts#L13)
 
 ## Properties
 
@@ -14,7 +14,7 @@ Defined in: [src/core/inputRequest.ts:13](https://github.com/footprintjs/agentfo
 
 > `readonly` `optional` **absence?**: [`ToolAbsence`](/agentfootprint/api/generated/interfaces/ToolAbsence.md)
 
-Defined in: [src/core/inputRequest.ts:37](https://github.com/footprintjs/agentfootprint/blob/8eb817f55f177662ed213c7b387a5bdc2527c87b/src/core/inputRequest.ts#L37)
+Defined in: [src/core/inputRequest.ts:37](https://github.com/footprintjs/agentfootprint/blob/f5cabfd85eeae981c1a9a9dd20edaa7a4ced5063/src/core/inputRequest.ts#L37)
 
 What the tool LOOKED AT before it asked (9.114.0): the envelope `absent()`
 returns, when a lookup found nothing and raises this request about the
@@ -37,7 +37,7 @@ carries it, as it does a returned miss.
 
 > `readonly` `optional` **context?**: `Readonly`\<`Record`\<`string`, `unknown`\>\>
 
-Defined in: [src/core/inputRequest.ts:20](https://github.com/footprintjs/agentfootprint/blob/8eb817f55f177662ed213c7b387a5bdc2527c87b/src/core/inputRequest.ts#L20)
+Defined in: [src/core/inputRequest.ts:20](https://github.com/footprintjs/agentfootprint/blob/f5cabfd85eeae981c1a9a9dd20edaa7a4ced5063/src/core/inputRequest.ts#L20)
 
 Opaque JSON authored by the collecting tool, never editable by the reply.
 
@@ -47,7 +47,7 @@ Opaque JSON authored by the collecting tool, never editable by the reply.
 
 > `readonly` **fields**: readonly [`InputField`](/agentfootprint/api/generated/interfaces/InputField.md)[]
 
-Defined in: [src/core/inputRequest.ts:16](https://github.com/footprintjs/agentfootprint/blob/8eb817f55f177662ed213c7b387a5bdc2527c87b/src/core/inputRequest.ts#L16)
+Defined in: [src/core/inputRequest.ts:16](https://github.com/footprintjs/agentfootprint/blob/f5cabfd85eeae981c1a9a9dd20edaa7a4ced5063/src/core/inputRequest.ts#L16)
 
 ***
 
@@ -55,7 +55,7 @@ Defined in: [src/core/inputRequest.ts:16](https://github.com/footprintjs/agentfo
 
 > `readonly` **id**: `string`
 
-Defined in: [src/core/inputRequest.ts:14](https://github.com/footprintjs/agentfootprint/blob/8eb817f55f177662ed213c7b387a5bdc2527c87b/src/core/inputRequest.ts#L14)
+Defined in: [src/core/inputRequest.ts:14](https://github.com/footprintjs/agentfootprint/blob/f5cabfd85eeae981c1a9a9dd20edaa7a4ced5063/src/core/inputRequest.ts#L14)
 
 ***
 
@@ -63,7 +63,7 @@ Defined in: [src/core/inputRequest.ts:14](https://github.com/footprintjs/agentfo
 
 > `readonly` **question**: `string`
 
-Defined in: [src/core/inputRequest.ts:15](https://github.com/footprintjs/agentfootprint/blob/8eb817f55f177662ed213c7b387a5bdc2527c87b/src/core/inputRequest.ts#L15)
+Defined in: [src/core/inputRequest.ts:15](https://github.com/footprintjs/agentfootprint/blob/f5cabfd85eeae981c1a9a9dd20edaa7a4ced5063/src/core/inputRequest.ts#L15)
 
 ***
 
@@ -71,6 +71,6 @@ Defined in: [src/core/inputRequest.ts:15](https://github.com/footprintjs/agentfo
 
 > `readonly` `optional` **supplied?**: `Readonly`\<`Record`\<`string`, [`InputValue`](/agentfootprint/api/generated/type-aliases/InputValue.md)\>\>
 
-Defined in: [src/core/inputRequest.ts:18](https://github.com/footprintjs/agentfootprint/blob/8eb817f55f177662ed213c7b387a5bdc2527c87b/src/core/inputRequest.ts#L18)
+Defined in: [src/core/inputRequest.ts:18](https://github.com/footprintjs/agentfootprint/blob/f5cabfd85eeae981c1a9a9dd20edaa7a4ced5063/src/core/inputRequest.ts#L18)
 
 Values the collection tool already knows; never labelled as a person's answer.

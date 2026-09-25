@@ -6,7 +6,7 @@
 
 # Class: RunbookAbsenceSignal
 
-Defined in: [src/core/runbook/dispatch.ts:44](https://github.com/footprintjs/agentfootprint/blob/8eb817f55f177662ed213c7b387a5bdc2527c87b/src/core/runbook/dispatch.ts#L44)
+Defined in: [src/core/runbook/dispatch.ts:44](https://github.com/footprintjs/agentfootprint/blob/f5cabfd85eeae981c1a9a9dd20edaa7a4ced5063/src/core/runbook/dispatch.ts#L44)
 
 The control signal an un-survivable inner absence throws through the
 chart. The engine commits staged state and rethrows (commit-on-error is
@@ -23,7 +23,7 @@ returns the absence verbatim.
 
 > **new RunbookAbsenceSignal**(`absence`, `innerTool`): `RunbookAbsenceSignal`
 
-Defined in: [src/core/runbook/dispatch.ts:46](https://github.com/footprintjs/agentfootprint/blob/8eb817f55f177662ed213c7b387a5bdc2527c87b/src/core/runbook/dispatch.ts#L46)
+Defined in: [src/core/runbook/dispatch.ts:46](https://github.com/footprintjs/agentfootprint/blob/f5cabfd85eeae981c1a9a9dd20edaa7a4ced5063/src/core/runbook/dispatch.ts#L46)
 
 #### Parameters
 
@@ -49,7 +49,7 @@ Defined in: [src/core/runbook/dispatch.ts:46](https://github.com/footprintjs/age
 
 > `readonly` **absence**: [`ToolAbsence`](/agentfootprint/api/generated/interfaces/ToolAbsence.md)
 
-Defined in: [src/core/runbook/dispatch.ts:46](https://github.com/footprintjs/agentfootprint/blob/8eb817f55f177662ed213c7b387a5bdc2527c87b/src/core/runbook/dispatch.ts#L46)
+Defined in: [src/core/runbook/dispatch.ts:46](https://github.com/footprintjs/agentfootprint/blob/f5cabfd85eeae981c1a9a9dd20edaa7a4ced5063/src/core/runbook/dispatch.ts#L46)
 
 ***
 
@@ -57,7 +57,7 @@ Defined in: [src/core/runbook/dispatch.ts:46](https://github.com/footprintjs/age
 
 > `readonly` **af\_runbook\_absence**: `true` = `true`
 
-Defined in: [src/core/runbook/dispatch.ts:45](https://github.com/footprintjs/agentfootprint/blob/8eb817f55f177662ed213c7b387a5bdc2527c87b/src/core/runbook/dispatch.ts#L45)
+Defined in: [src/core/runbook/dispatch.ts:45](https://github.com/footprintjs/agentfootprint/blob/f5cabfd85eeae981c1a9a9dd20edaa7a4ced5063/src/core/runbook/dispatch.ts#L45)
 
 ***
 

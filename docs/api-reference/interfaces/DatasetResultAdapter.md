@@ -6,7 +6,7 @@
 
 # Interface: DatasetResultAdapter\<TArgs, TResult, TProjected\>
 
-Defined in: [src/artifacts/datasetResult.ts:34](https://github.com/footprintjs/agentfootprint/blob/8eb817f55f177662ed213c7b387a5bdc2527c87b/src/artifacts/datasetResult.ts#L34)
+Defined in: [src/artifacts/datasetResult.ts:34](https://github.com/footprintjs/agentfootprint/blob/f5cabfd85eeae981c1a9a9dd20edaa7a4ced5063/src/artifacts/datasetResult.ts#L34)
 
 ## Type Parameters
 
@@ -28,7 +28,7 @@ Defined in: [src/artifacts/datasetResult.ts:34](https://github.com/footprintjs/a
 
 > **describe**(`result`, `args`): [`DatasetResultPlan`](/agentfootprint/api/generated/interfaces/DatasetResultPlan.md)\<`TProjected`\> \| `Promise`\<[`DatasetResultPlan`](/agentfootprint/api/generated/interfaces/DatasetResultPlan.md)\<`TProjected`\> \| `undefined`\> \| `undefined`
 
-Defined in: [src/artifacts/datasetResult.ts:40](https://github.com/footprintjs/agentfootprint/blob/8eb817f55f177662ed213c7b387a5bdc2527c87b/src/artifacts/datasetResult.ts#L40)
+Defined in: [src/artifacts/datasetResult.ts:40](https://github.com/footprintjs/agentfootprint/blob/f5cabfd85eeae981c1a9a9dd20edaa7a4ced5063/src/artifacts/datasetResult.ts#L40)
 
 Undefined is an intentional pass-through (for example a declared absence).
 

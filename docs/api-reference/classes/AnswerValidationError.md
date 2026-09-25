@@ -6,7 +6,7 @@
 
 # Class: AnswerValidationError
 
-Defined in: [src/answer-validation/types.ts:111](https://github.com/footprintjs/agentfootprint/blob/8eb817f55f177662ed213c7b387a5bdc2527c87b/src/answer-validation/types.ts#L111)
+Defined in: [src/answer-validation/types.ts:111](https://github.com/footprintjs/agentfootprint/blob/f5cabfd85eeae981c1a9a9dd20edaa7a4ced5063/src/answer-validation/types.ts#L111)
 
 An enforcing host refused delivery; diagnostic metadata only, never content.
 
@@ -20,7 +20,7 @@ An enforcing host refused delivery; diagnostic metadata only, never content.
 
 > **new AnswerValidationError**(`report`): `AnswerValidationError`
 
-Defined in: [src/answer-validation/types.ts:115](https://github.com/footprintjs/agentfootprint/blob/8eb817f55f177662ed213c7b387a5bdc2527c87b/src/answer-validation/types.ts#L115)
+Defined in: [src/answer-validation/types.ts:115](https://github.com/footprintjs/agentfootprint/blob/f5cabfd85eeae981c1a9a9dd20edaa7a4ced5063/src/answer-validation/types.ts#L115)
 
 #### Parameters
 
@@ -54,7 +54,7 @@ Defined in: node\_modules/typescript/lib/lib.es2022.error.d.ts:24
 
 > `readonly` **code**: `"ERR_ANSWER_VALIDATION"`
 
-Defined in: [src/answer-validation/types.ts:112](https://github.com/footprintjs/agentfootprint/blob/8eb817f55f177662ed213c7b387a5bdc2527c87b/src/answer-validation/types.ts#L112)
+Defined in: [src/answer-validation/types.ts:112](https://github.com/footprintjs/agentfootprint/blob/f5cabfd85eeae981c1a9a9dd20edaa7a4ced5063/src/answer-validation/types.ts#L112)
 
 ***
 
@@ -86,7 +86,7 @@ Defined in: node\_modules/typescript/lib/lib.es5.d.ts:1076
 
 > `readonly` **report**: [`AnswerValidationReport`](/agentfootprint/api/generated/interfaces/AnswerValidationReport.md)
 
-Defined in: [src/answer-validation/types.ts:113](https://github.com/footprintjs/agentfootprint/blob/8eb817f55f177662ed213c7b387a5bdc2527c87b/src/answer-validation/types.ts#L113)
+Defined in: [src/answer-validation/types.ts:113](https://github.com/footprintjs/agentfootprint/blob/f5cabfd85eeae981c1a9a9dd20edaa7a4ced5063/src/answer-validation/types.ts#L113)
 
 ***
 

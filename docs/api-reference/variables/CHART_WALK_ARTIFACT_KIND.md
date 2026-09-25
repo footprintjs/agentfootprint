@@ -8,7 +8,7 @@
 
 > `const` **CHART\_WALK\_ARTIFACT\_KIND**: `"recording/chart-walk"` = `'recording/chart-walk'`
 
-Defined in: [src/artifacts/recordingArtifact.ts:48](https://github.com/footprintjs/agentfootprint/blob/8eb817f55f177662ed213c7b387a5bdc2527c87b/src/artifacts/recordingArtifact.ts#L48)
+Defined in: [src/artifacts/recordingArtifact.ts:48](https://github.com/footprintjs/agentfootprint/blob/f5cabfd85eeae981c1a9a9dd20edaa7a4ced5063/src/artifacts/recordingArtifact.ts#L48)
 
 The consumer vocabulary a chart WALK is stored under (9.76.0) — one row per
 execution step of a runbook's inner chart, with the decider evidence

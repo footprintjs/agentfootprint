@@ -8,7 +8,7 @@
 
 > **checkInDeclined**(`input`): [`CheckInDecision`](/agentfootprint/api/generated/interfaces/CheckInDecision.md)
 
-Defined in: [src/core/checkin.ts:225](https://github.com/footprintjs/agentfootprint/blob/8eb817f55f177662ed213c7b387a5bdc2527c87b/src/core/checkin.ts#L225)
+Defined in: [src/core/checkin.ts:225](https://github.com/footprintjs/agentfootprint/blob/f5cabfd85eeae981c1a9a9dd20edaa7a4ced5063/src/core/checkin.ts#L225)
 
 Decline a pending check-in — the tool is NOT executed; the model receives
 a `"declined by human: <note>"` tool result and adapts in-loop.

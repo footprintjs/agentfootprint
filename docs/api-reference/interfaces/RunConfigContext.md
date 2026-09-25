@@ -6,7 +6,7 @@
 
 # Interface: RunConfigContext
 
-Defined in: [src/core/agent/types.ts:1129](https://github.com/footprintjs/agentfootprint/blob/8eb817f55f177662ed213c7b387a5bdc2527c87b/src/core/agent/types.ts#L1129)
+Defined in: [src/core/agent/types.ts:1129](https://github.com/footprintjs/agentfootprint/blob/f5cabfd85eeae981c1a9a9dd20edaa7a4ced5063/src/core/agent/types.ts#L1129)
 
 What a `.configure(fn)` resolver is given.
 
@@ -16,7 +16,7 @@ What a `.configure(fn)` resolver is given.
 
 > `readonly` **defaults**: `object`
 
-Defined in: [src/core/agent/types.ts:1137](https://github.com/footprintjs/agentfootprint/blob/8eb817f55f177662ed213c7b387a5bdc2527c87b/src/core/agent/types.ts#L1137)
+Defined in: [src/core/agent/types.ts:1137](https://github.com/footprintjs/agentfootprint/blob/f5cabfd85eeae981c1a9a9dd20edaa7a4ced5063/src/core/agent/types.ts#L1137)
 
 What the agent was BUILT with, so a resolver can decide relative to it.
 
@@ -34,7 +34,7 @@ What the agent was BUILT with, so a resolver can decide relative to it.
 
 > `readonly` `optional` **identity?**: `MemoryIdentity`
 
-Defined in: [src/core/agent/types.ts:1133](https://github.com/footprintjs/agentfootprint/blob/8eb817f55f177662ed213c7b387a5bdc2527c87b/src/core/agent/types.ts#L1133)
+Defined in: [src/core/agent/types.ts:1133](https://github.com/footprintjs/agentfootprint/blob/f5cabfd85eeae981c1a9a9dd20edaa7a4ced5063/src/core/agent/types.ts#L1133)
 
 The memory identity passed to `run({ identity })`, when there was one.
 
@@ -44,7 +44,7 @@ The memory identity passed to `run({ identity })`, when there was one.
 
 > `readonly` **message**: `string`
 
-Defined in: [src/core/agent/types.ts:1131](https://github.com/footprintjs/agentfootprint/blob/8eb817f55f177662ed213c7b387a5bdc2527c87b/src/core/agent/types.ts#L1131)
+Defined in: [src/core/agent/types.ts:1131](https://github.com/footprintjs/agentfootprint/blob/f5cabfd85eeae981c1a9a9dd20edaa7a4ced5063/src/core/agent/types.ts#L1131)
 
 The message this run was started with.
 
@@ -54,6 +54,6 @@ The message this run was started with.
 
 > `readonly` **runId**: `string`
 
-Defined in: [src/core/agent/types.ts:1135](https://github.com/footprintjs/agentfootprint/blob/8eb817f55f177662ed213c7b387a5bdc2527c87b/src/core/agent/types.ts#L1135)
+Defined in: [src/core/agent/types.ts:1135](https://github.com/footprintjs/agentfootprint/blob/f5cabfd85eeae981c1a9a9dd20edaa7a4ced5063/src/core/agent/types.ts#L1135)
 
 This run's id — the same one that stamps every typed event's `meta.runId`.

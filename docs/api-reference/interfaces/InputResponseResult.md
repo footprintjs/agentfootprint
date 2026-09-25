@@ -6,7 +6,7 @@
 
 # Interface: InputResponseResult
 
-Defined in: [src/core/inputRequest.ts:63](https://github.com/footprintjs/agentfootprint/blob/8eb817f55f177662ed213c7b387a5bdc2527c87b/src/core/inputRequest.ts#L63)
+Defined in: [src/core/inputRequest.ts:63](https://github.com/footprintjs/agentfootprint/blob/f5cabfd85eeae981c1a9a9dd20edaa7a4ced5063/src/core/inputRequest.ts#L63)
 
 The dedicated collecting tool's result; it contains inputs, not observations.
 
@@ -16,7 +16,7 @@ The dedicated collecting tool's result; it contains inputs, not observations.
 
 > `readonly` `optional` **context?**: `Readonly`\<`Record`\<`string`, `unknown`\>\>
 
-Defined in: [src/core/inputRequest.ts:68](https://github.com/footprintjs/agentfootprint/blob/8eb817f55f177662ed213c7b387a5bdc2527c87b/src/core/inputRequest.ts#L68)
+Defined in: [src/core/inputRequest.ts:68](https://github.com/footprintjs/agentfootprint/blob/f5cabfd85eeae981c1a9a9dd20edaa7a4ced5063/src/core/inputRequest.ts#L68)
 
 ***
 
@@ -24,7 +24,7 @@ Defined in: [src/core/inputRequest.ts:68](https://github.com/footprintjs/agentfo
 
 > `readonly` **origin**: `object`
 
-Defined in: [src/core/inputRequest.ts:69](https://github.com/footprintjs/agentfootprint/blob/8eb817f55f177662ed213c7b387a5bdc2527c87b/src/core/inputRequest.ts#L69)
+Defined in: [src/core/inputRequest.ts:69](https://github.com/footprintjs/agentfootprint/blob/f5cabfd85eeae981c1a9a9dd20edaa7a4ced5063/src/core/inputRequest.ts#L69)
 
 #### offeredSkillIds?
 
@@ -48,7 +48,7 @@ Defined in: [src/core/inputRequest.ts:69](https://github.com/footprintjs/agentfo
 
 > `readonly` **origins**: `Readonly`\<`Record`\<`string`, `"declaration"` \| `"response"`\>\>
 
-Defined in: [src/core/inputRequest.ts:67](https://github.com/footprintjs/agentfootprint/blob/8eb817f55f177662ed213c7b387a5bdc2527c87b/src/core/inputRequest.ts#L67)
+Defined in: [src/core/inputRequest.ts:67](https://github.com/footprintjs/agentfootprint/blob/f5cabfd85eeae981c1a9a9dd20edaa7a4ced5063/src/core/inputRequest.ts#L67)
 
 ***
 
@@ -56,7 +56,7 @@ Defined in: [src/core/inputRequest.ts:67](https://github.com/footprintjs/agentfo
 
 > `readonly` **requestId**: `string`
 
-Defined in: [src/core/inputRequest.ts:65](https://github.com/footprintjs/agentfootprint/blob/8eb817f55f177662ed213c7b387a5bdc2527c87b/src/core/inputRequest.ts#L65)
+Defined in: [src/core/inputRequest.ts:65](https://github.com/footprintjs/agentfootprint/blob/f5cabfd85eeae981c1a9a9dd20edaa7a4ced5063/src/core/inputRequest.ts#L65)
 
 ***
 
@@ -64,7 +64,7 @@ Defined in: [src/core/inputRequest.ts:65](https://github.com/footprintjs/agentfo
 
 > `readonly` **status**: `"input_received"`
 
-Defined in: [src/core/inputRequest.ts:64](https://github.com/footprintjs/agentfootprint/blob/8eb817f55f177662ed213c7b387a5bdc2527c87b/src/core/inputRequest.ts#L64)
+Defined in: [src/core/inputRequest.ts:64](https://github.com/footprintjs/agentfootprint/blob/f5cabfd85eeae981c1a9a9dd20edaa7a4ced5063/src/core/inputRequest.ts#L64)
 
 ***
 
@@ -72,4 +72,4 @@ Defined in: [src/core/inputRequest.ts:64](https://github.com/footprintjs/agentfo
 
 > `readonly` **values**: `Readonly`\<`Record`\<`string`, [`InputValue`](/agentfootprint/api/generated/type-aliases/InputValue.md)\>\>
 
-Defined in: [src/core/inputRequest.ts:66](https://github.com/footprintjs/agentfootprint/blob/8eb817f55f177662ed213c7b387a5bdc2527c87b/src/core/inputRequest.ts#L66)
+Defined in: [src/core/inputRequest.ts:66](https://github.com/footprintjs/agentfootprint/blob/f5cabfd85eeae981c1a9a9dd20edaa7a4ced5063/src/core/inputRequest.ts#L66)

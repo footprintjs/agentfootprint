@@ -8,7 +8,7 @@
 
 > **composeNotCovered**(`coverage`): readonly `string`[]
 
-Defined in: [src/lib/semantics/envelope.ts:114](https://github.com/footprintjs/agentfootprint/blob/8eb817f55f177662ed213c7b387a5bdc2527c87b/src/lib/semantics/envelope.ts#L114)
+Defined in: [src/lib/semantics/envelope.ts:114](https://github.com/footprintjs/agentfootprint/blob/f5cabfd85eeae981c1a9a9dd20edaa7a4ced5063/src/lib/semantics/envelope.ts#L114)
 
 Compose the `not_covered` prose lines FROM coverage — the one derivation,
  used by the mint and by the drift check, so the two can never disagree.

@@ -8,7 +8,7 @@
 
 > **projectWalk**(`entries`, `cap`): [`ProjectedWalk`](/agentfootprint/api/generated/interfaces/ProjectedWalk.md)
 
-Defined in: [src/core/runbook/walk.ts:78](https://github.com/footprintjs/agentfootprint/blob/8eb817f55f177662ed213c7b387a5bdc2527c87b/src/core/runbook/walk.ts#L78)
+Defined in: [src/core/runbook/walk.ts:78](https://github.com/footprintjs/agentfootprint/blob/f5cabfd85eeae981c1a9a9dd20edaa7a4ced5063/src/core/runbook/walk.ts#L78)
 
 Apply the cap law. Counters are about the WHOLE narrative (`total`), so a
  projected walk cannot read as a short run.

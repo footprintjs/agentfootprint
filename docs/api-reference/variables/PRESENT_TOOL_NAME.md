@@ -8,7 +8,7 @@
 
 > `const` **PRESENT\_TOOL\_NAME**: `"present"` = `'present'`
 
-Defined in: [src/artifacts/present.ts:36](https://github.com/footprintjs/agentfootprint/blob/8eb817f55f177662ed213c7b387a5bdc2527c87b/src/artifacts/present.ts#L36)
+Defined in: [src/artifacts/present.ts:36](https://github.com/footprintjs/agentfootprint/blob/f5cabfd85eeae981c1a9a9dd20edaa7a4ced5063/src/artifacts/present.ts#L36)
 
 The reserved name of the auto-attached tool. Reserved ONLY when a store is
 attached (the `read_skill` seam): a storeless agent may keep its own

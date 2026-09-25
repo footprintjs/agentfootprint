@@ -6,7 +6,7 @@
 
 # Interface: PermissionChecker
 
-Defined in: [src/adapters/types.ts:861](https://github.com/footprintjs/agentfootprint/blob/8eb817f55f177662ed213c7b387a5bdc2527c87b/src/adapters/types.ts#L861)
+Defined in: [src/adapters/types.ts:861](https://github.com/footprintjs/agentfootprint/blob/f5cabfd85eeae981c1a9a9dd20edaa7a4ced5063/src/adapters/types.ts#L861)
 
 ## Properties
 
@@ -14,7 +14,7 @@ Defined in: [src/adapters/types.ts:861](https://github.com/footprintjs/agentfoot
 
 > `readonly` `optional` **governs?**: readonly [`PermissionCapability`](/agentfootprint/api/generated/type-aliases/PermissionCapability.md)[]
 
-Defined in: [src/adapters/types.ts:894](https://github.com/footprintjs/agentfootprint/blob/8eb817f55f177662ed213c7b387a5bdc2527c87b/src/adapters/types.ts#L894)
+Defined in: [src/adapters/types.ts:894](https://github.com/footprintjs/agentfootprint/blob/f5cabfd85eeae981c1a9a9dd20edaa7a4ced5063/src/adapters/types.ts#L894)
 
 Which capabilities BEYOND `'tool_call'` this checker asks to be consulted
 about (9.11.0). Optional and feature-detected — **absence is NO**.
@@ -55,7 +55,7 @@ a checker that also governs which skills a role may activate
 
 > `readonly` **name**: `string`
 
-Defined in: [src/adapters/types.ts:862](https://github.com/footprintjs/agentfootprint/blob/8eb817f55f177662ed213c7b387a5bdc2527c87b/src/adapters/types.ts#L862)
+Defined in: [src/adapters/types.ts:862](https://github.com/footprintjs/agentfootprint/blob/f5cabfd85eeae981c1a9a9dd20edaa7a4ced5063/src/adapters/types.ts#L862)
 
 ## Methods
 
@@ -63,7 +63,7 @@ Defined in: [src/adapters/types.ts:862](https://github.com/footprintjs/agentfoot
 
 > **check**(`request`): [`PermissionDecision`](/agentfootprint/api/generated/interfaces/PermissionDecision.md) \| `Promise`\<[`PermissionDecision`](/agentfootprint/api/generated/interfaces/PermissionDecision.md)\>
 
-Defined in: [src/adapters/types.ts:863](https://github.com/footprintjs/agentfootprint/blob/8eb817f55f177662ed213c7b387a5bdc2527c87b/src/adapters/types.ts#L863)
+Defined in: [src/adapters/types.ts:863](https://github.com/footprintjs/agentfootprint/blob/f5cabfd85eeae981c1a9a9dd20edaa7a4ced5063/src/adapters/types.ts#L863)
 
 #### Parameters
 

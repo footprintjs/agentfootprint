@@ -6,7 +6,7 @@
 
 # Interface: AllowOutcome\<T\>
 
-Defined in: [src/core/agent/middleware/types.ts:86](https://github.com/footprintjs/agentfootprint/blob/8eb817f55f177662ed213c7b387a5bdc2527c87b/src/core/agent/middleware/types.ts#L86)
+Defined in: [src/core/agent/middleware/types.ts:86](https://github.com/footprintjs/agentfootprint/blob/f5cabfd85eeae981c1a9a9dd20edaa7a4ced5063/src/core/agent/middleware/types.ts#L86)
 
 Let the call through — optionally with a replacement for what the chain
 carries forward.
@@ -28,7 +28,7 @@ before?".
 
 > `readonly` **kind**: `"allow"`
 
-Defined in: [src/core/agent/middleware/types.ts:87](https://github.com/footprintjs/agentfootprint/blob/8eb817f55f177662ed213c7b387a5bdc2527c87b/src/core/agent/middleware/types.ts#L87)
+Defined in: [src/core/agent/middleware/types.ts:87](https://github.com/footprintjs/agentfootprint/blob/f5cabfd85eeae981c1a9a9dd20edaa7a4ced5063/src/core/agent/middleware/types.ts#L87)
 
 ***
 
@@ -36,7 +36,7 @@ Defined in: [src/core/agent/middleware/types.ts:87](https://github.com/footprint
 
 > `readonly` `optional` **value?**: `T`
 
-Defined in: [src/core/agent/middleware/types.ts:89](https://github.com/footprintjs/agentfootprint/blob/8eb817f55f177662ed213c7b387a5bdc2527c87b/src/core/agent/middleware/types.ts#L89)
+Defined in: [src/core/agent/middleware/types.ts:89](https://github.com/footprintjs/agentfootprint/blob/f5cabfd85eeae981c1a9a9dd20edaa7a4ced5063/src/core/agent/middleware/types.ts#L89)
 
 The replacement value. Absent = pass through unchanged.
 
@@ -46,6 +46,6 @@ The replacement value. Absent = pass through unchanged.
 
 > `readonly` `optional` **why?**: `string`
 
-Defined in: [src/core/agent/middleware/types.ts:91](https://github.com/footprintjs/agentfootprint/blob/8eb817f55f177662ed213c7b387a5bdc2527c87b/src/core/agent/middleware/types.ts#L91)
+Defined in: [src/core/agent/middleware/types.ts:91](https://github.com/footprintjs/agentfootprint/blob/f5cabfd85eeae981c1a9a9dd20edaa7a4ced5063/src/core/agent/middleware/types.ts#L91)
 
 Why the value changed. Present whenever `value` is.

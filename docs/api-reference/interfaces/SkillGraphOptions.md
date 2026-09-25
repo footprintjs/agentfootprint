@@ -6,7 +6,7 @@
 
 # Interface: SkillGraphOptions
 
-Defined in: [src/core/agent/AgentBuilder.ts:125](https://github.com/footprintjs/agentfootprint/blob/8eb817f55f177662ed213c7b387a5bdc2527c87b/src/core/agent/AgentBuilder.ts#L125)
+Defined in: [src/core/agent/AgentBuilder.ts:125](https://github.com/footprintjs/agentfootprint/blob/f5cabfd85eeae981c1a9a9dd20edaa7a4ced5063/src/core/agent/AgentBuilder.ts#L125)
 
 Mount options for `.skillGraph(graph, options)` (SG-C, 9.17.0; brains
 SG-D, 9.19.0). Every field is zero-cost when absent — an agent that passes
@@ -19,7 +19,7 @@ options existed.
 
 > `readonly` `optional` **continuity?**: `"turn"` \| `"conversation"`
 
-Defined in: [src/core/agent/AgentBuilder.ts:169](https://github.com/footprintjs/agentfootprint/blob/8eb817f55f177662ed213c7b387a5bdc2527c87b/src/core/agent/AgentBuilder.ts#L169)
+Defined in: [src/core/agent/AgentBuilder.ts:169](https://github.com/footprintjs/agentfootprint/blob/f5cabfd85eeae981c1a9a9dd20edaa7a4ced5063/src/core/agent/AgentBuilder.ts#L169)
 
 What the cursor spans. Default `'turn'` — today's per-run cursor,
 unchanged. `'conversation'`: the turn's final cursor rides the
@@ -37,7 +37,7 @@ not invent persistence.
 
 > `readonly` `optional` **decider?**: [`ProviderChoice`](/agentfootprint/api/generated/interfaces/ProviderChoice.md)
 
-Defined in: [src/core/agent/AgentBuilder.ts:199](https://github.com/footprintjs/agentfootprint/blob/8eb817f55f177662ed213c7b387a5bdc2527c87b/src/core/agent/AgentBuilder.ts#L199)
+Defined in: [src/core/agent/AgentBuilder.ts:199](https://github.com/footprintjs/agentfootprint/blob/f5cabfd85eeae981c1a9a9dd20edaa7a4ced5063/src/core/agent/AgentBuilder.ts#L199)
 
 The tier-3 DECIDER (9.19.0): an out-of-band constrained pick over an
 outstanding turn-start menu ∪ {stay} (the `llmClassifier` enum
@@ -54,7 +54,7 @@ it to resolve.
 
 > `readonly` `optional` **escalation?**: [`EscalationPolicy`](/agentfootprint/api/generated/interfaces/EscalationPolicy.md)
 
-Defined in: [src/core/agent/AgentBuilder.ts:188](https://github.com/footprintjs/agentfootprint/blob/8eb817f55f177662ed213c7b387a5bdc2527c87b/src/core/agent/AgentBuilder.ts#L188)
+Defined in: [src/core/agent/AgentBuilder.ts:188](https://github.com/footprintjs/agentfootprint/blob/f5cabfd85eeae981c1a9a9dd20edaa7a4ced5063/src/core/agent/AgentBuilder.ts#L188)
 
 Escalate-on-evidence (9.19.0): `afterRefusals` recorded gate refusals
 (`skill.rejected` — reachability, posture, OR a self-call: all three
@@ -69,7 +69,7 @@ real refusals count.
 
 > `readonly` `optional` **providers?**: `Readonly`\<`Record`\<`string`, [`ProviderChoice`](/agentfootprint/api/generated/interfaces/ProviderChoice.md)\>\>
 
-Defined in: [src/core/agent/AgentBuilder.ts:179](https://github.com/footprintjs/agentfootprint/blob/8eb817f55f177662ed213c7b387a5bdc2527c87b/src/core/agent/AgentBuilder.ts#L179)
+Defined in: [src/core/agent/AgentBuilder.ts:179](https://github.com/footprintjs/agentfootprint/blob/f5cabfd85eeae981c1a9a9dd20edaa7a4ced5063/src/core/agent/AgentBuilder.ts#L179)
 
 Per-skill BRAINS (9.19.0) — "the cursor picks the brain": while the
 graph's cursor is on a named skill, `callLLM` runs on its declared
@@ -85,7 +85,7 @@ same id in both homes with different choices is refused naming both.
 
 > `readonly` `optional` **strictness?**: `"assist"` \| `"guard"` \| `"rails"`
 
-Defined in: [src/core/agent/AgentBuilder.ts:157](https://github.com/footprintjs/agentfootprint/blob/8eb817f55f177662ed213c7b387a5bdc2527c87b/src/core/agent/AgentBuilder.ts#L157)
+Defined in: [src/core/agent/AgentBuilder.ts:157](https://github.com/footprintjs/agentfootprint/blob/f5cabfd85eeae981c1a9a9dd20edaa7a4ced5063/src/core/agent/AgentBuilder.ts#L157)
 
 How much routing authority the model has. Default `'assist'` — today,
 always: any REACHABLE `read_skill` pick is admitted, and a pick off an

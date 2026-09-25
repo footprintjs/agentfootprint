@@ -6,7 +6,7 @@
 
 # Interface: ServerToolEntry
 
-Defined in: [src/core/toolContract.ts:38](https://github.com/footprintjs/agentfootprint/blob/8eb817f55f177662ed213c7b387a5bdc2527c87b/src/core/toolContract.ts#L38)
+Defined in: [src/core/toolContract.ts:38](https://github.com/footprintjs/agentfootprint/blob/f5cabfd85eeae981c1a9a9dd20edaa7a4ced5063/src/core/toolContract.ts#L38)
 
 A server-catalog entry — the shape of one item from `GET /tools`.
 
@@ -16,7 +16,7 @@ A server-catalog entry — the shape of one item from `GET /tools`.
 
 > `readonly` `optional` **inputSchema?**: `object`
 
-Defined in: [src/core/toolContract.ts:40](https://github.com/footprintjs/agentfootprint/blob/8eb817f55f177662ed213c7b387a5bdc2527c87b/src/core/toolContract.ts#L40)
+Defined in: [src/core/toolContract.ts:40](https://github.com/footprintjs/agentfootprint/blob/f5cabfd85eeae981c1a9a9dd20edaa7a4ced5063/src/core/toolContract.ts#L40)
 
 #### properties?
 
@@ -32,4 +32,4 @@ Defined in: [src/core/toolContract.ts:40](https://github.com/footprintjs/agentfo
 
 > `readonly` **name**: `string`
 
-Defined in: [src/core/toolContract.ts:39](https://github.com/footprintjs/agentfootprint/blob/8eb817f55f177662ed213c7b387a5bdc2527c87b/src/core/toolContract.ts#L39)
+Defined in: [src/core/toolContract.ts:39](https://github.com/footprintjs/agentfootprint/blob/f5cabfd85eeae981c1a9a9dd20edaa7a4ced5063/src/core/toolContract.ts#L39)

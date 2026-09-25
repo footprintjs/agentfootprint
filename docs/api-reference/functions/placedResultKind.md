@@ -8,7 +8,7 @@
 
 > **placedResultKind**(`toolName`, `declared?`): `string`
 
-Defined in: [src/artifacts/placement.ts:95](https://github.com/footprintjs/agentfootprint/blob/8eb817f55f177662ed213c7b387a5bdc2527c87b/src/artifacts/placement.ts#L95)
+Defined in: [src/artifacts/placement.ts:95](https://github.com/footprintjs/agentfootprint/blob/f5cabfd85eeae981c1a9a9dd20edaa7a4ced5063/src/artifacts/placement.ts#L95)
 
 The kind vocabulary a placement mint declares — THE one decision, and the
 only place it is made.

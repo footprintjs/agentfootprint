@@ -6,7 +6,7 @@
 
 # Interface: RunbookAsToolOptions
 
-Defined in: [src/core/runbook/types.ts:170](https://github.com/footprintjs/agentfootprint/blob/8eb817f55f177662ed213c7b387a5bdc2527c87b/src/core/runbook/types.ts#L170)
+Defined in: [src/core/runbook/types.ts:170](https://github.com/footprintjs/agentfootprint/blob/f5cabfd85eeae981c1a9a9dd20edaa7a4ced5063/src/core/runbook/types.ts#L170)
 
 Everything `runbookAsTool` accepts. Smallest legal call:
  `{ name, description, procedure }` — and it still yields the spine.
@@ -17,7 +17,7 @@ Everything `runbookAsTool` accepts. Smallest legal call:
 
 > `readonly` `optional` **argumentsFrom?**: readonly `string`[]
 
-Defined in: [src/core/runbook/types.ts:186](https://github.com/footprintjs/agentfootprint/blob/8eb817f55f177662ed213c7b387a5bdc2527c87b/src/core/runbook/types.ts#L186)
+Defined in: [src/core/runbook/types.ts:186](https://github.com/footprintjs/agentfootprint/blob/f5cabfd85eeae981c1a9a9dd20edaa7a4ced5063/src/core/runbook/types.ts#L186)
 
 ***
 
@@ -25,7 +25,7 @@ Defined in: [src/core/runbook/types.ts:186](https://github.com/footprintjs/agent
 
 > `readonly` `optional` **composedOf?**: readonly `string`[]
 
-Defined in: [src/core/runbook/types.ts:189](https://github.com/footprintjs/agentfootprint/blob/8eb817f55f177662ed213c7b387a5bdc2527c87b/src/core/runbook/types.ts#L189)
+Defined in: [src/core/runbook/types.ts:189](https://github.com/footprintjs/agentfootprint/blob/f5cabfd85eeae981c1a9a9dd20edaa7a4ced5063/src/core/runbook/types.ts#L189)
 
 The named ingredient tools the procedure calls through `ctx.tools` —
  drift-checked at agent build.
@@ -36,7 +36,7 @@ The named ingredient tools the procedure calls through `ctx.tools` —
 
 > `readonly` **description**: `string`
 
-Defined in: [src/core/runbook/types.ts:174](https://github.com/footprintjs/agentfootprint/blob/8eb817f55f177662ed213c7b387a5bdc2527c87b/src/core/runbook/types.ts#L174)
+Defined in: [src/core/runbook/types.ts:174](https://github.com/footprintjs/agentfootprint/blob/f5cabfd85eeae981c1a9a9dd20edaa7a4ced5063/src/core/runbook/types.ts#L174)
 
 REQUIRED — a description-less tool is invisible to the model.
 
@@ -46,7 +46,7 @@ REQUIRED — a description-less tool is invisible to the model.
 
 > `readonly` `optional` **inputSchema?**: `Readonly`\<`Record`\<`string`, `unknown`\>\>
 
-Defined in: [src/core/runbook/types.ts:194](https://github.com/footprintjs/agentfootprint/blob/8eb817f55f177662ed213c7b387a5bdc2527c87b/src/core/runbook/types.ts#L194)
+Defined in: [src/core/runbook/types.ts:194](https://github.com/footprintjs/agentfootprint/blob/f5cabfd85eeae981c1a9a9dd20edaa7a4ced5063/src/core/runbook/types.ts#L194)
 
 Explicit input schema wins; otherwise the chart's `.contract()` input
  is lifted when it is a plain JSON-Schema object (a parseable schema —
@@ -59,7 +59,7 @@ Explicit input schema wins; otherwise the chart's `.contract()` input
 
 > `readonly` `optional` **keepRecord?**: `boolean`
 
-Defined in: [src/core/runbook/types.ts:213](https://github.com/footprintjs/agentfootprint/blob/8eb817f55f177662ed213c7b387a5bdc2527c87b/src/core/runbook/types.ts#L213)
+Defined in: [src/core/runbook/types.ts:213](https://github.com/footprintjs/agentfootprint/blob/f5cabfd85eeae981c1a9a9dd20edaa7a4ced5063/src/core/runbook/types.ts#L213)
 
 Keep each invocation's inner record for `inspect_tool_run` descent.
 
@@ -69,7 +69,7 @@ Keep each invocation's inner record for `inspect_tool_run` descent.
 
 > `readonly` `optional` **keepRecordLimit?**: `number`
 
-Defined in: [src/core/runbook/types.ts:215](https://github.com/footprintjs/agentfootprint/blob/8eb817f55f177662ed213c7b387a5bdc2527c87b/src/core/runbook/types.ts#L215)
+Defined in: [src/core/runbook/types.ts:215](https://github.com/footprintjs/agentfootprint/blob/f5cabfd85eeae981c1a9a9dd20edaa7a4ced5063/src/core/runbook/types.ts#L215)
 
 Bounded LRU size for kept records (requires `keepRecord: true`).
 
@@ -79,7 +79,7 @@ Bounded LRU size for kept records (requires `keepRecord: true`).
 
 > `readonly` **name**: `string`
 
-Defined in: [src/core/runbook/types.ts:172](https://github.com/footprintjs/agentfootprint/blob/8eb817f55f177662ed213c7b387a5bdc2527c87b/src/core/runbook/types.ts#L172)
+Defined in: [src/core/runbook/types.ts:172](https://github.com/footprintjs/agentfootprint/blob/f5cabfd85eeae981c1a9a9dd20edaa7a4ced5063/src/core/runbook/types.ts#L172)
 
 Tool name the LLM dispatches by.
 
@@ -89,7 +89,7 @@ Tool name the LLM dispatches by.
 
 > `readonly` `optional` **owner?**: `ToolOwner`
 
-Defined in: [src/core/runbook/types.ts:183](https://github.com/footprintjs/agentfootprint/blob/8eb817f55f177662ed213c7b387a5bdc2527c87b/src/core/runbook/types.ts#L183)
+Defined in: [src/core/runbook/types.ts:183](https://github.com/footprintjs/agentfootprint/blob/f5cabfd85eeae981c1a9a9dd20edaa7a4ced5063/src/core/runbook/types.ts#L183)
 
 ***
 
@@ -97,7 +97,7 @@ Defined in: [src/core/runbook/types.ts:183](https://github.com/footprintjs/agent
 
 > `readonly` `optional` **presentation?**: [`RunbookPresentation`](/agentfootprint/api/generated/type-aliases/RunbookPresentation.md)
 
-Defined in: [src/core/runbook/types.ts:205](https://github.com/footprintjs/agentfootprint/blob/8eb817f55f177662ed213c7b387a5bdc2527c87b/src/core/runbook/types.ts#L205)
+Defined in: [src/core/runbook/types.ts:205](https://github.com/footprintjs/agentfootprint/blob/f5cabfd85eeae981c1a9a9dd20edaa7a4ced5063/src/core/runbook/types.ts#L205)
 
 Who renders the rowset — see [RunbookPresentation](/agentfootprint/api/generated/type-aliases/RunbookPresentation.md). Default
  `'prose'`; an unknown value is refused at definition, never read as the
@@ -110,7 +110,7 @@ Who renders the rowset — see [RunbookPresentation](/agentfootprint/api/generat
 
 > `readonly` **procedure**: [`RunbookProcedure`](/agentfootprint/api/generated/type-aliases/RunbookProcedure.md)
 
-Defined in: [src/core/runbook/types.ts:176](https://github.com/footprintjs/agentfootprint/blob/8eb817f55f177662ed213c7b387a5bdc2527c87b/src/core/runbook/types.ts#L176)
+Defined in: [src/core/runbook/types.ts:176](https://github.com/footprintjs/agentfootprint/blob/f5cabfd85eeae981c1a9a9dd20edaa7a4ced5063/src/core/runbook/types.ts#L176)
 
 The procedure factory — see [RunbookProcedure](/agentfootprint/api/generated/type-aliases/RunbookProcedure.md).
 
@@ -120,7 +120,7 @@ The procedure factory — see [RunbookProcedure](/agentfootprint/api/generated/t
 
 > `readonly` `optional` **recorders?**: readonly [`CombinedRecorder`](/agentfootprint/api/generated/type-aliases/CombinedRecorder.md)[]
 
-Defined in: [src/core/runbook/types.ts:211](https://github.com/footprintjs/agentfootprint/blob/8eb817f55f177662ed213c7b387a5bdc2527c87b/src/core/runbook/types.ts#L211)
+Defined in: [src/core/runbook/types.ts:211](https://github.com/footprintjs/agentfootprint/blob/f5cabfd85eeae981c1a9a9dd20edaa7a4ced5063/src/core/runbook/types.ts#L211)
 
 Observers attached to each invocation's fresh inner executor.
 
@@ -130,7 +130,7 @@ Observers attached to each invocation's fresh inner executor.
 
 > `readonly` `optional` **redact?**: [`RedactionPolicy`](/agentfootprint/api/generated/interfaces/RedactionPolicy.md)
 
-Defined in: [src/core/runbook/types.ts:229](https://github.com/footprintjs/agentfootprint/blob/8eb817f55f177662ed213c7b387a5bdc2527c87b/src/core/runbook/types.ts#L229)
+Defined in: [src/core/runbook/types.ts:229](https://github.com/footprintjs/agentfootprint/blob/f5cabfd85eeae981c1a9a9dd20edaa7a4ced5063/src/core/runbook/types.ts#L229)
 
 Redaction policy for the inner run. One rule for everything the tool
  shows (9.89.1): the commit log is scrubbed at write time — and since
@@ -152,7 +152,7 @@ Redaction policy for the inner run. One rule for everything the tool
 
 > `readonly` `optional` **resultCeiling?**: [`ToolResultCeiling`](/agentfootprint/api/generated/interfaces/ToolResultCeiling.md)
 
-Defined in: [src/core/runbook/types.ts:184](https://github.com/footprintjs/agentfootprint/blob/8eb817f55f177662ed213c7b387a5bdc2527c87b/src/core/runbook/types.ts#L184)
+Defined in: [src/core/runbook/types.ts:184](https://github.com/footprintjs/agentfootprint/blob/f5cabfd85eeae981c1a9a9dd20edaa7a4ced5063/src/core/runbook/types.ts#L184)
 
 ***
 
@@ -160,7 +160,7 @@ Defined in: [src/core/runbook/types.ts:184](https://github.com/footprintjs/agent
 
 > `readonly` `optional` **resultClass?**: [`ToolResultClass`](/agentfootprint/api/generated/type-aliases/ToolResultClass.md)
 
-Defined in: [src/core/runbook/types.ts:182](https://github.com/footprintjs/agentfootprint/blob/8eb817f55f177662ed213c7b387a5bdc2527c87b/src/core/runbook/types.ts#L182)
+Defined in: [src/core/runbook/types.ts:182](https://github.com/footprintjs/agentfootprint/blob/f5cabfd85eeae981c1a9a9dd20edaa7a4ced5063/src/core/runbook/types.ts#L182)
 
 ***
 
@@ -168,7 +168,7 @@ Defined in: [src/core/runbook/types.ts:182](https://github.com/footprintjs/agent
 
 > `readonly` `optional` **resultKind?**: `string`
 
-Defined in: [src/core/runbook/types.ts:181](https://github.com/footprintjs/agentfootprint/blob/8eb817f55f177662ed213c7b387a5bdc2527c87b/src/core/runbook/types.ts#L181)
+Defined in: [src/core/runbook/types.ts:181](https://github.com/footprintjs/agentfootprint/blob/f5cabfd85eeae981c1a9a9dd20edaa7a4ced5063/src/core/runbook/types.ts#L181)
 
 Selects the envelope projection (`'verdict/*'` gets the rowset) AND is
  the artifact kind a placed result is minted under.
@@ -179,7 +179,7 @@ Selects the envelope projection (`'verdict/*'` gets the rowset) AND is
 
 > `readonly` `optional` **rules?**: [`RunbookRules`](/agentfootprint/api/generated/interfaces/RunbookRules.md)
 
-Defined in: [src/core/runbook/types.ts:198](https://github.com/footprintjs/agentfootprint/blob/8eb817f55f177662ed213c7b387a5bdc2527c87b/src/core/runbook/types.ts#L198)
+Defined in: [src/core/runbook/types.ts:198](https://github.com/footprintjs/agentfootprint/blob/f5cabfd85eeae981c1a9a9dd20edaa7a4ced5063/src/core/runbook/types.ts#L198)
 
 Rule provenance — see [RunbookRules](/agentfootprint/api/generated/interfaces/RunbookRules.md).
 
@@ -189,7 +189,7 @@ Rule provenance — see [RunbookRules](/agentfootprint/api/generated/interfaces/
 
 > `readonly` `optional` **verdicts?**: [`RunbookVerdictsOptions`](/agentfootprint/api/generated/interfaces/RunbookVerdictsOptions.md)
 
-Defined in: [src/core/runbook/types.ts:200](https://github.com/footprintjs/agentfootprint/blob/8eb817f55f177662ed213c7b387a5bdc2527c87b/src/core/runbook/types.ts#L200)
+Defined in: [src/core/runbook/types.ts:200](https://github.com/footprintjs/agentfootprint/blob/f5cabfd85eeae981c1a9a9dd20edaa7a4ced5063/src/core/runbook/types.ts#L200)
 
 The verdict projection's dials — see [RunbookVerdictsOptions](/agentfootprint/api/generated/interfaces/RunbookVerdictsOptions.md).
 
@@ -199,7 +199,7 @@ The verdict projection's dials — see [RunbookVerdictsOptions](/agentfootprint/
 
 > `readonly` `optional` **walk?**: [`RunbookWalkOptions`](/agentfootprint/api/generated/interfaces/RunbookWalkOptions.md)
 
-Defined in: [src/core/runbook/types.ts:207](https://github.com/footprintjs/agentfootprint/blob/8eb817f55f177662ed213c7b387a5bdc2527c87b/src/core/runbook/types.ts#L207)
+Defined in: [src/core/runbook/types.ts:207](https://github.com/footprintjs/agentfootprint/blob/f5cabfd85eeae981c1a9a9dd20edaa7a4ced5063/src/core/runbook/types.ts#L207)
 
 The walk policy — see [RunbookWalkOptions](/agentfootprint/api/generated/interfaces/RunbookWalkOptions.md).
 
@@ -209,4 +209,4 @@ The walk policy — see [RunbookWalkOptions](/agentfootprint/api/generated/inter
 
 > `readonly` `optional` **wants?**: `Readonly`\<`Record`\<`string`, `string`\>\>
 
-Defined in: [src/core/runbook/types.ts:185](https://github.com/footprintjs/agentfootprint/blob/8eb817f55f177662ed213c7b387a5bdc2527c87b/src/core/runbook/types.ts#L185)
+Defined in: [src/core/runbook/types.ts:185](https://github.com/footprintjs/agentfootprint/blob/f5cabfd85eeae981c1a9a9dd20edaa7a4ced5063/src/core/runbook/types.ts#L185)

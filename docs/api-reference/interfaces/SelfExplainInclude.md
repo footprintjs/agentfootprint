@@ -6,7 +6,7 @@
 
 # Interface: SelfExplainInclude
 
-Defined in: [src/lib/trace-toolpack/selfExplain.ts:74](https://github.com/footprintjs/agentfootprint/blob/8eb817f55f177662ed213c7b387a5bdc2527c87b/src/lib/trace-toolpack/selfExplain.ts#L74)
+Defined in: [src/lib/trace-toolpack/selfExplain.ts:74](https://github.com/footprintjs/agentfootprint/blob/f5cabfd85eeae981c1a9a9dd20edaa7a4ced5063/src/lib/trace-toolpack/selfExplain.ts#L74)
 
 How much of a turn's evidence the binding keeps.
 
@@ -23,7 +23,7 @@ narrative would repeat what the structured tools already say.
 
 > `readonly` `optional` **events?**: `boolean`
 
-Defined in: [src/lib/trace-toolpack/selfExplain.ts:85](https://github.com/footprintjs/agentfootprint/blob/8eb817f55f177662ed213c7b387a5bdc2527c87b/src/lib/trace-toolpack/selfExplain.ts#L85)
+Defined in: [src/lib/trace-toolpack/selfExplain.ts:85](https://github.com/footprintjs/agentfootprint/blob/f5cabfd85eeae981c1a9a9dd20edaa7a4ced5063/src/lib/trace-toolpack/selfExplain.ts#L85)
 
 A bounded tail of the run's typed events → tool-call timings and
 outcomes in `inspect_tool_call`, and the Context Integrity findings
@@ -38,6 +38,6 @@ rather than reporting a run with no context errors.
 
 > `readonly` `optional` **narrative?**: `boolean`
 
-Defined in: [src/lib/trace-toolpack/selfExplain.ts:76](https://github.com/footprintjs/agentfootprint/blob/8eb817f55f177662ed213c7b387a5bdc2527c87b/src/lib/trace-toolpack/selfExplain.ts#L76)
+Defined in: [src/lib/trace-toolpack/selfExplain.ts:76](https://github.com/footprintjs/agentfootprint/blob/f5cabfd85eeae981c1a9a9dd20edaa7a4ced5063/src/lib/trace-toolpack/selfExplain.ts#L76)
 
 The run's plain-English story → the `read_narrative` tool. Default true.

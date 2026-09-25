@@ -8,7 +8,7 @@
 
 > **milestoneTag**(`kind`): `string`
 
-Defined in: [src/conventions.ts:492](https://github.com/footprintjs/agentfootprint/blob/8eb817f55f177662ed213c7b387a5bdc2527c87b/src/conventions.ts#L492)
+Defined in: [src/conventions.ts:492](https://github.com/footprintjs/agentfootprint/blob/f5cabfd85eeae981c1a9a9dd20edaa7a4ced5063/src/conventions.ts#L492)
 
 The kind tag for a [MilestoneKind](/agentfootprint/api/generated/type-aliases/MilestoneKind.md) — `'milestone:' + kind`.
 

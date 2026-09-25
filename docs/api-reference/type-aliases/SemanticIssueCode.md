@@ -8,7 +8,7 @@
 
 > **SemanticIssueCode** = `"malformed-semantics"` \| `"series-without-grain"` \| `"counter-aggregation-unstated"` \| `"data-without-provenance"`
 
-Defined in: [src/lib/semantics/envelope.ts:63](https://github.com/footprintjs/agentfootprint/blob/8eb817f55f177662ed213c7b387a5bdc2527c87b/src/lib/semantics/envelope.ts#L63)
+Defined in: [src/lib/semantics/envelope.ts:63](https://github.com/footprintjs/agentfootprint/blob/f5cabfd85eeae981c1a9a9dd20edaa7a4ced5063/src/lib/semantics/envelope.ts#L63)
 
 The codes an envelope can be faulted with — shared by recognition (any
  issue ⇒ not recognized) and the `check:semantics` gate (issues become

@@ -8,7 +8,7 @@
 
 > **withDatasetArtifacts**\<`TArgs`, `TResult`, `TProjected`\>(`tool`, `adapter`): [`Tool`](/agentfootprint/api/generated/interfaces/Tool.md)\<`TArgs`, `TResult` \| `TProjected`\>
 
-Defined in: [src/artifacts/datasetResult.ts:55](https://github.com/footprintjs/agentfootprint/blob/8eb817f55f177662ed213c7b387a5bdc2527c87b/src/artifacts/datasetResult.ts#L55)
+Defined in: [src/artifacts/datasetResult.ts:55](https://github.com/footprintjs/agentfootprint/blob/f5cabfd85eeae981c1a9a9dd20edaa7a4ced5063/src/artifacts/datasetResult.ts#L55)
 
 Adapt any local, HTTP-backed or MCP Tool using the SAME already-bound execution capability.
 Claim-check: the host configures storage; the model carries tickets between tools. No UI required.

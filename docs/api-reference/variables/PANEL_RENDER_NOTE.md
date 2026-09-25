@@ -8,7 +8,7 @@
 
 > `const` **PANEL\_RENDER\_NOTE**: `string`
 
-Defined in: [src/core/runbook/verdicts.ts:65](https://github.com/footprintjs/agentfootprint/blob/8eb817f55f177662ed213c7b387a5bdc2527c87b/src/core/runbook/verdicts.ts#L65)
+Defined in: [src/core/runbook/verdicts.ts:65](https://github.com/footprintjs/agentfootprint/blob/f5cabfd85eeae981c1a9a9dd20edaa7a4ced5063/src/core/runbook/verdicts.ts#L65)
 
 The render law when the HOST renders the rowset (`presentation: 'panel'`) —
 stated to the model INSTEAD of a table, because there is none to ship.

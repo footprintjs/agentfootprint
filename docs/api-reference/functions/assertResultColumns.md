@@ -8,7 +8,7 @@
 
 > **assertResultColumns**(`toolName`, `columns`): `void`
 
-Defined in: [src/integrity/column-types/types.ts:138](https://github.com/footprintjs/agentfootprint/blob/8eb817f55f177662ed213c7b387a5bdc2527c87b/src/integrity/column-types/types.ts#L138)
+Defined in: [src/integrity/column-types/types.ts:138](https://github.com/footprintjs/agentfootprint/blob/f5cabfd85eeae981c1a9a9dd20edaa7a4ced5063/src/integrity/column-types/types.ts#L138)
 
 Refuse a `resultColumns` this library cannot honour, at definition time —
 naming the tool, the column and the fix.

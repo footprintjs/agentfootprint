@@ -6,7 +6,7 @@
 
 # Interface: TokenBudgetOptions
 
-Defined in: [src/core/agent/window/types.ts:550](https://github.com/footprintjs/agentfootprint/blob/8eb817f55f177662ed213c7b387a5bdc2527c87b/src/core/agent/window/types.ts#L550)
+Defined in: [src/core/agent/window/types.ts:550](https://github.com/footprintjs/agentfootprint/blob/f5cabfd85eeae981c1a9a9dd20edaa7a4ced5063/src/core/agent/window/types.ts#L550)
 
 What `tokenBudget({...})` accepts.
 
@@ -24,7 +24,7 @@ const agent = Agent.create({ provider: anthropic(), model: 'claude-sonnet-4-5' }
 
 > `readonly` `optional` **keepRecentTurns?**: `number`
 
-Defined in: [src/core/agent/window/types.ts:561](https://github.com/footprintjs/agentfootprint/blob/8eb817f55f177662ed213c7b387a5bdc2527c87b/src/core/agent/window/types.ts#L561)
+Defined in: [src/core/agent/window/types.ts:561](https://github.com/footprintjs/agentfootprint/blob/f5cabfd85eeae981c1a9a9dd20edaa7a4ced5063/src/core/agent/window/types.ts#L561)
 
 How many of the most recent turns are never dropped. Default 6.
 
@@ -34,7 +34,7 @@ How many of the most recent turns are never dropped. Default 6.
 
 > `readonly` **thresholdTokens**: `number`
 
-Defined in: [src/core/agent/window/types.ts:557](https://github.com/footprintjs/agentfootprint/blob/8eb817f55f177662ed213c7b387a5bdc2527c87b/src/core/agent/window/types.ts#L557)
+Defined in: [src/core/agent/window/types.ts:557](https://github.com/footprintjs/agentfootprint/blob/f5cabfd85eeae981c1a9a9dd20edaa7a4ced5063/src/core/agent/window/types.ts#L557)
 
 Drop when the LAST call's adapter-reported input tokens exceed this.
 

@@ -6,7 +6,7 @@
 
 # Interface: ExternalGrounding
 
-Defined in: [src/integrity/unsupported-argument/check.ts:102](https://github.com/footprintjs/agentfootprint/blob/8eb817f55f177662ed213c7b387a5bdc2527c87b/src/integrity/unsupported-argument/check.ts#L102)
+Defined in: [src/integrity/unsupported-argument/check.ts:102](https://github.com/footprintjs/agentfootprint/blob/f5cabfd85eeae981c1a9a9dd20edaa7a4ced5063/src/integrity/unsupported-argument/check.ts#L102)
 
 One argument value an external ground excused — the audit trail of an app
 assertion. Filed alongside the findings so the record can say WHICH source
@@ -18,7 +18,7 @@ grounded a value, not merely that no finding was raised.
 
 > `readonly` **path**: `string`
 
-Defined in: [src/integrity/unsupported-argument/check.ts:106](https://github.com/footprintjs/agentfootprint/blob/8eb817f55f177662ed213c7b387a5bdc2527c87b/src/integrity/unsupported-argument/check.ts#L106)
+Defined in: [src/integrity/unsupported-argument/check.ts:106](https://github.com/footprintjs/agentfootprint/blob/f5cabfd85eeae981c1a9a9dd20edaa7a4ced5063/src/integrity/unsupported-argument/check.ts#L106)
 
 Dot-path of the argument leaf the ground excused.
 
@@ -28,7 +28,7 @@ Dot-path of the argument leaf the ground excused.
 
 > `readonly` **source**: `string`
 
-Defined in: [src/integrity/unsupported-argument/check.ts:109](https://github.com/footprintjs/agentfootprint/blob/8eb817f55f177662ed213c7b387a5bdc2527c87b/src/integrity/unsupported-argument/check.ts#L109)
+Defined in: [src/integrity/unsupported-argument/check.ts:109](https://github.com/footprintjs/agentfootprint/blob/f5cabfd85eeae981c1a9a9dd20edaa7a4ced5063/src/integrity/unsupported-argument/check.ts#L109)
 
 The app's label from the [ExternalGround](/agentfootprint/api/generated/interfaces/ExternalGround.md) entry that matched.
 
@@ -38,7 +38,7 @@ The app's label from the [ExternalGround](/agentfootprint/api/generated/interfac
 
 > `readonly` **toolCallId**: `string`
 
-Defined in: [src/integrity/unsupported-argument/check.ts:104](https://github.com/footprintjs/agentfootprint/blob/8eb817f55f177662ed213c7b387a5bdc2527c87b/src/integrity/unsupported-argument/check.ts#L104)
+Defined in: [src/integrity/unsupported-argument/check.ts:104](https://github.com/footprintjs/agentfootprint/blob/f5cabfd85eeae981c1a9a9dd20edaa7a4ced5063/src/integrity/unsupported-argument/check.ts#L104)
 
 ***
 
@@ -46,7 +46,7 @@ Defined in: [src/integrity/unsupported-argument/check.ts:104](https://github.com
 
 > `readonly` **toolName**: `string`
 
-Defined in: [src/integrity/unsupported-argument/check.ts:103](https://github.com/footprintjs/agentfootprint/blob/8eb817f55f177662ed213c7b387a5bdc2527c87b/src/integrity/unsupported-argument/check.ts#L103)
+Defined in: [src/integrity/unsupported-argument/check.ts:103](https://github.com/footprintjs/agentfootprint/blob/f5cabfd85eeae981c1a9a9dd20edaa7a4ced5063/src/integrity/unsupported-argument/check.ts#L103)
 
 ***
 
@@ -54,4 +54,4 @@ Defined in: [src/integrity/unsupported-argument/check.ts:103](https://github.com
 
 > `readonly` **value**: `string`
 
-Defined in: [src/integrity/unsupported-argument/check.ts:107](https://github.com/footprintjs/agentfootprint/blob/8eb817f55f177662ed213c7b387a5bdc2527c87b/src/integrity/unsupported-argument/check.ts#L107)
+Defined in: [src/integrity/unsupported-argument/check.ts:107](https://github.com/footprintjs/agentfootprint/blob/f5cabfd85eeae981c1a9a9dd20edaa7a4ced5063/src/integrity/unsupported-argument/check.ts#L107)

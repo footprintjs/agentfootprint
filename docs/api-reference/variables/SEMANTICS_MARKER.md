@@ -8,7 +8,7 @@
 
 > `const` **SEMANTICS\_MARKER**: `"af_semantics"` = `'af_semantics'`
 
-Defined in: [src/lib/semantics/types.ts:48](https://github.com/footprintjs/agentfootprint/blob/8eb817f55f177662ed213c7b387a5bdc2527c87b/src/lib/semantics/types.ts#L48)
+Defined in: [src/lib/semantics/types.ts:48](https://github.com/footprintjs/agentfootprint/blob/f5cabfd85eeae981c1a9a9dd20edaa7a4ced5063/src/lib/semantics/types.ts#L48)
 
 The reserved key that makes a semantic envelope recognizable. Reserved
 vocabulary on the tool-result wire (the `af_absent` / `af_coverage`

@@ -6,7 +6,7 @@
 
 # Interface: KeyedFold
 
-Defined in: [src/lib/time-travel/keyedFold.ts:115](https://github.com/footprintjs/agentfootprint/blob/8eb817f55f177662ed213c7b387a5bdc2527c87b/src/lib/time-travel/keyedFold.ts#L115)
+Defined in: [src/lib/time-travel/keyedFold.ts:115](https://github.com/footprintjs/agentfootprint/blob/f5cabfd85eeae981c1a9a9dd20edaa7a4ced5063/src/lib/time-travel/keyedFold.ts#L115)
 
 One key's value at one commit — the question, and the answers already
 computed for it.
@@ -17,7 +17,7 @@ computed for it.
 
 > `readonly` **basis**: [`FoldBasis`](/agentfootprint/api/generated/type-aliases/FoldBasis.md)
 
-Defined in: [src/lib/time-travel/keyedFold.ts:117](https://github.com/footprintjs/agentfootprint/blob/8eb817f55f177662ed213c7b387a5bdc2527c87b/src/lib/time-travel/keyedFold.ts#L117)
+Defined in: [src/lib/time-travel/keyedFold.ts:117](https://github.com/footprintjs/agentfootprint/blob/f5cabfd85eeae981c1a9a9dd20edaa7a4ced5063/src/lib/time-travel/keyedFold.ts#L117)
 
 How this fold was derived — see [FoldBasis](/agentfootprint/api/generated/type-aliases/FoldBasis.md).
 
@@ -27,7 +27,7 @@ How this fold was derived — see [FoldBasis](/agentfootprint/api/generated/type
 
 > `readonly` **length**: `number`
 
-Defined in: [src/lib/time-travel/keyedFold.ts:119](https://github.com/footprintjs/agentfootprint/blob/8eb817f55f177662ed213c7b387a5bdc2527c87b/src/lib/time-travel/keyedFold.ts#L119)
+Defined in: [src/lib/time-travel/keyedFold.ts:119](https://github.com/footprintjs/agentfootprint/blob/f5cabfd85eeae981c1a9a9dd20edaa7a4ced5063/src/lib/time-travel/keyedFold.ts#L119)
 
 How many bundles the log holds.
 
@@ -37,7 +37,7 @@ How many bundles the log holds.
 
 > **valueAt**(`key`, `idx`): `unknown`
 
-Defined in: [src/lib/time-travel/keyedFold.ts:131](https://github.com/footprintjs/agentfootprint/blob/8eb817f55f177662ed213c7b387a5bdc2527c87b/src/lib/time-travel/keyedFold.ts#L131)
+Defined in: [src/lib/time-travel/keyedFold.ts:131](https://github.com/footprintjs/agentfootprint/blob/f5cabfd85eeae981c1a9a9dd20edaa7a4ced5063/src/lib/time-travel/keyedFold.ts#L131)
 
 The value of `key` folded through commit ARRAY INDEX `idx`, inclusive.
 `-1` (or lower) folds nothing and returns the base's value — the state

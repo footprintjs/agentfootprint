@@ -8,7 +8,7 @@
 
 > **RunbookProcedure** = (`tools`) => `FlowChart`
 
-Defined in: [src/core/runbook/types.ts:42](https://github.com/footprintjs/agentfootprint/blob/8eb817f55f177662ed213c7b387a5bdc2527c87b/src/core/runbook/types.ts#L42)
+Defined in: [src/core/runbook/types.ts:42](https://github.com/footprintjs/agentfootprint/blob/f5cabfd85eeae981c1a9a9dd20edaa7a4ced5063/src/core/runbook/types.ts#L42)
 
 The procedure: a factory invoked PER CALL with the run's own tool dispatch
 (`ctx.tools`), returning a FRESH chart whose stages close over it.

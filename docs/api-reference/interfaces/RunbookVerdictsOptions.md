@@ -6,7 +6,7 @@
 
 # Interface: RunbookVerdictsOptions
 
-Defined in: [src/core/runbook/types.ts:56](https://github.com/footprintjs/agentfootprint/blob/8eb817f55f177662ed213c7b387a5bdc2527c87b/src/core/runbook/types.ts#L56)
+Defined in: [src/core/runbook/types.ts:56](https://github.com/footprintjs/agentfootprint/blob/f5cabfd85eeae981c1a9a9dd20edaa7a4ced5063/src/core/runbook/types.ts#L56)
 
 The verdict/rowset projection's dials.
 
@@ -16,7 +16,7 @@ The verdict/rowset projection's dials.
 
 > `readonly` **decider**: `string`
 
-Defined in: [src/core/runbook/types.ts:73](https://github.com/footprintjs/agentfootprint/blob/8eb817f55f177662ed213c7b387a5bdc2527c87b/src/core/runbook/types.ts#L73)
+Defined in: [src/core/runbook/types.ts:73](https://github.com/footprintjs/agentfootprint/blob/f5cabfd85eeae981c1a9a9dd20edaa7a4ced5063/src/core/runbook/types.ts#L73)
 
 The decider stage (by id or name) whose declared branch labels generate
 `verdict_meanings`. Branch descriptions come from the chart's own
@@ -39,7 +39,7 @@ decide(scope, rules, { branch: 'protected', label: 'No rule fired — asset stay
 
 > `readonly` `optional` **maxRows?**: `number`
 
-Defined in: [src/core/runbook/types.ts:77](https://github.com/footprintjs/agentfootprint/blob/8eb817f55f177662ed213c7b387a5bdc2527c87b/src/core/runbook/types.ts#L77)
+Defined in: [src/core/runbook/types.ts:77](https://github.com/footprintjs/agentfootprint/blob/f5cabfd85eeae981c1a9a9dd20edaa7a4ced5063/src/core/runbook/types.ts#L77)
 
 Cap on `verdicts` rows AND the rendered table — ONE number for both
  halves (a longer list beside a shorter table is an invitation to retype

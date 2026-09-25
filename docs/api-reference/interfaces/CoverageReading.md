@@ -6,7 +6,7 @@
 
 # Interface: CoverageReading
 
-Defined in: [src/core/agent/coverage/read.ts:64](https://github.com/footprintjs/agentfootprint/blob/8eb817f55f177662ed213c7b387a5bdc2527c87b/src/core/agent/coverage/read.ts#L64)
+Defined in: [src/core/agent/coverage/read.ts:64](https://github.com/footprintjs/agentfootprint/blob/f5cabfd85eeae981c1a9a9dd20edaa7a4ced5063/src/core/agent/coverage/read.ts#L64)
 
 What one recognized result declares. `undefined` from
  [readCoverageResult](/agentfootprint/api/generated/functions/readCoverageResult.md) means "neither shape": untouched path.
@@ -17,7 +17,7 @@ What one recognized result declares. `undefined` from
 
 > `readonly` **declared**: readonly `CoverageFacts`[]
 
-Defined in: [src/core/agent/coverage/read.ts:76](https://github.com/footprintjs/agentfootprint/blob/8eb817f55f177662ed213c7b387a5bdc2527c87b/src/core/agent/coverage/read.ts#L76)
+Defined in: [src/core/agent/coverage/read.ts:76](https://github.com/footprintjs/agentfootprint/blob/f5cabfd85eeae981c1a9a9dd20edaa7a4ced5063/src/core/agent/coverage/read.ts#L76)
 
 In declaration order: the outer ledger first, then the absence it
  wraps. Usually one entry; two only when an author bounded an absence.
@@ -28,7 +28,7 @@ In declaration order: the outer ledger first, then the absence it
 
 > `readonly` `optional` **status?**: [`ToolResultStatus`](/agentfootprint/api/generated/type-aliases/ToolResultStatus.md)
 
-Defined in: [src/core/agent/coverage/read.ts:73](https://github.com/footprintjs/agentfootprint/blob/8eb817f55f177662ed213c7b387a5bdc2527c87b/src/core/agent/coverage/read.ts#L73)
+Defined in: [src/core/agent/coverage/read.ts:73](https://github.com/footprintjs/agentfootprint/blob/f5cabfd85eeae981c1a9a9dd20edaa7a4ced5063/src/core/agent/coverage/read.ts#L73)
 
 The status the framework DELIVERS for this call. `'absent'` when an
 absence is in play — never `'failure'`, and that is the point: a status

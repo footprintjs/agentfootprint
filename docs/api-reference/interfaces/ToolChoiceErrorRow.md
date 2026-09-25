@@ -6,7 +6,7 @@
 
 # Interface: ToolChoiceErrorRow
 
-Defined in: [src/core/agent/toolChoice/types.ts:91](https://github.com/footprintjs/agentfootprint/blob/8eb817f55f177662ed213c7b387a5bdc2527c87b/src/core/agent/toolChoice/types.ts#L91)
+Defined in: [src/core/agent/toolChoice/types.ts:91](https://github.com/footprintjs/agentfootprint/blob/f5cabfd85eeae981c1a9a9dd20edaa7a4ced5063/src/core/agent/toolChoice/types.ts#L91)
 
 The classifier was asked and produced no answer: the provider's status
 and error text (the PROVIDER's words — allowed on the record) and the
@@ -19,7 +19,7 @@ narrowing.
 
 > `readonly` **classifier**: `object`
 
-Defined in: [src/core/agent/toolChoice/types.ts:95](https://github.com/footprintjs/agentfootprint/blob/8eb817f55f177662ed213c7b387a5bdc2527c87b/src/core/agent/toolChoice/types.ts#L95)
+Defined in: [src/core/agent/toolChoice/types.ts:95](https://github.com/footprintjs/agentfootprint/blob/f5cabfd85eeae981c1a9a9dd20edaa7a4ced5063/src/core/agent/toolChoice/types.ts#L95)
 
 #### name
 
@@ -31,7 +31,7 @@ Defined in: [src/core/agent/toolChoice/types.ts:95](https://github.com/footprint
 
 > `readonly` **iteration**: `number`
 
-Defined in: [src/core/agent/toolChoice/types.ts:93](https://github.com/footprintjs/agentfootprint/blob/8eb817f55f177662ed213c7b387a5bdc2527c87b/src/core/agent/toolChoice/types.ts#L93)
+Defined in: [src/core/agent/toolChoice/types.ts:93](https://github.com/footprintjs/agentfootprint/blob/f5cabfd85eeae981c1a9a9dd20edaa7a4ced5063/src/core/agent/toolChoice/types.ts#L93)
 
 ***
 
@@ -39,7 +39,7 @@ Defined in: [src/core/agent/toolChoice/types.ts:93](https://github.com/footprint
 
 > `readonly` **kind**: `"pick-error"`
 
-Defined in: [src/core/agent/toolChoice/types.ts:92](https://github.com/footprintjs/agentfootprint/blob/8eb817f55f177662ed213c7b387a5bdc2527c87b/src/core/agent/toolChoice/types.ts#L92)
+Defined in: [src/core/agent/toolChoice/types.ts:92](https://github.com/footprintjs/agentfootprint/blob/f5cabfd85eeae981c1a9a9dd20edaa7a4ced5063/src/core/agent/toolChoice/types.ts#L92)
 
 ***
 
@@ -47,7 +47,7 @@ Defined in: [src/core/agent/toolChoice/types.ts:92](https://github.com/footprint
 
 > `readonly` **latencyMs**: `number`
 
-Defined in: [src/core/agent/toolChoice/types.ts:98](https://github.com/footprintjs/agentfootprint/blob/8eb817f55f177662ed213c7b387a5bdc2527c87b/src/core/agent/toolChoice/types.ts#L98)
+Defined in: [src/core/agent/toolChoice/types.ts:98](https://github.com/footprintjs/agentfootprint/blob/f5cabfd85eeae981c1a9a9dd20edaa7a4ced5063/src/core/agent/toolChoice/types.ts#L98)
 
 ***
 
@@ -55,7 +55,7 @@ Defined in: [src/core/agent/toolChoice/types.ts:98](https://github.com/footprint
 
 > `readonly` **message**: `string`
 
-Defined in: [src/core/agent/toolChoice/types.ts:97](https://github.com/footprintjs/agentfootprint/blob/8eb817f55f177662ed213c7b387a5bdc2527c87b/src/core/agent/toolChoice/types.ts#L97)
+Defined in: [src/core/agent/toolChoice/types.ts:97](https://github.com/footprintjs/agentfootprint/blob/f5cabfd85eeae981c1a9a9dd20edaa7a4ced5063/src/core/agent/toolChoice/types.ts#L97)
 
 ***
 
@@ -63,7 +63,7 @@ Defined in: [src/core/agent/toolChoice/types.ts:97](https://github.com/footprint
 
 > `readonly` `optional` **narrowedSkipped?**: [`NarrowSkipReason`](/agentfootprint/api/generated/type-aliases/NarrowSkipReason.md)
 
-Defined in: [src/core/agent/toolChoice/types.ts:107](https://github.com/footprintjs/agentfootprint/blob/8eb817f55f177662ed213c7b387a5bdc2527c87b/src/core/agent/toolChoice/types.ts#L107)
+Defined in: [src/core/agent/toolChoice/types.ts:107](https://github.com/footprintjs/agentfootprint/blob/f5cabfd85eeae981c1a9a9dd20edaa7a4ced5063/src/core/agent/toolChoice/types.ts#L107)
 
 Present exactly when the run was configured with `serve: { top }` — the
 reason narrowing did not happen, same vocabulary and law as
@@ -76,7 +76,7 @@ nothing was ever going to narrow.
 
 > `readonly` **served**: readonly `string`[]
 
-Defined in: [src/core/agent/toolChoice/types.ts:100](https://github.com/footprintjs/agentfootprint/blob/8eb817f55f177662ed213c7b387a5bdc2527c87b/src/core/agent/toolChoice/types.ts#L100)
+Defined in: [src/core/agent/toolChoice/types.ts:100](https://github.com/footprintjs/agentfootprint/blob/f5cabfd85eeae981c1a9a9dd20edaa7a4ced5063/src/core/agent/toolChoice/types.ts#L100)
 
 The names the slot committed — the full merged wire, by the fail-open law.
 
@@ -86,7 +86,7 @@ The names the slot committed — the full merged wire, by the fail-open law.
 
 > `readonly` **source**: `"classifier"`
 
-Defined in: [src/core/agent/toolChoice/types.ts:94](https://github.com/footprintjs/agentfootprint/blob/8eb817f55f177662ed213c7b387a5bdc2527c87b/src/core/agent/toolChoice/types.ts#L94)
+Defined in: [src/core/agent/toolChoice/types.ts:94](https://github.com/footprintjs/agentfootprint/blob/f5cabfd85eeae981c1a9a9dd20edaa7a4ced5063/src/core/agent/toolChoice/types.ts#L94)
 
 ***
 
@@ -94,4 +94,4 @@ Defined in: [src/core/agent/toolChoice/types.ts:94](https://github.com/footprint
 
 > `readonly` `optional` **status?**: `number`
 
-Defined in: [src/core/agent/toolChoice/types.ts:96](https://github.com/footprintjs/agentfootprint/blob/8eb817f55f177662ed213c7b387a5bdc2527c87b/src/core/agent/toolChoice/types.ts#L96)
+Defined in: [src/core/agent/toolChoice/types.ts:96](https://github.com/footprintjs/agentfootprint/blob/f5cabfd85eeae981c1a9a9dd20edaa7a4ced5063/src/core/agent/toolChoice/types.ts#L96)

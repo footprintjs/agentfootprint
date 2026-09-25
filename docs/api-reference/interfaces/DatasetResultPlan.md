@@ -6,7 +6,7 @@
 
 # Interface: DatasetResultPlan\<TProjected\>
 
-Defined in: [src/artifacts/datasetResult.ts:29](https://github.com/footprintjs/agentfootprint/blob/8eb817f55f177662ed213c7b387a5bdc2527c87b/src/artifacts/datasetResult.ts#L29)
+Defined in: [src/artifacts/datasetResult.ts:29](https://github.com/footprintjs/agentfootprint/blob/f5cabfd85eeae981c1a9a9dd20edaa7a4ced5063/src/artifacts/datasetResult.ts#L29)
 
 Projection owns field meanings, coverage envelopes and inline policy; receipts contain no rows.
 
@@ -22,7 +22,7 @@ Projection owns field meanings, coverage envelopes and inline policy; receipts c
 
 > `readonly` **datasets**: readonly [`DatasetArtifactInput`](/agentfootprint/api/generated/interfaces/DatasetArtifactInput.md)[]
 
-Defined in: [src/artifacts/datasetResult.ts:30](https://github.com/footprintjs/agentfootprint/blob/8eb817f55f177662ed213c7b387a5bdc2527c87b/src/artifacts/datasetResult.ts#L30)
+Defined in: [src/artifacts/datasetResult.ts:30](https://github.com/footprintjs/agentfootprint/blob/f5cabfd85eeae981c1a9a9dd20edaa7a4ced5063/src/artifacts/datasetResult.ts#L30)
 
 ## Methods
 
@@ -30,7 +30,7 @@ Defined in: [src/artifacts/datasetResult.ts:30](https://github.com/footprintjs/a
 
 > **project**(`publications`): `TProjected` \| `Promise`\<`TProjected`\>
 
-Defined in: [src/artifacts/datasetResult.ts:31](https://github.com/footprintjs/agentfootprint/blob/8eb817f55f177662ed213c7b387a5bdc2527c87b/src/artifacts/datasetResult.ts#L31)
+Defined in: [src/artifacts/datasetResult.ts:31](https://github.com/footprintjs/agentfootprint/blob/f5cabfd85eeae981c1a9a9dd20edaa7a4ced5063/src/artifacts/datasetResult.ts#L31)
 
 #### Parameters
 

@@ -6,7 +6,7 @@
 
 # Interface: PricingTable
 
-Defined in: [src/adapters/types.ts:917](https://github.com/footprintjs/agentfootprint/blob/8eb817f55f177662ed213c7b387a5bdc2527c87b/src/adapters/types.ts#L917)
+Defined in: [src/adapters/types.ts:917](https://github.com/footprintjs/agentfootprint/blob/f5cabfd85eeae981c1a9a9dd20edaa7a4ced5063/src/adapters/types.ts#L917)
 
 ## Properties
 
@@ -14,7 +14,7 @@ Defined in: [src/adapters/types.ts:917](https://github.com/footprintjs/agentfoot
 
 > `readonly` **name**: `string`
 
-Defined in: [src/adapters/types.ts:918](https://github.com/footprintjs/agentfootprint/blob/8eb817f55f177662ed213c7b387a5bdc2527c87b/src/adapters/types.ts#L918)
+Defined in: [src/adapters/types.ts:918](https://github.com/footprintjs/agentfootprint/blob/f5cabfd85eeae981c1a9a9dd20edaa7a4ced5063/src/adapters/types.ts#L918)
 
 ## Methods
 
@@ -22,7 +22,7 @@ Defined in: [src/adapters/types.ts:918](https://github.com/footprintjs/agentfoot
 
 > **pricePerToken**(`model`, `kind`): `number`
 
-Defined in: [src/adapters/types.ts:920](https://github.com/footprintjs/agentfootprint/blob/8eb817f55f177662ed213c7b387a5bdc2527c87b/src/adapters/types.ts#L920)
+Defined in: [src/adapters/types.ts:920](https://github.com/footprintjs/agentfootprint/blob/f5cabfd85eeae981c1a9a9dd20edaa7a4ced5063/src/adapters/types.ts#L920)
 
 USD per ONE token for the given model+kind.
 

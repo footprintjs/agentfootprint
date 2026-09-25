@@ -6,7 +6,7 @@
 
 # Interface: CodeRunner
 
-Defined in: [src/adapters/types.ts:1027](https://github.com/footprintjs/agentfootprint/blob/8eb817f55f177662ed213c7b387a5bdc2527c87b/src/adapters/types.ts#L1027)
+Defined in: [src/adapters/types.ts:1027](https://github.com/footprintjs/agentfootprint/blob/f5cabfd85eeae981c1a9a9dd20edaa7a4ced5063/src/adapters/types.ts#L1027)
 
 ## Properties
 
@@ -14,7 +14,7 @@ Defined in: [src/adapters/types.ts:1027](https://github.com/footprintjs/agentfoo
 
 > `readonly` **id**: `string`
 
-Defined in: [src/adapters/types.ts:1030](https://github.com/footprintjs/agentfootprint/blob/8eb817f55f177662ed213c7b387a5bdc2527c87b/src/adapters/types.ts#L1030)
+Defined in: [src/adapters/types.ts:1030](https://github.com/footprintjs/agentfootprint/blob/f5cabfd85eeae981c1a9a9dd20edaa7a4ced5063/src/adapters/types.ts#L1030)
 
 Stable id — reported on every `agentfootprint.tools.session_*` event so a
  row names its backend, not just its tool.
@@ -25,7 +25,7 @@ Stable id — reported on every `agentfootprint.tools.session_*` event so a
 
 > **start**(`req`): `Promise`\<[`CodeSession`](/agentfootprint/api/generated/interfaces/CodeSession.md)\>
 
-Defined in: [src/adapters/types.ts:1037](https://github.com/footprintjs/agentfootprint/blob/8eb817f55f177662ed213c7b387a5bdc2527c87b/src/adapters/types.ts#L1037)
+Defined in: [src/adapters/types.ts:1037](https://github.com/footprintjs/agentfootprint/blob/f5cabfd85eeae981c1a9a9dd20edaa7a4ced5063/src/adapters/types.ts#L1037)
 
 Open a session.
 

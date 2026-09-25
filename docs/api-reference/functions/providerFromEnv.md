@@ -8,7 +8,7 @@
 
 > **providerFromEnv**(`opts?`): [`ProviderFromEnv`](/agentfootprint/api/generated/interfaces/ProviderFromEnv.md)
 
-Defined in: [src/adapters/llm/createProvider.ts:208](https://github.com/footprintjs/agentfootprint/blob/8eb817f55f177662ed213c7b387a5bdc2527c87b/src/adapters/llm/createProvider.ts#L208)
+Defined in: [src/adapters/llm/createProvider.ts:208](https://github.com/footprintjs/agentfootprint/blob/f5cabfd85eeae981c1a9a9dd20edaa7a4ced5063/src/adapters/llm/createProvider.ts#L208)
 
 Resolve an `LLMProvider` from environment variables — drop your company's
 values in `.env` and the right provider is configured automatically, with no

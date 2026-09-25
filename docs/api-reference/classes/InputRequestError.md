@@ -6,7 +6,7 @@
 
 # Class: InputRequestError
 
-Defined in: [src/core/inputRequest.ts:99](https://github.com/footprintjs/agentfootprint/blob/8eb817f55f177662ed213c7b387a5bdc2527c87b/src/core/inputRequest.ts#L99)
+Defined in: [src/core/inputRequest.ts:99](https://github.com/footprintjs/agentfootprint/blob/f5cabfd85eeae981c1a9a9dd20edaa7a4ced5063/src/core/inputRequest.ts#L99)
 
 A malformed or stale data reply; no value was consumed and the ask remains live.
 
@@ -20,7 +20,7 @@ A malformed or stale data reply; no value was consumed and the ask remains live.
 
 > **new InputRequestError**(`reason`): `InputRequestError`
 
-Defined in: [src/core/inputRequest.ts:101](https://github.com/footprintjs/agentfootprint/blob/8eb817f55f177662ed213c7b387a5bdc2527c87b/src/core/inputRequest.ts#L101)
+Defined in: [src/core/inputRequest.ts:101](https://github.com/footprintjs/agentfootprint/blob/f5cabfd85eeae981c1a9a9dd20edaa7a4ced5063/src/core/inputRequest.ts#L101)
 
 #### Parameters
 
@@ -54,7 +54,7 @@ Defined in: node\_modules/typescript/lib/lib.es2022.error.d.ts:24
 
 > `readonly` **code**: `"ERR_INPUT_REQUEST_INVALID"`
 
-Defined in: [src/core/inputRequest.ts:100](https://github.com/footprintjs/agentfootprint/blob/8eb817f55f177662ed213c7b387a5bdc2527c87b/src/core/inputRequest.ts#L100)
+Defined in: [src/core/inputRequest.ts:100](https://github.com/footprintjs/agentfootprint/blob/f5cabfd85eeae981c1a9a9dd20edaa7a4ced5063/src/core/inputRequest.ts#L100)
 
 ***
 

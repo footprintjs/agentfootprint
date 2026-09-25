@@ -8,7 +8,7 @@
 
 > **unconfiguredArtifacts**(`onEvent?`): [`ToolArtifacts`](/agentfootprint/api/generated/interfaces/ToolArtifacts.md)
 
-Defined in: [src/artifacts/capability.ts:202](https://github.com/footprintjs/agentfootprint/blob/8eb817f55f177662ed213c7b387a5bdc2527c87b/src/artifacts/capability.ts#L202)
+Defined in: [src/artifacts/capability.ts:202](https://github.com/footprintjs/agentfootprint/blob/f5cabfd85eeae981c1a9a9dd20edaa7a4ced5063/src/artifacts/capability.ts#L202)
 
 The fail-closed capability used when NO store is attached. Every verb
 throws the same teaching refusal — loud, named, and on the record — so

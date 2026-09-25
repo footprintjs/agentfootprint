@@ -8,7 +8,7 @@
 
 > **keyedFold**(`source`): [`KeyedFold`](/agentfootprint/api/generated/interfaces/KeyedFold.md)
 
-Defined in: [src/lib/time-travel/keyedFold.ts:251](https://github.com/footprintjs/agentfootprint/blob/8eb817f55f177662ed213c7b387a5bdc2527c87b/src/lib/time-travel/keyedFold.ts#L251)
+Defined in: [src/lib/time-travel/keyedFold.ts:251](https://github.com/footprintjs/agentfootprint/blob/f5cabfd85eeae981c1a9a9dd20edaa7a4ced5063/src/lib/time-travel/keyedFold.ts#L251)
 
 The keyed fold for one source, memoized on the source object.
 

@@ -8,7 +8,7 @@
 
 > **selfConsistency**(`opts`): [`Runner`](/agentfootprint/api/generated/interfaces/Runner.md)\<\{ `message`: `string`; \}, `string`\>
 
-Defined in: [src/patterns/SelfConsistency.ts:46](https://github.com/footprintjs/agentfootprint/blob/8eb817f55f177662ed213c7b387a5bdc2527c87b/src/patterns/SelfConsistency.ts#L46)
+Defined in: [src/patterns/SelfConsistency.ts:46](https://github.com/footprintjs/agentfootprint/blob/f5cabfd85eeae981c1a9a9dd20edaa7a4ced5063/src/patterns/SelfConsistency.ts#L46)
 
 Build a SelfConsistency Runner. Given a system prompt, the Runner
 runs `samples` parallel LLMCalls with the same input, extracts each

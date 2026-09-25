@@ -8,7 +8,7 @@
 
 > **ToolResultClass** = `"triage"` \| `"inventory"`
 
-Defined in: [src/lib/semantics/types.ts:228](https://github.com/footprintjs/agentfootprint/blob/8eb817f55f177662ed213c7b387a5bdc2527c87b/src/lib/semantics/types.ts#L228)
+Defined in: [src/lib/semantics/types.ts:228](https://github.com/footprintjs/agentfootprint/blob/f5cabfd85eeae981c1a9a9dd20edaa7a4ced5063/src/lib/semantics/types.ts#L228)
 
 The declared class of a tool's RESULTS — what kind of answer this tool
 gives, stated by whoever wrote it (`defineTool({ resultClass })`; the

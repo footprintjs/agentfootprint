@@ -6,7 +6,7 @@
 
 # Class: CompactionUnmeasurableError
 
-Defined in: [src/core/agent/window/errors.ts:22](https://github.com/footprintjs/agentfootprint/blob/8eb817f55f177662ed213c7b387a5bdc2527c87b/src/core/agent/window/errors.ts#L22)
+Defined in: [src/core/agent/window/errors.ts:22](https://github.com/footprintjs/agentfootprint/blob/f5cabfd85eeae981c1a9a9dd20edaa7a4ced5063/src/core/agent/window/errors.ts#L22)
 
 Thrown when compaction is configured but the provider reports no token
 usage, so the threshold cannot be COUNTED.
@@ -30,7 +30,7 @@ resuming would walk into the same wall with the same provider.
 
 > **new CompactionUnmeasurableError**(`provider`): `CompactionUnmeasurableError`
 
-Defined in: [src/core/agent/window/errors.ts:27](https://github.com/footprintjs/agentfootprint/blob/8eb817f55f177662ed213c7b387a5bdc2527c87b/src/core/agent/window/errors.ts#L27)
+Defined in: [src/core/agent/window/errors.ts:27](https://github.com/footprintjs/agentfootprint/blob/f5cabfd85eeae981c1a9a9dd20edaa7a4ced5063/src/core/agent/window/errors.ts#L27)
 
 #### Parameters
 
@@ -76,7 +76,7 @@ Defined in: node\_modules/typescript/lib/lib.es5.d.ts:1077
 
 > `readonly` **name**: `"CompactionUnmeasurableError"` = `'CompactionUnmeasurableError'`
 
-Defined in: [src/core/agent/window/errors.ts:23](https://github.com/footprintjs/agentfootprint/blob/8eb817f55f177662ed213c7b387a5bdc2527c87b/src/core/agent/window/errors.ts#L23)
+Defined in: [src/core/agent/window/errors.ts:23](https://github.com/footprintjs/agentfootprint/blob/f5cabfd85eeae981c1a9a9dd20edaa7a4ced5063/src/core/agent/window/errors.ts#L23)
 
 #### Overrides
 
@@ -88,7 +88,7 @@ Defined in: [src/core/agent/window/errors.ts:23](https://github.com/footprintjs/
 
 > `readonly` **provider**: `string`
 
-Defined in: [src/core/agent/window/errors.ts:25](https://github.com/footprintjs/agentfootprint/blob/8eb817f55f177662ed213c7b387a5bdc2527c87b/src/core/agent/window/errors.ts#L25)
+Defined in: [src/core/agent/window/errors.ts:25](https://github.com/footprintjs/agentfootprint/blob/f5cabfd85eeae981c1a9a9dd20edaa7a4ced5063/src/core/agent/window/errors.ts#L25)
 
 `provider.name` of the adapter that reported nothing.
 

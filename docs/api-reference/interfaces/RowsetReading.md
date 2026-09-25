@@ -6,7 +6,7 @@
 
 # Interface: RowsetReading
 
-Defined in: [src/integrity/column-types/check.ts:96](https://github.com/footprintjs/agentfootprint/blob/8eb817f55f177662ed213c7b387a5bdc2527c87b/src/integrity/column-types/check.ts#L96)
+Defined in: [src/integrity/column-types/check.ts:96](https://github.com/footprintjs/agentfootprint/blob/f5cabfd85eeae981c1a9a9dd20edaa7a4ced5063/src/integrity/column-types/check.ts#L96)
 
 What the library could read about a finished result: the rows, or nothing.
 
@@ -19,4 +19,4 @@ that carried a verdict would be this file judging in two places.
 
 > `readonly` **rows**: readonly `Readonly`\<`Record`\<`string`, `unknown`\>\>[]
 
-Defined in: [src/integrity/column-types/check.ts:97](https://github.com/footprintjs/agentfootprint/blob/8eb817f55f177662ed213c7b387a5bdc2527c87b/src/integrity/column-types/check.ts#L97)
+Defined in: [src/integrity/column-types/check.ts:97](https://github.com/footprintjs/agentfootprint/blob/f5cabfd85eeae981c1a9a9dd20edaa7a4ced5063/src/integrity/column-types/check.ts#L97)

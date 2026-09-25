@@ -8,7 +8,7 @@
 
 > **bindArtifacts**(`store`, `scope`, `options?`): [`ToolArtifacts`](/agentfootprint/api/generated/interfaces/ToolArtifacts.md)
 
-Defined in: [src/artifacts/capability.ts:113](https://github.com/footprintjs/agentfootprint/blob/8eb817f55f177662ed213c7b387a5bdc2527c87b/src/artifacts/capability.ts#L113)
+Defined in: [src/artifacts/capability.ts:113](https://github.com/footprintjs/agentfootprint/blob/f5cabfd85eeae981c1a9a9dd20edaa7a4ced5063/src/artifacts/capability.ts#L113)
 
 Bind a store to one run's scope — the framework's move, made where the
 scope is known and a tool cannot reach.

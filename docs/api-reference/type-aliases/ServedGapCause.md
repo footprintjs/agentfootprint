@@ -8,7 +8,7 @@
 
 > **ServedGapCause** = `"no-receipt-committed"` \| `"receipt-shape-rejected"`
 
-Defined in: [src/lib/time-travel/servedView.ts:233](https://github.com/footprintjs/agentfootprint/blob/8eb817f55f177662ed213c7b387a5bdc2527c87b/src/lib/time-travel/servedView.ts#L233)
+Defined in: [src/lib/time-travel/servedView.ts:233](https://github.com/footprintjs/agentfootprint/blob/f5cabfd85eeae981c1a9a9dd20edaa7a4ced5063/src/lib/time-travel/servedView.ts#L233)
 
 WHAT STOOD IN THE WAY, as far as the record shows — computed at the read that
 failed, so it is a value and not a sentence.

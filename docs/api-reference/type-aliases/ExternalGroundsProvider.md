@@ -8,7 +8,7 @@
 
 > **ExternalGroundsProvider** = () => readonly [`ExternalGround`](/agentfootprint/api/generated/interfaces/ExternalGround.md)[]
 
-Defined in: [src/core/agent/types.ts:77](https://github.com/footprintjs/agentfootprint/blob/8eb817f55f177662ed213c7b387a5bdc2527c87b/src/core/agent/types.ts#L77)
+Defined in: [src/core/agent/types.ts:77](https://github.com/footprintjs/agentfootprint/blob/f5cabfd85eeae981c1a9a9dd20edaa7a4ced5063/src/core/agent/types.ts#L77)
 
 The app's external-ground door for the choice-seam integrity check
 (9.72.0) — see [AgentOptions.externalGrounds](/agentfootprint/api/generated/interfaces/AgentOptions.md#externalgrounds). Yields the entries the

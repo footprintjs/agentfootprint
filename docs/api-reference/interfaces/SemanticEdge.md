@@ -6,7 +6,7 @@
 
 # Interface: SemanticEdge
 
-Defined in: [src/lib/semantics/types.ts:73](https://github.com/footprintjs/agentfootprint/blob/8eb817f55f177662ed213c7b387a5bdc2527c87b/src/lib/semantics/types.ts#L73)
+Defined in: [src/lib/semantics/types.ts:73](https://github.com/footprintjs/agentfootprint/blob/f5cabfd85eeae981c1a9a9dd20edaa7a4ced5063/src/lib/semantics/types.ts#L73)
 
 One typed relationship — "this VM rides that datastore", "this zone
  contains that WWPN". `kind` names the relationship in the tool's words.
@@ -21,7 +21,7 @@ One typed relationship — "this VM rides that datastore", "this zone
 
 > `readonly` **from**: `string`
 
-Defined in: [src/lib/semantics/types.ts:74](https://github.com/footprintjs/agentfootprint/blob/8eb817f55f177662ed213c7b387a5bdc2527c87b/src/lib/semantics/types.ts#L74)
+Defined in: [src/lib/semantics/types.ts:74](https://github.com/footprintjs/agentfootprint/blob/f5cabfd85eeae981c1a9a9dd20edaa7a4ced5063/src/lib/semantics/types.ts#L74)
 
 ***
 
@@ -29,7 +29,7 @@ Defined in: [src/lib/semantics/types.ts:74](https://github.com/footprintjs/agent
 
 > `readonly` **kind**: `string`
 
-Defined in: [src/lib/semantics/types.ts:76](https://github.com/footprintjs/agentfootprint/blob/8eb817f55f177662ed213c7b387a5bdc2527c87b/src/lib/semantics/types.ts#L76)
+Defined in: [src/lib/semantics/types.ts:76](https://github.com/footprintjs/agentfootprint/blob/f5cabfd85eeae981c1a9a9dd20edaa7a4ced5063/src/lib/semantics/types.ts#L76)
 
 ***
 
@@ -37,4 +37,4 @@ Defined in: [src/lib/semantics/types.ts:76](https://github.com/footprintjs/agent
 
 > `readonly` **to**: `string`
 
-Defined in: [src/lib/semantics/types.ts:75](https://github.com/footprintjs/agentfootprint/blob/8eb817f55f177662ed213c7b387a5bdc2527c87b/src/lib/semantics/types.ts#L75)
+Defined in: [src/lib/semantics/types.ts:75](https://github.com/footprintjs/agentfootprint/blob/f5cabfd85eeae981c1a9a9dd20edaa7a4ced5063/src/lib/semantics/types.ts#L75)

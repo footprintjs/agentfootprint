@@ -6,7 +6,7 @@
 
 # Interface: ParallelInput
 
-Defined in: [src/core-flow/Parallel.ts:76](https://github.com/footprintjs/agentfootprint/blob/8eb817f55f177662ed213c7b387a5bdc2527c87b/src/core-flow/Parallel.ts#L76)
+Defined in: [src/core-flow/Parallel.ts:76](https://github.com/footprintjs/agentfootprint/blob/f5cabfd85eeae981c1a9a9dd20edaa7a4ced5063/src/core-flow/Parallel.ts#L76)
 
 ## Properties
 
@@ -14,4 +14,4 @@ Defined in: [src/core-flow/Parallel.ts:76](https://github.com/footprintjs/agentf
 
 > `readonly` **message**: `string`
 
-Defined in: [src/core-flow/Parallel.ts:77](https://github.com/footprintjs/agentfootprint/blob/8eb817f55f177662ed213c7b387a5bdc2527c87b/src/core-flow/Parallel.ts#L77)
+Defined in: [src/core-flow/Parallel.ts:77](https://github.com/footprintjs/agentfootprint/blob/f5cabfd85eeae981c1a9a9dd20edaa7a4ced5063/src/core-flow/Parallel.ts#L77)

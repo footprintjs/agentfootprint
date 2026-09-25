@@ -6,7 +6,7 @@
 
 # Interface: ContextEngineeringHandle
 
-Defined in: [src/recorders/core/contextEngineering.ts:138](https://github.com/footprintjs/agentfootprint/blob/8eb817f55f177662ed213c7b387a5bdc2527c87b/src/recorders/core/contextEngineering.ts#L138)
+Defined in: [src/recorders/core/contextEngineering.ts:138](https://github.com/footprintjs/agentfootprint/blob/f5cabfd85eeae981c1a9a9dd20edaa7a4ced5063/src/recorders/core/contextEngineering.ts#L138)
 
 Handle returned by `contextEngineering(agent)`. Lets consumers
 subscribe to engineered / baseline streams and detach cleanly.
@@ -17,7 +17,7 @@ subscribe to engineered / baseline streams and detach cleanly.
 
 > **detach**(): `void`
 
-Defined in: [src/recorders/core/contextEngineering.ts:154](https://github.com/footprintjs/agentfootprint/blob/8eb817f55f177662ed213c7b387a5bdc2527c87b/src/recorders/core/contextEngineering.ts#L154)
+Defined in: [src/recorders/core/contextEngineering.ts:154](https://github.com/footprintjs/agentfootprint/blob/f5cabfd85eeae981c1a9a9dd20edaa7a4ced5063/src/recorders/core/contextEngineering.ts#L154)
 
 Detach all subscriptions registered through this handle. After
 calling, no further callbacks will fire. Idempotent (safe to
@@ -33,7 +33,7 @@ call multiple times).
 
 > **onBaseline**(`listener`): [`ContextEngineeringUnsubscribe`](/agentfootprint/api/generated/type-aliases/ContextEngineeringUnsubscribe.md)
 
-Defined in: [src/recorders/core/contextEngineering.ts:148](https://github.com/footprintjs/agentfootprint/blob/8eb817f55f177662ed213c7b387a5bdc2527c87b/src/recorders/core/contextEngineering.ts#L148)
+Defined in: [src/recorders/core/contextEngineering.ts:148](https://github.com/footprintjs/agentfootprint/blob/f5cabfd85eeae981c1a9a9dd20edaa7a4ced5063/src/recorders/core/contextEngineering.ts#L148)
 
 Fires for `context.injected` events whose source is in
 `BASELINE_SOURCES`. Returns an unsubscribe function.
@@ -54,7 +54,7 @@ Fires for `context.injected` events whose source is in
 
 > **onEngineered**(`listener`): [`ContextEngineeringUnsubscribe`](/agentfootprint/api/generated/type-aliases/ContextEngineeringUnsubscribe.md)
 
-Defined in: [src/recorders/core/contextEngineering.ts:143](https://github.com/footprintjs/agentfootprint/blob/8eb817f55f177662ed213c7b387a5bdc2527c87b/src/recorders/core/contextEngineering.ts#L143)
+Defined in: [src/recorders/core/contextEngineering.ts:143](https://github.com/footprintjs/agentfootprint/blob/f5cabfd85eeae981c1a9a9dd20edaa7a4ced5063/src/recorders/core/contextEngineering.ts#L143)
 
 Fires for `context.injected` events whose source is in
 `ENGINEERED_SOURCES`. Returns an unsubscribe function.

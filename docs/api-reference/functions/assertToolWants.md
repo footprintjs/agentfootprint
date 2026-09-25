@@ -8,7 +8,7 @@
 
 > **assertToolWants**(`toolName`, `wants`, `inputSchema`): `void`
 
-Defined in: [src/artifacts/wants.ts:47](https://github.com/footprintjs/agentfootprint/blob/8eb817f55f177662ed213c7b387a5bdc2527c87b/src/artifacts/wants.ts#L47)
+Defined in: [src/artifacts/wants.ts:47](https://github.com/footprintjs/agentfootprint/blob/f5cabfd85eeae981c1a9a9dd20edaa7a4ced5063/src/artifacts/wants.ts#L47)
 
 Refuse a `wants` declaration this library cannot honor, at definition time
 — naming the tool and the fix, never at the first dispatch of the first

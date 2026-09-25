@@ -8,7 +8,7 @@
 
 > `const` **RECEIPT\_BOUNDARY**: `string`
 
-Defined in: [src/lib/time-travel/receipt.ts:182](https://github.com/footprintjs/agentfootprint/blob/8eb817f55f177662ed213c7b387a5bdc2527c87b/src/lib/time-travel/receipt.ts#L182)
+Defined in: [src/lib/time-travel/receipt.ts:182](https://github.com/footprintjs/agentfootprint/blob/f5cabfd85eeae981c1a9a9dd20edaa7a4ced5063/src/lib/time-travel/receipt.ts#L182)
 
 The boundary every receipt field is true at, in one sentence — exported so a
 renderer prints the library's own wording instead of inferring a stronger

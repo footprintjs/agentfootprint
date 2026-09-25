@@ -6,7 +6,7 @@
 
 # ~~Interface: ContextSourceAdapter~~
 
-Defined in: [src/adapters/types.ts:634](https://github.com/footprintjs/agentfootprint/blob/8eb817f55f177662ed213c7b387a5bdc2527c87b/src/adapters/types.ts#L634)
+Defined in: [src/adapters/types.ts:634](https://github.com/footprintjs/agentfootprint/blob/f5cabfd85eeae981c1a9a9dd20edaa7a4ced5063/src/adapters/types.ts#L634)
 
 ## Deprecated
 
@@ -26,7 +26,7 @@ port describes.
 
 > `readonly` **id**: `string`
 
-Defined in: [src/adapters/types.ts:635](https://github.com/footprintjs/agentfootprint/blob/8eb817f55f177662ed213c7b387a5bdc2527c87b/src/adapters/types.ts#L635)
+Defined in: [src/adapters/types.ts:635](https://github.com/footprintjs/agentfootprint/blob/f5cabfd85eeae981c1a9a9dd20edaa7a4ced5063/src/adapters/types.ts#L635)
 
 ***
 
@@ -34,7 +34,7 @@ Defined in: [src/adapters/types.ts:635](https://github.com/footprintjs/agentfoot
 
 > `readonly` **source**: `ContextSource`
 
-Defined in: [src/adapters/types.ts:637](https://github.com/footprintjs/agentfootprint/blob/8eb817f55f177662ed213c7b387a5bdc2527c87b/src/adapters/types.ts#L637)
+Defined in: [src/adapters/types.ts:637](https://github.com/footprintjs/agentfootprint/blob/f5cabfd85eeae981c1a9a9dd20edaa7a4ced5063/src/adapters/types.ts#L637)
 
 ***
 
@@ -42,7 +42,7 @@ Defined in: [src/adapters/types.ts:637](https://github.com/footprintjs/agentfoot
 
 > `readonly` **targetSlot**: `ContextSlot`
 
-Defined in: [src/adapters/types.ts:636](https://github.com/footprintjs/agentfootprint/blob/8eb817f55f177662ed213c7b387a5bdc2527c87b/src/adapters/types.ts#L636)
+Defined in: [src/adapters/types.ts:636](https://github.com/footprintjs/agentfootprint/blob/f5cabfd85eeae981c1a9a9dd20edaa7a4ced5063/src/adapters/types.ts#L636)
 
 ## Methods
 
@@ -50,7 +50,7 @@ Defined in: [src/adapters/types.ts:636](https://github.com/footprintjs/agentfoot
 
 > **resolve**(`ctx`): `Promise`\<readonly [`ContextContribution`](/agentfootprint/api/generated/interfaces/ContextContribution.md)[]\>
 
-Defined in: [src/adapters/types.ts:638](https://github.com/footprintjs/agentfootprint/blob/8eb817f55f177662ed213c7b387a5bdc2527c87b/src/adapters/types.ts#L638)
+Defined in: [src/adapters/types.ts:638](https://github.com/footprintjs/agentfootprint/blob/f5cabfd85eeae981c1a9a9dd20edaa7a4ced5063/src/adapters/types.ts#L638)
 
 #### Parameters
 

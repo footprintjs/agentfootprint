@@ -8,7 +8,7 @@
 
 > `const` **RESERVED\_SUBFLOW\_PREFIX**: `"sf-"` = `'sf-'`
 
-Defined in: [src/conventions.ts:96](https://github.com/footprintjs/agentfootprint/blob/8eb817f55f177662ed213c7b387a5bdc2527c87b/src/conventions.ts#L96)
+Defined in: [src/conventions.ts:96](https://github.com/footprintjs/agentfootprint/blob/f5cabfd85eeae981c1a9a9dd20edaa7a4ced5063/src/conventions.ts#L96)
 
 The subflow-id prefix the framework reserves for its OWN composition
 segments. Every id in SUBFLOW\_IDS carries it except

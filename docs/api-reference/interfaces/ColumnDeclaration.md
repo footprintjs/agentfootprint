@@ -6,7 +6,7 @@
 
 # Interface: ColumnDeclaration
 
-Defined in: [src/integrity/column-types/types.ts:52](https://github.com/footprintjs/agentfootprint/blob/8eb817f55f177662ed213c7b387a5bdc2527c87b/src/integrity/column-types/types.ts#L52)
+Defined in: [src/integrity/column-types/types.ts:52](https://github.com/footprintjs/agentfootprint/blob/f5cabfd85eeae981c1a9a9dd20edaa7a4ced5063/src/integrity/column-types/types.ts#L52)
 
 The object spelling of one column's declaration.
 
@@ -16,7 +16,7 @@ The object spelling of one column's declaration.
 
 > `readonly` `optional` **nullable?**: `boolean`
 
-Defined in: [src/integrity/column-types/types.ts:75](https://github.com/footprintjs/agentfootprint/blob/8eb817f55f177662ed213c7b387a5bdc2527c87b/src/integrity/column-types/types.ts#L75)
+Defined in: [src/integrity/column-types/types.ts:75](https://github.com/footprintjs/agentfootprint/blob/f5cabfd85eeae981c1a9a9dd20edaa7a4ced5063/src/integrity/column-types/types.ts#L75)
 
 `true` — a row of this column may legitimately carry NO VALUE (`null`,
 `undefined`, or the key simply not set on that row), and such a row is
@@ -43,6 +43,6 @@ unlisted columns are allowed and unjudged.
 
 > `readonly` **type**: [`ColumnType`](/agentfootprint/api/generated/type-aliases/ColumnType.md)
 
-Defined in: [src/integrity/column-types/types.ts:54](https://github.com/footprintjs/agentfootprint/blob/8eb817f55f177662ed213c7b387a5bdc2527c87b/src/integrity/column-types/types.ts#L54)
+Defined in: [src/integrity/column-types/types.ts:54](https://github.com/footprintjs/agentfootprint/blob/f5cabfd85eeae981c1a9a9dd20edaa7a4ced5063/src/integrity/column-types/types.ts#L54)
 
 What the column holds.

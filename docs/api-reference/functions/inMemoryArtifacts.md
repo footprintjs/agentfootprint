@@ -8,7 +8,7 @@
 
 > **inMemoryArtifacts**(`options?`): [`InMemoryArtifacts`](/agentfootprint/api/generated/interfaces/InMemoryArtifacts.md)
 
-Defined in: [src/artifacts/inMemoryArtifacts.ts:102](https://github.com/footprintjs/agentfootprint/blob/8eb817f55f177662ed213c7b387a5bdc2527c87b/src/artifacts/inMemoryArtifacts.ts#L102)
+Defined in: [src/artifacts/inMemoryArtifacts.ts:102](https://github.com/footprintjs/agentfootprint/blob/f5cabfd85eeae981c1a9a9dd20edaa7a4ced5063/src/artifacts/inMemoryArtifacts.ts#L102)
 
 A bounded, drop-counting, per-scope-isolated artifact store in process
 memory.

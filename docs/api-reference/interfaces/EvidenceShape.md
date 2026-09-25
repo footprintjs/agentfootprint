@@ -6,7 +6,7 @@
 
 # Interface: EvidenceShape
 
-Defined in: [src/core/agent/evidence/types.ts:46](https://github.com/footprintjs/agentfootprint/blob/8eb817f55f177662ed213c7b387a5bdc2527c87b/src/core/agent/evidence/types.ts#L46)
+Defined in: [src/core/agent/evidence/types.ts:46](https://github.com/footprintjs/agentfootprint/blob/f5cabfd85eeae981c1a9a9dd20edaa7a4ced5063/src/core/agent/evidence/types.ts#L46)
 
 A domain's own identifier shape.
 
@@ -27,7 +27,7 @@ stateful regex reused across tokens skips matches.
 
 > `readonly` **match**: `RegExp`
 
-Defined in: [src/core/agent/evidence/types.ts:51](https://github.com/footprintjs/agentfootprint/blob/8eb817f55f177662ed213c7b387a5bdc2527c87b/src/core/agent/evidence/types.ts#L51)
+Defined in: [src/core/agent/evidence/types.ts:51](https://github.com/footprintjs/agentfootprint/blob/f5cabfd85eeae981c1a9a9dd20edaa7a4ced5063/src/core/agent/evidence/types.ts#L51)
 
 The pattern. Matched against a whole normalized token.
 
@@ -37,7 +37,7 @@ The pattern. Matched against a whole normalized token.
 
 > `readonly` **name**: `string`
 
-Defined in: [src/core/agent/evidence/types.ts:49](https://github.com/footprintjs/agentfootprint/blob/8eb817f55f177662ed213c7b387a5bdc2527c87b/src/core/agent/evidence/types.ts#L49)
+Defined in: [src/core/agent/evidence/types.ts:49](https://github.com/footprintjs/agentfootprint/blob/f5cabfd85eeae981c1a9a9dd20edaa7a4ced5063/src/core/agent/evidence/types.ts#L49)
 
 Short name. Appears on the flagged value so a reader knows which rule
  caught it. Must be unique within one agent.

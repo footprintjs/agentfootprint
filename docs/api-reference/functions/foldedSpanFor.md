@@ -8,7 +8,7 @@
 
 > **foldedSpanFor**(`conversation`, `message`): [`FoldedSpan`](/agentfootprint/api/generated/interfaces/FoldedSpan.md) \| `undefined`
 
-Defined in: [src/core/agent/window/folded.ts:106](https://github.com/footprintjs/agentfootprint/blob/8eb817f55f177662ed213c7b387a5bdc2527c87b/src/core/agent/window/folded.ts#L106)
+Defined in: [src/core/agent/window/folded.ts:106](https://github.com/footprintjs/agentfootprint/blob/f5cabfd85eeae981c1a9a9dd20edaa7a4ced5063/src/core/agent/window/folded.ts#L106)
 
 What one summary message in a conversation stands for.
 

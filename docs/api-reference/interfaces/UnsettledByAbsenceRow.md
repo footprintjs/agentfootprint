@@ -6,7 +6,7 @@
 
 # Interface: UnsettledByAbsenceRow
 
-Defined in: [src/core/agent/findings/types.ts:354](https://github.com/footprintjs/agentfootprint/blob/8eb817f55f177662ed213c7b387a5bdc2527c87b/src/core/agent/findings/types.ts#L354)
+Defined in: [src/core/agent/findings/types.ts:354](https://github.com/footprintjs/agentfootprint/blob/f5cabfd85eeae981c1a9a9dd20edaa7a4ced5063/src/core/agent/findings/types.ts#L354)
 
 A `ruled-out` standing whose ONLY witness is an absence (9.113.0) — the
 library's row BESIDE the model's, never a rewrite of it. "Nothing was
@@ -69,7 +69,7 @@ is the MODEL's word on an `open` standing and calling the tool's sentence
 
 > `readonly` `optional` **cannotCover?**: readonly [`CoverageItem`](/agentfootprint/api/generated/interfaces/CoverageItem.md)[]
 
-Defined in: [src/core/agent/findings/types.ts:367](https://github.com/footprintjs/agentfootprint/blob/8eb817f55f177662ed213c7b387a5bdc2527c87b/src/core/agent/findings/types.ts#L367)
+Defined in: [src/core/agent/findings/types.ts:367](https://github.com/footprintjs/agentfootprint/blob/f5cabfd85eeae981c1a9a9dd20edaa7a4ced5063/src/core/agent/findings/types.ts#L367)
 
 The served envelope's `cannot_cover`, by the same rule. Present only when non-empty.
 
@@ -79,7 +79,7 @@ The served envelope's `cannot_cover`, by the same rule. Present only when non-em
 
 > `readonly` **iteration**: `number`
 
-Defined in: [src/core/agent/findings/types.ts:375](https://github.com/footprintjs/agentfootprint/blob/8eb817f55f177662ed213c7b387a5bdc2527c87b/src/core/agent/findings/types.ts#L375)
+Defined in: [src/core/agent/findings/types.ts:375](https://github.com/footprintjs/agentfootprint/blob/f5cabfd85eeae981c1a9a9dd20edaa7a4ced5063/src/core/agent/findings/types.ts#L375)
 
 The standing's iteration — the moment the check ran.
 
@@ -89,7 +89,7 @@ The standing's iteration — the moment the check ran.
 
 > `readonly` **kind**: `"unsettled-by-absence"`
 
-Defined in: [src/core/agent/findings/types.ts:355](https://github.com/footprintjs/agentfootprint/blob/8eb817f55f177662ed213c7b387a5bdc2527c87b/src/core/agent/findings/types.ts#L355)
+Defined in: [src/core/agent/findings/types.ts:355](https://github.com/footprintjs/agentfootprint/blob/f5cabfd85eeae981c1a9a9dd20edaa7a4ced5063/src/core/agent/findings/types.ts#L355)
 
 ***
 
@@ -97,7 +97,7 @@ Defined in: [src/core/agent/findings/types.ts:355](https://github.com/footprintj
 
 > `readonly` `optional` **notChecked?**: readonly [`CoverageItem`](/agentfootprint/api/generated/interfaces/CoverageItem.md)[]
 
-Defined in: [src/core/agent/findings/types.ts:365](https://github.com/footprintjs/agentfootprint/blob/8eb817f55f177662ed213c7b387a5bdc2527c87b/src/core/agent/findings/types.ts#L365)
+Defined in: [src/core/agent/findings/types.ts:365](https://github.com/footprintjs/agentfootprint/blob/f5cabfd85eeae981c1a9a9dd20edaa7a4ced5063/src/core/agent/findings/types.ts#L365)
 
 The SERVED envelope's `not_checked` (the served result's leading JSON
 object — a framework note joined after it is not part of it) — a
@@ -111,7 +111,7 @@ ground is left out. Present only when non-empty.
 
 > `readonly` **toolCallId**: `string`
 
-Defined in: [src/core/agent/findings/types.ts:357](https://github.com/footprintjs/agentfootprint/blob/8eb817f55f177662ed213c7b387a5bdc2527c87b/src/core/agent/findings/types.ts#L357)
+Defined in: [src/core/agent/findings/types.ts:357](https://github.com/footprintjs/agentfootprint/blob/f5cabfd85eeae981c1a9a9dd20edaa7a4ced5063/src/core/agent/findings/types.ts#L357)
 
 The ruled-out RESULT — the key of the standing this row is beside.
 
@@ -121,7 +121,7 @@ The ruled-out RESULT — the key of the standing this row is beside.
 
 > `readonly` `optional` **tryInstead?**: `string`
 
-Defined in: [src/core/agent/findings/types.ts:373](https://github.com/footprintjs/agentfootprint/blob/8eb817f55f177662ed213c7b387a5bdc2527c87b/src/core/agent/findings/types.ts#L373)
+Defined in: [src/core/agent/findings/types.ts:373](https://github.com/footprintjs/agentfootprint/blob/f5cabfd85eeae981c1a9a9dd20edaa7a4ced5063/src/core/agent/findings/types.ts#L373)
 
 The served absence's `try_instead`, the STRING byte for byte — never
 parsed, never trimmed, never read for a tool name. Present only when

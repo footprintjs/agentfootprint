@@ -6,7 +6,7 @@
 
 # Interface: InputResponse
 
-Defined in: [src/core/inputRequest.ts:54](https://github.com/footprintjs/agentfootprint/blob/8eb817f55f177662ed213c7b387a5bdc2527c87b/src/core/inputRequest.ts#L54)
+Defined in: [src/core/inputRequest.ts:54](https://github.com/footprintjs/agentfootprint/blob/f5cabfd85eeae981c1a9a9dd20edaa7a4ced5063/src/core/inputRequest.ts#L54)
 
 ## Properties
 
@@ -14,7 +14,7 @@ Defined in: [src/core/inputRequest.ts:54](https://github.com/footprintjs/agentfo
 
 > `readonly` **requestId**: `string`
 
-Defined in: [src/core/inputRequest.ts:55](https://github.com/footprintjs/agentfootprint/blob/8eb817f55f177662ed213c7b387a5bdc2527c87b/src/core/inputRequest.ts#L55)
+Defined in: [src/core/inputRequest.ts:55](https://github.com/footprintjs/agentfootprint/blob/f5cabfd85eeae981c1a9a9dd20edaa7a4ced5063/src/core/inputRequest.ts#L55)
 
 ***
 
@@ -22,4 +22,4 @@ Defined in: [src/core/inputRequest.ts:55](https://github.com/footprintjs/agentfo
 
 > `readonly` **values**: `Readonly`\<`Record`\<`string`, [`InputValue`](/agentfootprint/api/generated/type-aliases/InputValue.md)\>\>
 
-Defined in: [src/core/inputRequest.ts:56](https://github.com/footprintjs/agentfootprint/blob/8eb817f55f177662ed213c7b387a5bdc2527c87b/src/core/inputRequest.ts#L56)
+Defined in: [src/core/inputRequest.ts:56](https://github.com/footprintjs/agentfootprint/blob/f5cabfd85eeae981c1a9a9dd20edaa7a4ced5063/src/core/inputRequest.ts#L56)

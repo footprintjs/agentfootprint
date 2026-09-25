@@ -6,7 +6,7 @@
 
 # Interface: InputField
 
-Defined in: [src/core/inputRequest.ts:6](https://github.com/footprintjs/agentfootprint/blob/8eb817f55f177662ed213c7b387a5bdc2527c87b/src/core/inputRequest.ts#L6)
+Defined in: [src/core/inputRequest.ts:6](https://github.com/footprintjs/agentfootprint/blob/f5cabfd85eeae981c1a9a9dd20edaa7a4ced5063/src/core/inputRequest.ts#L6)
 
 ## Properties
 
@@ -14,7 +14,7 @@ Defined in: [src/core/inputRequest.ts:6](https://github.com/footprintjs/agentfoo
 
 > `readonly` `optional` **description?**: `string`
 
-Defined in: [src/core/inputRequest.ts:10](https://github.com/footprintjs/agentfootprint/blob/8eb817f55f177662ed213c7b387a5bdc2527c87b/src/core/inputRequest.ts#L10)
+Defined in: [src/core/inputRequest.ts:10](https://github.com/footprintjs/agentfootprint/blob/f5cabfd85eeae981c1a9a9dd20edaa7a4ced5063/src/core/inputRequest.ts#L10)
 
 ***
 
@@ -22,7 +22,7 @@ Defined in: [src/core/inputRequest.ts:10](https://github.com/footprintjs/agentfo
 
 > `readonly` `optional` **enum?**: readonly [`InputValue`](/agentfootprint/api/generated/type-aliases/InputValue.md)[]
 
-Defined in: [src/core/inputRequest.ts:11](https://github.com/footprintjs/agentfootprint/blob/8eb817f55f177662ed213c7b387a5bdc2527c87b/src/core/inputRequest.ts#L11)
+Defined in: [src/core/inputRequest.ts:11](https://github.com/footprintjs/agentfootprint/blob/f5cabfd85eeae981c1a9a9dd20edaa7a4ced5063/src/core/inputRequest.ts#L11)
 
 ***
 
@@ -30,7 +30,7 @@ Defined in: [src/core/inputRequest.ts:11](https://github.com/footprintjs/agentfo
 
 > `readonly` **id**: `string`
 
-Defined in: [src/core/inputRequest.ts:7](https://github.com/footprintjs/agentfootprint/blob/8eb817f55f177662ed213c7b387a5bdc2527c87b/src/core/inputRequest.ts#L7)
+Defined in: [src/core/inputRequest.ts:7](https://github.com/footprintjs/agentfootprint/blob/f5cabfd85eeae981c1a9a9dd20edaa7a4ced5063/src/core/inputRequest.ts#L7)
 
 ***
 
@@ -38,7 +38,7 @@ Defined in: [src/core/inputRequest.ts:7](https://github.com/footprintjs/agentfoo
 
 > `readonly` `optional` **required?**: `boolean`
 
-Defined in: [src/core/inputRequest.ts:9](https://github.com/footprintjs/agentfootprint/blob/8eb817f55f177662ed213c7b387a5bdc2527c87b/src/core/inputRequest.ts#L9)
+Defined in: [src/core/inputRequest.ts:9](https://github.com/footprintjs/agentfootprint/blob/f5cabfd85eeae981c1a9a9dd20edaa7a4ced5063/src/core/inputRequest.ts#L9)
 
 ***
 
@@ -46,4 +46,4 @@ Defined in: [src/core/inputRequest.ts:9](https://github.com/footprintjs/agentfoo
 
 > `readonly` **type**: `"string"` \| `"number"` \| `"boolean"`
 
-Defined in: [src/core/inputRequest.ts:8](https://github.com/footprintjs/agentfootprint/blob/8eb817f55f177662ed213c7b387a5bdc2527c87b/src/core/inputRequest.ts#L8)
+Defined in: [src/core/inputRequest.ts:8](https://github.com/footprintjs/agentfootprint/blob/f5cabfd85eeae981c1a9a9dd20edaa7a4ced5063/src/core/inputRequest.ts#L8)

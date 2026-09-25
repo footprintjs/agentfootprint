@@ -6,7 +6,7 @@
 
 # Interface: EpochLocation
 
-Defined in: [src/lib/time-travel/epochs.ts:64](https://github.com/footprintjs/agentfootprint/blob/8eb817f55f177662ed213c7b387a5bdc2527c87b/src/lib/time-travel/epochs.ts#L64)
+Defined in: [src/lib/time-travel/epochs.ts:64](https://github.com/footprintjs/agentfootprint/blob/f5cabfd85eeae981c1a9a9dd20edaa7a4ced5063/src/lib/time-travel/epochs.ts#L64)
 
 One epoch, located: which log holds its call, where in that log, and what
  that log folds against.
@@ -17,7 +17,7 @@ One epoch, located: which log holds its call, where in that log, and what
 
 > `readonly` **basis**: [`FoldBasis`](/agentfootprint/api/generated/type-aliases/FoldBasis.md)
 
-Defined in: [src/lib/time-travel/epochs.ts:108](https://github.com/footprintjs/agentfootprint/blob/8eb817f55f177662ed213c7b387a5bdc2527c87b/src/lib/time-travel/epochs.ts#L108)
+Defined in: [src/lib/time-travel/epochs.ts:108](https://github.com/footprintjs/agentfootprint/blob/f5cabfd85eeae981c1a9a9dd20edaa7a4ced5063/src/lib/time-travel/epochs.ts#L108)
 
 How [EpochLocation.source](/agentfootprint/api/generated/interfaces/EpochLocation.md#source) folds. `'log-only'` means the recording
 travelled without its fold base, so anything the log never `set` reads as
@@ -30,7 +30,7 @@ empty view.
 
 > `readonly` **callIdx**: `number`
 
-Defined in: [src/lib/time-travel/epochs.ts:85](https://github.com/footprintjs/agentfootprint/blob/8eb817f55f177662ed213c7b387a5bdc2527c87b/src/lib/time-travel/epochs.ts#L85)
+Defined in: [src/lib/time-travel/epochs.ts:85](https://github.com/footprintjs/agentfootprint/blob/f5cabfd85eeae981c1a9a9dd20edaa7a4ced5063/src/lib/time-travel/epochs.ts#L85)
 
 The call's ARRAY index in [EpochLocation.log](/agentfootprint/api/generated/interfaces/EpochLocation.md#log).
 
@@ -40,7 +40,7 @@ The call's ARRAY index in [EpochLocation.log](/agentfootprint/api/generated/inte
 
 > `readonly` **callRuntimeStageId**: `string`
 
-Defined in: [src/lib/time-travel/epochs.ts:80](https://github.com/footprintjs/agentfootprint/blob/8eb817f55f177662ed213c7b387a5bdc2527c87b/src/lib/time-travel/epochs.ts#L80)
+Defined in: [src/lib/time-travel/epochs.ts:80](https://github.com/footprintjs/agentfootprint/blob/f5cabfd85eeae981c1a9a9dd20edaa7a4ced5063/src/lib/time-travel/epochs.ts#L80)
 
 The `call-llm` stage's `runtimeStageId` — the llm-turn stop's own id.
 
@@ -50,7 +50,7 @@ The `call-llm` stage's `runtimeStageId` — the llm-turn stop's own id.
 
 > `readonly` **epoch**: `number`
 
-Defined in: [src/lib/time-travel/epochs.ts:78](https://github.com/footprintjs/agentfootprint/blob/8eb817f55f177662ed213c7b387a5bdc2527c87b/src/lib/time-travel/epochs.ts#L78)
+Defined in: [src/lib/time-travel/epochs.ts:78](https://github.com/footprintjs/agentfootprint/blob/f5cabfd85eeae981c1a9a9dd20edaa7a4ced5063/src/lib/time-travel/epochs.ts#L78)
 
 The committed `iteration` at the call. 1-based, and READ rather than
 counted — a run that pauses and resumes still names its epochs the way the
@@ -70,7 +70,7 @@ is the honest second choice, not a claim about the record.
 
 > `readonly` **hasRunLog**: `boolean`
 
-Defined in: [src/lib/time-travel/epochs.ts:114](https://github.com/footprintjs/agentfootprint/blob/8eb817f55f177662ed213c7b387a5bdc2527c87b/src/lib/time-travel/epochs.ts#L114)
+Defined in: [src/lib/time-travel/epochs.ts:114](https://github.com/footprintjs/agentfootprint/blob/f5cabfd85eeae981c1a9a9dd20edaa7a4ced5063/src/lib/time-travel/epochs.ts#L114)
 
 `false` when this recording carries no RUN log at all — a subtree handed
  in on its own. Every run constant is then unreadable, which
@@ -82,7 +82,7 @@ Defined in: [src/lib/time-travel/epochs.ts:114](https://github.com/footprintjs/a
 
 > `readonly` **log**: readonly `CommitBundle`[]
 
-Defined in: [src/lib/time-travel/epochs.ts:83](https://github.com/footprintjs/agentfootprint/blob/8eb817f55f177662ed213c7b387a5bdc2527c87b/src/lib/time-travel/epochs.ts#L83)
+Defined in: [src/lib/time-travel/epochs.ts:83](https://github.com/footprintjs/agentfootprint/blob/f5cabfd85eeae981c1a9a9dd20edaa7a4ced5063/src/lib/time-travel/epochs.ts#L83)
 
 The log the call committed to: the run's own under `'dynamic'`, the
  turn's inner history under `'dynamic-grouped'`.
@@ -93,7 +93,7 @@ The log the call committed to: the run's own under `'dynamic'`, the
 
 > `readonly` **runBasis**: [`FoldBasis`](/agentfootprint/api/generated/type-aliases/FoldBasis.md)
 
-Defined in: [src/lib/time-travel/epochs.ts:110](https://github.com/footprintjs/agentfootprint/blob/8eb817f55f177662ed213c7b387a5bdc2527c87b/src/lib/time-travel/epochs.ts#L110)
+Defined in: [src/lib/time-travel/epochs.ts:110](https://github.com/footprintjs/agentfootprint/blob/f5cabfd85eeae981c1a9a9dd20edaa7a4ced5063/src/lib/time-travel/epochs.ts#L110)
 
 The same, for [EpochLocation.runSource](/agentfootprint/api/generated/interfaces/EpochLocation.md#runsource).
 
@@ -103,7 +103,7 @@ The same, for [EpochLocation.runSource](/agentfootprint/api/generated/interfaces
 
 > `readonly` **runLog**: readonly `CommitBundle`[]
 
-Defined in: [src/lib/time-travel/epochs.ts:89](https://github.com/footprintjs/agentfootprint/blob/8eb817f55f177662ed213c7b387a5bdc2527c87b/src/lib/time-travel/epochs.ts#L89)
+Defined in: [src/lib/time-travel/epochs.ts:89](https://github.com/footprintjs/agentfootprint/blob/f5cabfd85eeae981c1a9a9dd20edaa7a4ced5063/src/lib/time-travel/epochs.ts#L89)
 
 The RUN's log, always. Run constants (a build-time fact seeded once) are
  read here, because a grouped turn's inner log never sees them unless the
@@ -115,7 +115,7 @@ The RUN's log, always. Run constants (a build-time fact seeded once) are
 
 > `readonly` **runSource**: `FoldSourceLike`
 
-Defined in: [src/lib/time-travel/epochs.ts:101](https://github.com/footprintjs/agentfootprint/blob/8eb817f55f177662ed213c7b387a5bdc2527c87b/src/lib/time-travel/epochs.ts#L101)
+Defined in: [src/lib/time-travel/epochs.ts:101](https://github.com/footprintjs/agentfootprint/blob/f5cabfd85eeae981c1a9a9dd20edaa7a4ced5063/src/lib/time-travel/epochs.ts#L101)
 
 The same, for [EpochLocation.runLog](/agentfootprint/api/generated/interfaces/EpochLocation.md#runlog).
 
@@ -125,7 +125,7 @@ The same, for [EpochLocation.runLog](/agentfootprint/api/generated/interfaces/Ep
 
 > `readonly` **source**: `FoldSourceLike`
 
-Defined in: [src/lib/time-travel/epochs.ts:99](https://github.com/footprintjs/agentfootprint/blob/8eb817f55f177662ed213c7b387a5bdc2527c87b/src/lib/time-travel/epochs.ts#L99)
+Defined in: [src/lib/time-travel/epochs.ts:99](https://github.com/footprintjs/agentfootprint/blob/f5cabfd85eeae981c1a9a9dd20edaa7a4ced5063/src/lib/time-travel/epochs.ts#L99)
 
 The fold source [EpochLocation.log](/agentfootprint/api/generated/interfaces/EpochLocation.md#log) belongs to — the log PLUS the
 base it was recorded against. Reads go through it, never through the bare
@@ -138,7 +138,7 @@ from where it actually came from.
 
 > `readonly` `optional` **subflowScope?**: `string`
 
-Defined in: [src/lib/time-travel/epochs.ts:92](https://github.com/footprintjs/agentfootprint/blob/8eb817f55f177662ed213c7b387a5bdc2527c87b/src/lib/time-travel/epochs.ts#L92)
+Defined in: [src/lib/time-travel/epochs.ts:92](https://github.com/footprintjs/agentfootprint/blob/f5cabfd85eeae981c1a9a9dd20edaa7a4ced5063/src/lib/time-travel/epochs.ts#L92)
 
 The `sf-llm-call` mount this epoch was projected from — set under
  `'dynamic-grouped'` only, and the tell that `callIdx` is inner-relative.

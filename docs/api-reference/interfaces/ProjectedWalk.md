@@ -6,7 +6,7 @@
 
 # Interface: ProjectedWalk
 
-Defined in: [src/core/runbook/walk.ts:55](https://github.com/footprintjs/agentfootprint/blob/8eb817f55f177662ed213c7b387a5bdc2527c87b/src/core/runbook/walk.ts#L55)
+Defined in: [src/core/runbook/walk.ts:55](https://github.com/footprintjs/agentfootprint/blob/f5cabfd85eeae981c1a9a9dd20edaa7a4ced5063/src/core/runbook/walk.ts#L55)
 
 The pure projection result — rows plus truthful counters.
 
@@ -16,7 +16,7 @@ The pure projection result — rows plus truthful counters.
 
 > `readonly` **complete**: `boolean`
 
-Defined in: [src/core/runbook/walk.ts:60](https://github.com/footprintjs/agentfootprint/blob/8eb817f55f177662ed213c7b387a5bdc2527c87b/src/core/runbook/walk.ts#L60)
+Defined in: [src/core/runbook/walk.ts:60](https://github.com/footprintjs/agentfootprint/blob/f5cabfd85eeae981c1a9a9dd20edaa7a4ced5063/src/core/runbook/walk.ts#L60)
 
 ***
 
@@ -24,7 +24,7 @@ Defined in: [src/core/runbook/walk.ts:60](https://github.com/footprintjs/agentfo
 
 > `readonly` **projection**: `"full"` \| `"control-flow"`
 
-Defined in: [src/core/runbook/walk.ts:57](https://github.com/footprintjs/agentfootprint/blob/8eb817f55f177662ed213c7b387a5bdc2527c87b/src/core/runbook/walk.ts#L57)
+Defined in: [src/core/runbook/walk.ts:57](https://github.com/footprintjs/agentfootprint/blob/f5cabfd85eeae981c1a9a9dd20edaa7a4ced5063/src/core/runbook/walk.ts#L57)
 
 ***
 
@@ -32,7 +32,7 @@ Defined in: [src/core/runbook/walk.ts:57](https://github.com/footprintjs/agentfo
 
 > `readonly` **rows**: readonly [`WalkRow`](/agentfootprint/api/generated/interfaces/WalkRow.md)[]
 
-Defined in: [src/core/runbook/walk.ts:56](https://github.com/footprintjs/agentfootprint/blob/8eb817f55f177662ed213c7b387a5bdc2527c87b/src/core/runbook/walk.ts#L56)
+Defined in: [src/core/runbook/walk.ts:56](https://github.com/footprintjs/agentfootprint/blob/f5cabfd85eeae981c1a9a9dd20edaa7a4ced5063/src/core/runbook/walk.ts#L56)
 
 ***
 
@@ -40,7 +40,7 @@ Defined in: [src/core/runbook/walk.ts:56](https://github.com/footprintjs/agentfo
 
 > `readonly` **shown**: `number`
 
-Defined in: [src/core/runbook/walk.ts:58](https://github.com/footprintjs/agentfootprint/blob/8eb817f55f177662ed213c7b387a5bdc2527c87b/src/core/runbook/walk.ts#L58)
+Defined in: [src/core/runbook/walk.ts:58](https://github.com/footprintjs/agentfootprint/blob/f5cabfd85eeae981c1a9a9dd20edaa7a4ced5063/src/core/runbook/walk.ts#L58)
 
 ***
 
@@ -48,4 +48,4 @@ Defined in: [src/core/runbook/walk.ts:58](https://github.com/footprintjs/agentfo
 
 > `readonly` **total**: `number`
 
-Defined in: [src/core/runbook/walk.ts:59](https://github.com/footprintjs/agentfootprint/blob/8eb817f55f177662ed213c7b387a5bdc2527c87b/src/core/runbook/walk.ts#L59)
+Defined in: [src/core/runbook/walk.ts:59](https://github.com/footprintjs/agentfootprint/blob/f5cabfd85eeae981c1a9a9dd20edaa7a4ced5063/src/core/runbook/walk.ts#L59)

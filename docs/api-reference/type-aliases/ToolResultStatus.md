@@ -8,7 +8,7 @@
 
 > **ToolResultStatus** = `"success"` \| `"failure"` \| `"denied"` \| `"invalid"` \| `"partial"` \| `"pending"` \| `"absent"`
 
-Defined in: [src/lib/injection-engine/toolOutcome.ts:38](https://github.com/footprintjs/agentfootprint/blob/8eb817f55f177662ed213c7b387a5bdc2527c87b/src/lib/injection-engine/toolOutcome.ts#L38)
+Defined in: [src/lib/injection-engine/toolOutcome.ts:38](https://github.com/footprintjs/agentfootprint/blob/f5cabfd85eeae981c1a9a9dd20edaa7a4ced5063/src/lib/injection-engine/toolOutcome.ts#L38)
 
 Normalized outcome of one tool call, declared by the tool itself. Seven
 values, deliberately closed: routing keyed on meaning needs a vocabulary

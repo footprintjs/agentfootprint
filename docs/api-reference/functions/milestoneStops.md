@@ -8,7 +8,7 @@
 
 > **milestoneStops**(`commitLog`, `executionTree?`): `Stop`\<[`Milestone`](/agentfootprint/api/generated/interfaces/Milestone.md)\>[]
 
-Defined in: [src/lib/time-travel/milestoneStops.ts:161](https://github.com/footprintjs/agentfootprint/blob/8eb817f55f177662ed213c7b387a5bdc2527c87b/src/lib/time-travel/milestoneStops.ts#L161)
+Defined in: [src/lib/time-travel/milestoneStops.ts:161](https://github.com/footprintjs/agentfootprint/blob/f5cabfd85eeae981c1a9a9dd20edaa7a4ced5063/src/lib/time-travel/milestoneStops.ts#L161)
 
 Derive one stop per committed MILESTONE from a recorded commit log.
 

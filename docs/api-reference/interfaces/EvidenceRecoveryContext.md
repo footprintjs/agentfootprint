@@ -6,7 +6,7 @@
 
 # Interface: EvidenceRecoveryContext
 
-Defined in: [src/core/agent/evidence/types.ts:56](https://github.com/footprintjs/agentfootprint/blob/8eb817f55f177662ed213c7b387a5bdc2527c87b/src/core/agent/evidence/types.ts#L56)
+Defined in: [src/core/agent/evidence/types.ts:56](https://github.com/footprintjs/agentfootprint/blob/f5cabfd85eeae981c1a9a9dd20edaa7a4ced5063/src/core/agent/evidence/types.ts#L56)
 
 Typed, detached context for the ONE internal evidence-recovery request.
 This is a token-grounding finding, not a semantic truth judgement.
@@ -17,7 +17,7 @@ This is a token-grounding finding, not a semantic truth judgement.
 
 > `readonly` **attempt**: `1`
 
-Defined in: [src/core/agent/evidence/types.ts:58](https://github.com/footprintjs/agentfootprint/blob/8eb817f55f177662ed213c7b387a5bdc2527c87b/src/core/agent/evidence/types.ts#L58)
+Defined in: [src/core/agent/evidence/types.ts:58](https://github.com/footprintjs/agentfootprint/blob/f5cabfd85eeae981c1a9a9dd20edaa7a4ced5063/src/core/agent/evidence/types.ts#L58)
 
 ***
 
@@ -25,7 +25,7 @@ Defined in: [src/core/agent/evidence/types.ts:58](https://github.com/footprintjs
 
 > `readonly` **iteration**: `number`
 
-Defined in: [src/core/agent/evidence/types.ts:59](https://github.com/footprintjs/agentfootprint/blob/8eb817f55f177662ed213c7b387a5bdc2527c87b/src/core/agent/evidence/types.ts#L59)
+Defined in: [src/core/agent/evidence/types.ts:59](https://github.com/footprintjs/agentfootprint/blob/f5cabfd85eeae981c1a9a9dd20edaa7a4ced5063/src/core/agent/evidence/types.ts#L59)
 
 ***
 
@@ -33,7 +33,7 @@ Defined in: [src/core/agent/evidence/types.ts:59](https://github.com/footprintjs
 
 > `readonly` **kind**: `"evidence"`
 
-Defined in: [src/core/agent/evidence/types.ts:57](https://github.com/footprintjs/agentfootprint/blob/8eb817f55f177662ed213c7b387a5bdc2527c87b/src/core/agent/evidence/types.ts#L57)
+Defined in: [src/core/agent/evidence/types.ts:57](https://github.com/footprintjs/agentfootprint/blob/f5cabfd85eeae981c1a9a9dd20edaa7a4ced5063/src/core/agent/evidence/types.ts#L57)
 
 ***
 
@@ -41,7 +41,7 @@ Defined in: [src/core/agent/evidence/types.ts:57](https://github.com/footprintjs
 
 > `readonly` **originalRequest**: `string`
 
-Defined in: [src/core/agent/evidence/types.ts:61](https://github.com/footprintjs/agentfootprint/blob/8eb817f55f177662ed213c7b387a5bdc2527c87b/src/core/agent/evidence/types.ts#L61)
+Defined in: [src/core/agent/evidence/types.ts:61](https://github.com/footprintjs/agentfootprint/blob/f5cabfd85eeae981c1a9a9dd20edaa7a4ced5063/src/core/agent/evidence/types.ts#L61)
 
 The authoritative input to this run, not an internally authored turn.
 
@@ -51,7 +51,7 @@ The authoritative input to this run, not an internally authored turn.
 
 > `readonly` **rejectedDraft**: `string`
 
-Defined in: [src/core/agent/evidence/types.ts:62](https://github.com/footprintjs/agentfootprint/blob/8eb817f55f177662ed213c7b387a5bdc2527c87b/src/core/agent/evidence/types.ts#L62)
+Defined in: [src/core/agent/evidence/types.ts:62](https://github.com/footprintjs/agentfootprint/blob/f5cabfd85eeae981c1a9a9dd20edaa7a4ced5063/src/core/agent/evidence/types.ts#L62)
 
 ***
 
@@ -59,7 +59,7 @@ Defined in: [src/core/agent/evidence/types.ts:62](https://github.com/footprintjs
 
 > `readonly` `optional` **spenderTools?**: readonly `string`[]
 
-Defined in: [src/core/agent/evidence/types.ts:65](https://github.com/footprintjs/agentfootprint/blob/8eb817f55f177662ed213c7b387a5bdc2527c87b/src/core/agent/evidence/types.ts#L65)
+Defined in: [src/core/agent/evidence/types.ts:65](https://github.com/footprintjs/agentfootprint/blob/f5cabfd85eeae981c1a9a9dd20edaa7a4ced5063/src/core/agent/evidence/types.ts#L65)
 
 ***
 
@@ -67,7 +67,7 @@ Defined in: [src/core/agent/evidence/types.ts:65](https://github.com/footprintjs
 
 > `readonly` `optional` **stagedRefs?**: readonly `object`[]
 
-Defined in: [src/core/agent/evidence/types.ts:64](https://github.com/footprintjs/agentfootprint/blob/8eb817f55f177662ed213c7b387a5bdc2527c87b/src/core/agent/evidence/types.ts#L64)
+Defined in: [src/core/agent/evidence/types.ts:64](https://github.com/footprintjs/agentfootprint/blob/f5cabfd85eeae981c1a9a9dd20edaa7a4ced5063/src/core/agent/evidence/types.ts#L64)
 
 ***
 
@@ -75,4 +75,4 @@ Defined in: [src/core/agent/evidence/types.ts:64](https://github.com/footprintjs
 
 > `readonly` **unsupported**: readonly [`UnsupportedValue`](/agentfootprint/api/generated/interfaces/UnsupportedValue.md)[]
 
-Defined in: [src/core/agent/evidence/types.ts:63](https://github.com/footprintjs/agentfootprint/blob/8eb817f55f177662ed213c7b387a5bdc2527c87b/src/core/agent/evidence/types.ts#L63)
+Defined in: [src/core/agent/evidence/types.ts:63](https://github.com/footprintjs/agentfootprint/blob/f5cabfd85eeae981c1a9a9dd20edaa7a4ced5063/src/core/agent/evidence/types.ts#L63)

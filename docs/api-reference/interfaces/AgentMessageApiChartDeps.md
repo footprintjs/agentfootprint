@@ -6,7 +6,7 @@
 
 # Interface: AgentMessageApiChartDeps
 
-Defined in: [src/core/agent/buildAgentMessageApiChart.ts:68](https://github.com/footprintjs/agentfootprint/blob/8eb817f55f177662ed213c7b387a5bdc2527c87b/src/core/agent/buildAgentMessageApiChart.ts#L68)
+Defined in: [src/core/agent/buildAgentMessageApiChart.ts:68](https://github.com/footprintjs/agentfootprint/blob/f5cabfd85eeae981c1a9a9dd20edaa7a4ced5063/src/core/agent/buildAgentMessageApiChart.ts#L68)
 
 ## Properties
 
@@ -14,7 +14,7 @@ Defined in: [src/core/agent/buildAgentMessageApiChart.ts:68](https://github.com/
 
 > `readonly` `optional` **getRunId?**: () => `string` \| `undefined`
 
-Defined in: [src/core/agent/buildAgentMessageApiChart.ts:96](https://github.com/footprintjs/agentfootprint/blob/8eb817f55f177662ed213c7b387a5bdc2527c87b/src/core/agent/buildAgentMessageApiChart.ts#L96)
+Defined in: [src/core/agent/buildAgentMessageApiChart.ts:96](https://github.com/footprintjs/agentfootprint/blob/f5cabfd85eeae981c1a9a9dd20edaa7a4ced5063/src/core/agent/buildAgentMessageApiChart.ts#L96)
 
 The id of the run this chart is about to make (9.91.0) — supply it and
 Call-LLM mints a receipt on every turn of the loop, the fingerprint of
@@ -49,7 +49,7 @@ await new FlowChartExecutor(chart).run({ input: { message: 'hi' } });
 
 > `readonly` `optional` **maxIterations?**: `number`
 
-Defined in: [src/core/agent/buildAgentMessageApiChart.ts:73](https://github.com/footprintjs/agentfootprint/blob/8eb817f55f177662ed213c7b387a5bdc2527c87b/src/core/agent/buildAgentMessageApiChart.ts#L73)
+Defined in: [src/core/agent/buildAgentMessageApiChart.ts:73](https://github.com/footprintjs/agentfootprint/blob/f5cabfd85eeae981c1a9a9dd20edaa7a4ced5063/src/core/agent/buildAgentMessageApiChart.ts#L73)
 
 ***
 
@@ -57,7 +57,7 @@ Defined in: [src/core/agent/buildAgentMessageApiChart.ts:73](https://github.com/
 
 > `readonly` **model**: `string`
 
-Defined in: [src/core/agent/buildAgentMessageApiChart.ts:70](https://github.com/footprintjs/agentfootprint/blob/8eb817f55f177662ed213c7b387a5bdc2527c87b/src/core/agent/buildAgentMessageApiChart.ts#L70)
+Defined in: [src/core/agent/buildAgentMessageApiChart.ts:70](https://github.com/footprintjs/agentfootprint/blob/f5cabfd85eeae981c1a9a9dd20edaa7a4ced5063/src/core/agent/buildAgentMessageApiChart.ts#L70)
 
 ***
 
@@ -65,7 +65,7 @@ Defined in: [src/core/agent/buildAgentMessageApiChart.ts:70](https://github.com/
 
 > `readonly` **provider**: [`LLMProvider`](/agentfootprint/api/generated/interfaces/LLMProvider.md)
 
-Defined in: [src/core/agent/buildAgentMessageApiChart.ts:69](https://github.com/footprintjs/agentfootprint/blob/8eb817f55f177662ed213c7b387a5bdc2527c87b/src/core/agent/buildAgentMessageApiChart.ts#L69)
+Defined in: [src/core/agent/buildAgentMessageApiChart.ts:69](https://github.com/footprintjs/agentfootprint/blob/f5cabfd85eeae981c1a9a9dd20edaa7a4ced5063/src/core/agent/buildAgentMessageApiChart.ts#L69)
 
 ***
 
@@ -73,7 +73,7 @@ Defined in: [src/core/agent/buildAgentMessageApiChart.ts:69](https://github.com/
 
 > `readonly` `optional` **structureRecorders?**: readonly `StructureRecorder`[]
 
-Defined in: [src/core/agent/buildAgentMessageApiChart.ts:74](https://github.com/footprintjs/agentfootprint/blob/8eb817f55f177662ed213c7b387a5bdc2527c87b/src/core/agent/buildAgentMessageApiChart.ts#L74)
+Defined in: [src/core/agent/buildAgentMessageApiChart.ts:74](https://github.com/footprintjs/agentfootprint/blob/f5cabfd85eeae981c1a9a9dd20edaa7a4ced5063/src/core/agent/buildAgentMessageApiChart.ts#L74)
 
 ***
 
@@ -81,7 +81,7 @@ Defined in: [src/core/agent/buildAgentMessageApiChart.ts:74](https://github.com/
 
 > `readonly` **systemPrompt**: `string`
 
-Defined in: [src/core/agent/buildAgentMessageApiChart.ts:71](https://github.com/footprintjs/agentfootprint/blob/8eb817f55f177662ed213c7b387a5bdc2527c87b/src/core/agent/buildAgentMessageApiChart.ts#L71)
+Defined in: [src/core/agent/buildAgentMessageApiChart.ts:71](https://github.com/footprintjs/agentfootprint/blob/f5cabfd85eeae981c1a9a9dd20edaa7a4ced5063/src/core/agent/buildAgentMessageApiChart.ts#L71)
 
 ***
 
@@ -89,4 +89,4 @@ Defined in: [src/core/agent/buildAgentMessageApiChart.ts:71](https://github.com/
 
 > `readonly` **tools**: readonly [`LLMToolSchema`](/agentfootprint/api/generated/interfaces/LLMToolSchema.md)[]
 
-Defined in: [src/core/agent/buildAgentMessageApiChart.ts:72](https://github.com/footprintjs/agentfootprint/blob/8eb817f55f177662ed213c7b387a5bdc2527c87b/src/core/agent/buildAgentMessageApiChart.ts#L72)
+Defined in: [src/core/agent/buildAgentMessageApiChart.ts:72](https://github.com/footprintjs/agentfootprint/blob/f5cabfd85eeae981c1a9a9dd20edaa7a4ced5063/src/core/agent/buildAgentMessageApiChart.ts#L72)

@@ -8,7 +8,7 @@
 
 > **recordingPutInput**(`recording`, `facts?`): [`PutArtifactInput`](/agentfootprint/api/generated/interfaces/PutArtifactInput.md)
 
-Defined in: [src/artifacts/recordingArtifact.ts:109](https://github.com/footprintjs/agentfootprint/blob/8eb817f55f177662ed213c7b387a5bdc2527c87b/src/artifacts/recordingArtifact.ts#L109)
+Defined in: [src/artifacts/recordingArtifact.ts:109](https://github.com/footprintjs/agentfootprint/blob/f5cabfd85eeae981c1a9a9dd20edaa7a4ced5063/src/artifacts/recordingArtifact.ts#L109)
 
 Turn one finished recording into the `put` input that stores it.
 

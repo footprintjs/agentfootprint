@@ -8,7 +8,7 @@
 
 > **readToolResultEnvelope**(`result`): [`ReadToolResultEnvelope`](/agentfootprint/api/generated/interfaces/ReadToolResultEnvelope.md) \| `undefined`
 
-Defined in: [src/core/agent/toolEffects.ts:145](https://github.com/footprintjs/agentfootprint/blob/8eb817f55f177662ed213c7b387a5bdc2527c87b/src/core/agent/toolEffects.ts#L145)
+Defined in: [src/core/agent/toolEffects.ts:145](https://github.com/footprintjs/agentfootprint/blob/f5cabfd85eeae981c1a9a9dd20edaa7a4ced5063/src/core/agent/toolEffects.ts#L145)
 
 Recognize (or decline to recognize) a tool's return value as an effects
 envelope. `undefined` = not an envelope: the caller keeps today's path

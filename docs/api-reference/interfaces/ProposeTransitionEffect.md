@@ -6,7 +6,7 @@
 
 # Interface: ProposeTransitionEffect
 
-Defined in: [src/core/agent/toolEffects.ts:68](https://github.com/footprintjs/agentfootprint/blob/8eb817f55f177662ed213c7b387a5bdc2527c87b/src/core/agent/toolEffects.ts#L68)
+Defined in: [src/core/agent/toolEffects.ts:68](https://github.com/footprintjs/agentfootprint/blob/f5cabfd85eeae981c1a9a9dd20edaa7a4ced5063/src/core/agent/toolEffects.ts#L68)
 
 A tool proposes moving the skill-graph cursor. The graph decides.
 
@@ -16,7 +16,7 @@ A tool proposes moving the skill-graph cursor. The graph decides.
 
 > `readonly` **kind**: `"propose-transition"`
 
-Defined in: [src/core/agent/toolEffects.ts:69](https://github.com/footprintjs/agentfootprint/blob/8eb817f55f177662ed213c7b387a5bdc2527c87b/src/core/agent/toolEffects.ts#L69)
+Defined in: [src/core/agent/toolEffects.ts:69](https://github.com/footprintjs/agentfootprint/blob/f5cabfd85eeae981c1a9a9dd20edaa7a4ced5063/src/core/agent/toolEffects.ts#L69)
 
 ***
 
@@ -24,7 +24,7 @@ Defined in: [src/core/agent/toolEffects.ts:69](https://github.com/footprintjs/ag
 
 > `readonly` **reason**: `string`
 
-Defined in: [src/core/agent/toolEffects.ts:76](https://github.com/footprintjs/agentfootprint/blob/8eb817f55f177662ed213c7b387a5bdc2527c87b/src/core/agent/toolEffects.ts#L76)
+Defined in: [src/core/agent/toolEffects.ts:76](https://github.com/footprintjs/agentfootprint/blob/f5cabfd85eeae981c1a9a9dd20edaa7a4ced5063/src/core/agent/toolEffects.ts#L76)
 
 Why — goes on the record (`tools.effect`), never optional: a routing
  proposal with no reason is exactly the arbitrary authority this
@@ -36,7 +36,7 @@ Why — goes on the record (`tools.effect`), never optional: a routing
 
 > `readonly` **targetSkillId**: `string`
 
-Defined in: [src/core/agent/toolEffects.ts:72](https://github.com/footprintjs/agentfootprint/blob/8eb817f55f177662ed213c7b387a5bdc2527c87b/src/core/agent/toolEffects.ts#L72)
+Defined in: [src/core/agent/toolEffects.ts:72](https://github.com/footprintjs/agentfootprint/blob/f5cabfd85eeae981c1a9a9dd20edaa7a4ced5063/src/core/agent/toolEffects.ts#L72)
 
 The skill node to move to. Reachability-checked against the graph's
  own law (`reachableSkills(cursor)`); unreachable = teaching refusal.

@@ -6,7 +6,7 @@
 
 # Interface: SelfExplainOptions
 
-Defined in: [src/lib/trace-toolpack/selfExplain.ts:89](https://github.com/footprintjs/agentfootprint/blob/8eb817f55f177662ed213c7b387a5bdc2527c87b/src/lib/trace-toolpack/selfExplain.ts#L89)
+Defined in: [src/lib/trace-toolpack/selfExplain.ts:89](https://github.com/footprintjs/agentfootprint/blob/f5cabfd85eeae981c1a9a9dd20edaa7a4ced5063/src/lib/trace-toolpack/selfExplain.ts#L89)
 
 Consumer surface for `.selfExplain()` on the Agent builder.
 
@@ -16,7 +16,7 @@ Consumer surface for `.selfExplain()` on the Agent builder.
 
 > `readonly` `optional` **delegate?**: `object`
 
-Defined in: [src/lib/trace-toolpack/selfExplain.ts:97](https://github.com/footprintjs/agentfootprint/blob/8eb817f55f177662ed213c7b387a5bdc2527c87b/src/lib/trace-toolpack/selfExplain.ts#L97)
+Defined in: [src/lib/trace-toolpack/selfExplain.ts:97](https://github.com/footprintjs/agentfootprint/blob/f5cabfd85eeae981c1a9a9dd20edaa7a4ced5063/src/lib/trace-toolpack/selfExplain.ts#L97)
 
 Answer why-questions on a SEPARATE (typically cheaper) model: the
 skill unlocks one `explain_run` tool that runs a nested
@@ -40,7 +40,7 @@ skill unlocks one `explain_run` tool that runs a nested
 
 > `readonly` `optional` **id?**: `string`
 
-Defined in: [src/lib/trace-toolpack/selfExplain.ts:103](https://github.com/footprintjs/agentfootprint/blob/8eb817f55f177662ed213c7b387a5bdc2527c87b/src/lib/trace-toolpack/selfExplain.ts#L103)
+Defined in: [src/lib/trace-toolpack/selfExplain.ts:103](https://github.com/footprintjs/agentfootprint/blob/f5cabfd85eeae981c1a9a9dd20edaa7a4ced5063/src/lib/trace-toolpack/selfExplain.ts#L103)
 
 Skill id (activation key for `read_skill`). Default 'self-explain'.
 
@@ -50,7 +50,7 @@ Skill id (activation key for `read_skill`). Default 'self-explain'.
 
 > `readonly` `optional` **include?**: [`SelfExplainInclude`](/agentfootprint/api/generated/interfaces/SelfExplainInclude.md)
 
-Defined in: [src/lib/trace-toolpack/selfExplain.ts:107](https://github.com/footprintjs/agentfootprint/blob/8eb817f55f177662ed213c7b387a5bdc2527c87b/src/lib/trace-toolpack/selfExplain.ts#L107)
+Defined in: [src/lib/trace-toolpack/selfExplain.ts:107](https://github.com/footprintjs/agentfootprint/blob/f5cabfd85eeae981c1a9a9dd20edaa7a4ced5063/src/lib/trace-toolpack/selfExplain.ts#L107)
 
 Which optional parts of a turn's evidence to capture. Both default true.
 
@@ -60,7 +60,7 @@ Which optional parts of a turn's evidence to capture. Both default true.
 
 > `readonly` `optional` **instruction?**: `string`
 
-Defined in: [src/lib/trace-toolpack/selfExplain.ts:91](https://github.com/footprintjs/agentfootprint/blob/8eb817f55f177662ed213c7b387a5bdc2527c87b/src/lib/trace-toolpack/selfExplain.ts#L91)
+Defined in: [src/lib/trace-toolpack/selfExplain.ts:91](https://github.com/footprintjs/agentfootprint/blob/f5cabfd85eeae981c1a9a9dd20edaa7a4ced5063/src/lib/trace-toolpack/selfExplain.ts#L91)
 
 Appended to the recommended skill body (ours stays; yours adds).
 
@@ -70,7 +70,7 @@ Appended to the recommended skill body (ours stays; yours adds).
 
 > `readonly` `optional` **maxEvents?**: `number`
 
-Defined in: [src/lib/trace-toolpack/selfExplain.ts:114](https://github.com/footprintjs/agentfootprint/blob/8eb817f55f177662ed213c7b387a5bdc2527c87b/src/lib/trace-toolpack/selfExplain.ts#L114)
+Defined in: [src/lib/trace-toolpack/selfExplain.ts:114](https://github.com/footprintjs/agentfootprint/blob/f5cabfd85eeae981c1a9a9dd20edaa7a4ced5063/src/lib/trace-toolpack/selfExplain.ts#L114)
 
 Cap on retained events per turn (only with `include.events`). Default
 2,000 — enough for a long tool-using turn, small enough that a server
@@ -83,6 +83,6 @@ dropped events says so in `inspect_tool_call`.
 
 > `readonly` `optional` **toolpack?**: `TraceToolpackOptions`
 
-Defined in: [src/lib/trace-toolpack/selfExplain.ts:105](https://github.com/footprintjs/agentfootprint/blob/8eb817f55f177662ed213c7b387a5bdc2527c87b/src/lib/trace-toolpack/selfExplain.ts#L105)
+Defined in: [src/lib/trace-toolpack/selfExplain.ts:105](https://github.com/footprintjs/agentfootprint/blob/f5cabfd85eeae981c1a9a9dd20edaa7a4ced5063/src/lib/trace-toolpack/selfExplain.ts#L105)
 
 Bounding dials forwarded to the toolpack.

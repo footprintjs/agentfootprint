@@ -8,7 +8,7 @@
 
 > `const` **TOOL\_SESSIONS**: unique `symbol`
 
-Defined in: [src/core/codeRunnerTool.ts:148](https://github.com/footprintjs/agentfootprint/blob/8eb817f55f177662ed213c7b387a5bdc2527c87b/src/core/codeRunnerTool.ts#L148)
+Defined in: [src/core/codeRunnerTool.ts:148](https://github.com/footprintjs/agentfootprint/blob/f5cabfd85eeae981c1a9a9dd20edaa7a4ced5063/src/core/codeRunnerTool.ts#L148)
 
 The per-tool session map, riding the `Tool` under a REGISTRY symbol.
 

@@ -6,7 +6,7 @@
 
 # Interface: ReceiptCacheMarker
 
-Defined in: [src/lib/time-travel/receipt.ts:249](https://github.com/footprintjs/agentfootprint/blob/8eb817f55f177662ed213c7b387a5bdc2527c87b/src/lib/time-travel/receipt.ts#L249)
+Defined in: [src/lib/time-travel/receipt.ts:249](https://github.com/footprintjs/agentfootprint/blob/f5cabfd85eeae981c1a9a9dd20edaa7a4ced5063/src/lib/time-travel/receipt.ts#L249)
 
 One `cache_control` breakpoint the cache strategy actually APPLIED — three
 scalars, no bytes.
@@ -40,7 +40,7 @@ at(3) === at(4); // false ⇒ the cached prefix moved, and the bill with it
 
 > `readonly` **boundaryIndex**: `number`
 
-Defined in: [src/lib/time-travel/receipt.ts:251](https://github.com/footprintjs/agentfootprint/blob/8eb817f55f177662ed213c7b387a5bdc2527c87b/src/lib/time-travel/receipt.ts#L251)
+Defined in: [src/lib/time-travel/receipt.ts:251](https://github.com/footprintjs/agentfootprint/blob/f5cabfd85eeae981c1a9a9dd20edaa7a4ced5063/src/lib/time-travel/receipt.ts#L251)
 
 ***
 
@@ -48,7 +48,7 @@ Defined in: [src/lib/time-travel/receipt.ts:251](https://github.com/footprintjs/
 
 > `readonly` **field**: `"system"` \| `"messages"` \| `"tools"`
 
-Defined in: [src/lib/time-travel/receipt.ts:250](https://github.com/footprintjs/agentfootprint/blob/8eb817f55f177662ed213c7b387a5bdc2527c87b/src/lib/time-travel/receipt.ts#L250)
+Defined in: [src/lib/time-travel/receipt.ts:250](https://github.com/footprintjs/agentfootprint/blob/f5cabfd85eeae981c1a9a9dd20edaa7a4ced5063/src/lib/time-travel/receipt.ts#L250)
 
 ***
 
@@ -56,4 +56,4 @@ Defined in: [src/lib/time-travel/receipt.ts:250](https://github.com/footprintjs/
 
 > `readonly` **ttl**: `"short"` \| `"long"`
 
-Defined in: [src/lib/time-travel/receipt.ts:252](https://github.com/footprintjs/agentfootprint/blob/8eb817f55f177662ed213c7b387a5bdc2527c87b/src/lib/time-travel/receipt.ts#L252)
+Defined in: [src/lib/time-travel/receipt.ts:252](https://github.com/footprintjs/agentfootprint/blob/f5cabfd85eeae981c1a9a9dd20edaa7a4ced5063/src/lib/time-travel/receipt.ts#L252)

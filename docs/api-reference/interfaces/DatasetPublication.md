@@ -6,7 +6,7 @@
 
 # Interface: DatasetPublication
 
-Defined in: [src/artifacts/datasetResult.ts:22](https://github.com/footprintjs/agentfootprint/blob/8eb817f55f177662ed213c7b387a5bdc2527c87b/src/artifacts/datasetResult.ts#L22)
+Defined in: [src/artifacts/datasetResult.ts:22](https://github.com/footprintjs/agentfootprint/blob/f5cabfd85eeae981c1a9a9dd20edaa7a4ced5063/src/artifacts/datasetResult.ts#L22)
 
 ## Properties
 
@@ -14,7 +14,7 @@ Defined in: [src/artifacts/datasetResult.ts:22](https://github.com/footprintjs/a
 
 > `readonly` **artifact**: [`DatasetArtifactReceipt`](/agentfootprint/api/generated/type-aliases/DatasetArtifactReceipt.md)
 
-Defined in: [src/artifacts/datasetResult.ts:24](https://github.com/footprintjs/agentfootprint/blob/8eb817f55f177662ed213c7b387a5bdc2527c87b/src/artifacts/datasetResult.ts#L24)
+Defined in: [src/artifacts/datasetResult.ts:24](https://github.com/footprintjs/agentfootprint/blob/f5cabfd85eeae981c1a9a9dd20edaa7a4ced5063/src/artifacts/datasetResult.ts#L24)
 
 ***
 
@@ -22,7 +22,7 @@ Defined in: [src/artifacts/datasetResult.ts:24](https://github.com/footprintjs/a
 
 > `readonly` **key**: `string`
 
-Defined in: [src/artifacts/datasetResult.ts:23](https://github.com/footprintjs/agentfootprint/blob/8eb817f55f177662ed213c7b387a5bdc2527c87b/src/artifacts/datasetResult.ts#L23)
+Defined in: [src/artifacts/datasetResult.ts:23](https://github.com/footprintjs/agentfootprint/blob/f5cabfd85eeae981c1a9a9dd20edaa7a4ced5063/src/artifacts/datasetResult.ts#L23)
 
 ***
 
@@ -30,4 +30,4 @@ Defined in: [src/artifacts/datasetResult.ts:23](https://github.com/footprintjs/a
 
 > `readonly` `optional` **source?**: [`DatasetArtifactReceipt`](/agentfootprint/api/generated/type-aliases/DatasetArtifactReceipt.md)
 
-Defined in: [src/artifacts/datasetResult.ts:25](https://github.com/footprintjs/agentfootprint/blob/8eb817f55f177662ed213c7b387a5bdc2527c87b/src/artifacts/datasetResult.ts#L25)
+Defined in: [src/artifacts/datasetResult.ts:25](https://github.com/footprintjs/agentfootprint/blob/f5cabfd85eeae981c1a9a9dd20edaa7a4ced5063/src/artifacts/datasetResult.ts#L25)

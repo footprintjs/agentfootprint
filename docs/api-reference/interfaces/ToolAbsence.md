@@ -6,7 +6,7 @@
 
 # Interface: ToolAbsence
 
-Defined in: [src/core/agent/coverage/types.ts:144](https://github.com/footprintjs/agentfootprint/blob/8eb817f55f177662ed213c7b387a5bdc2527c87b/src/core/agent/coverage/types.ts#L144)
+Defined in: [src/core/agent/coverage/types.ts:144](https://github.com/footprintjs/agentfootprint/blob/f5cabfd85eeae981c1a9a9dd20edaa7a4ced5063/src/core/agent/coverage/types.ts#L144)
 
 The rendered absence — the exact object a tool hands back and the model
 reads. Field names are snake_case and English on purpose: this value is
@@ -24,7 +24,7 @@ other shape as one.
 
 > `readonly` **af\_absent**: `true`
 
-Defined in: [src/core/agent/coverage/types.ts:145](https://github.com/footprintjs/agentfootprint/blob/8eb817f55f177662ed213c7b387a5bdc2527c87b/src/core/agent/coverage/types.ts#L145)
+Defined in: [src/core/agent/coverage/types.ts:145](https://github.com/footprintjs/agentfootprint/blob/f5cabfd85eeae981c1a9a9dd20edaa7a4ced5063/src/core/agent/coverage/types.ts#L145)
 
 ***
 
@@ -32,7 +32,7 @@ Defined in: [src/core/agent/coverage/types.ts:145](https://github.com/footprintj
 
 > `readonly` `optional` **cannot\_cover?**: readonly [`CoverageItem`](/agentfootprint/api/generated/interfaces/CoverageItem.md)[]
 
-Defined in: [src/core/agent/coverage/types.ts:152](https://github.com/footprintjs/agentfootprint/blob/8eb817f55f177662ed213c7b387a5bdc2527c87b/src/core/agent/coverage/types.ts#L152)
+Defined in: [src/core/agent/coverage/types.ts:152](https://github.com/footprintjs/agentfootprint/blob/f5cabfd85eeae981c1a9a9dd20edaa7a4ced5063/src/core/agent/coverage/types.ts#L152)
 
 ***
 
@@ -40,7 +40,7 @@ Defined in: [src/core/agent/coverage/types.ts:152](https://github.com/footprintj
 
 > `readonly` **checked**: readonly [`CoverageItem`](/agentfootprint/api/generated/interfaces/CoverageItem.md)[]
 
-Defined in: [src/core/agent/coverage/types.ts:150](https://github.com/footprintjs/agentfootprint/blob/8eb817f55f177662ed213c7b387a5bdc2527c87b/src/core/agent/coverage/types.ts#L150)
+Defined in: [src/core/agent/coverage/types.ts:150](https://github.com/footprintjs/agentfootprint/blob/f5cabfd85eeae981c1a9a9dd20edaa7a4ced5063/src/core/agent/coverage/types.ts#L150)
 
 ***
 
@@ -48,7 +48,7 @@ Defined in: [src/core/agent/coverage/types.ts:150](https://github.com/footprintj
 
 > `readonly` **looked\_for**: `string`
 
-Defined in: [src/core/agent/coverage/types.ts:149](https://github.com/footprintjs/agentfootprint/blob/8eb817f55f177662ed213c7b387a5bdc2527c87b/src/core/agent/coverage/types.ts#L149)
+Defined in: [src/core/agent/coverage/types.ts:149](https://github.com/footprintjs/agentfootprint/blob/f5cabfd85eeae981c1a9a9dd20edaa7a4ced5063/src/core/agent/coverage/types.ts#L149)
 
 ***
 
@@ -56,7 +56,7 @@ Defined in: [src/core/agent/coverage/types.ts:149](https://github.com/footprintj
 
 > `readonly` `optional` **not\_checked?**: readonly [`CoverageItem`](/agentfootprint/api/generated/interfaces/CoverageItem.md)[]
 
-Defined in: [src/core/agent/coverage/types.ts:151](https://github.com/footprintjs/agentfootprint/blob/8eb817f55f177662ed213c7b387a5bdc2527c87b/src/core/agent/coverage/types.ts#L151)
+Defined in: [src/core/agent/coverage/types.ts:151](https://github.com/footprintjs/agentfootprint/blob/f5cabfd85eeae981c1a9a9dd20edaa7a4ced5063/src/core/agent/coverage/types.ts#L151)
 
 ***
 
@@ -64,7 +64,7 @@ Defined in: [src/core/agent/coverage/types.ts:151](https://github.com/footprintj
 
 > `readonly` **note**: `string`
 
-Defined in: [src/core/agent/coverage/types.ts:163](https://github.com/footprintjs/agentfootprint/blob/8eb817f55f177662ed213c7b387a5bdc2527c87b/src/core/agent/coverage/types.ts#L163)
+Defined in: [src/core/agent/coverage/types.ts:163](https://github.com/footprintjs/agentfootprint/blob/f5cabfd85eeae981c1a9a9dd20edaa7a4ced5063/src/core/agent/coverage/types.ts#L163)
 
 The static sentence. Never interpolated — see `absent.ts`.
 
@@ -74,7 +74,7 @@ The static sentence. Never interpolated — see `absent.ts`.
 
 > `readonly` **outcome**: `"nothing_found"`
 
-Defined in: [src/core/agent/coverage/types.ts:148](https://github.com/footprintjs/agentfootprint/blob/8eb817f55f177662ed213c7b387a5bdc2527c87b/src/core/agent/coverage/types.ts#L148)
+Defined in: [src/core/agent/coverage/types.ts:148](https://github.com/footprintjs/agentfootprint/blob/f5cabfd85eeae981c1a9a9dd20edaa7a4ced5063/src/core/agent/coverage/types.ts#L148)
 
 The plain-English handle. Present so a model that skims one key still
  reads the outcome rather than inferring it from a missing field.
@@ -85,7 +85,7 @@ The plain-English handle. Present so a model that skims one key still
 
 > `readonly` **retry\_returns\_the\_same**: `true`
 
-Defined in: [src/core/agent/coverage/types.ts:155](https://github.com/footprintjs/agentfootprint/blob/8eb817f55f177662ed213c7b387a5bdc2527c87b/src/core/agent/coverage/types.ts#L155)
+Defined in: [src/core/agent/coverage/types.ts:155](https://github.com/footprintjs/agentfootprint/blob/f5cabfd85eeae981c1a9a9dd20edaa7a4ced5063/src/core/agent/coverage/types.ts#L155)
 
 Stated as data as well as prose — the note can be skimmed past, a
  `true` in a field named for the question cannot.
@@ -96,7 +96,7 @@ Stated as data as well as prose — the note can be skimmed past, a
 
 > `readonly` `optional` **try\_instead?**: `string`
 
-Defined in: [src/core/agent/coverage/types.ts:158](https://github.com/footprintjs/agentfootprint/blob/8eb817f55f177662ed213c7b387a5bdc2527c87b/src/core/agent/coverage/types.ts#L158)
+Defined in: [src/core/agent/coverage/types.ts:158](https://github.com/footprintjs/agentfootprint/blob/f5cabfd85eeae981c1a9a9dd20edaa7a4ced5063/src/core/agent/coverage/types.ts#L158)
 
 The author's sentence. A string, always — the typed tool rides its own
  key, so a reader of this one never has to narrow it.
@@ -107,7 +107,7 @@ The author's sentence. A string, always — the typed tool rides its own
 
 > `readonly` `optional` **try\_instead\_tool?**: [`TryInsteadTool`](/agentfootprint/api/generated/interfaces/TryInsteadTool.md)
 
-Defined in: [src/core/agent/coverage/types.ts:161](https://github.com/footprintjs/agentfootprint/blob/8eb817f55f177662ed213c7b387a5bdc2527c87b/src/core/agent/coverage/types.ts#L161)
+Defined in: [src/core/agent/coverage/types.ts:161](https://github.com/footprintjs/agentfootprint/blob/f5cabfd85eeae981c1a9a9dd20edaa7a4ced5063/src/core/agent/coverage/types.ts#L161)
 
 The typed tool the suggestion points at (9.113.0), as declared — the
  author's words, `{ tool, why? }`. The model reads it as written.

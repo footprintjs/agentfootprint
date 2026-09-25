@@ -8,6 +8,6 @@
 
 > **ObservabilityHandle** = [`StrategyHandle`](/agentfootprint/api/generated/type-aliases/StrategyHandle.md)
 
-Defined in: [src/strategies/types.ts:115](https://github.com/footprintjs/agentfootprint/blob/8eb817f55f177662ed213c7b387a5bdc2527c87b/src/strategies/types.ts#L115)
+Defined in: [src/strategies/types.ts:115](https://github.com/footprintjs/agentfootprint/blob/f5cabfd85eeae981c1a9a9dd20edaa7a4ced5063/src/strategies/types.ts#L115)
 
 `StrategyHandle` under the name the observability door returns it.

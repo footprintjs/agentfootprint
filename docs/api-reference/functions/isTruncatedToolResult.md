@@ -8,7 +8,7 @@
 
 > **isTruncatedToolResult**(`value`): `value is TruncatedToolResult`
 
-Defined in: [src/core/agent/toolResultCap.ts:76](https://github.com/footprintjs/agentfootprint/blob/8eb817f55f177662ed213c7b387a5bdc2527c87b/src/core/agent/toolResultCap.ts#L76)
+Defined in: [src/core/agent/toolResultCap.ts:76](https://github.com/footprintjs/agentfootprint/blob/f5cabfd85eeae981c1a9a9dd20edaa7a4ced5063/src/core/agent/toolResultCap.ts#L76)
 
 Type guard for consumers reading `tool_end.result` or a tool message.
 

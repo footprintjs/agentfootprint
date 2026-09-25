@@ -8,7 +8,7 @@
 
 > **ColumnType** = `"number"` \| `"string"` \| `"boolean"` \| `"date"`
 
-Defined in: [src/integrity/column-types/types.ts:46](https://github.com/footprintjs/agentfootprint/blob/8eb817f55f177662ed213c7b387a5bdc2527c87b/src/integrity/column-types/types.ts#L46)
+Defined in: [src/integrity/column-types/types.ts:46](https://github.com/footprintjs/agentfootprint/blob/f5cabfd85eeae981c1a9a9dd20edaa7a4ced5063/src/integrity/column-types/types.ts#L46)
 
 What a declared column holds.
 

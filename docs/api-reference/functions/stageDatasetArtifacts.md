@@ -8,7 +8,7 @@
 
 > **stageDatasetArtifacts**(`datasets`, `artifacts`): `Promise`\<readonly [`DatasetPublication`](/agentfootprint/api/generated/interfaces/DatasetPublication.md)[]\>
 
-Defined in: [src/artifacts/datasetResult.ts:85](https://github.com/footprintjs/agentfootprint/blob/8eb817f55f177662ed213c7b387a5bdc2527c87b/src/artifacts/datasetResult.ts#L85)
+Defined in: [src/artifacts/datasetResult.ts:85](https://github.com/footprintjs/agentfootprint/blob/f5cabfd85eeae981c1a9a9dd20edaa7a4ced5063/src/artifacts/datasetResult.ts#L85)
 
 The same staging step for an existing tool pipeline that already owns execution and projection.
 

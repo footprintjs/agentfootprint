@@ -6,7 +6,7 @@
 
 # Interface: MessageApiChartDeps
 
-Defined in: [src/core/agent/buildMessageApiChart.ts:70](https://github.com/footprintjs/agentfootprint/blob/8eb817f55f177662ed213c7b387a5bdc2527c87b/src/core/agent/buildMessageApiChart.ts#L70)
+Defined in: [src/core/agent/buildMessageApiChart.ts:70](https://github.com/footprintjs/agentfootprint/blob/f5cabfd85eeae981c1a9a9dd20edaa7a4ced5063/src/core/agent/buildMessageApiChart.ts#L70)
 
 ## Properties
 
@@ -14,7 +14,7 @@ Defined in: [src/core/agent/buildMessageApiChart.ts:70](https://github.com/footp
 
 > `readonly` `optional` **getRunId?**: () => `string` \| `undefined`
 
-Defined in: [src/core/agent/buildMessageApiChart.ts:106](https://github.com/footprintjs/agentfootprint/blob/8eb817f55f177662ed213c7b387a5bdc2527c87b/src/core/agent/buildMessageApiChart.ts#L106)
+Defined in: [src/core/agent/buildMessageApiChart.ts:106](https://github.com/footprintjs/agentfootprint/blob/f5cabfd85eeae981c1a9a9dd20edaa7a4ced5063/src/core/agent/buildMessageApiChart.ts#L106)
 
 The id of the run this chart is about to make (9.91.0) — supply it and
 Call-LLM mints a receipt, the fingerprint of what the model was handed,
@@ -59,7 +59,7 @@ receiptAt(executor.getSnapshot(), 1)?.basis.runId; // runId
 
 > `readonly` **model**: `string`
 
-Defined in: [src/core/agent/buildMessageApiChart.ts:72](https://github.com/footprintjs/agentfootprint/blob/8eb817f55f177662ed213c7b387a5bdc2527c87b/src/core/agent/buildMessageApiChart.ts#L72)
+Defined in: [src/core/agent/buildMessageApiChart.ts:72](https://github.com/footprintjs/agentfootprint/blob/f5cabfd85eeae981c1a9a9dd20edaa7a4ced5063/src/core/agent/buildMessageApiChart.ts#L72)
 
 ***
 
@@ -67,7 +67,7 @@ Defined in: [src/core/agent/buildMessageApiChart.ts:72](https://github.com/footp
 
 > `readonly` **provider**: [`LLMProvider`](/agentfootprint/api/generated/interfaces/LLMProvider.md)
 
-Defined in: [src/core/agent/buildMessageApiChart.ts:71](https://github.com/footprintjs/agentfootprint/blob/8eb817f55f177662ed213c7b387a5bdc2527c87b/src/core/agent/buildMessageApiChart.ts#L71)
+Defined in: [src/core/agent/buildMessageApiChart.ts:71](https://github.com/footprintjs/agentfootprint/blob/f5cabfd85eeae981c1a9a9dd20edaa7a4ced5063/src/core/agent/buildMessageApiChart.ts#L71)
 
 ***
 
@@ -75,7 +75,7 @@ Defined in: [src/core/agent/buildMessageApiChart.ts:71](https://github.com/footp
 
 > `readonly` `optional` **structureRecorders?**: readonly `StructureRecorder`[]
 
-Defined in: [src/core/agent/buildMessageApiChart.ts:74](https://github.com/footprintjs/agentfootprint/blob/8eb817f55f177662ed213c7b387a5bdc2527c87b/src/core/agent/buildMessageApiChart.ts#L74)
+Defined in: [src/core/agent/buildMessageApiChart.ts:74](https://github.com/footprintjs/agentfootprint/blob/f5cabfd85eeae981c1a9a9dd20edaa7a4ced5063/src/core/agent/buildMessageApiChart.ts#L74)
 
 ***
 
@@ -83,4 +83,4 @@ Defined in: [src/core/agent/buildMessageApiChart.ts:74](https://github.com/footp
 
 > `readonly` **systemPrompt**: `string`
 
-Defined in: [src/core/agent/buildMessageApiChart.ts:73](https://github.com/footprintjs/agentfootprint/blob/8eb817f55f177662ed213c7b387a5bdc2527c87b/src/core/agent/buildMessageApiChart.ts#L73)
+Defined in: [src/core/agent/buildMessageApiChart.ts:73](https://github.com/footprintjs/agentfootprint/blob/f5cabfd85eeae981c1a9a9dd20edaa7a4ced5063/src/core/agent/buildMessageApiChart.ts#L73)

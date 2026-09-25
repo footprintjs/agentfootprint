@@ -8,7 +8,7 @@
 
 > `const` **ALWAYS\_SERVED\_TOOLS**: readonly `string`[]
 
-Defined in: [src/core/agent/toolChoice/types.ts:39](https://github.com/footprintjs/agentfootprint/blob/8eb817f55f177662ed213c7b387a5bdc2527c87b/src/core/agent/toolChoice/types.ts#L39)
+Defined in: [src/core/agent/toolChoice/types.ts:39](https://github.com/footprintjs/agentfootprint/blob/f5cabfd85eeae981c1a9a9dd20edaa7a4ced5063/src/core/agent/toolChoice/types.ts#L39)
 
 The framework's own doors, never narrowed away: the skill menu
 (`read_skill`, `list_skills` — `core/agent/buildToolRegistry.ts`), the

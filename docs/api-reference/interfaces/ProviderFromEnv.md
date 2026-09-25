@@ -6,7 +6,7 @@
 
 # Interface: ProviderFromEnv
 
-Defined in: [src/adapters/llm/createProvider.ts:106](https://github.com/footprintjs/agentfootprint/blob/8eb817f55f177662ed213c7b387a5bdc2527c87b/src/adapters/llm/createProvider.ts#L106)
+Defined in: [src/adapters/llm/createProvider.ts:106](https://github.com/footprintjs/agentfootprint/blob/f5cabfd85eeae981c1a9a9dd20edaa7a4ced5063/src/adapters/llm/createProvider.ts#L106)
 
 What `providerFromEnv()` resolved: the provider + the `model` to pass to
  `Agent.create({ provider, model })`, and which `kind` was detected.
@@ -17,7 +17,7 @@ What `providerFromEnv()` resolved: the provider + the `model` to pass to
 
 > `readonly` **kind**: `"mock"` \| `"anthropic"` \| `"openai"` \| `"ollama"` \| `"foundry"` \| `"foundry-local"` \| `"azure-openai"`
 
-Defined in: [src/adapters/llm/createProvider.ts:109](https://github.com/footprintjs/agentfootprint/blob/8eb817f55f177662ed213c7b387a5bdc2527c87b/src/adapters/llm/createProvider.ts#L109)
+Defined in: [src/adapters/llm/createProvider.ts:109](https://github.com/footprintjs/agentfootprint/blob/f5cabfd85eeae981c1a9a9dd20edaa7a4ced5063/src/adapters/llm/createProvider.ts#L109)
 
 ***
 
@@ -25,7 +25,7 @@ Defined in: [src/adapters/llm/createProvider.ts:109](https://github.com/footprin
 
 > `readonly` **model**: `string`
 
-Defined in: [src/adapters/llm/createProvider.ts:108](https://github.com/footprintjs/agentfootprint/blob/8eb817f55f177662ed213c7b387a5bdc2527c87b/src/adapters/llm/createProvider.ts#L108)
+Defined in: [src/adapters/llm/createProvider.ts:108](https://github.com/footprintjs/agentfootprint/blob/f5cabfd85eeae981c1a9a9dd20edaa7a4ced5063/src/adapters/llm/createProvider.ts#L108)
 
 ***
 
@@ -33,4 +33,4 @@ Defined in: [src/adapters/llm/createProvider.ts:108](https://github.com/footprin
 
 > `readonly` **provider**: [`LLMProvider`](/agentfootprint/api/generated/interfaces/LLMProvider.md)
 
-Defined in: [src/adapters/llm/createProvider.ts:107](https://github.com/footprintjs/agentfootprint/blob/8eb817f55f177662ed213c7b387a5bdc2527c87b/src/adapters/llm/createProvider.ts#L107)
+Defined in: [src/adapters/llm/createProvider.ts:107](https://github.com/footprintjs/agentfootprint/blob/f5cabfd85eeae981c1a9a9dd20edaa7a4ced5063/src/adapters/llm/createProvider.ts#L107)
