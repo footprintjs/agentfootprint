@@ -116,6 +116,13 @@ export interface EventMeta {
    * anonymous `standingAgent` request has no session, and a bare `agent.run()`
    * has none either. `standingAgent` passes the caller's own session id
    * through; anyone else sets it with `run({ ... }, { sessionId })`.
+   *
+   * **Also on the hosting door's own facts.** An artifact a screen redeemed
+   * (`artifact-head` / `artifact-get`) or a host filed for its turn
+   * (`HostReply.turnArtifacts`) happens outside any run — `runId` stays the
+   * consumer scope — but it was produced FOR a session, and says which. That
+   * stamp is what keeps it out of another session's run recording on an agent
+   * several sessions share (`bridge/eventMeta.ts · eventBelongsToRun`).
    */
   readonly sessionId?: string;
   /**

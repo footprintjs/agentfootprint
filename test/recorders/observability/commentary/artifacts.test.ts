@@ -102,6 +102,36 @@ describe('artifacts.minted commentary', () => {
     expect(text).not.toContain('sha-256');
     expect(text).not.toContain('42000');
   });
+
+  // No tool minted it: the run's own recording (9.26.0) or a host filing for
+  // its turn (`HostReply.turnArtifacts`). Before this, the line printed an
+  // empty code span for the actor and credited a model with the ticket.
+  it('a mint no tool made names the app — never an empty tool, never the model', () => {
+    const { tool: _tool, ...toolless } = base;
+    void _tool;
+    const text = line(ev('agentfootprint.artifacts.minted', { ...toolless, label: 'turn story' }));
+    expect(text).toBe(
+      'The app itself (not a tool) checked “turn story” (dataset/rows, 41.0 KB) into the store.',
+    );
+    expect(text).not.toContain('``');
+    expect(text).not.toContain('the model got');
+  });
+
+  it('a tool-less mint keeps its derivation clause', () => {
+    const { tool: _tool, ...toolless } = base;
+    void _tool;
+    expect(
+      line(
+        ev('agentfootprint.artifacts.minted', {
+          ...toolless,
+          parentRefs: ['af-artifact://run-1/p1'],
+        }),
+      ),
+    ).toBe(
+      'The app itself (not a tool) checked a dataset/rows artifact (41.0 KB) into the store, ' +
+        'built from 1 earlier artifact.',
+    );
+  });
 });
 
 // ── presented ─────────────────────────────────────────────────────────
@@ -363,5 +393,33 @@ describe('routing anti-drift', () => {
         ev('agentfootprint.tools.discovery_failed', { providerName: 'p', error: 'e' }),
       ),
     ).toBeUndefined();
+  });
+});
+
+// ── hand_over_failed ─────────────────────────────────────────────────
+
+describe('artifacts.hand_over_failed commentary', () => {
+  it('says what went wrong with the app’s own filing, and that the reply was unaffected', () => {
+    expect(
+      line(
+        ev('agentfootprint.artifacts.hand_over_failed', {
+          cause: 'operation',
+          op: 'put',
+          errorClass: 'InvalidArtifactError',
+        }),
+      ),
+    ).toBe(
+      'The app’s own filing for a turn had a store call fail (checking an artifact in) — the ' +
+        'reply was delivered regardless.',
+    );
+  });
+
+  it('a timeout names the time limit and omits the op clause; no class or code in prose', () => {
+    const text = line(
+      ev('agentfootprint.artifacts.hand_over_failed', { cause: 'timeout', errorCode: 'ERR_X' }),
+    );
+    expect(text).toContain('ran past its time limit');
+    expect(text).not.toContain('(');
+    expect(text).not.toContain('ERR_X');
   });
 });

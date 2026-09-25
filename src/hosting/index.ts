@@ -137,7 +137,11 @@ export {
 } from './envelope.js';
 export { standingAgent } from './standingAgent.js';
 
-export { DEFAULT_MAX_ACTIVE_SESSIONS, DEFAULT_SWEEP_LIMIT } from './types.js';
+export {
+  DEFAULT_MAX_ACTIVE_SESSIONS,
+  DEFAULT_SWEEP_LIMIT,
+  TURN_ARTIFACTS_TIMEOUT_MS,
+} from './types.js';
 
 export {
   requireCapability,
@@ -154,6 +158,7 @@ export {
   NoArtifactStoreError,
   ArtifactNotFoundError,
   ArtifactNotCarriedError,
+  TurnArtifactsExpiredError,
   IdentityNotVerifiedError,
   VerifierUnavailableError,
   AdmissionRefusedError,
@@ -302,6 +307,7 @@ export type {
   StandingAgentOptions,
   StandingAgentPoolOptions,
   StandingAgentSharedOptions,
+  TurnArtifacts,
   Unsubscribe,
   WakeReason,
 } from './types.js';

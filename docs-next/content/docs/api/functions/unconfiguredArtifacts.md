@@ -6,7 +6,7 @@ title: unconfiguredArtifacts
 
 > **unconfiguredArtifacts**(`onEvent?`): [`ToolArtifacts`](/docs/api/interfaces/ToolArtifacts)
 
-Defined in: [src/artifacts/capability.ts:202](https://github.com/footprintjs/agentfootprint/blob/main/src/artifacts/capability.ts#L202)
+Defined in: [src/artifacts/capability.ts:210](https://github.com/footprintjs/agentfootprint/blob/main/src/artifacts/capability.ts#L210)
 
 The fail-closed capability used when NO store is attached. Every verb
 throws the same teaching refusal — loud, named, and on the record — so

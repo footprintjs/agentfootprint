@@ -91,7 +91,14 @@ function ctxWithStore(extra: Partial<ToolExecutionContext> = {}): {
   ctx: ToolExecutionContext;
   artifacts: ReturnType<typeof bindArtifacts>;
 } {
-  const artifacts = bindArtifacts(inMemoryArtifacts(), { conversationId: 'test-run' });
+  // Bound the way the agent binds a tool's capability: stamped with the call's
+  // own id. `origin` is the binding's field on every path — a put's own origin
+  // is dropped — so a binding with none would file parcels with no join at all.
+  const artifacts = bindArtifacts(
+    inMemoryArtifacts(),
+    { conversationId: 'test-run' },
+    { origin: { toolCallId: baseToolCtx.toolCallId } },
+  );
   const ctx = {
     ...baseToolCtx,
     artifacts,

@@ -105,6 +105,48 @@ export function buildEventMeta(
 }
 
 /**
+ * The run id an event carries when it was produced OUTSIDE any run — a
+ * consumer's own `agent.emit(...)`, the hosting door's redemption facts.
+ * One spelling, owned here beside the builder of every other run id.
+ */
+export const CONSUMER_SCOPE_RUN_ID = 'consumer-scope';
+
+/**
+ * Does an event belong to `run`? — the ONE answer to "which run is this event
+ * for?", asked by every collector that keeps a single run's events: the run's
+ * own recording (the `recordings` dial) and the self-explain evidence.
+ *
+ * Those collectors subscribe to the whole dispatcher and keep what arrives
+ * while their run is in flight. On an instance that serves more than one
+ * session — `standingAgent({ agent })`, where every session shares one agent —
+ * the dispatcher also carries facts produced for SOMEBODY ELSE at that moment:
+ * a screen redeeming its own chart, a host filing for its own turn, a tool
+ * upload from an earlier run landing late. Kept by timing alone, those facts
+ * entered the wrong person's recording, which that person could then redeem.
+ *
+ * Two clauses, in order:
+ *  1. **An event that names a run belongs to that run, and no other.** A run's
+ *     own events carry its id through {@link buildEventMeta}; a fact emitted
+ *     through an artifact binding carries the run the BINDING was created for
+ *     (captured at bind time, never read from whichever run is live when the
+ *     fact lands).
+ *  2. **An event of no run** ({@link CONSUMER_SCOPE_RUN_ID}) **belongs to runs
+ *     of the session it was produced for** — the hosting door stamps what it
+ *     produces (`RunnerBase.emitAttributed`) — **or, naming no session, to
+ *     whatever run is in flight**, exactly as before: a consumer's own
+ *     `agent.emit(...)` from inside a tool.
+ */
+export function eventBelongsToRun(
+  meta: Partial<Pick<EventMeta, 'runId' | 'sessionId'>> | undefined,
+  run: Pick<RunContext, 'runId' | 'sessionId'>,
+): boolean {
+  const namedRun = meta?.runId;
+  if (namedRun !== undefined && namedRun !== CONSUMER_SCOPE_RUN_ID) return namedRun === run.runId;
+  const producedFor = meta?.sessionId;
+  return producedFor === undefined || producedFor === run.sessionId;
+}
+
+/**
  * Parse footprintjs's `/`-separated subflow path into a readonly array.
  *
  * The source of truth for runtimeStageId parsing lives in footprintjs at

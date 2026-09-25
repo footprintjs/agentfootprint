@@ -45,6 +45,7 @@ import {
   ARTIFACT_OP_PHRASES,
   ARTIFACT_REFUSAL_PHRASES,
   ARTIFACT_SWEEP_PHRASES,
+  HAND_OVER_FAILURE_PHRASES,
   humanizeBytes,
   humanizeChars,
   phraseFor,
@@ -271,6 +272,10 @@ export const defaultCommentaryTemplates: CommentaryTemplates = {
   'artifacts.minted':
     '`{{tool}}` checked {{subject}} into the store{{derivedClause}} — the model got a ' +
     'one-line ticket, not the data.',
+  // No tool minted it — the run's own recording, or a host filing for its turn
+  // (`HostReply.turnArtifacts`). The same actor wording the resolved/refused
+  // lines use, and no claim about the model: no model was handed this ticket.
+  'artifacts.minted.host': '{{actor}} checked {{subject}} into the store{{derivedClause}}.',
   'artifacts.minted.subject.labeled': '“{{label}}” ({{kind}}, {{size}})',
   'artifacts.minted.subject.plain': 'a {{kind}} artifact ({{size}})',
   'artifacts.minted.derived': ', built from {{parentCount}} earlier artifact{{parentPlural}}',
@@ -301,6 +306,14 @@ export const defaultCommentaryTemplates: CommentaryTemplates = {
   'artifacts.refused.dispatch':
     '`{{tool}}` never ran — the artifact it asked for could not be delivered ' +
     '({{reasonPhrase}}), and the model was told what it can ask for instead.',
+
+  // The app's own filing for a turn (`HostReply.turnArtifacts`) did not go
+  // cleanly. Class only in the data; the sentence says what happened and that
+  // the person's reply was unaffected.
+  'artifacts.hand_over_failed':
+    'The app’s own filing for a turn {{causePhrase}}{{opClause}} — the reply was delivered ' +
+    'regardless.',
+  'artifacts.hand_over_failed.op': ' ({{opPhrase}})',
 
   'artifacts.expired':
     'A {{kind}} artifact ({{size}}) left the store {{reasonPhrase}}{{noticedClause}} — a ' +
@@ -543,7 +556,9 @@ export function selectCommentaryKey(event: AgentfootprintEvent): string | null |
         : 'tools.repeated_call';
 
     case 'agentfootprint.artifacts.minted':
-      return 'artifacts.minted';
+      // A mint no tool made has its own sentence — the tool one would print
+      // an empty tool name and credit a model with a ticket it never got.
+      return event.payload.tool ? 'artifacts.minted' : 'artifacts.minted.host';
     case 'agentfootprint.artifacts.presented':
       return 'artifacts.presented';
     case 'agentfootprint.artifacts.resolved':
@@ -552,6 +567,8 @@ export function selectCommentaryKey(event: AgentfootprintEvent): string | null |
       return event.payload.via === 'get' ? 'artifacts.resolved.get' : 'artifacts.resolved.head';
     case 'agentfootprint.artifacts.expired':
       return 'artifacts.expired';
+    case 'agentfootprint.artifacts.hand_over_failed':
+      return 'artifacts.hand_over_failed';
     case 'agentfootprint.artifacts.refused':
       // The dispatch door has its own sentence — but only when the event names
       // the tool that never ran. Without it, the generic refusal is the honest
@@ -930,7 +947,8 @@ export function extractCommentaryVars(
       const parentCount = p.parentRefs?.length ?? 0;
       return {
         ...base,
-        tool: p.tool,
+        tool: p.tool ?? '',
+        actor: artifactActor(p.tool, templates),
         kind: p.kind,
         size,
         subject,
@@ -988,6 +1006,24 @@ export function extractCommentaryVars(
           p.reason,
           'the store did not say why in words this build knows',
         ),
+      };
+    }
+
+    case 'agentfootprint.artifacts.hand_over_failed': {
+      const p = event.payload;
+      return {
+        ...base,
+        causePhrase: phraseFor(
+          HAND_OVER_FAILURE_PHRASES,
+          p.cause,
+          'failed for a reason this build does not have words for',
+        ),
+        opClause:
+          p.op !== undefined
+            ? renderCommentary(templates['artifacts.hand_over_failed.op'] ?? '', {
+                opPhrase: phraseFor(ARTIFACT_OP_PHRASES, p.op, 'an artifact request'),
+              })
+            : '',
       };
     }
 

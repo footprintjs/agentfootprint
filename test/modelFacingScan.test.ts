@@ -587,7 +587,7 @@ const LEDGER: Readonly<Record<string, readonly Entry[]>> = {
   'src/hosting/errors.ts': [
     {
       kind: 'not-model-facing',
-      count: 6,
+      count: 7,
       why: 'hosting error classes — their messages travel to the host and into HTTP responses, never onto a model`s wire',
     },
   ],
@@ -1074,12 +1074,16 @@ describe('every model-facing-shaped literal in src/ is accounted for', () => {
         // under reactMode 'classic' (Agent.ts 8 → 9) and the classifier's
         // instruction in `toolChoice/pick.ts` (a question to the classifier
         // port, not the model's wire; one new file).
+        // Unreleased (turn artifacts): one host-facing refusal added —
+        // `TurnArtifactsExpiredError`, rejected into HOST code that used a turn's
+        // artifact hand-over after its turn ended; no model reads it. Classified
+        // in hosting/errors.ts's not-model-facing row (6 → 7). Same files.
         files: 95,
-        total: 183,
+        total: 184,
         registry: 8,
         ephemeral: 20,
         unrepaired: 33,
-        notModelFacing: 122,
+        notModelFacing: 123,
         unrepairedEntries: 13,
       });
       // And the ledger's own total is the number of literals the scan flagged —

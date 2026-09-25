@@ -1,0 +1,4 @@
+---
+type: security
+---
+**The artifact door no longer lets a caller write into somebody else's record.** Its facts are stamped with the session the request NAMED, so the door now checks first: a `ref` that is not a claim ticket (`isArtifactRef`) is refused by the wire readers (`readArtifactWireOp`, `400 ERR_INVALID_WIRE_OP`, never echoing the text) and by the composer; and at a door with an identity verifier, a session the caller cannot open (the turn door's own `mayOpenSession` rule; for a first turn still in flight, only the caller it serves) answers the one `ERR_ARTIFACT_NOT_FOUND` with nothing emitted and no pooled lane built — a stranger could otherwise inject text into another signed-in person's live recording, or flood it until its own events were evicted. At a door with no verifier the session id remains the key, by law.

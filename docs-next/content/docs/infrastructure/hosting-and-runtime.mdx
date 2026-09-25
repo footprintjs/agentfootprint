@@ -91,6 +91,12 @@ is [`ERR_PAUSE_NOT_CARRIED`](#a-pause-the-wire-could-not-describe), and it is
 the smallest complete example of how these ports are written (`artifact` gets
 the same treatment: absent ⇒ `ERR_ARTIFACT_NOT_CARRIED`, named, never silence).
 
+One more optional member is not a terminal at all: `turnArtifacts(turn)` —
+awaited once per turn, bounded, before the terminal — hands the host the artifact store
+**already bound** to the scope that request's tickets are redeemed under, so
+host code that files its own artifacts for a turn never composes a scope. See
+[Filing for a turn](#filing-for-a-turn--replyturnartifacts).
+
 <CodeFile path="examples/deploy/standing-agent.ts" region="standing" title="examples/deploy/standing-agent.ts (region: standing)" />
 
 ## Why the ports look like nothing in particular
@@ -1260,6 +1266,148 @@ refuse there, as `InvalidWireOpError`), and `artifactWireBody(result)` as the
 AgentCore runtime wire carries both ops with its own `status: 'success'`
 envelope beside the standard body.
 
+### Filing for a turn — `reply.turnArtifacts`
+
+The run files its own tickets — a tool's dataset, the turn's recording — under
+the scope above. Host code often wants to file something for the same turn: a
+story of the turn, the person's own clicks, anything joined to that run. It
+must land where `artifact-get` will look for that caller, or it can never be
+redeemed.
+
+**The host never composes that scope.** A host that re-derives it gets it
+wrong in exactly the case that matters: `{ conversationId: sessionId }` is
+right at an open door and wrong at a signed-in one, where the redemption door
+composes `{ conversationId, principal: <verified user> }` — plus the tenant and
+namespace of a stored conversation, which the host never read. Every ticket
+it filed answered `404` for every signed-in user.
+
+Instead, implement the optional `turnArtifacts` member on the reply you hand
+the composer. It is called **once per turn and awaited**, while the session's
+lane is still held, with the serving agent's store already bound to the scope
+this request's tickets are redeemed under. The composer ends the reply only
+after the hook settles, so a ticket filed inside it exists before the body
+that carries it is composed:
+
+```ts
+import type { HostReply } from 'agentfootprint/hosting';
+
+// Inside a host that wraps another host's serve():
+const wrapped: HostReply = {
+  complete: (output) => reply.complete(output),
+  fail: (error) => reply.fail(error),
+  // Optional members are forwarded BY PRESENCE — the composer feature-detects
+  // each one, and a wrapper that dropped one would turn a pause, a redemption,
+  // a session op or a stream into a named refusal.
+  ...(reply.awaiting && { awaiting: (pending) => reply.awaiting?.(pending) }),
+  ...(reply.artifact && { artifact: (result) => reply.artifact?.(result) }),
+  ...(reply.sessions && { sessions: (result) => reply.sessions?.(result) }),
+  ...(reply.emit && { emit: (chunk) => reply.emit?.(chunk) }),
+  // Awaited by the composer, inside the turn, before `complete` / `awaiting`.
+  turnArtifacts: async (turn) => {
+    if (!turn.bound) return;             // 'no-session' | 'no-store'
+    const story = await turn.artifacts.put({
+      kind: 'story/turn',
+      mediaType: 'application/json',
+      data: storyOfThisTurn,
+    });
+    ticketForThisReply = story.ref;      // redeems for this caller — and nobody else
+  },
+};
+await handler(request, wrapped);
+```
+
+The value is a `TurnArtifacts` — one of three shapes:
+
+| Handed | When |
+|---|---|
+| `{ bound: true, artifacts }` | the request named a session and the agent has a store. `artifacts` has the shape a tool gets as `ctx.artifacts` — `put`, `head`, `get`, `delete`, `list` — and none of them takes a scope |
+| `{ bound: false, reason: 'no-session' }` | an anonymous request: its run scoped its artifacts to its own `runId`, which no later request can present, so there is nothing to bind — and nothing is invented. Wins when both apply |
+| `{ bound: false, reason: 'no-store' }` | the serving agent has no artifact store |
+
+- **Bounded.** The hook and every operation it started must settle within
+  `turnArtifactsTimeoutMs` (a `standingAgent` option; default
+  `TURN_ARTIFACTS_TIMEOUT_MS`, 5 s — the tool-teardown precedent, since both
+  sit on the shutdown path) and before the request's own `signal` aborts.
+  Whichever ends the wait, the binding is revoked, nothing in flight is
+  cancelled (it may still land, attributed to its own session and run), the
+  cause is reported, the terminal is delivered and the lane released. In the
+  shared `{ agent }` shape every session waits behind a turn's hook, so keep
+  it to filing. A non-positive or non-finite value is refused at construction.
+- **Live only for its turn.** Once the composer has waited for every operation
+  the hook started (a `put` it did not await included) — or the bound ended the
+  wait — it revokes the binding. A verb called later rejects with
+  `TurnArtifactsExpiredError` (`ERR_TURN_ARTIFACTS_EXPIRED`), a rejection that
+  is already handled, so a floating late call cannot crash the process: a
+  write made after the turn would land on whatever run the agent is serving by
+  then — in the shared shape, another person's. File inside the hook; never
+  hold the binding.
+- **Never decides the reply, never silent.** A hook that throws, an operation
+  that fails (awaited or not), the bound, the abort and a late call are each
+  put on the serving agent's stream as
+  `agentfootprint.artifacts.hand_over_failed { cause, op?, errorClass?,
+  errorCode? }` — `cause` is `'hook'`, `'operation'`, `'timeout'`, `'abort'`
+  or `'expired'`; class only, never a message; stamped with the session — and
+  the first of them on the ingress record
+  (`IngressRecord.turnArtifactsFailure`, same shape). None of them turns a
+  delivered answer, or a stored question, into a failure.
+- **It runs inside the turn.** Awaiting another turn of the same standing agent
+  from inside the hook can never finish — that turn queues behind this one —
+  so the bound ends the wait.
+- **One scope, and only one.** The scope is not on the value — a tuple a host
+  can read is one it can copy and edit. There is deliberately no exported
+  "scope for this request" function either: a function that takes a user id
+  can be handed somebody else's.
+- **On the record.** Each put lands on the serving agent as
+  `agentfootprint.artifacts.minted` with no `tool` field and `meta.sessionId`
+  and `meta.runId` naming the session and run it was filed for (captured when
+  the binding was built), stamped `origin: { runId }` with the run the turn
+  executed. A turn that executed none (a partial answer to an
+  input request, or its cancellation) stamps no origin, and a caller's own
+  `origin` is always dropped. A PAUSED turn's run files no recording — a pause
+  is not a finished run — so a reader joining on its run id should say
+  "paused, no recording", not "missing".
+- **Not for a non-turn.** No hand-over for a redemption, a session op, a
+  refused turn or a failed one, and none on `serveConversations` (a WebSocket
+  conversation is not a composer turn). A host without the member is served as
+  before.
+
+**Where the hand-over does NOT meet the run's own recording.** The hand-over
+follows the door. The run's recording follows the identity the run was seeded
+with, and at an **unverified** door those can differ: a conversation that
+carries an identity of its own (an app-seeded tenant, or a user an earlier
+turn claimed) while this request names nobody, and a pause that named nobody
+resumed by a claimed user, file the recording where no redemption by that
+caller looks. At a verifying door, and at an open one whose conversation
+carries no identity, they agree. These are pinned as known edges and not
+changed here.
+
+**Door facts carry their session — so the door checks who is asking.**
+Everything the hosting door produces — a redemption's `resolved` / `refused`, a
+filing's `minted` / `expired`, a `hand_over_failed` — is stamped with the
+session it was produced for (`meta.sessionId`), and a filing also with the run
+it was filed for. A run's recording (the `recordings` dial) and its
+self-explain event tail keep only what belongs to them — an event that names a
+run belongs to that run; one of no run, to runs of its session — so a screen
+redeeming during another person's run on a shared agent never enters that
+person's recording, while redemptions stay lane-free and every other listener
+still receives every fact.
+
+Because the stamp is the session the request NAMED, the artifact door checks
+before it emits anything:
+
+- **A `ref` that is not a claim ticket** (`art_` + 22 letters and digits) is
+  refused — `400 ERR_INVALID_WIRE_OP` from the wire readers, the same refusal
+  from the composer for a host that builds requests itself — and its text is
+  never echoed or recorded.
+- **At a door with an identity verifier**, a session the caller cannot open —
+  the turn door's own ownership rule; for a conversation whose first turn is
+  still in flight, only the caller that turn serves — answers the one
+  `404 ERR_ARTIFACT_NOT_FOUND`, with nothing emitted and no pooled lane built.
+  A stranger can neither write into another person's live recording nor flood
+  it until its own events are evicted.
+- **At a door with no verifier, the session id is the key**, by law: whoever
+  presents it may redeem under it, and its facts are that session's.
+
 ## Verified identity — `identity: { verify }`
 
 `HostRequest.userId` has said the same honest thing since 9.12: it is *what the
@@ -1541,6 +1689,15 @@ is not one of the door's own refusals — `'identity-refused'`,
 `'verifier-unavailable'`, `'admission-refused'`, `'session-refused'` — or read
 `admission`, the verdict your policy actually returned, which is on a refused
 record and a broken one alike.
+
+One optional field records something that did NOT decide the outcome:
+`turnArtifactsFailure: { cause, op?, errorClass?, errorCode? }` — the first
+failure of this turn's
+[`turnArtifacts`](#filing-for-a-turn--replyturnartifacts) hand-over (the hook
+threw, an operation failed, it outran its bound, or the caller hung up). The
+reply was delivered anyway (`outcome` still says what the caller got); the
+class is here, never the message — the same shape as the
+`agentfootprint.artifacts.hand_over_failed` event on the serving agent.
 
 ### It is a stream, not a chain
 

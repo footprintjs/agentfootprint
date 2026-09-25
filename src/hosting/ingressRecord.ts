@@ -77,7 +77,8 @@ import {
 } from './errors.js';
 import { ARTIFACT_GET_OP, ARTIFACT_HEAD_OP } from './artifactWire.js';
 import { SESSION_LIST_OP, SESSION_TRANSCRIPT_OP, SESSION_PENDING_OP } from './sessionWire.js';
-import type { HostReply, HostRequest } from './types.js';
+import type { ArtifactHandOverFailedPayload } from '../events/payloads.js';
+import type { HostReply, HostRequest, TurnArtifacts } from './types.js';
 
 /** Which of the composer's three doors this request knocked at. */
 export type IngressDoor = 'turn' | 'session-op' | 'artifact';
@@ -158,6 +159,16 @@ export interface IngressRecord {
   readonly bearerPresent: boolean;
   /** What the admission policy answered, when one was consulted. */
   readonly admission?: IngressAdmissionVerdict;
+  /**
+   * This turn's artifact hand-over (`HostReply.turnArtifacts`) did not go
+   * cleanly — the FIRST failure of it: the host's hook threw, an operation it
+   * started failed, it outran `turnArtifactsTimeoutMs`, or the caller hung up
+   * first. The reply was delivered regardless — the hand-over never decides the
+   * terminal, so `outcome` still says what the caller got. The per-request
+   * census of what `agentfootprint.artifacts.hand_over_failed` reports on the
+   * serving agent's stream, in the same shape: class only, never the message.
+   */
+  readonly turnArtifactsFailure?: ArtifactHandOverFailedPayload;
 }
 
 /**
@@ -233,6 +244,8 @@ export interface IngressNote {
   identified(verified: VerifiedIdentity | undefined): void;
   /** An admission policy answered. */
   admitted(verdict: IngressAdmissionVerdict): void;
+  /** The turn's artifact hand-over failed — the first failure is recorded. */
+  turnArtifactsFailed(failure: ArtifactHandOverFailedPayload): void;
   /** File the record for a request that left without any terminal at all. */
   settle(): void;
 }
@@ -304,6 +317,7 @@ export function beginIngress(request: HostRequest, sink: IngressSink): IngressNo
   const bearerPresent = bearerToken(request.headers) !== undefined;
   let userId: string | undefined;
   let admission: IngressAdmissionVerdict | undefined;
+  let hookFailure: IngressRecord['turnArtifactsFailure'];
   let filed = false;
 
   function file(outcome: IngressOutcome, err?: unknown): void {
@@ -323,6 +337,7 @@ export function beginIngress(request: HostRequest, sink: IngressSink): IngressNo
       ...(sessionId !== undefined && { sessionId }),
       bearerPresent,
       ...(admission !== undefined && { admission }),
+      ...(hookFailure !== undefined && { turnArtifactsFailure: hookFailure }),
     };
     try {
       sink(record);
@@ -366,6 +381,15 @@ export function beginIngress(request: HostRequest, sink: IngressSink): IngressNo
         }),
         // Not a terminal: a chunk is part of an answer still being written.
         ...(reply.emit && { emit: (chunk: string) => reply.emit?.(chunk) }),
+        // Not a terminal either, and forwarded by presence for the same reason
+        // the terminals are: the composer builds a binding only for a host
+        // that asked, so defining it here unconditionally would build one per
+        // turn that nobody holds. The host's promise is returned as-is — the
+        // composer awaits it (bounded), and records a failure through
+        // `turnArtifactsFailed` below.
+        ...(reply.turnArtifacts && {
+          turnArtifacts: (turn: TurnArtifacts) => reply.turnArtifacts?.(turn),
+        }),
       };
     },
     identified(verified: VerifiedIdentity | undefined): void {
@@ -373,6 +397,11 @@ export function beginIngress(request: HostRequest, sink: IngressSink): IngressNo
     },
     admitted(verdict: IngressAdmissionVerdict): void {
       admission = verdict;
+    },
+    turnArtifactsFailed(failure: ArtifactHandOverFailedPayload): void {
+      // The first failure is the census entry; a later one of the same hand-over
+      // (the bound firing after an operation failed, say) is on the stream.
+      hookFailure ??= failure;
     },
     settle(): void {
       // Only reachable if a request left the door without ending its reply,

@@ -6,7 +6,7 @@ title: makeRunId
 
 > **makeRunId**(): `string`
 
-Defined in: [src/core/RunnerBase.ts:63](https://github.com/footprintjs/agentfootprint/blob/main/src/core/RunnerBase.ts#L63)
+Defined in: [src/core/RunnerBase.ts:64](https://github.com/footprintjs/agentfootprint/blob/main/src/core/RunnerBase.ts#L64)
 
 Make a unique run id. Exported for tests; internal use normally.
 

@@ -61,6 +61,7 @@ import type {
 import { checkerGoverns } from '../../../adapters/types.js';
 import type { ContextRole } from '../../../events/types.js';
 import { typedEmit } from '../../../recorders/core/typedEmit.js';
+import type { AgentfootprintEventMap, AgentfootprintEventType } from '../../../events/registry.js';
 import { extractSequence } from '../../../security/extractSequence.js';
 import { skillTarget } from '../../../security/skillTarget.js';
 import { menuOutstanding, type TurnRoute } from '../../../lib/injection-engine/routingPolicy.js';
@@ -569,6 +570,20 @@ export interface ToolCallsHandlerDeps {
     readonly sessionId?: string;
     readonly identity?: MemoryIdentity;
   };
+  /**
+   * Put one artifact fact on the record for the run it BELONGS to — the door
+   * a `ctx.artifacts` fact takes when it lands after that run ended (a tool's
+   * floating upload finishing during a later run). The scope channel stamps
+   * whatever run is live at emit time; this stamps the run context the binding
+   * captured when it was built.
+   *
+   * @internal
+   */
+  readonly emitForRun?: (
+    type: AgentfootprintEventType,
+    payload: Record<string, unknown>,
+    runContext: import('../../../bridge/eventMeta.js').RunContext,
+  ) => void;
   /**
    * The runner's teardown tier, created on first use (9.7.0).
    *
@@ -2380,6 +2395,13 @@ export function buildToolCallsHandler(
    * during traversal, exactly like `credential.failed`. Payload bytes never
    * enter an event; the facts are meta only.
    *
+   * The binding owns WHOSE RUN its facts are for: the run context is captured
+   * here, when it is built. A fact that lands after that run ended — a tool
+   * that fired a `put` without awaiting it, finishing during a later run on a
+   * shared agent — goes out through `deps.emitForRun` stamped with the run it
+   * was made in, never with whichever run is live then (which would put one
+   * person's upload into another person's recording).
+   *
    * With NO store attached the capability is the fail-closed teacher and no
    * runIdentity read happens — a storeless agent's trace stays byte-identical.
    */
@@ -2388,11 +2410,28 @@ export function buildToolCallsHandler(
     toolName: string,
     toolCallId: string,
   ): Pick<ToolExecutionContext, 'artifacts' | 'hasArtifacts'> => {
+    const bindRun = deps.currentRun?.();
+    const emitFact = <K extends AgentfootprintEventType>(
+      type: K,
+      payload: AgentfootprintEventMap[K]['payload'],
+    ): void => {
+      const madeIn = bindRun?.runContext;
+      const emitForRun = deps.emitForRun;
+      if (
+        madeIn !== undefined &&
+        emitForRun !== undefined &&
+        deps.currentRun?.().runId !== madeIn.runId
+      ) {
+        emitForRun(type, payload as unknown as Record<string, unknown>, madeIn);
+        return;
+      }
+      typedEmit(scope, type, payload);
+    };
     const onEvent = (fact: ArtifactEventFact): void => {
       switch (fact.type) {
         case 'minted': {
           const meta = fact.meta;
-          typedEmit(scope, 'agentfootprint.artifacts.minted', {
+          emitFact('agentfootprint.artifacts.minted', {
             ref: meta.ref,
             kind: meta.kind,
             mediaType: meta.mediaType,
@@ -2407,7 +2446,7 @@ export function buildToolCallsHandler(
           return;
         }
         case 'resolved':
-          typedEmit(scope, 'agentfootprint.artifacts.resolved', {
+          emitFact('agentfootprint.artifacts.resolved', {
             ref: fact.ref,
             via: fact.via,
             kind: fact.kind,
@@ -2416,7 +2455,7 @@ export function buildToolCallsHandler(
           });
           return;
         case 'expired':
-          typedEmit(scope, 'agentfootprint.artifacts.expired', {
+          emitFact('agentfootprint.artifacts.expired', {
             ref: fact.swept.ref,
             reason: fact.swept.reason,
             kind: fact.swept.kind,
@@ -2425,7 +2464,7 @@ export function buildToolCallsHandler(
           });
           return;
         case 'refused':
-          typedEmit(scope, 'agentfootprint.artifacts.refused', {
+          emitFact('agentfootprint.artifacts.refused', {
             op: fact.op,
             reason: fact.reason,
             ...(fact.ref !== undefined && { ref: fact.ref }),
@@ -2439,9 +2478,8 @@ export function buildToolCallsHandler(
     if (store === undefined) {
       return { artifacts: unconfiguredArtifacts(onEvent), hasArtifacts: false };
     }
-    const facts = deps.currentRun?.();
     const artifacts: ToolArtifacts = bindArtifacts(store, runScopeOf(scope), {
-      origin: { ...(facts?.runId !== undefined && { runId: facts.runId }), toolCallId },
+      origin: { ...(bindRun?.runId !== undefined && { runId: bindRun.runId }), toolCallId },
       onEvent,
     });
     return { artifacts, hasArtifacts: true };

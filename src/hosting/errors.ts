@@ -386,6 +386,41 @@ export class ArtifactNotCarriedError extends Error {
 }
 
 /**
+ * Refused when host code uses a turn's artifact hand-over
+ * (`HostReply.turnArtifacts`) after that turn ended.
+ *
+ * The hand-over is live only while the hook runs: the composer awaits the
+ * hook while the session's lane is held, waits for every operation the hook
+ * started, then revokes the binding before the reply ends. A verb called
+ * after that is refused by name rather than performed. The footprintjs
+ * `ScopeFacade · assertLive` law, one layer up: a handle held past its stage
+ * is refused, because a write made outside its turn lands on whatever run the
+ * instance is serving by then — in the shared shape, another person's — and
+ * makes the record lie.
+ *
+ * The fix is always the same: file INSIDE the hook (`await
+ * turn.artifacts.put(...)`), and carry the ticket onward from there.
+ */
+export class TurnArtifactsExpiredError extends Error {
+  readonly code = 'ERR_TURN_ARTIFACTS_EXPIRED' as const;
+  /** Which verb was called after the turn ended. */
+  readonly op: 'put' | 'head' | 'get' | 'delete' | 'list';
+
+  constructor(op: 'put' | 'head' | 'get' | 'delete' | 'list') {
+    super(
+      `[hosting] turnArtifacts.${op}(...) was called after its turn ended. The hand-over ` +
+        `is live only while reply.turnArtifacts runs: the composer awaits the hook, waits ` +
+        `for every operation it started, then revokes the binding before the reply ends — ` +
+        `a write made later would land on whatever run the agent is serving by then. File ` +
+        `inside the hook (await turn.artifacts.${op}(...)) and carry the result onward from ` +
+        `there.`,
+    );
+    this.name = 'TurnArtifactsExpiredError';
+    this.op = op;
+  }
+}
+
+/**
  * An already-computed preview, so {@link UnreadableEnvelopeError.withSession}
  * can copy a refusal without being handed the stored bytes a second time. Not
  * exported: nothing outside this file should be able to hand-write a preview.

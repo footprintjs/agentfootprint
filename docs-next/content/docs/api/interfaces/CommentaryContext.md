@@ -4,7 +4,7 @@ title: CommentaryContext
 
 # Interface: CommentaryContext
 
-Defined in: [src/recorders/observability/commentary/commentaryTemplates.ts:398](https://github.com/footprintjs/agentfootprint/blob/main/src/recorders/observability/commentary/commentaryTemplates.ts#L398)
+Defined in: [src/recorders/observability/commentary/commentaryTemplates.ts:411](https://github.com/footprintjs/agentfootprint/blob/main/src/recorders/observability/commentary/commentaryTemplates.ts#L411)
 
 Context the var-extractor reads from. Anything that's NOT in the
  event payload (consumer-supplied appName, tool registry lookup) goes
@@ -16,7 +16,7 @@ Context the var-extractor reads from. Anything that's NOT in the
 
 > `readonly` **appName**: `string`
 
-Defined in: [src/recorders/observability/commentary/commentaryTemplates.ts:401](https://github.com/footprintjs/agentfootprint/blob/main/src/recorders/observability/commentary/commentaryTemplates.ts#L401)
+Defined in: [src/recorders/observability/commentary/commentaryTemplates.ts:414](https://github.com/footprintjs/agentfootprint/blob/main/src/recorders/observability/commentary/commentaryTemplates.ts#L414)
 
 The system that orchestrates the LLM. Substituted as the active
  actor in every line ("Acme called the LLM"). Default: `'Chatbot'`.
@@ -27,7 +27,7 @@ The system that orchestrates the LLM. Substituted as the active
 
 > `readonly` `optional` **getToolDescription?**: (`toolName`) => `string` \| `undefined`
 
-Defined in: [src/recorders/observability/commentary/commentaryTemplates.ts:406](https://github.com/footprintjs/agentfootprint/blob/main/src/recorders/observability/commentary/commentaryTemplates.ts#L406)
+Defined in: [src/recorders/observability/commentary/commentaryTemplates.ts:419](https://github.com/footprintjs/agentfootprint/blob/main/src/recorders/observability/commentary/commentaryTemplates.ts#L419)
 
 Resolves a tool name to its registered description ("Get current
  weather for a city"). Used to compose the optional `descClause`

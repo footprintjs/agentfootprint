@@ -100,7 +100,9 @@ export type ArtifactEventSink = (fact: ArtifactEventFact) => void;
 
 /** What `bindArtifacts` needs beyond the store and the scope. */
 export interface BindArtifactsOptions {
-  /** Stamped onto every mint — the run's own facts, absent when unknown. */
+  /** Stamped onto every mint — the run's own facts, absent when unknown. A
+   *  caller-supplied `origin` is dropped either way: with none here, a mint
+   *  carries no origin at all. */
   readonly origin?: ArtifactOrigin;
   /** Fact sink. Absent = silent binding (raw store semantics, no record). */
   readonly onEvent?: ArtifactEventSink;
@@ -123,10 +125,16 @@ export function bindArtifacts(
   return {
     async put(input: ToolArtifactPutInput): Promise<ArtifactMeta> {
       try {
-        // `origin` is the framework's field: whatever a caller managed to put
-        // there is discarded in favor of the run's own facts.
+        // `origin` is the framework's field on EVERY path: whatever a caller
+        // managed to put there (it is not on the type, but a JavaScript caller
+        // can still try) is dropped, and the binding stamps its own facts — or
+        // nothing, when it has none to stamp. Keeping a caller's origin
+        // whenever the binding had none would let an artifact join any run it
+        // named, another person's included.
+        const { origin: _callersOrigin, ...owned } = input as PutArtifactInput;
+        void _callersOrigin;
         const result = await store.put(scope, {
-          ...input,
+          ...owned,
           ...(origin !== undefined ? { origin } : {}),
         });
         for (const swept of result.swept) report({ type: 'expired', swept });

@@ -21,6 +21,7 @@
 
 import type { ArtifactOp, ArtifactRefusalReason } from '../../../artifacts/capability.js';
 import type { ArtifactSweepReason } from '../../../artifacts/types.js';
+import type { ArtifactHandOverFailureCause } from '../../../events/payloads.js';
 
 /**
  * Humanize a byte count for prose. Deliberately a LOCAL copy of the same
@@ -77,6 +78,16 @@ export const ARTIFACT_SWEEP_PHRASES: Readonly<Record<ArtifactSweepReason, string
   ttl: 'because the lifetime stated when it was checked in ran out',
   'max-bytes': 'to keep the store inside its size budget',
   'max-count': 'to keep the store inside its count budget',
+};
+
+/** What went wrong with an app's own filing for a turn (the artifact
+ *  hand-over). Exhaustive by type; the reply was delivered in every case. */
+export const HAND_OVER_FAILURE_PHRASES: Readonly<Record<ArtifactHandOverFailureCause, string>> = {
+  hook: 'failed in the app’s own code',
+  operation: 'had a store call fail',
+  timeout: 'ran past its time limit and was cut off — anything still in flight may land later',
+  abort: 'was cut off because the caller hung up — anything still in flight may land later',
+  expired: 'was used after its turn had ended, and the call was refused',
 };
 
 /**

@@ -29,6 +29,7 @@ import type { MiddlewareAsk } from '../core/pause.js';
 import type { AgentRunCheckpoint } from '../core/runCheckpoint.js';
 import type { AwaitingInput } from '../core/inputRequest.js';
 import type { Unsubscribe } from '../events/dispatcher.js';
+import type { ToolArtifacts } from '../artifacts/capability.js';
 import type { ArtifactWireRequest, ArtifactWireResult } from './artifactWire.js';
 import type { IdentityVerificationOptions } from './identityVerification.js';
 import type { AdmissionPolicy } from './admission.js';
@@ -246,9 +247,115 @@ export interface HostReply {
    * Handler code is identical either way: emit freely, complete once.
    */
   emit?(chunk: string): void;
+  /**
+   * The turn's artifact store, **already bound** to the scope this request's
+   * claim tickets are redeemed under — so host code that files its OWN
+   * artifacts for a turn (a story, the person's clicks, anything joined to it)
+   * files them where `artifact-get` will look for the same caller, without
+   * ever composing a scope.
+   *
+   * ── Awaited, inside the turn — and bounded ────────────────────────────────
+   * Not a terminal. The composer calls it exactly ONCE per turn, AWAITS it
+   * while the session's lane is still held, and only then ends the reply with
+   * `complete` or `awaiting` — so a ticket filed here exists before the body
+   * that carries it is composed. Never called for a request that is not a turn
+   * (an artifact redemption, a session op) or for a turn that ends through
+   * `fail`.
+   *
+   * The wait is BOUNDED: the hook and every operation it started must settle
+   * within `turnArtifactsTimeoutMs` (default `TURN_ARTIFACTS_TIMEOUT_MS`, 5 s)
+   * and before the request's own `signal` aborts. Whichever comes first ends
+   * the hand-over: the binding is revoked, what is in flight is NOT cancelled
+   * (it may still land, stamped with this turn's session and run), the cause is
+   * reported, and the terminal is delivered. In the shared `{ agent }` shape
+   * every session waits behind this turn's lane, so the hook's I/O is paid by
+   * everyone — keep it to filing.
+   *
+   * ── Live only for its turn ─────────────────────────────────────────────────
+   * The binding is live while the hand-over is: after the composer has waited
+   * for every operation started through it (a `put` that was not awaited
+   * included), or after the bound ended the wait, it REVOKES it. A verb called
+   * later rejects with `TurnArtifactsExpiredError` — a rejection already
+   * handled, so a floating late call cannot crash the process — and is reported
+   * as `'expired'`. File inside the hook; never hold the binding.
+   *
+   * ── Never decides the reply, never silent ──────────────────────────────────
+   * A hook that throws or rejects, an operation that fails (awaited or not), the
+   * bound, the abort and a late call are all put on the serving agent's stream
+   * as `agentfootprint.artifacts.hand_over_failed { cause, op?, errorClass?,
+   * errorCode? }` — class only, stamped with the session — and the FIRST of
+   * them on the ingress record (`IngressRecord.turnArtifactsFailure`). None of
+   * them turns a delivered answer, or a stored question, into a failure.
+   * Awaiting another turn of the same standing agent from inside the hook can
+   * never finish (that turn queues behind this one); the bound ends the wait.
+
+   * ── The scope, and what it is not ─────────────────────────────────────────
+   * The scope is the one {@link HostRequest.artifact} redemption re-composes
+   * for this request: the verified user (or the transport's own `userId` when
+   * no verifier is configured), the stored conversation's tenant and
+   * namespace, else the session rung `{ conversationId: sessionId }`. One
+   * owner of that tuple — the library — so an app cannot derive a slightly
+   * different one. It is where the DOOR redeems, which is not always where the
+   * run filed its own recording: at an unverified door a conversation that
+   * carries an identity of its own can put the recording elsewhere (the known
+   * edges are listed in `src/hosting/README.md`).
+   *
+   * Every put is stamped `origin: { runId }` with the run this turn executed,
+   * or carries no origin when it executed none (a partial answer to an input
+   * request, or its cancellation); a caller's own `origin` is always dropped.
+   * A PAUSED turn's run id names a run that files no recording — a pause is
+   * not a finished run, and the resumed run records under its own id — so a
+   * reader joining on it must say "paused, no recording", not "missing". Each
+   * filing lands on the serving agent's record as
+   * `agentfootprint.artifacts.minted` with no `tool` field, its meta naming the
+   * session and the run it was filed FOR — captured when the binding was
+   * built, never read from whichever run is live when a late fact lands.
+   *
+   * When there is nothing to bind, the value SAYS so rather than inventing a
+   * scope — see {@link TurnArtifacts}.
+   *
+   * Optional, and feature-detected: a host that does not implement it is
+   * served exactly as before.
+   *
+   * @example  File a turn's story and carry its ticket on the reply
+   *   turnArtifacts: async (turn) => {
+   *     if (!turn.bound) return;
+   *     const story = await turn.artifacts.put({ kind: 'story/turn', mediaType: 'application/json', data });
+   *     ticketForThisReply = story.ref; // the body `complete` composes next can carry it
+   *   },
+   */
+  turnArtifacts?(turn: TurnArtifacts): void | Promise<void>;
   /** End the reply with a failure. */
   fail(error: Error): void;
 }
+
+/**
+ * What {@link HostReply.turnArtifacts} is handed: this turn's artifact store,
+ * bound to exactly one scope — or the reason there is none.
+ *
+ * `artifacts` has the shape a tool gets as `ctx.artifacts`: five verbs, none
+ * of which takes a scope, so a binding can reach this request's scope and no
+ * other. The scope itself is deliberately NOT on the value — a tuple a host
+ * can read is a tuple a host can copy, edit and put under. The verbs work only
+ * while the hand-over is live (then `TurnArtifactsExpiredError`, already
+ * handled, reported as `'expired'`).
+ *
+ * A filing's `origin.runId` is the run the turn executed — none for a turn that
+ * executed none. On a PAUSED turn that run files no recording (a pause is not a
+ * finished run; the resumed run records under its own id), so a reader joining
+ * a filing to "its recording" by run id must read the absence as "paused, no
+ * recording", never as "missing".
+ *
+ * `bound: false` says why nothing was bound, checked in this order:
+ *  - `'no-session'` — the request named no session. An anonymous run scopes
+ *    its artifacts to its own run id, which no later request can present, so
+ *    there is no scope to bind — and none is invented. Wins over `'no-store'`
+ *    when both apply.
+ *  - `'no-store'` — the serving agent has no artifact store.
+ */
+export type TurnArtifacts =
+  | { readonly bound: true; readonly artifacts: ToolArtifacts }
+  | { readonly bound: false; readonly reason: 'no-session' | 'no-store' };
 
 /**
  * What you hand {@link AgentHost.serve}. Throwing is treated exactly like
@@ -1196,11 +1303,40 @@ export interface StandingAgentBaseOptions<TH extends HostHandle = HostHandle> {
    *   await standingAgent({ agent, sessions, host, shutdownOn: ['SIGTERM', 'SIGINT'] });
    */
   readonly shutdownOn?: readonly NodeJS.Signals[];
+  /**
+   * How long a turn's artifact hand-over (`HostReply.turnArtifacts`) may hold
+   * the reply — the hook AND every operation it started — before the composer
+   * stops waiting. Default {@link TURN_ARTIFACTS_TIMEOUT_MS} (5 s). The
+   * request's own `signal` ends the wait earlier when the caller hangs up.
+   *
+   * On expiry the binding is revoked, nothing in flight is cancelled (it may
+   * still land, attributed to its own session and run), the cause is reported
+   * (`agentfootprint.artifacts.hand_over_failed { cause: 'timeout' }`), the
+   * terminal is delivered and the lane released — so one host's hung store or
+   * hook can hold neither every other session (the shared shape), nor a pooled
+   * lane past `maxActiveSessions`, nor `close()` on the SIGTERM path.
+   *
+   * Must be a positive, finite number of milliseconds — a bound that can never
+   * fire is not a bound; anything else is refused at construction. Only read
+   * when the host implements the hook.
+   */
+  readonly turnArtifactsTimeoutMs?: number;
 }
 
 /** How many sessions a `agentFactory` pool holds before it evicts the least
  *  recently used one. See {@link StandingAgentPoolOptions.maxActiveSessions}. */
 export const DEFAULT_MAX_ACTIVE_SESSIONS = 100;
+
+/**
+ * How long a turn's artifact hand-over may hold its reply by default — the
+ * hook plus the operations it started. Five seconds: the order of
+ * `TOOL_TEARDOWN_TIMEOUT_MS`, and for the same reason — both sit on the
+ * shutdown path (`close()` drains in-flight requests), where an unbounded wait
+ * turns a container stop into a wait for SIGKILL — while leaving a store room
+ * for a few ordinary writes. See
+ * {@link StandingAgentBaseOptions.turnArtifactsTimeoutMs}.
+ */
+export const TURN_ARTIFACTS_TIMEOUT_MS = 5_000;
 
 /**
  * One shared agent, serving every session — the original shape, and still the

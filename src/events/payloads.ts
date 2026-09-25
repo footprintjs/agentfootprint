@@ -2875,7 +2875,8 @@ export interface AgentThinkingParseFailedPayload {
 // recorder, or an exporter — an id in a log is safe by construction because a
 // ref alone opens nothing.
 
-/** A tool checked a payload in and the store minted its claim ticket. */
+/** A payload was checked in and the store minted its claim ticket — by a
+ *  tool (`tool` names it), or by no tool at all (see {@link tool}). */
 export interface ArtifactMintedPayload {
   readonly ref: string;
   /** Consumer vocabulary: 'dataset/rows', 'chart/spec', … */
@@ -2891,8 +2892,14 @@ export interface ArtifactMintedPayload {
   readonly origin?: ArtifactOrigin;
   /** Derivation facts — validated at mint, so they cannot dangle at birth. */
   readonly parentRefs?: readonly string[];
-  /** The tool whose execute minted it. */
-  readonly tool: string;
+  /** The tool whose execute minted it. ABSENT when no tool did — the run's own
+   *  recording (9.26.0, the `recordings` dial) or a host filing for its turn
+   *  through `HostReply.turnArtifacts`; the event's `meta.sessionId` then names
+   *  the session the host filed for. Typed as always-present until now, and
+   *  already absent at run time since 9.26.0 — the 9.23.0 `resolved` /
+   *  `refused` precedent. Naming a phantom tool would be an actor a dashboard
+   *  groups by that does not exist. */
+  readonly tool?: string;
 }
 
 /** A ref was redeemed — described (`head`) or read (`get`) — under scope. */
@@ -2919,8 +2926,10 @@ export interface ArtifactExpiredPayload {
   readonly reason: ArtifactSweepReason;
   readonly kind: string;
   readonly bytes: number;
-  /** The tool whose put discovered/forced the sweep. */
-  readonly tool: string;
+  /** The tool whose put discovered/forced the sweep. ABSENT when the put was
+   *  not a tool's — the run's own recording, or a host filing for its turn
+   *  (the {@link ArtifactMintedPayload.tool} rule). */
+  readonly tool?: string;
 }
 
 /** An artifact verb refused — or answered "no data" — and said why. `no-store`
@@ -2944,6 +2953,46 @@ export interface ArtifactRefusedPayload {
    *  missing, expired and another-session's alike) or reached an agent with
    *  no store (`no-store`). */
   readonly tool?: string;
+}
+
+/**
+ * Why a turn's artifact hand-over (`HostReply.turnArtifacts`) did not go
+ * cleanly — one vocabulary, shared by this event and the ingress record's
+ * `turnArtifactsFailure`:
+ *
+ *  - `'hook'`      — the host's hook threw or rejected (and not merely by
+ *                    re-throwing an operation's own failure, which is counted
+ *                    once, as `'operation'`);
+ *  - `'operation'` — a verb started through the hand-over failed, awaited or
+ *                    not: a store refusal, an I/O error;
+ *  - `'timeout'`   — the hook and the operations it started outran the ceiling
+ *                    (`turnArtifactsTimeoutMs`); the binding was revoked and the
+ *                    reply delivered, and what was in flight may still land;
+ *  - `'abort'`     — the request's own signal fired (the caller hung up) before
+ *                    they settled; the same consequences;
+ *  - `'expired'`   — a verb was called after its turn ended and was refused.
+ */
+export type ArtifactHandOverFailureCause = 'hook' | 'operation' | 'timeout' | 'abort' | 'expired';
+
+/**
+ * A turn's artifact hand-over failed (the host's own filing — a story, the
+ * person's clicks). The reply was delivered regardless: the hand-over never
+ * decides it. Emitted on the serving agent for the session it was produced
+ * for (`meta.sessionId`, and `meta.runId` = the turn's run when it had one).
+ *
+ * Class only, never the message: the error came from the host's own code or
+ * its store, and either may carry anything — META ONLY, like every
+ * `artifacts.*` payload. `errorClass` is routable without parsing prose (the
+ * `tools.session_close_failed` precedent).
+ */
+export interface ArtifactHandOverFailedPayload {
+  readonly cause: ArtifactHandOverFailureCause;
+  /** The verb, for `'operation'` and `'expired'`. */
+  readonly op?: ArtifactOp;
+  /** Constructor name of what was thrown, when it was an `Error`. */
+  readonly errorClass?: string;
+  /** This package's (or the store's) own `code`, when the error carried one. */
+  readonly errorCode?: string;
 }
 
 /** The model handed an artifact to the screen (9.22.0): `present({ ref, as,
