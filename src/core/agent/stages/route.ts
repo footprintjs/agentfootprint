@@ -310,17 +310,19 @@ function recordAnswerGuarantee(
  * `FINDINGS_INSTRUCTION` tells every armed model it may carry the LAST batch's
  * standings as a JSON answer's top-level `_findings.previous` — with an output
  * schema or without one. So every decider takes the key back off the same way:
- * a JSON object answer carrying it has the key removed from what the caller
- * receives and every judge reads (`judgeAnswer`, `judgeEvidence`,
- * `readValidatedAnswer` / `judgeClaims`, `settleWrapUp`'s empty check,
- * `captureTurnPayload`, `Agent.runTyped`), and its standings are filed
- * `declaredOn: 'answer'`. Rows are filed only when the model declared
- * standings; the key is taken off whenever it was there. Prose, arrays and
- * objects without the key are untouched (`peelAnswerFindings` is identity on
- * them) and nothing is written. Peeled HERE because the decider is on the main
- * chart, so the write lands (`prepareFinal` runs in the non-merging Final
- * subflow and cannot write back). Until 9.114.1 only the enforcing decider
- * ran this, so a plain agent handed its caller the raw key and filed nothing.
+ * a `_findings` member of any JSON object in the answer — the whole answer, one
+ * in a code block, one in the prose (9.114.2; `findings/answerText.ts` is the
+ * rule, shared with the stream) — is taken off what the caller receives and
+ * every judge reads (`judgeAnswer`, `judgeEvidence`, `readValidatedAnswer` /
+ * `judgeClaims`, `settleWrapUp`'s empty check, `captureTurnPayload`,
+ * `Agent.runTyped`), and its standings are filed `declaredOn: 'answer'`. Rows
+ * are filed only when the model declared standings; the member is taken off
+ * whenever it was there. Text with no such member is untouched
+ * (`peelAnswerFindings` is identity on it) and nothing is written. Peeled
+ * HERE because the decider is on the main chart, so the write lands
+ * (`prepareFinal` runs in the non-merging Final subflow and cannot write
+ * back). Until 9.114.1 only the enforcing decider ran this, so a plain agent
+ * handed its caller the raw key and filed nothing.
  *
  * Identified against the results the run can identify (`findings/offer.ts ·
  * knownResults`): the last batch AND every tool message on `history` as this

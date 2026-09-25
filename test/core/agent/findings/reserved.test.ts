@@ -725,12 +725,11 @@ describe('splitFindings on a malformed declaration', () => {
 // ── Functional + property: peelAnswerFindings ────────────────────────────
 
 describe('peelAnswerFindings', () => {
-  it('is identity on prose, arrays, primitives, invalid JSON and objects without the key', () => {
+  it('is identity on prose, primitives, invalid JSON and objects without the key', () => {
     for (const raw of [
       'The port is up.',
       '',
       '  { not json',
-      '[{"_findings": {"basis": "direct"}}]',
       '"_findings"',
       '42',
       '{"answer": "up", "nested": {"_findings": 1}}',
@@ -753,15 +752,55 @@ describe('peelAnswerFindings', () => {
 
   it('peels the key even when its value is malformed, and counts it', () => {
     const peeled = peelAnswerFindings('{"answer": "up", "_findings": "direct"}');
-    expect(peeled.content).toBe('{"answer":"up"}');
+    // 9.114.2: the model's own spacing stays — only the member and its separator go.
+    expect(peeled.content).toBe('{"answer": "up"}');
     expect(peeled.findings).toBeUndefined();
     expect(peeled.malformed).toBe(1);
   });
 
-  it('tolerates leading whitespace before the object', () => {
+  it("keeps leading whitespace and the answer's own spacing (9.114.2 — the text is not re-serialised)", () => {
     const peeled = peelAnswerFindings('  \n {"answer": 1, "_findings": {"basis": "exploratory"}}');
-    expect(peeled.content).toBe('{"answer":1}');
+    expect(peeled.content).toBe('  \n {"answer": 1}');
     expect(peeled.findings).toEqual({ basis: 'exploratory' });
+  });
+
+  it('an object in a JSON list loses its key and keeps its place (9.114.2)', () => {
+    const peeled = peelAnswerFindings('[{"_findings": {"basis": "direct"}}]');
+    expect(peeled.content).toBe('[{}]');
+    expect(peeled.findings).toEqual({ basis: 'direct' });
+  });
+
+  it('a declaration written in prose or a code block is peeled and read (9.114.2)', () => {
+    const declared = { previous: [{ toolCallId: 'c1', standing: 'noise' }] };
+    const prose = peelAnswerFindings(`p1 is down.\n\n${JSON.stringify({ _findings: declared })}`);
+    expect(prose.content).toBe('p1 is down.');
+    expect(prose.findings).toEqual(declared);
+    const fenced = peelAnswerFindings(
+      `p1 is down.\n\n\`\`\`json\n${JSON.stringify({ _findings: declared })}\n\`\`\`\n`,
+    );
+    expect(fenced.content).toBe('p1 is down.');
+    expect(fenced.findings).toEqual(declared);
+  });
+
+  it('two objects each carrying the key: their previous lists join in text order; a repeated key in one object reads the last', () => {
+    const a = { previous: [{ toolCallId: 'c1', standing: 'noise' }] };
+    const b = { previous: [{ toolCallId: 'c2', standing: 'open', settles: 'x' }] };
+    const peeled = peelAnswerFindings(
+      `{"answer":1,"_findings":{"previous":[]},"_findings":${JSON.stringify(
+        a,
+      )}}\n\n{"_findings":${JSON.stringify(b)}}`,
+    );
+    expect(peeled.content).toBe('{"answer":1}');
+    expect(peeled.findings?.previous).toEqual([...a.previous, ...b.previous]);
+  });
+
+  it('a value cut off by the end of the text is hidden, counted, and never read', () => {
+    const peeled = peelAnswerFindings(
+      '{"answer": 1, "_findings": {"previous": [{"toolCallId": "c1"',
+    );
+    expect(peeled.content).toBe('{"answer": 1');
+    expect(peeled.findings).toBeUndefined();
+    expect(peeled.malformed).toBe(1);
   });
 
   it('property: identity on every generated JSON value without the key', () => {

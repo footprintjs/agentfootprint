@@ -235,7 +235,7 @@ agent.findings(); // basis, standing and conflict rows, in the order they were d
 
 There are no extra model calls, and an agent that never calls `.findings()` records exactly the bytes it recorded before.
 
-A JSON answer that carries a top-level `_findings` gets the same treatment, with or without `.outputSchema()`: the key is taken off the answer `run()` returns and the run records, and the standings are filed with `declaredOn: 'answer'`. A prose answer is returned as written. Streamed tokens (`agentfootprint.stream.token`) are the model's raw output, sent before the key is taken off — render the returned answer rather than the token stream if the model may write `_findings` there.
+The answer gets the same treatment, with or without `.outputSchema()`: a `_findings` the model writes into a JSON object in its answer — the whole answer, a code block, one written in the prose — is taken off the answer `run()` returns and the run records, and its standings are filed with `declaredOn: 'answer'`. Only that member goes; the rest of the answer stays as the model wrote it, except that an object left empty goes whole (a code block of notes with its fences) when it stood on its own line — an answer that was only that one object stays `{}`, so a JSON answer stays JSON — and stays `{}` anywhere else; a `_findings` nested inside another object's value is left as data. The token stream (`agentfootprint.stream.token`) goes through the same step piece by piece, so it never shows notes it takes off, and the answer turn's tokens join to exactly the answer `run()` returns unless an output rule rewrites it afterwards.
 
 ### Naming a result — the offer
 

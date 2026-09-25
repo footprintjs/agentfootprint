@@ -42,6 +42,8 @@ import {
 import { defineTool } from '../../../src/core/tools.js';
 import { mock } from '../../../src/llm-providers.js';
 import type {
+  LLMChunk,
+  LLMProvider,
   LLMRequest,
   LLMResponse,
   LLMToolSchema,
@@ -595,6 +597,15 @@ describe(".findings() without an output schema — every decider peels the answe
       expect(ledgerOf(agent)!.map((r) => r.kind)).toEqual(['basis']);
     });
 
+    it('a prose answer that ends in a code block of notes: the block goes, its standings are filed (9.114.2)', async () => {
+      const fenced = `p1 is down.\n\n\`\`\`json\n${JSON.stringify({
+        _findings: JSON.parse(ANSWER)._findings,
+      })}\n\`\`\`\n`;
+      const agent = build(fenced);
+      expect(await agent.run({ message: 'which port is down?' })).toBe('p1 is down.');
+      expect(ledgerOf(agent)![1]).toEqual(STANDING);
+    });
+
     it('a JSON answer without the key is untouched, byte for byte', async () => {
       const spaced = '{ "down": "p1" }';
       const agent = build(spaced);
@@ -684,9 +695,17 @@ describe(".findings() without an output schema — every decider peels the answe
         respond: (req: LLMRequest): string | Partial<LLMResponse> => {
           if ((req.tools?.length ?? 0) === 0) return WRAPPED;
           const n = req.messages.filter((m) => m.role === 'tool').length;
+          // The turn the limit cuts short carries notes of its own in its
+          // content — a fragment about to be replaced, never peeled or filed.
           return n === 0
             ? CALL_ONE
-            : { content: '', toolCalls: [{ id: 'c2', name: 'look', args: { q: 'again' } }] };
+            : {
+                content: JSON.stringify({
+                  draft: 'checking again',
+                  _findings: { previous: [{ toolCallId: 'c1', standing: 'noise' }] },
+                }),
+                toolCalls: [{ id: 'c2', name: 'look', args: { q: 'again' } }],
+              };
         },
       }),
       model: 'm',
@@ -713,6 +732,202 @@ describe(".findings() without an output schema — every decider peels the answe
     expect(standings.map((r) => [r.toolCallId, r.standing, r.declaredOn, r.settles])).toEqual([
       ['c1', 'open', 'answer', 'a second look'],
     ]);
+  });
+
+  it("the output chain runs first: a key the chain's output carries is peeled and filed", async () => {
+    // The model answered clean; an output rule wrote the declaration in. The
+    // peel reads what the chain hands on — run before the chain, it would
+    // have handed the caller the key. Both deciders a chain can sit on.
+    const annotate = {
+      name: 'annotate',
+      onMessage: (msg: { phase: string }) =>
+        msg.phase === 'output' ? allow(ANSWER, 'wrote the declaration in') : allow(),
+    };
+    for (const arm of [
+      (b: ReturnType<typeof Agent.create>) => b,
+      (b: ReturnType<typeof Agent.create>) => b.namesAndNumbersFromEvidence(),
+    ]) {
+      const agent = arm(
+        Agent.create({ provider: scripted([], CALL_ONE, PEELED), model: 'm' })
+          .tool(look as never)
+          .findings()
+          .messageMiddleware(annotate as never),
+      ).build();
+      expect(await agent.run({ message: 'which port is down?' })).toBe(PEELED);
+      expect(ledgerOf(agent)![1]).toEqual(STANDING);
+    }
+  });
+});
+
+// ─── 4c. the stream carries what stands (9.114.2) ────────────────────────
+
+describe('.findings() — the stream carries what stands, piece by piece (9.114.2)', () => {
+  /** A provider that streams each scripted turn's content in pieces of `size` characters. */
+  function chunked(
+    size: number,
+    pieces: string[][],
+    ...turns: Partial<LLMResponse>[]
+  ): LLMProvider {
+    let i = 0;
+    const responseOf = (turn: Partial<LLMResponse>): LLMResponse => ({
+      content: turn.content ?? '',
+      toolCalls: turn.toolCalls ?? [],
+      usage: { input: 1, output: 1 },
+      stopReason: (turn.toolCalls?.length ?? 0) > 0 ? 'tool_use' : 'end_turn',
+    });
+    return {
+      name: 'chunked',
+      complete: async () => responseOf(turns[Math.min(i++, turns.length - 1)]!),
+      async *stream(): AsyncIterable<LLMChunk> {
+        const response = responseOf(turns[Math.min(i++, turns.length - 1)]!);
+        const sent: string[] = [];
+        for (let at = 0; at < response.content.length; at += size) {
+          const content = response.content.slice(at, at + size);
+          sent.push(content);
+          yield { tokenIndex: sent.length - 1, content, done: false };
+        }
+        pieces.push(sent);
+        yield { tokenIndex: sent.length, content: '', done: true, response };
+      },
+    };
+  }
+  const DECLARED = JSON.stringify({
+    down: 'p1',
+    _findings: { previous: [{ toolCallId: 'c1', standing: 'ruled-out', line: 'p2 was up' }] },
+  });
+  const look = recordingTool('look', []);
+
+  async function streamOf(
+    agent: Agent,
+  ): Promise<{ answer: string; tokens: string[]; ends: string[] }> {
+    const tokens: string[] = [];
+    const ends: string[] = [];
+    agent.on('*', (e) => {
+      const p = e.payload as unknown as { content?: string };
+      if (e.type === 'agentfootprint.stream.token') tokens.push(p.content ?? '');
+      if (e.type === 'agentfootprint.stream.llm_end') ends.push(p.content ?? '');
+    });
+    const answer = await agent.run({ message: 'which port is down?' });
+    return { answer, tokens, ends };
+  }
+
+  it('no token carries the notes — not even a piece that ends inside the key — and the tokens join to the answer returned', async () => {
+    for (const size of [1, 3, 7, 1000]) {
+      const agent = Agent.create({
+        provider: chunked(size, [], CALL_ONE, { content: DECLARED }),
+        model: 'm',
+      })
+        .tool(look as never)
+        .findings()
+        .build();
+      const { answer, tokens, ends } = await streamOf(agent);
+      expect(answer).toBe(JSON.stringify({ down: 'p1' }));
+      expect(tokens.join('')).toBe(answer);
+      for (const t of tokens) expect(t).not.toMatch(/_fin|ndings|ruled|p2 was/);
+      expect(ends[ends.length - 1]).toBe(answer);
+      expect(ledgerOf(agent)!.map((r) => r.kind)).toEqual(['basis', 'standing']);
+    }
+  });
+
+  it('a prose answer with a code block of notes streams as the prose alone', async () => {
+    const PROSE = `p1 is down.\n\n\`\`\`json\n${JSON.stringify({
+      _findings: JSON.parse(DECLARED)._findings,
+    })}\n\`\`\`\n`;
+    const agent = Agent.create({
+      provider: chunked(4, [], CALL_ONE, { content: PROSE }),
+      model: 'm',
+    })
+      .tool(look as never)
+      .findings()
+      .build();
+    const { answer, tokens } = await streamOf(agent);
+    expect(answer).toBe('p1 is down.');
+    expect(tokens.join('')).toBe('p1 is down.');
+  });
+
+  it("an indented JSON answer keeps the model's layout, in the stream and in the answer", async () => {
+    const PRETTY = JSON.stringify(JSON.parse(DECLARED), null, 2);
+    const agent = Agent.create({
+      provider: chunked(5, [], CALL_ONE, { content: PRETTY }),
+      model: 'm',
+    })
+      .tool(look as never)
+      .findings()
+      .build();
+    const { answer, tokens } = await streamOf(agent);
+    expect(answer).toBe('{\n  "down": "p1"\n}');
+    expect(tokens.join('')).toBe(answer);
+  });
+
+  it('a stream cut part way through the key never shows the part it held — and is not retried', async () => {
+    // The reliability layer never retries a call whose stream already showed
+    // text (a mid-stream failure fails fast), so no scanner state can cross
+    // attempts; what must hold is that the piece held when the stream died —
+    // `,"_fin` — is never flushed.
+    const tokens: string[] = [];
+    let call = 0;
+    const transient = Object.assign(new Error('Service Unavailable'), { status: 503 });
+    const provider: LLMProvider = {
+      name: 'cut-inside-the-key',
+      complete: async () => {
+        throw new Error('stream only');
+      },
+      async *stream(): AsyncIterable<LLMChunk> {
+        call += 1;
+        if (call === 1) {
+          const response: LLMResponse = {
+            content: '',
+            toolCalls: CALL_ONE.toolCalls ?? [],
+            usage: { input: 1, output: 1 },
+            stopReason: 'tool_use',
+          };
+          yield { tokenIndex: 0, content: '', done: true, response };
+          return;
+        }
+        for (const [i, piece] of ['{"down"', ':"p1",', '"_fin'].entries())
+          yield { tokenIndex: i, content: piece, done: false };
+        throw transient;
+      },
+    };
+    const agent = Agent.create({ provider, model: 'm' })
+      .tool(look as never)
+      .findings()
+      .reliability({
+        postDecide: [
+          {
+            when: (st) => st.errorKind === '5xx-transient' && st.attempt < 3,
+            then: 'retry',
+            kind: 'transient-retry',
+          },
+          { when: (st) => st.error !== undefined, then: 'fail-fast', kind: 'unrecoverable' },
+        ],
+      })
+      .build();
+    agent.on('*', (e) => {
+      if (e.type === 'agentfootprint.stream.token')
+        tokens.push((e.payload as unknown as { content: string }).content);
+    });
+
+    await expect(agent.run({ message: 'which port is down?' })).rejects.toThrow(
+      /mid-stream failure not retryable/,
+    );
+    expect(call).toBe(2);
+    expect(tokens.join('')).toBe('{"down":"p1"');
+    for (const t of tokens) expect(t).not.toMatch(/_fin|,/);
+  });
+
+  it('an unarmed agent streams every piece exactly as the provider sent it', async () => {
+    const sent: string[][] = [];
+    const agent = Agent.create({
+      provider: chunked(3, sent, CALL_ONE, { content: DECLARED }),
+      model: 'm',
+    })
+      .tool(look as never)
+      .build();
+    const { answer, tokens, ends } = await streamOf(agent);
+    expect(answer).toBe(DECLARED);
+    expect(tokens).toEqual(sent.flat());
+    expect(ends[ends.length - 1]).toBe(DECLARED);
   });
 });
 

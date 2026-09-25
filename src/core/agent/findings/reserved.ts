@@ -8,7 +8,10 @@
  *          site (the committed tool list in `buildToolsSlot`, and the seed
  *          fallback); `splitFindings` is the FIRST read of a tool call's args
  *          in the dispatch loop; `peelAnswerFindings` runs before the output
- *          schema judges an answer. `ledger.ts` turns what they return into rows.
+ *          schema judges an answer, reading the answer's text through
+ *          `answerText.ts` — the scanner the stream shares, so the answer
+ *          returned and the tokens shown are the same text. `ledger.ts` turns
+ *          what they return into rows.
  *
  * THE LAWS THIS FILE KEEPS
  *   - Never mutate a schema or an args object: every changed value is a
@@ -38,6 +41,7 @@
  */
 
 import type { LLMToolSchema } from '../../../adapters/types.js';
+import { withoutReservedMembers, type RemovedMember } from './answerText.js';
 import {
   BASIS_VALUES,
   EXPECT_VALUES,
@@ -541,31 +545,68 @@ export function splitFindings(args: PlainObject): SplitFindings {
 }
 
 export interface PeeledAnswer {
-  /** `raw` itself unless it parsed to a plain object carrying the key. */
+  /** `raw` itself unless a `_findings` member was taken out of it. */
   readonly content: string;
   readonly findings?: FindingsDeclaration;
   readonly malformed?: number;
 }
 
 /**
- * Take the top-level `_findings` off a JSON answer. Identity on prose, on
- * arrays, and on objects without the key; otherwise the declaration plus the
- * object re-serialised without it — what the output schema then judges.
+ * Take the answer's `_findings` off, wherever the answer's TEXT carries it
+ * (9.114.2; `answerText.ts` is the rule, shared with the stream). Every JSON
+ * object in the answer that is not inside another object — the whole answer,
+ * a code block holding one, one written in the prose — loses its own
+ * `_findings` member and the separator that joined it, and nothing else moves:
+ * the model's layout and the prose around it stay as written. Identity when
+ * nothing was removed.
+ *
+ * The removed values are the answer's declaration: per object the LAST one
+ * (JSON's own rule for a repeated key — what a whole-answer `JSON.parse` read
+ * before 9.114.2), across objects in text order, their `previous` lists
+ * joined. A value that is not JSON, or that a cut-off text left unfinished, is
+ * dropped and counted (`malformed`), never guessed at.
  */
 export function peelAnswerFindings(raw: string): PeeledAnswer {
-  if (typeof raw !== 'string' || raw.trimStart()[0] !== '{') return { content: raw };
-  let parsed: unknown;
-  try {
-    parsed = JSON.parse(raw);
-  } catch {
-    return { content: raw };
+  if (typeof raw !== 'string') return { content: raw };
+  const { text, removed } = withoutReservedMembers(raw, RESERVED_ANSWER_KEY);
+  if (removed.length === 0) return { content: raw };
+  const lastPerObject = new Map<number, RemovedMember>();
+  for (const member of removed) lastPerObject.set(member.object, member);
+  let findings: FindingsDeclaration | undefined;
+  let malformed = 0;
+  for (const member of lastPerObject.values()) {
+    const read = readRemovedValue(member);
+    malformed += read.malformed;
+    if (read.declaration !== undefined) findings = joinDeclarations(findings, read.declaration);
   }
-  if (!isPlainObject(parsed) || !hasOwn(parsed, RESERVED_ANSWER_KEY)) return { content: raw };
-  const { [RESERVED_ANSWER_KEY]: declared, ...rest } = parsed;
-  const { declaration, malformed } = readDeclaration(declared);
   return {
-    content: JSON.stringify(rest),
-    ...(declaration !== undefined && { findings: declaration }),
+    content: text,
+    ...(findings !== undefined && { findings }),
     ...(malformed > 0 && { malformed }),
   };
+}
+
+/** One removed value, read as a declaration — or counted, when it cannot be read. */
+function readRemovedValue(member: RemovedMember): ReadDeclaration {
+  if (!member.complete) return { malformed: 1 };
+  let value: unknown;
+  try {
+    value = JSON.parse(member.valueText);
+  } catch {
+    return { malformed: 1 };
+  }
+  return readDeclaration(value);
+}
+
+/** Two objects' declarations as one: later fields win, `previous` lists join in text order. */
+function joinDeclarations(
+  earlier: FindingsDeclaration | undefined,
+  later: FindingsDeclaration,
+): FindingsDeclaration {
+  if (earlier === undefined) return later;
+  const previous =
+    earlier.previous === undefined && later.previous === undefined
+      ? undefined
+      : [...(earlier.previous ?? []), ...(later.previous ?? [])];
+  return { ...earlier, ...later, ...(previous !== undefined && { previous }) };
 }

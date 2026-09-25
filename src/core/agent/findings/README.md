@@ -134,66 +134,126 @@ foldLedger(scope.findingsLedger!).standingOf.get('call_1')?.standing; // 'fact'
   `cannotCover` and `try_instead` — so a redaction policy that hides tool
   output by key must cover `findingsLedger` too.
 
-## The answer's standings — one peel on every decider (9.114.1)
+## The answer's standings — one peel on every decider, one scanner for the text (9.114.1, 9.114.2)
 
 Why: the instruction (`reserved.ts · FINDINGS_INSTRUCTION`) tells every armed
 model it may carry the last batch's standings as a JSON answer's top-level
 `_findings.previous` — with an output schema or without one. Until 9.114.1
 only the decider built for `.outputSchema()` took the key back off; on any
 other armed agent the caller received the raw `"_findings": {…}`, and the
-standings were never filed.
+standings were never filed. Until 9.114.2 the stream still showed the key as
+the model wrote it, and a key written in prose or in a code block was left
+in the answer.
 
-The law — one peel, `stages/route.ts · peelAnswerStandings`, on every Route
-decider an armed agent can be given: the plain one (with or without the
-WrapUp branch), the output-chain one, the judging one (a stepped skill or
-`.namesAndNumbersFromEvidence()`) and the enforcing one (`.outputSchema()`).
-An unarmed agent keeps the fast path's shared reference, which reads nothing
-of the answer.
+The law, in two parts.
 
-- **What.** A JSON-object answer carrying a top-level `_findings` has the key
-  taken off what the caller receives — the returned answer, the committed
-  `llmLatestContent`, `turn_end.finalContent`, the memory write — and its
-  `previous` standings are filed `declaredOn: 'answer'`. Prose, arrays and
-  objects without the key are left byte for byte, and nothing is written.
-- **When.** After the output chain, before every judge (the schema, the step
-  procedure, the evidence gate, the claim contract) and before an exhausted
-  turn's empty-answer check — so each judges the answer the caller receives,
-  and the evidence gate never reads the model's bookkeeping as a claim. A
-  fragment the wrap-up is about to replace is not an answer and is not
-  peeled; the wrap-up's own answer is.
+**One peel, on every decider** — `stages/route.ts · peelAnswerStandings`, on
+every Route decider an armed agent can be given: the plain one (with or
+without the WrapUp branch), the output-chain one, the judging one (a stepped
+skill or `.namesAndNumbersFromEvidence()`) and the enforcing one
+(`.outputSchema()`). An unarmed agent keeps the fast path's shared reference,
+which reads nothing of the answer.
+
+- **When.** After the output chain — the peel reads what the chain hands on —
+  and before every judge (the schema, the step procedure, the evidence gate,
+  the claim contract) and before an exhausted turn's empty-answer check, so
+  each judges the answer the caller receives and the evidence gate never
+  reads the model's bookkeeping as a claim. A fragment the wrap-up is about
+  to replace is not an answer and is not peeled; the wrap-up's own answer is.
 - **Re-ask.** A re-ask exit (`output-retry`, `step-nudge`,
   `evidence-recheck`) puts back the string the model sent
   (`route.ts · restoreEmission`), so history never holds a turn the model
   never emitted.
 
-Two limits, stated:
+**One scanner for the text** — `answerText.ts`, shared by the peel
+(`reserved.ts · peelAnswerFindings`, the whole answer) and the stream
+(`stages/callLLM.ts`, chunk by chunk), so the tokens a UI shows and the
+answer the run returns are the same text.
 
-- **Streamed tokens are not peeled.** `agentfootprint.stream.token` carries
-  the provider's chunks as they arrive, before any decider runs, so a UI that
-  renders them shows `_findings` if the model writes it. Render the returned
-  answer (or `turn_end.finalContent`) instead; `.answerValidation()` withholds
-  draft tokens and streams only the answer it validated. The evidence README
-  states the same limit for a rejected draft.
-- **Only a JSON answer is read.** The peel parses the whole answer as one
-  JSON object: a key inside prose or a fenced block is left as written, never
-  guessed at, and an output middleware that turns a JSON answer into prose
-  before the peel leaves the key in it.
+- **What.** Every JSON object written in the answer — the whole answer, one
+  in a code block, one in the prose, one in a list — loses its own
+  `_findings` member: the key, the value and the separator that joined it,
+  and nothing else. The model's layout stays as written (the text is not
+  re-serialised). A `_findings` inside another object's value is data and
+  stays. The removed values are the answer's declaration — per object the
+  last one (JSON's rule for a repeated key), across objects in text order —
+  filed `declaredOn: 'answer'`.
+- **Empty objects.** An object left with nothing in it goes whole, its line
+  too, when it stood on a line of its own outside any list: the whole answer,
+  a paragraph of its own, a code block of its own (which goes with its
+  fences, however many notes objects it held). The removed line's
+  indentation goes with it, and so do the whole blank lines after it; the
+  next line keeps its own indentation (a line of code in a fence, an
+  indented code block). No blank lines are left at either end. An
+  answer that was one bare JSON object, left with nothing, is `{}`, so a
+  JSON answer stays JSON; an answer that held nothing but notes in any other
+  form is left empty. Anywhere else an emptied object stays `{}` — in a
+  list, mid-line, in code — so the text around it keeps its shape.
+- **The stream.** Under the arm each `agentfootprint.stream.token` is what
+  the scanner can show so far: a piece that ends part way through the key is
+  held until the key is read, and never shown if it is `_findings`. What is
+  held is bounded by a line — whitespace, a key (a raw line break ends one),
+  `{` until its first key is read, a separator, a code fence line, the rest
+  of an emptied object's line — and comes out as one last token when the
+  stream ends. The one exception is a `_findings` value: it is never shown
+  while it is JSON so far, and one that stops being JSON is held until the
+  character that breaks it and then given back as written (see *Never
+  guessed*), so that hold can span the notes' lines. So under the arm a
+  piece can go out as no token at all, and `tokenIndex` can skip numbers;
+  when something was still held at the end, that last token takes the index
+  one past the last piece's. `stream.llm_end.content`
+  is the same text. For the answer turn the tokens join to exactly the answer
+  `run()` returns, unless an output rule rewrites it afterwards
+  (`.messageMiddleware()`, `.limitsTravelWithTheAnswer()`); turns that call
+  tools stream their own text too. CallLLM's commit keeps what the model
+  sent, and so does history for a turn that calls tools; the Route decider
+  then commits the peeled answer as `llmLatestContent` — the answer the run
+  records — and puts back what the model sent at an exit that asks the model
+  again (`route.ts · restoreEmission`). An unarmed agent streams every piece
+  exactly as the provider sent it. A stream that fails after showing text is
+  not retried (the reliability layer's own rule), and what the scanner held
+  when it failed is never shown.
+- **Never guessed.** Text that stops being JSON part way (`{see below}`, a
+  stray quote or a raw line break inside the notes) is given back exactly as
+  written: keys and values are read by JSON's own grammar, so the first
+  character JSON cannot take decides it, not a count of brackets. A string
+  inside a list is read as a string, so its `]` or `{` does not end the list
+  or open an object. A `_findings` value that is JSON so far and cut off by
+  the end of the text stays hidden, is counted (`malformed`) and is never
+  read; when its object held nothing else and began mid-line, `{}` is left
+  where it began (an object that also held other members is left open, as
+  written). An object that
+  held nothing but complete notes when the text stopped being JSON — a model
+  one closing brace short — ends there and goes as an emptied object does,
+  so the paragraph after it is kept. Nothing removed means the text comes
+  back byte for byte.
 
 ```ts
 const agent = Agent.create({ provider, model }).tool(lookupOrder).tool(getPolicy).findings().build();
-// The model answers:
-//   {"answer":"Eligible only if unopened.","_findings":{"previous":[{"toolCallId":"c2","standing":"fact","assertions":[…]}]}}
+// The model answers in prose, with its notes in a code block at the end:
+//   Eligible only if unopened.
+//
+//   ```json
+//   {"_findings":{"previous":[{"toolCallId":"c2","standing":"fact","assertions":[…]}]}}
+//   ```
 await agent.run({ message: 'Can I get a refund for order A-1001?' });
-// → '{"answer":"Eligible only if unopened."}'
+// → 'Eligible only if unopened.' — and the token stream showed exactly that
 agent.findings();
 // → […, { kind: 'standing', toolCallId: 'c2', standing: 'fact', declaredOn: 'answer', … }]
 ```
 
-Proved by `test/core/agent/findings-ledger.test.ts` § 4b — each no-schema
-decider against a JSON answer with the key, a prose answer and a JSON answer
-without it; the evidence gate grounding the peeled answer; the wrap-up's
-answer; the fast path's reference kept for an unarmed agent — and § 14, whose
-re-ask exits run with and without a schema.
+Proved by `test/core/agent/findings/answerText.test.ts` (each rule by
+example; over seeded random text: nothing removed ⇒ byte-identical, any
+chunking ⇒ the same bytes as the whole, a `JSON.stringify` answer ⇒
+`JSON.stringify` of it without the key — the 9.114.1 peel's bytes), by
+`test/core/agent/findings/reserved.test.ts` (`peelAnswerFindings`), and by
+`test/core/agent/findings-ledger.test.ts` § 4b (each no-schema decider
+against a JSON answer with the key, a prose answer, a code block of notes and
+a JSON answer without it; the evidence gate grounding the peeled answer; the
+wrap-up's answer peeled and its fragment not; a key the output chain writes
+in, peeled; the fast path's reference kept for an unarmed agent), § 4c (the
+stream at piece sizes 1, 3, 7 and whole; prose; an indented answer; the
+unarmed stream untouched) and § 14 (re-ask exits with and without a schema).
 
 ## Proved on the wire, measured on the record
 
@@ -958,6 +1018,9 @@ byte-identity references under `test/core/tools/reference/` are unchanged.
 - `judge.ts` — `judgeQuestions` (pure), `judgeResult` (the one caller of
   `recordFindings` for judgment rows), `STANDING_CRITERIA`,
   `JUDGE_QUESTION_IDS`.
+- `answerText.ts` — `reservedMemberFilter` (the scanner, fed piece by
+  piece — the stream's), `withoutReservedMembers` (fed whole — the peel's),
+  `RemovedMember`. Internal — no barrel names them.
 - `reserved.ts` — `FINDINGS_ARGUMENT_SCHEMA`, `FINDINGS_OFFER_CAP`,
   `withFindingsArgument`, `withoutFindingsArgument`, `splitFindings`,
   `peelAnswerFindings`, `FINDINGS_INSTRUCTION`, `FINDINGS_CONTINGENT_LINE` /

@@ -55,6 +55,7 @@ import {
   splitFindings,
   withoutFindingsArgument,
 } from '../findings/reserved.js';
+import { reservedMemberFilter, withoutReservedMembers } from '../findings/answerText.js';
 import {
   collapseJudged,
   findingsLedgerPiece,
@@ -114,12 +115,15 @@ export interface CallLLMStageDeps {
   readonly hasEvidenceRecovery?: boolean;
   /**
    * THE FINDINGS LEDGER IS ARMED (9.101.0, `.findings()`) — present only
-   * then, only ever `true`. Two reads change and nothing else: the choice
+   * then, only ever `true`. Three reads change and nothing else: the choice
    * seam hands `unsupportedArgumentsOf` each armed call's args WITHOUT the
    * reserved `_findings` argument (its assertion text would be judged as
-   * identifiers), and `postValidate` judges the answer with the top-level
-   * `_findings` key peeled (it runs BEFORE the route decider — a strict
-   * schema would otherwise reject a correct answer and loop `outputRetry`).
+   * identifiers); `postValidate` judges the answer with its `_findings` taken
+   * off (it runs BEFORE the route decider — a strict schema would otherwise
+   * reject a correct answer and loop `outputRetry`); and (9.114.2) the
+   * `stream.token` chunks and the `stream.llm_end` content are what the
+   * content shows with its `_findings` taken off — the scanner the peel uses
+   * (`findings/answerText.ts`), so the text streamed is the answer returned.
    * `systemPieces`, `activeToolSchemas` and the receipt are untouched.
    */
   readonly findings?: true;
@@ -818,6 +822,17 @@ export function buildCallLLMStage(
     ): Promise<LLMResponse> => {
       let resp: LLMResponse | undefined;
       let firstChunkFired = false;
+      // THE STREAM CARRIES WHAT STANDS (9.114.2, `.findings()`): each chunk
+      // goes through the scanner the answer's peel uses, so a token never
+      // carries the model's `_findings` notes — not even when a chunk ends
+      // part way through the key — and the tokens join to exactly the text
+      // the run hands back. A fresh scanner per attempt; unarmed, the chunks
+      // go out as the provider sent them.
+      const shown =
+        deps.findings === true && deps.suppressDraftTokens !== true
+          ? reservedMemberFilter()
+          : undefined;
+      let lastTokenIndex = -1;
       if (provider.stream) {
         for await (const chunk of provider.stream(req, providerHooks)) {
           if (chunk.done) {
@@ -848,14 +863,28 @@ export function buildCallLLMStage(
               hooks.onFirstChunk?.();
             }
             if (deps.suppressDraftTokens !== true) {
-              typedEmit(scope, 'agentfootprint.stream.token', {
-                iteration,
-                tokenIndex: chunk.tokenIndex,
-                content: chunk.content,
-              });
+              const content = shown === undefined ? chunk.content : shown.push(chunk.content);
+              lastTokenIndex = chunk.tokenIndex;
+              if (content.length > 0) {
+                typedEmit(scope, 'agentfootprint.stream.token', {
+                  iteration,
+                  tokenIndex: chunk.tokenIndex,
+                  content,
+                });
+              }
             }
           }
         }
+      }
+      // What the scanner still held when the stream ended goes out as one
+      // last token (whitespace, a key it was reading, a `{`…).
+      const held = shown?.end() ?? '';
+      if (held.length > 0) {
+        typedEmit(scope, 'agentfootprint.stream.token', {
+          iteration,
+          tokenIndex: lastTokenIndex + 1,
+          content: held,
+        });
       }
       if (!resp) {
         // No `stream()` OR stream finished without a response payload.
@@ -993,7 +1022,10 @@ export function buildCallLLMStage(
 
     typedEmit(scope, 'agentfootprint.stream.llm_end', {
       iteration,
-      content: response.content,
+      // Under the arm, the content as the stream showed it (9.114.2) — the
+      // committed `llmLatestContent` below keeps what the model sent.
+      content:
+        deps.findings === true ? withoutReservedMembers(response.content).text : response.content,
       toolCallCount: response.toolCalls.length,
       usage: response.usage,
       stopReason: response.stopReason,
