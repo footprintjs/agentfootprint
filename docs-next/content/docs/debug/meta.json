@@ -1,5 +1,5 @@
 {
   "title": "Debug",
   "icon": "Bug",
-  "pages": ["manifesto", "debug", "tool-catalog-lint", "localize-context-bug", "rerun-without-sources", "compare-strategies", "variable-recall", "recorded-chat", "offline-replay", "time-travel", "file-a-bug", "self-explain", "causal-deep-dive", "testing", "error-handling"]
+  "pages": ["manifesto", "debug", "tool-catalog-lint", "localize-context-bug", "sharpen-the-diagnosis", "rerun-without-sources", "compare-strategies", "variable-recall", "recorded-chat", "offline-replay", "time-travel", "file-a-bug", "self-explain", "causal-deep-dive", "testing", "error-handling"]
 }

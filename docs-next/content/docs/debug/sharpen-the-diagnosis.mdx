@@ -1,0 +1,213 @@
+---
+title: Sharpen a context-bug diagnosis
+description: Four tools that sit around localizeContextBug — is the ranking trustworthy, was something dropped, which on-topic source is innocent, and which piece cost loops even when the answer came out right.
+---
+
+[`localizeContextBug`](doc:localize-context-bug) ranks the context pieces a
+wrong answer came from, then confirms by re-running without them. These four
+tools each answer one question the ranking alone can't. All are on
+`agentfootprint/observe`.
+
+| You're asking… | Use |
+|---|---|
+| Can I trust the top of the ranking? | `rankingConfidence` |
+| Was the piece that mattered dropped before the model saw it? | `findDroppedContext` |
+| Is an on-topic piece ranking high just because it's on-topic? | `scoreContrastiveInfluence` |
+| Did a piece waste loops, even though the answer was right? | two-score localization (`classifySuspect`) |
+
+The rule under all four: a **score narrows the search; only a re-run proves a
+cause**. None of them claims more than that.
+
+## Can I trust the top of the ranking?
+
+The influence ranking scores each piece of context by how much it **resembles
+the final answer**. That catches a misleading fact the answer echoes. It is
+blind to the opposite kind of bug — a piece that broke things by **crowding
+out** what mattered (truncation, dilution, "lost in the middle"). That culprit
+need not resemble the answer at all, yet the ranking still hands you a
+confident #1 — the wrong one.
+
+The tell is a **flat top**: nothing clearly leads. `rankingConfidence` says so,
+and tells you what to re-run:
+
+```ts
+import { scoreInfluence, rankingConfidence } from 'agentfootprint/observe';
+
+const scores = await scoreInfluence({ evidence, finalAnswerText, embedder });
+const c = rankingConfidence(scores);
+
+if (c.clearWinner) {
+  confirmByRerun([c.lead!]); // a clear LEAD — still a guess until a re-run flips it
+} else {
+  confirmByRerun(c.shortlist); // too flat to trust: re-run the whole shortlist
+}
+```
+
+`clearWinner` · `lead` · `margin` (top-1 minus top-2) · `shortlist` (always has
+the lead; adds the runner-up when the top is flat) · `reason` (for display only —
+read the fields, never parse it).
+
+"Is the top flat?" is a pluggable rule. The default, `marginStrategy(0.05)`,
+compares the absolute gap — simple, but its scale depends on your embedder.
+`ratioStrategy(0.05)` compares the relative gap, so it gives the same verdict at
+any scale:
+
+```ts
+import { rankingConfidence, ratioStrategy } from 'agentfootprint/observe';
+
+rankingConfidence(scores, { clearWinnerMargin: 0.08 }); // tune the default
+rankingConfidence(scores, { strategy: ratioStrategy(0.05) }); // swap the rule
+```
+
+Or pass your own `{ name, isClearWinner(rankedScores) }`. Whatever the rule, the
+shortlist always holds the lead, a single suspect is always a clear winner, and
+malformed scores degrade safely. The default thresholds are **uncalibrated** —
+sweep them on your own embedder.
+Runnable: [`09-attributability-marker.ts`](https://github.com/footprintjs/agentfootprint/blob/main/examples/observability/09-attributability-marker.ts).
+
+## Was the piece that mattered dropped?
+
+The ranking and the re-runs only see pieces that **reached** the model. A
+needed piece that was truncated out of the window, or never selected, is
+invisible to both — you can't remove what isn't there.
+
+Every injection, memory entry and tool result has a stable id, so "what got
+dropped" is just a set difference — exact, instant, no embeddings:
+
+```ts
+import { findDroppedContext } from 'agentfootprint/observe';
+
+const { dropped, anyDropped } = findDroppedContext(available, sentToModel);
+```
+
+A dropped piece is a **candidate** — most dropped context was dropped correctly.
+Prove it the mirror-image way: **put it back and re-run; if the answer flips,
+that's the cause.** The localizer does this for you when you pass
+`missingContext`:
+
+```ts
+import { localizeContextBug, type RestorationRunner } from 'agentfootprint/observe';
+
+// Re-run your agent with `units` added back ([] = the baseline run).
+const runner: RestorationRunner = async (units, { seed }) =>
+  rebuildAndRun({ restore: units, seed });
+
+const report = await localizeContextBug({
+  artifacts,
+  embedder,
+  atStep,
+  missingContext: {
+    available,
+    sent: sentToModel,
+    rerun: { runner, originalOutput: buggyAnswer, samples: 3 },
+  },
+});
+
+for (const c of report.dropped ?? []) {
+  if (c.verdict?.verdict === 'confirmed') console.log('dropped culprit:', c.id);
+}
+```
+
+Leave out `rerun` to get the candidate list without verdicts. This catches a
+piece that was available and fell out; a piece retrieval **never surfaced** is a
+different question, which needs a relevance signal, not a diff.
+Runnable: [`10-missing-context.ts`](https://github.com/footprintjs/agentfootprint/blob/main/examples/observability/10-missing-context.ts).
+
+## Is an on-topic piece ranking high just because it's on-topic?
+
+A refund decision quotes the refund policy, so the policy resembles *whatever*
+the model decided — approve or deny. When the answer is wrong, the policy still
+scores high and can sit above the piece that actually caused it.
+
+If you have a **reference answer** — a known-good run, a golden answer, a test
+case's expected output — score the difference instead:
+
+```text
+score(piece) = similarity(piece, actual answer) − similarity(piece, reference answer)
+```
+
+An on-topic innocent resembles both answers, so it cancels to about zero. The
+real culprit resembles the wrong answer specifically, so it stands out. Nothing
+else about the scoring changes, and the result feeds `rankingConfidence` as-is.
+
+```ts
+import { scoreContrastiveInfluence, rankingConfidence } from 'agentfootprint/observe';
+
+const scores = await scoreContrastiveInfluence({
+  evidence,
+  answerText: actualAnswer,
+  referenceText: expectedAnswer,
+  embedder,
+});
+const c = rankingConfidence(scores);
+```
+
+It also plugs into the localizer's `scorer` option:
+
+```ts
+import {
+  localizeContextBug,
+  scoreContrastiveInfluence,
+  type InfluenceScorer,
+} from 'agentfootprint/observe';
+
+const contrastive: InfluenceScorer = (args) =>
+  scoreContrastiveInfluence({
+    evidence: args.evidence,
+    answerText: args.finalAnswerText,
+    referenceText: expectedAnswer,
+    embedder: args.embedder,
+  });
+
+const report = await localizeContextBug({ artifacts, embedder, atStep, scorer: contrastive });
+```
+
+Use it for regression and eval debugging, where a reference exists; for a cold
+investigation with no reference, stay with the plain ranking. It removes a
+confound — it still proves nothing on its own.
+Runnable: [`11-contrastive-influence.ts`](https://github.com/footprintjs/agentfootprint/blob/main/examples/observability/11-contrastive-influence.ts)
+· [`16-pluggable-scorer.ts`](https://github.com/footprintjs/agentfootprint/blob/main/examples/observability/16-pluggable-scorer.ts).
+
+## Did a piece waste loops, even though the answer was right?
+
+A misleading piece can send the agent down a wrong tool call early and burn
+loops and tokens — **even when it recovers and answers correctly**. An accuracy
+check misses that; so does a token dashboard.
+
+The re-runs the localizer already does can measure it, for free. Have your
+re-run return the run's cost alongside its answer:
+
+```ts
+// Before: the runner returns the answer string.
+// Now:    it returns the answer and what the run cost.
+const runner = async (specs, { seed }) => {
+  const { output, loops, tokens } = await rerunAgent(specs, seed);
+  return { output, cost: { loops, tokens } };
+};
+```
+
+Each suspect then carries a second verdict, and `classifySuspect` sorts it into
+one of four cells:
+
+| | removing it reduced cost | no cost effect |
+|---|---|---|
+| **removing it flipped the answer** | `both` | `content-bug` |
+| **answer unchanged** | `cost-cause` — right answer, loops overpaid | `no-detected-effect` |
+
+```ts
+import { classifySuspect } from 'agentfootprint/observe';
+
+for (const s of report.suspects) console.log(s.source, classifySuspect(s));
+```
+
+The cost verdict is deliberately weaker than the answer flip. It must beat the
+cost variation you see when removing pieces that *don't* matter, and it must
+hold across seeds. "Removing it reduced cost" is all it claims — the piece might
+be needed scaffolding, never "wasted" — and `no-detected-effect` never means
+"innocent".
+Runnable: [`12-two-score-localization.ts`](https://github.com/footprintjs/agentfootprint/blob/main/examples/observability/12-two-score-localization.ts).
+
+## Next steps
+
+- [Localize a context bug](doc:localize-context-bug) — the ranking and re-run these build on
+- [Re-run without sources](doc:rerun-without-sources) — the removal re-run in detail
