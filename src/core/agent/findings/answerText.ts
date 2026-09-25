@@ -7,7 +7,7 @@
  *          (`withoutReservedMembers`), with the same bytes out either way.
  * Role:    core/ layer leaf. `stages/callLLM.ts` feeds it the provider's
  *          stream under the arm, so `agentfootprint.stream.token` never
- *          carries the model's notes; `reserved.ts · peelAnswerFindings` feeds
+ *          carries the model's notes; `peel.ts · peelAnswerFindings` feeds
  *          it the whole answer, so the answer the run returns is exactly the
  *          text the stream showed.
  *

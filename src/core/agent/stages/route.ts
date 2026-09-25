@@ -20,7 +20,6 @@ import type { LLMMessage } from '../../../adapters/types.js';
 import type { MessageMiddleware } from '../middleware/types.js';
 import { runMessageChain } from '../middleware/runChain.js';
 import { recordDecisions } from '../middleware/ledger.js';
-import { peelAnswerFindings } from '../findings/reserved.js';
 import {
   foldLedger,
   recordFindings,
@@ -339,12 +338,15 @@ function recordAnswerGuarantee(
  * RE-ASK exit puts back (see `restoreEmission`) — or `undefined` when nothing
  * was peeled. Unarmed: returns before reading anything.
  */
-function peelAnswerStandings(
+async function peelAnswerStandings(
   scope: TypedScope<AgentState>,
   findings: true | undefined,
-): string | undefined {
+): Promise<string | undefined> {
   if (findings !== true || typeof scope.llmLatestContent !== 'string') return undefined;
   const raw = scope.llmLatestContent;
+  // Loaded only under the arm (`findings/peel.ts`): an unarmed agent returned
+  // on the line above and never loads the scanner.
+  const { peelAnswerFindings } = await import('../findings/peel.js');
   const peeled = peelAnswerFindings(raw);
   if (peeled.findings?.previous !== undefined) {
     const known = knownResults(
@@ -676,30 +678,66 @@ function stepNudgeRationale(scope: TypedScope<AgentState>): string {
  * did. `hasWrapUp` is the ONE build-time fact it needs — a decider may never
  * name a branch the chart did not mount. `findings` (9.114.1) is the ledger's
  * arm: the answer's standings are peeled before anything reads the answer
- * (`peelAnswerStandings`). Absent, not one line of the peel runs.
+ * (`peelAnswerStandings`). Absent, not one line of the peel runs — and the
+ * decider stays synchronous, because the peel's scanner is loaded through
+ * `import()` (`findings/peel.ts`) and only the armed decider awaits it.
  */
+function buildSimpleDecider(hasWrapUp: boolean): (scope: TypedScope<AgentState>) => RouteBranch;
+function buildSimpleDecider(
+  hasWrapUp: boolean,
+  findings: true,
+): (scope: TypedScope<AgentState>) => Promise<RouteBranch>;
 function buildSimpleDecider(
   hasWrapUp: boolean,
   findings?: true,
-): (scope: TypedScope<AgentState>) => RouteBranch {
-  return (scope) => {
-    const { chosen, rationale, earlyStop } = decideBranch(scope);
-    // ── The out-of-budget wrap-up (9.56.0) ─────────────────────────────
-    // FIRST, and before the output chain or any judge: a fragment the loop is
-    // about to replace is not the final answer, so it is not middlewared, not
-    // schema-judged and not grounded — the step nudge's reasoning, one branch
-    // over. `false` for hasWrapUp short-circuits here in one comparison.
-    if (chosen === 'final' && wantsWrapUp(scope, earlyStop, hasWrapUp)) {
-      emitRouteDecided(scope, 'wrap-up', wrapUpRationale(scope));
-      settleWrapUp(scope, earlyStop, true);
-      return 'wrap-up';
+): (scope: TypedScope<AgentState>) => RouteBranch | Promise<RouteBranch> {
+  if (findings !== true) {
+    return (scope) => {
+      const decided = decideAndAnnounce(scope, hasWrapUp);
+      if (decided.branch === 'final') settleFinal(scope, decided.earlyStop);
+      return decided.branch;
+    };
+  }
+  return async (scope) => {
+    const decided = decideAndAnnounce(scope, hasWrapUp);
+    if (decided.branch === 'final') {
+      await peelAnswerStandings(scope, findings); // no re-ask exit here
+      settleFinal(scope, decided.earlyStop);
     }
-    emitRouteDecided(scope, chosen, rationale);
-    if (chosen === 'final') peelAnswerStandings(scope, findings); // no re-ask exit here
-    if (chosen === 'final') settleWrapUp(scope, earlyStop, false);
-    if (chosen === 'final') recordAnswerGuarantee(scope, undefined); // no output schema on this decider
-    return chosen;
+    return decided.branch;
   };
+}
+
+/** The simple decider's shared head: decide, take the wrap-up if it is owed, announce. */
+function decideAndAnnounce(
+  scope: TypedScope<AgentState>,
+  hasWrapUp: boolean,
+): {
+  readonly branch: RouteBranch;
+  readonly earlyStop: ReturnType<typeof decideBranch>['earlyStop'];
+} {
+  const { chosen, rationale, earlyStop } = decideBranch(scope);
+  // ── The out-of-budget wrap-up (9.56.0) ─────────────────────────────
+  // FIRST, and before the output chain or any judge: a fragment the loop is
+  // about to replace is not the final answer, so it is not middlewared, not
+  // schema-judged and not grounded — the step nudge's reasoning, one branch
+  // over. `false` for hasWrapUp short-circuits here in one comparison.
+  if (chosen === 'final' && wantsWrapUp(scope, earlyStop, hasWrapUp)) {
+    emitRouteDecided(scope, 'wrap-up', wrapUpRationale(scope));
+    settleWrapUp(scope, earlyStop, true);
+    return { branch: 'wrap-up', earlyStop };
+  }
+  emitRouteDecided(scope, chosen, rationale);
+  return { branch: chosen, earlyStop };
+}
+
+/** The simple decider's tail on a final answer (after the armed peel). */
+function settleFinal(
+  scope: TypedScope<AgentState>,
+  earlyStop: ReturnType<typeof decideBranch>['earlyStop'],
+): void {
+  settleWrapUp(scope, earlyStop, false);
+  recordAnswerGuarantee(scope, undefined); // no output schema on this decider
 }
 
 /** The wrap-up-less decider, kept as a module constant because it is the exact
@@ -849,7 +887,7 @@ export function buildRouteDeciderStage(
     scope.llmLatestContent = verdict.content;
     // AFTER the chain, as in every decider (`peelAnswerStandings`). This one
     // has no re-ask exit, so the emission is not kept.
-    peelAnswerStandings(scope, findings);
+    await peelAnswerStandings(scope, findings);
     // AFTER the chain: `answerWasEmpty` has to be judged on the string the
     // caller will actually receive, and the chain may have rewritten it.
     settleWrapUp(scope, earlyStop, false);
@@ -1020,7 +1058,7 @@ function buildJudgingDecider(
     // THE ANSWER TURN'S STANDINGS (9.114.1 on this decider): after the chain,
     // before every judge below — the enforcing decider's order. The two
     // re-ask exits put the emission back (`restoreEmission`).
-    const emission = peelAnswerStandings(scope, findings);
+    const emission = await peelAnswerStandings(scope, findings);
     // A withheld answer is judged by nothing below, so the recency row says so
     // here rather than sitting untouched (see `noteRecency`).
     if (denied) noteRecency(noticePriorTurnEvidence, integrityLedger, 'not-applicable');
@@ -1118,7 +1156,7 @@ function buildEnforcingDecider(
     // After the chain and before every judge below (`peelAnswerStandings`,
     // the one peel every decider runs). The string it held before the key
     // came off is what every RE-ASK exit puts back (`reAsk`).
-    const emission = peelAnswerStandings(scope, findings);
+    const emission = await peelAnswerStandings(scope, findings);
     const reAsk = (
       branch: 'output-retry' | 'step-nudge' | 'evidence-recheck',
       rationale: string,
@@ -1203,7 +1241,9 @@ function buildEnforcingDecider(
     // answer carrying `_findings` under a strict schema would read as "never
     // valid" and the chain's mistake would be charged to the model again.
     const judgedPreChain =
-      findings === true ? peelAnswerFindings(preChainAnswer).content : preChainAnswer;
+      findings === true
+        ? (await import('../findings/peel.js')).peelAnswerFindings(preChainAnswer).content
+        : preChainAnswer;
     const brokenByChain =
       rewrittenBy !== undefined && judgeAnswer(judgedPreChain, enforcement.parser) === undefined
         ? rewrittenBy

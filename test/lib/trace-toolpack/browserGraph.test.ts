@@ -117,6 +117,23 @@ describe.skipIf(!built)('the default browser graph of the root entry', () => {
     expect(graph.dynamicInputs.has('dist/esm/lib/trace-toolpack/lazyToolpack.js')).toBe(true);
   });
 
+  it('LAW: the findings answer-text scanner is not on the root sync closure either', async () => {
+    // Only `.findings()` agents run it (`findings/peel.ts`), so `callLLM` and
+    // `route` load it through `import()` under the arm — the same fence as the
+    // pack above, for the docs demo chunk it once grew by 1.4 KB gzip.
+    const graph = await splitGraph(resolve(DIST, 'index.js'));
+    expect(graph.syncInputs.has('dist/esm/core/agent/stages/callLLM.js')).toBe(true);
+    expect(graph.syncInputs.has('dist/esm/core/agent/findings/reserved.js')).toBe(true);
+    expect(graph.syncInputs.has('dist/esm/core/agent/findings/answerText.js')).toBe(false);
+    expect(graph.syncInputs.has('dist/esm/core/agent/findings/peel.js')).toBe(false);
+  });
+
+  it('the scanner is still reachable — behind a dynamic-import edge', async () => {
+    const graph = await splitGraph(resolve(DIST, 'index.js'));
+    expect(graph.dynamicInputs.has('dist/esm/core/agent/findings/answerText.js')).toBe(true);
+    expect(graph.dynamicInputs.has('dist/esm/core/agent/findings/peel.js')).toBe(true);
+  });
+
   it('contrast: the /observe door carries the pack statically, by design', async () => {
     const graph = await splitGraph(resolve(DIST, 'observe.js'));
     expect(graph.syncInputs.has(PACK)).toBe(true);

@@ -166,7 +166,7 @@ which reads nothing of the answer.
   never emitted.
 
 **One scanner for the text** — `answerText.ts`, shared by the peel
-(`reserved.ts · peelAnswerFindings`, the whole answer) and the stream
+(`peel.ts · peelAnswerFindings`, the whole answer) and the stream
 (`stages/callLLM.ts`, chunk by chunk), so the tokens a UI shows and the
 answer the run returns are the same text.
 
@@ -1023,8 +1023,13 @@ byte-identity references under `test/core/tools/reference/` are unchanged.
   `RemovedMember`. Internal — no barrel names them.
 - `reserved.ts` — `FINDINGS_ARGUMENT_SCHEMA`, `FINDINGS_OFFER_CAP`,
   `withFindingsArgument`, `withoutFindingsArgument`, `splitFindings`,
-  `peelAnswerFindings`, `FINDINGS_INSTRUCTION`, `FINDINGS_CONTINGENT_LINE` /
+  `FINDINGS_INSTRUCTION`, `FINDINGS_CONTINGENT_LINE` /
   `findingsInstructionFor`, `FINDINGS_ANSWER_ASK`.
+- `peel.ts` — `peelAnswerFindings`, plus `answerText.ts`'s
+  `reservedMemberFilter` / `withoutReservedMembers` re-exported: the ONE
+  module that statically imports the scanner, loaded through `import()` by
+  `callLLM` and `route` only under the arm, so an unarmed agent's bundle
+  carries none of it (pinned by test/lib/trace-toolpack/browserGraph.test.ts).
 - `offer.ts` — `offeredResultIds`, `nameableIds`, `undeclaredIds`,
   `servedToolCallIds`, `knownResults`, `isResultMessage`,
   `RETIRING_STANDINGS`.
