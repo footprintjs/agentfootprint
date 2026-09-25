@@ -12,13 +12,13 @@ Each page below opens with a **"Built from"** line showing the recipe, plus a pa
 Two categories:
 
 - **Loop patterns** — `reactMode: 'classic'` vs `reactMode: 'dynamic'`. Controls when the three API slots (SystemPrompt, Messages, Tools) re-evaluate inside the ReAct loop.
-- **Composition patterns** — `selfConsistency`, `reflection`, `debate`, `mapReduce`, `tot`, `swarm`. Factories from `agentfootprint/patterns` that wire primitives + compositions into a named shape.
+- **Composition patterns** — `selfConsistency`, `reflection`, `debate`, `mapReduce`, `tot`, `swarm`. Factories from the root `agentfootprint` import that wire primitives + compositions into a named shape.
 
 Import:
 
 ```typescript
 import { Agent } from 'agentfootprint';
-import { selfConsistency, reflection, debate, mapReduce, tot, swarm } from 'agentfootprint/patterns';
+import { selfConsistency, reflection, debate, mapReduce, tot, swarm } from 'agentfootprint';
 ```
 
 > **`Runner`** — the shared interface every primitive (`LLMCall`, `Agent`), every composition (`Sequence`, `Parallel`, `Conditional`), and every pattern factory returns. Each exposes `.run(input)`, `.getSpec()`, `.on()/.off()`, `.attach()`, and `.enable`. Because they all share it, they plug into each other.
@@ -97,7 +97,7 @@ Dynamic re-runs the prompt/messages/tools subflows every turn. If those subflows
 
 ---
 
-## Composition patterns — `agentfootprint/patterns`
+## Composition patterns
 
 All six are **thin factories** that express a named paper as a composition of primitives. Reading the source ([src/patterns/](../../src/patterns/)) is the fastest way to learn how to build your own.
 
@@ -145,7 +145,7 @@ Iterative self-refinement. Each iteration proposes a candidate, then a critic cr
 
 ```typescript
 import { mock } from 'agentfootprint';
-import { reflection } from 'agentfootprint/patterns';
+import { reflection } from 'agentfootprint';
 
 const provider = mock();   // swap for a real provider from 'agentfootprint/providers'
 
@@ -197,7 +197,7 @@ Each level fans out `branchingFactor` parallel thoughts, scores them with a cons
 
 ```typescript
 import { mock } from 'agentfootprint';
-import { tot } from 'agentfootprint/patterns';
+import { tot } from 'agentfootprint';
 
 const provider = mock();   // swap for a real provider from 'agentfootprint/providers'
 
@@ -253,7 +253,7 @@ A consumer-supplied `split(input, shardCount)` chops the input into exactly `sha
 
 ```typescript
 import { mock } from 'agentfootprint';
-import { mapReduce } from 'agentfootprint/patterns';
+import { mapReduce } from 'agentfootprint';
 
 const provider = mock();   // swap for a real provider from 'agentfootprint/providers'
 
@@ -312,7 +312,7 @@ Run `samples` parallel LLMCalls with the same input (high temperature for divers
 
 ```typescript
 import { mock } from 'agentfootprint';
-import { selfConsistency } from 'agentfootprint/patterns';
+import { selfConsistency } from 'agentfootprint';
 
 const provider = mock();
 
@@ -353,7 +353,7 @@ A proposer asserts a position, a critic argues against it (`rounds` times), then
 
 ```typescript
 import { mock } from 'agentfootprint';
-import { debate } from 'agentfootprint/patterns';
+import { debate } from 'agentfootprint';
 
 const provider = mock();
 
@@ -394,7 +394,7 @@ A fixed roster of agents plus a synchronous `route({ message })` function that p
 
 ```typescript
 import { Agent, mock } from 'agentfootprint';
-import { swarm } from 'agentfootprint/patterns';
+import { swarm } from 'agentfootprint';
 
 const provider = mock();
 const model = 'claude-sonnet-4';

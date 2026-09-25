@@ -412,9 +412,9 @@ Individual guides: [RAG](https://agentfootprint.dev/docs/build/rag), [Memory](ht
 
 Cross-cutting infrastructure that every primitive and composition uses. See:
 
-- [Providers](providers.md) — LLM adapters (`mock`, `anthropic`, `openai`, `bedrock`, …) and `ToolProvider` (`staticTools`, `gatedTools`, `skillScopedTools`)
+- [Providers](https://agentfootprint.dev/docs/build/tool-providers/) — LLM adapters (`mock`, `anthropic`, `openai`, `bedrock`, …) and `ToolProvider` (`staticTools`, `gatedTools`, `skillScopedTools`)
 - [Recorders](recorders.md) — observability factories (`costRecorder`, `evalRecorder`, `memoryRecorder`, `skillRecorder`, `toolsRecorder`, `permissionRecorder`, …) plus `CombinedNarrativeRecorder`
-- [Orchestration](orchestration.md) — `withRetry`, `withFallback`, `withCircuitBreaker` (from `agentfootprint/resilience`)
+- [Orchestration](https://agentfootprint.dev/docs/monitor/resilience/) — `withRetry`, `withFallback`, `withCircuitBreaker` (from `agentfootprint/resilience`)
 - [Security](security.md) — tool gating, `PermissionPolicy`, audit trail
 - [Streaming](streaming.md) — `toSSE`, real-time lifecycle events
 

@@ -1,6 +1,12 @@
-# Guides
+# Guides (being retired)
 
-Comprehensive guides for using agentfootprint — the explainable agent framework. Organized by the five-layer taxonomy (primitives → compositions → patterns → context engineering → features).
+> **The maintained documentation is the site: https://agentfootprint.dev/docs.**
+> These guides predate it and are not published or checked in CI. Each guide
+> still here holds something the site does not have yet; it is removed once that
+> content has moved. When a guide and the site disagree, trust the site — and
+> the code over both.
+
+Organized by the five-layer taxonomy (primitives → compositions → patterns → context engineering → features).
 
 ## Taxonomy
 
@@ -24,17 +30,17 @@ Two theses:
 | All layers | **[Concepts](concepts.md)** | The 5-layer taxonomy: 2 primitives, 3 compositions, patterns, context engineering, features |
 | Patterns | **[Patterns](patterns.md)** | Loop patterns (Classic/Dynamic ReAct via `reactMode`) + composition patterns (`selfConsistency`, `reflection`, `debate`, `mapReduce`, `tot`, `swarm`). Each with "Built from" recipe + source paper |
 | Context Eng | **[Instructions](instructions.md)** | Conditional context injection — `defineInstruction`, attaching to an agent, the four trigger kinds, Steering for always-on rules |
-| Features | **[Providers](providers.md)** | The 3 agent slots — system prompt + messages via injections, tools via `ToolProvider` (`staticTools` / `gatedTools` / `skillScopedTools`) — swap strategies without changing agent code |
+| Features | **[Providers](https://agentfootprint.dev/docs/build/tool-providers/)** | The 3 agent slots — system prompt + messages via injections, tools via `ToolProvider` (`staticTools` / `gatedTools` / `skillScopedTools`) — swap strategies without changing agent code |
 | Features | **[Recorders](recorders.md)** | Built-in recorders (agent, stream, cost, eval, memory, skill, tools, permission, composition, context) + `.attach()` / `.recorder()` API |
 | Features | **[Adapters](adapters.md)** | LLM adapters (Anthropic, OpenAI, Bedrock, Ollama, Mock) + protocol adapters (MCP) |
-| Features | **[Orchestration](orchestration.md)** | `withRetry`, `withFallback`, `withCircuitBreaker` — reliability wrappers |
+| Features | **[Orchestration](https://agentfootprint.dev/docs/monitor/resilience/)** | `withRetry`, `withFallback`, `withCircuitBreaker` — reliability wrappers |
 | Features | **[Security](security.md)** | Tool gating, permission policy, provider fallback, resilient providers, audit trail |
 | Features | **[Prompt Injection](prompt-injection.md)** | Honest posture: core does NOT detect injection — containment (gating, args validation, halts, credential scoping) + evidence, and what to add yourself |
 | Features | **[Trace Debugging](trace-debugging.md)** | The introspection toolpack (RFC-003 Part C): `traceToolpack(artifacts)` — trace evidence as tools a debugging LLM calls; bounded, honest (⚠), redaction-respecting, id-navigable |
 | Features | **[Streaming](streaming.md)** | Real-time lifecycle events via the typed event bus (`.on()`), SSE (`toSSE` / `SSEFormatter`), token streaming |
 | Features | **[Caching](caching.md)** | v2.6+ — provider-agnostic cache layer with per-injection policies; 77% token reduction on Dynamic ReAct |
 | Deploy | **[AgentCore](agentcore.md)** | Run on AWS Bedrock AgentCore: Runtime deploy template + Memory / Observability / Gateway(MCP) / Bedrock / Identity adapters |
-| Deploy | **[Microsoft Foundry](foundry.md)** | Both directions: `foundry()` calls a Foundry project over the v1 route and `foundryLocal()` calls an on-device model, while `foundryResponsesHost()` serves the Agent Inspector's Responses contract (`/responses` + `/readiness`, body-selected SSE lifecycle) as an inbound hosting adapter |
+| Deploy | **[Microsoft Foundry](https://agentfootprint.dev/docs/infrastructure/microsoft-foundry/)** | Both directions: `foundry()` calls a Foundry project over the v1 route and `foundryLocal()` calls an on-device model, while `foundryResponsesHost()` serves the Agent Inspector's Responses contract (`/responses` + `/readiness`, body-selected SSE lifecycle) as an inbound hosting adapter |
 
 ---
 

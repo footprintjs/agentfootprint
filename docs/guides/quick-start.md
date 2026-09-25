@@ -206,7 +206,7 @@ The examples above use `mock()` for clarity. Before deploying anything for real:
 | **Real provider** | `anthropic({ defaultModel: '...' })` (from `agentfootprint/providers`) with `model: 'anthropic'` — or `createProvider({ kind: 'anthropic', defaultModel: '...' })` — instead of `mock()` |
 | **Cost / token caps** | Pass `maxTokens` to `Agent.create({ ... })`; pass a `pricingTable` + `costBudget` to emit `agentfootprint.cost.*` events |
 | **Cancellation** | Pass `env: { signal: abortController.signal }` to `.run()` so users can cancel |
-| **Retry on rate limits** | Wrap the **provider** with `withRetry(provider, { shouldRetry })` (from `agentfootprint/resilience`) — see [orchestration.md](orchestration.md) |
+| **Retry on rate limits** | Wrap the **provider** with `withRetry(provider, { shouldRetry })` (from `agentfootprint/resilience`) — see [orchestration.md](https://agentfootprint.dev/docs/monitor/resilience/) |
 | **Tool authorization** | Gate the tool source with `gatedTools(...)` (from `agentfootprint/providers`) and wire it via `.toolProvider(...)` — see [security.md](security.md) |
 | **Audit trail** | Subscribe to typed events, or use the `agent.enable.observability({ strategy })` grouped strategy |
 
@@ -218,8 +218,8 @@ Treat the move from `mock()` to a real provider as a deployment milestone, not a
 
 - [Concepts](concepts.md) — the 5-layer taxonomy (2 primitives, 3 compositions, N patterns, context engineering, features)
 - [Patterns](patterns.md) — Regular vs Dynamic ReAct + 4 composition patterns
-- [Providers](providers.md) — customize prompts, messages, and tools
+- [Providers](https://agentfootprint.dev/docs/build/tool-providers/) — customize prompts, messages, and tools
 - [Recorders](recorders.md) — deep dive into all recorder types
 - [Adapters](adapters.md) — connect to real LLMs
-- [Orchestration](orchestration.md) — retry, fallback, circuit breaker
+- [Orchestration](https://agentfootprint.dev/docs/monitor/resilience/) — retry, fallback, circuit breaker
 - [Security](security.md) — tool gating + provider resilience
