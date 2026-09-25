@@ -223,7 +223,7 @@ It is `otelObservability` with three settings fixed for you:
 
 - the instrumentation scope name the service routes on (`AGENTCORE_EVALUATIONS_SCOPE_NAME`) — not overridable, because an override would produce spans the service skips;
 - `captureContent` on — the turn's prompt and answer go on the agent span, so a scorer has something to read;
-- `captureToolContent` on — each executed tool call's arguments and result go on its `execute_tool` span, for the tool-selection and tool-parameter scorers. Arguments your `onToolCall` rules changed are withheld; the result is what the model read after your `onToolResult` rules.
+- `captureToolContent` on — each executed tool call's arguments and result go on its `execute_tool` span, for the tool-selection and tool-parameter scorers. Argument keys your `onToolCall` rules changed (or the tool's own `redact` policy hides) are withheld; the result is what the model read after your `onToolResult` rules.
 
 Gotchas:
 

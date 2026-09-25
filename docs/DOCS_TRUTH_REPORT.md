@@ -8,15 +8,15 @@ _Recorded 2026-09-25._
 
 The package publishes **17 import paths** carrying **2252 distinct named exports**, plus **121 typed events**. For each one this report asks three separate questions: is it really *exported* (declared), is it *described in prose on the published docs site* (documented), and does a *real run actually use it* (exercised).
 
-**1510 of 2252 exports (67%) are described in prose on the site.** The rest split into five different problems, which is the whole point of keeping the columns apart:
+**1521 of 2252 exports (68%) are described in prose on the site.** The rest split into five different problems, which is the whole point of keeping the columns apart:
 
-- **30 exist, provably work, and are undocumented.** A reference run exercises them and no page on the site describes them. This is the honest headline number for "features that work and nobody has written about". It is the list to work through.
-- **108 are already written up, just not published.** Prose about them exists inside the repo (`docs/`, `README.md`) but never made it onto the site. These are cheap wins: the writing is done, it needs moving.
+- **32 exist, provably work, and are undocumented.** A reference run exercises them and no page on the site describes them. This is the honest headline number for "features that work and nobody has written about". It is the list to work through.
+- **91 are already written up, just not published.** Prose about them exists inside the repo (`docs/`, `README.md`) but never made it onto the site. These are cheap wins: the writing is done, it needs moving.
 - **18 appear only inside a code sample** and nowhere in the surrounding text. A reader scanning the page never learns they exist, and site search does not find them.
-- **586 are undocumented and no reference run touches them.** This report will not guess whether they work. They are reported as UNKNOWN, which is the honest answer, and they need a human pass.
-- **1277 are documented but no reference run exercises them.** For a function or a class that is the shape a dead or unimplemented feature has. For a type or an interface it is mostly noise, because a type is used, not called — so read that class by kind, and the tables below split it.
+- **590 are undocumented and no reference run touches them.** This report will not guess whether they work. They are reported as UNKNOWN, which is the honest answer, and they need a human pass.
+- **1288 are documented but no reference run exercises them.** For a function or a class that is the shape a dead or unimplemented feature has. For a type or an interface it is mostly noise, because a type is used, not called — so read that class by kind, and the tables below split it.
 
-On events: **68** of the 121 typed events are both described on the site and were seen firing in a real run. **20** are described but were never observed firing — that is exactly the shape the resilience events had for months (fully declared, with payload types, and zero emitters), so this number is worth a look every time it moves. **33** are not described in prose on the site at all.
+On events: **70** of the 121 typed events are both described on the site and were seen firing in a real run. **20** are described but were never observed firing — that is exactly the shape the resilience events had for months (fully declared, with payload types, and zero emitters), so this number is worth a look every time it moves. **31** are not described in prose on the site at all.
 
 ### Which number is "the" number
 
@@ -24,15 +24,15 @@ A previous inventory put the undocumented-feature count at roughly 36. That figu
 
 | Counting rule | Undocumented |
 |---|---|
-| every named export not in site prose | 742 |
-| … of those, absent from every prose anywhere in the repo | 616 |
-| only functions and classes (things you can call) | 163 |
-| only exports on the root barrel | 141 |
+| every named export not in site prose | 731 |
+| … of those, absent from every prose anywhere in the repo | 622 |
+| only functions and classes (things you can call) | 156 |
+| only exports on the root barrel | 139 |
 | **functions and classes on the root barrel** | **23** |
-| functions and classes that a reference run proves work | 9 |
-| typed events | 33 |
+| functions and classes that a reference run proves work | 10 |
+| typed events | 31 |
 
-The closest analogue to the remembered 36 is the **23 callable things on the root barrel with no prose description** — near enough that the old inventory was probably counting something like it, and far enough from 742 that quoting a single "undocumented" number without saying which rule produced it is how a figure like 36 drifts. Every table below states its rule.
+The closest analogue to the remembered 36 is the **23 callable things on the root barrel with no prose description** — near enough that the old inventory was probably counting something like it, and far enough from 731 that quoting a single "undocumented" number without saying which rule produced it is how a figure like 36 drifts. Every table below states its rule.
 
 **The worst class is empty: nowhere do the published docs tell a reader to import something that does not exist.** That check is not baselined — it fails the build immediately, always, because a reader who copies such a line is simply broken.
 
@@ -49,15 +49,15 @@ The repo has four documentation locations and they are not equivalent. Getting t
 | `docs-next/content/docs/**.mdx` (hand-written) | 113 | **Yes — the truth source.** This is what the published site renders and what a reader sees. |
 | `docs-next/content/docs/api/**` (TypeDoc-generated) | 665 | **No — excluded.** |
 | `docs/api-reference/**` (TypeDoc-generated) | 0 | **No — excluded.** |
-| `docs/**.md` + `README.md` (repo-internal prose) | 70 | **No** — but tracked as its own state, "written but not published". |
+| `docs/**.md` + `README.md` (repo-internal prose) | 52 | **No** — but tracked as its own state, "written but not published". |
 
-Both generated trees are produced **from the source**, so every exported symbol appears in them by construction. Counting either as documentation would mark **141** currently-undocumented symbols as documented, collapse most of this report to zero, and hand back a clean bill of health that means nothing. False reassurance in the exact place the author is trying to establish trust is worse than having no check, so both are excluded.
+Both generated trees are produced **from the source**, so every exported symbol appears in them by construction. Counting either as documentation would mark **139** currently-undocumented symbols as documented, collapse most of this report to zero, and hand back a clean bill of health that means nothing. False reassurance in the exact place the author is trying to establish trust is worse than having no check, so both are excluded.
 
 Freshness is a separate question from documentation. `docs/api-reference/` is retired: it is no longer committed, and `npm run docs:api` now writes its local-only preview to `api-docs/` (gitignored), so this row reads 0. The site's mirror, `docs-next/content/docs/api/`, is regenerated by `npm run docs:regen`, and CI's `generated` job fails when the committed copy differs — fresh, but still a restatement of the source, never documentation.
 
 ## What the existing CI docs gate already covers
 
-CI's `docs` job builds docs-next, which twoslash-compiles code blocks marked `ts twoslash` against the real types. That gate is real, and where it applies nothing can drift. It just applies narrowly: **32 of the 623 TypeScript/JavaScript blocks on the site are twoslash-marked**, and **374 `import … from 'agentfootprint…'` lines sit inside blocks the compiler never sees**. Three genuinely broken imports were found in exactly that blind spot while this report was first built (plain `typescript`-tagged fences in `reference/strategy-everywhere.mdx`), which is the concrete argument for checking the export map directly rather than trusting the build to catch it.
+CI's `docs` job builds docs-next, which twoslash-compiles code blocks marked `ts twoslash` against the real types. That gate is real, and where it applies nothing can drift. It just applies narrowly: **32 of the 634 TypeScript/JavaScript blocks on the site are twoslash-marked**, and **386 `import … from 'agentfootprint…'` lines sit inside blocks the compiler never sees**. Three genuinely broken imports were found in exactly that blind spot while this report was first built (plain `typescript`-tagged fences in `reference/strategy-everywhere.mdx`), which is the concrete argument for checking the export map directly rather than trusting the build to catch it.
 
 ## What each column means
 
@@ -87,7 +87,7 @@ This is **ratcheted, not gated**: a *new* one fails the build, but closing an ex
 
 ### 3. Declared + exercised + not documented — the classic doc gap
 
-These provably work — a reference run touches them — and no page on the site describes them. **30 symbols.**
+These provably work — a reference run touches them — and no page on the site describes them. **32 symbols.**
 
 | Symbol | Kind | Exported from |
 |---|---|---|
@@ -97,6 +97,7 @@ These provably work — a reference run touches them — and no page on the site
 | `formatToolCatalogReport` | function | `agentfootprint/observe` |
 | `ledgerGated` | function | `agentfootprint/observe` |
 | `ledgerToolGate` | function | `agentfootprint/observe` |
+| `liveStateRecorder` | function | `agentfootprint/observe` |
 | `pairwiseSimilarity` | function | `agentfootprint/observe` |
 | `renderStatusLine` | function | `agentfootprint/observe` |
 | `selectStatus` | function | `agentfootprint/observe` |
@@ -111,6 +112,7 @@ These provably work — a reference run touches them — and no page on the site
 | `CatalogTool` | interface | `agentfootprint/observe` |
 | `FindInput` | interface | `agentfootprint/observe` |
 | `InfluenceStrategy` | interface | `agentfootprint/observe` |
+| `MockProviderOptions` | interface | `agentfootprint/providers` |
 | `OtelSpanLike` | interface | `agentfootprint/observe` |
 | `OtelSpanOptions` | interface | `agentfootprint/observe` |
 | `OtelTracerLike` | interface | `agentfootprint/observe` |
@@ -151,7 +153,7 @@ The site describes it and it really is exported, but no reference run touches it
 | `agentfootprint.integrity.context_error` | `docs-next/content/docs/monitor/arming-context-integrity.mdx`, `docs-next/content/docs/monitor/column-types.mdx` |
 | `agentfootprint.integrity.external_ground_used` | `docs-next/content/docs/monitor/arming-context-integrity.mdx` |
 
-**Functions and classes described on the site but not touched by any reference run (394).** The other 883 in this class are types, interfaces and constants, which a run cannot "call" — they are named in `docs/docs-truth/baseline.json` rather than here.
+**Functions and classes described on the site but not touched by any reference run (401).** The other 887 in this class are types, interfaces and constants, which a run cannot "call" — they are named in `docs/docs-truth/baseline.json` rather than here.
 
 | Symbol | Kind | Exported from |
 |---|---|---|
@@ -293,6 +295,7 @@ The site describes it and it really is exported, but no reference run touches it
 | `bisectCulprits` | function | `agentfootprint/observe` |
 | `boundaryRecorder` | function | `agentfootprint/observe` |
 | `browserAnthropic` | function | `agentfootprint/providers` |
+| `browserAzureOpenai` | function | `agentfootprint/providers` |
 | `browserOpenai` | function | `agentfootprint/providers` |
 | `buildIndexChart` | function | `agentfootprint/rag` |
 | `buildReadSkillTool` | function | `agentfootprint/context` |
@@ -326,6 +329,7 @@ The site describes it and it really is exported, but no reference run touches it
 | `constrainedEnumPick` | function | `agentfootprint/context` |
 | `contentHash` | function | `agentfootprint/observe` |
 | `contextContractForModel` | function | `agentfootprint/context` |
+| `contextEvaluatedRecorder` | function | `agentfootprint/observe` |
 | `costRecorder` | function | `agentfootprint/observe` |
 | `createProvider` | function | `agentfootprint/providers` |
 | `declaredFacetCount` | function | `agentfootprint/observe` |
@@ -342,6 +346,7 @@ The site describes it and it really is exported, but no reference run touches it
 | `entraIdentity` | function | `agentfootprint/security` |
 | `envelopeOwner` | function | `agentfootprint/hosting` |
 | `envelopeTranscript` | function | `agentfootprint/hosting` |
+| `evalRecorder` | function | `agentfootprint/observe` |
 | `explainChoice` | function | `agentfootprint/observe` |
 | `exportCorpus` | function | `agentfootprint/rag` |
 | `extractInlineThinking` | function | `agentfootprint/providers` |
@@ -396,6 +401,7 @@ The site describes it and it really is exported, but no reference run touches it
 | `matchArm` | function | `agentfootprint/observe` |
 | `maxStoredTurn` | function | `agentfootprint/memory` |
 | `memoryBankStore` | function | `agentfootprint/memory` |
+| `memoryRecorder` | function | `agentfootprint/observe` |
 | `memoryStrategyInfo` | function | `agentfootprint/memory` |
 | `mergeInnerRuns` | function | `agentfootprint/observe` |
 | `mockClassifier` | function | `agentfootprint/classify` |
@@ -413,6 +419,7 @@ The site describes it and it really is exported, but no reference run touches it
 | `openaiEmbedder` | function | `agentfootprint/providers` |
 | `openRecording` | function | `agentfootprint/observe` |
 | `pdfLoader` | function | `agentfootprint/rag` |
+| `permissionRecorder` | function | `agentfootprint/observe` |
 | `persistence` | function | `agentfootprint/observe` |
 | `pgVectorStore` | function | `agentfootprint/memory` |
 | `pickByBudget` | function | `agentfootprint/memory` |
@@ -454,6 +461,7 @@ The site describes it and it really is exported, but no reference run touches it
 | `sessionWireBody` | function | `agentfootprint/hosting` |
 | `sha256` | function | `agentfootprint/rag` |
 | `skillIdFromTarget` | function | `agentfootprint/security` |
+| `skillRecorder` | function | `agentfootprint/observe` |
 | `skillScopedTools` | function | `agentfootprint/providers` |
 | `skillScopedToolsTarget` | function | `agentfootprint/providers` |
 | `skillTarget` | function | `agentfootprint/security` |
@@ -473,6 +481,7 @@ The site describes it and it really is exported, but no reference run touches it
 | `summarizeEmbeddings` | function | `agentfootprint/observe` |
 | `summarizeVector` | function | `agentfootprint/observe` |
 | `textLoader` | function | `agentfootprint/rag` |
+| `toolsRecorder` | function | `agentfootprint/observe` |
 | `toSkos` | function | `agentfootprint/ontology` |
 | `typesafe` | function | `agentfootprint/classify` |
 | `unconfiguredCredentialProvider` | function | `agentfootprint/security` |
@@ -552,7 +561,7 @@ The site describes it and it really is exported, but no reference run touches it
 
 ### 5. Written but not published
 
-Prose about these exists in the repo (`docs/`, `README.md`) but nothing on the site mentions them. The writing is already done — this is a publishing job, not an authoring job, which makes it the cheapest class to close. **108 symbols.**
+Prose about these exists in the repo (`docs/`, `README.md`) but nothing on the site mentions them. The writing is already done — this is a publishing job, not an authoring job, which makes it the cheapest class to close. **91 symbols.**
 
 | Symbol | Kind | Exported from | Already written up in |
 |---|---|---|---|
@@ -564,72 +573,60 @@ Prose about these exists in the repo (`docs/`, `README.md`) but nothing on the s
 | `INJECTION_KEYS` | const | `agentfootprint` | `docs/design/2026-09-findings-ledger-worklog.md` |
 | `EmitEvent` | interface | `agentfootprint` | `docs/proposals/001-lens-subflow-recorder.md` |
 | `FlowchartAsToolOptions` | interface | `agentfootprint` | `docs/design/2026-09-recorded-not-built.md` |
-| `FlowchartHandle` | interface | `agentfootprint` `agentfootprint/observe` | `docs/MENTAL_MODEL.md`, `docs/design/local-observability-and-pii.md`, `docs/guides/recorders.md` |
+| `FlowchartHandle` | interface | `agentfootprint` `agentfootprint/observe` | `docs/MENTAL_MODEL.md`, `docs/design/local-observability-and-pii.md` |
 | `GroupTranslator` | interface | `agentfootprint` | `docs/MENTAL_MODEL.md` |
 | `LLMCallOptions` | interface | `agentfootprint` | `docs/internals/README.md` |
 | `MessageApiChartDeps` | interface | `agentfootprint` | `docs/design/2026-09-findings-ledger-worklog.md` |
 | `OutputSchemaParser` | interface | `agentfootprint` | `docs/MENTAL_MODEL.md` |
-| `PricingTable` | interface | `agentfootprint` | `docs/MENTAL_MODEL.md`, `docs/guides/recorders.md` |
+| `PricingTable` | interface | `agentfootprint` | `docs/MENTAL_MODEL.md` |
 | `RunContext` | interface | `agentfootprint` | `docs/MENTAL_MODEL.md` |
 | `SlotComposition` | interface | `agentfootprint` | `docs/MENTAL_MODEL.md` |
-| `SwarmOptions` | interface | `agentfootprint` | `docs/guides/concepts.md` |
 | `TraversalContext` | interface | `agentfootprint` | `docs/design/2026-09-recorded-not-built.md`, `docs/proposals/003-per-loop-influence-credit.md`, `docs/proposals/005-trajectory-assembler.md` |
-| `BranchOutcome` | type | `agentfootprint` | `docs/MENTAL_MODEL.md`, `docs/guides/concepts.md` |
+| `BranchOutcome` | type | `agentfootprint` | `docs/MENTAL_MODEL.md` |
 | `GroupKind` | type | `agentfootprint` | `docs/MENTAL_MODEL.md` |
 | `ResilienceReport` | type | `agentfootprint` `agentfootprint/providers` | `docs/MENTAL_MODEL.md` |
 | `ablationForSuspect` | function | `agentfootprint/observe` | `docs/proposals/007-root-cause-backtrack.md` |
 | `adaptWeights` | function | `agentfootprint/observe` | `docs/proposals/003-per-loop-influence-credit.md`, `docs/proposals/006-loop-recall-shortlist.md` |
 | `agentThinkingTrace` | function | `agentfootprint/observe` | `docs/design/skill-graph-spec.md`, `docs/proposals/002-skill-graph.md` |
 | `averageRelevancy` | function | `agentfootprint/observe` | `docs/proposals/003-per-loop-influence-credit.md` |
-| `browserAzureOpenai` | function | `agentfootprint/providers` | `docs/guides/adapters.md` |
 | `bucketByAnchors` | function | `agentfootprint/observe` | `docs/proposals/005-trajectory-assembler.md` |
 | `buildInjectionEngineSubflow` | function | `agentfootprint/context` | `docs/MENTAL_MODEL.md`, `docs/design/map-walker-trace-fold-lens.md` |
-| `buildRunSteps` | function | `agentfootprint/observe` | `docs/guides/recorders.md` |
 | `buildStepGraph` | function | `agentfootprint/observe` | `docs/MENTAL_MODEL.md`, `docs/design/map-walker-trace-fold-lens.md` |
 | `buildWriterFrameIndex` | function | `agentfootprint/observe` | `docs/proposals/008-tool-output-provenance.md` |
 | `causalEvidenceRecorder` | function | `agentfootprint/memory` | `docs/MENTAL_MODEL.md` |
 | `compositeScore` | function | `agentfootprint/observe` | `docs/proposals/003-per-loop-influence-credit.md` |
-| `contextEvaluatedRecorder` | function | `agentfootprint/observe` | `docs/MENTAL_MODEL.md` |
 | `contextLedger` | function | `agentfootprint/observe` | `docs/design/map-walker-trace-fold-lens.md` |
 | `decideSkill` | function | `agentfootprint/context` `agentfootprint/skill-graph` | `docs/design/skill-graph-spec.md`, `docs/proposals/002-skill-graph.md` |
 | `decideTier2` | function | `agentfootprint/context` `agentfootprint/skill-graph` | `docs/design/2026-09-honest-answer-ledger.md` |
 | `defaultSuspectClassifier` | function | `agentfootprint/observe` | `docs/proposals/006-loop-recall-shortlist.md`, `docs/proposals/008-tool-output-provenance.md` |
-| `evalRecorder` | function | `agentfootprint/observe` | `docs/MENTAL_MODEL.md`, `docs/guides/concepts.md`, `docs/guides/recorders.md` |
 | `finalAnswerSimilarity` | function | `agentfootprint/observe` | `docs/proposals/003-per-loop-influence-credit.md` |
 | `formatAsNarrative` | function | `agentfootprint/memory` | `docs/design/map-walker-trace-fold-lens.md` |
 | `formatFacts` | function | `agentfootprint/memory` | `docs/design/map-walker-trace-fold-lens.md` |
-| `liveStateRecorder` | function | `agentfootprint/observe` | `docs/guides/recorders.md` |
 | `llmCallIdsFromEvents` | function | `agentfootprint/observe` | `docs/proposals/005-trajectory-assembler.md` |
 | `llmEdgeWeigher` | function | `agentfootprint/observe` | `docs/proposals/003-per-loop-influence-credit.md`, `docs/proposals/005-trajectory-assembler.md` |
 | `llmExtractor` | function | `agentfootprint/memory` | `docs/MENTAL_MODEL.md`, `docs/design/map-walker-trace-fold-lens.md` |
 | `llmFactExtractor` | function | `agentfootprint/memory` | `docs/MENTAL_MODEL.md`, `docs/design/map-walker-trace-fold-lens.md` |
-| `loadSnapshot` | function | `agentfootprint/memory` | `docs/design/map-walker-trace-fold-lens.md`, `docs/guides/prompt-injection.md` |
-| `memoryRecorder` | function | `agentfootprint/observe` | `docs/MENTAL_MODEL.md`, `docs/guides/concepts.md`, `docs/guides/recorders.md` |
-| `permissionRecorder` | function | `agentfootprint/observe` | `docs/MENTAL_MODEL.md`, `docs/guides/concepts.md`, `docs/guides/quick-start.md` |
+| `loadSnapshot` | function | `agentfootprint/memory` | `docs/design/map-walker-trace-fold-lens.md` |
 | `projectActiveInjection` | function | `agentfootprint/context` `agentfootprint/skill-graph` | `docs/MENTAL_MODEL.md` |
 | `rankEntries` | function | `agentfootprint/context` `agentfootprint/skill-graph` | `docs/design/2026-09-findings-ledger-worklog.md`, `docs/design/2026-09-scored-choice.md` |
 | `redactThinkingBlocks` | function | `agentfootprint/security` | `docs/MENTAL_MODEL.md`, `docs/design/local-observability-and-pii.md` |
-| `runStepRecorder` | function | `agentfootprint/observe` | `docs/guides/recorders.md` |
 | `scoreMargin` | function | `agentfootprint/observe` | `docs/proposals/003-per-loop-influence-credit.md` |
 | `shortlistEarlyCulprits` | function | `agentfootprint/observe` | `docs/proposals/006-loop-recall-shortlist.md`, `docs/proposals/007-root-cause-backtrack.md`, `docs/proposals/008-tool-output-provenance.md` |
-| `skillRecorder` | function | `agentfootprint/observe` | `docs/MENTAL_MODEL.md`, `docs/guides/concepts.md`, `docs/guides/recorders.md` |
 | `stepOutputText` | function | `agentfootprint/observe` | `docs/proposals/003-per-loop-influence-credit.md`, `docs/proposals/005-trajectory-assembler.md` |
 | `structuralProximity` | function | `agentfootprint/observe` | `docs/proposals/003-per-loop-influence-credit.md` |
 | `toBacktrackTrace` | function | `agentfootprint/observe` | `docs/proposals/007-root-cause-backtrack.md` |
-| `toolsRecorder` | function | `agentfootprint/observe` | `docs/MENTAL_MODEL.md`, `docs/guides/concepts.md`, `docs/guides/recorders.md` |
 | `typedEmit` | function | `agentfootprint/observe` | `docs/MENTAL_MODEL.md`, `docs/design/2026-09-turn-artifacts.md` |
 | `writeSnapshot` | function | `agentfootprint/memory` | `docs/design/map-walker-trace-fold-lens.md` |
 | `AnthropicProvider` | class | `agentfootprint/providers` | `docs/MENTAL_MODEL.md`, `docs/design/2026-09-findings-ledger-spec.md`, `docs/design/2026-09-honest-answer-ledger.md` |
-| `BedrockProvider` | class | `agentfootprint/providers` | `docs/MENTAL_MODEL.md`, `docs/guides/adapters.md` |
-| `BrowserAzureOpenAIProvider` | class | `agentfootprint/providers` | `docs/MENTAL_MODEL.md`, `docs/design/2026-09-findings-ledger-worklog.md`, `docs/guides/adapters.md` |
+| `BedrockProvider` | class | `agentfootprint/providers` | `docs/MENTAL_MODEL.md` |
+| `BrowserAzureOpenAIProvider` | class | `agentfootprint/providers` | `docs/MENTAL_MODEL.md`, `docs/design/2026-09-findings-ledger-worklog.md` |
 | `EmbeddingCache` | class | `agentfootprint/observe` | `docs/proposals/003-per-loop-influence-credit.md`, `docs/proposals/006-loop-recall-shortlist.md` |
-| `LiveStateRecorder` | class | `agentfootprint/observe` | `docs/MENTAL_MODEL.md`, `docs/guides/recorders.md` |
+| `LiveStateRecorder` | class | `agentfootprint/observe` | `docs/MENTAL_MODEL.md` |
 | `RunStepRecorder` | class | `agentfootprint/observe` | `docs/MENTAL_MODEL.md`, `docs/design/boundary-commit-ranges.md`, `docs/design/map-walker-trace-fold-lens.md` |
 | `SelfExplainBinding` | class | `agentfootprint/observe` | `docs/design/2026-09-turn-artifacts.md` |
 | `ALL_EVENT_TYPES` | const | `agentfootprint/events` | `docs/MENTAL_MODEL.md`, `docs/design/2026-09-findings-ledger-spec.md`, `docs/design/2026-09-findings-ledger-worklog.md` |
-| `TOOLPACK_HARD_CAPS` | const | `agentfootprint/observe` | `docs/guides/trace-debugging.md` |
 | `AblationVerdict` | interface | `agentfootprint/observe` | `docs/proposals/004-two-score-localization.md` |
-| `AgentfootprintEventMap` | interface | `agentfootprint/events` | `docs/design/2026-09-findings-ledger-spec.md`, `docs/guides/recorders.md` |
+| `AgentfootprintEventMap` | interface | `agentfootprint/events` | `docs/design/2026-09-findings-ledger-spec.md` |
 | `ConfidenceStrategy` | interface | `agentfootprint/observe` | `docs/proposals/003-per-loop-influence-credit.md` |
 | `ContextUnit` | interface | `agentfootprint/observe` | `docs/proposals/005-trajectory-assembler.md` |
 | `DefineSkillOptions` | interface | `agentfootprint/context` | `docs/INSTRUCTION_ARCHITECTURE.md` |
@@ -639,12 +636,10 @@ Prose about these exists in the repo (`docs/`, `README.md`) but nothing on the s
 | `EntryScorerInput` | interface | `agentfootprint/context` `agentfootprint/skill-graph` | `docs/design/2026-09-scored-choice.md` |
 | `EntryScoring` | interface | `agentfootprint/context` `agentfootprint/skill-graph` | `docs/design/2026-09-scored-choice.md` |
 | `EvidenceInput` | interface | `agentfootprint/observe` | `docs/proposals/003-per-loop-influence-credit.md`, `docs/proposals/005-trajectory-assembler.md`, `docs/proposals/006-loop-recall-shortlist.md` |
-| `FallbackProviderOptions` | interface | `agentfootprint/resilience` | `docs/guides/security.md` |
 | `HonestyFlag` | interface | `agentfootprint/observe` | `docs/proposals/005-trajectory-assembler.md` |
 | `InfluenceScore` | interface | `agentfootprint/observe` | `docs/design/skill-graph-spec.md`, `docs/proposals/003-per-loop-influence-credit.md`, `docs/proposals/005-trajectory-assembler.md` |
 | `LoopCandidate` | interface | `agentfootprint/observe` | `docs/proposals/006-loop-recall-shortlist.md` |
 | `LoopRecallShortlist` | interface | `agentfootprint/observe` | `docs/proposals/006-loop-recall-shortlist.md` |
-| `MockProviderOptions` | interface | `agentfootprint/providers` | `docs/guides/adapters.md` |
 | `RankingConfidence` | interface | `agentfootprint/observe` | `docs/proposals/006-loop-recall-shortlist.md` |
 | `RootCausePath` | interface | `agentfootprint/observe` | `docs/proposals/007-root-cause-backtrack.md` |
 | `SignalScores` | interface | `agentfootprint/observe` | `docs/proposals/006-loop-recall-shortlist.md` |
@@ -653,9 +648,7 @@ Prose about these exists in the repo (`docs/`, `README.md`) but nothing on the s
 | `StepNode` | interface | `agentfootprint/observe` | `docs/MENTAL_MODEL.md` |
 | `Suspect` | interface | `agentfootprint/observe` | `docs/proposals/004-two-score-localization.md`, `docs/proposals/006-loop-recall-shortlist.md` |
 | `SyntheticQuestionNode` | interface | `agentfootprint/observe` | `docs/proposals/005-trajectory-assembler.md` |
-| `ToSSEOptions` | interface | `agentfootprint/observe` | `docs/guides/streaming.md` |
 | `Trajectory` | interface | `agentfootprint/observe` | `docs/proposals/003-per-loop-influence-credit.md`, `docs/proposals/005-trajectory-assembler.md`, `docs/proposals/006-loop-recall-shortlist.md` |
-| `WithCircuitBreakerOptions` | interface | `agentfootprint/resilience` | `docs/guides/security.md` |
 | `ActorArrow` | type | `agentfootprint/observe` | `docs/MENTAL_MODEL.md` |
 | `ContextSlot` | type | `agentfootprint/events` | `docs/design/2026-09-served-graph.md` |
 | `DefineFactOptions` | type | `agentfootprint/context` | `docs/INSTRUCTION_ARCHITECTURE.md` |
@@ -663,7 +656,6 @@ Prose about these exists in the repo (`docs/`, `README.md`) but nothing on the s
 | `DomainEvent` | type | `agentfootprint/observe` | `docs/MENTAL_MODEL.md`, `docs/design/boundary-commit-ranges.md`, `docs/design/governance.md` |
 | `DomainWildcard` | type | `agentfootprint/events` | `docs/design/2026-09-findings-ledger-worklog.md` |
 | `HonestyFlagKind` | type | `agentfootprint/observe` | `docs/proposals/005-trajectory-assembler.md` |
-| `ToolGatePredicate` | type | `agentfootprint/providers` | `docs/guides/security.md` |
 
 ### 6. Mentioned only inside a code sample
 
@@ -692,7 +684,7 @@ The name appears in a fenced block on the site and nowhere in the surrounding te
 
 ### 7. Declared + not documented + not exercised — unknown
 
-Nowhere in any prose, and no reference run covers them, so this report will not claim they work or that they are dead. Some are internal-shaped types that happen to be exported; some may genuinely be dead. **586 symbols.**
+Nowhere in any prose, and no reference run covers them, so this report will not claim they work or that they are dead. Some are internal-shaped types that happen to be exported; some may genuinely be dead. **590 symbols.**
 
 | Symbol | Kind | Exported from |
 |---|---|---|
@@ -777,6 +769,7 @@ Nowhere in any prose, and no reference run covers them, so this report will not 
 | `SequenceInput` | interface | `agentfootprint` |
 | `SequenceOptions` | interface | `agentfootprint` |
 | `StageEvent` | interface | `agentfootprint` |
+| `SwarmOptions` | interface | `agentfootprint` |
 | `ToolContractCheckup` | interface | `agentfootprint` |
 | `ToolContractProblem` | interface | `agentfootprint` |
 | `ToolRegistryEntry` | interface | `agentfootprint` |
@@ -791,7 +784,6 @@ Nowhere in any prose, and no reference run covers them, so this report will not 
 | `ContextEngineeringUnsubscribe` | type | `agentfootprint` |
 | `ContextInjectedEvent` | type | `agentfootprint` |
 | `ContextInjectedListener` | type | `agentfootprint` |
-| `CreateProviderOptions` | type | `agentfootprint` `agentfootprint/providers` |
 | `EmittedEvent` | type | `agentfootprint` |
 | `EvidencePreset` | type | `agentfootprint` |
 | `FlowchartResultMapper` | type | `agentfootprint` |
@@ -804,7 +796,6 @@ Nowhere in any prose, and no reference run covers them, so this report will not 
 | `ObserverDeliveryOptions` | type | `agentfootprint` |
 | `ObserverDrainResult` | type | `agentfootprint` |
 | `ParallelOutput` | type | `agentfootprint` |
-| `ProviderKind` | type | `agentfootprint` `agentfootprint/providers` |
 | `ReadTrackingMode` | type | `agentfootprint` |
 | `SequenceOutput` | type | `agentfootprint` |
 | `StageRole` | type | `agentfootprint` |
@@ -816,7 +807,8 @@ Nowhere in any prose, and no reference run covers them, so this report will not 
 | `asConfidence` | function | `agentfootprint/memory` |
 | `asImportance` | function | `agentfootprint/memory` |
 | `attachCostStrategy` | function | `agentfootprint/observe` |
-| … | | _466 more. Every undocumented name is listed in `docs/docs-truth/baseline.json`; for the full classified table run `node scripts/docs-truth-check.mjs --json out.json`_ |
+| `attachFlowchart` | function | `agentfootprint/observe` |
+| … | | _470 more. Every undocumented name is listed in `docs/docs-truth/baseline.json`; for the full classified table run `node scripts/docs-truth-check.mjs --json out.json`_ |
 
 ### 8. Advisory — import paths named in prose that the export map does not expose
 
@@ -843,12 +835,12 @@ Whether a symbol comes from the root barrel or only from a subpath is a document
 
 | Import path | Exports | Described in site prose | Coverage |
 |---|---|---|---|
-| `agentfootprint` | 664 | 523 | 79% |
-| `agentfootprint/providers` | 156 | 124 | 79% |
+| `agentfootprint` | 664 | 525 | 79% |
+| `agentfootprint/providers` | 156 | 127 | 81% |
 | `agentfootprint/memory` | 223 | 112 | 50% |
 | `agentfootprint/rag` | 49 | 49 | 100% |
 | `agentfootprint/cache` | 27 | 19 | 70% |
-| `agentfootprint/observe` | 577 | 224 | 39% |
+| `agentfootprint/observe` | 577 | 232 | 40% |
 | `agentfootprint/events` | 24 | 9 | 38% |
 | `agentfootprint/context` | 162 | 100 | 62% |
 | `agentfootprint/resilience` | 24 | 16 | 67% |
@@ -878,6 +870,6 @@ Whether a symbol comes from the root barrel or only from a subpath is a document
 - a new typed event not described in site prose → **fail**
 - the published docs promising something that does not exist → **fail, always, baseline or not**
 - a doc-text rule firing (section 9: prose that contradicts the code) → **fail, always, baseline or not**
-- the 742 pre-existing undocumented exports recorded in the baseline → **pass**. They are known debt, not a surprise. Failing on them would turn the check red on day one and get it deleted in a week, which is worse than no check.
+- the 731 pre-existing undocumented exports recorded in the baseline → **pass**. They are known debt, not a surprise. Failing on them would turn the check red on day one and get it deleted in a week, which is worse than no check.
 
 Fixed some gaps? `npm run docs:truth:baseline` re-records the baseline and regenerates this report, so an improvement is locked in and cannot silently regress. Refresh the reference-run evidence with `npm run docs:truth:exercise` — it needs no credentials and never reads any.

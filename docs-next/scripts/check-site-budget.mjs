@@ -36,14 +36,15 @@ const ROUTES = [
   },
 ];
 
-const SEARCH_LIMITS = { raw: 12_000_000, gzip: 2_060_000, records: 2_000 };
-// Search gzip raised 2.00 -> 2.06 MB (2026-09-25). The site was 1.97 MB gzip
-// over 1,008 records; moving the tool-catalog lint guide and the audit-bundle
-// threat model from the unpublished docs/guides/ onto the site (docs that
-// existed but no reader of the site could find) took it just past 2.00 MB.
-// ~3% headroom, deliberately thin: the rest of docs/guides/ is still to move,
-// and each of those moves should meet this ceiling and say so, not slide under
-// a generous one.
+const SEARCH_LIMITS = { raw: 12_000_000, gzip: 2_110_000, records: 2_000 };
+// Search gzip raised 2.06 -> 2.11 MB (2026-09-25). The docs/guides/ migration is
+// complete: the last guides (streaming, recorders, security, prompt-injection,
+// adapters, AgentCore, instructions, quick-start) were folded into existing
+// site pages and the folder was deleted, which measured 2.07 MB gzip over 1,020
+// records. ~2% headroom, deliberately thin — nothing is left to migrate, so
+// the next raise should be growth a release can name.
+// Earlier: raised 2.00 -> 2.06 MB (2026-09-25) when the tool-catalog lint guide
+// and the audit-bundle threat model moved from docs/guides/ onto the site.
 // Raised for 9.57.0. The generated API reference had been three releases
 // stale (the 9.53.0 semantics surface was never regenerated), so this
 // release's regeneration added 25 pages at once and the export crossed both

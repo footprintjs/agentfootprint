@@ -63,7 +63,8 @@ export function headingSlugs(content) {
       .replace(/`([^`]*)`/g, '$1')
       .replace(/\*\*([^*]*)\*\*/g, '$1')
       .replace(/\*([^*]*)\*/g, '$1')
-      .replace(/_([^_]*)_/g, '$1')
+      // CommonMark: `_` emphasis never opens/closes inside a word (find_context_errors keeps its underscores)
+      .replace(/(^|[^\w])_([^_]+)_(?![\w])/g, '$1$2')
       .replace(/\[([^\]]*)\]\([^)]*\)/g, '$1')
       .trim();
     if (text) slugs.add(slugger.slug(text));
