@@ -47,7 +47,11 @@ function evidenceEvent(ctx: ReadContext): ViewEvent | undefined {
 
 function expectationLines(ctx: ReadContext, calls: CallsRead): Sentence[] {
   const lines: Sentence[] = [];
-  for (const call of calls.calls.slice(0, MAX_LISTED_CALLS)) {
+  // Every call the model declared an expectation for; the first MAX_LISTED_CALLS are printed.
+  const declared = calls.all.filter(
+    (c) => !c.unnamed && str(c.findings?.payload.basis) !== undefined,
+  );
+  for (const call of declared.slice(0, MAX_LISTED_CALLS)) {
     const f = call.findings;
     const basis = str(f?.payload.basis);
     if (f === undefined || basis === undefined) continue;
@@ -90,6 +94,17 @@ function expectationLines(ctx: ReadContext, calls: CallsRead): Sentence[] {
         }),
       );
     }
+  }
+  const hidden = declared.length - Math.min(declared.length, MAX_LISTED_CALLS);
+  if (hidden > 0) {
+    lines.push(
+      ctx.say('howSure.expected.more', {
+        vars: { n: n(hidden) },
+        pointers: declared
+          .slice(MAX_LISTED_CALLS)
+          .flatMap((c) => (c.findings ? [at(c.findings, 'basis')] : [])),
+      }),
+    );
   }
   return lines;
 }

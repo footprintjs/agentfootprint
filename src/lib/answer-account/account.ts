@@ -286,7 +286,8 @@ export function buildAccount(
     firstSignal !== undefined
       ? [
           chip('signals', 'chip.signals', firstSignal.tone, {
-            n: { value: checks.signals.length, source: 'library' },
+            // Every signal the checks raised, not only the listed ones.
+            n: { value: checks.signals.length + checks.omittedSignals, source: 'library' },
           }),
         ]
       : [];

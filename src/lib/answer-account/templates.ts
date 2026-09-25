@@ -189,6 +189,12 @@ export const ANSWER_ACCOUNT_TEMPLATES = Object.freeze({
   'cannotCover.item': t('{{short:label}}', 'tool'),
   'cannotCover.item.full': t('{{what}}', 'tool'),
   'tryInstead.tool': t('{{tool:code}} suggested trying {{other:code}} instead.', 'tool'),
+  'notChecked.unnamed': t(
+    'What the call {{id:code}} left unchecked is not told here: no event of it names its tool.',
+  ),
+  'notChecked.notListed': t(
+    "None of the tool calls listed here ran; {{count:n,'call that ran is','calls that ran are'}} among the ones not listed.",
+  ),
   'notChecked.noCalls': t('Nothing to report: no tool ran.'),
   'notChecked.noneRan': t('Nothing to report: none of the tool calls ran.'),
   'notChecked.beforePause': t(
@@ -242,6 +248,9 @@ export const ANSWER_ACCOUNT_TEMPLATES = Object.freeze({
   'howSure.expected.exploratory': t(
     'Before calling {{tool:code}}, the model said this call was exploratory.',
     'model',
+  ),
+  'howSure.expected.more': t(
+    "…and {{count:n,'more call','more calls'}} the model declared an expectation for, not listed here.",
   ),
   'howSure.outcome.nothing': t('The call found nothing.', 'tool'),
   'howSure.outcome.empty': t('The call returned an empty result.'),
@@ -304,6 +313,12 @@ export const ANSWER_ACCOUNT_TEMPLATES = Object.freeze({
   ),
   'unreachable.unnamed': t(
     'It cannot be told what the call {{id:code}} found: no event of it names its tool.',
+  ),
+  'unreachable.unnamed.existence': t(
+    'It cannot be told whether the call {{id:code}} checked that the thing asked about exists: no event of it names its tool.',
+  ),
+  'unreachable.unnamed.both': t(
+    'It cannot be told what the call {{id:code}} found, nor whether it checked that the thing asked about exists: no event of it names its tool.',
   ),
   'unreachable.empty': t(
     'It cannot be told whether the result of {{tool:code}} was empty: its shape is not declared.',

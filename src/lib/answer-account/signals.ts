@@ -37,6 +37,8 @@ export interface ChecksRead {
   readonly signals: readonly Signal[];
   /** Signal and unreachable lines past `MAX_LINES_PER_CHECK`, counted, not listed. */
   readonly omitted: number;
+  /** Of `omitted`, how many were SIGNALS — the signal count is a fact, so it counts them too. */
+  readonly omittedSignals: number;
   readonly omittedPointers: readonly RecordPointer[];
   readonly unreachable: readonly Unreachable[];
   readonly reachable: readonly CheckId[];
@@ -57,6 +59,7 @@ export function runChecks(
   const signals: Signal[] = [];
   const unreachable: Unreachable[] = [];
   let omitted = 0;
+  let omittedSignals = 0;
   const omittedPointers: RecordPointer[] = [];
   const omit = (sentence: Sentence) => {
     omitted += 1;
@@ -66,8 +69,10 @@ export function runChecks(
   const perCheck = (list: readonly { readonly check: CheckId }[], check: CheckId) =>
     list.filter((x) => x.check === check).length;
   const addSignal = (signal: Signal) => {
-    if (perCheck(signals, signal.check) >= MAX_LINES_PER_CHECK) omit(signal.sentence);
-    else signals.push(signal);
+    if (perCheck(signals, signal.check) >= MAX_LINES_PER_CHECK) {
+      omit(signal.sentence);
+      omittedSignals += 1;
+    } else signals.push(signal);
   };
   const addUnreachable = (u: Unreachable) => {
     if (perCheck(unreachable, u.check) >= MAX_LINES_PER_CHECK) omit(u.sentence);
@@ -100,18 +105,13 @@ export function runChecks(
 
   // A call no event names cannot be put in a sentence about its tool: every check it would
   // feed is said to be unreachable for it, by its call id — never silently skipped.
+  // Which checks each unnamed call blocks — ONE line per call, written after both loops.
+  const unnamedBlocks = new Map<(typeof calls.all)[number], Set<CheckId>>();
   const unnamed = (check: CheckId, call: (typeof calls.all)[number]) => {
     states[check] = 'unreachable';
-    addUnreachable({
-      check,
-      missing: 'unreadable',
-      sentence: ctx.say('unreachable.unnamed', {
-        vars: { id: call.tool },
-        status: 'not-recorded',
-        missing: 'unreadable',
-        pointers: call.fact.pointers,
-      }),
-    });
+    const blocks = unnamedBlocks.get(call) ?? new Set<CheckId>();
+    blocks.add(check);
+    unnamedBlocks.set(call, blocks);
   };
 
   // 2 — existence: EVERY call of this run (the listing cap never limits a check) whose
@@ -223,11 +223,31 @@ export function runChecks(
     });
   }
 
+  for (const [call, blocks] of unnamedBlocks) {
+    const both = blocks.has('existence') && blocks.has('empty-results');
+    const id = both
+      ? 'unreachable.unnamed.both'
+      : blocks.has('existence')
+      ? 'unreachable.unnamed.existence'
+      : 'unreachable.unnamed';
+    addUnreachable({
+      check: blocks.has('empty-results') ? 'empty-results' : 'existence',
+      missing: 'unreadable',
+      sentence: ctx.say(id, {
+        vars: { id: call.tool },
+        status: 'not-recorded',
+        missing: 'unreadable',
+        pointers: call.fact.pointers,
+      }),
+    });
+  }
+
   const ids: readonly CheckId[] = ['decided-delivered', 'existence', 'empty-results'];
   return {
     signals,
     // Pointers stand for the checks that ran — a sample is enough, and the account stays bounded.
     omitted,
+    omittedSignals,
     omittedPointers,
     unreachable,
     reachable: ids.filter((id) => states[id] === 'reachable'),

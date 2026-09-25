@@ -288,8 +288,22 @@ export function readCheckedRows(
 ): CheckedRows {
   const listed = calls.calls.slice(0, MAX_LISTED_CALLS);
   const checked = listed.flatMap((c) => checkedBlock(ctx, c));
-  const ran = listed.filter((c) => c.fact.outcome === 'ran' && !c.unnamed);
-  const notChecked = ran.flatMap((c) => notCheckedBlock(ctx, c));
+  // Listed: what the row PRINTS. Whether any call ran is a judgement — over every call,
+  // on the outcome alone, named or not (R2-B1).
+  const ranListed = listed.filter((c) => c.fact.outcome === 'ran');
+  const ranAll = calls.all.filter((c) => c.fact.outcome === 'ran');
+  const notChecked = ranListed.flatMap((c) =>
+    c.unnamed
+      ? [
+          ctx.say('notChecked.unnamed', {
+            vars: { id: c.tool },
+            status: 'not-recorded',
+            missing: 'unreadable',
+            pointers: c.fact.pointers,
+          }),
+        ]
+      : notCheckedBlock(ctx, c),
+  );
   if (ctx.resumedLeg) {
     const names = [...new Set(beforePause.map((c) => c.toolName.slice(0, FACT_TEXT_CHARS)))];
     const shown = names.slice(0, MAX_BEFORE_PAUSE_NAMES);
@@ -322,11 +336,19 @@ export function readCheckedRows(
     notChecked.push(
       ctx.say('notChecked.noCalls', { status: 'not-applicable', pointers: anchorPointer(ctx) }),
     );
-  } else if (ran.length === 0 && notChecked.length === 0) {
+  } else if (ranAll.length === 0) {
     notChecked.push(
       ctx.say('notChecked.noneRan', {
         status: 'not-applicable',
-        pointers: listed.flatMap((c) => c.fact.pointers),
+        pointers: calls.all.flatMap((c) => c.fact.pointers.slice(-1)),
+      }),
+    );
+  } else if (notChecked.length === 0) {
+    // Calls ran, but none of the LISTED ones did: say where they are, never "none ran".
+    notChecked.push(
+      ctx.say('notChecked.notListed', {
+        vars: { n: n(ranAll.length) },
+        pointers: ranAll.flatMap((c) => c.fact.pointers.slice(0, 1)),
       }),
     );
   }

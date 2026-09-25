@@ -1030,6 +1030,30 @@
   ],
   "source": "tool:lookup_volumes"
  },
+ "notChecked.unnamed@1": {
+  "text": "What the call id value left unchecked is not told here: no event of it names its tool.",
+  "parts": [
+   {
+    "text": "What the call "
+   },
+   {
+    "code": "id value"
+   },
+   {
+    "text": " left unchecked is not told here: no event of it names its tool."
+   }
+  ],
+  "source": "library"
+ },
+ "notChecked.notListed@1": {
+  "text": "None of the tool calls listed here ran; 2 calls that ran are among the ones not listed.",
+  "parts": [
+   {
+    "text": "None of the tool calls listed here ran; 2 calls that ran are among the ones not listed."
+   }
+  ],
+  "source": "library"
+ },
  "notChecked.noCalls@1": {
   "text": "Nothing to report: no tool ran.",
   "parts": [
@@ -1339,6 +1363,15 @@
   ],
   "source": "model"
  },
+ "howSure.expected.more@1": {
+  "text": "…and 2 more calls the model declared an expectation for, not listed here.",
+  "parts": [
+   {
+    "text": "…and 2 more calls the model declared an expectation for, not listed here."
+   }
+  ],
+  "source": "library"
+ },
  "howSure.outcome.nothing@1": {
   "text": "The call found nothing.",
   "parts": [
@@ -1616,6 +1649,36 @@
    },
    {
     "text": " found: no event of it names its tool."
+   }
+  ],
+  "source": "library"
+ },
+ "unreachable.unnamed.existence@1": {
+  "text": "It cannot be told whether the call id value checked that the thing asked about exists: no event of it names its tool.",
+  "parts": [
+   {
+    "text": "It cannot be told whether the call "
+   },
+   {
+    "code": "id value"
+   },
+   {
+    "text": " checked that the thing asked about exists: no event of it names its tool."
+   }
+  ],
+  "source": "library"
+ },
+ "unreachable.unnamed.both@1": {
+  "text": "It cannot be told what the call id value found, nor whether it checked that the thing asked about exists: no event of it names its tool.",
+  "parts": [
+   {
+    "text": "It cannot be told what the call "
+   },
+   {
+    "code": "id value"
+   },
+   {
+    "text": " found, nor whether it checked that the thing asked about exists: no event of it names its tool."
    }
   ],
   "source": "library"

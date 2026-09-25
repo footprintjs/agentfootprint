@@ -15,7 +15,7 @@ import type { AccountSource, RecordPointer, Sentence } from '../types.js';
 import { at, declarationAt, emptinessSource, historyAt, type ReadContext } from './common.js';
 import { endPointer, type CallRead, type CallsRead } from './calls.js';
 import type { BeforePauseCall } from './checked.js';
-import { anchorPointer, MAX_LISTED_CALLS } from './checked.js';
+import { anchorPointer, foldMore, MAX_LISTED_CALLS } from './checked.js';
 import type { InViewAll, InViewRead } from './inView.js';
 
 const toolOf = (call: CallRead) => call.tool;
@@ -148,6 +148,9 @@ export function readFoundRow(
   beforePause: readonly BeforePauseCall[],
 ): Sentence[] {
   const lines = calls.calls.slice(0, MAX_LISTED_CALLS).map((c) => foundForCall(ctx, c));
+  // The same "…and N more tool calls" the other call rows carry, right after the listed calls.
+  const more = foldMore(ctx, calls);
+  if (more !== undefined) lines.push(more);
   if (ctx.resumedLeg && beforePause.length > 0) {
     lines.push(
       ctx.say('found.beforePause', {

@@ -330,7 +330,15 @@ describe('S4 — a call no event names is counted and kept (the reviewer’s H6)
       'A tool call (toolu_01HRutzrsmgifaHQm73u6kuX) is in this record, but no event of it names its tool.',
     ]);
     expect(a.facts.calls[0]).toMatchObject({ unnamed: true, toolName: '' });
-    expect(a.unreachable.map((u) => u.sentence.template.id)).toContain('unreachable.unnamed');
+    // R2-S2 — ONE line for the call, naming both checks it blocks.
+    expect(a.unreachable.map((u) => u.sentence.template.id)).toEqual(['unreachable.unnamed.both']);
+    expect(
+      rowText(a, 'anything-wrong').filter((l) => l.includes('toolu_01HRutzrsmgifaHQm73u6kuX')),
+    ).toEqual([
+      'It cannot be told what the call toolu_01HRutzrsmgifaHQm73u6kuX found, nor whether it checked that the thing asked about exists: no event of it names its tool.',
+    ]);
+    // R2-B1 — it RAN (unnamed or not): never "none of the tool calls ran".
+    expect(rowIds(a, 'not-checked')).toEqual(['notChecked.unnamed']);
   });
 });
 
@@ -445,5 +453,117 @@ describe('af-3 security — the conversation id never leaves in an account', () 
       path: '#meta/sessionId',
     };
     expect(isShowable(p)).toBe(false);
+  });
+});
+
+describe('Round 2 — a listing cap never decides a fact', () => {
+  it('R2-B1 REAL — 5 refused calls, then a 6th that ran and returned []: never "none of the tool calls ran"', async () => {
+    const calls = Array.from({ length: 6 }, (_, i) => ({
+      id: `c${i + 1}`,
+      name: i < 5 ? 'blocked' : 'ok',
+      args: {},
+    }));
+    const { recording, runId } = await realRun({
+      tools: [tool('blocked', () => 1), tool('ok', () => [])],
+      replies: [{ toolCalls: calls }, { content: 'done' }],
+      permissionChecker: {
+        name: 'p',
+        check: async (r) =>
+          r.target === 'blocked' ? { result: 'deny', policyRuleId: 'no' } : { result: 'allow' },
+      },
+    });
+    const a = explain(recording, runId);
+    expect(rowIds(a, 'not-checked')).not.toContain('notChecked.noneRan');
+    expect(rowText(a, 'not-checked')).toEqual([
+      'None of the tool calls listed here ran; 1 call that ran is among the ones not listed.',
+    ]);
+    expect(a.signals.map((s) => s.id)).toEqual(['undeclared-empty-used']); // the same account agrees
+    // R2-S1 — "It found" says it folded, like the other call rows.
+    expect(rowText(a, 'found').at(-1)).toBe('…and 1 more tool call.');
+  });
+
+  it('R2-S1 REAL — the 55-call run: "It found" ends its listed calls with "…and 50 more tool calls."', async () => {
+    const calls = Array.from({ length: 55 }, (_, i) => ({
+      id: `c${i + 1}`,
+      name: i === 54 ? 'empty' : 'ok',
+      args: {},
+    }));
+    const { recording, runId } = await realRun({
+      tools: [tool('ok', () => [{ id: 1 }]), tool('empty', () => [])],
+      replies: [{ toolCalls: calls }, { content: 'done' }],
+    });
+    const a = explain(recording, runId);
+    const found = rowText(a, 'found');
+    expect(found).toHaveLength(6);
+    expect(found[5]).toBe('…and 50 more tool calls.');
+  });
+
+  /** Fixture A plus `count` more calls of this run (start + end), each ran and returned rows. */
+  function withCalls(
+    count: number,
+    extra: (i: number, id: string, rec: { events: E[] }) => void = () => undefined,
+  ) {
+    const rec = fixtureA() as unknown as { events: E[] };
+    for (let i = 0; i < count; i++) {
+      const id = `more-${i}`;
+      rec.events.push(
+        { ...rec.events[46]!, payload: { toolName: `t${i}`, toolCallId: id, args: {} } },
+        { ...rec.events[59]!, payload: { toolCallId: id, durationMs: 1, result: [{ id: i }] } },
+      );
+      extra(i, id, rec);
+    }
+    return rec;
+  }
+
+  it('R2-S1 — the How-sure expectation lines say how many they did not list', () => {
+    const rec = withCalls(6, (i, id, r) =>
+      r.events.push({
+        ...r.events[45]!,
+        payload: { toolName: `t${i}`, toolCallId: id, iteration: 1, basis: 'exploratory' },
+      }),
+    );
+    const a = explain(rec as unknown as Recording, FLAGSHIP_RUN_ID, NEO_DECLARATIONS);
+    const expected = a.rows
+      .find((r) => r.id === 'how-sure')!
+      .lines.filter((l) => l.template.id.startsWith('howSure.expected'));
+    expect(expected.map((l) => l.template.id).at(-1)).toBe('howSure.expected.more');
+    expect(expected.at(-1)!.text).toBe(
+      '…and 2 more calls the model declared an expectation for, not listed here.',
+    );
+  });
+
+  it('R2-M1 — call 53 (past the 50-call listing) carrying a kind: existence item is a signal', () => {
+    const rec = withCalls(55, (i, id, r) => {
+      if (i !== 52) return;
+      r.events.push({
+        ...r.events[51]!,
+        payload: {
+          toolName: 't52',
+          toolCallId: id,
+          iteration: 1,
+          checked: [{ what: 'the t52 table' }],
+          notChecked: [{ what: 'whether the name is a storage array', kind: 'existence' }],
+        },
+      });
+    });
+    const a = explain(rec as unknown as Recording, FLAGSHIP_RUN_ID, NEO_DECLARATIONS);
+    expect(a.facts.calls.some((c) => c.toolCallId === 'more-52')).toBe(false); // not LISTED
+    expect(a.signals.map((s) => s.sentence.text)).toContain(
+      't52 says it did not check whether the name is a storage array.',
+    );
+  });
+
+  it('the signal count chip counts every signal, not only the listed ones', () => {
+    const rec = fixtureA() as unknown as { events: E[] };
+    rec.events[51]!.payload.notChecked = Array.from({ length: 5 }, (_, i) => ({
+      what: `existence ${i}`,
+      kind: 'existence',
+    }));
+    const a = explain(rec as unknown as Recording, FLAGSHIP_RUN_ID, NEO_DECLARATIONS);
+    expect(a.signals.filter((s) => s.id === 'existence-not-checked')).toHaveLength(3); // listed
+    const chip = a.rows
+      .find((r) => r.id === 'anything-wrong')!
+      .chips.find((c) => c.mark === 'signals')!;
+    expect(chip.text).toBe('6 signals'); // 5 existence + 1 in view
   });
 });
