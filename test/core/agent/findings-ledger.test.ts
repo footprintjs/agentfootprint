@@ -13,8 +13,10 @@
  *     `tool_start`, middleware and `execute` never see it, files the BASIS
  *     row before `tool_start`, and files the previous batch's STANDINGS off
  *     the next call — while history keeps the emission verbatim;
- *   • the enforcing decider peels a JSON answer's top-level `_findings`,
- *     files `declaredOn: 'answer'` rows and judges the peeled content;
+ *   • every decider peels a JSON answer's top-level `_findings`, files
+ *     `declaredOn: 'answer'` rows and judges the peeled content — the
+ *     enforcing one since 9.101.0, the plain, output-chain and judging ones
+ *     since 9.114.1 (§ 4b);
  *   • the checkpoint carries the ledger and `continueFrom` re-seeds it;
  *   • the registry refuses an author's `_findings` at build, armed only;
  *   • the unarmed twin is byte-for-byte the agent it always was.
@@ -53,6 +55,7 @@ import {
   FINDINGS_INSTRUCTION,
 } from '../../../src/core/agent/findings/reserved.js';
 import { PolicyHaltError } from '../../../src/security/index.js';
+import { buildRouteDeciderStage, routeDeciderStage } from '../../../src/core/agent/stages/route.js';
 import { notDispatchedResult } from '../../../src/core/agent/stages/toolCalls.js';
 import { staticTools } from '../../../src/tool-providers/index.js';
 import { defineSkill } from '../../../src/injection-engine.js';
@@ -489,6 +492,227 @@ describe(".findings() — the JSON answer carries the last batch's standings", (
       .build();
     expect(await agent.runTyped({ message: 'q' })).toEqual({ down: 'p1' });
     expect(keysOf(agent)).not.toContain('findingsLedger');
+  });
+});
+
+// ─── 4b. the answer turn WITHOUT an output schema (9.114.1) ──────────────
+//
+// The instruction tells every armed model it may carry the last batch's
+// standings as a JSON answer's top-level `_findings.previous` — schema or no
+// schema. Until 9.114.1 only the enforcing decider took the key back off, so
+// a plain agent handed the caller the raw key and filed nothing. Every
+// decider an armed agent can be given now runs the one peel.
+
+describe(".findings() without an output schema — every decider peels the answer's standings", () => {
+  const ANSWER = JSON.stringify({
+    down: 'p1',
+    _findings: { previous: [{ toolCallId: 'c1', standing: 'ruled-out', line: 'p2 was up' }] },
+  });
+  const PEELED = JSON.stringify({ down: 'p1' });
+  const STANDING: StandingRow = {
+    kind: 'standing',
+    toolCallId: 'c1',
+    toolName: 'look',
+    standing: 'ruled-out',
+    line: 'p2 was up',
+    assertions: [],
+    declaredOn: 'answer',
+    iteration: 2,
+  };
+  /** A lookup whose result carries the answer's value, so an evidence gate grounds it. */
+  const look = defineTool<{ q?: string }, string>({
+    name: 'look',
+    description: 'look something up',
+    inputSchema: { type: 'object', properties: { q: { type: 'string' } } },
+    execute: () => 'port p1 status down; port p2 status up',
+  });
+  /** The four no-schema shapes an armed agent can be built into — one per decider. */
+  const SHAPES: readonly (readonly [
+    string,
+    (b: ReturnType<typeof Agent.create>) => ReturnType<typeof Agent.create>,
+    { wrapUpAtMaxIterations?: false },
+  ])[] = [
+    ['the plain decider (WrapUp mounted)', (b) => b, {}],
+    [
+      'the plain decider (wrapUpAtMaxIterations: false)',
+      (b) => b,
+      { wrapUpAtMaxIterations: false },
+    ],
+    [
+      'the output-chain decider',
+      (b) => b.messageMiddleware({ name: 'pass', onMessage: () => allow() }),
+      {},
+    ],
+    ['the judging decider (evidence gate)', (b) => b.namesAndNumbersFromEvidence(), {}],
+  ];
+
+  describe.each(SHAPES)('%s', (_label, arm, opts) => {
+    const build = (answer: string): Agent =>
+      arm(
+        Agent.create({ provider: scripted([], CALL_ONE, answer), model: 'm', ...opts })
+          .tool(look as never)
+          .findings(),
+      ).build();
+
+    it('a JSON answer comes back without the key; its standing is filed declaredOn: answer', async () => {
+      const agent = build(ANSWER);
+      const rows: Row[] = [];
+      agent.on('*', (e) =>
+        rows.push({ type: e.type, payload: e.payload as unknown as Record<string, unknown> }),
+      );
+      const answer = await agent.run({ message: 'which port is down?' });
+
+      expect(answer).toBe(PEELED);
+      const ledger = ledgerOf(agent)!;
+      expect(ledger.map((r) => r.kind)).toEqual(['basis', 'standing']);
+      expect(ledger[1]).toEqual(STANDING);
+      expect(rows.find((r) => r.type === 'agentfootprint.findings.standing')?.payload).toEqual({
+        toolCallId: 'c1',
+        toolName: 'look',
+        iteration: 2,
+        standing: 'ruled-out',
+        declaredOn: 'answer',
+        assertionCount: 0,
+      });
+      // The caller, the committed record and the turn's own event all carry
+      // the peeled answer (`finalContent` lives in the Final subflow; the
+      // record's copy is `llmLatestContent`, which that subflow reads).
+      const state = agent.getLastSnapshot()?.sharedState as unknown as AgentState;
+      expect(state.llmLatestContent).toBe(PEELED);
+      expect(
+        rows.find((r) => r.type === 'agentfootprint.agent.turn_end')?.payload.finalContent,
+      ).toBe(PEELED);
+      expect(
+        rows
+          .filter((r) => r.type === 'agentfootprint.agent.route_decided')
+          .map((r) => r.payload.chosen),
+      ).toEqual(['tool-calls', 'final']);
+    });
+
+    it('a plain-text answer is untouched and files nothing', async () => {
+      const agent = build('p1 is down');
+      expect(await agent.run({ message: 'which port is down?' })).toBe('p1 is down');
+      expect(ledgerOf(agent)!.map((r) => r.kind)).toEqual(['basis']);
+    });
+
+    it('a JSON answer without the key is untouched, byte for byte', async () => {
+      const spaced = '{ "down": "p1" }';
+      const agent = build(spaced);
+      expect(await agent.run({ message: 'which port is down?' })).toBe(spaced);
+      expect(ledgerOf(agent)!.map((r) => r.kind)).toEqual(['basis']);
+    });
+  });
+
+  it('an unarmed agent keeps the exact fast-path decider; an armed one is handed a peeling decider', () => {
+    expect(buildRouteDeciderStage()).toBe(routeDeciderStage);
+    const armed = buildRouteDeciderStage(
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      false,
+      undefined,
+      undefined,
+      undefined,
+      true,
+    );
+    expect(armed).not.toBe(routeDeciderStage);
+  });
+
+  it("the evidence gate grounds the PEELED answer — a value only the reserved key carries is not the answer's", async () => {
+    // `0xef0101` is in no tool result, and only the declaration carries it.
+    // Judged before the peel, `guard` would name it back as a fabrication and
+    // spend a revision on the model's own bookkeeping.
+    const flogi = defineTool<Record<string, never>, string>({
+      name: 'show_flogi',
+      description: 'fabric logins for a switch',
+      inputSchema: { type: 'object', properties: {} },
+      execute: () => JSON.stringify(TOOL_RESULTS.show_flogi),
+    });
+    const CALL: Partial<LLMResponse> = {
+      content: '',
+      toolCalls: [{ id: 'f1', name: 'show_flogi', args: { _findings: { basis: 'direct' } } }],
+    };
+    const DECLARING = JSON.stringify({
+      port: '0x650400',
+      _findings: {
+        previous: [
+          {
+            toolCallId: 'f1',
+            standing: 'fact',
+            assertions: [
+              { subject: { kind: 'port', id: 'fc1/5' }, predicate: 'peer', value: '0xef0101' },
+            ],
+          },
+        ],
+      },
+    });
+    const agent = Agent.create({ provider: scripted([], CALL, DECLARING), model: 'm' })
+      .tool(flogi)
+      .findings()
+      .namesAndNumbersFromEvidence({ posture: 'guard' })
+      .build();
+    const rows: Row[] = [];
+    agent.on('*', (e) =>
+      rows.push({ type: e.type, payload: e.payload as unknown as Record<string, unknown> }),
+    );
+    const answer = await agent.run({ message: 'which port?' });
+
+    expect(answer).toBe(JSON.stringify({ port: '0x650400' }));
+    expect(
+      rows
+        .filter((r) => r.type === 'agentfootprint.agent.route_decided')
+        .map((r) => r.payload.chosen),
+    ).toEqual(['tool-calls', 'final']);
+    expect(
+      rows.find((r) => r.type === 'agentfootprint.agent.evidence_checked')?.payload.action,
+    ).toBe('grounded');
+    const standings = ledgerOf(agent)!.filter((r): r is StandingRow => r.kind === 'standing');
+    expect(standings.map((r) => [r.toolCallId, r.standing, r.declaredOn])).toEqual([
+      ['f1', 'fact', 'answer'],
+    ]);
+  });
+
+  it('the out-of-budget wrap-up: the answer that ends the turn is peeled and its standings filed', async () => {
+    const WRAPPED = JSON.stringify({
+      summary: 'p1 is down; the second look never ran',
+      _findings: { previous: [{ toolCallId: 'c1', standing: 'open', settles: 'a second look' }] },
+    });
+    // Tools on the wire → keep asking; the wrap-up call withholds them.
+    const agent = Agent.create({
+      provider: mock({
+        respond: (req: LLMRequest): string | Partial<LLMResponse> => {
+          if ((req.tools?.length ?? 0) === 0) return WRAPPED;
+          const n = req.messages.filter((m) => m.role === 'tool').length;
+          return n === 0
+            ? CALL_ONE
+            : { content: '', toolCalls: [{ id: 'c2', name: 'look', args: { q: 'again' } }] };
+        },
+      }),
+      model: 'm',
+    })
+      .tool(look as never)
+      .findings()
+      .maxIterations(2)
+      .build();
+    const rows: Row[] = [];
+    agent.on('*', (e) =>
+      rows.push({ type: e.type, payload: e.payload as unknown as Record<string, unknown> }),
+    );
+    const answer = await agent.run({ message: 'which port is down?' });
+
+    expect(answer).toBe(JSON.stringify({ summary: 'p1 is down; the second look never ran' }));
+    expect(
+      rows
+        .filter((r) => r.type === 'agentfootprint.agent.route_decided')
+        .map((r) => r.payload.chosen),
+    ).toEqual(['tool-calls', 'wrap-up', 'final']);
+    const state = agent.getLastSnapshot()?.sharedState as unknown as AgentState;
+    expect(state.stoppedEarly).toMatchObject({ wrappedUp: true, answerWasEmpty: false });
+    const standings = ledgerOf(agent)!.filter((r): r is StandingRow => r.kind === 'standing');
+    expect(standings.map((r) => [r.toolCallId, r.standing, r.declaredOn, r.settles])).toEqual([
+      ['c1', 'open', 'answer', 'a second look'],
+    ]);
   });
 });
 
@@ -1102,149 +1326,161 @@ describe('.findings() — a provider tool that declares `_findings` itself', () 
 
 // ─── 14. every re-ask exit quotes the emission ───────────────────────────
 
-describe('.findings() — a re-ask exit quotes the emission, never the peeled form', () => {
-  /** Refuses any key but `port` — passes only because the answer key was peeled. */
-  const portParser = {
-    parse: (value: unknown) => {
-      const o = value as { port?: unknown };
-      if (typeof o?.port !== 'string') throw new Error('port must be a string');
-      if (Object.keys(o as object).some((k) => k !== 'port')) throw new Error('unknown key');
-      return o as { port: string };
-    },
-  };
-
-  it('evidence-recheck: the rejected draft the model is shown is the string it sent', async () => {
-    const flogi = defineTool<Record<string, never>, string>({
-      name: 'show_flogi',
-      description: 'fabric logins for a switch',
-      inputSchema: { type: 'object', properties: {} },
-      execute: () => JSON.stringify(TOOL_RESULTS.show_flogi),
-    });
-    const CALL: Partial<LLMResponse> = {
-      content: '',
-      toolCalls: [{ id: 'f1', name: 'show_flogi', args: { _findings: { basis: 'direct' } } }],
-    };
-    // The invented value is nowhere in the tool result — the gate flags it.
-    const INVENTED = JSON.stringify({
-      port: '0xef0101',
-      _findings: { previous: [{ toolCallId: 'f1', standing: 'open', settles: 'a second look' }] },
-    });
-    const GROUNDED = JSON.stringify({
-      port: '0x650400',
-      _findings: {
-        previous: [
-          {
-            toolCallId: 'f1',
-            standing: 'fact',
-            assertions: [
-              { subject: { kind: 'port', id: 'fc1/5' }, predicate: 'fcid', value: '0x650400' },
-            ],
-          },
-        ],
+// Run twice: under an output schema (the enforcing decider), and — since
+// 9.114.1 — without one (the judging decider), which must keep the same law.
+describe.each([
+  ['under an output schema', true],
+  ['without an output schema (9.114.1)', false],
+] as const)(
+  '.findings() — a re-ask exit quotes the emission, never the peeled form — %s',
+  (_label, withSchema) => {
+    /** Refuses any key but `port` — passes only because the answer key was peeled. */
+    const portParser = {
+      parse: (value: unknown) => {
+        const o = value as { port?: unknown };
+        if (typeof o?.port !== 'string') throw new Error('port must be a string');
+        if (Object.keys(o as object).some((k) => k !== 'port')) throw new Error('unknown key');
+        return o as { port: string };
       },
-    });
-    const seen: Shot[] = [];
-    const agent = Agent.create({ provider: scripted(seen, CALL, INVENTED, GROUNDED), model: 'm' })
-      .tool(flogi)
-      .findings()
-      .outputSchema(portParser, { retries: 0 })
-      .namesAndNumbersFromEvidence({ posture: 'guard' })
-      .build();
-    const rows: Row[] = [];
-    agent.on('*', (e) =>
-      rows.push({ type: e.type, payload: e.payload as unknown as Record<string, unknown> }),
-    );
-    const answer = await agent.run({ message: 'which port?' });
+    };
+    /** The schema this run is given — or none, which hands it the judging decider. */
+    const schema = <B extends ReturnType<typeof Agent.create>>(b: B): B =>
+      withSchema ? (b.outputSchema(portParser, { retries: 0 }) as B) : b;
 
-    expect(
-      rows
-        .filter((r) => r.type === 'agentfootprint.agent.route_decided')
-        .map((r) => r.payload.chosen),
-    ).toEqual(['tool-calls', 'evidence-recheck', 'final']);
-    // The schema judged the PEELED answer (it passed); the recovery the model
-    // is served quotes the EMISSION, reserved key and all.
-    const state = agent.getLastSnapshot()?.sharedState as unknown as AgentState;
-    expect(state.evidenceRecovery?.instruction).toContain(JSON.stringify(INVENTED));
-    expect(seen[2]!.system).toContain(JSON.stringify(INVENTED));
-    // The answer that STANDS is the peeled one; both answers' standings are on
-    // the record, the last one current.
-    expect(answer).toBe(JSON.stringify({ port: '0x650400' }));
-    const standings = ledgerOf(agent)!.filter((r): r is StandingRow => r.kind === 'standing');
-    expect(standings.map((r) => [r.toolCallId, r.standing, r.declaredOn])).toEqual([
-      ['f1', 'open', 'answer'],
-      ['f1', 'fact', 'answer'],
-    ]);
-  });
-
-  it('step-nudge: the premature answer pushed into history is the string the model sent', async () => {
-    const step = (name: string) =>
-      defineTool<Record<string, never>, string>({
-        name,
-        description: `${name} tool`,
+    it('evidence-recheck: the rejected draft the model is shown is the string it sent', async () => {
+      const flogi = defineTool<Record<string, never>, string>({
+        name: 'show_flogi',
+        description: 'fabric logins for a switch',
         inputSchema: { type: 'object', properties: {} },
-        execute: () => `${name} ran`,
+        execute: () => JSON.stringify(TOOL_RESULTS.show_flogi),
       });
-    const refund = defineSkill({
-      id: 'refund',
-      description: 'refund handling',
-      body: 'Handle refunds carefully.',
-      tools: [step('lookup'), step('charge'), step('export')] as never,
-      steps: [
-        { tool: 'lookup', note: 'find the order first' },
-        { tool: 'charge', note: 'refund the charge' },
-        { tool: 'export', note: 'file the receipt' },
-      ],
-    });
-    const call = (
-      name: string,
-      id: string,
-      args: Record<string, unknown> = {},
-    ): Partial<LLMResponse> => ({ content: '', toolCalls: [{ id, name, args }] });
-    const PREMATURE = JSON.stringify({
-      port: 'done',
-      _findings: { previous: [{ toolCallId: 't2', standing: 'noise' }] },
-    });
-    const agent = Agent.create({
-      provider: scripted(
-        [],
-        call('read_skill', 't1', { id: 'refund', _findings: { basis: 'direct' } }),
-        call('lookup', 't2', { _findings: { basis: 'direct' } }),
-        PREMATURE, // steps 2–3 unrun: nudged, not final
-        call('charge', 't3'),
-        call('export', 't4'),
-        JSON.stringify({ port: 'really done' }),
-      ),
-      model: 'm',
-      maxIterations: 8,
-    })
-      .system('You are support.')
-      .injection(refund)
-      .findings()
-      .outputSchema(portParser, { retries: 0 })
-      .build();
-    const rows: Row[] = [];
-    agent.on('*', (e) =>
-      rows.push({ type: e.type, payload: e.payload as unknown as Record<string, unknown> }),
-    );
-    const answer = await agent.run({ message: 'refund order 42' });
+      const CALL: Partial<LLMResponse> = {
+        content: '',
+        toolCalls: [{ id: 'f1', name: 'show_flogi', args: { _findings: { basis: 'direct' } } }],
+      };
+      // The invented value is nowhere in the tool result — the gate flags it.
+      const INVENTED = JSON.stringify({
+        port: '0xef0101',
+        _findings: { previous: [{ toolCallId: 'f1', standing: 'open', settles: 'a second look' }] },
+      });
+      const GROUNDED = JSON.stringify({
+        port: '0x650400',
+        _findings: {
+          previous: [
+            {
+              toolCallId: 'f1',
+              standing: 'fact',
+              assertions: [
+                { subject: { kind: 'port', id: 'fc1/5' }, predicate: 'fcid', value: '0x650400' },
+              ],
+            },
+          ],
+        },
+      });
+      const seen: Shot[] = [];
+      const agent = schema(
+        Agent.create({ provider: scripted(seen, CALL, INVENTED, GROUNDED), model: 'm' })
+          .tool(flogi)
+          .findings(),
+      )
+        .namesAndNumbersFromEvidence({ posture: 'guard' })
+        .build();
+      const rows: Row[] = [];
+      agent.on('*', (e) =>
+        rows.push({ type: e.type, payload: e.payload as unknown as Record<string, unknown> }),
+      );
+      const answer = await agent.run({ message: 'which port?' });
 
-    expect(
-      rows
-        .filter((r) => r.type === 'agentfootprint.agent.route_decided')
-        .map((r) => r.payload.chosen),
-    ).toContain('step-nudge');
-    // The teaching went back as the conversation: the premature answer AS
-    // SENT, then the ask — the schema had judged the peeled form.
-    const state = agent.getLastSnapshot()?.sharedState as unknown as AgentState;
-    const premature = state.history.find((m) => m.role === 'assistant' && m.content !== '');
-    expect(premature?.content).toBe(PREMATURE);
-    expect(answer).toBe(JSON.stringify({ port: 'really done' }));
-    const standings = ledgerOf(agent)!.filter((r): r is StandingRow => r.kind === 'standing');
-    expect(standings.map((r) => [r.toolCallId, r.standing, r.declaredOn])).toEqual([
-      ['t2', 'noise', 'answer'],
-    ]);
-  });
-});
+      expect(
+        rows
+          .filter((r) => r.type === 'agentfootprint.agent.route_decided')
+          .map((r) => r.payload.chosen),
+      ).toEqual(['tool-calls', 'evidence-recheck', 'final']);
+      // The schema judged the PEELED answer (it passed); the recovery the model
+      // is served quotes the EMISSION, reserved key and all.
+      const state = agent.getLastSnapshot()?.sharedState as unknown as AgentState;
+      expect(state.evidenceRecovery?.instruction).toContain(JSON.stringify(INVENTED));
+      expect(seen[2]!.system).toContain(JSON.stringify(INVENTED));
+      // The answer that STANDS is the peeled one; both answers' standings are on
+      // the record, the last one current.
+      expect(answer).toBe(JSON.stringify({ port: '0x650400' }));
+      const standings = ledgerOf(agent)!.filter((r): r is StandingRow => r.kind === 'standing');
+      expect(standings.map((r) => [r.toolCallId, r.standing, r.declaredOn])).toEqual([
+        ['f1', 'open', 'answer'],
+        ['f1', 'fact', 'answer'],
+      ]);
+    });
+
+    it('step-nudge: the premature answer pushed into history is the string the model sent', async () => {
+      const step = (name: string) =>
+        defineTool<Record<string, never>, string>({
+          name,
+          description: `${name} tool`,
+          inputSchema: { type: 'object', properties: {} },
+          execute: () => `${name} ran`,
+        });
+      const refund = defineSkill({
+        id: 'refund',
+        description: 'refund handling',
+        body: 'Handle refunds carefully.',
+        tools: [step('lookup'), step('charge'), step('export')] as never,
+        steps: [
+          { tool: 'lookup', note: 'find the order first' },
+          { tool: 'charge', note: 'refund the charge' },
+          { tool: 'export', note: 'file the receipt' },
+        ],
+      });
+      const call = (
+        name: string,
+        id: string,
+        args: Record<string, unknown> = {},
+      ): Partial<LLMResponse> => ({ content: '', toolCalls: [{ id, name, args }] });
+      const PREMATURE = JSON.stringify({
+        port: 'done',
+        _findings: { previous: [{ toolCallId: 't2', standing: 'noise' }] },
+      });
+      const agent = schema(
+        Agent.create({
+          provider: scripted(
+            [],
+            call('read_skill', 't1', { id: 'refund', _findings: { basis: 'direct' } }),
+            call('lookup', 't2', { _findings: { basis: 'direct' } }),
+            PREMATURE, // steps 2–3 unrun: nudged, not final
+            call('charge', 't3'),
+            call('export', 't4'),
+            JSON.stringify({ port: 'really done' }),
+          ),
+          model: 'm',
+          maxIterations: 8,
+        })
+          .system('You are support.')
+          .injection(refund)
+          .findings(),
+      ).build();
+      const rows: Row[] = [];
+      agent.on('*', (e) =>
+        rows.push({ type: e.type, payload: e.payload as unknown as Record<string, unknown> }),
+      );
+      const answer = await agent.run({ message: 'refund order 42' });
+
+      expect(
+        rows
+          .filter((r) => r.type === 'agentfootprint.agent.route_decided')
+          .map((r) => r.payload.chosen),
+      ).toContain('step-nudge');
+      // The teaching went back as the conversation: the premature answer AS
+      // SENT, then the ask — the schema had judged the peeled form.
+      const state = agent.getLastSnapshot()?.sharedState as unknown as AgentState;
+      const premature = state.history.find((m) => m.role === 'assistant' && m.content !== '');
+      expect(premature?.content).toBe(PREMATURE);
+      expect(answer).toBe(JSON.stringify({ port: 'really done' }));
+      const standings = ledgerOf(agent)!.filter((r): r is StandingRow => r.kind === 'standing');
+      expect(standings.map((r) => [r.toolCallId, r.standing, r.declaredOn])).toEqual([
+        ['t2', 'noise', 'answer'],
+      ]);
+    });
+  },
+);
 
 // ─── 13. the offer: the ids the model may name (9.102.0) ─────────────────
 

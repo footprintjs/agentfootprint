@@ -134,6 +134,67 @@ foldLedger(scope.findingsLedger!).standingOf.get('call_1')?.standing; // 'fact'
   `cannotCover` and `try_instead` — so a redaction policy that hides tool
   output by key must cover `findingsLedger` too.
 
+## The answer's standings — one peel on every decider (9.114.1)
+
+Why: the instruction (`reserved.ts · FINDINGS_INSTRUCTION`) tells every armed
+model it may carry the last batch's standings as a JSON answer's top-level
+`_findings.previous` — with an output schema or without one. Until 9.114.1
+only the decider built for `.outputSchema()` took the key back off; on any
+other armed agent the caller received the raw `"_findings": {…}`, and the
+standings were never filed.
+
+The law — one peel, `stages/route.ts · peelAnswerStandings`, on every Route
+decider an armed agent can be given: the plain one (with or without the
+WrapUp branch), the output-chain one, the judging one (a stepped skill or
+`.namesAndNumbersFromEvidence()`) and the enforcing one (`.outputSchema()`).
+An unarmed agent keeps the fast path's shared reference, which reads nothing
+of the answer.
+
+- **What.** A JSON-object answer carrying a top-level `_findings` has the key
+  taken off what the caller receives — the returned answer, the committed
+  `llmLatestContent`, `turn_end.finalContent`, the memory write — and its
+  `previous` standings are filed `declaredOn: 'answer'`. Prose, arrays and
+  objects without the key are left byte for byte, and nothing is written.
+- **When.** After the output chain, before every judge (the schema, the step
+  procedure, the evidence gate, the claim contract) and before an exhausted
+  turn's empty-answer check — so each judges the answer the caller receives,
+  and the evidence gate never reads the model's bookkeeping as a claim. A
+  fragment the wrap-up is about to replace is not an answer and is not
+  peeled; the wrap-up's own answer is.
+- **Re-ask.** A re-ask exit (`output-retry`, `step-nudge`,
+  `evidence-recheck`) puts back the string the model sent
+  (`route.ts · restoreEmission`), so history never holds a turn the model
+  never emitted.
+
+Two limits, stated:
+
+- **Streamed tokens are not peeled.** `agentfootprint.stream.token` carries
+  the provider's chunks as they arrive, before any decider runs, so a UI that
+  renders them shows `_findings` if the model writes it. Render the returned
+  answer (or `turn_end.finalContent`) instead; `.answerValidation()` withholds
+  draft tokens and streams only the answer it validated. The evidence README
+  states the same limit for a rejected draft.
+- **Only a JSON answer is read.** The peel parses the whole answer as one
+  JSON object: a key inside prose or a fenced block is left as written, never
+  guessed at, and an output middleware that turns a JSON answer into prose
+  before the peel leaves the key in it.
+
+```ts
+const agent = Agent.create({ provider, model }).tool(lookupOrder).tool(getPolicy).findings().build();
+// The model answers:
+//   {"answer":"Eligible only if unopened.","_findings":{"previous":[{"toolCallId":"c2","standing":"fact","assertions":[…]}]}}
+await agent.run({ message: 'Can I get a refund for order A-1001?' });
+// → '{"answer":"Eligible only if unopened."}'
+agent.findings();
+// → […, { kind: 'standing', toolCallId: 'c2', standing: 'fact', declaredOn: 'answer', … }]
+```
+
+Proved by `test/core/agent/findings-ledger.test.ts` § 4b — each no-schema
+decider against a JSON answer with the key, a prose answer and a JSON answer
+without it; the evidence gate grounding the peeled answer; the wrap-up's
+answer; the fast path's reference kept for an unarmed agent — and § 14, whose
+re-ask exits run with and without a schema.
+
 ## Proved on the wire, measured on the record
 
 - **The name survives every adapter.** `_findings` is public forever once a

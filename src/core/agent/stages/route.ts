@@ -302,6 +302,81 @@ function recordAnswerGuarantee(
       : 'checked';
 }
 
+/**
+ * THE ANSWER TURN'S STANDINGS (`.findings()`) — the ONE peel every decider
+ * runs over a would-be-final answer: after the output chain, before any judge
+ * and before anything else reads the answer.
+ *
+ * `FINDINGS_INSTRUCTION` tells every armed model it may carry the LAST batch's
+ * standings as a JSON answer's top-level `_findings.previous` — with an output
+ * schema or without one. So every decider takes the key back off the same way:
+ * a JSON object answer carrying it has the key removed from what the caller
+ * receives and every judge reads (`judgeAnswer`, `judgeEvidence`,
+ * `readValidatedAnswer` / `judgeClaims`, `settleWrapUp`'s empty check,
+ * `captureTurnPayload`, `Agent.runTyped`), and its standings are filed
+ * `declaredOn: 'answer'`. Rows are filed only when the model declared
+ * standings; the key is taken off whenever it was there. Prose, arrays and
+ * objects without the key are untouched (`peelAnswerFindings` is identity on
+ * them) and nothing is written. Peeled HERE because the decider is on the main
+ * chart, so the write lands (`prepareFinal` runs in the non-merging Final
+ * subflow and cannot write back). Until 9.114.1 only the enforcing decider
+ * ran this, so a plain agent handed its caller the raw key and filed nothing.
+ *
+ * Identified against the results the run can identify (`findings/offer.ts ·
+ * knownResults`): the last batch AND every tool message on `history` as this
+ * call was served it — the same list the offer was read from — so an id
+ * copied from the offer resolves whichever batch it came from (9.102.0). A
+ * ruled-out standing whose result the dispatch door recorded as an absence
+ * (`coverageDeclared`) AND the model was served as one (the served string —
+ * the door records the return before the after-tool chain acts) gets its
+ * `unsettled-by-absence` row immediately after it, worded from what was
+ * served; the key is read only for such a standing (9.113.0,
+ * `findings/unsettled.ts`).
+ *
+ * Returns the string the answer held before the key was taken off — what every
+ * RE-ASK exit puts back (see `restoreEmission`) — or `undefined` when nothing
+ * was peeled. Unarmed: returns before reading anything.
+ */
+function peelAnswerStandings(
+  scope: TypedScope<AgentState>,
+  findings: true | undefined,
+): string | undefined {
+  if (findings !== true || typeof scope.llmLatestContent !== 'string') return undefined;
+  const raw = scope.llmLatestContent;
+  const peeled = peelAnswerFindings(raw);
+  if (peeled.findings?.previous !== undefined) {
+    const known = knownResults(
+      [...((scope.history as readonly LLMMessage[] | undefined) ?? [])],
+      [...((scope.toolResults ?? []) as readonly PreviousResult[])],
+    );
+    recordFindings(
+      scope,
+      withUnsettledRows(
+        standingRowsFrom(known, peeled.findings, 'answer', scope.iteration as number),
+        known,
+        () => [...((scope.coverageDeclared ?? []) as readonly DeclaredCoverage[])],
+      ),
+    );
+  }
+  if (peeled.content === raw) return undefined;
+  scope.llmLatestContent = peeled.content;
+  return raw;
+}
+
+/**
+ * A branch that asks the model AGAIN quotes `llmLatestContent` back into the
+ * conversation as the turn being corrected — `outputRetry` and `stepNudge`
+ * push it into history as the assistant turn, `evidenceRecheck` serves it as
+ * the rejected draft — so at those exits it must be the string the model
+ * sent, or history holds a turn the model never emitted and the next request
+ * echoes it (`outputAttempts` records the verdict, never the text). The
+ * judges saw the PEELED answer; the answer that STANDS — every `'final'` — is
+ * the peeled one. Nothing peeled: the write-free exit it always was.
+ */
+function restoreEmission(scope: TypedScope<AgentState>, emission: string | undefined): void {
+  if (emission !== undefined) scope.llmLatestContent = emission;
+}
+
 function emitRouteDecided(
   scope: TypedScope<AgentState>,
   chosen: RouteBranch,
@@ -597,9 +672,14 @@ function stepNudgeRationale(scope: TypedScope<AgentState>): string {
 /**
  * The decider every plain agent runs: decide, announce, file whatever a limit
  * did. `hasWrapUp` is the ONE build-time fact it needs — a decider may never
- * name a branch the chart did not mount.
+ * name a branch the chart did not mount. `findings` (9.114.1) is the ledger's
+ * arm: the answer's standings are peeled before anything reads the answer
+ * (`peelAnswerStandings`). Absent, not one line of the peel runs.
  */
-function buildSimpleDecider(hasWrapUp: boolean): (scope: TypedScope<AgentState>) => RouteBranch {
+function buildSimpleDecider(
+  hasWrapUp: boolean,
+  findings?: true,
+): (scope: TypedScope<AgentState>) => RouteBranch {
   return (scope) => {
     const { chosen, rationale, earlyStop } = decideBranch(scope);
     // ── The out-of-budget wrap-up (9.56.0) ─────────────────────────────
@@ -613,6 +693,7 @@ function buildSimpleDecider(hasWrapUp: boolean): (scope: TypedScope<AgentState>)
       return 'wrap-up';
     }
     emitRouteDecided(scope, chosen, rationale);
+    if (chosen === 'final') peelAnswerStandings(scope, findings); // no re-ask exit here
     if (chosen === 'final') settleWrapUp(scope, earlyStop, false);
     if (chosen === 'final') recordAnswerGuarantee(scope, undefined); // no output schema on this decider
     return chosen;
@@ -687,10 +768,12 @@ export function buildRouteDeciderStage(
    *  `noticePriorTurnEvidence` precedent: a trailing optional the caller passes
    *  value-conditionally, so an unarmed agent hands this builder exactly the
    *  arguments it always did and the no-judge fast path returns the same
-   *  function reference. The ENFORCING decider peels the answer's JSON
-   *  envelope under it (the answer turn has one there and nowhere else);
-   *  since 9.110.0 both judging deciders also hand it to `judgeEvidence`,
-   *  where the contingent check reads the ledger's standings. */
+   *  function reference. EVERY decider peels a JSON answer's top-level
+   *  `_findings` under it (`peelAnswerStandings`) — the enforcing one since
+   *  9.101.0, the plain, output-chain and judging ones since 9.114.1, because
+   *  the instruction invites the key on any JSON answer, schema or not. Since
+   *  9.110.0 both judging deciders also hand it to `judgeEvidence`, where the
+   *  contingent check reads the ledger's standings. */
   findings?: true,
 ): (scope: TypedScope<AgentState>) => RouteBranch | Promise<RouteBranch> {
   const chain = messageMiddleware ?? [];
@@ -700,6 +783,9 @@ export function buildRouteDeciderStage(
     stepPlanFor === undefined &&
     evidence === undefined
   ) {
+    // An armed agent is handed the plain decider WITH the peel — never the
+    // fast path's shared reference, which reads nothing of the answer.
+    if (findings === true) return buildSimpleDecider(hasWrapUp, true);
     return hasWrapUp ? buildSimpleDecider(true) : routeDeciderStage;
   }
   if (enforcement !== undefined)
@@ -759,6 +845,9 @@ export function buildRouteDeciderStage(
     // Committed either way: on a refusal this is what was withheld, and the
     // ledger row beside it says who withheld it and why.
     scope.llmLatestContent = verdict.content;
+    // AFTER the chain, as in every decider (`peelAnswerStandings`). This one
+    // has no re-ask exit, so the emission is not kept.
+    peelAnswerStandings(scope, findings);
     // AFTER the chain: `answerWasEmpty` has to be judged on the string the
     // caller will actually receive, and the chain may have rewritten it.
     settleWrapUp(scope, earlyStop, false);
@@ -926,10 +1015,15 @@ function buildJudgingDecider(
       }
       scope.llmLatestContent = verdict.content;
     }
+    // THE ANSWER TURN'S STANDINGS (9.114.1 on this decider): after the chain,
+    // before every judge below — the enforcing decider's order. The two
+    // re-ask exits put the emission back (`restoreEmission`).
+    const emission = peelAnswerStandings(scope, findings);
     // A withheld answer is judged by nothing below, so the recency row says so
     // here rather than sitting untouched (see `noteRecency`).
     if (denied) noteRecency(noticePriorTurnEvidence, integrityLedger, 'not-applicable');
     if (!denied && judgeUnfinishedSteps(scope, stepPlanFor, earlyStop) === 'step-nudge') {
+      restoreEmission(scope, emission);
       emitRouteDecided(scope, 'step-nudge', stepNudgeRationale(scope));
       return 'step-nudge';
     }
@@ -946,6 +1040,7 @@ function buildJudgingDecider(
         findings,
       ) === 'evidence-recheck'
     ) {
+      restoreEmission(scope, emission);
       emitRouteDecided(scope, 'evidence-recheck', evidenceRecheckRationale(scope));
       return 'evidence-recheck';
     }
@@ -1018,68 +1113,15 @@ function buildEnforcingDecider(
     }
 
     // ── THE ANSWER TURN'S STANDINGS (9.101.0, `.findings()`) ────────────
-    // Under 'instruct' + an output schema the answer is a JSON envelope, and
-    // the model may carry the LAST batch's standings as its top-level
-    // `_findings.previous`. Peeled HERE — the decider is on the main chart,
-    // so the write lands (`prepareFinal` runs in the non-merging Final
-    // subflow and cannot write back) — and before every judge below, so
-    // `judgeAnswer`, `judgeEvidence`, `readValidatedAnswer` / `judgeClaims`,
-    // `captureTurnPayload` and `Agent.runTyped` all see the answer the model
-    // meant. Rows are filed only when the model declared standings; the key
-    // is taken off whenever it was there. Unarmed: not one line runs, and a
-    // string that is not JSON is untouched.
-    /** The string the provider returned, held aside when the arm took a key
-     *  off it — what every RE-ASK exit puts back (`reAsk`). */
-    let emission: string | undefined;
-    if (findings === true && typeof scope.llmLatestContent === 'string') {
-      const raw = scope.llmLatestContent;
-      const peeled = peelAnswerFindings(raw);
-      if (peeled.findings?.previous !== undefined) {
-        // Identified against the results the run can identify (`findings/
-        // offer.ts · knownResults`): the last batch AND every tool message on
-        // `history` as this call was served it — the same list the offer was
-        // read from — so an id copied from the offer resolves whichever batch
-        // it came from (9.102.0). A ruled-out standing whose result the
-        // dispatch door recorded as an absence (`coverageDeclared`) AND the
-        // model was served as one (the served string — the door records the
-        // return before the after-tool chain acts) gets its
-        // `unsettled-by-absence` row immediately after it, worded from what
-        // was served; the key is read only for such a standing (9.113.0,
-        // `findings/unsettled.ts`).
-        const known = knownResults(
-          [...((scope.history as readonly LLMMessage[] | undefined) ?? [])],
-          [...((scope.toolResults ?? []) as readonly PreviousResult[])],
-        );
-        recordFindings(
-          scope,
-          withUnsettledRows(
-            standingRowsFrom(known, peeled.findings, 'answer', scope.iteration as number),
-            known,
-            () => [...((scope.coverageDeclared ?? []) as readonly DeclaredCoverage[])],
-          ),
-        );
-      }
-      if (peeled.content !== raw) {
-        scope.llmLatestContent = peeled.content;
-        emission = raw;
-      }
-    }
-    /**
-     * A branch that asks the model AGAIN quotes `llmLatestContent` back into
-     * the conversation as the turn being corrected — `outputRetry` and
-     * `stepNudge` push it into history as the assistant turn, `evidenceRecheck`
-     * serves it as the rejected draft — so at those exits it must be the
-     * string the provider returned, or history holds a turn the model never
-     * emitted and the next request echoes it (`outputAttempts` records the
-     * verdict, never the text). The judges saw the PEELED answer; the answer
-     * that STANDS — every `'final'` — is the peeled one. Unarmed, or nothing
-     * peeled: the write-free exit it always was.
-     */
+    // After the chain and before every judge below (`peelAnswerStandings`,
+    // the one peel every decider runs). The string it held before the key
+    // came off is what every RE-ASK exit puts back (`reAsk`).
+    const emission = peelAnswerStandings(scope, findings);
     const reAsk = (
       branch: 'output-retry' | 'step-nudge' | 'evidence-recheck',
       rationale: string,
     ): RouteBranch => {
-      if (emission !== undefined) scope.llmLatestContent = emission;
+      restoreEmission(scope, emission);
       emitRouteDecided(scope, branch, rationale);
       return branch;
     };

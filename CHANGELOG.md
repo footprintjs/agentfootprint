@@ -5,6 +5,35 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [9.114.1] - 2026-09-25
+
+### Fixed
+
+- **`.findings()` without `.outputSchema()` no longer hands the caller the
+  model's `_findings` notes, and the answer's standings are filed.** The
+  instruction `.findings()` serves tells the model it may put the last batch's
+  standings in a top-level `_findings.previous` on a JSON answer, with or
+  without an output schema. Only the agent built with `.outputSchema()` took
+  that key back off. On every other armed agent — a plain one, or one with
+  `.messageMiddleware()`, a stepped skill or `.namesAndNumbersFromEvidence()` —
+  a model that followed the instruction had its raw `"_findings": {…}`
+  returned by `agent.run()`, where the end user saw it, and the standings it
+  declared were never filed: `agent.findings()` had no row for the last batch
+  of tool results. Every one of those agents now takes the key off with the
+  same single step the output-schema agent uses: the returned answer, the
+  committed record and `turn_end` carry the answer without the key, and the
+  standings are filed with `declaredOn: 'answer'`. The step runs after the
+  output middleware and before the step check and the evidence gate, so they
+  judge the answer the caller receives (a value only the key carried is no
+  longer flagged as an unsupported claim), and a re-ask — a step nudge or an
+  evidence revision — quotes the answer as the model sent it. A prose answer,
+  or a JSON answer without the key, is returned byte for byte as before, and
+  an agent without `.findings()` is unchanged. Streamed tokens
+  (`agentfootprint.stream.token`) are still the model's raw output, sent
+  before the step runs: a UI that renders them shows `_findings` if the model
+  writes it, so render the returned answer instead (the findings README,
+  "The answer's standings").
+
 ## [9.114.0] - 2026-09-24
 
 ### Added
