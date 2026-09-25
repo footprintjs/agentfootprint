@@ -738,11 +738,22 @@ describe('the bound reaches shutdown', () => {
       artifacts: inMemoryArtifacts(),
     }).build();
     const base = nodeHost({ port: 0, hostname: '127.0.0.1' });
+    // Close only once the turn is really inside its never-settling hook. A fixed
+    // sleep raced the request's arrival on a slow CI runner, so close() could
+    // start before the turn existed and the property went untested.
+    let hookEntered!: () => void;
+    const inHook = new Promise<void>((resolve) => (hookEntered = resolve));
     const wrapping: typeof base = {
       ...base,
       serve: (handler) =>
         base.serve((request, reply) =>
-          handler(request, { ...reply, turnArtifacts: () => new Promise<void>(() => undefined) }),
+          handler(request, {
+            ...reply,
+            turnArtifacts: () => {
+              hookEntered();
+              return new Promise<void>(() => undefined);
+            },
+          }),
         ),
     };
     const handle = await standingAgent({
@@ -757,9 +768,9 @@ describe('the bound reaches shutdown', () => {
       headers: { 'content-type': 'application/json', ...ALICE },
       body: JSON.stringify({ input: 'hi', sessionId: 'w1' }),
     });
-    await new Promise((resolve) => setTimeout(resolve, 20));
-    const closed = await within(handle.close(), 3_000);
+    expect((await within(inHook, 10_000)).settled).toBe(true);
+    const closed = await within(handle.close(), 10_000);
     expect(closed.settled).toBe(true);
     expect((await answered).status).toBe(200);
-  });
+  }, 30_000);
 });
