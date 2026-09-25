@@ -129,8 +129,16 @@ describe('a per-epoch scrub', () => {
     // Warm the module before anything is timed.
     scrubOverBatch(small);
 
-    const smallOverhead = scrubOverBatch(small);
-    const largeOverhead = scrubOverBatch(large);
+    // MEDIAN of three interleaved rounds, not one sample. Each overhead is a
+    // ratio of two best-of-5 timings, and the drift below is a ratio of two of
+    // THOSE — one noisy round (a GC pause, a busy CI runner under v8 coverage)
+    // moved it from ~1.0 to 2.25 once with the implementation unchanged.
+    // Interleaving small/large puts both sizes under the same machine
+    // conditions; the median discards the one round that was not.
+    const rounds = [0, 1, 2].map(() => [scrubOverBatch(small), scrubOverBatch(large)] as const);
+    const median = (xs: number[]): number => [...xs].sort((a, b) => a - b)[1]!;
+    const smallOverhead = median(rounds.map((r) => r[0]));
+    const largeOverhead = median(rounds.map((r) => r[1]));
 
     // THE DISCRIMINATING CLAUSE. Measured against the shape this release
     // replaced — the epoch index rebuilt per question, every read a full scan

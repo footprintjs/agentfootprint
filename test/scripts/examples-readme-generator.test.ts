@@ -42,6 +42,15 @@ function runGenerator(args: readonly string[] = []): { code: number; out: string
 // ─── 1. UNIT — generator runs ─────────────────────────────────────
 
 describe('Block E — generator runs', () => {
+  // FIRST, before any test below regenerates the file: the README as
+  // COMMITTED must already be current. Every later test rewrites it, which
+  // used to hide drift — `npm test` silently fixed the working tree instead of
+  // failing. The fix for a red here is `npm run docs:regen` + commit.
+  it('the committed README is current (--check before anything regenerates it)', () => {
+    const { code, out, err } = runGenerator(['--check']);
+    expect(code, `examples/README.md is stale — run \`npm run docs:regen\`.\n${out}${err}`).toBe(0);
+  });
+
   it('script exits 0 in regenerate mode', () => {
     const { code } = runGenerator();
     expect(code).toBe(0);
