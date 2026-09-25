@@ -35,9 +35,9 @@ only *labels* a spinning run; `maxIterations` is the hard stop), and there is **
 automatic re-delivery of an ageing skill body** (`refreshPolicy` is stored and never
 read on any version — use `surfaceMode: 'both'`).
 
-## Subpath map — 13 doors
+## Subpath map — 17 doors
 
-`agentfootprint` (main barrel: `Agent`, `LLMCall`, `defineTool`, control flow, patterns, `defineRAG`, pause/resume) · `/providers` (`mock`, `anthropic`, `openai`, `bedrock`, `ollama`, `mcpClient`, embedders — every provider, so bundlers never walk the vendor SDKs from the main barrel) · `/context` (`defineSkill`, `defineFact`, `defineSteering`, `defineInstruction`, `skillGraph`, `skillsFromDir`, the scorers) · `/memory` (`defineMemory`, `InMemoryStore`, `mockEmbedder`, the stores) · `/rag` (stores + loaders; `defineRAG` itself is on the main barrel) · `/observe` (recorders, tracing, `RunStep`) · `/resilience` (provider decorators) · `/reliability` (the rules-based fail-fast gate) · `/cache` (prefix-cache strategies; importing it registers them) · `/security` · `/hosting` · `/events` · `/skill-graph` (the routing layer with no framework attached, for a host that is not this agent).
+`agentfootprint` (main barrel: `Agent`, `LLMCall`, `defineTool`, control flow, patterns, `defineRAG`, pause/resume) · `/providers` (`mock`, `anthropic`, `openai`, `bedrock`, `ollama`, `mcpClient`, embedders — every provider, so bundlers never walk the vendor SDKs from the main barrel) · `/context` (`defineSkill`, `defineFact`, `defineSteering`, `defineInstruction`, `skillGraph`, `skillsFromDir`, the scorers) · `/memory` (`defineMemory`, `InMemoryStore`, `mockEmbedder`, the stores) · `/rag` (stores + loaders; `defineRAG` itself is on the main barrel) · `/observe` (recorders, tracing, `RunStep`) · `/resilience` (provider decorators) · `/reliability` (the rules-based fail-fast gate) · `/cache` (prefix-cache strategies; importing it registers them) · `/security` · `/hosting` · `/events` · `/skill-graph` (the routing layer with no framework attached, for a host that is not this agent) · `/recipes` (`defineAgentRecipe` — one named, versioned agent setup, applied with `.recipe()`) · `/maps` (`Claim<T>` and the map-engagement vocabulary behind `.maps()`) · `/classify` (the calibrated-classifier port: `Classifier`, `mockClassifier`) · `/ontology` (`defineOntology` — a declared map of the domain, mounted with `.ontology()`). `package.json` `exports` is the complete list; a path not on it does not resolve.
 
 ## Core Concepts
 
@@ -282,6 +282,29 @@ import { withRetry, withFallback, withCircuitBreaker } from 'agentfootprint/resi
 const reliable = withRetry(provider, { maxAttempts: 3 });
 const resilient = withFallback(primary, backup);
 ```
+
+## Decision Tree — Pick the Right Tool
+
+| Goal | Use |
+|---|---|
+| One-shot LLM call (summarization, classification) | `LLMCall` |
+| Loop with tools (research, code, anything iterative) | `Agent` |
+| Two LLM calls in series with output flowing | `Sequence` |
+| Multiple critics, merge with LLM | `Parallel` |
+| Route to specialist by intent | `Conditional` |
+| Iterate until quality bar | `Loop` |
+| Output format / persona / safety policy | `defineSteering` |
+| Rule that fires when predicate matches | `defineInstruction` |
+| LLM activates a body of expertise + its tools | `defineSkill` |
+| Inject user profile / current time / env data | `defineFact` |
+| Remember last N turns of conversation | `defineMemory({ type: EPISODIC, strategy: WINDOW })` |
+| Semantic recall via embeddings | `defineMemory({ type: SEMANTIC, strategy: TOP_K })` |
+| Cross-run "why?" replay | `defineMemory({ type: CAUSAL, strategy: TOP_K })` ⭐ |
+| Old memories should stop coming back | `defineMemory({ type: EPISODIC, strategy: DECAY, halfLifeMs })` |
+| Long conversation overflows the live window | `.compaction({ summarizer, model })` on the Agent |
+| Stored recall outgrew its window | `defineMemory({ type: EPISODIC, strategy: { kind: SUMMARIZE, recent, size, llm, model } })` — folds the older entries into one stored summary; originals kept |
+| Retrieve from a document corpus | `defineRAG({ store, embedder, topK, threshold })` |
+| Use tools from an external MCP server | `mcpClient({ transport, ... })` + `agent.tools(await c.tools())` |
 
 ## Anti-Patterns
 
