@@ -174,6 +174,54 @@ withRetry(new MyCustomProvider({ apiKey: '...' }), {
 });
 ```
 
+## What to normalize — and where the built-in providers still differ
+
+Your `fromMyApiFormat` converter has one job beyond copying text: map your vendor's
+vocabulary onto the shared one, the same way the built-in adapters do. The agent loop
+reads only the normalized fields, so code that works on `anthropic()` works on yours.
+
+| Field | The shared vocabulary | How the built-in adapters get there |
+|---|---|---|
+| `stopReason` | `'stop'`, `'tool_use'`, `'max_tokens'`, `'content_filter'` | Anthropic `end_turn` → `'stop'`; OpenAI `tool_calls` → `'tool_use'` and `length` → `'max_tokens'`; Bedrock `guardrail_intervened` → `'content_filter'`; Gemini `SAFETY` → `'content_filter'`. A reason with no match is passed through **unchanged**, so a vendor-specific reason reaches you instead of being guessed at |
+| `usage` | `{ input, output, cacheRead?, cacheWrite?, thinking? }` | The optional fields appear only when the vendor reports them. Never invent a zero — recorders treat a present field as a measured one |
+| `toolCalls` | `{ id, name, args }[]`, possibly several per reply | The agent runs every call in the reply within one iteration. On Anthropic, `parallelToolCalls: false` caps it at one (see [Anthropic](doc:anthropic)) |
+
+A few differences are not normalized away, because they are real:
+
+- **Extended thinking.** `Agent.create(...).thinking({ budget })` puts `thinking: { budget }` on every request. Anthropic sends it as a thinking budget, Gemini as its thinking budget, Ollama turns thinking on; OpenAI ignores it, because its reasoning is picked by the model id. If your API has no such knob, ignore `req.thinking`.
+- **System messages inside `messages`.** Some wires carry them, some drop them — that is what [`carriesInMessages`](#carriesinmessages--declare-what-your-wire-can-carry) declares.
+- **Model ids.** They are the vendor's. A Bedrock id is not an Anthropic API id, and on Azure OpenAI or Foundry the `model` is your **deployment** name. Switching providers usually means switching the `model` string too.
+
+If your application code starts branching on which provider is attached, stop and
+write against the normalized fields instead.
+
+## Picking a built-in provider from config — `createProvider()`
+
+When the provider is chosen at runtime — an env var, a feature flag, a tenant setting —
+`createProvider` builds any built-in provider from one tagged object. `kind` picks the
+adapter; the rest of the object is that factory's own options:
+
+```ts
+import { createProvider, type CreateProviderOptions } from 'agentfootprint/providers';
+
+const provider = createProvider({
+  kind: process.env.LLM_PROVIDER ?? 'mock',   // 'anthropic', 'openai', 'bedrock', …
+  apiKey: process.env.LLM_API_KEY,
+  defaultModel: process.env.LLM_MODEL,
+} as CreateProviderOptions);
+```
+
+The kinds are `mock`, `anthropic`, `openai`, `ollama`, `foundry`, `foundry-local`,
+`bedrock`, `gemini`, `browser-anthropic` and `browser-openai` (the type is exported as
+`ProviderKind`). An unknown kind throws, naming it.
+
+Gotchas:
+
+- **Custom providers don't go through it** — pass your instance to `Agent.create({ provider })` directly.
+- **No Azure kind.** Call `azureOpenai()` (or `browserAzureOpenai()`) directly.
+- **The `as CreateProviderOptions` cast** is the price of a kind read from a string: TypeScript can't check that the options match a kind it only learns at runtime. With a literal `kind: 'anthropic'` you get full checking and need no cast.
+- **Credentials already in the environment?** `providerFromEnv()` (main barrel) reads them and picks the provider itself — see [Ollama](doc:ollama) and [Microsoft Foundry](doc:microsoft-foundry) for its detection order.
+
 ## Anti-patterns
 
 - Don't bake retry logic into `complete`. Let `withRetry` handle it; your provider should be a thin SDK wrapper.
