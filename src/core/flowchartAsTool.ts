@@ -140,6 +140,7 @@ import {
   type KeepsInnerRuns,
 } from '../lib/trace-toolpack/innerRunRecords.js';
 import { servableSnapshot } from './servableSnapshot.js';
+import { argsRedactedBy, SHOWN_ARGS } from './toolShownArgs.js';
 import { defineTool } from './tools.js';
 import type { Tool, ToolExecutionContext } from './tools.js';
 
@@ -502,12 +503,17 @@ export function flowchartAsTool(opts: FlowchartAsToolOptions): Tool {
     },
   });
 
+  // The same policy on the ARGUMENTS an event may show (`toolShownArgs.ts` ·
+  // `argsRedactedBy`): the result is already the redacted view, and a key the
+  // policy names must not ride out beside it in the call's arguments. Under
+  // the same kind of registry symbol as the store below; no policy → none.
+  const shown = opts.redact !== undefined ? { [SHOWN_ARGS]: argsRedactedBy(opts.redact) } : {};
   // The store rides the Tool under a registry symbol — invisible to the
   // LLM, invisible to `Tool`'s shape, and found by `innerRunsOf()`. The
   // Agent builder collects it at `.build()` and hands it to the trace
   // artifacts, so the descent needs no wiring from the consumer.
-  if (store === undefined) return tool;
-  const keepsRecords: Tool & KeepsInnerRuns = { ...tool, [INNER_RUN_RECORDS]: store };
+  if (store === undefined) return opts.redact === undefined ? tool : { ...tool, ...shown };
+  const keepsRecords: Tool & KeepsInnerRuns = { ...tool, ...shown, [INNER_RUN_RECORDS]: store };
   return keepsRecords;
 }
 

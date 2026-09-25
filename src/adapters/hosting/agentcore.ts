@@ -73,6 +73,7 @@
 
 import { artifactWireBody, readArtifactWireOp } from '../../hosting/artifactWire.js';
 import { readSessionWireOp, sessionWireBody } from '../../hosting/sessionWire.js';
+import { platformFrontedDoor, type CrossSiteOptions } from '../../hosting/doorGuard.js';
 import { checkEnvelope } from '../../hosting/envelope.js';
 import { headerValue, httpHost } from '../../hosting/httpHost.js';
 import type {
@@ -195,8 +196,23 @@ const CONVERSATION_LIMITS = { maxFrameBytes: 32_768, idleMs: 900_000 } as const;
  */
 const BEARER_SUBPROTOCOL = 'base64UrlBearerAuthorization';
 
-/** Options for {@link agentCoreRuntimeHost}. */
-export interface AgentCoreRuntimeHostOptions {
+/**
+ * Options for {@link agentCoreRuntimeHost}.
+ *
+ * The three cross-site fields are the door guard every `httpHost` keeps, with
+ * this adapter's defaults INVERTED — off unless set. The runtime's front door
+ * is the only way to this port and demands a credential no web page holds (a
+ * signed request, or the bearer a browser offers on `/ws`), and whether that
+ * front door forwards `Origin` to the container at all is still unverified —
+ * so a default Origin rule could refuse the documented browser path while
+ * protecting nothing (see `platformFrontedDoor` in `src/hosting/doorGuard.ts`).
+ * Set any of them to enforce it, exactly as on every other door. On a
+ * LOOPBACK `hostname` (a laptop — no platform fronts it) every plain-host
+ * default applies instead, the loopback-only `allowedHosts` included; with the
+ * rules off the host says so once at boot. The session-id bound applies
+ * regardless: the runtime's own session header is bounded like any other.
+ */
+export interface AgentCoreRuntimeHostOptions extends CrossSiteOptions {
   /**
    * Port to bind. Default `8080` — the port the container contract specifies.
    * Pass `0` in tests to take an ephemeral one.
@@ -537,6 +553,10 @@ export function agentCoreRuntimeHost(options: AgentCoreRuntimeHostOptions = {}):
     // the pair by name rather than quietly dropping one half of what was asked
     // for.
     ...(options.onUnhandled !== undefined && { onUnhandled: options.onUnhandled }),
+    // The platform fronts this port: browser rules off unless the deployment
+    // sets them (see the options' doc) — except on a LOOPBACK bind, which no
+    // platform fronts, where every plain-host default applies.
+    ...platformFrontedDoor(options, options.server === undefined ? options.hostname : undefined),
   });
 }
 

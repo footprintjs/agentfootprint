@@ -69,8 +69,12 @@
  * (`payloadMode: 'bounded'`) record payloads NEVER carry raw runtime
  * values that can echo PII:
  *
- *   - tool args             → `'[keys: …]'` (top-level key NAMES only)
- *   - tool results          → `'[type: …]'` (typeof only)
+ *   - tool args             → `'[keys: …]'` (top-level key NAMES only);
+ *                             `tool_end`'s `changedArgKeys` is names already
+ *   - tool results          → `'[type: …]'` (typeof only) — `result` and,
+ *                             when a rule changed it, `modelResult` alike
+ *   - an evaluation's `explanation` → `'[N chars]'` (a judge's reason can
+ *                             quote the answer it graded)
  *   - userPrompt / LLM content / thinking blocks / history
  *                           → `'[N chars]'` / `'[N messages]'` markers
  *   - content PREVIEWS (`contentSummary` on context/memory events,
@@ -379,7 +383,13 @@ const BOUND_FIELDS: Readonly<
     blocks: (v) => (Array.isArray(v) ? `[${v.length} blocks]` : charsMarker(v)),
   },
   'agentfootprint.stream.tool_start': { args: keysMarker },
-  'agentfootprint.stream.tool_end': { result: (v) => `[type: ${typeofOf(v)}]` },
+  // `modelResult` (what a rule let the model read) is the same content as
+  // `result`, from the other side of a rule — bounded the same way.
+  // `changedArgKeys` is names only and rides verbatim, like `args`' keys.
+  'agentfootprint.stream.tool_end': {
+    result: (v) => `[type: ${typeofOf(v)}]`,
+    modelResult: (v) => `[type: ${typeofOf(v)}]`,
+  },
   // contentSummary is a raw-content PREVIEW (not a redacted summary) —
   // for short content it IS the content, so it is bounded like content.
   // `contentHash` stays verbatim: it links identical injections across
@@ -394,7 +404,10 @@ const BOUND_FIELDS: Readonly<
   'agentfootprint.pause.request': { questionPayload: keysMarker },
   'agentfootprint.pause.resume': { resumeInput: keysMarker },
   'agentfootprint.risk.flagged': { evidence: keysMarker },
-  'agentfootprint.eval.score': { evidence: keysMarker },
+  // `explanation` is a judge's reason — it can quote the answer it graded
+  // (`EvalScorePayload.explanation` says CONTENT). `label` is a vocabulary
+  // word by contract and stays verbatim.
+  'agentfootprint.eval.score': { evidence: keysMarker, explanation: charsMarker },
   'agentfootprint.memory.strategy_applied': { scoreEvidence: keysMarker },
 };
 

@@ -174,6 +174,27 @@ export interface RunRecorder {
  * ```
  */
 export function recordRun(runner: Runner, options: RecordRunOptions = {}): RunRecorder {
+  return recordRunWhere(runner, keepEveryEvent, options);
+}
+
+const keepEveryEvent = (): boolean => true;
+
+/**
+ * {@link recordRun} with a timeline that keeps only the events `keep` admits —
+ * the Agent's own per-run recording (`artifacts: { recordings: true }`) passes
+ * its run-membership rule (`bridge/eventMeta.ts · eventBelongsToRun`), so a
+ * fact produced for ANOTHER session while this run is in flight on a shared
+ * instance never enters it. The boundary log and the snapshot are untouched:
+ * neither ever carried such a fact.
+ *
+ * @internal — the Agent's; not on any door. `recordRun` is the public producer
+ * and records everything, as it always has.
+ */
+export function recordRunWhere(
+  runner: Runner,
+  keep: (event: AgentfootprintEvent) => boolean,
+  options: RecordRunOptions = {},
+): RunRecorder {
   // 1. THE TIMELINE. Subscribed before the run so nothing is missed —
   //    the dispatcher drops events with no listener rather than queuing
   //    them, so a late subscription starts mid-story. The bounded tail
@@ -182,7 +203,7 @@ export function recordRun(runner: Runner, options: RecordRunOptions = {}): RunRe
   //    amount and report a shortfall the same way.
   const tail = eventTail(options.maxEvents ?? DEFAULT_MAX_EVENTS);
   const offEvents: Unsubscribe = runner.on('*', (event: AgentfootprintEvent) => {
-    tail.push(event);
+    if (keep(event)) tail.push(event);
   });
 
   // 2. THE BOUNDARIES — all three connections, which is the whole reason

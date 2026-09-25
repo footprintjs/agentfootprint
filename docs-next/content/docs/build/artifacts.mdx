@@ -445,19 +445,20 @@ One ladder, one contract: a tool that stored a dataset against the in-memory sto
 
 ## The lifecycle, on the record
 
-Five typed events (domain wildcard: `agent.on('agentfootprint.artifacts.*', …)`):
+Six typed events (domain wildcard: `agent.on('agentfootprint.artifacts.*', …)`):
 
 | event | payload | fires when |
 |---|---|---|
-| `agentfootprint.artifacts.minted` | `ArtifactMintedPayload` — ref, kind, bytes, origin, parents | a tool checked a payload in (or placement did it for one) |
+| `agentfootprint.artifacts.minted` | `ArtifactMintedPayload` — ref, kind, bytes, origin, parents, `tool?` | a tool checked a payload in (or placement did it for one); `tool` is absent when no tool did — the run's own recording, or a host filing for its turn through `HostReply.turnArtifacts` |
 | `agentfootprint.artifacts.resolved` | `ArtifactResolvedPayload` — ref, `via: 'head' \| 'get'` | a ticket was redeemed — by a tool, or by dispatch resolving a `wants` argument |
 | `agentfootprint.artifacts.expired` | `ArtifactExpiredPayload` — ref, reason (ttl / max-bytes / max-count) | retention swept one |
 | `agentfootprint.artifacts.refused` | `ArtifactRefusedPayload` — op, reason, ref? | a verb refused — no store, missing-or-expired, unknown parent, digest mismatch, invalid input, kind mismatch; `op: 'dispatch'` marks the framework's own door (wants / present) |
 | `agentfootprint.artifacts.presented` | `ArtifactPresentedPayload` — ref, `as`, snapshot | the model handed a ref to the screen |
+| `agentfootprint.artifacts.hand_over_failed` | `ArtifactHandOverFailedPayload` — `cause` (`hook` / `operation` / `timeout` / `abort` / `expired`), `op?`, `errorClass?`, `errorCode?` | a host's own filing for a turn (`HostReply.turnArtifacts`) did not go cleanly — class only, stamped with its session; the reply was delivered regardless |
 
 This is what separates the store from plain "where are the bytes" systems: every mint, hop and refusal lands on the **same causal record** as the rest of the run, so "where did this number come from?" is a query, not an archaeology dig.
 
-For custom wiring outside the Agent (your own harness, tests), the binding layer is public: `bindArtifacts(store, scope, options)` (a `BindArtifactsOptions` with `origin` + an `ArtifactEventSink` receiving each `ArtifactEventFact` — op vocabulary `ArtifactOp`, refusal vocabulary `ArtifactRefusalReason`, put shape `ToolArtifactPutInput`) and `unconfiguredArtifacts()`, the fail-closed teacher itself.
+For custom wiring outside the Agent (your own harness, tests), the binding layer is public: `bindArtifacts(store, scope, options)` (a `BindArtifactsOptions` with `origin` + an `ArtifactEventSink` receiving each `ArtifactEventFact` — op vocabulary `ArtifactOp`, refusal vocabulary `ArtifactRefusalReason`, put shape `ToolArtifactPutInput`) and `unconfiguredArtifacts()`, the fail-closed teacher itself. `origin` is the binding's field on every path: a caller-supplied `origin` on a `put` is dropped, and the binding stamps its own — or none, when it was given none.
 
 ## Decisions worth knowing
 

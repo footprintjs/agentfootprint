@@ -43,6 +43,7 @@
 
 import type { IncomingMessage, Server, ServerResponse } from 'node:http';
 
+import { platformFrontedDoor, type CrossSiteOptions } from '../../hosting/doorGuard.js';
 import { headerValue, httpHost, type HttpHost } from '../../hosting/httpHost.js';
 import {
   a2aAgentCardDocument,
@@ -107,7 +108,19 @@ export function agentCoreA2AErrorCode(code: string | undefined): number {
   }
 }
 
-export interface AgentCoreA2AHostOptions {
+/**
+ * Options for {@link agentCoreA2AHost}.
+ *
+ * The three cross-site fields are the door guard every `httpHost` keeps, with
+ * this adapter's defaults INVERTED — off unless set: the runtime's front door
+ * is the only way to this port and demands a credential no web page holds, so
+ * the browser rules would protect nothing here (see `platformFrontedDoor` in
+ * `src/hosting/doorGuard.ts` for the whole argument). Set any of them to
+ * enforce it, exactly as on every other door. On a LOOPBACK `hostname` every
+ * plain-host default applies instead; with the rules off the host says so once
+ * at boot. The session-id bound applies regardless.
+ */
+export interface AgentCoreA2AHostOptions extends CrossSiteOptions {
   /** The agent card other agents read. Required — discovery is not optional in A2A. */
   readonly card: A2AAgentCard;
   /** Port to bind. Default {@link DEFAULT_AGENTCORE_A2A_PORT}. Pass `0` in tests. */
@@ -200,6 +213,10 @@ export function agentCoreA2AHost(options: AgentCoreA2AHostOptions): HttpHost {
     // the capability is declared, and it caught it here.
     capabilities: [],
     maxBodyBytes: options.maxBodyBytes ?? DEFAULT_MAX_BODY_BYTES,
+    // The platform fronts this port: browser rules off unless the deployment
+    // sets them (see the options' doc) — except on a LOOPBACK bind, which no
+    // platform fronts, where every plain-host default applies.
+    ...platformFrontedDoor(options, server === undefined ? hostname : undefined),
     ...socket,
   });
 }

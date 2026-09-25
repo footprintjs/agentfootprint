@@ -31,13 +31,26 @@
  * A body that NAMES an `op` never falls through to a model turn. A caller who
  * typo'd `'artifact-head'` and silently got a conversation turn (with the ref
  * as garbage input) would be the accepted-and-silently-wrong failure, so an
- * unknown op — and a known op missing its `ref` — throws
- * {@link InvalidWireOpError}, which `httpHost` answers as that request's 400.
+ * unknown op — and a known op missing its `ref`, or naming one that is not a ref
+ * (`isArtifactRef`) — throws {@link InvalidWireOpError}, which `httpHost`
+ * answers as that request's 400.
  */
 
+import { isArtifactRef } from '../artifacts/naming.js';
 import type { ArtifactMeta } from '../artifacts/types.js';
 import { InvalidWireOpError } from './errors.js';
 import { isWireOp, refuseUnknownWireOp, WIRE_OPS } from './wireOps.js';
+
+/**
+ * The refusal for a `ref` that is not a claim ticket — one sentence, shared by
+ * the wire readers and the composer's own check, and never echoing the text.
+ *
+ * @internal
+ */
+export const NOT_A_REF =
+  `was given a 'ref' that is not a claim ticket. Refs are minted as art_ followed by 22 ` +
+  `letters and digits; take them verbatim from a tool result, an artifacts.minted event ` +
+  `or a present(...) result.`;
 
 /** The wire spelling of `head` — metadata only, the render-by-ref decision. */
 export const ARTIFACT_HEAD_OP = WIRE_OPS.artifactHead;
@@ -106,6 +119,13 @@ export function readArtifactWireOp(
         `minted travel in its tool results and artifacts.minted events; a present(...) ` +
         `result carries the ref beside its description snapshot.`,
     );
+  }
+  // A ref is a MINTED token (`art_` + 22), and the one a request names travels
+  // onto the record (`artifacts.refused { ref }`) — so text that is not a ref
+  // is refused HERE, by shape, before any of it can reach a recording someone
+  // else will read. The refusal never echoes the text.
+  if (!isArtifactRef(ref)) {
+    throw new InvalidWireOpError(`'${String(op)}' ${NOT_A_REF}`);
   }
   return { op: op === ARTIFACT_HEAD_OP ? 'head' : 'get', ref };
 }

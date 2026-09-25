@@ -103,6 +103,7 @@ import {
   type KeepsInnerRuns,
 } from '../../lib/trace-toolpack/innerRunRecords.js';
 import { servableSnapshot } from '../servableSnapshot.js';
+import { argsRedactedBy, SHOWN_ARGS } from '../toolShownArgs.js';
 import { defineTool, type Tool, type ToolExecutionContext } from '../tools.js';
 import {
   carriedProvenanceOf,
@@ -536,7 +537,11 @@ export function runbookAsTool(opts: RunbookAsToolOptions): Tool {
     },
   });
 
-  if (store === undefined) return tool;
-  const keepsRecords: Tool & KeepsInnerRuns = { ...tool, [INNER_RUN_RECORDS]: store };
+  // The policy that scrubs the served result also governs the ARGUMENTS an
+  // event may show (`../toolShownArgs.ts` · `argsRedactedBy`) — the
+  // `flowchartAsTool` rule, one rule for both halves of the call.
+  const shown = opts.redact !== undefined ? { [SHOWN_ARGS]: argsRedactedBy(opts.redact) } : {};
+  if (store === undefined) return opts.redact === undefined ? tool : { ...tool, ...shown };
+  const keepsRecords: Tool & KeepsInnerRuns = { ...tool, ...shown, [INNER_RUN_RECORDS]: store };
   return keepsRecords;
 }

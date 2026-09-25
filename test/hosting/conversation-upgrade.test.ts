@@ -510,7 +510,7 @@ describe('the protocol itself, over a real socket', () => {
       transcript += chunk.toString('utf8');
     });
     socket.write(
-      `GET /conversation HTTP/1.1\r\nHost: x\r\nConnection: Upgrade\r\nUpgrade: websocket\r\n\r\n`,
+      `GET /conversation HTTP/1.1\r\nHost: 127.0.0.1\r\nConnection: Upgrade\r\nUpgrade: websocket\r\n\r\n`,
     );
     const deadline = Date.now() + 2000;
     while (!transcript.includes('\r\n\r\n') && Date.now() < deadline) {

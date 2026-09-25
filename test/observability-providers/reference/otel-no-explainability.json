@@ -1,0 +1,133 @@
+[
+  {
+    "name": "pin-agent",
+    "parent": null,
+    "attributes": {
+      "service.name": "pin-agent",
+      "gen_ai.operation.name": "invoke_agent",
+      "gen_ai.agent.name": "pin-agent",
+      "agentfootprint.run.id": "<runId>",
+      "agentfootprint.turn.index": 3,
+      "agentfootprint.principal.id": "user-7",
+      "agentfootprint.tenant.id": "acme",
+      "gen_ai.provider.name": "anthropic",
+      "gen_ai.request.model": "claude-x",
+      "gen_ai.usage.input_tokens": 150,
+      "gen_ai.usage.output_tokens": 29,
+      "agentfootprint.iteration.count": 2
+    },
+    "events": [],
+    "status": null,
+    "ended": true
+  },
+  {
+    "name": "iteration:1",
+    "parent": 0,
+    "attributes": {
+      "iteration.number": 1,
+      "cost.cumulative_usd": 0.0123,
+      "agentfootprint.tool_call.count": 2
+    },
+    "events": [
+      {
+        "name": "agentfootprint.tool.not_dispatched",
+        "attributes": {
+          "gen_ai.tool.name": "lookup",
+          "gen_ai.tool.call.id": "tc-c",
+          "agentfootprint.tool.paused_call.id": "tc-p",
+          "agentfootprint.tool.paused_call.name": "ask"
+        }
+      }
+    ],
+    "status": null,
+    "ended": true
+  },
+  {
+    "name": "llm",
+    "parent": 1,
+    "attributes": {
+      "gen_ai.operation.name": "chat",
+      "gen_ai.request.model": "claude-x",
+      "gen_ai.provider.name": "anthropic",
+      "gen_ai.request.temperature": 0.1,
+      "gen_ai.usage.input_tokens": 100,
+      "gen_ai.usage.output_tokens": 20,
+      "gen_ai.usage.cache_read.input_tokens": 5,
+      "gen_ai.usage.cache_creation.input_tokens": 1,
+      "gen_ai.response.finish_reasons": [
+        "tool_use"
+      ],
+      "gen_ai.response.id": "resp-1"
+    },
+    "events": [],
+    "status": null,
+    "ended": true
+  },
+  {
+    "name": "tool:lookup",
+    "parent": 1,
+    "attributes": {
+      "tool.name": "lookup",
+      "gen_ai.operation.name": "execute_tool",
+      "gen_ai.tool.name": "lookup",
+      "gen_ai.tool.call.id": "tc-a",
+      "agentfootprint.tool.args.keys": [
+        "account",
+        "region"
+      ],
+      "agentfootprint.tool.result.type": "string",
+      "error.type": "_OTHER"
+    },
+    "events": [],
+    "status": {
+      "code": 2
+    },
+    "ended": true
+  },
+  {
+    "name": "tool:refund",
+    "parent": 3,
+    "attributes": {
+      "tool.name": "refund",
+      "gen_ai.operation.name": "execute_tool",
+      "gen_ai.tool.name": "refund",
+      "gen_ai.tool.call.id": "tc-b",
+      "agentfootprint.tool.protocol": "mcp",
+      "agentfootprint.tool.args.keys": [
+        "amount"
+      ],
+      "agentfootprint.tool.result.type": "object"
+    },
+    "events": [],
+    "status": null,
+    "ended": true
+  },
+  {
+    "name": "iteration:2",
+    "parent": 0,
+    "attributes": {
+      "iteration.number": 2,
+      "agentfootprint.tool_call.count": 0
+    },
+    "events": [],
+    "status": null,
+    "ended": true
+  },
+  {
+    "name": "llm",
+    "parent": 5,
+    "attributes": {
+      "gen_ai.operation.name": "chat",
+      "gen_ai.request.model": "claude-x",
+      "gen_ai.provider.name": "anthropic",
+      "gen_ai.usage.input_tokens": 50,
+      "gen_ai.usage.output_tokens": 9,
+      "gen_ai.response.finish_reasons": [
+        "end_turn"
+      ]
+    },
+    "events": [],
+    "status": null,
+    "ended": true
+  }
+]

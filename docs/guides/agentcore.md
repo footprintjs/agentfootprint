@@ -534,7 +534,12 @@ applies whichever it actually means rather than this library picking a side.
   That is a *configuration* of `otelObservability`, not a second adapter: it
   sets the instrumentation scope name their classifier routes on
   (`AGENTCORE_EVALUATIONS_SCOPE_NAME`) and turns on `captureContent`, which puts
-  the turn's prompt and answer on the span where a scorer can read them. Both
+  the turn's prompt and answer on the agent span, and `captureToolContent`,
+  which puts each executed tool call's arguments and result on its
+  `execute_tool` span (`gen_ai.tool.call.arguments` / `.result` — the arguments
+  the model proposed, with every key your `onToolCall` rules changed withheld, and
+  what the model read after your `onToolResult` rules), where a
+  scorer can read them. Both switches
   are opt-in on the neutral adapter, because content on a span is an export of
   content — see `captureContent` before you enable it. Getting those spans to
   CloudWatch is separate and yours (an OTLP exporter with AWS's documented

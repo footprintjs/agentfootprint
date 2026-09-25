@@ -55,12 +55,22 @@
  *     concurrent-run refusal, an artifact ref that did not resolve;
  *   - and a request that was SERVED.
  *
+ * The HOST's own decisions land here too, though no handler ever saw them: a
+ * request its door guard turned away (a content type any page can send, a
+ * foreign Origin, a Host it was not configured for — `'cross-site-refused'`)
+ * and a session id over the bound (`'refused'`), at the request door and the
+ * conversation door alike. They arrive through the host's `onRefusal`, which
+ * the composer subscribes to whenever a sink is set, and they carry the same
+ * classes and nothing more — door `'request'` or `'conversation'`, because a
+ * forged request is refused before its body says which of the three doors it
+ * wanted.
+ *
  * What it does not carry, stated rather than implied: a body the TRANSPORT
- * refused before the composer ever saw it — unparseable JSON, or an `op` this
- * host's wire grammar does not speak (`InvalidWireOpError`, answered 400 by
- * `httpHost` inside its own request reader). That is a malformed request rather
- * than a decision about a caller, and the composer does not claim it. Your HTTP
- * access log has it.
+ * refused as MALFORMED — unparseable JSON, a body over `maxBodyBytes`, or an
+ * `op` this host's wire grammar does not speak (`InvalidWireOpError`, answered
+ * 400 by `httpHost` inside its own request reader). That is a broken request
+ * rather than a decision about a caller, and the composer does not claim it.
+ * Your HTTP access log has it.
  *
  * Pattern: Observer at a composition boundary. Zero-cost when unset — with no
  * sink configured nothing is built, nothing is wrapped, and the reply object the
@@ -70,17 +80,33 @@
 import { bearerToken, type VerifiedIdentity } from './identityVerification.js';
 import {
   AdmissionRefusedError,
+  HostNotAllowedError,
   IdentityNotVerifiedError,
+  OriginNotAllowedError,
   SessionNotFoundError,
+  UnsupportedMediaTypeError,
   VerifierUnavailableError,
   type IdentityFailureClass,
 } from './errors.js';
 import { ARTIFACT_GET_OP, ARTIFACT_HEAD_OP } from './artifactWire.js';
 import { SESSION_LIST_OP, SESSION_TRANSCRIPT_OP, SESSION_PENDING_OP } from './sessionWire.js';
-import type { HostReply, HostRequest } from './types.js';
+import type { ArtifactHandOverFailedPayload } from '../events/payloads.js';
+import type { HostRefusal, HostReply, HostRequest, TurnArtifacts } from './types.js';
 
-/** Which of the composer's three doors this request knocked at. */
-export type IngressDoor = 'turn' | 'session-op' | 'artifact';
+/**
+ * Which door this request knocked at.
+ *
+ *  - `'turn'`, `'session-op'`, `'artifact'` — the composer's three doors, for
+ *    every request the host handed on.
+ *  - `'request'` — the host's one-exchange door, for a request the HOST refused
+ *    before the composer saw it (the door guard; the session-id bound). Which
+ *    of the three it was headed for is deliberately not recorded: a forged
+ *    request is refused on its headers, and its body is never parsed.
+ *  - `'conversation'` — a conversation upgrade the host refused before the 101.
+ *    Recorded here because it is the same host's door and the same census,
+ *    though the composer itself never serves conversations.
+ */
+export type IngressDoor = 'turn' | 'session-op' | 'artifact' | 'request' | 'conversation';
 
 /**
  * How the door answered — coarse on purpose, because this is the field a
@@ -106,9 +132,16 @@ export type IngressDoor = 'turn' | 'session-op' | 'artifact';
  *  - `'admission-refused'` — 429. A policy said no before any work started.
  *  - `'session-refused'` — the one indistinguishable not-found: a session that
  *    does not exist, belongs to somebody else, or names no owner.
+ *  - `'cross-site-refused'` — the host's door guard turned it away before any
+ *    handler saw it: a content type a page on any site can send (415), a
+ *    browser Origin this door does not allow (403), a Host it was not
+ *    configured for (421). `errorCode` says which. Not proof of an attack — a
+ *    script that forgot `content-type: application/json` lands here too — but
+ *    the shape every forged request has, counted where it can be seen.
  *  - `'refused'` — every other refusal the door made by name (a session op with
  *    no verifier configured, a store with no owner index, a concurrent run, an
- *    artifact ref that did not resolve, a pause the wire could not carry).
+ *    artifact ref that did not resolve, a pause the wire could not carry, a
+ *    session id over the ceiling).
  *  - `'failed'` — the request ended in an error that is not one of the door's
  *    own refusals. Usually the run, the store or the provider — which is why
  *    an admitted request that then broke lands HERE and not in `'served'`.
@@ -119,6 +152,7 @@ export type IngressOutcome =
   | 'verifier-unavailable'
   | 'admission-refused'
   | 'session-refused'
+  | 'cross-site-refused'
   | 'refused'
   | 'failed';
 
@@ -158,6 +192,16 @@ export interface IngressRecord {
   readonly bearerPresent: boolean;
   /** What the admission policy answered, when one was consulted. */
   readonly admission?: IngressAdmissionVerdict;
+  /**
+   * This turn's artifact hand-over (`HostReply.turnArtifacts`) did not go
+   * cleanly — the FIRST failure of it: the host's hook threw, an operation it
+   * started failed, it outran `turnArtifactsTimeoutMs`, or the caller hung up
+   * first. The reply was delivered regardless — the hand-over never decides the
+   * terminal, so `outcome` still says what the caller got. The per-request
+   * census of what `agentfootprint.artifacts.hand_over_failed` reports on the
+   * serving agent's stream, in the same shape: class only, never the message.
+   */
+  readonly turnArtifactsFailure?: ArtifactHandOverFailedPayload;
 }
 
 /**
@@ -205,6 +249,13 @@ function classify(err: unknown): {
   if (err instanceof SessionNotFoundError) {
     return { outcome: 'session-refused', errorCode: err.code, errorName: err.name };
   }
+  if (
+    err instanceof UnsupportedMediaTypeError ||
+    err instanceof OriginNotAllowedError ||
+    err instanceof HostNotAllowedError
+  ) {
+    return { outcome: 'cross-site-refused', errorCode: err.code, errorName: err.name };
+  }
   const code = (err as { code?: unknown } | undefined)?.code;
   const name = (err as { name?: unknown } | undefined)?.name;
   // A hosting refusal names itself with an `ERR_…` code. Anything else is a
@@ -233,6 +284,8 @@ export interface IngressNote {
   identified(verified: VerifiedIdentity | undefined): void;
   /** An admission policy answered. */
   admitted(verdict: IngressAdmissionVerdict): void;
+  /** The turn's artifact hand-over failed — the first failure is recorded. */
+  turnArtifactsFailed(failure: ArtifactHandOverFailedPayload): void;
   /** File the record for a request that left without any terminal at all. */
   settle(): void;
 }
@@ -291,6 +344,34 @@ function warnSink(err: unknown): void {
 }
 
 /**
+ * File the record for a request the HOST refused before the composer saw it —
+ * what `standingAgent` hands to the host's `onRefusal` when a sink is set.
+ *
+ * Built from the refusal's class and the fact of a credential, exactly as a
+ * composer refusal is: no message, no header, no session id (a session id the
+ * bound refused is the one thing this record must never carry), no user —
+ * nothing was verified, because nothing got that far.
+ *
+ * @internal — the option is public, this bookkeeping is not.
+ */
+export function recordHostRefusal(refusal: HostRefusal, sink: IngressSink): void {
+  const detail = classify(refusal.error);
+  const record: IngressRecord = {
+    at: Date.now(),
+    door: refusal.door,
+    outcome: detail.outcome,
+    ...(detail.errorCode !== undefined && { errorCode: detail.errorCode }),
+    ...(detail.errorName !== undefined && { errorName: detail.errorName }),
+    bearerPresent: refusal.bearerPresent,
+  };
+  try {
+    sink(record);
+  } catch (sinkErr) {
+    warnSink(sinkErr);
+  }
+}
+
+/**
  * Begin one request's ingress record.
  *
  * @internal — the option is public, this bookkeeping is not.
@@ -304,6 +385,7 @@ export function beginIngress(request: HostRequest, sink: IngressSink): IngressNo
   const bearerPresent = bearerToken(request.headers) !== undefined;
   let userId: string | undefined;
   let admission: IngressAdmissionVerdict | undefined;
+  let hookFailure: IngressRecord['turnArtifactsFailure'];
   let filed = false;
 
   function file(outcome: IngressOutcome, err?: unknown): void {
@@ -323,6 +405,7 @@ export function beginIngress(request: HostRequest, sink: IngressSink): IngressNo
       ...(sessionId !== undefined && { sessionId }),
       bearerPresent,
       ...(admission !== undefined && { admission }),
+      ...(hookFailure !== undefined && { turnArtifactsFailure: hookFailure }),
     };
     try {
       sink(record);
@@ -366,6 +449,15 @@ export function beginIngress(request: HostRequest, sink: IngressSink): IngressNo
         }),
         // Not a terminal: a chunk is part of an answer still being written.
         ...(reply.emit && { emit: (chunk: string) => reply.emit?.(chunk) }),
+        // Not a terminal either, and forwarded by presence for the same reason
+        // the terminals are: the composer builds a binding only for a host
+        // that asked, so defining it here unconditionally would build one per
+        // turn that nobody holds. The host's promise is returned as-is — the
+        // composer awaits it (bounded), and records a failure through
+        // `turnArtifactsFailed` below.
+        ...(reply.turnArtifacts && {
+          turnArtifacts: (turn: TurnArtifacts) => reply.turnArtifacts?.(turn),
+        }),
       };
     },
     identified(verified: VerifiedIdentity | undefined): void {
@@ -373,6 +465,11 @@ export function beginIngress(request: HostRequest, sink: IngressSink): IngressNo
     },
     admitted(verdict: IngressAdmissionVerdict): void {
       admission = verdict;
+    },
+    turnArtifactsFailed(failure: ArtifactHandOverFailedPayload): void {
+      // The first failure is the census entry; a later one of the same hand-over
+      // (the bound firing after an operation failed, say) is on the stream.
+      hookFailure ??= failure;
     },
     settle(): void {
       // Only reachable if a request left the door without ending its reply,

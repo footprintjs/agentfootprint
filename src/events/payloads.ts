@@ -420,6 +420,45 @@ export interface ToolEndPayload {
    * other bracket.
    */
   readonly notDispatched?: LLMMessage['notDispatched'];
+  /**
+   * What the MODEL read for this call, when a rule made it differ from
+   * `result`: an `onToolResult` link rewrote or denied it, or the
+   * `maxToolResultChars` cap cut the model's channel alone. `result` stays the
+   * tool's own answer — this is the other half of that split, which until now
+   * lived only in history. Absent when the model read `result` itself (the
+   * common case; the two channels are then one reference). Stamped on all five
+   * dispatch paths.
+   */
+  readonly modelResult?: unknown;
+  /**
+   * The NAMES of the argument keys whose value the tool ran with differs from
+   * the proposal `stream.tool_start` carried: set, rewritten or removed by an
+   * `onToolCall` link, or hidden by the tool's own redaction policy
+   * (`flowchartAsTool({ redact })`, `runbookAsTool({ redact })` —
+   * `core/toolShownArgs.ts` · `shownArgsOf`). Names only, never values: a
+   * link may ADD a value (a server-side key) the model never saw, and an event
+   * goes to every sink attached, each serializing what it gets. Taken BEFORE
+   * the tool runs, so nothing the tool writes into its arguments reaches it.
+   * A reader exporting the call's arguments shows these keys' values as
+   * withheld. Absent when the tool ran with the proposal as it was.
+   *
+   * Stamped on the batch-dispatch bracket only — the one whose `tool_start`
+   * precedes it in the same run.
+   */
+  readonly changedArgKeys?: readonly string[];
+  /**
+   * A configured RULE refused the call, so the tool never ran: a permission
+   * policy denied or halted it, or an `onToolCall` link denied it. `result` is
+   * then the refusal the model read, and `error` is absent — this field is
+   * what tells such a bracket from a tool that ran and answered.
+   *
+   * NOT a general "never ran" marker, and its absence proves nothing: a call
+   * that could not run with no rule involved (an unknown tool name, an args
+   * rejection, a `wants` or credential block) carries `error: true` instead,
+   * a settled bracket carries `notDispatched`, and a resumed leg's bracket
+   * carries neither. Batch-dispatch bracket only.
+   */
+  readonly notExecuted?: true;
 }
 
 // context.* (5) — THE CORE DOMAIN
@@ -1950,7 +1989,9 @@ export interface TryInsteadToolPayload {
  * is a backlog of tools somebody keeps having to write by hand.
  */
 export interface ToolsCodeRunPayload {
-  /** The code-runner tool's own name, since an app may mount more than one. */
+  /** The name the model CALLED the code runner by, since an app may mount
+   *  more than one — the registered name, which differs from the runner's
+   *  own option name when a runner is re-exposed under another schema name. */
   readonly tool: string;
   /** The language the runner was configured for. */
   readonly language: string;
@@ -2166,9 +2207,37 @@ export interface EvalScorePayload {
   readonly value: number;
   readonly threshold?: number;
   readonly target: 'iteration' | 'turn' | 'run' | 'toolCall';
+  /**
+   * What the score is about: the run id (`event.meta.runId`) for `'run'` /
+   * `'turn'`, the iteration index for `'iteration'`, the provider's call id
+   * for `'toolCall'`. A NAME, not a capability: run ids are minted in
+   * sequence and anyone can write one, so a host filing a score from user
+   * input (a feedback button) checks the run is that user's before it emits.
+   * `otelObservability` parents a score to a run only when the score's own
+   * meta places it in that run's session; otherwise it rides a span of its
+   * own that names the ref.
+   */
   readonly targetRef: string;
   readonly evaluator?: 'llm' | 'fn' | 'heuristic';
   readonly evidence?: Readonly<Record<string, unknown>>;
+  /**
+   * The evaluator's own reading of the score, in a small vocabulary it
+   * documents — `'pass'` / `'fail'`, `'relevant'` / `'not_relevant'`.
+   * Optional and never derived: a `threshold` does not say which
+   * side of it passes, so no label is ever computed from one.
+   * `otelObservability` exports it BY DEFAULT as
+   * `gen_ai.evaluation.score.label` (the spec's "SHOULD have low
+   * cardinality"), so it must be a word from that vocabulary — never a
+   * judge's sentence, which belongs in {@link EvalScorePayload.explanation}.
+   */
+  readonly label?: string;
+  /**
+   * The evaluator's free-form reason for the score. It is CONTENT —
+   * a judge's reason can quote the answer it graded — so
+   * `otelObservability` exports it (`gen_ai.evaluation.explanation`) only
+   * under `captureContent`.
+   */
+  readonly explanation?: string;
 }
 
 export interface EvalThresholdCrossedPayload {
@@ -2875,7 +2944,8 @@ export interface AgentThinkingParseFailedPayload {
 // recorder, or an exporter — an id in a log is safe by construction because a
 // ref alone opens nothing.
 
-/** A tool checked a payload in and the store minted its claim ticket. */
+/** A payload was checked in and the store minted its claim ticket — by a
+ *  tool (`tool` names it), or by no tool at all (see {@link tool}). */
 export interface ArtifactMintedPayload {
   readonly ref: string;
   /** Consumer vocabulary: 'dataset/rows', 'chart/spec', … */
@@ -2891,8 +2961,14 @@ export interface ArtifactMintedPayload {
   readonly origin?: ArtifactOrigin;
   /** Derivation facts — validated at mint, so they cannot dangle at birth. */
   readonly parentRefs?: readonly string[];
-  /** The tool whose execute minted it. */
-  readonly tool: string;
+  /** The tool whose execute minted it. ABSENT when no tool did — the run's own
+   *  recording (9.26.0, the `recordings` dial) or a host filing for its turn
+   *  through `HostReply.turnArtifacts`; the event's `meta.sessionId` then names
+   *  the session the host filed for. Typed as always-present until now, and
+   *  already absent at run time since 9.26.0 — the 9.23.0 `resolved` /
+   *  `refused` precedent. Naming a phantom tool would be an actor a dashboard
+   *  groups by that does not exist. */
+  readonly tool?: string;
 }
 
 /** A ref was redeemed — described (`head`) or read (`get`) — under scope. */
@@ -2919,8 +2995,10 @@ export interface ArtifactExpiredPayload {
   readonly reason: ArtifactSweepReason;
   readonly kind: string;
   readonly bytes: number;
-  /** The tool whose put discovered/forced the sweep. */
-  readonly tool: string;
+  /** The tool whose put discovered/forced the sweep. ABSENT when the put was
+   *  not a tool's — the run's own recording, or a host filing for its turn
+   *  (the {@link ArtifactMintedPayload.tool} rule). */
+  readonly tool?: string;
 }
 
 /** An artifact verb refused — or answered "no data" — and said why. `no-store`
@@ -2944,6 +3022,46 @@ export interface ArtifactRefusedPayload {
    *  missing, expired and another-session's alike) or reached an agent with
    *  no store (`no-store`). */
   readonly tool?: string;
+}
+
+/**
+ * Why a turn's artifact hand-over (`HostReply.turnArtifacts`) did not go
+ * cleanly — one vocabulary, shared by this event and the ingress record's
+ * `turnArtifactsFailure`:
+ *
+ *  - `'hook'`      — the host's hook threw or rejected (and not merely by
+ *                    re-throwing an operation's own failure, which is counted
+ *                    once, as `'operation'`);
+ *  - `'operation'` — a verb started through the hand-over failed, awaited or
+ *                    not: a store refusal, an I/O error;
+ *  - `'timeout'`   — the hook and the operations it started outran the ceiling
+ *                    (`turnArtifactsTimeoutMs`); the binding was revoked and the
+ *                    reply delivered, and what was in flight may still land;
+ *  - `'abort'`     — the request's own signal fired (the caller hung up) before
+ *                    they settled; the same consequences;
+ *  - `'expired'`   — a verb was called after its turn ended and was refused.
+ */
+export type ArtifactHandOverFailureCause = 'hook' | 'operation' | 'timeout' | 'abort' | 'expired';
+
+/**
+ * A turn's artifact hand-over failed (the host's own filing — a story, the
+ * person's clicks). The reply was delivered regardless: the hand-over never
+ * decides it. Emitted on the serving agent for the session it was produced
+ * for (`meta.sessionId`, and `meta.runId` = the turn's run when it had one).
+ *
+ * Class only, never the message: the error came from the host's own code or
+ * its store, and either may carry anything — META ONLY, like every
+ * `artifacts.*` payload. `errorClass` is routable without parsing prose (the
+ * `tools.session_close_failed` precedent).
+ */
+export interface ArtifactHandOverFailedPayload {
+  readonly cause: ArtifactHandOverFailureCause;
+  /** The verb, for `'operation'` and `'expired'`. */
+  readonly op?: ArtifactOp;
+  /** Constructor name of what was thrown, when it was an `Error`. */
+  readonly errorClass?: string;
+  /** This package's (or the store's) own `code`, when the error carried one. */
+  readonly errorCode?: string;
 }
 
 /** The model handed an artifact to the screen (9.22.0): `present({ ref, as,

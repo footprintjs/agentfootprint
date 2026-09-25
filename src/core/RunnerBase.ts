@@ -35,6 +35,7 @@ import type {
   AgentfootprintEventType,
 } from '../events/registry.js';
 import type { EventMeta } from '../events/types.js';
+import { CONSUMER_SCOPE_RUN_ID } from '../bridge/eventMeta.js';
 import {
   attachObservabilityStrategy,
   attachCostStrategy,
@@ -800,6 +801,40 @@ export abstract class RunnerBase<TIn = unknown, TOut = unknown> implements Runne
     this.dispatcher.dispatch(event);
   }
 
+  /**
+   * Emit a library event on behalf of one hosting session — the hosting door's
+   * own facts (an artifact a screen redeemed, one a host filed for a turn, a
+   * hand-over that failed) — attributed to the session it was produced for
+   * and, when there was one, the run.
+   *
+   * The meta is `emit`'s consumer-scope meta plus `sessionId`, and `runId` when
+   * the fact was produced FOR a run (a host's filing names the turn's run,
+   * captured when its binding was created). Those stamps are what
+   * `bridge/eventMeta.ts · eventBelongsToRun` reads, so a collector that keeps
+   * ONE run's events (the run's recording, the self-explain evidence) leaves
+   * out a fact produced for another session or another run. Delivery is
+   * unchanged: every listener still receives it.
+   *
+   * @internal — the hosting door's; consumers emit through {@link emit}.
+   */
+  emitAttributed(
+    name: string,
+    payload: Record<string, unknown>,
+    attribution: { readonly sessionId: string; readonly runId?: string },
+  ): void {
+    if (!this.dispatcher.hasListenersFor(name as AgentfootprintEventType)) return;
+    const meta: EventMeta = {
+      ...this.minimalMeta(),
+      ...(attribution.runId !== undefined && { runId: attribution.runId }),
+      sessionId: attribution.sessionId,
+    };
+    this.dispatcher.dispatch({
+      type: name,
+      payload,
+      meta,
+    } as unknown as AgentfootprintEventMap[AgentfootprintEventType]);
+  }
+
   // ─── Internals exposed to subclasses ───────────────────────────
 
   /**
@@ -814,7 +849,7 @@ export abstract class RunnerBase<TIn = unknown, TOut = unknown> implements Runne
       runtimeStageId: 'consumer-emit#0',
       subflowPath: [],
       compositionPath: this.compositionPath(),
-      runId: 'consumer-scope',
+      runId: CONSUMER_SCOPE_RUN_ID,
     };
   }
 

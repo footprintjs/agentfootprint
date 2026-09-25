@@ -9,6 +9,11 @@
  * port-shaped lives in `types.ts`; this file is the join.
  *
  * ── The laws it keeps, all of them pinned by tests ───────────────────────────
+ *  - **A handshake the door guard refuses never gets a 101.** A WebSocket is
+ *    not bound by the same-origin policy and its browser API cannot set a
+ *    header, so there is no preflight to force: the host's guard judges Host,
+ *    Origin and Fetch metadata on the handshake itself, and the session id the
+ *    dialect read is bounded before the channel opens.
  *  - **A path this door does not own is not touched.** `node:http` calls EVERY
  *    `'upgrade'` listener for every upgrade, exactly as it calls every
  *    `'request'` listener — so a caller's own protocol lives beside this one on
@@ -40,13 +45,16 @@
 import type { IncomingMessage } from 'node:http';
 import type { Duplex } from 'node:stream';
 
+import { checkSessionId, type DoorGuard } from './doorGuard.js';
 import { ConversationClosedError, FrameTooLargeError } from './errors.js';
 import { lowerCasedHeaders } from './headers.js';
+import { bearerToken } from './identityVerification.js';
 import type {
   ConversationClose,
   ConversationHandler,
   ConversationLimits,
   HostConversation,
+  HostRefusal,
   Unsubscribe,
 } from './types.js';
 import {
@@ -109,6 +117,14 @@ export interface ConversationDoorOptions {
   readonly handler: ConversationHandler;
   /** Whether the host is still taking conversations — false after `close()`. */
   readonly accepting: () => boolean;
+  /**
+   * The host's door guard — Host and Origin (and the browser's Fetch
+   * metadata) judged on the handshake, BEFORE the 101. Absent, no handshake is
+   * judged, which is the conversation door as it was before the guard.
+   */
+  readonly guard?: DoorGuard;
+  /** Told about every handshake this door refuses on the guard's or the session bound's word. */
+  readonly onRefusal?: (refusal: HostRefusal) => void;
 }
 
 /** What a handshake dialect may read. Deliberately the same shape a request wire gets, minus the body. */
@@ -164,6 +180,16 @@ export function conversationDoor(options: ConversationDoorOptions): Conversation
       }
 
       const headers = lowerCasedHeaders(request.headers);
+      // The door guard, before anything else about the handshake is read. A
+      // WebSocket is not bound by the same-origin policy and its browser API
+      // cannot set a header, so there is no preflight to force: the browser's
+      // own Origin (and Sec-Fetch-Site) is the whole defence, and it has to be
+      // judged here — after the 101 the channel is open.
+      const crossSite = options.guard?.check(request);
+      if (crossSite !== undefined) {
+        refuseAtDoor(socket, crossSite, headers, options.onRefusal);
+        return true;
+      }
       const key = headers['sec-websocket-key'];
       const upgrade = (headers.upgrade ?? '').toLowerCase();
       if (upgrade !== 'websocket' || headers['sec-websocket-version'] !== '13' || !key) {
@@ -194,6 +220,14 @@ export function conversationDoor(options: ConversationDoorOptions): Conversation
           500,
           `the '${options.hostName}' host could not read this handshake: ${asMessage(err)}`,
         );
+        return true;
+      }
+      // The session-id bound, on whatever the dialect read — a header, a
+      // cookie, a query parameter. Judged before the 101, because after it the
+      // id would be on the conversation and in everything it touches.
+      const unboundedSession = checkSessionId(read.sessionId, options.hostName);
+      if (unboundedSession !== undefined) {
+        refuseAtDoor(socket, unboundedSession, { ...headers, ...read.headers }, options.onRefusal);
         return true;
       }
       socket.write(handshakeResponse(key, read.protocol));
@@ -230,16 +264,22 @@ export function conversationDoor(options: ConversationDoorOptions): Conversation
   };
 }
 
-/** The three statuses this door answers a pre-101 socket with. */
+/** The statuses this door answers a pre-101 socket with. */
 const REFUSAL_REASON: Readonly<Record<number, string>> = {
   400: 'Bad Request',
+  403: 'Forbidden',
+  415: 'Unsupported Media Type',
+  421: 'Misdirected Request',
   500: 'Internal Server Error',
   503: 'Service Unavailable',
 };
 
 /** Answer an upgrade we will not carry, in the one language a pre-101 socket speaks. */
 function refuse(socket: Duplex, status: number, message: string): void {
-  const text = `[hosting] ${message}.`;
+  refuseWithText(socket, status, `[hosting] ${message}.`);
+}
+
+function refuseWithText(socket: Duplex, status: number, text: string): void {
   const reason = REFUSAL_REASON[status] ?? 'Bad Request';
   socket.end(
     `HTTP/1.1 ${status} ${reason}\r\n` +
@@ -247,6 +287,32 @@ function refuse(socket: Duplex, status: number, message: string): void {
       `content-length: ${Buffer.byteLength(text)}\r\n` +
       `connection: close\r\n\r\n${text}`,
   );
+}
+
+/**
+ * Refuse a handshake on the door guard's or the session bound's word — the
+ * error's own status and sentence, which never repeat what the caller sent —
+ * and tell the host's refusal listeners. The listener runs AFTER the answer is
+ * written, and a listener that throws costs nothing but its own record: a
+ * broken log must not turn a refusal into a hung socket.
+ */
+function refuseAtDoor(
+  socket: Duplex,
+  error: Error & { readonly code: string; readonly status: number },
+  headers: Readonly<Record<string, string>>,
+  onRefusal: ((refusal: HostRefusal) => void) | undefined,
+): void {
+  refuseWithText(socket, error.status, error.message);
+  if (onRefusal === undefined) return;
+  try {
+    onRefusal({
+      door: 'conversation',
+      error,
+      bearerPresent: bearerToken(headers) !== undefined,
+    });
+  } catch {
+    // The refusal is answered; a listener's fault is the listener's.
+  }
 }
 
 interface OpenOptions {

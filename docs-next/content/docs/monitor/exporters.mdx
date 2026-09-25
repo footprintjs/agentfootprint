@@ -103,7 +103,13 @@ fields @timestamp, meta.sessionId, type
 ```
 
 The CloudWatch and AgentCore adapters serialize the whole envelope, so this
-arrives without their knowing it exists. Outside a host, set it yourself with
+arrives without their knowing it exists. `otelObservability` maps signals
+rather than serializing, so it places it deliberately: as the GenAI convention's
+`gen_ai.conversation.id` on the agent, chat and tool spans of a session-bound
+run — written as the session id's SHA-256 (it groups a session exactly as the
+id would, and at a door with no verifier the id itself opens the conversation;
+`conversationId: 'raw'` for a verifying door) — and on no span of a run
+without one. Outside a host, set it yourself with
 `agent.run(input, { sessionId })`.
 
 **Absent when there is no session, never invented.** An anonymous request has

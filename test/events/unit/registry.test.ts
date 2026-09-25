@@ -233,7 +233,14 @@ describe('event registry — names + exhaustiveness', () => {
     //     model call under `.ontology()`: the map's id, version and hash and
     //     its three counts. Identities and numbers only — never a meaning, a
     //     coverage sentence or a node name.)
-    expect(ALL_EVENT_TYPES.length).toBe(120);
+    //    (artifacts.hand_over_failed added with `HostReply.turnArtifacts` — a
+    //     host's own filing for a turn that did not go cleanly: the hook threw,
+    //     an operation failed, it outran its bound, the caller hung up, or a
+    //     call came after the turn. Class only, stamped with its session; the
+    //     reply was delivered regardless. The swallow is the library's decision,
+    //     so the visibility is its duty — the default deployment keeps no
+    //     ingress sink.)
+    expect(ALL_EVENT_TYPES.length).toBe(121);
   });
 
   it('every entry in ALL_EVENT_TYPES is a key of AgentfootprintEventMap', () => {

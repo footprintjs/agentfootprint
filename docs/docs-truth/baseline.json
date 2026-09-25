@@ -2,31 +2,31 @@
   "$schema": "docs-truth baseline v1",
   "note": "Recorded state of the docs-vs-code gap. CI fails only when this gets WORSE. Fixed a gap? Run `npm run docs:truth:baseline` to re-record and regenerate docs/DOCS_TRUTH_REPORT.md. The \"docs-promise-nothing\" class is NEVER baselined — it must always be zero.",
   "documentedMeans": "the symbol name appears in prose (outside any fenced code block) on a hand-written page under docs-next/content/docs. The two generated TypeDoc trees (docs-next/content/docs/api, docs/api-reference) are excluded — they are generated from source, so counting them would mark everything documented.",
-  "recordedAt": "2026-09-12",
+  "recordedAt": "2026-09-25",
   "surface": {
-    "subpaths": 15,
-    "declaredSymbols": 2115,
-    "declaredEvents": 111,
-    "eventSource": "src/events/registry.ts:780"
+    "subpaths": 17,
+    "declaredSymbols": 2234,
+    "declaredEvents": 120,
+    "eventSource": "src/events/registry.ts:843"
   },
   "counts": {
     "symbols": {
       "docs-promise-nothing": 0,
-      "documented-never-exercised": 1136,
-      "exercised-undocumented": 32,
-      "undocumented-unexercised": 594,
+      "documented-never-exercised": 1255,
+      "exercised-undocumented": 30,
+      "undocumented-unexercised": 584,
       "site-code-sample-only": 12,
-      "written-but-not-published": 117,
-      "ok": 224
+      "written-but-not-published": 128,
+      "ok": 225
     },
     "events": {
       "docs-promise-nothing": 0,
-      "documented-never-exercised": 10,
-      "exercised-undocumented": 10,
+      "documented-never-exercised": 19,
+      "exercised-undocumented": 9,
       "undocumented-unexercised": 13,
-      "site-code-sample-only": 5,
+      "site-code-sample-only": 4,
       "written-but-not-published": 7,
-      "ok": 66
+      "ok": 68
     },
     "phantoms": 0,
     "unregisteredEvents": 0,
@@ -251,7 +251,6 @@
     "EnableNamespace",
     "EntryCandidate",
     "EntryScore",
-    "EntryScorer",
     "EntryScorerInput",
     "EntryScoring",
     "EphemeralPipelineConfig",
@@ -812,7 +811,6 @@
     "agentfootprint.credential.acquired",
     "agentfootprint.credential.authorization_required",
     "agentfootprint.error.fatal",
-    "agentfootprint.eval.score",
     "agentfootprint.eval.threshold_crossed",
     "agentfootprint.memory.detached",
     "agentfootprint.memory.strategy_applied",
@@ -826,7 +824,6 @@
     "agentfootprint.skill.deactivated",
     "agentfootprint.stream.thinking_delta",
     "agentfootprint.stream.thinking_end",
-    "agentfootprint.stream.token",
     "agentfootprint.tools.activated",
     "agentfootprint.tools.deactivated",
     "agentfootprint.tools.discovery_completed",

@@ -26,7 +26,14 @@
  * In a browser the client half is one line:
  *
  *   import { browserSessionId } from 'agentfootprint';
- *   fetch('/invoke', { headers: { 'x-session-id': browserSessionId() }, ... })
+ *   fetch('/invoke', {
+ *     method: 'POST',
+ *     headers: { 'content-type': 'application/json', 'x-session-id': browserSessionId() },
+ *     body: JSON.stringify({ input }),
+ *   })
+ *
+ * The content type is required: the door refuses a POST that does not say it
+ * is JSON (415), because that is the request any web page can forge.
  *
  * Run:  npm run example examples/deploy/multi-user.ts
  */

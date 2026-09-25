@@ -61,6 +61,7 @@ import type {
 import { checkerGoverns } from '../../../adapters/types.js';
 import type { ContextRole } from '../../../events/types.js';
 import { typedEmit } from '../../../recorders/core/typedEmit.js';
+import type { AgentfootprintEventMap, AgentfootprintEventType } from '../../../events/registry.js';
 import { extractSequence } from '../../../security/extractSequence.js';
 import { skillTarget } from '../../../security/skillTarget.js';
 import { menuOutstanding, type TurnRoute } from '../../../lib/injection-engine/routingPolicy.js';
@@ -115,6 +116,7 @@ import type {
   ToolParty,
 } from '../../slots/buildToolsSlot.js';
 import type { ToolClaim } from '../buildToolRegistry.js';
+import { changedArgKeys, shownArgsOf } from '../../toolShownArgs.js';
 import type { Tool, ToolExecutionContext } from '../../tools.js';
 import { agentToolDispatch } from '../toolDispatch.js';
 import type { MemoryIdentity } from '../../../memory/identity/types.js';
@@ -569,6 +571,20 @@ export interface ToolCallsHandlerDeps {
     readonly sessionId?: string;
     readonly identity?: MemoryIdentity;
   };
+  /**
+   * Put one artifact fact on the record for the run it BELONGS to — the door
+   * a `ctx.artifacts` fact takes when it lands after that run ended (a tool's
+   * floating upload finishing during a later run). The scope channel stamps
+   * whatever run is live at emit time; this stamps the run context the binding
+   * captured when it was built.
+   *
+   * @internal
+   */
+  readonly emitForRun?: (
+    type: AgentfootprintEventType,
+    payload: Record<string, unknown>,
+    runContext: import('../../../bridge/eventMeta.js').RunContext,
+  ) => void;
   /**
    * The runner's teardown tier, created on first use (9.7.0).
    *
@@ -2380,6 +2396,13 @@ export function buildToolCallsHandler(
    * during traversal, exactly like `credential.failed`. Payload bytes never
    * enter an event; the facts are meta only.
    *
+   * The binding owns WHOSE RUN its facts are for: the run context is captured
+   * here, when it is built. A fact that lands after that run ended — a tool
+   * that fired a `put` without awaiting it, finishing during a later run on a
+   * shared agent — goes out through `deps.emitForRun` stamped with the run it
+   * was made in, never with whichever run is live then (which would put one
+   * person's upload into another person's recording).
+   *
    * With NO store attached the capability is the fail-closed teacher and no
    * runIdentity read happens — a storeless agent's trace stays byte-identical.
    */
@@ -2388,11 +2411,28 @@ export function buildToolCallsHandler(
     toolName: string,
     toolCallId: string,
   ): Pick<ToolExecutionContext, 'artifacts' | 'hasArtifacts'> => {
+    const bindRun = deps.currentRun?.();
+    const emitFact = <K extends AgentfootprintEventType>(
+      type: K,
+      payload: AgentfootprintEventMap[K]['payload'],
+    ): void => {
+      const madeIn = bindRun?.runContext;
+      const emitForRun = deps.emitForRun;
+      if (
+        madeIn !== undefined &&
+        emitForRun !== undefined &&
+        deps.currentRun?.().runId !== madeIn.runId
+      ) {
+        emitForRun(type, payload as unknown as Record<string, unknown>, madeIn);
+        return;
+      }
+      typedEmit(scope, type, payload);
+    };
     const onEvent = (fact: ArtifactEventFact): void => {
       switch (fact.type) {
         case 'minted': {
           const meta = fact.meta;
-          typedEmit(scope, 'agentfootprint.artifacts.minted', {
+          emitFact('agentfootprint.artifacts.minted', {
             ref: meta.ref,
             kind: meta.kind,
             mediaType: meta.mediaType,
@@ -2407,7 +2447,7 @@ export function buildToolCallsHandler(
           return;
         }
         case 'resolved':
-          typedEmit(scope, 'agentfootprint.artifacts.resolved', {
+          emitFact('agentfootprint.artifacts.resolved', {
             ref: fact.ref,
             via: fact.via,
             kind: fact.kind,
@@ -2416,7 +2456,7 @@ export function buildToolCallsHandler(
           });
           return;
         case 'expired':
-          typedEmit(scope, 'agentfootprint.artifacts.expired', {
+          emitFact('agentfootprint.artifacts.expired', {
             ref: fact.swept.ref,
             reason: fact.swept.reason,
             kind: fact.swept.kind,
@@ -2425,7 +2465,7 @@ export function buildToolCallsHandler(
           });
           return;
         case 'refused':
-          typedEmit(scope, 'agentfootprint.artifacts.refused', {
+          emitFact('agentfootprint.artifacts.refused', {
             op: fact.op,
             reason: fact.reason,
             ...(fact.ref !== undefined && { ref: fact.ref }),
@@ -2439,9 +2479,8 @@ export function buildToolCallsHandler(
     if (store === undefined) {
       return { artifacts: unconfiguredArtifacts(onEvent), hasArtifacts: false };
     }
-    const facts = deps.currentRun?.();
     const artifacts: ToolArtifacts = bindArtifacts(store, runScopeOf(scope), {
-      origin: { ...(facts?.runId !== undefined && { runId: facts.runId }), toolCallId },
+      origin: { ...(bindRun?.runId !== undefined && { runId: bindRun.runId }), toolCallId },
       onEvent,
     });
     return { artifacts, hasArtifacts: true };
@@ -3716,6 +3755,10 @@ export function buildToolCallsHandler(
         // answer to "what did this call really run with". Seeded from the
         // PEELED `args` (9.101.0), which is `tc.args` itself when unarmed.
         let callArgs: ToolArgs = args;
+        /** The arguments AFTER the before-tool chain and BEFORE a `wants`
+         *  resolution swaps refs for artifact data — what `changedArgKeys` is
+         *  judged on. Same reference as `args` unless a link rewrote. */
+        let chainedArgs: ToolArgs = args;
         let denied = false;
         /** True once `tool.execute` has been entered — see `afterMoment`. */
         let executed = false;
@@ -3927,6 +3970,7 @@ export function buildToolCallsHandler(
           });
           recordDecisions(scope, chain.decisions);
           callArgs = chain.args;
+          chainedArgs = chain.args;
           if (chain.kind === 'deny') {
             denied = true;
             result = chain.reason;
@@ -3979,6 +4023,12 @@ export function buildToolCallsHandler(
             };
           }
         }
+        // The keys the tool will run with a different value for than the
+        // model proposed — a link's rewrite, or a key the tool's own
+        // redaction hides (`../../toolShownArgs.ts` · `changedArgKeys`).
+        // Taken HERE, before anything executes: names only, so nothing the
+        // tool later writes into its arguments can ride `tool_end`.
+        const changedKeys = changedArgKeys(args, shownArgsOf(tool, chainedArgs));
         // Tool-args validation (#9) — AFTER the permission gate (policy must
         // see every attempted call, valid or not) and BEFORE credential
         // resolution (never acquire credentials for a call that won't run).
@@ -4318,7 +4368,12 @@ export function buildToolCallsHandler(
               const ranCode = codeRunsOf(tool)?.get(tc.id);
               if (ranCode !== undefined) {
                 (codeRunsOf(tool) as Map<string, unknown> | undefined)?.delete(tc.id);
-                typedEmit(scope, 'agentfootprint.tools.code_run', ranCode);
+                // `tool` is the name the model CALLED, not the one the runner's
+                // closure was built with: a runner re-exposed under another
+                // schema name must be recognizable by the name its calls carry
+                // (a content exporter withholds that tool's arguments — the
+                // program). Same bytes whenever the two names agree.
+                typedEmit(scope, 'agentfootprint.tools.code_run', { ...ranCode, tool: tc.name });
               }
               // The typed effects channel (9.19.0): a recognized envelope is
               // unwrapped HERE, at the one boundary the raw return crosses —
@@ -4858,6 +4913,16 @@ export function buildToolCallsHandler(
           // The tool's own declared outcome (9.19.0) — additive, envelope
           // tools only.
           ...(toolStatus !== undefined && { status: toolStatus }),
+          // Each only when a CONFIGURED RULE acted — an `onToolResult` link or
+          // the cap (`modelResult`), an `onToolCall` link or the tool's own
+          // redaction (`changedArgKeys`), a permission policy or a link that
+          // refused (`notExecuted`). With no rule, `tool_end` is the bytes it
+          // always was: a call that failed to run on its own (an unknown name,
+          // an args rejection, a credential block) keeps saying so with
+          // `error: true` alone.
+          ...(modelResult !== capped.result && { modelResult }),
+          ...(executed && changedKeys.length > 0 && { changedArgKeys: changedKeys }),
+          ...(denied && { notExecuted: true as const }),
         });
         let resultStr = typeof modelResult === 'string' ? modelResult : safeStringify(modelResult);
         // The tool's OWN answer, before any framework suffix joins it — what
@@ -5401,6 +5466,9 @@ export function buildToolCallsHandler(
           durationMs: Date.now() - startMs,
           ...(error === true && { error: true }),
           ...(resumeEnvelope?.status !== undefined && { status: resumeEnvelope.status }),
+          ...(askCapped.modelResult !== askCapped.result && {
+            modelResult: askCapped.modelResult,
+          }),
         });
         bracketSettled(scope, askSettlement);
         typedEmit(scope, 'agentfootprint.agent.iteration_end', {
@@ -5580,6 +5648,9 @@ export function buildToolCallsHandler(
           durationMs: Date.now() - startMs,
           ...(error === true && { error: true }),
           ...(resumeEnvelope?.status !== undefined && { status: resumeEnvelope.status }),
+          ...(decisionCapped.modelResult !== decisionCapped.result && {
+            modelResult: decisionCapped.modelResult,
+          }),
         });
         bracketSettled(scope, decisionSettlement);
         typedEmit(scope, 'agentfootprint.agent.iteration_end', {
@@ -5722,6 +5793,9 @@ export function buildToolCallsHandler(
           durationMs: Date.now() - startMs,
           ...(error === true && { error: true }),
           ...(consentEnvelope?.status !== undefined && { status: consentEnvelope.status }),
+          ...(consentCapped.modelResult !== consentCapped.result && {
+            modelResult: consentCapped.modelResult,
+          }),
         });
         bracketSettled(scope, consentSettlement);
         typedEmit(scope, 'agentfootprint.agent.iteration_end', {
@@ -5856,6 +5930,9 @@ export function buildToolCallsHandler(
         // configured, because the marker IS the result on every channel.
         result: pauseCapped.result,
         durationMs: Date.now() - startMs,
+        ...(pauseCapped.modelResult !== pauseCapped.result && {
+          modelResult: pauseCapped.modelResult,
+        }),
       });
       bracketSettled(scope, pauseSettlement);
       typedEmit(scope, 'agentfootprint.agent.iteration_end', {

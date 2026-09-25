@@ -3531,7 +3531,19 @@ export class AgentBuilder {
       selfExplainBinding.bindTo({
         getSnapshot: () => agent.getLastSnapshot(),
         getNarrative: () => agent.getLastNarrativeEntries(),
-        on: (type, listener) => agent.on(type, listener),
+        // Only the explained run's own events (`Agent.ownsEvent`): on an
+        // instance serving several sessions the hosting door emits facts for
+        // OTHER sessions while this run is in flight. This filters the EVENT
+        // tail only. The evidence as a whole is "the previous completed run of
+        // this INSTANCE" — on a shared `standingAgent({ agent })` that can be
+        // another person's run, snapshot and narrative included, read by the
+        // model answering whoever asks next. That is a known, pre-existing
+        // defect with its own follow-up (docs/design/2026-09-turn-artifacts.md,
+        // R2-11); nothing here claims otherwise.
+        on: (type, listener) =>
+          agent.on(type, (event) => {
+            if (agent.ownsEvent(event)) listener(event);
+          }),
         ...(innerRuns !== undefined && { getInnerRuns: () => innerRuns }),
       });
       agent.attach(selfExplainBinding.recorder());

@@ -98,12 +98,16 @@
  * mechanism of its own.
  */
 
+import { isDevMode } from 'footprintjs';
 import { bindArtifacts, type ArtifactEventFact } from '../artifacts/capability.js';
+import type { ArtifactScope } from '../artifacts/types.js';
+import type { ArtifactHandOverFailedPayload } from '../events/payloads.js';
 import { readAskComponent } from '../core/askComponent.js';
 import { applyInputResponse, readAwaitingInput } from '../core/inputRequest.js';
 import { isPaused, pauseDemandsDecision, type RunnerPauseOutcome } from '../core/pause.js';
 import type { AgentRunCheckpoint } from '../core/runCheckpoint.js';
-import type { ArtifactWireRequest, ArtifactWireResult } from './artifactWire.js';
+import { NOT_A_REF, type ArtifactWireRequest, type ArtifactWireResult } from './artifactWire.js';
+import { isArtifactRef } from '../artifacts/naming.js';
 import { durableWriter, type DurableWriter } from './durability.js';
 import {
   envelopeOwner,
@@ -120,6 +124,7 @@ import {
   ArtifactSessionRequiredError,
   AwaitingDecisionError,
   ConcurrentRunError,
+  InvalidWireOpError,
   NoArtifactStoreError,
   NoPendingAskError,
   PauseNotCarriedError,
@@ -131,7 +136,8 @@ import {
 } from './errors.js';
 import { verifyRequestIdentity, type VerifiedIdentity } from './identityVerification.js';
 import { spendKeyFor, spendLedger, type SpendLedger } from './admission.js';
-import { beginIngress, type IngressNote } from './ingressRecord.js';
+import { beginIngress, recordHostRefusal, type IngressNote } from './ingressRecord.js';
+import { openTurnArtifacts } from './turnArtifacts.js';
 import type { SessionWireRequest, SessionWireResult } from './sessionWire.js';
 import { SESSION_LIST_OP, SESSION_TRANSCRIPT_OP } from './sessionWire.js';
 import type {
@@ -144,7 +150,7 @@ import type {
   StandingAgentOptions,
   SessionLifecycle,
 } from './types.js';
-import { DEFAULT_MAX_ACTIVE_SESSIONS } from './types.js';
+import { DEFAULT_MAX_ACTIVE_SESSIONS, TURN_ARTIFACTS_TIMEOUT_MS } from './types.js';
 import type { Agent, AgentRunOptions } from '../core/Agent.js';
 import type { MemoryIdentity } from '../memory/identity/types.js';
 
@@ -184,6 +190,13 @@ interface Lane {
   activeRunId?: string;
   /** The REAL session id of the active run — never the anonymous placeholder. */
   activeSessionId?: string;
+  /**
+   * WHO the active turn was proven to be, at a verifying door — the one fact
+   * the artifact door needs for a session whose FIRST turn is still in flight
+   * (nothing persisted yet, so no stored owner to ask). `undefined` for an
+   * anonymous turn, or with no verifier.
+   */
+  activeOwner?: string;
   activeReply?: HostReply;
   /** Requests admitted and not yet finished. A lane with work is never evicted. */
   admitted: number;
@@ -317,6 +330,20 @@ export async function standingAgent<TH extends HostHandle>(
         `With a single shared 'agent' there is no pool to bound — every session already ` +
         `uses the one instance you passed. Drop it, or switch to 'agentFactory' to get ` +
         `the per-session pool it describes.`,
+    );
+  }
+  // A bound on the artifact hand-over that could never fire is not a bound —
+  // and a hand-over that may hold a lane forever is the outage it exists to
+  // prevent. Refused here, before a socket exists.
+  const turnArtifactsTimeoutMs = options.turnArtifactsTimeoutMs ?? TURN_ARTIFACTS_TIMEOUT_MS;
+  if (!Number.isFinite(turnArtifactsTimeoutMs) || turnArtifactsTimeoutMs <= 0) {
+    throw new Error(
+      `[hosting] standingAgent was given turnArtifactsTimeoutMs: ${String(
+        options.turnArtifactsTimeoutMs,
+      )}. It is how long a turn's artifact hand-over (reply.turnArtifacts) may hold the ` +
+        `reply, so it has to be a positive, finite number of milliseconds — a bound that ` +
+        `can never fire would let one host's hung store hold every other session. Drop it ` +
+        `for the default (${TURN_ARTIFACTS_TIMEOUT_MS} ms).`,
     );
   }
   const maxActiveSessions = options.maxActiveSessions ?? DEFAULT_MAX_ACTIVE_SESSIONS;
@@ -647,7 +674,7 @@ export async function standingAgent<TH extends HostHandle>(
     // "concurrent run", and must not make the turn wait either.
     if (identified.artifact !== undefined) {
       try {
-        await answerArtifact(identified.artifact, identified, reply);
+        await answerArtifact(identified.artifact, identified, verified, reply);
       } catch (err) {
         reply.fail(err instanceof Error ? err : new Error(String(err)));
       }
@@ -700,7 +727,7 @@ export async function standingAgent<TH extends HostHandle>(
       await serialize(
         lane,
         sessionKey,
-        () => answerOne(lane, sessions, identified, reply, sessionId, verified, spendKey),
+        () => answerOne(lane, sessions, identified, reply, sessionId, verified, spendKey, note),
         queueAnyway,
       );
     } catch (err) {
@@ -828,13 +855,17 @@ export async function standingAgent<TH extends HostHandle>(
    *
    * ── The scope is the run's own, re-composed — one isolation rule ────────
    * A ref is redeemed under EXACTLY the scope the run's tools minted it in:
-   * `identityForRequest(userId, sessionId, storedIdentity)` when the request
-   * names a user — the same call, on the same inputs, that composed the run's
-   * identity — else the session rung `{ conversationId: sessionId }` (what
-   * seed derives for an identity-less served run). No new spelling exists to
-   * drift. The stored identity is read only when a `userId` arrived (it is
-   * the only rung that needs the stored tenant/conversation tuple), through
-   * the same wake → hydrate → refuse-unreadable steps a turn takes.
+   * `sessionArtifactScope(userId, sessionId, storedIdentity)` — the same
+   * function a turn's hand-over (`reply.turnArtifacts`) is bound with, so a
+   * host's filing and this redemption compose one tuple from the same inputs
+   * for the same caller. It is `identityForRequest` when the request names a
+   * user — the same call, on the same inputs, that composed the run's
+   * identity — else the session rung
+   * `{ conversationId: sessionId }` (what seed derives for an identity-less
+   * served run). No new spelling exists to drift. The stored identity is read
+   * only when a `userId` arrived (it is the only rung that needs the stored
+   * tenant/conversation tuple), through the same wake → hydrate →
+   * refuse-unreadable steps a turn takes.
    *
    * A ref from another session — or a right session presented with the wrong
    * identity — composes a different tuple, and the store answers a wrong
@@ -850,12 +881,32 @@ export async function standingAgent<TH extends HostHandle>(
    * hosting door, and a phantom tool name would be an actor that does not
    * exist.
    *
+   * ── Nothing a stranger chose reaches the record ──────────────────────────
+   * Every fact this door emits is stamped with the session the request NAMED
+   * (`emitArtifactFact`), and that stamp decides which run's recording keeps
+   * it (`eventBelongsToRun`). So the door checks, before it emits anything or
+   * builds a lane:
+   *
+   *  1. **The ref's shape** (`isArtifactRef`) — free text posing as a ref would
+   *     be text written into a live recording (the wire readers refuse it too;
+   *     this covers a host that builds `HostRequest.artifact` itself).
+   *  2. **At a verifying door, ownership** — the turn door's own rule
+   *     (`mayOpenSession`) for a stored conversation; for one whose FIRST turn
+   *     is still in flight (nothing stored yet), only the caller that turn is
+   *     serving. Anyone else gets the ONE not-found, and nothing is emitted —
+   *     a stranger can neither write into another person's recording nor flood
+   *     it until its own events are evicted.
+   *
+   * At a door with no verifier the session id IS the key, by law: whoever
+   * presents it may redeem under it, and its facts are that session's.
+   *
    * Zero-cost when unused: an agent without a store answers with the teaching
    * refusal naming the attach, and nothing else in the composer changes.
    */
   async function answerArtifact(
     op: ArtifactWireRequest,
     request: HostRequest,
+    verified: VerifiedIdentity | undefined,
     reply: HostReply,
   ): Promise<void> {
     const sessionId = request.sessionId;
@@ -865,6 +916,18 @@ export async function standingAgent<TH extends HostHandle>(
       // session-less redemption could ever resolve. Taught, not 404'd: this
       // is a caller gap, not a missing ref.
       reply.fail(new ArtifactSessionRequiredError(op.op));
+      return;
+    }
+    if (!isArtifactRef(op.ref)) {
+      reply.fail(new InvalidWireOpError(`'artifact-${op.op}' ${NOT_A_REF}`));
+      return;
+    }
+    // Read the stored conversation once: its OWNER (a verifying door) and its
+    // identity tuple (any request naming a user) both come from it.
+    const needsStored = identityOptions !== undefined || request.userId !== undefined;
+    const envelope = needsStored ? await storedFor(sessionId) : undefined;
+    if (identityOptions !== undefined && !mayRedeemFrom(sessionId, envelope, verified)) {
+      reply.fail(new ArtifactNotFoundError(op.ref));
       return;
     }
     const lane = laneFor(sessionId);
@@ -878,26 +941,21 @@ export async function standingAgent<TH extends HostHandle>(
         // The fail-closed law at the wire: the refusal lands on the record
         // (`no-store`, the same reason `ctx.artifacts` teaches with) and the
         // reply names the attach.
-        emitArtifactFact(lane.agent, {
-          type: 'refused',
-          op: op.op,
-          reason: 'no-store',
-          ref: op.ref,
-        });
+        emitArtifactFact(
+          lane.agent,
+          { type: 'refused', op: op.op, reason: 'no-store', ref: op.ref },
+          { sessionId },
+        );
         reply.fail(new NoArtifactStoreError(op.op));
         return;
       }
       let stored: MemoryIdentity | undefined;
-      if (request.userId !== undefined) {
-        await sessions.onWake?.(sessionId, 'artifact');
+      if (request.userId !== undefined && envelope !== undefined) {
         try {
-          const envelope = await sessions.hydrate(sessionId);
-          if (envelope !== undefined) {
-            stored =
-              envelope.format === 'flowchart-v1'
-                ? readPausedRun(envelope).conversation.identity
-                : readEnvelope(envelope).identity;
-          }
+          stored =
+            envelope.format === 'flowchart-v1'
+              ? readPausedRun(envelope).conversation.identity
+              : readEnvelope(envelope).identity;
         } catch (err) {
           // The same law as a turn: an unreadable stored conversation is a
           // different fact from an absent one, and only one of them is safe
@@ -905,11 +963,9 @@ export async function standingAgent<TH extends HostHandle>(
           throw err instanceof UnreadableEnvelopeError ? err.withSession(sessionId) : err;
         }
       }
-      const scope: MemoryIdentity = identityForRequest(request.userId, sessionId, stored) ?? {
-        conversationId: sessionId,
-      };
+      const scope = sessionArtifactScope(request.userId, sessionId, stored);
       const bound = bindArtifacts(store, scope, {
-        onEvent: (fact) => emitArtifactFact(lane.agent, fact),
+        onEvent: (fact) => emitArtifactFact(lane.agent, fact, { sessionId }),
       });
       if (op.op === 'head') {
         const meta = await bound.head(op.ref);
@@ -933,6 +989,38 @@ export async function standingAgent<TH extends HostHandle>(
       lane.admitted -= 1;
       lane.lastUsedMs = Date.now();
     }
+  }
+
+  /** The stored conversation for a redemption — woken and hydrated the way a
+   *  turn does it, the unreadable-envelope law included. */
+  async function storedFor(sessionId: string): Promise<CheckpointEnvelope | undefined> {
+    await sessions.onWake?.(sessionId, 'artifact');
+    try {
+      return await sessions.hydrate(sessionId);
+    } catch (err) {
+      throw err instanceof UnreadableEnvelopeError ? err.withSession(sessionId) : err;
+    }
+  }
+
+  /**
+   * May this caller redeem under `sessionId` at a VERIFYING door?
+   *
+   * A stored conversation answers with the turn door's own rule
+   * (`mayOpenSession`) — asked leniently, before any strict reader, for the
+   * same reason the turn door asks it first. With nothing stored yet the only
+   * conversation that can hold artifacts is one whose FIRST turn is in flight
+   * right now (a chart presented mid-turn), and then only the caller that turn
+   * is serving may redeem. Read from the lane WITHOUT building one: a refused
+   * caller never makes the pool grow or evict.
+   */
+  function mayRedeemFrom(
+    sessionId: string,
+    envelope: CheckpointEnvelope | undefined,
+    verified: VerifiedIdentity | undefined,
+  ): boolean {
+    if (envelope !== undefined) return mayOpenSession(envelope, verified);
+    const serving = shared ?? pool.get(sessionId);
+    return serving?.activeSessionId === sessionId && serving.activeOwner === verified?.userId;
   }
 
   /**
@@ -1005,13 +1093,15 @@ export async function standingAgent<TH extends HostHandle>(
     reply: HostReply,
     sessionId: string | undefined,
     verified: VerifiedIdentity | undefined,
-    spendKey?: string,
+    spendKey: string | undefined,
+    note: IngressNote | undefined,
   ): Promise<void> {
     const runner = lane.agent;
     lane.activeReply = reply;
     // The writer only ever writes for the run it is inside; an anonymous
     // request has nowhere to write to and gets nothing.
     lane.activeSessionId = sessionId;
+    lane.activeOwner = verified?.userId;
     // Whose usage this lane's next token and cost events belong to. Set only
     // with an admission policy; the subscriptions that read it do not exist
     // otherwise.
@@ -1085,6 +1175,24 @@ export async function standingAgent<TH extends HostHandle>(
         sessionId,
         prior?.identity ?? paused?.conversation.identity,
       );
+      // What this turn offers a host that files its own artifacts
+      // (`reply.turnArtifacts`): WHERE its claim tickets are redeemed — the one
+      // composition the artifact door re-composes for the same caller, built
+      // only if a host asks — and where a hook failure is recorded. No session,
+      // no scope: nothing a later request presents could ever redeem an
+      // anonymous run's artifacts, so there is nothing to bind.
+      const stored = prior?.identity ?? paused?.conversation.identity;
+      const offer: TurnOffer = {
+        ...(sessionId !== undefined && {
+          session: {
+            id: sessionId,
+            scope: () => sessionArtifactScope(request.userId, sessionId, stored),
+          },
+        }),
+        timeoutMs: turnArtifactsTimeoutMs,
+        ...(request.signal !== undefined && { signal: request.signal }),
+        note,
+      };
       const runOptions: AgentRunOptions | undefined =
         request.signal !== undefined || sessionId !== undefined || identity !== undefined
           ? {
@@ -1145,6 +1253,9 @@ export async function standingAgent<TH extends HostHandle>(
             runner.abandonPause();
             if (sessionId !== undefined)
               await runner.closeToolSessions({ scope: 'run', sessionId });
+            // A turn that ends, so the host is offered its binding like any
+            // other — but no run happened, so there is no run id to stamp.
+            await offerTurnArtifacts(runner, reply, offer, () => undefined);
             reply.complete(output);
             return;
           }
@@ -1155,6 +1266,7 @@ export async function standingAgent<TH extends HostHandle>(
           store,
           reply,
           sessionId,
+          offer,
           paused,
         );
         return;
@@ -1169,7 +1281,7 @@ export async function standingAgent<TH extends HostHandle>(
       const output = prior
         ? await runner.run({ message: request.input, continueFrom: prior }, runOptions)
         : await runner.run({ message: request.input }, runOptions);
-      await deliver(lane, output, store, reply, sessionId);
+      await deliver(lane, output, store, reply, sessionId, offer);
     } catch (err) {
       // A run that threw still has to drain. A write left in flight would race
       // the NEXT turn's terminal write and could land after it. The drain's own
@@ -1181,6 +1293,7 @@ export async function standingAgent<TH extends HostHandle>(
     } finally {
       lane.activeReply = undefined;
       lane.activeSessionId = undefined;
+      lane.activeOwner = undefined;
       lane.activeSpendKey = undefined;
     }
   }
@@ -1192,6 +1305,7 @@ export async function standingAgent<TH extends HostHandle>(
     store: SessionLifecycle,
     reply: HostReply,
     sessionId: string | undefined,
+    offer: TurnOffer,
     priorPause?: PausedRun,
   ): Promise<void> {
     const runner = lane.agent;
@@ -1219,6 +1333,15 @@ export async function standingAgent<TH extends HostHandle>(
             toPausedEnvelope({ checkpoint: output.checkpoint, conversation, pending }),
           );
           if (reply.awaiting) {
+            // The run id for `origin` comes from the conversation just
+            // snapshotted. When that is the PRIOR pause's — re-used because
+            // the same question is still open, which is what a partial answer
+            // does WITHOUT running anything — no origin is stamped: this
+            // request ran nothing, and the instance's last run may be another
+            // session's. Absent is never wrong; a borrowed run id would be.
+            await offerTurnArtifacts(runner, reply, offer, () =>
+              conversation === priorPause?.conversation ? undefined : conversation?.runId,
+            );
             reply.awaiting(pending);
             return;
           }
@@ -1253,17 +1376,37 @@ export async function standingAgent<TH extends HostHandle>(
       }
     }
 
+    let conversation: AgentRunCheckpoint | undefined;
     if (sessionId !== undefined) {
-      const conversation = runner.checkpoint();
+      conversation = runner.checkpoint();
       // Persist BEFORE answering: the caller learns the answer only once the
       // conversation that produced it is durable, so a queued next turn can
       // never read state older than the answer already given.
       if (conversation) await store.persist(sessionId, toEnvelope(conversation));
     }
+    // The snapshot just persisted names the run that answered — the same id
+    // the run's own recording carries on its `origin` — so stamping a host's
+    // filing costs no second snapshot.
+    await offerTurnArtifacts(runner, reply, offer, () => conversation?.runId);
     reply.complete(typeof output === 'string' ? output : String(output));
   }
 
-  const handle = await host.serve(handler);
+  // The HOST's own refusals — a forged request its door guard turned away, a
+  // session id over the bound — never reach `handler`, so they would never
+  // reach the record either. Subscribed only when a sink is set (the zero-delta
+  // path stays zero), and only on a host that reports them (feature-detected).
+  // Before `serve`, so a refusal in the first instant of serving is not lost.
+  const stopHostRefusals =
+    ingressSink !== undefined && typeof host.onRefusal === 'function'
+      ? host.onRefusal((refusal) => recordHostRefusal(refusal, ingressSink))
+      : undefined;
+  let handle: HostHandle;
+  try {
+    handle = await host.serve(handler);
+  } catch (err) {
+    stopHostRefusals?.();
+    throw err;
+  }
 
   // ── Shutdown ────────────────────────────────────────────────────────
   //
@@ -1292,6 +1435,7 @@ export async function standingAgent<TH extends HostHandle>(
   function closeOnce(): Promise<void> {
     closing ??= (async () => {
       await handle.close();
+      stopHostRefusals?.();
       if (shared !== undefined) {
         shared.detach();
         if (shutdownMode !== 'none') {
@@ -1392,6 +1536,207 @@ function identityForRequest(
 }
 
 /**
+ * The scope a SESSION's claim tickets live in, for the request being served —
+ * the ONE composition of that tuple, shared by the two doors that need it.
+ *
+ * `answerArtifact` redeems under it, and a turn hands its host a store bound
+ * to it (`reply.turnArtifacts`). One function rather than two call sites that
+ * agree today: the field bug this exists for was a host that composed its own
+ * tuple, got the session rung right and the signed-in rung wrong, and filed
+ * every ticket where redemption would never look. Deliberately NOT exported —
+ * a function a host can call with a user id is a function a host can call
+ * with SOMEBODY ELSE's user id.
+ *
+ * `identityForRequest` when the request names a user, else the session rung
+ * `{ conversationId: sessionId }` — what seed derives for an identity-less
+ * served run.
+ */
+function sessionArtifactScope(
+  userId: string | undefined,
+  sessionId: string,
+  stored: MemoryIdentity | undefined,
+): ArtifactScope {
+  return identityForRequest(userId, sessionId, stored) ?? { conversationId: sessionId };
+}
+
+/**
+ * What one turn offers a host that files its own artifacts
+ * (`reply.turnArtifacts`): the session it served with the scope that
+ * session's tickets are redeemed under — absent when the request named no
+ * session — the bound on the hand-over, and where a failure is recorded.
+ *
+ * `scope` is a thunk so nothing is composed for a host that never asked.
+ */
+interface TurnOffer {
+  readonly session?: { readonly id: string; readonly scope: () => ArtifactScope };
+  /** The ceiling on the hook plus the operations it started. */
+  readonly timeoutMs: number;
+  /** The request's own cancellation — a caller who hung up. */
+  readonly signal?: AbortSignal;
+  /** The per-request census, when one is kept. */
+  readonly note?: IngressNote;
+}
+
+/** Who a hand-over's facts are FOR — captured when its binding is built. */
+interface Attribution {
+  readonly sessionId: string;
+  readonly runId?: string;
+}
+
+/**
+ * Hand this turn's binding to a host that asked for it — AWAITED while the
+ * session's lane is still held, BOUNDED, immediately before the turn's
+ * terminal.
+ *
+ * Four guarantees, each one a finding an earlier cut of this seam failed:
+ *
+ *  - **Inside the turn.** The composer awaits the hook here, so a host files
+ *    while no other run can be in flight on this instance.
+ *  - **Bounded.** The hook and every operation it started race ONE deadline
+ *    (`turnArtifactsTimeoutMs`) and the request's signal. Whichever ends the
+ *    wait, the binding is revoked, nothing in flight is cancelled (it may
+ *    still land — its facts name their own session and run, so they cannot
+ *    enter anyone else's record), the cause is reported and the terminal is
+ *    delivered — so one host's hung store or hook can hold neither every other
+ *    session (the shared shape), nor a pooled lane, nor `close()`.
+ *  - **Never the terminal's decision, never silent.** A hook that throws, an
+ *    operation that fails, the bound, the abort and a call after the turn are
+ *    reported (`turnArtifactsFailed`) and the terminal is delivered anyway.
+ *  - **Revoked when the turn ends.** A verb called later is refused by name
+ *    (`TurnArtifactsExpiredError`), already handled, and reported.
+ *
+ * A host without the hook gets nothing built: no binding, no scope, no store
+ * lookup, no run-id read, no timer.
+ */
+async function offerTurnArtifacts(
+  agent: Agent,
+  reply: HostReply,
+  offer: TurnOffer,
+  runIdOf: () => string | undefined,
+): Promise<void> {
+  if (reply.turnArtifacts === undefined) return;
+  const session = offer.session;
+  // WHOSE facts these are, captured NOW — the binding owns "whose run", never
+  // the agent's mutable current-run state when a late fact lands.
+  const runId = session !== undefined ? runIdOf() : undefined;
+  const attribution: Attribution | undefined =
+    session === undefined
+      ? undefined
+      : { sessionId: session.id, ...(runId !== undefined && { runId }) };
+  const failed = (failure: ArtifactHandOverFailedPayload): void =>
+    turnArtifactsFailed(agent, attribution, offer.note, failure);
+  const opened = openTurnArtifacts({
+    store: agent.getArtifactStore(),
+    scope: session?.scope(),
+    runId,
+    onEvent: (fact) => {
+      // Only a bound hand-over reports facts, and only a session binds.
+      if (attribution !== undefined) emitArtifactFact(agent, fact, attribution);
+    },
+    onFailure: (failure) =>
+      failed({
+        cause: failure.cause,
+        op: failure.op,
+        ...(failure.cause === 'operation' && errorClassOf(failure.error)),
+      }),
+  });
+  const handOver = (async (): Promise<void> => {
+    try {
+      await reply.turnArtifacts?.(opened.turn);
+    } catch (err) {
+      // A hook that merely re-threw an operation's failure was already counted.
+      if (!opened.reported(err)) failed({ cause: 'hook', ...errorClassOf(err) });
+    }
+    await opened.drain();
+  })();
+  try {
+    const ended = await withinBound(handOver, offer.timeoutMs, offer.signal);
+    if (ended !== 'settled') failed({ cause: ended });
+  } finally {
+    opened.revoke();
+  }
+}
+
+/**
+ * Wait for `work`, but no longer than `timeoutMs` and no longer than `signal`
+ * allows. `work` is NOT cancelled when the wait ends — there is nothing to
+ * cancel a store's in-flight write with, and pretending otherwise would be
+ * worse than saying we stopped waiting (the `toolSessions.ts · withTimeout`
+ * law). The timer is unref'd, so a pending hand-over can never be the reason a
+ * process stays up.
+ */
+async function withinBound(
+  work: Promise<void>,
+  timeoutMs: number,
+  signal: AbortSignal | undefined,
+): Promise<'settled' | 'timeout' | 'abort'> {
+  if (signal?.aborted === true) return 'abort';
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  let onAbort: (() => void) | undefined;
+  try {
+    return await Promise.race([
+      work.then(() => 'settled' as const),
+      new Promise<'timeout'>((resolve) => {
+        timer = setTimeout(() => resolve('timeout'), timeoutMs);
+        (timer as { unref?: () => void }).unref?.();
+      }),
+      new Promise<'abort'>((resolve) => {
+        if (signal === undefined) return;
+        onAbort = () => resolve('abort');
+        signal.addEventListener('abort', onAbort, { once: true });
+      }),
+    ]);
+  } finally {
+    if (timer !== undefined) clearTimeout(timer);
+    if (onAbort !== undefined) signal?.removeEventListener('abort', onAbort);
+  }
+}
+
+/** The routable half of a failure — class and code, never the message. */
+function errorClassOf(err: unknown): { errorClass?: string; errorCode?: string } {
+  const code = (err as { code?: unknown } | null | undefined)?.code;
+  return {
+    ...(err instanceof Error && { errorClass: err.constructor?.name ?? err.name }),
+    ...(typeof code === 'string' && { errorCode: code }),
+  };
+}
+
+/**
+ * Record one failure of a turn's artifact hand-over — on the serving agent's
+ * stream as `agentfootprint.artifacts.hand_over_failed`, stamped with the
+ * session and run it was FOR; the first one on the ingress record's census
+ * (`IngressRecord.turnArtifactsFailure`); and on the console in dev mode. The
+ * swallow is the library's decision, so the visibility is its duty: the
+ * default deployment keeps no ingress sink, and a missing story must not be
+ * silent there (the `toolSessions.ts` law 5, "never throws into the run — but
+ * never silent either"). It never reaches the reply.
+ */
+function turnArtifactsFailed(
+  agent: Agent,
+  attribution: Attribution | undefined,
+  note: IngressNote | undefined,
+  failure: ArtifactHandOverFailedPayload,
+): void {
+  const payload: ArtifactHandOverFailedPayload = {
+    cause: failure.cause,
+    ...(failure.op !== undefined && { op: failure.op }),
+    ...(failure.errorClass !== undefined && { errorClass: failure.errorClass }),
+    ...(failure.errorCode !== undefined && { errorCode: failure.errorCode }),
+  };
+  note?.turnArtifactsFailed(payload);
+  if (attribution !== undefined) {
+    agent.emitAttributed('agentfootprint.artifacts.hand_over_failed', { ...payload }, attribution);
+  }
+  if (isDevMode()) {
+    // eslint-disable-next-line no-console
+    console.error(
+      '[hosting] reply.turnArtifacts hand-over failed; the reply was delivered anyway:',
+      payload,
+    );
+  }
+}
+
+/**
  * End the reply with a resolved artifact — through the terminal built for it
  * when the host has one, and through the named refusal when it does not.
  *
@@ -1425,34 +1770,85 @@ function deliverSessions(reply: HostReply, op: string, result: SessionWireResult
 }
 
 /**
- * Put one capability fact on the serving agent's typed record — the wire
- * door's adapter onto the SAME `artifacts.resolved` / `artifacts.refused`
- * events every tool redemption rides, minus the `tool` field (the redeemer
- * was the hosting door, and payloads never carry an actor that does not
+ * Put one capability fact on the serving agent's typed record — the hosting
+ * door's adapter onto the SAME `artifacts.*` events every tool's use of
+ * `ctx.artifacts` rides, minus the `tool` field (the actor was the hosting
+ * door or the host's own code, and payloads never carry an actor that does not
  * exist).
  *
- * `minted` and `expired` have no arm because a read-only door cannot produce
- * them — only `put` does, and the wire deliberately has no put. Dropped when
- * nobody listens (the dispatcher's own fast path), so an unobserved agent
- * pays one listener check per fact and nothing more.
+ * Two bindings feed it. The wire's redemption (`artifact-head` /
+ * `artifact-get`) is read-only and only ever produces `resolved` / `refused`
+ * — the wire deliberately has no put. The turn's hand-over
+ * (`reply.turnArtifacts`) is the host's own code filing for its turn, so its
+ * `put` produces `minted` and, when retention made room, `expired` —
+ * tool-less, like the run's own recording mint, and carrying every meta field
+ * a tool's mint carries.
+ *
+ * Every fact is stamped with the SESSION it was produced for
+ * (`RunnerBase.emitAttributed`). The door answers outside any run and — for a
+ * redemption — outside the lane, so on an instance shared by several sessions
+ * a fact can be delivered while ANOTHER session's run is in flight; the stamp
+ * is what keeps it out of that run's recording and self-explain evidence
+ * (`bridge/eventMeta.ts · eventBelongsToRun`). Delivery to listeners is
+ * unchanged. Dropped when nobody listens (the dispatcher's own fast path), so
+ * an unobserved agent pays one listener check per fact and nothing more.
  */
-function emitArtifactFact(agent: Agent, fact: ArtifactEventFact): void {
+function emitArtifactFact(agent: Agent, fact: ArtifactEventFact, attribution: Attribution): void {
   switch (fact.type) {
+    case 'minted': {
+      const meta = fact.meta;
+      agent.emitAttributed(
+        'agentfootprint.artifacts.minted',
+        {
+          ref: meta.ref,
+          kind: meta.kind,
+          mediaType: meta.mediaType,
+          bytes: meta.bytes,
+          ...(meta.label !== undefined && { label: meta.label }),
+          ...(meta.digest !== undefined && { digest: meta.digest }),
+          ...(meta.expiresAt !== undefined && { expiresAt: meta.expiresAt }),
+          ...(meta.origin !== undefined && { origin: meta.origin }),
+          ...(meta.parentRefs !== undefined && { parentRefs: meta.parentRefs }),
+        },
+        attribution,
+      );
+      return;
+    }
+    case 'expired':
+      agent.emitAttributed(
+        'agentfootprint.artifacts.expired',
+        {
+          ref: fact.swept.ref,
+          reason: fact.swept.reason,
+          kind: fact.swept.kind,
+          bytes: fact.swept.bytes,
+        },
+        attribution,
+      );
+      return;
     case 'resolved':
-      agent.emit('agentfootprint.artifacts.resolved', {
-        ref: fact.ref,
-        via: fact.via,
-        kind: fact.kind,
-        bytes: fact.bytes,
-      });
+      agent.emitAttributed(
+        'agentfootprint.artifacts.resolved',
+        {
+          ref: fact.ref,
+          via: fact.via,
+          kind: fact.kind,
+          bytes: fact.bytes,
+        },
+        attribution,
+      );
       return;
     case 'refused':
-      agent.emit('agentfootprint.artifacts.refused', {
-        op: fact.op,
-        reason: fact.reason,
-        ...(fact.ref !== undefined && { ref: fact.ref }),
-        ...(fact.detail !== undefined && { detail: fact.detail }),
-      });
+      agent.emitAttributed(
+        'agentfootprint.artifacts.refused',
+        {
+          op: fact.op,
+          reason: fact.reason,
+          ...(fact.ref !== undefined && { ref: fact.ref }),
+          ...(fact.detail !== undefined && { detail: fact.detail }),
+        },
+        attribution,
+      );
       return;
     default:
       return;

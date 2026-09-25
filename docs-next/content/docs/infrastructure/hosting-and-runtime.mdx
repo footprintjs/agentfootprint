@@ -91,6 +91,12 @@ is [`ERR_PAUSE_NOT_CARRIED`](#a-pause-the-wire-could-not-describe), and it is
 the smallest complete example of how these ports are written (`artifact` gets
 the same treatment: absent ⇒ `ERR_ARTIFACT_NOT_CARRIED`, named, never silence).
 
+One more optional member is not a terminal at all: `turnArtifacts(turn)` —
+awaited once per turn, bounded, before the terminal — hands the host the artifact store
+**already bound** to the scope that request's tickets are redeemed under, so
+host code that files its own artifacts for a turn never composes a scope. See
+[Filing for a turn](#filing-for-a-turn--replyturnartifacts).
+
 <CodeFile path="examples/deploy/standing-agent.ts" region="standing" title="examples/deploy/standing-agent.ts (region: standing)" />
 
 ## Why the ports look like nothing in particular
@@ -208,6 +214,156 @@ nothing the adapter told you.)
 
 `close()` drains: work already in flight finishes, and anything arriving after
 is refused with a `HostClosedError` — over HTTP, a `503`.
+
+## The door guard — cross-site requests, DNS rebinding, the session id
+
+A door with no verifier, reachable only inside a company network, is not safe
+because of the network. Everyone inside it runs a browser, and any web page they
+open can steer that browser at the door. Before the guard, three things worked
+from any page:
+
+- **A forged turn.** A page could POST a JSON-shaped body as `text/plain` (a
+  CORS "simple" request, with no preflight). The door parsed it and ran a turn:
+  model budget spent, tools called, a conversation stored. The page could not
+  read the reply, and did not need to.
+- **DNS rebinding.** A page re-points its own domain name at the door's
+  address. The browser then treats it as same-origin with the door, and it can
+  read every answer.
+- **A cross-site WebSocket.** The same-origin policy does not cover a
+  WebSocket, so any page could open the conversation door.
+
+Every door `httpHost` serves (`nodeHost` included) now checks a request before
+any handler sees it. The checks apply in every identity mode, including a door
+with no verifier:
+
+| Rule | Refused with | Default | Option |
+|---|---|---|---|
+| A request that changes something (any method but GET/HEAD/OPTIONS) must say `content-type: application/json` | `UnsupportedMediaTypeError`, 415 | on | `requireJsonContentType: false` (escape hatch) |
+| A browser `Origin` must be allowed (always refused: `Origin: null`) | `OriginNotAllowedError`, 403 | the door's own host (`Host`, or `X-Forwarded-Host` from a proxy) | `allowedOrigins: [...]` or `'any'` |
+| A request the browser marked `Sec-Fetch-Site: cross-site` must come from a listed origin; a WebSocket handshake with `Sec-Fetch-Site` must carry an `Origin` | `OriginNotAllowedError`, 403 | on | a listed origin passes; `'any'` turns it off |
+| `Host` must be a configured name (the `Host` header only, never `X-Forwarded-Host`) | `HostNotAllowedError`, 421 | loopback bind: `localhost`, `127.0.0.1`, `[::1]`; any other bind: off, with one warning at boot | `allowedHosts: [...]` or `'any'` |
+| A session id must be 1 to `MAX_SESSION_ID_LENGTH` (400) characters of visible ASCII (`!` to `~`) | `InvalidSessionIdError`, 400 | on | none |
+| A body must fit `maxBodyBytes` | `RequestTooLargeError`, 413 | `nodeHost`: 1 MiB (`DEFAULT_NODE_MAX_BODY_BYTES`); `httpHost`: none | `maxBodyBytes` |
+
+```ts
+nodeHost({
+  port: 8080,
+  allowedHosts: ['neo.corp.example'],          // every name people use to reach it
+  // allowedOrigins: ['https://app.corp.example'], // only if a page on ANOTHER origin calls it
+});
+```
+
+**Why the JSON content type, and not a custom header.** RFC 10017 (BCP 212)
+§6.1.3.3 requires a CSRF defence, and §6.1.3.3.2 recommends a required custom
+request header, because a cross-origin request carrying one always needs a
+preflight. Under the Fetch standard, `content-type` is a CORS-safelisted request
+header only when its type is `application/x-www-form-urlencoded`,
+`multipart/form-data` or `text/plain`. So `application/json` forces the same
+preflight, and this host never approves one. A second required header would
+break every JSON client that already works and add nothing. The door accepts
+`application/json` exactly, never a `+json` type: Fetch lets pages send some of
+those cross-origin without a preflight (`application/expect-ct-report+json`, for
+one).
+
+**A WebSocket has no preflight to force.** The browser API cannot set a header.
+For a handshake, `Origin` and `Sec-Fetch-Site` are the whole defence, and the
+conversation door judges them before the `101`. A browser always sends both, so
+a handshake with `Sec-Fetch-Site` and no `Origin` is refused. Node's own
+`WebSocket` client sends only `Sec-Fetch-Mode` and no `Origin`, and still
+opens.
+
+**What happens to a refused body.** It is never parsed. When it is small (at
+most 1 MiB, arriving within 2 s) it is read and thrown away first, so a client
+still uploading reads the 415 instead of a connection reset. A larger one is
+answered at once, and a client still sending may see the reset. A request with
+`Expect: 100-continue` gets the refusal instead of the `100`, so it never sends
+the body (on a socket the host owns; a caller-owned `server` answers `100`
+itself before the host sees the request).
+
+**Why the session id is visible ASCII.** Node reads a header as latin1 and a
+JSON body as UTF-8, so `café` in `x-session-id` and `café` in the body were two
+different conversations. ASCII also leaves out everything a log or a store can
+misread: controls, line and paragraph separators, bidi overrides, zero-width
+characters, lone surrogates. Every id format in use fits. An empty id is
+refused too, because every caller that sent one shared a single conversation.
+
+**The default Origin rule does not stop DNS rebinding.** Under rebinding, the
+page's Origin and the request's Host both carry the attacker's name, so they
+match. `allowedHosts` is the defence: the `Host` header is one no page can set.
+A host bound to a loopback address (`127.0.0.1`, `::1`, `localhost`) defaults it
+to the loopback names. One common setup needs the list set by hand: a reverse
+proxy on the same machine that forwards the public name in `Host` (nginx
+`proxy_set_header Host $host` in front of a `127.0.0.1` bind). Its requests carry
+the public name, and the door cannot tell them from a rebinding page, so they get
+421, and the 421 says to list that name in `allowedHosts`. On any other bind,
+until you set it, the host prints one warning at boot, once per host name. This
+release warns rather than refuses, so existing deployments keep starting. Health
+probes are never judged: load balancers and kubelets send the target's address
+as Host.
+
+**Behind a reverse proxy:** forward `Origin` and `Sec-Fetch-*` unchanged, and
+either keep the client's `Host` or add `X-Forwarded-Host`. Two everyday setups
+rewrite `Host` without adding it: nginx's default `proxy_set_header Host
+$proxy_host`, and a Vite or webpack dev proxy with `changeOrigin: true`. Behind
+either, browser requests get 403 until you fix the proxy or set
+`allowedOrigins`. When the proxy sends `X-Forwarded-Proto`, a `Host` without a
+port is read under that scheme, so `http://name` and `https://name` stay two
+origins. A WRONG one fails closed: an inner nginx behind a TLS load balancer that
+sends its own `$scheme` (`http`) makes every browser POST get 403. Forward the
+outer proto from the inner hop, or list the page's origin in `allowedOrigins`. List every name the
+door answers to in `allowedHosts`. The library never redirects a short name to a
+canonical one; that belongs to the proxy or the application.
+
+**Requests without an `Origin`** (scripts, servers, `curl`) are not judged by
+the browser rules. Browsers always send one on these requests. They still need
+`content-type: application/json`: `curl -d` without `-H 'content-type:
+application/json'` now gets a 415.
+
+**Your own routes.** A route on `onUnhandled` (a sign-in form, a report
+download) arrives exactly as it came off the wire. The host does not guard it,
+so call the same guard there. `doorGuard({ name, ...rules })` returns a
+`DoorGuard` whose `check(req)` gives back the refusal (with its `status`) or
+`undefined`. An `IncomingMessage` works as it is, because the guard reads only
+the method and headers (`DoorRequest`):
+
+```ts
+const guard = doorGuard({ name: 'sign-in', allowedHosts: ['neo.corp.example'] });
+
+onUnhandled: (req, res) => {
+  const refusal = guard.check(req);
+  if (refusal) {
+    res.writeHead(refusal.status, { 'content-type': 'application/json' });
+    res.end(JSON.stringify({ error: refusal.message, code: refusal.code }));
+    return;
+  }
+  // …your route
+},
+```
+
+`checkSessionId(id, name)` is the session bound on its own, for a custom host.
+The vocabulary, all on `agentfootprint/hosting`: `CrossSiteOptions` (the three
+options, shared by `httpHost`, `nodeHost` and the hosted-runtime adapters),
+`DoorGuardOptions` (those plus `name`), `CrossSiteRefusal` (the union of the
+three cross-site refusal classes), `OriginRefusalRule` (`'same-host'`,
+`'listed'` or `'fetch-metadata'`: which browser fact refused), and `HostRefusal`
+(what the host's `onRefusal` listener receives: `door`, `error` and
+`bearerPresent`, never a header).
+
+**The hosted-runtime adapters leave the browser rules off unless you set
+them.** `agentCoreRuntimeHost`, `agentCoreA2AHost` and `foundryResponsesHost`
+serve a port that only the platform's front door can reach, and that door
+demands a credential no web page holds. Which headers the platform forwards to
+the container is not verified, so a default Origin rule could refuse the
+platform's own traffic while protecting nothing. That holds only on a
+non-loopback bind, and a host serving with the rules off prints one line at
+boot saying so. On a loopback bind (a laptop, which no platform fronts) they
+keep every default of a plain host. The same three options turn each rule on.
+The session-id bound applies to them as to every door.
+
+Every refusal names the rule and the option, never what the caller sent. Each
+one is also on the [ingress record](#the-ingress-record--oningressdecision) as
+`'cross-site-refused'` (or `'refused'` for a session id), through the host's
+`onRefusal`, including refusals at the WebSocket door.
 
 ## `httpHost` — writing your own HTTP adapter
 
@@ -1260,6 +1416,148 @@ refuse there, as `InvalidWireOpError`), and `artifactWireBody(result)` as the
 AgentCore runtime wire carries both ops with its own `status: 'success'`
 envelope beside the standard body.
 
+### Filing for a turn — `reply.turnArtifacts`
+
+The run files its own tickets — a tool's dataset, the turn's recording — under
+the scope above. Host code often wants to file something for the same turn: a
+story of the turn, the person's own clicks, anything joined to that run. It
+must land where `artifact-get` will look for that caller, or it can never be
+redeemed.
+
+**The host never composes that scope.** A host that re-derives it gets it
+wrong in exactly the case that matters: `{ conversationId: sessionId }` is
+right at an open door and wrong at a signed-in one, where the redemption door
+composes `{ conversationId, principal: <verified user> }` — plus the tenant and
+namespace of a stored conversation, which the host never read. Every ticket
+it filed answered `404` for every signed-in user.
+
+Instead, implement the optional `turnArtifacts` member on the reply you hand
+the composer. It is called **once per turn and awaited**, while the session's
+lane is still held, with the serving agent's store already bound to the scope
+this request's tickets are redeemed under. The composer ends the reply only
+after the hook settles, so a ticket filed inside it exists before the body
+that carries it is composed:
+
+```ts
+import type { HostReply } from 'agentfootprint/hosting';
+
+// Inside a host that wraps another host's serve():
+const wrapped: HostReply = {
+  complete: (output) => reply.complete(output),
+  fail: (error) => reply.fail(error),
+  // Optional members are forwarded BY PRESENCE — the composer feature-detects
+  // each one, and a wrapper that dropped one would turn a pause, a redemption,
+  // a session op or a stream into a named refusal.
+  ...(reply.awaiting && { awaiting: (pending) => reply.awaiting?.(pending) }),
+  ...(reply.artifact && { artifact: (result) => reply.artifact?.(result) }),
+  ...(reply.sessions && { sessions: (result) => reply.sessions?.(result) }),
+  ...(reply.emit && { emit: (chunk) => reply.emit?.(chunk) }),
+  // Awaited by the composer, inside the turn, before `complete` / `awaiting`.
+  turnArtifacts: async (turn) => {
+    if (!turn.bound) return;             // 'no-session' | 'no-store'
+    const story = await turn.artifacts.put({
+      kind: 'story/turn',
+      mediaType: 'application/json',
+      data: storyOfThisTurn,
+    });
+    ticketForThisReply = story.ref;      // redeems for this caller — and nobody else
+  },
+};
+await handler(request, wrapped);
+```
+
+The value is a `TurnArtifacts` — one of three shapes:
+
+| Handed | When |
+|---|---|
+| `{ bound: true, artifacts }` | the request named a session and the agent has a store. `artifacts` has the shape a tool gets as `ctx.artifacts` — `put`, `head`, `get`, `delete`, `list` — and none of them takes a scope |
+| `{ bound: false, reason: 'no-session' }` | an anonymous request: its run scoped its artifacts to its own `runId`, which no later request can present, so there is nothing to bind — and nothing is invented. Wins when both apply |
+| `{ bound: false, reason: 'no-store' }` | the serving agent has no artifact store |
+
+- **Bounded.** The hook and every operation it started must settle within
+  `turnArtifactsTimeoutMs` (a `standingAgent` option; default
+  `TURN_ARTIFACTS_TIMEOUT_MS`, 5 s — the tool-teardown precedent, since both
+  sit on the shutdown path) and before the request's own `signal` aborts.
+  Whichever ends the wait, the binding is revoked, nothing in flight is
+  cancelled (it may still land, attributed to its own session and run), the
+  cause is reported, the terminal is delivered and the lane released. In the
+  shared `{ agent }` shape every session waits behind a turn's hook, so keep
+  it to filing. A non-positive or non-finite value is refused at construction.
+- **Live only for its turn.** Once the composer has waited for every operation
+  the hook started (a `put` it did not await included) — or the bound ended the
+  wait — it revokes the binding. A verb called later rejects with
+  `TurnArtifactsExpiredError` (`ERR_TURN_ARTIFACTS_EXPIRED`), a rejection that
+  is already handled, so a floating late call cannot crash the process: a
+  write made after the turn would land on whatever run the agent is serving by
+  then — in the shared shape, another person's. File inside the hook; never
+  hold the binding.
+- **Never decides the reply, never silent.** A hook that throws, an operation
+  that fails (awaited or not), the bound, the abort and a late call are each
+  put on the serving agent's stream as
+  `agentfootprint.artifacts.hand_over_failed { cause, op?, errorClass?,
+  errorCode? }` — `cause` is `'hook'`, `'operation'`, `'timeout'`, `'abort'`
+  or `'expired'`; class only, never a message; stamped with the session — and
+  the first of them on the ingress record
+  (`IngressRecord.turnArtifactsFailure`, same shape). None of them turns a
+  delivered answer, or a stored question, into a failure.
+- **It runs inside the turn.** Awaiting another turn of the same standing agent
+  from inside the hook can never finish — that turn queues behind this one —
+  so the bound ends the wait.
+- **One scope, and only one.** The scope is not on the value — a tuple a host
+  can read is one it can copy and edit. There is deliberately no exported
+  "scope for this request" function either: a function that takes a user id
+  can be handed somebody else's.
+- **On the record.** Each put lands on the serving agent as
+  `agentfootprint.artifacts.minted` with no `tool` field and `meta.sessionId`
+  and `meta.runId` naming the session and run it was filed for (captured when
+  the binding was built), stamped `origin: { runId }` with the run the turn
+  executed. A turn that executed none (a partial answer to an
+  input request, or its cancellation) stamps no origin, and a caller's own
+  `origin` is always dropped. A PAUSED turn's run files no recording — a pause
+  is not a finished run — so a reader joining on its run id should say
+  "paused, no recording", not "missing".
+- **Not for a non-turn.** No hand-over for a redemption, a session op, a
+  refused turn or a failed one, and none on `serveConversations` (a WebSocket
+  conversation is not a composer turn). A host without the member is served as
+  before.
+
+**Where the hand-over does NOT meet the run's own recording.** The hand-over
+follows the door. The run's recording follows the identity the run was seeded
+with, and at an **unverified** door those can differ: a conversation that
+carries an identity of its own (an app-seeded tenant, or a user an earlier
+turn claimed) while this request names nobody, and a pause that named nobody
+resumed by a claimed user, file the recording where no redemption by that
+caller looks. At a verifying door, and at an open one whose conversation
+carries no identity, they agree. These are pinned as known edges and not
+changed here.
+
+**Door facts carry their session — so the door checks who is asking.**
+Everything the hosting door produces — a redemption's `resolved` / `refused`, a
+filing's `minted` / `expired`, a `hand_over_failed` — is stamped with the
+session it was produced for (`meta.sessionId`), and a filing also with the run
+it was filed for. A run's recording (the `recordings` dial) and its
+self-explain event tail keep only what belongs to them — an event that names a
+run belongs to that run; one of no run, to runs of its session — so a screen
+redeeming during another person's run on a shared agent never enters that
+person's recording, while redemptions stay lane-free and every other listener
+still receives every fact.
+
+Because the stamp is the session the request NAMED, the artifact door checks
+before it emits anything:
+
+- **A `ref` that is not a claim ticket** (`art_` + 22 letters and digits) is
+  refused — `400 ERR_INVALID_WIRE_OP` from the wire readers, the same refusal
+  from the composer for a host that builds requests itself — and its text is
+  never echoed or recorded.
+- **At a door with an identity verifier**, a session the caller cannot open —
+  the turn door's own ownership rule; for a conversation whose first turn is
+  still in flight, only the caller that turn serves — answers the one
+  `404 ERR_ARTIFACT_NOT_FOUND`, with nothing emitted and no pooled lane built.
+  A stranger can neither write into another person's live recording nor flood
+  it until its own events are evicted.
+- **At a door with no verifier, the session id is the key**, by law: whoever
+  presents it may redeem under it, and its facts are that session's.
+
 ## Verified identity — `identity: { verify }`
 
 `HostRequest.userId` has said the same honest thing since 9.12: it is *what the
@@ -1509,7 +1807,7 @@ reaches its terminal:
 ```ts
 {
   at: 1755100000000,
-  door: 'turn',                          // 'turn' | 'session-op' | 'artifact'
+  door: 'turn',                          // 'turn' | 'session-op' | 'artifact' | 'request' | 'conversation'
   outcome: 'identity-refused',           // see below
   errorCode: 'ERR_IDENTITY_NOT_VERIFIED',
   identityFailure: 'expired',            // the class, never the token
@@ -1523,14 +1821,21 @@ reaches its terminal:
 The whole vocabulary is four exported types. `IngressSink` is the callback
 `onIngressDecision` takes — `(record: IngressRecord) => void`, called
 synchronously, so buffer and batch inside it rather than awaiting a network.
-`IngressDoor` is `'turn' | 'session-op' | 'artifact'`. `IngressAdmissionVerdict`
+`IngressDoor` is `'turn' | 'session-op' | 'artifact'` for what the composer
+handled, plus `'request'` and `'conversation'` for a request the host's
+[door guard](#the-door-guard--cross-site-requests-dns-rebinding-the-session-id)
+refused before the composer saw it. A refused request's body is never read, so
+which of the three doors it wanted is not recorded. `IngressAdmissionVerdict`
 is `'allow' | 'queue' | 'refuse'`, what the policy answered when one was
 consulted.
 
 `IngressOutcome` is the field a dashboard groups by: `'served'`,
 `'identity-refused'`, `'verifier-unavailable'`, `'admission-refused'`,
-`'session-refused'`, `'refused'` (every other refusal the door made by name) and
-`'failed'`. `errorCode` carries the precision beside it.
+`'session-refused'`, `'cross-site-refused'` (the door guard: 415, 403 or 421),
+`'refused'` (every other refusal the door made by name, a session id over the
+bound included) and `'failed'`. `errorCode` carries the precision beside it.
+Both unions grew: a `switch` over either that claims to be exhaustive needs the
+new members.
 
 `'served'` means **delivered**, not *admitted*. The record is filed at the
 terminal the reply actually reached, so a request the door let through whose
@@ -1541,6 +1846,15 @@ is not one of the door's own refusals — `'identity-refused'`,
 `'verifier-unavailable'`, `'admission-refused'`, `'session-refused'` — or read
 `admission`, the verdict your policy actually returned, which is on a refused
 record and a broken one alike.
+
+One optional field records something that did NOT decide the outcome:
+`turnArtifactsFailure: { cause, op?, errorClass?, errorCode? }` — the first
+failure of this turn's
+[`turnArtifacts`](#filing-for-a-turn--replyturnartifacts) hand-over (the hook
+threw, an operation failed, it outran its bound, or the caller hung up). The
+reply was delivered anyway (`outcome` still says what the caller got); the
+class is here, never the message — the same shape as the
+`agentfootprint.artifacts.hand_over_failed` event on the serving agent.
 
 ### It is a stream, not a chain
 
@@ -1576,10 +1890,16 @@ an SDK's text, a store's detail or your own admission sentence, so none is
 copied). The one identity field is `userId`, and it is the id the token
 **proved**; a merely claimed one is never written down as if it were.
 
-One boundary, stated rather than implied: a body the **transport** refused
-before the composer saw it — unparseable JSON, or an `op` this host's wire
-grammar does not speak (`InvalidWireOpError`, answered 400 by `httpHost` inside
-its own request reader) — is not in this stream. That is a malformed request
+The **host's** own decisions are in it too, though no handler saw them: a
+request the door guard refused, and a session id over the bound. They arrive
+through the host's `onRefusal`, which the composer subscribes to whenever a sink
+is set. A WebSocket handshake refused on the same host is recorded with door
+`'conversation'`.
+
+One boundary, stated rather than implied: a body the **transport** refused as
+malformed (unparseable JSON, a body over `maxBodyBytes`, or an `op` this host's
+wire grammar does not speak, `InvalidWireOpError`, answered 400 by `httpHost`
+inside its own request reader) is not in this stream. That is a broken request
 rather than a decision about a caller, and your HTTP access log has it.
 
 Unset, nothing is built, nothing is wrapped, and the reply the handler uses is

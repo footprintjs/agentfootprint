@@ -1,0 +1,64 @@
+[
+  {
+    "name": "pin-agent",
+    "parent": null,
+    "attributes": {
+      "service.name": "pin-agent",
+      "gen_ai.operation.name": "invoke_agent",
+      "gen_ai.agent.name": "pin-agent",
+      "agentfootprint.run.id": "<runId>",
+      "agentfootprint.turn.index": 0,
+      "gen_ai.request.model": "m"
+    },
+    "events": [
+      {
+        "name": "agentfootprint.error.fatal",
+        "attributes": {
+          "agentfootprint.error.stage": "tool-calls",
+          "agentfootprint.error.scope": "agent"
+        }
+      }
+    ],
+    "status": {
+      "code": 2
+    },
+    "ended": true
+  },
+  {
+    "name": "iteration:1",
+    "parent": 0,
+    "attributes": {
+      "iteration.number": 1
+    },
+    "events": [],
+    "status": null,
+    "ended": true
+  },
+  {
+    "name": "llm",
+    "parent": 1,
+    "attributes": {
+      "gen_ai.operation.name": "chat",
+      "gen_ai.request.model": "m"
+    },
+    "events": [],
+    "status": null,
+    "ended": true
+  },
+  {
+    "name": "tool:t",
+    "parent": 2,
+    "attributes": {
+      "tool.name": "t",
+      "gen_ai.operation.name": "execute_tool",
+      "gen_ai.tool.name": "t",
+      "gen_ai.tool.call.id": "x",
+      "agentfootprint.tool.args.keys": [
+        "a"
+      ]
+    },
+    "events": [],
+    "status": null,
+    "ended": true
+  }
+]

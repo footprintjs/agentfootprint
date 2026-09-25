@@ -63,6 +63,21 @@
  * whichever closes last; on a caller-owned one each door attaches and detaches
  * its own listener and neither touches the socket.
  *
+ * ── The door guard, on both doors ────────────────────────────────────────────
+ * Being able to reach the port is not permission: every browser inside the
+ * network can be steered by any page it opens. So before any handler sees a
+ * request, the request door and the conversation door ask one guard
+ * (`doorGuard.ts`): a Host this door was not configured for (421), a browser
+ * origin it does not allow (403), a state-changing request that does not say
+ * it is JSON (415) — and, once a dialect has read it, a session id over the
+ * bound (400). Judged on the headers alone — a refused body is never parsed,
+ * only drained when small so its sender reads the answer — and never invited
+ * with a `100 Continue` on a socket this host owns. Answered with the
+ * refusal's own sentence, reported to `onRefusal` listeners. Probes (the
+ * health GET, the HEAD probe) are never asked; routes handed to `onUnhandled`
+ * are the caller's. A loopback bind with `allowedHosts` unset answers the
+ * loopback names only.
+ *
  * Pattern: Template method via configuration (Strategy on the wire format).
  * Everything HTTP lives here and in the wires; `types.ts` knows none of it.
  */
@@ -72,6 +87,14 @@ import type { Duplex } from 'node:stream';
 
 import { encodeSSE } from '../stream.js';
 import type { ArtifactWireRequest, ArtifactWireResult } from './artifactWire.js';
+import {
+  checkSessionId,
+  doorGuard,
+  warnAllowedHostsUnset,
+  warnBrowserRulesOff,
+  type CrossSiteOptions,
+  type CrossSiteRefusal,
+} from './doorGuard.js';
 import {
   ArtifactNotCarriedError,
   HostClosedError,
@@ -83,6 +106,7 @@ import {
 import type { SessionWireRequest, SessionWireResult } from './sessionWire.js';
 import { SESSION_LIST_OP, SESSION_TRANSCRIPT_OP, SESSION_PENDING_OP } from './sessionWire.js';
 import { lowerCasedHeaders } from './headers.js';
+import { bearerToken } from './identityVerification.js';
 import type {
   AgentHost,
   ConversationHandler,
@@ -91,8 +115,10 @@ import type {
   HostCapability,
   HostHandle,
   HostHandler,
+  HostRefusal,
   HostReply,
   PendingAsk,
+  Unsubscribe,
 } from './types.js';
 import {
   conversationDoor,
@@ -344,8 +370,16 @@ export interface HttpWire {
   readConversation?(facts: HandshakeFacts): ConversationHandshake;
 }
 
-/** Options for {@link httpHost}. */
-export interface HttpHostOptions {
+/**
+ * Options for {@link httpHost}.
+ *
+ * The three cross-site fields — `allowedOrigins`, `allowedHosts`,
+ * `requireJsonContentType` — come from {@link CrossSiteOptions} and are
+ * enforced by this host's door guard on its request door and its conversation
+ * door alike, before any handler sees a request. Their defaults are the safe
+ * ones; see `doorGuard.ts` for what each costs.
+ */
+export interface HttpHostOptions extends CrossSiteOptions {
   /**
    * Which adapter this is. Every refusal names it, so a caller reading an error
    * learns which adapter said no rather than which file it came from.
@@ -370,7 +404,12 @@ export interface HttpHostOptions {
    * not bind.
    */
   readonly port?: number;
-  /** Interface to bind. Default `'0.0.0.0'`. Refused together with `server`, for the same reason. */
+  /**
+   * Interface to bind. Default `'0.0.0.0'`. Refused together with `server`, for the same reason.
+   *
+   * Every interface means every name that resolves to one of them — which is
+   * why a host serving with `allowedHosts` unset says so once at boot.
+   */
   readonly hostname?: string;
   /** What this adapter claims beyond the baseline. Default `['streaming']`. */
   readonly capabilities?: readonly HostCapability[];
@@ -609,6 +648,17 @@ const STATUS_BY_CODE: Readonly<Record<string, number>> = {
   ERR_SESSION_INDEX_UNAVAILABLE: 501,
   ERR_SESSIONS_NOT_CARRIED: 501,
   ERR_REQUEST_TOO_LARGE: 413,
+  // The door guard — each refusal also carries its own `status`, which is what
+  // this host answers with; listed here too so a handler that fails a reply
+  // with one of them gets the same status and never a 500.
+  //   415: a request that changes something did not say it was JSON.
+  //   403: a browser page from an origin this door does not allow.
+  //   421: a Host this door was not configured to answer for (RFC 9110 §15.5.20).
+  //   400: a session id over the ceiling or with a control character in it.
+  ERR_UNSUPPORTED_MEDIA_TYPE: 415,
+  ERR_ORIGIN_NOT_ALLOWED: 403,
+  ERR_HOST_NOT_ALLOWED: 421,
+  ERR_INVALID_SESSION_ID: 400,
 };
 
 /**
@@ -705,6 +755,46 @@ export function httpHost(options: HttpHostOptions): HttpHost {
     ...options.conversationLimits,
   };
 
+  // ── The door guard ─────────────────────────────────────────────────
+  //
+  // Built at construction, so a configuration it could only misread (an
+  // `allowedOrigins` of 'null', an empty `allowedHosts`) is refused here, by
+  // name, before a socket exists. Both doors ask it; every refusal it makes —
+  // and every session id the bound refuses — goes to the listeners below,
+  // which is how a request no handler ever saw still reaches an ingress
+  // record.
+  //
+  // A LOOPBACK bind this host makes itself, with `allowedHosts` unset, answers
+  // the loopback names only: such a socket can be reached by no other name, so
+  // the default refuses nobody and closes DNS rebinding on a developer's own
+  // machine. (A caller-owned server's address is the caller's; it is not
+  // guessed.)
+  const guard = doorGuard({
+    name,
+    ...(!ownServer && { bindHost: hostname }),
+    ...(options.allowedOrigins !== undefined && { allowedOrigins: options.allowedOrigins }),
+    ...(options.allowedHosts !== undefined && { allowedHosts: options.allowedHosts }),
+    ...(options.requireJsonContentType !== undefined && {
+      requireJsonContentType: options.requireJsonContentType,
+    }),
+  });
+  const refusalListeners = new Set<(refusal: HostRefusal) => void>();
+  /** Tell every listener; a listener that throws is contained — the refusal is already answered. */
+  function reportRefusal(refusal: HostRefusal): void {
+    for (const listener of [...refusalListeners]) {
+      try {
+        listener(refusal);
+      } catch {
+        // A broken log must not turn an answered refusal into this process's failure.
+      }
+    }
+  }
+  /** The staged default and the rules-off notice, each said once at boot (per host name, per process). */
+  function announceBoot(): void {
+    if (guard.allowedHostsUnset) warnAllowedHostsUnset(name);
+    if (guard.browserRulesOff) warnBrowserRulesOff(name);
+  }
+
   // ── The socket both doors stand on ─────────────────────────────────
   //
   // Refcounted, because the deployment this exists for hands a container ONE
@@ -787,6 +877,13 @@ export function httpHost(options: HttpHostOptions): HttpHost {
     capabilities,
     conversationLimits,
 
+    onRefusal(listener: (refusal: HostRefusal) => void): Unsubscribe {
+      refusalListeners.add(listener);
+      return () => {
+        refusalListeners.delete(listener);
+      };
+    },
+
     async serveConversations(handler: ConversationHandler): Promise<HttpHostHandle> {
       if (conversationPath === undefined) {
         throw new Error(
@@ -815,6 +912,8 @@ export function httpHost(options: HttpHostOptions): HttpHost {
         ...(wire.readConversation && { readConversation: wire.readConversation.bind(wire) }),
         handler,
         accepting: () => accepting,
+        guard,
+        onRefusal: reportRefusal,
       });
 
       const onUpgrade = (request: IncomingMessage, socketOfConversation: Duplex): void => {
@@ -853,6 +952,7 @@ export function httpHost(options: HttpHostOptions): HttpHost {
         conversationsServing = false;
         throw err;
       }
+      announceBoot();
       server.on('upgrade', onUpgrade);
       let where: { url: string; port: number };
       try {
@@ -890,6 +990,70 @@ export function httpHost(options: HttpHostOptions): HttpHost {
       const inFlight = new Set<Promise<void>>();
       let accepting = true;
       let closing: Promise<void> | undefined;
+
+      /**
+       * Answer a door-guard refusal, report it, and close the connection.
+       *
+       * The body the caller is still sending is never parsed. When it was
+       * INVITED (no `Expect: 100-continue`, so the client is already
+       * uploading) and is small — at most {@link REFUSAL_DRAIN_BYTES}, within
+       * {@link REFUSAL_DRAIN_MS} — it is read and discarded first, so the
+       * client finishes its upload and READS the refusal instead of meeting a
+       * reset: closing a socket with unread bytes in it makes the kernel send
+       * RST, which a client mid-upload reports as `ECONNRESET` and never sees
+       * the 415. A body announced larger than that, or one that overruns it,
+       * is not drained — the answer goes out at once and a client still
+       * sending may see the reset. That is the bound, stated.
+       */
+      const refuseAtRequestDoor = (
+        req: IncomingMessage,
+        res: ServerResponse,
+        refusal: CrossSiteRefusal,
+        bodyInvited: boolean,
+      ): void => {
+        reportRefusal({
+          door: 'request',
+          error: refusal,
+          bearerPresent: bearerToken(lowerCasedHeaders(req.headers)) !== undefined,
+        });
+        const answer = (): void => {
+          try {
+            if (res.headersSent || res.writableEnded) return;
+            sendJson(res, refusal.status, wire.failure(refusal.message, refusal.code), {
+              connection: 'close',
+            });
+          } catch (err) {
+            failSafely(res, wire, err);
+          }
+        };
+        if (bodyInvited) drainThenAnswer(req, answer);
+        else answer();
+      };
+
+      /**
+       * `Expect: 100-continue` on a socket this host owns: judge the headers
+       * BEFORE node would say "100 Continue", so a refused request is never
+       * invited to send the body it is about to be refused for. Everything
+       * else gets its 100 and the ordinary route, exactly as node's default.
+       * (On a caller-owned server node answers 100 itself before any listener
+       * runs — that server's `checkContinue` is the caller's to own.)
+       */
+      const onCheckContinue = (req: IncomingMessage, res: ServerResponse): void => {
+        try {
+          const path = (req.url ?? '').split('?')[0];
+          if (accepting && req.method === 'POST' && path === invokePath) {
+            const crossSite = guard.check(req);
+            if (crossSite !== undefined) {
+              refuseAtRequestDoor(req, res, crossSite, false);
+              return;
+            }
+          }
+          res.writeContinue();
+          route(req, res);
+        } catch (err) {
+          failSafely(res, wire, err);
+        }
+      };
 
       const route = (req: IncomingMessage, res: ServerResponse): void => {
         // On a shared server an earlier listener may already have answered.
@@ -934,8 +1098,16 @@ export function httpHost(options: HttpHostOptions): HttpHost {
           );
           return;
         }
+        // The door guard, on the headers alone: a forged request's body is
+        // never parsed. See `refuseAtRequestDoor` for what happens to the
+        // bytes it is still sending.
+        const crossSite = guard.check(req);
+        if (crossSite !== undefined) {
+          refuseAtRequestDoor(req, res, crossSite, true);
+          return;
+        }
 
-        const served = serveOne(req, res, handler, wire, name, maxBodyBytes);
+        const served = serveOne(req, res, handler, wire, name, maxBodyBytes, reportRefusal);
         inFlight.add(served);
         // `serveOne` never rejects, by construction — see its doc.
         void served.finally(() => inFlight.delete(served));
@@ -956,12 +1128,15 @@ export function httpHost(options: HttpHostOptions): HttpHost {
       };
 
       const server = await acquireSocket();
+      announceBoot();
       server.on('request', onRequest);
+      if (!ownServer) server.on('checkContinue', onCheckContinue);
       let where: { url: string; port: number };
       try {
         where = addressOf(server);
       } catch (err) {
         server.off('request', onRequest);
+        server.off('checkContinue', onCheckContinue);
         await releaseSocket();
         throw err;
       }
@@ -988,6 +1163,7 @@ export function httpHost(options: HttpHostOptions): HttpHost {
             // thing close() promises not to do.
             await Promise.allSettled([...inFlight]);
             server.off('request', onRequest);
+            server.off('checkContinue', onCheckContinue);
             // The socket goes only when the LAST door lets go of it. A
             // conversation still open on this port is not this door's to end.
             await releaseSocket();
@@ -1014,9 +1190,10 @@ async function serveOne(
   wire: HttpWire,
   hostName: string,
   maxBodyBytes: number | undefined,
+  reportRefusal: (refusal: HostRefusal) => void,
 ): Promise<void> {
   try {
-    await dispatchOne(req, res, handler, wire, hostName, maxBodyBytes);
+    await dispatchOne(req, res, handler, wire, hostName, maxBodyBytes, reportRefusal);
   } catch (err) {
     // Everything inside answers its own failures; anything that got past them
     // — a dialect that threw, a body that would not stringify — is still this
@@ -1032,6 +1209,7 @@ async function dispatchOne(
   wire: HttpWire,
   hostName: string,
   maxBodyBytes: number | undefined,
+  reportRefusal: (refusal: HostRefusal) => void,
 ): Promise<void> {
   const controller = new AbortController();
 
@@ -1081,6 +1259,25 @@ async function dispatchOne(
       return;
     }
     throw err;
+  }
+  // The session-id bound, on whatever the dialect read it from — a body field,
+  // a header, a cookie — and on the id a session-history op names inside
+  // itself. Here, once, so no dialect can forget it, and before anything is
+  // framed: an id past this line rides every span of every turn it touches.
+  const unboundedSession =
+    checkSessionId(read.sessionId, hostName) ?? checkSessionId(sessionOpId(read.session), hostName);
+  if (unboundedSession !== undefined) {
+    sendJson(
+      res,
+      unboundedSession.status,
+      wire.failure(unboundedSession.message, unboundedSession.code, facts),
+    );
+    reportRefusal({
+      door: 'request',
+      error: unboundedSession,
+      bearerPresent: bearerToken(headers) !== undefined,
+    });
+    return;
   }
   const { input, sessionId, userId, decision, artifact, session, responseHeaders } = read;
   // The dialect's own reply headers — a `Set-Cookie` that issues a session, and
@@ -1284,6 +1481,47 @@ async function dispatchOne(
  * was found to break: a surprise this file has not imagined yet becomes THIS
  * REQUEST's 400 or 500, the failure of the thing that caused it.
  */
+/** The largest refused body read-and-discarded so its sender sees the refusal. */
+const REFUSAL_DRAIN_BYTES = 1_048_576;
+/** How long a refused body may take to arrive before the answer goes out anyway. */
+const REFUSAL_DRAIN_MS = 2_000;
+
+/**
+ * Read and discard a refused request's body — bounded in bytes and in time —
+ * then answer. A body announced over the bound (or none at all) is answered at
+ * once. Every listener is wrapped by `answer` itself, so nothing here can be
+ * the process's failure.
+ */
+function drainThenAnswer(req: IncomingMessage, answer: () => void): void {
+  const declared = req.headers['content-length'];
+  const chunked = req.headers['transfer-encoding'] !== undefined;
+  const length = declared === undefined ? 0 : Number(declared);
+  if (!chunked && !(length > 0 && length <= REFUSAL_DRAIN_BYTES)) {
+    answer();
+    return;
+  }
+  let read = 0;
+  let done = false;
+  const finish = (): void => {
+    if (done) return;
+    done = true;
+    clearTimeout(timer);
+    req.off('data', onData);
+    req.off('end', finish);
+    req.off('error', finish);
+    answer();
+  };
+  const onData = (chunk: Buffer | string): void => {
+    read += chunk.length;
+    if (read > REFUSAL_DRAIN_BYTES) finish();
+  };
+  const timer = setTimeout(finish, REFUSAL_DRAIN_MS);
+  if (typeof timer.unref === 'function') timer.unref();
+  req.on('data', onData);
+  req.once('end', finish);
+  req.once('error', finish);
+}
+
 /**
  * Write a framing's frames, in order, as Server-Sent Events.
  *
@@ -1364,6 +1602,11 @@ function readJson(
       }
     });
   });
+}
+
+/** The conversation a session-history op names inside itself, when it names one. */
+function sessionOpId(session: SessionWireRequest | undefined): string | undefined {
+  return session !== undefined && 'sessionId' in session ? session.sessionId : undefined;
 }
 
 function sendJson(

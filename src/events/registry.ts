@@ -132,6 +132,7 @@ import type {
   ArtifactResolvedPayload,
   ArtifactExpiredPayload,
   ArtifactRefusedPayload,
+  ArtifactHandOverFailedPayload,
   ArtifactPresentedPayload,
   MapEngagedPayload,
   MapParkedPayload,
@@ -317,6 +318,7 @@ export const EVENT_NAMES = {
     expired: 'agentfootprint.artifacts.expired',
     refused: 'agentfootprint.artifacts.refused',
     presented: 'agentfootprint.artifacts.presented',
+    handOverFailed: 'agentfootprint.artifacts.hand_over_failed',
   },
 } as const;
 
@@ -808,6 +810,10 @@ export interface AgentfootprintEventMap {
     'agentfootprint.artifacts.presented',
     ArtifactPresentedPayload
   >;
+  'agentfootprint.artifacts.hand_over_failed': AgentfootprintEventEnvelope<
+    'agentfootprint.artifacts.hand_over_failed',
+    ArtifactHandOverFailedPayload
+  >;
   'agentfootprint.map.engaged': AgentfootprintEventEnvelope<
     'agentfootprint.map.engaged',
     MapEngagedPayload
@@ -956,6 +962,7 @@ export const ALL_EVENT_TYPES: readonly AgentfootprintEventType[] = [
   'agentfootprint.artifacts.expired',
   'agentfootprint.artifacts.refused',
   'agentfootprint.artifacts.presented',
+  'agentfootprint.artifacts.hand_over_failed',
   'agentfootprint.map.engaged',
   'agentfootprint.map.parked',
   'agentfootprint.integrity.context_error',

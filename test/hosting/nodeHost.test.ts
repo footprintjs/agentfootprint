@@ -281,11 +281,19 @@ describe('nodeHost — what arrives at the handler', () => {
     }
   });
 
-  it('accepts an empty body as an empty input', async () => {
+  it('accepts an empty body as an empty input — from a caller that says it is JSON', async () => {
     const handle = await serving();
     try {
-      const reply = await fetch(`${handle.url}/invoke`, { method: 'POST' });
+      const reply = await fetch(`${handle.url}/invoke`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+      });
       expect(await reply.json()).toEqual({ output: 'echo:' });
+      // The same bodiless POST with no content type at all is the one request
+      // a page on any site can send with no preflight (RFC 10017 §6.1.3.3.2's
+      // "bodiless POST"), so the door guard refuses it before the handler.
+      const untyped = await fetch(`${handle.url}/invoke`, { method: 'POST' });
+      expect(untyped.status).toBe(415);
     } finally {
       await handle.close();
     }

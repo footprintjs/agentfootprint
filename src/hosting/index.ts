@@ -93,7 +93,13 @@
  *   process.on('SIGTERM', () => void handle.close());
  */
 
-export { nodeHost, jsonWire, jsonWireWith, DEFAULT_SESSION_HEADER } from './nodeHost.js';
+export {
+  nodeHost,
+  jsonWire,
+  jsonWireWith,
+  DEFAULT_SESSION_HEADER,
+  DEFAULT_NODE_MAX_BODY_BYTES,
+} from './nodeHost.js';
 export type { NodeHost, NodeHostHandle, NodeHostOptions, JsonWireOptions } from './nodeHost.js';
 // `browserSessionId` — the CLIENT half of a session — is deliberately NOT on
 // this barrel. It lives in `./browserSession.ts` beside the server half it
@@ -137,7 +143,11 @@ export {
 } from './envelope.js';
 export { standingAgent } from './standingAgent.js';
 
-export { DEFAULT_MAX_ACTIVE_SESSIONS, DEFAULT_SWEEP_LIMIT } from './types.js';
+export {
+  DEFAULT_MAX_ACTIVE_SESSIONS,
+  DEFAULT_SWEEP_LIMIT,
+  TURN_ARTIFACTS_TIMEOUT_MS,
+} from './types.js';
 
 export {
   requireCapability,
@@ -154,6 +164,7 @@ export {
   NoArtifactStoreError,
   ArtifactNotFoundError,
   ArtifactNotCarriedError,
+  TurnArtifactsExpiredError,
   IdentityNotVerifiedError,
   VerifierUnavailableError,
   AdmissionRefusedError,
@@ -165,8 +176,27 @@ export {
   SessionsNotCarriedError,
   RequestTooLargeError,
   WireRequestRefusal,
+  UnsupportedMediaTypeError,
+  OriginNotAllowedError,
+  HostNotAllowedError,
+  InvalidSessionIdError,
 } from './errors.js';
-export type { IdentityFailureClass } from './errors.js';
+export type { IdentityFailureClass, OriginRefusalRule } from './errors.js';
+
+// The door guard — what a request has to be before any handler sees it: a
+// request that changes something says it is JSON, a browser drives the door
+// only from an allowed origin, a Host is one the door was configured for, and
+// a session id is bounded. `httpHost` enforces it on both of its doors; it is
+// exported so an application's OWN routes beside the door (a sign-in route on
+// `onUnhandled`) keep the same rule in the same spelling.
+export { checkSessionId, doorGuard, MAX_SESSION_ID_LENGTH } from './doorGuard.js';
+export type {
+  CrossSiteOptions,
+  CrossSiteRefusal,
+  DoorGuard,
+  DoorGuardOptions,
+  DoorRequest,
+} from './doorGuard.js';
 
 // Retention (9.42.0) — the ONE feature detection for the port's optional
 // `retention()` member, and the refusal a store without one produces. A door
@@ -285,6 +315,7 @@ export type {
   HostConversation,
   HostHandle,
   HostHandler,
+  HostRefusal,
   HostReply,
   HostRequest,
   PausedRun,
@@ -302,6 +333,7 @@ export type {
   StandingAgentOptions,
   StandingAgentPoolOptions,
   StandingAgentSharedOptions,
+  TurnArtifacts,
   Unsubscribe,
   WakeReason,
 } from './types.js';

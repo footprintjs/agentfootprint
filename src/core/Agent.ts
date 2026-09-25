@@ -54,7 +54,7 @@ import type { CredentialProvider } from '../identity/types.js';
 import type { ArtifactScope, ArtifactStore } from '../artifacts/types.js';
 import { assertArtifactPlacement, type ArtifactPlacement } from '../artifacts/placement.js';
 import { recordingPutInput } from '../artifacts/recordingArtifact.js';
-import { recordRun, type RunRecorder } from '../recorders/observability/recordRun.js';
+import { recordRunWhere, type RunRecorder } from '../recorders/observability/recordRun.js';
 import type { AuthorizationRequiredMode } from '../identity/consent.js';
 import { CredentialConsentRequiredError } from '../identity/CredentialConsentRequiredError.js';
 import type { RunContext } from '../bridge/eventMeta.js';
@@ -87,8 +87,12 @@ import {
   TOOL_TEARDOWN_TIMEOUT_MS,
   type ToolSessionReport,
 } from './toolSessions.js';
-import { buildEventMeta } from '../bridge/eventMeta.js';
-import type { AgentfootprintEventMap } from '../events/registry.js';
+import { buildEventMeta, eventBelongsToRun } from '../bridge/eventMeta.js';
+import type {
+  AgentfootprintEvent,
+  AgentfootprintEventMap,
+  AgentfootprintEventType,
+} from '../events/registry.js';
 import { buildRunManifest } from './agent/runManifest.js';
 import { beginIntegrityRun, type IntegrityPosture } from '../integrity/disposition/lifecycle.js';
 import type { DispositionLedger } from '../integrity/disposition/ledger.js';
@@ -106,6 +110,14 @@ import type { AppliedRecipe } from '../recipes/types.js';
  * `session_reused`, happen inside a real stage and carry its real id.
  */
 const TOOL_TEARDOWN_STAGE_ID = 'tool-teardown#0';
+
+/**
+ * The pseudo-stage a LATE artifact fact is stamped with — one that lands after
+ * the run its binding was made in had ended (a tool's floating upload). Its
+ * stage is long gone; like the teardown events it says plainly where it came
+ * from, and carries the run it belongs to rather than the one that is live.
+ */
+const LATE_ARTIFACT_FACT_STAGE_ID = 'artifact-late#0';
 
 /**
  * The pseudo-stage the run-configuration manifest is stamped with (9.41.0).
@@ -1281,15 +1293,32 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
    * no listener is subscribed, no boundary recorder is attached, and the run
    * is byte-identical to every earlier release.
    *
-   * It is deliberately the SAME `recordRun` a consumer would call by hand.
-   * Nothing about this feature is a second recording implementation — the
-   * three connections that a hand-rolled version gets wrong (attach,
-   * subscribe, getCommitCount) are wired in exactly one place in this package,
-   * and this is a caller of it.
+   * It is deliberately the SAME recorder a consumer would call by hand
+   * (`recordRun`'s own body, `recordRunWhere`). Nothing about this feature is a
+   * second recording implementation — the three connections that a
+   * hand-rolled version gets wrong (attach, subscribe, getCommitCount) are
+   * wired in exactly one place in this package, and this is a caller of it.
+   * The one difference is the timeline's filter: a recording filed FOR a
+   * person keeps only the events of that person's run.
    */
   private startRunRecording(): RunRecorder | undefined {
     if (this.artifactRecordings === undefined || this.artifactStore === undefined) return undefined;
-    return recordRun(this);
+    // Only THIS run's events: on an instance serving several sessions, the
+    // hosting door emits facts for other sessions while this run is in flight,
+    // and a recording is redeemable by the person it was filed for.
+    return recordRunWhere(this, (event) => this.ownsEvent(event));
+  }
+
+  /**
+   * Does `event` belong to the run this agent is serving (or served last)? The
+   * run-membership rule (`bridge/eventMeta.ts · eventBelongsToRun`) against
+   * this instance's run context — asked by the per-run recording and by the
+   * self-explain evidence, the two collectors that keep one run's events.
+   *
+   * @internal
+   */
+  ownsEvent(event: AgentfootprintEvent): boolean {
+    return eventBelongsToRun(event.meta, this.currentRunContext);
   }
 
   /**
@@ -2590,6 +2619,20 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
    * meta comes from the registration-time run context, with a STATED pseudo-stage, the same
    * move as the `'<stageId>#paused'` stamp at the pause boundary.
    */
+  private emitLateFact(
+    type: AgentfootprintEventType,
+    payload: Record<string, unknown>,
+    runContext: RunContext,
+  ): void {
+    const dispatcher = this.getDispatcher();
+    if (!dispatcher.hasListenersFor(type)) return;
+    dispatcher.dispatch({
+      type,
+      payload,
+      meta: buildEventMeta({ runtimeStageId: LATE_ARTIFACT_FACT_STAGE_ID }, runContext),
+    } as unknown as AgentfootprintEventMap[typeof type]);
+  }
+
   private emitToolSessionReport(report: ToolSessionReport, origin: ToolSessionOrigin): void {
     const type =
       report.kind === 'closed'
@@ -4494,6 +4537,7 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
       // tier one is lazy on top of that — an agent whose tools hold no sessions
       // never allocates it.
       currentRun: () => this.toolRunFacts(),
+      emitForRun: (type, payload, runContext) => this.emitLateFact(type, payload, runContext),
       toolSessions: () => this.toolSessions(),
       // 8.6.0 — what a run does when a declared credential needs 3LO consent.
       onAuthorizationRequired: this.onAuthorizationRequired,

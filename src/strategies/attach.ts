@@ -146,6 +146,71 @@ interface DetachRouterArgs {
   readonly onError?: (err: Error, event: unknown) => void;
 }
 
+/** What a field that could not be copied reads as in a detached delivery. */
+const UNCLONEABLE = '[not cloneable]';
+
+/**
+ * A detached copy of an event, taken when it is SCHEDULED for detached
+ * delivery. `structuredClone` first — the footprintjs capture tier's `'clone'`
+ * policy (measured: ~2 µs for a typical event, ~30 µs for a 120 KB
+ * `iteration_end`). When the event holds something that cannot be copied, it
+ * DEGRADES AT THE LEAF ({@link copyLeaves}): the walk descends into objects
+ * and arrays, clones every value it can, and replaces only the value that
+ * cannot be copied (a method, a live handle) with {@link UNCLONEABLE} — so a
+ * tool result with one method keeps its data on every detached sink, as it
+ * does on the synchronous path. The degradation is reported. It never falls
+ * back to the live reference.
+ */
+function snapshotEvent(
+  event: unknown,
+  onDegraded: (type: string, event: unknown) => void,
+): unknown {
+  try {
+    return structuredClone(event);
+  } catch {
+    const e = event as { type?: unknown; payload?: unknown; meta?: unknown };
+    const seen = new WeakMap<object, unknown>();
+    onDegraded(typeof e.type === 'string' ? e.type : 'unknown', event);
+    return {
+      type: e.type,
+      payload: copyLeaves(e.payload, seen, 0),
+      meta: copyLeaves(e.meta, seen, 0),
+    };
+  }
+}
+
+/** How deep the leaf walk descends before it treats a subtree as one leaf. */
+const MAX_COPY_DEPTH = 64;
+
+/**
+ * `value` with every part `structuredClone` can copy copied — by
+ * `structuredClone` itself, so the copy has the clone's semantics (enumerable
+ * own data; an `Error`'s custom properties dropped) — and every part it cannot
+ * copy replaced by {@link UNCLONEABLE}. Plain objects and arrays are walked;
+ * anything else that fails (a `Map` holding a function, a class instance with
+ * a live handle) is one leaf. Cycles are preserved through `seen`.
+ */
+function copyLeaves(value: unknown, seen: WeakMap<object, unknown>, depth: number): unknown {
+  try {
+    return structuredClone(value);
+  } catch {
+    if (value === null || typeof value !== 'object' || depth >= MAX_COPY_DEPTH) return UNCLONEABLE;
+    const held = seen.get(value);
+    if (held !== undefined) return held;
+    if (Array.isArray(value)) {
+      const out: unknown[] = [];
+      seen.set(value, out);
+      for (const item of value) out.push(copyLeaves(item, seen, depth + 1));
+      return out;
+    }
+    if (value instanceof Map || value instanceof Set || value instanceof Error) return UNCLONEABLE;
+    const out: Record<string, unknown> = {};
+    seen.set(value, out);
+    for (const [key, item] of Object.entries(value)) out[key] = copyLeaves(item, seen, depth + 1);
+    return out;
+  }
+}
+
 /** Build a one-stage flowchart that performs `args.work(event)` and
  *  routes any thrown error to `args.onError`. The driver schedules
  *  this chart per event. */
@@ -267,6 +332,21 @@ function buildEventHandler(
   // in footprintjs IS `detachAndJoinLater` with the handle discarded, so this
   // is the same scheduling path, not a second one.)
   const inFlight = new Set<import('footprintjs/detach').DetachHandle>();
+  // An uncloneable payload is reported ONCE per event type — enough for an
+  // operator to see the degradation, not a stream per event.
+  const degradedTypes = new Set<string>();
+  const reportDegraded = (type: string, event: unknown): void => {
+    if (degradedTypes.has(type)) return;
+    degradedTypes.add(type);
+    args.onError?.(
+      new Error(
+        `[enable.*] detached delivery: '${type}' carried a value structuredClone cannot copy ` +
+          `(a function, a symbol, a live handle). The event was delivered with only that value ` +
+          `replaced by '${UNCLONEABLE}' — the rest of the payload intact — never as a live reference.`,
+      ),
+      event,
+    );
+  };
   const track = (handle: import('footprintjs/detach').DetachHandle): void => {
     inFlight.add(handle);
     const forget = (): void => {
@@ -282,8 +362,22 @@ function buildEventHandler(
       // puts the handle in the detach registry before the caller's next line,
       // so a shutdown that calls `flushAllDetached()` actually drains this
       // event instead of finding an empty registry (8.11.1).
+      //
+      // The driver runs the work LATER — after the tool that emitted a
+      // `tool_start` has executed, after the stage that produced a result has
+      // moved on. What it delivers must be the event AS IT WAS when it was
+      // scheduled, never the live object: a tool that writes a bearer header
+      // into its own arguments, or a result mutated after `tool_end`, would
+      // otherwise reach the sink as if the event had carried it. So the event
+      // is snapshotted HERE (`snapshotEvent`) — footprintjs's deferred-observer
+      // law, whose default capture is `'clone'` (`DeferredObserverTier`).
       try {
-        const handle = getDetachExecutor().detachAndJoinLater(detach.driver, wrapperChart, event);
+        const snapshot = snapshotEvent(event, reportDegraded);
+        const handle = getDetachExecutor().detachAndJoinLater(
+          detach.driver,
+          wrapperChart,
+          snapshot,
+        );
         track(handle);
         // Caller validates onHandle is set when mode !== 'forget' (see
         // mode-discrimination above; the mode='joinLater' branch requires it).
