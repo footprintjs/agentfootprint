@@ -20,7 +20,7 @@ while IFS= read -r file; do
     grep -nE "$REMOVED_APIS" "$file" | head -5
     FAILURES=$((FAILURES + count))
   fi
-done < <(find . -name "*.md" -not -path "*/node_modules/*" -not -path "*/dist/*" -not -name "CHANGELOG.md")
+done < <(find . -name "*.md" -not -path "*/node_modules/*" -not -path "*/dist/*" -not -name "CHANGELOG.md" -not -path "./changelogs/*")
 
 if [[ "$FAILURES" -gt 0 ]]; then
   echo ""

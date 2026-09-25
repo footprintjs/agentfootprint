@@ -154,3 +154,34 @@ describe('the paths CLAUDE.md calls removed really are gone', () => {
     });
   }
 });
+
+/**
+ * The consumer skill (ai-instructions/claude-code/SKILL.md — also the source of
+ * the generated AGENTS.md and the repo's installed skill) carries its own door
+ * list, written for users rather than contributors. It said "13 doors" for four
+ * minors after /recipes, /maps, /classify and /ontology shipped, so it is pinned
+ * the same way: every published subpath named, none invented, and the count it
+ * states out loud equal to the list. The root is written `agentfootprint` there,
+ * so the comparison is over the subpaths.
+ */
+describe('the consumer skill names exactly the doors package.json publishes', () => {
+  const skill = readFileSync(join(REPO_ROOT, 'ai-instructions/claude-code/SKILL.md'), 'utf-8');
+  const heading = /^## Subpath map — (\d+) doors$/m.exec(skill);
+  const mapLine = heading ? skill.slice(heading.index).split('\n')[2] ?? '' : '';
+
+  it('has a "Subpath map — N doors" section with its list on the line after the blank', () => {
+    expect(heading, 'SKILL.md has no "## Subpath map — N doors" heading').not.toBeNull();
+    expect(documentedPaths(mapLine).length).toBeGreaterThan(5);
+  });
+
+  it('lists every published subpath, and not one that is unpublished', () => {
+    const subpaths = publishedSubpaths().filter((p) => p !== '.');
+    expect(documentedPaths(mapLine), 'SKILL.md subpath map has drifted from package.json').toEqual(
+      subpaths,
+    );
+  });
+
+  it('the count in its heading counts the root plus every subpath', () => {
+    expect(Number(heading?.[1])).toBe(publishedSubpaths().length);
+  });
+});
