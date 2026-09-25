@@ -194,7 +194,7 @@ import {
   type ToolAbsence,
 } from '../coverage/index.js';
 import { readItemExtras, type CoverageSection } from '../coverage/items.js';
-import { servedToModel } from '../coverage/read.js';
+import { servedToModel, strippedOnly } from '../coverage/read.js';
 import {
   explainStatusOnlyNearMiss,
   pruneLeases,
@@ -1405,7 +1405,14 @@ export function buildToolCallsHandler(
     declaredStatus?: ToolResultStatus,
   ): string | undefined => {
     const ceiling = tool?.resultCeiling;
-    const verdict = applyResultCeiling(value, { toolName: call.toolName, ceiling });
+    // Measured on what the MODEL will read: the record-only coverage fields
+    // (`short`, `kind`) come off before serving (`afterMoment`), so declaring
+    // them must never tip a served result into a refusal. Same reference when
+    // nothing is declared — the measurement is the one it always was.
+    const verdict = applyResultCeiling(servedToModel(value), {
+      toolName: call.toolName,
+      ceiling,
+    });
     if (verdict === undefined || ceiling === undefined) return undefined;
     typedEmit(scope, 'agentfootprint.tools.result_refused', {
       toolName: call.toolName,
@@ -1459,7 +1466,8 @@ export function buildToolCallsHandler(
         toolName: call.toolName,
         toolCallId: call.toolCallId,
         columns,
-        reading: readRowset(value),
+        // What the model will read (the ceiling's reasoning, above).
+        reading: readRowset(servedToModel(value)),
         mode: deps.columnCheckMode ?? 'warn',
       },
       call.iteration,
@@ -2846,9 +2854,17 @@ export function buildToolCallsHandler(
     const substitute = placedToolResult(call.toolName, meta, text.length, placement.maxInlineChars);
     return {
       // One ticket when the two channels carry one value — the capResults
-      // law. A chain-transformed `result` keeps its own truth and meets the
-      // truncation net below, exactly as before.
-      result: values.result === values.modelResult ? substitute : values.result,
+      // law. A value that differs from what the model reads ONLY by the
+      // record-only coverage fields (`coverage/read.ts` · `strippedOnly`) is
+      // one value too: the fields still ride `tools.absent` /
+      // `tools.coverage_declared`, and `tool_end.result` must not keep a
+      // payload placement exists to keep off the record. A chain-transformed
+      // `result` keeps its own truth and meets the truncation net below,
+      // exactly as before.
+      result:
+        values.result === values.modelResult || strippedOnly(values.result, values.modelResult)
+          ? substitute
+          : values.result,
       modelResult: substitute,
     };
   };

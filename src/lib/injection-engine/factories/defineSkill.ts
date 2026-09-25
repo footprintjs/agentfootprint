@@ -42,6 +42,7 @@
  *   });
  */
 
+import { plainLineProblem } from '../../plainLine.js';
 import { isDevMode } from 'footprintjs';
 import type { Injection } from '../types.js';
 import type { Tool } from '../../../core/tools.js';
@@ -382,7 +383,8 @@ function readSkillTitle(id: string, raw: unknown): string | undefined {
     throw new Error(`${at} must be a non-empty string — or omit it; a report then prints the id.`);
   }
   const title = raw.trim();
-  if (/[\r\n]/.test(title)) throw new Error(`${at} must be one line.`);
+  const notPlain = plainLineProblem(at, title);
+  if (notPlain !== undefined) throw new Error(notPlain);
   if (title.length > MAX_SKILL_TITLE_CHARS) {
     throw new Error(`${at} is ${title.length} characters; the limit is ${MAX_SKILL_TITLE_CHARS}.`);
   }

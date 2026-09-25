@@ -541,14 +541,28 @@ return absent({
 
 Both are **record-only**: `tools.absent`, `tools.coverage_declared` and
 `sharedState.coverageDeclared` carry them, and the model never does — the
-framework removes them from the envelope before the model (or any
-`onToolResult` rule) reads it, so declaring them costs no request byte.
-`stream.tool_end` then keeps your envelope as `result` and what the model read
-as `modelResult`. They are never evidence either: **never put the caller's
-arguments in `short`** — it restates `what`. A tool in another language puts
-the same two keys on the items of its snake_case lists:
+framework removes them from a recognized envelope (an object: an absence, or
+a ledger and whatever it wraps) before the model or any `onToolResult` rule
+reads it, and the tool's `resultCeiling` measures that served value, so
+declaring them costs no request byte. `stream.tool_end` then keeps your
+envelope as `result` and what the model read as `modelResult` (under result
+placement both carry the one ticket). They are never evidence either:
+**never put the caller's arguments in `short`** — it restates `what`.
+
+What is **not** stripped, because it is not a recognized envelope object: a
+result returned as JSON text (an `mcpClient` result in its default text mode
+is one), an `af_absent` whose `checked` is empty (that is ordinary data), and
+an absence buried inside your own domain object. `mcpServe` does not strip
+either, on purpose: it hands the tool's own answer to another host, and a
+client's model there WILL read the two fields unless that client is an
+agentfootprint agent reading structured results, whose own door strips them.
+
+A tool in another language puts the same two keys on the items of its
+snake_case lists — and emits them only when the item has a value (a `None`
+is read as not declared, but it is still bytes the model reads):
 
 ```python
+# ABSENCE_NOTE and the marker come from canonical-notes.json (see below)
 {"af_absent": True, "outcome": "nothing_found", "looked_for": "…",
  "checked": [{"what": "…", "short": "every VM disk in the RVTools export of 2026-09-19"}],
  "not_checked": [{"what": "…", "short": "whether that name is a storage array",
@@ -556,9 +570,12 @@ the same two keys on the items of its snake_case lists:
  "retry_returns_the_same": True, "note": ABSENCE_NOTE}
 ```
 
-`absent()` and `coverage()` refuse a bad value where you wrote it; an envelope
-built by hand is read, never repaired — a bad `short` or `kind` is dropped with
-one dev-mode warning per tool, which a Python author never sees, so check both
+`short` is one line of plain visible text: no control characters, no line or
+paragraph separators, no invisible format characters (bidi overrides,
+zero-width characters) — checked before the 80-character limit. `absent()` and
+`coverage()` refuse a bad value where you wrote it; an envelope built by hand
+is read, never repaired — a bad `short` or `kind` is dropped with one dev-mode
+warning per tool per process, which a Python author never sees, so check both
 where you build the envelope.
 
 ## What a clean result does not rule out — `coverage()`

@@ -37,6 +37,7 @@ import {
   checkInApproved,
   coverage,
   defineTool,
+  inMemoryArtifacts,
   isPaused,
   pauseHere,
 } from '../../../src/index.js';
@@ -372,5 +373,155 @@ describe('record-only fields — every serving path goes through the one strip',
     };
     walk(SRC);
     expect(found.filter((f) => f !== 'core/agent/coverage/read.ts').sort()).toEqual(PINNED);
+  });
+});
+
+// ─── 4. ONE VALUE — the ceiling measures, and placement tickets, what is served ──
+
+/** The review's repro shape (af1-REVIEW.md S1/S2): a ledger around data. */
+function reviewLists(declare: boolean) {
+  return {
+    checked: [
+      {
+        what: 'vDisk and vm_rdm_map: every VM disk in the RVTools export dated 2026-09-19',
+        ...(declare && { short: 'every VM disk in the RVTools export' }),
+      },
+    ],
+    notChecked: [
+      {
+        what: 'whether that name is a storage array, and which VM disks are on it',
+        why: 'this tool places disks, it does not list arrays',
+        ...(declare && {
+          short: 'whether that name is a storage array',
+          kind: 'existence' as const,
+        }),
+      },
+    ],
+  };
+}
+
+async function runOne(
+  path: 'batch' | 'check-in',
+  value: () => unknown,
+  opts: { ceiling?: number; placement?: number },
+) {
+  const requests: string[] = [];
+  const events: { type: string; payload: Record<string, unknown> }[] = [];
+  const inner = mock({
+    replies: [{ toolCalls: [{ id: 'c1', name: 't', args: {} }] }, { content: 'done' }],
+  });
+  const provider = {
+    name: inner.name,
+    complete: async (req: LLMRequest): Promise<LLMResponse> => {
+      requests.push(JSON.stringify(req.messages));
+      return inner.complete(req);
+    },
+  };
+  const agent = Agent.create({
+    provider,
+    model: 'mock',
+    ...(opts.placement !== undefined && {
+      artifacts: { store: inMemoryArtifacts(), placement: { maxInlineChars: opts.placement } },
+    }),
+  })
+    .tool(
+      defineTool({
+        name: 't',
+        description: 'd',
+        inputSchema: { type: 'object', properties: {} },
+        ...(opts.ceiling !== undefined && { resultCeiling: { maxChars: opts.ceiling } }),
+        ...(path === 'check-in' && { checkIn: 'always' as const }),
+        execute: () => value(),
+      }),
+    )
+    .build();
+  agent.on('*', (e) => events.push({ type: e.type, payload: e.payload as never }));
+  const first = await agent.run({ message: 'go' });
+  if (path === 'check-in') {
+    if (!isPaused(first)) throw new Error('expected a pause');
+    await agent.resume(first.checkpoint, checkInApproved({ by: 'alice' }));
+  }
+  const end = events.find((e) => e.type === 'agentfootprint.stream.tool_end')!.payload;
+  const refused = events.some((e) => e.type === 'agentfootprint.tools.result_refused');
+  return { requests, events, end, refused };
+}
+
+describe('record-only fields — the ceiling measures the SERVED value (review S1)', () => {
+  const pad = { data: 'x'.repeat(1000) };
+  const plainValue = () => coverage(pad, reviewLists(false));
+  const declValue = () => coverage(pad, reviewLists(true));
+
+  it('the repro sizes: 1,614 served, 1,726 as the tool returned it', () => {
+    expect(JSON.stringify(plainValue()).length).toBe(1614);
+    expect(JSON.stringify(declValue()).length).toBe(1726);
+  });
+
+  it.each(['batch', 'check-in'] as const)(
+    '%s: at ceiling 1,670 both runs are SERVED, and their requests are byte-identical',
+    async (path) => {
+      const plain = await runOne(path, plainValue, { ceiling: 1670 });
+      const decl = await runOne(path, declValue, { ceiling: 1670 });
+      expect(plain.refused).toBe(false);
+      expect(decl.refused).toBe(false);
+      expect(decl.requests).toEqual(plain.requests);
+      expect(decl.end.result).toEqual(declValue());
+    },
+  );
+
+  it('a ceiling below the SERVED size still refuses both — the ceiling is not loosened', async () => {
+    const plain = await runOne('batch', plainValue, { ceiling: 1600 });
+    const decl = await runOne('batch', declValue, { ceiling: 1600 });
+    expect(plain.refused).toBe(true);
+    expect(decl.refused).toBe(true);
+    expect(decl.requests).toEqual(plain.requests);
+  });
+});
+
+describe('record-only fields — placement tickets ONE value (review S2)', () => {
+  const big = { rows: Array.from({ length: 400 }, (_, i) => ({ id: `row-${i}`, v: i })) };
+  const withoutRefs = (text: string) => text.replace(/art_[A-Za-z0-9]+/g, '<ref>');
+
+  it.each(['batch', 'check-in'] as const)(
+    '%s: a declaring result puts the ticket on BOTH channels — no payload on tool_end',
+    async (path) => {
+      const plain = await runOne(path, () => coverage(big, reviewLists(false)), {
+        placement: 2000,
+      });
+      const decl = await runOne(path, () => coverage(big, reviewLists(true)), {
+        placement: 2000,
+      });
+      expect('modelResult' in decl.end).toBe(false);
+      // The ticket, the same one the plain run records (artifact ids aside).
+      expect(withoutRefs(JSON.stringify(decl.end.result))).toBe(
+        withoutRefs(JSON.stringify(plain.end.result)),
+      );
+      expect(JSON.stringify(decl.end.result)).not.toContain('row-399');
+      expect(JSON.stringify(decl.end).length).toBeLessThan(2000);
+      expect(decl.requests.map(withoutRefs)).toEqual(plain.requests.map(withoutRefs));
+      // The fields still ride the record.
+      const declared = decl.events.find(
+        (e) => e.type === 'agentfootprint.tools.coverage_declared',
+      )!.payload;
+      expect(JSON.stringify(declared)).toContain('"short"');
+    },
+  );
+});
+
+describe('record-only fields — a Python `None` declares nothing (review M4)', () => {
+  it('"short": None / "kind": None on every item: served as written, no stamp, nothing recorded', async () => {
+    const envelope = () => ({
+      af_absent: true,
+      outcome: 'nothing_found',
+      looked_for: 'a disk',
+      checked: [{ what: 'the RVTools export', short: null }],
+      not_checked: [{ what: 'whether it is an array', short: null, kind: null }],
+      retry_returns_the_same: true,
+      note: 'n',
+    });
+    const run = await runOne('batch', envelope, {});
+    expect('modelResult' in run.end).toBe(false);
+    const absent = run.events.find((e) => e.type === 'agentfootprint.tools.absent')!.payload;
+    expect(JSON.stringify(absent)).not.toContain('"short"');
+    expect(run.requests[1]).toContain('\\"short\\":null'); // served as written
   });
 });

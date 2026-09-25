@@ -431,9 +431,12 @@ export interface ToolEndPayload {
    * channels are then one reference). Stamped on all five dispatch paths.
    *
    * Cost, stated: a call whose tool declares `short` or `kind` carries its
-   * envelope twice here (`result` + `modelResult`) — about 4 KB more per
-   * declaring call for a typical absence. A tool that declares neither gets
-   * no stamp and no new byte.
+   * envelope twice here (`result` + `modelResult`), so the extra bytes are
+   * the size of that envelope — about 4 KB for a typical absence, and as
+   * large as the payload a ledger wraps. Under result PLACEMENT a difference
+   * that is only this strip counts as one value: both channels carry the one
+   * ticket and nothing is stamped. A tool that declares neither gets no stamp
+   * and no new byte.
    */
   readonly modelResult?: unknown;
   /**

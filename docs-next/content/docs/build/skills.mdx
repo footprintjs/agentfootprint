@@ -600,8 +600,15 @@ const inventory = defineSkill({
 
 The title rides `agentfootprint.skill.graph_declared` as `nodes[].title`, for a
 report or a lens to print. Nothing the model reads changes, and neither does
-what a graph draws (the node's `label`). At most 60 characters, one line, and
-not the id itself; leave it out and the event carries exactly what it did.
+what a graph draws (the node's `label`). At most 60 characters of plain
+visible text on one line (no control, separator or invisible format
+characters), and not the id itself; leave it out and the event carries
+exactly what it did.
+
+It is recorded only on an agent with a skill graph (`.skillGraph(…)`), because
+`skill.graph_declared` is that agent's event. A titled skill added with
+`.skill()` alone is accepted and served exactly as before, but its title is on
+no event.
 
 ## Per-provider surface selection (`surfaceMode`)
 

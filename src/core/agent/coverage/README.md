@@ -227,30 +227,60 @@ under the snake_case lists (`checked` / `not_checked` / `cannot_cover`):
  "checked": [{"what": "…", "short": "every VM disk in the RVTools export of 2026-09-19"}],
  "not_checked": [{"what": "…", "short": "whether that name is a storage array",
                   "kind": "existence", "why": "…"}],
- "retry_returns_the_same": True, "note": ABSENCE_NOTE}
+ "retry_returns_the_same": True,
+ "note": ABSENCE_NOTE}  # your copy of the note, read from canonical-notes.json
 ```
+
+Emit `short` / `kind` only when the item has one — a `"short": None` is read
+as omitted, but it is bytes the model is served for nothing.
 
 The laws:
 
 - **Record-only.** Both reach the events (`tools.absent`,
   `tools.coverage_declared`), the tracked `coverageDeclared` rows and the
   account — never the model's request. `read.ts` · `servedToModel` removes
-  them from every recognized envelope (a bare absence, a ledger's own lists
-  AND the absence it bounds, a semantic envelope's `coverage`), and
-  `../stages/toolCalls.ts` · `afterMoment` asks it FIRST, so all five
-  dispatch paths strip and every after-tool link is handed the served value.
-  Where the two differ, `tool_end.modelResult` is stamped — the envelope then
-  rides the record twice (about 4 KB more per declaring call). A tool that
-  declares neither gets the same reference back: no stamp, no new byte
-  (pinned against the pre-change tree by
-  `test/core/agent/coverage-record-only-fields.test.ts`). A result returned as
-  JSON TEXT is never recognized at the door, so it is served as written.
+  them from every recognized envelope OBJECT: a bare absence, and a ledger —
+  its own lists and, recursively, whatever it bounds (an absence, another
+  ledger, a semantic envelope). `../stages/toolCalls.ts` · `afterMoment` asks
+  it FIRST, so all five dispatch paths strip and every after-tool link is
+  handed the served value. (A top-level semantic envelope is already reduced
+  to `semanticsForModel`, which drops the coverage detail, before
+  `afterMoment` runs — the semantic branch is defensive there, and live for a
+  semantic envelope a ledger bounds.)
+- **One value, measured and placed as served.** The tool's own ceiling and
+  the column judge (`refuseOverCeiling`, `judgeColumns`) measure the SERVED
+  value, so declaring the fields never tips a result into a refusal. Where
+  the two channels differ only by the strip, `tool_end.modelResult` is
+  stamped and the envelope rides the record twice (the envelope's size —
+  about 4 KB for a typical absence, more for a ledger around a big payload);
+  under placement that difference is ONE value (`read.ts` · `strippedOnly`)
+  and both channels carry the one ticket. A tool that declares neither gets
+  the same reference back: no stamp, no new byte (pinned against the
+  pre-change tree by `test/core/agent/coverage-record-only-fields.test.ts`).
+- **Not stripped — say so, never assume.** A result returned as JSON TEXT
+  (an `mcpClient` result in its default text mode is one), an `af_absent`
+  whose `checked` is empty (unrecognized, so it is data — served and recorded
+  as written), and an absence inside a tool's own domain object. And
+  `mcpServe` does not strip, by ruling: it carries the tool's own answer to
+  ANOTHER host, whose agentfootprint door (with `mcpClient` in
+  `resultMode: 'structured'`) records and strips them itself; a foreign
+  client's model, or an agentfootprint client in text mode, WILL read them.
+- **Reserved names, `null` omitted.** On a recognized envelope's items,
+  `short` and `kind` are reserved: any non-null value under either is
+  removed from the served value, valid or not (the record keeps only a valid
+  one). `null` counts as omitted on BOTH sides — served as written, recorded
+  as nothing, no stamp — but emit the key only when it has a value.
 - **One rule set, two doors.** `absent()` / `coverage()` refuse a bad value
   where it was written (`items.ts` · `normalizeCoverageList`). An envelope
   minted elsewhere is read by `items.ts` · `readItemExtras`: a valid value is
   copied, an invalid one DROPPED — read, never repaired — with one dev warning
-  per tool. A Python author never sees that warning, so validate at the call
-  site too. `null` reads as omitted.
+  per tool name per PROCESS. A Python author never sees that warning, so
+  validate at the call site too. "One line" is one shared rule
+  (`lib/plainLine.ts` · `plainLineProblem`, also asked for a skill `title`):
+  no control (`\p{Cc}`), line or paragraph separator (`\p{Zl}`, `\p{Zp}`)
+  or invisible format character (`\p{Cf}` — bidi overrides, zero-width
+  characters), checked BEFORE the length, so 80 characters is 80 a person
+  sees.
 - **Never evidence.** `evidence.ts` withholds both beside `looked_for`. `short`
   is the field an author is most tempted to personalise, and a true short form
   restates `what`, so nothing is lost. **Never interpolate the caller's

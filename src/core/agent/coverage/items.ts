@@ -13,6 +13,8 @@
 
 import { isDevMode } from 'footprintjs';
 
+import { plainLineProblem } from '../../../lib/plainLine.js';
+
 import type { CoverageInput, CoverageItem } from './types.js';
 
 /** Section names, as the author spells them — used verbatim in refusals. */
@@ -53,7 +55,8 @@ function shortProblem(short: unknown, what: string): string | undefined {
     return '`short` must be a non-empty string — or omit it; the report then prints `what`.';
   }
   const s = short.trim();
-  if (/[\r\n]/.test(s)) return '`short` must be one line.';
+  const notPlain = plainLineProblem('`short`', s);
+  if (notPlain !== undefined) return notPlain;
   if (s.length > MAX_SHORT_CHARS) {
     return `\`short\` is ${s.length} characters; the limit is ${MAX_SHORT_CHARS}.`;
   }
@@ -88,7 +91,9 @@ export interface CoverageItemExtras {
 const has = (item: object, key: string): boolean =>
   Object.prototype.hasOwnProperty.call(item, key) && (item as Record<string, unknown>)[key] != null;
 
-/** Tools already warned about a dropped extra — one warning per tool name. */
+/** Tools already warned about a dropped extra — one warning per tool name
+ *  per PROCESS (module state; a second agent in a long-lived host is not
+ *  told again — dev mode only, so acceptable). */
 const warnedTools = new Set<string>();
 
 /**
@@ -138,7 +143,7 @@ function warnDroppedExtra(toolName: string | undefined, section: string, problem
   console.warn(
     `agentfootprint coverage: tool '${toolName ?? '(unknown)'}' declared a ${section} item ` +
       `the record cannot carry, so that field was dropped (the item itself is kept): ` +
-      `${problem} This warning fires once per tool.`,
+      `${problem} This warning fires once per tool per process.`,
   );
 }
 
@@ -151,16 +156,19 @@ function warnDroppedExtra(toolName: string | undefined, section: string, problem
  */
 export function listWithoutRecordOnly(list: unknown): unknown {
   if (!Array.isArray(list)) return list;
+  // Declared = an own key holding a value — the record's reading
+  // (`readItemExtras`), so the two cannot disagree: `"short": None` from a
+  // Python producer is omitted for both, served as written, and stamps
+  // nothing. Any NON-null value under either key is removed, valid or not:
+  // the two names are RESERVED on a recognized envelope's items.
   const carries = (i: unknown): boolean =>
-    typeof i === 'object' &&
-    i !== null &&
-    RECORD_ONLY_ITEM_KEYS.some((k) => Object.prototype.hasOwnProperty.call(i, k));
+    typeof i === 'object' && i !== null && RECORD_ONLY_ITEM_KEYS.some((k) => has(i, k));
   if (!list.some(carries)) return list;
   return list.map((i: unknown) =>
     carries(i)
       ? Object.fromEntries(
           Object.entries(i as Record<string, unknown>).filter(
-            ([key]) => !RECORD_ONLY_ITEM_KEYS.includes(key),
+            ([key, v]) => !(RECORD_ONLY_ITEM_KEYS.includes(key) && v != null),
           ),
         )
       : i,

@@ -11,7 +11,12 @@
  *                 (`absenceEvidenceProjection`), bare, nested, as JSON text.
  *   - EDGE      — `null` reads as omitted; an item that is not an object is
  *                 left as found; one dev warning per tool.
- *   - REGRESSION— no library switch over the kind union is exhaustive.
+ *   - REGRESSION— no library switch over the kind union is exhaustive. A
+ *                 regex TRIPWIRE, not a proof: it slices each switch body to
+ *                 the first two-space-indented `}`, so a deeper-nested switch
+ *                 is judged against what follows it; it does not see
+ *                 double-quoted cases, if-chains, or exhaustiveness through a
+ *                 `Record<…, …>` map. A review still owns that law.
  *
  * The dispatch paths are driven end to end in
  * `coverage-record-only-fields.test.ts`.
@@ -32,7 +37,7 @@ import {
   MAX_SHORT_CHARS,
   readItemExtras,
 } from '../../../src/core/agent/coverage/items.js';
-import { servedToModel } from '../../../src/core/agent/coverage/read.js';
+import { servedToModel, strippedOnly } from '../../../src/core/agent/coverage/read.js';
 import { semantic } from '../../../src/lib/semantics/index.js';
 
 const WHAT = 'whether that name is a storage array, and which VM disks are on it';
@@ -81,7 +86,7 @@ describe('UNIT — the mint door refuses where the author typed it', () => {
   it.each([
     ['an empty short', { short: '   ' }, /non-empty/],
     ['a short that is not a string', { short: 7 }, /non-empty/],
-    ['a two-line short', { short: 'one\ntwo' }, /one line/],
+    ['a two-line short', { short: 'one\ntwo' }, /plain visible text/],
     [
       `a short over ${MAX_SHORT_CHARS} characters`,
       { short: 'x'.repeat(MAX_SHORT_CHARS + 1) },
@@ -93,6 +98,24 @@ describe('UNIT — the mint door refuses where the author typed it', () => {
     expect(() =>
       normalizeCoverageList('absent', 'notChecked', [{ what, ...extra }], false),
     ).toThrow(message);
+  });
+
+  it.each([
+    ['CR', 'one\rtwo'],
+    ['TAB (Cc)', 'whether\tthat name is an array'],
+    ['VT (Cc)', 'whether that\u000bname is an array'],
+    ['FF (Cc)', 'whether that\u000cname is an array'],
+    ['NEL U+0085 (Cc)', 'whether that\u0085name is an array'],
+    ['U+2028 line separator (Zl)', 'whether that\u2028name is an array'],
+    ['U+2029 paragraph separator (Zp)', 'whether that\u2029name is an array'],
+    ['U+202E RTL override (Cf)', 'whether \u202Eyarra na si eman taht'],
+    ['U+200B zero-width space ×60 (Cf) — padding past 80', 'short' + '\u200B'.repeat(60)],
+    ['U+2066 bidi isolate (Cf)', 'whether \u2066that\u2069 name'],
+  ])('S3: refuses %s in short, at both doors', (_label, short) => {
+    const what = 'whether that name is a storage array, and which VM disks are on it';
+    expect(() => absent({ what: 'x', checked: [{ what, short }] })).toThrow(/plain visible text/);
+    expect(() => coverage(1, { notChecked: [{ what, short }] })).toThrow(/plain visible text/);
+    expect(readItemExtras({ what, short }, 'notChecked', 'py_s3')).toEqual({});
   });
 
   it('refuses a short longer than its what', () => {
@@ -258,14 +281,61 @@ describe('UNIT — the strip serves every shape without the record-only keys', (
     expect(servedToModel(lookalike)).toBe(lookalike);
   });
 
-  it('readCoverageResult carries the served value', () => {
+  it('readCoverageResult RECORDS the fields — and carries no served copy (M1)', () => {
     const value = absent({ what: 'a disk', ...declared });
     const reading = readCoverageResult(value)!;
-    expect(reading.served).toEqual(absent({ what: 'a disk', ...plain }));
-    // The declared facts still carry the fields — the RECORD reads them here.
     expect(reading.declared[0]!.coverage.notChecked[0]).toMatchObject({ kind: 'existence' });
-    const undeclared = absent({ what: 'a disk', ...plain });
-    expect(readCoverageResult(undeclared)!.served).toBe(undeclared);
+    expect('served' in reading).toBe(false);
+  });
+
+  it('S4: a ledger is stripped through whatever it bounds — ledger in ledger, semantic in ledger', () => {
+    const inner = coverage({ a: 1 }, declared);
+    const served = servedToModel(coverage(inner, declared));
+    noExtras(served);
+    expect(served).toEqual(coverage(coverage({ a: 1 }, plain), plain));
+    const sem = {
+      ...(semantic({
+        facts: [{ entity: 'vm-1', disks: 0 }],
+        provenance: { measured_at: '2026-09-19T00:00:00Z', source: 'rvtools' },
+        coverage: { checked: [{ what: 'the export' }] },
+      }) as object),
+      coverage: { checked: [{ what: 'the export', short: 'export' }] },
+    };
+    noExtras(servedToModel(coverage(sem, plain)));
+    // Same-reference short-circuit at every depth when nothing is declared.
+    const deep = coverage(coverage(absent({ what: 'a disk', ...plain }), plain), plain);
+    expect(servedToModel(deep)).toBe(deep);
+  });
+
+  it('S4 (stated, pre-existing): the recognizer does not RECORD an inner ledger', () => {
+    // Only the outer ledger (and an inner ABSENCE) is declared; an inner
+    // ledger's lists are served stripped but are not a statement on the record.
+    const reading = readCoverageResult(coverage(coverage({ a: 1 }, declared), plain))!;
+    expect(reading.declared.map((d) => d.kind)).toEqual(['ledger']);
+    expect(reading.declared[0]!.coverage.checked).toEqual(plain.checked);
+  });
+
+  it('M4: a null short/kind (a Python None) is omitted — served as written, no copy', () => {
+    const envelope = {
+      af_absent: true,
+      outcome: 'nothing_found',
+      looked_for: 'a disk',
+      checked: [{ what: 'the export', short: null, kind: null }],
+      retry_returns_the_same: true,
+      note: 'n',
+    };
+    expect(servedToModel(envelope)).toBe(envelope);
+    const mixed = [{ what: 'the export', short: 'export', kind: null }];
+    expect(listWithoutRecordOnly(mixed)).toEqual([{ what: 'the export', kind: null }]);
+  });
+
+  it('S2 helper: strippedOnly recognizes the strip, and only the strip', () => {
+    const value = absent({ what: 'a disk', ...declared });
+    const served = servedToModel(value);
+    expect(strippedOnly(value, served)).toBe(true);
+    expect(strippedOnly(value, { ...(served as object) })).toBe(false);
+    expect(strippedOnly(value, value)).toBe(false);
+    expect(strippedOnly(absent({ what: 'a disk', ...declared }), served)).toBe(false);
   });
 
   it('listWithoutRecordOnly leaves non-object items as found', () => {

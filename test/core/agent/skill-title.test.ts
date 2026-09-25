@@ -45,9 +45,14 @@ describe('UNIT — defineSkill({ title })', () => {
 
   it.each([
     ['an empty title', '  ', /non-empty/],
-    ['a two-line title', 'array\nestate', /one line/],
+    ['a two-line title', 'array\nestate', /plain visible text/],
     ['a title over 60 characters', 'x'.repeat(61), /limit is 60/],
     ['the id itself', 'array-inventory', /the id itself/],
+    ['a U+2028 line separator (Zl)', 'array\u2028estate', /plain visible text/],
+    ['a U+2029 paragraph separator (Zp)', 'array\u2029estate', /plain visible text/],
+    ['a control character (Cc)', 'array\u0085estate', /plain visible text/],
+    ['a bidi override (Cf)', 'array \u202Eetatse', /plain visible text/],
+    ['zero-width padding (Cf)', 'array' + '\u200B'.repeat(70), /plain visible text/],
   ])('refuses %s', (_label, title, message) => {
     expect(() => inventory(title)).toThrow(message);
   });

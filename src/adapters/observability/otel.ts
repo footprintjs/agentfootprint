@@ -872,6 +872,9 @@ function evidenceVerdictAttrs(p: Partial<AgentEvidenceCheckedPayload>, content: 
     ...(typeof p.action === 'string' && { 'agentfootprint.evidence.action': p.action }),
     ...(typeof p.posture === 'string' && { 'agentfootprint.evidence.posture': p.posture }),
     ...(typeof p.candidates === 'number' && { 'agentfootprint.evidence.candidates': p.candidates }),
+    // How many of `candidates` were actually looked up (exempt values are
+    // not) — absent on an event recorded before the field existed.
+    ...(typeof p.lookedUp === 'number' && { 'agentfootprint.evidence.looked_up': p.lookedUp }),
     'agentfootprint.evidence.unsupported.count': unsupported.length,
     ...(typeof p.afterRevision === 'boolean' && {
       'agentfootprint.evidence.after_revision': p.afterRevision,
