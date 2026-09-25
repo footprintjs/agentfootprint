@@ -94,16 +94,17 @@ pinned in `test/lib/answer-account/golden/turn2.A.txt`:
 
 ## Files
 
-| file                         | job                                                                                               |
-| ---------------------------- | ------------------------------------------------------------------------------------------------- |
-| `types.ts`                   | the `AnswerAccount` shape (one exported name; the family by indexed access)                       |
-| `view.ts`                    | `recordingView` — ONE indexed pass, filtered to this run                                          |
-| `facts/`                     | one reader per row: `asked`, `understood`, `calls` (+ `checked`), `found` (+ `inView`), `howSure` |
-| `signals.ts`                 | the three checks, the signals, "Anything wrong", the one-liner                                    |
-| `templates.ts` / `render.ts` | the closed table and its filler (grammar: `count` pairs, `allOf`, `joinAnd`, `distance`)          |
-| `account.ts`                 | `accountForAnswer`; the per-sentence catch (`unreadable.line@1`)                                  |
-| `shown.ts`                   | `showLeaves` + the allow-list — the hosting op's half (af-3), not a door                          |
-| `declarations.ts`            | the app's declared data, validated (a caller error throws)                                        |
+| file                         | job                                                                                                                                         |
+| ---------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------- |
+| `types.ts`                   | the `AnswerAccount` shape (one exported name; the family by indexed access)                                                                 |
+| `view.ts`                    | `recordingView` — ONE indexed pass, filtered to this run                                                                                    |
+| `facts/`                     | one reader per row: `asked`, `understood`, `calls` (+ `checked`), `found` (+ `inView`), `howSure`                                           |
+| `signals.ts`                 | the three checks, the signals, "Anything wrong", the one-liner                                                                              |
+| `templates.ts` / `render.ts` | the closed table and its filler (grammar: `count` pairs, `allOf`, `joinAnd`, `distance`)                                                    |
+| `account.ts`                 | `accountForAnswer`; the per-sentence catch (`unreadable.line@1`)                                                                            |
+| `shown.ts`                   | `showLeaves` + the allow-list — the hosting op's half (af-3), not a door                                                                    |
+| `pointerKey.ts`              | `answerAccountPointerKey` — the ONE key format of the `shown` map; a leaf, public so the lens looks pointers up by the key the server wrote |
+| `declarations.ts`            | the app's declared data, validated (a caller error throws)                                                                                  |
 
 ## Changing the words
 

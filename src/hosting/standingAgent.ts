@@ -100,14 +100,23 @@
 
 import { isDevMode } from 'footprintjs';
 import { bindArtifacts, type ArtifactEventFact } from '../artifacts/capability.js';
-import type { ArtifactScope } from '../artifacts/types.js';
+import type { ArtifactScope, ArtifactStore } from '../artifacts/types.js';
 import type { ArtifactHandOverFailedPayload } from '../events/payloads.js';
 import { readAskComponent } from '../core/askComponent.js';
 import { applyInputResponse, readAwaitingInput } from '../core/inputRequest.js';
 import { isPaused, pauseDemandsDecision, type RunnerPauseOutcome } from '../core/pause.js';
 import type { AgentRunCheckpoint } from '../core/runCheckpoint.js';
-import { NOT_A_REF, type ArtifactWireRequest, type ArtifactWireResult } from './artifactWire.js';
+import {
+  ANSWER_ACCOUNT_OP,
+  artifactOpWireName,
+  NOT_A_REF,
+  type ArtifactWireRequest,
+  type ArtifactWireResult,
+} from './artifactWire.js';
+import { answerAccounts, type AnswerAccounts } from './answerAccounts.js';
 import { isArtifactRef } from '../artifacts/naming.js';
+import { RECORDING_ARTIFACT_KIND } from '../artifacts/recordingArtifact.js';
+import { refuseUnknownWireOp } from './wireOps.js';
 import { durableWriter, type DurableWriter } from './durability.js';
 import {
   envelopeOwner,
@@ -128,6 +137,7 @@ import {
   NoArtifactStoreError,
   NoPendingAskError,
   PauseNotCarriedError,
+  RecordingTooLargeForAccountError,
   SessionIndexUnavailableError,
   SessionNotFoundError,
   SessionOpNeedsIdentityError,
@@ -346,6 +356,14 @@ export async function standingAgent<TH extends HostHandle>(
         `for the default (${TURN_ARTIFACTS_TIMEOUT_MS} ms).`,
     );
   }
+  // The `answer-account` op (explain-answer): built — and its declarations,
+  // ceiling and cache size validated — only when the host opted in, so a bad
+  // declaration throws HERE, at boot, and never meets a request. Absent, the
+  // op answers the unknown-op refusal and nothing below is ever built.
+  const accounts: AnswerAccounts | undefined =
+    options.answerAccounts === undefined || options.answerAccounts === false
+      ? undefined
+      : answerAccounts(options.answerAccounts);
   const maxActiveSessions = options.maxActiveSessions ?? DEFAULT_MAX_ACTIVE_SESSIONS;
   if (factory !== undefined && (!Number.isInteger(maxActiveSessions) || maxActiveSessions < 1)) {
     throw new Error(
@@ -909,6 +927,10 @@ export async function standingAgent<TH extends HostHandle>(
     verified: VerifiedIdentity | undefined,
     reply: HostReply,
   ): Promise<void> {
+    // The account op is spoken only by a host that opted in — and refused
+    // before anything is read, so a host that never asked for it pays nothing
+    // and reveals nothing.
+    if (op.op === 'account' && accounts === undefined) refuseUnknownWireOp(ANSWER_ACCOUNT_OP);
     const sessionId = request.sessionId;
     if (sessionId === undefined) {
       // An anonymous run scopes its artifacts to its own runId — a name no
@@ -919,7 +941,7 @@ export async function standingAgent<TH extends HostHandle>(
       return;
     }
     if (!isArtifactRef(op.ref)) {
-      reply.fail(new InvalidWireOpError(`'artifact-${op.op}' ${NOT_A_REF}`));
+      reply.fail(new InvalidWireOpError(`'${artifactOpWireName(op.op)}' ${NOT_A_REF}`));
       return;
     }
     // Read the stored conversation once: its OWNER (a verifying door) and its
@@ -941,9 +963,16 @@ export async function standingAgent<TH extends HostHandle>(
         // The fail-closed law at the wire: the refusal lands on the record
         // (`no-store`, the same reason `ctx.artifacts` teaches with) and the
         // reply names the attach.
+        // (An account would have been READ with `get`, so that is the verb its
+        // refusal names — no new `ArtifactOp` member.)
         emitArtifactFact(
           lane.agent,
-          { type: 'refused', op: op.op, reason: 'no-store', ref: op.ref },
+          {
+            type: 'refused',
+            op: op.op === 'account' ? 'get' : op.op,
+            reason: 'no-store',
+            ref: op.ref,
+          },
           { sessionId },
         );
         reply.fail(new NoArtifactStoreError(op.op));
@@ -967,7 +996,10 @@ export async function standingAgent<TH extends HostHandle>(
       const bound = bindArtifacts(store, scope, {
         onEvent: (fact) => emitArtifactFact(lane.agent, fact, { sessionId }),
       });
-      if (op.op === 'head') {
+      if (op.op === 'account') {
+        // `accounts` is defined: the first line of this function refused otherwise.
+        await explainAnswer(accounts as AnswerAccounts, store, scope, op.ref, bound, reply);
+      } else if (op.op === 'head') {
         const meta = await bound.head(op.ref);
         if (meta === null) {
           reply.fail(new ArtifactNotFoundError(op.ref));
@@ -989,6 +1021,66 @@ export async function standingAgent<TH extends HostHandle>(
       lane.admitted -= 1;
       lane.lastUsedMs = Date.now();
     }
+  }
+
+  /**
+   * The `answer-account` branch, after ownership (explain-answer af-3).
+   *
+   * Everything before this line is `artifact-get`'s own path — the same
+   * ownership check, the same lane admission (never the run queue), the same
+   * composed scope. What the branch adds, in order:
+   *
+   *  1. **A SILENT head** — `bindArtifacts(store, scope)` with no sink, so it
+   *     emits nothing. It runs BEFORE the cache (review R3-S1): whether the
+   *     record still exists is the store's answer, so a swept or expired
+   *     recording is "not available" even while its account is cached, and a
+   *     kind change cannot be masked.
+   *  2. **Kind, then size** — not a `recording/run` → the ONE not-found (and
+   *     nothing was emitted); over the ceiling → the named 413, before a byte
+   *     of the payload is read. Both before the cache: neither can ever have
+   *     an entry there (failures are never cached; the ceiling is per host).
+   *  3. **The cache, then single-flight** — a hit reads nothing more and emits
+   *     nothing; a miss starts or joins the ONE computation for its key.
+   *  4. **The one door fact** — the leader's `get` goes through the sinked
+   *     binding, which emits the single `artifacts.resolved` (`via: 'get'`),
+   *     stamped with this session: the fact truthfully says the record was
+   *     read, and no new `ArtifactOp` exists to say it differently.
+   *  5. **Parse + fold + show-me** — `explainRecording`. Anything that cannot
+   *     be explained (the record vanished between head and get, it does not
+   *     parse, it is not a recording) is the one not-found, and is not cached.
+   */
+  async function explainAnswer(
+    service: AnswerAccounts,
+    store: ArtifactStore,
+    scope: ArtifactScope,
+    ref: string,
+    bound: ReturnType<typeof bindArtifacts>,
+    reply: HostReply,
+  ): Promise<void> {
+    const meta = await bindArtifacts(store, scope).head(ref);
+    if (meta === null || meta.kind !== RECORDING_ARTIFACT_KIND) {
+      reply.fail(new ArtifactNotFoundError(ref));
+      return;
+    }
+    if (meta.bytes > service.maxRecordingBytes) {
+      reply.fail(new RecordingTooLargeForAccountError(service.maxRecordingBytes));
+      return;
+    }
+    const key = service.keyFor(scope, ref);
+    const answer =
+      service.cached(key) ??
+      (await service.compute(key, async () => {
+        const record = await bound.get(ref);
+        if (record === null || record.meta.kind !== RECORDING_ARTIFACT_KIND) return null;
+        if (record.meta.bytes > service.maxRecordingBytes) return null;
+        const runId = record.meta.origin?.runId;
+        return { data: record.data, ...(runId !== undefined && { runId }) };
+      }));
+    if (answer === null) {
+      reply.fail(new ArtifactNotFoundError(ref));
+      return;
+    }
+    deliverArtifact(reply, { op: 'account', ref, meta, answer });
   }
 
   /** The stored conversation for a redemption — woken and hydrated the way a

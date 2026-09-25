@@ -268,10 +268,12 @@ filled from (each with its voucher and a pointer to the leaf of the record it
 came from), the signals, the checks that could not run, and the summary. The
 second argument is an `AnswerAccountDeclarations` — a skill's plain label,
 where an object-shaped result keeps its rows, whether the app decides skills
-itself — validated when you pass it. A server that serves the account also
-serves "show me" values as `AnswerAccountShownLeaf`s: an allow-listed leaf of
-the record, a derived row count (never the rows), or the reason it is
-withheld.
+itself — validated when you pass it. A server that serves the account — the
+[`answer-account` wire op](/docs/infrastructure/hosting-and-runtime#explain-this-answer--answer-account)
+does, so a browser never downloads the recording — also serves "show me"
+values as `AnswerAccountShownLeaf`s, keyed by `answerAccountPointerKey(pointer)`:
+an allow-listed leaf of the record, a derived row count (never the rows), or
+the reason it is withheld.
 
 ## Next steps
 

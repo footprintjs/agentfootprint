@@ -104,8 +104,11 @@ export {
 // it and where it lives in the record, and fixed sentences from a closed,
 // versioned template table. Pure and read-time: no clock, network or model.
 // See src/lib/answer-account/README.md.
+// `answerAccountPointerKey(pointer)` is the key of the `shown` map the hosting
+// op `{ op: 'answer-account', ref }` returns beside the account.
 export {
   accountForAnswer,
+  answerAccountPointerKey,
   type AnswerAccount,
   type AnswerAccountDeclarations,
   type AnswerAccountShownLeaf,

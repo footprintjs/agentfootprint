@@ -164,6 +164,7 @@ export {
   NoArtifactStoreError,
   ArtifactNotFoundError,
   ArtifactNotCarriedError,
+  RecordingTooLargeForAccountError,
   TurnArtifactsExpiredError,
   IdentityNotVerifiedError,
   VerifierUnavailableError,
@@ -299,7 +300,16 @@ export {
   ARTIFACT_HEAD_OP,
   ARTIFACT_GET_OP,
 } from './artifactWire.js';
-export type { ArtifactWireRequest, ArtifactWireResult } from './artifactWire.js';
+export type {
+  AnswerAccountWireBody,
+  ArtifactWireRequest,
+  ArtifactWireResult,
+} from './artifactWire.js';
+// "Explain this answer" (explain-answer): `{ op: 'answer-account', ref }`,
+// opted into with `standingAgent({ answerAccounts })`. The op is a branch of
+// the artifact redemption above — same grammar owner, same ownership path —
+// and answers `{ account, shown }` through `artifactWireBody`.
+export type { AnswerAccountsOptions } from './answerAccounts.js';
 
 export type {
   AgentHost,

@@ -1416,6 +1416,79 @@ refuse there, as `InvalidWireOpError`), and `artifactWireBody(result)` as the
 AgentCore runtime wire carries both ops with its own `status: 'success'`
 envelope beside the standard body.
 
+### Explain this answer — `answer-account`
+
+A third op on the same door explains one answer to a person without sending
+them its recording: `{ op: 'answer-account', ref }`, where `ref` is the
+answer's recording ticket. The server reads the recording, builds the
+[plain-words account](/docs/monitor/recordings#explain-an-answer-in-plain-words)
+(`accountForAnswer`), and answers `{ account, shown }` (typed
+`AnswerAccountWireBody`, from `agentfootprint/hosting`) — the account, plus the
+record's values behind its "show me" links that pass an allow-list, keyed by
+`answerAccountPointerKey(pointer)` from `agentfootprint/observe`. A browser makes
+one request per Explain, receives at most 192 KB, and never parses or folds a
+recording itself.
+
+It is off until the host asks for it, with `answerAccounts` (typed
+`AnswerAccountsOptions`; `true` takes every default):
+
+```ts
+await standingAgent({
+  agent,
+  sessions,
+  host: nodeHost({ port: 8080 }),
+  answerAccounts: {
+    // The app's declarations: checked NOW, never taken from a request.
+    declarations: { tools: { lookup_volumes: { rowsAt: 'volumes' } } },
+    // maxRecordingBytes: 16 * 1024 * 1024,  // the default ceiling
+    // cacheEntries: 32,                      // the default
+  },
+});
+```
+
+```ts
+// The browser — the session travels as on every other request.
+const res = await fetch('/invoke', {
+  method: 'POST',
+  headers: { 'content-type': 'application/json', 'x-session-id': sessionId },
+  body: JSON.stringify({ op: 'answer-account', ref }),
+});
+if (res.status === 404) showNotAvailable(); // the one not-found, whatever the reason
+const { account, shown } = await res.json();
+```
+
+**It is `artifact-get`, narrowed.** The op is a branch of the same redemption,
+so everything above holds for it — the door guard, the ref-shape check, the
+ownership check before any lane, lane-free (it answers while a run is going),
+one not-found for missing, expired and another person's. It can only narrow
+what leaves the server, never widen who sees it. What it adds:
+
+- **The record is asked first.** A silent head (no event) runs before the
+  cache, so a recording that was swept or expired answers "not available"
+  even when its account is cached.
+- **A stated ceiling.** A recording over `maxRecordingBytes` is refused with
+  `RecordingTooLargeForAccountError` (`ERR_RECORDING_TOO_LARGE_FOR_ACCOUNT`,
+  413) before any of it is read. The parse runs on the event loop every
+  session shares, and the ceiling bounds the worst one: on a 5.3 MB field
+  recording the parse costs about 6 ms and the account plus "show me" under
+  1 ms warm (3.4 ms the first time).
+- **One computation per answer.** Ten concurrent clicks on one answer cause one
+  store read; the result is cached per (scope, ref, template-set version,
+  declarations digest) — a library upgrade or a declarations change is a miss
+  by construction. Failures are never cached.
+- **One fact on the record.** A miss emits exactly one
+  `artifacts.resolved` (`via: 'get'`) — the record was read; a hit emits
+  none; a wrong-kind ref emits none.
+- **The declarations are the host's.** A body key other than `op`, `ref` and
+  `sessionId` is refused by name.
+
+| Reply | Status | When |
+|---|---|---|
+| `{ account, shown }` | 200 | the answer was explained |
+| `ERR_ARTIFACT_NOT_FOUND` | 404 | missing, expired, swept, another person's, not a recording, or unreadable |
+| `ERR_RECORDING_TOO_LARGE_FOR_ACCOUNT` | 413 | the recording is over the host's ceiling |
+| `ERR_INVALID_WIRE_OP` | 400 | not a ref, a key the op does not read — or a host that did not opt in |
+
 ### Filing for a turn — `reply.turnArtifacts`
 
 The run files its own tickets — a tool's dataset, the turn's recording — under

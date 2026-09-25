@@ -13,6 +13,7 @@
  */
 
 import { ANSWER_ACCOUNT_TEMPLATES, type TemplateId } from './templates.js';
+import { answerAccountPointerKey as pointerKey } from './pointerKey.js';
 import type {
   AccountSource,
   Chip,
@@ -289,19 +290,8 @@ export function saidBy(source: AccountSource): Chip {
   return chip('said-by', 'chip.saidBy', 'plain', { who: { value: who, source: 'library' } });
 }
 
-/** A stable identity for a pointer — the `shown` map's key. */
-export function pointerKey(p: RecordPointer): string {
-  switch (p.kind) {
-    case 'event':
-      return `event:${p.index}:${p.path}`;
-    case 'state':
-      return `state:${p.key}:${p.path}`;
-    case 'history':
-      return `history:${p.index}:${p.path}`;
-    case 'declaration':
-      return `declaration:${p.field}${p.id !== undefined ? `:${p.id}` : ''}`;
-  }
-}
+/** A stable identity for a pointer — the `shown` map's key (owned by `./pointerKey.ts`). */
+export { pointerKey };
 
 export function dedupePointers(pointers: readonly RecordPointer[]): RecordPointer[] {
   const seen = new Set<string>();

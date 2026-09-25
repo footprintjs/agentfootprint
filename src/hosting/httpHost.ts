@@ -627,6 +627,9 @@ const STATUS_BY_CODE: Readonly<Record<string, number>> = {
   ERR_ARTIFACT_NOT_FOUND: 404,
   ERR_NO_ARTIFACT_STORE: 501,
   ERR_ARTIFACT_NOT_CARRIED: 501,
+  // explain-answer — a recording over the host's `answerAccounts` ceiling. 413:
+  // the request is fine and the record exists; it is too large to explain HERE.
+  ERR_RECORDING_TOO_LARGE_FOR_ACCOUNT: 413,
   // 9.26.0 — the badge, the bouncer and the history desk.
   //   401: this caller was not identified (a token that did not verify, or one
   //        that was never presented at a door that insists).

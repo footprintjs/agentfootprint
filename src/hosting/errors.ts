@@ -276,6 +276,15 @@ export class InvalidWireOpError extends Error {
 }
 
 /**
+ * The wire spelling of an artifact verb, for the refusals below. (Spelled here
+ * rather than imported: `wireOps` imports this file for its own refusal, and
+ * the two spellings are pinned equal by the wire tests.)
+ */
+function artifactOpSpelling(op: 'head' | 'get' | 'account'): string {
+  return op === 'account' ? 'answer-account' : `artifact-${op}`;
+}
+
+/**
  * Thrown when an artifact operation arrives with no session id.
  *
  * Artifact resolution is governed by the requesting session's identity —
@@ -289,9 +298,11 @@ export class InvalidWireOpError extends Error {
 export class ArtifactSessionRequiredError extends Error {
   readonly code = 'ERR_ARTIFACT_SESSION_REQUIRED' as const;
 
-  constructor(op: 'head' | 'get') {
+  constructor(op: 'head' | 'get' | 'account') {
     super(
-      `[hosting] artifact-${op} needs the session whose run minted the ref: refs resolve ` +
+      `[hosting] ${artifactOpSpelling(
+        op,
+      )} needs the session whose run minted the ref: refs resolve ` +
         `under the requesting session's identity-composed scope, and this request named no ` +
         `session. Send sessionId the same way the conversation's own requests do — in the ` +
         `body, the session header, or the session cookie. There is no bare-ref mode: a ref ` +
@@ -313,9 +324,11 @@ export class ArtifactSessionRequiredError extends Error {
 export class NoArtifactStoreError extends Error {
   readonly code = 'ERR_NO_ARTIFACT_STORE' as const;
 
-  constructor(op: 'head' | 'get') {
+  constructor(op: 'head' | 'get' | 'account') {
     super(
-      `[hosting] artifact-${op} has no artifact store behind it: the agent serving this ` +
+      `[hosting] ${artifactOpSpelling(
+        op,
+      )} has no artifact store behind it: the agent serving this ` +
         `session was built without one, so no ref could ever resolve here. Pass ` +
         `\`artifacts\` to Agent.create({ ..., artifacts }) — inMemoryArtifacts() for an ` +
         `in-process store, fileArtifacts({ directory }) or sqliteArtifacts({ file }) for ` +
@@ -351,6 +364,40 @@ export class ArtifactNotFoundError extends Error {
     );
     this.name = 'ArtifactNotFoundError';
     this.ref = ref;
+  }
+}
+
+/**
+ * Refused when an `answer-account` request names a recording larger than the
+ * host's ceiling (`standingAgent({ answerAccounts: { maxRecordingBytes } })`,
+ * default 16 MiB).
+ *
+ * The account is computed on the event loop that serves every session, so its
+ * worst single parse is bounded by a number the operator chose — and a
+ * recording over it is refused BEFORE a byte of its payload is read (the size
+ * comes from the ticket's `bytes`). Named rather than folded into the one
+ * not-found: it reaches only a caller who already passed the ownership check,
+ * so it tells them nothing about anybody else's records, and "too large to
+ * explain here" is a different fact from "not available" — the operator can
+ * raise the ceiling, and a person should not be told their answer's record is
+ * gone when it is not.
+ *
+ * The message carries the ceiling and nothing from the recording.
+ */
+export class RecordingTooLargeForAccountError extends Error {
+  readonly code = 'ERR_RECORDING_TOO_LARGE_FOR_ACCOUNT' as const;
+  /** The ceiling the recording is over, in bytes. */
+  readonly maxRecordingBytes: number;
+
+  constructor(maxRecordingBytes: number) {
+    super(
+      `[hosting] this answer's recording is larger than the ${maxRecordingBytes} bytes this ` +
+        `host explains, so no account was computed and none of it was read. The operator ` +
+        `can raise the ceiling with standingAgent({ answerAccounts: { maxRecordingBytes } }); ` +
+        `the recording itself is still redeemable with 'artifact-get'.`,
+    );
+    this.name = 'RecordingTooLargeForAccountError';
+    this.maxRecordingBytes = maxRecordingBytes;
   }
 }
 
