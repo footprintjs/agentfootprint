@@ -1,5 +1,5 @@
 /**
- * The capability index in CLAUDE.md may omit, but must never lie.
+ * The capability index (CAPABILITIES.md) may omit, but must never lie.
  *
  * The table exists because a reader searches for the words THEY would use, finds
  * nothing, and builds a feature this library has shipped for releases — which
@@ -22,7 +22,7 @@ const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '../..');
 
 /** `| what you'd build | `symbol` | `path` | since |` */
 function indexRows(): { symbol: string; where: string }[] {
-  const md = readFileSync(join(ROOT, 'CLAUDE.md'), 'utf8');
+  const md = readFileSync(join(ROOT, 'CAPABILITIES.md'), 'utf8');
   const rows: { symbol: string; where: string }[] = [];
   for (const line of md.split('\n')) {
     if (!line.startsWith('| ') || line.startsWith('| If you are') || line.startsWith('|---'))

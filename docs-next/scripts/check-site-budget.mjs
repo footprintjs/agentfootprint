@@ -334,7 +334,16 @@ const OUTPUT_LIMITS = { bytes: 686_000_000, files: 7_400, duplicateRscBytes: 0 }
 // the last 0.4 KB is the wiring that decides whether to load them). Ceiling
 // ~2% over the 422.4 KB measurement, as every entry above; the next move is a
 // measured shrink or the next family, never a raise for a single feature.
-const DEMO_ASYNC_GZIP_LIMIT = 431_000;
+//
+// RAISED again (2026-09-25, owner's call — a stopgap, not the fix). The 9.114.2
+// findings fix (4025063: one answer-text scanner, findings/answerText.ts, shared
+// by the token stream and the final answer) took the demo chunk from under
+// 431.0 KB to 432.4 KB gzip across 17 async assets, measured in CI run
+// 36160082628. That scanner is wired on the default graph although only
+// `.findings()` agents use it. The owed fix is the shrink the paragraph above
+// asks for: load it behind the same import() as judge.ts / toolChoice/compose.ts,
+// then bring this ceiling back down. Ceiling ~2% over 432.4 KB.
+const DEMO_ASYNC_GZIP_LIMIT = 441_000;
 
 function formatBytes(bytes) {
   if (bytes < 1_000) return `${bytes} B`;

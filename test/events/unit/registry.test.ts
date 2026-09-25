@@ -26,7 +26,7 @@ describe('event registry — docs stay in sync with the registry (anti-drift)', 
     const domainCount = Object.keys(EVENT_NAMES).length;
     const root = join(__dirname, '../../..');
     const DOCS = [
-      'CLAUDE.md',
+      '.claude/rules/events-and-observability.md',
       'AGENTS.md',
       'docs/MENTAL_MODEL.md',
       'ai-instructions/claude-code/SKILL.md',

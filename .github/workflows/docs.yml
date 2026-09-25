@@ -2,14 +2,14 @@ name: Deploy Docs
 
 # Builds the docs-next site (homepage + Fumadocs docs) as a static export and deploys
 # it to the custom GitHub Pages domain at https://agentfootprint.dev/.
+#
+# WHEN: on a RELEASE, not on every push. The site documents what `npm install
+# agentfootprint` gives you — deploying from main showed readers features npm did
+# not have yet. The Release workflow (publish.yml) and scripts/release.sh start
+# this after tagging; run it by hand (Actions → Deploy Docs) for a docs-only fix
+# that should not wait for the next release. Every push and PR still BUILDS the
+# site in ci.yml's `docs` job, so a broken page is caught long before a release.
 on:
-  push:
-    branches: [main]
-    paths:
-      - 'docs-next/**'
-      - 'src/**' # API reference is generated from source
-      - 'scripts/gen-fumadocs-api.mjs'
-      - '.github/workflows/docs.yml'
   workflow_dispatch:
 
 permissions:
