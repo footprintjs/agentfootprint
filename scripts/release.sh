@@ -22,9 +22,9 @@ say() { if [ "${RELEASE_QUIET:-0}" != "1" ]; then echo "$@"; fi; }
 #      then every generated doc regenerated (npm run docs:generate)
 #   Then: commit + tag + push → GitHub release → CI npm publish → docs deploy
 #
-# THE PREFERRED RELEASE IS THE GITHUB WORKFLOW (Actions → Release, or
-# `gh workflow run publish.yml -f bump=auto`): it runs these gates on GitHub's
-# runners BEFORE anything is tagged. This script is the local fallback.
+# THE NORMAL RELEASE IS AUTOMATIC: merging a .changes/ fragment to main starts
+# the Release workflow (.github/workflows/publish.yml), which runs these gates on
+# GitHub's runners BEFORE anything is tagged. This script is the local fallback.
 #
 # Usage:
 #   npm run release         # version computed from .changes/ fragments

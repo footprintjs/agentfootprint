@@ -24,9 +24,10 @@ examples and releases honest without anyone remembering anything.
    fails when a generated file (API mirror, docs-truth report, examples README,
    AI-instruction copies) is stale.
 7. **Fast gate:** `npm run lint && npm run format && npx tsc --noEmit`.
-8. **Releasing is not part of a change.** Actions → Release (`.github/workflows/publish.yml`)
-   computes the version from the fragments, regenerates docs, runs every gate, then
-   tags, publishes to npm with provenance and deploys the docs site.
+8. **Releasing is not part of a change — merging is.** A push to `main` carrying a
+   fragment starts the Release workflow (`.github/workflows/publish.yml`): it computes
+   the version from the fragments, regenerates docs, runs every gate, then tags,
+   publishes to npm with provenance and deploys the docs site. A red gate releases nothing.
 
 **Three kinds of docs — keep them apart:**
 

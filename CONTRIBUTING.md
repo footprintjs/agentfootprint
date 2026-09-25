@@ -84,7 +84,9 @@ src/
 
 ## Releasing
 
-Maintainers: **Actions → Release → Run workflow** (or `gh workflow run publish.yml -f bump=auto`).
+**Releases are automatic:** merging a PR that carries a `.changes/` fragment starts the Release
+workflow. (Start it by hand with **Actions → Release → Run workflow** or
+`gh workflow run publish.yml -f bump=minor` — e.g. to force a bigger bump.)
 The workflow computes the version from `.changes/` fragments, writes the CHANGELOG entry,
 regenerates every generated doc, runs every gate — and only then commits, tags, creates the
 GitHub release, publishes to npm with provenance and deploys agentfootprint.dev. A red gate
