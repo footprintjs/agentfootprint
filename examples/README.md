@@ -290,6 +290,8 @@ _Run `npm run examples:readme` after adding/editing examples._
 | 68 | [`68-runbook-as-tool.ts`](features/68-runbook-as-tool.ts) | runbookAsTool — procedures as tools, answers as evidence | Declare a triage procedure once (rules, decider, inner tools) and get back the honesty envelope: coverage folded from inner tools, rule provenance, generated verdict meanings, and the recorded walk as a recording/chart-walk artifact ticket. |
 | 69 | [`69-evidence-repair.ts`](features/69-evidence-repair.ts) | Ask for missing context during evidence repair | A scripted unsupported year triggers one repair; configured guidance asks for the missing year and timezone. |
 | 70 | [`70-typed-input.ts`](features/70-typed-input.ts) | Collect typed inputs without losing the request | A partial reply updates the checkpoint without a model call; the full reply resumes the original collection tool. |
+| 71 | [`71-coverage-for-a-report.ts`](features/71-coverage-for-a-report.ts) | Coverage in plain words — short, kind and a skill title, on the record and never in the request | A lookup that found nothing declares a short form and a kind for each coverage item, and its skill a plain title; the record carries all three while the model reads byte-identical requests. |
+| 72 | [`72-explain-an-answer.ts`](features/72-explain-an-answer.ts) | Explain an answer in plain words — every line from the record, each with who vouches for it | A lookup that found nothing declares what it did not check; accountForAnswer reads the recording back as seven rows of fixed sentences, each with its template id and its voucher, and flags the gap. |
 
 ### [`canonical/`](canonical/) — end-to-end patterns
 

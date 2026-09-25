@@ -234,6 +234,47 @@ Check `format` first and refuse a string you do not recognise. Then
 `observeRecording()` as described in [Replay a saved run](doc:offline-replay).
 </Callout>
 
+## Explain an answer in plain words
+
+A recording can be read back for a person, not only for an engineer.
+`accountForAnswer` takes one answer's recording and returns an account in seven
+rows — You asked · It understood · It checked · It did not check · It found ·
+How sure · Anything wrong — plus a one-line summary. No model writes it: every
+line comes from a fixed, versioned template, carries its template id, and names
+who vouches for it — the person, the library's own record, a tool's declaration,
+the model, or the app. When the record does not hold a fact the line says "not
+recorded", and a check the record cannot support is listed as one that could not
+run, never as "nothing wrong".
+
+```ts
+import { accountForAnswer } from 'agentfootprint/observe';
+
+const account = accountForAnswer(recording, {
+  // Data the app declares when the report is made — vouched "app", never the record's.
+  skills: { 'array-inventory': { label: 'array estate report' } },
+  tools: { lookup_volumes: { rowsAt: 'volumes' } },
+});
+
+account.summary.sentence.text; // the one-liner
+account.rows.map((row) => row.heading.text); // ['You asked', 'It understood', …]
+```
+
+It reads only the answer's own run (by the agentfootprint run id on the
+recording, or the one you pass as `{ runId }`), it is pure — the same recording
+gives the same bytes — and it stays under 128 KB whatever the run held.
+
+The result is an `AnswerAccount`: the seven rows, the typed facts they were
+filled from (each with its voucher and a pointer to the leaf of the record it
+came from), the signals, the checks that could not run, and the summary. The
+second argument is an `AnswerAccountDeclarations` — a skill's plain label,
+where an object-shaped result keeps its rows, whether the app decides skills
+itself — validated when you pass it. A server that serves the account — the
+[`answer-account` wire op](/docs/infrastructure/hosting-and-runtime#explain-this-answer--answer-account)
+does, so a browser never downloads the recording — also serves "show me"
+values as `AnswerAccountShownLeaf`s, keyed by `answerAccountPointerKey(pointer)`:
+an allow-listed leaf of the record, a derived row count (never the rows), or
+the reason it is withheld.
+
 ## Next steps
 
 - [Replay a saved run](doc:offline-replay) — record a run, then render it in Why Lens or Flow Lens

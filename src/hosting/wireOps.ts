@@ -5,7 +5,9 @@
  * carrying `{ op: 'artifact-head' | 'artifact-get', ref }` redeems a claim
  * ticket, and since 9.26 one carrying `{ op: 'session-list' }` or
  * `{ op: 'session-transcript', sessionId }` asks the verified caller's own
- * conversation history. Two DOMAINS now share one field.
+ * conversation history. Two DOMAINS now share one field. (`answer-account`
+ * belongs to the artifact domain: it names a claim ticket, and its reader is
+ * `readArtifactWireOp`.)
  *
  * That is exactly the shape where a grammar quietly forks. Each domain has its
  * own reader (`readArtifactWireOp`, `readSessionWireOp`), each reader must
@@ -33,6 +35,12 @@ export const WIRE_OPS = {
   artifactHead: 'artifact-head',
   /** Metadata + the payload (9.23.0). */
   artifactGet: 'artifact-get',
+  /**
+   * One answer's plain-words account, computed on the server from the
+   * recording the ref names (explain-answer). Spoken only by a host that opted
+   * in with `standingAgent({ answerAccounts })`.
+   */
+  answerAccount: 'answer-account',
   /** The verified caller's own sessions (9.26.0). */
   sessionList: 'session-list',
   /** One owned session's message history (9.26.0). */
@@ -64,7 +72,9 @@ export function refuseUnknownWireOp(op: unknown): never {
   throw new InvalidWireOpError(
     `the wire operation '${String(op)}' is not one this host speaks. Known operations: ` +
       `'${WIRE_OPS.artifactHead}' (a claim ticket's metadata) and '${WIRE_OPS.artifactGet}' ` +
-      `(metadata + payload), each taking { ref }; '${WIRE_OPS.sessionList}' (the verified ` +
+      `(metadata + payload), each taking { ref }; '${WIRE_OPS.answerAccount}' (one answer's ` +
+      `plain-words account, taking { ref }, on a host that opted in with ` +
+      `standingAgent({ answerAccounts })); '${WIRE_OPS.sessionList}' (the verified ` +
       `caller's own sessions) and '${WIRE_OPS.sessionTranscript}' (one owned session's ` +
       `messages, taking { sessionId }); '${WIRE_OPS.sessionPending}' (the current question, ` +
       `taking { sessionId }). A request without 'op' is an ordinary invoke.`,

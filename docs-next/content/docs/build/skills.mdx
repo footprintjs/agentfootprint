@@ -584,6 +584,32 @@ Every law on this page applies to both spellings identically — the union arms,
 the check-up, `match` as data, `scopeTools`, deferred body-contract checks — because
 the object form is compiled *through* the builder: there is one implementation.
 
+## A plain name for a person (`title`)
+
+A skill's id is written for code (`array-inventory`); a person reading a report
+of an answer wants "the array estate report skill". Declare it once:
+
+```ts
+const inventory = defineSkill({
+  id: 'array-inventory',
+  title: 'array estate report',
+  description: 'Arrays, volumes and the VMs on them.',
+  body: '…',
+});
+```
+
+The title rides `agentfootprint.skill.graph_declared` as `nodes[].title`, for a
+report or a lens to print. Nothing the model reads changes, and neither does
+what a graph draws (the node's `label`). At most 60 characters of plain
+visible text on one line (no control, separator or invisible format
+characters), and not the id itself; leave it out and the event carries
+exactly what it did.
+
+It is recorded only on an agent with a skill graph (`.skillGraph(…)`), because
+`skill.graph_declared` is that agent's event. A titled skill added with
+`.skill()` alone is accepted and served exactly as before, but its title is on
+no event.
+
 ## Per-provider surface selection (`surfaceMode`)
 
 ```ts

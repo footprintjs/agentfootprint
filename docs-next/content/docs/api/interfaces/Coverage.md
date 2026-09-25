@@ -4,7 +4,7 @@ title: Coverage
 
 # Interface: Coverage
 
-Defined in: [src/core/agent/coverage/types.ts:53](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/coverage/types.ts#L53)
+Defined in: [src/core/agent/coverage/types.ts:84](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/coverage/types.ts#L84)
 
 The three lists, normalized. This is the shape everything downstream reads —
 the renderer, the event payload, the answer-level block.
@@ -31,7 +31,7 @@ The three are NOT interchangeable, and the difference is the whole point:
 
 > `readonly` **cannotCover**: readonly [`CoverageItem`](/docs/api/interfaces/CoverageItem)[]
 
-Defined in: [src/core/agent/coverage/types.ts:56](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/coverage/types.ts#L56)
+Defined in: [src/core/agent/coverage/types.ts:87](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/coverage/types.ts#L87)
 
 ***
 
@@ -39,7 +39,7 @@ Defined in: [src/core/agent/coverage/types.ts:56](https://github.com/footprintjs
 
 > `readonly` **checked**: readonly [`CoverageItem`](/docs/api/interfaces/CoverageItem)[]
 
-Defined in: [src/core/agent/coverage/types.ts:54](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/coverage/types.ts#L54)
+Defined in: [src/core/agent/coverage/types.ts:85](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/coverage/types.ts#L85)
 
 ***
 
@@ -47,4 +47,4 @@ Defined in: [src/core/agent/coverage/types.ts:54](https://github.com/footprintjs
 
 > `readonly` **notChecked**: readonly [`CoverageItem`](/docs/api/interfaces/CoverageItem)[]
 
-Defined in: [src/core/agent/coverage/types.ts:55](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/coverage/types.ts#L55)
+Defined in: [src/core/agent/coverage/types.ts:86](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/coverage/types.ts#L86)

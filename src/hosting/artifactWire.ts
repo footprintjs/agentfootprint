@@ -38,6 +38,7 @@
 
 import { isArtifactRef } from '../artifacts/naming.js';
 import type { ArtifactMeta } from '../artifacts/types.js';
+import type { AnswerAccount, AnswerAccountShownLeaf } from '../lib/answer-account/types.js';
 import { InvalidWireOpError } from './errors.js';
 import { isWireOp, refuseUnknownWireOp, WIRE_OPS } from './wireOps.js';
 
@@ -56,6 +57,26 @@ export const NOT_A_REF =
 export const ARTIFACT_HEAD_OP = WIRE_OPS.artifactHead;
 /** The wire spelling of `get` — metadata + payload. */
 export const ARTIFACT_GET_OP = WIRE_OPS.artifactGet;
+/**
+ * The wire spelling of `account` — one answer's plain-words account, computed
+ * on the server from the recording the ref names (explain-answer).
+ *
+ * @internal Read through `WIRE_OPS.answerAccount` from the barrel.
+ */
+export const ANSWER_ACCOUNT_OP = WIRE_OPS.answerAccount;
+
+/**
+ * The body keys an `answer-account` request may carry: the op, the ticket, and
+ * the session (which rides the body as it does on every other request). Any
+ * other key is refused by name — most of all `declarations`, which are the
+ * HOST's, validated at boot, and never a request's to choose.
+ */
+const ANSWER_ACCOUNT_KEYS: ReadonlySet<string> = new Set(['op', 'ref', 'sessionId']);
+
+/** The wire spelling of a port-side verb — what every refusal names. */
+export function artifactOpWireName(op: ArtifactWireRequest['op']): string {
+  return op === 'head' ? ARTIFACT_HEAD_OP : op === 'get' ? ARTIFACT_GET_OP : ANSWER_ACCOUNT_OP;
+}
 
 /**
  * One artifact operation, as a request carries it — the port-side shape
@@ -66,8 +87,11 @@ export const ARTIFACT_GET_OP = WIRE_OPS.artifactGet;
  * has to say which domain it belongs to; the port already knows.
  */
 export interface ArtifactWireRequest {
-  /** Which of the two read verbs to run. */
-  readonly op: 'head' | 'get';
+  /**
+   * Which read to run: `head`, `get`, or `account` — the answer account of the
+   * recording the ref names (wire spelling `'answer-account'`).
+   */
+  readonly op: 'head' | 'get' | 'account';
   /** The claim ticket to redeem (`art_…`). */
   readonly ref: string;
 }
@@ -77,14 +101,35 @@ export interface ArtifactWireRequest {
  * needs to compose its body.
  */
 export interface ArtifactWireResult {
-  /** The verb that ran. `data` is present iff it was `get`. */
-  readonly op: 'head' | 'get';
+  /** The verb that ran. `data` is present iff it was `get`; `answer` iff `account`. */
+  readonly op: 'head' | 'get' | 'account';
   /** The ref as requested. */
   readonly ref: string;
-  /** The claim ticket — what `head` returns and what `get` returns beside the payload. */
+  /**
+   * The claim ticket — what `head` returns and what `get` returns beside the
+   * payload. For `account` it is the recording's ticket, which the reply body
+   * does NOT carry (the body is the account and its show-me leaves, nothing
+   * else).
+   */
   readonly meta: ArtifactMeta;
   /** The payload. Present iff `op` is `get`. */
   readonly data?: unknown;
+  /** The answer account and its show-me leaves. Present iff `op` is `account`. */
+  readonly answer?: AnswerAccountWireBody;
+}
+
+/**
+ * What an `answer-account` request answers with: the account, and the leaf
+ * values its "show me" pointers name that pass the allow-list — keyed by
+ * `answerAccountPointerKey(pointer)` (`agentfootprint/observe`). Nothing else
+ * from the recording leaves the server.
+ *
+ * Bounded: the account is at most 128 KB serialized and `shown` at most 64 KB,
+ * so a whole reply is at most 192 KB.
+ */
+export interface AnswerAccountWireBody {
+  readonly account: AnswerAccount;
+  readonly shown: Readonly<Record<string, AnswerAccountShownLeaf>>;
 }
 
 /**
@@ -106,7 +151,7 @@ export function readArtifactWireOp(
 ): ArtifactWireRequest | undefined {
   const op = body.op;
   if (op === undefined) return undefined;
-  if (op !== ARTIFACT_HEAD_OP && op !== ARTIFACT_GET_OP) {
+  if (op !== ARTIFACT_HEAD_OP && op !== ARTIFACT_GET_OP && op !== ANSWER_ACCOUNT_OP) {
     // Somebody else's op — theirs to read. Nobody's — one shared refusal,
     // listing every operation this package speaks.
     if (isWireOp(op)) return undefined;
@@ -127,22 +172,54 @@ export function readArtifactWireOp(
   if (!isArtifactRef(ref)) {
     throw new InvalidWireOpError(`'${String(op)}' ${NOT_A_REF}`);
   }
+  if (op === ANSWER_ACCOUNT_OP) {
+    refuseForeignAccountKeys(body);
+    return { op: 'account', ref };
+  }
   return { op: op === ARTIFACT_HEAD_OP ? 'head' : 'get', ref };
+}
+
+/**
+ * An `answer-account` body names the ticket and nothing else. A key a caller
+ * believed would shape the account (`declarations`, a run id, a template
+ * version) is refused BY NAME rather than ignored: ignoring it would answer an
+ * account the caller did not ask for, and let them believe they had. The name
+ * is echoed only when it is a plain identifier; anything else is "a key".
+ */
+function refuseForeignAccountKeys(body: Readonly<Record<string, unknown>>): void {
+  const foreign = Object.keys(body).find((key) => !ANSWER_ACCOUNT_KEYS.has(key));
+  if (foreign === undefined) return;
+  const named = /^[A-Za-z_][A-Za-z0-9_-]{0,40}$/.test(foreign) ? `'${foreign}'` : 'a key';
+  throw new InvalidWireOpError(
+    `'${ANSWER_ACCOUNT_OP}' was given ${named} it does not read. It takes { op, ref } (and ` +
+      `the session, which rides the body, header or cookie as on any request); the ` +
+      `declarations and everything else that shapes the account are the host's, set once ` +
+      `with standingAgent({ answerAccounts }).`,
+  );
 }
 
 /**
  * The standard reply body for a resolved artifact operation:
  * `{ artifact: { ref, meta } }` for `head`, `{ artifact: { ref, meta, data } }`
- * for `get`.
+ * for `get`, and `{ account, shown }` for `answer-account`.
  *
  * Authored once so the two shipped dialects (and any custom one that wants
  * interop with the lens family's resolver) answer byte-compatibly; a dialect
  * that must add its own envelope fields spreads this and adds them beside
  * `artifact` (the managed-runtime wire adds its own `status`).
  */
-export function artifactWireBody(result: ArtifactWireResult): {
-  readonly artifact: Readonly<Record<string, unknown>>;
-} {
+export function artifactWireBody(
+  result: ArtifactWireResult,
+): { readonly artifact: Readonly<Record<string, unknown>> } | AnswerAccountWireBody {
+  // An `answer-account` result answers `{ account, shown }` — composed HERE so
+  // every dialect that already answers through this function (both shipped
+  // ones, and any custom one) serves it without a line of its own. A separate
+  // body function would let a dialect that never heard of it answer
+  // `{ artifact: { ref, meta } }` to an account request: accepted and silently
+  // wrong.
+  if (result.op === 'account' && result.answer !== undefined) {
+    return { account: result.answer.account, shown: result.answer.shown };
+  }
   return {
     artifact: {
       ref: result.ref,

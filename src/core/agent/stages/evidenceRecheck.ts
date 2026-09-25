@@ -111,6 +111,7 @@ export function buildEvidenceRecheckStage(
       iteration,
       posture: gate.posture,
       candidates: pending.candidates,
+      lookedUp: pending.lookedUp,
       unsupported: values.slice(0, MAX_REPORTED_VALUES),
       action: 'revision-asked',
       afterRevision: false,

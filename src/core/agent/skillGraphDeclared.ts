@@ -28,6 +28,9 @@
  *
  * Descriptions are the skills' catalog descriptions, verbatim — the text the
  * model reads — looked up by node id; absent when a skill declares none.
+ * Titles (`defineSkill({ title })`) are looked up the same way and absent the
+ * same way; a title is for a person reading a report and is never drawn in
+ * place of `label`.
  */
 
 import type { Injection } from '../../lib/injection-engine/types.js';
@@ -73,13 +76,19 @@ export function buildSkillGraphDeclared(
   const rawNodes = graph.nodes ?? [];
   const nodes = rawNodes.flatMap((n) => {
     if (typeof n.id !== 'string' || n.id.length === 0) return [];
-    const description = skills.find((s) => s.flavor === 'skill' && s.id === n.id)?.description;
+    const skill = skills.find((s) => s.flavor === 'skill' && s.id === n.id);
+    const description = skill?.description;
+    // The skill's declared plain name (`defineSkill({ title })`), looked up
+    // the way `description` is. Read by PRESENCE — absent = not declared, and
+    // the node carries the bytes it always did. Never the drawn `label`.
+    const title = skill?.title;
     return [
       {
         id: n.id,
         kind: n.kind,
         ...(description !== undefined && { description }),
         ...(n.label !== undefined && { label: n.label }),
+        ...(title !== undefined && { title }),
       },
     ];
   });

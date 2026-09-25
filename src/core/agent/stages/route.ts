@@ -570,6 +570,7 @@ function judgeEvidence(
       iteration,
       posture: gate.posture,
       candidates: verdict.candidates,
+      lookedUp: verdict.lookedUp,
       unsupported: [],
       action: 'grounded',
       afterRevision,
@@ -594,6 +595,7 @@ function judgeEvidence(
     scope.evidenceUnsupported = {
       values: verdict.unsupported.slice(0, MAX_REPORTED_VALUES),
       candidates: verdict.candidates,
+      lookedUp: verdict.lookedUp,
     };
     return 'evidence-recheck';
   }
@@ -610,6 +612,7 @@ function judgeEvidence(
     iteration,
     posture: gate.posture,
     candidates: verdict.candidates,
+    lookedUp: verdict.lookedUp,
     unsupported: verdict.unsupported.slice(0, MAX_REPORTED_VALUES),
     action: refused ? 'refused' : 'flagged',
     afterRevision,

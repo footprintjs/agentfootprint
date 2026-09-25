@@ -42,6 +42,7 @@
  *   });
  */
 
+import { plainLineProblem } from '../../plainLine.js';
 import { isDevMode } from 'footprintjs';
 import type { Injection } from '../types.js';
 import type { Tool } from '../../../core/tools.js';
@@ -119,6 +120,18 @@ export interface DefineSkillOptions {
   readonly id: string;
   /** Visible to the LLM via the activation tool's description. */
   readonly description: string;
+  /**
+   * The skill's plain name for a PERSON — "array estate report" for the id
+   * `array-inventory`. Optional: at most 60 characters, one line, and not the
+   * id itself.
+   *
+   * Record-only: it rides `agentfootprint.skill.graph_declared` (`nodes[].title`)
+   * so a report can name the skill in plain words, and nothing the model reads
+   * changes — the activation menu, the graph's drawn `label`, Mermaid and the
+   * lens captions keep the id. Absent = not declared, and the event carries
+   * the bytes it always did.
+   */
+  readonly title?: string;
   /** Body appended to the system-prompt slot once activated. */
   readonly body: string;
   /** Tools this Skill contributes. **By default they are added to the agent's tool
@@ -356,6 +369,31 @@ function warnRefreshPolicyDeprecated(skillId: string): void {
   );
 }
 
+/** The longest skill title a report prints. */
+const MAX_SKILL_TITLE_CHARS = 60;
+
+/**
+ * Validate a declared `title` — refused where the author wrote it. `undefined`
+ * when none was declared; otherwise the trimmed title.
+ */
+function readSkillTitle(id: string, raw: unknown): string | undefined {
+  if (raw === undefined) return undefined;
+  const at = `defineSkill(${id}): \`title\``;
+  if (typeof raw !== 'string' || raw.trim() === '') {
+    throw new Error(`${at} must be a non-empty string — or omit it; a report then prints the id.`);
+  }
+  const title = raw.trim();
+  const notPlain = plainLineProblem(at, title);
+  if (notPlain !== undefined) throw new Error(notPlain);
+  if (title.length > MAX_SKILL_TITLE_CHARS) {
+    throw new Error(`${at} is ${title.length} characters; the limit is ${MAX_SKILL_TITLE_CHARS}.`);
+  }
+  if (title === id) {
+    throw new Error(`${at} is the id itself — a title is the plain name a person reads; omit it.`);
+  }
+  return title;
+}
+
 export function defineSkill(opts: DefineSkillOptions): Injection {
   if (!opts.id || opts.id.trim().length === 0) {
     throw new Error('defineSkill: `id` is required and must be non-empty.');
@@ -369,6 +407,7 @@ export function defineSkill(opts: DefineSkillOptions): Injection {
     throw new Error(`defineSkill(${opts.id}): \`body\` is required.`);
   }
   assertNoViaToolName(`defineSkill(${opts.id})`, opts);
+  const title = readSkillTitle(opts.id, opts.title);
   if (opts.refreshPolicy) warnRefreshPolicyDeprecated(opts.id);
   // Steps checkup (9.18.0) — all the data is in hand HERE, so every step
   // refusal happens here: unknown tool, empty note/tool, steps:[], steps
@@ -387,6 +426,10 @@ export function defineSkill(opts: DefineSkillOptions): Injection {
   return Object.freeze({
     id: opts.id,
     description: opts.description,
+    // Top-level, not a `metadata` key: at least one path rebuilds `metadata`
+    // wholesale (`toolsFromActiveSkill`), and a top-level field survives every
+    // `{ ...injection }` spread (the `templated` precedent).
+    ...(title !== undefined && { title }),
     flavor: 'skill' as const,
     trigger: {
       kind: 'llm-activated' as const,

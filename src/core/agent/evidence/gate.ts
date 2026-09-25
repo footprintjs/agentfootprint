@@ -59,6 +59,7 @@
  * mechanism, it costs microseconds, and it is the same on every run.
  */
 
+import { MAX_REPORTED_VALUES } from './limits.js';
 import { validateRecoveryInstruction } from './recovery.js';
 import type { StagedRefsMatch } from '../stagedRefs.js';
 import { stagedRefsTeachingClause } from '../stagedRefs.js';
@@ -83,8 +84,9 @@ const POSTURES: readonly EvidencePosture[] = ['assist', 'guard', 'rails'];
 // corpus has to recognise the same string (see that file's header).
 export { EVIDENCE_CHECK_FRAME_PREFIX };
 
-/** Most values named in one message, one event payload or one error. */
-export const MAX_REPORTED_VALUES = 12;
+// The cap lives in the leaf `limits.ts` (a post-hoc reader needs the number,
+// not the extractor); re-exported here so every import keeps working.
+export { MAX_REPORTED_VALUES };
 
 /** Longest a single value is quoted at. */
 const MAX_VALUE_CHARS = 64;
@@ -255,6 +257,9 @@ export function checkAnswer(
   return {
     unsupported,
     candidates: candidates.length,
+    // Every candidate not skipped as exempt landed in exactly one of the two
+    // lists above — the count the gate really looked up.
+    lookedUp: grounded.length + unsupported.length,
     grounded,
     evidenceTruncated: args.evidence.truncated,
     grounding: {

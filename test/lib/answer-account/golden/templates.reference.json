@@ -1,0 +1,1899 @@
+{
+ "row.asked@1": {
+  "text": "You asked",
+  "parts": [
+   {
+    "text": "You asked"
+   }
+  ],
+  "source": "library"
+ },
+ "row.understood@1": {
+  "text": "It understood",
+  "parts": [
+   {
+    "text": "It understood"
+   }
+  ],
+  "source": "library"
+ },
+ "row.checked@1": {
+  "text": "It checked",
+  "parts": [
+   {
+    "text": "It checked"
+   }
+  ],
+  "source": "library"
+ },
+ "row.notChecked@1": {
+  "text": "It did not check",
+  "parts": [
+   {
+    "text": "It did not check"
+   }
+  ],
+  "source": "library"
+ },
+ "row.found@1": {
+  "text": "It found",
+  "parts": [
+   {
+    "text": "It found"
+   }
+  ],
+  "source": "library"
+ },
+ "row.howSure@1": {
+  "text": "How sure",
+  "parts": [
+   {
+    "text": "How sure"
+   }
+  ],
+  "source": "library"
+ },
+ "row.wrong@1": {
+  "text": "Anything wrong",
+  "parts": [
+   {
+    "text": "Anything wrong"
+   }
+  ],
+  "source": "library"
+ },
+ "row.more@1": {
+  "text": "…and 2 more tool calls.",
+  "parts": [
+   {
+    "text": "…and 2 more tool calls."
+   }
+  ],
+  "source": "library"
+ },
+ "items.more@1": {
+  "text": "…and 2 more items.",
+  "parts": [
+   {
+    "text": "…and 2 more items."
+   }
+  ],
+  "source": "library"
+ },
+ "chip.saidBy@1": {
+  "text": "said by: who value",
+  "parts": [
+   {
+    "text": "said by: who value"
+   }
+  ],
+  "source": "library"
+ },
+ "chip.who.person@1": {
+  "text": "you",
+  "parts": [
+   {
+    "text": "you"
+   }
+  ],
+  "source": "library"
+ },
+ "chip.who.library@1": {
+  "text": "the library's record",
+  "parts": [
+   {
+    "text": "the library's record"
+   }
+  ],
+  "source": "library"
+ },
+ "chip.who.model@1": {
+  "text": "the model",
+  "parts": [
+   {
+    "text": "the model"
+   }
+  ],
+  "source": "library"
+ },
+ "chip.who.app@1": {
+  "text": "the app (not recorded with the run)",
+  "parts": [
+   {
+    "text": "the app (not recorded with the run)"
+   }
+  ],
+  "source": "library"
+ },
+ "chip.declared@1": {
+  "text": "declared",
+  "parts": [
+   {
+    "text": "declared"
+   }
+  ],
+  "source": "library"
+ },
+ "chip.notDeclared@1": {
+  "text": "no coverage declared",
+  "parts": [
+   {
+    "text": "no coverage declared"
+   }
+  ],
+  "source": "library"
+ },
+ "chip.undeclaredEmpty@1": {
+  "text": "undeclared empty",
+  "parts": [
+   {
+    "text": "undeclared empty"
+   }
+  ],
+  "source": "library"
+ },
+ "chip.decidedDelivered@1": {
+  "text": "decided = delivered",
+  "parts": [
+   {
+    "text": "decided = delivered"
+   }
+  ],
+  "source": "library"
+ },
+ "chip.decidedNotDelivered@1": {
+  "text": "decided ≠ delivered",
+  "parts": [
+   {
+    "text": "decided ≠ delivered"
+   }
+  ],
+  "source": "library"
+ },
+ "chip.notRecorded@1": {
+  "text": "not recorded",
+  "parts": [
+   {
+    "text": "not recorded"
+   }
+  ],
+  "source": "library"
+ },
+ "chip.beforePause@1": {
+  "text": "before a pause — not in this record",
+  "parts": [
+   {
+    "text": "before a pause — not in this record"
+   }
+  ],
+  "source": "library"
+ },
+ "chip.kind.existence@1": {
+  "text": "whether it exists",
+  "parts": [
+   {
+    "text": "whether it exists"
+   }
+  ],
+  "source": "library"
+ },
+ "chip.kind.scope@1": {
+  "text": "outside what it covers",
+  "parts": [
+   {
+    "text": "outside what it covers"
+   }
+  ],
+  "source": "library"
+ },
+ "chip.signals@1": {
+  "text": "2 signals",
+  "parts": [
+   {
+    "text": "2 signals"
+   }
+  ],
+  "source": "library"
+ },
+ "chip.noneFound@1": {
+  "text": "none found",
+  "parts": [
+   {
+    "text": "none found"
+   }
+  ],
+  "source": "library"
+ },
+ "part.skill.labelled@1": {
+  "text": "label value skill (id value)",
+  "parts": [
+   {
+    "label": "label value",
+    "source": "library"
+   },
+   {
+    "text": " skill ("
+   },
+   {
+    "code": "id value"
+   },
+   {
+    "text": ")"
+   }
+  ],
+  "source": "library"
+ },
+ "part.skill.bare@1": {
+  "text": "id value skill",
+  "parts": [
+   {
+    "code": "id value"
+   },
+   {
+    "text": " skill"
+   }
+  ],
+  "source": "library"
+ },
+ "part.allOf.one@1": {
+  "text": "it",
+  "parts": [
+   {
+    "text": "it"
+   }
+  ],
+  "source": "library"
+ },
+ "part.allOf.two@1": {
+  "text": "both",
+  "parts": [
+   {
+    "text": "both"
+   }
+  ],
+  "source": "library"
+ },
+ "part.allOf.many@1": {
+  "text": "all 1",
+  "parts": [
+   {
+    "text": "all 1"
+   }
+  ],
+  "source": "library"
+ },
+ "part.clipped@1": {
+  "text": "… (the rest is in the record)",
+  "parts": [
+   {
+    "text": "… (the rest is in the record)"
+   }
+  ],
+  "source": "library"
+ },
+ "distance.previous@1": {
+  "text": "(the previous one)",
+  "parts": [
+   {
+    "text": "(the previous one)"
+   }
+  ],
+  "source": "library"
+ },
+ "distance.back@1": {
+  "text": "(1 answers back)",
+  "parts": [
+   {
+    "text": "(1 answers back)"
+   }
+  ],
+  "source": "library"
+ },
+ "distance.atLeast@1": {
+  "text": "(at least 2 answers back)",
+  "parts": [
+   {
+    "text": "(at least 2 answers back)"
+   }
+  ],
+  "source": "library"
+ },
+ "unreadable.line@1": {
+  "text": "This line could not be written from the record.",
+  "parts": [
+   {
+    "text": "This line could not be written from the record."
+   }
+  ],
+  "source": "library"
+ },
+ "asked@1": {
+  "text": "“question value”",
+  "parts": [
+   {
+    "text": "“"
+   },
+   {
+    "quote": "question value",
+    "source": "library"
+   },
+   {
+    "text": "”"
+   }
+  ],
+  "source": "library"
+ },
+ "asked.rewritten@1": {
+  "text": "Your message, as the app passed it to the model: “question value”",
+  "parts": [
+   {
+    "text": "Your message, as the app passed it to the model: “"
+   },
+   {
+    "quote": "question value",
+    "source": "library"
+   },
+   {
+    "text": "”"
+   }
+  ],
+  "source": "app"
+ },
+ "asked.raw.notRecorded@1": {
+  "text": "Your own words before that change are not in this record.",
+  "parts": [
+   {
+    "text": "Your own words before that change are not in this record."
+   }
+  ],
+  "source": "library"
+ },
+ "asked.resumed@1": {
+  "text": "This answer continued after a pause. The message, as the run held it: “question value”",
+  "parts": [
+   {
+    "text": "This answer continued after a pause. The message, as the run held it: “"
+   },
+   {
+    "quote": "question value",
+    "source": "library"
+   },
+   {
+    "text": "”"
+   }
+  ],
+  "source": "library"
+ },
+ "asked.none@1": {
+  "text": "The question is not recorded.",
+  "parts": [
+   {
+    "text": "The question is not recorded."
+   }
+  ],
+  "source": "library"
+ },
+ "understood.rule@1": {
+  "text": "The library's routing picked the skill-skill-id skill because one of the app's rules matched.",
+  "parts": [
+   {
+    "text": "The library's routing picked the "
+   },
+   {
+    "code": "skill-skill-id"
+   },
+   {
+    "text": " skill because one of the app's rules matched."
+   }
+  ],
+  "source": "library"
+ },
+ "understood.rule.witness@1": {
+  "text": "The library's routing picked the skill-skill-id skill because one of the app's rules matched your words “witness value”.",
+  "parts": [
+   {
+    "text": "The library's routing picked the "
+   },
+   {
+    "code": "skill-skill-id"
+   },
+   {
+    "text": " skill because one of the app's rules matched your words “"
+   },
+   {
+    "quote": "witness value",
+    "source": "library"
+   },
+   {
+    "text": "”."
+   }
+  ],
+  "source": "library"
+ },
+ "understood.intent@1": {
+  "text": "The library's routing picked the skill-skill-id skill.",
+  "parts": [
+   {
+    "text": "The library's routing picked the "
+   },
+   {
+    "code": "skill-skill-id"
+   },
+   {
+    "text": " skill."
+   }
+  ],
+  "source": "library"
+ },
+ "understood.scores.allOthers@1": {
+  "text": "The app's scoring put it first: 1 against 1 for every other skill.",
+  "parts": [
+   {
+    "text": "The app's scoring put it first: 1 against 1 for every other skill."
+   }
+  ],
+  "source": "app"
+ },
+ "understood.scores@1": {
+  "text": "The app's scoring put it first: 1 against 1 for the next one, the nextSkill-skill-id skill.",
+  "parts": [
+   {
+    "text": "The app's scoring put it first: 1 against 1 for the next one, the "
+   },
+   {
+    "code": "nextSkill-skill-id"
+   },
+   {
+    "text": " skill."
+   }
+  ],
+  "source": "app"
+ },
+ "understood.continuity@1": {
+  "text": "It stayed with the skill-skill-id skill from the previous question.",
+  "parts": [
+   {
+    "text": "It stayed with the "
+   },
+   {
+    "code": "skill-skill-id"
+   },
+   {
+    "text": " skill from the previous question."
+   }
+  ],
+  "source": "library"
+ },
+ "understood.decider@1": {
+  "text": "A separate routing model (model value) picked the skill-skill-id skill.",
+  "parts": [
+   {
+    "text": "A separate routing model ("
+   },
+   {
+    "code": "model value"
+   },
+   {
+    "text": ") picked the "
+   },
+   {
+    "code": "skill-skill-id"
+   },
+   {
+    "text": " skill."
+   }
+  ],
+  "source": "model"
+ },
+ "understood.decider.noModel@1": {
+  "text": "A separate routing model picked the skill-skill-id skill.",
+  "parts": [
+   {
+    "text": "A separate routing model picked the "
+   },
+   {
+    "code": "skill-skill-id"
+   },
+   {
+    "text": " skill."
+   }
+  ],
+  "source": "model"
+ },
+ "understood.menu@1": {
+  "text": "No routing rule decided; the model was offered 2 skills to choose from.",
+  "parts": [
+   {
+    "text": "No routing rule decided; the model was offered 2 skills to choose from."
+   }
+  ],
+  "source": "library"
+ },
+ "understood.menu.bare@1": {
+  "text": "No routing rule decided; the model was offered skills to choose from.",
+  "parts": [
+   {
+    "text": "No routing rule decided; the model was offered skills to choose from."
+   }
+  ],
+  "source": "library"
+ },
+ "understood.menu.picked@1": {
+  "text": "The model then opened the skill-skill-id skill.",
+  "parts": [
+   {
+    "text": "The model then opened the "
+   },
+   {
+    "code": "skill-skill-id"
+   },
+   {
+    "text": " skill."
+   }
+  ],
+  "source": "model"
+ },
+ "understood.none@1": {
+  "text": "No skill was chosen; the answer ran on the general instructions.",
+  "parts": [
+   {
+    "text": "No skill was chosen; the answer ran on the general instructions."
+   }
+  ],
+  "source": "library"
+ },
+ "understood.notConfigured@1": {
+  "text": "This app does not route questions to skills.",
+  "parts": [
+   {
+    "text": "This app does not route questions to skills."
+   }
+  ],
+  "source": "library"
+ },
+ "understood.notRecorded@1": {
+  "text": "How the question was routed is not recorded.",
+  "parts": [
+   {
+    "text": "How the question was routed is not recorded."
+   }
+  ],
+  "source": "library"
+ },
+ "understood.resumed@1": {
+  "text": "The routing happened before the pause and is not in this record.",
+  "parts": [
+   {
+    "text": "The routing happened before the pause and is not in this record."
+   }
+  ],
+  "source": "library"
+ },
+ "understood.delivered@1": {
+  "text": "The skill was given to the model before it answered.",
+  "parts": [
+   {
+    "text": "The skill was given to the model before it answered."
+   }
+  ],
+  "source": "library"
+ },
+ "understood.notDelivered@1": {
+  "text": "The skill-skill-id skill was not given to the model.",
+  "parts": [
+   {
+    "text": "The "
+   },
+   {
+    "code": "skill-skill-id"
+   },
+   {
+    "text": " skill was not given to the model."
+   }
+  ],
+  "source": "library"
+ },
+ "understood.notDelivered.other@1": {
+  "text": "The skill-skill-id skill was not given to the model; it was given the other-skill-id skill instead.",
+  "parts": [
+   {
+    "text": "The "
+   },
+   {
+    "code": "skill-skill-id"
+   },
+   {
+    "text": " skill was not given to the model; it was given the "
+   },
+   {
+    "code": "other-skill-id"
+   },
+   {
+    "text": " skill instead."
+   }
+  ],
+  "source": "library"
+ },
+ "understood.delivery.unknown@1": {
+  "text": "Whether the skill was given to the model cannot be told from this record.",
+  "parts": [
+   {
+    "text": "Whether the skill was given to the model cannot be told from this record."
+   }
+  ],
+  "source": "library"
+ },
+ "understood.refused@1": {
+  "text": "A check named by value refused to open the skill-skill-id skill.",
+  "parts": [
+   {
+    "text": "A check named "
+   },
+   {
+    "code": "by value"
+   },
+   {
+    "text": " refused to open the "
+   },
+   {
+    "code": "skill-skill-id"
+   },
+   {
+    "text": " skill."
+   }
+  ],
+  "source": "library"
+ },
+ "understood.refused.unnamed@1": {
+  "text": "A check refused to open the skill-skill-id skill.",
+  "parts": [
+   {
+    "text": "A check refused to open the "
+   },
+   {
+    "code": "skill-skill-id"
+   },
+   {
+    "text": " skill."
+   }
+  ],
+  "source": "library"
+ },
+ "understood.refused.more@1": {
+  "text": "…and 2 more refusals of the same skill, not listed here.",
+  "parts": [
+   {
+    "text": "…and 2 more refusals of the same skill, not listed here."
+   }
+  ],
+  "source": "library"
+ },
+ "understood.rejected@1": {
+  "text": "The skill graph refused to open the skill-skill-id skill.",
+  "parts": [
+   {
+    "text": "The skill graph refused to open the "
+   },
+   {
+    "code": "skill-skill-id"
+   },
+   {
+    "text": " skill."
+   }
+  ],
+  "source": "library"
+ },
+ "understood.confidence.none@1": {
+  "text": "How sure the routing was is not recorded.",
+  "parts": [
+   {
+    "text": "How sure the routing was is not recorded."
+   }
+  ],
+  "source": "library"
+ },
+ "understood.app.notRecorded@1": {
+  "text": "Whether the app itself decided a skill for this question is not recorded.",
+  "parts": [
+   {
+    "text": "Whether the app itself decided a skill for this question is not recorded."
+   }
+  ],
+  "source": "app"
+ },
+ "checked.declared@1": {
+  "text": "lookup_volumes says it checked:",
+  "parts": [
+   {
+    "code": "lookup_volumes"
+   },
+   {
+    "text": " says it checked:"
+   }
+  ],
+  "source": "tool:lookup_volumes"
+ },
+ "checked.item@1": {
+  "text": "short value",
+  "parts": [
+   {
+    "label": "short value",
+    "source": "library"
+   }
+  ],
+  "source": "tool:lookup_volumes"
+ },
+ "checked.item.full@1": {
+  "text": "what value",
+  "parts": [
+   {
+    "text": "what value"
+   }
+  ],
+  "source": "tool:lookup_volumes"
+ },
+ "checked.silent@1": {
+  "text": "lookup_volumes declared its limits but did not say what it checked.",
+  "parts": [
+   {
+    "code": "lookup_volumes"
+   },
+   {
+    "text": " declared its limits but did not say what it checked."
+   }
+  ],
+  "source": "library"
+ },
+ "checked.undeclared@1": {
+  "text": "It ran lookup_volumes. The tool did not say what it checked.",
+  "parts": [
+   {
+    "text": "It ran "
+   },
+   {
+    "code": "lookup_volumes"
+   },
+   {
+    "text": ". The tool did not say what it checked."
+   }
+  ],
+  "source": "library"
+ },
+ "checked.failed@1": {
+  "text": "It ran lookup_volumes, and the tool reported an error.",
+  "parts": [
+   {
+    "text": "It ran "
+   },
+   {
+    "code": "lookup_volumes"
+   },
+   {
+    "text": ", and the tool reported an error."
+   }
+  ],
+  "source": "library"
+ },
+ "checked.refused@1": {
+  "text": "It asked to run lookup_volumes, and a rule named by value refused it.",
+  "parts": [
+   {
+    "text": "It asked to run "
+   },
+   {
+    "code": "lookup_volumes"
+   },
+   {
+    "text": ", and a rule named "
+   },
+   {
+    "code": "by value"
+   },
+   {
+    "text": " refused it."
+   }
+  ],
+  "source": "library"
+ },
+ "checked.refused.unnamed@1": {
+  "text": "It asked to run lookup_volumes, and a rule refused it.",
+  "parts": [
+   {
+    "text": "It asked to run "
+   },
+   {
+    "code": "lookup_volumes"
+   },
+   {
+    "text": ", and a rule refused it."
+   }
+  ],
+  "source": "library"
+ },
+ "checked.declined@1": {
+  "text": "It asked to run lookup_volumes; a person was asked and declined.",
+  "parts": [
+   {
+    "text": "It asked to run "
+   },
+   {
+    "code": "lookup_volumes"
+   },
+   {
+    "text": "; a person was asked and declined."
+   }
+  ],
+  "source": "library"
+ },
+ "checked.notDispatched@1": {
+  "text": "It asked to run lookup_volumes, but the call was not run.",
+  "parts": [
+   {
+    "text": "It asked to run "
+   },
+   {
+    "code": "lookup_volumes"
+   },
+   {
+    "text": ", but the call was not run."
+   }
+  ],
+  "source": "library"
+ },
+ "checked.unknown@1": {
+  "text": "It started lookup_volumes; how the call ended is not recorded.",
+  "parts": [
+   {
+    "text": "It started "
+   },
+   {
+    "code": "lookup_volumes"
+   },
+   {
+    "text": "; how the call ended is not recorded."
+   }
+  ],
+  "source": "library"
+ },
+ "checked.beforePause@1": {
+  "text": "Before the pause it also ran 2 tools (names value); what those checked is not in this record.",
+  "parts": [
+   {
+    "text": "Before the pause it also ran 2 tools (names value); what those checked is not in this record."
+   }
+  ],
+  "source": "library"
+ },
+ "checked.beforePause.many@1": {
+  "text": "Before the pause it also ran 2 tools (among them names value); what those checked is not in this record.",
+  "parts": [
+   {
+    "text": "Before the pause it also ran 2 tools (among them names value); what those checked is not in this record."
+   }
+  ],
+  "source": "library"
+ },
+ "checked.unnamed@1": {
+  "text": "A tool call (id value) is in this record, but no event of it names its tool.",
+  "parts": [
+   {
+    "text": "A tool call ("
+   },
+   {
+    "code": "id value"
+   },
+   {
+    "text": ") is in this record, but no event of it names its tool."
+   }
+  ],
+  "source": "library"
+ },
+ "checked.beforePause.none@1": {
+  "text": "Anything run before the pause is not in this record.",
+  "parts": [
+   {
+    "text": "Anything run before the pause is not in this record."
+   }
+  ],
+  "source": "library"
+ },
+ "checked.noCalls@1": {
+  "text": "It did not run any tools for this answer.",
+  "parts": [
+   {
+    "text": "It did not run any tools for this answer."
+   }
+  ],
+  "source": "library"
+ },
+ "notChecked.declared@1": {
+  "text": "lookup_volumes says it did not check:",
+  "parts": [
+   {
+    "code": "lookup_volumes"
+   },
+   {
+    "text": " says it did not check:"
+   }
+  ],
+  "source": "tool:lookup_volumes"
+ },
+ "notChecked.item@1": {
+  "text": "short value",
+  "parts": [
+   {
+    "label": "short value",
+    "source": "library"
+   }
+  ],
+  "source": "tool:lookup_volumes"
+ },
+ "notChecked.item.full@1": {
+  "text": "what value",
+  "parts": [
+   {
+    "text": "what value"
+   }
+  ],
+  "source": "tool:lookup_volumes"
+ },
+ "notChecked.silent@1": {
+  "text": "lookup_volumes did not say what it left unchecked.",
+  "parts": [
+   {
+    "code": "lookup_volumes"
+   },
+   {
+    "text": " did not say what it left unchecked."
+   }
+  ],
+  "source": "library"
+ },
+ "notChecked.undeclared@1": {
+  "text": "lookup_volumes did not say what it left unchecked.",
+  "parts": [
+   {
+    "code": "lookup_volumes"
+   },
+   {
+    "text": " did not say what it left unchecked."
+   }
+  ],
+  "source": "library"
+ },
+ "cannotCover.declared@1": {
+  "text": "lookup_volumes says it can never check:",
+  "parts": [
+   {
+    "code": "lookup_volumes"
+   },
+   {
+    "text": " says it can never check:"
+   }
+  ],
+  "source": "tool:lookup_volumes"
+ },
+ "cannotCover.item@1": {
+  "text": "short value",
+  "parts": [
+   {
+    "label": "short value",
+    "source": "library"
+   }
+  ],
+  "source": "tool:lookup_volumes"
+ },
+ "cannotCover.item.full@1": {
+  "text": "what value",
+  "parts": [
+   {
+    "text": "what value"
+   }
+  ],
+  "source": "tool:lookup_volumes"
+ },
+ "tryInstead.tool@1": {
+  "text": "lookup_volumes suggested trying other value instead.",
+  "parts": [
+   {
+    "code": "lookup_volumes"
+   },
+   {
+    "text": " suggested trying "
+   },
+   {
+    "code": "other value"
+   },
+   {
+    "text": " instead."
+   }
+  ],
+  "source": "tool:lookup_volumes"
+ },
+ "notChecked.unnamed@1": {
+  "text": "What the call id value left unchecked is not told here: no event of it names its tool.",
+  "parts": [
+   {
+    "text": "What the call "
+   },
+   {
+    "code": "id value"
+   },
+   {
+    "text": " left unchecked is not told here: no event of it names its tool."
+   }
+  ],
+  "source": "library"
+ },
+ "notChecked.notListed@1": {
+  "text": "None of the tool calls listed here ran; 2 calls that ran are among the ones not listed.",
+  "parts": [
+   {
+    "text": "None of the tool calls listed here ran; 2 calls that ran are among the ones not listed."
+   }
+  ],
+  "source": "library"
+ },
+ "notChecked.noCalls@1": {
+  "text": "Nothing to report: no tool ran.",
+  "parts": [
+   {
+    "text": "Nothing to report: no tool ran."
+   }
+  ],
+  "source": "library"
+ },
+ "notChecked.noneRan@1": {
+  "text": "Nothing to report: none of the tool calls ran.",
+  "parts": [
+   {
+    "text": "Nothing to report: none of the tool calls ran."
+   }
+  ],
+  "source": "library"
+ },
+ "notChecked.beforePause@1": {
+  "text": "What the tools run before the pause did not check is not in this record.",
+  "parts": [
+   {
+    "text": "What the tools run before the pause did not check is not in this record."
+   }
+  ],
+  "source": "library"
+ },
+ "found.absent@1": {
+  "text": "lookup_volumes looked for lookedFor value and found none.",
+  "parts": [
+   {
+    "code": "lookup_volumes"
+   },
+   {
+    "text": " looked for lookedFor value and found none."
+   }
+  ],
+  "source": "tool:lookup_volumes"
+ },
+ "found.bare@1": {
+  "text": "lookup_volumes found nothing matching.",
+  "parts": [
+   {
+    "code": "lookup_volumes"
+   },
+   {
+    "text": " found nothing matching."
+   }
+  ],
+  "source": "tool:lookup_volumes"
+ },
+ "found.undeclaredEmpty@1": {
+  "text": "lookup_volumes returned an empty result and did not declare what it searched.",
+  "parts": [
+   {
+    "code": "lookup_volumes"
+   },
+   {
+    "text": " returned an empty result and did not declare what it searched."
+   }
+  ],
+  "source": "library"
+ },
+ "found.rows@1": {
+  "text": "lookup_volumes returned 2 items.",
+  "parts": [
+   {
+    "code": "lookup_volumes"
+   },
+   {
+    "text": " returned 2 items."
+   }
+  ],
+  "source": "library"
+ },
+ "found.result@1": {
+  "text": "lookup_volumes returned a result.",
+  "parts": [
+   {
+    "code": "lookup_volumes"
+   },
+   {
+    "text": " returned a result."
+   }
+  ],
+  "source": "library"
+ },
+ "found.failed@1": {
+  "text": "lookup_volumes returned an error, not a result.",
+  "parts": [
+   {
+    "code": "lookup_volumes"
+   },
+   {
+    "text": " returned an error, not a result."
+   }
+  ],
+  "source": "library"
+ },
+ "found.refused@1": {
+  "text": "lookup_volumes did not run, so it found nothing.",
+  "parts": [
+   {
+    "code": "lookup_volumes"
+   },
+   {
+    "text": " did not run, so it found nothing."
+   }
+  ],
+  "source": "library"
+ },
+ "found.declined@1": {
+  "text": "lookup_volumes did not run, so it found nothing.",
+  "parts": [
+   {
+    "code": "lookup_volumes"
+   },
+   {
+    "text": " did not run, so it found nothing."
+   }
+  ],
+  "source": "library"
+ },
+ "found.notDispatched@1": {
+  "text": "lookup_volumes did not run, so it found nothing.",
+  "parts": [
+   {
+    "code": "lookup_volumes"
+   },
+   {
+    "text": " did not run, so it found nothing."
+   }
+  ],
+  "source": "library"
+ },
+ "found.unknown@1": {
+  "text": "What lookup_volumes returned is not recorded.",
+  "parts": [
+   {
+    "text": "What "
+   },
+   {
+    "code": "lookup_volumes"
+   },
+   {
+    "text": " returned is not recorded."
+   }
+  ],
+  "source": "library"
+ },
+ "found.withheld@1": {
+  "text": "lookup_volumes ran, but a rule named by value withheld its result from the model.",
+  "parts": [
+   {
+    "code": "lookup_volumes"
+   },
+   {
+    "text": " ran, but a rule named "
+   },
+   {
+    "code": "by value"
+   },
+   {
+    "text": " withheld its result from the model."
+   }
+  ],
+  "source": "library"
+ },
+ "found.beforePause@1": {
+  "text": "What the tools found before the pause is not in this record.",
+  "parts": [
+   {
+    "text": "What the tools found before the pause is not in this record."
+   }
+  ],
+  "source": "library"
+ },
+ "found.inView@1": {
+  "text": "The model could also see the result of lookup_volumes from an earlier answer (2 answers back).",
+  "parts": [
+   {
+    "text": "The model could also see the result of "
+   },
+   {
+    "code": "lookup_volumes"
+   },
+   {
+    "text": " from an earlier answer (2 answers back)."
+   }
+  ],
+  "source": "library"
+ },
+ "found.inView.undeclaredEmpty@1": {
+  "text": "The model could also see the result of lookup_volumes from an earlier answer (2 answers back): an empty result that did not declare what it searched.",
+  "parts": [
+   {
+    "text": "The model could also see the result of "
+   },
+   {
+    "code": "lookup_volumes"
+   },
+   {
+    "text": " from an earlier answer (2 answers back): an empty result that did not declare what it searched."
+   }
+  ],
+  "source": "library"
+ },
+ "found.inView.absent@1": {
+  "text": "The model could also see the result of lookup_volumes from an earlier answer (2 answers back): it found nothing and declared what it searched.",
+  "parts": [
+   {
+    "text": "The model could also see the result of "
+   },
+   {
+    "code": "lookup_volumes"
+   },
+   {
+    "text": " from an earlier answer (2 answers back): it found nothing and declared what it searched."
+   }
+  ],
+  "source": "library"
+ },
+ "found.inView.more@1": {
+  "text": "…and 2 more earlier results the model could also see.",
+  "parts": [
+   {
+    "text": "…and 2 more earlier results the model could also see."
+   }
+  ],
+  "source": "library"
+ },
+ "found.unnamed@1": {
+  "text": "What the call id value returned is not told here: no event of it names its tool.",
+  "parts": [
+   {
+    "text": "What the call "
+   },
+   {
+    "code": "id value"
+   },
+   {
+    "text": " returned is not told here: no event of it names its tool."
+   }
+  ],
+  "source": "library"
+ },
+ "found.noCalls@1": {
+  "text": "No tool ran for this answer.",
+  "parts": [
+   {
+    "text": "No tool ran for this answer."
+   }
+  ],
+  "source": "library"
+ },
+ "howSure.standing.none@1": {
+  "text": "The record does not rate how sure this answer is.",
+  "parts": [
+   {
+    "text": "The record does not rate how sure this answer is."
+   }
+  ],
+  "source": "library"
+ },
+ "howSure.expected.direct@1": {
+  "text": "Before calling lookup_volumes, the model said it expected this call to answer the question directly, and rated how useful it expected the result to be: expect value.",
+  "parts": [
+   {
+    "text": "Before calling "
+   },
+   {
+    "code": "lookup_volumes"
+   },
+   {
+    "text": ", the model said it expected this call to answer the question directly, and rated how useful it expected the result to be: expect value."
+   }
+  ],
+  "source": "model"
+ },
+ "howSure.expected.directNoRating@1": {
+  "text": "Before calling lookup_volumes, the model said it expected this call to answer the question directly.",
+  "parts": [
+   {
+    "text": "Before calling "
+   },
+   {
+    "code": "lookup_volumes"
+   },
+   {
+    "text": ", the model said it expected this call to answer the question directly."
+   }
+  ],
+  "source": "model"
+ },
+ "howSure.expected.exploratory@1": {
+  "text": "Before calling lookup_volumes, the model said this call was exploratory.",
+  "parts": [
+   {
+    "text": "Before calling "
+   },
+   {
+    "code": "lookup_volumes"
+   },
+   {
+    "text": ", the model said this call was exploratory."
+   }
+  ],
+  "source": "model"
+ },
+ "howSure.expected.more@1": {
+  "text": "…and 2 more calls the model declared an expectation for, not listed here.",
+  "parts": [
+   {
+    "text": "…and 2 more calls the model declared an expectation for, not listed here."
+   }
+  ],
+  "source": "library"
+ },
+ "howSure.outcome.nothing@1": {
+  "text": "The call found nothing.",
+  "parts": [
+   {
+    "text": "The call found nothing."
+   }
+  ],
+  "source": "tool:lookup_volumes"
+ },
+ "howSure.outcome.empty@1": {
+  "text": "The call returned an empty result.",
+  "parts": [
+   {
+    "text": "The call returned an empty result."
+   }
+  ],
+  "source": "library"
+ },
+ "howSure.evidence.lookedUp@1": {
+  "text": "The library looked up 2 values from the answer in what the tools returned and found both.",
+  "parts": [
+   {
+    "text": "The library looked up 2 values from the answer in what the tools returned and found both."
+   }
+  ],
+  "source": "library"
+ },
+ "howSure.evidence.lookedUp.none@1": {
+  "text": "Every value in the answer also appears in your message, the conversation or the app's own instructions (recalled memory included), so none needed looking up.",
+  "parts": [
+   {
+    "text": "Every value in the answer also appears in your message, the conversation or the app's own instructions (recalled memory included), so none needed looking up."
+   }
+  ],
+  "source": "library"
+ },
+ "howSure.evidence.unsplit@1": {
+  "text": "The library checked the answer's names and numbers: none was missing from what the tools returned, your message, the conversation or the app's own instructions (recalled memory included).",
+  "parts": [
+   {
+    "text": "The library checked the answer's names and numbers: none was missing from what the tools returned, your message, the conversation or the app's own instructions (recalled memory included)."
+   }
+  ],
+  "source": "library"
+ },
+ "howSure.evidence.flagged@1": {
+  "text": "The library could not find 2 values from the answer in any tool result: values value.",
+  "parts": [
+   {
+    "text": "The library could not find 2 values from the answer in any tool result: values value."
+   }
+  ],
+  "source": "library"
+ },
+ "howSure.evidence.flagged.list@1": {
+  "text": "The library could not find 2 values from the answer in any tool result:",
+  "parts": [
+   {
+    "text": "The library could not find 2 values from the answer in any tool result:"
+   }
+  ],
+  "source": "library"
+ },
+ "howSure.evidence.flagged.atLeast@1": {
+  "text": "The library could not find at least 1 values from the answer in any tool result:",
+  "parts": [
+   {
+    "text": "The library could not find at least 1 values from the answer in any tool result:"
+   }
+  ],
+  "source": "library"
+ },
+ "howSure.evidence.value@1": {
+  "text": "value value",
+  "parts": [
+   {
+    "code": "value value"
+   }
+  ],
+  "source": "library"
+ },
+ "howSure.evidence.revised@1": {
+  "text": "The answer was sent back once to be corrected before this check.",
+  "parts": [
+   {
+    "text": "The answer was sent back once to be corrected before this check."
+   }
+  ],
+  "source": "library"
+ },
+ "howSure.evidence.empty@1": {
+  "text": "The answer contained no names or numbers for the library to check.",
+  "parts": [
+   {
+    "text": "The answer contained no names or numbers for the library to check."
+   }
+  ],
+  "source": "library"
+ },
+ "howSure.evidence.truncated@1": {
+  "text": "The library's index of tool results was full, so this check is incomplete.",
+  "parts": [
+   {
+    "text": "The library's index of tool results was full, so this check is incomplete."
+   }
+  ],
+  "source": "library"
+ },
+ "howSure.evidence.off@1": {
+  "text": "The library was not set to check the answer's names and numbers.",
+  "parts": [
+   {
+    "text": "The library was not set to check the answer's names and numbers."
+   }
+  ],
+  "source": "library"
+ },
+ "howSure.evidence.notRecorded@1": {
+  "text": "Whether the answer's names and numbers were checked is not recorded.",
+  "parts": [
+   {
+    "text": "Whether the answer's names and numbers were checked is not recorded."
+   }
+  ],
+  "source": "library"
+ },
+ "signal.decidedNotDelivered@1": {
+  "text": "The skill-skill-id skill was decided for this question but was not given to the model.",
+  "parts": [
+   {
+    "text": "The "
+   },
+   {
+    "code": "skill-skill-id"
+   },
+   {
+    "text": " skill was decided for this question but was not given to the model."
+   }
+  ],
+  "source": "library"
+ },
+ "signal.existenceNotChecked@1": {
+  "text": "lookup_volumes says it did not check short value.",
+  "parts": [
+   {
+    "code": "lookup_volumes"
+   },
+   {
+    "text": " says it did not check "
+   },
+   {
+    "label": "short value",
+    "source": "library"
+   },
+   {
+    "text": "."
+   }
+  ],
+  "source": "tool:lookup_volumes"
+ },
+ "signal.existenceNotChecked.full@1": {
+  "text": "lookup_volumes says it did not check what value.",
+  "parts": [
+   {
+    "code": "lookup_volumes"
+   },
+   {
+    "text": " says it did not check what value."
+   }
+  ],
+  "source": "tool:lookup_volumes"
+ },
+ "signal.existenceCannotCover@1": {
+  "text": "lookup_volumes says it can never check short value.",
+  "parts": [
+   {
+    "code": "lookup_volumes"
+   },
+   {
+    "text": " says it can never check "
+   },
+   {
+    "label": "short value",
+    "source": "library"
+   },
+   {
+    "text": "."
+   }
+  ],
+  "source": "tool:lookup_volumes"
+ },
+ "signal.existenceCannotCover.full@1": {
+  "text": "lookup_volumes says it can never check what value.",
+  "parts": [
+   {
+    "code": "lookup_volumes"
+   },
+   {
+    "text": " says it can never check what value."
+   }
+  ],
+  "source": "tool:lookup_volumes"
+ },
+ "signal.undeclaredEmptyUsed@1": {
+  "text": "This answer's lookup_volumes call returned an empty result that did not declare what it searched.",
+  "parts": [
+   {
+    "text": "This answer's "
+   },
+   {
+    "code": "lookup_volumes"
+   },
+   {
+    "text": " call returned an empty result that did not declare what it searched."
+   }
+  ],
+  "source": "library"
+ },
+ "signal.undeclaredEmptyInView@1": {
+  "text": "An empty result that did not declare what it searched, from lookup_volumes in an earlier answer (2 answers back), was in front of the model when it answered.",
+  "parts": [
+   {
+    "text": "An empty result that did not declare what it searched, from "
+   },
+   {
+    "code": "lookup_volumes"
+   },
+   {
+    "text": " in an earlier answer (2 answers back), was in front of the model when it answered."
+   }
+  ],
+  "source": "library"
+ },
+ "unreachable.decided@1": {
+  "text": "It cannot be told whether the chosen skill was given to the model: the routing is not in this record.",
+  "parts": [
+   {
+    "text": "It cannot be told whether the chosen skill was given to the model: the routing is not in this record."
+   }
+  ],
+  "source": "library"
+ },
+ "unreachable.delivery@1": {
+  "text": "It cannot be told whether the chosen skill was given to the model: what the model was given is not fully in this record.",
+  "parts": [
+   {
+    "text": "It cannot be told whether the chosen skill was given to the model: what the model was given is not fully in this record."
+   }
+  ],
+  "source": "library"
+ },
+ "unreachable.existence@1": {
+  "text": "It cannot be told whether lookup_volumes checked that the thing asked about exists: its not-checked items do not say what kind they are.",
+  "parts": [
+   {
+    "text": "It cannot be told whether "
+   },
+   {
+    "code": "lookup_volumes"
+   },
+   {
+    "text": " checked that the thing asked about exists: its not-checked items do not say what kind they are."
+   }
+  ],
+  "source": "library"
+ },
+ "unreachable.unnamed@1": {
+  "text": "It cannot be told what the call id value found: no event of it names its tool.",
+  "parts": [
+   {
+    "text": "It cannot be told what the call "
+   },
+   {
+    "code": "id value"
+   },
+   {
+    "text": " found: no event of it names its tool."
+   }
+  ],
+  "source": "library"
+ },
+ "unreachable.unnamed.existence@1": {
+  "text": "It cannot be told whether the call id value checked that the thing asked about exists: no event of it names its tool.",
+  "parts": [
+   {
+    "text": "It cannot be told whether the call "
+   },
+   {
+    "code": "id value"
+   },
+   {
+    "text": " checked that the thing asked about exists: no event of it names its tool."
+   }
+  ],
+  "source": "library"
+ },
+ "unreachable.unnamed.both@1": {
+  "text": "It cannot be told what the call id value found, nor whether it checked that the thing asked about exists: no event of it names its tool.",
+  "parts": [
+   {
+    "text": "It cannot be told what the call "
+   },
+   {
+    "code": "id value"
+   },
+   {
+    "text": " found, nor whether it checked that the thing asked about exists: no event of it names its tool."
+   }
+  ],
+  "source": "library"
+ },
+ "unreachable.empty@1": {
+  "text": "It cannot be told whether the result of lookup_volumes was empty: its shape is not declared.",
+  "parts": [
+   {
+    "text": "It cannot be told whether the result of "
+   },
+   {
+    "code": "lookup_volumes"
+   },
+   {
+    "text": " was empty: its shape is not declared."
+   }
+  ],
+  "source": "library"
+ },
+ "wrong.errors@1": {
+  "text": "2 tool calls did not run cleanly: 1 failed, 1 refused by a rule, 1 declined by a person, 1 not run.",
+  "parts": [
+   {
+    "text": "2 tool calls did not run cleanly: 1 failed, 1 refused by a rule, 1 declined by a person, 1 not run."
+   }
+  ],
+  "source": "library"
+ },
+ "wrong.withheld@1": {
+  "text": "2 results were withheld from the model by a rule after the tool ran.",
+  "parts": [
+   {
+    "text": "2 results were withheld from the model by a rule after the tool ran."
+   }
+  ],
+  "source": "library"
+ },
+ "wrong.noErrors@1": {
+  "text": "No tool call failed or was refused.",
+  "parts": [
+   {
+    "text": "No tool call failed or was refused."
+   }
+  ],
+  "source": "library"
+ },
+ "wrong.none@1": {
+  "text": "The 2 checks this report could run found nothing.",
+  "parts": [
+   {
+    "text": "The 2 checks this report could run found nothing."
+   }
+  ],
+  "source": "library"
+ },
+ "wrong.unreachable@1": {
+  "text": "1 of the 1 checks could not be run on this record.",
+  "parts": [
+   {
+    "text": "1 of the 1 checks could not be run on this record."
+   }
+  ],
+  "source": "library"
+ },
+ "wrong.unreachable.all@1": {
+  "text": "None of the checks this report looks for could be run on this record.",
+  "parts": [
+   {
+    "text": "None of the checks this report looks for could be run on this record."
+   }
+  ],
+  "source": "library"
+ },
+ "wrong.more@1": {
+  "text": "…and 2 more lines from these checks, not listed here.",
+  "parts": [
+   {
+    "text": "…and 2 more lines from these checks, not listed here."
+   }
+  ],
+  "source": "library"
+ },
+ "wrong.notApplicable@1": {
+  "text": "None of the checks this report looks for applies to this answer.",
+  "parts": [
+   {
+    "text": "None of the checks this report looks for applies to this answer."
+   }
+  ],
+  "source": "library"
+ },
+ "wrong.beforePause@1": {
+  "text": "Anything before the pause is not in this record, so these checks cover only the part after it.",
+  "parts": [
+   {
+    "text": "Anything before the pause is not in this record, so these checks cover only the part after it."
+   }
+  ],
+  "source": "library"
+ },
+ "scope.noOwnEvents@1": {
+  "text": "None of this record's events belong to the run asked for, so nothing about that run can be told from it.",
+  "parts": [
+   {
+    "text": "None of this record's events belong to the run asked for, so nothing about that run can be told from it."
+   }
+  ],
+  "source": "library"
+ },
+ "row.notInRecord@1": {
+  "text": "Not in this record: none of its events belong to the run asked for.",
+  "parts": [
+   {
+    "text": "Not in this record: none of its events belong to the run asked for."
+   }
+  ],
+  "source": "library"
+ },
+ "scope.unfiltered@1": {
+  "text": "Which run these events belong to is not recorded, so this report reads every event in the record.",
+  "parts": [
+   {
+    "text": "Which run these events belong to is not recorded, so this report reads every event in the record."
+   }
+  ],
+  "source": "library"
+ },
+ "summary.signal@1": {
+  "text": "first value",
+  "parts": [
+   {
+    "text": "first value"
+   }
+  ],
+  "source": "library"
+ },
+ "summary.signals@1": {
+  "text": "first value second value",
+  "parts": [
+   {
+    "text": "first value second value"
+   }
+  ],
+  "source": "library"
+ },
+ "summary.none@1": {
+  "text": "Nothing this report looks for turned up in the record.",
+  "parts": [
+   {
+    "text": "Nothing this report looks for turned up in the record."
+   }
+  ],
+  "source": "library"
+ },
+ "summary.none.partial@1": {
+  "text": "Nothing this report looks for turned up, but 1 of the 1 checks could not be run on this record.",
+  "parts": [
+   {
+    "text": "Nothing this report looks for turned up, but 1 of the 1 checks could not be run on this record."
+   }
+  ],
+  "source": "library"
+ },
+ "summary.none.nothingRun@1": {
+  "text": "This report could not run any of its checks on this record.",
+  "parts": [
+   {
+    "text": "This report could not run any of its checks on this record."
+   }
+  ],
+  "source": "library"
+ },
+ "summary.none.notApplicable@1": {
+  "text": "None of the checks this report looks for applies to this answer.",
+  "parts": [
+   {
+    "text": "None of the checks this report looks for applies to this answer."
+   }
+  ],
+  "source": "library"
+ },
+ "summary.resumed@1": {
+  "text": "This answer continued after a pause; what happened before the pause is not in this record.",
+  "parts": [
+   {
+    "text": "This answer continued after a pause; what happened before the pause is not in this record."
+   }
+  ],
+  "source": "library"
+ },
+ "summary.resumed.tail@1": {
+  "text": "What happened before the pause is not in this record.",
+  "parts": [
+   {
+    "text": "What happened before the pause is not in this record."
+   }
+  ],
+  "source": "library"
+ },
+ "summary.unfinished@1": {
+  "text": "This record does not show the run finishing.",
+  "parts": [
+   {
+    "text": "This record does not show the run finishing."
+   }
+  ],
+  "source": "library"
+ },
+ "summary.notAvailable@1": {
+  "text": "This answer's record is not available, so it cannot be explained.",
+  "parts": [
+   {
+    "text": "This answer's record is not available, so it cannot be explained."
+   }
+  ],
+  "source": "library"
+ }
+}

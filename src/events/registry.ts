@@ -258,8 +258,7 @@ export const EVENT_NAMES = {
     /**
      * @deprecated **Nothing emits this event, and nothing ever has** — a listener
      * on it hears silence, which looks exactly like "no risk found". It was the
-     * output of the risk-detector port (`adapters/types.ts`), which is also
-     * deprecated and has no caller.
+     * output of the risk-detector adapter port, which is also deprecated and has no caller.
      * Removed in 10.0.0. To screen content, refuse in a `PermissionChecker`
      * (`agentfootprint/security`), a `.reliability({ preCheck })` rule
      * (`agentfootprint/resilience`) or a `.messageMiddleware(...)`, and listen to
@@ -671,8 +670,7 @@ export interface AgentfootprintEventMap {
   /**
    * @deprecated **Nothing emits this event, and nothing ever has** — a listener
    * on it hears silence, which looks exactly like "no risk found". It was the
-   * output of the risk-detector port (`adapters/types.ts`), which is also
-   * deprecated and has no caller.
+   * output of the risk-detector adapter port, which is also deprecated and has no caller.
    * Removed in 10.0.0. To screen content, refuse in a `PermissionChecker`
    * (`agentfootprint/security`), a `.reliability({ preCheck })` rule
    * (`agentfootprint/resilience`) or a `.messageMiddleware(...)`, and listen to

@@ -1,0 +1,19 @@
+You asked:
+  Your message, as the app passed it to the model: “> the quoted line
+
+why is this line red?”  ⟨asked.rewritten@1 · app · recorded⟩
+  Your own words before that change are not in this record.  ⟨asked.raw.notRecorded@1 · library · not-recorded⟩
+It understood:
+  This app does not route questions to skills.  ⟨understood.notConfigured@1 · library · not-applicable⟩
+It checked:
+  It did not run any tools for this answer.  ⟨checked.noCalls@1 · library · recorded⟩
+It did not check:
+  Nothing to report: no tool ran.  ⟨notChecked.noCalls@1 · library · not-applicable⟩
+It found:
+  No tool ran for this answer.  ⟨found.noCalls@1 · library · recorded⟩
+How sure:
+  The record does not rate how sure this answer is.  ⟨howSure.standing.none@1 · library · not-recorded · not recorded⟩
+  The library was not set to check the answer's names and numbers.  ⟨howSure.evidence.off@1 · library · not-applicable⟩
+Anything wrong:
+  None of the checks this report looks for applies to this answer.  ⟨wrong.notApplicable@1 · library · not-applicable⟩
+In one line (unknown): None of the checks this report looks for applies to this answer.  ⟨library⟩

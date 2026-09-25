@@ -1,0 +1,19 @@
+You asked:
+  This answer continued after a pause. The message, as the run held it: “go”  ⟨asked.resumed@1 · library · recorded⟩
+It understood:
+  This app does not route questions to skills.  ⟨understood.notConfigured@1 · library · not-applicable⟩
+It checked:
+  It asked to run act; a person was asked and declined.  ⟨checked.declined@1 · library · recorded⟩
+  Anything run before the pause is not in this record.  ⟨checked.beforePause.none@1 · library · not-recorded · before a pause — not in this record⟩
+It did not check:
+  What the tools run before the pause did not check is not in this record.  ⟨notChecked.beforePause@1 · library · not-recorded · before a pause — not in this record⟩
+It found:
+  act did not run, so it found nothing.  ⟨found.declined@1 · library · recorded⟩
+How sure:
+  The record does not rate how sure this answer is.  ⟨howSure.standing.none@1 · library · not-recorded · not recorded⟩
+  The library was not set to check the answer's names and numbers.  ⟨howSure.evidence.off@1 · library · not-applicable⟩
+Anything wrong:
+  1 tool call did not run cleanly: 0 failed, 0 refused by a rule, 1 declined by a person, 0 not run.  ⟨wrong.errors@1 · library · recorded⟩
+  None of the checks this report looks for applies to this answer.  ⟨wrong.notApplicable@1 · library · not-applicable⟩
+  Anything before the pause is not in this record, so these checks cover only the part after it.  ⟨wrong.beforePause@1 · library · not-recorded · before a pause — not in this record⟩
+In one line (unknown): This answer continued after a pause; what happened before the pause is not in this record.  ⟨library⟩

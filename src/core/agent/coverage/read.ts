@@ -25,6 +25,7 @@ import {
   tryInsteadOfAbsence,
   tryInsteadToolOfAbsence,
 } from './absent.js';
+import { listsWithoutRecordOnly } from './items.js';
 import { coverageOfLedger, readCoverageLedger } from './ledger.js';
 import type { Coverage, ToolAbsence, TryInsteadTool } from './types.js';
 
@@ -74,6 +75,100 @@ export interface CoverageReading {
   /** In declaration order: the outer ledger first, then the absence it
    *  wraps. Usually one entry; two only when an author bounded an absence. */
   readonly declared: readonly CoverageFacts[];
+}
+
+/**
+ * The value the MODEL is served for one finalized tool result: a recognized
+ * envelope with `short` and `kind` removed from every coverage item. They are
+ * RECORD-ONLY: the events, the tracked `coverageDeclared` rows and the answer
+ * account carry them; the model's request never does, so a tool that
+ * declares them costs no request byte.
+ *
+ * The shapes, and nesting: a bare absence; a ledger — its own lists AND
+ * whatever it bounds, read by this same function (so `coverage(absent(…))`,
+ * `coverage(coverage(…))` and a semantic envelope under a ledger are all
+ * served stripped; the depth is whatever the author built); and a semantic
+ * envelope's `coverage`.
+ *
+ * NOT stripped, because none is a recognized envelope OBJECT: a result
+ * returned as JSON TEXT (an `mcpClient` result in its default text mode is
+ * one), an `af_absent` whose `checked` is empty or missing (the recognizer
+ * refuses it, so it is ordinary data — served and recorded as written), and
+ * an absence buried inside a tool's own domain object or array. A key whose
+ * value is `null` counts as omitted (a JSON producer's `None`), so it is
+ * served as written and stamps nothing.
+ *
+ * Zero-cost when unused: the SAME reference back for every value that is not
+ * a recognized envelope, and for every envelope whose items declare neither
+ * key — so a caller that stamps `tool_end.modelResult` by reference
+ * inequality stamps nothing new. A structural copy only when a key was
+ * present.
+ *
+ * Asked at the ENTRY of `../stages/toolCalls.ts` · `afterMoment`, which every
+ * dispatch path (the batch loop and the four resume doors) calls for a result
+ * that ran — so every after-tool link is handed the served value, and none
+ * can re-serve the fields — and by the result ceiling and the column judge at
+ * both execute boundaries, which measure what the model will read.
+ */
+export function servedToModel(value: unknown): unknown {
+  const served = strip(value);
+  // Remembered, so the placement door can tell "the two channels differ
+  // only by this strip" (one value, one ticket) from "a rule changed what
+  // the model reads" — see `strippedOnly`.
+  if (served !== value && typeof served === 'object' && served !== null) {
+    STRIPPED_FROM.set(served, value);
+  }
+  return served;
+}
+
+/** served copy → the value it was stripped from. Weak: never holds a result
+ *  past the call that produced it. */
+const STRIPPED_FROM = new WeakMap<object, unknown>();
+
+/**
+ * True when `modelResult` is exactly what {@link servedToModel} produced from
+ * `result` — the two channels carry ONE value and differ only by the
+ * record-only fields. `../stages/toolCalls.ts` · `placeResults` then gives
+ * both channels the ticket, as it does when they are one reference, so a
+ * declaring tool never keeps its whole payload on `tool_end.result`.
+ */
+export function strippedOnly(result: unknown, modelResult: unknown): boolean {
+  if (typeof modelResult !== 'object' || modelResult === null) return false;
+  return STRIPPED_FROM.has(modelResult) && STRIPPED_FROM.get(modelResult) === result;
+}
+
+/**
+ * Pure: the served form of `value`, and nothing remembered (the answer account
+ * reads through this; the dispatch door asks {@link servedToModel}, which also
+ * records the pair for `strippedOnly`).
+ *
+ * `seen` guards a ledger that bounds ITSELF (`v.result = v`, directly or
+ * further down): a holder met twice is returned as found, so a pathological
+ * cycle is served as written instead of overflowing the stack.
+ */
+export function strip(value: unknown, seen: WeakSet<object> = new WeakSet()): unknown {
+  if (typeof value === 'object' && value !== null) {
+    if (seen.has(value)) return value;
+    seen.add(value);
+  }
+  const absence = readAbsence(value);
+  if (absence !== undefined) return listsWithoutRecordOnly(absence);
+  const sem = readSemantics(value);
+  if (sem !== undefined) {
+    // Defensive at the dispatch door: `declareSemantics` has already replaced
+    // a top-level semantic envelope with `semanticsForModel`, which drops the
+    // three-list coverage detail, before `afterMoment` runs. It is reached for
+    // a semantic envelope a LEDGER bounds, and by a direct caller.
+    if (sem.coverage === undefined) return value;
+    const cov = listsWithoutRecordOnly(sem.coverage);
+    return cov === sem.coverage ? value : { ...(value as object), coverage: cov };
+  }
+  const covered = readCoverageLedger(value);
+  if (covered === undefined) return value;
+  const marker = listsWithoutRecordOnly(covered.af_coverage);
+  const result = strip(covered.result, seen);
+  if (marker === covered.af_coverage && result === covered.result) return value;
+  return { ...covered, af_coverage: marker, result };
 }
 
 const ABSENT_STATUS: ToolResultStatus = 'absent';

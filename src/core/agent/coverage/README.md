@@ -188,21 +188,114 @@ returned it.
   name included, off `tools.absent` (the sentence is read on its own), while a
   coverage item's `why` is served as the envelope holds it.
 
-### Waiting for its reader: `notChecked[].kind`
+### `short` and `kind` — for the person reading the report, never for the model
 
-The same design (§ 5.2) names a second typed field, written there as
-`notChecked: [{ kind: 'existence' | 'window' | …, subject?, why }]` — so that
-"existence was not checked" is a KIND rather than a phrase inside `what`.
-**Neither `kind` nor `subject` is shipped.** A field ships only when a reader
-in the same release reads it, and nothing in this release branches on either.
-The reader that would earn them is the assessment's `existence-not-checked`
-reason: an EXISTENCE claim (`exists: false`) on `.claims()` joined to an
-envelope's `notChecked[].kind === 'existence'` — and neither the claim class
-nor the assessment exists yet. Until then `notChecked[].what` stays prose,
-which a lens may print verbatim and nothing joins. When that reader lands, the
-fields land with it: validated at `absent()` / `coverage()` time like `why`,
-carried on both events, read by the join — and never inferred from `what`.
-How the design's item sits beside today's `{ what, why? }` is decided then.
+A coverage item's `what` is written for the MODEL and for an engineer: it
+names the tables it read ("vDisk and vm_rdm_map: every VM disk in the RVTools
+export dated 2026-09-19"). A person reading a report of the answer wants the
+same ground in five words, and wants to know whether an unchecked item is the
+one that matters most — whether the thing asked about exists at all. Two
+optional item fields say so, and the answer account
+(`lib/answer-account` · `accountForAnswer`) is their reader:
+
+- **`short`** — a short plain form of `what`. At most 80 characters, one line,
+  never longer than `what`; allowed in every section.
+- **`kind`** — what kind of ground an UNCHECKED item is: `'existence'`
+  (whether the thing asked about exists, or is the kind of thing the question
+  assumes) or `'scope'` (a population, family or source outside what this tool
+  reaches). On `notChecked` and `cannotCover` only — refused on `checked`.
+
+```ts
+return absent({
+  what: 'a VM disk in the RVTools export attributed to the array asked',
+  checked: [{ what: 'vDisk and vm_rdm_map: every VM disk in the RVTools export dated 2026-09-19',
+              short: 'every VM disk in the RVTools export of 2026-09-19' }],
+  notChecked: [
+    { what: 'whether that name is a storage array, and which VM disks are on it',
+      short: 'whether that name is a storage array', kind: 'existence', why: '…' },
+    { what: 'hosts that are not VMware — AIX LPARs and physical servers',
+      short: 'hosts that are not VMware', kind: 'scope', why: '…' },
+  ],
+});
+```
+
+A tool in another language puts the same two keys on the envelope's items,
+under the snake_case lists (`checked` / `not_checked` / `cannot_cover`):
+
+```python
+{"af_absent": True, "outcome": "nothing_found", "looked_for": "…",
+ "checked": [{"what": "…", "short": "every VM disk in the RVTools export of 2026-09-19"}],
+ "not_checked": [{"what": "…", "short": "whether that name is a storage array",
+                  "kind": "existence", "why": "…"}],
+ "retry_returns_the_same": True,
+ "note": ABSENCE_NOTE}  # your copy of the note, read from canonical-notes.json
+```
+
+Emit `short` / `kind` only when the item has one — a `"short": None` is read
+as omitted, but it is bytes the model is served for nothing.
+
+The laws:
+
+- **Record-only.** Both reach the events (`tools.absent`,
+  `tools.coverage_declared`), the tracked `coverageDeclared` rows and the
+  account — never the model's request. `read.ts` · `servedToModel` removes
+  them from every recognized envelope OBJECT: a bare absence, and a ledger —
+  its own lists and, recursively, whatever it bounds (an absence, another
+  ledger, a semantic envelope). `../stages/toolCalls.ts` · `afterMoment` asks
+  it FIRST, so all five dispatch paths strip and every after-tool link is
+  handed the served value. (A top-level semantic envelope is already reduced
+  to `semanticsForModel`, which drops the coverage detail, before
+  `afterMoment` runs — the semantic branch is defensive there, and live for a
+  semantic envelope a ledger bounds.)
+- **One value, measured and placed as served.** The tool's own ceiling and
+  the column judge (`refuseOverCeiling`, `judgeColumns`) measure the SERVED
+  value, so declaring the fields never tips a result into a refusal. Where
+  the two channels differ only by the strip, `tool_end.modelResult` is
+  stamped and the envelope rides the record twice (the envelope's size —
+  about 4 KB for a typical absence, more for a ledger around a big payload);
+  under placement that difference is ONE value (`read.ts` · `strippedOnly`)
+  and both channels carry the one ticket. A tool that declares neither gets
+  the same reference back: no stamp, no new byte (pinned against the
+  pre-change tree by `test/core/agent/coverage-record-only-fields.test.ts`).
+- **Not stripped — say so, never assume.** A result returned as JSON TEXT
+  (an `mcpClient` result in its default text mode is one), an `af_absent`
+  whose `checked` is empty (unrecognized, so it is data — served and recorded
+  as written), and an absence inside a tool's own domain object. And
+  `mcpServe` does not strip, by ruling: it carries the tool's own answer to
+  ANOTHER host, whose agentfootprint door (with `mcpClient` in
+  `resultMode: 'structured'`) records and strips them itself; a foreign
+  client's model, or an agentfootprint client in text mode, WILL read them.
+- **Reserved names, `null` omitted.** On a recognized envelope's items,
+  `short` and `kind` are reserved: any non-null value under either is
+  removed from the served value, valid or not (the record keeps only a valid
+  one). `null` counts as omitted on BOTH sides — served as written, recorded
+  as nothing, no stamp — but emit the key only when it has a value.
+- **One rule set, two doors.** `absent()` / `coverage()` refuse a bad value
+  where it was written (`items.ts` · `normalizeCoverageList`). An envelope
+  minted elsewhere is read by `items.ts` · `readItemExtras`: a valid value is
+  copied, an invalid one DROPPED — read, never repaired — with one dev warning
+  per tool name per PROCESS. A Python author never sees that warning, so
+  validate at the call site too. "One line" is one shared rule
+  (`lib/plainLine.ts` · `plainLineProblem`, also asked for a skill `title`):
+  no control (`\p{Cc}`), line or paragraph separator (`\p{Zl}`, `\p{Zp}`)
+  or invisible format character (`\p{Cf}` — bidi overrides, zero-width
+  characters), checked BEFORE the length, so 80 characters is 80 a person
+  sees.
+- **Never evidence.** `evidence.ts` withholds both beside `looked_for`. `short`
+  is the field an author is most tempted to personalise, and a true short form
+  restates `what`, so nothing is lost. **Never interpolate the caller's
+  arguments into `short`.**
+- **Never inferred.** No `short` → a report prints the full `what`. No `kind` →
+  no kind is claimed, and the account's existence check says it cannot tell.
+- **The first declared wins on a repeat.** Identity stays `what` + `why`
+  (`items.ts` · `sameItem`), so two equal items that differ only in `short`
+  or `kind` fold to the FIRST one in `mergeItems` — which is what a band folding
+  `coverageDeclared` shows. The per-call events keep each call's own.
+- **A closed union, never switched on exhaustively.** Every library switch
+  over `kind` keeps a `default` arm (pinned), so a later member (`'window'` is
+  the named candidate) is additive for producers.
+- **The limits block is unchanged** — `answer.ts` · `renderSection` prints
+  `what` and `why` only.
 
 ## 4. A lookup that pauses still declares what it looked at (9.114.0)
 
