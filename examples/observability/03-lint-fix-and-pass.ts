@@ -23,7 +23,7 @@
  * prose, so we run with MOCK_EMBEDDER_CALIBRATION. Note how the fixed
  * twins land in the WATCH band rather than far apart — that's the
  * mock's floor, not the descriptions'; a real embedder separates them
- * decisively (see docs/guides/tool-catalog-lint.md).
+ * decisively (see https://agentfootprint.dev/docs/debug/tool-catalog-lint/).
  *
  * Run:  npx tsx examples/observability/03-lint-fix-and-pass.ts
  * CI:   npx agentfootprint-lint-tools tools.json --threshold 0.94 --strict

@@ -58,7 +58,7 @@ chart, recording *which labeled rule fired and the exact conditions*
 The hash chain is tamper-**evident**, not tamper-**proof**: an adversary
 holding the only copy can recompute every hash from a mutation onward and
 present a self-consistent forgery. The documented threat model
-([docs/guides/security.md](../../docs/guides/security.md)) therefore says to
+([audit bundle threat model](https://agentfootprint.dev/docs/monitor/exporters/#tamper-evident-audit-bundle)) therefore says to
 anchor **both chain ends** externally — here a second file (`anchor.json`)
 stands in for a WORM bucket / RFC 3161 timestamp / second party:
 

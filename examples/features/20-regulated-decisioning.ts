@@ -28,7 +28,7 @@
  * BOTH chain ends are anchored externally (here: a second file standing in
  * for a WORM store / second party): the final hash AND the genesis
  * identity (runId + record-0 hash), per the documented threat model in
- * docs/guides/security.md.
+ * https://agentfootprint.dev/docs/monitor/exporters/#tamper-evident-audit-bundle
  *
  * Deterministic scripted mock provider — no API key needed.
  *

@@ -26,7 +26,7 @@
  * the report's RANKED section (relative ordering) is the signal to
  * trust — with a real embedder, calibrate confusabilityThreshold once
  * and absolute verdicts become meaningful (see
- * docs/guides/tool-catalog-lint.md).
+ * https://agentfootprint.dev/docs/debug/tool-catalog-lint/).
  *
  * Run:  npx tsx examples/observability/02-lint-confusable-catalog.ts
  * CI:   npx agentfootprint-lint-tools tools.json --threshold 0.94
