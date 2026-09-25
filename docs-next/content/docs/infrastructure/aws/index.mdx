@@ -47,7 +47,9 @@ status honestly is.
 | **Bedrock embeddings** | `bedrockEmbedder()` | `agentfootprint/providers` | `@aws-sdk/client-bedrock-runtime` | `InvokeModel` | Shipped | [Embedders](doc:embedders) |
 | **Actor on every event** (`EventMeta.principal` / `.tenant`) | `run({ identity })` — no adapter | `agentfootprint` (main) | none | — | Shipped (9.11.0); **identical on both provider columns** | [Observability sinks](doc:observability-sinks) |
 | **Control plane** (all `Create*`) | — | — | — | — | 🔴 Bridge it yourself — AWS SDK or CDK | — |
-| **Code Interpreter / Browser** | — | — | — | — | 🔴 Bridge it — wrap as a `defineTool` or an MCP tool | [Tools](doc:tools) |
+| **AgentCore Evaluations** | `agentCoreEvaluationSpans` — a configuration of `otelObservability` | `agentfootprint/observe` | your OpenTelemetry tracer | — (spans; delivering them to CloudWatch is yours) | Shipped | [Observability sinks](doc:observability-sinks) |
+| **AgentCore Code Interpreter** | `agentCoreCodeRunner` behind the `CodeRunner` port | `agentfootprint/providers` | `@aws-sdk/client-bedrock-agentcore` | `StartCodeInterpreterSession`, `InvokeCodeInterpreter`, `StopCodeInterpreterSession` | Shipped; contract-mapped and injection-tested | [Tools & gateways](doc:tools-and-gateways) |
+| **AgentCore Browser** | `agentCoreBrowser` behind the `BrowserRunner` port, incl. the human takeover | `agentfootprint/providers` | `@aws-sdk/client-bedrock-agentcore` | `StartBrowserSession`, `InvokeBrowser`, `UpdateBrowserStream`, `StopBrowserSession` | Shipped; contract-mapped and injection-tested | [Tools & gateways](doc:tools-and-gateways) |
 
 <Callout type="warn" title="What each status label means, exactly">
 **Really verified** is used for one row only: `agentCoreRuntimeHost` is plain
@@ -204,6 +206,32 @@ export remains and refuses at construction with the whole explanation.
 For rules you own, use `PermissionPolicy.fromRoles(...)` as the `permissionChecker`, or the
 `.toolMiddleware()` chain for conditional ones. See
 **[AgentCore adapters](doc:agentcore-adapters)**.
+
+## Evaluations — AWS scores it, the trace explains it
+
+AgentCore Evaluations scores an agent from its OpenTelemetry spans, and it scores agents
+that don't run on AWS too — as long as the spans reach CloudWatch and match its contract.
+`agentCoreEvaluationSpans` is the configuration that makes yours match:
+
+```ts
+import { agentCoreEvaluationSpans } from 'agentfootprint/observe';
+
+agent.enable.observability({ strategy: agentCoreEvaluationSpans({ serviceName: 'support-agent' }) });
+```
+
+It is `otelObservability` with three settings fixed for you:
+
+- the instrumentation scope name the service routes on (`AGENTCORE_EVALUATIONS_SCOPE_NAME`) — not overridable, because an override would produce spans the service skips;
+- `captureContent` on — the turn's prompt and answer go on the agent span, so a scorer has something to read;
+- `captureToolContent` on — each executed tool call's arguments and result go on its `execute_tool` span, for the tool-selection and tool-parameter scorers. Arguments your `onToolCall` rules changed are withheld; the result is what the model read after your `onToolResult` rules.
+
+Gotchas:
+
+- **Content on a span is an export of content.** Pass `captureContent: false` or `captureToolContent: false` to withhold either — and accept that the matching scorers then have nothing to grade.
+- **Shipping the spans is yours.** An OTLP exporter with AWS's documented headers, or a runtime that exports for you.
+- **It doesn't replace your own scoring.** Their evaluators say *what* the score is; the agentfootprint trace says *why*. A low tool-selection score is only a number until you can see what context the choice was made from — see [Localize a context bug](doc:localize-context-bug), which starts from your own `QualityRecorder` score.
+
+More on the span shape: **[Observability sinks](doc:observability-sinks)**.
 
 ## Observability — `agentcoreObservability`
 
@@ -416,7 +444,16 @@ agentfootprint is runtime-only, so these are yours:
 
 - **Control plane** — every `Create*` (Runtime, Memory, Gateway, WorkloadIdentity, policy
   store) via SDK / CDK.
-- **Code Interpreter**, **Browser** — wrap as tools (`defineTool` or an MCP server) for now.
+- **Getting spans to CloudWatch** for Evaluations — an OTLP exporter with AWS's documented
+  headers, or a runtime that exports for you. `agentCoreEvaluationSpans` shapes the spans;
+  it does not ship them.
+- **Page work in the Browser** — navigating, finding elements and filling forms go over the
+  session's CDP endpoint with Playwright or another CDP client. `agentCoreBrowser` hands you
+  that endpoint; it does not drive the page.
+- **Proof against live AWS.** Every adapter here that calls an AWS SDK is contract-mapped and
+  injection-tested; no test in this repo reaches AWS. The exception is the two
+  `agentCoreSessions` modes, which a production integration has run against the real
+  service. Confirm command and field names against the SDK version you install.
 
 The **Runtime host** used to be on this list. It is not any more —
 `agentCoreRuntimeHost()` + `agentCoreSessions()` are the `:8080` `/ping` +

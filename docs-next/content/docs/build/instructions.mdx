@@ -195,6 +195,59 @@ much room is left rather than on a raw iteration number that means nothing on it
 own. They arrive **paired**: both present, or neither. A count without a
 denominator is the fabrication the pairing exists to prevent.
 
+## Always-on rules — use Steering, not a conditional Instruction
+
+A rule that must hold on **every** turn — compliance, content policy, output format —
+shouldn't depend on a predicate at all. Use `defineSteering`, which is always on:
+
+```ts
+import { Agent } from 'agentfootprint';
+import { defineSteering } from 'agentfootprint/context';
+
+const compliance = defineSteering({
+  id: 'compliance',
+  prompt: 'GDPR compliance required. Never expose raw PII in your final answer.',
+});
+
+const agent = Agent.create({ provider, model }).steering(compliance).build();
+```
+
+The reason is how a predicate fails. **A predicate that throws is fail-open**: the
+Instruction is *skipped* for that iteration, not forced on. That is the right default for
+a nice-to-have rule and the wrong one for a rule you can never afford to miss. Steering
+(or `defineInstruction` with no `activeWhen`, which is always-on too) has no predicate to
+throw.
+
+Every skip is on the record. `agentfootprint.context.evaluated` fires each iteration with
+the active ids and a `skippedDetails` entry — `reason: 'predicate-threw'` plus the error —
+for each Instruction that was skipped:
+
+```ts
+agent.on('agentfootprint.context.evaluated', (e) => {
+  for (const s of e.payload.skippedDetails) console.warn(`${s.id} skipped: ${s.reason} ${s.error ?? ''}`);
+});
+```
+
+Wire that listener before you ship — "which rules actually fired on that turn?" is the
+first question an auditor asks. Runnable: [`examples/context-engineering/03-steering.ts`](https://github.com/footprintjs/agentfootprint/blob/main/examples/context-engineering/03-steering.ts).
+
+## One predicate, four trigger kinds
+
+You only ever write one predicate shape — `(ctx: InjectionContext) => boolean` — but
+each factory produces one of four underlying `InjectionTrigger` kinds:
+
+| You write | Trigger kind | Active when |
+|---|---|---|
+| `defineInstruction({ activeWhen })` | `rule` | the predicate returns `true` this iteration |
+| `defineInstruction({ … })` with no `activeWhen`, or `defineSteering(…)` | `always` | every iteration |
+| an `Injection` built with `{ kind: 'on-tool-return', toolName }` | `on-tool-return` | a tool matching `toolName` (a string, or a `RegExp`) just returned |
+| `defineSkill(…)` | `llm-activated` | the model called `read_skill` for that skill |
+
+In practice the `on-tool-return` case is usually written as a `rule` predicate that reads
+`ctx.lastToolResult`, as in the section above — same effect, one fewer shape to learn.
+`agentfootprint.context.evaluated` also reports `triggerKindCounts`, so you can see how
+many of each kind were active on a given turn.
+
 ## Anti-patterns
 
 - ❌ **Don't put dynamic state in the predicate's closure** — it's evaluated per iteration, with fresh `ctx`. Reading from `ctx` is correct; capturing a `let counter` in the closure is racy.

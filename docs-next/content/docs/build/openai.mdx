@@ -112,6 +112,38 @@ Interplay with `streamUsage`: a non-legacy endpoint already asks for
 for endpoints that stay legacy — this flag changes nothing about what either of
 its values does.
 
+## A credential that expires — pass `apiKey` as a function
+
+Some OpenAI-compatible endpoints take a short-lived OAuth or Entra token rather than a
+durable key — Vertex AI's OpenAI-compatible endpoint, or any OAuth-fronted gateway. A
+**string** `apiKey` is read once, when the provider is built, so a process that lives
+longer than the token starts failing with 401s. Pass a **function** instead:
+
+```ts
+import { openai } from 'agentfootprint/providers';
+
+const provider = openai({
+  baseURL: 'https://…/openapi',
+  // Called before every request; return the current token.
+  apiKey: async () => (await client.getAccessToken()).token ?? '',
+});
+```
+
+What it does, exactly:
+
+- The function is called **once per request**, before the request is built.
+- The SDK client is rebuilt **only when the returned string changed**, so a cached token costs one function call.
+- **A stream keeps the key it started with** — nothing can re-authenticate a socket that is already open.
+- Expiry is **your function's business**. The adapter doesn't decode or schedule anything; it asks every time and uses the answer. An empty answer is refused with an error — throw from the function if the token fetch failed, so the reason reaches you.
+
+`openai()`, `gemini()` and `foundry()` accept a function here. `anthropic()`, `ollama()`
+and the browser providers take a plain string. For an Azure-shaped endpoint, prefer the
+`credential` option on `azureOpenai()` (below) or `foundry()`: the token is minted per
+request with no callback of yours to keep correct.
+
+Runnable: [`examples/features/60-gemini-field-truths.ts`](https://github.com/footprintjs/agentfootprint/blob/main/examples/features/60-gemini-field-truths.ts)
+(the refreshable-key part) · the Vertex AI walkthrough is on [Google Cloud](doc:google-cloud).
+
 ## Azure OpenAI
 
 An Azure resource is not a drop-in OpenAI-compatible URL: it uses a
