@@ -368,6 +368,36 @@ export class ArtifactNotFoundError extends Error {
 }
 
 /**
+ * Refused when one session already has as many artifact operations in flight
+ * as the host allows (`standingAgent({ artifactOpsPerSession })`, default 8) —
+ * `artifact-head`, `artifact-get` and `answer-account` counted together.
+ *
+ * Those ops are lane-free and turn admission does not see them, so without a
+ * bound one session could keep the event loop every session shares busy with
+ * payload reads. The refusal is for THIS session only (every other session is
+ * served), it names no session id, and the same request succeeds once one of
+ * the session's own requests has finished.
+ */
+export class ArtifactOpsBusyError extends Error {
+  readonly code = 'ERR_ARTIFACT_OPS_BUSY' as const;
+  /** The per-session bound that was met. */
+  readonly limit: number;
+
+  constructor(op: 'head' | 'get' | 'account', limit: number) {
+    super(
+      `[hosting] ${artifactOpSpelling(
+        op,
+      )} was refused: the requesting session already has ${limit} ` +
+        `artifact operations in flight, which is as many as this host allows at once. Retry ` +
+        `when one has finished — redeem a few at a time — or raise ` +
+        `standingAgent({ artifactOpsPerSession }).`,
+    );
+    this.name = 'ArtifactOpsBusyError';
+    this.limit = limit;
+  }
+}
+
+/**
  * Refused when an `answer-account` request names a recording larger than the
  * host's ceiling (`standingAgent({ answerAccounts: { maxRecordingBytes } })`,
  * default 16 MiB).

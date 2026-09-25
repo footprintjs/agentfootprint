@@ -23,10 +23,10 @@
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { Agent, inMemoryArtifacts, recordingPutInput } from '../../src/index.js';
-import type { ArtifactStore } from '../../src/index.js';
+import type { ArtifactMeta, ArtifactScope, ArtifactStore } from '../../src/index.js';
 import { mock } from '../../src/llm-providers.js';
 import { accountForAnswer, answerAccountPointerKey } from '../../src/observe.js';
 import { showLeaves } from '../../src/lib/answer-account/shown.js';
@@ -34,6 +34,7 @@ import { ANSWER_ACCOUNT_TEMPLATE_SET_VERSION } from '../../src/lib/answer-accoun
 import {
   answerAccounts,
   ANSWER_ACCOUNT_CACHE_MAX_BYTES,
+  deepFreeze,
 } from '../../src/hosting/answerAccounts.js';
 import { memorySessions, standingAgent } from '../../src/hosting/index.js';
 import type {
@@ -147,6 +148,61 @@ async function putFlagship(store: ArtifactStore, sessionId: string): Promise<str
 /** An agent that serves a store and never needs to run. */
 const storeAgent = (store: ArtifactStore) =>
   Agent.create({ provider: mock({ reply: 'ok' }), model: 'm', artifacts: store }).build();
+
+/**
+ * A store whose `get` in ONE conversation waits until released — so a test can
+ * hold that session's artifact ops in flight while another session is served.
+ */
+function gatedStore(gatedConversation: string) {
+  const inner = inMemoryArtifacts();
+  let release: () => void = () => undefined;
+  const opened = new Promise<void>((resolve) => (release = resolve));
+  let waiting = 0;
+  const store: ArtifactStore = {
+    ...inner,
+    put: (scope, input) => inner.put(scope, input),
+    head: (scope, ref) => inner.head(scope, ref),
+    get: async (scope, ref) => {
+      if (scope.conversationId === gatedConversation) {
+        waiting += 1;
+        await opened;
+      }
+      return inner.get(scope, ref);
+    },
+    delete: (scope, ref) => inner.delete(scope, ref),
+    list: (scope, options) => inner.list(scope, options),
+  };
+  return { store, release: () => release(), waiting: () => waiting };
+}
+
+/** A store that tells the truth about everything except `bytes`. */
+function underReportingStore(claimed: number) {
+  const inner = inMemoryArtifacts();
+  const lie = (meta: ArtifactMeta): ArtifactMeta => ({ ...meta, bytes: claimed });
+  let gets = 0;
+  const store: ArtifactStore = {
+    ...inner,
+    put: (scope, input) => inner.put(scope, input),
+    head: async (scope: ArtifactScope, ref) => {
+      const meta = await inner.head(scope, ref);
+      return meta === null ? null : lie(meta);
+    },
+    get: async (scope: ArtifactScope, ref) => {
+      gets += 1;
+      const record = await inner.get(scope, ref);
+      return record === null ? null : { ...record, meta: lie(record.meta) };
+    },
+    delete: (scope, ref) => inner.delete(scope, ref),
+    list: (scope, options) => inner.list(scope, options),
+  };
+  return { store, gets: () => gets };
+}
+
+/** Wait until `check()` holds, or fail after ~2 s. */
+async function until(check: () => boolean): Promise<void> {
+  for (let i = 0; i < 200 && !check(); i++) await new Promise((r) => setTimeout(r, 10));
+  expect(check()).toBe(true);
+}
 
 // ─── The opt-in ──────────────────────────────────────────────────────
 
@@ -342,6 +398,33 @@ describe('answer-account — the record', () => {
     expect(events()).toHaveLength(0);
   });
 
+  it('a store that UNDER-REPORTS bytes: the payload’s real size is refused (413) before any parse, and never cached', async () => {
+    const { store, gets } = underReportingStore(10);
+    const { host } = await served(storeAgent(store), {
+      extra: { answerAccounts: { maxRecordingBytes: 1_000 } },
+    });
+    const ref = await putFlagship(store, 's-1');
+    const parse = vi.spyOn(JSON, 'parse');
+    try {
+      const replies = await Promise.all([explain(host, 's-1', ref), explain(host, 's-1', ref)]);
+      for (const got of replies) {
+        expect(got.code).toBe('ERR_RECORDING_TOO_LARGE_FOR_ACCOUNT');
+        expect(got.error).toContain('1000 bytes');
+      }
+      // Joined: one read. And nothing over the ceiling ever reached JSON.parse.
+      expect(gets()).toBe(1);
+      const bigParses = parse.mock.calls.filter(
+        ([text]) => typeof text === 'string' && text.length > 1_000,
+      );
+      expect(bigParses).toHaveLength(0);
+    } finally {
+      parse.mockRestore();
+    }
+    // Not cached: the next request reads again.
+    expect((await explain(host, 's-1', ref)).code).toBe('ERR_RECORDING_TOO_LARGE_FOR_ACCOUNT');
+    expect(gets()).toBe(2);
+  });
+
   it('an unreadable recording is the one not-found, and is never cached', async () => {
     const { store, counts } = countingStore();
     const { host } = await served(storeAgent(store), { extra: { answerAccounts: {} } });
@@ -427,7 +510,10 @@ describe('answer-account — the cache and the one fact', () => {
     const { store, counts } = countingStore();
     const agent = storeAgent(store);
     const events = artifactEventsOf(agent);
-    const { host } = await served(agent, { extra: { answerAccounts: {} } });
+    const { host } = await served(agent, {
+      // Above the per-session in-flight bound's default (8): this pins the join.
+      extra: { answerAccounts: {}, artifactOpsPerSession: 16 },
+    });
     const ref = await putFlagship(store, 's-1');
 
     const replies = await Promise.all(Array.from({ length: 10 }, () => explain(host, 's-1', ref)));
@@ -546,8 +632,96 @@ describe('answerAccounts — the cache key and the bounds (unit)', () => {
     }).toThrow(TypeError);
   });
 
+  it('deepFreeze recurses into an object that is already (shallowly) frozen, and ends a cycle', () => {
+    const inner = { editable: 1 };
+    const shallow = Object.freeze({ inner });
+    const cyclic: Record<string, unknown> = { shallow };
+    cyclic.self = cyclic;
+    deepFreeze(cyclic);
+    expect(Object.isFrozen(cyclic)).toBe(true);
+    expect(Object.isFrozen(inner)).toBe(true);
+    expect(() => {
+      inner.editable = 2;
+    }).toThrow(TypeError);
+  });
+
   it('bounds the whole cache by bytes too', () => {
     expect(ANSWER_ACCOUNT_CACHE_MAX_BYTES).toBe(8 * 1024 * 1024);
+  });
+});
+
+// ─── The per-session in-flight bound (artifact ops together) ────────
+
+describe('artifact ops — a per-session in-flight bound (429)', () => {
+  it('over the bound, ONE session is refused by name while another session is served', async () => {
+    const gate = gatedStore('s-busy');
+    const { host } = await served(storeAgent(gate.store), {
+      extra: { answerAccounts: {}, artifactOpsPerSession: 2 },
+    });
+    const busyRef = await putFlagship(gate.store, 's-busy');
+    const calmRef = await putFlagship(gate.store, 's-calm');
+
+    // Two ops in flight on s-busy — one get, one account — held at the store.
+    const held = [
+      host.deliver({ sessionId: 's-busy', artifact: { op: 'get', ref: busyRef } }),
+      explain(host, 's-busy', busyRef),
+    ];
+    await until(() => gate.waiting() === 2);
+
+    // A third, of any kind — head included — is refused, and names no session.
+    for (const op of ['head', 'get', 'account'] as const) {
+      const over = await host.deliver({ sessionId: 's-busy', artifact: { op, ref: busyRef } });
+      expect(over.code).toBe('ERR_ARTIFACT_OPS_BUSY');
+      expect(over.error).toContain('artifactOpsPerSession');
+      expect(over.error).not.toContain('s-busy');
+    }
+    // Another session is served meanwhile.
+    expect(bodyOf(await explain(host, 's-calm', calmRef)).account.kind).toBe(
+      'agentfootprint/answer-account',
+    );
+
+    gate.release();
+    const [got, account] = await Promise.all(held);
+    expect(got.error).toBeUndefined();
+    expect(bodyOf(account).account.kind).toBe('agentfootprint/answer-account');
+    // The slots came back: s-busy is served again.
+    const again = await host.deliver({
+      sessionId: 's-busy',
+      artifact: { op: 'head', ref: busyRef },
+    });
+    expect(again.error).toBeUndefined();
+  });
+
+  it('a caller refused at ownership spends no slot and is told not-found, never busy', async () => {
+    const gate = gatedStore('sA');
+    const agent = recordingAgent(gate.store);
+    const recordings = recordingsOf(agent);
+    const { host } = await served(agent, {
+      verify: true,
+      extra: { answerAccounts: {}, artifactOpsPerSession: 1 },
+    });
+    const ref = await answeredTurn(host, recordings, 'sA', ALICE);
+    const alice = explain(host, 'sA', ref, ALICE);
+    await until(() => gate.waiting() === 1);
+    const bob = await explain(host, 'sA', ref, BOB);
+    expect(bob.code).toBe('ERR_ARTIFACT_NOT_FOUND');
+    gate.release();
+    expect(bodyOf(await alice).account.kind).toBe('agentfootprint/answer-account');
+  });
+
+  it('refuses a bound that cannot mean anything at boot; Infinity is the explicit “no bound”', async () => {
+    const boot = (value: number) =>
+      standingAgent({
+        agent: storeAgent(inMemoryArtifacts()),
+        sessions: memorySessions(),
+        host: filingHost(),
+        artifactOpsPerSession: value,
+      });
+    await expect(boot(0)).rejects.toThrow(/artifactOpsPerSession/);
+    await expect(boot(1.5)).rejects.toThrow(/artifactOpsPerSession/);
+    await expect(boot(Number.NaN)).rejects.toThrow(/artifactOpsPerSession/);
+    const unbounded = await boot(Number.POSITIVE_INFINITY);
+    await unbounded.close();
   });
 });
 
@@ -638,6 +812,7 @@ describe('answer-account — the import fence (no model is called)', () => {
         '../lib/answer-account/types.js',
         '../recorders/observability/recordRun.js',
         './artifactWire.js',
+        './errors.js',
         'node:crypto',
       ].sort(),
     );

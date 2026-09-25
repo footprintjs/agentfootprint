@@ -183,6 +183,63 @@ describe('answer-account over HTTP — the door guard runs first (security)', ()
   });
 });
 
+// ─── The per-session in-flight bound, over HTTP ─────────────────────
+
+describe('artifact ops over HTTP — the per-session bound answers 429', () => {
+  it('a session over its bound gets 429 ERR_ARTIFACT_OPS_BUSY; another session gets 200', async () => {
+    const inner = inMemoryArtifacts();
+    let release: () => void = () => undefined;
+    const opened = new Promise<void>((resolve) => (release = resolve));
+    let waiting = 0;
+    const store: ArtifactStore = {
+      ...inner,
+      put: (scope, input) => inner.put(scope, input),
+      head: (scope, ref) => inner.head(scope, ref),
+      get: async (scope, ref) => {
+        if (scope.conversationId === 's-busy') {
+          waiting += 1;
+          await opened;
+        }
+        return inner.get(scope, ref);
+      },
+      delete: (scope, ref) => inner.delete(scope, ref),
+      list: (scope, options) => inner.list(scope, options),
+    };
+    const handle = await standingAgent({
+      agent: Agent.create({
+        provider: mock({ reply: 'ok' }),
+        model: 'm',
+        artifacts: store,
+      }).build(),
+      sessions: memorySessions(),
+      host: nodeHost({ port: 0, hostname: '127.0.0.1' }),
+      answerAccounts: true,
+      artifactOpsPerSession: 1,
+    });
+    open.push(handle);
+    const busyRef = await putRecording(store, 's-busy', fixtureA());
+    const calmRef = await putRecording(store, 's-calm', fixtureA());
+    const json = (session: string) => ({
+      'content-type': 'application/json',
+      'x-session-id': session,
+    });
+
+    const held = send(handle.port, { headers: json('s-busy'), body: opBody(busyRef) });
+    for (let i = 0; i < 200 && waiting === 0; i++) await new Promise((r) => setTimeout(r, 10));
+    expect(waiting).toBe(1);
+    const over = await send(handle.port, {
+      headers: json('s-busy'),
+      body: JSON.stringify({ op: 'artifact-head', ref: busyRef }),
+    });
+    expect(over.status).toBe(429);
+    expect(JSON.parse(over.body).code).toBe('ERR_ARTIFACT_OPS_BUSY');
+    const calm = await send(handle.port, { headers: json('s-calm'), body: opBody(calmRef) });
+    expect(calm.status).toBe(200);
+    release();
+    expect((await held).status).toBe(200);
+  });
+});
+
 // ─── The grammar ─────────────────────────────────────────────────────
 
 describe('answer-account over HTTP — the grammar', () => {

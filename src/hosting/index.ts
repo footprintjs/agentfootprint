@@ -144,6 +144,7 @@ export {
 export { standingAgent } from './standingAgent.js';
 
 export {
+  DEFAULT_ARTIFACT_OPS_PER_SESSION,
   DEFAULT_MAX_ACTIVE_SESSIONS,
   DEFAULT_SWEEP_LIMIT,
   TURN_ARTIFACTS_TIMEOUT_MS,
@@ -164,6 +165,7 @@ export {
   NoArtifactStoreError,
   ArtifactNotFoundError,
   ArtifactNotCarriedError,
+  ArtifactOpsBusyError,
   RecordingTooLargeForAccountError,
   TurnArtifactsExpiredError,
   IdentityNotVerifiedError,

@@ -1383,6 +1383,7 @@ regenerate"). Never a blank pane.
 | `ERR_INVALID_WIRE_OP` | 400 | an `op` this host does not speak, or a known op without `ref`. **A body that named an `op` never falls through to a model turn** — a typo'd redemption silently becoming a billed conversation turn is the failure this refusal exists to prevent |
 | `ERR_NO_ARTIFACT_STORE` | 501 | the serving agent has no store — the refusal names the attach: `Agent.create({ …, artifacts })` |
 | `ERR_ARTIFACT_NOT_CARRIED` | 501 | the ref resolved but this host/wire cannot describe the result (`reply.artifact` / the wire's `artifact` body shape is missing) |
+| `ERR_ARTIFACT_OPS_BUSY` | 429 | this session already has `artifactOpsPerSession` artifact ops in flight (default 8) — retry when one finishes |
 
 Each row throws a named class exported from `agentfootprint/hosting`, carrying
 the same `code` shown above for an adapter that would rather catch by class
@@ -1398,6 +1399,14 @@ Three more facts worth knowing:
   is refused as a run — a screen describing a chart while the model is
   mid-turn is served immediately, and a session *awaiting a decision* still
   redeems (history reload re-draws panes while the question is outstanding).
+- **So it is bounded per session instead.** Turn admission never sees these
+  ops, so `artifact-head`, `artifact-get` and `answer-account` count together
+  against `standingAgent({ artifactOpsPerSession })` — default
+  `DEFAULT_ARTIFACT_OPS_PER_SESSION` (8) in flight at once. The next one from
+  that session is refused with `ArtifactOpsBusyError` (429) while every other
+  session is served. It is counted after the ownership check, so a stranger
+  cannot spend your slots; `Infinity` switches it off. A screen redrawing many
+  panes should redeem a few at a time.
 - **On the record, once.** Every wire redemption rides the *existing*
   `agentfootprint.artifacts.resolved` / `artifacts.refused` events on the
   serving agent — with no `tool` field, because the redeemer was the hosting
@@ -1468,7 +1477,8 @@ what leaves the server, never widen who sees it. What it adds:
   even when its account is cached.
 - **A stated ceiling.** A recording over `maxRecordingBytes` is refused with
   `RecordingTooLargeForAccountError` (`ERR_RECORDING_TOO_LARGE_FOR_ACCOUNT`,
-  413) before any of it is read. The parse runs on the event loop every
+  413) before any of it is read — the ticket's `bytes` first, then the
+  payload's real size before any parse. The parse runs on the event loop every
   session shares, and the ceiling bounds the worst one: on a 5.3 MB field
   recording the parse costs about 6 ms and the account plus "show me" under
   1 ms warm (3.4 ms the first time).
@@ -1487,6 +1497,7 @@ what leaves the server, never widen who sees it. What it adds:
 | `{ account, shown }` | 200 | the answer was explained |
 | `ERR_ARTIFACT_NOT_FOUND` | 404 | missing, expired, swept, another person's, not a recording, or unreadable |
 | `ERR_RECORDING_TOO_LARGE_FOR_ACCOUNT` | 413 | the recording is over the host's ceiling |
+| `ERR_ARTIFACT_OPS_BUSY` | 429 | this session already has `artifactOpsPerSession` artifact ops in flight |
 | `ERR_INVALID_WIRE_OP` | 400 | not a ref, a key the op does not read — or a host that did not opt in |
 
 ### Filing for a turn — `reply.turnArtifacts`

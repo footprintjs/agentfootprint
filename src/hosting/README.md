@@ -169,7 +169,18 @@ session a request NAMED, the artifact door refuses a `ref` that is not a ref
 verifying door, answers a session the caller cannot open (`mayOpenSession`, or
 for a first turn still in flight, the caller it is serving) with the one
 not-found — nothing emitted, no lane built. At a door with no verifier the
-session id is the key, by law. Redemptions stay lane-free.
+session id is the key, by law. Redemptions stay lane-free — and are therefore
+BOUNDED per session instead: `artifact-head`, `artifact-get` and
+`answer-account` count together against `artifactOpsPerSession` (default
+`DEFAULT_ARTIFACT_OPS_PER_SESSION`, 8), counted after the ownership check, and
+the next one is refused with `ArtifactOpsBusyError` (429) while every other
+session is served. Turn admission never sees these ops, so this is their only
+bound.
+
+```ts
+await standingAgent({ agent, sessions, host, artifactOpsPerSession: 4 });
+// a 5th concurrent artifact op from one session → 429 ERR_ARTIFACT_OPS_BUSY
+```
 
 Typed input pauses use the existing `decision` transport for `{requestId,
 values}` and expose `PendingAsk.awaitingInput`. Partial replies persist the
@@ -197,7 +208,8 @@ only narrow what leaves, never widen who sees it. After ownership, in order:
    is cached;
 2. not a `recording/run` → the one not-found; over `maxRecordingBytes`
    (default 16 MiB) → `RecordingTooLargeForAccountError` (413), before a byte
-   of the payload is read;
+   of the payload is read — and again on the payload's REAL size before any
+   parse, since a store may under-report `bytes`;
 3. the cache (`(scope, ref, template-set version, declarations digest)`, 32
    entries and 8 MiB) — a hit reads and emits nothing more;
 4. single-flight: one computation per key, joined by concurrent requests; its

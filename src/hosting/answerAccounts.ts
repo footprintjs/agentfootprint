@@ -41,6 +41,7 @@ import { ANSWER_ACCOUNT_TEMPLATE_SET_VERSION } from '../lib/answer-account/templ
 import type { AnswerAccountDeclarations } from '../lib/answer-account/types.js';
 import type { Recording } from '../recorders/observability/recordRun.js';
 import type { AnswerAccountWireBody } from './artifactWire.js';
+import { RecordingTooLargeForAccountError } from './errors.js';
 
 /**
  * Opt in to the `answer-account` wire op — `standingAgent({ answerAccounts })`.
@@ -99,8 +100,9 @@ export interface AnswerAccounts {
   /**
    * Compute (or join the computation of) the answer for `key`. `load` runs at
    * most once per concurrent key and returns `null` when the record is not
-   * available. Resolves `null` for anything that cannot be explained — never
-   * cached.
+   * available. Resolves `null` for anything that cannot be explained, and
+   * rejects with `RecordingTooLargeForAccountError` when the payload in hand is
+   * over the ceiling whatever its ticket said — neither is ever cached.
    */
   compute(
     key: string,
@@ -176,6 +178,12 @@ export function answerAccounts(options: AnswerAccountsOptions | true): AnswerAcc
       const leader = (async (): Promise<AnswerAccountWireBody | null> => {
         const loaded = await load();
         if (loaded === null) return null;
+        // The ceiling again, on the bytes actually in hand (the branch checked
+        // the ticket's `bytes` before the read; a store may under-report).
+        const bytes = payloadBytes(loaded.data);
+        if (bytes !== undefined && bytes > maxRecordingBytes) {
+          throw new RecordingTooLargeForAccountError(maxRecordingBytes);
+        }
         const body = explainRecording(loaded, declarations);
         if (body !== null) remember(key, body);
         return body;
@@ -235,13 +243,31 @@ function readRecording(data: unknown): Recording | null {
 }
 
 /**
+ * @internal Exported for its test.
+ *
  * Freeze what the cache hands out. The same object is served to every reader
  * of that answer; a host that edited one reply would otherwise edit the next.
  */
-function deepFreeze<T>(value: T): T {
-  if (typeof value !== 'object' || value === null || Object.isFrozen(value)) return value;
-  for (const child of Object.values(value as Record<string, unknown>)) deepFreeze(child);
-  return Object.freeze(value);
+export function deepFreeze<T>(value: T, seen: WeakSet<object> = new WeakSet()): T {
+  if (typeof value !== 'object' || value === null || seen.has(value)) return value;
+  seen.add(value);
+  // Recurse even into an object that is ALREADY frozen: a shallow freeze
+  // (a library value, a future constant) would otherwise leave mutable
+  // children in the shared cache. The `seen` set ends a cycle.
+  for (const child of Object.values(value as Record<string, unknown>)) deepFreeze(child, seen);
+  return Object.isFrozen(value) ? value : Object.freeze(value);
+}
+
+/**
+ * The payload's REAL size in bytes, never the ticket's word for it — a custom
+ * store that under-reports `meta.bytes` must not walk a huge payload into
+ * `JSON.parse`. `undefined` for an already-parsed object (nothing left to
+ * parse; the store paid that cost).
+ */
+function payloadBytes(data: unknown): number | undefined {
+  if (typeof data === 'string') return Buffer.byteLength(data, 'utf8');
+  if (data instanceof Uint8Array) return data.byteLength;
+  return undefined;
 }
 
 /** The declarations' CONTENT, independent of key order — the cache key's last part. */

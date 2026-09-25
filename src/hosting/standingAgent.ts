@@ -129,6 +129,7 @@ import {
 import {
   AdmissionRefusedError,
   ArtifactNotCarriedError,
+  ArtifactOpsBusyError,
   ArtifactNotFoundError,
   ArtifactSessionRequiredError,
   AwaitingDecisionError,
@@ -160,7 +161,11 @@ import type {
   StandingAgentOptions,
   SessionLifecycle,
 } from './types.js';
-import { DEFAULT_MAX_ACTIVE_SESSIONS, TURN_ARTIFACTS_TIMEOUT_MS } from './types.js';
+import {
+  DEFAULT_ARTIFACT_OPS_PER_SESSION,
+  DEFAULT_MAX_ACTIVE_SESSIONS,
+  TURN_ARTIFACTS_TIMEOUT_MS,
+} from './types.js';
 import type { Agent, AgentRunOptions } from '../core/Agent.js';
 import type { MemoryIdentity } from '../memory/identity/types.js';
 
@@ -364,6 +369,25 @@ export async function standingAgent<TH extends HostHandle>(
     options.answerAccounts === undefined || options.answerAccounts === false
       ? undefined
       : answerAccounts(options.answerAccounts);
+  // How many artifact ops (head / get / answer-account) one session may have
+  // in flight at once. A bound that can never be met, or never fire, is
+  // refused here; `Infinity` is the explicit "no bound".
+  const artifactOpsPerSession = options.artifactOpsPerSession ?? DEFAULT_ARTIFACT_OPS_PER_SESSION;
+  if (
+    artifactOpsPerSession !== Number.POSITIVE_INFINITY &&
+    (!Number.isInteger(artifactOpsPerSession) || artifactOpsPerSession < 1)
+  ) {
+    throw new Error(
+      `[hosting] standingAgent was given artifactOpsPerSession: ${String(
+        options.artifactOpsPerSession,
+      )}. It is how many artifact operations (artifact-head, artifact-get, ` +
+        `answer-account) one session may have in flight at once, so it has to be a ` +
+        `positive whole number — or Infinity for no bound. Drop it for the default ` +
+        `(${DEFAULT_ARTIFACT_OPS_PER_SESSION}).`,
+    );
+  }
+  /** Session id → artifact ops in flight right now. An entry at zero is removed. */
+  const artifactOpsInFlight = new Map<string, number>();
   const maxActiveSessions = options.maxActiveSessions ?? DEFAULT_MAX_ACTIVE_SESSIONS;
   if (factory !== undefined && (!Number.isInteger(maxActiveSessions) || maxActiveSessions < 1)) {
     throw new Error(
@@ -952,11 +976,23 @@ export async function standingAgent<TH extends HostHandle>(
       reply.fail(new ArtifactNotFoundError(op.ref));
       return;
     }
+    // The per-session bound (after ownership, so a stranger can never spend
+    // someone else's slots): artifact ops are lane-free and turn admission
+    // does not see them, so without it one session could keep the event loop
+    // every session shares busy with payload reads and parses. Refused by
+    // name, never queued — a screen retries; a queue would only move the wait.
+    const busy = artifactOpsInFlight.get(sessionId) ?? 0;
+    if (busy >= artifactOpsPerSession) {
+      reply.fail(new ArtifactOpsBusyError(op.op, artifactOpsPerSession));
+      return;
+    }
     const lane = laneFor(sessionId);
     // Admitted for the duration: a lane with work is never evicted, and a
     // resolution mid-flight is work — retiring the instance under it would
     // tear down the very store being read.
     lane.admitted += 1;
+    // Counted with no await since the check above, so a burst cannot all pass it.
+    artifactOpsInFlight.set(sessionId, busy + 1);
     try {
       const store = lane.agent.getArtifactStore();
       if (store === undefined) {
@@ -1020,6 +1056,9 @@ export async function standingAgent<TH extends HostHandle>(
     } finally {
       lane.admitted -= 1;
       lane.lastUsedMs = Date.now();
+      const left = (artifactOpsInFlight.get(sessionId) ?? 1) - 1;
+      if (left <= 0) artifactOpsInFlight.delete(sessionId);
+      else artifactOpsInFlight.set(sessionId, left);
     }
   }
 
@@ -1037,7 +1076,8 @@ export async function standingAgent<TH extends HostHandle>(
    *     kind change cannot be masked.
    *  2. **Kind, then size** — not a `recording/run` → the ONE not-found (and
    *     nothing was emitted); over the ceiling → the named 413, before a byte
-   *     of the payload is read. Both before the cache: neither can ever have
+   *     of the payload is read (and again, by the service, on the payload's
+   *     REAL size before any parse — a store may under-report `bytes`). Both before the cache: neither can ever have
    *     an entry there (failures are never cached; the ceiling is per host).
    *  3. **The cache, then single-flight** — a hit reads nothing more and emits
    *     nothing; a miss starts or joins the ONE computation for its key.
@@ -1072,7 +1112,7 @@ export async function standingAgent<TH extends HostHandle>(
       (await service.compute(key, async () => {
         const record = await bound.get(ref);
         if (record === null || record.meta.kind !== RECORDING_ARTIFACT_KIND) return null;
-        if (record.meta.bytes > service.maxRecordingBytes) return null;
+        // The payload's REAL size is checked by the service before any parse.
         const runId = record.meta.origin?.runId;
         return { data: record.data, ...(runId !== undefined && { runId }) };
       }));

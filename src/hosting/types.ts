@@ -1399,7 +1399,29 @@ export interface StandingAgentBaseOptions<TH extends HostHandle = HostHandle> {
    *   } });
    */
   readonly answerAccounts?: AnswerAccountsOptions | boolean;
+  /**
+   * How many artifact operations — `artifact-head`, `artifact-get` and
+   * `answer-account`, counted together — ONE session may have in flight at
+   * once. Default {@link DEFAULT_ARTIFACT_OPS_PER_SESSION} (8).
+   *
+   * Artifact ops are lane-free (they never wait behind a run) and turn
+   * admission does not see them, so this is their bound: a session over it is
+   * refused with `ArtifactOpsBusyError` (`ERR_ARTIFACT_OPS_BUSY`, 429) while
+   * every other session is served. Counted after the ownership check, so a
+   * stranger cannot spend another session's slots. A screen that redraws many
+   * panes at once should redeem them a few at a time, or raise this.
+   * `Infinity` means no bound; anything else must be a positive whole number.
+   */
+  readonly artifactOpsPerSession?: number;
 }
+
+/**
+ * How many artifact operations one session may have in flight by default —
+ * enough for a screen redrawing a handful of panes, too few for one session
+ * to crowd the event loop every session shares. See
+ * {@link StandingAgentBaseOptions.artifactOpsPerSession}.
+ */
+export const DEFAULT_ARTIFACT_OPS_PER_SESSION = 8;
 
 /** How many sessions a `agentFactory` pool holds before it evicts the least
  *  recently used one. See {@link StandingAgentPoolOptions.maxActiveSessions}. */
