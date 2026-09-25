@@ -5,6 +5,17 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [9.116.1] - 2026-09-25
+
+### Changed
+
+- **Agents that don't use `.findings()` no longer bundle its answer-text
+  scanner.** The scanner that strips `_findings` notes from the answer and the
+  token stream (`findings/answerText.ts`) is now loaded on first use, only
+  when `.findings()` is on — the way the findings judge already loads. A browser
+  or edge bundle of a plain agent is about 3 KB gzip smaller. Behaviour is
+  unchanged for findings agents.
+
 ## [9.116.0] - 2026-09-25
 
 ### Added
