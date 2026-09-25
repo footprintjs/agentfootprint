@@ -1,4 +1,0 @@
----
-type: security
----
-**One session can no longer crowd the artifact door: a per-session in-flight bound, answered 429.** `artifact-head`, `artifact-get` and `answer-account` are lane-free — they never wait behind a run — and turn admission (`admission: { decide }`) does not see them, so until now one session could keep the event loop every session shares busy with payload reads and parses. They now count together against `standingAgent({ artifactOpsPerSession })` (default `DEFAULT_ARTIFACT_OPS_PER_SESSION`, 8): a request over it is refused with `ArtifactOpsBusyError` (`ERR_ARTIFACT_OPS_BUSY`, 429) while every other session is served, and the same request succeeds once one of that session's own requests has finished. It is counted AFTER the ownership check, so a stranger cannot spend another session's slots; `Infinity` switches it off. A screen that redraws many panes at once should redeem them a few at a time, or raise the bound.
