@@ -378,7 +378,7 @@ describe('providerFromEnv()', () => {
   });
 
   it('{ fallbackToMock: true } still reaches the mock under an injected endpoint', () => {
-    // The documented escape hatch (docs/guides/adapters.md, examples/features/
+    // The documented escape hatch (https://agentfootprint.dev/docs/build/custom-provider/, examples/features/
     // 16-providers.ts, and this function's own @example). A throw above the
     // mock return would make the contract line "or returns the mock when
     // { fallbackToMock: true }" false in a configuration the PLATFORM creates

@@ -59,6 +59,42 @@ For mock-first development of MCP integrations without spawning a subprocess, us
 
 The other direction is [`mcpServe(tools)`](doc:mcp-serve) — expose the tools you already wrote AS an MCP server, so another team's agent or a desktop MCP host can call them.
 
+## A procedure, or another agent, as one tool
+
+Sometimes the thing the model should call is bigger than a function — a multi-step
+procedure, or a whole specialist agent.
+
+- **A footprintjs flowchart** → [`runbookAsTool`](doc:runbook-as-tool) wraps it as one tool, and every answer carries what the procedure did and did not check. (The older [`flowchartAsTool`](doc:flowchart-as-tool) still works.)
+- **Another agent** → call its `run()` from a plain tool:
+
+```ts
+import { Agent, defineTool } from 'agentfootprint';
+import { mock } from 'agentfootprint/providers';
+
+const translator = Agent.create({ provider: mock({ reply: 'Hola, ¿cómo estás?' }), model: 'mock' })
+  .system('Translate the message to Spanish. Reply with the translation only.')
+  .build();
+
+const translate = defineTool<{ text: string }, string>({
+  name: 'translate',
+  description: 'Translate text to Spanish. Returns the translation only.',
+  inputSchema: { type: 'object', properties: { text: { type: 'string' } }, required: ['text'] },
+  execute: async ({ text }, ctx) => {
+    const out = await translator.run({ message: text }, ctx.signal ? { env: { signal: ctx.signal } } : undefined);
+    if (typeof out !== 'string') throw new Error('The translator paused; it cannot ask a person from inside a tool.');
+    return out;
+  },
+});
+```
+
+Gotchas:
+
+- **One run at a time per agent instance.** A second `run()` on an agent that is already running throws `RunInFlightError`. If two callers can reach the same specialist at once, build one per caller.
+- **The inner run is its own run.** The outer trace records one `translate` call; what the translator did is on `translator.getLastNarrativeEntries()` and its own events.
+- **A pause does not cross the tool boundary.** Handle the non-string outcome, as above.
+- **Hand-offs are a different shape.** When the specialist should *take over the conversation* rather than answer one question, use [`swarm()`](doc:swarm).
+- **Remote agents.** There is no built-in client for calling another team's agent over A2A; call its endpoint from `execute` like any other HTTP API. The other direction — letting other agents call yours over A2A — ships as `agentCoreA2AHost` (see [AgentCore adapters](doc:agentcore-adapters)).
+
 ## Argument validation — a declared shape is an enforced shape (9.64.0)
 
 Before a call is dispatched, its arguments are checked against the tool's own

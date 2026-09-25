@@ -33,7 +33,7 @@ These pages are the **rationale** behind the library design — they're written 
 - Library evaluators comparing frameworks at the architectural level
 - People who want to learn from the same sources we learned from
 
-If you just want to use the library, start at [`docs/guides/quick-start.md`](../guides/quick-start.md) instead. The inspiration pages are not required reading.
+If you just want to use the library, start at [the quick start](https://agentfootprint.dev/docs/getting-started/quick-start/) instead. The inspiration pages are not required reading.
 
 ## Why these two pillars together
 

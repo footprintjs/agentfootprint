@@ -165,6 +165,23 @@ and advances on resume. Full walkthrough in [Skills → Steps as
 data](doc:skills#steps-as-data-steps-9180); runnable end-to-end in
 `examples/context-engineering/16-skill-steps.ts`.
 
+## Before you ship
+
+Everything above runs on `mock()`. Moving to a real provider is a deployment step, not
+a one-line swap — this is the short list:
+
+| Concern | What to add |
+|---|---|
+| **A real provider** | `anthropic()` / `openai()` / `bedrock()` … from `agentfootprint/providers` in place of `mock()`, or `providerFromEnv()` to pick from your `.env` |
+| **Spend caps** | `maxIterations` bounds the loop and `maxTokens` caps each reply; add a `pricingTable` + `costBudget` to `Agent.create({ … })` — `costBudget: { usd: 0.5, onExceed: 'halt' }` stops the run at the next boundary |
+| **Cancellation** | `agent.run({ message }, { env: { signal: controller.signal } })` — the signal also reaches every tool as `ctx.signal` |
+| **Retries on rate limits** | Wrap the *provider*: `withRetry(provider)` from `agentfootprint/resilience` — see [Resilience](doc:resilience) |
+| **Which tools may run** | A `gatedTools(...)` source passed to `.toolProvider(...)` — see [Tool providers](doc:tool-providers) and [Security](doc:security) |
+| **An audit trail** | Typed `agent.on(...)` listeners, or `agent.enable.observability({ strategy })` — see [Observability](doc:observability) |
+
+The full production checklist (tenant identity, peer dependencies, secrets, pause/resume
+storage) is in [Deployment](doc:deployment).
+
 ## Next steps
 
 - **[Key concepts](doc:key-concepts)** — the 2 + 3 + N + Context Engineering + Memory mental model

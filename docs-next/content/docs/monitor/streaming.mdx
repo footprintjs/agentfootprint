@@ -31,6 +31,92 @@ The event taxonomy:
   - Since 9.54.0 this also moves the **live status line**: a top-level string `message` is shown verbatim (cut at 120 characters, cut stated), anything else renders an honest generic line — never a payload dump. See [Tools → What a person sees](doc:tools).
 - `stream.tool_end` — tool returned (result or error)
 
+Every event arrives as an envelope `{ type, payload, meta }`. `e.payload` is typed by the event name you subscribed to; `e.meta` says where it came from (`runId`, `runtimeStageId`, `turnIndex`, `iterIndex`, `wallClockMs`, …). `.on()` returns an unsubscribe function, and `'agentfootprint.stream.*'` / `'*'` subscribe to a whole domain or to everything — see [Observability](doc:observability) for the full taxonomy.
+
+### Token events follow the provider
+
+There is no streaming switch. If the provider has a `stream()` method, the agent uses it and fires one `stream.token` per text chunk. If it only has `complete()`, you get every other event — turn and iteration framing, `llm_start` / `llm_end`, `tool_start` / `tool_end` — just no `stream.token`. The same subscriber code works with either kind of provider.
+
+## The order events arrive in
+
+One `agent.run()` is one **turn**. A turn holds one or more **iterations**; each iteration is one LLM call followed by the tools it asked for:
+
+```
+agent.turn_start
+  agent.iteration_start
+    stream.llm_start → stream.token* → stream.llm_end
+    stream.tool_start → stream.tool_end      (once per requested tool)
+  agent.iteration_end
+  agent.iteration_start
+    stream.llm_start → stream.token* → stream.llm_end   (no tool calls: final answer)
+  agent.iteration_end
+agent.turn_end
+```
+
+A real two-iteration run that calls one tool, then answers:
+
+```
+agent.turn_start       { turnIndex: 0, userPrompt: 'Check order ORD-1003' }
+agent.iteration_start  { turnIndex: 0, iterIndex: 1 }
+stream.llm_start       { iteration: 1, provider, model, messagesCount, toolsCount }
+stream.token           { iteration: 1, tokenIndex: 0, content: "I'll " }
+stream.token           { iteration: 1, tokenIndex: 1, content: 'look it up' }
+stream.llm_end         { iteration: 1, content: "I'll look it up", toolCallCount: 1, usage, stopReason, durationMs }
+stream.tool_start      { toolName: 'lookup_order', toolCallId: 'tc-1', args: { orderId: 'ORD-1003' } }
+stream.tool_end        { toolCallId: 'tc-1', result: '…', durationMs: 42 }
+agent.iteration_end    { turnIndex: 0, iterIndex: 1, toolCallCount: 1 }
+agent.iteration_start  { turnIndex: 0, iterIndex: 2 }
+stream.llm_start       { iteration: 2, … }
+stream.token …
+stream.llm_end         { iteration: 2, toolCallCount: 0, content: 'Your order was denied…' }
+agent.iteration_end    { turnIndex: 0, iterIndex: 2, toolCallCount: 0 }
+agent.turn_end         { turnIndex: 0, finalContent: 'Your order was denied…', iterationCount: 2, totalInputTokens, totalOutputTokens, durationMs }
+```
+
+(All names carry the `agentfootprint.` prefix; it is dropped above for width.) Iterations count from 1, turns from 0. `agentfootprint.error.fatal` fires instead of a clean ending when a run fails.
+
+## Parallel tool calls
+
+When the model asks for several tools in one reply, each `stream.tool_start` carries `parallelCount` — how many calls that reply requested. It is absent when there was only one. The tools run one after another in the order the model listed them, so every `tool_start` is followed by its own `tool_end` before the next begins. Key your UI rows by `toolCallId` (both events carry it; only `tool_start` carries the name):
+
+```ts
+const rows = new Map<string, { name: string; startedAt: number; endedAt?: number }>();
+
+agent.on('agentfootprint.stream.tool_start', (e) => {
+  rows.set(e.payload.toolCallId, { name: e.payload.toolName, startedAt: Date.now() });
+});
+agent.on('agentfootprint.stream.tool_end', (e) => {
+  const row = rows.get(e.payload.toolCallId);
+  if (row) row.endedAt = Date.now();
+});
+```
+
+## Pause events
+
+When a tool asks for a human (`pauseHere(...)` / `askHuman(...)`), the stream stops mid-turn: that tool's `tool_start` is followed by `agentfootprint.pause.request` — no `tool_end`, no `turn_end` — and `agent.run()` returns a paused outcome (`{ paused: true, checkpoint, pauseData }`) instead of a string. `agent.resume(...)` fires `agentfootprint.pause.resume`, then the paused tool's `tool_end` and the rest of the turn stream as usual.
+
+```ts
+import { isPaused } from 'agentfootprint';
+
+agent.on('agentfootprint.pause.request', (e) => {
+  showApprovalPrompt(e.payload.questionPayload); // what the tool asked, plus toolName / toolCallId
+});
+
+const outcome = await agent.run({ message: 'Refund this order' });
+if (isPaused(outcome)) {
+  // store outcome.checkpoint (it is JSON), then later — even in another process:
+  const answer = await agent.resume(outcome.checkpoint, { approved: true });
+}
+```
+
+For a chat UI this means: end the SSE stream on `pause.request` too, not only on `turn_end`. Runnable end to end: [`examples/features/01-pause-resume.ts`](https://github.com/footprintjs/agentfootprint/blob/main/examples/features/01-pause-resume.ts).
+
+## A throwing listener never breaks the run
+
+Listeners are isolated. If an `.on()` handler throws, the error is caught, the other listeners for that event still fire, and the agent carries on — a bug in your UI code cannot fail the run. The flip side: nobody tells you. With footprintjs dev mode on (`enableDevMode()` from `footprintjs`) the error is logged to the console; otherwise it is swallowed silently, so wrap anything important in your own `try/catch`.
+
+Listeners are also never awaited. An `async` listener runs in the background, and the run does not wait for it — collect the promises and await them after `run()` if you need them finished.
+
 ## SSE for browser clients
 
 The fastest path is the built-in `toSSE()` helper from `agentfootprint/observe`. Hand it the runner and it yields SSE-formatted strings (`event: <name>\ndata: <json>\n\n`) until the run finishes — drop it into any HTTP framework that accepts an async-iterable body:

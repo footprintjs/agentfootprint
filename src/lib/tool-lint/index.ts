@@ -14,7 +14,7 @@
  *   - `defaultStructuralRules` + rule factories — the rule pack (C2)
  *   - `runToolLintCli` / bin `agentfootprint-lint-tools` — the gate (C3)
  *
- * Front-door guide: docs/guides/tool-catalog-lint.md
+ * Front-door guide: https://agentfootprint.dev/docs/debug/tool-catalog-lint/
  */
 
 export type {

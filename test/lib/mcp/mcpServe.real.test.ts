@@ -464,7 +464,7 @@ describe('mcpServe over a real streamable-HTTP transport', () => {
  * documents for a managed agent runtime?
  *
  * The contract, as written down HERE (`examples/deploy/README.md`,
- * `docs/guides/agentcore.md`, and the adapter's own header in
+ * https://agentfootprint.dev/docs/infrastructure/aws/agentcore/, and the adapter's own header in
  * `src/adapters/hosting/agentcore.ts`): `POST /invocations` taking
  * `{ "prompt" }` and answering `{ "response", "status" }`, `GET /ping`
  * answering a health body, both on `0.0.0.0:8080`, with the conversation id in

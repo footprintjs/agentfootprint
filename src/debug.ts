@@ -308,7 +308,7 @@ export {
 // library's Tool[] via catalogFromTools), a report with a gateable `ok`
 // out. Pluggable structural rule pack; thresholds + embedder consumer-
 // injected with our defaults. Bin: `agentfootprint-lint-tools`.
-// Front door: docs/guides/tool-catalog-lint.md.
+// Front door: https://agentfootprint.dev/docs/debug/tool-catalog-lint/
 export {
   analyzeToolCatalog,
   catalogFromTools,

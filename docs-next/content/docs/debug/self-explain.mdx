@@ -16,7 +16,7 @@ That's it. Day to day nothing changes — the agent runs with its production too
 `.selfExplain()` mounts **one skill**. Day to day the tool catalog carries only that skill's activation row — your production tools are untouched, and the model never sees the trace tools. When the user asks "why…", the LLM activates the skill (`read_skill`), and **that iteration alone** gains the trace tools, late-bound to the previous run:
 
 - `run_overview` — the catalog of what ran (steps, stages, loops, errors, honesty markers, and what the run cost)
-- `find_context_errors` — **what did this run contradict itself about?** The Context Integrity findings the library already caught, each with the step it was filed at and the drill that opens the state behind it. When no finding evidence was captured it says so — never "no errors found", and a green verdict is printed only when the checker rows sum to at least one *checked* encounter. Its `kind` filter offers exactly the classes this build ships a check for — `invariant-violation`, `dangling-reference`, `unsupported-argument`, `unsupported-claim`.
+- `find_context_errors` — **what did this run contradict itself about?** The Context Integrity findings the library already caught, each with the step it was filed at and the drill that opens the state behind it. When no finding evidence was captured it says so — never "no errors found", and a green verdict is printed only when the checker rows sum to at least one *checked* encounter. Its `kind` filter offers exactly the classes this build ships a check for (see [the tool reference](#find_context_errors--what-the-run-contradicted-itself-about) below).
 - `find_in_trace` — **free text in, step ids out.** The user's words ("order 7712") searched across stage names, state keys, every committed value and the narrative; each hit line ends with the exact call that opens it. The first move when the question names something you have no id for.
 - `trace_node` — inspect one step by id (its reads / writes / data + control parents / errors)
 - `who_wrote` — which step last wrote a value (backtrack a key to its source)
@@ -142,6 +142,123 @@ Mental model: **Causal memory pulls the right *run*; `.selfExplain()` drills the
 
 - **Needs `reactMode: 'dynamic'`** (the default) or `'dynamic-grouped'`. `'classic'` caches the tools slot on turn 1, so a mid-turn skill activation could never surface the trace tools — `.selfExplain()` **fails loud at build** rather than silently never answering. (Need it on a classic-mode agent? Run `traceDebugAgent()` as a separate session instead.)
 - **Reserved tool names.** Inline mode reserves all eleven names the pack can mount — `run_overview` / `find_context_errors` / `find_in_trace` / `trace_node` / `trace_slice` / `backtrack` / `who_wrote` / `get_value` / `inspect_tool_call` / `inspect_tool_run` / `read_narrative`; delegate mode reserves `explain_run`. The tools slot dedupes by name (first wins), so a consumer tool with one of those names would silently shadow the trace tool — `.build()` throws to stop it. The list is read from `TRACE_TOOL_NAMES` (the pack's own export) rather than retyped beside it, so it cannot fall behind the pack.
+
+## Without `.selfExplain()` — the toolpack and a dedicated debugger
+
+`.selfExplain()` is one of three doors over the same tools. The other two take the evidence of a completed run as a plain object — a `TraceToolpackArtifacts` bag — and work on any agent, including a `'classic'`-mode one:
+
+- `traceToolpack(artifacts, options?)` returns the raw tools. Mount them on any agent, or drive them from a script with `callTraceTool(tools, name, args)` — it validates the arguments against the tool's schema first, exactly as an Agent would, and returns the same correction string on a bad call instead of executing.
+- `traceDebugAgent({ artifacts, provider, model })` returns a ready `Agent` whose whole catalog is the toolpack and whose system prompt is the debugging method (overview → drill by id → cite evidence → respect ⚠). Options: `maxIterations` (default 8), `instruction` (appended to the method), `toolpack` (the bounding dials), `name`.
+
+```ts
+import { recordRun, openRecording, traceToolpack, callTraceTool, traceDebugAgent } from 'agentfootprint/observe';
+import { anthropic } from 'agentfootprint/providers';
+
+const recorder = recordRun(agent);
+await agent.run({ message: 'Approve loan APP-7' });
+const artifacts = openRecording(recorder.toRecording());   // { snapshot, events, … }
+
+// Scripted — the offline auditor pattern:
+const tools = traceToolpack(artifacts, { valueMaxChars: 4000 });
+console.log(await callTraceTool(tools, 'run_overview'));
+
+// Conversational — a cheap model, in a session of its own:
+const debuggerAi = traceDebugAgent({ artifacts, provider: anthropic(), model: 'claude-haiku-4-5' });
+await debuggerAi.run({ message: 'Why was loan APP-7 approved?' });
+```
+
+The bag has one required field and four optional ones. Each optional one switches on something, and a tool whose evidence is missing says so rather than answering emptily:
+
+| field | what it is | what it adds |
+|---|---|---|
+| `snapshot` | the run's snapshot (`agent.getLastSnapshot()`) | everything — the commit log and execution tree every tool reads |
+| `controlDeps` | footprintjs's `controlDepRecorder().asLookup()` from the run | `[control: rule]` edges in slices; without it, slices carry `⚠ control edges unavailable` |
+| `narrative` | the narrative lines | the `read_narrative` tool (it is not mounted without them) |
+| `events` | the run's typed events | `inspect_tool_call` durations and outcomes, and every `find_context_errors` finding |
+| `innerRuns` | the records chart tools kept (see [Wiring it by hand](#wiring-it-by-hand)) | `inspect_tool_run` |
+
+Runnable: [`examples/observability/01-trace-debug-session.ts`](https://github.com/footprintjs/agentfootprint/blob/main/examples/observability/01-trace-debug-session.ts) (scripted) and [`examples/observability/07-trace-debug-agent.ts`](https://github.com/footprintjs/agentfootprint/blob/main/examples/observability/07-trace-debug-agent.ts) (the dedicated debugger).
+
+## The tools, one by one
+
+Every step id is a `runtimeStageId` — `stageId#executionIndex`, for example `normalize#1`. The `#index` counts across the whole run, not per stage. It is the one key that links the commit log, the execution tree and the events, and every tool that takes a step accepts it.
+
+| tool | parameters | answers |
+|---|---|---|
+| `run_overview` | — | What happened, broadly: status, every stage (id, name, description), loop counts, where errors appeared, honesty notes, and cost when the run priced itself. **Start here.** |
+| `find_context_errors` | `kind?`, `limit?` (default 10, cap 25) | What did the run contradict itself about? The integrity findings already filed. |
+| `find_in_trace` | `query`, `maxHits?` (default 10, cap 25) | Where does this text appear? Free text in, step ids and keys out. |
+| `trace_node` | `runtimeStageId` | What did step X write (bounded previews plus true sizes), read, and where did its inputs come from? |
+| `trace_slice` | `runtimeStageId`, `key?`, `maxDepth?` (default 6, cap 20), `maxNodes?` (default 25, cap 100) | Which chain of steps produced the data at X, as an indented tree of drillable ids? |
+| `backtrack` | `variable`, `element?`, `before?`, `maxDepth?`, `maxNodes?` | Why is variable K what it is? No step id needed. `element` asks which step produced `K[i]`; `before` (a commit index) explains the value as it stood before that point. |
+| `who_wrote` | `key`, `beforeStageId?` | Which step last wrote K (optionally, strictly before step Y)? |
+| `get_value` | `runtimeStageId`, `key`, `maxChars?` (default 2000, cap 8000) | The full value of K as of step X. It works on delta commit logs. |
+| `inspect_tool_call` | `toolCallId` | One tool call, end to end. |
+| `inspect_tool_run` | `toolCallId`, `find?`, `variable?`, `runtimeStageId?`, `key?` | Inside one tool call, when the tool kept its own record. |
+| `read_narrative` | `offset?`, `maxLines?` (default 40, cap 200) | The run's story, one page at a time. |
+
+The defaults come from `TraceToolpackOptions` (`previewChars`, `sliceMaxDepth`, `sliceMaxNodes`, `valueMaxChars`), which you pass as the second argument to `traceToolpack` or as `toolpack` on `traceDebugAgent` and `.selfExplain()`. The caps are `TOOLPACK_HARD_CAPS`, and no argument can go past them.
+
+### `find_context_errors` — what the run contradicted itself about
+
+When an answer looks wrong, the cheapest move is to ask whether the library already caught the problem. Every [Context Integrity](doc:context-integrity) check files its findings on the run's event stream. This tool reads them. It never re-runs a check and never re-judges one. What it adds is the join: the step each finding was filed at, and the next call to make.
+
+```
+CONTEXT ERRORS — 1 finding(s) filed by this run's integrity checks (showing 1 of 1).
+
+[1] dangling-reference @compose · iteration 4 — 'screen_fire' is being offered while the
+    results that ground its arguments have left the window (whats_here) …
+    about: tool:screen_fire, tool:whats_here → find_in_trace('screen_fire')
+    filed at call-llm#88 → trace_node('call-llm#88') · trace_slice({ runtimeStageId: 'call-llm#88' })
+
+CHECKERS (posture: observe · …):
+- dangling-reference @compose: ran 6× · 6 finding(s) · not-applicable 3 (out of scope by rule)
+```
+
+(Abridged.) What to know:
+
+- **The checker rows are part of the answer.** "The checks ran and found nothing" and "no check was registered here" are different facts. A clean verdict is printed only when the rows add up to at least one *checked* encounter. If every encounter was out of scope or unreachable, the answer is **⚠ NOTHING WAS CHECKED**, with the reason.
+- **Absence has its own wording.** With no `events` in the bag, the tool reports *no finding evidence*, not a clean run. When the checker rows count findings the event tail no longer holds, it says **⚠ EVIDENCE MISSING**.
+- **`kind` offers only classes a check in this build can file:** `invariant-violation`, `unsupported-argument`, `dangling-reference`, `unsupported-claim`, `empty-lookup`, `column-type-mismatch`, `missing-column` and `prior-turn-evidence`. The finding type also names `duplicate-execution`, but nothing files it. The tool says so rather than answering "none found" about a class nobody checks.
+- **Findings are deduplicated when they are filed**, so a defect found again on a later iteration counts once. If the rows count more encounters than the list shows, the output says so.
+- **Findings are drillable.** The step a finding was filed at is a real `runtimeStageId`. An id that is not a step in this run is marked ⚠ instead of being offered as a drill.
+
+### `inspect_tool_call` — the four records, joined
+
+A tool call is spread across four records: the args the model *proposed* are on an assistant turn, the args it actually *ran with* are in the middleware ledger (only when a rule changed them), the result is a `role: 'tool'` turn, and the timing exists only in the event stream. This tool joins them for one `toolCallId`:
+
+```
+TOOL CALL c2 — check_inventory
+step: tool-calls#22 — drill with trace_node('tool-calls#22')
+proposed by the model: {"sku":"KB-88"}
+ran with: {"sku":"KB-88","limit":5} — CHANGED at before-tool by 'clamp-limit': "page size capped at 5"
+result: "Stock for KB-88: 12 units available…"
+outcome: ok
+duration: 4ms
+```
+
+The proposed/ran-with split is the reason it exists. A [middleware](doc:middleware) rule that rewrites args does not show up in the conversation: the model sees its own proposal in the history, and the tool ran with something else. Outcomes are `ok`, `error`, `denied` or `paused`. Without `events` in the bag, the line reads `duration: ⚠ unavailable` and explains that the commit log has no clock. An unknown id gets a correction that lists the ids this run actually recorded.
+
+For a tool that reached into someone else's system, the answer ends at the tool boundary — what went in and what came back. A tool can push that further by returning its own diagnostic refs (a request id, a log link), which travel through the trace like any other result. A chart tool with `keepRecord: true` goes further still: see [Through the tool boundary](#through-the-tool-boundary).
+
+## The contracts
+
+- **Bounded by default.** Previews are capped, slices have depth and node budgets, and values have character budgets. The model can raise a budget per call, but only up to `TOOLPACK_HARD_CAPS`. A value cut short says so: `⚠ truncated: served N of M chars`.
+- **Honest, never silent.** A truncated slice is marked, and so is a step that consumed inputs the commit log cannot see (run args, env, untracked reads). A missing `controlDeps` lookup, missing read tracking and values that never enter the commit log (pre-run state, values carried in closures) are named, not left out. `who_wrote` on a key with no tracked write says the value may have come from one of those places. It does not say "nothing wrote it".
+- **Redaction-respecting.** footprintjs scrubs the commit log at commit time. The tools pass the placeholders through as they are, flag the key `(redacted by policy)`, and never reconstruct around a redaction.
+- **Strict schemas.** On a small run (48 steps or fewer), step-id parameters carry an `enum` of every real step id, so a made-up id is rejected before the tool runs and the model corrects itself. Key parameters have **no** enum on purpose: a question about a key outside the commit log has an honest answer ("args, env and pre-run values never enter the commit log"), not a validation error. A bad id that gets through returns a correction naming the real steps.
+
+## Security posture
+
+Trace content can carry **adversarial text from the original run**. Tool results, retrieved documents and user input all pass through state, and these tools serve them back, bounded. Showing trace content to a model therefore shows it any prompt injection the run contained (see [Security](doc:security#prompt-injection--what-the-library-does-and-does-not-do)).
+
+- Prefer a **separate session over a completed run** — `traceDebugAgent`, or `.selfExplain({ delegate })` — to trace tools mounted on the production agent. Delegate mode keeps the trace walk out of the production context; only the bounded, cited answer comes back, as a tool result.
+- Treat what the tools return as **data, not instructions**. The bounded views limit how much comes back. They do not clean up what it says.
+- The toolpack never re-runs anything and holds no credentials. It is a read-only view over frozen artifacts.
+
+## Token economics
+
+[`examples/observability/01-trace-debug-session.ts`](https://github.com/footprintjs/agentfootprint/blob/main/examples/observability/01-trace-debug-session.ts) plants a wrong value (a debt-to-income ratio computed against annual instead of monthly income) that flows through a `decide()` decision. A scripted debugger finds the culprit step in 8 tool calls, served about 2.8K characters, against a full trace dump (snapshot JSON plus narrative) of about 29K — roughly a tenth. The gap grows with run size, because a session costs what the model *opens*, not what the run *produced*. The example prints its own numbers, so run it to see them for your build.
 
 ## Explaining a run that already finished
 

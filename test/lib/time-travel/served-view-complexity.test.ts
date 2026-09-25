@@ -164,5 +164,7 @@ describe('a per-epoch scrub', () => {
       drift,
       `overhead drifted ${drift.toFixed(2)}x from ${smallEpochs} to ${largeEpochs} epochs`,
     ).toBeLessThan(1.6);
-  });
+    // Three timed rounds over two recordings: ~1.5s on a quiet machine, past the
+    // 5s default on a loaded CI runner. The bound is the clauses above, not a clock.
+  }, 30_000);
 });

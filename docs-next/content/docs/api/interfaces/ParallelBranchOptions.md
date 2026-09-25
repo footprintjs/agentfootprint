@@ -53,7 +53,7 @@ fan-out stays best-effort (`Promise.allSettled`) and required
 failures are enforced at the Merge join instead — footprintjs's
 `failFast` is all-or-nothing per fork node, so engaging it for a
 mixed set would wrongly abort the run when an OPTIONAL sibling
-throws. See `docs/guides/concepts.md` (Parallel).
+throws. See https://agentfootprint.dev/docs/getting-started/key-concepts/ (Parallel).
 
 Pause semantics under fail-fast: with every branch required, a branch
 that PAUSES (`pauseHere()`) pre-empts its siblings the same way a

@@ -8,7 +8,7 @@
  *   npx agentfootprint-lint-tools tools.json
  *   npx agentfootprint-lint-tools tools.json --threshold 0.94 --strict
  *
- * Guide: docs/guides/tool-catalog-lint.md
+ * Guide: https://agentfootprint.dev/docs/debug/tool-catalog-lint/
  */
 const { runToolLintCli } = await import('../dist/esm/lib/tool-lint/cli.js');
 process.exitCode = await runToolLintCli(process.argv.slice(2));

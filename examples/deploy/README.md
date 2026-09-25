@@ -142,7 +142,7 @@ the two refusals you will meet: a frame past the declared ceiling
 
 Once your agent runs in the container, the other AgentCore primitives attach
 through agentfootprint adapters — see the
-[AgentCore integration guide](../../docs/guides/agentcore.md):
+[AgentCore integration guide](https://agentfootprint.dev/docs/infrastructure/aws/agentcore/):
 
 - **Memory** → `AgentCoreStore` (`agentfootprint/memory`)
 - **Observability** → `agentcoreObservability` (`agentfootprint/observe`)

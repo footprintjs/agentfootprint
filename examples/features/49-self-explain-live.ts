@@ -38,7 +38,7 @@
  * Every tool here is synthetic — no network, no web content. Trace tools
  * re-expose a run's own text to a model, so a run that swallowed a hostile
  * web page would re-serve it (bounded) on the way back out. Keep the
- * demonstration clean and read docs/guides/prompt-injection.md before
+ * demonstration clean and read https://agentfootprint.dev/docs/monitor/security/ before
  * pointing this at fetched content.
  *
  * Run:

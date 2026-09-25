@@ -289,6 +289,85 @@ On `context.injected`, `asRole` is a **`ContextRole`** — `'system' | 'user' | 
 
 `runner.attach(recorder)` is the lower-level path: it accepts a footprintjs `CombinedRecorder` that observes the **raw** footprintjs stream (`onWrite`, `onSubflowEntry`, `onDecision`, …) — not the grouped `agentfootprint.*` events. For agentfootprint's typed event taxonomy, prefer `runner.on(...)`. A `CombinedRecorder` discovers its handler methods via runtime method-shape detection — implement only the hooks you care about; ignore the rest.
 
+## Consumer-owned events — `runner.emit()`
+
+Some domains are partly yours to fill: `eval` (quality scores), `memory`, `skill`. Emit into them with `runner.emit(name, payload)` and every subscriber — your own listeners, `enable.observability` strategies, OTel — receives it like a library event. Use it for a score your evaluator computed after the run, a thumbs-up from the UI, or any app event you want on the same stream.
+
+```ts
+agent.on('agentfootprint.eval.score', (e) => {
+  console.log(`${e.payload.metricId} = ${e.payload.value}`);
+});
+
+const answer = await agent.run({ message: 'Summarize the Q3 report' });
+
+agent.emit('agentfootprint.eval.score', {
+  metricId: 'response-quality',
+  value: 0.85,
+  target: 'run',
+  targetRef: 'this-run',
+  evaluator: 'heuristic',
+});
+```
+
+A name outside the registry (say `'myapp.feedback.thumbs_up'`) is delivered to `'*'` listeners only, as an untyped event.
+
+Gotchas:
+
+- **Nobody listening, nothing sent.** `emit()` returns immediately when no listener matches — subscribe first.
+- **The payload is not type-checked.** `emit()` takes any object; a registry name does not make the compiler check its shape. Match the documented payload yourself.
+- **Keep `agentfootprint.*` for the registered names.** Invent your own prefix for app events.
+
+Runnable: [`examples/features/05-events.ts`](https://github.com/footprintjs/agentfootprint/blob/main/examples/features/05-events.ts).
+
+## Custom recorder
+
+When a listener per event is not enough — you want one object that sees scope writes, stage boundaries and emitted events together — write a recorder: an object with an `id` plus whichever footprintjs hooks you need (`onWrite`, `onCommit`, `onStageExecuted`, `onDecision`, `onEmit`, `onError`, …).
+
+```ts
+import { Agent, type CombinedRecorder } from 'agentfootprint';
+
+const log: string[] = [];
+const audit: CombinedRecorder = {
+  id: 'audit',
+  onWrite: (e) => log.push(`write ${e.key}`), // a stage wrote a state key
+  onEmit: (e) => log.push(`emit ${e.name}`), // an event emitted from a stage
+};
+
+// At build time — sees the very first run:
+const agent = Agent.create({ provider, model }).system('Be helpful.').watch(audit).build();
+
+// …or on a live agent — returns an unsubscribe you own:
+const detach = agent.attach(audit);
+detach();
+```
+
+Gotchas:
+
+- **`attach()` takes effect on the NEXT run.** A recorder attached while a run is in flight sees nothing of that run. `.watch()` on the builder avoids the question.
+- **`attach()` is not idempotent.** Each call adds another entry; attaching per request without calling the unsubscribe is a leak. Attach once, or detach every time.
+- **`onEmit` sees the events stages emit, not all of them.** A few events are dispatched by the runner itself (`agent.run_configured`, `pause.request`, `pause.resume`) and reach only `runner.on(...)`. For "every event", subscribe `runner.on('*', fn)`.
+- For one domain's worth of events, a closure over `runner.on('agentfootprint.<domain>.*', fn)` is simpler than a recorder — see [Custom aggregations](#custom-aggregations).
+
+## Built-in bridges (you don't attach these)
+
+Each run, the agent attaches internal recorders that turn what the stages emit into the typed stream you subscribe to. You never need them to observe an `Agent` — `runner.on(...)` is how you read their output. They are exported from `agentfootprint/observe` for one case: wiring the typed stream onto a footprintjs executor you drive yourself. Each factory takes `{ dispatcher, getRunContext, id? }`.
+
+| Factory | Forwards |
+|---|---|
+| `agentRecorder` | `agentfootprint.agent.*` |
+| `streamRecorder` | `agentfootprint.stream.*` |
+| `compositionRecorder` | `agentfootprint.composition.*` |
+| `ContextRecorder` (class) | `agentfootprint.context.injected` · `slot_composed` · `evicted` · `budget_pressure` |
+| `contextEvaluatedRecorder` | `agentfootprint.context.evaluated` |
+| `costRecorder` | `agentfootprint.cost.*` |
+| `toolsRecorder` | `agentfootprint.tools.*` |
+| `skillRecorder` | `agentfootprint.skill.*` |
+| `memoryRecorder` | `agentfootprint.memory.*` |
+| `embeddingRecorder` | `agentfootprint.embedding.*` |
+| `permissionRecorder` | `agentfootprint.permission.*` |
+| `evalRecorder` | `agentfootprint.eval.*` |
+| `resilienceRecorder` | `agentfootprint.error.retried` · `recovered` · `circuit_changed`, `agentfootprint.fallback.triggered` |
+
 ## OpenTelemetry
 
 `otelObservability` ships in `agentfootprint/observe`. It maps agentfootprint events onto OTel spans following the [GenAI semantic conventions](https://opentelemetry.io/docs/specs/semconv/gen-ai/) (`gen_ai.*` attributes) via your own `@opentelemetry/api` tracer. Pair with `@opentelemetry/sdk-node` and your favorite exporter (Jaeger, Tempo, Datadog OTel collector, etc.):
