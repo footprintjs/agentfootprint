@@ -421,13 +421,19 @@ export interface ToolEndPayload {
    */
   readonly notDispatched?: LLMMessage['notDispatched'];
   /**
-   * What the MODEL read for this call, when a rule made it differ from
-   * `result`: an `onToolResult` link rewrote or denied it, or the
-   * `maxToolResultChars` cap cut the model's channel alone. `result` stays the
-   * tool's own answer — this is the other half of that split, which until now
-   * lived only in history. Absent when the model read `result` itself (the
-   * common case; the two channels are then one reference). Stamped on all five
-   * dispatch paths.
+   * What the MODEL read for this call, when it differs from `result`: an
+   * `onToolResult` link rewrote or denied it, the `maxToolResultChars` cap
+   * cut the model's channel alone, or the library removed the record-only
+   * coverage fields (`short`, `kind` — see `CoverageItem`) from a coverage
+   * envelope before serving it. `result` stays the tool's own answer — this
+   * is the other half of that split, which until now lived only in history.
+   * Absent when the model read `result` itself (the common case; the two
+   * channels are then one reference). Stamped on all five dispatch paths.
+   *
+   * Cost, stated: a call whose tool declares `short` or `kind` carries its
+   * envelope twice here (`result` + `modelResult`) — about 4 KB more per
+   * declaring call for a typical absence. A tool that declares neither gets
+   * no stamp and no new byte.
    */
   readonly modelResult?: unknown;
   /**
@@ -1592,6 +1598,12 @@ export interface SkillGraphDeclaredPayload {
     readonly kind: string;
     readonly description?: string;
     readonly label?: string;
+    /** The skill's declared plain name for a person (`defineSkill({ title })`)
+     *  — "array estate report" for `array-inventory`. Absent when the skill
+     *  declares none (the label a graph draws for a skill node is its id, so
+     *  a reader wanting a plain name reads this, never `label`). The model
+     *  never reads it. */
+    readonly title?: string;
   }>;
   /** The author's edges, verbatim. `from: null` is the synthetic START (an
    *  entry edge — the lens's declared-edge consumers filter on
@@ -2021,6 +2033,15 @@ export interface ToolCoverageDeclaredPayload {
 export interface CoverageItemPayload {
   readonly what: string;
   readonly why?: string;
+  /** The item's short plain form, as the tool declared it — RECORD-ONLY: the
+   *  model was served the envelope without it. Absent when not declared (or
+   *  declared invalid by an envelope minted outside `absent()` / `coverage()`,
+   *  which is read, never repaired). */
+  readonly short?: string;
+  /** What kind of ground the item is (`'existence' | 'scope'`), on
+   *  `notChecked` / `cannotCover` only — RECORD-ONLY, like `short`. Absent =
+   *  not declared; never inferred from `what`. */
+  readonly kind?: 'existence' | 'scope';
 }
 
 /**
@@ -2376,8 +2397,19 @@ export interface AgentEvidenceCheckedPayload {
    *  once, `'rails'` may withhold the answer. */
   readonly posture: 'assist' | 'guard' | 'rails';
   /** How many distinct values the answer had to ground. `0` means the answer
-   *  asserted nothing the extractor treats as data. */
+   *  asserted nothing the extractor treats as data. INCLUDES exempt values —
+   *  see {@link lookedUp}. */
   readonly candidates: number;
+  /**
+   * How many of `candidates` the gate actually looked up in the tool results:
+   * the values found plus the values not found, before `unsupported` is
+   * sliced. The rest were EXEMPT — the person's message, the conversation or
+   * the app's own instructions (recalled memory included) already held them —
+   * and were never looked up. Present on every row from the release that
+   * added it; absent on a recording made before it, which therefore cannot
+   * say how many values were looked up.
+   */
+  readonly lookedUp?: number;
   /** The values that appear in no tool result, truncated to a readable list.
    *  Empty when `action` is `'grounded'`. */
   readonly unsupported: readonly { readonly value: string; readonly shape: string }[];

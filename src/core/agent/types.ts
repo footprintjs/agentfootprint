@@ -1488,6 +1488,9 @@ export interface AgentState {
     readonly values: readonly UnsupportedValue[];
     /** How many distinct values the answer had to ground, flagged included. */
     readonly candidates: number;
+    /** How many of them the gate looked up (exempt values excluded) — carried
+     *  to the recheck stage's `evidence_checked` row. */
+    readonly lookedUp: number;
   };
   /** The one bounded revision has been spent this turn (9.35.0). Written by
    *  the EvidenceRecheck branch; reset at seed. Absent on an agent without

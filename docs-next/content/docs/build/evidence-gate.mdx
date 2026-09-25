@@ -202,6 +202,13 @@ agent.on('agentfootprint.agent.evidence_checked', (e) => {
 });
 ```
 
+`candidates` counts every value the check found in the answer; `lookedUp`
+counts the ones it actually looked up in the tool results. The difference is
+the values your user's message, the conversation or your own instructions
+already held — those are never looked up, so a report says "looked up
+`lookedUp` values", never `candidates`. A recording made before `lookedUp`
+existed does not carry it.
+
 After the run, `agent.unsupportedValues()` returns the terminal verdict — the
 flagged `UnsupportedValue[]`, whether a revision was spent (`revised`), and
 whether the answer was withheld (`refused`) — or `undefined` when every value

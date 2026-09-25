@@ -255,6 +255,9 @@ export function checkAnswer(
   return {
     unsupported,
     candidates: candidates.length,
+    // Every candidate not skipped as exempt landed in exactly one of the two
+    // lists above — the count the gate really looked up.
+    lookedUp: grounded.length + unsupported.length,
     grounded,
     evidenceTruncated: args.evidence.truncated,
     grounding: {

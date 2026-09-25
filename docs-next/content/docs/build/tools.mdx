@@ -514,6 +514,53 @@ understand cannot stop a retry loop or keep a value out of the evidence corpus:
 
 Nothing else changes: no `error: true`, no retry, no refusal, no gate flag.
 
+**Words for the person reading the report — `short` and `kind`.** A coverage
+item's `what` is written for the model and for an engineer. Two optional
+fields on any item say the same ground for a person reading an account of the
+answer:
+
+- `short` — a short plain form of `what` (at most 80 characters, one line,
+  never longer than `what`);
+- `kind` — on a `notChecked` or `cannotCover` item only: `'existence'` when the
+  item is whether the thing asked about exists at all, `'scope'` when it is a
+  population or source outside what the tool reaches.
+
+```ts
+return absent({
+  what: 'a VM disk in the RVTools export attributed to the array asked',
+  checked: [{ what: 'vDisk and vm_rdm_map: every VM disk in the RVTools export dated 2026-09-19',
+              short: 'every VM disk in the RVTools export of 2026-09-19' }],
+  notChecked: [
+    { what: 'whether that name is a storage array, and which VM disks are on it',
+      short: 'whether that name is a storage array', kind: 'existence', why: 'this tool places disks' },
+    { what: 'hosts that are not VMware — AIX LPARs and physical servers',
+      short: 'hosts that are not VMware', kind: 'scope', why: 'RVTools sees VMware only' },
+  ],
+});
+```
+
+Both are **record-only**: `tools.absent`, `tools.coverage_declared` and
+`sharedState.coverageDeclared` carry them, and the model never does — the
+framework removes them from the envelope before the model (or any
+`onToolResult` rule) reads it, so declaring them costs no request byte.
+`stream.tool_end` then keeps your envelope as `result` and what the model read
+as `modelResult`. They are never evidence either: **never put the caller's
+arguments in `short`** — it restates `what`. A tool in another language puts
+the same two keys on the items of its snake_case lists:
+
+```python
+{"af_absent": True, "outcome": "nothing_found", "looked_for": "…",
+ "checked": [{"what": "…", "short": "every VM disk in the RVTools export of 2026-09-19"}],
+ "not_checked": [{"what": "…", "short": "whether that name is a storage array",
+                  "kind": "existence", "why": "…"}],
+ "retry_returns_the_same": True, "note": ABSENCE_NOTE}
+```
+
+`absent()` and `coverage()` refuse a bad value where you wrote it; an envelope
+built by hand is read, never repaired — a bad `short` or `kind` is dropped with
+one dev-mode warning per tool, which a Python author never sees, so check both
+where you build the envelope.
+
 ## What a clean result does not rule out — `coverage()`
 
 "Everything looks fine" arrives with no way to tell whether *fine* means
@@ -596,7 +643,7 @@ All from `agentfootprint`:
 
 - `absent` and `coverage` — the two doors, described above.
 - `CoverageItem`, `CoverageInput`, `Coverage` — one piece of ground
-  (`{ what, why? }`), what you may write in a list, and the normalized
+  (`{ what, why?, short?, kind? }`), what you may write in a list, and the normalized
   three-list shape everything downstream reads.
 - `AbsenceDeclaration` and `CoverageDeclaration` — what you pass to each door.
 - `TryInsteadTool` — the tool a suggestion points at (`{ tool, why? }`), given

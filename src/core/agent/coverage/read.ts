@@ -25,6 +25,7 @@ import {
   tryInsteadOfAbsence,
   tryInsteadToolOfAbsence,
 } from './absent.js';
+import { listsWithoutRecordOnly } from './items.js';
 import { coverageOfLedger, readCoverageLedger } from './ledger.js';
 import type { Coverage, ToolAbsence, TryInsteadTool } from './types.js';
 
@@ -74,6 +75,52 @@ export interface CoverageReading {
   /** In declaration order: the outer ledger first, then the absence it
    *  wraps. Usually one entry; two only when an author bounded an absence. */
   readonly declared: readonly CoverageFacts[];
+  /**
+   * The value the MODEL is served for this result: the recognized envelope
+   * with the record-only item keys (`short`, `kind`) removed from every
+   * coverage list — see {@link servedToModel}. The SAME reference as the
+   * value read when no item carried one.
+   */
+  readonly served: unknown;
+}
+
+/**
+ * The value the MODEL is served for one finalized tool result: a recognized
+ * envelope — a bare absence, a ledger (its own lists AND the absence it
+ * bounds), or a semantic envelope's `coverage` — with `short` and `kind`
+ * removed from every coverage item. They are RECORD-ONLY: the events, the
+ * tracked `coverageDeclared` rows and the answer account carry them; the
+ * model's request never does, so a tool that declares them costs no request
+ * byte.
+ *
+ * Zero-cost when unused: the SAME reference back for every value that is not
+ * a recognized envelope, and for every envelope whose items carry neither
+ * key — so a caller that stamps `tool_end.modelResult` by reference
+ * inequality stamps nothing new. A structural copy only when a key was
+ * present. A value the recognizers do not take (a JSON string, a malformed
+ * envelope) is data and is served byte for byte.
+ *
+ * Asked at the ENTRY of `../stages/toolCalls.ts` · `afterMoment`, which every
+ * dispatch path (the batch loop and the four resume doors) calls for a result
+ * that ran — so every after-tool link is handed the served value, and none
+ * can re-serve the fields.
+ */
+export function servedToModel(value: unknown): unknown {
+  const absence = readAbsence(value);
+  if (absence !== undefined) return listsWithoutRecordOnly(absence);
+  const sem = readSemantics(value);
+  if (sem !== undefined) {
+    if (sem.coverage === undefined) return value;
+    const cov = listsWithoutRecordOnly(sem.coverage);
+    return cov === sem.coverage ? value : { ...(value as object), coverage: cov };
+  }
+  const covered = readCoverageLedger(value);
+  if (covered === undefined) return value;
+  const marker = listsWithoutRecordOnly(covered.af_coverage);
+  const inner = readAbsence(covered.result);
+  const result = inner === undefined ? covered.result : listsWithoutRecordOnly(inner);
+  if (marker === covered.af_coverage && result === covered.result) return value;
+  return { ...covered, af_coverage: marker, result };
 }
 
 const ABSENT_STATUS: ToolResultStatus = 'absent';
@@ -87,6 +134,11 @@ const ABSENT_STATUS: ToolResultStatus = 'absent';
  * does not change what the answer was.
  */
 export function readCoverageResult(value: unknown): CoverageReading | undefined {
+  const reading = readDeclared(value);
+  return reading === undefined ? undefined : { ...reading, served: servedToModel(value) };
+}
+
+function readDeclared(value: unknown): Omit<CoverageReading, 'served'> | undefined {
   const absence = readAbsence(value);
   if (absence !== undefined) {
     return { status: ABSENT_STATUS, declared: [absenceFacts(absence)] };

@@ -35,9 +35,11 @@
  * That is laundering an invention through a failed lookup — the same bug
  * `evidence/frames.ts` exists to stop on the other side of the conversation.
  *
- * The gate therefore withholds `looked_for`, and only `looked_for` (see
- * `coverage/evidence.ts`): it is the one field whose job is to quote the
- * request. Everything else the absence carries — the coverage lists, the
+ * The gate therefore withholds `looked_for` (see `coverage/evidence.ts`): it
+ * is the one field whose job is to quote the request. The record-only item
+ * keys `short` and `kind` are withheld with it — a short form restates
+ * `what`, so nothing is lost, and it is the field an author is most tempted to
+ * personalise. Everything else the absence carries — the coverage lists, the
  * author's `tryInstead` and `tryInsteadTool`, any extra key the tool attached
  * to the envelope — is the TOOL speaking about the world and does ground,
  * because an answer that follows the absence's own advice must not be called

@@ -195,7 +195,8 @@
  * with every key `tool_end` names in `changedArgKeys` — a rule rewrote it,
  * or the tool's own `redact` policy hides it — withheld as `'REDACTED'`; the
  * result is what the model read (`modelResult`, after the `onToolResult`
- * scrub). Never a raw value a rule replaced, never a value a rule added.
+ * scrub and the removal of the record-only coverage fields `short` / `kind`).
+ * Never a raw value a rule replaced, never a value a rule added.
  *
  * @example Basic — Honeycomb via OTLP
  * ```ts

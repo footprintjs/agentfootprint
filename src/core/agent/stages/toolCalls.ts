@@ -193,6 +193,8 @@ import {
   type DeclaredCoverage,
   type ToolAbsence,
 } from '../coverage/index.js';
+import { readItemExtras, type CoverageSection } from '../coverage/items.js';
+import { servedToModel } from '../coverage/read.js';
 import {
   explainStatusOnlyNearMiss,
   pruneLeases,
@@ -1525,12 +1527,20 @@ export function buildToolCallsHandler(
     const rows: DeclaredCoverage[] = [];
     for (const facts of reading.declared) {
       // Copied item by item — event payloads are detached plain data, never
-      // a shared reference into a value the tool still holds.
-      const copy = (list: CoverageFacts['coverage']['checked']) =>
-        list.map((i) => ({ what: i.what, ...(i.why !== undefined && { why: i.why }) }));
-      const checked = copy(facts.coverage.checked);
-      const notChecked = copy(facts.coverage.notChecked);
-      const cannotCover = copy(facts.coverage.cannotCover);
+      // a shared reference into a value the tool still holds. The
+      // record-only extras (`short`, `kind`) ride along when valid, read by
+      // the ONE non-throwing reader (`coverage/items.ts` · `readItemExtras`),
+      // so the event and the tracked row carry the same fields; the model is
+      // served the envelope without them (`afterMoment`, below).
+      const copy = (list: CoverageFacts['coverage']['checked'], section: CoverageSection) =>
+        list.map((i) => ({
+          what: i.what,
+          ...(i.why !== undefined && { why: i.why }),
+          ...readItemExtras(i, section, call.toolName),
+        }));
+      const checked = copy(facts.coverage.checked, 'checked');
+      const notChecked = copy(facts.coverage.notChecked, 'notChecked');
+      const cannotCover = copy(facts.coverage.cannotCover, 'cannotCover');
       if (facts.kind === 'absence') {
         typedEmit(scope, 'agentfootprint.tools.absent', {
           toolName: call.toolName,
@@ -3106,19 +3116,28 @@ export function buildToolCallsHandler(
       readonly signal?: AbortSignal;
     },
   ): Promise<unknown> => {
+    // The record-only coverage fields (`short`, `kind`) come off FIRST, so the
+    // model is never served them and every link below is handed what the
+    // model will read — none can re-serve them. Every dispatch path calls
+    // this moment for a result that ran (the batch loop and the four resume
+    // doors), which is why the strip lives here and nowhere else. The SAME
+    // reference back when no item carried either key: a run whose tools
+    // declare neither serves the bytes it always did, and the callers'
+    // reference-inequality stamp of `tool_end.modelResult` stays unstamped.
+    const served = servedToModel(call.result);
     const chain = deps.toolMiddleware ?? [];
     // No `onToolResult` hook anywhere in the chain → no walk, no rows, no await
     // beyond the ones this dispatch already made. An agent whose middleware
     // only governs calls is byte-identical to one built before this moment
     // existed.
-    if (!chain.some((mw) => typeof mw.onToolResult === 'function')) return call.result;
+    if (!chain.some((mw) => typeof mw.onToolResult === 'function')) return served;
     const verdict = await runToolAfterChain(chain, {
       toolName: call.toolName,
       ...(call.tool?.source !== undefined && { toolSource: call.tool.source }),
       toolCallId: call.toolCallId,
       iteration: call.iteration,
       args: call.args,
-      result: call.result,
+      result: served,
       ...(call.error === true && { error: true as const }),
       history: call.history,
       ...(call.identity && { identity: call.identity }),
