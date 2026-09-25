@@ -15,7 +15,7 @@
 
 import { chip, n, v } from '../render.js';
 import type {
-  Fact,
+  AccountFact,
   FactStatus,
   RecordPointer,
   RoutingFacts,
@@ -125,7 +125,7 @@ function refusalsOf(ctx: ReadContext, to: string | undefined) {
   return { all: refusals, ofDecided: refusals.filter((r) => r.requestedId === to) };
 }
 
-const notRecordedFact = <T>(missing: 'no-event' | 'not-built' = 'no-event'): Fact<T> => ({
+const notRecordedFact = <T>(missing: 'no-event' | 'not-built' = 'no-event'): AccountFact<T> => ({
   value: null,
   source: 'library',
   status: 'not-recorded',
@@ -183,7 +183,7 @@ export function readUnderstood(ctx: ReadContext): UnderstoodRead {
         ]
       : [];
   const refusals = refusalsOf(ctx, str(routed?.payload.to));
-  const deliveredFact: Fact<readonly string[]> = {
+  const deliveredFact: AccountFact<readonly string[]> = {
     value: delivered.ids.slice(0, MAX_REFUSALS).map((id) => id.slice(0, FACT_TEXT_CHARS)),
     source: 'library',
     status: 'recorded',

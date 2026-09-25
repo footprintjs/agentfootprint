@@ -70,7 +70,7 @@ export type RecordPointer =
     };
 
 /** One fact the account read (or looked for and did not find). */
-export interface Fact<T> {
+export interface AccountFact<T> {
   readonly value: T | null;
   readonly source: AccountSource;
   readonly status: FactStatus;
@@ -250,7 +250,7 @@ export interface InViewFact {
 }
 
 export interface RoutingFacts {
-  readonly configured: Fact<
+  readonly configured: AccountFact<
     | {
         readonly routing?: string;
         readonly continuity?: string;
@@ -258,22 +258,22 @@ export interface RoutingFacts {
       }
     | 'none'
   >;
-  readonly verdict: Fact<{
+  readonly verdict: AccountFact<{
     readonly by: string;
     readonly from?: string;
     readonly to?: string;
     readonly decisive?: boolean;
     readonly scorer?: string;
   }>;
-  readonly scores: Fact<{
+  readonly scores: AccountFact<{
     readonly top: number;
     readonly next: number;
     readonly nextId: string;
     readonly allOthersEqual: boolean;
   }>;
-  readonly confidence: Fact<number>;
-  readonly appDecision: Fact<{ readonly skillId: string }>;
-  readonly delivered: Fact<readonly string[]>;
+  readonly confidence: AccountFact<number>;
+  readonly appDecision: AccountFact<{ readonly skillId: string }>;
+  readonly delivered: AccountFact<readonly string[]>;
   /** ≤ 12, ids and rule names cut at 200 (the model's `read_skill` argument is model-chosen). */
   readonly refusals: readonly {
     readonly requestedId: string;
@@ -308,10 +308,10 @@ export interface AnswerFacts {
   /** ≤ 50, newest first; every one of them is judged by the checks. */
   readonly inView: readonly InViewFact[];
   readonly inViewOmitted?: number;
-  readonly evidence: Fact<EvidenceFact>;
-  readonly standing: Fact<'known' | 'not-sure' | 'ask'>;
+  readonly evidence: AccountFact<EvidenceFact>;
+  readonly standing: AccountFact<'known' | 'not-sure' | 'ask'>;
   /** The library-appended limits block of the answer, when `.limitsTravelWithTheAnswer()` added one. */
-  readonly limitsBlock: Fact<string>;
+  readonly limitsBlock: AccountFact<string>;
   readonly errors: {
     readonly failed: number;
     readonly refused: number;
@@ -342,9 +342,9 @@ export interface AnswerAccount {
   readonly kind: 'agentfootprint/answer-account';
   readonly shape: 1;
   readonly templates: { readonly set: 'answer-account'; readonly version: number };
-  readonly run: Fact<RunFact>;
-  readonly question: Fact<string>;
-  readonly answer: Fact<string>;
+  readonly run: AccountFact<RunFact>;
+  readonly question: AccountFact<string>;
+  readonly answer: AccountFact<string>;
   readonly facts: AnswerFacts;
   /** Always the seven, in `RowId` order. */
   readonly rows: readonly Row[];

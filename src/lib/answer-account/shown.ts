@@ -22,7 +22,7 @@ import type {
   AnswerAccount,
   AnswerAccountDeclarations,
   AnswerAccountShownLeaf,
-  Fact,
+  AccountFact,
   RecordPointer,
   Sentence,
 } from './types.js';
@@ -199,7 +199,7 @@ export function accountPointers(account: AnswerAccount): RecordPointer[] {
     if (s === undefined) return;
     out.push(...s.pointers);
   };
-  const fromFact = (f: Fact<unknown>) => out.push(...f.pointers);
+  const fromFact = (f: AccountFact<unknown>) => out.push(...f.pointers);
   fromFact(account.run);
   fromFact(account.question);
   fromFact(account.answer);
@@ -219,7 +219,7 @@ export function accountPointers(account: AnswerAccount): RecordPointer[] {
     f.routing.delivered,
     f.evidence,
     f.limitsBlock,
-  ].forEach((x) => fromFact(x as Fact<unknown>));
+  ].forEach((x) => fromFact(x as AccountFact<unknown>));
   f.calls.forEach((c) => out.push(...c.pointers));
   f.inView.forEach((c) => out.push(...c.pointers));
   return out;

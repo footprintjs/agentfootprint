@@ -10,12 +10,12 @@
  */
 
 import { v } from '../render.js';
-import type { Fact, Sentence } from '../types.js';
+import type { AccountFact, Sentence } from '../types.js';
 import { str } from '../view.js';
 import { at, stateAt, type ReadContext } from './common.js';
 
 export interface AskedRead {
-  readonly question: Fact<string>;
+  readonly question: AccountFact<string>;
   readonly lines: readonly Sentence[];
 }
 

@@ -18,7 +18,7 @@ import type {
   AnswerAccount,
   AnswerAccountDeclarations,
   Chip,
-  Fact,
+  AccountFact,
   FactStatus,
   Row,
   RowId,
@@ -95,10 +95,13 @@ function row(
 }
 
 /** The answer, and the library-appended limits block split off it (`.limitsTravelWithTheAnswer()`). */
-function readAnswer(view: RecordingView): { answer: Fact<string>; limits: Fact<string> } {
+function readAnswer(view: RecordingView): {
+  answer: AccountFact<string>;
+  limits: AccountFact<string>;
+} {
   const end = view.last('agent.turn_end');
   const content = str(end?.payload.finalContent);
-  const none: Fact<string> = {
+  const none: AccountFact<string> = {
     value: null,
     source: 'library',
     status: 'not-recorded',
@@ -142,7 +145,7 @@ function readAnswer(view: RecordingView): { answer: Fact<string>; limits: Fact<s
   };
 }
 
-function readRun(view: RecordingView, resumedLeg: boolean): Fact<RunFact> {
+function readRun(view: RecordingView, resumedLeg: boolean): AccountFact<RunFact> {
   const configured = view.first('agent.run_configured');
   const model = str((configured?.payload.llm as Record<string, unknown> | undefined)?.model);
   const turnNumber = num(view.state?.turnNumber);
@@ -186,7 +189,12 @@ function noOwnEventsAccount(
   unread: () => number,
 ): AnswerAccount {
   const missing = { status: 'not-recorded' as const, missing: 'no-event' as const };
-  const none = <T>(): Fact<T> => ({ value: null, source: 'library', pointers: [], ...missing });
+  const none = <T>(): AccountFact<T> => ({
+    value: null,
+    source: 'library',
+    pointers: [],
+    ...missing,
+  });
   const rows: Row[] = (Object.keys(HEADINGS) as RowId[]).map((id) =>
     row(id, [
       id === 'anything-wrong'

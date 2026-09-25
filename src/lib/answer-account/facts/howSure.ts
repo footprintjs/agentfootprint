@@ -14,7 +14,7 @@
 
 import { MAX_REPORTED_VALUES } from '../../../core/agent/evidence/limits.js';
 import { chip, joinAnd, n, v } from '../render.js';
-import type { EvidenceFact, Fact, Sentence } from '../types.js';
+import type { EvidenceFact, AccountFact, Sentence } from '../types.js';
 import { isRecord, num, str, type ViewEvent } from '../view.js';
 import { at, emptinessSource, takeItem, type ReadContext } from './common.js';
 import type { CallsRead } from './calls.js';
@@ -25,7 +25,7 @@ export const FLAGGED_VALUE_CHARS = 200;
 
 export interface HowSureRead {
   readonly lines: readonly Sentence[];
-  readonly evidence: Fact<EvidenceFact>;
+  readonly evidence: AccountFact<EvidenceFact>;
 }
 
 /**
