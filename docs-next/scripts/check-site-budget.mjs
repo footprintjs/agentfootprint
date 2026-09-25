@@ -343,15 +343,20 @@ const OUTPUT_LIMITS = { bytes: 686_000_000, files: 7_400, duplicateRscBytes: 0 }
 // ~2% over the 422.4 KB measurement, as every entry above; the next move is a
 // measured shrink or the next family, never a raise for a single feature.
 //
-// RAISED again (2026-09-25, owner's call — a stopgap, not the fix). The 9.114.2
-// findings fix (4025063: one answer-text scanner, findings/answerText.ts, shared
-// by the token stream and the final answer) took the demo chunk from under
-// 431.0 KB to 432.4 KB gzip across 17 async assets, measured in CI run
-// 36160082628. That scanner is wired on the default graph although only
-// `.findings()` agents use it. The owed fix is the shrink the paragraph above
-// asks for: load it behind the same import() as judge.ts / toolChoice/compose.ts,
-// then bring this ceiling back down. Ceiling ~2% over 432.4 KB.
-const DEMO_ASYNC_GZIP_LIMIT = 441_000;
+// RAISED again (2026-09-25, owner's call — a stopgap) to 441 KB when the
+// 9.114.2 findings fix (4025063: one answer-text scanner, findings/answerText.ts)
+// took the demo chunk from under 431.0 KB to 432.4 KB gzip, with the scanner
+// wired on the default graph although only `.findings()` agents use it.
+//
+// LOWERED to 436 KB (2026-09-25): the owed shrink landed. The scanner now
+// sits behind `findings/peel.ts`, loaded through import() by callLLM and route
+// only under the arm — the judge.ts / toolChoice/compose.ts pattern — and
+// test/lib/trace-toolpack/browserGraph.test.ts pins it off the root sync
+// closure. Measured 430.4 KB gzip across 17 async assets (from 433.5 KB); the
+// same day's AnswerAccount release (#17, 9.116.0) then grew the default graph
+// by 1.5 KB, re-measured together at 431.9 KB. Ceiling ~1% over that — thinner
+// than the ~2% rule above, because the stopgap is paid back, not kept.
+const DEMO_ASYNC_GZIP_LIMIT = 436_000;
 
 function formatBytes(bytes) {
   if (bytes < 1_000) return `${bytes} B`;

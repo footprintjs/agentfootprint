@@ -50,12 +50,7 @@ import type { InjectionRecord } from '../../../recorders/core/types.js';
 import { emitCostTick, type ResolvedCostBudget } from '../../cost.js';
 import type { ReliabilityConfig } from '../../../reliability/types.js';
 import { applyOutputSchema, type OutputSchemaParser } from '../../outputSchema.js';
-import {
-  peelAnswerFindings,
-  splitFindings,
-  withoutFindingsArgument,
-} from '../findings/reserved.js';
-import { reservedMemberFilter, withoutReservedMembers } from '../findings/answerText.js';
+import { splitFindings, withoutFindingsArgument } from '../findings/reserved.js';
 import {
   collapseJudged,
   findingsLedgerPiece,
@@ -395,6 +390,11 @@ export function buildCallLLMStage(
   deps: CallLLMStageDeps,
 ): (scope: TypedScope<AgentState>) => Promise<void> {
   return async (scope) => {
+    // The answer-text scanner (`findings/peel.ts`), loaded ONCE per call and
+    // only under `.findings()` — the optional-family law of docs-next's site
+    // budget: an unarmed agent never loads the module. Every armed use below
+    // reads this binding; `undefined` IS the unarmed path.
+    const peel = deps.findings === true ? await import('../findings/peel.js') : undefined;
     const systemPromptInjections =
       (scope.systemPromptInjections as readonly InjectionRecord[]) ?? [];
     // `scope.messagesInjections` is read by ContextRecorder for
@@ -829,8 +829,8 @@ export function buildCallLLMStage(
       // the run hands back. A fresh scanner per attempt; unarmed, the chunks
       // go out as the provider sent them.
       const shown =
-        deps.findings === true && deps.suppressDraftTokens !== true
-          ? reservedMemberFilter()
+        peel !== undefined && deps.suppressDraftTokens !== true
+          ? peel.reservedMemberFilter()
           : undefined;
       let lastTokenIndex = -1;
       if (provider.stream) {
@@ -936,8 +936,8 @@ export function buildCallLLMStage(
           // strict schema must see the answer the model meant, not the
           // envelope its standings rode in on. Unarmed: the content itself.
           applyOutputSchema(
-            deps.findings === true
-              ? peelAnswerFindings(response.content).content
+            peel !== undefined
+              ? peel.peelAnswerFindings(response.content).content
               : response.content,
             parser,
           );
@@ -1025,7 +1025,7 @@ export function buildCallLLMStage(
       // Under the arm, the content as the stream showed it (9.114.2) — the
       // committed `llmLatestContent` below keeps what the model sent.
       content:
-        deps.findings === true ? withoutReservedMembers(response.content).text : response.content,
+        peel !== undefined ? peel.withoutReservedMembers(response.content).text : response.content,
       toolCallCount: response.toolCalls.length,
       usage: response.usage,
       stopReason: response.stopReason,

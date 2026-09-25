@@ -22,11 +22,11 @@ import {
   FINDINGS_ARGUMENT_SCHEMA,
   FINDINGS_INSTRUCTION,
   FINDINGS_OFFER_CAP,
-  peelAnswerFindings,
   splitFindings,
   withFindingsArgument,
   withoutFindingsArgument,
 } from '../../../../src/core/agent/findings/reserved.js';
+import { peelAnswerFindings } from '../../../../src/core/agent/findings/peel.js';
 import {
   BASIS_VALUES,
   EXPECT_VALUES,
