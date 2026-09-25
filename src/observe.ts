@@ -99,6 +99,18 @@ export {
   type RunRecorder,
 } from './recorders/observability/recordRun.js';
 
+// accountForAnswer — "Explain this answer": one answer's recording (plus what
+// the app declared) in, a typed account out — facts, each with who vouches for
+// it and where it lives in the record, and fixed sentences from a closed,
+// versioned template table. Pure and read-time: no clock, network or model.
+// See src/lib/answer-account/README.md.
+export {
+  accountForAnswer,
+  type AnswerAccount,
+  type AnswerAccountDeclarations,
+  type AnswerAccountShownLeaf,
+} from './lib/answer-account/index.js';
+
 // The recording ENVELOPE — the versioned contract that makes a recording
 // archivable. `recordRun` freezes a run; this states which run it is, how much
 // of it this is, who produced it and under what privacy policy, so a saved run

@@ -1,0 +1,2001 @@
+{
+ "kind": "agentfootprint/answer-account",
+ "shape": 1,
+ "templates": {
+  "set": "answer-account",
+  "version": 1
+ },
+ "run": {
+  "value": {
+   "runId": "run-1790361930311-2",
+   "sessionId": "a4fb6d65-130d-4d9c-bede-09a110f04434",
+   "turnNumber": 2,
+   "model": "claude-haiku-4-5-20251001",
+   "resumedLeg": false
+  },
+  "source": "library",
+  "status": "recorded",
+  "pointers": [
+   {
+    "kind": "event",
+    "index": 0,
+    "type": "agentfootprint.agent.run_configured",
+    "path": "#meta/runId",
+    "runtimeStageId": "run-configured#0"
+   },
+   {
+    "kind": "event",
+    "index": 0,
+    "type": "agentfootprint.agent.run_configured",
+    "path": "/llm/model",
+    "runtimeStageId": "run-configured#0"
+   },
+   {
+    "kind": "state",
+    "key": "turnNumber",
+    "path": ""
+   }
+  ]
+ },
+ "question": {
+  "value": "what applications are running on powerstore SHPSTRPLPCL003",
+  "source": "person",
+  "status": "recorded",
+  "pointers": [
+   {
+    "kind": "event",
+    "index": 5,
+    "type": "agentfootprint.agent.turn_start",
+    "path": "/userPrompt",
+    "runtimeStageId": "seed#0"
+   }
+  ]
+ },
+ "answer": {
+  "value": "**No applications found** on SHPSTRPLPCL003.\n\nThe array inventory tool could not match SHPSTRPLPCL003 to any VM disks in the RVTools export. This means either:\n- The array name is not recognized in the PowerStore volume mapping.\n- No VMs are currently backed by volumes on this array (as reported by the most recent RVTools export from 2026-09-19).\n\n**To verify the array exists and see its volumes directly**, use `powerstore_get_volumes(array_id: \"SHPSTRPLPCL003\")` — which I ran earlier and found zero volumes on record.\n\n**Source disclosure:** This answer uses LOCAL SEED data (synthetic test data, not production measurements).",
+  "source": "model",
+  "status": "recorded",
+  "pointers": [
+   {
+    "kind": "event",
+    "index": 192,
+    "type": "agentfootprint.agent.turn_end",
+    "path": "/finalContent",
+    "runtimeStageId": "final/prepare-final#46"
+   }
+  ]
+ },
+ "facts": {
+  "routing": {
+   "configured": {
+    "value": {
+     "routing": "assist",
+     "continuity": "conversation",
+     "scorer": "neo-declared-capability-ranking"
+    },
+    "source": "library",
+    "status": "recorded",
+    "pointers": [
+     {
+      "kind": "event",
+      "index": 0,
+      "type": "agentfootprint.agent.run_configured",
+      "path": "/skillGraph/routing",
+      "runtimeStageId": "run-configured#0"
+     }
+    ]
+   },
+   "confidence": {
+    "value": null,
+    "source": "library",
+    "status": "not-recorded",
+    "pointers": [],
+    "missing": "not-built"
+   },
+   "appDecision": {
+    "value": null,
+    "source": "library",
+    "status": "not-recorded",
+    "pointers": [],
+    "missing": "not-built"
+   },
+   "delivered": {
+    "value": [
+     "array-inventory"
+    ],
+    "source": "library",
+    "status": "recorded",
+    "pointers": [
+     {
+      "kind": "event",
+      "index": 16,
+      "type": "agentfootprint.context.injected",
+      "path": "/sourceId",
+      "runtimeStageId": "sf-system-prompt/compose#10"
+     }
+    ]
+   },
+   "refusals": [],
+   "verdict": {
+    "value": {
+     "by": "intent",
+     "from": "powerstore",
+     "to": "array-inventory",
+     "decisive": true,
+     "scorer": "neo-declared-capability-ranking"
+    },
+    "source": "library",
+    "status": "recorded",
+    "pointers": [
+     {
+      "kind": "event",
+      "index": 6,
+      "type": "agentfootprint.skill.turn_routed",
+      "path": "/by",
+      "runtimeStageId": "pick-entry#1"
+     },
+     {
+      "kind": "event",
+      "index": 6,
+      "type": "agentfootprint.skill.turn_routed",
+      "path": "/to",
+      "runtimeStageId": "pick-entry#1"
+     }
+    ]
+   },
+   "scores": {
+    "value": {
+     "top": 1,
+     "next": 0,
+     "nextId": "mds-interface-issues",
+     "allOthersEqual": true
+    },
+    "source": "app",
+    "status": "recorded",
+    "pointers": [
+     {
+      "kind": "event",
+      "index": 6,
+      "type": "agentfootprint.skill.turn_routed",
+      "path": "/scores/0/score",
+      "runtimeStageId": "pick-entry#1"
+     },
+     {
+      "kind": "event",
+      "index": 6,
+      "type": "agentfootprint.skill.turn_routed",
+      "path": "/scores/1/score",
+      "runtimeStageId": "pick-entry#1"
+     }
+    ]
+   }
+  },
+  "calls": [
+   {
+    "toolCallId": "toolu_01HRutzrsmgifaHQm73u6kuX",
+    "toolName": "get_array_inventory",
+    "outcome": "ran",
+    "emptiness": "declared-absent",
+    "view": "result",
+    "coverage": {
+     "kind": "absent",
+     "lookedFor": "a VM disk in the RVTools export attributed to the array asked",
+     "checked": 2,
+     "notChecked": 4,
+     "cannotCover": 0,
+     "kinds": 0
+    },
+    "expectation": {
+     "basis": "direct",
+     "expect": "high"
+    },
+    "pointers": [
+     {
+      "kind": "event",
+      "index": 46,
+      "type": "agentfootprint.stream.tool_start",
+      "path": "/toolName",
+      "runtimeStageId": "tool-calls#23"
+     },
+     {
+      "kind": "event",
+      "index": 59,
+      "type": "agentfootprint.stream.tool_end",
+      "path": "/status",
+      "runtimeStageId": "tool-calls#23"
+     }
+    ]
+   }
+  ],
+  "beforePause": [],
+  "inView": [
+   {
+    "toolName": "powerstore_get_volumes",
+    "toolCallId": "toolu_01YQPyS4gmUrsi8mv52oj1DE",
+    "distance": 1,
+    "windowed": true,
+    "emptiness": "undeclared-empty",
+    "rows": 0,
+    "emptinessSource": "app",
+    "pointers": [
+     {
+      "kind": "event",
+      "index": 64,
+      "type": "agentfootprint.context.injected",
+      "path": "/sourceId",
+      "runtimeStageId": "sf-messages/compose#34"
+     },
+     {
+      "kind": "history",
+      "index": 2,
+      "path": "/toolName",
+      "toolCallId": "toolu_01YQPyS4gmUrsi8mv52oj1DE"
+     }
+    ]
+   }
+  ],
+  "evidence": {
+   "value": {
+    "posture": "guard",
+    "candidates": 2,
+    "unsupported": [],
+    "capped": false,
+    "action": "grounded",
+    "afterRevision": false
+   },
+   "source": "library",
+   "status": "recorded",
+   "pointers": [
+    {
+     "kind": "event",
+     "index": 189,
+     "type": "agentfootprint.agent.evidence_checked",
+     "path": "/posture",
+     "runtimeStageId": "sf-route#44"
+    },
+    {
+     "kind": "event",
+     "index": 189,
+     "type": "agentfootprint.agent.evidence_checked",
+     "path": "/candidates",
+     "runtimeStageId": "sf-route#44"
+    }
+   ]
+  },
+  "standing": {
+   "value": null,
+   "source": "library",
+   "status": "not-recorded",
+   "pointers": [],
+   "missing": "not-built"
+  },
+  "limitsBlock": {
+   "value": null,
+   "source": "library",
+   "status": "not-applicable",
+   "pointers": []
+  },
+  "errors": {
+   "failed": 0,
+   "refused": 0,
+   "declined": 0,
+   "notDispatched": 0,
+   "withheld": 0
+  },
+  "checks": {
+   "reachable": [
+    "decided-delivered",
+    "empty-results"
+   ],
+   "unreachable": [
+    "existence"
+   ],
+   "notApplicable": []
+  }
+ },
+ "rows": [
+  {
+   "id": "asked",
+   "heading": {
+    "text": "You asked",
+    "parts": [
+     {
+      "text": "You asked"
+     }
+    ],
+    "template": {
+     "id": "row.asked",
+     "version": 1
+    },
+    "vars": {},
+    "source": "library",
+    "status": "not-applicable",
+    "pointers": []
+   },
+   "lines": [
+    {
+     "text": "“what applications are running on powerstore SHPSTRPLPCL003”",
+     "parts": [
+      {
+       "text": "“"
+      },
+      {
+       "quote": "what applications are running on powerstore SHPSTRPLPCL003",
+       "source": "person"
+      },
+      {
+       "text": "”"
+      }
+     ],
+     "template": {
+      "id": "asked",
+      "version": 1
+     },
+     "vars": {
+      "question": {
+       "value": "what applications are running on powerstore SHPSTRPLPCL003",
+       "source": "person",
+       "from": {
+        "kind": "event",
+        "index": 5,
+        "type": "agentfootprint.agent.turn_start",
+        "path": "/userPrompt",
+        "runtimeStageId": "seed#0"
+       }
+      }
+     },
+     "source": "person",
+     "status": "recorded",
+     "pointers": [
+      {
+       "kind": "event",
+       "index": 5,
+       "type": "agentfootprint.agent.turn_start",
+       "path": "/userPrompt",
+       "runtimeStageId": "seed#0"
+      }
+     ]
+    }
+   ],
+   "chips": [
+    {
+     "mark": "said-by",
+     "text": "said by: you",
+     "tone": "plain",
+     "template": {
+      "id": "chip.saidBy",
+      "version": 1
+     }
+    }
+   ],
+   "status": "recorded"
+  },
+  {
+   "id": "understood",
+   "heading": {
+    "text": "It understood",
+    "parts": [
+     {
+      "text": "It understood"
+     }
+    ],
+    "template": {
+     "id": "row.understood",
+     "version": 1
+    },
+    "vars": {},
+    "source": "library",
+    "status": "not-applicable",
+    "pointers": []
+   },
+   "lines": [
+    {
+     "text": "The library's routing picked the array estate report skill (array-inventory).",
+     "parts": [
+      {
+       "text": "The library's routing picked the "
+      },
+      {
+       "label": "array estate report",
+       "source": "app"
+      },
+      {
+       "text": " skill ("
+      },
+      {
+       "code": "array-inventory"
+      },
+      {
+       "text": ")."
+      }
+     ],
+     "template": {
+      "id": "understood.intent",
+      "version": 1
+     },
+     "vars": {
+      "skill": {
+       "value": "array-inventory",
+       "source": "library",
+       "from": {
+        "kind": "event",
+        "index": 6,
+        "type": "agentfootprint.skill.turn_routed",
+        "path": "/to",
+        "runtimeStageId": "pick-entry#1"
+       }
+      },
+      "skillLabel": {
+       "value": "array estate report",
+       "source": "app",
+       "from": {
+        "kind": "declaration",
+        "owner": "app",
+        "field": "skills.array-inventory.label",
+        "id": "neo-seo",
+        "version": "1"
+       }
+      }
+     },
+     "source": "library",
+     "status": "recorded",
+     "pointers": [
+      {
+       "kind": "event",
+       "index": 6,
+       "type": "agentfootprint.skill.turn_routed",
+       "path": "/by",
+       "runtimeStageId": "pick-entry#1"
+      },
+      {
+       "kind": "event",
+       "index": 6,
+       "type": "agentfootprint.skill.turn_routed",
+       "path": "/to",
+       "runtimeStageId": "pick-entry#1"
+      },
+      {
+       "kind": "declaration",
+       "owner": "app",
+       "field": "skills.array-inventory.label",
+       "id": "neo-seo",
+       "version": "1"
+      }
+     ]
+    },
+    {
+     "text": "The app's scoring put it first: 1 against 0 for every other skill.",
+     "parts": [
+      {
+       "text": "The app's scoring put it first: 1 against 0 for every other skill."
+      }
+     ],
+     "template": {
+      "id": "understood.scores.allOthers",
+      "version": 1
+     },
+     "vars": {
+      "top": {
+       "value": 1,
+       "source": "app",
+       "from": {
+        "kind": "event",
+        "index": 6,
+        "type": "agentfootprint.skill.turn_routed",
+        "path": "/scores/0/score",
+        "runtimeStageId": "pick-entry#1"
+       }
+      },
+      "next": {
+       "value": 0,
+       "source": "app",
+       "from": {
+        "kind": "event",
+        "index": 6,
+        "type": "agentfootprint.skill.turn_routed",
+        "path": "/scores/1/score",
+        "runtimeStageId": "pick-entry#1"
+       }
+      }
+     },
+     "source": "app",
+     "status": "recorded",
+     "pointers": [
+      {
+       "kind": "event",
+       "index": 6,
+       "type": "agentfootprint.skill.turn_routed",
+       "path": "/scores/0/score",
+       "runtimeStageId": "pick-entry#1"
+      },
+      {
+       "kind": "event",
+       "index": 6,
+       "type": "agentfootprint.skill.turn_routed",
+       "path": "/scores/1/score",
+       "runtimeStageId": "pick-entry#1"
+      }
+     ]
+    },
+    {
+     "text": "The skill was given to the model before it answered.",
+     "parts": [
+      {
+       "text": "The skill was given to the model before it answered."
+      }
+     ],
+     "template": {
+      "id": "understood.delivered",
+      "version": 1
+     },
+     "vars": {},
+     "source": "library",
+     "status": "recorded",
+     "pointers": [
+      {
+       "kind": "event",
+       "index": 6,
+       "type": "agentfootprint.skill.turn_routed",
+       "path": "/to",
+       "runtimeStageId": "pick-entry#1"
+      },
+      {
+       "kind": "event",
+       "index": 16,
+       "type": "agentfootprint.context.injected",
+       "path": "/sourceId",
+       "runtimeStageId": "sf-system-prompt/compose#10"
+      }
+     ],
+     "chips": [
+      {
+       "mark": "decided-delivered",
+       "text": "decided = delivered",
+       "tone": "ok",
+       "template": {
+        "id": "chip.decidedDelivered",
+        "version": 1
+       }
+      }
+     ]
+    },
+    {
+     "text": "How sure the routing was is not recorded.",
+     "parts": [
+      {
+       "text": "How sure the routing was is not recorded."
+      }
+     ],
+     "template": {
+      "id": "understood.confidence.none",
+      "version": 1
+     },
+     "vars": {},
+     "source": "library",
+     "status": "not-recorded",
+     "pointers": [],
+     "missing": "not-built",
+     "chips": [
+      {
+       "mark": "not-recorded",
+       "text": "not recorded",
+       "tone": "plain",
+       "template": {
+        "id": "chip.notRecorded",
+        "version": 1
+       }
+      }
+     ]
+    },
+    {
+     "text": "Whether the app itself decided a skill for this question is not recorded.",
+     "parts": [
+      {
+       "text": "Whether the app itself decided a skill for this question is not recorded."
+      }
+     ],
+     "template": {
+      "id": "understood.app.notRecorded",
+      "version": 1
+     },
+     "vars": {},
+     "source": "app",
+     "status": "not-recorded",
+     "pointers": [
+      {
+       "kind": "declaration",
+       "owner": "app",
+       "field": "routing.appDecides",
+       "id": "neo-seo",
+       "version": "1"
+      }
+     ],
+     "missing": "not-built",
+     "chips": [
+      {
+       "mark": "not-recorded",
+       "text": "not recorded",
+       "tone": "plain",
+       "template": {
+        "id": "chip.notRecorded",
+        "version": 1
+       }
+      }
+     ]
+    }
+   ],
+   "chips": [
+    {
+     "mark": "said-by",
+     "text": "said by: the library's record",
+     "tone": "plain",
+     "template": {
+      "id": "chip.saidBy",
+      "version": 1
+     }
+    },
+    {
+     "mark": "said-by",
+     "text": "said by: the app (not recorded with the run)",
+     "tone": "plain",
+     "template": {
+      "id": "chip.saidBy",
+      "version": 1
+     }
+    }
+   ],
+   "status": "recorded"
+  },
+  {
+   "id": "checked",
+   "heading": {
+    "text": "It checked",
+    "parts": [
+     {
+      "text": "It checked"
+     }
+    ],
+    "template": {
+     "id": "row.checked",
+     "version": 1
+    },
+    "vars": {},
+    "source": "library",
+    "status": "not-applicable",
+    "pointers": []
+   },
+   "lines": [
+    {
+     "text": "get_array_inventory says it checked:",
+     "parts": [
+      {
+       "code": "get_array_inventory"
+      },
+      {
+       "text": " says it checked:"
+      }
+     ],
+     "template": {
+      "id": "checked.declared",
+      "version": 1
+     },
+     "vars": {
+      "tool": {
+       "value": "get_array_inventory",
+       "source": "library",
+       "from": {
+        "kind": "event",
+        "index": 46,
+        "type": "agentfootprint.stream.tool_start",
+        "path": "/toolName",
+        "runtimeStageId": "tool-calls#23"
+       }
+      }
+     },
+     "source": "tool:get_array_inventory",
+     "status": "recorded",
+     "pointers": [
+      {
+       "kind": "event",
+       "index": 51,
+       "type": "agentfootprint.tools.absent",
+       "path": "/toolName",
+       "runtimeStageId": "tool-calls#23"
+      },
+      {
+       "kind": "event",
+       "index": 46,
+       "type": "agentfootprint.stream.tool_start",
+       "path": "/toolName",
+       "runtimeStageId": "tool-calls#23"
+      }
+     ],
+     "chips": [
+      {
+       "mark": "declared",
+       "text": "declared",
+       "tone": "plain",
+       "template": {
+        "id": "chip.declared",
+        "version": 1
+       }
+      }
+     ]
+    },
+    {
+     "text": "the array asked, tested for what this tool can place an array by — a whole PowerMax serial (twelve digits) or the whole name this tool gives a PowerMax array, part of a serial or name in its own table of PowerMax arrays, or part of an array name in the PowerStore volume mapping — which named no array as this sidecar last read it (a read covers the 24 hours before it): it is none of these, so it could not be placed as an array",
+     "parts": [
+      {
+       "text": "the array asked, tested for what this tool can place an array by — a whole PowerMax serial (twelve digits) or the whole name this tool gives a PowerMax array, part of a serial or name in its own table of PowerMax arrays, or part of an array name in the PowerStore volume mapping — which named no array as this sidecar last read it (a read covers the 24 hours before it): it is none of these, so it could not be placed as an array"
+      }
+     ],
+     "template": {
+      "id": "checked.item.full",
+      "version": 1
+     },
+     "vars": {
+      "what": {
+       "value": "the array asked, tested for what this tool can place an array by — a whole PowerMax serial (twelve digits) or the whole name this tool gives a PowerMax array, part of a serial or name in its own table of PowerMax arrays, or part of an array name in the PowerStore volume mapping — which named no array as this sidecar last read it (a read covers the 24 hours before it): it is none of these, so it could not be placed as an array",
+       "source": "tool:get_array_inventory",
+       "from": {
+        "kind": "event",
+        "index": 51,
+        "type": "agentfootprint.tools.absent",
+        "path": "/checked/0/what",
+        "runtimeStageId": "tool-calls#23"
+       }
+      },
+      "tool": {
+       "value": "get_array_inventory",
+       "source": "library",
+       "from": {
+        "kind": "event",
+        "index": 46,
+        "type": "agentfootprint.stream.tool_start",
+        "path": "/toolName",
+        "runtimeStageId": "tool-calls#23"
+       }
+      }
+     },
+     "source": "tool:get_array_inventory",
+     "status": "recorded",
+     "pointers": [
+      {
+       "kind": "event",
+       "index": 51,
+       "type": "agentfootprint.tools.absent",
+       "path": "/checked/0/what",
+       "runtimeStageId": "tool-calls#23"
+      },
+      {
+       "kind": "event",
+       "index": 46,
+       "type": "agentfootprint.stream.tool_start",
+       "path": "/toolName",
+       "runtimeStageId": "tool-calls#23"
+      }
+     ],
+     "item": true
+    },
+    {
+     "text": "vDisk and vm_rdm_map: every VM disk in the RVTools export dated 2026-09-19 (sync_metadata.source_date) — a VMDK by its datastore's WWN (vDatastore), an RDM by its own — each attributed to the array whose serial its WWN carries (a PowerStore WWN carries none: to the array the PowerStore volume mapping files it under; a WWN with neither: to no array), searched for one attributed to an array whose serial or name equals or contains the array asked",
+     "parts": [
+      {
+       "text": "vDisk and vm_rdm_map: every VM disk in the RVTools export dated 2026-09-19 (sync_metadata.source_date) — a VMDK by its datastore's WWN (vDatastore), an RDM by its own — each attributed to the array whose serial its WWN carries (a PowerStore WWN carries none: to the array the PowerStore volume mapping files it under; a WWN with neither: to no array), searched for one attributed to an array whose serial or name equals or contains the array asked"
+      }
+     ],
+     "template": {
+      "id": "checked.item.full",
+      "version": 1
+     },
+     "vars": {
+      "what": {
+       "value": "vDisk and vm_rdm_map: every VM disk in the RVTools export dated 2026-09-19 (sync_metadata.source_date) — a VMDK by its datastore's WWN (vDatastore), an RDM by its own — each attributed to the array whose serial its WWN carries (a PowerStore WWN carries none: to the array the PowerStore volume mapping files it under; a WWN with neither: to no array), searched for one attributed to an array whose serial or name equals or contains the array asked",
+       "source": "tool:get_array_inventory",
+       "from": {
+        "kind": "event",
+        "index": 51,
+        "type": "agentfootprint.tools.absent",
+        "path": "/checked/1/what",
+        "runtimeStageId": "tool-calls#23"
+       }
+      },
+      "tool": {
+       "value": "get_array_inventory",
+       "source": "library",
+       "from": {
+        "kind": "event",
+        "index": 46,
+        "type": "agentfootprint.stream.tool_start",
+        "path": "/toolName",
+        "runtimeStageId": "tool-calls#23"
+       }
+      }
+     },
+     "source": "tool:get_array_inventory",
+     "status": "recorded",
+     "pointers": [
+      {
+       "kind": "event",
+       "index": 51,
+       "type": "agentfootprint.tools.absent",
+       "path": "/checked/1/what",
+       "runtimeStageId": "tool-calls#23"
+      },
+      {
+       "kind": "event",
+       "index": 46,
+       "type": "agentfootprint.stream.tool_start",
+       "path": "/toolName",
+       "runtimeStageId": "tool-calls#23"
+      }
+     ],
+     "item": true
+    }
+   ],
+   "chips": [
+    {
+     "mark": "said-by",
+     "text": "said by: get_array_inventory",
+     "tone": "plain",
+     "template": {
+      "id": "chip.saidBy",
+      "version": 1
+     }
+    }
+   ],
+   "status": "recorded"
+  },
+  {
+   "id": "not-checked",
+   "heading": {
+    "text": "It did not check",
+    "parts": [
+     {
+      "text": "It did not check"
+     }
+    ],
+    "template": {
+     "id": "row.notChecked",
+     "version": 1
+    },
+    "vars": {},
+    "source": "library",
+    "status": "not-applicable",
+    "pointers": []
+   },
+   "lines": [
+    {
+     "text": "get_array_inventory says it did not check:",
+     "parts": [
+      {
+       "code": "get_array_inventory"
+      },
+      {
+       "text": " says it did not check:"
+      }
+     ],
+     "template": {
+      "id": "notChecked.declared",
+      "version": 1
+     },
+     "vars": {
+      "tool": {
+       "value": "get_array_inventory",
+       "source": "library",
+       "from": {
+        "kind": "event",
+        "index": 46,
+        "type": "agentfootprint.stream.tool_start",
+        "path": "/toolName",
+        "runtimeStageId": "tool-calls#23"
+       }
+      }
+     },
+     "source": "tool:get_array_inventory",
+     "status": "recorded",
+     "pointers": [
+      {
+       "kind": "event",
+       "index": 51,
+       "type": "agentfootprint.tools.absent",
+       "path": "/toolName",
+       "runtimeStageId": "tool-calls#23"
+      },
+      {
+       "kind": "event",
+       "index": 46,
+       "type": "agentfootprint.stream.tool_start",
+       "path": "/toolName",
+       "runtimeStageId": "tool-calls#23"
+      }
+     ],
+     "chips": [
+      {
+       "mark": "declared",
+       "text": "declared",
+       "tone": "plain",
+       "template": {
+        "id": "chip.declared",
+        "version": 1
+       }
+      }
+     ]
+    },
+    {
+     "text": "whether that name is a storage array, and which VM disks are on it",
+     "parts": [
+      {
+       "text": "whether that name is a storage array, and which VM disks are on it"
+      }
+     ],
+     "template": {
+      "id": "notChecked.item.full",
+      "version": 1
+     },
+     "vars": {
+      "what": {
+       "value": "whether that name is a storage array, and which VM disks are on it",
+       "source": "tool:get_array_inventory",
+       "from": {
+        "kind": "event",
+        "index": 51,
+        "type": "agentfootprint.tools.absent",
+        "path": "/notChecked/0/what",
+        "runtimeStageId": "tool-calls#23"
+       }
+      },
+      "tool": {
+       "value": "get_array_inventory",
+       "source": "library",
+       "from": {
+        "kind": "event",
+        "index": 46,
+        "type": "agentfootprint.stream.tool_start",
+        "path": "/toolName",
+        "runtimeStageId": "tool-calls#23"
+       }
+      }
+     },
+     "source": "tool:get_array_inventory",
+     "status": "recorded",
+     "pointers": [
+      {
+       "kind": "event",
+       "index": 51,
+       "type": "agentfootprint.tools.absent",
+       "path": "/notChecked/0/what",
+       "runtimeStageId": "tool-calls#23"
+      },
+      {
+       "kind": "event",
+       "index": 46,
+       "type": "agentfootprint.stream.tool_start",
+       "path": "/toolName",
+       "runtimeStageId": "tool-calls#23"
+      }
+     ],
+     "item": true
+    },
+    {
+     "text": "hosts that are not VMware — AIX LPARs and physical servers",
+     "parts": [
+      {
+       "text": "hosts that are not VMware — AIX LPARs and physical servers"
+      }
+     ],
+     "template": {
+      "id": "notChecked.item.full",
+      "version": 1
+     },
+     "vars": {
+      "what": {
+       "value": "hosts that are not VMware — AIX LPARs and physical servers",
+       "source": "tool:get_array_inventory",
+       "from": {
+        "kind": "event",
+        "index": 51,
+        "type": "agentfootprint.tools.absent",
+        "path": "/notChecked/1/what",
+        "runtimeStageId": "tool-calls#23"
+       }
+      },
+      "tool": {
+       "value": "get_array_inventory",
+       "source": "library",
+       "from": {
+        "kind": "event",
+        "index": 46,
+        "type": "agentfootprint.stream.tool_start",
+        "path": "/toolName",
+        "runtimeStageId": "tool-calls#23"
+       }
+      }
+     },
+     "source": "tool:get_array_inventory",
+     "status": "recorded",
+     "pointers": [
+      {
+       "kind": "event",
+       "index": 51,
+       "type": "agentfootprint.tools.absent",
+       "path": "/notChecked/1/what",
+       "runtimeStageId": "tool-calls#23"
+      },
+      {
+       "kind": "event",
+       "index": 46,
+       "type": "agentfootprint.stream.tool_start",
+       "path": "/toolName",
+       "runtimeStageId": "tool-calls#23"
+      }
+     ],
+     "item": true
+    },
+    {
+     "text": "PowerMax array performance",
+     "parts": [
+      {
+       "text": "PowerMax array performance"
+      }
+     ],
+     "template": {
+      "id": "notChecked.item.full",
+      "version": 1
+     },
+     "vars": {
+      "what": {
+       "value": "PowerMax array performance",
+       "source": "tool:get_array_inventory",
+       "from": {
+        "kind": "event",
+        "index": 51,
+        "type": "agentfootprint.tools.absent",
+        "path": "/notChecked/2/what",
+        "runtimeStageId": "tool-calls#23"
+       }
+      },
+      "tool": {
+       "value": "get_array_inventory",
+       "source": "library",
+       "from": {
+        "kind": "event",
+        "index": 46,
+        "type": "agentfootprint.stream.tool_start",
+        "path": "/toolName",
+        "runtimeStageId": "tool-calls#23"
+       }
+      }
+     },
+     "source": "tool:get_array_inventory",
+     "status": "recorded",
+     "pointers": [
+      {
+       "kind": "event",
+       "index": 51,
+       "type": "agentfootprint.tools.absent",
+       "path": "/notChecked/2/what",
+       "runtimeStageId": "tool-calls#23"
+      },
+      {
+       "kind": "event",
+       "index": 46,
+       "type": "agentfootprint.stream.tool_start",
+       "path": "/toolName",
+       "runtimeStageId": "tool-calls#23"
+      }
+     ],
+     "item": true
+    },
+    {
+     "text": "VM disks this tool attributes to no array: 4 in this export",
+     "parts": [
+      {
+       "text": "VM disks this tool attributes to no array: 4 in this export"
+      }
+     ],
+     "template": {
+      "id": "notChecked.item.full",
+      "version": 1
+     },
+     "vars": {
+      "what": {
+       "value": "VM disks this tool attributes to no array: 4 in this export",
+       "source": "tool:get_array_inventory",
+       "from": {
+        "kind": "event",
+        "index": 51,
+        "type": "agentfootprint.tools.absent",
+        "path": "/notChecked/3/what",
+        "runtimeStageId": "tool-calls#23"
+       }
+      },
+      "tool": {
+       "value": "get_array_inventory",
+       "source": "library",
+       "from": {
+        "kind": "event",
+        "index": 46,
+        "type": "agentfootprint.stream.tool_start",
+        "path": "/toolName",
+        "runtimeStageId": "tool-calls#23"
+       }
+      }
+     },
+     "source": "tool:get_array_inventory",
+     "status": "recorded",
+     "pointers": [
+      {
+       "kind": "event",
+       "index": 51,
+       "type": "agentfootprint.tools.absent",
+       "path": "/notChecked/3/what",
+       "runtimeStageId": "tool-calls#23"
+      },
+      {
+       "kind": "event",
+       "index": 46,
+       "type": "agentfootprint.stream.tool_start",
+       "path": "/toolName",
+       "runtimeStageId": "tool-calls#23"
+      }
+     ],
+     "item": true
+    }
+   ],
+   "chips": [
+    {
+     "mark": "said-by",
+     "text": "said by: get_array_inventory",
+     "tone": "plain",
+     "template": {
+      "id": "chip.saidBy",
+      "version": 1
+     }
+    }
+   ],
+   "status": "recorded"
+  },
+  {
+   "id": "found",
+   "heading": {
+    "text": "It found",
+    "parts": [
+     {
+      "text": "It found"
+     }
+    ],
+    "template": {
+     "id": "row.found",
+     "version": 1
+    },
+    "vars": {},
+    "source": "library",
+    "status": "not-applicable",
+    "pointers": []
+   },
+   "lines": [
+    {
+     "text": "get_array_inventory looked for a VM disk in the RVTools export attributed to the array asked and found none.",
+     "parts": [
+      {
+       "code": "get_array_inventory"
+      },
+      {
+       "text": " looked for a VM disk in the RVTools export attributed to the array asked and found none."
+      }
+     ],
+     "template": {
+      "id": "found.absent",
+      "version": 1
+     },
+     "vars": {
+      "tool": {
+       "value": "get_array_inventory",
+       "source": "library",
+       "from": {
+        "kind": "event",
+        "index": 46,
+        "type": "agentfootprint.stream.tool_start",
+        "path": "/toolName",
+        "runtimeStageId": "tool-calls#23"
+       }
+      },
+      "lookedFor": {
+       "value": "a VM disk in the RVTools export attributed to the array asked",
+       "source": "tool:get_array_inventory",
+       "from": {
+        "kind": "event",
+        "index": 51,
+        "type": "agentfootprint.tools.absent",
+        "path": "/lookedFor",
+        "runtimeStageId": "tool-calls#23"
+       }
+      }
+     },
+     "source": "tool:get_array_inventory",
+     "status": "recorded",
+     "pointers": [
+      {
+       "kind": "event",
+       "index": 59,
+       "type": "agentfootprint.stream.tool_end",
+       "path": "/status",
+       "runtimeStageId": "tool-calls#23"
+      },
+      {
+       "kind": "event",
+       "index": 46,
+       "type": "agentfootprint.stream.tool_start",
+       "path": "/toolName",
+       "runtimeStageId": "tool-calls#23"
+      },
+      {
+       "kind": "event",
+       "index": 51,
+       "type": "agentfootprint.tools.absent",
+       "path": "/lookedFor",
+       "runtimeStageId": "tool-calls#23"
+      }
+     ]
+    },
+    {
+     "text": "The model could also see the result of powerstore_get_volumes from an earlier answer (at least 1 answer back): an empty result that did not declare what it searched.",
+     "parts": [
+      {
+       "text": "The model could also see the result of "
+      },
+      {
+       "code": "powerstore_get_volumes"
+      },
+      {
+       "text": " from an earlier answer (at least 1 answer back): an empty result that did not declare what it searched."
+      }
+     ],
+     "template": {
+      "id": "found.inView.undeclaredEmpty",
+      "version": 1
+     },
+     "vars": {
+      "tool": {
+       "value": "powerstore_get_volumes",
+       "source": "library",
+       "from": {
+        "kind": "history",
+        "index": 2,
+        "path": "/toolName",
+        "toolCallId": "toolu_01YQPyS4gmUrsi8mv52oj1DE"
+       }
+      },
+      "distance": {
+       "value": 1,
+       "source": "library"
+      },
+      "distanceWindowed": {
+       "value": 1,
+       "source": "library"
+      }
+     },
+     "source": "app",
+     "status": "recorded",
+     "pointers": [
+      {
+       "kind": "event",
+       "index": 64,
+       "type": "agentfootprint.context.injected",
+       "path": "/sourceId",
+       "runtimeStageId": "sf-messages/compose#34"
+      },
+      {
+       "kind": "history",
+       "index": 2,
+       "path": "#emptiness",
+       "toolCallId": "toolu_01YQPyS4gmUrsi8mv52oj1DE"
+      },
+      {
+       "kind": "declaration",
+       "owner": "app",
+       "field": "tools.powerstore_get_volumes.rowsAt",
+       "id": "neo-seo",
+       "version": "1"
+      },
+      {
+       "kind": "history",
+       "index": 2,
+       "path": "/toolName",
+       "toolCallId": "toolu_01YQPyS4gmUrsi8mv52oj1DE"
+      }
+     ],
+     "chips": [
+      {
+       "mark": "undeclared-empty",
+       "text": "undeclared empty",
+       "tone": "warn",
+       "template": {
+        "id": "chip.undeclaredEmpty",
+        "version": 1
+       }
+      }
+     ]
+    }
+   ],
+   "chips": [
+    {
+     "mark": "said-by",
+     "text": "said by: get_array_inventory",
+     "tone": "plain",
+     "template": {
+      "id": "chip.saidBy",
+      "version": 1
+     }
+    },
+    {
+     "mark": "said-by",
+     "text": "said by: the app (not recorded with the run)",
+     "tone": "plain",
+     "template": {
+      "id": "chip.saidBy",
+      "version": 1
+     }
+    }
+   ],
+   "status": "recorded"
+  },
+  {
+   "id": "how-sure",
+   "heading": {
+    "text": "How sure",
+    "parts": [
+     {
+      "text": "How sure"
+     }
+    ],
+    "template": {
+     "id": "row.howSure",
+     "version": 1
+    },
+    "vars": {},
+    "source": "library",
+    "status": "not-applicable",
+    "pointers": []
+   },
+   "lines": [
+    {
+     "text": "The record does not rate how sure this answer is.",
+     "parts": [
+      {
+       "text": "The record does not rate how sure this answer is."
+      }
+     ],
+     "template": {
+      "id": "howSure.standing.none",
+      "version": 1
+     },
+     "vars": {},
+     "source": "library",
+     "status": "not-recorded",
+     "pointers": [],
+     "missing": "not-built",
+     "chips": [
+      {
+       "mark": "not-recorded",
+       "text": "not recorded",
+       "tone": "plain",
+       "template": {
+        "id": "chip.notRecorded",
+        "version": 1
+       }
+      }
+     ]
+    },
+    {
+     "text": "Before calling get_array_inventory, the model said it expected this call to answer the question directly, and rated how useful it expected the result to be: high.",
+     "parts": [
+      {
+       "text": "Before calling "
+      },
+      {
+       "code": "get_array_inventory"
+      },
+      {
+       "text": ", the model said it expected this call to answer the question directly, and rated how useful it expected the result to be: high."
+      }
+     ],
+     "template": {
+      "id": "howSure.expected.direct",
+      "version": 1
+     },
+     "vars": {
+      "tool": {
+       "value": "get_array_inventory",
+       "source": "library",
+       "from": {
+        "kind": "event",
+        "index": 46,
+        "type": "agentfootprint.stream.tool_start",
+        "path": "/toolName",
+        "runtimeStageId": "tool-calls#23"
+       }
+      },
+      "expect": {
+       "value": "high",
+       "source": "model",
+       "from": {
+        "kind": "event",
+        "index": 45,
+        "type": "agentfootprint.findings.declared",
+        "path": "/expect",
+        "runtimeStageId": "tool-calls#23"
+       }
+      }
+     },
+     "source": "model",
+     "status": "recorded",
+     "pointers": [
+      {
+       "kind": "event",
+       "index": 45,
+       "type": "agentfootprint.findings.declared",
+       "path": "/basis",
+       "runtimeStageId": "tool-calls#23"
+      },
+      {
+       "kind": "event",
+       "index": 46,
+       "type": "agentfootprint.stream.tool_start",
+       "path": "/toolName",
+       "runtimeStageId": "tool-calls#23"
+      },
+      {
+       "kind": "event",
+       "index": 45,
+       "type": "agentfootprint.findings.declared",
+       "path": "/expect",
+       "runtimeStageId": "tool-calls#23"
+      }
+     ]
+    },
+    {
+     "text": "The call found nothing.",
+     "parts": [
+      {
+       "text": "The call found nothing."
+      }
+     ],
+     "template": {
+      "id": "howSure.outcome.nothing",
+      "version": 1
+     },
+     "vars": {
+      "tool": {
+       "value": "get_array_inventory",
+       "source": "library",
+       "from": {
+        "kind": "event",
+        "index": 46,
+        "type": "agentfootprint.stream.tool_start",
+        "path": "/toolName",
+        "runtimeStageId": "tool-calls#23"
+       }
+      }
+     },
+     "source": "tool:get_array_inventory",
+     "status": "recorded",
+     "pointers": [
+      {
+       "kind": "event",
+       "index": 59,
+       "type": "agentfootprint.stream.tool_end",
+       "path": "/status",
+       "runtimeStageId": "tool-calls#23"
+      },
+      {
+       "kind": "event",
+       "index": 46,
+       "type": "agentfootprint.stream.tool_start",
+       "path": "/toolName",
+       "runtimeStageId": "tool-calls#23"
+      }
+     ]
+    },
+    {
+     "text": "The library checked the answer's names and numbers: none was missing from what the tools returned, your message, the conversation or the app's own instructions (recalled memory included).",
+     "parts": [
+      {
+       "text": "The library checked the answer's names and numbers: none was missing from what the tools returned, your message, the conversation or the app's own instructions (recalled memory included)."
+      }
+     ],
+     "template": {
+      "id": "howSure.evidence.unsplit",
+      "version": 1
+     },
+     "vars": {},
+     "source": "library",
+     "status": "recorded",
+     "pointers": [
+      {
+       "kind": "event",
+       "index": 189,
+       "type": "agentfootprint.agent.evidence_checked",
+       "path": "/candidates",
+       "runtimeStageId": "sf-route#44"
+      },
+      {
+       "kind": "event",
+       "index": 189,
+       "type": "agentfootprint.agent.evidence_checked",
+       "path": "/action",
+       "runtimeStageId": "sf-route#44"
+      }
+     ]
+    }
+   ],
+   "chips": [
+    {
+     "mark": "said-by",
+     "text": "said by: the model",
+     "tone": "plain",
+     "template": {
+      "id": "chip.saidBy",
+      "version": 1
+     }
+    },
+    {
+     "mark": "said-by",
+     "text": "said by: get_array_inventory",
+     "tone": "plain",
+     "template": {
+      "id": "chip.saidBy",
+      "version": 1
+     }
+    },
+    {
+     "mark": "said-by",
+     "text": "said by: the library's record",
+     "tone": "plain",
+     "template": {
+      "id": "chip.saidBy",
+      "version": 1
+     }
+    }
+   ],
+   "status": "recorded"
+  },
+  {
+   "id": "anything-wrong",
+   "heading": {
+    "text": "Anything wrong",
+    "parts": [
+     {
+      "text": "Anything wrong"
+     }
+    ],
+    "template": {
+     "id": "row.wrong",
+     "version": 1
+    },
+    "vars": {},
+    "source": "library",
+    "status": "not-applicable",
+    "pointers": []
+   },
+   "lines": [
+    {
+     "text": "An empty result that did not declare what it searched, from powerstore_get_volumes in an earlier answer (at least 1 answer back), was in front of the model when it answered.",
+     "parts": [
+      {
+       "text": "An empty result that did not declare what it searched, from "
+      },
+      {
+       "code": "powerstore_get_volumes"
+      },
+      {
+       "text": " in an earlier answer (at least 1 answer back), was in front of the model when it answered."
+      }
+     ],
+     "template": {
+      "id": "signal.undeclaredEmptyInView",
+      "version": 1
+     },
+     "vars": {
+      "tool": {
+       "value": "powerstore_get_volumes",
+       "source": "library",
+       "from": {
+        "kind": "history",
+        "index": 2,
+        "path": "/toolName",
+        "toolCallId": "toolu_01YQPyS4gmUrsi8mv52oj1DE"
+       }
+      },
+      "distance": {
+       "value": 1,
+       "source": "library"
+      },
+      "distanceWindowed": {
+       "value": 1,
+       "source": "library"
+      }
+     },
+     "source": "app",
+     "status": "recorded",
+     "pointers": [
+      {
+       "kind": "event",
+       "index": 64,
+       "type": "agentfootprint.context.injected",
+       "path": "/sourceId",
+       "runtimeStageId": "sf-messages/compose#34"
+      },
+      {
+       "kind": "history",
+       "index": 2,
+       "path": "#emptiness",
+       "toolCallId": "toolu_01YQPyS4gmUrsi8mv52oj1DE"
+      },
+      {
+       "kind": "declaration",
+       "owner": "app",
+       "field": "tools.powerstore_get_volumes.rowsAt",
+       "id": "neo-seo",
+       "version": "1"
+      },
+      {
+       "kind": "history",
+       "index": 2,
+       "path": "/toolName",
+       "toolCallId": "toolu_01YQPyS4gmUrsi8mv52oj1DE"
+      }
+     ]
+    },
+    {
+     "text": "No tool call failed or was refused.",
+     "parts": [
+      {
+       "text": "No tool call failed or was refused."
+      }
+     ],
+     "template": {
+      "id": "wrong.noErrors",
+      "version": 1
+     },
+     "vars": {},
+     "source": "library",
+     "status": "recorded",
+     "pointers": [
+      {
+       "kind": "event",
+       "index": 59,
+       "type": "agentfootprint.stream.tool_end",
+       "path": "/status",
+       "runtimeStageId": "tool-calls#23"
+      }
+     ]
+    },
+    {
+     "text": "1 of the 3 checks could not be run on this record.",
+     "parts": [
+      {
+       "text": "1 of the 3 checks could not be run on this record."
+      }
+     ],
+     "template": {
+      "id": "wrong.unreachable",
+      "version": 1
+     },
+     "vars": {
+      "unreachable": {
+       "value": 1,
+       "source": "library"
+      },
+      "applicable": {
+       "value": 3,
+       "source": "library"
+      }
+     },
+     "source": "library",
+     "status": "not-recorded",
+     "pointers": [],
+     "missing": "not-declared",
+     "chips": [
+      {
+       "mark": "not-recorded",
+       "text": "not recorded",
+       "tone": "plain",
+       "template": {
+        "id": "chip.notRecorded",
+        "version": 1
+       }
+      }
+     ]
+    },
+    {
+     "text": "It cannot be told whether get_array_inventory checked that the thing asked about exists: its not-checked items do not say what kind they are.",
+     "parts": [
+      {
+       "text": "It cannot be told whether "
+      },
+      {
+       "code": "get_array_inventory"
+      },
+      {
+       "text": " checked that the thing asked about exists: its not-checked items do not say what kind they are."
+      }
+     ],
+     "template": {
+      "id": "unreachable.existence",
+      "version": 1
+     },
+     "vars": {
+      "tool": {
+       "value": "get_array_inventory",
+       "source": "library",
+       "from": {
+        "kind": "event",
+        "index": 46,
+        "type": "agentfootprint.stream.tool_start",
+        "path": "/toolName",
+        "runtimeStageId": "tool-calls#23"
+       }
+      }
+     },
+     "source": "library",
+     "status": "not-recorded",
+     "pointers": [
+      {
+       "kind": "event",
+       "index": 51,
+       "type": "agentfootprint.tools.absent",
+       "path": "/notChecked/0/what",
+       "runtimeStageId": "tool-calls#23"
+      },
+      {
+       "kind": "event",
+       "index": 46,
+       "type": "agentfootprint.stream.tool_start",
+       "path": "/toolName",
+       "runtimeStageId": "tool-calls#23"
+      }
+     ],
+     "missing": "not-declared",
+     "item": true
+    }
+   ],
+   "chips": [
+    {
+     "mark": "signals",
+     "text": "1 signal",
+     "tone": "warn",
+     "template": {
+      "id": "chip.signals",
+      "version": 1
+     }
+    },
+    {
+     "mark": "said-by",
+     "text": "said by: the app (not recorded with the run)",
+     "tone": "plain",
+     "template": {
+      "id": "chip.saidBy",
+      "version": 1
+     }
+    },
+    {
+     "mark": "said-by",
+     "text": "said by: the library's record",
+     "tone": "plain",
+     "template": {
+      "id": "chip.saidBy",
+      "version": 1
+     }
+    }
+   ],
+   "status": "recorded"
+  }
+ ],
+ "signals": [
+  {
+   "id": "undeclared-empty-in-view",
+   "check": "empty-results",
+   "tone": "warn",
+   "sentence": {
+    "text": "An empty result that did not declare what it searched, from powerstore_get_volumes in an earlier answer (at least 1 answer back), was in front of the model when it answered.",
+    "parts": [
+     {
+      "text": "An empty result that did not declare what it searched, from "
+     },
+     {
+      "code": "powerstore_get_volumes"
+     },
+     {
+      "text": " in an earlier answer (at least 1 answer back), was in front of the model when it answered."
+     }
+    ],
+    "template": {
+     "id": "signal.undeclaredEmptyInView",
+     "version": 1
+    },
+    "vars": {
+     "tool": {
+      "value": "powerstore_get_volumes",
+      "source": "library",
+      "from": {
+       "kind": "history",
+       "index": 2,
+       "path": "/toolName",
+       "toolCallId": "toolu_01YQPyS4gmUrsi8mv52oj1DE"
+      }
+     },
+     "distance": {
+      "value": 1,
+      "source": "library"
+     },
+     "distanceWindowed": {
+      "value": 1,
+      "source": "library"
+     }
+    },
+    "source": "app",
+    "status": "recorded",
+    "pointers": [
+     {
+      "kind": "event",
+      "index": 64,
+      "type": "agentfootprint.context.injected",
+      "path": "/sourceId",
+      "runtimeStageId": "sf-messages/compose#34"
+     },
+     {
+      "kind": "history",
+      "index": 2,
+      "path": "#emptiness",
+      "toolCallId": "toolu_01YQPyS4gmUrsi8mv52oj1DE"
+     },
+     {
+      "kind": "declaration",
+      "owner": "app",
+      "field": "tools.powerstore_get_volumes.rowsAt",
+      "id": "neo-seo",
+      "version": "1"
+     },
+     {
+      "kind": "history",
+      "index": 2,
+      "path": "/toolName",
+      "toolCallId": "toolu_01YQPyS4gmUrsi8mv52oj1DE"
+     }
+    ]
+   }
+  }
+ ],
+ "unreachable": [
+  {
+   "check": "existence",
+   "missing": "not-declared",
+   "sentence": {
+    "text": "It cannot be told whether get_array_inventory checked that the thing asked about exists: its not-checked items do not say what kind they are.",
+    "parts": [
+     {
+      "text": "It cannot be told whether "
+     },
+     {
+      "code": "get_array_inventory"
+     },
+     {
+      "text": " checked that the thing asked about exists: its not-checked items do not say what kind they are."
+     }
+    ],
+    "template": {
+     "id": "unreachable.existence",
+     "version": 1
+    },
+    "vars": {
+     "tool": {
+      "value": "get_array_inventory",
+      "source": "library",
+      "from": {
+       "kind": "event",
+       "index": 46,
+       "type": "agentfootprint.stream.tool_start",
+       "path": "/toolName",
+       "runtimeStageId": "tool-calls#23"
+      }
+     }
+    },
+    "source": "library",
+    "status": "not-recorded",
+    "pointers": [
+     {
+      "kind": "event",
+      "index": 51,
+      "type": "agentfootprint.tools.absent",
+      "path": "/notChecked/0/what",
+      "runtimeStageId": "tool-calls#23"
+     },
+     {
+      "kind": "event",
+      "index": 46,
+      "type": "agentfootprint.stream.tool_start",
+      "path": "/toolName",
+      "runtimeStageId": "tool-calls#23"
+     }
+    ],
+    "missing": "not-declared"
+   }
+  }
+ ],
+ "summary": {
+  "sentence": {
+   "text": "An empty result that did not declare what it searched, from powerstore_get_volumes in an earlier answer (at least 1 answer back), was in front of the model when it answered.",
+   "parts": [
+    {
+     "text": "An empty result that did not declare what it searched, from "
+    },
+    {
+     "code": "powerstore_get_volumes"
+    },
+    {
+     "text": " in an earlier answer (at least 1 answer back), was in front of the model when it answered."
+    }
+   ],
+   "template": {
+    "id": "summary.signal",
+    "version": 1
+   },
+   "vars": {
+    "first.tool": {
+     "value": "powerstore_get_volumes",
+     "source": "library",
+     "from": {
+      "kind": "history",
+      "index": 2,
+      "path": "/toolName",
+      "toolCallId": "toolu_01YQPyS4gmUrsi8mv52oj1DE"
+     }
+    },
+    "first.distance": {
+     "value": 1,
+     "source": "library"
+    },
+    "first.distanceWindowed": {
+     "value": 1,
+     "source": "library"
+    }
+   },
+   "source": "app",
+   "status": "recorded",
+   "pointers": [
+    {
+     "kind": "event",
+     "index": 64,
+     "type": "agentfootprint.context.injected",
+     "path": "/sourceId",
+     "runtimeStageId": "sf-messages/compose#34"
+    },
+    {
+     "kind": "history",
+     "index": 2,
+     "path": "#emptiness",
+     "toolCallId": "toolu_01YQPyS4gmUrsi8mv52oj1DE"
+    },
+    {
+     "kind": "declaration",
+     "owner": "app",
+     "field": "tools.powerstore_get_volumes.rowsAt",
+     "id": "neo-seo",
+     "version": "1"
+    },
+    {
+     "kind": "history",
+     "index": 2,
+     "path": "/toolName",
+     "toolCallId": "toolu_01YQPyS4gmUrsi8mv52oj1DE"
+    }
+   ]
+  },
+  "tone": "warn"
+ },
+ "unread": 0,
+ "foreign": 0,
+ "scope": "own-run"
+}

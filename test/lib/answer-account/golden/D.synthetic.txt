@@ -1,0 +1,19 @@
+You asked:
+  “I am a VIP customer”  ⟨asked@1 · person · recorded⟩
+It understood:
+  The library's routing picked the vip skill because one of the app's rules matched your words “VIP”.  ⟨understood.rule.witness@1 · library · recorded⟩
+  The skill graph refused to open the vip skill.  ⟨understood.rejected@1 · library · recorded⟩
+  The vip skill was not given to the model; it was given the billing skill instead.  ⟨understood.notDelivered.other@1 · library · recorded · decided ≠ delivered⟩
+  How sure the routing was is not recorded.  ⟨understood.confidence.none@1 · library · not-recorded · not recorded⟩
+It checked:
+  It did not run any tools for this answer.  ⟨checked.noCalls@1 · library · recorded⟩
+It did not check:
+  Nothing to report: no tool ran.  ⟨notChecked.noCalls@1 · library · not-applicable⟩
+It found:
+  No tool ran for this answer.  ⟨found.noCalls@1 · library · recorded⟩
+How sure:
+  The record does not rate how sure this answer is.  ⟨howSure.standing.none@1 · library · not-recorded · not recorded⟩
+  The library was not set to check the answer's names and numbers.  ⟨howSure.evidence.off@1 · library · not-applicable⟩
+Anything wrong:
+  The vip skill was decided for this question but was not given to the model.  ⟨signal.decidedNotDelivered@1 · library · recorded⟩
+In one line (bad): The vip skill was decided for this question but was not given to the model.  ⟨library⟩

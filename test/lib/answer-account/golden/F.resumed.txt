@@ -1,0 +1,22 @@
+You asked:
+  This answer continued after a pause. The message, as the run held it: “how many volumes last year?”  ⟨asked.resumed@1 · library · recorded⟩
+It understood:
+  This app does not route questions to skills.  ⟨understood.notConfigured@1 · library · not-applicable⟩
+It checked:
+  It ran ask_year. The tool did not say what it checked.  ⟨checked.undeclared@1 · library · recorded · no coverage declared⟩
+  Before the pause it also ran 1 tool (lookup); what those checked is not in this record.  ⟨checked.beforePause@1 · library · recorded · before a pause — not in this record⟩
+It did not check:
+  ask_year did not say what it left unchecked.  ⟨notChecked.undeclared@1 · library · recorded · no coverage declared⟩
+  What the tools run before the pause did not check is not in this record.  ⟨notChecked.beforePause@1 · library · not-recorded · before a pause — not in this record⟩
+It found:
+  ask_year returned a result.  ⟨found.result@1 · library · recorded⟩
+  What the tools found before the pause is not in this record.  ⟨found.beforePause@1 · library · not-recorded · before a pause — not in this record⟩
+How sure:
+  The record does not rate how sure this answer is.  ⟨howSure.standing.none@1 · library · not-recorded · not recorded⟩
+  The library was not set to check the answer's names and numbers.  ⟨howSure.evidence.off@1 · library · not-applicable⟩
+Anything wrong:
+  No tool call failed or was refused.  ⟨wrong.noErrors@1 · library · recorded⟩
+  None of the checks this report looks for could be run on this record.  ⟨wrong.unreachable.all@1 · library · not-recorded · not recorded⟩
+    • It cannot be told whether the result of ask_year was empty: its shape is not declared.  ⟨unreachable.empty@1 · library · not-recorded⟩
+  Anything before the pause is not in this record, so these checks cover only the part after it.  ⟨wrong.beforePause@1 · library · not-recorded · before a pause — not in this record⟩
+In one line (unknown): This answer continued after a pause; what happened before the pause is not in this record.  ⟨library⟩
