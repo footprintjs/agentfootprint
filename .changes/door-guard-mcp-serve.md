@@ -1,4 +1,0 @@
----
-type: security
----
-**`mcpServe` over HTTP validates `Origin`, `Host` and the JSON content type before any tool runs.** The MCP transport specification requires servers to validate `Origin` on every connection to prevent DNS rebinding, and nothing did: the MCP SDK's own protection is off by default, so a page that re-pointed its name at a `127.0.0.1`-bound server could call tools and read the results. The HTTP transport now uses the same door guard, answered in the SDK's JSON-RPC error shape, with `allowedOrigins` and `allowedHosts` on `McpHttpServeTransport`. A loopback `host` answers the loopback names only, as the SDK's own `createMcpExpressApp` does. The library owns the JSON rule too, rather than trusting whichever SDK version is installed. Native MCP clients send no `Origin` and are unaffected.
