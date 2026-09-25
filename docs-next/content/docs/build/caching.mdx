@@ -1,0 +1,118 @@
+---
+title: Prompt caching
+description: Stable context — steering, facts, an active skill — is cached for you on providers that support it, per a policy you can override on each injection. On by default; one flag turns it off.
+---
+
+An agent loop sends the same system prompt and tool descriptions on every
+iteration. On providers with prompt caching, those repeated bytes can cost a
+fraction of normal input tokens — but only if the request marks which blocks
+are stable. agentfootprint does that marking for you.
+
+**It is on by default.** Most agents never touch it.
+
+## Turning it off
+
+```ts
+import { Agent } from 'agentfootprint';
+import { anthropic } from 'agentfootprint/providers';
+
+const agent = Agent.create({
+  provider: anthropic({ defaultModel: 'claude-sonnet-4-5' }),
+  caching: 'off', // the only accepted value; leave unset to keep caching on
+})
+  .system('…')
+  .build();
+```
+
+Turn it off when:
+
+- running tests against `mock()` — there is no real provider, so caching is moot;
+- debugging context assembly and you want the request exactly as built, every iteration;
+- running a token-cost comparison and you need an uncached baseline.
+
+In production, leave it on: a built-in gate (below) already stands caching down
+on the turns where it would cost more than it saves.
+
+## What gets cached — a policy per injection
+
+Each piece of context says how long it stays stable. The defaults follow how
+each kind behaves:
+
+| Declared with | Default `cache` | Why |
+|---|---|---|
+| `defineSteering` | `'always'` | Always-on rules are the most stable text in the loop |
+| `defineFact` | `'always'` | Static reference data |
+| `defineSkill` | `'while-active'` | Stable while the skill is active; released when it deactivates |
+| `defineInstruction` | `'never'` | Rule-based text flips turn to turn, so caching it would cost more than it saves |
+
+Override on any injection:
+
+```ts
+import { defineSkill } from 'agentfootprint/context';
+
+const triage = defineSkill({
+  id: 'port-error-triage',
+  description: 'Diagnose port errors on a storage switch.',
+  body: '…',
+  cache: 'always', // keep the body cached even while the skill is inactive
+});
+```
+
+The values are `'always'`, `'while-active'`, `'never'`, or
+`{ until: (ctx) => boolean }` — cached **until** the predicate returns true.
+The predicate sees the iteration, the iterations remaining, the user message,
+the last tool called and the input tokens used so far:
+
+```ts
+cache: { until: (ctx) => ctx.cumulativeInputTokens > 50_000 }
+```
+
+## When caching stands itself down
+
+Every iteration, before the model is called, a gate decides whether to place
+cache markers at all. It skips them when:
+
+1. caching is off for the agent;
+2. the recent cache hit rate has fallen below 0.3 — the markers aren't paying off;
+3. three or more different skills were active in the last five iterations —
+   each switch invalidates the cache, so marking would only add write cost.
+
+The gate's decision is recorded with the run, like every other decision.
+
+## Which providers, and how
+
+| Provider | How caching works | Cache token counts |
+|---|---|---|
+| Anthropic | Explicit markers on stable blocks (at most 4 per request) — placed for you | reported |
+| Bedrock, Claude models | Same markers as Anthropic | reported |
+| Bedrock, other models | Automatic on the provider side | not reported |
+| OpenAI | Automatic on the provider side | reported |
+| Anything else | No-op | — |
+
+Each provider has a strategy, chosen automatically from `provider.name`. To
+support another provider, implement `CacheStrategy` (`providerName`,
+`capabilities`, `prepareRequest`, `extractMetrics`) and register it with
+`registerCacheStrategy` from `agentfootprint/cache` — see the
+[API reference](https://agentfootprint.dev/docs/api/) for the exact shapes.
+
+## Did it pay off?
+
+`cacheRecorder()` (also on `agentfootprint/cache`) reports what caching cost and
+saved on a turn — and says "not measured" rather than zero when a provider
+reported nothing. See [The cache meter](doc:cache-meter).
+
+## Gate or stuff? Both work now
+
+Without caching, the only sensible shape for a skill-heavy agent is to **gate**:
+put only the active skill's text in the prompt. With caching, **stuffing** every
+skill into the prompt and letting the cache carry it becomes reasonable too.
+Measured on a 10-skill, 18-tool agent against the live Anthropic API (input
+tokens for one task):
+
+| Shape | Caching off | Caching on |
+|---|---|---|
+| Gate — base prompt + the one active skill | 28,404 | **6,535** (−77%) |
+| Stuff — base prompt + all 10 skills | ~140,000 | 7,640 (−95%) |
+
+Gating still uses fewer tokens and has a faster first call (no large cache
+write), but stuffing is now a matter of taste rather than cost.

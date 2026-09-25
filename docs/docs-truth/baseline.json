@@ -12,12 +12,12 @@
   "counts": {
     "symbols": {
       "docs-promise-nothing": 0,
-      "documented-never-exercised": 1275,
+      "documented-never-exercised": 1277,
       "exercised-undocumented": 30,
-      "undocumented-unexercised": 585,
+      "undocumented-unexercised": 586,
       "site-code-sample-only": 18,
-      "written-but-not-published": 113,
-      "ok": 231
+      "written-but-not-published": 108,
+      "ok": 233
     },
     "events": {
       "docs-promise-nothing": 0,
@@ -390,7 +390,6 @@
     "MenuHintOptions",
     "MergeFn",
     "MergeOutcomesFn",
-    "MergeWithLLMOptions",
     "MessageApiChartDeps",
     "MilestoneKind",
     "MissingContextResult",
@@ -727,7 +726,6 @@
     "loadRelevant",
     "loadSnapshot",
     "makeRunId",
-    "mapReduce",
     "memoryInjectionKey",
     "memoryRecorder",
     "menuOutstanding",
@@ -746,7 +744,6 @@
     "rankEntries",
     "rankSuspects",
     "redactThinkingBlocks",
-    "registerCacheStrategy",
     "renderCommentary",
     "renderStatusLine",
     "runRestorationProbe",
@@ -758,7 +755,6 @@
     "scoreMargin",
     "selectCommentaryKey",
     "selectStatus",
-    "selfConsistency",
     "semanticAlignmentStrategy",
     "semanticPipeline",
     "shortlistEarlyCulprits",

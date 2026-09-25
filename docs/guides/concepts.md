@@ -318,7 +318,7 @@ const content = await triage.run({ message: 'I want a refund please' });
 
 ## PATTERNS — named compositions
 
-Every paper in the agent literature is a composition of 2 primitives + 3 compositions. We ship a handful as factories; see the [Patterns guide](patterns.md) for the full set with source papers. A sample:
+Every paper in the agent literature is a composition of 2 primitives + 3 compositions. We ship a handful as factories; see the [Patterns guide](https://agentfootprint.dev/docs/build/patterns/) for the full set with source papers. A sample:
 
 | Pattern | Factory | Built from | Paper |
 |---|---|---|---|
@@ -457,4 +457,4 @@ The compositions and primitives use `{ message: string }` as their `TIn` and a `
 | Sample N answers, take the majority vote | Pattern: `selfConsistency()` |
 | Fan-out across N inputs, reduce | Pattern: `mapReduce()` |
 
-For the named patterns (`swarm` / `reflection` / `tot` / `selfConsistency` / `debate` / `mapReduce`), see the [Patterns guide](patterns.md).
+For the named patterns (`swarm` / `reflection` / `tot` / `selfConsistency` / `debate` / `mapReduce`), see the [Patterns guide](https://agentfootprint.dev/docs/build/patterns/).
