@@ -116,6 +116,7 @@ import type {
   ToolParty,
 } from '../../slots/buildToolsSlot.js';
 import type { ToolClaim } from '../buildToolRegistry.js';
+import { changedArgKeys, shownArgsOf } from '../../toolShownArgs.js';
 import type { Tool, ToolExecutionContext } from '../../tools.js';
 import { agentToolDispatch } from '../toolDispatch.js';
 import type { MemoryIdentity } from '../../../memory/identity/types.js';
@@ -3754,6 +3755,10 @@ export function buildToolCallsHandler(
         // answer to "what did this call really run with". Seeded from the
         // PEELED `args` (9.101.0), which is `tc.args` itself when unarmed.
         let callArgs: ToolArgs = args;
+        /** The arguments AFTER the before-tool chain and BEFORE a `wants`
+         *  resolution swaps refs for artifact data — what `changedArgKeys` is
+         *  judged on. Same reference as `args` unless a link rewrote. */
+        let chainedArgs: ToolArgs = args;
         let denied = false;
         /** True once `tool.execute` has been entered — see `afterMoment`. */
         let executed = false;
@@ -3965,6 +3970,7 @@ export function buildToolCallsHandler(
           });
           recordDecisions(scope, chain.decisions);
           callArgs = chain.args;
+          chainedArgs = chain.args;
           if (chain.kind === 'deny') {
             denied = true;
             result = chain.reason;
@@ -4017,6 +4023,12 @@ export function buildToolCallsHandler(
             };
           }
         }
+        // The keys the tool will run with a different value for than the
+        // model proposed — a link's rewrite, or a key the tool's own
+        // redaction hides (`../../toolShownArgs.ts` · `changedArgKeys`).
+        // Taken HERE, before anything executes: names only, so nothing the
+        // tool later writes into its arguments can ride `tool_end`.
+        const changedKeys = changedArgKeys(args, shownArgsOf(tool, chainedArgs));
         // Tool-args validation (#9) — AFTER the permission gate (policy must
         // see every attempted call, valid or not) and BEFORE credential
         // resolution (never acquire credentials for a call that won't run).
@@ -4356,7 +4368,12 @@ export function buildToolCallsHandler(
               const ranCode = codeRunsOf(tool)?.get(tc.id);
               if (ranCode !== undefined) {
                 (codeRunsOf(tool) as Map<string, unknown> | undefined)?.delete(tc.id);
-                typedEmit(scope, 'agentfootprint.tools.code_run', ranCode);
+                // `tool` is the name the model CALLED, not the one the runner's
+                // closure was built with: a runner re-exposed under another
+                // schema name must be recognizable by the name its calls carry
+                // (a content exporter withholds that tool's arguments — the
+                // program). Same bytes whenever the two names agree.
+                typedEmit(scope, 'agentfootprint.tools.code_run', { ...ranCode, tool: tc.name });
               }
               // The typed effects channel (9.19.0): a recognized envelope is
               // unwrapped HERE, at the one boundary the raw return crosses —
@@ -4896,6 +4913,16 @@ export function buildToolCallsHandler(
           // The tool's own declared outcome (9.19.0) — additive, envelope
           // tools only.
           ...(toolStatus !== undefined && { status: toolStatus }),
+          // Each only when a CONFIGURED RULE acted — an `onToolResult` link or
+          // the cap (`modelResult`), an `onToolCall` link or the tool's own
+          // redaction (`changedArgKeys`), a permission policy or a link that
+          // refused (`notExecuted`). With no rule, `tool_end` is the bytes it
+          // always was: a call that failed to run on its own (an unknown name,
+          // an args rejection, a credential block) keeps saying so with
+          // `error: true` alone.
+          ...(modelResult !== capped.result && { modelResult }),
+          ...(executed && changedKeys.length > 0 && { changedArgKeys: changedKeys }),
+          ...(denied && { notExecuted: true as const }),
         });
         let resultStr = typeof modelResult === 'string' ? modelResult : safeStringify(modelResult);
         // The tool's OWN answer, before any framework suffix joins it — what
@@ -5439,6 +5466,9 @@ export function buildToolCallsHandler(
           durationMs: Date.now() - startMs,
           ...(error === true && { error: true }),
           ...(resumeEnvelope?.status !== undefined && { status: resumeEnvelope.status }),
+          ...(askCapped.modelResult !== askCapped.result && {
+            modelResult: askCapped.modelResult,
+          }),
         });
         bracketSettled(scope, askSettlement);
         typedEmit(scope, 'agentfootprint.agent.iteration_end', {
@@ -5618,6 +5648,9 @@ export function buildToolCallsHandler(
           durationMs: Date.now() - startMs,
           ...(error === true && { error: true }),
           ...(resumeEnvelope?.status !== undefined && { status: resumeEnvelope.status }),
+          ...(decisionCapped.modelResult !== decisionCapped.result && {
+            modelResult: decisionCapped.modelResult,
+          }),
         });
         bracketSettled(scope, decisionSettlement);
         typedEmit(scope, 'agentfootprint.agent.iteration_end', {
@@ -5760,6 +5793,9 @@ export function buildToolCallsHandler(
           durationMs: Date.now() - startMs,
           ...(error === true && { error: true }),
           ...(consentEnvelope?.status !== undefined && { status: consentEnvelope.status }),
+          ...(consentCapped.modelResult !== consentCapped.result && {
+            modelResult: consentCapped.modelResult,
+          }),
         });
         bracketSettled(scope, consentSettlement);
         typedEmit(scope, 'agentfootprint.agent.iteration_end', {
@@ -5894,6 +5930,9 @@ export function buildToolCallsHandler(
         // configured, because the marker IS the result on every channel.
         result: pauseCapped.result,
         durationMs: Date.now() - startMs,
+        ...(pauseCapped.modelResult !== pauseCapped.result && {
+          modelResult: pauseCapped.modelResult,
+        }),
       });
       bracketSettled(scope, pauseSettlement);
       typedEmit(scope, 'agentfootprint.agent.iteration_end', {

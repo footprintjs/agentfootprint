@@ -191,14 +191,82 @@ CLASSIFY them, and only if the content it is grading is on them. Two settings on
   exactly like an agent with nothing wrong. The default does not change, because
   a rename moves every existing dashboard's spans out from under it.
 - **`captureContent`** (default `false`) — puts the turn's prompt on
-  `gen_ai.task.input` and its answer on `gen_ai.task.output`. This adapter's
-  standing rule is that content does not ride spans; enabling it **exports raw
-  prompt and answer text** to whatever backend your tracer points at, where it is
-  typically retained and searchable. Enable it when a consumer's whole purpose is
-  to read the content — a scorer cannot grade a turn it cannot see — and not to
-  make a dashboard richer. Per-inference message arrays are deliberately not
-  emitted: the `llm_start` / `llm_end` events carry model, usage and stop reason,
-  never the messages, so there is nothing truthful to put there.
+  `gen_ai.task.input` and its answer on `gen_ai.task.output` (AgentCore's
+  names, not the current GenAI registry's — kept for the consumers that read
+  them). This adapter's standing rule is that content does not ride spans;
+  enabling it **exports raw prompt and answer text** to whatever backend your
+  tracer points at, where it is typically retained and searchable. Enable it
+  when a consumer's whole purpose is to read the content — a scorer cannot
+  grade a turn it cannot see — and not to make a dashboard richer. It also
+  opens the evidence gate's unsupported values and an evaluation's explanation
+  (below). Per-inference message arrays are deliberately not emitted: the
+  `llm_start` / `llm_end` events carry model, usage and stop reason, never the
+  messages, so there is nothing truthful to put there.
+- **`captureToolContent`** (default `false`) — each executed tool call's
+  arguments and result, as `gen_ai.tool.call.arguments` /
+  `gen_ai.tool.call.result` on its `execute_tool` span. A switch of its own,
+  because tool traffic is a different disclosure from what the two parties
+  said: results are the run's raw records. What leaves is the model's view,
+  never more, and only for a call that ran and returned: the arguments the
+  model proposed, captured the moment the call starts (so a tool that writes
+  into its arguments cannot change what leaves), with every key your
+  `onToolCall` rules changed — or a tool's own `redact` policy hides — shown
+  as `REDACTED`, since a rule can add a value the model never saw; and the
+  result the model read, after your `onToolResult` scrubs. A
+  `codeRunnerTool`'s arguments are its generated program and never leave
+  (another code-executing tool, an MCP interpreter say, is not recognized). The spec's two
+  attributes hold objects; any other value (plain
+  text, a number, the string `"123"`) rides an `agentfootprint.*` attribute of
+  its own. A value over `maxContentChars` (default 65,536) is omitted with its
+  size stated — never cut, because a cut JSON value reads as complete data and
+  one oversized attribute can fail an export batch along with other runs'
+  spans.
+
+### What the span tree carries for an evaluator
+
+Without any option, a scorer that reads OTel also gets the structure this
+library records and a plain GenAI tracer does not have — content-free, and
+every string on it capped at 256 characters:
+
+| On the trace | From | Default | With a content switch |
+|---|---|---|---|
+| `gen_ai.conversation.id` on agent / chat / tool spans | `meta.sessionId` | the session id's SHA-256 — absent for a run with none, never the runId | `conversationId: 'raw'` exports the id itself: safe only behind a door that verifies who may open a conversation |
+| `gen_ai.evaluation.result` span event | `agentfootprint.eval.score` | name, score value and label, plus the target words, the ref, the threshold and the evaluator kind as `agentfootprint.eval.*` attributes | `captureContent` adds `gen_ai.evaluation.explanation` |
+| `agentfootprint.tools.absent`, `agentfootprint.tools.coverage_declared` | a tool's `absent()` / `coverage()` | a COUNT per list (checked / not checked / cannot cover); the suggested tool's name only when this exporter has seen that tool run — never a sentence the tool author wrote | same on the event; under `captureToolContent` the call's own result is the whole envelope, sentences included |
+| `agentfootprint.agent.evidence_checked` | the evidence gate | verdict, posture, candidates, unsupported COUNT | `captureContent` adds the unsupported values |
+| `agentfootprint.findings.standing`, and a count per standing on the agent span | `.findings()` | ids and the standing, at most 32 events per turn plus one summary; an id the model wrote that names no result is a flag, never the text | same |
+| `agentfootprint.integrity.disposition` span | the checker accounting every run files | only when a row is actionable — a check filed findings, or a registered check filed nothing while the run did work — with one event per such row; a healthy run exports nothing | `checkAccounting: 'all'` exports every row on every run |
+
+`gen_ai.evaluation.result` is the spec's evaluation event, carried here as a
+SPAN event: the spec's own reference emitter writes it through the Logs API,
+and this adapter speaks the Tracer API only, so a consumer that reads
+evaluation events from its logs pipeline will not find these.
+
+**Where a score lands.** A score filed **during** the turn lands on the span it
+names — the tool call (`targetRef` = the call id) or the iteration (`targetRef`
+= its index) while that span is open, the agent span for `'run'` / `'turn'` —
+else on a short `agentfootprint.evaluation` span under the turn. The run a
+score NAMES (`target: 'run'`, `targetRef` = a run id) wins over the run it was
+emitted from.
+
+**Whose run it is.** A score is parented to a run only when its own meta places
+it in that run's session: emitted from inside that run, or from the same
+session. Run ids are sequential names that anyone can write, so a score that
+cannot show it belongs — every `agent.emit('agentfootprint.eval.score', …)`
+after the run, which carries no session — is exported on an
+`agentfootprint.evaluation` span of its OWN — a new trace, never a child of
+whatever request span is active — naming the ref it claimed. A host that files scores from user input (a feedback button) checks
+the run is that user's first.
+
+**Late is best effort.** A finished turn's span can no longer take an event, so
+a late score and the checker accounting (which always arrives after
+`turn_end`) each get a short span under the turn — a span started after its
+parent ended, which is valid OpenTelemetry and which most trace views draw
+outside the parent's bar. That works while the run is among the strategy's
+last 32 closed turns; past that, the score is exported unparented and reported
+through `onError`, never dropped in silence. The durable home for scores filed
+after the run is a score record, not a trace span. The structure rows ride the
+`explainability` switch; the evaluation event does not.
 
 AWS Bedrock **AgentCore Evaluations** is the consumer that forced both. Since
 July 2026 it scores agents that do not run on AWS, and `agentCoreEvaluationSpans`
@@ -268,6 +336,17 @@ agent.enable.observability({
 });
 ```
 
+**A detached sink receives a snapshot, never the live event.** The driver runs
+the sink's work later — after the tool that emitted a `tool_start` has run,
+after a result has been handed on — so each event is copied with
+`structuredClone` at the moment it is scheduled, the same law footprintjs's
+deferred observers follow. A tool that writes a header into its own arguments,
+or code that mutates a result after `tool_end`, cannot change what a detached
+sink exports. The copy costs about 2 µs for a typical event and about 30 µs for
+a 120 KB `iteration_end`. A value that cannot be copied (a function, a live
+handle) is delivered as `[not cloneable]` and reported once per event type
+through the strategy's `onError` — never as a live reference.
+
 ## Axis 4 — volume
 
 `tier` is `'minimal' | 'standard' | 'firehose'`, default `'standard'`, and
@@ -288,7 +367,9 @@ dispatcher will not even forward types outside that set.
 `EventMeta.sessionId` (9.4.0) rides beside `runId` — one session produces many
 runs, and an event needs to say which of each it is. The CloudWatch and AgentCore
 adapters serialize the whole envelope, so it arrives without their knowing about
-it.
+it; `otelObservability` places its SHA-256 as `gen_ai.conversation.id` on
+the run's agent, chat and tool spans — the digest, because at a door with no
+verifier the session id itself opens the conversation.
 
 ```ts
 await agent.run(message, { sessionId });   // or let standingAgent do it for you

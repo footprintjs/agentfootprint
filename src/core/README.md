@@ -5,7 +5,9 @@ Walker: `RunnerBase.ts`, `runner.ts`, `runCheckpoint.ts`, `pause.ts`,
 Fold-feeding: `Agent.ts` · `readSkillOfferFor` and `Agent.ts` ·
 `hiddenSkillIdsNow` — the two resolvers every model-facing composer downstream
 filters with. Trace: `cost.ts`. Support: `tools.ts`, `runInput.ts`,
-`conversation.ts`, `translator.ts`, `humanizeLLMError.ts`, `outputFallback.ts`.
+`conversation.ts`, `translator.ts`, `humanizeLLMError.ts`, `outputFallback.ts`,
+`toolShownArgs.ts` (a tool's own `redact` policy on the arguments an event
+may show).
 Note: "Lens" in `runner.ts`, `RunnerBase.ts`, `Agent.ts`, `translator.ts` and
 `LLMCall.ts` means the VIEWER PRODUCT, not the wire-facing role.
 

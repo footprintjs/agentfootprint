@@ -97,11 +97,13 @@ export const AGENTCORE_EVALUATIONS_SCOPE_NAME = 'opentelemetry.instrumentation.a
  *
  * ── What this is ─────────────────────────────────────────────────────────────
  * A CONFIGURATION of {@link otelObservability}, not a second implementation:
- * the same spans, the same attributes, with the two settings that vendor
- * requires already correct — the scope name it classifies by, and the
- * turn-level content its scorers read. Everything else is passed through
- * untouched, so nothing about your telemetry becomes AgentCore-shaped except
- * the two things that had to be.
+ * the same spans, the same attributes, with the settings that vendor requires
+ * already correct — the scope name it classifies by, and the content its
+ * scorers read: the turn's prompt and answer (`captureContent`) and each tool
+ * call's arguments and result (`captureToolContent` — AgentCore's
+ * tool-parameter and tool-selection scorers read the call's arguments off the
+ * span). Everything else is passed through untouched, so nothing about your
+ * telemetry becomes AgentCore-shaped except the things that had to be.
  *
  * ── Why you would use it ─────────────────────────────────────────────────────
  * Since July 2026 AgentCore Evaluations scores agents that DO NOT run on AWS —
@@ -117,6 +119,16 @@ export const AGENTCORE_EVALUATIONS_SCOPE_NAME = 'opentelemetry.instrumentation.a
  * and it is also an export of raw content to your OTel backend. Pass
  * `captureContent: false` to opt back out and keep the scope name alone;
  * scores will then be based on an empty turn, which is worse than not scoring.
+ *
+ * It ALSO turns `captureToolContent` ON: each call that ran and returned
+ * exports its arguments (the model's proposal, with every key your
+ * `onToolCall` rules changed or the tool's own `redact` policy hides
+ * withheld) and the result the model read (after your `onToolResult`
+ * rules), each omitted over `maxContentChars`, never a code runner's
+ * program — for the same backend.
+ * Tool results are the run's raw records. Pass `captureToolContent: false` to
+ * keep the conversation text and withhold the tool traffic; the tool scorers
+ * then have nothing to grade.
  *
  * Getting the spans to CloudWatch is separate and yours: point an OTLP exporter
  * at the AgentCore log group per AWS's documented header contract, or run
@@ -134,6 +146,7 @@ export function agentCoreEvaluationSpans(
 ): OtelObservabilityStrategy {
   return otelObservability({
     captureContent: true,
+    captureToolContent: true,
     ...opts,
     // Not spreadable-over: a caller who overrode this would silently produce
     // spans the service skips, which is the exact failure this function exists
