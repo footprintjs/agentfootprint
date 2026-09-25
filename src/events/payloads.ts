@@ -2138,6 +2138,10 @@ export interface PermissionHaltPayload {
 }
 
 // risk.* + fallback.* (2)
+/**
+ * @deprecated Payload of `agentfootprint.risk.flagged`, which nothing emits —
+ * see that event. Removed in 10.0.0.
+ */
 export interface RiskFlaggedPayload {
   readonly severity: 'low' | 'medium' | 'high' | 'critical';
   readonly category:

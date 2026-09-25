@@ -255,6 +255,16 @@ export const EVENT_NAMES = {
     failed: 'agentfootprint.credential.failed',
   },
   risk: {
+    /**
+     * @deprecated **Nothing emits this event, and nothing ever has** — a listener
+     * on it hears silence, which looks exactly like "no risk found". It was the
+     * output of `RiskDetector`, which is also deprecated and has no caller.
+     * Removed in 10.0.0. To screen content, refuse in a `PermissionChecker`
+     * (`agentfootprint/security`), a `.reliability({ preCheck })` rule
+     * (`agentfootprint/resilience`) or a `.messageMiddleware(...)`, and listen to
+     * the events those already emit (`permission.halt`, `reliability.*`,
+     * `middleware.decision`).
+     */
     flagged: 'agentfootprint.risk.flagged',
   },
   fallback: {
@@ -657,6 +667,16 @@ export interface AgentfootprintEventMap {
     CredentialFailedPayload
   >;
   // risk + fallback
+  /**
+   * @deprecated **Nothing emits this event, and nothing ever has** — a listener
+   * on it hears silence, which looks exactly like "no risk found". It was the
+   * output of `RiskDetector`, which is also deprecated and has no caller.
+   * Removed in 10.0.0. To screen content, refuse in a `PermissionChecker`
+   * (`agentfootprint/security`), a `.reliability({ preCheck })` rule
+   * (`agentfootprint/resilience`) or a `.messageMiddleware(...)`, and listen to
+   * the events those already emit (`permission.halt`, `reliability.*`,
+   * `middleware.decision`).
+   */
   'agentfootprint.risk.flagged': AgentfootprintEventEnvelope<
     'agentfootprint.risk.flagged',
     RiskFlaggedPayload
