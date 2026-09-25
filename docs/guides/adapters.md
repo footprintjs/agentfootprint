@@ -51,7 +51,7 @@ providers are also re-exported from the top-level `agentfootprint` barrel.
    (`https://{account}.services.ai.azure.com/api/projects/{project}`): →
    `foundry({ projectEndpoint, deployment, credential })`. No `api-version`, and
    inside a hosted Foundry container `foundry()` with no arguments is the whole
-   configuration — see [foundry.md](foundry.md).
+   configuration — see [foundry.md](https://agentfootprint.dev/docs/infrastructure/microsoft-foundry/).
 4. **OpenAI-compatible, but the credential expires** (Vertex AI, any OAuth-fronted
    gateway): → `openai({ baseURL, apiKey: async () => token })`. Pass a
    **function**, not a string — see
@@ -549,4 +549,4 @@ throws a typed `CircuitOpenError` once the breaker trips.
 
 For richer reliability policies (circuit breaker plus fallback plus stuck-loop
 detection driven by the agent runner), see the `agentfootprint/resilience`
-subpath and [orchestration.md](orchestration.md).
+subpath and [orchestration.md](https://agentfootprint.dev/docs/monitor/resilience/).
