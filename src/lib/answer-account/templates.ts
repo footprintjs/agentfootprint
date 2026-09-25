@@ -352,7 +352,9 @@ export const ANSWER_ACCOUNT_TEMPLATES = Object.freeze({
     'This answer continued after a pause; what happened before the pause is not in this record.',
   ),
   'summary.resumed.tail': t('What happened before the pause is not in this record.'),
-  'summary.unfinished': t('This run did not finish, so there is no answer to explain.'),
+  // What the RECORD shows, never what the run did: a missing `turn_end` can be a pause, a crash
+  // or a truncated recording, and the record cannot tell those apart.
+  'summary.unfinished': t('This record does not show the run finishing.'),
   'summary.notAvailable': t("This answer's record is not available, so it cannot be explained."),
 } satisfies Record<string, AccountTemplate>);
 

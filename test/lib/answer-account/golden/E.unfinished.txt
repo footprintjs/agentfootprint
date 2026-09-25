@@ -14,4 +14,4 @@ How sure:
 Anything wrong:
   No tool call failed or was refused.  ⟨wrong.noErrors@1 · library · recorded⟩
   The 1 check this report could run found nothing.  ⟨wrong.none@1 · library · recorded · none found⟩
-In one line (unknown): This run did not finish, so there is no answer to explain.  ⟨library⟩
+In one line (unknown): This record does not show the run finishing.  ⟨library⟩

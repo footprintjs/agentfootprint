@@ -769,7 +769,7 @@ const LEDGER: Readonly<Record<string, readonly Entry[]>> = {
   'src/lib/answer-account/templates.ts': [
     {
       kind: 'not-model-facing',
-      count: 4,
+      count: 3,
       why: 'the answer account\'s template table — sentences rendered for a PERSON reading "Explain this answer" (the lens pane, the print report); `accountForAnswer` is a read-time fold over a finished recording and no model ever reads its output',
     },
   ],
@@ -1086,15 +1086,17 @@ describe('every model-facing-shaped literal in src/ is accounted for', () => {
         // artifact hand-over after its turn ended; no model reads it. Classified
         // in hosting/errors.ts's not-model-facing row (6 → 7). Same files.
         // Unreleased (explain this answer): the answer account's template table —
-        // four sentences for a PERSON reading an account of a finished run
-        // ("this call", "this run" matched the persistent rules). No model reads
-        // them; one new file, not-model-facing (4).
+        // three sentences for a PERSON reading an account of a finished run
+        // ("this call" matched the persistent rules; the fourth, "This run did
+        // not finish", became "This record does not show the run finishing" by
+        // the design owner's ruling). No model reads them; one new file,
+        // not-model-facing (3).
         files: 96,
-        total: 188,
+        total: 187,
         registry: 8,
         ephemeral: 20,
         unrepaired: 33,
-        notModelFacing: 127,
+        notModelFacing: 126,
         unrepairedEntries: 13,
       });
       // And the ledger's own total is the number of literals the scan flagged —
