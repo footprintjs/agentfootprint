@@ -182,7 +182,7 @@ And you don't have to read the trace yourself — the trace toolpack lets a debu
 | 🔧 Building an agent? | 🐛 Agent misbehaving? | 🏛️ Need audit / compliance? |
 |---|---|---|
 | Typed agents with skills, steering, RAG, memory, guardrails — and the trace for free. | Lint your tool catalog in 5 minutes — works on **any** framework's tool list. Then causal slices, context bisection, and the debugger-LLM toolpack. | Hash-chained, tamper-evident run records with an offline verifier — record-keeping in the EU-AI-Act shape. |
-| [→ Quick start](https://agentfootprint.dev/docs/getting-started/quick-start/) · [→ Build an agent](https://agentfootprint.dev/docs/build/agent/) | [→ Debug](https://agentfootprint.dev/docs/debug/debug/) · [→ Tool-catalog lint](docs/guides/tool-catalog-lint.md) · [→ Self-explain](https://agentfootprint.dev/docs/debug/self-explain/) | [→ Exporters & audit bundles](https://agentfootprint.dev/docs/monitor/exporters/) · [→ Security](https://agentfootprint.dev/docs/monitor/security/) |
+| [→ Quick start](https://agentfootprint.dev/docs/getting-started/quick-start/) · [→ Build an agent](https://agentfootprint.dev/docs/build/agent/) | [→ Debug](https://agentfootprint.dev/docs/debug/debug/) · [→ Tool-catalog lint](https://agentfootprint.dev/docs/debug/tool-catalog-lint/) · [→ Self-explain](https://agentfootprint.dev/docs/debug/self-explain/) | [→ Exporters & audit bundles](https://agentfootprint.dev/docs/monitor/exporters/) · [→ Security](https://agentfootprint.dev/docs/monitor/security/) |
 
 ## Mocks first, production second
 

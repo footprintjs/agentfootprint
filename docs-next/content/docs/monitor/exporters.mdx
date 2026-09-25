@@ -201,6 +201,63 @@ and the vendor adapters all come from `agentfootprint/observe`. Through 8.x they
 reachable at `agentfootprint/strategies` and `agentfootprint/observability-providers`; 9.0.0
 removed both of those paths.)
 
+## Tamper-evident audit bundle
+
+Logs tell you *what happened*. For compliance record-keeping you also have to show
+the record **hasn't been changed since it was captured**. `auditExport()`
+hash-chains every typed event — decisions, tool calls, validation rejections,
+permission verdicts, credential events, costs — into an append-only bundle: each
+record carries the SHA-256 of itself plus the previous record's hash, starting from
+a genesis record for the run.
+
+```ts
+import { auditExport, verifyAuditBundle } from 'agentfootprint/observe';
+
+const audit = auditExport({ agent: 'ledger-auditor' });
+const stop = agent.enable.observability({ strategy: audit });
+await agent.run({ message: 'audit account ACCT-1142' });
+stop();
+
+const bundle = audit.bundle(); // plain JSON — store it anywhere
+const check = verifyAuditBundle(bundle); // offline: no agent needed
+// { valid: true, recordsChecked: 50 }
+// change one byte anywhere → { valid: false, brokenAt: 13, reason: 'hash mismatch — …' }
+```
+
+- **Verify offline.** `verifyAuditBundle` is a pure function over the JSON and names
+  the exact record a change broke. The serialization rules are exported as
+  `canonicalJson`, so an auditor can write an independent verifier.
+- **Bounded payloads by default.** Tool arguments are recorded as key names, results
+  as a type, prompts and content as `[N chars]`. `payloadMode: 'verbatim'` records
+  everything, for access-controlled stores.
+- **Long runs.** `audit.drain()` returns the records since the last drain; pass the
+  segments together (`verifyAuditBundle([seg1, seg2])`) and they verify end to end.
+- **Runtime.** Hashing uses `node:crypto` (Node 20+, Bun, Deno). Browsers have no
+  synchronous SHA-256, so capture and verify on a server.
+
+<Callout type="warn" title="Tamper-EVIDENT, not tamper-PROOF — anchor both ends">
+The chain proves the bundle is internally consistent: any edit, insert, delete or
+reorder is detected and named. It cannot prove where the bundle came from — someone
+holding the only copy can recompute every hash after their change.
+
+To close that gap, store two things **outside** the bundle, somewhere the holder
+cannot rewrite (a write-once bucket, a signed log, an RFC 3161 timestamp, a second
+party):
+
+1. **`bundle.finalHash`** — pins the end of the chain, so a recomputed suffix no
+   longer matches.
+2. **The genesis identity — the first record's `meta.runId` and `hash`** — pins the start.
+   Anchoring `finalHash` alone does not catch **head truncation** (dropping the first
+   records). The verifier makes that visible — a bundle that starts from the chain's
+   origin must claim `firstSeq 0`, so a truncated one has to claim `firstSeq > 0` —
+   and an auditor must reject a first segment that does not start at 0.
+</Callout>
+
+Worked examples: [`19-audit-export.ts`](https://github.com/footprintjs/agentfootprint/blob/main/examples/features/19-audit-export.ts)
+(capture → verify → tamper → drain) and
+[`20-regulated-decisioning.ts`](https://github.com/footprintjs/agentfootprint/blob/main/examples/features/20-regulated-decisioning.ts)
+(an offline auditor reconstructing a loan decline, with both chain ends anchored).
+
 ## Wrapping or debugging a strategy
 
 The hot path is **`exportEvent`**, not `onEvent` (doc comments through 8.10.0 said `onEvent`, so

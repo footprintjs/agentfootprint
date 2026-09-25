@@ -1,0 +1,170 @@
+---
+title: Lint your tool catalog
+description: Find the tools a model could mix up — and the weak descriptions that make it guess — before a run ever happens. Works on any framework's tool list; a CI gate in five minutes.
+---
+
+When two tools look alike to the model, it picks the wrong one — quietly. No
+stack trace, no error: just runs that go sideways some of the time.
+
+A real case, from a storage-network operations agent:
+
+```text
+get_fcns_database         "FC Name Server (FCNS) DB — registered N_Ports in the fabric."
+influx_get_fcns_database  "FC Name Server registrations (time-series) — every registered N_Port…"
+```
+
+Same data, two backends (live vs. history) — and neither description says
+**when** to pick which. The model guesses.
+
+Tool choice is an LLM decision made from your descriptions, so treat the
+catalog like code: **lint it, and gate it in CI**.
+
+<Callout title="You don't need to use agentfootprint to use this">
+The lint reads OpenAI function definitions, Anthropic tools, an MCP server's
+`tools/list` result or a plain `{ name, description, inputSchema }` array
+as-is.
+</Callout>
+
+## Lint a catalog in five minutes
+
+Export your tools to a JSON file — any of these shapes:
+
+```jsonc
+// plain (also the MCP tool shape)
+[{ "name": "...", "description": "...", "inputSchema": { } }]
+// OpenAI
+[{ "type": "function", "function": { "name": "...", "description": "...", "parameters": { } } }]
+// Anthropic
+[{ "name": "...", "description": "...", "input_schema": { } }]
+// MCP tools/list result
+{ "tools": [ ] }
+```
+
+Then run:
+
+```bash
+npx agentfootprint-lint-tools tools.json
+```
+
+You get two sections. **Structural findings** need no embeddings and are always
+reliable:
+
+```text
+✗ error [description-missing-or-short] reset_port
+    tool has no description — the model can only guess from the name
+~ warn  [enum-in-prose] influx_get_port_ranking.metric
+    param 'metric' lists its legal values in prose ("avg_iops | peak_iops | mbps")
+    suggest: "enum": ["avg_iops","peak_iops","mbps"]
+~ warn  [says-what-not-when] get_fcns_database
+    description says WHAT the tool returns but gives no cue for WHEN to use it
+```
+
+The **similarity ranking** lists the pairs that look most alike:
+
+```text
+most-similar pairs (relative ordering — top 10):
+  0.9613  get_interface_counters <> influx_get_interface_counters
+  0.9445  get_fcns_database <> influx_get_fcns_database
+```
+
+Exit codes: `0` pass · `1` the gate failed · `2` bad usage or input.
+
+## Gate it in CI
+
+```yaml
+- run: npx agentfootprint-lint-tools tools.json --threshold 0.94 --strict
+```
+
+- Without `--threshold`, only structural findings gate: errors fail, and
+  `--strict` makes warnings fail too. Similarity is report-only.
+- With `--threshold`, any pair at or above that similarity is **confusable** and
+  fails the gate. Each one carries a hint naming what to make explicit:
+
+```text
+✗ CONFUSABLE 0.9445  get_fcns_database <> influx_get_fcns_database
+    hint: names differ only by 'influx' — make the descriptions say WHEN to
+    choose each (different backend/data source? live vs historical? freshness?)
+```
+
+<Callout type="warn" title="Similarity thresholds are per-embedder">
+The CLI's built-in embedder is an offline, deterministic mock (no API key). It
+squeezes unrelated text into roughly `0.85–0.97`, so its **ordering** is
+trustworthy but an absolute threshold needs calibrating — `0.94` is a starting
+point and expect some false positives. With a real embedding model, unrelated
+descriptions typically land at `0.3–0.7` and near-duplicates at `0.85+`.
+Calibrate once against one pair you know is confusable and one you know is
+fine, then gate.
+</Callout>
+
+## Use a real embedder from code
+
+```ts
+import {
+  analyzeToolCatalog,
+  coerceCatalog, // OpenAI / Anthropic / MCP / plain JSON → one shape
+  catalogFromTools, // agentfootprint Tool[] → the same shape
+  embeddingCache, // descriptions embed once, keyed by content hash
+} from 'agentfootprint/observe';
+
+const report = await analyzeToolCatalog(coerceCatalog(myToolsJson), {
+  embedder: embeddingCache(myEmbedder),
+  confusabilityThreshold: 0.85, // calibrate for your embedder
+  watchBand: 0.05, // advisory band just below the threshold
+  failOn: 'error', // 'warn' = strict
+});
+
+if (!report.ok) {
+  for (const pair of report.similarity.confusable) {
+    console.error(`${pair.a} <> ${pair.b} (${pair.similarity.toFixed(3)}): ${pair.hint}`);
+  }
+  for (const finding of report.structural) console.error(finding.message);
+  process.exit(1);
+}
+```
+
+The embedder is any object with `embed({ text })` and `embedBatch({ texts })` —
+OpenAI, Voyage, a local model. Wrapped in `embeddingCache`, a re-lint only pays
+for descriptions that changed.
+
+## The rules, and changing them
+
+| Rule | Catches | Severity |
+|---|---|---|
+| `description-missing-or-short` | No description, or under 40 characters | error / warn |
+| `says-what-not-when` | Describes what the tool returns, never when to use it | warn |
+| `enum-in-prose` | Legal values written in prose instead of a JSON-Schema `enum` | warn |
+| `optional-param-undocumented` | An optional parameter with nothing saying what omitting it means | warn |
+
+Rules are plain `{ id, check(tool, catalog) }` objects, so you can drop, re-tune
+or add your own:
+
+```ts
+import { defaultStructuralRules, descriptionRule } from 'agentfootprint/observe';
+
+const rules = [
+  ...defaultStructuralRules.filter((r) => r.id !== 'says-what-not-when'),
+  descriptionRule({ minChars: 80 }),
+  { id: 'house-style', check: (tool) => [] /* your findings */ },
+];
+```
+
+They are heuristics — they flag things to review, not certainties. Tune a rule's
+options before deleting it.
+
+## What the score measures — and its runtime twin
+
+The similarity is computed over what the model reads when it chooses: the
+tool's name (split into words) plus its description. High similarity means high
+overlap in meaning — a proxy for "could be mixed up", not a measurement of any
+particular model.
+
+If your agents run on agentfootprint, `toolChoiceRecorder` measures the same
+thing live, per LLM call: which tools were offered, which was chosen, and how
+decisive the choice was. It uses the same text and the same embedding cache, so
+the build-time lint and the runtime margins agree.
+
+## Examples
+
+- [`02-lint-confusable-catalog.ts`](https://github.com/footprintjs/agentfootprint/blob/main/examples/observability/02-lint-confusable-catalog.ts) — lint a real 16-tool catalog; the twins are flagged with hints.
+- [`03-lint-fix-and-pass.ts`](https://github.com/footprintjs/agentfootprint/blob/main/examples/observability/03-lint-fix-and-pass.ts) — fail, rewrite the descriptions to lead with WHEN, pass under the same thresholds.
+- [`04-tool-choice-margins.ts`](https://github.com/footprintjs/agentfootprint/blob/main/examples/observability/04-tool-choice-margins.ts) — runtime margins as a scripted agent walks into the twin trap.

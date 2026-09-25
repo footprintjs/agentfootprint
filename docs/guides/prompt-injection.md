@@ -82,7 +82,7 @@ own them.
 5. **Evidence channel.** Every gate above emits typed events
    (`permission.check`, `permission.halt`, `validation.args_invalid`,
    `credential.*`) and `auditExport` produces a tamper-evident, hash-chained
-   bundle ([security.md](security.md#tamper-evident-audit-export--auditexport--verifyauditbundle)).
+   bundle ([audit bundle](https://agentfootprint.dev/docs/monitor/exporters/#tamper-evident-audit-bundle)).
    You may not block an injection in real time — you can always reconstruct
    it.
 
