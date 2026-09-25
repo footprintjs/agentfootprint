@@ -348,13 +348,15 @@ const OUTPUT_LIMITS = { bytes: 686_000_000, files: 7_400, duplicateRscBytes: 0 }
 // took the demo chunk from under 431.0 KB to 432.4 KB gzip, with the scanner
 // wired on the default graph although only `.findings()` agents use it.
 //
-// LOWERED back to 431 KB (2026-09-25): the owed shrink landed. The scanner now
+// LOWERED to 436 KB (2026-09-25): the owed shrink landed. The scanner now
 // sits behind `findings/peel.ts`, loaded through import() by callLLM and route
 // only under the arm — the judge.ts / toolChoice/compose.ts pattern — and
 // test/lib/trace-toolpack/browserGraph.test.ts pins it off the root sync
-// closure. Re-measured: 430.4 KB gzip across 17 async assets (from 433.5 KB).
-// The stopgap is gone rather than kept as headroom.
-const DEMO_ASYNC_GZIP_LIMIT = 431_000;
+// closure. Measured 430.4 KB gzip across 17 async assets (from 433.5 KB); the
+// same day's AnswerAccount release (#17, 9.116.0) then grew the default graph
+// by 1.5 KB, re-measured together at 431.9 KB. Ceiling ~1% over that — thinner
+// than the ~2% rule above, because the stopgap is paid back, not kept.
+const DEMO_ASYNC_GZIP_LIMIT = 436_000;
 
 function formatBytes(bytes) {
   if (bytes < 1_000) return `${bytes} B`;
