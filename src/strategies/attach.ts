@@ -22,6 +22,7 @@ import type { FlowChart } from 'footprintjs';
 
 import type { EventDispatcher, Unsubscribe } from '../events/dispatcher.js';
 import type { AgentfootprintEvent, AgentfootprintEventType } from '../events/registry.js';
+import { withWireErrors } from '../lib/wireJson.js';
 import type {
   BaseStrategy,
   ObservabilityStrategy,
@@ -165,10 +166,15 @@ function snapshotEvent(
   event: unknown,
   onDegraded: (type: string, event: unknown) => void,
 ): unknown {
+  // Errors first, by the ONE wire rule (`lib/wireJson.ts`): the synchronous
+  // path's serializing sinks render them the same way, so both paths write the
+  // same bytes — and a clone would otherwise keep an Error that a detached
+  // sink can still read `stack` or a class's fields off.
+  const safe = withWireErrors(event);
   try {
-    return structuredClone(event);
+    return structuredClone(safe);
   } catch {
-    const e = event as { type?: unknown; payload?: unknown; meta?: unknown };
+    const e = safe as { type?: unknown; payload?: unknown; meta?: unknown };
     const seen = new WeakMap<object, unknown>();
     onDegraded(typeof e.type === 'string' ? e.type : 'unknown', event);
     return {
@@ -185,10 +191,13 @@ const MAX_COPY_DEPTH = 64;
 /**
  * `value` with every part `structuredClone` can copy copied — by
  * `structuredClone` itself, so the copy has the clone's semantics (enumerable
- * own data; an `Error`'s custom properties dropped) — and every part it cannot
+ * own data) — and every part it cannot
  * copy replaced by {@link UNCLONEABLE}. Plain objects and arrays are walked;
  * anything else that fails (a `Map` holding a function, a class instance with
- * a live handle) is one leaf. Cycles are preserved through `seen`.
+ * a live handle) is one leaf. Cycles are preserved through `seen`. An `Error`
+ * never reaches it: `snapshotEvent` has already rendered every one by the wire
+ * rule (`lib/wireJson.ts · withWireErrors`), the shape the synchronous path's
+ * serializing sinks write.
  */
 function copyLeaves(value: unknown, seen: WeakMap<object, unknown>, depth: number): unknown {
   try {

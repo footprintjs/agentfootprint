@@ -11,6 +11,11 @@ are forgotten.
 A sink may drop; the record may not. A strategy that fails takes only its own
 copy with it, and `lifecycle.ts` owns who may stop one.
 
+A detached delivery hands a sink a COPY taken when the event is scheduled
+(`attach.ts · snapshotEvent`), with every `Error` already rendered by the one
+wire rule (`lib/wireJson.ts`) — the shape the synchronous path's serializing
+sinks write, so the two paths produce the same bytes.
+
 ## Files
 - `types.ts` — the four sink interfaces.
 - `attach.ts` — wiring each strategy to its data source.

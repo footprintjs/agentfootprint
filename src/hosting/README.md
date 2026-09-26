@@ -198,7 +198,29 @@ session a request NAMED, the artifact door refuses a `ref` that is not a ref
 verifying door, answers a session the caller cannot open (`mayOpenSession`, or
 for a first turn still in flight, the caller it is serving) with the one
 not-found — nothing emitted, no lane built. At a door with no verifier the
-session id is the key, by law. Redemptions stay lane-free — and are therefore
+session id is the key, by law.
+
+**A read never takes a person's instance away.** A redemption and
+`handle.artifactsForRequest` never build a pooled lane and never evict one —
+before, anybody naming made-up session ids at an open door built an instance
+per id and retired the least recently used idle session, closing its tool
+sessions as `'evicted'`. The store that answers (`redeemerFor`):
+
+| the session has | answered by |
+|---|---|
+| a live lane (the shared agent, or its pooled instance) | that instance's store |
+| no live lane and no stored conversation | the one not-found — nothing built, nothing emitted (nothing could have been minted there: a first turn still in flight HAS a lane) |
+| no live lane, a stored conversation (its instance was evicted) | the READER: one instance from `agentFactory`, held outside the pool, built on first need, stopped at `close()` — it never counts toward `maxActiveSessions` |
+
+The reader answers from the factory's store, so a pooled deployment whose
+artifacts must outlive an instance hands every instance ONE store — which was
+already true: an instance with a store of its own takes its artifacts with it
+when it is evicted.
+
+```ts
+const store = sqliteArtifacts({ file: './artifacts.db' }); // shared by every instance
+await standingAgent({ agentFactory: () => Agent.create({ provider, model, artifacts: store }).build(), sessions, host });
+``` Redemptions stay lane-free — and are therefore
 BOUNDED per session instead: `artifact-head`, `artifact-get` and
 `answer-account` count together against `artifactOpsPerSession` (default
 `DEFAULT_ARTIFACT_OPS_PER_SESSION`, 8), counted after the ownership check, and

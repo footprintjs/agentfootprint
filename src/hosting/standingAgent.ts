@@ -413,6 +413,8 @@ export async function standingAgent<TH extends HostHandle>(
   const handedOver = new WeakSet<Agent>();
   /** The single lane of the shared shape, or `undefined` in the pooled one. */
   const shared = sharedAgent !== undefined ? makeLane(sharedAgent, '#shared') : undefined;
+  /** The pooled shape's reader — see `redeemerFor`. Built on first need only. */
+  let reader: Agent | undefined;
   let anonymous = 0;
 
   /**
@@ -972,14 +974,16 @@ export async function standingAgent<TH extends HostHandle>(
       reply.fail(new InvalidWireOpError(`'${artifactOpWireName(op.op)}' ${NOT_A_REF}`));
       return;
     }
-    // Read the stored conversation once: its OWNER (a verifying door) and its
-    // identity tuple (any request naming a user) both come from it.
+    // Read the stored conversation once: its OWNER (a verifying door), its
+    // identity tuple (any request naming a user), and — for a pooled session
+    // with no live instance — whether there is a conversation at all.
     const needsStored = identityOptions !== undefined || request.userId !== undefined;
-    const envelope = needsStored ? await storedFor(sessionId) : undefined;
+    let envelope = needsStored ? await storedFor(sessionId) : undefined;
     if (identityOptions !== undefined && !mayRedeemFrom(sessionId, envelope, verified)) {
       reply.fail(new ArtifactNotFoundError(op.ref));
       return;
     }
+    if (!needsStored && liveLane(sessionId) === undefined) envelope = await storedFor(sessionId);
     // The per-session bound (after ownership, so a stranger can never spend
     // someone else's slots): artifact ops are lane-free and turn admission
     // does not see them, so without it one session could keep the event loop
@@ -990,15 +994,22 @@ export async function standingAgent<TH extends HostHandle>(
       reply.fail(new ArtifactOpsBusyError(op.op, artifactOpsPerSession));
       return;
     }
-    const lane = laneFor(sessionId);
+    // NEVER a new lane, never an eviction (R2-12): the session's live
+    // instance, the reader, or the one not-found — see `redeemerFor`.
+    const redeemer = redeemerFor(sessionId, envelope);
+    if (redeemer === undefined) {
+      reply.fail(new ArtifactNotFoundError(op.ref));
+      return;
+    }
+    const lane = redeemer.lane;
     // Admitted for the duration: a lane with work is never evicted, and a
     // resolution mid-flight is work — retiring the instance under it would
     // tear down the very store being read.
-    lane.admitted += 1;
+    if (lane !== undefined) lane.admitted += 1;
     // Counted with no await since the check above, so a burst cannot all pass it.
     artifactOpsInFlight.set(sessionId, busy + 1);
     try {
-      const store = lane.agent.getArtifactStore();
+      const store = redeemer.agent.getArtifactStore();
       if (store === undefined) {
         // The fail-closed law at the wire: the refusal lands on the record
         // (`no-store`, the same reason `ctx.artifacts` teaches with) and the
@@ -1006,7 +1017,7 @@ export async function standingAgent<TH extends HostHandle>(
         // (An account would have been READ with `get`, so that is the verb its
         // refusal names — no new `ArtifactOp` member.)
         emitArtifactFact(
-          lane.agent,
+          redeemer.agent,
           {
             type: 'refused',
             op: op.op === 'account' ? 'get' : op.op,
@@ -1022,7 +1033,7 @@ export async function standingAgent<TH extends HostHandle>(
         request.userId !== undefined ? storedIdentityOf(envelope, sessionId) : undefined;
       const scope = sessionArtifactScope(request.userId, sessionId, stored);
       const bound = bindArtifacts(store, scope, {
-        onEvent: (fact) => emitArtifactFact(lane.agent, fact, { sessionId }),
+        onEvent: (fact) => emitArtifactFact(redeemer.agent, fact, { sessionId }),
       });
       if (op.op === 'account') {
         // `accounts` is defined: the first line of this function refused otherwise.
@@ -1046,8 +1057,10 @@ export async function standingAgent<TH extends HostHandle>(
         deliverArtifact(reply, { op: 'get', ref: op.ref, meta: record.meta, data: record.data });
       }
     } finally {
-      lane.admitted -= 1;
-      lane.lastUsedMs = Date.now();
+      if (lane !== undefined) {
+        lane.admitted -= 1;
+        lane.lastUsedMs = Date.now();
+      }
       const left = (artifactOpsInFlight.get(sessionId) ?? 1) - 1;
       if (left <= 0) artifactOpsInFlight.delete(sessionId);
       else artifactOpsInFlight.set(sessionId, left);
@@ -1177,16 +1190,18 @@ export async function standingAgent<TH extends HostHandle>(
     const sessionId = request.sessionId;
     if (sessionId === undefined) return { bound: false, reason: 'no-session' };
     const needsStored = identityOptions !== undefined || userId !== undefined;
-    const envelope = needsStored ? await storedFor(sessionId) : undefined;
+    let envelope = needsStored ? await storedFor(sessionId) : undefined;
     if (identityOptions !== undefined && !mayRedeemFrom(sessionId, envelope, verified)) {
       return { bound: false, reason: 'not-found' };
     }
+    if (!needsStored && liveLane(sessionId) === undefined) envelope = await storedFor(sessionId);
     const stored = userId !== undefined ? storedIdentityOf(envelope, sessionId) : undefined;
-    const lane = laneFor(sessionId);
-    lane.lastUsedMs = Date.now();
-    const store = lane.agent.getArtifactStore();
+    // Never a new lane, never an eviction — the redemption door's own rule.
+    const redeemer = redeemerFor(sessionId, envelope);
+    if (redeemer === undefined) return { bound: false, reason: 'not-found' };
+    const agent = redeemer.agent;
+    const store = agent.getArtifactStore();
     if (store === undefined) return { bound: false, reason: 'no-store' };
-    const agent = lane.agent;
     return {
       bound: true,
       artifacts: bindArtifacts(store, sessionArtifactScope(userId, sessionId, stored), {
@@ -1214,6 +1229,56 @@ export async function standingAgent<TH extends HostHandle>(
     if (envelope !== undefined) return mayOpenSession(envelope, verified);
     const serving = shared ?? pool.get(sessionId);
     return serving?.activeSessionId === sessionId && serving.activeOwner === verified?.userId;
+  }
+
+  /** The lane serving `sessionId` right now — never built, never refreshed. */
+  function liveLane(sessionId: string): Lane | undefined {
+    return shared ?? pool.get(sessionId);
+  }
+
+  /**
+   * Whose store answers a redemption (or `artifactsForRequest`) for
+   * `sessionId` — WITHOUT building a lane or evicting one (R2-12).
+   *
+   * Before, both doors called `laneFor`, so a caller naming session ids —
+   * anybody, at a door with no verifier, where the id is the key by law —
+   * built a pooled instance per id and evicted the least recently used idle
+   * session to make room, closing its tool sessions as `'evicted'`. A read is
+   * not a reason to take a person's instance away.
+   *
+   *  - **A live lane** (the shared agent, or this session's pooled instance) →
+   *    its agent. The lane is refreshed and admitted by the caller.
+   *  - **No live lane, no stored conversation** → `undefined`: the one
+   *    not-found. Artifacts are minted by a session's turns, and a session with
+   *    no stored conversation and no instance has no turn that could have
+   *    minted anything (a first turn still in flight HAS a lane). This is what
+   *    makes a flood of made-up ids cost one store read each and nothing else.
+   *  - **No live lane, a stored conversation** (its instance was evicted, or the
+   *    process restarted) → the READER: one instance from the factory, held
+   *    OUTSIDE the pool, built on first need and shared by every lane-less
+   *    session. It never counts toward `maxActiveSessions` and never evicts, so
+   *    the pool is exactly what the turns made it. It answers from the
+   *    factory's store, which is the only store an evicted session's
+   *    artifacts can still be in — the one-shared-store shape. (With a store
+   *    built per instance, an evicted instance's artifacts left with it, and
+   *    the reader's not-found is the true answer.)
+   *
+   * Rejected: answering "not-found" for EVERY lane-less session — a pooled
+   * session whose instance was evicted would lose redemption of refs it
+   * minted, which every release so far has served.
+   */
+  function redeemerFor(
+    sessionId: string,
+    envelope: CheckpointEnvelope | undefined,
+  ): { readonly agent: Agent; readonly lane?: Lane } | undefined {
+    const live = liveLane(sessionId);
+    if (live !== undefined) {
+      live.lastUsedMs = Date.now();
+      return { agent: live.agent, lane: live };
+    }
+    if (envelope === undefined) return undefined;
+    reader ??= fromFactory();
+    return { agent: reader };
   }
 
   /**
@@ -1642,8 +1707,10 @@ export async function standingAgent<TH extends HostHandle>(
         for (const lane of lanes) lane.detach();
         if (shutdownMode !== 'none') {
           // allSettled, not all: one instance whose exporter refuses to drain
-          // must not strand the drain of every other session's.
-          await Promise.allSettled(lanes.map((lane) => lane.agent.shutdown({ stop: true })));
+          // must not strand the drain of every other session's. The reader is
+          // this composer's too, so it stops with them.
+          const owned = [...lanes.map((lane) => lane.agent), ...(reader ? [reader] : [])];
+          await Promise.allSettled(owned.map((agent) => agent.shutdown({ stop: true })));
         }
       }
       removeSignalListeners();

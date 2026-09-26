@@ -390,7 +390,10 @@ export type ArtifactsRequest = Pick<HostRequest, 'sessionId' | 'headers' | 'user
  *  - `'not-found'` — at a verifying door, no conversation THIS caller can open
  *    under that id: somebody else's, one nobody signed for, or one whose first
  *    turn has not persisted yet (unless that turn is this caller's, in flight).
- *    One reason for all of them, as redemption answers them with one not-found.
+ *    At any door, a session with no live instance and no stored conversation
+ *    (nothing could have minted there). One reason for all of them, as
+ *    redemption answers them with one not-found. Never builds or evicts a
+ *    pooled instance to find out.
  *  - `'no-store'` — the serving agent has no artifact store.
  */
 export type RequestArtifacts =

@@ -1,0 +1,7 @@
+---
+type: security
+---
+**An Error inside an event no longer writes its custom properties, such as an axios error's `authorization` header, to any sink. A read at the artifact door no longer evicts anyone's instance.**
+
+- **One wire rule for Errors.** A tool that returned or passed along an error from a client library could put that error in an event payload. On the synchronous delivery path, `JSON.stringify` wrote the error's own enumerable properties to the NDJSON file, the audit export, CloudWatch / AgentCore, X-Ray metadata, OpenTelemetry attribute text and the console default. For an axios error that includes `config.headers.authorization`. The detached path wrote the same error as `{}`. Every Error is now written as `{ name, message, code? }` plus a bounded `cause` chain, and nothing else. Both paths use the same rule, so both write the same bytes. A value that holds no Error serializes exactly as before.
+- **Redemptions never build or evict a pooled instance.** At a door with no verifier, anybody naming made-up session ids in `artifact-head` / `artifact-get` / `answer-account` (or `handle.artifactsForRequest`) built one pooled instance per id. Each one evicted the least recently used idle session and closed its tool sessions as `'evicted'`. The door now answers from the session's live instance. A session with no live instance and no stored conversation gets the usual not-found. A session whose instance was evicted is answered by one reader instance held outside the pool, which never counts toward `maxActiveSessions`.

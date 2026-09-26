@@ -10,6 +10,21 @@ that; an exporter that drops an event drops only its own copy.
 Telemetry that fails invisibly is indistinguishable from telemetry that works,
 so delivery failures are themselves reported (`deliveryErrors.ts`).
 
+## How an Error reaches a wire (`lib/wireJson.ts`)
+An `Error` anywhere in an event is written as `{ name, message, code? }` plus a
+bounded `cause` chain — never a custom property (an axios error's
+`config.headers.authorization`), never `stack`. Every sink that serializes goes
+through `toWireJson` (`file`, `cloudwatch` / `agentcore`, `xray`, the `otel`
+attribute text, the console default) and `audit`'s sanitizer renders Errors by
+the same `wireError`; detached delivery renders them before it clones
+(`strategies/attach.ts · snapshotEvent`). So sync and detached delivery write
+the same bytes. A custom sink that serializes events should do the same:
+
+```ts
+import { toWireJson } from '../../lib/wireJson.js';
+const line = toWireJson(event); // not JSON.stringify(event)
+```
+
 ## What a span-MAPPING exporter may carry (`otel.ts`)
 `file` / `cloudwatch` / `agentcore` / `audit` serialize the whole envelope and
 inherit every field. `otelObservability` MAPS selected signals onto spans, so

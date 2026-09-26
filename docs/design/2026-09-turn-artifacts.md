@@ -254,6 +254,11 @@ id), so a reader joining on that run id must say "paused, no recording", not
   unfiltered. Fix in its own packet: key the capture by the run's session and
   serve only the asking run's session, or refuse `.selfExplain()` under
   `{ agent }`. Until then: do not combine them.
+- **R2-12 — FIXED: the artifact door built and evicted pooled lanes for any
+  named session.** A redemption and `artifactsForRequest` now go through
+  `standingAgent.ts · redeemerFor`: the live lane, else the one not-found when
+  nothing is stored, else a single reader instance outside the pool. Pinned by
+  `test/hosting/redemption-lanes.test.ts`.
 - **Late non-artifact emits.** Only facts emitted through an artifact binding
   own their run now; any other emit that outlives its run (a tool's floating
   `ctx.progress`, a late `typedEmit`) is still stamped by the emit bridge with
