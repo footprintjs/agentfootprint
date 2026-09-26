@@ -102,16 +102,16 @@ describe('identityConfigFromEnv — unit', () => {
     [{ IDENTITY_STRATEGY: 'oidc' }, 'IDENTITY_STRATEGY', /not a strategy.*open, oidc-token/],
     [{ IDENTITY_ISSUR: 'https://x' }, 'IDENTITY_ISSUR', /not a setting this release reads/],
     [
-      { IDENTITY_LDAP_URL: 'ldaps://dc1' },
-      'IDENTITY_LDAP_URL',
-      /directory-password, which is not in this release/,
+      { IDENTITY_PROXY_SIGN_OUT_URL: '/oauth2/sign_out' },
+      'IDENTITY_PROXY_SIGN_OUT_URL',
+      /proxy-token, which is not in this release/,
     ],
     [
       { IDENTITY_PROXY_TOKEN: 'id-token' },
       'IDENTITY_PROXY_TOKEN',
       /proxy-token, which is not in this release/,
     ],
-    [{ IDENTITY_LDAP_BASE_DN: 'DC=corp' }, 'IDENTITY_LDAP_BASE_DN', /directory-password/],
+    [{ IDENTITY_DIAGNOSE: '1' }, 'IDENTITY_DIAGNOSE', /the first-token report/],
     [{ IDENTITY_PROXY_HEADER: 'x' }, 'IDENTITY_PROXY_HEADER', /proxy-token/],
     [{ IDENTITY_REQUIRED_ROLE: 'neo-users' }, 'IDENTITY_REQUIRED_ROLE', /the role gate/],
     [{ IDENTITY_ALLOWED_CLIENTS: 'any, neo-web' }, 'IDENTITY_ALLOWED_CLIENTS', /'any' beside/],
@@ -172,7 +172,7 @@ describe('identityFromConfig — boot refusals', () => {
     );
   });
 
-  it.each(['proxy-token', 'directory-password'] as const)(
+  it.each(['proxy-token'] as const)(
     "'%s' is named in the vocabulary and refused as not in this release",
     async (strategy) => {
       const err = await refusal(() => identityFromConfig({ strategy }, { production: false }));
@@ -209,11 +209,11 @@ describe('identityFromConfig — boot refusals', () => {
   it('an unknown strategy or an unknown field refuses (JavaScript callers bypass the types)', async () => {
     await refusal(() => identityFromConfig({ strategy: 'sso' } as never, { production: false }));
     const later = await refusal(() =>
-      identityFromConfig({ strategy: 'open', ldapUrl: 'ldaps://dc1' } as never, {
+      identityFromConfig({ strategy: 'open', proxyHeader: 'x-forwarded-access-token' } as never, {
         production: false,
       }),
     );
-    expect(later.message).toMatch(/directory-password/);
+    expect(later.message).toMatch(/proxy-token/);
     await refusal(() =>
       identityFromConfig({ strategy: 'open', isuer: 'x' } as never, { production: false }),
     );

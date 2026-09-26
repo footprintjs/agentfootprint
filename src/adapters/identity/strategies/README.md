@@ -30,5 +30,7 @@ await standingAgent({ agent, sessions, host, identity: choice.identity });
 - `choose.ts` — `identityFromConfig` and the banner.
 - `browserChoice.ts` — `oidc-token` browser sign-in from config: all-or-none keys,
   the audience ≠ client id refusal, the door (pending independent review).
+- `directoryChoice.ts` — `directory-password` from config: LDAPS, limits from
+  AD's lockout threshold, the MFA-bypass banner.
 - `localChoice.ts` — the `local-password` strategy: the list, the store, the
   sign-in door; refused in production.

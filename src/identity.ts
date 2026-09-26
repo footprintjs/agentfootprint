@@ -152,6 +152,24 @@ export {
   type IdentityChoice,
   type IdentityMode,
 } from './adapters/identity/strategies/choose.js';
+// `directory-password`: Active Directory over LDAPS — bind, RFC 4532
+// Who-am-I, exactly one entry, its objectGUID. `ldapts` is an optional peer.
+export {
+  directoryPasswords,
+  type DirectoryPasswordsOptions,
+} from './adapters/identity/directory/directoryPasswords.js';
+export {
+  ldapDirectory,
+  MissingLdaptsError,
+  type LdapDirectoryOptions,
+  type LdaptsBackend,
+} from './adapters/identity/directory/ldapDirectory.js';
+export {
+  escapeFilterValue,
+  type Directory,
+  type DirectoryEntry,
+  type DirectorySession,
+} from './adapters/identity/directory/port.js';
 // `local-password` (development, tests, demos; refused in production): hashed
 // entries only, scrypt from node:crypto. `hashPassword` makes an entry.
 export {

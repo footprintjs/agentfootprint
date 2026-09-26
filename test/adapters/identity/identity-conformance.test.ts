@@ -15,7 +15,12 @@ import {
   runIdentityCase,
   type IdentityStrategyHarness,
 } from './conformance/cases.js';
-import { jwksHarness, localPasswordHarness, oidcHarness } from './conformance/harnesses.js';
+import {
+  directoryPasswordHarness,
+  jwksHarness,
+  localPasswordHarness,
+  oidcHarness,
+} from './conformance/harnesses.js';
 
 type Build = () => Promise<IdentityStrategyHarness & { close?(): Promise<void> }>;
 
@@ -30,6 +35,17 @@ const suites: [string, Build, readonly string[]][] = [
   [
     'local-password',
     localPasswordHarness,
+    [
+      'every-token-expires',
+      'an-application-is-not-a-person',
+      'only-a-listed-client-obtains-a-person',
+      'a-roles-string-is-one-role',
+      'unknown-roles-are-not-none',
+    ],
+  ],
+  [
+    'directory-password',
+    directoryPasswordHarness,
     [
       'every-token-expires',
       'an-application-is-not-a-person',

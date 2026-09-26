@@ -107,6 +107,48 @@ IDENTITY_CLIENT_KEY_FILE=/run/secrets/neo-web.pem
 IDENTITY_SCOPE=openid profile api://<API>/access_as_user
 ```
 
+## `directory-password` — Active Directory over LDAPS
+
+For a company with plain AD and no federation server (`directory/`). The sign-in
+door shows a username and password form; the directory decides who it was.
+
+- **LDAPS only**, the chain checked against `IDENTITY_LDAP_CA_FILE` and the
+  host name against the URL — no switch to skip either. `ldap://` is refused.
+- **An empty password never reaches the directory** (a simple bind with an
+  empty password is an unauthenticated bind a DC may call a success).
+- **Who-am-I decides who signed in (rule 18).** Bind as `<name>@<domain>`,
+  ask RFC 4532 Who-am-I, require `u:<NETBIOS>\<sam>` of the configured domain
+  (or a SID), then find EXACTLY ONE entry and take its `objectGUID` (base64).
+  The typed name is never used to find the person, which closes the rename
+  collision (an explicit UPN beats another object's implicit one).
+- **One answer** for every wrong credential; AD's sub-code (`52e`, `532`,
+  `773`, …) goes to the server log only. A directory that is down is 503.
+- **Attempt limits from AD's lockout policy:** half of
+  `IDENTITY_LDAP_LOCKOUT_THRESHOLD` per name per
+  `IDENTITY_LDAP_LOCKOUT_WINDOW_MINUTES`, counted as attempts START — it
+  reduces the lockout risk (AD also counts VPN, mail and typos), it cannot rule
+  it out.
+- **It bypasses the company's MFA**; the banner says so. `oidc-token` is
+  preferred wherever there is an identity provider.
+- `ldapts` is an optional peer, loaded lazily.
+- Note: this stores `objectGUID` as base64 of its 16 bytes; Keycloak's LDAP
+  mapper shows the SAME bytes as a GUID string (lab: `TxZImfBlwEqLsEo9EQP81w==`
+  = `9948164f-65f0-4ac0-8bb0-4a3d1103fcd7`). Switching between the two keeps
+  owners only if the claim is sent in the same encoding.
+
+```sh
+IDENTITY_STRATEGY=directory-password
+IDENTITY_PUBLIC_URL=https://neo.corp.example
+IDENTITY_LDAP_URL=ldaps://dc1.corp.example:636
+IDENTITY_LDAP_CA_FILE=/etc/neo/corp-root-ca.pem
+IDENTITY_LDAP_DOMAIN=corp.example
+IDENTITY_LDAP_NETBIOS_DOMAIN=CORP
+IDENTITY_LDAP_BASE_DN=DC=corp,DC=example
+IDENTITY_LDAP_REQUIRED_GROUP=CN=Neo Users,OU=Groups,DC=corp,DC=example
+IDENTITY_LDAP_LOCKOUT_THRESHOLD=10
+IDENTITY_LDAP_LOCKOUT_WINDOW_MINUTES=30
+```
+
 ## `local-password` — development, tests and demos
 
 `localPasswords('name:scrypt$…,…')` checks a password list; `hashPassword(pw)`
@@ -139,5 +181,6 @@ IDENTITY_LOCAL_USERS=priya:scrypt$17$8$1$…$…   # from hashPassword('…')
   person test.
 - `localPassword.ts` — the `local-password` list and `hashPassword` (scrypt).
 - `oidcSignIn.ts` — browser sign-in over `openid-client` (pending independent review).
+- `directory/` — `directory-password`: the rules and the LDAPS adapter.
 - `verify/` — the shared checks both verifiers use.
 - `strategies/` — `identityFromConfig`, `identityConfigFromEnv`, the vocabulary.

@@ -5,6 +5,7 @@
  */
 
 import {
+  directoryPasswords,
   hashPassword,
   jwksIdentity,
   localPasswords,
@@ -16,8 +17,10 @@ import {
   signInSource,
   verifyRequestIdentity,
   type DoorIdentity,
+  type PasswordChecker,
   type VerifiedIdentity,
 } from '../../../../src/hosting/index.js';
+import { fakeDirectory } from './fakeDirectory.js';
 import {
   login,
   mountDoor,
@@ -186,11 +189,47 @@ export async function localPasswordHarness(): Promise<
     `${IDS.b}:${await hashPassword('pw-b', LOCAL_TEST_COST)}`,
     `${odd}:${await hashPassword('pw-odd', LOCAL_TEST_COST)}`,
   ].join(',');
-  const m = await mountDoor({ passwords: localPasswords(users) });
-  const cookieOf = async (name: string, password: string): Promise<string> => {
-    const signedIn = await login(m.url, name, password);
+  return passwordDoorHarness('local-password', localPasswords(users), {
+    a: [IDS.a, 'pw-a', IDS.a],
+    b: [IDS.b, 'pw-b', IDS.b],
+    odd: [odd, 'pw-odd', odd],
+  });
+}
+
+/** `directory-password` over the fake directory: ids are objectGUIDs (base64). */
+export async function directoryPasswordHarness(): Promise<
+  IdentityStrategyHarness & { close(): Promise<void> }
+> {
+  const directory = fakeDirectory([
+    { sam: 'alice', password: 'pw-a' },
+    { sam: 'bob', password: 'pw-b' },
+    { sam: 'Odd.Name_1', password: 'pw-odd' },
+  ]);
+  const passwords = directoryPasswords({
+    directory,
+    domain: 'corp.example',
+    netbiosDomain: 'CORP',
+    baseDn: 'DC=corp,DC=example',
+  });
+  return passwordDoorHarness('directory-password', passwords, {
+    a: ['alice', 'pw-a', directory.guidOf('alice')],
+    b: ['bob', 'pw-b', directory.guidOf('bob')],
+    odd: ['Odd.Name_1', 'pw-odd', directory.guidOf('Odd.Name_1')],
+  });
+}
+
+/** A password strategy behind the sign-in door: the credential is the minted cookie. */
+async function passwordDoorHarness(
+  name: string,
+  passwords: PasswordChecker,
+  people: Record<'a' | 'b' | 'odd', [typed: string, password: string, id: string]>,
+): Promise<IdentityStrategyHarness & { close(): Promise<void> }> {
+  const m = await mountDoor({ passwords, limits: { perName: 100, backoffMs: 0 } });
+  const cookieOf = async (typed: string, password: string): Promise<string> => {
+    const signedIn = await login(m.url, typed, password);
     return (signedIn.cookie as string).split('=')[1] as string;
   };
+  const IDS_OF = { a: people.a[2], b: people.b[2], oddBytes: people.odd[2] };
   const verifierOver = (identity: DoorIdentity) => ({
     verify: async (cookie: string) =>
       (await verifyRequestIdentity(
@@ -201,26 +240,26 @@ export async function localPasswordHarness(): Promise<
       )) as VerifiedIdentity,
   });
   return {
-    name: 'local-password',
-    ids: { a: IDS.a, b: IDS.b, oddBytes: odd },
+    name,
+    ids: IDS_OF,
     verifier: verifierOver(m.door.identity),
     close: m.close,
     async present(shape) {
       switch (shape) {
         case 'person-a':
         case 'person-a-again':
-          return cookieOf(IDS.a, 'pw-a');
+          return cookieOf(people.a[0], people.a[1]);
         case 'person-b':
-          return cookieOf(IDS.b, 'pw-b');
+          return cookieOf(people.b[0], people.b[1]);
         case 'odd-bytes-id':
-          return cookieOf(odd, 'pw-odd');
+          return cookieOf(people.odd[0], people.odd[1]);
         case 'expired': {
           const value = `expired-${Math.random()}`;
           const t = Date.now() - 10 * 3_600_000;
           await m.store.create({
             key: signInKeyOf(value),
-            identity: { userId: IDS.a },
-            strategy: 'local-password',
+            identity: { userId: people.a[2] },
+            strategy: name,
             startedAt: t,
             expiresAt: t + 8 * 3_600_000,
             lastSeenAt: t,

@@ -28,6 +28,7 @@ export const STRATEGIES_IN_THIS_RELEASE: readonly IdentityStrategyName[] = [
   'open',
   'oidc-token',
   'local-password',
+  'directory-password',
 ];
 
 /** How an environment value becomes a config value. */
@@ -106,41 +107,85 @@ export const KEYS_IN_THIS_RELEASE: readonly ConfigKey[] = [
     env: 'IDENTITY_PUBLIC_URL',
     field: 'publicUrl',
     reading: 'text',
-    owners: ['oidc-token', 'local-password'],
+    owners: ['oidc-token', 'local-password', 'directory-password'],
   },
   {
     env: 'IDENTITY_SIGN_IN_HOURS',
     field: 'signInHours',
     reading: 'whole-number',
-    owners: ['oidc-token', 'local-password'],
+    owners: ['oidc-token', 'local-password', 'directory-password'],
   },
   {
     env: 'IDENTITY_SIGN_IN_IDLE_MINUTES',
     field: 'signInIdleMinutes',
     reading: 'whole-number',
-    owners: ['oidc-token', 'local-password'],
+    owners: ['oidc-token', 'local-password', 'directory-password'],
   },
   {
     env: 'IDENTITY_SIGN_IN_MAX',
     field: 'signInMax',
     reading: 'whole-number',
-    owners: ['oidc-token', 'local-password'],
+    owners: ['oidc-token', 'local-password', 'directory-password'],
   },
   { env: 'IDENTITY_LOCAL_USERS', field: 'localUsers', reading: 'text', owners: ['local-password'] },
   {
     env: 'IDENTITY_TRUSTED_PROXIES',
     field: 'trustedProxies',
     reading: 'list',
-    owners: ['local-password'],
+    owners: ['local-password', 'directory-password'],
+  },
+  {
+    env: 'IDENTITY_LDAP_URL',
+    field: 'ldapUrl',
+    reading: 'text',
+    owners: ['directory-password'],
+  },
+  {
+    env: 'IDENTITY_LDAP_CA_FILE',
+    field: 'ldapCaFile',
+    reading: 'text',
+    owners: ['directory-password'],
+  },
+  {
+    env: 'IDENTITY_LDAP_DOMAIN',
+    field: 'ldapDomain',
+    reading: 'text',
+    owners: ['directory-password'],
+  },
+  {
+    env: 'IDENTITY_LDAP_NETBIOS_DOMAIN',
+    field: 'ldapNetbiosDomain',
+    reading: 'text',
+    owners: ['directory-password'],
+  },
+  {
+    env: 'IDENTITY_LDAP_BASE_DN',
+    field: 'ldapBaseDn',
+    reading: 'text',
+    owners: ['directory-password'],
+  },
+  {
+    env: 'IDENTITY_LDAP_REQUIRED_GROUP',
+    field: 'ldapRequiredGroup',
+    reading: 'text',
+    owners: ['directory-password'],
+  },
+  {
+    env: 'IDENTITY_LDAP_LOCKOUT_THRESHOLD',
+    field: 'ldapLockoutThreshold',
+    reading: 'whole-number',
+    owners: ['directory-password'],
+  },
+  {
+    env: 'IDENTITY_LDAP_LOCKOUT_WINDOW_MINUTES',
+    field: 'ldapLockoutWindowMinutes',
+    reading: 'whole-number',
+    owners: ['directory-password'],
   },
 ];
 
 /** What a key a later release reads belongs to — named in its refusal. */
-export type LaterFeature =
-  | 'the first-token report'
-  | 'the role gate'
-  | 'proxy-token'
-  | 'directory-password';
+export type LaterFeature = 'the first-token report' | 'the role gate' | 'proxy-token';
 
 /**
  * Keys named in the design and read by a later release. Refused by name.
@@ -155,14 +200,6 @@ export const KEYS_IN_A_LATER_RELEASE: Readonly<Record<string, LaterFeature>> = {
   IDENTITY_PROXY_HEADER: 'proxy-token',
   IDENTITY_PROXY_TOKEN: 'proxy-token',
   IDENTITY_PROXY_SIGN_OUT_URL: 'proxy-token',
-  IDENTITY_LDAP_URL: 'directory-password',
-  IDENTITY_LDAP_CA_FILE: 'directory-password',
-  IDENTITY_LDAP_DOMAIN: 'directory-password',
-  IDENTITY_LDAP_NETBIOS_DOMAIN: 'directory-password',
-  IDENTITY_LDAP_BASE_DN: 'directory-password',
-  IDENTITY_LDAP_REQUIRED_GROUP: 'directory-password',
-  IDENTITY_LDAP_LOCKOUT_THRESHOLD: 'directory-password',
-  IDENTITY_LDAP_LOCKOUT_WINDOW_MINUTES: 'directory-password',
 };
 
 /** `issuer` → `IDENTITY_ISSUER (issuer)`: both spellings, so either reader finds it. */

@@ -69,6 +69,22 @@ export interface IdentityConfig {
   readonly signInIdleMinutes?: number;
   /** `IDENTITY_SIGN_IN_MAX` — the most sign-ins kept in memory. Default 10 000. */
   readonly signInMax?: number;
+  /** `IDENTITY_LDAP_URL` — `ldaps://dc1.corp.example:636` (`directory-password`; `ldap://` refused). */
+  readonly ldapUrl?: string;
+  /** `IDENTITY_LDAP_CA_FILE` — the company CA (PEM) the DC certificate chains to. */
+  readonly ldapCaFile?: string;
+  /** `IDENTITY_LDAP_DOMAIN` — the DNS domain people bind as `<name>@<domain>`. */
+  readonly ldapDomain?: string;
+  /** `IDENTITY_LDAP_NETBIOS_DOMAIN` — the NetBIOS domain Who-am-I must name. */
+  readonly ldapNetbiosDomain?: string;
+  /** `IDENTITY_LDAP_BASE_DN` — where accounts are searched. */
+  readonly ldapBaseDn?: string;
+  /** `IDENTITY_LDAP_REQUIRED_GROUP` — optional: the group (DN) people must be in, nested. */
+  readonly ldapRequiredGroup?: string;
+  /** `IDENTITY_LDAP_LOCKOUT_THRESHOLD` — AD's account-lockout threshold (0 = AD never locks). */
+  readonly ldapLockoutThreshold?: number;
+  /** `IDENTITY_LDAP_LOCKOUT_WINDOW_MINUTES` — AD's observation window. */
+  readonly ldapLockoutWindowMinutes?: number;
   /** `IDENTITY_TRUSTED_PROXIES` — peers whose `X-Forwarded-For` is believed. */
   readonly trustedProxies?: readonly string[];
 }

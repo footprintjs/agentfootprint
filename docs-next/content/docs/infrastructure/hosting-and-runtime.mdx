@@ -1910,9 +1910,8 @@ naming the key.
 - **Production names its strategy, even `open`.** You pass `production`; the
   library never guesses it from `NODE_ENV`.
 - **A typo is never `open`.** An unknown strategy or `IDENTITY_*` key is
-  refused, and so are the keys of strategies a later release adds
-  (`proxy-token`, `directory-password`): they are named and refused as "not in
-  this release".
+  refused, and so are the keys of a strategy a later release adds
+  (`proxy-token`): they are named and refused as "not in this release".
 - **Config errors refuse at boot; outages answer 503.** An unreachable IdP
   lets the app start and says so in the banner.
 - **The banner names settings and never a secret** — print every line.
@@ -2119,6 +2118,44 @@ IDENTITY_CLIENT_ID=<web client id>                # browser sign-in
 IDENTITY_CLIENT_KEY_FILE=/run/secrets/neo-web.pem # or IDENTITY_CLIENT_SECRET_FILE
 IDENTITY_SCOPE=openid profile api://<API client id>/access_as_user
 IDENTITY_COOKIE_KEY_FILE=/run/secrets/neo-cookie-key
+```
+
+### Plain Active Directory — `directory-password`
+
+For a company with Active Directory and no federation server, the sign-in door
+takes a Windows username and password and asks the directory, over LDAPS
+(`ldapDirectory(options)`, options `LdapDirectoryOptions`, over `ldapts` — an
+optional peer; `MissingLdaptsError` when absent, `LdaptsBackend` for a bundled
+app). `directoryPasswords(options)` (options `DirectoryPasswordsOptions`) is the
+`PasswordChecker` it plugs in:
+
+- an empty password never reaches the directory, and a name that is not 1–64
+  plain characters (after removing the configured `@domain`) never binds;
+- after the bind, RFC 4532 **Who-am-I** decides who signed in — the directory's
+  answer, never the typed name — and EXACTLY ONE entry is found for that
+  account; the id is its `objectGUID` (base64). This closes the rename
+  collision, where an explicit UPN beats another person's implicit one;
+- a required group is checked nested, its DN escaped (`escapeFilterValue`);
+- every wrong credential is one answer, AD's sub-code goes to the server log,
+  and a directory that is down is 503;
+- attempt limits come from AD's own lockout threshold (half of it per name per
+  window) — reducing the lockout risk, not ruling it out;
+- it bypasses the company's MFA, and the banner says so.
+
+The directory sits behind a small port (`Directory`, `DirectorySession`,
+`DirectoryEntry`), which is how the tests run it against a fake that applies
+AD's bind-name rules.
+
+```sh
+IDENTITY_STRATEGY=directory-password
+IDENTITY_PUBLIC_URL=https://neo.corp.example
+IDENTITY_LDAP_URL=ldaps://dc1.corp.example:636
+IDENTITY_LDAP_CA_FILE=/etc/neo/corp-root-ca.pem
+IDENTITY_LDAP_DOMAIN=corp.example
+IDENTITY_LDAP_NETBIOS_DOMAIN=CORP
+IDENTITY_LDAP_BASE_DN=DC=corp,DC=example
+IDENTITY_LDAP_LOCKOUT_THRESHOLD=10
+IDENTITY_LDAP_LOCKOUT_WINDOW_MINUTES=30
 ```
 
 ## Admission — `admission: { decide }`

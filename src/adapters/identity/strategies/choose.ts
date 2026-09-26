@@ -40,8 +40,10 @@ import {
   type OidcIdentityOptions,
 } from '../oidc.js';
 import { IdentityConfigError, readStrategy, type IdentityConfig } from './config.js';
+import type { LdaptsBackend } from '../directory/ldapDirectory.js';
 import type { OpenIdClientBackend } from '../oidcSignIn.js';
 import { browserDoor, browserSettings } from './browserChoice.js';
+import { directoryPasswordChoice } from './directoryChoice.js';
 import { localPasswordChoice } from './localChoice.js';
 import {
   KEYS_IN_A_LATER_RELEASE,
@@ -73,6 +75,8 @@ export interface IdentityBootOptions {
   readonly crossSite?: CrossSiteOptions;
   /** An already-imported `openid-client`, for a bundled app (browser sign-in). */
   readonly openIdClient?: OpenIdClientBackend;
+  /** An already-imported `ldapts`, for a bundled app (`directory-password`). */
+  readonly ldapts?: LdaptsBackend;
 }
 
 /** What the page's sign-in gate should show — `GET /auth/config` answers it. */
@@ -136,6 +140,7 @@ export async function identityFromConfig(
   if (strategy === 'open') return openChoice(fields, true);
   refuseForeignFields(strategy, fields);
   if (strategy === 'local-password') return localPasswordChoice(config, boot, production);
+  if (strategy === 'directory-password') return directoryPasswordChoice(config, boot, production);
   return oidcChoice(config, boot, production);
 }
 
