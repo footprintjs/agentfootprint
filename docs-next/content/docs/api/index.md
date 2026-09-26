@@ -33,6 +33,7 @@ title: agentfootprint
 - [ParallelBuilder](/docs/api/classes/ParallelBuilder)
 - [PauseAnswerRequiredError](/docs/api/classes/PauseAnswerRequiredError)
 - [PendingQuestionError](/docs/api/classes/PendingQuestionError)
+- [ResumeIdentityConflictError](/docs/api/classes/ResumeIdentityConflictError)
 - [RoutingDecisionError](/docs/api/classes/RoutingDecisionError)
 - [RunbookAbsenceSignal](/docs/api/classes/RunbookAbsenceSignal)
 - [RunCheckpointError](/docs/api/classes/RunCheckpointError)

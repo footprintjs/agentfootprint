@@ -1,15 +1,33 @@
 ---
-title: UnserializableRecordingError
+title: ResumeIdentityConflictError
 ---
 
-# Class: UnserializableRecordingError
+# Class: ResumeIdentityConflictError
 
-Defined in: [src/artifacts/recordingArtifact.ts:87](https://github.com/footprintjs/agentfootprint/blob/main/src/artifacts/recordingArtifact.ts#L87)
+Defined in: [src/core/conversation.ts:145](https://github.com/footprintjs/agentfootprint/blob/main/src/core/conversation.ts#L145)
 
-Raised when a recording could not be turned into bytes.
+Thrown by `resume(checkpoint, input, options)` when the run would carry two
+identities — refused before anything runs:
+ - `options.identity` names an identity other than the one the run's memory
+   namespace and credentials are restored with (`scope.runIdentity`, whatever
+   its source) — including an OWNERLESS pause (the per-run default or the
+   session rung) resumed by a named person;
+ - the checkpoint's own fields disagree (a session-rung marker on an
+   identity that carries a person).
 
-Its own class because the CALLER's answer differs from every other mint
-failure: a full store is retryable and a cyclic snapshot is not.
+The ownerless case is the fail-closed reading of an open owner question; a
+later release may relax it behind an explicit opt-in, never by default.
+
+One run never carries two identities. The resumed run keeps the paused run's
+memory namespace and credential identity (`scope.runIdentity`, restored from
+the checkpoint — a resume never re-seeds), so honouring a different caller
+would give the run one person's memory and vault and another person's
+`ctx.identity`, `EventMeta.principal` and stored ownership. Ownership is
+derived from the run and never moved; the same law, and the same `code`, as
+the hosting door's `SessionOwnershipConflictError`.
+
+Neither identity is named in the message: an error is read by whoever
+provoked it. Nothing has run and no state has moved when it is thrown.
 
 ## Extends
 
@@ -19,19 +37,13 @@ failure: a full store is retryable and a cyclic snapshot is not.
 
 ### Constructor
 
-> **new UnserializableRecordingError**(`detail`): `UnserializableRecordingError`
+> **new ResumeIdentityConflictError**(): `ResumeIdentityConflictError`
 
-Defined in: [src/artifacts/recordingArtifact.ts:90](https://github.com/footprintjs/agentfootprint/blob/main/src/artifacts/recordingArtifact.ts#L90)
-
-#### Parameters
-
-##### detail
-
-`string`
+Defined in: [src/core/conversation.ts:148](https://github.com/footprintjs/agentfootprint/blob/main/src/core/conversation.ts#L148)
 
 #### Returns
 
-`UnserializableRecordingError`
+`ResumeIdentityConflictError`
 
 #### Overrides
 
@@ -53,9 +65,9 @@ Defined in: node\_modules/typescript/lib/lib.es2022.error.d.ts:24
 
 ### code
 
-> `readonly` **code**: `"ERR_UNSERIALIZABLE_RECORDING"`
+> `readonly` **code**: `"ERR_SESSION_OWNERSHIP_CONFLICT"`
 
-Defined in: [src/artifacts/recordingArtifact.ts:88](https://github.com/footprintjs/agentfootprint/blob/main/src/artifacts/recordingArtifact.ts#L88)
+Defined in: [src/core/conversation.ts:146](https://github.com/footprintjs/agentfootprint/blob/main/src/core/conversation.ts#L146)
 
 ***
 
