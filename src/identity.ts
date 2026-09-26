@@ -140,7 +140,18 @@ export {
   identityFromConfig,
   type IdentityBootOptions,
   type IdentityChoice,
+  type IdentityMode,
 } from './adapters/identity/strategies/choose.js';
+// `local-password` (development, tests, demos; refused in production): hashed
+// entries only, scrypt from node:crypto. `hashPassword` makes an entry.
+export {
+  hashPassword,
+  localPasswords,
+  LocalPasswordConfigError,
+  SCRYPT_DEFAULT,
+  SCRYPT_FLOOR,
+  type ScryptCost,
+} from './adapters/identity/localPassword.js';
 export {
   identityConfigFromEnv,
   IdentityConfigError,

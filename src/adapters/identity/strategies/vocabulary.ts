@@ -24,30 +24,72 @@ export const IDENTITY_STRATEGIES: readonly IdentityStrategyName[] = [
 ];
 
 /** The strategies this release can start. The others are refused by name. */
-export const STRATEGIES_IN_THIS_RELEASE: readonly IdentityStrategyName[] = ['open', 'oidc-token'];
+export const STRATEGIES_IN_THIS_RELEASE: readonly IdentityStrategyName[] = [
+  'open',
+  'oidc-token',
+  'local-password',
+];
 
 /** How an environment value becomes a config value. */
-export type EnvReading = 'text' | 'strategy' | 'clients' | 'claim-path' | 'seconds';
+export type EnvReading = 'text' | 'strategy' | 'clients' | 'list' | 'claim-path' | 'whole-number';
 
 /** One key this release reads: its env name, its config field, how it parses. */
 export interface ConfigKey {
   readonly env: string;
   readonly field: string;
   readonly reading: EnvReading;
+  /** The one strategy that reads it (absent for `IDENTITY_STRATEGY`). */
+  readonly owner?: 'oidc-token' | 'local-password';
 }
 
-/** The keys `oidc-token` reads (and `IDENTITY_STRATEGY`). */
+/** The keys this release reads, each owned by one strategy (and `IDENTITY_STRATEGY`). */
 export const KEYS_IN_THIS_RELEASE: readonly ConfigKey[] = [
   { env: 'IDENTITY_STRATEGY', field: 'strategy', reading: 'strategy' },
-  { env: 'IDENTITY_ISSUER', field: 'issuer', reading: 'text' },
-  { env: 'IDENTITY_AUDIENCE', field: 'audience', reading: 'text' },
-  { env: 'IDENTITY_USER_ID_CLAIM', field: 'userIdClaim', reading: 'text' },
-  { env: 'IDENTITY_REQUIRED_SCOPE', field: 'requiredScope', reading: 'text' },
-  { env: 'IDENTITY_SCOPE_CLAIM', field: 'scopeClaim', reading: 'text' },
-  { env: 'IDENTITY_ALLOWED_CLIENTS', field: 'allowedClients', reading: 'clients' },
-  { env: 'IDENTITY_ROLES_CLAIM', field: 'rolesClaim', reading: 'claim-path' },
-  { env: 'IDENTITY_JWKS_URL', field: 'jwksUrl', reading: 'text' },
-  { env: 'IDENTITY_CLOCK_TOLERANCE_SECONDS', field: 'clockToleranceSeconds', reading: 'seconds' },
+  { env: 'IDENTITY_ISSUER', field: 'issuer', reading: 'text', owner: 'oidc-token' },
+  { env: 'IDENTITY_AUDIENCE', field: 'audience', reading: 'text', owner: 'oidc-token' },
+  { env: 'IDENTITY_USER_ID_CLAIM', field: 'userIdClaim', reading: 'text', owner: 'oidc-token' },
+  { env: 'IDENTITY_REQUIRED_SCOPE', field: 'requiredScope', reading: 'text', owner: 'oidc-token' },
+  { env: 'IDENTITY_SCOPE_CLAIM', field: 'scopeClaim', reading: 'text', owner: 'oidc-token' },
+  {
+    env: 'IDENTITY_ALLOWED_CLIENTS',
+    field: 'allowedClients',
+    reading: 'clients',
+    owner: 'oidc-token',
+  },
+  { env: 'IDENTITY_ROLES_CLAIM', field: 'rolesClaim', reading: 'claim-path', owner: 'oidc-token' },
+  { env: 'IDENTITY_JWKS_URL', field: 'jwksUrl', reading: 'text', owner: 'oidc-token' },
+  {
+    env: 'IDENTITY_CLOCK_TOLERANCE_SECONDS',
+    field: 'clockToleranceSeconds',
+    reading: 'whole-number',
+    owner: 'oidc-token',
+  },
+  { env: 'IDENTITY_PUBLIC_URL', field: 'publicUrl', reading: 'text', owner: 'local-password' },
+  { env: 'IDENTITY_LOCAL_USERS', field: 'localUsers', reading: 'text', owner: 'local-password' },
+  {
+    env: 'IDENTITY_SIGN_IN_HOURS',
+    field: 'signInHours',
+    reading: 'whole-number',
+    owner: 'local-password',
+  },
+  {
+    env: 'IDENTITY_SIGN_IN_IDLE_MINUTES',
+    field: 'signInIdleMinutes',
+    reading: 'whole-number',
+    owner: 'local-password',
+  },
+  {
+    env: 'IDENTITY_SIGN_IN_MAX',
+    field: 'signInMax',
+    reading: 'whole-number',
+    owner: 'local-password',
+  },
+  {
+    env: 'IDENTITY_TRUSTED_PROXIES',
+    field: 'trustedProxies',
+    reading: 'list',
+    owner: 'local-password',
+  },
 ];
 
 /** What a key a later release reads belongs to — named in its refusal. */
@@ -55,8 +97,7 @@ export type LaterFeature =
   | 'browser sign-in'
   | 'the role gate'
   | 'proxy-token'
-  | 'directory-password'
-  | 'local-password';
+  | 'directory-password';
 
 /**
  * Keys named in the design and read by a later release. Refused by name.
@@ -67,7 +108,6 @@ export type LaterFeature =
  * header is not ambient, and an ID-token-shaped token fails the person test.
  */
 export const KEYS_IN_A_LATER_RELEASE: Readonly<Record<string, LaterFeature>> = {
-  IDENTITY_PUBLIC_URL: 'browser sign-in',
   IDENTITY_CLIENT_ID: 'browser sign-in',
   IDENTITY_CLIENT_SECRET_FILE: 'browser sign-in',
   IDENTITY_CLIENT_KEY_FILE: 'browser sign-in',
@@ -76,11 +116,7 @@ export const KEYS_IN_A_LATER_RELEASE: Readonly<Record<string, LaterFeature>> = {
   IDENTITY_SCOPE: 'browser sign-in',
   IDENTITY_RESOURCE: 'browser sign-in',
   IDENTITY_DISPLAY_NAME_CLAIM: 'browser sign-in',
-  IDENTITY_SIGN_IN_HOURS: 'browser sign-in',
-  IDENTITY_SIGN_IN_IDLE_MINUTES: 'browser sign-in',
-  IDENTITY_SIGN_IN_MAX: 'browser sign-in',
   IDENTITY_DIAGNOSE: 'browser sign-in',
-  IDENTITY_TRUSTED_PROXIES: 'browser sign-in',
   IDENTITY_REQUIRED_ROLE: 'the role gate',
   IDENTITY_PROXY_HEADER: 'proxy-token',
   IDENTITY_PROXY_TOKEN: 'proxy-token',
@@ -93,7 +129,6 @@ export const KEYS_IN_A_LATER_RELEASE: Readonly<Record<string, LaterFeature>> = {
   IDENTITY_LDAP_REQUIRED_GROUP: 'directory-password',
   IDENTITY_LDAP_LOCKOUT_THRESHOLD: 'directory-password',
   IDENTITY_LDAP_LOCKOUT_WINDOW_MINUTES: 'directory-password',
-  IDENTITY_LOCAL_USERS: 'local-password',
 };
 
 /** `issuer` → `IDENTITY_ISSUER (issuer)`: both spellings, so either reader finds it. */

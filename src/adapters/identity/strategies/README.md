@@ -28,3 +28,5 @@ await standingAgent({ agent, sessions, host, identity: choice.identity });
   release's and later ones'.
 - `config.ts` — `IdentityConfig`, `IdentityConfigError`, `identityConfigFromEnv`.
 - `choose.ts` — `identityFromConfig` and the banner.
+- `localChoice.ts` — the `local-password` strategy: the list, the store, the
+  sign-in door; refused in production.

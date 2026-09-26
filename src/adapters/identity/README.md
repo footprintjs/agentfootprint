@@ -80,11 +80,31 @@ await verifier.verify(appOnlyToken); // → IdentityNotVerifiedError, failure 'n
 | Keycloak | the directory id mapper (`objectguid`, from LDAP `objectGUID`) | a service account HAS a `sub` and carries your scope; it has no directory id, so it is refused even if a client list is too broad (lab-proven) | `scope` |
 | Okta | `uid` | unverified whether `sub` can hold the login | `scope` |
 
+## `local-password` — development, tests and demos
+
+`localPasswords('name:scrypt$…,…')` checks a password list; `hashPassword(pw)`
+makes an entry. Hashed entries only — a plain password is refused at boot — and
+the strategy is refused in production (a list in the environment is not a
+production identity store). The KDF is **scrypt from `node:crypto`**: no new
+dependency (argon2 needs a native module, bcrypt a package), and memory-hard,
+which PBKDF2 is not. The default cost is OWASP's (N = 2^17, r = 8, p = 1); the
+cost travels in the hash, and anything below N = 2^14 is refused. An unknown
+name is checked against a real hash, so it costs what a known one does. The id
+is the configured name, matched exactly: the one exception to "never a name a
+person types", so renaming someone orphans their conversations.
+
+```sh
+IDENTITY_STRATEGY=local-password
+IDENTITY_PUBLIC_URL=http://localhost:5350
+IDENTITY_LOCAL_USERS=priya:scrypt$17$8$1$…$…   # from hashPassword('…')
+```
+
 ## Files
 - `agentcore.ts`, `azure.ts`, `google.ts`, `vault.ts` — outbound credential
   sources.
 - `jwks.ts` — verify a caller's bearer token against a published key set.
 - `oidc.ts` — the `oidc-token` verifier: discovery, AD FS's second issuer, the
   person test.
+- `localPassword.ts` — the `local-password` list and `hashPassword` (scrypt).
 - `verify/` — the shared checks both verifiers use.
 - `strategies/` — `identityFromConfig`, `identityConfigFromEnv`, the vocabulary.

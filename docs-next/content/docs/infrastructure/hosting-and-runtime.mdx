@@ -1998,6 +1998,62 @@ await standingAgent({
 });
 ```
 
+### The sign-in door — `signInDoor` and `local-password`
+
+`signInDoor(options)` (options: `SignInDoorOptions`) returns a `SignInDoor`
+that serves four routes under `/auth`; mount its `handle(req, res)` in front of
+your routes:
+
+| Route | What it does |
+|---|---|
+| `GET /auth/config` | `{ mode }` — the page's sign-in gate: `'open'`, `'token-only'` or `'password'` (an `IdentityMode`) |
+| `GET /auth/me` | `{ displayName, accountKey, expiresAt }` or 401. `accountKeyOf(userId)` is a 128-bit key for the page's caches |
+| `POST /auth/login` | a password sign-in, below |
+| `POST /auth/logout` | ends the sign-in, expires the cookie, closes its sockets; `{ next: '/' }` |
+
+A login runs the door guard first, whatever it carries (a login carries no
+credential, and a forged cross-site login would sign a victim into the
+attacker's account). It reads JSON only, answers a bad body with a fixed
+sentence (a parser's own message would quote the password), refuses an empty
+password before any check, and gives every wrong credential one answer —
+`WRONG_CREDENTIAL_SENTENCE` — after a minimum time. `AttemptLimits` grow a
+delay per typed name and per client address before refusing with 429. A
+sign-in already present is ended first. The cookie is
+`__Host-Http-af-signin` — `HttpOnly; Secure; SameSite=Strict; Path=/`, no
+`Domain`, 8 hours; on a plain-`http` localhost public URL (development only) it
+is `af-signin` without `Secure`, and the banner says so.
+
+Sign-ins live in a `SignInStore`; `memorySignIns()` (a `MemorySignIns`, options
+`MemorySignInsOptions`) keeps at most `DEFAULT_SIGN_IN_MAX` (10 000), the oldest
+ending first. Sign-ins and attempt budgets are per process: run one replica,
+pin each browser to one, or put a shared store behind the same four verbs.
+
+The password check is a `PasswordChecker` (it answers a `PasswordAccepted` or
+nothing). `local-password` is the one this release ships, for development,
+tests and demos — refused in production: `localPasswords(list)` over
+`name:scrypt$…` entries, made by `hashPassword(password)`. The KDF is scrypt
+from `node:crypto` (no dependency, memory-hard); `SCRYPT_DEFAULT` is OWASP's
+cost and `SCRYPT_FLOOR` the weakest a hash may carry (a `ScryptCost`); a plain
+or weak entry is a `LocalPasswordConfigError` at boot.
+
+```sh
+IDENTITY_STRATEGY=local-password
+IDENTITY_PUBLIC_URL=http://localhost:5350
+IDENTITY_LOCAL_USERS=priya:scrypt$17$8$1$…$…
+```
+
+```ts
+const choice = await identityFromConfig(identityConfigFromEnv(process.env), { production: false });
+const host = nodeHost({
+  port: 5350,
+  hostname: '127.0.0.1',
+  signIn: choice.hostSignIn,
+  onUnhandled: (req, res) =>
+    void choice.signInDoor!.handle(req, res).then((ok) => ok || res.writeHead(404).end()),
+});
+await standingAgent({ agent, sessions, host, identity: choice.identity });
+```
+
 ## Admission — `admission: { decide }`
 
 The cheapest refusal is the one made before the first model call. `admission`

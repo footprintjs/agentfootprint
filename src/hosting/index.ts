@@ -260,10 +260,28 @@ export {
   type SignInRead,
 } from './signin/cookie.js';
 export { signInSource, type SignInSourceOptions, type SignIns } from './signin/source.js';
+// The sign-in door (identity strategies, step 4) — `/auth/config`, `/auth/me`,
+// `/auth/login` (password), `/auth/logout`; a bounded in-memory store.
+export {
+  accountKeyOf,
+  signInDoor,
+  WRONG_CREDENTIAL_SENTENCE,
+  type SignInDoor,
+  type SignInDoorOptions,
+} from './signin/door.js';
+export {
+  DEFAULT_SIGN_IN_MAX,
+  memorySignIns,
+  type MemorySignIns,
+  type MemorySignInsOptions,
+} from './signin/memorySignIns.js';
+export type { AttemptLimits } from './signin/limits.js';
 export {
   SIGN_IN_COOKIE,
   SIGN_IN_COOKIE_LOCALHOST,
   type HostSignInOptions,
+  type PasswordAccepted,
+  type PasswordChecker,
   type SignIn,
   type SignInSource,
   type SignInStore,

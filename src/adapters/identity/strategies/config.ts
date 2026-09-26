@@ -43,6 +43,18 @@ export interface IdentityConfig {
   readonly jwksUrl?: string;
   /** `IDENTITY_CLOCK_TOLERANCE_SECONDS` — default 60. */
   readonly clockToleranceSeconds?: number;
+  /** `IDENTITY_PUBLIC_URL` — the URL people open the app at (`local-password`). */
+  readonly publicUrl?: string;
+  /** `IDENTITY_LOCAL_USERS` — `name:scrypt$…` entries, comma separated (`local-password`). */
+  readonly localUsers?: string;
+  /** `IDENTITY_SIGN_IN_HOURS` — a sign-in's absolute lifetime. Default 8. */
+  readonly signInHours?: number;
+  /** `IDENTITY_SIGN_IN_IDLE_MINUTES` — idle limit. Default 60 under a password strategy. */
+  readonly signInIdleMinutes?: number;
+  /** `IDENTITY_SIGN_IN_MAX` — the most sign-ins kept in memory. Default 10 000. */
+  readonly signInMax?: number;
+  /** `IDENTITY_TRUSTED_PROXIES` — peers whose `X-Forwarded-For` is believed. */
+  readonly trustedProxies?: readonly string[];
 }
 
 /**
@@ -150,10 +162,12 @@ function readValue(key: ConfigKey, value: string): unknown {
       return readStrategy(value);
     case 'clients':
       return readClients(value);
+    case 'list':
+      return value.split(/[\s,]+/).filter((v) => v.length > 0);
     case 'claim-path':
       return readClaimPath(value);
-    case 'seconds':
-      return readSeconds(key.env, value);
+    case 'whole-number':
+      return readWholeNumber(key.env, value);
   }
 }
 
@@ -204,7 +218,7 @@ function readClaimPath(value: string): ClaimPath {
   );
 }
 
-function readSeconds(name: string, value: string): number {
+function readWholeNumber(name: string, value: string): number {
   if (/^\d{1,6}$/.test(value)) return Number(value);
-  throw new IdentityConfigError(`${name} is a whole number of seconds (got '${value}').`, name);
+  throw new IdentityConfigError(`${name} is a whole number (got '${value}').`, name);
 }

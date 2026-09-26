@@ -91,7 +91,8 @@ funnel.
   (`wrong-client`). These, and `roles-unknown`, are new `IdentityFailureClass`
   words: the ingress record carries them like the others.
 - **The banner never carries a secret.** Print every line at boot.
-- This release starts `open` and `oidc-token` (bearer access tokens).
+- This release starts `open`, `oidc-token` (bearer access tokens) and
+  `local-password` (development only; refused in production).
   `proxy-token`, `directory-password`, `local-password` and browser sign-in
   are named and refused as "not in this release".
 
@@ -144,6 +145,36 @@ await standingAgent({
   identity,
 });
 await signIns.end(key); // sign-out: every socket carrying it closes
+```
+
+### The sign-in door — `/auth`, a cookie, no IdP token
+
+`signInDoor` (`signin/door.ts`) serves `/auth/config`, `/auth/me`,
+`/auth/login` and `/auth/logout`; mount it in front of your routes. With
+`IDENTITY_STRATEGY=local-password`, `identityFromConfig` builds it for you
+(`choice.signInDoor`, `choice.hostSignIn`, `choice.identity`).
+
+- **The browser holds no IdP token (rule 16).** It holds a random value in an
+  `HttpOnly` cookie; the server keeps the sign-in by the value's SHA-256.
+- **A password door (rule 18)** runs the door guard on every login, reads
+  JSON only, answers a bad body with a fixed sentence, refuses an empty
+  password before any check, gives every wrong credential one answer after a
+  minimum time, grows a delay before refusing a name or an address, and ends
+  a sign-in already present.
+- **Server-side state is bounded, and per process (rule 19).** The banner
+  says: run one replica, or pin each browser to one, or use a shared store.
+- Sign-ins last 8 hours, 60 idle minutes under a password.
+
+```ts
+const choice = await identityFromConfig(identityConfigFromEnv(process.env), { production: false });
+const door = choice.signInDoor!;
+const host = nodeHost({
+  port: 5350,
+  hostname: '127.0.0.1',
+  signIn: choice.hostSignIn,
+  onUnhandled: (req, res) => void door.handle(req, res).then((ok) => ok || res.writeHead(404).end()),
+});
+await standingAgent({ agent, sessions, host, identity: choice.identity });
 ```
 
 The rules for the verifiers themselves are in `src/adapters/identity/README.md`.

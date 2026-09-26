@@ -4,7 +4,25 @@
  * and runs the same `identityStrategyConformance`.
  */
 
-import { jwksIdentity, oidcIdentity, type OidcIdentityOptions } from '../../../../src/identity.js';
+import {
+  hashPassword,
+  jwksIdentity,
+  localPasswords,
+  oidcIdentity,
+  type OidcIdentityOptions,
+} from '../../../../src/identity.js';
+import {
+  signInKeyOf,
+  signInSource,
+  verifyRequestIdentity,
+  type IdentityVerificationOptions,
+  type VerifiedIdentity,
+} from '../../../../src/hosting/index.js';
+import {
+  login,
+  mountDoor,
+  TEST_COST as LOCAL_TEST_COST,
+} from '../../../hosting/signInDoorHarness.js';
 import type { IdentityStrategyHarness, Presentation } from './cases.js';
 import {
   appOnlyClaims,
@@ -150,6 +168,83 @@ export async function jwksHarness(): Promise<IdentityStrategyHarness> {
       'only-a-listed-client-obtains-a-person':
         'jwksIdentity has no client check — use oidcIdentity',
       'unknown-roles-are-not-none': 'jwksIdentity reads roles as given — use oidcIdentity',
+    },
+  };
+}
+
+/**
+ * `local-password`: the credential is the sign-in COOKIE the door minted after
+ * a password login, and `verify` is the sign-in path of the one funnel. Token
+ * shapes it cannot be presented (a JWT's claims) answer `undefined`.
+ */
+export async function localPasswordHarness(): Promise<
+  IdentityStrategyHarness & { close(): Promise<void> }
+> {
+  const odd = 'MiXeD Casé/Id';
+  const users = [
+    `${IDS.a}:${await hashPassword('pw-a', LOCAL_TEST_COST)}`,
+    `${IDS.b}:${await hashPassword('pw-b', LOCAL_TEST_COST)}`,
+    `${odd}:${await hashPassword('pw-odd', LOCAL_TEST_COST)}`,
+  ].join(',');
+  const m = await mountDoor({ passwords: localPasswords(users) });
+  const cookieOf = async (name: string, password: string): Promise<string> => {
+    const signedIn = await login(m.url, name, password);
+    return (signedIn.cookie as string).split('=')[1] as string;
+  };
+  const verifierOver = (identity: IdentityVerificationOptions) => ({
+    verify: async (cookie: string) =>
+      (await verifyRequestIdentity(
+        identity,
+        {},
+        undefined,
+        signInKeyOf(cookie),
+      )) as VerifiedIdentity,
+  });
+  return {
+    name: 'local-password',
+    ids: { a: IDS.a, b: IDS.b, oddBytes: odd },
+    verifier: verifierOver(m.door.identity),
+    close: m.close,
+    async present(shape) {
+      switch (shape) {
+        case 'person-a':
+        case 'person-a-again':
+          return cookieOf(IDS.a, 'pw-a');
+        case 'person-b':
+          return cookieOf(IDS.b, 'pw-b');
+        case 'odd-bytes-id':
+          return cookieOf(odd, 'pw-odd');
+        case 'expired': {
+          const value = `expired-${Math.random()}`;
+          const t = Date.now() - 10 * 3_600_000;
+          await m.store.create({
+            key: signInKeyOf(value),
+            identity: { userId: IDS.a },
+            strategy: 'local-password',
+            startedAt: t,
+            expiresAt: t + 8 * 3_600_000,
+            lastSeenAt: t,
+          });
+          return value;
+        }
+        case 'garbage':
+          return 'a-cookie-value-nobody-was-issued';
+        default:
+          return undefined;
+      }
+    },
+    async outage() {
+      const down = {
+        create: () => Promise.reject(new Error('down')),
+        find: () => Promise.reject(new Error('down')),
+        touch: () => Promise.reject(new Error('down')),
+        delete: () => Promise.reject(new Error('down')),
+      };
+      return verifierOver({ signIn: signInSource({ store: down, idleMinutes: 60 }) });
+    },
+    declared: {
+      'a-forgery-is-unverifiable':
+        "a sign-in key nobody holds answers 'expired' — ended, expired and never-existed are one answer by design",
     },
   };
 }

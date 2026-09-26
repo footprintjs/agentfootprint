@@ -109,3 +109,27 @@ export interface HostSignInOptions {
    */
   readonly identity: IdentityVerificationOptions;
 }
+
+/** What a password strategy proved. */
+export interface PasswordAccepted {
+  /** The person. `userId` is the owner of everything they do. */
+  readonly identity: VerifiedIdentity;
+  /** What the page shows. Never an id. */
+  readonly displayName?: string;
+}
+
+/**
+ * A password strategy: `local-password` today, `directory-password` later.
+ * Resolves the person, or `undefined` for ANY wrong credential — unknown name,
+ * wrong password, disabled account — so the sign-in door gives one answer for
+ * all of them. Throws only when it could not check at all (a directory that is
+ * down), which the door answers 503.
+ *
+ * The password is never stored, logged or forwarded by the door, and a checker
+ * must not do so either.
+ */
+export interface PasswordChecker {
+  /** Which strategy this is, recorded on the sign-in. */
+  readonly strategy: string;
+  check(username: string, password: string): Promise<PasswordAccepted | undefined>;
+}

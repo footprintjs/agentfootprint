@@ -26,7 +26,10 @@
  * config error must refuse the BOOT, and discovery is a network read.
  */
 
+import type { CrossSiteOptions } from '../../../hosting/doorGuard.js';
 import type { IdentityVerificationOptions } from '../../../hosting/identityVerification.js';
+import type { SignInDoor } from '../../../hosting/signin/door.js';
+import type { HostSignInOptions } from '../../../hosting/signin/types.js';
 import { pathLabel } from '../verify/claims.js';
 import { discoveryUrlFor, fetchableUrlProblem, type DiscoveryFetch } from '../verify/discovery.js';
 import type { JoseBackend } from '../verify/jwtCore.js';
@@ -37,6 +40,7 @@ import {
   type OidcIdentityOptions,
 } from '../oidc.js';
 import { IdentityConfigError, readStrategy, type IdentityConfig } from './config.js';
+import { localPasswordChoice } from './localChoice.js';
 import {
   KEYS_IN_A_LATER_RELEASE,
   KEYS_IN_THIS_RELEASE,
@@ -58,7 +62,17 @@ export interface IdentityBootOptions {
   readonly fetch?: DiscoveryFetch;
   /** An already-imported `jose`, for a bundled app. */
   readonly backend?: JoseBackend;
+  /**
+   * The door hardening's lists — the SAME `allowedHosts` / `allowedOrigins`
+   * the host is built with. A sign-in strategy's door guard is built from
+   * them (one source), and the public URL must pass them, or boot refuses.
+   * Unset: only a loopback public URL (development) can start a sign-in door.
+   */
+  readonly crossSite?: CrossSiteOptions;
 }
+
+/** What the page's sign-in gate should show — `GET /auth/config` answers it. */
+export type IdentityMode = 'open' | 'token-only' | 'password';
 
 /** The chosen strategy, ready to hand to every door. */
 export interface IdentityChoice {
@@ -69,6 +83,18 @@ export interface IdentityChoice {
    * `open`: nothing about a request changes.
    */
   readonly identity?: IdentityVerificationOptions;
+  /** What the page's sign-in gate shows: no sign-in, bearer tokens only, or a password form. */
+  readonly mode: IdentityMode;
+  /**
+   * The sign-in door (`/auth/*`), for a sign-in strategy. Mount it in front of
+   * your routes: `nodeHost({ onUnhandled: (req, res) => door.handle(req, res) … })`.
+   */
+  readonly signInDoor?: SignInDoor;
+  /**
+   * What the host takes for a sign-in strategy: `nodeHost({ signIn: choice.hostSignIn })`.
+   * The transport then strips the sign-in cookie and checks every socket.
+   */
+  readonly hostSignIn?: HostSignInOptions;
   /**
    * Lines to print at boot: the strategy, what it checks, what it does not,
    * and every warning. No secret, token, or claim value is ever in it.
@@ -104,6 +130,8 @@ export async function identityFromConfig(
     );
   }
   if (strategy === 'open') return openChoice(fields, true);
+  refuseForeignFields(strategy, fields);
+  if (strategy === 'local-password') return localPasswordChoice(config, boot, production);
   return oidcChoice(config, boot, production);
 }
 
@@ -132,6 +160,7 @@ function unsetStrategy(fields: readonly string[], production: boolean): Identity
 function openChoice(fields: readonly string[], stated: boolean): IdentityChoice {
   return {
     strategy: 'open',
+    mode: 'open',
     banner: [
       stated
         ? 'identity: strategy open'
@@ -161,6 +190,7 @@ async function oidcChoice(
   }
   return {
     strategy: 'oidc-token',
+    mode: 'token-only',
     identity: { verify: verifier.verify },
     banner: oidcBanner(options, state, production).map(bannerSafe),
   };
@@ -364,6 +394,19 @@ function bannerSafe(line: string): string {
   // eslint-disable-next-line no-control-regex
   const control = /[\u0000-\u001f\u007f]/g;
   return line.replace(control, (c) => `\\u${c.charCodeAt(0).toString(16).padStart(4, '0')}`);
+}
+
+/** A key another strategy reads is refused: somebody believes it is doing something. */
+function refuseForeignFields(strategy: IdentityStrategyName, fields: readonly string[]): void {
+  for (const field of fields) {
+    const key = KEYS_IN_THIS_RELEASE.find((k) => k.field === field);
+    if (key?.owner === undefined || key.owner === strategy) continue;
+    const why =
+      strategy === 'oidc-token' && key.owner === 'local-password' && field !== 'localUsers'
+        ? `belongs to browser sign-in, which for oidc-token is not in this release`
+        : `belongs to ${key.owner}, not ${strategy}`;
+    throw new IdentityConfigError(`${keyLabel(field)} ${why}. Remove it.`, key.env);
+  }
 }
 
 function refuseUnknownField(field: string): never {

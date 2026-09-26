@@ -15,23 +15,43 @@ import {
   runIdentityCase,
   type IdentityStrategyHarness,
 } from './conformance/cases.js';
-import { jwksHarness, oidcHarness } from './conformance/harnesses.js';
+import { jwksHarness, localPasswordHarness, oidcHarness } from './conformance/harnesses.js';
 
-const suites: [string, () => Promise<IdentityStrategyHarness>][] = [
-  ['oidcIdentity', oidcHarness],
-  ['jwksIdentity', jwksHarness],
+type Build = () => Promise<IdentityStrategyHarness & { close?(): Promise<void> }>;
+
+/**
+ * [name, harness, the laws it cannot be PRESENTED at all]. A password strategy
+ * has no token claims, so the token-shape laws are not applicable to it — named
+ * here, so a new not-applicable case is a test failure, never silence.
+ */
+const suites: [string, Build, readonly string[]][] = [
+  ['oidcIdentity', oidcHarness, []],
+  ['jwksIdentity', jwksHarness, []],
+  [
+    'local-password',
+    localPasswordHarness,
+    [
+      'every-token-expires',
+      'an-application-is-not-a-person',
+      'only-a-listed-client-obtains-a-person',
+      'a-roles-string-is-one-role',
+      'unknown-roles-are-not-none',
+    ],
+  ],
 ];
 
-for (const [name, build] of suites) {
+for (const [name, build, notApplicable] of suites) {
   describe(`identity conformance — ${name}`, () => {
     for (const testCase of identityStrategyConformance) {
       it(`${testCase.name}: ${testCase.law}`, async () => {
         const harness = await build();
-        const outcome = await runIdentityCase(testCase, harness);
+        const outcome = await runIdentityCase(testCase, harness).finally(() => harness.close?.());
         expect(outcome.stale, `declared but passing: ${outcome.detail}`).toBeUndefined();
         expect(outcome.status, outcome.detail).not.toBe('failed');
         if (harness.declared?.[testCase.name] === undefined) {
-          expect(outcome.status).toBe('passed');
+          expect(outcome.status).toBe(
+            notApplicable.includes(testCase.name) ? 'not-applicable' : 'passed',
+          );
         }
       });
     }

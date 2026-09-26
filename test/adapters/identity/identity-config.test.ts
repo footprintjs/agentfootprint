@@ -111,7 +111,7 @@ describe('identityConfigFromEnv — unit', () => {
       'IDENTITY_CLIENT_ID',
       /browser sign-in, which is not in this release/,
     ],
-    [{ IDENTITY_LOCAL_USERS: 'a:b' }, 'IDENTITY_LOCAL_USERS', /local-password/],
+    [{ IDENTITY_LDAP_BASE_DN: 'DC=corp' }, 'IDENTITY_LDAP_BASE_DN', /directory-password/],
     [{ IDENTITY_PROXY_HEADER: 'x' }, 'IDENTITY_PROXY_HEADER', /proxy-token/],
     [{ IDENTITY_REQUIRED_ROLE: 'neo-users' }, 'IDENTITY_REQUIRED_ROLE', /the role gate/],
     [{ IDENTITY_ALLOWED_CLIENTS: 'any, neo-web' }, 'IDENTITY_ALLOWED_CLIENTS', /'any' beside/],
@@ -172,13 +172,30 @@ describe('identityFromConfig — boot refusals', () => {
     );
   });
 
-  it.each(['proxy-token', 'directory-password', 'local-password'] as const)(
+  it.each(['proxy-token', 'directory-password'] as const)(
     "'%s' is named in the vocabulary and refused as not in this release",
     async (strategy) => {
       const err = await refusal(() => identityFromConfig({ strategy }, { production: false }));
       expect(err.message).toMatch(new RegExp(`'${strategy}', which is not in this release`));
     },
   );
+
+  it("a key another strategy reads refuses: browser sign-in keys are not oidc-token's (yet)", async () => {
+    const idp = await fakeIdp();
+    const err = await refusal(() =>
+      identityFromConfig(oidcConfig(idp, { publicUrl: 'https://neo.corp.example' }), {
+        production: false,
+        fetch: idp.fetch,
+        backend: idp.backend,
+      }),
+    );
+    expect(err.key).toBe('IDENTITY_PUBLIC_URL');
+    expect(err.message).toMatch(/browser sign-in, which for oidc-token is not in this release/);
+    const users = await refusal(() =>
+      identityFromConfig(oidcConfig(idp, { localUsers: 'a:b' }), { production: false }),
+    );
+    expect(users.message).toMatch(/belongs to local-password, not oidc-token/);
+  });
 
   it('an unknown strategy or an unknown field refuses (JavaScript callers bypass the types)', async () => {
     await refusal(() => identityFromConfig({ strategy: 'sso' } as never, { production: false }));
