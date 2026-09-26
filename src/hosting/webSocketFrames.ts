@@ -71,6 +71,8 @@ export const CLOSE_CODE = {
   noStatus: 1005,
   /** Text that is not valid UTF-8. */
   invalidPayload: 1007,
+  /** The endpoint's policy ended it — here: the sign-in behind the socket ended. */
+  policyViolation: 1008,
   /** Past a declared ceiling. */
   tooBig: 1009,
   /**

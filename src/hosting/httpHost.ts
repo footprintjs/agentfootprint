@@ -107,6 +107,9 @@ import type { SessionWireRequest, SessionWireResult } from './sessionWire.js';
 import { SESSION_LIST_OP, SESSION_TRANSCRIPT_OP, SESSION_PENDING_OP } from './sessionWire.js';
 import { lowerCasedHeaders } from './headers.js';
 import { bearerToken } from './identityVerification.js';
+import { readSignIn } from './signin/cookie.js';
+import { checkHostSignIn, type ResolvedHostSignIn } from './signin/hostSignIn.js';
+import type { HostSignInOptions } from './signin/types.js';
 import type {
   AgentHost,
   ConversationHandler,
@@ -562,6 +565,15 @@ export interface HttpHostOptions extends CrossSiteOptions {
    * always declined.
    */
   readonly invokeHeadProbe?: boolean;
+  /**
+   * Carry a sign-in cookie. The transport strips the cookie from every header
+   * bag it hands onward and passes its KEY instead (`HostRequest.signInKey`,
+   * `HostConversation.signInKey`); the conversation door verifies every
+   * handshake with `signIn.identity` before the 101, re-checks the sign-in
+   * before each inbound frame, and closes the socket when it ends. Absent —
+   * the default — nothing about either door changes, byte for byte.
+   */
+  readonly signIn?: HostSignInOptions;
 }
 
 /** A {@link HostHandle} that also says where it landed. */
@@ -738,6 +750,7 @@ export function httpHost(options: HttpHostOptions): HttpHost {
   }
   const port = options.port ?? 8080;
   const hostname = options.hostname ?? '0.0.0.0';
+  const signIn = checkHostSignIn(name, options.signIn);
   /**
    * The paths this host answers on. Everything else is unowned and may be
    * handed to `onUnhandled` — the conversation path included in the ownership,
@@ -919,6 +932,7 @@ export function httpHost(options: HttpHostOptions): HttpHost {
         accepting: () => accepting,
         guard,
         onRefusal: reportRefusal,
+        ...(signIn !== undefined && { signIn }),
       });
 
       const onUpgrade = (request: IncomingMessage, socketOfConversation: Duplex): void => {
@@ -1112,7 +1126,7 @@ export function httpHost(options: HttpHostOptions): HttpHost {
           return;
         }
 
-        const served = serveOne(req, res, handler, wire, name, maxBodyBytes, reportRefusal);
+        const served = serveOne(req, res, handler, wire, name, maxBodyBytes, reportRefusal, signIn);
         inFlight.add(served);
         // `serveOne` never rejects, by construction — see its doc.
         void served.finally(() => inFlight.delete(served));
@@ -1196,9 +1210,10 @@ async function serveOne(
   hostName: string,
   maxBodyBytes: number | undefined,
   reportRefusal: (refusal: HostRefusal) => void,
+  signIn: ResolvedHostSignIn | undefined,
 ): Promise<void> {
   try {
-    await dispatchOne(req, res, handler, wire, hostName, maxBodyBytes, reportRefusal);
+    await dispatchOne(req, res, handler, wire, hostName, maxBodyBytes, reportRefusal, signIn);
   } catch (err) {
     // Everything inside answers its own failures; anything that got past them
     // — a dialect that threw, a body that would not stringify — is still this
@@ -1215,6 +1230,7 @@ async function dispatchOne(
   hostName: string,
   maxBodyBytes: number | undefined,
   reportRefusal: (refusal: HostRefusal) => void,
+  signIn: ResolvedHostSignIn | undefined,
 ): Promise<void> {
   const controller = new AbortController();
 
@@ -1233,7 +1249,13 @@ async function dispatchOne(
     return;
   }
 
-  const headers = lowerCasedHeaders(req.headers);
+  // The sign-in cookie comes off here, before any dialect or handler reads a
+  // header, and only its KEY goes on. Without a sign-in cookie configured this
+  // is the plain lower-casing it always was.
+  const { headers, key: signInKey } =
+    signIn === undefined
+      ? { headers: lowerCasedHeaders(req.headers), key: undefined }
+      : readSignIn(req.headers, signIn.cookieName);
   const query = new URLSearchParams((req.url ?? '').split('?')[1] ?? '');
   const facts: HttpRequestFacts = { body, headers, query };
   // Read AFTER the body, because a dialect that carries the choice in the body
@@ -1437,6 +1459,7 @@ async function dispatchOne(
         ...(artifact !== undefined && { artifact }),
         ...(session !== undefined && { session }),
         headers,
+        ...(signInKey !== undefined && { signInKey }),
         signal: controller.signal,
       },
       reply,

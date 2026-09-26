@@ -168,6 +168,18 @@ export interface HostRequest {
    * to.
    */
   readonly headers?: Readonly<Record<string, string>>;
+  /**
+   * The sign-in this request named, as its KEY — set by a transport built
+   * with a sign-in cookie (`httpHost`/`nodeHost` `signIn`), which strips the
+   * cookie itself from {@link headers} before any handler sees them. The key is
+   * the cookie value's SHA-256: the store is keyed by it and it cannot be
+   * turned back into a cookie. Absent when the transport has no sign-in cookie
+   * configured, and when the request carried none.
+   *
+   * Not identity: `verifyRequestIdentity` turns it into one, through the
+   * deployment's sign-in source, exactly as it turns a bearer token into one.
+   */
+  readonly signInKey?: string;
   /** Aborted when the caller goes away. */
   readonly signal?: AbortSignal;
 }
@@ -600,8 +612,18 @@ export interface HostConversation {
    * some other way: a bearer token a browser could only send as a subprotocol
    * arrives here as an ordinary `authorization` header, because a port field
    * spelled the way one vendor spells it is how a port stops being one.
+   *
+   * Never the sign-in cookie: a host built with one strips it (see
+   * {@link signInKey}).
    */
   readonly headers?: Readonly<Record<string, string>>;
+  /**
+   * The sign-in the handshake carried, as its KEY (see
+   * {@link HostRequest.signInKey}). When it is present the door already
+   * checked it before the 101, re-checks it before handing on every inbound
+   * frame, and closes the conversation when the sign-in ends.
+   */
+  readonly signInKey?: string;
   /**
    * Host → far side. One frame, delivered whole.
    *

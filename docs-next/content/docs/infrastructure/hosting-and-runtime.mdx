@@ -1771,10 +1771,11 @@ characters". What travels is the **class** of the failure
 `'claimed-another-user'`, and three the person test adds: `'not-a-user-token'`
 (an application's own token, or one without the scope a person's token
 carries), `'wrong-client'` (a client this API does not list obtained it) and
-`'roles-unknown'` (the roles claim was replaced by an overage pointer). Each one
+`'roles-unknown'` (the roles claim was replaced by an overage pointer), and
+`'two-credentials'` (a token and a sign-in on one request). Each one
 is a different action for the caller, and none of them requires printing one
 character of the secret. If you `switch` over the class exhaustively, add the
-three new words.
+four new words.
 
 `IdentityNotVerifiedError` (`ERR_IDENTITY_NOT_VERIFIED`, **401**) carries that
 class. `VerifierUnavailableError` (`ERR_IDENTITY_VERIFIER_UNAVAILABLE`, **503**)
@@ -1940,6 +1941,56 @@ const choice = await identityFromConfig(identityConfigFromEnv(process.env), {
 });
 for (const line of choice.banner) console.log(line);
 await standingAgent({ agent, sessions, host, identity: choice.identity });
+```
+
+### Sign-ins and the credential seam — `signIn`
+
+A browser that signed in holds one thing: a random value in an `HttpOnly`
+cookie named `SIGN_IN_COOKIE` (`__Host-Http-af-signin`; `SIGN_IN_COOKIE_LOCALHOST`
+on plain-`http` localhost, development only). The server keeps the sign-in — a
+`SignIn` record in a `SignInStore` (four verbs: `create`, `find`, `touch`,
+`delete`) keyed by the cookie value's SHA-256, `signInKeyOf(value)`, so a leaked
+store row is not a live cookie.
+
+**The cookie never reaches a handler.** Build the host with
+`signIn: HostSignInOptions` and the transport strips the cookie from every
+header bag it hands onward and passes the key instead
+(`HostRequest.signInKey`, `HostConversation.signInKey`). `readSignIn(headers)`
+does the same for an app's own routes (it returns a `SignInRead`: the key and
+the headers without the cookie; a `HeaderBag` is either header shape), and
+`withoutCredentials(headers)` removes every header in `CREDENTIAL_HEADERS` for
+anything that logs.
+
+**One verification path.** `IdentityVerificationOptions` gains `signIn`, a
+`SignInSource` that answers "who is behind this key, right now?", and
+`tokenHeader` (read a token from a header other than `authorization`).
+`verify` may be left out only when `signIn` is present; the fields both shapes
+share are `IdentityVerificationBase`. `signInSource({ store, idleMinutes })`
+(options: `SignInSourceOptions`) applies both clocks — the absolute lifetime on
+the record and the idle limit — and returns `SignIns`, which can also `end` a
+sign-in and tell `onEnd` listeners.
+
+- A token and a sign-in on one request are refused as `'two-credentials'`.
+- A sign-in that ended, expired, went idle or never existed is one answer:
+  `'expired'`. A store that cannot answer is **503**.
+- A WebSocket handshake is verified before the 101 with the same funnel, a
+  socket admitted by a sign-in is re-checked before every inbound frame, and
+  ending the sign-in closes the socket (close code 1008).
+
+Without `signIn` on the host and on `identity`, nothing about either door
+changes, byte for byte.
+
+```ts
+import { nodeHost, signInSource, standingAgent } from 'agentfootprint/hosting';
+
+const signIns = signInSource({ store, idleMinutes: 60 });
+const identity = { signIn: signIns };
+await standingAgent({
+  agent,
+  sessions,
+  host: nodeHost({ port: 8080, allowedHosts: ['neo.corp.example'], signIn: { identity } }),
+  identity,
+});
 ```
 
 ## Admission — `admission: { decide }`

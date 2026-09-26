@@ -241,10 +241,33 @@ export type {
 // extraction every dialect's credential arrives through.
 export { bearerToken, verifyRequestIdentity } from './identityVerification.js';
 export type {
+  IdentityVerificationBase,
   IdentityVerificationOptions,
   IdentityVerifier,
   VerifiedIdentity,
 } from './identityVerification.js';
+
+// The credential seam (identity strategies, step 3) — the sign-in cookie comes
+// off the headers at the transport and only its KEY goes on; one credential per
+// request; a socket's sign-in is checked before the 101, re-checked per frame,
+// and closed when it ends. See src/hosting/signin/README.md.
+export {
+  CREDENTIAL_HEADERS,
+  readSignIn,
+  signInKeyOf,
+  withoutCredentials,
+  type HeaderBag,
+  type SignInRead,
+} from './signin/cookie.js';
+export { signInSource, type SignInSourceOptions, type SignIns } from './signin/source.js';
+export {
+  SIGN_IN_COOKIE,
+  SIGN_IN_COOKIE_LOCALHOST,
+  type HostSignInOptions,
+  type SignIn,
+  type SignInSource,
+  type SignInStore,
+} from './signin/types.js';
 
 // Admission (9.26.0) — decide whether a request runs before it costs anything.
 // `turnsPerHour` is the shipped reference policy; `spendLedger` is the

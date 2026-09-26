@@ -99,12 +99,56 @@ for (const line of choice.banner) console.log(line);
 await standingAgent({ agent, sessions, host: nodeHost({ port: 8080 }), identity: choice.identity });
 ```
 
+### The credential seam — a sign-in cookie never reaches a handler
+
+A host built with `signIn` carries a sign-in cookie. These rules hold at both
+doors (requests and conversations):
+
+1. **Proved, never read.** A `userId` comes only from a strategy's `verify`, or
+   from a sign-in the server keeps. A header, body field or cookie value is
+   never read as a person.
+2. **Refuse, never downgrade.** A request that cannot prove who it is is
+   refused — never run as anonymous, never under the name it claimed.
+3. **One strategy per deployment**, chosen by `identityFromConfig`.
+4. **One verification path.** Every credential ends in
+   `verifyRequestIdentity`: a bearer token in the strategy's `verify`, a
+   sign-in in the `signIn` source.
+5. **Secrets never travel (rule 10).** The transport strips the sign-in
+   cookie from `HostRequest.headers` and `HostConversation.headers` and passes
+   its key (`signInKey`, the value's SHA-256) instead. `withoutCredentials`
+   is for anything that logs.
+6. **Sign-in stays out of the record (rule 11).** The ingress record carries
+   the proven `userId` and the failure class, never the cookie or its key.
+7. **One credential per request (rule 13).** A token and a sign-in together
+   are refused as `two-credentials`.
+8. **A socket's sign-in is checked before the 101, re-checked before every
+   inbound frame, and sign-out closes the socket (rule 21).** An ended
+   sign-in closes it with 1008; a store that cannot answer closes it with
+   1011 — an outage, never a sign-out.
+
+A sign-in that ended, expired, went idle or never existed is one answer,
+`expired`. A sign-in store that cannot answer is 503. Without `signIn` on the
+host and on `identity`, nothing about either door changes.
+
+```ts
+const signIns = signInSource({ store, idleMinutes: 60 });
+const identity = { signIn: signIns };          // or { verify, signIn } for both
+await standingAgent({
+  agent,
+  sessions,
+  host: nodeHost({ port: 8080, allowedHosts: ['neo.corp.example'], signIn: { identity } }),
+  identity,
+});
+await signIns.end(key); // sign-out: every socket carrying it closes
+```
+
 The rules for the verifiers themselves are in `src/adapters/identity/README.md`.
 
 ## Files
 - `types.ts` — the three ports.
 - `httpHost.ts`, `nodeHost.ts`, `standingAgent.ts` — the hosts.
 - `doorGuard.ts` — what a request has to be before any handler sees it.
+- `signin/` — the sign-in cookie, the seam that strips it, the lifetimes.
 - `admission.ts` — refuse before it costs anything.
 - `ingressRecord.ts` — what the door decided for requests that never ran.
 - `turnArtifacts.ts` — the artifact hand-over a turn gives its host, and its

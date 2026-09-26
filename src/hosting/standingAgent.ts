@@ -342,9 +342,14 @@ export async function standingAgent<TH extends HostHandle>(
   // `decide` would throw on the first turn — and a door that refuses everybody
   // for a configuration reason is exactly the outage that takes an hour to
   // diagnose from the outside. Named here instead, before a socket exists.
-  if (identityOptions !== undefined && typeof identityOptions.verify !== 'function') {
+  if (
+    identityOptions !== undefined &&
+    typeof identityOptions.verify !== 'function' &&
+    typeof identityOptions.signIn?.identify !== 'function'
+  ) {
     throw new Error(
-      `[hosting] standingAgent was given 'identity' without a \`verify\` function. It is the ` +
+      `[hosting] standingAgent was given 'identity' without a \`verify\` function (or a ` +
+        `\`signIn\` source). It is the ` +
         `strategy that turns a caller's bearer token into a proven user, so there is nothing ` +
         `to verify with — and with it half-spelled every request would be refused as ` +
         `unverifiable. Pass identity: { verify: jwksIdentity({ jwksUrl, issuer, audience }` +
@@ -716,7 +721,12 @@ export async function standingAgent<TH extends HostHandle>(
     // release's behaviour, to the byte.
     let verified: VerifiedIdentity | undefined;
     try {
-      verified = await verifyRequestIdentity(identityOptions, request.headers, request.userId);
+      verified = await verifyRequestIdentity(
+        identityOptions,
+        request.headers,
+        request.userId,
+        request.signInKey,
+      );
     } catch (err) {
       reply.fail(err instanceof Error ? err : new Error(String(err)));
       return;

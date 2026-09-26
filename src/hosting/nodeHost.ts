@@ -51,6 +51,7 @@
  * throws does. `types.ts` knows none of it either way.
  */
 
+import type { HostSignInOptions } from './signin/types.js';
 import { artifactWireBody, readArtifactWireOp } from './artifactWire.js';
 import type { CrossSiteOptions } from './doorGuard.js';
 import { readSessionWireOp, sessionWireBody } from './sessionWire.js';
@@ -114,6 +115,13 @@ export interface NodeHostOptions extends CrossSiteOptions {
    * full set of laws is on `httpHost`'s own `server` option, which this is.
    */
   readonly server?: import('node:http').Server;
+  /**
+   * Carry a sign-in cookie — see `HttpHostOptions.signIn`. The cookie is
+   * stripped from every header bag handed onward and only its key goes on;
+   * conversation handshakes are verified before the 101. Absent, nothing
+   * changes.
+   */
+  readonly signIn?: HostSignInOptions;
   /**
    * Answer a request whose path this adapter does not own — your code, on this
    * host's socket, instead of its 404.
@@ -420,5 +428,6 @@ export function nodeHost(options: NodeHostOptions = {}): NodeHost {
     ...(options.requireJsonContentType !== undefined && {
       requireJsonContentType: options.requireJsonContentType,
     }),
+    ...(options.signIn !== undefined && { signIn: options.signIn }),
   });
 }

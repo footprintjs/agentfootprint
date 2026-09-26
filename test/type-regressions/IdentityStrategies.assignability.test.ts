@@ -7,8 +7,8 @@
  *   1. What `identityFromConfig` hands out is exactly what `standingAgent`
  *      takes — no cast between the chooser and the door.
  *   2. `oidcIdentity` IS an `IdentityVerifier` (the port did not grow).
- *   3. `IdentityFailureClass` carries the three new words, and an exhaustive
- *      switch over it names all ten — the changelog's "a consumer's
+ *   3. `IdentityFailureClass` carries the four new words, and an exhaustive
+ *      switch over it names all eleven — the changelog's "a consumer's
  *      exhaustive switch must add them" is this file failing to compile
  *      without them.
  *   4. `jwksIdentity` takes a roles PATH and `rolesFormat`.
@@ -33,6 +33,8 @@ import type {
   StandingAgentOptions,
 } from '../../src/doors/hosting';
 
+import { signInSource, type SignInStore } from '../../src/doors/hosting';
+
 function describeFailure(failure: IdentityFailureClass): string {
   switch (failure) {
     case 'no-token':
@@ -47,6 +49,8 @@ function describeFailure(failure: IdentityFailureClass): string {
     case 'wrong-client':
     case 'roles-unknown':
       return 'the person test';
+    case 'two-credentials':
+      return 'the credential seam';
     default: {
       const exhaustive: never = failure;
       return exhaustive;
@@ -55,6 +59,17 @@ function describeFailure(failure: IdentityFailureClass): string {
 }
 
 describe('identity strategies — public types', () => {
+  it('an identity may be sign-in only; verify-less WITHOUT signIn does not compile', () => {
+    const store = {} as SignInStore;
+    const signInOnly: IdentityVerificationOptions = {
+      signIn: signInSource({ store, idleMinutes: 60 }),
+    };
+    // @ts-expect-error — neither a verify nor a sign-in source: nothing to check with.
+    const nothing: IdentityVerificationOptions = { allowAnonymous: true };
+    expect(signInOnly.verify).toBeUndefined();
+    expect(nothing).toBeDefined();
+  });
+
   it("the chooser's identity is the door's identity, with no cast", () => {
     const fromChoice = (choice: IdentityChoice): IdentityVerificationOptions | undefined =>
       choice.identity;
@@ -86,8 +101,9 @@ describe('identity strategies — public types', () => {
     expect(config).toEqual({});
   });
 
-  it('IdentityFailureClass names the person test', () => {
+  it('IdentityFailureClass names the person test and the credential seam', () => {
     expect(describeFailure('not-a-user-token')).toBe('the person test');
+    expect(describeFailure('two-credentials')).toBe('the credential seam');
     expect(describeFailure('expired')).toBe('the token');
   });
 

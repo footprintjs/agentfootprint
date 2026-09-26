@@ -625,7 +625,9 @@ export class UnreadableEnvelopeError extends TypeError {
  * none of which requires printing one character of the token.
  *
  *  - `'no-token'` — no `Authorization: Bearer …` arrived at all.
- *  - `'expired'` — the token's own lifetime is over.
+ *  - `'expired'` — the token's own lifetime is over, or the sign-in the
+ *    request named has ended (signed out, expired, idle, or never existed —
+ *    one answer, so a guessed sign-in key learns nothing).
  *  - `'not-yet-valid'` — its `nbf` is in the future (a clock-skew smell).
  *  - `'wrong-audience'` — it was minted for a different API.
  *  - `'wrong-issuer'` — it came from an IdP this door does not accept.
@@ -641,12 +643,14 @@ export class UnreadableEnvelopeError extends TypeError {
  *    Raised by `oidcIdentity`'s person test.
  *  - `'wrong-client'` — a person's token, obtained by a client this door does
  *    not list (`azp` / `appid` / `cid` / `client_id`), or naming none.
+ *  - `'two-credentials'` — the request presented a token AND a sign-in.
+ *    Which one to believe is not a question a door answers (rule 13).
  *  - `'roles-unknown'` — the token's roles claim was replaced by a pointer to
  *    somewhere else (an IdP's group-overage pointer). Unknown is not none: reading it
  *    as "no roles" would strip a person silently.
  *
- * The last three arrived together with `oidcIdentity`. A consumer's
- * exhaustive `switch` over this union must add them.
+ * The last four arrived with `oidcIdentity` and the sign-in seam. A
+ * consumer's exhaustive `switch` over this union must add them.
  */
 export type IdentityFailureClass =
   | 'no-token'
@@ -658,6 +662,7 @@ export type IdentityFailureClass =
   | 'claimed-another-user'
   | 'not-a-user-token'
   | 'wrong-client'
+  | 'two-credentials'
   | 'roles-unknown';
 
 /**
@@ -702,8 +707,14 @@ function sentenceFor(failure: IdentityFailureClass, claimedUser: boolean): strin
             `requests may then carry no user id at all.`;
     case 'expired':
       return (
-        `the presented token has expired. Refresh it at your identity provider and retry; ` +
-        `nothing is wrong with this host or with the token's contents.`
+        `the presented token has expired, or the sign-in it named has ended. Refresh the ` +
+        `token at your identity provider (or sign in again) and retry; nothing is wrong with ` +
+        `this host.`
+      );
+    case 'two-credentials':
+      return (
+        `the request presented a token AND a sign-in. One credential per request: which of ` +
+        `the two to believe is not a question this door answers. Send one of them.`
       );
     case 'not-yet-valid':
       return (

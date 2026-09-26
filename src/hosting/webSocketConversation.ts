@@ -48,6 +48,9 @@ import type { Duplex } from 'node:stream';
 import { checkSessionId, type DoorGuard } from './doorGuard.js';
 import { ConversationClosedError, FrameTooLargeError } from './errors.js';
 import { lowerCasedHeaders } from './headers.js';
+import { readSignIn } from './signin/cookie.js';
+import { checkHandshake, signInStillLive, type ResolvedHostSignIn } from './signin/hostSignIn.js';
+import type { SignInSource } from './signin/types.js';
 import { bearerToken } from './identityVerification.js';
 import type {
   ConversationClose,
@@ -125,6 +128,13 @@ export interface ConversationDoorOptions {
   readonly guard?: DoorGuard;
   /** Told about every handshake this door refuses on the guard's or the session bound's word. */
   readonly onRefusal?: (refusal: HostRefusal) => void;
+  /**
+   * The host's sign-in cookie. Present: the cookie is stripped from the
+   * conversation's headers, the handshake is verified BEFORE the 101, and a
+   * socket admitted by a sign-in is re-checked before every inbound frame and
+   * closed when the sign-in ends. Absent: the door as it was.
+   */
+  readonly signIn?: ResolvedHostSignIn;
 }
 
 /** What a handshake dialect may read. Deliberately the same shape a request wire gets, minus the body. */
@@ -179,7 +189,10 @@ export function conversationDoor(options: ConversationDoorOptions): Conversation
         return true;
       }
 
-      const headers = lowerCasedHeaders(request.headers);
+      const { headers, key: signInKey } =
+        options.signIn === undefined
+          ? { headers: lowerCasedHeaders(request.headers), key: undefined }
+          : readSignIn(request.headers, options.signIn.cookieName);
       // The door guard, before anything else about the handshake is read. A
       // WebSocket is not bound by the same-origin policy and its browser API
       // cannot set a header, so there is no preflight to force: the browser's
@@ -230,26 +243,70 @@ export function conversationDoor(options: ConversationDoorOptions): Conversation
         refuseAtDoor(socket, unboundedSession, { ...headers, ...read.headers }, options.onRefusal);
         return true;
       }
-      socket.write(handshakeResponse(key, read.protocol));
+      const admit = (): void => {
+        socket.write(handshakeResponse(key, read.protocol));
 
-      const conversation = openConversation(socket, {
-        hostName: options.hostName,
-        limits: options.limits,
-        ...(read.sessionId !== undefined && { sessionId: read.sessionId }),
-        headers: { ...headers, ...read.headers },
-      });
-      live.add(conversation);
-      void conversation.ended.finally(() => live.delete(conversation));
+        const watched = options.signIn?.identity.signIn;
+        const conversation = openConversation(socket, {
+          hostName: options.hostName,
+          limits: options.limits,
+          ...(read.sessionId !== undefined && { sessionId: read.sessionId }),
+          headers: { ...headers, ...read.headers },
+          ...(signInKey !== undefined && { signInKey }),
+          ...(signInKey !== undefined &&
+            watched !== undefined && { watch: { source: watched, key: signInKey } }),
+        });
+        live.add(conversation);
+        void conversation.ended.finally(() => live.delete(conversation));
 
-      // A handler that throws ends THAT conversation and nothing else: one
-      // caller's bad frame is not an outage for everyone else on this door.
-      void (async () => {
-        try {
-          await options.handler(conversation.port);
-        } catch (err) {
-          conversation.end(`the conversation handler threw: ${asMessage(err)}`);
-        }
-      })();
+        // A handler that throws ends THAT conversation and nothing else: one
+        // caller's bad frame is not an outage for everyone else on this door.
+        void (async () => {
+          try {
+            await options.handler(conversation.port);
+          } catch (err) {
+            conversation.end(`the conversation handler threw: ${asMessage(err)}`);
+          }
+        })();
+      };
+      if (options.signIn === undefined) {
+        admit();
+        return true;
+      }
+      // The handshake is a GET, and a cross-site socket can read replies: it is
+      // verified HERE, before the 101 — the same funnel a request goes through,
+      // so a sign-in, a bearer token and "two credentials" answer exactly as
+      // they do at the request door.
+      const signIn = options.signIn;
+      void checkHandshake(signIn, { ...headers, ...read.headers }, signInKey)
+        .then((refusal) => {
+          if (socket.destroyed || !socket.writable) return;
+          if (refusal !== undefined) {
+            refuseAtDoor(
+              socket,
+              Object.assign(refusal.error, { status: refusal.status }),
+              headers,
+              options.onRefusal,
+            );
+            return;
+          }
+          if (!options.accepting()) {
+            refuse(
+              socket,
+              503,
+              `the '${options.hostName}' host is closed and is not taking new conversations`,
+            );
+            return;
+          }
+          admit();
+        })
+        .catch((err: unknown) => {
+          refuse(
+            socket,
+            500,
+            `the '${options.hostName}' host could not verify this handshake: ${asMessage(err)}`,
+          );
+        });
       return true;
     },
 
@@ -267,6 +324,7 @@ export function conversationDoor(options: ConversationDoorOptions): Conversation
 /** The statuses this door answers a pre-101 socket with. */
 const REFUSAL_REASON: Readonly<Record<number, string>> = {
   400: 'Bad Request',
+  401: 'Unauthorized',
   403: 'Forbidden',
   415: 'Unsupported Media Type',
   421: 'Misdirected Request',
@@ -320,6 +378,9 @@ interface OpenOptions {
   readonly limits: ConversationLimits;
   readonly sessionId?: string;
   readonly headers: Readonly<Record<string, string>>;
+  readonly signInKey?: string;
+  /** The sign-in this socket was admitted by: re-checked per frame, closed when it ends. */
+  readonly watch?: { readonly source: SignInSource; readonly key: string };
 }
 
 /**
@@ -390,7 +451,39 @@ function openConversation(socket: Duplex, options: OpenOptions): LiveConversatio
     resolveEnded();
   }
 
+  /**
+   * The sign-in re-check (rule 21): a socket admitted by a sign-in hands on no
+   * frame until the sign-in is confirmed live, in arrival order. A sign-in that
+   * ended closes the socket with 1008 and the frame is never delivered; a store
+   * that cannot answer closes it with 1011 — an outage, never a sign-out.
+   */
+  let gate: Promise<void> = Promise.resolve();
   function deliver(frame: string): void {
+    const watch = options.watch;
+    if (watch === undefined) {
+      deliverNow(frame);
+      return;
+    }
+    gate = gate.then(async () => {
+      if (ending !== undefined) return;
+      const state = await signInStillLive(watch.source, watch.key);
+      if (ending !== undefined) return;
+      if (state === 'live') deliverNow(frame);
+      else if (state === 'ended') signInEnded();
+      else {
+        finish(
+          { by: 'host', reason: 'the sign-in could not be checked (its store did not answer)' },
+          CLOSE_CODE.internalError,
+        );
+      }
+    });
+  }
+
+  function signInEnded(): void {
+    finish({ by: 'host', reason: 'the sign-in ended' }, CLOSE_CODE.policyViolation);
+  }
+
+  function deliverNow(frame: string): void {
     if (ending !== undefined) return;
     if (frameSubscribers.size === 0) {
       pendingBytes += Buffer.byteLength(frame, 'utf8');
@@ -581,9 +674,20 @@ function openConversation(socket: Duplex, options: OpenOptions): LiveConversatio
     }),
   );
 
+  // Close on sign-out: told by the source when the sign-in ends, not only
+  // found on the next frame. Feature-detected; unsubscribed when this ends.
+  const watch = options.watch;
+  if (watch?.source.onEnd !== undefined) {
+    const unsubscribe = watch.source.onEnd((ended) => {
+      if (ended === watch.key) signInEnded();
+    });
+    void ended.then(unsubscribe);
+  }
+
   const port: HostConversation = {
     ...(sessionId !== undefined && { sessionId }),
     headers: options.headers,
+    ...(options.signInKey !== undefined && { signInKey: options.signInKey }),
     send(frame: string): void {
       if (ending !== undefined) throw new ConversationClosedError(hostName, sessionId);
       const bytes = Buffer.byteLength(frame, 'utf8');
