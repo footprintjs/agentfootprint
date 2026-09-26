@@ -44,7 +44,9 @@ log.info({ path: req.url, headers: withoutCredentials(headers) });
   budget refuses; the per-address budget only DELAYS (a proxy or a NAT must
   not let a stranger lock everybody out), and a right password never adds to
   it. Name and address counters live in separate bounded maps and a counter
-  that still penalises is never evicted. For `directory-password` this
+  that still penalises is never evicted — for a NAME that is any counted
+  attempt, so a flood of junk names cannot push out a victim's counter at one
+  failure; a map full of such counters answers a new name 503 (`busy`). For `directory-password` this
   REDUCES Active Directory lockout risk; it cannot rule it out (see
   `adapters/identity/README.md`).
   ```ts

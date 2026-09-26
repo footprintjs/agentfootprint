@@ -2140,7 +2140,10 @@ the library never trusts the proxy's word for who the person is:
   proxy's client);
 - no discovery: `IDENTITY_JWKS_URL` (https, never through a redirect) and a
   literal `IDENTITY_ISSUER`; `IDENTITY_PROXY_HEADER` names the header
-  (default `authorization`);
+  (default `authorization`; otherwise a custom `x-…` header — `cookie`, other
+  standard headers and `x-forwarded-user` are refused);
+- `IDENTITY_PUBLIC_URL` is the origin alone — a path, query or fragment is
+  refused;
 - it refuses to start without the host's door guard lists, because the
   proxy's own cookie rides along on forged cross-site requests;
 - `choice.mode` is `'proxy'` and there is no sign-in door.

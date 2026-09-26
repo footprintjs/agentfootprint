@@ -224,6 +224,58 @@ describe('proxy-token — boot refusals', () => {
       (await refusal(() => identityFromConfig(proxyConfig({ clientId: 'neo-web' }), boot))).message,
     ).toMatch(/belongs to oidc-token, not proxy-token/);
   });
+
+  it('the token header is authorization or a custom x- header — never a standard one or a user name (idI57 recheck)', async () => {
+    const idp = await fakeIdp(ISSUER);
+    const boot = {
+      production: false,
+      backend: idp.backend,
+      crossSite: { allowedHosts: [...LISTS.allowedHosts] },
+    };
+    for (const bad of [
+      'cookie',
+      'Set-Cookie',
+      'host',
+      'forwarded',
+      'x-forwarded-user',
+      'X-Forwarded-User-Token',
+      'x-',
+      'x_token',
+    ]) {
+      expect(
+        (await refusal(() => identityFromConfig(proxyConfig({ proxyHeader: bad }), boot))).key,
+        bad,
+      ).toBe('IDENTITY_PROXY_HEADER');
+    }
+    for (const good of [
+      'authorization',
+      'Authorization',
+      'x-forwarded-access-token',
+      'x-auth-request-access-token',
+    ]) {
+      const choice = await identityFromConfig(proxyConfig({ proxyHeader: good }), boot);
+      expect(choice.mode, good).toBe('proxy');
+    }
+  });
+
+  it('the public URL is the origin alone: a path, query or fragment is refused (idI57 recheck)', async () => {
+    const idp = await fakeIdp(ISSUER);
+    const boot = {
+      production: false,
+      backend: idp.backend,
+      crossSite: { allowedHosts: [...LISTS.allowedHosts] },
+    };
+    for (const bad of [
+      'https://neo.corp.example/app/',
+      'https://neo.corp.example/?x=1',
+      'https://neo.corp.example/#top',
+    ]) {
+      expect(
+        (await refusal(() => identityFromConfig(proxyConfig({ publicUrl: bad }), boot))).key,
+        bad,
+      ).toBe('IDENTITY_PUBLIC_URL');
+    }
+  });
 });
 
 // ─── 2. SCENARIO — through the fake proxy ────────────────────────────

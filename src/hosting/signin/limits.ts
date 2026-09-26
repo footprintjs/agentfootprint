@@ -90,7 +90,11 @@ export function attemptLimiter(limits: AttemptLimits = {}): AttemptLimiter {
   const windowMs = positive(limits.windowMinutes ?? 15, 'windowMinutes') * 60_000;
   const backoffMs = nonNegative(limits.backoffMs ?? 1_000, 'backoffMs');
   const maxEntries = positive(limits.maxEntries ?? 10_000, 'maxEntries');
-  const names = boundedCounters(maxEntries, windowMs, (c) => c.attempts >= 2);
+  // A NAME counter with even ONE counted attempt is never evicted by new names
+  // (idI57 recheck): with `>= 2`, a flood of junk names could push out a
+  // victim's counter at one failure and hand the guesser a fresh budget. A map
+  // full of penalising counters answers a new name `busy` (503) instead.
+  const names = boundedCounters(maxEntries, windowMs, (c) => c.attempts >= 1);
   const addresses = boundedCounters(maxEntries, windowMs, (c) => c.attempts >= 2);
 
   const delayFor = (prior: number): number =>

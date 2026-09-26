@@ -78,14 +78,12 @@ export function proxyTokenChoice(
     );
   }
   const header = (config.proxyHeader ?? 'authorization').toLowerCase();
-  if (
-    !/^[a-z0-9-]+$/.test(header) ||
-    header === 'cookie' ||
-    header.startsWith('x-forwarded-user')
-  ) {
+  if (!isTokenHeader(header)) {
     throw new IdentityConfigError(
-      `IDENTITY_PROXY_HEADER '${header}' is not a header a proxy forwards a TOKEN in. A bare ` +
-        `user name (X-Forwarded-User) is never trusted: it is a string anybody can send.`,
+      `IDENTITY_PROXY_HEADER '${header}' is not a header a proxy forwards a TOKEN in: use ` +
+        `'authorization' or a custom 'x-…' header. A standard header (cookie, set-cookie, …) ` +
+        `means something else, and a bare user name (X-Forwarded-User) is never trusted: it ` +
+        `is a string anybody can send.`,
       'IDENTITY_PROXY_HEADER',
     );
   }
@@ -125,6 +123,17 @@ export function proxyTokenChoice(
   };
 }
 
+/**
+ * The headers a proxy may forward the token in (recheck NIT): `authorization`,
+ * or a custom `x-` header — never another standard header (`cookie`,
+ * `set-cookie`, `host`, …, which mean something else to every hop) and never
+ * `x-forwarded-user*` (a user NAME, not a token).
+ */
+function isTokenHeader(header: string): boolean {
+  if (header === 'authorization') return true;
+  return /^x-[a-z0-9-]+$/.test(header) && !header.startsWith('x-forwarded-user');
+}
+
 function parsePublicUrl(raw: string, production: boolean): URL {
   const problem = fetchableUrlProblem(raw, !production);
   if (problem !== undefined) {
@@ -133,5 +142,15 @@ function parsePublicUrl(raw: string, production: boolean): URL {
       'IDENTITY_PUBLIC_URL',
     );
   }
-  return new URL(raw);
+  const url = new URL(raw);
+  // The same rule as the sign-in door (idI57 N-5): the origin alone.
+  if (url.pathname !== '/' || url.search !== '' || url.hash !== '') {
+    throw new IdentityConfigError(
+      `${keyLabel('publicUrl')} '${raw}' has a path, query or fragment; give the origin alone (${
+        url.origin
+      }).`,
+      'IDENTITY_PUBLIC_URL',
+    );
+  }
+  return url;
 }

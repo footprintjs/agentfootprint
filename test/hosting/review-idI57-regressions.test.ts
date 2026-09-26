@@ -118,6 +118,32 @@ describe('review idI57 B-2 — the limiter window runs from the LAST failure', (
   });
 });
 
+describe('idI57 recheck — the name map cannot be flushed', () => {
+  it('a victim at ONE failure keeps the counter after 10k junk names fill the map; new names are busy', () => {
+    const l = attemptLimiter({ perName: 1, maxEntries: 100, backoffMs: 0 });
+    const v = l.begin('victim', '10.0.0.1', 0);
+    expect(v.kind).toBe('allow');
+    if (v.kind === 'allow') l.failed(v.ticket, 0);
+    const kinds = new Map<string, number>();
+    for (let i = 0; i < 10_000; i += 1) {
+      const junk = l.begin(`junk-${i}`, `10.1.${(i >> 8) & 255}.${i & 255}`, 1);
+      kinds.set(junk.kind, (kinds.get(junk.kind) ?? 0) + 1);
+      if (junk.kind === 'allow') l.failed(junk.ticket, 1);
+    }
+    expect(kinds.get('busy')).toBeGreaterThan(9_000);
+    expect(l.begin('victim', '10.0.0.1', 2).kind).toBe('refuse');
+  });
+
+  it('a name counter at zero (its only attempt given back) is still evictable', () => {
+    const l = attemptLimiter({ perName: 1, maxEntries: 2, backoffMs: 0 });
+    const v = l.begin('gone', '10.0.0.1', 0);
+    if (v.kind === 'allow') l.abandoned(v.ticket);
+    const a = l.begin('a', '10.0.0.2', 1);
+    if (a.kind === 'allow') l.failed(a.ticket, 1);
+    expect(l.begin('b', '10.0.0.3', 2).kind).toBe('allow');
+  });
+});
+
 describe('review idI57 L13 — a right password is not a strike against the address', () => {
   it('a morning of successful sign-ins through one proxy adds no delay', () => {
     const l = attemptLimiter({ perName: 5, perAddress: 2, backoffMs: 1_000 });

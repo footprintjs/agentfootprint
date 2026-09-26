@@ -138,9 +138,12 @@ and forwards a signed token on every request; `proxy-token` verifies it with
   machine outside production; never fetched through a redirect) and a LITERAL
   `IDENTITY_ISSUER`, compared exactly and never fetched.
 - **The header:** `IDENTITY_PROXY_HEADER` (default `authorization`, read as
-  `Bearer …`; any other header is the raw token). A bare user header
-  (`X-Forwarded-User`) is refused as a token header: it is a string anybody
-  can send.
+  `Bearer …`; any other header is the raw token). Only `authorization` or a
+  custom `x-…` header is accepted: a standard header (`cookie`, `set-cookie`,
+  `host`, …) means something else to every hop, and a bare user header
+  (`X-Forwarded-User…`) is a string anybody can send.
+- **The public URL is the origin alone** (`https://neo.corp.example`); a path,
+  query or fragment is refused, as on the sign-in door.
 - **Every door is hardened.** The browser's credential is the PROXY's cookie
   or a Windows login, turned into a valid header on every request the proxy
   forwards — forged cross-site ones included. `proxy-token` refuses to start
