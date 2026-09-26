@@ -35,6 +35,8 @@ export interface FakeDirectory extends Directory {
   /** The account's objectGUID as the strategy stores it (base64). */
   guidOf(sam: string): string;
   down: boolean;
+  /** The bind is SENT (recorded), then times out — a slow DC that may still have counted it. */
+  bindTimesOut: boolean;
   /** How Who-am-I answers: the NetBIOS form, the SID form, or a fixed string. */
   whoAmIForm: 'netbios' | 'sid' | { readonly fixed: string };
   /** Make a search for this sam return two entries. */
@@ -74,6 +76,7 @@ export function fakeDirectory(
   const fake: FakeDirectory = {
     binds: [],
     down: false,
+    bindTimesOut: false,
     whoAmIForm: 'netbios',
     groups: {},
     guidOf: (sam) => (guids.get(sam) as Buffer).toString('base64'),
@@ -88,6 +91,7 @@ export function fakeDirectory(
       return {
         async bind(name, password) {
           fake.binds.push(name);
+          if (fake.bindTimesOut) throw new Error('BindRequest: Operation timed out');
           if (password.length === 0) {
             // An UNAUTHENTICATED bind: a Windows DC may answer it as a success.
             authenticated = undefined;

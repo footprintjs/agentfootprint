@@ -209,7 +209,7 @@ async function oidcChoice(
       banner: banner.map(bannerSafe),
     };
   }
-  const door = browserDoor(browser, config, boot, production, verifier);
+  const door = await browserDoor(browser, config, boot, production, verifier);
   return {
     strategy: 'oidc-token',
     mode: 'redirect',

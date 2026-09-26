@@ -14,16 +14,27 @@
  *  - door hardening (H1/H4): the door guard is built from the host's own lists
  *    (`boot.crossSite`), and the public URL must pass them;
  *  - `IDENTITY_PKCE` other than `required` or `off`;
- *  - an unreadable key, secret or cookie-key file (named, never printed).
+ *  - an unreadable key, secret or cookie-key file (named, never printed);
+ *  - a sign-in that could never work (review idI57 S-1), found by the
+ *    strategy's `ready()`: `openid-client` not installed, a client key that is
+ *    not RSA / EC P-256, a discovery document with no authorization or token
+ *    endpoint, or PKCE required and `S256` not offered. An IdP that is merely
+ *    unreachable at boot is NOT refused — the first login tries again.
  */
 
 import { readFileSync } from 'node:fs';
 
 import { memorySignIns } from '../../../hosting/signin/memorySignIns.js';
-import { signInDoor, type SignInDoor } from '../../../hosting/signin/door.js';
+import { DEFAULT_IDLE_MINUTES, signInDoor, type SignInDoor } from '../../../hosting/signin/door.js';
 import { sealKeyFrom } from '../../../hosting/signin/seal.js';
 import type { OidcIdentity } from '../oidc.js';
-import { oidcSignIn, type OidcClientCredential } from '../oidcSignIn.js';
+import {
+  MissingOpenIdClientError,
+  OidcSignInSetupError,
+  oidcSignIn,
+  type OidcClientCredential,
+} from '../oidcSignIn.js';
+import type { RedirectSignIn } from '../../../hosting/signin/types.js';
 import { IdentityConfigError, type IdentityConfig } from './config.js';
 import type { IdentityBootOptions } from './choose.js';
 import { doorRefusal } from './doorError.js';
@@ -125,16 +136,17 @@ export function browserSettings(config: IdentityConfig): BrowserSettings | undef
   };
 }
 
-/** The sign-in door for `oidc-token` browser sign-in. */
-export function browserDoor(
+/** The sign-in door for `oidc-token` browser sign-in, refused at boot if it could never work. */
+export async function browserDoor(
   browser: BrowserSettings,
   config: IdentityConfig,
   boot: IdentityBootOptions,
   production: boolean,
   verifier: OidcIdentity,
-): SignInDoor {
+): Promise<SignInDoor> {
+  let redirect: RedirectSignIn;
   try {
-    const redirect = oidcSignIn({
+    redirect = oidcSignIn({
       verifier,
       clientId: browser.clientId,
       credential: browser.credential,
@@ -148,10 +160,18 @@ export function browserDoor(
       allowLoopbackHttp: !production,
       ...(boot.openIdClient !== undefined && { backend: boot.openIdClient }),
     });
+  } catch (err) {
+    throw doorRefusal('oidc-token browser sign-in', err);
+  }
+  await readyOrRefuse(redirect, browser);
+  try {
     return signInDoor({
       redirect,
       verify: verifier.verify,
-      store: memorySignIns({ ...(config.signInMax !== undefined && { max: config.signInMax }) }),
+      store: memorySignIns({
+        ...(config.signInMax !== undefined && { max: config.signInMax }),
+        idleMinutes: config.signInIdleMinutes ?? DEFAULT_IDLE_MINUTES.redirect,
+      }),
       publicUrl: browser.publicUrl,
       production,
       ...(boot.crossSite !== undefined && { guard: boot.crossSite }),
@@ -161,6 +181,41 @@ export function browserDoor(
     });
   } catch (err) {
     throw doorRefusal('oidc-token browser sign-in', err);
+  }
+}
+
+/** Await the strategy's boot check; a failure becomes a refusal naming the key to fix. */
+async function readyOrRefuse(redirect: RedirectSignIn, browser: BrowserSettings): Promise<void> {
+  try {
+    await redirect.ready?.();
+  } catch (err) {
+    if (err instanceof MissingOpenIdClientError) {
+      throw new IdentityConfigError(
+        'oidc-token browser sign-in needs the openid-client package: npm install openid-client.',
+      );
+    }
+    if (err instanceof OidcSignInSetupError) {
+      const text = err.message.replace(/^\[identity\] oidcSignIn: /, '').replace(/\.$/, '');
+      if (err.setting === 'client-key') {
+        throw new IdentityConfigError(
+          `browser sign-in cannot start: ${text}. Check ${
+            browser.credential.kind === 'private-key'
+              ? 'IDENTITY_CLIENT_KEY_FILE'
+              : 'IDENTITY_CLIENT_SECRET_FILE'
+          }.`,
+          browser.credential.kind === 'private-key'
+            ? 'IDENTITY_CLIENT_KEY_FILE'
+            : 'IDENTITY_CLIENT_SECRET_FILE',
+        );
+      }
+      throw new IdentityConfigError(
+        `browser sign-in cannot start: ${text}. Check IDENTITY_ISSUER (and IDENTITY_PKCE).`,
+        'IDENTITY_ISSUER',
+      );
+    }
+    throw new IdentityConfigError(
+      `browser sign-in cannot start: ${err instanceof Error ? err.name : 'an unknown failure'}.`,
+    );
   }
 }
 

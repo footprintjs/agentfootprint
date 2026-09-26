@@ -78,13 +78,25 @@ export function clientAddress(
   }
   const hops = (Array.isArray(header) ? header.join(',') : header ?? '')
     .split(',')
-    .map((h) => normaliseAddress(h.trim()))
+    .map((h) => normaliseAddress(withoutPort(h.trim())))
     .filter((h) => h.length > 0);
   for (let i = hops.length - 1; i >= 0; i -= 1) {
     const hop = hops[i] as string;
     if (!trusted.has(hop)) return hop;
   }
   return peer;
+}
+
+/**
+ * A forwarded hop without its port: some proxies send `1.2.3.4:5678` or
+ * `[2001:db8::1]:5678`, and a port per source connection would make every
+ * attempt a new address, so the delay never grew (review idI57 N-11).
+ */
+function withoutPort(hop: string): string {
+  const bracketed = /^\[([^\]]+)\](?::\d{1,5})?$/.exec(hop);
+  if (bracketed !== null) return bracketed[1] as string;
+  const v4 = /^(\d{1,3}(?:\.\d{1,3}){3}):\d{1,5}$/.exec(hop);
+  return v4 !== null ? (v4[1] as string) : hop;
 }
 
 function normaliseAddress(address: string): string {

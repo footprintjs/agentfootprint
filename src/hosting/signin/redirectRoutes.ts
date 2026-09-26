@@ -22,6 +22,14 @@
  *   A failure is a 303 to `/?signin_error=<code>`: a fixed reason code, never
  *   the identity provider's text.
  *
+ * Bounded per browser (review idI57 S-2): a login keeps at most the newest
+ * {@link KEPT_PENDING} OTHER pending transaction cookies and expires the rest,
+ * and a sealed transaction is at most {@link MAX_SEALED_BYTES} — so no page
+ * can stack enough cookies on this origin to make every request a 431.
+ *
+ * A failure that is the deployment's, not the browser's (the IdP or the store
+ * unreachable, the library missing) is logged by CLASS, once per change.
+ *
  * Two `GET` routes change state, deliberately: the login sets a cookie and the
  * callback creates a sign-in. Both are safe — the callback needs the sealed
  * cookie issued to THIS browser, a matching `state`, and a single-use code
@@ -52,6 +60,8 @@ export interface RedirectContext {
   };
   readonly sealKey: SealKey;
   readonly now: () => number;
+  /** Where an operator line goes (a failure class, once per change). */
+  readonly warn: (message: string) => void;
   endPresent(req: IncomingMessage): Promise<boolean>;
   startSignIn(
     accepted: SignInAccepted,
@@ -77,6 +87,10 @@ interface Transaction {
 
 const TRANSACTION_MS = 600_000;
 const ATTEMPT = /^[A-Za-z0-9_-]{16}$/;
+/** Pending transactions a login keeps besides its own — so one browser holds at most three. */
+export const KEPT_PENDING = 2;
+/** The largest sealed transaction, in bytes; a larger one is re-sealed with `returnTo` = `/`. */
+export const MAX_SEALED_BYTES = 1200;
 
 export function redirectRoutesFor(ctx: RedirectContext): RedirectRoutes {
   const redirectUri = `${ctx.publicUrl.origin}${ctx.prefix}/callback`;
@@ -96,10 +110,32 @@ export function redirectRoutesFor(ctx: RedirectContext): RedirectRoutes {
   const failed = (res: ServerResponse, reason: string, cookies: string[]): void =>
     go(res, 303, `/?signin_error=${encodeURIComponent(reason)}`, cookies);
 
+  // The deployment's failures, logged by class once per change (review idI57
+  // S-1): an operator sees WHY every sign-in fails, and a failing IdP does
+  // not flood the log. Never the IdP's text — only a class name.
+  let lastLogged: string | undefined;
+  const note = (where: string, err: unknown): void => {
+    const kind =
+      err instanceof RedirectSignInError
+        ? err.reason
+        : err instanceof Error && typeof err.name === 'string'
+        ? err.name
+        : 'unknown';
+    const line = `${where}: ${kind}`;
+    if (line === lastLogged) return;
+    lastLogged = line;
+    ctx.warn(`[hosting] sign-in door: browser sign-in failed at ${line}`);
+  };
+  const recovered = (): void => {
+    if (lastLogged === undefined) return;
+    lastLogged = undefined;
+    ctx.warn('[hosting] sign-in door: browser sign-in is working again');
+  };
+
   return {
     async login(req, res) {
       const url = new URL(req.url ?? '/', ctx.publicUrl.origin);
-      const returnTo = safeReturnTo(url.searchParams.get('returnTo'), ctx.publicUrl);
+      const returnTo = safeReturnTo(url.searchParams.get('returnTo'), ctx.publicUrl, ctx.prefix);
       const attempt = randomBytes(12).toString('base64url');
       const secrets: SignInAttempt = {
         state: `${attempt}.${randomBytes(24).toString('base64url')}`,
@@ -109,9 +145,11 @@ export function redirectRoutesFor(ctx: RedirectContext): RedirectRoutes {
       let location: string;
       try {
         location = await ctx.strategy.authorizationUrl(secrets, redirectUri);
-      } catch {
+      } catch (err) {
+        note('the login', err);
         return failed(res, 'unavailable', []);
       }
+      recovered();
       const transaction: Transaction = {
         s: secrets.state,
         n: secrets.nonce,
@@ -119,8 +157,12 @@ export function redirectRoutesFor(ctx: RedirectContext): RedirectRoutes {
         r: returnTo,
         t: ctx.now(),
       };
-      const sealed = seal(ctx.sealKey, ctx.cookie.txName(attempt), transaction);
-      return go(res, 302, location, [ctx.cookie.issueTx(attempt, sealed)]);
+      const name = ctx.cookie.txName(attempt);
+      let sealed = seal(ctx.sealKey, name, transaction);
+      if (sealed.length > MAX_SEALED_BYTES)
+        sealed = seal(ctx.sealKey, name, { ...transaction, r: '/' });
+      const stale = olderPending(ctx, req).map((old) => ctx.cookie.expireTx(old));
+      return go(res, 302, location, [...stale, ctx.cookie.issueTx(attempt, sealed)]);
     },
 
     async callback(req, res) {
@@ -143,14 +185,26 @@ export function redirectRoutesFor(ctx: RedirectContext): RedirectRoutes {
       try {
         accepted = await ctx.strategy.complete(url, secrets, redirectUri);
       } catch (err) {
-        return failed(
-          res,
-          err instanceof RedirectSignInError ? err.reason : 'exchange-failed',
-          clear,
-        );
+        const reason = err instanceof RedirectSignInError ? err.reason : 'exchange-failed';
+        // A refusal is the browser's business; an IdP that cannot be reached
+        // or a strategy that threw something unexpected is the operator's.
+        if (reason === 'unavailable' || !(err instanceof RedirectSignInError)) {
+          note('the callback', err);
+        }
+        return failed(res, reason, clear);
       }
-      await ctx.endPresent(req);
-      const started = await ctx.startSignIn(accepted, ctx.strategy.strategy);
+      let started: { setCookie: string };
+      try {
+        // Rotation: a sign-in the browser already carries ends first.
+        await ctx.endPresent(req);
+        started = await ctx.startSignIn(accepted, ctx.strategy.strategy);
+        recovered();
+      } catch (err) {
+        // A store that is full or down: the same redirect shape as every
+        // other failure, and the transaction cookie still cleared (N-4).
+        note('the callback', err);
+        return failed(res, 'unavailable', clear);
+      }
       return go(res, 303, transaction.r, [...clear, started.setCookie]);
     },
 
@@ -188,6 +242,29 @@ function openTransaction(
   const age = ctx.now() - opened.t;
   if (age < 0 || age > TRANSACTION_MS) return undefined;
   return opened as Transaction;
+}
+
+/**
+ * The attempts of the OTHER pending transactions this request carries, beyond
+ * the newest {@link KEPT_PENDING} — the ones this login expires. A cookie this
+ * server cannot open (or that is past its 10 minutes) counts as the oldest.
+ */
+function olderPending(ctx: RedirectContext, req: IncomingMessage): string[] {
+  const prefix = ctx.cookie.txName('');
+  const attempts = new Set<string>();
+  for (const part of (req.headers.cookie ?? '').split(';')) {
+    const name = part.trim().split('=')[0] ?? '';
+    if (!name.startsWith(prefix)) continue;
+    const attempt = name.slice(prefix.length);
+    if (ATTEMPT.test(attempt)) attempts.add(attempt);
+  }
+  if (attempts.size <= KEPT_PENDING) return [];
+  const aged = [...attempts].map((attempt) => ({
+    attempt,
+    t: openTransaction(ctx, req, attempt)?.t ?? -Infinity,
+  }));
+  aged.sort((a, b) => b.t - a.t);
+  return aged.slice(KEPT_PENDING).map((a) => a.attempt);
 }
 
 /** The one value of a named cookie; two of the same name name nothing. */

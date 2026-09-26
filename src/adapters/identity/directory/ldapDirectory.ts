@@ -9,6 +9,10 @@
  * skip either.
  */
 
+import { X509Certificate } from 'node:crypto';
+import { connect as tlsConnect, type ConnectionOptions, type TLSSocket } from 'node:tls';
+
+import { PasswordCheckUnreachableError } from '../../../hosting/signin/errors.js';
 import { lazyRequire } from '../../../lib/lazyRequire.js';
 import type { Directory, DirectoryEntry, DirectorySession } from './port.js';
 
@@ -72,20 +76,29 @@ export function ldapDirectory(options: LdapDirectoryOptions): Directory {
         `the password in the clear; use LDAPS (port 636) with the company CA.`,
     );
   }
-  if (typeof options.caPem !== 'string' || !options.caPem.includes('BEGIN CERTIFICATE')) {
-    throw new TypeError('[identity] ldapDirectory: caPem must be a PEM CA certificate.');
-  }
+  const caProblem = caPemProblem(options.caPem);
+  if (caProblem !== undefined) throw new TypeError(`[identity] ldapDirectory: ${caProblem}.`);
   const timeout = options.timeoutMs ?? 5_000;
   let lib: LdaptsBackend | undefined = options.backend;
 
   return {
     async open(): Promise<DirectorySession> {
       lib ??= await loadLdapts();
+      // Whether the TLS connection OPENED — the one bit that says whether a
+      // failed bind could have reached the DC (review idI57 S-6).
+      let reached = false;
       const client = new lib.Client({
         url: options.url,
         timeout,
         connectTimeout: timeout,
         tlsOptions: { ca: [options.caPem], minVersion: 'TLSv1.2', rejectUnauthorized: true },
+        createSecureConnection: (port: number, host: string, tls: ConnectionOptions): TLSSocket => {
+          const socket = tlsConnect(port, host, tls);
+          socket.once('secureConnect', () => {
+            reached = true;
+          });
+          return socket;
+        },
       });
       return {
         async bind(name, password) {
@@ -100,6 +113,17 @@ export function ldapDirectory(options: LdapDirectoryOptions): Directory {
               );
               return 'invalid';
             }
+            // Never connected (refused, unreachable, a TLS failure): the
+            // password never left, so the attempt is un-counted. Connected,
+            // then failed (a bind that timed out): AD may have counted it,
+            // so the error stays an ordinary one and the door counts it.
+            if (!reached) {
+              options.log?.('[identity] directory unreachable (no TLS connection opened)');
+              throw new PasswordCheckUnreachableError('the directory could not be reached', {
+                cause: err,
+              });
+            }
+            options.log?.('[identity] directory bind failed after it was sent (counted)');
             throw err;
           }
         },
@@ -123,6 +147,32 @@ export function ldapDirectory(options: LdapDirectoryOptions): Directory {
       };
     },
   };
+}
+
+/**
+ * Why a CA file is not one, or `undefined`: every PEM block must parse as an
+ * X.509 certificate with the CA flag set (review idI57 N-10 — a leaf
+ * certificate booted, then failed every sign-in).
+ */
+export function caPemProblem(caPem: unknown): string | undefined {
+  if (typeof caPem !== 'string') return 'caPem must be a PEM CA certificate';
+  const blocks = caPem.match(/-----BEGIN CERTIFICATE-----[\s\S]+?-----END CERTIFICATE-----/g);
+  if (blocks === null) return 'caPem must be a PEM CA certificate';
+  for (const block of blocks) {
+    let cert: X509Certificate;
+    try {
+      cert = new X509Certificate(block);
+    } catch {
+      return 'caPem holds a block that is not an X.509 certificate';
+    }
+    if (!cert.ca) {
+      return `caPem holds a certificate that is not a CA (${cert.subject.replace(
+        /\n/g,
+        ', ',
+      )}); give the CA that issued the DC's certificate`;
+    }
+  }
+  return undefined;
 }
 
 function toEntry(raw: Record<string, unknown>): DirectoryEntry {

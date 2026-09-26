@@ -32,17 +32,31 @@ log.info({ path: req.url, headers: withoutCredentials(headers) });
   check; every wrong credential gets one answer after a minimum time — a
   store that fails included; a sign-in already present is ended.
 - **Attempt limits hold under concurrency (`limits.ts`):** an attempt is
-  counted when it STARTS, one check per typed name runs at a time (a second
-  is 429 at once), and `checkGate.ts` caps checks door-wide (4 running, 32
-  waiting, then 503 + `Retry-After`). The per-name budget refuses; the
-  per-address budget only DELAYS (a proxy or a NAT must not let a stranger
-  lock everybody out). Name and address counters live in separate bounded
-  maps and a counter that still penalises is never evicted. This is what
-  keeps a parallel burst under Active Directory's lockout threshold for
-  `directory-password`.
+  counted when it STARTS, under the key the CHECKER names
+  (`PasswordChecker.budgetKey` — the account the typed name reaches, so
+  `alice`, `ALICE` and `alice@corp.example` are one budget on
+  `directory-password`); one check per key runs at a time (a second is 429 at
+  once), and `checkGate.ts` caps checks door-wide (4 running, 32 waiting, then
+  503 + `Retry-After`). A counter resets only a full window after its LAST
+  attempt (Active Directory's own rule), so spacing attempts buys nothing. A
+  check that threw `PasswordCheckUnreachableError` is un-counted; any other
+  throw (a bind that timed out after it was sent) stays counted. The per-name
+  budget refuses; the per-address budget only DELAYS (a proxy or a NAT must
+  not let a stranger lock everybody out), and a right password never adds to
+  it. Name and address counters live in separate bounded maps and a counter
+  that still penalises is never evicted. For `directory-password` this
+  REDUCES Active Directory lockout risk; it cannot rule it out (see
+  `adapters/identity/README.md`).
+  ```ts
+  const checker: PasswordChecker = {
+    strategy: 'my-directory',
+    budgetKey: (typed) => typed.trim().toLowerCase(), // one account, one budget
+    check: async (name, password) => lookUp(name, password), // undefined = wrong
+  };
+  ```
 - **Bounded, fair and per process (rule 19):** `memorySignIns` keeps at most
   10 000 live sign-ins and 10 per account (that account's oldest ends);
-  expired rows are swept first; a full store REFUSES a new sign-in (503)
+  expired rows — and, given `idleMinutes`, idle-dead ones — are swept first; a full store REFUSES a new sign-in (503)
   rather than ending someone else's. Every removal is announced (`onDelete` →
   `onEnd`), so an open socket carrying it closes. A restart signs everybody
   out and a second replica does not share either — the banner says so.
@@ -88,7 +102,27 @@ human security review (design Q5).
   sign-in → create → 303 with `Referrer-Policy: no-referrer`. A failure is a
   303 to `/?signin_error=<code>`, never the IdP's text.
 - **`returnTo` never leaves the public origin (rule 20)** — `returnTo.ts ·
-  safeReturnTo`.
+  safeReturnTo` — is kept only up to 512 bytes AFTER encoding, and never names
+  the door itself (`/auth/login` would loop through a silent-SSO IdP, a new
+  sign-in per lap). Anything refused is `/`.
+- **Bounded per browser:** a login keeps the newest two OTHER pending
+  transactions and expires the rest, and a sealed transaction past 1 200 bytes
+  is re-sealed with `returnTo` `/` — so no page can plant enough cookies on
+  this origin to make every request a 431.
+- **The operator is told:** a failure that is the deployment's (the IdP or
+  the store unreachable, the library missing) is logged by CLASS — never the
+  IdP's text — once per change, and "working again" once it recovers. A store
+  that fails at the callback is the usual redirect (`unavailable`), with the
+  transaction cleared.
+- **The door runs at the origin root:** a `publicUrl` with a path is refused
+  (the cookies are `Path=/`, `__Host-`, and the redirect URI is
+  `<origin>/auth/callback`).
+- **Development only — `http://localhost`:** the transaction cookie has no
+  `__Host-` prefix there, and cookies do not isolate by port, so another app
+  on this machine can plant one. Production requires https and `__Host-`.
+- **Accepted, documented (idI34 N-3):** a WebSocket that only RECEIVES
+  outlives its sign-in until it sends a frame or closes; the re-check runs per
+  inbound frame, coalesced behind one store lookup for a burst.
 
 ```ts
 const verifier = oidcIdentity({ issuer, audience, userIdClaim: 'oid', requiredScope, allowedClients: [clientId] });

@@ -456,8 +456,14 @@ function openConversation(socket: Duplex, options: OpenOptions): LiveConversatio
    * frame until the sign-in is confirmed live, in arrival order. A sign-in that
    * ended closes the socket with 1008 and the frame is never delivered; a store
    * that cannot answer closes it with 1011 — an outage, never a sign-out.
+   *
+   * Frames that arrive while a check runs are COALESCED behind ONE next check
+   * (review idI57 N-13): every frame is still handed on only after a check that
+   * began after it arrived, but a burst costs two store lookups, not one per
+   * frame. The bytes waiting count against `maxPendingBytes`.
    */
-  let gate: Promise<void> = Promise.resolve();
+  let waiting: string[] = [];
+  let checking = false;
   /** Bytes of frames waiting on the re-check — bounded like frames waiting for a subscriber. */
   let gatedBytes = 0;
   function deliver(frame: string): void {
@@ -466,8 +472,7 @@ function openConversation(socket: Duplex, options: OpenOptions): LiveConversatio
       deliverNow(frame);
       return;
     }
-    const bytes = Buffer.byteLength(frame, 'utf8');
-    gatedBytes += bytes;
+    gatedBytes += Buffer.byteLength(frame, 'utf8');
     if (maxPendingBytes !== undefined && gatedBytes > maxPendingBytes) {
       finish(
         {
@@ -480,20 +485,33 @@ function openConversation(socket: Duplex, options: OpenOptions): LiveConversatio
       );
       return;
     }
-    gate = gate.then(async () => {
-      if (ending !== undefined) return;
-      const state = await signInStillLive(watch.source, watch.key);
-      gatedBytes -= bytes;
-      if (ending !== undefined) return;
-      if (state === 'live') deliverNow(frame);
-      else if (state === 'ended') signInEnded();
-      else {
-        finish(
-          { by: 'host', reason: 'the sign-in could not be checked (its store did not answer)' },
-          CLOSE_CODE.internalError,
-        );
+    waiting.push(frame);
+    if (!checking) void recheck(watch);
+  }
+
+  async function recheck(watch: NonNullable<typeof options.watch>): Promise<void> {
+    checking = true;
+    try {
+      while (waiting.length > 0 && ending === undefined) {
+        const batch = waiting;
+        waiting = [];
+        const state = await signInStillLive(watch.source, watch.key);
+        for (const frame of batch) gatedBytes -= Buffer.byteLength(frame, 'utf8');
+        if (ending !== undefined) return;
+        if (state === 'live') {
+          for (const frame of batch) deliverNow(frame);
+        } else if (state === 'ended') {
+          signInEnded();
+        } else {
+          finish(
+            { by: 'host', reason: 'the sign-in could not be checked (its store did not answer)' },
+            CLOSE_CODE.internalError,
+          );
+        }
       }
-    });
+    } finally {
+      checking = false;
+    }
   }
 
   function signInEnded(): void {

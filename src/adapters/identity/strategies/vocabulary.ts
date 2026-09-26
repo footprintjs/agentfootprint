@@ -208,6 +208,12 @@ export const KEYS_IN_THIS_RELEASE: readonly ConfigKey[] = [
     reading: 'whole-number',
     owners: ['directory-password'],
   },
+  {
+    env: 'IDENTITY_LDAP_ACCEPT_LOW_THRESHOLD',
+    field: 'ldapAcceptLowThreshold',
+    reading: 'text',
+    owners: ['directory-password'],
+  },
   { env: 'IDENTITY_PROXY_HEADER', field: 'proxyHeader', reading: 'text', owners: ['proxy-token'] },
   { env: 'IDENTITY_PROXY_TOKEN', field: 'proxyToken', reading: 'text', owners: ['proxy-token'] },
 ];

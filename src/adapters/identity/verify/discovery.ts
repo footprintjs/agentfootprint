@@ -41,6 +41,10 @@ export interface DiscoveredIssuer {
   readonly tokenEndpoint?: string;
   /** RP-Initiated Logout, when the IdP offers it. */
   readonly endSessionEndpoint?: string;
+  /** RFC 9207: the IdP puts `iss` on every authorization response — then it is REQUIRED on the callback. */
+  readonly issParameterSupported?: boolean;
+  /** The PKCE methods the IdP names, when it names them. */
+  readonly codeChallengeMethods?: readonly string[];
 }
 
 /** The document's endpoint fields: each must be a URL this library may call. */
@@ -197,6 +201,8 @@ function checkDocument(
     }
     endpoints[name] = value as string;
   }
+  const record = doc as Record<string, unknown>;
+  const methods = record.code_challenge_methods_supported;
   return {
     kind: 'ready',
     issuer: {
@@ -204,6 +210,12 @@ function checkDocument(
       jwksUri,
       ...(typeof ati === 'string' && { accessTokenIssuer: ati }),
       ...endpoints,
+      ...(record.authorization_response_iss_parameter_supported === true && {
+        issParameterSupported: true,
+      }),
+      ...(Array.isArray(methods) && {
+        codeChallengeMethods: methods.filter((m): m is string => typeof m === 'string'),
+      }),
     },
   };
 }

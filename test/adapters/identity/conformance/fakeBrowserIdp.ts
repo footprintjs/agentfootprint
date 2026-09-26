@@ -31,6 +31,10 @@ export interface BrowserIdpSwitches {
   authorizeError?: boolean;
   /** Refuse a token request that carries no PKCE verifier. Default true. */
   requirePkce?: boolean;
+  /** Overrides merged into the discovery document (a key set to undefined is removed). */
+  discovery?: Record<string, unknown>;
+  /** Put RFC 9207 `iss` on the authorization response (a real IdP that advertises it does). */
+  issOnCallback?: boolean;
 }
 
 export interface FakeBrowserIdp {
@@ -132,7 +136,7 @@ export async function fakeBrowserIdp(
         res.end(typeof body === 'string' ? body : JSON.stringify(body));
       };
       if (url.pathname === '/realm/.well-known/openid-configuration') {
-        return send(200, {
+        const doc: Record<string, unknown> = {
           issuer: `${base}/realm`,
           jwks_uri: `${base}/realm/keys`,
           authorization_endpoint: `${base}/realm/authorize`,
@@ -140,7 +144,10 @@ export async function fakeBrowserIdp(
           end_session_endpoint: `${base}/realm/logout`,
           response_types_supported: ['code'],
           code_challenge_methods_supported: ['S256'],
-        });
+          ...idp.switches.discovery,
+        };
+        for (const [k, v] of Object.entries(doc)) if (v === undefined) delete doc[k];
+        return send(200, doc);
       }
       if (url.pathname === '/realm/keys') {
         const jwk = await jose.exportJWK(signing.publicKey);
@@ -185,6 +192,7 @@ export async function fakeBrowserIdp(
         const back = new URL(form.get('redirect_uri') ?? '');
         back.searchParams.set('code', code);
         back.searchParams.set('state', form.get('state') ?? '');
+        if (idp.switches.issOnCallback === true) back.searchParams.set('iss', `${base}/realm`);
         res.writeHead(302, { location: back.href }).end();
         return;
       }

@@ -113,9 +113,42 @@ export class MissingOpenIdClientError extends Error {
   }
 }
 
+/**
+ * A browser sign-in setting that can never work, found by `ready()` at boot —
+ * `setting` names which: the client key (not RSA / EC P-256, or unreadable)
+ * or the IdP's discovery document (no authorization or token endpoint, or
+ * PKCE required and `S256` not offered).
+ */
+export class OidcSignInSetupError extends Error {
+  readonly code = 'ERR_OIDC_SIGN_IN_SETUP' as const;
+  readonly setting: 'client-key' | 'discovery';
+
+  constructor(setting: 'client-key' | 'discovery', sentence: string) {
+    super(`[identity] oidcSignIn: ${sentence}.`);
+    this.name = 'OidcSignInSetupError';
+    this.setting = setting;
+  }
+}
+
 export function oidcSignIn(options: OidcSignInOptions): RedirectSignIn {
   checkOptions(options);
   const pkce = (options.pkce ?? 'required') === 'required';
+  // The library and the client authentication: loaded ONCE, and at boot by
+  // `ready()` — a missing library or a key of the wrong type is a refusal to
+  // start, never a login that answers `unavailable` (review idI57 S-1).
+  let loaded: Promise<{ lib: OpenIdClientBackend; auth: unknown }> | undefined;
+  const pieces = () =>
+    (loaded ??= (async () => {
+      const lib = options.backend ?? (await loadOpenIdClient());
+      const auth =
+        options.credential.kind === 'private-key'
+          ? lib.PrivateKeyJwt(await importSigningKey(options.credential.pem))
+          : lib.ClientSecretBasic(options.credential.secret);
+      return { lib, auth };
+    })().catch((err) => {
+      loaded = undefined;
+      throw err;
+    }));
   let configuration:
     | Promise<{ lib: OpenIdClientBackend; config: unknown; issuer: DiscoveredIssuer }>
     | undefined;
@@ -125,14 +158,9 @@ export function oidcSignIn(options: OidcSignInOptions): RedirectSignIn {
       const state = await options.verifier.discover();
       if (state.kind !== 'ready') throw new RedirectSignInError('unavailable');
       const issuer = state.issuer;
-      if (issuer.authorizationEndpoint === undefined || issuer.tokenEndpoint === undefined) {
-        throw new RedirectSignInError('unavailable');
-      }
-      const lib = options.backend ?? (await loadOpenIdClient());
-      const auth =
-        options.credential.kind === 'private-key'
-          ? lib.PrivateKeyJwt(await importSigningKey(options.credential.pem))
-          : lib.ClientSecretBasic(options.credential.secret);
+      const problem = issuerProblem(issuer, pkce);
+      if (problem !== undefined) throw new OidcSignInSetupError('discovery', problem);
+      const { lib, auth } = await pieces();
       const config = new lib.Configuration(
         {
           issuer: issuer.issuer,
@@ -141,6 +169,10 @@ export function oidcSignIn(options: OidcSignInOptions): RedirectSignIn {
           jwks_uri: issuer.jwksUri,
           ...(issuer.endSessionEndpoint !== undefined && {
             end_session_endpoint: issuer.endSessionEndpoint,
+          }),
+          // RFC 9207: advertised ⇒ required on the callback (review idI57 N-1).
+          ...(issuer.issParameterSupported === true && {
+            authorization_response_iss_parameter_supported: true,
           }),
         },
         options.clientId,
@@ -158,6 +190,14 @@ export function oidcSignIn(options: OidcSignInOptions): RedirectSignIn {
   return {
     strategy: 'oidc-token',
     pkce,
+    async ready(): Promise<void> {
+      await pieces();
+      const state = await options.verifier.discover();
+      // An outage is not a refusal: the first login tries again.
+      if (state.kind !== 'ready') return;
+      const problem = issuerProblem(state.issuer, pkce);
+      if (problem !== undefined) throw new OidcSignInSetupError('discovery', problem);
+    },
     async authorizationUrl(attempt: SignInAttempt, redirectUri: string): Promise<string> {
       const { lib, config } = await configured();
       const parameters: Record<string, string> = {
@@ -253,9 +293,33 @@ function classifyGrantFailure(
   return 'id-token-refused';
 }
 
+/** Why a discovered issuer cannot run browser sign-in, or `undefined`. */
+function issuerProblem(issuer: DiscoveredIssuer, pkce: boolean): string | undefined {
+  if (issuer.authorizationEndpoint === undefined || issuer.tokenEndpoint === undefined) {
+    return `the IdP's discovery document names no ${
+      issuer.authorizationEndpoint === undefined ? 'authorization_endpoint' : 'token_endpoint'
+    }, so a browser cannot sign in through it`;
+  }
+  const methods = issuer.codeChallengeMethods;
+  if (pkce && methods !== undefined && !methods.includes('S256')) {
+    return `PKCE is required, and the IdP's discovery document offers ${
+      methods.length === 0 ? 'no PKCE method' : methods.join(', ')
+    } but not S256`;
+  }
+  return undefined;
+}
+
 /** A PEM PKCS#8 private key → a Web Crypto signing key (RS256 or ES256). */
 async function importSigningKey(pem: string): Promise<{ key: unknown; kid?: string }> {
-  const key = createPrivateKey(pem);
+  let key: ReturnType<typeof createPrivateKey>;
+  try {
+    key = createPrivateKey(pem);
+  } catch {
+    throw new OidcSignInSetupError(
+      'client-key',
+      'the client key does not parse as a private key (an encrypted PEM is not accepted)',
+    );
+  }
   const der = key.export({ type: 'pkcs8', format: 'der' });
   const type = key.asymmetricKeyType;
   if (type === 'rsa') {
@@ -278,8 +342,9 @@ async function importSigningKey(pem: string): Promise<{ key: unknown; kid?: stri
     );
     return { key: imported };
   }
-  throw new TypeError(
-    '[identity] oidcSignIn: the client key must be an RSA or an EC P-256 private key (PKCS#8 PEM).',
+  throw new OidcSignInSetupError(
+    'client-key',
+    'the client key must be an RSA or an EC P-256 private key (PKCS#8 PEM)',
   );
 }
 

@@ -83,8 +83,14 @@ export interface IdentityConfig {
   readonly ldapRequiredGroup?: string;
   /** `IDENTITY_LDAP_LOCKOUT_THRESHOLD` — AD's account-lockout threshold (0 = AD never locks). */
   readonly ldapLockoutThreshold?: number;
-  /** `IDENTITY_LDAP_LOCKOUT_WINDOW_MINUTES` — AD's observation window. */
+  /** `IDENTITY_LDAP_LOCKOUT_WINDOW_MINUTES` — AD's "reset account lockout counter after" window. */
   readonly ldapLockoutWindowMinutes?: number;
+  /**
+   * `IDENTITY_LDAP_ACCEPT_LOW_THRESHOLD=yes` — boot although AD locks after 1
+   * or 2 wrong passwords, a threshold this door cannot stay under. Refused for
+   * any other threshold (a setting that does nothing is refused, not ignored).
+   */
+  readonly ldapAcceptLowThreshold?: string;
   /** `IDENTITY_PROXY_HEADER` — where the proxy puts the token (`proxy-token`). Default `authorization`. */
   readonly proxyHeader?: string;
   /** `IDENTITY_PROXY_TOKEN` — what the proxy forwards. Required; only `access-token` is accepted. */

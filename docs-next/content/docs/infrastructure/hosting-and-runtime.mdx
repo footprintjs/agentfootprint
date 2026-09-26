@@ -2079,7 +2079,15 @@ strategy's browser half — the authorization-code flow through `openid-client`,
 an optional peer loaded lazily (`MissingOpenIdClientError` when it is absent;
 `OpenIdClientBackend` for a bundled app). It is a `RedirectSignIn`, and
 `signInDoor({ redirect, verify })` serves it: `GET /auth/login` and
-`GET /auth/callback`.
+`GET /auth/callback`. Its `ready()` runs at boot — `identityFromConfig` awaits
+it — so a deployment that could never sign anybody in refuses to start:
+`openid-client` missing, a client key that is not RSA or EC P-256, or a
+discovery document without an authorization or token endpoint (or PKCE required
+and no `S256`) each end the boot with an `IdentityConfigError`, and
+`OidcSignInSetupError.setting` says which (`client-key` or `discovery`) when you
+call `ready()` yourself. An IdP that is merely unreachable at boot is not a
+refusal; the first login tries again, and the door logs the failure class once
+per change.
 
 - **One verification path.** The callback reads the person from an ACCESS
   token for this API, through the strategy's own `verify` — the person test
@@ -2142,7 +2150,12 @@ to the port is refused, but a person with their own valid token could skip what
 the proxy enforces beyond identity (MFA step-up, device posture, per-route
 rules). Bind to `127.0.0.1` behind a same-box proxy or firewall the port.
 
-### Plain Active Directory — `directory-password`
+### Plain Active Directory — `directory-password` (pending independent review)
+
+> **Pending independent review.** A password door on the company's real
+> directory; it is built and tested (a fake directory with AD's lockout rules
+> and a Samba AD lab), and its use in front of a company install waits for an
+> outside security review, like browser sign-in.
 
 For a company with Active Directory and no federation server, the sign-in door
 takes a Windows username and password and asks the directory, over LDAPS
@@ -2151,8 +2164,9 @@ optional peer; `MissingLdaptsError` when absent, `LdaptsBackend` for a bundled
 app). `directoryPasswords(options)` (options `DirectoryPasswordsOptions`) is the
 `PasswordChecker` it plugs in:
 
-- an empty password never reaches the directory, and a name that is not 1–64
-  plain characters (after removing the configured `@domain`) never binds;
+- an empty password, or one holding a control character, never reaches the
+  directory, and a name that is not 1–64 plain characters (after removing the
+  configured `@domain` or `NETBIOS\`) never binds;
 - after the bind, RFC 4532 **Who-am-I** decides who signed in — the directory's
   answer, never the typed name — and EXACTLY ONE entry is found for that
   account; the id is its `objectGUID` (base64). This closes the rename
@@ -2160,8 +2174,20 @@ app). `directoryPasswords(options)` (options `DirectoryPasswordsOptions`) is the
 - a required group is checked nested, its DN escaped (`escapeFilterValue`);
 - every wrong credential is one answer, AD's sub-code goes to the server log,
   and a directory that is down is 503;
-- attempt limits come from AD's own lockout threshold (half of it per name per
-  window) — reducing the lockout risk, not ruling it out;
+- attempt limits come from AD's own lockout policy: a THIRD of the threshold
+  per ACCOUNT (the checker's `budgetKey` — `alice`, `ALICE` and
+  `alice@corp.example` share one), reset only a full window after the LAST
+  failure, as AD resets its own counter. A third, because an account whose UPN
+  prefix differs from its `sAMAccountName` has two logon names and so two
+  budgets. A threshold of 1 or 2 refuses to boot unless
+  `IDENTITY_LDAP_ACCEPT_LOW_THRESHOLD=yes`. This REDUCES the lockout risk and
+  cannot rule it out; keep AD's lockout duration short and its threshold at 10
+  or more;
+- a bind that timed out after it was sent stays counted; a directory that
+  could not be reached (`PasswordCheckUnreachableError`) gives the attempt
+  back;
+- the CA file must hold a CA certificate and the base DN must parse, or the
+  boot is refused;
 - it bypasses the company's MFA, and the banner says so.
 
 The directory sits behind a small port (`Directory`, `DirectorySession`,

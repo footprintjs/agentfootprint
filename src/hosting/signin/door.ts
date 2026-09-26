@@ -48,7 +48,7 @@ import type { DoorIdentity, IdentityVerifier } from '../identityVerification.js'
 import { readSignIn, signInKeyOf } from './cookie.js';
 import { browserDoorGuard } from './browserGuard.js';
 import { checkGate, type CheckGateOptions } from './checkGate.js';
-import { SignInDoorConfigError } from './errors.js';
+import { PasswordCheckUnreachableError, SignInDoorConfigError } from './errors.js';
 import { clientAddress, trustedProxies } from './clientAddress.js';
 import { attemptLimiter, type AttemptLimits } from './limits.js';
 import { redirectRoutesFor } from './redirectRoutes.js';
@@ -139,7 +139,8 @@ const DEFAULT_HOURS = 8;
 /** The longest a sign-in may last: a week. Browsers cap cookies at 400 days anyway. */
 const MAX_HOURS = 168;
 const UNAVAILABLE = 'Sign-in is unavailable. Try again shortly.';
-const DEFAULT_IDLE_MINUTES = { password: 60, redirect: 30 } as const;
+/** A sign-in's idle limit by door mode, when `idleMinutes` is not given. */
+export const DEFAULT_IDLE_MINUTES = { password: 60, redirect: 30 } as const;
 const DEFAULT_MINIMUM_RESPONSE_MS = 400;
 const MAX_LOGIN_BODY_BYTES = 8 * 1024;
 
@@ -240,8 +241,11 @@ export function signInDoor(options: SignInDoorOptions): SignInDoor {
     const read = await readLoginBody(req);
     if (read.kind === 'refused') return answer(read.status, { error: read.sentence });
     const address = clientAddress(req, trusted, noteForwarded);
-    // Counted as it STARTS, before the slow check (review idI34 B-1).
-    const verdict = limiter.begin(read.username, address, now());
+    const passwords = options.passwords as PasswordChecker;
+    // Counted as it STARTS, before the slow check (review idI34 B-1), under the
+    // ACCOUNT the checker says the name reaches — `alice`, `ALICE` and
+    // `alice@corp.example` are one budget and one check in flight (idI57 B-1).
+    const verdict = limiter.begin(budgetKeyOf(passwords, read.username), address, now());
     if (verdict.kind === 'refuse') {
       return answer(
         429,
@@ -256,15 +260,18 @@ export function signInDoor(options: SignInDoorOptions): SignInDoor {
     let accepted: SignInAccepted | undefined;
     try {
       if (await endPresent(req)) expire['set-cookie'] = cookie.expired();
-      const passwords = options.passwords as PasswordChecker;
       const ran = await gate.run(() => passwords.check(read.username, read.password));
       if (ran === undefined) {
         limiter.abandoned(ticket);
         return await unavailable(expire);
       }
       accepted = ran.value;
-    } catch {
-      limiter.abandoned(ticket);
+    } catch (error) {
+      // Un-counted ONLY when the password never left this process; a check
+      // that failed after it was sent (a bind that timed out) may have been
+      // charged by the directory, so it stays counted (review idI57 S-6).
+      if (error instanceof PasswordCheckUnreachableError) limiter.abandoned(ticket);
+      else limiter.failed(ticket, now());
       return unavailable(expire);
     }
     if (accepted === undefined) {
@@ -273,7 +280,7 @@ export function signInDoor(options: SignInDoorOptions): SignInDoor {
     }
     limiter.succeeded(ticket);
     try {
-      const signedIn = await startSignIn(accepted, (options.passwords as PasswordChecker).strategy);
+      const signedIn = await startSignIn(accepted, passwords.strategy);
       return await answer(200, signedIn.body, { 'set-cookie': signedIn.setCookie });
     } catch {
       // A store that is full or down: the same 503, after the same minimum
@@ -292,6 +299,7 @@ export function signInDoor(options: SignInDoorOptions): SignInDoor {
           cookie,
           sealKey,
           now,
+          warn,
           endPresent,
           startSignIn,
         });
@@ -347,7 +355,8 @@ export function signInDoor(options: SignInDoorOptions): SignInDoor {
         ? []
         : [
             `identity: WARNING ${cookie.url.origin} is plain http on this machine: the cookie is ` +
-              `'${SIGN_IN_COOKIE_LOCALHOST}' without Secure or the __Host- prefix (development only; production refuses it)`,
+              `'${SIGN_IN_COOKIE_LOCALHOST}' without Secure or the __Host- prefix (development only; production refuses it). ` +
+              `Cookies do not isolate by port, so any other app on this machine's loopback names can set this door's cookies`,
           ]),
       `identity: sign-ins last ${hours} h, ${idleMinutes} min idle`,
       ...(mode === 'redirect'
@@ -436,6 +445,16 @@ function cookieFor(publicUrl: string, production: boolean): CookieShape {
   } catch {
     throw new SignInDoorConfigError('publicUrl', `publicUrl '${publicUrl}' is not an absolute URL`);
   }
+  // The door's routes, its cookies (`Path=/`, `__Host-`) and the callback URL
+  // all live at the origin's root, so an app published under a path would
+  // send the IdP a redirect URI it never registered (review idI57 N-5).
+  if (url.pathname !== '/' || url.search !== '' || url.hash !== '') {
+    throw new SignInDoorConfigError(
+      'publicUrl',
+      `publicUrl '${publicUrl}' has a path; the sign-in door runs at the origin's root, so give ` +
+        `the origin alone (${url.origin})`,
+    );
+  }
   const secure = url.protocol === 'https:';
   if (!secure) {
     if (url.protocol !== 'http:' || !isLoopbackBind(url.hostname)) {
@@ -520,7 +539,20 @@ async function readLoginBody(req: IncomingMessage): Promise<LoginRead> {
   if (name.length > 256 || password.length > 1024) {
     return { kind: 'refused', status: 400, sentence: BAD_BODY };
   }
+  // A control character is never part of a password a person typed, and a
+  // directory may cut the password at one (Samba signs `right\0junk` in —
+  // review idI57 N-7). Refused as malformed, before any check.
+  if (CONTROL_CHARACTER.test(password) || CONTROL_CHARACTER.test(name)) {
+    return { kind: 'refused', status: 400, sentence: BAD_BODY };
+  }
   return { kind: 'ok', username: name, password };
+}
+
+const CONTROL_CHARACTER = /\p{Cc}/u;
+
+/** The key a typed name's attempts are counted under — the checker's, when it names one. */
+function budgetKeyOf(passwords: PasswordChecker, typed: string): string {
+  return passwords.budgetKey?.(typed) ?? typed;
 }
 
 function bounded(value: number, name: string, max: number): number {

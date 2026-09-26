@@ -88,6 +88,13 @@ export async function hashPassword(
   if (typeof password !== 'string' || password.length === 0) {
     throw new LocalPasswordConfigError('hashPassword needs a non-empty password.');
   }
+  // The sign-in door refuses a password holding a control character before
+  // any check (review idI57 N-7), so a hash of one could never sign in.
+  if (/\p{Cc}/u.test(password)) {
+    throw new LocalPasswordConfigError(
+      'hashPassword refuses a password with a control character (a tab, a newline, NUL): the sign-in door never accepts one.',
+    );
+  }
   checkCost(cost, 'hashPassword');
   const salt = randomBytes(SALT_BYTES);
   const key = await derive(password, salt, cost);
@@ -137,8 +144,11 @@ export function localPasswords(
   return {
     strategy: 'local-password',
     names: [...table.keys()],
+    // The attempt budget is kept under the name the list compares — the
+    // trimmed NFC form (review idI57 B-1: the checker names the key).
+    budgetKey: (username) => localName(username),
     async check(username: string, password: string): Promise<PasswordAccepted | undefined> {
-      const name = username.normalize('NFC');
+      const name = localName(username);
       const stored = table.get(name);
       const against = stored ?? decoy;
       const key = await derive(password, against.salt, against.cost);
@@ -173,8 +183,13 @@ function parseList(list: string): [string, string][] {
     });
 }
 
+/** A name as the list compares it: trimmed, Unicode NFC. Case is kept — `Priya` and `priya` are two entries. */
+function localName(raw: string): string {
+  return raw.trim().normalize('NFC');
+}
+
 function checkName(raw: string): string {
-  const name = raw.trim().normalize('NFC');
+  const name = localName(raw);
   // eslint-disable-next-line no-control-regex
   if (name.length === 0 || name.length > 256 || /[:,\u0000-\u001f\u007f]/.test(name)) {
     throw new LocalPasswordConfigError(

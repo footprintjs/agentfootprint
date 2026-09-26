@@ -126,11 +126,15 @@ export interface PasswordAccepted {
 }
 
 /**
- * A password strategy: `local-password` today, `directory-password` later.
+ * A password strategy: `local-password` or `directory-password`.
  * Resolves the person, or `undefined` for ANY wrong credential — unknown name,
  * wrong password, disabled account — so the sign-in door gives one answer for
- * all of them. Throws only when it could not check at all (a directory that is
- * down), which the door answers 503.
+ * all of them. Throws when it could not give an answer, which the door answers
+ * 503. HOW it throws decides the attempt budget (review idI57 S-6):
+ * `PasswordCheckUnreachableError` (errors.ts) means the password never left this
+ * process (the directory could not be reached), so the attempt is un-counted;
+ * ANY other throw — a bind that timed out after it was sent — may have been
+ * charged by the directory, so it stays counted.
  *
  * The password is never stored, logged or forwarded by the door, and a checker
  * must not do so either.
@@ -139,6 +143,15 @@ export interface PasswordChecker {
   /** Which strategy this is, recorded on the sign-in. */
   readonly strategy: string;
   check(username: string, password: string): Promise<PasswordAccepted | undefined>;
+  /**
+   * The ACCOUNT a typed name reaches, as the checker's backend resolves it —
+   * the key the door's attempt budget and its one-check-in-flight rule are kept
+   * under (review idI57 B-1). Active Directory treats `alice`, `ALICE` and
+   * `alice@corp.example` as one account; a budget keyed on the typed text gave
+   * each spelling its own budget. Two typed names with one key MUST reach one
+   * account. Absent: the typed text is the key.
+   */
+  budgetKey?(username: string): string;
 }
 
 /** What a sign-in strategy proved — the same shape for a password and a redirect. */
@@ -195,4 +208,13 @@ export interface RedirectSignIn {
   complete(callback: URL, attempt: SignInAttempt, redirectUri: string): Promise<SignInAccepted>;
   /** The IdP's end-session URL, when it names one. */
   endSessionUrl?(postLogoutRedirectUri: string): Promise<string | undefined>;
+  /**
+   * Everything that can be checked before the first browser arrives — the
+   * library loads, the client key imports, the IdP's document names the
+   * endpoints — so a deployment that can never sign anybody in REFUSES TO
+   * BOOT instead of answering every login `unavailable` (review idI57 S-1).
+   * An IdP that cannot be reached right then is not a refusal: it resolves,
+   * and the first login tries again.
+   */
+  ready?(): Promise<void>;
 }

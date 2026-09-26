@@ -32,6 +32,8 @@ import { sidToBytes } from '../../../src/adapters/identity/directory/port.js';
 import { call, login } from '../../hosting/signInDoorHarness.js';
 import { mountDoor, type MountedDoor } from '../../hosting/signInDoorHarness.js';
 import { fakeDirectory, type FakeAccount } from './conformance/fakeDirectory.js';
+import { TEST_CA_PEM } from './conformance/testCertificates.js';
+import { PasswordCheckUnreachableError } from '../../../src/hosting/index.js';
 
 const ACCOUNTS: FakeAccount[] = [
   {
@@ -96,7 +98,10 @@ describe('directory-password — unit', () => {
     expect(accountFilter('u:', 'CORP')).toBeUndefined();
     expect(accountFilter('u:OTHER\\alice', 'CORP')).toBeUndefined();
     expect(accountFilter('dn:CN=alice,DC=corp', 'CORP')).toBeUndefined();
-    expect(accountFilter('u:S-1-5-21-1-2-3-1104', 'CORP')).toMatch(/^\(objectSid=\\01\\05/);
+    // The SID form carries the same objectClass guard as the NetBIOS form (review idI57 N-8).
+    expect(accountFilter('u:S-1-5-21-1-2-3-1104', 'CORP')).toMatch(
+      /^\(&\(objectClass=user\)\(objectSid=\\01\\05/,
+    );
   });
 
   it('RFC 4515 escaping: * ( ) \\ NUL and non-ASCII; bytes escaped whole', () => {
@@ -134,14 +139,14 @@ describe('ldapDirectory — TLS options (unit)', () => {
     }
     const directory = ldapDirectory({
       url: 'ldaps://dc1.corp.example:636',
-      caPem: '-----BEGIN CERTIFICATE-----\nMIIB\n-----END CERTIFICATE-----',
+      caPem: TEST_CA_PEM,
       backend: { Client } as never,
     });
     await (await directory.open()).close();
     const tls = seen[0]?.tlsOptions as Record<string, unknown>;
     expect(seen[0]?.url).toBe('ldaps://dc1.corp.example:636');
     expect(tls.rejectUnauthorized).toBe(true);
-    expect(tls.ca).toEqual(['-----BEGIN CERTIFICATE-----\nMIIB\n-----END CERTIFICATE-----']);
+    expect(tls.ca).toEqual([TEST_CA_PEM]);
     expect(tls.checkServerIdentity).toBeUndefined(); // Node's own host-name check applies
   });
 });
@@ -230,7 +235,10 @@ describe('directory-password — scenarios', () => {
   it('a directory that cannot be reached THROWS (503 at the door), never "wrong password"', async () => {
     const { directory, passwords } = checker();
     directory.down = true;
-    await expect(passwords.check('alice', 'Quartz-River-41!')).rejects.toThrow(/ECONNREFUSED/);
+    // Unreachable: the password never left, so the door un-counts it (idI57 S-6).
+    const err = await passwords.check('alice', 'Quartz-River-41!').catch((e: unknown) => e);
+    expect(err).toBeInstanceOf(PasswordCheckUnreachableError);
+    expect(String((err as Error).cause)).toMatch(/ECONNREFUSED/);
   });
 });
 
@@ -303,10 +311,7 @@ describe('directory-password — ROI', () => {
     const { join } = await import('node:path');
     const { tmpdir } = await import('node:os');
     const dir = mkdtempSync(join(tmpdir(), 'af-ldap-'));
-    writeFileSync(
-      join(dir, 'ca.pem'),
-      '-----BEGIN CERTIFICATE-----\nMIIB\n-----END CERTIFICATE-----\n',
-    );
+    writeFileSync(join(dir, 'ca.pem'), TEST_CA_PEM);
     const env = {
       IDENTITY_STRATEGY: 'directory-password',
       IDENTITY_PUBLIC_URL: 'https://neo.corp.example',
@@ -325,7 +330,10 @@ describe('directory-password — ROI', () => {
     expect(choice.strategy).toBe('directory-password');
     expect(choice.mode).toBe('password');
     const banner = choice.banner.join('\n');
-    expect(banner).toMatch(/5 per name per 30 min/);
+    // A THIRD of AD's 10, per ACCOUNT, reset 30 min after the LAST failure (idI57 B-1/B-2/S-4).
+    expect(banner).toMatch(/3 per account \(a third of AD's 10; alice, ALICE, CORP\\alice/);
+    expect(banner).toMatch(/counter reset 30 min after the LAST failure/);
+    expect(banner).toMatch(/separate UPN prefix has two budgets/);
     expect(banner).toMatch(/bypasses the company's MFA/);
     expect(choice.signInDoor?.cookieName).toBe('__Host-Http-af-signin');
     // Refusals: ldap://, a missing lockout key, an OIDC key beside it.

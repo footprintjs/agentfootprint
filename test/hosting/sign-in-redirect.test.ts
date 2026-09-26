@@ -58,6 +58,13 @@ describe('safeReturnTo — unit (design §5.5, pinned)', () => {
     [undefined, '/'],
     ['/reports?q=1#top', '/reports?q=1#top'],
     ['/a/../b', '/b'],
+    // Dot segments that RESOLVE to a protocol-relative path: the final `//`
+    // check is their only guard (review idI57 R4).
+    ['/.//evil.example', '/'],
+    ['/..//evil.example', '/'],
+    ['/%2e%2e//evil.example', '/'],
+    ['/%2e//evil.example', '/'],
+    ['/a/..//evil.example', '/'],
   ])('%j → %j', (input, want) => {
     const got = safeReturnTo(input, base);
     expect(got).toBe(want);
@@ -182,13 +189,28 @@ describe('redirect sign-in — scenarios', () => {
     const forged = await browserSignIn(m, 'alice', { otherBrowser: true });
     expect(forged.location).toBe('/?signin_error=state');
     expect(m.store.size).toBe(0);
-    // Replaying a finished callback: the transaction is gone and the code is spent.
-    const done = await browserSignIn(m, 'bob');
-    const again = await fetch(`${m.url}/auth/callback?code=x&state=${'A'.repeat(16)}.y`, {
-      redirect: 'manual',
-      headers: { cookie: done.jar.header() },
+    // A TRUE replay (review idI57 N-6): the captured callback URL with the
+    // captured transaction cookie. Nothing is stored on the server, so the seal
+    // still opens and `state` still matches — the IdP's single-use code is what
+    // refuses it, and no second sign-in is made.
+    const jar = new Jar();
+    let replay: { url: URL; cookie: string } | undefined;
+    const done = await browserSignIn(m, 'bob', {
+      jar,
+      tamper: (u) => {
+        replay = { url: new URL(u), cookie: jar.header() };
+        return u;
+      },
     });
-    expect(again.headers.get('location')).toBe('/?signin_error=state');
+    expect(done.status).toBe(303);
+    const captured = replay as { url: URL; cookie: string };
+    const again = await fetch(captured.url, {
+      redirect: 'manual',
+      headers: { cookie: captured.cookie },
+    });
+    expect(again.headers.get('location')).toBe('/?signin_error=exchange-failed');
+    expect(again.headers.getSetCookie().some((c) => /-tx-[^=]+=;.*Max-Age=0/.test(c))).toBe(true);
+    expect(m.store.size).toBe(1);
   });
 
   it('sign-out: the local sign-in ends and the page is sent to the IdP end-session URL', async () => {
@@ -278,6 +300,9 @@ describe('redirect sign-in — properties', () => {
       '@',
       ':',
       '..',
+      '.',
+      '%2e',
+      '%2e%2e',
       '?',
       '#',
       'http:',
@@ -288,8 +313,10 @@ describe('redirect sign-in — properties', () => {
       seed = (Math.imul(seed, 1103515245) + 12345) >>> 0;
       return seed / 2 ** 32;
     };
-    for (let i = 0; i < 2000; i += 1) {
-      let input = '';
+    for (let i = 0; i < 4000; i += 1) {
+      // Half the inputs start with one `/` — the shape that passes the raw
+      // checks and reaches the resolver, where dot segments live.
+      let input = next() < 0.5 ? '/' : '';
       const n = 1 + Math.floor(next() * 6);
       for (let j = 0; j < n; j += 1) input += parts[Math.floor(next() * parts.length)];
       const kept = safeReturnTo(input, base);

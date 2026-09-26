@@ -99,6 +99,20 @@ a company uses it.
   must carry an ID token either way.
 - `IDENTITY_RESOURCE` is sent as AD FS's `resource`; sign-out answers the IdP's
   end-session URL.
+- **The ID token binds the BROWSER, not the person.** Its nonce proves this
+  response answers this browser's login; the person comes from the access
+  token. The two are never compared (an AD FS ID token's `sub` is pairwise, so
+  they cannot be): the token endpoint is trusted to return one person's
+  tokens, over the client-authenticated back channel.
+- **A sign-in that could never work refuses the boot** (`ready()`, awaited by
+  `identityFromConfig`): `openid-client` not installed, a client key that is
+  not RSA or EC P-256 (`OidcSignInSetupError`, `setting: 'client-key'`), a
+  discovery document without an authorization or token endpoint, or PKCE
+  required and `S256` not offered (`setting: 'discovery'`). An IdP that is
+  merely unreachable at boot is not a refusal; the first login retries, and
+  the door logs the failure class once per change.
+- **What the IdP advertises is held to:** `authorization_response_iss_parameter_supported`
+  (RFC 9207) makes `iss` REQUIRED on the callback.
 
 ```sh
 IDENTITY_PUBLIC_URL=https://neo.corp.example
@@ -155,7 +169,7 @@ IDENTITY_ALLOWED_CLIENTS=<the proxy's client id>
 IDENTITY_PUBLIC_URL=https://neo.corp.example
 ```
 
-## `directory-password` — Active Directory over LDAPS
+## `directory-password` — Active Directory over LDAPS (PENDING INDEPENDENT REVIEW)
 
 For a company with plain AD and no federation server (`directory/`). The sign-in
 door shows a username and password form; the directory decides who it was.
@@ -171,11 +185,42 @@ door shows a username and password form; the directory decides who it was.
   collision (an explicit UPN beats another object's implicit one).
 - **One answer** for every wrong credential; AD's sub-code (`52e`, `532`,
   `773`, …) goes to the server log only. A directory that is down is 503.
-- **Attempt limits from AD's lockout policy:** half of
-  `IDENTITY_LDAP_LOCKOUT_THRESHOLD` per name per
-  `IDENTITY_LDAP_LOCKOUT_WINDOW_MINUTES`, counted as attempts START — it
-  reduces the lockout risk (AD also counts VPN, mail and typos), it cannot rule
-  it out.
+- **Attempt limits from AD's lockout policy — per ACCOUNT, a third, from the
+  LAST failure:** `IDENTITY_LDAP_LOCKOUT_THRESHOLD` ÷ 3 attempts per account,
+  counted as they START, one bind in flight per account. The budget is kept
+  under the account the name reaches (`PasswordChecker.budgetKey`): `alice`,
+  `ALICE`, `CORP\alice` and `alice@corp.example` are ONE budget, because AD
+  folds them into one account. The counter resets only a full
+  `IDENTITY_LDAP_LOCKOUT_WINDOW_MINUTES` after the LAST failure — AD's own
+  "reset account lockout counter after" rule — so a slow guesser gains
+  nothing by spacing attempts. A bind that timed out AFTER it was sent stays
+  counted (AD may have counted it); only a directory that could not be reached
+  gives the attempt back.
+- **Why a third, and what is left:** one AD account can carry two logon names
+  this door cannot tie together without a service account — its UPN prefix
+  and its `sAMAccountName` (Jane: `jsmith@corp`, `jsmith2`). Two budgets of a
+  third still leave AD a third of its threshold for the person's VPN, mail and
+  typos. The residual: an account with a THIRD logon name (an alternative UPN
+  suffix) could reach the threshold through this door alone, and nothing here
+  can stop AD counting other sources. The door REDUCES lockout risk; it cannot
+  rule it out. What holds whatever the door does is AD's own policy: a lockout
+  DURATION of minutes (not "until an admin unlocks") and a threshold of 10 or
+  more.
+- **A threshold of 1 or 2 is refused at boot** — no budget of whole attempts
+  stays under it — unless `IDENTITY_LDAP_ACCEPT_LOW_THRESHOLD=yes`, whose
+  banner says the door cannot protect those accounts. `0` (AD never locks)
+  keeps the door's default budget.
+- **The names it takes:** 1–64 characters of `A–Z a–z 0–9 . _ -`, with the
+  configured `@domain` or `NETBIOS\` removed. Legal Windows names with an
+  apostrophe, a space or a non-ASCII letter (`o'brien`, `mary ann`, `josé`)
+  never reach the directory — label the form "Windows username (e.g. jsmith)".
+  A password holding a control character (NUL, tab, newline) is refused before
+  the bind: Samba cuts a password at NUL.
+- **Boot checks the CA file and the base DN:** every PEM block must parse as
+  an X.509 certificate WITH the CA flag (a DC's own leaf certificate is
+  refused), and the base DN must parse.
+- **PENDING INDEPENDENT REVIEW** before a company install, like browser
+  sign-in: a password door on the company's real directory.
 - **It bypasses the company's MFA**; the banner says so. `oidc-token` is
   preferred wherever there is an identity provider.
 - `ldapts` is an optional peer, loaded lazily.

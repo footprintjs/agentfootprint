@@ -6,8 +6,9 @@
  *
  *  - **A per-account cap** (default 10 live sign-ins per `userId`). A person's
  *    eleventh sign-in ends THAT person's oldest; nobody else's.
- *  - **Expired rows are swept** before anything is counted, so dead sign-ins
- *    never crowd out live ones.
+ *  - **Dead rows are swept** before anything is counted — past their lifetime,
+ *    or idle longer than `idleMinutes` when given (the door's own idle limit;
+ *    review idI57 N-12) — so dead sign-ins never crowd out live ones.
  *  - **A full store REFUSES** a new sign-in ({@link SignInStoreFullError}, the
  *    door answers 503) rather than evicting another account's live sign-in.
  *  - **Every end is announced** through `onDelete`, which `signInSource` turns
@@ -28,6 +29,12 @@ export interface MemorySignInsOptions {
   readonly max?: number;
   /** The most live sign-ins one account may hold. Default 10. */
   readonly perAccount?: number;
+  /**
+   * Minutes without use after which a row is dead — pass the door's
+   * `idleMinutes` so an idle sign-in stops holding a place against `max`.
+   * Absent: only the lifetime (`expiresAt`) is swept.
+   */
+  readonly idleMinutes?: number;
   /** The clock, epoch ms, for sweeping expired rows. Default `Date.now`. */
   readonly now?: () => number;
   /** Told once when the store passes 90 % of `max`. Default: `console.warn`. */
@@ -51,6 +58,8 @@ export const DEFAULT_SIGN_INS_PER_ACCOUNT = 10;
 export function memorySignIns(options: MemorySignInsOptions = {}): MemorySignIns {
   const max = whole(options.max ?? DEFAULT_SIGN_IN_MAX, 'max');
   const perAccount = whole(options.perAccount ?? DEFAULT_SIGN_INS_PER_ACCOUNT, 'perAccount');
+  const idleMs =
+    options.idleMinutes === undefined ? Infinity : positiveMinutes(options.idleMinutes) * 60_000;
   const now = options.now ?? Date.now;
   const warn = options.warn ?? ((message: string) => console.warn(message));
   // A Map iterates in insertion order: the first key is the oldest sign-in.
@@ -77,7 +86,9 @@ export function memorySignIns(options: MemorySignInsOptions = {}): MemorySignIns
 
   const sweep = (): void => {
     const at = now();
-    for (const [key, row] of rows) if (row.expiresAt <= at) remove(key);
+    for (const [key, row] of rows) {
+      if (row.expiresAt <= at || at - row.lastSeenAt >= idleMs) remove(key);
+    }
   };
 
   return {
@@ -126,6 +137,13 @@ export function memorySignIns(options: MemorySignInsOptions = {}): MemorySignIns
       remove(key);
     },
   };
+}
+
+function positiveMinutes(value: number): number {
+  if (!Number.isFinite(value) || value <= 0) {
+    throw new MemorySignInsConfigError('idleMinutes', 'idleMinutes is a positive number');
+  }
+  return value;
 }
 
 function whole(value: number, option: string): number {

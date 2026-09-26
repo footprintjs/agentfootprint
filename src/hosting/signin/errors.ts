@@ -44,3 +44,19 @@ export class SignInStoreFullError extends Error {
     this.name = 'SignInStoreFullError';
   }
 }
+
+/**
+ * A password check that never reached its backend — the directory could not
+ * be connected to, or its TLS handshake failed — so the password was never
+ * sent and nobody's lockout counter moved. The door un-counts the attempt.
+ * Any OTHER error from a check (a bind that timed out after it was sent) keeps
+ * the attempt counted: the directory may have charged it (review idI57 S-6).
+ */
+export class PasswordCheckUnreachableError extends Error {
+  readonly code = 'ERR_PASSWORD_CHECK_UNREACHABLE' as const;
+
+  constructor(sentence: string, options?: { cause?: unknown }) {
+    super(`[hosting] ${sentence}`, options);
+    this.name = 'PasswordCheckUnreachableError';
+  }
+}

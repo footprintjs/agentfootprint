@@ -80,7 +80,8 @@ export interface AttemptLimiter {
 interface Counter {
   attempts: number;
   inFlight: number;
-  windowStart: number;
+  /** When the last attempt was counted or answered — the window runs from HERE (review idI57 B-2). */
+  lastAt: number;
 }
 
 export function attemptLimiter(limits: AttemptLimits = {}): AttemptLimiter {
@@ -103,7 +104,7 @@ export function attemptLimiter(limits: AttemptLimits = {}): AttemptLimiter {
       const bucket = addressBucket(address);
       const byName = names.get(name, now);
       if (byName !== undefined && (byName.inFlight > 0 || byName.attempts >= perName)) {
-        const left = byName.inFlight > 0 ? 1_000 : byName.windowStart + windowMs - now;
+        const left = byName.inFlight > 0 ? 1_000 : byName.lastAt + windowMs - now;
         return { kind: 'refuse', retryAfterSeconds: Math.max(1, Math.ceil(left / 1000)) };
       }
       const nameCounter = byName ?? names.create(name, now);
@@ -119,13 +120,15 @@ export function attemptLimiter(limits: AttemptLimits = {}): AttemptLimiter {
       const delayMs = Math.max(delayFor(nameCounter.attempts), delayFor(addressPrior));
       nameCounter.attempts += 1;
       nameCounter.inFlight += 1;
+      nameCounter.lastAt = now;
       addressCounter.attempts += 1;
       addressCounter.inFlight += 1;
+      addressCounter.lastAt = now;
       return { kind: 'allow', delayMs, ticket: { name, address: bucket } };
     },
-    failed(ticket) {
-      names.settle(ticket.name, 0);
-      addresses.settle(ticket.address, 0);
+    failed(ticket, now) {
+      names.settle(ticket.name, 0, now);
+      addresses.settle(ticket.address, 0, now);
     },
     succeeded(ticket) {
       names.drop(ticket.name);
@@ -151,7 +154,11 @@ function boundedCounters(
   penalising: (counter: Counter) => boolean,
 ) {
   const map = new Map<string, Counter>();
-  const live = (c: Counter, now: number) => now - c.windowStart < windowMs;
+  // AD's own rule ("reset account lockout counter after"): a counter is
+  // forgotten only once a FULL window has passed since its LAST attempt. A
+  // window fixed at the first attempt let a patient guesser space attempts
+  // across the boundary and land twice the budget inside one AD window.
+  const live = (c: Counter, now: number) => now - c.lastAt < windowMs;
   return {
     get size() {
       return map.size;
@@ -169,16 +176,17 @@ function boundedCounters(
     },
     create(key: string, now: number): Counter | undefined {
       if (map.size >= maxEntries && !evictOne(now)) return undefined;
-      const counter = { attempts: 0, inFlight: 0, windowStart: now };
+      const counter = { attempts: 0, inFlight: 0, lastAt: now };
       map.set(key, counter);
       return counter;
     },
-    /** One attempt answered: out of flight, and `uncount` attempts taken back. */
-    settle(key: string, uncount: number): void {
+    /** One attempt answered: out of flight, and `uncount` attempts taken back; a failure moves `lastAt`. */
+    settle(key: string, uncount: number, now?: number): void {
       const counter = map.get(key);
       if (counter === undefined) return;
       counter.inFlight = Math.max(0, counter.inFlight - 1);
       counter.attempts = Math.max(0, counter.attempts - uncount);
+      if (now !== undefined) counter.lastAt = Math.max(counter.lastAt, now);
     },
     drop(key: string): void {
       const counter = map.get(key);

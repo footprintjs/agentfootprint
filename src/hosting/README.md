@@ -167,9 +167,12 @@ await signIns.end(key); // sign-out: every socket carrying it closes
   minimum time, and ends a sign-in already present. **An attempt is counted
   when it STARTS**, one check per name is in flight at a time, and at most 4
   checks run door-wide (32 wait; beyond that 503 with `Retry-After`) — so a
-  parallel burst cannot get more guesses than the per-name budget. That is
-  what protects Active Directory's own lockout threshold once
-  `directory-password` rides this limiter.
+  parallel burst cannot get more guesses than the per-name budget. The budget
+  is kept under the key the password checker names (the ACCOUNT, for
+  `directory-password`) and resets a full window after the LAST attempt. For
+  `directory-password` this REDUCES the risk of tripping Active Directory's
+  own lockout; it cannot rule it out (AD counts every source, and an account
+  with two logon names has two budgets — `adapters/identity/README.md`).
 - **The per-name budget refuses; the per-address budget only delays.** Behind
   a proxy or a shared NAT everyone can arrive from one address, and a hard
   address budget would let anybody lock the whole company out of sign-in. List

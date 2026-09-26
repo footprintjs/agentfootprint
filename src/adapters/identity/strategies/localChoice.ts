@@ -12,7 +12,7 @@
  */
 
 import { memorySignIns } from '../../../hosting/signin/memorySignIns.js';
-import { signInDoor, type SignInDoor } from '../../../hosting/signin/door.js';
+import { DEFAULT_IDLE_MINUTES, signInDoor, type SignInDoor } from '../../../hosting/signin/door.js';
 import { LocalPasswordConfigError, localPasswords } from '../localPassword.js';
 import { IdentityConfigError, type IdentityConfig } from './config.js';
 import type { IdentityBootOptions, IdentityChoice } from './choose.js';
@@ -79,7 +79,10 @@ function buildDoor(
   try {
     return signInDoor({
       passwords,
-      store: memorySignIns({ ...(config.signInMax !== undefined && { max: config.signInMax }) }),
+      store: memorySignIns({
+        ...(config.signInMax !== undefined && { max: config.signInMax }),
+        idleMinutes: config.signInIdleMinutes ?? DEFAULT_IDLE_MINUTES.password,
+      }),
       publicUrl,
       production: false,
       ...(boot.crossSite !== undefined && { guard: boot.crossSite }),

@@ -14,12 +14,26 @@
  *     origin IS the public origin — a second check for a parser quirk step 1
  *     missed.
  *  3. Only the re-serialised `pathname + search + hash` is kept: that string,
- *     not the input, is what gets sealed and redirected to.
- *  4. Anything refused becomes `/`.
+ *     not the input, is what gets sealed and redirected to. It must still
+ *     start with exactly one `/`: dot segments (`/.//evil.example`,
+ *     `/%2e%2e//evil.example`) resolve to the pathname `//evil.example`, a
+ *     protocol-relative redirect — this check is their only guard.
+ *  4. The KEPT form is at most 512 bytes (review idI57 S-2): it rides in a
+ *     sealed cookie, and percent-encoding can grow 900 raw characters to
+ *     5 KB, past a browser's per-cookie cap.
+ *  5. Never the door itself (`/auth/login` would loop through a silent-SSO
+ *     IdP, minting a sign-in per lap — review idI57 N-3).
+ *  6. Anything refused becomes `/`.
  */
 
-/** The safe place to send the browser: a same-origin path, or `/`. */
-export function safeReturnTo(input: unknown, publicUrl: URL): string {
+/** The longest kept `returnTo`, in bytes after encoding. */
+export const MAX_RETURN_TO_BYTES = 512;
+
+/**
+ * The safe place to send the browser: a same-origin path, or `/`.
+ * `doorPrefix` (the sign-in door's, `/auth`): a path under it becomes `/`.
+ */
+export function safeReturnTo(input: unknown, publicUrl: URL, doorPrefix?: string): string {
   if (typeof input !== 'string' || input.length === 0 || input.length > 2048) return '/';
   if (!input.startsWith('/') || input.startsWith('//')) return '/';
   // eslint-disable-next-line no-control-regex
@@ -32,5 +46,14 @@ export function safeReturnTo(input: unknown, publicUrl: URL): string {
   }
   if (resolved.origin !== publicUrl.origin) return '/';
   const kept = `${resolved.pathname}${resolved.search}${resolved.hash}`;
-  return kept.startsWith('/') && !kept.startsWith('//') ? kept : '/';
+  if (!kept.startsWith('/') || kept.startsWith('//')) return '/';
+  if (Buffer.byteLength(kept, 'utf8') > MAX_RETURN_TO_BYTES) return '/';
+  if (doorPrefix !== undefined && underPrefix(resolved.pathname, doorPrefix)) return '/';
+  return kept;
+}
+
+function underPrefix(pathname: string, prefix: string): boolean {
+  const lower = pathname.toLowerCase();
+  const door = prefix.toLowerCase();
+  return lower === door || lower.startsWith(`${door}/`);
 }

@@ -141,6 +141,7 @@ export type { DiscoveredIssuer } from './adapters/identity/verify/discovery.js';
 // install. The person is read from an ACCESS token by the strategy's own verify.
 export {
   MissingOpenIdClientError,
+  OidcSignInSetupError,
   oidcSignIn,
   type OidcClientCredential,
   type OidcSignInOptions,

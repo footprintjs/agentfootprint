@@ -279,6 +279,7 @@ export {
 } from './signin/memorySignIns.js';
 export {
   MemorySignInsConfigError,
+  PasswordCheckUnreachableError,
   SignInDoorConfigError,
   SignInStoreFullError,
 } from './signin/errors.js';
