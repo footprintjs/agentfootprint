@@ -26,6 +26,7 @@ import type { OidcIdentity } from '../oidc.js';
 import { oidcSignIn, type OidcClientCredential } from '../oidcSignIn.js';
 import { IdentityConfigError, type IdentityConfig } from './config.js';
 import type { IdentityBootOptions } from './choose.js';
+import { doorRefusal } from './doorError.js';
 import { keyLabel } from './vocabulary.js';
 
 /** The settings browser sign-in needs, read and checked. */
@@ -159,13 +160,7 @@ export function browserDoor(
       ...(browser.cookieKey !== undefined && { cookieKey: browser.cookieKey }),
     });
   } catch (err) {
-    if (err instanceof IdentityConfigError) throw err;
-    const text =
-      err instanceof Error ? err.message.replace(/^\[(hosting|identity)\] /, '') : String(err);
-    throw new IdentityConfigError(
-      `oidc-token browser sign-in cannot start: ${text}`,
-      /publicUrl|public URL/.test(text) ? 'IDENTITY_PUBLIC_URL' : undefined,
-    );
+    throw doorRefusal('oidc-token browser sign-in', err);
   }
 }
 

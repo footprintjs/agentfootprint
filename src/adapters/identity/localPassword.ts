@@ -17,8 +17,18 @@
  * native module; bcrypt a package), and it is memory-hard, which PBKDF2 is not.
  * The default cost is OWASP's recommended scrypt setting (N = 2^17, r = 8,
  * p = 1: 128 MiB and a noticeable fraction of a second per check — on purpose).
- * The cost travels in the hash, so a list made with other parameters still
- * checks; anything weaker than N = 2^14, r = 8, p = 1 is refused.
+ * The cost travels in the hash. Anything weaker than N = 2^14, r = 8, p = 1 is
+ * refused, and so is anything dearer than 256 MiB per check (128·N·r) or
+ * p > 4 — a check is run for every unknown name too, so an absurd cost is a
+ * denial of service on the door.
+ *
+ * ── One cost per list ───────────────────────────────────────────────────────
+ * Every entry must carry the SAME cost. An unknown name is checked against a
+ * decoy hash so it takes as long as a known one; with mixed costs no single
+ * decoy can match every entry, and the time would tell which names exist. A
+ * cost change (a re-hash) is therefore done for the whole list at once: this is
+ * a development/test list the operator regenerates, not a live store that has
+ * to migrate one person at a time as they sign in.
  *
  * ── Ids ─────────────────────────────────────────────────────────────────────
  * The one exception to "never a name a person types" (rule 7): a local
@@ -36,6 +46,10 @@ import type { PasswordAccepted, PasswordChecker } from '../../hosting/signin/typ
 export const SCRYPT_DEFAULT = { log2N: 17, r: 8, p: 1 } as const;
 /** The weakest cost a stored hash may carry. */
 export const SCRYPT_FLOOR = { log2N: 14, r: 8, p: 1 } as const;
+/** The most memory one check may use: 128·N·r bytes. */
+export const SCRYPT_MAX_BYTES = 256 * 1024 * 1024;
+/** The most parallel passes one check may run. */
+export const SCRYPT_MAX_P = 4;
 
 const KEY_BYTES = 32;
 const SALT_BYTES = 16;
@@ -61,8 +75,11 @@ export class LocalPasswordConfigError extends Error {
  * Hash a password for a `local-password` list entry.
  *
  * @example
- *   // npx tsx -e "import('agentfootprint/security').then(m => m.hashPassword('…')).then(console.log)"
- *   IDENTITY_LOCAL_USERS=priya:scrypt$17$8$1$…$…
+ *   // Read the password from stdin, so it never lands in shell history:
+ *   //   read -rs PW && PW="$PW" node -e \
+ *   //     "import('agentfootprint/security').then(m => m.hashPassword(process.env.PW)).then(console.log)"
+ *   // Then SINGLE-QUOTE the list — a shell or a compose file expands `$17`:
+ *   //   IDENTITY_LOCAL_USERS='priya:scrypt$17$8$1$…$…'
  */
 export async function hashPassword(
   password: string,
@@ -99,9 +116,19 @@ export function localPasswords(
   for (const [rawName, hash] of entries) {
     const name = checkName(rawName);
     if (table.has(name)) {
-      throw new LocalPasswordConfigError(`the local-password list names '${name}' twice.`);
+      throw new LocalPasswordConfigError(
+        `the local-password list names '${name}' twice (names are compared after Unicode NFC).`,
+      );
     }
     table.set(name, parseHash(name, hash));
+  }
+  const costs = new Set([...table.values()].map((h) => `${h.cost.log2N}/${h.cost.r}/${h.cost.p}`));
+  if (costs.size > 1) {
+    throw new LocalPasswordConfigError(
+      `the local-password list mixes scrypt costs (${[...costs].join(', ')}). Every entry must ` +
+        `share one cost — an unknown name is timed against one decoy, and mixed costs would ` +
+        `tell which names exist. Re-hash the whole list at one cost.`,
+    );
   }
   // Checked against when the name is unknown, so an unknown name costs what a
   // known one does.
@@ -111,12 +138,13 @@ export function localPasswords(
     strategy: 'local-password',
     names: [...table.keys()],
     async check(username: string, password: string): Promise<PasswordAccepted | undefined> {
-      const stored = table.get(username);
+      const name = username.normalize('NFC');
+      const stored = table.get(name);
       const against = stored ?? decoy;
       const key = await derive(password, against.salt, against.cost);
       const match = timingSafeEqual(key, against.key);
       if (stored === undefined || !match) return undefined;
-      return { identity: { userId: username }, displayName: username };
+      return { identity: { userId: name }, displayName: name };
     },
   };
 }
@@ -146,7 +174,7 @@ function parseList(list: string): [string, string][] {
 }
 
 function checkName(raw: string): string {
-  const name = raw.trim();
+  const name = raw.trim().normalize('NFC');
   // eslint-disable-next-line no-control-regex
   if (name.length === 0 || name.length > 256 || /[:,\u0000-\u001f\u007f]/.test(name)) {
     throw new LocalPasswordConfigError(
@@ -169,7 +197,10 @@ function parseHash(name: string, hash: string): StoredHash {
   const saltBytes = Buffer.from(salt ?? '', 'base64url');
   const keyBytes = Buffer.from(key ?? '', 'base64url');
   if (parts.length !== 6 || saltBytes.length < 16 || keyBytes.length !== KEY_BYTES) {
-    throw new LocalPasswordConfigError(`the local-password hash for '${name}' is malformed.`);
+    throw new LocalPasswordConfigError(
+      `the local-password hash for '${name}' is malformed. If the value holds '$', single-quote ` +
+        `it: a shell or a compose file expands $17, $8 and $1 and hands over what is left.`,
+    );
   }
   checkCost(cost, `the local-password hash for '${name}'`);
   return { cost, salt: saltBytes, key: keyBytes };
@@ -183,13 +214,13 @@ function checkCost(cost: ScryptCost, who: string): void {
     cost.log2N >= SCRYPT_FLOOR.log2N &&
     cost.log2N <= 20 &&
     cost.r >= SCRYPT_FLOOR.r &&
-    cost.r <= 32 &&
     cost.p >= SCRYPT_FLOOR.p &&
-    cost.p <= 16;
+    cost.p <= SCRYPT_MAX_P &&
+    128 * 2 ** cost.log2N * cost.r <= SCRYPT_MAX_BYTES;
   if (!ok) {
     throw new LocalPasswordConfigError(
       `${who} has a scrypt cost below the floor (N=2^14, r=8, p=1) or past the ceiling ` +
-        `(N=2^20, r=32, p=16).`,
+        `(256 MiB per check, 128·N·r — e.g. N=2^18 with r=8 — and p ≤ ${SCRYPT_MAX_P}).`,
     );
   }
 }

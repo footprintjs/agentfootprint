@@ -29,12 +29,23 @@ log.info({ path: req.url, headers: withoutCredentials(headers) });
   carries (a login carries no credential, so a gate keyed on one would never
   run: login forgery); JSON only; a bad body gets a fixed sentence (a parser's
   message would quote the password); an empty password is refused before any
-  check; every wrong credential gets one answer after a minimum time; attempt
-  limits grow a delay before refusing; a sign-in already present is ended.
-- **Bounded and per process (rule 19):** `memorySignIns` keeps at most 10 000
-  sign-ins (the oldest ends first); attempt counters are bounded too. A
-  restart signs everybody out and a second replica does not share either —
-  the banner says so. Run one replica, sticky sessions, or a shared store.
+  check; every wrong credential gets one answer after a minimum time — a
+  store that fails included; a sign-in already present is ended.
+- **Attempt limits hold under concurrency (`limits.ts`):** an attempt is
+  counted when it STARTS, one check per typed name runs at a time (a second
+  is 429 at once), and `checkGate.ts` caps checks door-wide (4 running, 32
+  waiting, then 503 + `Retry-After`). The per-name budget refuses; the
+  per-address budget only DELAYS (a proxy or a NAT must not let a stranger
+  lock everybody out). Name and address counters live in separate bounded
+  maps and a counter that still penalises is never evicted. This is what
+  keeps a parallel burst under Active Directory's lockout threshold for
+  `directory-password`.
+- **Bounded, fair and per process (rule 19):** `memorySignIns` keeps at most
+  10 000 live sign-ins and 10 per account (that account's oldest ends);
+  expired rows are swept first; a full store REFUSES a new sign-in (503)
+  rather than ending someone else's. Every removal is announced (`onDelete` →
+  `onEnd`), so an open socket carrying it closes. A restart signs everybody
+  out and a second replica does not share either — the banner says so.
 - **The cookie:** `__Host-Http-af-signin`, `HttpOnly; Secure; SameSite=Strict;
   Path=/`, no `Domain`, `Max-Age` = the lifetime (8 h). On a plain-`http`
   localhost public URL — development only, refused in production — it is
@@ -100,7 +111,10 @@ const door = signInDoor({
 - `seal.ts` — the sealed transaction cookie.
 - `returnTo.ts` — `safeReturnTo`.
 - `memorySignIns.ts` — the bounded in-memory store.
-- `limits.ts` — attempt limits, bounded, per process.
+- `limits.ts` — attempt limits: counted at the start, bounded, per process.
+- `checkGate.ts` — the door-wide cap on concurrent password checks.
+- `clientAddress.ts` — the client address, trusted proxies (IPs and CIDR ranges).
+- `errors.ts` — `SignInDoorConfigError`, `SignInStoreFullError`.
 - `cookie.ts` — `readSignIn`, `signInKeyOf`, `withoutCredentials`.
 - `source.ts` — `signInSource`: the lifetimes (absolute + idle) in one place.
 - `hostSignIn.ts` — the host's `signIn` option checked at construction; the

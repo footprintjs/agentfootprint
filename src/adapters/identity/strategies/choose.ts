@@ -27,7 +27,7 @@
  */
 
 import type { CrossSiteOptions } from '../../../hosting/doorGuard.js';
-import type { IdentityVerificationOptions } from '../../../hosting/identityVerification.js';
+import type { DoorIdentity } from '../../../hosting/identityVerification.js';
 import type { SignInDoor } from '../../../hosting/signin/door.js';
 import type { HostSignInOptions } from '../../../hosting/signin/types.js';
 import { pathLabel } from '../verify/claims.js';
@@ -86,7 +86,7 @@ export interface IdentityChoice {
    * What `standingAgent({ identity })` and every app door take. ABSENT for
    * `open`: nothing about a request changes.
    */
-  readonly identity?: IdentityVerificationOptions;
+  readonly identity?: DoorIdentity;
   /** What the page's sign-in gate shows: no sign-in, bearer tokens only, or a password form. */
   readonly mode: IdentityMode;
   /**

@@ -1911,8 +1911,8 @@ naming the key.
   library never guesses it from `NODE_ENV`.
 - **A typo is never `open`.** An unknown strategy or `IDENTITY_*` key is
   refused, and so are the keys of strategies a later release adds
-  (`proxy-token`, `directory-password`, `local-password`, browser sign-in):
-  they are named and refused as "not in this release".
+  (`proxy-token`, `directory-password`): they are named and refused as "not in
+  this release".
 - **Config errors refuse at boot; outages answer 503.** An unreachable IdP
   lets the app start and says so in the banner.
 - **The banner names settings and never a secret** — print every line.
@@ -1963,14 +1963,20 @@ header bag it hands onward and passes the key instead
 (`HostRequest.signInKey`, `HostConversation.signInKey`). `readSignIn(headers)`
 does the same for an app's own routes (it returns a `SignInRead`: the key and
 the headers without the cookie; a `HeaderBag` is either header shape), and
-`withoutCredentials(headers)` removes every header in `CREDENTIAL_HEADERS` for
-anything that logs.
+`withoutCredentials(headers, { also })` removes every header in
+`CREDENTIAL_HEADERS` — the standard ones, `sec-websocket-protocol`, the common
+proxy and platform token headers, `x-api-key` — plus any you name in `also`
+(pass your `tokenHeader`), for anything that logs. A host built with `signIn`
+refuses to boot with the browser rules off: never `allowedOrigins: 'any'`,
+never `requireJsonContentType: false`, never `allowedHosts: 'any'`, and
+`allowedHosts` set unless it binds a loopback address.
 
-**One verification path.** `IdentityVerificationOptions` gains `signIn`, a
-`SignInSource` that answers "who is behind this key, right now?", and
-`tokenHeader` (read a token from a header other than `authorization`).
-`verify` may be left out only when `signIn` is present; the fields both shapes
-share are `IdentityVerificationBase`. `signInSource({ store, idleMinutes })`
+**One verification path.** `IdentityVerificationOptions` keeps its 9.26 shape
+(`verify` required) and gains two optional fields: `signIn`, a `SignInSource`
+that answers "who is behind this key, right now?", and `tokenHeader` (read a
+token from a header other than `authorization`). A door that takes sign-ins
+only is a `SignInOnlyIdentity`; every door accepts either, as a
+`DoorIdentity`. `signInSource({ store, idleMinutes })`
 (options: `SignInSourceOptions`) applies both clocks — the absolute lifetime on
 the record and the idle limit — and returns `SignIns`, which can also `end` a
 sign-in and tell `onEnd` listeners.
@@ -2024,8 +2030,16 @@ sign-in already present is ended first. The cookie is
 is `af-signin` without `Secure`, and the banner says so.
 
 Sign-ins live in a `SignInStore`; `memorySignIns()` (a `MemorySignIns`, options
-`MemorySignInsOptions`) keeps at most `DEFAULT_SIGN_IN_MAX` (10 000), the oldest
-ending first. Sign-ins and attempt budgets are per process: run one replica,
+`MemorySignInsOptions`) keeps at most `DEFAULT_SIGN_IN_MAX` (10 000) live
+sign-ins and `DEFAULT_SIGN_INS_PER_ACCOUNT` (10) per account — a person's
+eleventh ends their own oldest — sweeps expired rows first, and REFUSES a new
+sign-in when full (`SignInStoreFullError`, answered 503) rather than ending
+somebody else's. Every removal is announced, so a socket carrying it closes.
+Attempts are counted when they start, one check per name runs at a time, and
+`checks` (a `CheckGateOptions`) caps checks door-wide (4 running, 32 waiting).
+The per-name budget refuses; the per-address budget only delays, and
+`trustedProxies` takes IPs and CIDR ranges. A construction refusal is a
+`SignInDoorConfigError` naming the option; `MemorySignInsConfigError` likewise. Sign-ins and attempt budgets are per process: run one replica,
 pin each browser to one, or put a shared store behind the same four verbs.
 
 The password check is a `PasswordChecker` (it answers a `PasswordAccepted` or

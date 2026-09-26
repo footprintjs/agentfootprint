@@ -750,7 +750,14 @@ export function httpHost(options: HttpHostOptions): HttpHost {
   }
   const port = options.port ?? 8080;
   const hostname = options.hostname ?? '0.0.0.0';
-  const signIn = checkHostSignIn(name, options.signIn);
+  const signIn = checkHostSignIn(name, options.signIn, {
+    ...(options.allowedOrigins !== undefined && { allowedOrigins: options.allowedOrigins }),
+    ...(options.allowedHosts !== undefined && { allowedHosts: options.allowedHosts }),
+    ...(options.requireJsonContentType !== undefined && {
+      requireJsonContentType: options.requireJsonContentType,
+    }),
+    ...(!ownServer && { bindHost: hostname }),
+  });
   /**
    * The paths this host answers on. Everything else is unowned and may be
    * handed to `onUnhandled` — the conversation path included in the ownership,

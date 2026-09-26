@@ -412,11 +412,13 @@ describe('the transport — integration', () => {
         wire: jsonWire,
         invokePath: '/i',
         healthPath: '/h',
+        hostname: '127.0.0.1',
         signIn: {} as never,
       }),
     ).toThrow(/signIn needs 'identity'/);
     expect(() =>
       nodeHost({
+        hostname: '127.0.0.1',
         signIn: { cookieName: 'bad name', identity: { verify: async () => ({ userId: 'x' }) } },
       }),
     ).toThrow(/not a cookie name/);

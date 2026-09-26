@@ -91,10 +91,14 @@ funnel.
   (`wrong-client`). These, and `roles-unknown`, are new `IdentityFailureClass`
   words: the ingress record carries them like the others.
 - **The banner never carries a secret.** Print every line at boot.
-- This release starts `open`, `oidc-token` (bearer access tokens) and
-  `local-password` (development only; refused in production).
-  `proxy-token`, `directory-password`, `local-password` and browser sign-in
-  are named and refused as "not in this release".
+- This release starts `open`, `oidc-token` (bearer access tokens, plus
+  browser sign-in — pending independent review) and `local-password`
+  (development only; refused in production). `proxy-token` and
+  `directory-password` are named and refused as "not in this release".
+- **`GET /auth/config` in every mode.** The sign-in door answers it in
+  `password` and `redirect` mode; for `open` and `token-only` there is no door,
+  and the app answers `{ mode: choice.mode }` itself — the page learns from it
+  whether to show a sign-in.
 
 ```ts
 const choice = await identityFromConfig(identityConfigFromEnv(process.env), {
@@ -159,10 +163,27 @@ await signIns.end(key); // sign-out: every socket carrying it closes
 - **A password door (rule 18)** runs the door guard on every login, reads
   JSON only, answers a bad body with a fixed sentence, refuses an empty
   password before any check, gives every wrong credential one answer after a
-  minimum time, grows a delay before refusing a name or an address, and ends
-  a sign-in already present.
+  minimum time, and ends a sign-in already present. **An attempt is counted
+  when it STARTS**, one check per name is in flight at a time, and at most 4
+  checks run door-wide (32 wait; beyond that 503 with `Retry-After`) — so a
+  parallel burst cannot get more guesses than the per-name budget. That is
+  what protects Active Directory's own lockout threshold once
+  `directory-password` rides this limiter.
+- **The per-name budget refuses; the per-address budget only delays.** Behind
+  a proxy or a shared NAT everyone can arrive from one address, and a hard
+  address budget would let anybody lock the whole company out of sign-in. List
+  the proxy in `trustedProxies` (IPs or CIDR ranges) so each person is their
+  own address; the door warns once if forwarding headers arrive and none is
+  trusted. IPv6 clients are counted per /64.
 - **Server-side state is bounded, and per process (rule 19).** The banner
   says: run one replica, or pin each browser to one, or use a shared store.
+  One person can never sign anybody else out: each account keeps at most 10
+  live sign-ins (its oldest ends), expired rows are swept first, and a full
+  store refuses a NEW sign-in (503) instead of evicting someone else's.
+- **Every end is announced (rule 21).** Sign-out, the per-account cap and the
+  sweep all reach `onEnd`, and a socket carrying that sign-in closes. A socket
+  that only RECEIVES learns of a sign-in that simply ran out of time on its
+  next inbound frame; there is no timer.
 - Sign-ins last 8 hours, 60 idle minutes under a password.
 
 ```ts

@@ -32,7 +32,7 @@ import type { Unsubscribe } from '../events/dispatcher.js';
 import type { ToolArtifacts } from '../artifacts/capability.js';
 import type { ArtifactWireRequest, ArtifactWireResult } from './artifactWire.js';
 import type { AnswerAccountsOptions } from './answerAccounts.js';
-import type { IdentityVerificationOptions } from './identityVerification.js';
+import type { DoorIdentity } from './identityVerification.js';
 import type { AdmissionPolicy } from './admission.js';
 import type { IngressSink } from './ingressRecord.js';
 import type { SessionSummary, SessionWireRequest, SessionWireResult } from './sessionWire.js';
@@ -1374,7 +1374,7 @@ export interface StandingAgentBaseOptions<TH extends HostHandle = HostHandle> {
    *     audience:'my-api',
    *   }).verify }
    */
-  readonly identity?: IdentityVerificationOptions;
+  readonly identity?: DoorIdentity;
   /**
    * Decide whether a request runs at all, BEFORE any model is called (9.26.0).
    *

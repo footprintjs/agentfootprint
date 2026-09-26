@@ -25,7 +25,8 @@ import {
   signInKeyOf,
   WRONG_CREDENTIAL_SENTENCE,
 } from '../../src/hosting/index.js';
-import { attemptLimiter } from '../../src/hosting/signin/limits.js';
+import { addressBucket, attemptLimiter } from '../../src/hosting/signin/limits.js';
+import { SignInStoreFullError } from '../../src/hosting/signin/errors.js';
 import {
   hashPassword,
   identityConfigFromEnv,
@@ -55,35 +56,56 @@ async function mounted(extra: Parameters<typeof mountDoor>[0] = {}): Promise<Mou
 // ─── 1. UNIT — the store, the limiter, the password list, the cookie ──
 
 describe('memorySignIns — unit', () => {
-  const row = (key: string, at = 0) => ({
+  const row = (key: string, userId = key, at = 0, hours = 1) => ({
     key,
-    identity: { userId: key },
+    identity: { userId },
     strategy: 't',
     startedAt: at,
-    expiresAt: at + 1000,
+    expiresAt: at + hours * 3_600_000,
     lastSeenAt: at,
   });
 
-  it('is bounded: past the cap the OLDEST sign-in ends first, and touching does not reorder', async () => {
-    const store = memorySignIns({ max: 3, warn: () => undefined });
+  it('FULL: refuses a new sign-in rather than ending another account’s (review idI34 S-1)', async () => {
+    const store = memorySignIns({ max: 3, warn: () => undefined, now: () => 0 });
     for (const k of ['a', 'b', 'c']) await store.create(row(k));
-    await store.touch('a', 50);
-    await store.create(row('d'));
-    expect(await store.find('a')).toBeUndefined();
-    expect((await store.find('b'))?.key).toBe('b');
+    await expect(store.create(row('d'))).rejects.toBeInstanceOf(SignInStoreFullError);
+    expect((await store.find('a'))?.key).toBe('a');
     expect(store.size).toBe(3);
   });
 
-  it('warns once past 90 % of the cap; refuses a bad cap', async () => {
+  it('sweeps EXPIRED rows first, so dead sign-ins never crowd out live ones', async () => {
+    let t = 0;
+    const store = memorySignIns({ max: 2, warn: () => undefined, now: () => t });
+    await store.create(row('old', 'old', 0, 1));
+    await store.create(row('live', 'live', 0, 8));
+    t = 2 * 3_600_000; // 'old' has expired
+    await store.create(row('new', 'new', t));
+    expect(await store.find('old')).toBeUndefined();
+    expect((await store.find('live'))?.key).toBe('live');
+  });
+
+  it('a per-account cap: a person’s 11th sign-in ends THAT person’s oldest, announced through onDelete', async () => {
+    const store = memorySignIns({ warn: () => undefined, now: () => 0 });
+    const ended: string[] = [];
+    store.onDelete((key) => ended.push(key));
+    await store.create(row('bob-1', 'bob'));
+    for (let i = 0; i < 11; i += 1) await store.create(row(`alice-${i}`, 'alice'));
+    expect(ended).toEqual(['alice-0']);
+    expect((await store.find('bob-1'))?.key).toBe('bob-1');
+    expect(store.perAccount).toBe(10);
+  });
+
+  it('warns once past 90 % of the cap; refuses a bad cap by option name', async () => {
     const warnings: string[] = [];
-    const store = memorySignIns({ max: 10, warn: (m) => warnings.push(m) });
-    for (let i = 0; i < 12; i += 1) await store.create(row(`k${i}`));
+    const store = memorySignIns({ max: 10, warn: (m) => warnings.push(m), now: () => 0 });
+    for (let i = 0; i < 10; i += 1) await store.create(row(`k${i}`));
     expect(warnings).toHaveLength(1);
-    expect(() => memorySignIns({ max: 0 })).toThrow(/positive whole number/);
+    expect(() => memorySignIns({ max: 0 })).toThrow(/max is a positive whole number/);
+    expect(() => memorySignIns({ perAccount: 1.5 })).toThrow(/perAccount/);
   });
 
   it('hands out copies: a caller editing a found row edits nothing stored', async () => {
-    const store = memorySignIns();
+    const store = memorySignIns({ now: () => 0 });
     await store.create(row('a'));
     const found = (await store.find('a')) as { lastSeenAt: number };
     found.lastSeenAt = 999;
@@ -92,37 +114,97 @@ describe('memorySignIns — unit', () => {
 });
 
 describe('attemptLimiter — unit', () => {
-  it('grows a delay before it refuses, then refuses until the window passes', () => {
+  it('COUNTS AN ATTEMPT AS IT STARTS: 50 parallel begins for one name → one allowed, the rest refused (review idI34 B-1)', () => {
+    const limiter = attemptLimiter({ perName: 5, backoffMs: 0 });
+    const verdicts = Array.from({ length: 50 }, () => limiter.begin('alice', '10.0.0.1', 0));
+    expect(verdicts.filter((v) => v.kind === 'allow')).toHaveLength(1); // one check in flight per name
+    expect(verdicts.filter((v) => v.kind === 'refuse')).toHaveLength(49);
+  });
+
+  it('the delay grows from the COUNTED attempts, then the name is refused until the window passes', () => {
     const limiter = attemptLimiter({ perName: 4, windowMinutes: 1, backoffMs: 100 });
     const delays: number[] = [];
     for (let i = 0; i < 4; i += 1) {
-      const v = limiter.before('alice', 'ip', 0);
-      delays.push(v.kind === 'allow' ? v.delayMs : -1);
-      limiter.failed('alice', 'ip', 0);
+      const v = limiter.begin('alice', 'ip', 0);
+      if (v.kind !== 'allow') throw new Error('expected allow');
+      delays.push(v.delayMs);
+      limiter.failed(v.ticket, 0);
     }
     expect(delays).toEqual([0, 0, 100, 200]);
-    expect(limiter.before('alice', 'ip', 1000)).toMatchObject({
+    expect(limiter.begin('alice', 'ip', 1000)).toMatchObject({
       kind: 'refuse',
       retryAfterSeconds: 59,
     });
-    expect(limiter.before('alice', 'ip', 60_000).kind).toBe('allow');
+    expect(limiter.begin('alice', 'ip', 60_000).kind).toBe('allow');
   });
 
-  it('a success clears the name; the address budget is separate and kept', () => {
-    const limiter = attemptLimiter({ perName: 2, perAddress: 3, backoffMs: 0 });
-    limiter.failed('alice', 'ip', 0);
-    limiter.succeeded('alice');
-    expect(limiter.before('alice', 'ip', 0)).toMatchObject({ kind: 'allow', delayMs: 0 });
-    limiter.failed('bob', 'ip', 0);
-    limiter.failed('carol', 'ip', 0);
-    expect(limiter.before('dave', 'ip', 0).kind).toBe('refuse'); // 3 from one address
-    expect(limiter.before('dave', 'other-ip', 0).kind).toBe('allow');
+  it('a success clears the name; an abandoned check (directory down) is not counted', () => {
+    const limiter = attemptLimiter({ perName: 2, backoffMs: 0 });
+    const first = limiter.begin('alice', 'ip', 0);
+    if (first.kind !== 'allow') throw new Error('allow');
+    limiter.failed(first.ticket, 0);
+    const second = limiter.begin('alice', 'ip', 0);
+    if (second.kind !== 'allow') throw new Error('allow');
+    limiter.abandoned(second.ticket);
+    const third = limiter.begin('alice', 'ip', 0);
+    if (third.kind !== 'allow') throw new Error('allow');
+    limiter.succeeded(third.ticket);
+    expect(limiter.begin('alice', 'ip', 0)).toMatchObject({ kind: 'allow', delayMs: 0 });
   });
 
-  it('is bounded: past maxEntries the least recently used counter is forgotten', () => {
-    const limiter = attemptLimiter({ maxEntries: 10 });
-    for (let i = 0; i < 50; i += 1) limiter.failed(`n${i}`, `a${i}`, 0);
-    expect(limiter.size).toBeLessThanOrEqual(10);
+  it('the ADDRESS budget only delays, never refuses — a shared proxy address cannot lock everybody out', () => {
+    const limiter = attemptLimiter({ perName: 100, perAddress: 3, backoffMs: 100 });
+    let last = 0;
+    for (let i = 0; i < 20; i += 1) {
+      const v = limiter.begin(`n${i}`, 'proxy', 0);
+      expect(v.kind).toBe('allow');
+      if (v.kind === 'allow') {
+        last = v.delayMs;
+        limiter.failed(v.ticket, 0);
+      }
+    }
+    expect(last).toBe(800); // the capped delay
+  });
+
+  it('IPv6 is counted per /64: rotating addresses inside one network share a delay', () => {
+    expect(addressBucket('2001:db8:1:2::a')).toBe('2001:db8:1:2::/64');
+    expect(addressBucket('2001:db8:1:2:ffff::1')).toBe('2001:db8:1:2::/64');
+    expect(addressBucket('10.0.0.1')).toBe('10.0.0.1');
+    const limiter = attemptLimiter({ perName: 100, perAddress: 3, backoffMs: 100 });
+    let delay = 0;
+    for (let i = 0; i < 10; i += 1) {
+      const v = limiter.begin(`n${i}`, `2001:db8:1:2::${i.toString(16)}`, 0);
+      if (v.kind === 'allow') {
+        delay = v.delayMs;
+        limiter.failed(v.ticket, 0);
+      }
+    }
+    expect(delay).toBeGreaterThan(0);
+  });
+
+  it('name counters cannot be FLUSHED by address churn: separate maps, penalising counters never evicted', () => {
+    const limiter = attemptLimiter({ perName: 5, backoffMs: 0, maxEntries: 100 });
+    for (let i = 0; i < 5; i += 1) {
+      const v = limiter.begin('alice', '10.0.0.1', 0);
+      if (v.kind === 'allow') limiter.failed(v.ticket, 0);
+    }
+    for (let i = 0; i < 5_000; i += 1) {
+      const v = limiter.begin(`junk-${i}`, `2001:db8:${i.toString(16)}::1`, 1);
+      if (v.kind === 'allow') limiter.failed(v.ticket, 1);
+    }
+    expect(limiter.begin('alice', '10.0.0.9', 2).kind).toBe('refuse');
+    expect(limiter.size).toBeLessThanOrEqual(200);
+  });
+
+  it('bounded: when every counter still penalises, a NEW name is `busy`, never a forgotten penalty', () => {
+    const limiter = attemptLimiter({ perName: 5, backoffMs: 0, maxEntries: 3 });
+    for (const n of ['a', 'b', 'c']) {
+      for (let i = 0; i < 2; i += 1) {
+        const v = limiter.begin(n, '10.0.0.1', 0);
+        if (v.kind === 'allow') limiter.failed(v.ticket, 0);
+      }
+    }
+    expect(limiter.begin('d', '10.0.0.1', 0).kind).toBe('busy');
   });
 });
 
@@ -195,6 +277,55 @@ describe('signInDoor construction — unit', () => {
         guard: { allowedHosts: ['other.corp.example'] },
       }),
     ).toThrow(/refused by the door's own lists/);
+  });
+});
+
+describe('the https cookie — unit (review idI34 S-8, M18)', () => {
+  it('on an https public URL the sign-in cookie is __Host-Http-, Secure, HttpOnly, SameSite=Strict, Path=/, no Domain', async () => {
+    const { createServer } = await import('node:http');
+    const { request } = await import('node:http');
+    const door = signInDoor({
+      passwords: localPasswords(await testUsers()),
+      store: memorySignIns(),
+      publicUrl: 'https://neo.corp.example',
+      production: true,
+      guard: { allowedHosts: ['neo.corp.example'] },
+      minimumResponseMs: 0,
+    });
+    const server = createServer((req, res) => void door.handle(req, res));
+    await new Promise<void>((r) => server.listen(0, '127.0.0.1', r));
+    const port = (server.address() as { port: number }).port;
+    try {
+      const setCookie = await new Promise<string>((resolve, reject) => {
+        const body = JSON.stringify({ username: 'alice', password: 'alice-pw' });
+        const req = request(
+          {
+            host: '127.0.0.1',
+            port,
+            path: '/auth/login',
+            method: 'POST',
+            headers: {
+              host: 'neo.corp.example',
+              origin: 'https://neo.corp.example',
+              'content-type': 'application/json',
+              'content-length': String(body.length),
+            },
+          },
+          (res) => {
+            res.resume();
+            resolve(String(res.headers['set-cookie']?.[0] ?? `status ${res.statusCode}`));
+          },
+        );
+        req.on('error', reject);
+        req.end(body);
+      });
+      expect(setCookie).toMatch(
+        /^__Host-Http-af-signin=[A-Za-z0-9_-]{43}; Path=\/; HttpOnly; Secure; SameSite=Strict; Max-Age=28800$/,
+      );
+      expect(setCookie).not.toMatch(/Domain/i);
+    } finally {
+      await new Promise<void>((r) => server.close(() => r()));
+    }
   });
 });
 
@@ -365,18 +496,41 @@ describe('the sign-in door — integration', () => {
     expect((await connectConversation(m.port).opened).status).toBe(401);
   });
 
-  it('trusted proxies: the per-address budget follows X-Forwarded-For only behind a listed proxy', async () => {
+  it('trusted proxies (a CIDR range): the address follows X-Forwarded-For only behind a listed proxy', async () => {
+    const warnings: string[] = [];
     const m = await mounted({
-      limits: { perName: 100, perAddress: 2, backoffMs: 0 },
-      trustedProxies: ['127.0.0.1'],
+      limits: { perName: 100, perAddress: 2, backoffMs: 40 },
+      trustedProxies: ['127.0.0.0/8'],
+      warn: (w) => warnings.push(w),
     });
-    const from = (ip: string) => ({ 'x-forwarded-for': `${ip}, 10.9.9.9` });
-    // Rightmost untrusted hop is 10.9.9.9 for both: the SAME budget.
-    await login(m.url, 'x1', 'p', from('1.1.1.1'));
-    await login(m.url, 'x2', 'p', from('2.2.2.2'));
-    expect((await login(m.url, 'x3', 'p', from('3.3.3.3'))).status).toBe(429);
-    const direct = await login(m.url, 'x4', 'p', { 'x-forwarded-for': '10.8.8.8' });
-    expect(direct.status).toBe(401);
+    // Rightmost untrusted hop: 10.9.9.9 each time — one client, a growing delay.
+    const timed = async (name: string, xff: string) => {
+      const t = Date.now();
+      await login(m.url, name, 'p', { 'x-forwarded-for': xff });
+      return Date.now() - t;
+    };
+    await timed('x1', '1.1.1.1, 10.9.9.9');
+    await timed('x2', '2.2.2.2, 10.9.9.9');
+    await timed('x3', '3.3.3.3, 10.9.9.9');
+    expect(await timed('x4', '4.4.4.4, 10.9.9.9')).toBeGreaterThanOrEqual(35);
+    // Another client behind the same proxy is not slowed by the first.
+    expect(await timed('x5', '10.8.8.8')).toBeLessThan(35);
+    expect(warnings).toEqual([]);
+  });
+
+  it('refuses a trustedProxies entry that is not an IP or a CIDR range', async () => {
+    await expect(mounted({ trustedProxies: ['proxy.corp'] })).rejects.toThrow(
+      /not an IP address or a CIDR range/,
+    );
+  });
+
+  it('warns ONCE when X-Forwarded-For arrives and no proxy is trusted (one shared address budget)', async () => {
+    const warnings: string[] = [];
+    const m = await mounted({ warn: (w) => warnings.push(w) });
+    await login(m.url, 'a', 'p', { 'x-forwarded-for': '1.1.1.1' });
+    await login(m.url, 'b', 'p', { 'x-forwarded-for': '2.2.2.2' });
+    expect(warnings).toHaveLength(1);
+    expect(warnings[0]).toMatch(/trustedProxies is not set/);
   });
 });
 

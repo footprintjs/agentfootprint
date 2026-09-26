@@ -79,25 +79,58 @@ export function readSignIn(headers: HeaderBag, cookieName: string = SIGN_IN_COOK
 
 /**
  * The headers minus every one that carries a credential — for a log line, an
- * error report, anything that leaves the process. Removes `authorization`,
- * `proxy-authorization` and `cookie` whole (any cookie may be a credential), and
- * the headers authenticating proxies forward tokens in.
+ * error report, anything that leaves the process. Removes `cookie` and
+ * `authorization` whole (any cookie may be a credential), every header in
+ * {@link CREDENTIAL_HEADERS}, and any header named in `also` — pass the
+ * deployment's own `tokenHeader` there. Names are compared lower-cased.
  */
-export function withoutCredentials(headers: HeaderBag): Record<string, string> {
+export function withoutCredentials(
+  headers: HeaderBag,
+  options: { readonly also?: readonly string[] } = {},
+): Record<string, string> {
   const out = flatten(headers);
   for (const name of CREDENTIAL_HEADERS) delete out[name];
+  for (const name of options.also ?? []) delete out[name.toLowerCase()];
   return out;
 }
 
-/** Every header name {@link withoutCredentials} removes. */
+/**
+ * Every header name {@link withoutCredentials} removes:
+ *
+ * - the standard ones: `authorization`, `proxy-authorization`, `cookie`,
+ *   `set-cookie`;
+ * - `sec-websocket-protocol`, where a browser dialect carries a bearer token
+ *   (a browser's WebSocket cannot set `authorization`);
+ * - what authenticating proxies forward a signed token or identity in:
+ *   `x-forwarded-access-token`, `x-auth-request-access-token`,
+ *   `x-pomerium-jwt-assertion`, `x-amzn-oidc-accesstoken`, `x-amzn-oidc-data`,
+ *   `x-amzn-oidc-identity`, `x-goog-iap-jwt-assertion`, `cf-access-jwt-assertion`,
+ *   `x-ms-token-aad-access-token`, `x-ms-token-aad-id-token`,
+ *   `x-ms-token-aad-refresh-token`, `x-ms-client-principal`;
+ * - `x-api-key`.
+ *
+ * A header this list does not know (a custom token header) is removed only
+ * when named in `also`.
+ */
 export const CREDENTIAL_HEADERS: readonly string[] = [
   'authorization',
   'proxy-authorization',
   'cookie',
   'set-cookie',
+  'sec-websocket-protocol',
   'x-forwarded-access-token',
   'x-auth-request-access-token',
   'x-pomerium-jwt-assertion',
+  'x-amzn-oidc-accesstoken',
+  'x-amzn-oidc-data',
+  'x-amzn-oidc-identity',
+  'x-goog-iap-jwt-assertion',
+  'cf-access-jwt-assertion',
+  'x-ms-token-aad-access-token',
+  'x-ms-token-aad-id-token',
+  'x-ms-token-aad-refresh-token',
+  'x-ms-client-principal',
+  'x-api-key',
 ];
 
 function flatten(headers: HeaderBag): Record<string, string> {

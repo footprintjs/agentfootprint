@@ -184,7 +184,8 @@ export async function verifySignedToken(
   // The same tolerance `jose` was given, the same classes.
   const nowSeconds = Math.floor(Date.now() / 1000);
   const tolerance = checks.clockToleranceSeconds ?? 0;
-  if (payload.exp + tolerance < nowSeconds) throw new IdentityNotVerifiedError('expired', false);
+  // `<=`, as jose itself decides: a token is expired AT its `exp` second.
+  if (payload.exp + tolerance <= nowSeconds) throw new IdentityNotVerifiedError('expired', false);
   if (payload.nbf !== undefined) {
     if (typeof payload.nbf !== 'number' || !Number.isFinite(payload.nbf)) {
       throw new IdentityNotVerifiedError('unverifiable', false);

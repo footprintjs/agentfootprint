@@ -16,6 +16,7 @@ import { signInDoor, type SignInDoor } from '../../../hosting/signin/door.js';
 import { LocalPasswordConfigError, localPasswords } from '../localPassword.js';
 import { IdentityConfigError, type IdentityConfig } from './config.js';
 import type { IdentityBootOptions, IdentityChoice } from './choose.js';
+import { doorRefusal } from './doorError.js';
 import { keyLabel } from './vocabulary.js';
 
 /** Build the `local-password` choice, or refuse to boot naming the key. */
@@ -87,17 +88,7 @@ function buildDoor(
       ...(config.trustedProxies !== undefined && { trustedProxies: config.trustedProxies }),
     });
   } catch (err) {
-    const text = err instanceof Error ? err.message.replace(/^\[hosting\] /, '') : String(err);
-    const key = /publicUrl|public URL/.test(text)
-      ? 'IDENTITY_PUBLIC_URL'
-      : /hours/.test(text)
-      ? 'IDENTITY_SIGN_IN_HOURS'
-      : /idleMinutes/.test(text)
-      ? 'IDENTITY_SIGN_IN_IDLE_MINUTES'
-      : /max/.test(text)
-      ? 'IDENTITY_SIGN_IN_MAX'
-      : undefined;
-    throw new IdentityConfigError(`local-password cannot start: ${text}`, key);
+    throw doorRefusal('local-password', err);
   }
 }
 

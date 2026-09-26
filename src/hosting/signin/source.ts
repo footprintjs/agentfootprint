@@ -53,9 +53,14 @@ export function signInSource(options: SignInSourceOptions): SignIns {
     }
   };
 
+  // Every end the store reports is announced once — including the ends a
+  // store performs itself (a sweep, a per-account cap).
+  const storeAnnounces = typeof store.onDelete === 'function';
+  if (storeAnnounces) store.onDelete?.(tell);
+
   const end = async (key: string): Promise<void> => {
     await store.delete(key);
-    tell(key);
+    if (!storeAnnounces) tell(key);
   };
 
   return {

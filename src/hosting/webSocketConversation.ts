@@ -458,15 +458,32 @@ function openConversation(socket: Duplex, options: OpenOptions): LiveConversatio
    * that cannot answer closes it with 1011 — an outage, never a sign-out.
    */
   let gate: Promise<void> = Promise.resolve();
+  /** Bytes of frames waiting on the re-check — bounded like frames waiting for a subscriber. */
+  let gatedBytes = 0;
   function deliver(frame: string): void {
     const watch = options.watch;
     if (watch === undefined) {
       deliverNow(frame);
       return;
     }
+    const bytes = Buffer.byteLength(frame, 'utf8');
+    gatedBytes += bytes;
+    if (maxPendingBytes !== undefined && gatedBytes > maxPendingBytes) {
+      finish(
+        {
+          by: 'host',
+          reason:
+            `${gatedBytes} bytes were waiting on the sign-in re-check, past the declared ` +
+            `maxPendingBytes of ${maxPendingBytes}`,
+        },
+        CLOSE_CODE.tooBig,
+      );
+      return;
+    }
     gate = gate.then(async () => {
       if (ending !== undefined) return;
       const state = await signInStillLive(watch.source, watch.key);
+      gatedBytes -= bytes;
       if (ending !== undefined) return;
       if (state === 'live') deliverNow(frame);
       else if (state === 'ended') signInEnded();

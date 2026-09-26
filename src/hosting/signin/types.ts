@@ -17,7 +17,7 @@
  *    never decides whether a sign-in is still good.
  */
 
-import type { IdentityVerificationOptions, VerifiedIdentity } from '../identityVerification.js';
+import type { DoorIdentity, VerifiedIdentity } from '../identityVerification.js';
 
 /**
  * The sign-in cookie's name. `__Host-` makes the browser refuse it unless it is
@@ -66,10 +66,17 @@ export interface SignInStore {
   find(key: string): Promise<SignIn | undefined>;
   touch(key: string, at: number): Promise<void>;
   delete(key: string): Promise<void>;
+  /**
+   * Be told of EVERY row that goes — deleted, swept, or ended by a per-account
+   * cap — so `signInSource` can announce it and a socket carrying it closes.
+   * Optional and feature-detected; a store without it is announced only for
+   * the ends `signInSource` itself performs.
+   */
+  onDelete?(listener: (key: string) => void): () => void;
 }
 
 /**
- * What a door asks about a sign-in key — the port `IdentityVerificationOptions`
+ * What a door asks about a sign-in key — the port `DoorIdentity`
  * and the conversation door consume.
  */
 export interface SignInSource {
@@ -107,7 +114,7 @@ export interface HostSignInOptions {
    * `standingAgent({ identity })` takes. Required: a door that stripped the
    * cookie and checked nothing would hand a socket to anybody who asked.
    */
-  readonly identity: IdentityVerificationOptions;
+  readonly identity: DoorIdentity;
 }
 
 /** What a password strategy proved. */

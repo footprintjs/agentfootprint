@@ -15,7 +15,7 @@ import {
   signInKeyOf,
   signInSource,
   verifyRequestIdentity,
-  type IdentityVerificationOptions,
+  type DoorIdentity,
   type VerifiedIdentity,
 } from '../../../../src/hosting/index.js';
 import {
@@ -191,7 +191,7 @@ export async function localPasswordHarness(): Promise<
     const signedIn = await login(m.url, name, password);
     return (signedIn.cookie as string).split('=')[1] as string;
   };
-  const verifierOver = (identity: IdentityVerificationOptions) => ({
+  const verifierOver = (identity: DoorIdentity) => ({
     verify: async (cookie: string) =>
       (await verifyRequestIdentity(
         identity,

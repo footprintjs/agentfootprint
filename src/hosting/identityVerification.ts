@@ -102,32 +102,15 @@ export interface IdentityVerifier {
 /**
  * How a host door is told to check badges — {@link StandingAgentBaseOptions.identity}.
  *
- * Two credential sources, and a door may have either or both:
- *
- *  - `verify` — a TOKEN the request presents (`Authorization: Bearer …`, or
- *    the header named by {@link tokenHeader});
- *  - `signIn` — a SIGN-IN the server keeps, named by the key the transport
- *    passes after stripping the sign-in cookie (`HostRequest.signInKey`).
- *
- * `verify` may be left out only when `signIn` is present. With neither `signIn`
- * nor `tokenHeader` set, this is the 9.26 option exactly, and every request is
- * judged exactly as it was.
+ * The 9.26 shape, unchanged for its callers (`verify` required), plus two
+ * optional additions: `signIn` (a sign-in the server keeps, named by the key
+ * the transport passes after stripping the sign-in cookie) and `tokenHeader`.
+ * A door that takes sign-ins ONLY is a {@link SignInOnlyIdentity}; every door
+ * accepts either, as a {@link DoorIdentity}.
  */
-export type IdentityVerificationOptions =
-  | (IdentityVerificationBase & {
-      /** The strategy. `jwksIdentity({ … })`, `oidcIdentity({ … })`, or any {@link IdentityVerifier}. */
-      readonly verify: IdentityVerifier['verify'];
-      readonly signIn?: SignInSource;
-    })
-  | (IdentityVerificationBase & {
-      /** Absent: this door accepts sign-ins only, and a presented token is `unverifiable`. */
-      readonly verify?: undefined;
-      /** The sign-ins this door accepts (`signInSource({ store, idleMinutes })`). */
-      readonly signIn: SignInSource;
-    });
-
-/** The fields both shapes of {@link IdentityVerificationOptions} share. */
-export interface IdentityVerificationBase {
+export interface IdentityVerificationOptions {
+  /** The strategy. `jwksIdentity({ … })`, `oidcIdentity({ … })`, or any {@link IdentityVerifier}. */
+  readonly verify: IdentityVerifier['verify'];
   /**
    * Let a request that presents NO credential through as anonymous.
    * Default **`false`** — configuring a verifier closes the door.
@@ -143,6 +126,8 @@ export interface IdentityVerificationBase {
    * `userId`: it is refused rather than served under a name nobody proved.
    */
   readonly allowAnonymous?: boolean;
+  /** The sign-ins this door ALSO accepts (`signInSource({ store, idleMinutes })`). */
+  readonly signIn?: SignInSource;
   /**
    * Which header carries the token, lower-case. Default `'authorization'`,
    * read as `Bearer <token>`. Any other name is read as the raw token (a
@@ -151,6 +136,23 @@ export interface IdentityVerificationBase {
    */
   readonly tokenHeader?: string;
 }
+
+/**
+ * A door that accepts sign-ins only — no bearer tokens. A presented token is
+ * `unverifiable` there.
+ */
+export interface SignInOnlyIdentity {
+  readonly verify?: undefined;
+  /** The sign-ins this door accepts. */
+  readonly signIn: SignInSource;
+  /** As {@link IdentityVerificationOptions.allowAnonymous}. */
+  readonly allowAnonymous?: boolean;
+  /** As {@link IdentityVerificationOptions.tokenHeader}. */
+  readonly tokenHeader?: string;
+}
+
+/** What every door takes: a verifier (optionally with sign-ins), or sign-ins only. */
+export type DoorIdentity = IdentityVerificationOptions | SignInOnlyIdentity;
 
 /**
  * Pull the bearer token out of the delivered transport headers.
@@ -223,7 +225,7 @@ export function presentedToken(
  * {@link VerifierUnavailableError} (503), never a signed-out caller.
  */
 export async function verifyRequestIdentity(
-  options: IdentityVerificationOptions | undefined,
+  options: DoorIdentity | undefined,
   headers: Readonly<Record<string, string>> | undefined,
   claimedUserId: string | undefined,
   signInKey?: string,

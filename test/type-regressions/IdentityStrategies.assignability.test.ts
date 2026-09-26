@@ -28,6 +28,7 @@ import {
 } from '../../src/doors/security';
 import type {
   IdentityFailureClass,
+  DoorIdentity,
   IdentityVerificationOptions,
   IdentityVerifier,
   StandingAgentOptions,
@@ -58,24 +59,35 @@ function describeFailure(failure: IdentityFailureClass): string {
   }
 }
 
+/** 9.26 consumer code — must keep compiling (review idI34 S-6: the interface did not become a union). */
+async function reuse926(o: IdentityVerificationOptions, token: string) {
+  return o.verify(token);
+}
+interface AppIdentity926 extends IdentityVerificationOptions {
+  readonly audit: boolean;
+}
+
 describe('identity strategies — public types', () => {
-  it('an identity may be sign-in only; verify-less WITHOUT signIn does not compile', () => {
+  it('9.26 code that calls o.verify and extends IdentityVerificationOptions still compiles', async () => {
+    const app: AppIdentity926 = { verify: async () => ({ userId: 'u' }), audit: true };
+    expect((await reuse926(app, 't')).userId).toBe('u');
+  });
+
+  it('a door identity may be sign-in only; verify-less WITHOUT signIn does not compile', () => {
     const store = {} as SignInStore;
-    const signInOnly: IdentityVerificationOptions = {
+    const signInOnly: DoorIdentity = {
       signIn: signInSource({ store, idleMinutes: 60 }),
     };
     // @ts-expect-error — neither a verify nor a sign-in source: nothing to check with.
-    const nothing: IdentityVerificationOptions = { allowAnonymous: true };
+    const nothing: DoorIdentity = { allowAnonymous: true };
     expect(signInOnly.verify).toBeUndefined();
     expect(nothing).toBeDefined();
   });
 
   it("the chooser's identity is the door's identity, with no cast", () => {
-    const fromChoice = (choice: IdentityChoice): IdentityVerificationOptions | undefined =>
-      choice.identity;
-    const intoDoor = (
-      identity: IdentityVerificationOptions | undefined,
-    ): StandingAgentOptions['identity'] => identity;
+    const fromChoice = (choice: IdentityChoice): DoorIdentity | undefined => choice.identity;
+    const intoDoor = (identity: DoorIdentity | undefined): StandingAgentOptions['identity'] =>
+      identity;
     expect(typeof fromChoice).toBe('function');
     expect(typeof intoDoor).toBe('function');
     const boot: Promise<IdentityChoice> = identityFromConfig(

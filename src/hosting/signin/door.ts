@@ -44,8 +44,11 @@ import { createHash, randomBytes } from 'node:crypto';
 import type { IncomingMessage, ServerResponse } from 'node:http';
 
 import { doorGuard, isLoopbackBind, type CrossSiteOptions, type DoorGuard } from '../doorGuard.js';
-import type { IdentityVerificationOptions, IdentityVerifier } from '../identityVerification.js';
+import type { DoorIdentity, IdentityVerifier } from '../identityVerification.js';
 import { readSignIn, signInKeyOf } from './cookie.js';
+import { checkGate, type CheckGateOptions } from './checkGate.js';
+import { SignInDoorConfigError } from './errors.js';
+import { clientAddress, trustedProxies } from './clientAddress.js';
 import { attemptLimiter, type AttemptLimits } from './limits.js';
 import { redirectRoutesFor } from './redirectRoutes.js';
 import { randomSealKey, type SealKey } from './seal.js';
@@ -108,6 +111,10 @@ export interface SignInDoorOptions {
   readonly prefix?: string;
   /** The clock, epoch ms. Default `Date.now`. */
   readonly now?: () => number;
+  /** The door-wide cap on concurrent password checks (default 4 running, 32 waiting). */
+  readonly checks?: CheckGateOptions;
+  /** Where a one-time operator warning goes. Default `console.warn`. */
+  readonly warn?: (message: string) => void;
 }
 
 export interface SignInDoor {
@@ -120,12 +127,17 @@ export interface SignInDoor {
   /** What the host takes: `nodeHost({ signIn: door.hostSignIn })`. */
   readonly hostSignIn: HostSignInOptions;
   /** What `standingAgent({ identity })` takes. */
-  readonly identity: IdentityVerificationOptions;
+  readonly identity: DoorIdentity;
   /** Lines for the boot banner. No secrets. */
   readonly banner: readonly string[];
 }
 
+export { SignInDoorConfigError } from './errors.js';
+
 const DEFAULT_HOURS = 8;
+/** The longest a sign-in may last: a week. Browsers cap cookies at 400 days anyway. */
+const MAX_HOURS = 168;
+const UNAVAILABLE = 'Sign-in is unavailable. Try again shortly.';
 const DEFAULT_IDLE_MINUTES = { password: 60, redirect: 30 } as const;
 const DEFAULT_MINIMUM_RESPONSE_MS = 400;
 const MAX_LOGIN_BODY_BYTES = 8 * 1024;
@@ -134,18 +146,40 @@ const MAX_LOGIN_BODY_BYTES = 8 * 1024;
 export const WRONG_CREDENTIAL_SENTENCE = 'That username and password did not sign you in.';
 
 export function signInDoor(options: SignInDoorOptions): SignInDoor {
+  if (typeof options.production !== 'boolean') {
+    throw new SignInDoorConfigError('production', 'production is true or false — the app decides');
+  }
   const cookie = cookieFor(options.publicUrl, options.production);
   const prefix = options.prefix ?? '/auth';
   const now = options.now ?? Date.now;
-  const hours = positive(options.hours ?? DEFAULT_HOURS, 'hours');
+  const hours = bounded(options.hours ?? DEFAULT_HOURS, 'hours', MAX_HOURS);
   const mode = modeOf(options);
-  const idleMinutes = positive(options.idleMinutes ?? DEFAULT_IDLE_MINUTES[mode], 'idleMinutes');
+  const idleMinutes = bounded(
+    options.idleMinutes ?? DEFAULT_IDLE_MINUTES[mode],
+    'idleMinutes',
+    MAX_HOURS * 60,
+  );
   const minimumMs = options.minimumResponseMs ?? DEFAULT_MINIMUM_RESPONSE_MS;
-  const guard = guardFor(options.guard, cookie.url);
+  if (!Number.isFinite(minimumMs) || minimumMs < 0 || minimumMs > 10_000) {
+    throw new SignInDoorConfigError('minimumResponseMs', 'minimumResponseMs is 0 to 10 000 ms');
+  }
+  const guard = guardFor(options.guard, cookie);
   const limiter = attemptLimiter(options.limits);
+  const gate = checkGate(options.checks);
   const signIns = signInSource({ store: options.store, idleMinutes, now });
-  const trusted = new Set(options.trustedProxies ?? []);
-  const identity: IdentityVerificationOptions =
+  const trusted = trustedProxies(options.trustedProxies);
+  const warn = options.warn ?? ((message: string) => console.warn(message));
+  let warnedForwarded = false;
+  const noteForwarded = (): void => {
+    if (warnedForwarded) return;
+    warnedForwarded = true;
+    warn(
+      `[hosting] signInDoor: sign-in requests carry X-Forwarded-For but trustedProxies is not ` +
+        `set, so every person behind that proxy counts as ONE client address — one shared ` +
+        `(delay-only) address budget. Set trustedProxies to the proxy's address or range.`,
+    );
+  };
+  const identity: DoorIdentity =
     options.verify === undefined
       ? { signIn: signIns }
       : { verify: options.verify, signIn: signIns };
@@ -194,14 +228,19 @@ export function signInDoor(options: SignInDoorOptions): SignInDoor {
 
   const login = async (req: IncomingMessage, res: ServerResponse): Promise<void> => {
     const started = now();
+    // EVERY answer — refused, wrong, right, or a store that failed — waits for
+    // the minimum time, so no outcome can be told apart by how fast it came.
     const answer = async (status: number, body: unknown, extra: Headers = {}): Promise<void> => {
       await sleep(started + minimumMs - now());
       reply(res, status, body, extra);
     };
+    const unavailable = (extra: Headers = {}) =>
+      answer(503, { error: UNAVAILABLE }, { 'retry-after': '5', ...extra });
     const read = await readLoginBody(req);
     if (read.kind === 'refused') return answer(read.status, { error: read.sentence });
-    const address = clientAddress(req, trusted);
-    const verdict = limiter.before(read.username, address, now());
+    const address = clientAddress(req, trusted, noteForwarded);
+    // Counted as it STARTS, before the slow check (review idI34 B-1).
+    const verdict = limiter.begin(read.username, address, now());
     if (verdict.kind === 'refuse') {
       return answer(
         429,
@@ -209,23 +248,37 @@ export function signInDoor(options: SignInDoorOptions): SignInDoor {
         { 'retry-after': String(verdict.retryAfterSeconds) },
       );
     }
+    if (verdict.kind === 'busy') return unavailable();
+    const { ticket } = verdict;
     await sleep(verdict.delayMs);
     const expire: Headers = {};
-    if (await endPresent(req)) expire['set-cookie'] = cookie.expired();
-    const passwords = options.passwords as PasswordChecker;
-    let accepted;
+    let accepted: SignInAccepted | undefined;
     try {
-      accepted = await passwords.check(read.username, read.password);
+      if (await endPresent(req)) expire['set-cookie'] = cookie.expired();
+      const passwords = options.passwords as PasswordChecker;
+      const ran = await gate.run(() => passwords.check(read.username, read.password));
+      if (ran === undefined) {
+        limiter.abandoned(ticket);
+        return await unavailable(expire);
+      }
+      accepted = ran.value;
     } catch {
-      return answer(503, { error: 'Sign-in is unavailable. Try again shortly.' }, expire);
+      limiter.abandoned(ticket);
+      return unavailable(expire);
     }
     if (accepted === undefined) {
-      limiter.failed(read.username, address, now());
+      limiter.failed(ticket, now());
       return answer(401, { error: WRONG_CREDENTIAL_SENTENCE }, expire);
     }
-    limiter.succeeded(read.username);
-    const started2 = await startSignIn(accepted, passwords.strategy);
-    return answer(200, started2.body, { 'set-cookie': started2.setCookie });
+    limiter.succeeded(ticket);
+    try {
+      const signedIn = await startSignIn(accepted, (options.passwords as PasswordChecker).strategy);
+      return await answer(200, signedIn.body, { 'set-cookie': signedIn.setCookie });
+    } catch {
+      // A store that is full or down: the same 503, after the same minimum
+      // time — never an oracle for "that password was right".
+      return unavailable(expire);
+    }
   };
 
   const redirectRoutes =
@@ -265,7 +318,8 @@ export function signInDoor(options: SignInDoorOptions): SignInDoor {
     if (refusal !== undefined)
       return reply(res, refusal.status, { error: refusal.message, code: refusal.code });
     const method = (req.method ?? 'GET').toUpperCase();
-    const want = ROUTES[mode][path];
+    const routes = ROUTES[mode];
+    const want = Object.prototype.hasOwnProperty.call(routes, path) ? routes[path] : undefined;
     if (want === undefined) return reply(res, 404, { error: 'No such sign-in route.' });
     if (method !== want) {
       return reply(res, 405, { error: `Use ${want}.` }, { allow: want });
@@ -379,20 +433,22 @@ function cookieFor(publicUrl: string, production: boolean): CookieShape {
   try {
     url = new URL(publicUrl);
   } catch {
-    throw new TypeError(`[hosting] signInDoor: publicUrl '${publicUrl}' is not an absolute URL.`);
+    throw new SignInDoorConfigError('publicUrl', `publicUrl '${publicUrl}' is not an absolute URL`);
   }
   const secure = url.protocol === 'https:';
   if (!secure) {
     if (url.protocol !== 'http:' || !isLoopbackBind(url.hostname)) {
-      throw new TypeError(
-        `[hosting] signInDoor: publicUrl '${publicUrl}' must be https (plain http is accepted ` +
-          `only on this machine's loopback names, for development).`,
+      throw new SignInDoorConfigError(
+        'publicUrl',
+        `publicUrl '${publicUrl}' must be https (plain http is accepted only on this machine's ` +
+          `loopback names, for development)`,
       );
     }
     if (production) {
-      throw new TypeError(
-        `[hosting] signInDoor: publicUrl '${publicUrl}' is plain http, and this is production. ` +
-          `Without https the browser drops the Secure, __Host- sign-in cookie's protections.`,
+      throw new SignInDoorConfigError(
+        'publicUrl',
+        `publicUrl '${publicUrl}' is plain http, and this is production. Without https the ` +
+          `browser drops the Secure, __Host- sign-in cookie's protections`,
       );
     }
   }
@@ -422,19 +478,42 @@ function cookieFor(publicUrl: string, production: boolean): CookieShape {
  * `'any'` for either list (a browser door), and a public URL its own lists
  * would refuse.
  */
-function guardFor(lists: CrossSiteOptions | undefined, url: URL): DoorGuard {
+function guardFor(lists: CrossSiteOptions | undefined, cookie: CookieShape): DoorGuard {
+  const url = cookie.url;
   if (lists?.allowedHosts === 'any' || lists?.allowedOrigins === 'any') {
-    throw new TypeError(
-      `[hosting] signInDoor: allowedHosts/allowedOrigins 'any' says no browser reaches this ` +
-        `door, and a sign-in door is for browsers. List the names people use.`,
+    throw new SignInDoorConfigError(
+      'guard',
+      `allowedHosts/allowedOrigins 'any' says no browser reaches this door, and a sign-in door ` +
+        `is for browsers. List the names people use`,
+    );
+  }
+  if (lists?.requireJsonContentType === false) {
+    throw new SignInDoorConfigError(
+      'guard',
+      `requireJsonContentType false would let a form post a sign-in (login forgery)`,
     );
   }
   if (lists?.allowedHosts === undefined && !isLoopbackBind(url.hostname)) {
-    throw new TypeError(
-      `[hosting] signInDoor needs the door hardening's allowedHosts (the same list the host ` +
-        `uses): a sign-in cookie rides along on every forged request, so the door must refuse ` +
-        `other Host names and origins before identity is consulted.`,
+    throw new SignInDoorConfigError(
+      'guard',
+      `the door hardening's allowedHosts is required (the same list the host uses): a sign-in ` +
+        `cookie rides along on every forged request, so the door must refuse other Host names ` +
+        `and origins before identity is consulted`,
     );
+  }
+  // A plain-http (development) cookie is not Secure: it must never be offered
+  // to a name other machines reach.
+  if (!cookie.secure && Array.isArray(lists?.allowedHosts)) {
+    const lan = lists.allowedHosts.filter((h) => !isLoopbackBind(h.replace(/:\d+$/, '')));
+    if (lan.length > 0) {
+      throw new SignInDoorConfigError(
+        'guard',
+        `a plain-http public URL serves a cookie without Secure, so allowedHosts may name only ` +
+          `this machine (not ${lan.join(
+            ', ',
+          )}). https is required for any name other machines reach`,
+      );
+    }
   }
   const guard = doorGuard({
     name: 'sign-in',
@@ -447,9 +526,10 @@ function guardFor(lists: CrossSiteOptions | undefined, url: URL): DoorGuard {
     headers: { host: url.host, origin: url.origin, 'content-type': 'application/json' },
   });
   if (probe !== undefined) {
-    throw new TypeError(
-      `[hosting] signInDoor: the public URL ${url.origin} is refused by the door's own lists ` +
-        `(${probe.code}). Add its host to allowedHosts (and its origin to allowedOrigins, when set).`,
+    throw new SignInDoorConfigError(
+      'guard',
+      `the public URL ${url.origin} is refused by the door's own lists (${probe.code}). Add its ` +
+        `host to allowedHosts (and its origin to allowedOrigins, when set)`,
     );
   }
   return guard;
@@ -488,7 +568,8 @@ async function readLoginBody(req: IncomingMessage): Promise<LoginRead> {
   if (typeof username !== 'string' || typeof password !== 'string') {
     return { kind: 'refused', status: 400, sentence: BAD_BODY };
   }
-  const name = username.trim();
+  // One spelling per name: `José` typed as NFC and as NFD is one person.
+  const name = username.trim().normalize('NFC');
   // An empty password is refused before any check (RFC 4513 §6.3.1's advice,
   // kept for every password strategy): it is a malformed request, not a guess.
   if (name.length === 0 || password.length === 0) {
@@ -504,29 +585,9 @@ async function readLoginBody(req: IncomingMessage): Promise<LoginRead> {
   return { kind: 'ok', username: name, password };
 }
 
-/** The socket's address, or the rightmost untrusted `X-Forwarded-For` hop behind a trusted proxy. */
-function clientAddress(req: IncomingMessage, trusted: ReadonlySet<string>): string {
-  const peer = normaliseAddress(req.socket?.remoteAddress ?? 'unknown');
-  if (!trusted.has(peer)) return peer;
-  const header = req.headers['x-forwarded-for'];
-  const hops = (Array.isArray(header) ? header.join(',') : header ?? '')
-    .split(',')
-    .map((h) => normaliseAddress(h.trim()))
-    .filter((h) => h.length > 0);
-  for (let i = hops.length - 1; i >= 0; i -= 1) {
-    const hop = hops[i] as string;
-    if (!trusted.has(hop)) return hop;
-  }
-  return peer;
-}
-
-function normaliseAddress(address: string): string {
-  return address.startsWith('::ffff:') ? address.slice(7) : address;
-}
-
-function positive(value: number, name: string): number {
-  if (!Number.isFinite(value) || value <= 0) {
-    throw new TypeError(`[hosting] signInDoor: ${name} must be a positive number.`);
+function bounded(value: number, name: string, max: number): number {
+  if (!Number.isFinite(value) || value <= 0 || value > max) {
+    throw new SignInDoorConfigError(name, `${name} must be more than 0 and at most ${max}`);
   }
   return value;
 }

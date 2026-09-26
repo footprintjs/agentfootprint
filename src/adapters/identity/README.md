@@ -115,7 +115,12 @@ the strategy is refused in production (a list in the environment is not a
 production identity store). The KDF is **scrypt from `node:crypto`**: no new
 dependency (argon2 needs a native module, bcrypt a package), and memory-hard,
 which PBKDF2 is not. The default cost is OWASP's (N = 2^17, r = 8, p = 1); the
-cost travels in the hash, and anything below N = 2^14 is refused. An unknown
+cost travels in the hash; below N = 2^14, above 256 MiB per check (128·N·r) or
+p > 4 is refused. Every entry must share ONE cost — an unknown name is timed
+against a decoy, and mixed costs would tell which names exist — so a re-hash is
+done for the whole list at once (a development list the operator regenerates,
+not a live store migrating person by person). Names are Unicode-NFC-normalised.
+The hash holds `$`: single-quote the value in a shell or a compose file. An unknown
 name is checked against a real hash, so it costs what a known one does. The id
 is the configured name, matched exactly: the one exception to "never a name a
 person types", so renaming someone orphans their conversations.

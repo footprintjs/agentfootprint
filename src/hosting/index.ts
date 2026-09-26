@@ -241,8 +241,9 @@ export type {
 // extraction every dialect's credential arrives through.
 export { bearerToken, verifyRequestIdentity } from './identityVerification.js';
 export type {
-  IdentityVerificationBase,
+  DoorIdentity,
   IdentityVerificationOptions,
+  SignInOnlyIdentity,
   IdentityVerifier,
   VerifiedIdentity,
 } from './identityVerification.js';
@@ -271,10 +272,17 @@ export {
 } from './signin/door.js';
 export {
   DEFAULT_SIGN_IN_MAX,
+  DEFAULT_SIGN_INS_PER_ACCOUNT,
   memorySignIns,
   type MemorySignIns,
   type MemorySignInsOptions,
 } from './signin/memorySignIns.js';
+export {
+  MemorySignInsConfigError,
+  SignInDoorConfigError,
+  SignInStoreFullError,
+} from './signin/errors.js';
+export type { CheckGateOptions } from './signin/checkGate.js';
 export type { AttemptLimits } from './signin/limits.js';
 export { safeReturnTo } from './signin/returnTo.js';
 export { randomSealKey, sealKeyFrom, type SealKey } from './signin/seal.js';
