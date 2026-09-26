@@ -465,6 +465,13 @@ entries, a `CoverageInput` — a bare string or a `CoverageItem`
 blind spot is a claim about capability and a reader cannot act on, escalate or
 disprove one with no reason.
 
+`absent()` and `coverage()` refuse a key they do not read, rather than drop it
+— a declaration parsed from JSON with `not_checked` in it would otherwise lose
+that list without a word. The refusal names the spelling meant: for
+`not_checked` it asks whether you meant `notChecked`. A refusal thrown inside
+`execute` becomes the call's error result, which is what the model reads, so
+it starts `refused:` and never with the helper's name.
+
 **When the suggestion is another tool, name it as data (9.113.0).**
 `tryInstead` is one sentence, for the model. When that sentence points at
 another tool, name the tool beside it with `tryInsteadTool` — a

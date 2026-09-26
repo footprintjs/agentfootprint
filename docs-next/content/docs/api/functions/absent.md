@@ -6,7 +6,7 @@ title: absent
 
 > **absent**(`decl`): [`ToolAbsence`](/docs/api/interfaces/ToolAbsence)
 
-Defined in: [src/core/agent/coverage/absent.ts:245](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/coverage/absent.ts#L245)
+Defined in: [src/core/agent/coverage/absent.ts:269](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/coverage/absent.ts#L269)
 
 Say "I looked, and there is nothing" in a way a model cannot read as a
 failure — and cannot productively retry.
@@ -15,6 +15,13 @@ Returns the value a tool's `execute` should return. The framework
 recognizes it at the dispatch boundary and gives it a delivered status of
 `'absent'` (routable by `onToolStatus`), a `tools.absent` event, and an
 evidence-corpus rule of its own.
+
+Refuses (throws, where it is called) a declaration it cannot honor — and
+any key the declaration does not have, naming the spelling meant when the
+key is a casing slip (`not_checked` → `notChecked`), so a list declared
+from plain JavaScript or JSON cannot vanish without a word. Every refusal
+starts `refused: `: inside `execute` it becomes the call's error result,
+which the model reads.
 
 ## Parameters
 

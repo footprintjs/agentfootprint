@@ -47,7 +47,7 @@ The envelope's fields:
 | `clarify` | the ask-vs-answer decision as data: `{ question, candidates }`, or `null` for "ambiguity considered, none found" |
 | `render` | hints for a UI — the tool never renders; the model never sees these |
 
-`semantic()` refuses at the call site — the `absent()` law — anything the vocabulary cannot honor: series without `grain`, data without `provenance.measured_at` + `source`, a counter-looking aggregation (`sum`, `count`, `total`, `cumulative`, `counter`, `delta`) with `is_counter` unstated. A minted envelope is honest by construction.
+`semantic()` refuses at the call site — the `absent()` law — anything the vocabulary cannot honor: series without `grain`, data without `provenance.measured_at` + `source`, a counter-looking aggregation (`sum`, `count`, `total`, `cumulative`, `counter`, `delta`) with `is_counter` unstated. A minted envelope is honest by construction. A key the declaration — or its `grain`, `provenance`, `coverage`, `clarify` or `render` — does not have is refused too, never dropped, naming the spelling meant when it is a casing slip (`coverage.not_checked` → `notChecked`, `provenance.measuredAt` → `measured_at`). Inside `execute` a refusal becomes the call's error result, which is what the model reads, so it starts `refused:` rather than with the helper's name: `refused: this result carries series/facts with no provenance — …`.
 
 ## Two views of one envelope
 

@@ -50,7 +50,6 @@ const item = (extra: Record<string, unknown>) => ({
 describe('UNIT — the mint door refuses where the author typed it', () => {
   it('keeps a valid short (trimmed) and kind, in every section they are allowed', () => {
     const out = normalizeCoverageList(
-      'absent',
       'notChecked',
       [item({ short: '  whether that name is a storage array ', kind: 'existence' })],
       false,
@@ -63,23 +62,18 @@ describe('UNIT — the mint door refuses where the author typed it', () => {
         kind: 'existence',
       },
     ]);
-    expect(
-      normalizeCoverageList('coverage', 'checked', [{ what: WHAT, short: 'a name' }], false),
-    ).toEqual([{ what: WHAT, short: 'a name' }]);
-    expect(
-      normalizeCoverageList('absent', 'cannotCover', [item({ kind: 'scope' })], true)[0]!.kind,
-    ).toBe('scope');
+    expect(normalizeCoverageList('checked', [{ what: WHAT, short: 'a name' }], false)).toEqual([
+      { what: WHAT, short: 'a name' },
+    ]);
+    expect(normalizeCoverageList('cannotCover', [item({ kind: 'scope' })], true)[0]!.kind).toBe(
+      'scope',
+    );
   });
 
   it('declaring neither is byte-identical: no key appears', () => {
-    const out = normalizeCoverageList('absent', 'notChecked', [item({})], false);
+    const out = normalizeCoverageList('notChecked', [item({})], false);
     expect(Object.keys(out[0]!)).toEqual(['what', 'why']);
-    const nulls = normalizeCoverageList(
-      'absent',
-      'notChecked',
-      [item({ short: null, kind: null })],
-      false,
-    );
+    const nulls = normalizeCoverageList('notChecked', [item({ short: null, kind: null })], false);
     expect(Object.keys(nulls[0]!)).toEqual(['what', 'why']);
   });
 
@@ -95,9 +89,7 @@ describe('UNIT — the mint door refuses where the author typed it', () => {
     ['an unknown kind', { kind: 'window' }, /must be one of 'existence', 'scope'/],
   ])('refuses %s', (_label, extra, message) => {
     const what = 'y'.repeat(200);
-    expect(() =>
-      normalizeCoverageList('absent', 'notChecked', [{ what, ...extra }], false),
-    ).toThrow(message);
+    expect(() => normalizeCoverageList('notChecked', [{ what, ...extra }], false)).toThrow(message);
   });
 
   it.each([
@@ -121,7 +113,6 @@ describe('UNIT — the mint door refuses where the author typed it', () => {
   it('refuses a short longer than its what', () => {
     expect(() =>
       normalizeCoverageList(
-        'absent',
         'notChecked',
         [{ what: 'the archive', short: 'the whole archive' }],
         false,

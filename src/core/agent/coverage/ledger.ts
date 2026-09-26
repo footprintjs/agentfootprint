@@ -32,7 +32,8 @@
  * recognizer, same guarantee.
  */
 
-import { normalizeCoverageList } from './items.js';
+import { COVERAGE_DECLARATION_KEYS, normalizeCoverageList } from './items.js';
+import { refusal, refuseUnknownKeys } from './refusal.js';
 import type { Coverage, CoverageDeclaration, CoveredResult } from './types.js';
 
 /** The reserved key that makes a ledger recognizable. */
@@ -65,6 +66,13 @@ export const COVERAGE_NOTE =
  * `.limitsTravelWithTheAnswer()` configured, appends it to the run's final
  * answer where the model cannot drop it.
  *
+ * Refuses (throws, where it is called) a boundary that declares nothing, a
+ * malformed item, and any key the boundary does not have — naming the
+ * spelling meant when the key is a casing slip (`not_checked` →
+ * `notChecked`), so a list declared from plain JavaScript or JSON cannot
+ * vanish without a word. Every refusal starts `refused: `: inside `execute`
+ * it becomes the call's error result, which the model reads.
+ *
  * @example the highest-stakes tool in a triage agent
  *   defineTool({
  *     name: 'replication_health',
@@ -87,17 +95,18 @@ export const COVERAGE_NOTE =
 export function coverage<T>(content: T, decl: CoverageDeclaration): CoveredResult<T> {
   const fn = 'coverage';
   if (typeof decl !== 'object' || decl === null) {
-    throw new Error(
-      `${fn}: takes the result and its boundary — coverage(result, { checked?, notChecked?, ` +
+    throw refusal(
+      `${fn}() takes the result and its boundary — coverage(result, { checked?, notChecked?, ` +
         `cannotCover? }). To return a result with no declared boundary, return it bare.`,
     );
   }
-  const checked = normalizeCoverageList(fn, 'checked', decl.checked, false);
-  const notChecked = normalizeCoverageList(fn, 'notChecked', decl.notChecked, false);
-  const cannotCover = normalizeCoverageList(fn, 'cannotCover', decl.cannotCover, true);
+  refuseUnknownKeys(decl, COVERAGE_DECLARATION_KEYS);
+  const checked = normalizeCoverageList('checked', decl.checked, false);
+  const notChecked = normalizeCoverageList('notChecked', decl.notChecked, false);
+  const cannotCover = normalizeCoverageList('cannotCover', decl.cannotCover, true);
   if (checked.length === 0 && notChecked.length === 0 && cannotCover.length === 0) {
-    throw new Error(
-      `${fn}: all three lists are empty, so this ledger declares no boundary at all — it ` +
+    throw refusal(
+      `all three lists are empty, so this ledger declares no boundary at all — it ` +
         `would tell a reader nothing while looking like it did, which is worse than saying ` +
         `nothing. Name what you checked, what you skipped, or what you can never see; or ` +
         `return the result bare.`,

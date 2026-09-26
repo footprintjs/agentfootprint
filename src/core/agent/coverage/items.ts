@@ -15,7 +15,8 @@ import { isDevMode } from 'footprintjs';
 
 import { plainLineProblem } from '../../../lib/plainLine.js';
 
-import type { CoverageInput, CoverageItem } from './types.js';
+import { refusal } from './refusal.js';
+import type { CoverageDeclaration, CoverageInput, CoverageItem } from './types.js';
 
 /** Section names, as the author spells them — used verbatim in refusals. */
 export type CoverageSection = 'checked' | 'notChecked' | 'cannotCover';
@@ -176,8 +177,23 @@ export function listWithoutRecordOnly(list: unknown): unknown {
 }
 
 /**
+ * The keys a {@link CoverageDeclaration} has — the three lists, as the author
+ * spells them — tied to the type in BOTH directions: a key the interface
+ * gains, or one listed here that it does not have, fails to compile.
+ * `coverage()` and a `semantic()` declaration's `coverage` refuse any other
+ * key (`refusal.ts` · `refuseUnknownKeys`), so `not_checked` is refused,
+ * naming `notChecked`, instead of vanishing.
+ */
+export const COVERAGE_DECLARATION_KEYS: readonly string[] = Object.keys({
+  checked: true,
+  notChecked: true,
+  cannotCover: true,
+} satisfies Record<keyof CoverageDeclaration, true>);
+
+/**
  * Normalize one author list into {@link CoverageItem}s, refusing anything a
- * reader could not act on.
+ * reader could not act on. Every refusal starts with `refusal.ts` ·
+ * `REFUSED_PREFIX` and names the list and index, never the helper.
  *
  * `requireWhy` is true only for `cannotCover`. The asymmetry is deliberate:
  * "we checked the fcns database" and "we did not check the archive" are
@@ -188,15 +204,14 @@ export function listWithoutRecordOnly(list: unknown): unknown {
  * useful half.
  */
 export function normalizeCoverageList(
-  fn: string,
   section: CoverageSection,
   list: readonly CoverageInput[] | undefined,
   requireWhy: boolean,
 ): readonly CoverageItem[] {
   if (list === undefined) return [];
   if (!Array.isArray(list)) {
-    throw new Error(
-      `${fn}: \`${section}\` must be an array of strings or { what, why } entries — to say ` +
+    throw refusal(
+      `\`${section}\` must be an array of strings or { what, why } entries — to say ` +
         `nothing about it, omit the field (absent means "not declared", never "nothing there").`,
     );
   }
@@ -205,8 +220,8 @@ export function normalizeCoverageList(
     const at = `${section}[${i}]`;
     if (isPlainString(raw)) {
       if (requireWhy) {
-        throw new Error(
-          `${fn}: ${at} is '${raw.trim()}' with no reason. Every \`cannotCover\` entry needs a ` +
+        throw refusal(
+          `${at} is '${raw.trim()}' with no reason. Every \`cannotCover\` entry needs a ` +
             `\`why\` — a blind spot this tool can NEVER see is a claim about what it is, and a ` +
             `reader cannot act on, escalate or disprove a claim with no reason. Write ` +
             `{ what: '${raw.trim()}', why: '…' }, or move it to \`notChecked\` if a wider ` +
@@ -217,8 +232,8 @@ export function normalizeCoverageList(
       return;
     }
     if (typeof raw !== 'object' || raw === null || !isPlainString((raw as CoverageItem).what)) {
-      throw new Error(
-        `${fn}: ${at} names no ground. Each entry is either a non-empty string or ` +
+      throw refusal(
+        `${at} names no ground. Each entry is either a non-empty string or ` +
           `{ what, why } — what a reader has to know is WHICH source, window or population ` +
           `this is about.`,
       );
@@ -226,14 +241,14 @@ export function normalizeCoverageList(
     const item = raw as CoverageItem;
     const why = item.why;
     if (why !== undefined && !isPlainString(why)) {
-      throw new Error(
-        `${fn}: ${at} ('${item.what.trim()}') has a \`why\` that says nothing. Give it a ` +
+      throw refusal(
+        `${at} ('${item.what.trim()}') has a \`why\` that says nothing. Give it a ` +
           `reason or omit the field.`,
       );
     }
     if (requireWhy && why === undefined) {
-      throw new Error(
-        `${fn}: ${at} ('${item.what.trim()}') has no \`why\`. Every \`cannotCover\` entry ` +
+      throw refusal(
+        `${at} ('${item.what.trim()}') has no \`why\`. Every \`cannotCover\` entry ` +
           `needs one — see the entry above this line in the docs for why a permanent blind ` +
           `spot must say what makes it permanent.`,
       );
@@ -244,9 +259,9 @@ export function normalizeCoverageList(
     const short = item.short == null ? undefined : item.short;
     const kind = item.kind == null ? undefined : item.kind;
     const shortFault = short === undefined ? undefined : shortProblem(short, what);
-    if (shortFault !== undefined) throw new Error(`${fn}: ${at} ('${what}') — ${shortFault}`);
+    if (shortFault !== undefined) throw refusal(`${at} ('${what}') — ${shortFault}`);
     const kindFault = kind === undefined ? undefined : kindProblem(kind, section);
-    if (kindFault !== undefined) throw new Error(`${fn}: ${at} ('${what}') — ${kindFault}`);
+    if (kindFault !== undefined) throw refusal(`${at} ('${what}') — ${kindFault}`);
     items.push({
       what,
       ...(why !== undefined && { why: why.trim() }),

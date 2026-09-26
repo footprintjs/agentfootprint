@@ -39,6 +39,31 @@ forgot them.
   content is refused as oversized. The `coverage` field is additionally
   declared through the same channel `coverage()` uses.
 
+## A refusal reads as a refusal; an unknown key is never dropped
+
+`semantic()` shares the coverage helpers' law
+(`src/core/agent/coverage/README.md` § 5, the owner `refusal.ts`): every key
+the declaration — or its `grain`, `provenance`, `coverage`, `clarify` or
+`render` — carries is one the mint reads, or a refusal naming the spelling
+meant; and every refusal starts `refused: `, never `semantic:`. Thrown inside
+`execute`, that text is the call's error result the model reads:
+
+```ts
+semantic({ facts: rows }); // no provenance
+// refused: this result carries series/facts with no `provenance` —
+// `provenance.measured_at` and `provenance.source` are required whenever the
+// envelope carries data: a number with no age and no source cannot be trusted
+// or audited. (field: provenance)
+
+semantic(JSON.parse('{"facts":[{"entity":"vm-01"}],"coverage":{"not_checked":["vCenter"]}}'));
+// refused: 'coverage.not_checked' is not a field this vocabulary has — did you
+// mean `notChecked`? The fields of `coverage` are: checked, notChecked, cannotCover.
+```
+
+The four `semanticIssues` messages that had no subject now start "this
+result …", so the same text reads whole after the prefix, in `explainSemantics`
+and in the gate's findings.
+
 ## The marker and the note cross a language boundary (9.70.0)
 
 `SEMANTICS_MARKER` and `SEMANTICS_NOTE` are bytes a foreign process must

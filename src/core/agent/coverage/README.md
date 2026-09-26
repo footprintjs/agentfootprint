@@ -1,6 +1,7 @@
 **Mixed** — two declarations a tool authors, one reader the walk calls, one
 sentence the model keeps.
-Map: `types.ts`, `items.ts`, `absent.ts`, `ledger.ts` (what a tool declares).
+Map: `types.ts`, `items.ts`, `refusal.ts`, `absent.ts`, `ledger.ts` (what a tool
+declares).
 Walker: `read.ts` — the ONE reader both dispatch boundaries and the raise site
 (`../stages/toolCalls.ts` · `declareRaisedAbsence`) call.
 Fold: `evidence.ts` (`absenceEvidenceProjection` — what an absence may ground).
@@ -419,6 +420,69 @@ defineTool({
 
 Pinned by `test/core/agent/coverage-paused-lookup.test.ts`.
 
+## 5. A declaration is refused, never trimmed — and the refusal reads as one
+
+Why, twice over. **A silent loss:** the helpers read a declaration by name,
+and a declaration built in plain JavaScript, parsed from JSON or held in a
+widened variable escapes the type checker. `coverage(verdict, { checked,
+not_checked })` minted a ledger with `checked` only — the unchecked ground
+vanished, and the answer read as if the tool had no gap. **A refusal that
+read like a finding:** the helpers run inside `execute`, the dispatch loop
+turns a throw into the call's error result, and that text is what the model
+reads in place of the data. It used to start with the helper's name —
+`absent: …` at the head of a tool result reads like an answer — and no
+provider adapter this library ships marks a tool result as an error on the
+wire. The law:
+
+> **Every key a declaration carries is one the helper reads, or a refusal**
+> that names the spelling meant when the key is a casing slip. **Every
+> refusal starts `refused: `**, whichever helper refused.
+
+```ts
+// Parsed from JSON, so the type checker never saw it:
+const boundary = JSON.parse('{"checked":["SRDF pairs"],"not_checked":["NDM sessions"]}');
+coverage(verdict, boundary);
+// throws: refused: 'not_checked' is not a field this vocabulary has — did you mean
+//         `notChecked`? The fields are: checked, notChecked, cannotCover.
+```
+
+Thrown inside a tool, the same words are what the model reads — here a
+`semantic()` result with no source:
+
+```ts
+execute: () => semantic({ facts: rows, provenance: { measured_at: exportTime } }),
+// the call's error result, as the model reads it:
+// refused: `provenance.source` must name the system of record the values were
+// read from. (field: provenance.source)
+```
+
+- **Which keys.** `absent()`: `what`, `checked`, `notChecked`, `cannotCover`,
+  `tryInstead`, `tryInsteadTool`. `coverage()`: `checked`, `notChecked`,
+  `cannotCover`. `semantic()`: its eight fields, and the keys of each object
+  it carries — `grain`, `provenance`, `coverage`, `clarify`, `render`. The
+  three declaration key lists are tied to their types in both directions
+  (`satisfies Record<keyof …, true>`), so a field a type gains cannot be
+  refused by mistake.
+- **A suggestion only for a slip, never a guess.** `refusal.ts` ·
+  `spellingMeant` folds case and `_`/`-` away and names the known key with the
+  same letters — `not_checked` and `NotChecked` → `notChecked`, `measuredAt`
+  → `measured_at`. A different word gets the list of fields and nothing else.
+- **Not held to it, on purpose.** An ITEM's own keys (`{ what, why, short,
+  kind }`): an unknown one is still dropped — § 3's "Not the coverage lists'
+  rules", unchanged, because refusing it would change what existing item
+  lists built from rows mint. The data rows (`series`, `facts`, `edges`):
+  they carry the tool's own columns and pass through. And an envelope minted
+  elsewhere (a Python sidecar, a hand-built value) — it is READ by the
+  recognizers, which judge the snake_case wire, not by these rules.
+- **One prefix, never the helper's name.** `refusal.ts` · `REFUSED_PREFIX`
+  (`'refused: '`) is the one place it is spelled; `refusal()` is the one way
+  a helper throws. The body names the field and the fix; only the "takes a
+  declaration" line names the helper, as usage.
+- **A correct declaration mints what it always did** — pinned byte for byte by
+  `test/core/agent/coverage-declaration-refusals.test.ts` against goldens
+  taken from the tree before this change, which also pins the model-visible
+  tool message and that the run continues.
+
 ## What the framework does with them
 
 Recognition is STRICT (the effects-envelope law): only a plain object carrying
@@ -502,6 +566,7 @@ stated the limits, and it does not refuse an answer that did not.
 |---|---|
 | `types.ts` | the shared vocabulary — `CoverageItem`, the three lists, the two rendered shapes, the typed suggestion (`TryInsteadTool`) |
 | `items.ts` | normalize and REFUSE a declaration, at the call site |
+| `refusal.ts` | how every helper refuses (§ 5): the one prefix, `refused: `, and the one unknown-key check, naming the spelling meant |
 | `absent.ts` | `absent()`, the recognizer, the static note, and the ONE rule set for a suggestion (`tryInsteadOfAbsence` and `tryInsteadToolOfAbsence` read by it) |
 | `ledger.ts` | `coverage()`, the recognizer, the static note |
 | `read.ts` | the ONE reader both dispatch boundaries and the raise site (`../stages/toolCalls.ts` · `declareRaisedAbsence`) call — lifts the suggestion beside the coverage |

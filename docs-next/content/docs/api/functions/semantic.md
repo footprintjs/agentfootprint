@@ -6,7 +6,7 @@ title: semantic
 
 > **semantic**(`decl`): [`ToolSemantics`](/docs/api/interfaces/ToolSemantics)
 
-Defined in: [src/lib/semantics/envelope.ts:661](https://github.com/footprintjs/agentfootprint/blob/main/src/lib/semantics/envelope.ts#L661)
+Defined in: [src/lib/semantics/envelope.ts:710](https://github.com/footprintjs/agentfootprint/blob/main/src/lib/semantics/envelope.ts#L710)
 
 Say "here is typed data, with the caveats that make it honest" in a shape
 the framework recognizes, the record keeps whole, and a build gate can
@@ -21,7 +21,17 @@ flows through the same channel `coverage()` uses.
 Refuses (throws, at the call site — the `absent()` law) any declaration
 this vocabulary cannot honor: series without grain, data without
 provenance, a counter-looking aggregation with `is_counter` unstated, and
-every malformed shape — each refusal names the field and the fix.
+every malformed shape — each refusal names the field and the fix. A key
+the declaration, or one of its objects (`grain`, `provenance`,
+`coverage`, `clarify`, `render`), does not have is refused too, naming the
+spelling meant when it is a casing slip (`not_checked` → `notChecked`),
+so nothing declared from plain JavaScript or JSON vanishes without a word.
+
+Every refusal starts `refused: ` and never with this function's name:
+inside a tool's `execute` it becomes the call's error result, and the
+model reads it. "refused: this result carries series/facts with no
+provenance — …" reads as a refusal, where "semantic: carries …" read like
+a finding.
 
 ## Parameters
 

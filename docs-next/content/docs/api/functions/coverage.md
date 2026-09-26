@@ -6,7 +6,7 @@ title: coverage
 
 > **coverage**\<`T`\>(`content`, `decl`): [`CoveredResult`](/docs/api/interfaces/CoveredResult)\<`T`\>
 
-Defined in: [src/core/agent/coverage/ledger.ts:87](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/coverage/ledger.ts#L87)
+Defined in: [src/core/agent/coverage/ledger.ts:95](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/coverage/ledger.ts#L95)
 
 Return a verdict with its own boundary attached.
 
@@ -15,6 +15,13 @@ first, deliberately: a limit placed after a long result is a limit that gets
 skimmed past. The framework records the ledger and, with
 `.limitsTravelWithTheAnswer()` configured, appends it to the run's final
 answer where the model cannot drop it.
+
+Refuses (throws, where it is called) a boundary that declares nothing, a
+malformed item, and any key the boundary does not have — naming the
+spelling meant when the key is a casing slip (`not_checked` →
+`notChecked`), so a list declared from plain JavaScript or JSON cannot
+vanish without a word. Every refusal starts `refused: `: inside `execute`
+it becomes the call's error result, which the model reads.
 
 ## Type Parameters
 
