@@ -31,6 +31,7 @@
 
 import type { FlowDecisionEvent, FlowSelectedEvent } from 'footprintjs';
 import type { DecisionRecord, ToolCallRecord } from './types.js';
+import { toWireJson, withWireErrors } from '../../lib/wireJson.js';
 
 /** What the bridge delivers to `writeSnapshot` for one run. */
 export interface RunEvidence {
@@ -68,7 +69,7 @@ function preview(value: unknown, max: number): string {
   if (typeof value === 'string') s = value;
   else {
     try {
-      s = JSON.stringify(value);
+      s = toWireJson(value);
     } catch {
       s = String(value);
     }
@@ -85,8 +86,10 @@ function bounded(
 ): Readonly<Record<string, unknown>> | undefined {
   if (value === undefined) return undefined;
   try {
-    const s = JSON.stringify(value);
-    if (s.length <= max) return value;
+    const s = toWireJson(value);
+    // Kept as a value (not the text), so rendered the same way: an Error in
+    // it keeps its name, message, code and cause and nothing else.
+    if (s.length <= max) return withWireErrors(value);
     return { __truncated: `${s.slice(0, max)}…` };
   } catch {
     return { __truncated: String(value).slice(0, max) };

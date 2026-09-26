@@ -32,11 +32,12 @@
  *     certain.
  *  4. **LAST RESORT — the SHAPE `makeRunId` mints** (`isMintedRunId`), for a
  *     checkpoint from another instance with no receipt to match → read as
- *     derived. The one stated edge: a caller who names
- *     `{ conversationId: 'run-<digits>-<digits>' }` on one instance and resumes
- *     it bare on ANOTHER, after a pause-resume-pause chain, loses it — the
- *     fail-closed direction, because a derived namespace is never published as
- *     a person. Pass `identity` on `resume` to keep it.
+ *     derived. The one stated edge: a caller who names exactly
+ *     `{ conversationId: 'run-<digits>-<digits>' }` and resumes it BARE loses
+ *     it whenever step 1 cannot see it — on another instance, or on the same
+ *     instance once anyone else has run in between — and no receipt matches.
+ *     The fail-closed direction: a derived namespace is never published as a
+ *     person. Pass `identity` on `resume` to keep it.
  *
  * A checkpoint names who it is for; it is not proof. A host that lets
  * checkpoints leave its trust boundary signs them or keeps them server-side —
@@ -50,6 +51,7 @@ import { isMintedRunId } from '../RunnerBase.js';
 interface SeededState {
   readonly runIdentity?: unknown;
   readonly runIdentitySource?: unknown;
+  readonly runSessionId?: unknown;
   readonly receipt?: { readonly basis?: { readonly runId?: unknown } };
 }
 
@@ -89,6 +91,41 @@ export function callerIdentityOf(
     if (isMintedRunId(id)) return undefined;
   }
   return identity;
+}
+
+/**
+ * The identity the paused run's memory namespace and credentials are restored
+ * from — `scope.runIdentity` as the checkpoint carries it, whatever its source —
+ * as a validated copy; `undefined` when absent; `'malformed'` when the
+ * checkpoint's own fields disagree: a value that is not an identity, or a
+ * session-rung marker (`runIdentitySource: 'session'`) on anything but exactly
+ * `{ conversationId }` — the only shape seed's session rung writes.
+ */
+export function restoredIdentityOf(state: unknown): MemoryIdentity | 'malformed' | undefined {
+  if (state === null || typeof state !== 'object') return undefined;
+  const seeded = state as SeededState;
+  if (seeded.runIdentity === undefined) return undefined;
+  const identity = wellFormed(seeded.runIdentity);
+  if (identity === undefined) return 'malformed';
+  if (seeded.runIdentitySource !== undefined) {
+    if (seeded.runIdentitySource !== 'session' || !conversationOnly(identity)) return 'malformed';
+  }
+  return identity;
+}
+
+/**
+ * The session the paused run ran under, as its own state records it: the
+ * `runSessionId` seed writes on every session-bound run, else — for a
+ * checkpoint written before that key existed — the session rung's
+ * `runIdentity.conversationId`. `undefined` when neither says.
+ */
+export function pausedSessionOf(state: unknown): string | undefined {
+  if (state === null || typeof state !== 'object') return undefined;
+  const seeded = state as SeededState;
+  if (typeof seeded.runSessionId === 'string') return seeded.runSessionId;
+  if (seeded.runIdentitySource !== 'session') return undefined;
+  const identity = wellFormed(seeded.runIdentity);
+  return identity !== undefined && conversationOnly(identity) ? identity.conversationId : undefined;
 }
 
 /** Do two identities name the same tenant, principal and conversation? */

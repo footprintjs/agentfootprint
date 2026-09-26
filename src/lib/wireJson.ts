@@ -20,9 +20,13 @@
  * was never written (non-enumerable) and it names file paths.
  *
  * Both paths use it, so both write the same bytes:
- *  - SYNCHRONOUS: a serializing sink writes {@link toWireJson}(event) instead
- *    of `JSON.stringify(event)` — a replacer, so every non-Error value
- *    serializes exactly as before.
+ *  - SYNCHRONOUS: every serializer of the record writes {@link toWireJson}
+ *    instead of `JSON.stringify` — the sinks, the browser stream, the
+ *    recording artifact and file sink, the bug-report bundle, the tool-result
+ *    text (`test/architecture/wireJsonOnly.test.ts` keeps it that way). A
+ *    replacer that reads the HOLDER's raw value, so an Error's own `toJSON`
+ *    (a real `AxiosError`'s returns its config and stack) never pre-empts the
+ *    rule, and every non-Error value serializes exactly as before.
  *  - DETACHED: `strategies/attach.ts · snapshotEvent` renders Errors with
  *    {@link withWireErrors} BEFORE it clones, so what a detached sink
  *    serializes is already the rendered shape — and a detached sink that does
@@ -53,17 +57,28 @@ export interface WireError {
   readonly cause?: WireError | string | number | boolean;
 }
 
-/** An Error from any realm (`instanceof` fails across realms; the brand does not). */
+/**
+ * Is `value` an Error? `Error.isError` where the runtime has it (it sees the
+ * internal slot, so it answers across realms and cannot be spoofed), else
+ * `instanceof Error`. Never `Object.prototype.toString`: a plain object with
+ * `[Symbol.toStringTag]: 'Error'` would pass that brand, and rendering it as an
+ * Error would drop the data of a value that is not one. Never throws — a
+ * revoked Proxy answers `false`.
+ */
 export function isErrorValue(value: unknown): value is Error {
-  return (
-    value instanceof Error ||
-    (typeof value === 'object' &&
-      value !== null &&
-      Object.prototype.toString.call(value) === '[object Error]')
-  );
+  if (value === null || typeof value !== 'object') return false;
+  try {
+    const native = (Error as { isError?: (candidate: unknown) => boolean }).isError;
+    return typeof native === 'function' ? native(value) : value instanceof Error;
+  } catch {
+    return false;
+  }
 }
 
-/** Render one Error by the rule. Never throws; a throwing getter reads as absent. */
+/**
+ * Render one Error by the rule. Never throws: a throwing getter, a `message`
+ * whose `toString` throws, a revoked Proxy — each reads as absent.
+ */
 export function wireError(error: Error): WireError {
   return render(error, 0, new Set<object>());
 }
@@ -104,12 +119,31 @@ function read(target: object, key: string): unknown {
 
 function readString(target: object, key: string): string | undefined {
   const value = read(target, key);
-  return typeof value === 'string' ? value : value === undefined ? undefined : String(value);
+  if (typeof value === 'string') return value;
+  if (value === undefined) return undefined;
+  try {
+    return String(value);
+  } catch {
+    return undefined;
+  }
 }
 
-/** The `JSON.stringify` replacer that applies the rule. */
-function wireReplacer(_key: string, value: unknown): unknown {
-  return isErrorValue(value) ? wireError(value) : value;
+/**
+ * The `JSON.stringify` replacer that applies the rule — on the HOLDER's raw
+ * value (`this[key]`), not on `value`. `JSON.stringify` calls `toJSON()` before
+ * the replacer sees anything, and a real `AxiosError`'s `toJSON` returns its
+ * `config` (request headers included) and `stack` as a plain object; a
+ * replacer that read `value` would never see the Error at all. The root holder
+ * is `{ '': value }`, so a root Error is covered too.
+ */
+function wireReplacer(this: unknown, key: string, value: unknown): unknown {
+  let raw: unknown;
+  try {
+    raw = (this as Record<string, unknown>)[key];
+  } catch {
+    return value;
+  }
+  return isErrorValue(raw) ? wireError(raw) : value;
 }
 
 /**
@@ -129,8 +163,9 @@ export function toWireJson(value: unknown, space?: number): string {
  * allocation, which is every event but the rare one. A value that holds one is
  * copied whole (arrays and objects; everything else by reference), so a cycle
  * lands on the copy, never back on the original that still holds the Error.
- * Maps, Sets, Dates, RegExps and binary data are not entered
- * (`JSON.stringify` writes none of their contents).
+ * Arrays, plain and class objects, Maps and Sets are entered; Dates, RegExps
+ * and binary data are not. Never throws: a value it cannot read (a revoked
+ * Proxy) is left as it is.
  */
 export function withWireErrors<T>(value: T): T {
   if (!holdsError(value, 0, new WeakSet<object>())) return value;
@@ -142,8 +177,19 @@ function holdsError(value: unknown, depth: number, visited: WeakSet<object>): bo
   if (isErrorValue(value)) return true;
   if (depth >= MAX_WALK_DEPTH || !enterable(value) || visited.has(value)) return false;
   visited.add(value);
-  const items = Array.isArray(value) ? value : safeEntries(value).map(([, item]) => item);
-  return items.some((item) => holdsError(item, depth + 1, visited));
+  return childrenOf(value).some((item) => holdsError(item, depth + 1, visited));
+}
+
+/** The values a walk descends into: array items, Map keys and values, Set members, own entries. */
+function childrenOf(value: object): unknown[] {
+  try {
+    if (Array.isArray(value)) return value;
+    if (value instanceof Map) return [...value.keys(), ...value.values()];
+    if (value instanceof Set) return [...value];
+    return safeEntries(value).map(([, item]) => item);
+  } catch {
+    return [];
+  }
 }
 
 function copyWith(value: unknown, depth: number, copies: WeakMap<object, unknown>): unknown {
@@ -158,6 +204,22 @@ function copyWith(value: unknown, depth: number, copies: WeakMap<object, unknown
     for (const item of value) out.push(copyWith(item, depth + 1, copies));
     return out;
   }
+  // A Map or Set is entered too: `JSON.stringify` writes neither's contents,
+  // but a detached sink that does NOT serialize receives the clone, and a
+  // cloned Error still carries `stack`.
+  if (value instanceof Map) {
+    const out = new Map<unknown, unknown>();
+    copies.set(value, out);
+    for (const [k, v] of value)
+      out.set(copyWith(k, depth + 1, copies), copyWith(v, depth + 1, copies));
+    return out;
+  }
+  if (value instanceof Set) {
+    const out = new Set<unknown>();
+    copies.set(value, out);
+    for (const item of value) out.add(copyWith(item, depth + 1, copies));
+    return out;
+  }
   const out: Record<string, unknown> = {};
   copies.set(value, out);
   for (const [key, item] of safeEntries(value)) out[key] = copyWith(item, depth + 1, copies);
@@ -165,14 +227,16 @@ function copyWith(value: unknown, depth: number, copies: WeakMap<object, unknown
 }
 
 function enterable(value: object): boolean {
-  return !(
-    value instanceof Map ||
-    value instanceof Set ||
-    value instanceof Date ||
-    value instanceof RegExp ||
-    value instanceof ArrayBuffer ||
-    ArrayBuffer.isView(value)
-  );
+  try {
+    return !(
+      value instanceof Date ||
+      value instanceof RegExp ||
+      value instanceof ArrayBuffer ||
+      ArrayBuffer.isView(value)
+    );
+  } catch {
+    return false; // a revoked Proxy: nothing to enter, left as it is
+  }
 }
 
 function safeEntries(value: object): Array<[string, unknown]> {

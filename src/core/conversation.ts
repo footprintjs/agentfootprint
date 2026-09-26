@@ -119,8 +119,17 @@ export class PendingQuestionError extends Error {
 }
 
 /**
- * Thrown by `resume(checkpoint, input, { identity })` when the identity the
- * call names is not the one the PAUSED run's caller named.
+ * Thrown by `resume(checkpoint, input, options)` when the run would carry two
+ * identities — refused before anything runs:
+ *  - `options.identity` names an identity other than the one the run's memory
+ *    namespace and credentials are restored with (`scope.runIdentity`, whatever
+ *    its source) — including an OWNERLESS pause (the per-run default or the
+ *    session rung) resumed by a named person;
+ *  - the checkpoint's own fields disagree (a session-rung marker on an
+ *    identity that carries a person).
+ *
+ * The ownerless case is the fail-closed reading of an open owner question; a
+ * later release may relax it behind an explicit opt-in, never by default.
  *
  * One run never carries two identities. The resumed run keeps the paused run's
  * memory namespace and credential identity (`scope.runIdentity`, restored from

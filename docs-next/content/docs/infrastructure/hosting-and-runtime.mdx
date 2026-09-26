@@ -1609,11 +1609,11 @@ The value is a `TurnArtifacts` — one of three shapes:
 follows the door. The run's recording follows the identity the run was seeded
 with, and at an **unverified** door those can differ: a conversation that
 carries an identity of its own (an app-seeded tenant, or a user an earlier
-turn claimed) while this request names nobody, and a pause that named nobody
-resumed by a claimed user, file the recording where no redemption by that
-caller looks. At a verifying door, and at an open one whose conversation
-carries no identity, they agree. These are pinned as known edges and not
-changed here.
+turn claimed) while this request names nobody files the recording where no
+redemption by that caller looks. At a verifying door, and at an open one whose
+conversation carries no identity, they agree. That one is pinned as a known
+edge. A pause that named nobody, resumed by a claimed user, is refused
+(`ResumeIdentityConflictError`): one run never carries two identities.
 
 **Door facts carry their session — so the door checks who is asking.**
 Everything the hosting door produces — a redemption's `resolved` / `refused`, a
@@ -1641,6 +1641,42 @@ before it emits anything:
   it until its own events are evicted.
 - **At a door with no verifier, the session id is the key**, by law: whoever
   presents it may redeem under it, and its facts are that session's.
+
+### Outside a turn — `handle.artifactsForRequest`
+
+`reply.turnArtifacts` arrives at the END of a turn. A path that is not a turn —
+a panel reading a payload by ref before the run, an app-owned route that files a
+guide beside a conversation — asks the handle instead: `standingAgent` returns
+the adapter's handle extended with `StandingAgentHandle`, whose
+`artifactsForRequest(request)` takes an `ArtifactsForRequestInput` (the
+request's `sessionId`, its `headers` as Express hands them over, and at a door
+with no verifier its `userId` claim) and answers an `ArtifactsForRequestResult`.
+
+**Why it exists:** before it, an app that needed its request's scope early
+either copied the library's scope logic — the verifier, the stored identity, the
+composition — or bypassed it, reading `{ conversationId }` alone and getting an
+empty result for the signed-in owner. The host never composes a scope here: the
+handle runs the redemption door's own steps with the door's own instances, so a
+ref filed through it is redeemed on the wire by the same caller, and a ref
+another caller filed answers exactly like one that never existed.
+
+The result is the `TurnArtifacts` shape (five verbs, no scope on the value,
+never the unscoped store) or a reason: `'unverified'` (401; a repeated
+`authorization` header counts), `'unavailable'` (the verifier could not answer —
+503, never 401), `'no-session'`, `'invalid-session'` (400), `'not-found'`,
+`'no-store'`. It never builds or evicts a pooled instance. The verbs count
+against `artifactOpsPerSession`, and a call started after the binding's
+instance is retired or the host closes rejects with
+`RequestArtifactsRevokedError` — already handled; ask again.
+
+```ts
+const handle = await standingAgent({ agent, sessions, host, identity: { verify } });
+const STATUS: Record<string, number> = { unverified: 401, unavailable: 503, 'invalid-session': 400 };
+
+const scoped = await handle.artifactsForRequest({ sessionId, headers: req.headers });
+if (!scoped.bound) return res.status(STATUS[scoped.reason] ?? 404).end();
+const payload = await scoped.artifacts.get(ref); // null: missing, expired or not yours
+```
 
 ## Verified identity — `identity: { verify }`
 

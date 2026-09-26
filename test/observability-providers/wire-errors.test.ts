@@ -36,6 +36,7 @@ import { auditExport } from '../../src/adapters/observability/audit.js';
 import { cloudwatchObservability } from '../../src/adapters/observability/cloudwatch.js';
 import { consoleObservability } from '../../src/strategies/defaults/consoleObservability.js';
 import { toWireJson, withWireErrors, MAX_CAUSE_DEPTH } from '../../src/lib/wireJson.js';
+import { AxiosLikeError } from './axiosLikeError.js';
 
 const TOKEN = 'Bearer tok-R4-AXIOS';
 
@@ -67,6 +68,7 @@ function errorPayload(seed: number): unknown {
   const makeError = (depth: number): Error => {
     const kind = pick([
       'axios',
+      'axios-tojson',
       'plain',
       'type',
       'caused',
@@ -75,6 +77,8 @@ function errorPayload(seed: number): unknown {
       'number-code',
     ]);
     if (kind === 'axios') return axiosError(`axios ${depth}`);
+    // A real AxiosError carries `toJSON` (config + stack) — recheck RB2.
+    if (kind === 'axios-tojson') return new AxiosLikeError(`axios-json ${depth}`, TOKEN);
     if (kind === 'plain') return new Error(`plain ${depth}`);
     if (kind === 'type') return Object.assign(new TypeError(`type ${depth}`), { secret: TOKEN });
     if (kind === 'number-code')
@@ -257,6 +261,7 @@ describe('the wire rule — every sink, both delivery paths', () => {
     expect(all).toContain('"cause":{"name"');
     expect(all).toContain('"code":"ERR_BAD_REQUEST"');
     expect(all).toContain('"name":"TypeError"');
+    expect(all).toContain('"name":"AxiosError"');
   });
 
   it('plain circular data is refused alike by both paths (no line), and the audit breaks it alike', async () => {

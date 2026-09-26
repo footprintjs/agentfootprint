@@ -77,6 +77,7 @@
 import type { Recording, RunRecorder } from '../../recorders/observability/recordRun.js';
 import { narrativeFrom } from '../trace-toolpack/openRecording.js';
 import { engineVersion, libraryVersion } from '../libraryVersion.js';
+import { toWireJson } from '../wireJson.js';
 import { stampConversation, type EnvelopeSource } from './envelope.js';
 import { deriveTranscript, type Transcript } from './transcript.js';
 import { zipStore } from './zip.js';
@@ -319,7 +320,8 @@ interface PlannedFile {
   readonly turnCount?: number;
 }
 
-const json = (value: unknown): string => `${JSON.stringify(value, null, 2)}\n`;
+/** Every file in the bundle — recordings included — by the wire rule (`lib/wireJson.ts`). */
+const json = (value: unknown): string => `${toWireJson(value, 2)}\n`;
 
 const byteLength = (text: string): number => encoder.encode(text).length;
 

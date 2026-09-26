@@ -13,12 +13,27 @@ so delivery failures are themselves reported (`deliveryErrors.ts`).
 ## How an Error reaches a wire (`lib/wireJson.ts`)
 An `Error` anywhere in an event is written as `{ name, message, code? }` plus a
 bounded `cause` chain — never a custom property (an axios error's
-`config.headers.authorization`), never `stack`. Every sink that serializes goes
-through `toWireJson` (`file`, `cloudwatch` / `agentcore`, `xray`, the `otel`
-attribute text, the console default) and `audit`'s sanitizer renders Errors by
-the same `wireError`; detached delivery renders them before it clones
-(`strategies/attach.ts · snapshotEvent`). So sync and detached delivery write
-the same bytes. A custom sink that serializes events should do the same:
+`config.headers.authorization`), never `stack`, never what its own `toJSON`
+returns (a real `AxiosError`'s returns its config and stack: the replacer reads
+the holder's RAW value, so `toJSON` never pre-empts the rule). Every serializer
+of the record goes through it: here (`file`, `cloudwatch` / `agentcore`,
+`xray`, the `otel` attribute text, the console default; `audit`'s sanitizer
+renders Errors with the same `wireError`), the browser stream
+(`stream.ts · encodeSSE`), the recording artifact, the recording file sink,
+the bug-report bundle, and the tool-result text the model reads and `history`
+keeps (`core/agent/validators.ts · safeStringify`). Detached delivery renders
+Errors before it clones (`strategies/attach.ts · snapshotEvent`, Maps and Sets
+entered too), so sync and detached delivery write the same bytes.
+`test/architecture/wireJsonOnly.test.ts` refuses a direct `JSON.stringify` in
+these modules unless it is allow-listed with a reason.
+
+**What it costs** (measured by `bench/wire-json.mjs`, standalone, on a 553 KB
+event): `toWireJson` 0.92 ms vs `JSON.stringify` 0.46 ms (2.00×); detached
+`withWireErrors` + clone 2.09 ms vs clone 1.30 ms (1.60×) when the event holds
+no Error, 3.08 ms when it holds one (it is then copied whole). A value that
+holds no Error serializes to the same bytes as before.
+
+A custom sink that serializes events should do the same:
 
 ```ts
 import { toWireJson } from '../../lib/wireJson.js';

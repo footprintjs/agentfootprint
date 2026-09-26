@@ -371,8 +371,8 @@ export type TurnArtifacts =
  * or a redemption on the wire.
  *
  * `headers` takes a Node / Express `IncomingHttpHeaders` as it is: a value
- * that arrived as an array (a repeated header) is not read — a repeated
- * `authorization` is ambiguous, so it counts as no token.
+ * that arrived as an array (a repeated header) is not read, and a REPEATED
+ * `authorization` — two credentials — is refused as `'unverified'`.
  */
 export interface ArtifactsForRequestInput {
   readonly sessionId?: string;
@@ -390,8 +390,8 @@ export interface ArtifactsForRequestInput {
  * `artifactOpsPerSession` with the wire's redemptions (a verb past the bound
  * rejects with `ArtifactOpsBusyError`), and the binding is REVOKED when the
  * instance it is bound to is retired from the pool or the host is closed —
- * a verb after that rejects with `RequestArtifactsRevokedError` (already
- * handled; ask the handle again).
+ * a verb STARTED after that rejects with `RequestArtifactsRevokedError`
+ * (already handled; ask the handle again); one already in flight completes.
  *
  * `bound: false` says why, checked in this order:
  *  - `'unverified'` — a verifier is configured and the request did not pass it
@@ -410,7 +410,8 @@ export interface ArtifactsForRequestInput {
  *    turn has not persisted (unless that turn is this caller's, in flight); at
  *    any door, a session with no live instance and no stored conversation.
  *    One reason for all of them, as redemption answers them with one
- *    not-found. Never builds or evicts a pooled instance to find out.
+ *    not-found. Never builds or evicts a pooled instance to find out. Also
+ *    the answer of a call that lost the race to `close()`.
  *  - `'no-store'` — the serving agent has no artifact store.
  */
 export type ArtifactsForRequestResult =

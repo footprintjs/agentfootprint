@@ -784,7 +784,13 @@ describe('turnArtifacts — KNOWN EDGES (unverified door): the recording and the
     expect((await redeem(host, 's', filed.ref)).artifact?.ref).toBe(filed.ref);
   });
 
-  it('KNOWN EDGE: open door, a pause that names nobody resumed by a claimed user → the resumed recording keeps the pause’s tuple', async () => {
+  it('RULED (round 4, RS2): open door, a pause that names nobody resumed by a claimed user → refused; nothing runs', async () => {
+    // Was a KNOWN EDGE: the resumed run kept the pause's session-rung tuple
+    // while the claimed user rode ctx.identity and the hand-over — one run, two
+    // identities. Now fail closed: an ownerless pause is not claimed by the
+    // first person who resumes it (`ResumeIdentityConflictError`, the door's
+    // ownership code). A later release may relax this behind an explicit
+    // opt-in, never by default.
     const store = inMemoryArtifacts();
     const agent = pausingAgent(store);
     const recordings = recordingsOf(agent);
@@ -798,16 +804,11 @@ describe('turnArtifacts — KNOWN EDGES (unverified door): the recording and the
       decision: 'yes',
       onTurn: fileStory(),
     });
-    expect(resumed.output).toBe('refund issued');
-    const filed = filedOf(resumed);
-    const recordingRef = recordings()[0]?.ref as string;
-
-    // A resumed run files under the PAUSED run's seeded identity (resume never
-    // re-seeds) — the session rung — while the hand-over composed bob's tuple.
-    expect(await store.head({ conversationId: 's' }, recordingRef)).not.toBeNull();
-    expect((await redeem(host, 's', recordingRef, undefined, 'bob')).code).toBe(
-      'ERR_ARTIFACT_NOT_FOUND',
-    );
-    expect((await redeem(host, 's', filed.ref, undefined, 'bob')).artifact?.ref).toBe(filed.ref);
+    expect(resumed.code).toBe('ERR_SESSION_OWNERSHIP_CONFLICT');
+    expect(resumed.output).toBeUndefined();
+    expect(recordings()).toEqual([]);
+    // …and the same pause resumed by nobody still runs, under its own tuple.
+    const bare = await host.deliver({ sessionId: 's', decision: 'yes' });
+    expect(bare.output).toBe('refund issued');
   });
 });

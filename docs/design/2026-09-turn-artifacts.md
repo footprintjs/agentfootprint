@@ -195,7 +195,7 @@ things land:
 | fresh turn, no user, no stored identity | agree — the session rung |
 | resume by the same verified user as the pause | agree |
 | **KNOWN EDGE** — no user, the conversation carries an identity (an app-seeded tenant; a user an earlier turn claimed at an open door) | R = the stored identity, S = the session rung: the recording 404s at the door, the hand-over's filing redeems |
-| **KNOWN EDGE** — open door, a pause that named nobody resumed by a claimed user (or the claimed user changes) | R = the pausing seed, S = the resuming request's tuple |
+| open door, a pause that named nobody resumed by a claimed user (or the claimed user changes) | REFUSED since the round-4 recheck (RS2): `ResumeIdentityConflictError` — one run, one identity; may be relaxed later only behind an explicit opt-in |
 | after a resume on a shared agent, or on a pooled instance rebuilt after eviction | FIXED (Follow-up A): C is the resumed run's own caller, so the stored identity no longer names another session's caller or none |
 | a resume that names a DIFFERENT identity from the paused run's caller (a direct host) | REFUSED (`ResumeIdentityConflictError`): R is fixed in the checkpoint, so honouring the call would split one run between two identities (review S3) |
 

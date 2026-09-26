@@ -14,6 +14,7 @@ import { isDevMode } from 'footprintjs';
 import type { MemoryDefinition } from '../../memory/define.types.js';
 import type { Injection } from '../../lib/injection-engine/types.js';
 import type { Tool, ToolRegistryEntry } from '../tools.js';
+import { toWireJson } from '../../lib/wireJson.js';
 
 /**
  * Validate that every memory definition has a unique id. Each memory
@@ -166,12 +167,18 @@ export const NO_TOOL_VALUE = '(this tool returned no value)';
  * do something and report nothing; the conversation just has to say so.
  *
  * The truth is unaffected: `agentfootprint.stream.tool_end` still carries
- * the tool's REAL return value, `undefined` included.
+ * the tool's REAL return value, `undefined` included (every serializing sink
+ * renders an Error in it by the same wire rule).
  */
 export function safeStringify(value: unknown): string {
   if (value === undefined) return NO_TOOL_VALUE;
   try {
-    const json = JSON.stringify(value);
+    // The wire rule (`lib/wireJson.ts`): this string is the `role: 'tool'`
+    // message — sent to the model provider AND kept in `history`, so in every
+    // snapshot, recording and checkpoint. An Error in a tool result (a client
+    // library's, with its request headers) is written as its name, message,
+    // code and cause — never its custom properties, `toJSON` output or stack.
+    const json = toWireJson(value);
     // `undefined` again for a function or a symbol — describe it rather than
     // hand the next stage a hole.
     return json === undefined ? `[unserializable: ${typeof value}]` : json;

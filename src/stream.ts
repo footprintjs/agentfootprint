@@ -16,6 +16,7 @@
 import type { AgentfootprintEvent } from './events/registry.js';
 import type { RunnerBase } from './core/RunnerBase.js';
 import type { EventDispatcher, Unsubscribe } from './events/dispatcher.js';
+import { toWireJson } from './lib/wireJson.js';
 
 /**
  * Hand the runner this iterable's caller before calling `runner.run()`.
@@ -173,7 +174,9 @@ export class SSEFormatter<TIn = unknown, TOut = unknown> {
  * (auth/error frames, app-state echoes). Most consumers won't need this.
  */
 export function encodeSSE(eventName: string, payload: unknown): string {
-  const json = JSON.stringify(payload);
+  // The wire rule (`lib/wireJson.ts`): an Error in a payload streams as its
+  // name, message, code and cause — never its custom properties or stack.
+  const json = toWireJson(payload);
   // Escape newlines inside JSON (rare with stringify) so the data field
   // stays single-line. SSE's data: lines can be repeated, but the
   // canonical encoder keeps it simple.

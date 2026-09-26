@@ -3,17 +3,22 @@
  * kept and served under, and which run that was. Internal: nothing here is on
  * the `Agent` class's public surface.
  *
- * The key is the run's `sessionId` when it has one. A HOSTED run with no
- * session (a request `standingAgent` served without a `sessionId`) is keyed by
- * the host's per-request key (`#anonymous-N`) instead, handed in through
- * {@link withHostedConversation} — a key no later request can present, so no
- * other caller, signed in or not, can read that run's evidence. Only a DIRECT,
- * unhosted run with no session shares the `undefined` key: the single-user
- * path, where "the previous run with no session" is the caller's own.
+ * THE KEY SPACES ARE DISJOINT BY CONSTRUCTION (recheck RB1). A session id is a
+ * string a client chose — any visible ASCII, `#` included — so it can never be
+ * compared against a key the library minted. Every key is namespaced:
  *
- * Why not `sessionId`: a session id also decides the memory namespace (seed's
- * session rung), `EventMeta.sessionId` and tool-session teardown, and a
- * request that named no session must change none of those.
+ *  - `session:<sessionId>` — a run with a session ({@link sessionConversationKey});
+ *  - `hosted:<uuid>` — a HOSTED run with no session: `standingAgent` mints a
+ *    random UUID per request and hands it in through
+ *    {@link withHostedConversation}; unguessable, and in a space no session id
+ *    can enter, so no other caller — signed in or not — can name it;
+ *  - `undefined` — a DIRECT, unhosted run with no session: the single-user
+ *    path, where "the previous run with no session" is the caller's own.
+ *
+ * Why not a session id for the hosted case: a session id also decides the
+ * memory namespace (seed's session rung), `EventMeta.sessionId` and
+ * tool-session teardown, and a request that named no session changes none of
+ * those.
  */
 
 import type { RunOptions } from 'footprintjs';
@@ -37,7 +42,17 @@ export function withHostedConversation<T extends RunOptions | undefined>(
   return Object.assign({}, options, { [HOSTED_CONVERSATION]: key }) as NonNullable<T>;
 }
 
-/** The host's key a run's options carry, if any. */
+/** The evidence key of a run with a session. */
+export function sessionConversationKey(sessionId: string): string {
+  return `session:${sessionId}`;
+}
+
+/** The evidence key of a hosted run with no session, from the host's minted id. */
+export function hostedConversationKey(minted: string): string {
+  return `hosted:${minted}`;
+}
+
+/** The host's minted id a run's options carry, if any. */
 export function hostedConversationOf(options: unknown): string | undefined {
   if (options === null || typeof options !== 'object') return undefined;
   const key = (options as { [HOSTED_CONVERSATION]?: unknown })[HOSTED_CONVERSATION];

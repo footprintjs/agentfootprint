@@ -147,11 +147,12 @@ DOOR. The run's recording follows the identity the run was SEEDED with
 stored identity — what both later read — is written by `Agent.checkpoint()`
 from `Agent.lastRunIdentity`. Three sources; they agree at a verifying door and
 at an open one whose conversation carries no identity of its own. Pinned as
-KNOWN EDGES in `test/hosting/turn-artifacts.test.ts`: an unverified door where
+a KNOWN EDGE in `test/hosting/turn-artifacts.test.ts`: an unverified door where
 the conversation carries an identity (an app-seeded tenant, or a user an
-earlier turn claimed) while this request names nobody, and a pause that named
-nobody resumed by a claimed user — the recording is filed where no redemption
-by that caller looks.
+earlier turn claimed) while this request names nobody — the recording is filed
+where no redemption by that caller looks. (A pause that named nobody, resumed
+by a claimed user, is no longer an edge: it is refused — one run, one
+identity, below.)
 
 **A resumed run is for the person whose run it resumes — one run, one
 identity.** `Agent.resume` takes the caller identity (`Agent.lastRunIdentity`:
@@ -161,23 +162,34 @@ what `checkpoint()` stores, what `EventMeta.principal` and a tool's
 instance ran last. The law: never drop an identity a caller named, never
 promote one the library derived (the session rung, the per-run default).
 
-- A resume that names an identity DIFFERENT from the paused run's caller is
-  refused before anything runs — `ResumeIdentityConflictError`, code
-  `ERR_SESSION_OWNERSHIP_CONFLICT`, naming neither person. The resumed run
-  keeps the paused run's memory namespace and credentials (a resume never
-  re-seeds), so it cannot also run as somebody else.
-- A resume that names no session keeps the paused run's, so its evidence,
-  events and tool teardown stay with that session.
+- **One run, one identity, fail closed.** A resume that names an identity must
+  name exactly the one the run's memory namespace and credentials are
+  restored with (`scope.runIdentity` on the checkpoint, WHATEVER its source) —
+  a resume never re-seeds, so any other identity would split the run. Refused
+  before anything runs, with `ResumeIdentityConflictError` (code
+  `ERR_SESSION_OWNERSHIP_CONFLICT`, naming neither person):
+  - a DIFFERENT named person;
+  - an OWNERLESS pause (it named nobody: the per-run default or the session
+    rung) resumed by a named person — the fail-closed reading of an open
+    question; a later release may relax it behind an explicit opt-in, never by
+    default;
+  - a checkpoint whose own fields disagree (a session-rung marker on an
+    identity that carries a person), with or without a named identity.
+- A resume that names no session takes the one the paused run recorded in its
+  own state (`runSessionId`, written by seed on every session-bound run; for an
+  older checkpoint, the session rung) — ONE source, no instance memory — so
+  its evidence, events and tool teardown stay with that session.
 - **A checkpoint names who it is for; it is not proof.** A resume that names no
-  identity trusts the checkpoint's. A host that lets checkpoints leave its
-  trust boundary (held by a browser, say) signs them or keeps them
-  server-side, and passes the identity it verified — then an edited checkpoint
-  is refused. `standingAgent` keeps checkpoints server-side, gates every resume
-  on ownership and passes the verified identity.
-- The one stated edge: the per-run default is not recorded, so a checkpoint
-  from ANOTHER instance whose identity is exactly
-  `{ conversationId: 'run-<digits>-<digits>' }` (and matches no receipt) is
-  read as derived. Pass `identity` on `resume` to keep such a name.
+  identity trusts the checkpoint's identity and session. A host that lets
+  checkpoints leave its trust boundary (held by a browser, say) signs them or
+  keeps them server-side, and passes the identity it verified — then any edit
+  to the identity is refused. `standingAgent` keeps checkpoints server-side,
+  gates every resume on ownership and passes the verified identity.
+- The one stated edge: the per-run default is not recorded, so a caller-named
+  identity that is exactly `{ conversationId: 'run-<digits>-<digits>' }`,
+  resumed BARE on another instance — or on the same instance once anyone else
+  has run in between — and matching no receipt, is read as derived. Pass
+  `identity` on `resume` to keep such a name.
 
 ```ts
 // No host: the checkpoint carries who the paused run was for.
@@ -187,6 +199,8 @@ await agent.run({ message: 'hi', identity: yara });                 // somebody 
 await agent.resume(paused.checkpoint, 'yes', { sessionId: 's-x' }); // for xavier, in xavier's session
 agent.checkpoint()?.identity;                                        // → xavier
 await agent.resume(paused.checkpoint, 'yes', { identity: yara });   // throws ResumeIdentityConflictError
+const nobody = await agent.run({ message: 'refund me' });            // names nobody
+await agent.resume(nobody.checkpoint, 'yes', { identity: yara });   // throws: an ownerless run is not claimed
 ```
 
 **One agent, many people: self-explain reads only the asking conversation.**
@@ -194,11 +208,17 @@ await agent.resume(paused.checkpoint, 'yes', { identity: yara });   // throws Re
 event tail) under the CONVERSATION it ran for, and a why-question is answered
 from the previous completed turn of the asking run's own conversation — never
 the instance's last run, which on `standingAgent({ agent })` is somebody
-else's. The conversation is the run's session. A request `standingAgent`
-serves WITHOUT a session — signed in or not, shared or pooled — is its own
-conversation, keyed by that request's latch (`#anonymous-N`), which no later
-request can present. Only a direct, unhosted run with no session shares the
-no-session key: the single-user path. A tool's retained inner runs
+else's. The keys live in spaces no client string can enter
+(`core/agent/servingConversation.ts`): a run with a session is keyed
+`session:<id>` — whatever the id, `#` and all — and a request `standingAgent`
+serves WITHOUT a session (signed in or not, shared or pooled) is keyed
+`hosted:<a random UUID minted for that request>`, so no later request can
+name it. Only a direct, unhosted run with no session shares the no-session
+key: the single-user path. (The composer's own lane and latch keys are
+namespaced the same way, so a session id spelled `anonymous` or `#anonymous-1`
+is just a session.) A run joins its conversation when it STARTS, so the
+records its tools filed stay its conversation's even when it pauses or fails.
+A tool's retained inner runs
 (`flowchartAsTool` / `runbookAsTool` with `keepRecord: true`) are keyed by run
 AND call id and served only to the conversation whose runs made them: another
 conversation's record is not found, not listed, not counted — and a record that
@@ -274,8 +294,12 @@ value, never the unscoped store — or a reason, in this order: `'unverified'`
 cannot open, or one with no live instance and nothing stored), `'no-store'`.
 The verbs count against `artifactOpsPerSession` with the wire's redemptions
 (`ArtifactOpsBusyError`), and the binding is REVOKED when its instance is
-retired from the pool or the host closes (`RequestArtifactsRevokedError`,
-already handled — ask again). A ref filed through it is redeemed on the wire
+retired from the pool or the host closes: a call STARTED after that rejects
+with `RequestArtifactsRevokedError` (already handled — ask again); an operation
+already in flight completes. A call to `artifactsForRequest` that loses the
+race to `close()` binds nothing (`'not-found'`) and builds nothing.
+`headers` takes `IncomingHttpHeaders` as it is; a REPEATED `authorization` is
+two credentials, refused as `'unverified'` rather than read as none. A ref filed through it is redeemed on the wire
 by the same caller; another person's ref answers `null`, exactly like one that
 never existed.
 
@@ -286,7 +310,7 @@ const handle = await standingAgent({ agent, sessions, host, identity: { verify }
 const STATUS: Record<string, number> = { unverified: 401, unavailable: 503, 'invalid-session': 400 };
 
 app.get('/panel/:sessionId/:ref', async (req: Request, res: Response) => {
-  // `req.headers` goes in as it is; the seam applies the session-id check itself.
+  // `req.headers` goes in as it is (a repeated authorization is refused); the seam checks the session id itself.
   const scoped = await handle.artifactsForRequest({ sessionId: req.params.sessionId, headers: req.headers });
   if (!scoped.bound) return res.status(STATUS[scoped.reason] ?? 404).end();
   const payload = await scoped.artifacts.get(req.params.ref); // null: missing, expired or not yours

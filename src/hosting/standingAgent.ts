@@ -139,6 +139,7 @@ import {
   AwaitingDecisionError,
   ConcurrentRunError,
   HostClosedError,
+  IdentityNotVerifiedError,
   RequestArtifactsRevokedError,
   InvalidWireOpError,
   NoArtifactStoreError,
@@ -182,13 +183,21 @@ import type { Agent, AgentRunOptions } from '../core/Agent.js';
 import type { MemoryIdentity } from '../memory/identity/types.js';
 
 /**
- * The pool key the anonymous fallback instance is held under, and the session
- * key it can never collide with: a real session id from a transport is a
- * string somebody sent, and no wire delivers one that starts with `#`… which is
- * not a guarantee, so it is not relied on — anonymous requests are routed by
- * ABSENCE of a session id, never by matching this string.
+ * The keys this composer invents live in a namespace no client string can
+ * reach (recheck RB1 / N9). A session id is whatever a caller sent — `#` and
+ * all — so every key built FROM one is prefixed `session:`, and every key the
+ * host mints for a request with no session is spelled without that prefix. The
+ * two spaces are disjoint by construction, not by what a wire happens to send.
+ *
+ *  - {@link laneKeyOf} — the pool key: `session:<id>`, or {@link ANONYMOUS_LANE}.
+ *  - {@link latchKeyOf} — the concurrency latch: `session:<id>`, or
+ *    `anonymous:<n>` (unique per request).
  */
-const ANONYMOUS_LANE = '#anonymous';
+const ANONYMOUS_LANE = 'anonymous';
+
+function laneKeyOf(sessionId: string | undefined): string {
+  return sessionId === undefined ? ANONYMOUS_LANE : `session:${sessionId}`;
+}
 
 /**
  * One agent, and everything this composer keeps beside it.
@@ -205,8 +214,10 @@ const ANONYMOUS_LANE = '#anonymous';
  * subscribed on the agent that produced it.
  */
 interface Lane {
-  /** How the pool holds it: a session id, or {@link ANONYMOUS_LANE}. */
+  /** How the pool holds it — {@link laneKeyOf}. */
   readonly poolKey: string;
+  /** The session this pooled lane serves; undefined for the anonymous lane and the shared one. */
+  readonly sessionId?: string;
   readonly agent: Agent;
   /** The FIFO every request on this lane waits behind. Never rejects. */
   chain: Promise<void>;
@@ -434,9 +445,10 @@ export async function standingAgent<TH extends HostHandle>(
    * on eviction. An agent whose lane was detached has nothing of this
    * composer's left on it.
    */
-  function makeLane(agent: Agent, poolKey: string): Lane {
+  function makeLane(agent: Agent, poolKey: string, sessionId?: string): Lane {
     const lane: Lane = {
       poolKey,
+      ...(sessionId !== undefined && { sessionId }),
       agent,
       chain: Promise.resolve(),
       queued: [],
@@ -527,14 +539,14 @@ export async function standingAgent<TH extends HostHandle>(
    */
   function laneFor(sessionId: string | undefined): Lane {
     if (shared !== undefined) return shared;
-    const key = sessionId ?? ANONYMOUS_LANE;
+    const key = laneKeyOf(sessionId);
     const held = pool.get(key);
     if (held !== undefined) {
       held.lastUsedMs = Date.now();
       return held;
     }
     evictToFit();
-    const built = makeLane(fromFactory(), key);
+    const built = makeLane(fromFactory(), key, sessionId);
     pool.set(key, built);
     return built;
   }
@@ -620,7 +632,7 @@ export async function standingAgent<TH extends HostHandle>(
   async function retire(lane: Lane): Promise<void> {
     retired.add(lane.agent);
     lane.detach();
-    const sessionId = lane.poolKey === ANONYMOUS_LANE ? undefined : lane.poolKey;
+    const sessionId = lane.sessionId;
     try {
       await lane.agent.closeToolSessions({
         ...(sessionId !== undefined && { sessionId }),
@@ -648,7 +660,12 @@ export async function standingAgent<TH extends HostHandle>(
       !queueAnyway &&
       (lane.activeSession === sessionKey || lane.queued.includes(sessionKey))
     ) {
-      return Promise.reject(new ConcurrentRunError(sessionKey, lane.activeRunId));
+      return Promise.reject(
+        new ConcurrentRunError(
+          sessionKey.startsWith('session:') ? sessionKey.slice('session:'.length) : '(anonymous)',
+          lane.activeRunId,
+        ),
+      );
     }
     lane.queued.push(sessionKey);
     // Admitted from here, so the pool cannot retire this lane out from under a
@@ -746,7 +763,8 @@ export async function standingAgent<TH extends HostHandle>(
     // fallback instance — there is no conversation to isolate — and this unique
     // key is what keeps them from ever refusing each other as a "same session"
     // collision, which they are not.
-    const sessionKey = sessionId ?? `#anonymous-${++anonymous}`;
+    const sessionKey =
+      sessionId !== undefined ? `session:${sessionId}` : `anonymous:${++anonymous}`;
     try {
       // ── Admission, before a lane is even chosen ────────────────────
       // The cheapest refusal is the one made before any work: no hydrate, no
@@ -995,6 +1013,11 @@ export async function standingAgent<TH extends HostHandle>(
       return;
     }
     if (!needsStored && liveLane(sessionId) === undefined) envelope = await storedFor(sessionId);
+    // Outlived the composer across an await: answer like the door after close.
+    if (closing !== undefined) {
+      reply.fail(new HostClosedError(host.name));
+      return;
+    }
     // The per-session bound (after ownership, so a stranger can never spend
     // someone else's slots): artifact ops are lane-free and turn admission
     // does not see them, so without it one session could keep the event loop
@@ -1189,6 +1212,14 @@ export async function standingAgent<TH extends HostHandle>(
     request: ArtifactsForRequestInput,
   ): Promise<ArtifactsForRequestResult> {
     if (closing !== undefined) throw new HostClosedError(host.name);
+    // Two credentials are ambiguous: refused by name, never read as none.
+    if (identityOptions !== undefined && repeatsAuthorization(request.headers)) {
+      return {
+        bound: false,
+        reason: 'unverified',
+        error: new IdentityNotVerifiedError('unverifiable', false),
+      };
+    }
     let verified: VerifiedIdentity | undefined;
     try {
       verified = await verifyRequestIdentity(
@@ -1207,6 +1238,7 @@ export async function standingAgent<TH extends HostHandle>(
         error,
       };
     }
+    if (closing !== undefined) return { bound: false, reason: 'not-found' };
     const userId = verified?.userId ?? request.userId;
     const sessionId = request.sessionId;
     if (sessionId === undefined) return { bound: false, reason: 'no-session' };
@@ -1220,6 +1252,9 @@ export async function standingAgent<TH extends HostHandle>(
       return { bound: false, reason: 'not-found' };
     }
     if (!needsStored && liveLane(sessionId) === undefined) envelope = await storedFor(sessionId);
+    // Every await above could have outlived the composer (RS5): a call that
+    // lost the race to `close()` binds nothing and builds nothing.
+    if (closing !== undefined) return { bound: false, reason: 'not-found' };
     const stored = userId !== undefined ? storedIdentityOf(envelope, sessionId) : undefined;
     // Never a new lane, never an eviction — the redemption door's own rule.
     const redeemer = redeemerFor(sessionId, envelope);
@@ -1311,13 +1346,13 @@ export async function standingAgent<TH extends HostHandle>(
     verified: VerifiedIdentity | undefined,
   ): boolean {
     if (envelope !== undefined) return mayOpenSession(envelope, verified);
-    const serving = shared ?? pool.get(sessionId);
+    const serving = shared ?? pool.get(laneKeyOf(sessionId));
     return serving?.activeSessionId === sessionId && serving.activeOwner === verified?.userId;
   }
 
   /** The lane serving `sessionId` right now — never built, never refreshed. */
   function liveLane(sessionId: string): Lane | undefined {
-    return shared ?? pool.get(sessionId);
+    return shared ?? pool.get(laneKeyOf(sessionId));
   }
 
   /**
@@ -1361,6 +1396,9 @@ export async function standingAgent<TH extends HostHandle>(
       return { agent: live.agent, lane: live };
     }
     if (envelope === undefined) return undefined;
+    // Never built once the composer is closing: `close()` stops the reader it
+    // can see, and one built after that would run with no owner (RS5).
+    if (closing !== undefined) return undefined;
     reader ??= fromFactory();
     return { agent: reader };
   }
@@ -1544,13 +1582,13 @@ export async function standingAgent<TH extends HostHandle>(
             }
           : undefined;
       // A request with no session is its OWN conversation for self-explain
-      // (B1): keyed by this request's latch (`#anonymous-N`), which no later
-      // request can present — so no other caller, signed in or not, reads its
-      // evidence. It is not a session: memory, telemetry and teardown are
-      // untouched (`core/agent/servingConversation.ts`).
+      // (B1, recheck RB1): keyed by a random UUID minted for this request, in
+      // the `hosted:` key space no session id can enter — so no other caller,
+      // signed in or not, can name it. It is not a session: memory, telemetry
+      // and teardown are untouched (`core/agent/servingConversation.ts`).
       const runOptions: AgentRunOptions | undefined =
-        sessionId === undefined && lane.activeSession !== undefined
-          ? withHostedConversation(optionsForRun, lane.activeSession)
+        sessionId === undefined
+          ? withHostedConversation(optionsForRun, globalThis.crypto.randomUUID())
           : optionsForRun;
 
       // ── The one discriminant ─────────────────────────────────────────
@@ -2242,8 +2280,10 @@ function describePause(outcome: RunnerPauseOutcome, sessionId: string | undefine
 
 /**
  * Transport headers as the verifier reads them: string values only. A header
- * that arrived as an array (repeated) is dropped — a repeated `authorization`
- * is ambiguous, so it counts as no token rather than as either one.
+ * that arrived as an array (repeated) is dropped — except `authorization`,
+ * which the caller refuses first (`repeatsAuthorization`): two credentials are
+ * ambiguous, and dropping them would let the call proceed as anonymous at a
+ * door that allows it.
  */
 function singleValuedHeaders(
   headers: Readonly<Record<string, string | readonly string[] | undefined>> | undefined,
@@ -2254,4 +2294,13 @@ function singleValuedHeaders(
     if (typeof value === 'string') out[name] = value;
   }
   return out;
+}
+
+/** Did the transport deliver `authorization` (any case) more than once? */
+function repeatsAuthorization(
+  headers: Readonly<Record<string, string | readonly string[] | undefined>> | undefined,
+): boolean {
+  if (headers === undefined) return false;
+  const values = Object.entries(headers).filter(([name]) => name.toLowerCase() === 'authorization');
+  return values.length > 1 || values.some(([, value]) => Array.isArray(value));
 }
