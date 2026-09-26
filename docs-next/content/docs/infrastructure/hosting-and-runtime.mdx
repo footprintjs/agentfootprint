@@ -1911,6 +1911,12 @@ naming the key.
   lets the app start and says so in the banner.
 - **The banner names settings and never a secret** — print every line.
 
+The whole path — env settings, the chooser, the door, and what it refuses — runs
+end to end against a fake in-process identity provider in
+[`examples/deploy/oidc-token.ts`](https://github.com/footprintjs/agentfootprint/blob/main/examples/deploy/oidc-token.ts):
+
+<CodeFile path="examples/deploy/oidc-token.ts" region="identity-from-config" title="examples/deploy/oidc-token.ts (region: identity-from-config)" />
+
 `IdentityConfig` is the plain object `identityConfigFromEnv` builds (build it
 yourself if your settings live elsewhere); `IdentityBootOptions` carries
 `production` (plus optional `fetch` and `backend` seams); `IdentityChoice` is the
