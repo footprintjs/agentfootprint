@@ -19,7 +19,7 @@
  * at the threshold.
  */
 
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import {
   memorySignIns,
@@ -55,8 +55,18 @@ interface AdAccount {
   locked: boolean;
 }
 
-/** A directory with AD's lockout rule; `alice`, and Jane with two logon names. */
-function lockingDirectory(clock: () => number, threshold: number, windowMs: number) {
+/**
+ * A directory with AD's lockout rule; `alice`, and Jane with two logon names.
+ * `holdFirstBind`: the FIRST bind waits on it (later binds do not), so a test
+ * can keep one check in flight for as long as it needs — independent of how
+ * fast the machine delivers the other requests.
+ */
+function lockingDirectory(
+  clock: () => number,
+  threshold: number,
+  windowMs: number,
+  holdFirstBind?: Promise<void>,
+) {
   const accounts: AdAccount[] = [
     { sam: 'alice', password: 'Right-Pass-1!', bad: 0, lastBad: 0, locked: false },
     {
@@ -92,7 +102,8 @@ function lockingDirectory(clock: () => number, threshold: number, windowMs: numb
           binds.push(name);
           inFlight += 1;
           peak = Math.max(peak, inFlight);
-          await new Promise((r) => setTimeout(r, 5));
+          if (holdFirstBind !== undefined && binds.length === 1) await holdFirstBind;
+          else await new Promise((r) => setTimeout(r, 5));
           inFlight -= 1;
           const a = find(name);
           if (a === undefined) return 'invalid';
@@ -185,13 +196,24 @@ describe('review idI57 B-1 — one budget per ACCOUNT, whatever the spelling', (
   });
 
   it('one check in flight per ACCOUNT: four spellings in parallel run one bind at a time', async () => {
-    const dir = lockingDirectory(() => Date.now(), 10, 30 * 60_000);
+    // The first spelling's bind is HELD in flight while the other three arrive,
+    // so the test states the law (a second spelling of an account with a check
+    // in flight is refused) rather than racing a 5 ms bind against the runner:
+    // on a loaded CI runner the fourth request used to land after the first
+    // bind had finished and was, correctly, counted as a second attempt.
+    let release!: () => void;
+    const held = new Promise<void>((r) => (release = r));
+    const dir = lockingDirectory(() => Date.now(), 10, 30 * 60_000, held);
     const url = await mount(adDoor(dir, 10, 30));
-    const statuses = await Promise.all(
-      ['alice', 'Alice', 'aLice', 'alice@corp.example'].map((v) => post(url, v, 'wrong')),
+    const first = post(url, 'alice', 'wrong');
+    await vi.waitFor(() => expect(dir.binds).toHaveLength(1));
+    const others = await Promise.all(
+      ['Alice', 'aLice', 'alice@corp.example'].map((v) => post(url, v, 'wrong')),
     );
+    release();
+    expect(await first).toBe(401);
+    expect(others).toEqual([429, 429, 429]);
     expect(dir.peak).toBe(1);
-    expect(statuses.filter((s) => s === 429)).toHaveLength(3);
   });
 
   it('the key: lower-cased, any DOMAIN\\ prefix and any @suffix removed, NFC', () => {

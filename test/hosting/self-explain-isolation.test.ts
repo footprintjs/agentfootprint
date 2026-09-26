@@ -246,7 +246,10 @@ describe('R2-11 — self-explain on a shared agent reads only the asking convers
       }
       await closeAll();
     }
-  });
+    // 5 seeds × 4 people × 2 turns of real agent runs: ~1.8 s alone, past the
+    // 5 s default on a loaded CI runner — a budget sized to the work, as the
+    // other property suites in test/hosting declare theirs.
+  }, 30_000);
 
   it('property: every recording holds only its own run’s events and its own conversation’s text', async () => {
     const users = ['ann', 'ben', 'cat'];
@@ -266,5 +269,5 @@ describe('R2-11 — self-explain on a shared agent reads only the asking convers
       }
       await closeAll();
     }
-  });
+  }, 30_000);
 });
