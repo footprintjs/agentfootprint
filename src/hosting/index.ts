@@ -342,10 +342,13 @@ export type {
   SessionSweepOptions,
   SessionSweepResult,
   StandingAgentBaseOptions,
+  StandingAgentHandle,
   StandingAgentOptions,
   StandingAgentPoolOptions,
   StandingAgentSharedOptions,
   TurnArtifacts,
+  ArtifactsRequest,
+  RequestArtifacts,
   Unsubscribe,
   WakeReason,
 } from './types.js';

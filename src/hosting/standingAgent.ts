@@ -134,6 +134,7 @@ import {
   ArtifactSessionRequiredError,
   AwaitingDecisionError,
   ConcurrentRunError,
+  HostClosedError,
   InvalidWireOpError,
   NoArtifactStoreError,
   NoPendingAskError,
@@ -152,12 +153,15 @@ import { openTurnArtifacts } from './turnArtifacts.js';
 import type { SessionWireRequest, SessionWireResult } from './sessionWire.js';
 import { SESSION_LIST_OP, SESSION_TRANSCRIPT_OP } from './sessionWire.js';
 import type {
+  ArtifactsRequest,
   CheckpointEnvelope,
   HostHandle,
   HostReply,
   HostRequest,
   PausedRun,
   PendingAsk,
+  RequestArtifacts,
+  StandingAgentHandle,
   StandingAgentOptions,
   SessionLifecycle,
 } from './types.js';
@@ -268,7 +272,7 @@ interface Lane {
  */
 export async function standingAgent<TH extends HostHandle>(
   options: StandingAgentOptions<TH>,
-): Promise<TH> {
+): Promise<TH & StandingAgentHandle> {
   const { sessions, host } = options;
   const policy = options.onConcurrentInvoke ?? 'reject';
   const durability = options.durability ?? 'exit';
@@ -1014,20 +1018,8 @@ export async function standingAgent<TH extends HostHandle>(
         reply.fail(new NoArtifactStoreError(op.op));
         return;
       }
-      let stored: MemoryIdentity | undefined;
-      if (request.userId !== undefined && envelope !== undefined) {
-        try {
-          stored =
-            envelope.format === 'flowchart-v1'
-              ? readPausedRun(envelope).conversation.identity
-              : readEnvelope(envelope).identity;
-        } catch (err) {
-          // The same law as a turn: an unreadable stored conversation is a
-          // different fact from an absent one, and only one of them is safe
-          // to compose a scope from.
-          throw err instanceof UnreadableEnvelopeError ? err.withSession(sessionId) : err;
-        }
-      }
+      const stored =
+        request.userId !== undefined ? storedIdentityOf(envelope, sessionId) : undefined;
       const scope = sessionArtifactScope(request.userId, sessionId, stored);
       const bound = bindArtifacts(store, scope, {
         onEvent: (fact) => emitArtifactFact(lane.agent, fact, { sessionId }),
@@ -1132,6 +1124,75 @@ export async function standingAgent<TH extends HostHandle>(
     } catch (err) {
       throw err instanceof UnreadableEnvelopeError ? err.withSession(sessionId) : err;
     }
+  }
+
+  /**
+   * The identity a stored conversation carries — the `stored` input of
+   * `sessionArtifactScope`. The same law as a turn: an unreadable stored
+   * conversation is a different fact from an absent one, and only one of them
+   * is safe to compose a scope from, so it throws by name.
+   */
+  function storedIdentityOf(
+    envelope: CheckpointEnvelope | undefined,
+    sessionId: string,
+  ): MemoryIdentity | undefined {
+    if (envelope === undefined) return undefined;
+    try {
+      return envelope.format === 'flowchart-v1'
+        ? readPausedRun(envelope).conversation.identity
+        : readEnvelope(envelope).identity;
+    } catch (err) {
+      throw err instanceof UnreadableEnvelopeError ? err.withSession(sessionId) : err;
+    }
+  }
+
+  /**
+   * `handle.artifactsForRequest` — the redemption door's composition, handed
+   * to the host for a path that is not a turn (see
+   * {@link StandingAgentHandle.artifactsForRequest}).
+   *
+   * Every step is the one `answerArtifact` takes, in the same order and with
+   * the same instances — the badge (`verifyRequestIdentity`), the stored
+   * conversation (`storedFor`), ownership (`mayRedeemFrom`), the serving
+   * agent's store, the ONE composer (`sessionArtifactScope`) and the fact sink
+   * stamped with the session — so the scope it binds is the scope a wire
+   * redemption by the same caller reads. What differs is only what is handed
+   * back: the bound verbs instead of one resolved ref. Refusals are VALUES,
+   * because the host decides its own status codes; nothing is emitted before
+   * ownership is settled, and a refused caller builds no lane.
+   */
+  async function artifactsForRequest(request: ArtifactsRequest): Promise<RequestArtifacts> {
+    if (closing !== undefined) throw new HostClosedError(host.name);
+    let verified: VerifiedIdentity | undefined;
+    try {
+      verified = await verifyRequestIdentity(identityOptions, request.headers, request.userId);
+    } catch (err) {
+      return {
+        bound: false,
+        reason: 'unverified',
+        error: err instanceof Error ? err : new Error(String(err)),
+      };
+    }
+    const userId = verified?.userId ?? request.userId;
+    const sessionId = request.sessionId;
+    if (sessionId === undefined) return { bound: false, reason: 'no-session' };
+    const needsStored = identityOptions !== undefined || userId !== undefined;
+    const envelope = needsStored ? await storedFor(sessionId) : undefined;
+    if (identityOptions !== undefined && !mayRedeemFrom(sessionId, envelope, verified)) {
+      return { bound: false, reason: 'not-found' };
+    }
+    const stored = userId !== undefined ? storedIdentityOf(envelope, sessionId) : undefined;
+    const lane = laneFor(sessionId);
+    lane.lastUsedMs = Date.now();
+    const store = lane.agent.getArtifactStore();
+    if (store === undefined) return { bound: false, reason: 'no-store' };
+    const agent = lane.agent;
+    return {
+      bound: true,
+      artifacts: bindArtifacts(store, sessionArtifactScope(userId, sessionId, stored), {
+        onEvent: (fact) => emitArtifactFact(agent, fact, { sessionId }),
+      }),
+    };
   }
 
   /**
@@ -1611,7 +1672,8 @@ export async function standingAgent<TH extends HostHandle>(
   return {
     ...handle,
     close: closeOnce,
-  } as TH;
+    artifactsForRequest,
+  } as TH & StandingAgentHandle;
 }
 
 /**

@@ -187,7 +187,7 @@ things land:
 |---|---|---|
 | R | the run's `scope.runIdentity`, written ONCE by the seed stage (a resume never re-seeds) | the run's own recording and every tool's `ctx.artifacts` |
 | S | `sessionArtifactScope(userId, sessionId, stored)` | the door's redemption and the hand-over |
-| C | `Agent.checkpoint()` → `conversationOwner()` = `Agent.lastRunIdentity` | the STORED identity every later R and S read |
+| C | `Agent.checkpoint()` → `conversationOwner()` = `Agent.lastRunIdentity` — set by `run()` from the call, and (since Follow-up A) by `resume()` from the call or the paused run's own record (`core/agent/callerIdentity.ts · callerIdentityOf`) | the STORED identity every later R and S read |
 
 | case | R vs S |
 |---|---|
@@ -196,11 +196,14 @@ things land:
 | resume by the same verified user as the pause | agree |
 | **KNOWN EDGE** — no user, the conversation carries an identity (an app-seeded tenant; a user an earlier turn claimed at an open door) | R = the stored identity, S = the session rung: the recording 404s at the door, the hand-over's filing redeems |
 | **KNOWN EDGE** — open door, a pause that named nobody resumed by a claimed user (or the claimed user changes) | R = the pausing seed, S = the resuming request's tuple |
-| after ANY resume on a shared agent, or on a pooled instance rebuilt after eviction | C is poisoned (Follow-up A): the stored identity names another session's caller or none, and every LATER S and R read it |
+| after a resume on a shared agent, or on a pooled instance rebuilt after eviction | FIXED (Follow-up A): C is the resumed run's own caller, so the stored identity no longer names another session's caller or none |
 
-Where S and C agree, the hand-over and the door agree for the same caller;
-where C is poisoned they move together, and away from where the earlier turns
-filed.
+Where S and C agree, the hand-over and the door agree for the same caller.
+
+A host that needs S OUTSIDE a turn (a read by ref before the run, an app-owned
+route) asks `handle.artifactsForRequest(request)` — the redemption door's own
+verifier, ownership rule and composer, handed back as bound verbs or a reason;
+it never composes S itself.
 
 ## Record and origin
 
@@ -221,17 +224,27 @@ id), so a reader joining on that run id must say "paused, no recording", not
 
 ## Follow-ups (named, not in this packet)
 
-- **A — `Agent.resume` never updates `lastRunIdentity`** (row C above). After a
-  resume the persisted conversation carries the identity of the instance's last
-  `run()`: reproduced as an ownership conflict after an approved tool ran (shared
-  agent, verifier), an ownerless session re-homed into another conversation's
-  namespace under another principal (open door), and an evicted owner locked out
-  (pooled). Its own packet.
+- **A — FIXED: `Agent.resume` never updated `lastRunIdentity`** (row C above).
+  After a resume the persisted conversation carried the identity of the
+  instance's last `run()`: an ownership conflict after an approved tool ran
+  (shared agent, verifier), an ownerless session re-homed into another
+  conversation's namespace under another principal (open door), and an evicted
+  owner locked out (pooled). `resume()` now sets it from `options.identity ??`
+  the paused run's caller, read off the flowchart checkpoint
+  (`callerIdentityOf`, the inverse of seed's rungs; the per-run default is
+  recognised by shape, `RunnerBase.ts · isMintedRunId`, because the checkpoint
+  does not carry the paused run's id). Pinned by
+  `test/hosting/resume-identity.test.ts`.
 - **B — what a no-user (or changed-claimed-user) request on a conversation that
   carries an identity MEANS** (the KNOWN EDGE rows). Every fix moves an existing
   deployment's memory namespace or redemption reach; awaits the owner's ruling.
-- **R2-11 — HIGH, security: self-explain on a shared agent reads another
-  person's run.** `SelfExplainBinding` captures "the previous completed run" per
+- **R2-11 — FIXED: self-explain on a shared agent read another person's
+  run.** `SelfExplainBinding` now keeps evidence PER CONVERSATION (keyed by the
+  run's session, `getSessionId`; bounded LRU) and serves the asking run's
+  session only; the tools' inner-run records carry the session and are served
+  through `innerRunsOfConversation`. Pinned by the flipped test in
+  `turn-artifacts-round2.test.ts` and the seeded property tests in
+  `test/hosting/self-explain-isolation.test.ts`. The original entry: `SelfExplainBinding` captures "the previous completed run" per
   INSTANCE; on `standingAgent({ agent })` that is whoever ran last, so Bob's
   why-question reads Alice's snapshot and narrative (the devil's round-2 repro:
   Alice's "my secret is PINEAPPLE-42" returned to Bob's model by

@@ -78,6 +78,14 @@ export interface InnerRunRecord {
   /** Committed steps in the inner run — the size hint the descent line prints. */
   readonly steps: number;
   /**
+   * The session of the outer run that made the call (`ctx.sessionId`) —
+   * absent for a call made by a run with no session. The key a
+   * self-explaining agent serves records under
+   * ({@link innerRunsOfConversation}): on an agent shared by many sessions,
+   * one store holds everybody's calls.
+   */
+  readonly sessionId?: string;
+  /**
    * `{ snapshot, structure }` — absent only when capture itself failed, in
    * which case {@link problem} says why.
    */
@@ -111,6 +119,8 @@ export interface InnerRunSummary {
   readonly toolName: string;
   readonly outcome: InnerRunOutcome;
   readonly steps: number;
+  /** See {@link InnerRunRecord.sessionId}. */
+  readonly sessionId?: string;
 }
 
 /** Read side — what the trace tools are given. */
@@ -198,6 +208,7 @@ export function innerRunStore(limit: number = DEFAULT_INNER_RUN_LIMIT): InnerRun
         toolName: record.toolName,
         outcome: record.outcome,
         steps: record.steps,
+        ...(record.sessionId !== undefined && { sessionId: record.sessionId }),
       }));
     },
     get dropped(): number {
@@ -235,6 +246,42 @@ export function mergeInnerRuns(lookups: readonly InnerRunLookup[]): InnerRunLook
     },
     get limit(): number {
       return Math.min(...lookups.map((lookup) => lookup.limit));
+    },
+  };
+}
+
+/**
+ * The records ONE conversation's runs filed — the view a self-explaining agent
+ * serves (`selfExplain.ts · SelfExplainBinding`), so a why-question asked in
+ * session S can neither descend into nor list a call another session made.
+ *
+ * `sessionId` undefined selects the records of runs with no session. A record
+ * of another conversation answers exactly like a record never kept (the
+ * `get` is `undefined`, the `list` leaves it out): the same not-found, so the
+ * view says nothing about whether anyone else called the tool. `dropped` and
+ * `limit` describe the store as a whole.
+ *
+ * @example
+ * ```ts
+ * const mine = innerRunsOfConversation(lookup, 'session-7');
+ * mine.get('call-from-session-9'); // undefined — not found, not forbidden
+ * ```
+ */
+export function innerRunsOfConversation(
+  lookup: InnerRunLookup,
+  sessionId: string | undefined,
+): InnerRunLookup {
+  return {
+    get: (toolCallId) => {
+      const found = lookup.get(toolCallId);
+      return found !== undefined && found.sessionId === sessionId ? found : undefined;
+    },
+    list: () => lookup.list().filter((summary) => summary.sessionId === sessionId),
+    get dropped(): number {
+      return lookup.dropped;
+    },
+    get limit(): number {
+      return lookup.limit;
     },
   };
 }

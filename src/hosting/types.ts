@@ -364,6 +364,74 @@ export type TurnArtifacts =
   | { readonly bound: false; readonly reason: 'no-session' | 'no-store' };
 
 /**
+ * The part of a request {@link StandingAgentHandle.artifactsForRequest} reads:
+ * WHICH conversation (`sessionId`) and WHO is asking — the transport's headers
+ * (the bearer token a configured verifier checks) and, at a door with no
+ * verifier, its `userId` claim. The same fields, read the same way, as a turn
+ * or a redemption on the wire.
+ */
+export type ArtifactsRequest = Pick<HostRequest, 'sessionId' | 'headers' | 'userId'>;
+
+/**
+ * What {@link StandingAgentHandle.artifactsForRequest} answers: the serving
+ * agent's artifact store bound to the scope a REDEMPTION by this caller of this
+ * session would read — or why nothing was bound.
+ *
+ * `artifacts` has the {@link TurnArtifacts} shape: five verbs, no scope on the
+ * value, never the unscoped store. Unlike a turn's hand-over it is not revoked
+ * when a turn ends — there is no turn; it is the host's own request's.
+ *
+ * `bound: false` says why, checked in this order:
+ *  - `'unverified'` — a verifier is configured and the request did not pass it
+ *    (no token where one is required, a token that does not verify, a claimed
+ *    user the token does not prove). `error` is the verifier's refusal, for the
+ *    host's log and its 401.
+ *  - `'no-session'` — the request named no session.
+ *  - `'not-found'` — at a verifying door, no conversation THIS caller can open
+ *    under that id: somebody else's, one nobody signed for, or one whose first
+ *    turn has not persisted yet (unless that turn is this caller's, in flight).
+ *    One reason for all of them, as redemption answers them with one not-found.
+ *  - `'no-store'` — the serving agent has no artifact store.
+ */
+export type RequestArtifacts =
+  | { readonly bound: true; readonly artifacts: ToolArtifacts }
+  | {
+      readonly bound: false;
+      readonly reason: 'unverified' | 'no-session' | 'not-found' | 'no-store';
+      /** Present with `'unverified'` only: the verifier's refusal. */
+      readonly error?: Error;
+    };
+
+/**
+ * What `standingAgent(...)` adds to the host adapter's own handle.
+ */
+export interface StandingAgentHandle {
+  /**
+   * The serving agent's artifact store, bound to a VERIFIED request's scope —
+   * for the paths that are not a chat turn: a read before a run (a panel
+   * redeeming a payload by ref), or an app-owned HTTP route that files its own
+   * artifacts beside a conversation.
+   *
+   * The host never composes the scope. This runs the door's own steps with the
+   * door's own instances: the configured verifier, the session store (woken and
+   * hydrated as a redemption does), the redemption door's ownership rule, the
+   * scope composer redemption and `reply.turnArtifacts` use, and the store of
+   * the agent that serves that session. So a ref filed through it is redeemed
+   * on the wire by the same caller, and a ref another caller filed answers
+   * exactly like a ref that never existed.
+   *
+   * @example  An app route that reads a payload by ref before the turn runs
+   *   const handle = await standingAgent({ agent, sessions, host, identity: { verify } });
+   *   const found = await handle.artifactsForRequest({ sessionId, headers: req.headers });
+   *   if (!found.bound) return res.status(found.reason === 'unverified' ? 401 : 404).end();
+   *   const payload = await found.artifacts.get(ref); // null: missing, expired or not yours
+   *
+   * @throws HostClosedError after `close()`.
+   */
+  artifactsForRequest(request: ArtifactsRequest): Promise<RequestArtifacts>;
+}
+
+/**
  * What you hand {@link AgentHost.serve}. Throwing is treated exactly like
  * calling `reply.fail(err)` — a handler that throws is a failed request, never
  * a hung one.

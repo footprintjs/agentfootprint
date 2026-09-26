@@ -1,8 +1,10 @@
 /**
  * Round-2 attack regressions for `HostReply.turnArtifacts` and the hosting
  * door — the sixteen attacks of the 2026-09-25 closing re-attack, each ported
- * to assert the FIXED behaviour (one, R2-11, is a named pre-existing defect and
- * is pinned as such with `it.fails`), plus the bound's own pins.
+ * to assert the FIXED behaviour (R2-11, a pre-existing defect first pinned
+ * with `it.fails`, is fixed and asserted like the rest — its
+ * property-style companion is `self-explain-isolation.test.ts`), plus the
+ * bound's own pins.
  *
  * The laws being pinned:
  *   • BOUNDED. The hand-over (hook + drain) races a ceiling
@@ -650,41 +652,38 @@ describe('R2-10 — battery: every other door during alice’s run (shared shape
   });
 });
 
-// ─── R2-11 — PRE-EXISTING HIGH, named, not fixed here ───────────────
+// ─── R2-11 — self-explain evidence is kept per conversation ─
 
-describe('R2-11 — KNOWN DEFECT (pre-existing, HIGH follow-up): self-explain on a shared agent', () => {
-  it.fails(
-    'bob’s why-question must not read ALICE’s run — today it does (fails until the follow-up lands)',
-    async () => {
-      const base = mock({
-        replies: [
-          { content: 'noted' },
-          { toolCalls: [{ id: 'k1', name: 'read_skill', args: { id: 'self-explain' } }] },
-          { toolCalls: [{ id: 'k2', name: 'read_narrative', args: {} }] },
-          { toolCalls: [{ id: 'k3', name: 'run_overview', args: {} }] },
-          { content: 'here is why' },
-        ],
-      });
-      const provider = new Proxy(base, {
-        get: (target, prop) => (prop === 'stream' ? undefined : Reflect.get(target, prop, target)),
-      });
-      const agent = Agent.create({ provider: provider as never, model: 'm', maxIterations: 6 })
-        .selfExplain({})
-        .build();
-      const toolResults: string[] = [];
-      agent.on('agentfootprint.stream.tool_end', (event: AgentfootprintEvent) => {
-        toolResults.push(JSON.stringify(event.payload));
-      });
-      const { host } = await served(agent, { verify: true });
-      await host.deliver({
-        input: 'my secret is PINEAPPLE-42, keep it',
-        sessionId: 'sA',
-        headers: ALICE,
-      });
-      await host.deliver({ input: 'why did you answer that?', sessionId: 'sB', headers: BOB });
-      expect(toolResults.filter((text) => text.includes('PINEAPPLE-42'))).toEqual([]);
-    },
-  );
+describe('R2-11 — self-explain on a shared agent', () => {
+  it('bob’s why-question does not read ALICE’s run', async () => {
+    const base = mock({
+      replies: [
+        { content: 'noted' },
+        { toolCalls: [{ id: 'k1', name: 'read_skill', args: { id: 'self-explain' } }] },
+        { toolCalls: [{ id: 'k2', name: 'read_narrative', args: {} }] },
+        { toolCalls: [{ id: 'k3', name: 'run_overview', args: {} }] },
+        { content: 'here is why' },
+      ],
+    });
+    const provider = new Proxy(base, {
+      get: (target, prop) => (prop === 'stream' ? undefined : Reflect.get(target, prop, target)),
+    });
+    const agent = Agent.create({ provider: provider as never, model: 'm', maxIterations: 6 })
+      .selfExplain({})
+      .build();
+    const toolResults: string[] = [];
+    agent.on('agentfootprint.stream.tool_end', (event: AgentfootprintEvent) => {
+      toolResults.push(JSON.stringify(event.payload));
+    });
+    const { host } = await served(agent, { verify: true });
+    await host.deliver({
+      input: 'my secret is PINEAPPLE-42, keep it',
+      sessionId: 'sA',
+      headers: ALICE,
+    });
+    await host.deliver({ input: 'why did you answer that?', sessionId: 'sB', headers: BOB });
+    expect(toolResults.filter((text) => text.includes('PINEAPPLE-42'))).toEqual([]);
+  });
 });
 
 // ─── R2-12 — the door no longer builds lanes for sessions it refuses ─

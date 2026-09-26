@@ -88,6 +88,7 @@ import {
   type ToolSessionReport,
 } from './toolSessions.js';
 import { buildEventMeta, eventBelongsToRun } from '../bridge/eventMeta.js';
+import { callerIdentityOf } from './agent/callerIdentity.js';
 import type {
   AgentfootprintEvent,
   AgentfootprintEventMap,
@@ -749,7 +750,13 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
   /** The identity the caller gave the last run, or undefined when they gave
    *  none. Only an EXPLICIT identity is carried onto `checkpoint()`: the
    *  default is derived from a runId, and storing that would pin a whole
-   *  conversation to the id of the one run that started it. */
+   *  conversation to the id of the one run that started it.
+   *
+   *  Written by BOTH run doors, before the executor exists: `run()` from the
+   *  call and the continued conversation, `resume()` from the call and the
+   *  paused run's own record (`agent/callerIdentity.ts · callerIdentityOf`).
+   *  A resume that inherited it instead stored another person's identity on
+   *  a shared agent and none on a rebuilt pooled one. */
   private lastRunIdentity?: MemoryIdentity;
 
   /** How long ONE tool teardown may take before the runner stops waiting.
@@ -1319,6 +1326,18 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
    */
   ownsEvent(event: AgentfootprintEvent): boolean {
     return eventBelongsToRun(event.meta, this.currentRunContext);
+  }
+
+  /**
+   * The session of the run this agent is serving (or served last), or
+   * undefined for a run with no session — the conversation key the
+   * self-explain evidence is kept and served under
+   * (`selfExplain.ts · getSessionId`).
+   *
+   * @internal
+   */
+  servingSessionId(): string | undefined {
+    return this.currentRunContext.sessionId;
   }
 
   /**
@@ -1943,6 +1962,10 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
    * The model is told the same thing by the same fact — the trace tools answer
    * "No completed run is available yet" and the skill body says to say so
    * plainly. This is that answer, for the program.
+   *
+   * Evidence is kept per conversation, so on an agent serving several sessions
+   * this answers for the session of the run in flight — or, between runs, of
+   * the run served last.
    */
   canExplain(): boolean {
     return this.selfExplainBinding?.artifacts !== undefined;
@@ -2175,6 +2198,14 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
     // finishes: a resume that then FAILS must not leave the agent refusing
     // every later message on behalf of a question that has been answered.
     this.pendingQuestion = undefined;
+    // WHO this resumed run is for — set BEFORE the executor exists, because the
+    // run context's principal (every event's `EventMeta.principal`), a tool's
+    // `ctx.identity` and `checkpoint()` all read it. The resuming call's
+    // identity wins, as it does on `run()`; absent, it is the identity the
+    // PAUSED run's caller named, read off the checkpoint being resumed — never
+    // the identity of whatever this instance ran last, which on a shared or
+    // pooled agent is another person's, or nobody's (`callerIdentity.ts`).
+    this.lastRunIdentity = options?.identity ?? callerIdentityOf(checkpoint.sharedState);
     this.emitPauseResume(checkpoint, input);
     // Fresh executor — footprintjs 4.17.0+ seeds the runtime from
     // `checkpoint.sharedState` (and nested subflow states) automatically
@@ -2889,11 +2920,10 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
     // The actor, for every event this run emits (9.11.0).
     //
     // `lastRunIdentity` is what the CALLER passed and nothing else — `run()`
-    // sets it from `input.identity ?? options.identity ?? the conversation's`
-    // before this method is reached, and it stays undefined when nobody named
-    // one. `resume()` does not set it, so an explicit identity handed to
-    // `resume(cp, input, { identity })` is honoured here and a bare resume
-    // inherits whatever the run it continues was for.
+    // sets it from `input.identity ?? options.identity ?? the conversation's`,
+    // and `resume()` from `options.identity ?? the paused run's caller's`
+    // (`agent/callerIdentity.ts`), both before this method is reached; it stays
+    // undefined when nobody named one.
     //
     // NOT `scope.runIdentity`: that one is always populated and defaults to
     // `{ conversationId: '<runId>' }` (or, since 9.10.0, to the sessionId on a

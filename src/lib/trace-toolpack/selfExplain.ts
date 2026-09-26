@@ -29,6 +29,14 @@
  *    would expose the IN-FLIGHT run. Capturing only at terminal flush
  *    means the binding can never serve anything but a completed run.
  *
+ *    Keyed PER CONVERSATION (R2-11): one agent instance can serve
+ *    many people (`standingAgent({ agent })`), so "the previous completed
+ *    run" is asked of the ASKING run's session — the evidence of the last
+ *    run that session completed, never whichever run the instance finished
+ *    last. A run with no session reads the last run that had none. A tool's
+ *    retained inner runs are served through the same key
+ *    (`innerRunRecords.ts · innerRunsOfConversation`).
+ *
  * 2. `buildSelfExplainSkill` — the skill in two modes:
  *
  *      - INLINE (default): the skill unlocks the trace tools — every name
@@ -57,7 +65,7 @@ import type { AgentfootprintEvent } from '../../events/registry.js';
 import { skillScopedTools } from '../../tool-providers/skillScopedTools.js';
 import type { ToolProvider } from '../../tool-providers/types.js';
 import { SELF_EXPLAIN_BODY, SELF_EXPLAIN_WHEN } from './debugPrompt.js';
-import type { InnerRunLookup } from './innerRunRecords.js';
+import { innerRunsOfConversation, type InnerRunLookup } from './innerRunRecords.js';
 import { NO_COMPLETED_RUN_MESSAGE } from './traceToolNames.js';
 import type { TraceToolpackArtifacts, TraceToolpackOptions } from './types.js';
 
@@ -120,6 +128,24 @@ type CtrlRecorder = ReturnType<typeof controlDepRecorder>;
 export const SELF_EXPLAIN_MAX_EVENTS = 2000;
 
 /**
+ * How many conversations one binding keeps evidence for — the least recently
+ * explained or completed is dropped past it. One agent instance serving many
+ * sessions holds one completed turn per session, so the bound is what keeps a
+ * long-lived shared agent from pinning every session's last snapshot. A
+ * session whose evidence was dropped is answered like one with no completed
+ * turn: nothing is served, and nothing of anybody else's is served instead.
+ */
+const MAX_CONVERSATIONS = 64;
+
+/** One completed turn's evidence, captured at its terminal flush. */
+interface CapturedTurn {
+  readonly snapshot: RuntimeSnapshot;
+  readonly ctrl: CtrlRecorder;
+  readonly narrative?: readonly string[];
+  readonly events?: readonly AgentfootprintEvent[];
+}
+
+/**
  * What the binding reads a completed turn's evidence FROM.
  *
  * One object rather than three wiring calls, on purpose: the
@@ -145,26 +171,31 @@ export interface SelfExplainSource {
    * moment the follow-up question arrives.
    */
   getInnerRuns?(): InnerRunLookup | undefined;
+  /**
+   * The session of the run the agent is serving — or, between runs, served
+   * last — `undefined` for a run with no session. It is the KEY the evidence
+   * is kept and served under: read at the terminal flush it names the
+   * conversation the finished turn belongs to, read inside a turn it names the
+   * conversation asking. Absent (a bare `getSnapshot` binding) every run
+   * shares one key, which is the single-conversation behaviour.
+   */
+  getSessionId?(): string | undefined;
 }
 
 /**
  * The late-binding seam. Create one per built Agent, attach
  * `binding.recorder()` via `agent.attach()`, and point `bindTo()` at the
  * agent's `getLastSnapshot`. `artifacts` then always answers with the
- * previous COMPLETED run — never the in-flight one.
+ * previous COMPLETED run of the asking conversation — never the in-flight
+ * one, and never another conversation's.
  */
 export class SelfExplainBinding {
   private source: SelfExplainSource | undefined;
   private ctrl: CtrlRecorder = controlDepRecorder();
   private tail: EventTail | undefined;
-  private captured:
-    | {
-        snapshot: RuntimeSnapshot;
-        ctrl: CtrlRecorder;
-        narrative?: readonly string[];
-        events?: readonly AgentfootprintEvent[];
-      }
-    | undefined;
+  /** Completed-turn evidence per conversation (session id; `undefined` = no
+   *  session). Insertion order is recency order — see {@link MAX_CONVERSATIONS}. */
+  private readonly captured = new Map<string | undefined, CapturedTurn>();
 
   constructor(
     private readonly include: SelfExplainInclude = {},
@@ -195,17 +226,46 @@ export class SelfExplainBinding {
     }
   }
 
-  /** Evidence of the previous completed run, or undefined before the first. */
+  /**
+   * Evidence of the previous completed run OF THE ASKING CONVERSATION, or
+   * undefined when that conversation has completed none (or its evidence was
+   * dropped past the bound). Never another conversation's.
+   */
   get artifacts(): TraceToolpackArtifacts | undefined {
-    if (!this.captured) return undefined;
-    const innerRuns = this.source?.getInnerRuns?.();
+    const conversation = this.conversation();
+    const turn = this.captured.get(conversation);
+    if (turn === undefined) return undefined;
+    this.touch(conversation, turn);
+    const allInnerRuns = this.source?.getInnerRuns?.();
+    const innerRuns =
+      allInnerRuns === undefined
+        ? undefined
+        : this.source?.getSessionId === undefined
+        ? allInnerRuns
+        : innerRunsOfConversation(allInnerRuns, conversation);
     return {
-      snapshot: this.captured.snapshot,
-      controlDeps: this.captured.ctrl.asLookup(),
-      ...(this.captured.narrative !== undefined && { narrative: this.captured.narrative }),
-      ...(this.captured.events !== undefined && { events: this.captured.events }),
+      snapshot: turn.snapshot,
+      controlDeps: turn.ctrl.asLookup(),
+      ...(turn.narrative !== undefined && { narrative: turn.narrative }),
+      ...(turn.events !== undefined && { events: turn.events }),
       ...(innerRuns !== undefined && { innerRuns }),
     };
+  }
+
+  /** The conversation key of the run in flight (or served last). */
+  private conversation(): string | undefined {
+    return this.source?.getSessionId?.();
+  }
+
+  /** File (or refresh) one conversation's evidence as the most recent, within the bound. */
+  private touch(conversation: string | undefined, turn: CapturedTurn): void {
+    this.captured.delete(conversation);
+    this.captured.set(conversation, turn);
+    while (this.captured.size > MAX_CONVERSATIONS) {
+      const oldest = this.captured.keys().next();
+      if (oldest.done === true) break;
+      this.captured.delete(oldest.value);
+    }
   }
 
   /** The recorder to attach — forwards flow events to the per-run ctrl. */
@@ -221,12 +281,14 @@ export class SelfExplainBinding {
           ? this.source.getNarrative().map((entry) => entry.text)
           : undefined;
       const events = this.tail?.snapshot().events;
-      this.captured = {
+      // Filed under the FINISHED run's conversation — at the terminal flush
+      // the source still names the run that just ended.
+      this.touch(this.conversation(), {
         snapshot,
         ctrl: this.ctrl,
         ...(narrative !== undefined && { narrative }),
         ...(events !== undefined && { events }),
-      };
+      });
     };
     return {
       id: 'self-explain-binding',
@@ -238,7 +300,8 @@ export class SelfExplainBinding {
         // so the captured lookup survives Convention-4's runId reset.
         // The event tail rotates for the same reason — turn N+1's
         // evidence must not carry turn N's events. The retired tail is
-        // the one `captured` already holds, so it is not lost.
+        // the one its conversation's `captured` entry already holds, so it
+        // is not lost.
         this.ctrl = controlDepRecorder();
         if (this.wantsEvents && this.source?.on) this.tail = eventTail(this.maxEvents);
       },
