@@ -1232,10 +1232,13 @@ export async function standingAgent<TH extends HostHandle>(
     }
     let verified: VerifiedIdentity | undefined;
     try {
+      // The turn door's four arguments — the sign-in key included, so a
+      // person signed in by the cookie is who they are here too.
       verified = await verifyRequestIdentity(
         identityOptions,
         singleValuedHeaders(request.headers),
         request.userId,
+        request.signInKey,
       );
     } catch (err) {
       const error = err instanceof Error ? err : new Error(String(err));

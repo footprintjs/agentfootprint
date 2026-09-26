@@ -334,7 +334,10 @@ describe('the https cookie — unit (review idI34 S-8, M18)', () => {
 describe('the sign-in door — scenarios', () => {
   it('config, login, me, a turn as the person, logout — and the cookie attributes', async () => {
     const m = await mounted();
-    expect((await call(m.url, '/auth/config')).body).toEqual({ mode: 'password' });
+    expect((await call(m.url, '/auth/config')).body).toEqual({
+      mode: 'password',
+      passwordKind: 'local',
+    });
     expect((await call(m.url, '/auth/me')).status).toBe(401);
 
     const signedIn = await login(m.url, 'alice', 'alice-pw');
