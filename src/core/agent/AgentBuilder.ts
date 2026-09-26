@@ -83,6 +83,7 @@ import {
   SelfExplainBinding,
   type SelfExplainOptions,
 } from '../../lib/trace-toolpack/selfExplain.js';
+import { servingConversationOf } from './servingConversation.js';
 import {
   innerRunsOf,
   mergeInnerRuns,
@@ -3542,9 +3543,10 @@ export class AgentBuilder {
         // …and the evidence as a whole is kept PER CONVERSATION (R2-11): on a
         // shared `standingAgent({ agent })` the previous completed run of the
         // INSTANCE is whoever ran last, so the binding files each finished
-        // turn under its session and serves the asking run's session only —
-        // snapshot, narrative, events and the tools' inner runs alike.
-        getSessionId: () => agent.servingSessionId(),
+        // turn under its conversation and serves the asking run's only —
+        // snapshot, narrative, events and the tools' inner runs alike
+        // (`agent/servingConversation.ts` says what the key is).
+        getServing: () => servingConversationOf(agent),
       });
       agent.attach(selfExplainBinding.recorder());
       // …and the agent holds the binding, so `agent.canExplain()` answers

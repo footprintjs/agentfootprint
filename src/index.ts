@@ -700,6 +700,7 @@ export {
 export {
   NoConversationError,
   PendingQuestionError,
+  ResumeIdentityConflictError,
   RunInFlightError,
 } from './core/conversation.js';
 export {

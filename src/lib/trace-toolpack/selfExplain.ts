@@ -137,12 +137,26 @@ export const SELF_EXPLAIN_MAX_EVENTS = 2000;
  */
 const MAX_CONVERSATIONS = 64;
 
-/** One completed turn's evidence, captured at its terminal flush. */
+/** How many of one conversation's completed runs its inner-run view admits. */
+const MAX_RUNS_PER_CONVERSATION = 32;
+
+/** One conversation's evidence: its last completed turn, and its runs. */
 interface CapturedTurn {
   readonly snapshot: RuntimeSnapshot;
   readonly ctrl: CtrlRecorder;
   readonly narrative?: readonly string[];
   readonly events?: readonly AgentfootprintEvent[];
+  /** The ids of this conversation's completed runs, most recent last — the
+   *  runs whose tools' inner records this conversation may read. */
+  readonly runIds: readonly string[];
+}
+
+/** Which conversation the agent is serving, and which run — see {@link SelfExplainSource.getServing}. */
+export interface SelfExplainServing {
+  /** The evidence key. `undefined` = a direct run with no session. */
+  readonly conversation: string | undefined;
+  /** The run in flight, or the one served last. */
+  readonly runId: string;
 }
 
 /**
@@ -172,14 +186,17 @@ export interface SelfExplainSource {
    */
   getInnerRuns?(): InnerRunLookup | undefined;
   /**
-   * The session of the run the agent is serving — or, between runs, served
-   * last — `undefined` for a run with no session. It is the KEY the evidence
-   * is kept and served under: read at the terminal flush it names the
-   * conversation the finished turn belongs to, read inside a turn it names the
-   * conversation asking. Absent (a bare `getSnapshot` binding) every run
-   * shares one key, which is the single-conversation behaviour.
+   * The conversation the agent is serving — or, between runs, served last —
+   * and that run's id. The conversation is the KEY the evidence is kept and
+   * served under: read at the terminal flush it names the conversation the
+   * finished turn belongs to, read inside a turn it names the conversation
+   * asking. It is the run's session; a HOSTED run with no session gets the
+   * host's per-request key, which nobody can present again; only a direct run
+   * with no session shares `undefined`. Absent (a bare `getSnapshot` binding)
+   * every run shares one key — the single-conversation behaviour — and inner
+   * runs are served unfiltered.
    */
-  getSessionId?(): string | undefined;
+  getServing?(): SelfExplainServing;
 }
 
 /**
@@ -193,8 +210,8 @@ export class SelfExplainBinding {
   private source: SelfExplainSource | undefined;
   private ctrl: CtrlRecorder = controlDepRecorder();
   private tail: EventTail | undefined;
-  /** Completed-turn evidence per conversation (session id; `undefined` = no
-   *  session). Insertion order is recency order — see {@link MAX_CONVERSATIONS}. */
+  /** Evidence per conversation (see {@link SelfExplainSource.getServing}).
+   *  Insertion order is completion order — see {@link MAX_CONVERSATIONS}. */
   private readonly captured = new Map<string | undefined, CapturedTurn>();
 
   constructor(
@@ -232,17 +249,19 @@ export class SelfExplainBinding {
    * dropped past the bound). Never another conversation's.
    */
   get artifacts(): TraceToolpackArtifacts | undefined {
-    const conversation = this.conversation();
+    // No refresh on read: a read happens only inside the asking
+    // conversation's own run, whose terminal capture files it as the most
+    // recent anyway.
+    const conversation = this.serving()?.conversation;
     const turn = this.captured.get(conversation);
     if (turn === undefined) return undefined;
-    this.touch(conversation, turn);
     const allInnerRuns = this.source?.getInnerRuns?.();
     const innerRuns =
       allInnerRuns === undefined
         ? undefined
-        : this.source?.getSessionId === undefined
+        : this.source?.getServing === undefined
         ? allInnerRuns
-        : innerRunsOfConversation(allInnerRuns, conversation);
+        : innerRunsOfConversation(allInnerRuns, ownRuns(turn, conversation));
     return {
       snapshot: turn.snapshot,
       controlDeps: turn.ctrl.asLookup(),
@@ -252,13 +271,13 @@ export class SelfExplainBinding {
     };
   }
 
-  /** The conversation key of the run in flight (or served last). */
-  private conversation(): string | undefined {
-    return this.source?.getSessionId?.();
+  /** The conversation (and run) in flight, or served last. */
+  private serving(): SelfExplainServing | undefined {
+    return this.source?.getServing?.();
   }
 
-  /** File (or refresh) one conversation's evidence as the most recent, within the bound. */
-  private touch(conversation: string | undefined, turn: CapturedTurn): void {
+  /** File one conversation's evidence as the most recent, within the bound. */
+  private file(conversation: string | undefined, turn: CapturedTurn): void {
     this.captured.delete(conversation);
     this.captured.set(conversation, turn);
     while (this.captured.size > MAX_CONVERSATIONS) {
@@ -283,11 +302,17 @@ export class SelfExplainBinding {
       const events = this.tail?.snapshot().events;
       // Filed under the FINISHED run's conversation — at the terminal flush
       // the source still names the run that just ended.
-      this.touch(this.conversation(), {
+      const serving = this.serving();
+      const earlier = this.captured.get(serving?.conversation)?.runIds ?? [];
+      this.file(serving?.conversation, {
         snapshot,
         ctrl: this.ctrl,
         ...(narrative !== undefined && { narrative }),
         ...(events !== undefined && { events }),
+        runIds:
+          serving === undefined
+            ? earlier
+            : [...earlier, serving.runId].slice(-MAX_RUNS_PER_CONVERSATION),
       });
     };
     return {
@@ -317,6 +342,21 @@ export class SelfExplainBinding {
       },
     };
   }
+}
+
+/**
+ * Which inner-run records a conversation may read: those its own completed
+ * runs filed. A record that names no run (a third-party producer, a tool run
+ * outside an agent) cannot be attributed, so it is admitted only on the
+ * direct no-session path (`undefined`) — never to a session or a hosted
+ * request.
+ */
+function ownRuns(
+  turn: CapturedTurn,
+  conversation: string | undefined,
+): (runId: string | undefined) => boolean {
+  const runs = new Set(turn.runIds);
+  return (runId) => (runId === undefined ? conversation === undefined : runs.has(runId));
 }
 
 /** The delegate-mode tool: one call → a nested debugger at delegate price. */

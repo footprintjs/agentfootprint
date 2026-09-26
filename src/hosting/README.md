@@ -153,37 +153,58 @@ earlier turn claimed) while this request names nobody, and a pause that named
 nobody resumed by a claimed user — the recording is filed where no redemption
 by that caller looks.
 
-**A resumed run is for the person whose run it resumes.** `Agent.resume` sets
-the caller identity (`Agent.lastRunIdentity`: what `checkpoint()` stores, what
-`EventMeta.principal` and a tool's `ctx.identity` carry) from the resuming
-call's `identity`, else from the PAUSED run's own record on the checkpoint
+**A resumed run is for the person whose run it resumes — one run, one
+identity.** `Agent.resume` takes the caller identity (`Agent.lastRunIdentity`:
+what `checkpoint()` stores, what `EventMeta.principal` and a tool's
+`ctx.identity` carry) from the PAUSED run's own record on the checkpoint
 (`core/agent/callerIdentity.ts · callerIdentityOf`) — never from whatever the
-instance ran last. An identity the library derived for the paused run (the
-session rung, the per-run default) stays absent. So on ONE shared agent two
-signed-in people can each pause and resume, and a pooled owner whose instance
-was evicted between the pause and the resume keeps their conversation:
+instance ran last. The law: never drop an identity a caller named, never
+promote one the library derived (the session rung, the per-run default).
+
+- A resume that names an identity DIFFERENT from the paused run's caller is
+  refused before anything runs — `ResumeIdentityConflictError`, code
+  `ERR_SESSION_OWNERSHIP_CONFLICT`, naming neither person. The resumed run
+  keeps the paused run's memory namespace and credentials (a resume never
+  re-seeds), so it cannot also run as somebody else.
+- A resume that names no session keeps the paused run's, so its evidence,
+  events and tool teardown stay with that session.
+- **A checkpoint names who it is for; it is not proof.** A resume that names no
+  identity trusts the checkpoint's. A host that lets checkpoints leave its
+  trust boundary (held by a browser, say) signs them or keeps them
+  server-side, and passes the identity it verified — then an edited checkpoint
+  is refused. `standingAgent` keeps checkpoints server-side, gates every resume
+  on ownership and passes the verified identity.
+- The one stated edge: the per-run default is not recorded, so a checkpoint
+  from ANOTHER instance whose identity is exactly
+  `{ conversationId: 'run-<digits>-<digits>' }` (and matches no receipt) is
+  read as derived. Pass `identity` on `resume` to keep such a name.
 
 ```ts
 // No host: the checkpoint carries who the paused run was for.
-const paused = await agent.run({ message: 'refund me', identity: xavier });
+const paused = await agent.run({ message: 'refund me', identity: xavier }, { sessionId: 's-x' });
 agent.abandonPause();
-await agent.run({ message: 'hi', identity: yara });   // somebody else, same instance
-await agent.resume(paused.checkpoint, 'yes');          // for xavier, not yara
-agent.checkpoint()?.identity;                          // → xavier
+await agent.run({ message: 'hi', identity: yara });                 // somebody else, same instance
+await agent.resume(paused.checkpoint, 'yes', { sessionId: 's-x' }); // for xavier, in xavier's session
+agent.checkpoint()?.identity;                                        // → xavier
+await agent.resume(paused.checkpoint, 'yes', { identity: yara });   // throws ResumeIdentityConflictError
 ```
 
 **One agent, many people: self-explain reads only the asking conversation.**
 `.selfExplain()` keeps each finished turn's evidence (snapshot, narrative,
-event tail) under the SESSION it ran for, and a why-question is answered from
-the previous completed turn of the asking run's own session — never the
-instance's last run, which on `standingAgent({ agent })` is somebody else's. A
-tool's retained inner runs (`flowchartAsTool({ keepRecord: true })`) are served
-through the same key: a record another session filed is not found and not
-listed. A run with no session reads the last run that had none — two ANONYMOUS
-callers on one shared agent share that key by construction, so give each
-anonymous request its own session, or do not combine `.selfExplain()` with
-anonymous access on a shared agent. Evidence for the 64 most recently used
-conversations is kept per agent; an older one answers "no completed run".
+event tail) under the CONVERSATION it ran for, and a why-question is answered
+from the previous completed turn of the asking run's own conversation — never
+the instance's last run, which on `standingAgent({ agent })` is somebody
+else's. The conversation is the run's session. A request `standingAgent`
+serves WITHOUT a session — signed in or not, shared or pooled — is its own
+conversation, keyed by that request's latch (`#anonymous-N`), which no later
+request can present. Only a direct, unhosted run with no session shares the
+no-session key: the single-user path. A tool's retained inner runs
+(`flowchartAsTool` / `runbookAsTool` with `keepRecord: true`) are keyed by run
+AND call id and served only to the conversation whose runs made them: another
+conversation's record is not found, not listed, not counted — and a record that
+names no run (a third-party producer) is served only on the direct no-session
+path. Evidence for the 64 most recently completed conversations is kept per
+agent; an older one answers "no completed run".
 
 **Door facts carry their session — and the door checks who is asking.**
 Everything the door produces — a redemption's `resolved`/`refused`, a filing's
@@ -239,29 +260,39 @@ a panel reading a payload by ref before the run, an app-owned route that files
 a guide beside a conversation — asks the handle `standingAgent` returned
 instead. The rule: **the host never composes a scope.** The handle runs the
 redemption door's own steps with the door's own instances: the configured
-verifier, the stored conversation, the ownership rule (`mayRedeemFrom`), the
-ONE composer (`sessionArtifactScope`), and the store of the agent serving that
-session. What comes back is the `TurnArtifacts` shape — five verbs, no scope on
-the value — or a reason: `'unverified'` (with the verifier's `error`; checked
-first, so a verifying door never hands out a store to an unproven caller),
-`'no-session'`, `'not-found'` (a session this caller cannot open, including one
-whose first turn has not persisted), `'no-store'`. Never the unscoped store. A
-ref filed through it is redeemed on the wire by the same caller; another
-person's ref answers `null`, exactly like one that never existed.
+verifier, the session-id check the adapters apply (`checkSessionId`), the
+stored conversation, the ownership rule (`mayRedeemFrom`), the ONE composer
+(`sessionArtifactScope`), and the store of the instance serving that session —
+never building or evicting one (`redeemerFor`). "The caller" is what the door
+knows: with a verifier, the person the token proves; without one, the session
+id and the `userId` claim are the key, as on the wire.
+
+What comes back is the `TurnArtifacts` shape — five verbs, no scope on the
+value, never the unscoped store — or a reason, in this order: `'unverified'`
+(401), `'unavailable'` (the verifier could not answer — 503, never 401),
+`'no-session'`, `'invalid-session'` (400), `'not-found'` (a session this caller
+cannot open, or one with no live instance and nothing stored), `'no-store'`.
+The verbs count against `artifactOpsPerSession` with the wire's redemptions
+(`ArtifactOpsBusyError`), and the binding is REVOKED when its instance is
+retired from the pool or the host closes (`RequestArtifactsRevokedError`,
+already handled — ask again). A ref filed through it is redeemed on the wire
+by the same caller; another person's ref answers `null`, exactly like one that
+never existed.
 
 ```ts
-const handle = await standingAgent({ agent, sessions, host, identity: { verify } });
+import type { Request, Response } from 'express';
 
-app.get('/panel/:sessionId/:ref', async (req, res) => {
+const handle = await standingAgent({ agent, sessions, host, identity: { verify } });
+const STATUS: Record<string, number> = { unverified: 401, unavailable: 503, 'invalid-session': 400 };
+
+app.get('/panel/:sessionId/:ref', async (req: Request, res: Response) => {
+  // `req.headers` goes in as it is; the seam applies the session-id check itself.
   const scoped = await handle.artifactsForRequest({ sessionId: req.params.sessionId, headers: req.headers });
-  if (!scoped.bound) return res.status(scoped.reason === 'unverified' ? 401 : 404).end();
+  if (!scoped.bound) return res.status(STATUS[scoped.reason] ?? 404).end();
   const payload = await scoped.artifacts.get(req.params.ref); // null: missing, expired or not yours
   return payload ? res.json(payload.data) : res.status(404).end();
 });
 ```
-
-Unlike a turn's hand-over the binding is not revoked when a turn ends (there is
-no turn), and its facts are stamped with the session like every door fact.
 
 Typed input pauses use the existing `decision` transport for `{requestId,
 values}` and expose `PendingAsk.awaitingInput`. Partial replies persist the

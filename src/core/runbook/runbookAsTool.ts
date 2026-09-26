@@ -357,7 +357,7 @@ export function runbookAsTool(opts: RunbookAsToolOptions): Tool {
             .filter((text) => typeof text === 'string' && text.length > 0);
           store.keep({
             toolCallId: ctx.toolCallId,
-            ...(ctx.sessionId !== undefined && { sessionId: ctx.sessionId }),
+            ...(ctx.runId !== undefined && { runId: ctx.runId }),
             toolName: opts.name,
             outcome,
             steps: Array.isArray(commitLog) ? commitLog.length : 0,
@@ -371,7 +371,7 @@ export function runbookAsTool(opts: RunbookAsToolOptions): Tool {
         } catch (e) {
           store.keep({
             toolCallId: ctx.toolCallId,
-            ...(ctx.sessionId !== undefined && { sessionId: ctx.sessionId }),
+            ...(ctx.runId !== undefined && { runId: ctx.runId }),
             toolName: opts.name,
             outcome,
             steps: 0,

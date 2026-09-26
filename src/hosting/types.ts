@@ -364,13 +364,21 @@ export type TurnArtifacts =
   | { readonly bound: false; readonly reason: 'no-session' | 'no-store' };
 
 /**
- * The part of a request {@link StandingAgentHandle.artifactsForRequest} reads:
+ * What {@link StandingAgentHandle.artifactsForRequest} reads off a request:
  * WHICH conversation (`sessionId`) and WHO is asking — the transport's headers
  * (the bearer token a configured verifier checks) and, at a door with no
  * verifier, its `userId` claim. The same fields, read the same way, as a turn
  * or a redemption on the wire.
+ *
+ * `headers` takes a Node / Express `IncomingHttpHeaders` as it is: a value
+ * that arrived as an array (a repeated header) is not read — a repeated
+ * `authorization` is ambiguous, so it counts as no token.
  */
-export type ArtifactsRequest = Pick<HostRequest, 'sessionId' | 'headers' | 'userId'>;
+export interface ArtifactsForRequestInput {
+  readonly sessionId?: string;
+  readonly headers?: Readonly<Record<string, string | readonly string[] | undefined>>;
+  readonly userId?: string;
+}
 
 /**
  * What {@link StandingAgentHandle.artifactsForRequest} answers: the serving
@@ -378,30 +386,45 @@ export type ArtifactsRequest = Pick<HostRequest, 'sessionId' | 'headers' | 'user
  * session would read — or why nothing was bound.
  *
  * `artifacts` has the {@link TurnArtifacts} shape: five verbs, no scope on the
- * value, never the unscoped store. Unlike a turn's hand-over it is not revoked
- * when a turn ends — there is no turn; it is the host's own request's.
+ * value, never the unscoped store. Its verbs count against
+ * `artifactOpsPerSession` with the wire's redemptions (a verb past the bound
+ * rejects with `ArtifactOpsBusyError`), and the binding is REVOKED when the
+ * instance it is bound to is retired from the pool or the host is closed —
+ * a verb after that rejects with `RequestArtifactsRevokedError` (already
+ * handled; ask the handle again).
  *
  * `bound: false` says why, checked in this order:
  *  - `'unverified'` — a verifier is configured and the request did not pass it
  *    (no token where one is required, a token that does not verify, a claimed
- *    user the token does not prove). `error` is the verifier's refusal, for the
- *    host's log and its 401.
+ *    user the token does not prove). `error` is the verifier's refusal; a
+ *    host's 401.
+ *  - `'unavailable'` — the verifier could not answer (`VerifierUnavailableError`,
+ *    an identity-provider outage). `error` says which; a host's 503, never a
+ *    401 — the caller's credential was not judged.
  *  - `'no-session'` — the request named no session.
- *  - `'not-found'` — at a verifying door, no conversation THIS caller can open
- *    under that id: somebody else's, one nobody signed for, or one whose first
- *    turn has not persisted yet (unless that turn is this caller's, in flight).
- *    At any door, a session with no live instance and no stored conversation
- *    (nothing could have minted there). One reason for all of them, as
- *    redemption answers them with one not-found. Never builds or evicts a
- *    pooled instance to find out.
+ *  - `'invalid-session'` — the session id is one the wire refuses at the door
+ *    (empty, over the length bound, or a character outside visible ASCII —
+ *    `InvalidSessionIdError` as `error`); a host's 400.
+ *  - `'not-found'` — no conversation THIS caller can open under that id: at a
+ *    verifying door somebody else's, one nobody signed for, or one whose first
+ *    turn has not persisted (unless that turn is this caller's, in flight); at
+ *    any door, a session with no live instance and no stored conversation.
+ *    One reason for all of them, as redemption answers them with one
+ *    not-found. Never builds or evicts a pooled instance to find out.
  *  - `'no-store'` — the serving agent has no artifact store.
  */
-export type RequestArtifacts =
+export type ArtifactsForRequestResult =
   | { readonly bound: true; readonly artifacts: ToolArtifacts }
   | {
       readonly bound: false;
-      readonly reason: 'unverified' | 'no-session' | 'not-found' | 'no-store';
-      /** Present with `'unverified'` only: the verifier's refusal. */
+      readonly reason:
+        | 'unverified'
+        | 'unavailable'
+        | 'no-session'
+        | 'invalid-session'
+        | 'not-found'
+        | 'no-store';
+      /** Present with `'unverified'`, `'unavailable'` and `'invalid-session'`. */
       readonly error?: Error;
     };
 
@@ -410,28 +433,43 @@ export type RequestArtifacts =
  */
 export interface StandingAgentHandle {
   /**
-   * The serving agent's artifact store, bound to a VERIFIED request's scope —
-   * for the paths that are not a chat turn: a read before a run (a panel
-   * redeeming a payload by ref), or an app-owned HTTP route that files its own
-   * artifacts beside a conversation.
+   * The serving agent's artifact store, bound to the scope a redemption by this
+   * request's caller of this session reads — for the paths that are not a chat
+   * turn: a read before a run (a panel redeeming a payload by ref), or an
+   * app-owned route that files its own artifacts beside a conversation.
+   *
+   * "The caller" is what the door knows: at a door with a verifier, the person
+   * the token PROVES; at a door with no verifier, the session id and the
+   * transport's `userId` claim are the key, by law — exactly as on the wire.
    *
    * The host never composes the scope. This runs the door's own steps with the
-   * door's own instances: the configured verifier, the session store (woken and
-   * hydrated as a redemption does), the redemption door's ownership rule, the
-   * scope composer redemption and `reply.turnArtifacts` use, and the store of
-   * the agent that serves that session. So a ref filed through it is redeemed
-   * on the wire by the same caller, and a ref another caller filed answers
-   * exactly like a ref that never existed.
+   * door's own instances: the configured verifier, the session-id check, the
+   * session store (woken and hydrated as a redemption does), the redemption
+   * door's ownership rule, the ONE scope composer redemption and
+   * `reply.turnArtifacts` use, and the store of the instance serving that
+   * session — never building or evicting a pooled instance to find it. So a ref
+   * filed through it is redeemed on the wire by the same caller, and a ref
+   * another caller filed answers exactly like a ref that never existed.
    *
-   * @example  An app route that reads a payload by ref before the turn runs
+   * @example  An Express route that reads a payload by ref before the turn runs
    *   const handle = await standingAgent({ agent, sessions, host, identity: { verify } });
-   *   const found = await handle.artifactsForRequest({ sessionId, headers: req.headers });
-   *   if (!found.bound) return res.status(found.reason === 'unverified' ? 401 : 404).end();
-   *   const payload = await found.artifacts.get(ref); // null: missing, expired or not yours
+   *   app.get('/panel/:sessionId/:ref', async (req, res) => {
+   *     const found = await handle.artifactsForRequest({ sessionId: req.params.sessionId, headers: req.headers });
+   *     if (!found.bound) {
+   *       const status = { unverified: 401, unavailable: 503, 'invalid-session': 400 } as Record<string, number>;
+   *       return res.status(status[found.reason] ?? 404).end();
+   *     }
+   *     const payload = await found.artifacts.get(req.params.ref); // null: missing, expired or not yours
+   *     return payload ? res.json(payload.data) : res.status(404).end();
+   *   });
    *
    * @throws HostClosedError after `close()`.
+   * @throws UnreadableEnvelopeError when the stored conversation is present but
+   *   cannot be read (the turn door's law — never composed into a scope).
+   * @throws whatever the session store's own `onWake` / `hydrate` throws (an
+   *   outage is the store's to name, not a refusal value).
    */
-  artifactsForRequest(request: ArtifactsRequest): Promise<RequestArtifacts>;
+  artifactsForRequest(request: ArtifactsForRequestInput): Promise<ArtifactsForRequestResult>;
 }
 
 /**

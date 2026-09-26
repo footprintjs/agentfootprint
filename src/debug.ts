@@ -138,6 +138,7 @@ export {
   traceDebugAgent,
   type SelfExplainInclude,
   type SelfExplainOptions,
+  type SelfExplainServing,
   type SelfExplainSource,
   type TraceDebugAgentOptions,
 } from './lib/trace-toolpack/index.js';

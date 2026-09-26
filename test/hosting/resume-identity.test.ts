@@ -31,7 +31,7 @@
 
 import { afterEach, describe, expect, it } from 'vitest';
 
-import { Agent, defineTool } from '../../src/index.js';
+import { Agent, defineTool, ResumeIdentityConflictError } from '../../src/index.js';
 import type { AgentfootprintEvent } from '../../src/events.js';
 import type { FlowchartCheckpoint } from 'footprintjs';
 import { mock } from '../../src/llm-providers.js';
@@ -168,16 +168,18 @@ describe('the round trip, no host — pause → resume → checkpoint', () => {
     expect([...principals().values()].map((set) => [...set])).toEqual([['xavier']]);
   });
 
-  it('an identity the resuming call names wins, exactly as it does on run()', async () => {
+  it('an identity the resuming call names is honoured when it IS the paused run’s — and refused when it is not', async () => {
     const agent = approvingAgent([ASK, { content: 'refunded' }]);
-    const paused = (await agent.run({
-      message: 'refund me',
-      identity: { principal: 'xavier' },
-    })) as {
+    const named: MemoryIdentity = { principal: 'xavier', conversationId: 'cx' };
+    const paused = (await agent.run({ message: 'refund me', identity: named })) as {
       checkpoint: FlowchartCheckpoint;
     };
-    const named: MemoryIdentity = { principal: 'xavier', conversationId: 'moved' };
-    await agent.resume(paused.checkpoint, 'yes', { identity: named });
+    await expect(
+      agent.resume(paused.checkpoint, 'yes', {
+        identity: { principal: 'xavier', conversationId: 'moved' },
+      }),
+    ).rejects.toBeInstanceOf(ResumeIdentityConflictError);
+    await agent.resume(paused.checkpoint, 'yes', { identity: { ...named } });
     expect(agent.checkpoint()?.identity).toEqual(named);
   });
 

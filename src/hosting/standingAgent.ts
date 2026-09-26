@@ -99,7 +99,11 @@
  */
 
 import { isDevMode } from 'footprintjs';
-import { bindArtifacts, type ArtifactEventFact } from '../artifacts/capability.js';
+import {
+  bindArtifacts,
+  type ArtifactEventFact,
+  type ToolArtifacts,
+} from '../artifacts/capability.js';
 import type { ArtifactScope, ArtifactStore } from '../artifacts/types.js';
 import type { ArtifactHandOverFailedPayload } from '../events/payloads.js';
 import { readAskComponent } from '../core/askComponent.js';
@@ -135,6 +139,7 @@ import {
   AwaitingDecisionError,
   ConcurrentRunError,
   HostClosedError,
+  RequestArtifactsRevokedError,
   InvalidWireOpError,
   NoArtifactStoreError,
   NoPendingAskError,
@@ -145,7 +150,10 @@ import {
   SessionOpNeedsIdentityError,
   SessionsNotCarriedError,
   UnreadableEnvelopeError,
+  VerifierUnavailableError,
 } from './errors.js';
+import { checkSessionId } from './doorGuard.js';
+import { withHostedConversation } from '../core/agent/servingConversation.js';
 import { verifyRequestIdentity, type VerifiedIdentity } from './identityVerification.js';
 import { spendKeyFor, spendLedger, type SpendLedger } from './admission.js';
 import { beginIngress, recordHostRefusal, type IngressNote } from './ingressRecord.js';
@@ -153,14 +161,14 @@ import { openTurnArtifacts } from './turnArtifacts.js';
 import type { SessionWireRequest, SessionWireResult } from './sessionWire.js';
 import { SESSION_LIST_OP, SESSION_TRANSCRIPT_OP } from './sessionWire.js';
 import type {
-  ArtifactsRequest,
+  ArtifactsForRequestInput,
+  ArtifactsForRequestResult,
   CheckpointEnvelope,
   HostHandle,
   HostReply,
   HostRequest,
   PausedRun,
   PendingAsk,
-  RequestArtifacts,
   StandingAgentHandle,
   StandingAgentOptions,
   SessionLifecycle,
@@ -415,6 +423,8 @@ export async function standingAgent<TH extends HostHandle>(
   const shared = sharedAgent !== undefined ? makeLane(sharedAgent, '#shared') : undefined;
   /** The pooled shape's reader — see `redeemerFor`. Built on first need only. */
   let reader: Agent | undefined;
+  /** Instances retired from the pool — a seam binding to one is revoked. */
+  const retired = new WeakSet<Agent>();
   let anonymous = 0;
 
   /**
@@ -608,6 +618,7 @@ export async function standingAgent<TH extends HostHandle>(
    * person's turn for another session's broken cleanup.
    */
   async function retire(lane: Lane): Promise<void> {
+    retired.add(lane.agent);
     lane.detach();
     const sessionId = lane.poolKey === ANONYMOUS_LANE ? undefined : lane.poolKey;
     try {
@@ -1174,21 +1185,35 @@ export async function standingAgent<TH extends HostHandle>(
    * because the host decides its own status codes; nothing is emitted before
    * ownership is settled, and a refused caller builds no lane.
    */
-  async function artifactsForRequest(request: ArtifactsRequest): Promise<RequestArtifacts> {
+  async function artifactsForRequest(
+    request: ArtifactsForRequestInput,
+  ): Promise<ArtifactsForRequestResult> {
     if (closing !== undefined) throw new HostClosedError(host.name);
     let verified: VerifiedIdentity | undefined;
     try {
-      verified = await verifyRequestIdentity(identityOptions, request.headers, request.userId);
+      verified = await verifyRequestIdentity(
+        identityOptions,
+        singleValuedHeaders(request.headers),
+        request.userId,
+      );
     } catch (err) {
+      const error = err instanceof Error ? err : new Error(String(err));
+      // An identity-provider outage judged nobody's credential: its own
+      // reason (a 503), never 'unverified' (a 401 that sends every client to
+      // re-authenticate against a provider that is down).
       return {
         bound: false,
-        reason: 'unverified',
-        error: err instanceof Error ? err : new Error(String(err)),
+        reason: err instanceof VerifierUnavailableError ? 'unavailable' : 'unverified',
+        error,
       };
     }
     const userId = verified?.userId ?? request.userId;
     const sessionId = request.sessionId;
     if (sessionId === undefined) return { bound: false, reason: 'no-session' };
+    // The wire refuses these ids at the adapter (`doorGuard.ts`); the seam
+    // has no adapter in front of it, so it asks the same check itself.
+    const invalid = checkSessionId(sessionId, host.name);
+    if (invalid !== undefined) return { bound: false, reason: 'invalid-session', error: invalid };
     const needsStored = identityOptions !== undefined || userId !== undefined;
     let envelope = needsStored ? await storedFor(sessionId) : undefined;
     if (identityOptions !== undefined && !mayRedeemFrom(sessionId, envelope, verified)) {
@@ -1202,12 +1227,71 @@ export async function standingAgent<TH extends HostHandle>(
     const agent = redeemer.agent;
     const store = agent.getArtifactStore();
     if (store === undefined) return { bound: false, reason: 'no-store' };
-    return {
-      bound: true,
-      artifacts: bindArtifacts(store, sessionArtifactScope(userId, sessionId, stored), {
-        onEvent: (fact) => emitArtifactFact(agent, fact, { sessionId }),
-      }),
+    const bound = bindArtifacts(store, sessionArtifactScope(userId, sessionId, stored), {
+      onEvent: (fact) => emitArtifactFact(agent, fact, { sessionId }),
+    });
+    return { bound: true, artifacts: heldBinding(bound, sessionId, agent, redeemer.lane) };
+  }
+
+  /**
+   * A seam binding's verbs, held to the same terms as the wire's redemptions
+   * and a turn's hand-over (S5):
+   *
+   *  - **Revoked** when the instance it is bound to is retired from the pool or
+   *    the host closes — a write after that would land on a stopped agent and
+   *    its fact on a record nobody holds. `RequestArtifactsRevokedError`,
+   *    created already handled. Checked per call against `retired`, so a
+   *    binding that is never used again costs nothing to keep.
+   *  - **Bounded** by `artifactOpsPerSession`, counted with the wire's
+   *    redemptions of the same session (`ArtifactOpsBusyError`).
+   *  - **Admitted** to its lane for the duration of each call, so the pool
+   *    cannot retire the instance under an operation in flight.
+   */
+  function heldBinding(
+    bound: ToolArtifacts,
+    sessionId: string,
+    agent: Agent,
+    lane: Lane | undefined,
+  ): ToolArtifacts {
+    type Verb = 'put' | 'head' | 'get' | 'delete' | 'list';
+    const refused = <T>(error: Error): Promise<T> => {
+      const refusal = Promise.reject(error);
+      refusal.then(undefined, () => undefined);
+      return refusal as Promise<T>;
     };
+    function held<T>(verb: Verb, start: () => Promise<T>): Promise<T> {
+      if (closing !== undefined || retired.has(agent)) {
+        return refused(new RequestArtifactsRevokedError(verb));
+      }
+      const busy = artifactOpsInFlight.get(sessionId) ?? 0;
+      if (busy >= artifactOpsPerSession) {
+        return refused(new ArtifactOpsBusyError(verb, artifactOpsPerSession));
+      }
+      artifactOpsInFlight.set(sessionId, busy + 1);
+      if (lane !== undefined) lane.admitted += 1;
+      let running: Promise<T>;
+      try {
+        running = start();
+      } catch (err) {
+        running = Promise.reject(err);
+      }
+      return running.finally(() => {
+        if (lane !== undefined) {
+          lane.admitted -= 1;
+          lane.lastUsedMs = Date.now();
+        }
+        const left = (artifactOpsInFlight.get(sessionId) ?? 1) - 1;
+        if (left <= 0) artifactOpsInFlight.delete(sessionId);
+        else artifactOpsInFlight.set(sessionId, left);
+      });
+    }
+    return Object.freeze({
+      put: (input) => held('put', () => bound.put(input)),
+      head: (ref) => held('head', () => bound.head(ref)),
+      get: (ref) => held('get', () => bound.get(ref)),
+      delete: (ref) => held('delete', () => bound.delete(ref)),
+      list: (options) => held('list', () => bound.list(options)),
+    } satisfies ToolArtifacts);
   }
 
   /**
@@ -1451,7 +1535,7 @@ export async function standingAgent<TH extends HostHandle>(
         ...(request.signal !== undefined && { signal: request.signal }),
         note,
       };
-      const runOptions: AgentRunOptions | undefined =
+      const optionsForRun: AgentRunOptions | undefined =
         request.signal !== undefined || sessionId !== undefined || identity !== undefined
           ? {
               ...(request.signal !== undefined && { env: { signal: request.signal } }),
@@ -1459,6 +1543,15 @@ export async function standingAgent<TH extends HostHandle>(
               ...(identity !== undefined && { identity }),
             }
           : undefined;
+      // A request with no session is its OWN conversation for self-explain
+      // (B1): keyed by this request's latch (`#anonymous-N`), which no later
+      // request can present — so no other caller, signed in or not, reads its
+      // evidence. It is not a session: memory, telemetry and teardown are
+      // untouched (`core/agent/servingConversation.ts`).
+      const runOptions: AgentRunOptions | undefined =
+        sessionId === undefined && lane.activeSession !== undefined
+          ? withHostedConversation(optionsForRun, lane.activeSession)
+          : optionsForRun;
 
       // ── The one discriminant ─────────────────────────────────────────
       // A request carrying `decision` answers a pending question; a request
@@ -2145,4 +2238,20 @@ function describePause(outcome: RunnerPauseOutcome, sessionId: string | undefine
     ...(component !== undefined && { component }),
     pauseData: outcome.pauseData,
   };
+}
+
+/**
+ * Transport headers as the verifier reads them: string values only. A header
+ * that arrived as an array (repeated) is dropped — a repeated `authorization`
+ * is ambiguous, so it counts as no token rather than as either one.
+ */
+function singleValuedHeaders(
+  headers: Readonly<Record<string, string | readonly string[] | undefined>> | undefined,
+): Readonly<Record<string, string>> | undefined {
+  if (headers === undefined) return undefined;
+  const out: Record<string, string> = {};
+  for (const [name, value] of Object.entries(headers)) {
+    if (typeof value === 'string') out[name] = value;
+  }
+  return out;
 }

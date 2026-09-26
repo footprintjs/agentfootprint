@@ -88,7 +88,8 @@ import {
   type ToolSessionReport,
 } from './toolSessions.js';
 import { buildEventMeta, eventBelongsToRun } from '../bridge/eventMeta.js';
-import { callerIdentityOf } from './agent/callerIdentity.js';
+import { callerIdentityOf, sameIdentity } from './agent/callerIdentity.js';
+import { hostedConversationOf, registerServingConversation } from './agent/servingConversation.js';
 import type {
   AgentfootprintEvent,
   AgentfootprintEventMap,
@@ -212,7 +213,12 @@ import {
   type EvidenceRecoveryCheckpoint,
   type RunCheckpointTracker,
 } from './runCheckpoint.js';
-import { NoConversationError, PendingQuestionError, RunInFlightError } from './conversation.js';
+import {
+  NoConversationError,
+  PendingQuestionError,
+  ResumeIdentityConflictError,
+  RunInFlightError,
+} from './conversation.js';
 import { applyInputResponse, readAwaitingInput } from './inputRequest.js';
 import { applyOutputSchema, OutputSchemaError, type OutputSchemaParser } from './outputSchema.js';
 import { normalizeRunInput } from './runInput.js';
@@ -759,6 +765,21 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
    *  a shared agent and none on a rebuilt pooled one. */
   private lastRunIdentity?: MemoryIdentity;
 
+  /** Run ids this instance minted, most recent last (bounded) — evidence that a
+   *  checkpoint's `{ conversationId: '<runId>' }` is the per-run default
+   *  (`agent/callerIdentity.ts`). */
+  private readonly mintedRunIds = new Set<string>();
+
+  /** The session each recent pause of this instance ran under, keyed by
+   *  `pauseKeyOf(checkpoint)` (bounded) — so a resume that names no session
+   *  keeps the paused run's (`resume`). */
+  private readonly pausedSessions = new Map<string, string>();
+
+  /** The self-explain evidence key of the run in flight (or served last):
+   *  its session, else a host's per-request key, else undefined
+   *  (`agent/servingConversation.ts`). */
+  private servingConversation?: string;
+
   /** How long ONE tool teardown may take before the runner stops waiting.
    *  See `AgentOptions.toolTeardownTimeoutMs`. */
   private readonly toolTeardownTimeoutMs: number;
@@ -904,6 +925,13 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
     answerValidationConfig?: ResolvedAnswerValidation,
   ) {
     super();
+    // Which conversation this instance's self-explain evidence belongs to —
+    // held in a module registry, not on the class, so it is not public API
+    // (`agent/servingConversation.ts`).
+    registerServingConversation(this, () => ({
+      conversation: this.servingConversation,
+      runId: this.currentRunContext.runId,
+    }));
     this.answerValidationConfig = answerValidationConfig;
     this.provider = opts.provider;
     this.name = opts.name ?? 'Agent';
@@ -1326,18 +1354,6 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
    */
   ownsEvent(event: AgentfootprintEvent): boolean {
     return eventBelongsToRun(event.meta, this.currentRunContext);
-  }
-
-  /**
-   * The session of the run this agent is serving (or served last), or
-   * undefined for a run with no session — the conversation key the
-   * self-explain evidence is kept and served under
-   * (`selfExplain.ts · getSessionId`).
-   *
-   * @internal
-   */
-  servingSessionId(): string | undefined {
-    return this.currentRunContext.sessionId;
   }
 
   /**
@@ -1768,6 +1784,7 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
       const finalized = this.finalizeResult(executor, result);
       if (typeof finalized === 'string') this.lastRunAnswer = finalized;
       this.recordPendingQuestion(finalized);
+      this.rememberPausedSession(finalized);
       await this.endRunToolSessions(finalized);
       // The answer is FINISHED before this line and cannot be changed by it.
       // The liveness theorems (9.60.0, dev posture only) — a run that would
@@ -2134,6 +2151,28 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
     };
   }
 
+  /**
+   * Continue a run that paused to ask a person something, with their answer.
+   *
+   * WHO the resumed run is for is the paused run's caller, read off the
+   * checkpoint (`agent/callerIdentity.ts`) — never whatever this instance ran
+   * last; which SESSION, the call's `sessionId`, else the paused run's. A
+   * checkpoint names who it is for; it is not proof: a host that lets
+   * checkpoints leave its trust boundary signs them or keeps them
+   * server-side, and passes the identity it verified as `options.identity`.
+   *
+   * @throws ResumeIdentityConflictError when `options.identity` is not the
+   *   paused run's caller identity — before anything runs.
+   * @throws DecisionRequiredError when a consent gate is answered with
+   *   something other than a decision.
+   * @throws RunInFlightError when a run is already in flight.
+   *
+   * @example
+   * ```ts
+   * const outcome = await agent.run({ message: 'refund me', identity }, { sessionId });
+   * if (isPaused(outcome)) await agent.resume(outcome.checkpoint, 'yes', { identity, sessionId });
+   * ```
+   */
   async resume(
     checkpoint: FlowchartCheckpoint,
     input?: unknown,
@@ -2152,6 +2191,24 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
     // sound question is "what was asked?".
     const gate = pauseDemandsDecision(checkpoint.pauseData);
     if (gate && !isCheckInDecision(input)) throw new DecisionRequiredError(gate, input);
+    // One run, one identity — refused before anything moves. The paused run's
+    // caller identity is read off the checkpoint (`callerIdentity.ts`); a call
+    // naming a DIFFERENT one would give the run one person's memory namespace
+    // and credentials (restored, never re-seeded) and another's `ctx.identity`,
+    // principal and stored ownership. A checkpoint names who it is for; it is
+    // not proof — a host that lets checkpoints leave its trust boundary signs
+    // them or keeps them server-side, and passes the identity it verified here.
+    const pausedFor = callerIdentityOf(checkpoint.sharedState, {
+      ...(this.lastRunIdentity !== undefined && { named: this.lastRunIdentity }),
+      minted: this.mintedRunIds,
+    });
+    if (
+      options?.identity !== undefined &&
+      pausedFor !== undefined &&
+      !sameIdentity(options.identity, pausedFor)
+    ) {
+      throw new ResumeIdentityConflictError();
+    }
     // Typed data collection is not consent. Validate before changing any run state.
     const awaitingInput = gate === undefined ? readAwaitingInput(checkpoint.pauseData) : undefined;
     if (awaitingInput !== undefined) {
@@ -2200,12 +2257,20 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
     this.pendingQuestion = undefined;
     // WHO this resumed run is for — set BEFORE the executor exists, because the
     // run context's principal (every event's `EventMeta.principal`), a tool's
-    // `ctx.identity` and `checkpoint()` all read it. The resuming call's
-    // identity wins, as it does on `run()`; absent, it is the identity the
-    // PAUSED run's caller named, read off the checkpoint being resumed — never
-    // the identity of whatever this instance ran last, which on a shared or
-    // pooled agent is another person's, or nobody's (`callerIdentity.ts`).
-    this.lastRunIdentity = options?.identity ?? callerIdentityOf(checkpoint.sharedState);
+    // `ctx.identity` and `checkpoint()` all read it: the identity the PAUSED
+    // run's caller named (checked for a conflict at the top of this method),
+    // or the one this call names when the paused run's was derived — never the
+    // identity of whatever this instance ran last, which on a shared or pooled
+    // agent is another person's, or nobody's (`callerIdentity.ts`).
+    this.lastRunIdentity = options?.identity ?? pausedFor;
+    // …and WHICH session: the call's, else the paused run's — so a host that
+    // resumes without repeating the session does not file the resumed turn
+    // (its tool teardown, its events, its self-explain evidence) as sessionless.
+    const sessionId = options?.sessionId ?? this.pausedSessionOf(checkpoint);
+    const resumeOptions: AgentRunOptions | undefined =
+      sessionId !== undefined && options?.sessionId === undefined
+        ? { ...options, sessionId }
+        : options;
     this.emitPauseResume(checkpoint, input);
     // Fresh executor — footprintjs 4.17.0+ seeds the runtime from
     // `checkpoint.sharedState` (and nested subflow states) automatically
@@ -2216,7 +2281,7 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
     // paused and resumed is two runs, and each mints its own recording when
     // (and only when) it completes.
     const recording = this.startRunRecording();
-    const executor = this.createExecutor(options);
+    const executor = this.createExecutor(resumeOptions);
     this.inFlightRunId = this.currentRunContext.runId;
     // A resumed turn is two runs, and each keeps its own ledger — exactly
     // the recording's terms one comment up.
@@ -2225,12 +2290,13 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
     // One run can never raise on another run's consent block.
     this.consentOutstanding.clear();
     try {
-      const result = await executor.resume(checkpoint, input, options);
+      const result = await executor.resume(checkpoint, input, resumeOptions);
       const finalized = this.finalizeResult(executor, result);
       if (typeof finalized === 'string') this.lastRunAnswer = finalized;
       // The question this resume answered is settled; a resume that paused
       // AGAIN has asked a new one, and that one is outstanding from here.
       this.recordPendingQuestion(finalized);
+      this.rememberPausedSession(finalized);
       await this.endRunToolSessions(finalized);
       // Same liveness gate the fresh-run path applies (9.60.0).
       this.assertIntegrityAlive();
@@ -2532,6 +2598,33 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
       ...(typeof data?.toolCallId === 'string' && { toolCallId: data.toolCallId }),
       ...(typeof data?.question === 'string' && { question: data.question }),
     };
+  }
+
+  /** Remember which session a pause ran under (bounded), keyed by the pause. */
+  private rememberPausedSession(outcome: AgentOutput | RunnerPauseOutcome): void {
+    if (!isPaused(outcome)) return;
+    const sessionId = this.currentRunContext.sessionId;
+    if (sessionId === undefined) return;
+    this.pausedSessions.set(pauseKeyOf(outcome.checkpoint), sessionId);
+    boundInsertionOrder(this.pausedSessions, MAX_REMEMBERED_RUNS);
+  }
+
+  /**
+   * The session the paused run ran under: remembered by this instance, or —
+   * for a checkpoint from another instance — the session rung's own record
+   * (`runIdentitySource: 'session'` ⇒ `runIdentity.conversationId` IS the
+   * session). Undefined when neither says.
+   */
+  private pausedSessionOf(checkpoint: FlowchartCheckpoint): string | undefined {
+    const remembered = this.pausedSessions.get(pauseKeyOf(checkpoint));
+    if (remembered !== undefined) return remembered;
+    const state = checkpoint.sharedState as
+      | { runIdentitySource?: unknown; runIdentity?: { conversationId?: unknown } }
+      | undefined;
+    const derived = state?.runIdentity?.conversationId;
+    return state?.runIdentitySource === 'session' && typeof derived === 'string'
+      ? derived
+      : undefined;
   }
 
   /**
@@ -2936,9 +3029,13 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
     // A fresh run starts with no evictions filed — the previous run's last
     // visit must not be read as this run's (`window/evictedTurns.ts`).
     this.evictedTurnsHandle?.clear();
+    const runId = makeRunId();
+    this.mintedRunIds.add(runId);
+    boundInsertionOrder(this.mintedRunIds, MAX_REMEMBERED_RUNS);
+    this.servingConversation = sessionId ?? hostedConversationOf(runOptions);
     this.currentRunContext = {
       runStartMs: Date.now(),
-      runId: makeRunId(),
+      runId,
       compositionPath: [`Agent:${this.id}`],
       ...(correlationId !== undefined && { correlationId }),
       ...(traceId !== undefined && { traceId }),
@@ -4719,3 +4816,20 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
 // Re-export so the 28+ existing import sites continue to work unchanged.
 
 // Validators + helpers extracted to ./agent/validators.ts (v2.11.1).
+
+/** How many run ids / paused sessions one instance remembers. */
+const MAX_REMEMBERED_RUNS = 256;
+
+/** Drop the oldest entries of an insertion-ordered Set or Map past `max`. */
+function boundInsertionOrder(held: Set<string> | Map<string, unknown>, max: number): void {
+  while (held.size > max) {
+    const oldest = held.keys().next();
+    if (oldest.done === true) return;
+    held.delete(oldest.value);
+  }
+}
+
+/** A key that names one pause — stable across a JSON round trip. */
+function pauseKeyOf(checkpoint: FlowchartCheckpoint): string {
+  return `${checkpoint.pausedAt}|${checkpoint.pausedStageId}|${checkpoint.executionCount ?? ''}`;
+}

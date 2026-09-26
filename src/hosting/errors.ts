@@ -280,8 +280,13 @@ export class InvalidWireOpError extends Error {
  * rather than imported: `wireOps` imports this file for its own refusal, and
  * the two spellings are pinned equal by the wire tests.)
  */
-function artifactOpSpelling(op: 'head' | 'get' | 'account'): string {
-  return op === 'account' ? 'answer-account' : `artifact-${op}`;
+/** A bound verb from `handle.artifactsForRequest` — spelled as the call. */
+type SeamVerb = 'put' | 'delete' | 'list';
+
+function artifactOpSpelling(op: 'head' | 'get' | 'account' | SeamVerb): string {
+  if (op === 'account') return 'answer-account';
+  if (op === 'put' || op === 'delete' || op === 'list') return `artifacts.${op}(...)`;
+  return `artifact-${op}`;
 }
 
 /**
@@ -383,7 +388,7 @@ export class ArtifactOpsBusyError extends Error {
   /** The per-session bound that was met. */
   readonly limit: number;
 
-  constructor(op: 'head' | 'get' | 'account', limit: number) {
+  constructor(op: 'head' | 'get' | 'account' | SeamVerb, limit: number) {
     super(
       `[hosting] ${artifactOpSpelling(
         op,
@@ -493,6 +498,35 @@ export class TurnArtifactsExpiredError extends Error {
         `there.`,
     );
     this.name = 'TurnArtifactsExpiredError';
+    this.op = op;
+  }
+}
+
+/**
+ * Thrown by a verb of a binding `handle.artifactsForRequest` returned, called
+ * after the binding was revoked: the instance it was bound to was retired
+ * (evicted from the pool) or the composer was closed.
+ *
+ * The same law as {@link TurnArtifactsExpiredError}: a binding never outlives
+ * the instance whose store and record it writes to — a write after that would
+ * land on a stopped agent, and its fact on a record nobody holds. The
+ * rejection is created already handled, so a floating late call cannot crash
+ * the process. Ask the handle again for a fresh binding.
+ */
+export class RequestArtifactsRevokedError extends Error {
+  readonly code = 'ERR_REQUEST_ARTIFACTS_REVOKED' as const;
+  /** Which verb was called after the revocation. */
+  readonly op: 'put' | 'head' | 'get' | 'delete' | 'list';
+
+  constructor(op: 'put' | 'head' | 'get' | 'delete' | 'list') {
+    super(
+      `[hosting] artifacts.${op}(...) was called on a binding from ` +
+        `handle.artifactsForRequest after it was revoked: the agent instance it was bound to ` +
+        `was retired from the pool, or the host was closed. Call ` +
+        `handle.artifactsForRequest(request) again for a binding to the instance serving the ` +
+        `session now.`,
+    );
+    this.name = 'RequestArtifactsRevokedError';
     this.op = op;
   }
 }

@@ -168,6 +168,7 @@ export {
   ArtifactOpsBusyError,
   RecordingTooLargeForAccountError,
   TurnArtifactsExpiredError,
+  RequestArtifactsRevokedError,
   IdentityNotVerifiedError,
   VerifierUnavailableError,
   AdmissionRefusedError,
@@ -315,6 +316,8 @@ export type { AnswerAccountsOptions } from './answerAccounts.js';
 
 export type {
   AgentHost,
+  ArtifactsForRequestInput,
+  ArtifactsForRequestResult,
   CheckpointEnvelope,
   ConcurrentInvokePolicy,
   ConversationClose,
@@ -347,8 +350,6 @@ export type {
   StandingAgentPoolOptions,
   StandingAgentSharedOptions,
   TurnArtifacts,
-  ArtifactsRequest,
-  RequestArtifacts,
   Unsubscribe,
   WakeReason,
 } from './types.js';

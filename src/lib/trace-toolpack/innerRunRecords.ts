@@ -78,13 +78,14 @@ export interface InnerRunRecord {
   /** Committed steps in the inner run — the size hint the descent line prints. */
   readonly steps: number;
   /**
-   * The session of the outer run that made the call (`ctx.sessionId`) —
-   * absent for a call made by a run with no session. The key a
-   * self-explaining agent serves records under
-   * ({@link innerRunsOfConversation}): on an agent shared by many sessions,
-   * one store holds everybody's calls.
+   * The OUTER run that made the call (`ctx.runId`) — absent when the tool ran
+   * outside an agent run, or for a record a third-party producer filed. The
+   * store keys a record by run AND call id, so two runs that reuse a call id
+   * (another session's model, a replayed script) never displace each other;
+   * and a self-explaining agent serves only the records of the asking
+   * conversation's own runs ({@link innerRunsOfConversation}).
    */
-  readonly sessionId?: string;
+  readonly runId?: string;
   /**
    * `{ snapshot, structure }` — absent only when capture itself failed, in
    * which case {@link problem} says why.
@@ -119,8 +120,8 @@ export interface InnerRunSummary {
   readonly toolName: string;
   readonly outcome: InnerRunOutcome;
   readonly steps: number;
-  /** See {@link InnerRunRecord.sessionId}. */
-  readonly sessionId?: string;
+  /** See {@link InnerRunRecord.runId}. */
+  readonly runId?: string;
 }
 
 /** Read side — what the trace tools are given. */
@@ -137,6 +138,17 @@ export interface InnerRunLookup {
   readonly dropped: number;
   /** The cap in force (the smallest, when several stores are merged). */
   readonly limit: number;
+  /**
+   * The most recent record for `toolCallId` that `accept` admits — optional,
+   * so a lookup built before it existed still type-checks; a view falls back
+   * to {@link get} and checks the one record it returns.
+   */
+  getWhere?(
+    toolCallId: string,
+    accept: (record: InnerRunRecord) => boolean,
+  ): InnerRunRecord | undefined;
+  /** Drops of records whose `runId` `accept` admits (optional; see {@link getWhere}). */
+  droppedWhere?(accept: (runId: string | undefined) => boolean): number;
 }
 
 /** Write side — what the wrapping tool holds. */
@@ -180,39 +192,78 @@ export function innerRunsOf(candidate: unknown): InnerRunLookup | undefined {
 export function innerRunStore(limit: number = DEFAULT_INNER_RUN_LIMIT): InnerRunStore {
   const cap = Math.max(1, Math.floor(limit));
   // Insertion order IS recency order: delete-then-set moves a key to the
-  // end, so the first key is always the least-recently-used one.
+  // end, so the first key is always the least-recently-used one. Keyed by
+  // run AND call id — see `InnerRunRecord.runId`.
   const records = new Map<string, InnerRunRecord>();
   let dropped = 0;
+  // Drops per outer run ('' = no run), bounded like the records they count.
+  const dropsByRun = new Map<string, number>();
+  const keyOf = (record: InnerRunRecord): string =>
+    `${record.runId ?? ''}\u001f${record.toolCallId}`;
+  const touch = (key: string, record: InnerRunRecord): void => {
+    records.delete(key);
+    records.set(key, record);
+  };
+  const newestWhere = (
+    toolCallId: string,
+    accept: (record: InnerRunRecord) => boolean,
+  ): [string, InnerRunRecord] | undefined => {
+    const all = [...records.entries()];
+    for (let i = all.length - 1; i >= 0; i--) {
+      const entry = all[i] as [string, InnerRunRecord];
+      if (entry[1].toolCallId === toolCallId && accept(entry[1])) return entry;
+    }
+    return undefined;
+  };
+
+  // Reading refreshes recency (a record under investigation stays).
+  const getWhere = (
+    toolCallId: string,
+    accept: (record: InnerRunRecord) => boolean,
+  ): InnerRunRecord | undefined => {
+    const found = newestWhere(toolCallId, accept);
+    if (found === undefined) return undefined;
+    touch(found[0], found[1]);
+    return found[1];
+  };
 
   return {
     keep(record: InnerRunRecord): void {
-      records.delete(record.toolCallId);
-      records.set(record.toolCallId, record);
+      touch(keyOf(record), record);
       while (records.size > cap) {
-        const oldest = records.keys().next().value;
+        const oldest = records.entries().next().value;
         if (oldest === undefined) break;
-        records.delete(oldest);
+        records.delete(oldest[0]);
         dropped++;
+        const run = oldest[1].runId ?? '';
+        dropsByRun.delete(run);
+        dropsByRun.set(run, (dropsByRun.get(run) ?? 0) + 1);
+        while (dropsByRun.size > cap * 4) {
+          const first = dropsByRun.keys().next();
+          if (first.done === true) break;
+          dropsByRun.delete(first.value);
+        }
       }
     },
-    get(toolCallId: string): InnerRunRecord | undefined {
-      const found = records.get(toolCallId);
-      if (found === undefined) return undefined;
-      records.delete(toolCallId);
-      records.set(toolCallId, found);
-      return found;
-    },
+    get: (toolCallId) => getWhere(toolCallId, () => true),
+    getWhere,
     list(): readonly InnerRunSummary[] {
       return [...records.values()].map((record) => ({
         toolCallId: record.toolCallId,
         toolName: record.toolName,
         outcome: record.outcome,
         steps: record.steps,
-        ...(record.sessionId !== undefined && { sessionId: record.sessionId }),
+        ...(record.runId !== undefined && { runId: record.runId }),
       }));
     },
     get dropped(): number {
       return dropped;
+    },
+    droppedWhere(accept): number {
+      let total = 0;
+      for (const [run, count] of dropsByRun)
+        if (accept(run === '' ? undefined : run)) total += count;
+      return total;
     },
     get limit(): number {
       return cap;
@@ -240,10 +291,19 @@ export function mergeInnerRuns(lookups: readonly InnerRunLookup[]): InnerRunLook
       }
       return undefined;
     },
+    getWhere: (toolCallId, accept) => {
+      for (const lookup of lookups) {
+        const found = viewGet(lookup, toolCallId, accept);
+        if (found !== undefined) return found;
+      }
+      return undefined;
+    },
     list: () => lookups.flatMap((lookup) => lookup.list()),
     get dropped(): number {
       return lookups.reduce((total, lookup) => total + lookup.dropped, 0);
     },
+    droppedWhere: (accept) =>
+      lookups.reduce((total, lookup) => total + (lookup.droppedWhere?.(accept) ?? 0), 0),
     get limit(): number {
       return Math.min(...lookups.map((lookup) => lookup.limit));
     },
@@ -253,35 +313,49 @@ export function mergeInnerRuns(lookups: readonly InnerRunLookup[]): InnerRunLook
 /**
  * The records ONE conversation's runs filed — the view a self-explaining agent
  * serves (`selfExplain.ts · SelfExplainBinding`), so a why-question asked in
- * session S can neither descend into nor list a call another session made.
+ * one conversation can neither descend into, list, nor count a call another
+ * conversation's run made.
  *
- * `sessionId` undefined selects the records of runs with no session. A record
- * of another conversation answers exactly like a record never kept (the
- * `get` is `undefined`, the `list` leaves it out): the same not-found, so the
- * view says nothing about whether anyone else called the tool. `dropped` and
- * `limit` describe the store as a whole.
+ * `belongs(runId)` answers for a record's outer run (`InnerRunRecord.runId`);
+ * a record that names no run is asked with `undefined`. A record the view does
+ * not admit answers exactly like a record never kept — the same not-found, so
+ * the view says nothing about whether anyone else called the tool — and its
+ * drops are not in `dropped`. `limit` is the store's.
  *
  * @example
  * ```ts
- * const mine = innerRunsOfConversation(lookup, 'session-7');
- * mine.get('call-from-session-9'); // undefined — not found, not forbidden
+ * const mine = innerRunsOfConversation(lookup, (runId) => myRuns.has(runId ?? ''));
+ * mine.get('call-from-another-run'); // undefined — not found, not forbidden
  * ```
  */
 export function innerRunsOfConversation(
   lookup: InnerRunLookup,
-  sessionId: string | undefined,
+  belongs: (runId: string | undefined) => boolean,
 ): InnerRunLookup {
+  const admits = (record: InnerRunRecord): boolean => belongs(record.runId);
   return {
-    get: (toolCallId) => {
-      const found = lookup.get(toolCallId);
-      return found !== undefined && found.sessionId === sessionId ? found : undefined;
-    },
-    list: () => lookup.list().filter((summary) => summary.sessionId === sessionId),
+    get: (toolCallId) => viewGet(lookup, toolCallId, admits),
+    getWhere: (toolCallId, accept) =>
+      viewGet(lookup, toolCallId, (record) => admits(record) && accept(record)),
+    list: () => lookup.list().filter((summary) => belongs(summary.runId)),
     get dropped(): number {
-      return lookup.dropped;
+      return lookup.droppedWhere?.(belongs) ?? 0;
     },
+    droppedWhere: (accept) =>
+      lookup.droppedWhere?.((runId) => belongs(runId) && accept(runId)) ?? 0,
     get limit(): number {
       return lookup.limit;
     },
   };
+}
+
+/** `getWhere` when the lookup has it; else `get`, admitted or not found. */
+function viewGet(
+  lookup: InnerRunLookup,
+  toolCallId: string,
+  accept: (record: InnerRunRecord) => boolean,
+): InnerRunRecord | undefined {
+  if (lookup.getWhere !== undefined) return lookup.getWhere(toolCallId, accept);
+  const found = lookup.get(toolCallId);
+  return found !== undefined && accept(found) ? found : undefined;
 }

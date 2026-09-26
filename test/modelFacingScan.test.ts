@@ -587,7 +587,7 @@ const LEDGER: Readonly<Record<string, readonly Entry[]>> = {
   'src/hosting/errors.ts': [
     {
       kind: 'not-model-facing',
-      count: 7,
+      count: 8,
       why: 'hosting error classes — their messages travel to the host and into HTTP responses, never onto a model`s wire',
     },
   ],
@@ -1091,12 +1091,16 @@ describe('every model-facing-shaped literal in src/ is accounted for', () => {
         // not finish", became "This record does not show the run finishing" by
         // the design owner's ruling). No model reads them; one new file,
         // not-model-facing (3).
+        // Unreleased (identity fixes, round 3): one host-facing refusal added —
+        // `RequestArtifactsRevokedError`, rejected into HOST code that used a
+        // `handle.artifactsForRequest` binding after its instance was retired;
+        // no model reads it. hosting/errors.ts not-model-facing 7 → 8.
         files: 96,
-        total: 187,
+        total: 188,
         registry: 8,
         ephemeral: 20,
         unrepaired: 33,
-        notModelFacing: 126,
+        notModelFacing: 127,
         unrepairedEntries: 13,
       });
       // And the ledger's own total is the number of literals the scan flagged —

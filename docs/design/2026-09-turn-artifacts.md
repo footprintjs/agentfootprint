@@ -197,6 +197,7 @@ things land:
 | **KNOWN EDGE** — no user, the conversation carries an identity (an app-seeded tenant; a user an earlier turn claimed at an open door) | R = the stored identity, S = the session rung: the recording 404s at the door, the hand-over's filing redeems |
 | **KNOWN EDGE** — open door, a pause that named nobody resumed by a claimed user (or the claimed user changes) | R = the pausing seed, S = the resuming request's tuple |
 | after a resume on a shared agent, or on a pooled instance rebuilt after eviction | FIXED (Follow-up A): C is the resumed run's own caller, so the stored identity no longer names another session's caller or none |
+| a resume that names a DIFFERENT identity from the paused run's caller (a direct host) | REFUSED (`ResumeIdentityConflictError`): R is fixed in the checkpoint, so honouring the call would split one run between two identities (review S3) |
 
 Where S and C agree, the hand-over and the door agree for the same caller.
 
@@ -240,9 +241,11 @@ id), so a reader joining on that run id must say "paused, no recording", not
   deployment's memory namespace or redemption reach; awaits the owner's ruling.
 - **R2-11 — FIXED: self-explain on a shared agent read another person's
   run.** `SelfExplainBinding` now keeps evidence PER CONVERSATION (keyed by the
-  run's session, `getSessionId`; bounded LRU) and serves the asking run's
-  session only; the tools' inner-run records carry the session and are served
-  through `innerRunsOfConversation`. Pinned by the flipped test in
+  run's session, or for a hosted sessionless request its `#anonymous-N` latch —
+  review B1; `core/agent/servingConversation.ts`; bounded LRU) and serves the
+  asking run's conversation only; the tools' inner-run records carry their
+  outer run id, are keyed by run AND call id, and are served through
+  `innerRunsOfConversation` to the conversation whose runs made them. Pinned by the flipped test in
   `turn-artifacts-round2.test.ts` and the seeded property tests in
   `test/hosting/self-explain-isolation.test.ts`. The original entry: `SelfExplainBinding` captures "the previous completed run" per
   INSTANCE; on `standingAgent({ agent })` that is whoever ran last, so Bob's
