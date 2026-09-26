@@ -66,6 +66,41 @@ the rules are off. On a loopback bind (a laptop) they keep every default. The
 session-id bound applies to them too. See
 `docs/design/2026-09-door-hardening.md`.
 
+## Who is calling — one strategy, chosen by config
+
+A deployment proves who is calling with ONE strategy, picked once at boot by
+`identityFromConfig` (`agentfootprint/security`). Its answer is the
+`identity` option every door takes; `verifyRequestIdentity` stays the one
+funnel.
+
+- **Production names its strategy, even `open`.** `production` is an input the
+  app gives; the library never guesses it. Unset in production refuses to boot.
+- **A typo is never `open`.** An unknown strategy, an unknown `IDENTITY_*`
+  key, or a key a later release reads refuses by name. Keys set with no
+  strategy refuse; keys set beside an explicit `open` print a warning.
+- **Config errors refuse at boot; outages answer 503.** `oidc-token` reads the
+  issuer's discovery document at boot: a 404, a body that is not JSON, or a
+  document naming another issuer refuses; an unreachable IdP starts, says so
+  in the banner, and every request answers 503 until it is back.
+- **Only a person's token is a person.** `oidc-token` refuses an application's
+  own token (`not-a-user-token`) and a token from an unlisted client
+  (`wrong-client`). These, and `roles-unknown`, are new `IdentityFailureClass`
+  words: the ingress record carries them like the others.
+- **The banner never carries a secret.** Print every line at boot.
+- This release starts `open` and `oidc-token` (bearer access tokens).
+  `proxy-token`, `directory-password`, `local-password` and browser sign-in
+  are named and refused as "not in this release".
+
+```ts
+const choice = await identityFromConfig(identityConfigFromEnv(process.env), {
+  production: process.env.NODE_ENV === 'production' || process.env.APP_ENV === 'production',
+});
+for (const line of choice.banner) console.log(line);
+await standingAgent({ agent, sessions, host: nodeHost({ port: 8080 }), identity: choice.identity });
+```
+
+The rules for the verifiers themselves are in `src/adapters/identity/README.md`.
+
 ## Files
 - `types.ts` — the three ports.
 - `httpHost.ts`, `nodeHost.ts`, `standingAgent.ts` — the hosts.

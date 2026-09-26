@@ -10,6 +10,9 @@
  *   • Identity — the `CredentialProvider` port, the credential kinds
  *     (`bearer`, `apiKey`, `basic`, `headers`), `staticTokens`,
  *     `withCredentialRetry`, and `agentCoreIdentity`.
+ *   • Who is calling — the inbound verifiers `jwksIdentity` and
+ *     `oidcIdentity`, and `identityFromConfig` / `identityConfigFromEnv`,
+ *     which pick one strategy per deployment from config at boot.
  *
  * A vended credential is a secret: use it locally inside a tool's `execute`
  * and never write it to tracked scope.

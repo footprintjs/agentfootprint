@@ -29,12 +29,18 @@
  *
  * ── What it checks, and what it refuses to pretend to check ─────────────────
  * Signature (against the key the token's `kid` names, fetched and cached from
- * `jwksUrl`), `iss`, `aud`, `exp` and `nbf`. That is the whole list, and it is
- * the whole list on purpose:
+ * `jwksUrl`), `iss`, `aud`, `exp` and `nbf`. `exp` is REQUIRED: a signed token
+ * with no lifetime is refused as `unverifiable` rather than honoured forever.
+ * That is the whole list, and it is the whole list on purpose:
  *
  *   • **It is not an authorization decision.** A verified token proves WHO, not
  *     WHAT-THEY-MAY-DO. Roles and claims come back on the result so your own
  *     policy can decide; this adapter never reads them.
+ *   • **It does not ask whether the token stands for a PERSON.** An app's own
+ *     client-credentials token verifies here like a person's. When that
+ *     matters — any IdP where every registered app can obtain a token for your
+ *     API, which includes Entra ID — use `oidcIdentity`, whose person test
+ *     refuses app-only tokens by name.
  *   • **It does not check revocation.** A JWT is valid until it expires, and no
  *     amount of key fetching changes that. Short lifetimes are the answer; an
  *     adapter that implied otherwise would be selling a guarantee the protocol
@@ -68,23 +74,19 @@
  *   });
  */
 
-import { IdentityNotVerifiedError, VerifierUnavailableError } from '../../hosting/errors.js';
+import { IdentityNotVerifiedError } from '../../hosting/errors.js';
 import type { IdentityVerifier, VerifiedIdentity } from '../../hosting/identityVerification.js';
-import { lazyRequire } from '../../lib/lazyRequire.js';
+import { claimAt, rolesOf, type ClaimPath, type RolesFormat } from './verify/claims.js';
+import {
+  DEFAULT_ALGORITHMS,
+  loadJose,
+  verifySignedToken,
+  type JoseBackend,
+} from './verify/jwtCore.js';
 
-/**
- * The slice of `jose` this adapter uses — declared STRUCTURALLY, so a stub, a
- * pinned fork, or a future major satisfies it without this package taking a
- * hard type dependency on an optional peer. (The `UnpdfBackend` precedent.)
- */
-export interface JoseBackend {
-  createRemoteJWKSet(url: URL, options?: Record<string, unknown>): unknown;
-  jwtVerify(
-    token: string,
-    key: unknown,
-    options?: Record<string, unknown>,
-  ): Promise<{ payload: Record<string, unknown> }>;
-}
+export { MissingJwksSupportError } from './verify/jwtCore.js';
+export type { JoseBackend } from './verify/jwtCore.js';
+export type { ClaimPath, RolesFormat } from './verify/claims.js';
 
 export interface JwksIdentityOptions {
   /** Where the signing keys are published — an IdP's
@@ -106,11 +108,23 @@ export interface JwksIdentityOptions {
    */
   readonly userIdClaim?: string;
   /**
-   * Which claim carries roles. Default `'roles'`. Read leniently — a string,
-   * an array of strings, or a space-delimited string (the `scope` convention) —
-   * and ABSENT when the claim is absent. Never invented.
+   * Which claim carries roles. Default `'roles'`. A top-level name — a full
+   * URI is fine, and a dotted name is never split — or a PATH into nested
+   * objects: `['realm_access', 'roles']` for Keycloak's realm roles. ABSENT
+   * on the result when the claim is absent. Never invented.
    */
-  readonly rolesClaim?: string;
+  readonly rolesClaim?: ClaimPath;
+  /**
+   * How a roles claim holding a single STRING is read.
+   *
+   *  - `'list'` (default): the string is ONE role. `"Not neo-users"` is the
+   *    role `Not neo-users`, so it can never satisfy a check for `neo-users`.
+   *    An array contributes each string entry as one role.
+   *  - `'space-delimited'`: the string is split on whitespace — the reading
+   *    every release before this one used. Choose it only for a claim that
+   *    really is a space-delimited list (an OAuth `scope` read as roles).
+   */
+  readonly rolesFormat?: RolesFormat;
   /**
    * Signature algorithms to accept. Default: the RSA and ECDSA families
    * (`RS256/384/512`, `PS256/384/512`, `ES256/384/512`).
@@ -140,101 +154,6 @@ export interface JwksIdentityOptions {
    * ```
    */
   readonly backend?: JoseBackend;
-}
-
-/** Raised when a token must be verified and `jose` is not installed. */
-export class MissingJwksSupportError extends Error {
-  readonly code = 'ERR_MISSING_JWKS_SUPPORT' as const;
-
-  constructor() {
-    super(
-      'jwksIdentity requires the `jose` peer dependency.\n' +
-        '  Install:  npm install jose\n' +
-        '  Or pass `backend` to jwksIdentity() if your bundler resolves it statically.',
-    );
-    this.name = 'MissingJwksSupportError';
-  }
-}
-
-/** The asymmetric families. See {@link JwksIdentityOptions.algorithms}. */
-const DEFAULT_ALGORITHMS: readonly string[] = [
-  'RS256',
-  'RS384',
-  'RS512',
-  'PS256',
-  'PS384',
-  'PS512',
-  'ES256',
-  'ES384',
-  'ES512',
-];
-
-/**
- * `jose`'s stable error codes → this library's failure vocabulary.
- *
- * Mapped by CODE STRING rather than by `instanceof`, and that is the load-
- * bearing choice: the error classes are not on `jose`'s main entry point (they
- * live under `jose/errors`), the codes are documented as stable, and a string
- * comparison survives a duplicated copy of the library in a `node_modules` tree
- * — which `instanceof` famously does not.
- *
- * Every code is one this adapter has SEEN the installed library produce; the
- * pin test reproduces each one against the real package.
- */
-function classOf(
-  err: unknown,
-):
-  | 'expired'
-  | 'not-yet-valid'
-  | 'wrong-audience'
-  | 'wrong-issuer'
-  | 'unverifiable'
-  | 'keys-unavailable' {
-  const e = err as { code?: unknown; claim?: unknown } | null | undefined;
-  const code = typeof e?.code === 'string' ? e.code : undefined;
-  switch (code) {
-    case 'ERR_JWT_EXPIRED':
-      return 'expired';
-    case 'ERR_JWT_CLAIM_VALIDATION_FAILED': {
-      const claim = typeof e?.claim === 'string' ? e.claim : undefined;
-      if (claim === 'aud') return 'wrong-audience';
-      if (claim === 'iss') return 'wrong-issuer';
-      if (claim === 'nbf') return 'not-yet-valid';
-      return 'unverifiable';
-    }
-    case 'ERR_JWS_SIGNATURE_VERIFICATION_FAILED':
-    case 'ERR_JWKS_NO_MATCHING_KEY':
-    case 'ERR_JWKS_MULTIPLE_MATCHING_KEYS':
-    case 'ERR_JWS_INVALID':
-    case 'ERR_JWT_INVALID':
-    case 'ERR_JWK_INVALID':
-    case 'ERR_JWKS_INVALID':
-    case 'ERR_JOSE_ALG_NOT_ALLOWED':
-    case 'ERR_JOSE_NOT_SUPPORTED':
-      return 'unverifiable';
-    case 'ERR_JWKS_TIMEOUT':
-      return 'keys-unavailable';
-    default:
-      // No JOSE code at all. A key-set fetch that failed surfaces here as the
-      // runtime's own `TypeError: fetch failed` — an outage on THIS side, and
-      // answering it 401 would send every client to re-authenticate against a
-      // provider that is already down.
-      return code === undefined ? 'keys-unavailable' : 'unverifiable';
-  }
-}
-
-/** Roles out of a claim, read leniently and never invented. */
-function rolesOf(value: unknown): readonly string[] | undefined {
-  if (Array.isArray(value)) {
-    const roles = value.filter((v): v is string => typeof v === 'string' && v.length > 0);
-    return roles.length > 0 ? roles : undefined;
-  }
-  if (typeof value === 'string' && value.trim().length > 0) {
-    // The `scope` convention: one space-delimited string.
-    const roles = value.trim().split(/\s+/);
-    return roles.length > 0 ? roles : undefined;
-  }
-  return undefined;
 }
 
 export function jwksIdentity(options: JwksIdentityOptions): IdentityVerifier {
@@ -271,6 +190,14 @@ export function jwksIdentity(options: JwksIdentityOptions): IdentityVerifier {
   }
   const userIdClaim = options.userIdClaim ?? 'sub';
   const rolesClaim = options.rolesClaim ?? 'roles';
+  const rolesFormat = options.rolesFormat ?? 'list';
+  if (rolesFormat !== 'list' && rolesFormat !== 'space-delimited') {
+    throw new TypeError(
+      `[identity] jwksIdentity({ rolesFormat: ${JSON.stringify(rolesFormat)} }) — the reading ` +
+        `of a roles string is 'list' (one string is one role; the default) or ` +
+        `'space-delimited' (split on whitespace).`,
+    );
+  }
   const algorithms = options.algorithms ?? DEFAULT_ALGORITHMS;
 
   /** The key-set resolver, built once and reused — `jose` caches inside it. */
@@ -293,27 +220,15 @@ export function jwksIdentity(options: JwksIdentityOptions): IdentityVerifier {
   return {
     async verify(token: string): Promise<VerifiedIdentity> {
       const { jose, keys } = await getResolver();
-      let payload: Record<string, unknown>;
-      try {
-        const verified = await jose.jwtVerify(token, keys, {
-          issuer: options.issuer as string | string[],
-          audience: options.audience as string | string[],
-          algorithms: algorithms as string[],
-          ...(options.clockToleranceSeconds !== undefined && {
-            clockTolerance: options.clockToleranceSeconds,
-          }),
-        });
-        payload = verified.payload;
-      } catch (err) {
-        const failure = classOf(err);
-        // The one place the two shapes diverge: an unreachable key set is this
-        // deployment's outage (503), everything else is the caller's token
-        // (401). Neither carries the token, the claims, or the library's text.
-        if (failure === 'keys-unavailable') {
-          throw new VerifierUnavailableError('jwksIdentity', 'its key set could not be fetched');
-        }
-        throw new IdentityNotVerifiedError(failure, false);
-      }
+      const payload = await verifySignedToken(jose, keys, token, {
+        issuer: options.issuer,
+        audience: options.audience,
+        algorithms,
+        ...(options.clockToleranceSeconds !== undefined && {
+          clockToleranceSeconds: options.clockToleranceSeconds,
+        }),
+        verifierName: 'jwksIdentity',
+      });
       const userId = payload[userIdClaim];
       if (typeof userId !== 'string' || userId.length === 0) {
         // A perfectly valid token that does not say who it is about. Refused
@@ -321,7 +236,7 @@ export function jwksIdentity(options: JwksIdentityOptions): IdentityVerifier {
         // state nothing downstream could act on honestly.
         throw new IdentityNotVerifiedError('unverifiable', false);
       }
-      const roles = rolesOf(payload[rolesClaim]);
+      const roles = rolesOf(claimAt(payload, rolesClaim), rolesFormat);
       return {
         userId,
         ...(roles !== undefined && { roles }),
@@ -335,24 +250,4 @@ function emptyName(value: string | readonly string[] | undefined): boolean {
   if (typeof value === 'string') return value.trim().length === 0;
   if (Array.isArray(value)) return value.length === 0 || value.some((v) => typeof v !== 'string');
   return true;
-}
-
-/**
- * Load `jose`, or refuse by name.
- *
- * `jose` v6 is ESM-only, so a dynamic import is tried first and the CJS require
- * is the fallback — one of the two works on every runtime this package
- * supports. (The `unpdf` loader's shape, for the same reason.)
- */
-async function loadJose(): Promise<JoseBackend> {
-  try {
-    const spec = 'jose';
-    return (await import(spec)) as unknown as JoseBackend;
-  } catch {
-    try {
-      return lazyRequire<JoseBackend>('jose');
-    } catch {
-      throw new MissingJwksSupportError();
-    }
-  }
 }

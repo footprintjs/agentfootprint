@@ -1768,8 +1768,13 @@ body and no log line — not truncated, not hashed, not "the first eight
 characters". What travels is the **class** of the failure
 (`IdentityFailureClass`): `'no-token'`, `'expired'`, `'not-yet-valid'`,
 `'wrong-audience'`, `'wrong-issuer'`, `'unverifiable'`,
-`'claimed-another-user'`. Each one is a different action for the caller, and
-none of them requires printing one character of the secret.
+`'claimed-another-user'`, and three the person test adds: `'not-a-user-token'`
+(an application's own token, or one without the scope a person's token
+carries), `'wrong-client'` (a client this API does not list obtained it) and
+`'roles-unknown'` (the roles claim was replaced by an overage pointer). Each one
+is a different action for the caller, and none of them requires printing one
+character of the secret. If you `switch` over the class exhaustively, add the
+three new words.
 
 `IdentityNotVerifiedError` (`ERR_IDENTITY_NOT_VERIFIED`, **401**) carries that
 class. `VerifierUnavailableError` (`ERR_IDENTITY_VERIFIER_UNAVAILABLE`, **503**)
@@ -1810,13 +1815,21 @@ them. `JwksIdentityOptions` takes `jwksUrl`, `issuer` and `audience` (all
 required — a verifier that accepted any issuer is a signature check with no
 opinion about who signed, and one with no audience honours a token minted for
 somebody else's API), plus `userIdClaim` (default `'sub'`), `rolesClaim`
-(default `'roles'`, read leniently — an array, or the space-delimited `scope`
-convention), `algorithms` (default: the RSA and ECDSA families — symmetric
+(default `'roles'`; a claim name, or a path such as `['realm_access', 'roles']`
+for Keycloak — a dotted name is never split), `rolesFormat` (default `'list'`:
+an array gives one role per entry and a single string is ONE role, so
+`"Not neo-users"` never satisfies a check for `neo-users`; `'space-delimited'`
+keeps the old split for a claim that really is a list), `algorithms` (default:
+the RSA and ECDSA families — symmetric
 algorithms are deliberately excluded, because with a *public* key an accepted
 HMAC alg is the classic algorithm-confusion forgery), `clockToleranceSeconds`,
 `cacheMaxAgeMs` and `fetchTimeoutMs`.
 
-It checks the signature, `iss`, `aud`, `exp` and `nbf` — and nothing else. It is
+It checks the signature, `iss`, `aud`, `exp` and `nbf` — and nothing else.
+`exp` is required: a signed token with no lifetime is refused as
+`'unverifiable'` rather than honoured forever. It does **not** ask whether a
+token stands for a person — an application's own client-credentials token
+verifies like an employee's; use `oidcIdentity` below when that matters. It is
 not an authorization decision, and it does **not** check revocation: a JWT is
 valid until it expires, and no amount of key fetching changes that. Short
 lifetimes are the answer; an adapter implying otherwise would be selling a
@@ -1828,6 +1841,100 @@ specifier reaches the runtime unresolved, pass an already-imported module as
 `backend` — the `JoseBackend` slice is declared structurally, so a stub or a
 future major satisfies it without this package taking a hard type dependency on
 an optional peer.
+
+### `oidcIdentity` — a person's access token from your company's IdP
+
+`oidcIdentity` verifies an access token from an OpenID Connect provider — AD FS
+2016+, Entra ID, Keycloak, Okta — and asks the question `jwksIdentity` does
+not: **does this token stand for a person?** On Entra ID any application
+registered in the tenant can obtain a token for your API by the
+client-credentials grant, with the right issuer, audience and signature. It is
+refused here by its shape:
+
+- the scope only your API's person tokens carry (`requiredScope`, read from
+  `scp`, or `scope` with `scopeClaim: 'scope'`) must be present;
+- a token with roles and no scope, with `idtyp: "app"`, or with `oid` equal to
+  `sub` is an application's token (`'not-a-user-token'`);
+- the client that obtained it (`azp`, else `appid`, `cid`, `client_id`) must be
+  in `allowedClients` (`'wrong-client'`). On Keycloak and Okta a service
+  account's token can carry your scope, and this is the check that refuses it.
+
+`userIdClaim` is required, with no default: on both Microsoft IdPs `sub` is
+pairwise per application, so it is `oid` on Entra ID and your `objectGUID`
+claim on AD FS. The value is taken as bytes — never trimmed or case-folded.
+
+It reads the issuer's discovery document before accepting any token and pins
+the issuer it names — plus AD FS's `access_token_issuer`, the different `iss`
+AD FS signs access tokens with. A discovery 404, a body that is not JSON or a
+document naming another issuer is a configuration error; an IdP that cannot be
+reached is an outage, answered **503** and retried on later requests. `exp` is
+required, clock tolerance is 60 seconds by default, and a roles claim replaced
+by Entra's group-overage pointer is refused as `'roles-unknown'` rather than
+read as "no roles".
+
+```ts
+import { oidcIdentity } from 'agentfootprint/security';
+
+const verifier = oidcIdentity({
+  issuer: 'https://login.microsoftonline.com/<tenant>/v2.0',
+  audience: '<API client id>',
+  userIdClaim: 'oid',
+  requiredScope: 'access_as_user',
+  allowedClients: ['<web client id>'],
+});
+await standingAgent({ agent, sessions, host, identity: { verify: verifier.verify } });
+```
+
+The types: `OidcIdentityOptions` configures it; the result is an `OidcIdentity`
+— an `IdentityVerifier` plus `discover()`, which answers an
+`OidcDiscoveryState` (`ready` with a `DiscoveredIssuer`, `outage`, or
+`misconfigured`). `DiscoveryFetch` is the shape of the `fetch` option that
+reads the document, for tests and unusual runtimes. `rolesClaim` is a
+`ClaimPath` (a name, or an array of names into nested claims), and
+`jwksIdentity`'s `rolesFormat` is a `RolesFormat`.
+
+### Choosing a strategy by config — `identityFromConfig`
+
+A deployment picks ONE way of proving who is calling, at install time.
+`identityConfigFromEnv(process.env)` reads the `IDENTITY_*` variables and
+`identityFromConfig(config, { production })` judges them once at boot: it
+returns `{ strategy, identity, banner }`, or throws `IdentityConfigError`
+naming the key.
+
+- **Production names its strategy, even `open`.** You pass `production`; the
+  library never guesses it from `NODE_ENV`.
+- **A typo is never `open`.** An unknown strategy or `IDENTITY_*` key is
+  refused, and so are the keys of strategies a later release adds
+  (`proxy-token`, `directory-password`, `local-password`, browser sign-in):
+  they are named and refused as "not in this release".
+- **Config errors refuse at boot; outages answer 503.** An unreachable IdP
+  lets the app start and says so in the banner.
+- **The banner names settings and never a secret** — print every line.
+
+`IdentityConfig` is the plain object `identityConfigFromEnv` builds (build it
+yourself if your settings live elsewhere); `IdentityBootOptions` carries
+`production` (plus optional `fetch` and `backend` seams); `IdentityChoice` is the
+result, and its `strategy` is an `IdentityStrategyName` — one of `open`,
+`oidc-token`, `proxy-token`, `directory-password`, `local-password`.
+
+```sh
+IDENTITY_STRATEGY=oidc-token
+IDENTITY_ISSUER=https://login.microsoftonline.com/<tenant>/v2.0
+IDENTITY_AUDIENCE=<API client id>
+IDENTITY_USER_ID_CLAIM=oid
+IDENTITY_REQUIRED_SCOPE=access_as_user
+IDENTITY_ALLOWED_CLIENTS=<web client id>
+```
+
+```ts
+import { identityConfigFromEnv, identityFromConfig } from 'agentfootprint/security';
+
+const choice = await identityFromConfig(identityConfigFromEnv(process.env), {
+  production: process.env.NODE_ENV === 'production',
+});
+for (const line of choice.banner) console.log(line);
+await standingAgent({ agent, sessions, host, identity: choice.identity });
+```
 
 ## Admission — `admission: { decide }`
 

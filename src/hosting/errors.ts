@@ -635,6 +635,18 @@ export class UnreadableEnvelopeError extends TypeError {
  *    probing which half of a forgery to fix.
  *  - `'claimed-another-user'` — a valid token, and a request that signed
  *    somebody else's name beside it.
+ *  - `'not-a-user-token'` — a valid token that does not stand for a PERSON:
+ *    an app-only token (`idtyp: app`, `oid` equal to `sub`, roles and no
+ *    scope) or one without the scope only this API's person tokens carry.
+ *    Raised by `oidcIdentity`'s person test.
+ *  - `'wrong-client'` — a person's token, obtained by a client this door does
+ *    not list (`azp` / `appid` / `cid` / `client_id`), or naming none.
+ *  - `'roles-unknown'` — the token's roles claim was replaced by a pointer to
+ *    somewhere else (an IdP's group-overage pointer). Unknown is not none: reading it
+ *    as "no roles" would strip a person silently.
+ *
+ * The last three arrived together with `oidcIdentity`. A consumer's
+ * exhaustive `switch` over this union must add them.
  */
 export type IdentityFailureClass =
   | 'no-token'
@@ -643,7 +655,10 @@ export type IdentityFailureClass =
   | 'wrong-audience'
   | 'wrong-issuer'
   | 'unverifiable'
-  | 'claimed-another-user';
+  | 'claimed-another-user'
+  | 'not-a-user-token'
+  | 'wrong-client'
+  | 'roles-unknown';
 
 /**
  * The caller could not be identified, and this door was configured to insist.
@@ -716,6 +731,26 @@ function sentenceFor(failure: IdentityFailureClass, claimedUser: boolean): strin
         `the presented credential could not be verified — the signature did not check ` +
         `out, no key matched it, or it is not a token this host reads. Deliberately one ` +
         `answer for all three: naming which would tell whoever is probing what to fix.`
+      );
+    case 'not-a-user-token':
+      return (
+        `the presented token is valid but does not stand for a person: it is an ` +
+        `application's own token, or it lacks the scope this API requires of a person's ` +
+        `token. Sign in as a person through a client this API lists, and request this ` +
+        `API's scope.`
+      );
+    case 'wrong-client':
+      return (
+        `the presented token was obtained by a client this host does not accept, or it ` +
+        `does not say which client obtained it. Request the token through one of the ` +
+        `clients this API was configured to list.`
+      );
+    case 'roles-unknown':
+      return (
+        `the presented token does not carry the caller's roles: its roles claim was ` +
+        `replaced by a pointer to somewhere else (the group-overage shape, above about 200 ` +
+        `groups). Unknown is not none, so the caller is refused rather than served with no ` +
+        `roles. The deployment should send app roles (the 'roles' claim) instead of groups.`
       );
   }
 }

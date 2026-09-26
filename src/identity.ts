@@ -116,6 +116,34 @@ export {
 export {
   jwksIdentity,
   MissingJwksSupportError,
+  type ClaimPath,
   type JoseBackend,
   type JwksIdentityOptions,
+  type RolesFormat,
 } from './adapters/identity/jwks.js';
+
+// Sign-in strategies picked by CONFIG (the identity-strategies design). One
+// strategy per deployment, judged once at boot: `identityFromConfig` refuses a
+// wrong or missing setting by name, and production must name its strategy.
+// `oidcIdentity` is the `oidc-token` verifier: jwksIdentity's checks plus
+// discovery, AD FS's second issuer, and the PERSON test — an application's own
+// token is not an employee.
+export {
+  oidcIdentity,
+  type DiscoveryFetch,
+  type OidcDiscoveryState,
+  type OidcIdentity,
+  type OidcIdentityOptions,
+} from './adapters/identity/oidc.js';
+export type { DiscoveredIssuer } from './adapters/identity/verify/discovery.js';
+export {
+  identityFromConfig,
+  type IdentityBootOptions,
+  type IdentityChoice,
+} from './adapters/identity/strategies/choose.js';
+export {
+  identityConfigFromEnv,
+  IdentityConfigError,
+  type IdentityConfig,
+} from './adapters/identity/strategies/config.js';
+export type { IdentityStrategyName } from './adapters/identity/strategies/vocabulary.js';
