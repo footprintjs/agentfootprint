@@ -499,11 +499,14 @@ describe('the sign-in door — integration', () => {
   it('trusted proxies (a CIDR range): the address follows X-Forwarded-For only behind a listed proxy', async () => {
     const warnings: string[] = [];
     const m = await mounted({
-      limits: { perName: 100, perAddress: 2, backoffMs: 40 },
+      limits: { perName: 100, perAddress: 2, backoffMs: 60 },
       trustedProxies: ['127.0.0.0/8'],
       warn: (w) => warnings.push(w),
     });
     // Rightmost untrusted hop: 10.9.9.9 each time — one client, a growing delay.
+    // Past its budget the address waits the capped 8 × backoffMs = 480 ms. The
+    // bounds sit halfway, well clear of a loaded CI runner's own login latency
+    // (~60 ms seen), so they measure the limiter, not the machine.
     const timed = async (name: string, xff: string) => {
       const t = Date.now();
       await login(m.url, name, 'p', { 'x-forwarded-for': xff });
@@ -512,9 +515,9 @@ describe('the sign-in door — integration', () => {
     await timed('x1', '1.1.1.1, 10.9.9.9');
     await timed('x2', '2.2.2.2, 10.9.9.9');
     await timed('x3', '3.3.3.3, 10.9.9.9');
-    expect(await timed('x4', '4.4.4.4, 10.9.9.9')).toBeGreaterThanOrEqual(35);
+    expect(await timed('x4', '4.4.4.4, 10.9.9.9')).toBeGreaterThanOrEqual(450);
     // Another client behind the same proxy is not slowed by the first.
-    expect(await timed('x5', '10.8.8.8')).toBeLessThan(35);
+    expect(await timed('x5', '10.8.8.8')).toBeLessThan(240);
     expect(warnings).toEqual([]);
   });
 
