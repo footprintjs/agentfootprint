@@ -5,8 +5,8 @@ name: Deploy Docs
 #
 # WHEN: on a RELEASE, not on every push. The site documents what `npm install
 # agentfootprint` gives you — deploying from main showed readers features npm did
-# not have yet. The Release workflow (publish.yml) and scripts/release.sh start
-# this after tagging; run it by hand (Actions → Deploy Docs) for a docs-only fix
+# not have yet. The Release workflow (publish.yml) starts this once npm has the
+# version, and scripts/release.sh after tagging; run it by hand (Actions → Deploy Docs) for a docs-only fix
 # that should not wait for the next release. Every push and PR still BUILDS the
 # site in ci.yml's `docs` job, so a broken page is caught long before a release.
 on:
@@ -24,6 +24,7 @@ concurrency:
 jobs:
   build:
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@v7
 
@@ -86,6 +87,7 @@ jobs:
   deploy:
     needs: build
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
