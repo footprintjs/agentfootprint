@@ -95,6 +95,7 @@ export function directoryPasswords(options: DirectoryPasswordsOptions): Password
 
   return {
     strategy: 'directory-password',
+    kind: 'directory',
     budgetKey: (typed) => accountBudgetKey(typed),
     async check(typed: string, password: string): Promise<PasswordAccepted | undefined> {
       if (password.length === 0 || CONTROL_CHARACTER.test(password)) return undefined;

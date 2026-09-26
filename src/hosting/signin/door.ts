@@ -6,7 +6,8 @@
  *          its own routes (`nodeHost({ onUnhandled })`), like the app's own
  *          `/auth` routes before it.
  *
- *   GET  /auth/config  → `{ mode: 'password' }`
+ *   GET  /auth/config  → `{ mode: 'password', passwordKind: 'directory' | 'local' }`
+ *                        (`passwordKind` when the checker declares its `kind`)
  *   GET  /auth/me      → `{ displayName, accountKey, expiresAt }` or 401
  *   POST /auth/login   → the password sign-in (below)
  *   POST /auth/logout  → end the sign-in, expire the cookie, close its sockets
@@ -59,6 +60,7 @@ import {
   SIGN_IN_COOKIE_LOCALHOST,
   type HostSignInOptions,
   type PasswordChecker,
+  type PasswordKind,
   type RedirectSignIn,
   type SignInAccepted,
   type SignInStore,
@@ -156,6 +158,7 @@ export function signInDoor(options: SignInDoorOptions): SignInDoor {
   const now = options.now ?? Date.now;
   const hours = bounded(options.hours ?? DEFAULT_HOURS, 'hours', MAX_HOURS);
   const mode = modeOf(options);
+  const config = configAnswerOf(mode, options.passwords);
   const idleMinutes = bounded(
     options.idleMinutes ?? DEFAULT_IDLE_MINUTES[mode],
     'idleMinutes',
@@ -333,7 +336,7 @@ export function signInDoor(options: SignInDoorOptions): SignInDoor {
     if (method !== want) {
       return reply(res, 405, { error: `Use ${want}.` }, { allow: want });
     }
-    if (path === 'config') return reply(res, 200, { mode });
+    if (path === 'config') return reply(res, 200, config);
     if (path === 'me') return me(req, res);
     if (path === 'logout') return logout(req, res);
     if (redirectRoutes !== undefined) {
@@ -406,6 +409,31 @@ function modeOf(options: SignInDoorOptions): 'password' | 'redirect' {
     );
   }
   return options.passwords !== undefined ? 'password' : 'redirect';
+}
+
+/** What `GET /auth/config` may say a password door takes. */
+const PASSWORD_KINDS: readonly PasswordKind[] = ['directory', 'local'];
+
+/**
+ * `GET /auth/config`'s answer, fixed at construction: the mode, and on a
+ * password door the checker's declared `kind` as `passwordKind` — so a page
+ * can label its form. A checker that declares none adds nothing (never a
+ * guess); one that declares a word outside the vocabulary is refused here,
+ * because the page branches on it.
+ */
+function configAnswerOf(
+  mode: 'password' | 'redirect',
+  passwords: PasswordChecker | undefined,
+): Readonly<{ mode: 'password' | 'redirect'; passwordKind?: PasswordKind }> {
+  const kind = passwords?.kind;
+  if (mode !== 'password' || kind === undefined) return { mode };
+  if (!PASSWORD_KINDS.includes(kind)) {
+    throw new SignInDoorConfigError(
+      'passwords',
+      `passwords.kind is 'directory' or 'local' (got ${JSON.stringify(kind)})`,
+    );
+  }
+  return { mode, passwordKind: kind };
 }
 
 const SECURITY_HEADERS: Readonly<Headers> = {

@@ -378,9 +378,14 @@ export type TurnArtifacts =
 /**
  * What {@link StandingAgentHandle.artifactsForRequest} reads off a request:
  * WHICH conversation (`sessionId`) and WHO is asking — the transport's headers
- * (the bearer token a configured verifier checks) and, at a door with no
- * verifier, its `userId` claim. The same fields, read the same way, as a turn
- * or a redemption on the wire.
+ * (the bearer token a configured verifier checks), the sign-in KEY (a sign-in
+ * the server keeps) and, at a door with no verifier, its `userId` claim. The
+ * same fields, read the same way, as a turn or a redemption on the wire.
+ *
+ * The fields are {@link HostRequest}'s own, so inside a handler the request the
+ * transport built goes in AS IT IS — `handle.artifactsForRequest(request)` —
+ * and no credential can be left behind. A {@link HostConversation} goes in the
+ * same way.
  *
  * `headers` takes a Node / Express `IncomingHttpHeaders` as it is: a value
  * that arrived as an array (a repeated header) is not read, and a REPEATED
@@ -390,6 +395,21 @@ export interface ArtifactsForRequestInput {
   readonly sessionId?: string;
   readonly headers?: Readonly<Record<string, string | readonly string[] | undefined>>;
   readonly userId?: string;
+  /**
+   * The sign-in this request named, as its KEY — {@link HostRequest.signInKey},
+   * or on an app's own route `readSignIn(req.headers, cookieName).key`. Never
+   * the cookie: the seam does not read cookies, and a key cannot be turned
+   * back into one.
+   *
+   * Verified exactly as the turn door verifies it (`verifyRequestIdentity`
+   * with the key): an ended, expired or unknown sign-in is `'unverified'`
+   * (`'expired'`), a sign-in store that cannot answer is `'unavailable'`, and
+   * a key together with a bearer token is `'unverified'`
+   * (`'two-credentials'`). Absent, the request is judged as one that carried
+   * no sign-in — at a door that requires a credential, `'unverified'`
+   * (`'no-token'`), exactly as the turn door would judge it without its key.
+   */
+  readonly signInKey?: string;
 }
 
 /**
@@ -407,12 +427,14 @@ export interface ArtifactsForRequestInput {
  *
  * `bound: false` says why, checked in this order:
  *  - `'unverified'` — a verifier is configured and the request did not pass it
- *    (no token where one is required, a token that does not verify, a claimed
- *    user the token does not prove). `error` is the verifier's refusal; a
- *    host's 401.
+ *    (no credential where one is required, a token that does not verify, a
+ *    sign-in that ended or expired, a token AND a sign-in, a claimed user the
+ *    credential does not prove). `error` is the verifier's refusal; a host's
+ *    401.
  *  - `'unavailable'` — the verifier could not answer (`VerifierUnavailableError`,
- *    an identity-provider outage). `error` says which; a host's 503, never a
- *    401 — the caller's credential was not judged.
+ *    an identity-provider outage, a sign-in store that is down). `error` says
+ *    which; a host's 503, never a 401 — the caller's credential was not
+ *    judged.
  *  - `'no-session'` — the request named no session.
  *  - `'invalid-session'` — the session id is one the wire refuses at the door
  *    (empty, over the length bound, or a character outside visible ASCII —
@@ -451,8 +473,15 @@ export interface StandingAgentHandle {
    * app-owned route that files its own artifacts beside a conversation.
    *
    * "The caller" is what the door knows: at a door with a verifier, the person
-   * the token PROVES; at a door with no verifier, the session id and the
+   * the token or the sign-in PROVES; at a door with no verifier, the session id and the
    * transport's `userId` claim are the key, by law — exactly as on the wire.
+   *
+   * Inside a handler, hand it the request the transport built —
+   * `handle.artifactsForRequest(request)` — so the sign-in key
+   * ({@link HostRequest.signInKey}) goes in with the headers. On an app's own
+   * route, take the sign-in cookie off first and pass only its key:
+   * `const { key, headers } = readSignIn(req.headers, door.cookieName)`, then
+   * `{ sessionId, headers, signInKey: key }`.
    *
    * The host never composes the scope. This runs the door's own steps with the
    * door's own instances: the configured verifier, the session-id check, the
@@ -463,10 +492,20 @@ export interface StandingAgentHandle {
    * filed through it is redeemed on the wire by the same caller, and a ref
    * another caller filed answers exactly like a ref that never existed.
    *
+   * A filing made through it carries NO `origin`: this call executes no run,
+   * so there is no run id the library can vouch for (a caller's own `origin`
+   * is dropped, as on every binding). The caller is already the scope, and
+   * its `minted` fact names the session.
+   *
    * @example  An Express route that reads a payload by ref before the turn runs
-   *   const handle = await standingAgent({ agent, sessions, host, identity: { verify } });
+   *   const handle = await standingAgent({ agent, sessions, host, identity: door.identity });
    *   app.get('/panel/:sessionId/:ref', async (req, res) => {
-   *     const found = await handle.artifactsForRequest({ sessionId: req.params.sessionId, headers: req.headers });
+   *     const { key, headers } = readSignIn(req.headers, door.cookieName); // the cookie comes off
+   *     const found = await handle.artifactsForRequest({
+   *       sessionId: req.params.sessionId,
+   *       headers,
+   *       ...(key !== undefined && { signInKey: key }),
+   *     });
    *     if (!found.bound) {
    *       const status = { unverified: 401, unavailable: 503, 'invalid-session': 400 } as Record<string, number>;
    *       return res.status(status[found.reason] ?? 404).end();

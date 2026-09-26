@@ -1649,8 +1649,14 @@ a panel reading a payload by ref before the run, an app-owned route that files a
 guide beside a conversation — asks the handle instead: `standingAgent` returns
 the adapter's handle extended with `StandingAgentHandle`, whose
 `artifactsForRequest(request)` takes an `ArtifactsForRequestInput` (the
-request's `sessionId`, its `headers` as Express hands them over, and at a door
-with no verifier its `userId` claim) and answers an `ArtifactsForRequestResult`.
+request's `sessionId`, its `headers` as Express hands them over, its sign-in
+KEY as `signInKey`, and at a door with no verifier its `userId` claim) and
+answers an `ArtifactsForRequestResult`. It verifies exactly as the turn door
+does — `verifyRequestIdentity` with the sign-in key — so a person signed in by
+the cookie door binds here too. Inside a handler, pass the `HostRequest` itself
+(it IS an input); on an app's own route, take the cookie off with `readSignIn`
+and pass only its key. A filing made through it carries no `origin`: the call
+executes no run, so there is no run id to vouch for.
 
 **Why it exists:** before it, an app that needed its request's scope early
 either copied the library's scope logic — the verifier, the stored identity, the
@@ -1670,10 +1676,11 @@ instance is retired or the host closes rejects with
 `RequestArtifactsRevokedError` — already handled; ask again.
 
 ```ts
-const handle = await standingAgent({ agent, sessions, host, identity: { verify } });
+const handle = await standingAgent({ agent, sessions, host, identity: door.identity }); // door = signInDoor({ … })
 const STATUS: Record<string, number> = { unverified: 401, unavailable: 503, 'invalid-session': 400 };
 
-const scoped = await handle.artifactsForRequest({ sessionId, headers: req.headers });
+const { key, headers } = readSignIn(req.headers, door.cookieName); // the cookie comes off
+const scoped = await handle.artifactsForRequest({ sessionId, headers, signInKey: key });
 if (!scoped.bound) return res.status(STATUS[scoped.reason] ?? 404).end();
 const payload = await scoped.artifacts.get(ref); // null: missing, expired or not yours
 ```
@@ -2011,7 +2018,7 @@ your routes:
 
 | Route | What it does |
 |---|---|
-| `GET /auth/config` | `{ mode }` — the page's sign-in gate: `'open'`, `'token-only'`, `'password'` or `'redirect'` (an `IdentityMode`) |
+| `GET /auth/config` | `{ mode }` — the page's sign-in gate: `'open'`, `'token-only'`, `'password'` or `'redirect'` (an `IdentityMode`). A password door adds `passwordKind: 'directory' \| 'local'` (a `PasswordKind`: the checker's `PasswordChecker.kind`) so the page can label its form — "Windows username (e.g. jsmith)" for `'directory'` |
 | `GET /auth/me` | `{ displayName, accountKey, expiresAt }` or 401. `accountKeyOf(userId)` is a 128-bit key for the page's caches |
 | `POST /auth/login` | a password sign-in, below |
 | `POST /auth/logout` | ends the sign-in, expires the cookie, closes its sockets; `{ next: '/' }` |

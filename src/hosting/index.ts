@@ -294,6 +294,7 @@ export {
   RedirectSignInError,
   type PasswordAccepted,
   type PasswordChecker,
+  type PasswordKind,
   type RedirectFailure,
   type RedirectSignIn,
   type SignInAccepted,

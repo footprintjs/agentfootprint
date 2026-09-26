@@ -100,6 +100,15 @@ funnel.
   `password` and `redirect` mode; for `open` and `token-only` there is no door,
   and the app answers `{ mode: choice.mode }` itself — the page learns from it
   whether to show a sign-in.
+- **A password door says WHICH password (`passwordKind`).** Both password
+  strategies answer `mode: 'password'`, so the door adds
+  `passwordKind: 'directory'` (`directory-password`: the company directory's
+  account) or `'local'` (`local-password`: a list this app keeps) — the
+  checker's declared `PasswordChecker.kind`. It is a FACT; the words stay the
+  page's. Recommended labels: `'directory'` → "Windows username (e.g. jsmith)"
+  and "Windows password"; `'local'` or absent → "Username" and "Password". A
+  custom checker that declares no `kind` adds no key (never a guess); a word
+  outside the two is refused when the door is built.
 
 ```ts
 const choice = await identityFromConfig(identityConfigFromEnv(process.env), {
@@ -438,8 +447,32 @@ verifier, the session-id check the adapters apply (`checkSessionId`), the
 stored conversation, the ownership rule (`mayRedeemFrom`), the ONE composer
 (`sessionArtifactScope`), and the store of the instance serving that session —
 never building or evicting one (`redeemerFor`). "The caller" is what the door
-knows: with a verifier, the person the token proves; without one, the session
-id and the `userId` claim are the key, as on the wire.
+knows: with a verifier, the person the token or the sign-in proves; without
+one, the session id and the `userId` claim are the key, as on the wire.
+
+**It verifies exactly as the turn door does — the sign-in key included.** The
+input carries `HostRequest`'s own credential fields (`sessionId`, `headers`,
+`userId`, `signInKey`) and they go through the ONE funnel,
+`verifyRequestIdentity(identity, headers, userId, signInKey)`. So a person
+signed in by the cookie door (`local-password`, `directory-password`, browser
+OIDC) binds here as a bearer caller does; an ended or expired sign-in is
+`'unverified'` (`expired`); a sign-in store that cannot answer is
+`'unavailable'`; a key AND a bearer token are `'unverified'`
+(`two-credentials`). Two ways to hand it over, never the cookie:
+
+- **inside a handler**, pass the request the transport built —
+  `handle.artifactsForRequest(request)`. A `HostRequest` (and a
+  `HostConversation`) IS an `ArtifactsForRequestInput`, so the key cannot be
+  left behind;
+- **on an app's own route**, take the cookie off first with `readSignIn` and
+  pass only its key (the seam never reads a cookie).
+
+A filing made through it carries **no `origin`**: the call executes no run, so
+there is no run id the library could vouch for — reading "the session's last
+run" could name a run that did not produce it, and a caller's own `origin` is
+dropped as on every binding. The caller is already the scope, and the
+`minted` fact names the session. (Through 9.117.0 the key was not passed on,
+so every cookie-signed-in request was `'unverified'` here.)
 
 What comes back is the `TurnArtifacts` shape — five verbs, no scope on the
 value, never the unscoped store — or a reason, in this order: `'unverified'`
@@ -461,16 +494,29 @@ never existed.
 ```ts
 import type { Request, Response } from 'express';
 
-const handle = await standingAgent({ agent, sessions, host, identity: { verify } });
+const choice = await identityFromConfig(identityConfigFromEnv(process.env), { production });
+const handle = await standingAgent({ agent, sessions, host, identity: choice.identity });
 const STATUS: Record<string, number> = { unverified: 401, unavailable: 503, 'invalid-session': 400 };
 
 app.get('/panel/:sessionId/:ref', async (req: Request, res: Response) => {
-  // `req.headers` goes in as it is (a repeated authorization is refused); the seam checks the session id itself.
-  const scoped = await handle.artifactsForRequest({ sessionId: req.params.sessionId, headers: req.headers });
+  // The sign-in cookie comes off here; only its KEY goes on. With no sign-in
+  // strategy there is no cookie to read and `key` is undefined.
+  const { key, headers } = choice.signInDoor
+    ? readSignIn(req.headers, choice.signInDoor.cookieName)
+    : { key: undefined, headers: req.headers };
+  // A repeated authorization is refused; the seam checks the session id itself.
+  const scoped = await handle.artifactsForRequest({
+    sessionId: req.params.sessionId,
+    headers,
+    ...(key !== undefined && { signInKey: key }),
+  });
   if (!scoped.bound) return res.status(STATUS[scoped.reason] ?? 404).end();
   const payload = await scoped.artifacts.get(req.params.ref); // null: missing, expired or not yours
   return payload ? res.json(payload.data) : res.status(404).end();
 });
+
+// Inside a HostHandler the request already carries the key — pass it whole:
+//   const scoped = await handle.artifactsForRequest(request);
 ```
 
 Typed input pauses use the existing `decision` transport for `{requestId,

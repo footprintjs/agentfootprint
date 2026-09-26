@@ -125,6 +125,9 @@ export interface PasswordAccepted {
   readonly displayName?: string;
 }
 
+/** Which password a password door takes — see {@link PasswordChecker.kind}. */
+export type PasswordKind = 'directory' | 'local';
+
 /**
  * A password strategy: `local-password` or `directory-password`.
  * Resolves the person, or `undefined` for ANY wrong credential — unknown name,
@@ -142,6 +145,15 @@ export interface PasswordAccepted {
 export interface PasswordChecker {
   /** Which strategy this is, recorded on the sign-in. */
   readonly strategy: string;
+  /**
+   * Which password a person types here — the company directory's
+   * (`'directory'`, e.g. their Windows sign-in) or one kept by this app
+   * (`'local'`). `GET /auth/config` answers it as `passwordKind`, so the page
+   * can label its form ("Windows username" vs "Username"); the words stay the
+   * page's. `directoryPasswords` and `localPasswords` declare it. Absent: the
+   * answer carries no `passwordKind` — never a guess.
+   */
+  readonly kind?: PasswordKind;
   check(username: string, password: string): Promise<PasswordAccepted | undefined>;
   /**
    * The ACCOUNT a typed name reaches, as the checker's backend resolves it —

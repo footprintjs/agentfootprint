@@ -143,6 +143,7 @@ export function localPasswords(
 
   return {
     strategy: 'local-password',
+    kind: 'local',
     names: [...table.keys()],
     // The attempt budget is kept under the name the list compares — the
     // trimmed NFC form (review idI57 B-1: the checker names the key).

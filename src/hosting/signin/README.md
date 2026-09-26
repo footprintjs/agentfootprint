@@ -17,12 +17,24 @@ dialect, a log line and the ingress record never see the cookie (rule 10).
 const { key, headers } = readSignIn(req.headers);
 const who = key === undefined ? undefined : await signIns.identify(key);
 log.info({ path: req.url, headers: withoutCredentials(headers) });
+// …and hands the KEY — never the cookie — to the artifact seam:
+const scoped = await handle.artifactsForRequest({ sessionId, headers, signInKey: key });
 ```
 
 ## The sign-in door (`door.ts`)
 `GET /auth/config`, `GET /auth/me`, `POST /auth/login` (password), `POST
 /auth/logout`. The rules it keeps:
 
+- **`/auth/config` says which password (`passwordKind`).** `{ mode:
+  'password', passwordKind: 'directory' | 'local' }` — the checker's declared
+  `PasswordChecker.kind`, fixed when the door is built, so a page labels its
+  form ("Windows username (e.g. jsmith)" for `'directory'`, "Username" for
+  `'local'`). A fact, never words; a checker with no `kind` adds no key; a word
+  outside the two refuses at construction.
+  ```ts
+  const checker: PasswordChecker = { strategy: 'my-directory', kind: 'directory', check };
+  // GET /auth/config → { "mode": "password", "passwordKind": "directory" }
+  ```
 - **The browser holds no IdP token (rule 16)** — only a random cookie value;
   the server keeps the sign-in, and the store keeps only the value's SHA-256.
 - **Password doors (rule 18):** the door guard runs on every login whatever it
