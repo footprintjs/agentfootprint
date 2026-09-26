@@ -9,9 +9,19 @@ on:
 permissions:
   contents: read
 
+# A new push to a PR supersedes the run on its previous head. Pushes to main
+# are never cancelled: each one is a commit the Release workflow may cut.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+# EVERY install here is `npm ci` against the committed lockfiles — the same
+# tree the Release workflow gates and publishes. `npm install` would resolve
+# fresh versions and let CI pass on a tree that never ships.
 jobs:
   test:
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     strategy:
       matrix:
         node-version: [20, 22]
@@ -22,9 +32,9 @@ jobs:
       - uses: actions/setup-node@v6
         with:
           node-version: ${{ matrix.node-version }}
-          # no cache — lockfile not committed (platform-specific native deps)
+          cache: npm
 
-      - run: npm install
+      - run: npm ci
       - run: npx tsc --noEmit
       # Compile-level regression tests (test/type-regressions/) — ordinary
       # `test/**` isn't covered by the tsc run above (tsconfig.json's
@@ -47,19 +57,26 @@ jobs:
       - run: npx publint
       - run: npx @arethetypeswrong/cli --pack
 
+  # Also the two checks the Release workflow runs that nothing else in CI did —
+  # a PR green here must not go red at release time.
   lint:
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@v7
 
       - uses: actions/setup-node@v6
         with:
           node-version: 22
-          # no cache — lockfile not committed (platform-specific native deps)
+          cache: npm
 
-      - run: npm install
+      - run: npm ci
       - run: npm run lint
       - run: npm run format
+      - name: Documentation check (removed API names)
+        run: bash scripts/check-docs.sh
+      - name: Duplicate type check
+        run: node scripts/check-dup-types.mjs
 
   # Docs gate: builds docs-next (Fumadocs), which twoslash-compiles every
   # "ts twoslash" code block against the real agentfootprint types at build.
@@ -67,15 +84,20 @@ jobs:
   # code can't drift from the library (the test job runs every example).
   docs:
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@v7
 
       - uses: actions/setup-node@v6
         with:
           node-version: 22
+          cache: npm
+          cache-dependency-path: |
+            package-lock.json
+            docs-next/package-lock.json
 
       - name: Install root deps (docs-next resolves agentfootprint via a local dep)
-        run: npm install
+        run: npm ci
 
       # docs-next's prebuild generators (gen-agent-flowchart / gen-replay-trace) import
       # agentfootprint at runtime → need dist/esm. Build the library first, like docs.yml.
@@ -84,7 +106,13 @@ jobs:
 
       - name: Install docs-next deps
         working-directory: docs-next
-        run: npm install
+        run: npm ci
+
+      # The "Try it live" embed runs this builder in the reader's browser. The
+      # deploy (docs.yml) checks it too — too late: npm already has the version.
+      - name: Check the Try-it demo runs end-to-end
+        working-directory: docs-next
+        run: npm run check:tryit
 
       # Built as the STATIC EXPORT, with the same root-path env docs.yml
       # deploys with, so this job measures the artifact that actually ships
@@ -122,15 +150,15 @@ jobs:
   # fails on any diff — the fix is always `npm run docs:regen` + commit.
   generated:
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@v7
 
       - uses: actions/setup-node@v6
         with:
           node-version: 22
+          cache: npm
 
-      # npm ci, not install: install may rewrite the lockfile, which this job
-      # would then report as a stale generated file.
       - run: npm ci
       - run: npm run docs:check
 
@@ -140,6 +168,7 @@ jobs:
   changes:
     if: github.event_name == 'pull_request'
     runs-on: ubuntu-latest
+    timeout-minutes: 5
     steps:
       - uses: actions/checkout@v7
         with:
@@ -159,6 +188,7 @@ jobs:
   # link. Self-contained: github-slugger is the script's only external dep.
   docs-links:
     runs-on: ubuntu-latest
+    timeout-minutes: 5
     steps:
       - uses: actions/checkout@v7
 
@@ -185,14 +215,16 @@ jobs:
   # Needs the build: the DECLARED column reads dist/, i.e. what actually ships.
   docs-truth:
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@v7
 
       - uses: actions/setup-node@v6
         with:
           node-version: 22
+          cache: npm
 
-      - run: npm install
+      - run: npm ci
       - run: npm run build
       - run: npm run docs:truth
 
@@ -201,14 +233,16 @@ jobs:
   # so it stays visible without becoming a hostage to chasing the metric.
   coverage:
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@v7
 
       - uses: actions/setup-node@v6
         with:
           node-version: 22
+          cache: npm
 
-      - run: npm install
+      - run: npm ci
       - run: npm run build
       - run: npm run test:coverage
 

@@ -12,11 +12,16 @@ name: Release
 #            CHANGELOG entry, capability rows, every generated doc), then run
 #            EVERY gate against that exact tree, then stage the npm tarball.
 #            No write power of any kind.
-#   release  only after every gate is green: commit, tag, push, GitHub release,
-#            deploy the docs site. Runs no npm install — never shares a runtime
-#            with a dependency's install script.
+#   release  only after every gate is green: commit, tag, push, GitHub release.
+#            Runs no npm install — never shares a runtime with a dependency's
+#            install script. Every step is SAFE TO RE-RUN: one that already
+#            happened (commit on main, tag, GitHub release) is skipped, so
+#            "Re-run failed jobs" finishes a half-done release instead of
+#            stranding a version on main that npm never got.
 #   publish  `npm publish --provenance` of the tarball `build` staged. The ONLY
 #            job with an OIDC token.
+#   docs     deploy the docs site — AFTER npm has the version, so the site never
+#            documents a release the registry does not serve.
 #
 # Why the gates come FIRST: the previous flow tagged, pushed and created the
 # GitHub release, and only THEN ran these gates here — a red gate blocked the
@@ -57,14 +62,19 @@ on:
 permissions:
   contents: read
 
-# Two releases can never race for the same version number.
+# Two releases can never race for the same version number. GitHub keeps ONE
+# pending run per group and cancels an older pending one, so the legacy
+# `release: published` path (a tag someone already cut) gets a group per tag:
+# a fragment push arriving behind it must not cancel a tag that still needs
+# publishing, and it does not compete for a version number anyway.
 concurrency:
-  group: release
+  group: release-${{ github.event_name == 'release' && github.ref || 'main' }}
   cancel-in-progress: false
 
 jobs:
   plan:
     runs-on: ubuntu-latest
+    timeout-minutes: 5
     outputs:
       pending: ${{ steps.plan.outputs.pending }}
       sha: ${{ steps.plan.outputs.sha }}
@@ -104,6 +114,7 @@ jobs:
     needs: plan
     if: needs.plan.outputs.pending == 'true'
     runs-on: ubuntu-latest
+    timeout-minutes: 45
     outputs:
       version: ${{ steps.prepare.outputs.version }}
     env:
@@ -119,6 +130,17 @@ jobs:
 
       # The tracked lock installs the exact published ContextFootprint dependency.
       - run: npm ci
+
+      # The legacy path publishes whatever version package.json holds at the
+      # tag — refuse a tag that names a different one, before any gate runs.
+      - name: Tag matches package.json (legacy release path)
+        if: env.PREPARE != 'true'
+        run: |
+          PKG="v$(node -p "require('./package.json').version")"
+          if [ "$PKG" != "${{ github.ref_name }}" ]; then
+            echo "::error::Tag ${{ github.ref_name }} does not match package.json ($PKG). Nothing was published."
+            exit 1
+          fi
 
       # ── Prepare (automated release only) ────────────────────────────────
       - name: Prepare version + CHANGELOG from .changes/
@@ -207,22 +229,24 @@ jobs:
         with:
           name: package
           path: pkg/
-          retention-days: 7
+          # Long enough to re-run `publish` after a registry outage; the tag
+          # may already exist by then.
+          retention-days: 30
 
       - uses: actions/upload-artifact@v7
         if: env.PREPARE == 'true'
         with:
           name: release
           path: ${{ runner.temp }}/release/
-          retention-days: 7
+          retention-days: 30
 
   release:
     needs: [plan, build]
     if: github.event_name != 'release'
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     permissions:
       contents: write # commit + tag + GitHub release
-      actions: write # start the docs deploy (a push by this token triggers no workflow)
     steps:
       # The commit the gates judged — the patch applies to exactly this tree.
       - uses: actions/checkout@v7
@@ -234,23 +258,41 @@ jobs:
           name: release
           path: ${{ runner.temp }}/release
 
+      # Idempotent, so "Re-run failed jobs" finishes a half-done release:
+      #   - main already carries THIS release commit (its parent is the commit
+      #     the gates judged) → reuse it, do not commit again;
+      #   - the tag already exists on origin → do not push it again.
+      # Anything else on main is refused exactly as before.
       - name: Commit, tag, push
+        env:
+          PLAN_SHA: ${{ needs.plan.outputs.sha }}
         run: |
           VERSION="$(cat "$RUNNER_TEMP/release/version")"
           git config user.name "github-actions[bot]"
           git config user.email "41898283+github-actions[bot]@users.noreply.github.com"
-          git apply --index "$RUNNER_TEMP/release/commit.patch"
-          git commit -m "chore: release v$VERSION"
-          git tag "v$VERSION"
-          # Fast-forward only. If main moved while the gates ran, this refuses —
-          # the new commits were never gated. Nothing is lost: a push that
-          # moved main with a fragment has queued its own run, which releases
-          # from the new tip. A push without one: run the workflow by hand.
-          if ! git push origin "HEAD:refs/heads/main"; then
-            echo "::error::main moved while the release was being verified. Nothing was tagged or published — the queued run (or a manual one) releases from the new tip."
-            exit 1
+          git fetch --quiet --depth=2 origin main
+          if [ "$(git log -1 --format=%s origin/main)" = "chore: release v$VERSION" ] &&
+             [ "$(git rev-parse origin/main^)" = "$PLAN_SHA" ]; then
+            echo "main already carries chore: release v$VERSION — resuming after it."
+            git checkout --quiet --detach origin/main
+          else
+            git apply --index "$RUNNER_TEMP/release/commit.patch"
+            git commit -m "chore: release v$VERSION"
+            # Fast-forward only. If main moved while the gates ran, this refuses —
+            # the new commits were never gated. Nothing is lost: a push that
+            # moved main with a fragment has queued its own run, which releases
+            # from the new tip. A push without one: run the workflow by hand.
+            if ! git push origin "HEAD:refs/heads/main"; then
+              echo "::error::main moved while the release was being verified. Nothing was committed, tagged or published — the queued run (or a manual one) releases from the new tip."
+              exit 1
+            fi
           fi
-          git push origin "v$VERSION"
+          if git ls-remote --exit-code --tags origin "refs/tags/v$VERSION" >/dev/null; then
+            echo "Tag v$VERSION already on origin — not pushed again."
+          else
+            git tag "v$VERSION"
+            git push origin "v$VERSION"
+          fi
 
       # A release created with this job's token does not fire `release:
       # published`, so this workflow is not re-entered.
@@ -259,20 +301,18 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           VERSION="$(cat "$RUNNER_TEMP/release/version")"
-          gh release create "v$VERSION" --title "v$VERSION" --notes-file "$RUNNER_TEMP/release/notes.md" --latest
-
-      # The site documents what npm serves: it deploys on a release, not on every
-      # push to main (see docs.yml).
-      - name: Deploy the docs site
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: gh workflow run docs.yml --ref main
+          if gh release view "v$VERSION" >/dev/null 2>&1; then
+            echo "GitHub release v$VERSION already exists — not created again."
+          else
+            gh release create "v$VERSION" --title "v$VERSION" --notes-file "$RUNNER_TEMP/release/notes.md" --latest
+          fi
 
   publish:
     needs: [build, release]
     # `release` is skipped on the legacy trigger (the tag already exists).
     if: ${{ !cancelled() && needs.build.result == 'success' && (needs.release.result == 'success' || needs.release.result == 'skipped') }}
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     permissions:
       contents: read
       id-token: write # OIDC trusted publishing — granted to THIS job only
@@ -295,6 +335,22 @@ jobs:
       # No dependency resolution runs with publishing authority.
       # Trusted publishing: no NODE_AUTH_TOKEN — npm authenticates via the GitHub OIDC token.
       # If this step fails, the tag already exists: fix the cause and use
-      # "Re-run failed jobs" — the staged tarball is kept for 7 days.
+      # "Re-run failed jobs" — the staged tarball is kept for 30 days, and the
+      # release job skips what it already did.
       - name: Publish to npm
         run: npm publish --provenance --access public
+
+  # The site documents what npm serves, so it deploys only once npm has the
+  # version (see docs.yml). On the legacy path, release.sh starts it itself.
+  docs:
+    needs: [release, publish]
+    if: ${{ !cancelled() && needs.release.result == 'success' && needs.publish.result == 'success' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      actions: write # start the docs deploy (a push by GITHUB_TOKEN triggers no workflow)
+    steps:
+      - name: Deploy the docs site
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh workflow run docs.yml --repo "${{ github.repository }}" --ref main

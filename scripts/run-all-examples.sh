@@ -29,14 +29,26 @@ total=${#files[@]}
 results="$(mktemp -d)"
 trap 'rm -rf "$results"' EXIT
 
+# A hung example (a server or timer left open) must fail the sweep, not stall
+# CI for hours: each one gets EXAMPLE_TIMEOUT seconds (default 300). Uses
+# coreutils `timeout` where it exists (Linux CI); macOS without coreutils runs
+# unbounded, as before.
+EXAMPLE_TIMEOUT="${EXAMPLE_TIMEOUT:-300}"
+LIMIT=""
+if command -v timeout >/dev/null 2>&1; then LIMIT="timeout $EXAMPLE_TIMEOUT"; fi
+
 # One example. stdin from /dev/null: the sweep is a GATE, never a
 # conversation — an example that asks a person (34-checkin-coworker prompts
 # when stdin is a TTY) must take its non-interactive branch here (9.94.2).
 # Output is kept only for a failure, so the failure is diagnosable.
 run_one() {
-  local f="$1" key
+  local f="$1" key status=0
   key="$(echo "$f" | tr '/' '~')"
-  if "$TSX" "$f" >"$results/$key.log" 2>&1 </dev/null; then
+  $LIMIT "$TSX" "$f" >"$results/$key.log" 2>&1 </dev/null || status=$?
+  if [ "$status" -eq 124 ]; then
+    echo "(timed out after ${EXAMPLE_TIMEOUT}s)" >>"$results/$key.log"
+  fi
+  if [ "$status" -eq 0 ]; then
     echo "  ✓ $f"
     rm -f "$results/$key.log"
   else
@@ -45,7 +57,7 @@ run_one() {
   fi
 }
 export -f run_one
-export TSX results
+export TSX results LIMIT EXAMPLE_TIMEOUT
 
 echo "Running $total examples, $JOBS at a time..."
 printf '%s\n' "${files[@]}" | xargs -P "$JOBS" -I{} bash -c 'run_one "$1"' _ {}
