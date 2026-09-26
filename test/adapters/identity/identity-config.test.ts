@@ -107,9 +107,9 @@ describe('identityConfigFromEnv — unit', () => {
       /directory-password, which is not in this release/,
     ],
     [
-      { IDENTITY_CLIENT_ID: 'x' },
-      'IDENTITY_CLIENT_ID',
-      /browser sign-in, which is not in this release/,
+      { IDENTITY_PROXY_TOKEN: 'id-token' },
+      'IDENTITY_PROXY_TOKEN',
+      /proxy-token, which is not in this release/,
     ],
     [{ IDENTITY_LDAP_BASE_DN: 'DC=corp' }, 'IDENTITY_LDAP_BASE_DN', /directory-password/],
     [{ IDENTITY_PROXY_HEADER: 'x' }, 'IDENTITY_PROXY_HEADER', /proxy-token/],
@@ -180,21 +180,30 @@ describe('identityFromConfig — boot refusals', () => {
     },
   );
 
-  it("a key another strategy reads refuses: browser sign-in keys are not oidc-token's (yet)", async () => {
+  it('a key another strategy reads refuses; browser sign-in keys half-set refuse', async () => {
     const idp = await fakeIdp();
-    const err = await refusal(() =>
-      identityFromConfig(oidcConfig(idp, { publicUrl: 'https://neo.corp.example' }), {
-        production: false,
-        fetch: idp.fetch,
-        backend: idp.backend,
-      }),
+    const boot = { production: false, fetch: idp.fetch, backend: idp.backend };
+    const half = await refusal(() =>
+      identityFromConfig(oidcConfig(idp, { publicUrl: 'https://neo.corp.example' }), boot),
     );
-    expect(err.key).toBe('IDENTITY_PUBLIC_URL');
-    expect(err.message).toMatch(/browser sign-in, which for oidc-token is not in this release/);
+    expect(half.key).toBe('IDENTITY_CLIENT_ID');
+    expect(half.message).toMatch(/browser sign-in is half set/);
     const users = await refusal(() =>
       identityFromConfig(oidcConfig(idp, { localUsers: 'a:b' }), { production: false }),
     );
     expect(users.message).toMatch(/belongs to local-password, not oidc-token/);
+    const client = await refusal(() =>
+      identityFromConfig(
+        {
+          strategy: 'local-password',
+          clientId: 'x',
+          publicUrl: 'http://localhost:1',
+          localUsers: 'a:b',
+        },
+        { production: false },
+      ),
+    );
+    expect(client.message).toMatch(/belongs to oidc-token, not local-password/);
   });
 
   it('an unknown strategy or an unknown field refuses (JavaScript callers bypass the types)', async () => {

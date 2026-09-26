@@ -276,12 +276,19 @@ export {
   type MemorySignInsOptions,
 } from './signin/memorySignIns.js';
 export type { AttemptLimits } from './signin/limits.js';
+export { safeReturnTo } from './signin/returnTo.js';
+export { randomSealKey, sealKeyFrom, type SealKey } from './signin/seal.js';
 export {
   SIGN_IN_COOKIE,
   SIGN_IN_COOKIE_LOCALHOST,
   type HostSignInOptions,
+  RedirectSignInError,
   type PasswordAccepted,
   type PasswordChecker,
+  type RedirectFailure,
+  type RedirectSignIn,
+  type SignInAccepted,
+  type SignInAttempt,
   type SignIn,
   type SignInSource,
   type SignInStore,

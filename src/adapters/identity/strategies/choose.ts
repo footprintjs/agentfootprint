@@ -40,6 +40,8 @@ import {
   type OidcIdentityOptions,
 } from '../oidc.js';
 import { IdentityConfigError, readStrategy, type IdentityConfig } from './config.js';
+import type { OpenIdClientBackend } from '../oidcSignIn.js';
+import { browserDoor, browserSettings } from './browserChoice.js';
 import { localPasswordChoice } from './localChoice.js';
 import {
   KEYS_IN_A_LATER_RELEASE,
@@ -69,10 +71,12 @@ export interface IdentityBootOptions {
    * Unset: only a loopback public URL (development) can start a sign-in door.
    */
   readonly crossSite?: CrossSiteOptions;
+  /** An already-imported `openid-client`, for a bundled app (browser sign-in). */
+  readonly openIdClient?: OpenIdClientBackend;
 }
 
 /** What the page's sign-in gate should show — `GET /auth/config` answers it. */
-export type IdentityMode = 'open' | 'token-only' | 'password';
+export type IdentityMode = 'open' | 'token-only' | 'password' | 'redirect';
 
 /** The chosen strategy, ready to hand to every door. */
 export interface IdentityChoice {
@@ -179,6 +183,7 @@ async function oidcChoice(
   boot: IdentityBootOptions,
   production: boolean,
 ): Promise<IdentityChoice> {
+  const browser = browserSettings(config);
   const options = oidcOptions(config, boot, production);
   const verifier = buildVerifier(options);
   const state = await verifier.discover();
@@ -188,11 +193,23 @@ async function oidcChoice(
       'IDENTITY_ISSUER',
     );
   }
+  const banner = oidcBanner(options, state, production);
+  if (browser === undefined) {
+    return {
+      strategy: 'oidc-token',
+      mode: 'token-only',
+      identity: { verify: verifier.verify },
+      banner: banner.map(bannerSafe),
+    };
+  }
+  const door = browserDoor(browser, config, boot, production, verifier);
   return {
     strategy: 'oidc-token',
-    mode: 'token-only',
-    identity: { verify: verifier.verify },
-    banner: oidcBanner(options, state, production).map(bannerSafe),
+    mode: 'redirect',
+    identity: door.identity,
+    signInDoor: door,
+    hostSignIn: door.hostSignIn,
+    banner: [...banner, ...door.banner].map(bannerSafe),
   };
 }
 
@@ -246,15 +263,17 @@ function oidcOptions(
       'IDENTITY_REQUIRED_SCOPE',
     );
   }
+  const allowedClients =
+    config.allowedClients ?? (config.clientId !== undefined ? [config.clientId] : undefined);
   if (
-    config.allowedClients === undefined ||
-    (Array.isArray(config.allowedClients) && config.allowedClients.length === 0)
+    allowedClients === undefined ||
+    (Array.isArray(allowedClients) && allowedClients.length === 0)
   ) {
     missing(
       'allowedClients',
       `the client ids allowed to obtain a person token for this API, comma-separated, or 'any' ` +
-        `to turn the client check off. Required because browser sign-in (which would default ` +
-        `it to its own client) is not in this release`,
+        `to turn the client check off. Required when browser sign-in is off (with it on, it ` +
+        `defaults to IDENTITY_CLIENT_ID)`,
     );
   }
   if (config.allowedClients === 'any' && production) {
@@ -282,7 +301,7 @@ function oidcOptions(
     audience,
     userIdClaim,
     requiredScope,
-    allowedClients: config.allowedClients,
+    allowedClients,
     ...(config.scopeClaim !== undefined && { scopeClaim: config.scopeClaim }),
     ...(config.rolesClaim !== undefined && { rolesClaim: config.rolesClaim }),
     ...(config.jwksUrl !== undefined && { jwksUrl: config.jwksUrl }),
@@ -307,7 +326,7 @@ function oidcBanner(
           ', ',
         )} (each must have service accounts / client credentials turned off)`;
   const lines = [
-    'identity: strategy oidc-token (bearer access tokens; browser sign-in is not in this release)',
+    'identity: strategy oidc-token (bearer access tokens for this API)',
     `identity: issuer ${options.issuer}`,
     `identity: audience ${[options.audience].flat().join(', ')}`,
     `identity: user id claim ${options.userIdClaim} (taken as bytes: never trimmed or case-folded)`,
@@ -400,12 +419,11 @@ function bannerSafe(line: string): string {
 function refuseForeignFields(strategy: IdentityStrategyName, fields: readonly string[]): void {
   for (const field of fields) {
     const key = KEYS_IN_THIS_RELEASE.find((k) => k.field === field);
-    if (key?.owner === undefined || key.owner === strategy) continue;
-    const why =
-      strategy === 'oidc-token' && key.owner === 'local-password' && field !== 'localUsers'
-        ? `belongs to browser sign-in, which for oidc-token is not in this release`
-        : `belongs to ${key.owner}, not ${strategy}`;
-    throw new IdentityConfigError(`${keyLabel(field)} ${why}. Remove it.`, key.env);
+    if (key?.owners === undefined || key.owners.includes(strategy)) continue;
+    throw new IdentityConfigError(
+      `${keyLabel(field)} belongs to ${key.owners.join(' / ')}, not ${strategy}. Remove it.`,
+      key.env,
+    );
   }
 }
 

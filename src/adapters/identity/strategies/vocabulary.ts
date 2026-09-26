@@ -38,63 +38,106 @@ export interface ConfigKey {
   readonly env: string;
   readonly field: string;
   readonly reading: EnvReading;
-  /** The one strategy that reads it (absent for `IDENTITY_STRATEGY`). */
-  readonly owner?: 'oidc-token' | 'local-password';
+  /** The strategies that read it (absent for `IDENTITY_STRATEGY`). */
+  readonly owners?: readonly IdentityStrategyName[];
 }
 
-/** The keys this release reads, each owned by one strategy (and `IDENTITY_STRATEGY`). */
+/** The keys this release reads, each owned by the strategies that read it (and `IDENTITY_STRATEGY`). */
 export const KEYS_IN_THIS_RELEASE: readonly ConfigKey[] = [
   { env: 'IDENTITY_STRATEGY', field: 'strategy', reading: 'strategy' },
-  { env: 'IDENTITY_ISSUER', field: 'issuer', reading: 'text', owner: 'oidc-token' },
-  { env: 'IDENTITY_AUDIENCE', field: 'audience', reading: 'text', owner: 'oidc-token' },
-  { env: 'IDENTITY_USER_ID_CLAIM', field: 'userIdClaim', reading: 'text', owner: 'oidc-token' },
-  { env: 'IDENTITY_REQUIRED_SCOPE', field: 'requiredScope', reading: 'text', owner: 'oidc-token' },
-  { env: 'IDENTITY_SCOPE_CLAIM', field: 'scopeClaim', reading: 'text', owner: 'oidc-token' },
+  { env: 'IDENTITY_ISSUER', field: 'issuer', reading: 'text', owners: ['oidc-token'] },
+  { env: 'IDENTITY_AUDIENCE', field: 'audience', reading: 'text', owners: ['oidc-token'] },
+  { env: 'IDENTITY_USER_ID_CLAIM', field: 'userIdClaim', reading: 'text', owners: ['oidc-token'] },
+  {
+    env: 'IDENTITY_REQUIRED_SCOPE',
+    field: 'requiredScope',
+    reading: 'text',
+    owners: ['oidc-token'],
+  },
+  { env: 'IDENTITY_SCOPE_CLAIM', field: 'scopeClaim', reading: 'text', owners: ['oidc-token'] },
   {
     env: 'IDENTITY_ALLOWED_CLIENTS',
     field: 'allowedClients',
     reading: 'clients',
-    owner: 'oidc-token',
+    owners: ['oidc-token'],
   },
-  { env: 'IDENTITY_ROLES_CLAIM', field: 'rolesClaim', reading: 'claim-path', owner: 'oidc-token' },
-  { env: 'IDENTITY_JWKS_URL', field: 'jwksUrl', reading: 'text', owner: 'oidc-token' },
+  {
+    env: 'IDENTITY_ROLES_CLAIM',
+    field: 'rolesClaim',
+    reading: 'claim-path',
+    owners: ['oidc-token'],
+  },
+  { env: 'IDENTITY_JWKS_URL', field: 'jwksUrl', reading: 'text', owners: ['oidc-token'] },
   {
     env: 'IDENTITY_CLOCK_TOLERANCE_SECONDS',
     field: 'clockToleranceSeconds',
     reading: 'whole-number',
-    owner: 'oidc-token',
+    owners: ['oidc-token'],
   },
-  { env: 'IDENTITY_PUBLIC_URL', field: 'publicUrl', reading: 'text', owner: 'local-password' },
-  { env: 'IDENTITY_LOCAL_USERS', field: 'localUsers', reading: 'text', owner: 'local-password' },
+  { env: 'IDENTITY_CLIENT_ID', field: 'clientId', reading: 'text', owners: ['oidc-token'] },
+  {
+    env: 'IDENTITY_CLIENT_SECRET_FILE',
+    field: 'clientSecretFile',
+    reading: 'text',
+    owners: ['oidc-token'],
+  },
+  {
+    env: 'IDENTITY_CLIENT_KEY_FILE',
+    field: 'clientKeyFile',
+    reading: 'text',
+    owners: ['oidc-token'],
+  },
+  { env: 'IDENTITY_PKCE', field: 'pkce', reading: 'text', owners: ['oidc-token'] },
+  {
+    env: 'IDENTITY_COOKIE_KEY_FILE',
+    field: 'cookieKeyFile',
+    reading: 'text',
+    owners: ['oidc-token'],
+  },
+  { env: 'IDENTITY_SCOPE', field: 'scope', reading: 'text', owners: ['oidc-token'] },
+  { env: 'IDENTITY_RESOURCE', field: 'resource', reading: 'text', owners: ['oidc-token'] },
+  {
+    env: 'IDENTITY_DISPLAY_NAME_CLAIM',
+    field: 'displayNameClaim',
+    reading: 'text',
+    owners: ['oidc-token'],
+  },
+  {
+    env: 'IDENTITY_PUBLIC_URL',
+    field: 'publicUrl',
+    reading: 'text',
+    owners: ['oidc-token', 'local-password'],
+  },
   {
     env: 'IDENTITY_SIGN_IN_HOURS',
     field: 'signInHours',
     reading: 'whole-number',
-    owner: 'local-password',
+    owners: ['oidc-token', 'local-password'],
   },
   {
     env: 'IDENTITY_SIGN_IN_IDLE_MINUTES',
     field: 'signInIdleMinutes',
     reading: 'whole-number',
-    owner: 'local-password',
+    owners: ['oidc-token', 'local-password'],
   },
   {
     env: 'IDENTITY_SIGN_IN_MAX',
     field: 'signInMax',
     reading: 'whole-number',
-    owner: 'local-password',
+    owners: ['oidc-token', 'local-password'],
   },
+  { env: 'IDENTITY_LOCAL_USERS', field: 'localUsers', reading: 'text', owners: ['local-password'] },
   {
     env: 'IDENTITY_TRUSTED_PROXIES',
     field: 'trustedProxies',
     reading: 'list',
-    owner: 'local-password',
+    owners: ['local-password'],
   },
 ];
 
 /** What a key a later release reads belongs to — named in its refusal. */
 export type LaterFeature =
-  | 'browser sign-in'
+  | 'the first-token report'
   | 'the role gate'
   | 'proxy-token'
   | 'directory-password';
@@ -102,21 +145,12 @@ export type LaterFeature =
 /**
  * Keys named in the design and read by a later release. Refused by name.
  *
- * When browser sign-in moves in, two boot refusals come with it (design §3 H1
- * and §5.3): door hardening must be configured, and `IDENTITY_AUDIENCE` may not
- * equal `IDENTITY_CLIENT_ID`. Token-only `oidc-token` needs neither — a bearer
- * header is not ambient, and an ID-token-shaped token fails the person test.
+ * (Browser sign-in for `oidc-token` has moved in, and with it the two boot
+ * refusals it needs — design §3 H1, door hardening, and §5.3, `IDENTITY_AUDIENCE`
+ * never equal to `IDENTITY_CLIENT_ID`: see `browserChoice.ts · browserSettings`.)
  */
 export const KEYS_IN_A_LATER_RELEASE: Readonly<Record<string, LaterFeature>> = {
-  IDENTITY_CLIENT_ID: 'browser sign-in',
-  IDENTITY_CLIENT_SECRET_FILE: 'browser sign-in',
-  IDENTITY_CLIENT_KEY_FILE: 'browser sign-in',
-  IDENTITY_PKCE: 'browser sign-in',
-  IDENTITY_COOKIE_KEY_FILE: 'browser sign-in',
-  IDENTITY_SCOPE: 'browser sign-in',
-  IDENTITY_RESOURCE: 'browser sign-in',
-  IDENTITY_DISPLAY_NAME_CLAIM: 'browser sign-in',
-  IDENTITY_DIAGNOSE: 'browser sign-in',
+  IDENTITY_DIAGNOSE: 'the first-token report',
   IDENTITY_REQUIRED_ROLE: 'the role gate',
   IDENTITY_PROXY_HEADER: 'proxy-token',
   IDENTITY_PROXY_TOKEN: 'proxy-token',

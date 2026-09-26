@@ -35,7 +35,20 @@ export interface DiscoveredIssuer {
   readonly jwksUri: string;
   /** AD FS's second issuer for access tokens, when the document names one. */
   readonly accessTokenIssuer?: string;
+  /** Where a browser is sent to sign in — browser sign-in needs it. */
+  readonly authorizationEndpoint?: string;
+  /** Where the code is exchanged — browser sign-in needs it. */
+  readonly tokenEndpoint?: string;
+  /** RP-Initiated Logout, when the IdP offers it. */
+  readonly endSessionEndpoint?: string;
 }
+
+/** The document's endpoint fields: each must be a URL this library may call. */
+const ENDPOINTS = [
+  ['authorization_endpoint', 'authorizationEndpoint'],
+  ['token_endpoint', 'tokenEndpoint'],
+  ['end_session_endpoint', 'endSessionEndpoint'],
+] as const;
 
 export type DiscoveryOutcome =
   | { readonly kind: 'ready'; readonly issuer: DiscoveredIssuer }
@@ -173,8 +186,24 @@ function checkDocument(
       check: `${url} names an 'access_token_issuer' that is not a string`,
     };
   }
+  const endpoints: Record<string, string> = {};
+  for (const [field, name] of ENDPOINTS) {
+    const value = (doc as Record<string, unknown>)[field];
+    if (value === undefined) continue;
+    const problem =
+      typeof value === 'string' ? fetchableUrlProblem(value, allowLoopbackHttp) : 'is not a string';
+    if (problem !== undefined) {
+      return { kind: 'misconfigured', check: `the document's ${field} ${problem}` };
+    }
+    endpoints[name] = value as string;
+  }
   return {
     kind: 'ready',
-    issuer: { issuer, jwksUri, ...(typeof ati === 'string' && { accessTokenIssuer: ati }) },
+    issuer: {
+      issuer,
+      jwksUri,
+      ...(typeof ati === 'string' && { accessTokenIssuer: ati }),
+      ...endpoints,
+    },
   };
 }

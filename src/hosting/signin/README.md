@@ -61,10 +61,44 @@ const host = nodeHost({
 await standingAgent({ agent, sessions, host, identity: door.identity });
 ```
 
+## The redirect half (`redirectRoutes.ts`) — PENDING INDEPENDENT REVIEW
+
+`signInDoor({ redirect: oidcSignIn(…), verify })` adds `GET /auth/login` and
+`GET /auth/callback`. Built and tested; its release is gated on an outside
+human security review (design Q5).
+
+- **Nothing on the server for a login.** The attempt's `state`, `nonce`, PKCE
+  verifier and checked `returnTo` are SEALED (AES-256-GCM, bound to the cookie
+  name) into a per-attempt `<cookie>-tx-<attempt>` cookie, `SameSite=Lax`, 10
+  minutes. The transport strips it from handlers like the sign-in cookie.
+- **The callback order is load-bearing:** open + match `state` → clear the
+  transaction whatever happens → exchange (client credential + verifier) →
+  ID token → the strategy's own `verify` on the ACCESS token → end any present
+  sign-in → create → 303 with `Referrer-Policy: no-referrer`. A failure is a
+  303 to `/?signin_error=<code>`, never the IdP's text.
+- **`returnTo` never leaves the public origin (rule 20)** — `returnTo.ts ·
+  safeReturnTo`.
+
+```ts
+const verifier = oidcIdentity({ issuer, audience, userIdClaim: 'oid', requiredScope, allowedClients: [clientId] });
+const door = signInDoor({
+  redirect: oidcSignIn({ verifier, clientId, credential: { kind: 'private-key', pem }, scope: 'openid api://neo/access_as_user' }),
+  verify: verifier.verify, // bearer callers use the same path
+  store: memorySignIns(),
+  publicUrl: 'https://neo.corp.example',
+  production: true,
+  guard: { allowedHosts: ['neo.corp.example'] },
+  cookieKey: sealKeyFrom(readFileSync('/run/secrets/neo-cookie-key')),
+});
+```
+
 ## Files
 - `types.ts` — `SignIn`, the `SignInStore`, `SignInSource` and
   `PasswordChecker` ports, the cookie names, `HostSignInOptions`.
 - `door.ts` — `signInDoor`: the `/auth` routes.
+- `redirectRoutes.ts` — the redirect half: login and callback.
+- `seal.ts` — the sealed transaction cookie.
+- `returnTo.ts` — `safeReturnTo`.
 - `memorySignIns.ts` — the bounded in-memory store.
 - `limits.ts` — attempt limits, bounded, per process.
 - `cookie.ts` — `readSignIn`, `signInKeyOf`, `withoutCredentials`.

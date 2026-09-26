@@ -2006,7 +2006,7 @@ your routes:
 
 | Route | What it does |
 |---|---|
-| `GET /auth/config` | `{ mode }` — the page's sign-in gate: `'open'`, `'token-only'` or `'password'` (an `IdentityMode`) |
+| `GET /auth/config` | `{ mode }` — the page's sign-in gate: `'open'`, `'token-only'`, `'password'` or `'redirect'` (an `IdentityMode`) |
 | `GET /auth/me` | `{ displayName, accountKey, expiresAt }` or 401. `accountKeyOf(userId)` is a 128-bit key for the page's caches |
 | `POST /auth/login` | a password sign-in, below |
 | `POST /auth/logout` | ends the sign-in, expires the cookie, closes its sockets; `{ next: '/' }` |
@@ -2052,6 +2052,59 @@ const host = nodeHost({
     void choice.signInDoor!.handle(req, res).then((ok) => ok || res.writeHead(404).end()),
 });
 await standingAgent({ agent, sessions, host, identity: choice.identity });
+```
+
+### Browser sign-in for `oidc-token` — `oidcSignIn` (pending independent review)
+
+> **Pending independent review.** The redirect sign-in is built and tested
+> (a fake identity provider, a real headless browser, and a rehearsal against a
+> Keycloak lab), and its release is gated on an outside security review. Do not
+> put it in front of a company install before that review.
+
+`oidcSignIn(options)` (options: `OidcSignInOptions`) is the `oidc-token`
+strategy's browser half — the authorization-code flow through `openid-client`,
+an optional peer loaded lazily (`MissingOpenIdClientError` when it is absent;
+`OpenIdClientBackend` for a bundled app). It is a `RedirectSignIn`, and
+`signInDoor({ redirect, verify })` serves it: `GET /auth/login` and
+`GET /auth/callback`.
+
+- **One verification path.** The callback reads the person from an ACCESS
+  token for this API, through the strategy's own `verify` — the person test
+  included — so a browser sign-in and a bearer token give the same id. The ID
+  token only binds the login to this browser (`nonce`); nothing from the IdP is
+  stored. `IDENTITY_AUDIENCE` equal to `IDENTITY_CLIENT_ID` refuses to boot.
+- **The transaction lives in the browser.** `GET /auth/login` checks `returnTo`
+  (`safeReturnTo`: only a same-origin path, never `//…`, `\`, a control
+  character or an absolute URL), makes `state`, `nonce` and a PKCE verifier (a
+  `SignInAttempt`), and seals them into a per-attempt cookie
+  (`<cookie>-tx-<attempt>`, `SameSite=Lax`, 10 minutes, AES-256-GCM under a
+  `SealKey` — `sealKeyFrom` reads `IDENTITY_COOKIE_KEY_FILE`, `randomSealKey`
+  is the per-process default). Nothing is written on the server.
+- **The callback, in order:** open the transaction and match `state`; clear it
+  whatever happens; exchange the code (client credential + PKCE verifier);
+  check the ID token; verify the access token; end any sign-in present; create
+  the new one; **303** to `returnTo` with `Referrer-Policy: no-referrer`. A
+  failure is a 303 to `/?signin_error=<code>` — a `RedirectFailure`
+  (`state`, `idp-error`, `exchange-failed`, `id-token-refused`, `not-a-person`,
+  `unavailable`), carried by `RedirectSignInError`; never the IdP's own words.
+- **Client authentication:** a private key (`private_key_jwt`, preferred) or a
+  client secret (`client_secret_basic`) — an `OidcClientCredential`, exactly
+  one. `IDENTITY_PKCE=off` exists for AD FS 2016 only. `IDENTITY_RESOURCE` is
+  sent as AD FS's `resource`. Sign-out ends the sign-in and answers the IdP's
+  end-session URL.
+- A person's sign-in is a `SignInAccepted`: the identity plus a display name.
+
+```sh
+IDENTITY_STRATEGY=oidc-token
+IDENTITY_ISSUER=https://login.microsoftonline.com/<tenant>/v2.0
+IDENTITY_AUDIENCE=<API client id>
+IDENTITY_USER_ID_CLAIM=oid
+IDENTITY_REQUIRED_SCOPE=access_as_user
+IDENTITY_PUBLIC_URL=https://neo.corp.example      # these three together, or none:
+IDENTITY_CLIENT_ID=<web client id>                # browser sign-in
+IDENTITY_CLIENT_KEY_FILE=/run/secrets/neo-web.pem # or IDENTITY_CLIENT_SECRET_FILE
+IDENTITY_SCOPE=openid profile api://<API client id>/access_as_user
+IDENTITY_COOKIE_KEY_FILE=/run/secrets/neo-cookie-key
 ```
 
 ## Admission — `admission: { decide }`

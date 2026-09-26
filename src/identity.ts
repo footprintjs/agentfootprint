@@ -136,6 +136,16 @@ export {
   type OidcIdentityOptions,
 } from './adapters/identity/oidc.js';
 export type { DiscoveredIssuer } from './adapters/identity/verify/discovery.js';
+// Browser sign-in for oidc-token: the authorization-code flow through
+// `openid-client` (optional peer). PENDING INDEPENDENT REVIEW before a company
+// install. The person is read from an ACCESS token by the strategy's own verify.
+export {
+  MissingOpenIdClientError,
+  oidcSignIn,
+  type OidcClientCredential,
+  type OidcSignInOptions,
+  type OpenIdClientBackend,
+} from './adapters/identity/oidcSignIn.js';
 export {
   identityFromConfig,
   type IdentityBootOptions,

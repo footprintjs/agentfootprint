@@ -31,7 +31,10 @@ export interface SignInRead {
    * door can rely on, so neither is read.
    */
   readonly key?: string;
-  /** The headers, names lower-cased, WITHOUT the sign-in cookie. Other cookies are kept. */
+  /**
+   * The headers, names lower-cased, WITHOUT the sign-in cookie or any sign-in
+   * attempt's transaction cookie (`<name>-tx-*`). Other cookies are kept.
+   */
   readonly headers: Record<string, string>;
 }
 
@@ -56,15 +59,18 @@ export function readSignIn(headers: HeaderBag, cookieName: string = SIGN_IN_COOK
   if (cookie === undefined) return { headers: out };
   const kept: string[] = [];
   const values: string[] = [];
+  let stripped = false;
   for (const part of cookie.split(';')) {
     const trimmed = part.trim();
     if (trimmed.length === 0) continue;
     const eq = trimmed.indexOf('=');
     const name = eq < 0 ? trimmed : trimmed.slice(0, eq).trim();
     if (name === cookieName) values.push(eq < 0 ? '' : trimmed.slice(eq + 1).trim());
+    // A sign-in attempt's sealed transaction cookie is the door's alone.
+    else if (name.startsWith(`${cookieName}-tx-`)) stripped = true;
     else kept.push(trimmed);
   }
-  if (values.length === 0) return { headers: out };
+  if (values.length === 0 && !stripped) return { headers: out };
   if (kept.length > 0) out.cookie = kept.join('; ');
   else delete out.cookie;
   const value = values.length === 1 ? unquote(values[0] as string) : '';

@@ -44,21 +44,41 @@ import { createHash, randomBytes } from 'node:crypto';
 import type { IncomingMessage, ServerResponse } from 'node:http';
 
 import { doorGuard, isLoopbackBind, type CrossSiteOptions, type DoorGuard } from '../doorGuard.js';
-import type { IdentityVerificationOptions } from '../identityVerification.js';
+import type { IdentityVerificationOptions, IdentityVerifier } from '../identityVerification.js';
 import { readSignIn, signInKeyOf } from './cookie.js';
 import { attemptLimiter, type AttemptLimits } from './limits.js';
+import { redirectRoutesFor } from './redirectRoutes.js';
+import { randomSealKey, type SealKey } from './seal.js';
 import { signInSource, type SignIns } from './source.js';
 import {
   SIGN_IN_COOKIE,
   SIGN_IN_COOKIE_LOCALHOST,
   type HostSignInOptions,
   type PasswordChecker,
+  type RedirectSignIn,
+  type SignInAccepted,
   type SignInStore,
 } from './types.js';
 
 export interface SignInDoorOptions {
-  /** The password strategy (`localPasswords(…)`). */
-  readonly passwords: PasswordChecker;
+  /** A password strategy (`localPasswords(…)`) — `POST /auth/login`. Exactly one of this and `redirect`. */
+  readonly passwords?: PasswordChecker;
+  /**
+   * A redirect strategy (`oidcSignIn(…)`) — `GET /auth/login` and
+   * `GET /auth/callback`. Exactly one of this and `passwords`.
+   */
+  readonly redirect?: RedirectSignIn;
+  /**
+   * Bearer tokens accepted beside the sign-in cookie (scripts, the bench): the
+   * strategy's own `verify`. Put into {@link SignInDoor.identity}.
+   */
+  readonly verify?: IdentityVerifier['verify'];
+  /**
+   * The key that seals redirect transaction cookies — 32 bytes, shared by
+   * replicas (`IDENTITY_COOKIE_KEY_FILE`). Unset: random per process, and the
+   * banner says a restart invalidates sign-ins in progress.
+   */
+  readonly cookieKey?: SealKey;
   /** Where sign-ins are kept (`memorySignIns()`). */
   readonly store: SignInStore;
   /**
@@ -73,7 +93,7 @@ export interface SignInDoorOptions {
   readonly guard?: CrossSiteOptions;
   /** The absolute lifetime of a sign-in, hours. Default 8. */
   readonly hours?: number;
-  /** Minutes of inactivity after which a sign-in ends. Default 60 (a password door). */
+  /** Minutes of inactivity after which a sign-in ends. Default 60 under a password, 30 under a redirect (signing in again is silent there). */
   readonly idleMinutes?: number;
   /** Attempt limits on `POST /auth/login`. */
   readonly limits?: AttemptLimits;
@@ -106,7 +126,7 @@ export interface SignInDoor {
 }
 
 const DEFAULT_HOURS = 8;
-const DEFAULT_IDLE_MINUTES = 60;
+const DEFAULT_IDLE_MINUTES = { password: 60, redirect: 30 } as const;
 const DEFAULT_MINIMUM_RESPONSE_MS = 400;
 const MAX_LOGIN_BODY_BYTES = 8 * 1024;
 
@@ -118,18 +138,58 @@ export function signInDoor(options: SignInDoorOptions): SignInDoor {
   const prefix = options.prefix ?? '/auth';
   const now = options.now ?? Date.now;
   const hours = positive(options.hours ?? DEFAULT_HOURS, 'hours');
-  const idleMinutes = positive(options.idleMinutes ?? DEFAULT_IDLE_MINUTES, 'idleMinutes');
+  const mode = modeOf(options);
+  const idleMinutes = positive(options.idleMinutes ?? DEFAULT_IDLE_MINUTES[mode], 'idleMinutes');
   const minimumMs = options.minimumResponseMs ?? DEFAULT_MINIMUM_RESPONSE_MS;
   const guard = guardFor(options.guard, cookie.url);
   const limiter = attemptLimiter(options.limits);
   const signIns = signInSource({ store: options.store, idleMinutes, now });
   const trusted = new Set(options.trustedProxies ?? []);
-  const identity: IdentityVerificationOptions = { signIn: signIns };
+  const identity: IdentityVerificationOptions =
+    options.verify === undefined
+      ? { signIn: signIns }
+      : { verify: options.verify, signIn: signIns };
+  const sealKey = options.cookieKey ?? randomSealKey();
 
   const reply = (res: ServerResponse, status: number, body: unknown, extra: Headers = {}): void => {
     if (res.headersSent) return;
     res.writeHead(status, { ...SECURITY_HEADERS, 'content-type': 'application/json', ...extra });
     res.end(JSON.stringify(body));
+  };
+
+  /** A new sign-in for a proven person: 256 random bits out, only their SHA-256 kept. */
+  const startSignIn = async (
+    accepted: SignInAccepted,
+    strategy: string,
+  ): Promise<{ setCookie: string; body: Record<string, string> }> => {
+    const value = randomBytes(32).toString('base64url');
+    const at = now();
+    const expiresAt = at + hours * 3_600_000;
+    await options.store.create({
+      key: signInKeyOf(value),
+      identity: accepted.identity,
+      ...(accepted.displayName !== undefined && { displayName: accepted.displayName }),
+      strategy,
+      startedAt: at,
+      expiresAt,
+      lastSeenAt: at,
+    });
+    return {
+      setCookie: cookie.issue(value, hours * 3600),
+      body: {
+        displayName: accepted.displayName ?? accepted.identity.userId,
+        accountKey: accountKeyOf(accepted.identity.userId),
+        expiresAt: new Date(expiresAt).toISOString(),
+      },
+    };
+  };
+
+  /** End the sign-in a request carries, if any; resolves whether there was one. */
+  const endPresent = async (req: IncomingMessage): Promise<boolean> => {
+    const present = readSignIn(req.headers, cookie.name).key;
+    if (present === undefined) return false;
+    await signIns.end(present);
+    return true;
   };
 
   const login = async (req: IncomingMessage, res: ServerResponse): Promise<void> => {
@@ -151,14 +211,11 @@ export function signInDoor(options: SignInDoorOptions): SignInDoor {
     }
     await sleep(verdict.delayMs);
     const expire: Headers = {};
-    const present = readSignIn(req.headers, cookie.name).key;
-    if (present !== undefined) {
-      await signIns.end(present);
-      expire['set-cookie'] = cookie.expired();
-    }
+    if (await endPresent(req)) expire['set-cookie'] = cookie.expired();
+    const passwords = options.passwords as PasswordChecker;
     let accepted;
     try {
-      accepted = await options.passwords.check(read.username, read.password);
+      accepted = await passwords.check(read.username, read.password);
     } catch {
       return answer(503, { error: 'Sign-in is unavailable. Try again shortly.' }, expire);
     }
@@ -167,28 +224,23 @@ export function signInDoor(options: SignInDoorOptions): SignInDoor {
       return answer(401, { error: WRONG_CREDENTIAL_SENTENCE }, expire);
     }
     limiter.succeeded(read.username);
-    const value = randomBytes(32).toString('base64url');
-    const at = now();
-    const expiresAt = at + hours * 3_600_000;
-    await options.store.create({
-      key: signInKeyOf(value),
-      identity: accepted.identity,
-      ...(accepted.displayName !== undefined && { displayName: accepted.displayName }),
-      strategy: options.passwords.strategy,
-      startedAt: at,
-      expiresAt,
-      lastSeenAt: at,
-    });
-    return answer(
-      200,
-      {
-        displayName: accepted.displayName ?? accepted.identity.userId,
-        accountKey: accountKeyOf(accepted.identity.userId),
-        expiresAt: new Date(expiresAt).toISOString(),
-      },
-      { 'set-cookie': cookie.issue(value, hours * 3600) },
-    );
+    const started2 = await startSignIn(accepted, passwords.strategy);
+    return answer(200, started2.body, { 'set-cookie': started2.setCookie });
   };
+
+  const redirectRoutes =
+    options.redirect === undefined
+      ? undefined
+      : redirectRoutesFor({
+          strategy: options.redirect,
+          publicUrl: cookie.url,
+          prefix,
+          cookie,
+          sealKey,
+          now,
+          endPresent,
+          startSignIn,
+        });
 
   const me = async (req: IncomingMessage, res: ServerResponse): Promise<void> => {
     const key = readSignIn(req.headers, cookie.name).key;
@@ -203,9 +255,9 @@ export function signInDoor(options: SignInDoorOptions): SignInDoor {
   };
 
   const logout = async (req: IncomingMessage, res: ServerResponse): Promise<void> => {
-    const key = readSignIn(req.headers, cookie.name).key;
-    if (key !== undefined) await signIns.end(key);
-    return reply(res, 200, { next: '/' }, { 'set-cookie': cookie.expired() });
+    await endPresent(req);
+    const next = (await redirectRoutes?.logoutNext()) ?? '/';
+    return reply(res, 200, { next }, { 'set-cookie': cookie.expired() });
   };
 
   const route = async (req: IncomingMessage, res: ServerResponse, path: string): Promise<void> => {
@@ -213,15 +265,19 @@ export function signInDoor(options: SignInDoorOptions): SignInDoor {
     if (refusal !== undefined)
       return reply(res, refusal.status, { error: refusal.message, code: refusal.code });
     const method = (req.method ?? 'GET').toUpperCase();
-    const want = ROUTES[path];
+    const want = ROUTES[mode][path];
     if (want === undefined) return reply(res, 404, { error: 'No such sign-in route.' });
     if (method !== want) {
       return reply(res, 405, { error: `Use ${want}.` }, { allow: want });
     }
-    if (path === 'config') return reply(res, 200, { mode: 'password' });
+    if (path === 'config') return reply(res, 200, { mode });
     if (path === 'me') return me(req, res);
-    if (path === 'login') return login(req, res);
-    return logout(req, res);
+    if (path === 'logout') return logout(req, res);
+    if (redirectRoutes !== undefined) {
+      if (path === 'login') return redirectRoutes.login(req, res);
+      return redirectRoutes.callback(req, res);
+    }
+    return login(req, res);
   };
 
   return {
@@ -239,6 +295,16 @@ export function signInDoor(options: SignInDoorOptions): SignInDoor {
               `'${SIGN_IN_COOKIE_LOCALHOST}' without Secure or the __Host- prefix (development only; production refuses it)`,
           ]),
       `identity: sign-ins last ${hours} h, ${idleMinutes} min idle`,
+      ...(mode === 'redirect'
+        ? [
+            `identity: browser sign-in by redirect (${prefix}/login → the IdP → ${prefix}/callback); PKCE ${
+              options.redirect?.pkce === true ? 'on' : 'OFF (AD FS 2016)'
+            } — PENDING INDEPENDENT REVIEW before a company install`,
+            options.cookieKey === undefined
+              ? 'identity: WARNING no IDENTITY_COOKIE_KEY_FILE: sign-ins in progress are sealed with a per-process key, so a restart or another replica breaks them'
+              : 'identity: sign-ins in progress are sealed with IDENTITY_COOKIE_KEY_FILE',
+          ]
+        : []),
       'identity: sign-ins and attempt budgets are per process. Run one replica, or pin each ' +
         'browser to one replica (sticky sessions), or configure a shared sign-in store.',
     ],
@@ -259,14 +325,24 @@ export function signInDoor(options: SignInDoorOptions): SignInDoor {
 
 // ─── Pieces ──────────────────────────────────────────────────────────
 
-type Headers = Record<string, string>;
+type Headers = Record<string, string | string[]>;
 
-const ROUTES: Readonly<Record<string, string>> = {
-  config: 'GET',
-  me: 'GET',
-  login: 'POST',
-  logout: 'POST',
+const ROUTES: Readonly<Record<'password' | 'redirect', Readonly<Record<string, string>>>> = {
+  password: { config: 'GET', me: 'GET', login: 'POST', logout: 'POST' },
+  redirect: { config: 'GET', me: 'GET', login: 'GET', callback: 'GET', logout: 'POST' },
 };
+
+function modeOf(options: SignInDoorOptions): 'password' | 'redirect' {
+  const both = options.passwords !== undefined && options.redirect !== undefined;
+  const neither = options.passwords === undefined && options.redirect === undefined;
+  if (both || neither) {
+    throw new TypeError(
+      `[hosting] signInDoor takes exactly one strategy: 'passwords' (a password form) or ` +
+        `'redirect' (an identity provider's sign-in page).`,
+    );
+  }
+  return options.passwords !== undefined ? 'password' : 'redirect';
+}
 
 const SECURITY_HEADERS: Readonly<Headers> = {
   'cache-control': 'no-store',
@@ -285,12 +361,17 @@ export function accountKeyOf(userId: string): string {
     .toString('base64url');
 }
 
-interface CookieShape {
+export interface CookieShape {
   readonly name: string;
   readonly secure: boolean;
   readonly url: URL;
   issue(value: string, maxAgeSeconds: number): string;
   expired(): string;
+  /** The per-attempt transaction cookie's name. */
+  txName(attempt: string): string;
+  /** A transaction cookie: `SameSite=Lax` (it must come back on the IdP's redirect), 10 minutes. */
+  issueTx(attempt: string, sealed: string): string;
+  expireTx(attempt: string): string;
 }
 
 function cookieFor(publicUrl: string, production: boolean): CookieShape {
@@ -323,6 +404,15 @@ function cookieFor(publicUrl: string, production: boolean): CookieShape {
     url,
     issue: (value, maxAge) => `${name}=${value}; ${attrs}; Max-Age=${Math.floor(maxAge)}`,
     expired: () => `${name}=; ${attrs}; Max-Age=0`,
+    txName: (attempt) => `${name}-tx-${attempt}`,
+    issueTx: (attempt, sealed) =>
+      `${name}-tx-${attempt}=${sealed}; Path=/; HttpOnly;${
+        secure ? ' Secure;' : ''
+      } SameSite=Lax; Max-Age=600`,
+    expireTx: (attempt) =>
+      `${name}-tx-${attempt}=; Path=/; HttpOnly;${
+        secure ? ' Secure;' : ''
+      } SameSite=Lax; Max-Age=0`,
   };
 }
 

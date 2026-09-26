@@ -43,7 +43,23 @@ export interface IdentityConfig {
   readonly jwksUrl?: string;
   /** `IDENTITY_CLOCK_TOLERANCE_SECONDS` — default 60. */
   readonly clockToleranceSeconds?: number;
-  /** `IDENTITY_PUBLIC_URL` — the URL people open the app at (`local-password`). */
+  /** `IDENTITY_CLIENT_ID` — the browser client's id at the IdP (`oidc-token` browser sign-in). */
+  readonly clientId?: string;
+  /** `IDENTITY_CLIENT_KEY_FILE` — a PEM private key file for `private_key_jwt` (preferred). */
+  readonly clientKeyFile?: string;
+  /** `IDENTITY_CLIENT_SECRET_FILE` — a file holding the client secret (accepted). */
+  readonly clientSecretFile?: string;
+  /** `IDENTITY_PKCE` — `required` (default) or `off` (AD FS 2016). */
+  readonly pkce?: string;
+  /** `IDENTITY_COOKIE_KEY_FILE` — 32 bytes that seal sign-in attempts; shared by replicas. */
+  readonly cookieKeyFile?: string;
+  /** `IDENTITY_SCOPE` — the OAuth scopes the browser asks for: `openid` and this API's scope. */
+  readonly scope?: string;
+  /** `IDENTITY_RESOURCE` — AD FS: the Web API identifier, sent as `resource`. */
+  readonly resource?: string;
+  /** `IDENTITY_DISPLAY_NAME_CLAIM` — the access-token claim the page shows. */
+  readonly displayNameClaim?: string;
+  /** `IDENTITY_PUBLIC_URL` — the URL people open the app at (browser sign-in, `local-password`). */
   readonly publicUrl?: string;
   /** `IDENTITY_LOCAL_USERS` — `name:scrypt$…` entries, comma separated (`local-password`). */
   readonly localUsers?: string;

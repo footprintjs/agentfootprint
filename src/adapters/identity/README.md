@@ -80,6 +80,33 @@ await verifier.verify(appOnlyToken); // → IdentityNotVerifiedError, failure 'n
 | Keycloak | the directory id mapper (`objectguid`, from LDAP `objectGUID`) | a service account HAS a `sub` and carries your scope; it has no directory id, so it is refused even if a client list is too broad (lab-proven) | `scope` |
 | Okta | `uid` | unverified whether `sub` can hold the login | `scope` |
 
+## Browser sign-in for `oidc-token` — `oidcSignIn` (PENDING INDEPENDENT REVIEW)
+
+With `IDENTITY_PUBLIC_URL`, `IDENTITY_CLIENT_ID` and one client credential set
+(together or not at all), `oidc-token` also signs people in through the
+browser: the authorization-code flow, through `openid-client` (optional peer,
+lazily loaded). Built and tested — a fake IdP, a real headless browser, a
+Keycloak lab rehearsal — and gated on an outside human security review before
+a company uses it.
+
+- **One verification path (Q1).** The person is read from an ACCESS token for
+  this API by the strategy's own `verify`; the ID token only carries the nonce.
+  A browser sign-in and a bearer token give the same id. So
+  `IDENTITY_AUDIENCE` equal to `IDENTITY_CLIENT_ID` refuses to boot.
+- **Client authentication:** a private key (`private_key_jwt`) is preferred; a
+  client secret (`client_secret_basic`) is accepted (design §5.2). Exactly one.
+- **PKCE** is on unless `IDENTITY_PKCE=off` (AD FS 2016). Every token response
+  must carry an ID token either way.
+- `IDENTITY_RESOURCE` is sent as AD FS's `resource`; sign-out answers the IdP's
+  end-session URL.
+
+```sh
+IDENTITY_PUBLIC_URL=https://neo.corp.example
+IDENTITY_CLIENT_ID=<web client id>
+IDENTITY_CLIENT_KEY_FILE=/run/secrets/neo-web.pem
+IDENTITY_SCOPE=openid profile api://<API>/access_as_user
+```
+
 ## `local-password` — development, tests and demos
 
 `localPasswords('name:scrypt$…,…')` checks a password list; `hashPassword(pw)`
@@ -106,5 +133,6 @@ IDENTITY_LOCAL_USERS=priya:scrypt$17$8$1$…$…   # from hashPassword('…')
 - `oidc.ts` — the `oidc-token` verifier: discovery, AD FS's second issuer, the
   person test.
 - `localPassword.ts` — the `local-password` list and `hashPassword` (scrypt).
+- `oidcSignIn.ts` — browser sign-in over `openid-client` (pending independent review).
 - `verify/` — the shared checks both verifiers use.
 - `strategies/` — `identityFromConfig`, `identityConfigFromEnv`, the vocabulary.

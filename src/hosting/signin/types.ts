@@ -133,3 +133,59 @@ export interface PasswordChecker {
   readonly strategy: string;
   check(username: string, password: string): Promise<PasswordAccepted | undefined>;
 }
+
+/** What a sign-in strategy proved — the same shape for a password and a redirect. */
+export type SignInAccepted = PasswordAccepted;
+
+/**
+ * One browser sign-in attempt's secrets. The door makes them, seals them into
+ * the attempt's transaction cookie, and hands them back at the callback.
+ */
+export interface SignInAttempt {
+  readonly state: string;
+  readonly nonce: string;
+  /** Absent when PKCE is off. */
+  readonly codeVerifier?: string;
+}
+
+/** Why a redirect callback did not sign anybody in — a code, never the IdP's own words. */
+export type RedirectFailure =
+  | 'idp-error'
+  | 'exchange-failed'
+  | 'id-token-refused'
+  | 'not-a-person'
+  | 'unavailable';
+
+/** A callback that did not sign anybody in. Carries a reason CODE only. */
+export class RedirectSignInError extends Error {
+  readonly code = 'ERR_REDIRECT_SIGN_IN' as const;
+  readonly reason: RedirectFailure;
+
+  constructor(reason: RedirectFailure) {
+    super(`[hosting] the sign-in did not complete (${reason}).`);
+    this.name = 'RedirectSignInError';
+    this.reason = reason;
+  }
+}
+
+/**
+ * A redirect strategy: `oidc-token` with browser sign-in (`oidcSignIn`). The
+ * sign-in door owns the cookies, `returnTo` and the order of the callback; the
+ * strategy owns the protocol — where to send the browser, and turning the
+ * callback into a person through the strategy's OWN `verify` (one path).
+ */
+export interface RedirectSignIn {
+  /** Which strategy this is, recorded on the sign-in. */
+  readonly strategy: string;
+  /** Whether attempts carry a PKCE verifier. */
+  readonly pkce: boolean;
+  /** Where to send the browser for this attempt. */
+  authorizationUrl(attempt: SignInAttempt, redirectUri: string): Promise<string>;
+  /**
+   * The callback, already matched to its attempt: exchange the code, check the
+   * ID token, and prove the person. Throws {@link RedirectSignInError}.
+   */
+  complete(callback: URL, attempt: SignInAttempt, redirectUri: string): Promise<SignInAccepted>;
+  /** The IdP's end-session URL, when it names one. */
+  endSessionUrl?(postLogoutRedirectUri: string): Promise<string | undefined>;
+}

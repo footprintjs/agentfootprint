@@ -370,7 +370,9 @@
     "google-auth-library": "*",
     "ioredis": "*",
     "jose": "*",
+    "ldapts": "*",
     "openai": "*",
+    "openid-client": "*",
     "pg": "*",
     "unpdf": "*",
     "zod": "*"
@@ -436,7 +438,13 @@
     "jose": {
       "optional": true
     },
+    "ldapts": {
+      "optional": true
+    },
     "openai": {
+      "optional": true
+    },
+    "openid-client": {
       "optional": true
     },
     "pg": {
@@ -466,7 +474,10 @@
     "footprintjs": "^9.26.0",
     "google-auth-library": "^11.0.1",
     "jose": "^6.2.7",
+    "ldapts": "^9.2.0",
     "openai": "^7.4.0",
+    "openid-client": "^6.8.8",
+    "playwright-core": "^1.63.0",
     "prettier": "^2.8.1",
     "publint": "^0.3.0",
     "typedoc": "^0.28.19",

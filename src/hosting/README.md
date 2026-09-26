@@ -177,6 +177,12 @@ const host = nodeHost({
 await standingAgent({ agent, sessions, host, identity: choice.identity });
 ```
 
+**Browser sign-in for `oidc-token`** (`GET /auth/login` → the IdP →
+`GET /auth/callback`) is built and tested and **pending independent review**:
+see `signin/README.md`. `returnTo` never leaves the public origin (rule 20),
+the transaction is sealed into the browser, and the person comes from an
+access token through the strategy's own `verify` (rule 4).
+
 The rules for the verifiers themselves are in `src/adapters/identity/README.md`.
 
 ## Files
