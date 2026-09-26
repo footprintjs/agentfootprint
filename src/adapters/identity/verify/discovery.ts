@@ -8,7 +8,8 @@
  * nobody is ever told to fix. So:
  *
  *   • `outage` — a network error, a timeout, or a 5xx. The IdP may come back.
- *   • `misconfigured` — any other non-2xx, a body that is not a JSON object, a
+ *   • `misconfigured` — any other non-2xx (a redirect included: it is never
+ *     followed), a body that is not a JSON object, a
  *     document with no `issuer` or no `jwks_uri`, an `issuer` that is not the
  *     configured one (compared exactly — OpenID Connect Discovery §4.3), or a
  *     key-set URL that is not `https`. The configuration names the wrong thing.
@@ -44,7 +45,7 @@ export type DiscoveryOutcome =
 /** The one fetch this module makes — injectable, so tests need no socket. */
 export type DiscoveryFetch = (
   url: string,
-  init: { signal: AbortSignal; headers: Record<string, string>; redirect: 'follow' },
+  init: { signal: AbortSignal; headers: Record<string, string>; redirect: 'manual' },
 ) => Promise<{ status: number; text(): Promise<string> }>;
 
 export interface ReadDiscoveryOptions {
@@ -94,7 +95,9 @@ export async function readDiscovery(
     const res = await options.fetch(url, {
       signal,
       headers: { accept: 'application/json' },
-      redirect: 'follow',
+      // Never followed: the document chooses the signing keys, so it is read
+      // from the issuer's own URL or not at all (OIDC Discovery §4).
+      redirect: 'manual',
     });
     status = res.status;
     text = await res.text();
@@ -109,6 +112,15 @@ export async function readDiscovery(
     };
   }
   if (status >= 500) return { kind: 'outage', reason: `${url} answered HTTP ${status}` };
+  if (status >= 300 && status < 400) {
+    return {
+      kind: 'misconfigured',
+      check:
+        `${url} redirected (HTTP ${status}). The document is read only from the issuer's own ` +
+        `URL — a redirect could hand the choice of signing keys to another origin, or to ` +
+        `plain http — so the issuer must be the URL the document lives under.`,
+    };
+  }
   if (status < 200 || status >= 300) {
     return {
       kind: 'misconfigured',

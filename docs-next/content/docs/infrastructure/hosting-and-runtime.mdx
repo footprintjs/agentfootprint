@@ -1858,7 +1858,9 @@ refused here by its shape:
   `sub` is an application's token (`'not-a-user-token'`);
 - the client that obtained it (`azp`, else `appid`, `cid`, `client_id`) must be
   in `allowedClients` (`'wrong-client'`). On Keycloak and Okta a service
-  account's token can carry your scope, and this is the check that refuses it.
+  account's token can carry your scope, and this is the check that refuses it
+  — so every listed client must have service accounts / client credentials
+  turned off, and `'any'` is refused in production.
 
 `userIdClaim` is required, with no default: on both Microsoft IdPs `sub` is
 pairwise per application, so it is `oid` on Entra ID and your `objectGUID`
@@ -1868,8 +1870,11 @@ It reads the issuer's discovery document before accepting any token and pins
 the issuer it names — plus AD FS's `access_token_issuer`, the different `iss`
 AD FS signs access tokens with. A discovery 404, a body that is not JSON or a
 document naming another issuer is a configuration error; an IdP that cannot be
-reached is an outage, answered **503** and retried on later requests. `exp` is
-required, clock tolerance is 60 seconds by default, and a roles claim replaced
+reached is an outage, answered **503** with a fixed sentence and retried on
+later requests. Discovery never follows a redirect (the document picks the
+signing keys), and an `http` key set is refused in production. `exp` is
+required, clock tolerance is 60 seconds by default (at most 300), `HS*`
+algorithms are refused, and a roles claim replaced
 by Entra's group-overage pointer is refused as `'roles-unknown'` rather than
 read as "no roles".
 

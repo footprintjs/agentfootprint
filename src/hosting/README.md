@@ -80,8 +80,12 @@ funnel.
   strategy refuse; keys set beside an explicit `open` print a warning.
 - **Config errors refuse at boot; outages answer 503.** `oidc-token` reads the
   issuer's discovery document at boot: a 404, a body that is not JSON, or a
-  document naming another issuer refuses; an unreachable IdP starts, says so
-  in the banner, and every request answers 503 until it is back.
+  document naming another issuer — or a redirect — refuses; an unreachable IdP
+  starts, says so in the banner, and every request answers 503 (a fixed
+  sentence) until discovery succeeds. After such a boot, a later misconfigured
+  answer is logged once and retried, never final.
+- **`IDENTITY_ALLOWED_CLIENTS=any` refuses in production**, and every listed
+  client must have service accounts / client credentials turned off.
 - **Only a person's token is a person.** `oidc-token` refuses an application's
   own token (`not-a-user-token`) and a token from an unlisted client
   (`wrong-client`). These, and `roles-unknown`, are new `IdentityFailureClass`

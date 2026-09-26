@@ -67,6 +67,17 @@ export async function tokenFor(
       return idp.sign(person({ scp: 'User.Read openid' }));
     case 'wrong-client':
       return idp.sign(person({ azp: 'somebody-elses-client' }));
+    case 'service-account':
+      return idp.sign({
+        iss: shape.issuer,
+        aud: shape.audience,
+        iat: t,
+        exp: t + 300,
+        sub: 'svc-7c1d',
+        scp: `profile email ${shape.scope}`,
+        azp: 'some-daemon',
+        preferred_username: 'service-account-some-daemon',
+      });
     case 'no-client':
       return idp.sign(person({ azp: undefined }));
     case 'roles-string-with-space':

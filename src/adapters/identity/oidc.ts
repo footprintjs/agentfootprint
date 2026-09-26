@@ -90,6 +90,12 @@ export interface OidcIdentityOptions {
    * The clients allowed to obtain a person token for this API, read from
    * `azp`, else `appid`, else `cid`, else `client_id`. `'any'` turns the check
    * off — the banner says so. A token naming no client is refused.
+   *
+   * **Every client listed here must have service accounts / the
+   * client-credentials grant turned OFF.** On Keycloak and Okta a service
+   * account's token carries your API's scope, so this list is the check that
+   * refuses it — a listed client that can mint tokens for itself is a daemon
+   * that passes as a person. `identityFromConfig` refuses `'any'` in production.
    */
   readonly allowedClients: readonly string[] | 'any';
   /** The roles claim: a top-level name or a path (`['realm_access', 'roles']`). Default `'roles'`. A string is one role. */
@@ -98,18 +104,28 @@ export interface OidcIdentityOptions {
   readonly jwksUrl?: string;
   /** `'on'` (default) reads the issuer's discovery document; `'off'` needs {@link jwksUrl} and treats `issuer` as a literal. */
   readonly discovery?: 'on' | 'off';
-  /** Seconds of clock skew tolerated on `exp`/`nbf`. Default 60. */
+  /** Seconds of clock skew tolerated on `exp`/`nbf`. Default 60; at most 300 — skew, not lifetime. */
   readonly clockToleranceSeconds?: number;
-  /** Signature algorithms. Default: the RSA and ECDSA families (never `HS*`). */
+  /**
+   * Signature algorithms. Default: the RSA and ECDSA families. `HS*` is
+   * REFUSED: a key set is public, and an HMAC algorithm over a published key is
+   * the classic algorithm-confusion forgery.
+   */
   readonly algorithms?: readonly string[];
   /** Accept `http` URLs on a loopback host (development only). Default `false`. */
   readonly allowLoopbackHttp?: boolean;
-  /** Timeout for the discovery fetch, in ms. Default 5000. */
+  /** Timeout for the discovery fetch, in ms. Default 5000; 1 to 60 000. */
   readonly discoveryTimeoutMs?: number;
-  /** After an outage, the least time between two discovery attempts, in ms. Default 5000. */
+  /** After an outage, the least time between two discovery attempts, in ms. Default 5000; 0 to 3 600 000. */
   readonly discoveryRetryMs?: number;
   /** The fetch discovery uses. Default: the runtime's `fetch`. */
   readonly fetch?: DiscoveryFetch;
+  /**
+   * Where a later CHANGE of discovery state is written (outage → misconfigured
+   * → ready), with its full reason — the server's log, never a caller's reply.
+   * Default `console.warn`.
+   */
+  readonly log?: (line: string) => void;
   /** An already-imported `jose` (see `jwksIdentity`'s `backend`). */
   readonly backend?: JoseBackend;
 }
@@ -156,10 +172,13 @@ export function oidcIdentity(options: OidcIdentityOptions): OidcIdentity {
     async verify(token: string): Promise<VerifiedIdentity> {
       const state = await discovery.read();
       if (state.kind === 'outage') {
-        throw new VerifierUnavailableError(VERIFIER, `discovery failed: ${state.reason}`);
+        // A fixed sentence to the caller: the discovery URL and the IdP's own
+        // values are reconnaissance. The full reason goes to the server log
+        // (`log`) and to `discover()`, where only the operator reads it.
+        throw new VerifierUnavailableError(VERIFIER, 'discovery failed');
       }
       if (state.kind === 'misconfigured') {
-        throw new VerifierUnavailableError(VERIFIER, `identity is misconfigured: ${state.check}`);
+        throw new VerifierUnavailableError(VERIFIER, 'identity is misconfigured');
       }
       const { jose, keys } = await keysFor(settings.jwksUrl ?? state.issuer.jwksUri);
       const payload = await verifySignedToken(jose, keys, token, {
@@ -192,6 +211,7 @@ interface Settings {
   readonly discoveryTimeoutMs: number;
   readonly discoveryRetryMs: number;
   readonly fetch?: DiscoveryFetch;
+  readonly log: (line: string) => void;
 }
 
 /** The token's claims → a person, or the refusal that says why not. */
@@ -217,8 +237,16 @@ function acceptedIssuers(discovered: DiscoveredIssuer): string | readonly string
 }
 
 /**
- * Discovery as one cell: single-flight, `ready`/`misconfigured` settle for
- * good, an `outage` is retried by a later call no sooner than the retry gap.
+ * Discovery as one cell, single-flight.
+ *
+ *  - `ready` settles for good.
+ *  - `misconfigured` as the FIRST answer settles for good — that is the boot
+ *    `identityFromConfig` refuses.
+ *  - After an `outage` has been seen, a later `misconfigured` answer is NOT
+ *    final: a load balancer's one maintenance page must not brick sign-in until
+ *    a restart. It is retried, like an outage, no sooner than the retry gap.
+ *  - Every change of state is logged once, with the full reason — to the
+ *    server log only; callers get a fixed sentence.
  */
 function discoveryCell(settings: Settings): { read(): Promise<OidcDiscoveryState> } {
   if (settings.discovery === 'off') {
@@ -230,12 +258,27 @@ function discoveryCell(settings: Settings): { read(): Promise<OidcDiscoveryState
   }
   let settled: OidcDiscoveryState | undefined;
   let inFlight: Promise<OidcDiscoveryState> | undefined;
-  let lastOutage: { at: number; state: OidcDiscoveryState } | undefined;
+  let retryable: { at: number; state: OidcDiscoveryState } | undefined;
+  let everOutage = false;
+  let lastLogged: string | undefined;
+  const note = (state: OidcDiscoveryState): void => {
+    const line =
+      state.kind === 'ready'
+        ? `discovery ok for ${settings.issuer}`
+        : state.kind === 'outage'
+        ? `discovery unreachable: ${state.reason}`
+        : `discovery misconfigured: ${state.check}`;
+    if (line === lastLogged) return;
+    // The first answer is the boot's to report (banner or refusal); later
+    // changes are this cell's.
+    if (lastLogged !== undefined) settings.log(`[identity] oidcIdentity: ${line}`);
+    lastLogged = line;
+  };
   const read = (): Promise<OidcDiscoveryState> => {
     if (settled !== undefined) return Promise.resolve(settled);
     if (inFlight !== undefined) return inFlight;
-    if (lastOutage !== undefined && Date.now() - lastOutage.at < settings.discoveryRetryMs) {
-      return Promise.resolve(lastOutage.state);
+    if (retryable !== undefined && Date.now() - retryable.at < settings.discoveryRetryMs) {
+      return Promise.resolve(retryable.state);
     }
     inFlight = readDiscovery(settings.issuer, {
       fetch: settings.fetch ?? defaultFetch(),
@@ -243,7 +286,10 @@ function discoveryCell(settings: Settings): { read(): Promise<OidcDiscoveryState
       allowLoopbackHttp: settings.allowLoopbackHttp,
     }).then((outcome) => {
       inFlight = undefined;
-      if (outcome.kind === 'outage') lastOutage = { at: Date.now(), state: outcome };
+      note(outcome);
+      if (outcome.kind === 'outage') everOutage = true;
+      const retry = outcome.kind === 'outage' || (outcome.kind === 'misconfigured' && everOutage);
+      if (retry) retryable = { at: Date.now(), state: outcome };
       else settled = outcome;
       return outcome;
     });
@@ -312,11 +358,22 @@ function checkOptions(options: OidcIdentityOptions): Settings {
     ...(options.jwksUrl !== undefined && { jwksUrl: options.jwksUrl }),
     discovery,
     clockToleranceSeconds: checkSeconds(options.clockToleranceSeconds),
-    algorithms: options.algorithms ?? DEFAULT_ALGORITHMS,
+    algorithms: checkAlgorithms(options.algorithms),
     allowLoopbackHttp,
-    discoveryTimeoutMs: options.discoveryTimeoutMs ?? DEFAULT_DISCOVERY_TIMEOUT_MS,
-    discoveryRetryMs: options.discoveryRetryMs ?? DEFAULT_DISCOVERY_RETRY_MS,
+    discoveryTimeoutMs: checkMs(
+      options.discoveryTimeoutMs ?? DEFAULT_DISCOVERY_TIMEOUT_MS,
+      'discoveryTimeoutMs',
+      1,
+      60_000,
+    ),
+    discoveryRetryMs: checkMs(
+      options.discoveryRetryMs ?? DEFAULT_DISCOVERY_RETRY_MS,
+      'discoveryRetryMs',
+      0,
+      3_600_000,
+    ),
     ...(options.fetch !== undefined && { fetch: options.fetch }),
+    log: options.log ?? ((line: string) => console.warn(line)),
   };
 }
 
@@ -344,10 +401,42 @@ function checkPath(path: ClaimPath): ClaimPath {
   return path;
 }
 
+/** The most clock skew tolerated: skew between clocks, never a second token lifetime. */
+export const MAX_CLOCK_TOLERANCE_SECONDS = 300;
+
 function checkSeconds(value: number | undefined): number {
   if (value === undefined) return DEFAULT_CLOCK_TOLERANCE_SECONDS;
-  if (!Number.isFinite(value) || value < 0) {
-    refuse(`clockToleranceSeconds is a number of seconds, 0 or more (got ${String(value)})`);
+  if (!Number.isFinite(value) || value < 0 || value > MAX_CLOCK_TOLERANCE_SECONDS) {
+    refuse(
+      `clockToleranceSeconds is 0 to ${MAX_CLOCK_TOLERANCE_SECONDS} seconds — clock skew, not ` +
+        `lifetime (got ${String(value)})`,
+    );
+  }
+  return value;
+}
+
+function checkMs(value: number, name: string, min: number, max: number): number {
+  if (!Number.isFinite(value) || value < min || value > max) {
+    refuse(`${name} is ${min} to ${max} ms (got ${String(value)})`);
+  }
+  return value;
+}
+
+function checkAlgorithms(value: readonly string[] | undefined): readonly string[] {
+  if (value === undefined) return DEFAULT_ALGORITHMS;
+  if (
+    !Array.isArray(value) ||
+    value.length === 0 ||
+    value.some((a) => typeof a !== 'string' || a.length === 0)
+  ) {
+    refuse(`algorithms is a non-empty list of algorithm names`);
+  }
+  const symmetric = value.filter((a) => /^HS/i.test(a) || a === 'none');
+  if (symmetric.length > 0) {
+    refuse(
+      `algorithms may not include ${symmetric.join(', ')}: a key set is public, and an HMAC ` +
+        `algorithm (or none) over a published key is the classic algorithm-confusion forgery`,
+    );
   }
   return value;
 }

@@ -320,12 +320,31 @@ describe('oidcIdentity — scenarios', () => {
     },
   );
 
-  it('a config error first seen AFTER an outage start is still misconfigured, not an outage', async () => {
+  it('after an outage boot, a misconfigured answer is reported but NOT final (review S-1): a maintenance page does not brick sign-in', async () => {
     const idp = await fakeIdp();
     idp.discovery('down');
-    const verifier = oidcIdentity(optionsFor(idp, { discoveryRetryMs: 0 }));
+    const log: string[] = [];
+    const verifier = oidcIdentity(
+      optionsFor(idp, { discoveryRetryMs: 0, log: (line) => log.push(line) }),
+    );
     expect((await verifier.discover()).kind).toBe('outage');
+    idp.discovery('html'); // the load balancer's maintenance page, once
+    expect((await verifier.discover()).kind).toBe('misconfigured');
+    expect((await verifier.discover()).kind).toBe('misconfigured'); // unchanged: logged once
+    idp.discovery('ok');
+    expect((await verifier.discover()).kind).toBe('ready');
+    const token = await idp.sign(personClaims(shapeOf(idp), IDS.a));
+    expect((await verifier.verify(token)).userId).toBe(IDS.a);
+    // One line per CHANGE of state (the boot's own first answer is the banner's).
+    expect(log).toHaveLength(2);
+    expect(log[0]).toMatch(/discovery misconfigured: .* did not answer JSON/);
+    expect(log[1]).toMatch(/discovery ok/);
+  });
+
+  it('a misconfigured FIRST answer is final (the boot refuses it)', async () => {
+    const idp = await fakeIdp();
     idp.discovery('http-404');
+    const verifier = oidcIdentity(optionsFor(idp, { discoveryRetryMs: 0 }));
     expect((await verifier.discover()).kind).toBe('misconfigured');
     idp.discovery('ok');
     expect((await verifier.discover()).kind).toBe('misconfigured');

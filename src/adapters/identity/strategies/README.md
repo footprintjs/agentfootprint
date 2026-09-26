@@ -9,7 +9,11 @@ Reads an `IdentityConfig` (or `IDENTITY_*` environment variables) and the app's
 ## The one law here
 Config errors refuse at boot, outages answer 503, and production names its
 strategy — even `open`. A key this release does not read is refused by name,
-never ignored (`vocabulary.ts · KEYS_IN_A_LATER_RELEASE`).
+never ignored (`vocabulary.ts · KEYS_IN_A_LATER_RELEASE`). A lower-case
+`identity_*` name is refused too (it would otherwise be silently ignored), and
+a hosting platform's own `IDENTITY_ENDPOINT` / `IDENTITY_HEADER` /
+`IDENTITY_API_VERSION` / `IDENTITY_SERVER_THUMBPRINT` are skipped — never read,
+never printed (`config.ts · FOREIGN_PLATFORM_KEYS`).
 
 ```ts
 const choice = await identityFromConfig(identityConfigFromEnv(process.env), {

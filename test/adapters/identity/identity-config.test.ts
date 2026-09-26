@@ -387,14 +387,31 @@ describe('identityFromConfig — security', () => {
     expect(banner).toMatch(/allowed clients: neo-web/);
   });
 
-  it("allowedClients 'any' is stated loudly in the banner", async () => {
+  it("allowedClients 'any' is REFUSED in production (review B-1), and stated loudly in development", async () => {
     const idp = await fakeIdp();
-    const choice = await identityFromConfig(oidcConfig(idp, { allowedClients: 'any' }), {
+    const boot = { fetch: idp.fetch, backend: idp.backend };
+    const err = await refusal(() =>
+      identityFromConfig(oidcConfig(idp, { allowedClients: 'any' }), { production: true, ...boot }),
+    );
+    expect(err.key).toBe('IDENTITY_ALLOWED_CLIENTS');
+    expect(err.message).toMatch(/service account/);
+    const dev = await identityFromConfig(oidcConfig(idp, { allowedClients: 'any' }), {
+      production: false,
+      ...boot,
+    });
+    expect(dev.banner.join('\n')).toMatch(/any — the client check is OFF/);
+  });
+
+  it('the banner states the rule for listed clients: service accounts turned off', async () => {
+    const idp = await fakeIdp();
+    const choice = await identityFromConfig(oidcConfig(idp), {
       production: true,
       fetch: idp.fetch,
       backend: idp.backend,
     });
-    expect(choice.banner.join('\n')).toMatch(/any — the client check is OFF/);
+    expect(choice.banner.join('\n')).toMatch(
+      /neo-web \(each must have service accounts \/ client credentials turned off\)/,
+    );
   });
 });
 

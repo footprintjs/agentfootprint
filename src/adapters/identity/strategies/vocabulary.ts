@@ -58,7 +58,14 @@ export type LaterFeature =
   | 'directory-password'
   | 'local-password';
 
-/** Keys named in the design and read by a later release. Refused by name. */
+/**
+ * Keys named in the design and read by a later release. Refused by name.
+ *
+ * When browser sign-in moves in, two boot refusals come with it (design §3 H1
+ * and §5.3): door hardening must be configured, and `IDENTITY_AUDIENCE` may not
+ * equal `IDENTITY_CLIENT_ID`. Token-only `oidc-token` needs neither — a bearer
+ * header is not ambient, and an ID-token-shaped token fails the person test.
+ */
 export const KEYS_IN_A_LATER_RELEASE: Readonly<Record<string, LaterFeature>> = {
   IDENTITY_PUBLIC_URL: 'browser sign-in',
   IDENTITY_CLIENT_ID: 'browser sign-in',

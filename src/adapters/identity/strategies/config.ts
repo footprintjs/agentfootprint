@@ -71,11 +71,15 @@ export class IdentityConfigError extends Error {
  * An empty value counts as unset (an env file's `KEY=`). Values are trimmed —
  * they are configuration, not ids. Refused here, by name:
  *
+ *  - a lower-case `identity_*` name (a likely typo that would otherwise be ignored);
  *  - a key a LATER release reads (`IDENTITY_LDAP_URL`, `IDENTITY_CLIENT_ID`, …)
  *    — "not in this release", never silently ignored;
  *  - any other `IDENTITY_*` name — a typo must not become a default;
  *  - a strategy name that is not one of the five;
  *  - a value that does not parse (`IDENTITY_CLOCK_TOLERANCE_SECONDS=soon`).
+ *
+ * Skipped, never read or printed: the {@link FOREIGN_PLATFORM_KEYS} a hosting
+ * platform injects (`IDENTITY_ENDPOINT`, `IDENTITY_HEADER`, …).
  *
  * @example
  *   const choice = await identityFromConfig(identityConfigFromEnv(process.env), {
@@ -87,7 +91,16 @@ export function identityConfigFromEnv(
 ): IdentityConfig {
   const config: Record<string, unknown> = {};
   for (const name of Object.keys(env).sort()) {
-    if (!name.startsWith('IDENTITY_')) continue;
+    if (!name.toUpperCase().startsWith('IDENTITY_')) continue;
+    // Another platform's own variables, never read and never printed.
+    if (FOREIGN_PLATFORM_KEYS.includes(name)) continue;
+    if (!name.startsWith('IDENTITY_')) {
+      throw new IdentityConfigError(
+        `${name} looks like an identity setting in the wrong case. Settings are upper-case ` +
+          `(${name.toUpperCase()}); a lower-case one would be silently ignored, so it is refused.`,
+        name,
+      );
+    }
     const raw = env[name];
     if (raw === undefined || raw.trim().length === 0) continue;
     const key = KEYS_IN_THIS_RELEASE.find((k) => k.env === name);
@@ -96,6 +109,22 @@ export function identityConfigFromEnv(
   }
   return config as IdentityConfig;
 }
+
+/**
+ * `IDENTITY_*` names another platform injects into every process it hosts, and
+ * which therefore are not this library's settings: Azure App Service, Functions
+ * and Container Apps set `IDENTITY_ENDPOINT` and `IDENTITY_HEADER` (the managed
+ * identity endpoint and its secret header) and may set `IDENTITY_API_VERSION`;
+ * Service Fabric sets `IDENTITY_SERVER_THUMBPRINT`. They are skipped — never
+ * read, never printed in a refusal or a banner — so
+ * `identityConfigFromEnv(process.env)` works on those hosts.
+ */
+export const FOREIGN_PLATFORM_KEYS: readonly string[] = [
+  'IDENTITY_ENDPOINT',
+  'IDENTITY_HEADER',
+  'IDENTITY_API_VERSION',
+  'IDENTITY_SERVER_THUMBPRINT',
+];
 
 function refuseUnread(name: string): never {
   const later = KEYS_IN_A_LATER_RELEASE[name];

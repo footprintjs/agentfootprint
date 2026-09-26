@@ -23,7 +23,18 @@
  *      this is the check that refuses it there.
  *
  * a–d fail as `not-a-user-token`; e fails as `wrong-client`. `scp` alone is
- * Microsoft's test, not an IdP-neutral one; the five together are.
+ * Microsoft's test, not an IdP-neutral one; the checks together are.
+ *
+ * Check b is DEFENCE IN DEPTH, kept on purpose: today no token's outcome
+ * depends on it, because check a refuses every token with no scope claim in
+ * the same words. It stays so that a later change to a — an optional scope, a
+ * scope read from elsewhere — cannot silently admit a daemon's roles-only
+ * token. (A mutation that deletes it survives the suite, and that is why.)
+ *
+ * **The client check is load-bearing on Keycloak and Okta**, where a service
+ * account's client-credentials token carries your API's scope: every client in
+ * `allowedClients` must have service accounts / client credentials turned OFF,
+ * and `'any'` is refused in production by `identityFromConfig`.
  */
 
 import type { IdentityFailureClass } from '../../../hosting/errors.js';
@@ -76,10 +87,13 @@ export function rolesAreElsewhere(
   payload: Readonly<Record<string, unknown>>,
   rolesClaim: ClaimPath,
 ): boolean {
-  if (typeof rolesClaim !== 'string') return false;
+  // Distributed claims (`_claim_names`) name TOP-LEVEL claims, so a roles path
+  // is elsewhere when its first name is.
+  const top = typeof rolesClaim === 'string' ? rolesClaim : rolesClaim[0];
+  if (top === undefined) return false;
   const names = payload._claim_names;
   if (names !== null && typeof names === 'object' && !Array.isArray(names)) {
-    if (Object.prototype.hasOwnProperty.call(names, rolesClaim)) return true;
+    if (Object.prototype.hasOwnProperty.call(names, top)) return true;
   }
-  return rolesClaim === 'groups' && payload.hasgroups === true;
+  return top === 'groups' && payload.hasgroups === true;
 }

@@ -30,7 +30,12 @@ import type { IdentityVerificationOptions } from '../../../hosting/identityVerif
 import { pathLabel } from '../verify/claims.js';
 import { discoveryUrlFor, fetchableUrlProblem, type DiscoveryFetch } from '../verify/discovery.js';
 import type { JoseBackend } from '../verify/jwtCore.js';
-import { oidcIdentity, type OidcDiscoveryState, type OidcIdentityOptions } from '../oidc.js';
+import {
+  MAX_CLOCK_TOLERANCE_SECONDS,
+  oidcIdentity,
+  type OidcDiscoveryState,
+  type OidcIdentityOptions,
+} from '../oidc.js';
 import { IdentityConfigError, readStrategy, type IdentityConfig } from './config.js';
 import {
   KEYS_IN_A_LATER_RELEASE,
@@ -157,7 +162,7 @@ async function oidcChoice(
   return {
     strategy: 'oidc-token',
     identity: { verify: verifier.verify },
-    banner: oidcBanner(options, state, production),
+    banner: oidcBanner(options, state, production).map(bannerSafe),
   };
 }
 
@@ -222,6 +227,25 @@ function oidcOptions(
         `it to its own client) is not in this release`,
     );
   }
+  if (config.allowedClients === 'any' && production) {
+    throw new IdentityConfigError(
+      `IDENTITY_ALLOWED_CLIENTS is 'any', and this is production. On Keycloak and Okta a ` +
+        `service account's token carries your API's scope, so the client check is the only ` +
+        `thing that refuses an application posing as a person. List the clients people sign ` +
+        `in through — each with service accounts / client credentials turned OFF.`,
+      'IDENTITY_ALLOWED_CLIENTS',
+    );
+  }
+  if (
+    config.clockToleranceSeconds !== undefined &&
+    config.clockToleranceSeconds > MAX_CLOCK_TOLERANCE_SECONDS
+  ) {
+    throw new IdentityConfigError(
+      `IDENTITY_CLOCK_TOLERANCE_SECONDS is at most ${MAX_CLOCK_TOLERANCE_SECONDS}: it tolerates ` +
+        `clock skew, and a larger value is a second token lifetime nobody chose.`,
+      'IDENTITY_CLOCK_TOLERANCE_SECONDS',
+    );
+  }
   if (config.jwksUrl !== undefined) checkUrl(config.jwksUrl, 'jwksUrl', production);
   return {
     issuer,
@@ -248,8 +272,10 @@ function oidcBanner(
 ): string[] {
   const clients =
     options.allowedClients === 'any'
-      ? `any — the client check is OFF`
-      : options.allowedClients.join(', ');
+      ? `any — the client check is OFF (development only; production refuses it)`
+      : `${options.allowedClients.join(
+          ', ',
+        )} (each must have service accounts / client credentials turned off)`;
   const lines = [
     'identity: strategy oidc-token (bearer access tokens; browser sign-in is not in this release)',
     `identity: issuer ${options.issuer}`,
@@ -309,9 +335,35 @@ function checkFields(config: IdentityConfig): string[] {
   for (const [field, value] of Object.entries(config)) {
     if (value === undefined) continue;
     if (!known.has(field)) refuseUnknownField(field);
+    refuseControlCharacters(field, value);
     if (field !== 'strategy') set.push(field);
   }
   return set;
+}
+
+/**
+ * No value may carry a control character: a CR/LF in a setting would forge a
+ * banner line ("identity: person test — all checks on"), and no real issuer,
+ * audience, claim or client id contains one.
+ */
+function refuseControlCharacters(field: string, value: unknown): void {
+  const values = Array.isArray(value) ? value : [value];
+  // eslint-disable-next-line no-control-regex
+  if (values.some((v) => typeof v === 'string' && /[\u0000-\u001f\u007f]/.test(v))) {
+    const key = KEYS_IN_THIS_RELEASE.find((k) => k.field === field);
+    throw new IdentityConfigError(
+      `${keyLabel(field)} contains a control character (a line break, a tab, …). Settings ` +
+        `are single-line text.`,
+      key?.env,
+    );
+  }
+}
+
+/** A banner line with any control character escaped — belt and braces for values from a document. */
+function bannerSafe(line: string): string {
+  // eslint-disable-next-line no-control-regex
+  const control = /[\u0000-\u001f\u007f]/g;
+  return line.replace(control, (c) => `\\u${c.charCodeAt(0).toString(16).padStart(4, '0')}`);
 }
 
 function refuseUnknownField(field: string): never {

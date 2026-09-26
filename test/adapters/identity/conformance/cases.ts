@@ -49,6 +49,7 @@ export type Presentation =
   | 'wrong-scope'
   | 'wrong-client'
   | 'no-client'
+  | 'service-account'
   | 'roles-string-with-space'
   | 'roles-overage';
 
@@ -166,6 +167,7 @@ const REFUSED_SHAPES: readonly Presentation[] = [
   'wrong-scope',
   'wrong-client',
   'no-client',
+  'service-account',
   'roles-overage',
 ];
 
@@ -249,8 +251,15 @@ export const identityStrategyConformance: readonly IdentityCase[] = [
   },
   {
     name: 'only-a-listed-client-obtains-a-person',
-    law: 'The client that obtained the token must be listed; a token naming none is refused.',
-    run: (h) => expectRefusals(h, { 'wrong-client': 'wrong-client', 'no-client': 'wrong-client' }),
+    law: 'The client that obtained the token must be listed; a token naming none, or a service account carrying the scope, is refused.',
+    run: (h) =>
+      expectRefusals(h, {
+        'wrong-client': 'wrong-client',
+        'no-client': 'wrong-client',
+        // Keycloak/Okta: a service account's token carries the API's scope,
+        // so only the client check stands between it and a principal.
+        'service-account': 'wrong-client',
+      }),
   },
   {
     name: 'a-roles-string-is-one-role',

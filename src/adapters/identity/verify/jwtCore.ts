@@ -179,6 +179,20 @@ export async function verifySignedToken(
     // `requiredClaims` does not get to hand back a token with no lifetime.
     throw new IdentityNotVerifiedError('unverifiable', false);
   }
+  // And its TIME, not only its presence: a backend that skipped the clock
+  // checks (a stub, a fork) does not get to hand back an expired token either.
+  // The same tolerance `jose` was given, the same classes.
+  const nowSeconds = Math.floor(Date.now() / 1000);
+  const tolerance = checks.clockToleranceSeconds ?? 0;
+  if (payload.exp + tolerance < nowSeconds) throw new IdentityNotVerifiedError('expired', false);
+  if (payload.nbf !== undefined) {
+    if (typeof payload.nbf !== 'number' || !Number.isFinite(payload.nbf)) {
+      throw new IdentityNotVerifiedError('unverifiable', false);
+    }
+    if (payload.nbf - tolerance > nowSeconds) {
+      throw new IdentityNotVerifiedError('not-yet-valid', false);
+    }
+  }
   return payload;
 }
 
