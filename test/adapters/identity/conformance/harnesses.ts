@@ -7,6 +7,7 @@
 import {
   directoryPasswords,
   hashPassword,
+  identityFromConfig,
   jwksIdentity,
   localPasswords,
   oidcIdentity,
@@ -17,6 +18,7 @@ import {
   signInSource,
   verifyRequestIdentity,
   type DoorIdentity,
+  type IdentityVerifier,
   type PasswordChecker,
   type VerifiedIdentity,
 } from '../../../../src/hosting/index.js';
@@ -284,6 +286,41 @@ async function passwordDoorHarness(
     declared: {
       'a-forgery-is-unverifiable':
         "a sign-in key nobody holds answers 'expired' — ended, expired and never-existed are one answer by design",
+    },
+  };
+}
+
+/** `proxy-token`: the same tokens, verified with no discovery, a literal issuer and a JWKS URL. */
+export async function proxyTokenHarness(): Promise<IdentityStrategyHarness> {
+  const idp = await fakeIdp('proxy.corp.example');
+  const shape: PersonShape = { issuer: idp.issuer, ...SHAPE_DEFAULTS };
+  const boot = (backend: FakeIdp['backend']) =>
+    identityFromConfig(
+      {
+        strategy: 'proxy-token',
+        proxyToken: 'access-token',
+        issuer: idp.issuer,
+        jwksUrl: 'https://proxy.corp.example/.well-known/jwks.json',
+        audience: shape.audience,
+        userIdClaim: 'oid',
+        requiredScope: shape.scope,
+        allowedClients: [shape.client],
+        publicUrl: 'http://127.0.0.1:18481',
+      },
+      { production: false, backend },
+    );
+  const choice = await boot(idp.backend);
+  return {
+    name: 'proxy-token',
+    verifier: { verify: (choice.identity as { verify: IdentityVerifier['verify'] }).verify },
+    ids: IDS,
+    present: (which) => tokenFor(idp, shape, which),
+    async outage() {
+      const down = await boot({
+        createRemoteJWKSet: () => () => Promise.reject(new TypeError('fetch failed')),
+        jwtVerify: idp.backend.jwtVerify,
+      });
+      return { verify: (down.identity as { verify: IdentityVerifier['verify'] }).verify };
     },
   };
 }

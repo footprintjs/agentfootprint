@@ -44,6 +44,7 @@ import type { LdaptsBackend } from '../directory/ldapDirectory.js';
 import type { OpenIdClientBackend } from '../oidcSignIn.js';
 import { browserDoor, browserSettings } from './browserChoice.js';
 import { directoryPasswordChoice } from './directoryChoice.js';
+import { proxyTokenChoice } from './proxyChoice.js';
 import { localPasswordChoice } from './localChoice.js';
 import {
   KEYS_IN_A_LATER_RELEASE,
@@ -80,7 +81,7 @@ export interface IdentityBootOptions {
 }
 
 /** What the page's sign-in gate should show — `GET /auth/config` answers it. */
-export type IdentityMode = 'open' | 'token-only' | 'password' | 'redirect';
+export type IdentityMode = 'open' | 'token-only' | 'password' | 'redirect' | 'proxy';
 
 /** The chosen strategy, ready to hand to every door. */
 export interface IdentityChoice {
@@ -141,6 +142,7 @@ export async function identityFromConfig(
   refuseForeignFields(strategy, fields);
   if (strategy === 'local-password') return localPasswordChoice(config, boot, production);
   if (strategy === 'directory-password') return directoryPasswordChoice(config, boot, production);
+  if (strategy === 'proxy-token') return proxyTokenChoice(config, boot, production);
   return oidcChoice(config, boot, production);
 }
 
@@ -221,7 +223,7 @@ async function oidcChoice(
 // ─── oidc-token: required keys, then the verifier's options ──────────
 
 /** The verifier's own construction refusals are boot refusals too. */
-function buildVerifier(options: OidcIdentityOptions): ReturnType<typeof oidcIdentity> {
+export function buildVerifier(options: OidcIdentityOptions): ReturnType<typeof oidcIdentity> {
   try {
     return oidcIdentity(options);
   } catch (err) {
@@ -231,17 +233,26 @@ function buildVerifier(options: OidcIdentityOptions): ReturnType<typeof oidcIden
   }
 }
 
-function oidcOptions(
+export function oidcOptions(
   config: IdentityConfig,
   boot: IdentityBootOptions,
   production: boolean,
+  shape: { readonly strategy: 'oidc-token' | 'proxy-token'; readonly literalIssuer: boolean } = {
+    strategy: 'oidc-token',
+    literalIssuer: false,
+  },
 ): OidcIdentityOptions {
+  const required = (value: string | undefined, field: string, what: string): string =>
+    requiredFor(shape.strategy, value, field, what);
+  const missing = (field: string, what: string): never => missingFor(shape.strategy, field, what);
   const issuer = required(
     config.issuer,
     'issuer',
-    'the issuer URL your IdP names in its discovery document',
+    shape.literalIssuer
+      ? `the literal \`iss\` the tokens carry (compared exactly, never fetched)`
+      : 'the issuer URL your IdP names in its discovery document',
   );
-  checkUrl(issuer, 'issuer', production);
+  if (!shape.literalIssuer) checkUrl(issuer, 'issuer', production);
   const audience = config.audience;
   if (audience === undefined || (typeof audience === 'string' && audience.trim() === '')) {
     missing(
@@ -414,7 +425,7 @@ function refuseControlCharacters(field: string, value: unknown): void {
 }
 
 /** A banner line with any control character escaped — belt and braces for values from a document. */
-function bannerSafe(line: string): string {
+export function bannerSafe(line: string): string {
   // eslint-disable-next-line no-control-regex
   const control = /[\u0000-\u001f\u007f]/g;
   return line.replace(control, (c) => `\\u${c.charCodeAt(0).toString(16).padStart(4, '0')}`);
@@ -444,17 +455,22 @@ function refuseUnknownField(field: string): never {
   );
 }
 
-function required(value: string | undefined, field: string, what: string): string {
-  if (typeof value !== 'string' || value.trim().length === 0) missing(field, what);
+function requiredFor(
+  strategy: string,
+  value: string | undefined,
+  field: string,
+  what: string,
+): string {
+  if (typeof value !== 'string' || value.trim().length === 0) missingFor(strategy, field, what);
   return value as string;
 }
 
-function missing(field: string, what: string): never {
+function missingFor(strategy: string, field: string, what: string): never {
   const key = KEYS_IN_THIS_RELEASE.find((k) => k.field === field);
-  throw new IdentityConfigError(`oidc-token needs ${keyLabel(field)}: ${what}.`, key?.env);
+  throw new IdentityConfigError(`${strategy} needs ${keyLabel(field)}: ${what}.`, key?.env);
 }
 
-function checkUrl(url: string, field: string, production: boolean): void {
+export function checkUrl(url: string, field: string, production: boolean): void {
   const problem = fetchableUrlProblem(url, !production);
   if (problem === undefined) return;
   const key = KEYS_IN_THIS_RELEASE.find((k) => k.field === field);

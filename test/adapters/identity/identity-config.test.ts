@@ -104,15 +104,9 @@ describe('identityConfigFromEnv — unit', () => {
     [
       { IDENTITY_PROXY_SIGN_OUT_URL: '/oauth2/sign_out' },
       'IDENTITY_PROXY_SIGN_OUT_URL',
-      /proxy-token, which is not in this release/,
-    ],
-    [
-      { IDENTITY_PROXY_TOKEN: 'id-token' },
-      'IDENTITY_PROXY_TOKEN',
-      /proxy-token, which is not in this release/,
+      /the proxy sign-out link, which is not in this release/,
     ],
     [{ IDENTITY_DIAGNOSE: '1' }, 'IDENTITY_DIAGNOSE', /the first-token report/],
-    [{ IDENTITY_PROXY_HEADER: 'x' }, 'IDENTITY_PROXY_HEADER', /proxy-token/],
     [{ IDENTITY_REQUIRED_ROLE: 'neo-users' }, 'IDENTITY_REQUIRED_ROLE', /the role gate/],
     [{ IDENTITY_ALLOWED_CLIENTS: 'any, neo-web' }, 'IDENTITY_ALLOWED_CLIENTS', /'any' beside/],
     [{ IDENTITY_ROLES_CLAIM: '[realm_access.roles' }, 'IDENTITY_ROLES_CLAIM', /JSON array/],
@@ -172,13 +166,12 @@ describe('identityFromConfig — boot refusals', () => {
     );
   });
 
-  it.each(['proxy-token'] as const)(
-    "'%s' is named in the vocabulary and refused as not in this release",
-    async (strategy) => {
-      const err = await refusal(() => identityFromConfig({ strategy }, { production: false }));
-      expect(err.message).toMatch(new RegExp(`'${strategy}', which is not in this release`));
-    },
-  );
+  it('all five strategies start in this release (none is refused as not in it)', async () => {
+    const { STRATEGIES_IN_THIS_RELEASE, IDENTITY_STRATEGIES } = await import(
+      '../../../src/adapters/identity/strategies/vocabulary.js'
+    );
+    expect([...STRATEGIES_IN_THIS_RELEASE].sort()).toEqual([...IDENTITY_STRATEGIES].sort());
+  });
 
   it('a key another strategy reads refuses; browser sign-in keys half-set refuse', async () => {
     const idp = await fakeIdp();
@@ -209,11 +202,11 @@ describe('identityFromConfig — boot refusals', () => {
   it('an unknown strategy or an unknown field refuses (JavaScript callers bypass the types)', async () => {
     await refusal(() => identityFromConfig({ strategy: 'sso' } as never, { production: false }));
     const later = await refusal(() =>
-      identityFromConfig({ strategy: 'open', proxyHeader: 'x-forwarded-access-token' } as never, {
+      identityFromConfig({ strategy: 'open', proxySignOutUrl: '/oauth2/sign_out' } as never, {
         production: false,
       }),
     );
-    expect(later.message).toMatch(/proxy-token/);
+    expect(later.message).toMatch(/the proxy sign-out link/);
     await refusal(() =>
       identityFromConfig({ strategy: 'open', isuer: 'x' } as never, { production: false }),
     );

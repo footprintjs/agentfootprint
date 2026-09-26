@@ -91,10 +91,11 @@ funnel.
   (`wrong-client`). These, and `roles-unknown`, are new `IdentityFailureClass`
   words: the ingress record carries them like the others.
 - **The banner never carries a secret.** Print every line at boot.
-- This release starts `open`, `oidc-token` (bearer access tokens, plus
-  browser sign-in — pending independent review), `directory-password` (plain
-  AD over LDAPS) and `local-password` (development only; refused in
-  production). `proxy-token` is named and refused as "not in this release".
+- This release starts all five: `open`, `oidc-token` (bearer access tokens,
+  plus browser sign-in — pending independent review), `proxy-token` (an
+  authenticating proxy forwards an access token; the app port must be
+  reachable only from the proxy), `directory-password` (plain AD over LDAPS)
+  and `local-password` (development only; refused in production).
 - **`GET /auth/config` in every mode.** The sign-in door answers it in
   `password` and `redirect` mode; for `open` and `token-only` there is no door,
   and the app answers `{ mode: choice.mode }` itself — the page learns from it

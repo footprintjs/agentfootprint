@@ -43,9 +43,10 @@
 import { createHash, randomBytes } from 'node:crypto';
 import type { IncomingMessage, ServerResponse } from 'node:http';
 
-import { doorGuard, isLoopbackBind, type CrossSiteOptions, type DoorGuard } from '../doorGuard.js';
+import { isLoopbackBind, type CrossSiteOptions } from '../doorGuard.js';
 import type { DoorIdentity, IdentityVerifier } from '../identityVerification.js';
 import { readSignIn, signInKeyOf } from './cookie.js';
+import { browserDoorGuard } from './browserGuard.js';
 import { checkGate, type CheckGateOptions } from './checkGate.js';
 import { SignInDoorConfigError } from './errors.js';
 import { clientAddress, trustedProxies } from './clientAddress.js';
@@ -163,7 +164,7 @@ export function signInDoor(options: SignInDoorOptions): SignInDoor {
   if (!Number.isFinite(minimumMs) || minimumMs < 0 || minimumMs > 10_000) {
     throw new SignInDoorConfigError('minimumResponseMs', 'minimumResponseMs is 0 to 10 000 ms');
   }
-  const guard = guardFor(options.guard, cookie);
+  const guard = browserDoorGuard('sign-in', options.guard, cookie.url, !cookie.secure);
   const limiter = attemptLimiter(options.limits);
   const gate = checkGate(options.checks);
   const signIns = signInSource({ store: options.store, idleMinutes, now });
@@ -470,69 +471,6 @@ function cookieFor(publicUrl: string, production: boolean): CookieShape {
         secure ? ' Secure;' : ''
       } SameSite=Lax; Max-Age=0`,
   };
-}
-
-/**
- * The guard, built from the host's own lists (H4: one source). Refused at
- * construction: no `allowedHosts` for a public URL that is not loopback (H1),
- * `'any'` for either list (a browser door), and a public URL its own lists
- * would refuse.
- */
-function guardFor(lists: CrossSiteOptions | undefined, cookie: CookieShape): DoorGuard {
-  const url = cookie.url;
-  if (lists?.allowedHosts === 'any' || lists?.allowedOrigins === 'any') {
-    throw new SignInDoorConfigError(
-      'guard',
-      `allowedHosts/allowedOrigins 'any' says no browser reaches this door, and a sign-in door ` +
-        `is for browsers. List the names people use`,
-    );
-  }
-  if (lists?.requireJsonContentType === false) {
-    throw new SignInDoorConfigError(
-      'guard',
-      `requireJsonContentType false would let a form post a sign-in (login forgery)`,
-    );
-  }
-  if (lists?.allowedHosts === undefined && !isLoopbackBind(url.hostname)) {
-    throw new SignInDoorConfigError(
-      'guard',
-      `the door hardening's allowedHosts is required (the same list the host uses): a sign-in ` +
-        `cookie rides along on every forged request, so the door must refuse other Host names ` +
-        `and origins before identity is consulted`,
-    );
-  }
-  // A plain-http (development) cookie is not Secure: it must never be offered
-  // to a name other machines reach.
-  if (!cookie.secure && Array.isArray(lists?.allowedHosts)) {
-    const lan = lists.allowedHosts.filter((h) => !isLoopbackBind(h.replace(/:\d+$/, '')));
-    if (lan.length > 0) {
-      throw new SignInDoorConfigError(
-        'guard',
-        `a plain-http public URL serves a cookie without Secure, so allowedHosts may name only ` +
-          `this machine (not ${lan.join(
-            ', ',
-          )}). https is required for any name other machines reach`,
-      );
-    }
-  }
-  const guard = doorGuard({
-    name: 'sign-in',
-    ...(lists?.allowedHosts === undefined && { bindHost: url.hostname }),
-    ...(lists?.allowedHosts !== undefined && { allowedHosts: lists.allowedHosts }),
-    ...(lists?.allowedOrigins !== undefined && { allowedOrigins: lists.allowedOrigins }),
-  });
-  const probe = guard.check({
-    method: 'POST',
-    headers: { host: url.host, origin: url.origin, 'content-type': 'application/json' },
-  });
-  if (probe !== undefined) {
-    throw new SignInDoorConfigError(
-      'guard',
-      `the public URL ${url.origin} is refused by the door's own lists (${probe.code}). Add its ` +
-        `host to allowedHosts (and its origin to allowedOrigins, when set)`,
-    );
-  }
-  return guard;
 }
 
 type LoginRead =

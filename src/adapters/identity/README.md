@@ -107,6 +107,54 @@ IDENTITY_CLIENT_KEY_FILE=/run/secrets/neo-web.pem
 IDENTITY_SCOPE=openid profile api://<API>/access_as_user
 ```
 
+## `proxy-token` — an authenticating proxy signs in, the library still verifies
+
+For a company that already fronts internal apps with a login proxy
+(oauth2-proxy, `mod_auth_openidc`, Pomerium). The proxy signs the person in
+and forwards a signed token on every request; `proxy-token` verifies it with
+`oidcIdentity`'s checks — no discovery.
+
+- **An ACCESS token for this API, never an ID token.**
+  `IDENTITY_PROXY_TOKEN=access-token` is required and `id-token` is refused:
+  an ID token's audience is the proxy's own client and it carries no scope, so
+  the person test could not run. oauth2-proxy: `--pass-access-token`, or an
+  `injectRequestHeaders` rule on claim `access_token`. The whole person test
+  applies; `IDENTITY_ALLOWED_CLIENTS` names the proxy's client.
+- **No discovery:** `IDENTITY_JWKS_URL` (https; plain http only on this
+  machine outside production; never fetched through a redirect) and a LITERAL
+  `IDENTITY_ISSUER`, compared exactly and never fetched.
+- **The header:** `IDENTITY_PROXY_HEADER` (default `authorization`, read as
+  `Bearer …`; any other header is the raw token). A bare user header
+  (`X-Forwarded-User`) is refused as a token header: it is a string anybody
+  can send.
+- **Every door is hardened.** The browser's credential is the PROXY's cookie
+  or a Windows login, turned into a valid header on every request the proxy
+  forwards — forged cross-site ones included. `proxy-token` refuses to start
+  without the host's door guard lists (`boot.crossSite`, the same lists the
+  host is given).
+- **Make the app port reachable ONLY from the proxy.** The library verifies
+  the token; it cannot tell whether the proxy was on the path. A header an
+  outsider sends straight to the port is refused (no token, or a forged one),
+  but a person who reaches the port with their OWN valid token skips whatever
+  the proxy enforces beyond identity — MFA step-up, device posture, per-route
+  rules. Bind the app to `127.0.0.1` behind a same-box proxy, or firewall the
+  port to the proxy's address; and repeat in the app any authorization that
+  must hold (the library's person test and client check already run on every
+  request).
+
+```sh
+IDENTITY_STRATEGY=proxy-token
+IDENTITY_PROXY_TOKEN=access-token
+IDENTITY_PROXY_HEADER=x-forwarded-access-token      # oauth2-proxy --pass-access-token
+IDENTITY_ISSUER=http://fs.corp.example/adfs/services/trust   # literal, compared exactly
+IDENTITY_JWKS_URL=https://fs.corp.example/adfs/discovery/keys
+IDENTITY_AUDIENCE=urn:neo:api
+IDENTITY_USER_ID_CLAIM=urn:neo:objectguid
+IDENTITY_REQUIRED_SCOPE=user_impersonation
+IDENTITY_ALLOWED_CLIENTS=<the proxy's client id>
+IDENTITY_PUBLIC_URL=https://neo.corp.example
+```
+
 ## `directory-password` — Active Directory over LDAPS
 
 For a company with plain AD and no federation server (`directory/`). The sign-in
@@ -182,5 +230,6 @@ IDENTITY_LOCAL_USERS=priya:scrypt$17$8$1$…$…   # from hashPassword('…')
 - `localPassword.ts` — the `local-password` list and `hashPassword` (scrypt).
 - `oidcSignIn.ts` — browser sign-in over `openid-client` (pending independent review).
 - `directory/` — `directory-password`: the rules and the LDAPS adapter.
+- (`proxy-token` is `oidc.ts` with discovery off; its config is `strategies/proxyChoice.ts`.)
 - `verify/` — the shared checks both verifiers use.
 - `strategies/` — `identityFromConfig`, `identityConfigFromEnv`, the vocabulary.

@@ -85,6 +85,10 @@ export interface IdentityConfig {
   readonly ldapLockoutThreshold?: number;
   /** `IDENTITY_LDAP_LOCKOUT_WINDOW_MINUTES` — AD's observation window. */
   readonly ldapLockoutWindowMinutes?: number;
+  /** `IDENTITY_PROXY_HEADER` — where the proxy puts the token (`proxy-token`). Default `authorization`. */
+  readonly proxyHeader?: string;
+  /** `IDENTITY_PROXY_TOKEN` — what the proxy forwards. Required; only `access-token` is accepted. */
+  readonly proxyToken?: string;
   /** `IDENTITY_TRUSTED_PROXIES` — peers whose `X-Forwarded-For` is believed. */
   readonly trustedProxies?: readonly string[];
 }

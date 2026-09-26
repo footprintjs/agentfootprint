@@ -1910,8 +1910,8 @@ naming the key.
 - **Production names its strategy, even `open`.** You pass `production`; the
   library never guesses it from `NODE_ENV`.
 - **A typo is never `open`.** An unknown strategy or `IDENTITY_*` key is
-  refused, and so are the keys of a strategy a later release adds
-  (`proxy-token`): they are named and refused as "not in this release".
+  refused, and so are the few keys a later release reads: they are named and
+  refused as "not in this release".
 - **Config errors refuse at boot; outages answer 503.** An unreachable IdP
   lets the app start and says so in the banner.
 - **The banner names settings and never a secret** — print every line.
@@ -2119,6 +2119,28 @@ IDENTITY_CLIENT_KEY_FILE=/run/secrets/neo-web.pem # or IDENTITY_CLIENT_SECRET_FI
 IDENTITY_SCOPE=openid profile api://<API client id>/access_as_user
 IDENTITY_COOKIE_KEY_FILE=/run/secrets/neo-cookie-key
 ```
+
+### Behind an authenticating proxy — `proxy-token`
+
+When a login proxy (oauth2-proxy, `mod_auth_openidc`, Pomerium) already signs
+people in, `IDENTITY_STRATEGY=proxy-token` verifies the token it forwards —
+the library never trusts the proxy's word for who the person is:
+
+- the proxy must forward an ACCESS token for this API
+  (`IDENTITY_PROXY_TOKEN=access-token`; `id-token` is refused), and the person
+  test and client check run on it (`IDENTITY_ALLOWED_CLIENTS` names the
+  proxy's client);
+- no discovery: `IDENTITY_JWKS_URL` (https, never through a redirect) and a
+  literal `IDENTITY_ISSUER`; `IDENTITY_PROXY_HEADER` names the header
+  (default `authorization`);
+- it refuses to start without the host's door guard lists, because the
+  proxy's own cookie rides along on forged cross-site requests;
+- `choice.mode` is `'proxy'` and there is no sign-in door.
+
+**Make the app port reachable only from the proxy.** A spoofed header straight
+to the port is refused, but a person with their own valid token could skip what
+the proxy enforces beyond identity (MFA step-up, device posture, per-route
+rules). Bind to `127.0.0.1` behind a same-box proxy or firewall the port.
 
 ### Plain Active Directory — `directory-password`
 

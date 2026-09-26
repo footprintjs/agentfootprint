@@ -29,6 +29,7 @@ export const STRATEGIES_IN_THIS_RELEASE: readonly IdentityStrategyName[] = [
   'oidc-token',
   'local-password',
   'directory-password',
+  'proxy-token',
 ];
 
 /** How an environment value becomes a config value. */
@@ -46,34 +47,59 @@ export interface ConfigKey {
 /** The keys this release reads, each owned by the strategies that read it (and `IDENTITY_STRATEGY`). */
 export const KEYS_IN_THIS_RELEASE: readonly ConfigKey[] = [
   { env: 'IDENTITY_STRATEGY', field: 'strategy', reading: 'strategy' },
-  { env: 'IDENTITY_ISSUER', field: 'issuer', reading: 'text', owners: ['oidc-token'] },
-  { env: 'IDENTITY_AUDIENCE', field: 'audience', reading: 'text', owners: ['oidc-token'] },
-  { env: 'IDENTITY_USER_ID_CLAIM', field: 'userIdClaim', reading: 'text', owners: ['oidc-token'] },
+  {
+    env: 'IDENTITY_ISSUER',
+    field: 'issuer',
+    reading: 'text',
+    owners: ['oidc-token', 'proxy-token'],
+  },
+  {
+    env: 'IDENTITY_AUDIENCE',
+    field: 'audience',
+    reading: 'text',
+    owners: ['oidc-token', 'proxy-token'],
+  },
+  {
+    env: 'IDENTITY_USER_ID_CLAIM',
+    field: 'userIdClaim',
+    reading: 'text',
+    owners: ['oidc-token', 'proxy-token'],
+  },
   {
     env: 'IDENTITY_REQUIRED_SCOPE',
     field: 'requiredScope',
     reading: 'text',
-    owners: ['oidc-token'],
+    owners: ['oidc-token', 'proxy-token'],
   },
-  { env: 'IDENTITY_SCOPE_CLAIM', field: 'scopeClaim', reading: 'text', owners: ['oidc-token'] },
+  {
+    env: 'IDENTITY_SCOPE_CLAIM',
+    field: 'scopeClaim',
+    reading: 'text',
+    owners: ['oidc-token', 'proxy-token'],
+  },
   {
     env: 'IDENTITY_ALLOWED_CLIENTS',
     field: 'allowedClients',
     reading: 'clients',
-    owners: ['oidc-token'],
+    owners: ['oidc-token', 'proxy-token'],
   },
   {
     env: 'IDENTITY_ROLES_CLAIM',
     field: 'rolesClaim',
     reading: 'claim-path',
-    owners: ['oidc-token'],
+    owners: ['oidc-token', 'proxy-token'],
   },
-  { env: 'IDENTITY_JWKS_URL', field: 'jwksUrl', reading: 'text', owners: ['oidc-token'] },
+  {
+    env: 'IDENTITY_JWKS_URL',
+    field: 'jwksUrl',
+    reading: 'text',
+    owners: ['oidc-token', 'proxy-token'],
+  },
   {
     env: 'IDENTITY_CLOCK_TOLERANCE_SECONDS',
     field: 'clockToleranceSeconds',
     reading: 'whole-number',
-    owners: ['oidc-token'],
+    owners: ['oidc-token', 'proxy-token'],
   },
   { env: 'IDENTITY_CLIENT_ID', field: 'clientId', reading: 'text', owners: ['oidc-token'] },
   {
@@ -107,7 +133,7 @@ export const KEYS_IN_THIS_RELEASE: readonly ConfigKey[] = [
     env: 'IDENTITY_PUBLIC_URL',
     field: 'publicUrl',
     reading: 'text',
-    owners: ['oidc-token', 'local-password', 'directory-password'],
+    owners: ['oidc-token', 'local-password', 'directory-password', 'proxy-token'],
   },
   {
     env: 'IDENTITY_SIGN_IN_HOURS',
@@ -132,7 +158,7 @@ export const KEYS_IN_THIS_RELEASE: readonly ConfigKey[] = [
     env: 'IDENTITY_TRUSTED_PROXIES',
     field: 'trustedProxies',
     reading: 'list',
-    owners: ['local-password', 'directory-password'],
+    owners: ['local-password', 'directory-password', 'proxy-token'],
   },
   {
     env: 'IDENTITY_LDAP_URL',
@@ -182,10 +208,12 @@ export const KEYS_IN_THIS_RELEASE: readonly ConfigKey[] = [
     reading: 'whole-number',
     owners: ['directory-password'],
   },
+  { env: 'IDENTITY_PROXY_HEADER', field: 'proxyHeader', reading: 'text', owners: ['proxy-token'] },
+  { env: 'IDENTITY_PROXY_TOKEN', field: 'proxyToken', reading: 'text', owners: ['proxy-token'] },
 ];
 
 /** What a key a later release reads belongs to — named in its refusal. */
-export type LaterFeature = 'the first-token report' | 'the role gate' | 'proxy-token';
+export type LaterFeature = 'the first-token report' | 'the role gate' | 'the proxy sign-out link';
 
 /**
  * Keys named in the design and read by a later release. Refused by name.
@@ -197,9 +225,7 @@ export type LaterFeature = 'the first-token report' | 'the role gate' | 'proxy-t
 export const KEYS_IN_A_LATER_RELEASE: Readonly<Record<string, LaterFeature>> = {
   IDENTITY_DIAGNOSE: 'the first-token report',
   IDENTITY_REQUIRED_ROLE: 'the role gate',
-  IDENTITY_PROXY_HEADER: 'proxy-token',
-  IDENTITY_PROXY_TOKEN: 'proxy-token',
-  IDENTITY_PROXY_SIGN_OUT_URL: 'proxy-token',
+  IDENTITY_PROXY_SIGN_OUT_URL: 'the proxy sign-out link',
 };
 
 /** `issuer` → `IDENTITY_ISSUER (issuer)`: both spellings, so either reader finds it. */

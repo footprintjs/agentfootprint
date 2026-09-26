@@ -18,6 +18,7 @@ import {
 import {
   directoryPasswordHarness,
   jwksHarness,
+  proxyTokenHarness,
   localPasswordHarness,
   oidcHarness,
 } from './conformance/harnesses.js';
@@ -32,6 +33,7 @@ type Build = () => Promise<IdentityStrategyHarness & { close?(): Promise<void> }
 const suites: [string, Build, readonly string[]][] = [
   ['oidcIdentity', oidcHarness, []],
   ['jwksIdentity', jwksHarness, []],
+  ['proxy-token', proxyTokenHarness, []],
   [
     'local-password',
     localPasswordHarness,
