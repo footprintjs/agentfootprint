@@ -410,8 +410,7 @@ export interface ArtifactsForRequestInput {
  *    turn has not persisted (unless that turn is this caller's, in flight); at
  *    any door, a session with no live instance and no stored conversation.
  *    One reason for all of them, as redemption answers them with one
- *    not-found. Never builds or evicts a pooled instance to find out. Also
- *    the answer of a call that lost the race to `close()`.
+ *    not-found. Never builds or evicts a pooled instance to find out.
  *  - `'no-store'` — the serving agent has no artifact store.
  */
 export type ArtifactsForRequestResult =
@@ -464,7 +463,9 @@ export interface StandingAgentHandle {
    *     return payload ? res.json(payload.data) : res.status(404).end();
    *   });
    *
-   * @throws HostClosedError after `close()`.
+   * @throws HostClosedError after `close()` — including a call that was
+   *   waiting (on the verifier or the session store) when `close()` ran: it
+   *   binds nothing and builds nothing, exactly like the wire.
    * @throws UnreadableEnvelopeError when the stored conversation is present but
    *   cannot be read (the turn door's law — never composed into a scope).
    * @throws whatever the session store's own `onWake` / `hydrate` throws (an

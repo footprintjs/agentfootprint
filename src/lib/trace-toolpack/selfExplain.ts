@@ -137,6 +137,35 @@ export const SELF_EXPLAIN_MAX_EVENTS = 2000;
  */
 const MAX_CONVERSATIONS = 64;
 
+/**
+ * The separate bound for ONE-SHOT conversations — a hosted request with no
+ * session, which no later request can name (`SelfExplainServing.oneShot`).
+ * Kept on their own shelf so a flood of sessionless requests can never evict a
+ * session's evidence (recheck NIT 4); small, because nothing ever asks a
+ * follow-up question of one.
+ */
+const MAX_ONE_SHOT_CONVERSATIONS = 8;
+
+/** One bounded shelf of conversations: evidence and run ids, same keys. */
+interface Shelf {
+  readonly captured: Map<string | undefined, CapturedTurn>;
+  readonly runs: Map<string | undefined, string[]>;
+  readonly max: number;
+}
+
+function shelf(max: number): Shelf {
+  return { captured: new Map(), runs: new Map(), max };
+}
+
+/** Drop the oldest entries of an insertion-ordered map past `max`. */
+function bound(held: Map<string | undefined, unknown>, max: number): void {
+  while (held.size > max) {
+    const oldest = held.keys().next();
+    if (oldest.done === true) return;
+    held.delete(oldest.value);
+  }
+}
+
 /** How many of one conversation's runs its inner-run view admits. */
 const MAX_RUNS_PER_CONVERSATION = 32;
 
@@ -154,6 +183,9 @@ export interface SelfExplainServing {
   readonly conversation: string | undefined;
   /** The run in flight, or the one served last. */
   readonly runId: string;
+  /** A conversation no later request can name (a hosted request with no
+   *  session) — kept on its own, smaller shelf. */
+  readonly oneShot?: boolean;
 }
 
 /**
@@ -207,14 +239,15 @@ export class SelfExplainBinding {
   private source: SelfExplainSource | undefined;
   private ctrl: CtrlRecorder = controlDepRecorder();
   private tail: EventTail | undefined;
-  /** Evidence per conversation (see {@link SelfExplainSource.getServing}).
-   *  Insertion order is completion order — see {@link MAX_CONVERSATIONS}. */
-  private readonly captured = new Map<string | undefined, CapturedTurn>();
-  /** The ids of each conversation's runs, most recent last — recorded at run
-   *  START, so a run that PAUSED or FAILED (neither reaches the terminal
-   *  capture) still owns the records its tools filed (recheck RS4). Bounded
-   *  like `captured`. */
-  private readonly runs = new Map<string | undefined, string[]>();
+  /** Evidence and run ids per conversation (see
+   *  {@link SelfExplainSource.getServing}), on two shelves: one for
+   *  conversations a caller can come back to ({@link MAX_CONVERSATIONS}), one
+   *  for one-shot ones ({@link MAX_ONE_SHOT_CONVERSATIONS}). Insertion order is
+   *  recency order. Run ids are recorded at run START, so a run that PAUSED or
+   *  FAILED (neither reaches the terminal capture) still owns the records its
+   *  tools filed (recheck RS4). */
+  private readonly lasting = shelf(MAX_CONVERSATIONS);
+  private readonly oneShot = shelf(MAX_ONE_SHOT_CONVERSATIONS);
 
   constructor(
     private readonly include: SelfExplainInclude = {},
@@ -254,8 +287,10 @@ export class SelfExplainBinding {
     // No refresh on read: a read happens only inside the asking
     // conversation's own run, whose terminal capture files it as the most
     // recent anyway.
-    const conversation = this.serving()?.conversation;
-    const turn = this.captured.get(conversation);
+    const serving = this.serving();
+    const conversation = serving?.conversation;
+    const held = this.shelfOf(serving);
+    const turn = held.captured.get(conversation);
     if (turn === undefined) return undefined;
     const allInnerRuns = this.source?.getInnerRuns?.();
     const innerRuns =
@@ -265,7 +300,7 @@ export class SelfExplainBinding {
         ? allInnerRuns
         : innerRunsOfConversation(
             allInnerRuns,
-            ownRuns(this.runs.get(conversation) ?? [], conversation),
+            ownRuns(held.runs.get(conversation) ?? [], conversation),
           );
     return {
       snapshot: turn.snapshot,
@@ -281,27 +316,26 @@ export class SelfExplainBinding {
     return this.source?.getServing?.();
   }
 
-  /** Remember that `runId` belongs to `conversation` (bounded both ways). */
-  private recordRun(conversation: string | undefined, runId: string): void {
-    const held = this.runs.get(conversation) ?? [];
-    this.runs.delete(conversation);
-    this.runs.set(conversation, [...held, runId].slice(-MAX_RUNS_PER_CONVERSATION));
-    while (this.runs.size > MAX_CONVERSATIONS) {
-      const oldest = this.runs.keys().next();
-      if (oldest.done === true) break;
-      this.runs.delete(oldest.value);
-    }
+  /** Which shelf a conversation lives on. */
+  private shelfOf(serving: SelfExplainServing | undefined): Shelf {
+    return serving?.oneShot === true ? this.oneShot : this.lasting;
   }
 
-  /** File one conversation's evidence as the most recent, within the bound. */
-  private file(conversation: string | undefined, turn: CapturedTurn): void {
-    this.captured.delete(conversation);
-    this.captured.set(conversation, turn);
-    while (this.captured.size > MAX_CONVERSATIONS) {
-      const oldest = this.captured.keys().next();
-      if (oldest.done === true) break;
-      this.captured.delete(oldest.value);
-    }
+  /** Remember that the serving run belongs to its conversation (bounded both ways). */
+  private recordRun(serving: SelfExplainServing): void {
+    const { runs, max } = this.shelfOf(serving);
+    const held = runs.get(serving.conversation) ?? [];
+    runs.delete(serving.conversation);
+    runs.set(serving.conversation, [...held, serving.runId].slice(-MAX_RUNS_PER_CONVERSATION));
+    bound(runs, max);
+  }
+
+  /** File the serving conversation's evidence as its most recent, within the bound. */
+  private file(serving: SelfExplainServing | undefined, turn: CapturedTurn): void {
+    const { captured, max } = this.shelfOf(serving);
+    captured.delete(serving?.conversation);
+    captured.set(serving?.conversation, turn);
+    bound(captured, max);
   }
 
   /** The recorder to attach — forwards flow events to the per-run ctrl. */
@@ -319,7 +353,7 @@ export class SelfExplainBinding {
       const events = this.tail?.snapshot().events;
       // Filed under the FINISHED run's conversation — at the terminal flush
       // the source still names the run that just ended.
-      this.file(this.serving()?.conversation, {
+      this.file(this.serving(), {
         snapshot,
         ctrl: this.ctrl,
         ...(narrative !== undefined && { narrative }),
@@ -344,7 +378,7 @@ export class SelfExplainBinding {
         // failure never reaches the terminal capture, and the records its
         // tools filed must still be its conversation's to read.
         const serving = this.serving();
-        if (serving !== undefined) this.recordRun(serving.conversation, serving.runId);
+        if (serving !== undefined) this.recordRun(serving);
       },
       onRunEnd: capture,
       onRunFailed: capture,

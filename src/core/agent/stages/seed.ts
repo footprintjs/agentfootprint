@@ -470,6 +470,11 @@ function seedFrom(scope: TypedScope<AgentState>, message: string, deps: SeedStag
   // is handed, the one carrier that survives a restart (`Agent.resume`). A run
   // with no session writes nothing: the keys it commits are unchanged.
   if (sessionId !== undefined) scope.runSessionId = sessionId;
+  // …and on a run a caller NAMED that has no session, `null`: the positive
+  // record that there was none, so a resume can tell this checkpoint from one
+  // written before the key existed (`callerIdentity.ts · pausedSessionOf`). A
+  // run on the per-run default writes nothing.
+  else if (args.identity !== undefined) scope.runSessionId = null;
   scope.newMessages = [];
   // WHICH TURN THIS IS (9.6.0). Every release up to 9.5.1 wrote `1` here, on
   // every run — and memory writes key their entries on it (`msg-{turn}-{i}`),

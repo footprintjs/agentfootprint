@@ -41,6 +41,7 @@ import type { MemoryIdentity } from '../../src/memory/identity/types.js';
 import type { CredentialProvider, CredentialRequest } from '../../src/identity/types.js';
 import {
   ArtifactOpsBusyError,
+  HostClosedError,
   memorySessions,
   RequestArtifactsRevokedError,
   standingAgent,
@@ -458,8 +459,8 @@ describe('RS3 — no bound to fall off: 256 later pauses change nothing', () => 
 
 // ─── RS5: racing close() ──────────────────────────────────────────────
 
-describe('RS5 — artifactsForRequest racing close() binds nothing and builds no reader', () => {
-  it('a lane-less stored session, hydrate held across close → not-found, no reader built', async () => {
+describe('RS5 + NIT 6 — artifactsForRequest racing close() throws HostClosedError and builds no reader', () => {
+  it('a lane-less stored session, hydrate held across close → HostClosedError, no reader built', async () => {
     const store = inMemoryArtifacts();
     const built: Agent[] = [];
     const shut: number[] = [];
@@ -506,9 +507,8 @@ describe('RS5 — artifactsForRequest racing close() binds nothing and builds no
     await tick();
     await handle.close();
     open();
-    const result = await pending;
+    await expect(pending).rejects.toBeInstanceOf(HostClosedError);
     await tick();
-    expect(result).toEqual({ bound: false, reason: 'not-found' });
     expect(built).toHaveLength(2);
     expect(shut.sort()).toEqual([0, 1]);
   });

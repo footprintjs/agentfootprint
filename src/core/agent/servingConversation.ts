@@ -65,6 +65,8 @@ export interface ServingConversation {
   readonly conversation: string | undefined;
   /** The run in flight, or the one served last. */
   readonly runId: string;
+  /** A hosted request with no session: nobody can ever ask a follow-up. */
+  readonly oneShot?: boolean;
 }
 
 const registry = new WeakMap<object, () => ServingConversation>();

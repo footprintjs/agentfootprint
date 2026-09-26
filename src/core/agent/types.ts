@@ -1289,13 +1289,14 @@ export interface AgentState {
    */
   runIdentitySource?: 'session';
   /**
-   * The session this run served — written by seed on a session-bound run
-   * ONLY (absent otherwise, so a run with no session commits the keys it
-   * always did). `Agent.resume` reads it when the resuming call names no
-   * session. Like every checkpoint field it names, it does not prove: a host
-   * that lets checkpoints leave its trust boundary signs them.
+   * The session this run served — written by seed on a session-bound run;
+   * `null` on a run a caller named an identity for that has no session (the
+   * positive record of "none"); absent on a run with neither, which commits
+   * the keys it always did. `Agent.resume` reads it when the resuming call
+   * names no session. Like every checkpoint field it names, it does not
+   * prove: a host that lets checkpoints leave its trust boundary signs them.
    */
-  runSessionId?: string;
+  runSessionId?: string | null;
   // Set during the final branch — the (user, assistant) pair the
   // memory write subflows persist for cross-run recall.
   newMessages: readonly LLMMessage[];

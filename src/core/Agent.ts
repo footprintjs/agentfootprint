@@ -89,6 +89,7 @@ import {
 } from './toolSessions.js';
 import { buildEventMeta, eventBelongsToRun } from '../bridge/eventMeta.js';
 import {
+  assertIdentityShape,
   callerIdentityOf,
   pausedSessionOf,
   restoredIdentityOf,
@@ -936,6 +937,7 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
     registerServingConversation(this, () => ({
       conversation: this.servingConversation,
       runId: this.currentRunContext.runId,
+      ...(this.servingConversation?.startsWith('hosted:') === true && { oneShot: true }),
     }));
     this.answerValidationConfig = answerValidationConfig;
     this.provider = opts.provider;
@@ -1716,6 +1718,10 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
     // message; anything that is not a message is named and refused here
     // rather than becoming `content: undefined` inside the messages slot.
     const runInput = normalizeRunInput<AgentInput>(input, 'Agent.run');
+    // An identity that is not one is refused HERE, where the mistake was made —
+    // not at the resume of a pause it would have made impossible to resume.
+    assertIdentityShape(runInput.identity, 'Agent.run');
+    assertIdentityShape(options?.identity, 'Agent.run');
     // Timing next, and before the executor exists: both of these refuse a call
     // that would have SUCCEEDED into corrupted per-instance state or an
     // orphaned human question. See ./conversation.ts for why they are throws.
@@ -2193,6 +2199,7 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
     // Discriminated by the PAUSE, never by the input: a plain askHuman/pauseHere
     // answer is a value (often a string) and must stay accepted, so the only
     // sound question is "what was asked?".
+    assertIdentityShape(options?.identity, 'Agent.resume');
     const gate = pauseDemandsDecision(checkpoint.pauseData);
     if (gate && !isCheckInDecision(input)) throw new DecisionRequiredError(gate, input);
     // One run, one identity — refused before anything moves. The paused run's

@@ -176,9 +176,16 @@ promote one the library derived (the session rung, the per-run default).
   - a checkpoint whose own fields disagree (a session-rung marker on an
     identity that carries a person), with or without a named identity.
 - A resume that names no session takes the one the paused run recorded in its
-  own state (`runSessionId`, written by seed on every session-bound run; for an
-  older checkpoint, the session rung) — ONE source, no instance memory — so
-  its evidence, events and tool teardown stay with that session.
+  own state — ONE source, no instance memory — so its evidence, events and tool
+  teardown stay with that session. Seed writes `runSessionId` on every
+  session-bound run, and `null` on a run a caller named an identity for that
+  had no session. A checkpoint written BEFORE that key existed is never filed
+  as sessionless: the session rung gives it, and a caller-named identity gives
+  its `conversationId` (what `standingAgent` composed it from; an app that
+  seeded a different conversation id passes `sessionId` on the resume).
+- An identity that is not one — a field that is not a string, or no field at
+  all — is refused with a `TypeError` when the RUN begins, not at a resume
+  that could then never succeed.
 - **A checkpoint names who it is for; it is not proof.** A resume that names no
   identity trusts the checkpoint's identity and session. A host that lets
   checkpoints leave its trust boundary (held by a browser, say) signs them or
@@ -218,6 +225,8 @@ key: the single-user path. (The composer's own lane and latch keys are
 namespaced the same way, so a session id spelled `anonymous` or `#anonymous-1`
 is just a session.) A run joins its conversation when it STARTS, so the
 records its tools filed stay its conversation's even when it pauses or fails.
+Sessionless (one-shot) conversations are kept on their own shelf of 8, so a
+flood of sessionless requests never evicts a session's evidence.
 A tool's retained inner runs
 (`flowchartAsTool` / `runbookAsTool` with `keepRecord: true`) are keyed by run
 AND call id and served only to the conversation whose runs made them: another
@@ -297,7 +306,8 @@ The verbs count against `artifactOpsPerSession` with the wire's redemptions
 retired from the pool or the host closes: a call STARTED after that rejects
 with `RequestArtifactsRevokedError` (already handled — ask again); an operation
 already in flight completes. A call to `artifactsForRequest` that loses the
-race to `close()` binds nothing (`'not-found'`) and builds nothing.
+race to `close()` throws `HostClosedError`, as a call made after it does (and
+as the wire answers): it binds nothing and builds nothing.
 `headers` takes `IncomingHttpHeaders` as it is; a REPEATED `authorization` is
 two credentials, refused as `'unverified'` rather than read as none. A ref filed through it is redeemed on the wire
 by the same caller; another person's ref answers `null`, exactly like one that

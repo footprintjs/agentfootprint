@@ -1238,7 +1238,9 @@ export async function standingAgent<TH extends HostHandle>(
         error,
       };
     }
-    if (closing !== undefined) return { bound: false, reason: 'not-found' };
+    // The same answer after an await as before one: a composer that closed
+    // while this call waited is closed (the wire's HostClosedError, too).
+    if (closing !== undefined) throw new HostClosedError(host.name);
     const userId = verified?.userId ?? request.userId;
     const sessionId = request.sessionId;
     if (sessionId === undefined) return { bound: false, reason: 'no-session' };
@@ -1253,8 +1255,9 @@ export async function standingAgent<TH extends HostHandle>(
     }
     if (!needsStored && liveLane(sessionId) === undefined) envelope = await storedFor(sessionId);
     // Every await above could have outlived the composer (RS5): a call that
-    // lost the race to `close()` binds nothing and builds nothing.
-    if (closing !== undefined) return { bound: false, reason: 'not-found' };
+    // lost the race to `close()` binds nothing, builds nothing, and says so the
+    // way a call made after close does.
+    if (closing !== undefined) throw new HostClosedError(host.name);
     const stored = userId !== undefined ? storedIdentityOf(envelope, sessionId) : undefined;
     // Never a new lane, never an eviction — the redemption door's own rule.
     const redeemer = redeemerFor(sessionId, envelope);

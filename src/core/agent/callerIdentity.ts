@@ -123,9 +123,54 @@ export function pausedSessionOf(state: unknown): string | undefined {
   if (state === null || typeof state !== 'object') return undefined;
   const seeded = state as SeededState;
   if (typeof seeded.runSessionId === 'string') return seeded.runSessionId;
-  if (seeded.runIdentitySource !== 'session') return undefined;
+  // `null` is this release's record of "a caller-named run with NO session".
+  if (seeded.runSessionId === null) return undefined;
   const identity = wellFormed(seeded.runIdentity);
-  return identity !== undefined && conversationOnly(identity) ? identity.conversationId : undefined;
+  if (identity === undefined) return undefined;
+  if (seeded.runIdentitySource === 'session') {
+    return conversationOnly(identity) ? identity.conversationId : undefined;
+  }
+  // No marker at all on a caller-named identity: a checkpoint written BEFORE
+  // `runSessionId` existed (recheck NIT 3). Whether that run had a session is
+  // not recorded, and filing its resumed turn as sessionless would hand it to
+  // the next sessionless caller — so the session is recovered from the
+  // identity's `conversationId`, which is what `standingAgent` composed it from
+  // (`identityForRequest`). A run with no identity (the per-run default) had no
+  // session to recover.
+  const perRunDefault = conversationOnly(identity) && isMintedRunId(identity.conversationId);
+  return perRunDefault ? undefined : identity.conversationId;
+}
+
+/**
+ * Refuse, when a run BEGINS, an identity that is not one: not an object, a
+ * field that is present and not a string, or no field at all. TypeScript
+ * already forbids these; a JavaScript caller can still pass them, and without
+ * this door the run would start, pause, and then every resume of it — bare ones
+ * included — would refuse as a malformed checkpoint (recheck NIT 2). The
+ * refusal lands where the mistake was made.
+ *
+ * @throws TypeError naming the door and the field.
+ */
+export function assertIdentityShape(identity: unknown, door: string): void {
+  if (identity === undefined) return;
+  if (identity === null || typeof identity !== 'object' || Array.isArray(identity)) {
+    throw new TypeError(
+      `${door}: identity must be an object like { conversationId, principal?, tenant? }.`,
+    );
+  }
+  const raw = identity as Record<string, unknown>;
+  for (const key of ['conversationId', 'tenant', 'principal'] as const) {
+    if (raw[key] !== undefined && typeof raw[key] !== 'string') {
+      throw new TypeError(
+        `${door}: identity.${key} must be a string when present (got ${typeof raw[key]}).`,
+      );
+    }
+  }
+  if (raw.conversationId === undefined && raw.tenant === undefined && raw.principal === undefined) {
+    throw new TypeError(
+      `${door}: identity names nothing — pass { conversationId, principal?, tenant? }, or omit identity.`,
+    );
+  }
 }
 
 /** Do two identities name the same tenant, principal and conversation? */

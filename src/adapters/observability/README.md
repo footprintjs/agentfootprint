@@ -15,7 +15,11 @@ An `Error` anywhere in an event is written as `{ name, message, code? }` plus a
 bounded `cause` chain — never a custom property (an axios error's
 `config.headers.authorization`), never `stack`, never what its own `toJSON`
 returns (a real `AxiosError`'s returns its config and stack: the replacer reads
-the holder's RAW value, so `toJSON` never pre-empts the rule). Every serializer
+the holder's RAW value, so `toJSON` never pre-empts the rule), and an Error a
+`toJSON` RETURNS is rendered too. "An Error" is the OR of `Error.isError`,
+`instanceof Error` and Node's `util.types.isNativeError` — so a Proxy around an
+Error, and an Error from another realm (`vm`), are rendered on every supported
+runtime, and a spoofed `Symbol.toStringTag` is not an Error. Every serializer
 of the record goes through it: here (`file`, `cloudwatch` / `agentcore`,
 `xray`, the `otel` attribute text, the console default; `audit`'s sanitizer
 renders Errors with the same `wireError`), the browser stream
@@ -31,7 +35,13 @@ these modules unless it is allow-listed with a reason.
 event): `toWireJson` 0.92 ms vs `JSON.stringify` 0.46 ms (2.00×); detached
 `withWireErrors` + clone 2.09 ms vs clone 1.30 ms (1.60×) when the event holds
 no Error, 3.08 ms when it holds one (it is then copied whole). A value that
-holds no Error serializes to the same bytes as before.
+holds no Error serializes to the same bytes as before. Two stated limits: to
+see through `toJSON`, an ACCESSOR property (a getter, a Proxy `get` trap) whose
+value is an object is read twice (data properties and primitives once, as
+`JSON.stringify` reads them); and the detached walk stops 64 levels deep, so an
+Error nested deeper than that (inside 65 nested Sets, say) reaches a
+NON-serializing detached sink with its stack — a serializing one still renders
+it.
 
 A custom sink that serializes events should do the same:
 

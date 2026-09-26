@@ -58,21 +58,58 @@ export interface WireError {
 }
 
 /**
- * Is `value` an Error? `Error.isError` where the runtime has it (it sees the
- * internal slot, so it answers across realms and cannot be spoofed), else
- * `instanceof Error`. Never `Object.prototype.toString`: a plain object with
- * `[Symbol.toStringTag]: 'Error'` would pass that brand, and rendering it as an
- * Error would drop the data of a value that is not one. Never throws — a
+ * Is `value` an Error? True when ANY of three checks says so:
+ *  - `Error.isError` (Node ≥ 24, browsers): the internal slot — unspoofable,
+ *    across realms; false, by spec, for a Proxy around an Error;
+ *  - `instanceof Error`: catches that Proxy (its prototype passes through);
+ *  - Node's `util.types.isNativeError`: the internal slot again, so an Error
+ *    from another realm (`vm`) is caught on Node 20/22 where `Error.isError`
+ *    does not exist. Reached through `process.getBuiltinModule` at call time
+ *    (no import: this module ships to browsers, where it is simply absent).
+ * The OR makes the answer the same on every runtime the package supports.
+ * Never `Object.prototype.toString`: a plain object with
+ * `[Symbol.toStringTag]: 'Error'` would pass that brand. Never throws — a
  * revoked Proxy answers `false`.
  */
 export function isErrorValue(value: unknown): value is Error {
   if (value === null || typeof value !== 'object') return false;
+  return (
+    guarded(() => (Error as { isError?: (candidate: unknown) => boolean }).isError?.(value)) ===
+      true ||
+    guarded(() => value instanceof Error) === true ||
+    guarded(() => nodeIsNativeError()?.(value)) === true
+  );
+}
+
+function guarded<T>(check: () => T): T | undefined {
   try {
-    const native = (Error as { isError?: (candidate: unknown) => boolean }).isError;
-    return typeof native === 'function' ? native(value) : value instanceof Error;
+    return check();
   } catch {
-    return false;
+    return undefined;
   }
+}
+
+let nativeErrorCheck: ((candidate: unknown) => boolean) | null | undefined;
+
+/** Node's `util.types.isNativeError`, looked up once; `null` where there is none. */
+function nodeIsNativeError(): ((candidate: unknown) => boolean) | null {
+  if (nativeErrorCheck !== undefined) return nativeErrorCheck;
+  nativeErrorCheck = null;
+  try {
+    const host = (
+      globalThis as {
+        process?: { getBuiltinModule?: (id: string) => unknown };
+      }
+    ).process;
+    const util = host?.getBuiltinModule?.('node:util') as
+      | { types?: { isNativeError?: (candidate: unknown) => boolean } }
+      | undefined;
+    const check = util?.types?.isNativeError;
+    if (typeof check === 'function') nativeErrorCheck = check;
+  } catch {
+    nativeErrorCheck = null;
+  }
+  return nativeErrorCheck;
 }
 
 /**
@@ -137,13 +174,27 @@ function readString(target: object, key: string): string | undefined {
  * is `{ '': value }`, so a root Error is covered too.
  */
 function wireReplacer(this: unknown, key: string, value: unknown): unknown {
-  let raw: unknown;
-  try {
-    raw = (this as Record<string, unknown>)[key];
-  } catch {
-    return value;
-  }
+  // `value` first: an Error with no `toJSON`, and a `toJSON` that RETURNS an
+  // Error (recheck SF1), both arrive here as the Error itself.
+  if (isErrorValue(value)) return wireError(value);
+  // The holder's raw value is needed only when `value` could be what an
+  // Error's `toJSON` returned — a non-null object. A primitive never is, and a
+  // DATA property is read from its descriptor (no getter runs). Only an
+  // ACCESSOR property whose value is an object is read a second time: the
+  // stated cost of seeing through `toJSON` (see `toWireJson`).
+  if (value === null || typeof value !== 'object') return value;
+  const raw = rawOf(this, key);
   return isErrorValue(raw) ? wireError(raw) : value;
+}
+
+function rawOf(holder: unknown, key: string): unknown {
+  try {
+    const descriptor = Object.getOwnPropertyDescriptor(holder as object, key);
+    if (descriptor === undefined) return undefined;
+    return 'value' in descriptor ? descriptor.value : (holder as Record<string, unknown>)[key];
+  } catch {
+    return undefined;
+  }
 }
 
 /**
@@ -151,6 +202,12 @@ function wireReplacer(this: unknown, key: string, value: unknown): unknown {
  * otherwise, to the byte: it returns `undefined` for an unserializable root and
  * throws where `JSON.stringify` throws (a cycle, a BigInt) — so a sink keeps
  * its own handling of those.
+ *
+ * One stated difference in READS, not bytes: to see an Error behind a `toJSON`,
+ * an ACCESSOR property (a getter, a Proxy's `get` trap) whose value is an
+ * object is read twice, and a getter that answers differently on its second
+ * read decides whether an Error is rendered. Data properties and primitives are
+ * read once, as `JSON.stringify` reads them.
  */
 export function toWireJson(value: unknown, space?: number): string {
   return JSON.stringify(value, wireReplacer, space);
