@@ -36,9 +36,12 @@
  * ## The answer, re-checked, and a bounded re-ask
  *
  * The typed ask checks type and enum only, so an integer asked as a number can
- * come back `2.5`, and a bounded number out of bounds. Each answer is judged
+ * come back `2.5`, and a string can break its `pattern`. Each answer is judged
  * against the PROPERTY's own schema of every argument it binds to, read off the
- * implementation that will run. One that fails is not bound: its rows say
+ * implementation that will run, through the one validator's honest subset
+ * (`toolArgsValidation.ts` · `validatePropertyValue`: type, integer, enum,
+ * `pattern`, `minLength`, `maxLength` — numeric `minimum` / `maximum` are NOT
+ * judged, there or anywhere). One that fails is not bound: its rows say
  * `asked: 'invalid-answer'` and the field is asked again with a second fixed
  * question — at most `MAX_ASK_ROUNDS` times per field; after that, the calls
  * that needed it are refused.
@@ -61,8 +64,13 @@ import {
   type PeriodSpelling,
   type RuledArgument,
 } from './declare.js';
+import { ARGUMENT_ASK_KIND, ASK_CONTEXT_KEY, isArgumentAskContext } from './askMarker.js';
 import type { ArgumentFill, BatchCall, ToolOf } from './resolve.js';
 import { HIDDEN_VALUE, answeredRowOf, askedRowOf, type ArgumentRow } from './rows.js';
+
+// The reserved key and its kind have ONE owner (`askMarker.ts`), which a
+// reader on every agent's graph can load without loading this module.
+export { ARGUMENT_ASK_KIND, ASK_CONTEXT_KEY };
 
 // ─── The bounds and the fixed words ─────────────────────────────────────
 
@@ -72,10 +80,6 @@ export const MAX_ASK_ROUNDS = 3;
 export const MAX_ASK_FIELDS = 32;
 /** The declaration's `context` bound — the typed ask's own. */
 export const ASK_CONTEXT_CHARS = 16384;
-/** The reserved key of the declaration's `context` — the library's marker. */
-export const ASK_CONTEXT_KEY = 'agentfootprint';
-/** What the reserved key says this ask is. */
-export const ARGUMENT_ASK_KIND = 'arguments';
 /** The declaration id — the author's reusable id; each round is stamped with its own `requestId`. */
 export const ARGUMENT_ASK_ID = 'agentfootprint.arguments';
 
@@ -464,6 +468,15 @@ export function argumentAskDeclaration(
     );
   }
   const { indexes, context } = fittedRound(state, round.fieldIndexes, host);
+  if (host !== undefined && !fits(context)) {
+    // One field listing one call still does not fit beside the host's object:
+    // the host's state leaves no room for the library's own entry.
+    throw new TypeError(
+      `argumentAskContext: the returned object leaves no room for the library's own entry ` +
+        `within the ask's ${ASK_CONTEXT_CHARS}-character context bound — keep the host state ` +
+        'small (an id to look up, not the state).',
+    );
+  }
   const fields: InputField[] = indexes.map((i, k) => {
     const field = state.fields[i];
     return {
@@ -497,12 +510,7 @@ export function withWaiting(state: ArgumentAskState, waiting: AskWaiting): Argum
 
 /** Whether a stored library ask is the one this state is waiting on (the reserved marker). */
 export function isArgumentAsk(awaiting: AwaitingInput | undefined): boolean {
-  const marker = awaiting?.context?.[ASK_CONTEXT_KEY];
-  return (
-    typeof marker === 'object' &&
-    marker !== null &&
-    (marker as { ask?: unknown }).ask === ARGUMENT_ASK_KIND
-  );
+  return isArgumentAskContext(awaiting?.context);
 }
 
 // ─── The answer ─────────────────────────────────────────────────────────
@@ -575,7 +583,9 @@ export function memberValue(
 /**
  * Whether `answer` fits EVERY member's property schema (in the member's own
  * spelling) — the re-check the typed ask cannot do: an integer asked as a
- * number, a bound, a pattern. The rule is re-read through the same resolver.
+ * number, a `pattern`, a string length (never a numeric bound — the one
+ * validator ignores `minimum` / `maximum`). The rule is re-read through the
+ * same resolver.
  * `expected` names what a misfit failed — the schema's expectation, never the
  * answer.
  */

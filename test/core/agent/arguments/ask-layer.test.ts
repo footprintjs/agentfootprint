@@ -194,10 +194,16 @@ describe('the batch ask — ONE ask for everything the batch left out, before an
         ['c1', 'missing', undefined],
         ['c2', 'missing', undefined],
       ]);
-      // The standing reads ASK while the question is out.
+      // The standing reads ASK while the question is out — witnessed by the ask's
+      // own state AND by each `asked` row it is waiting on.
       const waiting = await agent.assessment();
       expect(waiting?.standing).toBe('ask');
       expect(waiting?.reasons.map((r) => r.reason)).toEqual(['argument-asked']);
+      expect(waiting?.reasons[0]!.witness).toEqual([
+        { kind: 'state', key: 'argumentAsk', path: '/waiting/requestId' },
+        { kind: 'state', key: 'findingsLedger', path: '/0/asked' },
+        { kind: 'state', key: 'findingsLedger', path: '/1/asked' },
+      ]);
 
       const done = await agent.resume(stored(paused), replyTo(paused, { f1: '24h' }));
       expect(done).toBe('No errors on either.');
@@ -592,7 +598,11 @@ describe('the readers of a pause', () => {
 });
 
 describe('the evidence gate learns the answers', () => {
-  it('an answer that states the answered period is not flagged', async () => {
+  // The period is spelled so the gate reads it as DATA: a number glued to a unit is
+  // judged on its number, which needs 4 digits (`evidence/extract.ts`) — `1440m`. A
+  // `7d` is never a candidate, so a test on it passes with the exemption removed.
+  // The result never echoes the period: only the person's answer carries it.
+  async function unsupported(viaAsk: boolean): Promise<string[]> {
     const tool = defineTool({
       name: 'search_logs',
       description: 'd',
@@ -600,25 +610,34 @@ describe('the evidence gate learns the answers', () => {
         type: 'object',
         properties: {
           service: { type: 'string' },
-          window: { type: 'string', enum: ['1h', '24h', '7d'] },
+          window: { type: 'string', enum: ['1440m', '4320m'] },
         },
       },
-      askOrAssume: { window: { ask: 'Which period?', choices: ['1h', '24h', '7d'] } },
-      // The result does not echo the period — only the person's answer carries it.
+      askOrAssume: { window: { ask: 'Which period?', choices: ['1440m', '4320m'] } },
       execute: async () => ({ errors: 3 }),
     });
     const m = scripted([
-      batch({ id: 'c1', name: 'search_logs', args: { service: 'checkout' } }),
-      answer('3 errors on checkout in the last 7d.'),
+      batch({
+        id: 'c1',
+        name: 'search_logs',
+        // The control: the MODEL sends the value, so nobody answered it.
+        args: viaAsk ? { service: 'checkout' } : { service: 'checkout', window: '1440m' },
+      }),
+      answer('3 errors on checkout in the last 1440m.'),
     ]);
     const agent = Agent.create({ provider: m.provider as never, model: 'm' })
       .tool(tool)
       .namesAndNumbersFromEvidence({ posture: 'assist' } as never)
       .build();
-    const paused = await agent.run({ message: 'errors on checkout?' });
-    await agent.resume(stored(paused), replyTo(paused, { f1: '7d' }));
-    const state = agent.getSnapshot()?.sharedState as { unsupportedValues?: unknown };
-    expect(state.unsupportedValues).toBeUndefined();
+    const out = await agent.run({ message: 'errors on checkout?' });
+    if (viaAsk) await agent.resume(stored(out), replyTo(out, { f1: '1440m' }));
+    return (agent.unsupportedValues()?.values ?? []).map((v) => v.value);
+  }
+
+  it('an answer that states the answered period is not flagged — the same value the model chose IS', async () => {
+    // The gate judges a number glued to a unit on its number.
+    expect(await unsupported(false)).toContain('1440');
+    expect(await unsupported(true)).toEqual([]);
   });
 });
 
@@ -799,7 +818,10 @@ describe('SECURITY', () => {
     );
   });
 
-  it('a hidden argument’s answer is on no row, event, note or ask context', async () => {
+  // Every OTHER surface — the resume event, every event, the recording, the snapshot,
+  // the narrative, the served messages — is swept with a value no schema carries in
+  // `ask-review.test.ts` (SECURITY): this `7d` is also an enum choice every request serves.
+  it('a hidden argument’s answer is on no row, argument event, note or ask context', async () => {
     const ran: Record<string, unknown>[] = [];
     const hiding = searchLogs(ran, {
       [SHOWN_ARGS]: (args: Record<string, unknown>) =>

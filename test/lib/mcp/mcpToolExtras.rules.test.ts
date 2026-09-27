@@ -188,6 +188,18 @@ describe('edge — a rule this library cannot apply is warned once and DROPPED',
     expect(warnSpy).not.toHaveBeenCalled();
   });
 
+  it('an `ask` rule with a choice the typed ask cannot offer is warned once and DROPPED — never a failed run', () => {
+    // A server's rule over a free-text argument: '' passes the property's schema (no
+    // minLength), and the typed ask would refuse it at the ask, failing the client's run.
+    const read = readToolExtras(
+      bag({ askOrAssume: { host: { ask: 'Which host?', choices: ['db-1', ''] } } }),
+      origin,
+    );
+    expect(read).toEqual({});
+    expect(warnSpy).toHaveBeenCalledTimes(1);
+    expect(String(warnSpy.mock.calls[0]![0])).toContain('askOrAssume.host.choices[1]');
+  });
+
   it('an `ask` rule whose choice the schema rejects is warned once and DROPPED', () => {
     const read = readToolExtras(
       bag({ askOrAssume: { time_range: { ask: 'Which period?', choices: ['1h', '9h'] } } }),

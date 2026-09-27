@@ -78,6 +78,7 @@ import {
 import { findingsLedgerPiece } from '../src/core/agent/findings/serve.js';
 import {
   filledNote,
+  keptAnswersNote,
   secondPauseRefusal,
   unansweredRefusal,
   unmountedRulesRefusal,
@@ -1498,11 +1499,17 @@ const PRODUCERS: readonly ModelFacingProducer[] = [
       /the person's answers for limit did not fit what the tool accepts \(limit: integer\)/,
       /its check-in consent gate needed a person’s approval for those arguments/,
       /the tool asked to pause for a person, and this batch had already paused once/,
+      // The review of step 4: a refused call's answers are KEPT, and the model is told so.
+      /The person's answer for window was kept for the next purge_logs call that leaves it out, so the call may be proposed again without window\./,
+      /The person's answers for window and limit were kept for the next export_logs call that leaves them out, so the call may be proposed again without them\./,
     ],
     compose: async () => [
       unansweredRefusal('top_talkers', [{ argument: 'limit', expected: 'integer' }]),
       secondPauseRefusal('purge_logs', 'check-in'),
       secondPauseRefusal('collect_window', 'tool-pause'),
+      secondPauseRefusal('purge_logs', 'check-in') + keptAnswersNote('purge_logs', ['window']),
+      secondPauseRefusal('export_logs', 'tool-pause') +
+        keptAnswersNote('export_logs', ['window', 'limit']),
     ],
   },
   {

@@ -1977,6 +1977,20 @@ export interface AgentState {
    * event or a lens view.
    */
   argumentAsk?: import('./arguments/ask.js').ArgumentAskState;
+  /**
+   * The person's answers to the inputs layer's ask that a call could NOT use
+   * (honesty layer 2): the batch that asked resumes with the answer and has
+   * no second pause to give, so a call of it that needs a person again — its
+   * check-in, a middleware `ask`, a credential consent, the tool's own pause —
+   * is refused, and its answered values are kept here. The next call of the
+   * same tool that leaves the same argument out, this turn, runs with the
+   * kept answer (filed `answered`, no second question), and the batch that
+   * fills from it drops it (`arguments/kept.ts`). Written by ToolCalls only,
+   * only when such a refusal happens; read by the inputs layer's mount.
+   * Working state: it holds the RAW answers, because the call must run with
+   * them — never a row, an event or a lens view.
+   */
+  argumentAnswersKept?: readonly import('./arguments/kept.js').KeptAnswer[];
 
   // ── Tool choice by classifier (`.toolChoice()`) ───────────────
   /**

@@ -90,6 +90,17 @@ describe('assertAskOrAssume — every refusal names the tool and the argument', 
     ['an empty choice list', { window: { ask: 'Which?', choices: [] } }],
     ['a repeated choice', { window: { ask: 'Which?', choices: ['1h', '1h'] } }],
     ['a choice outside the enum', { window: { ask: 'Which?', choices: ['9h'] } }],
+    // The typed ask's own field rule (`core/inputRequest.ts` · `isInputFieldValue`), judged at
+    // definition — before the step-4 review these passed here and failed the RUN at the ask.
+    [
+      'a blank choice the typed ask cannot offer',
+      { service: { ask: 'Which?', choices: ['', 'x'] } },
+    ],
+    ['a whitespace choice', { service: { ask: 'Which?', choices: ['  ', 'x'] } }],
+    [
+      'a choice longer than the typed ask carries',
+      { service: { ask: 'Which?', choices: ['x', 'y'.repeat(5000)] } },
+    ],
     [
       'a phrase with no token',
       { window: { ask: 'Which?', choices: [{ value: '24h', said: ['—'] }] } },
@@ -141,6 +152,13 @@ describe('assertAskOrAssume — every refusal names the tool and the argument', 
   it('names the argument in the refusal', () => {
     expect(refusal({ window: { assume: '9h' } })).toContain('askOrAssume.window.assume');
     expect(refusal({ tags: { assume: 'x' } })).toContain('askOrAssume.tags');
+  });
+
+  it('names the choice the typed ask cannot offer, and the rule it breaks', () => {
+    const message = refusal({ service: { ask: 'Which?', choices: ['prod', '   '] } });
+    expect(message).toContain('askOrAssume.service.choices[1]');
+    expect(message).toContain('cannot be offered by the typed ask');
+    expect(message).toContain('at most 4096 characters');
   });
 
   it('refuses more than 32 ask arguments', () => {

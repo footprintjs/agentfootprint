@@ -19,6 +19,7 @@
  * | The value                               | `assume` rule                   | `ask` rule                        |
  * |-----------------------------------------|---------------------------------|-----------------------------------|
  * | missing                                 | `default` — fill the default    | `asked: 'missing'` — ask, once per batch |
+ * | missing, an answer KEPT for it (`kept.ts`) | —                            | `answered` — fill the person's kept answer |
  * | present, equal to the declared default  | `default` — run (model's value) | — (an `ask` rule has no default)  |
  * | present, any other value                | `model` — run, flagged          | `model` — run, flagged (adopted Q2) |
  *
@@ -31,14 +32,26 @@
  * value is unverified, and asking would fire on nearly every call — it runs,
  * flagged `model`. A missing one is asked: RESOLVE names it on the call's
  * entry (`ask`), and ToolCalls raises the ONE typed ask for the whole batch
- * before anything in it runs (`arguments/ask.ts`). A call whose tool's rules
- * cannot be read at dispatch is refused, never run unruled and never repaired.
+ * before anything in it runs (`arguments/ask.ts`). A missing one the person
+ * already answered for a call the batch that asked could not finish — its
+ * answer KEPT (`kept.ts`: that batch had no second pause to give) — is filled
+ * with the kept answer instead of asked again, and filed `answered`. A call
+ * whose tool's rules cannot be read at dispatch is refused, never run unruled
+ * and never repaired.
  */
 
 import type { InputValue } from '../../inputRequest.js';
 import { shownArgsOf } from '../../toolShownArgs.js';
+import { validatePropertyValue } from '../toolArgsValidation.js';
 import { isMissing, isRefused, rulesOf, sameArgumentValue, type RuledToolLike } from './declare.js';
-import { argumentRowOf, askedRowOf, type ArgumentRow } from './rows.js';
+import { keptAnswerFor, type KeptAnswer } from './kept.js';
+import {
+  HIDDEN_VALUE,
+  answeredRowOf,
+  argumentRowOf,
+  askedRowOf,
+  type ArgumentRow,
+} from './rows.js';
 import { unreadableRulesRefusal } from './serve.js';
 
 /** One call of the batch, as the model emitted it (its raw arguments). */
@@ -76,8 +89,12 @@ export interface CheckedArgument {
   readonly rule: 'ask' | 'assume';
   readonly period?: true;
   /** Where the value came from — absent exactly on an argument to ASK (`asked`). */
-  readonly source?: 'default' | 'model';
-  /** The library fills the declared default: the call left the argument out. */
+  readonly source?: 'default' | 'model' | 'answered';
+  /**
+   * The library fills the value — the call left the argument out: the declared
+   * default (`source: 'default'`), or the person's answer KEPT for this
+   * (tool, argument) (`source: 'answered'`, `kept.ts`).
+   */
   readonly filled?: true;
   /** The call left an `ask` argument out: the person is asked, once per batch. */
   readonly asked?: 'missing';
@@ -163,15 +180,53 @@ function declaredDefault(
 }
 
 /**
+ * The person's answer KEPT for one `ask`-ruled (tool, argument) this turn
+ * (`kept.ts`), when it still fits the property's own schema on the
+ * implementation that will run — re-checked by the same validator the answer
+ * passed when it was bound; one that no longer fits is not used, and the
+ * value is asked for as usual.
+ */
+function keptValue(
+  toolOf: ToolOf,
+  kept: readonly KeptAnswer[] | undefined,
+  toolName: string,
+  argument: string,
+): InputValue | undefined {
+  const answer = keptAnswerFor(kept, toolName, argument);
+  if (answer === undefined) return undefined;
+  const properties = toolOf(toolName)?.schema.inputSchema?.properties;
+  const property =
+    typeof properties === 'object' && properties !== null
+      ? (properties as Record<string, unknown>)[argument]
+      : undefined;
+  const schema =
+    typeof property === 'object' && property !== null
+      ? (property as Readonly<Record<string, unknown>>)
+      : undefined;
+  return validatePropertyValue(answer.value, schema).ok ? answer.value : undefined;
+}
+
+/** A free-text `ask` field — a string with no declared choices: the person typed a name. */
+function isFreeAsk(toolOf: ToolOf, toolName: string, argument: string): boolean {
+  const rules = rulesOf(toolOf(toolName));
+  if (rules === undefined || isRefused(rules)) return false;
+  const rule = rules.ruled.find((r) => r.argument === argument);
+  return rule?.type === 'string' && rule.ask !== undefined && rule.ask.choices === undefined;
+}
+
+/**
  * Where each ruled value of each planned call came from, by the table above.
  * Declared sources are not armed in this version, so a present value either IS
  * the declared default (an `assume` rule) or is the model's own; a missing
- * value on an `ask` rule is placed `asked: 'missing'`.
+ * value on an `ask` rule is placed `asked: 'missing'` — or, when this turn
+ * KEPT the person's answer for that (tool, argument) (`kept`), filled with it
+ * and placed `answered`.
  */
 export function verifyPlan(
   plan: readonly PlannedCall[],
   calls: readonly BatchCall[],
   toolOf: ToolOf,
+  kept?: readonly KeptAnswer[],
 ): CheckedArgument[] {
   const byId = callById(calls);
   const checked: CheckedArgument[] = [];
@@ -188,7 +243,13 @@ export function verifyPlan(
         ...(p.period === true && { period: true as const }),
       };
       if (p.rule === 'ask') {
-        checked.push(p.missing ? { ...base, asked: 'missing' } : { ...base, source: 'model' });
+        if (!p.missing) {
+          checked.push({ ...base, source: 'model' });
+        } else if (keptValue(toolOf, kept, planned.toolName, p.argument) !== undefined) {
+          checked.push({ ...base, source: 'answered', filled: true });
+        } else {
+          checked.push({ ...base, asked: 'missing' });
+        }
         continue;
       }
       const assumed = declaredDefault(toolOf, planned.toolName, p.argument);
@@ -211,13 +272,16 @@ export function verifyPlan(
  * One row per checked argument, its value in the tool's OWN argument view
  * (`shownArgsOf`) — a fill is shown as the call will run with it, a model's
  * value as the model sent it; an argument to ASK has no value yet, so its row
- * carries none. The raw value never reaches a row.
+ * carries none; a kept answer files `answered` (`free` for a free-text
+ * field), exactly as the answer did when the person gave it. The raw value
+ * never reaches a row.
  */
 export function rowsOf(
   checked: readonly CheckedArgument[],
   calls: readonly BatchCall[],
   toolOf: ToolOf,
   stamp: { readonly turn: number; readonly iteration: number },
+  kept?: readonly KeptAnswer[],
 ): ArgumentRow[] {
   const byId = callById(calls);
   const rows: ArgumentRow[] = [];
@@ -227,6 +291,27 @@ export function rowsOf(
     const tool = toolOf(c.toolName);
     if (c.asked !== undefined) {
       rows.push(askedRowOf(c, stamp));
+      continue;
+    }
+    if (c.filled === true && c.source === 'answered') {
+      const answer = keptValue(toolOf, kept, c.toolName, c.argument);
+      if (answer === undefined) continue;
+      const shown = shownArgsOf(tool, { ...call.args, [c.argument]: answer });
+      rows.push(
+        answeredRowOf(
+          {
+            toolCallId: c.toolCallId,
+            toolName: c.toolName,
+            argument: c.argument,
+            rule: 'ask',
+            ...(c.period === true && { period: true as const }),
+            // A name nothing answers has no view to ask — shown as hidden, never raw.
+            shownValue: tool === undefined ? HIDDEN_VALUE : shown[c.argument],
+            ...(isFreeAsk(toolOf, c.toolName, c.argument) && { free: true as const }),
+          },
+          stamp,
+        ),
+      );
       continue;
     }
     if (c.filled === true) {
@@ -241,7 +326,9 @@ export function rowsOf(
       argumentRowOf(
         {
           ...c,
-          source: c.source ?? 'model',
+          // A present value: the declared default the model sent itself, or the model's own
+          // (`answered` is only ever a FILL, handled above).
+          source: c.source === 'default' ? 'default' : 'model',
           shownValue: shown,
           ...(c.source === 'default' && { shownProposed: shown }),
         },
@@ -255,16 +342,17 @@ export function rowsOf(
 // ─── RESOLVE ────────────────────────────────────────────────────────────
 
 /**
- * What ToolCalls applies: per call, the declared defaults to fill and the
- * `ask` arguments to ask the person for, or — for a call whose rules could not
- * be read — the sentence it reads instead of running. Nothing for a call that
- * runs as the model sent it.
+ * What ToolCalls applies: per call, the declared defaults and the kept answers
+ * to fill and the `ask` arguments to ask the person for, or — for a call whose
+ * rules could not be read — the sentence it reads instead of running. Nothing
+ * for a call that runs as the model sent it.
  */
 export function resolutionsOf(
   plan: readonly PlannedCall[],
   checked: readonly CheckedArgument[],
   toolOf: ToolOf,
   iteration: number,
+  kept?: readonly KeptAnswer[],
 ): ArgumentResolution[] {
   const resolutions: ArgumentResolution[] = [];
   for (const planned of plan) {
@@ -285,6 +373,13 @@ export function resolutionsOf(
         continue;
       }
       if (c.filled !== true) continue;
+      if (c.source === 'answered') {
+        const answer = keptValue(toolOf, kept, c.toolName, c.argument);
+        if (answer !== undefined) {
+          fills.push({ argument: c.argument, value: answer, source: 'answered' });
+        }
+        continue;
+      }
       const value = declaredDefault(toolOf, c.toolName, c.argument);
       if (value !== undefined) fills.push({ argument: c.argument, value, source: 'default' });
     }

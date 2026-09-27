@@ -37,7 +37,7 @@
 
 import { isDevMode } from 'footprintjs';
 
-import type { InputValue } from '../../inputRequest.js';
+import { isInputFieldValue, type InputValue } from '../../inputRequest.js';
 import { canonicalForm, tokenize } from '../evidence/normalize.js';
 import { validatePropertyValue } from '../toolArgsValidation.js';
 
@@ -382,6 +382,16 @@ function assertAskRule(
     const at = `${where}.choices[${i}]`;
     const value = choiceValue(toolName, at, entry);
     assertFitsProperty(toolName, at, value, property);
+    // The typed ask's own field rule (`core/inputRequest.ts` · `isInputFieldValue`):
+    // a choice it cannot offer is refused HERE, by name, never at the ask.
+    if (!isInputFieldValue(value)) {
+      refuse(
+        toolName,
+        at,
+        `${describeValue(value)} cannot be offered by the typed ask — a choice is a ` +
+          'non-blank string of at most 4096 characters, a finite number or a boolean.',
+      );
+    }
     if (values.some((v) => v === value)) {
       refuse(toolName, at, `repeats the value ${describeValue(value)}.`);
     }

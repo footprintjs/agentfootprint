@@ -32,7 +32,11 @@
  * re-entry cannot pause by RETURNING a value, so this batch's one human
  * question has been asked: a later call of the SAME batch that needs a person
  * (a middleware `ask`, a check-in, a credential consent, the tool's own
- * pause) is refused by name — the law every resume door already keeps.
+ * pause) is refused by name — the law every resume door already keeps. The
+ * answers such a call carried are KEPT (`../arguments/kept.ts`), so when the
+ * model proposes it again — leaving the argument out, as the served schema
+ * says — the layer fills the kept answer instead of asking the same question
+ * again, and the call's own step pauses in that batch, which asked nothing.
  */
 
 import { interrupt, type InterruptPayload, type TypedScope } from 'footprintjs';

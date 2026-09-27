@@ -78,6 +78,12 @@ export type ToolChainResult =
       readonly middleware: string;
       readonly args: ToolArgs;
       readonly decisions: MiddlewareDecision[];
+      /**
+       * Set when the link did not deny but ASKED, and `askPolicy: 'refuse'`
+       * turned the ask into this denial — the call needed a person and there
+       * was no pause to carry the question. Absent on every link's own deny.
+       */
+      readonly refusedAsk?: true;
     }
   | {
       readonly kind: 'ask';
@@ -169,7 +175,7 @@ export async function runToolChain(
           `middleware '${mw.name}' asked a person to decide, and there is no pause here to ` +
           `carry that ask: ${outcome.payload.question}`;
         decisions.push(row({ outcome: 'deny', why: reason }));
-        return { kind: 'deny', reason, middleware: mw.name, args, decisions };
+        return { kind: 'deny', reason, middleware: mw.name, args, decisions, refusedAsk: true };
       }
       decisions.push(row({ outcome: 'ask', why: outcome.payload.question }));
       return {

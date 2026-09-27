@@ -49,7 +49,12 @@ import {
   type ArgumentAskState,
   type AskField,
 } from '../../../../src/core/agent/arguments/ask.js';
-import type { BatchCall, ToolOf } from '../../../../src/core/agent/arguments/resolve.js';
+import type {
+  ArgumentResolution,
+  BatchCall,
+  ToolOf,
+} from '../../../../src/core/agent/arguments/resolve.js';
+import { askBeforeDispatch } from '../../../../src/core/agent/stages/argumentAsk.js';
 import {
   answeredRowOf,
   argumentRowIsWellFormed,
@@ -224,6 +229,55 @@ describe('the one period shape — shared fields and spellings', () => {
     expect(fields).toHaveLength(2);
   });
 
+  it('…and stay separate when the choices are as many but not the same periods', () => {
+    // Every choice of io_profile converts and the lists are the same length — but
+    // '-24h' is not a choice of net_flows: one question would offer the person a
+    // period one of the two tools does not accept.
+    const a = lookbackTool('io_profile', ['1h', '24h'], 'lookback');
+    const b = lookbackTool('net_flows', ['-1h', '-7d'], 'signed-lookback');
+    const fields = planAskFields(
+      [
+        { toolCallId: 'c1', ask: ['window'] },
+        { toolCallId: 'c2', ask: ['window'] },
+      ],
+      [call('c1', 'io_profile'), call('c2', 'net_flows')],
+      toolOfList(a, b),
+    );
+    expect(fields).toHaveLength(2);
+    expect(periodsShareField(fields[0]!, fields[1]!)).toBe(false);
+  });
+
+  it('a shared field lists every member it binds in the reserved context (`sharedWith`)', () => {
+    const a = lookbackTool('io_profile', ['1h', '24h'], 'lookback');
+    const b = lookbackTool('net_flows', ['-1h', '-24h'], 'signed-lookback');
+    const state = initialAskState(
+      1,
+      planAskFields(
+        [
+          { toolCallId: 'c1', ask: ['window'] },
+          { toolCallId: 'c2', ask: ['window'] },
+        ],
+        [call('c1', 'io_profile'), call('c2', 'net_flows')],
+        toolOfList(a, b),
+      ),
+    );
+    const { declaration } = argumentAskDeclaration(state, nextAskRound(state)!);
+    expect(declaration.context).toEqual({
+      [ASK_CONTEXT_KEY]: {
+        ask: 'arguments',
+        fields: [
+          {
+            id: 'f1',
+            tool: 'io_profile',
+            argument: 'window',
+            calls: ['c1'],
+            sharedWith: [{ tool: 'net_flows', argument: 'window', calls: ['c2'] }],
+          },
+        ],
+      },
+    });
+  });
+
   it('an iso-range period never merges — not even with another iso-range', () => {
     const range = '2026-01-01T00:00Z..2026-01-02T00:00Z';
     const a = lookbackTool('packets_a', [range], 'iso-range');
@@ -323,6 +377,34 @@ describe('argumentAskDeclaration — the typed ask for one round', () => {
     const listed = (declaration.context as never)[ASK_CONTEXT_KEY]['fields'][0];
     expect(listed.calls.length + listed.moreCalls).toBe(1200);
   });
+
+  it('a round too wide for the context carries FEWER FIELDS, each listing all its calls; the rest go next', () => {
+    // 32 fields × 40 calls each: all 32 do not fit the context; one alone does. The
+    // round drops FIELDS (asked in the next round) before it shortens any call list.
+    const wide = wideTool(32);
+    const ids = Array.from({ length: 40 }, (_, i) => `call_${String(i).padStart(6, '0')}`);
+    const args = Array.from({ length: 32 }, (_, i) => `a${i}`);
+    const state = initialAskState(
+      1,
+      planAskFields(
+        ids.map((id) => ({ toolCallId: id, ask: args })),
+        ids.map((id) => call(id, wide.schema.name)),
+        toolOfList(wide),
+      ),
+    );
+    expect(state.fields).toHaveLength(32);
+    const { declaration, fieldIndexes } = argumentAskDeclaration(state, nextAskRound(state)!);
+    expect(() => validateInputDeclaration(declaration)).not.toThrow();
+    expect(fieldIndexes.length).toBeGreaterThan(1);
+    expect(fieldIndexes.length).toBeLessThan(32);
+    const listed = (declaration.context as never)[ASK_CONTEXT_KEY]['fields'] as {
+      calls: string[];
+      moreCalls?: number;
+    }[];
+    expect(listed.every((f) => f.calls.length === 40 && f.moreCalls === undefined)).toBe(true);
+    const next = nextAskRound(waitingState(state));
+    expect(next?.fieldIndexes).toHaveLength(32 - fieldIndexes.length);
+  });
 });
 
 describe('judgeAskContextHook — the host’s own context', () => {
@@ -357,6 +439,24 @@ describe('judgeAskContextHook — the host’s own context', () => {
     expect(() =>
       argumentAskDeclaration(state, nextAskRound(state)!, { blob: 'x'.repeat(ASK_CONTEXT_CHARS) }),
     ).toThrow(/exceeds the ask's 16384-character context bound/);
+  });
+  it('a hook object that fits alone but leaves no room for the library’s own entry is refused by name', () => {
+    const tool = lookbackTool('search_logs', ['1h'], 'lookback');
+    const state = initialAskState(
+      1,
+      planAskFields(
+        [{ toolCallId: 'c1', ask: ['window'] }],
+        [call('c1', 'search_logs')],
+        toolOfList(tool),
+      ),
+    );
+    // Exactly at the bound with the reserved key's empty entry: the hook check passes,
+    // and the one field's entry then pushes the context over.
+    const empty = JSON.stringify({ blob: '', [ASK_CONTEXT_KEY]: { ask: 'arguments', fields: [] } });
+    const host = { blob: 'x'.repeat(ASK_CONTEXT_CHARS - empty.length) };
+    expect(() => argumentAskDeclaration(state, nextAskRound(state)!, host)).toThrow(
+      /argumentAskContext: the returned object leaves no room for the library's own entry/,
+    );
   });
 });
 
@@ -706,5 +806,55 @@ describe('LOAD — a batch that needs 40 fields', () => {
     const settled = settledCalls(state);
     expect(settled.get('c1')!.fills).toHaveLength(32);
     expect(settled.get('c2')!.fills).toHaveLength(8);
+  });
+});
+
+// ─── EDGE — the stage glue reads only THIS batch's state ───────────────
+
+describe('askBeforeDispatch — a state another batch left is never this batch’s', () => {
+  it('a waiting state stamped with another iteration is ignored: THIS batch is planned and asked', () => {
+    const tool = lookbackTool('search_logs', ['1h', '24h'], 'lookback');
+    const toolOf = toolOfList(tool);
+    // A question left out by batch 1 (iteration 1) — never this batch's to answer.
+    const stale = waitingState(
+      initialAskState(
+        1,
+        planAskFields([{ toolCallId: 'c1', ask: ['window'] }], [call('c1', 'search_logs')], toolOf),
+      ),
+    );
+    const store: Record<string, unknown> = { argumentAsk: stale };
+    const scope = {
+      $getValue: (key: string) => store[key],
+      iteration: 2,
+      turnNumber: 1,
+      turnStartMs: 0,
+      userMessage: 'errors?',
+      llmLatestToolCalls: [{ id: 'c9', name: 'search_logs', args: { host: 'db-1' } }],
+      get argumentAsk() {
+        return store.argumentAsk;
+      },
+      set argumentAsk(value: unknown) {
+        store.argumentAsk = value;
+      },
+    };
+    const resolutions = new Map<string, ArgumentResolution>([
+      ['c9', { toolCallId: 'c9', iteration: 2, ask: ['window'] }],
+    ]);
+    let thrown: unknown;
+    try {
+      askBeforeDispatch(scope as never, resolutions, { toolOf, runId: () => 'run-x' });
+    } catch (error) {
+      thrown = error;
+    }
+    // The pause is a FRESH ask for batch 2's own call — not batch 1's question.
+    expect((thrown as Error).name).toBe('InterruptSignal');
+    const awaiting = (
+      thrown as { payload: { awaitingInput: { requestId: string; context: unknown } } }
+    ).payload.awaitingInput;
+    expect(awaiting.requestId).toBe('run-x:arguments:2:1');
+    expect(awaiting.context).toMatchObject({
+      [ASK_CONTEXT_KEY]: { fields: [{ tool: 'search_logs', argument: 'window', calls: ['c9'] }] },
+    });
+    expect((store.argumentAsk as ArgumentAskState).iteration).toBe(2);
   });
 });

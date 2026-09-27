@@ -121,9 +121,11 @@ import { toolBytesOf } from '../../../lib/toolBytes.js';
 import { buildToolResolver, type ToolResolution } from './toolResolver.js';
 import type { ArgumentFill, ArgumentResolution } from '../arguments/resolve.js';
 import { rulesOf } from '../arguments/declare.js';
+import { keptThisTurn, withKept, withoutUsed } from '../arguments/kept.js';
 import {
   filledNote,
   hidesArgument,
+  keptAnswersNote,
   secondPauseRefusal,
   unmountedRulesRefusal,
   type FilledArgument,
@@ -1392,6 +1394,62 @@ function withFills(args: ToolArgs, resolution: ArgumentResolution | undefined): 
   const filled: Record<string, unknown> = { ...args };
   for (const fill of fills) filled[fill.argument] = fill.value;
   return filled;
+}
+
+/**
+ * KEPT ANSWERS, USED (honesty layer 2, step 4 — `../arguments/kept.ts`): the
+ * (tool, argument) pairs this batch's calls fill from an answer the turn kept
+ * are dropped from `argumentAnswersKept` — a kept answer is used once. Called
+ * before the batch ask merges its own answers, so a fill that is `answered`
+ * here came from a kept answer and nothing else; a batch that fills none never
+ * reads the key. A re-run after an interrupt finds them already dropped and
+ * writes nothing.
+ */
+function dropUsedKept(
+  scope: TypedScope<AgentState>,
+  resolutions: ReadonlyMap<string, ArgumentResolution>,
+  calls: readonly { readonly id: string; readonly name: string }[],
+): void {
+  const nameOf = new Map(calls.map((c) => [c.id, c.name]));
+  const used: { toolName: string; argument: string }[] = [];
+  for (const entry of resolutions.values()) {
+    const toolName = nameOf.get(entry.toolCallId);
+    if (toolName === undefined) continue;
+    for (const fill of entry.fills ?? []) {
+      if (fill.source === 'answered') used.push({ toolName, argument: fill.argument });
+    }
+  }
+  if (used.length === 0) return;
+  const turn = scope.turnNumber as number;
+  const before = scope.$getValue('argumentAnswersKept') as unknown;
+  const left = withoutUsed(before, turn, used);
+  if ((left?.length ?? 0) === keptThisTurn(before, turn).length) return;
+  scope.argumentAnswersKept = left;
+}
+
+/**
+ * KEEP a refused call's answers (honesty layer 2, step 4 — `../arguments/kept.ts`):
+ * in a batch whose one human question was the inputs layer's ask, a call that
+ * needed a person again was just refused — so the answered values it carried
+ * (the batch ask's, or a kept one it filled from) are kept for the call the
+ * model proposes next, which would otherwise leave the argument out and be
+ * asked the same question again. Returns the argument names kept, for the
+ * model's sentence (`keptAnswersNote`); nothing kept, nothing written.
+ */
+function keepAnswers(
+  scope: TypedScope<AgentState>,
+  toolName: string,
+  resolution: ArgumentResolution | undefined,
+): readonly string[] {
+  const answered = (resolution?.fills ?? []).filter((f) => f.source === 'answered');
+  if (answered.length === 0) return [];
+  scope.argumentAnswersKept = withKept(
+    scope.$getValue('argumentAnswersKept') as unknown,
+    scope.turnNumber as number,
+    toolName,
+    answered,
+  );
+  return answered.map((f) => f.argument);
 }
 
 /** The fills as the note may print them — a value the tool's view hides is never printed. */
@@ -3727,6 +3785,10 @@ export function buildToolCallsHandler(
       // THE INPUTS LAYER'S RESOLUTIONS for this batch (honesty layer 2) — read
       // only under the arm, and only the entries resolved for THIS iteration.
       let resolutions = deps.inputsLayer === true ? resolutionsFor(scope, iteration) : undefined;
+      // A fill the layer took from an answer this turn KEPT (a call of the
+      // batch that asked could not finish) is that answer's one use — dropped
+      // before anything else (`dropUsedKept`, `../arguments/kept.ts`).
+      if (resolutions !== undefined) dropUsedKept(scope, resolutions, toolCalls);
       // ── THE BATCH ASK (honesty layer 2, step 4) — FIRST, before anything
       // is written or dispatched: when the layer named an `ask` argument a
       // call of this batch left out, the person is asked ONCE for everything
@@ -4217,7 +4279,12 @@ export function buildToolCallsHandler(
           chainedArgs = chain.args;
           if (chain.kind === 'deny') {
             denied = true;
-            result = chain.reason;
+            // A link that ASKED, refused by the one-question law: the person's
+            // answers this call carried are kept for its next proposal.
+            result =
+              chain.refusedAsk === true && oneQuestionAsked
+                ? chain.reason + keptAnswersNote(tc.name, keepAnswers(scope, tc.name, resolution))
+                : chain.reason;
           } else if (chain.kind === 'ask') {
             // The typed half of the question (9.24.0), judged BEFORE anything
             // is committed: a component the screen could not render must
@@ -4387,7 +4454,11 @@ export function buildToolCallsHandler(
             // The gate's question is not asked and the tool does not run.
             checkInRefused = true;
             error = true;
-            result = secondPauseRefusal(tc.name, 'check-in');
+            // The person's answers the call carried are kept for its next
+            // proposal, where the check-in pauses as it always does.
+            result =
+              secondPauseRefusal(tc.name, 'check-in') +
+              keptAnswersNote(tc.name, keepAnswers(scope, tc.name, resolution));
           } else {
             // The tool's declared decision component (9.24.0), judged BEFORE
             // the evidence pack is assembled — a gate that cannot be honored
@@ -4559,6 +4630,12 @@ export function buildToolCallsHandler(
                 // side channel and `Agent.finalizeResult` raises.
                 error = true;
                 result = modelRefusal(need.credential);
+                // Under `'pause'`, reached only in the batch that asked: the
+                // person's answers the call carried are kept, so a call the
+                // model proposes again runs with them and pauses for consent
+                // in a batch that asked nothing (its sentence stays the
+                // credential's own — the service is the subject).
+                if (onAuthorizationRequired === 'pause') keepAnswers(scope, tc.name, resolution);
                 deps.reportConsentOutstanding?.({
                   service: need.credential,
                   authorizationUrl: cred.authorizationUrl,
@@ -4839,7 +4916,10 @@ export function buildToolCallsHandler(
               result =
                 raisedMissError ??
                 (isPauseRequest(err)
-                  ? secondPauseRefusal(tc.name, 'tool-pause')
+                  ? // Reached only in the batch that asked: the answers the call
+                    // carried are kept for its next proposal.
+                    secondPauseRefusal(tc.name, 'tool-pause') +
+                    keptAnswersNote(tc.name, keepAnswers(scope, tc.name, resolution))
                   : err instanceof Error
                   ? err.message
                   : String(err));

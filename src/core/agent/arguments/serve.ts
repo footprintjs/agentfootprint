@@ -278,6 +278,41 @@ export function secondPauseRefusal(toolName: string, why: 'check-in' | 'tool-pau
   );
 }
 
+// LENS · tool-result · persistent-history
+// reads: the tool's name and the NAMES of the arguments whose answers the refused call carried
+//        (`kept.ts` keeps their values)
+// law: past tense, anchored to the call it was composed on, so a later call of the turn re-reading it
+// (after the kept answer was used) still reads a true sentence; says what the model may do and promises
+// no outcome (a call proposed again may still be denied, refused, paused or asked); prints no value.
+/**
+ * The clause a refusal by the one-question law gains when the refused call
+ * carried the person's answers: they were KEPT for the tool's next call that
+ * leaves those arguments out (`kept.ts`), so the model may propose the call
+ * again without them. Empty when the call carried none.
+ *
+ * @example
+ * ```ts
+ * keptAnswersNote('purge_logs', ['window']);
+ * // " The person's answer for window was kept for the next purge_logs call that leaves it out,
+ * //   so the call may be proposed again without window."
+ * ```
+ */
+export function keptAnswersNote(toolName: string, argumentNames: readonly string[]): string {
+  if (argumentNames.length === 0) return '';
+  if (argumentNames.length === 1) {
+    const [name] = argumentNames;
+    return (
+      ` The person's answer for ${name} was kept for the next ${toolName} call that leaves ` +
+      `it out, so the call may be proposed again without ${name}.`
+    );
+  }
+  const names = `${argumentNames.slice(0, -1).join(', ')} and ${argumentNames.at(-1)}`;
+  return (
+    ` The person's answers for ${names} were kept for the next ${toolName} call that leaves ` +
+    'them out, so the call may be proposed again without them.'
+  );
+}
+
 // ─── The "Assumed" block (under `.limitsTravelWithTheAnswer()`) ───────────
 
 /** The block's opening line. Stable — tests and readers match on it. */
