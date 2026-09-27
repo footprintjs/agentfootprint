@@ -48,7 +48,7 @@ import { validatePropertyValue } from '../toolArgsValidation.js';
  * The phrases are matched as whole tokens, only inside a quote the model
  * declared — never scanned for in the person's words.
  */
-export type ArgumentChoice =
+export type AskChoice =
   | InputValue
   | { readonly value: InputValue; readonly said?: readonly string[] };
 
@@ -59,7 +59,7 @@ export type ArgumentChoice =
  * refused: the batch ask ships with the inputs layer's step 4.
  */
 export type ArgumentRule =
-  | { readonly ask: string; readonly choices?: readonly ArgumentChoice[] }
+  | { readonly ask: string; readonly choices?: readonly AskChoice[] }
   | { readonly assume: InputValue };
 
 /** Per argument name, its rule. Arguments with no rule run free. */
