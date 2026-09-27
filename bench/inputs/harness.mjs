@@ -187,6 +187,18 @@ function describeResult(v) {
   return '';
 }
 
+/** A tool result's own words, as the mock reads them: whole, or up to the library's note. */
+function mockToolWords(content) {
+  if (typeof content !== 'string') return content;
+  try {
+    JSON.parse(content);
+    return content;
+  } catch {
+    const cut = content.lastIndexOf('\n\n[');
+    return cut > 0 ? content.slice(0, cut) : content;
+  }
+}
+
 /** The mock's answer step: its text, or the facts of this turn's results plus an optional period. */
 export function composeMockAnswer(messages, answer) {
   if (answer.text !== undefined) return answer.text;
@@ -197,8 +209,17 @@ export function composeMockAnswer(messages, answer) {
   const parts = [];
   for (const m of messages.slice(lastUser + 1)) {
     if (m.role !== 'tool') continue;
+    // The mock restates facts by PARSING the result, where a model reads words. Under the
+    // `assume` arm the library appends a past-tense note after the tool's own bytes
+    // (`src/core/agent/stages/toolCalls.ts` · `filledNote`, "\n\n[… the call ran with …]"). The
+    // boundary it marks (`LLMMessage.toolChars`) never reaches a provider
+    // (`src/core/agent/composeRequest.ts` · `stripFrameworkFields`), so the mock reads the words
+    // as a model would (`mockToolWords`). Without this a filled call's result stops parsing and
+    // the mock drops facts no model would drop. A content that parses whole is read as before,
+    // so the `off` arm's answers (and `results/mock.json`) do not move.
+    const own = mockToolWords(m.content);
     try {
-      parts.push(describeResult(JSON.parse(m.content)));
+      parts.push(describeResult(JSON.parse(own)));
     } catch {
       // A refusal or a tool error is text, not a result: nothing to restate.
     }
