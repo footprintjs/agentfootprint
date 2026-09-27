@@ -450,7 +450,7 @@ Swarm — see §1 for their recipes. None add primitives.
 **Pipeline:** footprintjs 3 channels → recorder bridges → **`EventDispatcher`** (one per Runner,
 O(1) hash-dispatch, typed `on/off/once` + domain-wildcards + `'*'`, error-isolated) → consumers/Lens.
 
-**121 typed events / 27 domains**, all `agentfootprint.*`: `composition.*`(8) `agent.*`(14 — incl.
+**122 typed events / 27 domains**, all `agentfootprint.*`: `composition.*`(8) `agent.*`(14 — incl.
 `run_configured`, the run-configuration manifest; `budget_exhausted`, what a
 turn that ran out of budget then DID about it; and `grounding_nudged`, the
 staged-refs nudge's one record — the late line itself is request-only)

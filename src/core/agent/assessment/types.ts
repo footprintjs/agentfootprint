@@ -68,10 +68,21 @@ export type AssessmentPointer =
  * - `answer-check-failed` — the app's answer checks (`.answerValidation()`)
  *   failed this answer;
  * - `check-unreachable` — an armed check could not reach a verdict (the
- *   answer checks reported `unverified`).
+ *   answer checks reported `unverified`);
+ * - `argument-assumed` — a call of this turn ran on a value a tool's rule
+ *   assumed (an `argument` row with `source: 'default'` — the library filled
+ *   the declared default, or the model sent that same default), or a
+ *   before-tool middleware rewrote a ruled argument without declaring where
+ *   the value came from (honesty layer 2);
+ * - `argument-unverified` — a call of this turn ran on a value of a ruled
+ *   argument the record does not trace to the person, a result or the app
+ *   (an `argument` row with `source: 'model'`), or a declared source that
+ *   failed its check (honesty layer 2).
  */
 export type AssessmentReason =
   | 'asked'
+  | 'argument-assumed'
+  | 'argument-unverified'
   | 'declared-absent'
   | 'coverage-gap'
   | 'empty-undeclared'
@@ -94,9 +105,13 @@ export type AssessmentReason =
  *   history;
  * - `names-and-numbers` — the evidence gate's verdict, when it is committed
  *   (today only a flagged verdict is: `unsupportedValues`);
- * - `answer-checks` — the app's answer checks (`answerValidation`).
+ * - `answer-checks` — the app's answer checks (`answerValidation`);
+ * - `argument-rules` — the ruled arguments of this turn's calls that the
+ *   inputs layer filed a verdict on (honesty layer 2), of the same — every
+ *   `argument` row IS a verdict; present only when the layer filed one.
  */
 export type AssessmentCheck =
+  | 'argument-rules'
   | 'tool-coverage'
   | 'result-shape'
   | 'names-and-numbers'

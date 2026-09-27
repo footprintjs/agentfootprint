@@ -186,7 +186,15 @@ export async function runToolChain(
       const before = args;
       args = outcome.value;
       decisions.push(
-        row({ changed: true, ...(outcome.why && { why: outcome.why }), before, after: args }),
+        row({
+          changed: true,
+          ...(outcome.why && { why: outcome.why }),
+          before,
+          after: args,
+          // The middleware's own declaration of where the values came from —
+          // present only when it declared one (honesty layer 2).
+          ...(outcome.from !== undefined && { from: outcome.from }),
+        }),
       );
     } else {
       // `allow(undefined, why)` — nothing moved, and the link said why it was

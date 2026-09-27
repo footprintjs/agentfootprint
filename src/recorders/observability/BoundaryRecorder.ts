@@ -480,6 +480,7 @@ const AGENT_INTERNAL_LOCAL_IDS: ReadonlySet<string> = new Set<string>([
   SUBFLOW_IDS.CACHE, // v2.14 — per-turn cache decision wrapper; pure plumbing
   SUBFLOW_IDS.CACHE_DECISION, // v2.6 — emits cacheMarkers; not a user step
   SUBFLOW_IDS.THINKING, // v2.14 — normalize result lands on parent LLM step
+  SUBFLOW_IDS.INPUTS, // the inputs layer — its verdicts ride the ledger rows and their event
   // Decider stage ids (the same set is used to filter `decision.branch`
   // events whose deciding stage is plumbing rather than user-facing).
   STAGE_IDS.CACHE_GATE, // v2.6 — apply-markers / no-markers routing; plumbing

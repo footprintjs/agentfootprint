@@ -41,7 +41,12 @@ import type { AttributionUnit } from '../lib/influence-core/types.js';
 export interface CheckInRequest {
   /** The tool the agent wants to run (its name). */
   readonly tool: string;
-  /** The arguments the model proposed for this call. */
+  /**
+   * The arguments the call will run with: the model's proposal, with any value
+   * the inputs layer filled (a tool's `askOrAssume` `assume` rule) and any
+   * before-tool middleware rewrite applied — what a person approves is what
+   * runs.
+   */
   readonly args: Readonly<Record<string, unknown>>;
   /**
    * The model's stated reasoning for THIS call, when the assistant turn

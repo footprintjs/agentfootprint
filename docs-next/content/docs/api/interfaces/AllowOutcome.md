@@ -22,6 +22,21 @@ before?".
 
 ## Properties
 
+### from?
+
+> `readonly` `optional` **from?**: `Readonly`\<`Record`\<`string`, `"person"` \| `"default"` \| `"app"`\>\>
+
+Defined in: [src/core/agent/middleware/types.ts:100](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/middleware/types.ts#L100)
+
+WHERE the rewritten arguments' values came from, per argument name — the
+middleware's own declaration (`allow(args, why, { from })`), recorded on
+the decision row. Read by the answer's standing for an argument a tool's
+`askOrAssume` rules (honesty layer 2): a rewrite with no declared origin,
+or with `'default'`, reads as ASSUMED; `'person'` and `'app'` do not.
+Declared, never inferred. Present only when the middleware declared it.
+
+***
+
 ### kind
 
 > `readonly` **kind**: `"allow"`

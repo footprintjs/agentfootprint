@@ -48,6 +48,31 @@ async function mockRun(caseId: string, label: string) {
   return { raw, row: readRun(raw) };
 }
 
+describe('INTEGRATION — the scripted mock under the assume arm reads through the library note', () => {
+  it('a filled call keeps its facts: the mock restates the tool words, not the note', async () => {
+    const caseDef = caseById('p1-checkout-errors');
+    const label = 'leaves the period out; states no window';
+    const rep = caseDef.mock.findIndex((v: any) => v.label === label);
+    const raw = await runCase({
+      doors,
+      caseDef,
+      arm: 'assume',
+      rep,
+      provider: 'mock',
+      model: 'mock',
+    });
+    const row = readRun(raw);
+    expect(row.periodCalls).toEqual([
+      expect.objectContaining({ origin: 'omitted', ranWith: '2h', cls: 'default-unchosen' }),
+    ]);
+    // The result the mock read carried the note (so the fill really happened) …
+    const tool = raw.recording.snapshot.sharedState.history.find((m: any) => m.role === 'tool');
+    expect(tool.content).toMatch(/\n\n\[window was not in the search_logs call/);
+    // … and the answer still restates both facts.
+    expect(row.answer).toMatchObject({ factsExpected: 2, factsFound: 2 });
+  });
+});
+
 describe('INTEGRATION — each provoking shape lands in its class on a real run', () => {
   it(
     'P1: a default left out, a default sent, a period the model picked, a question in prose',
@@ -278,10 +303,23 @@ describe('FUNCTIONAL — the record the bench keeps', () => {
   });
 
   it('a declared arm the library drops is refused — never run unarmed', () => {
-    expect(() => buildTools(doors, 'assume', [], { turn: 0 })).toThrow(
+    // A defineTool that drops the declaration is refused by the harness, not run unarmed.
+    const dropping = {
+      ...doors,
+      defineTool: (spec: any) =>
+        doors.defineTool({ ...spec, askOrAssume: undefined, period: undefined }),
+    };
+    expect(() => buildTools(dropping, 'assume', [], { turn: 0 })).toThrow(
       /arm 'assume': this build's defineTool dropped `askOrAssume` on search_logs .* Refusing to run the arm unarmed/,
     );
-    expect(() => buildTools(doors, 'ask', [], { turn: 0 })).toThrow(/\(step 4\)/);
+    // Step 3's build declares `assume` on the three period tools and keeps it.
+    expect(
+      buildTools(doors, 'assume', [], { turn: 0 })
+        .filter((t: any) => t.askOrAssume !== undefined)
+        .map((t: any) => t.schema.name),
+    ).toEqual(['search_logs', 'io_profile', 'net_flows']);
+    // `ask` is refused by the library itself until step 4 ships the one ask per batch.
+    expect(() => buildTools(doors, 'ask', [], { turn: 0 })).toThrow(/step 4/);
     expect(buildTools(doors, 'off', [], { turn: 0 }).map((t: any) => t.schema.name)).toEqual([
       'search_logs',
       'io_profile',

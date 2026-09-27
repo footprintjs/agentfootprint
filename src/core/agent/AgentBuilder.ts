@@ -338,6 +338,10 @@ export class AgentBuilder {
    *  function the final branch mounts — which is what makes the feature
    *  byte-identical when unused. The recording half is unconditional. */
   private limitsTravelValue = false;
+  /** `.inputsLayer()` (honesty layer 2). False for every agent that did not
+   *  ask for it; a REGISTERED ruled tool arms the layer on its own, so this
+   *  is only for ruled tools a ToolProvider serves. */
+  private inputsLayerValue = false;
 
   private outputSchemaRetries = 0;
   private outputSchemaStrategy: OutputSchemaStrategy = 'instruct';
@@ -1920,6 +1924,41 @@ export class AgentBuilder {
   }
 
   /**
+   * Mount the INPUTS LAYER (honesty layer 2) for ruled tools the build cannot
+   * see — tools a `ToolProvider` serves.
+   *
+   * A tool that declares `askOrAssume` (`defineTool({ …, askOrAssume: { window:
+   * { assume: '2h' } } })`) arms the layer by itself when it is REGISTERED on
+   * the agent (`.tool()`, a skill's tools, an MCP tool registered here): the
+   * library fills a value the call leaves out, files it on the findings ledger
+   * as `default`, tells the model in a note on the result, and the answer's
+   * standing says the value was assumed. A ToolProvider's list is only known
+   * per iteration, so the build cannot see its ruled tools — and a ruled tool
+   * met on an agent without the layer is REFUSED rather than run unruled,
+   * because configured-and-inert looks exactly like configured-and-working.
+   * This one line mounts the layer so those tools' rules apply.
+   *
+   * Off → the chart is byte-identical (nothing mounted, decorated, read or
+   * written).
+   *
+   * @example
+   *   const agent = Agent.create({ provider, model })
+   *     .toolProvider(fleetTools)   // lists a tool that declares askOrAssume
+   *     .inputsLayer()
+   *     .build();
+   */
+  inputsLayer(): this {
+    if (this.inputsLayerValue) {
+      throw new Error(
+        'AgentBuilder.inputsLayer: already set. One agent mounts one inputs layer, over every ' +
+          'ruled tool it can call — a second call has nothing left to add. Drop it.',
+      );
+    }
+    this.inputsLayerValue = true;
+    return this;
+  }
+
+  /**
    * Offer a skill's tools **only while that skill is active** (9.36.0). One
    * line, for every skill on the agent.
    *
@@ -3066,7 +3105,8 @@ export class AgentBuilder {
       this.maxIterationsOverride !== undefined ||
       this.findingsValue !== undefined ||
       this.toolChoiceValue !== undefined ||
-      this.ontologyValue !== undefined
+      this.ontologyValue !== undefined ||
+      this.inputsLayerValue
         ? {
             ...this.opts,
             ...(this.maxIterationsOverride !== undefined && {
@@ -3077,6 +3117,8 @@ export class AgentBuilder {
             ...(this.toolChoiceValue !== undefined && { toolChoice: this.toolChoiceValue }),
             // The declared ontology (9.106.0), the same door grammar.
             ...(this.ontologyValue !== undefined && { ontology: this.ontologyValue }),
+            // The inputs layer (honesty layer 2), the same door grammar.
+            ...(this.inputsLayerValue && { inputsLayer: true }),
           }
         : this.opts;
     // .selfExplain(): a fresh binding per build() — two built agents never

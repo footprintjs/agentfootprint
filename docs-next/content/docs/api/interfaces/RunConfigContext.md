@@ -4,7 +4,7 @@ title: RunConfigContext
 
 # Interface: RunConfigContext
 
-Defined in: [src/core/agent/types.ts:1129](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/types.ts#L1129)
+Defined in: [src/core/agent/types.ts:1138](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/types.ts#L1138)
 
 What a `.configure(fn)` resolver is given.
 
@@ -14,7 +14,7 @@ What a `.configure(fn)` resolver is given.
 
 > `readonly` **defaults**: `object`
 
-Defined in: [src/core/agent/types.ts:1137](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/types.ts#L1137)
+Defined in: [src/core/agent/types.ts:1146](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/types.ts#L1146)
 
 What the agent was BUILT with, so a resolver can decide relative to it.
 
@@ -32,7 +32,7 @@ What the agent was BUILT with, so a resolver can decide relative to it.
 
 > `readonly` `optional` **identity?**: `MemoryIdentity`
 
-Defined in: [src/core/agent/types.ts:1133](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/types.ts#L1133)
+Defined in: [src/core/agent/types.ts:1142](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/types.ts#L1142)
 
 The memory identity passed to `run({ identity })`, when there was one.
 
@@ -42,7 +42,7 @@ The memory identity passed to `run({ identity })`, when there was one.
 
 > `readonly` **message**: `string`
 
-Defined in: [src/core/agent/types.ts:1131](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/types.ts#L1131)
+Defined in: [src/core/agent/types.ts:1140](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/types.ts#L1140)
 
 The message this run was started with.
 
@@ -52,6 +52,6 @@ The message this run was started with.
 
 > `readonly` **runId**: `string`
 
-Defined in: [src/core/agent/types.ts:1135](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/types.ts#L1135)
+Defined in: [src/core/agent/types.ts:1144](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/types.ts#L1144)
 
 This run's id — the same one that stamps every typed event's `meta.runId`.

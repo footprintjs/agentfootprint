@@ -4,6 +4,8 @@ Walker: `runChain.ts` (the one place a chain is walked), `outcomes.ts`,
 `types.ts`.
 Trace: `ledger.ts` — one writer for one committed key, where a chain's decisions
 become record.
+Fold: `rewrites.ts` — which ruled argument a before-tool rewrite superseded, read
+off that key (honesty layer 2).
 Support: `errors.ts`, `index.ts`.
 
 ## What it reads / what it writes
@@ -79,4 +81,17 @@ secrets").
 - `runChain.ts` — the Chain-of-Responsibility driver.
 - `outcomes.ts` — `allow` / `deny` / `ask`, as smart constructors.
 - `ledger.ts` — `recordDecisions`.
+- `rewrites.ts` — `argumentRewritesOf`: under the inputs layer a before-tool
+  rewrite of a ruled tool's arguments is filed with `changedKeys` (and, when
+  declared, `allow(args, why, { from })`'s origin per key); this is the ONE
+  reading of those rows, taken by the answer's standing
+  (`assessment/assess.ts` · `readArgumentVerdicts`) and the answer's "Assumed"
+  block (`arguments/serve.ts` · `assumedBlockOf`), so the two cannot disagree
+  about which value a call ran with. Both readers load through `import()`, so
+  a plain agent never carries this module.
+
+  ```ts
+  argumentRewritesOf(state.middlewareDecisions).get('c1')?.get('window');
+  // { index: 0, origin: 'person' } — the call ran with the rewrite's value
+  ```
 - `types.ts`, `errors.ts`, `index.ts` — shape, refusal, barrel.

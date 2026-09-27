@@ -263,6 +263,30 @@
  * result) and no `totalCacheReadTokens` (the mock reports no cache reads —
  * the key is value-conditional and absent here by law).
  *
+ * Honesty step 3 (the inputs layer, `assume` only): two new references,
+ * `agent-arguments-assume` and `agent-arguments-assume-limits` (the second
+ * beside `.limitsTravelWithTheAnswer()`, which none of the other 21 arms);
+ * none of the 21 moved (the 21 run first on the wired tree — 21/21 green, the
+ * reference directory untouched by git — copied aside, the two generated
+ * alone with `-t agent-arguments-assume` under `AF_TOOLS_REFERENCE=update`,
+ * the 21 `cmp`-equal after). What they hold, read from their bytes: the run
+ * constant `honestyLayers: { inputs: true }` on seed's commit; the served
+ * `search_logs` schema with `window` out of `required` and the rule's
+ * sentence on its description, at seed and on every epoch; the `sf-inputs`
+ * mount on the parent log with its `milestone:decision` / `Inputs` tags on
+ * every iteration, its output mapping writing `findingsLedger` (ONE
+ * `argument` row, `source: 'default'`, `turn: 1`, `period: true`) and
+ * `argumentResolutions` (one fill, stamped with iteration 1) once, on the
+ * iteration that dispatched, and nothing on the answer's iteration; the tool
+ * message's `toolChars` in `history` beside the note appended after the
+ * tool's own bytes, and the note in the served view of epoch 2 (the
+ * boundary field stripped from the wire). The `-limits` twin is byte-EQUAL to
+ * its sibling in this projection, which is the point it pins: arming the
+ * limits block beside the layer moves nothing on the parent log or the wire.
+ * The block itself is composed inside the Final subflow, whose own log this
+ * projection does not read; `test/core/agent/arguments/layer.test.ts` pins
+ * the answer's bytes.
+ *
  * Every scenario is a real run — the receipt-conformance shapes, each in the
  * configuration that has no name collision — and what is compared is the
  * whole `commitLog` plus `servedAt(k)` for every located epoch, after ONE
@@ -346,6 +370,25 @@ const tool = (name: string) =>
   defineTool({ name, description: `the ${name} tool`, execute: () => `${name} result` });
 
 const TOOL_THEN_DONE = [call('c1', 'alpha_tool'), answer('done')];
+
+/** A log search whose look-back period is RULED (the inputs layer): `assume: '2h'`. */
+const ruledSearchLogs = () =>
+  defineTool({
+    name: 'search_logs',
+    description: 'Error lines for one service over a look-back period.',
+    inputSchema: {
+      type: 'object',
+      required: ['service', 'window'],
+      properties: {
+        service: { type: 'string', description: 'Service name.' },
+        window: { type: 'string', enum: ['1h', '2h', '24h'], description: 'Look-back period.' },
+      },
+    },
+    askOrAssume: { window: { assume: '2h' } },
+    period: { argument: 'window', spelling: 'lookback' },
+    execute: (args: Record<string, unknown>) => ({ service: args.service, errors: 0 }),
+  });
+const RULED_THEN_DONE = [call('c1', 'search_logs', { service: 'checkout' }), answer('No errors.')];
 
 const graphOf = () =>
   skillGraph({
@@ -933,6 +976,17 @@ const SCENARIOS: Record<string, () => Promise<Snapshot>> = {
         getRunId: () => 'run-agent-message-api-reference',
       }),
       'weather in paris?',
+    ),
+  // The inputs layer (honesty layer 2), armed by a REGISTERED tool that
+  // declares `askOrAssume` — the model leaves the period out and the library
+  // fills the declared default. See the header for what the two hold.
+  'agent-arguments-assume': () =>
+    agentRun('dynamic', RULED_THEN_DONE, (a) => a.system('bot').tool(ruledSearchLogs())),
+  // …and beside `.limitsTravelWithTheAnswer()`, which none of the 21 earlier
+  // references arms: the answer carries the "Assumed" block.
+  'agent-arguments-assume-limits': () =>
+    agentRun('dynamic', RULED_THEN_DONE, (a) =>
+      a.system('bot').tool(ruledSearchLogs()).limitsTravelWithTheAnswer(),
     ),
 };
 

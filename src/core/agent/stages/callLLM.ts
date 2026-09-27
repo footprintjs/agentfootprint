@@ -41,6 +41,7 @@ import {
 import { toolNameOfMessage } from '../window/toolNames.js';
 import { evidenceRecoveryPiece } from '../evidence/recovery.js';
 import { joinSystemPrompt, stripFrameworkFields } from '../composeRequest.js';
+import { toolBytesOf } from '../../../lib/toolBytes.js';
 import { buildReceipt, receiptPieces, RECEIPT_KEY } from '../../../lib/time-travel/receipt.js';
 import type { EvictedTurnsHandle } from '../window/evictedTurns.js';
 import { findStagedRefs, stagedRefsNudgeLine } from '../stagedRefs.js';
@@ -368,6 +369,35 @@ export interface CallLLMStageDeps {
    * other agent hands this stage the deps object it always did.
    */
   readonly evictedTurns?: EvictedTurnsHandle;
+}
+
+/**
+ * The frame's non-assistant messages as GROUNDS for the unsupported-argument
+ * seam — each tool result read as the TOOL's own bytes (`lib/toolBytes.ts` ·
+ * `toolBytesOf`), so a value only the inputs layer's note carries ("the call
+ * ran with "production", the value the tool's rule assumes") grounds nothing:
+ * library-authored text is never evidence for a value (honesty law 4).
+ *
+ * The frame is the wire copy, which has lost the boundary field
+ * (`composeRequest.ts` · `stripFrameworkFields` removes it and keeps every
+ * message, in order), so the cut is read off the COMMITTED twin at the same
+ * index — and applied only while the frame still holds that twin's text byte
+ * for byte. A result the findings collapse turned into a ticket, or a cache
+ * strategy rewrote, is read as it was sent; the staged-refs nudge after the
+ * last committed message has no twin and is read as sent.
+ */
+function groundedTextOf(frame: readonly LLMMessage[], committed: readonly LLMMessage[]): string[] {
+  const grounds: string[] = [];
+  frame.forEach((message, i) => {
+    if (message.role === 'assistant') return;
+    const twin = committed[i];
+    grounds.push(
+      twin !== undefined && twin.role === 'tool' && twin.content === message.content
+        ? toolBytesOf(twin)
+        : message.content,
+    );
+  });
+  return grounds;
 }
 
 // LENS · system-text + tool-list · request-ephemeral
@@ -1142,7 +1172,9 @@ export function buildCallLLMStage(
                 llmRequest.systemPrompt === systemPrompt
                 ? [trustedSystemPrompt]
                 : []),
-              ...frameMessages.filter((m) => m.role !== 'assistant').map((m) => m.content),
+              // Every tool result as the TOOL's own bytes — the inputs layer's note
+              // after a filled call's result is the library's words (`groundedTextOf`).
+              ...groundedTextOf(frameMessages, committed),
             ],
             assistant: frameMessages.filter((m) => m.role === 'assistant').map((m) => m.content),
             ...(external.length > 0 && { external }),

@@ -16,7 +16,13 @@
  */
 
 import { assertAskComponent } from '../../askComponent.js';
-import type { AllowOutcome, AskOutcome, AskPayload, DenyOutcome } from './types.js';
+import type {
+  AllowOutcome,
+  ArgumentOrigins,
+  AskOutcome,
+  AskPayload,
+  DenyOutcome,
+} from './types.js';
 
 /** Pass the value through untouched. */
 export function allow(): AllowOutcome<never>;
@@ -37,7 +43,29 @@ export function allow(value: undefined, why: string): AllowOutcome<never>;
  * scrubbed rather than as a run whose input was always that way.
  */
 export function allow<T>(value: T, why: string): AllowOutcome<T>;
-export function allow<T>(value?: T, why?: string): AllowOutcome<T> {
+/**
+ * Replace the value, say why, and DECLARE where each rewritten argument's
+ * value came from — `'person'` (the person gave it, e.g. from a receipt of
+ * their answer), `'app'` (the app's own fact) or `'default'` (an app default
+ * nobody in the conversation chose). Recorded on the decision row. For an
+ * argument a tool's `askOrAssume` rules, the answer's standing reads a rewrite
+ * with no declared origin — or with `'default'` — as assumed.
+ *
+ * @example
+ *   allow({ ...call.args, window: receipt.window }, 'window from the collected receipt', {
+ *     from: { window: 'person' },
+ *   });
+ */
+export function allow<T>(
+  value: T,
+  why: string,
+  origin: { readonly from: ArgumentOrigins },
+): AllowOutcome<T>;
+export function allow<T>(
+  value?: T,
+  why?: string,
+  origin?: { readonly from: ArgumentOrigins },
+): AllowOutcome<T> {
   if (value === undefined) {
     return typeof why === 'string' && why.length > 0 ? { kind: 'allow', why } : { kind: 'allow' };
   }
@@ -48,7 +76,30 @@ export function allow<T>(value?: T, why?: string): AllowOutcome<T> {
         'call allow() with no arguments.',
     );
   }
-  return { kind: 'allow', value, why };
+  if (origin === undefined) return { kind: 'allow', value, why };
+  return { kind: 'allow', value, why, from: assertOrigins(origin) };
+}
+
+const ORIGINS: readonly string[] = ['person', 'default', 'app'];
+
+/** A declared origin map, judged — refused here, in the middleware author's own stack. */
+function assertOrigins(origin: unknown): ArgumentOrigins {
+  const from =
+    origin !== null && typeof origin === 'object' ? (origin as { from?: unknown }).from : undefined;
+  const valid =
+    from !== null &&
+    typeof from === 'object' &&
+    !Array.isArray(from) &&
+    Object.values(from as Record<string, unknown>).every(
+      (v) => typeof v === 'string' && ORIGINS.includes(v),
+    );
+  if (!valid) {
+    throw new Error(
+      "allow(value, why, { from }): `from` maps each rewritten argument's name to where its " +
+        "value came from — 'person', 'app' or 'default'.",
+    );
+  }
+  return { ...(from as ArgumentOrigins) };
 }
 
 /**

@@ -16,9 +16,12 @@ surfaced on `RunnerPauseOutcome.checkIn` (`core/pause.ts`). JSON/clone-safe.
 
 > `readonly` **args**: `Readonly`\<`Record`\<`string`, `unknown`\>\>
 
-Defined in: [src/core/checkin.ts:45](https://github.com/footprintjs/agentfootprint/blob/main/src/core/checkin.ts#L45)
+Defined in: [src/core/checkin.ts:50](https://github.com/footprintjs/agentfootprint/blob/main/src/core/checkin.ts#L50)
 
-The arguments the model proposed for this call.
+The arguments the call will run with: the model's proposal, with any value
+the inputs layer filled (a tool's `askOrAssume` `assume` rule) and any
+before-tool middleware rewrite applied — what a person approves is what
+runs.
 
 ***
 
@@ -26,7 +29,7 @@ The arguments the model proposed for this call.
 
 > `readonly` `optional` **component?**: [`AskComponent`](/docs/api/interfaces/AskComponent)
 
-Defined in: [src/core/checkin.ts:62](https://github.com/footprintjs/agentfootprint/blob/main/src/core/checkin.ts#L62)
+Defined in: [src/core/checkin.ts:67](https://github.com/footprintjs/agentfootprint/blob/main/src/core/checkin.ts#L67)
 
 Which REGISTERED screen component collects the decision (9.24.0) — the
 tool's own declaration (`defineTool({ checkIn, checkInComponent })`),
@@ -41,7 +44,7 @@ what the answer is.
 
 > `readonly` **evidence**: [`CheckInEvidence`](/docs/api/interfaces/CheckInEvidence)
 
-Defined in: [src/core/checkin.ts:53](https://github.com/footprintjs/agentfootprint/blob/main/src/core/checkin.ts#L53)
+Defined in: [src/core/checkin.ts:58](https://github.com/footprintjs/agentfootprint/blob/main/src/core/checkin.ts#L58)
 
 The receipts riding the ask.
 
@@ -51,7 +54,7 @@ The receipts riding the ask.
 
 > `readonly` `optional` **intent?**: `string`
 
-Defined in: [src/core/checkin.ts:51](https://github.com/footprintjs/agentfootprint/blob/main/src/core/checkin.ts#L51)
+Defined in: [src/core/checkin.ts:56](https://github.com/footprintjs/agentfootprint/blob/main/src/core/checkin.ts#L56)
 
 The model's stated reasoning for THIS call, when the assistant turn
 carried text alongside the tool call. Omitted when the turn was a bare

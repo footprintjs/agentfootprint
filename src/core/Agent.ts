@@ -237,7 +237,7 @@ import { normalizeRunInput } from './runInput.js';
 import type { ResolvedOutputEnforcement } from './agent/outputEnforcement.js';
 import { buildOutputRetryStage } from './agent/stages/outputRetry.js';
 import { RunnerBase, makeRunId } from './RunnerBase.js';
-import type { ToolRegistryEntry } from './tools.js';
+import type { Tool, ToolRegistryEntry } from './tools.js';
 import type { ToolProvider } from '../tool-providers/types.js';
 import {
   clampIterations,
@@ -271,7 +271,11 @@ import { buildSeedStage, type PendingResumeHistory } from './agent/stages/seed.j
 import type { MessageMiddleware, ToolMiddleware } from './agent/middleware/types.js';
 import { MessageDeniedError } from './agent/middleware/errors.js';
 import { buildCallLLMStage } from './agent/stages/callLLM.js';
-import { buildToolCallsHandler } from './agent/stages/toolCalls.js';
+import { buildToolCallsHandler, notServedResult } from './agent/stages/toolCalls.js';
+import { buildToolResolver } from './agent/stages/toolResolver.js';
+import { declaredDefaultsFrom } from './agent/stages/route.js';
+import { isRefused, rulesOf } from './agent/arguments/declare.js';
+import { honestyLayersOf, type HonestyLayers } from './agent/honesty/armed.js';
 import { assertMaxToolResultChars } from './agent/toolResultCap.js';
 import type { ToolArgValidationMode } from './agent/toolArgsValidation.js';
 import { buildAgentChart } from './agent/buildAgentChart.js';
@@ -523,6 +527,15 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
    *  armed agent with a window, where `stages/window.ts · buildWindowStage`
    *  spends it as the `'ledger-fact'` pin ceiling. */
   private readonly findingsOptions?: NonNullable<AgentOptions['findings']>;
+  /** `.inputsLayer()` (honesty layer 2): mount the inputs layer even when no
+   *  registered tool declares `askOrAssume` — for ruled tools only a
+   *  ToolProvider serves, which the build cannot see. */
+  private readonly inputsLayerOption?: true;
+  /** Whether this agent's chart mounts the inputs layer (`sf-inputs`) —
+   *  decided ONCE, in `buildChart`: a registered tool declares rules, or
+   *  `.inputsLayer()` was set. Gates the findings event bridge and the
+   *  widened ledger restore. */
+  private inputsLayerArmed = false;
   /** Tool choice by classifier (9.105.0, `.toolChoice()`): the classifier,
    *  the serve dial and the app's own doors. Threaded to the tools slot (the
    *  pick and the narrowing), to call-llm (`toolChoice: true`, the outcome
@@ -1015,6 +1028,7 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
     if (opts.permissionChecker) this.permissionChecker = opts.permissionChecker;
     if (opts.toolArgValidation !== undefined) this.toolArgValidation = opts.toolArgValidation;
     if (opts.findings !== undefined) this.findingsOptions = opts.findings;
+    if (opts.inputsLayer === true) this.inputsLayerOption = true;
     if (opts.toolChoice !== undefined) this.toolChoiceOptions = opts.toolChoice;
     if (opts.ontology !== undefined) this.ontology = opts.ontology;
     // The tool-result ceiling (9.11.0). Refused HERE, naming the value, rather
@@ -3204,7 +3218,9 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
     // `.findings()`: an unarmed agent gains no bridge, no listener and no
     // per-event work, and `agent.on('agentfootprint.findings.*')` can only
     // ever fire on an agent that could have filed a row.
-    if (this.findingsOptions !== undefined) {
+    // Also under the inputs layer (honesty layer 2): its `argument` rows are
+    // filed through the same writer and ride the same domain.
+    if (this.findingsOptions !== undefined || this.inputsLayerArmed) {
       attachObserver(
         new EmitBridge({
           id: 'agentfootprint.findings-bridge',
@@ -3597,9 +3613,16 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
    * assertions stood on, `open`, `ruled-out`, `noise` — the LAST row per
    * `toolCallId` is the current reading; earlier ones are quotable history)
    * and `conflict` rows (two stood-on readings that disagree, witnesses by
-   * identity). Undefined when the agent has no `.findings()` OR the model
-   * declared nothing — never an empty array standing in for "no findings",
-   * and an id with no standing row is undeclared, never `open`.
+   * identity). Undefined when nothing filed a row — never an empty array
+   * standing in for "no findings", and an id with no standing row is
+   * undeclared, never `open`.
+   *
+   * THE INPUTS LAYER files here too (honesty layer 2): an agent whose tools
+   * declare `askOrAssume` gets `argument` rows — the library's verdict on each
+   * ruled argument of each call (`source: 'default'` when a tool's rule
+   * assumed the value, `'model'` when the model sent one the record does not
+   * trace), each stamped with its conversation `turn` — WITHOUT `.findings()`.
+   * A reader that switches over every row kind must skip one it does not know.
    *
    * Detached from the execution record (`structuredClone`), so a caller may
    * keep or mutate it without touching the run's state.
@@ -3950,6 +3973,20 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
           .map((m) => m.store as MemoryStore),
       ),
     );
+    // The inputs layer (honesty layer 2) — late-bound like `toolSchemas`: the
+    // registry that says whether a tool is ruled is harvested further down.
+    let seededRuledTools: ReadonlyMap<string, Tool> | undefined;
+    let seededHonestyLayers: HonestyLayers | undefined;
+    // The findings ledger's restore (9.101.0), WIDENED (honesty layer 2): wired
+    // whenever the ledger OR an honesty layer is armed — an agent without
+    // `.findings()` files argument rows too, and a continued conversation must
+    // keep them. Still value-conditional inside seed (only when rows exist).
+    let ledgerRestoreArmed = this.findingsOptions !== undefined;
+    const consumeResumeLedger = (): FindingsLedger | undefined => {
+      const l = this.pendingResumeFindingsLedger;
+      this.pendingResumeFindingsLedger = undefined;
+      return l;
+    };
     const seed = buildSeedStage({
       maxIterations,
       // The forced-output tool's name (9.88.0) — a build-time constant, put on
@@ -3964,6 +4001,15 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
       },
       get toolWantsByName() {
         return seededToolWants;
+      },
+      get ruledTools() {
+        return seededRuledTools;
+      },
+      get honestyLayers() {
+        return seededHonestyLayers;
+      },
+      get consumePendingResumeFindingsLedger() {
+        return ledgerRestoreArmed ? consumeResumeLedger : undefined;
       },
       consumePendingResumeHistory: () => {
         const h = this.pendingResumeHistory;
@@ -3996,11 +4042,6 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
         ...(this.findingsOptions.answerAsk === 'quote-facts' && {
           findingsAnswerAsk: 'quote-facts' as const,
         }),
-        consumePendingResumeFindingsLedger: () => {
-          const l = this.pendingResumeFindingsLedger;
-          this.pendingResumeFindingsLedger = undefined;
-          return l;
-        },
       }),
       // The declared ontology (9.106.0): the whole frozen map, which seed
       // writes ONCE as the run constant `ontology` — the `findingsServe`
@@ -4179,6 +4220,26 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
     // built earlier with a getter; this resolves the actual value).
     toolSchemasResolved = toolSchemas;
 
+    // ── The inputs layer (honesty layer 2) — armed ONCE, here ──────────
+    // A registered tool (static, skill-carried, or an MCP tool registered on
+    // the builder) that declares argument rules arms the mount — the
+    // `toolGrounding` harvest precedent, over the same catalog. Tools a
+    // ToolProvider serves are invisible here, so `.inputsLayer()` arms the
+    // mount for them; without it their calls are refused at dispatch (fail
+    // closed). Unarmed: nothing below is mounted, decorated, read or written.
+    const ruledTools = new Map(
+      [...registryByName.entries()].filter(
+        ([, tool]) => tool.askOrAssume !== undefined || tool.period !== undefined,
+      ),
+    );
+    const inputsArmed = ruledTools.size > 0 || this.inputsLayerOption === true;
+    this.inputsLayerArmed = inputsArmed;
+    if (inputsArmed) {
+      if (ruledTools.size > 0) seededRuledTools = ruledTools;
+      seededHonestyLayers = honestyLayersOf(true);
+      ledgerRestoreArmed = true;
+    }
+
     // The gate's admissible set, for the record (9.50.0): declared hops from
     // the cursor plus the open skills — the SAME two resolvers the read_skill
     // offer and the refusal messages are built from (`readSkillOfferFor`),
@@ -4292,6 +4353,17 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
     // whose contract the model read is the party that answers. `lastServed`
     // is the run's memory of the same fact, for a name that left the wire.
     const servedTools: ServedToolParties = { current: new Map(), lastServed: new Map() };
+    // THE ONE DISPATCH RESOLVER, for the inputs layer (honesty layer 2): built
+    // from the SAME deps objects the dispatch handler builds its own from, so
+    // the layer reads a call's rules off the implementation that will answer.
+    const resolveForLayer = buildToolResolver({
+      registryByName,
+      ...(this.externalToolProvider && { externalToolProvider: this.externalToolProvider }),
+      ...(this.externalToolProvider && { providerToolCache }),
+      servedTools,
+      toolClaimants,
+      notServed: notServedResult,
+    });
     const readSkillFor = this.readSkillOfferFor();
     // Per-role skill visibility. The RESOLVER is handed to the tools slot, which
     // is the fact's one owner: it resolves the ids once per iteration and
@@ -4391,6 +4463,9 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
       // The findings ledger (9.101.0): the ONE decoration site is inside this
       // slot; the gate rides in value-conditionally.
       ...(this.findingsOptions !== undefined && { findings: true as const }),
+      // The inputs layer (honesty layer 2): the same site decorates a ruled
+      // tool's schema first — value-conditional, the same grammar.
+      ...(inputsArmed && { inputsLayer: true as const }),
       // Tool choice by classifier (9.105.0): the pick and the narrowing live
       // inside this slot too, at the same site; value-conditional.
       ...(this.toolChoiceOptions !== undefined && {
@@ -4596,6 +4671,21 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
       // trailing positional, for the same reason: an unarmed agent hands the
       // builder exactly the arguments it always did.
       this.findingsOptions !== undefined ? true : undefined,
+      // THE INPUTS LAYER (honesty layer 2) — the same value-conditional
+      // trailing positional: the rows this decider files carry the turn
+      // stamp, and with the evidence gate armed too, the gate's exempt corpus
+      // gains this turn's assumed values, read from the tools' declarations.
+      inputsArmed
+        ? {
+            ...(this.evidenceGate !== undefined && {
+              declaredDefaults: declaredDefaultsFrom((toolName, argument) => {
+                const rules = rulesOf(resolveForLayer(toolName).tool);
+                if (rules === undefined || isRefused(rules)) return undefined;
+                return rules.ruled.find((r) => r.argument === argument)?.assume;
+              }),
+            }),
+          }
+        : undefined,
     );
 
     const routeDecider =
@@ -4634,6 +4724,9 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
       // The findings ledger (9.101.0) — the peel, the basis row and the
       // previous batch's standings all live in this handler under this gate.
       ...(this.findingsOptions !== undefined && { findings: true as const }),
+      // The inputs layer (honesty layer 2) — the fills, the refusals and the
+      // note; absent → a ruled tool's call is refused (fail closed).
+      ...(inputsArmed && { inputsLayer: true as const }),
       // The judge (9.104.0) — VALUE-conditional inside the arm: an armed
       // agent without one hands the handler exactly the deps it did before.
       ...(this.findingsOptions?.judge !== undefined && {
@@ -4850,6 +4943,16 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
       // grammar as the slot's `findings` and callLLM's `hasFindingsLedger`,
       // so the three can never disagree about whether the ledger is armed.
       ...(this.findingsOptions !== undefined && { hasFindingsLedger: true }),
+      // The inputs layer (honesty layer 2): `sf-inputs` between the LLM call
+      // and Route, in both builders through one helper; absent → untouched.
+      // With a before-tool chain, the final branch's "Assumed" block also reads
+      // the chain's rewrites (a rewritten fill is not what the call ran with).
+      ...(inputsArmed && {
+        inputsLayer: {
+          toolOf: (toolName: string) => resolveForLayer(toolName).tool,
+          ...(this.toolMiddleware.length > 0 && { rewrites: true as const }),
+        },
+      }),
       // Tool choice by classifier (9.105.0): the mount args on the Tools
       // branch and the key across the sf-llm-call boundary, under the arm.
       ...(this.toolChoiceOptions !== undefined && { hasToolChoice: true }),

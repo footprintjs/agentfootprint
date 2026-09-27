@@ -251,6 +251,15 @@ export interface AgentOptions {
    */
   readonly toolArgValidation?: ToolArgValidationMode;
   /**
+   * THE INPUTS LAYER (honesty layer 2) — mount `sf-inputs` between the LLM
+   * call and Route even when no REGISTERED tool declares `askOrAssume`. A
+   * registered ruled tool arms the layer by itself; this option is for ruled
+   * tools a `ToolProvider` serves, which the build cannot see — without it,
+   * their calls are refused rather than run unruled (fail closed). Prefer the
+   * builder's `.inputsLayer()`. Absent → the chart is byte-identical.
+   */
+  readonly inputsLayer?: boolean;
+  /**
    * The findings ledger (9.101.0) — set by `.findings()` on the builder and
    * by nothing else. When present, every SERVED tool schema gains the
    * reserved optional `_findings` property (`withFindingsArgument`), the
@@ -1934,6 +1943,25 @@ export interface AgentState {
    * assertions, and the current conflict set is a fold, not the rows.
    */
   findingsLedger?: FindingsLedger;
+
+  // ── The honesty layers (`sf-inputs`, …) ───────────────────────
+  /**
+   * Which honesty layers this run armed — the ONE run constant, written once
+   * by seed (`honesty/armed.ts`), absent on a run that armed none. A reader
+   * of the record tells "armed, filed nothing" from "never armed" by it.
+   */
+  honestyLayers?: import('./honesty/armed.js').HonestyLayers;
+  /**
+   * What the inputs layer (honesty layer 2) hands ToolCalls for the batch it
+   * resolved — per call, the declared defaults to FILL, or the sentence the
+   * call reads instead of running. Written by the `sf-inputs` mount's output
+   * mapper only when there is something to apply (a top-level array under
+   * `arrayMerge: Replace`), each entry stamped with its batch's iteration, and
+   * read by ToolCalls only under the arm. Working state: it holds the RAW
+   * filled value, because the call must run with it — never a row, an event
+   * or a lens view (the rows carry the value in the tool's own view).
+   */
+  argumentResolutions?: readonly import('./arguments/resolve.js').ArgumentResolution[];
 
   // ── Tool choice by classifier (`.toolChoice()`) ───────────────
   /**

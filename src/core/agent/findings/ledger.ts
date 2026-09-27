@@ -51,6 +51,7 @@ import { isPlacedToolResult } from '../../../artifacts/placement.js';
 import { conflictsOf, type Conflict } from '../../../integrity/assertion/conflicts.js';
 import { assertionKey, type Assertion } from '../../../integrity/assertion/types.js';
 import { typedEmit } from '../../../recorders/core/typedEmit.js';
+import { HIDDEN_VALUE, type ArgumentRow } from '../arguments/rows.js';
 import {
   PROPOSITION_CHARS,
   type BasisRow,
@@ -172,28 +173,59 @@ function witnessesOf(conflict: Conflict, standingOf: ReadonlyMap<string, Standin
 // ─── The writer ────────────────────────────────────────────────────────
 
 /**
- * Append rows to the run's findings ledger, file a conflict row for every
- * key that first disagreed at this write, and emit one event per basis or
- * standing row. No-op on an empty list, so an armed agent whose model
- * declared nothing never writes the key — its commit log is the one it
- * always had. Callers pass basis and standing rows — each standing followed
- * by the `unsettled-by-absence` row the rule files beside it, when it files
- * one (`unsettled.ts · withUnsettledRows`); conflict rows are this function's
- * to write.
+ * The turn stamp (honesty layers, adopted Q6): while an honesty layer is
+ * armed, every row the one writer files carries the conversation turn it was
+ * filed in. Absent → rows are filed exactly as they always were.
  */
-export function recordFindings(scope: FindingsScope, rows: readonly FindingsRow[]): void {
-  if (rows.length === 0) return;
-  // Spread into a plain local array first: a TypedScope array read is a live
-  // deep-proxy view, and both the commit and the event payloads below must be
-  // detached plain data (RFC-001 'clone' capture under deferred delivery).
-  const prev: FindingsRow[] = [...((scope.findingsLedger as FindingsLedger | undefined) ?? [])];
-  const merged: FindingsRow[] = [...prev, ...rows];
+export interface TurnStamp {
+  readonly turn: number;
+}
+
+/** `rows` with `turn` set on every row that carries none — the same rows when unstamped. */
+function stamped(
+  rows: readonly FindingsRow[],
+  stamp: TurnStamp | undefined,
+): readonly FindingsRow[] {
+  if (stamp === undefined) return rows;
+  return rows.map((row) => (row.turn === undefined ? { ...row, turn: stamp.turn } : row));
+}
+
+/** What `appendRows` answers: the merged ledger and what the merge filed on its own. */
+export interface AppendedRows {
+  /** The ledger to commit — `prev`, the new rows, then any new conflict rows. */
+  readonly ledger: FindingsRow[];
+  /** The conflict rows this merge filed (a key whose readings first disagreed here). */
+  readonly newConflicts: readonly ConflictRow[];
+  /** The judge's current reading per result, for the standing event's `agrees`. */
+  readonly judgments: ReadonlyMap<string, JudgmentRow>;
+}
+
+/**
+ * THE PURE HALF of the one writer: merge `rows` onto `prev`, plus a conflict
+ * row for every key that first disagreed at this merge. No scope, no event —
+ * so a subflow's output mapper can merge rows its own stages already emitted
+ * for (the inputs layer, `honesty/mounts.ts`) with the same fold the in-stage
+ * callers use. Rows other than `fact` standings never enter `conflictsOf`, so
+ * a merge of argument rows files no conflict.
+ *
+ * @example
+ * ```ts
+ * const { ledger } = appendRows(scope.findingsLedger ?? [], rows);
+ * ```
+ */
+export function appendRows(
+  prev: readonly FindingsRow[],
+  rows: readonly FindingsRow[],
+  stamp?: TurnStamp,
+): AppendedRows {
+  const filed = stamped(rows, stamp);
+  const merged: FindingsRow[] = [...prev, ...filed];
   const fold = foldLedger(merged);
   const alreadyFiled = new Set<string>();
   for (const row of merged) {
     if (row.kind === 'conflict') alreadyFiled.add(row.key);
   }
-  const iteration = rows[rows.length - 1].iteration;
+  const iteration = filed.length > 0 ? filed[filed.length - 1].iteration : 0;
   const newConflicts: ConflictRow[] = fold.conflicts
     .filter((c) => !alreadyFiled.has(c.key))
     .map((c) => ({
@@ -201,17 +233,51 @@ export function recordFindings(scope: FindingsScope, rows: readonly FindingsRow[
       key: c.key,
       witnesses: witnessesOf(c, fold.standingOf),
       iteration,
+      ...(stamp !== undefined && { turn: stamp.turn }),
     }));
-  scope.findingsLedger = [...merged, ...newConflicts];
-  for (const row of rows) emitRow(scope, row, newConflicts, fold.judgments);
+  return { ledger: [...merged, ...newConflicts], newConflicts, judgments: fold.judgments };
 }
 
-function emitRow(
+/**
+ * Append rows to the run's findings ledger, file a conflict row for every
+ * key that first disagreed at this write, and emit one event per basis or
+ * standing row. No-op on an empty list, so an armed agent whose model
+ * declared nothing never writes the key — its commit log is the one it
+ * always had. Callers pass basis and standing rows — each standing followed
+ * by the `unsettled-by-absence` row the rule files beside it, when it files
+ * one (`unsettled.ts · withUnsettledRows`); conflict rows are this function's
+ * to write. Both halves of the one writer: `appendRows` (the merge) and
+ * `emitRow` (the events). `stamp` is the honesty layers' turn stamp — passed
+ * only while a layer is armed.
+ */
+export function recordFindings(
+  scope: FindingsScope,
+  rows: readonly FindingsRow[],
+  stamp?: TurnStamp,
+): void {
+  if (rows.length === 0) return;
+  // Spread into a plain local array first: a TypedScope array read is a live
+  // deep-proxy view, and both the commit and the event payloads below must be
+  // detached plain data (RFC-001 'clone' capture under deferred delivery).
+  const prev: FindingsRow[] = [...((scope.findingsLedger as FindingsLedger | undefined) ?? [])];
+  const filed = stamped(rows, stamp);
+  const { ledger, newConflicts, judgments } = appendRows(prev, filed, stamp);
+  scope.findingsLedger = ledger;
+  for (const row of filed) emitRow(scope, row, newConflicts, judgments);
+}
+
+/**
+ * THE EMIT HALF of the one writer: one event per row (identities, enums,
+ * counts — never a value). Exported for the inputs layer's Record stage,
+ * which emits inside its subflow and leaves the merge to the mount's output
+ * mapper (`appendRows`).
+ */
+export function emitRow(
   scope: FindingsScope,
   row: FindingsRow,
-  newConflicts: readonly ConflictRow[],
-  judgments: ReadonlyMap<string, JudgmentRow>,
-) {
+  newConflicts: readonly ConflictRow[] = [],
+  judgments: ReadonlyMap<string, JudgmentRow> = new Map(),
+): void {
   if (row.kind === 'basis') {
     typedEmit(scope, 'agentfootprint.findings.declared', {
       toolName: row.toolName,
@@ -276,6 +342,10 @@ function emitRow(
   // committed key, the served piece is its reader, and no event field ships
   // without a reader in the same release.
   if (row.kind === 'unsettled-by-absence') return;
+  if (row.kind === 'argument') {
+    emitArgumentRow(scope, row);
+    return;
+  }
   if (row.kind !== 'standing') return;
   const conflictKeys = newConflicts
     .filter((c) => c.witnesses.some((w) => w.toolCallId === row.toolCallId))
@@ -297,6 +367,39 @@ function emitRow(
     ...(conflictKeys.length > 0 && { conflictKeys }),
     ...(row.unknownId === true && { unknownId: true }),
     ...(judged !== undefined && { agrees: judged.standing === row.standing }),
+  });
+}
+
+/**
+ * The inputs layer's row event (`agentfootprint.findings.argument`) — names,
+ * enums and counts only. Never the value, the quote or the proposal (they live
+ * on the committed row, in the tool's own argument view), and no `valueChars`
+ * when that view hides the argument: the length of a hidden value is itself a
+ * leak.
+ */
+function emitArgumentRow(scope: FindingsScope, row: ArgumentRow): void {
+  const hidden = row.value === HIDDEN_VALUE;
+  typedEmit(scope, 'agentfootprint.findings.argument', {
+    toolCallId: row.toolCallId,
+    toolName: row.toolName,
+    iteration: row.iteration,
+    turn: row.turn,
+    argument: row.argument,
+    ...(row.rule !== undefined && { rule: row.rule }),
+    ...(row.period === true && { period: true as const }),
+    ...(row.source !== undefined && { source: row.source }),
+    ...(row.asked !== undefined && { asked: row.asked }),
+    ...(row.claimed !== undefined && { claimed: row.claimed }),
+    ...(row.matched !== undefined && { matched: row.matched }),
+    ...(row.reading === true && { reading: true as const }),
+    ...(row.earlier === true && { earlier: true as const }),
+    ...(row.setAside !== undefined && { setAside: row.setAside }),
+    ...(row.argumentsFrom !== undefined && { argumentsFrom: row.argumentsFrom }),
+    ...(row.coincides !== undefined && { coincides: row.coincides }),
+    ...(row.free === true && { free: true as const }),
+    ...(row.failed !== undefined && { failed: row.failed }),
+    ...(row.malformed !== undefined && { malformed: row.malformed }),
+    ...(row.value !== undefined && !hidden && { valueChars: row.value.length }),
   });
 }
 

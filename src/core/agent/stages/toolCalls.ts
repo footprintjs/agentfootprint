@@ -117,6 +117,8 @@ import type {
 } from '../../slots/buildToolsSlot.js';
 import type { ToolClaim } from '../buildToolRegistry.js';
 import { changedArgKeys, shownArgsOf } from '../../toolShownArgs.js';
+import { toolBytesOf } from '../../../lib/toolBytes.js';
+import { buildToolResolver, type ToolResolution } from './toolResolver.js';
 import type { Tool, ToolExecutionContext } from '../../tools.js';
 import { agentToolDispatch } from '../toolDispatch.js';
 import type { MemoryIdentity } from '../../../memory/identity/types.js';
@@ -134,6 +136,7 @@ import {
   recordFindings,
   standingRowsFrom,
   type PreviousResult,
+  type TurnStamp,
 } from '../findings/ledger.js';
 import {
   contingentRowsOf,
@@ -239,6 +242,25 @@ export interface ToolCallsHandlerDeps {
    * default — and not one of those lines runs.
    */
   readonly findings?: true;
+  /**
+   * THE INPUTS LAYER IS MOUNTED (honesty layer 2) — present only then, only
+   * ever `true`. Under it, the batch loop reads `argumentResolutions` (what
+   * `sf-inputs` resolved for THIS batch — entries stamped with another
+   * iteration are ignored) and, per call, applies the entry AFTER
+   * `tool_start` (which keeps the model's proposal) and BEFORE the permission
+   * check: a fill builds a fresh `{ ...args, ...fills }` that permission,
+   * middleware, validation, check-in, credentials and execute all see, and a
+   * refused entry lands in the argument-refusal shape — after permission and
+   * BEFORE the middleware chain, so no middleware asks about a call that will
+   * not run (the ask-resume door re-applies it). A call that ran on a filled
+   * value gets the layer's past-tense note after the tool's own bytes — one
+   * clause per fill it really ran with — and its history message carries
+   * `toolChars`. ABSENT, a call whose tool declares argument rules is REFUSED
+   * (fail closed — a ToolProvider served it and the build could not see it),
+   * at the same place and at the same door, with one warning naming
+   * `.inputsLayer()`; every other call runs exactly as it always did.
+   */
+  readonly inputsLayer?: true;
   /**
    * THE JUDGE (9.104.0, `.findings({ judge })`) — present only with the arm
    * and only when a classifier was configured. After every landed result is
@@ -1208,6 +1230,11 @@ function notDispatchedMarker(paused: {
  * never ran, so it produced nothing to take a value from. Read off the marker
  * (`../findings/offer.ts` · `isResultMessage`), never the sentence.
  *
+ * Each result is read as the TOOL's own bytes (`lib/toolBytes.ts` ·
+ * `toolBytesOf`): the note the inputs layer appends after a filled call's
+ * result carries the value the library filled, and a value only that note
+ * carries is not one the run's producer served.
+ *
  * Exported for its unit test (`test/integrity/emptyLookup.test.ts`).
  */
 export function producerCorpusOf(
@@ -1219,7 +1246,7 @@ export function producerCorpusOf(
     if (!isResultMessage(message)) continue;
     const name = message.toolName;
     if (typeof name !== 'string' || !argumentsFrom.includes(name)) continue;
-    produced.push({ toolName: name, text: message.content });
+    produced.push({ toolName: name, text: toolBytesOf(message) });
   }
   return produced;
 }
@@ -1248,6 +1275,8 @@ async function judgeLanded(
   ran: boolean,
   entry: { toolName: string; result: string; toolCallId: string },
   iteration: number,
+  /** The honesty layers' turn stamp — passed only while the inputs layer is armed. */
+  stamp?: TurnStamp,
 ): Promise<void> {
   if (judge === undefined || !ran) return;
   // Dynamic import — the optional-family law of docs-next's site budget: a
@@ -1262,6 +1291,7 @@ async function judgeLanded(
     entry,
     iteration,
     scope.$getEnv().signal,
+    stamp,
   );
 }
 
@@ -1320,6 +1350,17 @@ function towersFor(
     standingOf,
   };
 }
+
+// ─── The inputs layer's half of dispatch (honesty layer 2) ──────────────
+//
+// The fills, the note, the rewrites' `changedKeys` and the fail-closed refusal
+// live in `../arguments/dispatch.ts`, loaded through `import()` only when the
+// layer is armed, or when a call's tool declares rules on an agent built
+// without it — the optional-family law of docs-next's site budget (the
+// `judgeLanded` precedent above), so a plain agent's graph never carries them.
+
+/** The inputs layer's half of dispatch, once loaded. */
+type InputsDispatch = typeof import('../arguments/dispatch.js');
 
 export function buildToolCallsHandler(
   deps: ToolCallsHandlerDeps,
@@ -2931,62 +2972,47 @@ export function buildToolCallsHandler(
   // never shown under that name; a never-served name held by two parties is
   // refused the same way. Every off-wire dispatch that DOES happen is put on
   // the record by `tools.answered_off_wire`.
-  const fromProviderCache = (toolName: string): Tool | undefined =>
-    externalToolProvider
-      ? (providerToolCache?.current ?? []).find((t) => t.schema.name === toolName)
-      : undefined;
-  const providerParty: ToolParty = {
-    channel: 'provider',
-    ...(externalToolProvider?.id !== undefined && { id: externalToolProvider.id }),
-  };
-  /** The party a registry-routed name belongs to — its first build-time claimant. */
-  const registryPartyOf = (toolName: string): ToolParty => {
-    const first = toolClaimants?.get(toolName)?.[0];
-    return first === undefined
-      ? { channel: 'registry' }
-      : { channel: first.channel, ...(first.id !== undefined && { id: first.id }) };
-  };
-  interface Resolution {
-    readonly tool?: Tool;
-    /** The party whose implementation answers. */
-    readonly party?: ToolParty;
-    /** The name was NOT on this epoch's wire and the fallback dispatched it. */
-    readonly offWire?: true;
-    /** Nothing may answer: the sentence the model reads. Absent with no
-     *  `tool` means the name is unknown (`unknownToolResult`). */
-    readonly refusal?: string;
-  }
-  const resolveTool = (toolName: string, pinned?: ToolParty): Resolution => {
-    const wireParty = pinned ?? servedTools?.current.get(toolName);
-    if (wireParty !== undefined) {
-      const owner =
-        wireParty.channel === 'provider'
-          ? fromProviderCache(toolName)
-          : registryByName.get(toolName);
-      return owner !== undefined
-        ? { tool: owner, party: wireParty }
-        : { refusal: notServedResult(toolName) };
-    }
-    const registryHolder = registryByName.get(toolName);
-    const providerHolder = fromProviderCache(toolName);
-    if (registryHolder === undefined && providerHolder === undefined) return {};
-    const last = servedTools?.lastServed.get(toolName);
-    if (last !== undefined) {
-      const owner = last.channel === 'provider' ? providerHolder : registryHolder;
-      return owner !== undefined
-        ? { tool: owner, party: last, offWire: true }
-        : { refusal: notServedResult(toolName) };
-    }
-    if (registryHolder !== undefined && providerHolder !== undefined) {
-      return { refusal: notServedResult(toolName) };
-    }
-    return registryHolder !== undefined
-      ? { tool: registryHolder, party: registryPartyOf(toolName), offWire: true }
-      : // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
-        { tool: providerHolder!, party: providerParty, offWire: true };
-  };
+  // THE ONE RESOLVER (lifted into `./toolResolver.ts` for the inputs layer,
+  // which must read a call's argument rules off the implementation that WILL
+  // answer it) — built from the same deps objects, so both ask one function.
+  type Resolution = ToolResolution;
+  const resolveTool = buildToolResolver({
+    registryByName,
+    ...(externalToolProvider !== undefined && { externalToolProvider }),
+    ...(providerToolCache !== undefined && { providerToolCache }),
+    ...(servedTools !== undefined && { servedTools }),
+    ...(toolClaimants !== undefined && { toolClaimants }),
+    notServed: notServedResult,
+  });
   const lookupTool = (toolName: string, pinned?: ToolParty): Tool | undefined =>
     resolveTool(toolName, pinned).tool;
+  /**
+   * FAIL CLOSED (honesty layer 2, adopted Q14): with the inputs layer NOT
+   * mounted, a call whose tool declares argument rules is refused rather than
+   * run unruled — configured-and-inert looks exactly like
+   * configured-and-working. Only a ToolProvider-served tool can reach here
+   * (a registered ruled tool arms the layer at build). `undefined` —
+   * synchronously, no microtask — for every tool that declares nothing, and
+   * for every call on an armed agent; only a ruled tool on an agent without
+   * the layer loads the layer's dispatch half, for the sentence and the
+   * warning (`arguments/dispatch.ts` · `unmountedRefusal`).
+   */
+  const unmountedRules = (
+    tool: Tool | undefined,
+    toolName: string,
+  ): Promise<string> | undefined => {
+    if (deps.inputsLayer === true || tool === undefined) return undefined;
+    if (tool.askOrAssume === undefined && tool.period === undefined) return undefined;
+    return import('../arguments/dispatch.js').then((m) => m.unmountedRefusal(toolName));
+  };
+  /**
+   * The honesty layers' TURN STAMP (adopted Q6): while the inputs layer is
+   * armed, every row this handler files through the one writer carries the
+   * conversation turn — the ledger crosses turns on a continued conversation
+   * and `iteration` restarts at 1 every run. `turnNumber` is read only then.
+   */
+  const turnStampOf = (scope: TypedScope<AgentState>): TurnStamp | undefined =>
+    deps.inputsLayer === true ? { turn: scope.turnNumber as number } : undefined;
   /**
    * THE PER-CALL PEEL (9.101.0, `.findings()`). Under the arm the reserved
    * `_findings` argument is taken off a call's args — UNLESS the tool that
@@ -3591,6 +3617,13 @@ export function buildToolCallsHandler(
         }[]),
       ];
       const iteration = scope.iteration as number;
+      // THE INPUTS LAYER'S HALF OF DISPATCH (honesty layer 2) — loaded through
+      // `import()` only under the arm, so an unarmed batch awaits nothing new.
+      const inputs: InputsDispatch | undefined =
+        deps.inputsLayer === true ? await import('../arguments/dispatch.js') : undefined;
+      // THE INPUTS LAYER'S RESOLUTIONS for this batch — read only under the
+      // arm, and only the entries resolved for THIS iteration.
+      const resolutions = inputs?.resolutionsFor(scope, iteration);
       const newHistory: LLMMessage[] = [...(scope.history as readonly LLMMessage[])];
       // ALWAYS push the assistant turn when there are tool calls — even
       // if the content was empty — so providers (Anthropic, OpenAI) can
@@ -3686,6 +3719,7 @@ export function buildToolCallsHandler(
             known,
             () => [...((scope.coverageDeclared ?? []) as readonly DeclaredCoverage[])],
           ),
+          turnStampOf(scope),
         );
       }
       scope.toolResults = [];
@@ -3731,7 +3765,11 @@ export function buildToolCallsHandler(
         // its row — the declaration is a fact about the emission). Filed only
         // when the model DECLARED a basis; never inferred.
         if (peeled.findings?.basis !== undefined) {
-          recordFindings(scope, [basisRowFrom(tc, peeled.findings, iteration, peeled.malformed)]);
+          recordFindings(
+            scope,
+            [basisRowFrom(tc, peeled.findings, iteration, peeled.malformed)],
+            turnStampOf(scope),
+          );
         }
         // ── THE CONTINGENT ROWS FOR THIS CALL (9.110.0) — after the basis
         // row, before `tool_start`: the DATA values of the peeled arguments
@@ -3747,6 +3785,7 @@ export function buildToolCallsHandler(
               { toolCallId: tc.id },
               iteration,
             ),
+            turnStampOf(scope),
           );
         }
         typedEmit(scope, 'agentfootprint.stream.tool_start', {
@@ -3789,11 +3828,20 @@ export function buildToolCallsHandler(
         // gate) reads `callArgs`, never `tc.args`, so there is exactly one
         // answer to "what did this call really run with". Seeded from the
         // PEELED `args` (9.101.0), which is `tc.args` itself when unarmed.
-        let callArgs: ToolArgs = args;
+        // ── THE INPUTS LAYER'S ENTRY FOR THIS CALL (honesty layer 2) ──────
+        // Applied AFTER `tool_start` (which keeps the model's proposal) and
+        // BEFORE the permission check, so policy judges the call that will
+        // really run. A fill is a FRESH object — never an edit of `tc.args`,
+        // which is the assistant message's own object when `.findings()` is
+        // off. No entry (every unarmed agent) → `args` itself, by reference.
+        const resolution = resolutions?.get(tc.id);
+        const runArgs: ToolArgs = inputs !== undefined ? inputs.withFills(args, resolution) : args;
+        let callArgs: ToolArgs = runArgs;
         /** The arguments AFTER the before-tool chain and BEFORE a `wants`
          *  resolution swaps refs for artifact data — what `changedArgKeys` is
-         *  judged on. Same reference as `args` unless a link rewrote. */
-        let chainedArgs: ToolArgs = args;
+         *  judged on. Same reference as `args` unless a link rewrote (or the
+         *  inputs layer filled a value — then every filled key is named). */
+        let chainedArgs: ToolArgs = runArgs;
         let denied = false;
         /** True once `tool.execute` has been entered — see `afterMoment`. */
         let executed = false;
@@ -3817,7 +3865,7 @@ export function buildToolCallsHandler(
               capability: 'tool_call',
               actor: 'agent',
               target: tc.name,
-              context: args,
+              context: runArgs,
               sequence,
               history: newHistory,
               iteration,
@@ -3983,14 +4031,37 @@ export function buildToolCallsHandler(
             );
           }
         }
+        // Tool-args validation (#9) and the inputs layer's refusals share one
+        // flag: the call is refused for its ARGUMENTS and lands in one shape.
+        let argsRejected = false;
+        // ── THE INPUTS LAYER'S REFUSALS (honesty layer 2) — the argument-
+        // refusal shape the validation refusal below uses, decided HERE:
+        // after permission (policy sees every attempted call) and BEFORE the
+        // middleware chain, so no middleware can `ask` a person about a call
+        // the library has already decided must not run — an approved ask
+        // resumes through its own door, which re-applies both refusals
+        // (`resume`, the middleware-ask path). Refused: a call whose tool's
+        // rules could not be read at dispatch (the layer's entry), and — with
+        // the layer NOT mounted — any call whose tool declares rules (fail
+        // closed). Neither applies to a tool that declares nothing — and
+        // neither awaits for one (`unmountedRules` answers it synchronously).
+        const unmounted = unmountedRules(tool, tc.name);
+        const rulesRefusal =
+          resolution?.refused ?? (unmounted === undefined ? undefined : await unmounted);
+        if (!denied && rulesRefusal !== undefined) {
+          argsRejected = true;
+          error = true;
+          result = rulesRefusal;
+        }
         // ── The middleware chain ─────────────────────────────────────────
         // Walked only for a call the permission gate let through, so an
         // existing checker keeps deciding first and a denial there costs
         // nothing. A denial from the chain lands as the tool result, exactly
         // like every other refusal in this loop — the model reads it and
         // adapts. An `ask` commits partial state and pauses, on the same wire
-        // the check-in gate uses.
-        if (!denied && deps.toolMiddleware && deps.toolMiddleware.length > 0) {
+        // the check-in gate uses. Never walked for a call whose arguments the
+        // inputs layer refused (above).
+        if (!denied && !argsRejected && deps.toolMiddleware && deps.toolMiddleware.length > 0) {
           const chain = await runToolChain(deps.toolMiddleware, {
             toolName: tc.name,
             // Provenance from the tool that is about to run, so a policy can
@@ -4003,7 +4074,16 @@ export function buildToolCallsHandler(
             ...(runIdentity && { identity: runIdentity }),
             ...(env.signal && { signal: env.signal }),
           });
-          recordDecisions(scope, chain.decisions);
+          // Under the inputs layer, a rewrite of a RULED tool's arguments is
+          // filed with the NAMES of the keys it changed (honesty layer 2) —
+          // the answer's standing reads a rewritten ruled argument with no
+          // declared origin as assumed. Every other row: as it always was.
+          recordDecisions(
+            scope,
+            inputs !== undefined
+              ? inputs.decisionsToRecord(tool, chain.decisions)
+              : chain.decisions,
+          );
           callArgs = chain.args;
           chainedArgs = chain.args;
           if (chain.kind === 'deny') {
@@ -4072,8 +4152,9 @@ export function buildToolCallsHandler(
         // on the next ReAct iteration. Unknown tools keep the existing
         // "Unknown tool" path below — validation only applies to resolved
         // tools (their inputSchema is the contract the LLM was shown).
-        let argsRejected = false;
-        if (!denied && tool && toolArgValidation !== 'off') {
+        // (`argsRejected` is declared above the middleware chain: the inputs
+        // layer's refusals land in the same shape, before the chain.)
+        if (!denied && !argsRejected && tool && toolArgValidation !== 'off') {
           const verdict = validateToolArgs(callArgs, tool.schema.inputSchema);
           if (!verdict.ok) {
             typedEmit(scope, 'agentfootprint.validation.args_invalid', {
@@ -5071,11 +5152,26 @@ export function buildToolCallsHandler(
           }
         }
 
+        // ── The inputs layer's note (honesty layer 2) — LAST, after every
+        // other suffix, and only for a call that RAN on a value the library
+        // filled: one clause per fill the call really ran with
+        // (`arguments/dispatch.ts` · `fillsThatRan` — a middleware may have
+        // rewritten one). The message then carries `toolChars` (the tool's own
+        // bytes), so every reader of a result's content as the TOOL's words
+        // reads through the cut (`lib/toolBytes.ts` · `toolBytesOf`): a value
+        // that sits only in the library's note grounds nothing and hides no
+        // reading of the result.
+        const layerNote =
+          inputs !== undefined && executed
+            ? inputs.noteFor(tc.name, tool, resolution, callArgs)
+            : '';
+        if (layerNote !== '') resultStr += layerNote;
         newHistory.push({
           role: 'tool',
           content: resultStr,
           toolCallId: tc.id,
           toolName: tc.name,
+          ...(layerNote !== '' && { toolChars: deliveredResult.length }),
         });
 
         // ── Dynamic ReAct wiring ───────────────────────────────
@@ -5105,6 +5201,7 @@ export function buildToolCallsHandler(
           executed && !denied && !skillRejected,
           { toolName: tc.name, result: resultStr, toolCallId: tc.id },
           iteration,
+          turnStampOf(scope),
         );
 
         // (2) `read_skill` is the auto-attached activation tool.
@@ -5308,126 +5405,147 @@ export function buildToolCallsHandler(
           // re-run, so without it the build-time map's first holder answered.
           const resolved = resolveTool(toolName, scope.pausedToolParty as ToolParty | undefined);
           const tool = resolved.tool;
-          const rest = await runToolChain(deps.toolMiddleware ?? [], {
-            toolName,
-            ...(tool?.source !== undefined && { toolSource: tool.source }),
-            toolCallId,
-            iteration,
-            args,
-            history: [...(scope.history as readonly LLMMessage[])],
-            startIndex: askIndex + 1,
-            askPolicy: 'refuse',
-          });
-          recordDecisions(scope, rest.decisions);
-          // Would this tool's OWN consent gate have fired for this call? Asked by
-          // EVALUATING the demand, not by noticing that one was declared (8.13.0).
-          // Before that, any tool carrying a `checkIn` field was refused here even
-          // when its predicate said no — a selective gate (`amount > 1000`) blocked
-          // the £5 refunds it was written to let through, and the refusal claimed a
-          // consent gate would have run when it provably would not have.
-          //
-          // Judged on `rest.args` (what the tool would actually run with) and on
-          // the same history shape the loop's gate uses, so the answer cannot
-          // depend on which door the call arrived through.
-          const demandTrips =
-            rest.kind !== 'deny' &&
-            tool?.checkIn !== undefined &&
-            shouldCheckIn(tool.checkIn, rest.args, {
-              iteration,
-              toolCallId,
-              history: historyForCheckIn(scope, scope.history as readonly LLMMessage[]),
-            });
-          if (rest.kind === 'deny') {
-            result = rest.reason;
-          } else if (demandTrips) {
-            // The one-question rule, from the other direction: this tool's own
-            // consent gate really does demand a person for THESE arguments, and
-            // there is no checkpoint left to ask with.
-            //
-            // The two gates ask DIFFERENT questions, which is why an approval of
-            // one is not an answer to the other. A middleware `ask` carries the
-            // rule's own free-text question; a check-in carries the TOOL's demand
-            // with the evidence pack attached — `willDo`, what the run read, what
-            // drove the choice, the trail — none of which the person who approved
-            // the ask ever saw. Letting the approval satisfy both would file a
-            // `checkin.decision` for a question nobody was asked. Governance never
-            // silently invents a decision, for the same reason it never silently
-            // drops one.
+          // ── THE INPUTS LAYER'S REFUSALS, re-applied at this door (honesty
+          // layer 2). The batch loop decides them BEFORE the chain, so a call
+          // it refuses never reaches an ask. This door still asks both
+          // questions itself: a checkpoint written before they moved ahead of
+          // the chain, or resumed on an agent built without the layer, must
+          // not run a ruled tool unruled because a person approved the ask.
+          // Refused here, the rest of the chain is not walked and the tool
+          // does not run — the argument-refusal shape the loop lands.
+          const inputs: InputsDispatch | undefined =
+            deps.inputsLayer === true ? await import('../arguments/dispatch.js') : undefined;
+          const unmounted = unmountedRules(tool, toolName);
+          const rulesRefusal =
+            inputs?.resolutionsFor(scope, iteration).get(toolCallId)?.refused ??
+            (unmounted === undefined ? undefined : await unmounted);
+          if (rulesRefusal !== undefined) {
             error = true;
-            // A past fact about the resumed call, not a forecast about the
-            // turn (9.86.1): "cannot be retried this turn … Answer without it,
-            // or finish" was a prediction plus a standing order on a result
-            // that is re-read on every later call.
-            result =
-              `tool '${toolName}' was not executed on that call, and the resumed dispatch had ` +
-              `no second checkpoint to retry it on: it declares its own checkIn consent gate, ` +
-              `and that gate tripped for those arguments. (To ` +
-              `the agent's author: the middleware '${askedBy}' and the tool's checkIn ask ` +
-              `different questions — one is the rule's, one is the tool's with the evidence ` +
-              `pack attached — so approving one is not answering the other. Keep one gate for ` +
-              `this tool: drop the tool's \`checkIn\`, or let \`onToolCall\` return allow() for ` +
-              `tools that declare their own.)`;
+            result = rulesRefusal;
           } else {
-            const env = scope.$getEnv();
-            const dispatched = await resolveCredentialAndExecute(
-              scope,
-              resolved,
+            const rest = await runToolChain(deps.toolMiddleware ?? [], {
               toolName,
-              rest.args,
+              ...(tool?.source !== undefined && { toolSource: tool.source }),
               toolCallId,
               iteration,
-              env,
-            );
-            result = dispatched.result;
-            error = dispatched.error;
-            toolRan = dispatched.executed === true;
-            // A ceiling-refused call RAN but must not advance a step (9.20.0);
-            // its envelope — status 'invalid' plus any surviving declared
-            // effects — is still picked up and judged below.
-            stepToolRan =
-              dispatched.executed === true && error !== true && dispatched.ceilingRefused !== true;
-            if (dispatched.executed === true && error !== true) {
-              resumeEnvelope = dispatched.envelope;
-            }
-            // skip_step behind a middleware ask, approved (9.18.0): the
-            // placeholder just landed — replace it with the authoritative
-            // sentence BEFORE the chain's last word, the execute loop's
-            // composition kept.
-            if (frameworkSkipStepAnswered(toolName, tool) && stepToolRan) {
-              result = applySkipStep(scope, { args: rest.args, toolCallId, iteration });
-            }
-            // present behind a middleware ask, approved (9.22.0): same
-            // overwrite the batch loop applies — the snapshot (or refusal)
-            // replaces the placeholder before the chain's last word. A miss
-            // is an errored call here too.
-            if (deps.artifactStore && toolName === PRESENT_TOOL_NAME && stepToolRan) {
-              const presented = await applyPresent(scope, {
-                args: rest.args,
-                toolCallId,
+              args,
+              history: [...(scope.history as readonly LLMMessage[])],
+              startIndex: askIndex + 1,
+              askPolicy: 'refuse',
+            });
+            recordDecisions(scope, rest.decisions);
+            // Would this tool's OWN consent gate have fired for this call? Asked by
+            // EVALUATING the demand, not by noticing that one was declared (8.13.0).
+            // Before that, any tool carrying a `checkIn` field was refused here even
+            // when its predicate said no — a selective gate (`amount > 1000`) blocked
+            // the £5 refunds it was written to let through, and the refusal claimed a
+            // consent gate would have run when it provably would not have.
+            //
+            // Judged on `rest.args` (what the tool would actually run with) and on
+            // the same history shape the loop's gate uses, so the answer cannot
+            // depend on which door the call arrived through.
+            const demandTrips =
+              rest.kind !== 'deny' &&
+              tool?.checkIn !== undefined &&
+              shouldCheckIn(tool.checkIn, rest.args, {
                 iteration,
+                toolCallId,
+                history: historyForCheckIn(scope, scope.history as readonly LLMMessage[]),
               });
-              result = presented.text;
-              if (!presented.ok) {
-                error = true;
-                stepToolRan = false;
-              }
-            }
-            // The tool ran on this side of the pause, so the chain gets its
-            // last word here too — a rule about results cannot be skipped by
-            // routing a call through a human.
-            if (dispatched.executed === true) {
-              modelResult = await afterMoment(scope, {
-                ...(tool && { tool }),
+            if (rest.kind === 'deny') {
+              result = rest.reason;
+            } else if (demandTrips) {
+              // The one-question rule, from the other direction: this tool's own
+              // consent gate really does demand a person for THESE arguments, and
+              // there is no checkpoint left to ask with.
+              //
+              // The two gates ask DIFFERENT questions, which is why an approval of
+              // one is not an answer to the other. A middleware `ask` carries the
+              // rule's own free-text question; a check-in carries the TOOL's demand
+              // with the evidence pack attached — `willDo`, what the run read, what
+              // drove the choice, the trail — none of which the person who approved
+              // the ask ever saw. Letting the approval satisfy both would file a
+              // `checkin.decision` for a question nobody was asked. Governance never
+              // silently invents a decision, for the same reason it never silently
+              // drops one.
+              error = true;
+              // A past fact about the resumed call, not a forecast about the
+              // turn (9.86.1): "cannot be retried this turn … Answer without it,
+              // or finish" was a prediction plus a standing order on a result
+              // that is re-read on every later call.
+              result =
+                `tool '${toolName}' was not executed on that call, and the resumed dispatch had ` +
+                `no second checkpoint to retry it on: it declares its own checkIn consent gate, ` +
+                `and that gate tripped for those arguments. (To ` +
+                `the agent's author: the middleware '${askedBy}' and the tool's checkIn ask ` +
+                `different questions — one is the rule's, one is the tool's with the evidence ` +
+                `pack attached — so approving one is not answering the other. Keep one gate for ` +
+                `this tool: drop the tool's \`checkIn\`, or let \`onToolCall\` return allow() for ` +
+                `tools that declare their own.)`;
+            } else {
+              const env = scope.$getEnv();
+              const dispatched = await resolveCredentialAndExecute(
+                scope,
+                resolved,
                 toolName,
+                rest.args,
                 toolCallId,
                 iteration,
-                args: rest.args,
-                result,
-                ...(error === true && { error: true }),
-                history: [...(scope.history as readonly LLMMessage[])],
-                ...(scope.runIdentity && { identity: scope.runIdentity }),
-                ...(env.signal && { signal: env.signal }),
-              });
+                env,
+              );
+              result = dispatched.result;
+              error = dispatched.error;
+              toolRan = dispatched.executed === true;
+              // A ceiling-refused call RAN but must not advance a step (9.20.0);
+              // its envelope — status 'invalid' plus any surviving declared
+              // effects — is still picked up and judged below.
+              stepToolRan =
+                dispatched.executed === true &&
+                error !== true &&
+                dispatched.ceilingRefused !== true;
+              if (dispatched.executed === true && error !== true) {
+                resumeEnvelope = dispatched.envelope;
+              }
+              // skip_step behind a middleware ask, approved (9.18.0): the
+              // placeholder just landed — replace it with the authoritative
+              // sentence BEFORE the chain's last word, the execute loop's
+              // composition kept.
+              if (frameworkSkipStepAnswered(toolName, tool) && stepToolRan) {
+                result = applySkipStep(scope, { args: rest.args, toolCallId, iteration });
+              }
+              // present behind a middleware ask, approved (9.22.0): same
+              // overwrite the batch loop applies — the snapshot (or refusal)
+              // replaces the placeholder before the chain's last word. A miss
+              // is an errored call here too.
+              if (deps.artifactStore && toolName === PRESENT_TOOL_NAME && stepToolRan) {
+                const presented = await applyPresent(scope, {
+                  args: rest.args,
+                  toolCallId,
+                  iteration,
+                });
+                result = presented.text;
+                if (!presented.ok) {
+                  error = true;
+                  stepToolRan = false;
+                }
+              }
+              // The tool ran on this side of the pause, so the chain gets its
+              // last word here too — a rule about results cannot be skipped by
+              // routing a call through a human.
+              if (dispatched.executed === true) {
+                modelResult = await afterMoment(scope, {
+                  ...(tool && { tool }),
+                  toolName,
+                  toolCallId,
+                  iteration,
+                  args: rest.args,
+                  result,
+                  ...(error === true && { error: true }),
+                  history: [...(scope.history as readonly LLMMessage[])],
+                  ...(scope.runIdentity && { identity: scope.runIdentity }),
+                  ...(env.signal && { signal: env.signal }),
+                });
+              }
             }
           }
         }
@@ -5494,6 +5612,7 @@ export function buildToolCallsHandler(
           toolRan,
           { toolName, result: askResultStr, toolCallId },
           iteration,
+          turnStampOf(scope),
         );
         typedEmit(scope, 'agentfootprint.stream.tool_end', {
           toolCallId,
@@ -5676,6 +5795,7 @@ export function buildToolCallsHandler(
           toolRan,
           { toolName, result: decisionResultStr, toolCallId },
           iteration,
+          turnStampOf(scope),
         );
         typedEmit(scope, 'agentfootprint.stream.tool_end', {
           toolCallId,
@@ -5821,6 +5941,7 @@ export function buildToolCallsHandler(
           dispatched.executed === true,
           { toolName, result: consentResultStr, toolCallId },
           iteration,
+          turnStampOf(scope),
         );
         typedEmit(scope, 'agentfootprint.stream.tool_end', {
           toolCallId,
@@ -5956,6 +6077,7 @@ export function buildToolCallsHandler(
         true,
         { toolName, result: resultStr, toolCallId },
         iteration,
+        turnStampOf(scope),
       );
 
       typedEmit(scope, 'agentfootprint.stream.tool_end', {

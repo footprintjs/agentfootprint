@@ -90,6 +90,7 @@
 
 import type { LLMMessage } from '../../../adapters/types.js';
 import type { InjectionRecord } from '../../../recorders/core/types.js';
+import { toolBytesOf } from '../../../lib/toolBytes.js';
 import { absenceEvidenceProjection } from '../coverage/index.js';
 import { isLibraryAuthoredTurn } from './frames.js';
 import { lookupForms, normalizeToken, tokenize } from './normalize.js';
@@ -332,7 +333,11 @@ export function evidenceFromHistory(history: readonly LLMMessage[]): EvidenceCor
     if (msg.role !== 'tool') continue;
     toolResultsThisTurn += 1;
     sink.toolCallId = typeof msg.toolCallId === 'string' ? msg.toolCallId : undefined;
-    indexResult(msg.content, sink);
+    // The tool's OWN bytes (`lib/toolBytes.ts` · `toolBytesOf`, the one owner of the
+    // boundary): the inputs layer's note carries a value the call ran with ("2h", the
+    // value the tool's rule assumes), and indexing it would let an assumption ground an
+    // answer as if the tool had said it.
+    indexResult(toolBytesOf(msg), sink);
     sink.toolCallId = undefined;
   }
   return {
@@ -372,6 +377,13 @@ export function exemptFromRun(args: {
   readonly userMessage?: string;
   readonly history: readonly LLMMessage[];
   readonly systemPromptInjections?: readonly InjectionRecord[];
+  /**
+   * The declared `assume` values of every (tool, argument) that filed a
+   * `default` row this turn (the inputs layer, honesty layer 2) — the APP's own
+   * declaration, read from the tool's rule and never from the row, exempt like
+   * a value in the system prompt. Absent → the corpus it always was.
+   */
+  readonly declaredDefaults?: readonly string[];
 }): ReadonlySet<string> {
   // The same accumulator, walked with no turn boundaries: an exemption is a
   // fact about WHO supplied a value, and the turn it arrived in changes
@@ -402,6 +414,12 @@ export function exemptFromRun(args: {
     // create a false exemption for a value nobody supplied — the summary is
     // built from the content itself.
     else if (rec.contentSummary) addText(sink, rec.contentSummary);
+  }
+  // A tool's declared default is the app's declaration (honesty layer 2): the
+  // value itself and its tokens, exactly as a prompt's text is indexed.
+  for (const value of args.declaredDefaults ?? []) {
+    add(sink, value);
+    addText(sink, value);
   }
   return new Set(sink.values.keys());
 }

@@ -240,7 +240,7 @@ describe('event registry — names + exhaustiveness', () => {
     //     reply was delivered regardless. The swallow is the library's decision,
     //     so the visibility is its duty — the default deployment keeps no
     //     ingress sink.)
-    expect(ALL_EVENT_TYPES.length).toBe(121);
+    expect(ALL_EVENT_TYPES.length).toBe(122);
   });
 
   it('every entry in ALL_EVENT_TYPES is a key of AgentfootprintEventMap', () => {

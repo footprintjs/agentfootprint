@@ -155,11 +155,20 @@ export function mergeWire(candidates: readonly WireCandidate[]): {
   readonly winners: ReadonlyMap<string, ToolParty>;
   /** Every candidate that lost its name, in candidate order — competing losers. */
   readonly losers: ReadonlyMap<string, readonly ToolParty[]>;
+  /**
+   * The winning IMPLEMENTATION per served name, where the candidate carried one
+   * (honesty layer 2): the inputs layer decorates a served schema from the
+   * rules of the tool that will answer it. A name with no known tool (a chart
+   * with no claimant record) is absent — and is not decorated; the dispatch
+   * re-read is its guard.
+   */
+  readonly winningTools: ReadonlyMap<string, Tool>;
 } {
   const merged: LLMToolSchema[] = [];
   const winners = new Map<string, ToolParty>();
   const won = new Map<string, WireCandidate>();
   const losers = new Map<string, ToolParty[]>();
+  const winningTools = new Map<string, Tool>();
   for (const candidate of candidates) {
     const { schema, party } = candidate;
     const first = won.get(schema.name);
@@ -175,10 +184,14 @@ export function mergeWire(candidates: readonly WireCandidate[]): {
     }
     won.set(schema.name, candidate);
     winners.set(schema.name, party);
+    if (candidate.tool !== undefined) winningTools.set(schema.name, candidate.tool);
     merged.push(schema);
   }
-  return { merged, winners, losers };
+  return { merged, winners, losers, winningTools };
 }
+
+/** The inputs layer's wire decoration (`agent/arguments/serve.ts` · `rulesOnWire`). */
+type RulesOnWire = typeof import('../agent/arguments/serve.js').rulesOnWire;
 
 export interface ToolsSlotConfig {
   /** Tool registry exposed to the LLM. Empty → empty slot (LLMCall case). */
@@ -331,6 +344,16 @@ export interface ToolsSlotConfig {
    * empty offer, which serves the base decoration.
    */
   readonly findings?: true;
+  /**
+   * THE INPUTS LAYER IS ARMED (honesty layer 2) — present ONLY then, only
+   * ever `true`. Every served schema whose WINNING implementation declares
+   * `askOrAssume` is rebuilt at the ONE decoration site, one step before
+   * `withFindingsArgument` (`arguments/serve.ts` · `withArgumentRules`): each
+   * `assume`-ruled argument leaves `required` and its property says the rule.
+   * Absent, nothing is decorated — a ruled tool on an agent without the layer
+   * is refused at dispatch, and a sentence promising a fill would be false.
+   */
+  readonly inputsLayer?: true;
   /**
    * TOOL CHOICE BY CLASSIFIER IS ARMED (9.105.0, `.toolChoice()`) — present
    * ONLY then. Compose then asks `classifier` which of the merged wire's
@@ -848,7 +871,7 @@ export function buildToolsSlot(config: ToolsSlotConfig): FlowChart {
         ...(frameworkSkipStep !== undefined && { tool: frameworkSkipStep }),
       })),
     ];
-    const { merged, winners, losers } = mergeWire(candidates);
+    const { merged, winners, losers, winningTools } = mergeWire(candidates);
 
     // ── THE COMMIT — everything after the merge, as one closure ─────────
     // `served` is the list that goes on the record: the merged list itself
@@ -862,6 +885,7 @@ export function buildToolsSlot(config: ToolsSlotConfig): FlowChart {
       served: readonly LLMToolSchema[],
       servedInjections: readonly InjectionRecord[],
       narrowedTo: ReadonlySet<string> | undefined,
+      rules: RulesOnWire | undefined,
     ): void => {
       scope.$setValue(INJECTION_KEYS.TOOLS, servedInjections);
       // THE ONE DECORATION SITE (9.101.0). With `.findings()` armed, every
@@ -900,8 +924,13 @@ export function buildToolsSlot(config: ToolsSlotConfig): FlowChart {
       // see the narrowed list — nothing downstream learns a new mode.
       const offer: readonly string[] =
         config.findings === true ? args.findingsOffer ?? EMPTY_OFFER : EMPTY_OFFER;
+      // THE INPUTS LAYER'S RULES (honesty layer 2) decorate FIRST, from the
+      // rules of the implementation that WINS each name — `served` itself,
+      // by reference, when the layer is not armed or no served tool is ruled.
+      // `rules` is loaded (below) exactly when the layer is armed.
+      const ruled = rules !== undefined ? rules(served, winningTools) : served;
       scope.toolSchemas =
-        config.findings === true ? served.map((s) => withFindingsArgument(s, offer)) : served;
+        config.findings === true ? ruled.map((s) => withFindingsArgument(s, offer)) : ruled;
       if (servedTools !== undefined) {
         // Dispatch follows the OFFER: a name narrowed off this epoch's wire
         // was not served, so it is not on `current` and takes the off-wire
@@ -1016,9 +1045,20 @@ export function buildToolsSlot(config: ToolsSlotConfig): FlowChart {
       }
     };
 
+    // ── THE INPUTS LAYER'S DECORATION (honesty layer 2) — loaded through
+    // `import()` only when the layer is armed (the optional-family law, the
+    // tool-choice tail's own precedent below); an unarmed slot commits
+    // synchronously, exactly as it always did.
+    const loadingRules: Promise<RulesOnWire> | undefined =
+      config.inputsLayer === true
+        ? import('../agent/arguments/serve.js').then((m) => m.rulesOnWire)
+        : undefined;
     if (toolChoice === undefined) {
-      commitWire(merged, injections, undefined);
-      return;
+      if (loadingRules === undefined) {
+        commitWire(merged, injections, undefined, undefined);
+        return;
+      }
+      return loadingRules.then((rules) => commitWire(merged, injections, undefined, rules));
     }
     // ── TOOL CHOICE BY CLASSIFIER (9.105.0) — the armed tail ──────────────
     // The pick is awaited HERE, after the merge and before the commit, so the
@@ -1044,7 +1084,9 @@ export function buildToolsSlot(config: ToolsSlotConfig): FlowChart {
         prior: args.priorToolChoices ?? [],
         wrapUpAsked: args.wrapUpAsked === true,
       }).then(({ served, servedInjections, narrowedTo }) =>
-        commitWire(served, servedInjections, narrowedTo),
+        loadingRules === undefined
+          ? commitWire(served, servedInjections, narrowedTo, undefined)
+          : loadingRules.then((rules) => commitWire(served, servedInjections, narrowedTo, rules)),
       ),
     );
   };

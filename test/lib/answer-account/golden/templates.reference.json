@@ -1468,11 +1468,38 @@
   ],
   "source": "library"
  },
+ "howSure.check.argumentRules@1": {
+  "text": "Argument rules: ran value of 2 ruled arguments had a verdict on the record.",
+  "parts": [
+   {
+    "text": "Argument rules: ran value of 2 ruled arguments had a verdict on the record."
+   }
+  ],
+  "source": "library"
+ },
  "howSure.reason.asked@1": {
   "text": "A question the run asked is still waiting for its answer.",
   "parts": [
    {
     "text": "A question the run asked is still waiting for its answer."
+   }
+  ],
+  "source": "library"
+ },
+ "howSure.reason.argumentAssumed@1": {
+  "text": "2 values the calls ran with were assumed: set by a tool's rule or a rewrite, not given in the conversation.",
+  "parts": [
+   {
+    "text": "2 values the calls ran with were assumed: set by a tool's rule or a rewrite, not given in the conversation."
+   }
+  ],
+  "source": "library"
+ },
+ "howSure.reason.argumentUnverified@1": {
+  "text": "2 ruled values came from the model, with no source on the record: not the conversation, a result or the app.",
+  "parts": [
+   {
+    "text": "2 ruled values came from the model, with no source on the record: not the conversation, a result or the app."
    }
   ],
   "source": "library"

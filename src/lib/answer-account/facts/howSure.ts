@@ -218,6 +218,8 @@ function pointersOf(witness: readonly AssessmentPointer[]): RecordPointer[] {
 
 const REASON_LINES: Readonly<Record<AssessmentReason, TemplateId>> = {
   asked: 'howSure.reason.asked',
+  'argument-assumed': 'howSure.reason.argumentAssumed',
+  'argument-unverified': 'howSure.reason.argumentUnverified',
   'coverage-gap': 'howSure.reason.coverageGap',
   'declared-absent': 'howSure.reason.declaredAbsent',
   'empty-undeclared': 'howSure.reason.emptyUndeclared',
@@ -231,6 +233,8 @@ const REASON_LINES: Readonly<Record<AssessmentReason, TemplateId>> = {
 
 /** The reason lines that carry a count of the rows behind them. */
 const COUNTED: ReadonlySet<AssessmentReason> = new Set([
+  'argument-assumed',
+  'argument-unverified',
   'coverage-gap',
   'declared-absent',
   'empty-undeclared',
@@ -279,6 +283,7 @@ function callsBehind(
 }
 
 const CHECK_LINES: Readonly<Record<AssessmentCheck, TemplateId>> = {
+  'argument-rules': 'howSure.check.argumentRules',
   'tool-coverage': 'howSure.check.toolCoverage',
   'result-shape': 'howSure.check.resultShape',
   'names-and-numbers': 'howSure.check.namesAndNumbers',

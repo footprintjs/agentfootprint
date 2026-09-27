@@ -157,7 +157,11 @@ function wrapMockTool(
     // …and the same declarations, through the same reader (9.71.0). A rail
     // that arms on a remotely-declared `argumentsFrom` must arm here too, or
     // the mock proves nothing about the server it stands in for.
-    ...readToolExtras(mcp._meta, { server: serverName, tool: mcp.name }),
+    ...readToolExtras(mcp._meta, {
+      server: serverName,
+      tool: mcp.name,
+      inputSchema: mcp.inputSchema,
+    }),
     execute: async (args) => {
       const argsObj =
         args !== null && typeof args === 'object' && !Array.isArray(args)

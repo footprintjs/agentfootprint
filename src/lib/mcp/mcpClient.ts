@@ -317,7 +317,11 @@ function wrapMcpTool(
     // this tool still registers. That is what keeps one bad tool from killing
     // a forty-tool bulk register. A server that sent no bag adds no keys here,
     // so the Tool is byte-identical to one built before this existed.
-    ...readToolExtras(mcp._meta, { server: serverName, tool: mcp.name }),
+    ...readToolExtras(mcp._meta, {
+      server: serverName,
+      tool: mcp.name,
+      inputSchema: mcp.inputSchema,
+    }),
     execute: async (args) => {
       // The agent passes args as `unknown` per Tool contract. MCP
       // expects a JSON object — non-object inputs become `{}` rather

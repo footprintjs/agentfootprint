@@ -199,3 +199,51 @@ export const prepareFinalWithLimitsStage = (scope: TypedScope<AgentState>): void
       : scope.llmLatestContent;
   captureTurnPayload(scope, answer);
 };
+
+/**
+ * `.limitsTravelWithTheAnswer()` on an agent whose inputs layer is armed
+ * (honesty layer 2) — the limits stage above, plus the values a tool's
+ * `assume` rule filled THIS turn: "Assumed (a tool's rule, not your words)",
+ * composed by the framework from the committed `argument` rows
+ * (`arguments/serve.ts` · `assumedBlockOf`), so the model cannot drop it.
+ *
+ * Mounted in place of `prepareFinalWithLimitsStage` by both chart builders
+ * ONLY when both arms are on — the one place the final branch reads the
+ * ledger's argument rows, so a run that armed neither never reads the key (a
+ * tracked read of a key a run never writes is a phantom context source). With
+ * neither coverage nor an assumed value this turn, the answer is unchanged.
+ * The block's reader is loaded through `import()` — the optional-family law
+ * of docs-next's site budget — so this variant is async where the others are
+ * not, and only an armed agent ever mounts it.
+ *
+ * `readsRewrites` — the agent has a before-tool middleware chain
+ * (`.toolMiddleware()`), so a middleware may have rewritten an argument the
+ * layer filled: the call then ran with the REWRITE's value, and a line naming
+ * the filled one would put a value in the person's answer that the call did
+ * not run with. The stage then reads `middlewareDecisions` and leaves such a
+ * row out (omit, never deny) — the reading the answer's standing takes
+ * (`middleware/rewrites.ts` · `argumentRewritesOf`), which reads the rewrite
+ * itself. Without a chain the key can hold no tool rewrite and is never read.
+ */
+export function prepareFinalWithLimitsAndAssumedStage(
+  readsRewrites: boolean,
+): (scope: TypedScope<AgentState>) => Promise<void> {
+  return async (scope) => {
+    const { assumedBlockOf } = await import('../arguments/serve.js');
+    const declared = scope.coverageDeclared ?? [];
+    // The decisions are read only when there is a row a rewrite could
+    // supersede — and only on an agent whose chain can write one.
+    const assumed = assumedBlockOf(
+      scope.findingsLedger ?? [],
+      scope.turnNumber as number,
+      readsRewrites
+        ? () => [...((scope.middlewareDecisions as readonly unknown[] | undefined) ?? [])]
+        : undefined,
+    );
+    const answer =
+      declared.length > 0 || assumed !== ''
+        ? composeAnswerWithCoverage(scope.llmLatestContent, declared, assumed)
+        : scope.llmLatestContent;
+    captureTurnPayload(scope, answer);
+  };
+}

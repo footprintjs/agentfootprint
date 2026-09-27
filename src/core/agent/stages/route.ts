@@ -25,6 +25,7 @@ import {
   recordFindings,
   standingRowsFrom,
   type PreviousResult,
+  type TurnStamp,
 } from '../findings/ledger.js';
 import { knownResults } from '../findings/offer.js';
 import { contingentRowsOf, hasSetAsideStanding } from '../findings/contingent.js';
@@ -62,6 +63,92 @@ export type RouteBranch =
   | 'evidence-recheck'
   | 'wrap-up';
 
+/** The five values Route's dispatch test reads — nothing else decides it. */
+export interface DispatchValues {
+  /** How many tool calls the model asked for in this batch. */
+  readonly callCount: number;
+  readonly iteration: number;
+  readonly maxIterations: number;
+  readonly costBudgetHit?: boolean;
+  readonly costBudgetOnExceed?: 'warn' | 'halt';
+}
+
+/**
+ * THE dispatch test — `'tool-calls'` exactly when the model asked for calls,
+ * the run is not out of iterations, and no halting cost budget fired. One
+ * exported pure predicate, asked by every Route decider (through
+ * `decideBranch`) AND by the inputs layer (`honesty/mounts.ts`), which runs in
+ * its own isolated scope just before Route and must never ask the person about
+ * a batch Route then sends to the final branch.
+ *
+ * @example
+ * ```ts
+ * willDispatch({ callCount: 2, iteration: 3, maxIterations: 10 }); // true
+ * willDispatch({ callCount: 2, iteration: 10, maxIterations: 10 }); // false — out of iterations
+ * ```
+ */
+export function willDispatch(v: DispatchValues): boolean {
+  // A halting `costBudget` stops the loop HERE, at the same boundary
+  // maxIterations uses (8.14.0). Never mid-call: the call that crossed the
+  // budget has already completed, been billed and been recorded — this only
+  // decides that there will not be another one.
+  const costHalt = v.costBudgetHit === true && v.costBudgetOnExceed === 'halt';
+  const outOfIterations = v.iteration >= v.maxIterations;
+  return v.callCount > 0 && !outOfIterations && !costHalt;
+}
+
+/**
+ * The declared `assume` values behind THIS turn's `default` argument rows
+ * (honesty layer 2) — the exempt corpus's app-declaration half. Built by
+ * `declaredDefaultsFrom` over a rule reader, so the value is read from the
+ * tool's DECLARATION, never from the row (a row holds the tool's shown view,
+ * clipped, and `'REDACTED'` where the view hides it).
+ */
+export type DeclaredDefaults = (scope: TypedScope<AgentState>) => readonly string[];
+
+/**
+ * THE INPUTS LAYER IS ARMED (honesty layer 2) — what Route is handed then.
+ * Present exactly when the layer is mounted: the rows Route files through the
+ * one writer (the answer's standings, the contingent rows) carry the
+ * conversation `turn` (the turn stamp, adopted Q6). `declaredDefaults` rides
+ * along when the evidence gate is armed too: the exempt corpus gains this
+ * turn's assumed values. Absent → Route files and reads what it always did.
+ */
+export interface InputsRouteArm {
+  readonly declaredDefaults?: DeclaredDefaults;
+}
+
+/** The turn stamp for a row Route files — only under the inputs layer's arm. */
+function turnStampOf(
+  scope: TypedScope<AgentState>,
+  inputs: InputsRouteArm | undefined,
+): TurnStamp | undefined {
+  return inputs === undefined ? undefined : { turn: scope.turnNumber as number };
+}
+
+/**
+ * The exemption reader for an agent with the inputs layer armed beside the
+ * evidence gate. `ruleOf(toolName, argument)` answers the declared default
+ * off the implementation that answers the name (the shared dispatch
+ * resolver) — a name nothing answers any more exempts nothing, the safe
+ * direction (a missing exemption costs at most a flag on a value the app
+ * supplied).
+ */
+export function declaredDefaultsFrom(
+  ruleOf: (toolName: string, argument: string) => string | number | boolean | undefined,
+): DeclaredDefaults {
+  return (scope) => {
+    const turn = scope.turnNumber as number;
+    const values: string[] = [];
+    for (const row of [...((scope.findingsLedger as FindingsLedger | undefined) ?? [])]) {
+      if (row.kind !== 'argument' || row.turn !== turn || row.source !== 'default') continue;
+      const value = ruleOf(row.toolName, row.argument);
+      if (value !== undefined && !values.includes(String(value))) values.push(String(value));
+    }
+    return values;
+  };
+}
+
 /** The base decision, with the sentence that explains it. Split out so the
  *  enforcement-enabled path can decide, then judge, then announce ONCE — an
  *  agent whose answer is about to be re-asked should not have a route event
@@ -74,13 +161,22 @@ function decideBranch(scope: TypedScope<AgentState>): {
 } {
   const toolCalls = scope.llmLatestToolCalls as readonly { name: string }[];
   const iteration = scope.iteration as number;
-  // A halting `costBudget` stops the loop HERE, at the same boundary
-  // maxIterations uses (8.14.0). Never mid-call: the call that crossed the
-  // budget has already completed, been billed and been recorded — this only
-  // decides that there will not be another one.
-  const costHalt = scope.costBudgetHit === true && scope.costBudgetOnExceed === 'halt';
-  const outOfIterations = iteration >= scope.maxIterations;
-  const chosen = toolCalls.length > 0 && !outOfIterations && !costHalt ? 'tool-calls' : 'final';
+  // Read in the order, and under the short-circuit, this decider always read
+  // them: `costBudgetOnExceed` only once a budget was hit.
+  const costBudgetHit = scope.costBudgetHit;
+  const costBudgetOnExceed = costBudgetHit === true ? scope.costBudgetOnExceed : undefined;
+  const costHalt = costBudgetHit === true && costBudgetOnExceed === 'halt';
+  const maxIterations = scope.maxIterations;
+  const outOfIterations = iteration >= maxIterations;
+  const chosen = willDispatch({
+    callCount: toolCalls.length,
+    iteration,
+    maxIterations,
+    ...(costBudgetHit !== undefined && { costBudgetHit }),
+    ...(costBudgetOnExceed !== undefined && { costBudgetOnExceed }),
+  })
+    ? 'tool-calls'
+    : 'final';
   // A limit only CUT SHORT a turn if the model still wanted to do something.
   // A turn that ended because the model was done is not an early stop, however
   // many iterations it spent getting there.
@@ -341,6 +437,7 @@ function recordAnswerGuarantee(
 async function peelAnswerStandings(
   scope: TypedScope<AgentState>,
   findings: true | undefined,
+  inputs?: InputsRouteArm,
 ): Promise<string | undefined> {
   if (findings !== true || typeof scope.llmLatestContent !== 'string') return undefined;
   const raw = scope.llmLatestContent;
@@ -360,6 +457,7 @@ async function peelAnswerStandings(
         known,
         () => [...((scope.coverageDeclared ?? []) as readonly DeclaredCoverage[])],
       ),
+      turnStampOf(scope, inputs),
     );
   }
   if (peeled.content === raw) return undefined;
@@ -490,6 +588,11 @@ function judgeEvidence(
    *  the gate's grounded values against the ledger's standings. Absent → no
    *  read of the ledger, no row, no event — the gate as it was. */
   findings?: true,
+  /** THE INPUTS LAYER IS ARMED (honesty layer 2): the declared `assume`
+   *  values behind this turn's `default` rows join the exempt corpus — the
+   *  app's own declaration — and the contingent rows carry the turn stamp.
+   *  Absent → no read of the ledger for it, the corpus as it was. */
+  inputs?: InputsRouteArm,
 ): 'evidence-recheck' | undefined {
   if (gate === undefined) return undefined;
   const answer = (scope.llmLatestContent as string | undefined) ?? '';
@@ -515,6 +618,9 @@ function judgeEvidence(
       systemPromptInjections: scope.systemPromptInjections as
         | readonly InjectionRecord[]
         | undefined,
+      ...(inputs?.declaredDefaults !== undefined && {
+        declaredDefaults: inputs.declaredDefaults(scope),
+      }),
     }),
   });
 
@@ -561,6 +667,7 @@ function judgeEvidence(
       recordFindings(
         scope,
         contingentRowsOf(verdict.grounded, evidence, standingOf, 'answer', iteration),
+        turnStampOf(scope, inputs),
       );
     }
   }
@@ -689,10 +796,12 @@ function buildSimpleDecider(hasWrapUp: boolean): (scope: TypedScope<AgentState>)
 function buildSimpleDecider(
   hasWrapUp: boolean,
   findings: true,
+  inputs?: InputsRouteArm,
 ): (scope: TypedScope<AgentState>) => Promise<RouteBranch>;
 function buildSimpleDecider(
   hasWrapUp: boolean,
   findings?: true,
+  inputs?: InputsRouteArm,
 ): (scope: TypedScope<AgentState>) => RouteBranch | Promise<RouteBranch> {
   if (findings !== true) {
     return (scope) => {
@@ -704,7 +813,7 @@ function buildSimpleDecider(
   return async (scope) => {
     const decided = decideAndAnnounce(scope, hasWrapUp);
     if (decided.branch === 'final') {
-      await peelAnswerStandings(scope, findings); // no re-ask exit here
+      await peelAnswerStandings(scope, findings, inputs); // no re-ask exit here
       settleFinal(scope, decided.earlyStop);
     }
     return decided.branch;
@@ -818,6 +927,12 @@ export function buildRouteDeciderStage(
    *  9.110.0 both judging deciders also hand it to `judgeEvidence`, where the
    *  contingent check reads the ledger's standings. */
   findings?: true,
+  /** THE INPUTS LAYER IS ARMED (honesty layer 2) — the same trailing-optional
+   *  precedent: the rows this decider files carry the turn stamp, and — with
+   *  the evidence gate armed too — the declared `assume` values behind this
+   *  turn's `default` rows join the gate's exempt corpus. Passed only when the
+   *  layer is mounted; absent → the deciders an agent was always handed. */
+  inputs?: InputsRouteArm,
 ): (scope: TypedScope<AgentState>) => RouteBranch | Promise<RouteBranch> {
   const chain = messageMiddleware ?? [];
   if (
@@ -828,7 +943,7 @@ export function buildRouteDeciderStage(
   ) {
     // An armed agent is handed the plain decider WITH the peel — never the
     // fast path's shared reference, which reads nothing of the answer.
-    if (findings === true) return buildSimpleDecider(hasWrapUp, true);
+    if (findings === true) return buildSimpleDecider(hasWrapUp, true, inputs);
     return hasWrapUp ? buildSimpleDecider(true) : routeDeciderStage;
   }
   if (enforcement !== undefined)
@@ -842,6 +957,7 @@ export function buildRouteDeciderStage(
       integrityLedger,
       noticePriorTurnEvidence,
       findings,
+      inputs,
     );
   if (stepPlanFor !== undefined || evidence !== undefined)
     return buildJudgingDecider(
@@ -852,6 +968,7 @@ export function buildRouteDeciderStage(
       noticePriorTurnEvidence,
       integrityLedger,
       findings,
+      inputs,
     );
   return async (scope) => {
     const { chosen, rationale, earlyStop } = decideBranch(scope);
@@ -890,7 +1007,7 @@ export function buildRouteDeciderStage(
     scope.llmLatestContent = verdict.content;
     // AFTER the chain, as in every decider (`peelAnswerStandings`). This one
     // has no re-ask exit, so the emission is not kept.
-    await peelAnswerStandings(scope, findings);
+    await peelAnswerStandings(scope, findings, inputs);
     // AFTER the chain: `answerWasEmpty` has to be judged on the string the
     // caller will actually receive, and the chain may have rewritten it.
     settleWrapUp(scope, earlyStop, false);
@@ -1023,6 +1140,7 @@ function buildJudgingDecider(
   noticePriorTurnEvidence: boolean | undefined,
   integrityLedger: { current: DispositionLedger | undefined } | undefined,
   findings?: true,
+  inputs?: InputsRouteArm,
 ): (scope: TypedScope<AgentState>) => Promise<RouteBranch> {
   return async (scope) => {
     const { chosen, rationale, earlyStop } = decideBranch(scope);
@@ -1061,7 +1179,7 @@ function buildJudgingDecider(
     // THE ANSWER TURN'S STANDINGS (9.114.1 on this decider): after the chain,
     // before every judge below — the enforcing decider's order. The two
     // re-ask exits put the emission back (`restoreEmission`).
-    const emission = await peelAnswerStandings(scope, findings);
+    const emission = await peelAnswerStandings(scope, findings, inputs);
     // A withheld answer is judged by nothing below, so the recency row says so
     // here rather than sitting untouched (see `noteRecency`).
     if (denied) noteRecency(noticePriorTurnEvidence, integrityLedger, 'not-applicable');
@@ -1081,6 +1199,7 @@ function buildJudgingDecider(
         noticePriorTurnEvidence,
         integrityLedger,
         findings,
+        inputs,
       ) === 'evidence-recheck'
     ) {
       restoreEmission(scope, emission);
@@ -1110,6 +1229,7 @@ function buildEnforcingDecider(
   integrityLedger: { current: DispositionLedger | undefined } | undefined,
   noticePriorTurnEvidence: boolean | undefined,
   findings?: true,
+  inputs?: InputsRouteArm,
 ): (scope: TypedScope<AgentState>) => Promise<RouteBranch> {
   return async (scope) => {
     const base = decideBranch(scope);
@@ -1159,7 +1279,7 @@ function buildEnforcingDecider(
     // After the chain and before every judge below (`peelAnswerStandings`,
     // the one peel every decider runs). The string it held before the key
     // came off is what every RE-ASK exit puts back (`reAsk`).
-    const emission = await peelAnswerStandings(scope, findings);
+    const emission = await peelAnswerStandings(scope, findings, inputs);
     const reAsk = (
       branch: 'output-retry' | 'step-nudge' | 'evidence-recheck',
       rationale: string,
@@ -1211,6 +1331,7 @@ function buildEnforcingDecider(
           noticePriorTurnEvidence,
           integrityLedger,
           findings,
+          inputs,
         ) === 'evidence-recheck'
       ) {
         return reAsk('evidence-recheck', evidenceRecheckRationale(scope));

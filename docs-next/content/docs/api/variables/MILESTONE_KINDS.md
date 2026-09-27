@@ -6,6 +6,6 @@ title: MILESTONE_KINDS
 
 > `const` **MILESTONE\_KINDS**: readonly [`MilestoneKind`](/docs/api/type-aliases/MilestoneKind)[]
 
-Defined in: [src/conventions.ts:387](https://github.com/footprintjs/agentfootprint/blob/main/src/conventions.ts#L387)
+Defined in: [src/conventions.ts:410](https://github.com/footprintjs/agentfootprint/blob/main/src/conventions.ts#L410)
 
 Every [MilestoneKind](/docs/api/type-aliases/MilestoneKind), for validating a kind read off a recording.
