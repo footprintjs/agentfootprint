@@ -9,7 +9,8 @@ It did not check:
 It found:
   powerstore_get_volumes returned an empty result and did not declare what it searched.  ⟨found.undeclaredEmpty@1 · app · recorded · undeclared empty⟩
 How sure:
-  The record does not rate how sure this answer is.  ⟨howSure.standing.none@1 · library · not-recorded · not recorded⟩
+  Not sure — the record holds 1 reason this answer may not stand:  ⟨howSure.standing.notSure@1 · library · recorded⟩
+    • 1 call returned nothing and did not say what it searched.  ⟨howSure.reason.emptyUndeclared@1 · library · recorded⟩
   The library was not set to check the answer's names and numbers.  ⟨howSure.evidence.off@1 · library · not-applicable⟩
 Anything wrong:
   This answer's powerstore_get_volumes call returned an empty result that did not declare what it searched.  ⟨signal.undeclaredEmptyUsed@1 · app · recorded⟩

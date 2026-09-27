@@ -18,7 +18,11 @@
  *                        only, and its absence proves nothing).
  *
  * Emptiness is read from what the MODEL read — `modelResult ?? result` — and
- * never judged on a withheld result.
+ * never judged on a withheld result. The reader is the ONE emptiness reader
+ * (`core/agent/coverage/emptiness.ts` · `readEmptiness`), handed the door this
+ * record holds for the call: its absence (the delivered status, `tools.absent`),
+ * its boundary (`tools.coverage_declared`) and its described envelope
+ * (`tools.semantics_declared`).
  */
 
 import { strip } from '../../../core/agent/coverage/read.js';
@@ -31,6 +35,7 @@ import {
   historyAt,
   historyOf,
   readEmptiness,
+  rowsAtOf,
   type EmptinessReading,
   type ReadContext,
 } from './common.js';
@@ -74,6 +79,8 @@ export interface CallRead {
   /** The decision or permission row that refused / withheld it. */
   readonly ruleEvent?: ViewEvent;
   readonly coverage?: CoverageRead;
+  /** The `tools.semantics_declared` row: the described envelope as the record keeps it. */
+  readonly described?: ViewEvent;
   readonly emptiness: EmptinessReading;
   readonly findings?: ViewEvent;
   /** Where the tool's NAME is on the record (its start, its declaration, or its history message). */
@@ -304,19 +311,26 @@ function readOne(ctx: ReadContext, byCall: CallIndex, id: string): CallRead {
   const end = ends[ends.length - 1];
   const coverageEvents = [...byCall('tools.absent', id), ...byCall('tools.coverage_declared', id)];
   const coverage = readCoverage(coverageEvents);
+  const described = byCall('tools.semantics_declared', id)[0];
   const named = toolNameFor(ctx, id, start, coverage);
   // A call no event names is still a call: counted as unread, judged, and said to be unnamed.
   if (named === undefined) ctx.noteUnread();
   const toolName = named?.name ?? '';
   const outcome = outcomeOf(ctx, byCall, id, toolName, start, end);
   const judged = outcome.outcome === 'ran' && outcome.withheldBy === undefined && end !== undefined;
+  // The door THIS record holds for the call — its events — decides what was declared; a marker
+  // in the bytes the run did not recognize (an envelope returned as JSON text) is plain data.
   const emptiness: EmptinessReading = judged
-    ? readEmptiness(
-        'modelResult' in end.payload ? end.payload.modelResult : end.payload.result,
-        toolName,
-        ctx.declarations,
-        end.payload.status === 'absent' || coverage?.kind === 'absent',
-      )
+    ? readEmptiness('modelResult' in end.payload ? end.payload.modelResult : end.payload.result, {
+        ...(rowsAtOf(ctx.declarations, toolName) !== undefined && {
+          rowsAt: rowsAtOf(ctx.declarations, toolName),
+        }),
+        door: {
+          absent: end.payload.status === 'absent' || coverage?.kind === 'absent',
+          bounded: coverageEvents.some((e) => e.type.endsWith('tools.coverage_declared')),
+          ...(described !== undefined && { described: described.payload.semantics }),
+        },
+      })
     : { emptiness: 'unknown', undeclaredShape: false };
   const findings = byCall('findings.declared', id)[0];
   const basis = str(findings?.payload.basis);
@@ -337,6 +351,8 @@ function readOne(ctx: ReadContext, byCall: CallIndex, id: string): CallRead {
     emptiness: emptiness.emptiness,
     ...(emptiness.rows !== undefined && { rows: emptiness.rows }),
     ...(emptiness.source !== undefined && { emptinessSource: emptiness.source }),
+    ...(emptiness.described !== undefined && { described: emptiness.described }),
+    ...(emptiness.bounded === true && { bounded: true as const }),
     ...(judged && { view: viewOf(end) }),
     ...(coverage !== undefined && {
       coverage: {
@@ -364,6 +380,7 @@ function readOne(ctx: ReadContext, byCall: CallIndex, id: string): CallRead {
     ...(end !== undefined && { end }),
     ...(outcome.ruleEvent !== undefined && { ruleEvent: outcome.ruleEvent }),
     ...(coverage !== undefined && { coverage }),
+    ...(described !== undefined && { described }),
     emptiness,
     ...(findings !== undefined && { findings }),
     ...(namePointer !== undefined && { toolPointer: namePointer }),

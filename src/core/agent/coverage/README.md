@@ -4,7 +4,9 @@ Map: `types.ts`, `items.ts`, `refusal.ts`, `absent.ts`, `ledger.ts` (what a tool
 declares).
 Walker: `read.ts` — the ONE reader both dispatch boundaries and the raise site
 (`../stages/toolCalls.ts` · `declareRaisedAbsence`) call.
-Fold: `evidence.ts` (`absenceEvidenceProjection` — what an absence may ground).
+Fold: `evidence.ts` (`absenceEvidenceProjection` — what an absence may ground)
+and `emptiness.ts` (`readEmptiness` — the ONE reader of what came back, shared by
+the answer account and the answer's standing).
 Lens: `answer.ts` · `composeAnswerWithCoverage`, the coverage block appended to
 the final answer so the model cannot drop it.
 
@@ -487,6 +489,51 @@ execute: () => describedResult({ facts: rows, provenance: { measuredAt: exportTi
   taken from the tree before this change, which also pins the model-visible
   tool message and that the run continues.
 
+## 6. What came back — ONE emptiness reader (the honesty layer)
+
+**The law.** A result reads as empty, non-empty or unreadable by ONE rule, and
+silence about what was searched is recorded as silence.
+
+`emptiness.ts` · `readEmptiness` — called as `readEmptiness(value, { rowsAt?, door? })` — takes the value the
+model read and the door the RECORD says the call returned, and answers with
+typed routes only — never a guess:
+
+| What the record says came back | Reading |
+|---|---|
+| an absence — bare, inside a `coverage()`, or the delivered status `'absent'` | `declared-absent` |
+| a `describedResult()` with data (the envelope the record keeps) | `non-empty`, counted per kind |
+| a `describedResult()` with only `clarify` | `clarify` |
+| a `coverage()` envelope | its wrapped result, read by these same routes and marked `bounded`; an EMPTY wrapped rowset is `declared-absent` |
+| a bare top-level array | `undeclared-empty` or `non-empty` (library-counted) |
+| an object whose key the app declared in `rowsAt` | `undeclared-empty` or `non-empty` (app-counted) |
+| anything else | `unknown` |
+
+Two callers, one rule, so they cannot disagree: the `/observe` answer account
+(`lib/answer-account/facts/calls.ts` for this run's calls,
+`lib/answer-account/facts/inView.ts` for an earlier answer's result) and the
+answer's standing (`../assessment/assess.ts` · `assessAnswer`).
+
+**The door decides, when the record holds one.** An envelope a tool returned as
+JSON TEXT (an `mcpClient` in text mode) reaches the model byte-for-byte like a
+recognized one, but the run never recognized it — no status, no coverage row, no
+limits block. So a caller that holds the call's door passes it, and a marker the
+door does not vouch for is plain data:
+
+```ts
+readEmptiness('{"af_absent":true,"checked":[…],…}', { door: { absent: false, bounded: false } });
+// → { emptiness: 'unknown', undeclaredShape: true } — the run filed no absence, so none is read
+readEmptiness(JSON.stringify(coverage([], { checked: ['switch A'] })), {
+  door: { absent: false, bounded: true },
+});
+// → { emptiness: 'declared-absent', rows: 0, source: 'library', bounded: true, … }
+```
+
+Only when the record holds NO door for a result (an earlier answer's, whose run
+is not in this record) is the door read off the bytes, by the rule the run's own
+recognizer applies (`read.ts` · `readCoverageResult`). `rowsAtProblem` is the one
+rule for an app's declared rows key (a non-empty top-level key), asked by both
+readers' declarations.
+
 ## What the framework does with them
 
 Recognition is STRICT (the effects-envelope law): only a plain object carrying
@@ -571,8 +618,10 @@ stated the limits, and it does not refuse an answer that did not.
 | `types.ts` | the shared vocabulary — `CoverageItem`, the three lists, the two rendered shapes, the typed suggestion (`TryInsteadTool`) |
 | `items.ts` | normalize and REFUSE a declaration, at the call site |
 | `refusal.ts` | how every helper refuses (§ 5): the one prefix, `refused: `, and the one unknown-key check, naming the spelling meant |
-| `absent.ts` | `absent()`, the recognizer, the static note, and the ONE rule set for a suggestion (`tryInsteadOfAbsence` and `tryInsteadToolOfAbsence` read by it) |
-| `ledger.ts` | `coverage()`, the recognizer, the static note |
+| `recognize.ts` | the two recognizers (`readAbsence`, `readCoverageLedger`) and the two markers — a leaf, so a post-hoc reader loads them without the mints |
+| `absent.ts` | `absent()`, the static note, and the ONE rule set for a suggestion (`tryInsteadOfAbsence` and `tryInsteadToolOfAbsence` read by it); re-exports its recognizer |
+| `ledger.ts` | `coverage()` and the static note; re-exports its recognizer |
+| `emptiness.ts` | the ONE reader of what came back (§ 6) — typed routes, the door the record holds, the `rowsAt` rule |
 | `read.ts` | the ONE reader both dispatch boundaries and the raise site (`../stages/toolCalls.ts` · `declareRaisedAbsence`) call — lifts the suggestion beside the coverage |
 | `evidence.ts` | what an absence is allowed to ground |
 | `answer.ts` | folding the run's declarations into one appended block |

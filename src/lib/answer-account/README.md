@@ -37,8 +37,20 @@ pinned in `test/lib/answer-account/golden/turn2.A.txt`:
 |                | The app's scoring put it first: 1 against 0 for every other skill.            | app                           |
 | It checked     | get_array_inventory says it checked: • …                                      | tool:get_array_inventory      |
 | It found       | get_array_inventory looked for a VM disk … and found none.                    | tool:get_array_inventory      |
-| How sure       | The record does not rate how sure this answer is.                             | library (not recorded)        |
+| How sure       | Not assessed — the run's committed record holds no verdict the standing can rest on. | library (not applicable) |
 | Anything wrong | 1 of the 3 checks could not be run on this record.                            | library                       |
+
+The "How sure" row opens with the answer's STANDING — the one fold,
+`core/agent/assessment/assess.ts` · `assessAnswer`, over the recording's
+committed state (never its events): known · consistent with the record · not
+sure (each reason a line) · ask · not assessed. Fixture A reads "not assessed"
+because it was reduced before the fold existed: its state keeps `history` but not
+`coverageDeclared`, so the absence the events show is not on the rows the fold
+reads (`test/core/agent/assessment/fold-real-record.test.ts` restores the row
+and the same record reads "not sure"). Every result — here and in the standing —
+is read by the ONE emptiness reader, `core/agent/coverage/emptiness.ts` ·
+`readEmptiness`, handed the door this record holds for the call, so the account
+and the standing cannot disagree about what came back.
 
 ## The laws
 

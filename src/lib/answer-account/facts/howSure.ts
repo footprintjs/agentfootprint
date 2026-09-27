@@ -1,7 +1,12 @@
 /**
  * Row "How sure" — what the record holds about how sure the answer is, side by
- * side, never joined into a verdict:
- *   - the whole-answer standing: NOT BUILT in v1, said so;
+ * side:
+ *   - the whole-answer standing, FIRST: the one fold
+ *     (`core/agent/assessment/assess.ts` · `assessAnswer`) over the run's
+ *     committed state — known · consistent with the record · not sure (with the
+ *     reasons) · ask · not assessed — never read from this recording's events,
+ *     and never "known" from silence. The lines below stay facts beside it; the
+ *     standing is the only verdict, and it is the fold's, not this row's;
  *   - the model's pre-call expectation (`findings.declared`) — "how useful it
  *     expected the result to be", never a confidence — and, beside it, the
  *     call's outcome as its own fact (a declared absence can BE the direct,
@@ -12,11 +17,18 @@
  *     event slices `unsupported` at 12, so a full list says "at least".
  */
 
+import { assessAnswer } from '../../../core/agent/assessment/assess.js';
+import type {
+  AssessmentCheck,
+  AssessmentPointer,
+  AssessmentReason,
+} from '../../../core/agent/assessment/types.js';
 import { MAX_REPORTED_VALUES } from '../../../core/agent/evidence/limits.js';
 import { chip, joinAnd, n, v } from '../render.js';
-import type { EvidenceFact, AccountFact, Sentence } from '../types.js';
+import type { TemplateId } from '../templates.js';
+import type { AnswerFacts, EvidenceFact, AccountFact, RecordPointer, Sentence } from '../types.js';
 import { isRecord, num, str, type ViewEvent } from '../view.js';
-import { at, emptinessSource, takeItem, type ReadContext } from './common.js';
+import { at, emptinessSource, stateAt, takeItem, type ReadContext } from './common.js';
 import type { CallsRead } from './calls.js';
 import { MAX_LISTED_CALLS } from './checked.js';
 
@@ -26,6 +38,7 @@ export const FLAGGED_VALUE_CHARS = 200;
 export interface HowSureRead {
   readonly lines: readonly Sentence[];
   readonly evidence: AccountFact<EvidenceFact>;
+  readonly standing: AnswerFacts['standing'];
 }
 
 /**
@@ -192,15 +205,144 @@ function evidenceLines(ctx: ReadContext, e: ViewEvent, fact: EvidenceFact): Sent
   return lines;
 }
 
+/** The account's standing fact: the owner's word, or "not recorded" when no committed state is. */
+type StandingFact = AnswerFacts['standing'];
+
+/** Witness rows the account can point at (a checkpoint is never in a recording). */
+function pointersOf(witness: readonly AssessmentPointer[]): RecordPointer[] {
+  return witness.flatMap((w): RecordPointer[] => (w.kind === 'checkpoint' ? [] : [w]));
+}
+
+const REASON_LINES: Readonly<Record<AssessmentReason, TemplateId>> = {
+  asked: 'howSure.reason.asked',
+  'coverage-gap': 'howSure.reason.coverageGap',
+  'declared-absent': 'howSure.reason.declaredAbsent',
+  'empty-undeclared': 'howSure.reason.emptyUndeclared',
+  'sources-conflict': 'howSure.reason.sourcesConflict',
+  'value-unsupported': 'howSure.reason.valueUnsupported',
+  'value-survived-revision': 'howSure.reason.valueSurvivedRevision',
+  'stopped-early': 'howSure.reason.stoppedEarly',
+  'answer-check-failed': 'howSure.reason.answerCheckFailed',
+  'check-unreachable': 'howSure.reason.checkUnreachable',
+};
+
+/** The reason lines that carry a count of the rows behind them. */
+const COUNTED: ReadonlySet<AssessmentReason> = new Set([
+  'coverage-gap',
+  'declared-absent',
+  'empty-undeclared',
+  'sources-conflict',
+]);
+
+const CHECK_LINES: Readonly<Record<AssessmentCheck, TemplateId>> = {
+  'tool-coverage': 'howSure.check.toolCoverage',
+  'result-shape': 'howSure.check.resultShape',
+  'names-and-numbers': 'howSure.check.namesAndNumbers',
+  'answer-checks': 'howSure.check.answerChecks',
+};
+
+/**
+ * The answer's standing — the ONE fold (`core/agent/assessment/assess.ts` ·
+ * `assessAnswer`) over the run's committed state, rendered. The fold reads
+ * committed rows only, never this recording's events, so the account and every
+ * other reader of the same run say the same standing.
+ */
+function standingLines(ctx: ReadContext): { lines: Sentence[]; fact: StandingFact } {
+  const state = ctx.view.state;
+  if (state === undefined) {
+    return {
+      lines: [
+        ctx.say('howSure.standing.none', {
+          status: 'not-recorded',
+          missing: 'no-event',
+          chips: [chip('not-recorded', 'chip.notRecorded')],
+        }),
+      ],
+      fact: {
+        value: null,
+        source: 'library',
+        status: 'not-recorded',
+        pointers: [],
+        missing: 'no-event',
+      },
+    };
+  }
+  const a = assessAnswer({ snapshot: { sharedState: state } }, ctx.declarations);
+  const reasonPointers = pointersOf(a.reasons.flatMap((r) => r.witness));
+  const ran = a.checked.filter((c) => c.ran > 0);
+  const lines: Sentence[] = [];
+  switch (a.standing) {
+    case 'known':
+      lines.push(
+        ctx.say('howSure.standing.known', { pointers: [stateAt('answerValidation', 'status')] }),
+      );
+      break;
+    case 'consistent':
+      lines.push(
+        ctx.say('howSure.standing.consistent', {
+          vars: { n: n(ran.length) },
+          pointers: pointersOf(ran.flatMap((c) => c.witness)),
+        }),
+        ...ran.map((c) =>
+          ctx.say(CHECK_LINES[c.check], {
+            vars: { ran: n(c.ran), of: n(c.of) },
+            pointers: pointersOf(c.witness),
+            item: true,
+          }),
+        ),
+      );
+      break;
+    case 'not-sure':
+    case 'ask':
+      lines.push(
+        ctx.say(a.standing === 'ask' ? 'howSure.standing.ask' : 'howSure.standing.notSure', {
+          ...(a.standing === 'not-sure' && { vars: { n: n(a.reasons.length) } }),
+          ...recordedAt(reasonPointers),
+        }),
+        ...a.reasons.map((r) =>
+          ctx.say(REASON_LINES[r.reason], {
+            ...(COUNTED.has(r.reason) && { vars: { n: n(r.witness.length) } }),
+            ...recordedAt(pointersOf(r.witness)),
+            item: true,
+          }),
+        ),
+      );
+      break;
+    case 'not-assessed':
+      lines.push(ctx.say('howSure.standing.notAssessed', { status: 'not-applicable' }));
+      break;
+  }
+  const factPointers =
+    a.standing === 'known'
+      ? [stateAt('answerValidation', 'status')]
+      : a.standing === 'consistent'
+      ? pointersOf(ran.flatMap((c) => c.witness))
+      : reasonPointers;
+  return {
+    lines,
+    fact: {
+      value: a.standing,
+      source: 'library',
+      status: a.standing === 'not-assessed' ? 'not-applicable' : 'recorded',
+      pointers: factPointers,
+    },
+  };
+}
+
+/** A line is `recorded` only when it points into the record — a pending ask lives in the checkpoint, not here. */
+function recordedAt(pointers: readonly RecordPointer[]): {
+  pointers: readonly RecordPointer[];
+  status?: 'not-recorded';
+  missing?: 'no-event';
+} {
+  return pointers.length > 0
+    ? { pointers }
+    : { pointers, status: 'not-recorded', missing: 'no-event' };
+}
+
 export function readHowSure(ctx: ReadContext, calls: CallsRead): HowSureRead {
-  const lines: Sentence[] = [
-    ctx.say('howSure.standing.none', {
-      status: 'not-recorded',
-      missing: 'not-built',
-      chips: [chip('not-recorded', 'chip.notRecorded')],
-    }),
-    ...expectationLines(ctx, calls),
-  ];
+  const standing = standingLines(ctx);
+  const lines: Sentence[] = [...standing.lines, ...expectationLines(ctx, calls)];
   const e = evidenceEvent(ctx);
   const posture = str(e?.payload.posture);
   const candidates = num(e?.payload.candidates);
@@ -236,6 +378,7 @@ export function readHowSure(ctx: ReadContext, calls: CallsRead): HowSureRead {
     };
     return {
       lines,
+      standing: standing.fact,
       evidence: {
         value: stored,
         source: 'library',
@@ -256,6 +399,7 @@ export function readHowSure(ctx: ReadContext, calls: CallsRead): HowSureRead {
     );
     return {
       lines,
+      standing: standing.fact,
       evidence: { value: null, source: 'library', status: 'not-applicable', pointers: [] },
     };
   }
@@ -268,6 +412,7 @@ export function readHowSure(ctx: ReadContext, calls: CallsRead): HowSureRead {
   );
   return {
     lines,
+    standing: standing.fact,
     evidence: {
       value: null,
       source: 'library',

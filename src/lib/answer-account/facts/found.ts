@@ -4,15 +4,18 @@
  *
  * Branches on the call's outcome first: a call that did not run "found nothing"
  * because it did not run; a withheld result is never judged empty (the model
- * read the rule's refusal, not the rows). Emptiness is typed only — a declared
- * absence, a zero-length top-level array, or the app's declared `rowsAt` (then
- * the line is vouched `app`, because only the app's declaration makes it
- * "empty").
+ * read the rule's refusal, not the rows). Emptiness is typed only, read by the
+ * one emptiness reader (`core/agent/coverage/emptiness.ts` · `readEmptiness`):
+ * a declared absence (or an empty rowset inside a declared boundary), a
+ * described result's data counted per kind, a question handed back, a
+ * zero-length top-level array, or the app's declared `rowsAt` (then the line
+ * is vouched `app`, because only the app's declaration makes it "empty").
  */
 
 import { chip, n, v } from '../render.js';
 import type { AccountSource, RecordPointer, Sentence } from '../types.js';
 import { at, declarationAt, emptinessSource, historyAt, type ReadContext } from './common.js';
+import { isRecord, str } from '../view.js';
 import { endPointer, type CallRead, type CallsRead } from './calls.js';
 import type { BeforePauseCall } from './checked.js';
 import { anchorPointer, foldMore, MAX_LISTED_CALLS } from './checked.js';
@@ -29,7 +32,7 @@ function rowsAtPointers(
   return source === 'app' ? [declarationAt(ctx.declarations, `tools.${toolName}.rowsAt`)] : [];
 }
 
-function foundForCall(ctx: ReadContext, call: CallRead): Sentence {
+function foundForCall(ctx: ReadContext, call: CallRead): Sentence | Sentence[] {
   if (call.unnamed) {
     return ctx.say('found.unnamed', {
       vars: { id: call.tool },
@@ -94,13 +97,69 @@ function foundForCall(ctx: ReadContext, call: CallRead): Sentence {
         chips: [chip('undeclared-empty', 'chip.undeclaredEmpty', 'warn')],
       });
     case 'non-empty':
+      if (reading.described !== undefined && call.described !== undefined) {
+        return describedLines(ctx, call, reading.described);
+      }
       return ctx.say('found.rows', {
         vars: { tool, n: n(reading.rows ?? 0, emptinessSource(reading)) },
         pointers: [...endPointers, ...extra],
       });
+    case 'clarify':
+      return ctx.say('found.clarify', {
+        vars: { tool },
+        pointers: call.described ? [at(call.described, 'toolCallId')] : endPointers,
+      });
     case 'unknown':
       return ctx.say('found.result', { vars: { tool }, pointers: endPointers });
   }
+}
+
+const DESCRIBED_LINES = {
+  facts: 'found.described.facts',
+  series: 'found.described.series',
+  edges: 'found.described.edges',
+} as const;
+
+/**
+ * A described result: one line per kind of data, counted by the library from
+ * the envelope the record keeps (the `tools.semantics_declared` row — the model
+ * read its projection), then the tool's own source and time when it declared
+ * both.
+ */
+function describedLines(
+  ctx: ReadContext,
+  call: CallRead,
+  counts: NonNullable<CallRead['emptiness']['described']>,
+): Sentence[] {
+  const event = call.described as NonNullable<CallRead['described']>;
+  const lines: Sentence[] = [];
+  for (const kind of ['facts', 'series', 'edges'] as const) {
+    const count = counts[kind];
+    if (count === undefined) continue;
+    lines.push(
+      ctx.say(DESCRIBED_LINES[kind], {
+        vars: { tool: toolOf(call), n: n(count) },
+        pointers: [at(event, 'toolCallId')],
+      }),
+    );
+  }
+  const semantics = event.payload.semantics;
+  const provenance = isRecord(semantics) ? semantics.provenance : undefined;
+  const source = isRecord(provenance) ? str(provenance.source) : undefined;
+  const measuredAt = isRecord(provenance) ? str(provenance.measured_at) : undefined;
+  if (source !== undefined && measuredAt !== undefined) {
+    const by: AccountSource = `tool:${call.fact.toolName}`;
+    lines.push(
+      ctx.say('found.described.provenance', {
+        vars: {
+          tool: toolOf(call),
+          source: v(source, by, at(event, 'semantics', 'provenance', 'source')),
+          measuredAt: v(measuredAt, by, at(event, 'semantics', 'provenance', 'measured_at')),
+        },
+      }),
+    );
+  }
+  return lines;
 }
 
 /** The vars every in-view line shares. */
@@ -147,7 +206,7 @@ export function readFoundRow(
   inView: InViewAll,
   beforePause: readonly BeforePauseCall[],
 ): Sentence[] {
-  const lines = calls.calls.slice(0, MAX_LISTED_CALLS).map((c) => foundForCall(ctx, c));
+  const lines = calls.calls.slice(0, MAX_LISTED_CALLS).flatMap((c) => foundForCall(ctx, c));
   // The same "…and N more tool calls" the other call rows carry, right after the listed calls.
   const more = foldMore(ctx, calls);
   if (more !== undefined) lines.push(more);

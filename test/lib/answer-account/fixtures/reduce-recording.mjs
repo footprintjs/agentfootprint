@@ -5,7 +5,9 @@
  * What it keeps: every event, AT ITS INDEX (a token event keeps its slot with
  * its text blanked), so a pointer in a golden lands on the same event the
  * archived recording holds; the snapshot's `runId`; the `sharedState` keys the
- * account reads (`history`, `userMessage`, `turnNumber`, `pausedToolCallId`).
+ * account reads (`history`, `userMessage`, `turnNumber`, `pausedToolCallId`) and
+ * the committed rows its standing folds (`coverageDeclared`, `findingsLedger`,
+ * `unsupportedValues`, `stoppedEarly`, `answerValidation`).
  *
  * What it drops or blanks — size, and no app prompt checked into the library:
  *   - the snapshot's commit log, execution tree, recorders, subflow results and
@@ -23,7 +25,20 @@
 
 import { readFileSync, writeFileSync } from 'node:fs';
 
-const KEEP_STATE = ['history', 'userMessage', 'turnNumber', 'pausedToolCallId'];
+// The keys the account reads itself, then the committed rows its "How sure" row folds (the
+// standing fold, `core/agent/assessment/assess.ts`). Fixture A was reduced before the fold
+// existed, so it carries only the first four — its standing reads what that leaves.
+const KEEP_STATE = [
+  'history',
+  'userMessage',
+  'turnNumber',
+  'pausedToolCallId',
+  'coverageDeclared',
+  'findingsLedger',
+  'unsupportedValues',
+  'stoppedEarly',
+  'answerValidation',
+];
 const P = 'agentfootprint.';
 
 function reduceEvent(event) {

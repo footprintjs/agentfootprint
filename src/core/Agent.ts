@@ -166,6 +166,8 @@ import { CompactionUnmeasurableError } from './agent/window/errors.js';
 import type { WindowStrategy } from './agent/window/strategy.js';
 import type { FoldedSpan } from './agent/window/types.js';
 import type { FindingsLedger } from './agent/findings/types.js';
+import { assessAnswer } from './agent/assessment/assess.js';
+import type { AnswerAssessment, AssessmentDeclarations } from './agent/assessment/types.js';
 import {
   isCheckInDecision,
   resolveCheckInConfig,
@@ -3616,6 +3618,42 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
     const report = (this.getLastSnapshot()?.sharedState as Partial<AgentState> | undefined)
       ?.answerValidation;
     return report === undefined ? undefined : structuredClone(report);
+  }
+
+  /**
+   * How far the last run's answer stands — folded from its COMMITTED record,
+   * never from how sure the model sounded: `known` · `consistent` (checks ran,
+   * none fired — never "verified") · `not-sure` (with the reasons) · `ask` (the
+   * turn ended in a typed ask still waiting) · `not-assessed` (nothing on the
+   * record could be checked).
+   *
+   * The same pure fold as `assessAnswer` on `agentfootprint/observe`, over this
+   * agent's last snapshot — and, when the last run paused, its checkpoint, so a
+   * question still waiting is read. It reads rows, never events, so a later
+   * reader of the same recording folds the same standing. `undefined` before
+   * the first run.
+   *
+   * `declarations` is the answer account's object (`AnswerAccountDeclarations`):
+   * the fold reads `tools[name].rowsAt`, where an object result keeps its rows.
+   *
+   * @example
+   * ```ts
+   * await agent.run({ message: 'Which ports on switch A are down?' });
+   * const a = agent.assessment();
+   * if (a?.standing === 'not-sure') {
+   *   for (const r of a.reasons) console.log(r.reason); // e.g. 'empty-undeclared'
+   * }
+   * ```
+   */
+  assessment(declarations?: AssessmentDeclarations): AnswerAssessment | undefined {
+    const snapshot = this.getLastSnapshot();
+    if (snapshot === undefined) return undefined;
+    const executor = this.lastExecutor;
+    const checkpoint = executor?.isPaused() === true ? executor.getCheckpoint() : undefined;
+    return assessAnswer(
+      { snapshot, ...(checkpoint !== undefined && { checkpoint }) },
+      declarations,
+    );
   }
 
   private finalizeResult(

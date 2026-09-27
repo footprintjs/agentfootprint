@@ -8,6 +8,7 @@
  * top-level key with no `/` or `.`; unknown keys refused by name.
  */
 
+import { rowsAtProblem } from '../../core/agent/coverage/emptiness.js';
 import { plainLineProblem } from '../plainLine.js';
 import type { AnswerAccountDeclarations } from './types.js';
 
@@ -40,9 +41,9 @@ function checkLabel(id: string, label: unknown): void {
 }
 
 function checkRowsAt(tool: string, rowsAt: unknown): void {
-  if (typeof rowsAt !== 'string' || rowsAt.length === 0)
-    fail(`tools.${tool}.rowsAt must be a non-empty key`);
-  if (/[/.]/.test(rowsAt)) fail(`tools.${tool}.rowsAt must be a top-level key (no "/" or ".")`);
+  const problem = rowsAtProblem(rowsAt);
+  if (problem === 'empty') fail(`tools.${tool}.rowsAt must be a non-empty key`);
+  if (problem === 'nested') fail(`tools.${tool}.rowsAt must be a top-level key (no "/" or ".")`);
 }
 
 /** Returns the declarations (or `{}`), or throws a `TypeError` naming the first problem. */

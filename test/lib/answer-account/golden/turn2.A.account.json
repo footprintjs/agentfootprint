@@ -3,7 +3,7 @@
  "shape": 1,
  "templates": {
   "set": "answer-account",
-  "version": 1
+  "version": 2
  },
  "run": {
   "value": {
@@ -262,11 +262,10 @@
    ]
   },
   "standing": {
-   "value": null,
+   "value": "not-assessed",
    "source": "library",
-   "status": "not-recorded",
-   "pointers": [],
-   "missing": "not-built"
+   "status": "not-applicable",
+   "pointers": []
   },
   "limitsBlock": {
    "value": null,
@@ -1360,32 +1359,20 @@
    },
    "lines": [
     {
-     "text": "The record does not rate how sure this answer is.",
+     "text": "Not assessed — the run's committed record holds no verdict the standing can rest on.",
      "parts": [
       {
-       "text": "The record does not rate how sure this answer is."
+       "text": "Not assessed — the run's committed record holds no verdict the standing can rest on."
       }
      ],
      "template": {
-      "id": "howSure.standing.none",
+      "id": "howSure.standing.notAssessed",
       "version": 1
      },
      "vars": {},
      "source": "library",
-     "status": "not-recorded",
-     "pointers": [],
-     "missing": "not-built",
-     "chips": [
-      {
-       "mark": "not-recorded",
-       "text": "not recorded",
-       "tone": "plain",
-       "template": {
-        "id": "chip.notRecorded",
-        "version": 1
-       }
-      }
-     ]
+     "status": "not-applicable",
+     "pointers": []
     },
     {
      "text": "Before calling get_array_inventory, the model said it expected this call to answer the question directly, and rated how useful it expected the result to be: high.",

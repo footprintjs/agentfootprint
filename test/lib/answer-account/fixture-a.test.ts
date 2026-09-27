@@ -93,9 +93,16 @@ describe('fixture A — the real run, with neo’s declarations', () => {
     ]);
   });
 
-  it('How sure — standing not recorded; the expectation and the outcome side by side, no "instead"', () => {
+  // The fixture was REDUCED before the standing fold existed: its state keeps `history` but not
+  // `coverageDeclared`, so the fold (committed rows only, never events) cannot see the absence the
+  // events show — "not assessed", said so. `test/core/agent/assessment/fold-real-record.test.ts`
+  // pins the same record with its coverage row restored.
+  it('How sure — the standing (not assessed on this reduced record); the expectation and the outcome side by side, no "instead"', () => {
     expect(said(account, 'how-sure')).toEqual([
-      ['The record does not rate how sure this answer is.', 'library'],
+      [
+        "Not assessed — the run's committed record holds no verdict the standing can rest on.",
+        'library',
+      ],
       [
         'Before calling get_array_inventory, the model said it expected this call to answer the question directly, and rated how useful it expected the result to be: high.',
         'model',

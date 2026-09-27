@@ -275,6 +275,61 @@ values as `AnswerAccountShownLeaf`s, keyed by `answerAccountPointerKey(pointer)`
 an allow-listed leaf of the record, a derived row count (never the rows), or
 the reason it is withheld.
 
+## How far an answer stands
+
+The account's "How sure" row — and anything else that needs one word for an
+answer — reads its **standing** from what the run committed, never from how sure
+the model sounded:
+
+| Standing | When |
+|---|---|
+| `known` | a check tied the answer to a settled fact — today, a passed enforce [answer check](doc:output-schema#check-the-answer-against-evidence) for these exact bytes |
+| `consistent` | checks ran and none fired. Consistent with the record — never "verified" |
+| `not-sure` | a reason fired; each names the row it rests on |
+| `ask` | the turn ended in a typed question still waiting for its answer |
+| `not-assessed` | nothing the record holds could be checked |
+
+`agent.assessment()` folds the last run; `assessAnswer(recording)` from
+`agentfootprint/observe` folds a saved one — the same fold over the same
+committed rows, so the two agree:
+
+<CodeFile path="examples/features/73-answer-standing.ts" region="answer-standing" title="examples/features/73-answer-standing.ts (region: answer-standing)" />
+
+The reasons, each read from one committed row: a tool declared ground it did not
+check (`coverage-gap`); a tool declared that nothing matched (`declared-absent`,
+which includes an empty rowset inside a `coverage()` boundary); an empty rowset
+that said nothing about what it searched (`empty-undeclared` — silence recorded
+as silence); two results the model stood on disagree (`sources-conflict`); names
+or numbers in the answer appear in no tool result (`value-unsupported`,
+`value-survived-revision`); a limit cut the turn short (`stopped-early`); the
+app's answer checks failed (`answer-check-failed`) or could not reach a verdict
+(`check-unreachable`); a typed question is still waiting (`asked`). `checked`
+lists what actually ran, as counts (`tool-coverage 1/3` — one of three calls
+declared what it covered). Pass the same declarations object the account takes
+to say where an object result keeps its rows.
+
+The result is an `AnswerAssessment`: `assessment` (the value — `known`,
+`unrefuted`, `unknown`, `not-applicable`), `standing` (the word above),
+`reasons` (each with its layer and a pointer to every row it rests on), `support`
+(the row "known" stands on, when one does), `checked`, and `turnFrom` (whether
+the turn could be found after the last message a person said). The family is
+reached by indexed access — `AnswerAssessment['reasons'][number]['reason']`.
+
+Gotchas:
+
+- **It reads committed state, never events.** A verdict that exists only as an
+  event — the evidence gate's clean pass, the `.claims()` dispositions — is not
+  on the committed record yet, so it neither supports nor refutes. A recording
+  whose snapshot was trimmed of `coverageDeclared` reads "not assessed" even when
+  its events show an absence.
+- **This turn only.** It reads the results after the last message a person said,
+  so an earlier turn's empty result is not held against today's answer.
+- **A paused run: pass its checkpoint** —
+  `assessAnswer({ snapshot, checkpoint })`. The question it is waiting on lives
+  there, not in the recording. `agent.assessment()` does this for you.
+- **It measures claims within the record, not truth.** A tool that misstates
+  what it searched produces an honest-looking standing.
+
 ## Next steps
 
 - [Replay a saved run](doc:offline-replay) — record a run, then render it in Why Lens or Flow Lens
