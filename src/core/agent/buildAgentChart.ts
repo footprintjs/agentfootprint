@@ -63,10 +63,12 @@ import type { FindingsLedger } from './findings/types.js';
 import { breakFinalStage, breakFinalWithValidationStage } from './stages/breakFinal.js';
 import {
   prepareFinalStage,
+  prepareFinalWithLimitsAndAssumedStage,
   prepareFinalWithLimitsStage,
   prepareFinalWithValidationStage,
 } from './stages/prepareFinal.js';
 import { buildCacheSubflow } from './buildCacheSubflow.js';
+import { mountInputsLayer, type InputsMountDeps } from './honesty/mounts.js';
 import type { RouteBranch } from './stages/route.js';
 import type { AgentState } from './types.js';
 
@@ -299,6 +301,17 @@ export interface AgentChartDeps {
   readonly hasFindingsLedger?: boolean;
 
   /**
+   * The inputs layer is armed (honesty layer 2) — present ONLY when a tool
+   * the build can see declares `askOrAssume`, or the agent was built with
+   * `.inputsLayer()`. Mounts `sf-inputs` between the LLM call and Route
+   * (`honesty/mounts.ts` · `mountInputsLayer`, the ONE helper both builders
+   * call) and swaps the final branch's limits stage for the variant that also
+   * carries the assumed values, when `.limitsTravelWithTheAnswer()` is on.
+   * Absent — the default — and the chart is byte-identical.
+   */
+  readonly inputsLayer?: InputsMountDeps;
+
+  /**
    * Tool choice by classifier is armed (`.toolChoice()`, 9.105.0). Gates
    * THREE mount args on the Tools branch's `inputMapper` — `userMessage`
    * (what the classifier reads), `priorToolChoices` (the parent's rows,
@@ -369,7 +382,9 @@ export function buildAgentChart(deps: AgentChartDeps): FlowChart {
     deps.hasAnswerValidation === true
       ? prepareFinalWithValidationStage
       : deps.attachCoverageLimits === true
-      ? prepareFinalWithLimitsStage
+      ? deps.inputsLayer !== undefined
+        ? prepareFinalWithLimitsAndAssumedStage
+        : prepareFinalWithLimitsStage
       : prepareFinalStage,
     STAGE_IDS.PREPARE_FINAL,
     {
@@ -895,6 +910,11 @@ export function buildAgentChart(deps: AgentChartDeps): FlowChart {
       },
     );
   }
+  // ── The inputs layer — conditional mount (honesty layer 2) ───────────
+  // After the LLM call (and its thinking normalization), before Route: once
+  // per batch, and it acts only when Route's own predicate says the batch
+  // dispatches. The one helper both builders call; absent → untouched.
+  builder = mountInputsLayer(builder, deps.inputsLayer);
   // Declared milestones (9.90.0) on the decider and its branches — a decider /
   // branch has no cursor for `.tag()`, so each declares in its own `tags`.
   let decider = builder

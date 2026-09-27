@@ -224,6 +224,32 @@ is NOT stripped on the way to a provider: it exists to be sent.
 
 ***
 
+### toolChars?
+
+> `readonly` `optional` **toolChars?**: `number`
+
+Defined in: [src/adapters/types.ts:186](https://github.com/footprintjs/agentfootprint/blob/main/src/adapters/types.ts#L186)
+
+THE TOOL-BYTES BOUNDARY (honesty layer 2) — on a `role: 'tool'` message
+whose `content` the library annotated with a note that carries a VALUE
+(the inputs layer's "the call ran with "2h", the value the tool's rule
+assumes"), the length of the tool's OWN delivered text: `content` up to
+this index is the tool's; everything after it is the library's.
+
+Readers that must never count the library's words as the tool's read
+through the cut: the evidence index (`core/agent/evidence/evidenceIndex.ts`
+· `evidenceFromHistory`), so a value that sits only in the note grounds
+nothing — without it, the next call could cite this result as the source of
+"2h" and an assumption would become an observed value. The model still
+reads the whole `content`: it needs the value to reason about what ran.
+
+**Never reaches a provider.** `core/agent/composeRequest.ts` ·
+`stripFrameworkFields` removes it with `injectedBy` and `notDispatched`.
+Present only on a message the layer annotated, so every other run indexes
+exactly what it always did.
+
+***
+
 ### toolName?
 
 > `readonly` `optional` **toolName?**: `string`

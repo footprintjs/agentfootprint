@@ -4,7 +4,7 @@ title: ContingentRow
 
 # Interface: ContingentRow
 
-Defined in: [src/core/agent/findings/types.ts:290](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/findings/types.ts#L290)
+Defined in: [src/core/agent/findings/types.ts:326](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/findings/types.ts#L326)
 
 A value the model USED — in its answer, or as an argument of a later
 call — that came only from results the model itself declared `open`,
@@ -30,7 +30,7 @@ moment's iteration — the answer's, or the dispatching call's.
 
 > `readonly` **carriers**: readonly [`ContingentCarrier`](/docs/api/interfaces/ContingentCarrier)[]
 
-Defined in: [src/core/agent/findings/types.ts:294](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/findings/types.ts#L294)
+Defined in: [src/core/agent/findings/types.ts:330](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/findings/types.ts#L330)
 
 ***
 
@@ -38,7 +38,7 @@ Defined in: [src/core/agent/findings/types.ts:294](https://github.com/footprintj
 
 > `readonly` **declaredOn**: `DeclaredOn`
 
-Defined in: [src/core/agent/findings/types.ts:292](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/findings/types.ts#L292)
+Defined in: [src/core/agent/findings/types.ts:328](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/findings/types.ts#L328)
 
 ***
 
@@ -46,7 +46,7 @@ Defined in: [src/core/agent/findings/types.ts:292](https://github.com/footprintj
 
 > `readonly` **iteration**: `number`
 
-Defined in: [src/core/agent/findings/types.ts:295](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/findings/types.ts#L295)
+Defined in: [src/core/agent/findings/types.ts:331](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/findings/types.ts#L331)
 
 ***
 
@@ -54,7 +54,20 @@ Defined in: [src/core/agent/findings/types.ts:295](https://github.com/footprintj
 
 > `readonly` **kind**: `"contingent"`
 
-Defined in: [src/core/agent/findings/types.ts:291](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/findings/types.ts#L291)
+Defined in: [src/core/agent/findings/types.ts:327](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/findings/types.ts#L327)
+
+***
+
+### turn?
+
+> `readonly` `optional` **turn?**: `number`
+
+Defined in: [src/core/agent/findings/types.ts:338](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/findings/types.ts#L338)
+
+The conversation turn the row was filed in (`AgentState.turnNumber`) —
+stamped by the one writer while an honesty layer is armed (the inputs
+layer), absent otherwise. The ledger crosses turns on a continued
+conversation, and `iteration` restarts at 1 every run.
 
 ***
 
@@ -62,4 +75,4 @@ Defined in: [src/core/agent/findings/types.ts:291](https://github.com/footprintj
 
 > `readonly` **value**: `string`
 
-Defined in: [src/core/agent/findings/types.ts:293](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/findings/types.ts#L293)
+Defined in: [src/core/agent/findings/types.ts:329](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/findings/types.ts#L329)

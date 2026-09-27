@@ -28,6 +28,9 @@
 import type { TypedScope } from 'footprintjs';
 import { typedEmit } from '../../../recorders/core/typedEmit.js';
 import { composeAnswerWithCoverage } from '../coverage/index.js';
+import { HIDDEN_VALUE } from '../arguments/rows.js';
+import { assumedBlock, type AssumedLine } from '../arguments/serve.js';
+import type { FindingsRow } from '../findings/types.js';
 import type { AgentState } from '../types.js';
 
 /**
@@ -163,3 +166,44 @@ export const prepareFinalWithLimitsStage = (scope: TypedScope<AgentState>): void
       : scope.llmLatestContent;
   captureTurnPayload(scope, answer);
 };
+
+/**
+ * `.limitsTravelWithTheAnswer()` on an agent whose inputs layer is armed
+ * (honesty layer 2) — the limits stage above, plus the values a tool's
+ * `assume` rule filled THIS turn: "Assumed (a tool's rule, not your words)",
+ * composed by the framework from the committed `argument` rows
+ * (`arguments/serve.ts` · `assumedBlock`), so the model cannot drop it.
+ *
+ * Mounted in place of `prepareFinalWithLimitsStage` by both chart builders
+ * ONLY when both arms are on — the one place the final branch reads the
+ * ledger's argument rows, so a run that armed neither never reads the key (a
+ * tracked read of a key a run never writes is a phantom context source). With
+ * neither coverage nor an assumed value this turn, the answer is unchanged.
+ */
+export const prepareFinalWithLimitsAndAssumedStage = (scope: TypedScope<AgentState>): void => {
+  const declared = scope.coverageDeclared ?? [];
+  const assumed = assumedBlock(
+    assumedLinesOf(scope.findingsLedger ?? [], scope.turnNumber as number),
+  );
+  const answer =
+    declared.length > 0 || assumed !== ''
+      ? composeAnswerWithCoverage(scope.llmLatestContent, declared, assumed)
+      : scope.llmLatestContent;
+  captureTurnPayload(scope, answer);
+};
+
+/** This turn's `default` argument rows, as the "Assumed" block names them. */
+function assumedLinesOf(ledger: readonly FindingsRow[], turn: number): AssumedLine[] {
+  const lines: AssumedLine[] = [];
+  for (const row of ledger) {
+    if (row.kind !== 'argument' || row.turn !== turn || row.source !== 'default') continue;
+    const value = row.value ?? '';
+    lines.push({
+      toolName: row.toolName,
+      argument: row.argument,
+      value,
+      hidden: value === HIDDEN_VALUE,
+    });
+  }
+  return lines;
+}

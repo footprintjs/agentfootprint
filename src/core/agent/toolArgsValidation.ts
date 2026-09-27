@@ -354,6 +354,34 @@ export function validateToolArgs(
 }
 
 /**
+ * Validate ONE value against ONE property's own schema — the node rule
+ * `validateToolArgs` applies below the root, and nothing above it.
+ *
+ * Exists for the inputs layer (`core/agent/arguments/declare.ts` ·
+ * `assertAskOrAssume`): a declared `assume` value or `ask` choice is judged
+ * against `inputSchema.properties[argument]` alone. Wrapping it as
+ * `validateToolArgs({ [argument]: value }, inputSchema)` would enforce the
+ * ROOT `required` too, and refuse a rule on `window` because the
+ * declaration does not also carry `service`. Same honest subset, same total
+ * function: an exotic property schema under-validates, never throws.
+ *
+ * @example
+ * ```ts
+ * validatePropertyValue('2h', { type: 'string', enum: ['1h', '2h'] }).ok; // true
+ * validatePropertyValue('9h', { type: 'string', enum: ['1h', '2h'] }).ok; // false
+ * ```
+ */
+export function validatePropertyValue(
+  value: unknown,
+  propertySchema: Readonly<Record<string, unknown>> | undefined,
+): ToolArgValidationResult {
+  if (!propertySchema || typeof propertySchema !== 'object') return { ok: true, issues: [] };
+  const issues: ToolArgIssue[] = [];
+  validateNode(value, propertySchema, '', issues);
+  return { ok: issues.length === 0, issues };
+}
+
+/**
  * Render the MODEL-VISIBLE tool result for a rejected call. Names paths and
  * expectations; reports received TYPES for structural issues and the capped
  * offending VALUE for string-shape ones, because a shape complaint that will

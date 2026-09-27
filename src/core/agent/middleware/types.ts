@@ -89,7 +89,19 @@ export interface AllowOutcome<T> {
   readonly value?: T;
   /** Why the value changed. Present whenever `value` is. */
   readonly why?: string;
+  /**
+   * WHERE the rewritten arguments' values came from, per argument name — the
+   * middleware's own declaration (`allow(args, why, { from })`), recorded on
+   * the decision row. Read by the answer's standing for an argument a tool's
+   * `askOrAssume` rules (honesty layer 2): a rewrite with no declared origin,
+   * or with `'default'`, reads as ASSUMED; `'person'` and `'app'` do not.
+   * Declared, never inferred. Present only when the middleware declared it.
+   */
+  readonly from?: ArgumentOrigins;
 }
+
+/** Where a middleware says each rewritten argument's value came from. */
+export type ArgumentOrigins = Readonly<Record<string, 'person' | 'default' | 'app'>>;
 
 /**
  * Refuse the call. For a tool, `reason` reaches the model verbatim as the
@@ -365,4 +377,17 @@ export interface MiddlewareDecision {
    * then says which surface the person answered through. Never inferred.
    */
   readonly componentId?: string;
+  /**
+   * The middleware's own declaration of where the rewritten values came from
+   * (`allow(args, why, { from })`) — present only when it declared one.
+   */
+  readonly from?: ArgumentOrigins;
+  /**
+   * The NAMES of the arguments this before-tool rewrite changed (honesty
+   * layer 2) — filed only on an agent whose inputs layer is armed, for a call
+   * whose tool declares argument rules; names only, never values (the row
+   * already carries `before` and `after`). The answer's standing reads a
+   * rewrite of a RULED argument with no declared origin as assumed.
+   */
+  readonly changedKeys?: readonly string[];
 }

@@ -44,6 +44,20 @@ export const REASONS: readonly ReasonEntry[] = Object.freeze([
       'pausedToolCallId: the call a pause is still waiting on (requestInput, askHuman / pauseHere, a checkIn, a middleware ask, a credential consent)',
   },
   {
+    reason: 'argument-assumed',
+    layer: 2,
+    class: 'not-sure',
+    reads:
+      "findingsLedger: an argument row of this turn with source 'default' (the tool's rule assumed the value); or middlewareDecisions: a before-tool rewrite of a ruled argument (changedKeys) with no declared origin",
+  },
+  {
+    reason: 'argument-unverified',
+    layer: 2,
+    class: 'not-sure',
+    reads:
+      "findingsLedger: an argument row of this turn with source 'model' on a ruled or period argument, or with a failed declared-source check",
+  },
+  {
     reason: 'coverage-gap',
     layer: 3,
     class: 'not-sure',

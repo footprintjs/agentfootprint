@@ -209,6 +209,68 @@ argument, already verbatim in the same history, while structural errors
 (wrong type, missing field) echo nothing, and telemetry projections stay
 value-free.
 
+## A default nobody chose — `askOrAssume`
+
+A log search that defaults its look-back to 2 hours answers "any errors on
+checkout?" with "no errors" — and that means "no errors in a window nobody
+chose". Declare the default as a rule on the tool instead of burying it in
+`execute`, and the LIBRARY fills it, files it and admits it:
+
+<CodeFile path="examples/features/74-ask-or-assume.ts" region="ask-or-assume" title="examples/features/74-ask-or-assume.ts (region: ask-or-assume)" />
+
+When a call leaves `window` out:
+
+- the tool runs with `window: '2h'` — the library filled it, never the tool;
+- `agent.findings()` holds an `argument` row: `source: 'default'`, the value in
+  the tool's own argument view, the conversation `turn`;
+- `agentfootprint.findings.argument` fires (names, enums and counts only — never a value);
+- the model reads one past-tense note on the result: *window was not in the
+  search_logs call this result answers; the call ran with "2h", the value the
+  tool's rule assumes — recorded as assumed, not as the person's*;
+- `agent.assessment()` reads **not sure**, with the reason `argument-assumed`;
+- with `.limitsTravelWithTheAnswer()`, the answer ends with an
+  *Assumed (a tool's rule, not your words)* block.
+
+A model that sends the default itself is filed `default` too (with the value it
+sent as `proposed`): copying a default from a description is not a choice. Any
+other value is filed `model` and the standing says the record cannot trace it
+(`argument-unverified`). The model is told the rule in the schema it is served
+— the ruled argument leaves `required` and its description says *If left out,
+the tool's rule fills "2h", recorded as assumed.* — while the schema you wrote,
+the one `validateToolArgs` judges and `mcpServe` serves, is never edited.
+
+**Arming.** A registered tool that declares `askOrAssume` (through `.tool()`, a
+skill's tools, or an MCP tool registered on the builder) arms the layer by
+itself. A ruled tool that only a `ToolProvider` serves needs `.inputsLayer()`
+on the builder — without it, its calls are refused rather than run unruled,
+with one warning. Nothing declared, nothing changes: the chart, the record and
+the requests are byte-identical.
+
+**Refused at definition** (the same rule runs again at dispatch and at MCP
+ingest): a rule on an argument the schema does not offer, whose type is not
+exactly one of `string`, `number`, `integer`, `boolean`, or that is a `wants`
+argument; a value the property's own schema rejects; a `period` on an argument
+with no rule. `{ ask: 'question', choices }` — asking the person, once per
+batch, before anything runs — is not applied yet and is refused by name; use
+`assume` or leave the argument free.
+
+**Over MCP.** `askOrAssume` and `period` ride `_meta.agentfootprint` beside the
+other declarations, and the client judges them against the listed tool's own
+input schema — a rule that fails is warned about once and dropped, and the tool
+still registers.
+
+**A middleware that rewrites a ruled argument** after the layer checked it:
+its value is what ran, so it reads as assumed unless the middleware says where
+it came from — `allow({ ...call.args, window }, 'from the receipt', { from: {
+window: 'person' } })`.
+
+**The names.** `AskOrAssume` is the rules by argument name (`Tool.askOrAssume`);
+`ToolPeriod` says which argument sets the period and how its values are spelled
+(`Tool.period` — `lookback` `24h`, `signed-lookback` `-24h`, or `iso-range`); and
+`ArgumentRow` is the row the layer files on the findings ledger — a member of
+`FindingsRow`, so a reader that switches over every row kind must skip one it
+does not know.
+
 ## When a tool throws
 
 When `execute` throws, the framework catches it, reports it to the LLM as a tool error, and continues the loop. The LLM sees the error message and can decide to retry with different args, try a different tool, or surface to the user. See [Error handling](doc:error-handling) for the typed error contract + retry decorators.

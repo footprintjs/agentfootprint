@@ -60,6 +60,13 @@ export const SUBFLOW_IDS = {
    *  pure plumbing from the agent step's POV — never a user-facing
    *  step in the StepGraph. */
   THINKING: 'sf-thinking',
+  /** The inputs layer (honesty layer 2) — mounted between the LLM call and
+   *  Route ONLY when armed (a registered tool declares `askOrAssume`, or the
+   *  agent was built with `.inputsLayer()`). Runs once per batch: Declare →
+   *  Verify → Record → Resolve, filing one `argument` row per ruled argument
+   *  per call and handing ToolCalls the values the library fills. Absent on
+   *  every other agent — the chart is byte-identical. */
+  INPUTS: 'sf-inputs',
 } as const;
 
 export type SubflowId = (typeof SUBFLOW_IDS)[keyof typeof SUBFLOW_IDS];
@@ -214,6 +221,15 @@ export const STAGE_IDS = {
   /** BuildLLMRequest stage — calls strategy.prepareRequest to apply
    *  markers to the wire request (v2.6). */
   BUILD_LLM_REQUEST: 'build-llm-request',
+  /** The inputs layer's four stages, inside `sf-inputs` (honesty layer 2):
+   *  which calls carry rules and which ruled values are missing … */
+  DECLARE_ARGUMENTS: 'declare-arguments',
+  /** … where each ruled value came from … */
+  VERIFY_ARGUMENTS: 'verify-arguments',
+  /** … one `argument` row per ruled argument, and its event … */
+  RECORD_ARGUMENTS: 'record-arguments',
+  /** … and the fills and refusals ToolCalls applies. */
+  RESOLVE_ARGUMENTS: 'resolve-arguments',
 } as const;
 
 export type StageId = (typeof STAGE_IDS)[keyof typeof STAGE_IDS];
@@ -321,6 +337,13 @@ const PLUMBING_LOCAL_IDS: ReadonlySet<string> = new Set([
   STAGE_IDS.APPLY_MARKERS,
   STAGE_IDS.SKIP_CACHING,
   STAGE_IDS.BUILD_LLM_REQUEST,
+  // The inputs layer (honesty layer 2): its verdicts ride the ledger rows and
+  // `agentfootprint.findings.argument`; the mount and its stages are mechanism.
+  SUBFLOW_IDS.INPUTS,
+  STAGE_IDS.DECLARE_ARGUMENTS,
+  STAGE_IDS.VERIFY_ARGUMENTS,
+  STAGE_IDS.RECORD_ARGUMENTS,
+  STAGE_IDS.RESOLVE_ARGUMENTS,
 ]);
 
 /** Neutral chart boundaries — entry/exit, rendered normally (not muted). */
@@ -419,6 +442,10 @@ const MILESTONES: ReadonlyMap<string, Milestone> = new Map<string, Milestone>([
   ['tool-calls', milestone('tool-call', 'Tool call')],
   [SUBFLOW_IDS.TOOL_CALLS, milestone('tool-call', 'Tool call')],
   [SUBFLOW_IDS.ROUTE, milestone('decision', 'Route')],
+  // The inputs layer (honesty layer 2), mounted only when armed: where the
+  // library filled a value the call left out — a stop a reader scrubs to when
+  // asking whose value a call ran with.
+  [SUBFLOW_IDS.INPUTS, milestone('decision', 'Inputs')],
   // The answer failed its schema and the loop asked again — a stop worth
   // scrubbing to, because everything after it is a second attempt.
   [STAGE_IDS.OUTPUT_RETRY, milestone('decision', 'Schema retry')],

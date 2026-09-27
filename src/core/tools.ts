@@ -24,6 +24,7 @@ import {
   type ToolResultColumns,
 } from '../integrity/column-types/types.js';
 import { assertAskComponent, type AskComponent } from './askComponent.js';
+import { assertAskOrAssume, type AskOrAssume, type ToolPeriod } from './agent/arguments/declare.js';
 import type { CheckInDemand } from './checkin.js';
 import type { TeardownOptions, TeardownScope } from './toolSessions.js';
 
@@ -350,6 +351,36 @@ export interface Tool<TArgs = Record<string, unknown>, TResult = unknown> {
    *   });
    */
   readonly repeatedWhen?: 'arguments';
+  /**
+   * PER-ARGUMENT RULES (the inputs layer, honesty layer 2) — what the library
+   * does when a call leaves an argument out. `{ assume: value }`: the library
+   * FILLS the value (the tool never does) and files it on the findings ledger
+   * as `default`, so the answer's standing says the value was assumed.
+   * `{ ask: question, choices? }` is judged and refused in this version (the
+   * batch ask ships with the inputs layer's next step).
+   *
+   * The served copy of the schema drops a ruled argument from `required` and
+   * says the rule in the property's description; the registry schema — which
+   * `validateToolArgs` judges and `mcpServe` serves — is never edited.
+   * Carried over MCP in `_meta.agentfootprint`. Declaring it arms the inputs
+   * layer's mount (`sf-inputs`) on an agent that registers the tool; a ruled
+   * tool that only a ToolProvider serves needs `AgentBuilder.inputsLayer()`,
+   * and without it the call is refused rather than run unruled.
+   * Omitted → byte-identical.
+   *
+   * @example
+   * ```ts
+   * askOrAssume: { window: { assume: '2h' } }
+   * ```
+   */
+  readonly askOrAssume?: AskOrAssume;
+  /**
+   * WHICH ARGUMENT SETS THE PERIOD the answer covers, and how its values are
+   * spelled (`lookback` `24h`, `signed-lookback` `-24h`, `iso-range`). The
+   * argument must carry an `askOrAssume` rule. Rows for it carry
+   * `period: true`. Omitted → byte-identical.
+   */
+  readonly period?: ToolPeriod;
   execute(args: TArgs, ctx: ToolExecutionContext): Promise<TResult> | TResult;
 }
 
@@ -941,6 +972,12 @@ export interface DefineToolOptions<TArgs, TResult> {
    *  tool's own result — see {@link Tool.repeatedWhen}. Omitted →
    *  byte-identical (the ledger keeps comparing results, as always). */
   readonly repeatedWhen?: 'arguments';
+  /** Per-argument rules — what the library does when a call leaves an argument
+   *  out (see {@link Tool.askOrAssume}). Omitted → byte-identical. */
+  readonly askOrAssume?: AskOrAssume;
+  /** Which argument sets the period the answer covers (see {@link Tool.period}).
+   *  Requires a rule on that argument. Omitted → byte-identical. */
+  readonly period?: ToolPeriod;
   execute(args: TArgs, ctx: ToolExecutionContext): Promise<TResult> | TResult;
 }
 
@@ -1071,6 +1108,16 @@ export function defineTool<TArgs = Record<string, unknown>, TResult = unknown>(
   // catalog is complete.
   assertComposedOf(options.name, options.composedOf);
   assertGates(options.name, options.gates);
+  // The inputs layer's rules (honesty layer 2) — judged against the RESOLVED
+  // schema, each property by its OWN schema (never the root `required`), and
+  // refused here naming the tool and the argument, not at the first call.
+  assertAskOrAssume(
+    options.name,
+    options.askOrAssume,
+    options.period,
+    options.inputSchema ?? { type: 'object', properties: {} },
+    options.wants,
+  );
   return {
     schema: {
       name: options.name,
@@ -1095,6 +1142,8 @@ export function defineTool<TArgs = Record<string, unknown>, TResult = unknown>(
     ...(options.composedOf !== undefined && { composedOf: options.composedOf }),
     ...(options.gates !== undefined && { gates: options.gates }),
     ...(options.repeatedWhen !== undefined && { repeatedWhen: options.repeatedWhen }),
+    ...(options.askOrAssume !== undefined && { askOrAssume: options.askOrAssume }),
+    ...(options.period !== undefined && { period: options.period }),
     execute: options.execute,
   };
 }

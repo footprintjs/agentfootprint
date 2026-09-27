@@ -24,10 +24,14 @@
  *   - it does not see ToolProvider-delivered tools — there is no build-time
  *     list of those (the 9.72.0 caveat, carried forward honestly);
  *   - it does not carry `ctx.tools` itself — composition depth stops at one,
- *     the same bound the runbook grammar declares for sub-runbooks.
+ *     the same bound the runbook grammar declares for sub-runbooks;
+ *   - it does not apply argument rules — a tool that declares `askOrAssume`
+ *     refuses an inner call that leaves a ruled argument out (the inputs
+ *     layer fills and records only the model's own calls).
  */
 
 import type { Credential } from '../../identity/types.js';
+import { isMissing, isRefused, rulesOf } from './arguments/declare.js';
 import type {
   Tool,
   ToolDispatch,
@@ -91,6 +95,7 @@ export function agentToolDispatch(deps: AgentToolDispatchDeps): ToolDispatch {
             `data through a tool that takes it directly.`,
         );
       }
+      refuseUnaccountedRuledArguments(name, tool, args);
       seq += 1;
       const base = deps.innerContext(name, seq);
       const ctx: ToolExecutionContext = {
@@ -103,6 +108,39 @@ export function agentToolDispatch(deps: AgentToolDispatchDeps): ToolDispatch {
       return await tool.execute(args as Record<string, unknown>, ctx);
     },
   };
+}
+
+/**
+ * An inner call to a tool that declares argument rules (honesty layer 2) must
+ * give every ruled argument itself: inner dispatch fills nothing and files no
+ * row — the values are the composing tool's code, and the OUTER call is the
+ * accounted unit — so running a ruled tool with a ruled value missing would
+ * run it on a value nobody chose, with nothing on the record. Refused by name,
+ * like a `checkIn` or `wants` tool here. A rule that cannot be read refuses
+ * too; a tool that declares nothing is never asked.
+ */
+function refuseUnaccountedRuledArguments(name: string, tool: Tool, args: unknown): void {
+  const rules = rulesOf(tool);
+  if (rules === undefined) return;
+  if (isRefused(rules)) {
+    throw new Error(
+      `ctx.tools.call('${name}'): that tool's argument rules could not be read ` +
+        `(${rules.refused}) — inner dispatch refuses it rather than run it unruled.`,
+    );
+  }
+  const given =
+    args !== null && typeof args === 'object' && !Array.isArray(args)
+      ? (args as Readonly<Record<string, unknown>>)
+      : {};
+  const missing = rules.ruled.filter((r) => isMissing(given, r.argument)).map((r) => r.argument);
+  if (missing.length === 0) return;
+  throw new Error(
+    `ctx.tools.call('${name}'): that tool declares argument rules (askOrAssume) and the call ` +
+      `leaves ${missing.map((m) => `'${m}'`).join(', ')} out — inner dispatch fills nothing and ` +
+      `files no row, so running it would run on a value nobody chose, off the record. Pass ` +
+      `every ruled argument, or call the tool as a top-level tool, where the inputs layer ` +
+      `applies its rules.`,
+  );
 }
 
 /**

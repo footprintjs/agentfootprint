@@ -400,6 +400,9 @@ describe('UNIT — the reason table', () => {
   it('covers the union, once each, and names the class of each', () => {
     const union: readonly AssessmentReason[] = [
       'asked',
+      // Honesty layer 2 (the inputs layer, step 3).
+      'argument-assumed',
+      'argument-unverified',
       'declared-absent',
       'coverage-gap',
       'empty-undeclared',

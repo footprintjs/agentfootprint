@@ -61,6 +61,7 @@ import {
 } from '../adapters/llm/contextWindow.js';
 import type { MemoryIdentity } from '../memory/identity/types.js';
 import type { FoldedSpan } from './agent/window/types.js';
+import { argumentRowIsWellFormed } from './agent/arguments/rows.js';
 import {
   BASIS_VALUES,
   EXPECT_VALUES,
@@ -659,6 +660,13 @@ function ledgerRowIsWellFormed(row: unknown): boolean {
         (r.tryInstead === undefined || (typeof r.tryInstead === 'string' && r.tryInstead !== '')) &&
         typeof r.iteration === 'number'
       );
+    // The inputs layer's verdict on one ruled argument (honesty layer 2) —
+    // the arm ships in the SAME change as the row kind (the judge rows were
+    // refused until 9.110.0 because their arm came later). One owner of the
+    // row's shape: `arguments/rows.ts`. An older runtime refuses a checkpoint
+    // that carries this kind.
+    case 'argument':
+      return argumentRowIsWellFormed(r);
     default:
       return false;
   }
@@ -766,7 +774,9 @@ export function validateCheckpoint(value: unknown): AgentRunCheckpoint {
           "'contingent' (with declaredOn, value, at least one carrier { toolCallId, standing: " +
           "open | noise | ruled-out }, iteration) or 'unsettled-by-absence' (with toolCallId, " +
           'iteration, and optional non-empty notChecked / cannotCover lists of { what, why? } ' +
-          'and a non-empty tryInstead string). It is written by an agent with `.findings()` and ' +
+          "and a non-empty tryInstead string) or 'argument' (with toolCallId, toolName, " +
+          'argument, iteration, turn, and a source or an asked in its vocabulary). It is ' +
+          'written by an agent with `.findings()` or with the inputs layer armed, and ' +
           're-seeded verbatim on continuation.',
       );
     }

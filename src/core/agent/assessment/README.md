@@ -45,6 +45,8 @@ grows as later honesty steps commit new rows.
 | Reason | Layer | Read from |
 |---|---|---|
 | `asked` | every | `pausedToolCallId`: the call a pause is still waiting on — a typed input (`requestInput`), a question (`askHuman` / `pauseHere`), a consent gate (a tool's `checkIn`, a middleware's `ask`) or a credential consent; never the pause event |
+| `argument-assumed` | 2 | `findingsLedger`: an `argument` row of this turn with `source: 'default'` — a tool's `askOrAssume` rule filled the value, or the model sent that same default; or `middlewareDecisions`: a before-tool rewrite of a ruled argument (`changedKeys`) with no declared origin (`allow(args, why, { from })`) |
+| `argument-unverified` | 2 | `findingsLedger`: an `argument` row of this turn with `source: 'model'` on a ruled argument, or with a failed declared-source check |
 | `coverage-gap` | 3 | `coverageDeclared`: a `notChecked` or `cannotCover` item on a call of this turn; or `history`: the result's own envelope lists one, when its call has no coverage row |
 | `declared-absent` | 3 | `coverageDeclared`: an absence; or `history`: an empty rowset inside a declared `coverage()` boundary, or an absence in the result's own envelope when its call has no coverage row |
 | `empty-undeclared` | 3 | `history`: an empty rowset (a top-level array, or the app's `rowsAt` key) whose call has no coverage row |
@@ -54,6 +56,13 @@ grows as later honesty steps commit new rows.
 | `stopped-early` | 4 | `stoppedEarly` |
 | `answer-check-failed` | 4 | `answerValidation`: `status: 'failed'` |
 | `check-unreachable` | every | `answerValidation`: `status: 'unverified'` — an armed check that could not reach a verdict |
+
+The inputs layer's rows (honesty layer 2, `core/agent/arguments/README.md`) are
+read for THIS turn only — the ledger crosses turns, and every `argument` row
+carries its `turn` — and the last row per (call, argument) is the current one.
+When the layer filed any, `checked` gains `argument-rules` (layer 2): every row
+is a verdict, so `ran` equals `of`. No argument row ever supports "known": a
+membership pass only keeps a reason from firing.
 
 Every result is read through the ONE emptiness reader,
 `core/agent/coverage/emptiness.ts` · `readEmptiness`, the one the answer account
@@ -166,11 +175,13 @@ it at the study's freeze (adopted Q12).
 - **Evicted results.** Under `.window()`, a window strategy can remove this
   turn's early results from `history`; the commit log still has them, but the
   fold reads the final state, so an evicted undeclared `[]` fires nothing.
-- **Conflicts from an earlier turn that reuse a call id.** A carried conflict row
-  counts as this turn's when a witness shares a `toolCallId` with a call of this
-  turn — a provider that reuses ids across turns makes an earlier turn's conflict
-  read `sources-conflict` today. It over-reports and never hides, until the
-  honesty layers' `turn` stamp on ledger rows (step 3).
+- **Conflicts from an earlier turn that reuse a call id — on an agent without an
+  honesty layer.** A carried conflict row counts as this turn's when a witness
+  shares a `toolCallId` with a call of this turn — a provider that reuses ids
+  across turns makes an earlier turn's conflict read `sources-conflict`. It
+  over-reports and never hides. While the inputs layer is armed, the one writer
+  stamps every row with its conversation `turn` (honesty step 3), and a stamped
+  conflict row counts only in its own turn.
 - **Subject placement.** Which entity the question names is on hold, so the fold
   reads every call of the turn.
 - **The run-time answer layer, the served standing and its event** — a later

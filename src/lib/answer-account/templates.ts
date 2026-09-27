@@ -42,7 +42,7 @@ export interface AccountTemplate {
 }
 
 /** Bumped whenever any template's words change (a pinned digest enforces it). */
-export const ANSWER_ACCOUNT_TEMPLATE_SET_VERSION = 2;
+export const ANSWER_ACCOUNT_TEMPLATE_SET_VERSION = 3;
 
 const t = (text: string, voucher: TemplateVoucher = 'library', version = 1): AccountTemplate =>
   Object.freeze({ version, text, voucher });
@@ -279,7 +279,17 @@ export const ANSWER_ACCOUNT_TEMPLATES = Object.freeze({
     "Names and numbers: the answer's were looked up in what the tools returned.",
   ),
   'howSure.check.answerChecks': t("The app's answer checks: they ran on this answer."),
+  // The inputs layer (honesty layer 2) — set 3.
+  'howSure.check.argumentRules': t(
+    "Argument rules: {{ran}} of {{count:of,'ruled argument','ruled arguments'}} had a verdict on the record.",
+  ),
   'howSure.reason.asked': t('A question the run asked is still waiting for its answer.'),
+  'howSure.reason.argumentAssumed': t(
+    "{{count:n,'value a call ran with was','values the calls ran with were'}} assumed: set by a tool's rule or a rewrite, not given in the conversation.",
+  ),
+  'howSure.reason.argumentUnverified': t(
+    "{{count:n,'ruled value came','ruled values came'}} from the model, with no source on the record: not the conversation, a result or the app.",
+  ),
   'howSure.reason.coverageGap': t(
     "{{count:n,'call declared ground it did not check or can never cover','calls declared ground they did not check or can never cover'}}.",
   ),

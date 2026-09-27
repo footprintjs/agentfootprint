@@ -30,6 +30,7 @@
  */
 
 import type { Assertion } from '../../../integrity/assertion/types.js';
+import type { ArgumentRow } from '../arguments/rows.js';
 import type { CoverageItem } from '../coverage/types.js';
 
 /** The reserved optional property every SERVED tool schema carries when armed. */
@@ -131,6 +132,13 @@ export interface BasisRow {
    * about THIS declaration can live (the writer emits from rows alone).
    */
   readonly malformed?: number;
+  /**
+   * The conversation turn the row was filed in (`AgentState.turnNumber`) —
+   * stamped by the one writer while an honesty layer is armed (the inputs
+   * layer), absent otherwise. The ledger crosses turns on a continued
+   * conversation, and `iteration` restarts at 1 every run.
+   */
+  readonly turn?: number;
 }
 
 /** The model's standing on ONE previous result. The LAST row per `toolCallId` is current. */
@@ -165,6 +173,13 @@ export interface StandingRow {
    * as written, never resolved.
    */
   readonly unknownId?: true;
+  /**
+   * The conversation turn the row was filed in (`AgentState.turnNumber`) —
+   * stamped by the one writer while an honesty layer is armed (the inputs
+   * layer), absent otherwise. The ledger crosses turns on a continued
+   * conversation, and `iteration` restarts at 1 every run.
+   */
+  readonly turn?: number;
 }
 
 /** One witness of a conflict — identities only, never the value. */
@@ -184,6 +199,13 @@ export interface ConflictRow {
   readonly key: string;
   readonly witnesses: readonly ConflictWitness[];
   readonly iteration: number;
+  /**
+   * The conversation turn the row was filed in (`AgentState.turnNumber`) —
+   * stamped by the one writer while an honesty layer is armed (the inputs
+   * layer), absent otherwise. The ledger crosses turns on a continued
+   * conversation, and `iteration` restarts at 1 every run.
+   */
+  readonly turn?: number;
 }
 
 /**
@@ -231,6 +253,13 @@ export interface JudgmentRow {
   readonly clipped?: true;
   /** The iteration whose dispatch landed the result. */
   readonly iteration: number;
+  /**
+   * The conversation turn the row was filed in (`AgentState.turnNumber`) —
+   * stamped by the one writer while an honesty layer is armed (the inputs
+   * layer), absent otherwise. The ledger crosses turns on a continued
+   * conversation, and `iteration` restarts at 1 every run.
+   */
+  readonly turn?: number;
 }
 
 /**
@@ -250,6 +279,13 @@ export interface JudgmentErrorRow {
   readonly message: string;
   readonly latencyMs: number;
   readonly iteration: number;
+  /**
+   * The conversation turn the row was filed in (`AgentState.turnNumber`) —
+   * stamped by the one writer while an honesty layer is armed (the inputs
+   * layer), absent otherwise. The ledger crosses turns on a continued
+   * conversation, and `iteration` restarts at 1 every run.
+   */
+  readonly turn?: number;
 }
 
 /**
@@ -293,6 +329,13 @@ export interface ContingentRow {
   readonly value: string;
   readonly carriers: readonly ContingentCarrier[];
   readonly iteration: number;
+  /**
+   * The conversation turn the row was filed in (`AgentState.turnNumber`) —
+   * stamped by the one writer while an honesty layer is armed (the inputs
+   * layer), absent otherwise. The ledger crosses turns on a continued
+   * conversation, and `iteration` restarts at 1 every run.
+   */
+  readonly turn?: number;
 }
 
 /**
@@ -373,6 +416,13 @@ export interface UnsettledByAbsenceRow {
   readonly tryInstead?: string;
   /** The standing's iteration — the moment the check ran. */
   readonly iteration: number;
+  /**
+   * The conversation turn the row was filed in (`AgentState.turnNumber`) —
+   * stamped by the one writer while an honesty layer is armed (the inputs
+   * layer), absent otherwise. The ledger crosses turns on a continued
+   * conversation, and `iteration` restarts at 1 every run.
+   */
+  readonly turn?: number;
 }
 
 export type FindingsRow =
@@ -382,7 +432,11 @@ export type FindingsRow =
   | JudgmentRow
   | JudgmentErrorRow
   | ContingentRow
-  | UnsettledByAbsenceRow;
+  | UnsettledByAbsenceRow
+  // The inputs layer's verdict on one ruled argument of one call (honesty
+  // layer 2) — filed by the `sf-inputs` subflow, not by the model. Readers
+  // that switch over every kind must skip one they do not know.
+  | ArgumentRow;
 
 /** The committed key: flat, append-only, a fresh array on every write. */
 export type FindingsLedger = readonly FindingsRow[];

@@ -295,6 +295,20 @@ function indexResult(content: string, sink: Sink): void {
   addText(sink, content);
 }
 
+/**
+ * The tool's OWN bytes of a result message — `content` cut at the tool-bytes
+ * boundary when the library annotated it (`LLMMessage.toolChars`, the inputs
+ * layer's note), the whole `content` otherwise. The library's note carries a
+ * value the call ran with ("2h", the value the tool's rule assumes); indexing
+ * it would let an assumption ground an answer as if the tool had said it.
+ */
+export function toolBytesOf(msg: LLMMessage): string {
+  const cut = msg.toolChars;
+  return typeof cut === 'number' && cut >= 0 && cut <= msg.content.length
+    ? msg.content.slice(0, cut)
+    : msg.content;
+}
+
 // FOLD · the one owner of the corpus of values this run can prove it read from a tool result
 // consumers read this and never re-derive it: gate.ts · checkAnswer, which is HANDED the corpus rather than building one, and findings/contingent.ts · contingentRowsOf, handed its `carriers`; built at two moments by one fold — stages/route.ts · `judgeEvidence` (the answer) and stages/toolCalls.ts · `towersFor` (dispatch, under `.findings()` beside the gate only)
 // detached: yes — never stored; rebuilt per judgement, and the verdict is committed as plain data.
@@ -332,7 +346,7 @@ export function evidenceFromHistory(history: readonly LLMMessage[]): EvidenceCor
     if (msg.role !== 'tool') continue;
     toolResultsThisTurn += 1;
     sink.toolCallId = typeof msg.toolCallId === 'string' ? msg.toolCallId : undefined;
-    indexResult(msg.content, sink);
+    indexResult(toolBytesOf(msg), sink);
     sink.toolCallId = undefined;
   }
   return {
@@ -372,6 +386,13 @@ export function exemptFromRun(args: {
   readonly userMessage?: string;
   readonly history: readonly LLMMessage[];
   readonly systemPromptInjections?: readonly InjectionRecord[];
+  /**
+   * The declared `assume` values of every (tool, argument) that filed a
+   * `default` row this turn (the inputs layer, honesty layer 2) — the APP's own
+   * declaration, read from the tool's rule and never from the row, exempt like
+   * a value in the system prompt. Absent → the corpus it always was.
+   */
+  readonly declaredDefaults?: readonly string[];
 }): ReadonlySet<string> {
   // The same accumulator, walked with no turn boundaries: an exemption is a
   // fact about WHO supplied a value, and the turn it arrived in changes
@@ -402,6 +423,12 @@ export function exemptFromRun(args: {
     // create a false exemption for a value nobody supplied — the summary is
     // built from the content itself.
     else if (rec.contentSummary) addText(sink, rec.contentSummary);
+  }
+  // A tool's declared default is the app's declaration (honesty layer 2): the
+  // value itself and its tokens, exactly as a prompt's text is indexed.
+  for (const value of args.declaredDefaults ?? []) {
+    add(sink, value);
+    addText(sink, value);
   }
   return new Set(sink.values.keys());
 }

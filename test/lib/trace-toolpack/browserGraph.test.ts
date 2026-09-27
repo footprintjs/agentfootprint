@@ -142,6 +142,18 @@ describe.skipIf(!built)('the default browser graph of the root entry', () => {
     expect(graph.dynamicInputs.has('dist/esm/core/agent/assessment/assess.js')).toBe(true);
   });
 
+  it('LAW: the inputs layer’s stage bodies are off the root sync closure — the mount loads them on first use', async () => {
+    // Only an agent whose tools declare `askOrAssume` (or `.inputsLayer()`)
+    // mounts `sf-inputs`; its four stage bodies and the pure steps behind them
+    // are reached through `import()` from the mount (`honesty/mounts.ts`).
+    const graph = await splitGraph(resolve(DIST, 'index.js'));
+    expect(graph.syncInputs.has('dist/esm/core/agent/honesty/mounts.js')).toBe(true);
+    expect(graph.syncInputs.has('dist/esm/core/agent/arguments/subflow.js')).toBe(false);
+    expect(graph.syncInputs.has('dist/esm/core/agent/arguments/resolve.js')).toBe(false);
+    expect(graph.dynamicInputs.has('dist/esm/core/agent/arguments/subflow.js')).toBe(true);
+    expect(graph.dynamicInputs.has('dist/esm/core/agent/arguments/resolve.js')).toBe(true);
+  });
+
   it('contrast: the /observe door carries the pack statically, by design', async () => {
     const graph = await splitGraph(resolve(DIST, 'observe.js'));
     expect(graph.syncInputs.has(PACK)).toBe(true);

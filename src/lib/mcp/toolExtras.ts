@@ -65,6 +65,11 @@ import {
   type ToolResultColumns,
 } from '../../core/tools.js';
 import type { ToolResultClass } from '../semantics/types.js';
+import {
+  assertAskOrAssume,
+  type AskOrAssume,
+  type ToolPeriod,
+} from '../../core/agent/arguments/declare.js';
 
 /**
  * The single `_meta` key every agentfootprint declaration travels under.
@@ -125,6 +130,21 @@ export interface McpToolExtras {
    *  {@link Tool.gates}. Read by composition-time checks that must keep a
    *  gating tool out of a fan-out branch. */
   readonly gates?: boolean;
+  /**
+   * The per-argument rules (the inputs layer, honesty layer 2) — see
+   * {@link Tool.askOrAssume}. It passes this file's bar: the fill (and, in a
+   * later release, the ask) happens in the CLIENT's own loop before the call
+   * is sent — exactly as the client applies a served `resultCeiling` — and
+   * nothing about how the server runs the tool changes. The FIRST extra
+   * judged against the tool's schema, which is why the origin carries the
+   * listed tool's `inputSchema`. A client that ignores `_meta` sees the
+   * author's `required` and sends the value, or the server applies its own
+   * default.
+   */
+  readonly askOrAssume?: AskOrAssume;
+  /** Which argument sets the period the answer covers — see {@link Tool.period}.
+   *  Kept only beside a kept `askOrAssume` that rules the argument. */
+  readonly period?: ToolPeriod;
 }
 
 /**
@@ -145,6 +165,8 @@ export function toolExtrasOf(tool: Tool): McpToolExtras | undefined {
     ...(tool.resultCeiling !== undefined && { resultCeiling: tool.resultCeiling }),
     ...(tool.composedOf !== undefined && { composedOf: tool.composedOf }),
     ...(tool.gates !== undefined && { gates: tool.gates }),
+    ...(tool.askOrAssume !== undefined && { askOrAssume: tool.askOrAssume }),
+    ...(tool.period !== undefined && { period: tool.period }),
   };
   return Object.keys(extras).length > 0 ? extras : undefined;
 }
@@ -155,6 +177,13 @@ export interface McpToolExtrasOrigin {
   readonly server: string;
   /** The tool the bag was attached to. */
   readonly tool: string;
+  /**
+   * The listed tool's own `inputSchema` — what `askOrAssume` and `period` are
+   * judged against (each ruled property by its OWN schema). Absent → those
+   * two fields are judged against an empty schema, so every rule is dropped
+   * with a warning rather than trusted unjudged.
+   */
+  readonly inputSchema?: Readonly<Record<string, unknown>>;
 }
 
 /**
@@ -206,6 +235,17 @@ export function readToolExtras(meta: unknown, origin: McpToolExtrasOrigin): McpT
     assertComposedOf(origin.tool, v as readonly string[]),
   ) as readonly string[] | undefined;
   const gates = kept('gates', (v) => assertGates(origin.tool, v as boolean)) as boolean | undefined;
+  // The inputs layer's two, judged TOGETHER in order: the rules against the
+  // listed schema, then the period against the rules that were KEPT — a period
+  // naming an argument whose rule was dropped is dropped too (a period never
+  // arms anything alone).
+  const schema = origin.inputSchema ?? { type: 'object', properties: {} };
+  const askOrAssume = kept('askOrAssume', (v) =>
+    assertAskOrAssume(origin.tool, v, undefined, schema),
+  ) as AskOrAssume | undefined;
+  const period = kept('period', (v) => assertAskOrAssume(origin.tool, askOrAssume, v, schema)) as
+    | ToolPeriod
+    | undefined;
 
   return {
     ...(argumentsFrom !== undefined && { argumentsFrom }),
@@ -216,6 +256,8 @@ export function readToolExtras(meta: unknown, origin: McpToolExtrasOrigin): McpT
     ...(resultCeiling !== undefined && { resultCeiling }),
     ...(composedOf !== undefined && { composedOf }),
     ...(gates !== undefined && { gates }),
+    ...(askOrAssume !== undefined && { askOrAssume }),
+    ...(period !== undefined && { period }),
   };
 }
 

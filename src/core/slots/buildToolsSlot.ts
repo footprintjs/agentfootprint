@@ -38,6 +38,7 @@ import type { ToolNameChannel } from '../../events/payloads.js';
 import type { ToolProvider, ToolDispatchContext } from '../../tool-providers/types.js';
 import { composeSlot, fnv1a, formatOverflowWarning, slotOverflow, truncate } from './helpers.js';
 import { withFindingsArgument } from '../agent/findings/reserved.js';
+import { withArgumentRules } from '../agent/arguments/serve.js';
 import type { Classifier } from '../../classify/types.js';
 import type { ToolChoiceEntry } from '../agent/toolChoice/types.js';
 
@@ -155,11 +156,20 @@ export function mergeWire(candidates: readonly WireCandidate[]): {
   readonly winners: ReadonlyMap<string, ToolParty>;
   /** Every candidate that lost its name, in candidate order — competing losers. */
   readonly losers: ReadonlyMap<string, readonly ToolParty[]>;
+  /**
+   * The winning IMPLEMENTATION per served name, where the candidate carried one
+   * (honesty layer 2): the inputs layer decorates a served schema from the
+   * rules of the tool that will answer it. A name with no known tool (a chart
+   * with no claimant record) is absent — and is not decorated; the dispatch
+   * re-read is its guard.
+   */
+  readonly winningTools: ReadonlyMap<string, Tool>;
 } {
   const merged: LLMToolSchema[] = [];
   const winners = new Map<string, ToolParty>();
   const won = new Map<string, WireCandidate>();
   const losers = new Map<string, ToolParty[]>();
+  const winningTools = new Map<string, Tool>();
   for (const candidate of candidates) {
     const { schema, party } = candidate;
     const first = won.get(schema.name);
@@ -175,9 +185,29 @@ export function mergeWire(candidates: readonly WireCandidate[]): {
     }
     won.set(schema.name, candidate);
     winners.set(schema.name, party);
+    if (candidate.tool !== undefined) winningTools.set(schema.name, candidate.tool);
     merged.push(schema);
   }
-  return { merged, winners, losers };
+  return { merged, winners, losers, winningTools };
+}
+
+/**
+ * The served list with each ruled tool's schema decorated
+ * (`arguments/serve.ts` · `withArgumentRules`), or the SAME list when no
+ * served schema changed — so an armed agent whose wire carries no ruled tool
+ * commits the bytes it always did.
+ */
+function withRulesOnWire(
+  served: readonly LLMToolSchema[],
+  winningTools: ReadonlyMap<string, Tool>,
+): readonly LLMToolSchema[] {
+  let changed = false;
+  const decorated = served.map((schema) => {
+    const next = withArgumentRules(schema, winningTools.get(schema.name));
+    if (next !== schema) changed = true;
+    return next;
+  });
+  return changed ? decorated : served;
 }
 
 export interface ToolsSlotConfig {
@@ -331,6 +361,16 @@ export interface ToolsSlotConfig {
    * empty offer, which serves the base decoration.
    */
   readonly findings?: true;
+  /**
+   * THE INPUTS LAYER IS ARMED (honesty layer 2) — present ONLY then, only
+   * ever `true`. Every served schema whose WINNING implementation declares
+   * `askOrAssume` is rebuilt at the ONE decoration site, one step before
+   * `withFindingsArgument` (`arguments/serve.ts` · `withArgumentRules`): each
+   * `assume`-ruled argument leaves `required` and its property says the rule.
+   * Absent, nothing is decorated — a ruled tool on an agent without the layer
+   * is refused at dispatch, and a sentence promising a fill would be false.
+   */
+  readonly inputsLayer?: true;
   /**
    * TOOL CHOICE BY CLASSIFIER IS ARMED (9.105.0, `.toolChoice()`) — present
    * ONLY then. Compose then asks `classifier` which of the merged wire's
@@ -848,7 +888,7 @@ export function buildToolsSlot(config: ToolsSlotConfig): FlowChart {
         ...(frameworkSkipStep !== undefined && { tool: frameworkSkipStep }),
       })),
     ];
-    const { merged, winners, losers } = mergeWire(candidates);
+    const { merged, winners, losers, winningTools } = mergeWire(candidates);
 
     // ── THE COMMIT — everything after the merge, as one closure ─────────
     // `served` is the list that goes on the record: the merged list itself
@@ -900,8 +940,12 @@ export function buildToolsSlot(config: ToolsSlotConfig): FlowChart {
       // see the narrowed list — nothing downstream learns a new mode.
       const offer: readonly string[] =
         config.findings === true ? args.findingsOffer ?? EMPTY_OFFER : EMPTY_OFFER;
+      // THE INPUTS LAYER'S RULES (honesty layer 2) decorate FIRST, from the
+      // rules of the implementation that WINS each name — `served` itself,
+      // by reference, when the layer is not armed or no served tool is ruled.
+      const ruled = config.inputsLayer === true ? withRulesOnWire(served, winningTools) : served;
       scope.toolSchemas =
-        config.findings === true ? served.map((s) => withFindingsArgument(s, offer)) : served;
+        config.findings === true ? ruled.map((s) => withFindingsArgument(s, offer)) : ruled;
       if (servedTools !== undefined) {
         // Dispatch follows the OFFER: a name narrowed off this epoch's wire
         // was not served, so it is not on `current` and takes the off-wire

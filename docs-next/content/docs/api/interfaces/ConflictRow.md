@@ -4,7 +4,7 @@ title: ConflictRow
 
 # Interface: ConflictRow
 
-Defined in: [src/core/agent/findings/types.ts:181](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/findings/types.ts#L181)
+Defined in: [src/core/agent/findings/types.ts:196](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/findings/types.ts#L196)
 
 The algebra's fact at the write that created it: two stood-on readings on
 one key disagree. Written from `conflictsOf`'s output only, once per key.
@@ -15,7 +15,7 @@ one key disagree. Written from `conflictsOf`'s output only, once per key.
 
 > `readonly` **iteration**: `number`
 
-Defined in: [src/core/agent/findings/types.ts:186](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/findings/types.ts#L186)
+Defined in: [src/core/agent/findings/types.ts:201](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/findings/types.ts#L201)
 
 ***
 
@@ -23,7 +23,7 @@ Defined in: [src/core/agent/findings/types.ts:186](https://github.com/footprintj
 
 > `readonly` **key**: `string`
 
-Defined in: [src/core/agent/findings/types.ts:184](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/findings/types.ts#L184)
+Defined in: [src/core/agent/findings/types.ts:199](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/findings/types.ts#L199)
 
 The `assertionKey` the readings share.
 
@@ -33,7 +33,20 @@ The `assertionKey` the readings share.
 
 > `readonly` **kind**: `"conflict"`
 
-Defined in: [src/core/agent/findings/types.ts:182](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/findings/types.ts#L182)
+Defined in: [src/core/agent/findings/types.ts:197](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/findings/types.ts#L197)
+
+***
+
+### turn?
+
+> `readonly` `optional` **turn?**: `number`
+
+Defined in: [src/core/agent/findings/types.ts:208](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/findings/types.ts#L208)
+
+The conversation turn the row was filed in (`AgentState.turnNumber`) —
+stamped by the one writer while an honesty layer is armed (the inputs
+layer), absent otherwise. The ledger crosses turns on a continued
+conversation, and `iteration` restarts at 1 every run.
 
 ***
 
@@ -41,4 +54,4 @@ Defined in: [src/core/agent/findings/types.ts:182](https://github.com/footprintj
 
 > `readonly` **witnesses**: readonly [`ConflictWitness`](/docs/api/interfaces/ConflictWitness)[]
 
-Defined in: [src/core/agent/findings/types.ts:185](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/findings/types.ts#L185)
+Defined in: [src/core/agent/findings/types.ts:200](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/findings/types.ts#L200)

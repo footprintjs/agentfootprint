@@ -8,7 +8,7 @@ title: allow
 
 > **allow**(): [`AllowOutcome`](/docs/api/interfaces/AllowOutcome)\<`never`\>
 
-Defined in: [src/core/agent/middleware/outcomes.ts:22](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/middleware/outcomes.ts#L22)
+Defined in: [src/core/agent/middleware/outcomes.ts:28](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/middleware/outcomes.ts#L28)
 
 Pass the value through untouched.
 
@@ -20,7 +20,7 @@ Pass the value through untouched.
 
 > **allow**(`value`, `why`): [`AllowOutcome`](/docs/api/interfaces/AllowOutcome)\<`never`\>
 
-Defined in: [src/core/agent/middleware/outcomes.ts:31](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/middleware/outcomes.ts#L31)
+Defined in: [src/core/agent/middleware/outcomes.ts:37](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/middleware/outcomes.ts#L37)
 
 Pass the value through untouched, and say why you were comfortable.
 
@@ -47,7 +47,7 @@ silently permitted, not only in the record of the call that asked.
 
 > **allow**\<`T`\>(`value`, `why`): [`AllowOutcome`](/docs/api/interfaces/AllowOutcome)\<`T`\>
 
-Defined in: [src/core/agent/middleware/outcomes.ts:39](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/middleware/outcomes.ts#L39)
+Defined in: [src/core/agent/middleware/outcomes.ts:45](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/middleware/outcomes.ts#L45)
 
 Replace the value and say why.
 
@@ -74,3 +74,50 @@ scrubbed rather than as a run whose input was always that way.
 ### Returns
 
 [`AllowOutcome`](/docs/api/interfaces/AllowOutcome)\<`T`\>
+
+## Call Signature
+
+> **allow**\<`T`\>(`value`, `why`, `origin`): [`AllowOutcome`](/docs/api/interfaces/AllowOutcome)\<`T`\>
+
+Defined in: [src/core/agent/middleware/outcomes.ts:59](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/middleware/outcomes.ts#L59)
+
+Replace the value, say why, and DECLARE where each rewritten argument's
+value came from — `'person'` (the person gave it, e.g. from a receipt of
+their answer), `'app'` (the app's own fact) or `'default'` (an app default
+nobody in the conversation chose). Recorded on the decision row. For an
+argument a tool's `askOrAssume` rules, the answer's standing reads a rewrite
+with no declared origin — or with `'default'` — as assumed.
+
+### Type Parameters
+
+#### T
+
+`T`
+
+### Parameters
+
+#### value
+
+`T`
+
+#### why
+
+`string`
+
+#### origin
+
+##### from
+
+`ArgumentOrigins`
+
+### Returns
+
+[`AllowOutcome`](/docs/api/interfaces/AllowOutcome)\<`T`\>
+
+### Example
+
+```ts
+allow({ ...call.args, window: receipt.window }, 'window from the collected receipt', {
+    from: { window: 'person' },
+  });
+```

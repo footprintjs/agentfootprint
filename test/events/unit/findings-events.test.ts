@@ -19,6 +19,7 @@ import {
   type AgentfootprintEventMap,
 } from '../../../src/events/registry.js';
 import type {
+  FindingsArgumentPayload,
   FindingsContingentPayload,
   FindingsDeclaredPayload,
   FindingsJudgeFailedPayload,
@@ -27,7 +28,7 @@ import type {
 } from '../../../src/events/payloads.js';
 
 describe('findings events — registered at every site', () => {
-  it('EVENT_NAMES.findings names the five events in the three-segment form', () => {
+  it('EVENT_NAMES.findings names the six events in the three-segment form', () => {
     expect(EVENT_NAMES.findings).toEqual({
       declared: 'agentfootprint.findings.declared',
       standing: 'agentfootprint.findings.standing',
@@ -37,10 +38,12 @@ describe('findings events — registered at every site', () => {
       judge_failed: 'agentfootprint.findings.judge_failed',
       // 9.110.0 — the towers: a value used that came only from set-aside results.
       contingent: 'agentfootprint.findings.contingent',
+      // The inputs layer (honesty layer 2) — its verdict on one ruled argument.
+      argument: 'agentfootprint.findings.argument',
     });
   });
 
-  it('all five are in ALL_EVENT_TYPES, directly after the middleware domain', () => {
+  it('all six are in ALL_EVENT_TYPES, directly after the middleware domain', () => {
     const list = [...ALL_EVENT_TYPES];
     const at = list.indexOf('agentfootprint.middleware.decision');
     expect(at).toBeGreaterThan(-1);
@@ -49,6 +52,13 @@ describe('findings events — registered at every site', () => {
     expect(list[at + 3]).toBe('agentfootprint.findings.judged');
     expect(list[at + 4]).toBe('agentfootprint.findings.judge_failed');
     expect(list[at + 5]).toBe('agentfootprint.findings.contingent');
+    expect(list[at + 6]).toBe('agentfootprint.findings.argument');
+  });
+
+  it('the argument event is a key of AgentfootprintEventMap with its own payload type', () => {
+    expectTypeOf<
+      AgentfootprintEventMap['agentfootprint.findings.argument']['payload']
+    >().toEqualTypeOf<FindingsArgumentPayload>();
   });
 
   it('the contingent event is a key of AgentfootprintEventMap with its own payload type (9.110.0)', () => {

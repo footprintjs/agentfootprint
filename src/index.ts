@@ -615,6 +615,9 @@ export {
   // as printed. The model's own standing row is never rewritten.
   type UnsettledByAbsenceRow,
 } from './core/agent/findings/types.js';
+// The inputs layer (honesty layer 2): the ledger row it files per ruled
+// argument per call — a member of `FindingsRow`, returned by `agent.findings()`.
+export type { ArgumentRow } from './core/agent/arguments/rows.js';
 // 9.105.0 — tool choice by classifier (`.toolChoice()`): the row shapes
 // `AgentState.toolChoices` carries (a pick before every model call, the
 // outcome after it), the reasons a narrowing was skipped, and the two
@@ -766,6 +769,10 @@ export type {
   // clean retry). The record keeps the true size (tools.result_refused).
   ToolResultCeiling,
 } from './core/tools.js';
+// The inputs layer's declarations (honesty layer 2): per-argument rules —
+// `Tool.askOrAssume` (the library fills an `assume` default and files it) —
+// and which argument sets the period the answer covers (`Tool.period`).
+export type { AskOrAssume, ToolPeriod } from './core/agent/arguments/declare.js';
 export {
   defineTool,
   assertValidToolName,

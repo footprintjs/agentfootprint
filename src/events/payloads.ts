@@ -27,6 +27,12 @@ import type { LoopMoment } from '../core/agent/moments.js';
 import type { InstructionDeliveryLease, ToolResultStatus } from '../core/agent/toolEffects.js';
 import type { ToolSemantics } from '../lib/semantics/types.js';
 import type { Basis, Expect, Standing } from '../core/agent/findings/types.js';
+import type {
+  ArgumentAsked,
+  ArgumentCheckFailed,
+  ArgumentClaim,
+  ArgumentSource,
+} from '../core/agent/arguments/rows.js';
 
 // ─── Tier 1+2: Core Domain (library-emitted) ──────────────────────────
 
@@ -969,6 +975,43 @@ export interface FindingsContingentPayload {
   readonly standings: readonly Standing[];
   /** The length of the value as the row holds it. */
   readonly valueChars: number;
+}
+
+/**
+ * The inputs layer's verdict on ONE ruled argument of ONE tool call (honesty
+ * layer 2) — fired once per `argument` row the `sf-inputs` subflow files,
+ * before the call dispatches. This version files `source: 'default'` (the
+ * library filled the tool's declared `assume` value, or the model sent that
+ * same value) and `source: 'model'` (the model sent another value the record
+ * does not trace). Names, enums and counts only: never the value, a quote or
+ * the model's proposal — those stay on the committed row, in the tool's own
+ * argument view — and no `valueChars` when that view hides the argument. A
+ * host counts "1 assumed" from these events. The standing fold never reads
+ * them (it reads the committed rows).
+ */
+export interface FindingsArgumentPayload {
+  readonly toolCallId: string;
+  readonly toolName: string;
+  readonly iteration: number;
+  /** The conversation turn the row was filed in. */
+  readonly turn: number;
+  readonly argument: string;
+  readonly rule?: 'ask' | 'assume';
+  readonly period?: true;
+  readonly source?: ArgumentSource;
+  readonly asked?: ArgumentAsked;
+  readonly claimed?: ArgumentClaim;
+  readonly matched?: 'quote' | 'phrase' | 'spelling';
+  readonly reading?: true;
+  readonly earlier?: true;
+  readonly setAside?: 'open' | 'noise' | 'ruled-out';
+  readonly argumentsFrom?: 'listed' | 'unlisted';
+  readonly coincides?: 'person' | 'result' | 'app';
+  readonly free?: true;
+  readonly failed?: ArgumentCheckFailed;
+  readonly malformed?: number;
+  /** The length of the value as the row holds it — absent when the tool's view hides it. */
+  readonly valueChars?: number;
 }
 
 /**

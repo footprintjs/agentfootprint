@@ -222,6 +222,136 @@ function readPause(state: Readonly<Record<string, unknown>>, g: Gathered): void 
   }
 }
 
+/** One current `argument` row of this turn — the last per (call, argument). */
+interface ArgumentRowRead {
+  readonly index: number;
+  readonly toolCallId: string;
+  readonly argument: string;
+  readonly source?: string;
+  readonly ruled: boolean;
+  readonly failed: boolean;
+}
+
+/**
+ * This turn's CURRENT argument rows (honesty layer 2): the ledger's `argument`
+ * rows whose `turn` is the run's `turnNumber` — the ledger crosses turns on a
+ * continued conversation, and a row from an earlier turn is about a call this
+ * answer does not rest on — keyed by call, then argument, the LAST row
+ * winning. A record with no `turnNumber` reads every argument row (it may
+ * over-report; it never hides).
+ */
+function argumentRows(state: Readonly<Record<string, unknown>>): readonly ArgumentRowRead[] {
+  const ledger = Array.isArray(state.findingsLedger) ? state.findingsLedger : [];
+  const turn = typeof state.turnNumber === 'number' ? state.turnNumber : undefined;
+  const byCall = new Map<string, Map<string, ArgumentRowRead>>();
+  ledger.forEach((row: unknown, index) => {
+    if (!isRecord(row) || row.kind !== 'argument') return;
+    if (turn !== undefined && row.turn !== turn) return;
+    const toolCallId = str(row.toolCallId);
+    const argument = str(row.argument);
+    if (toolCallId === undefined || argument === undefined) return;
+    const source = str(row.source);
+    const read: ArgumentRowRead = {
+      index,
+      toolCallId,
+      argument,
+      ...(source !== undefined && { source }),
+      ruled: row.rule !== undefined || row.period === true,
+      failed: row.failed !== undefined,
+    };
+    const forCall = byCall.get(toolCallId) ?? new Map<string, ArgumentRowRead>();
+    forCall.set(argument, read);
+    byCall.set(toolCallId, forCall);
+  });
+  return [...byCall.values()].flatMap((forCall) => [...forCall.values()]);
+}
+
+/** A before-tool rewrite of one ruled argument — the last per (call, argument). */
+interface RewriteRead {
+  readonly index: number;
+  /** The middleware's declared origin for the argument, when it declared one. */
+  readonly origin?: string;
+}
+
+/**
+ * The before-tool middleware rewrites of this turn's calls
+ * (`middlewareDecisions` · `changedKeys`, filed under the inputs layer's arm),
+ * keyed by call, then argument — the LAST rewrite winning, because the value
+ * the call ran with is the last link's.
+ */
+function rewritesOf(
+  state: Readonly<Record<string, unknown>>,
+): Map<string, Map<string, RewriteRead>> {
+  const decisions = Array.isArray(state.middlewareDecisions) ? state.middlewareDecisions : [];
+  const byCall = new Map<string, Map<string, RewriteRead>>();
+  decisions.forEach((row: unknown, index) => {
+    if (!isRecord(row) || row.at !== 'tool' || !Array.isArray(row.changedKeys)) return;
+    const toolCallId = str(row.toolCallId);
+    if (toolCallId === undefined) return;
+    const from = isRecord(row.from) ? row.from : {};
+    const forCall = byCall.get(toolCallId) ?? new Map<string, RewriteRead>();
+    for (const key of row.changedKeys) {
+      if (typeof key !== 'string') continue;
+      const origin = str(from[key]);
+      forCall.set(key, { index, ...(origin !== undefined && { origin }) });
+    }
+    byCall.set(toolCallId, forCall);
+  });
+  return byCall;
+}
+
+/**
+ * Layer 2, the inputs layer's verdicts. For each ruled argument of this
+ * turn's calls, the value the call RAN with decides:
+ *
+ * - rewritten by a before-tool middleware AFTER the layer checked it — the
+ *   rewrite is what ran: ASSUMED unless the middleware declared the value the
+ *   person's or the app's (`allow(args, why, { from })`); a middleware default
+ *   never earns more standing than the same default declared as `assume`;
+ * - otherwise the layer's row: `default` fires `argument-assumed`; `model` on a
+ *   ruled argument, or a failed declared-source check, fires
+ *   `argument-unverified`.
+ *
+ * A verified source fires nothing — and supports nothing: a membership pass
+ * only keeps a reason from firing. Files the `argument-rules` check when the
+ * layer filed any verdict this turn.
+ */
+function readArgumentVerdicts(
+  state: Readonly<Record<string, unknown>>,
+  rows: readonly ArgumentRowRead[],
+  g: Gathered,
+): void {
+  if (rows.length === 0) return;
+  const rewrites = rewritesOf(state);
+  const witness: AssessmentPointer[] = [];
+  for (const row of rows) {
+    const at = statePointer('findingsLedger', row.index, 'argument');
+    witness.push(at);
+    const rewrite = rewrites.get(row.toolCallId)?.get(row.argument);
+    if (rewrite !== undefined) {
+      if (rewrite.origin !== 'person' && rewrite.origin !== 'app') {
+        fire(
+          g,
+          'argument-assumed',
+          statePointer('middlewareDecisions', rewrite.index, 'changedKeys'),
+        );
+      }
+      continue;
+    }
+    if (row.source === 'default') fire(g, 'argument-assumed', at);
+    else if ((row.source === 'model' && row.ruled) || row.failed) {
+      fire(g, 'argument-unverified', at);
+    }
+  }
+  g.checked.push({
+    layer: 2,
+    check: 'argument-rules',
+    ran: rows.length,
+    of: rows.length,
+    witness,
+  });
+}
+
 /** Layer 3, the tools' own declarations: every absence and every declared gap. */
 function readCoverageRows(coverage: readonly CoverageRow[], g: Gathered): void {
   for (const row of coverage) {
@@ -349,15 +479,23 @@ function readTurnCalls(
   return calls;
 }
 
-/** Layer 3, the model's readings: a conflict row that names a call of THIS turn. */
+/**
+ * Layer 3, the model's readings: a conflict row that names a call of THIS turn.
+ * A row the one writer stamped with its `turn` (the honesty layers' turn stamp,
+ * filed while a layer is armed) is this turn's only when the stamp says so —
+ * a provider that reuses call ids across turns no longer makes an earlier
+ * turn's conflict read as this one's. An unstamped row keeps the call-id rule.
+ */
 function readConflicts(
   state: Readonly<Record<string, unknown>>,
   calls: ReadonlySet<string>,
   g: Gathered,
 ): void {
   const ledger = Array.isArray(state.findingsLedger) ? state.findingsLedger : [];
+  const turn = typeof state.turnNumber === 'number' ? state.turnNumber : undefined;
   ledger.forEach((row: unknown, index) => {
     if (!isRecord(row) || row.kind !== 'conflict' || !Array.isArray(row.witnesses)) return;
+    if (typeof row.turn === 'number' && turn !== undefined && row.turn !== turn) return;
     const ofThisTurn = row.witnesses.some(
       (w: unknown) => isRecord(w) && typeof w.toolCallId === 'string' && calls.has(w.toolCallId),
     );
@@ -454,6 +592,7 @@ export function assessAnswer(
   const reads = readResults(results, coverage);
 
   readPause(state, g);
+  readArgumentVerdicts(state, argumentRows(state), g);
   readCoverageRows(coverage, g);
   const calls = readTurnCalls(reads, coverage, g);
   readTurnResults(reads, declarations, g);

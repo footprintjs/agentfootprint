@@ -68,11 +68,13 @@ import type { FindingsLedger } from './findings/types.js';
 import { breakFinalStage, breakFinalWithValidationStage } from './stages/breakFinal.js';
 import {
   prepareFinalStage,
+  prepareFinalWithLimitsAndAssumedStage,
   prepareFinalWithLimitsStage,
   prepareFinalWithValidationStage,
 } from './stages/prepareFinal.js';
 import { buildCacheSubflow } from './buildCacheSubflow.js';
 import type { AgentChartDeps } from './buildAgentChart.js';
+import { mountInputsLayer } from './honesty/mounts.js';
 import type { AgentState } from './types.js';
 import type { ToolChoiceEntry } from './toolChoice/types.js';
 
@@ -176,7 +178,9 @@ export function buildDynamicAgentChart(deps: AgentChartDeps): FlowChart {
     deps.hasAnswerValidation === true
       ? prepareFinalWithValidationStage
       : deps.attachCoverageLimits === true
-      ? prepareFinalWithLimitsStage
+      ? deps.inputsLayer !== undefined
+        ? prepareFinalWithLimitsAndAssumedStage
+        : prepareFinalWithLimitsStage
       : prepareFinalStage,
     STAGE_IDS.PREPARE_FINAL,
     {
@@ -646,7 +650,7 @@ export function buildDynamicAgentChart(deps: AgentChartDeps): FlowChart {
   }
   const loopTarget: string = deps.windowStage ? STAGE_IDS.COMPACT : SUBFLOW_IDS.LLM_CALL;
 
-  let decider = builder
+  const withLlmCall = builder
     .addSubFlowChartNext(SUBFLOW_IDS.LLM_CALL, llmCallSubflow, 'LLM', {
       inputMapper: (parent) => {
         const p = parent as Record<string, unknown>;
@@ -909,7 +913,11 @@ export function buildDynamicAgentChart(deps: AgentChartDeps): FlowChart {
     })
     // Declared milestones (9.90.0): the mount is the iteration boundary on the
     // OUTER log; the decider and its branches declare in their own `tags`.
-    .tag(...milestoneTagsFor(SUBFLOW_IDS.LLM_CALL))
+    .tag(...milestoneTagsFor(SUBFLOW_IDS.LLM_CALL));
+  // ── The inputs layer — conditional mount (honesty layer 2) ───────────
+  // The flat chart's twin, through the same helper: OUTSIDE `sf-llm-call`, at
+  // the same place — after the LLM call, before Route. Absent → untouched.
+  let decider = mountInputsLayer(withLlmCall, deps.inputsLayer)
     .addDeciderFunction('Route', deps.routeDecider as never, SUBFLOW_IDS.ROUTE, 'ReAct routing', {
       tags: milestoneTagsFor(SUBFLOW_IDS.ROUTE),
     })

@@ -689,6 +689,9 @@ const REFUSES_A_SECOND_CALL = [
   // register the ask twice and leave two maps with the later one silently
   // winning.
   'ontology',
+  // The inputs layer (honesty layer 2) — one mount per agent; a second call
+  // has nothing left to add.
+  'inputsLayer',
   'limitsTravelWithTheAnswer',
   'maps',
   'namesAndNumbersFromEvidence',
@@ -839,6 +842,7 @@ describe('silent success — the doctrine sweep', () => {
           .toolChoice({ classifier: { name: 'mock', classify: async () => ({}) } as never })
           .toolChoice({ classifier: { name: 'mock', classify: async () => ({}) } as never }),
       ontology: () => base().ontology(ONTOLOGY_MAP).ontology(ONTOLOGY_MAP),
+      inputsLayer: () => base().inputsLayer().inputsLayer(),
       limitsTravelWithTheAnswer: () =>
         base().limitsTravelWithTheAnswer().limitsTravelWithTheAnswer(),
       maps: () => base().maps().maps(),

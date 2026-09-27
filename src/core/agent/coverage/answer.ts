@@ -75,12 +75,31 @@ function renderSection(label: string, items: readonly CoverageItem[]): string {
  * Returns the answer UNCHANGED when nothing was declared — the identity case
  * matters, because it is the one every agent that never returns a coverage
  * shape takes.
+ *
+ * `assumed` (the inputs layer, honesty layer 2) is a second, already-composed
+ * block — the values a tool's `assume` rule filled this turn
+ * (`arguments/serve.ts` · `assumedBlock`) — appended after the coverage block
+ * under the same separator. With neither declarations nor an assumed block the
+ * answer is unchanged, byte for byte.
  */
 export function composeAnswerWithCoverage(
   answer: string,
   declared: readonly DeclaredCoverage[],
+  assumed = '',
 ): string {
-  if (declared.length === 0) return answer;
+  const blocks: string[] = [];
+  const coverage = coverageBlock(declared);
+  if (coverage !== '') blocks.push(coverage);
+  if (assumed !== '') blocks.push(assumed);
+  if (blocks.length === 0) return answer;
+  const body = answer.replace(/\s+$/, '');
+  const joined = blocks.join('\n\n');
+  return body.length > 0 ? `${body}\n\n---\n\n${joined}` : joined;
+}
+
+/** The coverage block alone — `''` when the declarations say nothing. */
+function coverageBlock(declared: readonly DeclaredCoverage[]): string {
+  if (declared.length === 0) return '';
   const sections: string[] = [];
   for (const [key, label] of SECTIONS) {
     const items = mergeItems(declared.map((d) => d[key]));
@@ -90,10 +109,9 @@ export function composeAnswerWithCoverage(
   // two doors (both refuse a declaration that says nothing), but a hand-built
   // shape could arrive here, and appending an empty heading would be noise
   // pretending to be a boundary.
-  if (sections.length === 0) return answer;
-  const block =
+  if (sections.length === 0) return '';
+  return (
     `${COVERAGE_BLOCK_HEADING} — declared by the tools that produced it, not by the model:` +
-    `\n\n${sections.join('\n\n')}`;
-  const body = answer.replace(/\s+$/, '');
-  return body.length > 0 ? `${body}\n\n---\n\n${block}` : block;
+    `\n\n${sections.join('\n\n')}`
+  );
 }

@@ -76,6 +76,14 @@ import {
   findingsInstructionFor,
 } from '../src/core/agent/findings/reserved.js';
 import { findingsLedgerPiece } from '../src/core/agent/findings/serve.js';
+import {
+  filledNote,
+  unmountedRulesRefusal,
+  unreadableRulesRefusal,
+  withArgumentRules,
+} from '../src/core/agent/arguments/serve.js';
+import { rulesOf } from '../src/core/agent/arguments/declare.js';
+import { SHOWN_ARGS } from '../src/core/toolShownArgs.js';
 import { defineOntology, ONTOLOGY_INSTRUCTION, ontologyPiece } from '../src/ontology/index.js';
 import type { FindingsLedger } from '../src/core/agent/findings/types.js';
 import {
@@ -666,6 +674,61 @@ const LEDGER_PIECE: Surface = {
   channel: 'system-text',
   lifetime: 'request-ephemeral',
 };
+
+/**
+ * The inputs layer's sentence on a ruled property (honesty layer 2). It rides
+ * the REQUEST — rebuilt onto the served copy of the schema at the one
+ * decoration site and its seed twin — but it is judged at the STRICTEST
+ * lifetime anyway (the design's rule for every served honesty sentence): it
+ * states the rule and what the record keeps, which stays true on every
+ * re-read, including under a cached tools slot.
+ */
+const RULED_PROPERTY_DESCRIPTION: Surface = {
+  channel: 'tool-description',
+  lifetime: 'persistent-history',
+};
+
+/** A ruled tool, and the same tool with an argument view that hides the ruled value. */
+function ruledSchemaDescriptions(): string[] {
+  const tool = defineTool({
+    name: 'search_logs',
+    description: 'Error lines for one service over a look-back period.',
+    inputSchema: {
+      type: 'object',
+      required: ['service', 'window'],
+      properties: {
+        service: { type: 'string' },
+        window: { type: 'string', enum: ['1h', '2h'], description: 'Look-back period.' },
+        limit: { type: 'integer' },
+      },
+    },
+    askOrAssume: { window: { assume: '2h' }, limit: { assume: 50 } },
+    execute: () => 'ok',
+  });
+  const hiding = {
+    ...tool,
+    [SHOWN_ARGS]: (args: Record<string, unknown>) =>
+      'window' in args ? { ...args, window: 'REDACTED' } : args,
+  };
+  return [tool, hiding].flatMap((t) => {
+    const served = withArgumentRules(t.schema, t as never);
+    const props = served.inputSchema.properties as Record<string, { description?: string }>;
+    return Object.values(props).flatMap((p) => (p.description ? [p.description] : []));
+  });
+}
+
+/** Both refusals, the dispatch re-read's composed from the REAL assert's own sentence. */
+function ruledRefusals(): string[] {
+  const broken = rulesOf({
+    schema: {
+      name: 'search_logs',
+      inputSchema: { type: 'object', properties: { window: { type: 'string', enum: ['1h'] } } },
+    },
+    askOrAssume: { window: { assume: '9h' } },
+  });
+  const reason = broken !== undefined && 'refused' in broken ? broken.refused : '';
+  return [unreadableRulesRefusal('search_logs', reason), unmountedRulesRefusal('search_logs')];
+}
 
 /**
  * A ledger that reaches EVERY arm of the piece's grammar: a conflict (two
@@ -1346,6 +1409,54 @@ const PRODUCERS: readonly ModelFacingProducer[] = [
       /^ruled out \(host_hbas, tool:call_1\): not the path$/m,
     ],
     compose: async () => findingsUnsettledPieces(),
+  },
+  {
+    id: 'inputs layer — the rule sentence on a ruled property (honesty layer 2)',
+    module: 'src/core/agent/arguments/serve.ts',
+    surface: RULED_PROPERTY_DESCRIPTION,
+    lifetimeBecause:
+      'it is a property description on the served copy of the schema, rebuilt per request by ' +
+      '`withArgumentRules` at the one decoration site; judged at the strictest lifetime because ' +
+      'it states a rule and what the record keeps, which a later re-read cannot falsify',
+    drivenBy: ['test/core/agent/arguments/layer.test.ts'],
+    reaches: [
+      /^Look-back period\. If left out, the tool's rule fills "2h", recorded as assumed\.$/m,
+      /If left out, the tool's rule fills 50, recorded as assumed\./,
+      /fills a declared value \(hidden by the tool's view\)/,
+    ],
+    compose: async () => ruledSchemaDescriptions(),
+  },
+  {
+    id: 'inputs layer — the note on a result whose call ran on a filled value (honesty layer 2)',
+    module: 'src/core/agent/arguments/serve.ts',
+    surface: TOOL_RESULT,
+    lifetimeBecause:
+      'ToolCalls appends it to the `role: "tool"` result of the call it names, so it is written ' +
+      'into `history` and re-read on every later call of the turn — past tense, anchored to ' +
+      '"the call this result answers"',
+    drivenBy: ['test/core/agent/arguments/layer.test.ts'],
+    reaches: [
+      /the call ran with "2h", the value the tool's rule assumes/,
+      /hidden by the tool's view/,
+    ],
+    compose: async () => [
+      filledNote('search_logs', [{ argument: 'window', value: '2h', hidden: false }]),
+      filledNote('search_logs', [{ argument: 'window', value: '2h', hidden: true }]),
+    ],
+  },
+  {
+    id: 'inputs layer — the refusals of a ruled call (honesty layer 2)',
+    module: 'src/core/agent/arguments/serve.ts',
+    surface: TOOL_RESULT,
+    lifetimeBecause:
+      'each lands as the `role: "tool"` result of the call it refused, in the argument-refusal ' +
+      'shape, so it is written into `history`',
+    drivenBy: ['test/core/agent/arguments/layer.test.ts'],
+    reaches: [
+      /its argument rules could not be read \(askOrAssume\.window\.assume/,
+      /this agent was not built to apply/,
+    ],
+    compose: async () => ruledRefusals(),
   },
   {
     id: 'ontology — the always-on INSTRUCTION piece (9.106.0; v2 9.107.0; v3 9.108.0)',

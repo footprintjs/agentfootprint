@@ -16,7 +16,7 @@ import {
 } from '../../../src/conventions.js';
 
 describe('SUBFLOW_IDS — single source of truth', () => {
-  it('has exactly the 12 known subflow IDs', () => {
+  it('has exactly the 13 known subflow IDs', () => {
     const expected = [
       'sf-injection-engine',
       'sf-llm-call', // LLMCall inner subflow wrapping the invocation
@@ -30,6 +30,7 @@ describe('SUBFLOW_IDS — single source of truth', () => {
       'sf-cache', // v2.14 — per-turn cache decision wrapper
       'sf-cache-decision',
       'sf-thinking', // v2.14 — normalize-thinking mount (agent-internal)
+      'sf-inputs', // the inputs layer (honesty layer 2) — mounted only when armed
     ];
     const actual = Object.values(SUBFLOW_IDS).sort();
     expect(actual).toEqual(expected.sort());
@@ -49,7 +50,7 @@ describe('SUBFLOW_IDS — single source of truth', () => {
 });
 
 describe('STAGE_IDS — single source of truth', () => {
-  it('has the 22 known stage IDs', () => {
+  it('has the 26 known stage IDs', () => {
     const actual = Object.values(STAGE_IDS).sort();
     expect(actual).toEqual(
       [
@@ -95,6 +96,11 @@ describe('STAGE_IDS — single source of truth', () => {
         'apply-markers',
         'no-markers',
         'build-llm-request',
+        // The inputs layer's four stages, inside `sf-inputs` (honesty layer 2):
+        'declare-arguments',
+        'verify-arguments',
+        'record-arguments',
+        'resolve-arguments',
       ].sort(),
     );
   });

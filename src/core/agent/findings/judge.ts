@@ -34,7 +34,12 @@
 
 import type { Classifier, ClassifyRequest } from '../../../classify/types.js';
 import { ClassifierError } from '../../../classify/types.js';
-import { recordFindings, type FindingsScope, type PreviousResult } from './ledger.js';
+import {
+  recordFindings,
+  type FindingsScope,
+  type PreviousResult,
+  type TurnStamp,
+} from './ledger.js';
 import {
   JUDGE_RESULT_CHARS,
   STANDING_VALUES,
@@ -144,6 +149,8 @@ export async function judgeResult(
   entry: PreviousResult & { readonly toolName: string },
   iteration: number,
   signal?: AbortSignal,
+  /** The honesty layers' turn stamp — passed only while the inputs layer is armed. */
+  stamp?: TurnStamp,
 ): Promise<void> {
   const basis = lastBasisRowFor(scope.findingsLedger ?? [], entry.toolCallId);
   const { request, against, clipped } = judgeQuestions(basis, scope.userMessage ?? '', entry);
@@ -165,7 +172,7 @@ export async function judgeResult(
       iteration,
     };
   }
-  recordFindings(scope, [row]);
+  recordFindings(scope, [row], stamp);
 }
 
 /** The LAST basis row filed for a call — the proposition declared before its result existed. */

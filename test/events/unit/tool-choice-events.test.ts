@@ -35,8 +35,9 @@ describe('tool-choice events — registered at every site', () => {
 
   it('all three are in ALL_EVENT_TYPES, directly after the findings domain', () => {
     const list = [...ALL_EVENT_TYPES];
-    // The findings domain's last entry is `contingent` since 9.110.0.
-    const at = list.indexOf('agentfootprint.findings.contingent');
+    // The findings domain's last entry is `argument` since the inputs layer
+    // (honesty layer 2); `contingent` before it, since 9.110.0.
+    const at = list.indexOf('agentfootprint.findings.argument');
     expect(at).toBeGreaterThan(-1);
     expect(list[at + 1]).toBe('agentfootprint.tool_choice.picked');
     expect(list[at + 2]).toBe('agentfootprint.tool_choice.outcome');

@@ -82,13 +82,16 @@ export function contributingPieces<T extends SystemPromptPiece>(
 /**
  * Drop the fields that exist for the library and never for the model.
  *
- * Today there are two: `injectedBy`, the delivery marker (7.21), and
+ * Today there are three: `injectedBy`, the delivery marker (7.21),
  * `notDispatched`, the batch settlement's marker (9.113.0 — the model reads the
- * settled call's sentence; the marker is that fact for the library's readers).
- * Messages without either pass through BY REFERENCE, so an agent that delivers
- * and settles nothing allocates nothing — and the array's length and order are
- * untouched either way, which is what keeps `CacheMarker{field:'messages'}`
- * honest.
+ * settled call's sentence; the marker is that fact for the library's readers),
+ * and `toolChars`, the tool-bytes boundary on a result the inputs layer
+ * annotated (honesty layer 2 — the model reads the whole content; the boundary
+ * tells the library's readers where the tool's own words end).
+ * Messages without any pass through BY REFERENCE, so an agent that delivers,
+ * settles and annotates nothing allocates nothing — and the array's length and
+ * order are untouched either way, which is what keeps
+ * `CacheMarker{field:'messages'}` honest.
  *
  * They are removed before the request exists rather than trusted to be
  * ignored: a consumer-authored adapter that serializes a message wholesale
@@ -106,16 +109,26 @@ export function stripFrameworkFields(messages: readonly LLMMessage[]): readonly 
   if (!messages.some(carriesFrameworkFields)) return messages;
   return messages.map((m) => {
     if (!carriesFrameworkFields(m)) return m;
-    const { injectedBy: _delivered, notDispatched: _settled, ...composed } = m;
+    const {
+      injectedBy: _delivered,
+      notDispatched: _settled,
+      toolChars: _toolBytes,
+      ...composed
+    } = m;
     void _delivered;
     void _settled;
+    void _toolBytes;
     return composed;
   });
 }
 
 /** Does this message carry a field {@link stripFrameworkFields} removes? */
 function carriesFrameworkFields(message: LLMMessage): boolean {
-  return message.injectedBy !== undefined || message.notDispatched !== undefined;
+  return (
+    message.injectedBy !== undefined ||
+    message.notDispatched !== undefined ||
+    message.toolChars !== undefined
+  );
 }
 
 /** What the messages-slot join needs from an injection record. */
