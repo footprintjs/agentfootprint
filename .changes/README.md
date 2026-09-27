@@ -1,9 +1,9 @@
 # `.changes/` — one file per change
 
 Every pull request that touches `src/` adds ONE fragment here. Merging it to
-`main` starts the release, which folds all fragments into `CHANGELOG.md`, picks
-the version, publishes to npm, and deletes them. A change with no fragment
-(docs, CI) does not release. **Never
+`main` opens (or updates) the release PR, which folds all fragments into
+`CHANGELOG.md`, picks the version and deletes them; merging the release PR
+publishes to npm. A change with no fragment (docs, CI) does not release. **Never
 edit `CHANGELOG.md` or `package.json`'s version by hand, and never write a
 version number** into a fragment, a capability row or a commit subject — the
 release fills it in.

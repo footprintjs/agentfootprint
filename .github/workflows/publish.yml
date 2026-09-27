@@ -1,72 +1,76 @@
 name: Release
 
-# THE release. It starts itself: every push to main that carries a .changes/
-# fragment (a merged PR that changed src/) releases. It can also be started by
-# hand — Actions → Release → Run workflow, or `gh workflow run publish.yml
-# -f bump=auto` — e.g. to force a minor. Every step after the start is automatic:
+# THE release, as a release PULL REQUEST — so `main` can require pull requests
+# and green checks, and the release still needs no person to prepare anything.
 #
-#   plan     is there anything to release? Validates the fragments and pins the
-#            exact commit every later job works on. Zero fragments = the run
-#            ends here, green, having released nothing.
-#   build    prepare the release IN THE TREE (version from .changes/ fragments,
-#            CHANGELOG entry, capability rows, every generated doc), then run
-#            EVERY gate against that exact tree, then stage the npm tarball.
+#   1. A PR carrying a .changes/ fragment merges to main. This workflow runs
+#      (`propose`): it computes the next version from the fragments, writes the
+#      CHANGELOG entry, bumps package.json, regenerates every generated doc, and
+#      opens — or updates — ONE pull request, "chore: release vX.Y.Z", from the
+#      branch `release/next`. More fragments merging later update the same PR.
+#   2. That PR runs the full CI like any other PR. With auto-merge on, it merges
+#      itself once CI is green; otherwise a person merges it.
+#   3. Its merge puts a version on main that has no tag yet. This workflow runs
+#      again (`publish` mode): EVERY gate against that exact tree, then tag,
+#      GitHub release, `npm publish --provenance`, and the docs site — in that
+#      order, each only after the one before it succeeded.
+#
+# Jobs:
+#   plan     what does main need? `publish` when package.json names a version
+#            with no tag; `propose` when fragments are waiting (or a bump was
+#            asked for by hand); otherwise nothing. Pins the commit every later
+#            job works on. Cheap — it runs on every push to main.
+#   propose  writes the release PR. Pushes and opens it with the release GitHub
+#            App's token: a PR opened with GITHUB_TOKEN would run no CI, and
+#            its required checks would never report.
+#   build    every gate against the release tree, then stages the npm tarball.
 #            No write power of any kind.
-#   release  only after every gate is green: commit, tag, push, GitHub release.
-#            Runs no npm install — never shares a runtime with a dependency's
-#            install script. Every step is SAFE TO RE-RUN: one that already
-#            happened (commit on main, tag, GitHub release) is skipped, so
-#            "Re-run failed jobs" finishes a half-done release instead of
-#            stranding a version on main that npm never got.
+#   release  tag + GitHub release. Runs no npm install. Safe to re-run: a tag or
+#            a release that already exists is skipped.
 #   publish  `npm publish --provenance` of the tarball `build` staged. The ONLY
 #            job with an OIDC token.
-#   docs     deploy the docs site — AFTER npm has the version, so the site never
-#            documents a release the registry does not serve.
+#   docs     deploys the docs site — AFTER npm has the version.
 #
-# Why the gates come FIRST: the previous flow tagged, pushed and created the
-# GitHub release, and only THEN ran these gates here — a red gate blocked the
-# publish but the version number was already spent (9.72.0/9.73.0 and 9.76.0–
-# 9.78.0 shipped over a red site budget; 9.58.0 over a red docs-truth). Now a
-# red gate means nothing was committed, tagged or published.
+# A red gate publishes nothing, and nothing a person has to undo: the version
+# on main simply stays untagged until a fixing PR merges (whose run publishes)
+# or someone re-runs the failed job.
 #
-# Nothing to prepare by hand: no version bump, no CHANGELOG edit, no "regenerate
-# the API reference" commit. Pull requests add fragments (.changes/README.md);
-# this workflow does the rest.
+# SETUP (once): a GitHub App with Contents + Pull requests read/write, installed
+# on this repository; its Client ID in the Actions VARIABLE
+# RELEASE_APP_CLIENT_ID and its private key in the Actions SECRET
+# RELEASE_APP_PRIVATE_KEY. For hands-off releases, turn on Settings → General →
+# "Allow auto-merge". CONTRIBUTING.md § Releasing has the steps.
 #
 # The file keeps its name, publish.yml, ON PURPOSE: npm trusted publishing is
 # bound to this workflow FILENAME. Renaming it breaks publishing until the
 # trusted-publisher setting on npmjs.com is changed to match.
 #
-# The legacy trigger stays: a GitHub release published by a person (`npm run
-# release:patch`, which runs scripts/release.sh locally) skips `prepare`/`release`
-# and runs the same gates + publish against the tag.
+# The legacy trigger stays: a GitHub release published by a person runs the same
+# gates + publish against that tag.
 on:
-  # Auto-release. The release commit itself is pushed with GITHUB_TOKEN, which
-  # triggers no workflow — so a release can never start another release.
   push:
     branches: [main]
-    paths: ['.changes/**']
   workflow_dispatch:
     inputs:
       bump:
-        description: 'Version bump. auto = computed from .changes/ fragments; patch/minor/major may raise it, never lower it.'
+        description: 'Version bump for the release PR. auto = computed from .changes/ fragments; patch/minor/major may raise it, never lower it.'
         type: choice
         options: [auto, patch, minor, major]
         default: auto
   release:
     types: [published]
 
-# Least privilege: nothing at the top level. `release` gets contents/actions
-# write, `publish` gets id-token; `build` — the only job that installs
-# dependencies — gets read.
+# Least privilege: nothing at the top level. `release` gets contents write,
+# `publish` gets id-token, `docs` gets actions write; `build` and `propose` —
+# the jobs that install dependencies — get read (propose writes only through
+# the App token, scoped to contents + pull requests).
 permissions:
   contents: read
 
-# Two releases can never race for the same version number. GitHub keeps ONE
-# pending run per group and cancels an older pending one, so the legacy
-# `release: published` path (a tag someone already cut) gets a group per tag:
-# a fragment push arriving behind it must not cancel a tag that still needs
-# publishing, and it does not compete for a version number anyway.
+# One run at a time for main, so two runs never compute the same version. GitHub
+# keeps ONE pending run per group and cancels an older pending one — harmless
+# here, since every run works from the TIP of main. The legacy path gets a group
+# per tag, so a push to main can never cancel a tag that still needs publishing.
 concurrency:
   group: release-${{ github.event_name == 'release' && github.ref || 'main' }}
   cancel-in-progress: false
@@ -76,8 +80,9 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 5
     outputs:
-      pending: ${{ steps.plan.outputs.pending }}
+      mode: ${{ steps.plan.outputs.mode }}
       sha: ${{ steps.plan.outputs.sha }}
+      version: ${{ steps.plan.outputs.version }}
     steps:
       - name: Releases are cut from main only
         if: github.event_name != 'release' && github.ref != 'refs/heads/main'
@@ -86,39 +91,39 @@ jobs:
           exit 1
 
       # The TIP of main, not the commit that triggered this run: runs queue
-      # behind each other (concurrency below), and by the time this one starts
-      # an earlier run may have pushed a release commit that already folded
-      # this push's fragments. Working from the tip means that case finds zero
-      # fragments and ends green, instead of releasing twice or failing a
-      # non-fast-forward push.
+      # behind each other, and the tip is what the next step must describe.
       - uses: actions/checkout@v7
         with:
           ref: ${{ github.event_name == 'release' && github.ref || 'main' }}
 
       - id: plan
         run: |
+          VERSION="$(node -p "require('./package.json').version")"
           echo "sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
           if [ "${{ github.event_name }}" = "release" ]; then
-            echo "pending=true" >> "$GITHUB_OUTPUT"; exit 0
+            echo "mode=publish" >> "$GITHUB_OUTPUT"; exit 0
           fi
           node scripts/changes.mjs check
+          if ! git ls-remote --exit-code --tags origin "refs/tags/v$VERSION" >/dev/null; then
+            echo "mode=publish" >> "$GITHUB_OUTPUT"
+            echo "main names v$VERSION, which has no tag — publishing it." >> "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
           count=$(find .changes -maxdepth 1 -name '*.md' ! -name README.md | wc -l)
           if [ "$count" -gt 0 ] || [ "${{ inputs.bump || 'auto' }}" != "auto" ]; then
-            echo "pending=true" >> "$GITHUB_OUTPUT"
+            echo "mode=propose" >> "$GITHUB_OUTPUT"
+            echo "$count .changes/ fragment(s) waiting — opening or updating the release PR." >> "$GITHUB_STEP_SUMMARY"
           else
-            echo "pending=false" >> "$GITHUB_OUTPUT"
-            echo "No .changes/ fragments on main — nothing to release." >> "$GITHUB_STEP_SUMMARY"
+            echo "mode=none" >> "$GITHUB_OUTPUT"
+            echo "Nothing to release: v$VERSION is tagged and no .changes/ fragments are waiting." >> "$GITHUB_STEP_SUMMARY"
           fi
 
   build:
     needs: plan
-    if: needs.plan.outputs.pending == 'true'
+    if: needs.plan.outputs.mode == 'publish'
     runs-on: ubuntu-latest
     timeout-minutes: 45
-    outputs:
-      version: ${{ steps.prepare.outputs.version }}
-    env:
-      PREPARE: ${{ github.event_name != 'release' }}
     steps:
       - uses: actions/checkout@v7
         with:
@@ -134,7 +139,7 @@ jobs:
       # The legacy path publishes whatever version package.json holds at the
       # tag — refuse a tag that names a different one, before any gate runs.
       - name: Tag matches package.json (legacy release path)
-        if: env.PREPARE != 'true'
+        if: github.event_name == 'release'
         run: |
           PKG="v$(node -p "require('./package.json').version")"
           if [ "$PKG" != "${{ github.ref_name }}" ]; then
@@ -142,34 +147,7 @@ jobs:
             exit 1
           fi
 
-      # ── Prepare (automated release only) ────────────────────────────────
-      - name: Prepare version + CHANGELOG from .changes/
-        id: prepare
-        if: env.PREPARE == 'true'
-        run: node scripts/release-prepare.mjs --bump "${{ inputs.bump || 'auto' }}" --notes-out "$RUNNER_TEMP/notes.md"
-
       - run: npm run build
-
-      # Every generated file (API mirror, docs-truth report, examples README,
-      # AI-instruction copies), so the release commit carries docs that match
-      # the version it names.
-      - name: Regenerate docs for the new version
-        if: env.PREPARE == 'true'
-        run: npm run docs:generate
-
-      # Captured BEFORE the gates run, so nothing a gate writes can leak into
-      # the release commit. The gates below then judge exactly these bytes.
-      # Everything lands OUTSIDE the checkout ($RUNNER_TEMP), so the capture
-      # cannot capture itself.
-      - name: Capture the release commit
-        if: env.PREPARE == 'true'
-        run: |
-          mkdir -p "$RUNNER_TEMP/release"
-          mv "$RUNNER_TEMP/notes.md" "$RUNNER_TEMP/release/notes.md"
-          git add -A
-          git diff --cached --binary > "$RUNNER_TEMP/release/commit.patch"
-          echo "${{ steps.prepare.outputs.version }}" > "$RUNNER_TEMP/release/version"
-          git diff --cached --stat
 
       # ── Gates — the same list scripts/release.sh runs locally ──────────
       - name: Documentation check (removed API names)
@@ -187,6 +165,10 @@ jobs:
         run: npm run test:coverage
       - name: Examples (typecheck + run every one end-to-end)
         run: npm run test:examples
+      # Generated files must match this exact tree — the release PR regenerated
+      # them, and nothing may have drifted since.
+      - name: Generated files are current
+        run: npm run docs:check
       # Docs-truth RATCHET: no new export or event without prose, and never
       # docs that tell a reader to import something that does not exist.
       - name: Docs truth
@@ -229,15 +211,7 @@ jobs:
         with:
           name: package
           path: pkg/
-          # Long enough to re-run `publish` after a registry outage; the tag
-          # may already exist by then.
-          retention-days: 30
-
-      - uses: actions/upload-artifact@v7
-        if: env.PREPARE == 'true'
-        with:
-          name: release
-          path: ${{ runner.temp }}/release/
+          # Long enough to re-run `publish` after a registry outage.
           retention-days: 30
 
   release:
@@ -246,47 +220,18 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     permissions:
-      contents: write # commit + tag + GitHub release
+      contents: write # tag + GitHub release
     steps:
-      # The commit the gates judged — the patch applies to exactly this tree.
+      # The commit the gates judged.
       - uses: actions/checkout@v7
         with:
           ref: ${{ needs.plan.outputs.sha }}
 
-      - uses: actions/download-artifact@v8
-        with:
-          name: release
-          path: ${{ runner.temp }}/release
-
-      # Idempotent, so "Re-run failed jobs" finishes a half-done release:
-      #   - main already carries THIS release commit (its parent is the commit
-      #     the gates judged) → reuse it, do not commit again;
-      #   - the tag already exists on origin → do not push it again.
-      # Anything else on main is refused exactly as before.
-      - name: Commit, tag, push
+      # Idempotent, so "Re-run failed jobs" finishes a half-done release.
+      - name: Tag
         env:
-          PLAN_SHA: ${{ needs.plan.outputs.sha }}
+          VERSION: ${{ needs.plan.outputs.version }}
         run: |
-          VERSION="$(cat "$RUNNER_TEMP/release/version")"
-          git config user.name "github-actions[bot]"
-          git config user.email "41898283+github-actions[bot]@users.noreply.github.com"
-          git fetch --quiet --depth=2 origin main
-          if [ "$(git log -1 --format=%s origin/main)" = "chore: release v$VERSION" ] &&
-             [ "$(git rev-parse origin/main^)" = "$PLAN_SHA" ]; then
-            echo "main already carries chore: release v$VERSION — resuming after it."
-            git checkout --quiet --detach origin/main
-          else
-            git apply --index "$RUNNER_TEMP/release/commit.patch"
-            git commit -m "chore: release v$VERSION"
-            # Fast-forward only. If main moved while the gates ran, this refuses —
-            # the new commits were never gated. Nothing is lost: a push that
-            # moved main with a fragment has queued its own run, which releases
-            # from the new tip. A push without one: run the workflow by hand.
-            if ! git push origin "HEAD:refs/heads/main"; then
-              echo "::error::main moved while the release was being verified. Nothing was committed, tagged or published — the queued run (or a manual one) releases from the new tip."
-              exit 1
-            fi
-          fi
           if git ls-remote --exit-code --tags origin "refs/tags/v$VERSION" >/dev/null; then
             echo "Tag v$VERSION already on origin — not pushed again."
           else
@@ -294,18 +239,27 @@ jobs:
             git push origin "v$VERSION"
           fi
 
-      # A release created with this job's token does not fire `release:
-      # published`, so this workflow is not re-entered.
+      # The notes are the CHANGELOG section the release PR wrote. A release
+      # created with this job's token does not fire `release: published`, so
+      # this workflow is not re-entered.
       - name: GitHub release
         env:
           GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ needs.plan.outputs.version }}
         run: |
-          VERSION="$(cat "$RUNNER_TEMP/release/version")"
           if gh release view "v$VERSION" >/dev/null 2>&1; then
             echo "GitHub release v$VERSION already exists — not created again."
-          else
-            gh release create "v$VERSION" --title "v$VERSION" --notes-file "$RUNNER_TEMP/release/notes.md" --latest
+            exit 0
           fi
+          awk -v head="## [$VERSION]" '
+            index($0, head) == 1 { on = 1; next }
+            on && /^## \[/ { exit }
+            on { print }
+          ' CHANGELOG.md > "$RUNNER_TEMP/notes.md"
+          if [ ! -s "$RUNNER_TEMP/notes.md" ]; then
+            echo "See CHANGELOG.md." > "$RUNNER_TEMP/notes.md"
+          fi
+          gh release create "v$VERSION" --title "v$VERSION" --notes-file "$RUNNER_TEMP/notes.md" --latest
 
   publish:
     needs: [build, release]
@@ -348,9 +302,98 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 5
     permissions:
-      actions: write # start the docs deploy (a push by GITHUB_TOKEN triggers no workflow)
+      actions: write # start the docs deploy
     steps:
       - name: Deploy the docs site
         env:
           GH_TOKEN: ${{ github.token }}
         run: gh workflow run docs.yml --repo "${{ github.repository }}" --ref main
+
+      # A PR may have merged a fragment while this release was publishing. Its
+      # own run found an untagged version and deferred to this one, so ask
+      # again now: `plan` opens the next release PR, or ends in seconds.
+      - name: Propose the next release if fragments are waiting
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh workflow run publish.yml --repo "${{ github.repository }}" --ref main
+
+  # Fragments are waiting: write the release onto `release/next` and open (or
+  # update) the release PR. Its merge is what `publish` mode releases.
+  propose:
+    needs: plan
+    if: needs.plan.outputs.mode == 'propose'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: The release App is configured
+        env:
+          CLIENT_ID: ${{ vars.RELEASE_APP_CLIENT_ID }}
+          HAS_KEY: ${{ secrets.RELEASE_APP_PRIVATE_KEY != '' }}
+        run: |
+          if [ -z "$CLIENT_ID" ] || [ "$HAS_KEY" != "true" ]; then
+            echo "::error::The release PR is opened by the release GitHub App, which is not configured: set the Actions variable RELEASE_APP_CLIENT_ID and the Actions secret RELEASE_APP_PRIVATE_KEY (CONTRIBUTING.md § Releasing). Nothing was released; the fragments stay on main."
+            exit 1
+          fi
+
+      # Pinned to a full commit SHA, like every third-party action with write
+      # power here. The token is scoped to exactly what this job writes.
+      - uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
+        id: app
+        with:
+          client-id: ${{ vars.RELEASE_APP_CLIENT_ID }}
+          private-key: ${{ secrets.RELEASE_APP_PRIVATE_KEY }}
+          permission-contents: write
+          permission-pull-requests: write
+
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ needs.plan.outputs.sha }}
+          token: ${{ steps.app.outputs.token }}
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 22
+
+      - run: npm ci
+
+      - name: Prepare version + CHANGELOG from .changes/
+        id: prepare
+        run: node scripts/release-prepare.mjs --bump "${{ inputs.bump || 'auto' }}" --notes-out "$RUNNER_TEMP/notes.md"
+
+      - run: npm run build
+
+      # Every generated file (API mirror, docs-truth report, examples README,
+      # AI-instruction copies), so the release PR carries docs that match the
+      # version it names.
+      - name: Regenerate docs for the new version
+        run: npm run docs:generate
+
+      # `release/next` belongs to this workflow: it is rebuilt from the tip of
+      # main on every run, so a force-push is the point, not a hazard.
+      - name: Open or update the release PR
+        env:
+          GH_TOKEN: ${{ steps.app.outputs.token }}
+          VERSION: ${{ steps.prepare.outputs.version }}
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898283+github-actions[bot]@users.noreply.github.com"
+          git checkout -B release/next
+          git add -A
+          git commit -m "chore: release v$VERSION"
+          git push --force origin release/next
+          {
+            cat "$RUNNER_TEMP/notes.md"
+            echo
+            echo "---"
+            echo "Written by the Release workflow from the \`.changes/\` fragments on main. Merging this PR tags v$VERSION, publishes it to npm and deploys the docs site. More fragments merging to main update this PR."
+          } > "$RUNNER_TEMP/body.md"
+          PR="$(gh pr list --head release/next --base main --state open --json number --jq '.[0].number // empty')"
+          if [ -n "$PR" ]; then
+            gh pr edit "$PR" --title "chore: release v$VERSION" --body-file "$RUNNER_TEMP/body.md"
+          else
+            gh pr create --base main --head release/next --title "chore: release v$VERSION" --body-file "$RUNNER_TEMP/body.md"
+          fi
+          # Hands-off when the repository allows auto-merge: merges itself once
+          # its required checks are green. Otherwise a person merges it.
+          gh pr merge release/next --auto --squash ||
+            echo "::notice::Auto-merge is not enabled for this repository — merge the release PR when its checks are green."
