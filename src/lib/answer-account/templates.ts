@@ -42,7 +42,7 @@ export interface AccountTemplate {
 }
 
 /** Bumped whenever any template's words change (a pinned digest enforces it). */
-export const ANSWER_ACCOUNT_TEMPLATE_SET_VERSION = 1;
+export const ANSWER_ACCOUNT_TEMPLATE_SET_VERSION = 2;
 
 const t = (text: string, voucher: TemplateVoucher = 'library', version = 1): AccountTemplate =>
   Object.freeze({ version, text, voucher });
@@ -208,6 +208,16 @@ export const ANSWER_ACCOUNT_TEMPLATES = Object.freeze({
     '{{tool:code}} returned an empty result and did not declare what it searched.',
   ),
   'found.rows': t("{{tool:code}} returned {{count:n,'item','items'}}."),
+  // A described result (`describedResult()` / `semantic()`): the counts are the library's, read
+  // from the envelope the record keeps; the source and the time are the tool's own words.
+  'found.described.facts': t("{{tool:code}} returned {{count:n,'fact','facts'}}."),
+  'found.described.series': t("{{tool:code}} returned {{count:n,'series','series'}}."),
+  'found.described.edges': t("{{tool:code}} returned {{count:n,'relationship','relationships'}}."),
+  'found.described.provenance': t(
+    '{{tool:code}} says the data came from {{source}}, as of {{measuredAt}}.',
+    'tool',
+  ),
+  'found.clarify': t('{{tool:code}} handed back a question instead of data.', 'tool'),
   'found.result': t('{{tool:code}} returned a result.'),
   'found.failed': t('{{tool:code}} returned an error, not a result.'),
   'found.refused': t('{{tool:code}} did not run, so it found nothing.'),
@@ -236,7 +246,59 @@ export const ANSWER_ACCOUNT_TEMPLATES = Object.freeze({
   'found.noCalls': t('No tool ran for this answer.'),
 
   // ── How sure ─────────────────────────────────────────────────────────
-  'howSure.standing.none': t('The record does not rate how sure this answer is.'),
+  // The answer's standing, rendered from the ONE fold (`core/agent/assessment/assess.ts` ·
+  // `assessAnswer`) over the run's committed record — never from how sure the model sounds.
+  'howSure.standing.none': t(
+    "How sure this answer is cannot be told: the run's committed state is not in this record.",
+    'library',
+    2,
+  ),
+  // No `turn_end` and no pause: the run threw, a rule stopped it before it answered, or the
+  // recording ends early — the record cannot tell those apart, and there is no answer to rate.
+  'howSure.standing.noAnswer': t(
+    'How sure cannot be told: this record does not show the run giving an answer.',
+  ),
+  'howSure.standing.known': t("Known — the app's answer checks passed this exact answer."),
+  'howSure.standing.consistent': t(
+    "Consistent with the run's record — {{count:n,'check','checks'}} ran and none fired. This is not a verification.",
+  ),
+  'howSure.standing.notSure': t(
+    "Not sure — the record holds {{count:n,'reason','reasons'}} this answer may not stand:",
+  ),
+  'howSure.standing.ask': t('Ask — the run stopped to ask a question before it could answer:'),
+  'howSure.standing.notAssessed': t(
+    "Not assessed — this record's committed state holds no verdict the standing can rest on.",
+  ),
+  'howSure.check.toolCoverage': t(
+    "Tool coverage: {{ran}} of {{count:of,'call','calls'}} declared what they covered.",
+  ),
+  'howSure.check.resultShape': t(
+    "What came back: {{ran}} of {{count:of,'result','results'}} could be read.",
+  ),
+  'howSure.check.namesAndNumbers': t(
+    "Names and numbers: the answer's were looked up in what the tools returned.",
+  ),
+  'howSure.check.answerChecks': t("The app's answer checks: they ran on this answer."),
+  'howSure.reason.asked': t('A question the run asked is still waiting for its answer.'),
+  'howSure.reason.coverageGap': t(
+    "{{count:n,'call declared ground it did not check or can never cover','calls declared ground they did not check or can never cover'}}.",
+  ),
+  'howSure.reason.declaredAbsent': t("{{count:n,'call','calls'}} declared that nothing matched."),
+  'howSure.reason.emptyUndeclared': t(
+    "{{count:n,'call returned nothing and did not say what it searched','calls returned nothing and did not say what they searched'}}.",
+  ),
+  'howSure.reason.sourcesConflict': t(
+    "{{count:n,'conflict','conflicts'}} between results the model stood on.",
+  ),
+  'howSure.reason.valueUnsupported': t('Names or numbers in the answer appear in no tool result.'),
+  'howSure.reason.valueSurvivedRevision': t(
+    'Names or numbers in the answer appear in no tool result, even after one revision.',
+  ),
+  'howSure.reason.stoppedEarly': t('The run stopped before the model finished.'),
+  'howSure.reason.answerCheckFailed': t("The app's answer checks failed this answer."),
+  'howSure.reason.checkUnreachable': t(
+    "The app's answer checks could not reach a verdict on this answer.",
+  ),
   'howSure.expected.direct': t(
     'Before calling {{tool:code}}, the model said it expected this call to answer the question directly, and rated how useful it expected the result to be: {{expect}}.',
     'model',

@@ -15,7 +15,7 @@
  * library actually raises. It skips itself (rather than failing) where `jose`
  * is not installed, because it is an optional peer.
  *
- * The pinned facts, as observed on jose 6.2.7:
+ * The pinned facts, as observed on jose 6.2.7 (and 6.2.8 for `requiredClaims`):
  *   expired            → ERR_JWT_EXPIRED
  *   wrong audience     → ERR_JWT_CLAIM_VALIDATION_FAILED, claim 'aud'
  *   wrong issuer       → ERR_JWT_CLAIM_VALIDATION_FAILED, claim 'iss'
@@ -24,6 +24,7 @@
  *   unknown kid        → ERR_JWKS_NO_MATCHING_KEY
  *   alg: none          → refused (a JWKS resolver has no key for it)
  *   disallowed alg     → ERR_JOSE_ALG_NOT_ALLOWED
+ *   no exp, required   → ERR_JWT_CLAIM_VALIDATION_FAILED, claim 'exp'
  */
 
 import { describe, expect, it } from 'vitest';
@@ -79,6 +80,7 @@ async function keyring(): Promise<{
   keys: unknown;
   sign(claims: Record<string, unknown>, over?: Record<string, string>): Promise<string>;
   otherKey: unknown;
+  privateKey: unknown;
   jwk: Record<string, unknown>;
 }> {
   const api = jose as JoseTestApi;
@@ -92,6 +94,7 @@ async function keyring(): Promise<{
     keys,
     jwk,
     otherKey: other.privateKey,
+    privateKey: pair.privateKey,
     sign(claims, over = {}) {
       const builder = new api.SignJWT(claims) as unknown as Record<
         string,
@@ -178,6 +181,26 @@ describeJose('jose 6 — SDK pin (asserted against the installed package)', () =
     expect(await codeOf('not-a-jwt-at-all', {})).toMatchObject({ code: 'ERR_JWS_INVALID' });
   });
 
+  it('PIN (jose 6.2.8 validateClaimsSet): exp is checked only when present, unless requiredClaims names it', async () => {
+    const api = jose as JoseTestApi;
+    const ring = await keyring();
+    const token = await (
+      new api.SignJWT({ sub: 'user-42', iss: ISSUER, aud: AUDIENCE }) as unknown as {
+        setProtectedHeader(h: Record<string, unknown>): { sign(k: unknown): Promise<string> };
+      }
+    )
+      .setProtectedHeader({ alg: 'RS256', kid: 'k1' })
+      .sign(ring.privateKey);
+    // Without requiredClaims a token with no lifetime verifies — the gap.
+    const open = await api.jwtVerify(token, ring.keys, { issuer: ISSUER, audience: AUDIENCE });
+    expect(open.payload.exp).toBeUndefined();
+    // With it, jose refuses by the code the adapter maps to `unverifiable`.
+    const refused = await api
+      .jwtVerify(token, ring.keys, { issuer: ISSUER, audience: AUDIENCE, requiredClaims: ['exp'] })
+      .catch((err: { code?: string; claim?: string }) => err);
+    expect(refused).toMatchObject({ code: 'ERR_JWT_CLAIM_VALIDATION_FAILED', claim: 'exp' });
+  });
+
   it('SECURITY PIN: an alg:none token cannot be verified against a key set', async () => {
     const api = jose as JoseTestApi;
     const ring = await keyring();
@@ -255,19 +278,98 @@ describeJose('jwksIdentity — integration over the real jose', () => {
     expect(await classOf('garbage')).toBe('unverifiable');
   });
 
-  it('reads roles from a space-delimited claim and omits them when absent', async () => {
+  it('a roles STRING is ONE role by default; absent roles stay absent', async () => {
+    // "Not neo-users" is a group name, not the two roles `Not` and `neo-users`
+    // — a space-splitting reader let it satisfy a gate for `neo-users`.
+    const ring = await keyring();
+    const verifier = jwksIdentity({
+      jwksUrl: 'https://idp.example.test/keys',
+      issuer: ISSUER,
+      audience: AUDIENCE,
+      backend: localBackend(ring.keys),
+    });
+    const one = await verifier.verify(await ring.sign({ roles: 'Not neo-users' }));
+    expect(one.roles).toEqual(['Not neo-users']);
+    const without = await verifier.verify(await ring.sign({}));
+    expect(without.roles).toBeUndefined();
+  });
+
+  it("rolesFormat: 'space-delimited' keeps the old reading, by request", async () => {
     const ring = await keyring();
     const verifier = jwksIdentity({
       jwksUrl: 'https://idp.example.test/keys',
       issuer: ISSUER,
       audience: AUDIENCE,
       rolesClaim: 'scope',
+      rolesFormat: 'space-delimited',
       backend: localBackend(ring.keys),
     });
     const withScope = await verifier.verify(await ring.sign({ scope: 'read:all write:own' }));
     expect(withScope.roles).toEqual(['read:all', 'write:own']);
-    const without = await verifier.verify(await ring.sign({}));
-    expect(without.roles).toBeUndefined();
+  });
+
+  it('reads nested roles by PATH, and never splits a dotted claim name', async () => {
+    const ring = await keyring();
+    const nested = jwksIdentity({
+      jwksUrl: 'https://idp.example.test/keys',
+      issuer: ISSUER,
+      audience: AUDIENCE,
+      rolesClaim: ['realm_access', 'roles'],
+      backend: localBackend(ring.keys),
+    });
+    const who = await nested.verify(
+      await ring.sign({ realm_access: { roles: ['SAN-Ops'] }, 'realm_access.roles': ['nope'] }),
+    );
+    expect(who.roles).toEqual(['SAN-Ops']);
+  });
+
+  it('refuses a rolesFormat it does not know', () => {
+    expect(() =>
+      jwksIdentity({
+        jwksUrl: 'https://idp.example.test/keys',
+        issuer: ISSUER,
+        audience: AUDIENCE,
+        rolesFormat: 'csv' as never,
+      }),
+    ).toThrow(/rolesFormat/);
+  });
+
+  it('EVERY TOKEN EXPIRES: a signed token with no exp is refused as unverifiable', async () => {
+    const api = jose as JoseTestApi;
+    const ring = await keyring();
+    const verifier = jwksIdentity({
+      jwksUrl: 'https://idp.example.test/keys',
+      issuer: ISSUER,
+      audience: AUDIENCE,
+      backend: localBackend(ring.keys),
+    });
+    // Signed by the published key, right iss/aud — and no lifetime.
+    const token = await (
+      new api.SignJWT({ sub: 'user-42', iss: ISSUER, aud: AUDIENCE }) as unknown as {
+        setProtectedHeader(h: Record<string, unknown>): { sign(k: unknown): Promise<string> };
+      }
+    )
+      .setProtectedHeader({ alg: 'RS256', kid: 'k1' })
+      .sign(ring.privateKey);
+    await expect(verifier.verify(token)).rejects.toMatchObject({ failure: 'unverifiable' });
+  });
+
+  it('EVERY TOKEN EXPIRES — a backend that ignores requiredClaims still cannot return a token with no exp', async () => {
+    let asked: Record<string, unknown> | undefined;
+    const verifier = jwksIdentity({
+      jwksUrl: 'https://idp.example.test/keys',
+      issuer: ISSUER,
+      audience: AUDIENCE,
+      backend: {
+        createRemoteJWKSet: () => ({}),
+        jwtVerify: (_t, _k, options) => {
+          asked = options;
+          return Promise.resolve({ payload: { sub: 'alice' } });
+        },
+      },
+    });
+    await expect(verifier.verify('t')).rejects.toMatchObject({ failure: 'unverifiable' });
+    expect(asked?.requiredClaims).toEqual(['exp']);
   });
 
   it('refuses a valid token that does not name its subject', async () => {
@@ -328,7 +430,7 @@ describeJose('jwksIdentity — security', () => {
         jwtVerify: (_t, _k, options) => {
           expect(options?.algorithms).not.toContain('HS256');
           expect(options?.algorithms).toContain('RS256');
-          return Promise.resolve({ payload: { sub: 'x' } });
+          return Promise.resolve({ payload: { sub: 'x', exp: 4_000_000_000 } });
         },
       },
     });
@@ -367,7 +469,7 @@ describe('jwksIdentity — performance', () => {
           built += 1;
           return {};
         },
-        jwtVerify: () => Promise.resolve({ payload: { sub: 'alice' } }),
+        jwtVerify: () => Promise.resolve({ payload: { sub: 'alice', exp: 4_000_000_000 } }),
       },
     });
     await verifier.verify('a');

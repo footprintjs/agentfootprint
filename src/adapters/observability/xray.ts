@@ -70,6 +70,7 @@
 
 import type { AgentfootprintEvent } from '../../events/registry.js';
 import { lazyRequire } from '../../lib/lazyRequire.js';
+import { toWireJson } from '../../lib/wireJson.js';
 import type { ObservabilityStrategy } from '../../strategies/types.js';
 
 import { rateLimitedConsoleSink } from './deliveryErrors.js';
@@ -222,7 +223,7 @@ export function xrayObservability(opts: XrayObservabilityOptions): Observability
     const batch = outbox.splice(0, maxBatchSegments);
     try {
       await ensureClient().putTraceSegments({
-        TraceSegmentDocuments: batch.map((s) => JSON.stringify(s)),
+        TraceSegmentDocuments: batch.map((s) => toWireJson(s)),
       });
     } catch (err) {
       // Routed through the strategy's CURRENT `_onError` (not a hook captured

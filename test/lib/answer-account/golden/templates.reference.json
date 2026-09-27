@@ -1129,6 +1129,66 @@
   ],
   "source": "library"
  },
+ "found.described.facts@1": {
+  "text": "lookup_volumes returned 2 facts.",
+  "parts": [
+   {
+    "code": "lookup_volumes"
+   },
+   {
+    "text": " returned 2 facts."
+   }
+  ],
+  "source": "library"
+ },
+ "found.described.series@1": {
+  "text": "lookup_volumes returned 2 series.",
+  "parts": [
+   {
+    "code": "lookup_volumes"
+   },
+   {
+    "text": " returned 2 series."
+   }
+  ],
+  "source": "library"
+ },
+ "found.described.edges@1": {
+  "text": "lookup_volumes returned 2 relationships.",
+  "parts": [
+   {
+    "code": "lookup_volumes"
+   },
+   {
+    "text": " returned 2 relationships."
+   }
+  ],
+  "source": "library"
+ },
+ "found.described.provenance@1": {
+  "text": "lookup_volumes says the data came from source value, as of measuredAt value.",
+  "parts": [
+   {
+    "code": "lookup_volumes"
+   },
+   {
+    "text": " says the data came from source value, as of measuredAt value."
+   }
+  ],
+  "source": "tool:lookup_volumes"
+ },
+ "found.clarify@1": {
+  "text": "lookup_volumes handed back a question instead of data.",
+  "parts": [
+   {
+    "code": "lookup_volumes"
+   },
+   {
+    "text": " handed back a question instead of data."
+   }
+  ],
+  "source": "tool:lookup_volumes"
+ },
  "found.result@1": {
   "text": "lookup_volumes returned a result.",
   "parts": [
@@ -1309,11 +1369,191 @@
   ],
   "source": "library"
  },
- "howSure.standing.none@1": {
-  "text": "The record does not rate how sure this answer is.",
+ "howSure.standing.none@2": {
+  "text": "How sure this answer is cannot be told: the run's committed state is not in this record.",
   "parts": [
    {
-    "text": "The record does not rate how sure this answer is."
+    "text": "How sure this answer is cannot be told: the run's committed state is not in this record."
+   }
+  ],
+  "source": "library"
+ },
+ "howSure.standing.noAnswer@1": {
+  "text": "How sure cannot be told: this record does not show the run giving an answer.",
+  "parts": [
+   {
+    "text": "How sure cannot be told: this record does not show the run giving an answer."
+   }
+  ],
+  "source": "library"
+ },
+ "howSure.standing.known@1": {
+  "text": "Known — the app's answer checks passed this exact answer.",
+  "parts": [
+   {
+    "text": "Known — the app's answer checks passed this exact answer."
+   }
+  ],
+  "source": "library"
+ },
+ "howSure.standing.consistent@1": {
+  "text": "Consistent with the run's record — 2 checks ran and none fired. This is not a verification.",
+  "parts": [
+   {
+    "text": "Consistent with the run's record — 2 checks ran and none fired. This is not a verification."
+   }
+  ],
+  "source": "library"
+ },
+ "howSure.standing.notSure@1": {
+  "text": "Not sure — the record holds 2 reasons this answer may not stand:",
+  "parts": [
+   {
+    "text": "Not sure — the record holds 2 reasons this answer may not stand:"
+   }
+  ],
+  "source": "library"
+ },
+ "howSure.standing.ask@1": {
+  "text": "Ask — the run stopped to ask a question before it could answer:",
+  "parts": [
+   {
+    "text": "Ask — the run stopped to ask a question before it could answer:"
+   }
+  ],
+  "source": "library"
+ },
+ "howSure.standing.notAssessed@1": {
+  "text": "Not assessed — this record's committed state holds no verdict the standing can rest on.",
+  "parts": [
+   {
+    "text": "Not assessed — this record's committed state holds no verdict the standing can rest on."
+   }
+  ],
+  "source": "library"
+ },
+ "howSure.check.toolCoverage@1": {
+  "text": "Tool coverage: ran value of 2 calls declared what they covered.",
+  "parts": [
+   {
+    "text": "Tool coverage: ran value of 2 calls declared what they covered."
+   }
+  ],
+  "source": "library"
+ },
+ "howSure.check.resultShape@1": {
+  "text": "What came back: ran value of 2 results could be read.",
+  "parts": [
+   {
+    "text": "What came back: ran value of 2 results could be read."
+   }
+  ],
+  "source": "library"
+ },
+ "howSure.check.namesAndNumbers@1": {
+  "text": "Names and numbers: the answer's were looked up in what the tools returned.",
+  "parts": [
+   {
+    "text": "Names and numbers: the answer's were looked up in what the tools returned."
+   }
+  ],
+  "source": "library"
+ },
+ "howSure.check.answerChecks@1": {
+  "text": "The app's answer checks: they ran on this answer.",
+  "parts": [
+   {
+    "text": "The app's answer checks: they ran on this answer."
+   }
+  ],
+  "source": "library"
+ },
+ "howSure.reason.asked@1": {
+  "text": "A question the run asked is still waiting for its answer.",
+  "parts": [
+   {
+    "text": "A question the run asked is still waiting for its answer."
+   }
+  ],
+  "source": "library"
+ },
+ "howSure.reason.coverageGap@1": {
+  "text": "2 calls declared ground they did not check or can never cover.",
+  "parts": [
+   {
+    "text": "2 calls declared ground they did not check or can never cover."
+   }
+  ],
+  "source": "library"
+ },
+ "howSure.reason.declaredAbsent@1": {
+  "text": "2 calls declared that nothing matched.",
+  "parts": [
+   {
+    "text": "2 calls declared that nothing matched."
+   }
+  ],
+  "source": "library"
+ },
+ "howSure.reason.emptyUndeclared@1": {
+  "text": "2 calls returned nothing and did not say what they searched.",
+  "parts": [
+   {
+    "text": "2 calls returned nothing and did not say what they searched."
+   }
+  ],
+  "source": "library"
+ },
+ "howSure.reason.sourcesConflict@1": {
+  "text": "2 conflicts between results the model stood on.",
+  "parts": [
+   {
+    "text": "2 conflicts between results the model stood on."
+   }
+  ],
+  "source": "library"
+ },
+ "howSure.reason.valueUnsupported@1": {
+  "text": "Names or numbers in the answer appear in no tool result.",
+  "parts": [
+   {
+    "text": "Names or numbers in the answer appear in no tool result."
+   }
+  ],
+  "source": "library"
+ },
+ "howSure.reason.valueSurvivedRevision@1": {
+  "text": "Names or numbers in the answer appear in no tool result, even after one revision.",
+  "parts": [
+   {
+    "text": "Names or numbers in the answer appear in no tool result, even after one revision."
+   }
+  ],
+  "source": "library"
+ },
+ "howSure.reason.stoppedEarly@1": {
+  "text": "The run stopped before the model finished.",
+  "parts": [
+   {
+    "text": "The run stopped before the model finished."
+   }
+  ],
+  "source": "library"
+ },
+ "howSure.reason.answerCheckFailed@1": {
+  "text": "The app's answer checks failed this answer.",
+  "parts": [
+   {
+    "text": "The app's answer checks failed this answer."
+   }
+  ],
+  "source": "library"
+ },
+ "howSure.reason.checkUnreachable@1": {
+  "text": "The app's answer checks could not reach a verdict on this answer.",
+  "parts": [
+   {
+    "text": "The app's answer checks could not reach a verdict on this answer."
    }
   ],
   "source": "library"

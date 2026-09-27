@@ -63,6 +63,7 @@
 
 import { warnIfInvalidToolName } from '../../tools.js';
 import { normalizeCoverageList } from './items.js';
+import { refusal, refuseUnknownKeys } from './refusal.js';
 import type { AbsenceDeclaration, Coverage, ToolAbsence, TryInsteadTool } from './types.js';
 
 // The recognizer lives in the leaf `recognize.ts` (a post-hoc reader asks it
@@ -93,6 +94,22 @@ const TOOL_SUGGESTION_KEYS: readonly string[] = Object.keys({
   tool: true,
   why: true,
 } satisfies Record<keyof TryInsteadTool, true>);
+
+/**
+ * The declaration's keys, tied to {@link AbsenceDeclaration} in BOTH
+ * directions, the {@link TOOL_SUGGESTION_KEYS} way. Any other key is refused,
+ * naming the spelling meant when it is a slip of one of these: a declaration
+ * fed from plain JavaScript or JSON with `not_checked` used to mint without
+ * that list, and the limit it declared vanished without a word.
+ */
+const ABSENCE_DECLARATION_KEYS: readonly string[] = Object.keys({
+  what: true,
+  checked: true,
+  notChecked: true,
+  cannotCover: true,
+  tryInstead: true,
+  tryInsteadTool: true,
+} satisfies Record<keyof AbsenceDeclaration, true>);
 
 /**
  * What one suggestion field reads as. `value: undefined` with no `problem`
@@ -219,6 +236,13 @@ function readToolSuggestion(raw: unknown): Reading<TryInsteadTool> {
  * `'absent'` (routable by `onToolStatus`), a `tools.absent` event, and an
  * evidence-corpus rule of its own.
  *
+ * Refuses (throws, where it is called) a declaration it cannot honor — and
+ * any key the declaration does not have, naming the spelling meant when the
+ * key is a casing slip (`not_checked` → `notChecked`), so a list declared
+ * from plain JavaScript or JSON cannot vanish without a word. Every refusal
+ * starts `refused: `: inside `execute` it becomes the call's error result,
+ * which the model reads.
+ *
  * @example a port-lookup tool that found no matching FLOGI
  *   defineTool({
  *     name: 'flogi_for_port',
@@ -245,35 +269,36 @@ function readToolSuggestion(raw: unknown): Reading<TryInsteadTool> {
 export function absent(decl: AbsenceDeclaration): ToolAbsence {
   const fn = 'absent';
   if (typeof decl !== 'object' || decl === null) {
-    throw new Error(
-      `${fn}: takes a declaration — { what, checked, notChecked?, cannotCover?, tryInstead?, ` +
+    throw refusal(
+      `${fn}() takes a declaration — { what, checked, notChecked?, cannotCover?, tryInstead?, ` +
         `tryInsteadTool? }.`,
     );
   }
+  refuseUnknownKeys(decl, ABSENCE_DECLARATION_KEYS);
   const what = typeof decl.what === 'string' ? decl.what.trim() : '';
   if (what === '') {
-    throw new Error(
-      `${fn}: \`what\` must say what was looked for (e.g. 'FLOGI entries on fc1/3'). An ` +
+    throw refusal(
+      `\`what\` must say what was looked for (e.g. 'FLOGI entries on fc1/3'). An ` +
         `absence that cannot name what it did not find is indistinguishable from a tool that ` +
         `returned nothing by accident.`,
     );
   }
-  const checked = normalizeCoverageList(fn, 'checked', decl.checked, false);
+  const checked = normalizeCoverageList('checked', decl.checked, false);
   if (checked.length === 0) {
-    throw new Error(
-      `${fn}: '${what}' — \`checked\` must name at least one source, window or population ` +
+    throw refusal(
+      `'${what}' — \`checked\` must name at least one source, window or population ` +
         `that WAS searched. An absence with no coverage is a null with extra steps: the reader ` +
         `still cannot tell "I looked and there is nothing" from "I could not look", which is ` +
         `the confusion this function exists to remove. If you genuinely could not look, that ` +
         `is an error — throw, or return a failure the model can retry.`,
     );
   }
-  const notChecked = normalizeCoverageList(fn, 'notChecked', decl.notChecked, false);
-  const cannotCover = normalizeCoverageList(fn, 'cannotCover', decl.cannotCover, true);
+  const notChecked = normalizeCoverageList('notChecked', decl.notChecked, false);
+  const cannotCover = normalizeCoverageList('cannotCover', decl.cannotCover, true);
   const sentence = readSentence(decl.tryInstead);
-  if (sentence.problem !== undefined) throw new Error(`${fn}: '${what}' — ${sentence.problem}`);
+  if (sentence.problem !== undefined) throw refusal(`'${what}' — ${sentence.problem}`);
   const tool = readToolSuggestion(decl.tryInsteadTool);
-  if (tool.problem !== undefined) throw new Error(`${fn}: '${what}' — ${tool.problem}`);
+  if (tool.problem !== undefined) throw refusal(`'${what}' — ${tool.problem}`);
   const tryInstead = sentence.value;
   const tryInsteadTool = tool.value;
   // The name's charset is the tool registry's question: the owner warns in

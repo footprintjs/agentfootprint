@@ -1,6 +1,6 @@
 {
   "name": "agentfootprint",
-  "version": "9.116.1",
+  "version": "9.121.0",
   "description": "The explainable agent framework — backtrack a wrong answer to the exact context that caused it (evidence, not guesses). Built on footprintjs.",
   "license": "MIT",
   "type": "commonjs",
@@ -66,6 +66,7 @@
     "bench:findings": "node bench/findings-context.mjs",
     "bench:findings:shuffle": "node bench/findings-shuffle.mjs",
     "bench:tool-choice": "node bench/tool-choice.mjs",
+    "bench:inputs": "node bench/inputs/run.mjs",
     "test:types": "tsc -p test/type-regressions/tsconfig.json",
     "examples:readme": "node scripts/generate-examples-readme.mjs",
     "examples:readme:check": "node scripts/generate-examples-readme.mjs --check",
@@ -370,7 +371,9 @@
     "google-auth-library": "*",
     "ioredis": "*",
     "jose": "*",
+    "ldapts": "*",
     "openai": "*",
+    "openid-client": "*",
     "pg": "*",
     "unpdf": "*",
     "zod": "*"
@@ -436,7 +439,13 @@
     "jose": {
       "optional": true
     },
+    "ldapts": {
+      "optional": true
+    },
     "openai": {
+      "optional": true
+    },
+    "openid-client": {
       "optional": true
     },
     "pg": {
@@ -466,7 +475,10 @@
     "footprintjs": "^9.26.0",
     "google-auth-library": "^11.0.1",
     "jose": "^6.2.7",
+    "ldapts": "^9.2.0",
     "openai": "^7.4.0",
+    "openid-client": "^6.8.8",
+    "playwright-core": "^1.63.0",
     "prettier": "^2.8.1",
     "publint": "^0.3.0",
     "typedoc": "^0.28.19",

@@ -116,6 +116,74 @@ export {
 export {
   jwksIdentity,
   MissingJwksSupportError,
+  type ClaimPath,
   type JoseBackend,
   type JwksIdentityOptions,
+  type RolesFormat,
 } from './adapters/identity/jwks.js';
+
+// Sign-in strategies picked by CONFIG (the identity-strategies design). One
+// strategy per deployment, judged once at boot: `identityFromConfig` refuses a
+// wrong or missing setting by name, and production must name its strategy.
+// `oidcIdentity` is the `oidc-token` verifier: jwksIdentity's checks plus
+// discovery, AD FS's second issuer, and the PERSON test — an application's own
+// token is not an employee.
+export {
+  oidcIdentity,
+  type DiscoveryFetch,
+  type OidcDiscoveryState,
+  type OidcIdentity,
+  type OidcIdentityOptions,
+} from './adapters/identity/oidc.js';
+export type { DiscoveredIssuer } from './adapters/identity/verify/discovery.js';
+// Browser sign-in for oidc-token: the authorization-code flow through
+// `openid-client` (optional peer). PENDING INDEPENDENT REVIEW before a company
+// install. The person is read from an ACCESS token by the strategy's own verify.
+export {
+  MissingOpenIdClientError,
+  OidcSignInSetupError,
+  oidcSignIn,
+  type OidcClientCredential,
+  type OidcSignInOptions,
+  type OpenIdClientBackend,
+} from './adapters/identity/oidcSignIn.js';
+export {
+  identityFromConfig,
+  type IdentityBootOptions,
+  type IdentityChoice,
+  type IdentityMode,
+} from './adapters/identity/strategies/choose.js';
+// `directory-password`: Active Directory over LDAPS — bind, RFC 4532
+// Who-am-I, exactly one entry, its objectGUID. `ldapts` is an optional peer.
+export {
+  directoryPasswords,
+  type DirectoryPasswordsOptions,
+} from './adapters/identity/directory/directoryPasswords.js';
+export {
+  ldapDirectory,
+  MissingLdaptsError,
+  type LdapDirectoryOptions,
+  type LdaptsBackend,
+} from './adapters/identity/directory/ldapDirectory.js';
+export {
+  escapeFilterValue,
+  type Directory,
+  type DirectoryEntry,
+  type DirectorySession,
+} from './adapters/identity/directory/port.js';
+// `local-password` (development, tests, demos; refused in production): hashed
+// entries only, scrypt from node:crypto. `hashPassword` makes an entry.
+export {
+  hashPassword,
+  localPasswords,
+  LocalPasswordConfigError,
+  SCRYPT_DEFAULT,
+  SCRYPT_FLOOR,
+  type ScryptCost,
+} from './adapters/identity/localPassword.js';
+export {
+  identityConfigFromEnv,
+  IdentityConfigError,
+  type IdentityConfig,
+} from './adapters/identity/strategies/config.js';
+export type { IdentityStrategyName } from './adapters/identity/strategies/vocabulary.js';

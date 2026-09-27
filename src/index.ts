@@ -700,6 +700,7 @@ export {
 export {
   NoConversationError,
   PendingQuestionError,
+  ResumeIdentityConflictError,
   RunInFlightError,
 } from './core/conversation.js';
 export {
@@ -850,9 +851,12 @@ export {
 // `tools.semantics_declared` event; a declared `coverage` flows through the
 // same channel `coverage()` uses. The gate half (`checkSemantics`, the
 // `agentfootprint-check-semantics` bin) ships through `/observe`.
+// `describedResult()` mints it from a camelCase declaration; `semantic()`,
+// the deprecated name, from the snake_case one — one core, the same wire.
 export {
   composeNotCovered,
   COUNTER_AGGREGATION_WORDS,
+  describedResult,
   explainSemantics,
   isCounterLookingAggregation,
   readSemantics,
@@ -861,6 +865,7 @@ export {
   SEMANTICS_MARKER,
   SEMANTICS_NOTE,
   semanticsForModel,
+  type DescribedResultDeclaration,
   type SemanticClarify,
   type SemanticCoverage,
   type SemanticDeclaration,

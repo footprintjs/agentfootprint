@@ -32,7 +32,7 @@ import type { Unsubscribe } from '../events/dispatcher.js';
 import type { ToolArtifacts } from '../artifacts/capability.js';
 import type { ArtifactWireRequest, ArtifactWireResult } from './artifactWire.js';
 import type { AnswerAccountsOptions } from './answerAccounts.js';
-import type { IdentityVerificationOptions } from './identityVerification.js';
+import type { DoorIdentity } from './identityVerification.js';
 import type { AdmissionPolicy } from './admission.js';
 import type { IngressSink } from './ingressRecord.js';
 import type { SessionSummary, SessionWireRequest, SessionWireResult } from './sessionWire.js';
@@ -168,6 +168,18 @@ export interface HostRequest {
    * to.
    */
   readonly headers?: Readonly<Record<string, string>>;
+  /**
+   * The sign-in this request named, as its KEY — set by a transport built
+   * with a sign-in cookie (`httpHost`/`nodeHost` `signIn`), which strips the
+   * cookie itself from {@link headers} before any handler sees them. The key is
+   * the cookie value's SHA-256: the store is keyed by it and it cannot be
+   * turned back into a cookie. Absent when the transport has no sign-in cookie
+   * configured, and when the request carried none.
+   *
+   * Not identity: `verifyRequestIdentity` turns it into one, through the
+   * deployment's sign-in source, exactly as it turns a bearer token into one.
+   */
+  readonly signInKey?: string;
   /** Aborted when the caller goes away. */
   readonly signal?: AbortSignal;
 }
@@ -364,6 +376,156 @@ export type TurnArtifacts =
   | { readonly bound: false; readonly reason: 'no-session' | 'no-store' };
 
 /**
+ * What {@link StandingAgentHandle.artifactsForRequest} reads off a request:
+ * WHICH conversation (`sessionId`) and WHO is asking — the transport's headers
+ * (the bearer token a configured verifier checks), the sign-in KEY (a sign-in
+ * the server keeps) and, at a door with no verifier, its `userId` claim. The
+ * same fields, read the same way, as a turn or a redemption on the wire.
+ *
+ * The fields are {@link HostRequest}'s own, so inside a handler the request the
+ * transport built goes in AS IT IS — `handle.artifactsForRequest(request)` —
+ * and no credential can be left behind. A {@link HostConversation} goes in the
+ * same way.
+ *
+ * `headers` takes a Node / Express `IncomingHttpHeaders` as it is: a value
+ * that arrived as an array (a repeated header) is not read, and a REPEATED
+ * `authorization` — two credentials — is refused as `'unverified'`.
+ */
+export interface ArtifactsForRequestInput {
+  readonly sessionId?: string;
+  readonly headers?: Readonly<Record<string, string | readonly string[] | undefined>>;
+  readonly userId?: string;
+  /**
+   * The sign-in this request named, as its KEY — {@link HostRequest.signInKey},
+   * or on an app's own route `readSignIn(req.headers, cookieName).key`. Never
+   * the cookie: the seam does not read cookies, and a key cannot be turned
+   * back into one.
+   *
+   * Verified exactly as the turn door verifies it (`verifyRequestIdentity`
+   * with the key): an ended, expired or unknown sign-in is `'unverified'`
+   * (`'expired'`), a sign-in store that cannot answer is `'unavailable'`, and
+   * a key together with a bearer token is `'unverified'`
+   * (`'two-credentials'`). Absent, the request is judged as one that carried
+   * no sign-in — at a door that requires a credential, `'unverified'`
+   * (`'no-token'`), exactly as the turn door would judge it without its key.
+   */
+  readonly signInKey?: string;
+}
+
+/**
+ * What {@link StandingAgentHandle.artifactsForRequest} answers: the serving
+ * agent's artifact store bound to the scope a REDEMPTION by this caller of this
+ * session would read — or why nothing was bound.
+ *
+ * `artifacts` has the {@link TurnArtifacts} shape: five verbs, no scope on the
+ * value, never the unscoped store. Its verbs count against
+ * `artifactOpsPerSession` with the wire's redemptions (a verb past the bound
+ * rejects with `ArtifactOpsBusyError`), and the binding is REVOKED when the
+ * instance it is bound to is retired from the pool or the host is closed —
+ * a verb STARTED after that rejects with `RequestArtifactsRevokedError`
+ * (already handled; ask the handle again); one already in flight completes.
+ *
+ * `bound: false` says why, checked in this order:
+ *  - `'unverified'` — a verifier is configured and the request did not pass it
+ *    (no credential where one is required, a token that does not verify, a
+ *    sign-in that ended or expired, a token AND a sign-in, a claimed user the
+ *    credential does not prove). `error` is the verifier's refusal; a host's
+ *    401.
+ *  - `'unavailable'` — the verifier could not answer (`VerifierUnavailableError`,
+ *    an identity-provider outage, a sign-in store that is down). `error` says
+ *    which; a host's 503, never a 401 — the caller's credential was not
+ *    judged.
+ *  - `'no-session'` — the request named no session.
+ *  - `'invalid-session'` — the session id is one the wire refuses at the door
+ *    (empty, over the length bound, or a character outside visible ASCII —
+ *    `InvalidSessionIdError` as `error`); a host's 400.
+ *  - `'not-found'` — no conversation THIS caller can open under that id: at a
+ *    verifying door somebody else's, one nobody signed for, or one whose first
+ *    turn has not persisted (unless that turn is this caller's, in flight); at
+ *    any door, a session with no live instance and no stored conversation.
+ *    One reason for all of them, as redemption answers them with one
+ *    not-found. Never builds or evicts a pooled instance to find out.
+ *  - `'no-store'` — the serving agent has no artifact store.
+ */
+export type ArtifactsForRequestResult =
+  | { readonly bound: true; readonly artifacts: ToolArtifacts }
+  | {
+      readonly bound: false;
+      readonly reason:
+        | 'unverified'
+        | 'unavailable'
+        | 'no-session'
+        | 'invalid-session'
+        | 'not-found'
+        | 'no-store';
+      /** Present with `'unverified'`, `'unavailable'` and `'invalid-session'`. */
+      readonly error?: Error;
+    };
+
+/**
+ * What `standingAgent(...)` adds to the host adapter's own handle.
+ */
+export interface StandingAgentHandle {
+  /**
+   * The serving agent's artifact store, bound to the scope a redemption by this
+   * request's caller of this session reads — for the paths that are not a chat
+   * turn: a read before a run (a panel redeeming a payload by ref), or an
+   * app-owned route that files its own artifacts beside a conversation.
+   *
+   * "The caller" is what the door knows: at a door with a verifier, the person
+   * the token or the sign-in PROVES; at a door with no verifier, the session id and the
+   * transport's `userId` claim are the key, by law — exactly as on the wire.
+   *
+   * Inside a handler, hand it the request the transport built —
+   * `handle.artifactsForRequest(request)` — so the sign-in key
+   * ({@link HostRequest.signInKey}) goes in with the headers. On an app's own
+   * route, take the sign-in cookie off first and pass only its key:
+   * `const { key, headers } = readSignIn(req.headers, door.cookieName)`, then
+   * `{ sessionId, headers, signInKey: key }`.
+   *
+   * The host never composes the scope. This runs the door's own steps with the
+   * door's own instances: the configured verifier, the session-id check, the
+   * session store (woken and hydrated as a redemption does), the redemption
+   * door's ownership rule, the ONE scope composer redemption and
+   * `reply.turnArtifacts` use, and the store of the instance serving that
+   * session — never building or evicting a pooled instance to find it. So a ref
+   * filed through it is redeemed on the wire by the same caller, and a ref
+   * another caller filed answers exactly like a ref that never existed.
+   *
+   * A filing made through it carries NO `origin`: this call executes no run,
+   * so there is no run id the library can vouch for (a caller's own `origin`
+   * is dropped, as on every binding). The caller is already the scope, and
+   * its `minted` fact names the session.
+   *
+   * @example  An Express route that reads a payload by ref before the turn runs
+   *   const handle = await standingAgent({ agent, sessions, host, identity: door.identity });
+   *   app.get('/panel/:sessionId/:ref', async (req, res) => {
+   *     const { key, headers } = readSignIn(req.headers, door.cookieName); // the cookie comes off
+   *     const found = await handle.artifactsForRequest({
+   *       sessionId: req.params.sessionId,
+   *       headers,
+   *       ...(key !== undefined && { signInKey: key }),
+   *     });
+   *     if (!found.bound) {
+   *       const status = { unverified: 401, unavailable: 503, 'invalid-session': 400 } as Record<string, number>;
+   *       return res.status(status[found.reason] ?? 404).end();
+   *     }
+   *     const payload = await found.artifacts.get(req.params.ref); // null: missing, expired or not yours
+   *     return payload ? res.json(payload.data) : res.status(404).end();
+   *   });
+   *
+   * @throws HostClosedError after `close()` — including a call that was
+   *   waiting (on the verifier or the session store) when `close()` ran: it
+   *   binds nothing and builds nothing, exactly like the wire.
+   * @throws UnreadableEnvelopeError when the stored conversation is present but
+   *   cannot be read (the turn door's law — never composed into a scope).
+   * @throws whatever the session store's own `onWake` / `hydrate` throws (an
+   *   outage is the store's to name, not a refusal value).
+   */
+  artifactsForRequest(request: ArtifactsForRequestInput): Promise<ArtifactsForRequestResult>;
+}
+
+/**
  * What you hand {@link AgentHost.serve}. Throwing is treated exactly like
  * calling `reply.fail(err)` — a handler that throws is a failed request, never
  * a hung one.
@@ -489,8 +651,18 @@ export interface HostConversation {
    * some other way: a bearer token a browser could only send as a subprotocol
    * arrives here as an ordinary `authorization` header, because a port field
    * spelled the way one vendor spells it is how a port stops being one.
+   *
+   * Never the sign-in cookie: a host built with one strips it (see
+   * {@link signInKey}).
    */
   readonly headers?: Readonly<Record<string, string>>;
+  /**
+   * The sign-in the handshake carried, as its KEY (see
+   * {@link HostRequest.signInKey}). When it is present the door already
+   * checked it before the 101, re-checks it before handing on every inbound
+   * frame, and closes the conversation when the sign-in ends.
+   */
+  readonly signInKey?: string;
   /**
    * Host → far side. One frame, delivered whole.
    *
@@ -1241,7 +1413,7 @@ export interface StandingAgentBaseOptions<TH extends HostHandle = HostHandle> {
    *     audience:'my-api',
    *   }).verify }
    */
-  readonly identity?: IdentityVerificationOptions;
+  readonly identity?: DoorIdentity;
   /**
    * Decide whether a request runs at all, BEFORE any model is called (9.26.0).
    *

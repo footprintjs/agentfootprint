@@ -62,6 +62,7 @@
  */
 
 import { lazyRequire } from '../../lib/lazyRequire.js';
+import { toWireJson } from '../../lib/wireJson.js';
 import type { RecordingEnvelope, RecordingSink } from './recordingEnvelope.js';
 
 type FsModule = typeof import('node:fs');
@@ -204,7 +205,7 @@ export function fileRecordingSink(options: FileRecordingSinkOptions): RecordingS
 
       let text: string;
       try {
-        text = `${JSON.stringify(envelope, null, 2)}\n`;
+        text = `${toWireJson(envelope, 2)}\n`; // the wire rule — `lib/wireJson.ts`
       } catch (cause) {
         // A circular reference or a BigInt inside the recording. Refuse by
         // name: the alternative is a file that exists and is not the run.

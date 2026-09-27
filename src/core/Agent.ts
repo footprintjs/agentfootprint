@@ -88,6 +88,19 @@ import {
   type ToolSessionReport,
 } from './toolSessions.js';
 import { buildEventMeta, eventBelongsToRun } from '../bridge/eventMeta.js';
+import {
+  assertIdentityShape,
+  callerIdentityOf,
+  pausedSessionOf,
+  restoredIdentityOf,
+  sameIdentity,
+} from './agent/callerIdentity.js';
+import {
+  hostedConversationKey,
+  hostedConversationOf,
+  registerServingConversation,
+  sessionConversationKey,
+} from './agent/servingConversation.js';
 import type {
   AgentfootprintEvent,
   AgentfootprintEventMap,
@@ -153,6 +166,7 @@ import { CompactionUnmeasurableError } from './agent/window/errors.js';
 import type { WindowStrategy } from './agent/window/strategy.js';
 import type { FoldedSpan } from './agent/window/types.js';
 import type { FindingsLedger } from './agent/findings/types.js';
+import type { AnswerAssessment, AssessmentDeclarations } from './agent/assessment/types.js';
 import {
   isCheckInDecision,
   resolveCheckInConfig,
@@ -211,7 +225,12 @@ import {
   type EvidenceRecoveryCheckpoint,
   type RunCheckpointTracker,
 } from './runCheckpoint.js';
-import { NoConversationError, PendingQuestionError, RunInFlightError } from './conversation.js';
+import {
+  NoConversationError,
+  PendingQuestionError,
+  ResumeIdentityConflictError,
+  RunInFlightError,
+} from './conversation.js';
 import { applyInputResponse, readAwaitingInput } from './inputRequest.js';
 import { applyOutputSchema, OutputSchemaError, type OutputSchemaParser } from './outputSchema.js';
 import { normalizeRunInput } from './runInput.js';
@@ -241,6 +260,8 @@ import type {
 } from './agent/types.js';
 import { buildRouteDeciderStage } from './agent/stages/route.js';
 import { withAnswerValidation } from './agent/stages/answerValidation.js';
+import { withAnswerCoverage } from './agent/stages/answerCoverage.js';
+import type { Coverage } from './agent/coverage/types.js';
 import {
   AnswerValidationError,
   type AnswerValidationReport,
@@ -465,10 +486,12 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
    */
   private readonly evidenceGate?: ResolvedEvidenceGate;
   /**
-   * `.limitsTravelWithTheAnswer()` (this release) — whether the run's declared
-   * coverage is folded into the final answer. False for every agent that did
-   * not ask for it; the RECORDING half of the coverage primitives does not
-   * consult it.
+   * `.limitsTravelWithTheAnswer()` — whether the run's declared coverage
+   * travels with the final answer: appended as a block to a prose answer, or,
+   * when an output schema makes the answer TYPED, committed beside it as data
+   * (`answerCoverage()`), because JSON followed by prose is not JSON. False for
+   * every agent that did not ask for it; the RECORDING half of the coverage
+   * primitives does not consult it.
    */
   private readonly limitsTravelWithTheAnswerValue: boolean = false;
   private readonly skillGraphCascade?: {
@@ -749,8 +772,24 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
   /** The identity the caller gave the last run, or undefined when they gave
    *  none. Only an EXPLICIT identity is carried onto `checkpoint()`: the
    *  default is derived from a runId, and storing that would pin a whole
-   *  conversation to the id of the one run that started it. */
+   *  conversation to the id of the one run that started it.
+   *
+   *  Written by BOTH run doors, before the executor exists: `run()` from the
+   *  call and the continued conversation, `resume()` from the call and the
+   *  paused run's own record (`agent/callerIdentity.ts · callerIdentityOf`).
+   *  A resume that inherited it instead stored another person's identity on
+   *  a shared agent and none on a rebuilt pooled one. */
   private lastRunIdentity?: MemoryIdentity;
+
+  /** Run ids this instance minted, most recent last (bounded) — evidence that a
+   *  checkpoint's `{ conversationId: '<runId>' }` is the per-run default
+   *  (`agent/callerIdentity.ts`). */
+  private readonly mintedRunIds = new Set<string>();
+
+  /** The self-explain evidence key of the run in flight (or served last):
+   *  its session, else a host's per-request key, else undefined
+   *  (`agent/servingConversation.ts`). */
+  private servingConversation?: string;
 
   /** How long ONE tool teardown may take before the runner stops waiting.
    *  See `AgentOptions.toolTeardownTimeoutMs`. */
@@ -897,6 +936,14 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
     answerValidationConfig?: ResolvedAnswerValidation,
   ) {
     super();
+    // Which conversation this instance's self-explain evidence belongs to —
+    // held in a module registry, not on the class, so it is not public API
+    // (`agent/servingConversation.ts`).
+    registerServingConversation(this, () => ({
+      conversation: this.servingConversation,
+      runId: this.currentRunContext.runId,
+      ...(this.servingConversation?.startsWith('hosted:') === true && { oneShot: true }),
+    }));
     this.answerValidationConfig = answerValidationConfig;
     this.provider = opts.provider;
     this.name = opts.name ?? 'Agent';
@@ -1602,6 +1649,10 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
    *
    * Throws if the agent has no outputSchema set or if the run
    * pauses (use `run()` directly when pauses are expected).
+   *
+   * With `.limitsTravelWithTheAnswer()`, nothing is appended to a typed
+   * answer: the limits its tools declared come back as data, from
+   * `agent.answerCoverage()`.
    */
   async runTyped<T = unknown>(input: AgentInput | string, options?: AgentRunOptions): Promise<T> {
     if (!this.outputSchemaParser) {
@@ -1676,6 +1727,10 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
     // message; anything that is not a message is named and refused here
     // rather than becoming `content: undefined` inside the messages slot.
     const runInput = normalizeRunInput<AgentInput>(input, 'Agent.run');
+    // An identity that is not one is refused HERE, where the mistake was made —
+    // not at the resume of a pause it would have made impossible to resume.
+    assertIdentityShape(runInput.identity, 'Agent.run');
+    assertIdentityShape(options?.identity, 'Agent.run');
     // Timing next, and before the executor exists: both of these refuse a call
     // that would have SUCCEEDED into corrupted per-instance state or an
     // orphaned human question. See ./conversation.ts for why they are throws.
@@ -1943,6 +1998,10 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
    * The model is told the same thing by the same fact — the trace tools answer
    * "No completed run is available yet" and the skill body says to say so
    * plainly. This is that answer, for the program.
+   *
+   * Evidence is kept per conversation, so on an agent serving several sessions
+   * this answers for the session of the run in flight — or, between runs, of
+   * the run served last.
    */
   canExplain(): boolean {
     return this.selfExplainBinding?.artifacts !== undefined;
@@ -2111,6 +2170,28 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
     };
   }
 
+  /**
+   * Continue a run that paused to ask a person something, with their answer.
+   *
+   * WHO the resumed run is for is the paused run's caller, read off the
+   * checkpoint (`agent/callerIdentity.ts`) — never whatever this instance ran
+   * last; which SESSION, the call's `sessionId`, else the paused run's. A
+   * checkpoint names who it is for; it is not proof: a host that lets
+   * checkpoints leave its trust boundary signs them or keeps them
+   * server-side, and passes the identity it verified as `options.identity`.
+   *
+   * @throws ResumeIdentityConflictError when `options.identity` is not the
+   *   paused run's caller identity — before anything runs.
+   * @throws DecisionRequiredError when a consent gate is answered with
+   *   something other than a decision.
+   * @throws RunInFlightError when a run is already in flight.
+   *
+   * @example
+   * ```ts
+   * const outcome = await agent.run({ message: 'refund me', identity }, { sessionId });
+   * if (isPaused(outcome)) await agent.resume(outcome.checkpoint, 'yes', { identity, sessionId });
+   * ```
+   */
   async resume(
     checkpoint: FlowchartCheckpoint,
     input?: unknown,
@@ -2127,8 +2208,34 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
     // Discriminated by the PAUSE, never by the input: a plain askHuman/pauseHere
     // answer is a value (often a string) and must stay accepted, so the only
     // sound question is "what was asked?".
+    assertIdentityShape(options?.identity, 'Agent.resume');
     const gate = pauseDemandsDecision(checkpoint.pauseData);
     if (gate && !isCheckInDecision(input)) throw new DecisionRequiredError(gate, input);
+    // One run, one identity — refused before anything moves. The paused run's
+    // caller identity is read off the checkpoint (`callerIdentity.ts`); a call
+    // naming a DIFFERENT one would give the run one person's memory namespace
+    // and credentials (restored, never re-seeded) and another's `ctx.identity`,
+    // principal and stored ownership. A checkpoint names who it is for; it is
+    // not proof — a host that lets checkpoints leave its trust boundary signs
+    // them or keeps them server-side, and passes the identity it verified here.
+    const pausedFor = callerIdentityOf(checkpoint.sharedState, {
+      ...(this.lastRunIdentity !== undefined && { named: this.lastRunIdentity }),
+      minted: this.mintedRunIds,
+    });
+    // The identity the run's memory namespace and credentials are restored
+    // from, WHATEVER its source (a caller's, the session rung, the per-run
+    // default). One run, one identity: a call that names an identity must
+    // name exactly this one — an ownerless (derived) pause resumed by a named
+    // person is refused too, and so is a checkpoint whose own fields disagree
+    // (a session-rung marker on an identity that carries a person).
+    const restored = restoredIdentityOf(checkpoint.sharedState);
+    if (
+      restored === 'malformed' ||
+      (options?.identity !== undefined &&
+        (restored === undefined || !sameIdentity(options.identity, restored)))
+    ) {
+      throw new ResumeIdentityConflictError();
+    }
     // Typed data collection is not consent. Validate before changing any run state.
     const awaitingInput = gate === undefined ? readAwaitingInput(checkpoint.pauseData) : undefined;
     if (awaitingInput !== undefined) {
@@ -2175,6 +2282,24 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
     // finishes: a resume that then FAILS must not leave the agent refusing
     // every later message on behalf of a question that has been answered.
     this.pendingQuestion = undefined;
+    // WHO this resumed run is for — set BEFORE the executor exists, because the
+    // run context's principal (every event's `EventMeta.principal`), a tool's
+    // `ctx.identity` and `checkpoint()` all read it: the identity the PAUSED
+    // run's caller named (a named `options.identity` was checked equal to the
+    // restored one at the top of this method) — never the identity of whatever
+    // this instance ran last, which on a shared or pooled agent is another
+    // person's, or nobody's (`callerIdentity.ts`).
+    this.lastRunIdentity = options?.identity ?? pausedFor;
+    // …and WHICH session: the call's, else the one the paused run recorded in
+    // its own state (`runSessionId`, or the session rung's) — one source, no
+    // instance memory — so a host that resumes without repeating the session
+    // does not file the resumed turn (its tool teardown, its events, its
+    // self-explain evidence) as sessionless.
+    const sessionId = options?.sessionId ?? pausedSessionOf(checkpoint.sharedState);
+    const resumeOptions: AgentRunOptions | undefined =
+      sessionId !== undefined && options?.sessionId === undefined
+        ? { ...options, sessionId }
+        : options;
     this.emitPauseResume(checkpoint, input);
     // Fresh executor — footprintjs 4.17.0+ seeds the runtime from
     // `checkpoint.sharedState` (and nested subflow states) automatically
@@ -2185,7 +2310,7 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
     // paused and resumed is two runs, and each mints its own recording when
     // (and only when) it completes.
     const recording = this.startRunRecording();
-    const executor = this.createExecutor(options);
+    const executor = this.createExecutor(resumeOptions);
     this.inFlightRunId = this.currentRunContext.runId;
     // A resumed turn is two runs, and each keeps its own ledger — exactly
     // the recording's terms one comment up.
@@ -2194,7 +2319,7 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
     // One run can never raise on another run's consent block.
     this.consentOutstanding.clear();
     try {
-      const result = await executor.resume(checkpoint, input, options);
+      const result = await executor.resume(checkpoint, input, resumeOptions);
       const finalized = this.finalizeResult(executor, result);
       if (typeof finalized === 'string') this.lastRunAnswer = finalized;
       // The question this resume answered is settled; a resume that paused
@@ -2889,11 +3014,10 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
     // The actor, for every event this run emits (9.11.0).
     //
     // `lastRunIdentity` is what the CALLER passed and nothing else — `run()`
-    // sets it from `input.identity ?? options.identity ?? the conversation's`
-    // before this method is reached, and it stays undefined when nobody named
-    // one. `resume()` does not set it, so an explicit identity handed to
-    // `resume(cp, input, { identity })` is honoured here and a bare resume
-    // inherits whatever the run it continues was for.
+    // sets it from `input.identity ?? options.identity ?? the conversation's`,
+    // and `resume()` from `options.identity ?? the paused run's caller's`
+    // (`agent/callerIdentity.ts`), both before this method is reached; it stays
+    // undefined when nobody named one.
     //
     // NOT `scope.runIdentity`: that one is always populated and defaults to
     // `{ conversationId: '<runId>' }` (or, since 9.10.0, to the sessionId on a
@@ -2906,9 +3030,19 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
     // A fresh run starts with no evictions filed — the previous run's last
     // visit must not be read as this run's (`window/evictedTurns.ts`).
     this.evictedTurnsHandle?.clear();
+    const runId = makeRunId();
+    this.mintedRunIds.add(runId);
+    boundInsertionOrder(this.mintedRunIds, MAX_REMEMBERED_RUNS);
+    const hosted = hostedConversationOf(runOptions);
+    this.servingConversation =
+      sessionId !== undefined
+        ? sessionConversationKey(sessionId)
+        : hosted !== undefined
+        ? hostedConversationKey(hosted)
+        : undefined;
     this.currentRunContext = {
       runStartMs: Date.now(),
-      runId: makeRunId(),
+      runId,
       compositionPath: [`Agent:${this.id}`],
       ...(correlationId !== undefined && { correlationId }),
       ...(traceId !== undefined && { traceId }),
@@ -3491,6 +3625,88 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
     const report = (this.getLastSnapshot()?.sharedState as Partial<AgentState> | undefined)
       ?.answerValidation;
     return report === undefined ? undefined : structuredClone(report);
+  }
+
+  /**
+   * The limits of the last run's TYPED answer, as data — what its tools
+   * declared they `checked`, did not check (`notChecked`) and can never see
+   * (`cannotCover`), folded across the run: duplicates said once, every entry
+   * kept.
+   *
+   * Set when the agent has an output schema AND `.limitsTravelWithTheAnswer()`:
+   * a typed answer is JSON, and the limits block that option appends to a
+   * prose answer would stop it being JSON, so for a typed answer the limits
+   * travel beside it instead — here, on `turn_end.answerCoverage`, and in
+   * `getLastSnapshot().sharedState.answerCoverage`, one value three ways. The
+   * answer string, and so `runTyped()`, is exactly the model's.
+   *
+   * `undefined` when the run's tools declared no limits, on a prose answer
+   * (the block is in the answer string there; `sharedState.coverageDeclared`
+   * holds the raw rows either way), and before the first run. Detached from
+   * the execution record, so a caller may keep or mutate it.
+   *
+   * @example
+   * ```ts
+   * const agent = Agent.create({ provider, model })
+   *   .tool(replicationHealth) // returns coverage(verdict, { … })
+   *   .outputSchema(Verdict)
+   *   .limitsTravelWithTheAnswer()
+   *   .build();
+   *
+   * const verdict = await agent.runTyped({ message: 'is replication healthy?' });
+   * const limits = agent.answerCoverage();
+   * for (const item of limits?.cannotCover ?? []) {
+   *   console.log(`never covered: ${item.what} (${item.why})`);
+   * }
+   * ```
+   */
+  answerCoverage(): Coverage | undefined {
+    const limits = (this.getLastSnapshot()?.sharedState as Partial<AgentState> | undefined)
+      ?.answerCoverage;
+    return limits === undefined ? undefined : structuredClone(limits);
+  }
+
+  /**
+   * How far the last run's answer stands — folded from its COMMITTED record,
+   * never from how sure the model sounded: `known` · `consistent` (checks ran,
+   * none fired — never "verified") · `not-sure` (with the reasons) · `ask` (the
+   * run paused on a question still waiting for a person) · `not-assessed`
+   * (nothing on the record could be checked).
+   *
+   * The same pure fold as `assessAnswer` on `agentfootprint/observe`, over this
+   * agent's last snapshot; it reads committed state, never events, so a later
+   * reader of the same recording folds the same standing. It resolves
+   * asynchronously because the fold is loaded through `import()` on first use —
+   * an agent that never asks does not carry it.
+   *
+   * Resolves to `undefined` when there is no answer to assess: before the first
+   * run, while a run is in flight, and after a run that threw or whose answer a
+   * rule refused (the typed error carries that verdict).
+   *
+   * `declarations` is the answer account's object, accepted as it is: the fold
+   * reads `tools[name].rowsAt`, where an object result keeps its rows.
+   *
+   * @example
+   * ```ts
+   * await agent.run({ message: 'Which ports on switch A are down?' });
+   * const a = await agent.assessment();
+   * if (a?.standing === 'not-sure') {
+   *   for (const r of a.reasons) console.log(r.reason); // e.g. 'empty-undeclared'
+   * }
+   * ```
+   */
+  async assessment(declarations?: AssessmentDeclarations): Promise<AnswerAssessment | undefined> {
+    const snapshot = this.getLastSnapshot();
+    if (snapshot === undefined) return undefined;
+    // Settled before the fold, which cannot tell a crash from its committed state: an answer
+    // this run RETURNED (`lastRunAnswer`, cleared at every run's start), or a pause — the fold
+    // reads that one from the committed state itself. Read BEFORE the import resolves, so a
+    // run started meanwhile cannot change which run is assessed.
+    const paused = this.lastExecutor?.isPaused() === true;
+    if (!paused && this.lastRunAnswer === undefined) return undefined;
+    // Loaded on first use, off the default graph (the findings/peel.ts precedent).
+    const { assessAnswer } = await import('./agent/assessment/assess.js');
+    return assessAnswer({ snapshot }, declarations);
   }
 
   private finalizeResult(
@@ -4392,6 +4608,16 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
             artifactStore,
             () => this.consentOutstanding.size > 0,
           );
+    // `.limitsTravelWithTheAnswer()` on a TYPED answer — decided once, here.
+    // An output schema makes the answer JSON, and the appended block would
+    // make it JSON followed by prose, which `runTyped()` cannot parse. So the
+    // limits travel as DATA: the Route decider's terminal decision commits the
+    // fold (`withAnswerCoverage`) and the Final branch projects it onto
+    // `turn_end`. A prose answer keeps the block; an agent that asked for
+    // neither is handed the decider it always had.
+    const limitsAsData =
+      this.limitsTravelWithTheAnswerValue && this.outputSchemaParser !== undefined;
+    const terminalRouteDecider = limitsAsData ? withAnswerCoverage(routeDecider) : routeDecider;
 
     // toolCallsHandler extracted to ./agent/stages/toolCalls.ts (v2.11.2).
     const toolCallsHandler = buildToolCallsHandler({
@@ -4573,7 +4799,7 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
       maxIterations,
       seed,
       callLLM,
-      routeDecider,
+      routeDecider: terminalRouteDecider,
       toolCallsHandler,
       // The re-ask branch — mounted only when there are retries to spend. A
       // `'tool-forced'` agent with `retries: 0` gets the constrained shape and
@@ -4630,11 +4856,14 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
       // The declared ontology (9.106.0): the grouped chart carries the run
       // constant across the sf-llm-call boundary, under the arm.
       ...(this.ontology !== undefined && { hasOntology: true }),
-      // `.limitsTravelWithTheAnswer()` (this release) — value-conditional, the
+      // `.limitsTravelWithTheAnswer()` — value-conditional, the
       // `resolvedModel` precedent: absent from the deps object entirely for an
       // agent that did not ask, so both builders mount the final-branch stage
-      // function they have always mounted.
-      ...(this.limitsTravelWithTheAnswerValue && { attachCoverageLimits: true }),
+      // function they have always mounted. ONE of the two, never both: a prose
+      // answer gets the appended block, a TYPED one (`limitsAsData`, above)
+      // gets the stage that appends nothing and carries the limits as data.
+      ...(this.limitsTravelWithTheAnswerValue && !limitsAsData && { attachCoverageLimits: true }),
+      ...(limitsAsData && { coverageLimitsAsData: true }),
       ...(this.answerValidationConfig !== undefined && { hasAnswerValidation: true }),
       // The out-of-budget wrap-up branch (9.56.0) — the conditional-mount law
       // above, decided once beside the Route decider that routes to it so the
@@ -4689,3 +4918,15 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
 // Re-export so the 28+ existing import sites continue to work unchanged.
 
 // Validators + helpers extracted to ./agent/validators.ts (v2.11.1).
+
+/** How many run ids one instance remembers. */
+const MAX_REMEMBERED_RUNS = 256;
+
+/** Drop the oldest entries of an insertion-ordered Set or Map past `max`. */
+function boundInsertionOrder(held: Set<string>, max: number): void {
+  while (held.size > max) {
+    const oldest = held.keys().next();
+    if (oldest.done === true) return;
+    held.delete(oldest.value);
+  }
+}

@@ -66,10 +66,164 @@ the rules are off. On a loopback bind (a laptop) they keep every default. The
 session-id bound applies to them too. See
 `docs/design/2026-09-door-hardening.md`.
 
+## Who is calling — one strategy, chosen by config
+
+A deployment proves who is calling with ONE strategy, picked once at boot by
+`identityFromConfig` (`agentfootprint/security`). Its answer is the
+`identity` option every door takes; `verifyRequestIdentity` stays the one
+funnel.
+
+- **Production names its strategy, even `open`.** `production` is an input the
+  app gives; the library never guesses it. Unset in production refuses to boot.
+- **A typo is never `open`.** An unknown strategy, an unknown `IDENTITY_*`
+  key, or a key a later release reads refuses by name. Keys set with no
+  strategy refuse; keys set beside an explicit `open` print a warning.
+- **Config errors refuse at boot; outages answer 503.** `oidc-token` reads the
+  issuer's discovery document at boot: a 404, a body that is not JSON, or a
+  document naming another issuer — or a redirect — refuses; an unreachable IdP
+  starts, says so in the banner, and every request answers 503 (a fixed
+  sentence) until discovery succeeds. After such a boot, a later misconfigured
+  answer is logged once and retried, never final.
+- **`IDENTITY_ALLOWED_CLIENTS=any` refuses in production**, and every listed
+  client must have service accounts / client credentials turned off.
+- **Only a person's token is a person.** `oidc-token` refuses an application's
+  own token (`not-a-user-token`) and a token from an unlisted client
+  (`wrong-client`). These, and `roles-unknown`, are new `IdentityFailureClass`
+  words: the ingress record carries them like the others.
+- **The banner never carries a secret.** Print every line at boot.
+- This release starts all five: `open`, `oidc-token` (bearer access tokens,
+  plus browser sign-in — pending independent review), `proxy-token` (an
+  authenticating proxy forwards an access token; the app port must be
+  reachable only from the proxy), `directory-password` (plain AD over LDAPS)
+  and `local-password` (development only; refused in production).
+- **`GET /auth/config` in every mode.** The sign-in door answers it in
+  `password` and `redirect` mode; for `open` and `token-only` there is no door,
+  and the app answers `{ mode: choice.mode }` itself — the page learns from it
+  whether to show a sign-in.
+- **A password door says WHICH password (`passwordKind`).** Both password
+  strategies answer `mode: 'password'`, so the door adds
+  `passwordKind: 'directory'` (`directory-password`: the company directory's
+  account) or `'local'` (`local-password`: a list this app keeps) — the
+  checker's declared `PasswordChecker.kind`. It is a FACT; the words stay the
+  page's. Recommended labels: `'directory'` → "Windows username (e.g. jsmith)"
+  and "Windows password"; `'local'` or absent → "Username" and "Password". A
+  custom checker that declares no `kind` adds no key (never a guess); a word
+  outside the two is refused when the door is built.
+
+```ts
+const choice = await identityFromConfig(identityConfigFromEnv(process.env), {
+  production: process.env.NODE_ENV === 'production' || process.env.APP_ENV === 'production',
+});
+for (const line of choice.banner) console.log(line);
+await standingAgent({ agent, sessions, host: nodeHost({ port: 8080 }), identity: choice.identity });
+```
+
+### The credential seam — a sign-in cookie never reaches a handler
+
+A host built with `signIn` carries a sign-in cookie. These rules hold at both
+doors (requests and conversations):
+
+1. **Proved, never read.** A `userId` comes only from a strategy's `verify`, or
+   from a sign-in the server keeps. A header, body field or cookie value is
+   never read as a person.
+2. **Refuse, never downgrade.** A request that cannot prove who it is is
+   refused — never run as anonymous, never under the name it claimed.
+3. **One strategy per deployment**, chosen by `identityFromConfig`.
+4. **One verification path.** Every credential ends in
+   `verifyRequestIdentity`: a bearer token in the strategy's `verify`, a
+   sign-in in the `signIn` source.
+5. **Secrets never travel (rule 10).** The transport strips the sign-in
+   cookie from `HostRequest.headers` and `HostConversation.headers` and passes
+   its key (`signInKey`, the value's SHA-256) instead. `withoutCredentials`
+   is for anything that logs.
+6. **Sign-in stays out of the record (rule 11).** The ingress record carries
+   the proven `userId` and the failure class, never the cookie or its key.
+7. **One credential per request (rule 13).** A token and a sign-in together
+   are refused as `two-credentials`.
+8. **A socket's sign-in is checked before the 101, re-checked before every
+   inbound frame, and sign-out closes the socket (rule 21).** An ended
+   sign-in closes it with 1008; a store that cannot answer closes it with
+   1011 — an outage, never a sign-out.
+
+A sign-in that ended, expired, went idle or never existed is one answer,
+`expired`. A sign-in store that cannot answer is 503. Without `signIn` on the
+host and on `identity`, nothing about either door changes.
+
+```ts
+const signIns = signInSource({ store, idleMinutes: 60 });
+const identity = { signIn: signIns };          // or { verify, signIn } for both
+await standingAgent({
+  agent,
+  sessions,
+  host: nodeHost({ port: 8080, allowedHosts: ['neo.corp.example'], signIn: { identity } }),
+  identity,
+});
+await signIns.end(key); // sign-out: every socket carrying it closes
+```
+
+### The sign-in door — `/auth`, a cookie, no IdP token
+
+`signInDoor` (`signin/door.ts`) serves `/auth/config`, `/auth/me`,
+`/auth/login` and `/auth/logout`; mount it in front of your routes. With
+`IDENTITY_STRATEGY=local-password`, `identityFromConfig` builds it for you
+(`choice.signInDoor`, `choice.hostSignIn`, `choice.identity`).
+
+- **The browser holds no IdP token (rule 16).** It holds a random value in an
+  `HttpOnly` cookie; the server keeps the sign-in by the value's SHA-256.
+- **A password door (rule 18)** runs the door guard on every login, reads
+  JSON only, answers a bad body with a fixed sentence, refuses an empty
+  password before any check, gives every wrong credential one answer after a
+  minimum time, and ends a sign-in already present. **An attempt is counted
+  when it STARTS**, one check per name is in flight at a time, and at most 4
+  checks run door-wide (32 wait; beyond that 503 with `Retry-After`) — so a
+  parallel burst cannot get more guesses than the per-name budget. The budget
+  is kept under the key the password checker names (the ACCOUNT, for
+  `directory-password`) and resets a full window after the LAST attempt. For
+  `directory-password` this REDUCES the risk of tripping Active Directory's
+  own lockout; it cannot rule it out (AD counts every source, and an account
+  with two logon names has two budgets — `adapters/identity/README.md`).
+- **The per-name budget refuses; the per-address budget only delays.** Behind
+  a proxy or a shared NAT everyone can arrive from one address, and a hard
+  address budget would let anybody lock the whole company out of sign-in. List
+  the proxy in `trustedProxies` (IPs or CIDR ranges) so each person is their
+  own address; the door warns once if forwarding headers arrive and none is
+  trusted. IPv6 clients are counted per /64.
+- **Server-side state is bounded, and per process (rule 19).** The banner
+  says: run one replica, or pin each browser to one, or use a shared store.
+  One person can never sign anybody else out: each account keeps at most 10
+  live sign-ins (its oldest ends), expired rows are swept first, and a full
+  store refuses a NEW sign-in (503) instead of evicting someone else's.
+- **Every end is announced (rule 21).** Sign-out, the per-account cap and the
+  sweep all reach `onEnd`, and a socket carrying that sign-in closes. A socket
+  that only RECEIVES learns of a sign-in that simply ran out of time on its
+  next inbound frame; there is no timer.
+- Sign-ins last 8 hours, 60 idle minutes under a password.
+
+```ts
+const choice = await identityFromConfig(identityConfigFromEnv(process.env), { production: false });
+const door = choice.signInDoor!;
+const host = nodeHost({
+  port: 5350,
+  hostname: '127.0.0.1',
+  signIn: choice.hostSignIn,
+  onUnhandled: (req, res) => void door.handle(req, res).then((ok) => ok || res.writeHead(404).end()),
+});
+await standingAgent({ agent, sessions, host, identity: choice.identity });
+```
+
+**Browser sign-in for `oidc-token`** (`GET /auth/login` → the IdP →
+`GET /auth/callback`) is built and tested and **pending independent review**:
+see `signin/README.md`. `returnTo` never leaves the public origin (rule 20),
+the transaction is sealed into the browser, and the person comes from an
+access token through the strategy's own `verify` (rule 4).
+
+The rules for the verifiers themselves are in `src/adapters/identity/README.md`.
+
 ## Files
 - `types.ts` — the three ports.
 - `httpHost.ts`, `nodeHost.ts`, `standingAgent.ts` — the hosts.
 - `doorGuard.ts` — what a request has to be before any handler sees it.
+- `signin/` — the sign-in cookie, the seam that strips it, the lifetimes.
 - `admission.ts` — refuse before it costs anything.
 - `ingressRecord.ts` — what the door decided for requests that never ran.
 - `turnArtifacts.ts` — the artifact hand-over a turn gives its host, and its
@@ -147,14 +301,93 @@ DOOR. The run's recording follows the identity the run was SEEDED with
 stored identity — what both later read — is written by `Agent.checkpoint()`
 from `Agent.lastRunIdentity`. Three sources; they agree at a verifying door and
 at an open one whose conversation carries no identity of its own. Pinned as
-KNOWN EDGES in `test/hosting/turn-artifacts.test.ts`: an unverified door where
+a KNOWN EDGE in `test/hosting/turn-artifacts.test.ts`: an unverified door where
 the conversation carries an identity (an app-seeded tenant, or a user an
-earlier turn claimed) while this request names nobody, and a pause that named
-nobody resumed by a claimed user — the recording is filed where no redemption
-by that caller looks. Separately, `Agent.resume` does not refresh
-`lastRunIdentity`, so after a resume on a shared or rebuilt instance the
-stored identity can name another session's caller — which moves the door and
-the hand-over together (a follow-up packet).
+earlier turn claimed) while this request names nobody — the recording is filed
+where no redemption by that caller looks. (A pause that named nobody, resumed
+by a claimed user, is no longer an edge: it is refused — one run, one
+identity, below.)
+
+**A resumed run is for the person whose run it resumes — one run, one
+identity.** `Agent.resume` takes the caller identity (`Agent.lastRunIdentity`:
+what `checkpoint()` stores, what `EventMeta.principal` and a tool's
+`ctx.identity` carry) from the PAUSED run's own record on the checkpoint
+(`core/agent/callerIdentity.ts · callerIdentityOf`) — never from whatever the
+instance ran last. The law: never drop an identity a caller named, never
+promote one the library derived (the session rung, the per-run default).
+
+- **One run, one identity, fail closed.** A resume that names an identity must
+  name exactly the one the run's memory namespace and credentials are
+  restored with (`scope.runIdentity` on the checkpoint, WHATEVER its source) —
+  a resume never re-seeds, so any other identity would split the run. Refused
+  before anything runs, with `ResumeIdentityConflictError` (code
+  `ERR_SESSION_OWNERSHIP_CONFLICT`, naming neither person):
+  - a DIFFERENT named person;
+  - an OWNERLESS pause (it named nobody: the per-run default or the session
+    rung) resumed by a named person — the fail-closed reading of an open
+    question; a later release may relax it behind an explicit opt-in, never by
+    default;
+  - a checkpoint whose own fields disagree (a session-rung marker on an
+    identity that carries a person), with or without a named identity.
+- A resume that names no session takes the one the paused run recorded in its
+  own state — ONE source, no instance memory — so its evidence, events and tool
+  teardown stay with that session. Seed writes `runSessionId` on every
+  session-bound run, and `null` on a run a caller named an identity for that
+  had no session. A checkpoint written BEFORE that key existed is never filed
+  as sessionless: the session rung gives it, and a caller-named identity gives
+  its `conversationId` (what `standingAgent` composed it from; an app that
+  seeded a different conversation id passes `sessionId` on the resume).
+- An identity that is not one — a field that is not a string, or no field at
+  all — is refused with a `TypeError` when the RUN begins, not at a resume
+  that could then never succeed.
+- **A checkpoint names who it is for; it is not proof.** A resume that names no
+  identity trusts the checkpoint's identity and session. A host that lets
+  checkpoints leave its trust boundary (held by a browser, say) signs them or
+  keeps them server-side, and passes the identity it verified — then any edit
+  to the identity is refused. `standingAgent` keeps checkpoints server-side,
+  gates every resume on ownership and passes the verified identity.
+- The one stated edge: the per-run default is not recorded, so a caller-named
+  identity that is exactly `{ conversationId: 'run-<digits>-<digits>' }`,
+  resumed BARE on another instance — or on the same instance once anyone else
+  has run in between — and matching no receipt, is read as derived. Pass
+  `identity` on `resume` to keep such a name.
+
+```ts
+// No host: the checkpoint carries who the paused run was for.
+const paused = await agent.run({ message: 'refund me', identity: xavier }, { sessionId: 's-x' });
+agent.abandonPause();
+await agent.run({ message: 'hi', identity: yara });                 // somebody else, same instance
+await agent.resume(paused.checkpoint, 'yes', { sessionId: 's-x' }); // for xavier, in xavier's session
+agent.checkpoint()?.identity;                                        // → xavier
+await agent.resume(paused.checkpoint, 'yes', { identity: yara });   // throws ResumeIdentityConflictError
+const nobody = await agent.run({ message: 'refund me' });            // names nobody
+await agent.resume(nobody.checkpoint, 'yes', { identity: yara });   // throws: an ownerless run is not claimed
+```
+
+**One agent, many people: self-explain reads only the asking conversation.**
+`.selfExplain()` keeps each finished turn's evidence (snapshot, narrative,
+event tail) under the CONVERSATION it ran for, and a why-question is answered
+from the previous completed turn of the asking run's own conversation — never
+the instance's last run, which on `standingAgent({ agent })` is somebody
+else's. The keys live in spaces no client string can enter
+(`core/agent/servingConversation.ts`): a run with a session is keyed
+`session:<id>` — whatever the id, `#` and all — and a request `standingAgent`
+serves WITHOUT a session (signed in or not, shared or pooled) is keyed
+`hosted:<a random UUID minted for that request>`, so no later request can
+name it. Only a direct, unhosted run with no session shares the no-session
+key: the single-user path. (The composer's own lane and latch keys are
+namespaced the same way, so a session id spelled `anonymous` or `#anonymous-1`
+is just a session.) A run joins its conversation when it STARTS, so the
+records its tools filed stay its conversation's even when it pauses or fails.
+Sessionless (one-shot) conversations are kept on their own shelf of 8, so a
+flood of sessionless requests never evicts a session's evidence.
+A tool's retained inner runs
+(`flowchartAsTool` / `runbookAsTool` with `keepRecord: true`) are keyed by run
+AND call id and served only to the conversation whose runs made them: another
+conversation's record is not found, not listed, not counted — and a record that
+names no run (a third-party producer) is served only on the direct no-session
+path. Evidence for the 64 most recently completed conversations is kept per
+agent; an older one answers "no completed run".
 
 **Door facts carry their session — and the door checks who is asking.**
 Everything the door produces — a redemption's `resolved`/`refused`, a filing's
@@ -169,7 +402,29 @@ session a request NAMED, the artifact door refuses a `ref` that is not a ref
 verifying door, answers a session the caller cannot open (`mayOpenSession`, or
 for a first turn still in flight, the caller it is serving) with the one
 not-found — nothing emitted, no lane built. At a door with no verifier the
-session id is the key, by law. Redemptions stay lane-free — and are therefore
+session id is the key, by law.
+
+**A read never takes a person's instance away.** A redemption and
+`handle.artifactsForRequest` never build a pooled lane and never evict one —
+before, anybody naming made-up session ids at an open door built an instance
+per id and retired the least recently used idle session, closing its tool
+sessions as `'evicted'`. The store that answers (`redeemerFor`):
+
+| the session has | answered by |
+|---|---|
+| a live lane (the shared agent, or its pooled instance) | that instance's store |
+| no live lane and no stored conversation | the one not-found — nothing built, nothing emitted (nothing could have been minted there: a first turn still in flight HAS a lane) |
+| no live lane, a stored conversation (its instance was evicted) | the READER: one instance from `agentFactory`, held outside the pool, built on first need, stopped at `close()` — it never counts toward `maxActiveSessions` |
+
+The reader answers from the factory's store, so a pooled deployment whose
+artifacts must outlive an instance hands every instance ONE store — which was
+already true: an instance with a store of its own takes its artifacts with it
+when it is evicted.
+
+```ts
+const store = sqliteArtifacts({ file: './artifacts.db' }); // shared by every instance
+await standingAgent({ agentFactory: () => Agent.create({ provider, model, artifacts: store }).build(), sessions, host });
+``` Redemptions stay lane-free — and are therefore
 BOUNDED per session instead: `artifact-head`, `artifact-get` and
 `answer-account` count together against `artifactOpsPerSession` (default
 `DEFAULT_ARTIFACT_OPS_PER_SESSION`, 8), counted after the ownership check, and
@@ -180,6 +435,88 @@ bound.
 ```ts
 await standingAgent({ agent, sessions, host, artifactOpsPerSession: 4 });
 // a 5th concurrent artifact op from one session → 429 ERR_ARTIFACT_OPS_BUSY
+```
+
+**A request's scope OUTSIDE a turn — `handle.artifactsForRequest`.**
+`reply.turnArtifacts` arrives at the END of a turn. A path that is not a turn —
+a panel reading a payload by ref before the run, an app-owned route that files
+a guide beside a conversation — asks the handle `standingAgent` returned
+instead. The rule: **the host never composes a scope.** The handle runs the
+redemption door's own steps with the door's own instances: the configured
+verifier, the session-id check the adapters apply (`checkSessionId`), the
+stored conversation, the ownership rule (`mayRedeemFrom`), the ONE composer
+(`sessionArtifactScope`), and the store of the instance serving that session —
+never building or evicting one (`redeemerFor`). "The caller" is what the door
+knows: with a verifier, the person the token or the sign-in proves; without
+one, the session id and the `userId` claim are the key, as on the wire.
+
+**It verifies exactly as the turn door does — the sign-in key included.** The
+input carries `HostRequest`'s own credential fields (`sessionId`, `headers`,
+`userId`, `signInKey`) and they go through the ONE funnel,
+`verifyRequestIdentity(identity, headers, userId, signInKey)`. So a person
+signed in by the cookie door (`local-password`, `directory-password`, browser
+OIDC) binds here as a bearer caller does; an ended or expired sign-in is
+`'unverified'` (`expired`); a sign-in store that cannot answer is
+`'unavailable'`; a key AND a bearer token are `'unverified'`
+(`two-credentials`). Two ways to hand it over, never the cookie:
+
+- **inside a handler**, pass the request the transport built —
+  `handle.artifactsForRequest(request)`. A `HostRequest` (and a
+  `HostConversation`) IS an `ArtifactsForRequestInput`, so the key cannot be
+  left behind;
+- **on an app's own route**, take the cookie off first with `readSignIn` and
+  pass only its key (the seam never reads a cookie).
+
+A filing made through it carries **no `origin`**: the call executes no run, so
+there is no run id the library could vouch for — reading "the session's last
+run" could name a run that did not produce it, and a caller's own `origin` is
+dropped as on every binding. The caller is already the scope, and the
+`minted` fact names the session. (Through 9.117.0 the key was not passed on,
+so every cookie-signed-in request was `'unverified'` here.)
+
+What comes back is the `TurnArtifacts` shape — five verbs, no scope on the
+value, never the unscoped store — or a reason, in this order: `'unverified'`
+(401), `'unavailable'` (the verifier could not answer — 503, never 401),
+`'no-session'`, `'invalid-session'` (400), `'not-found'` (a session this caller
+cannot open, or one with no live instance and nothing stored), `'no-store'`.
+The verbs count against `artifactOpsPerSession` with the wire's redemptions
+(`ArtifactOpsBusyError`), and the binding is REVOKED when its instance is
+retired from the pool or the host closes: a call STARTED after that rejects
+with `RequestArtifactsRevokedError` (already handled — ask again); an operation
+already in flight completes. A call to `artifactsForRequest` that loses the
+race to `close()` throws `HostClosedError`, as a call made after it does (and
+as the wire answers): it binds nothing and builds nothing.
+`headers` takes `IncomingHttpHeaders` as it is; a REPEATED `authorization` is
+two credentials, refused as `'unverified'` rather than read as none. A ref filed through it is redeemed on the wire
+by the same caller; another person's ref answers `null`, exactly like one that
+never existed.
+
+```ts
+import type { Request, Response } from 'express';
+
+const choice = await identityFromConfig(identityConfigFromEnv(process.env), { production });
+const handle = await standingAgent({ agent, sessions, host, identity: choice.identity });
+const STATUS: Record<string, number> = { unverified: 401, unavailable: 503, 'invalid-session': 400 };
+
+app.get('/panel/:sessionId/:ref', async (req: Request, res: Response) => {
+  // The sign-in cookie comes off here; only its KEY goes on. With no sign-in
+  // strategy there is no cookie to read and `key` is undefined.
+  const { key, headers } = choice.signInDoor
+    ? readSignIn(req.headers, choice.signInDoor.cookieName)
+    : { key: undefined, headers: req.headers };
+  // A repeated authorization is refused; the seam checks the session id itself.
+  const scoped = await handle.artifactsForRequest({
+    sessionId: req.params.sessionId,
+    headers,
+    ...(key !== undefined && { signInKey: key }),
+  });
+  if (!scoped.bound) return res.status(STATUS[scoped.reason] ?? 404).end();
+  const payload = await scoped.artifacts.get(req.params.ref); // null: missing, expired or not yours
+  return payload ? res.json(payload.data) : res.status(404).end();
+});
+
+// Inside a HostHandler the request already carries the key — pass it whole:
+//   const scoped = await handle.artifactsForRequest(request);
 ```
 
 Typed input pauses use the existing `decision` transport for `{requestId,

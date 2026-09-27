@@ -8,13 +8,16 @@
  * crashes the account.
  */
 
-import { readAbsence } from '../../../core/agent/coverage/recognize.js';
+import {
+  parseMaybeJson,
+  readEmptiness,
+  type EmptinessReading,
+} from '../../../core/agent/coverage/emptiness.js';
 import { sentence, v, type SentenceSpec } from '../render.js';
 import type { TemplateId } from '../templates.js';
 import type {
   AccountSource,
   AnswerAccountDeclarations,
-  Emptiness,
   RecordPointer,
   Sentence,
   SentenceVar,
@@ -212,66 +215,17 @@ export function skillVars(
 
 // ── the model's view of a result ─────────────────────────────────────────
 
-/** JSON text that is an object or array is read as data; anything else as found. */
-export function parseMaybeJson(value: unknown): unknown {
-  if (typeof value !== 'string') return value;
-  const trimmed = value.trim();
-  if (!trimmed.startsWith('{') && !trimmed.startsWith('[')) return value;
-  try {
-    return JSON.parse(trimmed) as unknown;
-  } catch {
-    return value;
-  }
-}
+// ONE owner of "what came back?": `core/agent/coverage/emptiness.ts` · `readEmptiness`,
+// shared with the standing fold (`core/agent/assessment/assess.ts` · `assessAnswer`), so the
+// account and the answer's standing cannot disagree about a result. The account supplies the
+// app's `rowsAt` and — for this run's calls — the door the record holds (`facts/calls.ts`).
+export { parseMaybeJson, readEmptiness, type EmptinessReading };
 
-export interface EmptinessReading {
-  readonly emptiness: Emptiness;
-  readonly rows?: number;
-  readonly source?: 'library' | 'app';
-  /** The rows key the reading used (the app's `rowsAt`), when it used one. */
-  readonly rowsAt?: string;
-  /** An object result with no declared shape — the empty-results check cannot be run on it. */
-  readonly undeclaredShape: boolean;
-}
-
-/**
- * Typed routes only (never a guess): a declared absence; a zero-length
- * top-level array (library-counted); an object whose app-declared `rowsAt`
- * key holds an array (app-counted). Anything else is `unknown`.
- */
-export function readEmptiness(
-  value: unknown,
-  toolName: string,
+/** The app's declared rows key for one tool, when it declared one. */
+export const rowsAtOf = (
   declarations: AnswerAccountDeclarations,
-  declaredAbsent: boolean,
-): EmptinessReading {
-  const data = parseMaybeJson(value);
-  if (declaredAbsent || readAbsence(data) !== undefined) {
-    return { emptiness: 'declared-absent', undeclaredShape: false };
-  }
-  if (Array.isArray(data)) {
-    return data.length === 0
-      ? { emptiness: 'undeclared-empty', rows: 0, source: 'library', undeclaredShape: false }
-      : { emptiness: 'non-empty', rows: data.length, source: 'library', undeclaredShape: false };
-  }
-  if (isRecord(data)) {
-    const rowsAt = declarations.tools?.[toolName]?.rowsAt;
-    const rows = rowsAt !== undefined ? data[rowsAt] : undefined;
-    if (rowsAt !== undefined && Array.isArray(rows)) {
-      return rows.length === 0
-        ? { emptiness: 'undeclared-empty', rows: 0, source: 'app', rowsAt, undeclaredShape: false }
-        : {
-            emptiness: 'non-empty',
-            rows: rows.length,
-            source: 'app',
-            rowsAt,
-            undeclaredShape: false,
-          };
-    }
-    return { emptiness: 'unknown', undeclaredShape: true };
-  }
-  return { emptiness: 'unknown', undeclaredShape: false };
-}
+  toolName: string,
+): string | undefined => declarations.tools?.[toolName]?.rowsAt;
 
 /** The source a sentence's emptiness claim rests on. */
 export const emptinessSource = (reading: { readonly source?: 'library' | 'app' }): AccountSource =>

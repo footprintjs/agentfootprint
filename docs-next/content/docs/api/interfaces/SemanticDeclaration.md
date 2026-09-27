@@ -4,9 +4,11 @@ title: SemanticDeclaration
 
 # Interface: SemanticDeclaration
 
-Defined in: [src/lib/semantics/types.ts:175](https://github.com/footprintjs/agentfootprint/blob/main/src/lib/semantics/types.ts#L175)
+Defined in: [src/lib/semantics/types.ts:177](https://github.com/footprintjs/agentfootprint/blob/main/src/lib/semantics/types.ts#L177)
 
-What a tool author passes to `semantic()`. At least one of `series`,
+What a tool author passes to `semantic()` — the deprecated name; new code
+passes a [DescribedResultDeclaration](/docs/api/type-aliases/DescribedResultDeclaration) to `describedResult()`, which
+mints the same envelope from camelCase names. At least one of `series`,
 `facts`, `edges` or a non-null `clarify` must be present — an envelope
 with no data and no question declares nothing.
 
@@ -20,7 +22,7 @@ two can never disagree. Declaring coverage is how not_covered is said.
 
 > `readonly` `optional` **clarify?**: [`SemanticClarify`](/docs/api/interfaces/SemanticClarify) \| `null`
 
-Defined in: [src/lib/semantics/types.ts:185](https://github.com/footprintjs/agentfootprint/blob/main/src/lib/semantics/types.ts#L185)
+Defined in: [src/lib/semantics/types.ts:187](https://github.com/footprintjs/agentfootprint/blob/main/src/lib/semantics/types.ts#L187)
 
 `null` states "ambiguity was considered; there is none" — a fact, kept
  on the record. Omit the field to say nothing.
@@ -31,7 +33,7 @@ Defined in: [src/lib/semantics/types.ts:185](https://github.com/footprintjs/agen
 
 > `readonly` `optional` **coverage?**: [`CoverageDeclaration`](/docs/api/interfaces/CoverageDeclaration)
 
-Defined in: [src/lib/semantics/types.ts:182](https://github.com/footprintjs/agentfootprint/blob/main/src/lib/semantics/types.ts#L182)
+Defined in: [src/lib/semantics/types.ts:184](https://github.com/footprintjs/agentfootprint/blob/main/src/lib/semantics/types.ts#L184)
 
 The coverage()-vocabulary declaration this envelope absorbs.
 
@@ -41,7 +43,7 @@ The coverage()-vocabulary declaration this envelope absorbs.
 
 > `readonly` `optional` **edges?**: readonly [`SemanticEdge`](/docs/api/interfaces/SemanticEdge)[]
 
-Defined in: [src/lib/semantics/types.ts:178](https://github.com/footprintjs/agentfootprint/blob/main/src/lib/semantics/types.ts#L178)
+Defined in: [src/lib/semantics/types.ts:180](https://github.com/footprintjs/agentfootprint/blob/main/src/lib/semantics/types.ts#L180)
 
 ***
 
@@ -49,7 +51,7 @@ Defined in: [src/lib/semantics/types.ts:178](https://github.com/footprintjs/agen
 
 > `readonly` `optional` **facts?**: readonly [`SemanticFact`](/docs/api/interfaces/SemanticFact)[]
 
-Defined in: [src/lib/semantics/types.ts:177](https://github.com/footprintjs/agentfootprint/blob/main/src/lib/semantics/types.ts#L177)
+Defined in: [src/lib/semantics/types.ts:179](https://github.com/footprintjs/agentfootprint/blob/main/src/lib/semantics/types.ts#L179)
 
 ***
 
@@ -57,7 +59,7 @@ Defined in: [src/lib/semantics/types.ts:177](https://github.com/footprintjs/agen
 
 > `readonly` `optional` **grain?**: [`SemanticGrain`](/docs/api/interfaces/SemanticGrain)
 
-Defined in: [src/lib/semantics/types.ts:179](https://github.com/footprintjs/agentfootprint/blob/main/src/lib/semantics/types.ts#L179)
+Defined in: [src/lib/semantics/types.ts:181](https://github.com/footprintjs/agentfootprint/blob/main/src/lib/semantics/types.ts#L181)
 
 ***
 
@@ -65,7 +67,7 @@ Defined in: [src/lib/semantics/types.ts:179](https://github.com/footprintjs/agen
 
 > `readonly` `optional` **provenance?**: [`SemanticProvenance`](/docs/api/interfaces/SemanticProvenance)
 
-Defined in: [src/lib/semantics/types.ts:180](https://github.com/footprintjs/agentfootprint/blob/main/src/lib/semantics/types.ts#L180)
+Defined in: [src/lib/semantics/types.ts:182](https://github.com/footprintjs/agentfootprint/blob/main/src/lib/semantics/types.ts#L182)
 
 ***
 
@@ -73,7 +75,7 @@ Defined in: [src/lib/semantics/types.ts:180](https://github.com/footprintjs/agen
 
 > `readonly` `optional` **render?**: [`SemanticRender`](/docs/api/interfaces/SemanticRender)
 
-Defined in: [src/lib/semantics/types.ts:186](https://github.com/footprintjs/agentfootprint/blob/main/src/lib/semantics/types.ts#L186)
+Defined in: [src/lib/semantics/types.ts:188](https://github.com/footprintjs/agentfootprint/blob/main/src/lib/semantics/types.ts#L188)
 
 ***
 
@@ -81,4 +83,4 @@ Defined in: [src/lib/semantics/types.ts:186](https://github.com/footprintjs/agen
 
 > `readonly` `optional` **series?**: readonly [`SemanticSeriesPoint`](/docs/api/interfaces/SemanticSeriesPoint)[]
 
-Defined in: [src/lib/semantics/types.ts:176](https://github.com/footprintjs/agentfootprint/blob/main/src/lib/semantics/types.ts#L176)
+Defined in: [src/lib/semantics/types.ts:178](https://github.com/footprintjs/agentfootprint/blob/main/src/lib/semantics/types.ts#L178)

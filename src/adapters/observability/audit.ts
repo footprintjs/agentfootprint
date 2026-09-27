@@ -146,6 +146,7 @@ import type { AgentfootprintEvent } from '../../events/registry.js';
 import { canonicalJson, CANONICAL_JSON_VERSION } from '../../lib/canonicalJson.js';
 import { lazyRequire } from '../../lib/lazyRequire.js';
 import { libraryVersion } from '../../lib/libraryVersion.js';
+import { isErrorValue, wireError } from '../../lib/wireJson.js';
 import type { ObservabilityStrategy } from '../../strategies/types.js';
 
 // ─── Public types ─────────────────────────────────────────────────────
@@ -320,6 +321,9 @@ function sanitizeJson(value: unknown, depth = 0, seen = new Set<object>()): unkn
 
   const obj = value as object;
   if (obj instanceof Date) return obj.toISOString();
+  // The wire rule (`lib/wireJson.ts`): name, message, code, cause — never an
+  // Error's custom properties (an axios error's request headers).
+  if (isErrorValue(obj)) return sanitizeJson(wireError(obj), depth, seen);
   if (depth >= MAX_DEPTH) return '[truncated: depth]';
   if (seen.has(obj)) return '[circular]';
   seen.add(obj);

@@ -1,0 +1,1637 @@
+{
+  "bench": "honesty step 1 — the standing fold over the recorded runs",
+  "rule": "bench/standing-fold/RULE.md",
+  "costUsd": 0,
+  "modelCalls": 0,
+  "ranAt": "2026-09-27T07:26:16.480Z",
+  "counts": {
+    "full": 23,
+    "excerpt": 26,
+    "excluded": 4,
+    "unreadable": 13,
+    "silenceProbes": 9
+  },
+  "standingMix": {
+    "full": {
+      "known": 0,
+      "consistent": 0,
+      "not-sure": 2,
+      "ask": 0,
+      "not-assessed": 21
+    },
+    "excerpt": {
+      "known": 0,
+      "consistent": 0,
+      "not-sure": 21,
+      "ask": 0,
+      "not-assessed": 5
+    }
+  },
+  "reasons": {
+    "full": {
+      "stopped-early": 1,
+      "coverage-gap": 1,
+      "declared-absent": 1
+    },
+    "excerpt": {
+      "coverage-gap": 21,
+      "declared-absent": 16
+    }
+  },
+  "resultShape": {
+    "full": {
+      "resultsInTurn": 37,
+      "unreadable": 36,
+      "share": 0.972972972972973
+    },
+    "excerpt": {
+      "resultsInTurn": 35,
+      "unreadable": 19,
+      "share": 0.5428571428571428
+    }
+  },
+  "parityInRepoRecordings": [
+    {
+      "id": "field:fixture-A",
+      "arm": "DECLARED",
+      "entity": "SHPSTRPLPCL003",
+      "turnsInEvents": 1,
+      "rq3": "NOT-COVERED",
+      "fold": "NOT-COVERED",
+      "standing": "not-sure",
+      "agree": true,
+      "difference": null
+    },
+    {
+      "id": "demo:demo-turn",
+      "arm": "PLAIN",
+      "entity": "Heat",
+      "turnsInEvents": 1,
+      "rq3": "UNKNOWN",
+      "fold": "UNKNOWN",
+      "standing": "not-assessed",
+      "agree": true,
+      "difference": null
+    }
+  ],
+  "noKnownFromSilence": {
+    "violations": [],
+    "probes": [
+      {
+        "id": "probe:empty-state",
+        "assessment": "not-applicable",
+        "standing": "not-assessed",
+        "expectKnown": false,
+        "ok": true
+      },
+      {
+        "id": "probe:history-only-no-results",
+        "assessment": "not-applicable",
+        "standing": "not-assessed",
+        "expectKnown": false,
+        "ok": true
+      },
+      {
+        "id": "probe:rows-nothing-declared",
+        "assessment": "unrefuted",
+        "standing": "consistent",
+        "expectKnown": false,
+        "ok": true
+      },
+      {
+        "id": "probe:empty-rowset-undeclared",
+        "assessment": "unknown",
+        "standing": "not-sure",
+        "expectKnown": false,
+        "ok": true
+      },
+      {
+        "id": "probe:declared-ledger-no-gap-rows",
+        "assessment": "unrefuted",
+        "standing": "consistent",
+        "expectKnown": false,
+        "ok": true
+      },
+      {
+        "id": "probe:validation-passed-observe-mode",
+        "assessment": "unrefuted",
+        "standing": "consistent",
+        "expectKnown": false,
+        "ok": true
+      },
+      {
+        "id": "probe:validation-passed-no-digest",
+        "assessment": "unrefuted",
+        "standing": "consistent",
+        "expectKnown": false,
+        "ok": true
+      },
+      {
+        "id": "probe:validation-passed-enforce-POSITIVE-CONTROL",
+        "assessment": "known",
+        "standing": "known",
+        "expectKnown": true,
+        "ok": true
+      },
+      {
+        "id": "probe:validation-passed-but-empty-undeclared",
+        "assessment": "unknown",
+        "standing": "not-sure",
+        "expectKnown": false,
+        "ok": true
+      }
+    ]
+  },
+  "records": [
+    {
+      "id": "ref:agent-dynamic-graph-hop",
+      "tier": "full",
+      "source": "test/core/tools/reference/agent-dynamic-graph-hop.json",
+      "assessment": "not-applicable",
+      "standing": "not-assessed",
+      "reasons": [],
+      "checked": [
+        {
+          "layer": 3,
+          "check": "tool-coverage",
+          "ran": 0,
+          "of": 1
+        },
+        {
+          "layer": 3,
+          "check": "result-shape",
+          "ran": 0,
+          "of": 1
+        }
+      ],
+      "turnFrom": "person",
+      "resultsInTurn": 1,
+      "resultsUnreadable": 1,
+      "commitLogFoldBasis": "log-only"
+    },
+    {
+      "id": "ref:agent-dynamic-static-tool",
+      "tier": "full",
+      "source": "test/core/tools/reference/agent-dynamic-static-tool.json",
+      "assessment": "not-applicable",
+      "standing": "not-assessed",
+      "reasons": [],
+      "checked": [
+        {
+          "layer": 3,
+          "check": "tool-coverage",
+          "ran": 0,
+          "of": 1
+        },
+        {
+          "layer": 3,
+          "check": "result-shape",
+          "ran": 0,
+          "of": 1
+        }
+      ],
+      "turnFrom": "person",
+      "resultsInTurn": 1,
+      "resultsUnreadable": 1,
+      "commitLogFoldBasis": "log-only"
+    },
+    {
+      "id": "ref:agent-findings-contingent",
+      "tier": "full",
+      "source": "test/core/tools/reference/agent-findings-contingent.json",
+      "assessment": "not-applicable",
+      "standing": "not-assessed",
+      "reasons": [],
+      "checked": [
+        {
+          "layer": 3,
+          "check": "tool-coverage",
+          "ran": 0,
+          "of": 2
+        },
+        {
+          "layer": 3,
+          "check": "result-shape",
+          "ran": 0,
+          "of": 2
+        }
+      ],
+      "turnFrom": "person",
+      "resultsInTurn": 2,
+      "resultsUnreadable": 2,
+      "commitLogFoldBasis": "log-only"
+    },
+    {
+      "id": "ref:agent-findings-judge",
+      "tier": "full",
+      "source": "test/core/tools/reference/agent-findings-judge.json",
+      "assessment": "not-applicable",
+      "standing": "not-assessed",
+      "reasons": [],
+      "checked": [
+        {
+          "layer": 3,
+          "check": "tool-coverage",
+          "ran": 0,
+          "of": 2
+        },
+        {
+          "layer": 3,
+          "check": "result-shape",
+          "ran": 0,
+          "of": 2
+        }
+      ],
+      "turnFrom": "person",
+      "resultsInTurn": 2,
+      "resultsUnreadable": 2,
+      "commitLogFoldBasis": "log-only"
+    },
+    {
+      "id": "ref:agent-findings-window",
+      "tier": "full",
+      "source": "test/core/tools/reference/agent-findings-window.json",
+      "assessment": "not-applicable",
+      "standing": "not-assessed",
+      "reasons": [],
+      "checked": [
+        {
+          "layer": 3,
+          "check": "tool-coverage",
+          "ran": 0,
+          "of": 4
+        },
+        {
+          "layer": 3,
+          "check": "result-shape",
+          "ran": 0,
+          "of": 4
+        }
+      ],
+      "turnFrom": "person",
+      "resultsInTurn": 4,
+      "resultsUnreadable": 4,
+      "commitLogFoldBasis": "log-only"
+    },
+    {
+      "id": "ref:agent-findings",
+      "tier": "full",
+      "source": "test/core/tools/reference/agent-findings.json",
+      "assessment": "not-applicable",
+      "standing": "not-assessed",
+      "reasons": [],
+      "checked": [
+        {
+          "layer": 3,
+          "check": "tool-coverage",
+          "ran": 0,
+          "of": 2
+        },
+        {
+          "layer": 3,
+          "check": "result-shape",
+          "ran": 0,
+          "of": 2
+        }
+      ],
+      "turnFrom": "person",
+      "resultsInTurn": 2,
+      "resultsUnreadable": 2,
+      "commitLogFoldBasis": "log-only"
+    },
+    {
+      "id": "ref:agent-from-active-skill",
+      "tier": "full",
+      "source": "test/core/tools/reference/agent-from-active-skill.json",
+      "assessment": "not-applicable",
+      "standing": "not-assessed",
+      "reasons": [],
+      "checked": [
+        {
+          "layer": 3,
+          "check": "tool-coverage",
+          "ran": 0,
+          "of": 2
+        },
+        {
+          "layer": 3,
+          "check": "result-shape",
+          "ran": 0,
+          "of": 2
+        }
+      ],
+      "turnFrom": "person",
+      "resultsInTurn": 2,
+      "resultsUnreadable": 2,
+      "commitLogFoldBasis": "log-only"
+    },
+    {
+      "id": "ref:agent-grouped-graph-hop",
+      "tier": "full",
+      "source": "test/core/tools/reference/agent-grouped-graph-hop.json",
+      "assessment": "not-applicable",
+      "standing": "not-assessed",
+      "reasons": [],
+      "checked": [
+        {
+          "layer": 3,
+          "check": "tool-coverage",
+          "ran": 0,
+          "of": 1
+        },
+        {
+          "layer": 3,
+          "check": "result-shape",
+          "ran": 0,
+          "of": 1
+        }
+      ],
+      "turnFrom": "person",
+      "resultsInTurn": 1,
+      "resultsUnreadable": 1,
+      "commitLogFoldBasis": "log-only"
+    },
+    {
+      "id": "ref:agent-grouped-static-tool",
+      "tier": "full",
+      "source": "test/core/tools/reference/agent-grouped-static-tool.json",
+      "assessment": "not-applicable",
+      "standing": "not-assessed",
+      "reasons": [],
+      "checked": [
+        {
+          "layer": 3,
+          "check": "tool-coverage",
+          "ran": 0,
+          "of": 1
+        },
+        {
+          "layer": 3,
+          "check": "result-shape",
+          "ran": 0,
+          "of": 1
+        }
+      ],
+      "turnFrom": "person",
+      "resultsInTurn": 1,
+      "resultsUnreadable": 1,
+      "commitLogFoldBasis": "log-only"
+    },
+    {
+      "id": "ref:agent-message-api-chart-one-turn",
+      "tier": "full",
+      "source": "test/core/tools/reference/agent-message-api-chart-one-turn.json",
+      "assessment": "not-applicable",
+      "standing": "not-assessed",
+      "reasons": [],
+      "checked": [],
+      "turnFrom": "person",
+      "resultsInTurn": 0,
+      "resultsUnreadable": 0,
+      "commitLogFoldBasis": "log-only"
+    },
+    {
+      "id": "ref:agent-ontology",
+      "tier": "full",
+      "source": "test/core/tools/reference/agent-ontology.json",
+      "assessment": "not-applicable",
+      "standing": "not-assessed",
+      "reasons": [],
+      "checked": [
+        {
+          "layer": 3,
+          "check": "tool-coverage",
+          "ran": 0,
+          "of": 1
+        },
+        {
+          "layer": 3,
+          "check": "result-shape",
+          "ran": 0,
+          "of": 1
+        }
+      ],
+      "turnFrom": "person",
+      "resultsInTurn": 1,
+      "resultsUnreadable": 1,
+      "commitLogFoldBasis": "log-only"
+    },
+    {
+      "id": "ref:agent-parked-map",
+      "tier": "full",
+      "source": "test/core/tools/reference/agent-parked-map.json",
+      "assessment": "not-applicable",
+      "standing": "not-assessed",
+      "reasons": [],
+      "checked": [
+        {
+          "layer": 3,
+          "check": "tool-coverage",
+          "ran": 0,
+          "of": 1
+        },
+        {
+          "layer": 3,
+          "check": "result-shape",
+          "ran": 0,
+          "of": 1
+        }
+      ],
+      "turnFrom": "person",
+      "resultsInTurn": 1,
+      "resultsUnreadable": 1,
+      "commitLogFoldBasis": "log-only"
+    },
+    {
+      "id": "ref:agent-provider-three-sources",
+      "tier": "full",
+      "source": "test/core/tools/reference/agent-provider-three-sources.json",
+      "assessment": "not-applicable",
+      "standing": "not-assessed",
+      "reasons": [],
+      "checked": [
+        {
+          "layer": 3,
+          "check": "tool-coverage",
+          "ran": 0,
+          "of": 3
+        },
+        {
+          "layer": 3,
+          "check": "result-shape",
+          "ran": 0,
+          "of": 3
+        }
+      ],
+      "turnFrom": "person",
+      "resultsInTurn": 3,
+      "resultsUnreadable": 3,
+      "commitLogFoldBasis": "log-only"
+    },
+    {
+      "id": "ref:agent-scoped-provider",
+      "tier": "full",
+      "source": "test/core/tools/reference/agent-scoped-provider.json",
+      "assessment": "not-applicable",
+      "standing": "not-assessed",
+      "reasons": [],
+      "checked": [
+        {
+          "layer": 3,
+          "check": "tool-coverage",
+          "ran": 0,
+          "of": 3
+        },
+        {
+          "layer": 3,
+          "check": "result-shape",
+          "ran": 0,
+          "of": 3
+        }
+      ],
+      "turnFrom": "person",
+      "resultsInTurn": 3,
+      "resultsUnreadable": 3,
+      "commitLogFoldBasis": "log-only"
+    },
+    {
+      "id": "ref:agent-shared-tool-reference",
+      "tier": "full",
+      "source": "test/core/tools/reference/agent-shared-tool-reference.json",
+      "assessment": "not-applicable",
+      "standing": "not-assessed",
+      "reasons": [],
+      "checked": [
+        {
+          "layer": 3,
+          "check": "tool-coverage",
+          "ran": 0,
+          "of": 4
+        },
+        {
+          "layer": 3,
+          "check": "result-shape",
+          "ran": 0,
+          "of": 4
+        }
+      ],
+      "turnFrom": "person",
+      "resultsInTurn": 4,
+      "resultsUnreadable": 4,
+      "commitLogFoldBasis": "log-only"
+    },
+    {
+      "id": "ref:agent-stepped-skill",
+      "tier": "full",
+      "source": "test/core/tools/reference/agent-stepped-skill.json",
+      "assessment": "not-applicable",
+      "standing": "not-assessed",
+      "reasons": [],
+      "checked": [
+        {
+          "layer": 3,
+          "check": "tool-coverage",
+          "ran": 0,
+          "of": 1
+        },
+        {
+          "layer": 3,
+          "check": "result-shape",
+          "ran": 0,
+          "of": 1
+        }
+      ],
+      "turnFrom": "person",
+      "resultsInTurn": 1,
+      "resultsUnreadable": 1,
+      "commitLogFoldBasis": "log-only"
+    },
+    {
+      "id": "ref:agent-tool-choice",
+      "tier": "full",
+      "source": "test/core/tools/reference/agent-tool-choice.json",
+      "assessment": "not-applicable",
+      "standing": "not-assessed",
+      "reasons": [],
+      "checked": [
+        {
+          "layer": 3,
+          "check": "tool-coverage",
+          "ran": 0,
+          "of": 3
+        },
+        {
+          "layer": 3,
+          "check": "result-shape",
+          "ran": 0,
+          "of": 3
+        }
+      ],
+      "turnFrom": "person",
+      "resultsInTurn": 3,
+      "resultsUnreadable": 3,
+      "commitLogFoldBasis": "log-only"
+    },
+    {
+      "id": "ref:agent-tool-forced",
+      "tier": "full",
+      "source": "test/core/tools/reference/agent-tool-forced.json",
+      "assessment": "not-applicable",
+      "standing": "not-assessed",
+      "reasons": [],
+      "checked": [],
+      "turnFrom": "person",
+      "resultsInTurn": 0,
+      "resultsUnreadable": 0,
+      "commitLogFoldBasis": "log-only"
+    },
+    {
+      "id": "ref:agent-wrap-up",
+      "tier": "full",
+      "source": "test/core/tools/reference/agent-wrap-up.json",
+      "assessment": "unknown",
+      "standing": "not-sure",
+      "reasons": [
+        "stopped-early"
+      ],
+      "checked": [
+        {
+          "layer": 3,
+          "check": "tool-coverage",
+          "ran": 0,
+          "of": 1
+        },
+        {
+          "layer": 3,
+          "check": "result-shape",
+          "ran": 0,
+          "of": 1
+        }
+      ],
+      "turnFrom": "person",
+      "resultsInTurn": 1,
+      "resultsUnreadable": 1,
+      "commitLogFoldBasis": "log-only"
+    },
+    {
+      "id": "ref:llmcall",
+      "tier": "full",
+      "source": "test/core/tools/reference/llmcall.json",
+      "assessment": "not-applicable",
+      "standing": "not-assessed",
+      "reasons": [],
+      "checked": [],
+      "turnFrom": "whole-history",
+      "resultsInTurn": 0,
+      "resultsUnreadable": 0,
+      "commitLogFoldBasis": "log-only"
+    },
+    {
+      "id": "ref:message-api-chart",
+      "tier": "full",
+      "source": "test/core/tools/reference/message-api-chart.json",
+      "assessment": "not-applicable",
+      "standing": "not-assessed",
+      "reasons": [],
+      "checked": [],
+      "turnFrom": "person",
+      "resultsInTurn": 0,
+      "resultsUnreadable": 0,
+      "commitLogFoldBasis": "log-only"
+    },
+    {
+      "id": "field:fixture-A",
+      "tier": "full",
+      "source": "test/lib/answer-account/fixtures/turn2.recorded.json",
+      "assessment": "unknown",
+      "standing": "not-sure",
+      "reasons": [
+        "coverage-gap",
+        "declared-absent"
+      ],
+      "checked": [
+        {
+          "layer": 3,
+          "check": "tool-coverage",
+          "ran": 1,
+          "of": 1
+        },
+        {
+          "layer": 3,
+          "check": "result-shape",
+          "ran": 1,
+          "of": 1
+        }
+      ],
+      "turnFrom": "person",
+      "resultsInTurn": 1,
+      "resultsUnreadable": 0,
+      "missingFoldKeys": [
+        "coverageDeclared",
+        "findingsLedger",
+        "unsupportedValues",
+        "stoppedEarly",
+        "answerValidation"
+      ]
+    },
+    {
+      "id": "demo:demo-turn",
+      "tier": "full",
+      "source": "test/recorders/observability/fixtures/demo-turn.json",
+      "assessment": "not-applicable",
+      "standing": "not-assessed",
+      "reasons": [],
+      "checked": [
+        {
+          "layer": 3,
+          "check": "tool-coverage",
+          "ran": 0,
+          "of": 3
+        },
+        {
+          "layer": 3,
+          "check": "result-shape",
+          "ran": 0,
+          "of": 3
+        }
+      ],
+      "turnFrom": "person",
+      "resultsInTurn": 3,
+      "resultsUnreadable": 3
+    },
+    {
+      "id": "excerpt:coverage-record-only/batch/bare",
+      "tier": "excerpt",
+      "source": "test/core/agent/reference/coverage-record-only-bytes.json",
+      "assessment": "unknown",
+      "standing": "not-sure",
+      "reasons": [
+        "coverage-gap",
+        "declared-absent"
+      ],
+      "checked": [
+        {
+          "layer": 3,
+          "check": "tool-coverage",
+          "ran": 1,
+          "of": 1
+        },
+        {
+          "layer": 3,
+          "check": "result-shape",
+          "ran": 1,
+          "of": 1
+        }
+      ],
+      "turnFrom": "person",
+      "resultsInTurn": 1,
+      "resultsUnreadable": 0,
+      "missingFoldKeys": [
+        "pausedToolCallId",
+        "findingsLedger",
+        "unsupportedValues",
+        "stoppedEarly",
+        "answerValidation"
+      ]
+    },
+    {
+      "id": "excerpt:coverage-record-only/batch/ledger",
+      "tier": "excerpt",
+      "source": "test/core/agent/reference/coverage-record-only-bytes.json",
+      "assessment": "unknown",
+      "standing": "not-sure",
+      "reasons": [
+        "coverage-gap"
+      ],
+      "checked": [
+        {
+          "layer": 3,
+          "check": "tool-coverage",
+          "ran": 1,
+          "of": 1
+        },
+        {
+          "layer": 3,
+          "check": "result-shape",
+          "ran": 0,
+          "of": 1
+        }
+      ],
+      "turnFrom": "person",
+      "resultsInTurn": 1,
+      "resultsUnreadable": 1,
+      "missingFoldKeys": [
+        "pausedToolCallId",
+        "findingsLedger",
+        "unsupportedValues",
+        "stoppedEarly",
+        "answerValidation"
+      ]
+    },
+    {
+      "id": "excerpt:coverage-record-only/batch/nested",
+      "tier": "excerpt",
+      "source": "test/core/agent/reference/coverage-record-only-bytes.json",
+      "assessment": "unknown",
+      "standing": "not-sure",
+      "reasons": [
+        "coverage-gap",
+        "declared-absent"
+      ],
+      "checked": [
+        {
+          "layer": 3,
+          "check": "tool-coverage",
+          "ran": 1,
+          "of": 1
+        },
+        {
+          "layer": 3,
+          "check": "result-shape",
+          "ran": 1,
+          "of": 1
+        }
+      ],
+      "turnFrom": "person",
+      "resultsInTurn": 1,
+      "resultsUnreadable": 0,
+      "missingFoldKeys": [
+        "pausedToolCallId",
+        "findingsLedger",
+        "unsupportedValues",
+        "stoppedEarly",
+        "answerValidation"
+      ]
+    },
+    {
+      "id": "excerpt:coverage-record-only/batch/foreign",
+      "tier": "excerpt",
+      "source": "test/core/agent/reference/coverage-record-only-bytes.json",
+      "assessment": "unknown",
+      "standing": "not-sure",
+      "reasons": [
+        "coverage-gap",
+        "declared-absent"
+      ],
+      "checked": [
+        {
+          "layer": 3,
+          "check": "tool-coverage",
+          "ran": 1,
+          "of": 1
+        },
+        {
+          "layer": 3,
+          "check": "result-shape",
+          "ran": 1,
+          "of": 1
+        }
+      ],
+      "turnFrom": "person",
+      "resultsInTurn": 1,
+      "resultsUnreadable": 0,
+      "missingFoldKeys": [
+        "pausedToolCallId",
+        "findingsLedger",
+        "unsupportedValues",
+        "stoppedEarly",
+        "answerValidation"
+      ]
+    },
+    {
+      "id": "excerpt:coverage-record-only/ask/bare",
+      "tier": "excerpt",
+      "source": "test/core/agent/reference/coverage-record-only-bytes.json",
+      "assessment": "unknown",
+      "standing": "not-sure",
+      "reasons": [
+        "coverage-gap",
+        "declared-absent"
+      ],
+      "checked": [
+        {
+          "layer": 3,
+          "check": "tool-coverage",
+          "ran": 1,
+          "of": 1
+        },
+        {
+          "layer": 3,
+          "check": "result-shape",
+          "ran": 1,
+          "of": 1
+        }
+      ],
+      "turnFrom": "person",
+      "resultsInTurn": 1,
+      "resultsUnreadable": 0,
+      "missingFoldKeys": [
+        "pausedToolCallId",
+        "findingsLedger",
+        "unsupportedValues",
+        "stoppedEarly",
+        "answerValidation"
+      ]
+    },
+    {
+      "id": "excerpt:coverage-record-only/ask/ledger",
+      "tier": "excerpt",
+      "source": "test/core/agent/reference/coverage-record-only-bytes.json",
+      "assessment": "unknown",
+      "standing": "not-sure",
+      "reasons": [
+        "coverage-gap"
+      ],
+      "checked": [
+        {
+          "layer": 3,
+          "check": "tool-coverage",
+          "ran": 1,
+          "of": 1
+        },
+        {
+          "layer": 3,
+          "check": "result-shape",
+          "ran": 0,
+          "of": 1
+        }
+      ],
+      "turnFrom": "person",
+      "resultsInTurn": 1,
+      "resultsUnreadable": 1,
+      "missingFoldKeys": [
+        "pausedToolCallId",
+        "findingsLedger",
+        "unsupportedValues",
+        "stoppedEarly",
+        "answerValidation"
+      ]
+    },
+    {
+      "id": "excerpt:coverage-record-only/ask/nested",
+      "tier": "excerpt",
+      "source": "test/core/agent/reference/coverage-record-only-bytes.json",
+      "assessment": "unknown",
+      "standing": "not-sure",
+      "reasons": [
+        "coverage-gap",
+        "declared-absent"
+      ],
+      "checked": [
+        {
+          "layer": 3,
+          "check": "tool-coverage",
+          "ran": 1,
+          "of": 1
+        },
+        {
+          "layer": 3,
+          "check": "result-shape",
+          "ran": 1,
+          "of": 1
+        }
+      ],
+      "turnFrom": "person",
+      "resultsInTurn": 1,
+      "resultsUnreadable": 0,
+      "missingFoldKeys": [
+        "pausedToolCallId",
+        "findingsLedger",
+        "unsupportedValues",
+        "stoppedEarly",
+        "answerValidation"
+      ]
+    },
+    {
+      "id": "excerpt:coverage-record-only/ask/foreign",
+      "tier": "excerpt",
+      "source": "test/core/agent/reference/coverage-record-only-bytes.json",
+      "assessment": "unknown",
+      "standing": "not-sure",
+      "reasons": [
+        "coverage-gap",
+        "declared-absent"
+      ],
+      "checked": [
+        {
+          "layer": 3,
+          "check": "tool-coverage",
+          "ran": 1,
+          "of": 1
+        },
+        {
+          "layer": 3,
+          "check": "result-shape",
+          "ran": 1,
+          "of": 1
+        }
+      ],
+      "turnFrom": "person",
+      "resultsInTurn": 1,
+      "resultsUnreadable": 0,
+      "missingFoldKeys": [
+        "pausedToolCallId",
+        "findingsLedger",
+        "unsupportedValues",
+        "stoppedEarly",
+        "answerValidation"
+      ]
+    },
+    {
+      "id": "excerpt:coverage-record-only/check-in/bare",
+      "tier": "excerpt",
+      "source": "test/core/agent/reference/coverage-record-only-bytes.json",
+      "assessment": "unknown",
+      "standing": "not-sure",
+      "reasons": [
+        "coverage-gap",
+        "declared-absent"
+      ],
+      "checked": [
+        {
+          "layer": 3,
+          "check": "tool-coverage",
+          "ran": 1,
+          "of": 1
+        },
+        {
+          "layer": 3,
+          "check": "result-shape",
+          "ran": 1,
+          "of": 1
+        }
+      ],
+      "turnFrom": "person",
+      "resultsInTurn": 1,
+      "resultsUnreadable": 0,
+      "missingFoldKeys": [
+        "pausedToolCallId",
+        "findingsLedger",
+        "unsupportedValues",
+        "stoppedEarly",
+        "answerValidation"
+      ]
+    },
+    {
+      "id": "excerpt:coverage-record-only/check-in/ledger",
+      "tier": "excerpt",
+      "source": "test/core/agent/reference/coverage-record-only-bytes.json",
+      "assessment": "unknown",
+      "standing": "not-sure",
+      "reasons": [
+        "coverage-gap"
+      ],
+      "checked": [
+        {
+          "layer": 3,
+          "check": "tool-coverage",
+          "ran": 1,
+          "of": 1
+        },
+        {
+          "layer": 3,
+          "check": "result-shape",
+          "ran": 0,
+          "of": 1
+        }
+      ],
+      "turnFrom": "person",
+      "resultsInTurn": 1,
+      "resultsUnreadable": 1,
+      "missingFoldKeys": [
+        "pausedToolCallId",
+        "findingsLedger",
+        "unsupportedValues",
+        "stoppedEarly",
+        "answerValidation"
+      ]
+    },
+    {
+      "id": "excerpt:coverage-record-only/check-in/nested",
+      "tier": "excerpt",
+      "source": "test/core/agent/reference/coverage-record-only-bytes.json",
+      "assessment": "unknown",
+      "standing": "not-sure",
+      "reasons": [
+        "coverage-gap",
+        "declared-absent"
+      ],
+      "checked": [
+        {
+          "layer": 3,
+          "check": "tool-coverage",
+          "ran": 1,
+          "of": 1
+        },
+        {
+          "layer": 3,
+          "check": "result-shape",
+          "ran": 1,
+          "of": 1
+        }
+      ],
+      "turnFrom": "person",
+      "resultsInTurn": 1,
+      "resultsUnreadable": 0,
+      "missingFoldKeys": [
+        "pausedToolCallId",
+        "findingsLedger",
+        "unsupportedValues",
+        "stoppedEarly",
+        "answerValidation"
+      ]
+    },
+    {
+      "id": "excerpt:coverage-record-only/check-in/foreign",
+      "tier": "excerpt",
+      "source": "test/core/agent/reference/coverage-record-only-bytes.json",
+      "assessment": "unknown",
+      "standing": "not-sure",
+      "reasons": [
+        "coverage-gap",
+        "declared-absent"
+      ],
+      "checked": [
+        {
+          "layer": 3,
+          "check": "tool-coverage",
+          "ran": 1,
+          "of": 1
+        },
+        {
+          "layer": 3,
+          "check": "result-shape",
+          "ran": 1,
+          "of": 1
+        }
+      ],
+      "turnFrom": "person",
+      "resultsInTurn": 1,
+      "resultsUnreadable": 0,
+      "missingFoldKeys": [
+        "pausedToolCallId",
+        "findingsLedger",
+        "unsupportedValues",
+        "stoppedEarly",
+        "answerValidation"
+      ]
+    },
+    {
+      "id": "excerpt:coverage-record-only/consent/bare",
+      "tier": "excerpt",
+      "source": "test/core/agent/reference/coverage-record-only-bytes.json",
+      "assessment": "unknown",
+      "standing": "not-sure",
+      "reasons": [
+        "coverage-gap",
+        "declared-absent"
+      ],
+      "checked": [
+        {
+          "layer": 3,
+          "check": "tool-coverage",
+          "ran": 1,
+          "of": 1
+        },
+        {
+          "layer": 3,
+          "check": "result-shape",
+          "ran": 1,
+          "of": 1
+        }
+      ],
+      "turnFrom": "person",
+      "resultsInTurn": 1,
+      "resultsUnreadable": 0,
+      "missingFoldKeys": [
+        "pausedToolCallId",
+        "findingsLedger",
+        "unsupportedValues",
+        "stoppedEarly",
+        "answerValidation"
+      ]
+    },
+    {
+      "id": "excerpt:coverage-record-only/consent/ledger",
+      "tier": "excerpt",
+      "source": "test/core/agent/reference/coverage-record-only-bytes.json",
+      "assessment": "unknown",
+      "standing": "not-sure",
+      "reasons": [
+        "coverage-gap"
+      ],
+      "checked": [
+        {
+          "layer": 3,
+          "check": "tool-coverage",
+          "ran": 1,
+          "of": 1
+        },
+        {
+          "layer": 3,
+          "check": "result-shape",
+          "ran": 0,
+          "of": 1
+        }
+      ],
+      "turnFrom": "person",
+      "resultsInTurn": 1,
+      "resultsUnreadable": 1,
+      "missingFoldKeys": [
+        "pausedToolCallId",
+        "findingsLedger",
+        "unsupportedValues",
+        "stoppedEarly",
+        "answerValidation"
+      ]
+    },
+    {
+      "id": "excerpt:coverage-record-only/consent/nested",
+      "tier": "excerpt",
+      "source": "test/core/agent/reference/coverage-record-only-bytes.json",
+      "assessment": "unknown",
+      "standing": "not-sure",
+      "reasons": [
+        "coverage-gap",
+        "declared-absent"
+      ],
+      "checked": [
+        {
+          "layer": 3,
+          "check": "tool-coverage",
+          "ran": 1,
+          "of": 1
+        },
+        {
+          "layer": 3,
+          "check": "result-shape",
+          "ran": 1,
+          "of": 1
+        }
+      ],
+      "turnFrom": "person",
+      "resultsInTurn": 1,
+      "resultsUnreadable": 0,
+      "missingFoldKeys": [
+        "pausedToolCallId",
+        "findingsLedger",
+        "unsupportedValues",
+        "stoppedEarly",
+        "answerValidation"
+      ]
+    },
+    {
+      "id": "excerpt:coverage-record-only/consent/foreign",
+      "tier": "excerpt",
+      "source": "test/core/agent/reference/coverage-record-only-bytes.json",
+      "assessment": "unknown",
+      "standing": "not-sure",
+      "reasons": [
+        "coverage-gap",
+        "declared-absent"
+      ],
+      "checked": [
+        {
+          "layer": 3,
+          "check": "tool-coverage",
+          "ran": 1,
+          "of": 1
+        },
+        {
+          "layer": 3,
+          "check": "result-shape",
+          "ran": 1,
+          "of": 1
+        }
+      ],
+      "turnFrom": "person",
+      "resultsInTurn": 1,
+      "resultsUnreadable": 0,
+      "missingFoldKeys": [
+        "pausedToolCallId",
+        "findingsLedger",
+        "unsupportedValues",
+        "stoppedEarly",
+        "answerValidation"
+      ]
+    },
+    {
+      "id": "excerpt:coverage-record-only/pause/bare",
+      "tier": "excerpt",
+      "source": "test/core/agent/reference/coverage-record-only-bytes.json",
+      "assessment": "unknown",
+      "standing": "not-sure",
+      "reasons": [
+        "coverage-gap",
+        "declared-absent"
+      ],
+      "checked": [
+        {
+          "layer": 3,
+          "check": "tool-coverage",
+          "ran": 1,
+          "of": 1
+        },
+        {
+          "layer": 3,
+          "check": "result-shape",
+          "ran": 1,
+          "of": 1
+        }
+      ],
+      "turnFrom": "person",
+      "resultsInTurn": 1,
+      "resultsUnreadable": 0,
+      "missingFoldKeys": [
+        "pausedToolCallId",
+        "findingsLedger",
+        "unsupportedValues",
+        "stoppedEarly",
+        "answerValidation"
+      ]
+    },
+    {
+      "id": "excerpt:coverage-record-only/pause/ledger",
+      "tier": "excerpt",
+      "source": "test/core/agent/reference/coverage-record-only-bytes.json",
+      "assessment": "unknown",
+      "standing": "not-sure",
+      "reasons": [
+        "coverage-gap"
+      ],
+      "checked": [
+        {
+          "layer": 3,
+          "check": "tool-coverage",
+          "ran": 1,
+          "of": 1
+        },
+        {
+          "layer": 3,
+          "check": "result-shape",
+          "ran": 0,
+          "of": 1
+        }
+      ],
+      "turnFrom": "person",
+      "resultsInTurn": 1,
+      "resultsUnreadable": 1,
+      "missingFoldKeys": [
+        "pausedToolCallId",
+        "findingsLedger",
+        "unsupportedValues",
+        "stoppedEarly",
+        "answerValidation"
+      ]
+    },
+    {
+      "id": "excerpt:coverage-record-only/pause/nested",
+      "tier": "excerpt",
+      "source": "test/core/agent/reference/coverage-record-only-bytes.json",
+      "assessment": "unknown",
+      "standing": "not-sure",
+      "reasons": [
+        "coverage-gap",
+        "declared-absent"
+      ],
+      "checked": [
+        {
+          "layer": 3,
+          "check": "tool-coverage",
+          "ran": 1,
+          "of": 1
+        },
+        {
+          "layer": 3,
+          "check": "result-shape",
+          "ran": 1,
+          "of": 1
+        }
+      ],
+      "turnFrom": "person",
+      "resultsInTurn": 1,
+      "resultsUnreadable": 0,
+      "missingFoldKeys": [
+        "pausedToolCallId",
+        "findingsLedger",
+        "unsupportedValues",
+        "stoppedEarly",
+        "answerValidation"
+      ]
+    },
+    {
+      "id": "excerpt:coverage-record-only/pause/foreign",
+      "tier": "excerpt",
+      "source": "test/core/agent/reference/coverage-record-only-bytes.json",
+      "assessment": "unknown",
+      "standing": "not-sure",
+      "reasons": [
+        "coverage-gap",
+        "declared-absent"
+      ],
+      "checked": [
+        {
+          "layer": 3,
+          "check": "tool-coverage",
+          "ran": 1,
+          "of": 1
+        },
+        {
+          "layer": 3,
+          "check": "result-shape",
+          "ran": 1,
+          "of": 1
+        }
+      ],
+      "turnFrom": "person",
+      "resultsInTurn": 1,
+      "resultsUnreadable": 0,
+      "missingFoldKeys": [
+        "pausedToolCallId",
+        "findingsLedger",
+        "unsupportedValues",
+        "stoppedEarly",
+        "answerValidation"
+      ]
+    },
+    {
+      "id": "excerpt:batch-pause-last-call/input",
+      "tier": "excerpt",
+      "source": "test/core/scenario/reference/batch-pause-last-call.json",
+      "assessment": "not-applicable",
+      "standing": "not-assessed",
+      "reasons": [],
+      "checked": [
+        {
+          "layer": 3,
+          "check": "tool-coverage",
+          "ran": 0,
+          "of": 3
+        },
+        {
+          "layer": 3,
+          "check": "result-shape",
+          "ran": 0,
+          "of": 3
+        }
+      ],
+      "turnFrom": "person",
+      "resultsInTurn": 3,
+      "resultsUnreadable": 3,
+      "missingFoldKeys": [
+        "coverageDeclared",
+        "pausedToolCallId",
+        "findingsLedger",
+        "unsupportedValues",
+        "stoppedEarly",
+        "answerValidation"
+      ]
+    },
+    {
+      "id": "excerpt:batch-pause-last-call/ask",
+      "tier": "excerpt",
+      "source": "test/core/scenario/reference/batch-pause-last-call.json",
+      "assessment": "not-applicable",
+      "standing": "not-assessed",
+      "reasons": [],
+      "checked": [
+        {
+          "layer": 3,
+          "check": "tool-coverage",
+          "ran": 0,
+          "of": 3
+        },
+        {
+          "layer": 3,
+          "check": "result-shape",
+          "ran": 0,
+          "of": 3
+        }
+      ],
+      "turnFrom": "person",
+      "resultsInTurn": 3,
+      "resultsUnreadable": 3,
+      "missingFoldKeys": [
+        "coverageDeclared",
+        "pausedToolCallId",
+        "findingsLedger",
+        "unsupportedValues",
+        "stoppedEarly",
+        "answerValidation"
+      ]
+    },
+    {
+      "id": "excerpt:batch-pause-last-call/check-in",
+      "tier": "excerpt",
+      "source": "test/core/scenario/reference/batch-pause-last-call.json",
+      "assessment": "not-applicable",
+      "standing": "not-assessed",
+      "reasons": [],
+      "checked": [
+        {
+          "layer": 3,
+          "check": "tool-coverage",
+          "ran": 0,
+          "of": 3
+        },
+        {
+          "layer": 3,
+          "check": "result-shape",
+          "ran": 0,
+          "of": 3
+        }
+      ],
+      "turnFrom": "person",
+      "resultsInTurn": 3,
+      "resultsUnreadable": 3,
+      "missingFoldKeys": [
+        "coverageDeclared",
+        "pausedToolCallId",
+        "findingsLedger",
+        "unsupportedValues",
+        "stoppedEarly",
+        "answerValidation"
+      ]
+    },
+    {
+      "id": "excerpt:batch-pause-last-call/consent",
+      "tier": "excerpt",
+      "source": "test/core/scenario/reference/batch-pause-last-call.json",
+      "assessment": "not-applicable",
+      "standing": "not-assessed",
+      "reasons": [],
+      "checked": [
+        {
+          "layer": 3,
+          "check": "tool-coverage",
+          "ran": 0,
+          "of": 3
+        },
+        {
+          "layer": 3,
+          "check": "result-shape",
+          "ran": 0,
+          "of": 3
+        }
+      ],
+      "turnFrom": "person",
+      "resultsInTurn": 3,
+      "resultsUnreadable": 3,
+      "missingFoldKeys": [
+        "coverageDeclared",
+        "pausedToolCallId",
+        "findingsLedger",
+        "unsupportedValues",
+        "stoppedEarly",
+        "answerValidation"
+      ]
+    },
+    {
+      "id": "excerpt:paused-lookup-no-absence",
+      "tier": "excerpt",
+      "source": "test/core/agent/reference/paused-lookup-no-absence.json",
+      "assessment": "not-applicable",
+      "standing": "not-assessed",
+      "reasons": [],
+      "checked": [
+        {
+          "layer": 3,
+          "check": "tool-coverage",
+          "ran": 0,
+          "of": 2
+        },
+        {
+          "layer": 3,
+          "check": "result-shape",
+          "ran": 0,
+          "of": 2
+        }
+      ],
+      "turnFrom": "person",
+      "resultsInTurn": 2,
+      "resultsUnreadable": 2,
+      "missingFoldKeys": [
+        "coverageDeclared",
+        "pausedToolCallId",
+        "findingsLedger",
+        "unsupportedValues",
+        "stoppedEarly",
+        "answerValidation"
+      ]
+    },
+    {
+      "id": "excerpt:absent-try-instead-sentence",
+      "tier": "excerpt",
+      "source": "test/core/agent/fixtures/absent-try-instead-sentence.reference.json",
+      "assessment": "unknown",
+      "standing": "not-sure",
+      "reasons": [
+        "coverage-gap",
+        "declared-absent"
+      ],
+      "checked": [
+        {
+          "layer": 3,
+          "check": "tool-coverage",
+          "ran": 1,
+          "of": 1
+        },
+        {
+          "layer": 3,
+          "check": "result-shape",
+          "ran": 1,
+          "of": 1
+        }
+      ],
+      "turnFrom": "person",
+      "resultsInTurn": 1,
+      "resultsUnreadable": 0,
+      "missingFoldKeys": [
+        "pausedToolCallId",
+        "findingsLedger",
+        "unsupportedValues",
+        "stoppedEarly",
+        "answerValidation"
+      ]
+    },
+    {
+      "id": "excluded:hand-raised-malformed-request/pauseHere with no fields, after a sibling ran",
+      "tier": "excluded",
+      "source": "test/core/agent/reference/hand-raised-malformed-request.json",
+      "why": "the run ended in an error ([input request] declare an id, question and between one and …): no answer, no standing"
+    },
+    {
+      "id": "excluded:hand-raised-malformed-request/pauseHere with `absence: null` and no fields, after a sibling ran",
+      "tier": "excluded",
+      "source": "test/core/agent/reference/hand-raised-malformed-request.json",
+      "why": "the run ended in an error ([input request] declare an id, question and between one and …): no answer, no standing"
+    },
+    {
+      "id": "excluded:hand-raised-malformed-request/pauseHere with an `absence` and no fields, after a sibling ran",
+      "tier": "excluded",
+      "source": "test/core/agent/reference/hand-raised-malformed-request.json",
+      "why": "the run ended in an error ([input request] declare an id, question and between one and …): no answer, no standing"
+    },
+    {
+      "id": "excluded:hand-raised-malformed-request/askHuman with an empty field list",
+      "tier": "excluded",
+      "source": "test/core/agent/reference/hand-raised-malformed-request.json",
+      "why": "the run ended in an error ([input request] declare an id, question and between one and …): no answer, no standing"
+    }
+  ],
+  "unreadableFiles": [
+    "test/observability-providers/reference/otel-content.json",
+    "test/observability-providers/reference/otel-default.json",
+    "test/observability-providers/reference/otel-fatal.json",
+    "test/observability-providers/reference/otel-genai-span-names.json",
+    "test/observability-providers/reference/otel-no-add-event.json",
+    "test/observability-providers/reference/otel-no-explainability.json",
+    "test/observability-providers/reference/otel-real-agent.json",
+    "test/observability-providers/reference/otel-session.json",
+    "test/integrity/reference/dangling-trap-narrative.json",
+    "test/core/agent/fixtures/absent-try-instead-not-a-sentence.reference.json",
+    "test/lib/answer-account/golden/turn2.A.account.json",
+    "test/lib/answer-account/golden/turn2.A.shown.json",
+    "test/lib/answer-account/golden/templates.reference.json"
+  ]
+}

@@ -72,6 +72,7 @@
 
 import type { AgentfootprintEvent, AgentfootprintEventType } from '../../events/registry.js';
 import { lazyRequire } from '../../lib/lazyRequire.js';
+import { toWireJson } from '../../lib/wireJson.js';
 import type { ObservabilityStrategy } from '../../strategies/types.js';
 
 import { rateLimitedConsoleSink } from './deliveryErrors.js';
@@ -270,7 +271,10 @@ export function fileObservability(opts: FileObservabilityOptions): Observability
     // reportable fact, not a reason to break the agent loop.
     let line: string;
     try {
-      line = JSON.stringify(event);
+      // The wire rule (`lib/wireJson.ts`): an Error writes its name, message,
+      // code and cause — never the custom properties a client library hung on
+      // it (an axios error's `config.headers.authorization`).
+      line = toWireJson(event);
     } catch (err) {
       reportFailure(
         new Error(

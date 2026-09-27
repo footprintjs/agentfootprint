@@ -65,6 +65,20 @@ export function makeRunId(): string {
   return `run-${Date.now()}-${++_runIdSeq}`;
 }
 
+/**
+ * Is `value` shaped like an id {@link makeRunId} mints? The recogniser lives
+ * beside the minter so the format has one owner.
+ *
+ * Asked by `core/agent/callerIdentity.ts · callerIdentityOf`, which must tell
+ * the per-run DEFAULT identity (`{ conversationId: '<runId>' }`, seed's third
+ * rung) apart from an identity a caller named — the one fact a resumed run
+ * cannot otherwise recover, because a flowchart checkpoint does not carry the
+ * paused run's id.
+ */
+export function isMintedRunId(value: unknown): boolean {
+  return typeof value === 'string' && /^run-\d+-\d+$/.test(value);
+}
+
 export abstract class RunnerBase<TIn = unknown, TOut = unknown> implements Runner<TIn, TOut> {
   protected readonly dispatcher = new EventDispatcher();
   protected readonly attachedRecorders: CombinedRecorder[] = [];

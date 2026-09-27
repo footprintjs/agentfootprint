@@ -114,6 +114,15 @@ export {
   type AnswerAccountShownLeaf,
 } from './lib/answer-account/index.js';
 
+// assessAnswer — the answer's STANDING, folded from the run's committed record:
+// known · consistent with the record · not sure (with the reasons) · ask · not
+// assessed. Never read from how sure the model sounds, never "known" from
+// silence, never from events. The account's "How sure" row renders the same
+// fold. ONE public type; its family (a reason, a witness, a check that ran) by
+// indexed access. See src/core/agent/assessment/README.md.
+export { assessAnswer } from './core/agent/assessment/assess.js';
+export type { AnswerAssessment } from './core/agent/assessment/types.js';
+
 // The recording ENVELOPE — the versioned contract that makes a recording
 // archivable. `recordRun` freezes a run; this states which run it is, how much
 // of it this is, who produced it and under what privacy policy, so a saved run

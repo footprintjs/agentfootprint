@@ -18,6 +18,64 @@ A `Tool` has two parts:
 
 The `inputSchema` is a JSON Schema describing the args the LLM should produce. It's the LLM's contract — it generates well-formed args based on that shape.
 
+## What `execute` returns — three helpers, one rule
+
+Whatever `execute` returns is what the model reads next. Plain data is fine until it has limits the model must not lose: how old it is, what it did not cover, whether anything matched at all. Three helpers say those limits as data. None of them adds anything to the system prompt or to the tool's schema — each one is the tool's response.
+
+| helper | use it when | the model reads | the record keeps |
+|---|---|---|---|
+| `describedResult({ … })` | rows, a series or relationships from a system of record — or a question back (`clarify`) | the data, `grain`, `provenance`, one `not_covered` line per gap, and a static note — never your `checked` list | the whole envelope on `tools.semantics_declared`, and its coverage in `coverageDeclared` |
+| `coverage(value, { … })` | any other value that has limits — a verdict, a sentence, an object you will not reshape | your value under `result`, with the coverage lists and a static note under `af_coverage` | `tools.coverage_declared` and `coverageDeclared` |
+| `absent({ … })` | nothing matched | what was looked for, the coverage of the search, that a retry returns the same, and a static note | `tools.absent`, `coverageDeclared`, and the call's status `'absent'` |
+
+**The rule:** rows from a system of record → `describedResult()`; any other value that has limits → `coverage()`; nothing matched → `absent()`. Never wrap one in another — `describedResult()` carries its own `coverage`. A person reading the final answer sees the same thing for all three: with [`.limitsTravelWithTheAnswer()`](#making-the-limits-survive--limitstravelwiththeanswer) on the agent, the coverage the tools declared is appended to the answer — provenance and grain never are.
+
+One `execute` that uses all three:
+
+<CodeFile path="examples/features/66-semantic-envelope.ts" region="three-helpers" title="examples/features/66-semantic-envelope.ts (region: three-helpers)" />
+
+What the model read for each branch, captured from that example's run (pretty-printed here; the model reads each on one line):
+
+```json title="describedResult — two rows found"
+{
+  "facts": [
+    { "entity": "vm-01", "day": "2026-08-18", "ok": true },
+    { "entity": "vm-01", "day": "2026-08-19", "ok": true }
+  ],
+  "provenance": {
+    "measured_at": "2026-08-19T10:12:00Z",
+    "source": "Cohesity API export (4 clusters)"
+  },
+  "not_covered": ["PPDM — not collected on this install"],
+  "note": "Typed data, not prose. `grain` and `provenance` are caveats that travel with the numbers: check `is_counter` before summing values from a series, read `measured_at` (and `age_seconds`) as how old the data is, and treat everything under `not_covered` as ground this result does NOT cover — a clean look here says nothing about it."
+}
+```
+
+```json title="coverage — a one-line verdict"
+{
+  "af_coverage": {
+    "checked": [{ "what": "every backup job in the export of 2026-08-19T10:12:00Z" }],
+    "cannot_cover": [{ "what": "PPDM", "why": "not collected on this install" }],
+    "note": "This result covers only what `checked` lists. `not_checked` is ground the call this result answers did not look at, and `cannot_cover` is ground this tool can never see — a clean result here is NOT evidence about either, and no retry changes `cannot_cover`. Carry these limits into any answer you build on this result."
+  },
+  "result": "vm-01: 2 of 2 backup runs succeeded"
+}
+```
+
+```json title="absent — nothing matched"
+{
+  "af_absent": true,
+  "outcome": "nothing_found",
+  "looked_for": "backup runs for vm-99",
+  "checked": [{ "what": "every backup job in the export of 2026-08-19T10:12:00Z" }],
+  "cannot_cover": [{ "what": "PPDM", "why": "not collected on this install" }],
+  "retry_returns_the_same": true,
+  "note": "The search ran and matched nothing. This is an ANSWER, not an error: nothing failed, nothing was substituted for what was asked, and calling this tool again with the same arguments returns this same result. `checked` is the ground this answer covers; anything under `not_checked` or `cannot_cover` is ground it does NOT cover, and reaching that needs a different question, not a retry."
+}
+```
+
+A helper that cannot honor its declaration throws inside `execute`, and the call's error result is its refusal: the model reads text that starts `refused: ` in place of the data, and the run continues. Details: [Described tool results](doc:semantic-results), [`absent()`](#an-absence-that-names-its-own-coverage--absent) and [`coverage()`](#what-a-clean-result-does-not-rule-out--coverage) below.
+
 ## defineTool — the flat builder
 
 `defineTool` is a flatter helper that puts name + description + inputSchema at the top level instead of nested under `schema`:
@@ -465,6 +523,13 @@ entries, a `CoverageInput` — a bare string or a `CoverageItem`
 blind spot is a claim about capability and a reader cannot act on, escalate or
 disprove one with no reason.
 
+`absent()` and `coverage()` refuse a key they do not read, rather than drop it
+— a declaration parsed from JSON with `not_checked` in it would otherwise lose
+that list without a word. The refusal names the spelling meant: for
+`not_checked` it asks whether you meant `notChecked`. A refusal thrown inside
+`execute` becomes the call's error result, which is what the model reads, so
+it starts `refused:` and never with the helper's name.
+
 **When the suggestion is another tool, name it as data (9.113.0).**
 `tryInstead` is one sentence, for the model. When that sentence points at
 another tool, name the tool beside it with `tryInsteadTool` — a
@@ -654,11 +719,61 @@ Off by default, because it changes the bytes of your answer; the RECORDING half
 runs either way, so you can measure how often your tools declare limits before
 you ship them to readers.
 
+**What it rewrites, exactly.** On a prose answer, the answer STRING you get
+back: the value `agent.run()` returns, `turn_end`'s `finalContent`, and the
+answer the turn's memory write stores all carry the block. The block comes
+from every coverage statement of the run — `absent()`, `coverage()` and a
+`describedResult()`'s `coverage` field alike (`sharedState.coverageDeclared` is
+the list); a `describedResult()`'s provenance and grain never reach it.
+
+- **Streamed answers.** The `stream.token` events carry what the model wrote,
+  as it wrote it; the block is appended after the stream ends, so a streaming
+  UI that shows only the tokens never shows it. Render `turn_end.finalContent`
+  (or the returned string) when the turn ends, or draw the limits yourself from
+  `sharedState.coverageDeclared`.
+- **Not the same "limits" as `.answerValidation({ limits })`.** Those are
+  resource bounds on answer validation — reads, bytes, checks, time. The limits
+  here are the ground your tools declared they did and did not cover.
+
+#### With an output schema, the limits come back as data
+
+A typed answer is JSON, and JSON with a paragraph after it is not JSON. So when
+the agent has [`.outputSchema()`](doc:output-schema), nothing is appended: the
+answer stays exactly what the model sent, `agent.runTyped()` parses it, and the
+same limits come back beside it as data.
+
+```ts
+const agent = Agent.create({ provider, model })
+  .tool(replicationHealth)
+  .outputSchema(Verdict)
+  .limitsTravelWithTheAnswer()
+  .build();
+
+const verdict = await agent.runTyped('is replication healthy?');
+// { healthy: true, summary: 'Replication is healthy.' }
+
+agent.answerCoverage();
+// {
+//   checked:     [{ what: 'SRDF pair state on all 4 arrays (live query)' }],
+//   notChecked:  [{ what: 'NDM migration sessions', why: 'the API timed out — ask again' }],
+//   cannotCover: [{ what: 'host-side multipathing', why: 'no collector runs on the ESX hosts' }],
+// }
+```
+
+`agent.answerCoverage()` holds the entries the block would have listed —
+duplicates said once, every entry kept — and is `undefined` when no tool
+declared a limit. The same value rides `turn_end` as `answerCoverage` and sits in
+the snapshot as `sharedState.answerCoverage`, so a UI that shows the answer when
+the turn ends can draw its limits beside it. `.answerValidation()` still refuses
+this option at build time.
+
 ### The coverage surface, named
 
 All from `agentfootprint`:
 
-- `absent` and `coverage` — the two doors, described above.
+- `absent` and `coverage` — the two doors, described above. The third way a
+  statement enters the same channel is the `coverage` field of a
+  `describedResult()` — see [Described tool results](doc:semantic-results).
 - `CoverageItem`, `CoverageInput`, `Coverage` — one piece of ground
   (`{ what, why?, short?, kind? }`), what you may write in a list, and the normalized
   three-list shape everything downstream reads.

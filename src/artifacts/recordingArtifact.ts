@@ -33,6 +33,7 @@
  */
 
 import type { PutArtifactInput } from './types.js';
+import { toWireJson } from '../lib/wireJson.js';
 
 /** The consumer vocabulary a run recording is stored under. One kind, exact
  *  match — the same rule every `wants` declaration is judged by. */
@@ -112,7 +113,10 @@ export function recordingPutInput(
 ): PutArtifactInput {
   let text: string;
   try {
-    text = JSON.stringify(recording) ?? '';
+    // The wire rule (`lib/wireJson.ts`): the recording holds the RAW events, and
+    // a stored recording is redeemable — an Error in one is written by name,
+    // message, code and cause only.
+    text = toWireJson(recording) ?? '';
   } catch (err) {
     throw new UnserializableRecordingError(err instanceof Error ? err.message : String(err));
   }
@@ -166,7 +170,7 @@ export function chartWalkPutInput(
 ): PutArtifactInput {
   let text: string;
   try {
-    text = JSON.stringify(rows) ?? '';
+    text = toWireJson(rows) ?? '';
   } catch (err) {
     throw new UnserializableRecordingError(err instanceof Error ? err.message : String(err));
   }

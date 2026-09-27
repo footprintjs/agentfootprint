@@ -283,6 +283,9 @@ describe('E — the edge set (§2.10)', () => {
     const a = explainChecked(JSON.parse(JSON.stringify(recording)) as Recording);
     expect(a.summary.sentence.template.id).toBe('summary.unfinished');
     expect(a.answer.status).toBe('not-recorded');
+    // No answer and no pause on the record: no standing is folded for an answer that does not exist.
+    expect(rowIds(a, 'how-sure')[0]).toBe('howSure.standing.noAnswer');
+    expect(a.facts.standing).toMatchObject({ value: null, status: 'not-recorded' });
     golden('E.unfinished.txt', dump(a));
   });
 
@@ -300,7 +303,7 @@ describe('E — the edge set (§2.10)', () => {
     expect(rowIds(a, 'checked')).toEqual(['checked.noCalls']);
     expect(rowIds(a, 'not-checked')).toEqual(['notChecked.noCalls']);
     expect(rowIds(a, 'found')).toEqual(['found.noCalls']);
-    expect(rowIds(a, 'how-sure')).toEqual(['howSure.standing.none', 'howSure.evidence.off']);
+    expect(rowIds(a, 'how-sure')).toEqual(['howSure.standing.notAssessed', 'howSure.evidence.off']);
     expect(rowIds(a, 'anything-wrong')).toEqual(['wrong.notApplicable']);
     expect(a.summary.sentence.template.id).toBe('summary.none.notApplicable');
     golden('E.nothing.txt', dump(a));

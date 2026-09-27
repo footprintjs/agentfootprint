@@ -415,9 +415,9 @@ checked again before delivery to the callback. A custom store or callback is
 trusted application code; these bounds are not a process memory or CPU sandbox.
 
 This version supports Agent's classic, dynamic and grouped execution paths.
-It rejects combinations with `.outputFallback()` and
-`.limitsTravelWithTheAnswer()` at build time because those can replace or append
-to the checked answer. Automatic correction and the separate
+It rejects `.outputFallback()` at build time because a fallback can replace the
+checked answer, and `.limitsTravelWithTheAnswer()` because the validated
+delivery has no place for the declared limits. Automatic correction and the separate
 `buildAgentMessageApiChart` runner are outside this feature. Existing `.claims()`
 checks retain their advisory behavior. Arbitrary prose is not proved correct:
 a host can instead validate a structured finding and render its factual text

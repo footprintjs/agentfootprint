@@ -49,6 +49,7 @@ export {
   SELF_EXPLAIN_MAX_EVENTS,
   type SelfExplainInclude,
   type SelfExplainOptions,
+  type SelfExplainServing,
   type SelfExplainSource,
 } from './selfExplain.js';
 export {

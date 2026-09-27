@@ -168,6 +168,7 @@ export {
   ArtifactOpsBusyError,
   RecordingTooLargeForAccountError,
   TurnArtifactsExpiredError,
+  RequestArtifactsRevokedError,
   IdentityNotVerifiedError,
   VerifierUnavailableError,
   AdmissionRefusedError,
@@ -240,10 +241,68 @@ export type {
 // extraction every dialect's credential arrives through.
 export { bearerToken, verifyRequestIdentity } from './identityVerification.js';
 export type {
+  DoorIdentity,
   IdentityVerificationOptions,
+  SignInOnlyIdentity,
   IdentityVerifier,
   VerifiedIdentity,
 } from './identityVerification.js';
+
+// The credential seam (identity strategies, step 3) — the sign-in cookie comes
+// off the headers at the transport and only its KEY goes on; one credential per
+// request; a socket's sign-in is checked before the 101, re-checked per frame,
+// and closed when it ends. See src/hosting/signin/README.md.
+export {
+  CREDENTIAL_HEADERS,
+  readSignIn,
+  signInKeyOf,
+  withoutCredentials,
+  type HeaderBag,
+  type SignInRead,
+} from './signin/cookie.js';
+export { signInSource, type SignInSourceOptions, type SignIns } from './signin/source.js';
+// The sign-in door (identity strategies, step 4) — `/auth/config`, `/auth/me`,
+// `/auth/login` (password), `/auth/logout`; a bounded in-memory store.
+export {
+  accountKeyOf,
+  signInDoor,
+  WRONG_CREDENTIAL_SENTENCE,
+  type SignInDoor,
+  type SignInDoorOptions,
+} from './signin/door.js';
+export {
+  DEFAULT_SIGN_IN_MAX,
+  DEFAULT_SIGN_INS_PER_ACCOUNT,
+  memorySignIns,
+  type MemorySignIns,
+  type MemorySignInsOptions,
+} from './signin/memorySignIns.js';
+export {
+  MemorySignInsConfigError,
+  PasswordCheckUnreachableError,
+  SignInDoorConfigError,
+  SignInStoreFullError,
+} from './signin/errors.js';
+export type { CheckGateOptions } from './signin/checkGate.js';
+export type { AttemptLimits } from './signin/limits.js';
+export { safeReturnTo } from './signin/returnTo.js';
+export { randomSealKey, sealKeyFrom, type SealKey } from './signin/seal.js';
+export {
+  SIGN_IN_COOKIE,
+  SIGN_IN_COOKIE_LOCALHOST,
+  type HostSignInOptions,
+  RedirectSignInError,
+  type PasswordAccepted,
+  type PasswordChecker,
+  type PasswordKind,
+  type RedirectFailure,
+  type RedirectSignIn,
+  type SignInAccepted,
+  type SignInAttempt,
+  type SignIn,
+  type SignInSource,
+  type SignInStore,
+} from './signin/types.js';
 
 // Admission (9.26.0) — decide whether a request runs before it costs anything.
 // `turnsPerHour` is the shipped reference policy; `spendLedger` is the
@@ -315,6 +374,8 @@ export type { AnswerAccountsOptions } from './answerAccounts.js';
 
 export type {
   AgentHost,
+  ArtifactsForRequestInput,
+  ArtifactsForRequestResult,
   CheckpointEnvelope,
   ConcurrentInvokePolicy,
   ConversationClose,
@@ -342,6 +403,7 @@ export type {
   SessionSweepOptions,
   SessionSweepResult,
   StandingAgentBaseOptions,
+  StandingAgentHandle,
   StandingAgentOptions,
   StandingAgentPoolOptions,
   StandingAgentSharedOptions,

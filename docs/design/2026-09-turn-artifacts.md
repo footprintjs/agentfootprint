@@ -187,7 +187,7 @@ things land:
 |---|---|---|
 | R | the run's `scope.runIdentity`, written ONCE by the seed stage (a resume never re-seeds) | the run's own recording and every tool's `ctx.artifacts` |
 | S | `sessionArtifactScope(userId, sessionId, stored)` | the door's redemption and the hand-over |
-| C | `Agent.checkpoint()` → `conversationOwner()` = `Agent.lastRunIdentity` | the STORED identity every later R and S read |
+| C | `Agent.checkpoint()` → `conversationOwner()` = `Agent.lastRunIdentity` — set by `run()` from the call, and (since Follow-up A) by `resume()` from the call or the paused run's own record (`core/agent/callerIdentity.ts · callerIdentityOf`) | the STORED identity every later R and S read |
 
 | case | R vs S |
 |---|---|
@@ -195,12 +195,16 @@ things land:
 | fresh turn, no user, no stored identity | agree — the session rung |
 | resume by the same verified user as the pause | agree |
 | **KNOWN EDGE** — no user, the conversation carries an identity (an app-seeded tenant; a user an earlier turn claimed at an open door) | R = the stored identity, S = the session rung: the recording 404s at the door, the hand-over's filing redeems |
-| **KNOWN EDGE** — open door, a pause that named nobody resumed by a claimed user (or the claimed user changes) | R = the pausing seed, S = the resuming request's tuple |
-| after ANY resume on a shared agent, or on a pooled instance rebuilt after eviction | C is poisoned (Follow-up A): the stored identity names another session's caller or none, and every LATER S and R read it |
+| open door, a pause that named nobody resumed by a claimed user (or the claimed user changes) | REFUSED since the round-4 recheck (RS2): `ResumeIdentityConflictError` — one run, one identity; may be relaxed later only behind an explicit opt-in |
+| after a resume on a shared agent, or on a pooled instance rebuilt after eviction | FIXED (Follow-up A): C is the resumed run's own caller, so the stored identity no longer names another session's caller or none |
+| a resume that names a DIFFERENT identity from the paused run's caller (a direct host) | REFUSED (`ResumeIdentityConflictError`): R is fixed in the checkpoint, so honouring the call would split one run between two identities (review S3) |
 
-Where S and C agree, the hand-over and the door agree for the same caller;
-where C is poisoned they move together, and away from where the earlier turns
-filed.
+Where S and C agree, the hand-over and the door agree for the same caller.
+
+A host that needs S OUTSIDE a turn (a read by ref before the run, an app-owned
+route) asks `handle.artifactsForRequest(request)` — the redemption door's own
+verifier, ownership rule and composer, handed back as bound verbs or a reason;
+it never composes S itself.
 
 ## Record and origin
 
@@ -221,17 +225,29 @@ id), so a reader joining on that run id must say "paused, no recording", not
 
 ## Follow-ups (named, not in this packet)
 
-- **A — `Agent.resume` never updates `lastRunIdentity`** (row C above). After a
-  resume the persisted conversation carries the identity of the instance's last
-  `run()`: reproduced as an ownership conflict after an approved tool ran (shared
-  agent, verifier), an ownerless session re-homed into another conversation's
-  namespace under another principal (open door), and an evicted owner locked out
-  (pooled). Its own packet.
+- **A — FIXED: `Agent.resume` never updated `lastRunIdentity`** (row C above).
+  After a resume the persisted conversation carried the identity of the
+  instance's last `run()`: an ownership conflict after an approved tool ran
+  (shared agent, verifier), an ownerless session re-homed into another
+  conversation's namespace under another principal (open door), and an evicted
+  owner locked out (pooled). `resume()` now sets it from `options.identity ??`
+  the paused run's caller, read off the flowchart checkpoint
+  (`callerIdentityOf`, the inverse of seed's rungs; the per-run default is
+  recognised by shape, `RunnerBase.ts · isMintedRunId`, because the checkpoint
+  does not carry the paused run's id). Pinned by
+  `test/hosting/resume-identity.test.ts`.
 - **B — what a no-user (or changed-claimed-user) request on a conversation that
   carries an identity MEANS** (the KNOWN EDGE rows). Every fix moves an existing
   deployment's memory namespace or redemption reach; awaits the owner's ruling.
-- **R2-11 — HIGH, security: self-explain on a shared agent reads another
-  person's run.** `SelfExplainBinding` captures "the previous completed run" per
+- **R2-11 — FIXED: self-explain on a shared agent read another person's
+  run.** `SelfExplainBinding` now keeps evidence PER CONVERSATION (keyed by the
+  run's session, or for a hosted sessionless request its `#anonymous-N` latch —
+  review B1; `core/agent/servingConversation.ts`; bounded LRU) and serves the
+  asking run's conversation only; the tools' inner-run records carry their
+  outer run id, are keyed by run AND call id, and are served through
+  `innerRunsOfConversation` to the conversation whose runs made them. Pinned by the flipped test in
+  `turn-artifacts-round2.test.ts` and the seeded property tests in
+  `test/hosting/self-explain-isolation.test.ts`. The original entry: `SelfExplainBinding` captures "the previous completed run" per
   INSTANCE; on `standingAgent({ agent })` that is whoever ran last, so Bob's
   why-question reads Alice's snapshot and narrative (the devil's round-2 repro:
   Alice's "my secret is PINEAPPLE-42" returned to Bob's model by
@@ -241,6 +257,11 @@ id), so a reader joining on that run id must say "paused, no recording", not
   unfiltered. Fix in its own packet: key the capture by the run's session and
   serve only the asking run's session, or refuse `.selfExplain()` under
   `{ agent }`. Until then: do not combine them.
+- **R2-12 — FIXED: the artifact door built and evicted pooled lanes for any
+  named session.** A redemption and `artifactsForRequest` now go through
+  `standingAgent.ts · redeemerFor`: the live lane, else the one not-found when
+  nothing is stored, else a single reader instance outside the pool. Pinned by
+  `test/hosting/redemption-lanes.test.ts`.
 - **Late non-artifact emits.** Only facts emitted through an artifact binding
   own their run now; any other emit that outlives its run (a tool's floating
   `ctx.progress`, a late `typedEmit`) is still stamped by the emit bridge with

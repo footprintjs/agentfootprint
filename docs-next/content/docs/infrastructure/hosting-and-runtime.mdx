@@ -1609,11 +1609,11 @@ The value is a `TurnArtifacts` — one of three shapes:
 follows the door. The run's recording follows the identity the run was seeded
 with, and at an **unverified** door those can differ: a conversation that
 carries an identity of its own (an app-seeded tenant, or a user an earlier
-turn claimed) while this request names nobody, and a pause that named nobody
-resumed by a claimed user, file the recording where no redemption by that
-caller looks. At a verifying door, and at an open one whose conversation
-carries no identity, they agree. These are pinned as known edges and not
-changed here.
+turn claimed) while this request names nobody files the recording where no
+redemption by that caller looks. At a verifying door, and at an open one whose
+conversation carries no identity, they agree. That one is pinned as a known
+edge. A pause that named nobody, resumed by a claimed user, is refused
+(`ResumeIdentityConflictError`): one run never carries two identities.
 
 **Door facts carry their session — so the door checks who is asking.**
 Everything the hosting door produces — a redemption's `resolved` / `refused`, a
@@ -1641,6 +1641,49 @@ before it emits anything:
   it until its own events are evicted.
 - **At a door with no verifier, the session id is the key**, by law: whoever
   presents it may redeem under it, and its facts are that session's.
+
+### Outside a turn — `handle.artifactsForRequest`
+
+`reply.turnArtifacts` arrives at the END of a turn. A path that is not a turn —
+a panel reading a payload by ref before the run, an app-owned route that files a
+guide beside a conversation — asks the handle instead: `standingAgent` returns
+the adapter's handle extended with `StandingAgentHandle`, whose
+`artifactsForRequest(request)` takes an `ArtifactsForRequestInput` (the
+request's `sessionId`, its `headers` as Express hands them over, its sign-in
+KEY as `signInKey`, and at a door with no verifier its `userId` claim) and
+answers an `ArtifactsForRequestResult`. It verifies exactly as the turn door
+does — `verifyRequestIdentity` with the sign-in key — so a person signed in by
+the cookie door binds here too. Inside a handler, pass the `HostRequest` itself
+(it IS an input); on an app's own route, take the cookie off with `readSignIn`
+and pass only its key. A filing made through it carries no `origin`: the call
+executes no run, so there is no run id to vouch for.
+
+**Why it exists:** before it, an app that needed its request's scope early
+either copied the library's scope logic — the verifier, the stored identity, the
+composition — or bypassed it, reading `{ conversationId }` alone and getting an
+empty result for the signed-in owner. The host never composes a scope here: the
+handle runs the redemption door's own steps with the door's own instances, so a
+ref filed through it is redeemed on the wire by the same caller, and a ref
+another caller filed answers exactly like one that never existed.
+
+The result is the `TurnArtifacts` shape (five verbs, no scope on the value,
+never the unscoped store) or a reason: `'unverified'` (401; a repeated
+`authorization` header counts), `'unavailable'` (the verifier could not answer —
+503, never 401), `'no-session'`, `'invalid-session'` (400), `'not-found'`,
+`'no-store'`. It never builds or evicts a pooled instance. The verbs count
+against `artifactOpsPerSession`, and a call started after the binding's
+instance is retired or the host closes rejects with
+`RequestArtifactsRevokedError` — already handled; ask again.
+
+```ts
+const handle = await standingAgent({ agent, sessions, host, identity: door.identity }); // door = signInDoor({ … })
+const STATUS: Record<string, number> = { unverified: 401, unavailable: 503, 'invalid-session': 400 };
+
+const { key, headers } = readSignIn(req.headers, door.cookieName); // the cookie comes off
+const scoped = await handle.artifactsForRequest({ sessionId, headers, signInKey: key });
+if (!scoped.bound) return res.status(STATUS[scoped.reason] ?? 404).end();
+const payload = await scoped.artifacts.get(ref); // null: missing, expired or not yours
+```
 
 ## Verified identity — `identity: { verify }`
 
@@ -1732,8 +1775,14 @@ body and no log line — not truncated, not hashed, not "the first eight
 characters". What travels is the **class** of the failure
 (`IdentityFailureClass`): `'no-token'`, `'expired'`, `'not-yet-valid'`,
 `'wrong-audience'`, `'wrong-issuer'`, `'unverifiable'`,
-`'claimed-another-user'`. Each one is a different action for the caller, and
-none of them requires printing one character of the secret.
+`'claimed-another-user'`, and three the person test adds: `'not-a-user-token'`
+(an application's own token, or one without the scope a person's token
+carries), `'wrong-client'` (a client this API does not list obtained it) and
+`'roles-unknown'` (the roles claim was replaced by an overage pointer), and
+`'two-credentials'` (a token and a sign-in on one request). Each one
+is a different action for the caller, and none of them requires printing one
+character of the secret. If you `switch` over the class exhaustively, add the
+four new words.
 
 `IdentityNotVerifiedError` (`ERR_IDENTITY_NOT_VERIFIED`, **401**) carries that
 class. `VerifierUnavailableError` (`ERR_IDENTITY_VERIFIER_UNAVAILABLE`, **503**)
@@ -1774,13 +1823,21 @@ them. `JwksIdentityOptions` takes `jwksUrl`, `issuer` and `audience` (all
 required — a verifier that accepted any issuer is a signature check with no
 opinion about who signed, and one with no audience honours a token minted for
 somebody else's API), plus `userIdClaim` (default `'sub'`), `rolesClaim`
-(default `'roles'`, read leniently — an array, or the space-delimited `scope`
-convention), `algorithms` (default: the RSA and ECDSA families — symmetric
+(default `'roles'`; a claim name, or a path such as `['realm_access', 'roles']`
+for Keycloak — a dotted name is never split), `rolesFormat` (default `'list'`:
+an array gives one role per entry and a single string is ONE role, so
+`"Not neo-users"` never satisfies a check for `neo-users`; `'space-delimited'`
+keeps the old split for a claim that really is a list), `algorithms` (default:
+the RSA and ECDSA families — symmetric
 algorithms are deliberately excluded, because with a *public* key an accepted
 HMAC alg is the classic algorithm-confusion forgery), `clockToleranceSeconds`,
 `cacheMaxAgeMs` and `fetchTimeoutMs`.
 
-It checks the signature, `iss`, `aud`, `exp` and `nbf` — and nothing else. It is
+It checks the signature, `iss`, `aud`, `exp` and `nbf` — and nothing else.
+`exp` is required: a signed token with no lifetime is refused as
+`'unverifiable'` rather than honoured forever. It does **not** ask whether a
+token stands for a person — an application's own client-credentials token
+verifies like an employee's; use `oidcIdentity` below when that matters. It is
 not an authorization decision, and it does **not** check revocation: a JWT is
 valid until it expires, and no amount of key fetching changes that. Short
 lifetimes are the answer; an adapter implying otherwise would be selling a
@@ -1792,6 +1849,372 @@ specifier reaches the runtime unresolved, pass an already-imported module as
 `backend` — the `JoseBackend` slice is declared structurally, so a stub or a
 future major satisfies it without this package taking a hard type dependency on
 an optional peer.
+
+### `oidcIdentity` — a person's access token from your company's IdP
+
+`oidcIdentity` verifies an access token from an OpenID Connect provider — AD FS
+2016+, Entra ID, Keycloak, Okta — and asks the question `jwksIdentity` does
+not: **does this token stand for a person?** On Entra ID any application
+registered in the tenant can obtain a token for your API by the
+client-credentials grant, with the right issuer, audience and signature. It is
+refused here by its shape:
+
+- the scope only your API's person tokens carry (`requiredScope`, read from
+  `scp`, or `scope` with `scopeClaim: 'scope'`) must be present;
+- a token with roles and no scope, with `idtyp: "app"`, or with `oid` equal to
+  `sub` is an application's token (`'not-a-user-token'`);
+- the client that obtained it (`azp`, else `appid`, `cid`, `client_id`) must be
+  in `allowedClients` (`'wrong-client'`). On Keycloak and Okta a service
+  account's token can carry your scope, and this is the check that refuses it
+  — so every listed client must have service accounts / client credentials
+  turned off, and `'any'` is refused in production.
+
+`userIdClaim` is required, with no default: on both Microsoft IdPs `sub` is
+pairwise per application, so it is `oid` on Entra ID and your `objectGUID`
+claim on AD FS. The value is taken as bytes — never trimmed or case-folded.
+
+It reads the issuer's discovery document before accepting any token and pins
+the issuer it names — plus AD FS's `access_token_issuer`, the different `iss`
+AD FS signs access tokens with. A discovery 404, a body that is not JSON or a
+document naming another issuer is a configuration error; an IdP that cannot be
+reached is an outage, answered **503** with a fixed sentence and retried on
+later requests. Discovery never follows a redirect (the document picks the
+signing keys), and an `http` key set is refused in production. `exp` is
+required, clock tolerance is 60 seconds by default (at most 300), `HS*`
+algorithms are refused, and a roles claim replaced
+by Entra's group-overage pointer is refused as `'roles-unknown'` rather than
+read as "no roles".
+
+```ts
+import { oidcIdentity } from 'agentfootprint/security';
+
+const verifier = oidcIdentity({
+  issuer: 'https://login.microsoftonline.com/<tenant>/v2.0',
+  audience: '<API client id>',
+  userIdClaim: 'oid',
+  requiredScope: 'access_as_user',
+  allowedClients: ['<web client id>'],
+});
+await standingAgent({ agent, sessions, host, identity: { verify: verifier.verify } });
+```
+
+The types: `OidcIdentityOptions` configures it; the result is an `OidcIdentity`
+— an `IdentityVerifier` plus `discover()`, which answers an
+`OidcDiscoveryState` (`ready` with a `DiscoveredIssuer`, `outage`, or
+`misconfigured`). `DiscoveryFetch` is the shape of the `fetch` option that
+reads the document, for tests and unusual runtimes. `rolesClaim` is a
+`ClaimPath` (a name, or an array of names into nested claims), and
+`jwksIdentity`'s `rolesFormat` is a `RolesFormat`.
+
+### Choosing a strategy by config — `identityFromConfig`
+
+A deployment picks ONE way of proving who is calling, at install time.
+`identityConfigFromEnv(process.env)` reads the `IDENTITY_*` variables and
+`identityFromConfig(config, { production })` judges them once at boot: it
+returns `{ strategy, identity, banner }`, or throws `IdentityConfigError`
+naming the key.
+
+- **Production names its strategy, even `open`.** You pass `production`; the
+  library never guesses it from `NODE_ENV`.
+- **A typo is never `open`.** An unknown strategy or `IDENTITY_*` key is
+  refused, and so are the few keys a later release reads: they are named and
+  refused as "not in this release".
+- **Config errors refuse at boot; outages answer 503.** An unreachable IdP
+  lets the app start and says so in the banner.
+- **The banner names settings and never a secret** — print every line.
+
+The whole path — env settings, the chooser, the door, and what it refuses — runs
+end to end against a fake in-process identity provider in
+[`examples/deploy/oidc-token.ts`](https://github.com/footprintjs/agentfootprint/blob/main/examples/deploy/oidc-token.ts):
+
+<CodeFile path="examples/deploy/oidc-token.ts" region="identity-from-config" title="examples/deploy/oidc-token.ts (region: identity-from-config)" />
+
+`IdentityConfig` is the plain object `identityConfigFromEnv` builds (build it
+yourself if your settings live elsewhere); `IdentityBootOptions` carries
+`production` (plus optional `fetch` and `backend` seams); `IdentityChoice` is the
+result, and its `strategy` is an `IdentityStrategyName` — one of `open`,
+`oidc-token`, `proxy-token`, `directory-password`, `local-password`.
+
+```sh
+IDENTITY_STRATEGY=oidc-token
+IDENTITY_ISSUER=https://login.microsoftonline.com/<tenant>/v2.0
+IDENTITY_AUDIENCE=<API client id>
+IDENTITY_USER_ID_CLAIM=oid
+IDENTITY_REQUIRED_SCOPE=access_as_user
+IDENTITY_ALLOWED_CLIENTS=<web client id>
+```
+
+```ts
+import { identityConfigFromEnv, identityFromConfig } from 'agentfootprint/security';
+
+const choice = await identityFromConfig(identityConfigFromEnv(process.env), {
+  production: process.env.NODE_ENV === 'production',
+});
+for (const line of choice.banner) console.log(line);
+await standingAgent({ agent, sessions, host, identity: choice.identity });
+```
+
+### Sign-ins and the credential seam — `signIn`
+
+A browser that signed in holds one thing: a random value in an `HttpOnly`
+cookie named `SIGN_IN_COOKIE` (`__Host-Http-af-signin`; `SIGN_IN_COOKIE_LOCALHOST`
+on plain-`http` localhost, development only). The server keeps the sign-in — a
+`SignIn` record in a `SignInStore` (four verbs: `create`, `find`, `touch`,
+`delete`) keyed by the cookie value's SHA-256, `signInKeyOf(value)`, so a leaked
+store row is not a live cookie.
+
+**The cookie never reaches a handler.** Build the host with
+`signIn: HostSignInOptions` and the transport strips the cookie from every
+header bag it hands onward and passes the key instead
+(`HostRequest.signInKey`, `HostConversation.signInKey`). `readSignIn(headers)`
+does the same for an app's own routes (it returns a `SignInRead`: the key and
+the headers without the cookie; a `HeaderBag` is either header shape), and
+`withoutCredentials(headers, { also })` removes every header in
+`CREDENTIAL_HEADERS` — the standard ones, `sec-websocket-protocol`, the common
+proxy and platform token headers, `x-api-key` — plus any you name in `also`
+(pass your `tokenHeader`), for anything that logs. A host built with `signIn`
+refuses to boot with the browser rules off: never `allowedOrigins: 'any'`,
+never `requireJsonContentType: false`, never `allowedHosts: 'any'`, and
+`allowedHosts` set unless it binds a loopback address.
+
+**One verification path.** `IdentityVerificationOptions` keeps its 9.26 shape
+(`verify` required) and gains two optional fields: `signIn`, a `SignInSource`
+that answers "who is behind this key, right now?", and `tokenHeader` (read a
+token from a header other than `authorization`). A door that takes sign-ins
+only is a `SignInOnlyIdentity`; every door accepts either, as a
+`DoorIdentity`. `signInSource({ store, idleMinutes })`
+(options: `SignInSourceOptions`) applies both clocks — the absolute lifetime on
+the record and the idle limit — and returns `SignIns`, which can also `end` a
+sign-in and tell `onEnd` listeners.
+
+- A token and a sign-in on one request are refused as `'two-credentials'`.
+- A sign-in that ended, expired, went idle or never existed is one answer:
+  `'expired'`. A store that cannot answer is **503**.
+- A WebSocket handshake is verified before the 101 with the same funnel, a
+  socket admitted by a sign-in is re-checked before every inbound frame, and
+  ending the sign-in closes the socket (close code 1008).
+
+Without `signIn` on the host and on `identity`, nothing about either door
+changes, byte for byte.
+
+```ts
+import { nodeHost, signInSource, standingAgent } from 'agentfootprint/hosting';
+
+const signIns = signInSource({ store, idleMinutes: 60 });
+const identity = { signIn: signIns };
+await standingAgent({
+  agent,
+  sessions,
+  host: nodeHost({ port: 8080, allowedHosts: ['neo.corp.example'], signIn: { identity } }),
+  identity,
+});
+```
+
+### The sign-in door — `signInDoor` and `local-password`
+
+`signInDoor(options)` (options: `SignInDoorOptions`) returns a `SignInDoor`
+that serves four routes under `/auth`; mount its `handle(req, res)` in front of
+your routes:
+
+| Route | What it does |
+|---|---|
+| `GET /auth/config` | `{ mode }` — the page's sign-in gate: `'open'`, `'token-only'`, `'password'` or `'redirect'` (an `IdentityMode`). A password door adds `passwordKind: 'directory' \| 'local'` (a `PasswordKind`: the checker's `PasswordChecker.kind`) so the page can label its form — "Windows username (e.g. jsmith)" for `'directory'` |
+| `GET /auth/me` | `{ displayName, accountKey, expiresAt }` or 401. `accountKeyOf(userId)` is a 128-bit key for the page's caches |
+| `POST /auth/login` | a password sign-in, below |
+| `POST /auth/logout` | ends the sign-in, expires the cookie, closes its sockets; `{ next: '/' }` |
+
+A login runs the door guard first, whatever it carries (a login carries no
+credential, and a forged cross-site login would sign a victim into the
+attacker's account). It reads JSON only, answers a bad body with a fixed
+sentence (a parser's own message would quote the password), refuses an empty
+password before any check, and gives every wrong credential one answer —
+`WRONG_CREDENTIAL_SENTENCE` — after a minimum time. `AttemptLimits` grow a
+delay per typed name and per client address before refusing with 429. A
+sign-in already present is ended first. The cookie is
+`__Host-Http-af-signin` — `HttpOnly; Secure; SameSite=Strict; Path=/`, no
+`Domain`, 8 hours; on a plain-`http` localhost public URL (development only) it
+is `af-signin` without `Secure`, and the banner says so.
+
+Sign-ins live in a `SignInStore`; `memorySignIns()` (a `MemorySignIns`, options
+`MemorySignInsOptions`) keeps at most `DEFAULT_SIGN_IN_MAX` (10 000) live
+sign-ins and `DEFAULT_SIGN_INS_PER_ACCOUNT` (10) per account — a person's
+eleventh ends their own oldest — sweeps expired rows first, and REFUSES a new
+sign-in when full (`SignInStoreFullError`, answered 503) rather than ending
+somebody else's. Every removal is announced, so a socket carrying it closes.
+Attempts are counted when they start, one check per name runs at a time, and
+`checks` (a `CheckGateOptions`) caps checks door-wide (4 running, 32 waiting).
+The per-name budget refuses; the per-address budget only delays, and
+`trustedProxies` takes IPs and CIDR ranges. A construction refusal is a
+`SignInDoorConfigError` naming the option; `MemorySignInsConfigError` likewise. Sign-ins and attempt budgets are per process: run one replica,
+pin each browser to one, or put a shared store behind the same four verbs.
+
+The password check is a `PasswordChecker` (it answers a `PasswordAccepted` or
+nothing). `local-password` is the one this release ships, for development,
+tests and demos — refused in production: `localPasswords(list)` over
+`name:scrypt$…` entries, made by `hashPassword(password)`. The KDF is scrypt
+from `node:crypto` (no dependency, memory-hard); `SCRYPT_DEFAULT` is OWASP's
+cost and `SCRYPT_FLOOR` the weakest a hash may carry (a `ScryptCost`); a plain
+or weak entry is a `LocalPasswordConfigError` at boot.
+
+```sh
+IDENTITY_STRATEGY=local-password
+IDENTITY_PUBLIC_URL=http://localhost:5350
+IDENTITY_LOCAL_USERS=priya:scrypt$17$8$1$…$…
+```
+
+```ts
+const choice = await identityFromConfig(identityConfigFromEnv(process.env), { production: false });
+const host = nodeHost({
+  port: 5350,
+  hostname: '127.0.0.1',
+  signIn: choice.hostSignIn,
+  onUnhandled: (req, res) =>
+    void choice.signInDoor!.handle(req, res).then((ok) => ok || res.writeHead(404).end()),
+});
+await standingAgent({ agent, sessions, host, identity: choice.identity });
+```
+
+### Browser sign-in for `oidc-token` — `oidcSignIn` (pending independent review)
+
+> **Pending independent review.** The redirect sign-in is built and tested
+> (a fake identity provider, a real headless browser, and a rehearsal against a
+> Keycloak lab), and its release is gated on an outside security review. Do not
+> put it in front of a company install before that review.
+
+`oidcSignIn(options)` (options: `OidcSignInOptions`) is the `oidc-token`
+strategy's browser half — the authorization-code flow through `openid-client`,
+an optional peer loaded lazily (`MissingOpenIdClientError` when it is absent;
+`OpenIdClientBackend` for a bundled app). It is a `RedirectSignIn`, and
+`signInDoor({ redirect, verify })` serves it: `GET /auth/login` and
+`GET /auth/callback`. Its `ready()` runs at boot — `identityFromConfig` awaits
+it — so a deployment that could never sign anybody in refuses to start:
+`openid-client` missing, a client key that is not RSA or EC P-256, or a
+discovery document without an authorization or token endpoint (or PKCE required
+and no `S256`) each end the boot with an `IdentityConfigError`, and
+`OidcSignInSetupError.setting` says which (`client-key` or `discovery`) when you
+call `ready()` yourself. An IdP that is merely unreachable at boot is not a
+refusal; the first login tries again, and the door logs the failure class once
+per change.
+
+- **One verification path.** The callback reads the person from an ACCESS
+  token for this API, through the strategy's own `verify` — the person test
+  included — so a browser sign-in and a bearer token give the same id. The ID
+  token only binds the login to this browser (`nonce`); nothing from the IdP is
+  stored. `IDENTITY_AUDIENCE` equal to `IDENTITY_CLIENT_ID` refuses to boot.
+- **The transaction lives in the browser.** `GET /auth/login` checks `returnTo`
+  (`safeReturnTo`: only a same-origin path, never `//…`, `\`, a control
+  character or an absolute URL), makes `state`, `nonce` and a PKCE verifier (a
+  `SignInAttempt`), and seals them into a per-attempt cookie
+  (`<cookie>-tx-<attempt>`, `SameSite=Lax`, 10 minutes, AES-256-GCM under a
+  `SealKey` — `sealKeyFrom` reads `IDENTITY_COOKIE_KEY_FILE`, `randomSealKey`
+  is the per-process default). Nothing is written on the server.
+- **The callback, in order:** open the transaction and match `state`; clear it
+  whatever happens; exchange the code (client credential + PKCE verifier);
+  check the ID token; verify the access token; end any sign-in present; create
+  the new one; **303** to `returnTo` with `Referrer-Policy: no-referrer`. A
+  failure is a 303 to `/?signin_error=<code>` — a `RedirectFailure`
+  (`state`, `idp-error`, `exchange-failed`, `id-token-refused`, `not-a-person`,
+  `unavailable`), carried by `RedirectSignInError`; never the IdP's own words.
+- **Client authentication:** a private key (`private_key_jwt`, preferred) or a
+  client secret (`client_secret_basic`) — an `OidcClientCredential`, exactly
+  one. `IDENTITY_PKCE=off` exists for AD FS 2016 only. `IDENTITY_RESOURCE` is
+  sent as AD FS's `resource`. Sign-out ends the sign-in and answers the IdP's
+  end-session URL.
+- A person's sign-in is a `SignInAccepted`: the identity plus a display name.
+
+```sh
+IDENTITY_STRATEGY=oidc-token
+IDENTITY_ISSUER=https://login.microsoftonline.com/<tenant>/v2.0
+IDENTITY_AUDIENCE=<API client id>
+IDENTITY_USER_ID_CLAIM=oid
+IDENTITY_REQUIRED_SCOPE=access_as_user
+IDENTITY_PUBLIC_URL=https://neo.corp.example      # these three together, or none:
+IDENTITY_CLIENT_ID=<web client id>                # browser sign-in
+IDENTITY_CLIENT_KEY_FILE=/run/secrets/neo-web.pem # or IDENTITY_CLIENT_SECRET_FILE
+IDENTITY_SCOPE=openid profile api://<API client id>/access_as_user
+IDENTITY_COOKIE_KEY_FILE=/run/secrets/neo-cookie-key
+```
+
+### Behind an authenticating proxy — `proxy-token`
+
+When a login proxy (oauth2-proxy, `mod_auth_openidc`, Pomerium) already signs
+people in, `IDENTITY_STRATEGY=proxy-token` verifies the token it forwards —
+the library never trusts the proxy's word for who the person is:
+
+- the proxy must forward an ACCESS token for this API
+  (`IDENTITY_PROXY_TOKEN=access-token`; `id-token` is refused), and the person
+  test and client check run on it (`IDENTITY_ALLOWED_CLIENTS` names the
+  proxy's client);
+- no discovery: `IDENTITY_JWKS_URL` (https, never through a redirect) and a
+  literal `IDENTITY_ISSUER`; `IDENTITY_PROXY_HEADER` names the header
+  (default `authorization`; otherwise a custom `x-…` header — `cookie`, other
+  standard headers and `x-forwarded-user` are refused);
+- `IDENTITY_PUBLIC_URL` is the origin alone — a path, query or fragment is
+  refused;
+- it refuses to start without the host's door guard lists, because the
+  proxy's own cookie rides along on forged cross-site requests;
+- `choice.mode` is `'proxy'` and there is no sign-in door.
+
+**Make the app port reachable only from the proxy.** A spoofed header straight
+to the port is refused, but a person with their own valid token could skip what
+the proxy enforces beyond identity (MFA step-up, device posture, per-route
+rules). Bind to `127.0.0.1` behind a same-box proxy or firewall the port.
+
+### Plain Active Directory — `directory-password` (pending independent review)
+
+> **Pending independent review.** A password door on the company's real
+> directory; it is built and tested (a fake directory with AD's lockout rules
+> and a Samba AD lab), and its use in front of a company install waits for an
+> outside security review, like browser sign-in.
+
+For a company with Active Directory and no federation server, the sign-in door
+takes a Windows username and password and asks the directory, over LDAPS
+(`ldapDirectory(options)`, options `LdapDirectoryOptions`, over `ldapts` — an
+optional peer; `MissingLdaptsError` when absent, `LdaptsBackend` for a bundled
+app). `directoryPasswords(options)` (options `DirectoryPasswordsOptions`) is the
+`PasswordChecker` it plugs in:
+
+- an empty password, or one holding a control character, never reaches the
+  directory, and a name that is not 1–64 plain characters (after removing the
+  configured `@domain` or `NETBIOS\`) never binds;
+- after the bind, RFC 4532 **Who-am-I** decides who signed in — the directory's
+  answer, never the typed name — and EXACTLY ONE entry is found for that
+  account; the id is its `objectGUID` (base64). This closes the rename
+  collision, where an explicit UPN beats another person's implicit one;
+- a required group is checked nested, its DN escaped (`escapeFilterValue`);
+- every wrong credential is one answer, AD's sub-code goes to the server log,
+  and a directory that is down is 503;
+- attempt limits come from AD's own lockout policy: a THIRD of the threshold
+  per ACCOUNT (the checker's `budgetKey` — `alice`, `ALICE` and
+  `alice@corp.example` share one), reset only a full window after the LAST
+  failure, as AD resets its own counter. A third, because an account whose UPN
+  prefix differs from its `sAMAccountName` has two logon names and so two
+  budgets. A threshold of 1 or 2 refuses to boot unless
+  `IDENTITY_LDAP_ACCEPT_LOW_THRESHOLD=yes`. This REDUCES the lockout risk and
+  cannot rule it out; keep AD's lockout duration short and its threshold at 10
+  or more;
+- a bind that timed out after it was sent stays counted; a directory that
+  could not be reached (`PasswordCheckUnreachableError`) gives the attempt
+  back;
+- the CA file must hold a CA certificate and the base DN must parse, or the
+  boot is refused;
+- it bypasses the company's MFA, and the banner says so.
+
+The directory sits behind a small port (`Directory`, `DirectorySession`,
+`DirectoryEntry`), which is how the tests run it against a fake that applies
+AD's bind-name rules.
+
+```sh
+IDENTITY_STRATEGY=directory-password
+IDENTITY_PUBLIC_URL=https://neo.corp.example
+IDENTITY_LDAP_URL=ldaps://dc1.corp.example:636
+IDENTITY_LDAP_CA_FILE=/etc/neo/corp-root-ca.pem
+IDENTITY_LDAP_DOMAIN=corp.example
+IDENTITY_LDAP_NETBIOS_DOMAIN=CORP
+IDENTITY_LDAP_BASE_DN=DC=corp,DC=example
+IDENTITY_LDAP_LOCKOUT_THRESHOLD=10
+IDENTITY_LDAP_LOCKOUT_WINDOW_MINUTES=30
+```
 
 ## Admission — `admission: { decide }`
 

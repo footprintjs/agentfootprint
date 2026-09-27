@@ -10,6 +10,46 @@ that; an exporter that drops an event drops only its own copy.
 Telemetry that fails invisibly is indistinguishable from telemetry that works,
 so delivery failures are themselves reported (`deliveryErrors.ts`).
 
+## How an Error reaches a wire (`lib/wireJson.ts`)
+An `Error` anywhere in an event is written as `{ name, message, code? }` plus a
+bounded `cause` chain — never a custom property (an axios error's
+`config.headers.authorization`), never `stack`, never what its own `toJSON`
+returns (a real `AxiosError`'s returns its config and stack: the replacer reads
+the holder's RAW value, so `toJSON` never pre-empts the rule), and an Error a
+`toJSON` RETURNS is rendered too. "An Error" is the OR of `Error.isError`,
+`instanceof Error` and Node's `util.types.isNativeError` — so a Proxy around an
+Error, and an Error from another realm (`vm`), are rendered on every supported
+runtime, and a spoofed `Symbol.toStringTag` is not an Error. Every serializer
+of the record goes through it: here (`file`, `cloudwatch` / `agentcore`,
+`xray`, the `otel` attribute text, the console default; `audit`'s sanitizer
+renders Errors with the same `wireError`), the browser stream
+(`stream.ts · encodeSSE`), the recording artifact, the recording file sink,
+the bug-report bundle, and the tool-result text the model reads and `history`
+keeps (`core/agent/validators.ts · safeStringify`). Detached delivery renders
+Errors before it clones (`strategies/attach.ts · snapshotEvent`, Maps and Sets
+entered too), so sync and detached delivery write the same bytes.
+`test/architecture/wireJsonOnly.test.ts` refuses a direct `JSON.stringify` in
+these modules unless it is allow-listed with a reason.
+
+**What it costs** (measured by `bench/wire-json.mjs`, standalone, on a 553 KB
+event): `toWireJson` 0.92 ms vs `JSON.stringify` 0.46 ms (2.00×); detached
+`withWireErrors` + clone 2.09 ms vs clone 1.30 ms (1.60×) when the event holds
+no Error, 3.08 ms when it holds one (it is then copied whole). A value that
+holds no Error serializes to the same bytes as before. Two stated limits: to
+see through `toJSON`, an ACCESSOR property (a getter, a Proxy `get` trap) whose
+value is an object is read twice (data properties and primitives once, as
+`JSON.stringify` reads them); and the detached walk stops 64 levels deep, so an
+Error nested deeper than that (inside 65 nested Sets, say) reaches a
+NON-serializing detached sink with its stack — a serializing one still renders
+it.
+
+A custom sink that serializes events should do the same:
+
+```ts
+import { toWireJson } from '../../lib/wireJson.js';
+const line = toWireJson(event); // not JSON.stringify(event)
+```
+
 ## What a span-MAPPING exporter may carry (`otel.ts`)
 `file` / `cloudwatch` / `agentcore` / `audit` serialize the whole envelope and
 inherit every field. `otelObservability` MAPS selected signals onto spans, so

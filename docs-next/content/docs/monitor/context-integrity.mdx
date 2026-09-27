@@ -82,11 +82,11 @@ The finding's `predicate` is the argument's dot-path (`machine`, `filter.hosts.0
 
 ## `.claims()` — the answer checked against the facts
 
-The evidence gate (`.evidence()`) grounds the answer's names and numbers: every value must appear in a tool result. Its stated limit is that a FALSE CLAIM ASSEMBLED FROM REAL VALUES passes — "fc1/3 is healthy" when the data says the port is down uses entirely grounded tokens. `.claims()` closes that hole for the facts you name. Tools that return `semantic({ facts: [...] })` settle typed readings; you declare which answer field reports which fact, and the checker joins:
+The evidence gate (`.evidence()`) grounds the answer's names and numbers: every value must appear in a tool result. Its stated limit is that a FALSE CLAIM ASSEMBLED FROM REAL VALUES passes — "fc1/3 is healthy" when the data says the port is down uses entirely grounded tokens. `.claims()` closes that hole for the facts you name. Tools that return `describedResult({ facts: [...], provenance })` settle typed readings; you declare which answer field reports which fact, and the checker joins:
 
 ```ts
 const agent = Agent.create({ provider, model })
-  .tool(screenTool)                      // returns semantic({ facts: [...] })
+  .tool(screenTool)                      // returns describedResult({ facts: [...], provenance })
   .outputSchema(AnswerSchema)            // required — prose is never checked
   .claims({ nav_count: { entity: 'screen2', field: 'nav' } })
   .build();

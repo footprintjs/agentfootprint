@@ -280,8 +280,13 @@ export class InvalidWireOpError extends Error {
  * rather than imported: `wireOps` imports this file for its own refusal, and
  * the two spellings are pinned equal by the wire tests.)
  */
-function artifactOpSpelling(op: 'head' | 'get' | 'account'): string {
-  return op === 'account' ? 'answer-account' : `artifact-${op}`;
+/** A bound verb from `handle.artifactsForRequest` — spelled as the call. */
+type SeamVerb = 'put' | 'delete' | 'list';
+
+function artifactOpSpelling(op: 'head' | 'get' | 'account' | SeamVerb): string {
+  if (op === 'account') return 'answer-account';
+  if (op === 'put' || op === 'delete' || op === 'list') return `artifacts.${op}(...)`;
+  return `artifact-${op}`;
 }
 
 /**
@@ -383,7 +388,7 @@ export class ArtifactOpsBusyError extends Error {
   /** The per-session bound that was met. */
   readonly limit: number;
 
-  constructor(op: 'head' | 'get' | 'account', limit: number) {
+  constructor(op: 'head' | 'get' | 'account' | SeamVerb, limit: number) {
     super(
       `[hosting] ${artifactOpSpelling(
         op,
@@ -498,6 +503,35 @@ export class TurnArtifactsExpiredError extends Error {
 }
 
 /**
+ * Thrown by a verb of a binding `handle.artifactsForRequest` returned, called
+ * after the binding was revoked: the instance it was bound to was retired
+ * (evicted from the pool) or the composer was closed.
+ *
+ * The same law as {@link TurnArtifactsExpiredError}: a binding never outlives
+ * the instance whose store and record it writes to — a write after that would
+ * land on a stopped agent, and its fact on a record nobody holds. The
+ * rejection is created already handled, so a floating late call cannot crash
+ * the process. Ask the handle again for a fresh binding.
+ */
+export class RequestArtifactsRevokedError extends Error {
+  readonly code = 'ERR_REQUEST_ARTIFACTS_REVOKED' as const;
+  /** Which verb was called after the revocation. */
+  readonly op: 'put' | 'head' | 'get' | 'delete' | 'list';
+
+  constructor(op: 'put' | 'head' | 'get' | 'delete' | 'list') {
+    super(
+      `[hosting] artifacts.${op}(...) was called on a binding from ` +
+        `handle.artifactsForRequest after it was revoked: the agent instance it was bound to ` +
+        `was retired from the pool, or the host was closed. Call ` +
+        `handle.artifactsForRequest(request) again for a binding to the instance serving the ` +
+        `session now.`,
+    );
+    this.name = 'RequestArtifactsRevokedError';
+    this.op = op;
+  }
+}
+
+/**
  * An already-computed preview, so {@link UnreadableEnvelopeError.withSession}
  * can copy a refusal without being handed the stored bytes a second time. Not
  * exported: nothing outside this file should be able to hand-write a preview.
@@ -591,7 +625,9 @@ export class UnreadableEnvelopeError extends TypeError {
  * none of which requires printing one character of the token.
  *
  *  - `'no-token'` — no `Authorization: Bearer …` arrived at all.
- *  - `'expired'` — the token's own lifetime is over.
+ *  - `'expired'` — the token's own lifetime is over, or the sign-in the
+ *    request named has ended (signed out, expired, idle, or never existed —
+ *    one answer, so a guessed sign-in key learns nothing).
  *  - `'not-yet-valid'` — its `nbf` is in the future (a clock-skew smell).
  *  - `'wrong-audience'` — it was minted for a different API.
  *  - `'wrong-issuer'` — it came from an IdP this door does not accept.
@@ -601,6 +637,20 @@ export class UnreadableEnvelopeError extends TypeError {
  *    probing which half of a forgery to fix.
  *  - `'claimed-another-user'` — a valid token, and a request that signed
  *    somebody else's name beside it.
+ *  - `'not-a-user-token'` — a valid token that does not stand for a PERSON:
+ *    an app-only token (`idtyp: app`, `oid` equal to `sub`, roles and no
+ *    scope) or one without the scope only this API's person tokens carry.
+ *    Raised by `oidcIdentity`'s person test.
+ *  - `'wrong-client'` — a person's token, obtained by a client this door does
+ *    not list (`azp` / `appid` / `cid` / `client_id`), or naming none.
+ *  - `'two-credentials'` — the request presented a token AND a sign-in.
+ *    Which one to believe is not a question a door answers (rule 13).
+ *  - `'roles-unknown'` — the token's roles claim was replaced by a pointer to
+ *    somewhere else (an IdP's group-overage pointer). Unknown is not none: reading it
+ *    as "no roles" would strip a person silently.
+ *
+ * The last four arrived with `oidcIdentity` and the sign-in seam. A
+ * consumer's exhaustive `switch` over this union must add them.
  */
 export type IdentityFailureClass =
   | 'no-token'
@@ -609,7 +659,11 @@ export type IdentityFailureClass =
   | 'wrong-audience'
   | 'wrong-issuer'
   | 'unverifiable'
-  | 'claimed-another-user';
+  | 'claimed-another-user'
+  | 'not-a-user-token'
+  | 'wrong-client'
+  | 'two-credentials'
+  | 'roles-unknown';
 
 /**
  * The caller could not be identified, and this door was configured to insist.
@@ -653,8 +707,14 @@ function sentenceFor(failure: IdentityFailureClass, claimedUser: boolean): strin
             `requests may then carry no user id at all.`;
     case 'expired':
       return (
-        `the presented token has expired. Refresh it at your identity provider and retry; ` +
-        `nothing is wrong with this host or with the token's contents.`
+        `the presented token has expired, or the sign-in it named has ended. Refresh the ` +
+        `token at your identity provider (or sign in again) and retry; nothing is wrong with ` +
+        `this host.`
+      );
+    case 'two-credentials':
+      return (
+        `the request presented a token AND a sign-in. One credential per request: which of ` +
+        `the two to believe is not a question this door answers. Send one of them.`
       );
     case 'not-yet-valid':
       return (
@@ -682,6 +742,26 @@ function sentenceFor(failure: IdentityFailureClass, claimedUser: boolean): strin
         `the presented credential could not be verified — the signature did not check ` +
         `out, no key matched it, or it is not a token this host reads. Deliberately one ` +
         `answer for all three: naming which would tell whoever is probing what to fix.`
+      );
+    case 'not-a-user-token':
+      return (
+        `the presented token is valid but does not stand for a person: it is an ` +
+        `application's own token, or it lacks the scope this API requires of a person's ` +
+        `token. Sign in as a person through a client this API lists, and request this ` +
+        `API's scope.`
+      );
+    case 'wrong-client':
+      return (
+        `the presented token was obtained by a client this host does not accept, or it ` +
+        `does not say which client obtained it. Request the token through one of the ` +
+        `clients this API was configured to list.`
+      );
+    case 'roles-unknown':
+      return (
+        `the presented token does not carry the caller's roles: its roles claim was ` +
+        `replaced by a pointer to somewhere else (the group-overage shape, above about 200 ` +
+        `groups). Unknown is not none, so the caller is refused rather than served with no ` +
+        `roles. The deployment should send app roles (the 'roles' claim) instead of groups.`
       );
   }
 }

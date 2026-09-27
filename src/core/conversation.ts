@@ -119,6 +119,45 @@ export class PendingQuestionError extends Error {
 }
 
 /**
+ * Thrown by `resume(checkpoint, input, options)` when the run would carry two
+ * identities — refused before anything runs:
+ *  - `options.identity` names an identity other than the one the run's memory
+ *    namespace and credentials are restored with (`scope.runIdentity`, whatever
+ *    its source) — including an OWNERLESS pause (the per-run default or the
+ *    session rung) resumed by a named person;
+ *  - the checkpoint's own fields disagree (a session-rung marker on an
+ *    identity that carries a person).
+ *
+ * The ownerless case is the fail-closed reading of an open owner question; a
+ * later release may relax it behind an explicit opt-in, never by default.
+ *
+ * One run never carries two identities. The resumed run keeps the paused run's
+ * memory namespace and credential identity (`scope.runIdentity`, restored from
+ * the checkpoint — a resume never re-seeds), so honouring a different caller
+ * would give the run one person's memory and vault and another person's
+ * `ctx.identity`, `EventMeta.principal` and stored ownership. Ownership is
+ * derived from the run and never moved; the same law, and the same `code`, as
+ * the hosting door's `SessionOwnershipConflictError`.
+ *
+ * Neither identity is named in the message: an error is read by whoever
+ * provoked it. Nothing has run and no state has moved when it is thrown.
+ */
+export class ResumeIdentityConflictError extends Error {
+  readonly code = 'ERR_SESSION_OWNERSHIP_CONFLICT' as const;
+
+  constructor() {
+    super(
+      'Agent.resume: the identity passed to resume() is not the one the paused run was for. ' +
+        "A resumed run keeps the paused run's memory namespace and credentials, so it cannot " +
+        'also run as somebody else. Resume with the identity the paused run was started with ' +
+        "(or none, and the checkpoint's is used), or start a new run for the other person. " +
+        'Neither identity appears in this message on purpose.',
+    );
+    this.name = 'ResumeIdentityConflictError';
+  }
+}
+
+/**
  * Thrown by `followUp()` when there is no conversation to follow up on.
  *
  * `followUp()` continues THIS agent's own last completed run. Before the first

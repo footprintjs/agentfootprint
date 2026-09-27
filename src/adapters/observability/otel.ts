@@ -246,6 +246,7 @@ import type { AgentfootprintEvent } from '../../events/registry.js';
 import { filedNothing } from '../../integrity/disposition/ledger.js';
 import { lazyRequire } from '../../lib/lazyRequire.js';
 import { sha256Hex } from '../../lib/time-travel/sha256.js';
+import { toWireJson } from '../../lib/wireJson.js';
 import type { ObservabilityStrategy } from '../../strategies/types.js';
 
 import { rateLimitedConsoleSink } from './deliveryErrors.js';
@@ -600,7 +601,7 @@ const MAX_ATTR_CHARS = 256;
 const MAX_LIST_ITEMS = 20;
 
 function bound(value: unknown): string {
-  const s = typeof value === 'string' ? value : JSON.stringify(value) ?? String(value);
+  const s = typeof value === 'string' ? value : toWireJson(value) ?? String(value);
   return s.length > MAX_ATTR_CHARS ? `${cutAt(s, MAX_ATTR_CHARS - 1)}…` : s;
 }
 
@@ -823,7 +824,7 @@ function toolContentAttrs(kind: 'args' | 'result', value: unknown, maxChars: num
   if (typeof value === 'string') text = value;
   else {
     try {
-      text = JSON.stringify(value);
+      text = toWireJson(value);
     } catch {
       return {};
     }
@@ -1585,7 +1586,7 @@ export function otelObservability(opts: OtelObservabilityOptions): OtelObservabi
   } {
     let text: string | undefined;
     try {
-      text = JSON.stringify(args);
+      text = toWireJson(args);
     } catch {
       text = undefined;
     }

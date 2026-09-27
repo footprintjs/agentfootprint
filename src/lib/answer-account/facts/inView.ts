@@ -29,6 +29,7 @@ import {
   historyAt,
   historyOf,
   readEmptiness,
+  rowsAtOf,
   type EmptinessReading,
   type ReadContext,
 } from './common.js';
@@ -100,7 +101,10 @@ export function readInView(ctx: ReadContext, callIds: ReadonlySet<string>): InVi
       .slice(historyIndex + 1)
       .filter((m) => isRecord(m) && m.role === 'user').length;
     if (distance < 1) continue;
-    const reading = readEmptiness(message.content, toolName, ctx.declarations, false);
+    // An EARLIER answer's result: its run's door is not in this record, so the one reader's strict
+    // recognizers read the history text itself — the only evidence of the door that is left.
+    const rowsAt = rowsAtOf(ctx.declarations, toolName);
+    const reading = readEmptiness(message.content, rowsAt !== undefined ? { rowsAt } : {});
     reads.push({
       fact: {
         toolName: toolName.slice(0, FACT_TEXT_CHARS),

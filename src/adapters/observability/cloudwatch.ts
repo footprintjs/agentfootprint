@@ -41,6 +41,7 @@
 
 import type { AgentfootprintEvent } from '../../events/registry.js';
 import { lazyRequire } from '../../lib/lazyRequire.js';
+import { toWireJson } from '../../lib/wireJson.js';
 import type { ObservabilityStrategy } from '../../strategies/types.js';
 
 import { rateLimitedConsoleSink } from './deliveryErrors.js';
@@ -299,7 +300,8 @@ export function _buildCloudWatchObservability(
 
   function enqueue(event: AgentfootprintEvent): void {
     if (stopped) return;
-    const message = JSON.stringify(event);
+    // The wire rule (`lib/wireJson.ts`) — an Error's custom properties never ship.
+    const message = toWireJson(event);
     const bytes = Buffer.byteLength(message, 'utf8');
     buffer.push({ timestamp: Date.now(), message });
     bufferBytes += bytes;

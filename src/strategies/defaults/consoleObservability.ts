@@ -20,6 +20,7 @@
 
 import type { AgentfootprintEvent } from '../../events/registry.js';
 import type { ObservabilityStrategy } from '../types.js';
+import { toWireJson } from '../../lib/wireJson.js';
 
 export interface ConsoleObservabilityOptions {
   /**
@@ -76,7 +77,7 @@ export function consoleObservability(
  *  serialization fails. */
 function safeJson(value: unknown): string {
   try {
-    return JSON.stringify(value);
+    return toWireJson(value);
   } catch {
     return '[unserializable]';
   }

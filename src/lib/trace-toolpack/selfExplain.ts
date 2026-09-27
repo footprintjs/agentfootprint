@@ -29,6 +29,14 @@
  *    would expose the IN-FLIGHT run. Capturing only at terminal flush
  *    means the binding can never serve anything but a completed run.
  *
+ *    Keyed PER CONVERSATION (R2-11): one agent instance can serve
+ *    many people (`standingAgent({ agent })`), so "the previous completed
+ *    run" is asked of the ASKING run's session — the evidence of the last
+ *    run that session completed, never whichever run the instance finished
+ *    last. A run with no session reads the last run that had none. A tool's
+ *    retained inner runs are served through the same key
+ *    (`innerRunRecords.ts · innerRunsOfConversation`).
+ *
  * 2. `buildSelfExplainSkill` — the skill in two modes:
  *
  *      - INLINE (default): the skill unlocks the trace tools — every name
@@ -57,7 +65,7 @@ import type { AgentfootprintEvent } from '../../events/registry.js';
 import { skillScopedTools } from '../../tool-providers/skillScopedTools.js';
 import type { ToolProvider } from '../../tool-providers/types.js';
 import { SELF_EXPLAIN_BODY, SELF_EXPLAIN_WHEN } from './debugPrompt.js';
-import type { InnerRunLookup } from './innerRunRecords.js';
+import { innerRunsOfConversation, type InnerRunLookup } from './innerRunRecords.js';
 import { NO_COMPLETED_RUN_MESSAGE } from './traceToolNames.js';
 import type { TraceToolpackArtifacts, TraceToolpackOptions } from './types.js';
 
@@ -120,6 +128,67 @@ type CtrlRecorder = ReturnType<typeof controlDepRecorder>;
 export const SELF_EXPLAIN_MAX_EVENTS = 2000;
 
 /**
+ * How many conversations one binding keeps evidence for — the least recently
+ * explained or completed is dropped past it. One agent instance serving many
+ * sessions holds one completed turn per session, so the bound is what keeps a
+ * long-lived shared agent from pinning every session's last snapshot. A
+ * session whose evidence was dropped is answered like one with no completed
+ * turn: nothing is served, and nothing of anybody else's is served instead.
+ */
+const MAX_CONVERSATIONS = 64;
+
+/**
+ * The separate bound for ONE-SHOT conversations — a hosted request with no
+ * session, which no later request can name (`SelfExplainServing.oneShot`).
+ * Kept on their own shelf so a flood of sessionless requests can never evict a
+ * session's evidence (recheck NIT 4); small, because nothing ever asks a
+ * follow-up question of one.
+ */
+const MAX_ONE_SHOT_CONVERSATIONS = 8;
+
+/** One bounded shelf of conversations: evidence and run ids, same keys. */
+interface Shelf {
+  readonly captured: Map<string | undefined, CapturedTurn>;
+  readonly runs: Map<string | undefined, string[]>;
+  readonly max: number;
+}
+
+function shelf(max: number): Shelf {
+  return { captured: new Map(), runs: new Map(), max };
+}
+
+/** Drop the oldest entries of an insertion-ordered map past `max`. */
+function bound(held: Map<string | undefined, unknown>, max: number): void {
+  while (held.size > max) {
+    const oldest = held.keys().next();
+    if (oldest.done === true) return;
+    held.delete(oldest.value);
+  }
+}
+
+/** How many of one conversation's runs its inner-run view admits. */
+const MAX_RUNS_PER_CONVERSATION = 32;
+
+/** One conversation's evidence: its last completed turn, and its runs. */
+interface CapturedTurn {
+  readonly snapshot: RuntimeSnapshot;
+  readonly ctrl: CtrlRecorder;
+  readonly narrative?: readonly string[];
+  readonly events?: readonly AgentfootprintEvent[];
+}
+
+/** Which conversation the agent is serving, and which run — see {@link SelfExplainSource.getServing}. */
+export interface SelfExplainServing {
+  /** The evidence key. `undefined` = a direct run with no session. */
+  readonly conversation: string | undefined;
+  /** The run in flight, or the one served last. */
+  readonly runId: string;
+  /** A conversation no later request can name (a hosted request with no
+   *  session) — kept on its own, smaller shelf. */
+  readonly oneShot?: boolean;
+}
+
+/**
  * What the binding reads a completed turn's evidence FROM.
  *
  * One object rather than three wiring calls, on purpose: the
@@ -145,26 +214,40 @@ export interface SelfExplainSource {
    * moment the follow-up question arrives.
    */
   getInnerRuns?(): InnerRunLookup | undefined;
+  /**
+   * The conversation the agent is serving — or, between runs, served last —
+   * and that run's id. The conversation is the KEY the evidence is kept and
+   * served under: read at the terminal flush it names the conversation the
+   * finished turn belongs to, read inside a turn it names the conversation
+   * asking. It is the run's session; a HOSTED run with no session gets the
+   * host's per-request key, which nobody can present again; only a direct run
+   * with no session shares `undefined`. Absent (a bare `getSnapshot` binding)
+   * every run shares one key — the single-conversation behaviour — and inner
+   * runs are served unfiltered.
+   */
+  getServing?(): SelfExplainServing;
 }
 
 /**
  * The late-binding seam. Create one per built Agent, attach
  * `binding.recorder()` via `agent.attach()`, and point `bindTo()` at the
  * agent's `getLastSnapshot`. `artifacts` then always answers with the
- * previous COMPLETED run — never the in-flight one.
+ * previous COMPLETED run of the asking conversation — never the in-flight
+ * one, and never another conversation's.
  */
 export class SelfExplainBinding {
   private source: SelfExplainSource | undefined;
   private ctrl: CtrlRecorder = controlDepRecorder();
   private tail: EventTail | undefined;
-  private captured:
-    | {
-        snapshot: RuntimeSnapshot;
-        ctrl: CtrlRecorder;
-        narrative?: readonly string[];
-        events?: readonly AgentfootprintEvent[];
-      }
-    | undefined;
+  /** Evidence and run ids per conversation (see
+   *  {@link SelfExplainSource.getServing}), on two shelves: one for
+   *  conversations a caller can come back to ({@link MAX_CONVERSATIONS}), one
+   *  for one-shot ones ({@link MAX_ONE_SHOT_CONVERSATIONS}). Insertion order is
+   *  recency order. Run ids are recorded at run START, so a run that PAUSED or
+   *  FAILED (neither reaches the terminal capture) still owns the records its
+   *  tools filed (recheck RS4). */
+  private readonly lasting = shelf(MAX_CONVERSATIONS);
+  private readonly oneShot = shelf(MAX_ONE_SHOT_CONVERSATIONS);
 
   constructor(
     private readonly include: SelfExplainInclude = {},
@@ -195,17 +278,64 @@ export class SelfExplainBinding {
     }
   }
 
-  /** Evidence of the previous completed run, or undefined before the first. */
+  /**
+   * Evidence of the previous completed run OF THE ASKING CONVERSATION, or
+   * undefined when that conversation has completed none (or its evidence was
+   * dropped past the bound). Never another conversation's.
+   */
   get artifacts(): TraceToolpackArtifacts | undefined {
-    if (!this.captured) return undefined;
-    const innerRuns = this.source?.getInnerRuns?.();
+    // No refresh on read: a read happens only inside the asking
+    // conversation's own run, whose terminal capture files it as the most
+    // recent anyway.
+    const serving = this.serving();
+    const conversation = serving?.conversation;
+    const held = this.shelfOf(serving);
+    const turn = held.captured.get(conversation);
+    if (turn === undefined) return undefined;
+    const allInnerRuns = this.source?.getInnerRuns?.();
+    const innerRuns =
+      allInnerRuns === undefined
+        ? undefined
+        : this.source?.getServing === undefined
+        ? allInnerRuns
+        : innerRunsOfConversation(
+            allInnerRuns,
+            ownRuns(held.runs.get(conversation) ?? [], conversation),
+          );
     return {
-      snapshot: this.captured.snapshot,
-      controlDeps: this.captured.ctrl.asLookup(),
-      ...(this.captured.narrative !== undefined && { narrative: this.captured.narrative }),
-      ...(this.captured.events !== undefined && { events: this.captured.events }),
+      snapshot: turn.snapshot,
+      controlDeps: turn.ctrl.asLookup(),
+      ...(turn.narrative !== undefined && { narrative: turn.narrative }),
+      ...(turn.events !== undefined && { events: turn.events }),
       ...(innerRuns !== undefined && { innerRuns }),
     };
+  }
+
+  /** The conversation (and run) in flight, or served last. */
+  private serving(): SelfExplainServing | undefined {
+    return this.source?.getServing?.();
+  }
+
+  /** Which shelf a conversation lives on. */
+  private shelfOf(serving: SelfExplainServing | undefined): Shelf {
+    return serving?.oneShot === true ? this.oneShot : this.lasting;
+  }
+
+  /** Remember that the serving run belongs to its conversation (bounded both ways). */
+  private recordRun(serving: SelfExplainServing): void {
+    const { runs, max } = this.shelfOf(serving);
+    const held = runs.get(serving.conversation) ?? [];
+    runs.delete(serving.conversation);
+    runs.set(serving.conversation, [...held, serving.runId].slice(-MAX_RUNS_PER_CONVERSATION));
+    bound(runs, max);
+  }
+
+  /** File the serving conversation's evidence as its most recent, within the bound. */
+  private file(serving: SelfExplainServing | undefined, turn: CapturedTurn): void {
+    const { captured, max } = this.shelfOf(serving);
+    captured.delete(serving?.conversation);
+    captured.set(serving?.conversation, turn);
+    bound(captured, max);
   }
 
   /** The recorder to attach — forwards flow events to the per-run ctrl. */
@@ -221,12 +351,14 @@ export class SelfExplainBinding {
           ? this.source.getNarrative().map((entry) => entry.text)
           : undefined;
       const events = this.tail?.snapshot().events;
-      this.captured = {
+      // Filed under the FINISHED run's conversation — at the terminal flush
+      // the source still names the run that just ended.
+      this.file(this.serving(), {
         snapshot,
         ctrl: this.ctrl,
         ...(narrative !== undefined && { narrative }),
         ...(events !== undefined && { events }),
-      };
+      });
     };
     return {
       id: 'self-explain-binding',
@@ -238,9 +370,15 @@ export class SelfExplainBinding {
         // so the captured lookup survives Convention-4's runId reset.
         // The event tail rotates for the same reason — turn N+1's
         // evidence must not carry turn N's events. The retired tail is
-        // the one `captured` already holds, so it is not lost.
+        // the one its conversation's `captured` entry already holds, so it
+        // is not lost.
         this.ctrl = controlDepRecorder();
         if (this.wantsEvents && this.source?.on) this.tail = eventTail(this.maxEvents);
+        // The run joins its conversation NOW, not at the end: a pause or a
+        // failure never reaches the terminal capture, and the records its
+        // tools filed must still be its conversation's to read.
+        const serving = this.serving();
+        if (serving !== undefined) this.recordRun(serving);
       },
       onRunEnd: capture,
       onRunFailed: capture,
@@ -254,6 +392,21 @@ export class SelfExplainBinding {
       },
     };
   }
+}
+
+/**
+ * Which inner-run records a conversation may read: those its own completed
+ * runs filed. A record that names no run (a third-party producer, a tool run
+ * outside an agent) cannot be attributed, so it is admitted only on the
+ * direct no-session path (`undefined`) — never to a session or a hosted
+ * request.
+ */
+function ownRuns(
+  runIds: readonly string[],
+  conversation: string | undefined,
+): (runId: string | undefined) => boolean {
+  const runs = new Set(runIds);
+  return (runId) => (runId === undefined ? conversation === undefined : runs.has(runId));
 }
 
 /** The delegate-mode tool: one call → a nested debugger at delegate price. */

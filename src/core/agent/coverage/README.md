@@ -1,11 +1,16 @@
 **Mixed** — two declarations a tool authors, one reader the walk calls, one
 sentence the model keeps.
-Map: `types.ts`, `items.ts`, `absent.ts`, `ledger.ts` (what a tool declares).
+Map: `types.ts`, `items.ts`, `refusal.ts`, `absent.ts`, `ledger.ts` (what a tool
+declares).
 Walker: `read.ts` — the ONE reader both dispatch boundaries and the raise site
 (`../stages/toolCalls.ts` · `declareRaisedAbsence`) call.
-Fold: `evidence.ts` (`absenceEvidenceProjection` — what an absence may ground).
+Fold: `evidence.ts` (`absenceEvidenceProjection` — what an absence may ground)
+and `emptiness.ts` (`readEmptiness` — the ONE reader of what came back, shared by
+the answer account and the answer's standing), and `answer.ts` ·
+`coverageOfAnswer` — the answer's limits as data, which a typed answer carries
+instead of the block.
 Lens: `answer.ts` · `composeAnswerWithCoverage`, the coverage block appended to
-the final answer so the model cannot drop it.
+a prose answer so the model cannot drop it.
 
 # `coverage/` — an absence that names itself, and a limit that travels
 
@@ -419,6 +424,134 @@ defineTool({
 
 Pinned by `test/core/agent/coverage-paused-lookup.test.ts`.
 
+## 5. A declaration is refused, never trimmed — and the refusal reads as one
+
+Why, twice over. **A silent loss:** the helpers read a declaration by name,
+and a declaration built in plain JavaScript, parsed from JSON or held in a
+widened variable escapes the type checker. `coverage(verdict, { checked,
+not_checked })` minted a ledger with `checked` only — the unchecked ground
+vanished, and the answer read as if the tool had no gap. **A refusal that
+read like a finding:** the helpers run inside `execute`, the dispatch loop
+turns a throw into the call's error result, and that text is what the model
+reads in place of the data. It used to start with the helper's name —
+`absent: …` at the head of a tool result reads like an answer — and no
+provider adapter this library ships marks a tool result as an error on the
+wire. The law:
+
+> **Every key a declaration carries is one the helper reads, or a refusal**
+> that names the spelling meant when the key is a casing slip. **Every
+> refusal starts `refused: `**, whichever helper refused.
+
+```ts
+// Parsed from JSON, so the type checker never saw it:
+const boundary = JSON.parse('{"checked":["SRDF pairs"],"not_checked":["NDM sessions"]}');
+coverage(verdict, boundary);
+// throws: refused: 'not_checked' is not a field this vocabulary has — did you mean
+//         `notChecked`? The fields are: checked, notChecked, cannotCover.
+```
+
+Thrown inside a tool, the same words are what the model reads — here a
+`describedResult()` result with no source (from plain JavaScript; in
+TypeScript the missing `source` is a compile error first):
+
+```js
+execute: () => describedResult({ facts: rows, provenance: { measuredAt: exportTime } }),
+// the call's error result, as the model reads it:
+// refused: `provenance.source` must name the system of record the values were
+// read from. (field: provenance.source)
+```
+
+- **Which keys.** `absent()`: `what`, `checked`, `notChecked`, `cannotCover`,
+  `tryInstead`, `tryInsteadTool`. `coverage()`: `checked`, `notChecked`,
+  `cannotCover`. `describedResult()` and the deprecated `semantic()`: their
+  eight fields, and the keys of each object they carry — `grain`,
+  `provenance`, `coverage`, `clarify`, `render` — each door in its own
+  spelling (`measuredAt` for one, `measured_at` for the other; each refuses
+  the other's, naming its own). The declaration key lists are tied to their
+  types in both directions (`satisfies Record<keyof …, true>`), so a field a
+  type gains cannot be refused by mistake.
+- **A suggestion only for a slip, never a guess.** `refusal.ts` ·
+  `spellingMeant` folds case and `_`/`-` away and names the known key with the
+  same letters — `not_checked` and `NotChecked` → `notChecked`; `measuredAt`
+  → `measured_at` at `semantic()`, and the reverse at `describedResult()`. A
+  different word gets the list of fields and nothing else.
+- **Not held to it, on purpose.** An ITEM's own keys (`{ what, why, short,
+  kind }`): an unknown one is still dropped — § 3's "Not the coverage lists'
+  rules", unchanged, because refusing it would change what existing item
+  lists built from rows mint. The data rows (`series`, `facts`, `edges`):
+  they carry the tool's own columns and pass through. And an envelope minted
+  elsewhere (a Python sidecar, a hand-built value) — it is READ by the
+  recognizers, which judge the snake_case wire, not by these rules.
+- **One prefix, never the helper's name.** `refusal.ts` · `REFUSED_PREFIX`
+  (`'refused: '`) is the one place it is spelled; `refusal()` is the one way
+  a helper throws. The body names the field and the fix; only the "takes a
+  declaration" line names the helper, as usage.
+- **A correct declaration mints what it always did** — pinned byte for byte by
+  `test/core/agent/coverage-declaration-refusals.test.ts` against goldens
+  taken from the tree before this change, which also pins the model-visible
+  tool message and that the run continues.
+
+## 6. What came back — ONE emptiness reader (the honesty layer)
+
+**The law.** A result reads as empty, non-empty or unreadable by ONE rule, and
+silence about what was searched is recorded as silence.
+
+`emptiness.ts` · `readEmptiness` — called as `readEmptiness(value, { rowsAt?, door? })` — takes the value the
+model read and the door the RECORD says the call returned, and answers with
+typed routes only — never a guess:
+
+| What the record says came back | Reading |
+|---|---|
+| an absence — bare, inside a `coverage()`, or the delivered status `'absent'` | `declared-absent` |
+| a `describedResult()` with data (the envelope the record keeps) | `non-empty`, counted per kind |
+| a `describedResult()` with only `clarify` | `clarify` |
+| a `coverage()` envelope | its wrapped result, read by these same routes and marked `bounded`; an EMPTY wrapped rowset is `declared-absent` |
+| a bare top-level array | `undeclared-empty` or `non-empty` (library-counted) |
+| an object whose key the app declared in `rowsAt` | `undeclared-empty` or `non-empty` (app-counted) |
+| anything else | `unknown` |
+
+Two callers, one rule: the `/observe` answer account
+(`lib/answer-account/facts/calls.ts` for this run's calls,
+`lib/answer-account/facts/inView.ts` for an earlier answer's result) and the
+answer's standing (`../assessment/assess.ts` · `assessAnswer`). They read the
+same bytes the same way and differ only in the door they hold (below).
+
+**The door decides, when the record holds one.** An envelope a tool returned as
+JSON TEXT (an `mcpClient` in text mode) reaches the model byte-for-byte like a
+recognized one, but the run never recognized it — no status, no coverage row, no
+limits block. So a caller that holds the call's door passes it, and a marker the
+door does not vouch for is plain data:
+
+```ts
+readEmptiness('{"af_absent":true,"checked":[…],…}', { door: { absent: false, bounded: false } });
+// → { emptiness: 'unknown', undeclaredShape: true } — the run filed no absence, so none is read
+readEmptiness(JSON.stringify(coverage([], { checked: ['switch A'] })), {
+  door: { absent: false, bounded: true },
+});
+// → { emptiness: 'declared-absent', rows: 0, source: 'library', bounded: true, … }
+```
+
+Only when a caller holds NO door for a result is the door read off the bytes,
+by the rule the run's own recognizer applies (`read.ts` · `readCoverageResult`),
+through `declaredByValue` — which also says whether the envelope lists a gap:
+
+- the account holds its EVENTS as the door for this run's calls (a call's
+  `tool_end` is always in the record), and none for an earlier answer's result;
+- the standing holds a door only for a call with a committed coverage row.
+  Committed state can LOSE a row the run filed — a history restored by
+  `resumeOnError` carries no `coverageDeclared`, a trimmed recording drops it —
+  so a call with no row is read off its bytes, and a library envelope in the
+  committed history is never read as silence. For a JSON-text envelope the run
+  never recognized, the standing therefore says more than "It found" does.
+
+```ts
+declaredByValue(JSON.stringify(absent({ what: 'VMs', checked: ['inventory'], notChecked: ['off VMs'] })));
+// → { absent: true, bounded: false, gap: true }
+```
+
+`rowsAtProblem` is the one rule for an app's declared rows key (a non-empty
+top-level key), asked by both readers' declarations.
+
 ## What the framework does with them
 
 Recognition is STRICT (the effects-envelope law): only a plain object carrying
@@ -434,7 +567,7 @@ ways — no delivered status, no ceiling, no column-type contract, no evidence.
 | event | `agentfootprint.tools.absent` | `agentfootprint.tools.coverage_declared` |
 | tracked state | appended to `coverageDeclared` | appended to `coverageDeclared` |
 | evidence corpus | grounds **every field but `looked_for`** | indexed as ordinary data |
-| final answer | folds into the block, with `.limitsTravelWithTheAnswer()` | same |
+| final answer | folds into the block, with `.limitsTravelWithTheAnswer()` — into `answerCoverage` (data) when the answer is typed | same |
 | suggestion (`tryInstead`, `tryInsteadTool`) | rides `tools.absent` as declared (9.113.0); never tracked, never appended | — (a ledger makes none) |
 
 ### What deliberately does NOT change
@@ -496,17 +629,55 @@ bytes, which is why it is opt-in; the recording half runs either way.
 It is **not** enforcement of the model's prose. It does not check that the model
 stated the limits, and it does not refuse an answer that did not.
 
+### A typed answer carries them as data
+
+An answer with an output schema is JSON, and JSON followed by a block of prose
+is not JSON: the append made `runTyped()` throw `OutputSchemaError` on every
+typed answer whose tools declared a limit. So with `.outputSchema()` configured,
+nothing is appended. The answer string stays exactly the model's (after the
+Route decider's own peel), and the same fold travels beside it —
+`coverageOfAnswer`, the block's three lists as data: merged in declaration
+order, duplicates said once, and every entry kept (the block's cap of twelve per
+section is a reading aid for prose, not a limit on data).
+
+```ts
+const agent = Agent.create({ provider, model })
+  .tool(replicationHealth) // returns coverage(verdict, { checked, notChecked, cannotCover })
+  .outputSchema(Verdict)
+  .limitsTravelWithTheAnswer()
+  .build();
+
+const verdict = await agent.runTyped('is replication healthy?'); // parses: nothing appended
+const limits = agent.answerCoverage();
+// → { checked: [{ what: 'SRDF pair state on all 4 arrays (live query)' }],
+//     notChecked: [{ what: 'NDM migration sessions', why: 'the API timed out — ask again' }],
+//     cannotCover: [{ what: 'host-side multipathing', why: 'no collector runs on the ESX hosts' }] }
+```
+
+One value, three readers: `AgentState.answerCoverage` (committed by the Route
+decider on the turn it picks `final` — `../stages/answerCoverage.ts` ·
+`withAnswerCoverage`; the Final branch cannot write back), `agent.answerCoverage()`
+(a detached copy), and `turn_end.answerCoverage` (projected by
+`../stages/prepareFinal.ts` · `prepareFinalWithLimitsAsDataStage`). All three are
+absent when no tool declared anything, so such a run commits exactly the keys it
+would have without the option. The raw rows stay in `coverageDeclared` either
+way. A prose answer is untouched, byte for byte — pinned with the typed path by
+`test/core/agent/coverage-typed-answer.test.ts`.
+
 ## Files
 
 | file | one job |
 |---|---|
 | `types.ts` | the shared vocabulary — `CoverageItem`, the three lists, the two rendered shapes, the typed suggestion (`TryInsteadTool`) |
 | `items.ts` | normalize and REFUSE a declaration, at the call site |
-| `absent.ts` | `absent()`, the recognizer, the static note, and the ONE rule set for a suggestion (`tryInsteadOfAbsence` and `tryInsteadToolOfAbsence` read by it) |
-| `ledger.ts` | `coverage()`, the recognizer, the static note |
+| `refusal.ts` | how every helper refuses (§ 5): the one prefix, `refused: `, and the one unknown-key check, naming the spelling meant |
+| `recognize.ts` | the two recognizers (`readAbsence`, `readCoverageLedger`) and the two markers — a leaf, so a post-hoc reader loads them without the mints |
+| `absent.ts` | `absent()`, the static note, and the ONE rule set for a suggestion (`tryInsteadOfAbsence` and `tryInsteadToolOfAbsence` read by it); re-exports its recognizer |
+| `ledger.ts` | `coverage()` and the static note; re-exports its recognizer |
+| `emptiness.ts` | the ONE reader of what came back (§ 6) — typed routes, the door the record holds, what a value's own envelope declares (`declaredByValue`), the `rowsAt` rule |
 | `read.ts` | the ONE reader both dispatch boundaries and the raise site (`../stages/toolCalls.ts` · `declareRaisedAbsence`) call — lifts the suggestion beside the coverage |
 | `evidence.ts` | what an absence is allowed to ground |
-| `answer.ts` | folding the run's declarations into one appended block |
+| `answer.ts` | folding the run's declarations into one appended block (a prose answer), or into the answer's coverage as data (`coverageOfAnswer`, a typed answer) |
 
 ## The notes cross a language boundary (9.70.0)
 

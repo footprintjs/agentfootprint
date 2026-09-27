@@ -87,6 +87,12 @@ export const SHOW_ME_ALLOW_LIST: Readonly<Record<string, readonly string[]>> = O
     '/{toolName,toolCallId}',
     '/{checked,notChecked,cannotCover}/*/{what,why,short,kind}',
   ),
+  // A described result: the tool's own source and time — never its data (the facts, series and
+  // edges are counted by the library and shown only as that count).
+  'tools.semantics_declared': list(
+    '/{toolName,toolCallId}',
+    '/semantics/provenance/{source,measured_at}',
+  ),
   'stream.tool_start': list('/{toolName,toolCallId}'),
   'stream.tool_end': list(
     '/{toolCallId,status,error,notExecuted}',

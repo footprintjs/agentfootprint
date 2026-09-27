@@ -362,6 +362,7 @@ export function recordHostRefusal(refusal: HostRefusal, sink: IngressSink): void
     outcome: detail.outcome,
     ...(detail.errorCode !== undefined && { errorCode: detail.errorCode }),
     ...(detail.errorName !== undefined && { errorName: detail.errorName }),
+    ...(detail.identityFailure !== undefined && { identityFailure: detail.identityFailure }),
     bearerPresent: refusal.bearerPresent,
   };
   try {

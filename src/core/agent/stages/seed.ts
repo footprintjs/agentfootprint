@@ -451,8 +451,9 @@ function seedFrom(scope: TypedScope<AgentState>, message: string, deps: SeedStag
   // The derivation is RECORDED rather than inferred: rung 2 also commits
   // `runIdentitySource: 'session'`, so a reader of the trace can tell a
   // namespace the caller chose from one this library derived. It is written on
-  // that path ONLY — a run on rung 1 or rung 3 commits exactly the keys it
-  // always did. And note what does NOT change: `Agent.lastRunIdentity` stays
+  // that path ONLY. A session-bound run (rung 1 with a session, or rung 2) also
+  // commits `runSessionId`, below; a run with no session commits exactly the
+  // keys it always did. And note what does NOT change: `Agent.lastRunIdentity` stays
   // the CALLER's identity, so a derived namespace never reaches `tool.execute`
   // as `ctx.identity` and "absent" keeps meaning "nobody named one".
   const sessionId = deps.getCurrentSessionId?.();
@@ -464,6 +465,16 @@ function seedFrom(scope: TypedScope<AgentState>, message: string, deps: SeedStag
   } else {
     scope.runIdentity = { conversationId: deps.getCurrentRunId() ?? 'default' };
   }
+  // WHICH SESSION this run served, recorded on every session-bound run (rung 1
+  // or 2) — so a resume that names no session reads it from the checkpoint it
+  // is handed, the one carrier that survives a restart (`Agent.resume`). A run
+  // with no session writes nothing: the keys it commits are unchanged.
+  if (sessionId !== undefined) scope.runSessionId = sessionId;
+  // …and on a run a caller NAMED that has no session, `null`: the positive
+  // record that there was none, so a resume can tell this checkpoint from one
+  // written before the key existed (`callerIdentity.ts · pausedSessionOf`). A
+  // run on the per-run default writes nothing.
+  else if (args.identity !== undefined) scope.runSessionId = null;
   scope.newMessages = [];
   // WHICH TURN THIS IS (9.6.0). Every release up to 9.5.1 wrote `1` here, on
   // every run — and memory writes key their entries on it (`msg-{turn}-{i}`),

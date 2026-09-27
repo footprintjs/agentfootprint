@@ -47,6 +47,7 @@
 
 import { IdentityNotVerifiedError, VerifierUnavailableError } from './errors.js';
 import type { IdentityFailureClass } from './errors.js';
+import type { SignInSource } from './signin/types.js';
 
 /**
  * What a verifier proved. The badge, read after it was checked.
@@ -100,12 +101,18 @@ export interface IdentityVerifier {
 
 /**
  * How a host door is told to check badges — {@link StandingAgentBaseOptions.identity}.
+ *
+ * The 9.26 shape, unchanged for its callers (`verify` required), plus two
+ * optional additions: `signIn` (a sign-in the server keeps, named by the key
+ * the transport passes after stripping the sign-in cookie) and `tokenHeader`.
+ * A door that takes sign-ins ONLY is a {@link SignInOnlyIdentity}; every door
+ * accepts either, as a {@link DoorIdentity}.
  */
 export interface IdentityVerificationOptions {
-  /** The strategy. `jwksIdentity({ … })`, or any {@link IdentityVerifier}. */
+  /** The strategy. `jwksIdentity({ … })`, `oidcIdentity({ … })`, or any {@link IdentityVerifier}. */
   readonly verify: IdentityVerifier['verify'];
   /**
-   * Let a request that presents NO `Authorization` header through as anonymous.
+   * Let a request that presents NO credential through as anonymous.
    * Default **`false`** — configuring a verifier closes the door.
    *
    * The default is the load-bearing half. A door that verifies a token when one
@@ -119,7 +126,33 @@ export interface IdentityVerificationOptions {
    * `userId`: it is refused rather than served under a name nobody proved.
    */
   readonly allowAnonymous?: boolean;
+  /** The sign-ins this door ALSO accepts (`signInSource({ store, idleMinutes })`). */
+  readonly signIn?: SignInSource;
+  /**
+   * Which header carries the token, lower-case. Default `'authorization'`,
+   * read as `Bearer <token>`. Any other name is read as the raw token (a
+   * leading `Bearer ` is tolerated) — the header an authenticating proxy
+   * forwards a signed token in.
+   */
+  readonly tokenHeader?: string;
 }
+
+/**
+ * A door that accepts sign-ins only — no bearer tokens. A presented token is
+ * `unverifiable` there.
+ */
+export interface SignInOnlyIdentity {
+  readonly verify?: undefined;
+  /** The sign-ins this door accepts. */
+  readonly signIn: SignInSource;
+  /** As {@link IdentityVerificationOptions.allowAnonymous}. */
+  readonly allowAnonymous?: boolean;
+  /** As {@link IdentityVerificationOptions.tokenHeader}. */
+  readonly tokenHeader?: string;
+}
+
+/** What every door takes: a verifier (optionally with sign-ins), or sign-ins only. */
+export type DoorIdentity = IdentityVerificationOptions | SignInOnlyIdentity;
 
 /**
  * Pull the bearer token out of the delivered transport headers.
@@ -154,6 +187,23 @@ export function bearerToken(
 }
 
 /**
+ * The token a request presents under `options.tokenHeader` — `bearerToken` for
+ * the default `authorization`, the raw (trimmed) value for any other header.
+ */
+export function presentedToken(
+  headers: Readonly<Record<string, string>> | undefined,
+  tokenHeader: string | undefined,
+): string | undefined {
+  if (tokenHeader === undefined || tokenHeader.toLowerCase() === 'authorization') {
+    return bearerToken(headers);
+  }
+  const raw = headers?.[tokenHeader.toLowerCase()];
+  if (typeof raw !== 'string') return undefined;
+  const token = raw.replace(/^bearer\s+/i, '').trim();
+  return token.length > 0 ? token : undefined;
+}
+
+/**
  * Run one request's verification and hand back the proven identity — or refuse.
  *
  * Shared by every door on the composer (a turn, an artifact redemption, a
@@ -165,14 +215,29 @@ export function bearerToken(
  *                  request changes (the zero-delta path).
  * @param headers   the delivered transport headers.
  * @param claimedUserId  what the transport put on `HostRequest.userId`.
+ * @param signInKey what the transport put on `HostRequest.signInKey` — the
+ *                  sign-in cookie's key, the cookie itself already stripped.
+ *
+ * One credential per request (rule 13): a token AND a sign-in together are
+ * refused as `'two-credentials'` — which one to believe is not a question a
+ * door should answer. A sign-in that ended, expired or never existed is
+ * `'expired'`, one answer for all three. A sign-in store that cannot answer is
+ * {@link VerifierUnavailableError} (503), never a signed-out caller.
  */
 export async function verifyRequestIdentity(
-  options: IdentityVerificationOptions | undefined,
+  options: DoorIdentity | undefined,
   headers: Readonly<Record<string, string>> | undefined,
   claimedUserId: string | undefined,
+  signInKey?: string,
 ): Promise<VerifiedIdentity | undefined> {
   if (options === undefined) return undefined;
-  const token = bearerToken(headers);
+  const token = presentedToken(headers, options.tokenHeader);
+  if (signInKey !== undefined && token !== undefined) {
+    throw new IdentityNotVerifiedError('two-credentials', claimedUserId !== undefined);
+  }
+  if (signInKey !== undefined && options.signIn !== undefined) {
+    return accepted(await signedIn(options.signIn, signInKey), claimedUserId);
+  }
   if (token === undefined) {
     // No badge. Whether that is allowed is the operator's call — but a request
     // that NAMED a user without one is refused either way, because that is the
@@ -181,6 +246,9 @@ export async function verifyRequestIdentity(
     if (options.allowAnonymous === true) return undefined;
     throw new IdentityNotVerifiedError('no-token', false);
   }
+  // A token at a door that takes sign-ins only: nothing here can check it.
+  if (typeof options.verify !== 'function')
+    throw new IdentityNotVerifiedError('unverifiable', false);
   let verified: VerifiedIdentity;
   try {
     verified = await options.verify(token);
@@ -192,6 +260,25 @@ export async function verifyRequestIdentity(
       throw err;
     throw new IdentityNotVerifiedError('unverifiable', false);
   }
+  return accepted(verified, claimedUserId);
+}
+
+/** The person behind a sign-in key, or the refusal. A store fault is an outage. */
+async function signedIn(source: SignInSource, key: string): Promise<VerifiedIdentity> {
+  let who: VerifiedIdentity | undefined;
+  try {
+    who = await source.identify(key);
+  } catch (err) {
+    if (err instanceof IdentityNotVerifiedError || err instanceof VerifierUnavailableError)
+      throw err;
+    throw new VerifierUnavailableError('sign-in', 'its sign-in store could not answer');
+  }
+  if (who === undefined) throw new IdentityNotVerifiedError('expired', false);
+  return who;
+}
+
+/** The checks every proven identity passes, whichever credential proved it. */
+function accepted(verified: VerifiedIdentity, claimedUserId: string | undefined): VerifiedIdentity {
   if (
     verified === null ||
     typeof verified !== 'object' ||
