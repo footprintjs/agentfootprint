@@ -117,7 +117,7 @@ Whatever a tool returns is what the model reads next. When that value has limits
 | `coverage(value, { … })` | any other value that has limits | your value, with what was and was not checked | `tools.coverage_declared` |
 | `absent({ … })` | nothing matched | what was looked for, where, and that a retry returns the same | `tools.absent` |
 
-Never wrap one in another. Add `.limitsTravelWithTheAnswer()` and the declared coverage is appended to the final answer — provenance and grain never are.
+Never wrap one in another. Add `.limitsTravelWithTheAnswer()` and the declared coverage is appended to the final answer — or, for a typed `.outputSchema()` answer, returned beside it as data by `agent.answerCoverage()`. Provenance and grain never are.
 
 ```typescript
 import { absent, coverage, describedResult } from 'agentfootprint';

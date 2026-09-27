@@ -144,6 +144,24 @@ export interface AgentTurnEndPayload {
     readonly pendingToolCalls: number;
     readonly wrappedUp?: true;
   };
+  /**
+   * The limits of a TYPED answer, as data — present ONLY when the agent has an
+   * output schema and `.limitsTravelWithTheAnswer()`, and the run's tools
+   * declared something; absent on every other turn.
+   *
+   * A prose answer carries its limits as a block appended to `finalContent`.
+   * A typed answer cannot: it is JSON, and JSON followed by prose is not JSON.
+   * So `finalContent` stays the model's answer and the same limits ride here —
+   * what the tools `checked`, did not check and can never cover, folded across
+   * the run (duplicates said once, every entry kept). Mirrors the committed
+   * `answerCoverage` record (`agent.answerCoverage()`), never a second source
+   * of it.
+   */
+  readonly answerCoverage?: {
+    readonly checked: readonly CoverageItemPayload[];
+    readonly notChecked: readonly CoverageItemPayload[];
+    readonly cannotCover: readonly CoverageItemPayload[];
+  };
 }
 
 /**

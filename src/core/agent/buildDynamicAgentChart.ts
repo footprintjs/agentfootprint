@@ -71,6 +71,7 @@ import {
   prepareFinalWithLimitsAndAssumedStage,
   prepareFinalWithLimitsStage,
   prepareFinalWithValidationStage,
+  prepareFinalWithLimitsAsDataStage,
 } from './stages/prepareFinal.js';
 import { buildCacheSubflow } from './buildCacheSubflow.js';
 import type { AgentChartDeps } from './buildAgentChart.js';
@@ -177,6 +178,8 @@ export function buildDynamicAgentChart(deps: AgentChartDeps): FlowChart {
     // for why the fold happens HERE and not in a stage of its own.
     deps.hasAnswerValidation === true
       ? prepareFinalWithValidationStage
+      : deps.coverageLimitsAsData === true
+      ? prepareFinalWithLimitsAsDataStage
       : deps.attachCoverageLimits === true
       ? deps.inputsLayer !== undefined
         ? prepareFinalWithLimitsAndAssumedStage(deps.inputsLayer.rewrites === true)

@@ -66,6 +66,7 @@ import {
   prepareFinalWithLimitsAndAssumedStage,
   prepareFinalWithLimitsStage,
   prepareFinalWithValidationStage,
+  prepareFinalWithLimitsAsDataStage,
 } from './stages/prepareFinal.js';
 import { buildCacheSubflow } from './buildCacheSubflow.js';
 import { mountInputsLayer, type InputsMountDeps } from './honesty/mounts.js';
@@ -261,7 +262,8 @@ export interface AgentChartDeps {
   readonly hasEvidenceGate?: boolean;
 
   /**
-   * `.limitsTravelWithTheAnswer()` is configured (this release). Swaps the
+   * `.limitsTravelWithTheAnswer()` is configured on a PROSE answer (no output
+   * schema — a typed one sets `coverageLimitsAsData` instead). Swaps the
    * final branch's first stage for the variant that folds the run's declared
    * coverage into the answer before the turn payload is captured. Absent →
    * the same stage function the chart has always mounted, byte for byte; the
@@ -269,6 +271,17 @@ export interface AgentChartDeps {
    * not depend on this flag.
    */
   readonly attachCoverageLimits?: boolean;
+
+  /**
+   * `.limitsTravelWithTheAnswer()` on an agent with an output schema — the
+   * answer is TYPED, so its limits travel as DATA and the block is never
+   * appended (JSON followed by prose is not JSON). Swaps the final branch's
+   * first stage for the variant that captures the model's answer unchanged
+   * and projects the Route decider's committed `answerCoverage` onto
+   * `turn_end`. The Agent sets this OR `attachCoverageLimits`, never both;
+   * absent → the stage the chart has always mounted.
+   */
+  readonly coverageLimitsAsData?: boolean;
 
   /** Opt-in terminal guard and one committed token; absent preserves the original final stage. */
   readonly hasAnswerValidation?: boolean;
@@ -381,6 +394,8 @@ export function buildAgentChart(deps: AgentChartDeps): FlowChart {
     // for why the fold happens HERE and not in a stage of its own.
     deps.hasAnswerValidation === true
       ? prepareFinalWithValidationStage
+      : deps.coverageLimitsAsData === true
+      ? prepareFinalWithLimitsAsDataStage
       : deps.attachCoverageLimits === true
       ? deps.inputsLayer !== undefined
         ? prepareFinalWithLimitsAndAssumedStage(deps.inputsLayer.rewrites === true)

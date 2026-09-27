@@ -27,7 +27,7 @@
 
 import type { TypedScope } from 'footprintjs';
 import { typedEmit } from '../../../recorders/core/typedEmit.js';
-import { composeAnswerWithCoverage } from '../coverage/index.js';
+import { composeAnswerWithCoverage, copyCoverage, type Coverage } from '../coverage/index.js';
 import { HIDDEN_VALUE, type ArgumentRow } from '../arguments/rows.js';
 import { assumedBlock, type AssumedLine } from '../arguments/serve.js';
 import type { FindingsRow } from '../findings/types.js';
@@ -37,19 +37,24 @@ import type { AgentState } from '../types.js';
 /**
  * The stage body, with the answer passed IN.
  *
- * One body, two entry points. The answer is a parameter rather than a read of
- * `scope.llmLatestContent` because `.limitsTravelWithTheAnswer()` composes a
- * different one — and everything filed here (`finalContent`, `newMessages`,
- * which memory persists, and `turn_end.finalContent`) must agree about what
- * the answer WAS. Note that `llmLatestContent` itself is a READ-ONLY input to
- * this branch subflow, so there is no version of this where the composed
- * answer is written back over it: the capture is the only place all four
- * readers meet.
+ * One body, several entry points. The answer is a parameter rather than a
+ * read of `scope.llmLatestContent` because `.limitsTravelWithTheAnswer()`
+ * composes a different one — and everything filed here (`finalContent`,
+ * `newMessages`, which memory persists, and `turn_end.finalContent`) must
+ * agree about what the answer WAS. Note that `llmLatestContent` itself is a
+ * READ-ONLY input to this branch subflow, so there is no version of this
+ * where the composed answer is written back over it: the capture is the only
+ * place all four readers meet.
+ *
+ * `answerCoverage` is a typed answer's limits
+ * (`prepareFinalWithLimitsAsDataStage`), already detached: projected onto
+ * `turn_end` beside the answer, never into it.
  */
 const captureTurnPayload = (
   scope: TypedScope<AgentState>,
   answer: string,
   commitValidated = false,
+  answerCoverage?: Coverage,
 ): void => {
   const iteration = scope.iteration;
   scope.finalContent = answer;
@@ -111,6 +116,9 @@ const captureTurnPayload = (
         ...(cut.wrappedUp === true && { wrappedUp: true as const }),
       },
     }),
+    // A typed answer's limits, beside it — the same value-conditional grammar:
+    // a turn with nothing to carry emits the exact payload it always did.
+    ...(answerCoverage !== undefined && { answerCoverage }),
   });
 };
 
@@ -143,15 +151,43 @@ export const prepareFinalWithValidationStage = (scope: TypedScope<AgentState>): 
 };
 
 /**
+ * `.limitsTravelWithTheAnswer()` on a TYPED answer (`.outputSchema()`) — the
+ * SAME stage, with the answer left exactly as the model sent it and the limits
+ * carried beside it.
+ *
+ * Mounted in place of `prepareFinalStage` by both chart builders only when the
+ * agent has an output schema AND asked for its limits to travel. The block
+ * `prepareFinalWithLimitsStage` appends is prose, and a typed answer followed
+ * by prose is not JSON — `runTyped()` threw on every answer that had limits.
+ * So nothing is appended here: `finalContent`, the memory turn and
+ * `turn_end.finalContent` all carry the model's (peeled) answer, and the limits
+ * the block would have printed ride `turn_end.answerCoverage` — a projection
+ * of `AgentState.answerCoverage`, which the Route decider committed on the main
+ * chart (`./answerCoverage.ts` · `withAnswerCoverage`). The key is read only
+ * under this arm: a run that asked for neither never reads it.
+ */
+export const prepareFinalWithLimitsAsDataStage = (scope: TypedScope<AgentState>): void => {
+  const limits = scope.answerCoverage;
+  captureTurnPayload(
+    scope,
+    scope.llmLatestContent,
+    false,
+    limits === undefined ? undefined : copyCoverage(limits),
+  );
+};
+
+/**
  * `.limitsTravelWithTheAnswer()`'s half of prepare-final — the SAME stage,
  * with the run's declared coverage folded into the answer first.
  *
  * Mounted in place of `prepareFinalStage` by both chart builders when the
- * option is configured, and nowhere else: an agent that did not ask for it
- * runs the function above, byte for byte. Written as one stage rather than a
- * second one because everything the capture files must agree about what the
- * answer WAS — a second stage afterwards would leave `turn_end` reporting an
- * answer the caller never saw.
+ * option is configured on an answer with no output schema, and nowhere else:
+ * an agent that did not ask for it runs `prepareFinalStage`, byte for byte,
+ * and a TYPED answer runs `prepareFinalWithLimitsAsDataStage` (above), which
+ * appends nothing. Written as one stage rather than a second one because
+ * everything the capture files must agree about what the answer WAS — a
+ * second stage afterwards would leave `turn_end` reporting an answer the
+ * caller never saw.
  *
  * It runs AFTER the evidence gate has judged (the gate is in the Route
  * decider, one stage earlier). That ordering is deliberate: the block is

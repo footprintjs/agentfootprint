@@ -259,8 +259,9 @@ delivered status `'absent'` (route it with `onToolStatus: 'absent'`) and grounds
 COVERAGE in the evidence gate — so an id the model invented does not become grounded by one
 lookup that found nothing. It is never an error: nothing retries it, nothing refuses it, no
 `error: true`. Add `.limitsTravelWithTheAnswer()` on the agent and the framework APPENDS the
-run's declared coverage to the final answer string (not to streamed tokens; it breaks
-`runTyped()`'s JSON), so the model cannot drop what it never wrote.
+run's declared coverage to the final answer string (not to streamed tokens), so the model
+cannot drop what it never wrote. With `.outputSchema()` nothing is appended — the JSON stays
+parseable by `runTyped()` and the same limits come back as data: `agent.answerCoverage()`.
 
 ## Observing a run
 
