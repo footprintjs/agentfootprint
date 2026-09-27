@@ -5,6 +5,22 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [9.119.0] - 2026-09-27
+
+### Added
+
+- **`describedResult()` — return rows, a series or relationships with their caveats, declared in one spelling.** A tool that answers from a system of record returns `describedResult({ facts, series, edges, grain, provenance, coverage, clarify, render })`, and the model reads the data with the caveats that make it honest: `grain` (interval, aggregation, whether the values are counters), `provenance` (when the world was measured, and from where) and one `not_covered` line for each gap the tool declared. It mints the same envelope `semantic()` mints, byte for byte — the wire, `af_semantics`, `tools.semantics_declared`, `SEMANTICS_NOTE`, `canonical-notes.json`, the recognizers and `check:semantics` are unchanged — from a declaration that is camelCase throughout: `measuredAt`, `ageSeconds`, `sourceExportDate`, `isCounter`, `filterNote`, `chartHint`, beside the `notChecked` / `cannotCover` you already write. The envelope the model reads stays snake_case.
+
+  Three things the new door adds. **A missing source is a compile error:** `DescribedResultDeclaration` requires `provenance` whenever `series` or `facts` is present (an edges-only or clarify-only result needs none), so you meet the mistake in your editor instead of in a refusal the model reads. **One spelling:** a snake_case key is refused, naming the camelCase one (``refused: 'provenance.measured_at' is not a field this vocabulary has — did you mean `measuredAt`?``), and every rule's refusal names the field as you spelled it (`grain.isCounter`, `provenance.measuredAt`). **Its own input type:** the camelCase declaration never widens the wire types, so `ToolSemantics.provenance` still has exactly `measured_at`, `age_seconds`, `source` and `source_export_date`.
+
+  `check:semantics` now tells a triage or inventory tool with no coverage to `Return describedResult({ …, coverage: { checked, notChecked, cannotCover } })`. The docs page "Semantic tool results" is now "Described tool results" (same address), with where the envelope lives — the tool's response; nothing enters the system prompt or the tool schema; the model reads a projection without your `checked` list; the record keeps everything; only coverage reaches the final answer — and how to take `measuredAt` from the data. The Tools page, the README and the coding-assistant skill now carry one table: rows from a system of record → `describedResult()`, any other value that has limits → `coverage()`, nothing matched → `absent()`, never one wrapped in another — and the Tools page prints exactly what the model reads from each. The `.limitsTravelWithTheAnswer()` docs now say what it rewrites: the answer string (`agent.run()`'s value, `turn_end.finalContent`, the turn's memory write), not the streamed tokens; with `.outputSchema()` the appended block makes `runTyped()` fail its JSON parse; and these limits are not `.answerValidation({ limits })`. The runnable example no longer marks one day's count of backup runs as a counter: a per-day count adds up to the week's total, so it is `isCounter: false`.
+
+### Deprecated
+
+- **`semantic()` is deprecated in favour of `describedResult()`.** The name read as semantic search — a word this library already uses for vector retrieval — and its declaration mixed the wire's snake_case names (`measured_at`, `is_counter`, `filter_note`) with camelCase ones (`notChecked`). `describedResult()` mints the same envelope, byte for byte, from a camelCase declaration, and makes a missing `provenance` beside `series` or `facts` a compile error. `semantic()` keeps working exactly as before — same declaration, same bytes, same refusals — and is marked `@deprecated` in its TSDoc only: no warning is printed. Which major removes it is not decided.
+
+  To migrate, rename the call and respell six keys: `measured_at` → `measuredAt`, `age_seconds` → `ageSeconds`, `source_export_date` → `sourceExportDate`, `is_counter` → `isCounter`, `filter_note` → `filterNote`, `chart_hint` → `chartHint`. Each door takes one spelling and refuses the other, naming the one it takes, so a call where only the name changed is refused at that line — nothing is minted without the field.
+
 ## [9.118.1] - 2026-09-27
 
 ### Fixed
