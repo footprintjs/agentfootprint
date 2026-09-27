@@ -356,8 +356,11 @@ export interface Tool<TArgs = Record<string, unknown>, TResult = unknown> {
    * does when a call leaves an argument out. `{ assume: value }`: the library
    * FILLS the value (the tool never does) and files it on the findings ledger
    * as `default`, so the answer's standing says the value was assumed.
-   * `{ ask: question, choices? }` is judged and refused in this version (the
-   * batch ask ships with the inputs layer's next step).
+   * `{ ask: question, choices? }`: the PERSON gives the value — the library
+   * asks ONCE for everything a batch of calls left out, before anything in the
+   * batch runs, through the typed input pause (`isInputPause`,
+   * `agent.resume(checkpoint, { requestId, values })`), and files the answer
+   * as `answered`. A present value runs as sent, filed as the model's own.
    *
    * The served copy of the schema drops a ruled argument from `required` and
    * says the rule in the property's description; the registry schema — which
@@ -371,6 +374,7 @@ export interface Tool<TArgs = Record<string, unknown>, TResult = unknown> {
    * @example
    * ```ts
    * askOrAssume: { window: { assume: '2h' } }
+   * askOrAssume: { window: { ask: 'Which period should the search cover?', choices: ['1h', '24h'] } }
    * ```
    */
   readonly askOrAssume?: AskOrAssume;

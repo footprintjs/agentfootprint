@@ -45,6 +45,7 @@ grows as later honesty steps commit new rows.
 | Reason | Layer | Read from |
 |---|---|---|
 | `asked` | every | `pausedToolCallId`: the call a pause is still waiting on — a typed input (`requestInput`), a question (`askHuman` / `pauseHere`), a consent gate (a tool's `checkIn`, a middleware's `ask`) or a credential consent; never the pause event |
+| `argument-asked` | 2 | `argumentAsk`: the inputs layer's batch ask with a question still out (`waiting`) — nothing in that batch has run; this turn's current `asked` rows on `findingsLedger` name the values; never the pause event |
 | `argument-assumed` | 2 | `findingsLedger`: an `argument` row of this turn with `source: 'default'` — a tool's `askOrAssume` rule filled the value, or the model sent that same default; or `middlewareDecisions`: a before-tool rewrite of a ruled argument (`changedKeys`) with no declared origin (`allow(args, why, { from })`) |
 | `argument-unverified` | 2 | `findingsLedger`: an `argument` row of this turn with `source: 'model'` on a ruled argument, or with a failed declared-source check |
 | `coverage-gap` | 3 | `coverageDeclared`: a `notChecked` or `cannotCover` item on a call of this turn; or `history`: the result's own envelope lists one, when its call has no coverage row |
@@ -92,7 +93,7 @@ The standing is about an answer, so the turn's end is settled first:
 | The turn ended | `agent.assessment()` | `assessAnswer(recording)` | the account's "How sure" |
 |---|---|---|---|
 | in an answer | the fold | the fold | the fold |
-| in a pause (any kind) | `ask` | `ask` | "Ask — the run stopped to ask a question before it could answer:" |
+| in a pause (any kind — the library's own batch ask included, `argument-asked`) | `ask` | `ask` | "Ask — the run stopped to ask a question before it could answer:" |
 | in an error before any answer (it threw, or a rule halted it — a policy halt, a fail-fast, an input denial) | `undefined` | not settled — see Not covered | "How sure cannot be told: this record does not show the run giving an answer." (no `turn_end`) |
 | in an answer a rule then refused (`UnsupportedValuesError`, `AnswerValidationError`, …) | `undefined` — `run()` returned no answer; the typed error carries the verdict | the fold | the fold — the record holds the answer (a `turn_end`), and the account explains that one |
 

@@ -1,0 +1,585 @@
+{
+  "commitLog": [
+    {
+      "idx": 0,
+      "overwrite": {
+        "findingsLedger": [
+          {
+            "argument": "window",
+            "iteration": 1,
+            "kind": "argument",
+            "period": true,
+            "rule": "ask",
+            "source": "answered",
+            "toolCallId": "c1",
+            "toolName": "search_logs",
+            "turn": 1,
+            "value": "24h"
+          }
+        ],
+        "history": [
+          {
+            "content": "",
+            "role": "assistant",
+            "toolCalls": [
+              {
+                "args": {
+                  "service": "checkout"
+                },
+                "id": "c1",
+                "name": "search_logs"
+              }
+            ]
+          },
+          {
+            "content": "{\"service\":\"checkout\",\"errors\":0}\n\n[window = \"24h\" in the search_logs call this result answers was chosen by the person when asked (the call had left it out).]",
+            "role": "tool",
+            "toolCallId": "c1",
+            "toolChars": 33,
+            "toolName": "search_logs"
+          }
+        ],
+        "iteration": 2,
+        "lastToolResult": {
+          "result": "{\"service\":\"checkout\",\"errors\":0}\n\n[window = \"24h\" in the search_logs call this result answers was chosen by the person when asked (the call had left it out).]",
+          "toolName": "search_logs"
+        },
+        "toolResults": [
+          {
+            "result": "{\"service\":\"checkout\",\"errors\":0}\n\n[window = \"24h\" in the search_logs call this result answers was chosen by the person when asked (the call had left it out).]",
+            "toolCallId": "c1",
+            "toolName": "search_logs"
+          }
+        ]
+      },
+      "redactedPaths": [],
+      "runtimeStageId": "tool-calls#26",
+      "stage": "ToolCalls",
+      "stageId": "tool-calls",
+      "tags": [
+        "milestone:tool-call",
+        "milestone-label:Tool call"
+      ],
+      "trace": [
+        {
+          "path": "findingsLedger",
+          "verb": "append"
+        },
+        {
+          "path": "argumentAsk",
+          "verb": "set"
+        },
+        {
+          "path": "lastToolResult",
+          "verb": "set"
+        },
+        {
+          "path": "toolResults",
+          "verb": "set"
+        },
+        {
+          "path": "history",
+          "verb": "append"
+        },
+        {
+          "path": "iteration",
+          "verb": "set"
+        }
+      ],
+      "updates": {}
+    },
+    {
+      "idx": 1,
+      "overwrite": {},
+      "redactedPaths": [],
+      "runtimeStageId": "sf-injection-engine#27",
+      "stage": "Injection Engine",
+      "stageId": "sf-injection-engine",
+      "tags": [
+        "milestone:iteration",
+        "milestone-label:Iteration"
+      ],
+      "trace": [],
+      "updates": {}
+    },
+    {
+      "idx": 2,
+      "overwrite": {},
+      "redactedPaths": [],
+      "runtimeStageId": "sf-injection-engine#27",
+      "stage": "Injection Engine",
+      "stageId": "sf-injection-engine",
+      "trace": [],
+      "updates": {}
+    },
+    {
+      "idx": 3,
+      "overwrite": {},
+      "redactedPaths": [],
+      "runtimeStageId": "context#32",
+      "stage": "Context",
+      "stageId": "context",
+      "trace": [],
+      "updates": {}
+    },
+    {
+      "idx": 4,
+      "overwrite": {},
+      "redactedPaths": [],
+      "runtimeStageId": "context#32",
+      "stage": "Context",
+      "stageId": "context",
+      "trace": [],
+      "updates": {}
+    },
+    {
+      "idx": 5,
+      "overwrite": {},
+      "redactedPaths": [],
+      "runtimeStageId": "sf-system-prompt#33",
+      "stage": "System Prompt",
+      "stageId": "sf-system-prompt",
+      "tags": [
+        "milestone:slot",
+        "milestone-label:System prompt"
+      ],
+      "trace": [],
+      "updates": {}
+    },
+    {
+      "idx": 6,
+      "overwrite": {
+        "messagesInjections": [
+          {
+            "asRecency": "earlier",
+            "asRole": "user",
+            "contentHash": "bce8e74",
+            "contentSummary": "go",
+            "position": 0,
+            "rawContent": "go",
+            "reason": "conversation history [0]",
+            "slot": "messages",
+            "source": "user"
+          },
+          {
+            "asRecency": "earlier",
+            "asRole": "assistant",
+            "contentHash": "62db47c8",
+            "contentSummary": "",
+            "position": 1,
+            "rawContent": "",
+            "reason": "conversation history [1]",
+            "slot": "messages",
+            "source": "assistant"
+          },
+          {
+            "asRecency": "latest",
+            "asRole": "tool",
+            "contentHash": "f55e1e09",
+            "contentSummary": "{\"service\":\"checkout\",\"errors\":0}\n\n[window = \"24h\" in the search_logs call this…",
+            "position": 2,
+            "rawContent": "{\"service\":\"checkout\",\"errors\":0}\n\n[window = \"24h\" in the search_logs call this result answers was chosen by the person when asked (the call had left it out).]",
+            "reason": "conversation history [2]",
+            "slot": "messages",
+            "source": "tool-result",
+            "sourceId": "c1"
+          }
+        ]
+      },
+      "redactedPaths": [],
+      "runtimeStageId": "context#32",
+      "stage": "Context",
+      "stageId": "context",
+      "trace": [
+        {
+          "path": "messagesInjections",
+          "verb": "set"
+        }
+      ],
+      "updates": {}
+    },
+    {
+      "idx": 7,
+      "overwrite": {},
+      "redactedPaths": [],
+      "runtimeStageId": "sf-messages#35",
+      "stage": "Messages",
+      "stageId": "sf-messages",
+      "tags": [
+        "milestone:slot",
+        "milestone-label:Messages"
+      ],
+      "trace": [],
+      "updates": {}
+    },
+    {
+      "idx": 8,
+      "overwrite": {},
+      "redactedPaths": [],
+      "runtimeStageId": "sf-system-prompt#33",
+      "stage": "System Prompt",
+      "stageId": "sf-system-prompt",
+      "trace": [],
+      "updates": {}
+    },
+    {
+      "idx": 9,
+      "overwrite": {},
+      "redactedPaths": [],
+      "runtimeStageId": "sf-messages#35",
+      "stage": "Messages",
+      "stageId": "sf-messages",
+      "trace": [],
+      "updates": {}
+    },
+    {
+      "idx": 10,
+      "overwrite": {},
+      "redactedPaths": [],
+      "runtimeStageId": "context#32",
+      "stage": "Context",
+      "stageId": "context",
+      "trace": [],
+      "updates": {}
+    },
+    {
+      "idx": 11,
+      "overwrite": {},
+      "redactedPaths": [],
+      "runtimeStageId": "sf-tools#37",
+      "stage": "Tools",
+      "stageId": "sf-tools",
+      "tags": [
+        "milestone:slot",
+        "milestone-label:Tools"
+      ],
+      "trace": [],
+      "updates": {}
+    },
+    {
+      "idx": 12,
+      "overwrite": {},
+      "redactedPaths": [],
+      "runtimeStageId": "sf-tools#37",
+      "stage": "Tools",
+      "stageId": "sf-tools",
+      "trace": [],
+      "updates": {}
+    },
+    {
+      "idx": 13,
+      "overwrite": {},
+      "redactedPaths": [],
+      "runtimeStageId": "sf-cache#40",
+      "stage": "Cache",
+      "stageId": "sf-cache",
+      "trace": [],
+      "updates": {}
+    },
+    {
+      "idx": 14,
+      "overwrite": {},
+      "redactedPaths": [],
+      "runtimeStageId": "sf-cache#40",
+      "stage": "Cache",
+      "stageId": "sf-cache",
+      "trace": [],
+      "updates": {}
+    },
+    {
+      "idx": 15,
+      "overwrite": {
+        "llmLatestContent": "No errors.",
+        "llmLatestToolCalls": [],
+        "receipt": {
+          "basis": {
+            "epoch": 2,
+            "model": "mock",
+            "provider": "byte-identity-mock",
+            "runId": "<volatile>"
+          },
+          "cache": {
+            "markersApplied": [],
+            "strategy": "*",
+            "transform": "unchanged",
+            "transformHash": null
+          },
+          "messages": {
+            "count": 3,
+            "entries": [
+              {
+                "hash": "<digest>",
+                "role": "user"
+              },
+              {
+                "hash": "<digest>",
+                "role": "assistant"
+              },
+              {
+                "hash": "<digest>",
+                "key": "c1",
+                "role": "tool"
+              }
+            ],
+            "requestOnly": []
+          },
+          "params": {},
+          "requestMeasurement": {
+            "boundary": "initial-prepared-request",
+            "format": "json-utf8-v1",
+            "slots": {
+              "messages": {
+                "jsonBytes": 384,
+                "jsonChars": 384
+              },
+              "systemPrompt": {
+                "jsonBytes": 5,
+                "jsonChars": 5
+              },
+              "tools": {
+                "jsonBytes": 395,
+                "jsonChars": 395
+              }
+            },
+            "status": "measured",
+            "total": {
+              "jsonBytes": 837,
+              "jsonChars": 837
+            }
+          },
+          "system": {
+            "chars": 3,
+            "hash": "<digest>",
+            "pieces": [
+              {
+                "hash": "<digest>",
+                "slot": "system-prompt",
+                "source": "base"
+              }
+            ]
+          },
+          "tools": {
+            "forced": null,
+            "names": [
+              "search_logs"
+            ],
+            "schemaHashes": {
+              "search_logs": "<digest>"
+            },
+            "withheld": null
+          }
+        }
+      },
+      "redactedPaths": [],
+      "runtimeStageId": "call-llm#44",
+      "stage": "CallLLM",
+      "stageId": "call-llm",
+      "tags": [
+        "milestone:llm-turn",
+        "milestone-label:LLM turn"
+      ],
+      "trace": [
+        {
+          "path": "receipt",
+          "verb": "set"
+        },
+        {
+          "path": "llmLatestContent",
+          "verb": "set"
+        },
+        {
+          "path": "llmLatestToolCalls",
+          "verb": "set"
+        }
+      ],
+      "updates": {}
+    },
+    {
+      "idx": 16,
+      "overwrite": {},
+      "redactedPaths": [],
+      "runtimeStageId": "sf-inputs#45",
+      "stage": "Inputs",
+      "stageId": "sf-inputs",
+      "tags": [
+        "milestone:decision",
+        "milestone-label:Inputs"
+      ],
+      "trace": [],
+      "updates": {}
+    },
+    {
+      "idx": 17,
+      "overwrite": {},
+      "redactedPaths": [],
+      "runtimeStageId": "sf-inputs#45",
+      "stage": "Inputs",
+      "stageId": "sf-inputs",
+      "trace": [],
+      "updates": {}
+    },
+    {
+      "idx": 18,
+      "overwrite": {
+        "answerGuarantee": "none"
+      },
+      "redactedPaths": [],
+      "runtimeStageId": "sf-route#50",
+      "stage": "Route",
+      "stageId": "sf-route",
+      "tags": [
+        "milestone:decision",
+        "milestone-label:Route"
+      ],
+      "trace": [
+        {
+          "path": "answerGuarantee",
+          "verb": "set"
+        }
+      ],
+      "updates": {}
+    },
+    {
+      "idx": 19,
+      "overwrite": {},
+      "redactedPaths": [],
+      "runtimeStageId": "sf-route#50",
+      "stage": "Route",
+      "stageId": "sf-route",
+      "trace": [
+        {
+          "path": "finalContent",
+          "verb": "set"
+        }
+      ],
+      "updates": {}
+    },
+    {
+      "idx": 20,
+      "overwrite": {},
+      "redactedPaths": [],
+      "runtimeStageId": "final#51",
+      "stage": "Final",
+      "stageId": "final",
+      "tags": [
+        "milestone:decision",
+        "milestone-label:Answer"
+      ],
+      "trace": [],
+      "updates": {}
+    }
+  ],
+  "served": [
+    {
+      "epoch": 2,
+      "view": {
+        "basis": {
+          "model": "mock",
+          "provider": "byte-identity-mock",
+          "runId": "<volatile>"
+        },
+        "callRuntimeStageId": "call-llm#44",
+        "epoch": 2,
+        "gaps": [
+          {
+            "fields": [
+              "cache.transform",
+              "cache.transformHash",
+              "cache.markersApplied",
+              "cache.strategy",
+              "system.hash",
+              "system.chars",
+              "system.pieces",
+              "messages.count",
+              "messages.entries",
+              "messages.requestOnly",
+              "tools.names",
+              "tools.schemaHashes",
+              "tools.forced",
+              "tools.withheld"
+            ],
+            "gap": "cache-transform",
+            "why": "What reached the provider may differ from the fields below, and nothing on this view would show it. Where another gap on this view covers one of them, that gap is the stronger claim."
+          },
+          {
+            "fields": [
+              "params"
+            ],
+            "gap": "provider-defaults",
+            "why": "A dial absent below was not recorded; that is not the same as the model running without one. A receipt describes the request as this library last saw it. Whatever handled it after that could have changed it, and nothing on the receipt would show that."
+          }
+        ],
+        "messages": {
+          "asSent": [
+            {
+              "content": "go",
+              "role": "user"
+            },
+            {
+              "content": "",
+              "role": "assistant",
+              "toolCalls": [
+                {
+                  "args": {
+                    "service": "checkout"
+                  },
+                  "id": "c1",
+                  "name": "search_logs"
+                }
+              ]
+            },
+            {
+              "content": "{\"service\":\"checkout\",\"errors\":0}\n\n[window = \"24h\" in the search_logs call this result answers was chosen by the person when asked (the call had left it out).]",
+              "role": "tool",
+              "toolCallId": "c1",
+              "toolName": "search_logs"
+            }
+          ],
+          "requestOnly": []
+        },
+        "system": {
+          "pieces": [
+            {
+              "slot": "system-prompt",
+              "source": "base",
+              "text": "bot"
+            }
+          ],
+          "text": "bot"
+        },
+        "tools": {
+          "names": [
+            "search_logs"
+          ],
+          "schemas": [
+            {
+              "description": "Error lines for one service over a look-back period.",
+              "inputSchema": {
+                "properties": {
+                  "service": {
+                    "description": "Service name.",
+                    "type": "string"
+                  },
+                  "window": {
+                    "description": "Look-back period. The tool's rule asks the person for this value; leave it out unless the person gave it.",
+                    "enum": [
+                      "1h",
+                      "2h",
+                      "24h"
+                    ],
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "service"
+                ],
+                "type": "object"
+              },
+              "name": "search_logs"
+            }
+          ]
+        }
+      }
+    }
+  ]
+}

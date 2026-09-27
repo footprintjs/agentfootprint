@@ -384,6 +384,13 @@ export function exemptFromRun(args: {
    * a value in the system prompt. Absent → the corpus it always was.
    */
   readonly declaredDefaults?: readonly string[];
+  /**
+   * The values the PERSON gave this turn by answering the inputs layer's
+   * batch ask (honesty layer 2, step 4) — read from this turn's `answered`
+   * rows. The library's ask writes no message, so this is the one door the
+   * answer reaches the gate through. Absent → the corpus it always was.
+   */
+  readonly answeredValues?: readonly string[];
 }): ReadonlySet<string> {
   // The same accumulator, walked with no turn boundaries: an exemption is a
   // fact about WHO supplied a value, and the turn it arrived in changes
@@ -418,6 +425,12 @@ export function exemptFromRun(args: {
   // A tool's declared default is the app's declaration (honesty layer 2): the
   // value itself and its tokens, exactly as a prompt's text is indexed.
   for (const value of args.declaredDefaults ?? []) {
+    add(sink, value);
+    addText(sink, value);
+  }
+  // The person's answer to the library's ask: their own words, exempt like a
+  // value in their message (honesty layer 2, step 4).
+  for (const value of args.answeredValues ?? []) {
     add(sink, value);
     addText(sink, value);
   }

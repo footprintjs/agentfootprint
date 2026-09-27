@@ -4,7 +4,7 @@ title: InputResponse
 
 # Interface: InputResponse
 
-Defined in: [src/core/inputRequest.ts:54](https://github.com/footprintjs/agentfootprint/blob/main/src/core/inputRequest.ts#L54)
+Defined in: [src/core/inputRequest.ts:61](https://github.com/footprintjs/agentfootprint/blob/main/src/core/inputRequest.ts#L61)
 
 ## Properties
 
@@ -12,7 +12,7 @@ Defined in: [src/core/inputRequest.ts:54](https://github.com/footprintjs/agentfo
 
 > `readonly` **requestId**: `string`
 
-Defined in: [src/core/inputRequest.ts:55](https://github.com/footprintjs/agentfootprint/blob/main/src/core/inputRequest.ts#L55)
+Defined in: [src/core/inputRequest.ts:62](https://github.com/footprintjs/agentfootprint/blob/main/src/core/inputRequest.ts#L62)
 
 ***
 
@@ -20,4 +20,4 @@ Defined in: [src/core/inputRequest.ts:55](https://github.com/footprintjs/agentfo
 
 > `readonly` **values**: `Readonly`\<`Record`\<`string`, [`InputValue`](/docs/api/type-aliases/InputValue)\>\>
 
-Defined in: [src/core/inputRequest.ts:56](https://github.com/footprintjs/agentfootprint/blob/main/src/core/inputRequest.ts#L56)
+Defined in: [src/core/inputRequest.ts:63](https://github.com/footprintjs/agentfootprint/blob/main/src/core/inputRequest.ts#L63)

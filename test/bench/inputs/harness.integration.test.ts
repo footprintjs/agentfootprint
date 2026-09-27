@@ -24,6 +24,7 @@ import { describe, expect, it } from 'vitest';
 import { CASES, FOLD_DECLARATIONS, caseById } from '../../../bench/inputs/cases.mjs';
 import {
   PRICES,
+  answerLibraryAsk,
   buildTools,
   costOf,
   reduceRecording,
@@ -302,6 +303,53 @@ describe('FUNCTIONAL — the record the bench keeps', () => {
     ]);
   });
 
+  it('step 4: the simulated person answers the library’s ask with the case’s meant period', async () => {
+    const caseDef = caseById('p1-checkout-errors');
+    const rep = caseDef.mock.findIndex(
+      (v: any) => v.label === 'leaves the period out; states no window',
+    );
+    const raw = await runCase({ doors, caseDef, arm: 'ask', rep, provider: 'mock', model: 'mock' });
+    expect(raw.mockExhausted).toBeUndefined();
+    // The call ran with the period the person means — never the model's value, never a default.
+    const ran = raw.execLog.filter((e: any) => e.tool === 'search_logs');
+    expect(ran.map((e: any) => e.received.window)).toEqual(['24h']);
+    // One ask, answered from the case's `means`, nothing unexpected.
+    expect(raw.turns[0].asks).toEqual([{ fields: { f1: '24h' }, unexpected: [] }]);
+    expect(typeof raw.turns[0].answer).toBe('string');
+    // The bench's reader: the period call ran with what the person meant, its current row is
+    // `answered`, and it was asked for; the standing is not left waiting.
+    const row = readRun(raw);
+    expect(row.complete).toBe(true);
+    expect(row.periodCalls).toEqual([
+      expect.objectContaining({
+        tool: 'search_logs',
+        origin: 'omitted',
+        ranWith: '24h',
+        meant: true,
+        row: { source: 'answered' },
+        askedFor: true,
+      }),
+    ]);
+    expect(raw.standing.reasons).not.toContain('argument-asked');
+  });
+
+  it('step 4: an ask for a pair the case never expects is answered with the declared default and counted', () => {
+    const caseDef = caseById('c2-list-services');
+    const answered = answerLibraryAsk(caseDef, {
+      requestId: 'r',
+      context: {
+        agentfootprint: {
+          ask: 'arguments',
+          fields: [{ id: 'f1', tool: 'search_logs', argument: 'window', calls: ['c1'] }],
+        },
+      },
+    });
+    expect(answered.reply.values.f1).toBeDefined();
+    expect(answered.unexpected).toEqual([{ tool: 'search_logs', argument: 'window' }]);
+    // A pause that is not the library's ask is not answered.
+    expect(answerLibraryAsk(caseDef, { requestId: 'r', context: { app: 1 } })).toBeUndefined();
+  });
+
   it('a declared arm the library drops is refused — never run unarmed', () => {
     // A defineTool that drops the declaration is refused by the harness, not run unarmed.
     const dropping = {
@@ -318,8 +366,12 @@ describe('FUNCTIONAL — the record the bench keeps', () => {
         .filter((t: any) => t.askOrAssume !== undefined)
         .map((t: any) => t.schema.name),
     ).toEqual(['search_logs', 'io_profile', 'net_flows']);
-    // `ask` is refused by the library itself until step 4 ships the one ask per batch.
-    expect(() => buildTools(doors, 'ask', [], { turn: 0 })).toThrow(/step 4/);
+    // Step 4's build declares `ask` on the same three period tools and keeps it.
+    expect(
+      buildTools(doors, 'ask', [], { turn: 0 })
+        .filter((t: any) => t.askOrAssume !== undefined)
+        .map((t: any) => t.schema.name),
+    ).toEqual(['search_logs', 'io_profile', 'net_flows']);
     expect(buildTools(doors, 'off', [], { turn: 0 }).map((t: any) => t.schema.name)).toEqual([
       'search_logs',
       'io_profile',

@@ -3,8 +3,9 @@
  *
  * Pattern: Lens. Pure composers, one per served surface: the ruled tool's
  *          SCHEMA (a rebuilt copy per request, never the registry reference),
- *          the past-tense NOTE on a result whose call ran on a filled value,
- *          the REFUSALS a call reads when it does not run, and the "Assumed"
+ *          the past-tense NOTE on a result whose call ran on a filled value
+ *          (a declared default, or the person's answer to the batch ask), the
+ *          REFUSALS a call reads when it does not run, and the "Assumed"
  *          block under an existing `.limitsTravelWithTheAnswer()`.
  * Role:    core/ layer leaf of the inputs layer (honesty layer 2). Every
  *          sentence here is registered in `test/modelFacingSurfaces.test.ts`:
@@ -57,6 +58,18 @@ export function assumeSentence(value: InputValue, hidden: boolean): string {
     : `If left out, the tool's rule fills ${printedValue(value)}, recorded as assumed.`;
 }
 
+// LENS · tool-description · persistent-history
+// reads: the tool's own `ask` rule — nothing about the call, the model or the person
+// law: says what the model may do and what the record keeps; promises no outcome (the call may still
+// be denied by permission, refused, or asked about again).
+/**
+ * The sentence a ruled `ask` property carries in the served schema: the rule
+ * asks the person for the value, so the model may leave it out — and should,
+ * unless the person gave it. No value is printed: an `ask` rule has no default.
+ */
+export const ASK_SENTENCE =
+  "The tool's rule asks the person for this value; leave it out unless the person gave it.";
+
 function withSentence(property: PlainObject, sentence: string): PlainObject {
   const description = property.description;
   const text =
@@ -71,14 +84,15 @@ function withSentence(property: PlainObject, sentence: string): PlainObject {
 // decoration site) and core/agent/stages/seed.ts (its static twin); servedView rebuilds from the
 // committed list, so the decoration is a pure function of (schema, tool).
 /**
- * The served copy of a ruled tool's schema: every argument an `assume` rule
- * governs leaves `required` (the library fills it when the call leaves it
- * out) and its property's description gains the rule's sentence. A rebuilt
- * copy — the registry schema, which `validateToolArgs` judges and `mcpServe`
- * serves, is never edited. The SAME reference back for a tool with no rules,
- * rules that cannot be read (the dispatch re-read refuses its calls) or no
- * tool at all (a chart with no claimant record) — so an agent whose tools
- * declare nothing serves the bytes it always did.
+ * The served copy of a ruled tool's schema: every argument an `assume` or an
+ * `ask` rule governs leaves `required` (the library fills it, or asks the
+ * person for it, when the call leaves it out) and its property's description
+ * gains the rule's sentence. A rebuilt copy — the registry schema, which
+ * `validateToolArgs` judges and `mcpServe` serves, is never edited. The SAME
+ * reference back for a tool with no rules, rules that cannot be read (the
+ * dispatch re-read refuses its calls) or no tool at all (a chart with no
+ * claimant record) — so an agent whose tools declare nothing serves the bytes
+ * it always did.
  *
  * @example
  * ```ts
@@ -91,20 +105,27 @@ export function withArgumentRules(
 ): LLMToolSchema {
   const rules = rulesOf(tool);
   if (rules === undefined || isRefused(rules)) return schema;
-  const assumed = rules.ruled.filter((r) => r.rule === 'assume' && r.assume !== undefined);
-  if (assumed.length === 0) return schema;
+  const served = rules.ruled.filter(
+    (r) =>
+      (r.rule === 'assume' && r.assume !== undefined) || (r.rule === 'ask' && r.ask !== undefined),
+  );
+  if (served.length === 0) return schema;
   const input = schema.inputSchema;
   const properties = isPlainObject(input.properties) ? { ...input.properties } : {};
-  for (const r of assumed) {
+  for (const r of served) {
     const property = properties[r.argument];
     if (!isPlainObject(property)) continue;
+    if (r.rule === 'ask') {
+      properties[r.argument] = withSentence(property, ASK_SENTENCE);
+      continue;
+    }
     const value = r.assume as InputValue;
     properties[r.argument] = withSentence(
       property,
       assumeSentence(value, hidesArgument(tool, r.argument, value)),
     );
   }
-  const ruledNames = new Set(assumed.map((r) => r.argument));
+  const ruledNames = new Set(served.map((r) => r.argument));
   const required = Array.isArray(input.required)
     ? (input.required as readonly unknown[]).filter(
         (name) => !(typeof name === 'string' && ruledNames.has(name)),
@@ -129,6 +150,8 @@ export interface FilledArgument {
   readonly argument: string;
   readonly value: InputValue;
   readonly hidden: boolean;
+  /** `answered`: the person's answer to the batch ask filled it. Absent: the tool's rule assumed it. */
+  readonly source?: 'answered';
 }
 
 // LENS · tool-result · persistent-history
@@ -159,15 +182,31 @@ export interface FilledArgument {
 export function filledNote(toolName: string, fills: readonly FilledArgument[]): string {
   return fills
     .map((f) =>
-      f.hidden
-        ? `\n\n[${f.argument} was not in the ${toolName} call this result answers; the call ran ` +
-          "with the value the tool's rule assumes (the value is hidden by the tool's view) — " +
-          "recorded as assumed, not as the person's.]"
-        : `\n\n[${f.argument} was not in the ${toolName} call this result answers; the call ran ` +
-          `with ${printedValue(f.value)}, the value the tool's rule assumes — recorded as ` +
-          "assumed, not as the person's.]",
+      f.source === 'answered' ? answeredClause(toolName, f) : assumedClause(toolName, f),
     )
     .join('');
+}
+
+function assumedClause(toolName: string, f: FilledArgument): string {
+  return f.hidden
+    ? `\n\n[${f.argument} was not in the ${toolName} call this result answers; the call ran ` +
+        "with the value the tool's rule assumes (the value is hidden by the tool's view) — " +
+        "recorded as assumed, not as the person's.]"
+    : `\n\n[${f.argument} was not in the ${toolName} call this result answers; the call ran ` +
+        `with ${printedValue(f.value)}, the value the tool's rule assumes — recorded as ` +
+        "assumed, not as the person's.]";
+}
+
+// LENS · tool-result · persistent-history
+// reads: the call's answered fill (the batch ask's answer bound to this toolCallId), kept only where the
+//        call RAN with it (`stages/toolCalls.ts` · `fillsThatRan`)
+// law: may omit, never deny; past tense, naming the call this result answers.
+function answeredClause(toolName: string, f: FilledArgument): string {
+  return f.hidden
+    ? `\n\n[${f.argument} in the ${toolName} call this result answers was chosen by the person ` +
+        "when asked (the value is hidden by the tool's view; the call had left it out).]"
+    : `\n\n[${f.argument} = ${printedValue(f.value)} in the ${toolName} call this result answers ` +
+        'was chosen by the person when asked (the call had left it out).]';
 }
 
 // ─── The refusals ───────────────────────────────────────────────────────
@@ -192,6 +231,51 @@ export function unreadableRulesRefusal(toolName: string, reason: string): string
  */
 export function unmountedRulesRefusal(toolName: string): string {
   return `${toolName} was not run on that call: it declares argument rules this agent was not built to apply.`;
+}
+
+// LENS · tool-result · persistent-history
+// reads: the batch ask's settled state — the arguments whose answers never fit, and the rule they failed
+// law: may omit, never deny; every clause anchored to the call it was composed on.
+/**
+ * The result a call reads when the person was asked for a ruled argument
+ * `MAX_ASK_ROUNDS` times and no answer fitted what the tool accepts — the call
+ * does not run. `expected` is the property schema's own expectation (never the
+ * person's answer).
+ */
+export function unansweredRefusal(
+  toolName: string,
+  unanswered: readonly { readonly argument: string; readonly expected?: string }[],
+): string {
+  const names = unanswered.map((u) => u.argument).join(', ');
+  const rules = unanswered.flatMap((u) =>
+    u.expected !== undefined ? [`${u.argument}: ${u.expected}`] : [],
+  );
+  return (
+    `${toolName} was not run on that call: the person's answers for ${names} did not fit what ` +
+    `the tool accepts${rules.length > 0 ? ` (${rules.join('; ')})` : ''}.`
+  );
+}
+
+// LENS · tool-result · persistent-history
+// reads: nothing but the fact that this batch already paused once, for the library's own ask
+// law: may omit, never deny; past tense, anchored to the call; names no destination.
+/**
+ * The result a call reads when it needed a person — its check-in consent gate
+ * tripped, or the tool itself asked to pause — in a batch that had ALREADY
+ * paused once, to ask the person for argument values: a resumed batch has no
+ * second pause to give (at most one human question per resume). The call did
+ * not finish; nothing about it is decided for the person.
+ */
+export function secondPauseRefusal(toolName: string, why: 'check-in' | 'tool-pause'): string {
+  const need =
+    why === 'check-in'
+      ? 'its check-in consent gate needed a person’s approval for those arguments'
+      : 'the tool asked to pause for a person';
+  return (
+    `${toolName} was not run to completion on that call: ${need}, and this batch had already ` +
+    'paused once — to ask the person for argument values — so there was no second pause to ' +
+    'ask with.'
+  );
 }
 
 // ─── The "Assumed" block (under `.limitsTravelWithTheAnswer()`) ───────────

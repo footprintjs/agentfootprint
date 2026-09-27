@@ -181,13 +181,21 @@ describe('edge — a rule this library cannot apply is warned once and DROPPED',
     expect(message).toContain("'io_profile'");
   });
 
-  it('an `ask` rule — this version applies `assume` only', () => {
+  it('an `ask` rule the schema accepts is carried (step 4 applies it: the batch ask)', () => {
+    const askOrAssume = { time_range: { ask: 'Which period?', choices: ['1h', '24h'] } };
+    const read = readToolExtras(bag({ askOrAssume }), origin);
+    expect(read).toEqual({ askOrAssume });
+    expect(warnSpy).not.toHaveBeenCalled();
+  });
+
+  it('an `ask` rule whose choice the schema rejects is warned once and DROPPED', () => {
     const read = readToolExtras(
-      bag({ askOrAssume: { time_range: { ask: 'Which period?', choices: ['1h', '24h'] } } }),
+      bag({ askOrAssume: { time_range: { ask: 'Which period?', choices: ['1h', '9h'] } } }),
       origin,
     );
     expect(read).toEqual({});
-    expect(String(warnSpy.mock.calls[0]![0])).toContain('step 4');
+    expect(warnSpy).toHaveBeenCalledTimes(1);
+    expect(String(warnSpy.mock.calls[0]![0])).toContain('askOrAssume.time_range.choices[1]');
   });
 
   it('a period whose rule was dropped is dropped too — a period never arms anything alone', () => {

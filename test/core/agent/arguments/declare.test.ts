@@ -127,11 +127,15 @@ describe('assertAskOrAssume — every refusal names the tool and the argument', 
     });
   }
 
-  it('refuses ANY ask rule in this version, naming the step, after its shape passed', () => {
-    const message = refusal({ window: { ask: 'Which period?', choices: ['1h', '24h'] } });
-    expect(message).toContain('askOrAssume.window');
-    expect(message).toContain("the inputs layer's step 4");
-    expect(message).toContain('{ assume: <value> }');
+  it('accepts an ask rule whose shape passes (step 4 applies it: the batch ask)', () => {
+    expect(() =>
+      assertAskOrAssume(
+        'search_logs',
+        { window: { ask: 'Which period?', choices: ['1h', { value: '24h', said: ['last day'] }] } },
+        undefined,
+        SCHEMA,
+      ),
+    ).not.toThrow();
   });
 
   it('names the argument in the refusal', () => {
@@ -284,8 +288,35 @@ describe('rulesOf — the dispatch re-read', () => {
     expect(isRefused(rules)).toBe(false);
     expect(rules).toEqual({
       ruled: [
-        { argument: 'window', rule: 'assume', assume: '2h', period: true },
-        { argument: 'limit', rule: 'assume', assume: 50 },
+        { argument: 'window', rule: 'assume', assume: '2h', type: 'string', period: true },
+        { argument: 'limit', rule: 'assume', assume: 50, type: 'integer' },
+      ],
+      period: { argument: 'window', spelling: 'lookback' },
+    });
+  });
+
+  it('reads an ask rule: the question, the choices’ values in declared order, the type', () => {
+    const tool = defineTool({
+      name: 'search_logs',
+      description: 'd',
+      inputSchema: SCHEMA,
+      askOrAssume: {
+        window: { ask: 'Which period?', choices: [{ value: '24h', said: ['last day'] }, '1h'] },
+        service: { ask: 'Which service?' },
+      },
+      period: { argument: 'window', spelling: 'lookback' },
+      execute: () => 'ok',
+    });
+    expect(rulesOf(tool)).toEqual({
+      ruled: [
+        {
+          argument: 'window',
+          rule: 'ask',
+          ask: { question: 'Which period?', choices: ['24h', '1h'] },
+          type: 'string',
+          period: true,
+        },
+        { argument: 'service', rule: 'ask', ask: { question: 'Which service?' }, type: 'string' },
       ],
       period: { argument: 'window', spelling: 'lookback' },
     });

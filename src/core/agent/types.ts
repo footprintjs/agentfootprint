@@ -260,6 +260,25 @@ export interface AgentOptions {
    */
   readonly inputsLayer?: boolean;
   /**
+   * THE INPUTS LAYER'S ASK (honesty layer 2) — the host's own context for the
+   * one typed ask the library raises per batch when a call leaves an `ask`
+   * argument out. Called each time such an ask is built; the object it
+   * returns is spread into the ask's `context` BESIDE the library's reserved
+   * key (`agentfootprint`), so a host that restores its own state from a
+   * pending ask's `context` (a routing step, a screen id) reads it back on
+   * resume exactly as it does for its own `requestInput`. Must return a plain
+   * JSON object that does not use the reserved key — anything else is refused
+   * (a `TypeError` naming this option) when the ask is built. Read only when
+   * an ask is raised; absent → the ask's `context` carries the library's key
+   * alone.
+   *
+   * @example
+   * ```ts
+   * Agent.create({ provider, model, argumentAskContext: () => ({ routing: { step: 'metrics' } }) })
+   * ```
+   */
+  readonly argumentAskContext?: () => Readonly<Record<string, unknown>>;
+  /**
    * The findings ledger (9.101.0) — set by `.findings()` on the builder and
    * by nothing else. When present, every SERVED tool schema gains the
    * reserved optional `_findings` property (`withFindingsArgument`), the
@@ -1946,6 +1965,18 @@ export interface AgentState {
    * or a lens view (the rows carry the value in the tool's own view).
    */
   argumentResolutions?: readonly import('./arguments/resolve.js').ArgumentResolution[];
+  /**
+   * The inputs layer's BATCH ASK in progress (honesty layer 2) — the fields
+   * of the one typed ask ToolCalls raised before anything in the batch ran,
+   * how often each was asked, the answers bound so far, and the question now
+   * out (`waiting`). Written by ToolCalls only, only while an ask for THIS
+   * batch is unsettled, and cleared when it settles — so a run whose record
+   * ends with this key present ended waiting on the library's ask (the
+   * answer's standing reads it: `argument-asked`). Working state: it holds
+   * the RAW answers, because the calls must run with them — never a row, an
+   * event or a lens view.
+   */
+  argumentAsk?: import('./arguments/ask.js').ArgumentAskState;
 
   // ── Tool choice by classifier (`.toolChoice()`) ───────────────
   /**

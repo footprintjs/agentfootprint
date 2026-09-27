@@ -106,6 +106,12 @@ The arms are registered in `cases.mjs` · `armDeclaration`. `off` is the tools a
 (`--arms off,assume --judge step3`, `--arms off,ask --judge step4`). On a build that does not
 carry the layer, the harness refuses an armed arm instead of running it unarmed.
 
+Under `ask`, the library pauses on ONE typed ask per batch when a call leaves the period out. The
+harness answers it as the simulated person `RULE.md` describes (`harness.mjs` · `answerLibraryAsk`):
+every field with the case's `means` for its (tool, argument), never the model's value; a field the
+case has no `means` for gets the argument's declared default and is recorded as unexpected. The
+run is then resumed, and each turn's record keeps the asks it answered (`turns[i].asks`).
+
 ## What it lets you measure
 
 The bench reads these from the record alone, per model and per prompt or skill version:

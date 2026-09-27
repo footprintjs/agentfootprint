@@ -132,8 +132,8 @@ export interface McpToolExtras {
   readonly gates?: boolean;
   /**
    * The per-argument rules (the inputs layer, honesty layer 2) — see
-   * {@link Tool.askOrAssume}. It passes this file's bar: the fill (and, in a
-   * later release, the ask) happens in the CLIENT's own loop before the call
+   * {@link Tool.askOrAssume}. It passes this file's bar: the fill and the
+   * batch ask happen in the CLIENT's own loop before the call
    * is sent — exactly as the client applies a served `resultCeiling` — and
    * nothing about how the server runs the tool changes. The FIRST extra
    * judged against the tool's schema, which is why the origin carries the

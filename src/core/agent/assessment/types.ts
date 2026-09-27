@@ -25,7 +25,8 @@
  *
  * - `state` — a leaf of a committed key of the run's `sharedState`
  *   (`coverageDeclared`, `findingsLedger`, `unsupportedValues`,
- *   `stoppedEarly`, `answerValidation`, and `pausedToolCallId` for a pause);
+ *   `stoppedEarly`, `answerValidation`, and `pausedToolCallId` or
+ *   `argumentAsk` for a pause);
  * - `history` — a leaf of one `history` message (a tool result, by index).
  *
  * Always a LEAF (a string, a number), never a whole row, so "show me" can show
@@ -77,10 +78,16 @@ export type AssessmentPointer =
  * - `argument-unverified` — a call of this turn ran on a value of a ruled
  *   argument the record does not trace to the person, a result or the app
  *   (an `argument` row with `source: 'model'`), or a declared source that
- *   failed its check (honesty layer 2).
+ *   failed its check (honesty layer 2);
+ * - `argument-asked` — the turn ended waiting on the inputs layer's own ask:
+ *   a batch left `ask`-ruled arguments out, the library asked the person for
+ *   them before anything ran, and no answer has come yet (the batch ask's
+ *   working state, `argumentAsk`, still has a question out; the `asked` rows
+ *   name which values). Nothing in that batch has run (honesty layer 2).
  */
 export type AssessmentReason =
   | 'asked'
+  | 'argument-asked'
   | 'argument-assumed'
   | 'argument-unverified'
   | 'declared-absent'

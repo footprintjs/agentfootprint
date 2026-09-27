@@ -42,7 +42,7 @@ export interface AccountTemplate {
 }
 
 /** Bumped whenever any template's words change (a pinned digest enforces it). */
-export const ANSWER_ACCOUNT_TEMPLATE_SET_VERSION = 3;
+export const ANSWER_ACCOUNT_TEMPLATE_SET_VERSION = 4;
 
 const t = (text: string, voucher: TemplateVoucher = 'library', version = 1): AccountTemplate =>
   Object.freeze({ version, text, voucher });
@@ -284,6 +284,10 @@ export const ANSWER_ACCOUNT_TEMPLATES = Object.freeze({
     "Argument rules: {{ran}} of {{count:of,'ruled argument','ruled arguments'}} had a verdict on the record.",
   ),
   'howSure.reason.asked': t('A question the run asked is still waiting for its answer.'),
+  // The inputs layer's own ask (honesty layer 2, step 4) — set 4.
+  'howSure.reason.argumentAsked': t(
+    'The run asked the person for values its calls need, before any of them ran; the answer has not come yet.',
+  ),
   'howSure.reason.argumentAssumed': t(
     "{{count:n,'value a call ran with was','values the calls ran with were'}} assumed: set by a tool's rule or a rewrite, not given in the conversation.",
   ),

@@ -287,6 +287,25 @@
  * projection does not read; `test/core/agent/arguments/layer.test.ts` pins
  * the answer's bytes.
  *
+ * Honesty step 4 (the batch ask): two new references, `agent-arguments-ask`
+ * (the leg that paused on the library's ask) and `agent-arguments-ask-resumed`
+ * (the leg the person's answer resumes, on a fresh executor from the stored
+ * checkpoint); none of the 23 earlier ones moved (run first on the wired tree
+ * — 23/23 green — copied aside, the two generated alone with
+ * `-t agent-arguments-ask` under `AF_TOOLS_REFERENCE=update`, the 23
+ * `cmp`-equal after). `requestId` joined the volatile keys — a typed ask's
+ * stamp carries the agent's run id, a clock — and no earlier reference holds
+ * the key. What they hold, read from their bytes: on the paused leg, the
+ * `sf-inputs` mount's output mapping writes `findingsLedger` (ONE `argument`
+ * row, `rule: 'ask'`, `asked: 'missing'`, no value) and `argumentResolutions`
+ * (the call's entry names `ask: ['window']`, no fill), and ToolCalls commits
+ * `argumentAsk` — the batch ask's working state with its question out — and
+ * NOTHING else: no assistant turn in `history`, no `pausedToolCallId`, no
+ * dispatch. On the resumed leg, ToolCalls' re-run is the first bundle: the
+ * `answered` row appended to the ledger, `argumentAsk` set to nothing (the ask
+ * settled), and the batch dispatched on its ordinary path — the tool message
+ * carries the answered note after the tool's own bytes and `toolChars`.
+ *
  * Every scenario is a real run — the receipt-conformance shapes, each in the
  * configuration that has no name collision — and what is compared is the
  * whole `commitLog` plus `servedAt(k)` for every located epoch, after ONE
@@ -312,6 +331,7 @@ import {
   Agent,
   defineTool,
   epochLocations,
+  isInputPause,
   LLMCall,
   servedAt,
   slidingWindow,
@@ -389,6 +409,47 @@ const ruledSearchLogs = () =>
     execute: (args: Record<string, unknown>) => ({ service: args.service, errors: 0 }),
   });
 const RULED_THEN_DONE = [call('c1', 'search_logs', { service: 'checkout' }), answer('No errors.')];
+
+/** The same search whose period the PERSON is asked for (step 4): `ask`, with choices. */
+const askingSearchLogs = () =>
+  defineTool({
+    name: 'search_logs',
+    description: 'Error lines for one service over a look-back period.',
+    inputSchema: {
+      type: 'object',
+      required: ['service', 'window'],
+      properties: {
+        service: { type: 'string', description: 'Service name.' },
+        window: { type: 'string', enum: ['1h', '2h', '24h'], description: 'Look-back period.' },
+      },
+    },
+    askOrAssume: {
+      window: { ask: 'Which period should the search cover?', choices: ['1h', '24h'] },
+    },
+    period: { argument: 'window', spelling: 'lookback' },
+    execute: (args: Record<string, unknown>) => ({ service: args.service, errors: 0 }),
+  });
+
+/** The paused leg of an ask run, or — `resumed` — the leg the answer resumes (a fresh executor). */
+async function askRun(resumed: boolean): Promise<Snapshot> {
+  const agent = Agent.create({
+    provider: scripted(RULED_THEN_DONE) as never,
+    model: 'mock',
+    maxIterations: 6,
+    reactMode: 'dynamic',
+  })
+    .system('bot')
+    .tool(askingSearchLogs())
+    .build();
+  const paused = await agent.run({ message: 'go' });
+  if (!resumed) return agent.getSnapshot()!;
+  if (!isInputPause(paused)) throw new Error('askRun: expected the library’s ask');
+  await agent.resume(JSON.parse(JSON.stringify(paused.checkpoint)), {
+    requestId: paused.awaitingInput.requestId,
+    values: { f1: '24h' },
+  });
+  return agent.getSnapshot()!;
+}
 
 const graphOf = () =>
   skillGraph({
@@ -988,6 +1049,11 @@ const SCENARIOS: Record<string, () => Promise<Snapshot>> = {
     agentRun('dynamic', RULED_THEN_DONE, (a) =>
       a.system('bot').tool(ruledSearchLogs()).limitsTravelWithTheAnswer(),
     ),
+  // Honesty step 4 — the batch ask: the model leaves an `ask`-ruled period
+  // out, the library asks the person before anything runs (the paused leg),
+  // and the answer resumes the batch (the resumed leg). See the header.
+  'agent-arguments-ask': () => askRun(false),
+  'agent-arguments-ask-resumed': () => askRun(true),
 };
 
 // ─── normalisation — only what differs between two runs of ONE configuration ──
@@ -995,8 +1061,17 @@ const SCENARIOS: Record<string, () => Promise<Snapshot>> = {
 /** A digest: the receipt's run-salted 16-hex fingerprints, or a full sha256. */
 const DIGEST = /^(?:[0-9a-f]{16}|[0-9a-f]{64})$/;
 const RUN_ID = /^run_[0-9a-z_-]+$/i;
-/** Keys whose values are clocks or run-minted identifiers. */
-const VOLATILE_KEYS = new Set(['runId', 'traceId', 'timestamp', 'at', 'conversationId']);
+/** Keys whose values are clocks or run-minted identifiers. `requestId` (honesty step 4): a
+ *  typed ask's stamp carries the agent's run id, a clock; none of the earlier references holds
+ *  one, so adding it moved none of them. */
+const VOLATILE_KEYS = new Set([
+  'runId',
+  'traceId',
+  'timestamp',
+  'at',
+  'conversationId',
+  'requestId',
+]);
 /** …and every clock reading, whatever it is called (`turnStartMs`, `startedAt`). */
 const CLOCK_KEY = /(?:Ms|At)$/;
 

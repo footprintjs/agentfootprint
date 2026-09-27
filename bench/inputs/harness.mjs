@@ -22,10 +22,42 @@
 
 import { createHash } from 'node:crypto';
 
-import { FOLD_DECLARATIONS, SYSTEM_PROMPT, TOOLS, armDeclaration } from './cases.mjs';
+import {
+  FOLD_DECLARATIONS,
+  SYSTEM_PROMPT,
+  TOOLS,
+  armDeclaration,
+  personAnswer,
+  toolSpec,
+} from './cases.mjs';
 
 /** Loop bound per turn. A real model that keeps calling stops here, and the record says so. */
 export const MAX_ITERATIONS = 6;
+/** How many of the library's asks one turn may answer (step 4) — rounds and re-asks included. */
+export const MAX_ANSWERED_ASKS = 4;
+
+/**
+ * The simulated person's reply to the library's batch ask (step 4, `RULE.md` · "The simulated
+ * person"): every field answered with the case's `means` for its (tool, argument), never with the
+ * model's value. A field the case has no `means` for is answered with the argument's declared
+ * default and counted as an unexpected ask. `undefined` for a pause that is not the library's ask.
+ */
+export function answerLibraryAsk(caseDef, awaitingInput) {
+  const marker = awaitingInput?.context?.agentfootprint;
+  if (marker?.ask !== 'arguments' || !Array.isArray(marker.fields)) return undefined;
+  const values = {};
+  const unexpected = [];
+  for (const field of marker.fields) {
+    const meant = personAnswer(caseDef, field.tool, field.argument);
+    if (meant !== undefined) {
+      values[field.id] = meant;
+      continue;
+    }
+    values[field.id] = toolSpec(field.tool)?.period?.default;
+    unexpected.push({ tool: field.tool, argument: field.argument });
+  }
+  return { reply: { requestId: awaitingInput.requestId, values }, unexpected };
+}
 /** Output bound per model call. The answers are a few sentences; this caps what a call can cost. */
 export const MAX_TOKENS = 1024;
 
@@ -391,13 +423,21 @@ export async function runCase(opts) {
     mockState.step = 0;
     const message = caseDef.turns[i];
     try {
-      const out = i === 0 ? await agent.run({ message }) : await agent.followUp(message);
+      let out = i === 0 ? await agent.run({ message }) : await agent.followUp(message);
+      // Step 4: the library's batch ask is answered as the simulated person, and the run resumed.
+      const asks = [];
+      while (typeof out !== 'string' && asks.length < MAX_ANSWERED_ASKS) {
+        const answered = answerLibraryAsk(caseDef, out?.awaitingInput);
+        if (answered === undefined) break;
+        asks.push({ fields: answered.reply.values, unexpected: answered.unexpected });
+        out = await agent.resume(out.checkpoint, answered.reply);
+      }
       if (typeof out !== 'string') {
-        // A pause. Step 2's arms never ask; step 4 answers here (`cases.mjs` · `personAnswer`).
-        turns.push({ message, paused: true });
+        // A pause the simulated person does not answer (step 2's arms never ask).
+        turns.push({ message, paused: true, ...(asks.length > 0 && { asks }) });
         break;
       }
-      turns.push({ message, answer: out });
+      turns.push({ message, answer: out, ...(asks.length > 0 && { asks }) });
     } catch (err) {
       turns.push({ message, error: String(err?.message ?? err) });
       break;

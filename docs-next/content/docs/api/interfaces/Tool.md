@@ -46,14 +46,17 @@ tool is never that check's subject, byte-identical.
 
 > `readonly` `optional` **askOrAssume?**: `Readonly`\<`Record`\<`string`, `ArgumentRule`\>\>
 
-Defined in: [src/core/tools.ts:376](https://github.com/footprintjs/agentfootprint/blob/main/src/core/tools.ts#L376)
+Defined in: [src/core/tools.ts:380](https://github.com/footprintjs/agentfootprint/blob/main/src/core/tools.ts#L380)
 
 PER-ARGUMENT RULES (the inputs layer, honesty layer 2) — what the library
 does when a call leaves an argument out. `{ assume: value }`: the library
 FILLS the value (the tool never does) and files it on the findings ledger
 as `default`, so the answer's standing says the value was assumed.
-`{ ask: question, choices? }` is judged and refused in this version (the
-batch ask ships with the inputs layer's next step).
+`{ ask: question, choices? }`: the PERSON gives the value — the library
+asks ONCE for everything a batch of calls left out, before anything in the
+batch runs, through the typed input pause (`isInputPause`,
+`agent.resume(checkpoint, { requestId, values })`), and files the answer
+as `answered`. A present value runs as sent, filed as the model's own.
 
 The served copy of the schema drops a ruled argument from `required` and
 says the rule in the property's description; the registry schema — which
@@ -68,6 +71,7 @@ Omitted → byte-identical.
 
 ```ts
 askOrAssume: { window: { assume: '2h' } }
+askOrAssume: { window: { ask: 'Which period should the search cover?', choices: ['1h', '24h'] } }
 ```
 
 ***
@@ -229,7 +233,7 @@ Omitted → exactly today's bytes (`source: 'registry'`).
 
 > `readonly` `optional` **period?**: [`ToolPeriod`](/docs/api/interfaces/ToolPeriod)
 
-Defined in: [src/core/tools.ts:383](https://github.com/footprintjs/agentfootprint/blob/main/src/core/tools.ts#L383)
+Defined in: [src/core/tools.ts:387](https://github.com/footprintjs/agentfootprint/blob/main/src/core/tools.ts#L387)
 
 WHICH ARGUMENT SETS THE PERIOD the answer covers, and how its values are
 spelled (`lookback` `24h`, `signed-lookback` `-24h`, `iso-range`). The
@@ -501,7 +505,7 @@ Omitted → byte-identical behavior (nothing resolved, nothing measured).
 
 > **execute**(`args`, `ctx`): `TResult` \| `Promise`\<`TResult`\>
 
-Defined in: [src/core/tools.ts:384](https://github.com/footprintjs/agentfootprint/blob/main/src/core/tools.ts#L384)
+Defined in: [src/core/tools.ts:388](https://github.com/footprintjs/agentfootprint/blob/main/src/core/tools.ts#L388)
 
 #### Parameters
 

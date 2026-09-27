@@ -19,10 +19,11 @@
  *     LIBRARY (never by the tool) and recorded as `default`; the answer's
  *     standing then says the value was assumed.
  *   - `{ ask: question, choices? }` — a value the call leaves out is asked of
- *     the person, once per batch, before anything runs. The shape is judged in
- *     full here, and then REFUSED: this version of the library does not apply
- *     an ask yet (the batch ask is the inputs layer's step 4), and a
- *     declaration must never promise what the library cannot do.
+ *     the person, ONCE per batch, before anything in the batch runs, through
+ *     the typed ask (`core/inputRequest.ts`); the answer is filled and
+ *     recorded as `answered` (`arguments/ask.ts`). A present value is not
+ *     asked in this version: the model does not yet say where its values came
+ *     from (declared sources), so it runs, recorded as the model's own.
  *
  * ## The period — `ToolPeriod`
  *
@@ -55,8 +56,9 @@ export type AskChoice =
 /**
  * One argument's rule — either ask the person, or assume a declared default.
  *
- * `assume` is applied by this version. `ask` is judged at definition and then
- * refused: the batch ask ships with the inputs layer's step 4.
+ * `assume`: a value the call leaves out is filled by the library and recorded
+ * as `default`. `ask`: a value the call leaves out is asked of the person once
+ * per batch, before anything in the batch runs, and recorded as `answered`.
  */
 export type ArgumentRule =
   | { readonly ask: string; readonly choices?: readonly AskChoice[] }
@@ -501,12 +503,13 @@ function assertPeriod(toolName: string, period: unknown, rules: PlainObject | un
  * `assume` value the property's OWN schema rejects (never the root `required`);
  * a malformed `said` phrase; more than 32 `ask` arguments; a period on an
  * argument with no rule, an unknown spelling, or a declared value not spelled
- * that way — and, after all of that, ANY `ask` rule: this version applies
- * `assume` only.
+ * that way.
  *
  * @example
  * ```ts
  * assertAskOrAssume('search_logs', { window: { assume: '2h' } }, undefined, schema);  // ok
+ * assertAskOrAssume('search_logs', { window: { ask: 'Which period?', choices: ['1h', '24h'] } },
+ *   undefined, schema);                                                           // ok
  * assertAskOrAssume('search_logs', { window: { assume: '9h' } }, undefined, schema);  // throws
  * ```
  */
@@ -544,16 +547,6 @@ export function assertAskOrAssume(
     }
   }
   if (period !== undefined) assertPeriod(toolName, period, rules);
-  for (const [argument, form] of forms) {
-    if (form !== 'ask') continue;
-    refuse(
-      toolName,
-      `askOrAssume.${argument}`,
-      '`ask` is not applied by this version of the library: the one ask per batch ships with ' +
-        "the inputs layer's step 4. Until then declare { assume: <value> } — the library fills " +
-        'it and records it as assumed — or leave the argument free.',
-    );
-  }
   warnDefaultProse(toolName, forms, inputSchema);
 }
 
@@ -594,12 +587,24 @@ function warnDefaultProse(
 
 // ─── Reading the rules at dispatch ──────────────────────────────────────
 
+/** What an `ask` rule declares, as the layer reads it. */
+export interface RuledAsk {
+  /** The author's question — the ask field's `description`. */
+  readonly question: string;
+  /** The author's choices' values, in declared order — the field's `enum`. Absent: a free field. */
+  readonly choices?: readonly InputValue[];
+}
+
 /** One ruled argument of a tool, as the layer reads it. */
 export interface RuledArgument {
   readonly argument: string;
   readonly rule: 'ask' | 'assume';
   /** The declared default — present on an `assume` rule. */
   readonly assume?: InputValue;
+  /** The question and the choices — present on an `ask` rule. */
+  readonly ask?: RuledAsk;
+  /** The property's JSON Schema type — one of `RULED_TYPES`, judged at definition. */
+  readonly type: 'string' | 'number' | 'integer' | 'boolean';
   /** Set on the argument `Tool.period` names. */
   readonly period?: true;
 }
@@ -654,6 +659,7 @@ export function rulesOf(tool: RuledToolLike | undefined): ToolRules | RulesRefus
     verdict = readRules(
       tool.askOrAssume as AskOrAssume | undefined,
       tool.period as ToolPeriod | undefined,
+      tool.schema.inputSchema,
     );
   } catch (error) {
     verdict = { refused: error instanceof Error ? error.message : String(error) };
@@ -667,14 +673,39 @@ export function isRefused(value: ToolRules | RulesRefused | undefined): value is
   return value !== undefined && 'refused' in value;
 }
 
+/** The value of one declared choice — a bare value, or `{ value, said? }`. */
+const choiceValueOf = (choice: AskChoice): InputValue =>
+  typeof choice === 'object' ? choice.value : choice;
+
+/** The property's type, read after the assert judged it one of `RULED_TYPES`. */
+function propertyTypeOf(
+  inputSchema: Readonly<Record<string, unknown>> | undefined,
+  argument: string,
+): RuledArgument['type'] {
+  const properties = isPlainObject(inputSchema?.properties)
+    ? (inputSchema?.properties as PlainObject)
+    : {};
+  const property = properties[argument];
+  const type = isPlainObject(property) ? property.type : undefined;
+  return type === 'number' || type === 'integer' || type === 'boolean' ? type : 'string';
+}
+
 function readRules(
   askOrAssume: AskOrAssume | undefined,
   period: ToolPeriod | undefined,
+  inputSchema: Readonly<Record<string, unknown>> | undefined,
 ): ToolRules {
   const ruled: RuledArgument[] = Object.entries(askOrAssume ?? {}).map(([argument, rule]) => ({
     argument,
     rule: 'ask' in rule ? ('ask' as const) : ('assume' as const),
     ...('assume' in rule && { assume: rule.assume }),
+    ...('ask' in rule && {
+      ask: {
+        question: rule.ask,
+        ...(rule.choices !== undefined && { choices: rule.choices.map(choiceValueOf) }),
+      },
+    }),
+    type: propertyTypeOf(inputSchema, argument),
     ...(period?.argument === argument && { period: true as const }),
   }));
   return { ruled, ...(period !== undefined && { period }) };
