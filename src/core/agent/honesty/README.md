@@ -34,8 +34,11 @@ builder = mountInputsLayer(builder, deps.inputsLayer); // undefined → the buil
   layer, `argumentResolutions`). Nothing to return → nothing is written.
 - **Events** fire inside the subflow, from the rows, through the ledger's emit half
   (`findings/ledger.ts` · `emitRow`) — names, enums and counts only.
-- **Lazy**: each layer's stage bodies load through `import()` on first use, so a plain
-  agent's bundle carries none of them.
+- **Lazy**: each layer's stage bodies — and every run-time half the other stages need
+  from it (for the inputs layer: `arguments/dispatch.ts`, `arguments/serve.ts`) — load
+  through `import()` under the arm, so a plain agent's bundle carries none of them. What
+  stays static is what a synchronous door needs first (the inputs layer's list:
+  `arguments/README.md`, "What a plain agent carries").
 
 ## The run constant
 

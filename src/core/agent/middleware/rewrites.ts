@@ -9,15 +9,16 @@
  *          before-tool rewrite of a RULED tool's arguments is filed on
  *          `middlewareDecisions` with the NAMES of the keys it changed
  *          (`MiddlewareDecision.changedKeys`, stamped by
- *          `stages/toolCalls.ts` · `withChangedKeys`) and, when the middleware
+ *          `arguments/dispatch.ts` · `withChangedKeys`) and, when the middleware
  *          declared one, where each value came from
  *          (`allow(args, why, { from })`). The layer checked the value BEFORE
  *          the chain ran, so a rewrite supersedes the layer's row: the value
  *          the call ran with is the rewrite's. Two readers must agree on that —
  *          `assessment/assess.ts` · `readArgumentVerdicts` (the standing) and
- *          `stages/prepareFinal.ts` · `assumedLinesOf` (the "Assumed" block) —
- *          and the fold loads through `import()`, so the final branch cannot
- *          import it: the reading lives here, once.
+ *          `arguments/serve.ts` · `assumedBlockOf` (the "Assumed" block) —
+ *          and both load through `import()` (the fold on first use, the block
+ *          under the arm), so neither can own the reading for the other: it
+ *          lives here, once, and a plain agent's graph carries it for neither.
  * Emits:   N/A.
  *
  * @example
@@ -41,7 +42,7 @@ const isRecord = (value: unknown): value is Record<string, unknown> =>
 
 // FOLD · the one owner of "which argument of which call a before-tool rewrite superseded"
 // consumers read this and never re-derive it: assessment/assess.ts · readArgumentVerdicts,
-// stages/prepareFinal.ts · assumedLinesOf
+// arguments/serve.ts · assumedBlockOf
 // detached: yes — fresh maps of plain entries, rebuilt per read.
 /**
  * The before-tool middleware rewrites on the record — `middlewareDecisions`

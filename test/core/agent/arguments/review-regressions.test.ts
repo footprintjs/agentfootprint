@@ -43,10 +43,8 @@ import {
 } from '../../../../src/index.js';
 import { staticTools } from '../../../../src/tool-providers/index.js';
 import type { LLMMessage, LLMRequest, LLMResponse } from '../../../../src/adapters/types.js';
-import {
-  _resetUnmountedRulesWarnings,
-  producerCorpusOf,
-} from '../../../../src/core/agent/stages/toolCalls.js';
+import { producerCorpusOf } from '../../../../src/core/agent/stages/toolCalls.js';
+import { _resetUnmountedRulesWarnings } from '../../../../src/core/agent/arguments/dispatch.js';
 import type { ArgumentRow } from '../../../../src/core/agent/arguments/rows.js';
 import { unreadableRulesRefusal } from '../../../../src/core/agent/arguments/serve.js';
 import { accountForAnswer } from '../../../../src/lib/answer-account/account.js';

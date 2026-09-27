@@ -1,6 +1,6 @@
 **Mixed** — the inputs layer (honesty layer 2): what a tool author declares about each argument, and what the library does, files and says when a call leaves one out.
 Map: `declare.ts` (the declaration and its one assert), `rows.ts` (the `argument` row and its door check).
-Walker: `resolve.ts` (the checks and the one table), `subflow.ts` (the four stages of `sf-inputs`).
+Walker: `resolve.ts` (the checks and the one table), `subflow.ts` (the four stages of `sf-inputs`), `dispatch.ts` (ToolCalls' half: the fills, the note, the rewrites' `changedKeys`, the fail-closed refusal).
 Lens: `serve.ts` (the served schema sentence, the note on a result, the refusals, the "Assumed" block).
 
 **The law.** No argument runs unaccounted for.
@@ -64,9 +64,9 @@ promise what the library cannot do.
 | DECLARE | the tool author: `Tool.askOrAssume` and `Tool.period` (`ToolPeriod`), judged by ONE assert (`declare.ts` · `assertAskOrAssume`) at definition (`core/tools.ts` · `defineTool`), at dispatch (`declare.ts` · `rulesOf` — a Tool built by hand or served by a ToolProvider never passed `defineTool`) and at MCP ingest (`lib/mcp/toolExtras.ts` · `readToolExtras`, which judges each rule against the listed tool's own `inputSchema`). A rule is refused, never repaired: an argument the schema does not offer or whose type is not exactly one of `string`, `number`, `integer`, `boolean`; a `wants` argument; a value the PROPERTY's own schema rejects (never the root `required`); a period on an argument with no rule. |
 | VERIFY | `resolve.ts` · `verifyPlan` — the table above; a pure function of the batch and the rules of the implementation that will run (`stages/toolResolver.ts` · `buildToolResolver`, the one dispatch resolver). |
 | RECORD | `rows.ts` · `ArgumentRow` — one row per ruled argument per call, its value in the tool's OWN argument view (`core/toolShownArgs.ts` · `shownArgsOf`: a hidden argument reads `'REDACTED'`), stamped with the conversation `turn`. Merged into the ONE ledger (`AgentState.findingsLedger`) by the ledger's pure half (`findings/ledger.ts` · `appendRows`) in ONE write per batch, through the mount's output mapper (`honesty/mounts.ts` · `mountInputsLayer`); one `agentfootprint.findings.argument` event per row (names, enums and counts — never a value). |
-| RESOLVE | `resolve.ts` · `resolutionsOf` — **assume** (fill the declared default) or **refuse** (the rules could not be read at dispatch). ToolCalls applies the entry after `tool_start` (which keeps the model's proposal) and BEFORE the permission check, so policy judges the call that will really run (`stages/toolCalls.ts` · `withFills`). A ruled tool met on an agent WITHOUT the layer is refused rather than run unruled (`serve.ts` · `unmountedRulesRefusal`). Both refusals are decided after permission and BEFORE the before-tool middleware chain, so no middleware can ask a person about a call that will not run; the middleware-ask resume door re-applies both (`stages/toolCalls.ts` · `resume`). Inner dispatch (`ctx.tools.call`) refuses a ruled tool unless every ruled argument is given (`toolDispatch.ts` · `refuseUnaccountedRuledArguments`). |
+| RESOLVE | `resolve.ts` · `resolutionsOf` — **assume** (fill the declared default) or **refuse** (the rules could not be read at dispatch). ToolCalls applies the entry after `tool_start` (which keeps the model's proposal) and BEFORE the permission check, so policy judges the call that will really run (`dispatch.ts` · `withFills`). A ruled tool met on an agent WITHOUT the layer is refused rather than run unruled (`dispatch.ts` · `unmountedRefusal`, the sentence `serve.ts` · `unmountedRulesRefusal`). Both refusals are decided after permission and BEFORE the before-tool middleware chain, so no middleware can ask a person about a call that will not run; the middleware-ask resume door re-applies both (`stages/toolCalls.ts` · `resume`). Inner dispatch (`ctx.tools.call`) refuses a ruled tool unless every ruled argument is given (`toolDispatch.ts` · `refuseUnaccountedRuledArguments`). |
 | FOLD | the answer's standing (`assessment/assess.ts` · `readArgumentVerdicts`), this turn's rows only: a `default` row fires `argument-assumed`, a `model` row on a ruled argument fires `argument-unverified` — "not sure". A before-tool middleware that rewrote a ruled argument AFTER the layer checked it supersedes the row (its value is what ran): assumed, unless it declared the value the person's or the app's (`allow(args, why, { from })`; `middleware/outcomes.ts` · `allow`). The rewrites are read by ONE owner (`middleware/rewrites.ts` · `argumentRewritesOf`), which the "Assumed" block reads too. Every result the fold reads is the TOOL's own bytes (`lib/toolBytes.ts` · `toolBytesOf`), so a filled call's `[]` still fires `empty-undeclared`. No row here ever SUPPORTS "known". |
-| SERVE | the model: the served schema drops an `assume`-ruled argument from `required` and says the rule (`serve.ts` · `withArgumentRules`); a call that ran on a filled value gets a past-tense note after the tool's own bytes (`serve.ts` · `filledNote`) — one clause per fill the call really ran with, so a fill a before-tool middleware rewrote is left out (`stages/toolCalls.ts` · `fillsThatRan`) — and its history message carries `toolChars`. Every reader of a result as the TOOL's words reads through that cut (`lib/toolBytes.ts` · `toolBytesOf`): the evidence gate, the answer's standing, the answer account, the unsupported-argument seam's grounds and the empty-lookup seam's producers — so the note grounds nothing and hides no reading of the result. The person: the rows, the event, the standing — and, only under `.limitsTravelWithTheAnswer()`, an "Assumed (a tool's rule, not your words)" block in the answer (`serve.ts` · `assumedBlock`), which leaves out a row a middleware rewrite superseded. |
+| SERVE | the model: the served schema drops an `assume`-ruled argument from `required` and says the rule (`serve.ts` · `withArgumentRules`); a call that ran on a filled value gets a past-tense note after the tool's own bytes (`serve.ts` · `filledNote`) — one clause per fill the call really ran with, so a fill a before-tool middleware rewrote is left out (`dispatch.ts` · `fillsThatRan`) — and its history message carries `toolChars`. Every reader of a result as the TOOL's words reads through that cut (`lib/toolBytes.ts` · `toolBytesOf`): the evidence gate, the answer's standing, the answer account, the unsupported-argument seam's grounds and the empty-lookup seam's producers — so the note grounds nothing and hides no reading of the result. The person: the rows, the event, the standing — and, only under `.limitsTravelWithTheAnswer()`, an "Assumed (a tool's rule, not your words)" block in the answer (`serve.ts` · `assumedBlockOf`), which leaves out a row a middleware rewrite superseded. |
 | ARM + MEASURE | a REGISTERED tool that declares rules (`.tool()`, a skill's tools, an MCP tool registered on the builder) arms the mount; `AgentBuilder.inputsLayer()` arms it for ruled tools only a ToolProvider serves. Nothing declared → nothing mounted, decorated, read or written: every run is byte-identical (the 21 references in `test/core/tools/reference/`, plus two armed ones). The bench is honesty step 2's inputs bench, whose registered rule names step 3's clauses (the assumed value admitted on the record and in the standing; the person's periods, the facts and the overhead held). |
 
 ## Where the layer runs
@@ -82,8 +82,32 @@ predicate says the batch dispatches (`stages/route.ts` · `willDispatch`). It is
 batch (`llmLatestToolCalls`), the predicate's values and `turnNumber` — never the ledger,
 never a tool (tools are closures, read through the shared resolver). It returns its rows and
 `argumentResolutions` (one entry per call to fill or refuse, stamped with the batch's
-iteration), both under `arrayMerge: Replace`. The four stage bodies load through `import()`
-on first use, so a plain agent's graph never carries them.
+iteration), both under `arrayMerge: Replace`.
+
+## What a plain agent carries
+
+The optional-family law of docs-next's site budget (`docs-next/scripts/check-site-budget.mjs`):
+the layer's run-time code reaches a run through `import()` at the point the arm is known, so
+a plain agent's graph never carries it.
+
+| Loaded through `import()`, only when armed | Loaded by |
+|---|---|
+| `subflow.ts`, `resolve.ts` — the four stage bodies and their pure steps | the mount's stage wrappers (`honesty/mounts.ts`), on first use |
+| `dispatch.ts` — the fills, the note, the rewrites' `changedKeys`, the fail-closed refusal | ToolCalls, once per batch under the arm; for a ruled tool on an agent without the layer, at that call |
+| `serve.ts` — the served schema, the note and refusal sentences, the "Assumed" block | the tools slot and seed (the schema), `dispatch.ts`, the final branch's armed variant (`stages/prepareFinal.ts` · `prepareFinalWithLimitsAndAssumedStage`) |
+| `middleware/rewrites.ts` — the one reading of a rewrite | `serve.ts` and the standing fold (`assessment/assess.ts`, itself loaded on first use) |
+
+What stays on the default graph is what a SYNCHRONOUS door needs before anything is known to
+be armed: the declaration and its one assert (`declare.ts` — `defineTool` refuses a malformed
+declaration synchronously, at definition), the row's shape and its checkpoint check
+(`rows.ts`, run by `validateCheckpoint`), the mount and the arm itself (`honesty/`,
+`AgentBuilder.inputsLayer`, the charts), the turn stamp and the one-writer merge
+(`findings/ledger.ts`), the tool-bytes cut (`lib/toolBytes.ts`) and
+`allow(args, why, { from })`. Two small armed pieces stay static on purpose: the argument
+row's event (`findings/ledger.ts` · `emitArgumentRow`, inside the one writer's emit half) and
+the inner-dispatch refusal (`toolDispatch.ts` · `refuseUnaccountedRuledArguments`, which
+refuses before `ctx.tools.call` takes its sequence number — an `await` there would reorder
+concurrent inner calls). `test/lib/trace-toolpack/browserGraph.test.ts` pins the split.
 
 ## Refused, and what the model reads
 

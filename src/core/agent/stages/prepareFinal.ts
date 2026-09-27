@@ -28,10 +28,6 @@
 import type { TypedScope } from 'footprintjs';
 import { typedEmit } from '../../../recorders/core/typedEmit.js';
 import { composeAnswerWithCoverage } from '../coverage/index.js';
-import { HIDDEN_VALUE, type ArgumentRow } from '../arguments/rows.js';
-import { assumedBlock, type AssumedLine } from '../arguments/serve.js';
-import type { FindingsRow } from '../findings/types.js';
-import { argumentRewritesOf, type ArgumentRewrite } from '../middleware/rewrites.js';
 import type { AgentState } from '../types.js';
 
 /**
@@ -173,13 +169,16 @@ export const prepareFinalWithLimitsStage = (scope: TypedScope<AgentState>): void
  * (honesty layer 2) — the limits stage above, plus the values a tool's
  * `assume` rule filled THIS turn: "Assumed (a tool's rule, not your words)",
  * composed by the framework from the committed `argument` rows
- * (`arguments/serve.ts` · `assumedBlock`), so the model cannot drop it.
+ * (`arguments/serve.ts` · `assumedBlockOf`), so the model cannot drop it.
  *
  * Mounted in place of `prepareFinalWithLimitsStage` by both chart builders
  * ONLY when both arms are on — the one place the final branch reads the
  * ledger's argument rows, so a run that armed neither never reads the key (a
  * tracked read of a key a run never writes is a phantom context source). With
  * neither coverage nor an assumed value this turn, the answer is unchanged.
+ * The block's reader is loaded through `import()` — the optional-family law
+ * of docs-next's site budget — so this variant is async where the others are
+ * not, and only an armed agent ever mounts it.
  *
  * `readsRewrites` — the agent has a before-tool middleware chain
  * (`.toolMiddleware()`), so a middleware may have rewritten an argument the
@@ -192,55 +191,23 @@ export const prepareFinalWithLimitsStage = (scope: TypedScope<AgentState>): void
  */
 export function prepareFinalWithLimitsAndAssumedStage(
   readsRewrites: boolean,
-): (scope: TypedScope<AgentState>) => void {
-  return (scope) => {
+): (scope: TypedScope<AgentState>) => Promise<void> {
+  return async (scope) => {
+    const { assumedBlockOf } = await import('../arguments/serve.js');
     const declared = scope.coverageDeclared ?? [];
-    const rows = defaultRowsOf(scope.findingsLedger ?? [], scope.turnNumber as number);
-    // Read only when there is a row a rewrite could supersede — and only on an
-    // agent whose chain can write one.
-    const rewrites =
-      readsRewrites && rows.length > 0
-        ? argumentRewritesOf([
-            ...((scope.middlewareDecisions as readonly unknown[] | undefined) ?? []),
-          ])
-        : undefined;
-    const assumed = assumedBlock(assumedLinesOf(rows, rewrites));
+    // The decisions are read only when there is a row a rewrite could
+    // supersede — and only on an agent whose chain can write one.
+    const assumed = assumedBlockOf(
+      scope.findingsLedger ?? [],
+      scope.turnNumber as number,
+      readsRewrites
+        ? () => [...((scope.middlewareDecisions as readonly unknown[] | undefined) ?? [])]
+        : undefined,
+    );
     const answer =
       declared.length > 0 || assumed !== ''
         ? composeAnswerWithCoverage(scope.llmLatestContent, declared, assumed)
         : scope.llmLatestContent;
     captureTurnPayload(scope, answer);
   };
-}
-
-/** This turn's `default` argument rows, in the order they were filed. */
-function defaultRowsOf(ledger: readonly FindingsRow[], turn: number): ArgumentRow[] {
-  const rows: ArgumentRow[] = [];
-  for (const row of ledger) {
-    if (row.kind === 'argument' && row.turn === turn && row.source === 'default') rows.push(row);
-  }
-  return rows;
-}
-
-/**
- * The rows as the "Assumed" block names them — every row a before-tool
- * rewrite superseded left out: its call ran with the rewrite's value, not
- * the one the row names (`middleware/rewrites.ts` · `argumentRewritesOf`).
- */
-function assumedLinesOf(
-  rows: readonly ArgumentRow[],
-  rewrites: ReadonlyMap<string, ReadonlyMap<string, ArgumentRewrite>> | undefined,
-): AssumedLine[] {
-  const lines: AssumedLine[] = [];
-  for (const row of rows) {
-    if (rewrites?.get(row.toolCallId)?.has(row.argument) === true) continue;
-    const value = row.value ?? '';
-    lines.push({
-      toolName: row.toolName,
-      argument: row.argument,
-      value,
-      hidden: value === HIDDEN_VALUE,
-    });
-  }
-  return lines;
 }

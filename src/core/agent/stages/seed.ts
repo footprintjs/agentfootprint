@@ -30,7 +30,6 @@ import type { MessageMiddleware } from '../middleware/types.js';
 import { runMessageChain } from '../middleware/runChain.js';
 import { recordDecisions } from '../middleware/ledger.js';
 import { withFindingsArgument } from '../findings/reserved.js';
-import { withArgumentRules } from '../arguments/serve.js';
 import type { HonestyLayers } from '../honesty/armed.js';
 import type { FindingsLedger } from '../findings/types.js';
 import type { Ontology } from '../../../ontology/types.js';
@@ -321,6 +320,21 @@ async function anchorTurnNumber(
   });
 }
 
+/** The inputs layer's schema decoration (`arguments/serve.ts` · `withArgumentRules`). */
+type RuleDecoration = typeof import('../arguments/serve.js').withArgumentRules;
+
+/**
+ * The inputs layer's schema decoration for THIS run's seed — loaded through
+ * `import()` only when a registered tool is ruled (`deps.ruledTools`), the
+ * optional-family law of docs-next's site budget; `undefined` otherwise, so
+ * an agent without the layer seeds with no new await and no new microtask.
+ */
+function loadRuleDecoration(deps: SeedStageDeps): Promise<RuleDecoration> | undefined {
+  return deps.ruledTools === undefined
+    ? undefined
+    : import('../arguments/serve.js').then((m) => m.withArgumentRules);
+}
+
 /**
  * Build the seed stage function for an Agent instance. Captures both
  * the chart-build-time constants and the per-run mutable accessors
@@ -335,18 +349,34 @@ export function buildSeedStage(
   // stage has always been. Not an optimisation: an agent without middleware
   // and without memory must produce the same stage shape, the same committed
   // keys and the same request bytes as before.
+  //
+  // A registered RULED tool (the inputs layer, honesty layer 2) is the one
+  // exception to "the same synchronous function": its schema decoration loads
+  // on first use (`loadRuleDecoration`), so that seed returns a promise — and
+  // only that agent's seed does.
   if (chain.length === 0 && stores.length === 0) {
     return (scope) => {
-      seedFrom(scope, scope.$getArgs<AgentInput>().message, deps);
+      const loading = loadRuleDecoration(deps);
+      if (loading === undefined) {
+        seedFrom(scope, scope.$getArgs<AgentInput>().message, deps, undefined);
+        return;
+      }
+      return loading.then((decorate) =>
+        seedFrom(scope, scope.$getArgs<AgentInput>().message, deps, decorate),
+      );
     };
   }
   if (chain.length === 0) {
     return async (scope) => {
-      seedFrom(scope, scope.$getArgs<AgentInput>().message, deps);
+      const loading = loadRuleDecoration(deps);
+      const decorate = loading === undefined ? undefined : await loading;
+      seedFrom(scope, scope.$getArgs<AgentInput>().message, deps, decorate);
       await anchorTurnNumber(scope, stores);
     };
   }
   return async (scope) => {
+    const loading = loadRuleDecoration(deps);
+    const decorate = loading === undefined ? undefined : await loading;
     const args = scope.$getArgs<AgentInput>();
     const verdict = await runMessageChain(chain, {
       phase: 'input',
@@ -363,7 +393,7 @@ export function buildSeedStage(
       // about a run, and hiding what was refused would make the record
       // useless), and a fully-seeded state means `resumeOnError` and every
       // recorder see the shape they expect rather than a half-built one.
-      seedFrom(scope, verdict.content, deps);
+      seedFrom(scope, verdict.content, deps, decorate);
       scope.messageDeniedReason = verdict.reason;
       scope.messageDeniedPhase = 'input';
       scope.messageDeniedBy = verdict.middleware;
@@ -375,7 +405,7 @@ export function buildSeedStage(
       scope.$break(`message denied at input: ${verdict.reason}`);
       return;
     }
-    seedFrom(scope, verdict.content, deps);
+    seedFrom(scope, verdict.content, deps, decorate);
     if (stores.length > 0) await anchorTurnNumber(scope, stores);
   };
 }
@@ -413,8 +443,17 @@ function historyForTurn(
  * args. Split out so the message the run proceeds with can come either
  * straight from the caller or from the `'input'` middleware chain — one
  * initialiser, so the two paths cannot drift.
+ *
+ * `decorate` is the inputs layer's schema decoration, loaded by the caller
+ * exactly when `deps.ruledTools` is set (`loadRuleDecoration`) — never on an
+ * agent whose registered tools declare no rules.
  */
-function seedFrom(scope: TypedScope<AgentState>, message: string, deps: SeedStageDeps): void {
+function seedFrom(
+  scope: TypedScope<AgentState>,
+  message: string,
+  deps: SeedStageDeps,
+  decorate: RuleDecoration | undefined,
+): void {
   const args = scope.$getArgs<AgentInput>();
   scope.userMessage = message;
 
@@ -546,9 +585,9 @@ function seedFrom(scope: TypedScope<AgentState>, message: string, deps: SeedStag
   // order: rules, then `_findings`. Only when a registered tool is ruled.
   const ruledTools = deps.ruledTools;
   const ruled =
-    ruledTools === undefined
+    ruledTools === undefined || decorate === undefined
       ? deps.toolSchemas
-      : deps.toolSchemas.map((s) => withArgumentRules(s, ruledTools.get(s.name)));
+      : deps.toolSchemas.map((s) => decorate(s, ruledTools.get(s.name)));
   scope.dynamicToolSchemas =
     deps.findings === true ? ruled.map((s) => withFindingsArgument(s)) : ruled;
   // The honesty layers' run constant (`honesty/armed.ts`) — written once, and

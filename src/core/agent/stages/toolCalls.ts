@@ -119,20 +119,12 @@ import type { ToolClaim } from '../buildToolRegistry.js';
 import { changedArgKeys, shownArgsOf } from '../../toolShownArgs.js';
 import { toolBytesOf } from '../../../lib/toolBytes.js';
 import { buildToolResolver, type ToolResolution } from './toolResolver.js';
-import type { ArgumentFill, ArgumentResolution } from '../arguments/resolve.js';
-import { rulesOf } from '../arguments/declare.js';
-import {
-  filledNote,
-  hidesArgument,
-  unmountedRulesRefusal,
-  type FilledArgument,
-} from '../arguments/serve.js';
 import type { Tool, ToolExecutionContext } from '../../tools.js';
 import { agentToolDispatch } from '../toolDispatch.js';
 import type { MemoryIdentity } from '../../../memory/identity/types.js';
 import type { TeardownOptions, TeardownScope, ToolSessionTier } from '../../toolSessions.js';
 import type { InjectionRecord } from '../../../recorders/core/types.js';
-import type { MiddlewareDecision, ToolMiddleware } from '../middleware/types.js';
+import type { ToolMiddleware } from '../middleware/types.js';
 import { runToolChain, runToolAfterChain, type ToolArgs } from '../middleware/runChain.js';
 import { recordDecisions } from '../middleware/ledger.js';
 import { ownsReservedArgument, splitFindings, type SplitFindings } from '../findings/reserved.js';
@@ -1360,109 +1352,15 @@ function towersFor(
 }
 
 // ─── The inputs layer's half of dispatch (honesty layer 2) ──────────────
+//
+// The fills, the note, the rewrites' `changedKeys` and the fail-closed refusal
+// live in `../arguments/dispatch.ts`, loaded through `import()` only when the
+// layer is armed, or when a call's tool declares rules on an agent built
+// without it — the optional-family law of docs-next's site budget (the
+// `judgeLanded` precedent above), so a plain agent's graph never carries them.
 
-/** This batch's entries of `argumentResolutions`, by call id — read only under the arm. */
-function resolutionsFor(
-  scope: TypedScope<AgentState>,
-  iteration: number,
-): ReadonlyMap<string, ArgumentResolution> {
-  const entries = [
-    ...((scope.argumentResolutions as readonly ArgumentResolution[] | undefined) ?? []),
-  ];
-  const byId = new Map<string, ArgumentResolution>();
-  for (const entry of entries) {
-    if (entry.iteration === iteration) byId.set(entry.toolCallId, entry);
-  }
-  return byId;
-}
-
-/** `args` with the entry's fills — a FRESH object; `args` itself when there are none. */
-function withFills(args: ToolArgs, resolution: ArgumentResolution | undefined): ToolArgs {
-  const fills = resolution?.fills;
-  if (fills === undefined || fills.length === 0) return args;
-  const filled: Record<string, unknown> = { ...args };
-  for (const fill of fills) filled[fill.argument] = fill.value;
-  return filled;
-}
-
-/** The fills as the note may print them — a value the tool's view hides is never printed. */
-function shownFills(tool: Tool | undefined, fills: readonly ArgumentFill[]): FilledArgument[] {
-  return fills.map((f) => ({
-    argument: f.argument,
-    value: f.value,
-    hidden: hidesArgument(tool, f.argument, f.value),
-  }));
-}
-
-/**
- * The entry's fills the call RAN with — each whose value is still the value on
- * the arguments the call ran with (`callArgs`, after the before-tool chain). A
- * middleware that rewrote a filled argument ran the call on ITS value, so a
- * clause naming the fill would tell the model the call ran with a value it did
- * not run with — a sentence a later path broke (honesty law 7). That clause is
- * omitted, never denied: the rewrite is on `middlewareDecisions`
- * (`changedKeys`), which the answer's standing and the "Assumed" block read.
- * Strict equality on purpose: the note prints the value, so it must be the
- * value that ran, byte for byte.
- */
-function fillsThatRan(
-  resolution: ArgumentResolution | undefined,
-  ranWith: ToolArgs,
-): readonly ArgumentFill[] {
-  const fills = resolution?.fills ?? [];
-  return fills.filter((f) => ranWith[f.argument] === f.value);
-}
-
-/**
- * The before-tool rows of one call's chain, each rewrite stamped with the
- * NAMES of the arguments it changed (`changedArgKeys` over its own
- * before/after — names only, never values).
- */
-function withChangedKeys(rows: readonly MiddlewareDecision[]): MiddlewareDecision[] {
-  return rows.map((row) => {
-    if (!row.changed || row.moment !== 'before-tool') return row;
-    const before = row.before;
-    const after = row.after;
-    if (
-      before === null ||
-      typeof before !== 'object' ||
-      after === null ||
-      typeof after !== 'object'
-    ) {
-      return row;
-    }
-    const keys = changedArgKeys(before as ToolArgs, after as ToolArgs);
-    return keys.length > 0 ? { ...row, changedKeys: keys } : row;
-  });
-}
-
-const warnedUnmounted = new Set<string>();
-const MAX_WARNED_UNMOUNTED = 500;
-
-/**
- * Once per tool name, unconditionally (a refused call is not a style note):
- * the tool declares argument rules and the agent was built without the
- * inputs layer, so every call to it is refused.
- */
-function warnUnmountedRulesOnce(toolName: string): void {
-  if (warnedUnmounted.has(toolName)) return;
-  if (warnedUnmounted.size < MAX_WARNED_UNMOUNTED) warnedUnmounted.add(toolName);
-  // eslint-disable-next-line no-console
-  console.warn(
-    `[agentfootprint] tool '${toolName}' declares argument rules (askOrAssume / period), and ` +
-      `this agent was built without the inputs layer — the tool reached the run through a ` +
-      `ToolProvider, which the build cannot see. Its calls are REFUSED rather than run ` +
-      `unruled. Build the agent with .inputsLayer() to apply the rules.`,
-  );
-}
-
-/**
- * Forget every unmounted-rules warning issued so far.
- * @internal test seam — the ledger is process-wide and warn-once.
- */
-export function _resetUnmountedRulesWarnings(): void {
-  warnedUnmounted.clear();
-}
+/** The inputs layer's half of dispatch, once loaded. */
+type InputsDispatch = typeof import('../arguments/dispatch.js');
 
 export function buildToolCallsHandler(
   deps: ToolCallsHandlerDeps,
@@ -3093,14 +2991,19 @@ export function buildToolCallsHandler(
    * mounted, a call whose tool declares argument rules is refused rather than
    * run unruled — configured-and-inert looks exactly like
    * configured-and-working. Only a ToolProvider-served tool can reach here
-   * (a registered ruled tool arms the layer at build). `undefined` for every
-   * tool that declares nothing, and for every call on an armed agent.
+   * (a registered ruled tool arms the layer at build). `undefined` —
+   * synchronously, no microtask — for every tool that declares nothing, and
+   * for every call on an armed agent; only a ruled tool on an agent without
+   * the layer loads the layer's dispatch half, for the sentence and the
+   * warning (`arguments/dispatch.ts` · `unmountedRefusal`).
    */
-  const unmountedRules = (tool: Tool | undefined, toolName: string): string | undefined => {
+  const unmountedRules = (
+    tool: Tool | undefined,
+    toolName: string,
+  ): Promise<string> | undefined => {
     if (deps.inputsLayer === true || tool === undefined) return undefined;
     if (tool.askOrAssume === undefined && tool.period === undefined) return undefined;
-    warnUnmountedRulesOnce(toolName);
-    return unmountedRulesRefusal(toolName);
+    return import('../arguments/dispatch.js').then((m) => m.unmountedRefusal(toolName));
   };
   /**
    * The honesty layers' TURN STAMP (adopted Q6): while the inputs layer is
@@ -3714,9 +3617,13 @@ export function buildToolCallsHandler(
         }[]),
       ];
       const iteration = scope.iteration as number;
-      // THE INPUTS LAYER'S RESOLUTIONS for this batch (honesty layer 2) — read
-      // only under the arm, and only the entries resolved for THIS iteration.
-      const resolutions = deps.inputsLayer === true ? resolutionsFor(scope, iteration) : undefined;
+      // THE INPUTS LAYER'S HALF OF DISPATCH (honesty layer 2) — loaded through
+      // `import()` only under the arm, so an unarmed batch awaits nothing new.
+      const inputs: InputsDispatch | undefined =
+        deps.inputsLayer === true ? await import('../arguments/dispatch.js') : undefined;
+      // THE INPUTS LAYER'S RESOLUTIONS for this batch — read only under the
+      // arm, and only the entries resolved for THIS iteration.
+      const resolutions = inputs?.resolutionsFor(scope, iteration);
       const newHistory: LLMMessage[] = [...(scope.history as readonly LLMMessage[])];
       // ALWAYS push the assistant turn when there are tool calls — even
       // if the content was empty — so providers (Anthropic, OpenAI) can
@@ -3928,7 +3835,7 @@ export function buildToolCallsHandler(
         // which is the assistant message's own object when `.findings()` is
         // off. No entry (every unarmed agent) → `args` itself, by reference.
         const resolution = resolutions?.get(tc.id);
-        const runArgs: ToolArgs = withFills(args, resolution);
+        const runArgs: ToolArgs = inputs !== undefined ? inputs.withFills(args, resolution) : args;
         let callArgs: ToolArgs = runArgs;
         /** The arguments AFTER the before-tool chain and BEFORE a `wants`
          *  resolution swaps refs for artifact data — what `changedArgKeys` is
@@ -4136,8 +4043,11 @@ export function buildToolCallsHandler(
         // (`resume`, the middleware-ask path). Refused: a call whose tool's
         // rules could not be read at dispatch (the layer's entry), and — with
         // the layer NOT mounted — any call whose tool declares rules (fail
-        // closed). Neither applies to a tool that declares nothing.
-        const rulesRefusal = resolution?.refused ?? unmountedRules(tool, tc.name);
+        // closed). Neither applies to a tool that declares nothing — and
+        // neither awaits for one (`unmountedRules` answers it synchronously).
+        const unmounted = unmountedRules(tool, tc.name);
+        const rulesRefusal =
+          resolution?.refused ?? (unmounted === undefined ? undefined : await unmounted);
         if (!denied && rulesRefusal !== undefined) {
           argsRejected = true;
           error = true;
@@ -4170,8 +4080,8 @@ export function buildToolCallsHandler(
           // declared origin as assumed. Every other row: as it always was.
           recordDecisions(
             scope,
-            deps.inputsLayer === true && rulesOf(tool) !== undefined
-              ? withChangedKeys(chain.decisions)
+            inputs !== undefined
+              ? inputs.decisionsToRecord(tool, chain.decisions)
               : chain.decisions,
           );
           callArgs = chain.args;
@@ -5245,14 +5155,16 @@ export function buildToolCallsHandler(
         // ── The inputs layer's note (honesty layer 2) — LAST, after every
         // other suffix, and only for a call that RAN on a value the library
         // filled: one clause per fill the call really ran with
-        // (`fillsThatRan` — a middleware may have rewritten one). The message
-        // then carries `toolChars` (the tool's own bytes), so every reader of
-        // a result's content as the TOOL's words reads through the cut
-        // (`lib/toolBytes.ts` · `toolBytesOf`): a value that sits only in the
-        // library's note grounds nothing and hides no reading of the result.
-        const ranFills = executed ? fillsThatRan(resolution, callArgs) : [];
+        // (`arguments/dispatch.ts` · `fillsThatRan` — a middleware may have
+        // rewritten one). The message then carries `toolChars` (the tool's own
+        // bytes), so every reader of a result's content as the TOOL's words
+        // reads through the cut (`lib/toolBytes.ts` · `toolBytesOf`): a value
+        // that sits only in the library's note grounds nothing and hides no
+        // reading of the result.
         const layerNote =
-          ranFills.length > 0 ? filledNote(tc.name, shownFills(tool, ranFills)) : '';
+          inputs !== undefined && executed
+            ? inputs.noteFor(tc.name, tool, resolution, callArgs)
+            : '';
         if (layerNote !== '') resultStr += layerNote;
         newHistory.push({
           role: 'tool',
@@ -5501,10 +5413,12 @@ export function buildToolCallsHandler(
           // not run a ruled tool unruled because a person approved the ask.
           // Refused here, the rest of the chain is not walked and the tool
           // does not run — the argument-refusal shape the loop lands.
+          const inputs: InputsDispatch | undefined =
+            deps.inputsLayer === true ? await import('../arguments/dispatch.js') : undefined;
+          const unmounted = unmountedRules(tool, toolName);
           const rulesRefusal =
-            (deps.inputsLayer === true
-              ? resolutionsFor(scope, iteration).get(toolCallId)?.refused
-              : undefined) ?? unmountedRules(tool, toolName);
+            inputs?.resolutionsFor(scope, iteration).get(toolCallId)?.refused ??
+            (unmounted === undefined ? undefined : await unmounted);
           if (rulesRefusal !== undefined) {
             error = true;
             result = rulesRefusal;
