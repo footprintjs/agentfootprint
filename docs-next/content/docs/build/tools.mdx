@@ -39,8 +39,8 @@ What the model read for each branch, captured from that example's run (pretty-pr
 ```json title="describedResult — two rows found"
 {
   "facts": [
-    { "entity": "shiecgprnap103", "day": "2026-08-18", "ok": true },
-    { "entity": "shiecgprnap103", "day": "2026-08-19", "ok": true }
+    { "entity": "vm-01", "day": "2026-08-18", "ok": true },
+    { "entity": "vm-01", "day": "2026-08-19", "ok": true }
   ],
   "provenance": {
     "measured_at": "2026-08-19T10:12:00Z",
@@ -58,7 +58,7 @@ What the model read for each branch, captured from that example's run (pretty-pr
     "cannot_cover": [{ "what": "PPDM", "why": "not collected on this install" }],
     "note": "This result covers only what `checked` lists. `not_checked` is ground the call this result answers did not look at, and `cannot_cover` is ground this tool can never see — a clean result here is NOT evidence about either, and no retry changes `cannot_cover`. Carry these limits into any answer you build on this result."
   },
-  "result": "shiecgprnap103: 2 of 2 backup runs succeeded"
+  "result": "vm-01: 2 of 2 backup runs succeeded"
 }
 ```
 
@@ -66,7 +66,7 @@ What the model read for each branch, captured from that example's run (pretty-pr
 {
   "af_absent": true,
   "outcome": "nothing_found",
-  "looked_for": "backup runs for shiecgprnap999",
+  "looked_for": "backup runs for vm-99",
   "checked": [{ "what": "every backup job in the export of 2026-08-19T10:12:00Z" }],
   "cannot_cover": [{ "what": "PPDM", "why": "not collected on this install" }],
   "retry_returns_the_same": true,

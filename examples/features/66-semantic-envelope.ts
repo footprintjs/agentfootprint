@@ -56,7 +56,7 @@ export const meta: ExampleMeta = {
     'compact projection, the record keeps the full envelope, one execute picks describedResult / ' +
     'coverage / absent by what it found, and check:semantics fails a triage tool that forgot its ' +
     'coverage — naming the tool and the field.',
-  defaultInput: 'Is the backup posture for shiecgprnap103 healthy?',
+  defaultInput: 'Is the backup posture for vm-01 healthy?',
   providerSlots: ['default'],
   tags: ['features', 'tools', 'observability', 'governance'],
 };
@@ -74,9 +74,9 @@ export const backupExport = {
   exportedAt: '2026-08-19T10:12:00Z',
   source: 'Cohesity API export (4 clusters)',
   runs: [
-    { vm: 'shiecgprnap103', day: '2026-08-18', ok: 1, copies: 1 },
-    { vm: 'shiecgprnap103', day: '2026-08-19', ok: 1, copies: 1 },
-    { vm: 'shiecgprnap104', day: '2026-08-19', ok: 0, copies: 0 },
+    { vm: 'vm-01', day: '2026-08-18', ok: 1, copies: 1 },
+    { vm: 'vm-01', day: '2026-08-19', ok: 1, copies: 1 },
+    { vm: 'vm-02', day: '2026-08-19', ok: 0, copies: 0 },
   ],
 };
 
@@ -158,7 +158,7 @@ const brokenTriage = defineTool({
 const oneTurn = (): LLMProvider =>
   mock({
     replies: [
-      { toolCalls: [{ id: 'call-backup-1', name: 'vm_backup_status', args: { vm: 'shiecgprnap103' } }] },
+      { toolCalls: [{ id: 'call-backup-1', name: 'vm_backup_status', args: { vm: 'vm-01' } }] },
       { content: 'Backed up — two successful daily runs. Note: PPDM is not collected here.' },
     ],
   });
@@ -181,10 +181,10 @@ export async function modelViews(): Promise<{ described: string; covered: string
   const agent = Agent.create({
     provider: mock({
       replies: [
-        { toolCalls: [{ id: 'c1', name: 'vm_backups', args: { vm: 'shiecgprnap103' } }] },
-        { toolCalls: [{ id: 'c2', name: 'vm_backups', args: { vm: 'shiecgprnap103', summary: true } }] },
-        { toolCalls: [{ id: 'c3', name: 'vm_backups', args: { vm: 'shiecgprnap999' } }] },
-        { content: 'shiecgprnap103: 2 of 2 runs succeeded; shiecgprnap999 has no backup runs.' },
+        { toolCalls: [{ id: 'c1', name: 'vm_backups', args: { vm: 'vm-01' } }] },
+        { toolCalls: [{ id: 'c2', name: 'vm_backups', args: { vm: 'vm-01', summary: true } }] },
+        { toolCalls: [{ id: 'c3', name: 'vm_backups', args: { vm: 'vm-99' } }] },
+        { content: 'vm-01: 2 of 2 runs succeeded; vm-99 has no backup runs.' },
       ],
     }),
     model: 'small-model',
@@ -193,7 +193,7 @@ export async function modelViews(): Promise<{ described: string; covered: string
     .system('You audit backup posture.')
     .tool(vmBackups)
     .build();
-  await agent.run({ message: 'Check shiecgprnap103 and shiecgprnap999.' });
+  await agent.run({ message: 'Check vm-01 and vm-99.' });
   const [described = '', covered = '', nothing = ''] = toolMessagesOf(agent);
   return { described, covered, absent: nothing };
 }
@@ -254,7 +254,7 @@ export async function run(input: string, provider?: LLMProvider): Promise<string
   // ── 4. The gate ────────────────────────────────────────────────────────
   console.log('4. check:semantics — the honest tool passes, the broken one fails BY NAME:\n');
   const catalog = [
-    { name: backupStatus.schema.name, resultClass: backupStatus.resultClass, results: [backupStatus.execute({ vm: 'shiecgprnap103' }, {} as never)] },
+    { name: backupStatus.schema.name, resultClass: backupStatus.resultClass, results: [backupStatus.execute({ vm: 'vm-01' }, {} as never)] },
     { name: brokenTriage.schema.name, resultClass: brokenTriage.resultClass, results: [brokenTriage.execute({}, {} as never)] },
   ];
   const report = checkSemantics(catalog as never);

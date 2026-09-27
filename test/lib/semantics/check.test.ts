@@ -27,7 +27,7 @@ const PROVENANCE = { measured_at: '2026-08-19T10:20:00Z', source: 'Cohesity API'
 
 const goodTriage = () =>
   semantic({
-    facts: [{ entity: 'shiecgprnap103', backed_up: true, copies: 1 }],
+    facts: [{ entity: 'vm-01', backed_up: true, copies: 1 }],
     provenance: PROVENANCE,
     coverage: {
       checked: ['4 Cohesity clusters'],
