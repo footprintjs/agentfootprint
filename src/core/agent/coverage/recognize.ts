@@ -1,14 +1,16 @@
 /**
- * The absence RECOGNIZER — a leaf: no imports but types.
+ * The two envelope RECOGNIZERS — a leaf: no imports but types.
  *
- * `absent.ts` mints an absence and owns its sentences; this file owns only the
- * one question every reader asks of a finished value, "is this an absence
- * envelope?". It is split out so a post-hoc reader (the answer account) can ask
- * it without loading the mint's tool-name checks. `absent.ts` re-exports both
- * names, so every existing import keeps working.
+ * `absent.ts` mints an absence and `ledger.ts` a coverage ledger, and each owns
+ * its sentences; this file owns only the one question every reader asks of a
+ * finished value, "is this an absence?" / "is this a covered result?". It is
+ * split out so a post-hoc reader (the answer account, the one emptiness reader
+ * in `emptiness.ts`, the standing fold) can ask it without loading the mints'
+ * tool-name checks and refusal sentences. `absent.ts` and `ledger.ts` re-export
+ * these names, so every existing import keeps working.
  */
 
-import type { ToolAbsence } from './types.js';
+import type { CoveredResult, ToolAbsence } from './types.js';
 
 /**
  * The reserved key that makes an absence recognizable. Exported because tests,
@@ -33,4 +35,21 @@ export function readAbsence(value: unknown): ToolAbsence | undefined {
   if (rec[ABSENCE_MARKER] !== true) return undefined;
   if (!Array.isArray(rec.checked) || rec.checked.length === 0) return undefined;
   return value as ToolAbsence;
+}
+
+/** The reserved key that makes a ledger recognizable. */
+export const COVERAGE_MARKER = 'af_coverage';
+
+/**
+ * Recognize (or decline to recognize) a value as a covered result. STRICT for
+ * the same reason `readAbsence` is: only a plain object carrying a plain
+ * `af_coverage` object AND a `result` key qualifies.
+ */
+export function readCoverageLedger(value: unknown): CoveredResult | undefined {
+  if (typeof value !== 'object' || value === null || Array.isArray(value)) return undefined;
+  const rec = value as Record<string, unknown>;
+  const marker = rec[COVERAGE_MARKER];
+  if (typeof marker !== 'object' || marker === null || Array.isArray(marker)) return undefined;
+  if (!('result' in rec)) return undefined;
+  return value as CoveredResult;
 }

@@ -36,7 +36,13 @@ const ROUTES = [
   },
 ];
 
-const SEARCH_LIMITS = { raw: 12_000_000, gzip: 2_110_000, records: 2_000 };
+const SEARCH_LIMITS = { raw: 12_000_000, gzip: 2_155_000, records: 2_000 };
+// Search gzip raised 2.11 -> 2.155 MB (2026-09-27) — growth this release can
+// name: the answer's standing (`assessAnswer()` / `agent.assessment()`), its
+// section on the recordings page and its Agent API entry. Measured with
+// EXPORT=true on the change: 2,111,307 B gzip (8.54 MB raw, 1,023 records),
+// 1.3 KB over the old ceiling; CI measured the same 2.11 MB. ~2% headroom, as
+// every raise here.
 // Search gzip raised 2.06 -> 2.11 MB (2026-09-25). The docs/guides/ migration is
 // complete: the last guides (streaming, recorders, security, prompt-injection,
 // adapters, AgentCore, instructions, quick-start) were folded into existing

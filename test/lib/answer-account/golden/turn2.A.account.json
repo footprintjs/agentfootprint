@@ -3,7 +3,7 @@
  "shape": 1,
  "templates": {
   "set": "answer-account",
-  "version": 1
+  "version": 2
  },
  "run": {
   "value": {
@@ -262,11 +262,23 @@
    ]
   },
   "standing": {
-   "value": null,
+   "value": "not-sure",
    "source": "library",
-   "status": "not-recorded",
-   "pointers": [],
-   "missing": "not-built"
+   "status": "recorded",
+   "pointers": [
+    {
+     "kind": "history",
+     "index": 6,
+     "path": "/toolCallId",
+     "toolCallId": "toolu_01HRutzrsmgifaHQm73u6kuX"
+    },
+    {
+     "kind": "history",
+     "index": 6,
+     "path": "/toolCallId",
+     "toolCallId": "toolu_01HRutzrsmgifaHQm73u6kuX"
+    }
+   ]
   },
   "limitsBlock": {
    "value": null,
@@ -1360,32 +1372,90 @@
    },
    "lines": [
     {
-     "text": "The record does not rate how sure this answer is.",
+     "text": "Not sure — the record holds 2 reasons this answer may not stand:",
      "parts": [
       {
-       "text": "The record does not rate how sure this answer is."
+       "text": "Not sure — the record holds 2 reasons this answer may not stand:"
       }
      ],
      "template": {
-      "id": "howSure.standing.none",
+      "id": "howSure.standing.notSure",
       "version": 1
      },
-     "vars": {},
+     "vars": {
+      "n": {
+       "value": 2,
+       "source": "library"
+      }
+     },
      "source": "library",
-     "status": "not-recorded",
-     "pointers": [],
-     "missing": "not-built",
-     "chips": [
+     "status": "recorded",
+     "pointers": [
       {
-       "mark": "not-recorded",
-       "text": "not recorded",
-       "tone": "plain",
-       "template": {
-        "id": "chip.notRecorded",
-        "version": 1
-       }
+       "kind": "history",
+       "index": 6,
+       "path": "/toolCallId",
+       "toolCallId": "toolu_01HRutzrsmgifaHQm73u6kuX"
       }
      ]
+    },
+    {
+     "text": "1 call declared ground it did not check or can never cover.",
+     "parts": [
+      {
+       "text": "1 call declared ground it did not check or can never cover."
+      }
+     ],
+     "template": {
+      "id": "howSure.reason.coverageGap",
+      "version": 1
+     },
+     "vars": {
+      "n": {
+       "value": 1,
+       "source": "library"
+      }
+     },
+     "source": "library",
+     "status": "recorded",
+     "pointers": [
+      {
+       "kind": "history",
+       "index": 6,
+       "path": "/toolCallId",
+       "toolCallId": "toolu_01HRutzrsmgifaHQm73u6kuX"
+      }
+     ],
+     "item": true
+    },
+    {
+     "text": "1 call declared that nothing matched.",
+     "parts": [
+      {
+       "text": "1 call declared that nothing matched."
+      }
+     ],
+     "template": {
+      "id": "howSure.reason.declaredAbsent",
+      "version": 1
+     },
+     "vars": {
+      "n": {
+       "value": 1,
+       "source": "library"
+      }
+     },
+     "source": "library",
+     "status": "recorded",
+     "pointers": [
+      {
+       "kind": "history",
+       "index": 6,
+       "path": "/toolCallId",
+       "toolCallId": "toolu_01HRutzrsmgifaHQm73u6kuX"
+      }
+     ],
+     "item": true
     },
     {
      "text": "Before calling get_array_inventory, the model said it expected this call to answer the question directly, and rated how useful it expected the result to be: high.",
@@ -1532,6 +1602,15 @@
    "chips": [
     {
      "mark": "said-by",
+     "text": "said by: the library's record",
+     "tone": "plain",
+     "template": {
+      "id": "chip.saidBy",
+      "version": 1
+     }
+    },
+    {
+     "mark": "said-by",
      "text": "said by: the model",
      "tone": "plain",
      "template": {
@@ -1542,15 +1621,6 @@
     {
      "mark": "said-by",
      "text": "said by: get_array_inventory",
-     "tone": "plain",
-     "template": {
-      "id": "chip.saidBy",
-      "version": 1
-     }
-    },
-    {
-     "mark": "said-by",
-     "text": "said by: the library's record",
      "tone": "plain",
      "template": {
       "id": "chip.saidBy",

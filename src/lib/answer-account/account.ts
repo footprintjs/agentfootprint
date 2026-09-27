@@ -341,13 +341,7 @@ export function buildAccount(
       inView: inView.all.slice(0, MAX_CALLS).map((r) => r.fact),
       ...(inView.all.length > MAX_CALLS && { inViewOmitted: inView.all.length - MAX_CALLS }),
       evidence: howSure.evidence,
-      standing: {
-        value: null,
-        source: 'library',
-        status: 'not-recorded',
-        pointers: [],
-        missing: 'not-built',
-      },
+      standing: howSure.standing,
       limitsBlock: limits,
       errors: {
         failed: count('failed'),

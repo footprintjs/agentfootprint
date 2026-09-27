@@ -292,6 +292,7 @@ _Run `npm run examples:readme` after adding/editing examples._
 | 70 | [`70-typed-input.ts`](features/70-typed-input.ts) | Collect typed inputs without losing the request | A partial reply updates the checkpoint without a model call; the full reply resumes the original collection tool. |
 | 71 | [`71-coverage-for-a-report.ts`](features/71-coverage-for-a-report.ts) | Coverage in plain words — short, kind and a skill title, on the record and never in the request | A lookup that found nothing declares a short form and a kind for each coverage item, and its skill a plain title; the record carries all three while the model reads byte-identical requests. |
 | 72 | [`72-explain-an-answer.ts`](features/72-explain-an-answer.ts) | Explain an answer in plain words — every line from the record, each with who vouches for it | A lookup that found nothing declares what it did not check; accountForAnswer reads the recording back as seven rows of fixed sentences, each with its template id and its voucher, and flags the gap. |
+| 73 | [`73-answer-standing.ts`](features/73-answer-standing.ts) | How far an answer stands — known, consistent, not sure, ask or not assessed, from the record | Three lookups answer the same question; agent.assessment() folds each answer’s standing from the committed record — an undeclared empty result and a declared absence are both "not sure", for different reasons; rows with nothing declared are "consistent with the record", never "known". |
 
 ### [`canonical/`](canonical/) — end-to-end patterns
 

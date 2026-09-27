@@ -1,0 +1,33 @@
+test/hosting/review-idI57-regressions.test.ts > review idI57 N-1 — what the IdP advertises is held to > PKCE required and S256 not offered: ready() refuses (discovery)
+test/hosting/review-idI57-regressions.test.ts > review idI57 N-1 — what the IdP advertises is held to > an IdP that advertises RFC 9207: a callback WITHOUT `iss` is refused; with it, signs in
+test/hosting/review-idI57-regressions.test.ts > review idI57 S-1 — a browser sign-in that could never work refuses the boot > a client key that is not RSA or EC P-256 → IDENTITY_CLIENT_KEY_FILE
+test/hosting/review-idI57-regressions.test.ts > review idI57 S-1 — a browser sign-in that could never work refuses the boot > an IdP that is merely unreachable at boot is NOT a refusal; logins then fail, logged ONCE
+test/hosting/review-idI57-regressions.test.ts > review idI57 S-1 — a browser sign-in that could never work refuses the boot > discovery with no authorization or token endpoint → IDENTITY_ISSUER
+test/hosting/review-idI57-regressions.test.ts > review idI57 S-2 — no cookie bomb > 900 × é (raw 901 characters) is kept as `/` — the kept form is measured AFTER encoding (R6)
+test/hosting/review-idI57-regressions.test.ts > review idI57 S-2 — no cookie bomb > N-3 end to end: a login asked to return to /auth/login lands on /
+test/hosting/review-idI57-regressions.test.ts > review idI57 S-2 — no cookie bomb > the NEWEST pending attempts are kept: a fourth login expires the oldest, and two logins in flight both finish
+test/hosting/review-idI57-regressions.test.ts > review idI57 S-3 — the callback > C10: two transaction cookies of one name name nothing
+test/hosting/review-idI57-regressions.test.ts > review idI57 S-3 — the callback > C2: a `state` failure clears the transaction cookie
+test/hosting/review-idI57-regressions.test.ts > review idI57 S-3 — the callback > C3: an exchange failure clears the transaction cookie
+test/hosting/review-idI57-regressions.test.ts > review idI57 S-3 — the callback > C5: a sign-in the browser already carries is ENDED at the callback (rotation)
+test/hosting/review-idI57-regressions.test.ts > review idI57 S-3 — the callback > C6: a transaction is good for 10 minutes and not a millisecond more
+test/hosting/review-idI57-regressions.test.ts > review idI57 S-3 — the callback > C9: returnTo comes only from the seal — a returnTo on the callback URL is ignored
+test/hosting/review-idI57-regressions.test.ts > review idI57 S-3 — the callback > N-4: a store that fails at the callback → the usual redirect, the tx cookie cleared, one log line
+test/hosting/sign-in-redirect.test.ts > redirect sign-in — ROI > identityFromConfig turns on browser sign-in when its keys are set; half set is refused
+test/hosting/sign-in-redirect.test.ts > redirect sign-in — integration > ONE PATH: the browser sign-in and a bearer token give the same id at /invoke
+test/hosting/sign-in-redirect.test.ts > redirect sign-in — integration > sign-out closes an open socket carrying the sign-in
+test/hosting/sign-in-redirect.test.ts > redirect sign-in — integration > the transaction cookie never reaches a handler
+test/hosting/sign-in-redirect.test.ts > redirect sign-in — properties > every attempt gets its own transaction cookie and state
+test/hosting/sign-in-redirect.test.ts > redirect sign-in — scenarios > PKCE off (AD FS 2016): no challenge is sent; the ID token and nonce still bind the login
+test/hosting/sign-in-redirect.test.ts > redirect sign-in — scenarios > a private-key client (private_key_jwt) signs in; a key the IdP never registered is refused
+test/hosting/sign-in-redirect.test.ts > redirect sign-in — scenarios > a state that does not match, or no transaction cookie at all, is refused as `state`
+test/hosting/sign-in-redirect.test.ts > redirect sign-in — scenarios > refused: an ID token for another nonce → { wrongNonce: true }, and no sign-in
+test/hosting/sign-in-redirect.test.ts > redirect sign-in — scenarios > refused: an IdP error → { authorizeError: true }, and no sign-in
+test/hosting/sign-in-redirect.test.ts > redirect sign-in — scenarios > refused: an access token for another client → { accessTokenClaims: { azp: 'other-app' } }, and no sign-in
+test/hosting/sign-in-redirect.test.ts > redirect sign-in — scenarios > refused: an app-only ACCESS token (roles, no scope) → { accessTokenClaims: { scp: undefined, roles: [ 'x' ] } }, and no sign-in
+test/hosting/sign-in-redirect.test.ts > redirect sign-in — scenarios > refused: no ID token in the token response → { omitIdToken: true }, and no sign-in
+test/hosting/sign-in-redirect.test.ts > redirect sign-in — scenarios > sign-out: the local sign-in ends and the page is sent to the IdP end-session URL
+test/hosting/sign-in-redirect.test.ts > redirect sign-in — scenarios > signs a person in: the id is the ACCESS token oid; 303 to returnTo with no-referrer; the cookie attributes
+test/hosting/sign-in-redirect.test.ts > redirect sign-in — scenarios > the authorization request: code, S256 PKCE, state, nonce, the redirect URI and the scope
+test/hosting/sign-in-redirect.test.ts > redirect sign-in — security > a transaction cookie from one attempt does not open another attempt
+test/hosting/sign-in-redirect.test.ts > redirect sign-in — security > the IdP's own words never reach the page, and the code does not leak onward

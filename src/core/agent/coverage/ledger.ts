@@ -36,8 +36,11 @@ import { COVERAGE_DECLARATION_KEYS, normalizeCoverageList } from './items.js';
 import { refusal, refuseUnknownKeys } from './refusal.js';
 import type { Coverage, CoverageDeclaration, CoveredResult } from './types.js';
 
-/** The reserved key that makes a ledger recognizable. */
-export const COVERAGE_MARKER = 'af_coverage';
+// The recognizer lives in the leaf `recognize.ts` (a post-hoc reader — the one
+// emptiness reader, the standing fold — asks it without loading this mint);
+// re-exported here so every import keeps working.
+import { COVERAGE_MARKER, readCoverageLedger } from './recognize.js';
+export { COVERAGE_MARKER, readCoverageLedger };
 
 /**
  * The static sentence every ledger carries. The last clause is the OFFER half
@@ -121,20 +124,6 @@ export function coverage<T>(content: T, decl: CoverageDeclaration): CoveredResul
     },
     result: content,
   };
-}
-
-/**
- * Recognize (or decline to recognize) a value as a covered result. STRICT for
- * the same reason `readAbsence` is: only a plain object carrying a plain
- * `af_coverage` object AND a `result` key qualifies.
- */
-export function readCoverageLedger(value: unknown): CoveredResult | undefined {
-  if (typeof value !== 'object' || value === null || Array.isArray(value)) return undefined;
-  const rec = value as Record<string, unknown>;
-  const marker = rec[COVERAGE_MARKER];
-  if (typeof marker !== 'object' || marker === null || Array.isArray(marker)) return undefined;
-  if (!('result' in rec)) return undefined;
-  return value as CoveredResult;
 }
 
 /** The ledger's coverage, in the normalized three-list shape. */

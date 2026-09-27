@@ -6,7 +6,7 @@ title: coverage
 
 > **coverage**\<`T`\>(`content`, `decl`): [`CoveredResult`](/docs/api/interfaces/CoveredResult)\<`T`\>
 
-Defined in: [src/core/agent/coverage/ledger.ts:95](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/coverage/ledger.ts#L95)
+Defined in: [src/core/agent/coverage/ledger.ts:98](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/coverage/ledger.ts#L98)
 
 Return a verdict with its own boundary attached.
 

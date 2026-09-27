@@ -12,7 +12,7 @@ It found:
   ask_year returned a result.  ⟨found.result@1 · library · recorded⟩
   What the tools found before the pause is not in this record.  ⟨found.beforePause@1 · library · not-recorded · before a pause — not in this record⟩
 How sure:
-  The record does not rate how sure this answer is.  ⟨howSure.standing.none@1 · library · not-recorded · not recorded⟩
+  Not assessed — this record's committed state holds no verdict the standing can rest on.  ⟨howSure.standing.notAssessed@1 · library · not-applicable⟩
   The library was not set to check the answer's names and numbers.  ⟨howSure.evidence.off@1 · library · not-applicable⟩
 Anything wrong:
   No tool call failed or was refused.  ⟨wrong.noErrors@1 · library · recorded⟩

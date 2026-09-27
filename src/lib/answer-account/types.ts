@@ -199,8 +199,15 @@ export type CallOutcome =
   /** A start with no recorded end — the record does not say how it ended. */
   | 'unknown';
 
-/** Whether the result the MODEL read was empty, and who says so. */
-export type Emptiness = 'declared-absent' | 'undeclared-empty' | 'non-empty' | 'unknown';
+/**
+ * Whether the result the MODEL read was empty, and who says so — the one
+ * emptiness reader's vocabulary (`core/agent/coverage/emptiness.ts` ·
+ * `readEmptiness`), shared with the standing fold. `clarify` (a described
+ * result that handed back a question and no data) joined it with that reader;
+ * readers of this union skip a value they do not know.
+ */
+import type { Emptiness } from '../../core/agent/coverage/emptiness.js';
+export type { Emptiness };
 
 export interface ToolCallFact {
   /** Cut at 200 characters (a model-chosen id is data, and the account is bounded). */
@@ -219,6 +226,18 @@ export interface ToolCallFact {
   readonly rows?: number;
   /** `app` when the emptiness rests on the app's declared `rowsAt`. */
   readonly emptinessSource?: 'library' | 'app';
+  /**
+   * A described result's data, counted per kind from the envelope the record
+   * keeps (the `tools.semantics_declared` event) — the model read its
+   * projection, which carries no marker.
+   */
+  readonly described?: {
+    readonly facts?: number;
+    readonly series?: number;
+    readonly edges?: number;
+  };
+  /** The result was read through a declared `coverage()` boundary. */
+  readonly bounded?: true;
   /** Whose view the emptiness was read from. */
   readonly view?: 'result' | 'model-result' | 'model-result-record-only';
   readonly coverage?: {
@@ -309,7 +328,16 @@ export interface AnswerFacts {
   readonly inView: readonly InViewFact[];
   readonly inViewOmitted?: number;
   readonly evidence: AccountFact<EvidenceFact>;
-  readonly standing: AccountFact<'known' | 'not-sure' | 'ask'>;
+  /**
+   * The answer's standing, folded from the run's committed state by the one
+   * fold (`core/agent/assessment/assess.ts` · `assessAnswer`) — the owner's
+   * words: `known` · `consistent` (checks ran, none fired — never "verified") ·
+   * `not-sure` · `ask` (the run paused on a question for a person) ·
+   * `not-assessed` (nothing on the record could be checked). `not-recorded`,
+   * with no word, when the recording carries no committed state, or shows no
+   * answer (no `turn_end`) and no pause — there is no answer to rate.
+   */
+  readonly standing: AccountFact<'known' | 'consistent' | 'not-sure' | 'ask' | 'not-assessed'>;
   /** The library-appended limits block of the answer, when `.limitsTravelWithTheAnswer()` added one. */
   readonly limitsBlock: AccountFact<string>;
   readonly errors: {
