@@ -789,28 +789,53 @@ Off by default, because it changes the bytes of your answer; the RECORDING half
 runs either way, so you can measure how often your tools declare limits before
 you ship them to readers.
 
-**What it rewrites, exactly.** The answer STRING you get back: the value
-`agent.run()` returns, `turn_end`'s `finalContent`, and the answer the turn's
-memory write stores all carry the block. The block comes from every coverage
-statement of the run — `absent()`, `coverage()` and a `describedResult()`'s
-`coverage` field alike (`sharedState.coverageDeclared` is the list); a
-`describedResult()`'s provenance and grain never reach it.
+**What it rewrites, exactly.** On a prose answer, the answer STRING you get
+back: the value `agent.run()` returns, `turn_end`'s `finalContent`, and the
+answer the turn's memory write stores all carry the block. The block comes
+from every coverage statement of the run — `absent()`, `coverage()` and a
+`describedResult()`'s `coverage` field alike (`sharedState.coverageDeclared` is
+the list); a `describedResult()`'s provenance and grain never reach it.
 
 - **Streamed answers.** The `stream.token` events carry what the model wrote,
   as it wrote it; the block is appended after the stream ends, so a streaming
   UI that shows only the tokens never shows it. Render `turn_end.finalContent`
   (or the returned string) when the turn ends, or draw the limits yourself from
   `sharedState.coverageDeclared`.
-- **`.outputSchema()` answers.** The block is prose appended to your JSON, so
-  `agent.runTyped()` fails with `OutputSchemaError` — the answer is no longer
-  JSON — and `agent.run()` returns the JSON followed by the block. For a typed
-  answer, leave this option off and read the limits from
-  `sharedState.coverageDeclared` or the `tools.coverage_declared` /
-  `tools.absent` events. `.answerValidation()` refuses the combination at
-  build time.
 - **Not the same "limits" as `.answerValidation({ limits })`.** Those are
   resource bounds on answer validation — reads, bytes, checks, time. The limits
   here are the ground your tools declared they did and did not cover.
+
+#### With an output schema, the limits come back as data
+
+A typed answer is JSON, and JSON with a paragraph after it is not JSON. So when
+the agent has [`.outputSchema()`](doc:output-schema), nothing is appended: the
+answer stays exactly what the model sent, `agent.runTyped()` parses it, and the
+same limits come back beside it as data.
+
+```ts
+const agent = Agent.create({ provider, model })
+  .tool(replicationHealth)
+  .outputSchema(Verdict)
+  .limitsTravelWithTheAnswer()
+  .build();
+
+const verdict = await agent.runTyped('is replication healthy?');
+// { healthy: true, summary: 'Replication is healthy.' }
+
+agent.answerCoverage();
+// {
+//   checked:     [{ what: 'SRDF pair state on all 4 arrays (live query)' }],
+//   notChecked:  [{ what: 'NDM migration sessions', why: 'the API timed out — ask again' }],
+//   cannotCover: [{ what: 'host-side multipathing', why: 'no collector runs on the ESX hosts' }],
+// }
+```
+
+`agent.answerCoverage()` holds the entries the block would have listed —
+duplicates said once, every entry kept — and is `undefined` when no tool
+declared a limit. The same value rides `turn_end` as `answerCoverage` and sits in
+the snapshot as `sharedState.answerCoverage`, so a UI that shows the answer when
+the turn ends can draw its limits beside it. `.answerValidation()` still refuses
+this option at build time.
 
 ### The coverage surface, named
 

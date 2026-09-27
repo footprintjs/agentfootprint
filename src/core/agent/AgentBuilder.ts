@@ -1856,7 +1856,8 @@ export class AgentBuilder {
    * cannotCover })` — or `absent({ what, checked, … })` — declares the ground
    * its result stands on. With this on, the run's declarations are folded into
    * one block and appended to the final answer, so a reader learns whether
-   * *"everything looks fine"* means **verified** or **unexamined**.
+   * *"everything looks fine"* means **verified** or **unexamined**. (A typed
+   * answer gets the same limits as data instead — see below.)
    *
    * ## Why appended, and not asked for
    *
@@ -1880,11 +1881,31 @@ export class AgentBuilder {
    * `coverageDeclared` in the snapshot), so you can measure how often your
    * tools declare limits before you decide to ship them.
    *
+   * ## With an output schema, the limits come back as data
+   *
+   * A typed answer (`.outputSchema()`) is JSON, and JSON with a block of prose
+   * after it is not JSON — so nothing is appended to it. The answer stays
+   * exactly what the model sent, `runTyped()` parses it, and the same limits
+   * the block would have listed come back beside it:
+   * `agent.answerCoverage()` (`{ checked, notChecked, cannotCover }`),
+   * `turn_end.answerCoverage`, and `answerCoverage` in the snapshot.
+   *
    * @example
    *   const agent = Agent.create({ provider, model })
    *     .tool(replicationHealth)   // returns coverage(verdict, { … })
    *     .limitsTravelWithTheAnswer()
    *     .build();
+   *
+   * @example A typed answer — the limits as data
+   * ```ts
+   * const typed = Agent.create({ provider, model })
+   *   .tool(replicationHealth)
+   *   .outputSchema(Verdict)
+   *   .limitsTravelWithTheAnswer()
+   *   .build();
+   * const verdict = await typed.runTyped({ message: 'is replication healthy?' });
+   * const limits = typed.answerCoverage(); // undefined when no tool declared any
+   * ```
    */
   limitsTravelWithTheAnswer(): this {
     // Refused rather than shrugged at, like every other one-per-agent policy
@@ -2979,7 +3000,8 @@ export class AgentBuilder {
    * checks; observe returns the answer with a recorded verdict. Both modes
    * withhold draft tokens until this boundary. The callback cannot rewrite
    * the answer; the schema's JSON-safe output is serialized once for delivery.
-   * Output fallbacks and coverage suffixes are not supported in this version.
+   * `.outputFallback()` and `.limitsTravelWithTheAnswer()` are refused beside it
+   * in this version.
    */
   answerValidation<T>(options: AnswerValidationOptions<T>): this {
     if (this.answerValidationConfig !== undefined) {
@@ -3063,7 +3085,7 @@ export class AgentBuilder {
       }
       if (this.outputFallbackCfg !== undefined || this.limitsTravelValue) {
         throw new Error(
-          'AgentBuilder.answerValidation does not support .outputFallback() or .limitsTravelWithTheAnswer(): those can change the checked answer after validation.',
+          'AgentBuilder.answerValidation does not support .outputFallback() or .limitsTravelWithTheAnswer(): a fallback can replace the checked answer after validation, and the validated delivery has no place for the declared limits.',
         );
       }
     }

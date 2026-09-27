@@ -1884,6 +1884,22 @@ export interface AgentState {
    */
   coverageDeclared?: ReadonlyArray<import('./coverage/index.js').DeclaredCoverage>;
   /**
+   * The ANSWER's coverage, as data — `coverageDeclared` folded into the three
+   * lists the limits block would have printed (merged in declaration order,
+   * duplicates dropped, every entry kept: `coverage/answer.ts` ·
+   * `coverageOfAnswer`).
+   *
+   * Written only when the answer is TYPED (`.outputSchema()`) and
+   * `.limitsTravelWithTheAnswer()` is on: a typed answer is JSON, and prose
+   * appended to it is not, so its limits travel BESIDE the answer instead of
+   * inside it. Committed by the Route decider on the turn it picks `final`
+   * (`stages/answerCoverage.ts` · `withAnswerCoverage`) — the Final branch
+   * cannot write back — and only when the run's tools declared something, so
+   * every other run commits exactly the keys it always did. Read it with
+   * `agent.answerCoverage()`; `turn_end.answerCoverage` mirrors it.
+   */
+  answerCoverage?: import('./coverage/index.js').Coverage;
+  /**
    * The typed readings this run's tools settled (9.61.0) — one row per
    * (entity, field, value) flattened out of each recognized semantic
    * envelope, in declaration order, never rewritten. The claim seam reads
