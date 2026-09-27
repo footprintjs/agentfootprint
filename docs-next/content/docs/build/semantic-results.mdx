@@ -1,61 +1,60 @@
 ---
-title: Semantic tool results
-description: A tool can return series, facts, and provenance as typed data — grain, freshness, and coverage travel with the numbers — and a build gate refuses a triage tool that forgets its caveats, by name.
+title: Described tool results
+description: describedResult() — a tool returns rows, a series or relationships as typed data, with grain, freshness and coverage traveling with the numbers; a build gate refuses a triage tool that forgets its caveats, by name.
 ---
 
-> Your inventory tool reports `jobs_local: 331` and `jobs_replicated_in: 607`. The model adds them and announces 938 protected jobs — a fleet nobody has, because those two numbers must never be summed. The tool's author knew that. The knowledge lived in a comment. **The semantic envelope makes the caveats typed data that travel with the values**, and `check:semantics` is the build gate that refuses a tool that forgot them.
+> Your inventory tool reports `jobs_local: 331` and `jobs_replicated_in: 607`. The model adds them and announces 938 protected jobs — a fleet nobody has, because those two numbers must never be summed. The tool's author knew that. The knowledge lived in a comment. **`describedResult()` makes the caveats typed data that travel with the values**, and `check:semantics` is the build gate that refuses a tool that forgot them.
 
 ## The problem: honesty by culture
 
 The conventions that make tool answers trustworthy — grain stated, counters marked, freshness declared, "not covered" named on every triage — get re-implemented by hand inside every tool and held in place by code review. That scales to one disciplined author. It does not scale to a hundred tools or to adapters written by other teams.
 
-`semantic()` turns the conventions into construction:
+`describedResult()` turns the conventions into construction. Every value in the declaration comes from the data — here the export's own timestamp is `measuredAt`:
 
-```ts
-import { defineTool, semantic } from 'agentfootprint';
+<CodeFile path="examples/features/66-semantic-envelope.ts" region="described-result" title="examples/features/66-semantic-envelope.ts (region: described-result)" />
 
-const backupStatus = defineTool({
-  name: 'vm_backup_status',
-  description: 'Backup posture for one VM across the Cohesity clusters',
-  resultClass: 'triage', // ← declared class; check:semantics keys rules on it
-  inputSchema: { type: 'object', properties: { vm: { type: 'string' } }, required: ['vm'] },
-  execute: ({ vm }) =>
-    semantic({
-      facts: [{ entity: vm, backed_up: true, copies: 1 }],
-      series: [{ t: '2026-08-19T10:00:00Z', entity: vm, metric: 'backup_runs_ok', value: 1 }],
-      grain: { interval: 'daily', aggregation: 'count', is_counter: true },
-      provenance: { measured_at: '2026-08-19T10:12:00Z', source: 'Cohesity API (4 clusters)' },
-      coverage: {
-        checked: ['4 Cohesity clusters'],
-        cannotCover: [{ what: 'PPDM', why: 'not collected on this install' }],
-      },
-      render: { default: 'table', columns: ['entity', 'backed_up', 'copies'] },
-    }),
-});
+The declaration is camelCase; the envelope the model and the record read is snake_case, and never changes:
+
+| field | what it says | on the wire |
+|---|---|---|
+| `series` | measured points — `{ t, entity, metric, value }` | `series` |
+| `facts` | typed rows about entities — every row names its `entity` | `facts` |
+| `edges` | typed relationships — `{ from, to, kind }` | `edges` |
+| `grain` | what one value MEANS: `interval`, `aggregation`, `isCounter`, `collapsed` | `grain`, with `is_counter` |
+| `provenance` | `measuredAt` (when the WORLD was measured — not when the tool ran), `source`, `ageSeconds`, `sourceExportDate` | `provenance`, with `measured_at`, `age_seconds`, `source_export_date` |
+| `coverage` | the three-list vocabulary `coverage()` and `absent()` speak: `checked`, `notChecked`, `cannotCover` | `coverage` (`not_checked`, `cannot_cover`) and the `not_covered` lines composed from it |
+| `clarify` | the ask-vs-answer decision as data: `{ question, candidates }`, or `null` for "ambiguity considered, none found" | `clarify` |
+| `render` | hints for a UI — `default`, `columns`, `sort`, `filterNote`, `chartHint`; the model never sees them | `render`, with `filter_note`, `chart_hint` |
+
+`isCounter` means a cumulative reading a reader must never add up: a total since the job was created. One day's count of successful runs is not a counter — adding days gives the week's total — so the example states `isCounter: false`. Either way it must be stated when `aggregation` is counter-looking (`sum`, `count`, `total`, `cumulative`, `counter`, `delta`).
+
+`describedResult()` refuses at the call site — the `absent()` law — anything the vocabulary cannot honor: series without `grain`, series or facts without `provenance.measuredAt` and `provenance.source`, a counter-looking aggregation with `isCounter` unstated. A missing `provenance` beside `series` or `facts` is also a compile error. A key the declaration — or its `grain`, `provenance`, `coverage`, `clarify` or `render` — does not have is refused too, never dropped, and a snake_case key names the camelCase one meant (`provenance.measured_at` → "did you mean `measuredAt`?"). Inside `execute` a refusal becomes the call's error result, which is what the model reads, so it starts `refused:` and names the field as you spelled it: `refused: this result carries series/facts with no provenance — provenance.measuredAt and provenance.source are required…`.
+
+## Where it lives
+
+```text
+  execute() returns describedResult({ … })
+          │   nothing is added to the system prompt or the tool's schema
+          │
+          ├─▶ the tool message ─── what the MODEL reads: the data, grain,
+          │                        provenance, one not_covered line per gap,
+          │                        a non-null clarify, the static note
+          │
+          ├─▶ the run record ───── tools.semantics_declared: the WHOLE envelope
+          │                        (checked list, render hints, marker) and the
+          │                        coverage rows in coverageDeclared
+          │
+          └─▶ the final answer ─── only with .limitsTravelWithTheAnswer(): the
+                                   coverage lists, appended — never provenance
+                                   or grain
 ```
 
-The envelope's fields:
-
-| field | what it says |
-|---|---|
-| `series` | measured points — `{ t, entity, metric, value }` |
-| `facts` | typed rows about entities — every row names its `entity` |
-| `edges` | typed relationships — `{ from, to, kind }` |
-| `grain` | what one value MEANS: `interval`, `aggregation`, `is_counter`, `collapsed` |
-| `provenance` | `measured_at` (when the WORLD was measured — not when the tool ran), `source`, `age_seconds`, `source_export_date` |
-| `coverage` | the same three-list vocabulary `coverage()` and `absent()` speak: checked / not checked / cannot cover |
-| `clarify` | the ask-vs-answer decision as data: `{ question, candidates }`, or `null` for "ambiguity considered, none found" |
-| `render` | hints for a UI — the tool never renders; the model never sees these |
-
-`semantic()` refuses at the call site — the `absent()` law — anything the vocabulary cannot honor: series without `grain`, data without `provenance.measured_at` + `source`, a counter-looking aggregation (`sum`, `count`, `total`, `cumulative`, `counter`, `delta`) with `is_counter` unstated. A minted envelope is honest by construction. A key the declaration — or its `grain`, `provenance`, `coverage`, `clarify` or `render` — does not have is refused too, never dropped, naming the spelling meant when it is a casing slip (`coverage.not_checked` → `notChecked`, `provenance.measuredAt` → `measured_at`). Inside `execute` a refusal becomes the call's error result, which is what the model reads, so it starts `refused:` rather than with the helper's name: `refused: this result carries series/facts with no provenance — …`.
-
-## Two views of one envelope
-
-**The model reads a compact, rendering-free projection**: the data, `grain`, `provenance`, the `not_covered` prose lines (composed from `coverage` — never hand-written, so the two cannot disagree), a non-null `clarify`, and a static note telling it how to read the caveats. It never sees the `af_semantics` marker, the `render` hints, or the three-list coverage detail.
-
-**The record gets everything.** The full envelope rides the typed
-`agentfootprint.tools.semantics_declared` event — one per recognized envelope, stamped with the
-tool name, the tool call id and the iteration:
+- **It is the tool's response.** Nothing goes into the system prompt or the tool spec; the envelope is the value `execute` returns.
+- **The model reads a projection**, `semanticsForModel`: the data, `grain`, `provenance`, the `not_covered` lines composed from `coverage` (never hand-written, so the two cannot disagree), a non-null `clarify`, and a static note telling it how to read the caveats. It does NOT read the `checked` list, the `render` hints or the `af_semantics` marker. (`absent()` and `coverage()` do serve their `checked` lists — see [what each helper serves](doc:tools#what-execute-returns--three-helpers-one-rule).)
+- **The record keeps everything**, on the typed `agentfootprint.tools.semantics_declared` event — one per recognized envelope, stamped with the tool name, the tool call id and the iteration — and the coverage lands in `sharedState.coverageDeclared` beside every `coverage()` and `absent()` statement. The event is emitted **before** the tool's `resultCeiling` is measured, so an oversized result that is refused still leaves its grain and provenance on the record.
+- **Only coverage reaches the final answer**, and only with [`.limitsTravelWithTheAnswer()`](doc:tools#making-the-limits-survive--limitstravelwiththeanswer). Provenance and grain are for the model and the record.
+- **A fact without a source never reaches the model.** It is refused inside the tool; the model reads the refusal in its place, and the run continues.
+- **`measuredAt` is never parsed.** It is the tool's own words for a time — `"last year, roughly"` passes — and it rides to the model as written.
 
 ```ts
 agent.on('agentfootprint.tools.semantics_declared', (e) => {
@@ -63,11 +62,48 @@ agent.on('agentfootprint.tools.semantics_declared', (e) => {
 });
 ```
 
-It lands in recordings (`recordRun` / `persistRecording`), so a UI can draw the table the author hinted at months after the run. And it is emitted **before** the tool's `resultCeiling` is measured — the ceiling measures the projection the model would read, and an oversized result cannot silently delete its own grain and provenance: the caveats are already on the record when the refusal replaces the content.
+It lands in recordings (`recordRun` / `persistRecording`), so a UI can draw the table the author hinted at months after the run.
 
-The `coverage` field is absorbed into the existing coverage channel — the same `tools.coverage_declared` event, the same tracked state, and [`.limitsTravelWithTheAnswer()`](doc:grounding) appends it to the final answer, exactly as if the tool had used `coverage()`.
+**Composition:** the result envelopes stack. `{ content: describedResult({...}), effects: [...], status: 'partial' }` is one result that carries typed data AND a [tool effect](doc:tools) AND an outcome status. `absent()` remains the answer for "I looked and found nothing"; never wrap a described result in `coverage()` — it carries its own.
 
-**Composition:** the three result envelopes stack. `{ content: semantic({...}), effects: [...], status: 'partial' }` is one result that carries typed data AND a [tool effect](doc:tools) AND an outcome status. `absent()` remains the answer for "I looked and found nothing".
+## Values from the data
+
+`measuredAt` is when the world was measured, and the data knows when that was. Take it from the data; never type a date into a tool:
+
+| the result | `measuredAt` is |
+|---|---|
+| rows from an export or a nightly file | the export's own timestamp |
+| a live read | the moment of the read — take `new Date().toISOString()` when you query |
+| a series | the newest sample's time |
+| a value computed over a window ("the last 24h") | the END of the window |
+
+`ageSeconds` is how old that was when the tool answered. It must be a finite number ≥ 0, so compute it only from a time you can parse — for an ISO export time, `Math.max(0, Math.round((Date.now() - Date.parse(exportedAt)) / 1000))` — and leave it out otherwise; `measuredAt` still says when.
+
+A computed result is still data from its system of record — a count over the export's rows carries the export's provenance:
+
+```ts
+const failed = runs.filter((r) => r.ok === 0);
+return describedResult({
+  facts: [{ entity: vm, failed_runs: failed.length, runs_seen: runs.length }],
+  provenance: { measuredAt: snapshot.exportedAt, source: snapshot.source },
+});
+```
+
+A clarify-only result hands the question back instead of picking silently; it needs no provenance:
+
+```ts
+const matches = customers.filter((c) => c.name.startsWith(query));
+if (matches.length > 1) {
+  return describedResult({
+    clarify: {
+      question: `${matches.length} customers match "${query}" — which one?`,
+      candidates: matches.map((c) => c.name),
+    },
+  });
+}
+```
+
+`clarify` does **not** pause the run: the model reads the question and decides what to do with it — often, to ask the person in its answer. To stop the run until a person supplies a value, use [`requestInput()`](doc:input-requests).
 
 ## check:semantics — the build gate
 
@@ -75,13 +111,13 @@ The gate judges **sample results** (what your mock tools return — a build must
 
 | rule | severity |
 |---|---|
-| `'triage'` result with no coverage declaration (semantic `coverage`, `coverage()`, or `absent()`) | error |
+| `'triage'` result with no coverage declaration (a described result's `coverage`, `coverage()`, or `absent()`) | error |
 | `'inventory'` result with no coverage declaration | error |
 | marker-bearing envelope with faults: `series-without-grain`, `data-without-provenance`, `counter-aggregation-unstated`, `malformed-semantics` | error |
 | `'inventory'` with `facts` but no `render` hint | warning |
 | a classed tool with zero sample results | warning |
 
-Severity follows provability: only what the declarations prove wrong errors. Every finding names the **tool** and the **field**.
+Severity follows provability: only what the declarations prove wrong errors. Every finding names the **tool** and the **field**, and a missing coverage tells the author to return `describedResult({ …, coverage })`, `coverage(result, …)` or `absent({ … })`.
 
 Wire it beside your other gates (the `check:tools` convention) — dump `[{ name, resultClass, results: [...] }]` to JSON and:
 
@@ -108,9 +144,13 @@ if (!report.ok) throw new Error(formatSemanticsReport(report));
 
 Recognition is strict: only a plain object whose `af_semantics` is exactly `true` **and** that passes the whole rule set is an envelope. Every other value any tool has ever returned — including a marker-bearing shape with faults, which is dev-warned and named by the gate but never half-applied — takes the exact path it always took, byte for byte.
 
+## `semantic()` — the deprecated name
+
+`semantic()` mints the same envelope, byte for byte, from a declaration that copies the wire's snake_case names through (`measured_at`, `is_counter`, `filter_note`). It keeps working unchanged, and it is deprecated: the name read as semantic search, and its declaration mixed two spellings. Each door takes one spelling and refuses the other, so switching only the name fails loudly at the line that needs the new spelling — `describedResult({ provenance: { measured_at } })` is refused, naming `measuredAt` — and nothing is minted without it.
+
 ## Vocabulary reference
 
-The authoring half ships on the main barrel (`agentfootprint`). `semantic` mints the envelope from a `SemanticDeclaration`; the rendered value is a `ToolSemantics` carrying `SemanticSeriesPoint` rows, `SemanticFact` rows, `SemanticEdge` links, a `SemanticGrain`, a `SemanticProvenance`, a `SemanticCoverage` (whose derived `not_covered` lines are composed by `composeNotCovered`), a `SemanticClarify` question and `SemanticRender` hints. `readSemantics` is the strict recognizer the dispatch loop uses; `explainSemantics` names the faults — `SemanticIssue` rows, each with a `SemanticIssueCode` — on a marker-bearing value that was not recognized; `semanticsForModel` builds the model's compact projection; `isCounterLookingAggregation` and the `COUNTER_AGGREGATION_WORDS` list decide when `is_counter` must be stated. The marker key is `SEMANTICS_MARKER` (the string `af_semantics`), the static note text is `SEMANTICS_NOTE`, the closed class set is `RESULT_CLASSES` (typed as `ToolResultClass`), and `assertResultClass` is the definition-time refusal `defineTool` runs on a declared class.
+The authoring half ships on the main barrel (`agentfootprint`). `describedResult` mints the envelope from a `DescribedResultDeclaration`; the deprecated `semantic` mints the same envelope from a `SemanticDeclaration`. The rendered value is a `ToolSemantics` carrying `SemanticSeriesPoint` rows, `SemanticFact` rows, `SemanticEdge` links, a `SemanticGrain`, a `SemanticProvenance`, a `SemanticCoverage` (whose derived `not_covered` lines are composed by `composeNotCovered`), a `SemanticClarify` question and `SemanticRender` hints. `readSemantics` is the strict recognizer the dispatch loop uses; `explainSemantics` names the faults — `SemanticIssue` rows, each with a `SemanticIssueCode` — on a marker-bearing value that was not recognized; `semanticsForModel` builds the model's compact projection; `isCounterLookingAggregation` and the `COUNTER_AGGREGATION_WORDS` list decide when `is_counter` must be stated. The marker key is `SEMANTICS_MARKER` (the string `af_semantics`), the static note text is `SEMANTICS_NOTE`, the closed class set is `RESULT_CLASSES` (typed as `ToolResultClass`), and `assertResultClass` is the definition-time refusal `defineTool` runs on a declared class.
 
 `SEMANTICS_NOTE` and `SEMANTICS_MARKER` are also published as **data**, beside the coverage/absence notes, at `node_modules/agentfootprint/canonical-notes.json` — for a tool written in a language that cannot import them. See [reading the canonical notes from another language](doc:tools#reading-the-canonical-notes-from-another-language-9700).
 
@@ -118,6 +158,6 @@ The gate half ships on `agentfootprint/observe`. `checkSemantics` judges an arra
 
 ## Next steps
 
-- [Runnable example 66](https://github.com/footprintjs/agentfootprint/blob/main/examples/features/66-semantic-envelope.ts) — the two views, the coverage absorb, and the gate failing a broken tool by name
-- [Grounding](doc:grounding) — `coverage()` / `absent()`, the vocabulary this envelope absorbs
-- [Tools](doc:tools) — `defineTool`, tool effects, `resultCeiling`
+- [Runnable example 66](https://github.com/footprintjs/agentfootprint/blob/main/examples/features/66-semantic-envelope.ts) — the two views, the coverage absorb, one `execute` with all three helpers, and the gate failing a broken tool by name
+- [Tools](doc:tools#what-execute-returns--three-helpers-one-rule) — which helper to return, and exactly what the model reads from each
+- [Unsupported claims](doc:arming-context-integrity#unsupported-claim--the-answer-says-more-than-the-run-settled) — `.claims()` checks an answer field against a fact a described result settled

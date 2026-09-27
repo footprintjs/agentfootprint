@@ -32,8 +32,8 @@
  * It is a SIBLING recognizer beside the effects envelope and the coverage
  * primitives — its own reserved marker (`af_semantics`, the
  * `af_absent`/`af_coverage` family), never new keys on the effects envelope.
- * The three compose on one result: `{ content: semantic({…}), effects: […],
- * status }` is a tool that returns typed data AND proposes a transition.
+ * The three compose on one result: `{ content: describedResult({…}), effects:
+ * […], status }` is a tool that returns typed data AND proposes a transition.
  */
 
 import type { CoverageDeclaration, CoverageItem } from '../../core/agent/coverage/types.js';
@@ -164,7 +164,9 @@ export interface SemanticCoverage {
 }
 
 /**
- * What a tool author passes to `semantic()`. At least one of `series`,
+ * What a tool author passes to `semantic()` — the deprecated name; new code
+ * passes a {@link DescribedResultDeclaration} to `describedResult()`, which
+ * mints the same envelope from camelCase names. At least one of `series`,
  * `facts`, `edges` or a non-null `clarify` must be present — an envelope
  * with no data and no question declares nothing.
  *
@@ -185,6 +187,124 @@ export interface SemanticDeclaration {
   readonly clarify?: SemanticClarify | null;
   readonly render?: SemanticRender;
 }
+
+// ── describedResult()'s declaration — the SAME fields, spelled as code ──
+//
+// The wire stays snake_case: `ToolSemantics` below is what a model and a
+// foreign process read, and its field names never change. `semantic()`'s
+// declaration copies those snake_case names through (`measured_at`,
+// `is_counter`) beside camelCase ones (`notChecked`), so a declaration mixed
+// two spellings. `describedResult()`'s declaration is camelCase throughout and
+// respelled to the unchanged wire, so these are separate INPUT types: widening
+// `SemanticProvenance` with a `measuredAt` would make the wire type claim a
+// field the wire never carries. Only the three objects whose keys differ get
+// their own shapes; data rows, `clarify` and `coverage` are spelled the same
+// on both sides and are shared. Not exported by name (every export is a
+// generated API page); reach one as
+// `NonNullable<DescribedResultDeclaration['provenance']>`.
+
+/**
+ * {@link SemanticGrain}, spelled as code: `isCounter` is `is_counter` on the
+ * wire.
+ *
+ * @inline
+ */
+interface DescribedGrain {
+  /** The collection interval the values live on ('30m', '1h', 'daily'). */
+  readonly interval?: string;
+  /** How the values were folded ('avg', 'max', 'sum', 'count', …). */
+  readonly aggregation?: string;
+  /**
+   * Whether the values are counters — cumulative readings a reader must never
+   * add together. MUST be stated (true or false) whenever `aggregation` is
+   * counter-looking (see {@link COUNTER_AGGREGATION_WORDS}).
+   */
+  readonly isCounter?: boolean;
+  /** What was folded away ('per-port rows collapsed to per-switch'). */
+  readonly collapsed?: string;
+}
+
+/**
+ * {@link SemanticProvenance}, spelled as code: `measuredAt`, `ageSeconds` and
+ * `sourceExportDate` are `measured_at`, `age_seconds` and
+ * `source_export_date` on the wire.
+ *
+ * @inline
+ */
+interface DescribedProvenance {
+  /**
+   * When the WORLD was measured, in the tool's own clock words — never
+   * parsed. Take it from the data: the export's time for a file, the moment
+   * of the read for a live query, the newest sample for a series, and the END
+   * of the window for a value computed over one.
+   */
+  readonly measuredAt: string;
+  /** How stale the data was when the tool answered, in seconds. */
+  readonly ageSeconds?: number;
+  /** The system of record the values were read from. */
+  readonly source: string;
+  /** For file-fed collectors: the export the values rode in on. */
+  readonly sourceExportDate?: string;
+}
+
+/**
+ * {@link SemanticRender}, spelled as code: `filterNote` and `chartHint` are
+ * `filter_note` and `chart_hint` on the wire.
+ *
+ * @inline
+ */
+interface DescribedRender {
+  /** The default presentation ('table', 'chart', 'prose', …). A hint. */
+  readonly default: string;
+  /** Column order for a tabular view. */
+  readonly columns?: readonly string[];
+  /** Sort hint ('avg_iops desc'). */
+  readonly sort?: string;
+  /** A note about what filtering already happened ('replicas excluded'). */
+  readonly filterNote?: string;
+  /** Chart-shape hint ('line per entity'). */
+  readonly chartHint?: string;
+}
+
+/**
+ * What a tool author passes to `describedResult()` — the
+ * {@link SemanticDeclaration} fields in ONE spelling, camelCase, respelled to
+ * the unchanged snake_case wire ({@link ToolSemantics}).
+ *
+ * `provenance` is REQUIRED whenever `series` or `facts` is present, and the
+ * compiler says so: a number with no source and no age is refused at run time
+ * anyway, inside the tool, where the model reads the refusal. A declaration
+ * with only `edges` or only a `clarify` question needs none.
+ *
+ * At least one of `series`, `facts`, `edges` or a non-null `clarify` must be
+ * present — an envelope with no data and no question declares nothing. There
+ * is no `notCovered`: the prose list the model reads is derived from
+ * `coverage`, so the two can never disagree.
+ */
+export type DescribedResultDeclaration = {
+  /** Measured points — `{ t, entity, metric, value }`. Needs `grain`. */
+  readonly series?: readonly SemanticSeriesPoint[];
+  /** Typed rows about entities — every row names its `entity`. */
+  readonly facts?: readonly SemanticFact[];
+  /** Typed relationships — `{ from, to, kind }`. */
+  readonly edges?: readonly SemanticEdge[];
+  /** What one value MEANS. Required with `series`. */
+  readonly grain?: DescribedGrain;
+  /** Where the values came from and how old they are. Required with
+   *  `series` or `facts`. */
+  readonly provenance?: DescribedProvenance;
+  /** The coverage()-vocabulary declaration this result absorbs. */
+  readonly coverage?: CoverageDeclaration;
+  /** A question the result hands back instead of picking silently. `null`
+   *  states "ambiguity was considered; there is none". It does not pause the
+   *  run — the model reads it and decides what to ask. */
+  readonly clarify?: SemanticClarify | null;
+  /** Hints for a UI. The model never reads them. */
+  readonly render?: DescribedRender;
+} & (
+  | { readonly provenance: DescribedProvenance }
+  | { readonly series?: undefined; readonly facts?: undefined }
+);
 
 /**
  * The rendered semantic envelope — the exact object a tool hands back.

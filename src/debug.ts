@@ -348,7 +348,7 @@ export {
 // the semantic-envelope vocabulary and the per-class rules declared on
 // defineTool({ resultClass }). A triage tool whose sample declares no
 // coverage fails the build NAMING the tool and the field. The authoring
-// half (semantic(), readSemantics, the types) ships on the main barrel.
+// half (describedResult(), readSemantics, the types) ships on the main barrel.
 export {
   checkSemantics,
   coerceSemanticsCatalog,

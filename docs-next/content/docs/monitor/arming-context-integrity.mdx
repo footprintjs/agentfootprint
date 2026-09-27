@@ -17,7 +17,7 @@ That is not hypothetical. This library's own reference agent shipped for weeks w
 | `invariant-violation` | `compose` | `.maps()` | a mounted skill map (`.skillGraph(map)`) |
 | `dangling-reference` | `compose` | `argumentsFrom: ['groundingTool']` on the dependent tool | nothing else |
 | `unsupported-argument` | `choice` | the SAME `argumentsFrom` field — nothing more to declare | nothing else |
-| `unsupported-claim` | `claim` | `.claims({ field: { entity, field } })` | `.outputSchema()` and a tool returning `semantic({ facts: [...] })` |
+| `unsupported-claim` | `claim` | `.claims({ field: { entity, field } })` | `.outputSchema()` and a tool returning `describedResult({ facts: [...], provenance })` |
 | `empty-lookup` | `write` | `noticeEmptyLookups: true` **plus** the same `argumentsFrom` field | nothing else — see [Empty lookups](doc:empty-lookup) |
 | `prior-turn-evidence` | `claim` | `noticePriorTurnEvidence: true` **plus** `.namesAndNumbersFromEvidence()` | nothing else — see [Prior-turn evidence](doc:prior-turn-evidence) |
 
@@ -115,13 +115,19 @@ Three laws, because this is an assertion door. Declared, never ambient: this opt
 
 ```ts
 import { z } from 'zod';
-import { Agent, defineTool, semantic } from 'agentfootprint';
+import { Agent, defineTool, describedResult } from 'agentfootprint';
 
 const screenTool = defineTool({
   name: 'whats_here',
   description: 'Read the nav count on a screen.',
   inputSchema: { type: 'object', properties: {} },
-  execute: async () => semantic({ facts: [{ entity: 'screen2', nav: 2 }] }),
+  execute: async () => {
+    const nav = await readNavCount('screen2'); // a live read
+    return describedResult({
+      facts: [{ entity: 'screen2', nav }],
+      provenance: { measuredAt: new Date().toISOString(), source: 'the screen, read live' },
+    });
+  },
 });
 
 const Answer = z.object({ nav_count: z.number() });
@@ -137,7 +143,7 @@ const agent = Agent.create({ provider, model })
 
 > `Agent.claims(): a claim contract needs a validated answer to read — add .outputSchema(schema). The claim seam compares TYPED fields; prose is never checked, so without a schema this contract would check nothing.`
 
-There is no typed stratum to compare a claim against until the answer is a parsed object, so a contract with no schema would silently check nothing — and a check that silently checks nothing is exactly the decay this whole family exists to prevent. That is also why `.claims()` needs a tool returning a `semantic()` envelope: the envelope is what settles the fact in the first place (`ledger.ts` flattens every recognized one into `(entity, field, value)` rows the checker can join against).
+There is no typed stratum to compare a claim against until the answer is a parsed object, so a contract with no schema would silently check nothing — and a check that silently checks nothing is exactly the decay this whole family exists to prevent. That is also why `.claims()` needs a tool returning a `describedResult()` envelope (or one from the deprecated `semantic()`): the envelope is what settles the fact in the first place (`ledger.ts` flattens every recognized one into `(entity, field, value)` rows the checker can join against).
 
 **What you'll see.** Nothing is blocked — the answer returns exactly as the model wrote it. If the claimed value disagrees with the settled fact, one `agentfootprint.integrity.context_error` fires with `kind: 'unsupported-claim'`, `seam: 'claim'`, naming both the claim and the fact it contradicts. The disposition row `unsupported-claim @ claim` shows `checked-fail`; agreement shows `checked-pass`; a field the answer omitted (schema allowed the absence) shows `not-applicable`; a fact the run never collected shows `unreachable` — the check refuses to accuse what it cannot compare.
 

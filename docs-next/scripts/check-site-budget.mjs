@@ -182,7 +182,22 @@ const SEARCH_LIMITS = { raw: 12_000_000, gzip: 2_110_000, records: 2_000 };
 // regenerates the pages whose source moved) plus the pages the 9.102–9.112
 // features added. Same rule as every raise here: ~2% over the measured export
 // (686 MB, 7,400 files); the thing to watch is still the per-route cost.
-const OUTPUT_LIMITS = { bytes: 686_000_000, files: 7_400, duplicateRscBytes: 0 };
+// RAISED for describedResult() — bytes only. Measured with EXPORT=true on the
+// change: 686.02 MB across 7,313 files (duplicate RSC pairs 0), against the
+// 9.118.1 tree measured the same way, same machine, the same day: 682.99 MB
+// across 7,295 files. The ceiling was 0.02 MB short. The +3.03 MB is two new
+// API routes (describedResult 0.80 MB, DescribedResultDeclaration 0.80 MB;
+// the nested camelCase shapes are inlined on purpose so they add no more),
+// their two entries in the nav tree all 781 routes embed (+344 B per copy of
+// the 153.6 KB tree, in each route's payload files and page), and the docs
+// that change adds: the result-helper table with the three captured model
+// views on the Tools page, and the Described tool results page. The shrinks
+// on offer would have deleted exactly that — the docs the change exists to
+// add, or the declaration type every other mint exports — so this is the
+// raise, with the measurement beside it. The file ceiling still holds (7,313
+// of 7,400). Search gzip still holds too, but thinly: 2,107,287 of 2,110,000
+// bytes. Same rule as every raise here: ~2% over the measured export.
+const OUTPUT_LIMITS = { bytes: 700_000_000, files: 7_400, duplicateRscBytes: 0 };
 // Raised for 9.61.0: 394.1 KB → 400.3 KB. The skill-graph demo imports
 // `defineTool` from 'agentfootprint', so the library's MAIN ENTRY and its
 // whole transitive graph ride this chunk — and this release added the
