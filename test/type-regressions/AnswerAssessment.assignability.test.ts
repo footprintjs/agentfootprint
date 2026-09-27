@@ -35,7 +35,9 @@ describe('answer standing — the types', () => {
     const a: AnswerAssessment = assessAnswer(recording, declarations);
     assessAnswer({ checkpoint: {} });
     assessAnswer({});
-    expectTypeOf<ReturnType<Agent['assessment']>>().toEqualTypeOf<AnswerAssessment | undefined>();
+    expectTypeOf<ReturnType<Agent['assessment']>>().toEqualTypeOf<
+      Promise<AnswerAssessment | undefined>
+    >();
     expect(a.standing).toBe('not-assessed');
   });
 
