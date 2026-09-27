@@ -1,0 +1,64 @@
+{
+  "suite": {
+    "command": "npx vitest run",
+    "total": 13892,
+    "passed": 13837,
+    "failed": 33,
+    "skipped": 22,
+    "failuresInBaseSet": 33,
+    "failuresOutsideBaseSet": [],
+    "baseSet": "bench/standing-fold/base-failures.txt (openid-client peer dependency not installed in this environment; src/hosting and test/hosting untouched by this branch)"
+  },
+  "parityCaseBank": {
+    "file": "test/core/agent/assessment/rq3-parity.test.ts",
+    "status": "passed",
+    "passed": 6,
+    "of": 6,
+    "turns": 18,
+    "agree": 14,
+    "namedDifferences": {
+      "entity-scope": 2,
+      "last-lookup": 1,
+      "pause-kind": 1
+    },
+    "unexplained": 0,
+    "direction": "every named difference: the fold says more (not-sure or ask)",
+    "plainShare": {
+      "rq3Unknown": "6/7",
+      "foldCannotVouch": "6/7"
+    }
+  },
+  "assessmentTests": [
+    {
+      "file": "assess.test.ts",
+      "status": "passed",
+      "passed": 28,
+      "of": 28
+    },
+    {
+      "file": "fold-integration.test.ts",
+      "status": "passed",
+      "passed": 21,
+      "of": 21
+    },
+    {
+      "file": "fold-real-record.test.ts",
+      "status": "passed",
+      "passed": 2,
+      "of": 2
+    },
+    {
+      "file": "reader-only.test.ts",
+      "status": "passed",
+      "passed": 4,
+      "of": 4
+    }
+  ],
+  "byteReferences": {
+    "file": "test/core/tools/byte-identity.test.ts",
+    "status": "passed",
+    "passed": 10,
+    "of": 10,
+    "gitDiffAgainstOriginMain": "empty"
+  }
+}

@@ -18,9 +18,9 @@ The recorded runs, every one the repository holds (a tracked JSON that carries c
 | full | the 21 byte references, `test/core/tools/reference/*.json` | `footprintjs/trace` · `stateAt` over the whole `commitLog` |
 | full | fixture A, `test/lib/answer-account/fixtures/turn2.recorded.json` (the one real field recording) | its `snapshot.sharedState`, with the app's declarations (`test/lib/answer-account/helpers.ts` · `NEO_DECLARATIONS`) |
 | full | `test/recorders/observability/fixtures/demo-turn.json` | its `finalState` |
-| excerpt | `test/core/agent/reference/coverage-record-only-bytes.json` (24 variants), `test/core/scenario/reference/batch-pause-last-call.json` (4), `test/core/agent/reference/paused-lookup-no-absence.json`, `test/core/agent/fixtures/absent-try-instead-*.reference.json` (2) | only the committed keys the reference retained (`history`, `coverageDeclared` where kept); the missing keys are listed per record, never rebuilt |
+| excerpt | `test/core/agent/reference/coverage-record-only-bytes.json` (20 variants), `test/core/scenario/reference/batch-pause-last-call.json` (4), `test/core/agent/reference/paused-lookup-no-absence.json`, `test/core/agent/fixtures/absent-try-instead-sentence.reference.json` | only the committed keys the reference retained (`history`, `coverageDeclared` where kept); the missing keys are listed per record, never rebuilt |
 | excluded | `test/core/agent/reference/hand-raised-malformed-request.json` (4) | each run ended in an error: no answer, so no standing (`assessAnswer`'s contract) — counted, not folded |
-| unreadable | the OTel references, the narrative reference, the account goldens | no committed state — counted |
+| unreadable | the OTel references, the narrative reference, `absent-try-instead-not-a-sentence.reference.json` (events and model-read text only), the account goldens | no committed state — counted |
 
 The study repository's recorded runs (`honest-answers/data/runs/`) are EMPTY at this bench
 (the study has not run its pilot): parity over the study's own records is blocked by data and is
