@@ -1,5 +1,6 @@
 ---
 type: fixed
+bump: minor
 ---
 **`.limitsTravelWithTheAnswer()` no longer breaks a typed answer — with `.outputSchema()`, the limits come back as data.**
 The option adds the limits your tools declared (what they checked, what they did not check,
