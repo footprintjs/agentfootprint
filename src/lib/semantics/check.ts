@@ -114,7 +114,7 @@ function classCoverageFinding(entry: SemanticsCatalogEntry, resultIndex: number)
           `a claim about ground it never stood on. `
         : `An inventory that cannot say which population it covered ("4 of 5 clusters") reads ` +
           `as the whole fleet. `) +
-      `Return semantic({ …, coverage: { checked, notChecked, cannotCover } }), or coverage(result, …), ` +
+      `Return describedResult({ …, coverage: { checked, notChecked, cannotCover } }), or coverage(result, …), ` +
       `or absent({ … }) when nothing was found.`,
   };
 }

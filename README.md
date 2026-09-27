@@ -107,6 +107,37 @@ For production, import a real provider from `agentfootprint/providers` and swap 
 
 **No cloud account?** `ollama('llama3.2')` from `agentfootprint/providers` runs the same agent against a local model for $0 — the free rung between the mock and the bill. Full recipes: [Ollama](https://agentfootprint.dev/docs/build/ollama/) · [OpenAI-compatible endpoints](https://agentfootprint.dev/docs/build/openai/#openai-compatible-endpoints-ollama-llamacpp-vllm-together-groq-lm-studio).
 
+## What a tool returns — three helpers, one rule
+
+Whatever a tool returns is what the model reads next. When that value has limits the model must not lose, return it through one of three helpers — each is the tool's response; nothing is added to the system prompt or the tool's schema:
+
+| helper | use it when | the model reads | the record keeps |
+|---|---|---|---|
+| `describedResult({ … })` | rows, a series or relationships from a system of record | the data, with `grain`, `provenance` and one `not_covered` line per gap | the whole envelope (`tools.semantics_declared`) |
+| `coverage(value, { … })` | any other value that has limits | your value, with what was and was not checked | `tools.coverage_declared` |
+| `absent({ … })` | nothing matched | what was looked for, where, and that a retry returns the same | `tools.absent` |
+
+Never wrap one in another. Add `.limitsTravelWithTheAnswer()` and the declared coverage is appended to the final answer — provenance and grain never are.
+
+```typescript
+import { absent, coverage, describedResult } from 'agentfootprint';
+
+execute: ({ vm, summary }) => {
+  const { exportedAt, source, runs: all } = backupExport;   // your system of record
+  const runs = all.filter((r) => r.vm === vm);
+  const ground = { checked: [`every backup job in the export of ${exportedAt}`] };
+  if (runs.length === 0) return absent({ what: `backup runs for ${vm}`, ...ground });  // nothing matched
+  if (summary) return coverage(`${vm}: ${runs.length} backup runs`, ground);           // a verdict with limits
+  return describedResult({                                                             // rows from the record
+    facts: runs.map((r) => ({ entity: vm, day: r.day, ok: r.ok === 1 })),
+    provenance: { measuredAt: exportedAt, source },   // the time comes from the data
+    coverage: ground,
+  });
+},
+```
+
+What the model reads from each, exactly: [Tools → what `execute` returns](https://agentfootprint.dev/docs/build/tools/#what-execute-returns--three-helpers-one-rule).
+
 ## How — we abstract context engineering
 
 Skills, steering, RAG, facts, memory, guardrails — every name for context does one thing: it injects into one of three LLM slots. So we abstracted the injection itself.

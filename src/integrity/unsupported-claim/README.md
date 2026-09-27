@@ -24,8 +24,8 @@ tokens: `fc1/3` is in the evidence and "healthy" is a word. Token grounding pass
 murmur. So does a final answer reporting `budget_start: 2` when the run's own ledger recorded 30.
 
 **What makes it decidable.** Two halves, and neither works alone. Typed facts make the contradiction
-_representable_: a tool returning `semantic({ facts: [{ entity: 'screen2', nav: 2 }] })` settles a
-reading, and `ledger.ts` flattens every recognized envelope into `(entity, field, value)` rows in
+_representable_: a tool returning `describedResult({ facts: [{ entity: 'screen2', nav: 2 }], provenance })`
+settles a reading, and `ledger.ts` flattens every recognized envelope into `(entity, field, value)` rows in
 `scope.claimFacts` — the `coverageDeclared` shape, and for the same reason (the envelope is replaced
 by its compact model projection on the wire, so without a tracked key the typed object exists nowhere
 a check could read). A **declared contract** makes it _decidable_: `.claims({ nav_count: { entity:
@@ -67,7 +67,7 @@ read those rows, so writing them would be committed state and checkpoint weight 
 
 ```ts
 const agent = Agent.create({ provider, model })
-  .tool(screenTool) // returns semantic({ facts: [{ entity: 'screen2', nav: 2 }] })
+  .tool(screenTool) // returns describedResult({ facts: [{ entity: 'screen2', nav: 2 }], provenance })
   .outputSchema(AnswerSchema) // required — prose has no typed stratum, and is never checked
   .claims({ nav_count: { entity: 'screen2', field: 'nav' } })
   .build();

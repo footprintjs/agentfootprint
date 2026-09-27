@@ -2048,7 +2048,8 @@ export interface CoverageItemPayload {
 }
 
 /**
- * A tool returned a semantic envelope (`semantic(…)`, 9.53.0) — typed
+ * A tool returned a semantic envelope (`describedResult(…)`, or the
+ * deprecated `semantic(…)`; 9.53.0) — typed
  * series/facts/edges with the caveats that make them honest (grain,
  * provenance, coverage) as data.
  *

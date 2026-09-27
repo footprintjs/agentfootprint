@@ -2,9 +2,10 @@
  * coverage/refusal — how a result helper refuses: the words every refusal
  * starts with, and the one unknown-key check its declaration passes.
  *
- * Pattern: one voice, three doors (`absent()`, `coverage()` and
- *          `semantic()`), so the three cannot disagree about what a refusal
- *          looks like or which keys a declaration may carry.
+ * Pattern: one voice, every door (`absent()`, `coverage()`,
+ *          `describedResult()` and the deprecated `semantic()`), so they
+ *          cannot disagree about what a refusal looks like or which keys a
+ *          declaration may carry.
  * Role:    core/ layer, pure, a leaf — no imports.
  * Emits:   N/A.
  *
@@ -29,12 +30,14 @@
  * none. So every key a declaration carries is either one the helper reads or
  * a refusal, and a refusal names the spelling meant when the key is that
  * spelling with its case or separators changed (`not_checked` →
- * `notChecked`, `measuredAt` → `measured_at`).
+ * `notChecked`; `measured_at` → `measuredAt` at `describedResult()`, the
+ * reverse at `semantic()`).
  */
 
 /**
- * The first words of every refusal `absent()`, `coverage()` and `semantic()`
- * throw — and so of the error result a model reads when one of them refuses
+ * The first words of every refusal `absent()`, `coverage()`,
+ * `describedResult()` and `semantic()` throw — and so of the error result a
+ * model reads when one of them refuses
  * inside a tool's `execute`. Neutral on purpose: it says what the text is and
  * never depends on which helper refused.
  */

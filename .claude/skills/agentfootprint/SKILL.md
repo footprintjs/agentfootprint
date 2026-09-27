@@ -210,35 +210,57 @@ the model — the framework stamps `toolCallId` / `toolName` / `iteration`, you 
 `payload`. `agent.on('agentfootprint.stream.*')` and `toSSE(agent)` carry it with
 no extra wiring.
 
-### When a tool finds nothing, and what a clean result does not cover
+### What a tool returns: rows, a verdict with limits, or nothing
+
+| helper | use it when | the model reads | the record keeps |
+|---|---|---|---|
+| `describedResult({ … })` | rows, a series or relationships from a system of record — or a question back (`clarify`) | data + `grain` + `provenance` + one `not_covered` line per gap + a static note — NOT the `checked` list | the whole envelope on `tools.semantics_declared`, coverage in `coverageDeclared` |
+| `coverage(value, { … })` | any other value that has limits (a verdict, a sentence) | your value under `result`, the coverage lists under `af_coverage` | `tools.coverage_declared`, `coverageDeclared` |
+| `absent({ … })` | nothing matched | what was looked for, the coverage, "a retry returns the same" | `tools.absent`, `coverageDeclared`, status `'absent'` |
+
+The rule: rows from a system of record → `describedResult()`; any other value with limits →
+`coverage()`; nothing matched → `absent()`. Never wrap one in another. All three are the tool's
+RESPONSE — nothing goes into the system prompt or the tool schema.
 
 ```typescript
-import { absent, coverage, defineTool } from 'agentfootprint';
+import { absent, coverage, defineTool, describedResult } from 'agentfootprint';
 
-// "I looked and there is nothing" — never readable as "I could not look".
-execute: ({ port }) => rows.length ? rows : absent({
-  what: `FLOGI entries on ${port}`,
-  checked: ['shq-fab-a: the live fcns database', 'window: the last 24h'],
-  notChecked: [{ what: 'the archived history', why: 'older than the 24h window' }],
-  cannotCover: [{ what: 'the peer fabric', why: 'this collector is scoped to one fabric' }],
-  tryInstead: 'Ask for a different interface, or query the peer fabric by name.',
-}),
-
-// A verdict WITH its boundary — what "fine" does and does not rule out.
-execute: async () => coverage(await checkReplication(), {
-  checked: ['SRDF pair state on all 4 arrays'],
-  cannotCover: [{ what: 'host-side multipathing', why: 'no collector on the ESX hosts' }],
-}),
+execute: ({ vm, summary }) => {
+  const { exportedAt, source, runs: all } = backupExport;   // the system of record
+  const runs = all.filter((r) => r.vm === vm);
+  const ground = {
+    checked: [`every backup job in the export of ${exportedAt}`],
+    cannotCover: [{ what: 'PPDM', why: 'not collected on this install' }],
+  };
+  // "I looked and there is nothing" — never readable as "I could not look".
+  if (runs.length === 0) return absent({ what: `backup runs for ${vm}`, ...ground });
+  // A verdict WITH its boundary — what "fine" does and does not rule out.
+  if (summary) return coverage(`${vm}: ${runs.length} backup runs`, ground);
+  // Rows WITH their caveats. measuredAt comes from the data (the export's time,
+  // the moment of a live read, the newest sample) — never a typed-in date.
+  return describedResult({
+    facts: runs.map((r) => ({ entity: vm, day: r.day, ok: r.ok === 1 })),
+    provenance: { measuredAt: exportedAt, source },
+    coverage: ground,
+  });
+},
 ```
 
-An absence gets the delivered status `'absent'` (route it with
-`onToolStatus: 'absent'`), files `agentfootprint.tools.absent`, and grounds only
-its COVERAGE in the evidence gate — so an id the model invented does not become
-grounded by one lookup that found nothing. It is never an error: nothing retries
-it, nothing refuses it, no `error: true`. A ledger files
-`agentfootprint.tools.coverage_declared`; add `.limitsTravelWithTheAnswer()` on
-the agent and the framework APPENDS the run's limits to the final answer, so the
-model cannot drop what it never wrote.
+`describedResult()` is camelCase throughout (`measuredAt`, `ageSeconds`, `isCounter`,
+`filterNote`); the envelope the model reads stays snake_case. Series need `grain`
+(`{ interval, aggregation, isCounter }` — state `isCounter` for `sum`/`count`-like
+aggregations); series or facts without `provenance` are a compile error and a run-time
+refusal. `semantic()` is the deprecated name for the same envelope with a snake_case
+declaration — do not use it in new code.
+
+A helper that cannot honor its declaration throws inside `execute`: the model reads text
+starting `refused: ` in place of the data, and the run continues. An absence gets the
+delivered status `'absent'` (route it with `onToolStatus: 'absent'`) and grounds only its
+COVERAGE in the evidence gate — so an id the model invented does not become grounded by one
+lookup that found nothing. It is never an error: nothing retries it, nothing refuses it, no
+`error: true`. Add `.limitsTravelWithTheAnswer()` on the agent and the framework APPENDS the
+run's declared coverage to the final answer string (not to streamed tokens; it breaks
+`runTyped()`'s JSON), so the model cannot drop what it never wrote.
 
 ## Observing a run
 

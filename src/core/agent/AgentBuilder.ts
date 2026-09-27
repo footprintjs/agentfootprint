@@ -1562,7 +1562,7 @@ export class AgentBuilder {
    *
    * @example
    *   const agent = Agent.create({ provider, model })
-   *     .tool(screenTool)                       // returns semantic({ facts: [...] })
+   *     .tool(screenTool)                       // returns describedResult({ facts: [...], provenance })
    *     .outputSchema(AnswerSchema)
    *     .claims({ nav_count: { entity: 'screen2', field: 'nav' } })
    *     .build();

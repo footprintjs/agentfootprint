@@ -34,7 +34,7 @@
  *
  * ## One rule set, two doors
  *
- * `semantic()` refuses a declaration this vocabulary cannot honor at the
+ * The mint refuses a declaration this vocabulary cannot honor at the
  * CALL SITE (the `absent()` law) — so a minted envelope is honest by
  * construction: series carry their grain, data carries its provenance,
  * counter-looking aggregations state `is_counter`. `semanticIssues()` judges
@@ -44,6 +44,17 @@
  * bearing value with any issue is NOT recognized — it keeps its bytes on
  * the data path (dev-warned, and named field-by-field by the gate), because
  * this library does not half-apply a shape it cannot fully honor.
+ *
+ * ## One core, two declaration doors
+ *
+ * `mintSemantics` is the ONE mint. Two doors hand it a declaration:
+ * `describedResult()` (described.ts — camelCase names, respelled to the wire)
+ * and `semantic()` below (the deprecated name — snake_case names copied
+ * through, byte for byte what it always minted). A door says only how its
+ * author spells things ({@link DeclarationDoor}); every rule is judged once,
+ * over the wire-spelled candidate, and every refusal quotes the author's own
+ * spelling back (`grain.isCounter` from one door, `grain.is_counter` from the
+ * other), so neither door ever answers in words its author did not write.
  */
 
 import {
@@ -51,11 +62,17 @@ import {
   normalizeCoverageList,
 } from '../../core/agent/coverage/items.js';
 import { refusal, refuseUnknownKeys } from '../../core/agent/coverage/refusal.js';
-import type { Coverage, CoverageItem } from '../../core/agent/coverage/types.js';
+import type {
+  Coverage,
+  CoverageDeclaration,
+  CoverageItem,
+} from '../../core/agent/coverage/types.js';
 import {
   COUNTER_AGGREGATION_WORDS,
   SEMANTICS_MARKER,
   SEMANTICS_NOTE,
+  type DescribedResultDeclaration,
+  type SemanticClarify,
   type SemanticCoverage,
   type SemanticDeclaration,
   type ToolSemantics,
@@ -110,8 +127,74 @@ const ENVELOPE_KEYS = new Set([
 const GRAIN_KEYS = new Set(['interval', 'aggregation', 'is_counter', 'collapsed']);
 const PROVENANCE_KEYS = new Set(['measured_at', 'age_seconds', 'source', 'source_export_date']);
 const COVERAGE_KEYS = new Set(['checked', 'not_checked', 'cannot_cover']);
-const CLARIFY_KEYS = new Set(['question', 'candidates']);
+/**
+ * The keys a {@link SemanticClarify} has — spelled the same in both
+ * declaration doors — tied to the type in BOTH directions, like
+ * `DECLARATION_KEYS` below.
+ */
+export const CLARIFY_DECLARATION_KEYS: readonly string[] = Object.keys({
+  question: true,
+  candidates: true,
+} satisfies Record<keyof SemanticClarify, true>);
+const CLARIFY_KEYS = new Set(CLARIFY_DECLARATION_KEYS);
 const RENDER_KEYS = new Set(['default', 'columns', 'sort', 'filter_note', 'chart_hint']);
+
+/**
+ * The six fields whose WIRE name is snake_case — the only names a declaration
+ * door may spell differently. Everything else (`interval`, `source`,
+ * `default`, the data rows, the eight top-level fields) is one word on both
+ * sides.
+ */
+export type SpelledField =
+  | 'is_counter'
+  | 'measured_at'
+  | 'age_seconds'
+  | 'source_export_date'
+  | 'filter_note'
+  | 'chart_hint';
+
+/** How one door's author spells each {@link SpelledField}. */
+export type Spelling = Readonly<Record<SpelledField, string>>;
+
+/** The wire's own spelling — what `semanticIssues`, recognition, the gate
+ *  and `semantic()` speak. */
+const WIRE_SPELLING: Spelling = {
+  is_counter: 'is_counter',
+  measured_at: 'measured_at',
+  age_seconds: 'age_seconds',
+  source_export_date: 'source_export_date',
+  filter_note: 'filter_note',
+  chart_hint: 'chart_hint',
+};
+
+/** The objects inside a declaration whose keys a door checks by name. */
+export type DeclaredObject = 'grain' | 'provenance' | 'coverage' | 'clarify' | 'render';
+
+/** The objects inside a declaration a door copies into their wire spelling. */
+export type RespelledObject = 'grain' | 'provenance' | 'render';
+
+/**
+ * How one declaration door spells the declaration it takes — everything that
+ * differs between `describedResult()` and `semantic()`. The rules do not
+ * differ; only the words do.
+ */
+export interface DeclarationDoor {
+  /** The helper's name, for the one refusal that names the call itself. */
+  readonly name: string;
+  /** The top-level keys a declaration may carry. */
+  readonly declarationKeys: readonly string[];
+  /** The keys that would hand-write the DERIVED `not_covered` prose list. */
+  readonly derivedKeys: readonly string[];
+  /** Each object a declaration may carry, with the keys it has in this
+   *  door's spelling — refused BEFORE anything is copied. */
+  readonly objectKeys: ReadonlyArray<readonly [field: DeclaredObject, known: readonly string[]]>;
+  /** Copy one declared object into the wire's spelling, keeping key order.
+   *  What it does with a value that is not a plain object is the door's own
+   *  call: the rule set names whatever reaches the candidate. */
+  readonly toWire: (field: RespelledObject, value: unknown) => unknown;
+  /** How this door's author spells the six snake_case wire fields. */
+  readonly spelling: Spelling;
+}
 
 /**
  * The keys a {@link SemanticDeclaration} has, tied to the type in BOTH
@@ -139,12 +222,12 @@ const DECLARATION_KEYS: readonly string[] = Object.keys({
  * `measured_at`), because the author's own object is still in hand.
  */
 const DECLARED_OBJECT_KEYS: ReadonlyArray<
-  readonly [field: keyof SemanticDeclaration, known: readonly string[]]
+  readonly [field: DeclaredObject, known: readonly string[]]
 > = [
   ['grain', [...GRAIN_KEYS]],
   ['provenance', [...PROVENANCE_KEYS]],
   ['coverage', COVERAGE_DECLARATION_KEYS],
-  ['clarify', [...CLARIFY_KEYS]],
+  ['clarify', CLARIFY_DECLARATION_KEYS],
   ['render', [...RENDER_KEYS]],
 ];
 
@@ -226,6 +309,17 @@ function checkItemList(
  * missing marker rather than guessing.
  */
 export function semanticIssues(value: unknown): readonly SemanticIssue[] {
+  return issuesIn(value, WIRE_SPELLING);
+}
+
+/**
+ * The rule set itself, over the wire-spelled `value`, naming each field the
+ * way `s` spells it. Recognition, the gate and `semantic()` pass the wire's
+ * own spelling; `describedResult()` passes camelCase, so its author reads
+ * `grain.isCounter` for the field they wrote. Only the six {@link
+ * SpelledField}s differ, and only in the words — never in what is judged.
+ */
+function issuesIn(value: unknown, s: Spelling): SemanticIssue[] {
   if (!isPlainObject(value)) {
     return [malformed(SEMANTICS_MARKER, 'a semantic envelope is a plain object.')];
   }
@@ -355,12 +449,13 @@ export function semanticIssues(value: unknown): readonly SemanticIssue[] {
 
   // ── grain ──
   const grain = value.grain;
+  const isCounter = s.is_counter;
   if (grain !== undefined) {
     if (!isPlainObject(grain)) {
       issues.push(
         malformed(
           'grain',
-          '`grain` must be an object ({ interval?, aggregation?, is_counter?, collapsed? }).',
+          `\`grain\` must be an object ({ interval?, aggregation?, ${isCounter}?, collapsed? }).`,
         ),
       );
     } else {
@@ -382,8 +477,8 @@ export function semanticIssues(value: unknown): readonly SemanticIssue[] {
         if (typeof grain.is_counter !== 'boolean') {
           issues.push(
             malformed(
-              'grain.is_counter',
-              '`grain.is_counter` must be a boolean — "stated" means true or false, never prose.',
+              `grain.${isCounter}`,
+              `\`grain.${isCounter}\` must be a boolean — "stated" means true or false, never prose.`,
             ),
           );
         } else says = true;
@@ -392,7 +487,7 @@ export function semanticIssues(value: unknown): readonly SemanticIssue[] {
         issues.push(
           malformed(
             'grain',
-            '`grain` says nothing — state at least one of interval, aggregation, is_counter, collapsed, or omit the field.',
+            `\`grain\` says nothing — state at least one of interval, aggregation, ${isCounter}, collapsed, or omit the field.`,
           ),
         );
       }
@@ -403,12 +498,12 @@ export function semanticIssues(value: unknown): readonly SemanticIssue[] {
       ) {
         issues.push({
           code: 'counter-aggregation-unstated',
-          field: 'grain.is_counter',
+          field: `grain.${isCounter}`,
           message:
             `grain.aggregation is '${grain.aggregation.trim()}', which is counter-looking, and ` +
-            `\`is_counter\` is not stated. Summing counters double-counts, and a reader cannot ` +
-            `tell a counter from a gauge by looking at a number — state \`is_counter: true\` or ` +
-            `\`is_counter: false\`.`,
+            `\`${isCounter}\` is not stated. Summing counters double-counts, and a reader cannot ` +
+            `tell a counter from a gauge by looking at a number — state \`${isCounter}: true\` or ` +
+            `\`${isCounter}: false\`.`,
         });
       }
     }
@@ -417,12 +512,15 @@ export function semanticIssues(value: unknown): readonly SemanticIssue[] {
   // ── provenance ──
   const provenance = value.provenance;
   const hasData = series !== undefined || facts !== undefined;
+  const measuredAt = s.measured_at;
+  const ageSeconds = s.age_seconds;
+  const sourceExportDate = s.source_export_date;
   if (provenance !== undefined) {
     if (!isPlainObject(provenance)) {
       issues.push(
         malformed(
           'provenance',
-          '`provenance` must be an object ({ measured_at, source, age_seconds?, source_export_date? }).',
+          `\`provenance\` must be an object ({ ${measuredAt}, source, ${ageSeconds}?, ${sourceExportDate}? }).`,
         ),
       );
     } else {
@@ -435,9 +533,9 @@ export function semanticIssues(value: unknown): readonly SemanticIssue[] {
       if (!isNonEmptyString(provenance.measured_at)) {
         issues.push({
           code: 'data-without-provenance',
-          field: 'provenance.measured_at',
+          field: `provenance.${measuredAt}`,
           message:
-            '`provenance.measured_at` must say when the WORLD was measured — a tool reading a ' +
+            `\`provenance.${measuredAt}\` must say when the WORLD was measured — a tool reading a ` +
             'nightly export and answering in 4ms is serving yesterday, and only this field says so.',
         });
       }
@@ -456,8 +554,8 @@ export function semanticIssues(value: unknown): readonly SemanticIssue[] {
       ) {
         issues.push(
           malformed(
-            'provenance.age_seconds',
-            '`provenance.age_seconds` must be a finite number ≥ 0 or omitted.',
+            `provenance.${ageSeconds}`,
+            `\`provenance.${ageSeconds}\` must be a finite number ≥ 0 or omitted.`,
           ),
         );
       }
@@ -467,8 +565,8 @@ export function semanticIssues(value: unknown): readonly SemanticIssue[] {
       ) {
         issues.push(
           malformed(
-            'provenance.source_export_date',
-            '`provenance.source_export_date` must be a non-empty string or omitted.',
+            `provenance.${sourceExportDate}`,
+            `\`provenance.${sourceExportDate}\` must be a non-empty string or omitted.`,
           ),
         );
       }
@@ -478,7 +576,7 @@ export function semanticIssues(value: unknown): readonly SemanticIssue[] {
       code: 'data-without-provenance',
       field: 'provenance',
       message:
-        'this result carries series/facts with no `provenance` — `provenance.measured_at` and ' +
+        `this result carries series/facts with no \`provenance\` — \`provenance.${measuredAt}\` and ` +
         '`provenance.source` are required whenever the envelope carries data: a number with ' +
         'no age and no source cannot be trusted or audited.',
     });
@@ -604,7 +702,7 @@ export function semanticIssues(value: unknown): readonly SemanticIssue[] {
       issues.push(
         malformed(
           'render',
-          '`render` must be an object ({ default, columns?, sort?, filter_note?, chart_hint? }).',
+          `\`render\` must be an object ({ default, columns?, sort?, ${s.filter_note}?, ${s.chart_hint}? }).`,
         ),
       );
     } else {
@@ -633,10 +731,17 @@ export function semanticIssues(value: unknown): readonly SemanticIssue[] {
           ),
         );
       }
-      for (const key of ['sort', 'filter_note', 'chart_hint'] as const) {
+      for (const [key, spelled] of [
+        ['sort', 'sort'],
+        ['filter_note', s.filter_note],
+        ['chart_hint', s.chart_hint],
+      ] as const) {
         if (render[key] !== undefined && !isNonEmptyString(render[key])) {
           issues.push(
-            malformed(`render.${key}`, `\`render.${key}\` must be a non-empty string or omitted.`),
+            malformed(
+              `render.${spelled}`,
+              `\`render.${spelled}\` must be a non-empty string or omitted.`,
+            ),
           );
         }
       }
@@ -670,9 +775,122 @@ export function semanticIssues(value: unknown): readonly SemanticIssue[] {
 }
 
 /**
+ * The declared `coverage`, normalized by the SAME validator the
+ * `coverage()`/`absent()` primitives use (one validator, three doors), then
+ * respelled snake_case for the rendered envelope. `undefined` when none was
+ * declared.
+ */
+function mintedCoverage(declared: unknown): SemanticCoverage | undefined {
+  if (declared === undefined) return undefined;
+  if (!isPlainObject(declared)) {
+    throw refusal(`\`coverage\` must be a { checked?, notChecked?, cannotCover? } declaration.`);
+  }
+  const cov = declared as CoverageDeclaration;
+  const checked = normalizeCoverageList('checked', cov.checked, false);
+  const notChecked = normalizeCoverageList('notChecked', cov.notChecked, false);
+  const cannotCover = normalizeCoverageList('cannotCover', cov.cannotCover, true);
+  if (checked.length + notChecked.length + cannotCover.length === 0) {
+    throw refusal(
+      `\`coverage\` names no ground at all — declare at least one item across ` +
+        `checked/notChecked/cannotCover, or omit the field (absent means "not declared", ` +
+        `never "nothing there").`,
+    );
+  }
+  return {
+    ...(checked.length > 0 && { checked }),
+    ...(notChecked.length > 0 && { not_checked: notChecked }),
+    ...(cannotCover.length > 0 && { cannot_cover: cannotCover }),
+  };
+}
+
+/**
+ * The ONE mint behind both declaration doors — `describedResult()` and
+ * `semantic()`. Refuses (throws, at the call site — the `absent()` law) any
+ * declaration this vocabulary cannot honor, in the door's own words; returns
+ * the rendered envelope otherwise.
+ *
+ * In order: the declaration must be an object; a hand-written `not_covered`
+ * is refused as derived; every key the declaration and its objects carry must
+ * be one the door reads (a casing slip names the spelling meant); coverage is
+ * normalized; the candidate is built in the WIRE spelling; and the whole rule
+ * set judges it, naming each field as the door's author spelled it.
+ */
+export function mintSemantics(
+  decl: SemanticDeclaration | DescribedResultDeclaration,
+  door: DeclarationDoor,
+): ToolSemantics {
+  // Deliberately not the isPlainObject guard: its predicate would REPLACE
+  // the declared field types with an index signature for the rest of the
+  // function (each declaration type is assignable to it, so it narrows).
+  if (typeof decl !== 'object' || decl === null || Array.isArray(decl)) {
+    throw refusal(
+      `${door.name}() takes a declaration — { series?, facts?, edges?, grain?, provenance?, ` +
+        `coverage?, clarify?, render? } with at least one of series/facts/edges/clarify.`,
+    );
+  }
+  const derived = door.derivedKeys.find((key) => Object.prototype.hasOwnProperty.call(decl, key));
+  if (derived !== undefined) {
+    throw refusal(
+      `\`${derived}\` is derived, never declared — declare \`coverage\` ` +
+        `({ notChecked, cannotCover }) and the prose list is composed from it, so the two ` +
+        `can never disagree.`,
+    );
+  }
+  refuseUnknownKeys(decl, door.declarationKeys);
+  for (const [field, known] of door.objectKeys) {
+    const nested: unknown = decl[field];
+    if (isPlainObject(nested)) refuseUnknownKeys(nested, known, field);
+  }
+
+  const coverage = mintedCoverage(decl.coverage);
+  const notCovered = coverage !== undefined ? composeNotCovered(coverage) : [];
+  const candidate: Record<string, unknown> = {
+    [SEMANTICS_MARKER]: true,
+    ...(decl.series !== undefined && { series: [...decl.series] }),
+    ...(decl.facts !== undefined && { facts: [...decl.facts] }),
+    ...(decl.edges !== undefined && { edges: [...decl.edges] }),
+    ...(decl.grain !== undefined && { grain: door.toWire('grain', decl.grain) }),
+    ...(decl.provenance !== undefined && {
+      provenance: door.toWire('provenance', decl.provenance),
+    }),
+    ...(coverage !== undefined && { coverage }),
+    ...(notCovered.length > 0 && { not_covered: notCovered }),
+    ...('clarify' in decl &&
+      decl.clarify !== undefined && {
+        clarify: decl.clarify === null ? null : copyClarify(decl.clarify),
+      }),
+    ...(decl.render !== undefined && { render: door.toWire('render', decl.render) }),
+    note: SEMANTICS_NOTE,
+  };
+
+  // One rule set, one implementation: the mint judges its own candidate with
+  // the exact validator recognition and the gate use, and refuses the first
+  // fault at the call site — in the words the door's author wrote.
+  const issues = issuesIn(candidate, door.spelling);
+  if (issues.length > 0) {
+    const first = issues[0];
+    throw refusal(`${first.message} (field: ${first.field})`);
+  }
+  return candidate as unknown as ToolSemantics;
+}
+
+/** `semantic()`'s door: the snake_case names are the wire's own, so each
+ *  declared object is copied through as written — spread, whatever it is, as
+ *  it always was, so a malformed one keeps the refusal it always got. */
+const SEMANTIC_DOOR: DeclarationDoor = {
+  name: 'semantic',
+  declarationKeys: DECLARATION_KEYS,
+  derivedKeys: ['not_covered'],
+  objectKeys: DECLARED_OBJECT_KEYS,
+  toWire: (_field, value) => ({ ...(value as object) }),
+  spelling: WIRE_SPELLING,
+};
+
+/**
  * Say "here is typed data, with the caveats that make it honest" in a shape
  * the framework recognizes, the record keeps whole, and a build gate can
- * refuse.
+ * refuse — from a declaration that copies the wire's snake_case names
+ * through (`measured_at`, `is_counter`, `filter_note`).
  *
  * Returns the value a tool's `execute` should return. The framework
  * recognizes it at the dispatch boundary: the MODEL reads the compact
@@ -688,12 +906,22 @@ export function semanticIssues(value: unknown): readonly SemanticIssue[] {
  * `coverage`, `clarify`, `render`), does not have is refused too, naming the
  * spelling meant when it is a casing slip (`not_checked` → `notChecked`),
  * so nothing declared from plain JavaScript or JSON vanishes without a word.
+ * A camelCase `measuredAt` is refused here, naming `measured_at`: this door
+ * takes one spelling.
  *
  * Every refusal starts `refused: ` and never with this function's name:
  * inside a tool's `execute` it becomes the call's error result, and the
  * model reads it. "refused: this result carries series/facts with no
  * provenance — …" reads as a refusal, where "semantic: carries …" read like
  * a finding.
+ *
+ * @deprecated Use {@link describedResult} — the same envelope, byte for
+ * byte, from a declaration spelled the way code is written (`measuredAt`,
+ * `ageSeconds`, `sourceExportDate`, `isCounter`, `filterNote`, `chartHint`),
+ * with a missing `provenance` caught by the compiler. The name `semantic`
+ * read as semantic search. This function keeps working unchanged, and
+ * keeps its own spelling: switching the name alone makes each
+ * `measured_at` a refusal that names `measuredAt`, never a silent loss.
  *
  * @example a per-port IOPS tool
  *   return semantic({
@@ -708,82 +936,7 @@ export function semanticIssues(value: unknown): readonly SemanticIssue[] {
  *   });
  */
 export function semantic(decl: SemanticDeclaration): ToolSemantics {
-  const fn = 'semantic';
-  // Deliberately not the isPlainObject guard: its predicate would REPLACE
-  // the declared field types with an index signature for the rest of the
-  // function (SemanticDeclaration is all-optional, hence assignable).
-  if (typeof decl !== 'object' || decl === null || Array.isArray(decl)) {
-    throw refusal(
-      `${fn}() takes a declaration — { series?, facts?, edges?, grain?, provenance?, ` +
-        `coverage?, clarify?, render? } with at least one of series/facts/edges/clarify.`,
-    );
-  }
-  if (Object.prototype.hasOwnProperty.call(decl, 'not_covered')) {
-    throw refusal(
-      `\`not_covered\` is derived, never declared — declare \`coverage\` ` +
-        `({ notChecked, cannotCover }) and the prose list is composed from it, so the two ` +
-        `can never disagree.`,
-    );
-  }
-  refuseUnknownKeys(decl, DECLARATION_KEYS);
-  for (const [field, known] of DECLARED_OBJECT_KEYS) {
-    const nested: unknown = decl[field];
-    if (isPlainObject(nested)) refuseUnknownKeys(nested, known, field);
-  }
-
-  // Coverage first — the coverage() vocabulary, normalized by the SAME
-  // validator the coverage()/absent() primitives use (one validator, three
-  // doors), then respelled snake_case for the rendered envelope.
-  let coverage: SemanticCoverage | undefined;
-  if (decl.coverage !== undefined) {
-    if (!isPlainObject(decl.coverage)) {
-      throw refusal(`\`coverage\` must be a { checked?, notChecked?, cannotCover? } declaration.`);
-    }
-    const cov = decl.coverage as SemanticDeclaration['coverage'] & object;
-    const checked = normalizeCoverageList('checked', cov.checked, false);
-    const notChecked = normalizeCoverageList('notChecked', cov.notChecked, false);
-    const cannotCover = normalizeCoverageList('cannotCover', cov.cannotCover, true);
-    if (checked.length + notChecked.length + cannotCover.length === 0) {
-      throw refusal(
-        `\`coverage\` names no ground at all — declare at least one item across ` +
-          `checked/notChecked/cannotCover, or omit the field (absent means "not declared", ` +
-          `never "nothing there").`,
-      );
-    }
-    coverage = {
-      ...(checked.length > 0 && { checked }),
-      ...(notChecked.length > 0 && { not_checked: notChecked }),
-      ...(cannotCover.length > 0 && { cannot_cover: cannotCover }),
-    };
-  }
-
-  const notCovered = coverage !== undefined ? composeNotCovered(coverage) : [];
-  const candidate: Record<string, unknown> = {
-    [SEMANTICS_MARKER]: true,
-    ...(decl.series !== undefined && { series: [...decl.series] }),
-    ...(decl.facts !== undefined && { facts: [...decl.facts] }),
-    ...(decl.edges !== undefined && { edges: [...decl.edges] }),
-    ...(decl.grain !== undefined && { grain: { ...decl.grain } }),
-    ...(decl.provenance !== undefined && { provenance: { ...decl.provenance } }),
-    ...(coverage !== undefined && { coverage }),
-    ...(notCovered.length > 0 && { not_covered: notCovered }),
-    ...('clarify' in decl &&
-      decl.clarify !== undefined && {
-        clarify: decl.clarify === null ? null : copyClarify(decl.clarify),
-      }),
-    ...(decl.render !== undefined && { render: { ...decl.render } }),
-    note: SEMANTICS_NOTE,
-  };
-
-  // One rule set, one implementation: the mint judges its own candidate with
-  // the exact validator recognition and the gate use, and refuses the first
-  // fault at the call site.
-  const issues = semanticIssues(candidate);
-  if (issues.length > 0) {
-    const first = issues[0];
-    throw refusal(`${first.message} (field: ${first.field})`);
-  }
-  return candidate as unknown as ToolSemantics;
+  return mintSemantics(decl, SEMANTIC_DOOR);
 }
 
 /**

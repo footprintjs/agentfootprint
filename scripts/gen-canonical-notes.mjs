@@ -3,7 +3,7 @@
  *
  * ## Why this file exists
  *
- * `absent()`, `coverage()` and `semantic()` mint shapes that carry a STATIC,
+ * `absent()`, `coverage()` and `describedResult()` mint shapes that carry a STATIC,
  * never-interpolated sentence, and a reserved marker key that makes each shape
  * recognizable. Those bytes are a contract: a recognizer accepts the marker
  * verbatim, and the note is what the docs promise a model will read.

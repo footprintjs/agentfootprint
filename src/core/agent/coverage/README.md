@@ -447,10 +447,11 @@ coverage(verdict, boundary);
 ```
 
 Thrown inside a tool, the same words are what the model reads — here a
-`semantic()` result with no source:
+`describedResult()` result with no source (from plain JavaScript; in
+TypeScript the missing `source` is a compile error first):
 
-```ts
-execute: () => semantic({ facts: rows, provenance: { measured_at: exportTime } }),
+```js
+execute: () => describedResult({ facts: rows, provenance: { measuredAt: exportTime } }),
 // the call's error result, as the model reads it:
 // refused: `provenance.source` must name the system of record the values were
 // read from. (field: provenance.source)
@@ -458,15 +459,18 @@ execute: () => semantic({ facts: rows, provenance: { measured_at: exportTime } }
 
 - **Which keys.** `absent()`: `what`, `checked`, `notChecked`, `cannotCover`,
   `tryInstead`, `tryInsteadTool`. `coverage()`: `checked`, `notChecked`,
-  `cannotCover`. `semantic()`: its eight fields, and the keys of each object
-  it carries — `grain`, `provenance`, `coverage`, `clarify`, `render`. The
-  three declaration key lists are tied to their types in both directions
-  (`satisfies Record<keyof …, true>`), so a field a type gains cannot be
-  refused by mistake.
+  `cannotCover`. `describedResult()` and the deprecated `semantic()`: their
+  eight fields, and the keys of each object they carry — `grain`,
+  `provenance`, `coverage`, `clarify`, `render` — each door in its own
+  spelling (`measuredAt` for one, `measured_at` for the other; each refuses
+  the other's, naming its own). The declaration key lists are tied to their
+  types in both directions (`satisfies Record<keyof …, true>`), so a field a
+  type gains cannot be refused by mistake.
 - **A suggestion only for a slip, never a guess.** `refusal.ts` ·
   `spellingMeant` folds case and `_`/`-` away and names the known key with the
-  same letters — `not_checked` and `NotChecked` → `notChecked`, `measuredAt`
-  → `measured_at`. A different word gets the list of fields and nothing else.
+  same letters — `not_checked` and `NotChecked` → `notChecked`; `measuredAt`
+  → `measured_at` at `semantic()`, and the reverse at `describedResult()`. A
+  different word gets the list of fields and nothing else.
 - **Not held to it, on purpose.** An ITEM's own keys (`{ what, why, short,
   kind }`): an unknown one is still dropped — § 3's "Not the coverage lists'
   rules", unchanged, because refusing it would change what existing item
