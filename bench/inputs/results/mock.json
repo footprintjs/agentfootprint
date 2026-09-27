@@ -1,0 +1,4827 @@
+{
+  "rule": "inputs-rule-1 (registered 2026-09-27)",
+  "what": "The inputs bench on the scripted mock — every variant of every case once, arm off. It measures the harness and the reader, never a model. Pinned by test/bench/inputs/unarmed-bytes.test.ts: an unarmed agent must keep serving these request bytes (requestsDigest) and these rows.",
+  "config": {
+    "provider": "mock",
+    "model": "mock",
+    "arms": [
+      "off"
+    ],
+    "maxIterations": 6,
+    "maxTokens": 1024
+  },
+  "rows": [
+    {
+      "key": "off/p1-checkout-errors/r0",
+      "arm": "off",
+      "caseId": "p1-checkout-errors",
+      "group": "P1",
+      "rep": 0,
+      "variant": "leaves the period out; states no window",
+      "complete": true,
+      "toolCalls": {
+        "proposed": 1,
+        "dispatched": 1,
+        "refused": 0,
+        "failed": 0
+      },
+      "periodCalls": [
+        {
+          "toolCallId": "t1c1",
+          "tool": "search_logs",
+          "argument": "window",
+          "origin": "omitted",
+          "dispatched": true,
+          "ok": true,
+          "ranWith": "2h",
+          "cls": "default-unchosen",
+          "meant": false
+        }
+      ],
+      "names": [
+        {
+          "toolCallId": "t1c1",
+          "tool": "search_logs",
+          "argument": "service",
+          "value": "checkout",
+          "cls": "said",
+          "dispatched": true,
+          "ok": true
+        }
+      ],
+      "periodExpected": true,
+      "noPeriodCall": false,
+      "answer": {
+        "present": true,
+        "ranDurations": [
+          "h2"
+        ],
+        "statedDurations": [],
+        "statesRan": false,
+        "statesOther": false,
+        "factsExpected": 2,
+        "factsFound": 2,
+        "asksInProse": false
+      },
+      "standing": {
+        "standing": "consistent",
+        "assessment": "unrefuted",
+        "reasons": []
+      },
+      "argumentRows": {
+        "total": 0,
+        "bySource": {},
+        "byAsked": {}
+      },
+      "llm": {
+        "calls": 2,
+        "input": 130,
+        "output": 10,
+        "cacheRead": 0,
+        "cacheWrite": 0
+      },
+      "usd": 0,
+      "requestsDigest": "c8549a71ccf54622.1215339b5f9e588a"
+    },
+    {
+      "key": "off/p1-checkout-errors/r1",
+      "arm": "off",
+      "caseId": "p1-checkout-errors",
+      "group": "P1",
+      "rep": 1,
+      "variant": "leaves the period out; states the window that ran",
+      "complete": true,
+      "toolCalls": {
+        "proposed": 1,
+        "dispatched": 1,
+        "refused": 0,
+        "failed": 0
+      },
+      "periodCalls": [
+        {
+          "toolCallId": "t1c1",
+          "tool": "search_logs",
+          "argument": "window",
+          "origin": "omitted",
+          "dispatched": true,
+          "ok": true,
+          "ranWith": "2h",
+          "cls": "default-unchosen",
+          "meant": false
+        }
+      ],
+      "names": [
+        {
+          "toolCallId": "t1c1",
+          "tool": "search_logs",
+          "argument": "service",
+          "value": "checkout",
+          "cls": "said",
+          "dispatched": true,
+          "ok": true
+        }
+      ],
+      "periodExpected": true,
+      "noPeriodCall": false,
+      "answer": {
+        "present": true,
+        "ranDurations": [
+          "h2"
+        ],
+        "statedDurations": [
+          "h2"
+        ],
+        "statesRan": true,
+        "statesOther": false,
+        "factsExpected": 2,
+        "factsFound": 2,
+        "asksInProse": false
+      },
+      "standing": {
+        "standing": "consistent",
+        "assessment": "unrefuted",
+        "reasons": []
+      },
+      "argumentRows": {
+        "total": 0,
+        "bySource": {},
+        "byAsked": {}
+      },
+      "llm": {
+        "calls": 2,
+        "input": 130,
+        "output": 17,
+        "cacheRead": 0,
+        "cacheWrite": 0
+      },
+      "usd": 0,
+      "requestsDigest": "c8549a71ccf54622.1215339b5f9e588a"
+    },
+    {
+      "key": "off/p1-checkout-errors/r2",
+      "arm": "off",
+      "caseId": "p1-checkout-errors",
+      "group": "P1",
+      "rep": 2,
+      "variant": "sends the default itself",
+      "complete": true,
+      "toolCalls": {
+        "proposed": 1,
+        "dispatched": 1,
+        "refused": 0,
+        "failed": 0
+      },
+      "periodCalls": [
+        {
+          "toolCallId": "t1c1",
+          "tool": "search_logs",
+          "argument": "window",
+          "origin": "sent",
+          "dispatched": true,
+          "ok": true,
+          "sent": "2h",
+          "ranWith": "2h",
+          "cls": "default-unchosen",
+          "meant": false
+        }
+      ],
+      "names": [
+        {
+          "toolCallId": "t1c1",
+          "tool": "search_logs",
+          "argument": "service",
+          "value": "checkout",
+          "cls": "said",
+          "dispatched": true,
+          "ok": true
+        }
+      ],
+      "periodExpected": true,
+      "noPeriodCall": false,
+      "answer": {
+        "present": true,
+        "ranDurations": [
+          "h2"
+        ],
+        "statedDurations": [
+          "h2"
+        ],
+        "statesRan": true,
+        "statesOther": false,
+        "factsExpected": 2,
+        "factsFound": 2,
+        "asksInProse": false
+      },
+      "standing": {
+        "standing": "consistent",
+        "assessment": "unrefuted",
+        "reasons": []
+      },
+      "argumentRows": {
+        "total": 0,
+        "bySource": {},
+        "byAsked": {}
+      },
+      "llm": {
+        "calls": 2,
+        "input": 130,
+        "output": 17,
+        "cacheRead": 0,
+        "cacheWrite": 0
+      },
+      "usd": 0,
+      "requestsDigest": "c8549a71ccf54622.626a03ea63c54ad2"
+    },
+    {
+      "key": "off/p1-checkout-errors/r3",
+      "arm": "off",
+      "caseId": "p1-checkout-errors",
+      "group": "P1",
+      "rep": 3,
+      "variant": "picks its own period",
+      "complete": true,
+      "toolCalls": {
+        "proposed": 1,
+        "dispatched": 1,
+        "refused": 0,
+        "failed": 0
+      },
+      "periodCalls": [
+        {
+          "toolCallId": "t1c1",
+          "tool": "search_logs",
+          "argument": "window",
+          "origin": "sent",
+          "dispatched": true,
+          "ok": true,
+          "sent": "24h",
+          "ranWith": "24h",
+          "cls": "model-chosen",
+          "meant": true
+        }
+      ],
+      "names": [
+        {
+          "toolCallId": "t1c1",
+          "tool": "search_logs",
+          "argument": "service",
+          "value": "checkout",
+          "cls": "said",
+          "dispatched": true,
+          "ok": true
+        }
+      ],
+      "periodExpected": true,
+      "noPeriodCall": false,
+      "answer": {
+        "present": true,
+        "ranDurations": [
+          "d1"
+        ],
+        "statedDurations": [
+          "d1"
+        ],
+        "statesRan": true,
+        "statesOther": false,
+        "factsExpected": 2,
+        "factsFound": 2,
+        "asksInProse": false
+      },
+      "standing": {
+        "standing": "consistent",
+        "assessment": "unrefuted",
+        "reasons": []
+      },
+      "argumentRows": {
+        "total": 0,
+        "bySource": {},
+        "byAsked": {}
+      },
+      "llm": {
+        "calls": 2,
+        "input": 131,
+        "output": 17,
+        "cacheRead": 0,
+        "cacheWrite": 0
+      },
+      "usd": 0,
+      "requestsDigest": "c8549a71ccf54622.be014d102222ef46"
+    },
+    {
+      "key": "off/p1-checkout-errors/r4",
+      "arm": "off",
+      "caseId": "p1-checkout-errors",
+      "group": "P1",
+      "rep": 4,
+      "variant": "asks in prose instead of calling",
+      "complete": true,
+      "toolCalls": {
+        "proposed": 0,
+        "dispatched": 0,
+        "refused": 0,
+        "failed": 0
+      },
+      "periodCalls": [],
+      "names": [],
+      "periodExpected": true,
+      "noPeriodCall": true,
+      "answer": {
+        "present": true,
+        "ranDurations": [],
+        "statedDurations": [
+          "h1",
+          "d1",
+          "d7"
+        ],
+        "statesRan": false,
+        "statesOther": true,
+        "factsExpected": 0,
+        "factsFound": 0,
+        "asksInProse": true
+      },
+      "standing": {
+        "standing": "not-assessed",
+        "assessment": "not-applicable",
+        "reasons": []
+      },
+      "argumentRows": {
+        "total": 0,
+        "bySource": {},
+        "byAsked": {}
+      },
+      "llm": {
+        "calls": 1,
+        "input": 27,
+        "output": 19,
+        "cacheRead": 0,
+        "cacheWrite": 0
+      },
+      "usd": 0,
+      "requestsDigest": "c8549a71ccf54622"
+    },
+    {
+      "key": "off/p1-payments-errors/r0",
+      "arm": "off",
+      "caseId": "p1-payments-errors",
+      "group": "P1",
+      "rep": 0,
+      "variant": "leaves the period out; flat \"no errors\"",
+      "complete": true,
+      "toolCalls": {
+        "proposed": 1,
+        "dispatched": 1,
+        "refused": 0,
+        "failed": 0
+      },
+      "periodCalls": [
+        {
+          "toolCallId": "t1c1",
+          "tool": "search_logs",
+          "argument": "window",
+          "origin": "omitted",
+          "dispatched": true,
+          "ok": true,
+          "ranWith": "2h",
+          "cls": "default-unchosen",
+          "meant": false
+        }
+      ],
+      "names": [
+        {
+          "toolCallId": "t1c1",
+          "tool": "search_logs",
+          "argument": "service",
+          "value": "payments",
+          "cls": "said",
+          "dispatched": true,
+          "ok": true
+        }
+      ],
+      "periodExpected": true,
+      "noPeriodCall": false,
+      "answer": {
+        "present": true,
+        "ranDurations": [
+          "h2"
+        ],
+        "statedDurations": [],
+        "statesRan": false,
+        "statesOther": false,
+        "factsExpected": 1,
+        "factsFound": 1,
+        "asksInProse": false
+      },
+      "standing": {
+        "standing": "not-sure",
+        "assessment": "unknown",
+        "reasons": [
+          "empty-undeclared"
+        ]
+      },
+      "argumentRows": {
+        "total": 0,
+        "bySource": {},
+        "byAsked": {}
+      },
+      "llm": {
+        "calls": 2,
+        "input": 74,
+        "output": 5,
+        "cacheRead": 0,
+        "cacheWrite": 0
+      },
+      "usd": 0,
+      "requestsDigest": "a2b927632483fbe6.4c6e289e1f479254"
+    },
+    {
+      "key": "off/p1-payments-errors/r1",
+      "arm": "off",
+      "caseId": "p1-payments-errors",
+      "group": "P1",
+      "rep": 1,
+      "variant": "leaves the period out; states the window that ran",
+      "complete": true,
+      "toolCalls": {
+        "proposed": 1,
+        "dispatched": 1,
+        "refused": 0,
+        "failed": 0
+      },
+      "periodCalls": [
+        {
+          "toolCallId": "t1c1",
+          "tool": "search_logs",
+          "argument": "window",
+          "origin": "omitted",
+          "dispatched": true,
+          "ok": true,
+          "ranWith": "2h",
+          "cls": "default-unchosen",
+          "meant": false
+        }
+      ],
+      "names": [
+        {
+          "toolCallId": "t1c1",
+          "tool": "search_logs",
+          "argument": "service",
+          "value": "payments",
+          "cls": "said",
+          "dispatched": true,
+          "ok": true
+        }
+      ],
+      "periodExpected": true,
+      "noPeriodCall": false,
+      "answer": {
+        "present": true,
+        "ranDurations": [
+          "h2"
+        ],
+        "statedDurations": [
+          "h2"
+        ],
+        "statesRan": true,
+        "statesOther": false,
+        "factsExpected": 1,
+        "factsFound": 1,
+        "asksInProse": false
+      },
+      "standing": {
+        "standing": "not-sure",
+        "assessment": "unknown",
+        "reasons": [
+          "empty-undeclared"
+        ]
+      },
+      "argumentRows": {
+        "total": 0,
+        "bySource": {},
+        "byAsked": {}
+      },
+      "llm": {
+        "calls": 2,
+        "input": 74,
+        "output": 12,
+        "cacheRead": 0,
+        "cacheWrite": 0
+      },
+      "usd": 0,
+      "requestsDigest": "a2b927632483fbe6.4c6e289e1f479254"
+    },
+    {
+      "key": "off/p1-payments-errors/r2",
+      "arm": "off",
+      "caseId": "p1-payments-errors",
+      "group": "P1",
+      "rep": 2,
+      "variant": "picks its own period",
+      "complete": true,
+      "toolCalls": {
+        "proposed": 1,
+        "dispatched": 1,
+        "refused": 0,
+        "failed": 0
+      },
+      "periodCalls": [
+        {
+          "toolCallId": "t1c1",
+          "tool": "search_logs",
+          "argument": "window",
+          "origin": "sent",
+          "dispatched": true,
+          "ok": true,
+          "sent": "24h",
+          "ranWith": "24h",
+          "cls": "model-chosen",
+          "meant": true
+        }
+      ],
+      "names": [
+        {
+          "toolCallId": "t1c1",
+          "tool": "search_logs",
+          "argument": "service",
+          "value": "payments",
+          "cls": "said",
+          "dispatched": true,
+          "ok": true
+        }
+      ],
+      "periodExpected": true,
+      "noPeriodCall": false,
+      "answer": {
+        "present": true,
+        "ranDurations": [
+          "d1"
+        ],
+        "statedDurations": [
+          "d1"
+        ],
+        "statesRan": true,
+        "statesOther": false,
+        "factsExpected": 2,
+        "factsFound": 2,
+        "asksInProse": false
+      },
+      "standing": {
+        "standing": "consistent",
+        "assessment": "unrefuted",
+        "reasons": []
+      },
+      "argumentRows": {
+        "total": 0,
+        "bySource": {},
+        "byAsked": {}
+      },
+      "llm": {
+        "calls": 2,
+        "input": 129,
+        "output": 17,
+        "cacheRead": 0,
+        "cacheWrite": 0
+      },
+      "usd": 0,
+      "requestsDigest": "a2b927632483fbe6.74d5c12b9f112876"
+    },
+    {
+      "key": "off/p1-disk-io/r0",
+      "arm": "off",
+      "caseId": "p1-disk-io",
+      "group": "P1",
+      "rep": 0,
+      "variant": "leaves the period out; states no window",
+      "complete": true,
+      "toolCalls": {
+        "proposed": 1,
+        "dispatched": 1,
+        "refused": 0,
+        "failed": 0
+      },
+      "periodCalls": [
+        {
+          "toolCallId": "t1c1",
+          "tool": "io_profile",
+          "argument": "time_range",
+          "origin": "omitted",
+          "dispatched": true,
+          "ok": true,
+          "ranWith": "24h",
+          "cls": "default-unchosen",
+          "meant": false
+        }
+      ],
+      "names": [
+        {
+          "toolCallId": "t1c1",
+          "tool": "io_profile",
+          "argument": "host",
+          "value": "srv-4417",
+          "cls": "said",
+          "dispatched": true,
+          "ok": true
+        }
+      ],
+      "periodExpected": true,
+      "noPeriodCall": false,
+      "answer": {
+        "present": true,
+        "ranDurations": [
+          "d1"
+        ],
+        "statedDurations": [],
+        "statesRan": false,
+        "statesOther": false,
+        "factsExpected": 2,
+        "factsFound": 2,
+        "asksInProse": false
+      },
+      "standing": {
+        "standing": "not-assessed",
+        "assessment": "not-applicable",
+        "reasons": []
+      },
+      "argumentRows": {
+        "total": 0,
+        "bySource": {},
+        "byAsked": {}
+      },
+      "llm": {
+        "calls": 2,
+        "input": 79,
+        "output": 11,
+        "cacheRead": 0,
+        "cacheWrite": 0
+      },
+      "usd": 0,
+      "requestsDigest": "d719d02885d0d06f.eae6f6d81e863b89"
+    },
+    {
+      "key": "off/p1-disk-io/r1",
+      "arm": "off",
+      "caseId": "p1-disk-io",
+      "group": "P1",
+      "rep": 1,
+      "variant": "sends the default itself",
+      "complete": true,
+      "toolCalls": {
+        "proposed": 1,
+        "dispatched": 1,
+        "refused": 0,
+        "failed": 0
+      },
+      "periodCalls": [
+        {
+          "toolCallId": "t1c1",
+          "tool": "io_profile",
+          "argument": "time_range",
+          "origin": "sent",
+          "dispatched": true,
+          "ok": true,
+          "sent": "24h",
+          "ranWith": "24h",
+          "cls": "default-unchosen",
+          "meant": false
+        }
+      ],
+      "names": [
+        {
+          "toolCallId": "t1c1",
+          "tool": "io_profile",
+          "argument": "host",
+          "value": "srv-4417",
+          "cls": "said",
+          "dispatched": true,
+          "ok": true
+        }
+      ],
+      "periodExpected": true,
+      "noPeriodCall": false,
+      "answer": {
+        "present": true,
+        "ranDurations": [
+          "d1"
+        ],
+        "statedDurations": [
+          "d1"
+        ],
+        "statesRan": true,
+        "statesOther": false,
+        "factsExpected": 2,
+        "factsFound": 2,
+        "asksInProse": false
+      },
+      "standing": {
+        "standing": "not-assessed",
+        "assessment": "not-applicable",
+        "reasons": []
+      },
+      "argumentRows": {
+        "total": 0,
+        "bySource": {},
+        "byAsked": {}
+      },
+      "llm": {
+        "calls": 2,
+        "input": 79,
+        "output": 17,
+        "cacheRead": 0,
+        "cacheWrite": 0
+      },
+      "usd": 0,
+      "requestsDigest": "d719d02885d0d06f.6ebf7a70901c9542"
+    },
+    {
+      "key": "off/p1-disk-io/r2",
+      "arm": "off",
+      "caseId": "p1-disk-io",
+      "group": "P1",
+      "rep": 2,
+      "variant": "picks its own period",
+      "complete": true,
+      "toolCalls": {
+        "proposed": 1,
+        "dispatched": 1,
+        "refused": 0,
+        "failed": 0
+      },
+      "periodCalls": [
+        {
+          "toolCallId": "t1c1",
+          "tool": "io_profile",
+          "argument": "time_range",
+          "origin": "sent",
+          "dispatched": true,
+          "ok": true,
+          "sent": "1h",
+          "ranWith": "1h",
+          "cls": "model-chosen",
+          "meant": true
+        }
+      ],
+      "names": [
+        {
+          "toolCallId": "t1c1",
+          "tool": "io_profile",
+          "argument": "host",
+          "value": "srv-4417",
+          "cls": "said",
+          "dispatched": true,
+          "ok": true
+        }
+      ],
+      "periodExpected": true,
+      "noPeriodCall": false,
+      "answer": {
+        "present": true,
+        "ranDurations": [
+          "h1"
+        ],
+        "statedDurations": [
+          "h1"
+        ],
+        "statesRan": true,
+        "statesOther": false,
+        "factsExpected": 2,
+        "factsFound": 2,
+        "asksInProse": false
+      },
+      "standing": {
+        "standing": "not-assessed",
+        "assessment": "not-applicable",
+        "reasons": []
+      },
+      "argumentRows": {
+        "total": 0,
+        "bySource": {},
+        "byAsked": {}
+      },
+      "llm": {
+        "calls": 2,
+        "input": 79,
+        "output": 16,
+        "cacheRead": 0,
+        "cacheWrite": 0
+      },
+      "usd": 0,
+      "requestsDigest": "d719d02885d0d06f.6191c10f99dcbb8e"
+    },
+    {
+      "key": "off/p1-network/r0",
+      "arm": "off",
+      "caseId": "p1-network",
+      "group": "P1",
+      "rep": 0,
+      "variant": "leaves the period out; states no window",
+      "complete": true,
+      "toolCalls": {
+        "proposed": 1,
+        "dispatched": 1,
+        "refused": 0,
+        "failed": 0
+      },
+      "periodCalls": [
+        {
+          "toolCallId": "t1c1",
+          "tool": "net_flows",
+          "argument": "window",
+          "origin": "omitted",
+          "dispatched": true,
+          "ok": true,
+          "ranWith": "-60m",
+          "cls": "default-unchosen",
+          "meant": false
+        }
+      ],
+      "names": [
+        {
+          "toolCallId": "t1c1",
+          "tool": "net_flows",
+          "argument": "host",
+          "value": "srv-2280",
+          "cls": "said",
+          "dispatched": true,
+          "ok": true
+        }
+      ],
+      "periodExpected": true,
+      "noPeriodCall": false,
+      "answer": {
+        "present": true,
+        "ranDurations": [
+          "h1"
+        ],
+        "statedDurations": [],
+        "statesRan": false,
+        "statesOther": false,
+        "factsExpected": 1,
+        "factsFound": 1,
+        "asksInProse": false
+      },
+      "standing": {
+        "standing": "not-assessed",
+        "assessment": "not-applicable",
+        "reasons": []
+      },
+      "argumentRows": {
+        "total": 0,
+        "bySource": {},
+        "byAsked": {}
+      },
+      "llm": {
+        "calls": 2,
+        "input": 85,
+        "output": 11,
+        "cacheRead": 0,
+        "cacheWrite": 0
+      },
+      "usd": 0,
+      "requestsDigest": "8fac1e649a5a8424.8d93bd6912a92ef7"
+    },
+    {
+      "key": "off/p1-network/r1",
+      "arm": "off",
+      "caseId": "p1-network",
+      "group": "P1",
+      "rep": 1,
+      "variant": "sends the default itself",
+      "complete": true,
+      "toolCalls": {
+        "proposed": 1,
+        "dispatched": 1,
+        "refused": 0,
+        "failed": 0
+      },
+      "periodCalls": [
+        {
+          "toolCallId": "t1c1",
+          "tool": "net_flows",
+          "argument": "window",
+          "origin": "sent",
+          "dispatched": true,
+          "ok": true,
+          "sent": "-60m",
+          "ranWith": "-60m",
+          "cls": "default-unchosen",
+          "meant": false
+        }
+      ],
+      "names": [
+        {
+          "toolCallId": "t1c1",
+          "tool": "net_flows",
+          "argument": "host",
+          "value": "srv-2280",
+          "cls": "said",
+          "dispatched": true,
+          "ok": true
+        }
+      ],
+      "periodExpected": true,
+      "noPeriodCall": false,
+      "answer": {
+        "present": true,
+        "ranDurations": [
+          "h1"
+        ],
+        "statedDurations": [
+          "h1"
+        ],
+        "statesRan": true,
+        "statesOther": false,
+        "factsExpected": 1,
+        "factsFound": 1,
+        "asksInProse": false
+      },
+      "standing": {
+        "standing": "not-assessed",
+        "assessment": "not-applicable",
+        "reasons": []
+      },
+      "argumentRows": {
+        "total": 0,
+        "bySource": {},
+        "byAsked": {}
+      },
+      "llm": {
+        "calls": 2,
+        "input": 85,
+        "output": 18,
+        "cacheRead": 0,
+        "cacheWrite": 0
+      },
+      "usd": 0,
+      "requestsDigest": "8fac1e649a5a8424.80d0660d2acc53da"
+    },
+    {
+      "key": "off/p1-network/r2",
+      "arm": "off",
+      "caseId": "p1-network",
+      "group": "P1",
+      "rep": 2,
+      "variant": "picks its own period",
+      "complete": true,
+      "toolCalls": {
+        "proposed": 1,
+        "dispatched": 1,
+        "refused": 0,
+        "failed": 0
+      },
+      "periodCalls": [
+        {
+          "toolCallId": "t1c1",
+          "tool": "net_flows",
+          "argument": "window",
+          "origin": "sent",
+          "dispatched": true,
+          "ok": true,
+          "sent": "-24h",
+          "ranWith": "-24h",
+          "cls": "model-chosen",
+          "meant": true
+        }
+      ],
+      "names": [
+        {
+          "toolCallId": "t1c1",
+          "tool": "net_flows",
+          "argument": "host",
+          "value": "srv-2280",
+          "cls": "said",
+          "dispatched": true,
+          "ok": true
+        }
+      ],
+      "periodExpected": true,
+      "noPeriodCall": false,
+      "answer": {
+        "present": true,
+        "ranDurations": [
+          "d1"
+        ],
+        "statedDurations": [
+          "d1"
+        ],
+        "statesRan": true,
+        "statesOther": false,
+        "factsExpected": 1,
+        "factsFound": 1,
+        "asksInProse": false
+      },
+      "standing": {
+        "standing": "not-assessed",
+        "assessment": "not-applicable",
+        "reasons": []
+      },
+      "argumentRows": {
+        "total": 0,
+        "bySource": {},
+        "byAsked": {}
+      },
+      "llm": {
+        "calls": 2,
+        "input": 85,
+        "output": 18,
+        "cacheRead": 0,
+        "cacheWrite": 0
+      },
+      "usd": 0,
+      "requestsDigest": "8fac1e649a5a8424.cc6b794fca5eaa9d"
+    },
+    {
+      "key": "off/p2-last-week/r0",
+      "arm": "off",
+      "caseId": "p2-last-week",
+      "group": "P2",
+      "rep": 0,
+      "variant": "carries the period",
+      "complete": true,
+      "toolCalls": {
+        "proposed": 1,
+        "dispatched": 1,
+        "refused": 0,
+        "failed": 0
+      },
+      "periodCalls": [
+        {
+          "toolCallId": "t1c1",
+          "tool": "search_logs",
+          "argument": "window",
+          "origin": "sent",
+          "dispatched": true,
+          "ok": true,
+          "sent": "7d",
+          "stated": [
+            "7d"
+          ],
+          "ranWith": "7d",
+          "cls": "person",
+          "meant": true
+        }
+      ],
+      "names": [
+        {
+          "toolCallId": "t1c1",
+          "tool": "search_logs",
+          "argument": "service",
+          "value": "checkout",
+          "cls": "said",
+          "dispatched": true,
+          "ok": true
+        }
+      ],
+      "periodExpected": true,
+      "noPeriodCall": false,
+      "answer": {
+        "present": true,
+        "ranDurations": [
+          "d7"
+        ],
+        "statedDurations": [
+          "d7"
+        ],
+        "statesRan": true,
+        "statesOther": false,
+        "factsExpected": 2,
+        "factsFound": 2,
+        "asksInProse": false
+      },
+      "standing": {
+        "standing": "consistent",
+        "assessment": "unrefuted",
+        "reasons": []
+      },
+      "argumentRows": {
+        "total": 0,
+        "bySource": {},
+        "byAsked": {}
+      },
+      "llm": {
+        "calls": 2,
+        "input": 149,
+        "output": 17,
+        "cacheRead": 0,
+        "cacheWrite": 0
+      },
+      "usd": 0,
+      "requestsDigest": "29e09d3746b611fc.3b2102f02335b0a0"
+    },
+    {
+      "key": "off/p2-last-week/r1",
+      "arm": "off",
+      "caseId": "p2-last-week",
+      "group": "P2",
+      "rep": 1,
+      "variant": "leaves it out, then claims the week",
+      "complete": true,
+      "toolCalls": {
+        "proposed": 1,
+        "dispatched": 1,
+        "refused": 0,
+        "failed": 0
+      },
+      "periodCalls": [
+        {
+          "toolCallId": "t1c1",
+          "tool": "search_logs",
+          "argument": "window",
+          "origin": "omitted",
+          "dispatched": true,
+          "ok": true,
+          "stated": [
+            "7d"
+          ],
+          "ranWith": "2h",
+          "cls": "contradicts",
+          "meant": false
+        }
+      ],
+      "names": [
+        {
+          "toolCallId": "t1c1",
+          "tool": "search_logs",
+          "argument": "service",
+          "value": "checkout",
+          "cls": "said",
+          "dispatched": true,
+          "ok": true
+        }
+      ],
+      "periodExpected": true,
+      "noPeriodCall": false,
+      "answer": {
+        "present": true,
+        "ranDurations": [
+          "h2"
+        ],
+        "statedDurations": [
+          "d7"
+        ],
+        "statesRan": false,
+        "statesOther": true,
+        "factsExpected": 2,
+        "factsFound": 2,
+        "asksInProse": false
+      },
+      "standing": {
+        "standing": "consistent",
+        "assessment": "unrefuted",
+        "reasons": []
+      },
+      "argumentRows": {
+        "total": 0,
+        "bySource": {},
+        "byAsked": {}
+      },
+      "llm": {
+        "calls": 2,
+        "input": 140,
+        "output": 16,
+        "cacheRead": 0,
+        "cacheWrite": 0
+      },
+      "usd": 0,
+      "requestsDigest": "29e09d3746b611fc.bd109a79ab6d0efa"
+    },
+    {
+      "key": "off/p2-last-week/r2",
+      "arm": "off",
+      "caseId": "p2-last-week",
+      "group": "P2",
+      "rep": 2,
+      "variant": "reads it as a day",
+      "complete": true,
+      "toolCalls": {
+        "proposed": 1,
+        "dispatched": 1,
+        "refused": 0,
+        "failed": 0
+      },
+      "periodCalls": [
+        {
+          "toolCallId": "t1c1",
+          "tool": "search_logs",
+          "argument": "window",
+          "origin": "sent",
+          "dispatched": true,
+          "ok": true,
+          "sent": "24h",
+          "stated": [
+            "7d"
+          ],
+          "ranWith": "24h",
+          "cls": "contradicts",
+          "meant": false
+        }
+      ],
+      "names": [
+        {
+          "toolCallId": "t1c1",
+          "tool": "search_logs",
+          "argument": "service",
+          "value": "checkout",
+          "cls": "said",
+          "dispatched": true,
+          "ok": true
+        }
+      ],
+      "periodExpected": true,
+      "noPeriodCall": false,
+      "answer": {
+        "present": true,
+        "ranDurations": [
+          "d1"
+        ],
+        "statedDurations": [
+          "d1"
+        ],
+        "statesRan": true,
+        "statesOther": false,
+        "factsExpected": 2,
+        "factsFound": 2,
+        "asksInProse": false
+      },
+      "standing": {
+        "standing": "consistent",
+        "assessment": "unrefuted",
+        "reasons": []
+      },
+      "argumentRows": {
+        "total": 0,
+        "bySource": {},
+        "byAsked": {}
+      },
+      "llm": {
+        "calls": 2,
+        "input": 141,
+        "output": 17,
+        "cacheRead": 0,
+        "cacheWrite": 0
+      },
+      "usd": 0,
+      "requestsDigest": "29e09d3746b611fc.6bd67708147d189c"
+    },
+    {
+      "key": "off/p2-past-day/r0",
+      "arm": "off",
+      "caseId": "p2-past-day",
+      "group": "P2",
+      "rep": 0,
+      "variant": "carries the period",
+      "complete": true,
+      "toolCalls": {
+        "proposed": 1,
+        "dispatched": 1,
+        "refused": 0,
+        "failed": 0
+      },
+      "periodCalls": [
+        {
+          "toolCallId": "t1c1",
+          "tool": "search_logs",
+          "argument": "window",
+          "origin": "sent",
+          "dispatched": true,
+          "ok": true,
+          "sent": "24h",
+          "stated": [
+            "24h"
+          ],
+          "ranWith": "24h",
+          "cls": "person",
+          "meant": true
+        }
+      ],
+      "names": [
+        {
+          "toolCallId": "t1c1",
+          "tool": "search_logs",
+          "argument": "service",
+          "value": "search",
+          "cls": "said",
+          "dispatched": true,
+          "ok": true
+        }
+      ],
+      "periodExpected": true,
+      "noPeriodCall": false,
+      "answer": {
+        "present": true,
+        "ranDurations": [
+          "d1"
+        ],
+        "statedDurations": [
+          "d1"
+        ],
+        "statesRan": true,
+        "statesOther": false,
+        "factsExpected": 2,
+        "factsFound": 2,
+        "asksInProse": false
+      },
+      "standing": {
+        "standing": "consistent",
+        "assessment": "unrefuted",
+        "reasons": []
+      },
+      "argumentRows": {
+        "total": 0,
+        "bySource": {},
+        "byAsked": {}
+      },
+      "llm": {
+        "calls": 2,
+        "input": 141,
+        "output": 17,
+        "cacheRead": 0,
+        "cacheWrite": 0
+      },
+      "usd": 0,
+      "requestsDigest": "c54be29b6edd956f.28fc9914acf7b9c1"
+    },
+    {
+      "key": "off/p2-past-day/r1",
+      "arm": "off",
+      "caseId": "p2-past-day",
+      "group": "P2",
+      "rep": 1,
+      "variant": "leaves it out",
+      "complete": true,
+      "toolCalls": {
+        "proposed": 1,
+        "dispatched": 1,
+        "refused": 0,
+        "failed": 0
+      },
+      "periodCalls": [
+        {
+          "toolCallId": "t1c1",
+          "tool": "search_logs",
+          "argument": "window",
+          "origin": "omitted",
+          "dispatched": true,
+          "ok": true,
+          "stated": [
+            "24h"
+          ],
+          "ranWith": "2h",
+          "cls": "contradicts",
+          "meant": false
+        }
+      ],
+      "names": [
+        {
+          "toolCallId": "t1c1",
+          "tool": "search_logs",
+          "argument": "service",
+          "value": "search",
+          "cls": "said",
+          "dispatched": true,
+          "ok": true
+        }
+      ],
+      "periodExpected": true,
+      "noPeriodCall": false,
+      "answer": {
+        "present": true,
+        "ranDurations": [
+          "h2"
+        ],
+        "statedDurations": [],
+        "statesRan": false,
+        "statesOther": false,
+        "factsExpected": 2,
+        "factsFound": 2,
+        "asksInProse": false
+      },
+      "standing": {
+        "standing": "consistent",
+        "assessment": "unrefuted",
+        "reasons": []
+      },
+      "argumentRows": {
+        "total": 0,
+        "bySource": {},
+        "byAsked": {}
+      },
+      "llm": {
+        "calls": 2,
+        "input": 141,
+        "output": 10,
+        "cacheRead": 0,
+        "cacheWrite": 0
+      },
+      "usd": 0,
+      "requestsDigest": "c54be29b6edd956f.6af099d2c9df2474"
+    },
+    {
+      "key": "off/p2-since-yesterday/r0",
+      "arm": "off",
+      "caseId": "p2-since-yesterday",
+      "group": "P2",
+      "rep": 0,
+      "variant": "reads it as a day",
+      "complete": true,
+      "toolCalls": {
+        "proposed": 1,
+        "dispatched": 1,
+        "refused": 0,
+        "failed": 0
+      },
+      "periodCalls": [
+        {
+          "toolCallId": "t1c1",
+          "tool": "search_logs",
+          "argument": "window",
+          "origin": "sent",
+          "dispatched": true,
+          "ok": true,
+          "sent": "24h",
+          "stated": [
+            "24h",
+            "7d"
+          ],
+          "ranWith": "24h",
+          "cls": "person",
+          "meant": false
+        }
+      ],
+      "names": [
+        {
+          "toolCallId": "t1c1",
+          "tool": "search_logs",
+          "argument": "service",
+          "value": "inventory",
+          "cls": "said",
+          "dispatched": true,
+          "ok": true
+        }
+      ],
+      "periodExpected": true,
+      "noPeriodCall": false,
+      "answer": {
+        "present": true,
+        "ranDurations": [
+          "d1"
+        ],
+        "statedDurations": [
+          "d1"
+        ],
+        "statesRan": true,
+        "statesOther": false,
+        "factsExpected": 2,
+        "factsFound": 2,
+        "asksInProse": false
+      },
+      "standing": {
+        "standing": "consistent",
+        "assessment": "unrefuted",
+        "reasons": []
+      },
+      "argumentRows": {
+        "total": 0,
+        "bySource": {},
+        "byAsked": {}
+      },
+      "llm": {
+        "calls": 2,
+        "input": 142,
+        "output": 17,
+        "cacheRead": 0,
+        "cacheWrite": 0
+      },
+      "usd": 0,
+      "requestsDigest": "ad5fd21f2f02271f.61ec22bdfab731d8"
+    },
+    {
+      "key": "off/p2-since-yesterday/r1",
+      "arm": "off",
+      "caseId": "p2-since-yesterday",
+      "group": "P2",
+      "rep": 1,
+      "variant": "reads it as a week",
+      "complete": true,
+      "toolCalls": {
+        "proposed": 1,
+        "dispatched": 1,
+        "refused": 0,
+        "failed": 0
+      },
+      "periodCalls": [
+        {
+          "toolCallId": "t1c1",
+          "tool": "search_logs",
+          "argument": "window",
+          "origin": "sent",
+          "dispatched": true,
+          "ok": true,
+          "sent": "7d",
+          "stated": [
+            "24h",
+            "7d"
+          ],
+          "ranWith": "7d",
+          "cls": "person",
+          "meant": true
+        }
+      ],
+      "names": [
+        {
+          "toolCallId": "t1c1",
+          "tool": "search_logs",
+          "argument": "service",
+          "value": "inventory",
+          "cls": "said",
+          "dispatched": true,
+          "ok": true
+        }
+      ],
+      "periodExpected": true,
+      "noPeriodCall": false,
+      "answer": {
+        "present": true,
+        "ranDurations": [
+          "d7"
+        ],
+        "statedDurations": [
+          "d7"
+        ],
+        "statesRan": true,
+        "statesOther": false,
+        "factsExpected": 2,
+        "factsFound": 2,
+        "asksInProse": false
+      },
+      "standing": {
+        "standing": "consistent",
+        "assessment": "unrefuted",
+        "reasons": []
+      },
+      "argumentRows": {
+        "total": 0,
+        "bySource": {},
+        "byAsked": {}
+      },
+      "llm": {
+        "calls": 2,
+        "input": 142,
+        "output": 17,
+        "cacheRead": 0,
+        "cacheWrite": 0
+      },
+      "usd": 0,
+      "requestsDigest": "ad5fd21f2f02271f.2b432c814751dd80"
+    },
+    {
+      "key": "off/p2-since-yesterday/r2",
+      "arm": "off",
+      "caseId": "p2-since-yesterday",
+      "group": "P2",
+      "rep": 2,
+      "variant": "leaves it out",
+      "complete": true,
+      "toolCalls": {
+        "proposed": 1,
+        "dispatched": 1,
+        "refused": 0,
+        "failed": 0
+      },
+      "periodCalls": [
+        {
+          "toolCallId": "t1c1",
+          "tool": "search_logs",
+          "argument": "window",
+          "origin": "omitted",
+          "dispatched": true,
+          "ok": true,
+          "stated": [
+            "24h",
+            "7d"
+          ],
+          "ranWith": "2h",
+          "cls": "contradicts",
+          "meant": false
+        }
+      ],
+      "names": [
+        {
+          "toolCallId": "t1c1",
+          "tool": "search_logs",
+          "argument": "service",
+          "value": "inventory",
+          "cls": "said",
+          "dispatched": true,
+          "ok": true
+        }
+      ],
+      "periodExpected": true,
+      "noPeriodCall": false,
+      "answer": {
+        "present": true,
+        "ranDurations": [
+          "h2"
+        ],
+        "statedDurations": [],
+        "statesRan": false,
+        "statesOther": false,
+        "factsExpected": 2,
+        "factsFound": 2,
+        "asksInProse": false
+      },
+      "standing": {
+        "standing": "consistent",
+        "assessment": "unrefuted",
+        "reasons": []
+      },
+      "argumentRows": {
+        "total": 0,
+        "bySource": {},
+        "byAsked": {}
+      },
+      "llm": {
+        "calls": 2,
+        "input": 134,
+        "output": 11,
+        "cacheRead": 0,
+        "cacheWrite": 0
+      },
+      "usd": 0,
+      "requestsDigest": "ad5fd21f2f02271f.f7ba129eb6037f47"
+    },
+    {
+      "key": "off/p2-last-hour-network/r0",
+      "arm": "off",
+      "caseId": "p2-last-hour-network",
+      "group": "P2",
+      "rep": 0,
+      "variant": "carries the period",
+      "complete": true,
+      "toolCalls": {
+        "proposed": 1,
+        "dispatched": 1,
+        "refused": 0,
+        "failed": 0
+      },
+      "periodCalls": [
+        {
+          "toolCallId": "t1c1",
+          "tool": "net_flows",
+          "argument": "window",
+          "origin": "sent",
+          "dispatched": true,
+          "ok": true,
+          "sent": "-60m",
+          "stated": [
+            "-60m"
+          ],
+          "ranWith": "-60m",
+          "cls": "person",
+          "meant": true
+        }
+      ],
+      "names": [
+        {
+          "toolCallId": "t1c1",
+          "tool": "net_flows",
+          "argument": "host",
+          "value": "srv-4417",
+          "cls": "said",
+          "dispatched": true,
+          "ok": true
+        }
+      ],
+      "periodExpected": true,
+      "noPeriodCall": false,
+      "answer": {
+        "present": true,
+        "ranDurations": [
+          "h1"
+        ],
+        "statedDurations": [
+          "h1"
+        ],
+        "statesRan": true,
+        "statesOther": false,
+        "factsExpected": 1,
+        "factsFound": 1,
+        "asksInProse": false
+      },
+      "standing": {
+        "standing": "not-assessed",
+        "assessment": "not-applicable",
+        "reasons": []
+      },
+      "argumentRows": {
+        "total": 0,
+        "bySource": {},
+        "byAsked": {}
+      },
+      "llm": {
+        "calls": 2,
+        "input": 91,
+        "output": 18,
+        "cacheRead": 0,
+        "cacheWrite": 0
+      },
+      "usd": 0,
+      "requestsDigest": "00560b43504a70bf.369e98c7b0512694"
+    },
+    {
+      "key": "off/p2-last-hour-network/r1",
+      "arm": "off",
+      "caseId": "p2-last-hour-network",
+      "group": "P2",
+      "rep": 1,
+      "variant": "leaves it out (the default is what was said)",
+      "complete": true,
+      "toolCalls": {
+        "proposed": 1,
+        "dispatched": 1,
+        "refused": 0,
+        "failed": 0
+      },
+      "periodCalls": [
+        {
+          "toolCallId": "t1c1",
+          "tool": "net_flows",
+          "argument": "window",
+          "origin": "omitted",
+          "dispatched": true,
+          "ok": true,
+          "stated": [
+            "-60m"
+          ],
+          "ranWith": "-60m",
+          "cls": "person",
+          "meant": true
+        }
+      ],
+      "names": [
+        {
+          "toolCallId": "t1c1",
+          "tool": "net_flows",
+          "argument": "host",
+          "value": "srv-4417",
+          "cls": "said",
+          "dispatched": true,
+          "ok": true
+        }
+      ],
+      "periodExpected": true,
+      "noPeriodCall": false,
+      "answer": {
+        "present": true,
+        "ranDurations": [
+          "h1"
+        ],
+        "statedDurations": [
+          "h1"
+        ],
+        "statesRan": true,
+        "statesOther": false,
+        "factsExpected": 1,
+        "factsFound": 1,
+        "asksInProse": false
+      },
+      "standing": {
+        "standing": "not-assessed",
+        "assessment": "not-applicable",
+        "reasons": []
+      },
+      "argumentRows": {
+        "total": 0,
+        "bySource": {},
+        "byAsked": {}
+      },
+      "llm": {
+        "calls": 2,
+        "input": 91,
+        "output": 18,
+        "cacheRead": 0,
+        "cacheWrite": 0
+      },
+      "usd": 0,
+      "requestsDigest": "00560b43504a70bf.5cbdfa4cac49c21e"
+    },
+    {
+      "key": "off/p2-last-hour-network/r2",
+      "arm": "off",
+      "caseId": "p2-last-hour-network",
+      "group": "P2",
+      "rep": 2,
+      "variant": "reads it as six hours",
+      "complete": true,
+      "toolCalls": {
+        "proposed": 1,
+        "dispatched": 1,
+        "refused": 0,
+        "failed": 0
+      },
+      "periodCalls": [
+        {
+          "toolCallId": "t1c1",
+          "tool": "net_flows",
+          "argument": "window",
+          "origin": "sent",
+          "dispatched": true,
+          "ok": true,
+          "sent": "-6h",
+          "stated": [
+            "-60m"
+          ],
+          "ranWith": "-6h",
+          "cls": "contradicts",
+          "meant": false
+        }
+      ],
+      "names": [
+        {
+          "toolCallId": "t1c1",
+          "tool": "net_flows",
+          "argument": "host",
+          "value": "srv-4417",
+          "cls": "said",
+          "dispatched": true,
+          "ok": true
+        }
+      ],
+      "periodExpected": true,
+      "noPeriodCall": false,
+      "answer": {
+        "present": true,
+        "ranDurations": [
+          "h6"
+        ],
+        "statedDurations": [
+          "h6"
+        ],
+        "statesRan": true,
+        "statesOther": false,
+        "factsExpected": 1,
+        "factsFound": 1,
+        "asksInProse": false
+      },
+      "standing": {
+        "standing": "not-assessed",
+        "assessment": "not-applicable",
+        "reasons": []
+      },
+      "argumentRows": {
+        "total": 0,
+        "bySource": {},
+        "byAsked": {}
+      },
+      "llm": {
+        "calls": 2,
+        "input": 91,
+        "output": 18,
+        "cacheRead": 0,
+        "cacheWrite": 0
+      },
+      "usd": 0,
+      "requestsDigest": "00560b43504a70bf.3acc3aadd979543e"
+    },
+    {
+      "key": "off/p3-storefront/r0",
+      "arm": "off",
+      "caseId": "p3-storefront",
+      "group": "P3",
+      "rep": 0,
+      "variant": "invents a service name",
+      "complete": true,
+      "toolCalls": {
+        "proposed": 1,
+        "dispatched": 1,
+        "refused": 0,
+        "failed": 1
+      },
+      "periodCalls": [
+        {
+          "toolCallId": "t1c1",
+          "tool": "search_logs",
+          "argument": "window",
+          "origin": "omitted",
+          "dispatched": true,
+          "ok": false
+        }
+      ],
+      "names": [
+        {
+          "toolCallId": "t1c1",
+          "tool": "search_logs",
+          "argument": "service",
+          "value": "storefront-api",
+          "cls": "nobody-said",
+          "dispatched": true,
+          "ok": false
+        }
+      ],
+      "periodExpected": true,
+      "noPeriodCall": true,
+      "answer": {
+        "present": true,
+        "ranDurations": [],
+        "statedDurations": [],
+        "statesRan": false,
+        "statesOther": false,
+        "factsExpected": 0,
+        "factsFound": 0,
+        "asksInProse": false
+      },
+      "standing": {
+        "standing": "not-assessed",
+        "assessment": "not-applicable",
+        "reasons": []
+      },
+      "argumentRows": {
+        "total": 0,
+        "bySource": {},
+        "byAsked": {}
+      },
+      "llm": {
+        "calls": 2,
+        "input": 80,
+        "output": 13,
+        "cacheRead": 0,
+        "cacheWrite": 0
+      },
+      "usd": 0,
+      "requestsDigest": "f07171ad84fb956f.c29214ea5f18b0b7"
+    },
+    {
+      "key": "off/p3-storefront/r1",
+      "arm": "off",
+      "caseId": "p3-storefront",
+      "group": "P3",
+      "rep": 1,
+      "variant": "looks the names up, then picks one",
+      "complete": true,
+      "toolCalls": {
+        "proposed": 2,
+        "dispatched": 2,
+        "refused": 0,
+        "failed": 0
+      },
+      "periodCalls": [
+        {
+          "toolCallId": "t1c2",
+          "tool": "search_logs",
+          "argument": "window",
+          "origin": "omitted",
+          "dispatched": true,
+          "ok": true,
+          "ranWith": "2h",
+          "cls": "default-unchosen",
+          "meant": false
+        }
+      ],
+      "names": [
+        {
+          "toolCallId": "t1c2",
+          "tool": "search_logs",
+          "argument": "service",
+          "value": "checkout",
+          "cls": "from-result",
+          "dispatched": true,
+          "ok": true
+        }
+      ],
+      "periodExpected": true,
+      "noPeriodCall": false,
+      "answer": {
+        "present": true,
+        "ranDurations": [
+          "h2"
+        ],
+        "statedDurations": [],
+        "statesRan": false,
+        "statesOther": false,
+        "factsExpected": 2,
+        "factsFound": 2,
+        "asksInProse": false
+      },
+      "standing": {
+        "standing": "consistent",
+        "assessment": "unrefuted",
+        "reasons": []
+      },
+      "argumentRows": {
+        "total": 0,
+        "bySource": {},
+        "byAsked": {}
+      },
+      "llm": {
+        "calls": 3,
+        "input": 200,
+        "output": 23,
+        "cacheRead": 0,
+        "cacheWrite": 0
+      },
+      "usd": 0,
+      "requestsDigest": "f07171ad84fb956f.92d31fe702f32663.666cba96af72091d"
+    },
+    {
+      "key": "off/p3-storefront/r2",
+      "arm": "off",
+      "caseId": "p3-storefront",
+      "group": "P3",
+      "rep": 2,
+      "variant": "guesses a real name without looking",
+      "complete": true,
+      "toolCalls": {
+        "proposed": 1,
+        "dispatched": 1,
+        "refused": 0,
+        "failed": 0
+      },
+      "periodCalls": [
+        {
+          "toolCallId": "t1c1",
+          "tool": "search_logs",
+          "argument": "window",
+          "origin": "omitted",
+          "dispatched": true,
+          "ok": true,
+          "ranWith": "2h",
+          "cls": "default-unchosen",
+          "meant": false
+        }
+      ],
+      "names": [
+        {
+          "toolCallId": "t1c1",
+          "tool": "search_logs",
+          "argument": "service",
+          "value": "checkout",
+          "cls": "nobody-said",
+          "dispatched": true,
+          "ok": true
+        }
+      ],
+      "periodExpected": true,
+      "noPeriodCall": false,
+      "answer": {
+        "present": true,
+        "ranDurations": [
+          "h2"
+        ],
+        "statedDurations": [],
+        "statesRan": false,
+        "statesOther": false,
+        "factsExpected": 2,
+        "factsFound": 2,
+        "asksInProse": false
+      },
+      "standing": {
+        "standing": "consistent",
+        "assessment": "unrefuted",
+        "reasons": []
+      },
+      "argumentRows": {
+        "total": 0,
+        "bySource": {},
+        "byAsked": {}
+      },
+      "llm": {
+        "calls": 2,
+        "input": 140,
+        "output": 10,
+        "cacheRead": 0,
+        "cacheWrite": 0
+      },
+      "usd": 0,
+      "requestsDigest": "f07171ad84fb956f.ef9b08d0336ff871"
+    },
+    {
+      "key": "off/p3-database-host/r0",
+      "arm": "off",
+      "caseId": "p3-database-host",
+      "group": "P3",
+      "rep": 0,
+      "variant": "invents a host id",
+      "complete": true,
+      "toolCalls": {
+        "proposed": 1,
+        "dispatched": 1,
+        "refused": 0,
+        "failed": 1
+      },
+      "periodCalls": [
+        {
+          "toolCallId": "t1c1",
+          "tool": "io_profile",
+          "argument": "time_range",
+          "origin": "omitted",
+          "dispatched": true,
+          "ok": false
+        }
+      ],
+      "names": [
+        {
+          "toolCallId": "t1c1",
+          "tool": "io_profile",
+          "argument": "host",
+          "value": "db-01",
+          "cls": "nobody-said",
+          "dispatched": true,
+          "ok": false
+        }
+      ],
+      "periodExpected": true,
+      "noPeriodCall": true,
+      "answer": {
+        "present": true,
+        "ranDurations": [],
+        "statedDurations": [],
+        "statesRan": false,
+        "statesOther": false,
+        "factsExpected": 0,
+        "factsFound": 0,
+        "asksInProse": false
+      },
+      "standing": {
+        "standing": "not-assessed",
+        "assessment": "not-applicable",
+        "reasons": []
+      },
+      "argumentRows": {
+        "total": 0,
+        "bySource": {},
+        "byAsked": {}
+      },
+      "llm": {
+        "calls": 2,
+        "input": 74,
+        "output": 10,
+        "cacheRead": 0,
+        "cacheWrite": 0
+      },
+      "usd": 0,
+      "requestsDigest": "8d488de1e8ab83e1.fde03e12912fb70a"
+    },
+    {
+      "key": "off/p3-database-host/r1",
+      "arm": "off",
+      "caseId": "p3-database-host",
+      "group": "P3",
+      "rep": 1,
+      "variant": "looks the hosts up first",
+      "complete": true,
+      "toolCalls": {
+        "proposed": 2,
+        "dispatched": 2,
+        "refused": 0,
+        "failed": 0
+      },
+      "periodCalls": [
+        {
+          "toolCallId": "t1c2",
+          "tool": "io_profile",
+          "argument": "time_range",
+          "origin": "omitted",
+          "dispatched": true,
+          "ok": true,
+          "ranWith": "24h",
+          "cls": "default-unchosen",
+          "meant": false
+        }
+      ],
+      "names": [
+        {
+          "toolCallId": "t1c2",
+          "tool": "io_profile",
+          "argument": "host",
+          "value": "srv-4417",
+          "cls": "from-result",
+          "dispatched": true,
+          "ok": true
+        }
+      ],
+      "periodExpected": true,
+      "noPeriodCall": false,
+      "answer": {
+        "present": true,
+        "ranDurations": [
+          "d1"
+        ],
+        "statedDurations": [],
+        "statesRan": false,
+        "statesOther": false,
+        "factsExpected": 2,
+        "factsFound": 2,
+        "asksInProse": false
+      },
+      "standing": {
+        "standing": "consistent",
+        "assessment": "unrefuted",
+        "reasons": []
+      },
+      "argumentRows": {
+        "total": 0,
+        "bySource": {},
+        "byAsked": {}
+      },
+      "llm": {
+        "calls": 3,
+        "input": 171,
+        "output": 26,
+        "cacheRead": 0,
+        "cacheWrite": 0
+      },
+      "usd": 0,
+      "requestsDigest": "8d488de1e8ab83e1.8865a1d66585f0fb.0b870345075135d5"
+    },
+    {
+      "key": "off/p4-earlier-turn/r0",
+      "arm": "off",
+      "caseId": "p4-earlier-turn",
+      "group": "P4",
+      "rep": 0,
+      "variant": "carries the earlier period",
+      "complete": true,
+      "toolCalls": {
+        "proposed": 1,
+        "dispatched": 1,
+        "refused": 0,
+        "failed": 0
+      },
+      "periodCalls": [
+        {
+          "toolCallId": "t2c2",
+          "tool": "search_logs",
+          "argument": "window",
+          "origin": "sent",
+          "dispatched": true,
+          "ok": true,
+          "sent": "24h",
+          "stated": [
+            "24h"
+          ],
+          "ranWith": "24h",
+          "cls": "person",
+          "meant": true
+        }
+      ],
+      "names": [
+        {
+          "toolCallId": "t2c2",
+          "tool": "search_logs",
+          "argument": "service",
+          "value": "payments",
+          "cls": "said",
+          "dispatched": true,
+          "ok": true
+        }
+      ],
+      "periodExpected": true,
+      "noPeriodCall": false,
+      "answer": {
+        "present": true,
+        "ranDurations": [
+          "d1"
+        ],
+        "statedDurations": [
+          "d1"
+        ],
+        "statesRan": true,
+        "statesOther": false,
+        "factsExpected": 2,
+        "factsFound": 2,
+        "asksInProse": false
+      },
+      "standing": {
+        "standing": "consistent",
+        "assessment": "unrefuted",
+        "reasons": []
+      },
+      "argumentRows": {
+        "total": 0,
+        "bySource": {},
+        "byAsked": {}
+      },
+      "llm": {
+        "calls": 4,
+        "input": 466,
+        "output": 34,
+        "cacheRead": 0,
+        "cacheWrite": 0
+      },
+      "usd": 0,
+      "requestsDigest": "2f1a21fb959043e8.a61db913121dd170.b490710e7f2a555f.851107e80f9b7e7e"
+    },
+    {
+      "key": "off/p4-earlier-turn/r1",
+      "arm": "off",
+      "caseId": "p4-earlier-turn",
+      "group": "P4",
+      "rep": 1,
+      "variant": "drops the earlier period",
+      "complete": true,
+      "toolCalls": {
+        "proposed": 1,
+        "dispatched": 1,
+        "refused": 0,
+        "failed": 0
+      },
+      "periodCalls": [
+        {
+          "toolCallId": "t2c2",
+          "tool": "search_logs",
+          "argument": "window",
+          "origin": "omitted",
+          "dispatched": true,
+          "ok": true,
+          "stated": [
+            "24h"
+          ],
+          "ranWith": "2h",
+          "cls": "contradicts",
+          "meant": false
+        }
+      ],
+      "names": [
+        {
+          "toolCallId": "t2c2",
+          "tool": "search_logs",
+          "argument": "service",
+          "value": "payments",
+          "cls": "said",
+          "dispatched": true,
+          "ok": true
+        }
+      ],
+      "periodExpected": true,
+      "noPeriodCall": false,
+      "answer": {
+        "present": true,
+        "ranDurations": [
+          "h2"
+        ],
+        "statedDurations": [],
+        "statesRan": false,
+        "statesOther": false,
+        "factsExpected": 1,
+        "factsFound": 1,
+        "asksInProse": false
+      },
+      "standing": {
+        "standing": "not-sure",
+        "assessment": "unknown",
+        "reasons": [
+          "empty-undeclared"
+        ]
+      },
+      "argumentRows": {
+        "total": 0,
+        "bySource": {},
+        "byAsked": {}
+      },
+      "llm": {
+        "calls": 4,
+        "input": 411,
+        "output": 22,
+        "cacheRead": 0,
+        "cacheWrite": 0
+      },
+      "usd": 0,
+      "requestsDigest": "2f1a21fb959043e8.a61db913121dd170.b490710e7f2a555f.6783785c56bc1dee"
+    },
+    {
+      "key": "off/p5-cache-host/r0",
+      "arm": "off",
+      "caseId": "p5-cache-host",
+      "group": "P5",
+      "rep": 0,
+      "variant": "looks it up, carries the period",
+      "complete": true,
+      "toolCalls": {
+        "proposed": 2,
+        "dispatched": 2,
+        "refused": 0,
+        "failed": 0
+      },
+      "periodCalls": [
+        {
+          "toolCallId": "t1c2",
+          "tool": "io_profile",
+          "argument": "time_range",
+          "origin": "sent",
+          "dispatched": true,
+          "ok": true,
+          "sent": "7d",
+          "stated": [
+            "7d"
+          ],
+          "ranWith": "7d",
+          "cls": "person",
+          "meant": true
+        }
+      ],
+      "names": [
+        {
+          "toolCallId": "t1c2",
+          "tool": "io_profile",
+          "argument": "host",
+          "value": "srv-9051",
+          "cls": "from-result",
+          "dispatched": true,
+          "ok": true
+        }
+      ],
+      "periodExpected": true,
+      "noPeriodCall": false,
+      "answer": {
+        "present": true,
+        "ranDurations": [
+          "d7"
+        ],
+        "statedDurations": [
+          "d7"
+        ],
+        "statesRan": true,
+        "statesOther": false,
+        "factsExpected": 2,
+        "factsFound": 2,
+        "asksInProse": false
+      },
+      "standing": {
+        "standing": "consistent",
+        "assessment": "unrefuted",
+        "reasons": []
+      },
+      "argumentRows": {
+        "total": 0,
+        "bySource": {},
+        "byAsked": {}
+      },
+      "llm": {
+        "calls": 3,
+        "input": 199,
+        "output": 32,
+        "cacheRead": 0,
+        "cacheWrite": 0
+      },
+      "usd": 0,
+      "requestsDigest": "306f7aba458635f3.19c294caf42000bd.3fdfff1dc25dfe79"
+    },
+    {
+      "key": "off/p5-cache-host/r1",
+      "arm": "off",
+      "caseId": "p5-cache-host",
+      "group": "P5",
+      "rep": 1,
+      "variant": "names the host without looking",
+      "complete": true,
+      "toolCalls": {
+        "proposed": 1,
+        "dispatched": 1,
+        "refused": 0,
+        "failed": 0
+      },
+      "periodCalls": [
+        {
+          "toolCallId": "t1c1",
+          "tool": "io_profile",
+          "argument": "time_range",
+          "origin": "sent",
+          "dispatched": true,
+          "ok": true,
+          "sent": "7d",
+          "stated": [
+            "7d"
+          ],
+          "ranWith": "7d",
+          "cls": "person",
+          "meant": true
+        }
+      ],
+      "names": [
+        {
+          "toolCallId": "t1c1",
+          "tool": "io_profile",
+          "argument": "host",
+          "value": "srv-9051",
+          "cls": "nobody-said",
+          "dispatched": true,
+          "ok": true
+        }
+      ],
+      "periodExpected": true,
+      "noPeriodCall": false,
+      "answer": {
+        "present": true,
+        "ranDurations": [
+          "d7"
+        ],
+        "statedDurations": [
+          "d7"
+        ],
+        "statesRan": true,
+        "statesOther": false,
+        "factsExpected": 2,
+        "factsFound": 2,
+        "asksInProse": false
+      },
+      "standing": {
+        "standing": "not-assessed",
+        "assessment": "not-applicable",
+        "reasons": []
+      },
+      "argumentRows": {
+        "total": 0,
+        "bySource": {},
+        "byAsked": {}
+      },
+      "llm": {
+        "calls": 2,
+        "input": 103,
+        "output": 17,
+        "cacheRead": 0,
+        "cacheWrite": 0
+      },
+      "usd": 0,
+      "requestsDigest": "306f7aba458635f3.68f9c57814efe484"
+    },
+    {
+      "key": "off/p5-cache-host/r2",
+      "arm": "off",
+      "caseId": "p5-cache-host",
+      "group": "P5",
+      "rep": 2,
+      "variant": "looks it up, leaves the period out",
+      "complete": true,
+      "toolCalls": {
+        "proposed": 2,
+        "dispatched": 2,
+        "refused": 0,
+        "failed": 0
+      },
+      "periodCalls": [
+        {
+          "toolCallId": "t1c2",
+          "tool": "io_profile",
+          "argument": "time_range",
+          "origin": "omitted",
+          "dispatched": true,
+          "ok": true,
+          "stated": [
+            "7d"
+          ],
+          "ranWith": "24h",
+          "cls": "contradicts",
+          "meant": false
+        }
+      ],
+      "names": [
+        {
+          "toolCallId": "t1c2",
+          "tool": "io_profile",
+          "argument": "host",
+          "value": "srv-9051",
+          "cls": "from-result",
+          "dispatched": true,
+          "ok": true
+        }
+      ],
+      "periodExpected": true,
+      "noPeriodCall": false,
+      "answer": {
+        "present": true,
+        "ranDurations": [
+          "d1"
+        ],
+        "statedDurations": [],
+        "statesRan": false,
+        "statesOther": false,
+        "factsExpected": 2,
+        "factsFound": 2,
+        "asksInProse": false
+      },
+      "standing": {
+        "standing": "consistent",
+        "assessment": "unrefuted",
+        "reasons": []
+      },
+      "argumentRows": {
+        "total": 0,
+        "bySource": {},
+        "byAsked": {}
+      },
+      "llm": {
+        "calls": 3,
+        "input": 199,
+        "output": 26,
+        "cacheRead": 0,
+        "cacheWrite": 0
+      },
+      "usd": 0,
+      "requestsDigest": "306f7aba458635f3.19c294caf42000bd.a3067ebf4b3585b9"
+    },
+    {
+      "key": "off/p6-disk-and-network/r0",
+      "arm": "off",
+      "caseId": "p6-disk-and-network",
+      "group": "P6",
+      "rep": 0,
+      "variant": "both spellings right, one batch",
+      "complete": true,
+      "toolCalls": {
+        "proposed": 2,
+        "dispatched": 2,
+        "refused": 0,
+        "failed": 0
+      },
+      "periodCalls": [
+        {
+          "toolCallId": "t1c1",
+          "tool": "io_profile",
+          "argument": "time_range",
+          "origin": "sent",
+          "dispatched": true,
+          "ok": true,
+          "sent": "24h",
+          "stated": [
+            "24h"
+          ],
+          "ranWith": "24h",
+          "cls": "person",
+          "meant": true
+        },
+        {
+          "toolCallId": "t1c2",
+          "tool": "net_flows",
+          "argument": "window",
+          "origin": "sent",
+          "dispatched": true,
+          "ok": true,
+          "sent": "-24h",
+          "stated": [
+            "-24h"
+          ],
+          "ranWith": "-24h",
+          "cls": "person",
+          "meant": true
+        }
+      ],
+      "names": [
+        {
+          "toolCallId": "t1c1",
+          "tool": "io_profile",
+          "argument": "host",
+          "value": "srv-4417",
+          "cls": "said",
+          "dispatched": true,
+          "ok": true
+        },
+        {
+          "toolCallId": "t1c2",
+          "tool": "net_flows",
+          "argument": "host",
+          "value": "srv-4417",
+          "cls": "said",
+          "dispatched": true,
+          "ok": true
+        }
+      ],
+      "periodExpected": true,
+      "noPeriodCall": false,
+      "answer": {
+        "present": true,
+        "ranDurations": [
+          "d1"
+        ],
+        "statedDurations": [
+          "d1"
+        ],
+        "statesRan": true,
+        "statesOther": false,
+        "factsExpected": 3,
+        "factsFound": 3,
+        "asksInProse": false
+      },
+      "standing": {
+        "standing": "not-assessed",
+        "assessment": "not-applicable",
+        "reasons": []
+      },
+      "argumentRows": {
+        "total": 0,
+        "bySource": {},
+        "byAsked": {}
+      },
+      "llm": {
+        "calls": 2,
+        "input": 119,
+        "output": 29,
+        "cacheRead": 0,
+        "cacheWrite": 0
+      },
+      "usd": 0,
+      "requestsDigest": "3131818a8e405828.4bb23383d3c7b333"
+    },
+    {
+      "key": "off/p6-disk-and-network/r1",
+      "arm": "off",
+      "caseId": "p6-disk-and-network",
+      "group": "P6",
+      "rep": 1,
+      "variant": "misspells the network period once, then fixes it",
+      "complete": true,
+      "toolCalls": {
+        "proposed": 3,
+        "dispatched": 2,
+        "refused": 1,
+        "failed": 0
+      },
+      "periodCalls": [
+        {
+          "toolCallId": "t1c1",
+          "tool": "io_profile",
+          "argument": "time_range",
+          "origin": "sent",
+          "dispatched": true,
+          "ok": true,
+          "sent": "24h",
+          "stated": [
+            "24h"
+          ],
+          "ranWith": "24h",
+          "cls": "person",
+          "meant": true
+        },
+        {
+          "toolCallId": "t1c2",
+          "tool": "net_flows",
+          "argument": "window",
+          "origin": "sent",
+          "dispatched": false,
+          "ok": false,
+          "sent": "24h",
+          "stated": [
+            "-24h"
+          ]
+        },
+        {
+          "toolCallId": "t1c3",
+          "tool": "net_flows",
+          "argument": "window",
+          "origin": "sent",
+          "dispatched": true,
+          "ok": true,
+          "sent": "-24h",
+          "stated": [
+            "-24h"
+          ],
+          "ranWith": "-24h",
+          "cls": "person",
+          "meant": true
+        }
+      ],
+      "names": [
+        {
+          "toolCallId": "t1c1",
+          "tool": "io_profile",
+          "argument": "host",
+          "value": "srv-4417",
+          "cls": "said",
+          "dispatched": true,
+          "ok": true
+        },
+        {
+          "toolCallId": "t1c2",
+          "tool": "net_flows",
+          "argument": "host",
+          "value": "srv-4417",
+          "cls": "said",
+          "dispatched": false,
+          "ok": false
+        },
+        {
+          "toolCallId": "t1c3",
+          "tool": "net_flows",
+          "argument": "host",
+          "value": "srv-4417",
+          "cls": "said",
+          "dispatched": true,
+          "ok": true
+        }
+      ],
+      "periodExpected": true,
+      "noPeriodCall": false,
+      "answer": {
+        "present": true,
+        "ranDurations": [
+          "d1"
+        ],
+        "statedDurations": [
+          "d1"
+        ],
+        "statesRan": true,
+        "statesOther": false,
+        "factsExpected": 3,
+        "factsFound": 3,
+        "asksInProse": false
+      },
+      "standing": {
+        "standing": "not-assessed",
+        "assessment": "not-applicable",
+        "reasons": []
+      },
+      "argumentRows": {
+        "total": 0,
+        "bySource": {},
+        "byAsked": {}
+      },
+      "llm": {
+        "calls": 3,
+        "input": 283,
+        "output": 29,
+        "cacheRead": 0,
+        "cacheWrite": 0
+      },
+      "usd": 0,
+      "requestsDigest": "3131818a8e405828.71a848fac08233c9.32b9311f3e8b5c13"
+    },
+    {
+      "key": "off/p6-disk-and-network/r2",
+      "arm": "off",
+      "caseId": "p6-disk-and-network",
+      "group": "P6",
+      "rep": 2,
+      "variant": "leaves the network period out",
+      "complete": true,
+      "toolCalls": {
+        "proposed": 2,
+        "dispatched": 2,
+        "refused": 0,
+        "failed": 0
+      },
+      "periodCalls": [
+        {
+          "toolCallId": "t1c1",
+          "tool": "io_profile",
+          "argument": "time_range",
+          "origin": "sent",
+          "dispatched": true,
+          "ok": true,
+          "sent": "24h",
+          "stated": [
+            "24h"
+          ],
+          "ranWith": "24h",
+          "cls": "person",
+          "meant": true
+        },
+        {
+          "toolCallId": "t1c2",
+          "tool": "net_flows",
+          "argument": "window",
+          "origin": "omitted",
+          "dispatched": true,
+          "ok": true,
+          "stated": [
+            "-24h"
+          ],
+          "ranWith": "-60m",
+          "cls": "contradicts",
+          "meant": false
+        }
+      ],
+      "names": [
+        {
+          "toolCallId": "t1c1",
+          "tool": "io_profile",
+          "argument": "host",
+          "value": "srv-4417",
+          "cls": "said",
+          "dispatched": true,
+          "ok": true
+        },
+        {
+          "toolCallId": "t1c2",
+          "tool": "net_flows",
+          "argument": "host",
+          "value": "srv-4417",
+          "cls": "said",
+          "dispatched": true,
+          "ok": true
+        }
+      ],
+      "periodExpected": true,
+      "noPeriodCall": false,
+      "answer": {
+        "present": true,
+        "ranDurations": [
+          "d1",
+          "h1"
+        ],
+        "statedDurations": [
+          "d1"
+        ],
+        "statesRan": false,
+        "statesOther": false,
+        "factsExpected": 3,
+        "factsFound": 3,
+        "asksInProse": false
+      },
+      "standing": {
+        "standing": "not-assessed",
+        "assessment": "not-applicable",
+        "reasons": []
+      },
+      "argumentRows": {
+        "total": 0,
+        "bySource": {},
+        "byAsked": {}
+      },
+      "llm": {
+        "calls": 2,
+        "input": 119,
+        "output": 29,
+        "cacheRead": 0,
+        "cacheWrite": 0
+      },
+      "usd": 0,
+      "requestsDigest": "3131818a8e405828.22c808142cd9b367"
+    },
+    {
+      "key": "off/c1-exact-24h/r0",
+      "arm": "off",
+      "caseId": "c1-exact-24h",
+      "group": "C1",
+      "rep": 0,
+      "variant": "carries the period",
+      "complete": true,
+      "toolCalls": {
+        "proposed": 1,
+        "dispatched": 1,
+        "refused": 0,
+        "failed": 0
+      },
+      "periodCalls": [
+        {
+          "toolCallId": "t1c1",
+          "tool": "search_logs",
+          "argument": "window",
+          "origin": "sent",
+          "dispatched": true,
+          "ok": true,
+          "sent": "24h",
+          "stated": [
+            "24h"
+          ],
+          "ranWith": "24h",
+          "cls": "person",
+          "meant": true
+        }
+      ],
+      "names": [
+        {
+          "toolCallId": "t1c1",
+          "tool": "search_logs",
+          "argument": "service",
+          "value": "checkout",
+          "cls": "said",
+          "dispatched": true,
+          "ok": true
+        }
+      ],
+      "periodExpected": true,
+      "noPeriodCall": false,
+      "answer": {
+        "present": true,
+        "ranDurations": [
+          "d1"
+        ],
+        "statedDurations": [
+          "d1"
+        ],
+        "statesRan": true,
+        "statesOther": false,
+        "factsExpected": 2,
+        "factsFound": 2,
+        "asksInProse": false
+      },
+      "standing": {
+        "standing": "consistent",
+        "assessment": "unrefuted",
+        "reasons": []
+      },
+      "argumentRows": {
+        "total": 0,
+        "bySource": {},
+        "byAsked": {}
+      },
+      "llm": {
+        "calls": 2,
+        "input": 139,
+        "output": 17,
+        "cacheRead": 0,
+        "cacheWrite": 0
+      },
+      "usd": 0,
+      "requestsDigest": "a7791ac8faf8dbf5.3000a9f8482dfec5"
+    },
+    {
+      "key": "off/c1-exact-24h/r1",
+      "arm": "off",
+      "caseId": "c1-exact-24h",
+      "group": "C1",
+      "rep": 1,
+      "variant": "leaves it out",
+      "complete": true,
+      "toolCalls": {
+        "proposed": 1,
+        "dispatched": 1,
+        "refused": 0,
+        "failed": 0
+      },
+      "periodCalls": [
+        {
+          "toolCallId": "t1c1",
+          "tool": "search_logs",
+          "argument": "window",
+          "origin": "omitted",
+          "dispatched": true,
+          "ok": true,
+          "stated": [
+            "24h"
+          ],
+          "ranWith": "2h",
+          "cls": "contradicts",
+          "meant": false
+        }
+      ],
+      "names": [
+        {
+          "toolCallId": "t1c1",
+          "tool": "search_logs",
+          "argument": "service",
+          "value": "checkout",
+          "cls": "said",
+          "dispatched": true,
+          "ok": true
+        }
+      ],
+      "periodExpected": true,
+      "noPeriodCall": false,
+      "answer": {
+        "present": true,
+        "ranDurations": [
+          "h2"
+        ],
+        "statedDurations": [],
+        "statesRan": false,
+        "statesOther": false,
+        "factsExpected": 2,
+        "factsFound": 2,
+        "asksInProse": false
+      },
+      "standing": {
+        "standing": "consistent",
+        "assessment": "unrefuted",
+        "reasons": []
+      },
+      "argumentRows": {
+        "total": 0,
+        "bySource": {},
+        "byAsked": {}
+      },
+      "llm": {
+        "calls": 2,
+        "input": 138,
+        "output": 10,
+        "cacheRead": 0,
+        "cacheWrite": 0
+      },
+      "usd": 0,
+      "requestsDigest": "a7791ac8faf8dbf5.5e307441df04cad0"
+    },
+    {
+      "key": "off/c1-exact-7d/r0",
+      "arm": "off",
+      "caseId": "c1-exact-7d",
+      "group": "C1",
+      "rep": 0,
+      "variant": "carries the period",
+      "complete": true,
+      "toolCalls": {
+        "proposed": 1,
+        "dispatched": 1,
+        "refused": 0,
+        "failed": 0
+      },
+      "periodCalls": [
+        {
+          "toolCallId": "t1c1",
+          "tool": "io_profile",
+          "argument": "time_range",
+          "origin": "sent",
+          "dispatched": true,
+          "ok": true,
+          "sent": "7d",
+          "stated": [
+            "7d"
+          ],
+          "ranWith": "7d",
+          "cls": "person",
+          "meant": true
+        }
+      ],
+      "names": [
+        {
+          "toolCallId": "t1c1",
+          "tool": "io_profile",
+          "argument": "host",
+          "value": "srv-2280",
+          "cls": "said",
+          "dispatched": true,
+          "ok": true
+        }
+      ],
+      "periodExpected": true,
+      "noPeriodCall": false,
+      "answer": {
+        "present": true,
+        "ranDurations": [
+          "d7"
+        ],
+        "statedDurations": [
+          "d7"
+        ],
+        "statesRan": true,
+        "statesOther": false,
+        "factsExpected": 2,
+        "factsFound": 2,
+        "asksInProse": false
+      },
+      "standing": {
+        "standing": "not-assessed",
+        "assessment": "not-applicable",
+        "reasons": []
+      },
+      "argumentRows": {
+        "total": 0,
+        "bySource": {},
+        "byAsked": {}
+      },
+      "llm": {
+        "calls": 2,
+        "input": 89,
+        "output": 17,
+        "cacheRead": 0,
+        "cacheWrite": 0
+      },
+      "usd": 0,
+      "requestsDigest": "16b551e4a2319aa3.3c967533c669d213"
+    },
+    {
+      "key": "off/c1-exact-7d/r1",
+      "arm": "off",
+      "caseId": "c1-exact-7d",
+      "group": "C1",
+      "rep": 1,
+      "variant": "leaves it out",
+      "complete": true,
+      "toolCalls": {
+        "proposed": 1,
+        "dispatched": 1,
+        "refused": 0,
+        "failed": 0
+      },
+      "periodCalls": [
+        {
+          "toolCallId": "t1c1",
+          "tool": "io_profile",
+          "argument": "time_range",
+          "origin": "omitted",
+          "dispatched": true,
+          "ok": true,
+          "stated": [
+            "7d"
+          ],
+          "ranWith": "24h",
+          "cls": "contradicts",
+          "meant": false
+        }
+      ],
+      "names": [
+        {
+          "toolCallId": "t1c1",
+          "tool": "io_profile",
+          "argument": "host",
+          "value": "srv-2280",
+          "cls": "said",
+          "dispatched": true,
+          "ok": true
+        }
+      ],
+      "periodExpected": true,
+      "noPeriodCall": false,
+      "answer": {
+        "present": true,
+        "ranDurations": [
+          "d1"
+        ],
+        "statedDurations": [],
+        "statesRan": false,
+        "statesOther": false,
+        "factsExpected": 2,
+        "factsFound": 2,
+        "asksInProse": false
+      },
+      "standing": {
+        "standing": "not-assessed",
+        "assessment": "not-applicable",
+        "reasons": []
+      },
+      "argumentRows": {
+        "total": 0,
+        "bySource": {},
+        "byAsked": {}
+      },
+      "llm": {
+        "calls": 2,
+        "input": 89,
+        "output": 11,
+        "cacheRead": 0,
+        "cacheWrite": 0
+      },
+      "usd": 0,
+      "requestsDigest": "16b551e4a2319aa3.19e05788ceb9caf8"
+    },
+    {
+      "key": "off/c2-list-services/r0",
+      "arm": "off",
+      "caseId": "c2-list-services",
+      "group": "C2",
+      "rep": 0,
+      "variant": "lists them",
+      "complete": true,
+      "toolCalls": {
+        "proposed": 1,
+        "dispatched": 1,
+        "refused": 0,
+        "failed": 0
+      },
+      "periodCalls": [],
+      "names": [],
+      "periodExpected": false,
+      "noPeriodCall": false,
+      "answer": {
+        "present": true,
+        "ranDurations": [],
+        "statedDurations": [],
+        "statesRan": false,
+        "statesOther": false,
+        "factsExpected": 0,
+        "factsFound": 0,
+        "asksInProse": false
+      },
+      "standing": {
+        "standing": "consistent",
+        "assessment": "unrefuted",
+        "reasons": []
+      },
+      "argumentRows": {
+        "total": 0,
+        "bySource": {},
+        "byAsked": {}
+      },
+      "llm": {
+        "calls": 2,
+        "input": 76,
+        "output": 12,
+        "cacheRead": 0,
+        "cacheWrite": 0
+      },
+      "usd": 0,
+      "requestsDigest": "1631c24a626d9d19.af738cdec56a5b7e"
+    },
+    {
+      "key": "off/c2-list-services/r1",
+      "arm": "off",
+      "caseId": "c2-list-services",
+      "group": "C2",
+      "rep": 1,
+      "variant": "answers without a call",
+      "complete": true,
+      "toolCalls": {
+        "proposed": 0,
+        "dispatched": 0,
+        "refused": 0,
+        "failed": 0
+      },
+      "periodCalls": [],
+      "names": [],
+      "periodExpected": false,
+      "noPeriodCall": false,
+      "answer": {
+        "present": true,
+        "ranDurations": [],
+        "statedDurations": [],
+        "statesRan": false,
+        "statesOther": false,
+        "factsExpected": 0,
+        "factsFound": 0,
+        "asksInProse": false
+      },
+      "standing": {
+        "standing": "not-assessed",
+        "assessment": "not-applicable",
+        "reasons": []
+      },
+      "argumentRows": {
+        "total": 0,
+        "bySource": {},
+        "byAsked": {}
+      },
+      "llm": {
+        "calls": 1,
+        "input": 31,
+        "output": 14,
+        "cacheRead": 0,
+        "cacheWrite": 0
+      },
+      "usd": 0,
+      "requestsDigest": "1631c24a626d9d19"
+    }
+  ],
+  "aggregates": {
+    "off": {
+      "sets": {
+        "unstated": {
+          "runs": 14,
+          "complete": 14,
+          "periodCalls": 13,
+          "classes": {
+            "person": 0,
+            "contradicts": 0,
+            "default-unchosen": 9,
+            "model-chosen": 4
+          },
+          "defaultUnchosenBy": {
+            "omitted": 6,
+            "sent": 3
+          },
+          "rates": {
+            "defaultUnchosen": 0.6923076923076923,
+            "notThePersons": 1,
+            "person": 0
+          },
+          "noPeriodCall": {
+            "runs": 1,
+            "of": 14,
+            "asksInProse": 1
+          },
+          "window": {
+            "of": 13,
+            "statesRan": 9,
+            "statesOther": 0
+          },
+          "names": {
+            "calls": 13,
+            "said": 13,
+            "fromResult": 0,
+            "nobodySaid": 0
+          },
+          "facts": {
+            "of": 13,
+            "mean": 1
+          },
+          "toolCalls": {
+            "perRun": 0.9285714285714286,
+            "refused": 0,
+            "failed": 0
+          },
+          "llm": {
+            "callsPerRun": 1.9285714285714286,
+            "inputPerCall": 48.77777777777778,
+            "outputPerCall": 7.592592592592593
+          },
+          "usd": 0,
+          "meant": {
+            "of": 13,
+            "meant": 4
+          },
+          "standing": {
+            "consistent": 5,
+            "not-assessed": 7,
+            "not-sure": 2
+          },
+          "reasons": {
+            "empty-undeclared": 2
+          },
+          "periodRuns": 13,
+          "argumentReasonRuns": 0,
+          "askedRuns": 0,
+          "argumentRows": {
+            "total": 0,
+            "admittedDefaults": 0,
+            "asked": 0
+          },
+          "stoppedEarly": 0,
+          "mockExhausted": 0
+        },
+        "stated": {
+          "runs": 20,
+          "complete": 20,
+          "periodCalls": 23,
+          "classes": {
+            "person": 14,
+            "contradicts": 9,
+            "default-unchosen": 0,
+            "model-chosen": 0
+          },
+          "defaultUnchosenBy": {
+            "omitted": 0,
+            "sent": 0
+          },
+          "rates": {
+            "defaultUnchosen": 0,
+            "notThePersons": 0.391304347826087,
+            "person": 0.6086956521739131
+          },
+          "noPeriodCall": {
+            "runs": 0,
+            "of": 20,
+            "asksInProse": 0
+          },
+          "window": {
+            "of": 20,
+            "statesRan": 13,
+            "statesOther": 1
+          },
+          "names": {
+            "calls": 24,
+            "said": 21,
+            "fromResult": 2,
+            "nobodySaid": 1
+          },
+          "facts": {
+            "of": 20,
+            "mean": 1
+          },
+          "toolCalls": {
+            "perRun": 1.3,
+            "refused": 1,
+            "failed": 0
+          },
+          "llm": {
+            "callsPerRun": 2.35,
+            "inputPerCall": 71.04255319148936,
+            "outputPerCall": 8.595744680851064
+          },
+          "usd": 0,
+          "meant": {
+            "of": 23,
+            "meant": 14
+          },
+          "standing": {
+            "consistent": 10,
+            "not-assessed": 9,
+            "not-sure": 1
+          },
+          "reasons": {
+            "empty-undeclared": 1
+          },
+          "periodRuns": 20,
+          "argumentReasonRuns": 0,
+          "askedRuns": 0,
+          "argumentRows": {
+            "total": 0,
+            "admittedDefaults": 0,
+            "asked": 0
+          },
+          "stoppedEarly": 0,
+          "mockExhausted": 0
+        },
+        "controls": {
+          "runs": 6,
+          "complete": 6,
+          "periodCalls": 4,
+          "classes": {
+            "person": 2,
+            "contradicts": 2,
+            "default-unchosen": 0,
+            "model-chosen": 0
+          },
+          "defaultUnchosenBy": {
+            "omitted": 0,
+            "sent": 0
+          },
+          "rates": {
+            "defaultUnchosen": 0,
+            "notThePersons": 0.5,
+            "person": 0.5
+          },
+          "noPeriodCall": {
+            "runs": 0,
+            "of": 4,
+            "asksInProse": 0
+          },
+          "window": {
+            "of": 4,
+            "statesRan": 2,
+            "statesOther": 0
+          },
+          "names": {
+            "calls": 4,
+            "said": 4,
+            "fromResult": 0,
+            "nobodySaid": 0
+          },
+          "facts": {
+            "of": 4,
+            "mean": 1
+          },
+          "toolCalls": {
+            "perRun": 0.8333333333333334,
+            "refused": 0,
+            "failed": 0
+          },
+          "llm": {
+            "callsPerRun": 1.8333333333333333,
+            "inputPerCall": 51.09090909090909,
+            "outputPerCall": 7.363636363636363
+          },
+          "usd": 0,
+          "meant": {
+            "of": 4,
+            "meant": 2
+          },
+          "standing": {
+            "consistent": 3,
+            "not-assessed": 3
+          },
+          "reasons": {},
+          "periodRuns": 4,
+          "argumentReasonRuns": 0,
+          "askedRuns": 0,
+          "argumentRows": {
+            "total": 0,
+            "admittedDefaults": 0,
+            "asked": 0
+          },
+          "stoppedEarly": 0,
+          "mockExhausted": 0
+        },
+        "names": {
+          "runs": 5,
+          "complete": 5,
+          "periodCalls": 3,
+          "classes": {
+            "person": 0,
+            "contradicts": 0,
+            "default-unchosen": 3,
+            "model-chosen": 0
+          },
+          "defaultUnchosenBy": {
+            "omitted": 3,
+            "sent": 0
+          },
+          "rates": {
+            "defaultUnchosen": 1,
+            "notThePersons": 1,
+            "person": 0
+          },
+          "noPeriodCall": {
+            "runs": 2,
+            "of": 5,
+            "asksInProse": 0
+          },
+          "window": {
+            "of": 3,
+            "statesRan": 0,
+            "statesOther": 0
+          },
+          "names": {
+            "calls": 5,
+            "said": 0,
+            "fromResult": 2,
+            "nobodySaid": 3
+          },
+          "facts": {
+            "of": 3,
+            "mean": 1
+          },
+          "toolCalls": {
+            "perRun": 1.4,
+            "refused": 0,
+            "failed": 2
+          },
+          "llm": {
+            "callsPerRun": 2.4,
+            "inputPerCall": 55.416666666666664,
+            "outputPerCall": 6.833333333333333
+          },
+          "usd": 0,
+          "meant": {
+            "of": 3,
+            "meant": 0
+          },
+          "standing": {
+            "not-assessed": 2,
+            "consistent": 3
+          },
+          "reasons": {},
+          "periodRuns": 3,
+          "argumentReasonRuns": 0,
+          "askedRuns": 0,
+          "argumentRows": {
+            "total": 0,
+            "admittedDefaults": 0,
+            "asked": 0
+          },
+          "stoppedEarly": 0,
+          "mockExhausted": 0
+        },
+        "all": {
+          "runs": 44,
+          "complete": 44,
+          "periodCalls": 42,
+          "classes": {
+            "person": 16,
+            "contradicts": 10,
+            "default-unchosen": 12,
+            "model-chosen": 4
+          },
+          "defaultUnchosenBy": {
+            "omitted": 9,
+            "sent": 3
+          },
+          "rates": {
+            "defaultUnchosen": 0.2857142857142857,
+            "notThePersons": 0.6190476190476191,
+            "person": 0.38095238095238093
+          },
+          "noPeriodCall": {
+            "runs": 3,
+            "of": 42,
+            "asksInProse": 1
+          },
+          "window": {
+            "of": 39,
+            "statesRan": 24,
+            "statesOther": 1
+          },
+          "names": {
+            "calls": 45,
+            "said": 37,
+            "fromResult": 4,
+            "nobodySaid": 4
+          },
+          "facts": {
+            "of": 39,
+            "mean": 1
+          },
+          "toolCalls": {
+            "perRun": 1.1363636363636365,
+            "refused": 1,
+            "failed": 2
+          },
+          "llm": {
+            "callsPerRun": 2.159090909090909,
+            "inputPerCall": 61.536842105263155,
+            "outputPerCall": 8.021052631578947
+          },
+          "usd": 0,
+          "meant": {
+            "of": 42,
+            "meant": 19
+          },
+          "standing": {
+            "consistent": 22,
+            "not-assessed": 19,
+            "not-sure": 3
+          },
+          "reasons": {
+            "empty-undeclared": 3
+          },
+          "periodRuns": 39,
+          "argumentReasonRuns": 0,
+          "askedRuns": 0,
+          "argumentRows": {
+            "total": 0,
+            "admittedDefaults": 0,
+            "asked": 0
+          },
+          "stoppedEarly": 0,
+          "mockExhausted": 0
+        }
+      },
+      "cases": {
+        "p1-checkout-errors": {
+          "runs": 5,
+          "complete": 5,
+          "periodCalls": 4,
+          "classes": {
+            "person": 0,
+            "contradicts": 0,
+            "default-unchosen": 3,
+            "model-chosen": 1
+          },
+          "defaultUnchosenBy": {
+            "omitted": 2,
+            "sent": 1
+          },
+          "rates": {
+            "defaultUnchosen": 0.75,
+            "notThePersons": 1,
+            "person": 0
+          },
+          "noPeriodCall": {
+            "runs": 1,
+            "of": 5,
+            "asksInProse": 1
+          },
+          "window": {
+            "of": 4,
+            "statesRan": 3,
+            "statesOther": 0
+          },
+          "names": {
+            "calls": 4,
+            "said": 4,
+            "fromResult": 0,
+            "nobodySaid": 0
+          },
+          "facts": {
+            "of": 4,
+            "mean": 1
+          },
+          "toolCalls": {
+            "perRun": 0.8,
+            "refused": 0,
+            "failed": 0
+          },
+          "llm": {
+            "callsPerRun": 1.8,
+            "inputPerCall": 60.888888888888886,
+            "outputPerCall": 8.88888888888889
+          },
+          "usd": 0,
+          "meant": {
+            "of": 4,
+            "meant": 1
+          },
+          "standing": {
+            "consistent": 4,
+            "not-assessed": 1
+          },
+          "reasons": {},
+          "periodRuns": 4,
+          "argumentReasonRuns": 0,
+          "askedRuns": 0,
+          "argumentRows": {
+            "total": 0,
+            "admittedDefaults": 0,
+            "asked": 0
+          },
+          "stoppedEarly": 0,
+          "mockExhausted": 0
+        },
+        "p1-payments-errors": {
+          "runs": 3,
+          "complete": 3,
+          "periodCalls": 3,
+          "classes": {
+            "person": 0,
+            "contradicts": 0,
+            "default-unchosen": 2,
+            "model-chosen": 1
+          },
+          "defaultUnchosenBy": {
+            "omitted": 2,
+            "sent": 0
+          },
+          "rates": {
+            "defaultUnchosen": 0.6666666666666666,
+            "notThePersons": 1,
+            "person": 0
+          },
+          "noPeriodCall": {
+            "runs": 0,
+            "of": 3,
+            "asksInProse": 0
+          },
+          "window": {
+            "of": 3,
+            "statesRan": 2,
+            "statesOther": 0
+          },
+          "names": {
+            "calls": 3,
+            "said": 3,
+            "fromResult": 0,
+            "nobodySaid": 0
+          },
+          "facts": {
+            "of": 3,
+            "mean": 1
+          },
+          "toolCalls": {
+            "perRun": 1,
+            "refused": 0,
+            "failed": 0
+          },
+          "llm": {
+            "callsPerRun": 2,
+            "inputPerCall": 46.166666666666664,
+            "outputPerCall": 5.666666666666667
+          },
+          "usd": 0,
+          "meant": {
+            "of": 3,
+            "meant": 1
+          },
+          "standing": {
+            "not-sure": 2,
+            "consistent": 1
+          },
+          "reasons": {
+            "empty-undeclared": 2
+          },
+          "periodRuns": 3,
+          "argumentReasonRuns": 0,
+          "askedRuns": 0,
+          "argumentRows": {
+            "total": 0,
+            "admittedDefaults": 0,
+            "asked": 0
+          },
+          "stoppedEarly": 0,
+          "mockExhausted": 0
+        },
+        "p1-disk-io": {
+          "runs": 3,
+          "complete": 3,
+          "periodCalls": 3,
+          "classes": {
+            "person": 0,
+            "contradicts": 0,
+            "default-unchosen": 2,
+            "model-chosen": 1
+          },
+          "defaultUnchosenBy": {
+            "omitted": 1,
+            "sent": 1
+          },
+          "rates": {
+            "defaultUnchosen": 0.6666666666666666,
+            "notThePersons": 1,
+            "person": 0
+          },
+          "noPeriodCall": {
+            "runs": 0,
+            "of": 3,
+            "asksInProse": 0
+          },
+          "window": {
+            "of": 3,
+            "statesRan": 2,
+            "statesOther": 0
+          },
+          "names": {
+            "calls": 3,
+            "said": 3,
+            "fromResult": 0,
+            "nobodySaid": 0
+          },
+          "facts": {
+            "of": 3,
+            "mean": 1
+          },
+          "toolCalls": {
+            "perRun": 1,
+            "refused": 0,
+            "failed": 0
+          },
+          "llm": {
+            "callsPerRun": 2,
+            "inputPerCall": 39.5,
+            "outputPerCall": 7.333333333333333
+          },
+          "usd": 0,
+          "meant": {
+            "of": 3,
+            "meant": 1
+          },
+          "standing": {
+            "not-assessed": 3
+          },
+          "reasons": {},
+          "periodRuns": 3,
+          "argumentReasonRuns": 0,
+          "askedRuns": 0,
+          "argumentRows": {
+            "total": 0,
+            "admittedDefaults": 0,
+            "asked": 0
+          },
+          "stoppedEarly": 0,
+          "mockExhausted": 0
+        },
+        "p1-network": {
+          "runs": 3,
+          "complete": 3,
+          "periodCalls": 3,
+          "classes": {
+            "person": 0,
+            "contradicts": 0,
+            "default-unchosen": 2,
+            "model-chosen": 1
+          },
+          "defaultUnchosenBy": {
+            "omitted": 1,
+            "sent": 1
+          },
+          "rates": {
+            "defaultUnchosen": 0.6666666666666666,
+            "notThePersons": 1,
+            "person": 0
+          },
+          "noPeriodCall": {
+            "runs": 0,
+            "of": 3,
+            "asksInProse": 0
+          },
+          "window": {
+            "of": 3,
+            "statesRan": 2,
+            "statesOther": 0
+          },
+          "names": {
+            "calls": 3,
+            "said": 3,
+            "fromResult": 0,
+            "nobodySaid": 0
+          },
+          "facts": {
+            "of": 3,
+            "mean": 1
+          },
+          "toolCalls": {
+            "perRun": 1,
+            "refused": 0,
+            "failed": 0
+          },
+          "llm": {
+            "callsPerRun": 2,
+            "inputPerCall": 42.5,
+            "outputPerCall": 7.833333333333333
+          },
+          "usd": 0,
+          "meant": {
+            "of": 3,
+            "meant": 1
+          },
+          "standing": {
+            "not-assessed": 3
+          },
+          "reasons": {},
+          "periodRuns": 3,
+          "argumentReasonRuns": 0,
+          "askedRuns": 0,
+          "argumentRows": {
+            "total": 0,
+            "admittedDefaults": 0,
+            "asked": 0
+          },
+          "stoppedEarly": 0,
+          "mockExhausted": 0
+        },
+        "p2-last-week": {
+          "runs": 3,
+          "complete": 3,
+          "periodCalls": 3,
+          "classes": {
+            "person": 1,
+            "contradicts": 2,
+            "default-unchosen": 0,
+            "model-chosen": 0
+          },
+          "defaultUnchosenBy": {
+            "omitted": 0,
+            "sent": 0
+          },
+          "rates": {
+            "defaultUnchosen": 0,
+            "notThePersons": 0.6666666666666666,
+            "person": 0.3333333333333333
+          },
+          "noPeriodCall": {
+            "runs": 0,
+            "of": 3,
+            "asksInProse": 0
+          },
+          "window": {
+            "of": 3,
+            "statesRan": 2,
+            "statesOther": 1
+          },
+          "names": {
+            "calls": 3,
+            "said": 3,
+            "fromResult": 0,
+            "nobodySaid": 0
+          },
+          "facts": {
+            "of": 3,
+            "mean": 1
+          },
+          "toolCalls": {
+            "perRun": 1,
+            "refused": 0,
+            "failed": 0
+          },
+          "llm": {
+            "callsPerRun": 2,
+            "inputPerCall": 71.66666666666667,
+            "outputPerCall": 8.333333333333334
+          },
+          "usd": 0,
+          "meant": {
+            "of": 3,
+            "meant": 1
+          },
+          "standing": {
+            "consistent": 3
+          },
+          "reasons": {},
+          "periodRuns": 3,
+          "argumentReasonRuns": 0,
+          "askedRuns": 0,
+          "argumentRows": {
+            "total": 0,
+            "admittedDefaults": 0,
+            "asked": 0
+          },
+          "stoppedEarly": 0,
+          "mockExhausted": 0
+        },
+        "p2-past-day": {
+          "runs": 2,
+          "complete": 2,
+          "periodCalls": 2,
+          "classes": {
+            "person": 1,
+            "contradicts": 1,
+            "default-unchosen": 0,
+            "model-chosen": 0
+          },
+          "defaultUnchosenBy": {
+            "omitted": 0,
+            "sent": 0
+          },
+          "rates": {
+            "defaultUnchosen": 0,
+            "notThePersons": 0.5,
+            "person": 0.5
+          },
+          "noPeriodCall": {
+            "runs": 0,
+            "of": 2,
+            "asksInProse": 0
+          },
+          "window": {
+            "of": 2,
+            "statesRan": 1,
+            "statesOther": 0
+          },
+          "names": {
+            "calls": 2,
+            "said": 2,
+            "fromResult": 0,
+            "nobodySaid": 0
+          },
+          "facts": {
+            "of": 2,
+            "mean": 1
+          },
+          "toolCalls": {
+            "perRun": 1,
+            "refused": 0,
+            "failed": 0
+          },
+          "llm": {
+            "callsPerRun": 2,
+            "inputPerCall": 70.5,
+            "outputPerCall": 6.75
+          },
+          "usd": 0,
+          "meant": {
+            "of": 2,
+            "meant": 1
+          },
+          "standing": {
+            "consistent": 2
+          },
+          "reasons": {},
+          "periodRuns": 2,
+          "argumentReasonRuns": 0,
+          "askedRuns": 0,
+          "argumentRows": {
+            "total": 0,
+            "admittedDefaults": 0,
+            "asked": 0
+          },
+          "stoppedEarly": 0,
+          "mockExhausted": 0
+        },
+        "p2-since-yesterday": {
+          "runs": 3,
+          "complete": 3,
+          "periodCalls": 3,
+          "classes": {
+            "person": 2,
+            "contradicts": 1,
+            "default-unchosen": 0,
+            "model-chosen": 0
+          },
+          "defaultUnchosenBy": {
+            "omitted": 0,
+            "sent": 0
+          },
+          "rates": {
+            "defaultUnchosen": 0,
+            "notThePersons": 0.3333333333333333,
+            "person": 0.6666666666666666
+          },
+          "noPeriodCall": {
+            "runs": 0,
+            "of": 3,
+            "asksInProse": 0
+          },
+          "window": {
+            "of": 3,
+            "statesRan": 2,
+            "statesOther": 0
+          },
+          "names": {
+            "calls": 3,
+            "said": 3,
+            "fromResult": 0,
+            "nobodySaid": 0
+          },
+          "facts": {
+            "of": 3,
+            "mean": 1
+          },
+          "toolCalls": {
+            "perRun": 1,
+            "refused": 0,
+            "failed": 0
+          },
+          "llm": {
+            "callsPerRun": 2,
+            "inputPerCall": 69.66666666666667,
+            "outputPerCall": 7.5
+          },
+          "usd": 0,
+          "meant": {
+            "of": 3,
+            "meant": 1
+          },
+          "standing": {
+            "consistent": 3
+          },
+          "reasons": {},
+          "periodRuns": 3,
+          "argumentReasonRuns": 0,
+          "askedRuns": 0,
+          "argumentRows": {
+            "total": 0,
+            "admittedDefaults": 0,
+            "asked": 0
+          },
+          "stoppedEarly": 0,
+          "mockExhausted": 0
+        },
+        "p2-last-hour-network": {
+          "runs": 3,
+          "complete": 3,
+          "periodCalls": 3,
+          "classes": {
+            "person": 2,
+            "contradicts": 1,
+            "default-unchosen": 0,
+            "model-chosen": 0
+          },
+          "defaultUnchosenBy": {
+            "omitted": 0,
+            "sent": 0
+          },
+          "rates": {
+            "defaultUnchosen": 0,
+            "notThePersons": 0.3333333333333333,
+            "person": 0.6666666666666666
+          },
+          "noPeriodCall": {
+            "runs": 0,
+            "of": 3,
+            "asksInProse": 0
+          },
+          "window": {
+            "of": 3,
+            "statesRan": 3,
+            "statesOther": 0
+          },
+          "names": {
+            "calls": 3,
+            "said": 3,
+            "fromResult": 0,
+            "nobodySaid": 0
+          },
+          "facts": {
+            "of": 3,
+            "mean": 1
+          },
+          "toolCalls": {
+            "perRun": 1,
+            "refused": 0,
+            "failed": 0
+          },
+          "llm": {
+            "callsPerRun": 2,
+            "inputPerCall": 45.5,
+            "outputPerCall": 9
+          },
+          "usd": 0,
+          "meant": {
+            "of": 3,
+            "meant": 2
+          },
+          "standing": {
+            "not-assessed": 3
+          },
+          "reasons": {},
+          "periodRuns": 3,
+          "argumentReasonRuns": 0,
+          "askedRuns": 0,
+          "argumentRows": {
+            "total": 0,
+            "admittedDefaults": 0,
+            "asked": 0
+          },
+          "stoppedEarly": 0,
+          "mockExhausted": 0
+        },
+        "p3-storefront": {
+          "runs": 3,
+          "complete": 3,
+          "periodCalls": 2,
+          "classes": {
+            "person": 0,
+            "contradicts": 0,
+            "default-unchosen": 2,
+            "model-chosen": 0
+          },
+          "defaultUnchosenBy": {
+            "omitted": 2,
+            "sent": 0
+          },
+          "rates": {
+            "defaultUnchosen": 1,
+            "notThePersons": 1,
+            "person": 0
+          },
+          "noPeriodCall": {
+            "runs": 1,
+            "of": 3,
+            "asksInProse": 0
+          },
+          "window": {
+            "of": 2,
+            "statesRan": 0,
+            "statesOther": 0
+          },
+          "names": {
+            "calls": 3,
+            "said": 0,
+            "fromResult": 1,
+            "nobodySaid": 2
+          },
+          "facts": {
+            "of": 2,
+            "mean": 1
+          },
+          "toolCalls": {
+            "perRun": 1.3333333333333333,
+            "refused": 0,
+            "failed": 1
+          },
+          "llm": {
+            "callsPerRun": 2.3333333333333335,
+            "inputPerCall": 60,
+            "outputPerCall": 6.571428571428571
+          },
+          "usd": 0,
+          "meant": {
+            "of": 2,
+            "meant": 0
+          },
+          "standing": {
+            "not-assessed": 1,
+            "consistent": 2
+          },
+          "reasons": {},
+          "periodRuns": 2,
+          "argumentReasonRuns": 0,
+          "askedRuns": 0,
+          "argumentRows": {
+            "total": 0,
+            "admittedDefaults": 0,
+            "asked": 0
+          },
+          "stoppedEarly": 0,
+          "mockExhausted": 0
+        },
+        "p3-database-host": {
+          "runs": 2,
+          "complete": 2,
+          "periodCalls": 1,
+          "classes": {
+            "person": 0,
+            "contradicts": 0,
+            "default-unchosen": 1,
+            "model-chosen": 0
+          },
+          "defaultUnchosenBy": {
+            "omitted": 1,
+            "sent": 0
+          },
+          "rates": {
+            "defaultUnchosen": 1,
+            "notThePersons": 1,
+            "person": 0
+          },
+          "noPeriodCall": {
+            "runs": 1,
+            "of": 2,
+            "asksInProse": 0
+          },
+          "window": {
+            "of": 1,
+            "statesRan": 0,
+            "statesOther": 0
+          },
+          "names": {
+            "calls": 2,
+            "said": 0,
+            "fromResult": 1,
+            "nobodySaid": 1
+          },
+          "facts": {
+            "of": 1,
+            "mean": 1
+          },
+          "toolCalls": {
+            "perRun": 1.5,
+            "refused": 0,
+            "failed": 1
+          },
+          "llm": {
+            "callsPerRun": 2.5,
+            "inputPerCall": 49,
+            "outputPerCall": 7.2
+          },
+          "usd": 0,
+          "meant": {
+            "of": 1,
+            "meant": 0
+          },
+          "standing": {
+            "not-assessed": 1,
+            "consistent": 1
+          },
+          "reasons": {},
+          "periodRuns": 1,
+          "argumentReasonRuns": 0,
+          "askedRuns": 0,
+          "argumentRows": {
+            "total": 0,
+            "admittedDefaults": 0,
+            "asked": 0
+          },
+          "stoppedEarly": 0,
+          "mockExhausted": 0
+        },
+        "p4-earlier-turn": {
+          "runs": 2,
+          "complete": 2,
+          "periodCalls": 2,
+          "classes": {
+            "person": 1,
+            "contradicts": 1,
+            "default-unchosen": 0,
+            "model-chosen": 0
+          },
+          "defaultUnchosenBy": {
+            "omitted": 0,
+            "sent": 0
+          },
+          "rates": {
+            "defaultUnchosen": 0,
+            "notThePersons": 0.5,
+            "person": 0.5
+          },
+          "noPeriodCall": {
+            "runs": 0,
+            "of": 2,
+            "asksInProse": 0
+          },
+          "window": {
+            "of": 2,
+            "statesRan": 1,
+            "statesOther": 0
+          },
+          "names": {
+            "calls": 2,
+            "said": 2,
+            "fromResult": 0,
+            "nobodySaid": 0
+          },
+          "facts": {
+            "of": 2,
+            "mean": 1
+          },
+          "toolCalls": {
+            "perRun": 1,
+            "refused": 0,
+            "failed": 0
+          },
+          "llm": {
+            "callsPerRun": 4,
+            "inputPerCall": 109.625,
+            "outputPerCall": 7
+          },
+          "usd": 0,
+          "meant": {
+            "of": 2,
+            "meant": 1
+          },
+          "standing": {
+            "consistent": 1,
+            "not-sure": 1
+          },
+          "reasons": {
+            "empty-undeclared": 1
+          },
+          "periodRuns": 2,
+          "argumentReasonRuns": 0,
+          "askedRuns": 0,
+          "argumentRows": {
+            "total": 0,
+            "admittedDefaults": 0,
+            "asked": 0
+          },
+          "stoppedEarly": 0,
+          "mockExhausted": 0
+        },
+        "p5-cache-host": {
+          "runs": 3,
+          "complete": 3,
+          "periodCalls": 3,
+          "classes": {
+            "person": 2,
+            "contradicts": 1,
+            "default-unchosen": 0,
+            "model-chosen": 0
+          },
+          "defaultUnchosenBy": {
+            "omitted": 0,
+            "sent": 0
+          },
+          "rates": {
+            "defaultUnchosen": 0,
+            "notThePersons": 0.3333333333333333,
+            "person": 0.6666666666666666
+          },
+          "noPeriodCall": {
+            "runs": 0,
+            "of": 3,
+            "asksInProse": 0
+          },
+          "window": {
+            "of": 3,
+            "statesRan": 2,
+            "statesOther": 0
+          },
+          "names": {
+            "calls": 3,
+            "said": 0,
+            "fromResult": 2,
+            "nobodySaid": 1
+          },
+          "facts": {
+            "of": 3,
+            "mean": 1
+          },
+          "toolCalls": {
+            "perRun": 1.6666666666666667,
+            "refused": 0,
+            "failed": 0
+          },
+          "llm": {
+            "callsPerRun": 2.6666666666666665,
+            "inputPerCall": 62.625,
+            "outputPerCall": 9.375
+          },
+          "usd": 0,
+          "meant": {
+            "of": 3,
+            "meant": 2
+          },
+          "standing": {
+            "consistent": 2,
+            "not-assessed": 1
+          },
+          "reasons": {},
+          "periodRuns": 3,
+          "argumentReasonRuns": 0,
+          "askedRuns": 0,
+          "argumentRows": {
+            "total": 0,
+            "admittedDefaults": 0,
+            "asked": 0
+          },
+          "stoppedEarly": 0,
+          "mockExhausted": 0
+        },
+        "p6-disk-and-network": {
+          "runs": 3,
+          "complete": 3,
+          "periodCalls": 6,
+          "classes": {
+            "person": 5,
+            "contradicts": 1,
+            "default-unchosen": 0,
+            "model-chosen": 0
+          },
+          "defaultUnchosenBy": {
+            "omitted": 0,
+            "sent": 0
+          },
+          "rates": {
+            "defaultUnchosen": 0,
+            "notThePersons": 0.16666666666666666,
+            "person": 0.8333333333333334
+          },
+          "noPeriodCall": {
+            "runs": 0,
+            "of": 3,
+            "asksInProse": 0
+          },
+          "window": {
+            "of": 3,
+            "statesRan": 2,
+            "statesOther": 0
+          },
+          "names": {
+            "calls": 7,
+            "said": 7,
+            "fromResult": 0,
+            "nobodySaid": 0
+          },
+          "facts": {
+            "of": 3,
+            "mean": 1
+          },
+          "toolCalls": {
+            "perRun": 2.3333333333333335,
+            "refused": 1,
+            "failed": 0
+          },
+          "llm": {
+            "callsPerRun": 2.3333333333333335,
+            "inputPerCall": 74.42857142857143,
+            "outputPerCall": 12.428571428571429
+          },
+          "usd": 0,
+          "meant": {
+            "of": 6,
+            "meant": 5
+          },
+          "standing": {
+            "not-assessed": 3
+          },
+          "reasons": {},
+          "periodRuns": 3,
+          "argumentReasonRuns": 0,
+          "askedRuns": 0,
+          "argumentRows": {
+            "total": 0,
+            "admittedDefaults": 0,
+            "asked": 0
+          },
+          "stoppedEarly": 0,
+          "mockExhausted": 0
+        },
+        "c1-exact-24h": {
+          "runs": 2,
+          "complete": 2,
+          "periodCalls": 2,
+          "classes": {
+            "person": 1,
+            "contradicts": 1,
+            "default-unchosen": 0,
+            "model-chosen": 0
+          },
+          "defaultUnchosenBy": {
+            "omitted": 0,
+            "sent": 0
+          },
+          "rates": {
+            "defaultUnchosen": 0,
+            "notThePersons": 0.5,
+            "person": 0.5
+          },
+          "noPeriodCall": {
+            "runs": 0,
+            "of": 2,
+            "asksInProse": 0
+          },
+          "window": {
+            "of": 2,
+            "statesRan": 1,
+            "statesOther": 0
+          },
+          "names": {
+            "calls": 2,
+            "said": 2,
+            "fromResult": 0,
+            "nobodySaid": 0
+          },
+          "facts": {
+            "of": 2,
+            "mean": 1
+          },
+          "toolCalls": {
+            "perRun": 1,
+            "refused": 0,
+            "failed": 0
+          },
+          "llm": {
+            "callsPerRun": 2,
+            "inputPerCall": 69.25,
+            "outputPerCall": 6.75
+          },
+          "usd": 0,
+          "meant": {
+            "of": 2,
+            "meant": 1
+          },
+          "standing": {
+            "consistent": 2
+          },
+          "reasons": {},
+          "periodRuns": 2,
+          "argumentReasonRuns": 0,
+          "askedRuns": 0,
+          "argumentRows": {
+            "total": 0,
+            "admittedDefaults": 0,
+            "asked": 0
+          },
+          "stoppedEarly": 0,
+          "mockExhausted": 0
+        },
+        "c1-exact-7d": {
+          "runs": 2,
+          "complete": 2,
+          "periodCalls": 2,
+          "classes": {
+            "person": 1,
+            "contradicts": 1,
+            "default-unchosen": 0,
+            "model-chosen": 0
+          },
+          "defaultUnchosenBy": {
+            "omitted": 0,
+            "sent": 0
+          },
+          "rates": {
+            "defaultUnchosen": 0,
+            "notThePersons": 0.5,
+            "person": 0.5
+          },
+          "noPeriodCall": {
+            "runs": 0,
+            "of": 2,
+            "asksInProse": 0
+          },
+          "window": {
+            "of": 2,
+            "statesRan": 1,
+            "statesOther": 0
+          },
+          "names": {
+            "calls": 2,
+            "said": 2,
+            "fromResult": 0,
+            "nobodySaid": 0
+          },
+          "facts": {
+            "of": 2,
+            "mean": 1
+          },
+          "toolCalls": {
+            "perRun": 1,
+            "refused": 0,
+            "failed": 0
+          },
+          "llm": {
+            "callsPerRun": 2,
+            "inputPerCall": 44.5,
+            "outputPerCall": 7
+          },
+          "usd": 0,
+          "meant": {
+            "of": 2,
+            "meant": 1
+          },
+          "standing": {
+            "not-assessed": 2
+          },
+          "reasons": {},
+          "periodRuns": 2,
+          "argumentReasonRuns": 0,
+          "askedRuns": 0,
+          "argumentRows": {
+            "total": 0,
+            "admittedDefaults": 0,
+            "asked": 0
+          },
+          "stoppedEarly": 0,
+          "mockExhausted": 0
+        },
+        "c2-list-services": {
+          "runs": 2,
+          "complete": 2,
+          "periodCalls": 0,
+          "classes": {
+            "person": 0,
+            "contradicts": 0,
+            "default-unchosen": 0,
+            "model-chosen": 0
+          },
+          "defaultUnchosenBy": {
+            "omitted": 0,
+            "sent": 0
+          },
+          "rates": {},
+          "noPeriodCall": {
+            "runs": 0,
+            "of": 0,
+            "asksInProse": 0
+          },
+          "window": {
+            "of": 0,
+            "statesRan": 0,
+            "statesOther": 0
+          },
+          "names": {
+            "calls": 0,
+            "said": 0,
+            "fromResult": 0,
+            "nobodySaid": 0
+          },
+          "facts": {
+            "of": 0
+          },
+          "toolCalls": {
+            "perRun": 0.5,
+            "refused": 0,
+            "failed": 0
+          },
+          "llm": {
+            "callsPerRun": 1.5,
+            "inputPerCall": 35.666666666666664,
+            "outputPerCall": 8.666666666666666
+          },
+          "usd": 0,
+          "meant": {
+            "of": 0,
+            "meant": 0
+          },
+          "standing": {
+            "consistent": 1,
+            "not-assessed": 1
+          },
+          "reasons": {},
+          "periodRuns": 0,
+          "argumentReasonRuns": 0,
+          "askedRuns": 0,
+          "argumentRows": {
+            "total": 0,
+            "admittedDefaults": 0,
+            "asked": 0
+          },
+          "stoppedEarly": 0,
+          "mockExhausted": 0
+        }
+      }
+    }
+  }
+}
