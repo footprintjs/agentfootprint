@@ -289,7 +289,7 @@ the model sounded:
 | `ask` | the run paused on a question still waiting for a person — a typed input, an `askHuman`, a check-in or a middleware ask |
 | `not-assessed` | nothing the record holds could be checked |
 
-`agent.assessment()` folds the last run; `assessAnswer(recording)` from
+`await agent.assessment()` folds the last run; `assessAnswer(recording)` from
 `agentfootprint/observe` folds a saved one — the same fold over the same
 committed rows, so the two agree:
 
@@ -331,7 +331,7 @@ Gotchas:
 - **A paused run reads `ask` from its record alone** — every kind of pause,
   from the committed state the pause leaves. No checkpoint is needed.
 - **No answer, no standing.** After a run that threw, or whose answer a rule
-  refused, `agent.assessment()` returns `undefined`, and the account's "How sure"
+  refused, `agent.assessment()` resolves to `undefined`, and the account's "How sure"
   says the record shows no answer. `assessAnswer` cannot tell a crash from the
   committed state, so check how the run ended before you fold its recording.
 - **It measures claims within the record, not truth.** A tool that misstates

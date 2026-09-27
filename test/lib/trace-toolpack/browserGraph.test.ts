@@ -134,6 +134,14 @@ describe.skipIf(!built)('the default browser graph of the root entry', () => {
     expect(graph.dynamicInputs.has('dist/esm/core/agent/findings/peel.js')).toBe(true);
   });
 
+  it('LAW: the standing fold is off the root sync closure — `agent.assessment()` loads it on first use', async () => {
+    // A reader nobody calls during a run: `Agent` reaches it only through `import()`.
+    const graph = await splitGraph(resolve(DIST, 'index.js'));
+    expect(graph.syncInputs.has('dist/esm/core/Agent.js')).toBe(true);
+    expect(graph.syncInputs.has('dist/esm/core/agent/assessment/assess.js')).toBe(false);
+    expect(graph.dynamicInputs.has('dist/esm/core/agent/assessment/assess.js')).toBe(true);
+  });
+
   it('contrast: the /observe door carries the pack statically, by design', async () => {
     const graph = await splitGraph(resolve(DIST, 'observe.js'));
     expect(graph.syncInputs.has(PACK)).toBe(true);

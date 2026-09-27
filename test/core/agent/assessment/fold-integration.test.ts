@@ -80,7 +80,7 @@ async function foldOf(
   await agent.run({ message });
   const recording = JSON.parse(JSON.stringify(recorder.toRecording())) as Recording;
   recorder.stop();
-  const live = agent.assessment()!;
+  const live = (await agent.assessment())!;
   const saved = assessAnswer(recording);
   // One fold, two readers: the running agent and a later reader of the saved bytes agree.
   expect(saved).toEqual(live);
@@ -480,7 +480,7 @@ describe('EDGE — how the turn ended: a pause of every kind, a run that threw',
     const recording = JSON.parse(JSON.stringify(recorder.toRecording())) as Recording;
     recorder.stop();
     expect(agent.getLastSnapshot()).toBeDefined(); // there IS a record — just no answer on it
-    expect(agent.assessment()).toBeUndefined();
+    expect(await agent.assessment()).toBeUndefined();
     const account = accountForAnswer(recording);
     expect(account.facts.standing).toMatchObject({ value: null, status: 'not-recorded' });
     expect(howSureOf(recording)[0]).toBe(
@@ -510,7 +510,7 @@ describe('EDGE — how the turn ended: a pause of every kind, a run that threw',
     );
     const recording = JSON.parse(JSON.stringify(recorder.toRecording())) as Recording;
     recorder.stop();
-    expect(agent.assessment()).toBeUndefined(); // the caller got an error, not an answer
+    expect(await agent.assessment()).toBeUndefined(); // the caller got an error, not an answer
     // The record holds the refused answer (its turn_end), and the reasons name the refusal.
     expect(recording.events.some((e) => e.type === 'agentfootprint.agent.turn_end')).toBe(true);
     expect(reasons(assessAnswer(recording))).toEqual(['value-survived-revision']);
@@ -540,7 +540,7 @@ describe('EDGE — how the turn ended: a pause of every kind, a run that threw',
       .build();
     const failed = await agent.run({ message: 'what runs on host-9?' }).catch((e: unknown) => e);
     if (!(failed instanceof RunCheckpointError)) throw new Error('expected a checkpoint error');
-    expect(agent.assessment()).toBeUndefined(); // the failed leg has no answer
+    expect(await agent.assessment()).toBeUndefined(); // the failed leg has no answer
     const recorder = recordRun(agent);
     const answer = await agent.resumeOnError(failed.checkpoint);
     const recording = JSON.parse(JSON.stringify(recorder.toRecording())) as Recording;
@@ -549,7 +549,7 @@ describe('EDGE — how the turn ended: a pause of every kind, a run that threw',
     // The checkpoint carries history, not `coverageDeclared` — the row is gone, the envelope is not.
     const state = agent.getLastSnapshot()!.sharedState as { coverageDeclared?: unknown };
     expect(state.coverageDeclared).toBeUndefined();
-    const live = agent.assessment()!;
+    const live = (await agent.assessment())!;
     expect(live.standing).toBe('not-sure');
     expect(reasons(live)).toEqual(['coverage-gap', 'declared-absent']);
     expect(assessAnswer(recording)).toEqual(live);
@@ -587,7 +587,7 @@ describe('EDGE — a typed ask, a resumed leg, a continued conversation', () => 
     if (!isInputPause(paused as never)) throw new Error('expected an input pause');
     const checkpoint = (paused as { checkpoint: unknown }).checkpoint;
 
-    const live = agent.assessment()!;
+    const live = (await agent.assessment())!;
     expect(live.standing).toBe('ask');
     expect(reasons(live)).toEqual(['asked', 'empty-undeclared']);
     // One fold, every carrier: the saved recording ALONE, the checkpoint alone, or both.
@@ -619,7 +619,7 @@ describe('EDGE — a typed ask, a resumed leg, a continued conversation', () => 
     const resumed = assessAnswer(leg);
     expect(resumed.turnFrom).toBe('person');
     expect(reasons(resumed)).toEqual(['empty-undeclared']); // c0's [] from before the pause
-    expect(agent.assessment()).toEqual(resumed);
+    expect(await agent.assessment()).toEqual(resumed);
   });
 
   it('a continued conversation: an earlier turn’s empty result is not this answer’s', async () => {
@@ -636,15 +636,15 @@ describe('EDGE — a typed ask, a resumed leg, a continued conversation', () => 
       .tool(lookup('list_ports', () => (call++ === 0 ? [] : [{ port: 3 }])))
       .build();
     await agent.run({ message: 'which ports are down?' });
-    expect(reasons(agent.assessment()!)).toEqual(['empty-undeclared']);
+    expect(reasons((await agent.assessment())!)).toEqual(['empty-undeclared']);
     await agent.run({ message: 'and now?', continueFrom: agent.checkpoint()! } as never);
-    const turn2 = agent.assessment()!;
+    const turn2 = (await agent.assessment())!;
     expect(turn2.standing).toBe('consistent');
     expect(turn2.checked.find((c) => c.check === 'result-shape')).toMatchObject({ ran: 1, of: 1 });
   });
 
-  it('before any run there is nothing to assess', () => {
+  it('before any run there is nothing to assess', async () => {
     const agent = Agent.create({ provider: mock({ reply: 'x' }), model: 'mock' }).build();
-    expect(agent.assessment()).toBeUndefined();
+    expect(await agent.assessment()).toBeUndefined();
   });
 });

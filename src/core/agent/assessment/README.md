@@ -6,7 +6,7 @@ confidence, and "known" needs a row that supports it.
 ```ts
 import { assessAnswer } from 'agentfootprint/observe';
 
-const a = agent.assessment();            // the last run — or, from a saved recording:
+const a = await agent.assessment();      // the last run — or, from a saved recording:
 const b = assessAnswer(recording);       // the same fold over the same committed rows
 a?.standing;                             // 'not-sure'
 a?.reasons.map((r) => r.reason);         // ['empty-undeclared']
@@ -66,7 +66,7 @@ row the run filed, and the fold must not read that as silence:
 ```ts
 // agent.run() → find_vm returns absent({ …, notChecked: ['powered-off VMs'] }) → the provider
 // fails → agent.resumeOnError(cp) → list_hosts returns rows → 'No VMs are hosted on host-9.'
-agent.assessment()?.reasons.map((r) => r.reason); // ['coverage-gap', 'declared-absent']
+(await agent.assessment())?.reasons.map((r) => r.reason); // ['coverage-gap', 'declared-absent']
 // The checkpoint carried the history (the envelope) and not `coverageDeclared` (the row).
 ```
 
@@ -94,7 +94,7 @@ it, and no checkpoint is needed:
 
 ```ts
 const out = await agent.run({ message: 'shut the down port' }); // a tool called askHuman(...)
-agent.assessment()?.standing;           // 'ask'
+(await agent.assessment())?.standing;   // 'ask'
 assessAnswer(recording).standing;       // 'ask' — the saved recording alone
 accountForAnswer(recording).facts.standing.value; // 'ask'
 ```
@@ -126,7 +126,7 @@ accountForAnswer(recording).facts.standing.value; // 'ask'
 | RECORD | existing committed keys only — nothing new is written |
 | RESOLVE | label only: the fold never asks, refuses or rewrites |
 | FOLD | `assess.ts` · `assessAnswer` — pure, committed rows only, one function for every reader |
-| SERVE | data: `agent.assessment()`, `assessAnswer` on `agentfootprint/observe`; the answer account's "How sure" row (`lib/answer-account/facts/howSure.ts` · `readHowSure`). Nothing reaches the model |
+| SERVE | data: `agent.assessment()` (async: it loads this fold through `import()` on first use, so an agent that never asks does not carry it — pinned by `test/lib/trace-toolpack/browserGraph.test.ts`), `assessAnswer` on `agentfootprint/observe`; the answer account's "How sure" row (`lib/answer-account/facts/howSure.ts` · `readHowSure`). Nothing reaches the model |
 | ARM + MEASURE | none — a reader: nothing runs inside a run, so every run's bytes are what they were; this README's last section |
 
 ## Parity with the study's RQ3 rule
@@ -154,7 +154,7 @@ it at the study's freeze (adopted Q12).
   needs each verdict commits one row, and its reason joins `REASONS` then.
 - **A run that threw, read by `assessAnswer` directly.** No committed row says a
   turn ended in an error in this version, so the fold folds what the crashed run
-  left, as if it had answered. `agent.assessment()` (which knows) returns
+  left, as if it had answered. `agent.assessment()` (which knows) resolves to
   `undefined` and the answer account (which reads the recording's `turn_end`)
   says the record shows no answer; a caller of `assessAnswer` checks the run's
   outcome first. The committed row that settles it arrives with the answer

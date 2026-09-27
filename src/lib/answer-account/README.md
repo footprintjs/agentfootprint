@@ -55,7 +55,7 @@ fold, and they are the only ones the row settles itself:
   stopped it before it answered, or the recording ends early): the row says
   "How sure cannot be told: this record does not show the run giving an
   answer." — no standing is folded for an answer that does not exist
-  (`agent.assessment()` returns `undefined` there).
+  (`agent.assessment()` resolves to `undefined` there).
 
 Fixture A was reduced before the fold existed: its state keeps `history` but not
 `coverageDeclared`. The fold never rebuilds that row from the events, but the

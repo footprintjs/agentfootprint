@@ -68,13 +68,13 @@ describe('BYTE-IDENTITY — asking never changes a run', () => {
 
     const before = JSON.stringify(asked.getLastSnapshot());
     const commits = asked.getCommitCount();
-    const standing = asked.assessment();
+    const standing = await asked.assessment();
     expect(standing?.standing).toBe('not-sure');
     expect(asked.getCommitCount()).toBe(commits); // no commit
     expect(JSON.stringify(asked.getLastSnapshot())).toBe(before); // no write
 
     await asked.run({ message: 'and now?', continueFrom: asked.checkpoint()! } as never);
-    asked.assessment();
+    await asked.assessment();
     await quiet.run({ message: 'and now?', continueFrom: quiet.checkpoint()! } as never);
     expect(committed(asked)).toEqual(committed(quiet));
   });

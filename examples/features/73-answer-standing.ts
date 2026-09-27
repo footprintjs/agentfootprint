@@ -70,7 +70,7 @@ async function standingOf(execute: () => unknown, message: string) {
   const saved = JSON.parse(JSON.stringify(recorder.toRecording()));
   recorder.stop();
 
-  const live = agent.assessment()!; // the last run, folded from its committed record
+  const live = (await agent.assessment())!; // the last run, folded from its committed record
   const later = assessAnswer(saved); // …and the same fold over the saved recording
   check(JSON.stringify(live) === JSON.stringify(later), 'the live and the saved folds to agree');
   return live;

@@ -166,7 +166,6 @@ import { CompactionUnmeasurableError } from './agent/window/errors.js';
 import type { WindowStrategy } from './agent/window/strategy.js';
 import type { FoldedSpan } from './agent/window/types.js';
 import type { FindingsLedger } from './agent/findings/types.js';
-import { assessAnswer } from './agent/assessment/assess.js';
 import type { AnswerAssessment, AssessmentDeclarations } from './agent/assessment/types.js';
 import {
   isCheckInDecision,
@@ -3624,41 +3623,42 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
    * How far the last run's answer stands — folded from its COMMITTED record,
    * never from how sure the model sounded: `known` · `consistent` (checks ran,
    * none fired — never "verified") · `not-sure` (with the reasons) · `ask` (the
-   * run paused on a question still waiting for a person — a typed input, an
-   * `askHuman`, a check-in or a middleware ask) · `not-assessed` (nothing on
-   * the record could be checked).
+   * run paused on a question still waiting for a person) · `not-assessed`
+   * (nothing on the record could be checked).
    *
    * The same pure fold as `assessAnswer` on `agentfootprint/observe`, over this
-   * agent's last snapshot. It reads committed state, never events — the pause
-   * too — so a later reader of the same recording folds the same standing.
+   * agent's last snapshot; it reads committed state, never events, so a later
+   * reader of the same recording folds the same standing. It resolves
+   * asynchronously because the fold is loaded through `import()` on first use —
+   * an agent that never asks does not carry it.
    *
-   * `undefined` when there is no answer to assess: before the first run, while
-   * a run is in flight, and after a run that returned no answer and asked no
-   * question — it threw, or a rule refused its answer (the typed error carries
-   * that verdict). The answer account, which explains the answer the RECORD
-   * holds, still renders a refused answer's standing.
+   * Resolves to `undefined` when there is no answer to assess: before the first
+   * run, while a run is in flight, and after a run that threw or whose answer a
+   * rule refused (the typed error carries that verdict).
    *
-   * `declarations` is the answer account's object — any
-   * `AnswerAccountDeclarations` is accepted as it is: the fold reads
-   * `tools[name].rowsAt`, where an object result keeps its rows.
+   * `declarations` is the answer account's object, accepted as it is: the fold
+   * reads `tools[name].rowsAt`, where an object result keeps its rows.
    *
    * @example
    * ```ts
    * await agent.run({ message: 'Which ports on switch A are down?' });
-   * const a = agent.assessment();
+   * const a = await agent.assessment();
    * if (a?.standing === 'not-sure') {
    *   for (const r of a.reasons) console.log(r.reason); // e.g. 'empty-undeclared'
    * }
    * ```
    */
-  assessment(declarations?: AssessmentDeclarations): AnswerAssessment | undefined {
+  async assessment(declarations?: AssessmentDeclarations): Promise<AnswerAssessment | undefined> {
     const snapshot = this.getLastSnapshot();
     if (snapshot === undefined) return undefined;
     // Settled before the fold, which cannot tell a crash from its committed state: an answer
     // this run RETURNED (`lastRunAnswer`, cleared at every run's start), or a pause — the fold
-    // reads that one from the committed state itself.
+    // reads that one from the committed state itself. Read BEFORE the import resolves, so a
+    // run started meanwhile cannot change which run is assessed.
     const paused = this.lastExecutor?.isPaused() === true;
     if (!paused && this.lastRunAnswer === undefined) return undefined;
+    // Loaded on first use, off the default graph (the findings/peel.ts precedent).
+    const { assessAnswer } = await import('./agent/assessment/assess.js');
     return assessAnswer({ snapshot }, declarations);
   }
 
