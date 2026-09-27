@@ -25,12 +25,12 @@
  *
  * - `state` — a leaf of a committed key of the run's `sharedState`
  *   (`coverageDeclared`, `findingsLedger`, `unsupportedValues`,
- *   `stoppedEarly`, `answerValidation`);
- * - `history` — a leaf of one `history` message (a tool result, by index);
- * - `checkpoint` — a leaf of the paused run's checkpoint (a pending ask).
+ *   `stoppedEarly`, `answerValidation`, and `pausedToolCallId` for a pause);
+ * - `history` — a leaf of one `history` message (a tool result, by index).
  *
  * Always a LEAF (a string, a number), never a whole row, so "show me" can show
- * the pointer without showing the row.
+ * the pointer without showing the row. Every witness is in a saved recording:
+ * the fold reads nothing a recording does not carry.
  */
 export type AssessmentPointer =
   | { readonly kind: 'state'; readonly key: string; readonly path: string }
@@ -39,8 +39,7 @@ export type AssessmentPointer =
       readonly index: number;
       readonly path: string;
       readonly toolCallId?: string;
-    }
-  | { readonly kind: 'checkpoint'; readonly path: string };
+    };
 
 /**
  * Why the answer does not stand as "known" or "consistent" — a CLOSED union,
@@ -48,12 +47,15 @@ export type AssessmentPointer =
  * row, the layer and the class). Readers skip a member they do not know: the
  * union grows as later honesty steps add rows (the coverage `kind` precedent).
  *
- * - `asked` — the turn ended in a typed ask still waiting for its answer (a
- *   tool's own `requestInput`), read from the paused run's checkpoint;
+ * - `asked` — the turn ended in a pause still waiting for a person: a typed
+ *   input (`requestInput`), a question (`askHuman` / `pauseHere`), a consent
+ *   gate (a tool's `checkIn`, a middleware's `ask`) or a credential consent —
+ *   read from the committed state the pause leaves (`pausedToolCallId`);
  * - `declared-absent` — a tool declared that nothing matched: an `absent()`,
  *   or an empty rowset inside a declared `coverage()` boundary;
  * - `coverage-gap` — a tool declared ground it did not check or can never
- *   cover (`notChecked`, `cannotCover`);
+ *   cover (`notChecked`, `cannotCover`) — on its coverage row, or, when the
+ *   record holds no row for the call, in the result's own envelope;
  * - `empty-undeclared` — an empty rowset that said nothing about what it
  *   searched: silence recorded as silence;
  * - `sources-conflict` — two readings the model stood on disagree (a
@@ -155,24 +157,26 @@ export interface AnswerAssessment {
 
 /**
  * The committed record the fold reads — a recording (`recordRun`), a snapshot
- * (`agent.getLastSnapshot()`), and/or a paused run's checkpoint.
+ * (`agent.getLastSnapshot()`), or a paused run's checkpoint.
  */
 export interface AssessmentRecord {
   /** The run's snapshot — `recording.snapshot`, `agent.getLastSnapshot()`. Its `sharedState` is read. */
   readonly snapshot?: unknown;
   /**
-   * The paused run's checkpoint (`RunnerPauseOutcome.checkpoint`), when the
-   * turn ended in a pause: a typed ask still waiting is read from its
-   * `pauseData`, never from an event, and its `sharedState` stands in when no
-   * snapshot is given.
+   * A paused run's checkpoint (`RunnerPauseOutcome.checkpoint`) — for a host
+   * that kept only that: its `sharedState` is read when no snapshot is given.
+   * Never needed to read the pause itself: the pause is in the committed state
+   * (`pausedToolCallId`), which the snapshot, the checkpoint and a saved
+   * recording all carry, so the fold says `ask` with or without it.
    */
   readonly checkpoint?: unknown;
 }
 
 /**
- * What the APP declares when the fold runs — not on the record. The same
- * object the answer account takes (`AnswerAccountDeclarations`); the fold
- * reads only `tools[name].rowsAt`, where an OBJECT-shaped result keeps its rows.
+ * What the APP declares when the fold runs — not on the record. Any
+ * `AnswerAccountDeclarations` (the answer account's object, exported on the
+ * observe door) is accepted as it is; the fold reads only
+ * `tools[name].rowsAt`, where an OBJECT-shaped result keeps its rows.
  */
 export interface AssessmentDeclarations {
   readonly tools?: Readonly<Record<string, { readonly rowsAt?: string }>>;

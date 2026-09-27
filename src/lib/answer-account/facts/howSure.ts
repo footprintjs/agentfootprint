@@ -6,7 +6,10 @@
  *     committed state — known · consistent with the record · not sure (with the
  *     reasons) · ask · not assessed — never read from this recording's events,
  *     and never "known" from silence. The lines below stay facts beside it; the
- *     standing is the only verdict, and it is the fold's, not this row's;
+ *     standing is the only verdict, and it is the fold's, not this row's. The
+ *     one thing this row settles FIRST, from the events it may read: a record
+ *     that shows no answer (no `turn_end`) and no pause gets no standing at all
+ *     — there is no answer to rate;
  *   - the model's pre-call expectation (`findings.declared`) — "how useful it
  *     expected the result to be", never a confidence — and, beside it, the
  *     call's outcome as its own fact (a declared absence can BE the direct,
@@ -208,9 +211,9 @@ function evidenceLines(ctx: ReadContext, e: ViewEvent, fact: EvidenceFact): Sent
 /** The account's standing fact: the owner's word, or "not recorded" when no committed state is. */
 type StandingFact = AnswerFacts['standing'];
 
-/** Witness rows the account can point at (a checkpoint is never in a recording). */
+/** Witness rows as the account's pointers — the fold's witnesses are all in the recording. */
 function pointersOf(witness: readonly AssessmentPointer[]): RecordPointer[] {
-  return witness.flatMap((w): RecordPointer[] => (w.kind === 'checkpoint' ? [] : [w]));
+  return [...witness];
 }
 
 const REASON_LINES: Readonly<Record<AssessmentReason, TemplateId>> = {
@@ -234,6 +237,47 @@ const COUNTED: ReadonlySet<AssessmentReason> = new Set([
   'sources-conflict',
 ]);
 
+/**
+ * The counted lines whose count is CALLS ("1 call declared …"), not rows: one
+ * `coverage(absent(…))` files a boundary row AND an absence row, and both can
+ * list a gap — one call, two rows. A conflict line counts conflicts (rows).
+ */
+const COUNTS_CALLS: ReadonlySet<AssessmentReason> = new Set([
+  'coverage-gap',
+  'declared-absent',
+  'empty-undeclared',
+]);
+
+/** The call a committed row names — the row a state witness points into (`/<index>/…`). */
+function rowCallId(
+  state: Readonly<Record<string, unknown>>,
+  w: { readonly key: string; readonly path: string },
+): string | undefined {
+  const rows = state[w.key];
+  const index = Number(w.path.split('/')[1]);
+  const row = Array.isArray(rows) && Number.isInteger(index) ? rows[index] : undefined;
+  return isRecord(row) ? str(row.toolCallId) : undefined;
+}
+
+/**
+ * How many calls a reason's witnesses stand for: a coverage row names its call,
+ * a result carries its call id, and a witness that names no call counts on its
+ * own — never merged into another (the fold's own rule for the calls of a turn).
+ */
+function callsBehind(
+  witness: readonly AssessmentPointer[],
+  state: Readonly<Record<string, unknown>>,
+): number {
+  const ids = new Set<string>();
+  let unnamed = 0;
+  for (const w of witness) {
+    const id = w.kind === 'history' ? w.toolCallId : rowCallId(state, w);
+    if (id === undefined) unnamed += 1;
+    else ids.add(id);
+  }
+  return ids.size + unnamed;
+}
+
 const CHECK_LINES: Readonly<Record<AssessmentCheck, TemplateId>> = {
   'tool-coverage': 'howSure.check.toolCoverage',
   'result-shape': 'howSure.check.resultShape',
@@ -241,33 +285,48 @@ const CHECK_LINES: Readonly<Record<AssessmentCheck, TemplateId>> = {
   'answer-checks': 'howSure.check.answerChecks',
 };
 
+/** A standing this record cannot give — said so, with the one template that says why. */
+function noStanding(
+  ctx: ReadContext,
+  id: 'howSure.standing.none' | 'howSure.standing.noAnswer',
+): { lines: Sentence[]; fact: StandingFact } {
+  return {
+    lines: [
+      ctx.say(id, {
+        status: 'not-recorded',
+        missing: 'no-event',
+        chips: [chip('not-recorded', 'chip.notRecorded')],
+      }),
+    ],
+    fact: {
+      value: null,
+      source: 'library',
+      status: 'not-recorded',
+      pointers: [],
+      missing: 'no-event',
+    },
+  };
+}
+
 /**
  * The answer's standing — the ONE fold (`core/agent/assessment/assess.ts` ·
  * `assessAnswer`) over the run's committed state, rendered. The fold reads
- * committed rows only, never this recording's events, so the account and every
- * other reader of the same run say the same standing.
+ * committed state only, never this recording's events — a pause included (the
+ * state it leaves) — so the account says the word `agent.assessment()` says
+ * about the same run. Settled first, from the events: a record with no answer
+ * (no `turn_end`) that did not end in a pause gets no standing — the run threw,
+ * a rule stopped it before it answered, or the recording ends early, and the
+ * fold cannot tell those from the committed state (`agent.assessment()`
+ * returns `undefined` there). A refused answer still has a `turn_end`: the
+ * account rates the answer the record holds.
  */
 function standingLines(ctx: ReadContext): { lines: Sentence[]; fact: StandingFact } {
   const state = ctx.view.state;
-  if (state === undefined) {
-    return {
-      lines: [
-        ctx.say('howSure.standing.none', {
-          status: 'not-recorded',
-          missing: 'no-event',
-          chips: [chip('not-recorded', 'chip.notRecorded')],
-        }),
-      ],
-      fact: {
-        value: null,
-        source: 'library',
-        status: 'not-recorded',
-        pointers: [],
-        missing: 'no-event',
-      },
-    };
-  }
+  if (state === undefined) return noStanding(ctx, 'howSure.standing.none');
   const a = assessAnswer({ snapshot: { sharedState: state } }, ctx.declarations);
+  if (a.standing !== 'ask' && ctx.view.last('agent.turn_end') === undefined) {
+    return noStanding(ctx, 'howSure.standing.noAnswer');
+  }
   const reasonPointers = pointersOf(a.reasons.flatMap((r) => r.witness));
   const ran = a.checked.filter((c) => c.ran > 0);
   const lines: Sentence[] = [];
@@ -301,7 +360,11 @@ function standingLines(ctx: ReadContext): { lines: Sentence[]; fact: StandingFac
         }),
         ...a.reasons.map((r) =>
           ctx.say(REASON_LINES[r.reason], {
-            ...(COUNTED.has(r.reason) && { vars: { n: n(r.witness.length) } }),
+            ...(COUNTED.has(r.reason) && {
+              vars: {
+                n: n(COUNTS_CALLS.has(r.reason) ? callsBehind(r.witness, state) : r.witness.length),
+              },
+            }),
             ...recordedAt(pointersOf(r.witness)),
             item: true,
           }),
@@ -329,7 +392,7 @@ function standingLines(ctx: ReadContext): { lines: Sentence[]; fact: StandingFac
   };
 }
 
-/** A line is `recorded` only when it points into the record — a pending ask lives in the checkpoint, not here. */
+/** A line is `recorded` only when it points into the record. */
 function recordedAt(pointers: readonly RecordPointer[]): {
   pointers: readonly RecordPointer[];
   status?: 'not-recorded';

@@ -12,7 +12,7 @@ It did not check:
 It found:
   No tool ran for this answer.  ⟨found.noCalls@1 · library · recorded⟩
 How sure:
-  Not assessed — the run's committed record holds no verdict the standing can rest on.  ⟨howSure.standing.notAssessed@1 · library · not-applicable⟩
+  Not assessed — this record's committed state holds no verdict the standing can rest on.  ⟨howSure.standing.notAssessed@1 · library · not-applicable⟩
   The library was not set to check the answer's names and numbers.  ⟨howSure.evidence.off@1 · library · not-applicable⟩
 Anything wrong:
   None of the checks this report looks for applies to this answer.  ⟨wrong.notApplicable@1 · library · not-applicable⟩

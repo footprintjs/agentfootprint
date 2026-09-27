@@ -3624,17 +3624,23 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
    * How far the last run's answer stands — folded from its COMMITTED record,
    * never from how sure the model sounded: `known` · `consistent` (checks ran,
    * none fired — never "verified") · `not-sure` (with the reasons) · `ask` (the
-   * turn ended in a typed ask still waiting) · `not-assessed` (nothing on the
-   * record could be checked).
+   * run paused on a question still waiting for a person — a typed input, an
+   * `askHuman`, a check-in or a middleware ask) · `not-assessed` (nothing on
+   * the record could be checked).
    *
    * The same pure fold as `assessAnswer` on `agentfootprint/observe`, over this
-   * agent's last snapshot — and, when the last run paused, its checkpoint, so a
-   * question still waiting is read. It reads rows, never events, so a later
-   * reader of the same recording folds the same standing. `undefined` before
-   * the first run.
+   * agent's last snapshot. It reads committed state, never events — the pause
+   * too — so a later reader of the same recording folds the same standing.
    *
-   * `declarations` is the answer account's object (`AnswerAccountDeclarations`):
-   * the fold reads `tools[name].rowsAt`, where an object result keeps its rows.
+   * `undefined` when there is no answer to assess: before the first run, while
+   * a run is in flight, and after a run that returned no answer and asked no
+   * question — it threw, or a rule refused its answer (the typed error carries
+   * that verdict). The answer account, which explains the answer the RECORD
+   * holds, still renders a refused answer's standing.
+   *
+   * `declarations` is the answer account's object — any
+   * `AnswerAccountDeclarations` is accepted as it is: the fold reads
+   * `tools[name].rowsAt`, where an object result keeps its rows.
    *
    * @example
    * ```ts
@@ -3648,12 +3654,12 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
   assessment(declarations?: AssessmentDeclarations): AnswerAssessment | undefined {
     const snapshot = this.getLastSnapshot();
     if (snapshot === undefined) return undefined;
-    const executor = this.lastExecutor;
-    const checkpoint = executor?.isPaused() === true ? executor.getCheckpoint() : undefined;
-    return assessAnswer(
-      { snapshot, ...(checkpoint !== undefined && { checkpoint }) },
-      declarations,
-    );
+    // Settled before the fold, which cannot tell a crash from its committed state: an answer
+    // this run RETURNED (`lastRunAnswer`, cleared at every run's start), or a pause — the fold
+    // reads that one from the committed state itself.
+    const paused = this.lastExecutor?.isPaused() === true;
+    if (!paused && this.lastRunAnswer === undefined) return undefined;
+    return assessAnswer({ snapshot }, declarations);
   }
 
   private finalizeResult(

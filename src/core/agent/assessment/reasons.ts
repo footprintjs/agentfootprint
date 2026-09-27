@@ -7,7 +7,8 @@
  * Role:    core/ layer leaf, pure data.
  *
  * THE CLASS. `ask` is a reason the person can settle by answering a question
- * the run already put to them — the turn ENDED in a typed ask. Every other
+ * the run already put to them — the turn ENDED in a pause waiting on a
+ * person's reply (a typed input, a question, a consent gate). Every other
  * reason is `not-sure`: the library cannot ask at the answer (the call that
  * could have used an answer has already run, and the library never replaces
  * the model's reply with a question), so an absence renders "not sure — what
@@ -39,20 +40,22 @@ export const REASONS: readonly ReasonEntry[] = Object.freeze([
   {
     reason: 'asked',
     class: 'ask',
-    reads: "the paused run's checkpoint: pauseData.awaitingInput (a tool's own requestInput)",
+    reads:
+      'pausedToolCallId: the call a pause is still waiting on (requestInput, askHuman / pauseHere, a checkIn, a middleware ask, a credential consent)',
   },
   {
     reason: 'coverage-gap',
     layer: 3,
     class: 'not-sure',
-    reads: 'coverageDeclared: a notChecked or cannotCover item on a call of this turn',
+    reads:
+      "coverageDeclared: a notChecked or cannotCover item on a call of this turn; or history: the result's own envelope lists one, when its call has no coverage row",
   },
   {
     reason: 'declared-absent',
     layer: 3,
     class: 'not-sure',
     reads:
-      'coverageDeclared: an absence on a call of this turn; or history: an empty rowset inside a declared coverage() boundary (the one emptiness reader)',
+      "coverageDeclared: an absence on a call of this turn; or history: an empty rowset inside a declared coverage() boundary, or an absence in the result's own envelope when its call has no coverage row (the one emptiness reader)",
   },
   {
     reason: 'empty-undeclared',

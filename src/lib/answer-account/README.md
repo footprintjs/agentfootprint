@@ -37,20 +37,37 @@ pinned in `test/lib/answer-account/golden/turn2.A.txt`:
 |                | The app's scoring put it first: 1 against 0 for every other skill.            | app                           |
 | It checked     | get_array_inventory says it checked: • …                                      | tool:get_array_inventory      |
 | It found       | get_array_inventory looked for a VM disk … and found none.                    | tool:get_array_inventory      |
-| How sure       | Not assessed — the run's committed record holds no verdict the standing can rest on. | library (not applicable) |
+| How sure       | Not sure — the record holds 2 reasons this answer may not stand: • 1 call declared ground it did not check or can never cover. • 1 call declared that nothing matched. | library |
 | Anything wrong | 1 of the 3 checks could not be run on this record.                            | library                       |
 
 The "How sure" row opens with the answer's STANDING — the one fold,
 `core/agent/assessment/assess.ts` · `assessAnswer`, over the recording's
 committed state (never its events): known · consistent with the record · not
-sure (each reason a line) · ask · not assessed. Fixture A reads "not assessed"
-because it was reduced before the fold existed: its state keeps `history` but not
-`coverageDeclared`, so the absence the events show is not on the rows the fold
-reads (`test/core/agent/assessment/fold-real-record.test.ts` restores the row
-and the same record reads "not sure"). Every result — here and in the standing —
-is read by the ONE emptiness reader, `core/agent/coverage/emptiness.ts` ·
-`readEmptiness`, handed the door this record holds for the call, so the account
-and the standing cannot disagree about what came back.
+sure (each reason a line, counting CALLS — one `coverage(absent(…))` files two
+rows and is one call) · ask · not assessed. Two cases are settled before the
+fold, and they are the only ones the row settles itself:
+
+- the run PAUSED (any kind — a typed input, `askHuman`, a check-in, a middleware
+  ask): the fold reads it from the committed state the pause leaves
+  (`pausedToolCallId`), so the row says "Ask — …", the word
+  `agent.assessment()` says;
+- the record shows NO answer and no pause (no `turn_end`: the run threw, a rule
+  stopped it before it answered, or the recording ends early): the row says
+  "How sure cannot be told: this record does not show the run giving an
+  answer." — no standing is folded for an answer that does not exist
+  (`agent.assessment()` returns `undefined` there).
+
+Fixture A was reduced before the fold existed: its state keeps `history` but not
+`coverageDeclared`. The fold never rebuilds that row from the events, but the
+absence envelope the model read is still in the committed `history`, and a call
+with no row is read off its bytes — so the reduced record reads what the full
+one does (`test/core/agent/assessment/fold-real-record.test.ts` pins both).
+Every result — here and in the standing — is read by the ONE emptiness reader,
+`core/agent/coverage/emptiness.ts` · `readEmptiness`. They differ in one place,
+named: for this run's calls "It found" holds the door the EVENTS are, so an
+envelope a tool returned as JSON text that the run never recognized is "returned
+a result" there, while the standing — which holds a door only where a committed
+coverage row is — reads the envelope (it may over-report; it never hides).
 
 ## The laws
 

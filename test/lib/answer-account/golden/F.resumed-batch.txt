@@ -14,7 +14,7 @@ It found:
   third did not run, so it found nothing.  ⟨found.notDispatched@1 · library · recorded⟩
   What the tools found before the pause is not in this record.  ⟨found.beforePause@1 · library · not-recorded · before a pause — not in this record⟩
 How sure:
-  Not assessed — the run's committed record holds no verdict the standing can rest on.  ⟨howSure.standing.notAssessed@1 · library · not-applicable⟩
+  Not assessed — this record's committed state holds no verdict the standing can rest on.  ⟨howSure.standing.notAssessed@1 · library · not-applicable⟩
   The library was not set to check the answer's names and numbers.  ⟨howSure.evidence.off@1 · library · not-applicable⟩
 Anything wrong:
   1 tool call did not run cleanly: 0 failed, 0 refused by a rule, 0 declined by a person, 1 not run.  ⟨wrong.errors@1 · library · recorded⟩

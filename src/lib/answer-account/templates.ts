@@ -253,6 +253,11 @@ export const ANSWER_ACCOUNT_TEMPLATES = Object.freeze({
     'library',
     2,
   ),
+  // No `turn_end` and no pause: the run threw, a rule stopped it before it answered, or the
+  // recording ends early — the record cannot tell those apart, and there is no answer to rate.
+  'howSure.standing.noAnswer': t(
+    'How sure cannot be told: this record does not show the run giving an answer.',
+  ),
   'howSure.standing.known': t("Known — the app's answer checks passed this exact answer."),
   'howSure.standing.consistent': t(
     "Consistent with the run's record — {{count:n,'check','checks'}} ran and none fired. This is not a verification.",
@@ -262,7 +267,7 @@ export const ANSWER_ACCOUNT_TEMPLATES = Object.freeze({
   ),
   'howSure.standing.ask': t('Ask — the run stopped to ask a question before it could answer:'),
   'howSure.standing.notAssessed': t(
-    "Not assessed — the run's committed record holds no verdict the standing can rest on.",
+    "Not assessed — this record's committed state holds no verdict the standing can rest on.",
   ),
   'howSure.check.toolCoverage': t(
     "Tool coverage: {{ran}} of {{count:of,'call','calls'}} declared what they covered.",

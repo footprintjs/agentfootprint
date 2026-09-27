@@ -37,6 +37,12 @@
  *   - `last-lookup` — RQ3's DECLARED-ABSENT reads only the LAST lookup for the
  *     entity; the fold reads every call of the turn ("rests on" in v1), so an
  *     earlier absence still makes it "not sure".
+ *   - `pause-kind` — RQ3's ASKED reads a TYPED ask only (a `pause.request`
+ *     carrying `awaitingInput`); the fold reads every pause the run ended in —
+ *     an `askHuman`, a check-in, a middleware ask — as `ask`, because no answer
+ *     exists yet whichever kind it is (the committed `pausedToolCallId`). A
+ *     turn RQ3 rates FOUND on the rows before an `askHuman` pause, the fold
+ *     rates "ask": it says more, never less.
  *   - NOT exercised: RQ3's "not-read status" clause reads a host's prose status
  *     sentence; neither the library nor this transcription parses prose, and the
  *     study's PLAIN transform removes such statuses anyway.
@@ -50,10 +56,10 @@ import { describe, expect, it } from 'vitest';
 import {
   Agent,
   absent,
+  askHuman,
   coverage,
   defineTool,
   describedResult,
-  isInputPause,
   requestInput,
 } from '../../../../src/index.js';
 import { mock } from '../../../../src/llm-providers.js';
@@ -62,7 +68,7 @@ import type { AnswerAssessment } from '../../../../src/observe.js';
 import type { Recording } from '../../../../src/recorders/observability/recordRun.js';
 
 type Rq3 = 'ASKED' | 'NOT-COVERED' | 'DECLARED-ABSENT' | 'FOUND' | 'UNKNOWN';
-type Difference = 'entity-scope' | 'last-lookup';
+type Difference = 'entity-scope' | 'last-lookup' | 'pause-kind';
 
 // ── the oracle: RQ3, transcribed over recorded EVENTS only ──────────────────
 
@@ -186,6 +192,22 @@ const CASES: readonly Case[] = [
     calls: [{ tool: 'ask_window', entity: 'host-9' }],
     rq3: 'ASKED',
     fold: 'ASKED',
+  },
+  {
+    id: 'D1b rows, then an askHuman question ends the turn (no typed ask)',
+    arm: 'DECLARED',
+    entity: 'host-9',
+    tools: {
+      find_vms: () => rows(2),
+      confirm: () => askHuman({ question: 'Restart these VMs on host-9?' }),
+    },
+    calls: [
+      { tool: 'find_vms', entity: 'host-9' },
+      { tool: 'confirm', entity: 'host-9' },
+    ],
+    rq3: 'FOUND',
+    fold: 'ASKED',
+    difference: 'pause-kind',
   },
   {
     id: 'D2 an absence that names ground it did not check',
@@ -432,21 +454,16 @@ async function turnOf(c: Case): Promise<Turn> {
     .tools(tools)
     .build();
   const recorder = recordRun(agent);
-  const out = await agent.run({ message: `What runs on ${c.entity}?` });
+  await agent.run({ message: `What runs on ${c.entity}?` });
   const recording = JSON.parse(JSON.stringify(recorder.toRecording())) as Recording;
   recorder.stop();
-  // The fold reads the pause from the paused run's checkpoint; RQ3 reads it from the events.
-  const checkpoint = isInputPause(out as never)
-    ? (out as { checkpoint: unknown }).checkpoint
-    : undefined;
+  // Both read the saved recording alone: the fold its committed state (a pause included, the
+  // `pausedToolCallId` it leaves), RQ3 its events.
   const declarations =
     c.rowsKey !== undefined
       ? { tools: { [c.rowsKey.tool]: { rowsAt: c.rowsKey.key } } }
       : undefined;
-  const assessment = assessAnswer(
-    { snapshot: recording.snapshot, ...(checkpoint !== undefined && { checkpoint }) },
-    declarations,
-  );
+  const assessment = assessAnswer(recording, declarations);
   return {
     c,
     rq3: rq3(recording.events as unknown as Ev[], c.entity, c.rowsKey?.key),
@@ -472,10 +489,10 @@ describe('PARITY — the fold against the registered RQ3 rule, over recorded run
     const unexplained = turns.filter((t) => t.rq3 !== t.fold && t.c.difference === undefined);
     expect(unexplained.map((t) => t.c.id)).toEqual([]);
     // A named difference is real (not a mislabelled agreement), and runs in ONE direction: the
-    // fold says more than RQ3 — it may over-report, it never hides.
+    // fold says more than RQ3 — not sure, or ask — it may over-report, it never hides.
     for (const t of turns.filter((x) => x.c.difference !== undefined)) {
       expect(t.fold, t.c.id).not.toBe(t.rq3);
-      expect(t.assessment.standing, t.c.id).toBe('not-sure');
+      expect(['not-sure', 'ask'], t.c.id).toContain(t.assessment.standing);
     }
   });
 
@@ -488,8 +505,9 @@ describe('PARITY — the fold against the registered RQ3 rule, over recorded run
       ASKED: { ASKED: 1, 'NOT-COVERED': 0, 'DECLARED-ABSENT': 0, FOUND: 0, UNKNOWN: 0 },
       'NOT-COVERED': { ASKED: 0, 'NOT-COVERED': 2, 'DECLARED-ABSENT': 0, FOUND: 0, UNKNOWN: 0 },
       'DECLARED-ABSENT': { ASKED: 0, 'NOT-COVERED': 0, 'DECLARED-ABSENT': 3, FOUND: 0, UNKNOWN: 0 },
-      // Three FOUND turns the fold reads as not sure: the two entity-scope cases and last-lookup.
-      FOUND: { ASKED: 0, 'NOT-COVERED': 1, 'DECLARED-ABSENT': 2, FOUND: 3, UNKNOWN: 0 },
+      // Four FOUND turns the fold reads as more: the two entity-scope cases and last-lookup (not
+      // sure), and pause-kind (ask — the turn ended in an askHuman question, so no answer exists).
+      FOUND: { ASKED: 1, 'NOT-COVERED': 1, 'DECLARED-ABSENT': 2, FOUND: 3, UNKNOWN: 0 },
       UNKNOWN: { ASKED: 0, 'NOT-COVERED': 0, 'DECLARED-ABSENT': 0, FOUND: 0, UNKNOWN: 6 },
     });
   });

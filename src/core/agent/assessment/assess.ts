@@ -1,9 +1,9 @@
 /**
  * assess — the answer's standing, folded from the committed record.
  *
- * Pattern: one pure Fold over the Trace. It reads COMMITTED rows only — the
- *          run's `sharedState` and, for a pause, the checkpoint's `pauseData` —
- *          and never an event, so the running agent and every later reader
+ * Pattern: one pure Fold over the Trace. It reads COMMITTED state only — the
+ *          run's `sharedState` (the snapshot's, or a paused run's checkpoint's)
+ *          — and never an event, so the running agent and every later reader
  *          fold the same bytes. No clock, network, model or randomness; the
  *          same inputs give the same bytes; it never writes into the run.
  * Role:    core/ layer, pure. The one owner of the answer's standing: the
@@ -36,11 +36,26 @@
  * calls are left out), and the answer's own rows (`unsupportedValues`,
  * `stoppedEarly`, `answerValidation`). "Rests on" is every call of the turn: it
  * may over-report, it never hides.
+ *
+ * ## How the turn ended
+ *
+ * A turn that ended in a PAUSE has no answer yet: a person's reply is what it
+ * waits on. The fold reads that from the committed state every pause leaves —
+ * `pausedToolCallId`, written by each pause the dispatch loop raises and
+ * cleared by each resume — so a snapshot, a checkpoint and a saved recording
+ * all say it, and every pause kind reads `ask`. A turn that ended in an ERROR
+ * has no answer either, and no committed row says so in this version: the
+ * readers settle that before they fold (`Agent.assessment` returns
+ * `undefined`; the answer account says the record shows no answer).
  */
 
-import { readAwaitingInput } from '../../inputRequest.js';
 import { isSaidByPerson } from '../../../lib/saidByPerson.js';
-import { readEmptiness, rowsAtProblem } from '../coverage/emptiness.js';
+import {
+  declaredByValue,
+  readEmptiness,
+  rowsAtProblem,
+  type ValueDeclaration,
+} from '../coverage/emptiness.js';
 import { REASONS, reasonEntry } from './reasons.js';
 import type {
   AnswerAssessment,
@@ -159,17 +174,6 @@ function coverageRows(state: Readonly<Record<string, unknown>>): readonly Covera
   return out;
 }
 
-/** A typed ask still waiting at the end of the turn — read from the checkpoint, never an event. */
-function pendingAsk(record: AssessmentRecord): boolean {
-  const pauseData = isRecord(record.checkpoint) ? record.checkpoint.pauseData : undefined;
-  try {
-    return readAwaitingInput(pauseData) !== undefined;
-  } catch {
-    // A malformed stored ask is not an ask the record can read — never guessed at.
-    return false;
-  }
-}
-
 const statePointer = (key: string, ...path: readonly (string | number)[]): AssessmentPointer => ({
   kind: 'state',
   key,
@@ -201,10 +205,20 @@ function fire(g: Gathered, reason: AssessmentReason, witness: AssessmentPointer)
   g.fired.set(reason, list);
 }
 
-/** Every layer: a typed ask still waiting at the end of the turn. */
-function readAsk(record: AssessmentRecord, g: Gathered): void {
-  if (pendingAsk(record)) {
-    fire(g, 'asked', { kind: 'checkpoint', path: '/pauseData/awaitingInput/requestId' });
+/**
+ * Every layer: the turn ENDED in a pause still waiting for a person — read from
+ * the committed state the pause leaves (`AgentState.pausedToolCallId`: the
+ * paused call, written by every pause the dispatch loop raises, cleared to `''`
+ * by every resume), never from the pause event or the checkpoint's
+ * `pauseData`. Every kind is the one `asked` reason: a typed input
+ * (`requestInput`), a question (`askHuman` / `pauseHere`), a consent gate (a
+ * tool's `checkIn`, a middleware's `ask`) and a credential consent all wait on
+ * a person's reply, and the answer does not exist until it comes.
+ */
+function readPause(state: Readonly<Record<string, unknown>>, g: Gathered): void {
+  const paused = state.pausedToolCallId;
+  if (typeof paused === 'string' && paused.length > 0) {
+    fire(g, 'asked', statePointer('pausedToolCallId'));
   }
 }
 
@@ -218,48 +232,79 @@ function readCoverageRows(coverage: readonly CoverageRow[], g: Gathered): void {
 }
 
 /**
- * Layer 3, what came back: every result of the turn through the ONE emptiness
- * reader, handed the door its coverage rows are — a marker the run did not
- * recognize is data.
+ * One result of the turn, with what the record holds about its call: the
+ * committed coverage rows, and — only when there are none — the envelope in
+ * the result itself (`coverage/emptiness.ts` · `declaredByValue`).
  */
-function readTurnResults(
+interface ResultRead {
+  readonly result: TurnResult;
+  readonly at: AssessmentPointer;
+  readonly rows: readonly CoverageRow[];
+  /**
+   * The result's OWN envelope, read when its call has no committed row: the run
+   * filed none (an envelope it never recognized, such as JSON text), or the row
+   * was lost on the way here (a history restored by `resumeOnError` carries no
+   * `coverageDeclared`; a trimmed recording drops it). Never read as silence.
+   */
+  readonly own?: ValueDeclaration;
+}
+
+function readResults(
   results: readonly TurnResult[],
   coverage: readonly CoverageRow[],
-  declarations: AssessmentDeclarations | undefined,
-  g: Gathered,
-): void {
+): readonly ResultRead[] {
   const rowsByCall = new Map<string, CoverageRow[]>();
   for (const row of coverage) {
     if (row.toolCallId === undefined) continue;
     rowsByCall.set(row.toolCallId, [...(rowsByCall.get(row.toolCallId) ?? []), row]);
   }
-  const readable: AssessmentPointer[] = [];
-  for (const result of results) {
+  return results.map((result) => {
     const rows = result.toolCallId !== undefined ? rowsByCall.get(result.toolCallId) ?? [] : [];
-    const door = {
-      absent: rows.some((c) => c.kind === 'absence'),
-      bounded: rows.some((c) => c.kind === 'ledger'),
-    };
+    const own = rows.length === 0 ? declaredByValue(result.content) : undefined;
+    return { result, at: historyPointer(result), rows, ...(own !== undefined && { own }) };
+  });
+}
+
+/**
+ * Layer 3, what came back: every result of the turn through the ONE emptiness
+ * reader. A call with committed coverage rows is read through the door those
+ * rows are; a call with none is handed NO door, so the reader reads the
+ * envelope in the bytes by the rule the run's recognizer files rows — and a gap
+ * that envelope lists is a reason too.
+ */
+function readTurnResults(
+  reads: readonly ResultRead[],
+  declarations: AssessmentDeclarations | undefined,
+  g: Gathered,
+): void {
+  const readable: AssessmentPointer[] = [];
+  for (const { result, at, rows, own } of reads) {
+    const absenceRow = rows.some((c) => c.kind === 'absence');
+    const door =
+      rows.length > 0
+        ? { absent: absenceRow, bounded: rows.some((c) => c.kind === 'ledger') }
+        : undefined;
     const rowsAt =
       result.toolName !== undefined ? declarations?.tools?.[result.toolName]?.rowsAt : undefined;
     const reading = readEmptiness(result.content, {
-      door,
+      ...(door !== undefined && { door }),
       ...(rowsAt !== undefined && { rowsAt }),
     });
-    const at = historyPointer(result);
     if (reading.emptiness !== 'unknown') readable.push(at);
-    // An empty rowset inside a declared boundary; an absence row already fired for itself.
-    if (reading.emptiness === 'declared-absent' && !door.absent) fire(g, 'declared-absent', at);
+    // An empty rowset inside a declared boundary, or an absence no row holds; an absence row fired for itself.
+    if (reading.emptiness === 'declared-absent' && !absenceRow) fire(g, 'declared-absent', at);
     if (reading.emptiness === 'undeclared-empty' && rows.length === 0) {
       fire(g, 'empty-undeclared', at);
     }
+    // A gap the result's own envelope lists, when no row holds it.
+    if (own?.gap === true) fire(g, 'coverage-gap', at);
   }
-  if (results.length > 0) {
+  if (reads.length > 0) {
     g.checked.push({
       layer: 3,
       check: 'result-shape',
       ran: readable.length,
-      of: results.length,
+      of: reads.length,
       witness: readable,
     });
   }
@@ -268,27 +313,37 @@ function readTurnResults(
 /**
  * The calls of this turn: every result's call and every coverage row's call.
  * A row or a result that names no call is counted on its own — never merged
- * into another call. Files the `tool-coverage` check and returns the ids.
+ * into another call. A call DECLARED what it covered when the record holds a
+ * coverage row for it, or — with no row — its result's own envelope. Files the
+ * `tool-coverage` check and returns the ids.
  */
 function readTurnCalls(
-  results: readonly TurnResult[],
+  reads: readonly ResultRead[],
   coverage: readonly CoverageRow[],
   g: Gathered,
 ): ReadonlySet<string> {
   const calls = new Set<string>();
-  for (const r of results) if (r.toolCallId !== undefined) calls.add(r.toolCallId);
+  for (const { result } of reads) if (result.toolCallId !== undefined) calls.add(result.toolCallId);
   for (const c of coverage) if (c.toolCallId !== undefined) calls.add(c.toolCallId);
   const declared = new Set(coverage.flatMap((c) => (c.toolCallId ? [c.toolCallId] : [])));
+  const witness = coverage.map((c) => statePointer('coverageDeclared', c.index, 'kind'));
+  let unnamedDeclared = 0;
+  for (const { result, at, own } of reads) {
+    if (own === undefined) continue;
+    witness.push(at);
+    if (result.toolCallId !== undefined) declared.add(result.toolCallId);
+    else unnamedDeclared += 1;
+  }
   const unjoinedRows = coverage.filter((c) => c.toolCallId === undefined).length;
-  const unnamedResults = results.filter((r) => r.toolCallId === undefined).length;
+  const unnamedResults = reads.filter((r) => r.result.toolCallId === undefined).length;
   const of = calls.size + unjoinedRows + unnamedResults;
   if (of > 0) {
     g.checked.push({
       layer: 3,
       check: 'tool-coverage',
-      ran: declared.size + unjoinedRows,
+      ran: declared.size + unjoinedRows + unnamedDeclared,
       of,
-      witness: coverage.map((c) => statePointer('coverageDeclared', c.index, 'kind')),
+      witness,
     });
   }
   return calls;
@@ -357,12 +412,19 @@ function valueOf(g: Gathered): Pick<AnswerAssessment, 'assessment' | 'reasons'> 
 /**
  * Fold one answer's standing from its committed record.
  *
- * @param record        a recording (`recordRun`), `{ snapshot }`, and/or
- *                      `{ checkpoint }` — pass a paused run's checkpoint so a
- *                      typed ask still waiting is read.
- * @param declarations  what the APP declares (the answer account's object): the
- *                      fold reads `tools[name].rowsAt`, where an object result
- *                      keeps its rows.
+ * The record of a turn that ended in an ANSWER or in a PAUSE (a pause reads
+ * `ask`, from the committed state the pause leaves — no checkpoint needed). A
+ * turn that ended in an error has no answer, and its committed state does not
+ * say so in this version: do not fold it (`agent.assessment()` returns
+ * `undefined` for one; the answer account says the record shows no answer).
+ *
+ * @param record        a recording (`recordRun`), `{ snapshot }`, or a paused
+ *                      run's `{ checkpoint }` — its `sharedState` is read when
+ *                      no snapshot is given.
+ * @param declarations  what the APP declares — any `AnswerAccountDeclarations`
+ *                      is accepted as it is: the fold reads only
+ *                      `tools[name].rowsAt`, where an object result keeps its
+ *                      rows.
  * @throws TypeError only on a caller error (a record that is not an object, a
  *                   malformed `rowsAt`); a record it cannot read yields
  *                   `not-applicable`, never a throw.
@@ -389,10 +451,12 @@ export function assessAnswer(
   const { results, from } = turnResults(history);
   const coverage = coverageRows(state);
 
-  readAsk(record, g);
+  const reads = readResults(results, coverage);
+
+  readPause(state, g);
   readCoverageRows(coverage, g);
-  const calls = readTurnCalls(results, coverage, g);
-  readTurnResults(results, coverage, declarations, g);
+  const calls = readTurnCalls(reads, coverage, g);
+  readTurnResults(reads, declarations, g);
   readConflicts(state, calls, g);
   readAnswerRows(state, g);
 

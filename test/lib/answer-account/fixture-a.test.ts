@@ -94,15 +94,15 @@ describe('fixture A — the real run, with neo’s declarations', () => {
   });
 
   // The fixture was REDUCED before the standing fold existed: its state keeps `history` but not
-  // `coverageDeclared`, so the fold (committed rows only, never events) cannot see the absence the
-  // events show — "not assessed", said so. `test/core/agent/assessment/fold-real-record.test.ts`
-  // pins the same record with its coverage row restored.
-  it('How sure — the standing (not assessed on this reduced record); the expectation and the outcome side by side, no "instead"', () => {
+  // `coverageDeclared`. The fold never rebuilds that row from the events, but the absence envelope
+  // the model read is still in the committed history, and a call with no row is read off its bytes
+  // — the same standing the full record gives (`test/core/agent/assessment/fold-real-record.test.ts`
+  // pins both).
+  it('How sure — the standing (not sure: the gap and the absence); the expectation and the outcome side by side, no "instead"', () => {
     expect(said(account, 'how-sure')).toEqual([
-      [
-        "Not assessed — the run's committed record holds no verdict the standing can rest on.",
-        'library',
-      ],
+      ['Not sure — the record holds 2 reasons this answer may not stand:', 'library'],
+      ['1 call declared ground it did not check or can never cover.', 'library'],
+      ['1 call declared that nothing matched.', 'library'],
       [
         'Before calling get_array_inventory, the model said it expected this call to answer the question directly, and rated how useful it expected the result to be: high.',
         'model',

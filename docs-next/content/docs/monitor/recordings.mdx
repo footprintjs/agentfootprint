@@ -286,7 +286,7 @@ the model sounded:
 | `known` | a check tied the answer to a settled fact — today, a passed enforce [answer check](doc:output-schema#check-the-answer-against-evidence) for these exact bytes |
 | `consistent` | checks ran and none fired. Consistent with the record — never "verified" |
 | `not-sure` | a reason fired; each names the row it rests on |
-| `ask` | the turn ended in a typed question still waiting for its answer |
+| `ask` | the run paused on a question still waiting for a person — a typed input, an `askHuman`, a check-in or a middleware ask |
 | `not-assessed` | nothing the record holds could be checked |
 
 `agent.assessment()` folds the last run; `assessAnswer(recording)` from
@@ -303,7 +303,8 @@ as silence); two results the model stood on disagree (`sources-conflict`); names
 or numbers in the answer appear in no tool result (`value-unsupported`,
 `value-survived-revision`); a limit cut the turn short (`stopped-early`); the
 app's answer checks failed (`answer-check-failed`) or could not reach a verdict
-(`check-unreachable`); a typed question is still waiting (`asked`). `checked`
+(`check-unreachable`); the run paused and a person's reply is still awaited
+(`asked`). `checked`
 lists what actually ran, as counts (`tool-coverage 1/3` — one of three calls
 declared what it covered). Pass the same declarations object the account takes
 to say where an object result keeps its rows.
@@ -319,14 +320,20 @@ Gotchas:
 
 - **It reads committed state, never events.** A verdict that exists only as an
   event — the evidence gate's clean pass, the `.claims()` dispositions — is not
-  on the committed record yet, so it neither supports nor refutes. A recording
-  whose snapshot was trimmed of `coverageDeclared` reads "not assessed" even when
-  its events show an absence.
+  on the committed record yet, so it neither supports nor refutes.
+- **A declaration the record lost is still read.** When a call has no committed
+  coverage row — a history restored by `resumeOnError`, a trimmed recording — the
+  envelope the model read is read from the result itself, never as silence. The
+  same holds for an envelope a tool returned as JSON text that the run never
+  recognized, so the standing can say more there than the account's "It found".
 - **This turn only.** It reads the results after the last message a person said,
   so an earlier turn's empty result is not held against today's answer.
-- **A paused run: pass its checkpoint** —
-  `assessAnswer({ snapshot, checkpoint })`. The question it is waiting on lives
-  there, not in the recording. `agent.assessment()` does this for you.
+- **A paused run reads `ask` from its record alone** — every kind of pause,
+  from the committed state the pause leaves. No checkpoint is needed.
+- **No answer, no standing.** After a run that threw, or whose answer a rule
+  refused, `agent.assessment()` returns `undefined`, and the account's "How sure"
+  says the record shows no answer. `assessAnswer` cannot tell a crash from the
+  committed state, so check how the run ended before you fold its recording.
 - **It measures claims within the record, not truth.** A tool that misstates
   what it searched produces an honest-looking standing.
 

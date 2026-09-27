@@ -19,7 +19,9 @@ It found:
   get_array_inventory looked for a VM disk in the RVTools export attributed to the array asked and found none.  ⟨found.absent@1 · tool:get_array_inventory · recorded⟩
   The model could also see the result of powerstore_get_volumes from an earlier answer (at least 1 answer back).  ⟨found.inView@1 · library · recorded⟩
 How sure:
-  Not assessed — the run's committed record holds no verdict the standing can rest on.  ⟨howSure.standing.notAssessed@1 · library · not-applicable⟩
+  Not sure — the record holds 2 reasons this answer may not stand:  ⟨howSure.standing.notSure@1 · library · recorded⟩
+    • 1 call declared ground it did not check or can never cover.  ⟨howSure.reason.coverageGap@1 · library · recorded⟩
+    • 1 call declared that nothing matched.  ⟨howSure.reason.declaredAbsent@1 · library · recorded⟩
   Before calling get_array_inventory, the model said it expected this call to answer the question directly, and rated how useful it expected the result to be: high.  ⟨howSure.expected.direct@1 · model · recorded⟩
   The call found nothing.  ⟨howSure.outcome.nothing@1 · tool:get_array_inventory · recorded⟩
   The library checked the answer's names and numbers: none was missing from what the tools returned, your message, the conversation or the app's own instructions (recalled memory included).  ⟨howSure.evidence.unsplit@1 · library · recorded⟩

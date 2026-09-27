@@ -508,10 +508,11 @@ typed routes only — never a guess:
 | an object whose key the app declared in `rowsAt` | `undeclared-empty` or `non-empty` (app-counted) |
 | anything else | `unknown` |
 
-Two callers, one rule, so they cannot disagree: the `/observe` answer account
+Two callers, one rule: the `/observe` answer account
 (`lib/answer-account/facts/calls.ts` for this run's calls,
 `lib/answer-account/facts/inView.ts` for an earlier answer's result) and the
-answer's standing (`../assessment/assess.ts` · `assessAnswer`).
+answer's standing (`../assessment/assess.ts` · `assessAnswer`). They read the
+same bytes the same way and differ only in the door they hold (below).
 
 **The door decides, when the record holds one.** An envelope a tool returned as
 JSON TEXT (an `mcpClient` in text mode) reaches the model byte-for-byte like a
@@ -528,11 +529,26 @@ readEmptiness(JSON.stringify(coverage([], { checked: ['switch A'] })), {
 // → { emptiness: 'declared-absent', rows: 0, source: 'library', bounded: true, … }
 ```
 
-Only when the record holds NO door for a result (an earlier answer's, whose run
-is not in this record) is the door read off the bytes, by the rule the run's own
-recognizer applies (`read.ts` · `readCoverageResult`). `rowsAtProblem` is the one
-rule for an app's declared rows key (a non-empty top-level key), asked by both
-readers' declarations.
+Only when a caller holds NO door for a result is the door read off the bytes,
+by the rule the run's own recognizer applies (`read.ts` · `readCoverageResult`),
+through `declaredByValue` — which also says whether the envelope lists a gap:
+
+- the account holds its EVENTS as the door for this run's calls (a call's
+  `tool_end` is always in the record), and none for an earlier answer's result;
+- the standing holds a door only for a call with a committed coverage row.
+  Committed state can LOSE a row the run filed — a history restored by
+  `resumeOnError` carries no `coverageDeclared`, a trimmed recording drops it —
+  so a call with no row is read off its bytes, and a library envelope in the
+  committed history is never read as silence. For a JSON-text envelope the run
+  never recognized, the standing therefore says more than "It found" does.
+
+```ts
+declaredByValue(JSON.stringify(absent({ what: 'VMs', checked: ['inventory'], notChecked: ['off VMs'] })));
+// → { absent: true, bounded: false, gap: true }
+```
+
+`rowsAtProblem` is the one rule for an app's declared rows key (a non-empty
+top-level key), asked by both readers' declarations.
 
 ## What the framework does with them
 
@@ -621,7 +637,7 @@ stated the limits, and it does not refuse an answer that did not.
 | `recognize.ts` | the two recognizers (`readAbsence`, `readCoverageLedger`) and the two markers — a leaf, so a post-hoc reader loads them without the mints |
 | `absent.ts` | `absent()`, the static note, and the ONE rule set for a suggestion (`tryInsteadOfAbsence` and `tryInsteadToolOfAbsence` read by it); re-exports its recognizer |
 | `ledger.ts` | `coverage()` and the static note; re-exports its recognizer |
-| `emptiness.ts` | the ONE reader of what came back (§ 6) — typed routes, the door the record holds, the `rowsAt` rule |
+| `emptiness.ts` | the ONE reader of what came back (§ 6) — typed routes, the door the record holds, what a value's own envelope declares (`declaredByValue`), the `rowsAt` rule |
 | `read.ts` | the ONE reader both dispatch boundaries and the raise site (`../stages/toolCalls.ts` · `declareRaisedAbsence`) call — lifts the suggestion beside the coverage |
 | `evidence.ts` | what an absence is allowed to ground |
 | `answer.ts` | folding the run's declarations into one appended block |

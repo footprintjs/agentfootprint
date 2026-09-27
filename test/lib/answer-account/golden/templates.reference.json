@@ -1378,6 +1378,15 @@
   ],
   "source": "library"
  },
+ "howSure.standing.noAnswer@1": {
+  "text": "How sure cannot be told: this record does not show the run giving an answer.",
+  "parts": [
+   {
+    "text": "How sure cannot be told: this record does not show the run giving an answer."
+   }
+  ],
+  "source": "library"
+ },
  "howSure.standing.known@1": {
   "text": "Known — the app's answer checks passed this exact answer.",
   "parts": [
@@ -1415,10 +1424,10 @@
   "source": "library"
  },
  "howSure.standing.notAssessed@1": {
-  "text": "Not assessed — the run's committed record holds no verdict the standing can rest on.",
+  "text": "Not assessed — this record's committed state holds no verdict the standing can rest on.",
   "parts": [
    {
-    "text": "Not assessed — the run's committed record holds no verdict the standing can rest on."
+    "text": "Not assessed — this record's committed state holds no verdict the standing can rest on."
    }
   ],
   "source": "library"

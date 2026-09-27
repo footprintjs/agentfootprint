@@ -28,7 +28,7 @@ second value set:
 
 | `assessment` | `standing` | When (this turn's committed rows) |
 |---|---|---|
-| `unknown` | `ask` | a reason of the ask class fired: a typed question is still waiting |
+| `unknown` | `ask` | a reason of the ask class fired: the turn ended in a pause still waiting for a person |
 | `unknown` | `not-sure` | any other reason fired |
 | `known` | `known` | a SUPPORTING row, and no reason: a passed enforce answer check (`.answerValidation()`) for these exact bytes |
 | `unrefuted` | `consistent` | at least one check ran, none fired, nothing supports — never "verified" |
@@ -44,9 +44,9 @@ grows as later honesty steps commit new rows.
 
 | Reason | Layer | Read from |
 |---|---|---|
-| `asked` | every | the paused run's checkpoint: `pauseData.awaitingInput` (a tool's own `requestInput`), never the pause event |
-| `coverage-gap` | 3 | `coverageDeclared`: a `notChecked` or `cannotCover` item on a call of this turn |
-| `declared-absent` | 3 | `coverageDeclared`: an absence; or `history`: an empty rowset inside a declared `coverage()` boundary |
+| `asked` | every | `pausedToolCallId`: the call a pause is still waiting on — a typed input (`requestInput`), a question (`askHuman` / `pauseHere`), a consent gate (a tool's `checkIn`, a middleware's `ask`) or a credential consent; never the pause event |
+| `coverage-gap` | 3 | `coverageDeclared`: a `notChecked` or `cannotCover` item on a call of this turn; or `history`: the result's own envelope lists one, when its call has no coverage row |
+| `declared-absent` | 3 | `coverageDeclared`: an absence; or `history`: an empty rowset inside a declared `coverage()` boundary, or an absence in the result's own envelope when its call has no coverage row |
 | `empty-undeclared` | 3 | `history`: an empty rowset (a top-level array, or the app's `rowsAt` key) whose call has no coverage row |
 | `sources-conflict` | 3 | `findingsLedger`: a conflict row whose witnesses name a call of this turn |
 | `value-unsupported` | 4 | `unsupportedValues` (`revised: false`) |
@@ -57,10 +57,47 @@ grows as later honesty steps commit new rows.
 
 Every result is read through the ONE emptiness reader,
 `core/agent/coverage/emptiness.ts` · `readEmptiness`, the one the answer account
-reads through too — so the person's account and the answer's standing cannot
-disagree about what came back. The fold hands it the door the RECORD holds for
-the call (its coverage rows): an envelope a tool returned as JSON text, which the
-run never recognized, is data, not a declaration.
+reads through too. A call with committed coverage rows is read through the door
+those rows are. A call with NONE is handed no door, so the reader reads the
+envelope in the bytes (`declaredByValue`, the rule the run's own recognizer files
+rows by) — and a gap it lists is a `coverage-gap`. Committed state can lose a
+row the run filed, and the fold must not read that as silence:
+
+```ts
+// agent.run() → find_vm returns absent({ …, notChecked: ['powered-off VMs'] }) → the provider
+// fails → agent.resumeOnError(cp) → list_hosts returns rows → 'No VMs are hosted on host-9.'
+agent.assessment()?.reasons.map((r) => r.reason); // ['coverage-gap', 'declared-absent']
+// The checkpoint carried the history (the envelope) and not `coverageDeclared` (the row).
+```
+
+The cost, named: an envelope a tool returned as JSON TEXT that the run never
+recognized (an `mcpClient` in text mode) is read as a declaration here, while the
+account's "It found" — which reads this run's calls through their EVENTS, a door
+that is always there — calls it "returned a result". The fold may over-report;
+it never hides.
+
+## How the turn ended
+
+The standing is about an answer, so the turn's end is settled first:
+
+| The turn ended | `agent.assessment()` | `assessAnswer(recording)` | the account's "How sure" |
+|---|---|---|---|
+| in an answer | the fold | the fold | the fold |
+| in a pause (any kind) | `ask` | `ask` | "Ask — the run stopped to ask a question before it could answer:" |
+| in an error before any answer (it threw, or a rule halted it — a policy halt, a fail-fast, an input denial) | `undefined` | not settled — see Not covered | "How sure cannot be told: this record does not show the run giving an answer." (no `turn_end`) |
+| in an answer a rule then refused (`UnsupportedValuesError`, `AnswerValidationError`, …) | `undefined` — `run()` returned no answer; the typed error carries the verdict | the fold | the fold — the record holds the answer (a `turn_end`), and the account explains that one |
+
+A pause is read from the committed state every pause leaves —
+`pausedToolCallId`, written by each pause the dispatch loop raises and cleared
+by each resume — so the snapshot, the checkpoint and a saved recording all say
+it, and no checkpoint is needed:
+
+```ts
+const out = await agent.run({ message: 'shut the down port' }); // a tool called askHuman(...)
+agent.assessment()?.standing;           // 'ask'
+assessAnswer(recording).standing;       // 'ask' — the saved recording alone
+accountForAnswer(recording).facts.standing.value; // 'ask'
+```
 
 ## Seven rules the fold keeps
 
@@ -99,11 +136,14 @@ transcription of the study's registered RQ3 algorithm (standing per turn from
 recorded EVENTS) over the same recorded runs: ASKED ↔ `ask`, NOT-COVERED ↔
 `coverage-gap`, DECLARED-ABSENT ↔ `declared-absent`, FOUND ↔ `unrefuted` (never
 `known`), UNKNOWN ↔ "the record cannot vouch" (`not-applicable`, or only
-`empty-undeclared`). Two differences are named and pinned, both in one
+`empty-undeclared`). Three differences are named and pinned, all in one
 direction — the fold says more, never less: RQ3 scopes to the entity the
 question names and the fold reads every call of the turn (`entity-scope`); RQ3's
 DECLARED-ABSENT reads only the last lookup and the fold reads every one
-(`last-lookup`).
+(`last-lookup`); RQ3's ASKED reads a typed ask only and the fold reads every
+pause as `ask` (`pause-kind`). The oracle is a TRANSCRIPTION: the study's frozen
+copy (`study/rq3-standing/`) does not exist yet, so the parity is re-run against
+it at the study's freeze (adopted Q12).
 
 ## Not covered
 
@@ -112,11 +152,25 @@ DECLARED-ABSENT reads only the last lookup and the fold reads every one
   and a claims-supported "known" — and the integrity dispositions are not on the
   committed record in this version. The fold never reads events; the step that
   needs each verdict commits one row, and its reason joins `REASONS` then.
-- **Asks other than a typed input.** A check-in or a middleware ask awaits a
-  DECISION, not an input; it is not the `asked` reason.
-- **A trimmed recording.** A snapshot without its `coverageDeclared` (the answer
-  account's reduced fixture is one) reads "not assessed" even when its events
-  show an absence — `test/core/agent/assessment/fold-real-record.test.ts` pins it.
+- **A run that threw, read by `assessAnswer` directly.** No committed row says a
+  turn ended in an error in this version, so the fold folds what the crashed run
+  left, as if it had answered. `agent.assessment()` (which knows) returns
+  `undefined` and the answer account (which reads the recording's `turn_end`)
+  says the record shows no answer; a caller of `assessAnswer` checks the run's
+  outcome first. The committed row that settles it arrives with the answer
+  layer's witness rows (honesty step 6).
+- **A row lost AND its envelope gone.** A record that lost a call's coverage row
+  is still read from the envelope in `history` — `fold-real-record.test.ts` pins
+  the account's reduced fixture reading the same standing as the full record. A
+  record that dropped the history too has nothing left to read.
+- **Evicted results.** Under `.window()`, a window strategy can remove this
+  turn's early results from `history`; the commit log still has them, but the
+  fold reads the final state, so an evicted undeclared `[]` fires nothing.
+- **Conflicts from an earlier turn that reuse a call id.** A carried conflict row
+  counts as this turn's when a witness shares a `toolCallId` with a call of this
+  turn — a provider that reuses ids across turns makes an earlier turn's conflict
+  read `sources-conflict` today. It over-reports and never hides, until the
+  honesty layers' `turn` stamp on ledger rows (step 3).
 - **Subject placement.** Which entity the question names is on hold, so the fold
   reads every call of the turn.
 - **The run-time answer layer, the served standing and its event** — a later
@@ -134,3 +188,10 @@ flat non-existence or completeness claim on an answer whose standing carries
 `declared-absent` or `coverage-gap` (the study's `exceeds`). The limit: it
 measures claims within the record, not truth — a tool that misstates what it
 searched produces an honest-looking standing.
+
+**Not yet measured.** The design puts the confusion table of this fold against
+the oracle over the retained recorded runs first in this step. It is blocked by
+data, not code: the retained selection-arm records are event streams and routing
+shadows with no committed state, so a fold that reads only committed state
+cannot run on them. The fix is the data path — the step-2 inputs baseline saves
+`recordRun` recordings WITH their snapshot, and the table runs over those.

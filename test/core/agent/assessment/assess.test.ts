@@ -4,15 +4,18 @@
  *
  * Test types:
  *   - UNIT      — each reason from its one row; the value by precedence; the
- *                 support rule; the turn boundary; the checkpoint; caller errors;
+ *                 support rule; the turn boundary; a pause, read from the
+ *                 committed state it leaves (every kind); an envelope whose
+ *                 row the record lost; caller errors;
  *   - PROPERTY  — over 3,000 generated records: never "known" without a
  *                 supporting row and no reason; a reason ⇔ `unknown`;
  *                 `not-applicable` ⇔ nothing ran, nothing fired, nothing
  *                 supports; the owner's word follows the value; total, pure,
  *                 deterministic;
  *   - SECURITY  — a library-written user frame never opens a turn (it is not a
- *                 person's message); a malformed stored ask is not an ask; the
- *                 fold never reads an event, however loud.
+ *                 person's message); a checkpoint's pause data is never read
+ *                 as a pause (only the committed state is); the fold never
+ *                 reads an event, however loud.
  */
 
 import { describe, expect, it } from 'vitest';
@@ -26,11 +29,7 @@ import type {
 import { absent, coverage } from '../../../../src/index.js';
 
 type State = Record<string, unknown>;
-const run = (state: State, checkpoint?: unknown) =>
-  assessAnswer({
-    snapshot: { sharedState: state },
-    ...(checkpoint !== undefined && { checkpoint }),
-  });
+const run = (state: State) => assessAnswer({ snapshot: { sharedState: state } });
 
 const user = (content: string) => ({ role: 'user', content });
 const tool = (toolCallId: string, result: unknown, toolName = 'lookup') => ({
@@ -123,30 +122,16 @@ describe('UNIT — the value, by precedence', () => {
   });
 
   it('ask outranks not sure; reasons come in the table’s order', () => {
-    const checkpoint = {
-      sharedState: {
-        history: [user('volumes last year?'), tool('c0', [])],
-      },
-      pauseData: {
-        awaitingInput: {
-          id: 'year',
-          question: 'Which year?',
-          fields: [{ id: 'year', type: 'number', required: true }],
-          status: 'awaiting_input',
-          requestId: 'r-1',
-          supplied: {},
-          origins: {},
-          missing: ['year'],
-          origin: { originalRequest: 'volumes last year?', toolCallId: 'c1' },
-        },
-      },
-    };
-    const a = assessAnswer({ checkpoint });
+    // A paused run's committed state: the call the pause waits on (`pausedToolCallId`).
+    const a = run({
+      history: [user('volumes last year?'), tool('c0', [])],
+      pausedToolCallId: 'c1',
+    });
     expect(reasonsOf(a)).toEqual(['asked', 'empty-undeclared']);
     expect(a.standing).toBe('ask');
     expect(a.reasons[0]).toEqual({
       reason: 'asked',
-      witness: [{ kind: 'checkpoint', path: '/pauseData/awaitingInput/requestId' }],
+      witness: [{ kind: 'state', key: 'pausedToolCallId', path: '' }],
     });
   });
 });
@@ -190,11 +175,55 @@ describe('UNIT — each reason from its one row', () => {
     expect(reasonsOf(declared)).toEqual(['empty-undeclared']);
   });
 
-  it('a JSON-text envelope the run filed no row for is data, not a declaration', () => {
-    // The history bytes of a recognized absence and of an unrecognized JSON-text one are the same.
+  it('an envelope in history whose call has NO coverage row is read off the bytes — never as silence', () => {
+    // The row can be lost (a history restored by `resumeOnError`, a trimmed recording) or never
+    // filed (JSON text the run did not recognize); the strict recognizer reads the envelope itself.
     const a = run({ history: [user('q'), tool('c1', absent({ what: 'x', checked: ['inv'] }))] });
-    expect(a.reasons).toEqual([]);
-    expect(a.standing).toBe('not-assessed');
+    expect(reasonsOf(a)).toEqual(['declared-absent']);
+    expect(a.reasons[0]!.witness).toEqual([
+      { kind: 'history', index: 1, path: '/toolCallId', toolCallId: 'c1' },
+    ]);
+    // …and it counts as the call declaring what it covered.
+    expect(a.checked.find((c) => c.check === 'tool-coverage')).toMatchObject({ ran: 1, of: 1 });
+  });
+
+  it('a gap the envelope lists is a reason too, when no row holds it (the resumeOnError shape)', () => {
+    const gapped = absent({
+      what: 'VMs on host-9',
+      checked: ['inventory'],
+      notChecked: ['off VMs'],
+    });
+    const lost = run({
+      history: [user('q'), tool('t1', gapped), tool('t2', [{ host: 'host-9' }])],
+    });
+    expect(reasonsOf(lost)).toEqual(['coverage-gap', 'declared-absent']);
+    expect(lost.standing).toBe('not-sure');
+    // The same call with its row committed says the same thing, read from the row instead.
+    const kept = run({
+      history: [user('q'), tool('t1', gapped), tool('t2', [{ host: 'host-9' }])],
+      coverageDeclared: [absenceRow('t1', { notChecked: [{ what: 'off VMs' }] })],
+    });
+    expect(reasonsOf(kept)).toEqual(reasonsOf(lost));
+    // A boundary wrapping an absence, both with gaps, read off the bytes: ONE witness per reason.
+    const wrapped = coverage(absent({ what: 'x', checked: ['a'], notChecked: ['b'] }), {
+      checked: ['a'],
+      notChecked: ['c'],
+    });
+    const both = run({ history: [user('q'), tool('c1', wrapped)] });
+    expect(both.reasons.map((r) => [r.reason, r.witness.length])).toEqual([
+      ['coverage-gap', 1],
+      ['declared-absent', 1],
+    ]);
+  });
+
+  it('a row the record holds still decides: an envelope is read off the bytes only when no row is', () => {
+    // A boundary row with no gap, around an absence the bytes also list a gap for: the row is the
+    // door, so the reading is the row's — an empty-looking value inside it is the declared absence.
+    const a = run({
+      history: [user('q'), tool('c1', coverage([], { checked: ['switch A'] }))],
+      coverageDeclared: [ledgerRow('c1')],
+    });
+    expect(reasonsOf(a)).toEqual(['declared-absent']);
   });
 
   it('sources-conflict only when a witness names a call of THIS turn', () => {
@@ -280,10 +309,54 @@ describe('UNIT — this turn only', () => {
     });
     expect(reasonsOf(a)).toEqual(['empty-undeclared']);
   });
+});
 
-  it('a malformed stored ask is not an ask (SECURITY: read, never guessed)', () => {
+describe('UNIT — how the turn ended: a pause, read from the committed state it leaves', () => {
+  const history = [user('shut the down port'), tool('c0', [{ port: 3 }])];
+
+  it('every pause kind is the one `asked` reason — the answer does not exist yet', () => {
+    // What each pause writes beside the call id (`AgentState`): none for requestInput / askHuman.
+    const kinds: readonly Record<string, unknown>[] = [
+      { pausedToolArgs: {} },
+      { pausedCheckIn: true },
+      { pausedAsk: true, pausedAskMiddleware: 'gate' },
+      { pausedCredential: true, pausedCredentialService: 'crm' },
+    ];
+    for (const extra of kinds) {
+      const a = run({ history, pausedToolCallId: 'c1', pausedToolName: 'act', ...extra });
+      expect(a.standing, JSON.stringify(extra)).toBe('ask');
+      expect(reasonsOf(a)).toEqual(['asked']);
+    }
+  });
+
+  it('a snapshot, a checkpoint and a saved recording say the same — no checkpoint needed', () => {
+    const state = { history, pausedToolCallId: 'c1' };
+    const fromSnapshot = assessAnswer({ snapshot: { sharedState: state } });
+    expect(assessAnswer({ checkpoint: { sharedState: state } })).toEqual(fromSnapshot);
+    expect(assessAnswer(JSON.parse(JSON.stringify({ snapshot: { sharedState: state } })))).toEqual(
+      fromSnapshot,
+    );
+  });
+
+  it('a resume clears it: an empty call id is no pause', () => {
+    expect(run({ history, pausedToolCallId: '' }).standing).toBe('consistent');
+    expect(run({ history, pausedToolCallId: 7 }).standing).toBe('consistent');
+  });
+
+  it('SECURITY — a checkpoint’s pause data is not a pause: only the committed state is read', () => {
+    const awaitingInput = {
+      id: 'year',
+      question: 'Which year?',
+      fields: [{ id: 'year', type: 'number', required: true }],
+      status: 'awaiting_input',
+      requestId: 'r-1',
+      supplied: {},
+      origins: {},
+      missing: ['year'],
+      origin: { originalRequest: 'q', toolCallId: 'c1' },
+    };
     const a = assessAnswer({
-      checkpoint: { sharedState: {}, pauseData: { awaitingInput: { status: 'awaiting_input' } } },
+      checkpoint: { sharedState: { history }, pauseData: { awaitingInput } },
     });
     expect(a.reasons).toEqual([]);
   });
@@ -359,7 +432,7 @@ describe('PROPERTY — the laws hold over 3,000 generated records', () => {
   const chance = (p: number) => next() < p;
   const pick = <T>(xs: readonly T[]): T => xs[Math.floor(next() * xs.length)]!;
 
-  function record(): { snapshot: { sharedState: State }; checkpoint?: unknown } {
+  function record(): { snapshot: { sharedState: State } } {
     const history: unknown[] = [];
     const coverageDeclared: unknown[] = [];
     const calls = Math.floor(next() * 4);
@@ -376,6 +449,19 @@ describe('PROPERTY — the laws hold over 3,000 generated records', () => {
       } else if (kind === 1) {
         history.push(tool(id, coverage(pick([[], [1]]), { checked: ['c'] })));
         coverageDeclared.push(ledgerRow(id, chance(0.5) ? { notChecked: [{ what: 'n' }] } : {}));
+      } else if (kind === 2) {
+        // An envelope whose row the record LOST (resumeOnError, a trimmed recording).
+        history.push(
+          tool(
+            id,
+            pick([
+              absent({ what: 'x', checked: ['c'] }),
+              absent({ what: 'x', checked: ['c'], notChecked: ['n'] }),
+              coverage([], { checked: ['c'] }),
+              coverage([1], { checked: ['c'], cannotCover: [{ what: 'y', why: 'z' }] }),
+            ]),
+          ),
+        );
       } else {
         history.push(tool(id, pick([[], [{ a: 1 }], { rows: [] }, 'text', 'Error: down'])));
       }
@@ -392,6 +478,7 @@ describe('PROPERTY — the laws hold over 3,000 generated records', () => {
         ...(chance(0.8) && { candidateDigest: 'd' }),
       };
     }
+    if (chance(0.1)) state.pausedToolCallId = pick(['c9', '']);
     if (chance(0.15)) {
       state.findingsLedger = [
         {
@@ -440,8 +527,25 @@ describe('PROPERTY — the laws hold over 3,000 generated records', () => {
       }[a.assessment];
       expect(a.standing).toBe(word);
       for (const c of a.checked) expect(c.ran).toBeLessThanOrEqual(c.of);
+      // A paused turn always reads ask; a library envelope in this turn's history is never silence.
+      const st = r.snapshot.sharedState;
+      if (typeof st.pausedToolCallId === 'string' && st.pausedToolCallId !== '') {
+        expect(a.standing).toBe('ask');
+      }
+      const turn = (st.history as { role: string; content: unknown }[]).slice(
+        (st.history as { role: string; content: unknown }[])
+          .map((m) => m.content)
+          .lastIndexOf('question') + 1,
+      );
+      const absentHere = turn.some(
+        (m) =>
+          m.role === 'tool' &&
+          typeof m.content === 'string' &&
+          m.content.includes('"af_absent":true'),
+      );
+      if (absentHere) expect(a.reasons.map((x) => x.reason)).toContain('declared-absent');
     }
-    // Every word but `ask` (which needs a checkpoint) was reached — the property ran on all of them.
-    expect([...seen].sort()).toEqual(['consistent', 'known', 'not-assessed', 'not-sure']);
+    // Every word was reached — the property ran on all of them.
+    expect([...seen].sort()).toEqual(['ask', 'consistent', 'known', 'not-assessed', 'not-sure']);
   });
 });

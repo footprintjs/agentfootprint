@@ -331,8 +331,10 @@ export interface AnswerFacts {
    * The answer's standing, folded from the run's committed state by the one
    * fold (`core/agent/assessment/assess.ts` · `assessAnswer`) — the owner's
    * words: `known` · `consistent` (checks ran, none fired — never "verified") ·
-   * `not-sure` · `ask` · `not-assessed` (nothing on the record could be
-   * checked). `not-recorded` when the recording carries no committed state.
+   * `not-sure` · `ask` (the run paused on a question for a person) ·
+   * `not-assessed` (nothing on the record could be checked). `not-recorded`,
+   * with no word, when the recording carries no committed state, or shows no
+   * answer (no `turn_end`) and no pause — there is no answer to rate.
    */
   readonly standing: AccountFact<'known' | 'consistent' | 'not-sure' | 'ask' | 'not-assessed'>;
   /** The library-appended limits block of the answer, when `.limitsTravelWithTheAnswer()` added one. */

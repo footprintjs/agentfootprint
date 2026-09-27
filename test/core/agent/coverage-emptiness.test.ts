@@ -4,7 +4,9 @@
  * Test types:
  *   - UNIT        — every route of the table, in its order; the door decides
  *                   when the record holds one; the value decides only when it
- *                   holds none; `coverage()` read through (nested, bounded);
+ *                   holds none (`declaredByValue`: the absence, the boundary
+ *                   and the gaps its envelope lists); `coverage()` read through
+ *                   (nested, bounded);
  *                   a described envelope's counts and its clarify-only form;
  *                   the `rowsAt` rule (`rowsAtProblem`);
  *   - PROPERTY    — over 2,000 generated values and doors: never throws, is
@@ -27,6 +29,7 @@ import { describe, expect, it } from 'vitest';
 
 import { absent, coverage } from '../../../src/index.js';
 import {
+  declaredByValue,
   readEmptiness,
   rowsAtProblem,
   type ReturnedDoor,
@@ -146,6 +149,39 @@ describe('UNIT — the routes, in order', () => {
   it('strings INSIDE the value are the tool’s — never parsed (only the top level is)', () => {
     const wrapped = coverage('[]', { checked: ['x'] });
     expect(readEmptiness(wrapped).emptiness).toBe('unknown');
+  });
+
+  it('declaredByValue — what a value’s own envelope declares, by the run’s recognizer rule', () => {
+    const gap = absent({ what: 'VMs', checked: ['inventory'], notChecked: ['off VMs'] });
+    // A bare absence, with and without a gap — JSON text reads the same as the object.
+    expect(declaredByValue(found)).toEqual({ absent: true, bounded: false, gap: false });
+    expect(declaredByValue(JSON.stringify(gap))).toEqual({
+      absent: true,
+      bounded: false,
+      gap: true,
+    });
+    // A boundary: its own gap, or the gap of the absence directly inside it.
+    expect(declaredByValue(coverage([1], { checked: ['a'] }))).toEqual({
+      absent: false,
+      bounded: true,
+      gap: false,
+    });
+    expect(
+      declaredByValue(coverage([1], { checked: ['a'], cannotCover: [{ what: 'x', why: 'y' }] })),
+    ).toEqual({
+      absent: false,
+      bounded: true,
+      gap: true,
+    });
+    expect(declaredByValue(coverage(gap, { checked: ['a'] }))).toEqual({
+      absent: true,
+      bounded: true,
+      gap: true,
+    });
+    // Neither envelope — or a marker the strict recognizer refuses — declares nothing.
+    for (const v of [[], [1], 'text', '{"af_absent":true,"checked":[]}', null, { rows: [] }]) {
+      expect(declaredByValue(v), JSON.stringify(v)).toBeUndefined();
+    }
   });
 
   it('rowsAtProblem — the one rule both readers’ declarations are checked by', () => {

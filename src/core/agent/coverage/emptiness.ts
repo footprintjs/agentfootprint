@@ -10,8 +10,9 @@
  *          for this run's calls, `lib/answer-account/facts/inView.ts` for an
  *          earlier answer's result) and the standing fold
  *          (`core/agent/assessment/assess.ts` · `assessAnswer`). One rule, so
- *          the person's account and the answer's standing cannot disagree
- *          about what came back.
+ *          the person's account and the answer's standing read the same bytes
+ *          the same way; they differ only where they hold a different door
+ *          (the list under "The door decides" below).
  * Emits:   N/A.
  *
  * ## The routes, in order
@@ -35,13 +36,28 @@
  * when the caller holds the call's door (`EmptinessContext.door` — this run's
  * calls, read from the coverage rows or events), the door alone says whether
  * an absence or a boundary was declared, and a marker the door does not vouch
- * for is read as plain data. Only when the record holds NO door for the result
- * (an earlier answer's result, whose run is not in this record) is the door
- * read off the value itself, by the rule the run's own recognizer applies
- * (`doorOf`, mirroring `coverage/read.ts` · `readCoverageResult`) — the only
- * evidence left, and the same answer the run would have filed for an object.
- * Recognizing JSON-text envelopes belongs at the execute boundary, with one
- * owner, not in a reader.
+ * for is read as plain data. Only when the caller holds NO door for the result
+ * is the door read off the value itself, by the rule the run's own recognizer
+ * applies (`declaredByValue`, mirroring `coverage/read.ts` ·
+ * `readCoverageResult`) — the only evidence left, and the same answer the run
+ * would have filed for an object. Which caller holds a door:
+ *
+ * - the answer account, for this run's calls — its EVENTS are the door
+ *   (`lib/answer-account/facts/calls.ts`), and a call's `tool_end` is always
+ *   in the record, so a JSON-text envelope the run never recognized reads as
+ *   data in "It found";
+ * - the standing fold, only for a call that has a committed coverage row
+ *   (`core/agent/assessment/assess.ts` · `readTurnResults`). Committed state
+ *   can LOSE a row the run filed (a history restored by `resumeOnError` does
+ *   not carry `coverageDeclared`; a trimmed recording drops it), so for a call
+ *   with no row the fold passes no door and the envelope in the committed
+ *   history is read — never read as silence. For a JSON-text envelope the run
+ *   never recognized (an `mcpClient` in text mode) the fold then says more
+ *   than "It found" does: it may over-report, it never hides;
+ * - nobody, for an earlier answer's result (`facts/inView.ts`).
+ *
+ * Recognizing JSON-text envelopes at run time belongs at the execute boundary,
+ * with one owner, not in a reader.
  */
 
 import { readAbsence, readCoverageLedger } from './recognize.js';
@@ -94,7 +110,9 @@ export interface EmptinessContext {
   /**
    * What the record says the call returned. ABSENT when the record holds no
    * door for this result — an earlier answer's result, whose run is not in
-   * this record — and the strict recognizers then read the value itself.
+   * this record, or (for the standing fold) a call with no committed coverage
+   * row — and the strict recognizers then read the value itself
+   * (`declaredByValue`).
    */
   readonly door?: ReturnedDoor;
 }
@@ -191,21 +209,57 @@ function describedReading(envelope: unknown): EmptinessReading | undefined {
   return isRecord(envelope.clarify) ? { emptiness: 'clarify', undeclaredShape: false } : undefined;
 }
 
+/** What a value's OWN envelope declares — see {@link declaredByValue}. */
+export interface ValueDeclaration {
+  /** An absence — bare, or directly inside a `coverage()` boundary. */
+  readonly absent: boolean;
+  /** A `coverage()` boundary. */
+  readonly bounded: boolean;
+  /**
+   * Ground the envelope says it did not check or can never cover — a
+   * non-empty `not_checked` / `cannot_cover`, on the boundary or on the
+   * absence it wraps.
+   */
+  readonly gap: boolean;
+}
+
+const listed = (value: unknown): boolean => Array.isArray(value) && value.length > 0;
+
 /**
- * The door the RUN's own recognizer files for a value it is handed
+ * What a value's own envelope declares, read by the strict recognizers only and
+ * by the rule the RUN's recognizer files rows for a value it is handed
  * (`coverage/read.ts` · `readCoverageResult`): a bare absence, or a boundary
- * with an absence directly inside it; a boundary's rows. Used only when the
- * record holds no door for the result, so both callers read an earlier
- * answer's result by exactly the rule its run applied.
+ * with an absence directly inside it, and the gaps either lists. `undefined`
+ * when the value is neither envelope. JSON text is parsed once, at the top.
+ *
+ * For a reader whose record holds no row for the call: an earlier answer's
+ * result (its run is not in this record), or a result whose row was never
+ * filed or was lost on the way here — a history restored by `resumeOnError`
+ * carries no `coverageDeclared`, and a trimmed recording may drop it. The
+ * envelope in the bytes is then the only evidence left, and reading it can
+ * only ADD a declaration, never hide one.
  */
-function doorOf(data: unknown): ReturnedDoor {
+export function declaredByValue(value: unknown): ValueDeclaration | undefined {
+  const data = parseMaybeJson(value);
   const ledger = readCoverageLedger(data);
+  const absence =
+    readAbsence(data) ?? (ledger !== undefined ? readAbsence(ledger.result) : undefined);
+  if (ledger === undefined && absence === undefined) return undefined;
   return {
-    absent:
-      readAbsence(data) !== undefined ||
-      (ledger !== undefined && readAbsence(ledger.result) !== undefined),
+    absent: absence !== undefined,
     bounded: ledger !== undefined,
+    gap:
+      listed(absence?.not_checked) ||
+      listed(absence?.cannot_cover) ||
+      listed(ledger?.af_coverage.not_checked) ||
+      listed(ledger?.af_coverage.cannot_cover),
   };
+}
+
+/** The door {@link declaredByValue} reads off the value — used only when the caller holds none. */
+function doorOf(data: unknown): ReturnedDoor {
+  const own = declaredByValue(data);
+  return { absent: own?.absent === true, bounded: own?.bounded === true };
 }
 
 /** A declared boundary read through (nested ones too), then the bare rowset. */
