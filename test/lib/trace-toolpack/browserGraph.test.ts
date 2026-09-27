@@ -164,6 +164,24 @@ describe.skipIf(!built)('the default browser graph of the root entry', () => {
     expect(graph.dynamicInputs.has('dist/esm/core/agent/arguments/ask.js')).toBe(true);
   });
 
+  it('LAW: the inputs layer’s run-time halves are off the root sync closure — only the synchronous doors stay', async () => {
+    // ToolCalls' half (the fills, the note, the rewrites' `changedKeys`, the
+    // fail-closed refusal), the served sentences and the "Assumed" block, and
+    // the one reading of a rewrite load through `import()` under the arm
+    // (`arguments/README.md`, "What a plain agent carries"). The declaration's
+    // assert stays: `defineTool` refuses a malformed rule synchronously.
+    const graph = await splitGraph(resolve(DIST, 'index.js'));
+    expect(graph.syncInputs.has('dist/esm/core/agent/arguments/declare.js')).toBe(true);
+    for (const lazy of [
+      'dist/esm/core/agent/arguments/dispatch.js',
+      'dist/esm/core/agent/arguments/serve.js',
+      'dist/esm/core/agent/middleware/rewrites.js',
+    ]) {
+      expect(graph.syncInputs.has(lazy), lazy).toBe(false);
+      expect(graph.dynamicInputs.has(lazy), lazy).toBe(true);
+    }
+  });
+
   it('contrast: the /observe door carries the pack statically, by design', async () => {
     const graph = await splitGraph(resolve(DIST, 'observe.js'));
     expect(graph.syncInputs.has(PACK)).toBe(true);

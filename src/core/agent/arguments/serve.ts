@@ -10,7 +10,13 @@
  * Role:    core/ layer leaf of the inputs layer (honesty layer 2). Every
  *          sentence here is registered in `test/modelFacingSurfaces.test.ts`:
  *          it says what the model may do and what the record keeps, and
- *          promises no outcome a later path can break.
+ *          promises no outcome a later path can break. Loaded through
+ *          `import()` by every static site that serves one of them — the
+ *          tools slot and seed (the schema), ToolCalls through
+ *          `dispatch.ts` (the note, the refusal), the final branch's armed
+ *          variant (the block) — and only under the arm: the optional-family
+ *          law of docs-next's site budget, so a plain agent's graph never
+ *          carries this module.
  * Emits:   N/A.
  *
  * ## The value in a sentence goes through the tool's own view
@@ -24,7 +30,9 @@
 import type { LLMToolSchema } from '../../../adapters/types.js';
 import { shownArgsOf } from '../../toolShownArgs.js';
 import type { InputValue } from '../../inputRequest.js';
+import { argumentRewritesOf, type ArgumentRewrite } from '../middleware/rewrites.js';
 import { isRefused, rulesOf, type RuledToolLike } from './declare.js';
+import { HIDDEN_VALUE, type ArgumentRow } from './rows.js';
 
 type PlainObject = Record<string, unknown>;
 
@@ -81,8 +89,9 @@ function withSentence(property: PlainObject, sentence: string): PlainObject {
 
 // FOLD · the one owner of how a ruled tool's schema is SERVED
 // consumers read this and never re-derive it: core/slots/buildToolsSlot.ts · commitWire (the one
-// decoration site) and core/agent/stages/seed.ts (its static twin); servedView rebuilds from the
-// committed list, so the decoration is a pure function of (schema, tool).
+// decoration site, through `rulesOnWire`) and core/agent/stages/seed.ts (its static twin), each
+// loading this module through `import()` under the arm; servedView rebuilds from the committed
+// list, so the decoration is a pure function of (schema, tool).
 /**
  * The served copy of a ruled tool's schema: every argument an `assume` or an
  * `ask` rule governs leaves `required` (the library fills it, or asks the
@@ -143,6 +152,26 @@ export function withArgumentRules(
   };
 }
 
+/**
+ * The served list with each ruled tool's schema decorated (`withArgumentRules`,
+ * from the rules of the implementation that WINS each name), or the SAME list
+ * when no served schema changed — so an armed agent whose wire carries no
+ * ruled tool commits the bytes it always did. The tools slot's one decoration
+ * site (`core/slots/buildToolsSlot.ts` · `commitWire`) calls it under the arm.
+ */
+export function rulesOnWire(
+  served: readonly LLMToolSchema[],
+  winningTools: ReadonlyMap<string, RuledToolLike>,
+): readonly LLMToolSchema[] {
+  let changed = false;
+  const decorated = served.map((schema) => {
+    const next = withArgumentRules(schema, winningTools.get(schema.name));
+    if (next !== schema) changed = true;
+    return next;
+  });
+  return changed ? decorated : served;
+}
+
 // ─── The note on a result ───────────────────────────────────────────────
 
 /** One filled argument, as the note names it. */
@@ -156,7 +185,7 @@ export interface FilledArgument {
 
 // LENS · tool-result · persistent-history
 // reads: the call's own fill (`argumentResolutions`, the layer's entry for this toolCallId), kept only
-//        where the call RAN with it (`stages/toolCalls.ts` · `fillsThatRan` — a middleware may rewrite one)
+//        where the call RAN with it (`dispatch.ts` · `fillsThatRan` — a middleware may rewrite one)
 // law: may omit, never deny; every clause anchored to the call it was composed on — past tense,
 // naming the call this result answers, so a later call of the turn re-reading it reads a true sentence.
 /**
@@ -347,4 +376,69 @@ export function assumedBlock(lines: readonly AssumedLine[]): string {
     );
   }
   return printed.length === 0 ? '' : `${ASSUMED_BLOCK_HEADING}\n${printed.join('\n')}`;
+}
+
+/**
+ * The "Assumed" block for THIS turn, read off the record: every `default`
+ * argument row of `turn`, in the order it was filed, less each row a
+ * before-tool rewrite superseded (its call ran with the rewrite's value, not
+ * the one the row names). `readDecisions` hands over `middlewareDecisions`; it
+ * is asked only when a row exists (a run with nothing assumed never reads the
+ * key), and is absent on an agent with no before-tool chain, whose record can
+ * hold no tool rewrite. `''` when nothing is assumed. The final branch's armed
+ * variant (`stages/prepareFinal.ts` · `prepareFinalWithLimitsAndAssumedStage`)
+ * calls it through `import()`.
+ *
+ * @example
+ * ```ts
+ * assumedBlockOf(state.findingsLedger ?? [], state.turnNumber, undefined);
+ * // "Assumed (a tool's rule, not your words):\n- window = \"2h\" (search_logs)"
+ * ```
+ */
+export function assumedBlockOf(
+  ledger: readonly { readonly kind: string }[],
+  turn: number,
+  readDecisions: (() => readonly unknown[]) | undefined,
+): string {
+  const rows = defaultRowsOf(ledger, turn);
+  const rewrites =
+    readDecisions !== undefined && rows.length > 0
+      ? argumentRewritesOf(readDecisions())
+      : undefined;
+  return assumedBlock(assumedLinesOf(rows, rewrites));
+}
+
+const isArgumentRow = (row: { readonly kind: string }): row is ArgumentRow =>
+  row.kind === 'argument';
+
+/** This turn's `default` argument rows, in the order they were filed. */
+function defaultRowsOf(ledger: readonly { readonly kind: string }[], turn: number): ArgumentRow[] {
+  const rows: ArgumentRow[] = [];
+  for (const row of ledger) {
+    if (isArgumentRow(row) && row.turn === turn && row.source === 'default') rows.push(row);
+  }
+  return rows;
+}
+
+/**
+ * The rows as the "Assumed" block names them — every row a before-tool
+ * rewrite superseded left out: its call ran with the rewrite's value, not
+ * the one the row names (`middleware/rewrites.ts` · `argumentRewritesOf`).
+ */
+function assumedLinesOf(
+  rows: readonly ArgumentRow[],
+  rewrites: ReadonlyMap<string, ReadonlyMap<string, ArgumentRewrite>> | undefined,
+): AssumedLine[] {
+  const lines: AssumedLine[] = [];
+  for (const row of rows) {
+    if (rewrites?.get(row.toolCallId)?.has(row.argument) === true) continue;
+    const value = row.value ?? '';
+    lines.push({
+      toolName: row.toolName,
+      argument: row.argument,
+      value,
+      hidden: value === HIDDEN_VALUE,
+    });
+  }
+  return lines;
 }

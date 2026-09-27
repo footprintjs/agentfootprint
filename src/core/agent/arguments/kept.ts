@@ -4,12 +4,13 @@
  *
  * Pattern: Map leaf, pure. The kept answer's shape and the functions that read
  *          and change the list: ToolCalls keeps and drops entries
- *          (`stages/toolCalls.ts`), the layer's mount hands this turn's
+ *          (`dispatch.ts` · `keepAnswers`, `dropUsedKept`, loaded by
+ *          `stages/toolCalls.ts` under the arm), the layer's mount hands this turn's
  *          entries to `sf-inputs` (`honesty/mounts.ts`), and the layer's one
  *          table fills from them (`resolve.ts` · `verifyPlan`).
  * Role:    core/ layer leaf of the inputs layer (honesty layer 2). On every
- *          armed agent's graph (ToolCalls imports it), so it imports types
- *          only.
+ *          armed agent's graph (the mount and `dispatch.ts` import it), so it
+ *          imports types only.
  * Emits:   N/A.
  *
  * ## Why an answer is kept

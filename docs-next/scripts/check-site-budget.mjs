@@ -377,7 +377,29 @@ const OUTPUT_LIMITS = { bytes: 700_000_000, files: 7_400, duplicateRscBytes: 0 }
 // same day's AnswerAccount release (#17, 9.116.0) then grew the default graph
 // by 1.5 KB, re-measured together at 431.9 KB. Ceiling ~1% over that — thinner
 // than the ~2% rule above, because the stopgap is paid back, not kept.
-const DEMO_ASYNC_GZIP_LIMIT = 436_000;
+//
+// RAISED to 450 KB (2026-09-27) — owner-approved raise 2026-09-27; docs-site
+// cleanup planned by the owner. The growth is the honesty inputs layer
+// (`askOrAssume`, honesty step 3, #26). Measured by CI's docs job with
+// EXPORT=true, 17 async assets every time:
+//   before  ceiling 436.0 KB; main at the merge base (cfcebe11)   434.7 KB
+//           the branch before the import() split (8e6ae1a7)       441.8 KB
+//   after   the split, main merged in (d8d7d689)                  441.1 KB
+// The layer's run-time half already loads through import() under the arm
+// (`arguments/dispatch.ts`, `arguments/serve.ts`, `arguments/subflow.ts`,
+// `arguments/resolve.ts`, `middleware/rewrites.ts` — none of them in the
+// demo's assets). That split took the branch from 441.8 to 441.1 KB while main
+// grew 0.5 KB under it (449193f0 measured 434.2 KB). What cannot move is the
+// half a SYNCHRONOUS door needs: `core/tools.ts` · `defineTool` validates
+// `askOrAssume` rules at definition (`arguments/declare.ts` ·
+// `assertAskOrAssume`), so declare.ts, rows.ts (the checkpoint check
+// `validateCheckpoint` runs), the mount, the arm and the turn stamp stay on the
+// default graph: +6.4 KB over the merge base. The full list is in
+// src/core/agent/arguments/README.md, "What a plain agent carries". A local
+// EXPORT=true build of d8d7d689 measured 439.8 KB. Local builds read about
+// 1.3 KB under CI on this number (dd076f68 saw 1.5 KB), so CI's figure is the
+// basis. Ceiling ~2% over CI's 441.1 KB, as every raise here.
+const DEMO_ASYNC_GZIP_LIMIT = 450_000;
 
 function formatBytes(bytes) {
   if (bytes < 1_000) return `${bytes} B`;

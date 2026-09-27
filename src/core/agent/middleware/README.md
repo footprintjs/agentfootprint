@@ -86,8 +86,9 @@ secrets").
   declared, `allow(args, why, { from })`'s origin per key); this is the ONE
   reading of those rows, taken by the answer's standing
   (`assessment/assess.ts` · `readArgumentVerdicts`) and the answer's "Assumed"
-  block (`stages/prepareFinal.ts`), so the two cannot disagree about which
-  value a call ran with.
+  block (`arguments/serve.ts` · `assumedBlockOf`), so the two cannot disagree
+  about which value a call ran with. Both readers load through `import()`, so
+  a plain agent never carries this module.
 
   ```ts
   argumentRewritesOf(state.middlewareDecisions).get('c1')?.get('window');
