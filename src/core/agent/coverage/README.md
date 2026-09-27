@@ -6,9 +6,11 @@ Walker: `read.ts` — the ONE reader both dispatch boundaries and the raise site
 (`../stages/toolCalls.ts` · `declareRaisedAbsence`) call.
 Fold: `evidence.ts` (`absenceEvidenceProjection` — what an absence may ground)
 and `emptiness.ts` (`readEmptiness` — the ONE reader of what came back, shared by
-the answer account and the answer's standing).
+the answer account and the answer's standing), and `answer.ts` ·
+`coverageOfAnswer` — the answer's limits as data, which a typed answer carries
+instead of the block.
 Lens: `answer.ts` · `composeAnswerWithCoverage`, the coverage block appended to
-the final answer so the model cannot drop it.
+a prose answer so the model cannot drop it.
 
 # `coverage/` — an absence that names itself, and a limit that travels
 
@@ -565,7 +567,7 @@ ways — no delivered status, no ceiling, no column-type contract, no evidence.
 | event | `agentfootprint.tools.absent` | `agentfootprint.tools.coverage_declared` |
 | tracked state | appended to `coverageDeclared` | appended to `coverageDeclared` |
 | evidence corpus | grounds **every field but `looked_for`** | indexed as ordinary data |
-| final answer | folds into the block, with `.limitsTravelWithTheAnswer()` | same |
+| final answer | folds into the block, with `.limitsTravelWithTheAnswer()` — into `answerCoverage` (data) when the answer is typed | same |
 | suggestion (`tryInstead`, `tryInsteadTool`) | rides `tools.absent` as declared (9.113.0); never tracked, never appended | — (a ledger makes none) |
 
 ### What deliberately does NOT change
@@ -627,6 +629,41 @@ bytes, which is why it is opt-in; the recording half runs either way.
 It is **not** enforcement of the model's prose. It does not check that the model
 stated the limits, and it does not refuse an answer that did not.
 
+### A typed answer carries them as data
+
+An answer with an output schema is JSON, and JSON followed by a block of prose
+is not JSON: the append made `runTyped()` throw `OutputSchemaError` on every
+typed answer whose tools declared a limit. So with `.outputSchema()` configured,
+nothing is appended. The answer string stays exactly the model's (after the
+Route decider's own peel), and the same fold travels beside it —
+`coverageOfAnswer`, the block's three lists as data: merged in declaration
+order, duplicates said once, and every entry kept (the block's cap of twelve per
+section is a reading aid for prose, not a limit on data).
+
+```ts
+const agent = Agent.create({ provider, model })
+  .tool(replicationHealth) // returns coverage(verdict, { checked, notChecked, cannotCover })
+  .outputSchema(Verdict)
+  .limitsTravelWithTheAnswer()
+  .build();
+
+const verdict = await agent.runTyped('is replication healthy?'); // parses: nothing appended
+const limits = agent.answerCoverage();
+// → { checked: [{ what: 'SRDF pair state on all 4 arrays (live query)' }],
+//     notChecked: [{ what: 'NDM migration sessions', why: 'the API timed out — ask again' }],
+//     cannotCover: [{ what: 'host-side multipathing', why: 'no collector runs on the ESX hosts' }] }
+```
+
+One value, three readers: `AgentState.answerCoverage` (committed by the Route
+decider on the turn it picks `final` — `../stages/answerCoverage.ts` ·
+`withAnswerCoverage`; the Final branch cannot write back), `agent.answerCoverage()`
+(a detached copy), and `turn_end.answerCoverage` (projected by
+`../stages/prepareFinal.ts` · `prepareFinalWithLimitsAsDataStage`). All three are
+absent when no tool declared anything, so such a run commits exactly the keys it
+would have without the option. The raw rows stay in `coverageDeclared` either
+way. A prose answer is untouched, byte for byte — pinned with the typed path by
+`test/core/agent/coverage-typed-answer.test.ts`.
+
 ## Files
 
 | file | one job |
@@ -640,7 +677,7 @@ stated the limits, and it does not refuse an answer that did not.
 | `emptiness.ts` | the ONE reader of what came back (§ 6) — typed routes, the door the record holds, what a value's own envelope declares (`declaredByValue`), the `rowsAt` rule |
 | `read.ts` | the ONE reader both dispatch boundaries and the raise site (`../stages/toolCalls.ts` · `declareRaisedAbsence`) call — lifts the suggestion beside the coverage |
 | `evidence.ts` | what an absence is allowed to ground |
-| `answer.ts` | folding the run's declarations into one appended block |
+| `answer.ts` | folding the run's declarations into one appended block (a prose answer), or into the answer's coverage as data (`coverageOfAnswer`, a typed answer) |
 
 ## The notes cross a language boundary (9.70.0)
 

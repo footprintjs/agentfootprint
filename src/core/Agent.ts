@@ -260,6 +260,8 @@ import type {
 } from './agent/types.js';
 import { buildRouteDeciderStage } from './agent/stages/route.js';
 import { withAnswerValidation } from './agent/stages/answerValidation.js';
+import { withAnswerCoverage } from './agent/stages/answerCoverage.js';
+import type { Coverage } from './agent/coverage/types.js';
 import {
   AnswerValidationError,
   type AnswerValidationReport,
@@ -484,10 +486,12 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
    */
   private readonly evidenceGate?: ResolvedEvidenceGate;
   /**
-   * `.limitsTravelWithTheAnswer()` (this release) — whether the run's declared
-   * coverage is folded into the final answer. False for every agent that did
-   * not ask for it; the RECORDING half of the coverage primitives does not
-   * consult it.
+   * `.limitsTravelWithTheAnswer()` — whether the run's declared coverage
+   * travels with the final answer: appended as a block to a prose answer, or,
+   * when an output schema makes the answer TYPED, committed beside it as data
+   * (`answerCoverage()`), because JSON followed by prose is not JSON. False for
+   * every agent that did not ask for it; the RECORDING half of the coverage
+   * primitives does not consult it.
    */
   private readonly limitsTravelWithTheAnswerValue: boolean = false;
   private readonly skillGraphCascade?: {
@@ -1645,6 +1649,10 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
    *
    * Throws if the agent has no outputSchema set or if the run
    * pauses (use `run()` directly when pauses are expected).
+   *
+   * With `.limitsTravelWithTheAnswer()`, nothing is appended to a typed
+   * answer: the limits its tools declared come back as data, from
+   * `agent.answerCoverage()`.
    */
   async runTyped<T = unknown>(input: AgentInput | string, options?: AgentRunOptions): Promise<T> {
     if (!this.outputSchemaParser) {
@@ -3620,6 +3628,45 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
   }
 
   /**
+   * The limits of the last run's TYPED answer, as data — what its tools
+   * declared they `checked`, did not check (`notChecked`) and can never see
+   * (`cannotCover`), folded across the run: duplicates said once, every entry
+   * kept.
+   *
+   * Set when the agent has an output schema AND `.limitsTravelWithTheAnswer()`:
+   * a typed answer is JSON, and the limits block that option appends to a
+   * prose answer would stop it being JSON, so for a typed answer the limits
+   * travel beside it instead — here, on `turn_end.answerCoverage`, and in
+   * `getLastSnapshot().sharedState.answerCoverage`, one value three ways. The
+   * answer string, and so `runTyped()`, is exactly the model's.
+   *
+   * `undefined` when the run's tools declared no limits, on a prose answer
+   * (the block is in the answer string there; `sharedState.coverageDeclared`
+   * holds the raw rows either way), and before the first run. Detached from
+   * the execution record, so a caller may keep or mutate it.
+   *
+   * @example
+   * ```ts
+   * const agent = Agent.create({ provider, model })
+   *   .tool(replicationHealth) // returns coverage(verdict, { … })
+   *   .outputSchema(Verdict)
+   *   .limitsTravelWithTheAnswer()
+   *   .build();
+   *
+   * const verdict = await agent.runTyped({ message: 'is replication healthy?' });
+   * const limits = agent.answerCoverage();
+   * for (const item of limits?.cannotCover ?? []) {
+   *   console.log(`never covered: ${item.what} (${item.why})`);
+   * }
+   * ```
+   */
+  answerCoverage(): Coverage | undefined {
+    const limits = (this.getLastSnapshot()?.sharedState as Partial<AgentState> | undefined)
+      ?.answerCoverage;
+    return limits === undefined ? undefined : structuredClone(limits);
+  }
+
+  /**
    * How far the last run's answer stands — folded from its COMMITTED record,
    * never from how sure the model sounded: `known` · `consistent` (checks ran,
    * none fired — never "verified") · `not-sure` (with the reasons) · `ask` (the
@@ -4561,6 +4608,16 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
             artifactStore,
             () => this.consentOutstanding.size > 0,
           );
+    // `.limitsTravelWithTheAnswer()` on a TYPED answer — decided once, here.
+    // An output schema makes the answer JSON, and the appended block would
+    // make it JSON followed by prose, which `runTyped()` cannot parse. So the
+    // limits travel as DATA: the Route decider's terminal decision commits the
+    // fold (`withAnswerCoverage`) and the Final branch projects it onto
+    // `turn_end`. A prose answer keeps the block; an agent that asked for
+    // neither is handed the decider it always had.
+    const limitsAsData =
+      this.limitsTravelWithTheAnswerValue && this.outputSchemaParser !== undefined;
+    const terminalRouteDecider = limitsAsData ? withAnswerCoverage(routeDecider) : routeDecider;
 
     // toolCallsHandler extracted to ./agent/stages/toolCalls.ts (v2.11.2).
     const toolCallsHandler = buildToolCallsHandler({
@@ -4742,7 +4799,7 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
       maxIterations,
       seed,
       callLLM,
-      routeDecider,
+      routeDecider: terminalRouteDecider,
       toolCallsHandler,
       // The re-ask branch — mounted only when there are retries to spend. A
       // `'tool-forced'` agent with `retries: 0` gets the constrained shape and
@@ -4799,11 +4856,14 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
       // The declared ontology (9.106.0): the grouped chart carries the run
       // constant across the sf-llm-call boundary, under the arm.
       ...(this.ontology !== undefined && { hasOntology: true }),
-      // `.limitsTravelWithTheAnswer()` (this release) — value-conditional, the
+      // `.limitsTravelWithTheAnswer()` — value-conditional, the
       // `resolvedModel` precedent: absent from the deps object entirely for an
       // agent that did not ask, so both builders mount the final-branch stage
-      // function they have always mounted.
-      ...(this.limitsTravelWithTheAnswerValue && { attachCoverageLimits: true }),
+      // function they have always mounted. ONE of the two, never both: a prose
+      // answer gets the appended block, a TYPED one (`limitsAsData`, above)
+      // gets the stage that appends nothing and carries the limits as data.
+      ...(this.limitsTravelWithTheAnswerValue && !limitsAsData && { attachCoverageLimits: true }),
+      ...(limitsAsData && { coverageLimitsAsData: true }),
       ...(this.answerValidationConfig !== undefined && { hasAnswerValidation: true }),
       // The out-of-budget wrap-up branch (9.56.0) — the conditional-mount law
       // above, decided once beside the Route decider that routes to it so the
