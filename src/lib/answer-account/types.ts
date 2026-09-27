@@ -206,7 +206,8 @@ export type CallOutcome =
  * result that handed back a question and no data) joined it with that reader;
  * readers of this union skip a value they do not know.
  */
-export type Emptiness = import('../../core/agent/coverage/emptiness.js').Emptiness;
+import type { Emptiness } from '../../core/agent/coverage/emptiness.js';
+export type { Emptiness };
 
 export interface ToolCallFact {
   /** Cut at 200 characters (a model-chosen id is data, and the account is bounded). */
