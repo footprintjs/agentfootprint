@@ -4888,8 +4888,13 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
       ...(this.findingsOptions !== undefined && { hasFindingsLedger: true }),
       // The inputs layer (honesty layer 2): `sf-inputs` between the LLM call
       // and Route, in both builders through one helper; absent → untouched.
+      // With a before-tool chain, the final branch's "Assumed" block also reads
+      // the chain's rewrites (a rewritten fill is not what the call ran with).
       ...(inputsArmed && {
-        inputsLayer: { toolOf: (toolName: string) => resolveForLayer(toolName).tool },
+        inputsLayer: {
+          toolOf: (toolName: string) => resolveForLayer(toolName).tool,
+          ...(this.toolMiddleware.length > 0 && { rewrites: true as const }),
+        },
       }),
       // Tool choice by classifier (9.105.0): the mount args on the Tools
       // branch and the key across the sf-llm-call boundary, under the arm.

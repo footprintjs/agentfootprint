@@ -4,7 +4,7 @@ title: LLMChunk
 
 # Interface: LLMChunk
 
-Defined in: [src/adapters/types.ts:376](https://github.com/footprintjs/agentfootprint/blob/main/src/adapters/types.ts#L376)
+Defined in: [src/adapters/types.ts:385](https://github.com/footprintjs/agentfootprint/blob/main/src/adapters/types.ts#L385)
 
 ## Properties
 
@@ -12,7 +12,7 @@ Defined in: [src/adapters/types.ts:376](https://github.com/footprintjs/agentfoot
 
 > `readonly` **content**: `string`
 
-Defined in: [src/adapters/types.ts:379](https://github.com/footprintjs/agentfootprint/blob/main/src/adapters/types.ts#L379)
+Defined in: [src/adapters/types.ts:388](https://github.com/footprintjs/agentfootprint/blob/main/src/adapters/types.ts#L388)
 
 Token text. Empty for the terminal chunk (`done: true`).
 
@@ -22,7 +22,7 @@ Token text. Empty for the terminal chunk (`done: true`).
 
 > `readonly` **done**: `boolean`
 
-Defined in: [src/adapters/types.ts:381](https://github.com/footprintjs/agentfootprint/blob/main/src/adapters/types.ts#L381)
+Defined in: [src/adapters/types.ts:390](https://github.com/footprintjs/agentfootprint/blob/main/src/adapters/types.ts#L390)
 
 True only for the final chunk in a stream.
 
@@ -32,7 +32,7 @@ True only for the final chunk in a stream.
 
 > `readonly` `optional` **response?**: [`LLMResponse`](/docs/api/interfaces/LLMResponse)
 
-Defined in: [src/adapters/types.ts:394](https://github.com/footprintjs/agentfootprint/blob/main/src/adapters/types.ts#L394)
+Defined in: [src/adapters/types.ts:403](https://github.com/footprintjs/agentfootprint/blob/main/src/adapters/types.ts#L403)
 
 Authoritative response payload, populated ONLY on the final chunk
 (`done: true`). Carries `toolCalls`, `usage`, `stopReason` — the
@@ -51,7 +51,7 @@ authoritative payload in that case.
 
 > `readonly` `optional` **thinkingDelta?**: `string`
 
-Defined in: [src/adapters/types.ts:411](https://github.com/footprintjs/agentfootprint/blob/main/src/adapters/types.ts#L411)
+Defined in: [src/adapters/types.ts:420](https://github.com/footprintjs/agentfootprint/blob/main/src/adapters/types.ts#L420)
 
 v2.14 — streaming thinking-content tokens. Parallel to `content`
 but for the model's reasoning chain rather than visible output.
@@ -74,4 +74,4 @@ live-status strategy).
 
 > `readonly` **tokenIndex**: `number`
 
-Defined in: [src/adapters/types.ts:377](https://github.com/footprintjs/agentfootprint/blob/main/src/adapters/types.ts#L377)
+Defined in: [src/adapters/types.ts:386](https://github.com/footprintjs/agentfootprint/blob/main/src/adapters/types.ts#L386)

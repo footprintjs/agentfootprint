@@ -117,8 +117,9 @@ import type {
 } from '../../slots/buildToolsSlot.js';
 import type { ToolClaim } from '../buildToolRegistry.js';
 import { changedArgKeys, shownArgsOf } from '../../toolShownArgs.js';
+import { toolBytesOf } from '../../../lib/toolBytes.js';
 import { buildToolResolver, type ToolResolution } from './toolResolver.js';
-import type { ArgumentResolution } from '../arguments/resolve.js';
+import type { ArgumentFill, ArgumentResolution } from '../arguments/resolve.js';
 import { rulesOf } from '../arguments/declare.js';
 import {
   filledNote,
@@ -257,11 +258,14 @@ export interface ToolCallsHandlerDeps {
    * `tool_start` (which keeps the model's proposal) and BEFORE the permission
    * check: a fill builds a fresh `{ ...args, ...fills }` that permission,
    * middleware, validation, check-in, credentials and execute all see, and a
-   * refused entry lands in the argument-refusal shape. A call that ran on a
-   * filled value gets the layer's past-tense note after the tool's own bytes,
-   * and its history message carries `toolChars`. ABSENT, a call whose tool
-   * declares argument rules is REFUSED (fail closed — a ToolProvider served
-   * it and the build could not see it), with one warning naming
+   * refused entry lands in the argument-refusal shape — after permission and
+   * BEFORE the middleware chain, so no middleware asks about a call that will
+   * not run (the ask-resume door re-applies it). A call that ran on a filled
+   * value gets the layer's past-tense note after the tool's own bytes — one
+   * clause per fill it really ran with — and its history message carries
+   * `toolChars`. ABSENT, a call whose tool declares argument rules is REFUSED
+   * (fail closed — a ToolProvider served it and the build could not see it),
+   * at the same place and at the same door, with one warning naming
    * `.inputsLayer()`; every other call runs exactly as it always did.
    */
   readonly inputsLayer?: true;
@@ -1234,6 +1238,11 @@ function notDispatchedMarker(paused: {
  * never ran, so it produced nothing to take a value from. Read off the marker
  * (`../findings/offer.ts` · `isResultMessage`), never the sentence.
  *
+ * Each result is read as the TOOL's own bytes (`lib/toolBytes.ts` ·
+ * `toolBytesOf`): the note the inputs layer appends after a filled call's
+ * result carries the value the library filled, and a value only that note
+ * carries is not one the run's producer served.
+ *
  * Exported for its unit test (`test/integrity/emptyLookup.test.ts`).
  */
 export function producerCorpusOf(
@@ -1245,7 +1254,7 @@ export function producerCorpusOf(
     if (!isResultMessage(message)) continue;
     const name = message.toolName;
     if (typeof name !== 'string' || !argumentsFrom.includes(name)) continue;
-    produced.push({ toolName: name, text: message.content });
+    produced.push({ toolName: name, text: toolBytesOf(message) });
   }
   return produced;
 }
@@ -1377,15 +1386,31 @@ function withFills(args: ToolArgs, resolution: ArgumentResolution | undefined): 
 }
 
 /** The fills as the note may print them — a value the tool's view hides is never printed. */
-function shownFills(
-  tool: Tool | undefined,
-  fills: NonNullable<ArgumentResolution['fills']>,
-): FilledArgument[] {
+function shownFills(tool: Tool | undefined, fills: readonly ArgumentFill[]): FilledArgument[] {
   return fills.map((f) => ({
     argument: f.argument,
     value: f.value,
     hidden: hidesArgument(tool, f.argument, f.value),
   }));
+}
+
+/**
+ * The entry's fills the call RAN with — each whose value is still the value on
+ * the arguments the call ran with (`callArgs`, after the before-tool chain). A
+ * middleware that rewrote a filled argument ran the call on ITS value, so a
+ * clause naming the fill would tell the model the call ran with a value it did
+ * not run with — a sentence a later path broke (honesty law 7). That clause is
+ * omitted, never denied: the rewrite is on `middlewareDecisions`
+ * (`changedKeys`), which the answer's standing and the "Assumed" block read.
+ * Strict equality on purpose: the note prints the value, so it must be the
+ * value that ran, byte for byte.
+ */
+function fillsThatRan(
+  resolution: ArgumentResolution | undefined,
+  ranWith: ToolArgs,
+): readonly ArgumentFill[] {
+  const fills = resolution?.fills ?? [];
+  return fills.filter((f) => ranWith[f.argument] === f.value);
 }
 
 /**
@@ -4099,14 +4124,34 @@ export function buildToolCallsHandler(
             );
           }
         }
+        // Tool-args validation (#9) and the inputs layer's refusals share one
+        // flag: the call is refused for its ARGUMENTS and lands in one shape.
+        let argsRejected = false;
+        // ── THE INPUTS LAYER'S REFUSALS (honesty layer 2) — the argument-
+        // refusal shape the validation refusal below uses, decided HERE:
+        // after permission (policy sees every attempted call) and BEFORE the
+        // middleware chain, so no middleware can `ask` a person about a call
+        // the library has already decided must not run — an approved ask
+        // resumes through its own door, which re-applies both refusals
+        // (`resume`, the middleware-ask path). Refused: a call whose tool's
+        // rules could not be read at dispatch (the layer's entry), and — with
+        // the layer NOT mounted — any call whose tool declares rules (fail
+        // closed). Neither applies to a tool that declares nothing.
+        const rulesRefusal = resolution?.refused ?? unmountedRules(tool, tc.name);
+        if (!denied && rulesRefusal !== undefined) {
+          argsRejected = true;
+          error = true;
+          result = rulesRefusal;
+        }
         // ── The middleware chain ─────────────────────────────────────────
         // Walked only for a call the permission gate let through, so an
         // existing checker keeps deciding first and a denial there costs
         // nothing. A denial from the chain lands as the tool result, exactly
         // like every other refusal in this loop — the model reads it and
         // adapts. An `ask` commits partial state and pauses, on the same wire
-        // the check-in gate uses.
-        if (!denied && deps.toolMiddleware && deps.toolMiddleware.length > 0) {
+        // the check-in gate uses. Never walked for a call whose arguments the
+        // inputs layer refused (above).
+        if (!denied && !argsRejected && deps.toolMiddleware && deps.toolMiddleware.length > 0) {
           const chain = await runToolChain(deps.toolMiddleware, {
             toolName: tc.name,
             // Provenance from the tool that is about to run, so a policy can
@@ -4197,20 +4242,8 @@ export function buildToolCallsHandler(
         // on the next ReAct iteration. Unknown tools keep the existing
         // "Unknown tool" path below — validation only applies to resolved
         // tools (their inputSchema is the contract the LLM was shown).
-        let argsRejected = false;
-        // ── THE INPUTS LAYER'S REFUSALS (honesty layer 2) — the argument-
-        // refusal shape the validation refusal below uses, and at its place
-        // (after permission: policy sees every attempted call). Refused: a
-        // call whose tool's rules could not be read at dispatch (the layer's
-        // entry), and — with the layer NOT mounted — any call whose tool
-        // declares rules (fail closed). Neither applies to a tool that
-        // declares nothing.
-        const rulesRefusal = resolution?.refused ?? unmountedRules(tool, tc.name);
-        if (!denied && rulesRefusal !== undefined) {
-          argsRejected = true;
-          error = true;
-          result = rulesRefusal;
-        }
+        // (`argsRejected` is declared above the middleware chain: the inputs
+        // layer's refusals land in the same shape, before the chain.)
         if (!denied && !argsRejected && tool && toolArgValidation !== 'off') {
           const verdict = validateToolArgs(callArgs, tool.schema.inputSchema);
           if (!verdict.ok) {
@@ -5211,14 +5244,15 @@ export function buildToolCallsHandler(
 
         // ── The inputs layer's note (honesty layer 2) — LAST, after every
         // other suffix, and only for a call that RAN on a value the library
-        // filled. The message then carries `toolChars` (the tool's own bytes),
-        // so no reader — the evidence index today — counts the note as the
-        // tool's words: a value that sits only in the library's note grounds
-        // nothing.
+        // filled: one clause per fill the call really ran with
+        // (`fillsThatRan` — a middleware may have rewritten one). The message
+        // then carries `toolChars` (the tool's own bytes), so every reader of
+        // a result's content as the TOOL's words reads through the cut
+        // (`lib/toolBytes.ts` · `toolBytesOf`): a value that sits only in the
+        // library's note grounds nothing and hides no reading of the result.
+        const ranFills = executed ? fillsThatRan(resolution, callArgs) : [];
         const layerNote =
-          executed && resolution?.fills !== undefined && resolution.fills.length > 0
-            ? filledNote(tc.name, shownFills(tool, resolution.fills))
-            : '';
+          ranFills.length > 0 ? filledNote(tc.name, shownFills(tool, ranFills)) : '';
         if (layerNote !== '') resultStr += layerNote;
         newHistory.push({
           role: 'tool',
@@ -5459,126 +5493,145 @@ export function buildToolCallsHandler(
           // re-run, so without it the build-time map's first holder answered.
           const resolved = resolveTool(toolName, scope.pausedToolParty as ToolParty | undefined);
           const tool = resolved.tool;
-          const rest = await runToolChain(deps.toolMiddleware ?? [], {
-            toolName,
-            ...(tool?.source !== undefined && { toolSource: tool.source }),
-            toolCallId,
-            iteration,
-            args,
-            history: [...(scope.history as readonly LLMMessage[])],
-            startIndex: askIndex + 1,
-            askPolicy: 'refuse',
-          });
-          recordDecisions(scope, rest.decisions);
-          // Would this tool's OWN consent gate have fired for this call? Asked by
-          // EVALUATING the demand, not by noticing that one was declared (8.13.0).
-          // Before that, any tool carrying a `checkIn` field was refused here even
-          // when its predicate said no — a selective gate (`amount > 1000`) blocked
-          // the £5 refunds it was written to let through, and the refusal claimed a
-          // consent gate would have run when it provably would not have.
-          //
-          // Judged on `rest.args` (what the tool would actually run with) and on
-          // the same history shape the loop's gate uses, so the answer cannot
-          // depend on which door the call arrived through.
-          const demandTrips =
-            rest.kind !== 'deny' &&
-            tool?.checkIn !== undefined &&
-            shouldCheckIn(tool.checkIn, rest.args, {
-              iteration,
-              toolCallId,
-              history: historyForCheckIn(scope, scope.history as readonly LLMMessage[]),
-            });
-          if (rest.kind === 'deny') {
-            result = rest.reason;
-          } else if (demandTrips) {
-            // The one-question rule, from the other direction: this tool's own
-            // consent gate really does demand a person for THESE arguments, and
-            // there is no checkpoint left to ask with.
-            //
-            // The two gates ask DIFFERENT questions, which is why an approval of
-            // one is not an answer to the other. A middleware `ask` carries the
-            // rule's own free-text question; a check-in carries the TOOL's demand
-            // with the evidence pack attached — `willDo`, what the run read, what
-            // drove the choice, the trail — none of which the person who approved
-            // the ask ever saw. Letting the approval satisfy both would file a
-            // `checkin.decision` for a question nobody was asked. Governance never
-            // silently invents a decision, for the same reason it never silently
-            // drops one.
+          // ── THE INPUTS LAYER'S REFUSALS, re-applied at this door (honesty
+          // layer 2). The batch loop decides them BEFORE the chain, so a call
+          // it refuses never reaches an ask. This door still asks both
+          // questions itself: a checkpoint written before they moved ahead of
+          // the chain, or resumed on an agent built without the layer, must
+          // not run a ruled tool unruled because a person approved the ask.
+          // Refused here, the rest of the chain is not walked and the tool
+          // does not run — the argument-refusal shape the loop lands.
+          const rulesRefusal =
+            (deps.inputsLayer === true
+              ? resolutionsFor(scope, iteration).get(toolCallId)?.refused
+              : undefined) ?? unmountedRules(tool, toolName);
+          if (rulesRefusal !== undefined) {
             error = true;
-            // A past fact about the resumed call, not a forecast about the
-            // turn (9.86.1): "cannot be retried this turn … Answer without it,
-            // or finish" was a prediction plus a standing order on a result
-            // that is re-read on every later call.
-            result =
-              `tool '${toolName}' was not executed on that call, and the resumed dispatch had ` +
-              `no second checkpoint to retry it on: it declares its own checkIn consent gate, ` +
-              `and that gate tripped for those arguments. (To ` +
-              `the agent's author: the middleware '${askedBy}' and the tool's checkIn ask ` +
-              `different questions — one is the rule's, one is the tool's with the evidence ` +
-              `pack attached — so approving one is not answering the other. Keep one gate for ` +
-              `this tool: drop the tool's \`checkIn\`, or let \`onToolCall\` return allow() for ` +
-              `tools that declare their own.)`;
+            result = rulesRefusal;
           } else {
-            const env = scope.$getEnv();
-            const dispatched = await resolveCredentialAndExecute(
-              scope,
-              resolved,
+            const rest = await runToolChain(deps.toolMiddleware ?? [], {
               toolName,
-              rest.args,
+              ...(tool?.source !== undefined && { toolSource: tool.source }),
               toolCallId,
               iteration,
-              env,
-            );
-            result = dispatched.result;
-            error = dispatched.error;
-            toolRan = dispatched.executed === true;
-            // A ceiling-refused call RAN but must not advance a step (9.20.0);
-            // its envelope — status 'invalid' plus any surviving declared
-            // effects — is still picked up and judged below.
-            stepToolRan =
-              dispatched.executed === true && error !== true && dispatched.ceilingRefused !== true;
-            if (dispatched.executed === true && error !== true) {
-              resumeEnvelope = dispatched.envelope;
-            }
-            // skip_step behind a middleware ask, approved (9.18.0): the
-            // placeholder just landed — replace it with the authoritative
-            // sentence BEFORE the chain's last word, the execute loop's
-            // composition kept.
-            if (frameworkSkipStepAnswered(toolName, tool) && stepToolRan) {
-              result = applySkipStep(scope, { args: rest.args, toolCallId, iteration });
-            }
-            // present behind a middleware ask, approved (9.22.0): same
-            // overwrite the batch loop applies — the snapshot (or refusal)
-            // replaces the placeholder before the chain's last word. A miss
-            // is an errored call here too.
-            if (deps.artifactStore && toolName === PRESENT_TOOL_NAME && stepToolRan) {
-              const presented = await applyPresent(scope, {
-                args: rest.args,
-                toolCallId,
+              args,
+              history: [...(scope.history as readonly LLMMessage[])],
+              startIndex: askIndex + 1,
+              askPolicy: 'refuse',
+            });
+            recordDecisions(scope, rest.decisions);
+            // Would this tool's OWN consent gate have fired for this call? Asked by
+            // EVALUATING the demand, not by noticing that one was declared (8.13.0).
+            // Before that, any tool carrying a `checkIn` field was refused here even
+            // when its predicate said no — a selective gate (`amount > 1000`) blocked
+            // the £5 refunds it was written to let through, and the refusal claimed a
+            // consent gate would have run when it provably would not have.
+            //
+            // Judged on `rest.args` (what the tool would actually run with) and on
+            // the same history shape the loop's gate uses, so the answer cannot
+            // depend on which door the call arrived through.
+            const demandTrips =
+              rest.kind !== 'deny' &&
+              tool?.checkIn !== undefined &&
+              shouldCheckIn(tool.checkIn, rest.args, {
                 iteration,
+                toolCallId,
+                history: historyForCheckIn(scope, scope.history as readonly LLMMessage[]),
               });
-              result = presented.text;
-              if (!presented.ok) {
-                error = true;
-                stepToolRan = false;
-              }
-            }
-            // The tool ran on this side of the pause, so the chain gets its
-            // last word here too — a rule about results cannot be skipped by
-            // routing a call through a human.
-            if (dispatched.executed === true) {
-              modelResult = await afterMoment(scope, {
-                ...(tool && { tool }),
+            if (rest.kind === 'deny') {
+              result = rest.reason;
+            } else if (demandTrips) {
+              // The one-question rule, from the other direction: this tool's own
+              // consent gate really does demand a person for THESE arguments, and
+              // there is no checkpoint left to ask with.
+              //
+              // The two gates ask DIFFERENT questions, which is why an approval of
+              // one is not an answer to the other. A middleware `ask` carries the
+              // rule's own free-text question; a check-in carries the TOOL's demand
+              // with the evidence pack attached — `willDo`, what the run read, what
+              // drove the choice, the trail — none of which the person who approved
+              // the ask ever saw. Letting the approval satisfy both would file a
+              // `checkin.decision` for a question nobody was asked. Governance never
+              // silently invents a decision, for the same reason it never silently
+              // drops one.
+              error = true;
+              // A past fact about the resumed call, not a forecast about the
+              // turn (9.86.1): "cannot be retried this turn … Answer without it,
+              // or finish" was a prediction plus a standing order on a result
+              // that is re-read on every later call.
+              result =
+                `tool '${toolName}' was not executed on that call, and the resumed dispatch had ` +
+                `no second checkpoint to retry it on: it declares its own checkIn consent gate, ` +
+                `and that gate tripped for those arguments. (To ` +
+                `the agent's author: the middleware '${askedBy}' and the tool's checkIn ask ` +
+                `different questions — one is the rule's, one is the tool's with the evidence ` +
+                `pack attached — so approving one is not answering the other. Keep one gate for ` +
+                `this tool: drop the tool's \`checkIn\`, or let \`onToolCall\` return allow() for ` +
+                `tools that declare their own.)`;
+            } else {
+              const env = scope.$getEnv();
+              const dispatched = await resolveCredentialAndExecute(
+                scope,
+                resolved,
                 toolName,
+                rest.args,
                 toolCallId,
                 iteration,
-                args: rest.args,
-                result,
-                ...(error === true && { error: true }),
-                history: [...(scope.history as readonly LLMMessage[])],
-                ...(scope.runIdentity && { identity: scope.runIdentity }),
-                ...(env.signal && { signal: env.signal }),
-              });
+                env,
+              );
+              result = dispatched.result;
+              error = dispatched.error;
+              toolRan = dispatched.executed === true;
+              // A ceiling-refused call RAN but must not advance a step (9.20.0);
+              // its envelope — status 'invalid' plus any surviving declared
+              // effects — is still picked up and judged below.
+              stepToolRan =
+                dispatched.executed === true &&
+                error !== true &&
+                dispatched.ceilingRefused !== true;
+              if (dispatched.executed === true && error !== true) {
+                resumeEnvelope = dispatched.envelope;
+              }
+              // skip_step behind a middleware ask, approved (9.18.0): the
+              // placeholder just landed — replace it with the authoritative
+              // sentence BEFORE the chain's last word, the execute loop's
+              // composition kept.
+              if (frameworkSkipStepAnswered(toolName, tool) && stepToolRan) {
+                result = applySkipStep(scope, { args: rest.args, toolCallId, iteration });
+              }
+              // present behind a middleware ask, approved (9.22.0): same
+              // overwrite the batch loop applies — the snapshot (or refusal)
+              // replaces the placeholder before the chain's last word. A miss
+              // is an errored call here too.
+              if (deps.artifactStore && toolName === PRESENT_TOOL_NAME && stepToolRan) {
+                const presented = await applyPresent(scope, {
+                  args: rest.args,
+                  toolCallId,
+                  iteration,
+                });
+                result = presented.text;
+                if (!presented.ok) {
+                  error = true;
+                  stepToolRan = false;
+                }
+              }
+              // The tool ran on this side of the pause, so the chain gets its
+              // last word here too — a rule about results cannot be skipped by
+              // routing a call through a human.
+              if (dispatched.executed === true) {
+                modelResult = await afterMoment(scope, {
+                  ...(tool && { tool }),
+                  toolName,
+                  toolCallId,
+                  iteration,
+                  args: rest.args,
+                  result,
+                  ...(error === true && { error: true }),
+                  history: [...(scope.history as readonly LLMMessage[])],
+                  ...(scope.runIdentity && { identity: scope.runIdentity }),
+                  ...(env.signal && { signal: env.signal }),
+                });
+              }
             }
           }
         }

@@ -243,8 +243,9 @@ the one `validateToolArgs` judges and `mcpServe` serves, is never edited.
 skill's tools, or an MCP tool registered on the builder) arms the layer by
 itself. A ruled tool that only a `ToolProvider` serves needs `.inputsLayer()`
 on the builder — without it, its calls are refused rather than run unruled,
-with one warning. Nothing declared, nothing changes: the chart, the record and
-the requests are byte-identical.
+with one warning, and before any `.toolMiddleware()` link runs, so nobody is
+asked to approve a call that will not run. Nothing declared, nothing changes:
+the chart, the record and the requests are byte-identical.
 
 **Refused at definition** (the same rule runs again at dispatch and at MCP
 ingest): a rule on an argument the schema does not offer, whose type is not
@@ -262,7 +263,14 @@ still registers.
 **A middleware that rewrites a ruled argument** after the layer checked it:
 its value is what ran, so it reads as assumed unless the middleware says where
 it came from — `allow({ ...call.args, window }, 'from the receipt', { from: {
-window: 'person' } })`.
+window: 'person' } })`. A filled value the middleware replaced is named nowhere:
+not in the note the model reads, not in the *Assumed* block.
+
+**The note is never read as the tool's words.** The result message carries the
+length of the tool's own text, and every reader of a result reads only that
+part — the evidence gate, `agent.assessment()`, the answer account and the
+`unsupported-argument` / `empty-lookup` checks. So the "2h" in the note grounds
+nothing, and a bare `[]` after a note still reads *not sure* (`empty-undeclared`).
 
 **The names.** `AskOrAssume` is the rules by argument name (`Tool.askOrAssume`);
 `ToolPeriod` says which argument sets the period and how its values are spelled

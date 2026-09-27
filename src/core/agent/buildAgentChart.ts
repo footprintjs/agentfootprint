@@ -383,7 +383,7 @@ export function buildAgentChart(deps: AgentChartDeps): FlowChart {
       ? prepareFinalWithValidationStage
       : deps.attachCoverageLimits === true
       ? deps.inputsLayer !== undefined
-        ? prepareFinalWithLimitsAndAssumedStage
+        ? prepareFinalWithLimitsAndAssumedStage(deps.inputsLayer.rewrites === true)
         : prepareFinalWithLimitsStage
       : prepareFinalStage,
     STAGE_IDS.PREPARE_FINAL,

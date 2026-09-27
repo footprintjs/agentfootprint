@@ -593,6 +593,10 @@ function ledgerRowIsWellFormed(row: unknown): boolean {
     value !== null &&
     typeof value === 'object' &&
     typeof (value as { toolCallId?: unknown }).toolCallId === 'string';
+  // The honesty layers' turn stamp may ride EVERY kind (the one writer stamps
+  // each row it files while a layer is armed); readers compare it as a number,
+  // so a stamp of any other type would quietly drop its row from its own turn.
+  if (r.turn !== undefined && typeof r.turn !== 'number') return false;
   switch (r.kind) {
     case 'basis':
       return (
@@ -775,7 +779,8 @@ export function validateCheckpoint(value: unknown): AgentRunCheckpoint {
           "open | noise | ruled-out }, iteration) or 'unsettled-by-absence' (with toolCallId, " +
           'iteration, and optional non-empty notChecked / cannotCover lists of { what, why? } ' +
           "and a non-empty tryInstead string) or 'argument' (with toolCallId, toolName, " +
-          'argument, iteration, turn, and a source or an asked in its vocabulary). It is ' +
+          'argument, iteration, turn, and a source or an asked in its vocabulary); a row of ' +
+          'any kind may carry a numeric turn. It is ' +
           'written by an agent with `.findings()` or with the inputs layer armed, and ' +
           're-seeded verbatim on continuation.',
       );

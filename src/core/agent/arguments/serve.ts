@@ -132,16 +132,22 @@ export interface FilledArgument {
 }
 
 // LENS · tool-result · persistent-history
-// reads: the call's own fill (`argumentResolutions`, the layer's entry for this toolCallId)
+// reads: the call's own fill (`argumentResolutions`, the layer's entry for this toolCallId), kept only
+//        where the call RAN with it (`stages/toolCalls.ts` · `fillsThatRan` — a middleware may rewrite one)
 // law: may omit, never deny; every clause anchored to the call it was composed on — past tense,
 // naming the call this result answers, so a later call of the turn re-reading it reads a true sentence.
 /**
  * The past-tense note ToolCalls appends to the result of a call that RAN on a
- * value the library filled — one bracket per filled argument, after the tool's
- * own bytes (the message then carries `toolChars`, so no reader counts the
- * note as the tool's words). The value is kept in the note because the model
- * needs it to reason about what ran ("no errors in 2h"); it is never evidence
- * for that value.
+ * value the library filled — one bracket per filled argument the call really
+ * ran with (a clause whose fill a before-tool middleware rewrote is left
+ * out), after the tool's own bytes. The message then carries `toolChars`, and
+ * every reader of a result's content as the TOOL's words reads through that
+ * cut (`lib/toolBytes.ts` · `toolBytesOf`): the evidence index, the answer's
+ * standing and the answer account's in-view results, the unsupported-argument
+ * seam's grounded corpus and the empty-lookup seam's producer corpus. The
+ * value is kept in the note because the model needs it to reason about what
+ * ran ("no errors in 2h"); it is never evidence for that value, and it never
+ * hides a reading of the tool's own bytes.
  *
  * @example
  * ```ts

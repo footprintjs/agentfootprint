@@ -4,7 +4,7 @@ title: PricingTable
 
 # Interface: PricingTable
 
-Defined in: [src/adapters/types.ts:937](https://github.com/footprintjs/agentfootprint/blob/main/src/adapters/types.ts#L937)
+Defined in: [src/adapters/types.ts:946](https://github.com/footprintjs/agentfootprint/blob/main/src/adapters/types.ts#L946)
 
 ## Properties
 
@@ -12,7 +12,7 @@ Defined in: [src/adapters/types.ts:937](https://github.com/footprintjs/agentfoot
 
 > `readonly` **name**: `string`
 
-Defined in: [src/adapters/types.ts:938](https://github.com/footprintjs/agentfootprint/blob/main/src/adapters/types.ts#L938)
+Defined in: [src/adapters/types.ts:947](https://github.com/footprintjs/agentfootprint/blob/main/src/adapters/types.ts#L947)
 
 ## Methods
 
@@ -20,7 +20,7 @@ Defined in: [src/adapters/types.ts:938](https://github.com/footprintjs/agentfoot
 
 > **pricePerToken**(`model`, `kind`): `number`
 
-Defined in: [src/adapters/types.ts:940](https://github.com/footprintjs/agentfootprint/blob/main/src/adapters/types.ts#L940)
+Defined in: [src/adapters/types.ts:949](https://github.com/footprintjs/agentfootprint/blob/main/src/adapters/types.ts#L949)
 
 USD per ONE token for the given model+kind.
 

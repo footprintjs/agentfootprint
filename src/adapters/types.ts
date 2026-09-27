@@ -171,12 +171,21 @@ export interface LLMMessage {
    * assumes"), the length of the tool's OWN delivered text: `content` up to
    * this index is the tool's; everything after it is the library's.
    *
-   * Readers that must never count the library's words as the tool's read
-   * through the cut: the evidence index (`core/agent/evidence/evidenceIndex.ts`
-   * · `evidenceFromHistory`), so a value that sits only in the note grounds
-   * nothing — without it, the next call could cite this result as the source of
-   * "2h" and an assumption would become an observed value. The model still
-   * reads the whole `content`: it needs the value to reason about what ran.
+   * Every reader that treats a result's content as the TOOL's words reads
+   * through the cut, and through ONE owner of it (`lib/toolBytes.ts` ·
+   * `toolBytesOf`): the evidence index (`core/agent/evidence/evidenceIndex.ts`
+   * · `evidenceFromHistory`), so a value that sits only in the note grounds no
+   * answer — without it, the next call could cite this result as the source of
+   * "2h" and an assumption would become an observed value; the answer's
+   * standing (`core/agent/assessment/assess.ts` · `assessAnswer`) and the
+   * answer account's in-view results (`lib/answer-account/facts/inView.ts`),
+   * so the note never breaks the one emptiness reader's parse and hides an
+   * empty or absent result; the unsupported-argument seam's grounded corpus
+   * (`core/agent/stages/callLLM.ts`, cut on the committed twin — the wire copy
+   * has lost this field) and the empty-lookup seam's producer corpus
+   * (`core/agent/stages/toolCalls.ts` · `producerCorpusOf`), so the note never
+   * vouches for an argument. The model still reads the whole `content`: it
+   * needs the value to reason about what ran.
    *
    * **Never reaches a provider.** `core/agent/composeRequest.ts` ·
    * `stripFrameworkFields` removes it with `injectedBy` and `notDispatched`.

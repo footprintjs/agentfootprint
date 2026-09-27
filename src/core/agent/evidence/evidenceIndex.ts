@@ -90,6 +90,7 @@
 
 import type { LLMMessage } from '../../../adapters/types.js';
 import type { InjectionRecord } from '../../../recorders/core/types.js';
+import { toolBytesOf } from '../../../lib/toolBytes.js';
 import { absenceEvidenceProjection } from '../coverage/index.js';
 import { isLibraryAuthoredTurn } from './frames.js';
 import { lookupForms, normalizeToken, tokenize } from './normalize.js';
@@ -295,20 +296,6 @@ function indexResult(content: string, sink: Sink): void {
   addText(sink, content);
 }
 
-/**
- * The tool's OWN bytes of a result message — `content` cut at the tool-bytes
- * boundary when the library annotated it (`LLMMessage.toolChars`, the inputs
- * layer's note), the whole `content` otherwise. The library's note carries a
- * value the call ran with ("2h", the value the tool's rule assumes); indexing
- * it would let an assumption ground an answer as if the tool had said it.
- */
-export function toolBytesOf(msg: LLMMessage): string {
-  const cut = msg.toolChars;
-  return typeof cut === 'number' && cut >= 0 && cut <= msg.content.length
-    ? msg.content.slice(0, cut)
-    : msg.content;
-}
-
 // FOLD · the one owner of the corpus of values this run can prove it read from a tool result
 // consumers read this and never re-derive it: gate.ts · checkAnswer, which is HANDED the corpus rather than building one, and findings/contingent.ts · contingentRowsOf, handed its `carriers`; built at two moments by one fold — stages/route.ts · `judgeEvidence` (the answer) and stages/toolCalls.ts · `towersFor` (dispatch, under `.findings()` beside the gate only)
 // detached: yes — never stored; rebuilt per judgement, and the verdict is committed as plain data.
@@ -346,6 +333,10 @@ export function evidenceFromHistory(history: readonly LLMMessage[]): EvidenceCor
     if (msg.role !== 'tool') continue;
     toolResultsThisTurn += 1;
     sink.toolCallId = typeof msg.toolCallId === 'string' ? msg.toolCallId : undefined;
+    // The tool's OWN bytes (`lib/toolBytes.ts` · `toolBytesOf`, the one owner of the
+    // boundary): the inputs layer's note carries a value the call ran with ("2h", the
+    // value the tool's rule assumes), and indexing it would let an assumption ground an
+    // answer as if the tool had said it.
     indexResult(toolBytesOf(msg), sink);
     sink.toolCallId = undefined;
   }

@@ -50,12 +50,14 @@
  */
 
 import { isSaidByPerson } from '../../../lib/saidByPerson.js';
+import { toolBytesOf } from '../../../lib/toolBytes.js';
 import {
   declaredByValue,
   readEmptiness,
   rowsAtProblem,
   type ValueDeclaration,
 } from '../coverage/emptiness.js';
+import { argumentRewritesOf } from '../middleware/rewrites.js';
 import { REASONS, reasonEntry } from './reasons.js';
 import type {
   AnswerAssessment,
@@ -108,10 +110,21 @@ interface TurnResult {
   readonly index: number;
   readonly toolCallId?: string;
   readonly toolName?: string;
+  /**
+   * The TOOL's own bytes — `content` cut at the tool-bytes boundary
+   * (`lib/toolBytes.ts` · `toolBytesOf`). The inputs layer appends a note
+   * after a filled call's result; read whole, the note breaks the parse and
+   * the one emptiness reader returns `unknown`, which would hide
+   * `empty-undeclared`, `declared-absent` and a listed gap on exactly the
+   * calls that ran on a default nobody chose.
+   */
   readonly content: unknown;
 }
 
-/** The results after the last message a person said — or all of them, said so, when none is. */
+/**
+ * The results after the last message a person said — or all of them, said so,
+ * when none is — each read as the tool's own bytes.
+ */
 function turnResults(history: readonly unknown[]): {
   readonly results: readonly TurnResult[];
   readonly from: AnswerAssessment['turnFrom'];
@@ -141,7 +154,7 @@ function turnResults(history: readonly unknown[]): {
       index: i,
       ...(toolCallId !== undefined && { toolCallId }),
       ...(toolName !== undefined && { toolName }),
-      content: m.content,
+      content: toolBytesOf({ content: m.content, toolChars: m.toolChars }),
     });
   }
   return { results, from: start >= 0 ? 'person' : 'whole-history' };
@@ -266,40 +279,6 @@ function argumentRows(state: Readonly<Record<string, unknown>>): readonly Argume
   return [...byCall.values()].flatMap((forCall) => [...forCall.values()]);
 }
 
-/** A before-tool rewrite of one ruled argument — the last per (call, argument). */
-interface RewriteRead {
-  readonly index: number;
-  /** The middleware's declared origin for the argument, when it declared one. */
-  readonly origin?: string;
-}
-
-/**
- * The before-tool middleware rewrites of this turn's calls
- * (`middlewareDecisions` · `changedKeys`, filed under the inputs layer's arm),
- * keyed by call, then argument — the LAST rewrite winning, because the value
- * the call ran with is the last link's.
- */
-function rewritesOf(
-  state: Readonly<Record<string, unknown>>,
-): Map<string, Map<string, RewriteRead>> {
-  const decisions = Array.isArray(state.middlewareDecisions) ? state.middlewareDecisions : [];
-  const byCall = new Map<string, Map<string, RewriteRead>>();
-  decisions.forEach((row: unknown, index) => {
-    if (!isRecord(row) || row.at !== 'tool' || !Array.isArray(row.changedKeys)) return;
-    const toolCallId = str(row.toolCallId);
-    if (toolCallId === undefined) return;
-    const from = isRecord(row.from) ? row.from : {};
-    const forCall = byCall.get(toolCallId) ?? new Map<string, RewriteRead>();
-    for (const key of row.changedKeys) {
-      if (typeof key !== 'string') continue;
-      const origin = str(from[key]);
-      forCall.set(key, { index, ...(origin !== undefined && { origin }) });
-    }
-    byCall.set(toolCallId, forCall);
-  });
-  return byCall;
-}
-
 /**
  * Layer 2, the inputs layer's verdicts. For each ruled argument of this
  * turn's calls, the value the call RAN with decides:
@@ -322,7 +301,9 @@ function readArgumentVerdicts(
   g: Gathered,
 ): void {
   if (rows.length === 0) return;
-  const rewrites = rewritesOf(state);
+  // The before-tool rewrites (`middlewareDecisions` · `changedKeys`) — the ONE reading the
+  // answer's "Assumed" block takes too (`middleware/rewrites.ts` · `argumentRewritesOf`).
+  const rewrites = argumentRewritesOf(state.middlewareDecisions);
   const witness: AssessmentPointer[] = [];
   for (const row of rows) {
     const at = statePointer('findingsLedger', row.index, 'argument');

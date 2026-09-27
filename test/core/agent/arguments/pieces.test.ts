@@ -42,8 +42,8 @@ import type { FindingsRow } from '../../../../src/core/agent/findings/types.js';
 import {
   evidenceFromHistory,
   exemptFromRun,
-  toolBytesOf,
 } from '../../../../src/core/agent/evidence/evidenceIndex.js';
+import { toolBytesOf } from '../../../../src/lib/toolBytes.js';
 import { willDispatch } from '../../../../src/core/agent/stages/route.js';
 import { validateCheckpoint } from '../../../../src/core/runCheckpoint.js';
 import {
@@ -302,6 +302,35 @@ describe('rows.ts — the row and its door', () => {
       /'argument'/,
     );
   });
+
+  it('validateCheckpoint refuses a turn stamp that is not a number on EVERY kind — readers compare it as one', () => {
+    const basis = {
+      kind: 'basis',
+      toolCallId: 'c1',
+      toolName: 't',
+      iteration: 1,
+      basis: 'direct',
+    };
+    const cp = {
+      version: 1,
+      runId: 'r',
+      history: [{ role: 'user', content: 'hi' }],
+      lastCompletedIteration: 1,
+      failurePoint: { phase: 'unknown', iteration: 1 },
+      originalInput: { message: 'hi' },
+    };
+    expect(() => validateCheckpoint({ ...cp, findingsLedger: [basis] })).not.toThrow();
+    expect(() =>
+      validateCheckpoint({ ...cp, findingsLedger: [{ ...basis, turn: 2 }] }),
+    ).not.toThrow();
+    expect(() => validateCheckpoint({ ...cp, findingsLedger: [{ ...basis, turn: '2' }] })).toThrow(
+      /any kind may carry a numeric turn/,
+    );
+    const conflict = { kind: 'conflict', key: 'h1 · state', witnesses: [], iteration: 1 };
+    expect(() =>
+      validateCheckpoint({ ...cp, findingsLedger: [{ ...conflict, turn: null }] }),
+    ).toThrow(/findingsLedger/);
+  });
 });
 
 describe('findings/ledger.ts · appendRows — the pure half of the one writer', () => {
@@ -356,6 +385,16 @@ describe('evidenceIndex.ts — the tool-bytes boundary and the declared defaults
     const { toolChars: _cut, ...plain } = annotated;
     void _cut;
     expect(toolBytesOf(plain)).toBe(plain.content);
+  });
+
+  it('toolBytesOf applies no boundary that cannot describe the content; a non-string passes through', () => {
+    expect(toolBytesOf({ content: 'abc', toolChars: 9 })).toBe('abc');
+    expect(toolBytesOf({ content: 'abc', toolChars: 1.5 })).toBe('abc');
+    expect(toolBytesOf({ content: 'abc', toolChars: -1 })).toBe('abc');
+    expect(toolBytesOf({ content: 'abc', toolChars: '2' })).toBe('abc');
+    expect(toolBytesOf({ content: 'abc', toolChars: 0 })).toBe('');
+    const rows = [1, 2];
+    expect(toolBytesOf({ content: rows, toolChars: 1 })).toBe(rows);
   });
 
   it('a value only the library’s note carries is NOT evidence — the laundering the boundary stops', () => {

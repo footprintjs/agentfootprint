@@ -277,6 +277,87 @@ describe('UNIT — each reason from its one row', () => {
   });
 });
 
+describe('UNIT — the inputs layer’s note is the library’s words, never the tool’s (the tool-bytes boundary)', () => {
+  // A call that ran on a value the library filled carries a past-tense note
+  // after the tool's own bytes, and the committed message says where the
+  // tool's words end (`toolChars`). The fold reads the tool's bytes only.
+  const NOTE =
+    '\n\n[window was not in the search_logs call this result answers; the call ran with "2h", ' +
+    "the value the tool's rule assumes — recorded as assumed, not as the person's.]";
+  const filled = (toolCallId: string, own: string, withBoundary = true) => ({
+    role: 'tool',
+    toolCallId,
+    toolName: 'search_logs',
+    content: own + NOTE,
+    ...(withBoundary && { toolChars: own.length }),
+  });
+  const defaultRow = (toolCallId: string) => ({
+    kind: 'argument',
+    turn: 1,
+    toolCallId,
+    toolName: 'search_logs',
+    iteration: 1,
+    argument: 'window',
+    rule: 'assume',
+    source: 'default',
+    value: '2h',
+  });
+
+  it('a filled call’s bare [] still fires empty-undeclared — the note hides no reading', () => {
+    const a = run({ turnNumber: 1, history: [user('q'), filled('c1', '[]')] });
+    expect(reasonsOf(a)).toEqual(['empty-undeclared']);
+    expect(a.checked.find((c) => c.check === 'result-shape')).toMatchObject({ ran: 1, of: 1 });
+    const withRow = run({
+      turnNumber: 1,
+      history: [user('q'), filled('c1', '[]')],
+      findingsLedger: [defaultRow('c1')],
+    });
+    expect(reasonsOf(withRow)).toEqual(['argument-assumed', 'empty-undeclared']);
+  });
+
+  it('a filled call’s JSON-text absence still fires declared-absent, and it DECLARED what it covered', () => {
+    const envelope = JSON.stringify(absent({ what: 'error lines', checked: ['the log index'] }));
+    const a = run({
+      turnNumber: 1,
+      history: [user('q'), filled('c1', envelope)],
+      findingsLedger: [defaultRow('c1')],
+    });
+    expect(reasonsOf(a)).toEqual(['argument-assumed', 'declared-absent']);
+    expect(a.checked.find((c) => c.check === 'tool-coverage')).toMatchObject({ ran: 1, of: 1 });
+  });
+
+  it('the boundary is what does it: the same note with no boundary cannot be read', () => {
+    const a = run({ turnNumber: 1, history: [user('q'), filled('c1', '[]', false)] });
+    expect(reasonsOf(a)).toEqual([]);
+    expect(a.checked.find((c) => c.check === 'result-shape')).toMatchObject({ ran: 0, of: 1 });
+  });
+});
+
+describe('UNIT — a conflict row stamped with its turn counts in that turn only', () => {
+  const conflict = (turn?: number) => ({
+    kind: 'conflict',
+    key: 'host h1 · state',
+    witnesses: [{ toolCallId: 'c1', subject: { kind: 'host', id: 'h1' }, predicate: 'state' }],
+    iteration: 1,
+    ...(turn !== undefined && { turn }),
+  });
+  // A provider that reuses call ids across turns: turn 2's `c1` is not turn 1's.
+  const history = [user('t1'), tool('c1', [1]), user('t2'), tool('c1', [1])];
+
+  it('stamped with an earlier turn: not this answer’s, although a witness id recurs', () => {
+    expect(run({ turnNumber: 2, history, findingsLedger: [conflict(1)] }).reasons).toEqual([]);
+  });
+
+  it('stamped with this turn: fires; unstamped: the call-id rule (it may over-report)', () => {
+    expect(reasonsOf(run({ turnNumber: 2, history, findingsLedger: [conflict(2)] }))).toEqual([
+      'sources-conflict',
+    ]);
+    expect(reasonsOf(run({ turnNumber: 2, history, findingsLedger: [conflict()] }))).toEqual([
+      'sources-conflict',
+    ]);
+  });
+});
+
 describe('UNIT — this turn only', () => {
   it('reads after the last message a PERSON said; earlier turns’ results are not this answer’s', () => {
     const a = run({ history: [user('t1'), tool('c0', []), user('t2'), tool('c2', [{ id: 1 }])] });

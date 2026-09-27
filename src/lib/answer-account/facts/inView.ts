@@ -20,6 +20,7 @@
  * must never become an in-view line.
  */
 
+import { toolBytesOf } from '../../toolBytes.js';
 import { v } from '../render.js';
 import type { InViewFact, SentenceVar } from '../types.js';
 import { FACT_TEXT_CHARS } from './calls.js';
@@ -102,9 +103,14 @@ export function readInView(ctx: ReadContext, callIds: ReadonlySet<string>): InVi
       .filter((m) => isRecord(m) && m.role === 'user').length;
     if (distance < 1) continue;
     // An EARLIER answer's result: its run's door is not in this record, so the one reader's strict
-    // recognizers read the history text itself — the only evidence of the door that is left.
+    // recognizers read the history text itself — the only evidence of the door that is left. The
+    // TOOL's own bytes (`lib/toolBytes.ts` · `toolBytesOf`): a note the inputs layer appended after
+    // a filled call's result is the library's, and read whole it breaks the parse.
     const rowsAt = rowsAtOf(ctx.declarations, toolName);
-    const reading = readEmptiness(message.content, rowsAt !== undefined ? { rowsAt } : {});
+    const reading = readEmptiness(
+      toolBytesOf({ content: message.content, toolChars: message.toolChars }),
+      rowsAt !== undefined ? { rowsAt } : {},
+    );
     reads.push({
       fact: {
         toolName: toolName.slice(0, FACT_TEXT_CHARS),

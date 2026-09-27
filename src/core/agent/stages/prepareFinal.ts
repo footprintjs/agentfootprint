@@ -28,9 +28,10 @@
 import type { TypedScope } from 'footprintjs';
 import { typedEmit } from '../../../recorders/core/typedEmit.js';
 import { composeAnswerWithCoverage } from '../coverage/index.js';
-import { HIDDEN_VALUE } from '../arguments/rows.js';
+import { HIDDEN_VALUE, type ArgumentRow } from '../arguments/rows.js';
 import { assumedBlock, type AssumedLine } from '../arguments/serve.js';
 import type { FindingsRow } from '../findings/types.js';
+import { argumentRewritesOf, type ArgumentRewrite } from '../middleware/rewrites.js';
 import type { AgentState } from '../types.js';
 
 /**
@@ -179,24 +180,60 @@ export const prepareFinalWithLimitsStage = (scope: TypedScope<AgentState>): void
  * ledger's argument rows, so a run that armed neither never reads the key (a
  * tracked read of a key a run never writes is a phantom context source). With
  * neither coverage nor an assumed value this turn, the answer is unchanged.
+ *
+ * `readsRewrites` — the agent has a before-tool middleware chain
+ * (`.toolMiddleware()`), so a middleware may have rewritten an argument the
+ * layer filled: the call then ran with the REWRITE's value, and a line naming
+ * the filled one would put a value in the person's answer that the call did
+ * not run with. The stage then reads `middlewareDecisions` and leaves such a
+ * row out (omit, never deny) — the reading the answer's standing takes
+ * (`middleware/rewrites.ts` · `argumentRewritesOf`), which reads the rewrite
+ * itself. Without a chain the key can hold no tool rewrite and is never read.
  */
-export const prepareFinalWithLimitsAndAssumedStage = (scope: TypedScope<AgentState>): void => {
-  const declared = scope.coverageDeclared ?? [];
-  const assumed = assumedBlock(
-    assumedLinesOf(scope.findingsLedger ?? [], scope.turnNumber as number),
-  );
-  const answer =
-    declared.length > 0 || assumed !== ''
-      ? composeAnswerWithCoverage(scope.llmLatestContent, declared, assumed)
-      : scope.llmLatestContent;
-  captureTurnPayload(scope, answer);
-};
+export function prepareFinalWithLimitsAndAssumedStage(
+  readsRewrites: boolean,
+): (scope: TypedScope<AgentState>) => void {
+  return (scope) => {
+    const declared = scope.coverageDeclared ?? [];
+    const rows = defaultRowsOf(scope.findingsLedger ?? [], scope.turnNumber as number);
+    // Read only when there is a row a rewrite could supersede — and only on an
+    // agent whose chain can write one.
+    const rewrites =
+      readsRewrites && rows.length > 0
+        ? argumentRewritesOf([
+            ...((scope.middlewareDecisions as readonly unknown[] | undefined) ?? []),
+          ])
+        : undefined;
+    const assumed = assumedBlock(assumedLinesOf(rows, rewrites));
+    const answer =
+      declared.length > 0 || assumed !== ''
+        ? composeAnswerWithCoverage(scope.llmLatestContent, declared, assumed)
+        : scope.llmLatestContent;
+    captureTurnPayload(scope, answer);
+  };
+}
 
-/** This turn's `default` argument rows, as the "Assumed" block names them. */
-function assumedLinesOf(ledger: readonly FindingsRow[], turn: number): AssumedLine[] {
-  const lines: AssumedLine[] = [];
+/** This turn's `default` argument rows, in the order they were filed. */
+function defaultRowsOf(ledger: readonly FindingsRow[], turn: number): ArgumentRow[] {
+  const rows: ArgumentRow[] = [];
   for (const row of ledger) {
-    if (row.kind !== 'argument' || row.turn !== turn || row.source !== 'default') continue;
+    if (row.kind === 'argument' && row.turn === turn && row.source === 'default') rows.push(row);
+  }
+  return rows;
+}
+
+/**
+ * The rows as the "Assumed" block names them — every row a before-tool
+ * rewrite superseded left out: its call ran with the rewrite's value, not
+ * the one the row names (`middleware/rewrites.ts` · `argumentRewritesOf`).
+ */
+function assumedLinesOf(
+  rows: readonly ArgumentRow[],
+  rewrites: ReadonlyMap<string, ReadonlyMap<string, ArgumentRewrite>> | undefined,
+): AssumedLine[] {
+  const lines: AssumedLine[] = [];
+  for (const row of rows) {
+    if (rewrites?.get(row.toolCallId)?.has(row.argument) === true) continue;
     const value = row.value ?? '';
     lines.push({
       toolName: row.toolName,

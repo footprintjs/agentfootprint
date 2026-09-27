@@ -48,6 +48,15 @@ import { willDispatch } from '../stages/route.js';
 export interface InputsMountDeps {
   /** The implementation that will answer a name — the shared dispatch resolver's. */
   readonly toolOf: ToolOf;
+  /**
+   * A before-tool middleware chain is configured (`.toolMiddleware()`), so a
+   * rewrite can supersede one of the layer's rows (the call then ran with the
+   * rewrite's value). Read by the final branch's "Assumed" block
+   * (`stages/prepareFinal.ts` · `prepareFinalWithLimitsAndAssumedStage`),
+   * which then reads `middlewareDecisions`; absent, that key can hold no tool
+   * rewrite and is never read. The mount itself does not read it.
+   */
+  readonly rewrites?: true;
 }
 
 type StageModule = typeof import('../arguments/subflow.js');
