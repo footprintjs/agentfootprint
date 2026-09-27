@@ -10,8 +10,8 @@ The package publishes **17 import paths** carrying **2355 distinct named exports
 
 **1624 of 2355 exports (69%) are described in prose on the site.** The rest split into five different problems, which is the whole point of keeping the columns apart:
 
-- **32 exist, provably work, and are undocumented.** A reference run exercises them and no page on the site describes them. This is the honest headline number for "features that work and nobody has written about". It is the list to work through.
-- **91 are already written up, just not published.** Prose about them exists inside the repo (`docs/`, `README.md`) but never made it onto the site. These are cheap wins: the writing is done, it needs moving.
+- **31 exist, provably work, and are undocumented.** A reference run exercises them and no page on the site describes them. This is the honest headline number for "features that work and nobody has written about". It is the list to work through.
+- **92 are already written up, just not published.** Prose about them exists inside the repo (`docs/`, `README.md`) but never made it onto the site. These are cheap wins: the writing is done, it needs moving.
 - **18 appear only inside a code sample** and nowhere in the surrounding text. A reader scanning the page never learns they exist, and site search does not find them.
 - **590 are undocumented and no reference run touches them.** This report will not guess whether they work. They are reported as UNKNOWN, which is the honest answer, and they need a human pass.
 - **1391 are documented but no reference run exercises them.** For a function or a class that is the shape a dead or unimplemented feature has. For a type or an interface it is mostly noise, because a type is used, not called — so read that class by kind, and the tables below split it.
@@ -25,11 +25,11 @@ A previous inventory put the undocumented-feature count at roughly 36. That figu
 | Counting rule | Undocumented |
 |---|---|
 | every named export not in site prose | 731 |
-| … of those, absent from every prose anywhere in the repo | 622 |
+| … of those, absent from every prose anywhere in the repo | 621 |
 | only functions and classes (things you can call) | 156 |
 | only exports on the root barrel | 139 |
 | **functions and classes on the root barrel** | **23** |
-| functions and classes that a reference run proves work | 10 |
+| functions and classes that a reference run proves work | 9 |
 | typed events | 31 |
 
 The closest analogue to the remembered 36 is the **23 callable things on the root barrel with no prose description** — near enough that the old inventory was probably counting something like it, and far enough from 731 that quoting a single "undocumented" number without saying which rule produced it is how a figure like 36 drifts. Every table below states its rule.
@@ -49,7 +49,7 @@ The repo has four documentation locations and they are not equivalent. Getting t
 | `docs-next/content/docs/**.mdx` (hand-written) | 113 | **Yes — the truth source.** This is what the published site renders and what a reader sees. |
 | `docs-next/content/docs/api/**` (TypeDoc-generated) | 668 | **No — excluded.** |
 | `docs/api-reference/**` (TypeDoc-generated) | 0 | **No — excluded.** |
-| `docs/**.md` + `README.md` (repo-internal prose) | 52 | **No** — but tracked as its own state, "written but not published". |
+| `docs/**.md` + `README.md` (repo-internal prose) | 58 | **No** — but tracked as its own state, "written but not published". |
 
 Both generated trees are produced **from the source**, so every exported symbol appears in them by construction. Counting either as documentation would mark **139** currently-undocumented symbols as documented, collapse most of this report to zero, and hand back a clean bill of health that means nothing. False reassurance in the exact place the author is trying to establish trust is worse than having no check, so both are excluded.
 
@@ -87,7 +87,7 @@ This is **ratcheted, not gated**: a *new* one fails the build, but closing an ex
 
 ### 3. Declared + exercised + not documented — the classic doc gap
 
-These provably work — a reference run touches them — and no page on the site describes them. **32 symbols.**
+These provably work — a reference run touches them — and no page on the site describes them. **31 symbols.**
 
 | Symbol | Kind | Exported from |
 |---|---|---|
@@ -96,7 +96,6 @@ These provably work — a reference run touches them — and no page on the site
 | `compareFinders` | function | `agentfootprint/observe` |
 | `formatToolCatalogReport` | function | `agentfootprint/observe` |
 | `ledgerGated` | function | `agentfootprint/observe` |
-| `ledgerToolGate` | function | `agentfootprint/observe` |
 | `liveStateRecorder` | function | `agentfootprint/observe` |
 | `pairwiseSimilarity` | function | `agentfootprint/observe` |
 | `renderStatusLine` | function | `agentfootprint/observe` |
@@ -598,16 +597,16 @@ The site describes it and it really is exported, but no reference run touches it
 
 ### 5. Written but not published
 
-Prose about these exists in the repo (`docs/`, `README.md`) but nothing on the site mentions them. The writing is already done — this is a publishing job, not an authoring job, which makes it the cheapest class to close. **91 symbols.**
+Prose about these exists in the repo (`docs/`, `README.md`) but nothing on the site mentions them. The writing is already done — this is a publishing job, not an authoring job, which makes it the cheapest class to close. **92 symbols.**
 
 | Symbol | Kind | Exported from | Already written up in |
 |---|---|---|---|
 | `applyOutputSchema` | function | `agentfootprint` | `docs/design/2026-09-findings-ledger-spec.md` |
 | `isPauseRequest` | function | `agentfootprint` | `docs/design/2026-09-honest-answer-ledger-decisions.md`, `docs/design/2026-09-honest-answer-ledger.md` |
 | `makeRunId` | function | `agentfootprint` | `docs/MENTAL_MODEL.md` |
-| `stageRole` | function | `agentfootprint` | `docs/proposals/005-trajectory-assembler.md` |
+| `stageRole` | function | `agentfootprint` | `docs/design/honesty/inputs.md`, `docs/proposals/005-trajectory-assembler.md` |
 | `toolContractCheckup` | function | `agentfootprint` | `docs/proposals/010-contextual-error-types.md` |
-| `INJECTION_KEYS` | const | `agentfootprint` | `docs/design/2026-09-findings-ledger-worklog.md` |
+| `INJECTION_KEYS` | const | `agentfootprint` | `docs/design/2026-09-findings-ledger-worklog.md`, `docs/design/honesty/README.md`, `docs/design/honesty/choice.md` |
 | `EmitEvent` | interface | `agentfootprint` | `docs/proposals/001-lens-subflow-recorder.md` |
 | `FlowchartAsToolOptions` | interface | `agentfootprint` | `docs/design/2026-09-recorded-not-built.md` |
 | `FlowchartHandle` | interface | `agentfootprint` `agentfootprint/observe` | `docs/MENTAL_MODEL.md`, `docs/design/local-observability-and-pii.md` |
@@ -634,11 +633,12 @@ Prose about these exists in the repo (`docs/`, `README.md`) but nothing on the s
 | `compositeScore` | function | `agentfootprint/observe` | `docs/proposals/003-per-loop-influence-credit.md` |
 | `contextLedger` | function | `agentfootprint/observe` | `docs/design/map-walker-trace-fold-lens.md` |
 | `decideSkill` | function | `agentfootprint/context` `agentfootprint/skill-graph` | `docs/design/skill-graph-spec.md`, `docs/proposals/002-skill-graph.md` |
-| `decideTier2` | function | `agentfootprint/context` `agentfootprint/skill-graph` | `docs/design/2026-09-honest-answer-ledger.md` |
+| `decideTier2` | function | `agentfootprint/context` `agentfootprint/skill-graph` | `docs/design/2026-09-honest-answer-ledger.md`, `docs/design/honesty/README.md`, `docs/design/honesty/choice.md` |
 | `defaultSuspectClassifier` | function | `agentfootprint/observe` | `docs/proposals/006-loop-recall-shortlist.md`, `docs/proposals/008-tool-output-provenance.md` |
 | `finalAnswerSimilarity` | function | `agentfootprint/observe` | `docs/proposals/003-per-loop-influence-credit.md` |
 | `formatAsNarrative` | function | `agentfootprint/memory` | `docs/design/map-walker-trace-fold-lens.md` |
 | `formatFacts` | function | `agentfootprint/memory` | `docs/design/map-walker-trace-fold-lens.md` |
+| `ledgerToolGate` | function | `agentfootprint/observe` | `docs/design/honesty/README.md`, `docs/design/honesty/choice.md` |
 | `llmCallIdsFromEvents` | function | `agentfootprint/observe` | `docs/proposals/005-trajectory-assembler.md` |
 | `llmEdgeWeigher` | function | `agentfootprint/observe` | `docs/proposals/003-per-loop-influence-credit.md`, `docs/proposals/005-trajectory-assembler.md` |
 | `llmExtractor` | function | `agentfootprint/memory` | `docs/MENTAL_MODEL.md`, `docs/design/map-walker-trace-fold-lens.md` |
