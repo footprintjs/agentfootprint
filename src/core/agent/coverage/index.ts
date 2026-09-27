@@ -10,7 +10,12 @@
  */
 
 export { ABSENCE_MARKER, ABSENCE_NOTE, absent, coverageOfAbsence, readAbsence } from './absent.js';
-export { composeAnswerWithCoverage, COVERAGE_BLOCK_HEADING } from './answer.js';
+export {
+  composeAnswerWithCoverage,
+  copyCoverage,
+  COVERAGE_BLOCK_HEADING,
+  coverageOfAnswer,
+} from './answer.js';
 export { absenceEvidenceProjection } from './evidence.js';
 export { mergeItems, normalizeCoverageList, sameItem } from './items.js';
 export {

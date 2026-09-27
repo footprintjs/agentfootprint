@@ -24,6 +24,16 @@
  * (`.limitsTravelWithTheAnswer()`): an agent that never asks for it is
  * byte-identical.
  *
+ * ## Why a TYPED answer gets the same fold as data, never the block
+ *
+ * An answer with an output schema is JSON, and JSON followed by prose is not
+ * JSON — appending the block made `runTyped()` throw on every answer that had
+ * limits. So when an output schema is configured the answer string stays the
+ * model's own, and the same fold travels BESIDE it: `coverageOfAnswer` below,
+ * committed as `AgentState.answerCoverage`. The model still cannot drop it —
+ * the framework composes it from what the tools declared — and a person reads
+ * it wherever the app draws it, not wherever the prose happened to end.
+ *
  * ## Why an absence contributes too
  *
  * `absent()` and `coverage()` make the same kind of statement about the same
@@ -35,7 +45,7 @@
  */
 
 import { mergeItems } from './items.js';
-import type { CoverageItem, DeclaredCoverage } from './types.js';
+import type { Coverage, CoverageItem, DeclaredCoverage } from './types.js';
 
 /** The block's opening line. Stable — tests and readers match on it. */
 export const COVERAGE_BLOCK_HEADING = 'Coverage of this answer';
@@ -63,9 +73,65 @@ function renderSection(label: string, items: readonly CoverageItem[]): string {
   return `${label}:\n${lines.join('\n')}`;
 }
 
+// reads: scope.coverageDeclared ← read by ../stages/answerCoverage.ts · withAnswerCoverage, on the Route decider's
+//        terminal decision, and only when the answer is TYPED — the data twin of `composeAnswerWithCoverage`, below.
+/**
+ * The run's declarations folded into the ANSWER's coverage — the three lists
+ * `composeAnswerWithCoverage` renders, as data.
+ *
+ * `.limitsTravelWithTheAnswer()` on a typed answer (`.outputSchema()`): the
+ * answer string has to stay the model's JSON for `runTyped()` to parse it, so
+ * the limits travel beside it instead of inside it — this value, committed as
+ * `AgentState.answerCoverage`, projected onto `turn_end.answerCoverage` and
+ * returned by `agent.answerCoverage()`.
+ *
+ * Folded by the block's own rule — `mergeItems` over each list in declaration
+ * order, duplicates dropped — so every entry is one the block would print and
+ * none is added. It keeps EVERY entry: the block's cap (twelve per section,
+ * then "… and N more") is a reading aid for prose, not a limit on the data.
+ *
+ * Fresh plain objects, copied field by field (`what`, `why`, and the
+ * record-only `short` / `kind` when declared), never a reference into the rows
+ * it was folded from — so the value can be committed, emitted and handed to a
+ * caller as detached data. `undefined` when nothing was declared: the identity
+ * case, the one every run whose tools declare nothing takes.
+ */
+export function coverageOfAnswer(declared: readonly DeclaredCoverage[]): Coverage | undefined {
+  if (declared.length === 0) return undefined;
+  const folded: Coverage = {
+    checked: mergeItems(declared.map((d) => d.checked)).map(copyItem),
+    notChecked: mergeItems(declared.map((d) => d.notChecked)).map(copyItem),
+    cannotCover: mergeItems(declared.map((d) => d.cannotCover)).map(copyItem),
+  };
+  // The composer's second identity case, for the same reason: a hand-built row
+  // that says nothing must not become a boundary that looks like one.
+  const entries = folded.checked.length + folded.notChecked.length + folded.cannotCover.length;
+  return entries > 0 ? folded : undefined;
+}
+
+/** A coverage value as detached plain data — the same three lists, every item copied. */
+export function copyCoverage(value: Coverage): Coverage {
+  return {
+    checked: value.checked.map(copyItem),
+    notChecked: value.notChecked.map(copyItem),
+    cannotCover: value.cannotCover.map(copyItem),
+  };
+}
+
+/** One entry as detached plain data: the fields a coverage item declares, nothing else. */
+function copyItem(item: CoverageItem): CoverageItem {
+  return {
+    what: item.what,
+    ...(item.why !== undefined && { why: item.why }),
+    ...(item.short !== undefined && { short: item.short }),
+    ...(item.kind !== undefined && { kind: item.kind }),
+  };
+}
+
 // LENS · injected-turn · persistent-history
 // reads: scope.coverageDeclared ← read once by ../stages/prepareFinal.ts · captureTurnPayload — the ONE reader that COMPOSES from it,
-//        folded and capped. Not the only read of the key: ../stages/toolCalls.ts · declareCoverage reads it to append to it,
+//        folded and capped (a typed answer never reaches it: its data twin is `coverageOfAnswer`, above). Not the only read
+//        of the key: ../stages/toolCalls.ts · declareCoverage reads it to append to it,
 //        and ../findings/unsettled.ts · withUnsettledRows (9.113.0) reads one call's rows for their `kind` — the witness
 //        that the tool returned an absence — and composes nothing from them (its row's words come from the served result).
 // law: may omit, never deny; every clause anchored to the call it was composed on.
