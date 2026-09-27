@@ -1,0 +1,1527 @@
+{
+  "rule": "inputs-rule-1 (registered 2026-09-27)",
+  "what": "The step-2 BASELINE of the inputs bench (RULE.md, \"What the step-2 baseline reports\"): arm off, the agent as it ships, on Haiku 4.5. Nothing is gated. It is the before number only: steps 3 and 4 decide on their own interleaved off arms, never on this file.",
+  "recorded": "2026-09-27, one invocation, after inputs-rule-1 was committed (6d188db5) and pushed to bench/inputs-baseline",
+  "runDir": "bench/inputs/runs/haiku45-baseline (results.json with every row, report.md, raw/*.json.gz, blind-sheet.json, blind-key.json)",
+  "config": {
+    "provider": "anthropic",
+    "model": "claude-haiku-4-5-20251001",
+    "arms": [
+      "off"
+    ],
+    "cases": [
+      "p1-checkout-errors",
+      "p1-payments-errors",
+      "p1-disk-io",
+      "p1-network",
+      "p2-last-week",
+      "p2-past-day",
+      "p2-since-yesterday",
+      "p2-last-hour-network",
+      "p3-storefront",
+      "p3-database-host",
+      "p4-earlier-turn",
+      "p5-cache-host",
+      "p6-disk-and-network",
+      "c1-exact-24h",
+      "c1-exact-7d",
+      "c2-list-services"
+    ],
+    "runs": 10,
+    "seed": 20260927,
+    "concurrency": 4,
+    "maxIterations": 6,
+    "maxTokens": 1024,
+    "maxUsd": 1.5
+  },
+  "cost": {
+    "usd": 0.636679,
+    "runs": 160,
+    "capUsd": 1.5,
+    "stopped": null,
+    "pricedAt": "harness.mjs · PRICES (Haiku 4.5)"
+  },
+  "provocation": {
+    "set": "unstated",
+    "runs": 40,
+    "periodCalls": 40,
+    "defaultNobodyChose": 35,
+    "leftOut": 35,
+    "sent": 0,
+    "modelChosen": 5,
+    "rate": 0.875,
+    "runsWithNoPeriodCall": 0,
+    "p1Provokes": true
+  },
+  "aggregates": {
+    "off": {
+      "sets": {
+        "unstated": {
+          "runs": 40,
+          "complete": 40,
+          "periodCalls": 40,
+          "classes": {
+            "person": 0,
+            "contradicts": 0,
+            "default-unchosen": 35,
+            "model-chosen": 5
+          },
+          "defaultUnchosenBy": {
+            "omitted": 35,
+            "sent": 0
+          },
+          "rates": {
+            "defaultUnchosen": 0.875,
+            "notThePersons": 1,
+            "person": 0
+          },
+          "noPeriodCall": {
+            "runs": 0,
+            "of": 40,
+            "asksInProse": 0
+          },
+          "window": {
+            "of": 40,
+            "statesRan": 26,
+            "statesOther": 14
+          },
+          "names": {
+            "calls": 40,
+            "said": 40,
+            "fromResult": 0,
+            "nobodySaid": 0
+          },
+          "facts": {
+            "of": 40,
+            "mean": 1
+          },
+          "toolCalls": {
+            "perRun": 1.1,
+            "refused": 0,
+            "failed": 0
+          },
+          "llm": {
+            "callsPerRun": 2.1,
+            "inputPerCall": 1118.797619047619,
+            "outputPerCall": 103.41666666666667
+          },
+          "usd": 0.13741400000000004,
+          "meant": {
+            "of": 40,
+            "meant": 5
+          },
+          "standing": {
+            "consistent": 14,
+            "not-sure": 6,
+            "not-assessed": 20
+          },
+          "reasons": {
+            "empty-undeclared": 6
+          },
+          "periodRuns": 40,
+          "argumentReasonRuns": 0,
+          "askedRuns": 0,
+          "argumentRows": {
+            "total": 0,
+            "admittedDefaults": 0,
+            "asked": 0
+          },
+          "stoppedEarly": 0,
+          "mockExhausted": 0
+        },
+        "stated": {
+          "runs": 80,
+          "complete": 80,
+          "periodCalls": 90,
+          "classes": {
+            "person": 90,
+            "contradicts": 0,
+            "default-unchosen": 0,
+            "model-chosen": 0
+          },
+          "defaultUnchosenBy": {
+            "omitted": 0,
+            "sent": 0
+          },
+          "rates": {
+            "defaultUnchosen": 0,
+            "notThePersons": 0,
+            "person": 1
+          },
+          "noPeriodCall": {
+            "runs": 0,
+            "of": 80,
+            "asksInProse": 0
+          },
+          "window": {
+            "of": 80,
+            "statesRan": 76,
+            "statesOther": 0
+          },
+          "names": {
+            "calls": 90,
+            "said": 80,
+            "fromResult": 10,
+            "nobodySaid": 0
+          },
+          "facts": {
+            "of": 80,
+            "mean": 1
+          },
+          "toolCalls": {
+            "perRun": 1.25,
+            "refused": 0,
+            "failed": 0
+          },
+          "llm": {
+            "callsPerRun": 2.375,
+            "inputPerCall": 1198.8947368421052,
+            "outputPerCall": 128.42105263157896
+          },
+          "usd": 0.34978999999999993,
+          "meant": {
+            "of": 90,
+            "meant": 90
+          },
+          "standing": {
+            "consistent": 50,
+            "not-assessed": 30
+          },
+          "reasons": {},
+          "periodRuns": 80,
+          "argumentReasonRuns": 0,
+          "askedRuns": 0,
+          "argumentRows": {
+            "total": 0,
+            "admittedDefaults": 0,
+            "asked": 0
+          },
+          "stoppedEarly": 0,
+          "mockExhausted": 0
+        },
+        "controls": {
+          "runs": 30,
+          "complete": 30,
+          "periodCalls": 20,
+          "classes": {
+            "person": 20,
+            "contradicts": 0,
+            "default-unchosen": 0,
+            "model-chosen": 0
+          },
+          "defaultUnchosenBy": {
+            "omitted": 0,
+            "sent": 0
+          },
+          "rates": {
+            "defaultUnchosen": 0,
+            "notThePersons": 0,
+            "person": 1
+          },
+          "noPeriodCall": {
+            "runs": 0,
+            "of": 20,
+            "asksInProse": 0
+          },
+          "window": {
+            "of": 20,
+            "statesRan": 20,
+            "statesOther": 0
+          },
+          "names": {
+            "calls": 20,
+            "said": 20,
+            "fromResult": 0,
+            "nobodySaid": 0
+          },
+          "facts": {
+            "of": 20,
+            "mean": 1
+          },
+          "toolCalls": {
+            "perRun": 1,
+            "refused": 0,
+            "failed": 0
+          },
+          "llm": {
+            "callsPerRun": 2,
+            "inputPerCall": 1117.55,
+            "outputPerCall": 94.01666666666667
+          },
+          "usd": 0.09525799999999998,
+          "meant": {
+            "of": 20,
+            "meant": 20
+          },
+          "standing": {
+            "consistent": 20,
+            "not-assessed": 10
+          },
+          "reasons": {},
+          "periodRuns": 20,
+          "argumentReasonRuns": 0,
+          "askedRuns": 0,
+          "argumentRows": {
+            "total": 0,
+            "admittedDefaults": 0,
+            "asked": 0
+          },
+          "stoppedEarly": 0,
+          "mockExhausted": 0
+        },
+        "names": {
+          "runs": 20,
+          "complete": 20,
+          "periodCalls": 18,
+          "classes": {
+            "person": 0,
+            "contradicts": 0,
+            "default-unchosen": 10,
+            "model-chosen": 8
+          },
+          "defaultUnchosenBy": {
+            "omitted": 10,
+            "sent": 0
+          },
+          "rates": {
+            "defaultUnchosen": 0.5555555555555556,
+            "notThePersons": 1,
+            "person": 0
+          },
+          "noPeriodCall": {
+            "runs": 8,
+            "of": 20,
+            "asksInProse": 8
+          },
+          "window": {
+            "of": 12,
+            "statesRan": 12,
+            "statesOther": 1
+          },
+          "names": {
+            "calls": 18,
+            "said": 0,
+            "fromResult": 18,
+            "nobodySaid": 0
+          },
+          "facts": {
+            "of": 12,
+            "mean": 1
+          },
+          "toolCalls": {
+            "perRun": 1.9,
+            "refused": 0,
+            "failed": 0
+          },
+          "llm": {
+            "callsPerRun": 2.6,
+            "inputPerCall": 1159.173076923077,
+            "outputPerCall": 98.4423076923077
+          },
+          "usd": 0.08587199999999999,
+          "meant": {
+            "of": 18,
+            "meant": 0
+          },
+          "standing": {
+            "not-sure": 2,
+            "consistent": 18
+          },
+          "reasons": {
+            "empty-undeclared": 2
+          },
+          "periodRuns": 12,
+          "argumentReasonRuns": 0,
+          "askedRuns": 0,
+          "argumentRows": {
+            "total": 0,
+            "admittedDefaults": 0,
+            "asked": 0
+          },
+          "stoppedEarly": 0,
+          "mockExhausted": 0
+        },
+        "all": {
+          "runs": 160,
+          "complete": 160,
+          "periodCalls": 158,
+          "classes": {
+            "person": 100,
+            "contradicts": 0,
+            "default-unchosen": 45,
+            "model-chosen": 13
+          },
+          "defaultUnchosenBy": {
+            "omitted": 45,
+            "sent": 0
+          },
+          "rates": {
+            "defaultUnchosen": 0.2848101265822785,
+            "notThePersons": 0.3670886075949367,
+            "person": 0.6329113924050633
+          },
+          "noPeriodCall": {
+            "runs": 8,
+            "of": 150,
+            "asksInProse": 8
+          },
+          "window": {
+            "of": 142,
+            "statesRan": 124,
+            "statesOther": 15
+          },
+          "names": {
+            "calls": 158,
+            "said": 130,
+            "fromResult": 28,
+            "nobodySaid": 0
+          },
+          "facts": {
+            "of": 142,
+            "mean": 1
+          },
+          "toolCalls": {
+            "perRun": 1.2625,
+            "refused": 0,
+            "failed": 0
+          },
+          "llm": {
+            "callsPerRun": 2.2875,
+            "inputPerCall": 1165.4344262295083,
+            "outputPerCall": 114.82513661202186
+          },
+          "usd": 0.6366790000000002,
+          "meant": {
+            "of": 158,
+            "meant": 95
+          },
+          "standing": {
+            "consistent": 102,
+            "not-sure": 8,
+            "not-assessed": 50
+          },
+          "reasons": {
+            "empty-undeclared": 8
+          },
+          "periodRuns": 142,
+          "argumentReasonRuns": 0,
+          "askedRuns": 0,
+          "argumentRows": {
+            "total": 0,
+            "admittedDefaults": 0,
+            "asked": 0
+          },
+          "stoppedEarly": 0,
+          "mockExhausted": 0
+        }
+      },
+      "cases": {
+        "p1-checkout-errors": {
+          "runs": 10,
+          "complete": 10,
+          "periodCalls": 10,
+          "classes": {
+            "person": 0,
+            "contradicts": 0,
+            "default-unchosen": 9,
+            "model-chosen": 1
+          },
+          "defaultUnchosenBy": {
+            "omitted": 9,
+            "sent": 0
+          },
+          "rates": {
+            "defaultUnchosen": 0.9,
+            "notThePersons": 1,
+            "person": 0
+          },
+          "noPeriodCall": {
+            "runs": 0,
+            "of": 10,
+            "asksInProse": 0
+          },
+          "window": {
+            "of": 10,
+            "statesRan": 1,
+            "statesOther": 4
+          },
+          "names": {
+            "calls": 10,
+            "said": 10,
+            "fromResult": 0,
+            "nobodySaid": 0
+          },
+          "facts": {
+            "of": 10,
+            "mean": 1
+          },
+          "toolCalls": {
+            "perRun": 1,
+            "refused": 0,
+            "failed": 0
+          },
+          "llm": {
+            "callsPerRun": 2,
+            "inputPerCall": 1136.85,
+            "outputPerCall": 140.4
+          },
+          "usd": 0.036777000000000004,
+          "meant": {
+            "of": 10,
+            "meant": 1
+          },
+          "standing": {
+            "consistent": 10
+          },
+          "reasons": {},
+          "periodRuns": 10,
+          "argumentReasonRuns": 0,
+          "askedRuns": 0,
+          "argumentRows": {
+            "total": 0,
+            "admittedDefaults": 0,
+            "asked": 0
+          },
+          "stoppedEarly": 0,
+          "mockExhausted": 0
+        },
+        "p1-payments-errors": {
+          "runs": 10,
+          "complete": 10,
+          "periodCalls": 10,
+          "classes": {
+            "person": 0,
+            "contradicts": 0,
+            "default-unchosen": 6,
+            "model-chosen": 4
+          },
+          "defaultUnchosenBy": {
+            "omitted": 6,
+            "sent": 0
+          },
+          "rates": {
+            "defaultUnchosen": 0.6,
+            "notThePersons": 1,
+            "person": 0
+          },
+          "noPeriodCall": {
+            "runs": 0,
+            "of": 10,
+            "asksInProse": 0
+          },
+          "window": {
+            "of": 10,
+            "statesRan": 5,
+            "statesOther": 6
+          },
+          "names": {
+            "calls": 10,
+            "said": 10,
+            "fromResult": 0,
+            "nobodySaid": 0
+          },
+          "facts": {
+            "of": 10,
+            "mean": 1
+          },
+          "toolCalls": {
+            "perRun": 1.4,
+            "refused": 0,
+            "failed": 0
+          },
+          "llm": {
+            "callsPerRun": 2.4,
+            "inputPerCall": 1126.7083333333333,
+            "outputPerCall": 84.66666666666667
+          },
+          "usd": 0.037201,
+          "meant": {
+            "of": 10,
+            "meant": 4
+          },
+          "standing": {
+            "not-sure": 6,
+            "consistent": 4
+          },
+          "reasons": {
+            "empty-undeclared": 6
+          },
+          "periodRuns": 10,
+          "argumentReasonRuns": 0,
+          "askedRuns": 0,
+          "argumentRows": {
+            "total": 0,
+            "admittedDefaults": 0,
+            "asked": 0
+          },
+          "stoppedEarly": 0,
+          "mockExhausted": 0
+        },
+        "p1-disk-io": {
+          "runs": 10,
+          "complete": 10,
+          "periodCalls": 10,
+          "classes": {
+            "person": 0,
+            "contradicts": 0,
+            "default-unchosen": 10,
+            "model-chosen": 0
+          },
+          "defaultUnchosenBy": {
+            "omitted": 10,
+            "sent": 0
+          },
+          "rates": {
+            "defaultUnchosen": 1,
+            "notThePersons": 1,
+            "person": 0
+          },
+          "noPeriodCall": {
+            "runs": 0,
+            "of": 10,
+            "asksInProse": 0
+          },
+          "window": {
+            "of": 10,
+            "statesRan": 10,
+            "statesOther": 0
+          },
+          "names": {
+            "calls": 10,
+            "said": 10,
+            "fromResult": 0,
+            "nobodySaid": 0
+          },
+          "facts": {
+            "of": 10,
+            "mean": 1
+          },
+          "toolCalls": {
+            "perRun": 1,
+            "refused": 0,
+            "failed": 0
+          },
+          "llm": {
+            "callsPerRun": 2,
+            "inputPerCall": 1107.75,
+            "outputPerCall": 99.8
+          },
+          "usd": 0.032135,
+          "meant": {
+            "of": 10,
+            "meant": 0
+          },
+          "standing": {
+            "not-assessed": 10
+          },
+          "reasons": {},
+          "periodRuns": 10,
+          "argumentReasonRuns": 0,
+          "askedRuns": 0,
+          "argumentRows": {
+            "total": 0,
+            "admittedDefaults": 0,
+            "asked": 0
+          },
+          "stoppedEarly": 0,
+          "mockExhausted": 0
+        },
+        "p1-network": {
+          "runs": 10,
+          "complete": 10,
+          "periodCalls": 10,
+          "classes": {
+            "person": 0,
+            "contradicts": 0,
+            "default-unchosen": 10,
+            "model-chosen": 0
+          },
+          "defaultUnchosenBy": {
+            "omitted": 10,
+            "sent": 0
+          },
+          "rates": {
+            "defaultUnchosen": 1,
+            "notThePersons": 1,
+            "person": 0
+          },
+          "noPeriodCall": {
+            "runs": 0,
+            "of": 10,
+            "asksInProse": 0
+          },
+          "window": {
+            "of": 10,
+            "statesRan": 10,
+            "statesOther": 4
+          },
+          "names": {
+            "calls": 10,
+            "said": 10,
+            "fromResult": 0,
+            "nobodySaid": 0
+          },
+          "facts": {
+            "of": 10,
+            "mean": 1
+          },
+          "toolCalls": {
+            "perRun": 1,
+            "refused": 0,
+            "failed": 0
+          },
+          "llm": {
+            "callsPerRun": 2,
+            "inputPerCall": 1102.3,
+            "outputPerCall": 92.55
+          },
+          "usd": 0.031300999999999995,
+          "meant": {
+            "of": 10,
+            "meant": 0
+          },
+          "standing": {
+            "not-assessed": 10
+          },
+          "reasons": {},
+          "periodRuns": 10,
+          "argumentReasonRuns": 0,
+          "askedRuns": 0,
+          "argumentRows": {
+            "total": 0,
+            "admittedDefaults": 0,
+            "asked": 0
+          },
+          "stoppedEarly": 0,
+          "mockExhausted": 0
+        },
+        "p2-last-week": {
+          "runs": 10,
+          "complete": 10,
+          "periodCalls": 10,
+          "classes": {
+            "person": 10,
+            "contradicts": 0,
+            "default-unchosen": 0,
+            "model-chosen": 0
+          },
+          "defaultUnchosenBy": {
+            "omitted": 0,
+            "sent": 0
+          },
+          "rates": {
+            "defaultUnchosen": 0,
+            "notThePersons": 0,
+            "person": 1
+          },
+          "noPeriodCall": {
+            "runs": 0,
+            "of": 10,
+            "asksInProse": 0
+          },
+          "window": {
+            "of": 10,
+            "statesRan": 10,
+            "statesOther": 0
+          },
+          "names": {
+            "calls": 10,
+            "said": 10,
+            "fromResult": 0,
+            "nobodySaid": 0
+          },
+          "facts": {
+            "of": 10,
+            "mean": 1
+          },
+          "toolCalls": {
+            "perRun": 1,
+            "refused": 0,
+            "failed": 0
+          },
+          "llm": {
+            "callsPerRun": 2,
+            "inputPerCall": 1156.6,
+            "outputPerCall": 149.15
+          },
+          "usd": 0.03804699999999999,
+          "meant": {
+            "of": 10,
+            "meant": 10
+          },
+          "standing": {
+            "consistent": 10
+          },
+          "reasons": {},
+          "periodRuns": 10,
+          "argumentReasonRuns": 0,
+          "askedRuns": 0,
+          "argumentRows": {
+            "total": 0,
+            "admittedDefaults": 0,
+            "asked": 0
+          },
+          "stoppedEarly": 0,
+          "mockExhausted": 0
+        },
+        "p2-past-day": {
+          "runs": 10,
+          "complete": 10,
+          "periodCalls": 10,
+          "classes": {
+            "person": 10,
+            "contradicts": 0,
+            "default-unchosen": 0,
+            "model-chosen": 0
+          },
+          "defaultUnchosenBy": {
+            "omitted": 0,
+            "sent": 0
+          },
+          "rates": {
+            "defaultUnchosen": 0,
+            "notThePersons": 0,
+            "person": 1
+          },
+          "noPeriodCall": {
+            "runs": 0,
+            "of": 10,
+            "asksInProse": 0
+          },
+          "window": {
+            "of": 10,
+            "statesRan": 10,
+            "statesOther": 0
+          },
+          "names": {
+            "calls": 10,
+            "said": 10,
+            "fromResult": 0,
+            "nobodySaid": 0
+          },
+          "facts": {
+            "of": 10,
+            "mean": 1
+          },
+          "toolCalls": {
+            "perRun": 1,
+            "refused": 0,
+            "failed": 0
+          },
+          "llm": {
+            "callsPerRun": 2,
+            "inputPerCall": 1148.45,
+            "outputPerCall": 139.8
+          },
+          "usd": 0.036949,
+          "meant": {
+            "of": 10,
+            "meant": 10
+          },
+          "standing": {
+            "consistent": 10
+          },
+          "reasons": {},
+          "periodRuns": 10,
+          "argumentReasonRuns": 0,
+          "askedRuns": 0,
+          "argumentRows": {
+            "total": 0,
+            "admittedDefaults": 0,
+            "asked": 0
+          },
+          "stoppedEarly": 0,
+          "mockExhausted": 0
+        },
+        "p2-since-yesterday": {
+          "runs": 10,
+          "complete": 10,
+          "periodCalls": 10,
+          "classes": {
+            "person": 10,
+            "contradicts": 0,
+            "default-unchosen": 0,
+            "model-chosen": 0
+          },
+          "defaultUnchosenBy": {
+            "omitted": 0,
+            "sent": 0
+          },
+          "rates": {
+            "defaultUnchosen": 0,
+            "notThePersons": 0,
+            "person": 1
+          },
+          "noPeriodCall": {
+            "runs": 0,
+            "of": 10,
+            "asksInProse": 0
+          },
+          "window": {
+            "of": 10,
+            "statesRan": 10,
+            "statesOther": 0
+          },
+          "names": {
+            "calls": 10,
+            "said": 10,
+            "fromResult": 0,
+            "nobodySaid": 0
+          },
+          "facts": {
+            "of": 10,
+            "mean": 1
+          },
+          "toolCalls": {
+            "perRun": 1,
+            "refused": 0,
+            "failed": 0
+          },
+          "llm": {
+            "callsPerRun": 2,
+            "inputPerCall": 1149.65,
+            "outputPerCall": 138.7
+          },
+          "usd": 0.036863,
+          "meant": {
+            "of": 10,
+            "meant": 0
+          },
+          "standing": {
+            "consistent": 10
+          },
+          "reasons": {},
+          "periodRuns": 10,
+          "argumentReasonRuns": 0,
+          "askedRuns": 0,
+          "argumentRows": {
+            "total": 0,
+            "admittedDefaults": 0,
+            "asked": 0
+          },
+          "stoppedEarly": 0,
+          "mockExhausted": 0
+        },
+        "p2-last-hour-network": {
+          "runs": 10,
+          "complete": 10,
+          "periodCalls": 10,
+          "classes": {
+            "person": 10,
+            "contradicts": 0,
+            "default-unchosen": 0,
+            "model-chosen": 0
+          },
+          "defaultUnchosenBy": {
+            "omitted": 0,
+            "sent": 0
+          },
+          "rates": {
+            "defaultUnchosen": 0,
+            "notThePersons": 0,
+            "person": 1
+          },
+          "noPeriodCall": {
+            "runs": 0,
+            "of": 10,
+            "asksInProse": 0
+          },
+          "window": {
+            "of": 10,
+            "statesRan": 10,
+            "statesOther": 0
+          },
+          "names": {
+            "calls": 10,
+            "said": 10,
+            "fromResult": 0,
+            "nobodySaid": 0
+          },
+          "facts": {
+            "of": 10,
+            "mean": 1
+          },
+          "toolCalls": {
+            "perRun": 1,
+            "refused": 0,
+            "failed": 0
+          },
+          "llm": {
+            "callsPerRun": 2,
+            "inputPerCall": 1114.55,
+            "outputPerCall": 62.9
+          },
+          "usd": 0.028581,
+          "meant": {
+            "of": 10,
+            "meant": 10
+          },
+          "standing": {
+            "not-assessed": 10
+          },
+          "reasons": {},
+          "periodRuns": 10,
+          "argumentReasonRuns": 0,
+          "askedRuns": 0,
+          "argumentRows": {
+            "total": 0,
+            "admittedDefaults": 0,
+            "asked": 0
+          },
+          "stoppedEarly": 0,
+          "mockExhausted": 0
+        },
+        "p3-storefront": {
+          "runs": 10,
+          "complete": 10,
+          "periodCalls": 8,
+          "classes": {
+            "person": 0,
+            "contradicts": 0,
+            "default-unchosen": 0,
+            "model-chosen": 8
+          },
+          "defaultUnchosenBy": {
+            "omitted": 0,
+            "sent": 0
+          },
+          "rates": {
+            "defaultUnchosen": 0,
+            "notThePersons": 1,
+            "person": 0
+          },
+          "noPeriodCall": {
+            "runs": 8,
+            "of": 10,
+            "asksInProse": 8
+          },
+          "window": {
+            "of": 2,
+            "statesRan": 2,
+            "statesOther": 0
+          },
+          "names": {
+            "calls": 8,
+            "said": 0,
+            "fromResult": 8,
+            "nobodySaid": 0
+          },
+          "facts": {
+            "of": 2,
+            "mean": 1
+          },
+          "toolCalls": {
+            "perRun": 1.8,
+            "refused": 0,
+            "failed": 0
+          },
+          "llm": {
+            "callsPerRun": 2.2,
+            "inputPerCall": 1145.3181818181818,
+            "outputPerCall": 100.63636363636364
+          },
+          "usd": 0.036266999999999994,
+          "meant": {
+            "of": 8,
+            "meant": 0
+          },
+          "standing": {
+            "not-sure": 2,
+            "consistent": 8
+          },
+          "reasons": {
+            "empty-undeclared": 2
+          },
+          "periodRuns": 2,
+          "argumentReasonRuns": 0,
+          "askedRuns": 0,
+          "argumentRows": {
+            "total": 0,
+            "admittedDefaults": 0,
+            "asked": 0
+          },
+          "stoppedEarly": 0,
+          "mockExhausted": 0
+        },
+        "p3-database-host": {
+          "runs": 10,
+          "complete": 10,
+          "periodCalls": 10,
+          "classes": {
+            "person": 0,
+            "contradicts": 0,
+            "default-unchosen": 10,
+            "model-chosen": 0
+          },
+          "defaultUnchosenBy": {
+            "omitted": 10,
+            "sent": 0
+          },
+          "rates": {
+            "defaultUnchosen": 1,
+            "notThePersons": 1,
+            "person": 0
+          },
+          "noPeriodCall": {
+            "runs": 0,
+            "of": 10,
+            "asksInProse": 0
+          },
+          "window": {
+            "of": 10,
+            "statesRan": 10,
+            "statesOther": 1
+          },
+          "names": {
+            "calls": 10,
+            "said": 0,
+            "fromResult": 10,
+            "nobodySaid": 0
+          },
+          "facts": {
+            "of": 10,
+            "mean": 1
+          },
+          "toolCalls": {
+            "perRun": 2,
+            "refused": 0,
+            "failed": 0
+          },
+          "llm": {
+            "callsPerRun": 3,
+            "inputPerCall": 1169.3333333333333,
+            "outputPerCall": 96.83333333333333
+          },
+          "usd": 0.049605,
+          "meant": {
+            "of": 10,
+            "meant": 0
+          },
+          "standing": {
+            "consistent": 10
+          },
+          "reasons": {},
+          "periodRuns": 10,
+          "argumentReasonRuns": 0,
+          "askedRuns": 0,
+          "argumentRows": {
+            "total": 0,
+            "admittedDefaults": 0,
+            "asked": 0
+          },
+          "stoppedEarly": 0,
+          "mockExhausted": 0
+        },
+        "p4-earlier-turn": {
+          "runs": 10,
+          "complete": 10,
+          "periodCalls": 10,
+          "classes": {
+            "person": 10,
+            "contradicts": 0,
+            "default-unchosen": 0,
+            "model-chosen": 0
+          },
+          "defaultUnchosenBy": {
+            "omitted": 0,
+            "sent": 0
+          },
+          "rates": {
+            "defaultUnchosen": 0,
+            "notThePersons": 0,
+            "person": 1
+          },
+          "noPeriodCall": {
+            "runs": 0,
+            "of": 10,
+            "asksInProse": 0
+          },
+          "window": {
+            "of": 10,
+            "statesRan": 6,
+            "statesOther": 0
+          },
+          "names": {
+            "calls": 10,
+            "said": 10,
+            "fromResult": 0,
+            "nobodySaid": 0
+          },
+          "facts": {
+            "of": 10,
+            "mean": 1
+          },
+          "toolCalls": {
+            "perRun": 1,
+            "refused": 0,
+            "failed": 0
+          },
+          "llm": {
+            "callsPerRun": 4,
+            "inputPerCall": 1354.425,
+            "outputPerCall": 144.375
+          },
+          "usd": 0.08305200000000001,
+          "meant": {
+            "of": 10,
+            "meant": 10
+          },
+          "standing": {
+            "consistent": 10
+          },
+          "reasons": {},
+          "periodRuns": 10,
+          "argumentReasonRuns": 0,
+          "askedRuns": 0,
+          "argumentRows": {
+            "total": 0,
+            "admittedDefaults": 0,
+            "asked": 0
+          },
+          "stoppedEarly": 0,
+          "mockExhausted": 0
+        },
+        "p5-cache-host": {
+          "runs": 10,
+          "complete": 10,
+          "periodCalls": 10,
+          "classes": {
+            "person": 10,
+            "contradicts": 0,
+            "default-unchosen": 0,
+            "model-chosen": 0
+          },
+          "defaultUnchosenBy": {
+            "omitted": 0,
+            "sent": 0
+          },
+          "rates": {
+            "defaultUnchosen": 0,
+            "notThePersons": 0,
+            "person": 1
+          },
+          "noPeriodCall": {
+            "runs": 0,
+            "of": 10,
+            "asksInProse": 0
+          },
+          "window": {
+            "of": 10,
+            "statesRan": 10,
+            "statesOther": 0
+          },
+          "names": {
+            "calls": 10,
+            "said": 0,
+            "fromResult": 10,
+            "nobodySaid": 0
+          },
+          "facts": {
+            "of": 10,
+            "mean": 1
+          },
+          "toolCalls": {
+            "perRun": 2,
+            "refused": 0,
+            "failed": 0
+          },
+          "llm": {
+            "callsPerRun": 3,
+            "inputPerCall": 1188.5333333333333,
+            "outputPerCall": 100.9
+          },
+          "usd": 0.050790999999999996,
+          "meant": {
+            "of": 10,
+            "meant": 10
+          },
+          "standing": {
+            "consistent": 10
+          },
+          "reasons": {},
+          "periodRuns": 10,
+          "argumentReasonRuns": 0,
+          "askedRuns": 0,
+          "argumentRows": {
+            "total": 0,
+            "admittedDefaults": 0,
+            "asked": 0
+          },
+          "stoppedEarly": 0,
+          "mockExhausted": 0
+        },
+        "p6-disk-and-network": {
+          "runs": 10,
+          "complete": 10,
+          "periodCalls": 20,
+          "classes": {
+            "person": 20,
+            "contradicts": 0,
+            "default-unchosen": 0,
+            "model-chosen": 0
+          },
+          "defaultUnchosenBy": {
+            "omitted": 0,
+            "sent": 0
+          },
+          "rates": {
+            "defaultUnchosen": 0,
+            "notThePersons": 0,
+            "person": 1
+          },
+          "noPeriodCall": {
+            "runs": 0,
+            "of": 10,
+            "asksInProse": 0
+          },
+          "window": {
+            "of": 10,
+            "statesRan": 10,
+            "statesOther": 0
+          },
+          "names": {
+            "calls": 20,
+            "said": 20,
+            "fromResult": 0,
+            "nobodySaid": 0
+          },
+          "facts": {
+            "of": 10,
+            "mean": 1
+          },
+          "toolCalls": {
+            "perRun": 2,
+            "refused": 0,
+            "failed": 0
+          },
+          "llm": {
+            "callsPerRun": 2,
+            "inputPerCall": 1201.1,
+            "outputPerCall": 198.3
+          },
+          "usd": 0.043851999999999995,
+          "meant": {
+            "of": 20,
+            "meant": 20
+          },
+          "standing": {
+            "not-assessed": 10
+          },
+          "reasons": {},
+          "periodRuns": 10,
+          "argumentReasonRuns": 0,
+          "askedRuns": 0,
+          "argumentRows": {
+            "total": 0,
+            "admittedDefaults": 0,
+            "asked": 0
+          },
+          "stoppedEarly": 0,
+          "mockExhausted": 0
+        },
+        "c1-exact-24h": {
+          "runs": 10,
+          "complete": 10,
+          "periodCalls": 10,
+          "classes": {
+            "person": 10,
+            "contradicts": 0,
+            "default-unchosen": 0,
+            "model-chosen": 0
+          },
+          "defaultUnchosenBy": {
+            "omitted": 0,
+            "sent": 0
+          },
+          "rates": {
+            "defaultUnchosen": 0,
+            "notThePersons": 0,
+            "person": 1
+          },
+          "noPeriodCall": {
+            "runs": 0,
+            "of": 10,
+            "asksInProse": 0
+          },
+          "window": {
+            "of": 10,
+            "statesRan": 10,
+            "statesOther": 0
+          },
+          "names": {
+            "calls": 10,
+            "said": 10,
+            "fromResult": 0,
+            "nobodySaid": 0
+          },
+          "facts": {
+            "of": 10,
+            "mean": 1
+          },
+          "toolCalls": {
+            "perRun": 1,
+            "refused": 0,
+            "failed": 0
+          },
+          "llm": {
+            "callsPerRun": 2,
+            "inputPerCall": 1153.5,
+            "outputPerCall": 143.8
+          },
+          "usd": 0.03745,
+          "meant": {
+            "of": 10,
+            "meant": 10
+          },
+          "standing": {
+            "consistent": 10
+          },
+          "reasons": {},
+          "periodRuns": 10,
+          "argumentReasonRuns": 0,
+          "askedRuns": 0,
+          "argumentRows": {
+            "total": 0,
+            "admittedDefaults": 0,
+            "asked": 0
+          },
+          "stoppedEarly": 0,
+          "mockExhausted": 0
+        },
+        "c1-exact-7d": {
+          "runs": 10,
+          "complete": 10,
+          "periodCalls": 10,
+          "classes": {
+            "person": 10,
+            "contradicts": 0,
+            "default-unchosen": 0,
+            "model-chosen": 0
+          },
+          "defaultUnchosenBy": {
+            "omitted": 0,
+            "sent": 0
+          },
+          "rates": {
+            "defaultUnchosen": 0,
+            "notThePersons": 0,
+            "person": 1
+          },
+          "noPeriodCall": {
+            "runs": 0,
+            "of": 10,
+            "asksInProse": 0
+          },
+          "window": {
+            "of": 10,
+            "statesRan": 10,
+            "statesOther": 0
+          },
+          "names": {
+            "calls": 10,
+            "said": 10,
+            "fromResult": 0,
+            "nobodySaid": 0
+          },
+          "facts": {
+            "of": 10,
+            "mean": 1
+          },
+          "toolCalls": {
+            "perRun": 1,
+            "refused": 0,
+            "failed": 0
+          },
+          "llm": {
+            "callsPerRun": 2,
+            "inputPerCall": 1123.65,
+            "outputPerCall": 85.95
+          },
+          "usd": 0.031067999999999995,
+          "meant": {
+            "of": 10,
+            "meant": 10
+          },
+          "standing": {
+            "not-assessed": 10
+          },
+          "reasons": {},
+          "periodRuns": 10,
+          "argumentReasonRuns": 0,
+          "askedRuns": 0,
+          "argumentRows": {
+            "total": 0,
+            "admittedDefaults": 0,
+            "asked": 0
+          },
+          "stoppedEarly": 0,
+          "mockExhausted": 0
+        },
+        "c2-list-services": {
+          "runs": 10,
+          "complete": 10,
+          "periodCalls": 0,
+          "classes": {
+            "person": 0,
+            "contradicts": 0,
+            "default-unchosen": 0,
+            "model-chosen": 0
+          },
+          "defaultUnchosenBy": {
+            "omitted": 0,
+            "sent": 0
+          },
+          "rates": {},
+          "noPeriodCall": {
+            "runs": 0,
+            "of": 0,
+            "asksInProse": 0
+          },
+          "window": {
+            "of": 0,
+            "statesRan": 0,
+            "statesOther": 0
+          },
+          "names": {
+            "calls": 0,
+            "said": 0,
+            "fromResult": 0,
+            "nobodySaid": 0
+          },
+          "facts": {
+            "of": 0
+          },
+          "toolCalls": {
+            "perRun": 1,
+            "refused": 0,
+            "failed": 0
+          },
+          "llm": {
+            "callsPerRun": 2,
+            "inputPerCall": 1075.5,
+            "outputPerCall": 52.3
+          },
+          "usd": 0.02674,
+          "meant": {
+            "of": 0,
+            "meant": 0
+          },
+          "standing": {
+            "consistent": 10
+          },
+          "reasons": {},
+          "periodRuns": 0,
+          "argumentReasonRuns": 0,
+          "askedRuns": 0,
+          "argumentRows": {
+            "total": 0,
+            "admittedDefaults": 0,
+            "asked": 0
+          },
+          "stoppedEarly": 0,
+          "mockExhausted": 0
+        }
+      }
+    }
+  }
+}
