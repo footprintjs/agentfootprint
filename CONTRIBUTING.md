@@ -84,13 +84,52 @@ src/
 
 ## Releasing
 
-**Releases are automatic:** merging a PR that carries a `.changes/` fragment starts the Release
-workflow. (Start it by hand with **Actions → Release → Run workflow** or
-`gh workflow run publish.yml -f bump=minor` — e.g. to force a bigger bump.)
-The workflow computes the version from `.changes/` fragments, writes the CHANGELOG entry,
-regenerates every generated doc, runs every gate — and only then commits, tags, creates the
-GitHub release, publishes to npm with provenance and deploys agentfootprint.dev. A red gate
-leaves nothing tagged. `npm run release` runs the same steps from a local machine.
+**Releases are automatic, through a release pull request.**
+
+1. Merging a PR that carries a `.changes/` fragment starts the Release workflow. It computes the
+   next version from the fragments, writes the CHANGELOG entry, bumps `package.json`,
+   regenerates every generated doc, and opens (or updates) **one** PR, `chore: release vX.Y.Z`,
+   from the branch `release/next`. Later fragments update the same PR.
+2. That PR runs the full CI. With auto-merge on it merges itself once CI is green; otherwise
+   merge it yourself.
+3. Its merge runs every gate again on the exact release tree, then tags, creates the GitHub
+   release, publishes to npm with provenance and deploys agentfootprint.dev — each step only if
+   the one before succeeded. A red gate publishes nothing; fix it with a normal PR and the
+   version publishes when that merges (or re-run the failed job).
+
+Start it by hand with **Actions → Release → Run workflow** or
+`gh workflow run publish.yml -f bump=minor` (e.g. to force a bigger bump). `npm run release`
+(scripts/release.sh) pushes to `main` directly, so it stops working once `main` is protected.
+
+### One-time setup: the release App
+
+A PR opened with the workflow's own `GITHUB_TOKEN` runs no CI, so its required checks would
+never report. The release PR is opened by a small GitHub App instead:
+
+1. **Create the App** — GitHub → your org (footprintjs) → Settings → Developer settings →
+   GitHub Apps → **New GitHub App**. Any name (e.g. `agentfootprint-release`); Homepage URL:
+   the repo URL; **Webhook: uncheck Active**. Repository permissions: **Contents: Read and
+   write**, **Pull requests: Read and write** (Metadata: read is added for you). "Where can
+   this App be installed": **Only on this account**. Create it.
+2. **Keys** — on the App's page, copy the **Client ID**, then **Generate a private key**
+   (a `.pem` file downloads).
+3. **Install it** — the App's page → Install App → footprintjs → **Only select repositories**
+   → `agentfootprint`.
+4. **Store them in the repo** — agentfootprint → Settings → Secrets and variables → Actions:
+   - Variables tab → **New repository variable** `RELEASE_APP_CLIENT_ID` = the Client ID.
+   - Secrets tab → **New repository secret** `RELEASE_APP_PRIVATE_KEY` = the whole `.pem`
+     file's contents. Then delete the downloaded file.
+5. **Auto-merge** (optional, for hands-off releases) — Settings → General → Pull Requests →
+   **Allow auto-merge**.
+
+### Protecting `main`
+
+Settings → Rules → Rulesets → **New branch ruleset**: target the default branch; enable
+**Restrict deletions**, **Block force pushes**, **Require a pull request before merging**
+(0 required approvals if you are the only maintainer — otherwise every release PR waits for
+an approval) and **Require status checks to pass** with: `test (20)`, `test (22)`, `lint`,
+`docs`, `generated`, `docs-links`, `docs-truth`, `coverage`, `changes`. Leave the bypass list
+empty. Tags are not affected, so the Release workflow can still tag and publish.
 
 ## Commit Messages
 

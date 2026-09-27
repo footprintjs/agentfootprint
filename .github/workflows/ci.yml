@@ -165,8 +165,15 @@ jobs:
   # Change fragments — every PR that touches src/ adds a .changes/*.md file
   # (see .changes/README.md). The release folds them into CHANGELOG.md and
   # picks the version, so nobody edits either by hand.
+  # The release PR (branch release/next, opened by the Release workflow from
+  # this repository) is the one change that SHOULD write a CHANGELOG version
+  # heading and consume fragments, so it is exempt. A fork's branch of the same
+  # name is not.
   changes:
-    if: github.event_name == 'pull_request'
+    if: >-
+      github.event_name == 'pull_request' &&
+      !(github.head_ref == 'release/next' &&
+        github.event.pull_request.head.repo.full_name == github.repository)
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
