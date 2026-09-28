@@ -262,6 +262,17 @@ export interface ToolCallsHandlerDeps {
    */
   readonly inputsLayer?: true;
   /**
+   * DECLARED SOURCES ARE ARMED (honesty layer 2, `.findings({ argumentSources:
+   * true })`) — present only then, only ever `true`, and only beside
+   * `findings` and `inputsLayer`. The per-call peel reads `_findings.from`
+   * exactly as the inputs layer read it (`findings/reserved.ts` ·
+   * `splitFindings`'s arms), so a `from`-only declaration is readable and a
+   * dropped `from` entry is counted on the call's basis row. The checks
+   * themselves ran in the layer, before this stage; nothing else here reads
+   * `from`.
+   */
+  readonly argumentSources?: true;
+  /**
    * The host's own context for the inputs layer's batch ask
    * (`AgentOptions.argumentAskContext`) — called when an ask is built, its
    * object spread into the ask's `context` beside the library's reserved key
@@ -3032,12 +3043,13 @@ export function buildToolCallsHandler(
    * runs with the call and files no row, exactly as the committed schema
    * says. Unarmed: `tc.args` itself, by reference — not one byte moves.
    */
+  const peelArms = deps.argumentSources === true ? { argumentSources: true } : undefined;
   const peelCall = (tc: {
     readonly name: string;
     readonly args: Readonly<Record<string, unknown>>;
   }): SplitFindings =>
     deps.findings === true && !ownsReservedArgument(resolveTool(tc.name).tool?.schema)
-      ? splitFindings(tc.args)
+      ? splitFindings(tc.args, peelArms)
       : { args: tc.args };
   /** The record of an off-wire dispatch — once per such call, before it runs. */
   const noteOffWire = (
@@ -5253,7 +5265,7 @@ export function buildToolCallsHandler(
         // reading of the result.
         const layerNote =
           inputs !== undefined && executed
-            ? inputs.noteFor(tc.name, tool, resolution, callArgs)
+            ? inputs.noteFor(tc.name, tool, resolution, callArgs, args)
             : '';
         if (layerNote !== '') resultStr += layerNote;
         newHistory.push({

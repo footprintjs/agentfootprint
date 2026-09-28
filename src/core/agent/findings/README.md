@@ -1002,6 +1002,29 @@ both moments on both chart shapes; the row and the section carrying
 `test/core/agent/findings/unsettled-batch-settlement.test.ts`. The 21
 byte-identity references under `test/core/tools/reference/` are unchanged.
 
+## Where each argument value came from — `_findings.from` (honesty layer 2, step 5)
+
+Under `.findings({ argumentSources: true })` (the inputs layer's declared sources) the
+reserved argument carries one more part, on the calls of a RULED tool:
+
+```json
+"_findings": { "basis": "direct",
+  "from": [{ "argument": "window", "source": "user", "quote": "over the last week" }] }
+```
+
+- **Served** only there: `withFindingsArgument(schema, offer, { from: true })` plants
+  `FINDINGS_FROM_PROPERTY` after the base's own keys, on a tool that carries argument rules
+  (`arguments/declare.ts` · `carriesRules`); every other tool keeps the base by reference. The
+  instruction gains one line (`FINDINGS_SOURCES_LINE`, through `findingsInstructionFor`).
+- **Read** by the one reader, `readDeclaration(raw, { argumentSources: true }, args)`, through
+  `arguments/sources.ts` · `readSources`: a `from`-only declaration is readable, a malformed
+  entry is dropped and counted (`sourcesMalformed`, and into `malformed`), judged against the
+  call's own arguments. ToolCalls' peel reads it the same way (`splitFindings(args, arms)`), so
+  a basis row counts the dropped entries; unarmed, `from` is ignored as any unknown key is.
+- **Checked and filed** by the inputs layer (`arguments/checks.ts` · `checkSource`, its rows
+  `kind: 'argument'` on this ledger) — never by this folder: a declaration is a claim, and the
+  record keeps the library's verdict beside it.
+
 ## Files
 
 - `types.ts` — `RESERVED_ARGUMENT`, the vocabularies, `PROPOSITION_CHARS`,

@@ -221,6 +221,8 @@ const REASON_LINES: Readonly<Record<AssessmentReason, TemplateId>> = {
   'argument-asked': 'howSure.reason.argumentAsked',
   'argument-assumed': 'howSure.reason.argumentAssumed',
   'argument-unverified': 'howSure.reason.argumentUnverified',
+  'argument-read': 'howSure.reason.argumentRead',
+  'value-contingent': 'howSure.reason.valueContingent',
   'coverage-gap': 'howSure.reason.coverageGap',
   'declared-absent': 'howSure.reason.declaredAbsent',
   'empty-undeclared': 'howSure.reason.emptyUndeclared',
@@ -236,6 +238,8 @@ const REASON_LINES: Readonly<Record<AssessmentReason, TemplateId>> = {
 const COUNTED: ReadonlySet<AssessmentReason> = new Set([
   'argument-assumed',
   'argument-unverified',
+  'argument-read',
+  'value-contingent',
   'coverage-gap',
   'declared-absent',
   'empty-undeclared',
@@ -285,6 +289,7 @@ function callsBehind(
 
 const CHECK_LINES: Readonly<Record<AssessmentCheck, TemplateId>> = {
   'argument-rules': 'howSure.check.argumentRules',
+  'argument-sources': 'howSure.check.argumentSources',
   'tool-coverage': 'howSure.check.toolCoverage',
   'result-shape': 'howSure.check.resultShape',
   'names-and-numbers': 'howSure.check.namesAndNumbers',

@@ -306,6 +306,21 @@
  * settled), and the batch dispatched on its ordinary path — the tool message
  * carries the answered note after the tool's own bytes and `toolChars`.
  *
+ * Honesty step 5 (declared sources): one new reference, `agent-arguments-sources`
+ * (`.findings({ argumentSources: true })` beside a tool whose `ask` rule carries a
+ * declared phrase; the model's call declares `_findings.from` with a quote of the
+ * person's words); none of the 25 earlier ones moved (copied aside, the new one
+ * generated alone with `-t agent-arguments-sources` under
+ * `AF_TOOLS_REFERENCE=update`, the 25 `cmp`-equal after). What it holds, read
+ * from its bytes: the run constant `honestyLayers: { argumentSources: true,
+ * inputs: true }` on seed's commit; the served `search_logs` schema whose
+ * `_findings` carries `from` (at seed and on both epochs; no other tool is
+ * served here), and the findings instruction with its sources line in every
+ * recorded piece; the `sf-inputs` mount's output mapping writing ONE `argument`
+ * row — `source: 'said'`, `claimed: 'user'`, `matched: 'phrase'`, the quote in
+ * the tool's own view — and NO `argumentResolutions` (the call runs as sent:
+ * nothing to fill, nothing to ask); no `userMessageFrom` (a person's message).
+ *
  * Every scenario is a real run — the receipt-conformance shapes, each in the
  * configuration that has no name collision — and what is compared is the
  * whole `commitLog` plus `servedAt(k)` for every located epoch, after ONE
@@ -429,6 +444,61 @@ const askingSearchLogs = () =>
     period: { argument: 'window', spelling: 'lookback' },
     execute: (args: Record<string, unknown>) => ({ service: args.service, errors: 0 }),
   });
+
+/**
+ * The same search under DECLARED SOURCES (step 5): its period is asked of the
+ * person, one choice carries a phrase the author vouches for, and the model
+ * declares where its value came from (`_findings.from`, a quote of the
+ * person's words) — the phrase checks the quote out, and the call runs.
+ */
+const sourcedSearchLogs = () =>
+  defineTool({
+    name: 'search_logs',
+    description: 'Error lines for one service over a look-back period.',
+    inputSchema: {
+      type: 'object',
+      required: ['service', 'window'],
+      properties: {
+        service: { type: 'string', description: 'Service name.' },
+        window: { type: 'string', enum: ['1h', '2h', '24h'], description: 'Look-back period.' },
+      },
+    },
+    askOrAssume: {
+      window: {
+        ask: 'Which period should the search cover?',
+        choices: [{ value: '24h', said: ['past day'] }, '1h'],
+      },
+    },
+    period: { argument: 'window', spelling: 'lookback' },
+    execute: (args: Record<string, unknown>) => ({ service: args.service, errors: 0 }),
+  });
+const SOURCED_THEN_DONE = [
+  call('c1', 'search_logs', {
+    service: 'checkout',
+    window: '24h',
+    _findings: {
+      basis: 'direct',
+      from: [{ argument: 'window', source: 'user', quote: 'the past day' }],
+    },
+  }),
+  answer('No errors.'),
+];
+
+/** The declared-sources run: the person's message carries the words the model quotes. */
+async function sourcesRun(): Promise<Snapshot> {
+  const agent = Agent.create({
+    provider: scripted(SOURCED_THEN_DONE) as never,
+    model: 'mock',
+    maxIterations: 6,
+    reactMode: 'dynamic',
+  })
+    .system('bot')
+    .tool(sourcedSearchLogs())
+    .findings({ argumentSources: true })
+    .build();
+  await agent.run({ message: 'any errors on checkout in the past day?' });
+  return agent.getSnapshot()!;
+}
 
 /** The paused leg of an ask run, or — `resumed` — the leg the answer resumes (a fresh executor). */
 async function askRun(resumed: boolean): Promise<Snapshot> {
@@ -1054,6 +1124,10 @@ const SCENARIOS: Record<string, () => Promise<Snapshot>> = {
   // and the answer resumes the batch (the resumed leg). See the header.
   'agent-arguments-ask': () => askRun(false),
   'agent-arguments-ask-resumed': () => askRun(true),
+  // Honesty step 5 — declared sources: the model says the period came from the
+  // person's words, the declared phrase checks the quote out, the call runs. See
+  // the header.
+  'agent-arguments-sources': () => sourcesRun(),
 };
 
 // ─── normalisation — only what differs between two runs of ONE configuration ──

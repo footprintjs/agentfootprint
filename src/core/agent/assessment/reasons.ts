@@ -62,7 +62,21 @@ export const REASONS: readonly ReasonEntry[] = Object.freeze([
     layer: 2,
     class: 'not-sure',
     reads:
-      "findingsLedger: an argument row of this turn with source 'model' on a ruled or period argument, or with a failed declared-source check",
+      "findingsLedger: an argument row of this turn with source 'model' on a ruled or period argument, or with a failed declared-source check (on any argument)",
+  },
+  {
+    reason: 'argument-read',
+    layer: 2,
+    class: 'not-sure',
+    reads:
+      "findingsLedger: an argument row of this turn with source 'said' and reading — the person's words were found, the value is the model's reading of them (under an ask rule it asked instead)",
+  },
+  {
+    reason: 'value-contingent',
+    layer: 2,
+    class: 'not-sure',
+    reads:
+      "findingsLedger: an argument row of this turn with source 'result' and setAside (the model named a result it had set aside); or a contingent row of this turn",
   },
   {
     reason: 'coverage-gap',

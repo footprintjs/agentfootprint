@@ -181,6 +181,12 @@ export interface FilledArgument {
   readonly hidden: boolean;
   /** `answered`: the person's answer to the batch ask filled it. Absent: the tool's rule assumed it. */
   readonly source?: 'answered';
+  /**
+   * The value the call had CARRIED, which the person's answer replaced
+   * (declared sources: an untraced value is asked about). Absent: the call
+   * had left the argument out.
+   */
+  readonly carried?: InputValue;
 }
 
 // LENS · tool-result · persistent-history
@@ -228,14 +234,20 @@ function assumedClause(toolName: string, f: FilledArgument): string {
 
 // LENS · tool-result · persistent-history
 // reads: the call's answered fill (the batch ask's answer bound to this toolCallId), kept only where the
-//        call RAN with it (`dispatch.ts` · `fillsThatRan`)
+//        call RAN with it (`dispatch.ts` · `fillsThatRan`), and the value the call had carried, if any
 // law: may omit, never deny; past tense, naming the call this result answers.
 function answeredClause(toolName: string, f: FilledArgument): string {
+  const before =
+    f.carried === undefined
+      ? 'the call had left it out'
+      : f.hidden
+      ? 'the call had carried a value of its own'
+      : `the call had carried ${printedValue(f.carried)}`;
   return f.hidden
     ? `\n\n[${f.argument} in the ${toolName} call this result answers was chosen by the person ` +
-        "when asked (the value is hidden by the tool's view; the call had left it out).]"
+        `when asked (the value is hidden by the tool's view; ${before}).]`
     : `\n\n[${f.argument} = ${printedValue(f.value)} in the ${toolName} call this result answers ` +
-        'was chosen by the person when asked (the call had left it out).]';
+        `was chosen by the person when asked (${before}).]`;
 }
 
 // ─── The refusals ───────────────────────────────────────────────────────

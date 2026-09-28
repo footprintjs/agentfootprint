@@ -1477,6 +1477,15 @@
   ],
   "source": "library"
  },
+ "howSure.check.argumentSources@1": {
+  "text": "Argument sources: ran value of 2 values had a source verdict on the record.",
+  "parts": [
+   {
+    "text": "Argument sources: ran value of 2 values had a source verdict on the record."
+   }
+  ],
+  "source": "library"
+ },
  "howSure.reason.asked@1": {
   "text": "A question the run asked is still waiting for its answer.",
   "parts": [
@@ -1504,11 +1513,29 @@
   ],
   "source": "library"
  },
- "howSure.reason.argumentUnverified@1": {
-  "text": "2 ruled values came from the model, with no source on the record: not the conversation, a result or the app.",
+ "howSure.reason.argumentUnverified@2": {
+  "text": "2 values came from the model, with no source on the record: not the conversation, a result or the app.",
   "parts": [
    {
-    "text": "2 ruled values came from the model, with no source on the record: not the conversation, a result or the app."
+    "text": "2 values came from the model, with no source on the record: not the conversation, a result or the app."
+   }
+  ],
+  "source": "library"
+ },
+ "howSure.reason.argumentRead@1": {
+  "text": "2 values the calls ran with were read into the conversation: the quoted words are on the record, the value itself is not in them.",
+  "parts": [
+   {
+    "text": "2 values the calls ran with were read into the conversation: the quoted words are on the record, the value itself is not in them."
+   }
+  ],
+  "source": "library"
+ },
+ "howSure.reason.valueContingent@1": {
+  "text": "2 values were taken from a result the model itself had set aside.",
+  "parts": [
+   {
+    "text": "2 values were taken from a result the model itself had set aside."
    }
   ],
   "source": "library"

@@ -485,6 +485,9 @@ describe('UNIT — the reason table', () => {
       'argument-asked',
       'argument-assumed',
       'argument-unverified',
+      // …and step 5 (declared sources).
+      'argument-read',
+      'value-contingent',
       'declared-absent',
       'coverage-gap',
       'empty-undeclared',

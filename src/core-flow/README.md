@@ -148,6 +148,10 @@ Every file in this folder depends only on: `footprintjs`, `../core/runner.ts`, `
 
 This is enforced by convention (no import paths cross the line). Compositions take `Runner<T>` generically — they don't know or care whether a child is LLM-backed. That makes them trivially testable with pure-function runner stubs.
 
+### Decision 10: a composed message is marked — for the runner that reads the mark
+
+A step after the first of a `Sequence`, and every `Loop` iteration after the first, is handed ANOTHER runner's output as its message. Another model's words must never count as "the person said it" (the inputs layer's declared sources check a quote against the person's messages), and only the composition knows where the message came from. So these mappers pass `messageFrom: 'composed'` (`../core/messageFrom.ts` · `composedInput`) — and `Parallel`, `Conditional` and a nested `Sequence` / `Loop` pass it on to the child they hand their OWN message to when they were handed a composed one. The mark goes ONLY to a runner that reads it (an `Agent` armed with `.findings({ argumentSources: true })`, or a composition holding one — `readsMessageFromIfAny`): every other composition hands its children the input object it always did, byte for byte. The registry is a leaf in `core/`, so this folder still imports no LLM-backed runner. Pinned by `test/core/messageFrom.test.ts`.
+
 ## Events emitted
 
 | Composition | Events |

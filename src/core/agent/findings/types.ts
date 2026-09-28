@@ -31,6 +31,7 @@
 
 import type { Assertion } from '../../../integrity/assertion/types.js';
 import type { ArgumentRow } from '../arguments/rows.js';
+import type { DeclaredSource } from '../arguments/sources.js';
 import type { CoverageItem } from '../coverage/types.js';
 
 /** The reserved optional property every SERVED tool schema carries when armed. */
@@ -105,6 +106,13 @@ export interface FindingsDeclaration {
   /** What the result should show if the proposition holds — one line, optional. */
   readonly predicts?: string;
   readonly previous?: readonly PreviousStanding[];
+  /**
+   * Where each argument value of THIS call came from — read only under
+   * `.findings({ argumentSources: true })` (the inputs layer's declared
+   * sources, `arguments/sources.ts` · `readSources`); ignored otherwise, as an
+   * unknown key always was. A claim the library checks, never evidence.
+   */
+  readonly from?: readonly DeclaredSource[];
 }
 
 /** Where a standing was declared: on a later tool call, or on the answer. */

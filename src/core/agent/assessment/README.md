@@ -47,7 +47,9 @@ grows as later honesty steps commit new rows.
 | `asked` | every | `pausedToolCallId`: the call a pause is still waiting on — a typed input (`requestInput`), a question (`askHuman` / `pauseHere`), a consent gate (a tool's `checkIn`, a middleware's `ask`) or a credential consent; never the pause event |
 | `argument-asked` | 2 | `argumentAsk`: the inputs layer's batch ask with a question still out (`waiting`) — nothing in that batch has run; this turn's current `asked` rows on `findingsLedger` name the values; never the pause event |
 | `argument-assumed` | 2 | `findingsLedger`: an `argument` row of this turn with `source: 'default'` — a tool's `askOrAssume` rule filled the value, or the model sent that same default; or `middlewareDecisions`: a before-tool rewrite of a ruled argument (`changedKeys`) with no declared origin (`allow(args, why, { from })`) |
-| `argument-unverified` | 2 | `findingsLedger`: an `argument` row of this turn with `source: 'model'` on a ruled argument, or with a failed declared-source check |
+| `argument-unverified` | 2 | `findingsLedger`: an `argument` row of this turn with `source: 'model'` on a ruled argument, or with a failed declared-source check (`failed`) on ANY argument — the model misstated the record |
+| `argument-read` | 2 | `findingsLedger`: an `argument` row of this turn with `source: 'said'` and `reading` — the quoted words are the person's, the value is the model's reading of them (declared sources) |
+| `value-contingent` | 2 | `findingsLedger`: an `argument` row of this turn with `source: 'result'` and `setAside` (the model named a result it had set aside); or a `contingent` row of this turn (stamped with it, or unstamped on a call of this turn or on the answer) |
 | `coverage-gap` | 3 | `coverageDeclared`: a `notChecked` or `cannotCover` item on a call of this turn; or `history`: the result's own envelope lists one, when its call has no coverage row |
 | `declared-absent` | 3 | `coverageDeclared`: an absence; or `history`: an empty rowset inside a declared `coverage()` boundary, or an absence in the result's own envelope when its call has no coverage row |
 | `empty-undeclared` | 3 | `history`: an empty rowset (a top-level array, or the app's `rowsAt` key) whose call has no coverage row |
@@ -62,8 +64,14 @@ The inputs layer's rows (honesty layer 2, `core/agent/arguments/README.md`) are
 read for THIS turn only — the ledger crosses turns, and every `argument` row
 carries its `turn` — and the last row per (call, argument) is the current one.
 When the layer filed any, `checked` gains `argument-rules` (layer 2): every row
-is a verdict, so `ran` equals `of`. No argument row ever supports "known": a
-membership pass only keeps a reason from firing.
+is a verdict, so `ran` equals `of`. Under declared sources
+(`.findings({ argumentSources: true })`) `checked` gains `argument-sources` too:
+`of` is the rows the check judged (they carry `claimed`), `ran` the ones it
+reached a verdict on (all but `uncheckable`). A traced source — the person's
+quoted words or a declared phrase, their answer, a result, the app — fires
+nothing, so a turn whose values all check out reads "consistent with the
+record"; no argument row ever supports "known": a membership pass only keeps a
+reason from firing.
 
 Every result is read through the ONE emptiness reader,
 `core/agent/coverage/emptiness.ts` · `readEmptiness`, the one the answer account

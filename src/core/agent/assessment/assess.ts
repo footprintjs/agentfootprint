@@ -245,6 +245,12 @@ interface ArgumentRowRead {
   readonly asked: boolean;
   readonly ruled: boolean;
   readonly failed: boolean;
+  /** The declared-sources check judged it (`claimed` present) — and whether it reached a verdict. */
+  readonly sourced?: 'verdict' | 'uncheckable';
+  /** `said` + `reading`: the value is the model's reading of the person's words. */
+  readonly reading: boolean;
+  /** `result` + `setAside`: the value came from a result the model had set aside. */
+  readonly setAside: boolean;
 }
 
 /**
@@ -274,6 +280,11 @@ function argumentRows(state: Readonly<Record<string, unknown>>): readonly Argume
       asked: typeof row.asked === 'string' && source === undefined,
       ruled: row.rule !== undefined || row.period === true,
       failed: row.failed !== undefined,
+      ...(typeof row.claimed === 'string' && {
+        sourced: row.failed === 'uncheckable' ? ('uncheckable' as const) : ('verdict' as const),
+      }),
+      reading: source === 'said' && row.reading === true,
+      setAside: source === 'result' && typeof row.setAside === 'string',
     };
     const forCall = byCall.get(toolCallId) ?? new Map<string, ArgumentRowRead>();
     forCall.set(argument, read);
@@ -291,12 +302,18 @@ function argumentRows(state: Readonly<Record<string, unknown>>): readonly Argume
  *   person's or the app's (`allow(args, why, { from })`); a middleware default
  *   never earns more standing than the same default declared as `assume`;
  * - otherwise the layer's row: `default` fires `argument-assumed`; `model` on a
- *   ruled argument, or a failed declared-source check, fires
- *   `argument-unverified`.
+ *   ruled argument, or a failed declared-source check on ANY argument (the
+ *   model misstated the record), fires `argument-unverified`; `said` with
+ *   `reading` (the model's reading of the person's words) fires
+ *   `argument-read`; `result` with `setAside` (a result the model set aside)
+ *   fires `value-contingent`.
  *
- * A verified source fires nothing — and supports nothing: a membership pass
- * only keeps a reason from firing. Files the `argument-rules` check when the
- * layer filed any verdict this turn.
+ * A traced source — `said` via the quote or a declared phrase, `answered`,
+ * `result`, `app` — fires nothing, and SUPPORTS nothing: a membership pass
+ * only keeps a reason from firing, so no row here ever makes an answer
+ * "known". Files the `argument-rules` check when the layer filed any verdict
+ * this turn, and the `argument-sources` check when the declared-sources check
+ * judged any.
  */
 function readArgumentVerdicts(
   state: Readonly<Record<string, unknown>>,
@@ -325,7 +342,8 @@ function readArgumentVerdicts(
     if (row.source === 'default') fire(g, 'argument-assumed', at);
     else if ((row.source === 'model' && row.ruled) || row.failed) {
       fire(g, 'argument-unverified', at);
-    }
+    } else if (row.reading) fire(g, 'argument-read', at);
+    else if (row.setAside) fire(g, 'value-contingent', at);
   }
   g.checked.push({
     layer: 2,
@@ -333,6 +351,47 @@ function readArgumentVerdicts(
     ran: rows.length,
     of: rows.length,
     witness,
+  });
+  // The declared-sources check (`.findings({ argumentSources: true })`) — the rows it
+  // judged carry `claimed`; `uncheckable` is a check that reached no verdict.
+  const judged = rows.filter((r) => r.sourced !== undefined);
+  if (judged.length > 0) {
+    const reached = judged.filter((r) => r.sourced === 'verdict');
+    g.checked.push({
+      layer: 2,
+      check: 'argument-sources',
+      ran: reached.length,
+      of: judged.length,
+      witness: reached.map((r) => statePointer('findingsLedger', r.index, 'claimed')),
+    });
+  }
+}
+
+/**
+ * Layer 2, the contingent law's rows: a value a call of this turn — or the
+ * answer — used that only results the model itself set aside carried
+ * (`findings/contingent.ts`, filed under `.findings()` beside the evidence
+ * gate). A row the one writer stamped with its `turn` is this turn's only when
+ * the stamp says so; an unstamped row declared on a call is this turn's when
+ * the call is, and one declared on the answer is read as this turn's (it may
+ * over-report; it never hides).
+ */
+function readContingentRows(
+  state: Readonly<Record<string, unknown>>,
+  calls: ReadonlySet<string>,
+  g: Gathered,
+): void {
+  const ledger = Array.isArray(state.findingsLedger) ? state.findingsLedger : [];
+  const turn = typeof state.turnNumber === 'number' ? state.turnNumber : undefined;
+  ledger.forEach((row: unknown, index) => {
+    if (!isRecord(row) || row.kind !== 'contingent') return;
+    if (typeof row.turn === 'number' && turn !== undefined) {
+      if (row.turn !== turn) return;
+    } else if (row.declaredOn !== 'answer') {
+      const on = isRecord(row.declaredOn) ? str(row.declaredOn.toolCallId) : undefined;
+      if (on === undefined || !calls.has(on)) return;
+    }
+    fire(g, 'value-contingent', statePointer('findingsLedger', index, 'value'));
   });
 }
 
@@ -604,6 +663,7 @@ export function assessAnswer(
   readArgumentVerdicts(state, argumentVerdicts, g);
   readCoverageRows(coverage, g);
   const calls = readTurnCalls(reads, coverage, g);
+  readContingentRows(state, calls, g);
   readTurnResults(reads, declarations, g);
   readConflicts(state, calls, g);
   readAnswerRows(state, g);

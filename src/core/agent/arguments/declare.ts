@@ -21,9 +21,13 @@
  *   - `{ ask: question, choices? }` — a value the call leaves out is asked of
  *     the person, ONCE per batch, before anything in the batch runs, through
  *     the typed ask (`core/inputRequest.ts`); the answer is filled and
- *     recorded as `answered` (`arguments/ask.ts`). A present value is not
- *     asked in this version: the model does not yet say where its values came
- *     from (declared sources), so it runs, recorded as the model's own.
+ *     recorded as `answered` (`arguments/ask.ts`). A PRESENT value runs,
+ *     recorded as the model's own — unless declared sources are armed
+ *     (`.findings({ argumentSources: true })`): then the model says where it
+ *     came from, the library checks it (`checks.ts` · `checkSource`), and a
+ *     value the check does not trace is asked about too. A choice may carry
+ *     phrases the author vouches for (`{ value, said }`), matched only inside
+ *     a quote the model declared.
  *
  * ## The period — `ToolPeriod`
  *
@@ -193,6 +197,28 @@ export function parsesUnderSpelling(value: unknown, spelling: PeriodSpelling): b
       );
     }
   }
+}
+
+/**
+ * Convert a period value between the two spellings the library converts —
+ * `lookback` ↔ `signed-lookback`, by adding or removing the leading minus.
+ * Nothing is ever turned into a duration; an `iso-range` is never converted.
+ * `undefined` when the value does not parse under `from`. The one owner: the
+ * batch ask's shared period field (`ask.ts` · `periodsShareField`) and the
+ * declared-sources check's earlier answer in another spelling (`checks.ts` ·
+ * `checkSource`, `matched: 'spelling'`) both convert through it.
+ */
+export function convertSpelling(
+  value: InputValue,
+  from: PeriodSpelling,
+  to: PeriodSpelling,
+): InputValue | undefined {
+  if (!parsesUnderSpelling(value, from)) return undefined;
+  if (from === to) return value;
+  const text = value as string;
+  if (from === 'lookback' && to === 'signed-lookback') return `-${text}`;
+  if (from === 'signed-lookback' && to === 'lookback') return text.slice(1);
+  return undefined;
 }
 
 // ─── The refusal ────────────────────────────────────────────────────────
@@ -597,12 +623,25 @@ function warnDefaultProse(
 
 // ─── Reading the rules at dispatch ──────────────────────────────────────
 
+/** One declared choice's phrases — words the author vouches for as meaning that value. */
+export interface ChoicePhrases {
+  readonly value: InputValue;
+  readonly said: readonly string[];
+}
+
 /** What an `ask` rule declares, as the layer reads it. */
 export interface RuledAsk {
   /** The author's question — the ask field's `description`. */
   readonly question: string;
   /** The author's choices' values, in declared order — the field's `enum`. Absent: a free field. */
   readonly choices?: readonly InputValue[];
+  /**
+   * The choices that declare `said` phrases, in declared order — matched as
+   * whole tokens only inside a quote the model declared (`checks.ts` ·
+   * `checkSource`, `matched: 'phrase'`), never scanned for in the person's
+   * words. Absent when no choice declares any.
+   */
+  readonly phrases?: readonly ChoicePhrases[];
 }
 
 /** One ruled argument of a tool, as the layer reads it. */
@@ -683,9 +722,46 @@ export function isRefused(value: ToolRules | RulesRefused | undefined): value is
   return value !== undefined && 'refused' in value;
 }
 
+/**
+ * Whether a tool's argument rules can be read and rule at least one argument
+ * — the one predicate for "this tool is RULED" wherever the declared sources'
+ * `_findings.from` is planted (`core/slots/buildToolsSlot.ts`, `stages/seed.ts`):
+ * only such a tool's calls are checked and filed.
+ */
+export function carriesRules(tool: RuledToolLike | undefined): boolean {
+  const rules = rulesOf(tool);
+  return rules !== undefined && !isRefused(rules) && rules.ruled.length > 0;
+}
+
 /** The value of one declared choice — a bare value, or `{ value, said? }`. */
 const choiceValueOf = (choice: AskChoice): InputValue =>
   typeof choice === 'object' ? choice.value : choice;
+
+/** The choices that declare `said` phrases, as the layer reads them. */
+function phrasesOf(choices: readonly AskChoice[]): ChoicePhrases[] {
+  const out: ChoicePhrases[] = [];
+  for (const choice of choices) {
+    if (typeof choice !== 'object' || choice.said === undefined || choice.said.length === 0) {
+      continue;
+    }
+    out.push({ value: choice.value, said: [...choice.said] });
+  }
+  return out;
+}
+
+/** An `ask` rule as the layer reads it: the question, the choices' values, their phrases. */
+function readAsk(rule: {
+  readonly ask: string;
+  readonly choices?: readonly AskChoice[];
+}): RuledAsk {
+  if (rule.choices === undefined) return { question: rule.ask };
+  const phrases = phrasesOf(rule.choices);
+  return {
+    question: rule.ask,
+    choices: rule.choices.map(choiceValueOf),
+    ...(phrases.length > 0 && { phrases }),
+  };
+}
 
 /** The property's type, read after the assert judged it one of `RULED_TYPES`. */
 function propertyTypeOf(
@@ -709,12 +785,7 @@ function readRules(
     argument,
     rule: 'ask' in rule ? ('ask' as const) : ('assume' as const),
     ...('assume' in rule && { assume: rule.assume }),
-    ...('ask' in rule && {
-      ask: {
-        question: rule.ask,
-        ...(rule.choices !== undefined && { choices: rule.choices.map(choiceValueOf) }),
-      },
-    }),
+    ...('ask' in rule && { ask: readAsk(rule) }),
     type: propertyTypeOf(inputSchema, argument),
     ...(period?.argument === argument && { period: true as const }),
   }));

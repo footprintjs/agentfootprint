@@ -38,6 +38,7 @@ import type { ToolNameChannel } from '../../events/payloads.js';
 import type { ToolProvider, ToolDispatchContext } from '../../tool-providers/types.js';
 import { composeSlot, fnv1a, formatOverflowWarning, slotOverflow, truncate } from './helpers.js';
 import { withFindingsArgument } from '../agent/findings/reserved.js';
+import { carriesRules } from '../agent/arguments/declare.js';
 import type { Classifier } from '../../classify/types.js';
 import type { ToolChoiceEntry } from '../agent/toolChoice/types.js';
 
@@ -354,6 +355,16 @@ export interface ToolsSlotConfig {
    * is refused at dispatch, and a sentence promising a fill would be false.
    */
   readonly inputsLayer?: true;
+  /**
+   * DECLARED SOURCES ARE ARMED (honesty layer 2, `.findings({ argumentSources:
+   * true })`) — present ONLY then, only ever `true`, and only beside `findings`
+   * and `inputsLayer`. At the same decoration site, a schema whose WINNING
+   * implementation carries argument rules (`arguments/declare.ts` ·
+   * `carriesRules`) gets the `_findings` variant with `from`
+   * (`findings/reserved.ts` · `withFindingsArgument`'s `from`); every other
+   * schema keeps the base by reference. Absent → the decoration it always was.
+   */
+  readonly argumentSources?: true;
   /**
    * TOOL CHOICE BY CLASSIFIER IS ARMED (9.105.0, `.toolChoice()`) — present
    * ONLY then. Compose then asks `classifier` which of the merged wire's
@@ -929,8 +940,15 @@ export function buildToolsSlot(config: ToolsSlotConfig): FlowChart {
       // by reference, when the layer is not armed or no served tool is ruled.
       // `rules` is loaded (below) exactly when the layer is armed.
       const ruled = rules !== undefined ? rules(served, winningTools) : served;
+      // Declared sources (honesty layer 2): `_findings.from` on a RULED tool only.
+      const from = (s: LLMToolSchema): { from: true } | undefined =>
+        config.argumentSources === true && carriesRules(winningTools.get(s.name))
+          ? { from: true }
+          : undefined;
       scope.toolSchemas =
-        config.findings === true ? ruled.map((s) => withFindingsArgument(s, offer)) : ruled;
+        config.findings === true
+          ? ruled.map((s) => withFindingsArgument(s, offer, from(s)))
+          : ruled;
       if (servedTools !== undefined) {
         // Dispatch follows the OFFER: a name narrowed off this epoch's wire
         // was not served, so it is not on `current` and takes the off-wire

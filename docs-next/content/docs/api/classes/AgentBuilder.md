@@ -100,7 +100,7 @@ One key per moment. `input` / `output` take message
 
 > **answerValidation**\<`T`\>(`options`): `this`
 
-Defined in: [src/core/agent/AgentBuilder.ts:3006](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/AgentBuilder.ts#L3006)
+Defined in: [src/core/agent/AgentBuilder.ts:3028](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/AgentBuilder.ts#L3028)
 
 Validate a JSON answer against host-owned evidence before delivering it.
 Requires outputSchema. Enforce (default) refuses failed or unverified
@@ -155,7 +155,7 @@ commentary + thinking templates. Same place to brand a tenant
 
 > **build**(): [`Agent`](/docs/api/classes/Agent)
 
-Defined in: [src/core/agent/AgentBuilder.ts:3079](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/AgentBuilder.ts#L3079)
+Defined in: [src/core/agent/AgentBuilder.ts:3101](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/AgentBuilder.ts#L3101)
 
 #### Returns
 
@@ -167,7 +167,7 @@ Defined in: [src/core/agent/AgentBuilder.ts:3079](https://github.com/footprintjs
 
 > **checkIn**(`opts?`): `this`
 
-Defined in: [src/core/agent/AgentBuilder.ts:2885](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/AgentBuilder.ts#L2885)
+Defined in: [src/core/agent/AgentBuilder.ts:2907](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/AgentBuilder.ts#L2907)
 
 #### Parameters
 
@@ -412,7 +412,7 @@ Distinct from Skills (LLM-activated guidance) and Steering
 
 > **findings**(`options?`): `this`
 
-Defined in: [src/core/agent/AgentBuilder.ts:2126](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/AgentBuilder.ts#L2126)
+Defined in: [src/core/agent/AgentBuilder.ts:2137](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/AgentBuilder.ts#L2137)
 
 The findings ledger (9.101.0) — the model's OWN standings on its tool
 results, on the record, at zero extra calls.
@@ -460,6 +460,17 @@ a window strategy, where `stages/window.ts · buildWindowStage` spends it
 as the `'ledger-fact'` pin ceiling; a negative or non-integer value is
 refused here.
 
+`argumentSources: true` (honesty layer 2, declared sources) — on a tool
+that declares argument rules (`askOrAssume`), the reserved argument also
+carries `from`: the model says where each argument value came from (the
+person's words as a `quote`, a result's `id`, an earlier answer, the app,
+or `'assumed'`), and the inputs layer CHECKS each claim before the batch
+runs and files the verdict on the call's argument rows — under an `ask`
+rule, a value the checks do not trace is asked of the person. One more
+instruction line is registered. It needs the inputs layer (a registered
+ruled tool, or `.inputsLayer()`) and is refused at build without it. Off
+(the default): nothing is served, read or written.
+
 Once per agent (a second call is refused, the `.window()` grammar).
 Registers the always-on `findings-ledger` instruction — the byte-for-byte
 twin of [outputSchema](/docs/api/classes/AgentBuilder#outputschema)'s piece, hashed per piece on every receipt,
@@ -477,6 +488,21 @@ existed: no decoration, no peel, no key, no piece, no event.
 
 Whether the served piece ends with the answer-turn ask
  (`FINDINGS_ANSWER_ASK`): `'none'` (default) or `'quote-facts'` (bench-gated).
+
+###### argumentSources?
+
+`boolean`
+
+DECLARED SOURCES (honesty layer 2) — the model says where each argument
+value of a ruled call came from, in `_findings.from` (the person's words
+as a `quote`, a result's `id`, an earlier answer, the app, or
+`'assumed'`), and the library CHECKS each claim before the batch runs
+(`arguments/checks.ts` · `checkSource`) and files the verdict on the
+call's argument rows. Under an `ask` rule, a present value the checks do
+not trace to a source is asked of the person. Requires the inputs layer
+(a registered tool that declares `askOrAssume`, or `.inputsLayer()`) —
+refused at build without it. Default off: no `from` property, no
+instruction line, no check, byte-identical.
 
 ###### judge?
 
@@ -829,7 +855,7 @@ The READ subflow runs at the configured `timing` (default
 
 > **messageMiddleware**(...`middleware`): `this`
 
-Defined in: [src/core/agent/AgentBuilder.ts:2861](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/AgentBuilder.ts#L2861)
+Defined in: [src/core/agent/AgentBuilder.ts:2883](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/AgentBuilder.ts#L2883)
 
 Wrap the message boundary in a governance chain — the input before the
 model sees it, the output before the caller receives it.
@@ -978,7 +1004,7 @@ const agent = Agent.create({ provider, model })
 
 > **ontology**(`ontology`, `options?`): `this`
 
-Defined in: [src/core/agent/AgentBuilder.ts:2363](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/AgentBuilder.ts#L2363)
+Defined in: [src/core/agent/AgentBuilder.ts:2385](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/AgentBuilder.ts#L2385)
 
 The declared ontology (9.106.0) — a MAP of what exists and where, never
 a way to fetch it.
@@ -1065,7 +1091,7 @@ const agent = Agent.create({ provider, model }).tool(lookupPort).ontology(map).b
 
 > **outputFallback**\<`T`\>(`options`): `this`
 
-Defined in: [src/core/agent/AgentBuilder.ts:2468](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/AgentBuilder.ts#L2468)
+Defined in: [src/core/agent/AgentBuilder.ts:2490](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/AgentBuilder.ts#L2490)
 
 3-tier degradation for output-schema validation failures. Pairs
 with `.outputSchema()` — an agent that has one and not the other is
@@ -1292,7 +1318,7 @@ deleted in 10.0.0.
 
 > **reliability**(`config`): `this`
 
-Defined in: [src/core/agent/AgentBuilder.ts:2575](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/AgentBuilder.ts#L2575)
+Defined in: [src/core/agent/AgentBuilder.ts:2597](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/AgentBuilder.ts#L2597)
 
 Wire rules-based reliability around every `CallLLM` execution.
 The framework wraps the LLM call in a retry/fallback/fail-fast
@@ -1364,7 +1390,7 @@ import { Agent } from 'agentfootprint';
 
 > **selfExplain**(`opts?`): `this`
 
-Defined in: [src/core/agent/AgentBuilder.ts:2893](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/AgentBuilder.ts#L2893)
+Defined in: [src/core/agent/AgentBuilder.ts:2915](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/AgentBuilder.ts#L2915)
 
 #### Parameters
 
@@ -1624,7 +1650,7 @@ Optional config. `cache` controls how the
 
 > **thinking**(`opts`): `this`
 
-Defined in: [src/core/agent/AgentBuilder.ts:2668](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/AgentBuilder.ts#L2668)
+Defined in: [src/core/agent/AgentBuilder.ts:2690](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/AgentBuilder.ts#L2690)
 
 v2.14+ — REQUEST-side thinking activation. Tells the provider to
 emit reasoning blocks alongside its response.
@@ -1685,7 +1711,7 @@ Agent.create({ provider: anthropic({...}), model: 'claude-sonnet-4-5' })
 
 > **thinkingHandler**(`handler`): `this`
 
-Defined in: [src/core/agent/AgentBuilder.ts:2619](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/AgentBuilder.ts#L2619)
+Defined in: [src/core/agent/AgentBuilder.ts:2641](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/AgentBuilder.ts#L2641)
 
 Wire a thinking handler (v2.14+). Three usage patterns:
 
@@ -1793,7 +1819,7 @@ Defined in: [src/core/agent/AgentBuilder.ts:523](https://github.com/footprintjs/
 
 > **toolChoice**(`options`): `this`
 
-Defined in: [src/core/agent/AgentBuilder.ts:2245](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/AgentBuilder.ts#L2245)
+Defined in: [src/core/agent/AgentBuilder.ts:2267](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/AgentBuilder.ts#L2267)
 
 Tool choice by classifier (9.105.0) — a SECOND READING of which tool
 answers the current step, filed beside the model's own call, and
@@ -1871,7 +1897,7 @@ agent.getSnapshot()?.sharedState.toolChoices; // pick → served → called, per
 
 > **toolMiddleware**(...`middleware`): `this`
 
-Defined in: [src/core/agent/AgentBuilder.ts:2788](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/AgentBuilder.ts#L2788)
+Defined in: [src/core/agent/AgentBuilder.ts:2810](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/AgentBuilder.ts#L2810)
 
 Wrap every tool dispatch in a governance chain.
 

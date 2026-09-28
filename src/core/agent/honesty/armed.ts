@@ -17,12 +17,21 @@
 export interface HonestyLayers {
   /** The inputs layer (honesty layer 2) — `sf-inputs` is mounted. */
   readonly inputs?: true;
+  /**
+   * The inputs layer's declared sources (`.findings({ argumentSources: true
+   * })`) — ruled tools carry `_findings.from`, and the layer checks it.
+   */
+  readonly argumentSources?: true;
 }
 
 /**
  * The run constant for an agent whose inputs layer is mounted, or `undefined`
- * when it is not (then seed writes nothing).
+ * when it is not (then seed writes nothing). `argumentSources` only beside it.
  */
-export function honestyLayersOf(inputsLayer: boolean): HonestyLayers | undefined {
-  return inputsLayer ? { inputs: true } : undefined;
+export function honestyLayersOf(
+  inputsLayer: boolean,
+  argumentSources = false,
+): HonestyLayers | undefined {
+  if (!inputsLayer) return undefined;
+  return argumentSources ? { inputs: true, argumentSources: true } : { inputs: true };
 }

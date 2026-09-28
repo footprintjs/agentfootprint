@@ -162,11 +162,50 @@ renders, answers and cancels it like any other:
   the tool's own view hides; the `answered` rows carry what each tool's view
   allows.
 - **A value the model did send** runs as sent and is recorded as the model's
-  own — the library does not ask about it.
+  own — the library does not ask about it, unless declared sources are on (next
+  section).
 
 Your app can keep its own state on the ask (a routing step, a screen id):
 `Agent.create({ …, argumentAskContext: () => ({ routing: { step: 'metrics' } }) })`
 spreads the object into `context` beside the library's key, which it may not use.
+
+## Where each value came from — declared sources
+
+With `.findings({ argumentSources: true })`, the model says, for each argument of
+a ruled call, where the value came from — the person's words (copied as a
+`quote`), a tool result (its `id`), the person's earlier answer, the app's own
+text, or `'assumed'` — and the library **checks** each claim before anything in
+the batch runs. A choice can carry words you vouch for as meaning it
+(`{ value: '7d', said: ['last week'] }`), so "over the last week" checks out as
+`7d` without the library ever parsing a time phrase:
+
+<CodeFile path="examples/features/76-declared-sources.ts" region="declared-sources" title="examples/features/76-declared-sources.ts (region: declared-sources)" />
+
+<CodeFile path="examples/features/76-declared-sources.ts" region="checked" title="examples/features/76-declared-sources.ts (region: checked)" />
+
+- **A checked value runs.** The quote must be in the person's own messages, and
+  the value in the quote or one of your phrases for it; a result id must name a
+  result the model was served, and the value must be in that result's own bytes
+  (a note the library added never counts); an earlier answer must be the
+  person's answer to the library's ask. The row says what was checked:
+  `source: 'said'` with `matched: 'phrase'`, `'result'`, `'answered'`, `'app'`.
+- **An unchecked value on an `ask` argument is asked** — nothing declared, a
+  failed claim, or a READING (the words are the person's, the value is not in
+  them). The ask shows the person their own words (`quoted`), never the model's
+  value; the answer replaces it, and the row keeps the model's value as
+  `proposed`.
+- **A failed claim is recorded as written**, never repaired
+  (`failed: 'quote-not-found'`, `'not-in-result'`, …), and the answer's standing
+  says the value is not traced.
+- **Checked is not verified.** Matching words cannot see a negation or another
+  sentence, so a checked value keeps a reason from firing and supports nothing:
+  the answer reads "consistent with the record", never "known".
+- **Another runner's message is not the person's.** `Sequence` and `Loop` mark a
+  step's message that is an earlier step's output, and a quote from it fails;
+  code that composes runners by hand passes `messageFrom: 'composed'` to `run()`.
+- **It costs tokens, and it is off by default.** The `from` property rides only on
+  tools that declare `askOrAssume`, plus one instruction line. It needs the inputs
+  layer and is refused at build without it.
 
 ## Hosted chat
 

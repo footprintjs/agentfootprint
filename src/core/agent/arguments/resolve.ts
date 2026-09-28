@@ -14,7 +14,7 @@
  *          Imports nothing from `findings/` (the one-way law).
  * Emits:   N/A.
  *
- * ## The table this version applies (declared sources unarmed)
+ * ## The table (declared sources unarmed)
  *
  * | The value                               | `assume` rule                   | `ask` rule                        |
  * |-----------------------------------------|---------------------------------|-----------------------------------|
@@ -23,6 +23,24 @@
  * | present, equal to the declared default  | `default` — run (model's value) | — (an `ask` rule has no default)  |
  * | present, any other value                | `model` — run, flagged          | `model` — run, flagged (adopted Q2) |
  *
+ * ## Under declared sources (`.findings({ argumentSources: true })`)
+ *
+ * A PRESENT value is checked against the source the model declared for it
+ * (`checks.ts` · `checkSource`) — and so is every free argument a `from`
+ * entry names, filed with no rule. A missing value is resolved exactly as
+ * above: it has no source to check.
+ *
+ * | The present value                                                     | `assume` rule        | `ask` rule                        | no rule |
+ * |-----------------------------------------------------------------------|----------------------|-----------------------------------|---------|
+ * | traced — `said` (quote or phrase), `answered`, `result`, `app`       | run                  | run                               | run, a row |
+ * | the declared default, not the person's (V1)                           | run → `default`      | —                                 | —       |
+ * | untraced — nothing declared, `assumed`, a hint, a failed claim, a reading | run, flagged     | `asked: 'unverified'` — ask       | run, a row |
+ *
+ * A reading (`said` + `reading`: the person's words were found, the value is
+ * not in them) ASKS under an `ask` rule — otherwise any exact fragment of the
+ * person's message would carry any value past the rule — and the ask's field
+ * shows the person their own words (`quoted`) unless the tool's view hides the
+ * argument. The model's value never rides the ask.
  * "Equal" is the evidence module's same-value rule (`declare.ts` ·
  * `sameArgumentValue`). A present value equal to the default is filed as
  * `default`, never as the model's own choice: a model that copies a default
@@ -43,16 +61,27 @@
 import type { InputValue } from '../../inputRequest.js';
 import { shownArgsOf } from '../../toolShownArgs.js';
 import { validatePropertyValue } from '../toolArgsValidation.js';
-import { isMissing, isRefused, rulesOf, sameArgumentValue, type RuledToolLike } from './declare.js';
+import { checkSource, isTraced, type SourceCheck, type SourceCorpus } from './checks.js';
+import {
+  isMissing,
+  isRefused,
+  rulesOf,
+  sameArgumentValue,
+  type RuledArgument,
+  type RuledToolLike,
+  type ToolRules,
+} from './declare.js';
 import { keptAnswerFor, type KeptAnswer } from './kept.js';
 import {
   HIDDEN_VALUE,
   answeredRowOf,
   argumentRowOf,
   askedRowOf,
+  sourcedRowOf,
   type ArgumentRow,
 } from './rows.js';
 import { unreadableRulesRefusal } from './serve.js';
+import type { CallSources, DeclaredSource } from './sources.js';
 
 /** One call of the batch, as the model emitted it (its raw arguments). */
 export interface BatchCall {
@@ -62,7 +91,9 @@ export interface BatchCall {
 }
 
 /** The implementation that will answer a name — the shared dispatch resolver's. */
-export type ToolOf = (toolName: string) => RuledToolLike | undefined;
+export type ToolOf = (
+  toolName: string,
+) => (RuledToolLike & { readonly argumentsFrom?: readonly string[] }) | undefined;
 
 /** One ruled argument of one call, as DECLARE found it. Identities and a flag — no value. */
 export interface PlannedArgument {
@@ -79,6 +110,12 @@ export interface PlannedCall {
   /** The dispatch re-read could not read the rules — the assert's own sentence. */
   readonly refused?: string;
   readonly ruled: readonly PlannedArgument[];
+  /**
+   * Under declared sources: the FREE arguments (no rule) a `from` entry named
+   * — each is checked and filed with no rule, never filled and never asked
+   * (adopted Q18). Absent when there are none.
+   */
+  readonly free?: readonly string[];
 }
 
 /** One ruled argument, as VERIFY placed it. No value — the rows take the value in the tool's view. */
@@ -86,18 +123,41 @@ export interface CheckedArgument {
   readonly toolCallId: string;
   readonly toolName: string;
   readonly argument: string;
-  readonly rule: 'ask' | 'assume';
+  /** The argument's rule — absent only on a FREE argument a `from` entry named. */
+  readonly rule?: 'ask' | 'assume';
   readonly period?: true;
   /** Where the value came from — absent exactly on an argument to ASK (`asked`). */
-  readonly source?: 'default' | 'model' | 'answered';
+  readonly source?: 'default' | 'model' | 'answered' | 'said' | 'result' | 'app';
   /**
    * The library fills the value — the call left the argument out: the declared
    * default (`source: 'default'`), or the person's answer KEPT for this
    * (tool, argument) (`source: 'answered'`, `kept.ts`).
    */
   readonly filled?: true;
-  /** The call left an `ask` argument out: the person is asked, once per batch. */
-  readonly asked?: 'missing';
+  /**
+   * The person is asked, once per batch: the call left an `ask` argument out
+   * (`missing`), or — under declared sources — its present value is not traced
+   * to a source the record holds (`unverified`).
+   */
+  readonly asked?: 'missing' | 'unverified';
+  /**
+   * The declared-sources check's verdict on a PRESENT value — set exactly when
+   * the arm is on for the call (`checks.ts` · `checkSource`). Enums, flags, a
+   * result id and an app label: never the value, never the quote.
+   */
+  readonly check?: SourceCheck;
+}
+
+/**
+ * The declared sources, as the layer's stages are handed them: each call's
+ * `from` entries (`sources.ts` · `CallSources`, by call id — a call with no
+ * entry declares nothing: its tool owns the reserved argument) and, for the
+ * checks, the corpora (`checks.ts` · `SourceCorpus`). Absent → the arm is off.
+ */
+export interface SourcesArm {
+  readonly declared: ReadonlyMap<string, CallSources>;
+  /** Present from VERIFY on — DECLARE needs only the entries. */
+  readonly corpus?: SourceCorpus;
 }
 
 /**
@@ -124,31 +184,63 @@ export interface ArgumentResolution {
   readonly fills?: readonly ArgumentFill[];
   readonly refused?: string;
   /**
-   * The `ask`-ruled arguments this call left out, in the rule's declared order
-   * — names only. ToolCalls asks the person for every one of them across the
-   * batch, ONCE and before anything runs (`arguments/ask.ts`), and fills the
-   * answers as `answered`.
+   * The `ask`-ruled arguments to ask the person for, in the rule's declared
+   * order — names only: the ones this call left out, and, under declared
+   * sources, the ones whose present value is not traced to a source the record
+   * holds. ToolCalls asks the person for every one of them across the batch,
+   * ONCE and before anything runs (`arguments/ask.ts`), and fills the answers
+   * as `answered`.
    */
   readonly ask?: readonly string[];
+  /**
+   * Under declared sources: for an argument asked because the model READ a
+   * value into the person's words (`said` + `reading`), those words — the
+   * quote the model declared, found in the person's own messages — so the ask
+   * can show the person what was read. Never the model's value, and never for
+   * an argument the tool's view hides.
+   */
+  readonly quoted?: readonly { readonly argument: string; readonly quote: string }[];
 }
 
 // ─── DECLARE ────────────────────────────────────────────────────────────
+
+/** The free arguments (no rule) a call's `from` entries name, in declared order. */
+function freeNamed(
+  sources: SourcesArm | undefined,
+  toolCallId: string,
+  ruled: readonly { readonly argument: string }[],
+): string[] {
+  const from = sources?.declared.get(toolCallId)?.from ?? [];
+  const ruledNames = new Set(ruled.map((r) => r.argument));
+  return from.filter((e) => !ruledNames.has(e.argument)).map((e) => e.argument);
+}
 
 /**
  * Every call of the batch whose tool carries rules — read through `rulesOf`,
  * the dispatch re-read of the SAME assert `defineTool` runs — with each ruled
  * argument marked missing or present. A call whose rules cannot be read is
- * planned as refused. Calls to tools without rules are not planned.
+ * planned as refused. Calls to tools without rules are not planned — unless,
+ * under declared sources (`sources`), a `from` entry names one of their
+ * arguments: that argument is planned FREE, to be checked and filed.
  */
-export function declareBatch(calls: readonly BatchCall[], toolOf: ToolOf): PlannedCall[] {
+export function declareBatch(
+  calls: readonly BatchCall[],
+  toolOf: ToolOf,
+  sources?: SourcesArm,
+): PlannedCall[] {
   const plan: PlannedCall[] = [];
   for (const call of calls) {
     const rules = rulesOf(toolOf(call.name));
-    if (rules === undefined) continue;
+    if (rules === undefined) {
+      const free = freeNamed(sources, call.id, []);
+      if (free.length > 0) plan.push({ toolCallId: call.id, toolName: call.name, ruled: [], free });
+      continue;
+    }
     if (isRefused(rules)) {
       plan.push({ toolCallId: call.id, toolName: call.name, refused: rules.refused, ruled: [] });
       continue;
     }
+    const free = freeNamed(sources, call.id, rules.ruled);
     plan.push({
       toolCallId: call.id,
       toolName: call.name,
@@ -158,6 +250,7 @@ export function declareBatch(calls: readonly BatchCall[], toolOf: ToolOf): Plann
         ...(r.period === true && { period: true as const }),
         missing: isMissing(call.args, r.argument),
       })),
+      ...(free.length > 0 && { free }),
     });
   }
   return plan;
@@ -168,15 +261,19 @@ export function declareBatch(calls: readonly BatchCall[], toolOf: ToolOf): Plann
 const callById = (calls: readonly BatchCall[]): Map<string, BatchCall> =>
   new Map(calls.map((c) => [c.id, c]));
 
+/** The tool's rules, when they can be read — `undefined` otherwise. */
+function readableRules(toolOf: ToolOf, toolName: string): ToolRules | undefined {
+  const rules = rulesOf(toolOf(toolName));
+  return rules === undefined || isRefused(rules) ? undefined : rules;
+}
+
 /** The declared default of one ruled argument, read off the implementation that will run. */
 function declaredDefault(
   toolOf: ToolOf,
   toolName: string,
   argument: string,
 ): InputValue | undefined {
-  const rules = rulesOf(toolOf(toolName));
-  if (rules === undefined || isRefused(rules)) return undefined;
-  return rules.ruled.find((r) => r.argument === argument)?.assume;
+  return readableRules(toolOf, toolName)?.ruled.find((r) => r.argument === argument)?.assume;
 }
 
 /**
@@ -208,25 +305,75 @@ function keptValue(
 
 /** A free-text `ask` field — a string with no declared choices: the person typed a name. */
 function isFreeAsk(toolOf: ToolOf, toolName: string, argument: string): boolean {
-  const rules = rulesOf(toolOf(toolName));
-  if (rules === undefined || isRefused(rules)) return false;
-  const rule = rules.ruled.find((r) => r.argument === argument);
+  const rule = readableRules(toolOf, toolName)?.ruled.find((r) => r.argument === argument);
   return rule?.type === 'string' && rule.ask !== undefined && rule.ask.choices === undefined;
+}
+
+/** The model's `from` entry for one argument of one call, if it declared one. */
+function claimFor(
+  sources: SourcesArm | undefined,
+  toolCallId: string,
+  argument: string,
+): DeclaredSource | undefined {
+  return sources?.declared.get(toolCallId)?.from.find((e) => e.argument === argument);
+}
+
+/**
+ * The declared-sources verdict on one present value (`checks.ts` ·
+ * `checkSource`) — `undefined` when the arm is off for this call (no corpus,
+ * or the call declares nothing: its tool owns the reserved argument).
+ */
+function sourceCheckOf(
+  sources: SourcesArm | undefined,
+  toolOf: ToolOf,
+  call: BatchCall,
+  argument: string,
+  rule: RuledArgument | undefined,
+): SourceCheck | undefined {
+  if (sources?.corpus === undefined || !sources.declared.has(call.id)) return undefined;
+  const tool = toolOf(call.name);
+  const spelling =
+    rule?.period === true ? readableRules(toolOf, call.name)?.period?.spelling : undefined;
+  const claim = claimFor(sources, call.id, argument);
+  return checkSource(
+    {
+      toolName: call.name,
+      argument,
+      value: call.args[argument],
+      ...(rule !== undefined && { rule }),
+      ...(spelling !== undefined && { spelling }),
+      ...(tool?.argumentsFrom !== undefined && { argumentsFrom: tool.argumentsFrom }),
+      ...(claim !== undefined && { claim }),
+    },
+    sources.corpus,
+  );
+}
+
+/** A present value's place under the arm: run on the verdict, or — an untraced `ask` value — ask. */
+function placeChecked(
+  base: Omit<CheckedArgument, 'source' | 'asked' | 'check'>,
+  check: SourceCheck,
+): CheckedArgument {
+  if (base.rule === 'ask' && !isTraced(check)) return { ...base, asked: 'unverified', check };
+  return { ...base, source: check.source, check };
 }
 
 /**
  * Where each ruled value of each planned call came from, by the table above.
- * Declared sources are not armed in this version, so a present value either IS
- * the declared default (an `assume` rule) or is the model's own; a missing
- * value on an `ask` rule is placed `asked: 'missing'` — or, when this turn
- * KEPT the person's answer for that (tool, argument) (`kept`), filled with it
- * and placed `answered`.
+ * Unarmed (no `sources`), a present value either IS the declared default (an
+ * `assume` rule) or is the model's own; a missing value on an `ask` rule is
+ * placed `asked: 'missing'` — or, when this turn KEPT the person's answer for
+ * that (tool, argument) (`kept`), filled with it and placed `answered`. Under
+ * declared sources, a PRESENT value — and every free argument a `from` entry
+ * names — is checked (`checks.ts` · `checkSource`), and an untraced value on
+ * an `ask` rule is asked about (`asked: 'unverified'`).
  */
 export function verifyPlan(
   plan: readonly PlannedCall[],
   calls: readonly BatchCall[],
   toolOf: ToolOf,
   kept?: readonly KeptAnswer[],
+  sources?: SourcesArm,
 ): CheckedArgument[] {
   const byId = callById(calls);
   const checked: CheckedArgument[] = [];
@@ -234,6 +381,7 @@ export function verifyPlan(
     if (planned.refused !== undefined) continue;
     const call = byId.get(planned.toolCallId);
     if (call === undefined) continue;
+    const rules = readableRules(toolOf, planned.toolName);
     for (const p of planned.ruled) {
       const base = {
         toolCallId: planned.toolCallId,
@@ -242,6 +390,12 @@ export function verifyPlan(
         rule: p.rule,
         ...(p.period === true && { period: true as const }),
       };
+      const rule = rules?.ruled.find((r) => r.argument === p.argument);
+      const check = p.missing ? undefined : sourceCheckOf(sources, toolOf, call, p.argument, rule);
+      if (check !== undefined) {
+        checked.push(placeChecked(base, check));
+        continue;
+      }
       if (p.rule === 'ask') {
         if (!p.missing) {
           checked.push({ ...base, source: 'model' });
@@ -262,19 +416,158 @@ export function verifyPlan(
         checked.push({ ...base, source: 'model' });
       }
     }
+    for (const argument of planned.free ?? []) {
+      const check = sourceCheckOf(sources, toolOf, call, argument, undefined);
+      if (check === undefined) continue;
+      checked.push({
+        toolCallId: planned.toolCallId,
+        toolName: planned.toolName,
+        argument,
+        source: check.source,
+        check,
+      });
+    }
   }
   return checked;
 }
 
 // ─── RECORD ─────────────────────────────────────────────────────────────
 
+/** The rule a checked argument carries — defined on every path but a free argument's. */
+function ruleOf(c: CheckedArgument): 'ask' | 'assume' {
+  return c.rule ?? 'assume';
+}
+
+/**
+ * Whether a quote may be SHOWN beside this call. A quote is free text the
+ * model wrote, not an argument, so no view covers it — and it may hold ANY
+ * argument's value (a person gives a user name and a password in one
+ * sentence). So it is shown only when the tool's view hides NOTHING in the
+ * call (`shownArgsOf` answers the call's own arguments, same reference,
+ * exactly then) — never beside a call whose tool hid an argument, whichever
+ * argument the quote names, and never for a name nothing answers.
+ */
+function viewHidesNothing(tool: unknown, call: BatchCall): boolean {
+  return tool !== undefined && shownArgsOf(tool, call.args) === call.args;
+}
+
+/**
+ * The row for a value the declared-sources check judged: the verdict, the
+ * value (or, on an ask, the model's proposal) and the quote — each in the
+ * tool's OWN argument view; a quote reads `'REDACTED'` whenever the view hid
+ * anything in the call (`viewHidesNothing`).
+ */
+function sourcedRow(
+  c: CheckedArgument & { readonly check: SourceCheck },
+  call: BatchCall,
+  toolOf: ToolOf,
+  sources: SourcesArm | undefined,
+  stamp: { readonly turn: number; readonly iteration: number },
+): ArgumentRow {
+  const tool = toolOf(c.toolName);
+  // A name nothing answers has no view to ask — shown as hidden, never raw.
+  const shown = tool === undefined ? HIDDEN_VALUE : shownArgsOf(tool, call.args)[c.argument];
+  const quoteShown = viewHidesNothing(tool, call);
+  const quote = claimFor(sources, c.toolCallId, c.argument)?.quote;
+  const { check } = c;
+  const asked = c.asked === 'unverified';
+  return sourcedRowOf(
+    {
+      toolCallId: c.toolCallId,
+      toolName: c.toolName,
+      argument: c.argument,
+      ...(c.rule !== undefined && { rule: c.rule }),
+      ...(c.period === true && { period: true as const }),
+      ...(asked ? { asked: 'unverified' as const } : { source: check.source }),
+      ...(!asked && { shownValue: shown }),
+      // The model's own value: on an ask (it will not run) and on a default it sent (V1).
+      ...((asked || check.source === 'default') && { shownProposed: shown }),
+      claimed: check.claimed,
+      ...(check.matched !== undefined && { matched: check.matched }),
+      ...(quote !== undefined && { shownQuoteText: quoteShown ? quote : HIDDEN_VALUE }),
+      ...(check.reading === true && { reading: true as const }),
+      ...(check.earlier === true && { earlier: true as const }),
+      ...(check.result !== undefined && { result: check.result }),
+      ...(check.setAside !== undefined && { setAside: check.setAside }),
+      ...(check.argumentsFrom !== undefined && { argumentsFrom: check.argumentsFrom }),
+      ...(check.appSource !== undefined && { appSource: check.appSource }),
+      ...(check.coincides !== undefined && { coincides: check.coincides }),
+      ...(check.failed !== undefined && { failed: check.failed }),
+    },
+    stamp,
+  );
+}
+
+/** One checked argument's row, on the unarmed paths (and a missing value's under the arm). */
+function plainRow(
+  c: CheckedArgument,
+  call: BatchCall,
+  toolOf: ToolOf,
+  stamp: { readonly turn: number; readonly iteration: number },
+  kept: readonly KeptAnswer[] | undefined,
+): ArgumentRow | undefined {
+  const tool = toolOf(c.toolName);
+  const who = { ...c, rule: ruleOf(c) };
+  if (c.asked !== undefined) return askedRowOf(who, stamp);
+  if (c.filled === true && c.source === 'answered') {
+    const answer = keptValue(toolOf, kept, c.toolName, c.argument);
+    if (answer === undefined) return undefined;
+    const shown = shownArgsOf(tool, { ...call.args, [c.argument]: answer });
+    return answeredRowOf(
+      {
+        toolCallId: c.toolCallId,
+        toolName: c.toolName,
+        argument: c.argument,
+        rule: 'ask',
+        ...(c.period === true && { period: true as const }),
+        // A name nothing answers has no view to ask — shown as hidden, never raw.
+        shownValue: tool === undefined ? HIDDEN_VALUE : shown[c.argument],
+        ...(isFreeAsk(toolOf, c.toolName, c.argument) && { free: true as const }),
+      },
+      stamp,
+    );
+  }
+  if (c.filled === true) {
+    const assumed = declaredDefault(toolOf, c.toolName, c.argument);
+    if (assumed === undefined) return undefined;
+    const shown = shownArgsOf(tool, { ...call.args, [c.argument]: assumed });
+    return argumentRowOf({ ...who, source: 'default', shownValue: shown[c.argument] }, stamp);
+  }
+  const shown = shownArgsOf(tool, call.args)[c.argument];
+  return argumentRowOf(
+    {
+      ...who,
+      // A present value: the declared default the model sent itself, or the model's own
+      // (`answered` is only ever a FILL, handled above).
+      source: c.source === 'default' ? 'default' : 'model',
+      shownValue: shown,
+      ...(c.source === 'default' && { shownProposed: shown }),
+    },
+    stamp,
+  );
+}
+
+/**
+ * `row` with the call's dropped `from` entries counted — the call's FIRST row
+ * carries the count when no basis row does (`sources.ts` · `CallSources`),
+ * written before `failed`, in `ArgumentRow`'s own field order.
+ */
+function withMalformed(row: ArgumentRow, malformed: number): ArgumentRow {
+  const { failed, ...rest } = row;
+  return { ...rest, malformed, ...(failed !== undefined && { failed }) };
+}
+
 /**
  * One row per checked argument, its value in the tool's OWN argument view
  * (`shownArgsOf`) — a fill is shown as the call will run with it, a model's
  * value as the model sent it; an argument to ASK has no value yet, so its row
- * carries none; a kept answer files `answered` (`free` for a free-text
- * field), exactly as the answer did when the person gave it. The raw value
- * never reaches a row.
+ * carries none (under declared sources, the model's proposal rides as
+ * `proposed`); a kept answer files `answered` (`free` for a free-text field),
+ * exactly as the answer did when the person gave it. Under declared sources a
+ * present value's row carries the check's verdict (`claimed`, `matched`,
+ * `quote`, `failed`, …), and the call's first row carries the count of its
+ * dropped `from` entries when no basis row does. The raw value never reaches
+ * a row.
  */
 export function rowsOf(
   checked: readonly CheckedArgument[],
@@ -282,59 +575,26 @@ export function rowsOf(
   toolOf: ToolOf,
   stamp: { readonly turn: number; readonly iteration: number },
   kept?: readonly KeptAnswer[],
+  sources?: SourcesArm,
 ): ArgumentRow[] {
   const byId = callById(calls);
   const rows: ArgumentRow[] = [];
+  const counted = new Set<string>();
   for (const c of checked) {
     const call = byId.get(c.toolCallId);
     if (call === undefined) continue;
-    const tool = toolOf(c.toolName);
-    if (c.asked !== undefined) {
-      rows.push(askedRowOf(c, stamp));
+    const row =
+      c.check !== undefined
+        ? sourcedRow({ ...c, check: c.check }, call, toolOf, sources, stamp)
+        : plainRow(c, call, toolOf, stamp, kept);
+    if (row === undefined) continue;
+    const malformed = sources?.declared.get(c.toolCallId)?.malformed;
+    if (malformed !== undefined && malformed > 0 && !counted.has(c.toolCallId)) {
+      counted.add(c.toolCallId);
+      rows.push(withMalformed(row, malformed));
       continue;
     }
-    if (c.filled === true && c.source === 'answered') {
-      const answer = keptValue(toolOf, kept, c.toolName, c.argument);
-      if (answer === undefined) continue;
-      const shown = shownArgsOf(tool, { ...call.args, [c.argument]: answer });
-      rows.push(
-        answeredRowOf(
-          {
-            toolCallId: c.toolCallId,
-            toolName: c.toolName,
-            argument: c.argument,
-            rule: 'ask',
-            ...(c.period === true && { period: true as const }),
-            // A name nothing answers has no view to ask — shown as hidden, never raw.
-            shownValue: tool === undefined ? HIDDEN_VALUE : shown[c.argument],
-            ...(isFreeAsk(toolOf, c.toolName, c.argument) && { free: true as const }),
-          },
-          stamp,
-        ),
-      );
-      continue;
-    }
-    if (c.filled === true) {
-      const assumed = declaredDefault(toolOf, c.toolName, c.argument);
-      if (assumed === undefined) continue;
-      const shown = shownArgsOf(tool, { ...call.args, [c.argument]: assumed });
-      rows.push(argumentRowOf({ ...c, source: 'default', shownValue: shown[c.argument] }, stamp));
-      continue;
-    }
-    const shown = shownArgsOf(tool, call.args)[c.argument];
-    rows.push(
-      argumentRowOf(
-        {
-          ...c,
-          // A present value: the declared default the model sent itself, or the model's own
-          // (`answered` is only ever a FILL, handled above).
-          source: c.source === 'default' ? 'default' : 'model',
-          shownValue: shown,
-          ...(c.source === 'default' && { shownProposed: shown }),
-        },
-        stamp,
-      ),
-    );
+    rows.push(row);
   }
   return rows;
 }
@@ -342,8 +602,30 @@ export function rowsOf(
 // ─── RESOLVE ────────────────────────────────────────────────────────────
 
 /**
+ * The person's own words a READING was made of, for the ask's field — the
+ * quote the model declared, found in the person's messages (`said` +
+ * `reading`), and only when the tool's view hid nothing in the call (the
+ * row's own rule, `viewHidesNothing`: the ask is on the record too).
+ */
+function quotedFor(
+  c: CheckedArgument,
+  calls: ReadonlyMap<string, BatchCall>,
+  toolOf: ToolOf,
+  sources: SourcesArm | undefined,
+): string | undefined {
+  if (c.asked !== 'unverified' || c.check?.source !== 'said' || c.check.reading !== true) {
+    return undefined;
+  }
+  const quote = claimFor(sources, c.toolCallId, c.argument)?.quote;
+  const call = calls.get(c.toolCallId);
+  if (quote === undefined || call === undefined) return undefined;
+  return viewHidesNothing(toolOf(c.toolName), call) ? quote : undefined;
+}
+
+/**
  * What ToolCalls applies: per call, the declared defaults and the kept answers
- * to fill and the `ask` arguments to ask the person for, or — for a call whose
+ * to fill and the `ask` arguments to ask the person for (with, under declared
+ * sources, the person's words a reading was made of), or — for a call whose
  * rules could not be read — the sentence it reads instead of running. Nothing
  * for a call that runs as the model sent it.
  */
@@ -353,7 +635,10 @@ export function resolutionsOf(
   toolOf: ToolOf,
   iteration: number,
   kept?: readonly KeptAnswer[],
+  sources?: SourcesArm,
+  calls?: readonly BatchCall[],
 ): ArgumentResolution[] {
+  const byId = callById(calls ?? []);
   const resolutions: ArgumentResolution[] = [];
   for (const planned of plan) {
     if (planned.refused !== undefined) {
@@ -366,10 +651,13 @@ export function resolutionsOf(
     }
     const fills: ArgumentFill[] = [];
     const ask: string[] = [];
+    const quoted: { argument: string; quote: string }[] = [];
     for (const c of checked) {
       if (c.toolCallId !== planned.toolCallId) continue;
-      if (c.asked === 'missing') {
+      if (c.asked !== undefined) {
         ask.push(c.argument);
+        const quote = quotedFor(c, byId, toolOf, sources);
+        if (quote !== undefined) quoted.push({ argument: c.argument, quote });
         continue;
       }
       if (c.filled !== true) continue;
@@ -389,6 +677,7 @@ export function resolutionsOf(
         iteration,
         ...(fills.length > 0 && { fills }),
         ...(ask.length > 0 && { ask }),
+        ...(quoted.length > 0 && { quoted }),
       });
     }
   }

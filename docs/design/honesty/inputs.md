@@ -8,6 +8,28 @@ overturn. Nothing here is built yet.**
 > design pages (this page's § 10 in Q2–Q19, its § 10.1 in Q20–Q32). The text below is the page as reviewed on 2026-09-26, with its file names and
 > links updated for this folder. The plan builds this layer in steps 2–5 of
 > [the architecture note](README.md) § 7.
+>
+> **Step 5 (declared sources) as built** — `src/core/agent/arguments/README.md` is the live
+> account; where the build settled a detail this page left open, it says so here. The reader of
+> `from` is `arguments/sources.ts` (static: the one reader of `_findings` is synchronous) and the
+> checks are `arguments/checks.ts` · `checkSource` (loaded with the layer); the corpora are built
+> by `honesty/sourceCorpus.ts` · `sourceCorpusOf` from raw pieces the mount hands in, and a result
+> is read once per batch (`evidence/resultCarries.ts` · `resultReader`, beside `resultCarries`, over
+> the index's own `readResult`).
+> A `turn` claim resolves to an earlier answer of the SAME argument, or of a period in a spelling
+> that converts — never to any answer that happens to share the value (the coincidence § 3.5 V4
+> rejects). The run constant a composed message leaves is `userMessageFrom` (the run input's own
+> `messageFrom` is read-only in scope); `Sequence` and `Loop` mark a message that is an earlier
+> step's output, and `Parallel`, `Conditional` and a nested composition pass a composed message
+> on — `Graph`, `Workflow` and the patterns do not mark yet, and `reflection()` is built from
+> `LLMCall`s, so its critic cannot call a ruled tool (§ 8's reflection test runs on `Sequence`).
+> The fold's `value-contingent` reads the ledger's `ContingentRow`s too (§ 4.7), and `checked`
+> gains `argument-sources`. One rule is TIGHTER than § 5.1 wrote it: a row's `quote` (and the
+> ask's `quoted`) reads `'REDACTED'` whenever the tool's view hid ANY argument of the call, not
+> only its own — a quote is free text, and a person who gives a user name and a password in one
+> sentence puts the hidden value inside the visible argument's quote
+> (`arguments/resolve.ts` · `viewHidesNothing`). The bench's step-5 arm and its registered rule
+> are not part of the build; they are registered before the step's first paid call.
 
 - Written against agentfootprint 9.118.1 (`f83f277c` on main) and footprintjs 9.27.0. Every code
   fact below was re-read in the code on 2026-09-26.

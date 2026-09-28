@@ -93,12 +93,12 @@ import { TRACE_TOOL_NAMES } from '../../lib/trace-toolpack/traceToolNames.js';
 import { Agent } from '../Agent.js';
 import { buildSkillGraphDeclared, type SkillGraphDeclaredMap } from './skillGraphDeclared.js';
 import type { AgentOptions, RunConfigFn } from './types.js';
-import { FINDINGS_INSTRUCTION, findingsInstructionFor } from './findings/reserved.js';
+import {
+  FINDINGS_INSTRUCTION,
+  FINDINGS_INSTRUCTION_ID,
+  findingsInstructionFor,
+} from './findings/reserved.js';
 import { ONTOLOGY_INSTRUCTION, ONTOLOGY_INSTRUCTION_ID } from '../../ontology/instruction.js';
-
-/** The id of the always-on instruction `.findings()` registers (9.101.0) —
- *  the name a receipt's `system.pieces` carries and a test can look for. */
-const FINDINGS_INSTRUCTION_ID = 'findings-ledger';
 import type { CompactionOptions } from './window/types.js';
 import type { WindowStrategy } from './window/strategy.js';
 import type { LLMProvider } from '../../adapters/types.js';
@@ -2105,6 +2105,17 @@ export class AgentBuilder {
    * as the `'ledger-fact'` pin ceiling; a negative or non-integer value is
    * refused here.
    *
+   * `argumentSources: true` (honesty layer 2, declared sources) — on a tool
+   * that declares argument rules (`askOrAssume`), the reserved argument also
+   * carries `from`: the model says where each argument value came from (the
+   * person's words as a `quote`, a result's `id`, an earlier answer, the app,
+   * or `'assumed'`), and the inputs layer CHECKS each claim before the batch
+   * runs and files the verdict on the call's argument rows — under an `ask`
+   * rule, a value the checks do not trace is asked of the person. One more
+   * instruction line is registered. It needs the inputs layer (a registered
+   * ruled tool, or `.inputsLayer()`) and is refused at build without it. Off
+   * (the default): nothing is served, read or written.
+   *
    * Once per agent (a second call is refused, the `.window()` grammar).
    * Registers the always-on `findings-ledger` instruction — the byte-for-byte
    * twin of {@link outputSchema}'s piece, hashed per piece on every receipt,
@@ -2174,6 +2185,16 @@ export class AgentBuilder {
           'signal?) }` from agentfootprint/classify (`typesafe()`, `mockClassifier()`, or your own).',
       );
     }
+    // Declared sources (honesty layer 2): a boolean, or nothing. It needs the
+    // inputs layer, which only the whole agent can say is armed — `Agent`
+    // refuses it at build when no ruled tool and no `.inputsLayer()` arm one.
+    const argumentSources = options?.argumentSources;
+    if (argumentSources !== undefined && typeof argumentSources !== 'boolean') {
+      throw new Error(
+        `AgentBuilder.findings: argumentSources must be true or false, got ` +
+          `${JSON.stringify(argumentSources)}.`,
+      );
+    }
     // `answerAsk` is stored as given, never normalised: `'none'` is the
     // default and `Agent.ts` threads the dial only under `'quote-facts'`, so
     // an explicit `'none'` and an absent one reach the run as the same thing.
@@ -2182,6 +2203,7 @@ export class AgentBuilder {
       ...(answerAsk !== undefined && { answerAsk }),
       ...(keep !== undefined && { keepLedgerFacts: keep }),
       ...(judge !== undefined && { judge }),
+      ...(argumentSources === true && { argumentSources: true }),
     };
     // The always-on ask — the `outputSchema()` twin: a system-slot instruction
     // that activates every iteration, so a long run keeps the vocabulary
@@ -3156,13 +3178,19 @@ export class AgentBuilder {
     // registered by `.findings()` is rebuilt in place, same id, same
     // activation, so an agent with the ledger alone keeps the exact bytes
     // `.findings()` registered.
-    if (this.findingsValue !== undefined && this.evidenceGate !== undefined) {
+    // THE SOURCES LINE (honesty layer 2) — the same rebuild, one more line,
+    // under `.findings({ argumentSources: true })` only.
+    const sourcesArmed = this.findingsValue?.argumentSources === true;
+    if (this.findingsValue !== undefined && (this.evidenceGate !== undefined || sourcesArmed)) {
       const at = this.injectionList.findIndex((i) => i.id === FINDINGS_INSTRUCTION_ID);
       if (at >= 0) {
         this.injectionList[at] = defineInstruction({
           id: FINDINGS_INSTRUCTION_ID,
           activeWhen: () => true,
-          prompt: findingsInstructionFor({ contingent: true }),
+          prompt: findingsInstructionFor({
+            contingent: this.evidenceGate !== undefined,
+            ...(sourcesArmed && { argumentSources: true }),
+          }),
         });
       }
     }

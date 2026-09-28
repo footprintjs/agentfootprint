@@ -233,7 +233,7 @@ import {
 } from './conversation.js';
 import { applyInputResponse, readAwaitingInput } from './inputRequest.js';
 import { applyOutputSchema, OutputSchemaError, type OutputSchemaParser } from './outputSchema.js';
-import { normalizeRunInput } from './runInput.js';
+import { InvalidRunInputError, normalizeRunInput } from './runInput.js';
 import type { ResolvedOutputEnforcement } from './agent/outputEnforcement.js';
 import { buildOutputRetryStage } from './agent/stages/outputRetry.js';
 import { RunnerBase, makeRunId } from './RunnerBase.js';
@@ -276,6 +276,7 @@ import { buildToolResolver } from './agent/stages/toolResolver.js';
 import { answeredValuesOf, declaredDefaultsFrom } from './agent/stages/route.js';
 import { isRefused, rulesOf } from './agent/arguments/declare.js';
 import { honestyLayersOf, type HonestyLayers } from './agent/honesty/armed.js';
+import { readsMessageFrom } from './messageFrom.js';
 import { assertMaxToolResultChars } from './agent/toolResultCap.js';
 import type { ToolArgValidationMode } from './agent/toolArgsValidation.js';
 import { buildAgentChart } from './agent/buildAgentChart.js';
@@ -1032,6 +1033,9 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
     if (opts.permissionChecker) this.permissionChecker = opts.permissionChecker;
     if (opts.toolArgValidation !== undefined) this.toolArgValidation = opts.toolArgValidation;
     if (opts.findings !== undefined) this.findingsOptions = opts.findings;
+    // Declared sources (honesty layer 2) read `AgentInput.messageFrom` — a
+    // composition hands the marker only to a runner that reads it.
+    if (opts.findings?.argumentSources === true) readsMessageFrom(this);
     if (opts.inputsLayer === true) this.inputsLayerOption = true;
     if (opts.argumentAskContext !== undefined) this.argumentAskContext = opts.argumentAskContext;
     if (opts.toolChoice !== undefined) this.toolChoiceOptions = opts.toolChoice;
@@ -1746,6 +1750,18 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
     // message; anything that is not a message is named and refused here
     // rather than becoming `content: undefined` inside the messages slot.
     const runInput = normalizeRunInput<AgentInput>(input, 'Agent.run');
+    // Who wrote the message (declared sources' one reader): one of two words,
+    // or nothing — a typo would read as the person's words, so it is refused.
+    const messageFrom = (runInput as { readonly messageFrom?: unknown }).messageFrom;
+    if (messageFrom !== undefined && messageFrom !== 'person' && messageFrom !== 'composed') {
+      throw new InvalidRunInputError({
+        runner: 'Agent.run',
+        received: `messageFrom: ${
+          typeof messageFrom === 'string' ? JSON.stringify(messageFrom) : typeof messageFrom
+        }`,
+        hint: "messageFrom is 'person' (the default) or 'composed' (another runner's output)",
+      });
+    }
     // An identity that is not one is refused HERE, where the mistake was made —
     // not at the resume of a pause it would have made impossible to resume.
     assertIdentityShape(runInput.identity, 'Agent.run');
@@ -1812,6 +1828,10 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
         input: {
           message: runInput.message,
           ...(this.lastRunIdentity !== undefined && { identity: this.lastRunIdentity }),
+          // A composed message reaches seed only on an agent that reads it
+          // (declared sources) — every other run's input is the bytes it was.
+          ...(messageFrom === 'composed' &&
+            this.findingsOptions?.argumentSources === true && { messageFrom: 'composed' }),
         },
         // Co-engineered boundary (#16): the engine's loop-iteration limit
         // (footprintjs 9 default 1000) must never fire BELOW the agent's own
@@ -4013,6 +4033,10 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
       get honestyLayers() {
         return seededHonestyLayers;
       },
+      // Declared sources (honesty layer 2): the seed twin plants `_findings.from`
+      // on ruled tools, and the run's `messageFrom` constant is written — only
+      // under the arm (refused at build without the inputs layer).
+      ...(this.findingsOptions?.argumentSources === true && { argumentSources: true as const }),
       get consumePendingResumeFindingsLedger() {
         return ledgerRestoreArmed ? consumeResumeLedger : undefined;
       },
@@ -4239,9 +4263,22 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
     );
     const inputsArmed = ruledTools.size > 0 || this.inputsLayerOption === true;
     this.inputsLayerArmed = inputsArmed;
+    // DECLARED SOURCES (honesty layer 2, `.findings({ argumentSources: true })`)
+    // — the model's `_findings.from`, checked by the inputs layer. It has
+    // nothing to act on without the layer, and configured-and-inert looks
+    // exactly like configured-and-working: refused here, at build.
+    const argumentSources = this.findingsOptions?.argumentSources === true;
+    if (argumentSources && !inputsArmed) {
+      throw new Error(
+        'Agent: .findings({ argumentSources: true }) needs the inputs layer — the declared ' +
+          'sources are read and checked on the calls of a tool that declares argument rules ' +
+          '(askOrAssume), and this agent registers none. Register such a tool, or arm the ' +
+          'layer for ToolProvider tools with .inputsLayer().',
+      );
+    }
     if (inputsArmed) {
       if (ruledTools.size > 0) seededRuledTools = ruledTools;
-      seededHonestyLayers = honestyLayersOf(true);
+      seededHonestyLayers = honestyLayersOf(true, argumentSources);
       ledgerRestoreArmed = true;
     }
 
@@ -4471,6 +4508,8 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
       // The inputs layer (honesty layer 2): the same site decorates a ruled
       // tool's schema first — value-conditional, the same grammar.
       ...(inputsArmed && { inputsLayer: true as const }),
+      // …and, under declared sources, plants `_findings.from` on ruled tools only.
+      ...(argumentSources && { argumentSources: true as const }),
       // Tool choice by classifier (9.105.0): the pick and the narrowing live
       // inside this slot too, at the same site; value-conditional.
       ...(this.toolChoiceOptions !== undefined && {
@@ -4734,6 +4773,8 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
       // The inputs layer (honesty layer 2) — the fills, the refusals and the
       // note; absent → a ruled tool's call is refused (fail closed).
       ...(inputsArmed && { inputsLayer: true as const }),
+      // Declared sources: the peel reads `_findings.from` as the layer did.
+      ...(argumentSources && { argumentSources: true as const }),
       // …and the host's own context for the layer's batch ask (step 4),
       // value-conditional inside the arm.
       ...(inputsArmed &&
@@ -4962,6 +5003,15 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
         inputsLayer: {
           toolOf: (toolName: string) => resolveForLayer(toolName).tool,
           ...(this.toolMiddleware.length > 0 && { rewrites: true as const }),
+          // Declared sources: the layer reads `_findings.from` and checks it against
+          // the corpora the mount hands in — the app's `externalGrounds` among them.
+          ...(argumentSources && {
+            sources: {
+              ...(this.externalGrounds !== undefined && {
+                externalGrounds: this.externalGrounds,
+              }),
+            },
+          }),
         },
       }),
       // Tool choice by classifier (9.105.0): the mount args on the Tools

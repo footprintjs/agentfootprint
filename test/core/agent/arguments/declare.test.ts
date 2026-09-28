@@ -313,7 +313,7 @@ describe('rulesOf — the dispatch re-read', () => {
     });
   });
 
-  it('reads an ask rule: the question, the choices’ values in declared order, the type', () => {
+  it('reads an ask rule: the question, the choices’ values in declared order, their phrases, the type', () => {
     const tool = defineTool({
       name: 'search_logs',
       description: 'd',
@@ -330,7 +330,13 @@ describe('rulesOf — the dispatch re-read', () => {
         {
           argument: 'window',
           rule: 'ask',
-          ask: { question: 'Which period?', choices: ['24h', '1h'] },
+          // The declared phrases ride beside the values (step 5, declared sources:
+          // matched only inside a quote the model declared, never scanned for).
+          ask: {
+            question: 'Which period?',
+            choices: ['24h', '1h'],
+            phrases: [{ value: '24h', said: ['last day'] }],
+          },
           type: 'string',
           period: true,
         },

@@ -48,6 +48,7 @@ looks the way it does, and it is stated again at the top of `gate.ts`.
 | `normalize.ts` | one spelling per value, on BOTH sides (`41,200` ≡ `41200`) |
 | `extract.ts` | which tokens in an answer are DATA — the conservative rule |
 | `evidenceIndex.ts` | the structural walk of tool results, and the exempt corpus |
+| `resultCarries.ts` | one result, read the index's way (`evidenceIndex.ts` · `readResult`), asked for one value (`resultReader`, `resultCarries`) — the inputs layer's declared-sources check asks whether a result carries the value the model says it took from it; loaded with that layer, never on a plain agent's graph |
 | `gate.ts` | resolve options, judge an answer, write the sentences |
 | `recovery.ts` | resolve bounded recovery guidance and compose the internal repair instruction |
 | `errors.ts` | `UnsupportedValuesError` — the `rails` refusal at the boundary |

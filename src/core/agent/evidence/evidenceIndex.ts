@@ -98,9 +98,11 @@ import { lookupForms, normalizeToken, tokenize } from './normalize.js';
 /**
  * Ceiling on indexed tokens. Generous — a 200 000-token corpus is roughly a
  * 5 MB tool result — because the cost of hitting it is not "slower", it is
- * "the gate stops accusing" (see {@link EvidenceCorpus.truncated}).
+ * "the gate stops accusing" (see {@link EvidenceCorpus.truncated}). The
+ * declared-sources check reads a haystack to the same ceiling and says
+ * `uncheckable` past it (`evidence/resultCarries.ts` · `resultReader`).
  */
-const MAX_INDEX_TOKENS = 200_000;
+export const MAX_INDEX_TOKENS = 200_000;
 
 /**
  * How many results one indexed form remembers as its CARRIERS (9.110.0)
@@ -270,8 +272,15 @@ function walk(node: unknown, sink: Sink): void {
   }
 }
 
-/** Index one tool result: structurally when it is JSON, as text when it is not. */
-function indexResult(content: string, sink: Sink): void {
+/**
+ * How ONE tool result is read — the one reading both the index
+ * (`indexResult`) and the per-result question (`resultCarries.ts` ·
+ * `resultReader`) take: the parsed JSON when it is JSON (an absence's
+ * `looked_for` projected away), its text otherwise.
+ */
+export function readResult(
+  content: string,
+): { readonly parsed: unknown } | { readonly text: string } {
   const trimmed = content.trim();
   if (trimmed.startsWith('{') || trimmed.startsWith('[')) {
     try {
@@ -284,8 +293,7 @@ function indexResult(content: string, sink: Sink): void {
       // side of the conversation. `undefined` (every other result ever
       // returned) keeps the walk it always had.
       const projection = absenceEvidenceProjection(parsed);
-      walk(projection ?? parsed, sink);
-      return;
+      return { parsed: projection ?? parsed };
     } catch {
       // Not JSON after all (a truncated result, a log line that happens to
       // start with a brace). Fall through to the text path rather than lose
@@ -293,7 +301,14 @@ function indexResult(content: string, sink: Sink): void {
       // something the model read.
     }
   }
-  addText(sink, content);
+  return { text: content };
+}
+
+/** Index one tool result: structurally when it is JSON, as text when it is not. */
+function indexResult(content: string, sink: Sink): void {
+  const read = readResult(content);
+  if ('parsed' in read) walk(read.parsed, sink);
+  else addText(sink, read.text);
 }
 
 // FOLD · the one owner of the corpus of values this run can prove it read from a tool result

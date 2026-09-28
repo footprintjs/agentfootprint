@@ -41,6 +41,7 @@
  */
 
 import type { LLMToolSchema } from '../../../adapters/types.js';
+import { DECLARED_SOURCE_KINDS, readSources } from '../arguments/sources.js';
 import {
   BASIS_VALUES,
   EXPECT_VALUES,
@@ -192,6 +193,58 @@ export const FINDINGS_ARGUMENT_SCHEMA: PlainObject = deepFreeze({
 });
 
 /**
+ * The `from` property (honesty layer 2, declared sources) — where each
+ * argument value of the call came from, planted ONLY under
+ * `.findings({ argumentSources: true })` and ONLY on a tool that declares
+ * argument rules (`withFindingsArgument`'s `from` option): planted everywhere
+ * it would cost every served tool its bytes before any benefit is measured.
+ * Says what the model may declare and nothing about what serving does;
+ * judged by `unprovable` at the strictest lifetime in
+ * `test/modelFacingSurfaces.test.ts`.
+ */
+export const FINDINGS_FROM_PROPERTY: PlainObject = deepFreeze({
+  type: 'array',
+  description:
+    'Optional: where each argument value of the call came from, one entry per argument. ' +
+    'Leave an argument out rather than guess.',
+  items: {
+    type: 'object',
+    properties: {
+      argument: { type: 'string', description: "The argument's name in the call." },
+      source: { type: 'string', enum: [...DECLARED_SOURCE_KINDS] },
+      quote: {
+        type: 'string',
+        description: "source 'user': the person's words the value came from, copied exactly.",
+      },
+      id: {
+        type: 'string',
+        description: "source 'result': the tool_result id, as listed for previous[].toolCallId.",
+      },
+    },
+    required: ['argument', 'source'],
+  },
+});
+
+/** `planted` with `from` among its properties — a rebuilt, deep-frozen copy; the key order is the base's, then `from`. */
+function withFromProperty(planted: PlainObject): PlainObject {
+  return deepFreeze({
+    ...planted,
+    properties: { ...(planted.properties as PlainObject), from: FINDINGS_FROM_PROPERTY },
+  });
+}
+
+/** The base decoration with `from` — built once, served by reference like the base. */
+const FINDINGS_ARGUMENT_SCHEMA_WITH_FROM: PlainObject = withFromProperty(FINDINGS_ARGUMENT_SCHEMA);
+
+/**
+ * The id of the always-on instruction `.findings()` registers (9.101.0) — the
+ * name a receipt's `system.pieces` carries and a test can look for; the
+ * declared-sources corpus leaves the library's own instruction out of the
+ * app's text by it.
+ */
+export const FINDINGS_INSTRUCTION_ID = 'findings-ledger';
+
+/**
  * The always-on system instruction `.findings()` registers (the twin of
  * `outputSchema()`'s piece). It asks; it promises nothing about serving.
  */
@@ -232,16 +285,37 @@ export const FINDINGS_CONTINGENT_LINE =
   'contingent on it.';
 
 /**
+ * The one line the instruction gains under
+ * `.findings({ argumentSources: true })` (honesty layer 2, declared sources):
+ * how to say where each argument value came from, on a call to a tool whose
+ * schema carries `_findings.from`. It says what the model may declare and
+ * what the record keeps — a declaration is a claim the library checks, never
+ * evidence. Never registered without the arm. Judged by `unprovable` at the
+ * strictest lifetime in `test/modelFacingSurfaces.test.ts`.
+ */
+export const FINDINGS_SOURCES_LINE =
+  '`_findings.from`, on a call to a tool whose schema carries it: for each argument value that ' +
+  "came from somewhere, say where — 'user' with the person's exact words as `quote` (from any " +
+  "of their messages), 'result' with the tool_result `id`, 'turn' when the person gave it " +
+  "earlier as an answer to a question the run asked, 'app' when your instructions carry it — or " +
+  "'assumed' when you chose it. Each entry is recorded with the library's check of it.";
+
+/**
  * The instruction an armed agent registers: `FINDINGS_INSTRUCTION` as it
  * is, plus `FINDINGS_CONTINGENT_LINE` as one more line when the evidence
- * gate is armed too. Composed at `AgentBuilder.build` (the two doors may be
- * called in either order), and byte-identical to the constant when the gate
- * is absent — so the `.findings()`-only references are the bytes they were.
+ * gate is armed too, plus `FINDINGS_SOURCES_LINE` under the declared-sources
+ * arm. Composed at `AgentBuilder.build` (the doors may be called in either
+ * order), and byte-identical to the constant when neither is armed — so the
+ * `.findings()`-only references are the bytes they were.
  */
-export function findingsInstructionFor(arms: { readonly contingent: boolean }): string {
-  return arms.contingent
-    ? `${FINDINGS_INSTRUCTION}\n${FINDINGS_CONTINGENT_LINE}`
-    : FINDINGS_INSTRUCTION;
+export function findingsInstructionFor(arms: {
+  readonly contingent: boolean;
+  readonly argumentSources?: boolean;
+}): string {
+  const lines = [FINDINGS_INSTRUCTION];
+  if (arms.contingent) lines.push(FINDINGS_CONTINGENT_LINE);
+  if (arms.argumentSources === true) lines.push(FINDINGS_SOURCES_LINE);
+  return lines.join('\n');
 }
 
 /**
@@ -343,16 +417,33 @@ function offeredFindingsSchema(offer: readonly string[]): PlainObject {
  * no offer, so a JavaScript caller that makes that mistake serves the base
  * decoration instead of crashing every armed run at seed; the compiler is
  * the guard, this is the floor.
+ *
+ * `options.from` (honesty layer 2, declared sources) — the caller says the
+ * tool declares argument rules and `.findings({ argumentSources: true })` is
+ * armed: the planted property gains `from` (`FINDINGS_FROM_PROPERTY`), after
+ * the base's own keys. Its description's first sentence is the base's, so
+ * `withoutFindingsArgument` still recognises the decoration. Every other tool
+ * keeps the base by reference.
  */
 export function withFindingsArgument(
   schema: LLMToolSchema,
   offer: readonly string[] = [],
+  options?: { readonly from?: boolean },
 ): LLMToolSchema {
   if (ownsReservedArgument(schema)) return schema;
   const properties = schema.inputSchema.properties;
   const existing = isPlainObject(properties) ? properties : undefined;
   const ids = Array.isArray(offer) ? offer : [];
-  const planted = ids.length === 0 ? FINDINGS_ARGUMENT_SCHEMA : offeredFindingsSchema(ids);
+  const from = options?.from === true;
+  // Declared sources (honesty layer 2): a ruled tool's decoration gains `from`.
+  const planted =
+    ids.length === 0
+      ? from
+        ? FINDINGS_ARGUMENT_SCHEMA_WITH_FROM
+        : FINDINGS_ARGUMENT_SCHEMA
+      : from
+      ? withFromProperty(offeredFindingsSchema(ids))
+      : offeredFindingsSchema(ids);
   return {
     ...schema,
     inputSchema: {
@@ -406,6 +497,18 @@ export interface ReadDeclaration {
   readonly declaration?: FindingsDeclaration;
   /** Entries and fields dropped as malformed. */
   readonly malformed: number;
+  /**
+   * Of `malformed`, the `from` entries dropped — set only when `from` was read
+   * (the declared-sources arm), so the inputs layer can carry the count on an
+   * argument row when the call files no basis row.
+   */
+  readonly sourcesMalformed?: number;
+}
+
+/** Which optional parts of `_findings` a reader reads. Absent → none (the declaration as it always was). */
+export interface DeclarationArms {
+  /** `_findings.from` — `.findings({ argumentSources: true })` (honesty layer 2). */
+  readonly argumentSources?: boolean;
 }
 
 function isDeclaredAssertion(value: unknown): value is DeclaredAssertion {
@@ -467,9 +570,19 @@ function readPrevious(raw: unknown): { entry?: PreviousStanding; malformed: numb
  * The one validator both peels share. Enum-checks every field; a field that
  * fails is dropped and counted; nothing is defaulted. No `declaration` comes
  * back when nothing readable survived.
+ *
+ * `arms.argumentSources` (honesty layer 2) also reads `from` — judged against
+ * the call's own arguments (`args`, `_findings` taken off) by
+ * `arguments/sources.ts` · `readSources` — and counts a `from`-only
+ * declaration as readable. Unarmed, `from` is ignored exactly as any unknown
+ * key is, so a `.findings()`-only agent reads the bytes it always read.
  */
 /** @internal — shared with `peel.ts`. */
-export function readDeclaration(raw: unknown): ReadDeclaration {
+export function readDeclaration(
+  raw: unknown,
+  arms?: DeclarationArms,
+  args?: PlainObject,
+): ReadDeclaration {
   if (!isPlainObject(raw)) return { malformed: 1 };
   let malformed = 0;
   const out: {
@@ -478,6 +591,7 @@ export function readDeclaration(raw: unknown): ReadDeclaration {
     proposition?: string;
     predicts?: string;
     previous?: PreviousStanding[];
+    from?: FindingsDeclaration['from'];
   } = {};
   if (raw.basis !== undefined) {
     if (isOneOf<Basis>(raw.basis, BASIS_VALUES)) out.basis = raw.basis;
@@ -509,13 +623,25 @@ export function readDeclaration(raw: unknown): ReadDeclaration {
       out.previous = previous;
     }
   }
+  let sourcesMalformed: number | undefined;
+  if (arms?.argumentSources === true && raw.from !== undefined) {
+    const read = readSources(raw.from, args ?? {});
+    sourcesMalformed = read.malformed;
+    malformed += read.malformed;
+    if (Array.isArray(raw.from)) out.from = read.from;
+  }
   const readable =
     out.basis !== undefined ||
     out.expect !== undefined ||
     out.proposition !== undefined ||
     out.predicts !== undefined ||
-    out.previous !== undefined;
-  return { ...(readable && { declaration: out }), malformed };
+    out.previous !== undefined ||
+    out.from !== undefined;
+  return {
+    ...(readable && { declaration: out }),
+    malformed,
+    ...(sourcesMalformed !== undefined && { sourcesMalformed }),
+  };
 }
 
 // ─── The two peels ─────────────────────────────────────────────────────
@@ -531,12 +657,15 @@ export interface SplitFindings {
 /**
  * Take `_findings` off a tool call's args. The first read of `tc.args` in the
  * dispatch loop when armed: what comes back as `args` is what the call runs
- * with, and the model's declaration rides on `findings`.
+ * with, and the model's declaration rides on `findings`. `arms` is the
+ * reader's (`readDeclaration`): under declared sources the peel reads `from`
+ * exactly as the inputs layer did, so both reads of one `_findings` agree —
+ * the same readable declaration, the same malformed count.
  */
-export function splitFindings(args: PlainObject): SplitFindings {
+export function splitFindings(args: PlainObject, arms?: DeclarationArms): SplitFindings {
   if (!isPlainObject(args) || !hasOwn(args, RESERVED_ARGUMENT)) return { args };
   const { [RESERVED_ARGUMENT]: raw, ...rest } = args;
-  const { declaration, malformed } = readDeclaration(raw);
+  const { declaration, malformed } = readDeclaration(raw, arms, rest);
   return {
     args: rest,
     ...(declaration !== undefined && { findings: declaration }),

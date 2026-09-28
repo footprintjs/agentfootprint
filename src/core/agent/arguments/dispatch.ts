@@ -22,12 +22,13 @@
  */
 
 import type { TypedScope } from 'footprintjs';
+import type { InputValue } from '../../inputRequest.js';
 import { changedArgKeys } from '../../toolShownArgs.js';
 import type { Tool } from '../../tools.js';
 import type { ToolArgs } from '../middleware/runChain.js';
 import type { MiddlewareDecision } from '../middleware/types.js';
 import type { AgentState } from '../types.js';
-import { rulesOf } from './declare.js';
+import { isMissing, rulesOf } from './declare.js';
 import { keptThisTurn, withKept, withoutUsed } from './kept.js';
 import type { ArgumentFill, ArgumentResolution } from './resolve.js';
 import {
@@ -160,27 +161,46 @@ export function fillsThatRan(
   return fills.filter((f) => ranWith[f.argument] === f.value);
 }
 
+/** The value the model's call carried for `argument` — `undefined` when it left it out. */
+function carriedValue(proposed: ToolArgs | undefined, argument: string): InputValue | undefined {
+  if (proposed === undefined || isMissing(proposed, argument)) return undefined;
+  const value = proposed[argument];
+  return typeof value === 'string' ||
+    typeof value === 'boolean' ||
+    (typeof value === 'number' && Number.isFinite(value))
+    ? value
+    : undefined;
+}
+
 /**
  * The past-tense note for a call that RAN on filled values (`serve.ts` ·
  * `filledNote`) — one clause per fill it really ran with (`fillsThatRan`), a
- * value the tool's view hides never printed. `''` when no fill ran.
+ * value the tool's view hides never printed. `proposed` is the call's own
+ * arguments before the fills: an answered fill that REPLACED a value the call
+ * carried (declared sources ask about an untraced value) says what the call
+ * had carried. `''` when no fill ran.
  */
 export function noteFor(
   toolName: string,
   tool: Tool | undefined,
   resolution: ArgumentResolution | undefined,
   ranWith: ToolArgs,
+  proposed?: ToolArgs,
 ): string {
   const ran = fillsThatRan(resolution, ranWith);
   if (ran.length === 0) return '';
   return filledNote(
     toolName,
-    ran.map((f) => ({
-      argument: f.argument,
-      value: f.value,
-      hidden: hidesArgument(tool, f.argument, f.value),
-      ...(f.source === 'answered' && { source: 'answered' as const }),
-    })),
+    ran.map((f) => {
+      const carried = f.source === 'answered' ? carriedValue(proposed, f.argument) : undefined;
+      return {
+        argument: f.argument,
+        value: f.value,
+        hidden: hidesArgument(tool, f.argument, f.value),
+        ...(f.source === 'answered' && { source: 'answered' as const }),
+        ...(carried !== undefined && { carried }),
+      };
+    }),
   );
 }
 

@@ -30,6 +30,7 @@ import type { MessageMiddleware } from '../middleware/types.js';
 import { runMessageChain } from '../middleware/runChain.js';
 import { recordDecisions } from '../middleware/ledger.js';
 import { withFindingsArgument } from '../findings/reserved.js';
+import { carriesRules } from '../arguments/declare.js';
 import type { HonestyLayers } from '../honesty/armed.js';
 import type { FindingsLedger } from '../findings/types.js';
 import type { Ontology } from '../../../ontology/types.js';
@@ -129,6 +130,16 @@ export interface SeedStageDeps {
    * constant, written once. Absent → nothing is written.
    */
   readonly honestyLayers?: HonestyLayers;
+  /**
+   * DECLARED SOURCES ARE ARMED (honesty layer 2, `.findings({
+   * argumentSources: true })`) — present only then, only ever `true`. The
+   * static tool list seeded for iteration 1 plants `_findings.from` on each
+   * RULED tool (`findings/reserved.ts` · `withFindingsArgument`'s `from`), as
+   * the tools slot does on every later call; and a run whose caller passed
+   * `messageFrom: 'composed'` records the run constant `userMessageFrom`,
+   * which the checks read. Absent → neither.
+   */
+  readonly argumentSources?: true;
   /**
    * Accessor for the current run's id, used to default the memory
    * identity when consumer didn't pass `agent.run({ identity })`. Set
@@ -588,11 +599,20 @@ function seedFrom(
     ruledTools === undefined || decorate === undefined
       ? deps.toolSchemas
       : deps.toolSchemas.map((s) => decorate(s, ruledTools.get(s.name)));
-  scope.dynamicToolSchemas =
-    deps.findings === true ? ruled.map((s) => withFindingsArgument(s)) : ruled;
+  // Declared sources (honesty layer 2): a ruled tool's decoration carries `from`.
+  const planted = (s: LLMToolSchema): LLMToolSchema =>
+    deps.argumentSources === true && carriesRules(ruledTools?.get(s.name))
+      ? withFindingsArgument(s, [], { from: true })
+      : withFindingsArgument(s);
+  scope.dynamicToolSchemas = deps.findings === true ? ruled.map((s) => planted(s)) : ruled;
   // The honesty layers' run constant (`honesty/armed.ts`) — written once, and
   // only when a layer is armed.
   if (deps.honestyLayers !== undefined) scope.honestyLayers = deps.honestyLayers;
+  // WHO WROTE THE MESSAGE, when it was not a person (declared sources' one
+  // reader): written only under the arm, and only for a composed message.
+  if (deps.argumentSources === true && args.messageFrom === 'composed') {
+    scope.userMessageFrom = 'composed';
+  }
   // The forced-output tool's NAME (9.88.0) — the one fact about it that lands
   // on the record. Value-conditional: an agent on the default `'instruct'`
   // strategy writes nothing here.

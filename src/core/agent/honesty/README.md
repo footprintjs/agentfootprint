@@ -1,6 +1,7 @@
 **Mixed** — where the honesty layers mount, and which ones a run armed.
 Map: `armed.ts` (the one run constant, `AgentState.honestyLayers`).
 Walker: `mounts.ts` (the conditional mounts both chart builders call, and each layer's input and output mappings).
+Fold: `sourceCorpus.ts` (the corpora the inputs layer's declared-sources checks read, built from the served record — the one module on the layer's side that reads both `findings/` and `arguments/`).
 
 **The law.** A layer is a subflow mounted only when armed: an agent that armed none builds
 the chart, commits the keys and serves the bytes it always did.
@@ -13,7 +14,7 @@ confidence. Four decision points, one layer each:
 | Layer | Decision | Where it mounts | Status |
 |---|---|---|---|
 | 1 · choice | choose a tool | beside the inputs layer | a later step |
-| 2 · inputs | fill its inputs | `sf-inputs`, after the LLM call and before Route (`mounts.ts` · `mountInputsLayer`); its batch ask is raised by ToolCalls, first thing (`stages/argumentAsk.ts` · `askBeforeDispatch`) | **shipped: `assume`, and `ask` for a missing value** (one ask per batch) — `core/agent/arguments/README.md` |
+| 2 · inputs | fill its inputs | `sf-inputs`, after the LLM call and before Route (`mounts.ts` · `mountInputsLayer`); its batch ask is raised by ToolCalls, first thing (`stages/argumentAsk.ts` · `askBeforeDispatch`) | **shipped: `assume`, `ask` for a missing value** (one ask per batch), **and declared sources** (`.findings({ argumentSources: true })`: the model's `_findings.from`, checked; an untraced value on an `ask` argument is asked) — `core/agent/arguments/README.md` |
 | 3 · results | read a result | the loop head | a later step |
 | 4 · answer | give the answer | the first node of the final branch | the standing is a reader today (`assessment/`) |
 
@@ -43,8 +44,19 @@ builder = mountInputsLayer(builder, deps.inputsLayer); // undefined → the buil
 ## The run constant
 
 `armed.ts` · `honestyLayersOf` — seed writes `honestyLayers: { inputs: true }` once, on a run
-whose inputs layer is mounted, and nothing on any other run. A reader of the record tells
-"this layer was armed and filed nothing" from "this layer was never armed" by this key.
+whose inputs layer is mounted (`{ inputs: true, argumentSources: true }` when its declared
+sources are armed too), and nothing on any other run. A reader of the record tells "this layer
+was armed and filed nothing" from "this layer was never armed" by this key.
+
+Under declared sources the mount hands the layer the RAW pieces its checks read — the served
+history, the composed system prompt's records, the ledger's standing rows and `answered`
+argument rows (never the whole ledger), the previous batch's result ids and the run's
+`userMessageFrom` — and `sourceCorpus.ts` · `sourceCorpusOf` builds the corpora from them on
+the batch's Verify stage, loaded on first use: the person's words (`lib/saidByPerson.ts` ·
+`isSaidByPerson`; a composed run's own message marked), each result's TOOL bytes
+(`lib/toolBytes.ts` · `toolBytesOf`) with the model's current standing on it
+(`findings/ledger.ts` · `foldLedger`, plus this batch's own `previous[]`), the app's text (the
+library's own always-on instructions left out) and the person's earlier answers.
 
 ## A pause inside a layer
 
