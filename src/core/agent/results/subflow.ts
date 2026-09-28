@@ -66,7 +66,7 @@ import {
 } from '../coverage/period.js';
 
 /** One call of the batch ToolCalls just ran — identities only. */
-export interface BatchCall {
+export interface RanCall {
   readonly toolCallId: string;
   readonly toolName: string;
 }
@@ -108,7 +108,7 @@ export type PeriodArgumentOf = (toolName: string) => string | undefined;
 export interface ResultsLayerState {
   // ── inputs (the mount's inputMapper; frozen inside the subflow) ──
   /** The batch to judge — empty on a visit with none (the first iteration, or a re-entry). */
-  readonly calls: readonly BatchCall[];
+  readonly calls: readonly RanCall[];
   /** The periods the batch's results declared — handed only when there are some. */
   readonly periods?: readonly CallPeriod[];
   /** The iteration that dispatched the batch (`honesty/mounts.ts` · `batchToJudge`) — handed only with a batch. */
@@ -137,7 +137,7 @@ export interface ResultsLayerDeps {
  * held wins, so merging can only over-report).
  */
 export function planPeriods(
-  calls: readonly BatchCall[],
+  calls: readonly RanCall[],
   periods: readonly CallPeriod[],
   periodArgumentOf: PeriodArgumentOf,
 ): PlannedPeriod[] {
@@ -196,8 +196,8 @@ export function periodRowsOf(
 // ─── The four stages ────────────────────────────────────────────────────
 
 /** A frozen input read is a live view — copied into plain data once. */
-function callsOf(scope: TypedScope<ResultsLayerState>): BatchCall[] {
-  return [...((scope.calls as readonly BatchCall[] | undefined) ?? [])].map((c) => ({
+function callsOf(scope: TypedScope<ResultsLayerState>): RanCall[] {
+  return [...((scope.calls as readonly RanCall[] | undefined) ?? [])].map((c) => ({
     toolCallId: c.toolCallId,
     toolName: c.toolName,
   }));

@@ -63,7 +63,7 @@ import { copyPeriod, type DeclaredPeriod, type PeriodRow } from '../coverage/per
 import { appendRows, emitRow, type FindingsScope } from '../findings/ledger.js';
 import type { FindingsRow } from '../findings/types.js';
 import type {
-  BatchCall,
+  RanCall,
   CallPeriod,
   ResultsLayerDeps,
   ResultsLayerState,
@@ -309,7 +309,7 @@ function resultsLayerInput(parent: Record<string, unknown>): ResultsLayerState {
   const batchIteration = batchToJudge(parent.iteration as number, parent.toolResultsIteration);
   if (batchIteration === undefined) return { calls: [] };
   const batch = (parent.toolResults as readonly unknown[] | undefined) ?? [];
-  const calls: BatchCall[] = [];
+  const calls: RanCall[] = [];
   for (const entry of batch) {
     if (!isRecord(entry)) continue;
     if (typeof entry.toolCallId !== 'string' || typeof entry.toolName !== 'string') continue;

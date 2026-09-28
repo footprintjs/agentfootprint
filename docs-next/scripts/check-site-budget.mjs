@@ -210,7 +210,11 @@ const SEARCH_LIMITS = { raw: 12_000_000, gzip: 2_155_000, records: 2_000 };
 // pairs 0 — each layer alone fitted (7,383 files on step 7b), together they
 // cross by 10 API pages. ~2% over the measured file count, the rule every
 // raise here follows. Bytes still hold, thinly (699.52 of 700 MB).
-const OUTPUT_LIMITS = { bytes: 700_000_000, files: 7_560, duplicateRscBytes: 0 };
+// RAISED 2026-09-28, bytes, for the same merge: CI measured 701.60 MB across
+// 7,411 files (the local clean build read 699.52 MB). Owner-approved raise
+// (owner confirmed 2026-09-28); docs-site cleanup planned. ~2% over the CI
+// measurement, the rule every raise here follows.
+const OUTPUT_LIMITS = { bytes: 716_000_000, files: 7_560, duplicateRscBytes: 0 };
 // Raised for 9.61.0: 394.1 KB → 400.3 KB. The skill-graph demo imports
 // `defineTool` from 'agentfootprint', so the library's MAIN ENTRY and its
 // whole transitive graph ride this chunk — and this release added the
