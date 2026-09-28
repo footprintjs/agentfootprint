@@ -39,8 +39,8 @@
  * A reading (`said` + `reading`: the person's words were found, the value is
  * not in them) ASKS under an `ask` rule — otherwise any exact fragment of the
  * person's message would carry any value past the rule — and the ask's field
- * shows the person their own words (`quoted`) unless the tool's view hides the
- * argument. The model's value never rides the ask.
+ * shows the person their own words (`quoted`) unless a tool in reach hides
+ * arguments (`quotesMayShow`). The model's value never rides the ask.
  * "Equal" is the evidence module's same-value rule (`declare.ts` ·
  * `sameArgumentValue`). A present value equal to the default is filed as
  * `default`, never as the model's own choice: a model that copies a default
@@ -59,7 +59,7 @@
  */
 
 import type { InputValue } from '../../inputRequest.js';
-import { shownArgsOf } from '../../toolShownArgs.js';
+import { carriesArgumentView, shownArgsOf } from '../../toolShownArgs.js';
 import { validatePropertyValue } from '../toolArgsValidation.js';
 import { checkSource, isTraced, type SourceCheck, type SourceCorpus } from './checks.js';
 import {
@@ -146,6 +146,12 @@ export interface CheckedArgument {
    * result id and an app label: never the value, never the quote.
    */
   readonly check?: SourceCheck;
+  /**
+   * The model's quote for this argument may be SHOWN — on the row and on the
+   * ask (`quotesMayShow`: no tool in reach hides arguments). Absent → a quote
+   * reads `'REDACTED'` on the row and rides no ask.
+   */
+  readonly quoteShown?: true;
 }
 
 /**
@@ -158,6 +164,12 @@ export interface SourcesArm {
   readonly declared: ReadonlyMap<string, CallSources>;
   /** Present from VERIFY on — DECLARE needs only the entries. */
   readonly corpus?: SourceCorpus;
+  /**
+   * A tool the agent registers carries an arguments view
+   * (`core/toolShownArgs.ts` · `carriesArgumentView`) — read once, at build.
+   * Present only then; read by VERIFY (`quotesMayShow`).
+   */
+  readonly argumentViews?: true;
 }
 
 /**
@@ -196,8 +208,8 @@ export interface ArgumentResolution {
    * Under declared sources: for an argument asked because the model READ a
    * value into the person's words (`said` + `reading`), those words — the
    * quote the model declared, found in the person's own messages — so the ask
-   * can show the person what was read. Never the model's value, and never for
-   * an argument the tool's view hides.
+   * can show the person what was read. Never the model's value, and never
+   * while a tool in reach hides arguments (`quotesMayShow`).
    */
   readonly quoted?: readonly { readonly argument: string; readonly quote: string }[];
 }
@@ -359,6 +371,30 @@ function placeChecked(
 }
 
 /**
+ * Whether ANY quote of this batch may be SHOWN — on its row and on the ask. A
+ * quote is free text the model wrote, token-equal to the person's words: it
+ * may hold ANY value the person gave, in any spelling (a user name and a
+ * password in one sentence; a PIN typed "1 2 3 4" and passed as `1234`), and
+ * no tool's view covers it — a tool hides its OWN arguments. So a quote is
+ * shown only while no tool in reach hides arguments: none the agent registers
+ * (`SourcesArm.argumentViews`, read at build — so a quote filed BEFORE the
+ * call that carries a hidden value is hidden too), and none that a call of
+ * this batch or of the served history resolves to (a ToolProvider's tool is
+ * seen once a call names it). The checks still read every quote in memory;
+ * only what the record SHOWS is decided here.
+ */
+function quotesMayShow(
+  calls: readonly BatchCall[],
+  toolOf: ToolOf,
+  sources: SourcesArm | undefined,
+): boolean {
+  if (sources?.corpus === undefined || sources.argumentViews === true) return false;
+  const names = new Set([...calls.map((c) => c.name), ...(sources.corpus.calledTools ?? [])]);
+  for (const name of names) if (carriesArgumentView(toolOf(name))) return false;
+  return true;
+}
+
+/**
  * Where each ruled value of each planned call came from, by the table above.
  * Unarmed (no `sources`), a present value either IS the declared default (an
  * `assume` rule) or is the model's own; a missing value on an `ask` rule is
@@ -377,6 +413,15 @@ export function verifyPlan(
 ): CheckedArgument[] {
   const byId = callById(calls);
   const checked: CheckedArgument[] = [];
+  // Quotes are shown on this batch's rows and ask only when no tool in reach hides
+  // arguments — and never beside a call whose name nothing answers (no view to ask).
+  const quotesShown = quotesMayShow(calls, toolOf, sources);
+  const quoteOf = (call: BatchCall, argument: string): { quoteShown?: true } =>
+    quotesShown &&
+    toolOf(call.name) !== undefined &&
+    claimFor(sources, call.id, argument)?.quote !== undefined
+      ? { quoteShown: true }
+      : {};
   for (const planned of plan) {
     if (planned.refused !== undefined) continue;
     const call = byId.get(planned.toolCallId);
@@ -393,7 +438,7 @@ export function verifyPlan(
       const rule = rules?.ruled.find((r) => r.argument === p.argument);
       const check = p.missing ? undefined : sourceCheckOf(sources, toolOf, call, p.argument, rule);
       if (check !== undefined) {
-        checked.push(placeChecked(base, check));
+        checked.push(placeChecked({ ...base, ...quoteOf(call, p.argument) }, check));
         continue;
       }
       if (p.rule === 'ask') {
@@ -425,6 +470,7 @@ export function verifyPlan(
         argument,
         source: check.source,
         check,
+        ...quoteOf(call, argument),
       });
     }
   }
@@ -439,23 +485,10 @@ function ruleOf(c: CheckedArgument): 'ask' | 'assume' {
 }
 
 /**
- * Whether a quote may be SHOWN beside this call. A quote is free text the
- * model wrote, not an argument, so no view covers it — and it may hold ANY
- * argument's value (a person gives a user name and a password in one
- * sentence). So it is shown only when the tool's view hides NOTHING in the
- * call (`shownArgsOf` answers the call's own arguments, same reference,
- * exactly then) — never beside a call whose tool hid an argument, whichever
- * argument the quote names, and never for a name nothing answers.
- */
-function viewHidesNothing(tool: unknown, call: BatchCall): boolean {
-  return tool !== undefined && shownArgsOf(tool, call.args) === call.args;
-}
-
-/**
  * The row for a value the declared-sources check judged: the verdict, the
- * value (or, on an ask, the model's proposal) and the quote — each in the
- * tool's OWN argument view; a quote reads `'REDACTED'` whenever the view hid
- * anything in the call (`viewHidesNothing`).
+ * value (or, on an ask, the model's proposal) — each in the tool's OWN
+ * argument view — and the quote, which reads `'REDACTED'` unless VERIFY found
+ * no tool in reach that hides arguments (`quoteShown`, `quotesMayShow`).
  */
 function sourcedRow(
   c: CheckedArgument & { readonly check: SourceCheck },
@@ -467,7 +500,7 @@ function sourcedRow(
   const tool = toolOf(c.toolName);
   // A name nothing answers has no view to ask — shown as hidden, never raw.
   const shown = tool === undefined ? HIDDEN_VALUE : shownArgsOf(tool, call.args)[c.argument];
-  const quoteShown = viewHidesNothing(tool, call);
+  const quoteShown = c.quoteShown === true;
   const quote = claimFor(sources, c.toolCallId, c.argument)?.quote;
   const { check } = c;
   const asked = c.asked === 'unverified';
@@ -604,22 +637,15 @@ export function rowsOf(
 /**
  * The person's own words a READING was made of, for the ask's field — the
  * quote the model declared, found in the person's messages (`said` +
- * `reading`), and only when the tool's view hid nothing in the call (the
- * row's own rule, `viewHidesNothing`: the ask is on the record too).
+ * `reading`), and only where the row may show it (`quoteShown`: the ask is on
+ * the record too).
  */
-function quotedFor(
-  c: CheckedArgument,
-  calls: ReadonlyMap<string, BatchCall>,
-  toolOf: ToolOf,
-  sources: SourcesArm | undefined,
-): string | undefined {
+function quotedFor(c: CheckedArgument, sources: SourcesArm | undefined): string | undefined {
   if (c.asked !== 'unverified' || c.check?.source !== 'said' || c.check.reading !== true) {
     return undefined;
   }
-  const quote = claimFor(sources, c.toolCallId, c.argument)?.quote;
-  const call = calls.get(c.toolCallId);
-  if (quote === undefined || call === undefined) return undefined;
-  return viewHidesNothing(toolOf(c.toolName), call) ? quote : undefined;
+  if (c.quoteShown !== true) return undefined;
+  return claimFor(sources, c.toolCallId, c.argument)?.quote;
 }
 
 /**
@@ -636,9 +662,7 @@ export function resolutionsOf(
   iteration: number,
   kept?: readonly KeptAnswer[],
   sources?: SourcesArm,
-  calls?: readonly BatchCall[],
 ): ArgumentResolution[] {
-  const byId = callById(calls ?? []);
   const resolutions: ArgumentResolution[] = [];
   for (const planned of plan) {
     if (planned.refused !== undefined) {
@@ -656,7 +680,7 @@ export function resolutionsOf(
       if (c.toolCallId !== planned.toolCallId) continue;
       if (c.asked !== undefined) {
         ask.push(c.argument);
-        const quote = quotedFor(c, byId, toolOf, sources);
+        const quote = quotedFor(c, sources);
         if (quote !== undefined) quoted.push({ argument: c.argument, quote });
         continue;
       }

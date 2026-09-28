@@ -107,9 +107,10 @@ export interface ArgumentRow {
   readonly claimed?: ArgumentClaim;
   readonly matched?: 'quote' | 'phrase' | 'spelling';
   /**
-   * The model's `quote`, clipped (`QUOTE_CHARS`) — `'REDACTED'` whenever the
-   * tool's view hid ANY argument of the call: a quote is free text, and may
-   * hold another argument's value.
+   * The model's `quote`, clipped (`QUOTE_CHARS`) — `'REDACTED'` while ANY tool
+   * in reach hides arguments (one the agent registers, or one a call of the
+   * batch or of the served history resolves to): a quote is free text, and
+   * may hold any value a tool hides, in any spelling.
    */
   readonly quote?: string;
   readonly reading?: true;
@@ -304,9 +305,9 @@ export function shownQuote(quote: string): string {
  * row builder is handed it — enums, flags, ids and labels. The value, the
  * model's proposal and the quote arrive ALREADY in the tool's own argument
  * view (`shownValue`, `shownProposed`: `'REDACTED'` where the view hides the
- * argument; `shownQuoteText`: `'REDACTED'` whenever the view hid anything in
- * the call — a quote is free text and may hold any argument's value), so a
- * raw value never reaches a row.
+ * argument; `shownQuoteText`: `'REDACTED'` while any tool in reach hides
+ * arguments — a quote is free text and may hold any hidden value), so a raw
+ * value never reaches a row.
  */
 export interface SourcedVerdict {
   readonly toolCallId: string;
@@ -324,7 +325,7 @@ export interface SourcedVerdict {
   readonly shownProposed?: unknown;
   readonly claimed: ArgumentClaim;
   readonly matched?: 'quote' | 'phrase' | 'spelling';
-  /** The model's quote — `'REDACTED'` whenever the tool's view hid any argument of the call. */
+  /** The model's quote — `'REDACTED'` while any tool in reach hides arguments (`resolve.ts` · `quotesMayShow`). */
   readonly shownQuoteText?: string;
   readonly reading?: true;
   readonly earlier?: true;

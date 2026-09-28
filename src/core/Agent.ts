@@ -277,6 +277,7 @@ import { answeredValuesOf, declaredDefaultsFrom } from './agent/stages/route.js'
 import { isRefused, rulesOf } from './agent/arguments/declare.js';
 import { honestyLayersOf, type HonestyLayers } from './agent/honesty/armed.js';
 import { readsMessageFrom } from './messageFrom.js';
+import { carriesArgumentView } from './toolShownArgs.js';
 import { assertMaxToolResultChars } from './agent/toolResultCap.js';
 import type { ToolArgValidationMode } from './agent/toolArgsValidation.js';
 import { buildAgentChart } from './agent/buildAgentChart.js';
@@ -5009,6 +5010,11 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
             sources: {
               ...(this.externalGrounds !== undefined && {
                 externalGrounds: this.externalGrounds,
+              }),
+              // A registered tool that hides an argument keeps every quote off the
+              // record — a quote is free text that may hold the hidden value.
+              ...([...registryByName.values()].some(carriesArgumentView) && {
+                argumentViews: true as const,
               }),
             },
           }),

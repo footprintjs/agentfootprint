@@ -49,7 +49,7 @@ grows as later honesty steps commit new rows.
 | `argument-assumed` | 2 | `findingsLedger`: an `argument` row of this turn with `source: 'default'` — a tool's `askOrAssume` rule filled the value, or the model sent that same default; or `middlewareDecisions`: a before-tool rewrite of a ruled argument (`changedKeys`) with no declared origin (`allow(args, why, { from })`) |
 | `argument-unverified` | 2 | `findingsLedger`: an `argument` row of this turn with `source: 'model'` on a ruled argument, or with a failed declared-source check (`failed`) on ANY argument — the model misstated the record |
 | `argument-read` | 2 | `findingsLedger`: an `argument` row of this turn with `source: 'said'` and `reading` — the quoted words are the person's, the value is the model's reading of them (declared sources) |
-| `value-contingent` | 2 | `findingsLedger`: an `argument` row of this turn with `source: 'result'` and `setAside` (the model named a result it had set aside); or a `contingent` row of this turn (stamped with it, or unstamped on a call of this turn or on the answer) |
+| `value-contingent` | 2 | `findingsLedger`: an `argument` row of this turn with `source: 'result'` and `setAside` (the model named a result it had set aside); or a `contingent` row of this turn (stamped with it; unstamped on a call of this turn; unstamped on the answer on a first turn, or on a later turn when it follows — or is — a row the ledger shows to be this turn's: `assess.ts` · `firstRowOfTurn`) |
 | `coverage-gap` | 3 | `coverageDeclared`: a `notChecked` or `cannotCover` item on a call of this turn; or `history`: the result's own envelope lists one, when its call has no coverage row |
 | `declared-absent` | 3 | `coverageDeclared`: an absence; or `history`: an empty rowset inside a declared `coverage()` boundary, or an absence in the result's own envelope when its call has no coverage row |
 | `empty-undeclared` | 3 | `history`: an empty rowset (a top-level array, or the app's `rowsAt` key) whose call has no coverage row |
@@ -191,6 +191,17 @@ it at the study's freeze (adopted Q12).
   over-reports and never hides. While the inputs layer is armed, the one writer
   stamps every row with its conversation `turn` (honesty step 3), and a stamped
   conflict row counts only in its own turn.
+- **An unstamped contingent row declared on the ANSWER, on a later turn the
+  ledger cannot place** (an agent without the inputs layer). Such a row names no
+  call of its own, and the ledger crosses turns on a continued conversation, so
+  on a turn after the first it counts only when it follows — or is — a row the
+  ledger shows to be this turn's: one stamped with this turn, or one that names
+  a call of this turn (a row cannot name a call before the call exists). A later
+  turn that made no call and filed nothing else leaves it unread: it may be an
+  earlier turn's answer, and an earlier answer must never make this one "not
+  sure". A provider that reuses call ids across turns can place an earlier row
+  in this turn — it over-reports there. Arm the inputs layer and every row
+  carries its turn.
 - **Subject placement.** Which entity the question names is on hold, so the fold
   reads every call of the turn.
 - **The run-time answer layer, the served standing and its event** — a later

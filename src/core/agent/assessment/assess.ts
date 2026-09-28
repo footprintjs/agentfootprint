@@ -367,14 +367,56 @@ function readArgumentVerdicts(
   }
 }
 
+/** The call ids one ledger row names — its own, where it was declared, its carriers, its witnesses. */
+function callsNamedBy(row: Readonly<Record<string, unknown>>): string[] {
+  const named: string[] = [];
+  const id = str(row.toolCallId);
+  if (id !== undefined) named.push(id);
+  const on = isRecord(row.declaredOn) ? str(row.declaredOn.toolCallId) : undefined;
+  if (on !== undefined) named.push(on);
+  for (const list of [row.carriers, row.witnesses]) {
+    if (!Array.isArray(list)) continue;
+    for (const entry of list as readonly unknown[]) {
+      const at = isRecord(entry) ? str(entry.toolCallId) : undefined;
+      if (at !== undefined) named.push(at);
+    }
+  }
+  return named;
+}
+
+/**
+ * Where THIS turn's rows begin on the ledger, as far as the ledger itself can
+ * show it: the first row stamped with this turn, or — unstamped — the first
+ * that names a call of this turn. A row cannot name a call before the call
+ * exists, and the one writer appends in order, so every row from there on was
+ * filed this turn. `-1` when no row shows it — nothing on the ledger is shown
+ * to be this turn's.
+ */
+function firstRowOfTurn(
+  ledger: readonly unknown[],
+  calls: ReadonlySet<string>,
+  turn: number,
+): number {
+  return ledger.findIndex((row) => {
+    if (!isRecord(row)) return false;
+    if (typeof row.turn === 'number') return row.turn === turn;
+    return callsNamedBy(row).some((id) => calls.has(id));
+  });
+}
+
 /**
  * Layer 2, the contingent law's rows: a value a call of this turn — or the
  * answer — used that only results the model itself set aside carried
  * (`findings/contingent.ts`, filed under `.findings()` beside the evidence
  * gate). A row the one writer stamped with its `turn` is this turn's only when
  * the stamp says so; an unstamped row declared on a call is this turn's when
- * the call is, and one declared on the answer is read as this turn's (it may
- * over-report; it never hides).
+ * the call is. An unstamped row declared on the ANSWER names no call of its
+ * own, and the ledger crosses turns on a continued conversation: on a first
+ * turn (or a record with no `turnNumber`) it is this turn's; on a later turn
+ * only when it follows — or is — a row the ledger shows to be this turn's
+ * (`firstRowOfTurn`). Otherwise the record cannot say which turn filed it,
+ * and it is not read: an earlier turn's answer must never make this one "not
+ * sure". The rows of an agent that arms the inputs layer carry their turn.
  */
 function readContingentRows(
   state: Readonly<Record<string, unknown>>,
@@ -383,6 +425,7 @@ function readContingentRows(
 ): void {
   const ledger = Array.isArray(state.findingsLedger) ? state.findingsLedger : [];
   const turn = typeof state.turnNumber === 'number' ? state.turnNumber : undefined;
+  const since = turn !== undefined && turn > 1 ? firstRowOfTurn(ledger, calls, turn) : 0;
   ledger.forEach((row: unknown, index) => {
     if (!isRecord(row) || row.kind !== 'contingent') return;
     if (typeof row.turn === 'number' && turn !== undefined) {
@@ -390,6 +433,8 @@ function readContingentRows(
     } else if (row.declaredOn !== 'answer') {
       const on = isRecord(row.declaredOn) ? str(row.declaredOn.toolCallId) : undefined;
       if (on === undefined || !calls.has(on)) return;
+    } else if (since < 0 || index < since) {
+      return;
     }
     fire(g, 'value-contingent', statePointer('findingsLedger', index, 'value'));
   });

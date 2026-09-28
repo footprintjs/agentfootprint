@@ -15,21 +15,34 @@ overturn. Nothing here is built yet.**
 > checks are `arguments/checks.ts` · `checkSource` (loaded with the layer); the corpora are built
 > by `honesty/sourceCorpus.ts` · `sourceCorpusOf` from raw pieces the mount hands in, and a result
 > is read once per batch (`evidence/resultCarries.ts` · `resultReader`, beside `resultCarries`, over
-> the index's own `readResult`).
-> A `turn` claim resolves to an earlier answer of the SAME argument, or of a period in a spelling
-> that converts — never to any answer that happens to share the value (the coincidence § 3.5 V4
-> rejects). The run constant a composed message leaves is `userMessageFrom` (the run input's own
-> `messageFrom` is read-only in scope); `Sequence` and `Loop` mark a message that is an earlier
-> step's output, and `Parallel`, `Conditional` and a nested composition pass a composed message
-> on — `Graph`, `Workflow` and the patterns do not mark yet, and `reflection()` is built from
-> `LLMCall`s, so its critic cannot call a ruled tool (§ 8's reflection test runs on `Sequence`).
+> the index's own `readResult`). § 3.3's MUST-FIX reached one case this page did not name: a
+> framework note joined AFTER the tool's JSON (a step banner, an effect note, the repeated-call
+> note — Q16 kept them unannotated) made the whole message fail to parse, and the text fallback
+> read `{"id":4417}` as `:4417`. `readResult` now reads the JSON a result opens with by the JSON
+> grammar (`evidence/servedJson.ts`) — several MCP text blocks and a capped result's cut `head`
+> too — and only what follows as text; the evidence gate reads through the same function, so
+> its identical false flag is gone with it.
+> A `turn` claim resolves to an earlier answer of the SAME argument of the SAME tool, or of a
+> period (any tool's) in a spelling that converts — never to any answer that happens to share
+> the value (the coincidence § 3.5 V4 rejects). The run constant a composed message leaves is
+> `userMessageFrom` (the run input's own `messageFrom` is read-only in scope); `Sequence`,
+> `Loop`, `workflow()` and `graph()` mark a message that is an earlier step's or node's output,
+> and `Parallel`, `Conditional` and a nested composition pass a composed message on;
+> `reflection()` is built from `LLMCall`s, so its critic cannot call a ruled tool (§ 8's
+> reflection test runs on `Sequence`). The mark is the run's, not the message's (a `followUp`
+> after a composed run reads that message as the person's) — named in the README, not built.
 > The fold's `value-contingent` reads the ledger's `ContingentRow`s too (§ 4.7), and `checked`
-> gains `argument-sources`. One rule is TIGHTER than § 5.1 wrote it: a row's `quote` (and the
-> ask's `quoted`) reads `'REDACTED'` whenever the tool's view hid ANY argument of the call, not
-> only its own — a quote is free text, and a person who gives a user name and a password in one
-> sentence puts the hidden value inside the visible argument's quote
-> (`arguments/resolve.ts` · `viewHidesNothing`). The bench's step-5 arm and its registered rule
-> are not part of the build; they are registered before the step's first paid call.
+> gains `argument-sources`; an UNSTAMPED row declared on the answer (an agent without the
+> inputs layer) counts on a first turn, and on a later one only where the ledger shows it is
+> this turn's (§ 5.2's law: an earlier turn's row never makes this answer "not sure").
+> One rule is TIGHTER than § 5.1 wrote it: a row's `quote` (and the ask's `quoted`) reads
+> `'REDACTED'` while ANY tool in reach hides arguments — one the agent registers (read at
+> build, so a quote filed before the hiding call is covered), or one a call of the batch or of
+> the served history resolves to — not only when the quote's own argument is hidden: a quote is
+> free text, and a person who gives a user name and a password in one sentence puts the hidden
+> value inside another call's quote (`arguments/resolve.ts` · `quotesMayShow`). The bench's
+> step-5 arm and its registered rule are not part of the build; they are registered before the
+> step's first paid call.
 
 - Written against agentfootprint 9.118.1 (`f83f277c` on main) and footprintjs 9.27.0. Every code
   fact below was re-read in the code on 2026-09-26.

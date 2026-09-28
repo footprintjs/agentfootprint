@@ -6,7 +6,8 @@
  *          composition calls where it hands one runner another runner's output
  *          as its message.
  * Role:    core/ leaf. No imports, no state beyond the set. A composition
- *          (`core-flow/Sequence.ts`, `core-flow/Loop.ts`) passes
+ *          (`core-flow/Sequence.ts`, `core-flow/Loop.ts`,
+ *          `core-flow/Workflow.ts`, `core-flow/Graph.ts`) passes
  *          `messageFrom: 'composed'` ONLY to a runner that reads it — an
  *          `Agent` whose declared sources are armed
  *          (`.findings({ argumentSources: true })`) — so every other
@@ -49,13 +50,17 @@ export function readsMessageFromIfAny(composition: object, children: readonly ob
  * The input a composition hands `runner` when its message is ANOTHER runner's
  * output: `input` with `messageFrom: 'composed'` for a runner that reads the
  * marker, and `input` itself — the same reference — for every other runner.
+ * A structured hand-off (`workflow()`, `graph()`) is marked whole: every key
+ * of it is another runner's output, its `message` included — and for a
+ * runner that reads the marker, a `messageFrom` the earlier runner returned
+ * is overwritten, never trusted.
  *
  * @example
  * ```ts
  * inputMapper: (parent) => composedInput(step.runner, { message: parent.current as string }),
  * ```
  */
-export function composedInput<I extends { readonly message: string }>(
+export function composedInput<I extends object>(
   runner: object,
   input: I,
 ): I | (I & { readonly messageFrom: 'composed' }) {

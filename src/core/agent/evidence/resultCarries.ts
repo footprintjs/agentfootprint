@@ -4,8 +4,9 @@
  *
  * Pattern: a pure reader over the index's one reading of a result
  *          (`evidenceIndex.ts` · `readResult`: parsed JSON with an absence's
- *          `looked_for` projected away, walked leaf by leaf, keys included;
- *          the text when it is not JSON) and the one normaliser
+ *          `looked_for` projected away, walked leaf by leaf, keys included —
+ *          the leading JSON of a result a framework note follows, and the
+ *          note as text; the text when it is not JSON) and the one normaliser
  *          (`normalize.ts`) — never a second haystack.
  * Role:    core/ layer, `evidence/`. Asked by the inputs layer's declared-
  *          sources check (`core/agent/arguments/checks.ts` · `checkSource`),
@@ -96,6 +97,12 @@ function leavesOf(content: string): ReadLeaves {
   const read = readResult(content);
   if ('parsed' in read) {
     visit(read.parsed);
+    // The text after the JSON (a framework note) is one leaf, read to what is left of the ceiling.
+    if (read.tail !== undefined && budget > 0) {
+      const tokens = canonicalTokens(read.tail);
+      leaves.push({ whole: '', tokens: tokens.slice(0, budget) });
+      budget -= tokens.length;
+    }
     return { leaves, truncated: budget <= 0 };
   }
   // Text is one leaf — a longer value may span its tokens, never a substring.
@@ -145,7 +152,9 @@ export function resultReader(
  * projected away, walked leaf by leaf, keys included; the text when it is not
  * JSON), so a number or a boolean in compact JSON is found (`{"limit":50,
  * "ok":true}` carries `50` and `true`) where a tokenizer over the raw string
- * would see `:50` and `:true`. A one-token value is found when it equals a
+ * would see `:50` and `:true` — also when a framework note follows the JSON
+ * (a step banner, the repeated-call note), when it is several JSON blocks (an
+ * MCP text result) and in a capped result's `head`. A one-token value is found when it equals a
  * leaf or one of a leaf's tokens; a longer value must occur contiguously
  * inside one string leaf (or in the text). Whole tokens only, never
  * substrings; one normaliser (`normalize.ts`), so `41,200` is `41200` here as

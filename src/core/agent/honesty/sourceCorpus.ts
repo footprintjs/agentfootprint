@@ -215,6 +215,16 @@ function appWordsOf(
   return out;
 }
 
+/** The names of the tools the served history's assistant turns called, each once. */
+function calledToolsOf(history: readonly LLMMessage[]): string[] {
+  const names = new Set<string>();
+  for (const m of history) {
+    if (m.role !== 'assistant' || !Array.isArray(m.toolCalls)) continue;
+    for (const call of m.toolCalls) if (typeof call?.name === 'string') names.add(call.name);
+  }
+  return [...names];
+}
+
 /** The person's earlier answers to the library's ask — the ledger's `answered` argument rows. */
 function answersOf(ledger: readonly unknown[] | undefined, toolOf: ToolOf): EarlierAnswer[] {
   const out: EarlierAnswer[] = [];
@@ -294,6 +304,7 @@ export function sourceCorpusOf(
 ): SourceCorpus {
   const history = inputs.history.filter(isMessage);
   const current = currentRequestOf(history);
+  const calledTools = calledToolsOf(history);
   return {
     turn,
     person: personWordsOf(history, current, inputs.composed === true),
@@ -308,5 +319,6 @@ export function sourceCorpusOf(
       .map((m) => m.content),
     app: appWordsOf(history, inputs.systemPromptInjections, deps.externalGrounds),
     answers: answersOf(inputs.ledger, deps.toolOf),
+    ...(calledTools.length > 0 && { calledTools }),
   };
 }

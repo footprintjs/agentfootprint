@@ -114,6 +114,11 @@ export interface InputsLayerDeps {
   readonly emitRows: (scope: TypedScope<InputsLayerState>, rows: readonly ArgumentRow[]) => void;
   /** Present exactly under declared sources (`.findings({ argumentSources: true })`). */
   readonly sources?: {
+    /**
+     * A tool the agent registers carries an arguments view — present only
+     * then: no quote is shown on a row or an ask (`resolve.ts` · `quotesMayShow`).
+     */
+    readonly argumentViews?: true;
     /** Each call's `from` entries, through the one reader of `_findings`. */
     readonly declaredOf: (calls: readonly BatchCall[]) => readonly CallSources[];
     /** The corpora the checks read, from the pieces the mount handed in (loaded on first use). */
@@ -134,13 +139,21 @@ function declaredOf(
   return new Map(deps.sources.declaredOf(calls).map((d) => [d.toolCallId, d]));
 }
 
-/** The arm as the pure steps take it — the entries, and (from Verify on) the corpora. */
+/**
+ * The arm as the pure steps take it — the entries, and (from Verify on) the
+ * corpora and whether a registered tool hides arguments.
+ */
 function armOf(
   declared: ReadonlyMap<string, CallSources> | undefined,
   corpus?: SourceCorpus,
+  argumentViews?: true,
 ): SourcesArm | undefined {
   if (declared === undefined) return undefined;
-  return { declared, ...(corpus !== undefined && { corpus }) };
+  return {
+    declared,
+    ...(corpus !== undefined && { corpus }),
+    ...(argumentViews === true && { argumentViews }),
+  };
 }
 
 /**
@@ -227,7 +240,7 @@ export async function verifyArgumentsStage(
     calls,
     deps.toolOf,
     leavesAskOut(plan) ? keptOf(scope) : undefined,
-    armOf(declared, corpus),
+    armOf(declared, corpus, deps.sources?.argumentViews),
   );
 }
 
@@ -295,6 +308,5 @@ export function resolveArgumentsStage(
     scope.iteration as number,
     fillsKept(checked) ? keptOf(scope) : undefined,
     calls !== undefined ? armOf(declaredOf(deps, calls)) : undefined,
-    calls,
   );
 }

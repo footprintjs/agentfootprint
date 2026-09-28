@@ -53,6 +53,7 @@
 import { isPlacedToolResult } from '../../../artifacts/placement.js';
 import { MAX_INDEX_TOKENS } from '../evidence/evidenceIndex.js';
 import { canonicalTokens, occursIn, resultReader } from '../evidence/resultCarries.js';
+import { leadingJsonValues } from '../evidence/servedJson.js';
 import {
   convertSpelling,
   sameArgumentValue,
@@ -127,6 +128,13 @@ export interface SourceCorpus {
   readonly assistant: readonly string[];
   readonly app: readonly AppWords[];
   readonly answers: readonly EarlierAnswer[];
+  /**
+   * The names of the tools the served history's assistant turns called —
+   * names only. Never read by a check: the layer asks whether any of them
+   * hides arguments, so a quote that may hold a hidden value stays off the
+   * record (`resolve.ts` · `quotesMayShow`). Absent → none.
+   */
+  readonly calledTools?: readonly string[];
 }
 
 // ─── The subject and the verdict ────────────────────────────────────────
@@ -245,15 +253,16 @@ function sameTokens(a: readonly string[], b: readonly string[]): boolean {
 /** A row value the clip cut (`integrity/argumentLeaves.ts` · `clipValue`) — nothing to compare. */
 const isClipped = (value: string): boolean => value.length >= 80 && value.endsWith('…');
 
-/** A placement ticket — the model was served the ticket, not the value. */
+/**
+ * A placement ticket — the model was served the ticket, not the value. Read
+ * as the result's LEADING JSON value (`evidence/servedJson.ts`), so a ticket a
+ * framework note follows is still a ticket.
+ */
 function isPlaced(text: string): boolean {
   const trimmed = text.trimStart();
   if (!trimmed.startsWith('{')) return false;
-  try {
-    return isPlacedToolResult(JSON.parse(trimmed));
-  } catch {
-    return false;
-  }
+  const [first] = leadingJsonValues(trimmed).values;
+  return first !== undefined && isPlacedToolResult(first);
 }
 
 // ─── The hint ───────────────────────────────────────────────────────────
@@ -360,11 +369,18 @@ function checkResult(
 
 // ─── V4 · `turn` ────────────────────────────────────────────────────────
 
-/** The earlier answers a `turn` claim may resolve to: the same argument, or both period arguments. */
+/**
+ * The earlier answers a `turn` claim may resolve to: the same argument OF THE
+ * SAME TOOL (another tool's `limit` is not this one's), or — both period
+ * arguments — a period answered for any tool (a period is a period, in the
+ * spelling each tool declares).
+ */
 function answersFor(subject: SourceSubject, corpus: SourceCorpus): readonly EarlierAnswer[] {
   const period = subject.rule?.period === true;
   return corpus.answers.filter(
-    (a) => a.argument === subject.argument || (period && a.period === true),
+    (a) =>
+      (a.toolName === subject.toolName && a.argument === subject.argument) ||
+      (period && a.period === true),
   );
 }
 

@@ -7,8 +7,10 @@
  *                 supports nothing (`consistent`, never `known`); a reading
  *                 fires `argument-read`; a result the model set aside fires
  *                 `value-contingent`, and so does a `ContingentRow` of this
- *                 turn (stamped, or unstamped on a call of this turn / the
- *                 answer) — never one of an earlier turn; a failed claim fires
+ *                 turn (stamped, or unstamped on a call of this turn) —
+ *                 never one of an earlier turn; an unstamped row declared on
+ *                 the ANSWER counts on a first turn, and on a later one only
+ *                 where the ledger shows it is this turn's; a failed claim fires
  *                 `argument-unverified` on ANY argument; a free argument the
  *                 model assumed fires nothing; the `argument-sources` check
  *                 counts the rows the check judged and the ones it reached a
@@ -131,8 +133,55 @@ describe('UNIT — the declared-sources rows, reason by reason', () => {
       'value-contingent',
     ]);
     expect(reasons(withResult(contingent({ declaredOn: { toolCallId: 'zz' } })))).toEqual([]);
-    // Unstamped on the answer: read as this turn's — it may over-report, it never hides.
-    expect(reasons(withResult(contingent({ declaredOn: 'answer' })))).toEqual(['value-contingent']);
+  });
+
+  it('an UNSTAMPED row declared on the answer is this turn’s only where the ledger shows it', () => {
+    const onAnswer = (over: Record<string, unknown> = {}) => ({
+      kind: 'contingent',
+      declaredOn: 'answer',
+      value: 'srv-1',
+      carriers: [{ toolCallId: 't0', standing: 'noise' }],
+      iteration: 1,
+      ...over,
+    });
+    // The reviewer's record: turn 2, a turn-1 answer's row, nothing of turn 2 on the
+    // ledger — an earlier turn's answer must not make this one "not sure".
+    const turnTwo = (...rows: object[]): State => ({
+      turnNumber: 2,
+      history: [
+        { role: 'user', content: 'q1' },
+        { role: 'assistant', content: 'a1' },
+        { role: 'user', content: 'q2' },
+        { role: 'tool', toolCallId: 'c7', content: '[{"id":1}]' },
+        { role: 'assistant', content: 'a2' },
+      ],
+      findingsLedger: rows,
+    });
+    expect(run(turnTwo(onAnswer())).standing).toBe('consistent');
+    expect(reasons(turnTwo(onAnswer()))).toEqual([]);
+    // …it IS this turn's when it names a result of this turn itself,
+    expect(
+      reasons(turnTwo(onAnswer({ carriers: [{ toolCallId: 'c7', standing: 'noise' }] }))),
+    ).toEqual(['value-contingent']);
+    // …or follows a row that names a call of this turn (a row cannot name a call
+    // before the call exists),
+    const standingOnC7 = {
+      kind: 'standing',
+      toolCallId: 'c7',
+      standing: 'noise',
+      assertions: [],
+      declaredOn: 'answer',
+      iteration: 2,
+    };
+    expect(reasons(turnTwo(standingOnC7, onAnswer()))).toEqual(['value-contingent']);
+    // …never when it comes BEFORE that row (it was filed in an earlier turn),
+    expect(reasons(turnTwo(onAnswer(), standingOnC7))).toEqual([]);
+    // …and a row stamped with THIS turn shows where the turn began too.
+    expect(reasons(turnTwo({ ...standingOnC7, toolCallId: 'zz', turn: 2 }, onAnswer()))).toEqual([
+      'value-contingent',
+    ]);
+    // A first turn has no earlier one: its unstamped answer row is its own.
+    expect(reasons({ ...turnTwo(onAnswer()), turnNumber: 1 })).toEqual(['value-contingent']);
   });
 
   it('`argument-sources` counts the judged rows, and the ones that reached a verdict', () => {

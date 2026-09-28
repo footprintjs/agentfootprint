@@ -15,7 +15,9 @@
  *                    filed with no rule; the malformed `from` entries ride the
  *                    basis row, or the call's first argument row;
  *   - INTEGRATION  — a `Sequence` hands its second agent a composed message,
- *                    and a quote from it fails `composed-message`; a period
+ *                    and a quote from it fails `composed-message` — so do
+ *                    `workflow()` (a later step) and `graph()` (a child
+ *                    node), where the `ask` argument is then asked; a period
  *                    answered in turn 1 as `24h` traces in turn 2 to a `-24h`
  *                    argument (`matched: 'spelling'`); a `turn` claim with no
  *                    earlier answer is no source; the app's `externalGrounds`
@@ -24,13 +26,20 @@
  *                    `consistent` — never `known`); the arm is refused at build
  *                    without the inputs layer;
  *   - SECURITY     — laundering: a value only in the library's note (behind the
- *                    tool-bytes boundary) files `not-in-result`; a quote from a
+ *                    tool-bytes boundary) files `not-in-result` — while a
+ *                    number in the tool's JSON BEFORE a framework note (the
+ *                    repeated-call note) or in several MCP text blocks is
+ *                    found; the library's own instructions are never the
+ *                    app's text; a quote from a
  *                    library frame or an evicted turn is `quote-not-found`; a
  *                    hidden argument's quote, value and proposal read
  *                    `'REDACTED'`, the event carries no length and the ask no
  *                    `quoted`; a quote beside a call whose view hid ANOTHER
  *                    argument reads `'REDACTED'` too (free text may hold any
- *                    argument's value); a before-tool rewrite after the layer reads as
+ *                    argument's value) — and so does a quote beside a call of
+ *                    ANOTHER tool while a tool that hides arguments is in
+ *                    reach (the same batch, a later turn, before the hiding
+ *                    call); the served note names no hidden value; a before-tool rewrite after the layer reads as
  *                    assumed; events never carry a value or a quote;
  *   - PERFORMANCE  — what `from` and the instruction line add to a served
  *                    request (recorded, not claimed), and the checks' cost per
@@ -45,8 +54,10 @@ import {
   Agent,
   Sequence,
   defineTool,
+  graph,
   isInputPause,
   isPaused,
+  workflow,
   type AgentOutput,
   type RunnerPauseOutcome,
   type Tool,
@@ -55,11 +66,14 @@ import { assessAnswer, recordRun } from '../../../../src/observe.js';
 import { allow } from '../../../../src/core/agent/middleware/outcomes.js';
 import type { LLMRequest, LLMResponse } from '../../../../src/adapters/types.js';
 import type { ArgumentRow } from '../../../../src/core/agent/arguments/rows.js';
+import { checkSource } from '../../../../src/core/agent/arguments/checks.js';
 import {
   FINDINGS_FROM_PROPERTY,
+  FINDINGS_INSTRUCTION_ID,
   FINDINGS_SOURCES_LINE,
 } from '../../../../src/core/agent/findings/reserved.js';
 import { sourceCorpusOf } from '../../../../src/core/agent/honesty/sourceCorpus.js';
+import { mockMcpClient } from '../../../../src/lib/mcp/mockMcpClient.js';
 import { SHOWN_ARGS } from '../../../../src/core/toolShownArgs.js';
 import { STEP_NUDGE_FRAME_PREFIX } from '../../../../src/lib/saidByPerson.js';
 
@@ -536,6 +550,113 @@ describe('a result, the app, an earlier answer — each checked in its one place
     expect(a?.standing).toBe('not-sure');
   });
 
+  it('a number from a result the library joined a note to (the repeated-call note) is found — never a false `not-in-result`', async () => {
+    const ran: Record<string, unknown>[] = [];
+    const hosts = defineTool({
+      name: 'list_hosts',
+      description: 'Hosts of one service.',
+      inputSchema: { type: 'object', properties: { service: { type: 'string' } } },
+      execute: async () => ({ hosts: [{ id: 4417, name: 'srv-a', up: true }] }),
+    });
+    const hostErrors = defineTool({
+      name: 'host_errors',
+      description: 'Errors on one host.',
+      inputSchema: {
+        type: 'object',
+        properties: { host_id: { type: 'number' }, include_up: { type: 'boolean' } },
+      },
+      askOrAssume: { host_id: { ask: 'Which host id?' } },
+      execute: async (args) => {
+        ran.push({ ...args });
+        return { errors: 0 };
+      },
+    });
+    const m = scripted([
+      batch({ id: 'c1', name: 'list_hosts', args: { service: 'checkout' } }),
+      // The same call again: its result is served with the repeated-call note after it.
+      batch({ id: 'c2', name: 'list_hosts', args: { service: 'checkout' } }),
+      batch({
+        id: 'c3',
+        name: 'host_errors',
+        args: {
+          host_id: 4417,
+          include_up: true,
+          _findings: from(
+            { argument: 'host_id', source: 'result', id: 'c2' },
+            { argument: 'include_up', source: 'result', id: 'c2' },
+          ),
+        },
+      }),
+      answer('No errors.'),
+    ]);
+    const agent = Agent.create({ provider: m.provider as never, model: 'm' })
+      .tool(hosts)
+      .tool(hostErrors)
+      .findings({ argumentSources: true })
+      .build();
+    const out = await agent.run({ message: 'Any errors on the checkout hosts?' });
+    // The note really rode c2's result — the case this pins.
+    const served = m.requests[2]!.messages.find((x) => x.role === 'tool' && x.toolCallId === 'c2');
+    expect(served?.content).toMatch(/^\{"hosts":\[\{"id":4417,.*\}\]\}\s+\[identical call:/s);
+    expect(out).toBe('No errors.');
+    expect(ran).toEqual([{ host_id: 4417, include_up: true }]);
+    expect(argumentRows(agent).map((r) => [r.argument, r.source, r.result, r.failed])).toEqual([
+      ['host_id', 'result', 'c2', undefined],
+      ['include_up', 'result', 'c2', undefined],
+    ]);
+  });
+
+  it('an MCP text result of several compact-JSON blocks is read block by block', async () => {
+    const ran: Record<string, unknown>[] = [];
+    const client = mockMcpClient({
+      name: 'fleet',
+      tools: [
+        {
+          name: 'list_hosts',
+          inputSchema: { type: 'object', properties: {} },
+          handler: async () => ({
+            content: [
+              { type: 'text', text: '{"id":4417,"name":"srv-a"}' },
+              { type: 'text', text: '{"id":2210,"name":"srv-b"}' },
+            ],
+          }),
+        },
+        {
+          name: 'host_errors',
+          inputSchema: { type: 'object', properties: { host_id: { type: 'number' } } },
+          _meta: { agentfootprint: { askOrAssume: { host_id: { ask: 'Which host id?' } } } },
+          handler: async (args) => {
+            ran.push({ ...args });
+            return '{"errors":0}';
+          },
+        },
+      ],
+    });
+    const m = scripted([
+      batch({ id: 'c1', name: 'list_hosts', args: {} }),
+      batch({
+        id: 'c2',
+        name: 'host_errors',
+        args: {
+          host_id: 2210,
+          _findings: from({ argument: 'host_id', source: 'result', id: 'c1' }),
+        },
+      }),
+      answer('ok'),
+    ]);
+    const agent = Agent.create({ provider: m.provider as never, model: 'm' })
+      .tools(await client.tools())
+      .findings({ argumentSources: true })
+      .build();
+    const out = await agent.run({ message: 'errors on the second host?' });
+    expect(m.requests[1]!.messages.find((x) => x.role === 'tool')?.content).toBe(
+      '{"id":4417,"name":"srv-a"}\n{"id":2210,"name":"srv-b"}',
+    );
+    expect(out).toBe('ok');
+    expect(ran).toEqual([{ host_id: 2210 }]);
+    expect(argumentRows(agent)[0]).toMatchObject({ source: 'result', result: 'c1' });
+  });
+
   it('the app’s externalGrounds label rides `appSource`', async () => {
     const m = scripted([
       batch({
@@ -687,6 +808,81 @@ describe('a result, the app, an earlier answer — each checked in its one place
     expect(argumentRows(direct)[0]!.failed).toBeUndefined();
   });
 
+  it('a composed run (workflow() and graph()): a later step’s or a child node’s message is another model’s words', async () => {
+    const planner = () =>
+      Agent.create({
+        provider: scripted([answer('Search checkout errors over the last week.')])
+          .provider as never,
+        model: 'm',
+      }).build();
+    const quoteFromMessage = batch({
+      id: 'c1',
+      name: 'search_logs',
+      args: {
+        service: 'checkout',
+        window: '7d',
+        _findings: from({ argument: 'window', source: 'user', quote: 'over the last week' }),
+      },
+    });
+    const worker = (ran: Record<string, unknown>[]) =>
+      Agent.create({
+        provider: scripted([quoteFromMessage, answer('No errors.')]).provider as never,
+        model: 'm',
+      })
+        .tool(askingSearch(ran))
+        .findings({ argumentSources: true })
+        .build();
+    // The quote holds a phrase declared for `7d`: from the PERSON it would run; from
+    // another runner's output it fails, so the `ask` argument is asked — nothing runs.
+    const ranInFlow: Record<string, unknown>[] = [];
+    const flow = workflow(planner(), worker(ranInFlow));
+    expect(isPaused(await flow.run({ message: 'Any errors on checkout?' }))).toBe(true);
+    expect(ranInFlow).toEqual([]);
+    const ranInGraph: Record<string, unknown>[] = [];
+    const g = graph({
+      nodes: [
+        { id: 'plan', runner: planner() },
+        { id: 'work', runner: worker(ranInGraph) },
+      ],
+      edges: [{ from: 'plan', to: 'work' }],
+    });
+    expect(isPaused(await g.run({ message: 'Any errors on checkout?' }))).toBe(true);
+    expect(ranInGraph).toEqual([]);
+    // The row, on a run that completes (the declared default, V1 — the claim kept as written).
+    const ran: Record<string, unknown>[] = [];
+    const assuming = Agent.create({
+      provider: scripted([
+        batch({
+          id: 'c1',
+          name: 'search_logs',
+          args: {
+            service: 'checkout',
+            window: '2h',
+            _findings: from({ argument: 'window', source: 'user', quote: 'over the last week' }),
+          },
+        }),
+        answer('No errors.'),
+      ]).provider as never,
+      model: 'm',
+    })
+      .tool(assumingSearch(ran))
+      .findings({ argumentSources: true })
+      .build();
+    const done = workflow(planner(), assuming);
+    expect(await done.run({ message: 'Any errors on checkout?' })).toBe('No errors.');
+    const snap = done.getSnapshot() as unknown as {
+      subflowResults: Record<string, { treeContext: { globalContext: Record<string, unknown> } }>;
+    };
+    const step = snap.subflowResults['step-2']!.treeContext.globalContext;
+    expect(step.userMessageFrom).toBe('composed');
+    const rows = (step.findingsLedger as ArgumentRow[]).filter((r) => r.kind === 'argument');
+    expect(rows[0]).toMatchObject({
+      source: 'default',
+      claimed: 'user',
+      failed: 'composed-message',
+    });
+  });
+
   it('messageFrom is one of two words — a typo is refused, never read as the person’s', async () => {
     const agent = Agent.create({ provider: scripted([answer('x')]).provider as never, model: 'm' })
       .tool(askingSearch([]))
@@ -744,6 +940,44 @@ describe('SECURITY — library text is never evidence, and no value passes a too
     expect(corpus.person.map((p) => p.text)).toEqual(['errors on checkout?']);
   });
 
+  it('the library’s own instructions are never the app’s text: a value only there fails `not-in-app-text`', () => {
+    const corpus = sourceCorpusOf(
+      {
+        history: [{ role: 'user', content: 'errors on checkout?' }],
+        systemPromptInjections: [
+          // The findings instruction's words ("exploratory", "noise") — the LIBRARY's.
+          {
+            source: 'instructions',
+            sourceId: FINDINGS_INSTRUCTION_ID,
+            rawContent: 'Declare a basis: direct or exploratory; a result may be noise.',
+          },
+          // The app's own instruction.
+          {
+            source: 'instructions',
+            sourceId: 'team-policy',
+            rawContent: 'Our look-back is weekly.',
+          },
+        ],
+      },
+      [],
+      1,
+      { toolOf: () => undefined },
+    );
+    expect(corpus.app.map((a) => a.text)).toEqual(['Our look-back is weekly.']);
+    const claimApp = (value: string) =>
+      checkSource(
+        {
+          toolName: 'search_logs',
+          argument: 'mode',
+          value,
+          claim: { argument: 'mode', source: 'app' },
+        },
+        corpus,
+      );
+    expect(claimApp('exploratory')).toMatchObject({ source: 'model', failed: 'not-in-app-text' });
+    expect(claimApp('weekly')).toMatchObject({ source: 'app', claimed: 'app' });
+  });
+
   it('an evicted turn is not the person’s words any more: the check is window-relative', () => {
     const corpus = sourceCorpusOf(
       { history: [{ role: 'user', content: 'and payments?' }] },
@@ -786,6 +1020,11 @@ describe('SECURITY — library text is never evidence, and no value passes a too
     await agent.resume(stored(paused), replyTo(paused, { f1: '7d' }));
     expect(JSON.stringify(agent.findings())).not.toContain('24h');
     expect(JSON.stringify(agent.findings())).not.toContain('"7d"');
+    // …and the note served after the result names no hidden value either — not the
+    // model's (it says only that the call had carried a value of its own).
+    const note = m.requests[m.requests.length - 1]!.messages.find((x) => x.role === 'tool')!;
+    expect(note.content).toContain('the call had carried a value of its own');
+    expect(note.content).not.toContain('24h');
   });
 
   it('a quote is free text: when the view hides ANOTHER argument, every quote on the call reads REDACTED and the ask shows none', async () => {
@@ -842,6 +1081,100 @@ describe('SECURITY — library text is never evidence, and no value passes a too
       .build();
     await open.run({ message: 'errors on checkout?' });
     expect(argumentRows(open)[0]).toMatchObject({ quote: 'errors on checkout', reading: true });
+  });
+
+  describe('a quote may hold a value ANOTHER tool hides — no quote is shown while such a tool is in reach', () => {
+    /** A sign-in tool whose view hides the password (the `flowchartAsTool({ redact })` shape). */
+    const login = (): Tool =>
+      ({
+        ...defineTool({
+          name: 'login',
+          description: 'Sign in.',
+          inputSchema: {
+            type: 'object',
+            properties: { user: { type: 'string' }, password: { type: 'string' } },
+          },
+          execute: async () => ({ ok: true }),
+        }),
+        [SHOWN_ARGS]: (args: Record<string, unknown>) =>
+          'password' in args ? { ...args, password: 'REDACTED' } : args,
+      } as never);
+    const quoting = (id: string, quote: string, window = '24h') => ({
+      id,
+      name: 'search_logs',
+      args: {
+        service: 'checkout',
+        window,
+        _findings: from({ argument: 'window', source: 'user', quote }),
+      },
+    });
+    const signIn = (id: string) => ({
+      id,
+      name: 'login',
+      args: { user: 'bob', password: 'hunter2', _findings: { basis: 'direct' } },
+    });
+    const agentWith = (script: Reply[], tools: Tool[]) => {
+      let builder = Agent.create({ provider: scripted(script).provider as never, model: 'm' });
+      for (const t of tools) builder = builder.tool(t);
+      return builder.findings({ argumentSources: true }).build();
+    };
+
+    it('the same batch: a sibling call hides the password; the quote holding it is REDACTED, the ask shows none', async () => {
+      const sentence =
+        'Log me in as bob with password hunter2 and show checkout errors from the last week';
+      const agent = agentWith(
+        [batch(signIn('c1'), quoting('c2', sentence, '7d')), answer('No errors.')],
+        [login(), askingSearch([])],
+      );
+      const out = await agent.run({ message: sentence });
+      // The verdict is unchanged — "last week" is a phrase declared for 7d — only the text is withheld.
+      expect(out).toBe('No errors.');
+      expect(argumentRows(agent)[0]).toMatchObject({
+        toolCallId: 'c2',
+        source: 'said',
+        matched: 'phrase',
+        quote: 'REDACTED',
+      });
+      expect(JSON.stringify(agent.findings())).not.toContain('hunter2');
+      // A reading asks; the ask carries no `quoted`.
+      const asking = agentWith(
+        [batch(signIn('c1'), quoting('c2', 'I am bob and my password is hunter2')), answer('ok')],
+        [login(), askingSearch([])],
+      );
+      const paused = await asking.run({
+        message: 'I am bob and my password is hunter2, any errors on checkout?',
+      });
+      if (!isInputPause(paused)) throw new Error('expected the reading to be asked about');
+      expect(JSON.stringify(paused.awaitingInput.context)).not.toContain('hunter2');
+      expect(JSON.stringify(asking.findings())).not.toContain('hunter2');
+    });
+
+    it('a later turn: the password went to the sign-in tool in turn 1; turn 2’s quote of it is REDACTED', async () => {
+      const agent = agentWith(
+        [
+          batch(signIn('c1')),
+          answer('signed in'),
+          batch(quoting('c2', 'my password is hunter2')),
+          answer('ok'),
+        ],
+        [login(), askingSearch([])],
+      );
+      await agent.run({ message: 'sign me in: user bob, my password is hunter2' });
+      const paused = await agent.followUp('any errors on checkout?');
+      if (!isInputPause(paused)) throw new Error('expected the reading to be asked about');
+      expect(JSON.stringify(paused.awaitingInput.context)).not.toContain('hunter2');
+      expect(JSON.stringify(agent.findings())).not.toContain('hunter2');
+    });
+
+    it('a quote filed BEFORE the call that hides the value: the registered tool hides it too', async () => {
+      const agent = agentWith(
+        [batch(quoting('c1', 'password hunter2 and checkout errors', '7d')), answer('ok')],
+        [login(), askingSearch([])],
+      );
+      await agent.run({ message: 'password hunter2 and checkout errors over the last week' });
+      expect(JSON.stringify(agent.findings())).not.toContain('hunter2');
+      expect(argumentRows(agent)[0]).toMatchObject({ quote: 'REDACTED' });
+    });
   });
 
   it('events carry names, enums and counts — never a value, a quote or a proposal', async () => {

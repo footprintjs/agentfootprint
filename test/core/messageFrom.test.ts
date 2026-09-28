@@ -13,14 +13,51 @@
  *                    the inner Sequence's first step; `Loop`: the first
  *                    iteration is the caller's, a later one is composed;
  *                    `Parallel` and `Conditional` pass a composed message on to
- *                    their branches; an unarmed agent in the same slot records
- *                    nothing.
+ *                    their branches; `workflow()`: step 1 is the caller's
+ *                    input, a later step's (a string OR a structured
+ *                    hand-off) is composed, and nested the composed message
+ *                    reaches its step 1; `graph()`: a root is the caller's
+ *                    input, a child and a join node are composed; an unarmed
+ *                    agent in the same slot records nothing.
  */
 
 import { describe, expect, it } from 'vitest';
 
-import { Agent, Conditional, Loop, Parallel, Sequence, defineTool } from '../../src/index.js';
+import {
+  Agent,
+  Conditional,
+  Loop,
+  Parallel,
+  Sequence,
+  defineTool,
+  graph,
+  workflow,
+} from '../../src/index.js';
+import { flowChart, type FlowChart } from 'footprintjs';
+
 import { composedInput, readsMessageFrom } from '../../src/core/messageFrom.js';
+import { RunnerBase } from '../../src/core/RunnerBase.js';
+import type { RunnerPauseOutcome } from '../../src/core/pause.js';
+
+/** A non-LLM step that hands on whatever `fn` returns — a structured hand-off. */
+class ObjectStep extends RunnerBase<object, unknown> {
+  readonly id = 'object-step';
+  readonly name = 'object-step';
+  constructor(private readonly fn: () => unknown) {
+    super();
+    this.initChart(() => this.buildChart());
+  }
+  private buildChart(): FlowChart {
+    const fn = this.fn;
+    return flowChart<Record<string, unknown>>('Hand', (() => fn()) as never, 'hand-run').build();
+  }
+  async run(): Promise<unknown> {
+    throw new Error('ObjectStep: mounted only');
+  }
+  async resume(): Promise<unknown | RunnerPauseOutcome> {
+    throw new Error('ObjectStep: no pause');
+  }
+}
 
 const reply = (content: string) => ({
   name: 'm',
@@ -168,5 +205,85 @@ describe('INTEGRATION — each composition marks the message it did not get from
     expect(marked.some((k) => k.startsWith('step-par/p'))).toBe(true);
     expect(marked.some((k) => k.startsWith('step-par/q'))).toBe(false);
     expect(marked.some((k) => k.startsWith('step-cond/always'))).toBe(true);
+  });
+
+  it('workflow(): step 1 is the caller’s input, a later step’s is composed', async () => {
+    const flow = workflow(armed('plan'), armed());
+    await flow.run({ message: 'hi' });
+    const snap = flow.getSnapshot();
+    expect(agentSteps(snap)).toEqual(['step-1', 'step-2']);
+    expect(composedSteps(snap)).toEqual(['step-2']);
+    // The same chain unarmed: nothing recorded, the hand-off it always was.
+    const bare = workflow(plain('plan'), plain());
+    await bare.run({ message: 'hi' });
+    expect(composedSteps(bare.getSnapshot())).toEqual([]);
+  });
+
+  it('workflow(): a STRUCTURED hand-off is composed too — a `messageFrom` it carries is not trusted', async () => {
+    // A step that hands on an object claiming its message is the person's.
+    const forward = new ObjectStep(() => ({ message: 'plan: search', messageFrom: 'person' }));
+    const flow = workflow(forward as never, armed());
+    await flow.run({ message: 'hi' });
+    expect(composedSteps(flow.getSnapshot())).toEqual(['step-2']);
+  });
+
+  it('workflow() and graph() pass their WHOLE input on: a caller’s own `messageFrom` reaches step 1 / a root', async () => {
+    const flow = workflow(armed());
+    await flow.run({ message: 'hi', messageFrom: 'composed' } as never);
+    expect(composedSteps(flow.getSnapshot())).toEqual(['step-1']);
+    const g = graph({ nodes: [{ id: 'root', runner: armed() }], edges: [] });
+    await g.run({ message: 'hi', messageFrom: 'composed' });
+    expect(composedSteps(g.getSnapshot())).toEqual(['root']);
+  });
+
+  it('workflow(): nested as a later step, the composed hand-off reaches ITS step 1', async () => {
+    const inner = workflow(armed('inner'));
+    const outer = Sequence.create()
+      .step('a', plain('plan'))
+      .step('b', inner as never)
+      .build();
+    await outer.run({ message: 'hi' });
+    expect(composedSteps(outer.getSnapshot())).toEqual(['step-b', 'step-b/step-1']);
+  });
+
+  it('graph(): a root is the caller’s input; a child node and a join node are composed', async () => {
+    const g = graph({
+      nodes: [
+        { id: 'plan', runner: armed('plan') },
+        { id: 'look', runner: armed('look') },
+        { id: 'check', runner: armed('check') },
+        { id: 'write', runner: armed(), join: (u) => ({ message: `${u.look} ${u.check}` }) },
+      ],
+      edges: [
+        { from: 'plan', to: 'look' },
+        { from: 'plan', to: 'check' },
+        { from: 'look', to: 'write' },
+        { from: 'check', to: 'write' },
+      ],
+    });
+    await g.run({ message: 'hi' });
+    const snap = g.getSnapshot();
+    expect(agentSteps(snap)).toEqual(['check', 'look', 'plan', 'write']);
+    expect(composedSteps(snap)).toEqual(['check', 'look', 'write']);
+    // Unarmed: nothing recorded.
+    const bare = graph({
+      nodes: [
+        { id: 'plan', runner: plain('plan') },
+        { id: 'work', runner: plain() },
+      ],
+      edges: [{ from: 'plan', to: 'work' }],
+    });
+    await bare.run({ message: 'hi' });
+    expect(composedSteps(bare.getSnapshot())).toEqual([]);
+  });
+
+  it('graph(): nested as a later step, the composed message reaches its roots', async () => {
+    const inner = graph({ nodes: [{ id: 'root', runner: armed('inner') }], edges: [] });
+    const outer = Sequence.create()
+      .step('a', plain('plan'))
+      .step('b', inner as never)
+      .build();
+    await outer.run({ message: 'hi' });
+    expect(composedSteps(outer.getSnapshot())).toEqual(['step-b', 'step-b/root']);
   });
 });

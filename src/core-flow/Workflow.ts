@@ -73,6 +73,7 @@ import {
   type TypedScope,
 } from 'footprintjs';
 import type { RunContext } from '../bridge/eventMeta.js';
+import { composedInput, readsMessageFromIfAny } from '../core/messageFrom.js';
 import type { RunnerPauseOutcome } from '../core/pause.js';
 import type { Runner } from '../core/runner.js';
 import { RunnerBase, makeRunId } from '../core/RunnerBase.js';
@@ -161,6 +162,8 @@ export class Workflow<TIn extends object = object, TOut = unknown> extends Runne
     this.name = opts.name ?? 'Workflow';
     this.id = opts.id ?? 'workflow';
     this.steps = steps;
+    // Holding a step that reads `messageFrom`, it reads it too (`core/messageFrom.ts`).
+    readsMessageFromIfAny(this, steps);
     // Eager chart construction — see `RunnerBase.initChart` JSDoc.
     this.initChart(() => this.buildChart());
   }
@@ -243,7 +246,15 @@ export class Workflow<TIn extends object = object, TOut = unknown> extends Runne
         step.getSpec(),
         `Step ${stepNumber}`,
         {
-          inputMapper: (parent) => toStepArgs(parent.current, stepNumber),
+          // Step 1 is handed the workflow's own input as it came (a composed
+          // mark handed to the workflow included). Every later step is handed
+          // an EARLIER step's output — another runner's words, marked for a
+          // runner that reads the marker (`core/messageFrom.ts` ·
+          // `composedInput`); every other runner gets the input it always did.
+          inputMapper: (parent) => {
+            const args = toStepArgs(parent.current, stepNumber);
+            return stepNumber === 1 ? args : composedInput(step, args);
+          },
           // Untouched: whatever the step's chart returned is what the next
           // step (or the caller) receives. No string coercion.
           outputMapper: (sfOutput) => ({ current: sfOutput }),

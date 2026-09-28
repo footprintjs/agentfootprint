@@ -10,7 +10,11 @@
  *                 readable; `resultCarries` over compact JSON (numbers,
  *                 booleans, a number inside a nested array), an absence's
  *                 `looked_for`, one leaf versus two, the ceiling and a value
- *                 with no token; `checkSource`'s verdict for every claim;
+ *                 with no token — and over a result that is NOT one JSON
+ *                 value: a step banner or the repeated-call note after the
+ *                 JSON, several MCP text blocks, a capped result's cut head,
+ *                 and bracketed text that is not JSON; `checkSource`'s
+ *                 verdict for every claim;
  *   - PROPERTY  — (seeded, the repo carries no property library) parity of
  *                 `resultCarries` with the evidence index for one-token
  *                 values; every primitive leaf of `JSON.stringify(x)` is found
@@ -18,7 +22,13 @@
  *                 not in q with no phrase for v in q, the value is a READING —
  *                 never traced, so an `ask` rule never runs it unasked;
  *   - SECURITY  — a quote found only in a composed run's own message fails as
- *                 `composed-message`; a value only in a DIFFERENT result than
+ *                 `composed-message`, and only the run's OWN message is marked;
+ *                 a quote is shown on a row or an ask only while no tool in
+ *                 reach hides arguments (registered, called in the batch or
+ *                 the served history, the call's own), and only a READING
+ *                 rides the ask as the person's words; a `turn` claim never
+ *                 resolves to another tool's or another argument's answer;
+ *                 a value only in a DIFFERENT result than
  *                 the one named fails `not-in-result`; a placement ticket
  *                 fails `placed-result`; a negation passes membership and is
  *                 still no more than `said` (never support — the fold's law);
@@ -35,6 +45,13 @@ import {
   type SourceSubject,
 } from '../../../../src/core/agent/arguments/checks.js';
 import { rulesOf, isRefused } from '../../../../src/core/agent/arguments/declare.js';
+import {
+  declareBatch,
+  resolutionsOf,
+  verifyPlan,
+} from '../../../../src/core/agent/arguments/resolve.js';
+import { sourceCorpusOf } from '../../../../src/core/agent/honesty/sourceCorpus.js';
+import { SHOWN_ARGS } from '../../../../src/core/toolShownArgs.js';
 import { readSources } from '../../../../src/core/agent/arguments/sources.js';
 import {
   MAX_INDEX_TOKENS,
@@ -245,6 +262,65 @@ describe('UNIT — resultCarries: the evidence index’s own per-result reading'
   it('plain text is read as text', () => {
     expect(resultCarries('error rate 3% on checkout', 'checkout')).toBe('found');
     expect(resultCarries('error rate 3% on checkout', 'payments')).toBe('not-found');
+  });
+
+  describe('a result that is NOT one JSON value — its JSON read by the grammar, never tokenised whole', () => {
+    const json = JSON.stringify({ hosts: [{ id: 4417, name: 'srv-a', up: true }], limit: 50 });
+
+    it('a step banner joined after the JSON (a stepped skill)', () => {
+      const served = `${json} Step 1 of 3 done. Now on step 2 of 3: search the logs (tool: \`search_logs\`).`;
+      expect(resultCarries(served, 4417)).toBe('found');
+      expect(resultCarries(served, 50)).toBe('found');
+      expect(resultCarries(served, true)).toBe('found');
+      expect(resultCarries(served, 'srv-a')).toBe('found');
+      // The note is still read, as text (adopted Q16): it carries its own words.
+      expect(resultCarries(served, 'search_logs')).toBe('found');
+    });
+
+    it('the repeated-call note joined after the JSON', () => {
+      const served = `${json}\n\n[identical call: 'list_hosts' has now returned exactly this result 3 times this turn, for exactly these arguments.]`;
+      expect(resultCarries(served, 4417)).toBe('found');
+      expect(resultCarries(served, true)).toBe('found');
+      expect(resultCarries(served, 50)).toBe('found');
+      expect(resultCarries(served, 9999)).toBe('not-found');
+    });
+
+    it('several compact-JSON blocks (an MCP text result’s content blocks, joined by newlines)', () => {
+      const served = '{"id":4417,"name":"srv-a"}\n{"id":2210,"name":"srv-b","up":false}';
+      expect(resultCarries(served, 4417)).toBe('found');
+      expect(resultCarries(served, 2210)).toBe('found');
+      expect(resultCarries(served, false)).toBe('found');
+      expect(resultCarries(served, 'srv-b')).toBe('found');
+      // …and a further block cut short: its complete leaves count, the cut one does not.
+      const cut = `${served}\n{"id":3301,"name":"srv-c","port":80`;
+      expect(resultCarries(cut, 3301)).toBe('found');
+      expect(resultCarries(cut, 'srv-c')).toBe('found');
+      expect(resultCarries(cut, 80)).toBe('not-found');
+    });
+
+    it('a capped result: the head — the tool’s first characters, JSON cut mid-value — is read', () => {
+      const head = json.slice(0, 44); // {"hosts":[{"id":4417,"name":"srv-a","up":tr
+      const served = JSON.stringify({
+        truncated: true,
+        reason:
+          'list_hosts returned 90000 chars, over the 60-char cap. Narrow the request and call again.',
+        head,
+      });
+      expect(resultCarries(served, 4417)).toBe('found');
+      expect(resultCarries(served, 'srv-a')).toBe('found');
+      expect(resultCarries(served, 2210)).toBe('not-found');
+      // A cut head that is plain text reads as it always did.
+      const text = JSON.stringify({ truncated: true, reason: 'too long', head: 'port 4417 is up' });
+      expect(resultCarries(text, 4417)).toBe('found');
+    });
+
+    it('text that opens with a bracket and is not JSON stays text — `21:00:00:24` is one token', () => {
+      const log = '[INFO] 21:00:00:24:ff:4a:12:03 logged in on fc1/3';
+      expect(resultCarries(log, '21:00:00:24:ff:4a:12:03')).toBe('found');
+      expect(resultCarries(log, 'fc1/3')).toBe('found');
+      const brace = '{level=info} port 8080 open';
+      expect(resultCarries(brace, 8080)).toBe('found');
+    });
   });
 
   it('a value with no token, or a result past the ceiling, is uncheckable — never "not found"', () => {
@@ -487,6 +563,40 @@ describe('UNIT — V4: `turn` resolves only to an earlier answer', () => {
     expect(v).toEqual({ source: 'answered', matched: 'spelling', earlier: true, claimed: 'turn' });
   });
 
+  it('another argument’s answer, or the same-named argument of ANOTHER tool, is no source', () => {
+    // An `ask` rule, so no declared default can stand in for the answer (V1).
+    const limit = { argument: 'limit', rule: 'ask', type: 'integer', ask: {} } as never;
+    const claim = { argument: 'limit', source: 'turn' as const };
+    // The person answered `limit = 50` for ANOTHER tool: not this tool's limit.
+    const otherTool = checkSource(
+      subject({ argument: 'limit', value: 50, rule: limit, claim }),
+      corpus({
+        turn: 2,
+        answers: [{ toolName: 'list_hosts', argument: 'limit', value: '50', turn: 1 }],
+      }),
+    );
+    expect(otherTool.source).not.toBe('answered');
+    expect(isTraced(otherTool)).toBe(false);
+    // …nor an answer to another argument of this tool that happens to carry the value.
+    const otherArgument = checkSource(
+      subject({ argument: 'limit', value: 50, rule: limit, claim }),
+      corpus({
+        turn: 2,
+        answers: [{ toolName: 'search_logs', argument: 'offset', value: '50', turn: 1 }],
+      }),
+    );
+    expect(otherArgument.source).not.toBe('answered');
+    // The same tool's own argument answers it.
+    const own = checkSource(
+      subject({ argument: 'limit', value: 50, rule: limit, claim }),
+      corpus({
+        turn: 2,
+        answers: [{ toolName: 'search_logs', argument: 'limit', value: '50', turn: 1 }],
+      }),
+    );
+    expect(own).toEqual({ source: 'answered', earlier: true, claimed: 'turn' });
+  });
+
   it('no earlier turn and no answer → no-earlier-turn', () => {
     const v = checkSource(subject({ claim: { argument: 'window', source: 'turn' } }), corpus());
     expect(v.failed).toBe('no-earlier-turn');
@@ -609,6 +719,117 @@ describe('UNIT — V5: `app`; V6: assumed or nothing; V1: the declared default',
         corpus(),
       ),
     ).toEqual({ source: 'model', failed: 'uncheckable', claimed: 'app' });
+  });
+});
+
+// ─── what the record may SHOW of a quote ────────────────────────────
+
+describe('SECURITY — a quote is shown only while no tool in reach hides arguments (`verifyPlan`)', () => {
+  const hides = (name: string): Tool =>
+    ({
+      ...defineTool({ name, description: 'd', execute: () => 'ok' }),
+      [SHOWN_ARGS]: (args: Record<string, unknown>) => ({ ...args, secret: 'REDACTED' }),
+    } as never);
+  const call = {
+    id: 'c1',
+    name: 'search_logs',
+    args: { window: '7d', _findings: { basis: 'direct' } },
+  };
+  const declared = new Map([
+    [
+      'c1',
+      {
+        toolCallId: 'c1',
+        from: [{ argument: 'window', source: 'user' as const, quote: 'the last week' }],
+      },
+    ],
+  ]);
+  const shownFor = (
+    toolOf: (name: string) => Tool | undefined,
+    over: { calledTools?: string[]; argumentViews?: true } = {},
+  ) => {
+    const sources = {
+      declared,
+      corpus: corpus(over.calledTools !== undefined ? { calledTools: over.calledTools } : {}),
+      ...(over.argumentViews === true && { argumentViews: true as const }),
+    };
+    const plan = declareBatch([call], toolOf, sources);
+    return verifyPlan(plan, [call], toolOf, undefined, sources)[0]?.quoteShown;
+  };
+  const only = (name: string) => (name === 'search_logs' ? searchLogs : undefined);
+
+  it('no tool in reach hides arguments: the quote is shown', () => {
+    expect(shownFor(only)).toBe(true);
+  });
+
+  it('a registered tool hides arguments (read at build): hidden — even before any call to it', () => {
+    expect(shownFor(only, { argumentViews: true })).toBeUndefined();
+  });
+
+  it('a tool the served history called hides arguments (a ToolProvider’s, seen once named): hidden', () => {
+    const toolOf = (name: string) => (name === 'vault' ? hides('vault') : only(name));
+    expect(shownFor(toolOf, { calledTools: ['vault'] })).toBeUndefined();
+    // Not called anywhere in reach: nothing is known to hide, the quote is shown.
+    expect(shownFor(toolOf)).toBe(true);
+  });
+
+  it('the call’s own tool hides arguments, or its name answers nothing: hidden', () => {
+    const own = (name: string) =>
+      name === 'search_logs'
+        ? ({ ...searchLogs, ...hides('x'), name: 'search_logs' } as Tool)
+        : undefined;
+    expect(shownFor(own)).toBeUndefined();
+  });
+
+  it('only a READING rides the ask as the person’s words — never a quote the check did not find', () => {
+    const asked = (check: object) =>
+      resolutionsOf(
+        [{ toolCallId: 'c1', toolName: 'search_logs', ruled: [] }],
+        [
+          {
+            toolCallId: 'c1',
+            toolName: 'search_logs',
+            argument: 'window',
+            rule: 'ask',
+            asked: 'unverified',
+            check: check as never,
+            quoteShown: true,
+          },
+        ],
+        only,
+        1,
+        undefined,
+        { declared },
+      )[0];
+    expect(asked({ source: 'said', reading: true, claimed: 'user' })?.quoted).toEqual([
+      { argument: 'window', quote: 'the last week' },
+    ]);
+    expect(
+      asked({ source: 'model', claimed: 'user', failed: 'quote-not-found' })?.quoted,
+    ).toBeUndefined();
+    expect(asked({ source: 'model', claimed: 'none' })?.quoted).toBeUndefined();
+  });
+});
+
+describe('SECURITY — in a composed run only the run’s OWN message is another runner’s', () => {
+  it('earlier person messages stay the person’s; the current request is marked', () => {
+    const c = sourceCorpusOf(
+      {
+        history: [
+          { role: 'user', content: 'earlier, from the person' },
+          { role: 'assistant', content: 'ok' },
+          { role: 'user', content: 'Plan: search the last week' },
+        ],
+        composed: true,
+      },
+      [],
+      2,
+      { toolOf: () => undefined },
+    );
+    expect(c.person).toEqual([
+      { text: 'earlier, from the person', earlier: true },
+      { text: 'Plan: search the last week', composed: true },
+    ]);
   });
 });
 

@@ -83,6 +83,13 @@ export interface InputsMountDeps {
    */
   readonly sources?: {
     readonly externalGrounds?: () => readonly ExternalGround[];
+    /**
+     * A tool the agent registers carries an arguments view
+     * (`core/toolShownArgs.ts` · `carriesArgumentView`) — present only then:
+     * no quote the model wrote is shown on a row or an ask, since a quote may
+     * hold the value that tool hides (`arguments/resolve.ts` · `quotesMayShow`).
+     */
+    readonly argumentViews?: true;
   };
 }
 
@@ -153,6 +160,7 @@ export function buildInputsSubflow(deps: InputsMountDeps): FlowChart {
     armed ??= loadCorpus().then((corpus) => ({
       ...base,
       sources: {
+        ...(sources.argumentViews === true && { argumentViews: true as const }),
         declaredOf: (calls: readonly BatchCall[]) => corpus.declaredSourcesOf(calls, deps.toolOf),
         corpusOf: async (
           inputs: SourceInputs,

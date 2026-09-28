@@ -33,7 +33,7 @@ named is filed with no `rule`. A reader skips a member it does not know.
 
 > `readonly` `optional` **appSource?**: `string`
 
-Defined in: [src/core/agent/arguments/rows.ts:120](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/arguments/rows.ts#L120)
+Defined in: [src/core/agent/arguments/rows.ts:121](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/arguments/rows.ts#L121)
 
 ***
 
@@ -51,7 +51,7 @@ The top-level argument name — schema vocabulary, like `toolName`.
 
 > `readonly` `optional` **argumentsFrom?**: `"listed"` \| `"unlisted"`
 
-Defined in: [src/core/agent/arguments/rows.ts:119](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/arguments/rows.ts#L119)
+Defined in: [src/core/agent/arguments/rows.ts:120](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/arguments/rows.ts#L120)
 
 ***
 
@@ -75,7 +75,7 @@ Defined in: [src/core/agent/arguments/rows.ts:107](https://github.com/footprintj
 
 > `readonly` `optional` **coincides?**: `"person"` \| `"app"` \| `"result"`
 
-Defined in: [src/core/agent/arguments/rows.ts:122](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/arguments/rows.ts#L122)
+Defined in: [src/core/agent/arguments/rows.ts:123](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/arguments/rows.ts#L123)
 
 ***
 
@@ -83,7 +83,7 @@ Defined in: [src/core/agent/arguments/rows.ts:122](https://github.com/footprintj
 
 > `readonly` `optional` **earlier?**: `true`
 
-Defined in: [src/core/agent/arguments/rows.ts:116](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/arguments/rows.ts#L116)
+Defined in: [src/core/agent/arguments/rows.ts:117](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/arguments/rows.ts#L117)
 
 ***
 
@@ -91,7 +91,7 @@ Defined in: [src/core/agent/arguments/rows.ts:116](https://github.com/footprintj
 
 > `readonly` `optional` **failed?**: `ArgumentCheckFailed`
 
-Defined in: [src/core/agent/arguments/rows.ts:124](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/arguments/rows.ts#L124)
+Defined in: [src/core/agent/arguments/rows.ts:125](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/arguments/rows.ts#L125)
 
 ***
 
@@ -99,7 +99,7 @@ Defined in: [src/core/agent/arguments/rows.ts:124](https://github.com/footprintj
 
 > `readonly` `optional` **free?**: `true`
 
-Defined in: [src/core/agent/arguments/rows.ts:121](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/arguments/rows.ts#L121)
+Defined in: [src/core/agent/arguments/rows.ts:122](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/arguments/rows.ts#L122)
 
 ***
 
@@ -123,7 +123,7 @@ Defined in: [src/core/agent/arguments/rows.ts:80](https://github.com/footprintjs
 
 > `readonly` `optional` **malformed?**: `number`
 
-Defined in: [src/core/agent/arguments/rows.ts:123](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/arguments/rows.ts#L123)
+Defined in: [src/core/agent/arguments/rows.ts:124](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/arguments/rows.ts#L124)
 
 ***
 
@@ -161,11 +161,12 @@ value the person's answer replaced.
 
 > `readonly` `optional` **quote?**: `string`
 
-Defined in: [src/core/agent/arguments/rows.ts:114](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/arguments/rows.ts#L114)
+Defined in: [src/core/agent/arguments/rows.ts:115](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/arguments/rows.ts#L115)
 
-The model's `quote`, clipped (`QUOTE_CHARS`) — `'REDACTED'` whenever the
-tool's view hid ANY argument of the call: a quote is free text, and may
-hold another argument's value.
+The model's `quote`, clipped (`QUOTE_CHARS`) — `'REDACTED'` while ANY tool
+in reach hides arguments (one the agent registers, or one a call of the
+batch or of the served history resolves to): a quote is free text, and
+may hold any value a tool hides, in any spelling.
 
 ***
 
@@ -173,7 +174,7 @@ hold another argument's value.
 
 > `readonly` `optional` **reading?**: `true`
 
-Defined in: [src/core/agent/arguments/rows.ts:115](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/arguments/rows.ts#L115)
+Defined in: [src/core/agent/arguments/rows.ts:116](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/arguments/rows.ts#L116)
 
 ***
 
@@ -181,7 +182,7 @@ Defined in: [src/core/agent/arguments/rows.ts:115](https://github.com/footprintj
 
 > `readonly` `optional` **result?**: `string`
 
-Defined in: [src/core/agent/arguments/rows.ts:117](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/arguments/rows.ts#L117)
+Defined in: [src/core/agent/arguments/rows.ts:118](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/arguments/rows.ts#L118)
 
 ***
 
@@ -199,7 +200,7 @@ The rule on the argument; absent on a free argument a `from` entry named.
 
 > `readonly` `optional` **setAside?**: `"open"` \| `"noise"` \| `"ruled-out"`
 
-Defined in: [src/core/agent/arguments/rows.ts:118](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/arguments/rows.ts#L118)
+Defined in: [src/core/agent/arguments/rows.ts:119](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/arguments/rows.ts#L119)
 
 ***
 

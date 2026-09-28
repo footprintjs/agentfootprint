@@ -200,9 +200,15 @@ the batch runs. A choice can carry words you vouch for as meaning it
 - **Checked is not verified.** Matching words cannot see a negation or another
   sentence, so a checked value keeps a reason from firing and supports nothing:
   the answer reads "consistent with the record", never "known".
-- **Another runner's message is not the person's.** `Sequence` and `Loop` mark a
-  step's message that is an earlier step's output, and a quote from it fails;
-  code that composes runners by hand passes `messageFrom: 'composed'` to `run()`.
+- **Another runner's message is not the person's.** `Sequence`, `Loop`,
+  `workflow()` and `graph()` mark a step's (or node's) message that is an earlier
+  one's output, and a quote from it fails; code that composes runners by hand
+  passes `messageFrom: 'composed'` to `run()`.
+- **A quote stays off the record while a tool hides arguments.** A quote is the
+  person's free text and may hold a value another tool keeps out of the record
+  (a password given in the same sentence), so on an agent with such a tool
+  (`flowchartAsTool({ redact })`) every row's `quote` reads `'REDACTED'` and the
+  ask shows no `quoted` — the check itself still runs.
 - **It costs tokens, and it is off by default.** The `from` property rides only on
   tools that declare `askOrAssume`, plus one instruction line. It needs the inputs
   layer and is refused at build without it.

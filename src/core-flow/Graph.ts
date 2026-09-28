@@ -129,6 +129,7 @@ import {
   type TypedScope,
 } from 'footprintjs';
 import type { RunContext } from '../bridge/eventMeta.js';
+import { composedInput, readsMessageFromIfAny } from '../core/messageFrom.js';
 import type { RunnerPauseOutcome } from '../core/pause.js';
 import type { Runner } from '../core/runner.js';
 import { RunnerBase, makeRunId } from '../core/RunnerBase.js';
@@ -443,6 +444,11 @@ export class Graph extends RunnerBase<GraphInput, GraphOutput> {
     for (const node of opts.nodes) parents.set(node.id, []);
     for (const edge of opts.edges) parents.get(edge.to)?.push(edge.from);
     this.parentsOf = parents;
+    // Holding a node that reads `messageFrom`, it reads it too (`core/messageFrom.ts`).
+    readsMessageFromIfAny(
+      this,
+      opts.nodes.map((n) => n.runner),
+    );
 
     // Eager chart construction — see `RunnerBase.initChart` JSDoc.
     this.initChart(() => this.buildChart());
@@ -702,6 +708,12 @@ export class Graph extends RunnerBase<GraphInput, GraphOutput> {
    * parent is passed through; 2+ parents go through the node's `join`
    * (which the build already guaranteed exists).
    *
+   * A root's input is the graph's own, as it came (a composed mark handed to
+   * the graph included). Every other node is handed OTHER runners' output —
+   * marked for a runner that reads the marker (`core/messageFrom.ts` ·
+   * `composedInput`), so another model's words never count as the person's;
+   * every other runner gets the input it always did.
+   *
    * `parent` here is the RAW parent state the engine hands an
    * `inputMapper` — not a TypedScope — so structured upstream values read
    * back intact.
@@ -720,11 +732,14 @@ export class Graph extends RunnerBase<GraphInput, GraphOutput> {
     if (node.join !== undefined) {
       const upstream: Record<string, unknown> = {};
       for (const id of upstreamIds) upstream[id] = results[id];
-      return toNodeArgs(node.join(upstream), node.id, `join of node '${node.id}'`);
+      return composedInput(
+        node.runner,
+        toNodeArgs(node.join(upstream), node.id, `join of node '${node.id}'`),
+      );
     }
 
     const only = upstreamIds[0] ?? '';
-    return toNodeArgs(results[only], node.id, `node '${only}'`);
+    return composedInput(node.runner, toNodeArgs(results[only], node.id, `node '${only}'`));
   }
 }
 
