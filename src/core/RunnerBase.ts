@@ -17,6 +17,7 @@ import type {
 } from 'footprintjs';
 import { EventDispatcher } from '../events/dispatcher.js';
 import { redactConsentUrlForEvent } from '../identity/consent.js';
+import { argumentAskReplyForEvent, isArgumentAskPause } from './agent/arguments/askMarker.js';
 import { readAskComponent } from './askComponent.js';
 import { pauseDemandsDecision } from './pause.js';
 import { readAwaitingInput } from './inputRequest.js';
@@ -436,10 +437,17 @@ export abstract class RunnerBase<TIn = unknown, TOut = unknown> implements Runne
     this.dispatcher.dispatch({
       type: 'agentfootprint.pause.resume',
       payload: {
-        resumeInput:
-          typeof input === 'object' && input !== null
-            ? (input as Readonly<Record<string, unknown>>)
-            : { input },
+        // The inputs layer's OWN ask (honesty layer 2): its answer fills
+        // arguments a tool's view may hide, and such a value rides no event —
+        // so the reply's shape travels (request id, field ids) and every
+        // answered value reads 'REDACTED' (`askMarker.ts` ·
+        // `argumentAskReplyForEvent`). The `answered` rows carry what each
+        // tool's view allows. Every other pause kind: the reply, unchanged.
+        resumeInput: isArgumentAskPause(checkpoint.pauseData)
+          ? argumentAskReplyForEvent(input)
+          : typeof input === 'object' && input !== null
+          ? (input as Readonly<Record<string, unknown>>)
+          : { input },
         pausedDurationMs,
         ...(answeredVia !== undefined && { componentId: answeredVia }),
       },

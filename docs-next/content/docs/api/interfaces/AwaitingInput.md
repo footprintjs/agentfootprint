@@ -82,6 +82,12 @@ Defined in: [src/core/inputRequest.ts:47](https://github.com/footprintjs/agentfo
 
 > `readonly` **toolCallId**: `string`
 
+The call that raised the request. For the inputs layer's own batch ask
+(`context.agentfootprint.ask === 'arguments'`, honesty layer 2) no single
+call raised it — the library asked before anything in the batch ran — so
+this names the batch's FIRST asked call, and `context.agentfootprint.fields`
+lists every call each field is for.
+
 ***
 
 ### origins

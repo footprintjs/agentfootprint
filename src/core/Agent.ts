@@ -273,7 +273,7 @@ import { MessageDeniedError } from './agent/middleware/errors.js';
 import { buildCallLLMStage } from './agent/stages/callLLM.js';
 import { buildToolCallsHandler, notServedResult } from './agent/stages/toolCalls.js';
 import { buildToolResolver } from './agent/stages/toolResolver.js';
-import { declaredDefaultsFrom } from './agent/stages/route.js';
+import { answeredValuesOf, declaredDefaultsFrom } from './agent/stages/route.js';
 import { isRefused, rulesOf } from './agent/arguments/declare.js';
 import { honestyLayersOf, type HonestyLayers } from './agent/honesty/armed.js';
 import { assertMaxToolResultChars } from './agent/toolResultCap.js';
@@ -531,6 +531,10 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
    *  registered tool declares `askOrAssume` — for ruled tools only a
    *  ToolProvider serves, which the build cannot see. */
   private readonly inputsLayerOption?: true;
+  /** `AgentOptions.argumentAskContext` (honesty layer 2): the host's own
+   *  context for the inputs layer's batch ask, handed to the dispatch stage
+   *  only when the layer is mounted. */
+  private readonly argumentAskContext?: () => Readonly<Record<string, unknown>>;
   /** Whether this agent's chart mounts the inputs layer (`sf-inputs`) —
    *  decided ONCE, in `buildChart`: a registered tool declares rules, or
    *  `.inputsLayer()` was set. Gates the findings event bridge and the
@@ -1029,6 +1033,7 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
     if (opts.toolArgValidation !== undefined) this.toolArgValidation = opts.toolArgValidation;
     if (opts.findings !== undefined) this.findingsOptions = opts.findings;
     if (opts.inputsLayer === true) this.inputsLayerOption = true;
+    if (opts.argumentAskContext !== undefined) this.argumentAskContext = opts.argumentAskContext;
     if (opts.toolChoice !== undefined) this.toolChoiceOptions = opts.toolChoice;
     if (opts.ontology !== undefined) this.ontology = opts.ontology;
     // The tool-result ceiling (9.11.0). Refused HERE, naming the value, rather
@@ -4674,7 +4679,8 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
       // THE INPUTS LAYER (honesty layer 2) — the same value-conditional
       // trailing positional: the rows this decider files carry the turn
       // stamp, and with the evidence gate armed too, the gate's exempt corpus
-      // gains this turn's assumed values, read from the tools' declarations.
+      // gains this turn's assumed values, read from the tools' declarations,
+      // and the values the person gave the layer's batch ask (step 4).
       inputsArmed
         ? {
             ...(this.evidenceGate !== undefined && {
@@ -4683,6 +4689,7 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
                 if (rules === undefined || isRefused(rules)) return undefined;
                 return rules.ruled.find((r) => r.argument === argument)?.assume;
               }),
+              answeredValues: answeredValuesOf,
             }),
           }
         : undefined,
@@ -4727,6 +4734,10 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
       // The inputs layer (honesty layer 2) — the fills, the refusals and the
       // note; absent → a ruled tool's call is refused (fail closed).
       ...(inputsArmed && { inputsLayer: true as const }),
+      // …and the host's own context for the layer's batch ask (step 4),
+      // value-conditional inside the arm.
+      ...(inputsArmed &&
+        this.argumentAskContext !== undefined && { argumentAskContext: this.argumentAskContext }),
       // The judge (9.104.0) — VALUE-conditional inside the arm: an armed
       // agent without one hands the handler exactly the deps it did before.
       ...(this.findingsOptions?.judge !== undefined && {

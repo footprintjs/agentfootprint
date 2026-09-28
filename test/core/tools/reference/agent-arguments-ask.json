@@ -1,0 +1,825 @@
+{
+  "commitLog": [
+    {
+      "idx": 0,
+      "overwrite": {
+        "activatedInjectionIds": [],
+        "activeInjections": [],
+        "cacheMarkers": [],
+        "cachingDisabled": false,
+        "contextTokensRemaining": 32000,
+        "costBudgetHit": false,
+        "cumEstimatedUsd": 0,
+        "cumTokensInput": 0,
+        "cumTokensOutput": 0,
+        "deliveredMessageKeys": [],
+        "dynamicToolSchemas": [
+          {
+            "description": "Error lines for one service over a look-back period.",
+            "inputSchema": {
+              "properties": {
+                "service": {
+                  "description": "Service name.",
+                  "type": "string"
+                },
+                "window": {
+                  "description": "Look-back period. The tool's rule asks the person for this value; leave it out unless the person gave it.",
+                  "enum": [
+                    "1h",
+                    "2h",
+                    "24h"
+                  ],
+                  "type": "string"
+                }
+              },
+              "required": [
+                "service"
+              ],
+              "type": "object"
+            },
+            "name": "search_logs"
+          }
+        ],
+        "finalContent": "",
+        "history": [
+          {
+            "content": "go",
+            "role": "user"
+          }
+        ],
+        "honestyLayers": {
+          "inputs": true
+        },
+        "iteration": 1,
+        "llmLatestContent": "",
+        "llmLatestToolCalls": [],
+        "maxIterations": 6,
+        "messagesInjections": [],
+        "newMessages": [],
+        "pausedToolCallId": "",
+        "pausedToolName": "",
+        "pausedToolStartMs": "<volatile>",
+        "runIdentity": {
+          "conversationId": "<volatile>"
+        },
+        "skillHistory": [],
+        "systemPromptInjections": [],
+        "thinkingBlocks": [],
+        "toolsInjections": [],
+        "totalInputTokens": 0,
+        "totalOutputTokens": 0,
+        "turnNumber": 1,
+        "turnStartMs": "<volatile>",
+        "userMessage": "go"
+      },
+      "redactedPaths": [],
+      "runtimeStageId": "seed#0",
+      "stage": "Initialize",
+      "stageId": "seed",
+      "trace": [
+        {
+          "path": "userMessage",
+          "verb": "set"
+        },
+        {
+          "path": "history",
+          "verb": "set"
+        },
+        {
+          "path": "runIdentity",
+          "verb": "set"
+        },
+        {
+          "path": "newMessages",
+          "verb": "set"
+        },
+        {
+          "path": "turnNumber",
+          "verb": "set"
+        },
+        {
+          "path": "contextTokensRemaining",
+          "verb": "set"
+        },
+        {
+          "path": "iteration",
+          "verb": "set"
+        },
+        {
+          "path": "maxIterations",
+          "verb": "set"
+        },
+        {
+          "path": "finalContent",
+          "verb": "set"
+        },
+        {
+          "path": "totalInputTokens",
+          "verb": "set"
+        },
+        {
+          "path": "totalOutputTokens",
+          "verb": "set"
+        },
+        {
+          "path": "turnStartMs",
+          "verb": "set"
+        },
+        {
+          "path": "systemPromptInjections",
+          "verb": "set"
+        },
+        {
+          "path": "messagesInjections",
+          "verb": "set"
+        },
+        {
+          "path": "toolsInjections",
+          "verb": "set"
+        },
+        {
+          "path": "llmLatestContent",
+          "verb": "set"
+        },
+        {
+          "path": "llmLatestToolCalls",
+          "verb": "set"
+        },
+        {
+          "path": "thinkingBlocks",
+          "verb": "set"
+        },
+        {
+          "path": "pausedToolCallId",
+          "verb": "set"
+        },
+        {
+          "path": "pausedToolName",
+          "verb": "set"
+        },
+        {
+          "path": "pausedToolStartMs",
+          "verb": "set"
+        },
+        {
+          "path": "cumTokensInput",
+          "verb": "set"
+        },
+        {
+          "path": "cumTokensOutput",
+          "verb": "set"
+        },
+        {
+          "path": "cumEstimatedUsd",
+          "verb": "set"
+        },
+        {
+          "path": "costBudgetHit",
+          "verb": "set"
+        },
+        {
+          "path": "activeInjections",
+          "verb": "set"
+        },
+        {
+          "path": "activatedInjectionIds",
+          "verb": "set"
+        },
+        {
+          "path": "dynamicToolSchemas",
+          "verb": "set"
+        },
+        {
+          "path": "honestyLayers",
+          "verb": "set"
+        },
+        {
+          "path": "deliveredMessageKeys",
+          "verb": "set"
+        },
+        {
+          "path": "cacheMarkers",
+          "verb": "set"
+        },
+        {
+          "path": "cachingDisabled",
+          "verb": "set"
+        },
+        {
+          "path": "skillHistory",
+          "verb": "set"
+        }
+      ],
+      "untrackedSources": [
+        "args"
+      ],
+      "updates": {}
+    },
+    {
+      "idx": 1,
+      "overwrite": {
+        "activeByslot": {
+          "messages": [],
+          "systemPrompt": [],
+          "tools": []
+        }
+      },
+      "redactedPaths": [],
+      "runtimeStageId": "sf-injection-engine#1",
+      "stage": "Injection Engine",
+      "stageId": "sf-injection-engine",
+      "tags": [
+        "milestone:iteration",
+        "milestone-label:Iteration"
+      ],
+      "trace": [
+        {
+          "path": "activeByslot\u001fsystemPrompt",
+          "verb": "set"
+        },
+        {
+          "path": "activeByslot\u001fmessages",
+          "verb": "set"
+        },
+        {
+          "path": "activeByslot\u001ftools",
+          "verb": "set"
+        }
+      ],
+      "updates": {}
+    },
+    {
+      "idx": 2,
+      "overwrite": {},
+      "redactedPaths": [],
+      "runtimeStageId": "sf-injection-engine#1",
+      "stage": "Injection Engine",
+      "stageId": "sf-injection-engine",
+      "trace": [],
+      "updates": {}
+    },
+    {
+      "idx": 3,
+      "overwrite": {},
+      "redactedPaths": [],
+      "runtimeStageId": "context#6",
+      "stage": "Context",
+      "stageId": "context",
+      "trace": [],
+      "updates": {}
+    },
+    {
+      "idx": 4,
+      "overwrite": {
+        "systemPromptInjections": [
+          {
+            "contentHash": "e168e7e9",
+            "contentSummary": "bot",
+            "rawContent": "bot",
+            "reason": "Agent.system()",
+            "slot": "system-prompt",
+            "source": "base"
+          }
+        ]
+      },
+      "redactedPaths": [],
+      "runtimeStageId": "context#6",
+      "stage": "Context",
+      "stageId": "context",
+      "trace": [
+        {
+          "path": "systemPromptInjections",
+          "verb": "append"
+        }
+      ],
+      "updates": {}
+    },
+    {
+      "idx": 5,
+      "overwrite": {},
+      "redactedPaths": [],
+      "runtimeStageId": "sf-system-prompt#7",
+      "stage": "System Prompt",
+      "stageId": "sf-system-prompt",
+      "tags": [
+        "milestone:slot",
+        "milestone-label:System prompt"
+      ],
+      "trace": [],
+      "updates": {}
+    },
+    {
+      "idx": 6,
+      "overwrite": {
+        "messagesInjections": [
+          {
+            "asRecency": "latest",
+            "asRole": "user",
+            "contentHash": "bce8e74",
+            "contentSummary": "go",
+            "position": 0,
+            "rawContent": "go",
+            "reason": "conversation history [0]",
+            "slot": "messages",
+            "source": "user"
+          }
+        ]
+      },
+      "redactedPaths": [],
+      "runtimeStageId": "context#6",
+      "stage": "Context",
+      "stageId": "context",
+      "trace": [
+        {
+          "path": "messagesInjections",
+          "verb": "append"
+        }
+      ],
+      "updates": {}
+    },
+    {
+      "idx": 7,
+      "overwrite": {},
+      "redactedPaths": [],
+      "runtimeStageId": "sf-messages#9",
+      "stage": "Messages",
+      "stageId": "sf-messages",
+      "tags": [
+        "milestone:slot",
+        "milestone-label:Messages"
+      ],
+      "trace": [],
+      "updates": {}
+    },
+    {
+      "idx": 8,
+      "overwrite": {},
+      "redactedPaths": [],
+      "runtimeStageId": "sf-system-prompt#7",
+      "stage": "System Prompt",
+      "stageId": "sf-system-prompt",
+      "trace": [],
+      "updates": {}
+    },
+    {
+      "idx": 9,
+      "overwrite": {},
+      "redactedPaths": [],
+      "runtimeStageId": "sf-messages#9",
+      "stage": "Messages",
+      "stageId": "sf-messages",
+      "trace": [],
+      "updates": {}
+    },
+    {
+      "idx": 10,
+      "overwrite": {
+        "toolsInjections": [
+          {
+            "contentHash": "8e582715",
+            "contentSummary": "search_logs: Error lines for one service over a look-back period.",
+            "position": 0,
+            "rawContent": "search_logs: Error lines for one service over a look-back period.",
+            "reason": "tool registry",
+            "slot": "tools",
+            "source": "registry",
+            "sourceId": "search_logs"
+          }
+        ]
+      },
+      "redactedPaths": [],
+      "runtimeStageId": "context#6",
+      "stage": "Context",
+      "stageId": "context",
+      "trace": [
+        {
+          "path": "toolsInjections",
+          "verb": "append"
+        }
+      ],
+      "updates": {}
+    },
+    {
+      "idx": 11,
+      "overwrite": {},
+      "redactedPaths": [],
+      "runtimeStageId": "sf-tools#11",
+      "stage": "Tools",
+      "stageId": "sf-tools",
+      "tags": [
+        "milestone:slot",
+        "milestone-label:Tools"
+      ],
+      "trace": [],
+      "updates": {}
+    },
+    {
+      "idx": 12,
+      "overwrite": {},
+      "redactedPaths": [],
+      "runtimeStageId": "sf-tools#11",
+      "stage": "Tools",
+      "stageId": "sf-tools",
+      "trace": [],
+      "updates": {}
+    },
+    {
+      "idx": 13,
+      "overwrite": {
+        "cacheMarkers": [
+          {
+            "boundaryIndex": 0,
+            "field": "system",
+            "reason": "system stable prefix (1 entries, ending at base system prompt)",
+            "ttl": "short"
+          }
+        ]
+      },
+      "redactedPaths": [],
+      "runtimeStageId": "sf-cache#14",
+      "stage": "Cache",
+      "stageId": "sf-cache",
+      "trace": [
+        {
+          "path": "cacheMarkers",
+          "verb": "append"
+        }
+      ],
+      "updates": {}
+    },
+    {
+      "idx": 14,
+      "overwrite": {},
+      "redactedPaths": [],
+      "runtimeStageId": "sf-cache#14",
+      "stage": "Cache",
+      "stageId": "sf-cache",
+      "trace": [],
+      "updates": {}
+    },
+    {
+      "idx": 15,
+      "overwrite": {
+        "llmLatestToolCalls": [
+          {
+            "args": {
+              "service": "checkout"
+            },
+            "id": "c1",
+            "name": "search_logs"
+          }
+        ],
+        "receipt": {
+          "basis": {
+            "epoch": 1,
+            "model": "mock",
+            "provider": "byte-identity-mock",
+            "runId": "<volatile>"
+          },
+          "cache": {
+            "markersApplied": [],
+            "strategy": "*",
+            "transform": "unchanged",
+            "transformHash": null
+          },
+          "messages": {
+            "count": 1,
+            "entries": [
+              {
+                "hash": "<digest>",
+                "role": "user"
+              }
+            ],
+            "requestOnly": []
+          },
+          "params": {},
+          "requestMeasurement": {
+            "boundary": "initial-prepared-request",
+            "format": "json-utf8-v1",
+            "slots": {
+              "messages": {
+                "jsonBytes": 32,
+                "jsonChars": 32
+              },
+              "systemPrompt": {
+                "jsonBytes": 5,
+                "jsonChars": 5
+              },
+              "tools": {
+                "jsonBytes": 395,
+                "jsonChars": 395
+              }
+            },
+            "status": "measured",
+            "total": {
+              "jsonBytes": 485,
+              "jsonChars": 485
+            }
+          },
+          "system": {
+            "chars": 3,
+            "hash": "<digest>",
+            "pieces": [
+              {
+                "hash": "<digest>",
+                "slot": "system-prompt",
+                "source": "base"
+              }
+            ]
+          },
+          "tools": {
+            "forced": null,
+            "names": [
+              "search_logs"
+            ],
+            "schemaHashes": {
+              "search_logs": "<digest>"
+            },
+            "withheld": null
+          }
+        }
+      },
+      "redactedPaths": [],
+      "runtimeStageId": "call-llm#18",
+      "stage": "CallLLM",
+      "stageId": "call-llm",
+      "tags": [
+        "milestone:llm-turn",
+        "milestone-label:LLM turn"
+      ],
+      "trace": [
+        {
+          "path": "receipt",
+          "verb": "set"
+        },
+        {
+          "path": "llmLatestToolCalls",
+          "verb": "append"
+        }
+      ],
+      "updates": {}
+    },
+    {
+      "idx": 16,
+      "overwrite": {
+        "argumentResolutions": [
+          {
+            "ask": [
+              "window"
+            ],
+            "iteration": 1,
+            "toolCallId": "c1"
+          }
+        ],
+        "findingsLedger": [
+          {
+            "argument": "window",
+            "asked": "missing",
+            "iteration": 1,
+            "kind": "argument",
+            "period": true,
+            "rule": "ask",
+            "toolCallId": "c1",
+            "toolName": "search_logs",
+            "turn": 1
+          }
+        ]
+      },
+      "redactedPaths": [],
+      "runtimeStageId": "sf-inputs#19",
+      "stage": "Inputs",
+      "stageId": "sf-inputs",
+      "tags": [
+        "milestone:decision",
+        "milestone-label:Inputs"
+      ],
+      "trace": [
+        {
+          "path": "findingsLedger",
+          "verb": "set"
+        },
+        {
+          "path": "argumentResolutions",
+          "verb": "set"
+        }
+      ],
+      "updates": {}
+    },
+    {
+      "idx": 17,
+      "overwrite": {},
+      "redactedPaths": [],
+      "runtimeStageId": "sf-inputs#19",
+      "stage": "Inputs",
+      "stageId": "sf-inputs",
+      "trace": [],
+      "updates": {}
+    },
+    {
+      "idx": 18,
+      "overwrite": {},
+      "redactedPaths": [],
+      "runtimeStageId": "sf-route#24",
+      "stage": "Route",
+      "stageId": "sf-route",
+      "tags": [
+        "milestone:decision",
+        "milestone-label:Route"
+      ],
+      "trace": [],
+      "updates": {}
+    },
+    {
+      "idx": 19,
+      "overwrite": {
+        "argumentAsk": {
+          "fields": [
+            {
+              "choices": [
+                "1h",
+                "24h"
+              ],
+              "members": [
+                {
+                  "argument": "window",
+                  "period": true,
+                  "spelling": "lookback",
+                  "toolCallIds": [
+                    "c1"
+                  ],
+                  "toolName": "search_logs"
+                }
+              ],
+              "question": "Which period should the search cover?",
+              "spelling": "lookback",
+              "type": "string"
+            }
+          ],
+          "iteration": 1,
+          "progress": [
+            {
+              "rounds": 1
+            }
+          ],
+          "waiting": {
+            "awaiting": {
+              "context": {
+                "agentfootprint": {
+                  "ask": "arguments",
+                  "fields": [
+                    {
+                      "argument": "window",
+                      "calls": [
+                        "c1"
+                      ],
+                      "id": "f1",
+                      "tool": "search_logs"
+                    }
+                  ]
+                }
+              },
+              "fields": [
+                {
+                  "description": "Which period should the search cover?",
+                  "enum": [
+                    "1h",
+                    "24h"
+                  ],
+                  "id": "f1",
+                  "required": true,
+                  "type": "string"
+                }
+              ],
+              "id": "agentfootprint.arguments",
+              "missing": [
+                "f1"
+              ],
+              "origin": {
+                "originalRequest": "go",
+                "toolCallId": "c1"
+              },
+              "origins": {},
+              "question": "Before the next step can run, a few values are needed. Each field says what it is for.",
+              "requestId": "<volatile>",
+              "status": "awaiting_input",
+              "supplied": {}
+            },
+            "fieldIndexes": [
+              0
+            ],
+            "requestId": "<volatile>"
+          }
+        }
+      },
+      "redactedPaths": [],
+      "runtimeStageId": "tool-calls#25",
+      "stage": "ToolCalls",
+      "stageId": "tool-calls",
+      "tags": [
+        "milestone:tool-call",
+        "milestone-label:Tool call"
+      ],
+      "trace": [
+        {
+          "path": "argumentAsk",
+          "verb": "set"
+        }
+      ],
+      "updates": {}
+    }
+  ],
+  "served": [
+    {
+      "epoch": 1,
+      "view": {
+        "basis": {
+          "model": "mock",
+          "provider": "byte-identity-mock",
+          "runId": "<volatile>"
+        },
+        "callRuntimeStageId": "call-llm#18",
+        "epoch": 1,
+        "gaps": [
+          {
+            "fields": [
+              "cache.transform",
+              "cache.transformHash",
+              "cache.markersApplied",
+              "cache.strategy",
+              "system.hash",
+              "system.chars",
+              "system.pieces",
+              "messages.count",
+              "messages.entries",
+              "messages.requestOnly",
+              "tools.names",
+              "tools.schemaHashes",
+              "tools.forced",
+              "tools.withheld"
+            ],
+            "gap": "cache-transform",
+            "why": "What reached the provider may differ from the fields below, and nothing on this view would show it. Where another gap on this view covers one of them, that gap is the stronger claim."
+          },
+          {
+            "fields": [
+              "params"
+            ],
+            "gap": "provider-defaults",
+            "why": "A dial absent below was not recorded; that is not the same as the model running without one. A receipt describes the request as this library last saw it. Whatever handled it after that could have changed it, and nothing on the receipt would show that."
+          }
+        ],
+        "messages": {
+          "asSent": [
+            {
+              "content": "go",
+              "role": "user"
+            }
+          ],
+          "requestOnly": []
+        },
+        "system": {
+          "pieces": [
+            {
+              "slot": "system-prompt",
+              "source": "base",
+              "text": "bot"
+            }
+          ],
+          "text": "bot"
+        },
+        "tools": {
+          "names": [
+            "search_logs"
+          ],
+          "schemas": [
+            {
+              "description": "Error lines for one service over a look-back period.",
+              "inputSchema": {
+                "properties": {
+                  "service": {
+                    "description": "Service name.",
+                    "type": "string"
+                  },
+                  "window": {
+                    "description": "Look-back period. The tool's rule asks the person for this value; leave it out unless the person gave it.",
+                    "enum": [
+                      "1h",
+                      "2h",
+                      "24h"
+                    ],
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "service"
+                ],
+                "type": "object"
+              },
+              "name": "search_logs"
+            }
+          ]
+        }
+      }
+    }
+  ]
+}

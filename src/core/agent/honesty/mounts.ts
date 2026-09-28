@@ -19,9 +19,11 @@
  *
  * Handed (the input mapping, frozen inside the subflow): the batch
  * (`llmLatestToolCalls`, raw), the dispatch predicate's values and
- * `turnNumber`. Never the ledger, never a tool — tools are closures, read
- * through the shared dispatch resolver (`stages/toolResolver.ts`) so the rules
- * checked are the rules of the implementation that will run.
+ * `turnNumber` — and, only when this turn KEPT an answer the batch that asked
+ * could not use (`arguments/kept.ts`), those answers. Never the ledger, never
+ * a tool — tools are closures, read through the shared dispatch resolver
+ * (`stages/toolResolver.ts`) so the rules checked are the rules of the
+ * implementation that will run.
  *
  * Returned (the output mapping, `arrayMerge: Replace` — the loop-crossed mount
  * law): the rows, merged into the ledger in ONE write by the ledger's pure half
@@ -37,6 +39,7 @@ import { flowChart } from 'footprintjs';
 import type { FlowChart, FlowChartBuilder, TypedScope } from 'footprintjs';
 
 import { STAGE_IDS, SUBFLOW_IDS, milestoneTagsFor } from '../../../conventions.js';
+import { keptThisTurn } from '../arguments/kept.js';
 import type { ArgumentRow } from '../arguments/rows.js';
 import type { ArgumentResolution, ToolOf } from '../arguments/resolve.js';
 import type { InputsLayerDeps, InputsLayerState } from '../arguments/subflow.js';
@@ -131,6 +134,9 @@ export function mountInputsLayer<B extends FlowChartBuilder>(
           costBudgetHit === true
             ? (parent.costBudgetOnExceed as 'warn' | 'halt' | undefined)
             : undefined;
+        // The answers this turn kept for a call it could not finish — the key
+        // exists only after such a refusal, so every other run hands nothing.
+        const kept = keptThisTurn(parent.argumentAnswersKept, parent.turnNumber as number);
         return {
           calls: (parent.llmLatestToolCalls as readonly unknown[] | undefined) ?? [],
           iteration: parent.iteration as number,
@@ -138,6 +144,7 @@ export function mountInputsLayer<B extends FlowChartBuilder>(
           ...(costBudgetHit !== undefined && { costBudgetHit }),
           ...(costBudgetOnExceed !== undefined && { costBudgetOnExceed }),
           turnNumber: parent.turnNumber as number,
+          ...(kept.length > 0 && { argumentAnswersKept: kept }),
         };
       },
       outputMapper: (sf: Record<string, unknown>, parent: Record<string, unknown>) => {

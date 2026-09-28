@@ -46,6 +46,13 @@ export interface AwaitingInput extends Omit<InputRequestDeclaration, 'absence'> 
   readonly missing: readonly string[];
   readonly origin: {
     readonly originalRequest: string;
+    /**
+     * The call that raised the request. For the inputs layer's own batch ask
+     * (`context.agentfootprint.ask === 'arguments'`, honesty layer 2) no single
+     * call raised it — the library asked before anything in the batch ran — so
+     * this names the batch's FIRST asked call, and `context.agentfootprint.fields`
+     * lists every call each field is for.
+     */
     readonly toolCallId: string;
     readonly skillId?: string;
     readonly offeredSkillIds?: readonly string[];
@@ -103,6 +110,19 @@ export class InputRequestError extends TypeError {
     this.name = 'InputRequestError';
   }
 }
+/**
+ * A value a typed ask can carry in a field — as a supplied value, a choice or
+ * an answer: a non-blank string of at most 4096 characters, a finite number,
+ * or a boolean. The one rule, shared by this module's validation and by the
+ * declarations that build a typed ask (`agent/arguments/declare.ts` judges an
+ * `ask` rule's choices with it at definition).
+ */
+export function isInputFieldValue(value: unknown): value is InputValue {
+  if (typeof value === 'string') return value.trim().length > 0 && value.length <= 4096;
+  if (typeof value === 'number') return Number.isFinite(value);
+  return typeof value === 'boolean';
+}
+
 function validateValues(fields: readonly InputField[], raw: unknown): Record<string, InputValue> {
   if (!object(raw)) fail('values must be an object');
   const values: Record<string, InputValue> = {};
@@ -111,9 +131,8 @@ function validateValues(fields: readonly InputField[], raw: unknown): Record<str
     if (!field) fail('values contain an undeclared field');
     if (
       typeof value !== field.type ||
-      (typeof value === 'number' && !Number.isFinite(value)) ||
-      (typeof value === 'string' && (value.length > 4096 || value.trim().length === 0)) ||
-      (field.enum !== undefined && !field.enum.includes(value as InputValue))
+      !isInputFieldValue(value) ||
+      (field.enum !== undefined && !field.enum.includes(value))
     ) {
       fail('a value does not satisfy its declared field type or choices');
     }

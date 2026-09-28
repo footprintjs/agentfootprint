@@ -78,6 +78,9 @@ import {
 import { findingsLedgerPiece } from '../src/core/agent/findings/serve.js';
 import {
   filledNote,
+  keptAnswersNote,
+  secondPauseRefusal,
+  unansweredRefusal,
   unmountedRulesRefusal,
   unreadableRulesRefusal,
   withArgumentRules,
@@ -710,7 +713,22 @@ function ruledSchemaDescriptions(): string[] {
     [SHOWN_ARGS]: (args: Record<string, unknown>) =>
       'window' in args ? { ...args, window: 'REDACTED' } : args,
   };
-  return [tool, hiding].flatMap((t) => {
+  // …and an `ask` rule (step 4): the sentence prints no value — there is none.
+  const asking = defineTool({
+    name: 'search_logs',
+    description: 'Error lines for one service over a look-back period.',
+    inputSchema: {
+      type: 'object',
+      required: ['service', 'window'],
+      properties: {
+        service: { type: 'string' },
+        window: { type: 'string', enum: ['1h', '2h'], description: 'Look-back period.' },
+      },
+    },
+    askOrAssume: { window: { ask: 'Which period?', choices: ['1h', '2h'] } },
+    execute: () => 'ok',
+  });
+  return [tool, hiding, asking].flatMap((t) => {
     const served = withArgumentRules(t.schema, t as never);
     const props = served.inputSchema.properties as Record<string, { description?: string }>;
     return Object.values(props).flatMap((p) => (p.description ? [p.description] : []));
@@ -1423,6 +1441,7 @@ const PRODUCERS: readonly ModelFacingProducer[] = [
       /^Look-back period\. If left out, the tool's rule fills "2h", recorded as assumed\.$/m,
       /If left out, the tool's rule fills 50, recorded as assumed\./,
       /fills a declared value \(hidden by the tool's view\)/,
+      /^Look-back period\. The tool's rule asks the person for this value; leave it out unless the person gave it\.$/m,
     ],
     compose: async () => ruledSchemaDescriptions(),
   },
@@ -1438,10 +1457,18 @@ const PRODUCERS: readonly ModelFacingProducer[] = [
     reaches: [
       /the call ran with "2h", the value the tool's rule assumes/,
       /hidden by the tool's view/,
+      /window = "24h" in the search_logs call this result answers was chosen by the person when asked \(the call had left it out\)/,
+      /chosen by the person when asked \(the value is hidden by the tool's view; the call had left it out\)/,
     ],
     compose: async () => [
       filledNote('search_logs', [{ argument: 'window', value: '2h', hidden: false }]),
       filledNote('search_logs', [{ argument: 'window', value: '2h', hidden: true }]),
+      filledNote('search_logs', [
+        { argument: 'window', value: '24h', hidden: false, source: 'answered' },
+      ]),
+      filledNote('search_logs', [
+        { argument: 'window', value: '24h', hidden: true, source: 'answered' },
+      ]),
     ],
   },
   {
@@ -1457,6 +1484,33 @@ const PRODUCERS: readonly ModelFacingProducer[] = [
       /this agent was not built to apply/,
     ],
     compose: async () => ruledRefusals(),
+  },
+  {
+    id: 'inputs layer — the batch ask’s refusals (honesty layer 2, step 4)',
+    module: 'src/core/agent/arguments/serve.ts',
+    surface: TOOL_RESULT,
+    lifetimeBecause:
+      'each lands as the `role: "tool"` result of the call it refused — a call whose person’s ' +
+      'answers never fitted the tool, or a call that needed a second pause in a batch that had ' +
+      'already paused once for the layer’s own ask — so it is written into `history`, past tense, ' +
+      'anchored to "that call"',
+    drivenBy: ['test/core/agent/arguments/ask-layer.test.ts'],
+    reaches: [
+      /the person's answers for limit did not fit what the tool accepts \(limit: integer\)/,
+      /its check-in consent gate needed a person’s approval for those arguments/,
+      /the tool asked to pause for a person, and this batch had already paused once/,
+      // The review of step 4: a refused call's answers are KEPT, and the model is told so.
+      /The person's answer for window was kept for the next purge_logs call that leaves it out, so the call may be proposed again without window\./,
+      /The person's answers for window and limit were kept for the next export_logs call that leaves them out, so the call may be proposed again without them\./,
+    ],
+    compose: async () => [
+      unansweredRefusal('top_talkers', [{ argument: 'limit', expected: 'integer' }]),
+      secondPauseRefusal('purge_logs', 'check-in'),
+      secondPauseRefusal('collect_window', 'tool-pause'),
+      secondPauseRefusal('purge_logs', 'check-in') + keptAnswersNote('purge_logs', ['window']),
+      secondPauseRefusal('export_logs', 'tool-pause') +
+        keptAnswersNote('export_logs', ['window', 'limit']),
+    ],
   },
   {
     id: 'ontology — the always-on INSTRUCTION piece (9.106.0; v2 9.107.0; v3 9.108.0)',

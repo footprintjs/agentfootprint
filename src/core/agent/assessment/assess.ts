@@ -241,6 +241,8 @@ interface ArgumentRowRead {
   readonly toolCallId: string;
   readonly argument: string;
   readonly source?: string;
+  /** Set on a row that ASKED the person — no source yet. */
+  readonly asked: boolean;
   readonly ruled: boolean;
   readonly failed: boolean;
 }
@@ -269,6 +271,7 @@ function argumentRows(state: Readonly<Record<string, unknown>>): readonly Argume
       toolCallId,
       argument,
       ...(source !== undefined && { source }),
+      asked: typeof row.asked === 'string' && source === undefined,
       ruled: row.rule !== undefined || row.period === true,
       failed: row.failed !== undefined,
     };
@@ -331,6 +334,29 @@ function readArgumentVerdicts(
     of: rows.length,
     witness,
   });
+}
+
+/**
+ * Layer 2, the inputs layer's own ask: the turn ENDED with the batch ask still
+ * waiting on the person — read from the committed state the ask leaves
+ * (`AgentState.argumentAsk`, whose `waiting` is written before the pause and
+ * cleared when the answer settles it), never from the pause event or the
+ * checkpoint's `pauseData`. The witnesses are that marker and this turn's
+ * current `asked` rows — the values the answer waits on. Nothing in the batch
+ * has run. An ask that settled (answered, or refused after three answers that
+ * did not fit) leaves no marker and fires nothing here.
+ */
+function readArgumentAsk(
+  state: Readonly<Record<string, unknown>>,
+  rows: readonly ArgumentRowRead[],
+  g: Gathered,
+): void {
+  const ask = state.argumentAsk;
+  if (!isRecord(ask) || !isRecord(ask.waiting)) return;
+  fire(g, 'argument-asked', statePointer('argumentAsk', 'waiting', 'requestId'));
+  for (const row of rows) {
+    if (row.asked) fire(g, 'argument-asked', statePointer('findingsLedger', row.index, 'asked'));
+  }
 }
 
 /** Layer 3, the tools' own declarations: every absence and every declared gap. */
@@ -573,7 +599,9 @@ export function assessAnswer(
   const reads = readResults(results, coverage);
 
   readPause(state, g);
-  readArgumentVerdicts(state, argumentRows(state), g);
+  const argumentVerdicts = argumentRows(state);
+  readArgumentAsk(state, argumentVerdicts, g);
+  readArgumentVerdicts(state, argumentVerdicts, g);
   readCoverageRows(coverage, g);
   const calls = readTurnCalls(reads, coverage, g);
   readTurnResults(reads, declarations, g);

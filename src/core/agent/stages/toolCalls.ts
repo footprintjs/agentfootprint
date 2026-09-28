@@ -262,6 +262,14 @@ export interface ToolCallsHandlerDeps {
    */
   readonly inputsLayer?: true;
   /**
+   * The host's own context for the inputs layer's batch ask
+   * (`AgentOptions.argumentAskContext`) — called when an ask is built, its
+   * object spread into the ask's `context` beside the library's reserved key
+   * (`arguments/ask.ts` · `judgeAskContextHook`). Present only when the agent
+   * configured one; read only when an ask is raised.
+   */
+  readonly argumentAskContext?: () => unknown;
+  /**
    * THE JUDGE (9.104.0, `.findings({ judge })`) — present only with the arm
    * and only when a classifier was configured. After every landed result is
    * committed to `toolResults` — the execute loop and the four resume doors
@@ -3623,7 +3631,41 @@ export function buildToolCallsHandler(
         deps.inputsLayer === true ? await import('../arguments/dispatch.js') : undefined;
       // THE INPUTS LAYER'S RESOLUTIONS for this batch — read only under the
       // arm, and only the entries resolved for THIS iteration.
-      const resolutions = inputs?.resolutionsFor(scope, iteration);
+      let resolutions = inputs?.resolutionsFor(scope, iteration);
+      // A fill the layer took from an answer this turn KEPT (a call of the
+      // batch that asked could not finish) is that answer's one use — dropped
+      // before anything else (`arguments/dispatch.ts` · `dropUsedKept`).
+      if (inputs !== undefined && resolutions !== undefined) {
+        inputs.dropUsedKept(scope, resolutions, toolCalls);
+      }
+      // ── THE BATCH ASK (honesty layer 2, step 4) — FIRST, before anything
+      // is written or dispatched: when the layer named an `ask` argument a
+      // call of this batch left out, the person is asked ONCE for everything
+      // the batch needs (`./argumentAsk.ts` · `askBeforeDispatch`, which
+      // pauses through footprintjs's `interrupt()`). The resume re-runs this
+      // stage from here; the answer comes back out of the same interrupt, is
+      // bound, and the entries below carry the answered fills. A pass that
+      // carries an answer has asked this batch's one human question: every
+      // later pause in the SAME batch is refused by name (`askedLayer`, the
+      // layer's dispatch half, set only then).
+      let askedLayer: InputsDispatch | undefined;
+      if (
+        inputs !== undefined &&
+        resolutions !== undefined &&
+        [...resolutions.values()].some((r) => r.ask !== undefined)
+      ) {
+        // Loaded on first use — the optional-family law: a plain agent's
+        // graph never carries the ask (`test/lib/trace-toolpack/browserGraph`).
+        const { askBeforeDispatch } = await import('./argumentAsk.js');
+        const asked = askBeforeDispatch(scope, resolutions, {
+          toolOf: (toolName) => resolveTool(toolName).tool,
+          runId: () => deps.currentRun?.().runId,
+          ...(deps.argumentAskContext !== undefined && { hostContext: deps.argumentAskContext }),
+        });
+        resolutions = asked.resolutions;
+        if (asked.answered) askedLayer = inputs;
+      }
+      const oneQuestionAsked = askedLayer !== undefined;
       const newHistory: LLMMessage[] = [...(scope.history as readonly LLMMessage[])];
       // ALWAYS push the assistant turn when there are tool calls — even
       // if the content was empty — so providers (Anthropic, OpenAI) can
@@ -4034,6 +4076,9 @@ export function buildToolCallsHandler(
         // Tool-args validation (#9) and the inputs layer's refusals share one
         // flag: the call is refused for its ARGUMENTS and lands in one shape.
         let argsRejected = false;
+        // A check-in that tripped in a batch whose one human question was the
+        // inputs layer's ask (`oneQuestionAsked`) — refused, never asked.
+        let checkInRefused = false;
         // ── THE INPUTS LAYER'S REFUSALS (honesty layer 2) — the argument-
         // refusal shape the validation refusal below uses, decided HERE:
         // after permission (policy sees every attempted call) and BEFORE the
@@ -4073,6 +4118,10 @@ export function buildToolCallsHandler(
             history: newHistory,
             ...(runIdentity && { identity: runIdentity }),
             ...(env.signal && { signal: env.signal }),
+            // One human question per resume: this batch already asked the
+            // person for argument values, so a link that also wants a person
+            // gets the chain's named refusal and the tool does not run.
+            ...(oneQuestionAsked && { askPolicy: 'refuse' as const }),
           });
           // Under the inputs layer, a rewrite of a RULED tool's arguments is
           // filed with the NAMES of the keys it changed (honesty layer 2) —
@@ -4088,7 +4137,12 @@ export function buildToolCallsHandler(
           chainedArgs = chain.args;
           if (chain.kind === 'deny') {
             denied = true;
-            result = chain.reason;
+            // A link that ASKED, refused by the one-question law: the person's
+            // answers this call carried are kept for its next proposal.
+            result =
+              chain.refusedAsk === true && askedLayer !== undefined
+                ? chain.reason + askedLayer.keptNote(scope, tc.name, resolution)
+                : chain.reason;
           } else if (chain.kind === 'ask') {
             // The typed half of the question (9.24.0), judged BEFORE anything
             // is committed: a component the screen could not render must
@@ -4251,6 +4305,18 @@ export function buildToolCallsHandler(
           ) {
             // Predicate said no — fall through to the normal credential+execute
             // path below (this `if` block is the ONLY thing the gate adds).
+          } else if (askedLayer !== undefined) {
+            // One human question per resume (honesty layer 2, step 4): this
+            // batch already paused to ask the person for argument values, and
+            // the re-run that carries the answer has no second pause to give.
+            // The gate's question is not asked and the tool does not run.
+            checkInRefused = true;
+            error = true;
+            // The person's answers the call carried are kept for its next
+            // proposal, where the check-in pauses as it always does.
+            result =
+              askedLayer.secondPauseRefusal(tc.name, 'check-in') +
+              askedLayer.keptNote(scope, tc.name, resolution);
           } else {
             // The tool's declared decision component (9.24.0), judged BEFORE
             // the evidence pack is assembled — a gate that cannot be honored
@@ -4309,7 +4375,7 @@ export function buildToolCallsHandler(
             return { toolCallId: tc.id, toolName: tc.name, checkIn: request };
           }
         }
-        if (!denied && !argsRejected) {
+        if (!denied && !argsRejected && !checkInRefused) {
           // ── Declared artifact arguments (9.22.0) ──────────────────────
           // The `needs` precedent applied to data: resolve the tool's
           // declared `wants` refs BEFORE credential resolution (never
@@ -4382,7 +4448,10 @@ export function buildToolCallsHandler(
                   service: need.credential,
                   sessionId: cred.sessionId,
                 });
-                if (onAuthorizationRequired === 'pause') {
+                // In a batch whose one human question was the inputs layer's
+                // ask, there is no second pause to give: the model is told, as
+                // under `'tell-model'` (`oneQuestionAsked`).
+                if (onAuthorizationRequired === 'pause' && !oneQuestionAsked) {
                   // Consent is unfinished work, and unfinished work is a pause
                   // — the same wire the check-in gate and a middleware `ask`
                   // ride. Commit partial state so resume() finds history
@@ -4419,6 +4488,14 @@ export function buildToolCallsHandler(
                 // side channel and `Agent.finalizeResult` raises.
                 error = true;
                 result = modelRefusal(need.credential);
+                // Under `'pause'`, reached only in the batch that asked: the
+                // person's answers the call carried are kept, so a call the
+                // model proposes again runs with them and pauses for consent
+                // in a batch that asked nothing (its sentence stays the
+                // credential's own — the service is the subject).
+                if (onAuthorizationRequired === 'pause') {
+                  askedLayer?.keepAnswers(scope, tc.name, resolution);
+                }
                 deps.reportConsentOutstanding?.({
                   service: need.credential,
                   authorizationUrl: cred.authorizationUrl,
@@ -4576,7 +4653,10 @@ export function buildToolCallsHandler(
               // Set when a raise declared a miss the door could not file:
               // the call then errors with this text and does not pause.
               let raisedMissError: string | undefined;
-              if (isPauseRequest(err)) {
+              // In a batch whose one human question was the inputs layer's ask
+              // (`oneQuestionAsked`), the tool's own pause cannot be given: the
+              // call settles as an error below, with the refusal sentence.
+              if (isPauseRequest(err) && !oneQuestionAsked) {
                 // The typed half of the question (9.24.0): a tool that raised
                 // `askHuman({ question, component })` nominated a screen
                 // component, and the nomination is judged HERE — the raise
@@ -4693,7 +4773,17 @@ export function buildToolCallsHandler(
               // settled here too — the returned path's error, not a pause.
               await endCall(tc.id);
               error = true;
-              result = raisedMissError ?? (err instanceof Error ? err.message : String(err));
+              result =
+                raisedMissError ??
+                (askedLayer !== undefined && isPauseRequest(err)
+                  ? // Reached only in the batch that asked (a pause anywhere
+                    // else returned above, or set `raisedMissError`): the
+                    // answers the call carried are kept for its next proposal.
+                    askedLayer.secondPauseRefusal(tc.name, 'tool-pause') +
+                    askedLayer.keptNote(scope, tc.name, resolution)
+                  : err instanceof Error
+                  ? err.message
+                  : String(err));
             }
           }
         }

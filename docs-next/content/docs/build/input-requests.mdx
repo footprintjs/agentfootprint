@@ -106,6 +106,68 @@ Invalid or stale replies leave the checkpoint available for correction.
 `describedResult({ clarify: ... })` remains an informational result and does not
 automatically pause a run.
 
+## When the library asks — a tool's `ask` rule
+
+A collection tool is the shape for a question only your app can frame (a
+calendar date, a year and a timezone together). For a single ARGUMENT only the
+person can give — the period a log search covers, the site a report is for —
+declare it on the tool that takes it, and the library asks for you:
+
+<CodeFile path="examples/features/75-ask-for-missing-arguments.ts" region="ask-for-missing-arguments" title="examples/features/75-ask-for-missing-arguments.ts (region: ask-for-missing-arguments)" />
+
+When a batch of calls leaves `window` out, nothing in the batch runs. The run
+pauses on ONE typed input for everything the batch needs — the same
+`isInputPause` / `awaitingInput` / `resume` shape as above, and `standingAgent`
+renders, answers and cancels it like any other:
+
+<CodeFile path="examples/features/75-ask-for-missing-arguments.ts" region="the-ask" title="examples/features/75-ask-for-missing-arguments.ts (region: the-ask)" />
+
+- **One field per argument, bound to every call that needs it.** Field ids are
+  positional (`f1`, `f2`, …). Each field's `description` is the tool author's
+  question and its `enum` the author's choices; the question itself is a fixed
+  library sentence. `awaitingInput.context.agentfootprint` —
+  `{ ask: 'arguments', fields: [{ id, tool, argument, calls }] }` — says what
+  each field is for; `origin.toolCallId` names the batch's first asked call.
+- **Nothing the model proposed rides the ask.** No value it wrote, no choice.
+- **One period, one question.** Two tools whose period arguments are spelled
+  differently (`24h` and `-24h`) share one field when their choices are the
+  same periods; each call runs with the answer in its own spelling.
+- **The answer is re-checked** against the tool's own schema for that argument
+  (an integer answered `2.5`, a string that breaks its `pattern`). An answer
+  that does not fit is asked again with a second fixed question — at most three
+  times; then the calls that needed it are refused, and the model reads why.
+- **The resume adds no model call.** Each call runs on its ordinary path —
+  permission, middleware, validation — with the answer filled in, and its
+  result tells the model the value was the person's answer. `agent.findings()`
+  holds an `argument` row `asked: 'missing'` per value (from the moment of the
+  ask), then `source: 'answered'` (`free: true` for a free-text field).
+  `agent.assessment()` reads **ask** while the question is out.
+- **One human question per resume — and the answer is kept.** In the batch that
+  asked, a later call that would need a person — its check-in, a middleware
+  `ask`, a credential consent, the tool's own `requestInput` — is refused by name
+  instead of pausing a second time. When that call carried the person's answers,
+  they are kept for the rest of the turn and the model is told so: proposed
+  again with the argument left out, the call runs with the kept answer (nobody
+  is asked again) and pauses for its own step then. A tool with both an `ask`
+  rule and a check-in costs the person two round trips. A kept answer is used
+  once; a later call of the same tool in another batch is asked again.
+- **A credential consent in the batch that asked** (under the default
+  `onAuthorizationRequired: 'pause'`): the model reads the credential's own
+  refusal, and if the turn ends without a later call obtaining the credential,
+  the turn raises `CredentialConsentRequiredError` — carrying the authorization
+  URL to your app — instead of returning the model's answer.
+- **The resume event keeps the answer out.** The `agentfootprint.pause.resume`
+  event of this ask carries the reply's shape — its request id and field ids —
+  with every value read as `'REDACTED'`, because an answer may fill an argument
+  the tool's own view hides; the `answered` rows carry what each tool's view
+  allows.
+- **A value the model did send** runs as sent and is recorded as the model's
+  own — the library does not ask about it.
+
+Your app can keep its own state on the ask (a routing step, a screen id):
+`Agent.create({ …, argumentAskContext: () => ({ routing: { step: 'metrics' } }) })`
+spreads the object into `context` beside the library's key, which it may not use.
+
 ## Hosted chat
 
 `standingAgent` stores the paused run under its session and returns its usual

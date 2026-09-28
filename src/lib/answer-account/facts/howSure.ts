@@ -218,6 +218,7 @@ function pointersOf(witness: readonly AssessmentPointer[]): RecordPointer[] {
 
 const REASON_LINES: Readonly<Record<AssessmentReason, TemplateId>> = {
   asked: 'howSure.reason.asked',
+  'argument-asked': 'howSure.reason.argumentAsked',
   'argument-assumed': 'howSure.reason.argumentAssumed',
   'argument-unverified': 'howSure.reason.argumentUnverified',
   'coverage-gap': 'howSure.reason.coverageGap',

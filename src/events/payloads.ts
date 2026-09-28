@@ -780,6 +780,14 @@ export interface PauseRequestPayload {
 }
 
 export interface PauseResumePayload {
+  /**
+   * The reply the run resumed with. For the inputs layer's own ask
+   * (`awaitingInput.context.agentfootprint.ask === 'arguments'`) every
+   * answered value reads `'REDACTED'` — the reply's shape (request id, field
+   * ids) travels, the person's values do not, because they fill arguments a
+   * tool's view may hide; the `answered` argument rows carry what each tool's
+   * view allows.
+   */
   readonly resumeInput: Readonly<Record<string, unknown>>;
   readonly pausedDurationMs: number;
   /** The registered component the paused ask nominated to collect its answer

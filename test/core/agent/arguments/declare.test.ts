@@ -90,6 +90,17 @@ describe('assertAskOrAssume — every refusal names the tool and the argument', 
     ['an empty choice list', { window: { ask: 'Which?', choices: [] } }],
     ['a repeated choice', { window: { ask: 'Which?', choices: ['1h', '1h'] } }],
     ['a choice outside the enum', { window: { ask: 'Which?', choices: ['9h'] } }],
+    // The typed ask's own field rule (`core/inputRequest.ts` · `isInputFieldValue`), judged at
+    // definition — before the step-4 review these passed here and failed the RUN at the ask.
+    [
+      'a blank choice the typed ask cannot offer',
+      { service: { ask: 'Which?', choices: ['', 'x'] } },
+    ],
+    ['a whitespace choice', { service: { ask: 'Which?', choices: ['  ', 'x'] } }],
+    [
+      'a choice longer than the typed ask carries',
+      { service: { ask: 'Which?', choices: ['x', 'y'.repeat(5000)] } },
+    ],
     [
       'a phrase with no token',
       { window: { ask: 'Which?', choices: [{ value: '24h', said: ['—'] }] } },
@@ -127,16 +138,27 @@ describe('assertAskOrAssume — every refusal names the tool and the argument', 
     });
   }
 
-  it('refuses ANY ask rule in this version, naming the step, after its shape passed', () => {
-    const message = refusal({ window: { ask: 'Which period?', choices: ['1h', '24h'] } });
-    expect(message).toContain('askOrAssume.window');
-    expect(message).toContain("the inputs layer's step 4");
-    expect(message).toContain('{ assume: <value> }');
+  it('accepts an ask rule whose shape passes (step 4 applies it: the batch ask)', () => {
+    expect(() =>
+      assertAskOrAssume(
+        'search_logs',
+        { window: { ask: 'Which period?', choices: ['1h', { value: '24h', said: ['last day'] }] } },
+        undefined,
+        SCHEMA,
+      ),
+    ).not.toThrow();
   });
 
   it('names the argument in the refusal', () => {
     expect(refusal({ window: { assume: '9h' } })).toContain('askOrAssume.window.assume');
     expect(refusal({ tags: { assume: 'x' } })).toContain('askOrAssume.tags');
+  });
+
+  it('names the choice the typed ask cannot offer, and the rule it breaks', () => {
+    const message = refusal({ service: { ask: 'Which?', choices: ['prod', '   '] } });
+    expect(message).toContain('askOrAssume.service.choices[1]');
+    expect(message).toContain('cannot be offered by the typed ask');
+    expect(message).toContain('at most 4096 characters');
   });
 
   it('refuses more than 32 ask arguments', () => {
@@ -284,8 +306,35 @@ describe('rulesOf — the dispatch re-read', () => {
     expect(isRefused(rules)).toBe(false);
     expect(rules).toEqual({
       ruled: [
-        { argument: 'window', rule: 'assume', assume: '2h', period: true },
-        { argument: 'limit', rule: 'assume', assume: 50 },
+        { argument: 'window', rule: 'assume', assume: '2h', type: 'string', period: true },
+        { argument: 'limit', rule: 'assume', assume: 50, type: 'integer' },
+      ],
+      period: { argument: 'window', spelling: 'lookback' },
+    });
+  });
+
+  it('reads an ask rule: the question, the choices’ values in declared order, the type', () => {
+    const tool = defineTool({
+      name: 'search_logs',
+      description: 'd',
+      inputSchema: SCHEMA,
+      askOrAssume: {
+        window: { ask: 'Which period?', choices: [{ value: '24h', said: ['last day'] }, '1h'] },
+        service: { ask: 'Which service?' },
+      },
+      period: { argument: 'window', spelling: 'lookback' },
+      execute: () => 'ok',
+    });
+    expect(rulesOf(tool)).toEqual({
+      ruled: [
+        {
+          argument: 'window',
+          rule: 'ask',
+          ask: { question: 'Which period?', choices: ['24h', '1h'] },
+          type: 'string',
+          period: true,
+        },
+        { argument: 'service', rule: 'ask', ask: { question: 'Which service?' }, type: 'string' },
       ],
       period: { argument: 'window', spelling: 'lookback' },
     });

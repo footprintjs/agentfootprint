@@ -481,7 +481,8 @@ describe('UNIT — the reason table', () => {
   it('covers the union, once each, and names the class of each', () => {
     const union: readonly AssessmentReason[] = [
       'asked',
-      // Honesty layer 2 (the inputs layer, step 3).
+      // Honesty layer 2 (the inputs layer, steps 3 and 4).
+      'argument-asked',
       'argument-assumed',
       'argument-unverified',
       'declared-absent',
@@ -495,7 +496,10 @@ describe('UNIT — the reason table', () => {
       'check-unreachable',
     ];
     expect([...REASONS.map((r) => r.reason)].sort()).toEqual([...union].sort());
-    expect(REASONS.filter((r) => r.class === 'ask').map((r) => r.reason)).toEqual(['asked']);
+    expect(REASONS.filter((r) => r.class === 'ask').map((r) => r.reason)).toEqual([
+      'asked',
+      'argument-asked',
+    ]);
     expect(Object.isFrozen(REASONS)).toBe(true);
     expect(() => reasonEntry('nope' as AssessmentReason)).toThrow(/no table entry/);
   });

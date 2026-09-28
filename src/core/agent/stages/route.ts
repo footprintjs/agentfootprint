@@ -32,6 +32,7 @@ import { contingentRowsOf, hasSetAsideStanding } from '../findings/contingent.js
 import { withUnsettledRows } from '../findings/unsettled.js';
 import type { DeclaredCoverage } from '../coverage/types.js';
 import type { FindingsLedger } from '../findings/types.js';
+import { HIDDEN_VALUE } from '../arguments/rows.js';
 import {
   judgeAnswer,
   recordOutputAttempt,
@@ -116,7 +117,34 @@ export type DeclaredDefaults = (scope: TypedScope<AgentState>) => readonly strin
  */
 export interface InputsRouteArm {
   readonly declaredDefaults?: DeclaredDefaults;
+  /** This turn's answered values (the batch ask, step 4) — the person's own words. */
+  readonly answeredValues?: AnsweredValues;
 }
+
+/**
+ * The values the PERSON gave this turn by answering the inputs layer's batch
+ * ask (honesty layer 2, step 4) — the exempt corpus's person half for the
+ * library's own ask. Unlike a tool's own `requestInput`, whose answer lands as
+ * an `input_received` tool result, the library's ask writes no message, so
+ * nothing else puts the answer in front of the gate. Read from THIS turn's
+ * `answered` rows — their value in the tool's own view; a value the view hides
+ * reads `'REDACTED'` and exempts nothing (an answer that repeats it may be
+ * flagged — the safe direction).
+ */
+export type AnsweredValues = (scope: TypedScope<AgentState>) => readonly string[];
+
+/** The one reader of this turn's answered values, off the ledger's `answered` rows. */
+export const answeredValuesOf: AnsweredValues = (scope) => {
+  const turn = scope.turnNumber as number;
+  const values: string[] = [];
+  for (const row of [...((scope.findingsLedger as FindingsLedger | undefined) ?? [])]) {
+    if (row.kind !== 'argument' || row.turn !== turn || row.source !== 'answered') continue;
+    if (row.value === undefined || row.value === HIDDEN_VALUE || values.includes(row.value))
+      continue;
+    values.push(row.value);
+  }
+  return values;
+};
 
 /** The turn stamp for a row Route files — only under the inputs layer's arm. */
 function turnStampOf(
@@ -620,6 +648,9 @@ function judgeEvidence(
         | undefined,
       ...(inputs?.declaredDefaults !== undefined && {
         declaredDefaults: inputs.declaredDefaults(scope),
+      }),
+      ...(inputs?.answeredValues !== undefined && {
+        answeredValues: inputs.answeredValues(scope),
       }),
     }),
   });

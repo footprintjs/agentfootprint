@@ -13,7 +13,7 @@ confidence. Four decision points, one layer each:
 | Layer | Decision | Where it mounts | Status |
 |---|---|---|---|
 | 1 · choice | choose a tool | beside the inputs layer | a later step |
-| 2 · inputs | fill its inputs | `sf-inputs`, after the LLM call and before Route (`mounts.ts` · `mountInputsLayer`) | **shipped: `assume`** — `core/agent/arguments/README.md` |
+| 2 · inputs | fill its inputs | `sf-inputs`, after the LLM call and before Route (`mounts.ts` · `mountInputsLayer`); its batch ask is raised by ToolCalls, first thing (`stages/argumentAsk.ts` · `askBeforeDispatch`) | **shipped: `assume`, and `ask` for a missing value** (one ask per batch) — `core/agent/arguments/README.md` |
 | 3 · results | read a result | the loop head | a later step |
 | 4 · answer | give the answer | the first node of the final branch | the standing is a reader today (`assessment/`) |
 
@@ -45,6 +45,17 @@ builder = mountInputsLayer(builder, deps.inputsLayer); // undefined → the buil
 `armed.ts` · `honestyLayersOf` — seed writes `honestyLayers: { inputs: true }` once, on a run
 whose inputs layer is mounted, and nothing on any other run. A reader of the record tells
 "this layer was armed and filed nothing" from "this layer was never armed" by this key.
+
+## A pause inside a layer
+
+A layer that must ask the person (the inputs layer's batch ask) does not pause inside its own
+subflow: on footprintjs 9.26–9.27 a pause raised in a subflow mounted in the ReAct loop body
+resumes into a traversal that cannot reach the loop head (the loop-back resolves to its
+reference stub and the run ends after one stage), and inside a composition it would sit two
+subflows deep. The layer DECIDES what to ask and files its rows through its output mapping;
+the loop's own pausable branch (ToolCalls) RAISES the ask, through footprintjs's
+`interrupt()`, before anything in the batch runs — the one place footprintjs resumes
+correctly. See `core/agent/arguments/README.md`, "The batch ask".
 
 ## Not covered
 

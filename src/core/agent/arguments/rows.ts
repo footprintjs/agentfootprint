@@ -30,7 +30,12 @@ import { clipValue } from '../../../integrity/argumentLeaves.js';
 /** Where a ruled argument's value came from, as the library's checks placed it. */
 export type ArgumentSource = 'said' | 'answered' | 'result' | 'app' | 'default' | 'model';
 
-/** Why the library asked (step 4 of the inputs layer files these). */
+/**
+ * Why the library asked: the call left the value out (`missing`); the value
+ * was present and not traced to the person (`unverified` — the declared-sources
+ * step files these); the person's answer did not fit the property's own schema
+ * and the field was asked again (`invalid-answer`).
+ */
 export type ArgumentAsked = 'missing' | 'unverified' | 'invalid-answer';
 
 /** What the model claimed about a value's source (`_findings.from`, step 5). */
@@ -54,12 +59,15 @@ export type ArgumentCheckFailed =
  * `AgentState.findingsLedger` (`kind: 'argument'`).
  *
  * This version files `source: 'default'` (the library filled the declared
- * default, or the model sent that same value itself — `proposed` says which)
- * and `source: 'model'` (the model sent another value, and the record does not
- * show where it came from). The other members of each union are the layer's
- * vocabulary for its later steps — the batch ask (`answered`, `asked`, `free`)
- * and the declared sources (`said`, `result`, `app`, `claimed`, `failed`, …);
- * a reader skips what it does not know.
+ * default, or the model sent that same value itself — `proposed` says which),
+ * `source: 'model'` (the model sent another value, and the record does not
+ * show where it came from), `asked` with no source (the call left an `ask`
+ * argument out and the person was asked — `missing` — or asked again after an
+ * answer that did not fit — `invalid-answer`), and `source: 'answered'` (the
+ * person's answer filled the value; `free` when it came through a free-text
+ * field). The other members of each union are the layer's vocabulary for its
+ * later steps — the declared sources (`said`, `result`, `app`, `claimed`,
+ * `failed`, …); a reader skips what it does not know.
  */
 export interface ArgumentRow {
   readonly kind: 'argument';
@@ -173,6 +181,70 @@ export interface ArgumentVerdict {
   readonly shownValue: unknown;
   /** The model's own value in the shown view — set only when the model sent one. */
   readonly shownProposed?: unknown;
+}
+
+/** The identity of one ruled argument of one call — what every row builder is handed. */
+export interface ArgumentIdentity {
+  readonly toolCallId: string;
+  readonly toolName: string;
+  readonly argument: string;
+  readonly rule: 'ask' | 'assume';
+  readonly period?: true;
+}
+
+/** The identity fields, in the one order every `argument` row is written in. */
+function identityOf(
+  who: ArgumentIdentity,
+  stamp: { readonly turn: number; readonly iteration: number },
+) {
+  return {
+    kind: 'argument' as const,
+    turn: stamp.turn,
+    toolCallId: who.toolCallId,
+    toolName: who.toolName,
+    iteration: stamp.iteration,
+    argument: who.argument,
+    rule: who.rule,
+    ...(who.period === true && { period: true as const }),
+  };
+}
+
+/**
+ * The row for an argument the person is ASKED for: no `source` (nobody has
+ * given the value yet) and no `value` (there is none). `invalid-answer` when
+ * an answer did not fit the property's own schema and the field is asked
+ * again — the answer itself is not kept.
+ */
+export function askedRowOf(
+  who: ArgumentIdentity,
+  stamp: { readonly turn: number; readonly iteration: number },
+  asked: ArgumentAsked = 'missing',
+): ArgumentRow {
+  return { ...identityOf(who, stamp), asked };
+}
+
+/**
+ * The row for a value the person's ANSWER filled (`source: 'answered'`): the
+ * value the call runs with, in the tool's own argument view; `proposed` only
+ * when the call had carried a value the answer replaced (absent = the call
+ * left it out); `free` when the answer came through a free-text field — a
+ * name the person typed, which is provenance and never support.
+ */
+export function answeredRowOf(
+  who: ArgumentIdentity & {
+    readonly shownValue: unknown;
+    readonly shownProposed?: unknown;
+    readonly free?: true;
+  },
+  stamp: { readonly turn: number; readonly iteration: number },
+): ArgumentRow {
+  return {
+    ...identityOf(who, stamp),
+    source: 'answered',
+    value: shownValue(who.shownValue),
+    ...(who.shownProposed !== undefined && { proposed: shownValue(who.shownProposed) }),
+    ...(who.free === true && { free: true as const }),
+  };
 }
 
 /**

@@ -154,6 +154,16 @@ describe.skipIf(!built)('the default browser graph of the root entry', () => {
     expect(graph.dynamicInputs.has('dist/esm/core/agent/arguments/resolve.js')).toBe(true);
   });
 
+  it('LAW: the batch ask is off the root sync closure — ToolCalls loads it when an ask is raised', async () => {
+    // Only a batch whose layer named an `ask` argument reaches it
+    // (`stages/toolCalls.ts` → `import('./argumentAsk.js')`).
+    const graph = await splitGraph(resolve(DIST, 'index.js'));
+    expect(graph.syncInputs.has('dist/esm/core/agent/stages/argumentAsk.js')).toBe(false);
+    expect(graph.syncInputs.has('dist/esm/core/agent/arguments/ask.js')).toBe(false);
+    expect(graph.dynamicInputs.has('dist/esm/core/agent/stages/argumentAsk.js')).toBe(true);
+    expect(graph.dynamicInputs.has('dist/esm/core/agent/arguments/ask.js')).toBe(true);
+  });
+
   it('LAW: the inputs layer’s run-time halves are off the root sync closure — only the synchronous doors stay', async () => {
     // ToolCalls' half (the fills, the note, the rewrites' `changedKeys`, the
     // fail-closed refusal), the served sentences and the "Assumed" block, and

@@ -251,9 +251,12 @@ the chart, the record and the requests are byte-identical.
 ingest): a rule on an argument the schema does not offer, whose type is not
 exactly one of `string`, `number`, `integer`, `boolean`, or that is a `wants`
 argument; a value the property's own schema rejects; a `period` on an argument
-with no rule. `{ ask: 'question', choices }` — asking the person, once per
-batch, before anything runs — is not applied yet and is refused by name; use
-`assume` or leave the argument free.
+with no rule.
+
+**Asking the person instead** — `{ ask: 'question', choices }`: a value the
+call leaves out is asked of the person, once for the whole batch and before
+anything in it runs, through the typed input pause. See
+[Collect missing inputs](doc:input-requests).
 
 **Over MCP.** `askOrAssume` and `period` ride `_meta.agentfootprint` beside the
 other declarations, and the client judges them against the listed tool's own

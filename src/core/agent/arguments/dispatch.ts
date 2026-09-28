@@ -21,13 +21,30 @@
  * ```
  */
 
+import type { TypedScope } from 'footprintjs';
 import { changedArgKeys } from '../../toolShownArgs.js';
 import type { Tool } from '../../tools.js';
 import type { ToolArgs } from '../middleware/runChain.js';
 import type { MiddlewareDecision } from '../middleware/types.js';
+import type { AgentState } from '../types.js';
 import { rulesOf } from './declare.js';
+import { keptThisTurn, withKept, withoutUsed } from './kept.js';
 import type { ArgumentFill, ArgumentResolution } from './resolve.js';
-import { filledNote, hidesArgument, unmountedRulesRefusal } from './serve.js';
+import {
+  filledNote,
+  hidesArgument,
+  keptAnswersNote,
+  secondPauseRefusal,
+  unmountedRulesRefusal,
+} from './serve.js';
+
+/**
+ * The refusal a call reads when the batch's one human question was the
+ * layer's ask and the call needed a person again (`serve.ts` ·
+ * `secondPauseRefusal`) — re-exported so ToolCalls reaches it through this
+ * module's one `import()`.
+ */
+export { secondPauseRefusal };
 
 /**
  * This batch's entries of `argumentResolutions`, by call id — only the entries
@@ -53,6 +70,75 @@ export function withFills(args: ToolArgs, resolution: ArgumentResolution | undef
   const filled: Record<string, unknown> = { ...args };
   for (const fill of fills) filled[fill.argument] = fill.value;
   return filled;
+}
+
+/**
+ * KEPT ANSWERS, USED (honesty layer 2, step 4 — `kept.ts`): the
+ * (tool, argument) pairs this batch's calls fill from an answer the turn kept
+ * are dropped from `argumentAnswersKept` — a kept answer is used once. Called
+ * before the batch ask merges its own answers, so a fill that is `answered`
+ * here came from a kept answer and nothing else; a batch that fills none never
+ * reads the key. A re-run after an interrupt finds them already dropped and
+ * writes nothing.
+ */
+export function dropUsedKept(
+  scope: TypedScope<AgentState>,
+  resolutions: ReadonlyMap<string, ArgumentResolution>,
+  calls: readonly { readonly id: string; readonly name: string }[],
+): void {
+  const nameOf = new Map(calls.map((c) => [c.id, c.name]));
+  const used: { toolName: string; argument: string }[] = [];
+  for (const entry of resolutions.values()) {
+    const toolName = nameOf.get(entry.toolCallId);
+    if (toolName === undefined) continue;
+    for (const fill of entry.fills ?? []) {
+      if (fill.source === 'answered') used.push({ toolName, argument: fill.argument });
+    }
+  }
+  if (used.length === 0) return;
+  const turn = scope.turnNumber as number;
+  const before = scope.$getValue('argumentAnswersKept') as unknown;
+  const left = withoutUsed(before, turn, used);
+  if ((left?.length ?? 0) === keptThisTurn(before, turn).length) return;
+  scope.argumentAnswersKept = left;
+}
+
+/**
+ * KEEP a refused call's answers (honesty layer 2, step 4 — `kept.ts`): in a
+ * batch whose one human question was the inputs layer's ask, a call that
+ * needed a person again was just refused — so the answered values it carried
+ * (the batch ask's, or a kept one it filled from) are kept for the call the
+ * model proposes next, which would otherwise leave the argument out and be
+ * asked the same question again. Returns the argument names kept, for the
+ * model's sentence (`keptNote`); nothing kept, nothing written.
+ */
+export function keepAnswers(
+  scope: TypedScope<AgentState>,
+  toolName: string,
+  resolution: ArgumentResolution | undefined,
+): readonly string[] {
+  const answered = (resolution?.fills ?? []).filter((f) => f.source === 'answered');
+  if (answered.length === 0) return [];
+  scope.argumentAnswersKept = withKept(
+    scope.$getValue('argumentAnswersKept') as unknown,
+    scope.turnNumber as number,
+    toolName,
+    answered,
+  );
+  return answered.map((f) => f.argument);
+}
+
+/**
+ * KEEP a refused call's answers and return the model's sentence for them
+ * (`serve.ts` · `keptAnswersNote` over `keepAnswers`) — `''` when the call
+ * carried no answer.
+ */
+export function keptNote(
+  scope: TypedScope<AgentState>,
+  toolName: string,
+  resolution: ArgumentResolution | undefined,
+): string {
+  return keptAnswersNote(toolName, keepAnswers(scope, toolName, resolution));
 }
 
 /**
@@ -93,6 +179,7 @@ export function noteFor(
       argument: f.argument,
       value: f.value,
       hidden: hidesArgument(tool, f.argument, f.value),
+      ...(f.source === 'answered' && { source: 'answered' as const }),
     })),
   );
 }

@@ -1486,6 +1486,15 @@
   ],
   "source": "library"
  },
+ "howSure.reason.argumentAsked@1": {
+  "text": "The run asked the person for values its calls need, before any of them ran; the answer has not come yet.",
+  "parts": [
+   {
+    "text": "The run asked the person for values its calls need, before any of them ran; the answer has not come yet."
+   }
+  ],
+  "source": "library"
+ },
  "howSure.reason.argumentAssumed@1": {
   "text": "2 values the calls ran with were assumed: set by a tool's rule or a rewrite, not given in the conversation.",
   "parts": [

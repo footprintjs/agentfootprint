@@ -18,6 +18,7 @@ import { describe, expect, it } from 'vitest';
 
 import { Agent, defineTool, type Tool } from '../../../../src/index.js';
 import type { LLMRequest, LLMResponse } from '../../../../src/adapters/types.js';
+import { answeredValuesOf } from '../../../../src/core/agent/stages/route.js';
 
 function scripted(script: readonly { content: string; toolCalls?: unknown[] }[]) {
   let i = 0;
@@ -120,5 +121,34 @@ describe('the inputs layer beside the evidence gate', () => {
     await second.run({ message: 'what period was that?', continueFrom: cp });
     // No default row THIS turn, and the note is behind the boundary: unsupported.
     expect(unsupportedOf(second)).toContain('1440');
+  });
+});
+
+describe('answeredValuesOf — the person’s answers, THIS turn, in the tool’s own view', () => {
+  const row = (turn: number, source: string, value: string, argument = 'window') => ({
+    kind: 'argument',
+    turn,
+    toolCallId: `c-${turn}-${value}`,
+    toolName: 'search_logs',
+    iteration: 1,
+    argument,
+    rule: 'ask',
+    source,
+    value,
+  });
+
+  it('reads only this turn’s `answered` rows — an earlier turn’s answer exempts nothing now', () => {
+    const scope = {
+      turnNumber: 2,
+      findingsLedger: [
+        row(1, 'answered', '4320m'),
+        row(2, 'answered', '1440m'),
+        row(2, 'answered', '1440m', 'other'),
+        row(2, 'model', '9999m'),
+        row(2, 'answered', 'REDACTED'),
+        { kind: 'standing', turn: 2, value: '7777' },
+      ],
+    };
+    expect(answeredValuesOf(scope as never)).toEqual(['1440m']);
   });
 });

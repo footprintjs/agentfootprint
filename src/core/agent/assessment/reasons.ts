@@ -44,6 +44,13 @@ export const REASONS: readonly ReasonEntry[] = Object.freeze([
       'pausedToolCallId: the call a pause is still waiting on (requestInput, askHuman / pauseHere, a checkIn, a middleware ask, a credential consent)',
   },
   {
+    reason: 'argument-asked',
+    layer: 2,
+    class: 'ask',
+    reads:
+      "argumentAsk: the inputs layer's batch ask with a question still out (`waiting`) — nothing in that batch has run; the findingsLedger's current `asked` rows of this turn name the values",
+  },
+  {
     reason: 'argument-assumed',
     layer: 2,
     class: 'not-sure',
