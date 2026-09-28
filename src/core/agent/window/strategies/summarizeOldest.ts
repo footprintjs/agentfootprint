@@ -20,6 +20,7 @@
  * debugging an over-budget window actually needs.
  */
 
+import { exemptLineageOf } from '../../evidence/evidenceIndex.js';
 import { CompactionUnmeasurableError } from '../errors.js';
 import { spanFingerprint, summaryFingerprint } from '../folded.js';
 import { resolveCompactionOptions } from '../options.js';
@@ -188,6 +189,9 @@ export function summarizeOldest(options: CompactionOptions): WindowStrategy {
         iteration,
         model,
         retain: config.retain,
+        // What the folded person/app turns exempted, read off the ORIGINALS
+        // now — never re-derived later from the summary's text.
+        foldedExempt: exemptLineageOf(span),
       });
       const spend = { model, usage: summary.usage };
 

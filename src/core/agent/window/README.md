@@ -170,6 +170,26 @@ Pinned by `test/core/window-last-tool-result.test.ts`,
 `test/integrity/danglingReference.test.ts` (the narrative too) and, end to
 end, `test/core/scenario/batch-pause-settlement.test.ts`.
 
+## A summary carries its fold's exemptions, never its own (evidence gate)
+
+**`buildSummaryMessage` stamps `foldedExempt` — the forms the exempt corpus
+held for the folded person/app turns, computed from the ORIGINALS by
+`../evidence/evidenceIndex.ts` · `exemptLineageOf` — and the summary's text
+exempts nothing.** A summary is a model's claim; indexing it as supplied let
+an invented value skip the evidence gate and the contingent check.
+`summarizeOldest` passes the lineage on every fold; a nested fold unions it;
+`../composeRequest.ts` · `stripFrameworkFields` keeps it off the wire.
+
+```ts
+buildSummaryMessage(summary.text, { foldedMessageCount: span.length, iteration, model,
+  retain: config.retain, foldedExempt: exemptLineageOf(span) });
+// → { role: 'user', content: '[compacted history — …]\n\n…', foldedExempt: ['arr-2291', …] }
+```
+
+What the gate and the contingent check read after a fold, and how
+`'conversation'`, `'discard'` and restored summaries behave:
+`../evidence/README.md` § "A compaction summary exempts nothing by itself".
+
 ## Files
 - `notice.ts` — the message a DROP leaves behind, and why it must exist.
 - `summarize.ts` — the authored frame around an untrusted summary.
