@@ -274,6 +274,14 @@ export interface ToolCallsHandlerDeps {
    */
   readonly resultsLayer?: true;
   /**
+   * THE ANSWER LAYER IS ARMED (honesty layer 4, `.answerLayer()`) — the ONE
+   * thing it changes here is the turn stamp: while any honesty layer is armed
+   * the one writer stamps every row it files with the conversation turn
+   * (adopted Q6), so the rows this handler files (basis, standing, judgment,
+   * contingent) carry `turn`. Absent → the rows are filed as they always were.
+   */
+  readonly answerLayer?: true;
+  /**
    * The host's own context for the inputs layer's batch ask
    * (`AgentOptions.argumentAskContext`) — called when an ask is built, its
    * object spread into the ask's `context` beside the library's reserved key
@@ -1352,7 +1360,7 @@ async function judgeLanded(
   ran: boolean,
   entry: { toolName: string; result: string; toolCallId: string },
   iteration: number,
-  /** The honesty layers' turn stamp — passed only while the inputs layer is armed. */
+  /** The honesty layers' turn stamp — passed only while an honesty layer is armed. */
   stamp?: TurnStamp,
 ): Promise<void> {
   if (judge === undefined || !ran) return;
@@ -3110,15 +3118,16 @@ export function buildToolCallsHandler(
     }
   };
   /**
-   * The honesty layers' TURN STAMP (adopted Q6): while the inputs layer is
-   * armed, every row this handler files through the one writer carries the
-   * conversation turn — the ledger crosses turns on a continued conversation
-   * and `iteration` restarts at 1 every run. `turnNumber` is read only then.
+   * The honesty layers' TURN STAMP (adopted Q6): while an honesty layer is
+   * armed (the inputs layer, the results layer, the answer layer), every row
+   * this handler files through the one writer carries the conversation turn —
+   * the ledger crosses turns on a continued conversation and `iteration`
+   * restarts at 1 every run. `turnNumber` is read only then.
    */
   // While ANY honesty layer is armed, the one writer stamps the turn (adopted
   // Q6) — the inputs layer, or the results layer (step 7b).
   const turnStampOf = (scope: TypedScope<AgentState>): TurnStamp | undefined =>
-    deps.inputsLayer === true || deps.resultsLayer === true
+    deps.inputsLayer === true || deps.resultsLayer === true || deps.answerLayer === true
       ? { turn: scope.turnNumber as number }
       : undefined;
   /**

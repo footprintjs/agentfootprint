@@ -347,6 +347,10 @@ export class AgentBuilder {
    *  on its own, so this is for provider-served tools and for tools that
    *  declare a period only on their results. */
   private resultsLayerValue = false;
+  /** `.answerLayer()` (honesty layer 4). Undefined for every agent that did
+   *  not ask for it — the chart, the rows, the events and the answer are then
+   *  byte-identical; `standingLine` is the prose line's own opt-in. */
+  private answerLayerValue?: { readonly standingLine?: true };
 
   private outputSchemaRetries = 0;
   private outputSchemaStrategy: OutputSchemaStrategy = 'instruct';
@@ -2007,6 +2011,75 @@ export class AgentBuilder {
   }
 
   /**
+   * Mount the ANSWER LAYER (honesty layer 4): every answer gets its standing,
+   * folded from the run's committed record — never from how sure the model
+   * sounded — and served as data.
+   *
+   * The standing is one of five words: `known` (a supporting row: a passed
+   * `.answerValidation()` report for these exact bytes), `consistent` with the
+   * run's record (checks ran and none fired — never "verified"), `not-sure`
+   * (a reason fired: an assumed argument, an empty result that did not say
+   * what it searched, a declared gap, an unsupported value, a limit that cut
+   * the turn short, …), `ask`, or `not-assessed` (nothing on the record could
+   * be checked). It is the same fold as `agent.assessment()` and
+   * `assessAnswer(recording)`, run once inside the run at the head of the
+   * final branch, so the in-run standing equals the one a later reader folds.
+   *
+   * Armed, three things happen and no others:
+   *
+   * - `turn_end.answerAssessment` and one `agentfootprint.answer.assessed`
+   *   event carry the value, its rendering, the reason kinds and the checks
+   *   that ran — never a value from the answer or a quote;
+   * - the Route decider files two witness rows on the findings ledger, so the
+   *   fold can read them: the evidence gate's clean pass (`grounded` — the
+   *   names-and-numbers check RAN; it never supports "known") and an answer
+   *   given before a skill's declared steps finished (`steps-unfinished`);
+   * - every row the findings ledger gets carries its conversation `turn`.
+   *
+   * It is a LABEL: it never asks, never refuses and never changes the model's
+   * reply. The one exception is opt-in — `{ standingLine: true }` appends ONE
+   * line to a prose answer (`Not sure — window = "2h" was assumed by
+   * search_logs's rule, not given by you.`), after the limits separator.
+   * Refused beside `.answerValidation()` (which judges the exact bytes
+   * delivered) and beside `.outputSchema()` (a typed answer is JSON, and JSON
+   * followed by prose is not) — through this door and `AgentOptions.answerLayer`
+   * alike; the standing still travels as data there. The line, like the
+   * limits block, is appended to the answer the run returns — never streamed
+   * on `stream.token`.
+   *
+   * The in-run fold reads no app declarations: `agent.assessment(declarations)`
+   * and the answer account take `rowsAt`, and can say more than the run did.
+   *
+   * Off → the chart, the committed rows, the events and the answer are
+   * byte-identical.
+   *
+   * @example
+   *   const agent = Agent.create({ provider, model })
+   *     .tool(searchLogs)
+   *     .answerLayer()                       // the standing as data
+   *     .build();
+   *   agent.on('agentfootprint.answer.assessed', (e) => console.log(e.payload.standing));
+   *
+   * @example One line to the person, too
+   *   Agent.create({ provider, model }).tool(searchLogs).answerLayer({ standingLine: true }).build();
+   */
+  answerLayer(options?: { readonly standingLine?: boolean }): this {
+    if (this.answerLayerValue !== undefined) {
+      throw new Error(
+        'AgentBuilder.answerLayer: already set. One agent folds one standing per answer — ' +
+          'a second call has nothing left to add. Drop it (pass { standingLine: true } once).',
+      );
+    }
+    if (options !== undefined && (typeof options !== 'object' || options === null)) {
+      throw new Error(
+        'AgentBuilder.answerLayer: options must be an object — { standingLine?: boolean } — or omitted.',
+      );
+    }
+    this.answerLayerValue = answerLayerArm(options ?? {}, 'AgentBuilder.answerLayer');
+    return this;
+  }
+
+  /**
    * Offer a skill's tools **only while that skill is active** (9.36.0). One
    * line, for every skill on the agent.
    *
@@ -3137,6 +3210,33 @@ export class AgentBuilder {
         );
       }
     }
+    // The answer layer (honesty layer 4), resolved ONCE from both doors — the
+    // builder's `.answerLayer()` wins; otherwise `AgentOptions.answerLayer`,
+    // checked by the same rules — so the refusals below and the arm `Agent`
+    // receives can never read two different values.
+    const answerLayer =
+      this.answerLayerValue ?? answerLayerFromOptions(this.opts.answerLayer as unknown);
+    // The answer layer's line appends prose to the answer — refused where the
+    // answer's bytes are judged or must parse. The standing itself still
+    // travels as data on both (`turn_end.answerAssessment`).
+    if (answerLayer?.standingLine === true) {
+      if (this.answerValidationConfig !== undefined) {
+        throw new Error(
+          'AgentBuilder.answerLayer({ standingLine: true }) cannot be combined with ' +
+            '.answerValidation(): the answer checks judge the exact bytes delivered, and the line ' +
+            'would change them. Keep .answerLayer() without the line — the standing still travels ' +
+            'as data, on turn_end.answerAssessment and agentfootprint.answer.assessed.',
+        );
+      }
+      if (this.outputSchemaParser !== undefined) {
+        throw new Error(
+          'AgentBuilder.answerLayer({ standingLine: true }) cannot be combined with ' +
+            '.outputSchema(): a typed answer is JSON, and JSON followed by a line of prose is not. ' +
+            'Keep .answerLayer() without the line — the standing still travels as data, on ' +
+            'turn_end.answerAssessment and agentfootprint.answer.assessed.',
+        );
+      }
+    }
     // Resolve the voice config: bundled defaults + consumer overrides.
     // Templates flow through the same barrel exports the rest of the
     // library uses, so a future locale-pack swap is a single import.
@@ -3155,7 +3255,8 @@ export class AgentBuilder {
       this.toolChoiceValue !== undefined ||
       this.ontologyValue !== undefined ||
       this.inputsLayerValue ||
-      this.resultsLayerValue
+      this.resultsLayerValue ||
+      answerLayer !== undefined
         ? {
             ...this.opts,
             ...(this.maxIterationsOverride !== undefined && {
@@ -3170,6 +3271,11 @@ export class AgentBuilder {
             ...(this.inputsLayerValue && { inputsLayer: true }),
             // The results layer (honesty layer 3), the same door grammar.
             ...(this.resultsLayerValue && { resultsLayer: true }),
+            // The answer layer (honesty layer 4), the same door grammar — the
+            // value resolved above, whichever door set it.
+            ...(answerLayer !== undefined && {
+              answerLayer: answerLayer.standingLine === true ? { standingLine: true } : true,
+            }),
           }
         : this.opts;
     // .selfExplain(): a fresh binding per build() — two built agents never
@@ -3671,6 +3777,47 @@ export class AgentBuilder {
     }
     return agent;
   }
+}
+
+/**
+ * THE ANSWER LAYER'S ARM (honesty layer 4), checked by ONE rule for both of
+ * its doors — `.answerLayer(options)` and `AgentOptions.answerLayer` — so a
+ * value one door refuses, the other refuses too: an unknown key, or a
+ * `standingLine` that is not a boolean, is refused by name. Returns the arm
+ * normalised (`{ standingLine: true }` or `{}`).
+ */
+function answerLayerArm(
+  options: Readonly<Record<string, unknown>>,
+  door: string,
+): { readonly standingLine?: true } {
+  const unknown = Object.keys(options).filter((k) => k !== 'standingLine');
+  if (unknown.length > 0) {
+    throw new Error(
+      `${door}: unknown option(s) ${unknown.map((k) => `'${k}'`).join(', ')}. ` +
+        'The one option is standingLine (boolean).',
+    );
+  }
+  if (options.standingLine !== undefined && typeof options.standingLine !== 'boolean') {
+    throw new Error(`${door}: standingLine must be a boolean.`);
+  }
+  return options.standingLine === true ? { standingLine: true } : {};
+}
+
+/**
+ * `AgentOptions.answerLayer` as the arm `build()` resolves: `undefined` when
+ * it is absent or `false`, `{}` for `true`, an object through
+ * `answerLayerArm` — so the options door meets every refusal the builder's
+ * door does. Anything else is refused by name.
+ */
+function answerLayerFromOptions(value: unknown): { readonly standingLine?: true } | undefined {
+  if (value === undefined || value === false) return undefined;
+  if (value === true) return {};
+  if (typeof value !== 'object' || value === null || Array.isArray(value)) {
+    throw new Error(
+      'AgentOptions.answerLayer must be a boolean or an object — { standingLine?: boolean }.',
+    );
+  }
+  return answerLayerArm(value as Readonly<Record<string, unknown>>, 'AgentOptions.answerLayer');
 }
 
 /**

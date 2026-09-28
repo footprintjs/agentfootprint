@@ -27,8 +27,12 @@
 
 import type { TypedScope } from 'footprintjs';
 import { typedEmit } from '../../../recorders/core/typedEmit.js';
-import { composeAnswerWithCoverage, copyCoverage } from '../coverage/index.js';
-import type { AnswerCoverage } from '../coverage/answer.js';
+import type { AnswerAssessmentData } from '../assessment/compose.js';
+import {
+  composeAnswerWithCoverage,
+  copyAnswerCoverage,
+  type AnswerCoverage,
+} from '../coverage/index.js';
 import type { AgentState } from '../types.js';
 
 /**
@@ -45,13 +49,16 @@ import type { AgentState } from '../types.js';
  *
  * `answerCoverage` is a typed answer's limits
  * (`prepareFinalWithLimitsAsDataStage`), already detached: projected onto
- * `turn_end` beside the answer, never into it.
+ * `turn_end` beside the answer, never into it. `answerAssessment` is the
+ * answer layer's standing as data (honesty layer 4), already detached:
+ * projected onto `turn_end` the same way.
  */
 const captureTurnPayload = (
   scope: TypedScope<AgentState>,
   answer: string,
   commitValidated = false,
   answerCoverage?: AnswerCoverage,
+  answerAssessment?: AnswerAssessmentData,
 ): void => {
   const iteration = scope.iteration;
   scope.finalContent = answer;
@@ -116,6 +123,9 @@ const captureTurnPayload = (
     // A typed answer's limits, beside it — the same value-conditional grammar:
     // a turn with nothing to carry emits the exact payload it always did.
     ...(answerCoverage !== undefined && { answerCoverage }),
+    // The answer layer's standing (honesty layer 4) — only on an agent that
+    // armed it; every other turn emits the exact payload it always did.
+    ...(answerAssessment !== undefined && { answerAssessment }),
   });
 };
 
@@ -130,6 +140,17 @@ export const prepareFinalStage = (scope: TypedScope<AgentState>): void => {
  * capture, its public events or the memory writers mounted after it.
  */
 export const prepareFinalWithValidationStage = (scope: TypedScope<AgentState>): void => {
+  if (withheldByValidation(scope)) return;
+  captureTurnPayload(scope, scope.llmLatestContent, true);
+};
+
+/**
+ * The validated door's guard, ONE owner for both of its stages (with and
+ * without the answer layer): a missing report, a failed or unverified enforce
+ * report, a prior refusal or a denied answer breaks the branch before the
+ * capture — returns `true` when it did.
+ */
+function withheldByValidation(scope: TypedScope<AgentState>): boolean {
   const report = scope.answerValidation;
   const mayDeliver =
     report !== undefined &&
@@ -142,10 +163,10 @@ export const prepareFinalWithValidationStage = (scope: TypedScope<AgentState>): 
     scope.unsupportedValues?.refused === true
   ) {
     scope.$break('answer validation withheld terminal delivery');
-    return;
+    return true;
   }
-  captureTurnPayload(scope, scope.llmLatestContent, true);
-};
+  return false;
+}
 
 /**
  * `.limitsTravelWithTheAnswer()` on a TYPED answer (`.outputSchema()`) — the
@@ -169,7 +190,7 @@ export const prepareFinalWithLimitsAsDataStage = (scope: TypedScope<AgentState>)
     scope,
     scope.llmLatestContent,
     false,
-    limits === undefined ? undefined : copyCoverage(limits),
+    limits === undefined ? undefined : copyAnswerCoverage(limits),
   );
 };
 
@@ -246,5 +267,126 @@ export function prepareFinalWithLimitsAndAssumedStage(
         ? composeAnswerWithCoverage(scope.llmLatestContent, declared, assumed)
         : scope.llmLatestContent;
     captureTurnPayload(scope, answer);
+  };
+}
+
+// ─── The answer layer (honesty layer 4) ─────────────────────────────────
+
+/** Which PrepareFinal body the final branch mounts — the arms both chart builders read. */
+export interface FinalStageArms {
+  readonly hasAnswerValidation?: boolean;
+  readonly coverageLimitsAsData?: boolean;
+  readonly attachCoverageLimits?: boolean;
+  /** The inputs layer is armed; `rewrites` — a before-tool chain can rewrite a filled value. */
+  readonly inputsLayer?: { readonly rewrites?: true };
+  /** The answer layer is armed; `standingLine` — its one line travels with a prose answer. */
+  readonly answerLayer?: { readonly standingLine?: true };
+}
+
+/**
+ * THE ONE CHOICE of PrepareFinal's body, for both chart builders (the twins
+ * cannot drift). Without the answer layer it returns the very stage function
+ * each combination of arms has always mounted — same reference, same bytes;
+ * with it, the variant that also carries the layer's standing
+ * (`prepareFinalWithAnswerLayerStage`).
+ */
+export function prepareFinalFor(
+  arms: FinalStageArms,
+): (scope: TypedScope<AgentState>) => void | Promise<void> {
+  if (arms.answerLayer !== undefined) {
+    return prepareFinalWithAnswerLayerStage({
+      validation: arms.hasAnswerValidation === true,
+      limitsAsData: arms.coverageLimitsAsData === true,
+      limits: arms.attachCoverageLimits === true,
+      ...(arms.inputsLayer !== undefined && {
+        assumed: { readsRewrites: arms.inputsLayer.rewrites === true },
+      }),
+      standingLine: arms.answerLayer.standingLine === true,
+    });
+  }
+  return arms.hasAnswerValidation === true
+    ? prepareFinalWithValidationStage
+    : arms.coverageLimitsAsData === true
+    ? prepareFinalWithLimitsAsDataStage
+    : arms.attachCoverageLimits === true
+    ? arms.inputsLayer !== undefined
+      ? prepareFinalWithLimitsAndAssumedStage(arms.inputsLayer.rewrites === true)
+      : prepareFinalWithLimitsStage
+    : prepareFinalStage;
+}
+
+/** The answer layer's standing as detached plain data — the fields the projection declares, nothing else. */
+function copyAssessment(value: AnswerAssessmentData): AnswerAssessmentData {
+  return {
+    assessment: value.assessment,
+    standing: value.standing,
+    reasons: [...value.reasons],
+    checked: value.checked.map((c) => ({ layer: c.layer, check: c.check, ran: c.ran, of: c.of })),
+  };
+}
+
+/**
+ * PrepareFinal on an agent whose ANSWER LAYER is armed (honesty layer 4): the
+ * same capture, plus the standing the layer's stage filed one stage earlier
+ * (`assessment/stage.ts` · `assessAnswerStage`) — on `turn_end` as
+ * `answerAssessment`, and, under `.answerLayer({ standingLine: true })`, as
+ * one line appended to a PROSE answer.
+ *
+ * Every other arm keeps its own law: the validated door delivers exactly the
+ * judged bytes (the line is refused beside `.answerValidation()` at build); a
+ * typed answer is never touched (the line is refused beside `.outputSchema()`,
+ * and its limits still travel as data); a prose answer under
+ * `.limitsTravelWithTheAnswer()` still gets the limits block — and when the
+ * line is on, the line names the assumed values and the "Assumed" block is
+ * not appended too (one composer for one fact). The answer is composed by the
+ * one composer (`coverage/answer.ts` · `composeAnswerWithCoverage`); with
+ * nothing to append it is the model's answer, byte for byte.
+ */
+export function prepareFinalWithAnswerLayerStage(o: {
+  readonly validation: boolean;
+  readonly limitsAsData: boolean;
+  readonly limits: boolean;
+  /** The inputs layer is armed beside the prose limits block. */
+  readonly assumed?: { readonly readsRewrites: boolean };
+  readonly standingLine: boolean;
+}): (scope: TypedScope<AgentState>) => Promise<void> {
+  return async (scope) => {
+    const filed = scope.$getValue('answerAssessment') as AnswerAssessmentData | undefined;
+    const assessed = filed === undefined ? undefined : copyAssessment(filed);
+    if (o.validation) {
+      if (withheldByValidation(scope)) return;
+      captureTurnPayload(scope, scope.llmLatestContent, true, undefined, assessed);
+      return;
+    }
+    if (o.limitsAsData) {
+      const limits = scope.answerCoverage;
+      captureTurnPayload(
+        scope,
+        scope.llmLatestContent,
+        false,
+        limits === undefined ? undefined : copyAnswerCoverage(limits),
+        assessed,
+      );
+      return;
+    }
+    const line = o.standingLine ? scope.answerStandingLine ?? '' : '';
+    const declared = o.limits ? scope.coverageDeclared ?? [] : [];
+    let assumed = '';
+    if (o.limits && o.assumed !== undefined && !o.standingLine) {
+      const { assumedBlockOf } = await import('../arguments/serve.js');
+      const readsRewrites = o.assumed.readsRewrites;
+      assumed = assumedBlockOf(
+        scope.findingsLedger ?? [],
+        scope.turnNumber as number,
+        readsRewrites
+          ? () => [...((scope.middlewareDecisions as readonly unknown[] | undefined) ?? [])]
+          : undefined,
+      );
+    }
+    const answer =
+      declared.length > 0 || assumed !== '' || line !== ''
+        ? composeAnswerWithCoverage(scope.llmLatestContent, declared, assumed, line)
+        : scope.llmLatestContent;
+    captureTurnPayload(scope, answer, false, undefined, assessed);
   };
 }

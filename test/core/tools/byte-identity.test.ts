@@ -366,6 +366,22 @@
  * it. The `covered` `host-103` result, every row and every other key did not
  * move.
  *
+ * Honesty step 6 (the answer layer): one new reference, `agent-answer-layer`
+ * — the `agent-stepped-skill` scenario with `.answerLayer()` on, so the delta
+ * is read against its unarmed twin line by line; none of the 25 earlier ones
+ * moved (run first on the wired tree — 25/25 green — copied aside, the one
+ * generated alone with `-t agent-answer-layer` under
+ * `AF_TOOLS_REFERENCE=update`, the 25 `cmp`-equal after). What it holds, read
+ * from its bytes against the twin: the run constant `honestyLayers: { answer:
+ * true }` on seed's commit, and — on the Route commit of the answer the step
+ * judge ACCEPTED (the one nudge already spent) — the `findingsLedger` key
+ * with ONE `steps-unfinished` witness row (`turn: 1`, the unrun step's
+ * position and tool, never its note). Nothing else on the parent log moves:
+ * the layer's stage runs inside the Final subflow, whose own log this
+ * projection does not read, and the final mount's output mapping is the
+ * bytes it always was (it receives the answer string). The event and the
+ * `turn_end` field are pinned by `test/core/agent/assessment/answer-layer.test.ts`.
+ *
  * Every scenario is a real run — the receipt-conformance shapes, each in the
  * configuration that has no name collision — and what is compared is the
  * whole `commitLog` plus `servedAt(k)` for every located epoch, after ONE
@@ -1164,6 +1180,32 @@ const SCENARIOS: Record<string, () => Promise<Snapshot>> = {
   'agent-results-period': () =>
     agentRun('dynamic', PERIOD_THEN_DONE, (a) =>
       a.system('bot').tool(periodDeclaringBackupRuns()).resultsLayer(),
+    ),
+  // Honesty step 6 (the answer layer): the stepped-skill scenario's twin, armed.
+  'agent-answer-layer': () =>
+    agentRun('dynamic', [call('c1', 'lookup'), answer('done'), answer('done')], (a) =>
+      a
+        .system('bot')
+        .skillGraph(
+          skillGraph({
+            skills: [
+              defineSkill({
+                id: 'refund',
+                description: 'refunds',
+                body: 'REFUND_BODY',
+                tools: [tool('lookup'), tool('charge')],
+                steps: [
+                  { tool: 'lookup', note: 'find the order first' },
+                  { tool: 'charge', note: 'refund the charge' },
+                ],
+              } as never),
+            ],
+            start: 'refund',
+            steps: [],
+            check: 'off',
+          }),
+        )
+        .answerLayer(),
     ),
 };
 

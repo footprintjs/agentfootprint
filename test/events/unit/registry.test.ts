@@ -244,7 +244,11 @@ describe('event registry — names + exhaustiveness', () => {
     //     — the verdict on one call's period: covered, partly held, not held,
     //     unknown or undeclared; the tool, the call and the word, never an
     //     instant.)
-    expect(ALL_EVENT_TYPES.length).toBe(123);
+    //    (answer.assessed added with the answer layer — honesty layer 4,
+    //     `.answerLayer()`: the answer's standing as data, once per answer —
+    //     the value, its rendering, the reason kinds and the checks that ran.
+    //     Never a value from the answer, a quote or a witness pointer.)
+    expect(ALL_EVENT_TYPES.length).toBe(124);
   });
 
   it('every entry in ALL_EVENT_TYPES is a key of AgentfootprintEventMap', () => {

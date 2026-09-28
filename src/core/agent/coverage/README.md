@@ -747,6 +747,30 @@ would have without the option. The raw rows stay in `coverageDeclared` either
 way. A prose answer is untouched, byte for byte — pinned with the typed path by
 `test/core/agent/coverage-typed-answer.test.ts`.
 
+**One fold, two forms.** The block and the data are two callers of ONE fold —
+`answer.ts` · `foldSections` merges each list once, in declaration order,
+duplicates dropped — so the items the block prints are, in order, the items the
+data holds; the block only caps what a person reads. Pinned by a property test over
+generated declarations (`test/core/agent/coverage-answer-one-fold.test.ts`).
+
+**The assumed values travel too.** On an agent whose inputs layer is armed (a tool
+declares `askOrAssume`), a prose answer's section carries the "Assumed" block; a
+typed answer's limits carry the same values as data — `assumed`, read from the same
+rows by the same function the block prints from (`../arguments/serve.ts` ·
+`assumedLinesFor`), each value in the tool's own view (`'REDACTED'` with `hidden`
+when that view hides it), and present only when a value was assumed:
+
+```ts
+agent.answerCoverage();
+// → { checked: [], notChecked: [], cannotCover: [],
+//     assumed: [{ toolName: 'search_logs', argument: 'window', value: '2h', hidden: false }] }
+```
+
+The value is an `AnswerCoverage` — a `Coverage` plus that optional list — so a
+reader written against the three lists keeps working. The key is still written by
+the Route decider's decorator, whether or not the answer layer (honesty layer 4) is
+armed: the final branch cannot write back, and one key has one writer.
+
 ## Files
 
 | file | one job |

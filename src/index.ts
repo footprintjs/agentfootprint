@@ -618,6 +618,10 @@ export {
 // The inputs layer (honesty layer 2): the ledger row it files per ruled
 // argument per call — a member of `FindingsRow`, returned by `agent.findings()`.
 export type { ArgumentRow } from './core/agent/arguments/rows.js';
+// The answer layer (honesty layer 4, `.answerLayer()`): the two witness rows
+// the Route decider files for it — the evidence gate's clean pass and an
+// answer given before its declared steps finished. Members of `FindingsRow`.
+export type { GroundedRow, StepsUnfinishedRow } from './core/agent/assessment/witness.js';
 // 9.105.0 — tool choice by classifier (`.toolChoice()`): the row shapes
 // `AgentState.toolChoices` carries (a pick before every model call, the
 // outcome after it), the reasons a narrowing was skipped, and the two
@@ -839,6 +843,9 @@ export {
   readCoverageLedger,
   readCoverageResult,
   type AbsenceDeclaration,
+  // A typed answer's limits as data (`agent.answerCoverage()`): the three
+  // lists, and the values a tool's rule assumed (the inputs layer).
+  type AnswerCoverage,
   type Coverage,
   type CoverageDeclaration,
   type CoverageInput,

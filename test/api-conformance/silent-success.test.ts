@@ -694,6 +694,9 @@ const REFUSES_A_SECOND_CALL = [
   'inputsLayer',
   // The results layer (honesty layer 3) — the same: one mount per agent.
   'resultsLayer',
+  // The answer layer (honesty layer 4) — one standing per answer; a second
+  // call would let a later `standingLine` silently win.
+  'answerLayer',
   'limitsTravelWithTheAnswer',
   'maps',
   'namesAndNumbersFromEvidence',
@@ -846,6 +849,7 @@ describe('silent success — the doctrine sweep', () => {
       ontology: () => base().ontology(ONTOLOGY_MAP).ontology(ONTOLOGY_MAP),
       inputsLayer: () => base().inputsLayer().inputsLayer(),
       resultsLayer: () => base().resultsLayer().resultsLayer(),
+      answerLayer: () => base().answerLayer().answerLayer({ standingLine: true }),
       limitsTravelWithTheAnswer: () =>
         base().limitsTravelWithTheAnswer().limitsTravelWithTheAnswer(),
       maps: () => base().maps().maps(),

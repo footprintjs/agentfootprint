@@ -248,6 +248,12 @@ export const STAGE_IDS = {
   RECORD_RESULTS: 'record-results',
   /** … and what the layer does about them: flag (the rows are the flags). */
   RESOLVE_RESULTS: 'resolve-results',
+  /** The answer layer (honesty layer 4) — mounted as the FIRST stage of the
+   *  final branch ONLY when armed (`.answerLayer()`): the answer's standing,
+   *  folded from the committed record, filed as data for PrepareFinal and
+   *  announced once (`agentfootprint.answer.assessed`). Absent on every other
+   *  agent — the final branch starts at PrepareFinal, byte-identical. */
+  ASSESS_ANSWER: 'assess-answer',
 } as const;
 
 export type StageId = (typeof STAGE_IDS)[keyof typeof STAGE_IDS];
@@ -370,6 +376,10 @@ const PLUMBING_LOCAL_IDS: ReadonlySet<string> = new Set([
   STAGE_IDS.VERIFY_RESULTS,
   STAGE_IDS.RECORD_RESULTS,
   STAGE_IDS.RESOLVE_RESULTS,
+  // The answer layer (honesty layer 4): its verdict rides `turn_end` and
+  // `agentfootprint.answer.assessed`; the stage that folds it is mechanism —
+  // the answer itself is PrepareFinal's milestone, one stage later.
+  STAGE_IDS.ASSESS_ANSWER,
 ]);
 
 /** Neutral chart boundaries — entry/exit, rendered normally (not muted). */

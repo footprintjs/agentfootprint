@@ -108,6 +108,7 @@ import {
   type ReadSkillOffer,
 } from '../src/lib/injection-engine/skillToolDescriptors.js';
 import { presentArtifact } from '../src/artifacts/present.js';
+import { standingLineOf } from '../src/core/agent/assessment/compose.js';
 import { resolveToolWants } from '../src/artifacts/wants.js';
 import { parkCard } from '../src/maps/engagement/parkCard.js';
 import type {
@@ -1581,6 +1582,121 @@ const PRODUCERS: readonly ModelFacingProducer[] = [
       /`checked` is the ground this answer covers inside `period\.held` only/,
     ],
     compose: async () => servedPeriodNotes(),
+  },
+  {
+    id: 'answer layer — the standing line appended to a prose answer (honesty layer 4)',
+    module: 'src/core/agent/assessment/compose.ts',
+    surface: INJECTED_TURN,
+    lifetimeBecause:
+      'appended after the answer under `.answerLayer({ standingLine: true })`, so it is part of ' +
+      'the assistant turn a continued conversation carries (`agent.checkpoint()` keeps the ' +
+      'answer) and every later call of that conversation re-reads it — it says what the ' +
+      'record held when this answer was given, never what is true of the world',
+    drivenBy: ['test/core/agent/assessment/answer-layer.test.ts'],
+    reaches: [
+      /^Not sure — window = "2h" was assumed by search_logs's rule, not given by you/m,
+      /its value is hidden by the tool's view/,
+      /a before-tool rule set a value a call ran with and did not say where it came from/,
+      /^Consistent with the run's record — 2 checks ran and none fired/m,
+      /^Consistent with the run's record — 1 check ran and did not fire: argument rules\./m,
+      /^Known — the app's answer checks passed this exact answer\.$/m,
+      /^Not assessed — no check applied to this answer\.$/m,
+      /a tool's data does not reach the time the question asked about/,
+      /^Consistent with the run's record — 1 check ran and did not fire: the time each result covered\./m,
+      /^Ask — the run stopped to ask a question before it could answer\.$/m,
+    ],
+    compose: async () => {
+      const base = { assessment: 'unknown' as const, checked: [] };
+      return [
+        standingLineOf(
+          { ...base, standing: 'not-sure', reasons: ['argument-assumed', 'empty-undeclared'] },
+          [
+            { toolName: 'search_logs', argument: 'window', value: '2h', hidden: false },
+            { toolName: 'vault', argument: 'token', value: 'REDACTED', hidden: true },
+          ],
+          true,
+        ),
+        standingLineOf(
+          {
+            ...base,
+            standing: 'not-sure',
+            reasons: [
+              'argument-unverified',
+              'coverage-gap',
+              'declared-absent',
+              'sources-conflict',
+              'value-unsupported',
+              'value-survived-revision',
+              'stopped-early',
+              'steps-unfinished',
+              'answer-check-failed',
+              'check-unreachable',
+            ],
+          },
+          [],
+          false,
+        ),
+        standingLineOf(
+          {
+            assessment: 'unrefuted',
+            standing: 'consistent',
+            reasons: [],
+            checked: [
+              { layer: 3, check: 'result-shape', ran: 1, of: 1 },
+              { layer: 4, check: 'names-and-numbers', ran: 1, of: 1 },
+            ],
+          },
+          [],
+          false,
+        ),
+        standingLineOf(
+          {
+            assessment: 'unrefuted',
+            standing: 'consistent',
+            reasons: [],
+            checked: [{ layer: 2, check: 'argument-rules', ran: 1, of: 1 }],
+          },
+          [],
+          false,
+        ),
+        // The results layer's period reasons and check (honesty step 7b).
+        standingLineOf(
+          {
+            ...base,
+            standing: 'not-sure',
+            reasons: [
+              'period-not-held',
+              'period-partly-held',
+              'period-unknown',
+              'period-undeclared',
+            ],
+          },
+          [],
+          false,
+        ),
+        standingLineOf(
+          {
+            assessment: 'unrefuted',
+            standing: 'consistent',
+            reasons: [],
+            checked: [{ layer: 3, check: 'result-period', ran: 1, of: 1 }],
+          },
+          [],
+          false,
+        ),
+        standingLineOf({ ...base, assessment: 'known', standing: 'known', reasons: [] }, [], false),
+        standingLineOf(
+          { ...base, assessment: 'not-applicable', standing: 'not-assessed', reasons: [] },
+          [],
+          false,
+        ),
+        standingLineOf(
+          { ...base, standing: 'ask', reasons: ['asked', 'argument-asked'] },
+          [],
+          false,
+        ),
+      ];
+    },
   },
   {
     id: 'ontology — the always-on INSTRUCTION piece (9.106.0; v2 9.107.0; v3 9.108.0)',

@@ -133,6 +133,15 @@ foldLedger(scope.findingsLedger!).standingOf.get('call_1')?.standing; // 'fact'
   values) and, on that row, a TOOL's words — the envelope's `notChecked`,
   `cannotCover` and `try_instead` — so a redaction policy that hides tool
   output by key must cover `findingsLedger` too.
+- The ledger also holds rows the MODEL never declared, each a kind of its own
+  and each skipped by every reader here that does not know it: the inputs
+  layer's `argument` rows (honesty layer 2, `../arguments/rows.ts`), and — only
+  while the answer layer is armed (honesty layer 4) — two witness rows the Route
+  decider files through `recordFindings`: `grounded` (the evidence gate's clean
+  pass) and `steps-unfinished` (an answer accepted or cut short before a skill's
+  declared steps finished), shaped by `../assessment/witness.ts`. Neither emits
+  an event of its own (the verdict's event fired beside it), neither enters
+  `foldLedger` or the served piece, and both carry `turn`.
 
 ## The answer's standings — one peel on every decider, one scanner for the text (9.114.1, 9.114.2)
 

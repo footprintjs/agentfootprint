@@ -52,6 +52,11 @@ import { fileIntegrityFindings } from '../integrityFindings.js';
 import { unsupportedClaimsOf } from '../../../integrity/unsupported-claim/check.js';
 import type { DeclaredClaim } from '../../../integrity/unsupported-claim/check.js';
 import { contextErrorIdentity } from '../../../integrity/finding/types.js';
+import {
+  groundedRowFrom,
+  stepsUnfinishedRowFrom,
+  type StepsUnfinishedRow,
+} from '../assessment/witness.js';
 import type { DispositionLedger } from '../../../integrity/disposition/ledger.js';
 import type { Disposition } from '../../../integrity/disposition/types.js';
 import type { InjectionRecord } from '../../../recorders/core/types.js';
@@ -146,12 +151,29 @@ export const answeredValuesOf: AnsweredValues = (scope) => {
   return values;
 };
 
-/** The turn stamp for a row Route files — only under the inputs layer's arm. */
+/**
+ * THE ANSWER LAYER IS ARMED (honesty layer 4) — what Route is handed then:
+ * `true`, and nothing else. The judges file the answer's two witness rows
+ * (`assessment/witness.ts`) — the evidence gate's clean pass and an answer
+ * given before its declared steps finished — because this is where those
+ * verdicts are computed; the layer, at the head of the final branch, only
+ * reads them. Every row Route files carries the turn stamp. Absent → Route
+ * files and reads what it always did.
+ */
+export type AnswerRouteArm = true;
+
+/**
+ * The turn stamp for a row Route files — while ANY honesty layer is armed
+ * (adopted Q6: the one writer stamps every row it files while a layer is on).
+ */
 function turnStampOf(
   scope: TypedScope<AgentState>,
   inputs: InputsRouteArm | undefined,
+  answer?: AnswerRouteArm,
 ): TurnStamp | undefined {
-  return inputs === undefined ? undefined : { turn: scope.turnNumber as number };
+  return inputs === undefined && answer === undefined
+    ? undefined
+    : { turn: scope.turnNumber as number };
 }
 
 /**
@@ -466,6 +488,7 @@ async function peelAnswerStandings(
   scope: TypedScope<AgentState>,
   findings: true | undefined,
   inputs?: InputsRouteArm,
+  answer?: AnswerRouteArm,
 ): Promise<string | undefined> {
   if (findings !== true || typeof scope.llmLatestContent !== 'string') return undefined;
   const raw = scope.llmLatestContent;
@@ -485,7 +508,7 @@ async function peelAnswerStandings(
         known,
         () => [...((scope.coverageDeclared ?? []) as readonly DeclaredCoverage[])],
       ),
-      turnStampOf(scope, inputs),
+      turnStampOf(scope, inputs, answer),
     );
   }
   if (peeled.content === raw) return undefined;
@@ -542,39 +565,63 @@ function emitRouteDecided(
  * (the re-key), already visible in the record as a pointer that never
  * completed. Undefined `stepPlanFor`, no pointer, or a complete procedure →
  * `undefined` and not one event (zero-cost-when-unused).
+ *
+ * Under the answer layer's arm an accepted or cut-short verdict RETURNS its
+ * witness row (`assessment/witness.ts`) instead of filing it: the evidence
+ * gate runs after this judge and can still send the draft back, and a row
+ * about a draft that was replaced would say "the answer came before the
+ * declared steps finished" of an answer that may have finished them. The
+ * caller files it only where it really answers `'final'` (`fileStepsWitness`).
  */
 function judgeUnfinishedSteps(
   scope: TypedScope<AgentState>,
   stepPlanFor: StepPlanFor | undefined,
   earlyStop: 'max-iterations' | 'cost-budget' | undefined,
-): 'step-nudge' | undefined {
+  /** THE ANSWER LAYER IS ARMED (honesty layer 4): an accepted or cut-short
+   *  verdict also builds its witness row, for the caller to file if the
+   *  answer stands. Absent → the event alone, as always. */
+  answer?: AnswerRouteArm,
+): 'step-nudge' | StepsUnfinishedRow | undefined {
   if (!stepPlanFor) return undefined;
   const ptr = pointerOf(scope.stepPointer);
   if (!stepInProgress(ptr)) return undefined;
   const plan = stepPlanFor(ptr.skillId);
   if (!plan) return undefined;
   const iteration = scope.iteration as number;
-  if (earlyStop !== undefined) {
-    typedEmit(scope, 'agentfootprint.skill.steps_unfinished', {
-      skillId: ptr.skillId,
-      remaining: remainingStepsOf(ptr, plan),
-      total: ptr.total,
-      action: 'cut-short',
-      iteration,
-    });
-    return undefined;
-  }
-  if (scope.stepNudgeSpent === true) {
-    typedEmit(scope, 'agentfootprint.skill.steps_unfinished', {
-      skillId: ptr.skillId,
-      remaining: remainingStepsOf(ptr, plan),
-      total: ptr.total,
-      action: 'accepted',
-      iteration,
-    });
-    return undefined;
-  }
-  return 'step-nudge';
+  const action =
+    earlyStop !== undefined ? 'cut-short' : scope.stepNudgeSpent === true ? 'accepted' : undefined;
+  if (action === undefined) return 'step-nudge';
+  const remaining = remainingStepsOf(ptr, plan);
+  typedEmit(scope, 'agentfootprint.skill.steps_unfinished', {
+    skillId: ptr.skillId,
+    remaining,
+    total: ptr.total,
+    action,
+    iteration,
+  });
+  if (answer !== true) return undefined;
+  return stepsUnfinishedRowFrom({
+    turn: scope.turnNumber as number,
+    iteration,
+    skillId: ptr.skillId,
+    remaining,
+    total: ptr.total,
+    action,
+  });
+}
+
+/**
+ * File the step judge's witness row — called by a decider at the one moment
+ * it answers `'final'` with the answer that verdict was about, after every
+ * judge that could still send that answer back has let it stand. Anything but
+ * a row (no verdict, an unarmed agent) files nothing.
+ */
+function fileStepsWitness(
+  scope: TypedScope<AgentState>,
+  verdict: 'step-nudge' | StepsUnfinishedRow | undefined,
+): void {
+  if (verdict === undefined || verdict === 'step-nudge') return;
+  recordFindings(scope, [verdict]);
 }
 
 /**
@@ -621,6 +668,10 @@ function judgeEvidence(
    *  app's own declaration — and the contingent rows carry the turn stamp.
    *  Absent → no read of the ledger for it, the corpus as it was. */
   inputs?: InputsRouteArm,
+  /** THE ANSWER LAYER IS ARMED (honesty layer 4): the clean verdict also
+   *  files its committed witness row, and the contingent rows carry the turn
+   *  stamp. Absent → the `grounded` event alone, as always. */
+  answerLayer?: AnswerRouteArm,
 ): 'evidence-recheck' | undefined {
   if (gate === undefined) return undefined;
   const answer = (scope.llmLatestContent as string | undefined) ?? '';
@@ -698,7 +749,7 @@ function judgeEvidence(
       recordFindings(
         scope,
         contingentRowsOf(verdict.grounded, evidence, standingOf, 'answer', iteration),
-        turnStampOf(scope, inputs),
+        turnStampOf(scope, inputs, answerLayer),
       );
     }
   }
@@ -713,6 +764,20 @@ function judgeEvidence(
       action: 'grounded',
       afterRevision,
     });
+    // The answer layer's witness (honesty layer 4): the clean verdict, on the
+    // record — a flagged or refused one is committed already (below).
+    if (answerLayer === true) {
+      recordFindings(scope, [
+        groundedRowFrom({
+          turn: scope.turnNumber as number,
+          iteration,
+          posture: gate.posture,
+          candidates: verdict.candidates,
+          lookedUp: verdict.lookedUp,
+          afterRevision,
+        }),
+      ]);
+    }
     return undefined;
   }
 
@@ -828,11 +893,13 @@ function buildSimpleDecider(
   hasWrapUp: boolean,
   findings: true,
   inputs?: InputsRouteArm,
+  answer?: AnswerRouteArm,
 ): (scope: TypedScope<AgentState>) => Promise<RouteBranch>;
 function buildSimpleDecider(
   hasWrapUp: boolean,
   findings?: true,
   inputs?: InputsRouteArm,
+  answer?: AnswerRouteArm,
 ): (scope: TypedScope<AgentState>) => RouteBranch | Promise<RouteBranch> {
   if (findings !== true) {
     return (scope) => {
@@ -844,7 +911,7 @@ function buildSimpleDecider(
   return async (scope) => {
     const decided = decideAndAnnounce(scope, hasWrapUp);
     if (decided.branch === 'final') {
-      await peelAnswerStandings(scope, findings, inputs); // no re-ask exit here
+      await peelAnswerStandings(scope, findings, inputs, answer); // no re-ask exit here
       settleFinal(scope, decided.earlyStop);
     }
     return decided.branch;
@@ -964,6 +1031,14 @@ export function buildRouteDeciderStage(
    *  turn's `default` rows join the gate's exempt corpus. Passed only when the
    *  layer is mounted; absent → the deciders an agent was always handed. */
   inputs?: InputsRouteArm,
+  /** THE ANSWER LAYER IS ARMED (honesty layer 4) — the same trailing-optional
+   *  precedent: the judges file the answer's witness rows (the evidence gate's
+   *  clean pass, an answer given before its declared steps finished) and every
+   *  row this decider files carries the turn stamp. Passed only when the layer
+   *  is armed; absent → the deciders an agent was always handed. A decider
+   *  with no judge files no witness row, so the arm changes nothing there
+   *  beyond the stamp on the answer peel's rows. */
+  answer?: AnswerRouteArm,
 ): (scope: TypedScope<AgentState>) => RouteBranch | Promise<RouteBranch> {
   const chain = messageMiddleware ?? [];
   if (
@@ -974,7 +1049,7 @@ export function buildRouteDeciderStage(
   ) {
     // An armed agent is handed the plain decider WITH the peel — never the
     // fast path's shared reference, which reads nothing of the answer.
-    if (findings === true) return buildSimpleDecider(hasWrapUp, true, inputs);
+    if (findings === true) return buildSimpleDecider(hasWrapUp, true, inputs, answer);
     return hasWrapUp ? buildSimpleDecider(true) : routeDeciderStage;
   }
   if (enforcement !== undefined)
@@ -989,6 +1064,7 @@ export function buildRouteDeciderStage(
       noticePriorTurnEvidence,
       findings,
       inputs,
+      answer,
     );
   if (stepPlanFor !== undefined || evidence !== undefined)
     return buildJudgingDecider(
@@ -1000,6 +1076,7 @@ export function buildRouteDeciderStage(
       integrityLedger,
       findings,
       inputs,
+      answer,
     );
   return async (scope) => {
     const { chosen, rationale, earlyStop } = decideBranch(scope);
@@ -1038,7 +1115,7 @@ export function buildRouteDeciderStage(
     scope.llmLatestContent = verdict.content;
     // AFTER the chain, as in every decider (`peelAnswerStandings`). This one
     // has no re-ask exit, so the emission is not kept.
-    await peelAnswerStandings(scope, findings, inputs);
+    await peelAnswerStandings(scope, findings, inputs, answer);
     // AFTER the chain: `answerWasEmpty` has to be judged on the string the
     // caller will actually receive, and the chain may have rewritten it.
     settleWrapUp(scope, earlyStop, false);
@@ -1172,6 +1249,7 @@ function buildJudgingDecider(
   integrityLedger: { current: DispositionLedger | undefined } | undefined,
   findings?: true,
   inputs?: InputsRouteArm,
+  answer?: AnswerRouteArm,
 ): (scope: TypedScope<AgentState>) => Promise<RouteBranch> {
   return async (scope) => {
     const { chosen, rationale, earlyStop } = decideBranch(scope);
@@ -1210,11 +1288,12 @@ function buildJudgingDecider(
     // THE ANSWER TURN'S STANDINGS (9.114.1 on this decider): after the chain,
     // before every judge below — the enforcing decider's order. The two
     // re-ask exits put the emission back (`restoreEmission`).
-    const emission = await peelAnswerStandings(scope, findings, inputs);
+    const emission = await peelAnswerStandings(scope, findings, inputs, answer);
     // A withheld answer is judged by nothing below, so the recency row says so
     // here rather than sitting untouched (see `noteRecency`).
     if (denied) noteRecency(noticePriorTurnEvidence, integrityLedger, 'not-applicable');
-    if (!denied && judgeUnfinishedSteps(scope, stepPlanFor, earlyStop) === 'step-nudge') {
+    const steps = denied ? undefined : judgeUnfinishedSteps(scope, stepPlanFor, earlyStop, answer);
+    if (steps === 'step-nudge') {
       restoreEmission(scope, emission);
       emitRouteDecided(scope, 'step-nudge', stepNudgeRationale(scope));
       return 'step-nudge';
@@ -1231,12 +1310,15 @@ function buildJudgingDecider(
         integrityLedger,
         findings,
         inputs,
+        answer,
       ) === 'evidence-recheck'
     ) {
       restoreEmission(scope, emission);
       emitRouteDecided(scope, 'evidence-recheck', evidenceRecheckRationale(scope));
       return 'evidence-recheck';
     }
+    // The answer stands: only now is the step judge's witness about it.
+    fileStepsWitness(scope, steps);
     recordAnswerGuarantee(scope, undefined); // this decider is built without an output schema
     emitRouteDecided(scope, 'final', rationale);
     settleWrapUp(scope, earlyStop, false);
@@ -1261,6 +1343,7 @@ function buildEnforcingDecider(
   noticePriorTurnEvidence: boolean | undefined,
   findings?: true,
   inputs?: InputsRouteArm,
+  answer?: AnswerRouteArm,
 ): (scope: TypedScope<AgentState>) => Promise<RouteBranch> {
   return async (scope) => {
     const base = decideBranch(scope);
@@ -1310,7 +1393,7 @@ function buildEnforcingDecider(
     // After the chain and before every judge below (`peelAnswerStandings`,
     // the one peel every decider runs). The string it held before the key
     // came off is what every RE-ASK exit puts back (`reAsk`).
-    const emission = await peelAnswerStandings(scope, findings, inputs);
+    const emission = await peelAnswerStandings(scope, findings, inputs, answer);
     const reAsk = (
       branch: 'output-retry' | 'step-nudge' | 'evidence-recheck',
       rationale: string,
@@ -1348,7 +1431,8 @@ function buildEnforcingDecider(
       });
       // The schema verdict ran FIRST (an answer being re-asked is not a
       // stop); the step judge sees only an answer the schema let stand.
-      if (judgeUnfinishedSteps(scope, stepPlanFor, base.earlyStop) === 'step-nudge') {
+      const steps = judgeUnfinishedSteps(scope, stepPlanFor, base.earlyStop, answer);
+      if (steps === 'step-nudge') {
         return reAsk('step-nudge', stepNudgeRationale(scope));
       }
       // The evidence gate is last of the three judges: it grounds the answer
@@ -1363,10 +1447,13 @@ function buildEnforcingDecider(
           integrityLedger,
           findings,
           inputs,
+          answer,
         ) === 'evidence-recheck'
       ) {
         return reAsk('evidence-recheck', evidenceRecheckRationale(scope));
       }
+      // The answer stands: only now is the step judge's witness about it.
+      fileStepsWitness(scope, steps);
       // LAST, and it re-routes nothing: this answer is the one being handed
       // back, and a claim that disagrees with the run's settled facts is a
       // fact about a finished run (see judgeClaims).
@@ -1443,9 +1530,13 @@ function buildEnforcingDecider(
     // A schema-exhausted answer is still a would-be-final one, and the step
     // table is unconditional on schema state: steps remaining + nudge
     // unspent → one teaching re-ask (its turn may well fix both).
-    if (judgeUnfinishedSteps(scope, stepPlanFor, base.earlyStop) === 'step-nudge') {
+    const steps = judgeUnfinishedSteps(scope, stepPlanFor, base.earlyStop, answer);
+    if (steps === 'step-nudge') {
       return reAsk('step-nudge', stepNudgeRationale(scope));
     }
+    // No judge runs after this one on this path (the gate is skipped below),
+    // so the answer stands and its witness is filed at once.
+    fileStepsWitness(scope, steps);
     // The evidence gate deliberately does NOT run here. This answer already
     // failed its own contract and the caller is being told so; grounding the
     // values inside a shape the app has declared invalid would file a second

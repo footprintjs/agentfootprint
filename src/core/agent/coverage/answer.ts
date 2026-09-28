@@ -61,15 +61,62 @@ export interface AnswerPeriod extends DeclaredPeriod {
 }
 
 /**
- * The answer's limits as data — the three lists the block prints, and (honesty
- * step 7b) the periods the calls declared, present only when one did.
+ * A TYPED answer's limits, as data — the three coverage lists the prose block
+ * would print, plus the values a tool's `assume` rule filled this turn (the
+ * inputs layer, honesty layer 2), which the prose answer prints as its
+ * "Assumed" block. The value of `AgentState.answerCoverage`,
+ * `turn_end.answerCoverage` and `agent.answerCoverage()`.
  *
- * @inline
+ * `assumed` is the SAME reading of the SAME rows the block prints
+ * (`arguments/serve.ts` · `assumedLinesFor`): one entry per distinct (tool,
+ * argument, value), in the order the rows were filed, a row a before-tool
+ * rewrite superseded left out. `value` is the tool's own argument view —
+ * `'REDACTED'`, with `hidden: true`, when that view hides the argument.
+ * Present only when a value was assumed. `periods` (honesty step 7b) is the
+ * data twin of the block's `Period:` lines, present only when a call declared one.
  */
-export type AnswerCoverage = Coverage & { readonly periods?: readonly AnswerPeriod[] };
+export interface AnswerCoverage extends Coverage {
+  /** The periods the calls declared (honesty step 7b) — one per declaring
+   *  call, as declared; present only when one did. */
+  readonly periods?: readonly AnswerPeriod[];
+  readonly assumed?: readonly {
+    readonly toolName: string;
+    readonly argument: string;
+    readonly value: string;
+    readonly hidden: boolean;
+  }[];
+}
+
+/** One assumed value as `AnswerCoverage` carries it. */
+type AssumedValue = NonNullable<AnswerCoverage['assumed']>[number];
+
+/**
+ * THE FOLD both answer forms share: each section merged ONCE across the run's
+ * declarations — declaration order, duplicates dropped (`mergeItems`). The
+ * block renders these lists (capped for the reader) and the data copies them
+ * (uncapped), so the two cannot disagree about which items the answer's limits
+ * hold: one rule, one place, two callers.
+ */
+function foldSections(declared: readonly DeclaredCoverage[]): Coverage {
+  return {
+    checked: mergeItems(declared.map((d) => d.checked)),
+    notChecked: mergeItems(declared.map((d) => d.notChecked)),
+    cannotCover: mergeItems(declared.map((d) => d.cannotCover)),
+  };
+}
 
 /** The block's opening line. Stable — tests and readers match on it. */
 export const COVERAGE_BLOCK_HEADING = 'Coverage of this answer';
+
+/**
+ * The inputs layer's "Assumed" block's opening line (`arguments/serve.ts` ·
+ * `assumedBlock` composes the block). Owned here, beside the limits block's
+ * heading: this module's `composeAnswerWithCoverage` is the one composer of
+ * the section the framework appends after an answer, and a reader of the
+ * answer's text (`lib/answer-account/account.ts` · `readAnswer`) finds every
+ * block of it through this one module. Stable — tests and readers match on it.
+ */
+export const ASSUMED_BLOCK_HEADING = "Assumed (a tool's rule, not your words):";
 
 /**
  * Entries per section before the block folds. A boundary nobody reads is not
@@ -139,10 +186,11 @@ function periodsOf(declared: readonly DeclaredCoverage[]): AnswerPeriod[] {
  * `AgentState.answerCoverage`, projected onto `turn_end.answerCoverage` and
  * returned by `agent.answerCoverage()`.
  *
- * Folded by the block's own rule — `mergeItems` over each list in declaration
- * order, duplicates dropped — so every entry is one the block would print and
- * none is added. It keeps EVERY entry: the block's cap (twelve per section,
- * then "… and N more") is a reading aid for prose, not a limit on the data.
+ * Folded by the block's own fold (`foldSections`, the one place each list is
+ * merged — declaration order, duplicates dropped), so every entry is one the
+ * block would print and none is added. It keeps EVERY entry: the block's cap
+ * (twelve per section, then "… and N more") is a reading aid for prose, not a
+ * limit on the data.
  *
  * Fresh plain objects, copied field by field (`what`, `why`, and the
  * record-only `short` / `kind` when declared), never a reference into the rows
@@ -158,12 +206,8 @@ export function coverageOfAnswer(
   // block's `Period:` lines; the key only when one was declared, so a run whose
   // tools declared none commits the value it always did.
   const periods = periodsOf(declared);
-  const folded: AnswerCoverage = {
-    checked: mergeItems(declared.map((d) => d.checked)).map(copyItem),
-    notChecked: mergeItems(declared.map((d) => d.notChecked)).map(copyItem),
-    cannotCover: mergeItems(declared.map((d) => d.cannotCover)).map(copyItem),
-    ...(periods.length > 0 && { periods }),
-  };
+  const sections = copyCoverage(foldSections(declared));
+  const folded: AnswerCoverage = periods.length > 0 ? { ...sections, periods } : sections;
   // The composer's second identity case, for the same reason: a hand-built row
   // that says nothing must not become a boundary that looks like one.
   const entries =
@@ -171,19 +215,56 @@ export function coverageOfAnswer(
   return entries > 0 ? folded : undefined;
 }
 
-/** A coverage value as detached plain data — the same three lists, every item copied (and its periods, when it carries them). */
-export function copyCoverage(value: AnswerCoverage): AnswerCoverage {
+/**
+ * A typed answer's limits as ONE value: the folded coverage (or three empty
+ * lists) and the values assumed this turn, `assumed` present only when one
+ * was. `undefined` when there is neither — the identity case, so a run whose
+ * tools declared nothing and assumed nothing commits exactly the keys it
+ * always did.
+ */
+export function answerCoverageOf(
+  folded: AnswerCoverage | undefined,
+  assumed: readonly AssumedValue[],
+): AnswerCoverage | undefined {
+  if (folded === undefined && assumed.length === 0) return undefined;
+  const base = folded ?? { checked: [], notChecked: [], cannotCover: [] };
+  return assumed.length > 0 ? { ...base, assumed: assumed.map(copyAssumed) } : base;
+}
+
+/** A coverage value as detached plain data — the same three lists, every item copied. */
+export function copyCoverage(value: Coverage): Coverage {
   return {
     checked: value.checked.map(copyItem),
     notChecked: value.notChecked.map(copyItem),
     cannotCover: value.cannotCover.map(copyItem),
-    ...(value.periods !== undefined && {
-      periods: value.periods.map((p) => ({
-        toolName: p.toolName,
-        ...(p.toolCallId !== undefined && { toolCallId: p.toolCallId }),
-        ...copyPeriod(p),
-      })),
-    }),
+  };
+}
+
+/** A typed answer's limits as detached plain data — the lists and any assumed values, copied. */
+export function copyAnswerCoverage(value: AnswerCoverage): AnswerCoverage {
+  return {
+    ...copyCoverage(value),
+    ...(value.periods !== undefined && { periods: value.periods.map(copyAnswerPeriod) }),
+    ...(value.assumed !== undefined && { assumed: value.assumed.map(copyAssumed) }),
+  };
+}
+
+/** One declared period as the answer carries it, as detached plain data. */
+function copyAnswerPeriod(p: AnswerPeriod): AnswerPeriod {
+  return {
+    toolName: p.toolName,
+    ...(p.toolCallId !== undefined && { toolCallId: p.toolCallId }),
+    ...copyPeriod(p),
+  };
+}
+
+/** One assumed value as detached plain data. */
+function copyAssumed(line: AssumedValue): AssumedValue {
+  return {
+    toolName: line.toolName,
+    argument: line.argument,
+    value: line.value,
+    hidden: line.hidden,
   };
 }
 
@@ -211,6 +292,12 @@ function copyItem(item: CoverageItem): CoverageItem {
  * matters, because it is the one every agent that never returns a coverage
  * shape takes.
  *
+ * `standing` (the answer layer, honesty layer 4, under
+ * `.answerLayer({ standingLine: true })`) is the answer's standing as one
+ * already-composed line (`assessment/compose.ts` · `standingLineOf`); it opens
+ * the section, and while it is on the caller passes no `assumed` block — the
+ * line names the assumed values itself (one composer for one fact).
+ *
  * `assumed` (the inputs layer, honesty layer 2) is a second, already-composed
  * block — the values a tool's `assume` rule filled this turn
  * (`arguments/serve.ts` · `assumedBlock`) — appended after the coverage block
@@ -221,8 +308,14 @@ export function composeAnswerWithCoverage(
   answer: string,
   declared: readonly DeclaredCoverage[],
   assumed = '',
+  standing = '',
 ): string {
   const blocks: string[] = [];
+  // The answer layer's standing line (honesty layer 4, its own opt-in arm)
+  // opens the section: it is the headline a person reads first. When it is
+  // on, the caller passes no "Assumed" block — the line owns that sentence
+  // (one composer for one fact).
+  if (standing !== '') blocks.push(standing);
   const coverage = coverageBlock(declared);
   if (coverage !== '') blocks.push(coverage);
   if (assumed !== '') blocks.push(assumed);
@@ -235,9 +328,10 @@ export function composeAnswerWithCoverage(
 /** The coverage block alone — `''` when the declarations say nothing. */
 function coverageBlock(declared: readonly DeclaredCoverage[]): string {
   if (declared.length === 0) return '';
+  const folded = foldSections(declared);
   const sections: string[] = [];
   for (const [key, label] of SECTIONS) {
-    const items = mergeItems(declared.map((d) => d[key]));
+    const items = folded[key];
     if (items.length > 0) sections.push(renderSection(label, items));
   }
   // One `Period:` line per declaring call (honesty step 7b) — the period AS

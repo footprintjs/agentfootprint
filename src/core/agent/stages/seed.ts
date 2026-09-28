@@ -57,6 +57,13 @@ export interface PendingResumeHistory {
    * message is already the last user entry in `history`.
    */
   readonly appendsUserTurn: boolean;
+  /**
+   * The turn the stored history ends on — `AgentRunCheckpoint.turnNumber`,
+   * which a checkpoint carries only while an honesty layer is armed. Seed
+   * continues the turn stamp from it (`turnNumberFor`); absent → the stored
+   * history's count, and the restored ledger's stamps, are all it has.
+   */
+  readonly turn?: number;
 }
 
 export interface SeedStageDeps {
@@ -295,6 +302,49 @@ function countUserTurns(history: readonly LLMMessage[]): number {
   return Math.max(1, count);
 }
 
+/** A stamp that counts as a turn: a positive whole number. */
+const isTurn = (value: unknown): value is number =>
+  typeof value === 'number' && Number.isSafeInteger(value) && value >= 1;
+
+/**
+ * WHICH TURN THIS IS, while an honesty layer is armed — the stamp every
+ * ledger row of this turn carries (`findings/ledger.ts` · `recordFindings`)
+ * and the one the answer's standing reads "this turn" by, so it must never
+ * repeat in one conversation. `countUserTurns` cannot promise that on its
+ * own: a window strategy or a compaction trims the stored history, and the
+ * count of the user messages left repeats and goes backwards — an earlier
+ * turn's verdict would then be folded as a later turn's.
+ *
+ * Two floors raise the count, each a lower bound of the true turn (the rule
+ * `memory/turn/resolveTurnNumber.ts` applies to a store: whichever source
+ * knows more wins, and none drags the conversation backwards):
+ *   - the turn the stored history ENDS on (`AgentRunCheckpoint.turnNumber`):
+ *     a continued conversation is the turn after it, a `resumeOnError` retry
+ *     the same turn again;
+ *   - the latest turn stamped on the restored ledger — for a conversation
+ *     stored before the checkpoint carried its turn: a continued
+ *     conversation comes after every stamped row, a retry at or after them.
+ *
+ * With neither — a fresh run, or no layer armed — the count, as always.
+ */
+function turnNumberFor(
+  history: readonly LLMMessage[],
+  resume: PendingResumeHistory | undefined,
+  ledger: FindingsLedger | undefined,
+  stamped: boolean,
+): number {
+  const counted = countUserTurns(history);
+  if (!stamped || resume === undefined) return counted;
+  const next = resume.appendsUserTurn ? 1 : 0;
+  let turn = counted;
+  if (isTurn(resume.turn)) turn = Math.max(turn, resume.turn + next);
+  for (const row of ledger ?? []) {
+    const stamp = (row as { readonly turn?: unknown }).turn;
+    if (isTurn(stamp)) turn = Math.max(turn, stamp + next);
+  }
+  return turn;
+}
+
 /**
  * Raise `scope.turnNumber` to what the conversation's own stores know.
  *
@@ -462,7 +512,8 @@ function seedFrom(
   // the input chain's verdict — on every path (`historyForTurn`). The
   // accessor clears the field, so a later run without a continuation starts
   // fresh.
-  const history = historyForTurn(deps.consumePendingResumeHistory(), message);
+  const resume = deps.consumePendingResumeHistory();
+  const history = historyForTurn(resume, message);
   scope.history = history;
 
   // The window's durable companion. Restored whether or not THIS agent is
@@ -544,8 +595,11 @@ function seedFrom(
   // builds a fresh Agent per turn hands over no history at all, and for that
   // shape `anchorTurnNumber` below raises this to what the STORE knows.
   // Over-counting (a checkpoint captured mid-retry carries an extra authored
-  // user message) costs a skipped ordinal, never a collision.
-  scope.turnNumber = countUserTurns(history);
+  // user message) costs a skipped ordinal, never a collision. While an
+  // honesty layer is armed the count is raised to what the stored
+  // conversation already stamped (`turnNumberFor`): a window strategy trims
+  // the stored history, and the count alone repeats.
+  scope.turnNumber = turnNumberFor(history, resume, resumeLedger, deps.honestyLayers !== undefined);
   // Permissive default — explicit cap will land when PricingTable
   // gets a context-window field. Memory pickByBudget treats anything
   // ≥ minimumTokens as "fits", so this just enables the budget path.

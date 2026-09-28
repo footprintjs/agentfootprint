@@ -42,7 +42,7 @@ export interface AccountTemplate {
 }
 
 /** Bumped whenever any template's words change (a pinned digest enforces it). */
-export const ANSWER_ACCOUNT_TEMPLATE_SET_VERSION = 5;
+export const ANSWER_ACCOUNT_TEMPLATE_SET_VERSION = 6;
 
 const t = (text: string, voucher: TemplateVoucher = 'library', version = 1): AccountTemplate =>
   Object.freeze({ version, text, voucher });
@@ -283,7 +283,7 @@ export const ANSWER_ACCOUNT_TEMPLATES = Object.freeze({
   'howSure.check.argumentRules': t(
     "Argument rules: {{ran}} of {{count:of,'ruled argument','ruled arguments'}} had a verdict on the record.",
   ),
-  // The results layer (honesty layer 3, step 7b) — set 5.
+  // The results layer (honesty layer 3, step 7b) — set 6.
   'howSure.check.resultPeriod': t(
     "Result periods: {{ran}} of {{count:of,'call','calls'}} had a period verdict on the record.",
   ),
@@ -305,7 +305,7 @@ export const ANSWER_ACCOUNT_TEMPLATES = Object.freeze({
   'howSure.reason.emptyUndeclared': t(
     "{{count:n,'call returned nothing and did not say what it searched','calls returned nothing and did not say what they searched'}}.",
   ),
-  // The results layer's period verdicts (honesty layer 3, step 7b) — set 5.
+  // The results layer's period verdicts (honesty layer 3, step 7b) — set 6.
   'howSure.reason.periodNotHeld': t(
     "{{count:n,'call asked about a period its store does not hold','calls asked about periods their stores do not hold'}}.",
   ),
@@ -326,6 +326,10 @@ export const ANSWER_ACCOUNT_TEMPLATES = Object.freeze({
     'Names or numbers in the answer appear in no tool result, even after one revision.',
   ),
   'howSure.reason.stoppedEarly': t('The run stopped before the model finished.'),
+  // The answer layer's witness (honesty layer 4) — set 5.
+  'howSure.reason.stepsUnfinished': t(
+    "The answer came before the active skill's declared steps finished.",
+  ),
   'howSure.reason.answerCheckFailed': t("The app's answer checks failed this answer."),
   'howSure.reason.checkUnreachable': t(
     "The app's answer checks could not reach a verdict on this answer.",

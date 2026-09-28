@@ -203,7 +203,14 @@ const SEARCH_LIMITS = { raw: 12_000_000, gzip: 2_155_000, records: 2_000 };
 // raise, with the measurement beside it. The file ceiling still holds (7,313
 // of 7,400). Search gzip still holds too, but thinly: 2,107,287 of 2,110,000
 // bytes. Same rule as every raise here: ~2% over the measured export.
-const OUTPUT_LIMITS = { bytes: 700_000_000, files: 7_400, duplicateRscBytes: 0 };
+// RAISED 2026-09-28 for the merge of honesty step 6 (the answer layer, 9.124.0)
+// into step 7b (the results layer) — files only; owner-approved raise;
+// docs-site cleanup planned. Measured after a clean rebuild (out/ and .next/
+// removed first), EXPORT=true: 699.52 MB across 7,410 files, duplicate RSC
+// pairs 0 — each layer alone fitted (7,383 files on step 7b), together they
+// cross by 10 API pages. ~2% over the measured file count, the rule every
+// raise here follows. Bytes still hold, thinly (699.52 of 700 MB).
+const OUTPUT_LIMITS = { bytes: 700_000_000, files: 7_560, duplicateRscBytes: 0 };
 // Raised for 9.61.0: 394.1 KB → 400.3 KB. The skill-graph demo imports
 // `defineTool` from 'agentfootprint', so the library's MAIN ENTRY and its
 // whole transitive graph ride this chunk — and this release added the

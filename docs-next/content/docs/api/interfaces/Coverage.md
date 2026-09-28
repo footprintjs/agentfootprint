@@ -23,6 +23,7 @@ The three are NOT interchangeable, and the difference is the whole point:
 
 ## Extended by
 
+- [`AnswerCoverage`](/docs/api/interfaces/AnswerCoverage)
 - [`DeclaredCoverage`](/docs/api/interfaces/DeclaredCoverage)
 
 ## Properties

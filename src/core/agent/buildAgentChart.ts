@@ -61,18 +61,14 @@ import { withMemoryRecall } from './memoryRecallInjections.js';
 import { offeredResultIds } from './findings/offer.js';
 import type { FindingsLedger } from './findings/types.js';
 import { breakFinalStage, breakFinalWithValidationStage } from './stages/breakFinal.js';
-import {
-  prepareFinalStage,
-  prepareFinalWithLimitsAndAssumedStage,
-  prepareFinalWithLimitsStage,
-  prepareFinalWithValidationStage,
-  prepareFinalWithLimitsAsDataStage,
-} from './stages/prepareFinal.js';
+import { prepareFinalFor } from './stages/prepareFinal.js';
 import { buildCacheSubflow } from './buildCacheSubflow.js';
 import {
   mountInputsLayer,
   mountResultsLayer,
   RESULTS_LOOP_TARGET,
+  startFinalBranch,
+  type AnswerMountDeps,
   type InputsMountDeps,
   type ResultsMountDeps,
 } from './honesty/mounts.js';
@@ -339,6 +335,16 @@ export interface AgentChartDeps {
    * default — and the chart is byte-identical.
    */
   readonly resultsLayer?: ResultsMountDeps;
+  /**
+   * The answer layer is armed (honesty layer 4, `.answerLayer()`). Starts the
+   * final branch with the layer's stage — the answer's standing, folded from
+   * the committed record, filed for PrepareFinal and announced once
+   * (`honesty/mounts.ts` · `startFinalBranch`, the ONE helper both builders
+   * call) — and swaps PrepareFinal's body for the variant that carries the
+   * standing on `turn_end` (and, under `standingLine`, appends its line to a
+   * prose answer). Absent — the default — and the branch is byte-identical.
+   */
+  readonly answerLayer?: AnswerMountDeps;
 
   /**
    * Tool choice by classifier is armed (`.toolChoice()`, 9.105.0). Gates
@@ -403,28 +409,16 @@ export function buildAgentChart(deps: AgentChartDeps): FlowChart {
   // Split so memory-write subflows can mount BETWEEN setting
   // finalContent and breaking the ReAct loop. PrepareFinal captures
   // the turn payload; BreakFinal terminates the loop.
-  let finalBranchBuilder = flowChart<AgentState>(
-    'PrepareFinal',
-    // Same stage id, same position — only the body differs, and only for an
-    // agent that asked for its limits to travel. See `stages/prepareFinal.ts`
-    // for why the fold happens HERE and not in a stage of its own.
-    deps.hasAnswerValidation === true
-      ? prepareFinalWithValidationStage
-      : deps.coverageLimitsAsData === true
-      ? prepareFinalWithLimitsAsDataStage
-      : deps.attachCoverageLimits === true
-      ? deps.inputsLayer !== undefined
-        ? prepareFinalWithLimitsAndAssumedStage(deps.inputsLayer.rewrites === true)
-        : prepareFinalWithLimitsStage
-      : prepareFinalStage,
-    STAGE_IDS.PREPARE_FINAL,
-    {
-      ...(deps.structureRecorders !== undefined && {
-        structureRecorders: [...deps.structureRecorders],
-      }),
-      description: 'Capture turn payload (finalContent + newMessages)',
-      tags: milestoneTagsFor(STAGE_IDS.PREPARE_FINAL),
-    },
+  // Same stage id, same position for PrepareFinal — only the body differs, and
+  // only for an agent that asked for its limits (or its standing) to travel.
+  // See `stages/prepareFinal.ts` · `prepareFinalFor`, the ONE choice both
+  // builders make, and `honesty/mounts.ts` · `startFinalBranch`, which puts
+  // the answer layer's stage first when it is armed and builds the branch
+  // exactly as it always was when it is not.
+  let finalBranchBuilder = startFinalBranch(
+    deps.answerLayer,
+    prepareFinalFor(deps),
+    deps.structureRecorders,
   );
   for (const m of deps.memories) {
     if (m.write) {

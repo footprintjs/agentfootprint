@@ -30,6 +30,7 @@
 import type { LLMToolSchema } from '../../../adapters/types.js';
 import { shownArgsOf } from '../../toolShownArgs.js';
 import type { InputValue } from '../../inputRequest.js';
+import { ASSUMED_BLOCK_HEADING } from '../coverage/answer.js';
 import { argumentRewritesOf, type ArgumentRewrite } from '../middleware/rewrites.js';
 import { isRefused, rulesOf, type RuledToolLike } from './declare.js';
 import { HIDDEN_VALUE, type ArgumentRow } from './rows.js';
@@ -344,8 +345,14 @@ export function keptAnswersNote(toolName: string, argumentNames: readonly string
 
 // ─── The "Assumed" block (under `.limitsTravelWithTheAnswer()`) ───────────
 
-/** The block's opening line. Stable — tests and readers match on it. */
-export const ASSUMED_BLOCK_HEADING = "Assumed (a tool's rule, not your words):";
+/**
+ * The block's opening line. Stable — tests and readers match on it. Owned by
+ * the appended section's one composer (`coverage/answer.ts`), beside the
+ * limits block's heading, so a reader of an answer's text finds every block
+ * the framework appends through one module; re-exported here, where the block
+ * is composed.
+ */
+export { ASSUMED_BLOCK_HEADING };
 
 /** One assumed value, as the answer's block names it. */
 export interface AssumedLine {
@@ -400,12 +407,41 @@ export function assumedBlockOf(
   turn: number,
   readDecisions: (() => readonly unknown[]) | undefined,
 ): string {
+  return assumedBlock(assumedLinesFor(ledger, turn, readDecisions));
+}
+
+// FOLD · the one reading of "what was assumed this turn"
+// consumers read this and never re-derive it: the prose "Assumed" block (`assumedBlockOf`, above),
+// a TYPED answer's limits as data (`stages/answerCoverage.ts` · `withAnswerCoverage` — the
+// `assumed` list on `answerCoverage`) and the answer layer's standing line
+// (`assessment/stage.ts` · `assessAnswerStage`). Same rows, same view, same order — so the block,
+// the data and the line cannot disagree about which values were assumed.
+/**
+ * This turn's assumed values, as the "Assumed" block's lines: every `default`
+ * argument row of `turn`, in the order it was filed, less each row a
+ * before-tool rewrite superseded (its call ran with the rewrite's value, not
+ * the one the row names). `readDecisions` hands over `middlewareDecisions`; it
+ * is asked only when a row exists, and is absent on an agent with no
+ * before-tool chain, whose record can hold no tool rewrite. `[]` when nothing
+ * is assumed. The block prints each distinct (tool, argument, value) once.
+ *
+ * @example
+ * ```ts
+ * assumedLinesFor(state.findingsLedger ?? [], state.turnNumber, undefined);
+ * // [{ toolName: 'search_logs', argument: 'window', value: '2h', hidden: false }]
+ * ```
+ */
+export function assumedLinesFor(
+  ledger: readonly { readonly kind: string }[],
+  turn: number,
+  readDecisions: (() => readonly unknown[]) | undefined,
+): AssumedLine[] {
   const rows = defaultRowsOf(ledger, turn);
   const rewrites =
     readDecisions !== undefined && rows.length > 0
       ? argumentRewritesOf(readDecisions())
       : undefined;
-  return assumedBlock(assumedLinesOf(rows, rewrites));
+  return assumedLinesOf(rows, rewrites);
 }
 
 const isArgumentRow = (row: { readonly kind: string }): row is ArgumentRow =>

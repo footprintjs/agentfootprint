@@ -19,17 +19,36 @@ export interface HonestyLayers {
   readonly inputs?: true;
   /** The results layer (honesty layer 3, step 7b) — `sf-results` is mounted at the loop head. */
   readonly results?: true;
+  /**
+   * The answer layer (honesty layer 4) — its stages head the final branch,
+   * and the Route decider files the answer's witness rows
+   * (`assessment/witness.ts`).
+   */
+  readonly answer?: true;
 }
 
 /**
- * The run constant for an agent with any layer mounted, or `undefined` when
- * none is (then seed writes nothing). An agent with only the inputs layer
- * records `{ inputs: true }`, exactly as before the results layer existed.
+ * The run constant for an agent's armed layers, or `undefined` when none is
+ * armed (then seed writes nothing). A layer that is not armed is absent from
+ * the object — never `false` — so the bytes of a run that armed only the
+ * inputs layer are the bytes that layer has always committed.
+ *
+ * @example
+ * ```ts
+ * honestyLayersOf({ inputs: true, answer: false }); // { inputs: true }
+ * honestyLayersOf({ inputs: false, results: true, answer: false }); // { results: true }
+ * honestyLayersOf({ inputs: false, answer: false }); // undefined
+ * ```
  */
-export function honestyLayersOf(
-  inputsLayer: boolean,
-  resultsLayer = false,
-): HonestyLayers | undefined {
-  if (!inputsLayer && !resultsLayer) return undefined;
-  return { ...(inputsLayer && { inputs: true }), ...(resultsLayer && { results: true }) };
+export function honestyLayersOf(armed: {
+  readonly inputs: boolean;
+  readonly results?: boolean;
+  readonly answer: boolean;
+}): HonestyLayers | undefined {
+  if (!armed.inputs && armed.results !== true && !armed.answer) return undefined;
+  return {
+    ...(armed.inputs && { inputs: true as const }),
+    ...(armed.results === true && { results: true as const }),
+    ...(armed.answer && { answer: true as const }),
+  };
 }

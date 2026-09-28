@@ -66,16 +66,15 @@ import { withMemoryRecall } from './memoryRecallInjections.js';
 import { offeredResultIds } from './findings/offer.js';
 import type { FindingsLedger } from './findings/types.js';
 import { breakFinalStage, breakFinalWithValidationStage } from './stages/breakFinal.js';
-import {
-  prepareFinalStage,
-  prepareFinalWithLimitsAndAssumedStage,
-  prepareFinalWithLimitsStage,
-  prepareFinalWithValidationStage,
-  prepareFinalWithLimitsAsDataStage,
-} from './stages/prepareFinal.js';
+import { prepareFinalFor } from './stages/prepareFinal.js';
 import { buildCacheSubflow } from './buildCacheSubflow.js';
 import type { AgentChartDeps } from './buildAgentChart.js';
-import { mountInputsLayer, mountResultsLayer, RESULTS_LOOP_TARGET } from './honesty/mounts.js';
+import {
+  mountInputsLayer,
+  mountResultsLayer,
+  RESULTS_LOOP_TARGET,
+  startFinalBranch,
+} from './honesty/mounts.js';
 import type { AgentState } from './types.js';
 import type { ToolChoiceEntry } from './toolChoice/types.js';
 
@@ -171,28 +170,14 @@ export function buildDynamicAgentChart(deps: AgentChartDeps): FlowChart {
   // payload, memory-write subflows persist it, BreakFinal terminates
   // the ReAct loop. Lives in the OUTER chart (the final answer is a
   // peer of the LLM turn, not part of it).
-  let finalBranchBuilder = flowChart<AgentState>(
-    'PrepareFinal',
-    // Same stage id, same position — only the body differs, and only for an
-    // agent that asked for its limits to travel. See `stages/prepareFinal.ts`
-    // for why the fold happens HERE and not in a stage of its own.
-    deps.hasAnswerValidation === true
-      ? prepareFinalWithValidationStage
-      : deps.coverageLimitsAsData === true
-      ? prepareFinalWithLimitsAsDataStage
-      : deps.attachCoverageLimits === true
-      ? deps.inputsLayer !== undefined
-        ? prepareFinalWithLimitsAndAssumedStage(deps.inputsLayer.rewrites === true)
-        : prepareFinalWithLimitsStage
-      : prepareFinalStage,
-    STAGE_IDS.PREPARE_FINAL,
-    {
-      ...(deps.structureRecorders !== undefined && {
-        structureRecorders: [...deps.structureRecorders],
-      }),
-      description: 'Capture turn payload (finalContent + newMessages)',
-      tags: milestoneTagsFor(STAGE_IDS.PREPARE_FINAL),
-    },
+  // Same stage id, same position for PrepareFinal — only the body differs, and
+  // only for an agent that asked for its limits (or its standing) to travel.
+  // See `stages/prepareFinal.ts` · `prepareFinalFor` and `honesty/mounts.ts` ·
+  // `startFinalBranch`, the one choice and the one helper both builders use.
+  let finalBranchBuilder = startFinalBranch(
+    deps.answerLayer,
+    prepareFinalFor(deps),
+    deps.structureRecorders,
   );
   for (const m of deps.memories) {
     if (m.write) {

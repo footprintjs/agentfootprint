@@ -130,6 +130,7 @@ import type {
   ToolChoiceOutcomePayload,
   ToolChoiceFailedPayload,
   OntologyServedPayload,
+  AnswerAssessedPayload,
   ArtifactMintedPayload,
   ArtifactResolvedPayload,
   ArtifactExpiredPayload,
@@ -324,6 +325,10 @@ export const EVENT_NAMES = {
   },
   ontology: {
     served: 'agentfootprint.ontology.served',
+  },
+  // The answer layer (honesty layer 4): the answer's standing, as data.
+  answer: {
+    assessed: 'agentfootprint.answer.assessed',
   },
   embedding: {
     generated: 'agentfootprint.embedding.generated',
@@ -818,6 +823,11 @@ export interface AgentfootprintEventMap {
     'agentfootprint.ontology.served',
     OntologyServedPayload
   >;
+  // answer (the answer layer's standing — the value, the reason kinds, the checks that ran)
+  'agentfootprint.answer.assessed': AgentfootprintEventEnvelope<
+    'agentfootprint.answer.assessed',
+    AnswerAssessedPayload
+  >;
   // embedding
   'agentfootprint.embedding.generated': AgentfootprintEventEnvelope<
     'agentfootprint.embedding.generated',
@@ -992,6 +1002,7 @@ export const ALL_EVENT_TYPES: readonly AgentfootprintEventType[] = [
   'agentfootprint.tool_choice.outcome',
   'agentfootprint.tool_choice.failed',
   'agentfootprint.ontology.served',
+  'agentfootprint.answer.assessed',
   'agentfootprint.embedding.generated',
   'agentfootprint.artifacts.minted',
   'agentfootprint.artifacts.resolved',

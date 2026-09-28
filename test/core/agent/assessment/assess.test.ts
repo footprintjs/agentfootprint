@@ -497,6 +497,8 @@ describe('UNIT — the reason table', () => {
       'value-unsupported',
       'value-survived-revision',
       'stopped-early',
+      // Honesty layer 4 (the answer layer's witness row, step 6).
+      'steps-unfinished',
       'answer-check-failed',
       'check-unreachable',
     ];
