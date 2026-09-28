@@ -5,6 +5,46 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [9.125.1] - 2026-09-28
+
+### Changed
+
+- **agentfootprint now requires footprintjs 9.28.0 — a paused agent inside a composition resumes with the composition's continuation.**
+  footprintjs 9.28.0 resumes by walking the real chart instead of a stand-in for
+  the paused stage. What you will see:
+
+  - A paused agent inside a `Conditional` or `Parallel` that is a step of a
+    `Sequence` now finishes the composition on resume: `Sequence(Conditional(agent))`
+    runs its Finalize (and the steps after it), `Sequence(Parallel(agent, other))`
+    runs its Merge once, after the answer. Before, the resumed run ended without
+    the composition's result.
+  - A pause inside a CONCURRENT `graph()` level resumes that node and then runs
+    the later levels (before, only the paused node finished).
+  - When an `LLMCall` run loops back to its client stage, the commit log now
+    names the real node (`stage: 'Client'`, its display name) where it wrote the
+    stage id (`'client'`) — one field of one bundle; nothing else in the record
+    moved.
+
+  The `peerDependencies` range and the development dependency move to `^9.28.0`.
+
+### Fixed
+
+- **A compaction summary no longer exempts its own values from the evidence check.**
+  `.compaction()` puts the summarizer's text in a user-role message, and the
+  evidence gate's exempt corpus indexed it as if the person had said it — so a
+  value the summarizer INVENTED skipped the names-and-numbers check, and a
+  summary that repeated a value from a result the model had declared open, noise
+  or ruled-out skipped the contingent check too. A summary's text now exempts
+  nothing. What the folded person and app messages exempted is carried forward
+  with the summary instead (`LLMMessage.foldedExempt`, read off the original
+  messages at fold time, never off the summary; kept off the wire), so a value
+  the person gave before the fold stays exempt — on the next turn, after a
+  restore and through a nested fold. A value from a folded TOOL result is judged
+  against the results still in the window, exactly as after a drop. Correction
+  frames stay non-exempt, and an agent that never compacts builds the same
+  corpus as before. See `src/core/agent/evidence/README.md` § "A compaction
+  summary exempts nothing by itself".
+
 ## [9.125.0] - 2026-09-28
 
 ### Added
