@@ -31,8 +31,14 @@
  *                   `from` is never judged as an argument value — and its
  *                   enum fence strips the decoration, so a source word never
  *                   excuses one;
- *   - SECURITY    — a hidden answer's note offers no `turn` clause; a tool
- *                   whose author owns `_findings` keeps its argument;
+ *   - SECURITY    — a hidden answer's note offers no `turn` clause; a
+ *                   REGISTERED ruled tool whose author owns `_findings` is
+ *                   refused at build under either sources door (a skill's
+ *                   scoped tool too); an unruled one, or one without the
+ *                   sources arm, keeps its argument; a ToolProvider's ruled
+ *                   tool that owns it is served and run as written — the
+ *                   unarmed `ask` sentence, no `turn` clause — beside a
+ *                   registered ruled tool that keeps both on the same wire;
  *                   `inputsLayer` refuses what it cannot read;
  *   - PERFORMANCE — what each arm serves per request (recorded, not claimed):
  *                   the sources-only arm adds nothing to the system prompt and
@@ -72,6 +78,8 @@ import {
 } from '../../../../src/core/agent/findings/reserved.js';
 import { readInputsLayerOption } from '../../../../src/core/agent/honesty/armed.js';
 import { SHOWN_ARGS } from '../../../../src/core/toolShownArgs.js';
+import { defineSkill } from '../../../../src/injection-engine.js';
+import { staticTools } from '../../../../src/tool-providers/index.js';
 
 // ─── the harness ─────────────────────────────────────────────────────
 
@@ -690,43 +698,152 @@ describe('INTEGRATION — the choice seam reads a ruled call’s arguments witho
 // ─── SECURITY ─────────────────────────────────────────────────────────
 
 describe('SECURITY — the author’s `_findings` and a hidden answer', () => {
-  it('a ruled tool whose author owns `_findings` is served and run as written — its value is the author’s argument', async () => {
-    const ran: Record<string, unknown>[] = [];
-    const owning = defineTool({
+  /** A ruled tool whose AUTHOR declares an argument named `_findings` — the reserved name. */
+  const owningTool = (ran: Record<string, unknown>[] = []): Tool =>
+    defineTool({
       name: 'annotate',
       description: 'Adds a note for one service over a period.',
       inputSchema: {
         type: 'object',
         properties: {
           service: { type: 'string' },
-          window: { type: 'string', enum: ['1h', '24h'] },
+          window: { type: 'string', enum: ['1h', '24h', '7d'], description: 'Look-back period.' },
           _findings: { type: 'string', description: 'The author’s own note.' },
         },
       },
-      askOrAssume: { window: { assume: '1h' } },
+      askOrAssume: {
+        window: { ask: 'Which period should the note cover?', choices: ['1h', '24h', '7d'] },
+      },
       execute: async (args) => {
         ran.push({ ...args });
         return 'noted';
       },
     });
+  const refusedBySources =
+    /tool 'annotate' declares the reserved argument '_findings' — with declared sources \(argumentSources: true\)/;
+
+  it('a REGISTERED ruled tool whose author owns `_findings` is refused at build under the sources-only door, naming the tool', () => {
+    // Served, it would read "…quote their words for it in `_findings.from`" beside the author's
+    // own `_findings` — and the model's declaration would run as the author's argument.
+    const m = scripted([answer('hi')]);
+    const create = (options: Record<string, unknown> = {}) =>
+      Agent.create({ provider: m.provider as never, model: 'm', ...options });
+    expect(() =>
+      create().tool(owningTool()).inputsLayer({ argumentSources: true }).build(),
+    ).toThrow(refusedBySources);
+    // The option form of the same door.
+    expect(() =>
+      create({ inputsLayer: { argumentSources: true } })
+        .tool(owningTool())
+        .build(),
+    ).toThrow(refusedBySources);
+    // A skill's SCOPED tool is decorated when its skill is active — it is not on the static list,
+    // and it is refused all the same.
+    const notes = defineSkill({
+      id: 'notes',
+      description: 'Service notes.',
+      body: 'Note what the person says.',
+      tools: [owningTool()] as never,
+      autoActivate: 'currentSkill',
+    });
+    expect(() => create().skill(notes).inputsLayer({ argumentSources: true }).build()).toThrow(
+      refusedBySources,
+    );
+    // The ledger's door refuses it too — by the ledger's own refusal: it decorates every tool.
+    expect(() => create().tool(owningTool()).findings({ argumentSources: true }).build()).toThrow(
+      /tool 'annotate' declares the reserved argument '_findings' — with \.findings\(\)/,
+    );
+  });
+
+  it('nothing plants `_findings` on the tool, so the author keeps it: the layer without sources, or an UNRULED tool under them', async () => {
+    const m = scripted([answer('hi')]);
+    const create = () => Agent.create({ provider: m.provider as never, model: 'm' });
+    expect(() => create().tool(owningTool()).inputsLayer().build()).not.toThrow();
+    const jot = defineTool({
+      name: 'jot',
+      description: 'Jots a line.',
+      inputSchema: {
+        type: 'object',
+        properties: { _findings: { type: 'string', description: 'The author’s own line.' } },
+      },
+      execute: async () => 'ok',
+    });
+    const agent = create()
+      .tool(askingSearch([]))
+      .tool(jot)
+      .inputsLayer({ argumentSources: true })
+      .build();
+    await agent.run({ message: 'hello' });
+    expect(propertiesOf(m.requests[0]!, 'jot')._findings).toEqual({
+      type: 'string',
+      description: 'The author’s own line.',
+    });
+  });
+
+  it('a ToolProvider’s ruled tool whose author owns `_findings` is served and run as written: the unarmed `ask` sentence, no `turn` clause', async () => {
+    const ran: Record<string, unknown>[] = [];
+    const m = scripted([
+      batch({ id: 'c1', name: 'annotate', args: { service: 'checkout', _findings: 'mine' } }),
+      answer('Noted.'),
+    ]);
+    const agent = Agent.create({ provider: m.provider as never, model: 'm' })
+      .tool(askingSearch([]))
+      .toolProvider(staticTools([owningTool(ran)]))
+      .inputsLayer({ argumentSources: true })
+      .build();
+    const paused = await agent.run({ message: 'Note that checkout is fine.' });
+    const first = m.requests[0]!;
+    // Served as its author wrote it — the author's `_findings`, and a sentence that names no
+    // `_findings.from` — while the registered ruled tool beside it on the SAME wire keeps the
+    // armed sentence and the decoration: the choice is per tool.
+    expect(propertiesOf(first, 'annotate')._findings).toEqual({
+      type: 'string',
+      description: 'The author’s own note.',
+    });
+    expect(propertiesOf(first, 'annotate').window!.description).toBe(
+      `Look-back period. ${ASK_SENTENCE}`,
+    );
+    expect(propertiesOf(first, 'search_logs').window!.description).toBe(
+      `Look-back period. ${ASK_SOURCES_SENTENCE}`,
+    );
+    expect(propertiesOf(first, 'search_logs')._findings).toEqual(FINDINGS_SOURCES_SCHEMA);
+    await agent.resume(stored(paused), replyTo(paused, { f1: '24h' }));
+    // Run as written: the value is the author's argument, never peeled, and nothing was declared.
+    expect(ran).toEqual([{ service: 'checkout', window: '24h', _findings: 'mine' }]);
+    expect(argumentRows(agent).map((r) => [r.asked ?? r.source, r.claimed])).toEqual([
+      ['missing', undefined],
+      ['answered', undefined],
+    ]);
+    // The answered note is step 4's: that tool carries no `_findings.from` to cite the answer in.
+    const message = m.requests[1]!.messages.find((msg) => msg.role === 'tool')!;
+    expect(message.content).toContain(
+      'window = "24h" in the annotate call this result answers was chosen by the person when ' +
+        'asked (the call had left it out).]',
+    );
+    expect(message.content).not.toContain(ANSWERED_SOURCE_CLAUSE);
+  });
+
+  it('…and a value that tool’s call carries runs as sent, filed `model` — it had nowhere to declare a source, so it is not asked about', async () => {
+    const ran: Record<string, unknown>[] = [];
     const m = scripted([
       batch({
         id: 'c1',
         name: 'annotate',
-        args: { service: 'checkout', window: '1h', _findings: 'mine' },
+        args: { service: 'checkout', window: '7d', _findings: 'mine' },
       }),
-      answer('done'),
+      answer('Noted.'),
     ]);
     const agent = Agent.create({ provider: m.provider as never, model: 'm' })
-      .tool(owning)
+      .toolProvider(staticTools([owningTool(ran)]))
       .inputsLayer({ argumentSources: true })
       .build();
-    await agent.run({ message: 'note it' });
-    expect(propertiesOf(m.requests[0]!, 'annotate')._findings).toEqual({
-      type: 'string',
-      description: 'The author’s own note.',
-    });
-    expect(ran).toEqual([{ service: 'checkout', window: '1h', _findings: 'mine' }]);
+    const out = await agent.run({ message: 'Note that checkout is fine.' });
+    expect(out).toBe('Noted.');
+    expect(ran).toEqual([{ service: 'checkout', window: '7d', _findings: 'mine' }]);
+    expect(argumentRows(agent)).toEqual([
+      expect.objectContaining({ argument: 'window', source: 'model' }),
+    ]);
+    expect(argumentRows(agent)[0]!.claimed).toBeUndefined();
   });
 
   it('a hidden answer’s note offers no `turn` clause — the record keeps no value to check it against', async () => {

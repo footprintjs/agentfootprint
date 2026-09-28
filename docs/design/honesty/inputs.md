@@ -46,30 +46,46 @@ overturn. Nothing here is built yet.**
 > step-5 arm and its registered rule are not part of the build; they are registered before the
 > step's first paid call.
 >
-> **Step 5, round 1 of the paid bench's fixes (2026-09-28) — two places this page is CHANGED,
-> for the owner to confirm.** The paid run (`bench/inputs/runs/haiku45-step5`, rule
+> **Step 5, round 1 of the paid bench's fixes (2026-09-28) — two places this page is CHANGED.
+> ADOPTED overnight 2026-09-28 on the owner's go ("decide for the library, report the reason");
+> the owner may overturn it ([decisions.md](decisions.md) Q44, which wins over the text below
+> where they differ).** The paid run (`bench/inputs/runs/haiku45-step5`, rule
 > `inputs-rule-step5`, FAIL) found the checks right and the served text wrong: the model wrote
 > `from` on 35 of 268 calls, cited the person's words only beside a result it also cited, and
-> re-sent an earlier answer with no source. (1) **§ 2.3, what the model is served.** Under the
-> sources arm an `ask` property's sentence names the declaration where the model decides
-> (`arguments/serve.ts` · `ASK_SOURCES_SENTENCE` — this page's "whatever the arms" sentence is
-> kept for the unarmed layer only); `from` is explained ONCE, in its own property, with no
-> "Optional:" and no "Leave an argument out rather than guess", the sources' meanings on
+> re-sent an earlier answer with no source. (a) **§ 2.3, what the model is served — the ruled
+> argument's sentence differs when sources are armed**, because the armed layer changes what a
+> present value needs (an unsourced value is asked), and served text must say what the layer will
+> do. Under the sources arm an `ask` property's sentence names the declaration where the model
+> decides (`arguments/serve.ts` · `ASK_SOURCES_SENTENCE` — this page's "whatever the arms"
+> sentence is kept for the unarmed layer only); `from` is explained ONCE, in its own property,
+> with no "Optional:" and no "Leave an argument out rather than guess", the sources' meanings on
 > `source`, and what the record keeps ("a value with no entry has no declared source on the
 > record"); beside the ledger it comes FIRST in `_findings` and joins its `required`
 > (`['basis', 'from']`); the instruction line is GONE (it paid for the explanation twice); and an
 > answered note adds that a later call may cite that answer as `turn` (`serve.ts` ·
-> `ANSWERED_SOURCE_CLAUSE`, never for a hidden answer). (2) **§ 6, arming — "Refused without
-> `.findings()`" no longer holds.** `.inputsLayer({ argumentSources: true })` arms the same
-> checks and rows WITHOUT the findings ledger: `_findings` with `from` alone
-> (`findings/reserved.ts` · `FINDINGS_SOURCES_SCHEMA`) on ruled tools only, so every other tool and
-> the system prompt are served as on a plain agent (the ledger costs every tool about 2,500
-> characters, which the arm needed only for `from`). `.findings({ argumentSources: true })` stays,
-> and `.findings()` + `.inputsLayer({ argumentSources: true })` serves the same bytes; `setAside`
-> needs the ledger's standings, so it is filed only beside it. The registered rule is frozen and
-> not re-scored by these: its `full` arm still rides `.findings()`, so its S5-8 cannot pass on
-> any wording — whether the next registration measures S5-8 against `off` or against the agent
-> the arm needs is the owner's question.
+> `ANSWERED_SOURCE_CLAUSE`, never for a hidden answer). By the same reason, both sentences are
+> served only on a tool whose schema carries `_findings.from`: a REGISTERED ruled tool whose
+> author owns `_findings` is refused at build under either door (`buildToolRegistry.ts` ·
+> `assertReservedArgument`, over every ruled tool of the dispatch map, a skill's scoped tools
+> included), and a ToolProvider's is served and run as written, with the unarmed `ask` sentence
+> and no `turn` clause (§ 2.2's "a tool that owns the name is neither decorated nor read" now
+> holds for its sentences too). (b) **§ 6, arming — sources may be armed without `.findings()`;
+> "Refused without `.findings()`" no longer holds**, because two laws of the architecture note's
+> clause 7 — "a tool declaration may serve bytes only inside that tool's own schema" and "zero
+> cost when undeclared" — forbid charging every tool the ledger's schema for a feature that needs
+> `from` on ruled tools only. `.inputsLayer({ argumentSources: true })` arms the same checks and
+> rows WITHOUT the findings ledger: `_findings` with `from` alone (`findings/reserved.ts` ·
+> `FINDINGS_SOURCES_SCHEMA`) on ruled tools only, so every other tool and the system prompt are
+> served as on a plain agent (the ledger costs every tool about 2,500 characters, which the arm
+> needed only for `from`). `.findings({ argumentSources: true })` stays and serves the same
+> checks, and `.findings()` + `.inputsLayer({ argumentSources: true })` serves the same bytes;
+> `setAside` needs the ledger's standings, so it is filed only beside it. (c) **The option name
+> `argumentSources` is kept on both doors** — one vocabulary. Every other law of this page holds:
+> the checks (§ 3) are unchanged, a model declaration is a claim and never evidence, and
+> membership can refute but never make an answer "known". The registered rule is frozen and not
+> re-scored by these: its `full` arm still rides `.findings()`, so its S5-8 cannot pass on any
+> wording — whether the next registration measures S5-8 against `off` or against the agent the
+> arm needs is the owner's question.
 
 - Written against agentfootprint 9.118.1 (`f83f277c` on main) and footprintjs 9.27.0. Every code
   fact below was re-read in the code on 2026-09-26.

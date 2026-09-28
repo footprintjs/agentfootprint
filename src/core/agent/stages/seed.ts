@@ -596,7 +596,12 @@ function seedFrom(
   // base decoration — an explicit lambda, because passed point-free `.map`
   // would hand the index in as the offer (`reserved.ts · withFindingsArgument`).
   // The inputs layer's rules decorate FIRST (honesty layer 2) — the slot's
-  // order: rules, then `_findings`. Only when a registered tool is ruled.
+  // order: rules, then `_findings`. Only when a registered tool is ruled. One
+  // options value for every schema here, where the slot decides per schema
+  // (`ownsReservedArgument`): the seed serves REGISTERED tools only, and under
+  // declared sources a registered ruled tool whose author owns `_findings` is
+  // refused at build (`buildToolRegistry` · `assertReservedArgument`) — so
+  // every ruled schema here carries the `_findings.from` its sentence names.
   const ruledTools = deps.ruledTools;
   const ruleOptions = deps.argumentSources === true ? { sources: true } : undefined;
   const ruled =

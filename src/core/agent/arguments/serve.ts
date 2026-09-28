@@ -103,10 +103,15 @@ export const ASK_SOURCES_SENTENCE =
 export interface ServeOptions {
   /**
    * Declared sources are armed (`.findings({ argumentSources: true })` or
-   * `.inputsLayer({ argumentSources: true })`): an `ask` property says where the
-   * model declares the person's words, and an answered note says a later call
-   * may cite the answer. Absent → the sentences steps 3 and 4 serve, byte for
-   * byte.
+   * `.inputsLayer({ argumentSources: true })`) AND this tool's served schema
+   * carries `_findings.from`: an `ask` property says where the model declares
+   * the person's words, and an answered note says a later call may cite the
+   * answer. The CALLER decides it per tool, by the rule the planters and the
+   * dispatch peel ask (`findings/reserved.ts` · `ownsReservedArgument`, which
+   * this leaf cannot import): a tool whose author owns `_findings` is served
+   * undecorated, so a sentence naming `_findings.from` would tell the model to
+   * write into the author's own argument. Absent → the sentences steps 3 and 4
+   * serve, byte for byte.
    */
   readonly sources?: boolean;
 }
@@ -194,15 +199,18 @@ export function withArgumentRules(
  * when no served schema changed — so an armed agent whose wire carries no
  * ruled tool commits the bytes it always did. The tools slot's one decoration
  * site (`core/slots/buildToolsSlot.ts` · `commitWire`) calls it under the arm.
+ * `optionsOf` gives each schema its own `ServeOptions`: under declared sources
+ * one wire can hold a tool that carries `_findings.from` beside a provider's
+ * tool whose author owns `_findings`, which does not.
  */
 export function rulesOnWire(
   served: readonly LLMToolSchema[],
   winningTools: ReadonlyMap<string, RuledToolLike>,
-  options?: ServeOptions,
+  optionsOf?: (schema: LLMToolSchema) => ServeOptions | undefined,
 ): readonly LLMToolSchema[] {
   let changed = false;
   const decorated = served.map((schema) => {
-    const next = withArgumentRules(schema, winningTools.get(schema.name), options);
+    const next = withArgumentRules(schema, winningTools.get(schema.name), optionsOf?.(schema));
     if (next !== schema) changed = true;
     return next;
   });

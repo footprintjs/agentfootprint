@@ -66,9 +66,12 @@ the emission, hashed by the receipt like any other argument.
   the pause and halt carriers — is the peeled form.
 - **A tool that owns the name keeps it.** `ownsReservedArgument` is the one
   predicate: a registry schema declaring `_findings` is refused at build
-  (armed only); a provider or MCP schema declaring it is served undecorated,
-  and a call to that tool is not peeled — the value is the author's
-  argument, and it files no row.
+  (armed only — under `.findings()` every registry tool, under declared
+  sources every RULED one, whichever door armed them:
+  `buildToolRegistry.ts` · `assertReservedArgument`); a provider or MCP
+  schema declaring it is served undecorated, no sentence it is served names
+  `_findings.from`, and a call to that tool is not peeled — the value is the
+  author's argument, and it files no row.
 - **Served from the record, never rewritten into it.** The answer turn reads
   a piece composed from the folded ledger and a ticket where a judged
   noise or ruled-out result stood, on the wire only; `history` keeps every

@@ -1332,6 +1332,13 @@ async function judgeLanded(
 const UNSCOPED_RUN = '#no-run-id';
 
 /**
+ * The inputs layer's note options for a call whose tool's served schema
+ * carries `_findings.from` under declared sources (`arguments/serve.ts` ·
+ * `ServeOptions`) — one frozen value, handed per call.
+ */
+const SOURCES_NOTE = Object.freeze({ sources: true as const });
+
+/**
  * What the dispatch moment of the contingent check needs for one batch
  * (9.110.0), or `undefined` when nothing can be filed: one of the two doors
  * is closed, the ledger is absent, or no result holds a set-aside standing.
@@ -3064,9 +3071,15 @@ export function buildToolCallsHandler(
     peelsReserved(resolveTool(tc.name).tool) ? splitFindings(tc.args, peelArms) : { args: tc.args };
   /**
    * The inputs layer's note options: under declared sources an answered
-   * clause says a later call may cite the answer. Absent → the step-3/4 note.
+   * clause says a later call may cite the answer in `_findings.from` — only
+   * for a tool whose served schema CARRIES it. A tool whose author owns
+   * `_findings` was served undecorated and its calls are not peeled
+   * (`peelsReserved`'s rule, `ownsReservedArgument`; a registered one is
+   * refused at build), so its note is the step-4 note. Absent → the step-3/4
+   * note.
    */
-  const noteOptions = deps.argumentSources === true ? { sources: true } : undefined;
+  const noteOptionsFor = (tool: Tool | undefined): { readonly sources: true } | undefined =>
+    deps.argumentSources === true && !ownsReservedArgument(tool?.schema) ? SOURCES_NOTE : undefined;
   /** The record of an off-wire dispatch — once per such call, before it runs. */
   const noteOffWire = (
     scope: TypedScope<AgentState>,
@@ -5283,7 +5296,7 @@ export function buildToolCallsHandler(
         // `ANSWERED_SOURCE_CLAUSE`).
         const layerNote =
           inputs !== undefined && executed
-            ? inputs.noteFor(tc.name, tool, resolution, callArgs, args, noteOptions)
+            ? inputs.noteFor(tc.name, tool, resolution, callArgs, args, noteOptionsFor(tool))
             : '';
         if (layerNote !== '') resultStr += layerNote;
         newHistory.push({

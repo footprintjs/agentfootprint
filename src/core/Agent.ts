@@ -4166,6 +4166,9 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
         // The reserved-argument refusal (9.101.0) — only when the ledger is
         // armed may a registry tool's own `_findings` be refused.
         ...(this.findingsOptions !== undefined && { findings: true as const }),
+        // …and, under declared sources (either door), a RULED tool's: the arm
+        // plants `_findings.from` on it and its sentences name that argument.
+        ...(this.argumentSourcesArmed === true && { argumentSources: true as const }),
       },
     );
     // The declared ontology's tool edges (9.106.0): every name a node's `via`

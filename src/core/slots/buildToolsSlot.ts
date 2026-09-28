@@ -37,7 +37,11 @@ import type { ToolClaim } from '../agent/buildToolRegistry.js';
 import type { ToolNameChannel } from '../../events/payloads.js';
 import type { ToolProvider, ToolDispatchContext } from '../../tool-providers/types.js';
 import { composeSlot, fnv1a, formatOverflowWarning, slotOverflow, truncate } from './helpers.js';
-import { withFindingsArgument, withSourcesArgument } from '../agent/findings/reserved.js';
+import {
+  ownsReservedArgument,
+  withFindingsArgument,
+  withSourcesArgument,
+} from '../agent/findings/reserved.js';
 import { carriesRules } from '../agent/arguments/declare.js';
 import type { Classifier } from '../../classify/types.js';
 import type { ToolChoiceEntry } from '../agent/toolChoice/types.js';
@@ -193,6 +197,13 @@ export function mergeWire(candidates: readonly WireCandidate[]): {
 
 /** The inputs layer's wire decoration (`agent/arguments/serve.ts` · `rulesOnWire`). */
 type RulesOnWire = typeof import('../agent/arguments/serve.js').rulesOnWire;
+
+/**
+ * The rules' serve options for a schema that will CARRY `_findings.from`
+ * under declared sources (`agent/arguments/serve.ts` · `ServeOptions`) — one
+ * frozen value, handed per schema.
+ */
+const SOURCES_SERVED = Object.freeze({ sources: true as const });
 
 /**
  * Declared sources WITHOUT the findings ledger: each RULED schema gains the
@@ -963,15 +974,16 @@ export function buildToolsSlot(config: ToolsSlotConfig): FlowChart {
       // THE INPUTS LAYER'S RULES (honesty layer 2) decorate FIRST, from the
       // rules of the implementation that WINS each name — `served` itself,
       // by reference, when the layer is not armed or no served tool is ruled.
-      // `rules` is loaded (below) exactly when the layer is armed.
-      const ruled =
-        rules !== undefined
-          ? rules(
-              served,
-              winningTools,
-              config.argumentSources === true ? { sources: true } : undefined,
-            )
-          : served;
+      // `rules` is loaded (below) exactly when the layer is armed. Under
+      // declared sources an `ask` rule's sentence names `_findings.from` only
+      // on a schema that will CARRY it: a tool whose author owns `_findings`
+      // is left undecorated by both planters below (`ownsReservedArgument`,
+      // the rule the dispatch peel asks), so it keeps the unarmed sentence —
+      // a REGISTERED one is refused at build (`buildToolRegistry` ·
+      // `assertReservedArgument`), so this is a ToolProvider's tool.
+      const sourcesOf = (s: LLMToolSchema): typeof SOURCES_SERVED | undefined =>
+        config.argumentSources === true && !ownsReservedArgument(s) ? SOURCES_SERVED : undefined;
+      const ruled = rules !== undefined ? rules(served, winningTools, sourcesOf) : served;
       // Declared sources (honesty layer 2): `_findings.from` on a RULED tool only —
       // inside the ledger's decoration under `.findings()`, or as the reserved
       // argument's only property without it (`withSourcesArgument`).

@@ -222,6 +222,11 @@ last week" checks out as `7d` without the library ever parsing a time phrase:
   served as they would be without it. `.findings({ argumentSources: true })` needs
   the inputs layer and is refused at build without it; `.inputsLayer(...)` is the
   inputs layer.
+- **`_findings` is the library's name on a ruled tool.** With the arm on, a tool
+  that declares `askOrAssume` and also takes an argument of its own named
+  `_findings` is refused when the agent is built — rename the argument. A tool a
+  provider serves with its own `_findings` runs as written: nothing it is served
+  asks the model where its values came from.
 
 ## Hosted chat
 

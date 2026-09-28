@@ -18,8 +18,8 @@
  *   - each layer page states its law in the README's own words (README.md
  *     § 5.5, "The one-sentence laws") and ends with "What … lets you measure"
  *     (the owner's framing, item 4, on decisions.md);
- *   - the decisions page carries the adoption marker and answers Q1–Q43 once
- *     each.
+ *   - the decisions page carries the adoption markers (the 43 answers of
+ *     2026-09-27, and Q44 of 2026-09-28) and answers Q1–Q44 once each.
  *
  * WHAT IT DOES NOT PROVE: that a `file · symbol` pointer on these pages still
  * resolves. The pages cite code that later steps create, so, like the rest of
@@ -44,6 +44,8 @@ const LAYER_PAGES: Readonly<Record<string, string>> = {
 };
 
 const ADOPTION_MARKER = "Adopted overnight 2026-09-27 on the owner's go; the owner may overturn.";
+/** Q44, reopened by the step-5 bench and adopted the same way a night later. */
+const LATER_ADOPTION_MARKER = "Adopted overnight 2026-09-28 on the owner's go";
 
 /** The banned citation form, as test/architecture/citations.test.ts spells it. */
 const LINE_CITATION = /[A-Za-z0-9_.\-/]+\.(?:ts|tsx|md):\d+/;
@@ -166,9 +168,10 @@ describe('docs/design/honesty — the folder keeps its own promises', () => {
     });
   }
 
-  it('the decisions page carries the adoption marker and answers Q1–Q43 once each', () => {
+  it('the decisions page carries the adoption markers and answers Q1–Q44 once each', () => {
     const text = read('decisions.md');
     expect(text.includes(ADOPTION_MARKER), 'the adoption marker is missing').toBe(true);
+    expect(text.includes(LATER_ADOPTION_MARKER), 'Q44’s adoption marker is missing').toBe(true);
     const numbers: number[] = [];
     for (const line of text.split('\n')) {
       const m = /^\|\s*Q(\d+)\s*\|/.exec(line);
@@ -177,6 +180,6 @@ describe('docs/design/honesty — the folder keeps its own promises', () => {
       const answer = (line.split('|')[3] ?? '').trim();
       expect(answer.length, `Q${m[1]} has no answer`).toBeGreaterThan(0);
     }
-    expect(numbers).toEqual(Array.from({ length: 43 }, (_, i) => i + 1));
+    expect(numbers).toEqual(Array.from({ length: 44 }, (_, i) => i + 1));
   });
 });

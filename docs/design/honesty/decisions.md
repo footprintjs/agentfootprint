@@ -5,7 +5,8 @@
 This page records what was decided for the honesty layers: the owner's framing of 2026-09-26,
 which the three design pages were written to, and the 43 questions those pages put, each with the
 answer it took. The go reached this page through the overnight build's task; the owner's own review
-of this page is the confirmation, and any answer here can be overturned.
+of this page is the confirmation, and any answer here can be overturned. One later question, Q44,
+reopened by the step-5 bench, was adopted the same way on 2026-09-28 (the last section).
 
 - The questions are numbered once across the three pages, as the owner's summary of 2026-09-26
   numbered them. Each row names where the question was asked: the pages number their own lists
@@ -168,3 +169,18 @@ note's text where it touches it.
 | Q41 | The empty-data message | **Its own fix after 7a**, so 7a keeps "the same refusals". | results Q9 | step 7a′ |
 | Q42 | A `clarify-open` reason | **Leave `clarify` as data only in v1.** Such a reason would over-report. | results Q10 | — |
 | Q43 | The names: `period`, `queried`, `held`, `readAt`, `'unknown'`, the verdict words, the `period` row kind | **Keep the drafts.** | results Q11 | step 7b's docs |
+
+### After the step-5 bench (2026-09-28)
+
+**Adopted overnight 2026-09-28 on the owner's go ("decide for the library, report the reason") —
+the same go as the 43 above; the owner may overturn it.** It changes two places the inputs page had
+settled, § 2.3 and § 6, so it is recorded here, where an answer wins over a page's text. The paid
+step-5 run (`bench/inputs/runs/haiku45-step5`, rule `inputs-rule-step5`, FAIL on Haiku 4.5) found
+the checks right and the served text wrong: no made-up quote was verified and every cited value
+traced, but the model almost never declared a source for the person's words — nothing it was
+served asked for one, and `from` was optional — and the arm rode on `.findings()`, which serves the
+whole ledger schema (about 2,400 characters) on every tool.
+
+| # | Question | Adopted answer | Asked in | Lands in |
+|---|---|---|---|---|
+| Q44 | Redesign what the model is served under declared sources, and how the arm is switched on? | **Yes, in three parts.** (a) **§ 2.3 — a ruled `ask` argument's sentence differs when sources are armed** (`arguments/serve.ts` · `ASK_SOURCES_SENTENCE`, and an answered note gains `ANSWERED_SOURCE_CLAUSE`), because the armed layer changes what a present value needs — an unsourced value is asked — and served text must say what the layer will do. So both are served only on a tool whose schema carries `_findings.from`: a registered ruled tool whose author owns `_findings` is refused at build, and a ToolProvider's is served its unarmed sentences. (b) **§ 6 — sources may be armed without `.findings()`**, through `.inputsLayer({ argumentSources: true })`, because two laws of the architecture note's clause 7 — "a tool declaration may serve bytes only inside that tool's own schema" and "zero cost when undeclared" — forbid charging every tool the ledger's schema for a feature that needs `from` on ruled tools only. `.findings({ argumentSources: true })` stays and serves the same checks. (c) **The option name `argumentSources` is kept on both doors** — one vocabulary. Every other law holds: the checks are unchanged, a model declaration is a claim and never evidence, and membership can refute but never make an answer "known". | inputs § 2.3 and § 6, reopened by the step-5 bench | step 5, round 1 (`900061af`) and its review fix (the refusal and the per-tool sentences) |
