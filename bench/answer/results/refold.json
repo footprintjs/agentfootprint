@@ -1,0 +1,311 @@
+{
+  "what": "Every recorded inputs-bench run re-folded with this build ($0): the saved standing against today's fold (with the inputs sheet's rowsAt declarations), the standing the answer layer would have served (the fold without declarations), and answers exceeding their standing.",
+  "all": {
+    "runs": 800,
+    "answered": 800,
+    "foldUnchanged": {
+      "k": 800,
+      "n": 800,
+      "share": 1,
+      "wilson": [
+        0.9952211237192937,
+        1
+      ]
+    },
+    "inRunMix": {
+      "not-assessed": 517,
+      "not-sure": 231,
+      "consistent": 52
+    },
+    "declaredMix": {
+      "consistent": 404,
+      "not-assessed": 150,
+      "not-sure": 246
+    },
+    "flat": {
+      "k": 109,
+      "n": 800,
+      "share": 0.13625,
+      "wilson": [
+        0.11420958039621762,
+        0.16176705209799605
+      ]
+    },
+    "hedges": {
+      "k": 288,
+      "n": 800,
+      "share": 0.36,
+      "wilson": [
+        0.3274801783844573,
+        0.39385790697414025
+      ]
+    },
+    "exceedsInRun": {
+      "k": 42,
+      "n": 800,
+      "share": 0.0525,
+      "wilson": [
+        0.039072795922146554,
+        0.07020429834908537
+      ]
+    },
+    "exceedsDeclared": {
+      "k": 51,
+      "n": 800,
+      "share": 0.06375,
+      "wilson": [
+        0.04881779213543175,
+        0.0828517774194843
+      ]
+    },
+    "flatFlaggedInRun": {
+      "k": 42,
+      "n": 109,
+      "share": 0.3853211009174312,
+      "wilson": [
+        0.2993458749371437,
+        0.4791043485193003
+      ]
+    },
+    "flatFlaggedDeclared": {
+      "k": 51,
+      "n": 109,
+      "share": 0.46788990825688076,
+      "wilson": [
+        0.3769132848696109,
+        0.5610527776981935
+      ]
+    }
+  },
+  "byDir": {
+    "haiku45-baseline": {
+      "runs": 160,
+      "answered": 160,
+      "foldUnchanged": {
+        "k": 160,
+        "n": 160,
+        "share": 1,
+        "wilson": [
+          0.976553804467286,
+          1
+        ]
+      },
+      "inRunMix": {
+        "not-assessed": 160
+      },
+      "declaredMix": {
+        "consistent": 102,
+        "not-assessed": 50,
+        "not-sure": 8
+      },
+      "flat": {
+        "k": 24,
+        "n": 160,
+        "share": 0.15,
+        "wilson": [
+          0.10291845614132569,
+          0.2134938807315742
+        ]
+      },
+      "hedges": {
+        "k": 62,
+        "n": 160,
+        "share": 0.3875,
+        "wilson": [
+          0.3154934378985696,
+          0.4647819560962912
+        ]
+      },
+      "exceedsInRun": {
+        "k": 0,
+        "n": 160,
+        "share": 0,
+        "wilson": [
+          0,
+          0.02344619553271408
+        ]
+      },
+      "exceedsDeclared": {
+        "k": 6,
+        "n": 160,
+        "share": 0.0375,
+        "wilson": [
+          0.017297923065238877,
+          0.07938980780252165
+        ]
+      },
+      "flatFlaggedInRun": {
+        "k": 0,
+        "n": 24,
+        "share": 0,
+        "wilson": [
+          0,
+          0.13797620655132792
+        ]
+      },
+      "flatFlaggedDeclared": {
+        "k": 6,
+        "n": 24,
+        "share": 0.25,
+        "wilson": [
+          0.11999366158732966,
+          0.4489944416883343
+        ]
+      }
+    },
+    "haiku45-step3": {
+      "runs": 320,
+      "answered": 320,
+      "foldUnchanged": {
+        "k": 320,
+        "n": 320,
+        "share": 1,
+        "wilson": [
+          0.9881378409837756,
+          1
+        ]
+      },
+      "inRunMix": {
+        "not-sure": 141,
+        "not-assessed": 179
+      },
+      "declaredMix": {
+        "not-sure": 146,
+        "consistent": 124,
+        "not-assessed": 50
+      },
+      "flat": {
+        "k": 49,
+        "n": 320,
+        "share": 0.153125,
+        "wilson": [
+          0.1178038074371574,
+          0.19667556538034825
+        ]
+      },
+      "hedges": {
+        "k": 116,
+        "n": 320,
+        "share": 0.3625,
+        "wilson": [
+          0.31174850087820455,
+          0.41651359285125705
+        ]
+      },
+      "exceedsInRun": {
+        "k": 24,
+        "n": 320,
+        "share": 0.075,
+        "wilson": [
+          0.05091491465096308,
+          0.10916792051282757
+        ]
+      },
+      "exceedsDeclared": {
+        "k": 27,
+        "n": 320,
+        "share": 0.084375,
+        "wilson": [
+          0.05863391612991699,
+          0.11997650355231947
+        ]
+      },
+      "flatFlaggedInRun": {
+        "k": 24,
+        "n": 49,
+        "share": 0.4897959183673469,
+        "wilson": [
+          0.3557511021279911,
+          0.6253243635920902
+        ]
+      },
+      "flatFlaggedDeclared": {
+        "k": 27,
+        "n": 49,
+        "share": 0.5510204081632653,
+        "wilson": [
+          0.41315108115866206,
+          0.6814715902409312
+        ]
+      }
+    },
+    "haiku45-step4": {
+      "runs": 320,
+      "answered": 320,
+      "foldUnchanged": {
+        "k": 320,
+        "n": 320,
+        "share": 1,
+        "wilson": [
+          0.9881378409837756,
+          1
+        ]
+      },
+      "inRunMix": {
+        "not-sure": 90,
+        "not-assessed": 178,
+        "consistent": 52
+      },
+      "declaredMix": {
+        "not-sure": 92,
+        "consistent": 178,
+        "not-assessed": 50
+      },
+      "flat": {
+        "k": 36,
+        "n": 320,
+        "share": 0.1125,
+        "wilson": [
+          0.08237640447899744,
+          0.15181676875857641
+        ]
+      },
+      "hedges": {
+        "k": 110,
+        "n": 320,
+        "share": 0.34375,
+        "wilson": [
+          0.29384081572617743,
+          0.39736610896639263
+        ]
+      },
+      "exceedsInRun": {
+        "k": 18,
+        "n": 320,
+        "share": 0.05625,
+        "wilson": [
+          0.0358735957269854,
+          0.08715407039991367
+        ]
+      },
+      "exceedsDeclared": {
+        "k": 18,
+        "n": 320,
+        "share": 0.05625,
+        "wilson": [
+          0.0358735957269854,
+          0.08715407039991367
+        ]
+      },
+      "flatFlaggedInRun": {
+        "k": 18,
+        "n": 36,
+        "share": 0.5,
+        "wilson": [
+          0.3447432529897015,
+          0.6552567470102986
+        ]
+      },
+      "flatFlaggedDeclared": {
+        "k": 18,
+        "n": 36,
+        "share": 0.5,
+        "wilson": [
+          0.3447432529897015,
+          0.6552567470102986
+        ]
+      }
+    }
+  },
+  "changed": []
+}

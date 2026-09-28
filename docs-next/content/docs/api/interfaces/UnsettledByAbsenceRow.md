@@ -4,7 +4,7 @@ title: UnsettledByAbsenceRow
 
 # Interface: UnsettledByAbsenceRow
 
-Defined in: [src/core/agent/findings/types.ts:397](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/findings/types.ts#L397)
+Defined in: [src/core/agent/findings/types.ts:398](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/findings/types.ts#L398)
 
 A `ruled-out` standing whose ONLY witness is an absence (9.113.0) — the
 library's row BESIDE the model's, never a rewrite of it. "Nothing was
@@ -67,7 +67,7 @@ is the MODEL's word on an `open` standing and calling the tool's sentence
 
 > `readonly` `optional` **cannotCover?**: readonly [`CoverageItem`](/docs/api/interfaces/CoverageItem)[]
 
-Defined in: [src/core/agent/findings/types.ts:410](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/findings/types.ts#L410)
+Defined in: [src/core/agent/findings/types.ts:411](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/findings/types.ts#L411)
 
 The served envelope's `cannot_cover`, by the same rule. Present only when non-empty.
 
@@ -77,7 +77,7 @@ The served envelope's `cannot_cover`, by the same rule. Present only when non-em
 
 > `readonly` **iteration**: `number`
 
-Defined in: [src/core/agent/findings/types.ts:418](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/findings/types.ts#L418)
+Defined in: [src/core/agent/findings/types.ts:419](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/findings/types.ts#L419)
 
 The standing's iteration — the moment the check ran.
 
@@ -87,7 +87,7 @@ The standing's iteration — the moment the check ran.
 
 > `readonly` **kind**: `"unsettled-by-absence"`
 
-Defined in: [src/core/agent/findings/types.ts:398](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/findings/types.ts#L398)
+Defined in: [src/core/agent/findings/types.ts:399](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/findings/types.ts#L399)
 
 ***
 
@@ -95,7 +95,7 @@ Defined in: [src/core/agent/findings/types.ts:398](https://github.com/footprintj
 
 > `readonly` `optional` **notChecked?**: readonly [`CoverageItem`](/docs/api/interfaces/CoverageItem)[]
 
-Defined in: [src/core/agent/findings/types.ts:408](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/findings/types.ts#L408)
+Defined in: [src/core/agent/findings/types.ts:409](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/findings/types.ts#L409)
 
 The SERVED envelope's `not_checked` (the served result's leading JSON
 object — a framework note joined after it is not part of it) — a
@@ -109,7 +109,7 @@ ground is left out. Present only when non-empty.
 
 > `readonly` **toolCallId**: `string`
 
-Defined in: [src/core/agent/findings/types.ts:400](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/findings/types.ts#L400)
+Defined in: [src/core/agent/findings/types.ts:401](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/findings/types.ts#L401)
 
 The ruled-out RESULT — the key of the standing this row is beside.
 
@@ -119,7 +119,7 @@ The ruled-out RESULT — the key of the standing this row is beside.
 
 > `readonly` `optional` **tryInstead?**: `string`
 
-Defined in: [src/core/agent/findings/types.ts:416](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/findings/types.ts#L416)
+Defined in: [src/core/agent/findings/types.ts:417](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/findings/types.ts#L417)
 
 The served absence's `try_instead`, the STRING byte for byte — never
 parsed, never trimmed, never read for a tool name. Present only when
@@ -131,9 +131,9 @@ that string is non-blank.
 
 > `readonly` `optional` **turn?**: `number`
 
-Defined in: [src/core/agent/findings/types.ts:425](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/findings/types.ts#L425)
+Defined in: [src/core/agent/findings/types.ts:426](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/findings/types.ts#L426)
 
 The conversation turn the row was filed in (`AgentState.turnNumber`) —
 stamped by the one writer while an honesty layer is armed (the inputs
-layer), absent otherwise. The ledger crosses turns on a continued
+layer, the answer layer), absent otherwise. The ledger crosses turns on a continued
 conversation, and `iteration` restarts at 1 every run.

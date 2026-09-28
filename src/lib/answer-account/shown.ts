@@ -62,7 +62,13 @@ export const SHOW_ME_ALLOW_LIST: Readonly<Record<string, readonly string[]>> = O
     '/window',
   ),
   'agent.turn_start': list('/userPrompt'),
-  'agent.turn_end': list('/finalContent'),
+  'agent.turn_end': list(
+    '/finalContent',
+    // A typed answer's limits as data: the tools' own coverage words, as `tools.coverage_declared`
+    // shows them, and which tool's rule assumed a value — never the value (an argument's value).
+    '/answerCoverage/{checked,notChecked,cannotCover}/*/{what,why,short,kind}',
+    '/answerCoverage/assumed/*/{toolName,argument}',
+  ),
   'middleware.decision': list('/{middleware,moment,outcome,changed,toolName,toolCallId}'),
   'permission.check': list('/{target,result,policyRuleId}'),
   'checkin.decision': list('/{approved,toolName,toolCallId}'),
@@ -225,6 +231,7 @@ export function accountPointers(account: AnswerAccount): RecordPointer[] {
     f.routing.delivered,
     f.evidence,
     f.limitsBlock,
+    f.limitsData,
   ].forEach((x) => fromFact(x as AccountFact<unknown>));
   f.calls.forEach((c) => out.push(...c.pointers));
   f.inView.forEach((c) => out.push(...c.pointers));

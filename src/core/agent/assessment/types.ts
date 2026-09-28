@@ -83,7 +83,11 @@ export type AssessmentPointer =
  *   a batch left `ask`-ruled arguments out, the library asked the person for
  *   them before anything ran, and no answer has come yet (the batch ask's
  *   working state, `argumentAsk`, still has a question out; the `asked` rows
- *   name which values). Nothing in that batch has run (honesty layer 2).
+ *   name which values). Nothing in that batch has run (honesty layer 2);
+ * - `steps-unfinished` — the answer came before the active skill's declared
+ *   steps finished: the one teaching nudge was already spent, or a limit
+ *   forced the answer (a `steps-unfinished` witness row of this turn, filed
+ *   while the answer layer is armed — honesty layer 4).
  */
 export type AssessmentReason =
   | 'asked'
@@ -97,6 +101,7 @@ export type AssessmentReason =
   | 'value-unsupported'
   | 'value-survived-revision'
   | 'stopped-early'
+  | 'steps-unfinished'
   | 'answer-check-failed'
   | 'check-unreachable';
 
@@ -110,8 +115,11 @@ export type AssessmentReason =
  * - `result-shape` — the results of this turn whose shape could be read (the
  *   one emptiness reader did not say `unknown`), of the results in the turn's
  *   history;
- * - `names-and-numbers` — the evidence gate's verdict, when it is committed
- *   (today only a flagged verdict is: `unsupportedValues`);
+ * - `names-and-numbers` — the evidence gate's verdict, when it is committed:
+ *   a flagged verdict (`unsupportedValues`) on every armed gate, and — while
+ *   the answer layer is armed (honesty layer 4) — its clean pass too (a
+ *   `grounded` witness row of this turn). A clean pass is a membership pass:
+ *   it counts as a check that ran, never as support;
  * - `answer-checks` — the app's answer checks (`answerValidation`);
  * - `argument-rules` — the ruled arguments of this turn's calls that the
  *   inputs layer filed a verdict on (honesty layer 2), of the same — every

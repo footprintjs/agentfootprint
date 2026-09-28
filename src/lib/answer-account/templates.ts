@@ -42,7 +42,7 @@ export interface AccountTemplate {
 }
 
 /** Bumped whenever any template's words change (a pinned digest enforces it). */
-export const ANSWER_ACCOUNT_TEMPLATE_SET_VERSION = 4;
+export const ANSWER_ACCOUNT_TEMPLATE_SET_VERSION = 5;
 
 const t = (text: string, voucher: TemplateVoucher = 'library', version = 1): AccountTemplate =>
   Object.freeze({ version, text, voucher });
@@ -309,6 +309,10 @@ export const ANSWER_ACCOUNT_TEMPLATES = Object.freeze({
     'Names or numbers in the answer appear in no tool result, even after one revision.',
   ),
   'howSure.reason.stoppedEarly': t('The run stopped before the model finished.'),
+  // The answer layer's witness (honesty layer 4) — set 5.
+  'howSure.reason.stepsUnfinished': t(
+    "The answer came before the active skill's declared steps finished.",
+  ),
   'howSure.reason.answerCheckFailed': t("The app's answer checks failed this answer."),
   'howSure.reason.checkUnreachable': t(
     "The app's answer checks could not reach a verdict on this answer.",

@@ -229,7 +229,8 @@ When a call leaves `window` out:
   tool's rule assumes — recorded as assumed, not as the person's*;
 - `agent.assessment()` reads **not sure**, with the reason `argument-assumed`;
 - with `.limitsTravelWithTheAnswer()`, the answer ends with an
-  *Assumed (a tool's rule, not your words)* block.
+  *Assumed (a tool's rule, not your words)* block — or, on a typed answer, the
+  same values come back as data, `agent.answerCoverage().assumed`.
 
 A model that sends the default itself is filed `default` too (with the value it
 sent as `proposed`): copying a default from a description is not a choice. Any
@@ -835,7 +836,12 @@ agent.answerCoverage();
 
 `agent.answerCoverage()` holds the entries the block would have listed —
 duplicates said once, every entry kept — and is `undefined` when no tool
-declared a limit. The same value rides `turn_end` as `answerCoverage` and sits in
+declared a limit and nothing was assumed. When a tool's
+[`askOrAssume`](#a-default-nobody-chose--askorassume) rule filled a value,
+the data also lists it — `assumed: [{ toolName, argument, value, hidden }]`, the
+same values the prose answer's *Assumed* block prints, each in the tool's own
+argument view. The value's type is `AnswerCoverage`: a `Coverage` plus that
+optional list, so code written against the three lists keeps working. The same value rides `turn_end` as `answerCoverage` and sits in
 the snapshot as `sharedState.answerCoverage`, so a UI that shows the answer when
 the turn ends can draw its limits beside it. `.answerValidation()` still refuses
 this option at build time.
