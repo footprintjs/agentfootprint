@@ -155,3 +155,34 @@ These are the numbers `rule.mjs` · `MARGINS` carries.
 | `q33FalseNotSure` | 0.1 |
 | `labelAgreement` | 0.9 |
 | `labelSample` | 40 |
+
+## The registered run — 2026-09-28 (recorded after the run; nothing above was changed)
+
+`bench/results/runs/haiku45-step7b/` — Haiku 4.5, 320 runs (10 cases, N = 20, arms interleaved),
+fresh seed 252377172, $0.8675 of the $1.75 cap, no stop, every run answered.
+
+**Verdict: FAIL** (P1). The null is recorded; whether the layer stays opt-in with the null stated
+in its change fragment and README, or is withdrawn, is the owner's call.
+
+| Clause | Measured | |
+|---|---|---|
+| P1 | provoking pairs 80/80 measurable; flat `off` 0.9125, `on` 0.95; off-only 4, on-only 7; p = 0.887 | FAIL |
+| P2 | 200/200 `on` runs agree with the planted truth; 0 `off` runs carry a period reason | PASS |
+| G1 | needless hedges on controls: `off` 0/40, `on` 0/40 | PASS |
+| G2 | facts: `off` 1.00, `on` 1.00 | PASS |
+| G3 | input tokens per call 1,000 → 1,044 (× 1.044); model calls per run 2.00 → 2.00 | PASS |
+| Q33 | F = 20/20 = 1.00 (held-known control "not sure" 0/20; the model's own answer hedged 0/20 either way) | RECOMMEND the alternative |
+
+Per cell (reported): R1 flat `off` 33/40, `on` 40/40 — the `off` prose time was echoed in 7
+answers ("the backup export from 2026-09-26 02:00 UTC"), which the labeller reads as scoped by
+boundary; the typed period was never echoed. R2 flat `off` 40/40, `on` 36/40 — three answers said
+the store keeps 7 days. **The record flags every flat `on` answer: 76/76** carry a `period-*`
+reason on their standing, against 0/73 under `off`. What the numbers say: on Haiku 4.5 a typed
+period inside the tool result does not change the model's words; the layer's value is in the
+record — the standing and the Period line the person reads — not in the answer text. Read from
+the raw answers: several `on` answers read `queried` as what the store covered ("the log store was
+checked for the entire period from August 27"), and one scoped reading (`as of 2026-09-26 10:00`)
+is a labeller false positive in the `on` arm's favour; neither moves the verdict.
+
+The hand-label sheet is `runs/haiku45-step7b/blind-sheet.json` (the owner labels; no claim
+leaves the bench before agreement ≥ 0.90 on ≥ 40 answers).

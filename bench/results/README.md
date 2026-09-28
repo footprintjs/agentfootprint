@@ -50,6 +50,14 @@ mounts `.resultsLayer()`. See `RULE.md` for the registered rule.
   phrase derived from the planted instants), flat, hedged, and the facts it restates.
 - **The rest** — model calls, tokens, dollars.
 
+## The registered run (2026-09-28): FAIL on P1
+
+Haiku 4.5, 320 runs, $0.8675: flat claims past the held period on the provoking pairs were
+0.9125 without the period and 0.95 with it (p = 0.887). Every guard held, the fold agreed with the
+planted truth on 200/200 armed runs, and the record flagged 76/76 of the armed flat answers. Q33:
+the false-"not sure" rate on non-empty held-unknown results was 1.00, so the bench recommends the
+lens-line alternative. Details: `RULE.md`, "The registered run"; data: `runs/haiku45-step7b/`.
+
 ## Running it
 
 ```sh
