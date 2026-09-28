@@ -428,8 +428,33 @@ export function judgeStep5(aggregates, served) {
       pOff === undefined || pOn === undefined ? undefined : pOn >= pOff - M.personDrop,
     ),
   );
-  const [facts, overhead] = commonClauses('S5', off, on);
-  clauses.push({ ...facts, id: 'S5-7' }, { ...overhead, id: 'S5-8' });
+  const [facts] = commonClauses('S5', off, on);
+  clauses.push({ ...facts, id: 'S5-7' });
+  // S5-8 reads the input tokens the model was SERVED — uncached plus cache reads and writes.
+  // Steps 3–4's `commonClauses` reads `llm.input`, which was the whole input on their arms (no
+  // prompt there was cached); the `full` arm's long prompt is cached by the provider, and
+  // `llm.input` is then only the uncached remainder (`RULE-step5.md` · S5-8, "What changed").
+  const tOff = aggregates.off.sources?.sets.all.tokens;
+  const tOn = src.all.tokens;
+  const inOff = tOff?.servedInputPerCall;
+  const inOn = tOn.servedInputPerCall;
+  const callsOff = tOff?.callsPerRun;
+  const callsOn = tOn.callsPerRun;
+  clauses.push(
+    clause(
+      'S5-8',
+      'input tokens per model call (uncached + cache reads + cache writes) and model calls per run stay under their ceilings (S3-4 / S4-4, carried)',
+      {
+        inputPerCall: { off: inOff, armed: inOn },
+        uncachedInputPerCall: { off: tOff?.uncachedInputPerCall, armed: tOn.uncachedInputPerCall },
+        callsPerRun: { off: callsOff, armed: callsOn },
+      },
+      `input ≤ ${M.inputTokensRatio} × off; calls ≤ ${M.modelCallsRatio} × off`,
+      inOff === undefined || inOn === undefined || callsOff === undefined || callsOn === undefined
+        ? undefined
+        : inOn <= M.inputTokensRatio * inOff && callsOn <= M.modelCallsRatio * callsOff,
+    ),
+  );
   const base = served?.findings?.perRequest;
   const full = served?.full?.perRequest;
   const ratioServed = base === undefined || full === undefined ? undefined : full / base;
@@ -499,7 +524,11 @@ export function judgeStep5(aggregates, served) {
       },
       'R5-j': {
         says: 'what it costs: input tokens per model call and served characters per request',
-        inputPerCall: { off: off.all.llm.inputPerCall, armed: on.all.llm.inputPerCall },
+        servedInputPerCall: {
+          off: aggregates.off.sources?.sets.all.tokens.servedInputPerCall,
+          armed: src.all.tokens.servedInputPerCall,
+        },
+        uncachedInputPerCall: { off: off.all.llm.inputPerCall, armed: on.all.llm.inputPerCall },
         outputPerCall: { off: off.all.llm.outputPerCall, armed: on.all.llm.outputPerCall },
         usd: { off: off.all.usd, armed: on.all.usd },
         served,

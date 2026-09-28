@@ -224,6 +224,19 @@ describe('UNIT — step 5 clauses', () => {
     expect(none.verdict).toBe('NOT-MEASURABLE');
   });
 
+  it('S5-8 counts cache reads and writes as input: a cached prompt is not a cheap one', () => {
+    const cached = (rows: any[]) =>
+      rows.map((r: any) =>
+        r.arm === 'full'
+          ? { ...r, llm: { ...r.llm, input: 200, cacheRead: 9000, cacheWrite: 0 } }
+          : r,
+      );
+    const v = judge(cached([...arm('off', 0), ...arm('full', 10)]));
+    expect(clauseOf(v, 'S5-8').pass).toBe(false);
+    expect(clauseOf(v, 'S5-8').value.inputPerCall.armed).toBe(4600);
+    expect(clauseOf(v, 'S5-8').value.uncachedInputPerCall.armed).toBe(100);
+  });
+
   it('every clause passing gives PASS; the rule refuses aggregates without the step-5 reader', () => {
     expect(judge([...arm('off', 0), ...arm('full', 10)]).verdict).toBe('PASS');
     expect(() => judgeStep5(aggregate([...arm('off', 0), ...arm('full', 10)]), SERVED_OK)).toThrow(

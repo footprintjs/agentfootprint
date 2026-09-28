@@ -592,9 +592,24 @@ export function summarizeSources(rows) {
   const namesArgument = (r) => (r.standing?.reasons ?? []).some((x) => x.startsWith('argument-'));
   const nameRows = rows.flatMap((r) => r.names.map((n) => n.row)).filter((x) => x !== undefined);
   const nameClaims = nameRows.filter((x) => x.claimed !== undefined && x.claimed !== 'none');
+  // Input tokens as the model was SERVED them: uncached, cache reads and cache writes. The
+  // provider caches a long prompt on its own (the `.findings()` agent's is long); `llm.input`
+  // alone is then only the uncached remainder (`RULE-step5.md` · S5-8, "input tokens").
+  const llmCalls = rows.reduce((n, r) => n + r.llm.calls, 0);
+  const servedInput = rows.reduce(
+    (n, r) => n + r.llm.input + (r.llm.cacheRead ?? 0) + (r.llm.cacheWrite ?? 0),
+    0,
+  );
   return {
     runs: rows.length,
     periodCalls: calls.length,
+    tokens: {
+      calls: llmCalls,
+      servedInputPerCall: llmCalls === 0 ? undefined : servedInput / llmCalls,
+      uncachedInputPerCall:
+        llmCalls === 0 ? undefined : rows.reduce((n, r) => n + r.llm.input, 0) / llmCalls,
+      callsPerRun: rows.length === 0 ? undefined : llmCalls / rows.length,
+    },
     claims: {
       of: claims.length,
       declared: declared.length,

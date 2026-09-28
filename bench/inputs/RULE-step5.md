@@ -177,6 +177,22 @@ As in `RULE.md`:
 - **Blind hand labels.** Every gated clause is computed from the record against truths this
   sheet declared before any run. The answer-window reader is reported as in `RULE.md`.
 
+## Amendment after the paid run (2026-09-28): S5-8's transcription
+
+The clauses and margins above did not change. The code that transcribes S5-8 did.
+
+S5-8 measures "mean input tokens per model call". `rule.mjs` first reused steps 3–4's
+transcription (`commonClauses`), which reads `llm.input`. On steps 3–4's arms that was every
+input token, because no prompt there was cached. On the `full` arm the provider cached the long
+prompt on its own. `llm.input` was then only the uncached remainder: 518 per call, against 1,175
+for `off`. So the first report showed S5-8 as PASS, on a number that left out 91% of the input
+the model was served. This page wins over its transcription, so `judgeStep5` now reads the
+input tokens the model was served (uncached, cache reads and cache writes;
+`metrics.mjs` · `summarizeSources` · `tokens`). It reports the uncached figure beside it. The
+saved runs were rescored with `run.mjs --rescore`, and no model was called. S5-8 is FAIL: 5,773
+input tokens per call against 1,175 (4.91 ×). That is what this page predicted before the run.
+The verdict was FAIL both before and after the correction.
+
 ## Margins
 
 These are the numbers `rule.mjs` · `STEP5_MARGINS` carries. `test/bench/inputs/rule-step5.test.ts`
