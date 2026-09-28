@@ -107,6 +107,13 @@ describe('UNIT — the step-6 clauses', () => {
       'A-8': 'PASS',
     });
     expect(v.verdict).toBe('PASS');
+    // the verbalised baseline reads sensitivity on the provoking set and specificity on the
+    // controls, for BOTH arms
+    const r2 = Object.entries(v.reported).find(([k]) => k.startsWith('R-2'))?.[1] as any;
+    for (const arm of ['layer', 'off']) {
+      expect(r2[arm].sensitivity.n, arm).toBe(20);
+      expect(r2[arm].specificity.n, arm).toBe(20);
+    }
   });
 
   it('A-1 passes at 0.80 and fails just under it; not-assessed does not count', () => {

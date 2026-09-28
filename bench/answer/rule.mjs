@@ -181,7 +181,10 @@ export function judgeStep6(aggregates) {
         layerAmongFlat: on.allProvoking.exceedsAmongFlat,
       },
       'R-2 the model’s words as the reader (verbalised baseline, same runs)': {
-        layer: on.provoking.verbalised,
+        layer: {
+          sensitivity: on.provoking.verbalised.sensitivity,
+          specificity: on.control.verbalised.specificity,
+        },
         off: {
           sensitivity: off.provoking.verbalised.sensitivity,
           specificity: off.control.verbalised.specificity,

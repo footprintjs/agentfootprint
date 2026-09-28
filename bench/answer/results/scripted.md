@@ -184,10 +184,11 @@ First request identical across arms: 12/12 cases.
         ]
       },
       "specificity": {
-        "k": 0,
-        "n": 0,
+        "k": 5,
+        "n": 5,
+        "share": 1,
         "wilson": [
-          0,
+          0.5655175313406071,
           1
         ]
       }

@@ -246,6 +246,22 @@ verbalised confidence, and its own `_findings` answer standing. No served honest
 study arm (architecture § 6.3). The build made no paid call: the step's registered success rule and
 its runs belong to the bench, after the rule is committed.
 
+**Measured, 2026-09-28 — PASS** (`bench/answer/`, rule `answer-rule-step6` in
+`bench/answer/RULE.md`, committed and pushed before the first paid call). Haiku 4.5, arms `off`
+and `layer` interleaved, 12 cases × 10, seed 20260928, $0.77. Every gated clause held: the in-run
+standing flagged 50/50 provoking answers and supported 50/50 control answers; in-run equalled
+read-after (event, `turn_end`, `assessAnswer`, `agent.assessment()`) on 120/120; the first request
+was byte-identical across arms on 12/12 cases; 120/120 answers were the model's own text; facts,
+hedges, asks, tokens per call (×1.002) and calls per run (×0.993) did not move. Reported: 14 of 50
+provoking answers exceeded their standing — all ten answers to the bare empty lookup said flatly
+"there are no open incidents" — and the standing flagged 14/14 of them; the model's own words
+(a phrase reader, hand labels pending) flagged 26/50. The gap set — a wrong-kind entity and an
+undeclared partial lookup — was flagged 2/20: those limitations reach no committed row in this
+version. Before it, at $0: the 800 recorded inputs-bench runs re-folded unchanged by this build.
+The model called a tool on every run, so the live sensitivity is mostly the fold reaching rows it
+was built to read; a run that answers without a lookup reads "not assessed" (scripted). Details:
+`bench/answer/README.md`, "Results".
+
 ## What the answer layer lets you measure
 
 From the record alone — and now at the moment the answer exists, from one event per answer:

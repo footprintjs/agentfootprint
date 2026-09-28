@@ -76,6 +76,49 @@ that exceed it. Output: `results/refold.json`, `results/refold.md`.
 
 [`RULE.md`](RULE.md), registered before the first paid call; `rule.mjs` computes it.
 
+## Results
+
+**Haiku 4.5, 2026-09-28 — PASS** on `answer-rule-step6` (`runs/haiku45-step6/`: `report.md`,
+`results.json`, `raw/`, the blind sheet). Arms `off` and `layer` interleaved, 12 cases × 10 = 240
+runs, seed 20260928, $0.7701 of a $1.40 cap.
+
+| Clause | Measured | Threshold | |
+|---|---|---|---|
+| A-1 in-run standing flags provoking answers | 50/50 = 1.00 | ≥ 0.80 | PASS |
+| A-2 in-run standing supports control answers | 50/50 = 1.00 | ≥ 0.90 | PASS |
+| A-3 in-run = read-after, one event per answer, off silent | 120/120 | 100% | PASS |
+| A-4 first request byte-identical across arms | 12/12 cases | 12/12 | PASS |
+| A-5 the answer is the model's text | 120/120 | 100% | PASS |
+| A-6 facts on the controls | 1.00 → 1.00 | ≥ off − 0.05 | PASS |
+| A-7 control hedges; control pauses | 0 → 0; 0 → 0 | ≤ off + 0.10 | PASS |
+| A-8 input tokens per call; calls per run | ×1.002; ×0.993 | ≤ 1.10; ≤ 1.15 | PASS |
+
+Reported:
+
+- **Answers that exceed their standing:** 14 of 50 provoking answers, the same under both arms
+  (the layer serves the model nothing). All ten answers to the bare empty lookup said flatly
+  "there are no open incidents"; two of ten on each declared absence. None on the two coverage-gap
+  overclaims — the model carried the result's own limit into its words every time. The in-run
+  standing flagged 14 of the 14.
+- **The model's words as the reader** (the phrase reader, hand labels pending): it flags 26/50
+  provoking answers under `layer`, 31/50 under `off`, and 0/50 controls — against the standing's
+  50/50. The reader is known to miss some phrasings ("isn't collected", "aren't available"), so
+  the comparison is not a claim until the blind sheet is labelled.
+- **The gap set:** 2/20 flagged (a wrong-kind question where the model guessed hosts reads
+  "consistent"; the undeclared open-only lookup reads "consistent" even when the model says the
+  month is not covered). Over every case that does not vouch: 52/70.
+- **Grounded witness rows:** on 120/120 `layer` answers; no unsupported value on either arm.
+- **What this run cannot show:** the model called a tool on every run (0% without one), so the live
+  sensitivity is mostly the fold reaching the rows it was built to read. An answer given without a
+  lookup reads "not assessed" (the scripted variant shows it), and counts against A-1.
+
+$0 first: the scripted run (every variant under `off`, `layer`, `line`; `results/scripted.md`,
+pinned as `results/mock.json`) and the re-fold of 800 recorded runs (`results/refold.md`: the fold
+unchanged on 800/800; 42/800 answers exceed the standing the layer would have served). The
+scripted run showed no library bug. The prose arm (`line`) appends the line to the answer that
+enters the next turn's history — as `.limitsTravelWithTheAnswer()`'s block does — so under that
+arm a continued conversation serves the model the line; it is not in the paid comparison.
+
 ## Files
 
 | File | Job |
