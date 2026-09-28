@@ -4,7 +4,7 @@ title: CodeSession
 
 # Interface: CodeSession
 
-Defined in: [src/adapters/types.ts:1131](https://github.com/footprintjs/agentfootprint/blob/main/src/adapters/types.ts#L1131)
+Defined in: [src/adapters/types.ts:1154](https://github.com/footprintjs/agentfootprint/blob/main/src/adapters/types.ts#L1154)
 
 One live session. `stop()` is idempotent and tolerates "already gone".
 
@@ -14,7 +14,7 @@ One live session. `stop()` is idempotent and tolerates "already gone".
 
 > `readonly` **id**: `string`
 
-Defined in: [src/adapters/types.ts:1133](https://github.com/footprintjs/agentfootprint/blob/main/src/adapters/types.ts#L1133)
+Defined in: [src/adapters/types.ts:1156](https://github.com/footprintjs/agentfootprint/blob/main/src/adapters/types.ts#L1156)
 
 The backend's own id for this session, when it has one.
 
@@ -24,7 +24,7 @@ The backend's own id for this session, when it has one.
 
 > **execute**(`req`): `Promise`\<[`CodeResult`](/docs/api/interfaces/CodeResult)\>
 
-Defined in: [src/adapters/types.ts:1134](https://github.com/footprintjs/agentfootprint/blob/main/src/adapters/types.ts#L1134)
+Defined in: [src/adapters/types.ts:1157](https://github.com/footprintjs/agentfootprint/blob/main/src/adapters/types.ts#L1157)
 
 #### Parameters
 
@@ -56,7 +56,7 @@ Defined in: [src/adapters/types.ts:1134](https://github.com/footprintjs/agentfoo
 
 > `optional` **stageInputs**(`inputs`): `Promise`\<readonly [`StagedCodeInput`](/docs/api/interfaces/StagedCodeInput)[]\>
 
-Defined in: [src/adapters/types.ts:1168](https://github.com/footprintjs/agentfootprint/blob/main/src/adapters/types.ts#L1168)
+Defined in: [src/adapters/types.ts:1191](https://github.com/footprintjs/agentfootprint/blob/main/src/adapters/types.ts#L1191)
 
 OPTIONAL (9.26.0) — put payloads INTO the session, so code can read data
 that never travelled through the context window.
@@ -101,7 +101,7 @@ readonly [`CodeInput`](/docs/api/interfaces/CodeInput)[]
 
 > **stop**(): `Promise`\<`void`\>
 
-Defined in: [src/adapters/types.ts:1176](https://github.com/footprintjs/agentfootprint/blob/main/src/adapters/types.ts#L1176)
+Defined in: [src/adapters/types.ts:1199](https://github.com/footprintjs/agentfootprint/blob/main/src/adapters/types.ts#L1199)
 
 Release the session.
 

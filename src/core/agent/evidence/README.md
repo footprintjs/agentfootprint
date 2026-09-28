@@ -193,6 +193,68 @@ answer-moment input of the contingent check; at dispatch
 `groundedArgumentValues` reads the same rule over a call's string leaves. The
 exempt corpus never files a carrier — an exemption names no result.
 
+## A compaction summary exempts nothing by itself
+
+**A summary frame's TEXT never enters the exempt corpus. The frame carries
+the forms its folded person/app turns exempted (`LLMMessage.foldedExempt`),
+and only those.** One rule, one owner: `evidenceIndex.ts` ·
+`addHistoryExempt`, asked by `exemptFromRun` (the corpus) and by
+`exemptLineageOf` (the fold, `../window/strategies/summarizeOldest.ts`), so
+what a turn exempted before a fold and what its summary carries after one
+cannot disagree.
+
+Why: `../window/summarize.ts` · `buildSummaryMessage` puts the summarizer's
+text in a `role: 'user'` message. `lib/saidByPerson.ts` · `isSaidByPerson`
+already said it was nobody's, but the exempt corpus excluded only the two
+correction frames — so every value in the summary, invented ones included,
+was exempt, and the gate skipped the names-and-numbers check for an answer
+that repeated it. The contingent check (`../findings/contingent.ts`) skips
+exempt values the same way, so a summary that echoed a value from a result
+the model had declared open, noise or ruled-out waved it past that check too.
+
+```ts
+const summary = buildSummaryMessage('Synthetic audit example: invented-987654.', {
+  foldedMessageCount: 2, iteration: 3, model: 'audit-mock', retain: 'conversation',
+});
+exemptFromRun({ history: [summary] }).has('invented-987654'); // false — was true
+
+// A faithful fold: the person's value rides the lineage, read off the ORIGINAL.
+const folded = [{ role: 'user', content: 'Check array ARR-2291.' }];
+const frame = buildSummaryMessage('The user asked about ARR-2291.', {
+  foldedMessageCount: 1, iteration: 3, model: 'm', retain: 'conversation',
+  foldedExempt: exemptLineageOf(folded),
+});
+exemptFromRun({ history: [frame] }).has(normalizeToken('ARR-2291')); // true
+```
+
+What each check reads AFTER a fold:
+
+| Input | Source after the fold |
+|---|---|
+| exempt corpus | the current request, the live user/system turns (corrections and summary TEXT excluded), every summary's `foldedExempt`, the system-prompt injections, declared defaults, answered values |
+| evidence corpus (gate) | the `role: 'tool'` messages still in the window — a folded result is gone, exactly as a dropped one is; the pins (`keepLastToolResults`, the ledger-fact pin) decide which results stay |
+| carriers + standing (contingent) | carriers from this turn's live tool messages; standing from `scope.findingsLedger`, which compaction never touches — a folded result keeps its standing under its `toolCallId`, and a value whose only carrier was folded has no carrier, so it files no contingent row and is judged by the gate as ungrounded unless exempt |
+
+So a summarized tool value keeps its tool source — it is never promoted to
+"supplied" by being repeated in a summary — and is judged against what the
+window still holds.
+
+- **`retain: 'conversation'`** — the lineage rides the summary; the verbatim
+  originals ride the checkpoint's `FoldedSpan.messages` as before. The corpus
+  reads the lineage, never the originals, so both policies take one path.
+- **`retain: 'discard'`** — the originals are not kept, but the lineage (lookup
+  forms, not messages) still rides the summary, so a person's value stays
+  exempt on the next turn instead of reading as invented.
+- **A restored summary** (a checkpoint, a stored conversation) carries the
+  lineage it was folded with; a nested fold unions the lineage of any summary
+  inside its span. A summary frame WITHOUT one — hand-built, or folded before
+  the field existed — exempts nothing: a value it names is checked like any
+  other (the narrow direction `isSaidByPerson` already takes).
+- Correction frames (`[evidence check`, `[schema check`) stay excluded, and
+  an agent that never folds builds exactly the corpus it always did.
+
+Pinned by `test/core/agent/evidence/summary-exemption.test.ts`.
+
 ## A glued-unit number is met on the lookup side only (9.110.0)
 
 The extractor judges an answer's `1007us` on its digits (the value `1007`);
