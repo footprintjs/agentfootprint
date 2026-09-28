@@ -228,7 +228,7 @@ function assumedClause(toolName: string, f: FilledArgument): string {
 
 // LENS · tool-result · persistent-history
 // reads: the call's answered fill (the batch ask's answer bound to this toolCallId), kept only where the
-//        call RAN with it (`stages/toolCalls.ts` · `fillsThatRan`)
+//        call RAN with it (`dispatch.ts` · `fillsThatRan`)
 // law: may omit, never deny; past tense, naming the call this result answers.
 function answeredClause(toolName: string, f: FilledArgument): string {
   return f.hidden
