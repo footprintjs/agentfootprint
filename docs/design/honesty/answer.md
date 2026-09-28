@@ -36,7 +36,8 @@ agent.on('agentfootprint.answer.assessed', (e) => e.payload.standing); // 'not-s
   one writer by the Route decider ONLY under the arm, because that is where the verdicts are
   computed: `grounded` (the evidence gate's clean pass — `stages/route.ts` · `judgeEvidence`) and
   `steps-unfinished` (an answer accepted or cut short before a skill's declared steps finished —
-  `stages/route.ts` · `judgeUnfinishedSteps`). Names, enums and counts: the posture, the counts,
+  `stages/route.ts` · `judgeUnfinishedSteps` returns it, `fileStepsWitness` files it once the
+  answer has stood every later judge — decision 11). Names, enums and counts: the posture, the counts,
   `afterRevision`; the skill, each unrun step's position and tool — never a value, a quote or a
   step's note. They emit nothing of their own (the verdict's event fired beside them). The
   checkpoint door has an arm for each (`core/runCheckpoint.ts`); an older runtime refuses a
@@ -60,6 +61,8 @@ agent.on('agentfootprint.answer.assessed', (e) => e.payload.standing); // 'not-s
 - **The turn stamp** — while the answer layer is armed, every row the one writer files carries
   `turn` (adopted Q6: "while any layer is armed"), and the continued conversation's restore is
   wired (the same widening step 3 made for the inputs layer). `honestyLayers` gains `answer: true`.
+  The checkpoint carries the turn it ended on (`AgentRunCheckpoint.turnNumber`, while a layer is
+  armed), so the stamp never repeats in a conversation (decision 12).
 
 ## The equality law, pinned
 
@@ -89,8 +92,11 @@ decider committed, before PrepareFinal, which writes nothing the fold reads.
    never the final branch's scope. (Checked: for the same reason `sharedState.finalContent` reads
    `undefined` after a standard run; that pre-existing quirk is not changed here.) So the layer
    files no rows of its own: the witness rows it folds are filed by Route, as designed; the
-   standing is derived and lives only in the final branch's working state (`answerAssessment`,
-   `answerStandingLine`), never in the run's state (§ 9: a stored assessment was rejected). The
+   standing is derived, and it is committed only in the final branch's OWN state
+   (`answerAssessment`, `answerStandingLine` — so the branch's subflow result and commit log hold a
+   copy, `subflowResults.final`), never in the run's state (§ 9: a stored assessment was
+   rejected). That copy is not a source: it is the hand-off to PrepareFinal, and every reader
+   re-folds the committed rows (`assessAnswer`, `agent.assessment()`, the answer account). The
    branch mapping is byte-identical when armed. A later layer-4 row that must reach the run's
    state from the final branch needs the branch's result shape changed — and every composition
    mount that reads it as a string with it.
@@ -117,10 +123,11 @@ decider committed, before PrepareFinal, which writes nothing the fold reads.
    `lib/answer-account/account.ts` · `readAnswer` reads `turn_end.answerCoverage` into a new fact,
    `limitsData` (recorded; a pointer to every item), and a typed answer's `limitsBlock` now reads
    `not-recorded` with `missing: 'as-data'` — never `not-applicable` when the limits travelled.
-   The split of a prose answer finds the framework's whole appended section by the first words of
-   its blocks, so an "Assumed" block alone, or a standing line alone, no longer reads as the model's
-   words (the "Assumed"-alone case was a step-3 gap). Template set 5 adds the `steps-unfinished`
-   reason's line.
+   The split of a prose answer finds the framework's whole appended section — the blocks by their
+   headings, the standing line by its exact words rebuilt from the record (decision 13) — so an
+   "Assumed" block alone, or a standing line alone, no longer reads as the model's words (the
+   "Assumed"-alone case was a step-3 gap). Template set 5 adds the `steps-unfinished` reason's
+   line.
 8. **Stricter: the line is refused beside `.outputSchema()` too.** The design names
    `.answerValidation()` (exact bytes). A typed answer is JSON, and JSON followed by a line is not
    (the #27 bug); the standing already travels as data there, so the line would be inert — refused
@@ -133,6 +140,46 @@ decider committed, before PrepareFinal, which writes nothing the fold reads.
     not its reading. The record holds only the unfinished verdict (a finished procedure files
     nothing, before and after this step), so a `checked` entry would appear only when the check
     failed and misstate how often it ran.
+
+### Fixed in the review of the build (round 1)
+
+11. **A witness row is filed only for the answer that stands.** The step judge runs before the
+    evidence gate, and it filed its `steps-unfinished` row at once — so a draft the gate sent back
+    left a row describing an answer that was replaced: a revision that finished the steps still
+    read "the answer came before the skill's declared steps finished", and one that did not filed
+    the verdict twice. `stages/route.ts` · `judgeUnfinishedSteps` now RETURNS the row, and each
+    decider files it (`fileStepsWitness`) only where it really answers `'final'` — after the gate
+    (and, in the enforcing decider, the schema) has let the answer stand. The
+    `skill.steps_unfinished` event still fires where it always did (unarmed runs are
+    byte-identical). Pinned: a stepped skill beside the gate, both deciders, both chart builders;
+    the equality test asserts at most one witness row of each kind per turn on every case.
+12. **The turn stamp never repeats in a conversation.** `seed.ts` counted the user messages of the
+    stored history, and a window strategy (or a compaction) trims that history — the count
+    repeated and went backwards, and an earlier turn's witness row was folded as a later turn's
+    (the line then told the person about steps a plain turn never had). While a layer is armed the
+    checkpoint now carries the turn its history ends on (`AgentRunCheckpoint.turnNumber`, both
+    carriers, validated at the door, an optional field — version 1 still), and seed continues from
+    it (`turnNumberFor`): a continued conversation is the turn after it, a `resumeOnError` retry
+    the same turn. The restored ledger's latest stamp is a second floor, for a conversation stored
+    before the carrier existed — the rule `memory/turn/resolveTurnNumber.ts` applies to a store.
+13. **The account credits the line to the library only when the record proves it.** The split
+    matched the line's short openings ("Not sure — ", "Known — ") on every recording — a plain
+    agent's model words were read as a block the library appended. The account now rebuilds the
+    exact line from the record (`turn_end.answerAssessment`, and — for an assumed value — the
+    committed rows it names, through the same `assessment/compose.ts` · `assumedValuesSourceOf` the
+    stage composes from) and splits only on that line, where the composer puts it. The two block
+    headings (limits, "Assumed") are matched as before. A recording without its committed state
+    cannot rebuild an assumed value, and then the line is not claimed.
+14. **`stoppedEarly` is read on every armed agent.** The read list kept it behind the tool arm,
+    but the Route decider writes it on any agent whose model asks for calls when a limit fires —
+    a tool registered or not — so a tool-less agent's in-run standing said "not assessed" and the
+    recording "not sure". Every key's writers were checked against the list.
+15. **Both doors meet the build refusals.** `AgentOptions.answerLayer` skipped the line's refusals
+    beside `.outputSchema()` and `.answerValidation()` — the line was appended to a typed answer's
+    JSON. `AgentBuilder.build` now resolves the arm once from both doors, through one validator.
+16. **The line never drops an assumed value.** It replaces the uncapped "Assumed" block, so its
+    assumed clauses are exempt from the clause cap; only the other reasons fold into "… and N
+    more".
 
 ## The layer contract, as step 6 ships it
 
@@ -170,6 +217,26 @@ the export 693.70 MB across 7,374 files. Every ceiling holds; no raise.
 - **A finished step procedure** files no row, so it cannot count as a check that ran.
 - **The line's reasons carry no counts** — a person reads which kinds of reason fired, and the
   account's "How sure" row (or `agent.assessment()`) has the counts and the rows.
+- **The app's declarations do not reach the in-run fold.** `rowsAt` declarations
+  (`AssessmentDeclarations`) reach `assessAnswer(record, declarations)`,
+  `agent.assessment(declarations)` and the account; the layer folds without them, so for an app
+  that declares them the event and the line can say less than the account does about the same run
+  (an object result's empty rows read `not-assessed` in the run, `not sure` afterwards).
+  Accepting them as build-time data on `.answerLayer()` is the natural next arm.
+- **A composition does not receive `agentfootprint.answer.assessed`.** The composition's dispatcher
+  bridges the agent domain, not `answer.*`, so a Sequence (or any runner that mounts an agent)
+  reads the standing on `turn_end.answerAssessment`.
+- **A typed answer that failed its own contract** (`outputContractUnmet`) folds on the model's
+  bytes — no reason reads the contract verdict, and a fallback value `runTyped()` returns was never
+  assessed.
+- **A refused answer** (the evidence gate's `rails` posture) still fires `answer.assessed` and puts
+  the line on `turn_end.finalContent`; the run then throws, and `agent.assessment()` returns
+  `undefined`. The event is about the answer the run composed, not one that was delivered.
+- **The line and the limits are not streamed** — `stream.token` carries the model's text; the
+  returned answer carries the appended section.
+- **A retried turn after a final-branch failure** (`resumeOnError` of a crash after Route chose
+  `final`) files the retry's witness rows under the same turn as the failed attempt's; the fold
+  reads every `steps-unfinished` row of the turn, so the failed attempt's can still fire.
 
 ## Its benchmark
 

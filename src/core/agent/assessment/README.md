@@ -46,8 +46,9 @@ const text = await agent.run({ message: 'Which ports on switch A are down?' });
   `startFinalBranch` (the one helper both chart builders call) and loaded through
   `import()` on the first armed answer. It reads ONLY the committed keys the fold
   reads that this agent's arms can write (`honesty/mounts.ts` · `answerFoldReads`),
-  folds them, files the projection for PrepareFinal (`answerAssessment`, final-branch
-  working state — never the run's state: a fold is derived, never stored) and fires
+  folds them, files the projection for PrepareFinal (`answerAssessment`, committed in
+  the final branch's own state — its subflow result keeps that copy — never in the
+  run's state; the copy is a hand-off, not a source: every reader re-folds) and fires
   `agentfootprint.answer.assessed`.
 - **The projection** — `compose.ts` · `assessmentDataOf`: the value, the word, the
   reason KINDS and the checks that ran. The same object on `turn_end.answerAssessment`
@@ -56,9 +57,16 @@ const text = await agent.run({ message: 'Which ports on switch A are down?' });
 - **Two witness rows** — `witness.ts`. The Route decider files them on the findings
   ledger ONLY while the layer is armed, because that is where the verdicts are
   computed: `grounded` (the evidence gate's clean pass) and `steps-unfinished` (an
-  answer accepted or cut short before a skill's declared steps finished). Each carries
-  `turn`; each emits nothing of its own (the verdict's event fired beside it); the
-  checkpoint door has an arm for each.
+  answer accepted or cut short before a skill's declared steps finished). Each is filed
+  only for the answer that STANDS — the step judge returns its row, and the decider
+  files it where it answers `'final'`, after the gate (and the schema) let the answer
+  stand — so a draft sent back files none. Each carries `turn`; each emits nothing of
+  its own (the verdict's event fired beside it); the checkpoint door has an arm for each.
+- **The turn stamp never repeats** — "this turn" is read by `turn`, so seed continues
+  the stamp from the turn the stored conversation ended on
+  (`AgentRunCheckpoint.turnNumber`, carried while a layer is armed) and from the
+  restored ledger's latest stamp (`stages/seed.ts` · `turnNumberFor`): a window
+  strategy trims the stored history, and its count of user messages repeats.
 - **The line** — `compose.ts` · `standingLineOf`, under `{ standingLine: true }` only, on
   a PROSE answer only (refused beside `.answerValidation()` and `.outputSchema()` at
   build). Appended after the limits separator by the one composer; beside
@@ -258,6 +266,13 @@ it at the study's freeze (adopted Q12).
   ran — only an unfinished one is on the record.
 - **The line's reasons carry no counts** — it names which kinds of reason fired;
   `agent.assessment()` and the account have the counts and the rows.
+- **In the run, no app declarations.** The layer folds without `rowsAt`;
+  `assessAnswer(record, declarations)`, `agent.assessment(declarations)` and the
+  account take them and can say more about the same run.
+- **Where the event does not reach** — a composition that mounts the agent reads
+  `turn_end.answerAssessment` (its dispatcher does not bridge `answer.*`); the line
+  is never streamed. The rest of the layer's gaps: `docs/design/honesty/answer.md`,
+  "Not covered".
 
 ## What it lets you measure
 

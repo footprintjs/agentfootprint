@@ -9,27 +9,39 @@
  *                    library; a fixed seed keeps every case reproducible by
  *                    its index) over agent configurations — tool result shapes,
  *                    the evidence gate's postures, the inputs layer, the limits
- *                    block, the line, a tight action budget — each run once and
- *                    held to the law;
+ *                    block, the line, a tight action budget, and an agent with
+ *                    no tool at all whose model still asks for one — each run
+ *                    once and held to the law; with the line on, the answer
+ *                    account finds exactly the section the run appended;
  *   - SCENARIO     — the named paths the law must survive: a pause and its
  *                    resume (a tool's question; the inputs layer's own batch
  *                    ask), a continued conversation of three turns, a typed
  *                    answer re-asked once for its schema, the evidence gate's
  *                    one revision, a limit that cut the turn short (wrapped up,
- *                    and cut short with the wrap-up off), and an agent mounted
- *                    in a composition (a Sequence step), whose standing reaches
- *                    the composition on `turn_end`;
+ *                    cut short with the wrap-up off, and on a tool-less agent),
+ *                    a before-tool rewrite of a ruled argument, and an agent
+ *                    mounted in a composition (a Sequence step), whose standing
+ *                    reaches the composition on `turn_end`;
  *   - REGRESSION   — the in-run projection also equals `agent.assessment()`,
- *                    the running agent's own read-after door.
+ *                    the running agent's own read-after door; and every case
+ *                    holds at most one witness row of each kind per turn.
  */
 
 import { describe, expect, it } from 'vitest';
 
-import { Agent, askHuman, coverage, defineTool, type Tool } from '../../../../src/index.js';
+import {
+  Agent,
+  allow,
+  askHuman,
+  coverage,
+  defineTool,
+  type Tool,
+  type ToolMiddleware,
+} from '../../../../src/index.js';
 import { Sequence } from '../../../../src/core-flow/Sequence.js';
 import { isPaused } from '../../../../src/core/pause.js';
 import { mock } from '../../../../src/llm-providers.js';
-import { assessAnswer, recordRun } from '../../../../src/observe.js';
+import { accountForAnswer, assessAnswer, recordRun } from '../../../../src/observe.js';
 import type { Recording } from '../../../../src/recorders/observability/recordRun.js';
 import {
   assessmentDataOf,
@@ -73,6 +85,19 @@ async function leg(agent: Agent, drive: () => Promise<unknown>): Promise<Leg> {
   return { assessed, turnEnds, recording, result };
 }
 
+/**
+ * ONE witness row of each kind per turn, at most: a row is filed only for the
+ * answer that stands — a draft the gate or the schema sends back files none.
+ */
+function atMostOneWitnessPerTurn(agent: Agent): void {
+  const state = agent.getLastSnapshot()?.sharedState as { findingsLedger?: unknown[] } | undefined;
+  const ledger = (state?.findingsLedger ?? []) as Record<string, unknown>[];
+  for (const kind of ['grounded', 'steps-unfinished']) {
+    const turns = ledger.filter((r) => r.kind === kind).map((r) => r.turn);
+    expect(new Set(turns).size, `${kind} rows per turn`).toBe(turns.length);
+  }
+}
+
 /** THE LAW for one leg that ended in an answer: event = turn_end = read-after fold = agent.assessment(). */
 async function holdsTheLaw(agent: Agent, l: Leg): Promise<AnswerAssessmentData> {
   expect(l.assessed).toHaveLength(1);
@@ -81,6 +106,7 @@ async function holdsTheLaw(agent: Agent, l: Leg): Promise<AnswerAssessmentData> 
   expect(assessmentDataOf(assessAnswer(l.recording))).toEqual(inRun);
   const live = await agent.assessment();
   if (live !== undefined) expect(assessmentDataOf(live)).toEqual(inRun);
+  atMostOneWitnessPerTurn(agent);
   return inRun;
 }
 
@@ -329,6 +355,104 @@ describe('SCENARIO — the law when a limit cut the turn short', () => {
     const s = await holdsTheLaw(agent, l);
     expect(s.reasons).toContain('stopped-early');
   });
+
+  // The Route decider records a cut-short turn on EVERY agent — the model asked
+  // for calls and a limit refused to run them, whether or not a tool could have
+  // answered. An agent with no tool surface once left `stoppedEarly` out of the
+  // layer's reads, so the run said "not assessed" and the recording "not sure".
+  it.each([
+    ['empty answer', ''],
+    ['answer beside the call', 'partial answer'],
+  ])(
+    'no tools at all, a call asked for at the limit (%s): stopped early, and the law holds',
+    async (_, content) => {
+      const agent = Agent.create({
+        provider: mock({
+          replies: [
+            { content, toolCalls: [{ id: 'g1', name: 'ghost', args: {} }] },
+            { content: 'done' },
+          ] as never,
+        }),
+        model: 'mock',
+        maxIterations: 1,
+      })
+        .answerLayer()
+        .build();
+      const l = await leg(agent, () => agent.run({ message: 'hello' }));
+      expect(l.result).toBe(content);
+      const stopped = (agent.getLastSnapshot()?.sharedState as { stoppedEarly?: unknown })
+        .stoppedEarly;
+      expect(stopped).toMatchObject({ reason: 'max-iterations', pendingToolCalls: 1 });
+      const s = await holdsTheLaw(agent, l);
+      expect(s).toMatchObject({ standing: 'not-sure', reasons: ['stopped-early'] });
+    },
+  );
+});
+
+describe('SCENARIO — the law with a before-tool rewrite of a ruled argument', () => {
+  // The rewrite is what the call RAN with, so it supersedes the inputs layer's
+  // row — the in-run fold must read `middlewareDecisions` exactly as the
+  // read-after fold does, and the line names a rewrite with no declared origin.
+  const searchLogs = defineTool({
+    name: 'search_logs',
+    description: 'Error lines for one service over a look-back period.',
+    inputSchema: {
+      type: 'object',
+      required: ['service', 'window'],
+      properties: {
+        service: { type: 'string' },
+        window: { type: 'string', enum: ['1h', '2h', '24h'] },
+      },
+    },
+    askOrAssume: { window: { assume: '2h' } },
+    execute: async () => ({ errors: 0 }),
+  });
+  const rewrite = (from?: { window: 'person' }): ToolMiddleware => ({
+    name: 'absolute-window',
+    onToolCall: (c) =>
+      c.toolName === 'search_logs'
+        ? from === undefined
+          ? allow({ ...c.args, window: '24h' }, 'window from the receipt')
+          : allow({ ...c.args, window: '24h' }, 'window from the receipt', { from })
+        : allow(),
+  });
+
+  it.each([
+    [
+      'no declared origin: assumed, and the line names the rewrite',
+      undefined,
+      ['argument-assumed'],
+    ],
+    [
+      "declared the person's: the rewrite supersedes the model's value",
+      { window: 'person' } as const,
+      [],
+    ],
+  ])('%s', async (_, from, reasons) => {
+    const agent = Agent.create({
+      provider: mock({
+        replies: [
+          { toolCalls: [{ id: 'c1', name: 'search_logs', args: { service: 'a', window: '1h' } }] },
+          { content: 'No errors on a.' },
+        ] as never,
+      }),
+      model: 'mock',
+    })
+      .tool(searchLogs)
+      .toolMiddleware(rewrite(from))
+      .answerLayer({ standingLine: true })
+      .build();
+    const l = await leg(agent, () => agent.run({ message: 'errors on a?' }));
+    const s = await holdsTheLaw(agent, l);
+    expect(s.reasons).toEqual(reasons);
+    const account = accountForAnswer(l.recording);
+    expect(`${account.answer.value}\n\n---\n\n${account.facts.limitsBlock.value}`).toBe(l.result);
+    if (from === undefined) {
+      expect(l.result).toContain(
+        'a before-tool rule set a value a call ran with and did not say where it came from',
+      );
+    }
+  });
 });
 
 describe('SCENARIO — the law on an agent mounted in a composition', () => {
@@ -411,6 +535,13 @@ interface Config {
   readonly tight: boolean;
   readonly findings: boolean;
   readonly answer: string;
+  /**
+   * No tool registered at all — the model still asks for one (the mock's
+   * script), so the call is refused as unknown, or a limit cuts the turn
+   * short before it runs. Drawn LAST, so every other field of a seed is the
+   * one it always drew.
+   */
+  readonly noTools: boolean;
 }
 
 function configOf(seed: number): Config {
@@ -427,6 +558,7 @@ function configOf(seed: number): Config {
     tight: r() < 0.25,
     findings: r() < 0.25,
     answer: pick(['Port 3 is down.', 'Nothing is down.', 'I could not tell.', 'Port 9 is down.']),
+    noTools: r() < 0.15,
   };
 }
 
@@ -466,7 +598,8 @@ function agentOf(c: Config): Agent {
     model: 'mock',
     reactMode: c.reactMode,
     ...(c.tight && { maxIterations: 1 }),
-  }).tool(listPorts);
+  });
+  if (!c.noTools) b = b.tool(listPorts);
   if (c.gate !== undefined) b = b.namesAndNumbersFromEvidence({ posture: c.gate });
   if (c.limits) b = b.limitsTravelWithTheAnswer();
   if (c.findings) b = b.findings();
@@ -488,12 +621,24 @@ describe('PROPERTY — the in-run standing equals the read-after fold, over 40 g
       expect(section).toMatch(
         /^(Known|Consistent with the run's record|Not sure|Ask|Not assessed) — /,
       );
+      // …and the answer account finds exactly what the run appended — the line
+      // by its own words, rebuilt from the record — never less, never more.
+      const account = accountForAnswer(l.recording);
+      const model = account.answer.value ?? '';
+      const appended = account.facts.limitsBlock.value;
+      expect(appended).not.toBeNull();
+      expect(model === '' ? appended : `${model}\n\n---\n\n${appended}`).toBe(l.result);
     }
   });
 
   it('the generated cases are not one shape: several standings and many reasons were held to the law', () => {
     expect(seen).toHaveLength(40);
-    expect(new Set(Array.from({ length: 40 }, (_, i) => configOf(i + 1).reactMode)).size).toBe(2);
+    const configs = Array.from({ length: 40 }, (_, i) => configOf(i + 1));
+    expect(new Set(configs.map((c) => c.reactMode)).size).toBe(2);
+    // An agent with no tool surface is generated, and one of them is cut short
+    // at the limit — the path whose `stoppedEarly` the layer once never read.
+    expect(configs.some((c) => c.noTools && c.tight)).toBe(true);
+    expect(configs.some((c) => c.noTools && !c.tight)).toBe(true);
     expect(new Set(seen.map((s) => s.standing)).size).toBeGreaterThanOrEqual(2);
     const reasons = new Set(seen.flatMap((s) => s.reasons));
     for (const r of [

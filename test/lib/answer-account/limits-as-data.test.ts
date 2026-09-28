@@ -11,15 +11,19 @@
  * (`missing: 'as-data'`) — never `not-applicable` when the limits travelled.
  *
  * And the split is the framework's whole appended section, found at the
- * separator by the first words of its blocks (the limits block, the "Assumed"
- * block, the answer layer's standing line) — an "Assumed" block alone, or a
- * standing line alone, no longer reads as the model's own words; a `---` the
- * model wrote itself is never split.
+ * separator: the two blocks by their headings (the limits block, the "Assumed"
+ * block), and the answer layer's standing line by its EXACT words, rebuilt
+ * from the run's record — an "Assumed" block alone, or a standing line alone,
+ * no longer reads as the model's own words, and the model's own words never
+ * read as the library's: a `---` the model wrote itself is never split, nor a
+ * model answer that uses the line's plain openings ("Not sure — ").
  *
  * Test types: INTEGRATION (real runs on the mock, recorded) · EDGE (the
- * model's own separator; an answer with no text of its own) · REGRESSION (a
- * prose run with no appended section and no data reads as it always did) —
- * every account's pointers resolve (P1) and print no refused leaf (P7).
+ * model's own separator and standing words, on a plain agent and on one with
+ * the layer but not the line; an answer with no text of its own; a record
+ * without its committed state) · REGRESSION (a prose run with no appended
+ * section and no data reads as it always did) — every account's pointers
+ * resolve (P1) and print no refused leaf (P7).
  */
 
 import { describe, expect, it } from 'vitest';
@@ -205,5 +209,107 @@ describe('EDGE — what is never split', () => {
     expect(account.answer.value).toBe('Part one.\n\n---\n\nPart two.');
     expect(account.facts.limitsBlock.status).toBe('not-applicable');
     expect(account.facts.limitsData.status).toBe('not-applicable');
+  });
+
+  // The standing line's words are the owner's plain words ("Not sure — ",
+  // "Known — ") — words a model can write too. They are the library's only
+  // where the record says the run appended THIS line: the answer layer's
+  // standing on `turn_end`, and the exact line rebuilt from it.
+  it.each([
+    [
+      'an answer that opens with a standing word',
+      'Not sure — the host is not in the inventory I can see.',
+    ],
+    [
+      'its own `---`, then a standing word',
+      'Port 3 is down.\n\n---\n\nKnown — port 3 has been down since Monday.',
+    ],
+  ])('a plain agent’s model words stay the model’s: %s', async (_, reply) => {
+    const agent = Agent.create({ provider: mock({ reply }), model: 'mock' }).build();
+    const recording = await recorded(agent, 'where is it?');
+    const account = accountForAnswer(recording);
+    expect(account.answer.value).toBe(reply);
+    expect(account.answer.source).toBe('model');
+    expect(account.facts.limitsBlock.status).toBe('not-applicable');
+  });
+
+  it('the answer layer armed WITHOUT the line: a model `---` then "Not sure — …" stays the model’s', async () => {
+    const reply = 'Port 3 is down.\n\n---\n\nNot sure — I only saw one switch.';
+    const agent = Agent.create({ provider: callThen('list_ports', {}, reply), model: 'mock' })
+      .tool(
+        defineTool({
+          name: 'list_ports',
+          description: 'ports',
+          inputSchema: { type: 'object', properties: {} },
+          execute: () => [],
+        }),
+      )
+      .answerLayer()
+      .build();
+    const recording = await recorded(agent, 'which ports are down?');
+    const account = accountForAnswer(recording);
+    // The run's standing IS "not sure" — and still the model wrote these words, not the library.
+    expect(account.facts.standing.value).toBe('not-sure');
+    expect(account.answer.value).toBe(reply);
+    expect(account.facts.limitsBlock.status).toBe('not-applicable');
+  });
+});
+
+describe('INTEGRATION — the standing line is found by its exact words, rebuilt from the record', () => {
+  it('the line alone on an answer with no words of its own: all of it is the library’s', async () => {
+    // No tool at all; the model asks for one at the limit and says nothing, so
+    // the composer appends the line with no separator (the answer is empty).
+    const agent = Agent.create({
+      provider: mock({
+        replies: [{ content: '', toolCalls: [{ id: 'g1', name: 'ghost', args: {} }] }] as never,
+      }),
+      model: 'mock',
+      maxIterations: 1,
+    })
+      .answerLayer({ standingLine: true })
+      .build();
+    const recording = await recorded(agent, 'hello?');
+    const account = accountForAnswer(recording);
+    expect(account.answer.value).toBe('');
+    expect(account.facts.limitsBlock).toMatchObject({
+      value: 'Not sure — the run stopped before the model finished.',
+      source: 'library',
+      status: 'recorded',
+    });
+    assertP1(account, recording);
+  });
+
+  it('a line naming an assumed value — rebuilt from the committed rows it was composed from', async () => {
+    const agent = Agent.create({
+      provider: callThen('search_logs', { service: 'checkout' }, 'No errors.'),
+      model: 'mock',
+    })
+      .tool(searchLogs)
+      .answerLayer({ standingLine: true })
+      .build();
+    const recording = await recorded(agent, 'errors on checkout?');
+    const account = accountForAnswer(recording);
+    expect(account.answer.value).toBe('No errors.');
+    expect(account.facts.limitsBlock.value).toBe(
+      'Not sure — window = "2h" was assumed by search_logs\'s rule, not given by you.',
+    );
+  });
+
+  it('a record without the committed state cannot rebuild that line — it is never claimed for the library', async () => {
+    const agent = Agent.create({
+      provider: callThen('search_logs', { service: 'checkout' }, 'No errors.'),
+      model: 'mock',
+    })
+      .tool(searchLogs)
+      .answerLayer({ standingLine: true })
+      .build();
+    const recording = await recorded(agent, 'errors on checkout?');
+    const { snapshot: _dropped, ...withoutState } = recording as unknown as Record<string, unknown>;
+    void _dropped;
+    const account = accountForAnswer(withoutState as unknown as Recording);
+    expect(account.answer.value).toBe(
+      'No errors.\n\n---\n\nNot sure — window = "2h" was assumed by search_logs\'s rule, not given by you.',
+    );
+    expect(account.facts.limitsBlock.status).toBe('not-applicable');
   });
 });

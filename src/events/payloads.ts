@@ -1175,7 +1175,17 @@ export interface AnswerAssessmentPayload {
  * the turn's payload is captured. It carries the standing as data
  * ({@link AnswerAssessmentPayload}) with the conversation turn and the
  * answer's iteration. The fold it reports reads committed rows only, so the
- * same recording read afterwards with `assessAnswer` folds the same value.
+ * same recording read afterwards with `assessAnswer` folds the same value
+ * (without app declarations — `assessAnswer(record, declarations)` with
+ * `rowsAt` can say more than the run did).
+ *
+ * Where it reaches, and what it is about:
+ * - the agent's own listeners only — a composition that mounts the agent
+ *   bridges the agent domain, not `answer.*`, so read
+ *   `turn_end.answerAssessment` there;
+ * - the answer the run COMPOSED: under the evidence gate's `rails` posture a
+ *   refused answer is assessed too, and then the run throws (no answer is
+ *   delivered, and `agent.assessment()` returns `undefined`).
  */
 export interface AnswerAssessedPayload extends AnswerAssessmentPayload {
   /** `AgentState.turnNumber` — the conversation turn. */

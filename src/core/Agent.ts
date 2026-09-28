@@ -1917,6 +1917,9 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
           // …and the findings ledger (9.101.0), from the same snapshot reader
           // `checkpoint()` uses — one reader, two carriers.
           this.findingsLedgerOf(this.getLastSnapshot()?.sharedState as Partial<AgentState>),
+          // …and the turn the failing run was on (honesty layers), so the
+          // retry is stamped the same turn — one reader, two carriers.
+          this.turnNumberOf(this.getLastSnapshot()?.sharedState as Partial<AgentState>),
         );
         throw new RunCheckpointError(cause, checkpoint);
       }
@@ -2457,6 +2460,7 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
     const skillCursor = this.continuityCursorOf(state);
     const evidenceRecovery = this.evidenceRecoveryOf(state);
     const findingsLedger = this.findingsLedgerOf(state);
+    const turnNumber = this.turnNumberOf(state);
     return {
       version: 1,
       runId: this.currentRunContext.runId,
@@ -2479,6 +2483,9 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
       // The model's standings (9.101.0) — absent unless the run recorded any,
       // by the `folded` rule: an optional key, never a format change.
       ...(findingsLedger !== undefined && { findingsLedger }),
+      // The turn this history ends on (honesty layers) — absent unless a
+      // layer is armed, so every other checkpoint keeps its byte shape.
+      ...(turnNumber !== undefined && { turnNumber }),
     };
   }
 
@@ -2548,6 +2555,22 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
   }
 
   /**
+   * The turn a checkpoint's history ends on — `findingsLedgerOf`'s twin, one
+   * reader for `checkpoint()` and the crash carrier. Only while an honesty
+   * layer is armed (the run constant `honestyLayers`, read from the same
+   * snapshot): that is when every ledger row carries its `turn` and the next
+   * run's stamp must continue from it (`AgentRunCheckpoint.turnNumber`).
+   * `undefined` otherwise, so the key stays absent.
+   *
+   * @internal
+   */
+  private turnNumberOf(state?: Partial<AgentState>): number | undefined {
+    if (state?.honestyLayers === undefined) return undefined;
+    const turn = state.turnNumber;
+    return typeof turn === 'number' && Number.isSafeInteger(turn) && turn >= 1 ? turn : undefined;
+  }
+
+  /**
    * The two owner facts every conversation carrier stamps — who the run was
    * for, and which agent ran it (9.2.0).
    *
@@ -2594,6 +2617,9 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
     this.pendingResumeHistory = {
       history: cp.history as readonly LLMMessage[],
       appendsUserTurn,
+      // The turn the stored history ends on (honesty layers) — seed continues
+      // the turn stamp from it only while a layer is armed.
+      ...(cp.turnNumber !== undefined && { turn: cp.turnNumber }),
     };
     // The folded spans beside it. A conversation stored before 8.2 has none,
     // and `undefined` is the right answer there — it means "this conversation

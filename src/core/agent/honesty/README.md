@@ -78,7 +78,10 @@ let finalBranch = startFinalBranch(deps.answerLayer, prepareFinalFor(deps), deps
 (`{ inputs: true }`, `{ answer: true }`, or both), and nothing on a run that armed none. A reader
 of the record tells "this layer was armed and filed nothing" from "this layer was never armed"
 by this key. While any layer is armed, the one writer stamps every ledger row with its `turn`,
-and a continued conversation's ledger is restored.
+a continued conversation's ledger is restored, and the checkpoint carries the turn it ended on
+(`AgentRunCheckpoint.turnNumber`) — seed continues the stamp from it and from the restored
+ledger's latest stamp (`stages/seed.ts` · `turnNumberFor`), because a window strategy trims the
+stored history and a count of its user messages repeats.
 
 ## A pause inside a layer
 

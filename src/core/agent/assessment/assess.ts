@@ -563,9 +563,11 @@ function readAnswerRows(state: Readonly<Record<string, unknown>>, g: Gathered): 
     // The gate's clean pass on this turn's answer — the LAST one, the verdict
     // on the answer that stands (an earlier draft's verdict never reaches a
     // row: a draft sent back for revision files `evidenceUnsupported`, not a
-    // witness). A pass that looked NOTHING up (the answer stated no name or
-    // number, or every one was exempt) did not apply: it is absent from
-    // `checked`, never a check that "ran" on an answer it could not read.
+    // witness, and the Route decider files a `steps-unfinished` row only once
+    // its answer has stood every later judge). A pass that looked NOTHING up
+    // (the answer stated no name or number, or every one was exempt) did not
+    // apply: it is absent from `checked`, never a check that "ran" on an
+    // answer it could not read.
     const grounded = witnesses.filter((w) => w.kind === 'grounded').at(-1);
     if (grounded !== undefined && (grounded.lookedUp ?? 0) > 0) {
       g.checked.push({

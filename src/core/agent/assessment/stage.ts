@@ -45,11 +45,16 @@
 import type { TypedScope } from 'footprintjs';
 
 import { typedEmit } from '../../../recorders/core/typedEmit.js';
-import type { FindingsLedger } from '../findings/types.js';
 import type { AgentState } from '../types.js';
 import { assessAnswer } from './assess.js';
-import { assessmentDataOf, standingLineOf, type StandingAssumedValue } from './compose.js';
-import type { AnswerAssessment } from './types.js';
+import {
+  assessmentDataOf,
+  assumedValuesSourceOf,
+  rewrittenBehind,
+  standingLineOf,
+  type AnswerAssessmentData,
+  type StandingAssumedValue,
+} from './compose.js';
 
 /** What the mount hands the stage — build-time facts, never scope. */
 export interface AnswerStageDeps {
@@ -77,35 +82,21 @@ function committedRecordOf(
   return record;
 }
 
-/** The fold's argument-assumed witnesses that point at a before-tool rewrite, not at a row. */
-function rewrittenBehind(assessed: AnswerAssessment): boolean {
-  return assessed.reasons.some(
-    (r) =>
-      r.reason === 'argument-assumed' &&
-      r.witness.some((w) => w.kind === 'state' && w.key === 'middlewareDecisions'),
-  );
-}
-
 /**
  * This turn's assumed values for the line — the "Assumed" block's own reading
  * (`arguments/serve.ts` · `assumedLinesFor`), over the same record the fold
- * read, loaded only when the fold says a value was assumed.
+ * read, from the source `compose.ts` · `assumedValuesSourceOf` chooses (the
+ * answer account rebuilds the line from the same choice). The reader loads
+ * only when the fold says a value was assumed.
  */
 async function assumedValuesOf(
-  assessed: AnswerAssessment,
+  data: AnswerAssessmentData,
   record: Readonly<Record<string, unknown>>,
 ): Promise<readonly StandingAssumedValue[]> {
-  if (!assessed.reasons.some((r) => r.reason === 'argument-assumed')) return [];
-  const ledger = (record.findingsLedger as FindingsLedger | undefined) ?? [];
-  const turn = record.turnNumber;
-  if (typeof turn !== 'number' || !ledger.some((row) => row.kind === 'argument')) return [];
+  const source = assumedValuesSourceOf(data.reasons, record);
+  if (source === undefined) return [];
   const { assumedLinesFor } = await import('../arguments/serve.js');
-  const decisions = record.middlewareDecisions;
-  return assumedLinesFor(
-    ledger,
-    turn,
-    Array.isArray(decisions) ? () => decisions as readonly unknown[] : undefined,
-  );
+  return assumedLinesFor(source.ledger, source.turn, source.readDecisions);
 }
 
 /**
@@ -128,10 +119,7 @@ export async function assessAnswerStage(
     ...assessmentDataOf(assessed),
   });
   if (deps.standingLine !== true) return;
-  const assumed = await assumedValuesOf(assessed, record);
-  scope.answerStandingLine = standingLineOf(
-    assessmentDataOf(assessed),
-    assumed,
-    rewrittenBehind(assessed),
-  );
+  const data = assessmentDataOf(assessed);
+  const assumed = await assumedValuesOf(data, record);
+  scope.answerStandingLine = standingLineOf(data, assumed, rewrittenBehind(assessed));
 }

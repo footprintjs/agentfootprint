@@ -374,6 +374,12 @@ Gotchas:
 - **In a composition** (an agent mounted as a `Sequence` step), the standing
   reaches the composition on the agent's `turn_end`; the `answer.*` event stays
   on the agent's own dispatcher.
+- **A turn's rows stay that turn's.** While a layer is armed a checkpoint carries
+  the turn it ended on (`turnNumber`), and the next run continues from it — so a
+  continued conversation never folds an earlier turn's rows as its own, even when
+  a window strategy trims the stored history.
+- **The line is not streamed.** Like the limits block, it is appended to the
+  answer the run returns; `stream.token` carries the model's text.
 - **Off by default.** Without `.answerLayer()` the chart, the committed rows, the
   events and the answer are exactly what they were.
 

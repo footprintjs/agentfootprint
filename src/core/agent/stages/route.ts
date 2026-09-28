@@ -52,7 +52,11 @@ import { fileIntegrityFindings } from '../integrityFindings.js';
 import { unsupportedClaimsOf } from '../../../integrity/unsupported-claim/check.js';
 import type { DeclaredClaim } from '../../../integrity/unsupported-claim/check.js';
 import { contextErrorIdentity } from '../../../integrity/finding/types.js';
-import { groundedRowFrom, stepsUnfinishedRowFrom } from '../assessment/witness.js';
+import {
+  groundedRowFrom,
+  stepsUnfinishedRowFrom,
+  type StepsUnfinishedRow,
+} from '../assessment/witness.js';
 import type { DispositionLedger } from '../../../integrity/disposition/ledger.js';
 import type { Disposition } from '../../../integrity/disposition/types.js';
 import type { InjectionRecord } from '../../../recorders/core/types.js';
@@ -561,16 +565,23 @@ function emitRouteDecided(
  * (the re-key), already visible in the record as a pointer that never
  * completed. Undefined `stepPlanFor`, no pointer, or a complete procedure →
  * `undefined` and not one event (zero-cost-when-unused).
+ *
+ * Under the answer layer's arm an accepted or cut-short verdict RETURNS its
+ * witness row (`assessment/witness.ts`) instead of filing it: the evidence
+ * gate runs after this judge and can still send the draft back, and a row
+ * about a draft that was replaced would say "the answer came before the
+ * declared steps finished" of an answer that may have finished them. The
+ * caller files it only where it really answers `'final'` (`fileStepsWitness`).
  */
 function judgeUnfinishedSteps(
   scope: TypedScope<AgentState>,
   stepPlanFor: StepPlanFor | undefined,
   earlyStop: 'max-iterations' | 'cost-budget' | undefined,
   /** THE ANSWER LAYER IS ARMED (honesty layer 4): an accepted or cut-short
-   *  verdict also files its committed witness row. Absent → the event alone,
-   *  as always. */
+   *  verdict also builds its witness row, for the caller to file if the
+   *  answer stands. Absent → the event alone, as always. */
   answer?: AnswerRouteArm,
-): 'step-nudge' | undefined {
+): 'step-nudge' | StepsUnfinishedRow | undefined {
   if (!stepPlanFor) return undefined;
   const ptr = pointerOf(scope.stepPointer);
   if (!stepInProgress(ptr)) return undefined;
@@ -588,19 +599,29 @@ function judgeUnfinishedSteps(
     action,
     iteration,
   });
-  if (answer === true) {
-    recordFindings(scope, [
-      stepsUnfinishedRowFrom({
-        turn: scope.turnNumber as number,
-        iteration,
-        skillId: ptr.skillId,
-        remaining,
-        total: ptr.total,
-        action,
-      }),
-    ]);
-  }
-  return undefined;
+  if (answer !== true) return undefined;
+  return stepsUnfinishedRowFrom({
+    turn: scope.turnNumber as number,
+    iteration,
+    skillId: ptr.skillId,
+    remaining,
+    total: ptr.total,
+    action,
+  });
+}
+
+/**
+ * File the step judge's witness row — called by a decider at the one moment
+ * it answers `'final'` with the answer that verdict was about, after every
+ * judge that could still send that answer back has let it stand. Anything but
+ * a row (no verdict, an unarmed agent) files nothing.
+ */
+function fileStepsWitness(
+  scope: TypedScope<AgentState>,
+  verdict: 'step-nudge' | StepsUnfinishedRow | undefined,
+): void {
+  if (verdict === undefined || verdict === 'step-nudge') return;
+  recordFindings(scope, [verdict]);
 }
 
 /**
@@ -1271,7 +1292,8 @@ function buildJudgingDecider(
     // A withheld answer is judged by nothing below, so the recency row says so
     // here rather than sitting untouched (see `noteRecency`).
     if (denied) noteRecency(noticePriorTurnEvidence, integrityLedger, 'not-applicable');
-    if (!denied && judgeUnfinishedSteps(scope, stepPlanFor, earlyStop, answer) === 'step-nudge') {
+    const steps = denied ? undefined : judgeUnfinishedSteps(scope, stepPlanFor, earlyStop, answer);
+    if (steps === 'step-nudge') {
       restoreEmission(scope, emission);
       emitRouteDecided(scope, 'step-nudge', stepNudgeRationale(scope));
       return 'step-nudge';
@@ -1295,6 +1317,8 @@ function buildJudgingDecider(
       emitRouteDecided(scope, 'evidence-recheck', evidenceRecheckRationale(scope));
       return 'evidence-recheck';
     }
+    // The answer stands: only now is the step judge's witness about it.
+    fileStepsWitness(scope, steps);
     recordAnswerGuarantee(scope, undefined); // this decider is built without an output schema
     emitRouteDecided(scope, 'final', rationale);
     settleWrapUp(scope, earlyStop, false);
@@ -1407,7 +1431,8 @@ function buildEnforcingDecider(
       });
       // The schema verdict ran FIRST (an answer being re-asked is not a
       // stop); the step judge sees only an answer the schema let stand.
-      if (judgeUnfinishedSteps(scope, stepPlanFor, base.earlyStop, answer) === 'step-nudge') {
+      const steps = judgeUnfinishedSteps(scope, stepPlanFor, base.earlyStop, answer);
+      if (steps === 'step-nudge') {
         return reAsk('step-nudge', stepNudgeRationale(scope));
       }
       // The evidence gate is last of the three judges: it grounds the answer
@@ -1427,6 +1452,8 @@ function buildEnforcingDecider(
       ) {
         return reAsk('evidence-recheck', evidenceRecheckRationale(scope));
       }
+      // The answer stands: only now is the step judge's witness about it.
+      fileStepsWitness(scope, steps);
       // LAST, and it re-routes nothing: this answer is the one being handed
       // back, and a claim that disagrees with the run's settled facts is a
       // fact about a finished run (see judgeClaims).
@@ -1503,9 +1530,13 @@ function buildEnforcingDecider(
     // A schema-exhausted answer is still a would-be-final one, and the step
     // table is unconditional on schema state: steps remaining + nudge
     // unspent → one teaching re-ask (its turn may well fix both).
-    if (judgeUnfinishedSteps(scope, stepPlanFor, base.earlyStop, answer) === 'step-nudge') {
+    const steps = judgeUnfinishedSteps(scope, stepPlanFor, base.earlyStop, answer);
+    if (steps === 'step-nudge') {
       return reAsk('step-nudge', stepNudgeRationale(scope));
     }
+    // No judge runs after this one on this path (the gate is skipped below),
+    // so the answer stands and its witness is filed at once.
+    fileStepsWitness(scope, steps);
     // The evidence gate deliberately does NOT run here. This answer already
     // failed its own contract and the caller is being told so; grounding the
     // values inside a shape the app has declared invalid would file a second

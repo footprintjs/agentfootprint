@@ -215,20 +215,28 @@ export interface AnswerMountDeps {
  * read whether or not this run wrote it, so the in-run fold never misses a row
  * the read-after fold sees (the equality law).
  *
- * - always: `history`, `turnNumber`, `pausedToolCallId` (seed writes them) and
+ * - always: `history`, `turnNumber`, `pausedToolCallId` (seed writes them),
  *   `findingsLedger` (the witness rows, and any rows a continued conversation
- *   restores — the restore is wired while a layer is armed);
- * - a tool surface: `coverageDeclared`, `stoppedEarly` (a limit only cuts a
- *   turn short while tool calls are pending);
+ *   restores — the restore is wired while a layer is armed) and
+ *   `stoppedEarly` — the Route decider writes it on EVERY agent
+ *   (`stages/route.ts` · `recordEarlyStop`): a limit cuts a turn short
+ *   whenever the model asked for calls, whether or not this agent registered
+ *   a tool that could answer them;
+ * - a tool surface: `coverageDeclared` (only a tool that ran declares
+ *   coverage);
  * - the evidence gate: `unsupportedValues`;
  * - `.answerValidation()`: `answerValidation`;
  * - the inputs layer: `argumentAsk`, and `middlewareDecisions` when a
  *   before-tool chain can rewrite a filled value.
  *
+ * Every key's writers were checked against this list: a writer that no arm
+ * gates puts its key in the always group — decide by the writer, never by the
+ * usual path to it.
+ *
  * @example
  * ```ts
  * answerFoldReads({ tools: true, evidenceGate: false, answerValidation: false, inputs: false, toolMiddleware: false });
- * // ['history', 'turnNumber', 'pausedToolCallId', 'findingsLedger', 'coverageDeclared', 'stoppedEarly']
+ * // ['history', 'turnNumber', 'pausedToolCallId', 'findingsLedger', 'stoppedEarly', 'coverageDeclared']
  * ```
  */
 export function answerFoldReads(arms: {
@@ -243,7 +251,8 @@ export function answerFoldReads(arms: {
     'turnNumber',
     'pausedToolCallId',
     'findingsLedger',
-    ...(arms.tools ? (['coverageDeclared', 'stoppedEarly'] as const) : []),
+    'stoppedEarly',
+    ...(arms.tools ? (['coverageDeclared'] as const) : []),
     ...(arms.evidenceGate ? (['unsupportedValues'] as const) : []),
     ...(arms.answerValidation ? (['answerValidation'] as const) : []),
     ...(arms.inputs ? (['argumentAsk'] as const) : []),

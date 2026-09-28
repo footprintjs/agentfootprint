@@ -78,8 +78,12 @@ export interface UnfinishedStep {
  * The answer came before the active skill's declared steps finished
  * (`agentfootprint.skill.steps_unfinished` with `action: 'accepted'` — the one
  * teaching nudge was already spent — or `'cut-short'` — a limit forced the
- * answer). Filed by the Route decider on the turn's answer while the answer
- * layer is armed. The `'nudged'` verdict needs no row: the turn went on.
+ * answer). Filed by the Route decider while the answer layer is armed, and
+ * only for the answer that STANDS: the step judge runs before the evidence
+ * gate, so a stop it accepted on a draft the gate then sends back files no row
+ * (the event still fires) — the revision is judged again, and at most one row
+ * per answer reaches the ledger. The `'nudged'` verdict needs no row: the turn
+ * went on.
  */
 export interface StepsUnfinishedRow {
   readonly kind: 'steps-unfinished';

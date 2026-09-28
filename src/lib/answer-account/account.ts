@@ -9,7 +9,14 @@
  * and counted (`unread`); a line whose fill fails becomes `unreadable.line@1`.
  */
 
-import { STANDING_LINE_OPENINGS } from '../../core/agent/assessment/compose.js';
+import { assumedLinesFor } from '../../core/agent/arguments/serve.js';
+import { assessAnswer } from '../../core/agent/assessment/assess.js';
+import {
+  assessmentDataFrom,
+  assumedValuesSourceOf,
+  rewrittenBehind,
+  standingLineOf,
+} from '../../core/agent/assessment/compose.js';
 import { ASSUMED_BLOCK_HEADING, COVERAGE_BLOCK_HEADING } from '../../core/agent/coverage/answer.js';
 import type { Recording } from '../../recorders/observability/recordRun.js';
 import { chip, clipFact, MAX_VAR_CHARS, saidBy, sentence } from './render.js';
@@ -101,34 +108,71 @@ function row(
 const APPENDED_SEPARATOR = '\n\n---\n\n';
 
 /**
- * The first words of every block the framework appends after an answer
+ * The headings of the two BLOCKS the framework appends after an answer
  * (`coverage/answer.ts` · `composeAnswerWithCoverage`, the one composer), each
- * read from its owner: the limits block's heading, the "Assumed" block's
- * heading and the standing line's openings.
+ * read from its owner: the limits block's and the "Assumed" block's — long,
+ * fixed sentences only the framework writes.
  */
-const APPENDED_OPENINGS: readonly string[] = [
+const BLOCK_HEADINGS: readonly string[] = [
   `${COVERAGE_BLOCK_HEADING} — declared by the tools that produced it, not by the model:`,
   ASSUMED_BLOCK_HEADING,
-  ...Object.values(STANDING_LINE_OPENINGS),
 ];
 
-const opensAppended = (text: string): boolean => APPENDED_OPENINGS.some((o) => text.startsWith(o));
+/**
+ * The standing line THIS run appended, rebuilt from its record — or
+ * `undefined` when the record says none could be there.
+ *
+ * The line opens with the owner's plain words ("Not sure — ", "Known — "),
+ * which a model can write too, so an opening proves nothing. The record does:
+ * `turn_end.answerAssessment` exists only on a run whose answer layer folded
+ * the standing, and the line is ONE function of that projection
+ * (`assessment/compose.ts` · `standingLineOf`) — plus, when a value was
+ * assumed, of the committed rows it names, read from the source the layer's
+ * stage read (`assumedValuesSourceOf`) and the fold's rewrite witness. Only
+ * that exact line, where the composer puts it, is the library's. Without the
+ * committed state an assumed value cannot be rebuilt, and the line is not
+ * claimed.
+ */
+function appendedStandingLine(
+  end: ViewEvent,
+  state: Readonly<Record<string, unknown>> | undefined,
+): string | undefined {
+  const data = assessmentDataFrom(end.payload.answerAssessment);
+  if (data === undefined) return undefined;
+  if (!data.reasons.includes('argument-assumed')) return standingLineOf(data, [], false);
+  if (state === undefined) return undefined;
+  const source = assumedValuesSourceOf(data.reasons, state);
+  const assumed =
+    source === undefined ? [] : assumedLinesFor(source.ledger, source.turn, source.readDecisions);
+  const rewritten = rewrittenBehind(assessAnswer({ snapshot: { sharedState: state } }));
+  return standingLineOf(data, assumed, rewritten);
+}
+
+/** Whether `text` opens the framework's appended section: the run's own line, or a block's heading. */
+function opensAppended(text: string, line: string | undefined): boolean {
+  if (line !== undefined && (text === line || text.startsWith(`${line}\n\n`))) return true;
+  return BLOCK_HEADINGS.some((heading) => text.startsWith(heading));
+}
 
 /**
  * Split the framework's appended section off an answer: the LAST separator
- * whose next line opens one of the framework's blocks — a `---` the model
- * wrote itself opens none, and the composer joins its own blocks with blank
- * lines, never a second separator. An answer with no text of its own is the
- * section alone (the composer adds no separator then).
+ * whose next line opens it — the run's own standing line, exactly, or a
+ * block's heading. A `---` the model wrote itself opens neither, and the
+ * composer joins its own blocks with blank lines, never a second separator.
+ * An answer with no text of its own is the section alone (the composer adds
+ * no separator then).
  */
-function splitAppended(content: string): { readonly model: string; readonly appended?: string } {
+function splitAppended(
+  content: string,
+  line: string | undefined,
+): { readonly model: string; readonly appended?: string } {
   let at = content.lastIndexOf(APPENDED_SEPARATOR);
   while (at >= 0) {
     const rest = content.slice(at + APPENDED_SEPARATOR.length);
-    if (opensAppended(rest)) return { model: content.slice(0, at), appended: rest };
+    if (opensAppended(rest, line)) return { model: content.slice(0, at), appended: rest };
     at = at === 0 ? -1 : content.lastIndexOf(APPENDED_SEPARATOR, at - 1);
   }
-  return opensAppended(content) ? { model: '', appended: content } : { model: content };
+  return opensAppended(content, line) ? { model: '', appended: content } : { model: content };
 }
 
 /** How many items one of the data's lists holds — `0` for a list the record does not carry. */
@@ -214,7 +258,7 @@ function readAnswer(view: RecordingView): {
   }
   const pointer = at(end, 'finalContent');
   const data = readLimitsData(end);
-  const { model, appended } = splitAppended(content);
+  const { model, appended } = splitAppended(content, appendedStandingLine(end, view.state));
   const answer: AccountFact<string> = {
     ...clipFact(model, MAX_ANSWER_CHARS),
     source: 'model',

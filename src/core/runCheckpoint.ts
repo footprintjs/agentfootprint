@@ -159,6 +159,26 @@ export interface AgentRunCheckpoint {
    */
   readonly findingsLedger?: FindingsLedger;
   /**
+   * The conversation TURN the stored history ends on — the stored run's
+   * `AgentState.turnNumber` — carried while an honesty layer is armed.
+   *
+   * Every ledger row filed while a layer is armed carries its `turn`, and the
+   * answer's standing reads "this turn" by that stamp, so a stamp must never
+   * repeat in one conversation. The count of user messages in `history` cannot
+   * promise that: a window strategy or a compaction trims the stored history,
+   * and the count repeats and goes backwards — an earlier turn's verdict would
+   * then be folded as a later turn's. So the next run starts from this number:
+   * `run({ continueFrom })` is the turn after it, `resumeOnError` the same
+   * turn again. Written by both carriers (`checkpoint()` and the crash
+   * checkpoint), and only while a layer is armed — every other checkpoint
+   * keeps its exact byte shape.
+   *
+   * **Version 1 still**, by the same documented rule as {@link folded} /
+   * {@link findingsLedger}: an optional field is not a format change, and a
+   * runtime that has never heard of it continues the conversation correctly.
+   */
+  readonly turnNumber?: number;
+  /**
    * WHO this conversation belongs to — the `identity` the stored run was
    * given, carried so that continuing it lands in the same namespace it
    * started in (9.2.0).
@@ -559,6 +579,13 @@ export function buildCheckpoint(
    * Absent unless the run's ledger is non-empty.
    */
   findingsLedger?: FindingsLedger,
+  /**
+   * The turn the failing run was on (honesty layers), read from the same
+   * committed snapshot by the same one-reader-two-carriers rule — so a crash
+   * checkpoint cannot lose the turn `checkpoint()` keeps. Absent unless a
+   * layer is armed; see {@link AgentRunCheckpoint.turnNumber}.
+   */
+  turnNumber?: number,
 ): AgentRunCheckpoint {
   return {
     version: 1,
@@ -574,6 +601,7 @@ export function buildCheckpoint(
     ...(skillCursor !== undefined && { skillCursor }),
     ...(evidenceRecovery !== undefined && { evidenceRecovery }),
     ...(findingsLedger !== undefined && findingsLedger.length > 0 && { findingsLedger }),
+    ...(turnNumber !== undefined && { turnNumber }),
   };
 }
 
@@ -683,6 +711,11 @@ function ledgerRowIsWellFormed(row: unknown): boolean {
     default:
       return false;
   }
+}
+
+/** A conversation turn: a positive whole number (the `AgentState.turnNumber` seed writes). */
+function isTurnNumber(value: unknown): value is number {
+  return typeof value === 'number' && Number.isSafeInteger(value) && value >= 1;
 }
 
 /** A non-empty list of `{ what, why? }` coverage items, both strings — the shape the rule files. */
@@ -796,6 +829,17 @@ export function validateCheckpoint(value: unknown): AgentRunCheckpoint {
           're-seeded verbatim on continuation.',
       );
     }
+  }
+  // The turn the stored history ends on (honesty layers), by the same
+  // present-only rule: a checkpoint without the key is every conversation
+  // stored without a layer armed. When present it is a turn — a positive
+  // whole number — because the next run's turn stamp starts from it.
+  if (c.turnNumber !== undefined && !isTurnNumber(c.turnNumber)) {
+    throw new TypeError(
+      `[resumeOnError] checkpoint \`turnNumber\` must be a positive whole number when present ` +
+        `(got ${JSON.stringify(c.turnNumber) ?? typeof c.turnNumber}). It is the conversation ` +
+        `turn the stored history ends on, written while an honesty layer is armed.`,
+    );
   }
   // The conversation itself, message by message (8.18.0). `Array.isArray` was
   // the whole check, one field away from `originalInput.message` — which HAS

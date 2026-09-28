@@ -4,13 +4,17 @@ title: StepsUnfinishedRow
 
 # Interface: StepsUnfinishedRow
 
-Defined in: [src/core/agent/assessment/witness.ts:84](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/assessment/witness.ts#L84)
+Defined in: [src/core/agent/assessment/witness.ts:88](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/assessment/witness.ts#L88)
 
 The answer came before the active skill's declared steps finished
 (`agentfootprint.skill.steps_unfinished` with `action: 'accepted'` — the one
 teaching nudge was already spent — or `'cut-short'` — a limit forced the
-answer). Filed by the Route decider on the turn's answer while the answer
-layer is armed. The `'nudged'` verdict needs no row: the turn went on.
+answer). Filed by the Route decider while the answer layer is armed, and
+only for the answer that STANDS: the step judge runs before the evidence
+gate, so a stop it accepted on a draft the gate then sends back files no row
+(the event still fires) — the revision is judged again, and at most one row
+per answer reaches the ledger. The `'nudged'` verdict needs no row: the turn
+went on.
 
 ## Properties
 
@@ -18,7 +22,7 @@ layer is armed. The `'nudged'` verdict needs no row: the turn went on.
 
 > `readonly` **action**: `"accepted"` \| `"cut-short"`
 
-Defined in: [src/core/agent/assessment/witness.ts:96](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/assessment/witness.ts#L96)
+Defined in: [src/core/agent/assessment/witness.ts:100](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/assessment/witness.ts#L100)
 
 ***
 
@@ -26,7 +30,7 @@ Defined in: [src/core/agent/assessment/witness.ts:96](https://github.com/footpri
 
 > `readonly` **iteration**: `number`
 
-Defined in: [src/core/agent/assessment/witness.ts:89](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/assessment/witness.ts#L89)
+Defined in: [src/core/agent/assessment/witness.ts:93](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/assessment/witness.ts#L93)
 
 The iteration whose answer the step judge read.
 
@@ -36,7 +40,7 @@ The iteration whose answer the step judge read.
 
 > `readonly` **kind**: `"steps-unfinished"`
 
-Defined in: [src/core/agent/assessment/witness.ts:85](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/assessment/witness.ts#L85)
+Defined in: [src/core/agent/assessment/witness.ts:89](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/assessment/witness.ts#L89)
 
 ***
 
@@ -44,7 +48,7 @@ Defined in: [src/core/agent/assessment/witness.ts:85](https://github.com/footpri
 
 > `readonly` **remaining**: readonly `UnfinishedStep`[]
 
-Defined in: [src/core/agent/assessment/witness.ts:93](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/assessment/witness.ts#L93)
+Defined in: [src/core/agent/assessment/witness.ts:97](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/assessment/witness.ts#L97)
 
 The declared steps not reached, in order — position and tool only.
 
@@ -54,7 +58,7 @@ The declared steps not reached, in order — position and tool only.
 
 > `readonly` **skillId**: `string`
 
-Defined in: [src/core/agent/assessment/witness.ts:91](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/assessment/witness.ts#L91)
+Defined in: [src/core/agent/assessment/witness.ts:95](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/assessment/witness.ts#L95)
 
 The skill whose procedure was in progress.
 
@@ -64,7 +68,7 @@ The skill whose procedure was in progress.
 
 > `readonly` **total**: `number`
 
-Defined in: [src/core/agent/assessment/witness.ts:95](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/assessment/witness.ts#L95)
+Defined in: [src/core/agent/assessment/witness.ts:99](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/assessment/witness.ts#L99)
 
 How many steps the procedure declares.
 
@@ -74,6 +78,6 @@ How many steps the procedure declares.
 
 > `readonly` **turn**: `number`
 
-Defined in: [src/core/agent/assessment/witness.ts:87](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/assessment/witness.ts#L87)
+Defined in: [src/core/agent/assessment/witness.ts:91](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/assessment/witness.ts#L91)
 
 `AgentState.turnNumber` when the row was filed — the conversation turn.

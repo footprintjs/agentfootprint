@@ -43,9 +43,11 @@ import type { AnswerAssessment, AssessmentCheck, AssessmentReason } from './type
 export const STANDING_LINE_VERSION = 1;
 
 /**
- * The line's first words, one per standing — the owner's words, and the only
- * words a reader of the answer text matches on to find where the framework's
- * appended section begins (`lib/answer-account/account.ts` · `readAnswer`).
+ * The line's first words, one per standing — the owner's words. They are
+ * plain words a model can write too, so a reader of the answer text never
+ * matches on them alone: the answer account finds the line by rebuilding the
+ * WHOLE line from the run's record (`lib/answer-account/account.ts` ·
+ * `readAnswer`, through `standingLineOf`).
  */
 export const STANDING_LINE_OPENINGS: Readonly<Record<AnswerAssessment['standing'], string>> =
   Object.freeze({
@@ -91,7 +93,122 @@ export function assessmentDataOf(a: AnswerAssessment): AnswerAssessmentData {
   };
 }
 
-/** How many reason clauses the line prints before it folds the rest into a count. */
+const isRecord = (value: unknown): value is Readonly<Record<string, unknown>> =>
+  typeof value === 'object' && value !== null && !Array.isArray(value);
+
+const owns = (table: object, key: unknown): boolean =>
+  typeof key === 'string' && Object.prototype.hasOwnProperty.call(table, key);
+
+const ASSESSMENTS: readonly AnswerAssessment['assessment'][] = [
+  'known',
+  'unrefuted',
+  'unknown',
+  'not-applicable',
+];
+
+// FOLD · the one reader of the standing as data off a RECORD (`turn_end.answerAssessment`)
+// consumers read this and never re-derive it: lib/answer-account/account.ts · appendedStandingLine
+/**
+ * The standing as data read back off a record — `turn_end.answerAssessment`
+ * as a recording holds it — or `undefined` unless every field is in this
+ * version's vocabulary (a value, a standing with an opening, known reason
+ * kinds, checks with counts). A fresh copy, field by field.
+ */
+export function assessmentDataFrom(value: unknown): AnswerAssessmentData | undefined {
+  if (!isRecord(value)) return undefined;
+  const { assessment, standing, reasons, checked } = value;
+  if (!ASSESSMENTS.includes(assessment as AnswerAssessment['assessment'])) return undefined;
+  if (!owns(STANDING_LINE_OPENINGS, standing)) return undefined;
+  if (!Array.isArray(reasons)) return undefined;
+  if (!reasons.every((r) => r === 'argument-assumed' || owns(REASON_WORDS, r))) return undefined;
+  if (!Array.isArray(checked)) return undefined;
+  const ran: AnswerAssessmentData['checked'][number][] = [];
+  for (const c of checked as readonly unknown[]) {
+    if (!isRecord(c) || !owns(CHECK_WORDS, c.check)) return undefined;
+    const { layer, ran: count, of } = c;
+    if (typeof layer !== 'number' || typeof count !== 'number' || typeof of !== 'number') {
+      return undefined;
+    }
+    ran.push({
+      layer: layer as AnswerAssessment['checked'][number]['layer'],
+      check: c.check as AssessmentCheck,
+      ran: count,
+      of,
+    });
+  }
+  return {
+    assessment: assessment as AnswerAssessment['assessment'],
+    standing: standing as AnswerAssessment['standing'],
+    reasons: [...(reasons as readonly AssessmentReason[])],
+    checked: ran,
+  };
+}
+
+/**
+ * Whether a before-tool rewrite with no declared origin fired
+ * `argument-assumed` — the fold's witness that points at `middlewareDecisions`
+ * rather than at a row. The line then names it once, without a value.
+ */
+export function rewrittenBehind(assessed: AnswerAssessment): boolean {
+  return assessed.reasons.some(
+    (r) =>
+      r.reason === 'argument-assumed' &&
+      r.witness.some((w) => w.kind === 'state' && w.key === 'middlewareDecisions'),
+  );
+}
+
+/**
+ * Where this turn's assumed values are read from: the ledger, the turn, and
+ * the before-tool rewrites a row may have been superseded by — handed to the
+ * "Assumed" block's own reader (`arguments/serve.ts` · `assumedLinesFor`),
+ * which the caller loads: the answer layer's stage through `import()` (the
+ * optional-family law), the answer account statically.
+ */
+export interface AssumedValuesSource {
+  readonly ledger: readonly { readonly kind: string }[];
+  readonly turn: number;
+  readonly readDecisions: (() => readonly unknown[]) | undefined;
+}
+
+// FOLD · the one choice of what the line's assumed values are read from
+// consumers read this and never re-derive it: assessment/stage.ts · assessAnswerStage (to compose
+// the line), lib/answer-account/account.ts · appendedStandingLine (to find it again in the answer)
+/**
+ * The source of the line's assumed values in `record` (committed state) —
+ * `undefined` when the line names none: no `argument-assumed` reason, no
+ * turn, or no `argument` row. Rows that are not objects are passed over, so a
+ * damaged record is read, never thrown on.
+ */
+export function assumedValuesSourceOf(
+  reasons: readonly AssessmentReason[],
+  record: Readonly<Record<string, unknown>>,
+): AssumedValuesSource | undefined {
+  if (!reasons.includes('argument-assumed')) return undefined;
+  const turn = record.turnNumber;
+  if (typeof turn !== 'number') return undefined;
+  const rows: readonly unknown[] = Array.isArray(record.findingsLedger)
+    ? record.findingsLedger
+    : [];
+  const ledger = rows.filter(
+    (row): row is { readonly kind: string } => isRecord(row) && typeof row.kind === 'string',
+  );
+  if (!ledger.some((row) => row.kind === 'argument')) return undefined;
+  const decisions = record.middlewareDecisions;
+  return {
+    ledger,
+    turn,
+    readDecisions: Array.isArray(decisions) ? () => decisions as readonly unknown[] : undefined,
+  };
+}
+
+/**
+ * How many reason clauses the line prints before it folds the rest into a
+ * count. The assumed clauses are never counted and never cut: beside
+ * `.limitsTravelWithTheAnswer()` the line REPLACES the "Assumed" block, which
+ * prints every assumed value, so a cut there would drop a value the person
+ * would otherwise have read. A fold's distinct reason kinds stay under the cap
+ * on their own; it bounds a hand-built projection.
+ */
 const MAX_CLAUSES = 12;
 
 const CHECK_WORDS: Readonly<Record<AssessmentCheck, string>> = {
@@ -142,31 +259,37 @@ function assumedClauses(lines: readonly StandingAssumedValue[]): string[] {
   return out;
 }
 
-/** The "not sure" clauses, in the fold's reason order. */
+/** The "not sure" clauses, in the fold's reason order — every assumed one, the rest capped. */
 function reasonClauses(
   data: AnswerAssessmentData,
   assumed: readonly StandingAssumedValue[],
   rewritten: boolean,
 ): string[] {
   const clauses: string[] = [];
+  let counted = 0;
+  let folded = 0;
   for (const reason of data.reasons) {
-    if (reason !== 'argument-assumed') {
-      clauses.push(REASON_WORDS[reason]);
+    if (reason === 'argument-assumed') {
+      // Never cut (see MAX_CLAUSES): the line owns the assumed sentence.
+      clauses.push(...assumedClauses(assumed));
+      // A before-tool rewrite with no declared origin fires the same reason and
+      // names no row the block would print: said once, without a value.
+      if (rewritten || assumed.length === 0) {
+        clauses.push(
+          'a before-tool rule set a value a call ran with and did not say where it came from',
+        );
+      }
       continue;
     }
-    clauses.push(...assumedClauses(assumed));
-    // A before-tool rewrite with no declared origin fires the same reason and
-    // names no row the block would print: said once, without a value.
-    if (rewritten || assumed.length === 0) {
-      clauses.push(
-        'a before-tool rule set a value a call ran with and did not say where it came from',
-      );
+    if (counted < MAX_CLAUSES) {
+      clauses.push(REASON_WORDS[reason]);
+      counted += 1;
+    } else {
+      folded += 1;
     }
   }
-  if (clauses.length <= MAX_CLAUSES) return clauses;
-  const shown = clauses.slice(0, MAX_CLAUSES);
-  shown.push(`… and ${clauses.length - MAX_CLAUSES} more (in the run record)`);
-  return shown;
+  if (folded > 0) clauses.push(`… and ${folded} more (in the run record)`);
+  return clauses;
 }
 
 // LENS · appended-answer · persistent-history
