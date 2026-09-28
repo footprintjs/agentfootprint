@@ -510,16 +510,80 @@ function readConflicts(
   });
 }
 
-/** Layer 4, the answer's own rows: the evidence gate's flag, a cut-short turn, the app's checks. */
+/** One answer-layer witness row of this turn, where it sits on the ledger. */
+interface WitnessRead {
+  readonly index: number;
+  readonly kind: 'grounded' | 'steps-unfinished';
+  /** On a `grounded` row: how many values the gate looked up in the tools' results. */
+  readonly lookedUp?: number;
+}
+
+/**
+ * This turn's witness rows (honesty layer 4, `assessment/witness.ts`): the
+ * ledger's `grounded` and `steps-unfinished` rows whose `turn` is the run's
+ * `turnNumber` — the ledger crosses turns on a continued conversation, and an
+ * earlier turn's verdict is about an answer this fold is not reading. A record
+ * with no `turnNumber` reads every witness row (it may over-report; it never
+ * hides). Filed only while the answer layer is armed, so an unarmed record
+ * holds none and this reads nothing.
+ */
+function witnessRows(state: Readonly<Record<string, unknown>>): readonly WitnessRead[] {
+  const ledger = Array.isArray(state.findingsLedger) ? state.findingsLedger : [];
+  const turn = typeof state.turnNumber === 'number' ? state.turnNumber : undefined;
+  const out: WitnessRead[] = [];
+  ledger.forEach((row: unknown, index) => {
+    if (!isRecord(row) || (row.kind !== 'grounded' && row.kind !== 'steps-unfinished')) return;
+    if (turn !== undefined && row.turn !== turn) return;
+    out.push({
+      index,
+      kind: row.kind,
+      ...(typeof row.lookedUp === 'number' && { lookedUp: row.lookedUp }),
+    });
+  });
+  return out;
+}
+
+/**
+ * Layer 4, the answer's own rows: the evidence gate's verdict (a flag —
+ * `unsupportedValues` — or, while the answer layer is armed, its clean pass,
+ * the `grounded` witness row), a cut-short turn, an answer given before its
+ * declared steps finished (the `steps-unfinished` witness row), the app's
+ * checks. A clean pass is a MEMBERSHIP pass — every value found somewhere in
+ * the tools' results — so it files the check as having run and supports
+ * nothing: "known" needs a tie check.
+ */
 function readAnswerRows(state: Readonly<Record<string, unknown>>, g: Gathered): void {
+  const witnesses = witnessRows(state);
   const unsupported = state.unsupportedValues;
   if (isRecord(unsupported)) {
     const at = statePointer('unsupportedValues', 'candidates');
     fire(g, unsupported.revised === true ? 'value-survived-revision' : 'value-unsupported', at);
     g.checked.push({ layer: 4, check: 'names-and-numbers', ran: 1, of: 1, witness: [at] });
+  } else {
+    // The gate's clean pass on this turn's answer — the LAST one, the verdict
+    // on the answer that stands (an earlier draft's verdict never reaches a
+    // row: a draft sent back for revision files `evidenceUnsupported`, not a
+    // witness). A pass that looked NOTHING up (the answer stated no name or
+    // number, or every one was exempt) did not apply: it is absent from
+    // `checked`, never a check that "ran" on an answer it could not read.
+    const grounded = witnesses.filter((w) => w.kind === 'grounded').at(-1);
+    if (grounded !== undefined && (grounded.lookedUp ?? 0) > 0) {
+      g.checked.push({
+        layer: 4,
+        check: 'names-and-numbers',
+        ran: 1,
+        of: 1,
+        witness: [statePointer('findingsLedger', grounded.index, 'kind')],
+      });
+    }
   }
   if (isRecord(state.stoppedEarly)) {
     fire(g, 'stopped-early', statePointer('stoppedEarly', 'iteration'));
+  }
+  for (const w of witnesses) {
+    if (w.kind === 'steps-unfinished') {
+      fire(g, 'steps-unfinished', statePointer('findingsLedger', w.index, 'kind'));
+    }
   }
   const report = state.answerValidation;
   if (!isRecord(report) || typeof report.status !== 'string') return;

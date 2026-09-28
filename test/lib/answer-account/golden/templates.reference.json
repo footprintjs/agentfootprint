@@ -1576,6 +1576,15 @@
   ],
   "source": "library"
  },
+ "howSure.reason.stepsUnfinished@1": {
+  "text": "The answer came before the active skill's declared steps finished.",
+  "parts": [
+   {
+    "text": "The answer came before the active skill's declared steps finished."
+   }
+  ],
+  "source": "library"
+ },
  "howSure.reason.answerCheckFailed@1": {
   "text": "The app's answer checks failed this answer.",
   "parts": [

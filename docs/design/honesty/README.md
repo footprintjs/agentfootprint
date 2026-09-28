@@ -18,7 +18,7 @@ overturn. Nothing in it is built yet: this folder is step 0 of its plan (§ 7).*
 > | [choice.md](choice.md) | layer 1 · choose a tool — a stub until step 9 |
 > | [inputs.md](inputs.md) | layer 2 · fill its inputs — ask or assume, and where each value came from |
 > | [results.md](results.md) | layer 3 · read a result — the three result doors, the period, the one emptiness reader |
-> | [answer.md](answer.md) | layer 4 · give the answer — a stub until step 6; the fold itself is § 4 of this note |
+> | [answer.md](answer.md) | layer 4 · give the answer — what step 6 built (the answer layer), its decisions and where it departs from this note; the fold itself is § 4 of this note |
 
 - Written against agentfootprint 9.118.1 (on npm; its fix is `f83f277c` on main) and footprintjs 9.27.0.
 - Code is cited as `file · symbol`. Paths are under agentfootprint's `src/` unless they start with

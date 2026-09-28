@@ -302,6 +302,8 @@ that said nothing about what it searched (`empty-undeclared` — silence recorde
 as silence); two results the model stood on disagree (`sources-conflict`); names
 or numbers in the answer appear in no tool result (`value-unsupported`,
 `value-survived-revision`); a limit cut the turn short (`stopped-early`); the
+answer came before a skill's declared steps finished (`steps-unfinished`, on an
+agent with the answer layer — below); the
 app's answer checks failed (`answer-check-failed`) or could not reach a verdict
 (`check-unreachable`); the run paused and a person's reply is still awaited
 (`asked`). `checked`
@@ -319,8 +321,9 @@ reached by indexed access — `AnswerAssessment['reasons'][number]['reason']`.
 Gotchas:
 
 - **It reads committed state, never events.** A verdict that exists only as an
-  event — the evidence gate's clean pass, the `.claims()` dispositions — is not
-  on the committed record yet, so it neither supports nor refutes.
+  event — the `.claims()` dispositions, and on an agent without the answer layer
+  the evidence gate's clean pass — is not on the committed record, so it neither
+  supports nor refutes.
 - **A declaration the record lost is still read.** When a call has no committed
   coverage row — a history restored by `resumeOnError`, a trimmed recording — the
   envelope the model read is read from the result itself, never as silence. The
@@ -336,6 +339,43 @@ Gotchas:
   committed state, so check how the run ended before you fold its recording.
 - **It measures claims within the record, not truth.** A tool that misstates
   what it searched produces an honest-looking standing.
+
+### The standing, in the run — `.answerLayer()`
+
+`.answerLayer()` runs the same fold INSIDE the run — as the first stage of the
+final branch, after every check has filed its verdict — and serves the result the
+moment the answer exists:
+
+- `turn_end.answerAssessment` and one `agentfootprint.answer.assessed` event carry
+  the value, its word, the reason kinds and the checks that ran — never a value
+  from the answer or a quote;
+- the evidence gate's clean pass and an answer given before a skill's declared
+  steps finished are committed as rows on the findings ledger — a `GroundedRow`
+  and a `StepsUnfinishedRow`, members of `FindingsRow` that `agent.findings()`
+  returns, each stamped with its conversation turn (the gate's pass is the check
+  having RUN — it lifts "not assessed" to "consistent", never to "known");
+- `{ standingLine: true }` appends one line to a prose answer, after the
+  separator. It is refused beside `.answerValidation()` (the checks judge the
+  exact bytes) and beside `.outputSchema()` (a typed answer is JSON) — the
+  standing still travels as data there.
+
+The in-run standing and a later `assessAnswer(recording)` are one fold over the
+same committed rows, so they agree:
+
+<CodeFile path="examples/features/76-answer-layer.ts" region="answer-layer" title="examples/features/76-answer-layer.ts (region: answer-layer)" />
+
+Gotchas:
+
+- **It is a label.** It never asks, never refuses and never edits the model's
+  words — the line comes after the separator, and the data rides beside the
+  answer.
+- **One event per answer.** A draft sent back for a revision or a schema retry
+  is not assessed; the answer that stands is.
+- **In a composition** (an agent mounted as a `Sequence` step), the standing
+  reaches the composition on the agent's `turn_end`; the `answer.*` event stays
+  on the agent's own dispatcher.
+- **Off by default.** Without `.answerLayer()` the chart, the committed rows, the
+  events and the answer are exactly what they were.
 
 ## Next steps
 

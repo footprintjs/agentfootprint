@@ -62,6 +62,7 @@ import {
 import type { MemoryIdentity } from '../memory/identity/types.js';
 import type { FoldedSpan } from './agent/window/types.js';
 import { argumentRowIsWellFormed } from './agent/arguments/rows.js';
+import { witnessRowIsWellFormed } from './agent/assessment/witness.js';
 import {
   BASIS_VALUES,
   EXPECT_VALUES,
@@ -671,6 +672,14 @@ function ledgerRowIsWellFormed(row: unknown): boolean {
     // that carries this kind.
     case 'argument':
       return argumentRowIsWellFormed(r);
+    // The answer layer's witness rows (honesty layer 4): the evidence gate's
+    // clean verdict and an answer given before its declared steps finished.
+    // The arms ship in the SAME change as the kinds; one owner of their shape
+    // (`assessment/witness.ts`). An older runtime refuses a checkpoint that
+    // carries either kind.
+    case 'grounded':
+    case 'steps-unfinished':
+      return witnessRowIsWellFormed(r);
     default:
       return false;
   }
@@ -779,9 +788,11 @@ export function validateCheckpoint(value: unknown): AgentRunCheckpoint {
           "open | noise | ruled-out }, iteration) or 'unsettled-by-absence' (with toolCallId, " +
           'iteration, and optional non-empty notChecked / cannotCover lists of { what, why? } ' +
           "and a non-empty tryInstead string) or 'argument' (with toolCallId, toolName, " +
-          'argument, iteration, turn, and a source or an asked in its vocabulary); a row of ' +
-          'any kind may carry a numeric turn. It is ' +
-          'written by an agent with `.findings()` or with the inputs layer armed, and ' +
+          'argument, iteration, turn, and a source or an asked in its vocabulary) or ' +
+          "'grounded' (with turn, iteration, posture, candidates, lookedUp) or " +
+          "'steps-unfinished' (with turn, iteration, skillId, remaining[] of { index, tool }, " +
+          'total, action: accepted | cut-short); a row of any kind may carry a numeric turn. ' +
+          'It is written by an agent with `.findings()` or with an honesty layer armed, and ' +
           're-seeded verbatim on continuation.',
       );
     }

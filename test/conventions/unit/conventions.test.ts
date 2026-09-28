@@ -50,7 +50,7 @@ describe('SUBFLOW_IDS — single source of truth', () => {
 });
 
 describe('STAGE_IDS — single source of truth', () => {
-  it('has the 26 known stage IDs', () => {
+  it('has the 27 known stage IDs', () => {
     const actual = Object.values(STAGE_IDS).sort();
     expect(actual).toEqual(
       [
@@ -101,6 +101,9 @@ describe('STAGE_IDS — single source of truth', () => {
         'verify-arguments',
         'record-arguments',
         'resolve-arguments',
+        // The answer layer's stage, heading the final branch (honesty layer 4)
+        // — mounted only with `.answerLayer()`:
+        'assess-answer',
       ].sort(),
     );
   });

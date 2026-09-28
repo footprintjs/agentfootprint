@@ -1,4 +1,8 @@
-**Fold** — the answer's standing, folded from the run's committed record: known · consistent with the record · not sure (with the reasons) · ask · not assessed.
+**Mixed** — the answer's standing, folded from the run's committed record: known · consistent with the record · not sure (with the reasons) · ask · not assessed — read after the run, and (honesty layer 4, the answer layer) inside it.
+Fold: `assess.ts` (the one fold) and `reasons.ts` (the closed reason table).
+Map: `witness.ts` (the answer layer's two committed witness rows, filed by the Route decider).
+Walker: `stage.ts` (the answer layer's one stage, at the head of the final branch).
+Lens: `compose.ts` (the standing as data, and as one line for the person under its own arm).
 
 **The law.** The standing is folded from the rows, never from the model's
 confidence, and "known" needs a row that supports it.
@@ -18,6 +22,57 @@ answer one question — a bare `[]` reads "not sure" (`empty-undeclared`), an
 `absent()` that names a gap reads "not sure" with the reasons a person can act on
 (`coverage-gap`, `declared-absent`), and rows with nothing declared read
 "consistent with the record" — never "known".
+
+## In the run — the answer layer (`.answerLayer()`)
+
+The same fold, run INSIDE the run, as the first stage of the final branch — after
+the Route decider's checks filed their verdicts, before the turn is captured — and
+served as data the moment the answer exists:
+
+```ts
+const agent = Agent.create({ provider, model })
+  .tool(listDownPorts)
+  .namesAndNumbersFromEvidence({ posture: 'assist' })
+  .answerLayer({ standingLine: true }) // `{}` / no argument: the data only
+  .build();
+
+agent.on('agentfootprint.answer.assessed', (e) => e.payload.standing); // 'not-sure'
+const text = await agent.run({ message: 'Which ports on switch A are down?' });
+// 'No ports on switch A are down.\n\n---\n\nNot sure — a lookup came back empty without saying what it searched.'
+// turn_end.answerAssessment carries the same projection; assessAnswer(recording) folds it again.
+```
+
+- **One stage** — `stage.ts` · `assessAnswerStage`, mounted by `honesty/mounts.ts` ·
+  `startFinalBranch` (the one helper both chart builders call) and loaded through
+  `import()` on the first armed answer. It reads ONLY the committed keys the fold
+  reads that this agent's arms can write (`honesty/mounts.ts` · `answerFoldReads`),
+  folds them, files the projection for PrepareFinal (`answerAssessment`, final-branch
+  working state — never the run's state: a fold is derived, never stored) and fires
+  `agentfootprint.answer.assessed`.
+- **The projection** — `compose.ts` · `assessmentDataOf`: the value, the word, the
+  reason KINDS and the checks that ran. The same object on `turn_end.answerAssessment`
+  and on the event (which adds `turn` and `iteration`). No witness pointer, no digest,
+  no value, no quote.
+- **Two witness rows** — `witness.ts`. The Route decider files them on the findings
+  ledger ONLY while the layer is armed, because that is where the verdicts are
+  computed: `grounded` (the evidence gate's clean pass) and `steps-unfinished` (an
+  answer accepted or cut short before a skill's declared steps finished). Each carries
+  `turn`; each emits nothing of its own (the verdict's event fired beside it); the
+  checkpoint door has an arm for each.
+- **The line** — `compose.ts` · `standingLineOf`, under `{ standingLine: true }` only, on
+  a PROSE answer only (refused beside `.answerValidation()` and `.outputSchema()` at
+  build). Appended after the limits separator by the one composer; beside
+  `.limitsTravelWithTheAnswer()` it names the assumed values itself and the "Assumed"
+  block is not appended too. An assumed value is printed only in the tool's own view.
+- **THE EQUALITY LAW** — the in-run standing equals `assessAnswer()` over the same
+  recording read afterwards: one pure function over the same committed rows, at the one
+  moment nothing after it can change them. Pinned by
+  `test/core/agent/assessment/answer-layer-equality.test.ts` across a pause and its
+  resume, a continued conversation, typed answers, the evidence revision, a limit that
+  cut the turn short, an agent mounted in a composition, and 40 generated
+  configurations.
+
+The runnable example is `examples/features/76-answer-layer.ts`.
 
 ## The values, and the words
 
@@ -55,6 +110,7 @@ grows as later honesty steps commit new rows.
 | `value-unsupported` | 4 | `unsupportedValues` (`revised: false`) |
 | `value-survived-revision` | 4 | `unsupportedValues` (`revised: true`) |
 | `stopped-early` | 4 | `stoppedEarly` |
+| `steps-unfinished` | 4 | `findingsLedger`: a `steps-unfinished` witness row of this turn — the answer came before the active skill's declared steps finished (filed while the answer layer is armed) |
 | `answer-check-failed` | 4 | `answerValidation`: `status: 'failed'` |
 | `check-unreachable` | every | `answerValidation`: `status: 'unverified'` — an armed check that could not reach a verdict |
 
@@ -64,6 +120,14 @@ carries its `turn` — and the last row per (call, argument) is the current one.
 When the layer filed any, `checked` gains `argument-rules` (layer 2): every row
 is a verdict, so `ran` equals `of`. No argument row ever supports "known": a
 membership pass only keeps a reason from firing.
+
+The answer layer's witness rows (honesty layer 4) are read the same way — this
+turn's only. A `grounded` row files `names-and-numbers` in `checked` (the gate's
+check RAN on this answer) when the gate looked up at least one value — a clean pass
+that looked nothing up did not apply, so it is left out; it never supports "known"
+(finding a value in a result is a membership pass). A flag (`unsupportedValues`)
+stays the verdict when both exist. A `steps-unfinished` row fires the reason of that
+name and files no check: the record holds only the unfinished verdict.
 
 Every result is read through the ONE emptiness reader,
 `core/agent/coverage/emptiness.ts` · `readEmptiness`, the one the answer account
@@ -127,17 +191,17 @@ accountForAnswer(recording).facts.standing.value; // 'ask'
 7. **The model's own answer-level standing never moves the value.** A lens may
    show it beside the word.
 
-## The layer contract (layer 4 · give the answer), as this step ships it
+## The layer contract (layer 4 · give the answer), as it ships
 
 | Clause | Here |
 |---|---|
-| DECLARE | existing: `.answerValidation()`, `.namesAndNumbersFromEvidence()`, `.claims()`; the tools' `absent()` / `coverage()` / `describedResult()` |
+| DECLARE | existing: `.answerValidation()`, `.namesAndNumbersFromEvidence()`, `.claims()`; the tools' `absent()` / `coverage()` / `describedResult()`; the layer's own arm, `.answerLayer()` |
 | VERIFY | existing: the Route decider's checks (`core/agent/stages/route.ts` · `judgeClaims`), `core/agent/evidence/gate.ts` · `checkAnswer`, `answer-validation/validate.ts` · `executeAnswerValidation` |
-| RECORD | existing committed keys only — nothing new is written |
-| RESOLVE | label only: the fold never asks, refuses or rewrites |
-| FOLD | `assess.ts` · `assessAnswer` — pure, committed rows only, one function for every reader |
-| SERVE | data: `agent.assessment()` (async: it loads this fold through `import()` on first use, so an agent that never asks does not carry it — pinned by `test/lib/trace-toolpack/browserGraph.test.ts`), `assessAnswer` on `agentfootprint/observe`; the answer account's "How sure" row (`lib/answer-account/facts/howSure.ts` · `readHowSure`). Nothing reaches the model |
-| ARM + MEASURE | none — a reader: nothing runs inside a run, so every run's bytes are what they were; this README's last section |
+| RECORD | the existing committed keys, and — under the layer's arm — the two witness rows (`witness.ts`), filed by the Route decider (`core/agent/stages/route.ts` · `judgeEvidence`, `judgeUnfinishedSteps`) |
+| RESOLVE | label only: the fold never asks, refuses or rewrites; the one opt-in line is appended after the answer, never into it |
+| FOLD | `assess.ts` · `assessAnswer` — pure, committed rows only, one function for every reader, in the run and after it |
+| SERVE | after the run: `agent.assessment()` (async: it loads this fold through `import()` on first use, so an agent that never asks does not carry it — pinned by `test/lib/trace-toolpack/browserGraph.test.ts`), `assessAnswer` on `agentfootprint/observe`, the answer account's "How sure" row (`lib/answer-account/facts/howSure.ts` · `readHowSure`); in the run (armed): `turn_end.answerAssessment`, `agentfootprint.answer.assessed`, and the line under `{ standingLine: true }` |
+| ARM + MEASURE | `.answerLayer()`; off → byte-identical (every reference under `test/core/tools/reference/` unchanged; `agent-answer-layer` is the armed one); this README's last section |
 
 ## Parity with the study's RQ3 rule
 
@@ -157,18 +221,23 @@ it at the study's freeze (adopted Q12).
 
 ## Not covered
 
-- **Verdicts that exist only as events.** The evidence gate's clean pass
-  (`agent.evidence_checked`), the `.claims()` dispositions — so `claim-contradicted`
-  and a claims-supported "known" — and the integrity dispositions are not on the
-  committed record in this version. The fold never reads events; the step that
-  needs each verdict commits one row, and its reason joins `REASONS` then.
+- **Verdicts that exist only as events.** The `.claims()` dispositions — so
+  `claim-contradicted` and a claims-supported "known" — and the integrity
+  dispositions are not on the committed record in this version. The fold never
+  reads events; the step that needs each verdict commits one row, and its reason
+  joins `REASONS` then. The evidence gate's clean pass and unfinished steps are
+  committed only while the answer layer is armed; on an agent without it they
+  stay events, and the fold reads them as it always did (not at all).
 - **A run that threw, read by `assessAnswer` directly.** No committed row says a
   turn ended in an error in this version, so the fold folds what the crashed run
   left, as if it had answered. `agent.assessment()` (which knows) resolves to
   `undefined` and the answer account (which reads the recording's `turn_end`)
   says the record shows no answer; a caller of `assessAnswer` checks the run's
-  outcome first. The committed row that settles it arrives with the answer
-  layer's witness rows (honesty step 6).
+  outcome first. Step 6 did not settle it: the answer layer's stage runs inside
+  the final branch, whose output mapping receives the answer string, never the
+  branch's scope, so it cannot commit an "answered" row to the run's state; a row
+  filed by the Route decider could, and it needs the fold's return shape to say
+  "no answer" — a decision of its own (`docs/design/honesty/answer.md`).
 - **A row lost AND its envelope gone.** A record that lost a call's coverage row
   is still read from the envelope in `history` — `fold-real-record.test.ts` pins
   the account's reduced fixture reading the same standing as the full record. A
@@ -185,14 +254,19 @@ it at the study's freeze (adopted Q12).
   conflict row counts only in its own turn.
 - **Subject placement.** Which entity the question names is on hold, so the fold
   reads every call of the turn.
-- **The run-time answer layer, the served standing and its event** — a later
-  step; this one is a reader.
+- **A finished step procedure** files no row, so it cannot count as a check that
+  ran — only an unfinished one is on the record.
+- **The line's reasons carry no counts** — it names which kinds of reason fired;
+  `agent.assessment()` and the account have the counts and the rows.
 
 ## What it lets you measure
 
-From the record alone, per model and per prompt or skill version: the **standing
+From the record alone, per model and per prompt or skill version — and, with the
+answer layer armed, from one event per answer at the moment it exists: the **standing
 mix** (known · consistent · not sure · ask · not assessed); the **reason mix**,
-per layer; **how much actually ran** (`checked`: how many calls declared what
+per layer; how often the evidence gate's check actually **ran** on an answer (a
+`grounded` row with values looked up) against how often it **flagged** one; how
+often an answer came **before its declared steps finished**; **how much actually ran** (`checked`: how many calls declared what
 they covered, how many results could be read at all — the unreadable share); the
 **empty-undeclared rate** (empty results that did not say what they searched);
 and, beside a rater's claim label, **answers that exceed their standing** — a

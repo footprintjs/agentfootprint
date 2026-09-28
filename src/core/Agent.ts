@@ -261,7 +261,7 @@ import type {
 import { buildRouteDeciderStage } from './agent/stages/route.js';
 import { withAnswerValidation } from './agent/stages/answerValidation.js';
 import { withAnswerCoverage } from './agent/stages/answerCoverage.js';
-import type { Coverage } from './agent/coverage/types.js';
+import type { AnswerCoverage } from './agent/coverage/answer.js';
 import {
   AnswerValidationError,
   type AnswerValidationReport,
@@ -276,6 +276,7 @@ import { buildToolResolver } from './agent/stages/toolResolver.js';
 import { answeredValuesOf, declaredDefaultsFrom } from './agent/stages/route.js';
 import { isRefused, rulesOf } from './agent/arguments/declare.js';
 import { honestyLayersOf, type HonestyLayers } from './agent/honesty/armed.js';
+import { answerFoldReads } from './agent/honesty/mounts.js';
 import { assertMaxToolResultChars } from './agent/toolResultCap.js';
 import type { ToolArgValidationMode } from './agent/toolArgsValidation.js';
 import { buildAgentChart } from './agent/buildAgentChart.js';
@@ -540,6 +541,12 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
    *  `.inputsLayer()` was set. Gates the findings event bridge and the
    *  widened ledger restore. */
   private inputsLayerArmed = false;
+  /** `.answerLayer()` (honesty layer 4): the answer's standing folded at the
+   *  head of the final branch and served as data; `standingLine` — also one
+   *  line appended to a prose answer. Undefined on every agent that did not
+   *  ask, and that undefined is the whole zero-cost guarantee: no stage, no
+   *  witness row, no stamp, no event, no bridge. */
+  private readonly answerLayerOption?: { readonly standingLine?: true };
   /** Tool choice by classifier (9.105.0, `.toolChoice()`): the classifier,
    *  the serve dial and the app's own doors. Threaded to the tools slot (the
    *  pick and the narrowing), to call-llm (`toolChoice: true`, the outcome
@@ -1033,6 +1040,10 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
     if (opts.toolArgValidation !== undefined) this.toolArgValidation = opts.toolArgValidation;
     if (opts.findings !== undefined) this.findingsOptions = opts.findings;
     if (opts.inputsLayer === true) this.inputsLayerOption = true;
+    if (opts.answerLayer === true) this.answerLayerOption = {};
+    else if (typeof opts.answerLayer === 'object' && opts.answerLayer !== null) {
+      this.answerLayerOption = opts.answerLayer.standingLine === true ? { standingLine: true } : {};
+    }
     if (opts.argumentAskContext !== undefined) this.argumentAskContext = opts.argumentAskContext;
     if (opts.toolChoice !== undefined) this.toolChoiceOptions = opts.toolChoice;
     if (opts.ontology !== undefined) this.ontology = opts.ontology;
@@ -3235,6 +3246,19 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
         }),
       );
     }
+    // Same wiring for `agentfootprint.answer.*` (honesty layer 4) — the one
+    // event the answer layer's stage fires per answer. Attached only under
+    // `.answerLayer()`, shipped WITH the domain (the credential.* lesson).
+    if (this.answerLayerOption !== undefined) {
+      attachObserver(
+        new EmitBridge({
+          id: 'agentfootprint.answer-bridge',
+          prefix: 'agentfootprint.answer.',
+          dispatcher,
+          getRunContext: getRunCtx,
+        }),
+      );
+    }
     // Same wiring for `agentfootprint.tool_choice.*` (9.105.0) — the three
     // events `recordToolChoice` files on scope. Attached only under
     // `.toolChoice()`, for the same reason.
@@ -3668,10 +3692,17 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
    * `getLastSnapshot().sharedState.answerCoverage`, one value three ways. The
    * answer string, and so `runTyped()`, is exactly the model's.
    *
-   * `undefined` when the run's tools declared no limits, on a prose answer
-   * (the block is in the answer string there; `sharedState.coverageDeclared`
-   * holds the raw rows either way), and before the first run. Detached from
-   * the execution record, so a caller may keep or mutate it.
+   * On an agent whose inputs layer is armed (a tool declares `askOrAssume`),
+   * `assumed` lists the values a tool's rule filled this turn — the same rows,
+   * read the same way, that a prose answer's "Assumed" block prints — each in
+   * the tool's own argument view (`'REDACTED'` with `hidden` when that view
+   * hides it).
+   *
+   * `undefined` when the run's tools declared no limits and nothing was
+   * assumed, on a prose answer (the block is in the answer string there;
+   * `sharedState.coverageDeclared` holds the raw rows either way), and before
+   * the first run. Detached from the execution record, so a caller may keep
+   * or mutate it.
    *
    * @example
    * ```ts
@@ -3688,7 +3719,7 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
    * }
    * ```
    */
-  answerCoverage(): Coverage | undefined {
+  answerCoverage(): AnswerCoverage | undefined {
     const limits = (this.getLastSnapshot()?.sharedState as Partial<AgentState> | undefined)
       ?.answerCoverage;
     return limits === undefined ? undefined : structuredClone(limits);
@@ -4239,9 +4270,13 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
     );
     const inputsArmed = ruledTools.size > 0 || this.inputsLayerOption === true;
     this.inputsLayerArmed = inputsArmed;
-    if (inputsArmed) {
-      if (ruledTools.size > 0) seededRuledTools = ruledTools;
-      seededHonestyLayers = honestyLayersOf(true);
+    if (inputsArmed && ruledTools.size > 0) seededRuledTools = ruledTools;
+    // ── The answer layer (honesty layer 4) — armed by its option alone ─────
+    const answerArmed = this.answerLayerOption !== undefined;
+    // The run constant names every armed layer; the restore is wired whenever
+    // one is (adopted Q6) — still value-conditional inside seed.
+    if (inputsArmed || answerArmed) {
+      seededHonestyLayers = honestyLayersOf({ inputs: inputsArmed, answer: answerArmed });
       ledgerRestoreArmed = true;
     }
 
@@ -4693,6 +4728,10 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
             }),
           }
         : undefined,
+      // THE ANSWER LAYER (honesty layer 4) — the same value-conditional
+      // trailing positional: the judges file the answer's witness rows, and
+      // every row this decider files carries the turn stamp.
+      answerArmed ? true : undefined,
     );
 
     const routeDecider =
@@ -4714,7 +4753,16 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
     // neither is handed the decider it always had.
     const limitsAsData =
       this.limitsTravelWithTheAnswerValue && this.outputSchemaParser !== undefined;
-    const terminalRouteDecider = limitsAsData ? withAnswerCoverage(routeDecider) : routeDecider;
+    // With the inputs layer armed, the typed answer's limits carry this
+    // turn's assumed values too — the same rows the prose "Assumed" block
+    // prints (`withAnswerCoverage`'s second argument); a rewrite by a
+    // before-tool chain is read only when the agent has one.
+    const terminalRouteDecider = limitsAsData
+      ? withAnswerCoverage(
+          routeDecider,
+          inputsArmed ? { rewrites: this.toolMiddleware.length > 0 } : undefined,
+        )
+      : routeDecider;
 
     // toolCallsHandler extracted to ./agent/stages/toolCalls.ts (v2.11.2).
     const toolCallsHandler = buildToolCallsHandler({
@@ -4734,6 +4782,9 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
       // The inputs layer (honesty layer 2) — the fills, the refusals and the
       // note; absent → a ruled tool's call is refused (fail closed).
       ...(inputsArmed && { inputsLayer: true as const }),
+      // The answer layer (honesty layer 4) — only the turn stamp on the rows
+      // this handler files (adopted Q6).
+      ...(answerArmed && { answerLayer: true as const }),
       // …and the host's own context for the layer's batch ask (step 4),
       // value-conditional inside the arm.
       ...(inputsArmed &&
@@ -4962,6 +5013,21 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
         inputsLayer: {
           toolOf: (toolName: string) => resolveForLayer(toolName).tool,
           ...(this.toolMiddleware.length > 0 && { rewrites: true as const }),
+        },
+      }),
+      // The answer layer (honesty layer 4): its stage heads the final branch
+      // in both builders through one helper, reading only the committed keys
+      // this agent's arms can write; absent → the branch is untouched.
+      ...(this.answerLayerOption !== undefined && {
+        answerLayer: {
+          reads: answerFoldReads({
+            tools: canCallTools,
+            evidenceGate: this.evidenceGate !== undefined,
+            answerValidation: this.answerValidationConfig !== undefined,
+            inputs: inputsArmed,
+            toolMiddleware: this.toolMiddleware.length > 0,
+          }),
+          ...(this.answerLayerOption.standingLine === true && { standingLine: true as const }),
         },
       }),
       // Tool choice by classifier (9.105.0): the mount args on the Tools

@@ -36,7 +36,12 @@ export type MissingReason =
   /** It happened in an earlier leg of a resumed answer. */
   | 'before-pause'
   /** Present, but not in a shape the account reads (counted in `unread`). */
-  | 'unreadable';
+  | 'unreadable'
+  /**
+   * It travelled as DATA beside the answer, not as text in it — a typed
+   * answer's limits (`turn_end.answerCoverage`, read as `limitsData`).
+   */
+  | 'as-data';
 
 /**
  * Where "show me" lands. Always a LEAF: `path` names one value, never a whole
@@ -315,6 +320,15 @@ export interface EvidenceFact {
   readonly truncated?: boolean;
 }
 
+/** A typed answer's limits as the account reads them: how many items each list holds. */
+export interface LimitsDataFact {
+  readonly checked: number;
+  readonly notChecked: number;
+  readonly cannotCover: number;
+  /** Values a tool's rule assumed this turn (the inputs layer). */
+  readonly assumed: number;
+}
+
 /** The typed facts every sentence is filled from. */
 export interface AnswerFacts {
   readonly routing: RoutingFacts;
@@ -338,8 +352,24 @@ export interface AnswerFacts {
    * answer (no `turn_end`) and no pause — there is no answer to rate.
    */
   readonly standing: AccountFact<'known' | 'consistent' | 'not-sure' | 'ask' | 'not-assessed'>;
-  /** The library-appended limits block of the answer, when `.limitsTravelWithTheAnswer()` added one. */
+  /**
+   * The library-appended section of a PROSE answer, when the framework added
+   * one: the limits block (`.limitsTravelWithTheAnswer()`), the "Assumed"
+   * block (the inputs layer) and the standing line (`.answerLayer({
+   * standingLine: true })`), in the order they were appended — split off the
+   * answer at the separator, so `answer` is the model's own text. A TYPED
+   * answer carries no such text: its limits travel as data, so this reads
+   * `not-recorded` with `missing: 'as-data'` and `limitsData` holds them.
+   */
   readonly limitsBlock: AccountFact<string>;
+  /**
+   * A TYPED answer's limits, as the run recorded them beside it
+   * (`turn_end.answerCoverage` — `.limitsTravelWithTheAnswer()` with an output
+   * schema): how many items each list holds, with a pointer to every item.
+   * `not-applicable` when the answer carried no limits as data (a prose
+   * answer carries them in `limitsBlock`).
+   */
+  readonly limitsData: AccountFact<LimitsDataFact>;
   readonly errors: {
     readonly failed: number;
     readonly refused: number;

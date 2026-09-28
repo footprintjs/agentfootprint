@@ -32,11 +32,26 @@
  *
  * The stage bodies (`arguments/subflow.ts`) load through `import()` on first
  * use — the optional-family law — so a plain agent's graph never carries them.
+ *
+ * ## The answer layer — the head of the final branch
+ *
+ * A footprintjs decider branch is one node with no continuation, so the answer
+ * layer cannot sit BETWEEN Route and Final; it heads the final branch instead
+ * (adopted Q3). The final branch is a subflow, and footprintjs starts every
+ * chart with a function stage, so the layer is that first stage:
+ * `assess-answer`, then PrepareFinal (`startFinalBranch`). It reads the
+ * committed keys the fold reads — only those the agent's arms can write
+ * (`answerFoldReads`, decided at build) — and hands PrepareFinal the standing
+ * as data inside the branch. It files no rows of its own: the witness rows it
+ * folds are filed by the Route decider (`assessment/witness.ts`), and the
+ * branch mount's output mapping receives the branch's RESULT (the answer
+ * string every composition that mounts an agent reads), never its scope — so
+ * the mapping stays byte-identical when the layer is armed.
  */
 
 import { ArrayMergeMode } from 'footprintjs/advanced';
 import { flowChart } from 'footprintjs';
-import type { FlowChart, FlowChartBuilder, TypedScope } from 'footprintjs';
+import type { FlowChart, FlowChartBuilder, StructureRecorder, TypedScope } from 'footprintjs';
 
 import { STAGE_IDS, SUBFLOW_IDS, milestoneTagsFor } from '../../../conventions.js';
 import { keptThisTurn } from '../arguments/kept.js';
@@ -46,6 +61,7 @@ import type { InputsLayerDeps, InputsLayerState } from '../arguments/subflow.js'
 import { appendRows, emitRow, type FindingsScope } from '../findings/ledger.js';
 import type { FindingsRow } from '../findings/types.js';
 import { willDispatch } from '../stages/route.js';
+import type { AgentState } from '../types.js';
 
 /** What an armed agent hands the inputs layer's mount — closures, never scope. */
 export interface InputsMountDeps {
@@ -166,4 +182,121 @@ export function mountInputsLayer<B extends FlowChartBuilder>(
       arrayMerge: ArrayMergeMode.Replace,
     })
     .tag(...milestoneTagsFor(SUBFLOW_IDS.INPUTS));
+}
+
+// ─── The answer layer (honesty layer 4) ─────────────────────────────────
+
+/** A committed key the one fold (`assessment/assess.ts` · `assessAnswer`) reads. */
+export type AnswerFoldKey =
+  | 'history'
+  | 'turnNumber'
+  | 'pausedToolCallId'
+  | 'findingsLedger'
+  | 'coverageDeclared'
+  | 'stoppedEarly'
+  | 'unsupportedValues'
+  | 'answerValidation'
+  | 'argumentAsk'
+  | 'middlewareDecisions';
+
+/** What an agent with the answer layer armed hands the final branch — build-time facts, never scope. */
+export interface AnswerMountDeps {
+  /** The committed keys the fold reads — only those this agent's arms can write (`answerFoldReads`). */
+  readonly reads: readonly AnswerFoldKey[];
+  /** `.answerLayer({ standingLine: true })` — compose one line for a prose answer. */
+  readonly standingLine?: true;
+}
+
+/**
+ * THE READ LIST — which committed keys the answer layer's fold reads, from
+ * the agent's arms: a key no arm of this agent can write is never read (a
+ * tracked read of a key a run never writes is a phantom context source —
+ * honesty law 9). Over-approximates on purpose: a key an arm CAN write is
+ * read whether or not this run wrote it, so the in-run fold never misses a row
+ * the read-after fold sees (the equality law).
+ *
+ * - always: `history`, `turnNumber`, `pausedToolCallId` (seed writes them) and
+ *   `findingsLedger` (the witness rows, and any rows a continued conversation
+ *   restores — the restore is wired while a layer is armed);
+ * - a tool surface: `coverageDeclared`, `stoppedEarly` (a limit only cuts a
+ *   turn short while tool calls are pending);
+ * - the evidence gate: `unsupportedValues`;
+ * - `.answerValidation()`: `answerValidation`;
+ * - the inputs layer: `argumentAsk`, and `middlewareDecisions` when a
+ *   before-tool chain can rewrite a filled value.
+ *
+ * @example
+ * ```ts
+ * answerFoldReads({ tools: true, evidenceGate: false, answerValidation: false, inputs: false, toolMiddleware: false });
+ * // ['history', 'turnNumber', 'pausedToolCallId', 'findingsLedger', 'coverageDeclared', 'stoppedEarly']
+ * ```
+ */
+export function answerFoldReads(arms: {
+  readonly tools: boolean;
+  readonly evidenceGate: boolean;
+  readonly answerValidation: boolean;
+  readonly inputs: boolean;
+  readonly toolMiddleware: boolean;
+}): readonly AnswerFoldKey[] {
+  return [
+    'history',
+    'turnNumber',
+    'pausedToolCallId',
+    'findingsLedger',
+    ...(arms.tools ? (['coverageDeclared', 'stoppedEarly'] as const) : []),
+    ...(arms.evidenceGate ? (['unsupportedValues'] as const) : []),
+    ...(arms.answerValidation ? (['answerValidation'] as const) : []),
+    ...(arms.inputs ? (['argumentAsk'] as const) : []),
+    ...(arms.inputs && arms.toolMiddleware ? (['middlewareDecisions'] as const) : []),
+  ];
+}
+
+type AnswerStageModule = typeof import('../assessment/stage.js');
+
+let answerStageModule: Promise<AnswerStageModule> | undefined;
+
+/** The answer layer's stage body, loaded once per process on the first armed answer. */
+function loadAnswerStage(): Promise<AnswerStageModule> {
+  answerStageModule ??= import('../assessment/stage.js');
+  return answerStageModule;
+}
+
+/** PrepareFinal's description — one string, whichever stage heads the branch. */
+const PREPARE_FINAL_DESCRIPTION = 'Capture turn payload (finalContent + newMessages)';
+
+/**
+ * Start the final branch: the answer layer's stage first when it is armed,
+ * then PrepareFinal — or PrepareFinal alone when it is not, built exactly as
+ * both chart builders always built it (same name, stage id, options and tags),
+ * so an agent without the layer builds a byte-identical branch. Both builders
+ * call this, so the twins cannot drift.
+ */
+export function startFinalBranch(
+  answer: AnswerMountDeps | undefined,
+  prepareFinal: (scope: TypedScope<AgentState>) => void | Promise<void>,
+  structureRecorders: readonly StructureRecorder[] | undefined,
+): FlowChartBuilder<any, TypedScope<AgentState>> {
+  const recorders = structureRecorders !== undefined && {
+    structureRecorders: [...structureRecorders],
+  };
+  if (answer === undefined) {
+    return flowChart<AgentState>('PrepareFinal', prepareFinal, STAGE_IDS.PREPARE_FINAL, {
+      ...recorders,
+      description: PREPARE_FINAL_DESCRIPTION,
+      tags: milestoneTagsFor(STAGE_IDS.PREPARE_FINAL),
+    });
+  }
+  const assess = async (scope: TypedScope<AgentState>): Promise<void> =>
+    (await loadAnswerStage()).assessAnswerStage(scope, answer);
+  return flowChart<AgentState>('AssessAnswer', assess, STAGE_IDS.ASSESS_ANSWER, {
+    ...recorders,
+    description: "The answer's standing, folded from the run's committed record",
+  })
+    .addFunction(
+      'PrepareFinal',
+      prepareFinal as never,
+      STAGE_IDS.PREPARE_FINAL,
+      PREPARE_FINAL_DESCRIPTION,
+    )
+    .tag(...milestoneTagsFor(STAGE_IDS.PREPARE_FINAL));
 }

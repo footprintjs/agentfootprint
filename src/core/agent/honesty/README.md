@@ -1,6 +1,6 @@
 **Mixed** — where the honesty layers mount, and which ones a run armed.
 Map: `armed.ts` (the one run constant, `AgentState.honestyLayers`).
-Walker: `mounts.ts` (the conditional mounts both chart builders call, and each layer's input and output mappings).
+Walker: `mounts.ts` (the conditional mounts both chart builders call, each layer's input and output mappings, and the answer layer's read list).
 
 **The law.** A layer is a subflow mounted only when armed: an agent that armed none builds
 the chart, commits the keys and serves the bytes it always did.
@@ -15,7 +15,7 @@ confidence. Four decision points, one layer each:
 | 1 · choice | choose a tool | beside the inputs layer | a later step |
 | 2 · inputs | fill its inputs | `sf-inputs`, after the LLM call and before Route (`mounts.ts` · `mountInputsLayer`); its batch ask is raised by ToolCalls, first thing (`stages/argumentAsk.ts` · `askBeforeDispatch`) | **shipped: `assume`, and `ask` for a missing value** (one ask per batch) — `core/agent/arguments/README.md` |
 | 3 · results | read a result | the loop head | a later step |
-| 4 · answer | give the answer | the first node of the final branch | the standing is a reader today (`assessment/`) |
+| 4 · answer | give the answer | the first stage of the final branch (`mounts.ts` · `startFinalBranch`), `assess-answer` | **shipped** (`.answerLayer()`): the standing folded in the run and served as data (`turn_end.answerAssessment`, `agentfootprint.answer.assessed`), two witness rows filed by Route, an opt-in line — `core/agent/assessment/README.md` |
 
 ## How a layer mounts
 
@@ -40,11 +40,45 @@ builder = mountInputsLayer(builder, deps.inputsLayer); // undefined → the buil
   stays static is what a synchronous door needs first (the inputs layer's list:
   `arguments/README.md`, "What a plain agent carries").
 
+## The answer layer — the head of the final branch
+
+A decider branch is one node with no continuation, so the answer layer cannot sit between
+Route and Final; it heads the final branch (adopted Q3). footprintjs starts every chart with a
+function stage, so the layer is that first stage — `assess-answer`, then PrepareFinal — built by
+`mounts.ts` · `startFinalBranch`, which builds the branch exactly as it always was when the
+layer is not armed.
+
+```ts
+// Both builders, for the final branch:
+let finalBranch = startFinalBranch(deps.answerLayer, prepareFinalFor(deps), deps.structureRecorders);
+```
+
+- **Handed**: nothing new — the final branch already receives the run's state. The stage reads
+  only the committed keys the fold reads that this agent's arms can write (`mounts.ts` ·
+  `answerFoldReads`, decided at build: a key no arm can write is never read).
+- **Returned**: nothing to the run's state. The branch mount's output mapping receives the
+  branch's RESULT (the answer string, which every composition that mounts an agent reads as a
+  string), never its scope — so the layer hands its projection to PrepareFinal INSIDE the branch
+  (`answerAssessment`), and the rows it folds are the witness rows the Route decider files.
+- **Events**: one `agentfootprint.answer.assessed` per answer, from the stage.
+- **Lazy**: the stage body, the fold and the line's composer load through `import()` on the first
+  armed answer; the witness rows' shape (`assessment/witness.ts`) stays static, because the
+  checkpoint door checks it synchronously.
+- **What a plain agent carries**: what a synchronous door needs first — the arm and its build
+  refusals (`AgentBuilder.answerLayer`), the branch choice (`mounts.ts` · `startFinalBranch`,
+  `answerFoldReads`), the witness rows' builders and checkpoint check, the event's name — and
+  the armed PrepareFinal body, kept beside every other PrepareFinal body because they share one
+  capture (`stages/prepareFinal.ts` · `prepareFinalFor`). Measured by the docs site's own budget
+  (`docs-next/scripts/check-site-budget.mjs`, a local `EXPORT=true` build, the same docs with
+  only the library swapped): the deferred demo went from 440.8 to 442.8 KB gzip.
+
 ## The run constant
 
-`armed.ts` · `honestyLayersOf` — seed writes `honestyLayers: { inputs: true }` once, on a run
-whose inputs layer is mounted, and nothing on any other run. A reader of the record tells
-"this layer was armed and filed nothing" from "this layer was never armed" by this key.
+`armed.ts` · `honestyLayersOf` — seed writes `honestyLayers` once, naming every armed layer
+(`{ inputs: true }`, `{ answer: true }`, or both), and nothing on a run that armed none. A reader
+of the record tells "this layer was armed and filed nothing" from "this layer was never armed"
+by this key. While any layer is armed, the one writer stamps every ledger row with its `turn`,
+and a continued conversation's ledger is restored.
 
 ## A pause inside a layer
 
@@ -59,7 +93,10 @@ correctly. See `core/agent/arguments/README.md`, "The batch ask".
 
 ## Not covered
 
-- Layers 1, 3 and the run-time half of layer 4 — later steps of the plan.
+- Layers 1 and 3 — later steps of the plan.
+- A row the answer layer itself must commit to the run's state — the final branch cannot write
+  back (see above); such a row is filed by the Route decider, or the branch's result shape
+  changes with every composition that reads it.
 - A layer mounted inside another runner's chart (a composed pattern) — each `Agent` mounts
   its own.
 
