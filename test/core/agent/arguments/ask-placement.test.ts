@@ -4,23 +4,29 @@
  *
  * The design (the arguments note, § 4.3) puts a pausable `Ask` stage and a
  * `Bind` decider that loops back to it inside `sf-inputs`, which is mounted in
- * the ReAct loop body before Route. On the footprintjs this package runs
- * against, that placement cannot be resumed correctly. These three minimal
- * charts pin the three facts the placement decision rests on:
+ * the ReAct loop body before Route. Until footprintjs 9.28.0 that placement
+ * could not be resumed correctly. These three minimal charts pin the three
+ * facts the placement decision rested on, as they read on footprintjs 9.28.0
+ * and later:
  *
- *   1. a decider looping back to the PAUSED stage after a resume re-runs its
- *      resume half — the stage never pauses again, so a re-ask is impossible;
- *   2. a pause inside a subflow mounted in a loop body resumes into a traversal
- *      whose loop-back cannot reach the loop head: the run ends silently after
- *      one stage of the next iteration;
+ *   1. a decider looping back to the PAUSED stage after a resume now reaches
+ *      the paused stage for real — it pauses again, so a re-ask works
+ *      (before 9.28.0 it re-ran the resume half and never paused again);
+ *   2. a pause inside a subflow mounted in a loop body now resumes into the
+ *      real loop, and the run finishes every iteration (before 9.28.0 the
+ *      loop-back could not reach the loop head and the run ended silently
+ *      after one stage of the next iteration);
  *   3. an `interrupt()` raised by the loop's own pausable branch resumes by
  *      re-running that branch, and the loop continues — the placement used.
  *
- * WHEN THIS TEST FAILS on facts 1 or 2, footprintjs now resolves loop targets
- * against the real chart on resume: the ask may move into `sf-inputs` as the
- * design drew it (and a second pause in the batch that asked would no longer
- * have to be refused). Revisit `stages/argumentAsk.ts` then — do not just
- * update these expectations.
+ * footprintjs 9.28.0 ("resume walks the real chart") FIXED facts 1 and 2, so
+ * the expectations below were updated to the healthy traces. The ask MAY now
+ * move into `sf-inputs` as the design drew it (and a second pause in the
+ * batch that asked would no longer have to be refused). That move is a
+ * TRACKED FOLLOW-UP (`src/core/agent/arguments/README.md` § "Not
+ * covered"), deliberately not made in the dependency bump: revisit
+ * `stages/argumentAsk.ts` there. If facts 1 or 2 ever read the OLD traces
+ * again, footprintjs regressed — do not just update these expectations back.
  */
 
 import { describe, expect, it } from 'vitest';
@@ -44,7 +50,7 @@ async function drive(chart: FlowChart, answers = 6): Promise<{ trace: string[]; 
 }
 
 describe('TRIPWIRE — where footprintjs can resume a pause inside the ReAct loop', () => {
-  it('fact 1: a loop back to the paused stage re-runs its resume half, never pausing again', async () => {
+  it('fact 1: a loop back to the paused stage pauses it again — the re-ask reaches the person', async () => {
     const inner = flowChart('Plan', (s: S) => void (s.log = ['plan']), 'plan')
       .addPausableFunction(
         'Ask',
@@ -78,11 +84,11 @@ describe('TRIPWIRE — where footprintjs can resume a pause inside the ReAct loo
       })
       .build();
     const { trace, pauses } = await drive(chart);
-    expect(pauses).toBe(1); // the re-ask never reached the person
-    expect(trace).toEqual(['plan', 'ask', 'resume-half', 'resume-half']);
+    expect(pauses).toBe(2); // the re-ask reached the person (1 before footprintjs 9.28.0)
+    expect(trace).toEqual(['plan', 'ask', 'resume-half', 'ask', 'resume-half']);
   });
 
-  it('fact 2: a pause in a subflow of the loop body ends the resumed run after the next loop head', async () => {
+  it('fact 2: a pause in a subflow of the loop body resumes into the real loop and finishes it', async () => {
     const inner = flowChart('Start', () => undefined, 'sf-start')
       .addPausableFunction(
         'Ask',
@@ -130,8 +136,8 @@ describe('TRIPWIRE — where footprintjs can resume a pause inside the ReAct loo
       .end()
       .build();
     const { trace } = await drive(chart);
-    // A healthy loop would read head1 tools1 head2 tools2 head3 final.
-    expect(trace).toEqual(['head1', 'tools1', 'head2']);
+    // The healthy loop (before footprintjs 9.28.0: head1 tools1 head2, then silence).
+    expect(trace).toEqual(['head1', 'tools1', 'head2', 'tools2', 'head3', 'final']);
   });
 
   it('fact 3: an interrupt() raised by the looping branch re-runs it on resume, and the loop continues', async () => {

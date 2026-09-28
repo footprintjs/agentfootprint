@@ -410,7 +410,17 @@ const OUTPUT_LIMITS = { bytes: 716_000_000, files: 7_560, duplicateRscBytes: 0 }
 // EXPORT=true build of d8d7d689 measured 439.8 KB. Local builds read about
 // 1.3 KB under CI on this number (dd076f68 saw 1.5 KB), so CI's figure is the
 // basis. Ceiling ~2% over CI's 441.1 KB, as every raise here.
-const DEMO_ASYNC_GZIP_LIMIT = 450_000;
+//
+// RAISED to 460 KB (2026-09-28) — owner-approved raise; docs-site cleanup
+// planned. The growth is the footprintjs 9.28.0 dependency bump (resume walks
+// the real chart), which the demo's engine carries on the default graph. A
+// local EXPORT=true build of the 9.125.0 library on footprintjs 9.28.0
+// measured 450.7 KB gzip across 17 async assets against the 450.0 KB ceiling.
+// The same branch's compaction-summary fix adds ~0.1 KB gzip to the demo's
+// modules (`evidenceIndex`, `composeRequest`, each minified alone), so the
+// branch reads ~450.8 KB locally; local builds read ~1.3 KB under CI, so CI
+// should land near 452 KB. Ceiling ~2% over that.
+const DEMO_ASYNC_GZIP_LIMIT = 460_000;
 
 function formatBytes(bytes) {
   if (bytes < 1_000) return `${bytes} B`;

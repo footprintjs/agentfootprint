@@ -226,6 +226,14 @@ the PERFORMANCE block), and the resume adds no model call.
 
 ## Not covered
 
+- **The ask inside `sf-inputs`, as the design drew it (follow-up).** The batch ask is raised
+  by ToolCalls (`stages/argumentAsk.ts`) because footprintjs could not resume a pause inside
+  a subflow of the loop body, nor a decider looping back to the paused stage. footprintjs
+  9.28.0 fixed both (`test/core/agent/arguments/ask-placement.test.ts` pins the healthy
+  traces — facts 1 and 2), so the ask MAY now move into `sf-inputs` with a `Bind` decider
+  that loops back to it, and a second pause in the batch that asked need no longer be
+  refused. Not moved yet: the move changes the chart, the record and the refusal above, and
+  is its own packet.
 - **Asking about a PRESENT value** — a value on an `ask` argument the model did send runs as
   sent, filed `model`, until the model can declare where it came from (`_findings.from`, the
   declared-sources step); only then is an unverified value asked about.
