@@ -76,6 +76,14 @@ What the model read for each branch, captured from that example's run (pretty-pr
 
 A helper that cannot honor its declaration throws inside `execute`, and the call's error result is its refusal: the model reads text that starts `refused: ` in place of the data, and the run continues. Details: [Described tool results](doc:semantic-results), [`absent()`](#an-absence-that-names-its-own-coverage--absent) and [`coverage()`](#what-a-clean-result-does-not-rule-out--coverage) below.
 
+**Write both branches.** A data list is never empty — "nothing matched" has exactly one helper — so `describedResult({ facts: [] })` is refused, and the refusal names the one you meant:
+
+```text
+refused: `facts` is empty — if nothing matched, return absent({ what, checked }) instead. (field: facts)
+```
+
+A tool without an empty branch passes every test that has rows and meets this on its first empty read in production, where the model reads the refusal instead of "nothing matched". So every `execute` that returns rows says both: `rows.length ? describedResult({ … }) : absent({ … })` — the example above does exactly that.
+
 ## defineTool — the flat builder
 
 `defineTool` is a flatter helper that puts name + description + inputSchema at the top level instead of nested under `schema`:

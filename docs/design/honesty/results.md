@@ -8,6 +8,13 @@ Nothing here is built unless a line says "shipped" or "drafted".**
 > text below is the page as reviewed on 2026-09-26, with its file names and links updated for this
 > folder. Step 7a (`describedResult()`, § 6) was delivered on its own track: it merged to main as
 > #22 (`0600ab53`) late on 2026-09-26, after this page was written.
+>
+> **Step 7a′ built, 2026-09-27** (branch `feat/results-period`, its first commit; not yet merged or
+> released): the empty-data refusal names `absent()` (§ 1.3) — `lib/semantics/envelope.ts` ·
+> `emptyDataList`, one core for both doors and the `check:semantics` gate; the refusal is a
+> registered model-facing sentence. Beyond the page, in the same mint: a data list that is not a
+> list at all is refused as one (it used to crash with a `TypeError` on an object) —
+> `envelope.ts` · `copyDataList`.
 
 - Written against agentfootprint 9.118.1 (`8360b3b8` on npm; its fix `f83f277c` shipped the
   request's fix 0 and fix 1) and footprintjs 9.27.0.
@@ -90,6 +97,8 @@ the status stays `'absent'` (`coverage/read.ts` · `readCoverageResult`).
   (`semanticIssues`), so "nothing matched" has exactly one door: `absent()`.
 
 ### 1.3 One small fix the table asks for
+
+**Built as step 7a′ (2026-09-27, `feat/results-period`).** The page as written:
 
 The empty-data refusal reads "`facts` must be a non-empty array of rows — omit the field to say
 nothing" (`semanticIssues`). Two things are wrong with it:

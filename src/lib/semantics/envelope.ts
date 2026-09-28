@@ -242,6 +242,42 @@ function malformed(field: string, message: string): SemanticIssue {
   return { code: 'malformed-semantics', field, message };
 }
 
+/**
+ * The fault for an EMPTY data list — `series: []`, `facts: []`, `edges: []` —
+ * which names the one door for "nothing matched": `absent()`.
+ *
+ * The rule itself is unchanged (a data list is never empty, so "nothing
+ * matched" has exactly one door). What changed is the advice: it used to say
+ * "omit the field to say nothing", and following it on the found branch's
+ * only data field walked straight into the next refusal ("this result
+ * declares nothing"). And the fault is data-dependent — a tool with no empty
+ * branch passes every test that has rows and refuses on its first empty read
+ * in production, where the MODEL reads this text in place of the data — so it
+ * says the branch to write, in the author's own helper names. One core, so
+ * both declaration doors and the `check:semantics` gate say the same.
+ */
+function emptyDataList(field: 'series' | 'facts' | 'edges'): SemanticIssue {
+  return malformed(
+    field,
+    `\`${field}\` is empty — if nothing matched, return absent({ what, checked }) instead.`,
+  );
+}
+
+/**
+ * Detach one declared data list (`series`, `facts`, `edges`) for the candidate
+ * envelope. A list — or any other iterable a plain-JavaScript author handed
+ * over, which always minted — is copied into a fresh array. A value that is
+ * NOT a list passes through untouched so the rule set names it for what it is:
+ * a spread would have thrown a `TypeError` on a plain object or a number (a
+ * crash that does not read as a refusal, in the one place the model reads
+ * it), and turned a string into its characters, refused as a malformed ROW.
+ */
+function copyDataList(value: unknown): unknown {
+  if (typeof value === 'string' || typeof value !== 'object' || value === null) return value;
+  const iterate = (value as { readonly [Symbol.iterator]?: unknown })[Symbol.iterator];
+  return typeof iterate === 'function' ? [...(value as Iterable<unknown>)] : value;
+}
+
 /** Detach one clarify declaration for the candidate envelope. A non-object
  *  passes through untouched so the validator can name it. */
 function copyClarify(clarify: unknown): unknown {
@@ -348,7 +384,9 @@ function issuesIn(value: unknown, s: Spelling): SemanticIssue[] {
   // ── series ──
   const series = value.series;
   if (series !== undefined) {
-    if (!Array.isArray(series) || series.length === 0) {
+    if (Array.isArray(series) && series.length === 0) {
+      issues.push(emptyDataList('series'));
+    } else if (!Array.isArray(series)) {
       issues.push(
         malformed(
           'series',
@@ -397,7 +435,9 @@ function issuesIn(value: unknown, s: Spelling): SemanticIssue[] {
   // ── facts ──
   const facts = value.facts;
   if (facts !== undefined) {
-    if (!Array.isArray(facts) || facts.length === 0) {
+    if (Array.isArray(facts) && facts.length === 0) {
+      issues.push(emptyDataList('facts'));
+    } else if (!Array.isArray(facts)) {
       issues.push(
         malformed(
           'facts',
@@ -421,7 +461,9 @@ function issuesIn(value: unknown, s: Spelling): SemanticIssue[] {
   // ── edges ──
   const edges = value.edges;
   if (edges !== undefined) {
-    if (!Array.isArray(edges) || edges.length === 0) {
+    if (Array.isArray(edges) && edges.length === 0) {
+      issues.push(emptyDataList('edges'));
+    } else if (!Array.isArray(edges)) {
       issues.push(
         malformed(
           'edges',
@@ -846,9 +888,9 @@ export function mintSemantics(
   const notCovered = coverage !== undefined ? composeNotCovered(coverage) : [];
   const candidate: Record<string, unknown> = {
     [SEMANTICS_MARKER]: true,
-    ...(decl.series !== undefined && { series: [...decl.series] }),
-    ...(decl.facts !== undefined && { facts: [...decl.facts] }),
-    ...(decl.edges !== undefined && { edges: [...decl.edges] }),
+    ...(decl.series !== undefined && { series: copyDataList(decl.series) }),
+    ...(decl.facts !== undefined && { facts: copyDataList(decl.facts) }),
+    ...(decl.edges !== undefined && { edges: copyDataList(decl.edges) }),
     ...(decl.grain !== undefined && { grain: door.toWire('grain', decl.grain) }),
     ...(decl.provenance !== undefined && {
       provenance: door.toWire('provenance', decl.provenance),

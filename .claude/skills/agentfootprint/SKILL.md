@@ -254,7 +254,10 @@ refusal. `semantic()` is the deprecated name for the same envelope with a snake_
 declaration — do not use it in new code.
 
 A helper that cannot honor its declaration throws inside `execute`: the model reads text
-starting `refused: ` in place of the data, and the run continues. An absence gets the
+starting `refused: ` in place of the data, and the run continues. A data list is never
+empty — `describedResult({ facts: [] })` is refused with "`facts` is empty — if nothing
+matched, return absent({ what, checked }) instead" — so every `execute` that returns rows
+writes both branches: `rows.length ? describedResult({ … }) : absent({ … })`. An absence gets the
 delivered status `'absent'` (route it with `onToolStatus: 'absent'`) and grounds only its
 COVERAGE in the evidence gate — so an id the model invented does not become grounded by one
 lookup that found nothing. It is never an error: nothing retries it, nothing refuses it, no

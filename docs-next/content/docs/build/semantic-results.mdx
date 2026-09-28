@@ -54,6 +54,7 @@ The declaration is camelCase; the envelope the model and the record read is snak
 - **The record keeps everything**, on the typed `agentfootprint.tools.semantics_declared` event — one per recognized envelope, stamped with the tool name, the tool call id and the iteration — and the coverage lands in `sharedState.coverageDeclared` beside every `coverage()` and `absent()` statement. The event is emitted **before** the tool's `resultCeiling` is measured, so an oversized result that is refused still leaves its grain and provenance on the record.
 - **Only coverage reaches the final answer**, and only with [`.limitsTravelWithTheAnswer()`](doc:tools#making-the-limits-survive--limitstravelwiththeanswer). Provenance and grain are for the model and the record.
 - **A fact without a source never reaches the model.** It is refused inside the tool; the model reads the refusal in its place, and the run continues.
+- **An empty list is not "nothing matched".** `series`, `facts` and `edges` are never empty, so a found branch cannot also be the not-found branch: `describedResult({ facts: [] })` is refused with `` `facts` is empty — if nothing matched, return absent({ what, checked }) instead ``. Write both: `rows.length ? describedResult({ … }) : absent({ … })`. `check:semantics` says the same about a sample that exercises the empty branch.
 - **`measuredAt` is never parsed.** It is the tool's own words for a time — `"last year, roughly"` passes — and it rides to the model as written.
 
 ```ts

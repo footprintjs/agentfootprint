@@ -50,9 +50,11 @@ import {
   Agent,
   codeRunnerTool,
   defineTool,
+  describedResult,
   inMemoryArtifacts,
   isInputPause,
   requestInput,
+  semantic,
   type ArtifactScope,
   type CodeRunner,
 } from '../src/index.js';
@@ -973,6 +975,36 @@ function ontologyPieces(): string[] {
   return [ontologyPiece(map).rawContent];
 }
 
+/**
+ * The empty-data refusal (honesty step 7a′), composed by the REAL mints — both
+ * declaration doors, every data list — exactly as a tool's `execute` throws it.
+ */
+function emptyDataRefusals(): readonly string[] {
+  const refusalOf = (mint: () => unknown): string => {
+    try {
+      mint();
+    } catch (err) {
+      return (err as Error).message;
+    }
+    throw new Error('expected the empty data list to be refused');
+  };
+  const provenance = { measuredAt: '2026-09-26T02:00:00Z', source: 'nightly export' };
+  return [
+    refusalOf(() => describedResult({ facts: [], provenance })),
+    refusalOf(() =>
+      describedResult({
+        series: [],
+        grain: { interval: '1h', aggregation: 'avg', isCounter: false },
+        provenance,
+      }),
+    ),
+    refusalOf(() => describedResult({ edges: [] })),
+    refusalOf(() =>
+      semantic({ facts: [], provenance: { measured_at: '2026-09-26T02:00:00Z', source: 'x' } }),
+    ),
+  ];
+}
+
 // ─── The registry ────────────────────────────────────────────────────
 
 const PRODUCERS: readonly ModelFacingProducer[] = [
@@ -1511,6 +1543,22 @@ const PRODUCERS: readonly ModelFacingProducer[] = [
       secondPauseRefusal('export_logs', 'tool-pause') +
         keptAnswersNote('export_logs', ['window', 'limit']),
     ],
+  },
+  {
+    id: 'result helpers — the empty-data refusal names absent() (honesty step 7a′)',
+    module: 'src/lib/semantics/envelope.ts',
+    surface: TOOL_RESULT,
+    lifetimeBecause:
+      'the mint throws inside the tool’s `execute`, and the dispatch loop turns the throw into ' +
+      'that call’s error result — a `role: "tool"` message written into `history` and re-read on ' +
+      'every later call of the turn',
+    drivenBy: ['test/lib/semantics/empty-data-refusal.test.ts'],
+    reaches: [
+      /^refused: `facts` is empty — if nothing matched, return absent\(\{ what, checked \}\) instead\. \(field: facts\)$/m,
+      /^refused: `series` is empty — if nothing matched, return absent\(\{ what, checked \}\) instead\. \(field: series\)$/m,
+      /^refused: `edges` is empty — if nothing matched, return absent\(\{ what, checked \}\) instead\. \(field: edges\)$/m,
+    ],
+    compose: async () => emptyDataRefusals(),
   },
   {
     id: 'ontology — the always-on INSTRUCTION piece (9.106.0; v2 9.107.0; v3 9.108.0)',
