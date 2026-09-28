@@ -72,12 +72,15 @@ const SPELLED: ReadonlyArray<readonly [camel: string, snake: string]> = [
 ];
 
 /** A refusal from the camelCase door in the snake_case door's words — so the
- *  two can be compared as ONE rule said twice. */
+ *  two can be compared as ONE rule said twice. The one field only the new door
+ *  takes (`period`, honesty step 7b — the deprecated door gains nothing) is
+ *  dropped from the field list it names. */
 const inWireWords = (message: string): string =>
   [
     ...SPELLED,
     ['notCovered', 'not_covered'] as const,
     ['describedResult()', 'semantic()'] as const,
+    ['provenance, period, coverage', 'provenance, coverage'] as const,
   ].reduce((text, [camel, snake]) => text.split(camel).join(snake), message);
 
 /** The same declaration in both spellings — the one case table every
@@ -534,6 +537,19 @@ describe('functional: a refusal names the field as the author spelled it', () =>
     expect(message.startsWith(REFUSED_PREFIX)).toBe(true);
     // The camelCase author never reads a snake_case field name back.
     for (const [, snake] of SPELLED) expect(message).not.toContain(snake);
+  });
+
+  it('not a declaration at all: each door names ITS fields — period only on describedResult()', () => {
+    expect(refusalOf(() => describedResult(null as never))).toBe(
+      'refused: describedResult() takes a declaration — { series?, facts?, edges?, grain?, ' +
+        'provenance?, period?, coverage?, clarify?, render? } with at least one of ' +
+        'series/facts/edges/clarify.',
+    );
+    // The deprecated door keeps the words it always gave.
+    expect(refusalOf(() => semantic(null as never))).toBe(
+      'refused: semantic() takes a declaration — { series?, facts?, edges?, grain?, provenance?, ' +
+        'coverage?, clarify?, render? } with at least one of series/facts/edges/clarify.',
+    );
   });
 
   it('is the SAME rule semantic() applies — one core, only the words differ', () => {

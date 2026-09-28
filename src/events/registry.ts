@@ -125,10 +125,12 @@ import type {
   FindingsJudgeFailedPayload,
   FindingsContingentPayload,
   FindingsArgumentPayload,
+  FindingsPeriodPayload,
   ToolChoicePickedPayload,
   ToolChoiceOutcomePayload,
   ToolChoiceFailedPayload,
   OntologyServedPayload,
+  AnswerAssessedPayload,
   ArtifactMintedPayload,
   ArtifactResolvedPayload,
   ArtifactExpiredPayload,
@@ -313,6 +315,8 @@ export const EVENT_NAMES = {
     contingent: 'agentfootprint.findings.contingent',
     // The inputs layer's verdict on one ruled argument of one call (honesty layer 2).
     argument: 'agentfootprint.findings.argument',
+    // The results layer's verdict on one call's period (honesty layer 3, step 7b).
+    period: 'agentfootprint.findings.period',
   },
   tool_choice: {
     picked: 'agentfootprint.tool_choice.picked',
@@ -321,6 +325,10 @@ export const EVENT_NAMES = {
   },
   ontology: {
     served: 'agentfootprint.ontology.served',
+  },
+  // The answer layer (honesty layer 4): the answer's standing, as data.
+  answer: {
+    assessed: 'agentfootprint.answer.assessed',
   },
   embedding: {
     generated: 'agentfootprint.embedding.generated',
@@ -793,6 +801,10 @@ export interface AgentfootprintEventMap {
     'agentfootprint.findings.argument',
     FindingsArgumentPayload
   >;
+  'agentfootprint.findings.period': AgentfootprintEventEnvelope<
+    'agentfootprint.findings.period',
+    FindingsPeriodPayload
+  >;
   // tool_choice (a classifier's pick beside the model's call — identities, numbers, a boolean)
   'agentfootprint.tool_choice.picked': AgentfootprintEventEnvelope<
     'agentfootprint.tool_choice.picked',
@@ -810,6 +822,11 @@ export interface AgentfootprintEventMap {
   'agentfootprint.ontology.served': AgentfootprintEventEnvelope<
     'agentfootprint.ontology.served',
     OntologyServedPayload
+  >;
+  // answer (the answer layer's standing — the value, the reason kinds, the checks that ran)
+  'agentfootprint.answer.assessed': AgentfootprintEventEnvelope<
+    'agentfootprint.answer.assessed',
+    AnswerAssessedPayload
   >;
   // embedding
   'agentfootprint.embedding.generated': AgentfootprintEventEnvelope<
@@ -980,10 +997,12 @@ export const ALL_EVENT_TYPES: readonly AgentfootprintEventType[] = [
   'agentfootprint.findings.judge_failed',
   'agentfootprint.findings.contingent',
   'agentfootprint.findings.argument',
+  'agentfootprint.findings.period',
   'agentfootprint.tool_choice.picked',
   'agentfootprint.tool_choice.outcome',
   'agentfootprint.tool_choice.failed',
   'agentfootprint.ontology.served',
+  'agentfootprint.answer.assessed',
   'agentfootprint.embedding.generated',
   'agentfootprint.artifacts.minted',
   'agentfootprint.artifacts.resolved',

@@ -32,6 +32,8 @@
 import type { Assertion } from '../../../integrity/assertion/types.js';
 import type { ArgumentRow } from '../arguments/rows.js';
 import type { DeclaredSource } from '../arguments/sources.js';
+import type { PeriodRow } from '../coverage/period.js';
+import type { GroundedRow, StepsUnfinishedRow } from '../assessment/witness.js';
 import type { CoverageItem } from '../coverage/types.js';
 
 /** The reserved optional property every SERVED tool schema carries when armed. */
@@ -144,7 +146,7 @@ export interface BasisRow {
   /**
    * The conversation turn the row was filed in (`AgentState.turnNumber`) —
    * stamped by the one writer while an honesty layer is armed (the inputs
-   * layer), absent otherwise. The ledger crosses turns on a continued
+   * layer, the answer layer), absent otherwise. The ledger crosses turns on a continued
    * conversation, and `iteration` restarts at 1 every run.
    */
   readonly turn?: number;
@@ -185,7 +187,7 @@ export interface StandingRow {
   /**
    * The conversation turn the row was filed in (`AgentState.turnNumber`) —
    * stamped by the one writer while an honesty layer is armed (the inputs
-   * layer), absent otherwise. The ledger crosses turns on a continued
+   * layer, the answer layer), absent otherwise. The ledger crosses turns on a continued
    * conversation, and `iteration` restarts at 1 every run.
    */
   readonly turn?: number;
@@ -211,7 +213,7 @@ export interface ConflictRow {
   /**
    * The conversation turn the row was filed in (`AgentState.turnNumber`) —
    * stamped by the one writer while an honesty layer is armed (the inputs
-   * layer), absent otherwise. The ledger crosses turns on a continued
+   * layer, the answer layer), absent otherwise. The ledger crosses turns on a continued
    * conversation, and `iteration` restarts at 1 every run.
    */
   readonly turn?: number;
@@ -265,7 +267,7 @@ export interface JudgmentRow {
   /**
    * The conversation turn the row was filed in (`AgentState.turnNumber`) —
    * stamped by the one writer while an honesty layer is armed (the inputs
-   * layer), absent otherwise. The ledger crosses turns on a continued
+   * layer, the answer layer), absent otherwise. The ledger crosses turns on a continued
    * conversation, and `iteration` restarts at 1 every run.
    */
   readonly turn?: number;
@@ -291,7 +293,7 @@ export interface JudgmentErrorRow {
   /**
    * The conversation turn the row was filed in (`AgentState.turnNumber`) —
    * stamped by the one writer while an honesty layer is armed (the inputs
-   * layer), absent otherwise. The ledger crosses turns on a continued
+   * layer, the answer layer), absent otherwise. The ledger crosses turns on a continued
    * conversation, and `iteration` restarts at 1 every run.
    */
   readonly turn?: number;
@@ -341,7 +343,7 @@ export interface ContingentRow {
   /**
    * The conversation turn the row was filed in (`AgentState.turnNumber`) —
    * stamped by the one writer while an honesty layer is armed (the inputs
-   * layer), absent otherwise. The ledger crosses turns on a continued
+   * layer, the answer layer), absent otherwise. The ledger crosses turns on a continued
    * conversation, and `iteration` restarts at 1 every run.
    */
   readonly turn?: number;
@@ -428,7 +430,7 @@ export interface UnsettledByAbsenceRow {
   /**
    * The conversation turn the row was filed in (`AgentState.turnNumber`) —
    * stamped by the one writer while an honesty layer is armed (the inputs
-   * layer), absent otherwise. The ledger crosses turns on a continued
+   * layer, the answer layer), absent otherwise. The ledger crosses turns on a continued
    * conversation, and `iteration` restarts at 1 every run.
    */
   readonly turn?: number;
@@ -445,7 +447,16 @@ export type FindingsRow =
   // The inputs layer's verdict on one ruled argument of one call (honesty
   // layer 2) — filed by the `sf-inputs` subflow, not by the model. Readers
   // that switch over every kind must skip one they do not know.
-  | ArgumentRow;
+  | ArgumentRow
+  // The results layer's verdict on one call's period (honesty layer 3, step
+  // 7b) — filed by the `sf-results` subflow at the loop head, not by the model.
+  | PeriodRow
+  // The answer layer's committed witnesses (honesty layer 4) — two verdicts
+  // the Route decider computes that were events only: the evidence gate's
+  // clean pass, and an answer given before its declared steps finished.
+  // Filed only while the answer layer is armed (`assessment/witness.ts`).
+  | GroundedRow
+  | StepsUnfinishedRow;
 
 /** The committed key: flat, append-only, a fresh array on every write. */
 export type FindingsLedger = readonly FindingsRow[];

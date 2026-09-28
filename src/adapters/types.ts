@@ -193,6 +193,29 @@ export interface LLMMessage {
    * exactly what it always did.
    */
   readonly toolChars?: number;
+  /**
+   * THE EXEMPTION LINEAGE OF A FOLD — on a compaction summary frame
+   * (`core/agent/window/summarize.ts` · `buildSummaryMessage`), the lookup
+   * forms the EXEMPT corpus held for the messages this summary folded away:
+   * the person's and the app's user/system turns (and the lineage of any
+   * earlier summary inside the span), taken from those ORIGINAL messages at
+   * fold time by `core/agent/evidence/evidenceIndex.ts` · `exemptLineageOf`.
+   *
+   * The summary's own TEXT is a model's claim, so it exempts nothing
+   * (`evidenceIndex.ts` · `exemptFromRun` skips the frame's content and reads
+   * this field instead). Without the field a value the person gave in a
+   * folded turn would lose its exemption; without skipping the text, a value
+   * the summarizer invented would gain one.
+   *
+   * Rides the summary wherever the history goes (the conversation checkpoint
+   * included), so a restored summary keeps the lineage it was folded with; a
+   * summary frame WITHOUT it (hand-built, or folded before this field
+   * existed) exempts nothing. Absent when the fold carried no exempt value.
+   *
+   * **Never reaches a provider.** `core/agent/composeRequest.ts` ·
+   * `stripFrameworkFields` removes it with the other framework fields.
+   */
+  readonly foldedExempt?: readonly string[];
 }
 
 /**

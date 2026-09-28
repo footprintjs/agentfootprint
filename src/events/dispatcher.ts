@@ -115,7 +115,10 @@ export type DomainWildcard =
   | 'agentfootprint.artifacts.*'
   // 9.106.0 — the declared ontology's domain, added WITH its wildcard (the
   // credential-domain lesson): one event today, `ontology.served`.
-  | 'agentfootprint.ontology.*';
+  | 'agentfootprint.ontology.*'
+  // The answer layer's domain (honesty layer 4), added WITH its wildcard and
+  // its bridge: one event today, `answer.assessed`.
+  | 'agentfootprint.answer.*';
 
 export type AllWildcard = '*';
 

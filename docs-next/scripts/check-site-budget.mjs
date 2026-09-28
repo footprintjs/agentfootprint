@@ -203,7 +203,18 @@ const SEARCH_LIMITS = { raw: 12_000_000, gzip: 2_155_000, records: 2_000 };
 // raise, with the measurement beside it. The file ceiling still holds (7,313
 // of 7,400). Search gzip still holds too, but thinly: 2,107,287 of 2,110,000
 // bytes. Same rule as every raise here: ~2% over the measured export.
-const OUTPUT_LIMITS = { bytes: 700_000_000, files: 7_400, duplicateRscBytes: 0 };
+// RAISED 2026-09-28 for the merge of honesty step 6 (the answer layer, 9.124.0)
+// into step 7b (the results layer) — files only; owner-approved raise;
+// docs-site cleanup planned. Measured after a clean rebuild (out/ and .next/
+// removed first), EXPORT=true: 699.52 MB across 7,410 files, duplicate RSC
+// pairs 0 — each layer alone fitted (7,383 files on step 7b), together they
+// cross by 10 API pages. ~2% over the measured file count, the rule every
+// raise here follows. Bytes still hold, thinly (699.52 of 700 MB).
+// RAISED 2026-09-28, bytes, for the same merge: CI measured 701.60 MB across
+// 7,411 files (the local clean build read 699.52 MB). Owner-approved raise
+// (owner confirmed 2026-09-28); docs-site cleanup planned. ~2% over the CI
+// measurement, the rule every raise here follows.
+const OUTPUT_LIMITS = { bytes: 716_000_000, files: 7_560, duplicateRscBytes: 0 };
 // Raised for 9.61.0: 394.1 KB → 400.3 KB. The skill-graph demo imports
 // `defineTool` from 'agentfootprint', so the library's MAIN ENTRY and its
 // whole transitive graph ride this chunk — and this release added the
@@ -399,7 +410,17 @@ const OUTPUT_LIMITS = { bytes: 700_000_000, files: 7_400, duplicateRscBytes: 0 }
 // EXPORT=true build of d8d7d689 measured 439.8 KB. Local builds read about
 // 1.3 KB under CI on this number (dd076f68 saw 1.5 KB), so CI's figure is the
 // basis. Ceiling ~2% over CI's 441.1 KB, as every raise here.
-const DEMO_ASYNC_GZIP_LIMIT = 450_000;
+//
+// RAISED to 460 KB (2026-09-28) — owner-approved raise; docs-site cleanup
+// planned. The growth is the footprintjs 9.28.0 dependency bump (resume walks
+// the real chart), which the demo's engine carries on the default graph. A
+// local EXPORT=true build of the 9.125.0 library on footprintjs 9.28.0
+// measured 450.7 KB gzip across 17 async assets against the 450.0 KB ceiling.
+// The same branch's compaction-summary fix adds ~0.1 KB gzip to the demo's
+// modules (`evidenceIndex`, `composeRequest`, each minified alone), so the
+// branch reads ~450.8 KB locally; local builds read ~1.3 KB under CI, so CI
+// should land near 452 KB. Ceiling ~2% over that.
+const DEMO_ASYNC_GZIP_LIMIT = 460_000;
 
 function formatBytes(bytes) {
   if (bytes < 1_000) return `${bytes} B`;

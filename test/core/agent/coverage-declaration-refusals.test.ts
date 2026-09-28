@@ -268,9 +268,10 @@ describe('unit: the other keys each helper reads are held to the same rule', () 
 
   it('a key that is not a casing slip gets no guess — only the fields that exist', () => {
     const message = refusalOf(() => coverage(1, fromJson('{"checked":["a"],"skipped":["b"]}')));
+    // `period` joined the fields `coverage()` reads in honesty step 7b.
     expect(message).toBe(
       `${REFUSED_PREFIX}'skipped' is not a field this vocabulary has. ` +
-        'The fields are: checked, notChecked, cannotCover.',
+        'The fields are: checked, notChecked, cannotCover, period.',
     );
   });
 

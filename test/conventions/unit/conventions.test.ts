@@ -16,7 +16,7 @@ import {
 } from '../../../src/conventions.js';
 
 describe('SUBFLOW_IDS — single source of truth', () => {
-  it('has exactly the 13 known subflow IDs', () => {
+  it('has exactly the 14 known subflow IDs', () => {
     const expected = [
       'sf-injection-engine',
       'sf-llm-call', // LLMCall inner subflow wrapping the invocation
@@ -31,6 +31,7 @@ describe('SUBFLOW_IDS — single source of truth', () => {
       'sf-cache-decision',
       'sf-thinking', // v2.14 — normalize-thinking mount (agent-internal)
       'sf-inputs', // the inputs layer (honesty layer 2) — mounted only when armed
+      'sf-results', // the results layer (honesty layer 3) — the loop head, only when armed
     ];
     const actual = Object.values(SUBFLOW_IDS).sort();
     expect(actual).toEqual(expected.sort());
@@ -50,7 +51,7 @@ describe('SUBFLOW_IDS — single source of truth', () => {
 });
 
 describe('STAGE_IDS — single source of truth', () => {
-  it('has the 26 known stage IDs', () => {
+  it('has the 31 known stage IDs', () => {
     const actual = Object.values(STAGE_IDS).sort();
     expect(actual).toEqual(
       [
@@ -101,6 +102,14 @@ describe('STAGE_IDS — single source of truth', () => {
         'verify-arguments',
         'record-arguments',
         'resolve-arguments',
+        // The results layer's four stages, inside `sf-results` (honesty layer 3):
+        'declare-results',
+        'verify-results',
+        'record-results',
+        'resolve-results',
+        // The answer layer's stage, heading the final branch (honesty layer 4)
+        // — mounted only with `.answerLayer()`:
+        'assess-answer',
       ].sort(),
     );
   });

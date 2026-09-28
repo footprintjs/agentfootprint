@@ -13,7 +13,7 @@
  * that forgot them — by tool name and field name. (`semantic()` is the
  * deprecated name for the same envelope, declared in snake_case.)
  *
- * Four things this example shows, in order:
+ * Five things this example shows, in order:
  *
  *   1. Two views of one envelope — the MODEL reads a compact rendering-free
  *      projection (data + grain + provenance + `not_covered`); the RECORD
@@ -28,6 +28,8 @@
  *      ground. What the model reads for each is captured by `modelViews()`.
  *   4. The gate — `checkSemantics` passes the honest tool, then fails a
  *      deliberately broken triage tool BY NAME, naming the missing field.
+ *   5. An empty list is not "nothing matched" — `describedResult({ facts: [] })`
+ *      is refused, and the refusal names the branch to write: `absent()`.
  *
  * Every value in a declaration comes from the data: `measuredAt` is the
  * export's own timestamp, never a date typed into the tool.
@@ -269,7 +271,27 @@ export async function run(input: string, provider?: LLMProvider): Promise<string
     'the honest tool has zero findings',
   );
   console.log('   In CI this is one line beside check:tools:');
-  console.log('   "check:semantics": "agentfootprint-check-semantics semantics-catalog.json"');
+  console.log('   "check:semantics": "agentfootprint-check-semantics semantics-catalog.json"\n');
+
+  // ── 5. An empty list names the door for "nothing matched" ─────────────
+  // A data list is never empty — "nothing matched" has ONE helper — so a tool
+  // without an empty branch meets this on its first empty read, where the
+  // model reads the refusal in place of the data. It says which branch to write.
+  console.log('5. An empty list is refused — and the refusal names the branch to write:\n');
+  let refusal = '';
+  try {
+    describedResult({
+      facts: [],
+      provenance: { measuredAt: backupExport.exportedAt, source: backupExport.source },
+    });
+  } catch (err) {
+    refusal = (err as Error).message;
+  }
+  console.log(`   ${refusal}`);
+  check(
+    refusal.startsWith('refused: `facts` is empty — if nothing matched, return absent({ what, checked }) instead.'),
+    'the empty-data refusal to name absent()',
+  );
 
   return answer.split('\n')[0] ?? answer;
 }

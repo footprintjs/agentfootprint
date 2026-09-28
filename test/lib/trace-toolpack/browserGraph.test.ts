@@ -154,6 +154,16 @@ describe.skipIf(!built)('the default browser graph of the root entry', () => {
     expect(graph.dynamicInputs.has('dist/esm/core/agent/arguments/resolve.js')).toBe(true);
   });
 
+  it('LAW: the results layer’s stage bodies are off the root sync closure — the mount loads them on first use', async () => {
+    // Only an agent with a `ToolPeriod` tool (or `.resultsLayer()`) mounts
+    // `sf-results`; its stage bodies load through `import()` from the mount.
+    // What the mount's synchronous input mapping needs (`batchToJudge`) lives
+    // in the mount itself, so it pulls nothing of the layer onto the graph.
+    const graph = await splitGraph(resolve(DIST, 'index.js'));
+    expect(graph.syncInputs.has('dist/esm/core/agent/results/subflow.js')).toBe(false);
+    expect(graph.dynamicInputs.has('dist/esm/core/agent/results/subflow.js')).toBe(true);
+  });
+
   it('LAW: the batch ask is off the root sync closure — ToolCalls loads it when an ask is raised', async () => {
     // Only a batch whose layer named an `ask` argument reaches it
     // (`stages/toolCalls.ts` → `import('./argumentAsk.js')`).
@@ -195,6 +205,24 @@ describe.skipIf(!built)('the default browser graph of the root entry', () => {
       'dist/esm/core/agent/arguments/checks.js',
       'dist/esm/core/agent/evidence/resultCarries.js',
       'dist/esm/core/agent/honesty/sourceCorpus.js',
+    ]) {
+      expect(graph.syncInputs.has(lazy), lazy).toBe(false);
+      expect(graph.dynamicInputs.has(lazy), lazy).toBe(true);
+    }
+  });
+
+  it('LAW: the answer layer’s run-time half is off the root sync closure — the mount loads it on the first armed answer', async () => {
+    // Only an agent with `.answerLayer()` starts its final branch with the
+    // layer's stage; its body, the fold it runs and the line's composer are
+    // reached through `import()` from the mount (`honesty/mounts.ts` ·
+    // `startFinalBranch`). What stays static is what a synchronous door needs
+    // first: the witness rows' shape, which the checkpoint door checks.
+    const graph = await splitGraph(resolve(DIST, 'index.js'));
+    expect(graph.syncInputs.has('dist/esm/core/agent/assessment/witness.js')).toBe(true);
+    for (const lazy of [
+      'dist/esm/core/agent/assessment/stage.js',
+      'dist/esm/core/agent/assessment/compose.js',
+      'dist/esm/core/agent/assessment/assess.js',
     ]) {
       expect(graph.syncInputs.has(lazy), lazy).toBe(false);
       expect(graph.dynamicInputs.has(lazy), lazy).toBe(true);

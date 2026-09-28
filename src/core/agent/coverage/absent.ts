@@ -61,8 +61,10 @@
  * reads by it, so a mint and a read cannot disagree.
  */
 
+import { mintProvenance } from '../../../lib/semantics/described.js';
 import { warnIfInvalidToolName } from '../../tools.js';
 import { normalizeCoverageList } from './items.js';
+import { mintPeriod } from './period.js';
 import { refusal, refuseUnknownKeys } from './refusal.js';
 import type { AbsenceDeclaration, Coverage, ToolAbsence, TryInsteadTool } from './types.js';
 
@@ -83,6 +85,22 @@ export const ABSENCE_NOTE =
   'arguments returns this same result. `checked` is the ground this answer covers; anything ' +
   'under `not_checked` or `cannot_cover` is ground it does NOT cover, and reaching that ' +
   'needs a different question, not a retry.';
+
+/**
+ * The note the MODEL is served in place of {@link ABSENCE_NOTE} when the
+ * absence's own period is `partly-held` or `not-held` (honesty step 7b, bench
+ * round 1) — `coverage/read.ts` · `strip` swaps it in and appends the period's
+ * one clause. It keeps what stays true (the call ran, a retry returns the same
+ * result) and drops the two completeness claims that do not: "nothing was
+ * substituted for what was asked" and `checked` as the whole ground. Static,
+ * never interpolated, never minted — the tool's own output keeps
+ * {@link ABSENCE_NOTE}.
+ */
+export const ABSENCE_NOTE_HELD_ONLY =
+  'The search ran and matched nothing — the call did not fail, and calling this tool again ' +
+  'with the same arguments returns this same result. `checked` is the ground this answer ' +
+  'covers inside `period.held` only; anything under `not_checked` or `cannot_cover` is ground ' +
+  'it does NOT cover, and reaching that needs a different question, not a retry.';
 
 /**
  * The typed tool's keys, tied to {@link TryInsteadTool} in BOTH directions: a
@@ -109,6 +127,8 @@ const ABSENCE_DECLARATION_KEYS: readonly string[] = Object.keys({
   cannotCover: true,
   tryInstead: true,
   tryInsteadTool: true,
+  provenance: true,
+  period: true,
 } satisfies Record<keyof AbsenceDeclaration, true>);
 
 /**
@@ -243,6 +263,12 @@ function readToolSuggestion(raw: unknown): Reading<TryInsteadTool> {
  * starts `refused: `: inside `execute` it becomes the call's error result,
  * which the model reads.
  *
+ * Since honesty step 7b an absence also says WHERE it looked and WHEN —
+ * `provenance: { measuredAt, source }`, the shape and rules `describedResult()`
+ * uses — and what time its read covered — `period: { queried, held, readAt? }`,
+ * ISO 8601 instants with a zone (`held` may be `'unknown'`). "Searched the 02:00
+ * export — nothing" becomes data; the results layer judges the period.
+ *
  * @example a port-lookup tool that found no matching FLOGI
  *   defineTool({
  *     name: 'flogi_for_port',
@@ -271,7 +297,7 @@ export function absent(decl: AbsenceDeclaration): ToolAbsence {
   if (typeof decl !== 'object' || decl === null) {
     throw refusal(
       `${fn}() takes a declaration — { what, checked, notChecked?, cannotCover?, tryInstead?, ` +
-        `tryInsteadTool? }.`,
+        `tryInsteadTool?, provenance?, period? }.`,
     );
   }
   refuseUnknownKeys(decl, ABSENCE_DECLARATION_KEYS);
@@ -304,6 +330,13 @@ export function absent(decl: AbsenceDeclaration): ToolAbsence {
   // The name's charset is the tool registry's question: the owner warns in
   // dev mode and never throws — the verdict a `defineTool` of it would get.
   if (tryInsteadTool !== undefined) warnIfInvalidToolName(tryInsteadTool.tool);
+  // Honesty step 7b — the source and time of the search, by the ONE provenance
+  // rule `describedResult()` mints with (`lib/semantics/described.ts` ·
+  // `mintProvenance`), and the period its read covered, by the ONE period rule
+  // (`period.ts` · `mintPeriod`). Each refuses at this line, in camelCase.
+  // `null` reads as omitted for either — a JSON producer's missing value.
+  const provenance = decl.provenance == null ? undefined : mintProvenance(decl.provenance);
+  const period = mintPeriod(decl.period);
 
   return {
     af_absent: true,
@@ -312,6 +345,8 @@ export function absent(decl: AbsenceDeclaration): ToolAbsence {
     checked,
     ...(notChecked.length > 0 && { not_checked: notChecked }),
     ...(cannotCover.length > 0 && { cannot_cover: cannotCover }),
+    ...(provenance !== undefined && { provenance }),
+    ...(period !== undefined && { period }),
     retry_returns_the_same: true,
     ...(tryInstead !== undefined && { try_instead: tryInstead }),
     ...(tryInsteadTool !== undefined && { try_instead_tool: tryInsteadTool }),

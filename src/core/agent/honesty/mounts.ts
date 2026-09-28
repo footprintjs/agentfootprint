@@ -44,22 +44,46 @@
  * `_findings` (`sourceCorpus.ts` · `declaredSourcesOf`, over
  * `findings/reserved.ts` · `readDeclaration`), and the corpora
  * (`sourceCorpus.ts` · `sourceCorpusOf`).
+ *
+ * ## The answer layer — the head of the final branch
+ *
+ * A footprintjs decider branch is one node with no continuation, so the answer
+ * layer cannot sit BETWEEN Route and Final; it heads the final branch instead
+ * (adopted Q3). The final branch is a subflow, and footprintjs starts every
+ * chart with a function stage, so the layer is that first stage:
+ * `assess-answer`, then PrepareFinal (`startFinalBranch`). It reads the
+ * committed keys the fold reads — only those the agent's arms can write
+ * (`answerFoldReads`, decided at build) — and hands PrepareFinal the standing
+ * as data inside the branch. It files no rows of its own: the witness rows it
+ * folds are filed by the Route decider (`assessment/witness.ts`), and the
+ * branch mount's output mapping receives the branch's RESULT (the answer
+ * string every composition that mounts an agent reads), never its scope — so
+ * the mapping stays byte-identical when the layer is armed.
  */
 
 import { ArrayMergeMode } from 'footprintjs/advanced';
 import { flowChart } from 'footprintjs';
-import type { FlowChart, FlowChartBuilder, TypedScope } from 'footprintjs';
+import type { FlowChart, FlowChartBuilder, StructureRecorder, TypedScope } from 'footprintjs';
 
 import type { ExternalGround } from '../../../integrity/unsupported-argument/check.js';
 import { STAGE_IDS, SUBFLOW_IDS, milestoneTagsFor } from '../../../conventions.js';
 import type { SourceCorpus } from '../arguments/checks.js';
+import { isRefused, rulesOf } from '../arguments/declare.js';
 import { keptThisTurn } from '../arguments/kept.js';
 import type { ArgumentRow } from '../arguments/rows.js';
 import type { ArgumentResolution, BatchCall, ToolOf } from '../arguments/resolve.js';
 import type { InputsLayerDeps, InputsLayerState, SourceInputs } from '../arguments/subflow.js';
+import { copyPeriod, type DeclaredPeriod, type PeriodRow } from '../coverage/period.js';
 import { appendRows, emitRow, type FindingsScope } from '../findings/ledger.js';
 import type { FindingsRow } from '../findings/types.js';
+import type {
+  RanCall,
+  CallPeriod,
+  ResultsLayerDeps,
+  ResultsLayerState,
+} from '../results/subflow.js';
 import { willDispatch } from '../stages/route.js';
+import type { AgentState } from '../types.js';
 
 /** What an armed agent hands the inputs layer's mount — closures, never scope. */
 export interface InputsMountDeps {
@@ -287,4 +311,311 @@ export function mountInputsLayer<B extends FlowChartBuilder>(
       arrayMerge: ArrayMergeMode.Replace,
     })
     .tag(...milestoneTagsFor(SUBFLOW_IDS.INPUTS));
+}
+
+// ─── The results layer — `sf-results`, at the loop head (honesty layer 3) ──
+
+/** What an armed agent hands the results layer's mount — closures, never scope. */
+export interface ResultsMountDeps {
+  /** The implementation that answered a name — the shared dispatch resolver's. */
+  readonly toolOf: ToolOf;
+}
+
+type ResultsStageModule = typeof import('../results/subflow.js');
+
+let resultsModule: Promise<ResultsStageModule> | undefined;
+
+/** The results layer's stage bodies, loaded once per process on first use. */
+function loadResultsStages(): Promise<ResultsStageModule> {
+  resultsModule ??= import('../results/subflow.js');
+  return resultsModule;
+}
+
+/** The ledger's emit half, one `findings.period` event per row, from inside the subflow. */
+function emitPeriodRows(scope: TypedScope<ResultsLayerState>, rows: readonly PeriodRow[]): void {
+  for (const row of rows) emitRow(scope as unknown as FindingsScope, row);
+}
+
+/**
+ * The argument a tool's `ToolPeriod` names — read off the implementation that
+ * answered the name, by the inputs layer's own reader (`arguments/declare.ts` ·
+ * `rulesOf`): a `ToolPeriod` is that layer's declaration, and this layer only
+ * reads it. A tool whose rules cannot be read declares nothing here (its calls
+ * were refused, never run).
+ */
+function periodArgumentOf(toolOf: ToolOf): (toolName: string) => string | undefined {
+  return (toolName) => {
+    const rules = rulesOf(toolOf(toolName));
+    return rules === undefined || isRefused(rules) ? undefined : rules.period?.argument;
+  };
+}
+
+/**
+ * The `sf-results` subflow: Declare → Verify → Record → Resolve, four thin
+ * stages over the pure steps of `results/subflow.ts`.
+ */
+export function buildResultsSubflow(deps: ResultsMountDeps): FlowChart {
+  const layer: ResultsLayerDeps = {
+    periodArgumentOf: periodArgumentOf(deps.toolOf),
+    emitRows: emitPeriodRows,
+  };
+  type Stage = (scope: TypedScope<ResultsLayerState>) => Promise<void>;
+  const declare: Stage = async (scope) =>
+    (await loadResultsStages()).declareResultsStage(scope, layer);
+  const verify: Stage = async (scope) => (await loadResultsStages()).verifyResultsStage(scope);
+  const record: Stage = async (scope) =>
+    (await loadResultsStages()).recordResultsStage(scope, layer);
+  const resolve: Stage = async () => (await loadResultsStages()).resolveResultsStage();
+  return flowChart<ResultsLayerState>('DeclareResults', declare, STAGE_IDS.DECLARE_RESULTS, {
+    description:
+      'Which calls of the batch just run declared a period, or come from a tool that declares one',
+  })
+    .addFunction(
+      'VerifyResults',
+      verify as never,
+      STAGE_IDS.VERIFY_RESULTS,
+      'The verdict on each period: covered, partly held, not held, unknown — or undeclared',
+    )
+    .addFunction(
+      'RecordResults',
+      record as never,
+      STAGE_IDS.RECORD_RESULTS,
+      'One period row per judged call, on the one ledger',
+    )
+    .addFunction(
+      'ResolveResults',
+      resolve as never,
+      STAGE_IDS.RESOLVE_RESULTS,
+      'Flag — a result that already ran is never asked about, filled or refused',
+    )
+    .build();
+}
+
+const isRecord = (value: unknown): value is Record<string, unknown> =>
+  typeof value === 'object' && value !== null && !Array.isArray(value);
+
+/**
+ * WHICH BATCH the loop head hands the results layer on this visit — the
+ * iteration that dispatched it, or `undefined` when there is none to judge.
+ *
+ * `stamp` is the iteration ToolCalls wrote beside the batch it dispatched
+ * (`AgentState.toolResultsIteration`, under the arm); `iteration` is the loop
+ * head's. ToolCalls advances the iteration by exactly one and loops straight
+ * here; every other way back — the schema re-ask, the step nudge, the evidence
+ * recheck, the wrap-up — runs no tool, leaves the batch in place and advances
+ * the iteration again. So the batch is new on this visit exactly when
+ * `iteration === stamp + 1`: each batch judged ONCE per run.
+ *
+ * Never by call id. A provider's synthetic counter restarts with each provider
+ * instance (`<prefix>-call-${++toolCallSeq}`), so a resumed leg repeats the ids
+ * of the leg that failed — whose rows the conversation checkpoint carries — and
+ * nothing stops a provider reusing an id across batches of one run. A stamp is
+ * per run: no conversation checkpoint carries it, so a resumed leg starts with
+ * none. Were the invariant above ever broken, a batch would be judged twice —
+ * an over-report, never a hidden verdict.
+ */
+export function batchToJudge(iteration: number, stamp: unknown): number | undefined {
+  return typeof stamp === 'number' && iteration === stamp + 1 ? stamp : undefined;
+}
+
+/**
+ * What the loop head hands the results layer — the batch's identities, the
+ * periods ITS results declared (the coverage rows of the batch's iteration, so
+ * a call id an earlier batch also used cannot lend it a period), and the
+ * stamps. Only on the first visit after ToolCalls ran the batch
+ * (`batchToJudge`); every other visit is handed an empty batch and reads
+ * nothing else, so the layer never reads a key the run has not written.
+ */
+function resultsLayerInput(parent: Record<string, unknown>): ResultsLayerState {
+  const batchIteration = batchToJudge(parent.iteration as number, parent.toolResultsIteration);
+  if (batchIteration === undefined) return { calls: [] };
+  const batch = (parent.toolResults as readonly unknown[] | undefined) ?? [];
+  const calls: RanCall[] = [];
+  for (const entry of batch) {
+    if (!isRecord(entry)) continue;
+    if (typeof entry.toolCallId !== 'string' || typeof entry.toolName !== 'string') continue;
+    calls.push({ toolCallId: entry.toolCallId, toolName: entry.toolName });
+  }
+  if (calls.length === 0) return { calls };
+  const ids = new Set(calls.map((c) => c.toolCallId));
+  const periods: CallPeriod[] = [];
+  for (const row of (parent.coverageDeclared as readonly unknown[] | undefined) ?? []) {
+    if (!isRecord(row) || row.iteration !== batchIteration || row.period === undefined) continue;
+    if (typeof row.toolCallId !== 'string' || !ids.has(row.toolCallId)) continue;
+    periods.push({ toolCallId: row.toolCallId, period: copyPeriod(row.period as DeclaredPeriod) });
+  }
+  return {
+    calls,
+    batchIteration,
+    turnNumber: parent.turnNumber as number,
+    ...(periods.length > 0 && { periods }),
+  };
+}
+
+/**
+ * Mount the results layer at the LOOP HEAD — or return the builder untouched
+ * when the layer is not armed (`deps === undefined`), so an agent without it
+ * builds the chart it always built. Both chart builders call this at the same
+ * place — immediately before the window strategy's `Compact` stage (or the
+ * loop target that stands there) — and make the mount the loop target
+ * (`RESULTS_LOOP_TARGET`), the `Compact` precedent: the layer reads the batch
+ * just run before any window strategy folds it away.
+ *
+ * Returned (the output mapping, `arrayMerge: Replace` — the loop-crossed mount
+ * law): the rows, merged into the ledger in ONE write by the ledger's pure
+ * half. Nothing to return → nothing is written.
+ */
+export function mountResultsLayer<B extends FlowChartBuilder>(
+  builder: B,
+  deps: ResultsMountDeps | undefined,
+): B {
+  if (deps === undefined) return builder;
+  return builder
+    .addSubFlowChartNext(SUBFLOW_IDS.RESULTS, buildResultsSubflow(deps), 'Results', {
+      inputMapper: resultsLayerInput,
+      outputMapper: (sf: Record<string, unknown>, parent: Record<string, unknown>) => {
+        const rows = (sf.periodRows as readonly PeriodRow[] | undefined) ?? [];
+        return rows.length === 0
+          ? {}
+          : {
+              // ONE committed copy per layer run — the rows this batch filed,
+              // merged by the ledger's pure half; the events already fired inside.
+              findingsLedger: appendRows(
+                [...((parent.findingsLedger as readonly FindingsRow[] | undefined) ?? [])],
+                rows,
+              ).ledger,
+            };
+      },
+      arrayMerge: ArrayMergeMode.Replace,
+    })
+    .tag(...milestoneTagsFor(SUBFLOW_IDS.RESULTS));
+}
+
+/** The loop target the results layer's mount becomes when armed — `tool-calls` and every re-ask loop back to it. */
+export const RESULTS_LOOP_TARGET: string = SUBFLOW_IDS.RESULTS;
+
+// ─── The answer layer (honesty layer 4) ─────────────────────────────────
+
+/** A committed key the one fold (`assessment/assess.ts` · `assessAnswer`) reads. */
+export type AnswerFoldKey =
+  | 'history'
+  | 'turnNumber'
+  | 'pausedToolCallId'
+  | 'findingsLedger'
+  | 'coverageDeclared'
+  | 'stoppedEarly'
+  | 'unsupportedValues'
+  | 'answerValidation'
+  | 'argumentAsk'
+  | 'middlewareDecisions';
+
+/** What an agent with the answer layer armed hands the final branch — build-time facts, never scope. */
+export interface AnswerMountDeps {
+  /** The committed keys the fold reads — only those this agent's arms can write (`answerFoldReads`). */
+  readonly reads: readonly AnswerFoldKey[];
+  /** `.answerLayer({ standingLine: true })` — compose one line for a prose answer. */
+  readonly standingLine?: true;
+}
+
+/**
+ * THE READ LIST — which committed keys the answer layer's fold reads, from
+ * the agent's arms: a key no arm of this agent can write is never read (a
+ * tracked read of a key a run never writes is a phantom context source —
+ * honesty law 9). Over-approximates on purpose: a key an arm CAN write is
+ * read whether or not this run wrote it, so the in-run fold never misses a row
+ * the read-after fold sees (the equality law).
+ *
+ * - always: `history`, `turnNumber`, `pausedToolCallId` (seed writes them),
+ *   `findingsLedger` (the witness rows, and any rows a continued conversation
+ *   restores — the restore is wired while a layer is armed) and
+ *   `stoppedEarly` — the Route decider writes it on EVERY agent
+ *   (`stages/route.ts` · `recordEarlyStop`): a limit cuts a turn short
+ *   whenever the model asked for calls, whether or not this agent registered
+ *   a tool that could answer them;
+ * - a tool surface: `coverageDeclared` (only a tool that ran declares
+ *   coverage);
+ * - the evidence gate: `unsupportedValues`;
+ * - `.answerValidation()`: `answerValidation`;
+ * - the inputs layer: `argumentAsk`, and `middlewareDecisions` when a
+ *   before-tool chain can rewrite a filled value.
+ *
+ * Every key's writers were checked against this list: a writer that no arm
+ * gates puts its key in the always group — decide by the writer, never by the
+ * usual path to it.
+ *
+ * @example
+ * ```ts
+ * answerFoldReads({ tools: true, evidenceGate: false, answerValidation: false, inputs: false, toolMiddleware: false });
+ * // ['history', 'turnNumber', 'pausedToolCallId', 'findingsLedger', 'stoppedEarly', 'coverageDeclared']
+ * ```
+ */
+export function answerFoldReads(arms: {
+  readonly tools: boolean;
+  readonly evidenceGate: boolean;
+  readonly answerValidation: boolean;
+  readonly inputs: boolean;
+  readonly toolMiddleware: boolean;
+}): readonly AnswerFoldKey[] {
+  return [
+    'history',
+    'turnNumber',
+    'pausedToolCallId',
+    'findingsLedger',
+    'stoppedEarly',
+    ...(arms.tools ? (['coverageDeclared'] as const) : []),
+    ...(arms.evidenceGate ? (['unsupportedValues'] as const) : []),
+    ...(arms.answerValidation ? (['answerValidation'] as const) : []),
+    ...(arms.inputs ? (['argumentAsk'] as const) : []),
+    ...(arms.inputs && arms.toolMiddleware ? (['middlewareDecisions'] as const) : []),
+  ];
+}
+
+type AnswerStageModule = typeof import('../assessment/stage.js');
+
+let answerStageModule: Promise<AnswerStageModule> | undefined;
+
+/** The answer layer's stage body, loaded once per process on the first armed answer. */
+function loadAnswerStage(): Promise<AnswerStageModule> {
+  answerStageModule ??= import('../assessment/stage.js');
+  return answerStageModule;
+}
+
+/** PrepareFinal's description — one string, whichever stage heads the branch. */
+const PREPARE_FINAL_DESCRIPTION = 'Capture turn payload (finalContent + newMessages)';
+
+/**
+ * Start the final branch: the answer layer's stage first when it is armed,
+ * then PrepareFinal — or PrepareFinal alone when it is not, built exactly as
+ * both chart builders always built it (same name, stage id, options and tags),
+ * so an agent without the layer builds a byte-identical branch. Both builders
+ * call this, so the twins cannot drift.
+ */
+export function startFinalBranch(
+  answer: AnswerMountDeps | undefined,
+  prepareFinal: (scope: TypedScope<AgentState>) => void | Promise<void>,
+  structureRecorders: readonly StructureRecorder[] | undefined,
+): FlowChartBuilder<any, TypedScope<AgentState>> {
+  const recorders = structureRecorders !== undefined && {
+    structureRecorders: [...structureRecorders],
+  };
+  if (answer === undefined) {
+    return flowChart<AgentState>('PrepareFinal', prepareFinal, STAGE_IDS.PREPARE_FINAL, {
+      ...recorders,
+      description: PREPARE_FINAL_DESCRIPTION,
+      tags: milestoneTagsFor(STAGE_IDS.PREPARE_FINAL),
+    });
+  }
+  const assess = async (scope: TypedScope<AgentState>): Promise<void> =>
+    (await loadAnswerStage()).assessAnswerStage(scope, answer);
+  return flowChart<AgentState>('AssessAnswer', assess, STAGE_IDS.ASSESS_ANSWER, {
+    ...recorders,
+    description: "The answer's standing, folded from the run's committed record",
+  })
+    .addFunction(
+      'PrepareFinal',
+      prepareFinal as never,
+      STAGE_IDS.PREPARE_FINAL,
+      PREPARE_FINAL_DESCRIPTION,
+    )
+    .tag(...milestoneTagsFor(STAGE_IDS.PREPARE_FINAL));
 }

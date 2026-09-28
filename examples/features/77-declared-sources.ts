@@ -1,5 +1,5 @@
 /**
- * 76 — where each value came from, CHECKED: `.inputsLayer({ argumentSources: true })`.
+ * 77 — where each value came from, CHECKED: `.inputsLayer({ argumentSources: true })`.
  *
  * The person asks "any errors on checkout over the last week?". The log search's
  * period is the person's to give (`askOrAssume: { window: { ask, choices } }`), and
@@ -28,7 +28,7 @@
  * on the ruled tool only; `.findings({ argumentSources: true })` arms the same
  * checks beside the findings ledger, whose own `_findings` rides every tool.
  *
- * Run:  npm run example examples/features/76-declared-sources.ts
+ * Run:  npm run example examples/features/77-declared-sources.ts
  */
 
 import { Agent, defineTool, isInputPause, type ArgumentRow } from '../../src/index.js';
@@ -36,7 +36,7 @@ import { mock } from '../../src/doors/providers.js';
 import { isCliEntry, printResult, type ExampleMeta } from '../helpers/cli.js';
 
 export const meta: ExampleMeta = {
-  id: 'features/76-declared-sources',
+  id: 'features/77-declared-sources',
   title: 'Where each value came from — the model declares it, the library checks it',
   group: 'features',
   description:
@@ -75,7 +75,6 @@ function searchLogsTool(ran: Record<string, unknown>[]) {
         choices: [{ value: '7d', said: ['last week', 'past week'] }, '1h', '24h'],
       },
     },
-    period: { argument: 'window', spelling: 'lookback' },
     execute: async (args) => {
       ran.push({ ...args });
       return { service: args.service, window: args.window, errors: 0 };

@@ -216,9 +216,11 @@ describe('INTEGRATION — the full-b arm on the scripted mock', () => {
         provider: 'mock',
         model: 'mock',
       });
+      // (+ `results: true` since the merge with honesty step 7b: the bench's tools declare a ToolPeriod.)
       expect(raw.recording.snapshot.sharedState.honestyLayers).toEqual({
         inputs: true,
         argumentSources: true,
+        results: true,
       });
       const tools = served[0];
       const reserved = (name: string) =>

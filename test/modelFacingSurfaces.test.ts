@@ -47,12 +47,16 @@ import { existsSync } from 'node:fs';
 import { resolve } from 'node:path';
 
 import {
+  absent,
   Agent,
   codeRunnerTool,
+  coverage,
   defineTool,
+  describedResult,
   inMemoryArtifacts,
   isInputPause,
   requestInput,
+  semantic,
   type ArtifactScope,
   type CodeRunner,
 } from '../src/index.js';
@@ -68,6 +72,8 @@ import {
   notDispatchedResult,
   unknownToolResult,
 } from '../src/core/agent/stages/toolCalls.js';
+import { servedToModel } from '../src/core/agent/coverage/read.js';
+import { semanticsForModel } from '../src/lib/semantics/envelope.js';
 import { WRAP_UP_INSTRUCTION } from '../src/core/agent/stages/wrapUp.js';
 import {
   FINDINGS_ANSWER_ASK,
@@ -104,6 +110,7 @@ import {
   type ReadSkillOffer,
 } from '../src/lib/injection-engine/skillToolDescriptors.js';
 import { presentArtifact } from '../src/artifacts/present.js';
+import { standingLineOf } from '../src/core/agent/assessment/compose.js';
 import { resolveToolWants } from '../src/artifacts/wants.js';
 import { parkCard } from '../src/maps/engagement/parkCard.js';
 import type {
@@ -992,6 +999,36 @@ function ontologyPieces(): string[] {
   return [ontologyPiece(map).rawContent];
 }
 
+/**
+ * The empty-data refusal (honesty step 7a′), composed by the REAL mints — both
+ * declaration doors, every data list — exactly as a tool's `execute` throws it.
+ */
+function emptyDataRefusals(): readonly string[] {
+  const refusalOf = (mint: () => unknown): string => {
+    try {
+      mint();
+    } catch (err) {
+      return (err as Error).message;
+    }
+    throw new Error('expected the empty data list to be refused');
+  };
+  const provenance = { measuredAt: '2026-09-26T02:00:00Z', source: 'nightly export' };
+  return [
+    refusalOf(() => describedResult({ facts: [], provenance })),
+    refusalOf(() =>
+      describedResult({
+        series: [],
+        grain: { interval: '1h', aggregation: 'avg', isCounter: false },
+        provenance,
+      }),
+    ),
+    refusalOf(() => describedResult({ edges: [] })),
+    refusalOf(() =>
+      semantic({ facts: [], provenance: { measured_at: '2026-09-26T02:00:00Z', source: 'x' } }),
+    ),
+  ];
+}
+
 // ─── The registry ────────────────────────────────────────────────────
 
 const PRODUCERS: readonly ModelFacingProducer[] = [
@@ -1592,6 +1629,159 @@ const PRODUCERS: readonly ModelFacingProducer[] = [
     ],
   },
   {
+    id: 'result helpers — the empty-data refusal names absent() (honesty step 7a′)',
+    module: 'src/lib/semantics/envelope.ts',
+    surface: TOOL_RESULT,
+    lifetimeBecause:
+      'the mint throws inside the tool’s `execute`, and the dispatch loop turns the throw into ' +
+      'that call’s error result — a `role: "tool"` message written into `history` and re-read on ' +
+      'every later call of the turn',
+    drivenBy: ['test/lib/semantics/empty-data-refusal.test.ts'],
+    reaches: [
+      /^refused: `facts` is empty — if nothing matched, return absent\(\{ what, checked \}\) instead\. \(field: facts\)$/m,
+      /^refused: `series` is empty — if nothing matched, return absent\(\{ what, checked \}\) instead\. \(field: series\)$/m,
+      /^refused: `edges` is empty — if nothing matched, return absent\(\{ what, checked \}\) instead\. \(field: edges\)$/m,
+    ],
+    compose: async () => emptyDataRefusals(),
+  },
+  {
+    id: 'result doors — the served period verdict word and its one clause (honesty step 7b, bench round 1)',
+    module: 'src/core/agent/coverage/period.ts',
+    surface: TOOL_RESULT,
+    lifetimeBecause:
+      'the dispatch door serves it inside the `role: "tool"` result of the call whose period it ' +
+      'judges (`coverage/read.ts` · `servedToModel`, `semanticsForModel`), so it is written into ' +
+      '`history` and re-read on every later call of the turn — anchored to "this result" and ' +
+      "to the result's own `period` keys, never to a time",
+    drivenBy: ['test/core/agent/results/layer.test.ts'],
+    reaches: [
+      /`period\.verdict` is `not-held`: the store holds none of the time this read asked about/,
+      /`period\.verdict` is `partly-held`: the store holds only part of the time this read asked about/,
+      /`period\.verdict` is `unknown`: the tool cannot say what time its store holds/,
+      /`checked` is the ground this answer covers inside `period\.held` only/,
+    ],
+    compose: async () => servedPeriodNotes(),
+  },
+  {
+    id: 'answer layer — the standing line appended to a prose answer (honesty layer 4)',
+    module: 'src/core/agent/assessment/compose.ts',
+    surface: INJECTED_TURN,
+    lifetimeBecause:
+      'appended after the answer under `.answerLayer({ standingLine: true })`, so it is part of ' +
+      'the assistant turn a continued conversation carries (`agent.checkpoint()` keeps the ' +
+      'answer) and every later call of that conversation re-reads it — it says what the ' +
+      'record held when this answer was given, never what is true of the world',
+    drivenBy: ['test/core/agent/assessment/answer-layer.test.ts'],
+    reaches: [
+      /^Not sure — window = "2h" was assumed by search_logs's rule, not given by you/m,
+      /its value is hidden by the tool's view/,
+      /a before-tool rule set a value a call ran with and did not say where it came from/,
+      /a value a call ran with was read into your words: the quoted words are on the record, the value is not in them/,
+      /a value a call ran with was taken from a result the model itself had set aside/,
+      /^Consistent with the run's record — 2 checks ran and none fired/m,
+      /^Consistent with the run's record — 1 check ran and did not fire: argument rules\./m,
+      /^Known — the app's answer checks passed this exact answer\.$/m,
+      /^Not assessed — no check applied to this answer\.$/m,
+      /a tool's data does not reach the time the question asked about/,
+      /^Consistent with the run's record — 1 check ran and did not fire: the time each result covered\./m,
+      /^Ask — the run stopped to ask a question before it could answer\.$/m,
+    ],
+    compose: async () => {
+      const base = { assessment: 'unknown' as const, checked: [] };
+      return [
+        standingLineOf(
+          { ...base, standing: 'not-sure', reasons: ['argument-assumed', 'empty-undeclared'] },
+          [
+            { toolName: 'search_logs', argument: 'window', value: '2h', hidden: false },
+            { toolName: 'vault', argument: 'token', value: 'REDACTED', hidden: true },
+          ],
+          true,
+        ),
+        standingLineOf(
+          {
+            ...base,
+            standing: 'not-sure',
+            reasons: [
+              'argument-unverified',
+              'argument-read',
+              'value-contingent',
+              'coverage-gap',
+              'declared-absent',
+              'sources-conflict',
+              'value-unsupported',
+              'value-survived-revision',
+              'stopped-early',
+              'steps-unfinished',
+              'answer-check-failed',
+              'check-unreachable',
+            ],
+          },
+          [],
+          false,
+        ),
+        standingLineOf(
+          {
+            assessment: 'unrefuted',
+            standing: 'consistent',
+            reasons: [],
+            checked: [
+              { layer: 3, check: 'result-shape', ran: 1, of: 1 },
+              { layer: 4, check: 'names-and-numbers', ran: 1, of: 1 },
+            ],
+          },
+          [],
+          false,
+        ),
+        standingLineOf(
+          {
+            assessment: 'unrefuted',
+            standing: 'consistent',
+            reasons: [],
+            checked: [{ layer: 2, check: 'argument-rules', ran: 1, of: 1 }],
+          },
+          [],
+          false,
+        ),
+        // The results layer's period reasons and check (honesty step 7b).
+        standingLineOf(
+          {
+            ...base,
+            standing: 'not-sure',
+            reasons: [
+              'period-not-held',
+              'period-partly-held',
+              'period-unknown',
+              'period-undeclared',
+            ],
+          },
+          [],
+          false,
+        ),
+        standingLineOf(
+          {
+            assessment: 'unrefuted',
+            standing: 'consistent',
+            reasons: [],
+            checked: [{ layer: 3, check: 'result-period', ran: 1, of: 1 }],
+          },
+          [],
+          false,
+        ),
+        standingLineOf({ ...base, assessment: 'known', standing: 'known', reasons: [] }, [], false),
+        standingLineOf(
+          { ...base, assessment: 'not-applicable', standing: 'not-assessed', reasons: [] },
+          [],
+          false,
+        ),
+        standingLineOf(
+          { ...base, standing: 'ask', reasons: ['asked', 'argument-asked'] },
+          [],
+          false,
+        ),
+      ];
+    },
+  },
+  {
     id: 'ontology — the always-on INSTRUCTION piece (9.106.0; v2 9.107.0; v3 9.108.0)',
     module: 'src/ontology/instruction.ts',
     surface: ALWAYS_ON_INSTRUCTION,
@@ -1664,6 +1854,28 @@ const PRODUCERS: readonly ModelFacingProducer[] = [
 ];
 
 // ─── The checks ──────────────────────────────────────────────────────
+
+/** The notes the dispatch door serves for a period the store did not hold all of —
+ *  composed by the shipped serve, one per verdict and per door. */
+function servedPeriodNotes(): string[] {
+  const queried = { from: '2026-09-26T09:00:00Z', to: '2026-09-26T10:00:00Z' };
+  const periods = [
+    { queried, held: { from: '2026-08-27T02:00:00Z', to: '2026-09-26T02:00:00Z' } },
+    { queried, held: { from: '2026-08-27T09:30:00Z', to: '2026-09-26T09:30:00Z' } },
+    { queried, held: 'unknown' as const },
+  ];
+  const provenance = { measuredAt: '2026-09-26T02:00:00Z', source: 'nightly export' };
+  return periods.flatMap((period) => [
+    String((servedToModel(absent({ what: 'x', checked: ['y'], period })) as { note: string }).note),
+    String(
+      (servedToModel(coverage(1, { checked: ['y'], period })) as { af_coverage: { note: string } })
+        .af_coverage.note,
+    ),
+    String(
+      semanticsForModel(describedResult({ facts: [{ entity: 'h' }], provenance, period })).note,
+    ),
+  ]);
+}
 
 describe('the model-facing inventory', () => {
   it('every registered producer composes real output, and the checker reads all of it', async () => {

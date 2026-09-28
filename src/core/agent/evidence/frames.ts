@@ -47,6 +47,12 @@ export { EVIDENCE_CHECK_FRAME_PREFIX } from '../../../lib/saidByPerson.js';
  * to the drop notice and the compaction frame would change which values the
  * evidence gate exempts, which is a decision about the gate and not about
  * authorship. Read `LIBRARY_AUTHORED_PREFIXES` if you want the whole list.
+ *
+ * The compaction frame is the one such decision taken: the exempt corpus
+ * (`evidenceIndex.ts` · `exemptFromRun`) reads a summary's carried lineage
+ * (`LLMMessage.foldedExempt`) instead of its model-written text. That rule
+ * lives beside the corpus, not here — this predicate also draws the turn
+ * boundary in `evidenceFromHistory`, which the fix did not move.
  */
 export function isLibraryAuthoredTurn(content: string): boolean {
   return (

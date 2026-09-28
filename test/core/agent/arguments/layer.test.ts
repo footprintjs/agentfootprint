@@ -183,10 +183,15 @@ describe('assume — a missing ruled argument is filled by the library', () => {
       const committed = history.find((msg) => msg.role === 'tool')!;
       expect(committed.toolChars).toBe('{"service":"checkout","errors":0}'.length);
 
-      // The standing names the assumption.
+      // The standing names the assumption. (Honesty step 7b: search_logs declares
+      // a ToolPeriod and its result declares no period, so the results layer
+      // files `undeclared` beside it — declared silence, recorded as silence.)
       const standing = (await agent.assessment())!;
       expect(standing.standing).toBe('not-sure');
-      expect(standing.reasons.map((r) => r.reason)).toEqual(['argument-assumed']);
+      expect(standing.reasons.map((r) => r.reason)).toEqual([
+        'argument-assumed',
+        'period-undeclared',
+      ]);
       expect(standing.checked.find((c) => c.check === 'argument-rules')).toMatchObject({
         layer: 2,
         ran: 1,
@@ -226,7 +231,11 @@ describe('assume — a missing ruled argument is filled by the library', () => {
     expect(argumentRows(agent)).toMatchObject([{ source: 'default', value: '2h', proposed: '2h' }]);
     const toolMessage = m.requests[1]!.messages.find((msg) => msg.role === 'tool')!;
     expect(toolMessage.content).toBe('{"service":"checkout","errors":0}');
-    expect((await agent.assessment())!.reasons.map((r) => r.reason)).toEqual(['argument-assumed']);
+    // (+ `period-undeclared`, step 7b: a ToolPeriod tool whose result declares no period.)
+    expect((await agent.assessment())!.reasons.map((r) => r.reason)).toEqual([
+      'argument-assumed',
+      'period-undeclared',
+    ]);
   });
 
   it('a model that sends another value files `model` — the standing says the record cannot trace it', async () => {
@@ -241,7 +250,11 @@ describe('assume — a missing ruled argument is filled by the library', () => {
     expect(argumentRows(agent)).toMatchObject([{ source: 'model', value: '24h' }]);
     expect(argumentRows(agent)[0]).not.toHaveProperty('proposed');
     const standing = (await agent.assessment())!;
-    expect(standing.reasons.map((r) => r.reason)).toEqual(['argument-unverified']);
+    // (+ `period-undeclared`, step 7b: a ToolPeriod tool whose result declares no period.)
+    expect(standing.reasons.map((r) => r.reason)).toEqual([
+      'argument-unverified',
+      'period-undeclared',
+    ]);
   });
 
   it('permission judges the COMPLETED arguments — the call that will really run', async () => {
@@ -297,8 +310,9 @@ describe('assume — across turns (the turn stamp and the widened restore)', () 
       .build();
     await first.run({ message: 'errors on a?' });
     const cp = first.checkpoint()!;
-    // An agent WITHOUT .findings() still carries its argument rows.
-    expect(cp.findingsLedger?.map((r) => r.kind)).toEqual(['argument']);
+    // An agent WITHOUT .findings() still carries its argument rows — and, since
+    // step 7b, the results layer's period row for the same call.
+    expect(cp.findingsLedger?.map((r) => r.kind)).toEqual(['argument', 'period']);
 
     const second = Agent.create({
       provider: scripted([answer('hello again')]).provider as never,
@@ -361,6 +375,8 @@ describe('assume — across turns (the turn stamp and the widened restore)', () 
     expect(rows.map((r) => [r.kind, r.turn])).toEqual([
       ['argument', 1],
       ['basis', 1],
+      // The results layer's verdict on the batch (step 7b), filed at the loop head.
+      ['period', 1],
     ]);
   });
 });
@@ -518,7 +534,11 @@ describe('assume — a before-tool middleware that rewrites a ruled argument', (
     }[];
     expect(rows.map((r) => r.changedKeys)).toEqual([['window']]);
     const standing = (await agent.assessment())!;
-    expect(standing.reasons.map((r) => r.reason)).toEqual(['argument-assumed']);
+    // (+ `period-undeclared`, step 7b: a ToolPeriod tool whose result declares no period.)
+    expect(standing.reasons.map((r) => r.reason)).toEqual([
+      'argument-assumed',
+      'period-undeclared',
+    ]);
     expect(standing.reasons[0]!.witness[0]).toMatchObject({ key: 'middlewareDecisions' });
   });
 
@@ -535,8 +555,12 @@ describe('assume — a before-tool middleware that rewrites a ruled argument', (
     const rows = agent.getSnapshot()!.sharedState.middlewareDecisions as { from?: unknown }[];
     expect(rows[0]!.from).toEqual({ window: 'person' });
     const standing = (await agent.assessment())!;
-    expect(standing.reasons.map((r) => r.reason)).toEqual([]);
-    expect(standing.standing).toBe('consistent');
+    // No ARGUMENT reason fires: the person's value superseded the model's row.
+    expect(standing.reasons.filter((r) => r.layer === 2)).toEqual([]);
+    // What remains is the results layer's (step 7b): search_logs declares a
+    // ToolPeriod and its result said nothing about the period its read covered.
+    expect(standing.reasons.map((r) => r.reason)).toEqual(['period-undeclared']);
+    expect(standing.standing).toBe('not-sure');
   });
 
   it('allow() refuses an origin outside the vocabulary', () => {
@@ -598,6 +622,10 @@ describe('assume — one ledger merge per layer run, never one per call', () => 
       .commitLog.filter((bundle) =>
         (bundle.trace as readonly { path: string }[]).some((t) => t.path === 'findingsLedger'),
       );
-    expect(writes).toHaveLength(1);
+    // ONE merge per layer run: the inputs layer's 200 argument rows, then — at
+    // the loop head, step 7b — the results layer's 200 period rows (the tool
+    // declares a ToolPeriod and no result declared a period).
+    expect(writes).toHaveLength(2);
+    expect((agent.findings() ?? []).filter((r) => r.kind === 'period')).toHaveLength(200);
   });
 });

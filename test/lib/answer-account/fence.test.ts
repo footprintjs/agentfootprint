@@ -116,8 +116,10 @@ describe('IMPORT-GRAPH FENCE', () => {
     }
     expect([...outside].sort()).toEqual([
       'bridge/eventMeta.ts', // eventBelongsToRun — the ONE owner of "which run is this event for"
+      'core/agent/arguments/serve.ts', // assumedLinesFor — the ONE reading of this turn's assumed values
       'core/agent/assessment/assess.ts', // assessAnswer — the ONE fold of the answer's standing
-      'core/agent/coverage/answer.ts', // COVERAGE_BLOCK_HEADING — the library-owned limits block
+      'core/agent/assessment/compose.ts', // standingLineOf + its inputs — the ONE composer of the standing line
+      'core/agent/coverage/answer.ts', // COVERAGE_BLOCK_HEADING / ASSUMED_BLOCK_HEADING — the appended section's headings
       'core/agent/coverage/emptiness.ts', // readEmptiness / rowsAtProblem — the ONE emptiness reader
       'core/agent/coverage/read.ts', // strip — the ONE owner of what the record-only strip serves
       'core/agent/evidence/limits.ts', // MAX_REPORTED_VALUES — the event's cap, a leaf

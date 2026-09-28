@@ -6,7 +6,7 @@ title: "~~Function: semantic()~~"
 
 > **semantic**(`decl`): [`ToolSemantics`](/docs/api/interfaces/ToolSemantics)
 
-Defined in: [src/lib/semantics/envelope.ts:938](https://github.com/footprintjs/agentfootprint/blob/main/src/lib/semantics/envelope.ts#L938)
+Defined in: [src/lib/semantics/envelope.ts:1025](https://github.com/footprintjs/agentfootprint/blob/main/src/lib/semantics/envelope.ts#L1025)
 
 Say "here is typed data, with the caveats that make it honest" in a shape
 the framework recognizes, the record keeps whole, and a build gate can

@@ -8,6 +8,54 @@ Nothing here is built unless a line says "shipped" or "drafted".**
 > text below is the page as reviewed on 2026-09-26, with its file names and links updated for this
 > folder. Step 7a (`describedResult()`, § 6) was delivered on its own track: it merged to main as
 > #22 (`0600ab53`) late on 2026-09-26, after this page was written.
+>
+> **Step 7a′ built, 2026-09-27** (branch `feat/results-period`, its first commit; not yet merged or
+> released): the empty-data refusal names `absent()` (§ 1.3) — `lib/semantics/envelope.ts` ·
+> `emptyDataList`, one core for both doors and the `check:semantics` gate; the refusal is a
+> registered model-facing sentence. Beyond the page, in the same mint: a data list that is not a
+> list at all is refused as one (it used to crash with a `TypeError` on an object) —
+> `envelope.ts` · `copyDataList`.
+>
+> **Step 7b built, 2026-09-27** (branch `feat/results-period`, its second commit; not yet merged or
+> released; the paid bench cells R1–R3 are the Bench agent's, after its registered rule):
+> `coverage/period.ts` (the one shape `DeclaredPeriod`, the one rule set `periodProblem` behind
+> `mintPeriod` / `readPeriod`, `periodVerdict`, `periodLine`, `PERIOD_WIRE`, the `PeriodRow` and its
+> checkpoint door); `period` on the three doors and `provenance` on `absent()` only
+> (`lib/semantics/described.ts` · `mintProvenance` over `lib/semantics/envelope.ts` ·
+> `provenanceIssues`, one rule set with `describedResult()`); the coverage channel carrying both;
+> `canonical-notes.json` · `wire.PERIOD_WIRE`; the results subflow (`core/agent/results/`, mounted by
+> `honesty/mounts.ts` · `mountResultsLayer` at the loop head as the loop target); the period
+> reasons and `result-period` in `assessment/`; the `Period:` line and `answerCoverage.periods`;
+> the join (a period reason's witnesses are the period row and the argument row). Decisions this
+> build took where the page was silent, each for the reviewer: (1) the arm — a registered tool's
+> `ToolPeriod` arms the mount, and `AgentBuilder.resultsLayer()` arms it for provider-served tools
+> and for periods declared only on results (the page's "a result declares `period`" could not arm
+> a static chart by itself); without the layer a declared period is recorded, never judged, and
+> dev-warned once per tool; (2) the four step-3/4 byte references declare a `ToolPeriod`, so they
+> are armed runs and were regenerated — the delta is exactly the new mount, one `undeclared` row
+> and the run constant (recorded in `test/core/tools/byte-identity.test.ts`); (3) `undeclared` is
+> filed for every call of a `ToolPeriod` tool in the batch, including one that never ran (an
+> over-report until step 8's outcome row); (4) a call that declared two periods (`coverage()`
+> around `absent()`) gets the LEAST held verdict (`coverage/period.ts` · `leastHeld`); (5) the
+> `Period:` line prints the instants as declared, with no verdict word (the standing owns the
+> verdict's sentence) and no version stamp (the "Assumed" block precedent); (6) a period on
+> `coverage()` alone is a declared boundary, and so is a described result's for the
+> `check:semantics` class rules; (7) the `result-period` check name, the `findings.period` event
+> carrying no argument name, and the stage ids `declare-results` … `resolve-results` (Resolve
+> writes nothing in 7b — flag is the only verb after a call ran). The lens follow-up — reading
+> `period` on the three envelopes, the `period` row and `findings.period` — is the lens repo's.
+>
+> **Step 7b review, round 1 (2026-09-28).** The build told a re-entry from a new batch by
+> "a period row of this turn already names this call id" — and a call id is not a call: a
+> provider's synthetic ids restart with each provider instance, so a leg resumed with
+> `resumeOnError` repeated the failed leg's id and its call was never judged (a not-held read
+> answered "known"). Now ToolCalls stamps the batch with the iteration that dispatched it
+> (`AgentState.toolResultsIteration`, under the arm) and the mount hands the batch to the layer
+> only on the loop-head visit one iteration past that stamp (`honesty/mounts.ts` ·
+> `batchToJudge`) — each batch once per run (a batch paused before anything stamped it is
+> stamped as it completes on resume); a batch's periods are read from the coverage rows of its
+> own iteration; and the fold reads EVERY `period` row of the turn, never the last per call, so
+> a later `covered` under a reused id cannot hide an earlier `not-held`.
 
 - Written against agentfootprint 9.118.1 (`8360b3b8` on npm; its fix `f83f277c` shipped the
   request's fix 0 and fix 1) and footprintjs 9.27.0.
@@ -90,6 +138,8 @@ the status stays `'absent'` (`coverage/read.ts` · `readCoverageResult`).
   (`semanticIssues`), so "nothing matched" has exactly one door: `absent()`.
 
 ### 1.3 One small fix the table asks for
+
+**Built as step 7a′ (2026-09-27, `feat/results-period`).** The page as written:
 
 The empty-data refusal reads "`facts` must be a non-empty array of rows — omit the field to say
 nothing" (`semanticIssues`). Two things are wrong with it:
@@ -451,6 +501,16 @@ carries — the grain clause only with `grain`, the provenance clause only with 
 - **No period sentence.** The period is served as the data the tool declared; `"held": "unknown"`
   reads as what it is. A derived verdict word on the wire ("held covers: part") is rejected for v1
   (§ 9) and returns only if cells R1/R2 show the model misreading instants.
+  **2026-09-28, bench round 1 — the contingency fired.** The registered run
+  (`bench/results/runs/haiku45-step7b/`) showed the model restating `queried` as the ground a result
+  covered and never comparing it with `held`. The SERVE door now adds the verdict word inside the
+  served period (`period.verdict`: `not-held` · `partly-held` · `unknown`; nothing for `covered`)
+  and that word's one static clause after the note (`coverage/period.ts` · `PERIOD_VERDICT_CLAUSES`);
+  an absence whose store did not hold all of the time asked reads `ABSENCE_NOTE_HELD_ONLY`, which
+  drops the completeness claims. Computed at serve (`coverage/read.ts` · `servedToModel`,
+  `semanticsForModel`) by `periodVerdict` — the tool's own output is unchanged, so no foreign
+  helper mints anything new; a recognizer reading a served value back removes a word that agrees
+  with the instants and refuses one that does not. Neither word nor clause grounds.
 - **Nothing from the results layer.** It records verdicts and serves nothing (§ 3.5).
 - **The inputs layer's past-tense note** (*"window was not in the search_logs call this result
   answers; the call ran with "2h" …"*) is library text appended to the served result. It belongs to
@@ -615,8 +675,8 @@ a CAPABILITIES row, a `.changes` fragment, the docs-next page, an example, `npm 
 |---|---|---|---|
 | 1 | `coverage/emptiness.ts` · `readEmptiness` (one owner); the answer account and `assessAnswer` both call it; the account's described template | none — readers only | — |
 | 7a | `describedResult()` (drafted, § 6) | a new door | — |
-| 7a′ | the empty-data refusal names `absent()` (§ 1.3) | refusal text only | 7a |
-| 7b | `coverage/period.ts` (the rule and `periodVerdict`); `period` on the three doors and `provenance` on `absent()`; the coverage channel carries `period`; `canonical-notes.json`; the results subflow at the loop head, its period rows and reasons; the `Period:` line under the existing limits arm; the lens reads `period` | a result declares `period`, or its tool a `ToolPeriod` | 1, 3 — the `ToolPeriod` ships with step 3, owned by `arguments/`, and is refused without an argument rule ([inputs.md](inputs.md) § 1.3; Q12 below) |
+| 7a′ | the empty-data refusal names `absent()` (§ 1.3) — **built 2026-09-27** | refusal text only | 7a |
+| 7b | `coverage/period.ts` (the rule and `periodVerdict`); `period` on the three doors and `provenance` on `absent()`; the coverage channel carries `period`; `canonical-notes.json`; the results subflow at the loop head, its period rows and reasons; the `Period:` line under the existing limits arm; the lens reads `period` — **built 2026-09-27 except the lens (its own repo)** | a result declares `period`, or its tool a `ToolPeriod` | 1, 3 — the `ToolPeriod` ships with step 3, owned by `arguments/`, and is refused without an argument rule ([inputs.md](inputs.md) § 1.3; Q12 below) |
 | 7c | the composed note (§ 4.3) | none — a `changed` fragment, owner's call (Q3) | 7a |
 | 8 | the outcome row per call at one landing funnel: the door, its counts, the emptiness reading, refused / errored / truncated / placed; `coverage-undeclared` (Q5); fact-in-result; `expectation-missed` | the results layer | 5, 7b |
 

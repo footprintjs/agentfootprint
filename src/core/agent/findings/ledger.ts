@@ -342,8 +342,24 @@ export function emitRow(
   // committed key, the served piece is its reader, and no event field ships
   // without a reader in the same release.
   if (row.kind === 'unsettled-by-absence') return;
+  // The answer layer's witness rows (honesty layer 4) emit nothing of their
+  // own either: the verdict each one commits fired its event beside it, from
+  // the same stage (`agent.evidence_checked`, `skill.steps_unfinished`).
+  if (row.kind === 'grounded' || row.kind === 'steps-unfinished') return;
   if (row.kind === 'argument') {
     emitArgumentRow(scope, row);
+    return;
+  }
+  // The results layer's period verdict (honesty layer 3, step 7b): the tool,
+  // the call, the stamps and the verdict word — never an instant.
+  if (row.kind === 'period') {
+    typedEmit(scope, 'agentfootprint.findings.period', {
+      toolCallId: row.toolCallId,
+      toolName: row.toolName,
+      iteration: row.iteration,
+      turn: row.turn,
+      verdict: row.verdict,
+    });
     return;
   }
   if (row.kind !== 'standing') return;

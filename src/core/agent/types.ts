@@ -271,6 +271,30 @@ export interface AgentOptions {
    */
   readonly inputsLayer?: boolean | { readonly argumentSources?: boolean };
   /**
+   * THE RESULTS LAYER (honesty layer 3) — mount `sf-results` at the loop head
+   * even when no REGISTERED tool declares a `ToolPeriod`. A registered tool
+   * with a `ToolPeriod` arms the layer by itself; this option is for tools a
+   * `ToolProvider` serves, which the build cannot see, and for tools that
+   * declare a `period` only on their results — without the layer those
+   * periods are recorded but no verdict is filed (one dev warning per tool
+   * says so). Prefer the builder's `.resultsLayer()`. Absent → the chart is
+   * byte-identical.
+   */
+  readonly resultsLayer?: boolean;
+  /**
+   * THE ANSWER LAYER (honesty layer 4) — fold the answer's standing at the
+   * head of the final branch, from the run's committed record, and serve it
+   * as data: `turn_end.answerAssessment` and one
+   * `agentfootprint.answer.assessed` event (the value, the reason kinds, the
+   * checks that ran — never a value). While it is armed the Route decider
+   * files two witness rows the fold reads (the evidence gate's clean pass, an
+   * answer given before its declared steps finished). `{ standingLine: true }`
+   * also appends one line to a PROSE answer — refused beside
+   * `.answerValidation()` and `.outputSchema()`. Prefer the builder's
+   * `.answerLayer()`. Absent → the chart is byte-identical.
+   */
+  readonly answerLayer?: boolean | { readonly standingLine?: boolean };
+  /**
    * THE INPUTS LAYER'S ASK (honesty layer 2) — the host's own context for the
    * one typed ask the library raises per batch when a call leaves an `ask`
    * argument out. Called each time such an ask is built; the object it
@@ -1717,6 +1741,22 @@ export interface AgentState {
      *  edges key on it. */
     status?: import('./toolEffects.js').ToolResultStatus;
   }>;
+  /**
+   * The iteration that DISPATCHED the batch `toolResults` holds — written
+   * beside it by ToolCalls when dispatch starts (or, for a batch paused
+   * before anything stamped it, when it completes on resume), and ONLY while
+   * the results layer is mounted (honesty layer 3): an agent without it
+   * commits exactly the keys it always did.
+   *
+   * It is how the layer at the loop head knows a batch from a re-entry
+   * (`honesty/mounts.ts` · `batchToJudge`): ToolCalls advances `iteration`
+   * by one and loops straight to the layer, so the batch is new exactly when
+   * the loop head's `iteration` is this plus one — each batch judged once per
+   * run, never by call id, which a provider may reuse. Per run: a
+   * conversation checkpoint (`AgentRunCheckpoint`) never carries it, so a
+   * resumed leg starts without one.
+   */
+  toolResultsIteration?: number;
   /** The `Deliver` stage's record for THIS iteration: which messages-slot
    *  injections entered the window, and which were held back with the
    *  sentence saying why. Overwritten per iteration (the commit log keeps
@@ -1947,18 +1987,23 @@ export interface AgentState {
    * The ANSWER's coverage, as data — `coverageDeclared` folded into the three
    * lists the limits block would have printed (merged in declaration order,
    * duplicates dropped, every entry kept: `coverage/answer.ts` ·
-   * `coverageOfAnswer`).
+   * `coverageOfAnswer`) — and, only when a call declared one (honesty step
+   * 7b), `periods`, the data twin of the block's `Period:` lines; and, on an
+   * agent whose inputs layer is armed, the values a tool's rule assumed this
+   * turn (`assumed`: the rows the prose answer's "Assumed" block prints, read
+   * the same way).
    *
    * Written only when the answer is TYPED (`.outputSchema()`) and
    * `.limitsTravelWithTheAnswer()` is on: a typed answer is JSON, and prose
    * appended to it is not, so its limits travel BESIDE the answer instead of
    * inside it. Committed by the Route decider on the turn it picks `final`
    * (`stages/answerCoverage.ts` · `withAnswerCoverage`) — the Final branch
-   * cannot write back — and only when the run's tools declared something, so
-   * every other run commits exactly the keys it always did. Read it with
-   * `agent.answerCoverage()`; `turn_end.answerCoverage` mirrors it.
+   * cannot write back — and only when the run's tools declared something or
+   * a value was assumed, so every other run commits exactly the keys it always
+   * did. Read it with `agent.answerCoverage()`; `turn_end.answerCoverage`
+   * mirrors it.
    */
-  answerCoverage?: import('./coverage/index.js').Coverage;
+  answerCoverage?: import('./coverage/index.js').AnswerCoverage;
   /**
    * The typed readings this run's tools settled (9.61.0) — one row per
    * (entity, field, value) flattened out of each recognized semantic
@@ -2011,6 +2056,23 @@ export interface AgentState {
    * of the record tells "armed, filed nothing" from "never armed" by it.
    */
   honestyLayers?: import('./honesty/armed.js').HonestyLayers;
+  /**
+   * The answer's standing, as data — written by the answer layer's stage at
+   * the head of the Final branch (honesty layer 4, `assessment/stage.ts` ·
+   * `assessAnswerStage`) and read by PrepareFinal, one stage later, to put it
+   * on `turn_end.answerAssessment`. Final-branch WORKING state: the branch
+   * mount's output mapping never carries it back, so the run's own state
+   * never holds it — the standing is derived, never stored beside the rows it
+   * is folded from (`agent.assessment()` folds them again, to the same value).
+   */
+  answerAssessment?: import('./assessment/compose.js').AnswerAssessmentData;
+  /**
+   * The answer's standing as one line for the person — composed by the same
+   * stage under `.answerLayer({ standingLine: true })` and appended to a
+   * prose answer by PrepareFinal. Final-branch working state, like
+   * `answerAssessment`.
+   */
+  answerStandingLine?: string;
   /**
    * What the inputs layer (honesty layer 2) hands ToolCalls for the batch it
    * resolved — per call, the declared defaults to FILL, or the sentence the

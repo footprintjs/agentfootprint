@@ -61,7 +61,7 @@
       "overwrite": {},
       "redactedPaths": [],
       "runtimeStageId": "client#9",
-      "stage": "client",
+      "stage": "Client",
       "stageId": "client",
       "trace": [],
       "updates": {}

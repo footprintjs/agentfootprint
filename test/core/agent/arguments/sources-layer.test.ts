@@ -326,9 +326,11 @@ describe('the checks decide what runs — an untraced value on an `ask` argument
         quote: 'over the last week',
       },
     ]);
-    // A traced source keeps every reason from firing — and supports nothing.
+    // A traced source keeps every ARGUMENT reason from firing — and supports
+    // nothing. (The one reason left is honesty step 7b's `period-undeclared`: a
+    // ToolPeriod tool whose result declares no period.)
     const a = await agent.assessment();
-    expect(a?.standing).toBe('consistent');
+    expect(a?.reasons.map((r) => r.reason)).toEqual(['period-undeclared']);
     expect(a?.checked.find((c) => c.check === 'argument-sources')).toMatchObject({ ran: 1, of: 1 });
   });
 
@@ -445,7 +447,8 @@ describe('the checks decide what runs — an untraced value on an `ask` argument
     ]);
     expect(argumentRows(agent)[0]!.appSource).toBeUndefined();
     const a = await agent.assessment();
-    expect(a?.reasons.map((r) => r.reason)).toEqual(['argument-assumed']);
+    // (+ `period-undeclared`, honesty step 7b: a ToolPeriod tool whose result declares no period.)
+    expect(a?.reasons.map((r) => r.reason)).toEqual(['argument-assumed', 'period-undeclared']);
   });
 
   it('a failed claim on a FREE argument is checked and filed with no rule — the model misstated the record', async () => {
@@ -478,7 +481,8 @@ describe('the checks decide what runs — an untraced value on an `ask` argument
       value: 'storefront',
     });
     const a = await agent.assessment();
-    expect(a?.reasons.map((r) => r.reason)).toEqual(['argument-unverified']);
+    // (+ `period-undeclared`, honesty step 7b: a ToolPeriod tool whose result declares no period.)
+    expect(a?.reasons.map((r) => r.reason)).toEqual(['argument-unverified', 'period-undeclared']);
   });
 
   it('the dropped `from` entries ride the basis row — or, with no basis, the call’s first argument row', async () => {
@@ -1333,7 +1337,8 @@ describe('SECURITY — library text is never evidence, and no value passes a too
     await agent.run({ message: 'errors on checkout over the last week?' });
     expect(argumentRows(agent)[0]).toMatchObject({ source: 'said', matched: 'phrase' });
     const a = await agent.assessment();
-    expect(a?.reasons.map((r) => r.reason)).toEqual(['argument-assumed']);
+    // (+ `period-undeclared`, honesty step 7b: a ToolPeriod tool whose result declares no period.)
+    expect(a?.reasons.map((r) => r.reason)).toEqual(['argument-assumed', 'period-undeclared']);
   });
 });
 

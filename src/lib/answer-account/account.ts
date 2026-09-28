@@ -9,7 +9,15 @@
  * and counted (`unread`); a line whose fill fails becomes `unreadable.line@1`.
  */
 
-import { COVERAGE_BLOCK_HEADING } from '../../core/agent/coverage/answer.js';
+import { assumedLinesFor } from '../../core/agent/arguments/serve.js';
+import { assessAnswer } from '../../core/agent/assessment/assess.js';
+import {
+  assessmentDataFrom,
+  assumedValuesSourceOf,
+  rewrittenBehind,
+  standingLineOf,
+} from '../../core/agent/assessment/compose.js';
+import { ASSUMED_BLOCK_HEADING, COVERAGE_BLOCK_HEADING } from '../../core/agent/coverage/answer.js';
 import type { Recording } from '../../recorders/observability/recordRun.js';
 import { chip, clipFact, MAX_VAR_CHARS, saidBy, sentence } from './render.js';
 import { ANSWER_ACCOUNT_TEMPLATE_SET_VERSION, type TemplateId } from './templates.js';
@@ -20,13 +28,15 @@ import type {
   Chip,
   AccountFact,
   FactStatus,
+  LimitsDataFact,
+  RecordPointer,
   Row,
   RowId,
   RunFact,
   Sentence,
 } from './types.js';
 import { validateDeclarations } from './declarations.js';
-import { num, str, recordingView, type RecordingView } from './view.js';
+import { isRecord, num, str, recordingView, type RecordingView, type ViewEvent } from './view.js';
 import {
   at,
   derived,
@@ -94,10 +104,135 @@ function row(
   };
 }
 
-/** The answer, and the library-appended limits block split off it (`.limitsTravelWithTheAnswer()`). */
+/** The separator the framework's one composer puts between the answer and what it appends. */
+const APPENDED_SEPARATOR = '\n\n---\n\n';
+
+/**
+ * The headings of the two BLOCKS the framework appends after an answer
+ * (`coverage/answer.ts` · `composeAnswerWithCoverage`, the one composer), each
+ * read from its owner: the limits block's and the "Assumed" block's — long,
+ * fixed sentences only the framework writes.
+ */
+const BLOCK_HEADINGS: readonly string[] = [
+  `${COVERAGE_BLOCK_HEADING} — declared by the tools that produced it, not by the model:`,
+  ASSUMED_BLOCK_HEADING,
+];
+
+/**
+ * The standing line THIS run appended, rebuilt from its record — or
+ * `undefined` when the record says none could be there.
+ *
+ * The line opens with the owner's plain words ("Not sure — ", "Known — "),
+ * which a model can write too, so an opening proves nothing. The record does:
+ * `turn_end.answerAssessment` exists only on a run whose answer layer folded
+ * the standing, and the line is ONE function of that projection
+ * (`assessment/compose.ts` · `standingLineOf`) — plus, when a value was
+ * assumed, of the committed rows it names, read from the source the layer's
+ * stage read (`assumedValuesSourceOf`) and the fold's rewrite witness. Only
+ * that exact line, where the composer puts it, is the library's. Without the
+ * committed state an assumed value cannot be rebuilt, and the line is not
+ * claimed.
+ */
+function appendedStandingLine(
+  end: ViewEvent,
+  state: Readonly<Record<string, unknown>> | undefined,
+): string | undefined {
+  const data = assessmentDataFrom(end.payload.answerAssessment);
+  if (data === undefined) return undefined;
+  if (!data.reasons.includes('argument-assumed')) return standingLineOf(data, [], false);
+  if (state === undefined) return undefined;
+  const source = assumedValuesSourceOf(data.reasons, state);
+  const assumed =
+    source === undefined ? [] : assumedLinesFor(source.ledger, source.turn, source.readDecisions);
+  const rewritten = rewrittenBehind(assessAnswer({ snapshot: { sharedState: state } }));
+  return standingLineOf(data, assumed, rewritten);
+}
+
+/** Whether `text` opens the framework's appended section: the run's own line, or a block's heading. */
+function opensAppended(text: string, line: string | undefined): boolean {
+  if (line !== undefined && (text === line || text.startsWith(`${line}\n\n`))) return true;
+  return BLOCK_HEADINGS.some((heading) => text.startsWith(heading));
+}
+
+/**
+ * Split the framework's appended section off an answer: the LAST separator
+ * whose next line opens it — the run's own standing line, exactly, or a
+ * block's heading. A `---` the model wrote itself opens neither, and the
+ * composer joins its own blocks with blank lines, never a second separator.
+ * An answer with no text of its own is the section alone (the composer adds
+ * no separator then).
+ */
+function splitAppended(
+  content: string,
+  line: string | undefined,
+): { readonly model: string; readonly appended?: string } {
+  let at = content.lastIndexOf(APPENDED_SEPARATOR);
+  while (at >= 0) {
+    const rest = content.slice(at + APPENDED_SEPARATOR.length);
+    if (opensAppended(rest, line)) return { model: content.slice(0, at), appended: rest };
+    at = at === 0 ? -1 : content.lastIndexOf(APPENDED_SEPARATOR, at - 1);
+  }
+  return opensAppended(content, line) ? { model: '', appended: content } : { model: content };
+}
+
+/** How many items one of the data's lists holds — `0` for a list the record does not carry. */
+const listLength = (value: unknown): number => (Array.isArray(value) ? value.length : 0);
+
+/**
+ * A TYPED answer's limits, read off `turn_end.answerCoverage` — the data
+ * `.limitsTravelWithTheAnswer()` files beside an answer that must stay JSON.
+ * Counts, with a pointer to every item's `what` (an assumed value's
+ * `toolName` — never its `value`, an argument's value, which "show me" never
+ * shows), capped at the account's call cap. `undefined` when the event
+ * carries none.
+ */
+function readLimitsData(end: ViewEvent): AccountFact<LimitsDataFact> | undefined {
+  const data = end.payload.answerCoverage;
+  if (!isRecord(data)) return undefined;
+  const pointers: RecordPointer[] = [];
+  for (const list of ['checked', 'notChecked', 'cannotCover'] as const) {
+    const items = data[list];
+    if (!Array.isArray(items)) continue;
+    items.forEach((item, i) => {
+      if (isRecord(item) && typeof item.what === 'string') {
+        pointers.push(at(end, 'answerCoverage', list, i, 'what'));
+      }
+    });
+  }
+  const assumed = data.assumed;
+  if (Array.isArray(assumed)) {
+    assumed.forEach((item, i) => {
+      if (isRecord(item) && typeof item.toolName === 'string') {
+        pointers.push(at(end, 'answerCoverage', 'assumed', i, 'toolName'));
+      }
+    });
+  }
+  if (pointers.length === 0) return undefined;
+  return {
+    value: {
+      checked: listLength(data.checked),
+      notChecked: listLength(data.notChecked),
+      cannotCover: listLength(data.cannotCover),
+      assumed: listLength(assumed),
+    },
+    source: 'library',
+    status: 'recorded',
+    pointers: pointers.slice(0, MAX_CALLS),
+  };
+}
+
+/**
+ * The answer, and what the framework carried with it: the appended section of
+ * a PROSE answer split off it (the limits block, the "Assumed" block, the
+ * standing line — `limitsBlock`), or a TYPED answer's limits as data
+ * (`limitsData`). A typed answer's limits never read `not-applicable`: the
+ * block reads `not-recorded` with `missing: 'as-data'`, and the data is
+ * `recorded`.
+ */
 function readAnswer(view: RecordingView): {
   answer: AccountFact<string>;
   limits: AccountFact<string>;
+  limitsData: AccountFact<LimitsDataFact>;
 } {
   const end = view.last('agent.turn_end');
   const content = str(end?.payload.finalContent);
@@ -108,40 +243,53 @@ function readAnswer(view: RecordingView): {
     pointers: [],
     missing: 'no-event',
   };
+  const noData: AccountFact<LimitsDataFact> = {
+    value: null,
+    source: 'library',
+    status: 'not-applicable',
+    pointers: [],
+  };
   if (end === undefined || content === undefined) {
     return {
       answer: none,
       limits: { value: null, source: 'library', status: 'not-applicable', pointers: [] },
+      limitsData: noData,
     };
   }
   const pointer = at(end, 'finalContent');
-  const heading = `${COVERAGE_BLOCK_HEADING} — declared by the tools that produced it, not by the model:`;
-  const cut = content.lastIndexOf(heading);
-  if (cut < 0) {
+  const data = readLimitsData(end);
+  const { model, appended } = splitAppended(content, appendedStandingLine(end, view.state));
+  const answer: AccountFact<string> = {
+    ...clipFact(model, MAX_ANSWER_CHARS),
+    source: 'model',
+    status: 'recorded',
+    pointers: [pointer],
+  };
+  if (appended !== undefined) {
     return {
-      answer: {
-        ...clipFact(content, MAX_ANSWER_CHARS),
-        source: 'model',
+      answer,
+      limits: {
+        ...clipFact(appended, MAX_ANSWER_CHARS),
+        source: 'library',
         status: 'recorded',
         pointers: [pointer],
       },
-      limits: { value: null, source: 'library', status: 'not-applicable', pointers: [] },
+      limitsData: data ?? noData,
     };
   }
-  const model = content.slice(0, cut).replace(/\n\n---\n\n$/, '');
   return {
-    answer: {
-      ...clipFact(model, MAX_ANSWER_CHARS),
-      source: 'model',
-      status: 'recorded',
-      pointers: [pointer],
-    },
-    limits: {
-      ...clipFact(content.slice(cut), MAX_ANSWER_CHARS),
-      source: 'library',
-      status: 'recorded',
-      pointers: [pointer],
-    },
+    answer,
+    limits:
+      data !== undefined
+        ? {
+            value: null,
+            source: 'library',
+            status: 'not-recorded',
+            pointers: [],
+            missing: 'as-data',
+          }
+        : { value: null, source: 'library', status: 'not-applicable', pointers: [] },
+    limitsData: data ?? noData,
   };
 }
 
@@ -228,6 +376,7 @@ function noOwnEventsAccount(
       evidence: none(),
       standing: none(),
       limitsBlock: none(),
+      limitsData: none(),
       errors: { failed: 0, refused: 0, declined: 0, notDispatched: 0, withheld: 0 },
       checks: { reachable: [], unreachable: [], notApplicable: [] },
     },
@@ -286,7 +435,7 @@ export function buildAccount(
   const howSure = readHowSure(ctx, calls);
   const checks = runChecks(ctx, understood, calls, inView);
   const wrong = wrongLines(ctx, checks, calls);
-  const { answer, limits } = readAnswer(view);
+  const { answer, limits, limitsData } = readAnswer(view);
   const summary = summaryOf(ctx, checks, answer.status === 'recorded');
 
   const firstSignal = checks.signals[0];
@@ -343,6 +492,7 @@ export function buildAccount(
       evidence: howSure.evidence,
       standing: howSure.standing,
       limitsBlock: limits,
+      limitsData,
       errors: {
         failed: count('failed'),
         refused: count('refused'),

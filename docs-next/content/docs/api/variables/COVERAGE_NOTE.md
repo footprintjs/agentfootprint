@@ -6,7 +6,7 @@ title: COVERAGE_NOTE
 
 > `const` **COVERAGE\_NOTE**: `string`
 
-Defined in: [src/core/agent/coverage/ledger.ts:56](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/coverage/ledger.ts#L56)
+Defined in: [src/core/agent/coverage/ledger.ts:71](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/coverage/ledger.ts#L71)
 
 The static sentence every ledger carries. The last clause is the OFFER half
 of survival — the model is told to carry the limits into its answer. The

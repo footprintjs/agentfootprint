@@ -15,13 +15,17 @@
  * was searched", never "ask".
  *
  * WHAT IS NOT HERE, AND WHY. A reason is read from a COMMITTED row, never from
- * an event, so the running agent and a later reader fold the same bytes. Three
+ * an event, so the running agent and a later reader fold the same bytes. Two
  * verdicts the honesty design names are events only in this version and so
- * cannot be read yet: the evidence gate's clean pass (`agent.evidence_checked`),
- * the `.claims()` dispositions (`claim-contradicted`, and the `checked-pass`
- * rows that would SUPPORT "known"), and the integrity dispositions
- * (`integrity.disposition`). The step that needs each one adds one committed
- * row, and the reason joins this table in the same change.
+ * cannot be read yet: the `.claims()` dispositions (`claim-contradicted`, and
+ * the `checked-pass` rows that would SUPPORT "known"), and the integrity
+ * dispositions (`integrity.disposition`). The step that needs each one adds
+ * one committed row, and the reason joins this table in the same change — as
+ * the answer layer (honesty layer 4) did for two: the evidence gate's clean
+ * pass (a `grounded` witness row, read as the names-and-numbers check having
+ * run — never as a reason, never as support) and an answer given before its
+ * declared steps finished (`steps-unfinished`, below). Both rows are filed only
+ * while the answer layer is armed (`assessment/witness.ts`).
  */
 
 import type { AssessmentReason, HonestyLayer } from './types.js';
@@ -100,6 +104,33 @@ export const REASONS: readonly ReasonEntry[] = Object.freeze([
       'history: an empty rowset (a top-level array, or the app’s rowsAt key) whose call has no coverage row',
   },
   {
+    reason: 'period-not-held',
+    layer: 3,
+    class: 'not-sure',
+    reads:
+      "findingsLedger: a period row of this turn with verdict 'not-held' — the store holds none of what the read asked for (and, when the tool declares a ToolPeriod, the inputs layer's argument row for the same call: who chose the period)",
+  },
+  {
+    reason: 'period-partly-held',
+    layer: 3,
+    class: 'not-sure',
+    reads: "findingsLedger: a period row of this turn with verdict 'partly-held'",
+  },
+  {
+    reason: 'period-unknown',
+    layer: 3,
+    class: 'not-sure',
+    reads:
+      "findingsLedger: a period row of this turn with verdict 'unknown' — the tool declared held: 'unknown'",
+  },
+  {
+    reason: 'period-undeclared',
+    layer: 3,
+    class: 'not-sure',
+    reads:
+      "findingsLedger: a period row of this turn with verdict 'undeclared' — the tool declares a ToolPeriod and the result declared no period",
+  },
+  {
     reason: 'sources-conflict',
     layer: 3,
     class: 'not-sure',
@@ -118,6 +149,13 @@ export const REASONS: readonly ReasonEntry[] = Object.freeze([
     reads: 'unsupportedValues (revised: true)',
   },
   { reason: 'stopped-early', layer: 4, class: 'not-sure', reads: 'stoppedEarly' },
+  {
+    reason: 'steps-unfinished',
+    layer: 4,
+    class: 'not-sure',
+    reads:
+      "findingsLedger: a steps-unfinished witness row of this turn (the answer came before the active skill's declared steps finished — filed while the answer layer is armed)",
+  },
   {
     reason: 'answer-check-failed',
     layer: 4,

@@ -110,6 +110,11 @@ function retentionSentence(retain: CompactionRetention): string {
  * appended to it verbatim: the library never edits model output, and it never
  * lets model output speak in the library's voice either.
  *
+ * The summary is a claim, so it exempts nothing from the evidence gate or the
+ * contingent check: the values the FOLDED person/app turns exempted ride as
+ * `foldedExempt` (read by `evidence/evidenceIndex.ts` · `exemptFromRun`), and
+ * the text itself is never indexed as supplied.
+ *
  * The label states the retention policy, and states it truthfully — see
  * {@link retentionSentence}. `COMPACTED_FRAME_PREFIX` is unchanged: it is what
  * every reader and every test matches on, and it stays put.
@@ -121,6 +126,13 @@ export function buildSummaryMessage(
     readonly iteration: number;
     readonly model: string;
     readonly retain: CompactionRetention;
+    /**
+     * The exemption lineage of the folded span (`evidence/evidenceIndex.ts` ·
+     * `exemptLineageOf`, computed from the ORIGINAL messages). Stamped as
+     * `LLMMessage.foldedExempt` when non-empty; the summary's text never
+     * exempts anything, so a frame built without it exempts nothing.
+     */
+    readonly foldedExempt?: readonly string[];
   },
 ): LLMMessage {
   const label =
@@ -128,7 +140,15 @@ export function buildSummaryMessage(
     `out of this window at iteration ${facts.iteration}. The text after this line is a SUMMARY ` +
     `written by ${facts.model}; it is a claim about the conversation, not the conversation. ` +
     `${retentionSentence(facts.retain)}]`;
-  return { role: 'user', content: `${label}\n\n${summary}` };
+  const content = `${label}\n\n${summary}`;
+  // Frozen with the frame: a lineage is a record of what the fold carried,
+  // and every later reader (the exempt corpus, a nested fold) only reads it.
+  const lineage = facts.foldedExempt ?? [];
+  return {
+    role: 'user',
+    content,
+    ...(lineage.length > 0 && { foldedExempt: Object.freeze([...lineage]) }),
+  };
 }
 
 export interface SummarizeResult {

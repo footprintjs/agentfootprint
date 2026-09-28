@@ -490,11 +490,11 @@ describe('graph — lifecycle', () => {
     expect(resumed.after).toBe('after:approved');
   });
 
-  it('pins the LIMIT: a pause inside a CONCURRENT level resumes only that node', async () => {
-    // Honest limit, inherited from footprintjs: resuming into a FORK child
-    // completes that child and stops — the parent's fork/join continuation
-    // does not carry on. A single-node level avoids this by mounting
-    // sequentially; a genuinely concurrent level cannot.
+  it('a pause inside a CONCURRENT level resumes that node, then runs the later levels', async () => {
+    // Until footprintjs 9.28.0 this pinned a LIMIT: resuming into a FORK child
+    // completed that child and stopped — the fork/join continuation did not
+    // carry on, so `later` never ran. Resume now walks the real chart, so the
+    // join and every later level run after the paused node finishes.
     const asksAHuman = Agent.create({
       provider: scripted(resp('', [{ id: 't1', name: 'approve', args: {} }]), resp('approved')),
       model: 'mock',
@@ -528,12 +528,12 @@ describe('graph — lifecycle', () => {
     expect(isPaused(paused)).toBe(true);
     if (!isPaused(paused)) return;
 
-    // What IS true on resume: the paused node finishes and its output is
-    // recorded, but the remaining levels do NOT run.
+    // The paused node finishes, its sibling's recorded output is kept, and
+    // the level after the join runs on it.
     const resumed = await dag.resume(paused.checkpoint, { approved: true });
-    expect(resumed).toBe('approved');
+    expect(resumed).toEqual({ sibling: 'sib:go', gate: 'approved', later: 'later:sib:go' });
     expect(dag.getLastSnapshot()?.sharedState).toMatchObject({
-      results: { gate: 'approved' },
+      results: { sibling: 'sib:go', gate: 'approved', later: 'later:sib:go' },
     });
   });
 

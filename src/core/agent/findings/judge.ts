@@ -149,7 +149,7 @@ export async function judgeResult(
   entry: PreviousResult & { readonly toolName: string },
   iteration: number,
   signal?: AbortSignal,
-  /** The honesty layers' turn stamp — passed only while the inputs layer is armed. */
+  /** The honesty layers' turn stamp — passed only while an honesty layer is armed. */
   stamp?: TurnStamp,
 ): Promise<void> {
   const basis = lastBasisRowFor(scope.findingsLedger ?? [], entry.toolCallId);

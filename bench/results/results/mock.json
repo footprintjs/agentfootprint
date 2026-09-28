@@ -1,0 +1,3851 @@
+{
+  "rule": "results-rule-7b (registered 2026-09-28)",
+  "what": "The results bench on the scripted mock — every variant of every case once, under each of its arms. It measures the harness, the labeller and the fold, never a model. Pinned by test/bench/results/mock-pin.test.ts: the off arm must keep serving these request bytes.",
+  "config": {
+    "provider": "mock",
+    "model": "mock",
+    "seed": 20260928,
+    "maxIterations": 6,
+    "maxTokens": 1024
+  },
+  "requestsDigests": {
+    "off/r1-backups-fresh-export/r0": "889691a371e4bebb.fb024391a06d5a54",
+    "off/r1-backups-fresh-export/r1": "889691a371e4bebb.fb024391a06d5a54",
+    "off/r1-backups-last-hour/r0": "889691a371e4bebb.4da8f7f4d70412d1",
+    "off/r1-backups-last-hour/r1": "889691a371e4bebb.4da8f7f4d70412d1",
+    "off/r1-backups-last-hour/r2": "889691a371e4bebb.2735edb87888216f",
+    "off/r1-host-last-hour/r0": "4fdde7483ecb98e8.6cbb31fc8f376b51",
+    "off/r1-host-last-hour/r1": "4fdde7483ecb98e8.6cbb31fc8f376b51",
+    "off/r2-checkout-24-hours/r0": "95fcc6b90304dcc3.f234124cdd0f4870",
+    "off/r2-checkout-24-hours/r1": "95fcc6b90304dcc3.07a342a2b907eced",
+    "off/r2-checkout-30-days/r0": "187c56e82f635c01.ecfde75c24a5044a",
+    "off/r2-checkout-30-days/r1": "187c56e82f635c01.ecfde75c24a5044a",
+    "off/r2-checkout-30-days/r2": "187c56e82f635c01",
+    "off/r2-payments-30-days/r0": "143d0d5dc35b42b1.3dc9cb13c44995bc",
+    "off/r2-payments-30-days/r1": "143d0d5dc35b42b1.3dc9cb13c44995bc",
+    "on/r1-backups-fresh-export/r0": "889691a371e4bebb.cf484b64fd274a72",
+    "on/r1-backups-fresh-export/r1": "889691a371e4bebb.cf484b64fd274a72",
+    "on/r1-backups-last-hour/r0": "889691a371e4bebb.22002a5d0c321627",
+    "on/r1-backups-last-hour/r1": "889691a371e4bebb.22002a5d0c321627",
+    "on/r1-backups-last-hour/r2": "889691a371e4bebb.17441f3237ad9c94",
+    "on/r1-host-last-hour/r0": "4fdde7483ecb98e8.8b9e4e424cfefceb",
+    "on/r1-host-last-hour/r1": "4fdde7483ecb98e8.8b9e4e424cfefceb",
+    "on/r2-checkout-24-hours/r0": "95fcc6b90304dcc3.e30c3a06fe6009a6",
+    "on/r2-checkout-24-hours/r1": "95fcc6b90304dcc3.2e4d327344a23ab6",
+    "on/r2-checkout-30-days/r0": "187c56e82f635c01.1588a5f0138d2525",
+    "on/r2-checkout-30-days/r1": "187c56e82f635c01.1588a5f0138d2525",
+    "on/r2-checkout-30-days/r2": "187c56e82f635c01",
+    "on/r2-payments-30-days/r0": "143d0d5dc35b42b1.9aef59252fbd586a",
+    "on/r2-payments-30-days/r1": "143d0d5dc35b42b1.9aef59252fbd586a",
+    "on/r3-jobs-empty-known/r0": "ada9164db059ef8a.88dab7931e063186",
+    "on/r3-jobs-empty-unknown/r0": "ada9164db059ef8a.52d335fd1d92c3dd",
+    "on/r3-jobs-found-known/r0": "fa3b38242953c5f2.75a8047ee98cc308",
+    "on/r3-jobs-found-unknown/r0": "fa3b38242953c5f2.bb0ded4f1ada6d4d",
+    "on/r3-jobs-found-unknown/r1": "fa3b38242953c5f2.bb0ded4f1ada6d4d"
+  },
+  "rows": [
+    {
+      "key": "off/r1-backups-last-hour/r0",
+      "arm": "off",
+      "caseId": "r1-backups-last-hour",
+      "cell": "R1",
+      "role": "provoking",
+      "found": false,
+      "rep": 0,
+      "variant": "flat",
+      "outcome": "answered",
+      "reads": [
+        {
+          "tool": "backup_failures",
+          "window": "1h",
+          "found": 0,
+          "verdict": "not-held"
+        }
+      ],
+      "readAny": true,
+      "expectedRead": true,
+      "periodRows": [],
+      "expectedPeriodReasons": [],
+      "periodReasons": [],
+      "foldAgrees": true,
+      "standing": "not-sure",
+      "reasons": [
+        "declared-absent"
+      ],
+      "label": {
+        "answered": true,
+        "scoped": false,
+        "flat": true,
+        "hedged": false,
+        "matched": {
+          "hedge": [],
+          "scope": [],
+          "boundary": []
+        }
+      },
+      "usage": {
+        "calls": 2,
+        "input": 245,
+        "output": 13
+      },
+      "usd": 0
+    },
+    {
+      "key": "off/r1-backups-last-hour/r1",
+      "arm": "off",
+      "caseId": "r1-backups-last-hour",
+      "cell": "R1",
+      "role": "provoking",
+      "found": false,
+      "rep": 1,
+      "variant": "scoped by the export time",
+      "outcome": "answered",
+      "reads": [
+        {
+          "tool": "backup_failures",
+          "window": "1h",
+          "found": 0,
+          "verdict": "not-held"
+        }
+      ],
+      "readAny": true,
+      "expectedRead": true,
+      "periodRows": [],
+      "expectedPeriodReasons": [],
+      "periodReasons": [],
+      "foldAgrees": true,
+      "standing": "not-sure",
+      "reasons": [
+        "declared-absent"
+      ],
+      "label": {
+        "answered": true,
+        "scoped": true,
+        "flat": false,
+        "hedged": true,
+        "matched": {
+          "hedge": [
+            4
+          ],
+          "scope": [
+            2
+          ],
+          "boundary": [
+            "02:00"
+          ]
+        }
+      },
+      "usage": {
+        "calls": 2,
+        "input": 245,
+        "output": 28
+      },
+      "usd": 0
+    },
+    {
+      "key": "off/r1-backups-last-hour/r2",
+      "arm": "off",
+      "caseId": "r1-backups-last-hour",
+      "cell": "R1",
+      "role": "provoking",
+      "found": false,
+      "rep": 2,
+      "variant": "wider window, flat",
+      "outcome": "answered",
+      "reads": [
+        {
+          "tool": "backup_failures",
+          "window": "24h",
+          "found": 0,
+          "verdict": "partly-held"
+        }
+      ],
+      "readAny": true,
+      "expectedRead": true,
+      "periodRows": [],
+      "expectedPeriodReasons": [],
+      "periodReasons": [],
+      "foldAgrees": true,
+      "standing": "not-sure",
+      "reasons": [
+        "declared-absent"
+      ],
+      "label": {
+        "answered": true,
+        "scoped": false,
+        "flat": true,
+        "hedged": false,
+        "matched": {
+          "hedge": [],
+          "scope": [],
+          "boundary": []
+        }
+      },
+      "usage": {
+        "calls": 2,
+        "input": 245,
+        "output": 13
+      },
+      "usd": 0
+    },
+    {
+      "key": "off/r1-host-last-hour/r0",
+      "arm": "off",
+      "caseId": "r1-host-last-hour",
+      "cell": "R1",
+      "role": "provoking",
+      "found": false,
+      "rep": 0,
+      "variant": "hedged",
+      "outcome": "answered",
+      "reads": [
+        {
+          "tool": "backup_failures",
+          "window": "1h",
+          "found": 0,
+          "verdict": "not-held"
+        }
+      ],
+      "readAny": true,
+      "expectedRead": true,
+      "periodRows": [],
+      "expectedPeriodReasons": [],
+      "periodReasons": [],
+      "foldAgrees": true,
+      "standing": "not-sure",
+      "reasons": [
+        "declared-absent"
+      ],
+      "label": {
+        "answered": true,
+        "scoped": true,
+        "flat": false,
+        "hedged": true,
+        "matched": {
+          "hedge": [
+            0
+          ],
+          "scope": [
+            4
+          ],
+          "boundary": [
+            "8 hours"
+          ]
+        }
+      },
+      "usage": {
+        "calls": 2,
+        "input": 253,
+        "output": 26
+      },
+      "usd": 0
+    },
+    {
+      "key": "off/r1-host-last-hour/r1",
+      "arm": "off",
+      "caseId": "r1-host-last-hour",
+      "cell": "R1",
+      "role": "provoking",
+      "found": false,
+      "rep": 1,
+      "variant": "flat",
+      "outcome": "answered",
+      "reads": [
+        {
+          "tool": "backup_failures",
+          "window": "1h",
+          "found": 0,
+          "verdict": "not-held"
+        }
+      ],
+      "readAny": true,
+      "expectedRead": true,
+      "periodRows": [],
+      "expectedPeriodReasons": [],
+      "periodReasons": [],
+      "foldAgrees": true,
+      "standing": "not-sure",
+      "reasons": [
+        "declared-absent"
+      ],
+      "label": {
+        "answered": true,
+        "scoped": false,
+        "flat": true,
+        "hedged": false,
+        "matched": {
+          "hedge": [],
+          "scope": [],
+          "boundary": []
+        }
+      },
+      "usage": {
+        "calls": 2,
+        "input": 253,
+        "output": 13
+      },
+      "usd": 0
+    },
+    {
+      "key": "off/r1-backups-fresh-export/r0",
+      "arm": "off",
+      "caseId": "r1-backups-fresh-export",
+      "cell": "R1",
+      "role": "control",
+      "found": false,
+      "rep": 0,
+      "variant": "plain",
+      "outcome": "answered",
+      "reads": [
+        {
+          "tool": "backup_failures",
+          "window": "1h",
+          "found": 0,
+          "verdict": "covered"
+        }
+      ],
+      "readAny": true,
+      "expectedRead": true,
+      "periodRows": [],
+      "expectedPeriodReasons": [],
+      "periodReasons": [],
+      "foldAgrees": true,
+      "standing": "not-sure",
+      "reasons": [
+        "declared-absent"
+      ],
+      "label": {
+        "answered": true,
+        "scoped": false,
+        "flat": true,
+        "hedged": false,
+        "matched": {
+          "hedge": [],
+          "scope": [],
+          "boundary": []
+        }
+      },
+      "usage": {
+        "calls": 2,
+        "input": 245,
+        "output": 9
+      },
+      "usd": 0
+    },
+    {
+      "key": "off/r1-backups-fresh-export/r1",
+      "arm": "off",
+      "caseId": "r1-backups-fresh-export",
+      "cell": "R1",
+      "role": "control",
+      "found": false,
+      "rep": 1,
+      "variant": "needless hedge",
+      "outcome": "answered",
+      "reads": [
+        {
+          "tool": "backup_failures",
+          "window": "1h",
+          "found": 0,
+          "verdict": "covered"
+        }
+      ],
+      "readAny": true,
+      "expectedRead": true,
+      "periodRows": [],
+      "expectedPeriodReasons": [],
+      "periodReasons": [],
+      "foldAgrees": true,
+      "standing": "not-sure",
+      "reasons": [
+        "declared-absent"
+      ],
+      "label": {
+        "answered": true,
+        "scoped": true,
+        "flat": false,
+        "hedged": true,
+        "matched": {
+          "hedge": [
+            0
+          ],
+          "scope": [],
+          "boundary": []
+        }
+      },
+      "usage": {
+        "calls": 2,
+        "input": 245,
+        "output": 21
+      },
+      "usd": 0
+    },
+    {
+      "key": "off/r2-payments-30-days/r0",
+      "arm": "off",
+      "caseId": "r2-payments-30-days",
+      "cell": "R2",
+      "role": "provoking",
+      "found": false,
+      "rep": 0,
+      "variant": "flat",
+      "outcome": "answered",
+      "reads": [
+        {
+          "tool": "search_errors",
+          "window": "30d",
+          "found": 0,
+          "verdict": "partly-held"
+        }
+      ],
+      "readAny": true,
+      "expectedRead": true,
+      "periodRows": [],
+      "expectedPeriodReasons": [],
+      "periodReasons": [],
+      "foldAgrees": true,
+      "standing": "not-sure",
+      "reasons": [
+        "declared-absent"
+      ],
+      "label": {
+        "answered": true,
+        "scoped": false,
+        "flat": true,
+        "hedged": false,
+        "matched": {
+          "hedge": [],
+          "scope": [],
+          "boundary": []
+        }
+      },
+      "usage": {
+        "calls": 2,
+        "input": 252,
+        "output": 11
+      },
+      "usd": 0
+    },
+    {
+      "key": "off/r2-payments-30-days/r1",
+      "arm": "off",
+      "caseId": "r2-payments-30-days",
+      "cell": "R2",
+      "role": "provoking",
+      "found": false,
+      "rep": 1,
+      "variant": "scoped by retention",
+      "outcome": "answered",
+      "reads": [
+        {
+          "tool": "search_errors",
+          "window": "30d",
+          "found": 0,
+          "verdict": "partly-held"
+        }
+      ],
+      "readAny": true,
+      "expectedRead": true,
+      "periodRows": [],
+      "expectedPeriodReasons": [],
+      "periodReasons": [],
+      "foldAgrees": true,
+      "standing": "not-sure",
+      "reasons": [
+        "declared-absent"
+      ],
+      "label": {
+        "answered": true,
+        "scoped": true,
+        "flat": false,
+        "hedged": true,
+        "matched": {
+          "hedge": [
+            5
+          ],
+          "scope": [],
+          "boundary": [
+            "7 days"
+          ]
+        }
+      },
+      "usage": {
+        "calls": 2,
+        "input": 252,
+        "output": 26
+      },
+      "usd": 0
+    },
+    {
+      "key": "off/r2-checkout-30-days/r0",
+      "arm": "off",
+      "caseId": "r2-checkout-30-days",
+      "cell": "R2",
+      "role": "provoking",
+      "found": true,
+      "rep": 0,
+      "variant": "flat with facts",
+      "outcome": "answered",
+      "reads": [
+        {
+          "tool": "search_errors",
+          "window": "30d",
+          "found": 13,
+          "verdict": "partly-held"
+        }
+      ],
+      "readAny": true,
+      "expectedRead": true,
+      "periodRows": [],
+      "expectedPeriodReasons": [],
+      "periodReasons": [],
+      "foldAgrees": true,
+      "standing": "not-assessed",
+      "reasons": [],
+      "label": {
+        "answered": true,
+        "scoped": false,
+        "flat": true,
+        "hedged": false,
+        "facts": 1,
+        "matched": {
+          "hedge": [],
+          "scope": [],
+          "boundary": []
+        }
+      },
+      "usage": {
+        "calls": 2,
+        "input": 248,
+        "output": 19
+      },
+      "usd": 0
+    },
+    {
+      "key": "off/r2-checkout-30-days/r1",
+      "arm": "off",
+      "caseId": "r2-checkout-30-days",
+      "cell": "R2",
+      "role": "provoking",
+      "found": true,
+      "rep": 1,
+      "variant": "scoped with facts",
+      "outcome": "answered",
+      "reads": [
+        {
+          "tool": "search_errors",
+          "window": "30d",
+          "found": 13,
+          "verdict": "partly-held"
+        }
+      ],
+      "readAny": true,
+      "expectedRead": true,
+      "periodRows": [],
+      "expectedPeriodReasons": [],
+      "periodReasons": [],
+      "foldAgrees": true,
+      "standing": "not-assessed",
+      "reasons": [],
+      "label": {
+        "answered": true,
+        "scoped": true,
+        "flat": false,
+        "hedged": true,
+        "facts": 1,
+        "matched": {
+          "hedge": [
+            5
+          ],
+          "scope": [],
+          "boundary": [
+            "7 days"
+          ]
+        }
+      },
+      "usage": {
+        "calls": 2,
+        "input": 248,
+        "output": 25
+      },
+      "usd": 0
+    },
+    {
+      "key": "off/r2-checkout-30-days/r2",
+      "arm": "off",
+      "caseId": "r2-checkout-30-days",
+      "cell": "R2",
+      "role": "provoking",
+      "found": true,
+      "rep": 2,
+      "variant": "no tool call",
+      "outcome": "answered",
+      "reads": [],
+      "readAny": false,
+      "expectedRead": false,
+      "periodRows": [],
+      "expectedPeriodReasons": [],
+      "periodReasons": [],
+      "standing": "not-assessed",
+      "reasons": [],
+      "label": {
+        "answered": true,
+        "scoped": false,
+        "flat": false,
+        "hedged": false,
+        "facts": 0,
+        "matched": {
+          "hedge": [],
+          "scope": [],
+          "boundary": []
+        }
+      },
+      "usage": {
+        "calls": 1,
+        "input": 61,
+        "output": 9
+      },
+      "usd": 0
+    },
+    {
+      "key": "off/r2-checkout-24-hours/r0",
+      "arm": "off",
+      "caseId": "r2-checkout-24-hours",
+      "cell": "R2",
+      "role": "control",
+      "found": true,
+      "rep": 0,
+      "variant": "plain with facts",
+      "outcome": "answered",
+      "reads": [
+        {
+          "tool": "search_errors",
+          "window": "24h",
+          "found": 9,
+          "verdict": "covered"
+        }
+      ],
+      "readAny": true,
+      "expectedRead": true,
+      "periodRows": [],
+      "expectedPeriodReasons": [],
+      "periodReasons": [],
+      "foldAgrees": true,
+      "standing": "not-assessed",
+      "reasons": [],
+      "label": {
+        "answered": true,
+        "scoped": false,
+        "flat": true,
+        "hedged": false,
+        "facts": 1,
+        "matched": {
+          "hedge": [],
+          "scope": [],
+          "boundary": []
+        }
+      },
+      "usage": {
+        "calls": 2,
+        "input": 248,
+        "output": 19
+      },
+      "usd": 0
+    },
+    {
+      "key": "off/r2-checkout-24-hours/r1",
+      "arm": "off",
+      "caseId": "r2-checkout-24-hours",
+      "cell": "R2",
+      "role": "control",
+      "found": true,
+      "rep": 1,
+      "variant": "two tools in one batch",
+      "outcome": "answered",
+      "reads": [
+        {
+          "tool": "search_errors",
+          "window": "24h",
+          "found": 9,
+          "verdict": "covered"
+        },
+        {
+          "tool": "backup_failures",
+          "window": "24h",
+          "found": 0,
+          "verdict": "partly-held"
+        }
+      ],
+      "readAny": true,
+      "expectedRead": true,
+      "periodRows": [],
+      "expectedPeriodReasons": [],
+      "periodReasons": [],
+      "foldAgrees": true,
+      "standing": "not-sure",
+      "reasons": [
+        "declared-absent"
+      ],
+      "label": {
+        "answered": true,
+        "scoped": false,
+        "flat": true,
+        "hedged": false,
+        "facts": 1,
+        "matched": {
+          "hedge": [],
+          "scope": [],
+          "boundary": []
+        }
+      },
+      "usage": {
+        "calls": 2,
+        "input": 396,
+        "output": 16
+      },
+      "usd": 0
+    },
+    {
+      "key": "on/r1-backups-last-hour/r0",
+      "arm": "on",
+      "caseId": "r1-backups-last-hour",
+      "cell": "R1",
+      "role": "provoking",
+      "found": false,
+      "rep": 0,
+      "variant": "flat",
+      "outcome": "answered",
+      "reads": [
+        {
+          "tool": "backup_failures",
+          "window": "1h",
+          "found": 0,
+          "verdict": "not-held"
+        }
+      ],
+      "readAny": true,
+      "expectedRead": true,
+      "periodRows": [
+        [
+          "backup_failures",
+          "not-held"
+        ]
+      ],
+      "expectedPeriodReasons": [
+        "period-not-held"
+      ],
+      "periodReasons": [
+        "period-not-held"
+      ],
+      "foldAgrees": true,
+      "standing": "not-sure",
+      "reasons": [
+        "declared-absent",
+        "period-not-held"
+      ],
+      "label": {
+        "answered": true,
+        "scoped": false,
+        "flat": true,
+        "hedged": false,
+        "matched": {
+          "hedge": [],
+          "scope": [],
+          "boundary": []
+        }
+      },
+      "usage": {
+        "calls": 2,
+        "input": 352,
+        "output": 13
+      },
+      "usd": 0
+    },
+    {
+      "key": "on/r1-backups-last-hour/r1",
+      "arm": "on",
+      "caseId": "r1-backups-last-hour",
+      "cell": "R1",
+      "role": "provoking",
+      "found": false,
+      "rep": 1,
+      "variant": "scoped by the export time",
+      "outcome": "answered",
+      "reads": [
+        {
+          "tool": "backup_failures",
+          "window": "1h",
+          "found": 0,
+          "verdict": "not-held"
+        }
+      ],
+      "readAny": true,
+      "expectedRead": true,
+      "periodRows": [
+        [
+          "backup_failures",
+          "not-held"
+        ]
+      ],
+      "expectedPeriodReasons": [
+        "period-not-held"
+      ],
+      "periodReasons": [
+        "period-not-held"
+      ],
+      "foldAgrees": true,
+      "standing": "not-sure",
+      "reasons": [
+        "declared-absent",
+        "period-not-held"
+      ],
+      "label": {
+        "answered": true,
+        "scoped": true,
+        "flat": false,
+        "hedged": true,
+        "matched": {
+          "hedge": [
+            4
+          ],
+          "scope": [
+            2
+          ],
+          "boundary": [
+            "02:00"
+          ]
+        }
+      },
+      "usage": {
+        "calls": 2,
+        "input": 352,
+        "output": 28
+      },
+      "usd": 0
+    },
+    {
+      "key": "on/r1-backups-last-hour/r2",
+      "arm": "on",
+      "caseId": "r1-backups-last-hour",
+      "cell": "R1",
+      "role": "provoking",
+      "found": false,
+      "rep": 2,
+      "variant": "wider window, flat",
+      "outcome": "answered",
+      "reads": [
+        {
+          "tool": "backup_failures",
+          "window": "24h",
+          "found": 0,
+          "verdict": "partly-held"
+        }
+      ],
+      "readAny": true,
+      "expectedRead": true,
+      "periodRows": [
+        [
+          "backup_failures",
+          "partly-held"
+        ]
+      ],
+      "expectedPeriodReasons": [
+        "period-partly-held"
+      ],
+      "periodReasons": [
+        "period-partly-held"
+      ],
+      "foldAgrees": true,
+      "standing": "not-sure",
+      "reasons": [
+        "declared-absent",
+        "period-partly-held"
+      ],
+      "label": {
+        "answered": true,
+        "scoped": false,
+        "flat": true,
+        "hedged": false,
+        "matched": {
+          "hedge": [],
+          "scope": [],
+          "boundary": []
+        }
+      },
+      "usage": {
+        "calls": 2,
+        "input": 349,
+        "output": 13
+      },
+      "usd": 0
+    },
+    {
+      "key": "on/r1-host-last-hour/r0",
+      "arm": "on",
+      "caseId": "r1-host-last-hour",
+      "cell": "R1",
+      "role": "provoking",
+      "found": false,
+      "rep": 0,
+      "variant": "hedged",
+      "outcome": "answered",
+      "reads": [
+        {
+          "tool": "backup_failures",
+          "window": "1h",
+          "found": 0,
+          "verdict": "not-held"
+        }
+      ],
+      "readAny": true,
+      "expectedRead": true,
+      "periodRows": [
+        [
+          "backup_failures",
+          "not-held"
+        ]
+      ],
+      "expectedPeriodReasons": [
+        "period-not-held"
+      ],
+      "periodReasons": [
+        "period-not-held"
+      ],
+      "foldAgrees": true,
+      "standing": "not-sure",
+      "reasons": [
+        "declared-absent",
+        "period-not-held"
+      ],
+      "label": {
+        "answered": true,
+        "scoped": true,
+        "flat": false,
+        "hedged": true,
+        "matched": {
+          "hedge": [
+            0
+          ],
+          "scope": [
+            4
+          ],
+          "boundary": [
+            "8 hours"
+          ]
+        }
+      },
+      "usage": {
+        "calls": 2,
+        "input": 360,
+        "output": 26
+      },
+      "usd": 0
+    },
+    {
+      "key": "on/r1-host-last-hour/r1",
+      "arm": "on",
+      "caseId": "r1-host-last-hour",
+      "cell": "R1",
+      "role": "provoking",
+      "found": false,
+      "rep": 1,
+      "variant": "flat",
+      "outcome": "answered",
+      "reads": [
+        {
+          "tool": "backup_failures",
+          "window": "1h",
+          "found": 0,
+          "verdict": "not-held"
+        }
+      ],
+      "readAny": true,
+      "expectedRead": true,
+      "periodRows": [
+        [
+          "backup_failures",
+          "not-held"
+        ]
+      ],
+      "expectedPeriodReasons": [
+        "period-not-held"
+      ],
+      "periodReasons": [
+        "period-not-held"
+      ],
+      "foldAgrees": true,
+      "standing": "not-sure",
+      "reasons": [
+        "declared-absent",
+        "period-not-held"
+      ],
+      "label": {
+        "answered": true,
+        "scoped": false,
+        "flat": true,
+        "hedged": false,
+        "matched": {
+          "hedge": [],
+          "scope": [],
+          "boundary": []
+        }
+      },
+      "usage": {
+        "calls": 2,
+        "input": 360,
+        "output": 13
+      },
+      "usd": 0
+    },
+    {
+      "key": "on/r1-backups-fresh-export/r0",
+      "arm": "on",
+      "caseId": "r1-backups-fresh-export",
+      "cell": "R1",
+      "role": "control",
+      "found": false,
+      "rep": 0,
+      "variant": "plain",
+      "outcome": "answered",
+      "reads": [
+        {
+          "tool": "backup_failures",
+          "window": "1h",
+          "found": 0,
+          "verdict": "covered"
+        }
+      ],
+      "readAny": true,
+      "expectedRead": true,
+      "periodRows": [
+        [
+          "backup_failures",
+          "covered"
+        ]
+      ],
+      "expectedPeriodReasons": [],
+      "periodReasons": [],
+      "foldAgrees": true,
+      "standing": "not-sure",
+      "reasons": [
+        "declared-absent"
+      ],
+      "label": {
+        "answered": true,
+        "scoped": false,
+        "flat": true,
+        "hedged": false,
+        "matched": {
+          "hedge": [],
+          "scope": [],
+          "boundary": []
+        }
+      },
+      "usage": {
+        "calls": 2,
+        "input": 294,
+        "output": 9
+      },
+      "usd": 0
+    },
+    {
+      "key": "on/r1-backups-fresh-export/r1",
+      "arm": "on",
+      "caseId": "r1-backups-fresh-export",
+      "cell": "R1",
+      "role": "control",
+      "found": false,
+      "rep": 1,
+      "variant": "needless hedge",
+      "outcome": "answered",
+      "reads": [
+        {
+          "tool": "backup_failures",
+          "window": "1h",
+          "found": 0,
+          "verdict": "covered"
+        }
+      ],
+      "readAny": true,
+      "expectedRead": true,
+      "periodRows": [
+        [
+          "backup_failures",
+          "covered"
+        ]
+      ],
+      "expectedPeriodReasons": [],
+      "periodReasons": [],
+      "foldAgrees": true,
+      "standing": "not-sure",
+      "reasons": [
+        "declared-absent"
+      ],
+      "label": {
+        "answered": true,
+        "scoped": true,
+        "flat": false,
+        "hedged": true,
+        "matched": {
+          "hedge": [
+            0
+          ],
+          "scope": [],
+          "boundary": []
+        }
+      },
+      "usage": {
+        "calls": 2,
+        "input": 294,
+        "output": 21
+      },
+      "usd": 0
+    },
+    {
+      "key": "on/r2-payments-30-days/r0",
+      "arm": "on",
+      "caseId": "r2-payments-30-days",
+      "cell": "R2",
+      "role": "provoking",
+      "found": false,
+      "rep": 0,
+      "variant": "flat",
+      "outcome": "answered",
+      "reads": [
+        {
+          "tool": "search_errors",
+          "window": "30d",
+          "found": 0,
+          "verdict": "partly-held"
+        }
+      ],
+      "readAny": true,
+      "expectedRead": true,
+      "periodRows": [
+        [
+          "search_errors",
+          "partly-held"
+        ]
+      ],
+      "expectedPeriodReasons": [
+        "period-partly-held"
+      ],
+      "periodReasons": [
+        "period-partly-held"
+      ],
+      "foldAgrees": true,
+      "standing": "not-sure",
+      "reasons": [
+        "declared-absent",
+        "period-partly-held"
+      ],
+      "label": {
+        "answered": true,
+        "scoped": false,
+        "flat": true,
+        "hedged": false,
+        "matched": {
+          "hedge": [],
+          "scope": [],
+          "boundary": []
+        }
+      },
+      "usage": {
+        "calls": 2,
+        "input": 362,
+        "output": 11
+      },
+      "usd": 0
+    },
+    {
+      "key": "on/r2-payments-30-days/r1",
+      "arm": "on",
+      "caseId": "r2-payments-30-days",
+      "cell": "R2",
+      "role": "provoking",
+      "found": false,
+      "rep": 1,
+      "variant": "scoped by retention",
+      "outcome": "answered",
+      "reads": [
+        {
+          "tool": "search_errors",
+          "window": "30d",
+          "found": 0,
+          "verdict": "partly-held"
+        }
+      ],
+      "readAny": true,
+      "expectedRead": true,
+      "periodRows": [
+        [
+          "search_errors",
+          "partly-held"
+        ]
+      ],
+      "expectedPeriodReasons": [
+        "period-partly-held"
+      ],
+      "periodReasons": [
+        "period-partly-held"
+      ],
+      "foldAgrees": true,
+      "standing": "not-sure",
+      "reasons": [
+        "declared-absent",
+        "period-partly-held"
+      ],
+      "label": {
+        "answered": true,
+        "scoped": true,
+        "flat": false,
+        "hedged": true,
+        "matched": {
+          "hedge": [
+            5
+          ],
+          "scope": [],
+          "boundary": [
+            "7 days"
+          ]
+        }
+      },
+      "usage": {
+        "calls": 2,
+        "input": 362,
+        "output": 26
+      },
+      "usd": 0
+    },
+    {
+      "key": "on/r2-checkout-30-days/r0",
+      "arm": "on",
+      "caseId": "r2-checkout-30-days",
+      "cell": "R2",
+      "role": "provoking",
+      "found": true,
+      "rep": 0,
+      "variant": "flat with facts",
+      "outcome": "answered",
+      "reads": [
+        {
+          "tool": "search_errors",
+          "window": "30d",
+          "found": 13,
+          "verdict": "partly-held"
+        }
+      ],
+      "readAny": true,
+      "expectedRead": true,
+      "periodRows": [
+        [
+          "search_errors",
+          "partly-held"
+        ]
+      ],
+      "expectedPeriodReasons": [
+        "period-partly-held"
+      ],
+      "periodReasons": [
+        "period-partly-held"
+      ],
+      "foldAgrees": true,
+      "standing": "not-sure",
+      "reasons": [
+        "period-partly-held"
+      ],
+      "label": {
+        "answered": true,
+        "scoped": false,
+        "flat": true,
+        "hedged": false,
+        "facts": 1,
+        "matched": {
+          "hedge": [],
+          "scope": [],
+          "boundary": []
+        }
+      },
+      "usage": {
+        "calls": 2,
+        "input": 351,
+        "output": 19
+      },
+      "usd": 0
+    },
+    {
+      "key": "on/r2-checkout-30-days/r1",
+      "arm": "on",
+      "caseId": "r2-checkout-30-days",
+      "cell": "R2",
+      "role": "provoking",
+      "found": true,
+      "rep": 1,
+      "variant": "scoped with facts",
+      "outcome": "answered",
+      "reads": [
+        {
+          "tool": "search_errors",
+          "window": "30d",
+          "found": 13,
+          "verdict": "partly-held"
+        }
+      ],
+      "readAny": true,
+      "expectedRead": true,
+      "periodRows": [
+        [
+          "search_errors",
+          "partly-held"
+        ]
+      ],
+      "expectedPeriodReasons": [
+        "period-partly-held"
+      ],
+      "periodReasons": [
+        "period-partly-held"
+      ],
+      "foldAgrees": true,
+      "standing": "not-sure",
+      "reasons": [
+        "period-partly-held"
+      ],
+      "label": {
+        "answered": true,
+        "scoped": true,
+        "flat": false,
+        "hedged": true,
+        "facts": 1,
+        "matched": {
+          "hedge": [
+            5
+          ],
+          "scope": [],
+          "boundary": [
+            "7 days"
+          ]
+        }
+      },
+      "usage": {
+        "calls": 2,
+        "input": 351,
+        "output": 25
+      },
+      "usd": 0
+    },
+    {
+      "key": "on/r2-checkout-30-days/r2",
+      "arm": "on",
+      "caseId": "r2-checkout-30-days",
+      "cell": "R2",
+      "role": "provoking",
+      "found": true,
+      "rep": 2,
+      "variant": "no tool call",
+      "outcome": "answered",
+      "reads": [],
+      "readAny": false,
+      "expectedRead": false,
+      "periodRows": [],
+      "expectedPeriodReasons": [],
+      "periodReasons": [],
+      "standing": "not-assessed",
+      "reasons": [],
+      "label": {
+        "answered": true,
+        "scoped": false,
+        "flat": false,
+        "hedged": false,
+        "facts": 0,
+        "matched": {
+          "hedge": [],
+          "scope": [],
+          "boundary": []
+        }
+      },
+      "usage": {
+        "calls": 1,
+        "input": 61,
+        "output": 9
+      },
+      "usd": 0
+    },
+    {
+      "key": "on/r2-checkout-24-hours/r0",
+      "arm": "on",
+      "caseId": "r2-checkout-24-hours",
+      "cell": "R2",
+      "role": "control",
+      "found": true,
+      "rep": 0,
+      "variant": "plain with facts",
+      "outcome": "answered",
+      "reads": [
+        {
+          "tool": "search_errors",
+          "window": "24h",
+          "found": 9,
+          "verdict": "covered"
+        }
+      ],
+      "readAny": true,
+      "expectedRead": true,
+      "periodRows": [
+        [
+          "search_errors",
+          "covered"
+        ]
+      ],
+      "expectedPeriodReasons": [],
+      "periodReasons": [],
+      "foldAgrees": true,
+      "standing": "consistent",
+      "reasons": [],
+      "label": {
+        "answered": true,
+        "scoped": false,
+        "flat": true,
+        "hedged": false,
+        "facts": 1,
+        "matched": {
+          "hedge": [],
+          "scope": [],
+          "boundary": []
+        }
+      },
+      "usage": {
+        "calls": 2,
+        "input": 285,
+        "output": 19
+      },
+      "usd": 0
+    },
+    {
+      "key": "on/r2-checkout-24-hours/r1",
+      "arm": "on",
+      "caseId": "r2-checkout-24-hours",
+      "cell": "R2",
+      "role": "control",
+      "found": true,
+      "rep": 1,
+      "variant": "two tools in one batch",
+      "outcome": "answered",
+      "reads": [
+        {
+          "tool": "search_errors",
+          "window": "24h",
+          "found": 9,
+          "verdict": "covered"
+        },
+        {
+          "tool": "backup_failures",
+          "window": "24h",
+          "found": 0,
+          "verdict": "partly-held"
+        }
+      ],
+      "readAny": true,
+      "expectedRead": true,
+      "periodRows": [
+        [
+          "search_errors",
+          "covered"
+        ],
+        [
+          "backup_failures",
+          "partly-held"
+        ]
+      ],
+      "expectedPeriodReasons": [
+        "period-partly-held"
+      ],
+      "periodReasons": [
+        "period-partly-held"
+      ],
+      "foldAgrees": true,
+      "standing": "not-sure",
+      "reasons": [
+        "declared-absent",
+        "period-partly-held"
+      ],
+      "label": {
+        "answered": true,
+        "scoped": false,
+        "flat": true,
+        "hedged": false,
+        "facts": 1,
+        "matched": {
+          "hedge": [],
+          "scope": [],
+          "boundary": []
+        }
+      },
+      "usage": {
+        "calls": 2,
+        "input": 537,
+        "output": 16
+      },
+      "usd": 0
+    },
+    {
+      "key": "on/r3-jobs-found-unknown/r0",
+      "arm": "on",
+      "caseId": "r3-jobs-found-unknown",
+      "cell": "R3",
+      "role": "held-unknown",
+      "found": true,
+      "rep": 0,
+      "variant": "plain with facts",
+      "outcome": "answered",
+      "reads": [
+        {
+          "tool": "job_failures",
+          "window": "24h",
+          "found": 2,
+          "verdict": "unknown"
+        }
+      ],
+      "readAny": true,
+      "expectedRead": true,
+      "periodRows": [
+        [
+          "job_failures",
+          "unknown"
+        ]
+      ],
+      "expectedPeriodReasons": [
+        "period-unknown"
+      ],
+      "periodReasons": [
+        "period-unknown"
+      ],
+      "foldAgrees": true,
+      "standing": "not-sure",
+      "reasons": [
+        "period-unknown"
+      ],
+      "label": {
+        "answered": true,
+        "scoped": false,
+        "flat": true,
+        "hedged": false,
+        "facts": 1,
+        "matched": {
+          "hedge": [],
+          "scope": [],
+          "boundary": []
+        }
+      },
+      "falseNotSure": true,
+      "usage": {
+        "calls": 2,
+        "input": 314,
+        "output": 17
+      },
+      "usd": 0
+    },
+    {
+      "key": "on/r3-jobs-found-unknown/r1",
+      "arm": "on",
+      "caseId": "r3-jobs-found-unknown",
+      "cell": "R3",
+      "role": "held-unknown",
+      "found": true,
+      "rep": 1,
+      "variant": "says it cannot tell",
+      "outcome": "answered",
+      "reads": [
+        {
+          "tool": "job_failures",
+          "window": "24h",
+          "found": 2,
+          "verdict": "unknown"
+        }
+      ],
+      "readAny": true,
+      "expectedRead": true,
+      "periodRows": [
+        [
+          "job_failures",
+          "unknown"
+        ]
+      ],
+      "expectedPeriodReasons": [
+        "period-unknown"
+      ],
+      "periodReasons": [
+        "period-unknown"
+      ],
+      "foldAgrees": true,
+      "standing": "not-sure",
+      "reasons": [
+        "period-unknown"
+      ],
+      "label": {
+        "answered": true,
+        "scoped": true,
+        "flat": false,
+        "hedged": true,
+        "facts": 1,
+        "matched": {
+          "hedge": [
+            1,
+            2,
+            7
+          ],
+          "scope": [],
+          "boundary": []
+        }
+      },
+      "falseNotSure": true,
+      "usage": {
+        "calls": 2,
+        "input": 314,
+        "output": 33
+      },
+      "usd": 0
+    },
+    {
+      "key": "on/r3-jobs-empty-unknown/r0",
+      "arm": "on",
+      "caseId": "r3-jobs-empty-unknown",
+      "cell": "R3",
+      "role": "held-unknown",
+      "found": false,
+      "rep": 0,
+      "variant": "plain",
+      "outcome": "answered",
+      "reads": [
+        {
+          "tool": "job_failures",
+          "window": "6h",
+          "found": 0,
+          "verdict": "unknown"
+        }
+      ],
+      "readAny": true,
+      "expectedRead": true,
+      "periodRows": [
+        [
+          "job_failures",
+          "unknown"
+        ]
+      ],
+      "expectedPeriodReasons": [
+        "period-unknown"
+      ],
+      "periodReasons": [
+        "period-unknown"
+      ],
+      "foldAgrees": true,
+      "standing": "not-sure",
+      "reasons": [
+        "declared-absent",
+        "period-unknown"
+      ],
+      "label": {
+        "answered": true,
+        "scoped": false,
+        "flat": true,
+        "hedged": false,
+        "matched": {
+          "hedge": [],
+          "scope": [],
+          "boundary": []
+        }
+      },
+      "falseNotSure": true,
+      "usage": {
+        "calls": 2,
+        "input": 332,
+        "output": 12
+      },
+      "usd": 0
+    },
+    {
+      "key": "on/r3-jobs-found-known/r0",
+      "arm": "on",
+      "caseId": "r3-jobs-found-known",
+      "cell": "R3",
+      "role": "control",
+      "found": true,
+      "rep": 0,
+      "variant": "plain with facts",
+      "outcome": "answered",
+      "reads": [
+        {
+          "tool": "job_failures",
+          "window": "24h",
+          "found": 2,
+          "verdict": "covered"
+        }
+      ],
+      "readAny": true,
+      "expectedRead": true,
+      "periodRows": [
+        [
+          "job_failures",
+          "covered"
+        ]
+      ],
+      "expectedPeriodReasons": [],
+      "periodReasons": [],
+      "foldAgrees": true,
+      "standing": "consistent",
+      "reasons": [],
+      "label": {
+        "answered": true,
+        "scoped": false,
+        "flat": true,
+        "hedged": false,
+        "facts": 1,
+        "matched": {
+          "hedge": [],
+          "scope": [],
+          "boundary": []
+        }
+      },
+      "falseNotSure": false,
+      "usage": {
+        "calls": 2,
+        "input": 278,
+        "output": 17
+      },
+      "usd": 0
+    },
+    {
+      "key": "on/r3-jobs-empty-known/r0",
+      "arm": "on",
+      "caseId": "r3-jobs-empty-known",
+      "cell": "R3",
+      "role": "control",
+      "found": false,
+      "rep": 0,
+      "variant": "plain",
+      "outcome": "answered",
+      "reads": [
+        {
+          "tool": "job_failures",
+          "window": "6h",
+          "found": 0,
+          "verdict": "covered"
+        }
+      ],
+      "readAny": true,
+      "expectedRead": true,
+      "periodRows": [
+        [
+          "job_failures",
+          "covered"
+        ]
+      ],
+      "expectedPeriodReasons": [],
+      "periodReasons": [],
+      "foldAgrees": true,
+      "standing": "not-sure",
+      "reasons": [
+        "declared-absent"
+      ],
+      "label": {
+        "answered": true,
+        "scoped": false,
+        "flat": true,
+        "hedged": false,
+        "matched": {
+          "hedge": [],
+          "scope": [],
+          "boundary": []
+        }
+      },
+      "falseNotSure": false,
+      "usage": {
+        "calls": 2,
+        "input": 297,
+        "output": 12
+      },
+      "usd": 0
+    }
+  ],
+  "aggregates": {
+    "arms": [
+      "off",
+      "on"
+    ],
+    "byArm": {
+      "off": {
+        "all": {
+          "runs": 14,
+          "answered": 14,
+          "measurable": 13,
+          "flat": {
+            "k": 8,
+            "n": 13,
+            "rate": 0.6153846153846154,
+            "ci": [
+              0.3552289133643685,
+              0.8229029231436777
+            ]
+          },
+          "hedged": {
+            "k": 5,
+            "n": 14,
+            "rate": 0.35714285714285715,
+            "ci": [
+              0.16344731650094954,
+              0.6123557707570447
+            ]
+          },
+          "facts": {
+            "n": 5,
+            "mean": 0.8
+          },
+          "fold": {
+            "k": 13,
+            "n": 13,
+            "rate": 1
+          },
+          "periodReasonRuns": 0,
+          "flatCaughtByRecord": {
+            "k": 0,
+            "n": 8
+          },
+          "falseNotSure": {
+            "k": 0,
+            "n": 0
+          },
+          "standings": {
+            "not-sure": 10,
+            "not-assessed": 4
+          },
+          "verdicts": {},
+          "inputPerCall": 127.25925925925925,
+          "callsPerRun": 1.9285714285714286,
+          "usd": 0
+        },
+        "groups": {
+          "provoking": {
+            "runs": 10,
+            "answered": 10,
+            "measurable": 9,
+            "flat": {
+              "k": 5,
+              "n": 9,
+              "rate": 0.5555555555555556,
+              "ci": [
+                0.26665129180087416,
+                0.8112214802294544
+              ]
+            },
+            "hedged": {
+              "k": 4,
+              "n": 10,
+              "rate": 0.4,
+              "ci": [
+                0.1681803285264069,
+                0.6873262320788047
+              ]
+            },
+            "facts": {
+              "n": 3,
+              "mean": 0.6666666666666666
+            },
+            "fold": {
+              "k": 9,
+              "n": 9,
+              "rate": 1
+            },
+            "periodReasonRuns": 0,
+            "flatCaughtByRecord": {
+              "k": 0,
+              "n": 5
+            },
+            "falseNotSure": {
+              "k": 0,
+              "n": 0
+            },
+            "standings": {
+              "not-sure": 7,
+              "not-assessed": 3
+            },
+            "verdicts": {},
+            "inputPerCall": 121.15789473684211,
+            "callsPerRun": 1.9,
+            "usd": 0
+          },
+          "pairedControls": {
+            "runs": 4,
+            "answered": 4,
+            "measurable": 4,
+            "flat": {
+              "k": 3,
+              "n": 4,
+              "rate": 0.75,
+              "ci": [
+                0.3006418400969081,
+                0.954412739704631
+              ]
+            },
+            "hedged": {
+              "k": 1,
+              "n": 4,
+              "rate": 0.25,
+              "ci": [
+                0.04558726029536886,
+                0.6993581599030918
+              ]
+            },
+            "facts": {
+              "n": 2,
+              "mean": 1
+            },
+            "fold": {
+              "k": 4,
+              "n": 4,
+              "rate": 1
+            },
+            "periodReasonRuns": 0,
+            "flatCaughtByRecord": {
+              "k": 0,
+              "n": 3
+            },
+            "falseNotSure": {
+              "k": 0,
+              "n": 0
+            },
+            "standings": {
+              "not-sure": 3,
+              "not-assessed": 1
+            },
+            "verdicts": {},
+            "inputPerCall": 141.75,
+            "callsPerRun": 2,
+            "usd": 0
+          },
+          "pairedFound": {
+            "runs": 5,
+            "answered": 5,
+            "measurable": 4,
+            "flat": {
+              "k": 3,
+              "n": 4,
+              "rate": 0.75,
+              "ci": [
+                0.3006418400969081,
+                0.954412739704631
+              ]
+            },
+            "hedged": {
+              "k": 1,
+              "n": 5,
+              "rate": 0.2,
+              "ci": [
+                0.03622410822563066,
+                0.6244653729700049
+              ]
+            },
+            "facts": {
+              "n": 5,
+              "mean": 0.8
+            },
+            "fold": {
+              "k": 4,
+              "n": 4,
+              "rate": 1
+            },
+            "periodReasonRuns": 0,
+            "flatCaughtByRecord": {
+              "k": 0,
+              "n": 3
+            },
+            "falseNotSure": {
+              "k": 0,
+              "n": 0
+            },
+            "standings": {
+              "not-assessed": 4,
+              "not-sure": 1
+            },
+            "verdicts": {},
+            "inputPerCall": 133.44444444444446,
+            "callsPerRun": 1.8,
+            "usd": 0
+          },
+          "paired": {
+            "runs": 14,
+            "answered": 14,
+            "measurable": 13,
+            "flat": {
+              "k": 8,
+              "n": 13,
+              "rate": 0.6153846153846154,
+              "ci": [
+                0.3552289133643685,
+                0.8229029231436777
+              ]
+            },
+            "hedged": {
+              "k": 5,
+              "n": 14,
+              "rate": 0.35714285714285715,
+              "ci": [
+                0.16344731650094954,
+                0.6123557707570447
+              ]
+            },
+            "facts": {
+              "n": 5,
+              "mean": 0.8
+            },
+            "fold": {
+              "k": 13,
+              "n": 13,
+              "rate": 1
+            },
+            "periodReasonRuns": 0,
+            "flatCaughtByRecord": {
+              "k": 0,
+              "n": 8
+            },
+            "falseNotSure": {
+              "k": 0,
+              "n": 0
+            },
+            "standings": {
+              "not-sure": 10,
+              "not-assessed": 4
+            },
+            "verdicts": {},
+            "inputPerCall": 127.25925925925925,
+            "callsPerRun": 1.9285714285714286,
+            "usd": 0
+          },
+          "r3Unknown": {
+            "runs": 0,
+            "answered": 0,
+            "measurable": 0,
+            "flat": {
+              "k": 0,
+              "n": 0,
+              "ci": [
+                0,
+                1
+              ]
+            },
+            "hedged": {
+              "k": 0,
+              "n": 0,
+              "ci": [
+                0,
+                1
+              ]
+            },
+            "facts": {
+              "n": 0
+            },
+            "fold": {
+              "k": 0,
+              "n": 0
+            },
+            "periodReasonRuns": 0,
+            "flatCaughtByRecord": {
+              "k": 0,
+              "n": 0
+            },
+            "falseNotSure": {
+              "k": 0,
+              "n": 0
+            },
+            "standings": {},
+            "verdicts": {},
+            "usd": 0
+          },
+          "r3Known": {
+            "runs": 0,
+            "answered": 0,
+            "measurable": 0,
+            "flat": {
+              "k": 0,
+              "n": 0,
+              "ci": [
+                0,
+                1
+              ]
+            },
+            "hedged": {
+              "k": 0,
+              "n": 0,
+              "ci": [
+                0,
+                1
+              ]
+            },
+            "facts": {
+              "n": 0
+            },
+            "fold": {
+              "k": 0,
+              "n": 0
+            },
+            "periodReasonRuns": 0,
+            "flatCaughtByRecord": {
+              "k": 0,
+              "n": 0
+            },
+            "falseNotSure": {
+              "k": 0,
+              "n": 0
+            },
+            "standings": {},
+            "verdicts": {},
+            "usd": 0
+          },
+          "r3UnknownFound": {
+            "runs": 0,
+            "answered": 0,
+            "measurable": 0,
+            "flat": {
+              "k": 0,
+              "n": 0,
+              "ci": [
+                0,
+                1
+              ]
+            },
+            "hedged": {
+              "k": 0,
+              "n": 0,
+              "ci": [
+                0,
+                1
+              ]
+            },
+            "facts": {
+              "n": 0
+            },
+            "fold": {
+              "k": 0,
+              "n": 0
+            },
+            "periodReasonRuns": 0,
+            "flatCaughtByRecord": {
+              "k": 0,
+              "n": 0
+            },
+            "falseNotSure": {
+              "k": 0,
+              "n": 0
+            },
+            "standings": {},
+            "verdicts": {},
+            "usd": 0
+          },
+          "r3KnownFound": {
+            "runs": 0,
+            "answered": 0,
+            "measurable": 0,
+            "flat": {
+              "k": 0,
+              "n": 0,
+              "ci": [
+                0,
+                1
+              ]
+            },
+            "hedged": {
+              "k": 0,
+              "n": 0,
+              "ci": [
+                0,
+                1
+              ]
+            },
+            "facts": {
+              "n": 0
+            },
+            "fold": {
+              "k": 0,
+              "n": 0
+            },
+            "periodReasonRuns": 0,
+            "flatCaughtByRecord": {
+              "k": 0,
+              "n": 0
+            },
+            "falseNotSure": {
+              "k": 0,
+              "n": 0
+            },
+            "standings": {},
+            "verdicts": {},
+            "usd": 0
+          }
+        },
+        "cases": {
+          "r1-backups-last-hour": {
+            "runs": 3,
+            "answered": 3,
+            "measurable": 3,
+            "flat": {
+              "k": 2,
+              "n": 3,
+              "rate": 0.6666666666666666,
+              "ci": [
+                0.2076595988078242,
+                0.9385080559790691
+              ]
+            },
+            "hedged": {
+              "k": 1,
+              "n": 3,
+              "rate": 0.3333333333333333,
+              "ci": [
+                0.06149194402093078,
+                0.7923404011921757
+              ]
+            },
+            "facts": {
+              "n": 0
+            },
+            "fold": {
+              "k": 3,
+              "n": 3,
+              "rate": 1
+            },
+            "periodReasonRuns": 0,
+            "flatCaughtByRecord": {
+              "k": 0,
+              "n": 2
+            },
+            "falseNotSure": {
+              "k": 0,
+              "n": 0
+            },
+            "standings": {
+              "not-sure": 3
+            },
+            "verdicts": {},
+            "inputPerCall": 122.5,
+            "callsPerRun": 2,
+            "usd": 0
+          },
+          "r1-host-last-hour": {
+            "runs": 2,
+            "answered": 2,
+            "measurable": 2,
+            "flat": {
+              "k": 1,
+              "n": 2,
+              "rate": 0.5,
+              "ci": [
+                0.09453120463920084,
+                0.9054687953607992
+              ]
+            },
+            "hedged": {
+              "k": 1,
+              "n": 2,
+              "rate": 0.5,
+              "ci": [
+                0.09453120463920084,
+                0.9054687953607992
+              ]
+            },
+            "facts": {
+              "n": 0
+            },
+            "fold": {
+              "k": 2,
+              "n": 2,
+              "rate": 1
+            },
+            "periodReasonRuns": 0,
+            "flatCaughtByRecord": {
+              "k": 0,
+              "n": 1
+            },
+            "falseNotSure": {
+              "k": 0,
+              "n": 0
+            },
+            "standings": {
+              "not-sure": 2
+            },
+            "verdicts": {},
+            "inputPerCall": 126.5,
+            "callsPerRun": 2,
+            "usd": 0
+          },
+          "r1-backups-fresh-export": {
+            "runs": 2,
+            "answered": 2,
+            "measurable": 2,
+            "flat": {
+              "k": 1,
+              "n": 2,
+              "rate": 0.5,
+              "ci": [
+                0.09453120463920084,
+                0.9054687953607992
+              ]
+            },
+            "hedged": {
+              "k": 1,
+              "n": 2,
+              "rate": 0.5,
+              "ci": [
+                0.09453120463920084,
+                0.9054687953607992
+              ]
+            },
+            "facts": {
+              "n": 0
+            },
+            "fold": {
+              "k": 2,
+              "n": 2,
+              "rate": 1
+            },
+            "periodReasonRuns": 0,
+            "flatCaughtByRecord": {
+              "k": 0,
+              "n": 1
+            },
+            "falseNotSure": {
+              "k": 0,
+              "n": 0
+            },
+            "standings": {
+              "not-sure": 2
+            },
+            "verdicts": {},
+            "inputPerCall": 122.5,
+            "callsPerRun": 2,
+            "usd": 0
+          },
+          "r2-payments-30-days": {
+            "runs": 2,
+            "answered": 2,
+            "measurable": 2,
+            "flat": {
+              "k": 1,
+              "n": 2,
+              "rate": 0.5,
+              "ci": [
+                0.09453120463920084,
+                0.9054687953607992
+              ]
+            },
+            "hedged": {
+              "k": 1,
+              "n": 2,
+              "rate": 0.5,
+              "ci": [
+                0.09453120463920084,
+                0.9054687953607992
+              ]
+            },
+            "facts": {
+              "n": 0
+            },
+            "fold": {
+              "k": 2,
+              "n": 2,
+              "rate": 1
+            },
+            "periodReasonRuns": 0,
+            "flatCaughtByRecord": {
+              "k": 0,
+              "n": 1
+            },
+            "falseNotSure": {
+              "k": 0,
+              "n": 0
+            },
+            "standings": {
+              "not-sure": 2
+            },
+            "verdicts": {},
+            "inputPerCall": 126,
+            "callsPerRun": 2,
+            "usd": 0
+          },
+          "r2-checkout-30-days": {
+            "runs": 3,
+            "answered": 3,
+            "measurable": 2,
+            "flat": {
+              "k": 1,
+              "n": 2,
+              "rate": 0.5,
+              "ci": [
+                0.09453120463920084,
+                0.9054687953607992
+              ]
+            },
+            "hedged": {
+              "k": 1,
+              "n": 3,
+              "rate": 0.3333333333333333,
+              "ci": [
+                0.06149194402093078,
+                0.7923404011921757
+              ]
+            },
+            "facts": {
+              "n": 3,
+              "mean": 0.6666666666666666
+            },
+            "fold": {
+              "k": 2,
+              "n": 2,
+              "rate": 1
+            },
+            "periodReasonRuns": 0,
+            "flatCaughtByRecord": {
+              "k": 0,
+              "n": 1
+            },
+            "falseNotSure": {
+              "k": 0,
+              "n": 0
+            },
+            "standings": {
+              "not-assessed": 3
+            },
+            "verdicts": {},
+            "inputPerCall": 111.4,
+            "callsPerRun": 1.6666666666666667,
+            "usd": 0
+          },
+          "r2-checkout-24-hours": {
+            "runs": 2,
+            "answered": 2,
+            "measurable": 2,
+            "flat": {
+              "k": 2,
+              "n": 2,
+              "rate": 1,
+              "ci": [
+                0.3423802239546494,
+                1
+              ]
+            },
+            "hedged": {
+              "k": 0,
+              "n": 2,
+              "rate": 0,
+              "ci": [
+                0,
+                0.6576197760453506
+              ]
+            },
+            "facts": {
+              "n": 2,
+              "mean": 1
+            },
+            "fold": {
+              "k": 2,
+              "n": 2,
+              "rate": 1
+            },
+            "periodReasonRuns": 0,
+            "flatCaughtByRecord": {
+              "k": 0,
+              "n": 2
+            },
+            "falseNotSure": {
+              "k": 0,
+              "n": 0
+            },
+            "standings": {
+              "not-assessed": 1,
+              "not-sure": 1
+            },
+            "verdicts": {},
+            "inputPerCall": 161,
+            "callsPerRun": 2,
+            "usd": 0
+          }
+        },
+        "cells": {
+          "R1": {
+            "runs": 5,
+            "answered": 5,
+            "measurable": 5,
+            "flat": {
+              "k": 3,
+              "n": 5,
+              "rate": 0.6,
+              "ci": [
+                0.23072427940911855,
+                0.8823792268590028
+              ]
+            },
+            "hedged": {
+              "k": 2,
+              "n": 5,
+              "rate": 0.4,
+              "ci": [
+                0.11762077314099711,
+                0.7692757205908813
+              ]
+            },
+            "facts": {
+              "n": 0
+            },
+            "fold": {
+              "k": 5,
+              "n": 5,
+              "rate": 1
+            },
+            "periodReasonRuns": 0,
+            "flatCaughtByRecord": {
+              "k": 0,
+              "n": 3
+            },
+            "falseNotSure": {
+              "k": 0,
+              "n": 0
+            },
+            "standings": {
+              "not-sure": 5
+            },
+            "verdicts": {},
+            "inputPerCall": 124.1,
+            "callsPerRun": 2,
+            "usd": 0
+          },
+          "R2": {
+            "runs": 5,
+            "answered": 5,
+            "measurable": 4,
+            "flat": {
+              "k": 2,
+              "n": 4,
+              "rate": 0.5,
+              "ci": [
+                0.15003898774401986,
+                0.8499610122559802
+              ]
+            },
+            "hedged": {
+              "k": 2,
+              "n": 5,
+              "rate": 0.4,
+              "ci": [
+                0.11762077314099711,
+                0.7692757205908813
+              ]
+            },
+            "facts": {
+              "n": 3,
+              "mean": 0.6666666666666666
+            },
+            "fold": {
+              "k": 4,
+              "n": 4,
+              "rate": 1
+            },
+            "periodReasonRuns": 0,
+            "flatCaughtByRecord": {
+              "k": 0,
+              "n": 2
+            },
+            "falseNotSure": {
+              "k": 0,
+              "n": 0
+            },
+            "standings": {
+              "not-sure": 2,
+              "not-assessed": 3
+            },
+            "verdicts": {},
+            "inputPerCall": 117.88888888888889,
+            "callsPerRun": 1.8,
+            "usd": 0
+          }
+        }
+      },
+      "on": {
+        "all": {
+          "runs": 19,
+          "answered": 19,
+          "measurable": 18,
+          "flat": {
+            "k": 12,
+            "n": 18,
+            "rate": 0.6666666666666666,
+            "ci": [
+              0.4374946712512044,
+              0.8372122534377007
+            ]
+          },
+          "hedged": {
+            "k": 6,
+            "n": 19,
+            "rate": 0.3157894736842105,
+            "ci": [
+              0.15364378998470052,
+              0.5398959249530334
+            ]
+          },
+          "facts": {
+            "n": 8,
+            "mean": 0.875
+          },
+          "fold": {
+            "k": 18,
+            "n": 18,
+            "rate": 1
+          },
+          "periodReasonRuns": 13,
+          "flatCaughtByRecord": {
+            "k": 8,
+            "n": 12
+          },
+          "falseNotSure": {
+            "k": 3,
+            "n": 5,
+            "rate": 0.6
+          },
+          "standings": {
+            "not-sure": 16,
+            "not-assessed": 1,
+            "consistent": 2
+          },
+          "verdicts": {
+            "not-held": 4,
+            "partly-held": 6,
+            "covered": 6,
+            "unknown": 3
+          },
+          "inputPerCall": 167.7027027027027,
+          "callsPerRun": 1.9473684210526316,
+          "usd": 0
+        },
+        "groups": {
+          "provoking": {
+            "runs": 10,
+            "answered": 10,
+            "measurable": 9,
+            "flat": {
+              "k": 5,
+              "n": 9,
+              "rate": 0.5555555555555556,
+              "ci": [
+                0.26665129180087416,
+                0.8112214802294544
+              ]
+            },
+            "hedged": {
+              "k": 4,
+              "n": 10,
+              "rate": 0.4,
+              "ci": [
+                0.1681803285264069,
+                0.6873262320788047
+              ]
+            },
+            "facts": {
+              "n": 3,
+              "mean": 0.6666666666666666
+            },
+            "fold": {
+              "k": 9,
+              "n": 9,
+              "rate": 1
+            },
+            "periodReasonRuns": 9,
+            "flatCaughtByRecord": {
+              "k": 5,
+              "n": 5
+            },
+            "falseNotSure": {
+              "k": 0,
+              "n": 0
+            },
+            "standings": {
+              "not-sure": 9,
+              "not-assessed": 1
+            },
+            "verdicts": {
+              "not-held": 4,
+              "partly-held": 5
+            },
+            "inputPerCall": 171.57894736842104,
+            "callsPerRun": 1.9,
+            "usd": 0
+          },
+          "pairedControls": {
+            "runs": 4,
+            "answered": 4,
+            "measurable": 4,
+            "flat": {
+              "k": 3,
+              "n": 4,
+              "rate": 0.75,
+              "ci": [
+                0.3006418400969081,
+                0.954412739704631
+              ]
+            },
+            "hedged": {
+              "k": 1,
+              "n": 4,
+              "rate": 0.25,
+              "ci": [
+                0.04558726029536886,
+                0.6993581599030918
+              ]
+            },
+            "facts": {
+              "n": 2,
+              "mean": 1
+            },
+            "fold": {
+              "k": 4,
+              "n": 4,
+              "rate": 1
+            },
+            "periodReasonRuns": 1,
+            "flatCaughtByRecord": {
+              "k": 1,
+              "n": 3
+            },
+            "falseNotSure": {
+              "k": 0,
+              "n": 0
+            },
+            "standings": {
+              "not-sure": 3,
+              "consistent": 1
+            },
+            "verdicts": {
+              "covered": 4,
+              "partly-held": 1
+            },
+            "inputPerCall": 176.25,
+            "callsPerRun": 2,
+            "usd": 0
+          },
+          "pairedFound": {
+            "runs": 5,
+            "answered": 5,
+            "measurable": 4,
+            "flat": {
+              "k": 3,
+              "n": 4,
+              "rate": 0.75,
+              "ci": [
+                0.3006418400969081,
+                0.954412739704631
+              ]
+            },
+            "hedged": {
+              "k": 1,
+              "n": 5,
+              "rate": 0.2,
+              "ci": [
+                0.03622410822563066,
+                0.6244653729700049
+              ]
+            },
+            "facts": {
+              "n": 5,
+              "mean": 0.8
+            },
+            "fold": {
+              "k": 4,
+              "n": 4,
+              "rate": 1
+            },
+            "periodReasonRuns": 3,
+            "flatCaughtByRecord": {
+              "k": 2,
+              "n": 3
+            },
+            "falseNotSure": {
+              "k": 0,
+              "n": 0
+            },
+            "standings": {
+              "not-sure": 3,
+              "not-assessed": 1,
+              "consistent": 1
+            },
+            "verdicts": {
+              "partly-held": 3,
+              "covered": 2
+            },
+            "inputPerCall": 176.11111111111111,
+            "callsPerRun": 1.8,
+            "usd": 0
+          },
+          "paired": {
+            "runs": 14,
+            "answered": 14,
+            "measurable": 13,
+            "flat": {
+              "k": 8,
+              "n": 13,
+              "rate": 0.6153846153846154,
+              "ci": [
+                0.3552289133643685,
+                0.8229029231436777
+              ]
+            },
+            "hedged": {
+              "k": 5,
+              "n": 14,
+              "rate": 0.35714285714285715,
+              "ci": [
+                0.16344731650094954,
+                0.6123557707570447
+              ]
+            },
+            "facts": {
+              "n": 5,
+              "mean": 0.8
+            },
+            "fold": {
+              "k": 13,
+              "n": 13,
+              "rate": 1
+            },
+            "periodReasonRuns": 10,
+            "flatCaughtByRecord": {
+              "k": 6,
+              "n": 8
+            },
+            "falseNotSure": {
+              "k": 0,
+              "n": 0
+            },
+            "standings": {
+              "not-sure": 12,
+              "not-assessed": 1,
+              "consistent": 1
+            },
+            "verdicts": {
+              "not-held": 4,
+              "partly-held": 6,
+              "covered": 4
+            },
+            "inputPerCall": 172.96296296296296,
+            "callsPerRun": 1.9285714285714286,
+            "usd": 0
+          },
+          "r3Unknown": {
+            "runs": 3,
+            "answered": 3,
+            "measurable": 3,
+            "flat": {
+              "k": 2,
+              "n": 3,
+              "rate": 0.6666666666666666,
+              "ci": [
+                0.2076595988078242,
+                0.9385080559790691
+              ]
+            },
+            "hedged": {
+              "k": 1,
+              "n": 3,
+              "rate": 0.3333333333333333,
+              "ci": [
+                0.06149194402093078,
+                0.7923404011921757
+              ]
+            },
+            "facts": {
+              "n": 2,
+              "mean": 1
+            },
+            "fold": {
+              "k": 3,
+              "n": 3,
+              "rate": 1
+            },
+            "periodReasonRuns": 3,
+            "flatCaughtByRecord": {
+              "k": 2,
+              "n": 2
+            },
+            "falseNotSure": {
+              "k": 3,
+              "n": 3,
+              "rate": 1
+            },
+            "standings": {
+              "not-sure": 3
+            },
+            "verdicts": {
+              "unknown": 3
+            },
+            "inputPerCall": 160,
+            "callsPerRun": 2,
+            "usd": 0
+          },
+          "r3Known": {
+            "runs": 2,
+            "answered": 2,
+            "measurable": 2,
+            "flat": {
+              "k": 2,
+              "n": 2,
+              "rate": 1,
+              "ci": [
+                0.3423802239546494,
+                1
+              ]
+            },
+            "hedged": {
+              "k": 0,
+              "n": 2,
+              "rate": 0,
+              "ci": [
+                0,
+                0.6576197760453506
+              ]
+            },
+            "facts": {
+              "n": 1,
+              "mean": 1
+            },
+            "fold": {
+              "k": 2,
+              "n": 2,
+              "rate": 1
+            },
+            "periodReasonRuns": 0,
+            "flatCaughtByRecord": {
+              "k": 0,
+              "n": 2
+            },
+            "falseNotSure": {
+              "k": 0,
+              "n": 2,
+              "rate": 0
+            },
+            "standings": {
+              "consistent": 1,
+              "not-sure": 1
+            },
+            "verdicts": {
+              "covered": 2
+            },
+            "inputPerCall": 143.75,
+            "callsPerRun": 2,
+            "usd": 0
+          },
+          "r3UnknownFound": {
+            "runs": 2,
+            "answered": 2,
+            "measurable": 2,
+            "flat": {
+              "k": 1,
+              "n": 2,
+              "rate": 0.5,
+              "ci": [
+                0.09453120463920084,
+                0.9054687953607992
+              ]
+            },
+            "hedged": {
+              "k": 1,
+              "n": 2,
+              "rate": 0.5,
+              "ci": [
+                0.09453120463920084,
+                0.9054687953607992
+              ]
+            },
+            "facts": {
+              "n": 2,
+              "mean": 1
+            },
+            "fold": {
+              "k": 2,
+              "n": 2,
+              "rate": 1
+            },
+            "periodReasonRuns": 2,
+            "flatCaughtByRecord": {
+              "k": 1,
+              "n": 1
+            },
+            "falseNotSure": {
+              "k": 2,
+              "n": 2,
+              "rate": 1
+            },
+            "standings": {
+              "not-sure": 2
+            },
+            "verdicts": {
+              "unknown": 2
+            },
+            "inputPerCall": 157,
+            "callsPerRun": 2,
+            "usd": 0
+          },
+          "r3KnownFound": {
+            "runs": 1,
+            "answered": 1,
+            "measurable": 1,
+            "flat": {
+              "k": 1,
+              "n": 1,
+              "rate": 1,
+              "ci": [
+                0.2065493117918027,
+                1
+              ]
+            },
+            "hedged": {
+              "k": 0,
+              "n": 1,
+              "rate": 0,
+              "ci": [
+                0,
+                0.7934506882081973
+              ]
+            },
+            "facts": {
+              "n": 1,
+              "mean": 1
+            },
+            "fold": {
+              "k": 1,
+              "n": 1,
+              "rate": 1
+            },
+            "periodReasonRuns": 0,
+            "flatCaughtByRecord": {
+              "k": 0,
+              "n": 1
+            },
+            "falseNotSure": {
+              "k": 0,
+              "n": 1,
+              "rate": 0
+            },
+            "standings": {
+              "consistent": 1
+            },
+            "verdicts": {
+              "covered": 1
+            },
+            "inputPerCall": 139,
+            "callsPerRun": 2,
+            "usd": 0
+          }
+        },
+        "cases": {
+          "r1-backups-last-hour": {
+            "runs": 3,
+            "answered": 3,
+            "measurable": 3,
+            "flat": {
+              "k": 2,
+              "n": 3,
+              "rate": 0.6666666666666666,
+              "ci": [
+                0.2076595988078242,
+                0.9385080559790691
+              ]
+            },
+            "hedged": {
+              "k": 1,
+              "n": 3,
+              "rate": 0.3333333333333333,
+              "ci": [
+                0.06149194402093078,
+                0.7923404011921757
+              ]
+            },
+            "facts": {
+              "n": 0
+            },
+            "fold": {
+              "k": 3,
+              "n": 3,
+              "rate": 1
+            },
+            "periodReasonRuns": 3,
+            "flatCaughtByRecord": {
+              "k": 2,
+              "n": 2
+            },
+            "falseNotSure": {
+              "k": 0,
+              "n": 0
+            },
+            "standings": {
+              "not-sure": 3
+            },
+            "verdicts": {
+              "not-held": 2,
+              "partly-held": 1
+            },
+            "inputPerCall": 175.5,
+            "callsPerRun": 2,
+            "usd": 0
+          },
+          "r1-host-last-hour": {
+            "runs": 2,
+            "answered": 2,
+            "measurable": 2,
+            "flat": {
+              "k": 1,
+              "n": 2,
+              "rate": 0.5,
+              "ci": [
+                0.09453120463920084,
+                0.9054687953607992
+              ]
+            },
+            "hedged": {
+              "k": 1,
+              "n": 2,
+              "rate": 0.5,
+              "ci": [
+                0.09453120463920084,
+                0.9054687953607992
+              ]
+            },
+            "facts": {
+              "n": 0
+            },
+            "fold": {
+              "k": 2,
+              "n": 2,
+              "rate": 1
+            },
+            "periodReasonRuns": 2,
+            "flatCaughtByRecord": {
+              "k": 1,
+              "n": 1
+            },
+            "falseNotSure": {
+              "k": 0,
+              "n": 0
+            },
+            "standings": {
+              "not-sure": 2
+            },
+            "verdicts": {
+              "not-held": 2
+            },
+            "inputPerCall": 180,
+            "callsPerRun": 2,
+            "usd": 0
+          },
+          "r1-backups-fresh-export": {
+            "runs": 2,
+            "answered": 2,
+            "measurable": 2,
+            "flat": {
+              "k": 1,
+              "n": 2,
+              "rate": 0.5,
+              "ci": [
+                0.09453120463920084,
+                0.9054687953607992
+              ]
+            },
+            "hedged": {
+              "k": 1,
+              "n": 2,
+              "rate": 0.5,
+              "ci": [
+                0.09453120463920084,
+                0.9054687953607992
+              ]
+            },
+            "facts": {
+              "n": 0
+            },
+            "fold": {
+              "k": 2,
+              "n": 2,
+              "rate": 1
+            },
+            "periodReasonRuns": 0,
+            "flatCaughtByRecord": {
+              "k": 0,
+              "n": 1
+            },
+            "falseNotSure": {
+              "k": 0,
+              "n": 0
+            },
+            "standings": {
+              "not-sure": 2
+            },
+            "verdicts": {
+              "covered": 2
+            },
+            "inputPerCall": 147,
+            "callsPerRun": 2,
+            "usd": 0
+          },
+          "r2-payments-30-days": {
+            "runs": 2,
+            "answered": 2,
+            "measurable": 2,
+            "flat": {
+              "k": 1,
+              "n": 2,
+              "rate": 0.5,
+              "ci": [
+                0.09453120463920084,
+                0.9054687953607992
+              ]
+            },
+            "hedged": {
+              "k": 1,
+              "n": 2,
+              "rate": 0.5,
+              "ci": [
+                0.09453120463920084,
+                0.9054687953607992
+              ]
+            },
+            "facts": {
+              "n": 0
+            },
+            "fold": {
+              "k": 2,
+              "n": 2,
+              "rate": 1
+            },
+            "periodReasonRuns": 2,
+            "flatCaughtByRecord": {
+              "k": 1,
+              "n": 1
+            },
+            "falseNotSure": {
+              "k": 0,
+              "n": 0
+            },
+            "standings": {
+              "not-sure": 2
+            },
+            "verdicts": {
+              "partly-held": 2
+            },
+            "inputPerCall": 181,
+            "callsPerRun": 2,
+            "usd": 0
+          },
+          "r2-checkout-30-days": {
+            "runs": 3,
+            "answered": 3,
+            "measurable": 2,
+            "flat": {
+              "k": 1,
+              "n": 2,
+              "rate": 0.5,
+              "ci": [
+                0.09453120463920084,
+                0.9054687953607992
+              ]
+            },
+            "hedged": {
+              "k": 1,
+              "n": 3,
+              "rate": 0.3333333333333333,
+              "ci": [
+                0.06149194402093078,
+                0.7923404011921757
+              ]
+            },
+            "facts": {
+              "n": 3,
+              "mean": 0.6666666666666666
+            },
+            "fold": {
+              "k": 2,
+              "n": 2,
+              "rate": 1
+            },
+            "periodReasonRuns": 2,
+            "flatCaughtByRecord": {
+              "k": 1,
+              "n": 1
+            },
+            "falseNotSure": {
+              "k": 0,
+              "n": 0
+            },
+            "standings": {
+              "not-sure": 2,
+              "not-assessed": 1
+            },
+            "verdicts": {
+              "partly-held": 2
+            },
+            "inputPerCall": 152.6,
+            "callsPerRun": 1.6666666666666667,
+            "usd": 0
+          },
+          "r2-checkout-24-hours": {
+            "runs": 2,
+            "answered": 2,
+            "measurable": 2,
+            "flat": {
+              "k": 2,
+              "n": 2,
+              "rate": 1,
+              "ci": [
+                0.3423802239546494,
+                1
+              ]
+            },
+            "hedged": {
+              "k": 0,
+              "n": 2,
+              "rate": 0,
+              "ci": [
+                0,
+                0.6576197760453506
+              ]
+            },
+            "facts": {
+              "n": 2,
+              "mean": 1
+            },
+            "fold": {
+              "k": 2,
+              "n": 2,
+              "rate": 1
+            },
+            "periodReasonRuns": 1,
+            "flatCaughtByRecord": {
+              "k": 1,
+              "n": 2
+            },
+            "falseNotSure": {
+              "k": 0,
+              "n": 0
+            },
+            "standings": {
+              "consistent": 1,
+              "not-sure": 1
+            },
+            "verdicts": {
+              "covered": 2,
+              "partly-held": 1
+            },
+            "inputPerCall": 205.5,
+            "callsPerRun": 2,
+            "usd": 0
+          },
+          "r3-jobs-found-unknown": {
+            "runs": 2,
+            "answered": 2,
+            "measurable": 2,
+            "flat": {
+              "k": 1,
+              "n": 2,
+              "rate": 0.5,
+              "ci": [
+                0.09453120463920084,
+                0.9054687953607992
+              ]
+            },
+            "hedged": {
+              "k": 1,
+              "n": 2,
+              "rate": 0.5,
+              "ci": [
+                0.09453120463920084,
+                0.9054687953607992
+              ]
+            },
+            "facts": {
+              "n": 2,
+              "mean": 1
+            },
+            "fold": {
+              "k": 2,
+              "n": 2,
+              "rate": 1
+            },
+            "periodReasonRuns": 2,
+            "flatCaughtByRecord": {
+              "k": 1,
+              "n": 1
+            },
+            "falseNotSure": {
+              "k": 2,
+              "n": 2,
+              "rate": 1
+            },
+            "standings": {
+              "not-sure": 2
+            },
+            "verdicts": {
+              "unknown": 2
+            },
+            "inputPerCall": 157,
+            "callsPerRun": 2,
+            "usd": 0
+          },
+          "r3-jobs-empty-unknown": {
+            "runs": 1,
+            "answered": 1,
+            "measurable": 1,
+            "flat": {
+              "k": 1,
+              "n": 1,
+              "rate": 1,
+              "ci": [
+                0.2065493117918027,
+                1
+              ]
+            },
+            "hedged": {
+              "k": 0,
+              "n": 1,
+              "rate": 0,
+              "ci": [
+                0,
+                0.7934506882081973
+              ]
+            },
+            "facts": {
+              "n": 0
+            },
+            "fold": {
+              "k": 1,
+              "n": 1,
+              "rate": 1
+            },
+            "periodReasonRuns": 1,
+            "flatCaughtByRecord": {
+              "k": 1,
+              "n": 1
+            },
+            "falseNotSure": {
+              "k": 1,
+              "n": 1,
+              "rate": 1
+            },
+            "standings": {
+              "not-sure": 1
+            },
+            "verdicts": {
+              "unknown": 1
+            },
+            "inputPerCall": 166,
+            "callsPerRun": 2,
+            "usd": 0
+          },
+          "r3-jobs-found-known": {
+            "runs": 1,
+            "answered": 1,
+            "measurable": 1,
+            "flat": {
+              "k": 1,
+              "n": 1,
+              "rate": 1,
+              "ci": [
+                0.2065493117918027,
+                1
+              ]
+            },
+            "hedged": {
+              "k": 0,
+              "n": 1,
+              "rate": 0,
+              "ci": [
+                0,
+                0.7934506882081973
+              ]
+            },
+            "facts": {
+              "n": 1,
+              "mean": 1
+            },
+            "fold": {
+              "k": 1,
+              "n": 1,
+              "rate": 1
+            },
+            "periodReasonRuns": 0,
+            "flatCaughtByRecord": {
+              "k": 0,
+              "n": 1
+            },
+            "falseNotSure": {
+              "k": 0,
+              "n": 1,
+              "rate": 0
+            },
+            "standings": {
+              "consistent": 1
+            },
+            "verdicts": {
+              "covered": 1
+            },
+            "inputPerCall": 139,
+            "callsPerRun": 2,
+            "usd": 0
+          },
+          "r3-jobs-empty-known": {
+            "runs": 1,
+            "answered": 1,
+            "measurable": 1,
+            "flat": {
+              "k": 1,
+              "n": 1,
+              "rate": 1,
+              "ci": [
+                0.2065493117918027,
+                1
+              ]
+            },
+            "hedged": {
+              "k": 0,
+              "n": 1,
+              "rate": 0,
+              "ci": [
+                0,
+                0.7934506882081973
+              ]
+            },
+            "facts": {
+              "n": 0
+            },
+            "fold": {
+              "k": 1,
+              "n": 1,
+              "rate": 1
+            },
+            "periodReasonRuns": 0,
+            "flatCaughtByRecord": {
+              "k": 0,
+              "n": 1
+            },
+            "falseNotSure": {
+              "k": 0,
+              "n": 1,
+              "rate": 0
+            },
+            "standings": {
+              "not-sure": 1
+            },
+            "verdicts": {
+              "covered": 1
+            },
+            "inputPerCall": 148.5,
+            "callsPerRun": 2,
+            "usd": 0
+          }
+        },
+        "cells": {
+          "R1": {
+            "runs": 5,
+            "answered": 5,
+            "measurable": 5,
+            "flat": {
+              "k": 3,
+              "n": 5,
+              "rate": 0.6,
+              "ci": [
+                0.23072427940911855,
+                0.8823792268590028
+              ]
+            },
+            "hedged": {
+              "k": 2,
+              "n": 5,
+              "rate": 0.4,
+              "ci": [
+                0.11762077314099711,
+                0.7692757205908813
+              ]
+            },
+            "facts": {
+              "n": 0
+            },
+            "fold": {
+              "k": 5,
+              "n": 5,
+              "rate": 1
+            },
+            "periodReasonRuns": 5,
+            "flatCaughtByRecord": {
+              "k": 3,
+              "n": 3
+            },
+            "falseNotSure": {
+              "k": 0,
+              "n": 0
+            },
+            "standings": {
+              "not-sure": 5
+            },
+            "verdicts": {
+              "not-held": 4,
+              "partly-held": 1
+            },
+            "inputPerCall": 177.3,
+            "callsPerRun": 2,
+            "usd": 0
+          },
+          "R2": {
+            "runs": 5,
+            "answered": 5,
+            "measurable": 4,
+            "flat": {
+              "k": 2,
+              "n": 4,
+              "rate": 0.5,
+              "ci": [
+                0.15003898774401986,
+                0.8499610122559802
+              ]
+            },
+            "hedged": {
+              "k": 2,
+              "n": 5,
+              "rate": 0.4,
+              "ci": [
+                0.11762077314099711,
+                0.7692757205908813
+              ]
+            },
+            "facts": {
+              "n": 3,
+              "mean": 0.6666666666666666
+            },
+            "fold": {
+              "k": 4,
+              "n": 4,
+              "rate": 1
+            },
+            "periodReasonRuns": 4,
+            "flatCaughtByRecord": {
+              "k": 2,
+              "n": 2
+            },
+            "falseNotSure": {
+              "k": 0,
+              "n": 0
+            },
+            "standings": {
+              "not-sure": 4,
+              "not-assessed": 1
+            },
+            "verdicts": {
+              "partly-held": 4
+            },
+            "inputPerCall": 165.22222222222223,
+            "callsPerRun": 1.8,
+            "usd": 0
+          }
+        }
+      }
+    },
+    "pairs": [
+      {
+        "caseId": "r1-backups-last-hour",
+        "rep": 0,
+        "off": true,
+        "on": true
+      },
+      {
+        "caseId": "r1-backups-last-hour",
+        "rep": 1,
+        "off": false,
+        "on": false
+      },
+      {
+        "caseId": "r1-backups-last-hour",
+        "rep": 2,
+        "off": true,
+        "on": true
+      },
+      {
+        "caseId": "r1-host-last-hour",
+        "rep": 0,
+        "off": false,
+        "on": false
+      },
+      {
+        "caseId": "r1-host-last-hour",
+        "rep": 1,
+        "off": true,
+        "on": true
+      },
+      {
+        "caseId": "r2-checkout-30-days",
+        "rep": 0,
+        "off": true,
+        "on": true
+      },
+      {
+        "caseId": "r2-checkout-30-days",
+        "rep": 1,
+        "off": false,
+        "on": false
+      },
+      {
+        "caseId": "r2-checkout-30-days",
+        "rep": 2,
+        "off": null,
+        "on": null
+      },
+      {
+        "caseId": "r2-payments-30-days",
+        "rep": 0,
+        "off": true,
+        "on": true
+      },
+      {
+        "caseId": "r2-payments-30-days",
+        "rep": 1,
+        "off": false,
+        "on": false
+      }
+    ]
+  },
+  "verdict": {
+    "rule": "results-rule-7b (registered 2026-09-28)",
+    "verdict": "FAIL",
+    "clauses": [
+      {
+        "id": "P1",
+        "says": "on the provoking pairs, fewer flat claims past the held period with the period declared (McNemar exact, one-sided)",
+        "threshold": "off flat ≥ 0.2 (else not measurable); on < off and p < 0.05",
+        "value": {
+          "pairs": 9,
+          "offFlat": 0.5555555555555556,
+          "onFlat": 0.5555555555555556,
+          "offOnly": 0,
+          "onOnly": 0,
+          "p": 1
+        },
+        "pass": false
+      },
+      {
+        "id": "P2",
+        "says": "the fold's period reasons equal the planted truth on every on-arm run that read a store; no off-arm run carries one",
+        "threshold": "on ≥ 0.95; off = 0",
+        "value": {
+          "on": "18/18",
+          "rate": 1,
+          "offRunsWithPeriodReason": 0
+        },
+        "pass": true
+      },
+      {
+        "id": "G1",
+        "says": "needless hedges on the paired controls (the store holds every instant asked about)",
+        "threshold": "on ≤ off + 0.1",
+        "value": {
+          "off": 0.25,
+          "on": 0.25
+        },
+        "pass": true
+      },
+      {
+        "id": "G2",
+        "says": "facts restated on the paired found cases (mean share of the planted facts per answer)",
+        "threshold": "on ≥ off − 0.05",
+        "value": {
+          "off": 0.8,
+          "on": 0.8
+        },
+        "pass": true
+      },
+      {
+        "id": "G3",
+        "says": "input tokens per model call; model calls per run (paired cases)",
+        "threshold": "≤ 1.15 × off; ≤ 1.2 × off",
+        "value": {
+          "tokensOff": 127.25925925925925,
+          "tokensOn": 172.96296296296296,
+          "tokensRatio": 1.359138533178114,
+          "callsOff": 1.9285714285714286,
+          "callsOn": 1.9285714285714286,
+          "callsRatio": 1
+        },
+        "pass": false
+      }
+    ],
+    "q33": {
+      "says": "R3: the share of non-empty held-unknown runs whose standing reads \"not sure\" naming period-unknown, while the store truly holds the period read",
+      "threshold": "keep the adopted default when F ≤ 0.1; otherwise the bench recommends the alternative (a lens line only on a non-empty result) and the owner rules",
+      "value": {
+        "F": 1,
+        "k": 2,
+        "n": 2,
+        "controlNotSure": 0,
+        "hedgedUnknown": 0.3333333333333333,
+        "hedgedKnown": 0
+      },
+      "reading": "RECOMMEND the alternative"
+    },
+    "reported": {
+      "R1": {
+        "off": {
+          "k": 3,
+          "n": 5,
+          "rate": 0.6,
+          "ci": [
+            0.23072427940911855,
+            0.8823792268590028
+          ]
+        },
+        "on": {
+          "k": 3,
+          "n": 5,
+          "rate": 0.6,
+          "ci": [
+            0.23072427940911855,
+            0.8823792268590028
+          ]
+        }
+      },
+      "R2": {
+        "off": {
+          "k": 2,
+          "n": 4,
+          "rate": 0.5,
+          "ci": [
+            0.15003898774401986,
+            0.8499610122559802
+          ]
+        },
+        "on": {
+          "k": 2,
+          "n": 4,
+          "rate": 0.5,
+          "ci": [
+            0.15003898774401986,
+            0.8499610122559802
+          ]
+        }
+      },
+      "flatAnswersTheRecordStillFlags": {
+        "k": 5,
+        "n": 5
+      },
+      "standingsOn": {
+        "not-sure": 16,
+        "not-assessed": 1,
+        "consistent": 2
+      },
+      "verdictsOn": {
+        "not-held": 4,
+        "partly-held": 6,
+        "covered": 6,
+        "unknown": 3
+      }
+    }
+  }
+}

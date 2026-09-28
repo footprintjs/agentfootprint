@@ -32,9 +32,24 @@
  * recognizer, same guarantee.
  */
 
-import { COVERAGE_DECLARATION_KEYS, normalizeCoverageList } from './items.js';
+import { normalizeCoverageList } from './items.js';
+import { mintPeriod } from './period.js';
 import { refusal, refuseUnknownKeys } from './refusal.js';
-import type { Coverage, CoverageDeclaration, CoveredResult } from './types.js';
+import type { Coverage, CoverageLedgerDeclaration, CoveredResult } from './types.js';
+
+/**
+ * The keys `coverage()`'s declaration has — the three lists and, since honesty
+ * step 7b, the period the value's read covered — tied to the type in BOTH
+ * directions, the `COVERAGE_DECLARATION_KEYS` way. That list stays the three
+ * lists alone: a described result's `coverage` shares it, and takes no period
+ * (its period is top-level).
+ */
+const LEDGER_DECLARATION_KEYS: readonly string[] = Object.keys({
+  checked: true,
+  notChecked: true,
+  cannotCover: true,
+  period: true,
+} satisfies Record<keyof CoverageLedgerDeclaration, true>);
 
 // The recognizer lives in the leaf `recognize.ts` (a post-hoc reader — the one
 // emptiness reader, the standing fold — asks it without loading this mint);
@@ -69,8 +84,13 @@ export const COVERAGE_NOTE =
  * `.limitsTravelWithTheAnswer()` configured, appends it to the run's final
  * answer where the model cannot drop it.
  *
+ * `period` (honesty step 7b) says what time the read behind the value
+ * covered — `{ queried, held, readAt? }`, ISO 8601 instants with a zone; it is
+ * a boundary on its own, served inside `af_coverage` before `result`, and the
+ * results layer judges it. `coverage()` takes no `provenance`.
+ *
  * Refuses (throws, where it is called) a boundary that declares nothing, a
- * malformed item, and any key the boundary does not have — naming the
+ * malformed item or period, and any key the boundary does not have — naming the
  * spelling meant when the key is a casing slip (`not_checked` →
  * `notChecked`), so a list declared from plain JavaScript or JSON cannot
  * vanish without a word. Every refusal starts `refused: `: inside `execute`
@@ -95,19 +115,29 @@ export const COVERAGE_NOTE =
  *     },
  *   });
  */
-export function coverage<T>(content: T, decl: CoverageDeclaration): CoveredResult<T> {
+export function coverage<T>(content: T, decl: CoverageLedgerDeclaration): CoveredResult<T> {
   const fn = 'coverage';
   if (typeof decl !== 'object' || decl === null) {
     throw refusal(
       `${fn}() takes the result and its boundary — coverage(result, { checked?, notChecked?, ` +
-        `cannotCover? }). To return a result with no declared boundary, return it bare.`,
+        `cannotCover?, period? }). To return a result with no declared boundary, return it bare.`,
     );
   }
-  refuseUnknownKeys(decl, COVERAGE_DECLARATION_KEYS);
+  refuseUnknownKeys(decl, LEDGER_DECLARATION_KEYS);
   const checked = normalizeCoverageList('checked', decl.checked, false);
   const notChecked = normalizeCoverageList('notChecked', decl.notChecked, false);
   const cannotCover = normalizeCoverageList('cannotCover', decl.cannotCover, true);
-  if (checked.length === 0 && notChecked.length === 0 && cannotCover.length === 0) {
+  // Honesty step 7b: the period the value's read covered, by the ONE period
+  // rule (`period.ts` · `mintPeriod`) — refused here, in camelCase, when
+  // malformed. A period IS a declared boundary (in time), so a ledger that
+  // declares only a period is not the empty ledger refused below.
+  const period = mintPeriod(decl.period);
+  if (
+    checked.length === 0 &&
+    notChecked.length === 0 &&
+    cannotCover.length === 0 &&
+    period === undefined
+  ) {
     throw refusal(
       `all three lists are empty, so this ledger declares no boundary at all — it ` +
         `would tell a reader nothing while looking like it did, which is worse than saying ` +
@@ -120,6 +150,8 @@ export function coverage<T>(content: T, decl: CoverageDeclaration): CoveredResul
       ...(checked.length > 0 && { checked }),
       ...(notChecked.length > 0 && { not_checked: notChecked }),
       ...(cannotCover.length > 0 && { cannot_cover: cannotCover }),
+      // Serialized BEFORE `result`, with the lists, so a truncated view keeps it.
+      ...(period !== undefined && { period }),
       note: COVERAGE_NOTE,
     },
     result: content,

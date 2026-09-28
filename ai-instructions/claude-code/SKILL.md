@@ -246,6 +246,16 @@ execute: ({ vm, summary }) => {
 },
 ```
 
+All three take a `period` — what time the READ covered: `{ queried: { from, to }, held:
+{ from, to } | 'unknown', readAt? }`, ISO 8601 instants WITH a zone, computed by the tool
+from its own data (the library never parses "last hour"). `absent()` also takes
+`describedResult()`'s `provenance: { measuredAt, source }`. The results layer files one
+verdict per call (`covered` · `partly-held` · `not-held` · `unknown` · `undeclared`) and
+the answer's standing reads "not sure" for all but `covered`; a tool that declares a period
+argument (`defineTool({ …, period: { argument: 'window' } })`, needs an `askOrAssume` rule)
+arms it and gets `undeclared` when its result says nothing; `.resultsLayer()` arms it for
+tools that declare a period only on their results.
+
 `describedResult()` is camelCase throughout (`measuredAt`, `ageSeconds`, `isCounter`,
 `filterNote`); the envelope the model reads stays snake_case. Series need `grain`
 (`{ interval, aggregation, isCounter }` — state `isCounter` for `sum`/`count`-like
@@ -254,7 +264,10 @@ refusal. `semantic()` is the deprecated name for the same envelope with a snake_
 declaration — do not use it in new code.
 
 A helper that cannot honor its declaration throws inside `execute`: the model reads text
-starting `refused: ` in place of the data, and the run continues. An absence gets the
+starting `refused: ` in place of the data, and the run continues. A data list is never
+empty — `describedResult({ facts: [] })` is refused with "`facts` is empty — if nothing
+matched, return absent({ what, checked }) instead" — so every `execute` that returns rows
+writes both branches: `rows.length ? describedResult({ … }) : absent({ … })`. An absence gets the
 delivered status `'absent'` (route it with `onToolStatus: 'absent'`) and grounds only its
 COVERAGE in the evidence gate — so an id the model invented does not become grounded by one
 lookup that found nothing. It is never an error: nothing retries it, nothing refuses it, no
@@ -275,7 +288,7 @@ const agent = Agent.create({ provider, model })
 agent.on('agentfootprint.context.evaluated', (e) => console.log(e.payload.activeIds));
 ```
 
-**122 typed events across 27 domains.** Two subscription shapes and no third:
+**124 typed events across 28 domains.** Two subscription shapes and no third:
 `'*'` (every event) and `'agentfootprint.<domain>.*'` (one domain). **`'agentfootprint.*'`
 is not a pattern** — TypeScript rejects it, and at runtime it would match nothing.
 

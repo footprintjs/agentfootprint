@@ -62,6 +62,8 @@ import {
 import type { MemoryIdentity } from '../memory/identity/types.js';
 import type { FoldedSpan } from './agent/window/types.js';
 import { argumentRowIsWellFormed } from './agent/arguments/rows.js';
+import { periodRowIsWellFormed } from './agent/coverage/period.js';
+import { witnessRowIsWellFormed } from './agent/assessment/witness.js';
 import {
   BASIS_VALUES,
   EXPECT_VALUES,
@@ -157,6 +159,26 @@ export interface AgentRunCheckpoint {
    * {@link skillCursor}.
    */
   readonly findingsLedger?: FindingsLedger;
+  /**
+   * The conversation TURN the stored history ends on — the stored run's
+   * `AgentState.turnNumber` — carried while an honesty layer is armed.
+   *
+   * Every ledger row filed while a layer is armed carries its `turn`, and the
+   * answer's standing reads "this turn" by that stamp, so a stamp must never
+   * repeat in one conversation. The count of user messages in `history` cannot
+   * promise that: a window strategy or a compaction trims the stored history,
+   * and the count repeats and goes backwards — an earlier turn's verdict would
+   * then be folded as a later turn's. So the next run starts from this number:
+   * `run({ continueFrom })` is the turn after it, `resumeOnError` the same
+   * turn again. Written by both carriers (`checkpoint()` and the crash
+   * checkpoint), and only while a layer is armed — every other checkpoint
+   * keeps its exact byte shape.
+   *
+   * **Version 1 still**, by the same documented rule as {@link folded} /
+   * {@link findingsLedger}: an optional field is not a format change, and a
+   * runtime that has never heard of it continues the conversation correctly.
+   */
+  readonly turnNumber?: number;
   /**
    * WHO this conversation belongs to — the `identity` the stored run was
    * given, carried so that continuing it lands in the same namespace it
@@ -558,6 +580,13 @@ export function buildCheckpoint(
    * Absent unless the run's ledger is non-empty.
    */
   findingsLedger?: FindingsLedger,
+  /**
+   * The turn the failing run was on (honesty layers), read from the same
+   * committed snapshot by the same one-reader-two-carriers rule — so a crash
+   * checkpoint cannot lose the turn `checkpoint()` keeps. Absent unless a
+   * layer is armed; see {@link AgentRunCheckpoint.turnNumber}.
+   */
+  turnNumber?: number,
 ): AgentRunCheckpoint {
   return {
     version: 1,
@@ -573,6 +602,7 @@ export function buildCheckpoint(
     ...(skillCursor !== undefined && { skillCursor }),
     ...(evidenceRecovery !== undefined && { evidenceRecovery }),
     ...(findingsLedger !== undefined && findingsLedger.length > 0 && { findingsLedger }),
+    ...(turnNumber !== undefined && { turnNumber }),
   };
 }
 
@@ -671,9 +701,28 @@ function ledgerRowIsWellFormed(row: unknown): boolean {
     // that carries this kind.
     case 'argument':
       return argumentRowIsWellFormed(r);
+    // The results layer's verdict on one call's period (honesty layer 3, step
+    // 7b) — the arm ships in the SAME change as the row kind. One owner of the
+    // row's shape: `agent/coverage/period.ts`. An older runtime refuses a
+    // checkpoint that carries this kind.
+    case 'period':
+      return periodRowIsWellFormed(r);
+    // The answer layer's witness rows (honesty layer 4): the evidence gate's
+    // clean verdict and an answer given before its declared steps finished.
+    // The arms ship in the SAME change as the kinds; one owner of their shape
+    // (`assessment/witness.ts`). An older runtime refuses a checkpoint that
+    // carries either kind.
+    case 'grounded':
+    case 'steps-unfinished':
+      return witnessRowIsWellFormed(r);
     default:
       return false;
   }
+}
+
+/** A conversation turn: a positive whole number (the `AgentState.turnNumber` seed writes). */
+function isTurnNumber(value: unknown): value is number {
+  return typeof value === 'number' && Number.isSafeInteger(value) && value >= 1;
 }
 
 /** A non-empty list of `{ what, why? }` coverage items, both strings — the shape the rule files. */
@@ -779,12 +828,27 @@ export function validateCheckpoint(value: unknown): AgentRunCheckpoint {
           "open | noise | ruled-out }, iteration) or 'unsettled-by-absence' (with toolCallId, " +
           'iteration, and optional non-empty notChecked / cannotCover lists of { what, why? } ' +
           "and a non-empty tryInstead string) or 'argument' (with toolCallId, toolName, " +
-          'argument, iteration, turn, and a source or an asked in its vocabulary); a row of ' +
-          'any kind may carry a numeric turn. It is ' +
-          'written by an agent with `.findings()` or with the inputs layer armed, and ' +
+          'argument, iteration, turn, and a source or an asked in its vocabulary) or ' +
+          "'period' (with toolCallId, toolName, iteration, turn, and a verdict of covered, " +
+          'partly-held, not-held, unknown or undeclared) or ' +
+          "'grounded' (with turn, iteration, posture, candidates, lookedUp) or " +
+          "'steps-unfinished' (with turn, iteration, skillId, remaining[] of { index, tool }, " +
+          'total, action: accepted | cut-short); a row of any kind may carry a numeric turn. ' +
+          'It is written by an agent with `.findings()` or with an honesty layer armed, and ' +
           're-seeded verbatim on continuation.',
       );
     }
+  }
+  // The turn the stored history ends on (honesty layers), by the same
+  // present-only rule: a checkpoint without the key is every conversation
+  // stored without a layer armed. When present it is a turn — a positive
+  // whole number — because the next run's turn stamp starts from it.
+  if (c.turnNumber !== undefined && !isTurnNumber(c.turnNumber)) {
+    throw new TypeError(
+      `[resumeOnError] checkpoint \`turnNumber\` must be a positive whole number when present ` +
+        `(got ${JSON.stringify(c.turnNumber) ?? typeof c.turnNumber}). It is the conversation ` +
+        `turn the stored history ends on, written while an honesty layer is armed.`,
+    );
   }
   // The conversation itself, message by message (8.18.0). `Array.isArray` was
   // the whole check, one field away from `originalInput.message` — which HAS

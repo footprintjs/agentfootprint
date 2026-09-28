@@ -261,7 +261,7 @@ import type {
 import { buildRouteDeciderStage } from './agent/stages/route.js';
 import { withAnswerValidation } from './agent/stages/answerValidation.js';
 import { withAnswerCoverage } from './agent/stages/answerCoverage.js';
-import type { Coverage } from './agent/coverage/types.js';
+import type { AnswerCoverage } from './agent/coverage/answer.js';
 import {
   AnswerValidationError,
   type AnswerValidationReport,
@@ -280,6 +280,7 @@ import {
   readInputsLayerOption,
   type HonestyLayers,
 } from './agent/honesty/armed.js';
+import { answerFoldReads } from './agent/honesty/mounts.js';
 import { readsMessageFrom } from './messageFrom.js';
 import { carriesArgumentView } from './toolShownArgs.js';
 import { assertMaxToolResultChars } from './agent/toolResultCap.js';
@@ -553,6 +554,22 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
    *  `.inputsLayer()` was set. Gates the findings event bridge and the
    *  widened ledger restore. */
   private inputsLayerArmed = false;
+  /** `.resultsLayer()` (honesty layer 3, step 7b): mount the results layer
+   *  even when no registered tool declares a `ToolPeriod` — for tools a
+   *  ToolProvider serves, and for tools that declare a period only on their
+   *  results. */
+  private readonly resultsLayerOption?: true;
+  /** Whether this agent's chart mounts the results layer (`sf-results`) —
+   *  decided ONCE, in `buildChart`: a registered tool declares a `ToolPeriod`,
+   *  or `.resultsLayer()` was set. Gates the findings event bridge and the
+   *  widened ledger restore, as the inputs layer's flag does. */
+  private resultsLayerArmed = false;
+  /** `.answerLayer()` (honesty layer 4): the answer's standing folded at the
+   *  head of the final branch and served as data; `standingLine` — also one
+   *  line appended to a prose answer. Undefined on every agent that did not
+   *  ask, and that undefined is the whole zero-cost guarantee: no stage, no
+   *  witness row, no stamp, no event, no bridge. */
+  private readonly answerLayerOption?: { readonly standingLine?: true };
   /** Tool choice by classifier (9.105.0, `.toolChoice()`): the classifier,
    *  the serve dial and the app's own doors. Threaded to the tools slot (the
    *  pick and the narrowing), to call-llm (`toolChoice: true`, the outcome
@@ -1050,6 +1067,11 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
     // sources without the findings ledger.
     const inputsLayer = readInputsLayerOption(opts.inputsLayer);
     if (inputsLayer !== undefined) this.inputsLayerOption = true;
+    if (opts.resultsLayer === true) this.resultsLayerOption = true;
+    if (opts.answerLayer === true) this.answerLayerOption = {};
+    else if (typeof opts.answerLayer === 'object' && opts.answerLayer !== null) {
+      this.answerLayerOption = opts.answerLayer.standingLine === true ? { standingLine: true } : {};
+    }
     if (opts.findings?.argumentSources === true || inputsLayer?.argumentSources === true) {
       this.argumentSourcesArmed = true;
       // Declared sources read `AgentInput.messageFrom` — a composition hands
@@ -1945,6 +1967,9 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
           // …and the findings ledger (9.101.0), from the same snapshot reader
           // `checkpoint()` uses — one reader, two carriers.
           this.findingsLedgerOf(this.getLastSnapshot()?.sharedState as Partial<AgentState>),
+          // …and the turn the failing run was on (honesty layers), so the
+          // retry is stamped the same turn — one reader, two carriers.
+          this.turnNumberOf(this.getLastSnapshot()?.sharedState as Partial<AgentState>),
         );
         throw new RunCheckpointError(cause, checkpoint);
       }
@@ -2485,6 +2510,7 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
     const skillCursor = this.continuityCursorOf(state);
     const evidenceRecovery = this.evidenceRecoveryOf(state);
     const findingsLedger = this.findingsLedgerOf(state);
+    const turnNumber = this.turnNumberOf(state);
     return {
       version: 1,
       runId: this.currentRunContext.runId,
@@ -2507,6 +2533,9 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
       // The model's standings (9.101.0) — absent unless the run recorded any,
       // by the `folded` rule: an optional key, never a format change.
       ...(findingsLedger !== undefined && { findingsLedger }),
+      // The turn this history ends on (honesty layers) — absent unless a
+      // layer is armed, so every other checkpoint keeps its byte shape.
+      ...(turnNumber !== undefined && { turnNumber }),
     };
   }
 
@@ -2576,6 +2605,22 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
   }
 
   /**
+   * The turn a checkpoint's history ends on — `findingsLedgerOf`'s twin, one
+   * reader for `checkpoint()` and the crash carrier. Only while an honesty
+   * layer is armed (the run constant `honestyLayers`, read from the same
+   * snapshot): that is when every ledger row carries its `turn` and the next
+   * run's stamp must continue from it (`AgentRunCheckpoint.turnNumber`).
+   * `undefined` otherwise, so the key stays absent.
+   *
+   * @internal
+   */
+  private turnNumberOf(state?: Partial<AgentState>): number | undefined {
+    if (state?.honestyLayers === undefined) return undefined;
+    const turn = state.turnNumber;
+    return typeof turn === 'number' && Number.isSafeInteger(turn) && turn >= 1 ? turn : undefined;
+  }
+
+  /**
    * The two owner facts every conversation carrier stamps — who the run was
    * for, and which agent ran it (9.2.0).
    *
@@ -2622,6 +2667,9 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
     this.pendingResumeHistory = {
       history: cp.history as readonly LLMMessage[],
       appendsUserTurn,
+      // The turn the stored history ends on (honesty layers) — seed continues
+      // the turn stamp from it only while a layer is armed.
+      ...(cp.turnNumber !== undefined && { turn: cp.turnNumber }),
     };
     // The folded spans beside it. A conversation stored before 8.2 has none,
     // and `undefined` is the right answer there — it means "this conversation
@@ -3263,12 +3311,26 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
     // per-event work, and `agent.on('agentfootprint.findings.*')` can only
     // ever fire on an agent that could have filed a row.
     // Also under the inputs layer (honesty layer 2): its `argument` rows are
-    // filed through the same writer and ride the same domain.
-    if (this.findingsOptions !== undefined || this.inputsLayerArmed) {
+    // filed through the same writer and ride the same domain — and under the
+    // results layer (honesty layer 3), whose `period` rows do the same.
+    if (this.findingsOptions !== undefined || this.inputsLayerArmed || this.resultsLayerArmed) {
       attachObserver(
         new EmitBridge({
           id: 'agentfootprint.findings-bridge',
           prefix: 'agentfootprint.findings.',
+          dispatcher,
+          getRunContext: getRunCtx,
+        }),
+      );
+    }
+    // Same wiring for `agentfootprint.answer.*` (honesty layer 4) — the one
+    // event the answer layer's stage fires per answer. Attached only under
+    // `.answerLayer()`, shipped WITH the domain (the credential.* lesson).
+    if (this.answerLayerOption !== undefined) {
+      attachObserver(
+        new EmitBridge({
+          id: 'agentfootprint.answer-bridge',
+          prefix: 'agentfootprint.answer.',
           dispatcher,
           getRunContext: getRunCtx,
         }),
@@ -3668,6 +3730,11 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
    * trace), each stamped with its conversation `turn` — WITHOUT `.findings()`.
    * A reader that switches over every row kind must skip one it does not know.
    *
+   * THE RESULTS LAYER files here too (honesty layer 3, step 7b): `period` rows
+   * — one per call whose result declared the period its read covered, or whose
+   * tool declares a period argument: `covered`, `partly-held`, `not-held`,
+   * `unknown`, or `undeclared` (the result said nothing about its period).
+   *
    * Detached from the execution record (`structuredClone`), so a caller may
    * keep or mutate it without touching the run's state.
    *
@@ -3707,10 +3774,22 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
    * `getLastSnapshot().sharedState.answerCoverage`, one value three ways. The
    * answer string, and so `runTyped()`, is exactly the model's.
    *
-   * `undefined` when the run's tools declared no limits, on a prose answer
-   * (the block is in the answer string there; `sharedState.coverageDeclared`
-   * holds the raw rows either way), and before the first run. Detached from
-   * the execution record, so a caller may keep or mutate it.
+   * On an agent whose inputs layer is armed (a tool declares `askOrAssume`),
+   * `assumed` lists the values a tool's rule filled this turn — the same rows,
+   * read the same way, that a prose answer's "Assumed" block prints — each in
+   * the tool's own argument view (`'REDACTED'` with `hidden` when that view
+   * hides it).
+   *
+   * `undefined` when the run's tools declared no limits and nothing was
+   * assumed, on a prose answer (the block is in the answer string there;
+   * `sharedState.coverageDeclared` holds the raw rows either way), and before
+   * the first run. Detached from the execution record, so a caller may keep
+   * or mutate it.
+   *
+   * `periods` (honesty step 7b) — present only when a call's result declared
+   * the period its read covered: one entry per declaring call, `{ toolName,
+   * toolCallId, queried, held, readAt? }`, the period as the tool declared it
+   * — the data twin of the prose block's `Period:` lines.
    *
    * @example
    * ```ts
@@ -3727,7 +3806,7 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
    * }
    * ```
    */
-  answerCoverage(): Coverage | undefined {
+  answerCoverage(): AnswerCoverage | undefined {
     const limits = (this.getLastSnapshot()?.sharedState as Partial<AgentState> | undefined)
       ?.answerCoverage;
     return limits === undefined ? undefined : structuredClone(limits);
@@ -4301,9 +4380,29 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
           '.inputsLayer({ argumentSources: true })).',
       );
     }
-    if (inputsArmed) {
-      if (ruledTools.size > 0) seededRuledTools = ruledTools;
-      seededHonestyLayers = honestyLayersOf(true, argumentSources);
+    // ── The results layer (honesty layer 3, step 7b) — armed ONCE, here ──
+    // A registered tool that declares a `ToolPeriod` (the inputs layer's
+    // declaration: which argument sets the period) arms the mount, over the
+    // same catalog: its results owe a period, and a result that declares none
+    // is recorded as silence. `.resultsLayer()` arms it for tools the build
+    // cannot see and for tools that declare a period only on their results.
+    // Unarmed: nothing below is mounted, read or written.
+    const resultsArmed =
+      [...registryByName.values()].some((tool) => tool.period !== undefined) ||
+      this.resultsLayerOption === true;
+    this.resultsLayerArmed = resultsArmed;
+    if (inputsArmed && ruledTools.size > 0) seededRuledTools = ruledTools;
+    // ── The answer layer (honesty layer 4) — armed by its option alone ─────
+    const answerArmed = this.answerLayerOption !== undefined;
+    // The run constant names every armed layer; the restore is wired whenever
+    // one is (adopted Q6) — still value-conditional inside seed.
+    if (inputsArmed || resultsArmed || answerArmed) {
+      seededHonestyLayers = honestyLayersOf({
+        inputs: inputsArmed,
+        argumentSources,
+        results: resultsArmed,
+        answer: answerArmed,
+      });
       ledgerRestoreArmed = true;
     }
 
@@ -4748,19 +4847,26 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
       // trailing positional: the rows this decider files carry the turn
       // stamp, and with the evidence gate armed too, the gate's exempt corpus
       // gains this turn's assumed values, read from the tools' declarations,
-      // and the values the person gave the layer's batch ask (step 4).
-      inputsArmed
+      // and the values the person gave the layer's batch ask (step 4). The
+      // results layer (step 7b) arms the stamp alone — "while any layer is
+      // armed, the one writer stamps the turn" — and nothing else.
+      inputsArmed || resultsArmed
         ? {
-            ...(this.evidenceGate !== undefined && {
-              declaredDefaults: declaredDefaultsFrom((toolName, argument) => {
-                const rules = rulesOf(resolveForLayer(toolName).tool);
-                if (rules === undefined || isRefused(rules)) return undefined;
-                return rules.ruled.find((r) => r.argument === argument)?.assume;
+            ...(inputsArmed &&
+              this.evidenceGate !== undefined && {
+                declaredDefaults: declaredDefaultsFrom((toolName, argument) => {
+                  const rules = rulesOf(resolveForLayer(toolName).tool);
+                  if (rules === undefined || isRefused(rules)) return undefined;
+                  return rules.ruled.find((r) => r.argument === argument)?.assume;
+                }),
+                answeredValues: answeredValuesOf,
               }),
-              answeredValues: answeredValuesOf,
-            }),
           }
         : undefined,
+      // THE ANSWER LAYER (honesty layer 4) — the same value-conditional
+      // trailing positional: the judges file the answer's witness rows, and
+      // every row this decider files carries the turn stamp.
+      answerArmed ? true : undefined,
     );
 
     const routeDecider =
@@ -4782,7 +4888,16 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
     // neither is handed the decider it always had.
     const limitsAsData =
       this.limitsTravelWithTheAnswerValue && this.outputSchemaParser !== undefined;
-    const terminalRouteDecider = limitsAsData ? withAnswerCoverage(routeDecider) : routeDecider;
+    // With the inputs layer armed, the typed answer's limits carry this
+    // turn's assumed values too — the same rows the prose "Assumed" block
+    // prints (`withAnswerCoverage`'s second argument); a rewrite by a
+    // before-tool chain is read only when the agent has one.
+    const terminalRouteDecider = limitsAsData
+      ? withAnswerCoverage(
+          routeDecider,
+          inputsArmed ? { rewrites: this.toolMiddleware.length > 0 } : undefined,
+        )
+      : routeDecider;
 
     // toolCallsHandler extracted to ./agent/stages/toolCalls.ts (v2.11.2).
     const toolCallsHandler = buildToolCallsHandler({
@@ -4804,6 +4919,13 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
       ...(inputsArmed && { inputsLayer: true as const }),
       // Declared sources: the peel reads `_findings.from` as the layer did.
       ...(argumentSources && { argumentSources: true as const }),
+      // The results layer (honesty layer 3, step 7b) — read in one place: a
+      // period a result declares with NO layer mounted is dev-warned (nobody
+      // will file its verdict). And the turn stamp, as under any layer.
+      ...(resultsArmed && { resultsLayer: true as const }),
+      // The answer layer (honesty layer 4) — only the turn stamp on the rows
+      // this handler files (adopted Q6).
+      ...(answerArmed && { answerLayer: true as const }),
       // …and the host's own context for the layer's batch ask (step 4),
       // value-conditional inside the arm.
       ...(inputsArmed &&
@@ -5055,6 +5177,27 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
               }),
             },
           }),
+        },
+      }),
+      // The results layer (honesty layer 3, step 7b): `sf-results` at the loop
+      // head, in both builders through one helper, reading each call's
+      // `ToolPeriod` off the implementation that answered it; absent → untouched.
+      ...(resultsArmed && {
+        resultsLayer: { toolOf: (toolName: string) => resolveForLayer(toolName).tool },
+      }),
+      // The answer layer (honesty layer 4): its stage heads the final branch
+      // in both builders through one helper, reading only the committed keys
+      // this agent's arms can write; absent → the branch is untouched.
+      ...(this.answerLayerOption !== undefined && {
+        answerLayer: {
+          reads: answerFoldReads({
+            tools: canCallTools,
+            evidenceGate: this.evidenceGate !== undefined,
+            answerValidation: this.answerValidationConfig !== undefined,
+            inputs: inputsArmed,
+            toolMiddleware: this.toolMiddleware.length > 0,
+          }),
+          ...(this.answerLayerOption.standingLine === true && { standingLine: true as const }),
         },
       }),
       // Tool choice by classifier (9.105.0): the mount args on the Tools

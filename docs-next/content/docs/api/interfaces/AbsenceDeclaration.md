@@ -4,7 +4,7 @@ title: AbsenceDeclaration
 
 # Interface: AbsenceDeclaration
 
-Defined in: [src/core/agent/coverage/types.ts:122](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/coverage/types.ts#L122)
+Defined in: [src/core/agent/coverage/types.ts:132](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/coverage/types.ts#L132)
 
 What a tool author passes to import('./absent.js').absent.
 
@@ -14,7 +14,7 @@ What a tool author passes to import('./absent.js').absent.
 
 > `readonly` `optional` **cannotCover?**: readonly [`CoverageInput`](/docs/api/type-aliases/CoverageInput)[]
 
-Defined in: [src/core/agent/coverage/types.ts:140](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/coverage/types.ts#L140)
+Defined in: [src/core/agent/coverage/types.ts:150](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/coverage/types.ts#L150)
 
 Ground no search by this tool can reach. Each needs a `why`.
 
@@ -24,7 +24,7 @@ Ground no search by this tool can reach. Each needs a `why`.
 
 > `readonly` **checked**: readonly [`CoverageInput`](/docs/api/type-aliases/CoverageInput)[]
 
-Defined in: [src/core/agent/coverage/types.ts:135](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/coverage/types.ts#L135)
+Defined in: [src/core/agent/coverage/types.ts:145](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/coverage/types.ts#L145)
 
 The coverage of the search — REQUIRED and non-empty. An absence that
 names no coverage is a `null` with extra steps: the reader still cannot
@@ -37,10 +37,68 @@ the entire failure this primitive exists to prevent.
 
 > `readonly` `optional` **notChecked?**: readonly [`CoverageInput`](/docs/api/type-aliases/CoverageInput)[]
 
-Defined in: [src/core/agent/coverage/types.ts:138](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/coverage/types.ts#L138)
+Defined in: [src/core/agent/coverage/types.ts:148](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/coverage/types.ts#L148)
 
 Ground the search did not reach this time — an absence here proves
  nothing about it.
+
+***
+
+### period?
+
+> `readonly` `optional` **period?**: [`DeclaredPeriod`](/docs/api/interfaces/DeclaredPeriod)
+
+Defined in: [src/core/agent/coverage/types.ts:190](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/coverage/types.ts#L190)
+
+What the search's READ covered in time — the instants it asked for, and
+what the store holds (or `'unknown'`, said out loud) — honesty step 7b.
+Every value is an ISO 8601 instant with a zone; a malformed period is
+refused here. The results layer files its verdict (covered · partly held ·
+not held · unknown), and `.limitsTravelWithTheAnswer()` prints it.
+
+***
+
+### provenance?
+
+> `readonly` `optional` **provenance?**: `object`
+
+Defined in: [src/core/agent/coverage/types.ts:182](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/coverage/types.ts#L182)
+
+Where the search looked and how old that source is — the SAME shape
+`describedResult()` declares (`measuredAt`, `source`, and optionally
+`ageSeconds`, `sourceExportDate`), respelled to the same snake_case wire
+(honesty step 7b). `measuredAt` and `source` are both required once it is
+present. So the found branch and the not-found branch of one `execute`
+carry their source and time in one shape: "searched the 02:00 export —
+nothing" as data, not prose in `checked`. `measuredAt` is the tool's own
+words, never parsed.
+
+#### ageSeconds?
+
+> `readonly` `optional` **ageSeconds?**: `number`
+
+How stale the data was when the tool answered, in seconds.
+
+#### measuredAt
+
+> `readonly` **measuredAt**: `string`
+
+When the WORLD was measured, in the tool's own clock words — never
+parsed. Take it from the data: the export's time for a file, the moment
+of the read for a live query, the newest sample for a series, and the END
+of the window for a value computed over one.
+
+#### source
+
+> `readonly` **source**: `string`
+
+The system of record the values were read from.
+
+#### sourceExportDate?
+
+> `readonly` `optional` **sourceExportDate?**: `string`
+
+For file-fed collectors: the export the values rode in on.
 
 ***
 
@@ -48,7 +106,7 @@ Ground the search did not reach this time — an absence here proves
 
 > `readonly` `optional` **tryInstead?**: `string`
 
-Defined in: [src/core/agent/coverage/types.ts:151](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/coverage/types.ts#L151)
+Defined in: [src/core/agent/coverage/types.ts:161](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/coverage/types.ts#L161)
 
 Where to go INSTEAD, in one sentence ("widen the window with
 `window: '7d'`, or ask for a different interface"). Optional, and the
@@ -65,7 +123,7 @@ when the sentence points at another tool, name that tool in
 
 > `readonly` `optional` **tryInsteadTool?**: [`TryInsteadTool`](/docs/api/interfaces/TryInsteadTool)
 
-Defined in: [src/core/agent/coverage/types.ts:161](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/coverage/types.ts#L161)
+Defined in: [src/core/agent/coverage/types.ts:171](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/coverage/types.ts#L171)
 
 The other TOOL the suggestion points at, as data (9.113.0) —
 `{ tool, why? }`. Beside the sentence, not instead of it: the sentence is
@@ -81,7 +139,7 @@ refused (see `absent.ts` · `readToolSuggestion` for why).
 
 > `readonly` **what**: `string`
 
-Defined in: [src/core/agent/coverage/types.ts:128](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/coverage/types.ts#L128)
+Defined in: [src/core/agent/coverage/types.ts:138](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/coverage/types.ts#L138)
 
 What was looked for, in the author's own words ("FLOGI entries on
 fc1/3"). Required: an absence that cannot say what it did not find is

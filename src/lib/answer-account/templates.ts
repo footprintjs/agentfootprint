@@ -42,7 +42,7 @@ export interface AccountTemplate {
 }
 
 /** Bumped whenever any template's words change (a pinned digest enforces it). */
-export const ANSWER_ACCOUNT_TEMPLATE_SET_VERSION = 5;
+export const ANSWER_ACCOUNT_TEMPLATE_SET_VERSION = 7;
 
 const t = (text: string, voucher: TemplateVoucher = 'library', version = 1): AccountTemplate =>
   Object.freeze({ version, text, voucher });
@@ -283,9 +283,13 @@ export const ANSWER_ACCOUNT_TEMPLATES = Object.freeze({
   'howSure.check.argumentRules': t(
     "Argument rules: {{ran}} of {{count:of,'ruled argument','ruled arguments'}} had a verdict on the record.",
   ),
-  // The inputs layer's declared sources (honesty layer 2, step 5) — set 5.
+  // The inputs layer's declared sources (honesty layer 2, step 5) — set 7.
   'howSure.check.argumentSources': t(
     "Argument sources: {{ran}} of {{count:of,'value','values'}} had a source verdict on the record.",
+  ),
+  // The results layer (honesty layer 3, step 7b) — set 6.
+  'howSure.check.resultPeriod': t(
+    "Result periods: {{ran}} of {{count:of,'call','calls'}} had a period verdict on the record.",
   ),
   'howSure.reason.asked': t('A question the run asked is still waiting for its answer.'),
   // The inputs layer's own ask (honesty layer 2, step 4) — set 4.
@@ -295,7 +299,7 @@ export const ANSWER_ACCOUNT_TEMPLATES = Object.freeze({
   'howSure.reason.argumentAssumed': t(
     "{{count:n,'value a call ran with was','values the calls ran with were'}} assumed: set by a tool's rule or a rewrite, not given in the conversation.",
   ),
-  // Set 5: a failed declared-source check fires this reason on ANY argument, so "ruled" went.
+  // Set 7: a failed declared-source check fires this reason on ANY argument, so "ruled" went.
   'howSure.reason.argumentUnverified': t(
     "{{count:n,'value came','values came'}} from the model, with no source on the record: not the conversation, a result or the app.",
     'library',
@@ -314,6 +318,19 @@ export const ANSWER_ACCOUNT_TEMPLATES = Object.freeze({
   'howSure.reason.emptyUndeclared': t(
     "{{count:n,'call returned nothing and did not say what it searched','calls returned nothing and did not say what they searched'}}.",
   ),
+  // The results layer's period verdicts (honesty layer 3, step 7b) — set 6.
+  'howSure.reason.periodNotHeld': t(
+    "{{count:n,'call asked about a period its store does not hold','calls asked about periods their stores do not hold'}}.",
+  ),
+  'howSure.reason.periodPartlyHeld': t(
+    "{{count:n,'call asked about a period its store holds only part of','calls asked about periods their stores hold only part of'}}.",
+  ),
+  'howSure.reason.periodUnknown': t(
+    "{{count:n,'call could not say whether its store holds the period it asked about','calls could not say whether their stores hold the periods they asked about'}}.",
+  ),
+  'howSure.reason.periodUndeclared': t(
+    "{{count:n,'call did not say what period its read covered, though its tool declares a period argument','calls did not say what period their reads covered, though their tools declare a period argument'}}.",
+  ),
   'howSure.reason.sourcesConflict': t(
     "{{count:n,'conflict','conflicts'}} between results the model stood on.",
   ),
@@ -322,6 +339,10 @@ export const ANSWER_ACCOUNT_TEMPLATES = Object.freeze({
     'Names or numbers in the answer appear in no tool result, even after one revision.',
   ),
   'howSure.reason.stoppedEarly': t('The run stopped before the model finished.'),
+  // The answer layer's witness (honesty layer 4) — set 5.
+  'howSure.reason.stepsUnfinished': t(
+    "The answer came before the active skill's declared steps finished.",
+  ),
   'howSure.reason.answerCheckFailed': t("The app's answer checks failed this answer."),
   'howSure.reason.checkUnreachable': t(
     "The app's answer checks could not reach a verdict on this answer.",

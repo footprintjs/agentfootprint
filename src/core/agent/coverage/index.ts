@@ -11,10 +11,13 @@
 
 export { ABSENCE_MARKER, ABSENCE_NOTE, absent, coverageOfAbsence, readAbsence } from './absent.js';
 export {
+  answerCoverageOf,
   composeAnswerWithCoverage,
+  copyAnswerCoverage,
   copyCoverage,
   COVERAGE_BLOCK_HEADING,
   coverageOfAnswer,
+  type AnswerCoverage,
 } from './answer.js';
 export { absenceEvidenceProjection } from './evidence.js';
 export { mergeItems, normalizeCoverageList, sameItem } from './items.js';
@@ -26,6 +29,7 @@ export {
   readCoverageLedger,
 } from './ledger.js';
 export { readCoverageResult, type CoverageFacts, type CoverageReading } from './read.js';
+export { PERIOD_WIRE, periodVerdict, type DeclaredPeriod, type PeriodRow } from './period.js';
 export type {
   AbsenceDeclaration,
   Coverage,

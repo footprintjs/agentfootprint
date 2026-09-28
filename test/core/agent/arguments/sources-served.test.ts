@@ -411,7 +411,8 @@ describe('FUNCTIONAL — `.inputsLayer({ argumentSources: true })`: `from` on ru
     expect(req.systemPrompt ?? '').not.toContain('Findings v1');
     // The run constant says what was armed; the ledger's own constant is absent.
     const state = agent.getSnapshot()!.sharedState as Record<string, unknown>;
-    expect(state.honestyLayers).toEqual({ inputs: true, argumentSources: true });
+    // (+ `results: true`, honesty step 7b: search_logs declares a ToolPeriod.)
+    expect(state.honestyLayers).toEqual({ inputs: true, argumentSources: true, results: true });
     expect(state.findingsServe).toBeUndefined();
   });
 
@@ -441,14 +442,17 @@ describe('FUNCTIONAL — `.inputsLayer({ argumentSources: true })`: `from` on ru
     expect(out).toBe('No errors.');
     expect(ran).toEqual([{ service: 'checkout', window: '7d' }]);
     const ledger = agent.findings() ?? [];
-    expect(ledger.map((r) => r.kind)).toEqual(['argument']);
+    // (+ the results layer's `period` row, honesty step 7b: a ToolPeriod tool.)
+    expect(ledger.map((r) => r.kind)).toEqual(['argument', 'period']);
     expect(argumentRows(agent)[0]).toMatchObject({
       source: 'said',
       claimed: 'user',
       matched: 'phrase',
       quote: 'over the last week',
     });
-    expect((await agent.assessment())?.standing).toBe('consistent');
+    // No argument reason fires; the one left is honesty step 7b's
+    // `period-undeclared` (a ToolPeriod tool whose result declares no period).
+    expect((await agent.assessment())?.reasons.map((r) => r.reason)).toEqual(['period-undeclared']);
   });
 
   it('an untraced value is asked, exactly as under the ledger’s door', async () => {
@@ -567,7 +571,8 @@ describe('FUNCTIONAL — `.inputsLayer({ argumentSources: true })`: `from` on ru
     );
     expect(propertiesOf(req, 'search_logs')._findings).toBeUndefined();
     const state = agent.getSnapshot()!.sharedState as Record<string, unknown>;
-    expect(state.honestyLayers).toEqual({ inputs: true });
+    // (+ `results: true`, honesty step 7b: search_logs declares a ToolPeriod.)
+    expect(state.honestyLayers).toEqual({ inputs: true, results: true });
   });
 
   it('SECURITY: the builder door refuses what it cannot read', () => {
@@ -608,7 +613,8 @@ describe('FUNCTIONAL — `.inputsLayer({ argumentSources: true })`: `from` on ru
     await agent.run({ message: 'hello' });
     expect(propertiesOf(m.requests[0]!, 'search_logs')._findings).toEqual(FINDINGS_SOURCES_SCHEMA);
     const state = agent.getSnapshot()!.sharedState as Record<string, unknown>;
-    expect(state.honestyLayers).toEqual({ inputs: true, argumentSources: true });
+    // (+ `results: true`, honesty step 7b: search_logs declares a ToolPeriod.)
+    expect(state.honestyLayers).toEqual({ inputs: true, argumentSources: true, results: true });
   });
 });
 

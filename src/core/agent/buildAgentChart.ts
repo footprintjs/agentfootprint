@@ -61,15 +61,17 @@ import { withMemoryRecall } from './memoryRecallInjections.js';
 import { offeredResultIds } from './findings/offer.js';
 import type { FindingsLedger } from './findings/types.js';
 import { breakFinalStage, breakFinalWithValidationStage } from './stages/breakFinal.js';
-import {
-  prepareFinalStage,
-  prepareFinalWithLimitsAndAssumedStage,
-  prepareFinalWithLimitsStage,
-  prepareFinalWithValidationStage,
-  prepareFinalWithLimitsAsDataStage,
-} from './stages/prepareFinal.js';
+import { prepareFinalFor } from './stages/prepareFinal.js';
 import { buildCacheSubflow } from './buildCacheSubflow.js';
-import { mountInputsLayer, type InputsMountDeps } from './honesty/mounts.js';
+import {
+  mountInputsLayer,
+  mountResultsLayer,
+  RESULTS_LOOP_TARGET,
+  startFinalBranch,
+  type AnswerMountDeps,
+  type InputsMountDeps,
+  type ResultsMountDeps,
+} from './honesty/mounts.js';
 import type { RouteBranch } from './stages/route.js';
 import type { AgentState } from './types.js';
 
@@ -325,6 +327,26 @@ export interface AgentChartDeps {
   readonly inputsLayer?: InputsMountDeps;
 
   /**
+   * The results layer is armed (honesty layer 3, step 7b) — present ONLY when a
+   * tool the build can see declares a `ToolPeriod`, or the agent was built
+   * with `.resultsLayer()`. Mounts `sf-results` at the loop head, before the
+   * window strategy, and makes it the loop target (`honesty/mounts.ts` ·
+   * `mountResultsLayer`, the ONE helper both builders call). Absent — the
+   * default — and the chart is byte-identical.
+   */
+  readonly resultsLayer?: ResultsMountDeps;
+  /**
+   * The answer layer is armed (honesty layer 4, `.answerLayer()`). Starts the
+   * final branch with the layer's stage — the answer's standing, folded from
+   * the committed record, filed for PrepareFinal and announced once
+   * (`honesty/mounts.ts` · `startFinalBranch`, the ONE helper both builders
+   * call) — and swaps PrepareFinal's body for the variant that carries the
+   * standing on `turn_end` (and, under `standingLine`, appends its line to a
+   * prose answer). Absent — the default — and the branch is byte-identical.
+   */
+  readonly answerLayer?: AnswerMountDeps;
+
+  /**
    * Tool choice by classifier is armed (`.toolChoice()`, 9.105.0). Gates
    * THREE mount args on the Tools branch's `inputMapper` — `userMessage`
    * (what the classifier reads), `priorToolChoices` (the parent's rows,
@@ -387,28 +409,16 @@ export function buildAgentChart(deps: AgentChartDeps): FlowChart {
   // Split so memory-write subflows can mount BETWEEN setting
   // finalContent and breaking the ReAct loop. PrepareFinal captures
   // the turn payload; BreakFinal terminates the loop.
-  let finalBranchBuilder = flowChart<AgentState>(
-    'PrepareFinal',
-    // Same stage id, same position — only the body differs, and only for an
-    // agent that asked for its limits to travel. See `stages/prepareFinal.ts`
-    // for why the fold happens HERE and not in a stage of its own.
-    deps.hasAnswerValidation === true
-      ? prepareFinalWithValidationStage
-      : deps.coverageLimitsAsData === true
-      ? prepareFinalWithLimitsAsDataStage
-      : deps.attachCoverageLimits === true
-      ? deps.inputsLayer !== undefined
-        ? prepareFinalWithLimitsAndAssumedStage(deps.inputsLayer.rewrites === true)
-        : prepareFinalWithLimitsStage
-      : prepareFinalStage,
-    STAGE_IDS.PREPARE_FINAL,
-    {
-      ...(deps.structureRecorders !== undefined && {
-        structureRecorders: [...deps.structureRecorders],
-      }),
-      description: 'Capture turn payload (finalContent + newMessages)',
-      tags: milestoneTagsFor(STAGE_IDS.PREPARE_FINAL),
-    },
+  // Same stage id, same position for PrepareFinal — only the body differs, and
+  // only for an agent that asked for its limits (or its standing) to travel.
+  // See `stages/prepareFinal.ts` · `prepareFinalFor`, the ONE choice both
+  // builders make, and `honesty/mounts.ts` · `startFinalBranch`, which puts
+  // the answer layer's stage first when it is armed and builds the branch
+  // exactly as it always was when it is not.
+  let finalBranchBuilder = startFinalBranch(
+    deps.answerLayer,
+    prepareFinalFor(deps),
+    deps.structureRecorders,
   );
   for (const m of deps.memories) {
     if (m.write) {
@@ -496,6 +506,12 @@ export function buildAgentChart(deps: AgentChartDeps): FlowChart {
     );
   }
 
+  // ── The results layer — conditional mount at the LOOP HEAD (honesty layer 3).
+  // Mounted before the window strategy and made the loop target below: it reads
+  // the batch ToolCalls just ran before any window strategy folds it away.
+  // Absent → the builder, untouched.
+  builder = mountResultsLayer(builder, deps.resultsLayer);
+
   // Window strategy — mounted immediately before the current loop target, and
   // it BECOMES the loop target below. That placement is the whole design: the
   // window changes once per iteration boundary, before the injection engine
@@ -511,7 +527,15 @@ export function buildAgentChart(deps: AgentChartDeps): FlowChart {
   }
   // Where `tool-calls` loops back to. With a window strategy the head moves
   // one stage earlier; without it, this is the id it has always been.
-  const loopTarget: string = deps.windowStage ? STAGE_IDS.COMPACT : SUBFLOW_IDS.INJECTION_ENGINE;
+  // The results layer (honesty layer 3) heads the loop when armed: every
+  // tool-calls loop enters it first, so it reads the batch just run before any
+  // window strategy folds it away (`honesty/mounts.ts` · `mountResultsLayer`).
+  const loopTarget: string =
+    deps.resultsLayer !== undefined
+      ? RESULTS_LOOP_TARGET
+      : deps.windowStage
+      ? STAGE_IDS.COMPACT
+      : SUBFLOW_IDS.INJECTION_ENGINE;
 
   builder = builder
     // Injection Engine — evaluates every Injection's trigger once

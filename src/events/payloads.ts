@@ -33,6 +33,11 @@ import type {
   ArgumentClaim,
   ArgumentSource,
 } from '../core/agent/arguments/rows.js';
+import type {
+  AssessmentCheck,
+  AssessmentReason,
+  HonestyLayer,
+} from '../core/agent/assessment/types.js';
 
 // ─── Tier 1+2: Core Domain (library-emitted) ──────────────────────────
 
@@ -161,7 +166,42 @@ export interface AgentTurnEndPayload {
     readonly checked: readonly CoverageItemPayload[];
     readonly notChecked: readonly CoverageItemPayload[];
     readonly cannotCover: readonly CoverageItemPayload[];
+    /**
+     * The periods the calls' results declared (honesty step 7b) — one per
+     * declaring call, as declared; present only when one did. The data twin of
+     * a prose answer's `Period:` lines.
+     */
+    readonly periods?: readonly (PeriodPayload & {
+      readonly toolName: string;
+      readonly toolCallId?: string;
+    })[];
+    /**
+     * The values a tool's `assume` rule filled this turn (the inputs layer,
+     * honesty layer 2) — the SAME rows, read the same way, that the prose
+     * answer's "Assumed" block prints (`arguments/serve.ts` ·
+     * `assumedLinesFor`): one entry per distinct (tool, argument, value), a
+     * row a before-tool rewrite superseded left out. `value` is the tool's
+     * own argument view; `'REDACTED'` with `hidden` when that view hides it.
+     * Present only when a value was assumed.
+     */
+    readonly assumed?: readonly {
+      readonly toolName: string;
+      readonly argument: string;
+      readonly value: string;
+      readonly hidden: boolean;
+    }[];
   };
+  /**
+   * The answer's standing, as data — present ONLY on an agent with
+   * `.answerLayer()` (honesty layer 4), and then on every turn that ends in
+   * an answer. The same projection `agentfootprint.answer.assessed` carries
+   * ({@link AnswerAssessmentPayload}): the value, its rendering, the reason
+   * kinds and the checks that ran; never a value or a quote. It rides
+   * `turn_end` because that is the event a consumer already reads to render
+   * an outcome — including a composition that mounts the agent, whose
+   * dispatcher carries the agent's `turn_end` but not the `answer.*` domain.
+   */
+  readonly answerAssessment?: AnswerAssessmentPayload;
 }
 
 /**
@@ -1041,6 +1081,25 @@ export interface FindingsArgumentPayload {
 }
 
 /**
+ * The results layer's verdict on ONE call's period (honesty layer 3, step 7b)
+ * — fired once per `period` row the `sf-results` subflow files at the loop
+ * head, after the call ran. The tool's name, the call's id, the stamps and the
+ * verdict word ONLY: never an instant (the declared period stays on the
+ * committed coverage row). `undeclared` means the tool declares a period
+ * argument and this result said nothing about what its read covered. A host
+ * counts "1 read the store did not hold" from these events; the standing fold
+ * never reads them (it reads the committed rows).
+ */
+export interface FindingsPeriodPayload {
+  readonly toolCallId: string;
+  readonly toolName: string;
+  readonly iteration: number;
+  /** The conversation turn the row was filed in. */
+  readonly turn: number;
+  readonly verdict: 'covered' | 'partly-held' | 'not-held' | 'unknown' | 'undeclared';
+}
+
+/**
  * A classifier picked a tool for one model call (9.105.0, `.toolChoice()`):
  * the provider's pick among the OFFERED tools (the merged wire minus the
  * always-served doors), its confidence, how many were offered and how many
@@ -1107,6 +1166,60 @@ export interface OntologyServedPayload {
   readonly nodes: number;
   readonly sources: number;
   readonly edges: number;
+}
+
+// ─── answer (the answer layer — honesty layer 4) ────────────────────────
+
+/**
+ * The answer's standing as data — the SAME projection on
+ * `agentfootprint.answer.assessed` and on `turn_end.answerAssessment`, built
+ * by one function (`assessment/compose.ts` · `assessmentDataOf`) from the one
+ * fold (`assessAnswer`) the answer layer runs at the head of the final
+ * branch. Names, enums and counts only: the value, its rendering, the reason
+ * KINDS and the checks that ran — never a value from the answer, a quote, a
+ * witness pointer or the support's digest (those stay on the committed rows
+ * `agent.assessment()` folds, with their pointers).
+ */
+export interface AnswerAssessmentPayload {
+  /** The value: `known | unrefuted | unknown | not-applicable`. */
+  readonly assessment: 'known' | 'unrefuted' | 'unknown' | 'not-applicable';
+  /** The owner's words for it: known · consistent · not sure · ask · not assessed. */
+  readonly standing: 'known' | 'consistent' | 'not-sure' | 'ask' | 'not-assessed';
+  /** Every reason that fired, by kind, in the fold's order (the ask first, then by layer). */
+  readonly reasons: readonly AssessmentReason[];
+  /** What actually ran this turn, printed as it is — never a fixed list. */
+  readonly checked: readonly {
+    readonly layer: HonestyLayer;
+    readonly check: AssessmentCheck;
+    readonly ran: number;
+    readonly of: number;
+  }[];
+}
+
+/**
+ * The answer layer assessed the turn's answer (honesty layer 4,
+ * `.answerLayer()`): ONE event per answer, fired at the head of the final
+ * branch — after the Route decider's checks filed their verdicts and before
+ * the turn's payload is captured. It carries the standing as data
+ * ({@link AnswerAssessmentPayload}) with the conversation turn and the
+ * answer's iteration. The fold it reports reads committed rows only, so the
+ * same recording read afterwards with `assessAnswer` folds the same value
+ * (without app declarations — `assessAnswer(record, declarations)` with
+ * `rowsAt` can say more than the run did).
+ *
+ * Where it reaches, and what it is about:
+ * - the agent's own listeners only — a composition that mounts the agent
+ *   bridges the agent domain, not `answer.*`, so read
+ *   `turn_end.answerAssessment` there;
+ * - the answer the run COMPOSED: under the evidence gate's `rails` posture a
+ *   refused answer is assessed too, and then the run throws (no answer is
+ *   delivered, and `agent.assessment()` returns `undefined`).
+ */
+export interface AnswerAssessedPayload extends AnswerAssessmentPayload {
+  /** `AgentState.turnNumber` — the conversation turn. */
+  readonly turn: number;
+  /** The iteration whose answer was assessed. */
+  readonly iteration: number;
 }
 
 // ─── Tier 3: Observability Layers (recorder-emitted, opt-in) ──────────
@@ -2039,6 +2152,38 @@ export interface ToolAbsentPayload {
    * come without the other.
    */
   readonly tryInsteadTool?: TryInsteadToolPayload;
+  /**
+   * Where the search looked and when that source was measured, as the tool
+   * declared it (honesty step 7b) — `absent({ …, provenance })`, in the
+   * record's camelCase form. Default-omitted: an absence that declares no
+   * source carries no key, and one whose source the rule set refuses (an
+   * envelope minted elsewhere) carries none either (dev-warned).
+   */
+  readonly provenance?: ProvenancePayload;
+  /**
+   * What the search's READ covered in time, as the tool declared it (honesty
+   * step 7b) — instants verbatim, camelCase like `lookedFor`. Default-omitted.
+   */
+  readonly period?: PeriodPayload;
+}
+
+/** An absence's source and time as it rides an event — detached plain data. */
+export interface ProvenancePayload {
+  readonly measuredAt: string;
+  readonly source: string;
+  readonly ageSeconds?: number;
+  readonly sourceExportDate?: string;
+}
+
+/**
+ * A declared period as it rides an event (honesty step 7b) — detached plain
+ * data, the instants the tool declared, never parsed or reformatted.
+ */
+export interface PeriodPayload {
+  readonly queried: { readonly from: string; readonly to: string };
+  /** What the store holds, or `'unknown'` — the tool said it cannot vouch for it. */
+  readonly held: { readonly from: string; readonly to: string } | 'unknown';
+  readonly readAt?: string;
 }
 
 /** A suggestion to try another tool, as it rides an event: detached plain
@@ -2098,6 +2243,12 @@ export interface ToolCoverageDeclaredPayload {
   readonly checked?: readonly CoverageItemPayload[];
   readonly notChecked?: readonly CoverageItemPayload[];
   readonly cannotCover?: readonly CoverageItemPayload[];
+  /**
+   * What the read behind the value covered in time (honesty step 7b) — a
+   * `coverage()`'s `period`, or a described result's (whose boundary this
+   * event carries). Default-omitted.
+   */
+  readonly period?: PeriodPayload;
 }
 
 /** One piece of declared ground, as it rides an event: detached plain data,

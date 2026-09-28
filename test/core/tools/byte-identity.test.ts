@@ -336,6 +336,97 @@
  * and steps 3–4's four among them; the two generated alone with
  * `-t agent-arguments-sources` under `AF_TOOLS_REFERENCE=update`).
  *
+ * Honesty step 7b (the results layer): the FOUR inputs-layer references
+ * REGENERATED — `agent-arguments-assume`, `-assume-limits`, `-ask` and
+ * `-ask-resumed` — because their `search_logs` declares a `ToolPeriod`
+ * (`period: { argument: 'window' }`), which is step 7b's arm: a tool that
+ * declares a period argument owes a period on its results, and one that says
+ * nothing is recorded as silence. None of the other 21 moved (run first on the
+ * wired tree, the four regenerated alone with `-t agent-arguments` under
+ * `AF_TOOLS_REFERENCE=update`, the 21 `cmp`-equal after). The delta was read
+ * bundle by bundle with the new `sf-results` bundles set aside and execution
+ * indices normalized, and it is EXACTLY three families on each: (1) seed's
+ * run constant `honestyLayers` gains `results: true` (the two legs that run
+ * seed); (2) the `sf-results` mount at the loop head — two bundles per visit
+ * (the mount and its output mapping), a visit on iteration 1 that reads no
+ * batch and writes nothing, and, on every leg that dispatched the batch, a
+ * visit after ToolCalls whose output mapping appends ONE `period` row to
+ * `findingsLedger` (`{ kind: 'period', turn: 1, toolCallId: 'c1', toolName:
+ * 'search_logs', iteration: 1, verdict: 'undeclared', argument: 'window' }` —
+ * the mock's result declares no period); on the resumed leg that visit is the
+ * loop landing on the new target after the resumed batch, which is the proof
+ * that a resume reaches it; (3) every later bundle's `idx` shifts by the
+ * inserted bundles. No served view moved — the layer serves the model nothing —
+ * and no message, tool, receipt or other key moved.
+ *
+ * …and one new reference, `agent-results-period` (`.resultsLayer()` over a tool
+ * whose RESULTS declare their period and that declares no `ToolPeriod`): the
+ * run constant `honestyLayers: { results: true }`; `coverageDeclared` rows that
+ * carry the declared period in camelCase (a described result with a period and
+ * no coverage lists files a `'ledger'` row with three empty lists; the
+ * absence's row carries `readAt`, which the normaliser reads as a clock); the
+ * `sf-results` visits, each batch's appending one `period` row (`covered` for
+ * `host-103`, `not-held` for `host-999`); and the served tool messages carrying
+ * each `period` as the tool declared it, snake_case (`read_at`).
+ *
+ * Step 7b's first review round REGENERATED four of those five —
+ * `agent-arguments-assume`, `-assume-limits`, `-ask-resumed` and
+ * `agent-results-period` — when the layer stopped telling a batch from a
+ * re-entry by call id (a provider may reuse one; a resumed leg repeats the ids
+ * of the leg that failed) and started reading the iteration that dispatched
+ * the batch, which ToolCalls now stamps beside it under the arm. The four were
+ * copied aside, regenerated alone under `AF_TOOLS_REFERENCE=update -t …`, the
+ * other 22 `cmp`-equal after, and each diffed path by path: the delta is ONE
+ * family — every `tool-calls` bundle that dispatched a batch gains
+ * `toolResultsIteration` (the batch's iteration: 1, and 2 for the second batch
+ * of `agent-results-period`) in `overwrite`, with one `set` trace row that
+ * shifts the bundle's other trace rows by one. `agent-arguments-ask` did not
+ * move: its leg pauses on the ask before dispatch starts, so nothing is
+ * stamped. No served view, message, row or other key moved.
+ *
+ * Step 7b's bench round 1 REGENERATED `agent-results-period` alone (copied
+ * aside, `AF_TOOLS_REFERENCE=update -t agent-results-period`, the other 26
+ * untouched): the serve door now adds the verdict word and its one clause to a
+ * period the store did not hold all of (`coverage/read.ts` · `withPeriodServed`).
+ * The delta is ONE family — the served `host-999` absence (`not-held`) gains
+ * `"verdict":"not-held"` inside its period and reads `ABSENCE_NOTE_HELD_ONLY`
+ * plus the `not-held` clause, in every place that served string is recorded
+ * (the tool message, `lastToolResult`, `toolResults`, the injection's raw
+ * content and hash, the sent view) and the request measurement that counts
+ * it. The `covered` `host-103` result, every row and every other key did not
+ * move.
+ *
+ * Honesty step 6 (the answer layer): one new reference, `agent-answer-layer`
+ * — the `agent-stepped-skill` scenario with `.answerLayer()` on, so the delta
+ * is read against its unarmed twin line by line; none of the 25 earlier ones
+ * moved (run first on the wired tree — 25/25 green — copied aside, the one
+ * generated alone with `-t agent-answer-layer` under
+ * `AF_TOOLS_REFERENCE=update`, the 25 `cmp`-equal after). What it holds, read
+ * from its bytes against the twin: the run constant `honestyLayers: { answer:
+ * true }` on seed's commit, and — on the Route commit of the answer the step
+ * judge ACCEPTED (the one nudge already spent) — the `findingsLedger` key
+ * with ONE `steps-unfinished` witness row (`turn: 1`, the unrun step's
+ * position and tool, never its note). Nothing else on the parent log moves:
+ * the layer's stage runs inside the Final subflow, whose own log this
+ * projection does not read, and the final mount's output mapping is the
+ * bytes it always was (it receives the answer string). The event and the
+ * `turn_end` field are pinned by `test/core/agent/assessment/answer-layer.test.ts`.
+ *
+ * The merge of step 5 (declared sources) with steps 6 and 7b REGENERATED step
+ * 5's two references, `agent-arguments-sources` and `-sources-only`, alone
+ * (copied aside, `AF_TOOLS_REFERENCE=update -t agent-arguments-sources`; the
+ * other 28 green untouched): their `search_logs` declares a `ToolPeriod`
+ * (`period: { argument: 'window', spelling: 'lookback' }`), which is step 7b's
+ * arm. Read bundle by bundle with the `sf-results` bundles set aside and
+ * execution indices normalized, the delta is EXACTLY step 7b's families: seed's
+ * `honestyLayers` gains `results: true` (beside `inputs` and `argumentSources`);
+ * the `sf-results` visits at the loop head (iteration 1 writes nothing; the
+ * visit after ToolCalls appends ONE `period` row for `c1`, `argument: 'window'`);
+ * the dispatching `tool-calls` bundle gains `toolResultsIteration: 1` with one
+ * `set` trace row; and every later index shifts (the served views'
+ * `callRuntimeStageId` among them). The `argument` rows, the served schemas,
+ * messages and every other key did not move.
+ *
  * Every scenario is a real run — the receipt-conformance shapes, each in the
  * configuration that has no name collision — and what is compared is the
  * whole `commitLog` plus `servedAt(k)` for every located epoch, after ONE
@@ -358,8 +449,10 @@ import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 import { flowChart, FlowChartExecutor, type FlowChart } from 'footprintjs';
 import {
+  absent,
   Agent,
   defineTool,
+  describedResult,
   epochLocations,
   isInputPause,
   LLMCall,
@@ -531,6 +624,49 @@ async function sourcesRun(ledger = true): Promise<Snapshot> {
   await agent.run({ message: 'any errors on checkout in the past day?' });
   return agent.getSnapshot()!;
 }
+
+/**
+ * A backup search whose RESULTS declare the period their read covered (honesty
+ * step 7b) — no `ToolPeriod`, so the results layer is armed by `.resultsLayer()`.
+ * `host-103` finds rows inside what the export holds (`covered`); `host-999`
+ * finds nothing, asked about an hour after the export ends (`not-held`).
+ */
+const periodDeclaringBackupRuns = () =>
+  defineTool({
+    name: 'backup_runs',
+    description: 'Failed backup runs for one host, read from the nightly backup export.',
+    inputSchema: {
+      type: 'object',
+      required: ['host'],
+      properties: { host: { type: 'string', description: 'Host name.' } },
+    },
+    execute: (args: Record<string, unknown>) => {
+      const host = String(args.host);
+      const provenance = { measuredAt: '2026-09-26T02:00:00Z', source: 'nightly backup export' };
+      const held = { from: '2026-08-27T02:00:00Z', to: '2026-09-26T02:00:00Z' };
+      return host === 'host-103'
+        ? describedResult({
+            facts: [{ entity: host, failed: 2 }],
+            provenance,
+            period: { queried: { from: '2026-09-25T00:00:00Z', to: '2026-09-26T00:00:00Z' }, held },
+          })
+        : absent({
+            what: `failed backup runs for ${host}`,
+            checked: ['every job in the 02:00 export'],
+            provenance,
+            period: {
+              queried: { from: '2026-09-26T09:00:00Z', to: '2026-09-26T10:00:00Z' },
+              held,
+              readAt: '2026-09-26T10:00:03Z',
+            },
+          });
+    },
+  });
+const PERIOD_THEN_DONE = [
+  call('c1', 'backup_runs', { host: 'host-103' }),
+  call('c2', 'backup_runs', { host: 'host-999' }),
+  answer('Two failures on host-103; none found for host-999.'),
+];
 
 /** The paused leg of an ask run, or — `resumed` — the leg the answer resumes (a fresh executor). */
 async function askRun(resumed: boolean): Promise<Snapshot> {
@@ -1163,6 +1299,38 @@ const SCENARIOS: Record<string, () => Promise<Snapshot>> = {
   // …and declared sources WITHOUT the findings ledger (step 5, round 1 of the
   // bench fixes): `_findings` with `from` alone on the ruled tool.
   'agent-arguments-sources-only': () => sourcesRun(false),
+  // Honesty step 7b — the results layer, armed by `.resultsLayer()` over a tool
+  // whose results declare their period (no ToolPeriod). See the header.
+  'agent-results-period': () =>
+    agentRun('dynamic', PERIOD_THEN_DONE, (a) =>
+      a.system('bot').tool(periodDeclaringBackupRuns()).resultsLayer(),
+    ),
+  // Honesty step 6 (the answer layer): the stepped-skill scenario's twin, armed.
+  'agent-answer-layer': () =>
+    agentRun('dynamic', [call('c1', 'lookup'), answer('done'), answer('done')], (a) =>
+      a
+        .system('bot')
+        .skillGraph(
+          skillGraph({
+            skills: [
+              defineSkill({
+                id: 'refund',
+                description: 'refunds',
+                body: 'REFUND_BODY',
+                tools: [tool('lookup'), tool('charge')],
+                steps: [
+                  { tool: 'lookup', note: 'find the order first' },
+                  { tool: 'charge', note: 'refund the charge' },
+                ],
+              } as never),
+            ],
+            start: 'refund',
+            steps: [],
+            check: 'off',
+          }),
+        )
+        .answerLayer(),
+    ),
 };
 
 // ─── normalisation — only what differs between two runs of ONE configuration ──

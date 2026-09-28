@@ -43,7 +43,7 @@ The runnable examples are `examples/features/74-ask-or-assume.ts` (the model lea
 period out, the library fills `2h`, the answer's standing reads "not sure — assumed"),
 `examples/features/75-ask-for-missing-arguments.ts` (two calls leave the period out, the
 person is asked ONCE, both calls run with the answer, and the standing reads "ask" until it
-comes) and `examples/features/76-declared-sources.ts` (the model says the period came from
+comes) and `examples/features/77-declared-sources.ts` (the model says the period came from
 the person's words, a phrase the author declared checks the quote out and the call runs; a
 value the words do not hold is a reading, and the person is asked).
 
@@ -324,6 +324,20 @@ the inner-dispatch refusal (`toolDispatch.ts` · `refuseUnaccountedRuledArgument
 refuses before `ctx.tools.call` takes its sequence number — an `await` there would reorder
 concurrent inner calls). `test/lib/trace-toolpack/browserGraph.test.ts` pins the split.
 
+## The period argument, and the results layer (honesty step 7b)
+
+`Tool.period` (`declare.ts` · `ToolPeriod`) is this layer's declaration — which
+argument sets the period, in which declared spelling — and it now ALSO arms the
+results layer (`core/agent/results/README.md`): a tool that declares a period
+argument owes a period on its results, so each call gets a `period` row at the
+loop head — the period's verdict, or `undeclared` when the result said nothing
+about what its read covered. The two rows join by the call id and the argument
+name (the `argument` row's `period: true`, the `period` row's `argument`): this
+layer says WHO chose the period, the results layer says WHAT the read covered,
+and neither parses the other's words. The answer's standing names both rows as
+the witnesses of a `period-*` reason. This layer's rows, served bytes and refusals
+are unchanged.
+
 ## Refused, and what the model reads
 
 | When | The call reads |
@@ -353,6 +367,14 @@ the PERFORMANCE block), and the resume adds no model call.
 
 ## Not covered
 
+- **The ask inside `sf-inputs`, as the design drew it (follow-up).** The batch ask is raised
+  by ToolCalls (`stages/argumentAsk.ts`) because footprintjs could not resume a pause inside
+  a subflow of the loop body, nor a decider looping back to the paused stage. footprintjs
+  9.28.0 fixed both (`test/core/agent/arguments/ask-placement.test.ts` pins the healthy
+  traces — facts 1 and 2), so the ask MAY now move into `sf-inputs` with a `Bind` decider
+  that loops back to it, and a second pause in the batch that asked need no longer be
+  refused. Not moved yet: the move changes the chart, the record and the refusal above, and
+  is its own packet.
 - **Asking about a PRESENT value without declared sources** — a value on an `ask` argument
   the model did send runs as sent, filed `model`, unless declared sources are armed
   (`.inputsLayer({ argumentSources: true })` or `.findings({ argumentSources: true })`): only a

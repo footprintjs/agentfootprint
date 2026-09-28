@@ -49,7 +49,10 @@
  *
  * The EXEMPT index is built from a different corpus with the same machinery:
  * the user's own message, the conversation's user/system turns, and the
- * system-prompt content this turn was built from. A value the user supplied is
+ * system-prompt content this turn was built from. A compaction summary is a
+ * user-role turn a MODEL wrote, so its text is not in it — the summary
+ * carries the forms its folded person/app turns exempted instead
+ * (`LLMMessage.foldedExempt`, {@link exemptLineageOf}). A value the user supplied is
  * not a fabrication — the user gave it — and neither is one the app's own
  * prompt or skill body put in front of the model.
  *
@@ -95,6 +98,7 @@ import type { InjectionRecord } from '../../../recorders/core/types.js';
 import { toolBytesOf } from '../../../lib/toolBytes.js';
 import { absenceEvidenceProjection } from '../coverage/index.js';
 import { isTruncatedToolResult } from '../toolResultCap.js';
+import { isCompactedSummary } from '../../../lib/saidByPerson.js';
 import { isLibraryAuthoredTurn } from './frames.js';
 import { lookupForms, normalizeToken, tokenize } from './normalize.js';
 import { jsonPrefixOf, leadingJsonValues } from './servedJson.js';
@@ -414,6 +418,73 @@ export function evidenceFromHistory(history: readonly LLMMessage[]): EvidenceCor
   };
 }
 
+/** Insert an already-normalized lookup form (a fold's carried lineage). */
+function addForm(sink: Sink, form: string): void {
+  if (form === '' || sink.values.has(form)) return;
+  if (sink.budget <= 0) return;
+  sink.values.set(form, sink.turn);
+  sink.budget -= 1;
+}
+
+/**
+ * The history half of the exempt corpus — ONE rule, asked by the corpus
+ * ({@link exemptFromRun}) and by the fold that records its lineage
+ * ({@link exemptLineageOf}), so what a message exempted before a fold and
+ * what its summary carries after one cannot disagree.
+ */
+function addHistoryExempt(sink: Sink, history: readonly LLMMessage[]): void {
+  for (const msg of history) {
+    if (msg.role !== 'user' && msg.role !== 'system') continue;
+    // A compaction summary's TEXT is a model's claim about the conversation,
+    // not something the person or the app supplied — indexing it exempted
+    // every value the summarizer wrote, invented ones included, from the
+    // gate and the contingent check. It contributes the LINEAGE it was folded
+    // with instead: the forms the folded person/app turns exempted, taken
+    // from those original messages at fold time. A frame without one exempts
+    // nothing. See the "Compaction" section of this folder's README.
+    if (isCompactedSummary(msg)) {
+      for (const form of msg.foldedExempt ?? []) addForm(sink, form);
+      continue;
+    }
+    // …except the corrections this library wrote. They are `role: 'user'`
+    // turns that QUOTE the flagged values back to the model, so indexing one
+    // would exempt exactly what it challenged — the gate laundering its own
+    // accusation. See frames.ts.
+    if (isLibraryAuthoredTurn(msg.content)) continue;
+    addText(sink, msg.content);
+  }
+}
+
+// FOLD · the one owner of what a compaction summary carries forward for the exempt corpus
+// consumers read this and never re-derive it: window/strategies/summarizeOldest.ts (stamps it on the frame via buildSummaryMessage), read back by exemptFromRun
+// detached: yes — a fresh array of strings, computed from the folded ORIGINALS, never from the summary text.
+/**
+ * The exemption lineage of a span about to be folded: every lookup form the
+ * exempt corpus holds for these messages, in first-seen order — the person's
+ * and the app's turns by the corpus's own rule, a nested summary by the
+ * lineage IT carried. Tool results contribute nothing here: a summarized tool
+ * value keeps its tool source and is judged against the tool results still in
+ * the window, exactly like a value whose result a drop removed.
+ *
+ * @example
+ * ```ts
+ * const lineage = exemptLineageOf([{ role: 'user', content: 'Check array ARR-2291.' }]);
+ * lineage.includes(normalizeToken('ARR-2291')); // true — the person's value
+ * exemptLineageOf([{ role: 'tool', content: 'ARR-7', toolCallId: 't1' }]); // [] — a tool's
+ * ```
+ */
+export function exemptLineageOf(span: readonly LLMMessage[]): readonly string[] {
+  const sink: Sink = {
+    values: new Map<string, number>(),
+    carriers: new Map(),
+    budget: MAX_INDEX_TOKENS,
+    turn: 0,
+    toolCallId: undefined,
+  };
+  addHistoryExempt(sink, span);
+  return [...sink.values.keys()];
+}
+
 /**
  * Build the exempt corpus: everything the RUN put in front of the model that
  * the model did not invent — the user's message, the conversation's user and
@@ -471,15 +542,7 @@ export function exemptFromRun(args: {
     toolCallId: undefined,
   };
   if (args.userMessage) addText(sink, args.userMessage);
-  for (const msg of args.history) {
-    if (msg.role !== 'user' && msg.role !== 'system') continue;
-    // …except the corrections this library wrote. They are `role: 'user'`
-    // turns that QUOTE the flagged values back to the model, so indexing one
-    // would exempt exactly what it challenged — the gate laundering its own
-    // accusation. See frames.ts.
-    if (isLibraryAuthoredTurn(msg.content)) continue;
-    addText(sink, msg.content);
-  }
+  addHistoryExempt(sink, args.history);
   for (const rec of args.systemPromptInjections ?? []) {
     if (rec.rawContent) addText(sink, rec.rawContent);
     // The summary is what a redacted record has instead. Indexing it cannot

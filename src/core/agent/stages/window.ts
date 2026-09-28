@@ -1,7 +1,9 @@
 /**
  * window — the loop-head stage that applies the agent's window strategy.
  *
- * Runs once per ReAct iteration boundary, as the loop target, so everything
+ * Runs once per ReAct iteration boundary, as the loop target — or right after
+ * the results layer, which heads the loop when armed (honesty step 7b) and
+ * reads the batch just run before this stage folds it away — so everything
  * downstream in the turn — the injection engine's triggers, all three context
  * slots, and the wire itself — sees ONE window. No component gets a different
  * past than the model does.

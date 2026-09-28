@@ -25,6 +25,14 @@ export interface HonestyLayers {
    * exactly when `.findings()` did.
    */
   readonly argumentSources?: true;
+  /** The results layer (honesty layer 3, step 7b) — `sf-results` is mounted at the loop head. */
+  readonly results?: true;
+  /**
+   * The answer layer (honesty layer 4) — its stages head the final branch,
+   * and the Route decider files the answer's witness rows
+   * (`assessment/witness.ts`).
+   */
+  readonly answer?: true;
 }
 
 /**
@@ -74,13 +82,31 @@ export function readInputsLayerOption(value: unknown): InputsLayerOptions | unde
 }
 
 /**
- * The run constant for an agent whose inputs layer is mounted, or `undefined`
- * when it is not (then seed writes nothing). `argumentSources` only beside it.
+ * The run constant for an agent's armed layers, or `undefined` when none is
+ * armed (then seed writes nothing). A layer that is not armed is absent from
+ * the object — never `false` — so the bytes of a run that armed only the
+ * inputs layer are the bytes that layer has always committed.
+ * `argumentSources` only beside `inputs`.
+ *
+ * @example
+ * ```ts
+ * honestyLayersOf({ inputs: true, answer: false }); // { inputs: true }
+ * honestyLayersOf({ inputs: true, argumentSources: true, answer: false }); // { inputs: true, argumentSources: true }
+ * honestyLayersOf({ inputs: false, results: true, answer: false }); // { results: true }
+ * honestyLayersOf({ inputs: false, answer: false }); // undefined
+ * ```
  */
-export function honestyLayersOf(
-  inputsLayer: boolean,
-  argumentSources = false,
-): HonestyLayers | undefined {
-  if (!inputsLayer) return undefined;
-  return argumentSources ? { inputs: true, argumentSources: true } : { inputs: true };
+export function honestyLayersOf(armed: {
+  readonly inputs: boolean;
+  readonly argumentSources?: boolean;
+  readonly results?: boolean;
+  readonly answer: boolean;
+}): HonestyLayers | undefined {
+  if (!armed.inputs && armed.results !== true && !armed.answer) return undefined;
+  return {
+    ...(armed.inputs && { inputs: true as const }),
+    ...(armed.inputs && armed.argumentSources === true && { argumentSources: true as const }),
+    ...(armed.results === true && { results: true as const }),
+    ...(armed.answer && { answer: true as const }),
+  };
 }

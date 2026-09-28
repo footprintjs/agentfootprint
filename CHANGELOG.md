@@ -5,6 +5,85 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [9.125.1] - 2026-09-28
+
+### Changed
+
+- **agentfootprint now requires footprintjs 9.28.0 — a paused agent inside a composition resumes with the composition's continuation.**
+  footprintjs 9.28.0 resumes by walking the real chart instead of a stand-in for
+  the paused stage. What you will see:
+
+  - A paused agent inside a `Conditional` or `Parallel` that is a step of a
+    `Sequence` now finishes the composition on resume: `Sequence(Conditional(agent))`
+    runs its Finalize (and the steps after it), `Sequence(Parallel(agent, other))`
+    runs its Merge once, after the answer. Before, the resumed run ended without
+    the composition's result.
+  - A pause inside a CONCURRENT `graph()` level resumes that node and then runs
+    the later levels (before, only the paused node finished).
+  - When an `LLMCall` run loops back to its client stage, the commit log now
+    names the real node (`stage: 'Client'`, its display name) where it wrote the
+    stage id (`'client'`) — one field of one bundle; nothing else in the record
+    moved.
+
+  The `peerDependencies` range and the development dependency move to `^9.28.0`.
+
+### Fixed
+
+- **A compaction summary no longer exempts its own values from the evidence check.**
+  `.compaction()` puts the summarizer's text in a user-role message, and the
+  evidence gate's exempt corpus indexed it as if the person had said it — so a
+  value the summarizer INVENTED skipped the names-and-numbers check, and a
+  summary that repeated a value from a result the model had declared open, noise
+  or ruled-out skipped the contingent check too. A summary's text now exempts
+  nothing. What the folded person and app messages exempted is carried forward
+  with the summary instead (`LLMMessage.foldedExempt`, read off the original
+  messages at fold time, never off the summary; kept off the wire), so a value
+  the person gave before the fold stays exempt — on the next turn, after a
+  restore and through a nested fold. A value from a folded TOOL result is judged
+  against the results still in the window, exactly as after a drop. Correction
+  frames stay non-exempt, and an agent that never compacts builds the same
+  corpus as before. See `src/core/agent/evidence/README.md` § "A compaction
+  summary exempts nothing by itself".
+
+## [9.125.0] - 2026-09-28
+
+### Added
+
+- **A result says what time its read covered — `period` on `absent()`, `coverage()` and `describedResult()`, and the results layer that judges it (honesty layer 3).** A search for "the last hour" answered from an export that ends at 02:00 used to read "no failures" with nothing on the record to say the data ends seven hours before the hour asked about. Now a result declares the period of the READ that produced it — `period: { queried: { from, to }, held: { from, to } | 'unknown', readAt? }`, ISO 8601 instants WITH a zone, computed by the tool from its own data (the library compares instants and never parses "last hour" or "2h") — on the door it already returns: `absent({ …, period })`, `coverage(value, { …, period })` (inside `af_coverage`, before `result`; a period alone is a boundary) and `describedResult({ …, period })` (top-level). The model reads the period as declared — and, when the store did not hold all of the time the read asked about, the library's verdict word inside it (`period.verdict`: `not-held`, `partly-held` or `unknown`, by `periodVerdict`) and that word's one static note clause, added at the serve door and never minted into the tool's output; an absence then drops the note's claim to be a complete answer. A `covered` period is served with nothing added, and the word and clause never ground an answer (the first registered bench showed the model reading `queried` as covered ground when shown the instants alone). `absent()` also takes the `provenance: { measuredAt, source, ageSeconds?, sourceExportDate? }` `describedResult()` carries, by the same rules and to the same snake_case wire, so "searched the 02:00 export — nothing" is data. One rule set (`DeclaredPeriod`) refuses a malformed period at the mint (`refused: …`, naming `readAt` for a `read_at` slip) and reads one minted elsewhere without repair: on `af_absent` / `af_coverage` it is left off the record with one dev warning per tool, on `af_semantics` it keeps the envelope plain data. The coverage channel carries it — `coverageDeclared` rows gain `period`, `tools.absent` gains `period` and `provenance`, `tools.coverage_declared` gains `period`; a described result with a period and no coverage files a `'ledger'` row with three empty lists.
+
+  The results layer (`sf-results`) mounts at the loop head — it becomes the loop target, before the window strategy — and files ONE verdict per call on the findings ledger (`PeriodRow`, `kind: 'period'`) by one pure rule, `periodVerdict` (bounds inclusive): `covered`, `partly-held`, `not-held`, `unknown`, or `undeclared` when the tool declares a period argument and the result said nothing about its period — declared silence, recorded as silence. `agentfootprint.findings.period` carries the verdict word only, never an instant. The answer's standing (`agent.assessment()`, `assessAnswer`) reads `period-not-held`, `period-partly-held`, `period-unknown` (on a non-empty result too) and `period-undeclared` as "not sure", with `result-period` on `checked`; a period reason's witnesses are the period row and the inputs layer's argument row for the same call (who chose the period, beside what the read covered). Under an existing `.limitsTravelWithTheAnswer()`, the answer carries one `Period:` line per declaring call, as declared; a typed answer carries the same as `periods` in `agent.answerCoverage()` and `turn_end.answerCoverage`. `canonical-notes.json` gains `wire.PERIOD_WIRE` — every reserved key and the literal `'unknown'` — so a helper in another language mints the same envelope. The layer itself serves the model nothing.
+
+  How it arms: a REGISTERED tool that declares a `ToolPeriod` (`defineTool({ …, period: { argument } })`) arms it by itself — so an agent built on 9.122.0 or 9.123.0 whose tool declares one now gets a `period` row per call, `undeclared` until its results declare a period, and its standing reads "not sure" accordingly; `AgentBuilder.resultsLayer()` (or `AgentOptions.resultsLayer`) arms it for a tool a ToolProvider serves and for tools that declare a period only on their results. A period declared with no layer mounted is still recorded, never judged, and one dev warning per tool says so. Nothing declared → nothing mounted, read or written: every run is byte-identical. The run constant `honestyLayers` gains `results: true` on an armed run, and while any layer is armed the one ledger writer stamps the turn on every row. Each batch is judged ONCE per run, told from a re-entry (a schema re-ask, a nudge, a recheck, a wrap-up) by the iteration that dispatched it — ToolCalls writes `toolResultsIteration` beside `toolResults`, under the arm only — and never by call id: a provider's synthetic ids restart with each provider instance, so a leg resumed with `resumeOnError` repeats the failed leg's ids, and each of those calls still gets its verdict.
+
+  Surfaces that widen, named: `FindingsRow` gains the `period` kind (readers that switch over every kind must skip one they do not know); an armed run's state gains `toolResultsIteration`; the answer account's template set moves to 6 (five new lines); `AssessmentReason` gains four members and `AssessmentCheck` one; `agent.answerCoverage()` may carry `periods`. Across versions: an OLDER reader serves a period on `af_absent` / `af_coverage` to the model as tool knowledge and files nothing, and REFUSES a whole `af_semantics` envelope that carries one (it stays data) — upgrade readers, and the lens, before tools mint a period; an older runtime refuses a checkpoint that carries a `period` row. An `mcpClient` in its default text mode is not recognized at the door, so use `resultMode: 'structured'` for tools that return envelopes.
+
+### Fixed
+
+- **An empty `facts`, `series` or `edges` list is refused with the branch to write: "if nothing matched, return absent({ what, checked }) instead".** A described result's data lists are never empty — "nothing matched" has exactly one helper, `absent()` — and the refusal used to advise "omit the field to say nothing", which on the found branch's only data field led straight to the next refusal ("this result declares nothing"). The fault is data-dependent (a tool without an empty branch passes every test that has rows and meets it on its first empty read in production, where the model reads the refusal in place of "nothing matched"), so it now names the door: `` refused: `facts` is empty — if nothing matched, return absent({ what, checked }) instead. (field: facts) ``. One rule set, so `describedResult()` and the deprecated `semantic()` refuse in the same words, `check:semantics` names the same fault on a sample that exercises the empty branch, and an envelope minted elsewhere with an empty list stays plain data with the same dev warning. The rule and every well-formed envelope's bytes are unchanged. Also fixed in the same mint: a data list that is not a list at all (a plain object, a number, a string) is refused as one ("`facts` must be a non-empty array of rows") instead of crashing with a `TypeError` or being refused as its string's characters; any other iterable still mints, as it always did. What it lets you measure: the refusal text is stable and names the field, so its count in tool errors, per tool, is how often a tool reached production without an empty branch.
+
+## [9.124.0] - 2026-09-28
+
+### Added
+
+- **The answer's standing, in the run: `.answerLayer()` (honesty layer 4).** The same fold `agent.assessment()` runs after a run — known · consistent with the record · not sure (with the reasons) · ask · not assessed, from the committed record, never from how sure the model sounded — now runs INSIDE the run, as the first stage of the final branch, and is served the moment the answer exists: `turn_end.answerAssessment` and one new event, `agentfootprint.answer.assessed` (the value, its word, the reason kinds and the checks that ran — never a value from the answer or a quote; new `answer.*` domain with its wildcard). The in-run standing equals `assessAnswer()` over the same recording read afterwards — pinned across pause and resume, a continued conversation, typed answers, the evidence revision, a limit that cut the turn short and an agent mounted in a composition.
+
+  ```ts
+  const agent = Agent.create({ provider, model })
+    .tool(listDownPorts)
+    .answerLayer({ standingLine: true }) // .answerLayer() alone: the data only
+    .build();
+  agent.on('agentfootprint.answer.assessed', (e) => console.log(e.payload.standing)); // 'not-sure'
+  await agent.run('Which ports on switch A are down?');
+  // 'No ports on switch A are down.\n\n---\n\nNot sure — a lookup came back empty without saying what it searched.'
+  ```
+
+  - While the layer is armed, the Route decider commits two **witness rows** on the findings ledger, so the fold can read verdicts that were events only: `grounded` (the evidence gate's clean pass — the names-and-numbers check RAN, which reads "consistent", never "known") and `steps-unfinished` (an answer accepted or cut short before a skill's declared steps finished — a new layer-4 reason). New exported types `GroundedRow` and `StepsUnfinishedRow` join `FindingsRow`; a reader that switches over every kind must skip one it does not know. An older runtime refuses a continued-conversation checkpoint that carries either kind.
+  - While any honesty layer is armed, every findings-ledger row carries its conversation `turn`, a continued conversation's ledger is restored, and a checkpoint carries the turn it ended on — new optional field `AgentRunCheckpoint.turnNumber` (both carriers: `agent.checkpoint()` and `RunCheckpointError.checkpoint`; version 1 still), so the stamp never repeats even when a window strategy trims the stored history. `resumeOnError` retries the same turn; `run({ continueFrom })` is the next one.
+  - `{ standingLine: true }` appends ONE line to a prose answer, after the limits separator, and never edits the model's words; beside `.limitsTravelWithTheAnswer()` the line names the assumed values itself instead of an "Assumed" block. Refused at build beside `.answerValidation()` and `.outputSchema()`, through `.answerLayer()` and `AgentOptions.answerLayer` alike. Every assumed value is printed — the line never cuts one.
+  - A **typed answer's limits** (`.outputSchema()` + `.limitsTravelWithTheAnswer()`) now carry the values a tool's `askOrAssume` rule filled: `agent.answerCoverage().assumed`, the same rows the prose "Assumed" block prints (new exported type `AnswerCoverage`, a `Coverage` plus that optional list). The block and the data are now two callers of ONE fold.
+  - The **answer account** (`accountForAnswer`) reads a typed answer's limits as data (`facts.limitsData`; `limitsBlock` says `missing: 'as-data'` instead of `not-applicable`), splits the framework's whole appended section off a prose answer (an "Assumed" block alone no longer reads as the model's words; a standing line is the library's only when the record shows the run appended exactly that line — a model's own "Not sure — …" stays its words), and renders the new reason (template set 5).
+  - Off by default: an agent without `.answerLayer()` builds the same chart and commits, emits and answers exactly what it did.
+
 ## [9.123.0] - 2026-09-28
 
 ### Added

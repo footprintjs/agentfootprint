@@ -288,9 +288,11 @@ describe('INTEGRATION — the full arm on the scripted mock', () => {
     'a quote holding a declared phrase files said by phrase, with no ask; the standing names no argument',
     async () => {
       const { raw, row: r } = await run('s5-words-io-hour', 'quotes the words', 'full');
+      // (+ `results: true` since the merge with honesty step 7b: the bench's tools declare a ToolPeriod.)
       expect(raw.recording.snapshot.sharedState.honestyLayers).toEqual({
         inputs: true,
         argumentSources: true,
+        results: true,
       });
       const c = r.periodCalls[0];
       expect(c.row).toMatchObject({ source: 'said', claimed: 'user', matched: 'phrase' });

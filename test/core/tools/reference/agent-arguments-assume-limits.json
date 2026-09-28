@@ -48,7 +48,8 @@
           }
         ],
         "honestyLayers": {
-          "inputs": true
+          "inputs": true,
+          "results": true
         },
         "iteration": 1,
         "llmLatestContent": "",
@@ -217,6 +218,30 @@
     },
     {
       "idx": 1,
+      "overwrite": {},
+      "redactedPaths": [],
+      "runtimeStageId": "sf-results#1",
+      "stage": "Results",
+      "stageId": "sf-results",
+      "tags": [
+        "milestone:decision",
+        "milestone-label:Results"
+      ],
+      "trace": [],
+      "updates": {}
+    },
+    {
+      "idx": 2,
+      "overwrite": {},
+      "redactedPaths": [],
+      "runtimeStageId": "sf-results#1",
+      "stage": "Results",
+      "stageId": "sf-results",
+      "trace": [],
+      "updates": {}
+    },
+    {
+      "idx": 3,
       "overwrite": {
         "activeByslot": {
           "messages": [],
@@ -225,7 +250,7 @@
         }
       },
       "redactedPaths": [],
-      "runtimeStageId": "sf-injection-engine#1",
+      "runtimeStageId": "sf-injection-engine#6",
       "stage": "Injection Engine",
       "stageId": "sf-injection-engine",
       "tags": [
@@ -249,27 +274,27 @@
       "updates": {}
     },
     {
-      "idx": 2,
+      "idx": 4,
       "overwrite": {},
       "redactedPaths": [],
-      "runtimeStageId": "sf-injection-engine#1",
+      "runtimeStageId": "sf-injection-engine#6",
       "stage": "Injection Engine",
       "stageId": "sf-injection-engine",
       "trace": [],
       "updates": {}
     },
     {
-      "idx": 3,
+      "idx": 5,
       "overwrite": {},
       "redactedPaths": [],
-      "runtimeStageId": "context#6",
+      "runtimeStageId": "context#11",
       "stage": "Context",
       "stageId": "context",
       "trace": [],
       "updates": {}
     },
     {
-      "idx": 4,
+      "idx": 6,
       "overwrite": {
         "systemPromptInjections": [
           {
@@ -283,7 +308,7 @@
         ]
       },
       "redactedPaths": [],
-      "runtimeStageId": "context#6",
+      "runtimeStageId": "context#11",
       "stage": "Context",
       "stageId": "context",
       "trace": [
@@ -295,10 +320,10 @@
       "updates": {}
     },
     {
-      "idx": 5,
+      "idx": 7,
       "overwrite": {},
       "redactedPaths": [],
-      "runtimeStageId": "sf-system-prompt#7",
+      "runtimeStageId": "sf-system-prompt#12",
       "stage": "System Prompt",
       "stageId": "sf-system-prompt",
       "tags": [
@@ -309,7 +334,7 @@
       "updates": {}
     },
     {
-      "idx": 6,
+      "idx": 8,
       "overwrite": {
         "messagesInjections": [
           {
@@ -326,7 +351,7 @@
         ]
       },
       "redactedPaths": [],
-      "runtimeStageId": "context#6",
+      "runtimeStageId": "context#11",
       "stage": "Context",
       "stageId": "context",
       "trace": [
@@ -338,10 +363,10 @@
       "updates": {}
     },
     {
-      "idx": 7,
+      "idx": 9,
       "overwrite": {},
       "redactedPaths": [],
-      "runtimeStageId": "sf-messages#9",
+      "runtimeStageId": "sf-messages#14",
       "stage": "Messages",
       "stageId": "sf-messages",
       "tags": [
@@ -352,27 +377,27 @@
       "updates": {}
     },
     {
-      "idx": 8,
+      "idx": 10,
       "overwrite": {},
       "redactedPaths": [],
-      "runtimeStageId": "sf-system-prompt#7",
+      "runtimeStageId": "sf-system-prompt#12",
       "stage": "System Prompt",
       "stageId": "sf-system-prompt",
       "trace": [],
       "updates": {}
     },
     {
-      "idx": 9,
+      "idx": 11,
       "overwrite": {},
       "redactedPaths": [],
-      "runtimeStageId": "sf-messages#9",
+      "runtimeStageId": "sf-messages#14",
       "stage": "Messages",
       "stageId": "sf-messages",
       "trace": [],
       "updates": {}
     },
     {
-      "idx": 10,
+      "idx": 12,
       "overwrite": {
         "toolsInjections": [
           {
@@ -388,7 +413,7 @@
         ]
       },
       "redactedPaths": [],
-      "runtimeStageId": "context#6",
+      "runtimeStageId": "context#11",
       "stage": "Context",
       "stageId": "context",
       "trace": [
@@ -400,10 +425,10 @@
       "updates": {}
     },
     {
-      "idx": 11,
+      "idx": 13,
       "overwrite": {},
       "redactedPaths": [],
-      "runtimeStageId": "sf-tools#11",
+      "runtimeStageId": "sf-tools#16",
       "stage": "Tools",
       "stageId": "sf-tools",
       "tags": [
@@ -414,17 +439,17 @@
       "updates": {}
     },
     {
-      "idx": 12,
+      "idx": 14,
       "overwrite": {},
       "redactedPaths": [],
-      "runtimeStageId": "sf-tools#11",
+      "runtimeStageId": "sf-tools#16",
       "stage": "Tools",
       "stageId": "sf-tools",
       "trace": [],
       "updates": {}
     },
     {
-      "idx": 13,
+      "idx": 15,
       "overwrite": {
         "cacheMarkers": [
           {
@@ -436,7 +461,7 @@
         ]
       },
       "redactedPaths": [],
-      "runtimeStageId": "sf-cache#14",
+      "runtimeStageId": "sf-cache#19",
       "stage": "Cache",
       "stageId": "sf-cache",
       "trace": [
@@ -448,17 +473,17 @@
       "updates": {}
     },
     {
-      "idx": 14,
+      "idx": 16,
       "overwrite": {},
       "redactedPaths": [],
-      "runtimeStageId": "sf-cache#14",
+      "runtimeStageId": "sf-cache#19",
       "stage": "Cache",
       "stageId": "sf-cache",
       "trace": [],
       "updates": {}
     },
     {
-      "idx": 15,
+      "idx": 17,
       "overwrite": {
         "llmLatestToolCalls": [
           {
@@ -540,7 +565,7 @@
         }
       },
       "redactedPaths": [],
-      "runtimeStageId": "call-llm#18",
+      "runtimeStageId": "call-llm#23",
       "stage": "CallLLM",
       "stageId": "call-llm",
       "tags": [
@@ -560,7 +585,7 @@
       "updates": {}
     },
     {
-      "idx": 16,
+      "idx": 18,
       "overwrite": {
         "argumentResolutions": [
           {
@@ -591,7 +616,7 @@
         ]
       },
       "redactedPaths": [],
-      "runtimeStageId": "sf-inputs#19",
+      "runtimeStageId": "sf-inputs#24",
       "stage": "Inputs",
       "stageId": "sf-inputs",
       "tags": [
@@ -611,20 +636,20 @@
       "updates": {}
     },
     {
-      "idx": 17,
+      "idx": 19,
       "overwrite": {},
       "redactedPaths": [],
-      "runtimeStageId": "sf-inputs#19",
+      "runtimeStageId": "sf-inputs#24",
       "stage": "Inputs",
       "stageId": "sf-inputs",
       "trace": [],
       "updates": {}
     },
     {
-      "idx": 18,
+      "idx": 20,
       "overwrite": {},
       "redactedPaths": [],
-      "runtimeStageId": "sf-route#24",
+      "runtimeStageId": "sf-route#29",
       "stage": "Route",
       "stageId": "sf-route",
       "tags": [
@@ -635,7 +660,7 @@
       "updates": {}
     },
     {
-      "idx": 19,
+      "idx": 21,
       "overwrite": {
         "history": [
           {
@@ -670,10 +695,11 @@
             "toolCallId": "c1",
             "toolName": "search_logs"
           }
-        ]
+        ],
+        "toolResultsIteration": 1
       },
       "redactedPaths": [],
-      "runtimeStageId": "tool-calls#25",
+      "runtimeStageId": "tool-calls#30",
       "stage": "ToolCalls",
       "stageId": "tool-calls",
       "tags": [
@@ -681,6 +707,10 @@
         "milestone-label:Tool call"
       ],
       "trace": [
+        {
+          "path": "toolResultsIteration",
+          "verb": "set"
+        },
         {
           "path": "lastToolResult",
           "verb": "set"
@@ -701,10 +731,51 @@
       "updates": {}
     },
     {
-      "idx": 20,
+      "idx": 22,
+      "overwrite": {
+        "findingsLedger": [
+          {
+            "argument": "window",
+            "iteration": 1,
+            "kind": "period",
+            "toolCallId": "c1",
+            "toolName": "search_logs",
+            "turn": 1,
+            "verdict": "undeclared"
+          }
+        ]
+      },
+      "redactedPaths": [],
+      "runtimeStageId": "sf-results#31",
+      "stage": "Results",
+      "stageId": "sf-results",
+      "tags": [
+        "milestone:decision",
+        "milestone-label:Results"
+      ],
+      "trace": [
+        {
+          "path": "findingsLedger",
+          "verb": "append"
+        }
+      ],
+      "updates": {}
+    },
+    {
+      "idx": 23,
       "overwrite": {},
       "redactedPaths": [],
-      "runtimeStageId": "sf-injection-engine#26",
+      "runtimeStageId": "sf-results#31",
+      "stage": "Results",
+      "stageId": "sf-results",
+      "trace": [],
+      "updates": {}
+    },
+    {
+      "idx": 24,
+      "overwrite": {},
+      "redactedPaths": [],
+      "runtimeStageId": "sf-injection-engine#36",
       "stage": "Injection Engine",
       "stageId": "sf-injection-engine",
       "tags": [
@@ -715,40 +786,40 @@
       "updates": {}
     },
     {
-      "idx": 21,
+      "idx": 25,
       "overwrite": {},
       "redactedPaths": [],
-      "runtimeStageId": "sf-injection-engine#26",
+      "runtimeStageId": "sf-injection-engine#36",
       "stage": "Injection Engine",
       "stageId": "sf-injection-engine",
       "trace": [],
       "updates": {}
     },
     {
-      "idx": 22,
+      "idx": 26,
       "overwrite": {},
       "redactedPaths": [],
-      "runtimeStageId": "context#31",
+      "runtimeStageId": "context#41",
       "stage": "Context",
       "stageId": "context",
       "trace": [],
       "updates": {}
     },
     {
-      "idx": 23,
+      "idx": 27,
       "overwrite": {},
       "redactedPaths": [],
-      "runtimeStageId": "context#31",
+      "runtimeStageId": "context#41",
       "stage": "Context",
       "stageId": "context",
       "trace": [],
       "updates": {}
     },
     {
-      "idx": 24,
+      "idx": 28,
       "overwrite": {},
       "redactedPaths": [],
-      "runtimeStageId": "sf-system-prompt#32",
+      "runtimeStageId": "sf-system-prompt#42",
       "stage": "System Prompt",
       "stageId": "sf-system-prompt",
       "tags": [
@@ -759,7 +830,7 @@
       "updates": {}
     },
     {
-      "idx": 25,
+      "idx": 29,
       "overwrite": {
         "messagesInjections": [
           {
@@ -799,7 +870,7 @@
         ]
       },
       "redactedPaths": [],
-      "runtimeStageId": "context#31",
+      "runtimeStageId": "context#41",
       "stage": "Context",
       "stageId": "context",
       "trace": [
@@ -811,10 +882,10 @@
       "updates": {}
     },
     {
-      "idx": 26,
+      "idx": 30,
       "overwrite": {},
       "redactedPaths": [],
-      "runtimeStageId": "sf-messages#34",
+      "runtimeStageId": "sf-messages#44",
       "stage": "Messages",
       "stageId": "sf-messages",
       "tags": [
@@ -825,40 +896,40 @@
       "updates": {}
     },
     {
-      "idx": 27,
+      "idx": 31,
       "overwrite": {},
       "redactedPaths": [],
-      "runtimeStageId": "sf-system-prompt#32",
+      "runtimeStageId": "sf-system-prompt#42",
       "stage": "System Prompt",
       "stageId": "sf-system-prompt",
       "trace": [],
       "updates": {}
     },
     {
-      "idx": 28,
+      "idx": 32,
       "overwrite": {},
       "redactedPaths": [],
-      "runtimeStageId": "sf-messages#34",
+      "runtimeStageId": "sf-messages#44",
       "stage": "Messages",
       "stageId": "sf-messages",
       "trace": [],
       "updates": {}
     },
     {
-      "idx": 29,
+      "idx": 33,
       "overwrite": {},
       "redactedPaths": [],
-      "runtimeStageId": "context#31",
+      "runtimeStageId": "context#41",
       "stage": "Context",
       "stageId": "context",
       "trace": [],
       "updates": {}
     },
     {
-      "idx": 30,
+      "idx": 34,
       "overwrite": {},
       "redactedPaths": [],
-      "runtimeStageId": "sf-tools#36",
+      "runtimeStageId": "sf-tools#46",
       "stage": "Tools",
       "stageId": "sf-tools",
       "tags": [
@@ -869,37 +940,37 @@
       "updates": {}
     },
     {
-      "idx": 31,
+      "idx": 35,
       "overwrite": {},
       "redactedPaths": [],
-      "runtimeStageId": "sf-tools#36",
+      "runtimeStageId": "sf-tools#46",
       "stage": "Tools",
       "stageId": "sf-tools",
       "trace": [],
       "updates": {}
     },
     {
-      "idx": 32,
+      "idx": 36,
       "overwrite": {},
       "redactedPaths": [],
-      "runtimeStageId": "sf-cache#39",
+      "runtimeStageId": "sf-cache#49",
       "stage": "Cache",
       "stageId": "sf-cache",
       "trace": [],
       "updates": {}
     },
     {
-      "idx": 33,
+      "idx": 37,
       "overwrite": {},
       "redactedPaths": [],
-      "runtimeStageId": "sf-cache#39",
+      "runtimeStageId": "sf-cache#49",
       "stage": "Cache",
       "stageId": "sf-cache",
       "trace": [],
       "updates": {}
     },
     {
-      "idx": 34,
+      "idx": 38,
       "overwrite": {
         "llmLatestContent": "No errors.",
         "llmLatestToolCalls": [],
@@ -983,7 +1054,7 @@
         }
       },
       "redactedPaths": [],
-      "runtimeStageId": "call-llm#43",
+      "runtimeStageId": "call-llm#53",
       "stage": "CallLLM",
       "stageId": "call-llm",
       "tags": [
@@ -1007,10 +1078,10 @@
       "updates": {}
     },
     {
-      "idx": 35,
+      "idx": 39,
       "overwrite": {},
       "redactedPaths": [],
-      "runtimeStageId": "sf-inputs#44",
+      "runtimeStageId": "sf-inputs#54",
       "stage": "Inputs",
       "stageId": "sf-inputs",
       "tags": [
@@ -1021,22 +1092,22 @@
       "updates": {}
     },
     {
-      "idx": 36,
+      "idx": 40,
       "overwrite": {},
       "redactedPaths": [],
-      "runtimeStageId": "sf-inputs#44",
+      "runtimeStageId": "sf-inputs#54",
       "stage": "Inputs",
       "stageId": "sf-inputs",
       "trace": [],
       "updates": {}
     },
     {
-      "idx": 37,
+      "idx": 41,
       "overwrite": {
         "answerGuarantee": "none"
       },
       "redactedPaths": [],
-      "runtimeStageId": "sf-route#49",
+      "runtimeStageId": "sf-route#59",
       "stage": "Route",
       "stageId": "sf-route",
       "tags": [
@@ -1052,10 +1123,10 @@
       "updates": {}
     },
     {
-      "idx": 38,
+      "idx": 42,
       "overwrite": {},
       "redactedPaths": [],
-      "runtimeStageId": "sf-route#49",
+      "runtimeStageId": "sf-route#59",
       "stage": "Route",
       "stageId": "sf-route",
       "trace": [
@@ -1067,10 +1138,10 @@
       "updates": {}
     },
     {
-      "idx": 39,
+      "idx": 43,
       "overwrite": {},
       "redactedPaths": [],
-      "runtimeStageId": "final#50",
+      "runtimeStageId": "final#60",
       "stage": "Final",
       "stageId": "final",
       "tags": [
@@ -1090,7 +1161,7 @@
           "provider": "byte-identity-mock",
           "runId": "<volatile>"
         },
-        "callRuntimeStageId": "call-llm#18",
+        "callRuntimeStageId": "call-llm#23",
         "epoch": 1,
         "gaps": [
           {
@@ -1182,7 +1253,7 @@
           "provider": "byte-identity-mock",
           "runId": "<volatile>"
         },
-        "callRuntimeStageId": "call-llm#43",
+        "callRuntimeStageId": "call-llm#53",
         "epoch": 2,
         "gaps": [
           {

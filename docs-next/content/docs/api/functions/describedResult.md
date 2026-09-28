@@ -6,7 +6,7 @@ title: describedResult
 
 > **describedResult**(`decl`): [`ToolSemantics`](/docs/api/interfaces/ToolSemantics)
 
-Defined in: [src/lib/semantics/described.ts:213](https://github.com/footprintjs/agentfootprint/blob/main/src/lib/semantics/described.ts#L213)
+Defined in: [src/lib/semantics/described.ts:278](https://github.com/footprintjs/agentfootprint/blob/main/src/lib/semantics/described.ts#L278)
 
 Return rows, a series or relationships from a system of record — WITH the
 caveats that make them honest — in a shape the framework recognizes, the
@@ -27,6 +27,13 @@ the final answer (`.limitsTravelWithTheAnswer()`).
 measured, taken from the data — the export's time, the moment of a live
 read, the newest sample of a series, the end of a window — never typed in.
 It is never parsed: the library passes your words through.
+
+**The period** (honesty step 7b). `period: { queried, held, readAt? }` says
+what time the READ covered — the instants it asked for, and what the store
+holds (or `'unknown'`) — as ISO 8601 instants with a zone. The model reads it
+as declared; the results layer compares the instants and files its verdict
+(covered · partly held · not held · unknown). A malformed period is refused
+here.
 
 Refuses (throws, at the call site — the `absent()` law) any declaration
 this vocabulary cannot honor: series without `grain`, series or facts

@@ -92,7 +92,23 @@ export type AssessmentPointer =
  * - `value-contingent` — a call of this turn ran on a value taken from a
  *   result the model itself had set aside (`open`, `noise`, `ruled-out`): an
  *   `argument` row with `source: 'result'` and `setAside`, or a
- *   `ContingentRow` of this turn (honesty layer 2).
+ *   `ContingentRow` of this turn (honesty layer 2);
+ * - `period-not-held` — a result declared the period its read covered, and
+ *   the store holds NONE of what the read asked for (a `period` row with
+ *   verdict `not-held` — the results layer, honesty layer 3): "the data ends
+ *   at 02:00; the hour asked about is after it";
+ * - `period-partly-held` — the store holds only part of it (`partly-held`);
+ * - `period-unknown` — the tool said it cannot vouch for what its store holds
+ *   (`held: 'unknown'` → `unknown`), even on a non-empty result: an answer
+ *   built over a period the store may not hold rests on less than it says
+ *   (adopted Q33 — a bench cell decides whether it stays);
+ * - `period-undeclared` — the tool declares a period argument (a
+ *   `ToolPeriod`) and this result said nothing about what its read covered:
+ *   declared silence, recorded as silence (`undeclared`).
+ * - `steps-unfinished` — the answer came before the active skill's declared
+ *   steps finished: the one teaching nudge was already spent, or a limit
+ *   forced the answer (a `steps-unfinished` witness row of this turn, filed
+ *   while the answer layer is armed — honesty layer 4).
  */
 export type AssessmentReason =
   | 'asked'
@@ -104,10 +120,15 @@ export type AssessmentReason =
   | 'declared-absent'
   | 'coverage-gap'
   | 'empty-undeclared'
+  | 'period-not-held'
+  | 'period-partly-held'
+  | 'period-unknown'
+  | 'period-undeclared'
   | 'sources-conflict'
   | 'value-unsupported'
   | 'value-survived-revision'
   | 'stopped-early'
+  | 'steps-unfinished'
   | 'answer-check-failed'
   | 'check-unreachable';
 
@@ -121,8 +142,11 @@ export type AssessmentReason =
  * - `result-shape` — the results of this turn whose shape could be read (the
  *   one emptiness reader did not say `unknown`), of the results in the turn's
  *   history;
- * - `names-and-numbers` — the evidence gate's verdict, when it is committed
- *   (today only a flagged verdict is: `unsupportedValues`);
+ * - `names-and-numbers` — the evidence gate's verdict, when it is committed:
+ *   a flagged verdict (`unsupportedValues`) on every armed gate, and — while
+ *   the answer layer is armed (honesty layer 4) — its clean pass too (a
+ *   `grounded` witness row of this turn). A clean pass is a membership pass:
+ *   it counts as a check that ran, never as support;
  * - `answer-checks` — the app's answer checks (`answerValidation`);
  * - `argument-rules` — the ruled arguments of this turn's calls that the
  *   inputs layer filed a verdict on (honesty layer 2), of the same — every
@@ -131,10 +155,14 @@ export type AssessmentReason =
  *   check judged (a row that carries `claimed`: `.findings({ argumentSources:
  *   true })`), the ones it reached a verdict on (every one but `uncheckable`);
  *   present only when the arm filed one. A pass here never supports "known".
+ * - `result-period` — this turn's calls the results layer filed a period
+ *   verdict on (honesty layer 3), of the same — every `period` row IS a
+ *   verdict, `covered` included; present only when the layer filed one.
  */
 export type AssessmentCheck =
   | 'argument-rules'
   | 'argument-sources'
+  | 'result-period'
   | 'tool-coverage'
   | 'result-shape'
   | 'names-and-numbers'

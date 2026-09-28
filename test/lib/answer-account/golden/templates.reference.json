@@ -1486,6 +1486,15 @@
   ],
   "source": "library"
  },
+ "howSure.check.resultPeriod@1": {
+  "text": "Result periods: ran value of 2 calls had a period verdict on the record.",
+  "parts": [
+   {
+    "text": "Result periods: ran value of 2 calls had a period verdict on the record."
+   }
+  ],
+  "source": "library"
+ },
  "howSure.reason.asked@1": {
   "text": "A question the run asked is still waiting for its answer.",
   "parts": [
@@ -1567,6 +1576,42 @@
   ],
   "source": "library"
  },
+ "howSure.reason.periodNotHeld@1": {
+  "text": "2 calls asked about periods their stores do not hold.",
+  "parts": [
+   {
+    "text": "2 calls asked about periods their stores do not hold."
+   }
+  ],
+  "source": "library"
+ },
+ "howSure.reason.periodPartlyHeld@1": {
+  "text": "2 calls asked about periods their stores hold only part of.",
+  "parts": [
+   {
+    "text": "2 calls asked about periods their stores hold only part of."
+   }
+  ],
+  "source": "library"
+ },
+ "howSure.reason.periodUnknown@1": {
+  "text": "2 calls could not say whether their stores hold the periods they asked about.",
+  "parts": [
+   {
+    "text": "2 calls could not say whether their stores hold the periods they asked about."
+   }
+  ],
+  "source": "library"
+ },
+ "howSure.reason.periodUndeclared@1": {
+  "text": "2 calls did not say what period their reads covered, though their tools declare a period argument.",
+  "parts": [
+   {
+    "text": "2 calls did not say what period their reads covered, though their tools declare a period argument."
+   }
+  ],
+  "source": "library"
+ },
  "howSure.reason.sourcesConflict@1": {
   "text": "2 conflicts between results the model stood on.",
   "parts": [
@@ -1599,6 +1644,15 @@
   "parts": [
    {
     "text": "The run stopped before the model finished."
+   }
+  ],
+  "source": "library"
+ },
+ "howSure.reason.stepsUnfinished@1": {
+  "text": "The answer came before the active skill's declared steps finished.",
+  "parts": [
+   {
+    "text": "The answer came before the active skill's declared steps finished."
    }
   ],
   "source": "library"
