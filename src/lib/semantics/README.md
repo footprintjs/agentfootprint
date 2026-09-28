@@ -105,6 +105,62 @@ so the same text reads whole after the prefix, in `explainSemantics` and in
 the gate's findings — which recognize the WIRE, so they always speak
 snake_case.
 
+## An empty list names the one door for "nothing matched" (honesty step 7a′)
+
+**The law.** A data list (`series`, `facts`, `edges`) is never empty, so
+"nothing matched" has exactly one door — `absent()` — and the refusal says so.
+It used to say "omit the field to say nothing", which on the found branch's only
+data field led straight to the next refusal ("this result declares nothing").
+And the fault is data-dependent: a tool with no empty branch passes every test
+that has rows and meets it on its first empty read in production, where the
+MODEL reads the refusal instead of "nothing matched". So it names the branch to
+write (`envelope.ts` · `emptyDataList`, one core, so both doors and the gate):
+
+```ts
+execute: async ({ host }) => {
+  const rows = (await loadExport()).rows.filter((r) => r.host === host);
+  // describedResult({ facts: [] , … }) would be refused:
+  //   refused: `facts` is empty — if nothing matched, return absent({ what, checked }) instead. (field: facts)
+  return rows.length
+    ? describedResult({ facts: rows, provenance: { measuredAt: exportedAt, source: 'backup export' } })
+    : absent({ what: `backup runs for ${host}`, checked: [`every job in the export of ${exportedAt}`] });
+},
+```
+
+A value that is not a list at all (a string, a plain object, a number) reaches
+the rule set untouched and is refused as one — "`facts` must be a non-empty
+array of rows" — where a spread used to crash on an object (a `TypeError`, which
+does not read as a refusal) or refuse a string's characters as malformed rows;
+any other iterable still mints, copied into a fresh array (`envelope.ts` ·
+`copyDataList`). Pinned by `test/lib/semantics/empty-data-refusal.test.ts`,
+and the refusal is a registered model-facing sentence
+(`test/modelFacingSurfaces.test.ts`).
+
+## The period (honesty step 7b)
+
+`describedResult({ …, period })` — what the READ behind the data covered in
+time: `queried` (the instants it asked for), `held` (what the store holds, or
+`'unknown'`) and `readAt`, every value an ISO 8601 instant with a zone. A
+top-level field on `af_semantics` (after `provenance`), minted by the ONE period
+rule set (`core/agent/coverage/period.ts` · `mintPeriod`) and refused there in
+camelCase; `semanticsForModel` serves it as declared; the recognizer holds a
+foreign envelope's period to the same rule set (`period.ts` · `periodProblem`,
+wire spelling) — a fault is one more `semanticIssues` fault, so the envelope
+stays data. `readCoverageResult` absorbs it into the coverage channel like
+`coverage`: an envelope with a period and no coverage files a `'ledger'` row
+whose three lists are empty. `semantic()`, the deprecated door, gains no field.
+The results layer (`core/agent/results/`) files the verdict. The provenance
+rule is shared with `absent()` the same way (`described.ts` · `mintProvenance`,
+`envelope.ts` · `provenanceIssues`).
+
+```ts
+return describedResult({
+  facts: rows,
+  provenance: { measuredAt: snap.exportedAt, source: 'nightly export' },
+  period: { queried: { from, to }, held: { from: snap.heldFrom, to: snap.exportedAt } },
+});
+```
+
 ## The marker and the note cross a language boundary (9.70.0)
 
 `SEMANTICS_MARKER` and `SEMANTICS_NOTE` are bytes a foreign process must

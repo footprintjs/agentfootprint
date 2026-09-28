@@ -4,7 +4,7 @@ title: ContingentCarrier
 
 # Interface: ContingentCarrier
 
-Defined in: [src/core/agent/findings/types.ts:302](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/findings/types.ts#L302)
+Defined in: [src/core/agent/findings/types.ts:303](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/findings/types.ts#L303)
 
 One result that carried a contingent value, with the standing the model gave it.
 
@@ -14,7 +14,7 @@ One result that carried a contingent value, with the standing the model gave it.
 
 > `readonly` **standing**: [`Standing`](/docs/api/type-aliases/Standing)
 
-Defined in: [src/core/agent/findings/types.ts:305](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/findings/types.ts#L305)
+Defined in: [src/core/agent/findings/types.ts:306](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/findings/types.ts#L306)
 
 The result's CURRENT standing — never `fact` (a fact carrier means the value stands).
 
@@ -24,4 +24,4 @@ The result's CURRENT standing — never `fact` (a fact carrier means the value s
 
 > `readonly` **toolCallId**: `string`
 
-Defined in: [src/core/agent/findings/types.ts:303](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/findings/types.ts#L303)
+Defined in: [src/core/agent/findings/types.ts:304](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/findings/types.ts#L304)

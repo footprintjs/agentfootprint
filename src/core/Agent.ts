@@ -541,6 +541,16 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
    *  `.inputsLayer()` was set. Gates the findings event bridge and the
    *  widened ledger restore. */
   private inputsLayerArmed = false;
+  /** `.resultsLayer()` (honesty layer 3, step 7b): mount the results layer
+   *  even when no registered tool declares a `ToolPeriod` — for tools a
+   *  ToolProvider serves, and for tools that declare a period only on their
+   *  results. */
+  private readonly resultsLayerOption?: true;
+  /** Whether this agent's chart mounts the results layer (`sf-results`) —
+   *  decided ONCE, in `buildChart`: a registered tool declares a `ToolPeriod`,
+   *  or `.resultsLayer()` was set. Gates the findings event bridge and the
+   *  widened ledger restore, as the inputs layer's flag does. */
+  private resultsLayerArmed = false;
   /** `.answerLayer()` (honesty layer 4): the answer's standing folded at the
    *  head of the final branch and served as data; `standingLine` — also one
    *  line appended to a prose answer. Undefined on every agent that did not
@@ -1040,6 +1050,7 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
     if (opts.toolArgValidation !== undefined) this.toolArgValidation = opts.toolArgValidation;
     if (opts.findings !== undefined) this.findingsOptions = opts.findings;
     if (opts.inputsLayer === true) this.inputsLayerOption = true;
+    if (opts.resultsLayer === true) this.resultsLayerOption = true;
     if (opts.answerLayer === true) this.answerLayerOption = {};
     else if (typeof opts.answerLayer === 'object' && opts.answerLayer !== null) {
       this.answerLayerOption = opts.answerLayer.standingLine === true ? { standingLine: true } : {};
@@ -3261,8 +3272,9 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
     // per-event work, and `agent.on('agentfootprint.findings.*')` can only
     // ever fire on an agent that could have filed a row.
     // Also under the inputs layer (honesty layer 2): its `argument` rows are
-    // filed through the same writer and ride the same domain.
-    if (this.findingsOptions !== undefined || this.inputsLayerArmed) {
+    // filed through the same writer and ride the same domain — and under the
+    // results layer (honesty layer 3), whose `period` rows do the same.
+    if (this.findingsOptions !== undefined || this.inputsLayerArmed || this.resultsLayerArmed) {
       attachObserver(
         new EmitBridge({
           id: 'agentfootprint.findings-bridge',
@@ -3679,6 +3691,11 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
    * trace), each stamped with its conversation `turn` — WITHOUT `.findings()`.
    * A reader that switches over every row kind must skip one it does not know.
    *
+   * THE RESULTS LAYER files here too (honesty layer 3, step 7b): `period` rows
+   * — one per call whose result declared the period its read covered, or whose
+   * tool declares a period argument: `covered`, `partly-held`, `not-held`,
+   * `unknown`, or `undeclared` (the result said nothing about its period).
+   *
    * Detached from the execution record (`structuredClone`), so a caller may
    * keep or mutate it without touching the run's state.
    *
@@ -3729,6 +3746,11 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
    * `sharedState.coverageDeclared` holds the raw rows either way), and before
    * the first run. Detached from the execution record, so a caller may keep
    * or mutate it.
+   *
+   * `periods` (honesty step 7b) — present only when a call's result declared
+   * the period its read covered: one entry per declaring call, `{ toolName,
+   * toolCallId, queried, held, readAt? }`, the period as the tool declared it
+   * — the data twin of the prose block's `Period:` lines.
    *
    * @example
    * ```ts
@@ -4296,13 +4318,28 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
     );
     const inputsArmed = ruledTools.size > 0 || this.inputsLayerOption === true;
     this.inputsLayerArmed = inputsArmed;
+    // ── The results layer (honesty layer 3, step 7b) — armed ONCE, here ──
+    // A registered tool that declares a `ToolPeriod` (the inputs layer's
+    // declaration: which argument sets the period) arms the mount, over the
+    // same catalog: its results owe a period, and a result that declares none
+    // is recorded as silence. `.resultsLayer()` arms it for tools the build
+    // cannot see and for tools that declare a period only on their results.
+    // Unarmed: nothing below is mounted, read or written.
+    const resultsArmed =
+      [...registryByName.values()].some((tool) => tool.period !== undefined) ||
+      this.resultsLayerOption === true;
+    this.resultsLayerArmed = resultsArmed;
     if (inputsArmed && ruledTools.size > 0) seededRuledTools = ruledTools;
     // ── The answer layer (honesty layer 4) — armed by its option alone ─────
     const answerArmed = this.answerLayerOption !== undefined;
     // The run constant names every armed layer; the restore is wired whenever
     // one is (adopted Q6) — still value-conditional inside seed.
-    if (inputsArmed || answerArmed) {
-      seededHonestyLayers = honestyLayersOf({ inputs: inputsArmed, answer: answerArmed });
+    if (inputsArmed || resultsArmed || answerArmed) {
+      seededHonestyLayers = honestyLayersOf({
+        inputs: inputsArmed,
+        results: resultsArmed,
+        answer: answerArmed,
+      });
       ledgerRestoreArmed = true;
     }
 
@@ -4741,17 +4778,20 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
       // trailing positional: the rows this decider files carry the turn
       // stamp, and with the evidence gate armed too, the gate's exempt corpus
       // gains this turn's assumed values, read from the tools' declarations,
-      // and the values the person gave the layer's batch ask (step 4).
-      inputsArmed
+      // and the values the person gave the layer's batch ask (step 4). The
+      // results layer (step 7b) arms the stamp alone — "while any layer is
+      // armed, the one writer stamps the turn" — and nothing else.
+      inputsArmed || resultsArmed
         ? {
-            ...(this.evidenceGate !== undefined && {
-              declaredDefaults: declaredDefaultsFrom((toolName, argument) => {
-                const rules = rulesOf(resolveForLayer(toolName).tool);
-                if (rules === undefined || isRefused(rules)) return undefined;
-                return rules.ruled.find((r) => r.argument === argument)?.assume;
+            ...(inputsArmed &&
+              this.evidenceGate !== undefined && {
+                declaredDefaults: declaredDefaultsFrom((toolName, argument) => {
+                  const rules = rulesOf(resolveForLayer(toolName).tool);
+                  if (rules === undefined || isRefused(rules)) return undefined;
+                  return rules.ruled.find((r) => r.argument === argument)?.assume;
+                }),
+                answeredValues: answeredValuesOf,
               }),
-              answeredValues: answeredValuesOf,
-            }),
           }
         : undefined,
       // THE ANSWER LAYER (honesty layer 4) — the same value-conditional
@@ -4808,6 +4848,10 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
       // The inputs layer (honesty layer 2) — the fills, the refusals and the
       // note; absent → a ruled tool's call is refused (fail closed).
       ...(inputsArmed && { inputsLayer: true as const }),
+      // The results layer (honesty layer 3, step 7b) — read in one place: a
+      // period a result declares with NO layer mounted is dev-warned (nobody
+      // will file its verdict). And the turn stamp, as under any layer.
+      ...(resultsArmed && { resultsLayer: true as const }),
       // The answer layer (honesty layer 4) — only the turn stamp on the rows
       // this handler files (adopted Q6).
       ...(answerArmed && { answerLayer: true as const }),
@@ -5040,6 +5084,12 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
           toolOf: (toolName: string) => resolveForLayer(toolName).tool,
           ...(this.toolMiddleware.length > 0 && { rewrites: true as const }),
         },
+      }),
+      // The results layer (honesty layer 3, step 7b): `sf-results` at the loop
+      // head, in both builders through one helper, reading each call's
+      // `ToolPeriod` off the implementation that answered it; absent → untouched.
+      ...(resultsArmed && {
+        resultsLayer: { toolOf: (toolName: string) => resolveForLayer(toolName).tool },
       }),
       // The answer layer (honesty layer 4): its stage heads the final branch
       // in both builders through one helper, reading only the committed keys

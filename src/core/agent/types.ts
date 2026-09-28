@@ -260,6 +260,17 @@ export interface AgentOptions {
    */
   readonly inputsLayer?: boolean;
   /**
+   * THE RESULTS LAYER (honesty layer 3) — mount `sf-results` at the loop head
+   * even when no REGISTERED tool declares a `ToolPeriod`. A registered tool
+   * with a `ToolPeriod` arms the layer by itself; this option is for tools a
+   * `ToolProvider` serves, which the build cannot see, and for tools that
+   * declare a `period` only on their results — without the layer those
+   * periods are recorded but no verdict is filed (one dev warning per tool
+   * says so). Prefer the builder's `.resultsLayer()`. Absent → the chart is
+   * byte-identical.
+   */
+  readonly resultsLayer?: boolean;
+  /**
    * THE ANSWER LAYER (honesty layer 4) — fold the answer's standing at the
    * head of the final branch, from the run's committed record, and serve it
    * as data: `turn_end.answerAssessment` and one
@@ -1689,6 +1700,22 @@ export interface AgentState {
      *  edges key on it. */
     status?: import('./toolEffects.js').ToolResultStatus;
   }>;
+  /**
+   * The iteration that DISPATCHED the batch `toolResults` holds — written
+   * beside it by ToolCalls when dispatch starts (or, for a batch paused
+   * before anything stamped it, when it completes on resume), and ONLY while
+   * the results layer is mounted (honesty layer 3): an agent without it
+   * commits exactly the keys it always did.
+   *
+   * It is how the layer at the loop head knows a batch from a re-entry
+   * (`honesty/mounts.ts` · `batchToJudge`): ToolCalls advances `iteration`
+   * by one and loops straight to the layer, so the batch is new exactly when
+   * the loop head's `iteration` is this plus one — each batch judged once per
+   * run, never by call id, which a provider may reuse. Per run: a
+   * conversation checkpoint (`AgentRunCheckpoint`) never carries it, so a
+   * resumed leg starts without one.
+   */
+  toolResultsIteration?: number;
   /** The `Deliver` stage's record for THIS iteration: which messages-slot
    *  injections entered the window, and which were held back with the
    *  sentence saying why. Overwritten per iteration (the commit log keeps
@@ -1919,9 +1946,11 @@ export interface AgentState {
    * The ANSWER's coverage, as data — `coverageDeclared` folded into the three
    * lists the limits block would have printed (merged in declaration order,
    * duplicates dropped, every entry kept: `coverage/answer.ts` ·
-   * `coverageOfAnswer`) — and, on an agent whose inputs layer is armed, the
-   * values a tool's rule assumed this turn (`assumed`: the rows the prose
-   * answer's "Assumed" block prints, read the same way).
+   * `coverageOfAnswer`) — and, only when a call declared one (honesty step
+   * 7b), `periods`, the data twin of the block's `Period:` lines; and, on an
+   * agent whose inputs layer is armed, the values a tool's rule assumed this
+   * turn (`assumed`: the rows the prose answer's "Assumed" block prints, read
+   * the same way).
    *
    * Written only when the answer is TYPED (`.outputSchema()`) and
    * `.limitsTravelWithTheAnswer()` is on: a typed answer is JSON, and prose

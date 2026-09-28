@@ -224,6 +224,10 @@ const REASON_LINES: Readonly<Record<AssessmentReason, TemplateId>> = {
   'coverage-gap': 'howSure.reason.coverageGap',
   'declared-absent': 'howSure.reason.declaredAbsent',
   'empty-undeclared': 'howSure.reason.emptyUndeclared',
+  'period-not-held': 'howSure.reason.periodNotHeld',
+  'period-partly-held': 'howSure.reason.periodPartlyHeld',
+  'period-unknown': 'howSure.reason.periodUnknown',
+  'period-undeclared': 'howSure.reason.periodUndeclared',
   'sources-conflict': 'howSure.reason.sourcesConflict',
   'value-unsupported': 'howSure.reason.valueUnsupported',
   'value-survived-revision': 'howSure.reason.valueSurvivedRevision',
@@ -240,6 +244,10 @@ const COUNTED: ReadonlySet<AssessmentReason> = new Set([
   'coverage-gap',
   'declared-absent',
   'empty-undeclared',
+  'period-not-held',
+  'period-partly-held',
+  'period-unknown',
+  'period-undeclared',
   'sources-conflict',
 ]);
 
@@ -252,6 +260,13 @@ const COUNTS_CALLS: ReadonlySet<AssessmentReason> = new Set([
   'coverage-gap',
   'declared-absent',
   'empty-undeclared',
+  // A period reason's witnesses are the call's `period` row and, when its tool
+  // declares a `ToolPeriod`, the inputs layer's `argument` row for the same
+  // call — two rows, one call.
+  'period-not-held',
+  'period-partly-held',
+  'period-unknown',
+  'period-undeclared',
 ]);
 
 /** The call a committed row names — the row a state witness points into (`/<index>/…`). */
@@ -286,6 +301,7 @@ function callsBehind(
 
 const CHECK_LINES: Readonly<Record<AssessmentCheck, TemplateId>> = {
   'argument-rules': 'howSure.check.argumentRules',
+  'result-period': 'howSure.check.resultPeriod',
   'tool-coverage': 'howSure.check.toolCoverage',
   'result-shape': 'howSure.check.resultShape',
   'names-and-numbers': 'howSure.check.namesAndNumbers',

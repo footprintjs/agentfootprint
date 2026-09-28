@@ -67,6 +67,14 @@ export const SUBFLOW_IDS = {
    *  per call and handing ToolCalls the values the library fills. Absent on
    *  every other agent — the chart is byte-identical. */
   INPUTS: 'sf-inputs',
+  /** The results layer (honesty layer 3, step 7b) — mounted at the LOOP HEAD
+   *  (before `Compact`, which it precedes as the loop target) ONLY when armed
+   *  (a registered tool declares a `ToolPeriod`, or the agent was built with
+   *  `.resultsLayer()`). Reads the batch ToolCalls just ran — Declare → Verify
+   *  → Record → Resolve — and files one `period` row per call that declared a
+   *  period or whose tool declares a `ToolPeriod`. Absent on every other agent
+   *  — the chart is byte-identical. */
+  RESULTS: 'sf-results',
 } as const;
 
 export type SubflowId = (typeof SUBFLOW_IDS)[keyof typeof SUBFLOW_IDS];
@@ -230,6 +238,16 @@ export const STAGE_IDS = {
   RECORD_ARGUMENTS: 'record-arguments',
   /** … and the fills and refusals ToolCalls applies. */
   RESOLVE_ARGUMENTS: 'resolve-arguments',
+  /** The results layer's four stages, inside `sf-results` (honesty layer 3):
+   *  which calls of the batch just run declared a period, or come from a tool
+   *  that declares a `ToolPeriod` … */
+  DECLARE_RESULTS: 'declare-results',
+  /** … the verdict on each one's period … */
+  VERIFY_RESULTS: 'verify-results',
+  /** … one `period` row per call, and its event … */
+  RECORD_RESULTS: 'record-results',
+  /** … and what the layer does about them: flag (the rows are the flags). */
+  RESOLVE_RESULTS: 'resolve-results',
   /** The answer layer (honesty layer 4) — mounted as the FIRST stage of the
    *  final branch ONLY when armed (`.answerLayer()`): the answer's standing,
    *  folded from the committed record, filed as data for PrepareFinal and
@@ -350,6 +368,14 @@ const PLUMBING_LOCAL_IDS: ReadonlySet<string> = new Set([
   STAGE_IDS.VERIFY_ARGUMENTS,
   STAGE_IDS.RECORD_ARGUMENTS,
   STAGE_IDS.RESOLVE_ARGUMENTS,
+  // The results layer (honesty layer 3): its verdicts ride the ledger's
+  // `period` rows and `agentfootprint.findings.period`; the mount and its
+  // stages are mechanism.
+  SUBFLOW_IDS.RESULTS,
+  STAGE_IDS.DECLARE_RESULTS,
+  STAGE_IDS.VERIFY_RESULTS,
+  STAGE_IDS.RECORD_RESULTS,
+  STAGE_IDS.RESOLVE_RESULTS,
   // The answer layer (honesty layer 4): its verdict rides `turn_end` and
   // `agentfootprint.answer.assessed`; the stage that folds it is mechanism —
   // the answer itself is PrepareFinal's milestone, one stage later.
@@ -456,6 +482,10 @@ const MILESTONES: ReadonlyMap<string, Milestone> = new Map<string, Milestone>([
   // library filled a value the call left out — a stop a reader scrubs to when
   // asking whose value a call ran with.
   [SUBFLOW_IDS.INPUTS, milestone('decision', 'Inputs')],
+  // The results layer (honesty layer 3), mounted only when armed at the loop
+  // head: where the record says what the batch just run covered in time — a
+  // stop a reader scrubs to when asking whether the data held the period.
+  [SUBFLOW_IDS.RESULTS, milestone('decision', 'Results')],
   // The answer failed its schema and the loop asked again — a stop worth
   // scrubbing to, because everything after it is a second attempt.
   [STAGE_IDS.OUTPUT_RETRY, milestone('decision', 'Schema retry')],

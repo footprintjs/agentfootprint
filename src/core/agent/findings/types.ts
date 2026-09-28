@@ -31,6 +31,7 @@
 
 import type { Assertion } from '../../../integrity/assertion/types.js';
 import type { ArgumentRow } from '../arguments/rows.js';
+import type { PeriodRow } from '../coverage/period.js';
 import type { GroundedRow, StepsUnfinishedRow } from '../assessment/witness.js';
 import type { CoverageItem } from '../coverage/types.js';
 
@@ -438,6 +439,9 @@ export type FindingsRow =
   // layer 2) — filed by the `sf-inputs` subflow, not by the model. Readers
   // that switch over every kind must skip one they do not know.
   | ArgumentRow
+  // The results layer's verdict on one call's period (honesty layer 3, step
+  // 7b) — filed by the `sf-results` subflow at the loop head, not by the model.
+  | PeriodRow
   // The answer layer's committed witnesses (honesty layer 4) — two verdicts
   // the Route decider computes that were events only: the evidence gate's
   // clean pass, and an answer given before its declared steps finished.

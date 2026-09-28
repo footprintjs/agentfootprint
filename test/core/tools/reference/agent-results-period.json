@@ -1,0 +1,1889 @@
+{
+  "commitLog": [
+    {
+      "idx": 0,
+      "overwrite": {
+        "activatedInjectionIds": [],
+        "activeInjections": [],
+        "cacheMarkers": [],
+        "cachingDisabled": false,
+        "contextTokensRemaining": 32000,
+        "costBudgetHit": false,
+        "cumEstimatedUsd": 0,
+        "cumTokensInput": 0,
+        "cumTokensOutput": 0,
+        "deliveredMessageKeys": [],
+        "dynamicToolSchemas": [
+          {
+            "description": "Failed backup runs for one host, read from the nightly backup export.",
+            "inputSchema": {
+              "properties": {
+                "host": {
+                  "description": "Host name.",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "host"
+              ],
+              "type": "object"
+            },
+            "name": "backup_runs"
+          }
+        ],
+        "finalContent": "",
+        "history": [
+          {
+            "content": "go",
+            "role": "user"
+          }
+        ],
+        "honestyLayers": {
+          "results": true
+        },
+        "iteration": 1,
+        "llmLatestContent": "",
+        "llmLatestToolCalls": [],
+        "maxIterations": 6,
+        "messagesInjections": [],
+        "newMessages": [],
+        "pausedToolCallId": "",
+        "pausedToolName": "",
+        "pausedToolStartMs": "<volatile>",
+        "runIdentity": {
+          "conversationId": "<volatile>"
+        },
+        "skillHistory": [],
+        "systemPromptInjections": [],
+        "thinkingBlocks": [],
+        "toolsInjections": [],
+        "totalInputTokens": 0,
+        "totalOutputTokens": 0,
+        "turnNumber": 1,
+        "turnStartMs": "<volatile>",
+        "userMessage": "go"
+      },
+      "redactedPaths": [],
+      "runtimeStageId": "seed#0",
+      "stage": "Initialize",
+      "stageId": "seed",
+      "trace": [
+        {
+          "path": "userMessage",
+          "verb": "set"
+        },
+        {
+          "path": "history",
+          "verb": "set"
+        },
+        {
+          "path": "runIdentity",
+          "verb": "set"
+        },
+        {
+          "path": "newMessages",
+          "verb": "set"
+        },
+        {
+          "path": "turnNumber",
+          "verb": "set"
+        },
+        {
+          "path": "contextTokensRemaining",
+          "verb": "set"
+        },
+        {
+          "path": "iteration",
+          "verb": "set"
+        },
+        {
+          "path": "maxIterations",
+          "verb": "set"
+        },
+        {
+          "path": "finalContent",
+          "verb": "set"
+        },
+        {
+          "path": "totalInputTokens",
+          "verb": "set"
+        },
+        {
+          "path": "totalOutputTokens",
+          "verb": "set"
+        },
+        {
+          "path": "turnStartMs",
+          "verb": "set"
+        },
+        {
+          "path": "systemPromptInjections",
+          "verb": "set"
+        },
+        {
+          "path": "messagesInjections",
+          "verb": "set"
+        },
+        {
+          "path": "toolsInjections",
+          "verb": "set"
+        },
+        {
+          "path": "llmLatestContent",
+          "verb": "set"
+        },
+        {
+          "path": "llmLatestToolCalls",
+          "verb": "set"
+        },
+        {
+          "path": "thinkingBlocks",
+          "verb": "set"
+        },
+        {
+          "path": "pausedToolCallId",
+          "verb": "set"
+        },
+        {
+          "path": "pausedToolName",
+          "verb": "set"
+        },
+        {
+          "path": "pausedToolStartMs",
+          "verb": "set"
+        },
+        {
+          "path": "cumTokensInput",
+          "verb": "set"
+        },
+        {
+          "path": "cumTokensOutput",
+          "verb": "set"
+        },
+        {
+          "path": "cumEstimatedUsd",
+          "verb": "set"
+        },
+        {
+          "path": "costBudgetHit",
+          "verb": "set"
+        },
+        {
+          "path": "activeInjections",
+          "verb": "set"
+        },
+        {
+          "path": "activatedInjectionIds",
+          "verb": "set"
+        },
+        {
+          "path": "dynamicToolSchemas",
+          "verb": "set"
+        },
+        {
+          "path": "honestyLayers",
+          "verb": "set"
+        },
+        {
+          "path": "deliveredMessageKeys",
+          "verb": "set"
+        },
+        {
+          "path": "cacheMarkers",
+          "verb": "set"
+        },
+        {
+          "path": "cachingDisabled",
+          "verb": "set"
+        },
+        {
+          "path": "skillHistory",
+          "verb": "set"
+        }
+      ],
+      "untrackedSources": [
+        "args"
+      ],
+      "updates": {}
+    },
+    {
+      "idx": 1,
+      "overwrite": {},
+      "redactedPaths": [],
+      "runtimeStageId": "sf-results#1",
+      "stage": "Results",
+      "stageId": "sf-results",
+      "tags": [
+        "milestone:decision",
+        "milestone-label:Results"
+      ],
+      "trace": [],
+      "updates": {}
+    },
+    {
+      "idx": 2,
+      "overwrite": {},
+      "redactedPaths": [],
+      "runtimeStageId": "sf-results#1",
+      "stage": "Results",
+      "stageId": "sf-results",
+      "trace": [],
+      "updates": {}
+    },
+    {
+      "idx": 3,
+      "overwrite": {
+        "activeByslot": {
+          "messages": [],
+          "systemPrompt": [],
+          "tools": []
+        }
+      },
+      "redactedPaths": [],
+      "runtimeStageId": "sf-injection-engine#6",
+      "stage": "Injection Engine",
+      "stageId": "sf-injection-engine",
+      "tags": [
+        "milestone:iteration",
+        "milestone-label:Iteration"
+      ],
+      "trace": [
+        {
+          "path": "activeByslot\u001fsystemPrompt",
+          "verb": "set"
+        },
+        {
+          "path": "activeByslot\u001fmessages",
+          "verb": "set"
+        },
+        {
+          "path": "activeByslot\u001ftools",
+          "verb": "set"
+        }
+      ],
+      "updates": {}
+    },
+    {
+      "idx": 4,
+      "overwrite": {},
+      "redactedPaths": [],
+      "runtimeStageId": "sf-injection-engine#6",
+      "stage": "Injection Engine",
+      "stageId": "sf-injection-engine",
+      "trace": [],
+      "updates": {}
+    },
+    {
+      "idx": 5,
+      "overwrite": {},
+      "redactedPaths": [],
+      "runtimeStageId": "context#11",
+      "stage": "Context",
+      "stageId": "context",
+      "trace": [],
+      "updates": {}
+    },
+    {
+      "idx": 6,
+      "overwrite": {
+        "systemPromptInjections": [
+          {
+            "contentHash": "e168e7e9",
+            "contentSummary": "bot",
+            "rawContent": "bot",
+            "reason": "Agent.system()",
+            "slot": "system-prompt",
+            "source": "base"
+          }
+        ]
+      },
+      "redactedPaths": [],
+      "runtimeStageId": "context#11",
+      "stage": "Context",
+      "stageId": "context",
+      "trace": [
+        {
+          "path": "systemPromptInjections",
+          "verb": "append"
+        }
+      ],
+      "updates": {}
+    },
+    {
+      "idx": 7,
+      "overwrite": {},
+      "redactedPaths": [],
+      "runtimeStageId": "sf-system-prompt#12",
+      "stage": "System Prompt",
+      "stageId": "sf-system-prompt",
+      "tags": [
+        "milestone:slot",
+        "milestone-label:System prompt"
+      ],
+      "trace": [],
+      "updates": {}
+    },
+    {
+      "idx": 8,
+      "overwrite": {
+        "messagesInjections": [
+          {
+            "asRecency": "latest",
+            "asRole": "user",
+            "contentHash": "bce8e74",
+            "contentSummary": "go",
+            "position": 0,
+            "rawContent": "go",
+            "reason": "conversation history [0]",
+            "slot": "messages",
+            "source": "user"
+          }
+        ]
+      },
+      "redactedPaths": [],
+      "runtimeStageId": "context#11",
+      "stage": "Context",
+      "stageId": "context",
+      "trace": [
+        {
+          "path": "messagesInjections",
+          "verb": "append"
+        }
+      ],
+      "updates": {}
+    },
+    {
+      "idx": 9,
+      "overwrite": {},
+      "redactedPaths": [],
+      "runtimeStageId": "sf-messages#14",
+      "stage": "Messages",
+      "stageId": "sf-messages",
+      "tags": [
+        "milestone:slot",
+        "milestone-label:Messages"
+      ],
+      "trace": [],
+      "updates": {}
+    },
+    {
+      "idx": 10,
+      "overwrite": {},
+      "redactedPaths": [],
+      "runtimeStageId": "sf-system-prompt#12",
+      "stage": "System Prompt",
+      "stageId": "sf-system-prompt",
+      "trace": [],
+      "updates": {}
+    },
+    {
+      "idx": 11,
+      "overwrite": {},
+      "redactedPaths": [],
+      "runtimeStageId": "sf-messages#14",
+      "stage": "Messages",
+      "stageId": "sf-messages",
+      "trace": [],
+      "updates": {}
+    },
+    {
+      "idx": 12,
+      "overwrite": {
+        "toolsInjections": [
+          {
+            "contentHash": "a18b8042",
+            "contentSummary": "backup_runs: Failed backup runs for one host, read from the nightly backup expo…",
+            "position": 0,
+            "rawContent": "backup_runs: Failed backup runs for one host, read from the nightly backup export.",
+            "reason": "tool registry",
+            "slot": "tools",
+            "source": "registry",
+            "sourceId": "backup_runs"
+          }
+        ]
+      },
+      "redactedPaths": [],
+      "runtimeStageId": "context#11",
+      "stage": "Context",
+      "stageId": "context",
+      "trace": [
+        {
+          "path": "toolsInjections",
+          "verb": "append"
+        }
+      ],
+      "updates": {}
+    },
+    {
+      "idx": 13,
+      "overwrite": {},
+      "redactedPaths": [],
+      "runtimeStageId": "sf-tools#16",
+      "stage": "Tools",
+      "stageId": "sf-tools",
+      "tags": [
+        "milestone:slot",
+        "milestone-label:Tools"
+      ],
+      "trace": [],
+      "updates": {}
+    },
+    {
+      "idx": 14,
+      "overwrite": {},
+      "redactedPaths": [],
+      "runtimeStageId": "sf-tools#16",
+      "stage": "Tools",
+      "stageId": "sf-tools",
+      "trace": [],
+      "updates": {}
+    },
+    {
+      "idx": 15,
+      "overwrite": {
+        "cacheMarkers": [
+          {
+            "boundaryIndex": 0,
+            "field": "system",
+            "reason": "system stable prefix (1 entries, ending at base system prompt)",
+            "ttl": "short"
+          }
+        ]
+      },
+      "redactedPaths": [],
+      "runtimeStageId": "sf-cache#19",
+      "stage": "Cache",
+      "stageId": "sf-cache",
+      "trace": [
+        {
+          "path": "cacheMarkers",
+          "verb": "append"
+        }
+      ],
+      "updates": {}
+    },
+    {
+      "idx": 16,
+      "overwrite": {},
+      "redactedPaths": [],
+      "runtimeStageId": "sf-cache#19",
+      "stage": "Cache",
+      "stageId": "sf-cache",
+      "trace": [],
+      "updates": {}
+    },
+    {
+      "idx": 17,
+      "overwrite": {
+        "llmLatestToolCalls": [
+          {
+            "args": {
+              "host": "host-103"
+            },
+            "id": "c1",
+            "name": "backup_runs"
+          }
+        ],
+        "receipt": {
+          "basis": {
+            "epoch": 1,
+            "model": "mock",
+            "provider": "byte-identity-mock",
+            "runId": "<volatile>"
+          },
+          "cache": {
+            "markersApplied": [],
+            "strategy": "*",
+            "transform": "unchanged",
+            "transformHash": null
+          },
+          "messages": {
+            "count": 1,
+            "entries": [
+              {
+                "hash": "<digest>",
+                "role": "user"
+              }
+            ],
+            "requestOnly": []
+          },
+          "params": {},
+          "requestMeasurement": {
+            "boundary": "initial-prepared-request",
+            "format": "json-utf8-v1",
+            "slots": {
+              "messages": {
+                "jsonBytes": 32,
+                "jsonChars": 32
+              },
+              "systemPrompt": {
+                "jsonBytes": 5,
+                "jsonChars": 5
+              },
+              "tools": {
+                "jsonBytes": 229,
+                "jsonChars": 229
+              }
+            },
+            "status": "measured",
+            "total": {
+              "jsonBytes": 319,
+              "jsonChars": 319
+            }
+          },
+          "system": {
+            "chars": 3,
+            "hash": "<digest>",
+            "pieces": [
+              {
+                "hash": "<digest>",
+                "slot": "system-prompt",
+                "source": "base"
+              }
+            ]
+          },
+          "tools": {
+            "forced": null,
+            "names": [
+              "backup_runs"
+            ],
+            "schemaHashes": {
+              "backup_runs": "<digest>"
+            },
+            "withheld": null
+          }
+        }
+      },
+      "redactedPaths": [],
+      "runtimeStageId": "call-llm#23",
+      "stage": "CallLLM",
+      "stageId": "call-llm",
+      "tags": [
+        "milestone:llm-turn",
+        "milestone-label:LLM turn"
+      ],
+      "trace": [
+        {
+          "path": "receipt",
+          "verb": "set"
+        },
+        {
+          "path": "llmLatestToolCalls",
+          "verb": "append"
+        }
+      ],
+      "updates": {}
+    },
+    {
+      "idx": 18,
+      "overwrite": {},
+      "redactedPaths": [],
+      "runtimeStageId": "sf-route#24",
+      "stage": "Route",
+      "stageId": "sf-route",
+      "tags": [
+        "milestone:decision",
+        "milestone-label:Route"
+      ],
+      "trace": [],
+      "updates": {}
+    },
+    {
+      "idx": 19,
+      "overwrite": {
+        "coverageDeclared": [
+          {
+            "cannotCover": [],
+            "checked": [],
+            "iteration": 1,
+            "kind": "ledger",
+            "notChecked": [],
+            "period": {
+              "held": {
+                "from": "2026-08-27T02:00:00Z",
+                "to": "2026-09-26T02:00:00Z"
+              },
+              "queried": {
+                "from": "2026-09-25T00:00:00Z",
+                "to": "2026-09-26T00:00:00Z"
+              }
+            },
+            "toolCallId": "c1",
+            "toolName": "backup_runs"
+          }
+        ],
+        "history": [
+          {
+            "content": "",
+            "role": "assistant",
+            "toolCalls": [
+              {
+                "args": {
+                  "host": "host-103"
+                },
+                "id": "c1",
+                "name": "backup_runs"
+              }
+            ]
+          },
+          {
+            "content": "{\"facts\":[{\"entity\":\"host-103\",\"failed\":2}],\"provenance\":{\"measured_at\":\"2026-09-26T02:00:00Z\",\"source\":\"nightly backup export\"},\"period\":{\"queried\":{\"from\":\"2026-09-25T00:00:00Z\",\"to\":\"2026-09-26T00:00:00Z\"},\"held\":{\"from\":\"2026-08-27T02:00:00Z\",\"to\":\"2026-09-26T02:00:00Z\"}},\"note\":\"Typed data, not prose. `grain` and `provenance` are caveats that travel with the numbers: check `is_counter` before summing values from a series, read `measured_at` (and `age_seconds`) as how old the data is, and treat everything under `not_covered` as ground this result does NOT cover — a clean look here says nothing about it.\"}",
+            "role": "tool",
+            "toolCallId": "c1",
+            "toolName": "backup_runs"
+          }
+        ],
+        "iteration": 2,
+        "lastToolResult": {
+          "result": "{\"facts\":[{\"entity\":\"host-103\",\"failed\":2}],\"provenance\":{\"measured_at\":\"2026-09-26T02:00:00Z\",\"source\":\"nightly backup export\"},\"period\":{\"queried\":{\"from\":\"2026-09-25T00:00:00Z\",\"to\":\"2026-09-26T00:00:00Z\"},\"held\":{\"from\":\"2026-08-27T02:00:00Z\",\"to\":\"2026-09-26T02:00:00Z\"}},\"note\":\"Typed data, not prose. `grain` and `provenance` are caveats that travel with the numbers: check `is_counter` before summing values from a series, read `measured_at` (and `age_seconds`) as how old the data is, and treat everything under `not_covered` as ground this result does NOT cover — a clean look here says nothing about it.\"}",
+          "toolName": "backup_runs"
+        },
+        "toolResults": [
+          {
+            "result": "{\"facts\":[{\"entity\":\"host-103\",\"failed\":2}],\"provenance\":{\"measured_at\":\"2026-09-26T02:00:00Z\",\"source\":\"nightly backup export\"},\"period\":{\"queried\":{\"from\":\"2026-09-25T00:00:00Z\",\"to\":\"2026-09-26T00:00:00Z\"},\"held\":{\"from\":\"2026-08-27T02:00:00Z\",\"to\":\"2026-09-26T02:00:00Z\"}},\"note\":\"Typed data, not prose. `grain` and `provenance` are caveats that travel with the numbers: check `is_counter` before summing values from a series, read `measured_at` (and `age_seconds`) as how old the data is, and treat everything under `not_covered` as ground this result does NOT cover — a clean look here says nothing about it.\"}",
+            "toolCallId": "c1",
+            "toolName": "backup_runs"
+          }
+        ],
+        "toolResultsIteration": 1
+      },
+      "redactedPaths": [],
+      "runtimeStageId": "tool-calls#25",
+      "stage": "ToolCalls",
+      "stageId": "tool-calls",
+      "tags": [
+        "milestone:tool-call",
+        "milestone-label:Tool call"
+      ],
+      "trace": [
+        {
+          "path": "toolResultsIteration",
+          "verb": "set"
+        },
+        {
+          "path": "coverageDeclared",
+          "verb": "set"
+        },
+        {
+          "path": "lastToolResult",
+          "verb": "set"
+        },
+        {
+          "path": "toolResults",
+          "verb": "set"
+        },
+        {
+          "path": "history",
+          "verb": "append"
+        },
+        {
+          "path": "iteration",
+          "verb": "set"
+        }
+      ],
+      "updates": {}
+    },
+    {
+      "idx": 20,
+      "overwrite": {
+        "findingsLedger": [
+          {
+            "iteration": 1,
+            "kind": "period",
+            "toolCallId": "c1",
+            "toolName": "backup_runs",
+            "turn": 1,
+            "verdict": "covered"
+          }
+        ]
+      },
+      "redactedPaths": [],
+      "runtimeStageId": "sf-results#26",
+      "stage": "Results",
+      "stageId": "sf-results",
+      "tags": [
+        "milestone:decision",
+        "milestone-label:Results"
+      ],
+      "trace": [
+        {
+          "path": "findingsLedger",
+          "verb": "set"
+        }
+      ],
+      "updates": {}
+    },
+    {
+      "idx": 21,
+      "overwrite": {},
+      "redactedPaths": [],
+      "runtimeStageId": "sf-results#26",
+      "stage": "Results",
+      "stageId": "sf-results",
+      "trace": [],
+      "updates": {}
+    },
+    {
+      "idx": 22,
+      "overwrite": {},
+      "redactedPaths": [],
+      "runtimeStageId": "sf-injection-engine#31",
+      "stage": "Injection Engine",
+      "stageId": "sf-injection-engine",
+      "tags": [
+        "milestone:iteration",
+        "milestone-label:Iteration"
+      ],
+      "trace": [],
+      "updates": {}
+    },
+    {
+      "idx": 23,
+      "overwrite": {},
+      "redactedPaths": [],
+      "runtimeStageId": "sf-injection-engine#31",
+      "stage": "Injection Engine",
+      "stageId": "sf-injection-engine",
+      "trace": [],
+      "updates": {}
+    },
+    {
+      "idx": 24,
+      "overwrite": {},
+      "redactedPaths": [],
+      "runtimeStageId": "context#36",
+      "stage": "Context",
+      "stageId": "context",
+      "trace": [],
+      "updates": {}
+    },
+    {
+      "idx": 25,
+      "overwrite": {},
+      "redactedPaths": [],
+      "runtimeStageId": "context#36",
+      "stage": "Context",
+      "stageId": "context",
+      "trace": [],
+      "updates": {}
+    },
+    {
+      "idx": 26,
+      "overwrite": {},
+      "redactedPaths": [],
+      "runtimeStageId": "sf-system-prompt#37",
+      "stage": "System Prompt",
+      "stageId": "sf-system-prompt",
+      "tags": [
+        "milestone:slot",
+        "milestone-label:System prompt"
+      ],
+      "trace": [],
+      "updates": {}
+    },
+    {
+      "idx": 27,
+      "overwrite": {
+        "messagesInjections": [
+          {
+            "asRecency": "earlier",
+            "asRole": "user",
+            "contentHash": "bce8e74",
+            "contentSummary": "go",
+            "position": 0,
+            "rawContent": "go",
+            "reason": "conversation history [0]",
+            "slot": "messages",
+            "source": "user"
+          },
+          {
+            "asRecency": "earlier",
+            "asRole": "assistant",
+            "contentHash": "62db47c8",
+            "contentSummary": "",
+            "position": 1,
+            "rawContent": "",
+            "reason": "conversation history [1]",
+            "slot": "messages",
+            "source": "assistant"
+          },
+          {
+            "asRecency": "latest",
+            "asRole": "tool",
+            "contentHash": "24f99c53",
+            "contentSummary": "{\"facts\":[{\"entity\":\"host-103\",\"failed\":2}],\"provenance\":{\"measured_at\":\"2026-0…",
+            "position": 2,
+            "rawContent": "{\"facts\":[{\"entity\":\"host-103\",\"failed\":2}],\"provenance\":{\"measured_at\":\"2026-09-26T02:00:00Z\",\"source\":\"nightly backup export\"},\"period\":{\"queried\":{\"from\":\"2026-09-25T00:00:00Z\",\"to\":\"2026-09-26T00:00:00Z\"},\"held\":{\"from\":\"2026-08-27T02:00:00Z\",\"to\":\"2026-09-26T02:00:00Z\"}},\"note\":\"Typed data, not prose. `grain` and `provenance` are caveats that travel with the numbers: check `is_counter` before summing values from a series, read `measured_at` (and `age_seconds`) as how old the data is, and treat everything under `not_covered` as ground this result does NOT cover — a clean look here says nothing about it.\"}",
+            "reason": "conversation history [2]",
+            "slot": "messages",
+            "source": "tool-result",
+            "sourceId": "c1"
+          }
+        ]
+      },
+      "redactedPaths": [],
+      "runtimeStageId": "context#36",
+      "stage": "Context",
+      "stageId": "context",
+      "trace": [
+        {
+          "path": "messagesInjections",
+          "verb": "set"
+        }
+      ],
+      "updates": {}
+    },
+    {
+      "idx": 28,
+      "overwrite": {},
+      "redactedPaths": [],
+      "runtimeStageId": "sf-messages#39",
+      "stage": "Messages",
+      "stageId": "sf-messages",
+      "tags": [
+        "milestone:slot",
+        "milestone-label:Messages"
+      ],
+      "trace": [],
+      "updates": {}
+    },
+    {
+      "idx": 29,
+      "overwrite": {},
+      "redactedPaths": [],
+      "runtimeStageId": "sf-system-prompt#37",
+      "stage": "System Prompt",
+      "stageId": "sf-system-prompt",
+      "trace": [],
+      "updates": {}
+    },
+    {
+      "idx": 30,
+      "overwrite": {},
+      "redactedPaths": [],
+      "runtimeStageId": "sf-messages#39",
+      "stage": "Messages",
+      "stageId": "sf-messages",
+      "trace": [],
+      "updates": {}
+    },
+    {
+      "idx": 31,
+      "overwrite": {},
+      "redactedPaths": [],
+      "runtimeStageId": "context#36",
+      "stage": "Context",
+      "stageId": "context",
+      "trace": [],
+      "updates": {}
+    },
+    {
+      "idx": 32,
+      "overwrite": {},
+      "redactedPaths": [],
+      "runtimeStageId": "sf-tools#41",
+      "stage": "Tools",
+      "stageId": "sf-tools",
+      "tags": [
+        "milestone:slot",
+        "milestone-label:Tools"
+      ],
+      "trace": [],
+      "updates": {}
+    },
+    {
+      "idx": 33,
+      "overwrite": {},
+      "redactedPaths": [],
+      "runtimeStageId": "sf-tools#41",
+      "stage": "Tools",
+      "stageId": "sf-tools",
+      "trace": [],
+      "updates": {}
+    },
+    {
+      "idx": 34,
+      "overwrite": {},
+      "redactedPaths": [],
+      "runtimeStageId": "sf-cache#44",
+      "stage": "Cache",
+      "stageId": "sf-cache",
+      "trace": [],
+      "updates": {}
+    },
+    {
+      "idx": 35,
+      "overwrite": {},
+      "redactedPaths": [],
+      "runtimeStageId": "sf-cache#44",
+      "stage": "Cache",
+      "stageId": "sf-cache",
+      "trace": [],
+      "updates": {}
+    },
+    {
+      "idx": 36,
+      "overwrite": {
+        "llmLatestToolCalls": [
+          {
+            "args": {
+              "host": "host-999"
+            },
+            "id": "c2",
+            "name": "backup_runs"
+          }
+        ],
+        "receipt": {
+          "basis": {
+            "epoch": 2,
+            "model": "mock",
+            "provider": "byte-identity-mock",
+            "runId": "<volatile>"
+          },
+          "cache": {
+            "markersApplied": [],
+            "strategy": "*",
+            "transform": "unchanged",
+            "transformHash": null
+          },
+          "messages": {
+            "count": 3,
+            "entries": [
+              {
+                "hash": "<digest>",
+                "role": "user"
+              },
+              {
+                "hash": "<digest>",
+                "role": "assistant"
+              },
+              {
+                "hash": "<digest>",
+                "key": "c1",
+                "role": "tool"
+              }
+            ],
+            "requestOnly": []
+          },
+          "params": {},
+          "requestMeasurement": {
+            "boundary": "initial-prepared-request",
+            "format": "json-utf8-v1",
+            "slots": {
+              "messages": {
+                "jsonBytes": 874,
+                "jsonChars": 872
+              },
+              "systemPrompt": {
+                "jsonBytes": 5,
+                "jsonChars": 5
+              },
+              "tools": {
+                "jsonBytes": 229,
+                "jsonChars": 229
+              }
+            },
+            "status": "measured",
+            "total": {
+              "jsonBytes": 1161,
+              "jsonChars": 1159
+            }
+          },
+          "system": {
+            "chars": 3,
+            "hash": "<digest>",
+            "pieces": [
+              {
+                "hash": "<digest>",
+                "slot": "system-prompt",
+                "source": "base"
+              }
+            ]
+          },
+          "tools": {
+            "forced": null,
+            "names": [
+              "backup_runs"
+            ],
+            "schemaHashes": {
+              "backup_runs": "<digest>"
+            },
+            "withheld": null
+          }
+        }
+      },
+      "redactedPaths": [],
+      "runtimeStageId": "call-llm#48",
+      "stage": "CallLLM",
+      "stageId": "call-llm",
+      "tags": [
+        "milestone:llm-turn",
+        "milestone-label:LLM turn"
+      ],
+      "trace": [
+        {
+          "path": "receipt",
+          "verb": "set"
+        },
+        {
+          "path": "llmLatestToolCalls",
+          "verb": "set"
+        }
+      ],
+      "updates": {}
+    },
+    {
+      "idx": 37,
+      "overwrite": {},
+      "redactedPaths": [],
+      "runtimeStageId": "sf-route#49",
+      "stage": "Route",
+      "stageId": "sf-route",
+      "tags": [
+        "milestone:decision",
+        "milestone-label:Route"
+      ],
+      "trace": [],
+      "updates": {}
+    },
+    {
+      "idx": 38,
+      "overwrite": {
+        "coverageDeclared": [
+          {
+            "cannotCover": [],
+            "checked": [
+              {
+                "what": "every job in the 02:00 export"
+              }
+            ],
+            "iteration": 2,
+            "kind": "absence",
+            "lookedFor": "failed backup runs for host-999",
+            "notChecked": [],
+            "period": {
+              "held": {
+                "from": "2026-08-27T02:00:00Z",
+                "to": "2026-09-26T02:00:00Z"
+              },
+              "queried": {
+                "from": "2026-09-26T09:00:00Z",
+                "to": "2026-09-26T10:00:00Z"
+              },
+              "readAt": "<volatile>"
+            },
+            "toolCallId": "c2",
+            "toolName": "backup_runs"
+          }
+        ],
+        "history": [
+          {
+            "content": "",
+            "role": "assistant",
+            "toolCalls": [
+              {
+                "args": {
+                  "host": "host-999"
+                },
+                "id": "c2",
+                "name": "backup_runs"
+              }
+            ]
+          },
+          {
+            "content": "{\"af_absent\":true,\"outcome\":\"nothing_found\",\"looked_for\":\"failed backup runs for host-999\",\"checked\":[{\"what\":\"every job in the 02:00 export\"}],\"provenance\":{\"measured_at\":\"2026-09-26T02:00:00Z\",\"source\":\"nightly backup export\"},\"period\":{\"queried\":{\"from\":\"2026-09-26T09:00:00Z\",\"to\":\"2026-09-26T10:00:00Z\"},\"held\":{\"from\":\"2026-08-27T02:00:00Z\",\"to\":\"2026-09-26T02:00:00Z\"},\"read_at\":\"2026-09-26T10:00:03Z\",\"verdict\":\"not-held\"},\"retry_returns_the_same\":true,\"note\":\"The search ran and matched nothing — the call did not fail, and calling this tool again with the same arguments returns this same result. `checked` is the ground this answer covers inside `period.held` only; anything under `not_checked` or `cannot_cover` is ground it does NOT cover, and reaching that needs a different question, not a retry. `period.verdict` is `not-held`: the store holds none of the time this read asked about (`period.queried`), so all of that time is ground this result does NOT cover — this result settles nothing about it, and the time the store does hold is `period.held`.\"}",
+            "role": "tool",
+            "toolCallId": "c2",
+            "toolName": "backup_runs"
+          }
+        ],
+        "iteration": 3,
+        "lastToolResult": {
+          "result": "{\"af_absent\":true,\"outcome\":\"nothing_found\",\"looked_for\":\"failed backup runs for host-999\",\"checked\":[{\"what\":\"every job in the 02:00 export\"}],\"provenance\":{\"measured_at\":\"2026-09-26T02:00:00Z\",\"source\":\"nightly backup export\"},\"period\":{\"queried\":{\"from\":\"2026-09-26T09:00:00Z\",\"to\":\"2026-09-26T10:00:00Z\"},\"held\":{\"from\":\"2026-08-27T02:00:00Z\",\"to\":\"2026-09-26T02:00:00Z\"},\"read_at\":\"2026-09-26T10:00:03Z\",\"verdict\":\"not-held\"},\"retry_returns_the_same\":true,\"note\":\"The search ran and matched nothing — the call did not fail, and calling this tool again with the same arguments returns this same result. `checked` is the ground this answer covers inside `period.held` only; anything under `not_checked` or `cannot_cover` is ground it does NOT cover, and reaching that needs a different question, not a retry. `period.verdict` is `not-held`: the store holds none of the time this read asked about (`period.queried`), so all of that time is ground this result does NOT cover — this result settles nothing about it, and the time the store does hold is `period.held`.\"}",
+          "status": "absent",
+          "toolName": "backup_runs"
+        },
+        "toolResults": [
+          {
+            "result": "{\"af_absent\":true,\"outcome\":\"nothing_found\",\"looked_for\":\"failed backup runs for host-999\",\"checked\":[{\"what\":\"every job in the 02:00 export\"}],\"provenance\":{\"measured_at\":\"2026-09-26T02:00:00Z\",\"source\":\"nightly backup export\"},\"period\":{\"queried\":{\"from\":\"2026-09-26T09:00:00Z\",\"to\":\"2026-09-26T10:00:00Z\"},\"held\":{\"from\":\"2026-08-27T02:00:00Z\",\"to\":\"2026-09-26T02:00:00Z\"},\"read_at\":\"2026-09-26T10:00:03Z\",\"verdict\":\"not-held\"},\"retry_returns_the_same\":true,\"note\":\"The search ran and matched nothing — the call did not fail, and calling this tool again with the same arguments returns this same result. `checked` is the ground this answer covers inside `period.held` only; anything under `not_checked` or `cannot_cover` is ground it does NOT cover, and reaching that needs a different question, not a retry. `period.verdict` is `not-held`: the store holds none of the time this read asked about (`period.queried`), so all of that time is ground this result does NOT cover — this result settles nothing about it, and the time the store does hold is `period.held`.\"}",
+            "status": "absent",
+            "toolCallId": "c2",
+            "toolName": "backup_runs"
+          }
+        ],
+        "toolResultsIteration": 2
+      },
+      "redactedPaths": [],
+      "runtimeStageId": "tool-calls#50",
+      "stage": "ToolCalls",
+      "stageId": "tool-calls",
+      "tags": [
+        "milestone:tool-call",
+        "milestone-label:Tool call"
+      ],
+      "trace": [
+        {
+          "path": "toolResultsIteration",
+          "verb": "set"
+        },
+        {
+          "path": "coverageDeclared",
+          "verb": "append"
+        },
+        {
+          "path": "lastToolResult",
+          "verb": "set"
+        },
+        {
+          "path": "toolResults",
+          "verb": "set"
+        },
+        {
+          "path": "history",
+          "verb": "append"
+        },
+        {
+          "path": "iteration",
+          "verb": "set"
+        }
+      ],
+      "updates": {}
+    },
+    {
+      "idx": 39,
+      "overwrite": {
+        "findingsLedger": [
+          {
+            "iteration": 2,
+            "kind": "period",
+            "toolCallId": "c2",
+            "toolName": "backup_runs",
+            "turn": 1,
+            "verdict": "not-held"
+          }
+        ]
+      },
+      "redactedPaths": [],
+      "runtimeStageId": "sf-results#51",
+      "stage": "Results.1",
+      "stageId": "sf-results",
+      "tags": [
+        "milestone:decision",
+        "milestone-label:Results"
+      ],
+      "trace": [
+        {
+          "path": "findingsLedger",
+          "verb": "append"
+        }
+      ],
+      "updates": {}
+    },
+    {
+      "idx": 40,
+      "overwrite": {},
+      "redactedPaths": [],
+      "runtimeStageId": "sf-results#51",
+      "stage": "Results.1",
+      "stageId": "sf-results",
+      "trace": [],
+      "updates": {}
+    },
+    {
+      "idx": 41,
+      "overwrite": {},
+      "redactedPaths": [],
+      "runtimeStageId": "sf-injection-engine#56",
+      "stage": "Injection Engine",
+      "stageId": "sf-injection-engine",
+      "tags": [
+        "milestone:iteration",
+        "milestone-label:Iteration"
+      ],
+      "trace": [],
+      "updates": {}
+    },
+    {
+      "idx": 42,
+      "overwrite": {},
+      "redactedPaths": [],
+      "runtimeStageId": "sf-injection-engine#56",
+      "stage": "Injection Engine",
+      "stageId": "sf-injection-engine",
+      "trace": [],
+      "updates": {}
+    },
+    {
+      "idx": 43,
+      "overwrite": {},
+      "redactedPaths": [],
+      "runtimeStageId": "context#61",
+      "stage": "Context",
+      "stageId": "context",
+      "trace": [],
+      "updates": {}
+    },
+    {
+      "idx": 44,
+      "overwrite": {},
+      "redactedPaths": [],
+      "runtimeStageId": "context#61",
+      "stage": "Context",
+      "stageId": "context",
+      "trace": [],
+      "updates": {}
+    },
+    {
+      "idx": 45,
+      "overwrite": {},
+      "redactedPaths": [],
+      "runtimeStageId": "sf-system-prompt#62",
+      "stage": "System Prompt",
+      "stageId": "sf-system-prompt",
+      "tags": [
+        "milestone:slot",
+        "milestone-label:System prompt"
+      ],
+      "trace": [],
+      "updates": {}
+    },
+    {
+      "idx": 46,
+      "overwrite": {
+        "messagesInjections": [
+          {
+            "asRecency": "earlier",
+            "asRole": "user",
+            "contentHash": "bce8e74",
+            "contentSummary": "go",
+            "position": 0,
+            "rawContent": "go",
+            "reason": "conversation history [0]",
+            "slot": "messages",
+            "source": "user"
+          },
+          {
+            "asRecency": "earlier",
+            "asRole": "assistant",
+            "contentHash": "62db47c8",
+            "contentSummary": "",
+            "position": 1,
+            "rawContent": "",
+            "reason": "conversation history [1]",
+            "slot": "messages",
+            "source": "assistant"
+          },
+          {
+            "asRecency": "earlier",
+            "asRole": "tool",
+            "contentHash": "24f99c53",
+            "contentSummary": "{\"facts\":[{\"entity\":\"host-103\",\"failed\":2}],\"provenance\":{\"measured_at\":\"2026-0…",
+            "position": 2,
+            "rawContent": "{\"facts\":[{\"entity\":\"host-103\",\"failed\":2}],\"provenance\":{\"measured_at\":\"2026-09-26T02:00:00Z\",\"source\":\"nightly backup export\"},\"period\":{\"queried\":{\"from\":\"2026-09-25T00:00:00Z\",\"to\":\"2026-09-26T00:00:00Z\"},\"held\":{\"from\":\"2026-08-27T02:00:00Z\",\"to\":\"2026-09-26T02:00:00Z\"}},\"note\":\"Typed data, not prose. `grain` and `provenance` are caveats that travel with the numbers: check `is_counter` before summing values from a series, read `measured_at` (and `age_seconds`) as how old the data is, and treat everything under `not_covered` as ground this result does NOT cover — a clean look here says nothing about it.\"}",
+            "reason": "conversation history [2]",
+            "slot": "messages",
+            "source": "tool-result",
+            "sourceId": "c1"
+          },
+          {
+            "asRecency": "earlier",
+            "asRole": "assistant",
+            "contentHash": "ead60db2",
+            "contentSummary": "",
+            "position": 3,
+            "rawContent": "",
+            "reason": "conversation history [3]",
+            "slot": "messages",
+            "source": "assistant"
+          },
+          {
+            "asRecency": "latest",
+            "asRole": "tool",
+            "contentHash": "1031fe31",
+            "contentSummary": "{\"af_absent\":true,\"outcome\":\"nothing_found\",\"looked_for\":\"failed backup runs fo…",
+            "position": 4,
+            "rawContent": "{\"af_absent\":true,\"outcome\":\"nothing_found\",\"looked_for\":\"failed backup runs for host-999\",\"checked\":[{\"what\":\"every job in the 02:00 export\"}],\"provenance\":{\"measured_at\":\"2026-09-26T02:00:00Z\",\"source\":\"nightly backup export\"},\"period\":{\"queried\":{\"from\":\"2026-09-26T09:00:00Z\",\"to\":\"2026-09-26T10:00:00Z\"},\"held\":{\"from\":\"2026-08-27T02:00:00Z\",\"to\":\"2026-09-26T02:00:00Z\"},\"read_at\":\"2026-09-26T10:00:03Z\",\"verdict\":\"not-held\"},\"retry_returns_the_same\":true,\"note\":\"The search ran and matched nothing — the call did not fail, and calling this tool again with the same arguments returns this same result. `checked` is the ground this answer covers inside `period.held` only; anything under `not_checked` or `cannot_cover` is ground it does NOT cover, and reaching that needs a different question, not a retry. `period.verdict` is `not-held`: the store holds none of the time this read asked about (`period.queried`), so all of that time is ground this result does NOT cover — this result settles nothing about it, and the time the store does hold is `period.held`.\"}",
+            "reason": "conversation history [4]",
+            "slot": "messages",
+            "source": "tool-result",
+            "sourceId": "c2"
+          }
+        ]
+      },
+      "redactedPaths": [],
+      "runtimeStageId": "context#61",
+      "stage": "Context",
+      "stageId": "context",
+      "trace": [
+        {
+          "path": "messagesInjections",
+          "verb": "set"
+        }
+      ],
+      "updates": {}
+    },
+    {
+      "idx": 47,
+      "overwrite": {},
+      "redactedPaths": [],
+      "runtimeStageId": "sf-messages#64",
+      "stage": "Messages",
+      "stageId": "sf-messages",
+      "tags": [
+        "milestone:slot",
+        "milestone-label:Messages"
+      ],
+      "trace": [],
+      "updates": {}
+    },
+    {
+      "idx": 48,
+      "overwrite": {},
+      "redactedPaths": [],
+      "runtimeStageId": "sf-system-prompt#62",
+      "stage": "System Prompt",
+      "stageId": "sf-system-prompt",
+      "trace": [],
+      "updates": {}
+    },
+    {
+      "idx": 49,
+      "overwrite": {},
+      "redactedPaths": [],
+      "runtimeStageId": "sf-messages#64",
+      "stage": "Messages",
+      "stageId": "sf-messages",
+      "trace": [],
+      "updates": {}
+    },
+    {
+      "idx": 50,
+      "overwrite": {},
+      "redactedPaths": [],
+      "runtimeStageId": "context#61",
+      "stage": "Context",
+      "stageId": "context",
+      "trace": [],
+      "updates": {}
+    },
+    {
+      "idx": 51,
+      "overwrite": {},
+      "redactedPaths": [],
+      "runtimeStageId": "sf-tools#66",
+      "stage": "Tools",
+      "stageId": "sf-tools",
+      "tags": [
+        "milestone:slot",
+        "milestone-label:Tools"
+      ],
+      "trace": [],
+      "updates": {}
+    },
+    {
+      "idx": 52,
+      "overwrite": {},
+      "redactedPaths": [],
+      "runtimeStageId": "sf-tools#66",
+      "stage": "Tools",
+      "stageId": "sf-tools",
+      "trace": [],
+      "updates": {}
+    },
+    {
+      "idx": 53,
+      "overwrite": {},
+      "redactedPaths": [],
+      "runtimeStageId": "sf-cache#69",
+      "stage": "Cache",
+      "stageId": "sf-cache",
+      "trace": [],
+      "updates": {}
+    },
+    {
+      "idx": 54,
+      "overwrite": {},
+      "redactedPaths": [],
+      "runtimeStageId": "sf-cache#69",
+      "stage": "Cache",
+      "stageId": "sf-cache",
+      "trace": [],
+      "updates": {}
+    },
+    {
+      "idx": 55,
+      "overwrite": {
+        "llmLatestContent": "Two failures on host-103; none found for host-999.",
+        "llmLatestToolCalls": [],
+        "receipt": {
+          "basis": {
+            "epoch": 3,
+            "model": "mock",
+            "provider": "byte-identity-mock",
+            "runId": "<volatile>"
+          },
+          "cache": {
+            "markersApplied": [],
+            "strategy": "*",
+            "transform": "unchanged",
+            "transformHash": null
+          },
+          "messages": {
+            "count": 5,
+            "entries": [
+              {
+                "hash": "<digest>",
+                "role": "user"
+              },
+              {
+                "hash": "<digest>",
+                "role": "assistant"
+              },
+              {
+                "hash": "<digest>",
+                "key": "c1",
+                "role": "tool"
+              },
+              {
+                "hash": "<digest>",
+                "role": "assistant"
+              },
+              {
+                "hash": "<digest>",
+                "key": "c2",
+                "role": "tool"
+              }
+            ],
+            "requestOnly": []
+          },
+          "params": {},
+          "requestMeasurement": {
+            "boundary": "initial-prepared-request",
+            "format": "json-utf8-v1",
+            "slots": {
+              "messages": {
+                "jsonBytes": 2188,
+                "jsonChars": 2182
+              },
+              "systemPrompt": {
+                "jsonBytes": 5,
+                "jsonChars": 5
+              },
+              "tools": {
+                "jsonBytes": 229,
+                "jsonChars": 229
+              }
+            },
+            "status": "measured",
+            "total": {
+              "jsonBytes": 2475,
+              "jsonChars": 2469
+            }
+          },
+          "system": {
+            "chars": 3,
+            "hash": "<digest>",
+            "pieces": [
+              {
+                "hash": "<digest>",
+                "slot": "system-prompt",
+                "source": "base"
+              }
+            ]
+          },
+          "tools": {
+            "forced": null,
+            "names": [
+              "backup_runs"
+            ],
+            "schemaHashes": {
+              "backup_runs": "<digest>"
+            },
+            "withheld": null
+          }
+        }
+      },
+      "redactedPaths": [],
+      "runtimeStageId": "call-llm#73",
+      "stage": "CallLLM",
+      "stageId": "call-llm",
+      "tags": [
+        "milestone:llm-turn",
+        "milestone-label:LLM turn"
+      ],
+      "trace": [
+        {
+          "path": "receipt",
+          "verb": "set"
+        },
+        {
+          "path": "llmLatestContent",
+          "verb": "set"
+        },
+        {
+          "path": "llmLatestToolCalls",
+          "verb": "set"
+        }
+      ],
+      "updates": {}
+    },
+    {
+      "idx": 56,
+      "overwrite": {
+        "answerGuarantee": "none"
+      },
+      "redactedPaths": [],
+      "runtimeStageId": "sf-route#74",
+      "stage": "Route",
+      "stageId": "sf-route",
+      "tags": [
+        "milestone:decision",
+        "milestone-label:Route"
+      ],
+      "trace": [
+        {
+          "path": "answerGuarantee",
+          "verb": "set"
+        }
+      ],
+      "updates": {}
+    },
+    {
+      "idx": 57,
+      "overwrite": {},
+      "redactedPaths": [],
+      "runtimeStageId": "sf-route#74",
+      "stage": "Route",
+      "stageId": "sf-route",
+      "trace": [
+        {
+          "path": "finalContent",
+          "verb": "set"
+        }
+      ],
+      "updates": {}
+    },
+    {
+      "idx": 58,
+      "overwrite": {},
+      "redactedPaths": [],
+      "runtimeStageId": "final#75",
+      "stage": "Final",
+      "stageId": "final",
+      "tags": [
+        "milestone:decision",
+        "milestone-label:Answer"
+      ],
+      "trace": [],
+      "updates": {}
+    }
+  ],
+  "served": [
+    {
+      "epoch": 1,
+      "view": {
+        "basis": {
+          "model": "mock",
+          "provider": "byte-identity-mock",
+          "runId": "<volatile>"
+        },
+        "callRuntimeStageId": "call-llm#23",
+        "epoch": 1,
+        "gaps": [
+          {
+            "fields": [
+              "cache.transform",
+              "cache.transformHash",
+              "cache.markersApplied",
+              "cache.strategy",
+              "system.hash",
+              "system.chars",
+              "system.pieces",
+              "messages.count",
+              "messages.entries",
+              "messages.requestOnly",
+              "tools.names",
+              "tools.schemaHashes",
+              "tools.forced",
+              "tools.withheld"
+            ],
+            "gap": "cache-transform",
+            "why": "What reached the provider may differ from the fields below, and nothing on this view would show it. Where another gap on this view covers one of them, that gap is the stronger claim."
+          },
+          {
+            "fields": [
+              "params"
+            ],
+            "gap": "provider-defaults",
+            "why": "A dial absent below was not recorded; that is not the same as the model running without one. A receipt describes the request as this library last saw it. Whatever handled it after that could have changed it, and nothing on the receipt would show that."
+          }
+        ],
+        "messages": {
+          "asSent": [
+            {
+              "content": "go",
+              "role": "user"
+            }
+          ],
+          "requestOnly": []
+        },
+        "system": {
+          "pieces": [
+            {
+              "slot": "system-prompt",
+              "source": "base",
+              "text": "bot"
+            }
+          ],
+          "text": "bot"
+        },
+        "tools": {
+          "names": [
+            "backup_runs"
+          ],
+          "schemas": [
+            {
+              "description": "Failed backup runs for one host, read from the nightly backup export.",
+              "inputSchema": {
+                "properties": {
+                  "host": {
+                    "description": "Host name.",
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "host"
+                ],
+                "type": "object"
+              },
+              "name": "backup_runs"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "epoch": 2,
+      "view": {
+        "basis": {
+          "model": "mock",
+          "provider": "byte-identity-mock",
+          "runId": "<volatile>"
+        },
+        "callRuntimeStageId": "call-llm#48",
+        "epoch": 2,
+        "gaps": [
+          {
+            "fields": [
+              "cache.transform",
+              "cache.transformHash",
+              "cache.markersApplied",
+              "cache.strategy",
+              "system.hash",
+              "system.chars",
+              "system.pieces",
+              "messages.count",
+              "messages.entries",
+              "messages.requestOnly",
+              "tools.names",
+              "tools.schemaHashes",
+              "tools.forced",
+              "tools.withheld"
+            ],
+            "gap": "cache-transform",
+            "why": "What reached the provider may differ from the fields below, and nothing on this view would show it. Where another gap on this view covers one of them, that gap is the stronger claim."
+          },
+          {
+            "fields": [
+              "params"
+            ],
+            "gap": "provider-defaults",
+            "why": "A dial absent below was not recorded; that is not the same as the model running without one. A receipt describes the request as this library last saw it. Whatever handled it after that could have changed it, and nothing on the receipt would show that."
+          }
+        ],
+        "messages": {
+          "asSent": [
+            {
+              "content": "go",
+              "role": "user"
+            },
+            {
+              "content": "",
+              "role": "assistant",
+              "toolCalls": [
+                {
+                  "args": {
+                    "host": "host-103"
+                  },
+                  "id": "c1",
+                  "name": "backup_runs"
+                }
+              ]
+            },
+            {
+              "content": "{\"facts\":[{\"entity\":\"host-103\",\"failed\":2}],\"provenance\":{\"measured_at\":\"2026-09-26T02:00:00Z\",\"source\":\"nightly backup export\"},\"period\":{\"queried\":{\"from\":\"2026-09-25T00:00:00Z\",\"to\":\"2026-09-26T00:00:00Z\"},\"held\":{\"from\":\"2026-08-27T02:00:00Z\",\"to\":\"2026-09-26T02:00:00Z\"}},\"note\":\"Typed data, not prose. `grain` and `provenance` are caveats that travel with the numbers: check `is_counter` before summing values from a series, read `measured_at` (and `age_seconds`) as how old the data is, and treat everything under `not_covered` as ground this result does NOT cover — a clean look here says nothing about it.\"}",
+              "role": "tool",
+              "toolCallId": "c1",
+              "toolName": "backup_runs"
+            }
+          ],
+          "requestOnly": []
+        },
+        "system": {
+          "pieces": [
+            {
+              "slot": "system-prompt",
+              "source": "base",
+              "text": "bot"
+            }
+          ],
+          "text": "bot"
+        },
+        "tools": {
+          "names": [
+            "backup_runs"
+          ],
+          "schemas": [
+            {
+              "description": "Failed backup runs for one host, read from the nightly backup export.",
+              "inputSchema": {
+                "properties": {
+                  "host": {
+                    "description": "Host name.",
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "host"
+                ],
+                "type": "object"
+              },
+              "name": "backup_runs"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "epoch": 3,
+      "view": {
+        "basis": {
+          "model": "mock",
+          "provider": "byte-identity-mock",
+          "runId": "<volatile>"
+        },
+        "callRuntimeStageId": "call-llm#73",
+        "epoch": 3,
+        "gaps": [
+          {
+            "fields": [
+              "cache.transform",
+              "cache.transformHash",
+              "cache.markersApplied",
+              "cache.strategy",
+              "system.hash",
+              "system.chars",
+              "system.pieces",
+              "messages.count",
+              "messages.entries",
+              "messages.requestOnly",
+              "tools.names",
+              "tools.schemaHashes",
+              "tools.forced",
+              "tools.withheld"
+            ],
+            "gap": "cache-transform",
+            "why": "What reached the provider may differ from the fields below, and nothing on this view would show it. Where another gap on this view covers one of them, that gap is the stronger claim."
+          },
+          {
+            "fields": [
+              "params"
+            ],
+            "gap": "provider-defaults",
+            "why": "A dial absent below was not recorded; that is not the same as the model running without one. A receipt describes the request as this library last saw it. Whatever handled it after that could have changed it, and nothing on the receipt would show that."
+          }
+        ],
+        "messages": {
+          "asSent": [
+            {
+              "content": "go",
+              "role": "user"
+            },
+            {
+              "content": "",
+              "role": "assistant",
+              "toolCalls": [
+                {
+                  "args": {
+                    "host": "host-103"
+                  },
+                  "id": "c1",
+                  "name": "backup_runs"
+                }
+              ]
+            },
+            {
+              "content": "{\"facts\":[{\"entity\":\"host-103\",\"failed\":2}],\"provenance\":{\"measured_at\":\"2026-09-26T02:00:00Z\",\"source\":\"nightly backup export\"},\"period\":{\"queried\":{\"from\":\"2026-09-25T00:00:00Z\",\"to\":\"2026-09-26T00:00:00Z\"},\"held\":{\"from\":\"2026-08-27T02:00:00Z\",\"to\":\"2026-09-26T02:00:00Z\"}},\"note\":\"Typed data, not prose. `grain` and `provenance` are caveats that travel with the numbers: check `is_counter` before summing values from a series, read `measured_at` (and `age_seconds`) as how old the data is, and treat everything under `not_covered` as ground this result does NOT cover — a clean look here says nothing about it.\"}",
+              "role": "tool",
+              "toolCallId": "c1",
+              "toolName": "backup_runs"
+            },
+            {
+              "content": "",
+              "role": "assistant",
+              "toolCalls": [
+                {
+                  "args": {
+                    "host": "host-999"
+                  },
+                  "id": "c2",
+                  "name": "backup_runs"
+                }
+              ]
+            },
+            {
+              "content": "{\"af_absent\":true,\"outcome\":\"nothing_found\",\"looked_for\":\"failed backup runs for host-999\",\"checked\":[{\"what\":\"every job in the 02:00 export\"}],\"provenance\":{\"measured_at\":\"2026-09-26T02:00:00Z\",\"source\":\"nightly backup export\"},\"period\":{\"queried\":{\"from\":\"2026-09-26T09:00:00Z\",\"to\":\"2026-09-26T10:00:00Z\"},\"held\":{\"from\":\"2026-08-27T02:00:00Z\",\"to\":\"2026-09-26T02:00:00Z\"},\"read_at\":\"2026-09-26T10:00:03Z\",\"verdict\":\"not-held\"},\"retry_returns_the_same\":true,\"note\":\"The search ran and matched nothing — the call did not fail, and calling this tool again with the same arguments returns this same result. `checked` is the ground this answer covers inside `period.held` only; anything under `not_checked` or `cannot_cover` is ground it does NOT cover, and reaching that needs a different question, not a retry. `period.verdict` is `not-held`: the store holds none of the time this read asked about (`period.queried`), so all of that time is ground this result does NOT cover — this result settles nothing about it, and the time the store does hold is `period.held`.\"}",
+              "role": "tool",
+              "toolCallId": "c2",
+              "toolName": "backup_runs"
+            }
+          ],
+          "requestOnly": []
+        },
+        "system": {
+          "pieces": [
+            {
+              "slot": "system-prompt",
+              "source": "base",
+              "text": "bot"
+            }
+          ],
+          "text": "bot"
+        },
+        "tools": {
+          "names": [
+            "backup_runs"
+          ],
+          "schemas": [
+            {
+              "description": "Failed backup runs for one host, read from the nightly backup export.",
+              "inputSchema": {
+                "properties": {
+                  "host": {
+                    "description": "Host name.",
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "host"
+                ],
+                "type": "object"
+              },
+              "name": "backup_runs"
+            }
+          ]
+        }
+      }
+    }
+  ]
+}

@@ -69,7 +69,12 @@ import { breakFinalStage, breakFinalWithValidationStage } from './stages/breakFi
 import { prepareFinalFor } from './stages/prepareFinal.js';
 import { buildCacheSubflow } from './buildCacheSubflow.js';
 import type { AgentChartDeps } from './buildAgentChart.js';
-import { mountInputsLayer, startFinalBranch } from './honesty/mounts.js';
+import {
+  mountInputsLayer,
+  mountResultsLayer,
+  RESULTS_LOOP_TARGET,
+  startFinalBranch,
+} from './honesty/mounts.js';
 import type { AgentState } from './types.js';
 import type { ToolChoiceEntry } from './toolChoice/types.js';
 
@@ -618,6 +623,11 @@ export function buildDynamicAgentChart(deps: AgentChartDeps): FlowChart {
     );
   }
 
+  // ── The results layer — conditional mount at the LOOP HEAD (honesty layer 3).
+  // The flat chart's twin, through the same helper: on the OUTER chart, before
+  // the window strategy, and the loop target below. Absent → untouched.
+  builder = mountResultsLayer(builder, deps.resultsLayer);
+
   // Window strategy — the OUTER chart, immediately before sf-llm-call, and it
   // becomes the loop target below. It cannot live inside sf-llm-call: the
   // window crosses that boundary as a read-only inputMapper arg and is not in
@@ -631,7 +641,15 @@ export function buildDynamicAgentChart(deps: AgentChartDeps): FlowChart {
       `Apply the '${deps.windowStage.strategyName}' window strategy to the live window`,
     );
   }
-  const loopTarget: string = deps.windowStage ? STAGE_IDS.COMPACT : SUBFLOW_IDS.LLM_CALL;
+  // The results layer (honesty layer 3) heads the loop when armed: every
+  // tool-calls loop enters it first, so it reads the batch just run before any
+  // window strategy folds it away (`honesty/mounts.ts` · `mountResultsLayer`).
+  const loopTarget: string =
+    deps.resultsLayer !== undefined
+      ? RESULTS_LOOP_TARGET
+      : deps.windowStage
+      ? STAGE_IDS.COMPACT
+      : SUBFLOW_IDS.LLM_CALL;
 
   const withLlmCall = builder
     .addSubFlowChartNext(SUBFLOW_IDS.LLM_CALL, llmCallSubflow, 'LLM', {

@@ -359,6 +359,92 @@ function readArgumentAsk(
   }
 }
 
+/** One `period` row of this turn — one judged call. */
+interface PeriodRowRead {
+  readonly index: number;
+  readonly toolCallId: string;
+  readonly verdict: string;
+  /** The argument the tool's `ToolPeriod` names — the join key to the call's argument row. */
+  readonly argument?: string;
+}
+
+/**
+ * This turn's period verdicts (honesty layer 3): EVERY `period` row whose
+ * `turn` is the run's `turnNumber`, in ledger order. A record with no
+ * `turnNumber` reads every period row (it may over-report; it never hides).
+ *
+ * Never collapsed by call id. The layer files one row per judged call — each
+ * batch judged once (`honesty/mounts.ts` · `batchToJudge`) — so a second row
+ * under an id is ANOTHER call: a provider's synthetic counter restarts with
+ * each provider instance, so a resumed leg repeats the ids of the leg that
+ * failed (whose rows ride the checkpoint, under the same turn), and a provider
+ * may reuse an id across batches. "The last per call" would let a later
+ * `covered` hide an earlier `not-held` the answer can still rest on.
+ */
+function periodRows(state: Readonly<Record<string, unknown>>): readonly PeriodRowRead[] {
+  const ledger = Array.isArray(state.findingsLedger) ? state.findingsLedger : [];
+  const turn = typeof state.turnNumber === 'number' ? state.turnNumber : undefined;
+  const rows: PeriodRowRead[] = [];
+  ledger.forEach((row: unknown, index) => {
+    if (!isRecord(row) || row.kind !== 'period') return;
+    if (turn !== undefined && row.turn !== turn) return;
+    const toolCallId = str(row.toolCallId);
+    const verdict = str(row.verdict);
+    if (toolCallId === undefined || verdict === undefined) return;
+    const argument = str(row.argument);
+    rows.push({ index, toolCallId, verdict, ...(argument !== undefined && { argument }) });
+  });
+  return rows;
+}
+
+/** The reason each period verdict fires — `covered` fires none. */
+const PERIOD_REASONS: Readonly<Record<string, AssessmentReason>> = {
+  'not-held': 'period-not-held',
+  'partly-held': 'period-partly-held',
+  unknown: 'period-unknown',
+  undeclared: 'period-undeclared',
+};
+
+/**
+ * Layer 3, the results layer's verdicts: each period row of this turn — the
+ * store did not hold the period the read asked for (`not-held`), held only
+ * part of it (`partly-held`), could not say (`unknown`, adopted Q33: "not
+ * sure" by default, on a non-empty result too), or the result said nothing
+ * about its period though its tool declares a period argument (`undeclared`).
+ * `covered` fires nothing — and supports nothing: a period the store held
+ * keeps a reason from firing, never more.
+ *
+ * THE JOIN (results.md § 3.7): the inputs layer owns WHO chose the period
+ * (the call's `argument` row for the argument its `ToolPeriod` names), this
+ * layer owns WHAT the read covered. A period reason's witnesses are both rows
+ * — joined by the call id and the argument name, and neither parses the
+ * other's words — so a reader can say "the hour you asked about" or "the 2
+ * hours the tool's rule assumed". Files the `result-period` check when the
+ * layer filed any verdict this turn.
+ */
+function readPeriodVerdicts(
+  rows: readonly PeriodRowRead[],
+  argumentVerdicts: readonly ArgumentRowRead[],
+  g: Gathered,
+): void {
+  if (rows.length === 0) return;
+  const witness: AssessmentPointer[] = [];
+  for (const row of rows) {
+    const at = statePointer('findingsLedger', row.index, 'verdict');
+    witness.push(at);
+    const reason = PERIOD_REASONS[row.verdict];
+    if (reason === undefined) continue;
+    fire(g, reason, at);
+    const chosenBy = argumentVerdicts.find(
+      (a) => a.toolCallId === row.toolCallId && a.argument === row.argument,
+    );
+    if (row.argument !== undefined && chosenBy !== undefined) {
+      fire(g, reason, statePointer('findingsLedger', chosenBy.index, 'argument'));
+    }
+  }
+  g.checked.push({ layer: 3, check: 'result-period', ran: rows.length, of: rows.length, witness });
+}
+
 /** Layer 3, the tools' own declarations: every absence and every declared gap. */
 function readCoverageRows(coverage: readonly CoverageRow[], g: Gathered): void {
   for (const row of coverage) {
@@ -671,6 +757,7 @@ export function assessAnswer(
   readCoverageRows(coverage, g);
   const calls = readTurnCalls(reads, coverage, g);
   readTurnResults(reads, declarations, g);
+  readPeriodVerdicts(periodRows(state), argumentVerdicts, g);
   readConflicts(state, calls, g);
   readAnswerRows(state, g);
 

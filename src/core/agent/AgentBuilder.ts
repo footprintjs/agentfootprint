@@ -342,6 +342,11 @@ export class AgentBuilder {
    *  ask for it; a REGISTERED ruled tool arms the layer on its own, so this
    *  is only for ruled tools a ToolProvider serves. */
   private inputsLayerValue = false;
+  /** `.resultsLayer()` (honesty layer 3, step 7b). False for every agent that
+   *  did not ask for it; a REGISTERED tool with a `ToolPeriod` arms the layer
+   *  on its own, so this is for provider-served tools and for tools that
+   *  declare a period only on their results. */
+  private resultsLayerValue = false;
   /** `.answerLayer()` (honesty layer 4). Undefined for every agent that did
    *  not ask for it — the chart, the rows, the events and the answer are then
    *  byte-identical; `standingLine` is the prose line's own opt-in. */
@@ -1963,6 +1968,49 @@ export class AgentBuilder {
   }
 
   /**
+   * Mount the RESULTS LAYER (honesty layer 3) for periods the build cannot
+   * see coming — a `ToolPeriod` on a tool a `ToolProvider` serves, or a
+   * `period` a tool declares only on its results.
+   *
+   * A result says what time its read covered: `absent({ …, period })`,
+   * `coverage(value, { …, period })` or `describedResult({ …, period })` —
+   * the instants it `queried`, and what the store `held` (or `'unknown'`, said
+   * out loud). The layer runs at the loop head, reads the batch just run, and
+   * files ONE verdict per call on the findings ledger (`kind: 'period'`):
+   * `covered`, `partly-held`, `not-held`, `unknown` — or `undeclared`, when
+   * the tool declares a `ToolPeriod` and the result said nothing about what its
+   * read covered. The answer's standing (`agent.assessment()`) reads "not
+   * sure" for every verdict but `covered`. It serves the model nothing: the
+   * period is already in the result the model read.
+   *
+   * A REGISTERED tool that declares a `ToolPeriod` (`defineTool({ …, period:
+   * { argument: 'window' } })`) arms the layer by itself. Without the layer, a
+   * declared period is still recorded (`coverageDeclared`, the events, the
+   * `Period:` line under `.limitsTravelWithTheAnswer()`) — but no verdict is
+   * filed, and one dev warning per tool says so.
+   *
+   * Off → the chart is byte-identical (nothing mounted, read or written).
+   *
+   * @example
+   *   const agent = Agent.create({ provider, model })
+   *     .tool(backupRuns)   // returns absent({ …, period }) / describedResult({ …, period })
+   *     .resultsLayer()
+   *     .build();
+   *   await agent.run({ message: 'Any failed backups in the last hour?' });
+   *   (await agent.assessment())?.reasons; // [{ reason: 'period-not-held', layer: 3, … }]
+   */
+  resultsLayer(): this {
+    if (this.resultsLayerValue) {
+      throw new Error(
+        'AgentBuilder.resultsLayer: already set. One agent mounts one results layer, over every ' +
+          'call it runs — a second call has nothing left to add. Drop it.',
+      );
+    }
+    this.resultsLayerValue = true;
+    return this;
+  }
+
+  /**
    * Mount the ANSWER LAYER (honesty layer 4): every answer gets its standing,
    * folded from the run's committed record — never from how sure the model
    * sounded — and served as data.
@@ -3207,6 +3255,7 @@ export class AgentBuilder {
       this.toolChoiceValue !== undefined ||
       this.ontologyValue !== undefined ||
       this.inputsLayerValue ||
+      this.resultsLayerValue ||
       answerLayer !== undefined
         ? {
             ...this.opts,
@@ -3220,6 +3269,8 @@ export class AgentBuilder {
             ...(this.ontologyValue !== undefined && { ontology: this.ontologyValue }),
             // The inputs layer (honesty layer 2), the same door grammar.
             ...(this.inputsLayerValue && { inputsLayer: true }),
+            // The results layer (honesty layer 3), the same door grammar.
+            ...(this.resultsLayerValue && { resultsLayer: true }),
             // The answer layer (honesty layer 4), the same door grammar — the
             // value resolved above, whichever door set it.
             ...(answerLayer !== undefined && {

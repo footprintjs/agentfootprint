@@ -76,6 +76,7 @@
 import { readAbsence } from './absent.js';
 import { listsWithoutRecordOnly } from './items.js';
 import { readCoverageLedger } from './ledger.js';
+import { withoutServedPeriod } from './read.js';
 import type { ToolAbsence } from './types.js';
 
 /**
@@ -141,6 +142,15 @@ function toolAuthoredOnly(absence: ToolAbsence): unknown {
  * or an array of names is projected without this file knowing its shape.
  */
 export function absenceEvidenceProjection(parsed: unknown): unknown | undefined {
+  // The words the SERVE door derived from a declared period — the verdict
+  // word and its note clause (`read.ts` · `withPeriodServed`) — are library
+  // text, not the tool speaking, and never ground (honesty step 7b).
+  const own = withoutServedPeriod(parsed);
+  return frameProjection(own) ?? (own === parsed ? undefined : own);
+}
+
+/** The absence frame's projection of a value, or `undefined` when it carries none. */
+function frameProjection(parsed: unknown): unknown | undefined {
   const absence = readAbsence(parsed);
   if (absence !== undefined) return toolAuthoredOnly(absence);
   const covered = readCoverageLedger(parsed);

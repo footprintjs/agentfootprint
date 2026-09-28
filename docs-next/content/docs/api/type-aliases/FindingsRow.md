@@ -4,6 +4,6 @@ title: FindingsRow
 
 # Type Alias: FindingsRow
 
-> **FindingsRow** = [`BasisRow`](/docs/api/interfaces/BasisRow) \| [`StandingRow`](/docs/api/interfaces/StandingRow) \| [`ConflictRow`](/docs/api/interfaces/ConflictRow) \| [`JudgmentRow`](/docs/api/interfaces/JudgmentRow) \| [`JudgmentErrorRow`](/docs/api/interfaces/JudgmentErrorRow) \| [`ContingentRow`](/docs/api/interfaces/ContingentRow) \| [`UnsettledByAbsenceRow`](/docs/api/interfaces/UnsettledByAbsenceRow) \| [`ArgumentRow`](/docs/api/interfaces/ArgumentRow) \| [`GroundedRow`](/docs/api/interfaces/GroundedRow) \| [`StepsUnfinishedRow`](/docs/api/interfaces/StepsUnfinishedRow)
+> **FindingsRow** = [`BasisRow`](/docs/api/interfaces/BasisRow) \| [`StandingRow`](/docs/api/interfaces/StandingRow) \| [`ConflictRow`](/docs/api/interfaces/ConflictRow) \| [`JudgmentRow`](/docs/api/interfaces/JudgmentRow) \| [`JudgmentErrorRow`](/docs/api/interfaces/JudgmentErrorRow) \| [`ContingentRow`](/docs/api/interfaces/ContingentRow) \| [`UnsettledByAbsenceRow`](/docs/api/interfaces/UnsettledByAbsenceRow) \| [`ArgumentRow`](/docs/api/interfaces/ArgumentRow) \| [`PeriodRow`](/docs/api/interfaces/PeriodRow) \| [`GroundedRow`](/docs/api/interfaces/GroundedRow) \| [`StepsUnfinishedRow`](/docs/api/interfaces/StepsUnfinishedRow)
 
-Defined in: [src/core/agent/findings/types.ts:429](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/findings/types.ts#L429)
+Defined in: [src/core/agent/findings/types.ts:430](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/findings/types.ts#L430)

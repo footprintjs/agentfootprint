@@ -24,11 +24,12 @@ import type {
   FindingsDeclaredPayload,
   FindingsJudgeFailedPayload,
   FindingsJudgedPayload,
+  FindingsPeriodPayload,
   FindingsStandingPayload,
 } from '../../../src/events/payloads.js';
 
 describe('findings events — registered at every site', () => {
-  it('EVENT_NAMES.findings names the six events in the three-segment form', () => {
+  it('EVENT_NAMES.findings names the seven events in the three-segment form', () => {
     expect(EVENT_NAMES.findings).toEqual({
       declared: 'agentfootprint.findings.declared',
       standing: 'agentfootprint.findings.standing',
@@ -40,6 +41,8 @@ describe('findings events — registered at every site', () => {
       contingent: 'agentfootprint.findings.contingent',
       // The inputs layer (honesty layer 2) — its verdict on one ruled argument.
       argument: 'agentfootprint.findings.argument',
+      // The results layer (honesty layer 3, step 7b) — its verdict on one call's period.
+      period: 'agentfootprint.findings.period',
     });
   });
 
@@ -53,6 +56,13 @@ describe('findings events — registered at every site', () => {
     expect(list[at + 4]).toBe('agentfootprint.findings.judge_failed');
     expect(list[at + 5]).toBe('agentfootprint.findings.contingent');
     expect(list[at + 6]).toBe('agentfootprint.findings.argument');
+    expect(list[at + 7]).toBe('agentfootprint.findings.period');
+  });
+
+  it('the period event is a key of AgentfootprintEventMap with its own payload type (step 7b)', () => {
+    expectTypeOf<
+      AgentfootprintEventMap['agentfootprint.findings.period']['payload']
+    >().toEqualTypeOf<FindingsPeriodPayload>();
   });
 
   it('the argument event is a key of AgentfootprintEventMap with its own payload type', () => {

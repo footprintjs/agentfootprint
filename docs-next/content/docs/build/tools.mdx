@@ -30,6 +30,8 @@ Whatever `execute` returns is what the model reads next. Plain data is fine unti
 
 **The rule:** rows from a system of record → `describedResult()`; any other value that has limits → `coverage()`; nothing matched → `absent()`. Never wrap one in another — `describedResult()` carries its own `coverage`. A person reading the final answer sees the same thing for all three: with [`.limitsTravelWithTheAnswer()`](#making-the-limits-survive--limitstravelwiththeanswer) on the agent, the coverage the tools declared is appended to the answer — provenance and grain never are.
 
+All three also take a `period` — what time the READ covered — and `absent()` takes the `provenance` `describedResult()` carries, so "searched the 02:00 export — nothing" is data, not prose. See [The period a result covered](#the-period-a-result-covered--period) below.
+
 One `execute` that uses all three:
 
 <CodeFile path="examples/features/66-semantic-envelope.ts" region="three-helpers" title="examples/features/66-semantic-envelope.ts (region: three-helpers)" />
@@ -75,6 +77,14 @@ What the model read for each branch, captured from that example's run (pretty-pr
 ```
 
 A helper that cannot honor its declaration throws inside `execute`, and the call's error result is its refusal: the model reads text that starts `refused: ` in place of the data, and the run continues. Details: [Described tool results](doc:semantic-results), [`absent()`](#an-absence-that-names-its-own-coverage--absent) and [`coverage()`](#what-a-clean-result-does-not-rule-out--coverage) below.
+
+**Write both branches.** A data list is never empty — "nothing matched" has exactly one helper — so `describedResult({ facts: [] })` is refused, and the refusal names the one you meant:
+
+```text
+refused: `facts` is empty — if nothing matched, return absent({ what, checked }) instead. (field: facts)
+```
+
+A tool without an empty branch passes every test that has rows and meets this on its first empty read in production, where the model reads the refusal instead of "nothing matched". So every `execute` that returns rows says both: `rows.length ? describedResult({ … }) : absent({ … })` — the example above does exactly that.
 
 ## defineTool — the flat builder
 
@@ -873,6 +883,9 @@ All from `agentfootprint`:
   exported because tests and readers match on them.
 - `COVERAGE_BLOCK_HEADING` — the appended block's opening line, for anything
   that has to find or strip it downstream.
+- `DeclaredPeriod`, `periodVerdict`, `PeriodRow` and `PERIOD_WIRE` — the period
+  a result declares, the one verdict over it, the row the results layer files,
+  and the period's wire spelling as data (below).
 
 ### Reading the canonical notes from another language (9.70.0)
 
@@ -920,11 +933,12 @@ def absent(checked, not_checked=(), cannot_cover=()):
 
 Three things are worth knowing about the file:
 
-- **Keys are the exported constant names**, in three groups — `notes`
+- **Keys are the exported constant names**, in four groups — `notes`
   (`ABSENCE_NOTE`, `COVERAGE_NOTE`, `SEMANTICS_NOTE`), `markers` (the reserved
-  keys) and `headings` (`COVERAGE_BLOCK_HEADING`). The same value is reachable
-  as a TypeScript import from `agentfootprint`, so the two sides of a polyglot
-  system quote one source.
+  keys), `headings` (`COVERAGE_BLOCK_HEADING`) and `wire` (`PERIOD_WIRE`, the
+  period's keys and its one literal, published whole — below). The same value
+  is reachable as a TypeScript import from `agentfootprint`, so the two sides of
+  a polyglot system quote one source.
 - **It is generated at build time from the package's own compiled exports**,
   never hand-maintained, so it cannot disagree with the code that ships. The
   test suite pins both directions: every value byte-equals its constant, and
@@ -935,6 +949,96 @@ Three things are worth knowing about the file:
 What is deliberately *not* in it: model-facing prose the library injects for
 itself, like the out-of-budget wrap-up instruction. No foreign process mints
 those, and publishing them would turn an interop contract into an inventory.
+
+## The period a result covered — `period`
+
+A backup search reads the nightly export, taken at 02:00, and is asked at 10:00
+about "the last hour". It finds nothing — and "no failed backups" silently means
+"none in data that ends seven hours before the hour you asked about". The tool
+knows both times; the model does not. So a result says what time its read
+covered, on the result it already returns:
+
+<CodeFile path="examples/features/78-result-period.ts" region="result-period" title="examples/features/78-result-period.ts (region: result-period)" />
+
+- **`queried`** — the instants the READ asked for (of the read that produced
+  this result, not of "this call");
+- **`held`** — what the store holds at the time of the read, or `'unknown'`,
+  said out loud when the tool cannot vouch for it;
+- **`readAt`** (optional) — when the read ran; a cached answer is served minutes
+  after the read it describes.
+
+Every value is an ISO 8601 instant WITH a zone (`2026-09-26T09:00:00Z`,
+`2026-09-26T11:00:00+02:00`): the library compares instants, and one with no
+zone is refused rather than guessed. It never parses "last hour" or "2h" —
+the tool computes the instants from its own data. The same `period` goes on
+`coverage(value, { …, period })` (inside `af_coverage`, before `result`) and on
+`describedResult({ …, period })` (a top-level field); the model reads it as you
+declared it, snake_case on the wire (`read_at`). `absent()` also takes
+`provenance: { measuredAt, source }` — the shape and the rules
+`describedResult()` uses — so the found branch and the not-found branch of one
+`execute` say their source and time the same way.
+
+**The results layer** judges it. At the head of the loop, after every batch,
+it files ONE verdict per call on the findings ledger (`kind: 'period'`), by one
+pure rule over the instants you declared (`periodVerdict`, bounds inclusive):
+
+| verdict | when | the answer's standing |
+|---|---|---|
+| `covered` | the store holds every instant the read asked for | nothing fires |
+| `partly-held` | it holds some of them | not sure — `period-partly-held` |
+| `not-held` | it holds none of them | not sure — `period-not-held` |
+| `unknown` | `held: 'unknown'` — on a non-empty result too | not sure — `period-unknown` |
+| `undeclared` | the tool declares a period argument (`period: { argument }` on `defineTool`) and this result said nothing about its period | not sure — `period-undeclared` |
+
+`agentfootprint.findings.period` fires per row with the verdict word only —
+never an instant. The layer serves the model nothing new (the period is already
+in the result it read).
+
+**Arming.** A registered tool that declares a period argument — `defineTool({
+…, askOrAssume: { window: { assume: '2h' } }, period: { argument: 'window' } })`
+— arms the layer by itself: its results owe a period, and one that says nothing
+is recorded as silence (`undeclared`). For a tool that declares a period only on
+its results, or one a `ToolProvider` serves, add `.resultsLayer()` on the
+builder. Without the layer a declared period is still recorded (on
+`sharedState.coverageDeclared` and the `tools.absent` / `tools.coverage_declared`
+events) but never judged — and one dev-mode warning per tool says so. Nothing
+declared, nothing changes: the chart, the record and the requests are
+byte-identical.
+
+**For the person**, under an existing `.limitsTravelWithTheAnswer()` only, one
+`Period:` line per declaring call, as the tool declared it:
+
+```text
+Period:
+- backup_failures queried 2026-09-26T09:00:00Z to 2026-09-26T10:00:00Z; the store holds 2026-08-27T02:00:00Z to 2026-09-26T02:00:00Z
+```
+
+A typed answer (`.outputSchema()`) carries the same as data:
+`agent.answerCoverage().periods` — `{ toolName, toolCallId, queried, held, readAt? }`
+per declaring call — and `turn_end.answerCoverage.periods`.
+
+**From another language**, mint the same envelope from
+`canonical-notes.json`'s `wire.PERIOD_WIRE` — every reserved key and the literal
+`'unknown'`, read rather than copied:
+
+```python
+wire = json.load(open("node_modules/agentfootprint/canonical-notes.json"))["wire"]["PERIOD_WIRE"]
+
+def period(queried_from, queried_to, held=None, read_at=None):
+    held_value = wire["heldUnknown"] if held is None else {wire["from"]: held[0], wire["to"]: held[1]}
+    out = {wire["queried"]: {wire["from"]: queried_from, wire["to"]: queried_to}, wire["held"]: held_value}
+    if read_at is not None:
+        out[wire["readAt"]] = read_at
+    return out   # put it under wire["key"] on af_absent / af_coverage / af_semantics
+```
+
+**Across versions.** A reader older than this release serves a period on
+`af_absent` or `af_coverage` to the model as tool knowledge and files nothing,
+and refuses a whole `af_semantics` envelope that carries one (it stays plain
+data) — so upgrade the reading side (and the lens) before tools mint periods.
+An `mcpClient` in its default text mode hands envelopes over as JSON text, which
+is not recognized at the door at all — use `resultMode: 'structured'` for tools
+that return envelopes.
 
 ## The result ceiling — refuse, never truncate (9.20.0)
 

@@ -17,6 +17,8 @@
 export interface HonestyLayers {
   /** The inputs layer (honesty layer 2) — `sf-inputs` is mounted. */
   readonly inputs?: true;
+  /** The results layer (honesty layer 3, step 7b) — `sf-results` is mounted at the loop head. */
+  readonly results?: true;
   /**
    * The answer layer (honesty layer 4) — its stages head the final branch,
    * and the Route decider files the answer's witness rows
@@ -34,16 +36,19 @@ export interface HonestyLayers {
  * @example
  * ```ts
  * honestyLayersOf({ inputs: true, answer: false }); // { inputs: true }
+ * honestyLayersOf({ inputs: false, results: true, answer: false }); // { results: true }
  * honestyLayersOf({ inputs: false, answer: false }); // undefined
  * ```
  */
 export function honestyLayersOf(armed: {
   readonly inputs: boolean;
+  readonly results?: boolean;
   readonly answer: boolean;
 }): HonestyLayers | undefined {
-  if (!armed.inputs && !armed.answer) return undefined;
+  if (!armed.inputs && armed.results !== true && !armed.answer) return undefined;
   return {
     ...(armed.inputs && { inputs: true as const }),
+    ...(armed.results === true && { results: true as const }),
     ...(armed.answer && { answer: true as const }),
   };
 }

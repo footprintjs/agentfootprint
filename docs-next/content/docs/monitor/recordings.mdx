@@ -299,7 +299,12 @@ The reasons, each read from one committed row: a tool declared ground it did not
 check (`coverage-gap`); a tool declared that nothing matched (`declared-absent`,
 which includes an empty rowset inside a `coverage()` boundary); an empty rowset
 that said nothing about what it searched (`empty-undeclared` — silence recorded
-as silence); two results the model stood on disagree (`sources-conflict`); names
+as silence); a result's store does not hold the period its read asked about
+(`period-not-held`), holds only part of it (`period-partly-held`), cannot say
+(`period-unknown`), or the tool declares a period argument and its result said
+nothing about its period (`period-undeclared`) — the results layer's verdicts, see
+[The period a result covered](doc:tools#the-period-a-result-covered--period); two
+results the model stood on disagree (`sources-conflict`); names
 or numbers in the answer appear in no tool result (`value-unsupported`,
 `value-survived-revision`); a limit cut the turn short (`stopped-early`); the
 answer came before a skill's declared steps finished (`steps-unfinished`, on an

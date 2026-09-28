@@ -4,7 +4,7 @@ title: CoverageItem
 
 # Interface: CoverageItem
 
-Defined in: [src/core/agent/coverage/types.ts:22](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/coverage/types.ts#L22)
+Defined in: [src/core/agent/coverage/types.ts:32](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/coverage/types.ts#L32)
 
 One piece of ground, and (optionally) why it is where it is.
 
@@ -19,7 +19,7 @@ because the library does not know which of them are real.
 
 > `readonly` `optional` **kind?**: `"scope"` \| `"existence"`
 
-Defined in: [src/core/agent/coverage/types.ts:62](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/coverage/types.ts#L62)
+Defined in: [src/core/agent/coverage/types.ts:72](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/coverage/types.ts#L72)
 
 What kind of ground a `notChecked` or `cannotCover` item is — a CLOSED
 set, read by the answer account's existence check:
@@ -41,7 +41,7 @@ later member is an additive change for producers.
 
 > `readonly` `optional` **short?**: `string`
 
-Defined in: [src/core/agent/coverage/types.ts:46](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/coverage/types.ts#L46)
+Defined in: [src/core/agent/coverage/types.ts:56](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/coverage/types.ts#L56)
 
 A short plain form of `what`, for a person reading a report — "every VM
 disk in the RVTools export of 2026-09-19" for a `what` that names the two
@@ -62,7 +62,7 @@ short form restates `what`, so no value should live only here.
 
 > `readonly` **what**: `string`
 
-Defined in: [src/core/agent/coverage/types.ts:24](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/coverage/types.ts#L24)
+Defined in: [src/core/agent/coverage/types.ts:34](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/coverage/types.ts#L34)
 
 The source, window, filter or population. Non-empty.
 
@@ -72,7 +72,7 @@ The source, window, filter or population. Non-empty.
 
 > `readonly` `optional` **why?**: `string`
 
-Defined in: [src/core/agent/coverage/types.ts:31](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/coverage/types.ts#L31)
+Defined in: [src/core/agent/coverage/types.ts:41](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/coverage/types.ts#L41)
 
 Why it sits where it does. REQUIRED on `cannotCover` (a permanent blind
 spot is a claim about capability, and a claim with no reason cannot be

@@ -84,6 +84,18 @@ export type AssessmentPointer =
  *   them before anything ran, and no answer has come yet (the batch ask's
  *   working state, `argumentAsk`, still has a question out; the `asked` rows
  *   name which values). Nothing in that batch has run (honesty layer 2);
+ * - `period-not-held` — a result declared the period its read covered, and
+ *   the store holds NONE of what the read asked for (a `period` row with
+ *   verdict `not-held` — the results layer, honesty layer 3): "the data ends
+ *   at 02:00; the hour asked about is after it";
+ * - `period-partly-held` — the store holds only part of it (`partly-held`);
+ * - `period-unknown` — the tool said it cannot vouch for what its store holds
+ *   (`held: 'unknown'` → `unknown`), even on a non-empty result: an answer
+ *   built over a period the store may not hold rests on less than it says
+ *   (adopted Q33 — a bench cell decides whether it stays);
+ * - `period-undeclared` — the tool declares a period argument (a
+ *   `ToolPeriod`) and this result said nothing about what its read covered:
+ *   declared silence, recorded as silence (`undeclared`).
  * - `steps-unfinished` — the answer came before the active skill's declared
  *   steps finished: the one teaching nudge was already spent, or a limit
  *   forced the answer (a `steps-unfinished` witness row of this turn, filed
@@ -97,6 +109,10 @@ export type AssessmentReason =
   | 'declared-absent'
   | 'coverage-gap'
   | 'empty-undeclared'
+  | 'period-not-held'
+  | 'period-partly-held'
+  | 'period-unknown'
+  | 'period-undeclared'
   | 'sources-conflict'
   | 'value-unsupported'
   | 'value-survived-revision'
@@ -123,10 +139,14 @@ export type AssessmentReason =
  * - `answer-checks` — the app's answer checks (`answerValidation`);
  * - `argument-rules` — the ruled arguments of this turn's calls that the
  *   inputs layer filed a verdict on (honesty layer 2), of the same — every
- *   `argument` row IS a verdict; present only when the layer filed one.
+ *   `argument` row IS a verdict; present only when the layer filed one;
+ * - `result-period` — this turn's calls the results layer filed a period
+ *   verdict on (honesty layer 3), of the same — every `period` row IS a
+ *   verdict, `covered` included; present only when the layer filed one.
  */
 export type AssessmentCheck =
   | 'argument-rules'
+  | 'result-period'
   | 'tool-coverage'
   | 'result-shape'
   | 'names-and-numbers'

@@ -62,6 +62,7 @@ import {
 import type { MemoryIdentity } from '../memory/identity/types.js';
 import type { FoldedSpan } from './agent/window/types.js';
 import { argumentRowIsWellFormed } from './agent/arguments/rows.js';
+import { periodRowIsWellFormed } from './agent/coverage/period.js';
 import { witnessRowIsWellFormed } from './agent/assessment/witness.js';
 import {
   BASIS_VALUES,
@@ -700,6 +701,12 @@ function ledgerRowIsWellFormed(row: unknown): boolean {
     // that carries this kind.
     case 'argument':
       return argumentRowIsWellFormed(r);
+    // The results layer's verdict on one call's period (honesty layer 3, step
+    // 7b) — the arm ships in the SAME change as the row kind. One owner of the
+    // row's shape: `agent/coverage/period.ts`. An older runtime refuses a
+    // checkpoint that carries this kind.
+    case 'period':
+      return periodRowIsWellFormed(r);
     // The answer layer's witness rows (honesty layer 4): the evidence gate's
     // clean verdict and an answer given before its declared steps finished.
     // The arms ship in the SAME change as the kinds; one owner of their shape
@@ -822,6 +829,8 @@ export function validateCheckpoint(value: unknown): AgentRunCheckpoint {
           'iteration, and optional non-empty notChecked / cannotCover lists of { what, why? } ' +
           "and a non-empty tryInstead string) or 'argument' (with toolCallId, toolName, " +
           'argument, iteration, turn, and a source or an asked in its vocabulary) or ' +
+          "'period' (with toolCallId, toolName, iteration, turn, and a verdict of covered, " +
+          'partly-held, not-held, unknown or undeclared) or ' +
           "'grounded' (with turn, iteration, posture, candidates, lookedUp) or " +
           "'steps-unfinished' (with turn, iteration, skillId, remaining[] of { index, tool }, " +
           'total, action: accepted | cut-short); a row of any kind may carry a numeric turn. ' +

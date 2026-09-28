@@ -90,6 +90,33 @@ export const REASONS: readonly ReasonEntry[] = Object.freeze([
       'history: an empty rowset (a top-level array, or the app’s rowsAt key) whose call has no coverage row',
   },
   {
+    reason: 'period-not-held',
+    layer: 3,
+    class: 'not-sure',
+    reads:
+      "findingsLedger: a period row of this turn with verdict 'not-held' — the store holds none of what the read asked for (and, when the tool declares a ToolPeriod, the inputs layer's argument row for the same call: who chose the period)",
+  },
+  {
+    reason: 'period-partly-held',
+    layer: 3,
+    class: 'not-sure',
+    reads: "findingsLedger: a period row of this turn with verdict 'partly-held'",
+  },
+  {
+    reason: 'period-unknown',
+    layer: 3,
+    class: 'not-sure',
+    reads:
+      "findingsLedger: a period row of this turn with verdict 'unknown' — the tool declared held: 'unknown'",
+  },
+  {
+    reason: 'period-undeclared',
+    layer: 3,
+    class: 'not-sure',
+    reads:
+      "findingsLedger: a period row of this turn with verdict 'undeclared' — the tool declares a ToolPeriod and the result declared no period",
+  },
+  {
     reason: 'sources-conflict',
     layer: 3,
     class: 'not-sure',

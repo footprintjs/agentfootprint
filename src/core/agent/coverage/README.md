@@ -1,12 +1,14 @@
 **Mixed** — two declarations a tool authors, one reader the walk calls, one
 sentence the model keeps.
 Map: `types.ts`, `items.ts`, `refusal.ts`, `absent.ts`, `ledger.ts` (what a tool
-declares).
+declares), and `period.ts` (the one period shape a result declares, its one
+rule set, and the verdict row the results layer files — honesty step 7b).
 Walker: `read.ts` — the ONE reader both dispatch boundaries and the raise site
 (`../stages/toolCalls.ts` · `declareRaisedAbsence`) call.
 Fold: `evidence.ts` (`absenceEvidenceProjection` — what an absence may ground)
 and `emptiness.ts` (`readEmptiness` — the ONE reader of what came back, shared by
-the answer account and the answer's standing), and `answer.ts` ·
+the answer account and the answer's standing), `period.ts` · `periodVerdict`
+(the ONE verdict over a declared period), and `answer.ts` ·
 `coverageOfAnswer` — the answer's limits as data, which a typed answer carries
 instead of the block.
 Lens: `answer.ts` · `composeAnswerWithCoverage`, the coverage block appended to
@@ -462,12 +464,13 @@ execute: () => describedResult({ facts: rows, provenance: { measuredAt: exportTi
 ```
 
 - **Which keys.** `absent()`: `what`, `checked`, `notChecked`, `cannotCover`,
-  `tryInstead`, `tryInsteadTool`. `coverage()`: `checked`, `notChecked`,
-  `cannotCover`. `describedResult()` and the deprecated `semantic()`: their
-  eight fields, and the keys of each object they carry — `grain`,
-  `provenance`, `coverage`, `clarify`, `render` — each door in its own
-  spelling (`measuredAt` for one, `measured_at` for the other; each refuses
-  the other's, naming its own). The declaration key lists are tied to their
+  `tryInstead`, `tryInsteadTool`, and since honesty step 7b `provenance` and
+  `period` (§ 7). `coverage()`: `checked`, `notChecked`, `cannotCover`,
+  `period`. `describedResult()`: its nine fields (`period` among them); the
+  deprecated `semantic()`: its eight — it gains no field. And the keys of each
+  object they carry — `grain`, `provenance`, `coverage`, `clarify`, `render`,
+  `period` — each door in its own spelling (`measuredAt` for one,
+  `measured_at` for the other; each refuses the other's, naming its own). The declaration key lists are tied to their
   types in both directions (`satisfies Record<keyof …, true>`), so a field a
   type gains cannot be refused by mistake.
 - **A suggestion only for a slip, never a guess.** `refusal.ts` ·
@@ -552,6 +555,84 @@ declaredByValue(JSON.stringify(absent({ what: 'VMs', checked: ['inventory'], not
 `rowsAtProblem` is the one rule for an app's declared rows key (a non-empty
 top-level key), asked by both readers' declarations.
 
+## 7. The period a result covered — and an absence's source and time (honesty step 7b)
+
+**The law.** A result says what it covered, its period included; silence about
+a declared period is recorded as silence.
+
+A search for "the last hour" answered from the 02:00 export finds nothing, and
+"nothing" silently means "nothing in data that ends seven hours before the hour
+asked about". The tool knows both times; the model does not. So all three doors
+take the ONE period shape (`period.ts` · `DeclaredPeriod`), and `absent()` takes
+the source and time `describedResult()` already carries:
+
+```ts
+return absent({
+  what: `failed backup runs for ${host}`,
+  checked: ['every job in the nightly export'],
+  provenance: { measuredAt: snap.exportedAt, source: 'nightly backup export' }, // describedResult()'s shape
+  period: {
+    queried: { from: '2026-09-26T09:00:00Z', to: '2026-09-26T10:00:00Z' }, // what the READ asked for
+    held: { from: snap.heldFrom, to: snap.exportedAt },                    // what the store holds — or 'unknown'
+    readAt: '2026-09-26T10:00:03Z',                                         // when the read ran (optional)
+  },
+});
+// on the wire: "provenance": { "measured_at", "source" }, "period": { "queried", "held", "read_at" }
+```
+
+- **One shape, three doors, one rule set.** `absent()`, `coverage()` (inside
+  `af_coverage`, before `result`, so a truncated view keeps it) and
+  `describedResult()` (a top-level field) all mint it by `period.ts` ·
+  `mintPeriod`; `semantic()` gains nothing. Every value is an ISO 8601 instant
+  WITH a zone — the library compares instants, and one with no zone is refused
+  rather than guessed; `from` is never after `to`; `held` is a span or the
+  literal `'unknown'`, said out loud. A `period` is a declared boundary on its
+  own: `coverage(value, { period })` with no lists is accepted.
+- **`provenance` on `absent()` only** (adopted Q34; `coverage()` takes none — a
+  value that comes as rows from a system of record has `describedResult()`).
+  One rule set with `describedResult()`'s: `lib/semantics/described.ts` ·
+  `mintProvenance` mints it, `lib/semantics/envelope.ts` · `provenanceIssues`
+  judges it — `measuredAt` and `source` both required once it is present.
+  `measuredAt` is words for the model and is never parsed.
+- **Read, never repaired.** An envelope minted elsewhere (a Python helper) is
+  read by `period.ts` · `readPeriod`: on `af_absent` and `af_coverage` a
+  malformed period — or an absence's malformed `provenance` — is left off the
+  record and named once per tool in dev mode (`period.ts` ·
+  `warnDroppedDeclaration`), while the model still reads what the tool wrote; on
+  `af_semantics` it is one more fault of the envelope's rule set, so the whole
+  envelope stays data (that door's strictness law).
+- **The one channel carries it.** `read.ts` · `readCoverageResult` hands each
+  declaration's period (and an absence's provenance) to ToolCalls, which files
+  it on the `coverageDeclared` row (`period`, camelCase) and the events
+  (`tools.absent` gains `provenance` and `period`, `tools.coverage_declared`
+  gains `period`) — whatever the agent armed: it is the tool's declaration. A
+  described result with a period and no coverage lists files a `'ledger'` row
+  whose three lists are empty, so every reader of the lists prints nothing new.
+- **The verdict is the results layer's.** `period.ts` · `periodVerdict` — one
+  pure rule over the declared instants, bounds inclusive: `covered`,
+  `partly-held`, `not-held`, `unknown`. The results layer (`../results/`) files
+  one `period` row per call at the loop head — `undeclared` when the tool
+  declares a `ToolPeriod` and the result declared no period — and the answer's
+  standing reads them. A period declared on an agent whose layer is not mounted
+  is recorded and never judged, and one dev warning per tool says so.
+- **For the person, under `.limitsTravelWithTheAnswer()` only:** one `Period:`
+  line per declaring call, the period AS DECLARED (`period.ts` · `periodLine`,
+  in `answer.ts` · `composeAnswerWithCoverage`); a typed answer carries the same
+  as `periods` in its limits data (`answer.ts` · `coverageOfAnswer`). With no
+  period declared the block is the bytes it always was.
+- **Across processes.** `canonical-notes.json` publishes the period's wire
+  spelling (`PERIOD_WIRE`: every key and the literal `'unknown'`), so a Python
+  helper mints it byte for byte. An OLDER reader serves a period on `af_absent`
+  / `af_coverage` as tool knowledge and files nothing, and refuses a whole
+  `af_semantics` that carries one — the changelog names the floor.
+
+Pinned by `test/core/agent/coverage-period.test.ts` (the rule set, the verdict,
+seeded properties), `test/core/agent/coverage-period-doors.test.ts` (the three
+doors, recognition, byte identity) and `test/core/agent/results/layer.test.ts`
+(the loop). **What it lets you measure:** the period declaration rate and the
+verdict mix per tool, the held-unknown share, and — from `tools.absent` — how
+often "nothing" names its source and time.
+
 ## What the framework does with them
 
 Recognition is STRICT (the effects-envelope law): only a plain object carrying
@@ -569,6 +650,8 @@ ways — no delivered status, no ceiling, no column-type contract, no evidence.
 | evidence corpus | grounds **every field but `looked_for`** | indexed as ordinary data |
 | final answer | folds into the block, with `.limitsTravelWithTheAnswer()` — into `answerCoverage` (data) when the answer is typed | same |
 | suggestion (`tryInstead`, `tryInsteadTool`) | rides `tools.absent` as declared (9.113.0); never tracked, never appended | — (a ledger makes none) |
+| `provenance` (step 7b) | rides `tools.absent`, camelCase; served in the envelope; never tracked, never appended | — (`coverage()` takes none) |
+| `period` (step 7b) | rides `tools.absent` and the tracked row; served as declared; its verdict is the results layer's row; a `Period:` line under `.limitsTravelWithTheAnswer()` | same, on `tools.coverage_declared` |
 
 ### What deliberately does NOT change
 
@@ -701,6 +784,7 @@ armed: the final branch cannot write back, and one key has one writer.
 | `emptiness.ts` | the ONE reader of what came back (§ 6) — typed routes, the door the record holds, what a value's own envelope declares (`declaredByValue`), the `rowsAt` rule |
 | `read.ts` | the ONE reader both dispatch boundaries and the raise site (`../stages/toolCalls.ts` · `declareRaisedAbsence`) call — lifts the suggestion beside the coverage |
 | `evidence.ts` | what an absence is allowed to ground |
+| `period.ts` | the ONE period shape (`DeclaredPeriod`), its ONE rule set (`periodProblem` — asked by every mint and every reader), the verdict (`periodVerdict`), the person's line (`periodLine`), the wire spelling as data (`PERIOD_WIRE`), and the results layer's `period` row with its checkpoint door |
 | `answer.ts` | folding the run's declarations into one appended block (a prose answer), or into the answer's coverage as data (`coverageOfAnswer`, a typed answer) |
 
 ## The notes cross a language boundary (9.70.0)

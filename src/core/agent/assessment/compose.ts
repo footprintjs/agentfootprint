@@ -215,6 +215,7 @@ const CHECK_WORDS: Readonly<Record<AssessmentCheck, string>> = {
   'argument-rules': 'argument rules',
   'tool-coverage': 'tool coverage',
   'result-shape': 'what came back',
+  'result-period': 'the time each result covered',
   'names-and-numbers': 'names and numbers',
   'answer-checks': "the app's answer checks",
 };
@@ -227,6 +228,10 @@ const REASON_WORDS: Readonly<Record<Exclude<AssessmentReason, 'argument-assumed'
   'coverage-gap': 'a tool said there is ground it did not check or cannot cover',
   'declared-absent': 'a tool said nothing matched',
   'empty-undeclared': 'a lookup came back empty without saying what it searched',
+  'period-not-held': "a tool's data does not reach the time the question asked about",
+  'period-partly-held': "a tool's data covers only part of the time the question asked about",
+  'period-unknown': 'a tool could not say what time its data covers',
+  'period-undeclared': 'a tool did not say what time its result covers',
   'sources-conflict': 'two results the answer stood on disagree',
   'value-unsupported': 'names or numbers in the answer appear in no tool result',
   'value-survived-revision':

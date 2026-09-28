@@ -90,11 +90,13 @@ const isPlainObject = (v: unknown): v is Record<string, unknown> =>
   typeof v === 'object' && v !== null && !Array.isArray(v);
 
 /** True when a result states its boundary through ANY recognized door: a
- *  semantic envelope with `coverage`, a `coverage()` ledger, or an
- *  `absent()` (whose `checked` IS its coverage). */
+ *  semantic envelope with `coverage` or a `period` (honesty step 7b — a
+ *  boundary in time, the same answer a `coverage()` carrying only a period
+ *  gets), a `coverage()` ledger, or an `absent()` (whose `checked` IS its
+ *  coverage). */
 function declaresCoverage(result: unknown): boolean {
   const sem = readSemantics(result);
-  if (sem !== undefined) return sem.coverage !== undefined;
+  if (sem !== undefined) return sem.coverage !== undefined || sem.period !== undefined;
   return readCoverageResult(result) !== undefined;
 }
 

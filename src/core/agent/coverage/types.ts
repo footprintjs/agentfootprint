@@ -7,9 +7,19 @@
  *          result stands on. Spelling them with one vocabulary is what lets
  *          the answer-level block merge an absence's boundary with a
  *          verdict's without translating between two grammars.
- * Role:    core/ layer, pure data. No imports, no behavior.
+ * Role:    core/ layer, pure data. No behavior; TYPE-only imports (they erase
+ *          at runtime): the one period shape (`period.ts`) and the one
+ *          provenance shape `describedResult()` already declares
+ *          (`lib/semantics/types.ts`), so an absence says its source and time
+ *          in the same words a described result does.
  * Emits:   N/A.
  */
+
+import type {
+  DescribedResultDeclaration,
+  SemanticProvenance,
+} from '../../../lib/semantics/types.js';
+import type { DeclaredPeriod, PeriodOnWire } from './period.js';
 
 /**
  * One piece of ground, and (optionally) why it is where it is.
@@ -159,7 +169,42 @@ export interface AbsenceDeclaration {
    * refused (see `absent.ts` · `readToolSuggestion` for why).
    */
   readonly tryInsteadTool?: TryInsteadTool;
+  /**
+   * Where the search looked and how old that source is — the SAME shape
+   * `describedResult()` declares (`measuredAt`, `source`, and optionally
+   * `ageSeconds`, `sourceExportDate`), respelled to the same snake_case wire
+   * (honesty step 7b). `measuredAt` and `source` are both required once it is
+   * present. So the found branch and the not-found branch of one `execute`
+   * carry their source and time in one shape: "searched the 02:00 export —
+   * nothing" as data, not prose in `checked`. `measuredAt` is the tool's own
+   * words, never parsed.
+   */
+  readonly provenance?: NonNullable<DescribedResultDeclaration['provenance']>;
+  /**
+   * What the search's READ covered in time — the instants it asked for, and
+   * what the store holds (or `'unknown'`, said out loud) — honesty step 7b.
+   * Every value is an ISO 8601 instant with a zone; a malformed period is
+   * refused here. The results layer files its verdict (covered · partly held ·
+   * not held · unknown), and `.limitsTravelWithTheAnswer()` prints it.
+   */
+  readonly period?: DeclaredPeriod;
 }
+
+/**
+ * What a tool author passes to {@link import('./ledger.js').coverage}: the
+ * three lists, and the period the verdict's read covered (honesty step 7b).
+ * `coverage()` takes no `provenance` — a value that comes as rows from a
+ * system of record has `describedResult()`.
+ *
+ * @inline
+ */
+export type CoverageLedgerDeclaration = CoverageDeclaration & {
+  /**
+   * What the read behind this value covered in time — the instants it asked
+   * for, and what the store holds (or `'unknown'`). Refused when malformed.
+   */
+  readonly period?: DeclaredPeriod;
+};
 
 /**
  * The rendered absence — the exact object a tool hands back and the model
@@ -190,6 +235,12 @@ export interface ToolAbsence {
   /** The typed tool the suggestion points at (9.113.0), as declared — the
    *  author's words, `{ tool, why? }`. The model reads it as written. */
   readonly try_instead_tool?: TryInsteadTool;
+  /** Where the search looked and when that source was measured — the wire
+   *  `describedResult()` mints (`measured_at`, `source`, …), honesty step 7b. */
+  readonly provenance?: SemanticProvenance;
+  /** What the search's read covered in time — `queried`, `held` (or
+   *  `'unknown'`), `read_at` — honesty step 7b. */
+  readonly period?: PeriodOnWire;
   /** The static sentence. Never interpolated — see `absent.ts`. */
   readonly note: string;
 }
@@ -200,6 +251,9 @@ export interface CoveredResult<T = unknown> {
     readonly checked?: readonly CoverageItem[];
     readonly not_checked?: readonly CoverageItem[];
     readonly cannot_cover?: readonly CoverageItem[];
+    /** What the read behind the value covered in time — honesty step 7b.
+     *  Serialized before `result`, like the lists. */
+    readonly period?: PeriodOnWire;
     readonly note: string;
   };
   /** The tool's own answer, untouched. */
@@ -221,4 +275,11 @@ export interface DeclaredCoverage extends Coverage {
   readonly iteration: number;
   /** Present for `'absence'` only — what the search was for. */
   readonly lookedFor?: string;
+  /**
+   * The period the declaration said its read covered, in the record's
+   * camelCase form (honesty step 7b) — present only when the envelope declared
+   * a well-formed one. A described result with a period and no coverage lists
+   * files a `'ledger'` row whose three lists are empty.
+   */
+  readonly period?: DeclaredPeriod;
 }

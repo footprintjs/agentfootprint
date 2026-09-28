@@ -54,12 +54,20 @@ import { flowChart } from 'footprintjs';
 import type { FlowChart, FlowChartBuilder, StructureRecorder, TypedScope } from 'footprintjs';
 
 import { STAGE_IDS, SUBFLOW_IDS, milestoneTagsFor } from '../../../conventions.js';
+import { isRefused, rulesOf } from '../arguments/declare.js';
 import { keptThisTurn } from '../arguments/kept.js';
 import type { ArgumentRow } from '../arguments/rows.js';
 import type { ArgumentResolution, ToolOf } from '../arguments/resolve.js';
 import type { InputsLayerDeps, InputsLayerState } from '../arguments/subflow.js';
+import { copyPeriod, type DeclaredPeriod, type PeriodRow } from '../coverage/period.js';
 import { appendRows, emitRow, type FindingsScope } from '../findings/ledger.js';
 import type { FindingsRow } from '../findings/types.js';
+import type {
+  RanCall,
+  CallPeriod,
+  ResultsLayerDeps,
+  ResultsLayerState,
+} from '../results/subflow.js';
 import { willDispatch } from '../stages/route.js';
 import type { AgentState } from '../types.js';
 
@@ -183,6 +191,187 @@ export function mountInputsLayer<B extends FlowChartBuilder>(
     })
     .tag(...milestoneTagsFor(SUBFLOW_IDS.INPUTS));
 }
+
+// ─── The results layer — `sf-results`, at the loop head (honesty layer 3) ──
+
+/** What an armed agent hands the results layer's mount — closures, never scope. */
+export interface ResultsMountDeps {
+  /** The implementation that answered a name — the shared dispatch resolver's. */
+  readonly toolOf: ToolOf;
+}
+
+type ResultsStageModule = typeof import('../results/subflow.js');
+
+let resultsModule: Promise<ResultsStageModule> | undefined;
+
+/** The results layer's stage bodies, loaded once per process on first use. */
+function loadResultsStages(): Promise<ResultsStageModule> {
+  resultsModule ??= import('../results/subflow.js');
+  return resultsModule;
+}
+
+/** The ledger's emit half, one `findings.period` event per row, from inside the subflow. */
+function emitPeriodRows(scope: TypedScope<ResultsLayerState>, rows: readonly PeriodRow[]): void {
+  for (const row of rows) emitRow(scope as unknown as FindingsScope, row);
+}
+
+/**
+ * The argument a tool's `ToolPeriod` names — read off the implementation that
+ * answered the name, by the inputs layer's own reader (`arguments/declare.ts` ·
+ * `rulesOf`): a `ToolPeriod` is that layer's declaration, and this layer only
+ * reads it. A tool whose rules cannot be read declares nothing here (its calls
+ * were refused, never run).
+ */
+function periodArgumentOf(toolOf: ToolOf): (toolName: string) => string | undefined {
+  return (toolName) => {
+    const rules = rulesOf(toolOf(toolName));
+    return rules === undefined || isRefused(rules) ? undefined : rules.period?.argument;
+  };
+}
+
+/**
+ * The `sf-results` subflow: Declare → Verify → Record → Resolve, four thin
+ * stages over the pure steps of `results/subflow.ts`.
+ */
+export function buildResultsSubflow(deps: ResultsMountDeps): FlowChart {
+  const layer: ResultsLayerDeps = {
+    periodArgumentOf: periodArgumentOf(deps.toolOf),
+    emitRows: emitPeriodRows,
+  };
+  type Stage = (scope: TypedScope<ResultsLayerState>) => Promise<void>;
+  const declare: Stage = async (scope) =>
+    (await loadResultsStages()).declareResultsStage(scope, layer);
+  const verify: Stage = async (scope) => (await loadResultsStages()).verifyResultsStage(scope);
+  const record: Stage = async (scope) =>
+    (await loadResultsStages()).recordResultsStage(scope, layer);
+  const resolve: Stage = async () => (await loadResultsStages()).resolveResultsStage();
+  return flowChart<ResultsLayerState>('DeclareResults', declare, STAGE_IDS.DECLARE_RESULTS, {
+    description:
+      'Which calls of the batch just run declared a period, or come from a tool that declares one',
+  })
+    .addFunction(
+      'VerifyResults',
+      verify as never,
+      STAGE_IDS.VERIFY_RESULTS,
+      'The verdict on each period: covered, partly held, not held, unknown — or undeclared',
+    )
+    .addFunction(
+      'RecordResults',
+      record as never,
+      STAGE_IDS.RECORD_RESULTS,
+      'One period row per judged call, on the one ledger',
+    )
+    .addFunction(
+      'ResolveResults',
+      resolve as never,
+      STAGE_IDS.RESOLVE_RESULTS,
+      'Flag — a result that already ran is never asked about, filled or refused',
+    )
+    .build();
+}
+
+const isRecord = (value: unknown): value is Record<string, unknown> =>
+  typeof value === 'object' && value !== null && !Array.isArray(value);
+
+/**
+ * WHICH BATCH the loop head hands the results layer on this visit — the
+ * iteration that dispatched it, or `undefined` when there is none to judge.
+ *
+ * `stamp` is the iteration ToolCalls wrote beside the batch it dispatched
+ * (`AgentState.toolResultsIteration`, under the arm); `iteration` is the loop
+ * head's. ToolCalls advances the iteration by exactly one and loops straight
+ * here; every other way back — the schema re-ask, the step nudge, the evidence
+ * recheck, the wrap-up — runs no tool, leaves the batch in place and advances
+ * the iteration again. So the batch is new on this visit exactly when
+ * `iteration === stamp + 1`: each batch judged ONCE per run.
+ *
+ * Never by call id. A provider's synthetic counter restarts with each provider
+ * instance (`<prefix>-call-${++toolCallSeq}`), so a resumed leg repeats the ids
+ * of the leg that failed — whose rows the conversation checkpoint carries — and
+ * nothing stops a provider reusing an id across batches of one run. A stamp is
+ * per run: no conversation checkpoint carries it, so a resumed leg starts with
+ * none. Were the invariant above ever broken, a batch would be judged twice —
+ * an over-report, never a hidden verdict.
+ */
+export function batchToJudge(iteration: number, stamp: unknown): number | undefined {
+  return typeof stamp === 'number' && iteration === stamp + 1 ? stamp : undefined;
+}
+
+/**
+ * What the loop head hands the results layer — the batch's identities, the
+ * periods ITS results declared (the coverage rows of the batch's iteration, so
+ * a call id an earlier batch also used cannot lend it a period), and the
+ * stamps. Only on the first visit after ToolCalls ran the batch
+ * (`batchToJudge`); every other visit is handed an empty batch and reads
+ * nothing else, so the layer never reads a key the run has not written.
+ */
+function resultsLayerInput(parent: Record<string, unknown>): ResultsLayerState {
+  const batchIteration = batchToJudge(parent.iteration as number, parent.toolResultsIteration);
+  if (batchIteration === undefined) return { calls: [] };
+  const batch = (parent.toolResults as readonly unknown[] | undefined) ?? [];
+  const calls: RanCall[] = [];
+  for (const entry of batch) {
+    if (!isRecord(entry)) continue;
+    if (typeof entry.toolCallId !== 'string' || typeof entry.toolName !== 'string') continue;
+    calls.push({ toolCallId: entry.toolCallId, toolName: entry.toolName });
+  }
+  if (calls.length === 0) return { calls };
+  const ids = new Set(calls.map((c) => c.toolCallId));
+  const periods: CallPeriod[] = [];
+  for (const row of (parent.coverageDeclared as readonly unknown[] | undefined) ?? []) {
+    if (!isRecord(row) || row.iteration !== batchIteration || row.period === undefined) continue;
+    if (typeof row.toolCallId !== 'string' || !ids.has(row.toolCallId)) continue;
+    periods.push({ toolCallId: row.toolCallId, period: copyPeriod(row.period as DeclaredPeriod) });
+  }
+  return {
+    calls,
+    batchIteration,
+    turnNumber: parent.turnNumber as number,
+    ...(periods.length > 0 && { periods }),
+  };
+}
+
+/**
+ * Mount the results layer at the LOOP HEAD — or return the builder untouched
+ * when the layer is not armed (`deps === undefined`), so an agent without it
+ * builds the chart it always built. Both chart builders call this at the same
+ * place — immediately before the window strategy's `Compact` stage (or the
+ * loop target that stands there) — and make the mount the loop target
+ * (`RESULTS_LOOP_TARGET`), the `Compact` precedent: the layer reads the batch
+ * just run before any window strategy folds it away.
+ *
+ * Returned (the output mapping, `arrayMerge: Replace` — the loop-crossed mount
+ * law): the rows, merged into the ledger in ONE write by the ledger's pure
+ * half. Nothing to return → nothing is written.
+ */
+export function mountResultsLayer<B extends FlowChartBuilder>(
+  builder: B,
+  deps: ResultsMountDeps | undefined,
+): B {
+  if (deps === undefined) return builder;
+  return builder
+    .addSubFlowChartNext(SUBFLOW_IDS.RESULTS, buildResultsSubflow(deps), 'Results', {
+      inputMapper: resultsLayerInput,
+      outputMapper: (sf: Record<string, unknown>, parent: Record<string, unknown>) => {
+        const rows = (sf.periodRows as readonly PeriodRow[] | undefined) ?? [];
+        return rows.length === 0
+          ? {}
+          : {
+              // ONE committed copy per layer run — the rows this batch filed,
+              // merged by the ledger's pure half; the events already fired inside.
+              findingsLedger: appendRows(
+                [...((parent.findingsLedger as readonly FindingsRow[] | undefined) ?? [])],
+                rows,
+              ).ledger,
+            };
+      },
+      arrayMerge: ArrayMergeMode.Replace,
+    })
+    .tag(...milestoneTagsFor(SUBFLOW_IDS.RESULTS));
+}
+
+/** The loop target the results layer's mount becomes when armed — `tool-calls` and every re-ask loop back to it. */
+export const RESULTS_LOOP_TARGET: string = SUBFLOW_IDS.RESULTS;
 
 // ─── The answer layer (honesty layer 4) ─────────────────────────────────
 

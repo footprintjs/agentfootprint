@@ -154,6 +154,16 @@ describe.skipIf(!built)('the default browser graph of the root entry', () => {
     expect(graph.dynamicInputs.has('dist/esm/core/agent/arguments/resolve.js')).toBe(true);
   });
 
+  it('LAW: the results layer’s stage bodies are off the root sync closure — the mount loads them on first use', async () => {
+    // Only an agent with a `ToolPeriod` tool (or `.resultsLayer()`) mounts
+    // `sf-results`; its stage bodies load through `import()` from the mount.
+    // What the mount's synchronous input mapping needs (`batchToJudge`) lives
+    // in the mount itself, so it pulls nothing of the layer onto the graph.
+    const graph = await splitGraph(resolve(DIST, 'index.js'));
+    expect(graph.syncInputs.has('dist/esm/core/agent/results/subflow.js')).toBe(false);
+    expect(graph.dynamicInputs.has('dist/esm/core/agent/results/subflow.js')).toBe(true);
+  });
+
   it('LAW: the batch ask is off the root sync closure — ToolCalls loads it when an ask is raised', async () => {
     // Only a batch whose layer named an `ask` argument reaches it
     // (`stages/toolCalls.ts` → `import('./argumentAsk.js')`).
