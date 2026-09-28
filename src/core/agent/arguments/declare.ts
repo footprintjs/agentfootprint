@@ -23,7 +23,8 @@
  *     the typed ask (`core/inputRequest.ts`); the answer is filled and
  *     recorded as `answered` (`arguments/ask.ts`). A PRESENT value runs,
  *     recorded as the model's own — unless declared sources are armed
- *     (`.findings({ argumentSources: true })`): then the model says where it
+ *     (`.inputsLayer({ argumentSources: true })`, or `.findings({ argumentSources:
+ *     true })` beside the ledger): then the model says where it
  *     came from, the library checks it (`checks.ts` · `checkSource`), and a
  *     value the check does not trace is asked about too. A choice may carry
  *     phrases the author vouches for (`{ value, said }`), matched only inside

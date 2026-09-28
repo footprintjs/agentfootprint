@@ -98,6 +98,7 @@ import {
   FINDINGS_INSTRUCTION_ID,
   findingsInstructionFor,
 } from './findings/reserved.js';
+import { readInputsLayerOption } from './honesty/armed.js';
 import { ONTOLOGY_INSTRUCTION, ONTOLOGY_INSTRUCTION_ID } from '../../ontology/instruction.js';
 import type { CompactionOptions } from './window/types.js';
 import type { WindowStrategy } from './window/strategy.js';
@@ -340,8 +341,12 @@ export class AgentBuilder {
   private limitsTravelValue = false;
   /** `.inputsLayer()` (honesty layer 2). False for every agent that did not
    *  ask for it; a REGISTERED ruled tool arms the layer on its own, so this
-   *  is only for ruled tools a ToolProvider serves. */
+   *  is for ruled tools a ToolProvider serves — and for declared sources
+   *  without the findings ledger (`inputsLayerSourcesValue`). */
   private inputsLayerValue = false;
+  /** `.inputsLayer({ argumentSources: true })` (honesty layer 2): declared
+   *  sources without the findings ledger. False unless asked for. */
+  private inputsLayerSourcesValue = false;
 
   private outputSchemaRetries = 0;
   private outputSchemaStrategy: OutputSchemaStrategy = 'instruct';
@@ -1938,6 +1943,17 @@ export class AgentBuilder {
    * because configured-and-inert looks exactly like configured-and-working.
    * This one line mounts the layer so those tools' rules apply.
    *
+   * `argumentSources: true` arms DECLARED SOURCES without the findings
+   * ledger: each ruled tool's served schema carries the reserved `_findings`
+   * argument with `from` alone — where each argument value came from (the
+   * person's words as a `quote`, a result's `id`, an earlier answer, the app,
+   * or `'assumed'`) — and the layer CHECKS each claim before the batch runs;
+   * under an `ask` rule a value the checks do not trace is asked of the
+   * person. The same checks and rows as `.findings({ argumentSources: true })`,
+   * without the ledger's `_findings` schema on every tool (about 2,500
+   * characters each) — `.findings()` beside it serves both, exactly as that
+   * door does.
+   *
    * Off → the chart is byte-identical (nothing mounted, decorated, read or
    * written).
    *
@@ -1946,15 +1962,35 @@ export class AgentBuilder {
    *     .toolProvider(fleetTools)   // lists a tool that declares askOrAssume
    *     .inputsLayer()
    *     .build();
+   *
+   * @example
+   *   // The model says where each ruled value came from; the library checks it.
+   *   const agent = Agent.create({ provider, model })
+   *     .tool(searchLogs)           // declares askOrAssume: { window: { ask, choices } }
+   *     .inputsLayer({ argumentSources: true })
+   *     .build();
    */
-  inputsLayer(): this {
+  inputsLayer(options?: { readonly argumentSources?: boolean }): this {
     if (this.inputsLayerValue) {
       throw new Error(
         'AgentBuilder.inputsLayer: already set. One agent mounts one inputs layer, over every ' +
           'ruled tool it can call — a second call has nothing left to add. Drop it.',
       );
     }
+    if (options !== undefined && (options === null || typeof options !== 'object')) {
+      throw new Error(
+        `AgentBuilder.inputsLayer: expected an options object or nothing, got ${typeof options}.`,
+      );
+    }
+    const argumentSources = options?.argumentSources;
+    if (argumentSources !== undefined && typeof argumentSources !== 'boolean') {
+      throw new Error(
+        `AgentBuilder.inputsLayer: argumentSources must be true or false, got ` +
+          `${JSON.stringify(argumentSources)}.`,
+      );
+    }
     this.inputsLayerValue = true;
+    this.inputsLayerSourcesValue = argumentSources === true;
     return this;
   }
 
@@ -2107,14 +2143,17 @@ export class AgentBuilder {
    *
    * `argumentSources: true` (honesty layer 2, declared sources) — on a tool
    * that declares argument rules (`askOrAssume`), the reserved argument also
-   * carries `from`: the model says where each argument value came from (the
-   * person's words as a `quote`, a result's `id`, an earlier answer, the app,
-   * or `'assumed'`), and the inputs layer CHECKS each claim before the batch
-   * runs and files the verdict on the call's argument rows — under an `ask`
-   * rule, a value the checks do not trace is asked of the person. One more
-   * instruction line is registered. It needs the inputs layer (a registered
-   * ruled tool, or `.inputsLayer()`) and is refused at build without it. Off
-   * (the default): nothing is served, read or written.
+   * carries `from`, first and required: the model says where each argument
+   * value came from (the person's words as a `quote`, a result's `id`, an
+   * earlier answer, the app, or `'assumed'`), and the inputs layer CHECKS each
+   * claim before the batch runs and files the verdict on the call's argument
+   * rows — under an `ask` rule, a value the checks do not trace is asked of the
+   * person, and the rule's sentence names `_findings.from`. No instruction line
+   * is added: `from` explains itself in its own property. It needs the inputs
+   * layer (a registered ruled tool, or `.inputsLayer()`) and is refused at
+   * build without it. The same arm WITHOUT this ledger:
+   * `.inputsLayer({ argumentSources: true })`. Off (the default): nothing is
+   * served, read or written.
    *
    * Once per agent (a second call is refused, the `.window()` grammar).
    * Registers the always-on `findings-ledger` instruction — the byte-for-byte
@@ -2188,6 +2227,8 @@ export class AgentBuilder {
     // Declared sources (honesty layer 2): a boolean, or nothing. It needs the
     // inputs layer, which only the whole agent can say is armed — `Agent`
     // refuses it at build when no ruled tool and no `.inputsLayer()` arm one.
+    // (`.inputsLayer({ argumentSources: true })` arms the same thing without
+    // this ledger.)
     const argumentSources = options?.argumentSources;
     if (argumentSources !== undefined && typeof argumentSources !== 'boolean') {
       throw new Error(
@@ -3139,8 +3180,18 @@ export class AgentBuilder {
             ...(this.toolChoiceValue !== undefined && { toolChoice: this.toolChoiceValue }),
             // The declared ontology (9.106.0), the same door grammar.
             ...(this.ontologyValue !== undefined && { ontology: this.ontologyValue }),
-            // The inputs layer (honesty layer 2), the same door grammar.
-            ...(this.inputsLayerValue && { inputsLayer: true }),
+            // The inputs layer (honesty layer 2), the same door grammar — its
+            // object form only when it also arms declared sources. The door
+            // MERGES with an `inputsLayer` option given to `Agent.create`: sources
+            // armed by either stay armed, and a malformed option is still refused
+            // by the one reader rather than silently replaced by the door's value.
+            ...(this.inputsLayerValue && {
+              inputsLayer:
+                this.inputsLayerSourcesValue ||
+                readInputsLayerOption(this.opts.inputsLayer)?.argumentSources === true
+                  ? { argumentSources: true }
+                  : true,
+            }),
           }
         : this.opts;
     // .selfExplain(): a fresh binding per build() — two built agents never
@@ -3178,19 +3229,15 @@ export class AgentBuilder {
     // registered by `.findings()` is rebuilt in place, same id, same
     // activation, so an agent with the ledger alone keeps the exact bytes
     // `.findings()` registered.
-    // THE SOURCES LINE (honesty layer 2) — the same rebuild, one more line,
-    // under `.findings({ argumentSources: true })` only.
-    const sourcesArmed = this.findingsValue?.argumentSources === true;
-    if (this.findingsValue !== undefined && (this.evidenceGate !== undefined || sourcesArmed)) {
+    // Declared sources (honesty layer 2) add NO line: `from` is explained
+    // once, in its own property on the ruled tools that carry it.
+    if (this.findingsValue !== undefined && this.evidenceGate !== undefined) {
       const at = this.injectionList.findIndex((i) => i.id === FINDINGS_INSTRUCTION_ID);
       if (at >= 0) {
         this.injectionList[at] = defineInstruction({
           id: FINDINGS_INSTRUCTION_ID,
           activeWhen: () => true,
-          prompt: findingsInstructionFor({
-            contingent: this.evidenceGate !== undefined,
-            ...(sourcesArmed && { argumentSources: true }),
-          }),
+          prompt: findingsInstructionFor({ contingent: true }),
         });
       }
     }

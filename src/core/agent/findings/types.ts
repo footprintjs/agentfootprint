@@ -107,10 +107,11 @@ export interface FindingsDeclaration {
   readonly predicts?: string;
   readonly previous?: readonly PreviousStanding[];
   /**
-   * Where each argument value of THIS call came from — read only under
-   * `.findings({ argumentSources: true })` (the inputs layer's declared
-   * sources, `arguments/sources.ts` · `readSources`); ignored otherwise, as an
-   * unknown key always was. A claim the library checks, never evidence.
+   * Where each argument value of THIS call came from — read only under the
+   * inputs layer's declared sources (`.inputsLayer({ argumentSources: true })`
+   * or `.findings({ argumentSources: true })`, `arguments/sources.ts` ·
+   * `readSources`); ignored otherwise, as an unknown key always was. A claim
+   * the library checks, never evidence.
    */
   readonly from?: readonly DeclaredSource[];
 }

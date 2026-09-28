@@ -33,7 +33,7 @@
  * The stage bodies (`arguments/subflow.ts`) load through `import()` on first
  * use — the optional-family law — so a plain agent's graph never carries them.
  *
- * ## Declared sources (`.findings({ argumentSources: true })`)
+ * ## Declared sources (`.findings({ argumentSources: true })`, `.inputsLayer({ argumentSources: true })`)
  *
  * Under the arm the mount also hands the layer the RAW pieces its checks read
  * (`sourceInputs`): the served history, the composed system prompt's records,
@@ -75,14 +75,23 @@ export interface InputsMountDeps {
    */
   readonly rewrites?: true;
   /**
-   * DECLARED SOURCES ARE ARMED (`.findings({ argumentSources: true })`) —
-   * present only then. The mount hands the layer the pieces its checks read
+   * DECLARED SOURCES ARE ARMED (`.findings({ argumentSources: true })` or
+   * `.inputsLayer({ argumentSources: true })`) — present only then. The mount hands the layer the pieces its checks read
    * and the closures that read them; `externalGrounds` is the app's own
    * vouched-for values (`AgentOptions.externalGrounds`), an `app` source with
    * its label.
    */
   readonly sources?: {
     readonly externalGrounds?: () => readonly ExternalGround[];
+    /**
+     * The findings ledger is armed beside declared sources (`.findings()`) —
+     * present only then: a call that declares a basis files a BASIS row in
+     * ToolCalls, and that row carries the count of dropped `from` entries.
+     * Absent (declared sources without the ledger), no basis row is ever
+     * filed, so the count rides the call's first argument row
+     * (`sourceCorpus.ts` · `declaredSourcesOf`).
+     */
+    readonly basisRows?: true;
     /**
      * A tool in reach may carry an arguments view — one the agent registers
      * carries one (`core/toolShownArgs.ts` · `carriesArgumentView`), or a
@@ -163,7 +172,12 @@ export function buildInputsSubflow(deps: InputsMountDeps): FlowChart {
       ...base,
       sources: {
         ...(sources.argumentViews === true && { argumentViews: true as const }),
-        declaredOf: (calls: readonly BatchCall[]) => corpus.declaredSourcesOf(calls, deps.toolOf),
+        declaredOf: (calls: readonly BatchCall[]) =>
+          corpus.declaredSourcesOf(
+            calls,
+            deps.toolOf,
+            sources.basisRows === true ? { basisRows: true } : undefined,
+          ),
         corpusOf: async (
           inputs: SourceInputs,
           calls: readonly BatchCall[],

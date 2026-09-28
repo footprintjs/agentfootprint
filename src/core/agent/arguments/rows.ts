@@ -66,7 +66,8 @@ export type ArgumentCheckFailed =
  * `invalid-answer`), and `source: 'answered'` (the person's answer filled the
  * value; `free` when it came through a free-text field).
  *
- * Under declared sources (`.findings({ argumentSources: true })`) a present
+ * Under declared sources (`.inputsLayer({ argumentSources: true })` or
+ * `.findings({ argumentSources: true })`) a present
  * value's row also carries the model's claim and the library's check of it
  * (`sourcedRowOf`): `claimed` (`'none'` when it declared nothing), `source`
  * `said` / `result` / `app` / `answered` when the check traced it (`matched`,
@@ -340,7 +341,7 @@ export interface SourcedVerdict {
 
 /**
  * The row for one argument the declared-sources check judged (honesty layer
- * 2, `.findings({ argumentSources: true })`): the identity, the verdict's
+ * 2, declared sources): the identity, the verdict's
  * source (or `asked: 'unverified'` — the person is asked, and nothing runs on
  * the model's value), the value in the tool's own view, and every field of the
  * claim and the check as the verdict carries it. Written in the one field order

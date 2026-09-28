@@ -74,6 +74,7 @@ import {
   FINDINGS_ARGUMENT_SCHEMA,
   FINDINGS_FROM_PROPERTY,
   FINDINGS_INSTRUCTION,
+  FINDINGS_SOURCES_SCHEMA,
   findingsInstructionFor,
 } from '../src/core/agent/findings/reserved.js';
 import { findingsLedgerPiece } from '../src/core/agent/findings/serve.js';
@@ -729,11 +730,14 @@ function ruledSchemaDescriptions(): string[] {
     askOrAssume: { window: { ask: 'Which period?', choices: ['1h', '2h'] } },
     execute: () => 'ok',
   });
-  return [tool, hiding, asking].flatMap((t) => {
-    const served = withArgumentRules(t.schema, t as never);
-    const props = served.inputSchema.properties as Record<string, { description?: string }>;
-    return Object.values(props).flatMap((p) => (p.description ? [p.description] : []));
-  });
+  // …both under declared sources too (step 5): the `ask` sentence names `_findings.from`.
+  return [tool, hiding, asking].flatMap((t) =>
+    [undefined, { sources: true }].flatMap((options) => {
+      const served = withArgumentRules(t.schema, t as never, options);
+      const props = served.inputSchema.properties as Record<string, { description?: string }>;
+      return Object.values(props).flatMap((p) => (p.description ? [p.description] : []));
+    }),
+  );
 }
 
 /** Both refusals, the dispatch re-read's composed from the REAL assert's own sentence. */
@@ -927,19 +931,16 @@ function findingsSchemaDescriptions(schema: unknown = FINDINGS_ARGUMENT_SCHEMA):
 }
 
 /**
- * The declared-sources arm's two served surfaces (honesty layer 2, step 5):
- * the `from` property planted on a RULED tool's `_findings`, and the one line
- * the findings instruction gains. Both ride the request only — the property
- * is rebuilt onto every served schema, the line is an injection-engine system
- * piece — but they are judged at the STRICTEST lifetime (the design's rule for
- * every served honesty sentence).
+ * The declared-sources arm's served surface (honesty layer 2, step 5): the
+ * `from` property planted on a RULED tool's `_findings` — inside the ledger's
+ * decoration, or alone (`FINDINGS_SOURCES_SCHEMA`, declared sources without
+ * the ledger). It rides the request only — rebuilt onto every served schema —
+ * but it is judged at the STRICTEST lifetime (the design's rule for every
+ * served honesty sentence). There is no instruction line any more: `from` is
+ * explained once, in its own property.
  */
 const DECLARED_SOURCES_PROPERTY: Surface = {
   channel: 'tool-description',
-  lifetime: 'persistent-history',
-};
-const DECLARED_SOURCES_LINE: Surface = {
-  channel: 'system-text',
   lifetime: 'persistent-history',
 };
 
@@ -1460,6 +1461,8 @@ const PRODUCERS: readonly ModelFacingProducer[] = [
       /If left out, the tool's rule fills 50, recorded as assumed\./,
       /fills a declared value \(hidden by the tool's view\)/,
       /^Look-back period\. The tool's rule asks the person for this value; leave it out unless the person gave it\.$/m,
+      // Step 5 (declared sources): the same rule, and where the model says the person gave it.
+      /^Look-back period\. The tool's rule asks the person for this value; leave it out unless the person gave it, and then quote their words for it in `_findings\.from`\.$/m,
     ],
     compose: async () => ruledSchemaDescriptions(),
   },
@@ -1480,6 +1483,9 @@ const PRODUCERS: readonly ModelFacingProducer[] = [
       // Step 5 (declared sources): the answer REPLACED a value the call carried.
       /window = "24h" in the search_logs call this result answers was chosen by the person when asked \(the call had carried "2h"\)/,
       /\(the value is hidden by the tool's view; the call had carried a value of its own\)/,
+      // …and, under the arm, a later call may cite the answer (never for a hidden one).
+      /was chosen by the person when asked \(the call had left it out\); a later call may cite that answer in `_findings\.from` with source 'turn'\.\]$/m,
+      /\(the call had carried "2h"\); a later call may cite that answer in `_findings\.from` with source 'turn'\.\]$/m,
     ],
     compose: async () => [
       filledNote('search_logs', [{ argument: 'window', value: '2h', hidden: false }]),
@@ -1496,6 +1502,25 @@ const PRODUCERS: readonly ModelFacingProducer[] = [
       filledNote('search_logs', [
         { argument: 'window', value: '24h', hidden: true, source: 'answered', carried: '2h' },
       ]),
+      // Declared sources: the `turn` clause — and a hidden answer, which gets none.
+      filledNote(
+        'search_logs',
+        [{ argument: 'window', value: '24h', hidden: false, source: 'answered' }],
+        { sources: true },
+      ),
+      filledNote(
+        'search_logs',
+        [{ argument: 'window', value: '24h', hidden: false, source: 'answered', carried: '2h' }],
+        { sources: true },
+      ),
+      filledNote(
+        'search_logs',
+        [{ argument: 'window', value: '24h', hidden: true, source: 'answered' }],
+        { sources: true },
+      ),
+      filledNote('search_logs', [{ argument: 'window', value: '2h', hidden: false }], {
+        sources: true,
+      }),
     ],
   },
   {
@@ -1545,46 +1570,25 @@ const PRODUCERS: readonly ModelFacingProducer[] = [
     surface: DECLARED_SOURCES_PROPERTY,
     lifetimeBecause:
       "a property of the served copy of a RULED tool's schema, planted by `withFindingsArgument` " +
-      '(its `from` option) at the one decoration site and its seed twin, rebuilt per request — ' +
-      'judged at the strictest lifetime anyway, because it says what the model may declare and ' +
-      'promises nothing a later path can break',
-    drivenBy: ['test/core/agent/arguments/sources-layer.test.ts'],
-    // Every description the property carries: the array's, and each field's.
-    reaches: [
-      /^Optional: where each argument value of the call came from, one entry per argument\. Leave an argument out rather than guess\.$/m,
-      /^The argument's name in the call\.$/m,
-      /^source 'user': the person's words the value came from, copied exactly\.$/m,
-      /^source 'result': the tool_result id, as listed for previous\[\]\.toolCallId\.$/m,
-    ],
-    compose: async () => findingsSchemaDescriptions(FINDINGS_FROM_PROPERTY),
-  },
-  {
-    id: 'inputs layer — the SOURCES line of the findings instruction (honesty layer 2, step 5)',
-    module: 'src/core/agent/findings/reserved.ts',
-    surface: DECLARED_SOURCES_LINE,
-    lifetimeBecause:
-      'the same `findings-ledger` instruction as the rows above — `AgentBuilder.build` rebuilds it ' +
-      'in place with `FINDINGS_SOURCES_LINE` as one more line under `.findings({ argumentSources: ' +
-      'true })` only, a system piece recomposed on every pass; judged at the strictest lifetime ' +
-      'because it states what the model may declare and what the record keeps',
+      '(its `from` option) or, without the ledger, by `withSourcesArgument` at the one decoration ' +
+      'site and its seed twin, rebuilt per request — judged at the strictest lifetime anyway, ' +
+      'because it says what the model may declare and what the record keeps, and promises ' +
+      'nothing a later path can break',
     drivenBy: [
       'test/core/agent/arguments/sources-layer.test.ts',
-      'test/core/tools/byte-identity.test.ts',
+      'test/core/agent/arguments/sources-served.test.ts',
     ],
-    // Each source the line names, and what the record does with an entry.
+    // Every description the property carries — the array's, the source's, the quote's — and
+    // the sources-only decoration's own (the versioned marker alone).
     reaches: [
-      /^Findings v1\./,
-      /`_findings\.from`, on a call to a tool whose schema carries it/,
-      /'user' with the person's exact words as `quote` \(from any of their messages\)/,
-      /'result' with the tool_result `id`/,
-      /'turn' when the person gave it earlier as an answer to a question the run asked/,
-      /'app' when your instructions carry it/,
-      /'assumed' when you chose it/,
-      /Each entry is recorded with the library's check of it\.$/m,
+      /^Where each argument value the call sends came from, one entry per value, recorded with the library's check of it; a value with no entry has no declared source on the record\.$/m,
+      /^'user': the person's words \(quote\); 'result': a tool result \(id\); 'turn': their answer when the run asked them; 'app': your instructions; 'assumed': your own choice\.$/m,
+      /^Copied exactly from the person's messages\.$/m,
+      /^Findings v1 \(reserved by the agent runtime\)\.$/m,
     ],
     compose: async () => [
-      findingsInstructionFor({ contingent: false, argumentSources: true }),
-      findingsInstructionFor({ contingent: true, argumentSources: true }),
+      ...findingsSchemaDescriptions(FINDINGS_FROM_PROPERTY),
+      ...findingsSchemaDescriptions(FINDINGS_SOURCES_SCHEMA),
     ],
   },
   {

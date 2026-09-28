@@ -258,7 +258,7 @@ call leaves out is asked of the person, once for the whole batch and before
 anything in it runs, through the typed input pause. See
 [Collect missing inputs](doc:input-requests).
 
-**Where a value the model DID send came from** — `.findings({ argumentSources:
+**Where a value the model DID send came from** — `.inputsLayer({ argumentSources:
 true })`: the model declares each value's source (the person's words, a result,
 an earlier answer, the app) and the library checks it before the call runs; an
 unchecked value on an `ask` argument is asked. A choice may carry words you vouch

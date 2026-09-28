@@ -352,7 +352,7 @@ function readArgumentVerdicts(
     of: rows.length,
     witness,
   });
-  // The declared-sources check (`.findings({ argumentSources: true })`) — the rows it
+  // The declared-sources check (either door: `.inputsLayer` or `.findings`) — the rows it
   // judged carry `claimed`; `uncheckable` is a check that reached no verdict.
   const judged = rows.filter((r) => r.sourced !== undefined);
   if (judged.length > 0) {

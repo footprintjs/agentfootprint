@@ -22,7 +22,7 @@
  * going to the final branch, so nothing is planned and every later stage finds
  * an empty plan. The layer never files a row about a call Route will not run.
  *
- * ## Declared sources (`.findings({ argumentSources: true })`)
+ * ## Declared sources (`.inputsLayer({ argumentSources: true })`, `.findings({ argumentSources: true })`)
  *
  * Present only under the arm: `deps.sources` reads each call's `from` entries
  * through the ONE reader of `_findings` (`findings/reserved.ts` ·
@@ -112,7 +112,8 @@ export interface InputsLayerDeps {
   }) => boolean;
   /** The ledger's emit half — one `findings.argument` event per row. */
   readonly emitRows: (scope: TypedScope<InputsLayerState>, rows: readonly ArgumentRow[]) => void;
-  /** Present exactly under declared sources (`.findings({ argumentSources: true })`). */
+  /** Present exactly under declared sources (either door: `.inputsLayer({ argumentSources: true })`
+   *  or `.findings({ argumentSources: true })`). */
   readonly sources?: {
     /**
      * A tool the agent registers carries an arguments view — present only

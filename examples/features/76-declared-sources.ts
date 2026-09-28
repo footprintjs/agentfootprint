@@ -1,5 +1,5 @@
 /**
- * 76 — where each value came from, CHECKED: `.findings({ argumentSources: true })`.
+ * 76 — where each value came from, CHECKED: `.inputsLayer({ argumentSources: true })`.
  *
  * The person asks "any errors on checkout over the last week?". The log search's
  * period is the person's to give (`askOrAssume: { window: { ask, choices } }`), and
@@ -16,10 +16,17 @@
  *   - a second turn sends `24h` quoting "any errors on checkout" — the words are
  *     the person's, the value is not in them: a READING. Under an `ask` rule a
  *     reading is asked, and the ask shows the person their own words (`quoted`) —
- *     never the model's value. The answer replaces the value, and the row says so.
+ *     never the model's value. The answer replaces the value, and the row says so;
+ *     the result's note adds that a later call may cite that answer;
+ *   - a third turn re-uses the answer and cites it (`source: 'turn'`): it is the
+ *     person's earlier answer, so the call runs without asking again.
  *
  * A pass keeps a reason from firing and supports nothing: the first answer's
  * standing reads "consistent with the record", never "known".
+ *
+ * `.inputsLayer({ argumentSources: true })` plants `_findings` — with `from` alone —
+ * on the ruled tool only; `.findings({ argumentSources: true })` arms the same
+ * checks beside the findings ledger, whose own `_findings` rides every tool.
  *
  * Run:  npm run example examples/features/76-declared-sources.ts
  */
@@ -33,10 +40,11 @@ export const meta: ExampleMeta = {
   title: 'Where each value came from — the model declares it, the library checks it',
   group: 'features',
   description:
-    'Under .findings({ argumentSources: true }) the model declares each argument value’s source in ' +
-    '_findings.from (the person’s words as a quote, a result id, an earlier answer, the app, or ' +
+    'Under .inputsLayer({ argumentSources: true }) the model declares each argument value’s source ' +
+    'in _findings.from (the person’s words as a quote, a result id, an earlier answer, the app, or ' +
     '"assumed"). The library checks the claim before the call runs: a declared phrase makes "over ' +
-    'the last week" check out as 7d; a value the words do not hold is a reading, and the person is asked.',
+    'the last week" check out as 7d; a value the words do not hold is a reading, and the person is ' +
+    'asked; the answer, cited later as an earlier answer, runs without asking again.',
   defaultInput: 'Any errors on checkout over the last week?',
   // Scripted on purpose: the model's declaration is the case, and a live model may not make it.
   providerSlots: [],
@@ -89,7 +97,6 @@ function buildAgent(ran: Record<string, unknown>[]) {
                 service: 'checkout',
                 window: '7d',
                 _findings: {
-                  basis: 'direct',
                   from: [{ argument: 'window', source: 'user', quote: 'over the last week' }],
                 },
               },
@@ -107,7 +114,6 @@ function buildAgent(ran: Record<string, unknown>[]) {
                 service: 'payments',
                 window: '24h',
                 _findings: {
-                  basis: 'direct',
                   from: [{ argument: 'window', source: 'user', quote: 'and on payments' }],
                 },
               },
@@ -115,12 +121,27 @@ function buildAgent(ran: Record<string, unknown>[]) {
           ],
         },
         { content: 'No errors on payments in the last hour.' },
+        // Turn 3 — the same period again, cited as the person's earlier answer.
+        {
+          toolCalls: [
+            {
+              id: 'call-3',
+              name: 'search_logs',
+              args: {
+                service: 'search',
+                window: '1h',
+                _findings: { from: [{ argument: 'window', source: 'turn' }] },
+              },
+            },
+          ],
+        },
+        { content: 'No errors on search in the last hour.' },
       ],
     }),
     model: 'small-model',
   })
     .tool(searchLogsTool(ran))
-    .findings({ argumentSources: true })
+    .inputsLayer({ argumentSources: true })
     .build();
 }
 // #endregion declared-sources
@@ -144,6 +165,8 @@ export async function run(input: string): Promise<string> {
     requestId: paused.awaitingInput.requestId,
     values: { f1: '1h' },
   });
+  // Turn 3 cites that answer (`source: 'turn'`) — it runs, and nobody is asked again.
+  const third = await agent.followUp('And on search?');
   // #endregion checked
 
   const rows = (agent.findings() ?? []).filter((r): r is ArgumentRow => r.kind === 'argument');
@@ -160,6 +183,7 @@ export async function run(input: string): Promise<string> {
     ),
   );
   console.log('turn 2:', second);
+  console.log('turn 3:', third);
 
   check(standing.standing === 'consistent', 'a checked quote to read "consistent", never "known"');
   check(
@@ -171,10 +195,15 @@ export async function run(input: string): Promise<string> {
     'the reading to be asked',
   );
   check(
-    ran.length === 2 && ran[0]!.window === '7d' && ran[1]!.window === '1h',
+    ran.length === 3 && ran[0]!.window === '7d' && ran[1]!.window === '1h',
     'the second call to run with the person’s answer, not the model’s reading',
   );
-  return `${standing.standing} → asked → ${String(second)}`;
+  check(
+    rows.some((r) => r.toolCallId === 'call-3' && r.source === 'answered' && r.earlier === true) &&
+      !rows.some((r) => r.toolCallId === 'call-3' && r.asked !== undefined),
+    'the cited earlier answer to run without asking again',
+  );
+  return `${standing.standing} → asked → ${String(second)} → ${String(third)}`;
 }
 
 if (isCliEntry(import.meta.url)) {

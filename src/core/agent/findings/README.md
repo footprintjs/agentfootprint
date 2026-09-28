@@ -1013,9 +1013,18 @@ reserved argument carries one more part, on the calls of a RULED tool:
 ```
 
 - **Served** only there: `withFindingsArgument(schema, offer, { from: true })` plants
-  `FINDINGS_FROM_PROPERTY` after the base's own keys, on a tool that carries argument rules
-  (`arguments/declare.ts` · `carriesRules`); every other tool keeps the base by reference. The
-  instruction gains one line (`FINDINGS_SOURCES_LINE`, through `findingsInstructionFor`).
+  `FINDINGS_FROM_PROPERTY` FIRST and adds it to the property's `required` (`['basis',
+  'from']`), on a tool that carries argument rules (`arguments/declare.ts` · `carriesRules`);
+  every other tool keeps the base by reference. `from` is explained ONCE, in its own property
+  (its sources, a quote copied exactly, and what the record keeps) — the instruction gains no
+  line: the first cut served a second explanation in the system prompt and paid for it twice.
+- **Without this ledger** (`.inputsLayer({ argumentSources: true })`, no `.findings()`) the
+  same `from` is planted alone: `withSourcesArgument` plants `FINDINGS_SOURCES_SCHEMA` (the
+  versioned marker as its description, `from` required) on ruled tools only, so every other
+  tool — and the system prompt — is served as on a plain agent. `withoutFindingsArgument`
+  recognises it by the marker like every decoration, and `carriesFindingsDecoration` answers
+  for a served schema whether the model's `_findings` on it is a declaration: the choice seam
+  peels exactly those calls when only ruled tools carry it.
 - **Read** by the one reader, `readDeclaration(raw, { argumentSources: true }, args)`, through
   `arguments/sources.ts` · `readSources`: a `from`-only declaration is readable, a malformed
   entry is dropped and counted (`sourcesMalformed`, and into `malformed`), judged against the
@@ -1047,7 +1056,8 @@ reserved argument carries one more part, on the calls of a RULED tool:
 - `reserved.ts` — `FINDINGS_ARGUMENT_SCHEMA`, `FINDINGS_OFFER_CAP`,
   `withFindingsArgument`, `withoutFindingsArgument`, `splitFindings`,
   `FINDINGS_INSTRUCTION`, `FINDINGS_CONTINGENT_LINE` /
-  `findingsInstructionFor`, `FINDINGS_ANSWER_ASK`.
+  `findingsInstructionFor`, `FINDINGS_ANSWER_ASK`; declared sources' `FINDINGS_FROM_PROPERTY`,
+  `FINDINGS_SOURCES_SCHEMA` / `withSourcesArgument` and `carriesFindingsDecoration`.
 - `peel.ts` — `peelAnswerFindings`, plus `answerText.ts`'s
   `reservedMemberFilter` / `withoutReservedMembers` re-exported: the ONE
   module that statically imports the scanner, loaded through `import()` by

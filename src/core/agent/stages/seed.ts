@@ -29,7 +29,7 @@ import type { FoldedSpan } from '../window/types.js';
 import type { MessageMiddleware } from '../middleware/types.js';
 import { runMessageChain } from '../middleware/runChain.js';
 import { recordDecisions } from '../middleware/ledger.js';
-import { withFindingsArgument } from '../findings/reserved.js';
+import { withFindingsArgument, withSourcesArgument } from '../findings/reserved.js';
 import { carriesRules } from '../arguments/declare.js';
 import type { HonestyLayers } from '../honesty/armed.js';
 import type { FindingsLedger } from '../findings/types.js';
@@ -132,12 +132,15 @@ export interface SeedStageDeps {
   readonly honestyLayers?: HonestyLayers;
   /**
    * DECLARED SOURCES ARE ARMED (honesty layer 2, `.findings({
-   * argumentSources: true })`) — present only then, only ever `true`. The
-   * static tool list seeded for iteration 1 plants `_findings.from` on each
-   * RULED tool (`findings/reserved.ts` · `withFindingsArgument`'s `from`), as
-   * the tools slot does on every later call; and a run whose caller passed
-   * `messageFrom: 'composed'` records the run constant `userMessageFrom`,
-   * which the checks read. Absent → neither.
+   * argumentSources: true })` or `.inputsLayer({ argumentSources: true })`) —
+   * present only then, only ever `true`. The static tool list seeded for
+   * iteration 1 plants `_findings.from` on each RULED tool, as the tools slot
+   * does on every later call — inside the ledger's decoration beside
+   * `findings` (`findings/reserved.ts` · `withFindingsArgument`'s `from`), or
+   * alone without it (`withSourcesArgument`) — and an `ask` rule's sentence
+   * names `_findings.from` (`arguments/serve.ts` · `ASK_SOURCES_SENTENCE`); a
+   * run whose caller passed `messageFrom: 'composed'` records the run constant
+   * `userMessageFrom`, which the checks read. Absent → none of it.
    */
   readonly argumentSources?: true;
   /**
@@ -595,16 +598,24 @@ function seedFrom(
   // The inputs layer's rules decorate FIRST (honesty layer 2) — the slot's
   // order: rules, then `_findings`. Only when a registered tool is ruled.
   const ruledTools = deps.ruledTools;
+  const ruleOptions = deps.argumentSources === true ? { sources: true } : undefined;
   const ruled =
     ruledTools === undefined || decorate === undefined
       ? deps.toolSchemas
-      : deps.toolSchemas.map((s) => decorate(s, ruledTools.get(s.name)));
-  // Declared sources (honesty layer 2): a ruled tool's decoration carries `from`.
+      : deps.toolSchemas.map((s) => decorate(s, ruledTools.get(s.name), ruleOptions));
+  // Declared sources (honesty layer 2): a ruled tool's decoration carries `from` —
+  // inside the ledger's `_findings` under `.findings()`, or as the reserved
+  // argument's only property without it (the slot's `sourcesOnWire` twin).
+  const isRuled = (s: LLMToolSchema): boolean =>
+    deps.argumentSources === true && carriesRules(ruledTools?.get(s.name));
   const planted = (s: LLMToolSchema): LLMToolSchema =>
-    deps.argumentSources === true && carriesRules(ruledTools?.get(s.name))
-      ? withFindingsArgument(s, [], { from: true })
-      : withFindingsArgument(s);
-  scope.dynamicToolSchemas = deps.findings === true ? ruled.map((s) => planted(s)) : ruled;
+    isRuled(s) ? withFindingsArgument(s, [], { from: true }) : withFindingsArgument(s);
+  scope.dynamicToolSchemas =
+    deps.findings === true
+      ? ruled.map((s) => planted(s))
+      : deps.argumentSources === true && ruled.some(isRuled)
+      ? ruled.map((s) => (isRuled(s) ? withSourcesArgument(s) : s))
+      : ruled;
   // The honesty layers' run constant (`honesty/armed.ts`) — written once, and
   // only when a layer is armed.
   if (deps.honestyLayers !== undefined) scope.honestyLayers = deps.honestyLayers;

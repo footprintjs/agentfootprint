@@ -23,7 +23,7 @@
  * | present, equal to the declared default  | `default` — run (model's value) | — (an `ask` rule has no default)  |
  * | present, any other value                | `model` — run, flagged          | `model` — run, flagged (adopted Q2) |
  *
- * ## Under declared sources (`.findings({ argumentSources: true })`)
+ * ## Under declared sources (`.inputsLayer({ argumentSources: true })`, `.findings({ argumentSources: true })`)
  *
  * A PRESENT value is checked against the source the model declared for it
  * (`checks.ts` · `checkSource`) — and so is every free argument a `from`

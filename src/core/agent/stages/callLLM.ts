@@ -51,7 +51,11 @@ import type { InjectionRecord } from '../../../recorders/core/types.js';
 import { emitCostTick, type ResolvedCostBudget } from '../../cost.js';
 import type { ReliabilityConfig } from '../../../reliability/types.js';
 import { applyOutputSchema, type OutputSchemaParser } from '../../outputSchema.js';
-import { splitFindings, withoutFindingsArgument } from '../findings/reserved.js';
+import {
+  carriesFindingsDecoration,
+  splitFindings,
+  withoutFindingsArgument,
+} from '../findings/reserved.js';
 import {
   collapseJudged,
   findingsLedgerPiece,
@@ -123,6 +127,18 @@ export interface CallLLMStageDeps {
    * `systemPieces`, `activeToolSchemas` and the receipt are untouched.
    */
   readonly findings?: true;
+  /**
+   * DECLARED SOURCES ARE ARMED (honesty layer 2) — present only then, only
+   * ever `true`. Read in ONE place, and only without `findings`: declared
+   * sources without the ledger (`.inputsLayer({ argumentSources: true })`)
+   * plant `_findings` on RULED tools only, so the choice seam peels a call's
+   * arguments exactly where the served schema carries the decoration
+   * (`findings/reserved.ts` · `carriesFindingsDecoration`) — a quote in
+   * `from` is the person's words, never an identifier the call asserts — and
+   * its enum fence reads the schema without it. Under `findings` every call is
+   * peeled as before.
+   */
+  readonly argumentSources?: true;
   /**
    * THE LEDGER IS SERVED (9.101.0, step 3) — present only under `.findings()`,
    * only ever `true`, threaded beside `findings` by `Agent.ts`. It gates
@@ -1144,13 +1160,20 @@ export function buildCallLLMStage(
             // alone (`Agent.build`), and an armed registry tool never owns
             // the name (`buildToolRegistry · assertReservedArgument`), so
             // the value here is always the model's. Unarmed: `c.args` itself.
-            args: deps.findings === true ? splitFindings(c.args).args : c.args,
+            // Declared sources without the ledger decorate RULED tools only:
+            // peeled where the served schema carries the decoration.
+            args:
+              deps.findings === true ||
+              (deps.argumentSources === true && carriesFindingsDecoration(schemaOf.get(c.name)))
+                ? splitFindings(c.args).args
+                : c.args,
             argumentsFrom: grounding.get(c.name) ?? [],
             // The enum fence reads the schema WITHOUT the decoration: the
-            // reserved words (`direct`, `fact`, `noise`, …) are the model's
-            // vocabulary for a declaration, never an excuse for an argument.
+            // reserved words (`direct`, `fact`, `noise`, `user`, …) are the
+            // model's vocabulary for a declaration, never an excuse for an
+            // argument.
             declaredEnums: declaredEnumValuesOf(
-              deps.findings === true
+              deps.findings === true || deps.argumentSources === true
                 ? withoutFindingsArgument(schemaOf.get(c.name))
                 : schemaOf.get(c.name),
             ),

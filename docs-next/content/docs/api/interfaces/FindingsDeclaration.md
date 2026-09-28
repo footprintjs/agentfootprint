@@ -32,12 +32,13 @@ Defined in: [src/core/agent/findings/types.ts:98](https://github.com/footprintjs
 
 > `readonly` `optional` **from?**: readonly `DeclaredSource`[]
 
-Defined in: [src/core/agent/findings/types.ts:115](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/findings/types.ts#L115)
+Defined in: [src/core/agent/findings/types.ts:116](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/findings/types.ts#L116)
 
-Where each argument value of THIS call came from — read only under
-`.findings({ argumentSources: true })` (the inputs layer's declared
-sources, `arguments/sources.ts` · `readSources`); ignored otherwise, as an
-unknown key always was. A claim the library checks, never evidence.
+Where each argument value of THIS call came from — read only under the
+inputs layer's declared sources (`.inputsLayer({ argumentSources: true })`
+or `.findings({ argumentSources: true })`, `arguments/sources.ts` ·
+`readSources`); ignored otherwise, as an unknown key always was. A claim
+the library checks, never evidence.
 
 ***
 

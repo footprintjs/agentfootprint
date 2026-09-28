@@ -321,6 +321,21 @@
  * the tool's own view — and NO `argumentResolutions` (the call runs as sent:
  * nothing to fill, nothing to ask); no `userMessageFrom` (a person's message).
  *
+ * Step 5, round 1 of the paid bench's fixes: `agent-arguments-sources` MOVED,
+ * on purpose and only in what is served — `from`'s descriptions (no
+ * "Optional", what the record keeps, the sources named once), `from` in the
+ * ruled tool's `_findings.required`, the `ask` sentence naming
+ * `_findings.from`, and the findings instruction WITHOUT its sources line
+ * (the receipt's pieces and sizes follow); every row, key and verb is as it
+ * was. One new reference, `agent-arguments-sources-only`
+ * (`.inputsLayer({ argumentSources: true })`, no `.findings()`): the ruled
+ * tool's `_findings` carries `from` alone, the system prompt is the app's
+ * `bot` alone, no `findingsServe` constant, the ONE `argument` row
+ * (`said`, `matched: 'phrase'`) and no basis row. The other 25 did not move
+ * (run on the fixed tree before regenerating: 25/25 green, the 21 unarmed ones
+ * and steps 3–4's four among them; the two generated alone with
+ * `-t agent-arguments-sources` under `AF_TOOLS_REFERENCE=update`).
+ *
  * Every scenario is a real run — the receipt-conformance shapes, each in the
  * configuration that has no name collision — and what is compared is the
  * whole `commitLog` plus `servedAt(k)` for every located epoch, after ONE
@@ -484,18 +499,35 @@ const SOURCED_THEN_DONE = [
   answer('No errors.'),
 ];
 
-/** The declared-sources run: the person's message carries the words the model quotes. */
-async function sourcesRun(): Promise<Snapshot> {
-  const agent = Agent.create({
-    provider: scripted(SOURCED_THEN_DONE) as never,
+/** …and without the findings ledger: `_findings` carries `from` alone, so the call declares no basis. */
+const SOURCED_ONLY_THEN_DONE = [
+  call('c1', 'search_logs', {
+    service: 'checkout',
+    window: '24h',
+    _findings: { from: [{ argument: 'window', source: 'user', quote: 'the past day' }] },
+  }),
+  answer('No errors.'),
+];
+
+/**
+ * The declared-sources run: the person's message carries the words the model
+ * quotes — beside the findings ledger (`.findings({ argumentSources: true })`),
+ * or without it (`.inputsLayer({ argumentSources: true })`, `ledger: false`).
+ */
+async function sourcesRun(ledger = true): Promise<Snapshot> {
+  const builder = Agent.create({
+    provider: scripted(ledger ? SOURCED_THEN_DONE : SOURCED_ONLY_THEN_DONE) as never,
     model: 'mock',
     maxIterations: 6,
     reactMode: 'dynamic',
   })
     .system('bot')
-    .tool(sourcedSearchLogs())
-    .findings({ argumentSources: true })
-    .build();
+    .tool(sourcedSearchLogs());
+  const agent = (
+    ledger
+      ? builder.findings({ argumentSources: true })
+      : builder.inputsLayer({ argumentSources: true })
+  ).build();
   await agent.run({ message: 'any errors on checkout in the past day?' });
   return agent.getSnapshot()!;
 }
@@ -1128,6 +1160,9 @@ const SCENARIOS: Record<string, () => Promise<Snapshot>> = {
   // person's words, the declared phrase checks the quote out, the call runs. See
   // the header.
   'agent-arguments-sources': () => sourcesRun(),
+  // …and declared sources WITHOUT the findings ledger (step 5, round 1 of the
+  // bench fixes): `_findings` with `from` alone on the ruled tool.
+  'agent-arguments-sources-only': () => sourcesRun(false),
 };
 
 // ─── normalisation — only what differs between two runs of ONE configuration ──

@@ -19,9 +19,58 @@ export interface HonestyLayers {
   readonly inputs?: true;
   /**
    * The inputs layer's declared sources (`.findings({ argumentSources: true
-   * })`) — ruled tools carry `_findings.from`, and the layer checks it.
+   * })` or `.inputsLayer({ argumentSources: true })`) — ruled tools carry
+   * `_findings.from`, and the layer checks it. Which door armed it is on the
+   * record too: the findings ledger's run constant `findingsServe` exists
+   * exactly when `.findings()` did.
    */
   readonly argumentSources?: true;
+}
+
+/**
+ * The object form of `AgentOptions.inputsLayer` — `AgentBuilder.inputsLayer(options)`.
+ * Written inline on the public option (no new export, no new API page); this
+ * is the reader's name for it.
+ */
+export interface InputsLayerOptions {
+  /**
+   * DECLARED SOURCES without the findings ledger: each ruled tool's served
+   * schema carries the reserved `_findings` argument with `from` alone, and
+   * the layer checks every claim before the batch runs. Default off.
+   */
+  readonly argumentSources?: boolean;
+}
+
+/**
+ * `AgentOptions.inputsLayer` as the agent reads it — `undefined` when the
+ * layer is not asked for (`undefined` or `false`), the options otherwise
+ * (`true` reads as `{}`). Anything else is REFUSED, naming the value: a door
+ * that silently ignored `{ argumentSources: 'yes' }` would look configured and
+ * do nothing.
+ */
+export function readInputsLayerOption(value: unknown): InputsLayerOptions | undefined {
+  if (value === undefined || value === false) return undefined;
+  if (value === true) return {};
+  if (typeof value !== 'object' || value === null || Array.isArray(value)) {
+    throw new Error(
+      `Agent: inputsLayer must be true, false or { argumentSources?: boolean }, got ` +
+        `${JSON.stringify(value)}.`,
+    );
+  }
+  const unknown = Object.keys(value).filter((k) => k !== 'argumentSources');
+  if (unknown.length > 0) {
+    throw new Error(
+      `Agent: inputsLayer takes { argumentSources?: boolean } only — unknown key ` +
+        `${unknown.map((k) => `'${k}'`).join(', ')}.`,
+    );
+  }
+  const sources = (value as { readonly argumentSources?: unknown }).argumentSources;
+  if (sources !== undefined && typeof sources !== 'boolean') {
+    throw new Error(
+      `Agent: inputsLayer.argumentSources must be true or false, got ${JSON.stringify(sources)}.`,
+    );
+  }
+  return sources === true ? { argumentSources: true } : {};
 }
 
 /**

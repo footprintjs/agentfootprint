@@ -4,8 +4,8 @@
  *
  * Test types (Convention 3):
  *   - FUNCTIONAL   — the served schema carries `_findings.from` on RULED tools
- *                    only, and the instruction gains one line, under the arm
- *                    only; a declared phrase makes "over the last week" check
+ *                    only (first, and required), explained once in its own
+ *                    property — no instruction line — under the arm only; a declared phrase makes "over the last week" check
  *                    out as `7d` and the call runs; an untraced value on an
  *                    `ask` argument is ASKED (the model's value never rides
  *                    the ask) and the answer's note says what the call had
@@ -45,9 +45,9 @@
  *                    before an ask; any provider counts, even one that lists
  *                    no hiding tool); the served note names no hidden value; a before-tool rewrite after the layer reads as
  *                    assumed; events never carry a value or a quote;
- *   - PERFORMANCE  — what `from` and the instruction line add to a served
- *                    request (recorded, not claimed), and the checks' cost per
- *                    batch;
+ *   - PERFORMANCE  — what `from` adds to a served request (recorded, not
+ *                    claimed; the system prompt does not move), and the
+ *                    checks' cost per batch;
  *   - LOAD         — 50 calls × 5 ruled arguments, each with a `from` entry:
  *                    250 rows in ONE ledger write.
  */
@@ -74,7 +74,6 @@ import { checkSource } from '../../../../src/core/agent/arguments/checks.js';
 import {
   FINDINGS_FROM_PROPERTY,
   FINDINGS_INSTRUCTION_ID,
-  FINDINGS_SOURCES_LINE,
 } from '../../../../src/core/agent/findings/reserved.js';
 import { sourceCorpusOf } from '../../../../src/core/agent/honesty/sourceCorpus.js';
 import { mockMcpClient } from '../../../../src/lib/mcp/mockMcpClient.js';
@@ -234,8 +233,8 @@ afterEach(() => {
 
 // ─── FUNCTIONAL ──────────────────────────────────────────────────────
 
-describe('what the model is served — `from` on ruled tools only, one instruction line, only under the arm', () => {
-  it('armed: a ruled tool’s `_findings` carries `from`; an unruled tool’s does not; the line is in the prompt', async () => {
+describe('what the model is served — `from` on ruled tools only, explained once, only under the arm', () => {
+  it('armed: a ruled tool’s `_findings` carries `from` first and required; an unruled tool’s does not; no instruction line', async () => {
     const m = scripted([answer('hi')]);
     const agent = Agent.create({ provider: m.provider as never, model: 'm' })
       .tool(askingSearch([]))
@@ -244,11 +243,20 @@ describe('what the model is served — `from` on ruled tools only, one instructi
       .build();
     await agent.run({ message: 'hello' });
     const req = m.requests[0]!;
-    expect(findingsProperty(req, 'search_logs').properties!.from).toEqual(FINDINGS_FROM_PROPERTY);
+    const ruled = findingsProperty(req, 'search_logs') as {
+      properties: Record<string, unknown>;
+      required: string[];
+      description: string;
+    };
+    expect(ruled.properties.from).toEqual(FINDINGS_FROM_PROPERTY);
+    expect(Object.keys(ruled.properties)[0]).toBe('from');
+    expect(ruled.required).toEqual(['basis', 'from']);
     expect(findingsProperty(req, 'list_services').properties!.from).toBeUndefined();
     // The first sentence of the decoration is unchanged — `withoutFindingsArgument` still knows it.
-    expect(findingsProperty(req, 'search_logs').description).toMatch(/^Findings v1 \(reserved/);
-    expect(req.systemPrompt).toContain(FINDINGS_SOURCES_LINE);
+    expect(ruled.description).toMatch(/^Findings v1 \(reserved/);
+    // Explained ONCE, in the property: the system prompt carries no sources line.
+    expect(req.systemPrompt ?? '').not.toContain('_findings.from');
+    expect(req.systemPrompt ?? '').not.toContain("'turn'");
   });
 
   it('unarmed `.findings()`: no `from` anywhere, no line — the served request is the bytes it was', async () => {
@@ -363,8 +371,11 @@ describe('the checks decide what runs — an untraced value on an `ask` argument
     const rows = argumentRows(agent);
     expect(rows[1]).toMatchObject({ source: 'answered', value: '1h', proposed: '24h' });
     const tool = m.requests[1]!.messages.find((msg) => msg.role === 'tool')!;
+    // …and, under declared sources, a later call may cite the answer (`turn`).
     expect(tool.content).toContain(
-      'window = "1h" in the search_logs call this result answers was chosen by the person when asked (the call had carried "24h").',
+      'window = "1h" in the search_logs call this result answers was chosen by the person when ' +
+        'asked (the call had carried "24h"); a later call may cite that answer in `_findings.from` ' +
+        "with source 'turn'.]",
     );
   });
 
@@ -1329,7 +1340,7 @@ describe('SECURITY — library text is never evidence, and no value passes a too
 // ─── PERFORMANCE / LOAD ─────────────────────────────────────────────
 
 describe('PERFORMANCE — what the arm adds to a request, and what the checks cost', () => {
-  it('records the served bytes `from` and the instruction line add (a ruled tool only)', async () => {
+  it('records the served bytes `from` adds (a ruled tool only; the system prompt does not move)', async () => {
     const serve = async (argumentSources: boolean) => {
       const m = scripted([answer('hi')]);
       const agent = Agent.create({ provider: m.provider as never, model: 'm' })
@@ -1358,7 +1369,8 @@ describe('PERFORMANCE — what the arm adds to a request, and what the checks co
     );
     expect(on.unruled).toBe(off.unruled);
     expect(on.ruled - off.ruled).toBe(on.tools - off.tools);
-    expect(on.system - off.system).toBe(FINDINGS_SOURCES_LINE.length + 1);
+    // `from` is explained once, in its own property: the system prompt does not move.
+    expect(on.system - off.system).toBe(0);
   });
 });
 

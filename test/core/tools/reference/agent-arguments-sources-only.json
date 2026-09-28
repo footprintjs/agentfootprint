@@ -19,25 +19,8 @@
             "inputSchema": {
               "properties": {
                 "_findings": {
-                  "description": "Findings v1 (reserved by the agent runtime). basis: why you make the call — 'direct' when you expect the result to answer what you are after, 'exploratory' when you are looking. expect: how useful you expect the result to be. proposition and predicts (optional, one line each): what the call tests, and what the result should show if that holds. previous: the standing of each earlier tool result, by its tool_result id — 'fact' with the assertions you stand on (subject kind and id, predicate, value), 'open' with what would settle it, 'ruled-out' with one line naming what was ruled out, 'noise' with nothing. On the record a fact's assertions are asserted, an open or ruled-out result's are quoted, and noise carries none.",
+                  "description": "Findings v1 (reserved by the agent runtime).",
                   "properties": {
-                    "basis": {
-                      "description": "'direct': you expect this result to answer what you are after; 'exploratory': you are looking.",
-                      "enum": [
-                        "direct",
-                        "exploratory"
-                      ],
-                      "type": "string"
-                    },
-                    "expect": {
-                      "description": "How useful you expect the result to be.",
-                      "enum": [
-                        "low",
-                        "medium",
-                        "high"
-                      ],
-                      "type": "string"
-                    },
                     "from": {
                       "description": "Where each argument value the call sends came from, one entry per value, recorded with the library's check of it; a value with no entry has no declared source on the record.",
                       "items": {
@@ -71,89 +54,9 @@
                         "type": "object"
                       },
                       "type": "array"
-                    },
-                    "predicts": {
-                      "description": "Optional, with proposition: one line naming what the result should show if the proposition holds.",
-                      "type": "string"
-                    },
-                    "previous": {
-                      "description": "The standing of each earlier tool result, by its tool_result id. Name only what you can stand on; leave a result unnamed rather than guess.",
-                      "items": {
-                        "properties": {
-                          "assertions": {
-                            "description": "What you stand on (fact) or quote (open, ruled-out). Never restate the result.",
-                            "items": {
-                              "properties": {
-                                "predicate": {
-                                  "type": "string"
-                                },
-                                "subject": {
-                                  "properties": {
-                                    "id": {
-                                      "type": "string"
-                                    },
-                                    "kind": {
-                                      "type": "string"
-                                    }
-                                  },
-                                  "required": [
-                                    "kind",
-                                    "id"
-                                  ],
-                                  "type": "object"
-                                },
-                                "value": {}
-                              },
-                              "required": [
-                                "subject",
-                                "predicate",
-                                "value"
-                              ],
-                              "type": "object"
-                            },
-                            "type": "array"
-                          },
-                          "line": {
-                            "description": "ruled-out: one line naming what was ruled out.",
-                            "type": "string"
-                          },
-                          "settles": {
-                            "description": "open: what would settle it.",
-                            "type": "string"
-                          },
-                          "sought": {
-                            "description": "Whether the result was what the call was after.",
-                            "type": "boolean"
-                          },
-                          "standing": {
-                            "enum": [
-                              "fact",
-                              "open",
-                              "noise",
-                              "ruled-out"
-                            ],
-                            "type": "string"
-                          },
-                          "toolCallId": {
-                            "description": "The tool_result id being judged.",
-                            "type": "string"
-                          }
-                        },
-                        "required": [
-                          "toolCallId",
-                          "standing"
-                        ],
-                        "type": "object"
-                      },
-                      "type": "array"
-                    },
-                    "proposition": {
-                      "description": "Optional, recommended when basis is 'exploratory': one line naming what the call tests.",
-                      "type": "string"
                     }
                   },
                   "required": [
-                    "basis",
                     "from"
                   ],
                   "type": "object"
@@ -181,7 +84,6 @@
           }
         ],
         "finalContent": "",
-        "findingsServe": "ledger-and-facts",
         "history": [
           {
             "content": "any errors on checkout in the past day?",
@@ -336,10 +238,6 @@
           "verb": "set"
         },
         {
-          "path": "findingsServe",
-          "verb": "set"
-        },
-        {
           "path": "deliveredMessageKeys",
           "verb": "set"
         },
@@ -366,25 +264,9 @@
       "overwrite": {
         "activeByslot": {
           "messages": [],
-          "systemPrompt": [
-            {
-              "id": "findings-ledger",
-              "reason": "instructions 'findings-ledger' active",
-              "source": "instructions"
-            }
-          ],
+          "systemPrompt": [],
           "tools": []
-        },
-        "activeInjections": [
-          {
-            "cache": "never",
-            "flavor": "instructions",
-            "id": "findings-ledger",
-            "inject": {
-              "systemPrompt": "Findings v1. Tool schemas carry an optional `_findings` argument; declare it on your tool calls.\n`_findings.basis` on each call: 'direct' when you expect the result to answer what you are after, 'exploratory' when you are looking; add `expect` ('low' | 'medium' | 'high') for how useful you expect it to be.\nBefore an exploratory call, add `proposition` (what the call tests) and `predicts` (what the result should show if it holds) — optional, one line each.\nOn your next tool call — or, when you answer in JSON, as a top-level `_findings.previous` — state the standing of each previous tool result by its tool_result id:\n- 'fact' with the assertions you stand on (subject kind and id, predicate, value);\n- 'open' with what would settle it (`settles`);\n- 'ruled-out' with one line naming what was ruled out (`line`);\n- 'noise' with nothing.\nNever restate a result in a standing. Name a result again only to change its standing; a result you never name has no standing — leave it unnamed rather than guess.\nName a result by the id exactly as it appears in the tool schema's list for `previous[].toolCallId` — the provider's tool_result id copied whole, never a position or a count."
-            }
-          }
-        ]
+        }
       },
       "redactedPaths": [],
       "runtimeStageId": "sf-injection-engine#1",
@@ -395,10 +277,6 @@
         "milestone-label:Iteration"
       ],
       "trace": [
-        {
-          "path": "activeInjections",
-          "verb": "append"
-        },
         {
           "path": "activeByslot\u001fsystemPrompt",
           "verb": "set"
@@ -445,15 +323,6 @@
             "reason": "Agent.system()",
             "slot": "system-prompt",
             "source": "base"
-          },
-          {
-            "contentHash": "958e5064",
-            "contentSummary": "Findings v1. Tool schemas carry an optional `_findings` argument; declare it on…",
-            "rawContent": "Findings v1. Tool schemas carry an optional `_findings` argument; declare it on your tool calls.\n`_findings.basis` on each call: 'direct' when you expect the result to answer what you are after, 'exploratory' when you are looking; add `expect` ('low' | 'medium' | 'high') for how useful you expect it to be.\nBefore an exploratory call, add `proposition` (what the call tests) and `predicts` (what the result should show if it holds) — optional, one line each.\nOn your next tool call — or, when you answer in JSON, as a top-level `_findings.previous` — state the standing of each previous tool result by its tool_result id:\n- 'fact' with the assertions you stand on (subject kind and id, predicate, value);\n- 'open' with what would settle it (`settles`);\n- 'ruled-out' with one line naming what was ruled out (`line`);\n- 'noise' with nothing.\nNever restate a result in a standing. Name a result again only to change its standing; a result you never name has no standing — leave it unnamed rather than guess.\nName a result by the id exactly as it appears in the tool schema's list for `previous[].toolCallId` — the provider's tool_result id copied whole, never a position or a count.",
-            "reason": "instructions 'findings-ledger' active",
-            "slot": "system-prompt",
-            "source": "instructions",
-            "sourceId": "findings-ledger"
           }
         ]
       },
@@ -639,7 +508,6 @@
           {
             "args": {
               "_findings": {
-                "basis": "direct",
                 "from": [
                   {
                     "argument": "window",
@@ -688,33 +556,28 @@
                 "jsonChars": 69
               },
               "systemPrompt": {
-                "jsonBytes": 1209,
-                "jsonChars": 1199
+                "jsonBytes": 5,
+                "jsonChars": 5
               },
               "tools": {
-                "jsonBytes": 3545,
-                "jsonChars": 3541
+                "jsonBytes": 1258,
+                "jsonChars": 1258
               }
             },
             "status": "measured",
             "total": {
-              "jsonBytes": 4876,
-              "jsonChars": 4862
+              "jsonBytes": 1385,
+              "jsonChars": 1385
             }
           },
           "system": {
-            "chars": 1186,
+            "chars": 3,
             "hash": "<digest>",
             "pieces": [
               {
                 "hash": "<digest>",
                 "slot": "system-prompt",
                 "source": "base"
-              },
-              {
-                "hash": "<digest>",
-                "slot": "system-prompt",
-                "source": "instructions"
               }
             ]
           },
@@ -814,16 +677,6 @@
     {
       "idx": 19,
       "overwrite": {
-        "findingsLedger": [
-          {
-            "basis": "direct",
-            "iteration": 1,
-            "kind": "basis",
-            "toolCallId": "c1",
-            "toolName": "search_logs",
-            "turn": 1
-          }
-        ],
         "history": [
           {
             "content": "",
@@ -832,7 +685,6 @@
               {
                 "args": {
                   "_findings": {
-                    "basis": "direct",
                     "from": [
                       {
                         "argument": "window",
@@ -879,10 +731,6 @@
       ],
       "trace": [
         {
-          "path": "findingsLedger",
-          "verb": "append"
-        },
-        {
           "path": "lastToolResult",
           "verb": "set"
         },
@@ -903,17 +751,7 @@
     },
     {
       "idx": 20,
-      "overwrite": {
-        "activeByslot": {
-          "systemPrompt": [
-            {
-              "id": "findings-ledger",
-              "reason": "instructions 'findings-ledger' active",
-              "source": "instructions"
-            }
-          ]
-        }
-      },
+      "overwrite": {},
       "redactedPaths": [],
       "runtimeStageId": "sf-injection-engine#26",
       "stage": "Injection Engine",
@@ -922,12 +760,7 @@
         "milestone:iteration",
         "milestone-label:Iteration"
       ],
-      "trace": [
-        {
-          "path": "activeByslot\u001fsystemPrompt",
-          "verb": "append"
-        }
-      ],
+      "trace": [],
       "updates": {}
     },
     {
@@ -1062,188 +895,12 @@
     },
     {
       "idx": 29,
-      "overwrite": {
-        "dynamicToolSchemas": [
-          {
-            "description": "Error lines for one service over a look-back period.",
-            "inputSchema": {
-              "properties": {
-                "_findings": {
-                  "description": "Findings v1 (reserved by the agent runtime). basis: why you make the call — 'direct' when you expect the result to answer what you are after, 'exploratory' when you are looking. expect: how useful you expect the result to be. proposition and predicts (optional, one line each): what the call tests, and what the result should show if that holds. previous: the standing of each earlier tool result, by its tool_result id — 'fact' with the assertions you stand on (subject kind and id, predicate, value), 'open' with what would settle it, 'ruled-out' with one line naming what was ruled out, 'noise' with nothing. On the record a fact's assertions are asserted, an open or ruled-out result's are quoted, and noise carries none.",
-                  "properties": {
-                    "basis": {
-                      "description": "'direct': you expect this result to answer what you are after; 'exploratory': you are looking.",
-                      "enum": [
-                        "direct",
-                        "exploratory"
-                      ],
-                      "type": "string"
-                    },
-                    "expect": {
-                      "description": "How useful you expect the result to be.",
-                      "enum": [
-                        "low",
-                        "medium",
-                        "high"
-                      ],
-                      "type": "string"
-                    },
-                    "from": {
-                      "description": "Where each argument value the call sends came from, one entry per value, recorded with the library's check of it; a value with no entry has no declared source on the record.",
-                      "items": {
-                        "properties": {
-                          "argument": {
-                            "type": "string"
-                          },
-                          "id": {
-                            "type": "string"
-                          },
-                          "quote": {
-                            "description": "Copied exactly from the person's messages.",
-                            "type": "string"
-                          },
-                          "source": {
-                            "description": "'user': the person's words (quote); 'result': a tool result (id); 'turn': their answer when the run asked them; 'app': your instructions; 'assumed': your own choice.",
-                            "enum": [
-                              "user",
-                              "result",
-                              "turn",
-                              "app",
-                              "assumed"
-                            ],
-                            "type": "string"
-                          }
-                        },
-                        "required": [
-                          "argument",
-                          "source"
-                        ],
-                        "type": "object"
-                      },
-                      "type": "array"
-                    },
-                    "predicts": {
-                      "description": "Optional, with proposition: one line naming what the result should show if the proposition holds.",
-                      "type": "string"
-                    },
-                    "previous": {
-                      "description": "The standing of each earlier tool result, by its tool_result id. Name only what you can stand on; leave a result unnamed rather than guess.",
-                      "items": {
-                        "properties": {
-                          "assertions": {
-                            "description": "What you stand on (fact) or quote (open, ruled-out). Never restate the result.",
-                            "items": {
-                              "properties": {
-                                "predicate": {
-                                  "type": "string"
-                                },
-                                "subject": {
-                                  "properties": {
-                                    "id": {
-                                      "type": "string"
-                                    },
-                                    "kind": {
-                                      "type": "string"
-                                    }
-                                  },
-                                  "required": [
-                                    "kind",
-                                    "id"
-                                  ],
-                                  "type": "object"
-                                },
-                                "value": {}
-                              },
-                              "required": [
-                                "subject",
-                                "predicate",
-                                "value"
-                              ],
-                              "type": "object"
-                            },
-                            "type": "array"
-                          },
-                          "line": {
-                            "description": "ruled-out: one line naming what was ruled out.",
-                            "type": "string"
-                          },
-                          "settles": {
-                            "description": "open: what would settle it.",
-                            "type": "string"
-                          },
-                          "sought": {
-                            "description": "Whether the result was what the call was after.",
-                            "type": "boolean"
-                          },
-                          "standing": {
-                            "enum": [
-                              "fact",
-                              "open",
-                              "noise",
-                              "ruled-out"
-                            ],
-                            "type": "string"
-                          },
-                          "toolCallId": {
-                            "description": "The tool_result id being judged — one of the ids listed; a result not listed cannot be named here.",
-                            "enum": [
-                              "c1"
-                            ],
-                            "type": "string"
-                          }
-                        },
-                        "required": [
-                          "toolCallId",
-                          "standing"
-                        ],
-                        "type": "object"
-                      },
-                      "type": "array"
-                    },
-                    "proposition": {
-                      "description": "Optional, recommended when basis is 'exploratory': one line naming what the call tests.",
-                      "type": "string"
-                    }
-                  },
-                  "required": [
-                    "basis",
-                    "from"
-                  ],
-                  "type": "object"
-                },
-                "service": {
-                  "description": "Service name.",
-                  "type": "string"
-                },
-                "window": {
-                  "description": "Look-back period. The tool's rule asks the person for this value; leave it out unless the person gave it, and then quote their words for it in `_findings.from`.",
-                  "enum": [
-                    "1h",
-                    "2h",
-                    "24h"
-                  ],
-                  "type": "string"
-                }
-              },
-              "required": [
-                "service"
-              ],
-              "type": "object"
-            },
-            "name": "search_logs"
-          }
-        ]
-      },
+      "overwrite": {},
       "redactedPaths": [],
       "runtimeStageId": "context#31",
       "stage": "Context",
       "stageId": "context",
-      "trace": [
-        {
-          "path": "dynamicToolSchemas",
-          "verb": "set"
-        }
-      ],
+      "trace": [],
       "updates": {}
     },
     {
@@ -1333,37 +990,32 @@
             "format": "json-utf8-v1",
             "slots": {
               "messages": {
-                "jsonBytes": 407,
-                "jsonChars": 407
+                "jsonBytes": 390,
+                "jsonChars": 390
               },
               "systemPrompt": {
-                "jsonBytes": 1209,
-                "jsonChars": 1199
+                "jsonBytes": 5,
+                "jsonChars": 5
               },
               "tools": {
-                "jsonBytes": 3627,
-                "jsonChars": 3621
+                "jsonBytes": 1258,
+                "jsonChars": 1258
               }
             },
             "status": "measured",
             "total": {
-              "jsonBytes": 5296,
-              "jsonChars": 5280
+              "jsonBytes": 1706,
+              "jsonChars": 1706
             }
           },
           "system": {
-            "chars": 1186,
+            "chars": 3,
             "hash": "<digest>",
             "pieces": [
               {
                 "hash": "<digest>",
                 "slot": "system-prompt",
                 "source": "base"
-              },
-              {
-                "hash": "<digest>",
-                "slot": "system-prompt",
-                "source": "instructions"
               }
             ]
           },
@@ -1533,14 +1185,9 @@
               "slot": "system-prompt",
               "source": "base",
               "text": "bot"
-            },
-            {
-              "slot": "system-prompt",
-              "source": "instructions",
-              "text": "Findings v1. Tool schemas carry an optional `_findings` argument; declare it on your tool calls.\n`_findings.basis` on each call: 'direct' when you expect the result to answer what you are after, 'exploratory' when you are looking; add `expect` ('low' | 'medium' | 'high') for how useful you expect it to be.\nBefore an exploratory call, add `proposition` (what the call tests) and `predicts` (what the result should show if it holds) — optional, one line each.\nOn your next tool call — or, when you answer in JSON, as a top-level `_findings.previous` — state the standing of each previous tool result by its tool_result id:\n- 'fact' with the assertions you stand on (subject kind and id, predicate, value);\n- 'open' with what would settle it (`settles`);\n- 'ruled-out' with one line naming what was ruled out (`line`);\n- 'noise' with nothing.\nNever restate a result in a standing. Name a result again only to change its standing; a result you never name has no standing — leave it unnamed rather than guess.\nName a result by the id exactly as it appears in the tool schema's list for `previous[].toolCallId` — the provider's tool_result id copied whole, never a position or a count."
             }
           ],
-          "text": "bot\n\nFindings v1. Tool schemas carry an optional `_findings` argument; declare it on your tool calls.\n`_findings.basis` on each call: 'direct' when you expect the result to answer what you are after, 'exploratory' when you are looking; add `expect` ('low' | 'medium' | 'high') for how useful you expect it to be.\nBefore an exploratory call, add `proposition` (what the call tests) and `predicts` (what the result should show if it holds) — optional, one line each.\nOn your next tool call — or, when you answer in JSON, as a top-level `_findings.previous` — state the standing of each previous tool result by its tool_result id:\n- 'fact' with the assertions you stand on (subject kind and id, predicate, value);\n- 'open' with what would settle it (`settles`);\n- 'ruled-out' with one line naming what was ruled out (`line`);\n- 'noise' with nothing.\nNever restate a result in a standing. Name a result again only to change its standing; a result you never name has no standing — leave it unnamed rather than guess.\nName a result by the id exactly as it appears in the tool schema's list for `previous[].toolCallId` — the provider's tool_result id copied whole, never a position or a count."
+          "text": "bot"
         },
         "tools": {
           "names": [
@@ -1552,25 +1199,8 @@
               "inputSchema": {
                 "properties": {
                   "_findings": {
-                    "description": "Findings v1 (reserved by the agent runtime). basis: why you make the call — 'direct' when you expect the result to answer what you are after, 'exploratory' when you are looking. expect: how useful you expect the result to be. proposition and predicts (optional, one line each): what the call tests, and what the result should show if that holds. previous: the standing of each earlier tool result, by its tool_result id — 'fact' with the assertions you stand on (subject kind and id, predicate, value), 'open' with what would settle it, 'ruled-out' with one line naming what was ruled out, 'noise' with nothing. On the record a fact's assertions are asserted, an open or ruled-out result's are quoted, and noise carries none.",
+                    "description": "Findings v1 (reserved by the agent runtime).",
                     "properties": {
-                      "basis": {
-                        "description": "'direct': you expect this result to answer what you are after; 'exploratory': you are looking.",
-                        "enum": [
-                          "direct",
-                          "exploratory"
-                        ],
-                        "type": "string"
-                      },
-                      "expect": {
-                        "description": "How useful you expect the result to be.",
-                        "enum": [
-                          "low",
-                          "medium",
-                          "high"
-                        ],
-                        "type": "string"
-                      },
                       "from": {
                         "description": "Where each argument value the call sends came from, one entry per value, recorded with the library's check of it; a value with no entry has no declared source on the record.",
                         "items": {
@@ -1604,89 +1234,9 @@
                           "type": "object"
                         },
                         "type": "array"
-                      },
-                      "predicts": {
-                        "description": "Optional, with proposition: one line naming what the result should show if the proposition holds.",
-                        "type": "string"
-                      },
-                      "previous": {
-                        "description": "The standing of each earlier tool result, by its tool_result id. Name only what you can stand on; leave a result unnamed rather than guess.",
-                        "items": {
-                          "properties": {
-                            "assertions": {
-                              "description": "What you stand on (fact) or quote (open, ruled-out). Never restate the result.",
-                              "items": {
-                                "properties": {
-                                  "predicate": {
-                                    "type": "string"
-                                  },
-                                  "subject": {
-                                    "properties": {
-                                      "id": {
-                                        "type": "string"
-                                      },
-                                      "kind": {
-                                        "type": "string"
-                                      }
-                                    },
-                                    "required": [
-                                      "kind",
-                                      "id"
-                                    ],
-                                    "type": "object"
-                                  },
-                                  "value": {}
-                                },
-                                "required": [
-                                  "subject",
-                                  "predicate",
-                                  "value"
-                                ],
-                                "type": "object"
-                              },
-                              "type": "array"
-                            },
-                            "line": {
-                              "description": "ruled-out: one line naming what was ruled out.",
-                              "type": "string"
-                            },
-                            "settles": {
-                              "description": "open: what would settle it.",
-                              "type": "string"
-                            },
-                            "sought": {
-                              "description": "Whether the result was what the call was after.",
-                              "type": "boolean"
-                            },
-                            "standing": {
-                              "enum": [
-                                "fact",
-                                "open",
-                                "noise",
-                                "ruled-out"
-                              ],
-                              "type": "string"
-                            },
-                            "toolCallId": {
-                              "description": "The tool_result id being judged.",
-                              "type": "string"
-                            }
-                          },
-                          "required": [
-                            "toolCallId",
-                            "standing"
-                          ],
-                          "type": "object"
-                        },
-                        "type": "array"
-                      },
-                      "proposition": {
-                        "description": "Optional, recommended when basis is 'exploratory': one line naming what the call tests.",
-                        "type": "string"
                       }
                     },
                     "required": [
-                      "basis",
                       "from"
                     ],
                     "type": "object"
@@ -1768,7 +1318,6 @@
                 {
                   "args": {
                     "_findings": {
-                      "basis": "direct",
                       "from": [
                         {
                           "argument": "window",
@@ -1800,14 +1349,9 @@
               "slot": "system-prompt",
               "source": "base",
               "text": "bot"
-            },
-            {
-              "slot": "system-prompt",
-              "source": "instructions",
-              "text": "Findings v1. Tool schemas carry an optional `_findings` argument; declare it on your tool calls.\n`_findings.basis` on each call: 'direct' when you expect the result to answer what you are after, 'exploratory' when you are looking; add `expect` ('low' | 'medium' | 'high') for how useful you expect it to be.\nBefore an exploratory call, add `proposition` (what the call tests) and `predicts` (what the result should show if it holds) — optional, one line each.\nOn your next tool call — or, when you answer in JSON, as a top-level `_findings.previous` — state the standing of each previous tool result by its tool_result id:\n- 'fact' with the assertions you stand on (subject kind and id, predicate, value);\n- 'open' with what would settle it (`settles`);\n- 'ruled-out' with one line naming what was ruled out (`line`);\n- 'noise' with nothing.\nNever restate a result in a standing. Name a result again only to change its standing; a result you never name has no standing — leave it unnamed rather than guess.\nName a result by the id exactly as it appears in the tool schema's list for `previous[].toolCallId` — the provider's tool_result id copied whole, never a position or a count."
             }
           ],
-          "text": "bot\n\nFindings v1. Tool schemas carry an optional `_findings` argument; declare it on your tool calls.\n`_findings.basis` on each call: 'direct' when you expect the result to answer what you are after, 'exploratory' when you are looking; add `expect` ('low' | 'medium' | 'high') for how useful you expect it to be.\nBefore an exploratory call, add `proposition` (what the call tests) and `predicts` (what the result should show if it holds) — optional, one line each.\nOn your next tool call — or, when you answer in JSON, as a top-level `_findings.previous` — state the standing of each previous tool result by its tool_result id:\n- 'fact' with the assertions you stand on (subject kind and id, predicate, value);\n- 'open' with what would settle it (`settles`);\n- 'ruled-out' with one line naming what was ruled out (`line`);\n- 'noise' with nothing.\nNever restate a result in a standing. Name a result again only to change its standing; a result you never name has no standing — leave it unnamed rather than guess.\nName a result by the id exactly as it appears in the tool schema's list for `previous[].toolCallId` — the provider's tool_result id copied whole, never a position or a count."
+          "text": "bot"
         },
         "tools": {
           "names": [
@@ -1819,25 +1363,8 @@
               "inputSchema": {
                 "properties": {
                   "_findings": {
-                    "description": "Findings v1 (reserved by the agent runtime). basis: why you make the call — 'direct' when you expect the result to answer what you are after, 'exploratory' when you are looking. expect: how useful you expect the result to be. proposition and predicts (optional, one line each): what the call tests, and what the result should show if that holds. previous: the standing of each earlier tool result, by its tool_result id — 'fact' with the assertions you stand on (subject kind and id, predicate, value), 'open' with what would settle it, 'ruled-out' with one line naming what was ruled out, 'noise' with nothing. On the record a fact's assertions are asserted, an open or ruled-out result's are quoted, and noise carries none.",
+                    "description": "Findings v1 (reserved by the agent runtime).",
                     "properties": {
-                      "basis": {
-                        "description": "'direct': you expect this result to answer what you are after; 'exploratory': you are looking.",
-                        "enum": [
-                          "direct",
-                          "exploratory"
-                        ],
-                        "type": "string"
-                      },
-                      "expect": {
-                        "description": "How useful you expect the result to be.",
-                        "enum": [
-                          "low",
-                          "medium",
-                          "high"
-                        ],
-                        "type": "string"
-                      },
                       "from": {
                         "description": "Where each argument value the call sends came from, one entry per value, recorded with the library's check of it; a value with no entry has no declared source on the record.",
                         "items": {
@@ -1871,92 +1398,9 @@
                           "type": "object"
                         },
                         "type": "array"
-                      },
-                      "predicts": {
-                        "description": "Optional, with proposition: one line naming what the result should show if the proposition holds.",
-                        "type": "string"
-                      },
-                      "previous": {
-                        "description": "The standing of each earlier tool result, by its tool_result id. Name only what you can stand on; leave a result unnamed rather than guess.",
-                        "items": {
-                          "properties": {
-                            "assertions": {
-                              "description": "What you stand on (fact) or quote (open, ruled-out). Never restate the result.",
-                              "items": {
-                                "properties": {
-                                  "predicate": {
-                                    "type": "string"
-                                  },
-                                  "subject": {
-                                    "properties": {
-                                      "id": {
-                                        "type": "string"
-                                      },
-                                      "kind": {
-                                        "type": "string"
-                                      }
-                                    },
-                                    "required": [
-                                      "kind",
-                                      "id"
-                                    ],
-                                    "type": "object"
-                                  },
-                                  "value": {}
-                                },
-                                "required": [
-                                  "subject",
-                                  "predicate",
-                                  "value"
-                                ],
-                                "type": "object"
-                              },
-                              "type": "array"
-                            },
-                            "line": {
-                              "description": "ruled-out: one line naming what was ruled out.",
-                              "type": "string"
-                            },
-                            "settles": {
-                              "description": "open: what would settle it.",
-                              "type": "string"
-                            },
-                            "sought": {
-                              "description": "Whether the result was what the call was after.",
-                              "type": "boolean"
-                            },
-                            "standing": {
-                              "enum": [
-                                "fact",
-                                "open",
-                                "noise",
-                                "ruled-out"
-                              ],
-                              "type": "string"
-                            },
-                            "toolCallId": {
-                              "description": "The tool_result id being judged — one of the ids listed; a result not listed cannot be named here.",
-                              "enum": [
-                                "c1"
-                              ],
-                              "type": "string"
-                            }
-                          },
-                          "required": [
-                            "toolCallId",
-                            "standing"
-                          ],
-                          "type": "object"
-                        },
-                        "type": "array"
-                      },
-                      "proposition": {
-                        "description": "Optional, recommended when basis is 'exploratory': one line naming what the call tests.",
-                        "type": "string"
                       }
                     },
                     "required": [
-                      "basis",
                       "from"
                     ],
                     "type": "object"

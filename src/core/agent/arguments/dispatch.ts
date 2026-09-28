@@ -37,6 +37,7 @@ import {
   keptAnswersNote,
   secondPauseRefusal,
   unmountedRulesRefusal,
+  type ServeOptions,
 } from './serve.js';
 
 /**
@@ -178,7 +179,9 @@ function carriedValue(proposed: ToolArgs | undefined, argument: string): InputVa
  * value the tool's view hides never printed. `proposed` is the call's own
  * arguments before the fills: an answered fill that REPLACED a value the call
  * carried (declared sources ask about an untraced value) says what the call
- * had carried. `''` when no fill ran.
+ * had carried; under declared sources (`options.sources`) an answered clause
+ * also says a later call may cite the answer (`serve.ts` ·
+ * `ANSWERED_SOURCE_CLAUSE`). `''` when no fill ran.
  */
 export function noteFor(
   toolName: string,
@@ -186,6 +189,7 @@ export function noteFor(
   resolution: ArgumentResolution | undefined,
   ranWith: ToolArgs,
   proposed?: ToolArgs,
+  options?: ServeOptions,
 ): string {
   const ran = fillsThatRan(resolution, ranWith);
   if (ran.length === 0) return '';
@@ -201,6 +205,7 @@ export function noteFor(
         ...(carried !== undefined && { carried }),
       };
     }),
+    options,
   );
 }
 

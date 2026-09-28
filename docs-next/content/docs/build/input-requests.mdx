@@ -171,13 +171,14 @@ spreads the object into `context` beside the library's key, which it may not use
 
 ## Where each value came from — declared sources
 
-With `.findings({ argumentSources: true })`, the model says, for each argument of
-a ruled call, where the value came from — the person's words (copied as a
+With `.inputsLayer({ argumentSources: true })`, the model says, for each argument
+of a ruled call, where the value came from — the person's words (copied as a
 `quote`), a tool result (its `id`), the person's earlier answer, the app's own
 text, or `'assumed'` — and the library **checks** each claim before anything in
-the batch runs. A choice can carry words you vouch for as meaning it
-(`{ value: '7d', said: ['last week'] }`), so "over the last week" checks out as
-`7d` without the library ever parsing a time phrase:
+the batch runs. (`.findings({ argumentSources: true })` arms the same checks on
+an agent that also keeps the findings ledger.) A choice can carry words you
+vouch for as meaning it (`{ value: '7d', said: ['last week'] }`), so "over the
+last week" checks out as `7d` without the library ever parsing a time phrase:
 
 <CodeFile path="examples/features/76-declared-sources.ts" region="declared-sources" title="examples/features/76-declared-sources.ts (region: declared-sources)" />
 
@@ -187,8 +188,10 @@ the batch runs. A choice can carry words you vouch for as meaning it
   the value in the quote or one of your phrases for it; a result id must name a
   result the model was served, and the value must be in that result's own bytes
   (a note the library added never counts); an earlier answer must be the
-  person's answer to the library's ask. The row says what was checked:
-  `source: 'said'` with `matched: 'phrase'`, `'result'`, `'answered'`, `'app'`.
+  person's answer to the library's ask — the note on the result of the call that
+  ran with it tells the model it may cite that answer later. The row says what
+  was checked: `source: 'said'` with `matched: 'phrase'`, `'result'`,
+  `'answered'`, `'app'`.
 - **An unchecked value on an `ask` argument is asked** — nothing declared, a
   failed claim, or a READING (the words are the person's, the value is not in
   them). The ask shows the person their own words (`quoted`, unless a tool may
@@ -215,8 +218,10 @@ the batch runs. A choice can carry words you vouch for as meaning it
   written before the hiding tool is called, or first listed, is hidden too. The
   check itself still runs.
 - **It costs tokens, and it is off by default.** The `from` property rides only on
-  tools that declare `askOrAssume`, plus one instruction line. It needs the inputs
-  layer and is refused at build without it.
+  tools that declare `askOrAssume` — every other tool and the system prompt are
+  served as they would be without it. `.findings({ argumentSources: true })` needs
+  the inputs layer and is refused at build without it; `.inputsLayer(...)` is the
+  inputs layer.
 
 ## Hosted chat
 

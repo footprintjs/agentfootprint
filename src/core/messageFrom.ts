@@ -10,7 +10,8 @@
  *          `core-flow/Workflow.ts`, `core-flow/Graph.ts`) passes
  *          `messageFrom: 'composed'` ONLY to a runner that reads it — an
  *          `Agent` whose declared sources are armed
- *          (`.findings({ argumentSources: true })`) — so every other
+ *          (`.findings({ argumentSources: true })` or
+ *          `.inputsLayer({ argumentSources: true })`) — so every other
  *          composition hands its steps the input it always did, byte for byte.
  * Emits:   N/A.
  *

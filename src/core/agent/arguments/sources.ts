@@ -5,7 +5,8 @@
  * Pattern: Map. The vocabulary of a declared source and one pure reader that
  *          judges the model's `from` array against the call it rides on. The
  *          reader is called by the ONE reader of `_findings`
- *          (`findings/reserved.ts` · `readDeclaration`, under
+ *          (`findings/reserved.ts` · `readDeclaration`, under declared
+ *          sources — `.inputsLayer({ argumentSources: true })` or
  *          `.findings({ argumentSources: true })`), so the inputs layer and
  *          ToolCalls' peel read one `_findings` the same way.
  * Role:    core/ layer leaf of the inputs layer (honesty layer 2). Imports

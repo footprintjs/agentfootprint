@@ -255,10 +255,21 @@ export interface AgentOptions {
    * call and Route even when no REGISTERED tool declares `askOrAssume`. A
    * registered ruled tool arms the layer by itself; this option is for ruled
    * tools a `ToolProvider` serves, which the build cannot see — without it,
-   * their calls are refused rather than run unruled (fail closed). Prefer the
-   * builder's `.inputsLayer()`. Absent → the chart is byte-identical.
+   * their calls are refused rather than run unruled (fail closed).
+   *
+   * `{ argumentSources: true }` also arms DECLARED SOURCES without the
+   * findings ledger: each ruled tool's served schema carries the reserved
+   * `_findings` argument with `from` alone (where each argument value came
+   * from — the person's words as a `quote`, a result's `id`, an earlier
+   * answer, the app, or `'assumed'`), the layer checks each claim before the
+   * batch runs, and under an `ask` rule a value the checks do not trace is
+   * asked of the person — the same checks and rows as
+   * `findings({ argumentSources: true })`, without the ledger's schema on
+   * every tool. Any other value is refused at construction.
+   *
+   * Prefer the builder's `.inputsLayer()`. Absent → the chart is byte-identical.
    */
-  readonly inputsLayer?: boolean;
+  readonly inputsLayer?: boolean | { readonly argumentSources?: boolean };
   /**
    * THE INPUTS LAYER'S ASK (honesty layer 2) — the host's own context for the
    * one typed ask the library raises per batch when a call leaves an `ask`
@@ -358,8 +369,9 @@ export interface AgentOptions {
      * call's argument rows. Under an `ask` rule, a present value the checks do
      * not trace to a source is asked of the person. Requires the inputs layer
      * (a registered tool that declares `askOrAssume`, or `.inputsLayer()`) —
-     * refused at build without it. Default off: no `from` property, no
-     * instruction line, no check, byte-identical.
+     * refused at build without it. Without the ledger:
+     * `inputsLayer: { argumentSources: true }`. Default off: no `from`
+     * property, no check, byte-identical.
      */
     readonly argumentSources?: boolean;
   };
@@ -1272,7 +1284,8 @@ export interface AgentInput {
    * hand passes it the same way.
    *
    * Read only by the inputs layer's declared sources
-   * (`.findings({ argumentSources: true })`): a quote the model says came from
+   * (`.inputsLayer({ argumentSources: true })` or `.findings({ argumentSources:
+   * true })`): a quote the model says came from
    * the person, found only in a composed message, is filed as another model's
    * words (`failed: 'composed-message'`) and never counts as "the person said
    * it". Every other agent ignores it and records nothing.
@@ -2040,7 +2053,8 @@ export interface AgentState {
    * runner's output handed on by a composition (`Sequence`, `Loop`, or your
    * own code, through `AgentInput.messageFrom`). A run constant written once
    * by seed, and ONLY on an agent whose declared sources are armed
-   * (`.findings({ argumentSources: true })`), its one reader: a quote found
+   * (`.inputsLayer({ argumentSources: true })` or `.findings({ argumentSources:
+   * true })`), its one reader: a quote found
    * only in this run's own message is another model's words, never the
    * person's (`failed: 'composed-message'`). Absent on every other run.
    * (Its own key: the run input's `messageFrom` is read-only in scope.)

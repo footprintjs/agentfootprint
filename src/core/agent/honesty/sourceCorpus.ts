@@ -13,7 +13,8 @@
  *          import BOTH `findings/` and `arguments/` (the one-way law keeps
  *          `arguments/` a leaf). Loaded through `import()` by the mount's
  *          closures on first use (`mounts.ts` · `buildInputsSubflow`), only
- *          under `.findings({ argumentSources: true })` — never on a plain
+ *          under declared sources (`.findings({ argumentSources: true })` or
+ *          `.inputsLayer({ argumentSources: true })`) — never on a plain
  *          agent's graph.
  * Emits:   N/A.
  *
@@ -244,11 +245,15 @@ function answersOf(ledger: readonly unknown[] | undefined, toolOf: ToolOf): Earl
  * against the call's own arguments. A call whose tool OWNS the reserved
  * argument declares nothing and gets no entry; a call with no `_findings`
  * declares an empty `from`. The dropped entries' count rides only when the
- * call files no basis row (that row carries it otherwise).
+ * call files no basis row (that row carries it otherwise) — and a call files
+ * one only beside the findings ledger (`options.basisRows`: `.findings()` is
+ * armed and the call declared a basis). Declared sources without the ledger
+ * file no basis row at all, so the count always rides the first argument row.
  */
 export function declaredSourcesOf(
   calls: readonly BatchCall[],
   toolOf: ToolOf,
+  options?: { readonly basisRows?: boolean },
 ): readonly CallSources[] {
   const out: CallSources[] = [];
   for (const call of calls) {
@@ -261,10 +266,9 @@ export function declaredSourcesOf(
     }
     const { [RESERVED_ARGUMENT]: raw, ...rest } = args;
     const read = readDeclaration(raw, { argumentSources: true }, rest);
+    const filesBasisRow = options?.basisRows === true && read.declaration?.basis !== undefined;
     const malformed =
-      read.declaration?.basis === undefined && (read.sourcesMalformed ?? 0) > 0
-        ? read.sourcesMalformed
-        : undefined;
+      !filesBasisRow && (read.sourcesMalformed ?? 0) > 0 ? read.sourcesMalformed : undefined;
     out.push({
       toolCallId: call.id,
       from: read.declaration?.from ?? [],

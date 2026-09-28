@@ -4,7 +4,7 @@ title: RunConfig
 
 # Interface: RunConfig
 
-Defined in: [src/core/agent/types.ts:1162](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/types.ts#L1162)
+Defined in: [src/core/agent/types.ts:1174](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/types.ts#L1174)
 
 What `.configure(fn)` may change for one run. Both fields are
 optional; returning `{}` (or nothing) means "use the built defaults",
@@ -19,7 +19,7 @@ and it is consulted every iteration rather than once per run.
 
 > `readonly` `optional` **instructions?**: `string`
 
-Defined in: [src/core/agent/types.ts:1166](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/types.ts#L1166)
+Defined in: [src/core/agent/types.ts:1178](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/types.ts#L1178)
 
 Replaces the base system prompt set by `.system(...)` for this run.
 
@@ -29,6 +29,6 @@ Replaces the base system prompt set by `.system(...)` for this run.
 
 > `readonly` `optional` **model?**: `string`
 
-Defined in: [src/core/agent/types.ts:1164](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/types.ts#L1164)
+Defined in: [src/core/agent/types.ts:1176](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/types.ts#L1176)
 
 Model id for every LLM call in this run.
