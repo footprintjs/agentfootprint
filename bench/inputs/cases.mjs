@@ -983,9 +983,277 @@ export const CASES = Object.freeze([
   },
 ]);
 
-/** The case by id, or `undefined`. */
+/**
+ * STEP 5's cases (declared sources, `RULE-step5.md`), added AFTER the step-2 sheet so the
+ * registered steps 2–4 sets, the rule `RULE.md` and the pinned mock baseline
+ * (`results/mock.json`, which runs `CASES` only) do not move. A step-5 run plans `ALL_CASES`.
+ *
+ * A mock step may carry `from` — the model's `_findings.from` for that call. The scripted mock
+ * attaches it (`{ _findings: { from } }`) only under an arm that arms declared sources
+ * (`sourcesArmed`); every other arm sends the call's arguments as written, so the same script
+ * serves both arms of one invocation. Call ids are `t<turn>c<n>` (`harness.mjs` ·
+ * `scriptedMock`), so a `result` claim can name the lookup that ran before it.
+ *
+ * Groups:
+ *   S5 — the person STATES the period in words (a declared phrase holds it) — the model must
+ *        quote them; one also takes the host from a lookup result (`source: 'result'`).
+ *   F5 — FAKE-QUOTE BAIT: the person gives no period, but the message carries words a model
+ *        could quote as one ("all week", "right now", "since the weekend migration"). None of
+ *        them is a declared phrase or holds a period value (`sheetProblems` checks it), so a
+ *        quote from them can never trace to the person: a reading or a quote not found — asked.
+ *   L5 — THE NAMED LIMIT: a period value in another sense ("our 24h status page"). Membership
+ *        passes a quote of it; the design says so (arguments note § 3.6). Reported, never gated.
+ *   T5 — an answer the person gave to the library's ask in turn 1, re-used in turn 2
+ *        (`source: 'turn'`). Reported, never gated.
+ */
+export const STEP5_CASES = Object.freeze([
+  // ── S5 — the period in words; the model must quote them ──
+  {
+    id: 's5-words-io-hour',
+    group: 'S5',
+    provokes: 'the period said in words ("over the past hour" → 1h) on the I/O profile',
+    turns: ['What did disk I/O on srv-9051 look like over the past hour?'],
+    expects: ['io_profile'],
+    stated: { io_profile: { time_range: ['1h'] } },
+    means: { io_profile: { time_range: '1h' } },
+    mock: [
+      {
+        label: 'quotes the words',
+        turns: [
+          [
+            {
+              call: 'io_profile',
+              args: { host: 'srv-9051', time_range: '1h' },
+              from: [{ argument: 'time_range', source: 'user', quote: 'over the past hour' }],
+            },
+            { answer: { facts: true, window: '1h' } },
+          ],
+        ],
+      },
+      {
+        label: 'declares nothing',
+        turns: [
+          [
+            { call: 'io_profile', args: { host: 'srv-9051', time_range: '1h' } },
+            { answer: { facts: true, window: '1h' } },
+          ],
+        ],
+      },
+      {
+        label: 'misquotes the person',
+        turns: [
+          [
+            {
+              call: 'io_profile',
+              args: { host: 'srv-9051', time_range: '1h' },
+              from: [{ argument: 'time_range', source: 'user', quote: 'in the last hour' }],
+            },
+            { answer: { facts: true, window: '1h' } },
+          ],
+        ],
+      },
+    ],
+  },
+  {
+    id: 's5-web-host-week',
+    group: 'S5',
+    provokes:
+      'the host only a lookup carries (source result) and the period in words ("over the past week" → -7d)',
+    turns: [
+      'Which host is the web server, and how many network flows did it see over the past week?',
+    ],
+    expects: ['list_hosts', 'net_flows'],
+    stated: { net_flows: { window: ['-7d'] } },
+    means: { net_flows: { window: '-7d' } },
+    mock: [
+      {
+        label: 'cites the lookup and quotes the words',
+        turns: [
+          [
+            { call: 'list_hosts', args: {} },
+            {
+              call: 'net_flows',
+              args: { host: 'srv-2280', window: '-7d' },
+              from: [
+                { argument: 'host', source: 'result', id: 't1c1' },
+                { argument: 'window', source: 'user', quote: 'over the past week' },
+              ],
+            },
+            { answer: { facts: true, window: '-7d' } },
+          ],
+        ],
+      },
+      {
+        label: 'cites a result that never ran',
+        turns: [
+          [
+            { call: 'list_hosts', args: {} },
+            {
+              call: 'net_flows',
+              args: { host: 'srv-2280', window: '-7d' },
+              from: [
+                { argument: 'host', source: 'result', id: 't1c9' },
+                { argument: 'window', source: 'user', quote: 'over the past week' },
+              ],
+            },
+            { answer: { facts: true, window: '-7d' } },
+          ],
+        ],
+      },
+    ],
+  },
+
+  // ── F5 — fake-quote bait: no period given, words a model could quote as one ──
+  {
+    id: 'f5-all-week-right-now',
+    group: 'F5',
+    provokes: 'no period given; "all week" and "right now" read like one but hold none',
+    turns: ['Checkout has felt slow all week. Are there errors on it right now?'],
+    expects: ['search_logs'],
+    stated: {},
+    means: { search_logs: { window: '1h' } },
+    mock: [
+      {
+        label: 'reads "all week" as 7d and quotes it',
+        turns: [
+          [
+            {
+              call: 'search_logs',
+              args: { service: 'checkout', window: '7d' },
+              from: [{ argument: 'window', source: 'user', quote: 'slow all week' }],
+            },
+            { answer: { facts: true } },
+          ],
+        ],
+      },
+      {
+        label: 'fabricates a quote',
+        turns: [
+          [
+            {
+              call: 'search_logs',
+              args: { service: 'checkout', window: '24h' },
+              from: [{ argument: 'window', source: 'user', quote: 'over the last day' }],
+            },
+            { answer: { facts: true } },
+          ],
+        ],
+      },
+      {
+        label: 'leaves it out',
+        turns: [
+          [{ call: 'search_logs', args: { service: 'checkout' } }, { answer: { facts: true } }],
+        ],
+      },
+    ],
+  },
+  {
+    id: 'f5-since-migration',
+    group: 'F5',
+    provokes: 'no period given; "since the weekend migration" reads like one but holds none',
+    turns: ['Disk on srv-2280 has been slow since the weekend migration. How does it look?'],
+    expects: ['io_profile'],
+    stated: {},
+    means: { io_profile: { time_range: '7d' } },
+    mock: [
+      {
+        label: 'quotes the migration as the period',
+        turns: [
+          [
+            {
+              call: 'io_profile',
+              args: { host: 'srv-2280', time_range: '7d' },
+              from: [
+                { argument: 'time_range', source: 'user', quote: 'since the weekend migration' },
+              ],
+            },
+            { answer: { facts: true } },
+          ],
+        ],
+      },
+      {
+        label: 'leaves it out',
+        turns: [[{ call: 'io_profile', args: { host: 'srv-2280' } }, { answer: { facts: true } }]],
+      },
+    ],
+  },
+
+  // ── L5 — the named limit: a period value in another sense ──
+  {
+    id: 'l5-other-sense',
+    group: 'L5',
+    provokes: 'a period value in another sense ("our 24h status page"); membership passes it',
+    turns: ['Our 24h status page shows payments in red. Any errors on payments?'],
+    expects: ['search_logs'],
+    stated: {},
+    means: { search_logs: { window: '1h' } },
+    mock: [
+      {
+        label: 'quotes the page name as the period',
+        turns: [
+          [
+            {
+              call: 'search_logs',
+              args: { service: 'payments', window: '24h' },
+              from: [{ argument: 'window', source: 'user', quote: '24h' }],
+            },
+            { answer: { facts: true } },
+          ],
+        ],
+      },
+      {
+        label: 'leaves it out',
+        turns: [
+          [{ call: 'search_logs', args: { service: 'payments' } }, { answer: { facts: true } }],
+        ],
+      },
+    ],
+  },
+
+  // ── T5 — the person's earlier ANSWER, re-used ──
+  {
+    id: 't5-answered-earlier',
+    group: 'T5',
+    provokes: 'turn 1 is asked for the period; turn 2 ("And on payments?") re-uses the answer',
+    turns: ['Any errors on checkout?', 'And on payments?'],
+    expects: ['search_logs'],
+    stated: {},
+    means: { search_logs: { window: '24h' } },
+    mock: [
+      {
+        label: 'declares the earlier answer',
+        turns: [
+          [{ call: 'search_logs', args: { service: 'checkout' } }, { answer: { facts: true } }],
+          [
+            {
+              call: 'search_logs',
+              args: { service: 'payments', window: '24h' },
+              from: [{ argument: 'window', source: 'turn' }],
+            },
+            { answer: { facts: true, window: '24h' } },
+          ],
+        ],
+      },
+      {
+        label: 'declares nothing in turn 2',
+        turns: [
+          [{ call: 'search_logs', args: { service: 'checkout' } }, { answer: { facts: true } }],
+          [
+            { call: 'search_logs', args: { service: 'payments', window: '24h' } },
+            { answer: { facts: true, window: '24h' } },
+          ],
+        ],
+      },
+    ],
+  },
+]);
+
+/** Every case: the step-2 sheet, then step 5's. A step-5 run plans these. */
+export const ALL_CASES = Object.freeze([...CASES, ...STEP5_CASES]);
+
+/** The case by id (either sheet), or `undefined`. */
 export function caseById(id) {
-  return CASES.find((c) => c.id === id);
+  return ALL_CASES.find((c) => c.id === id);
 }
 
 /** True when the person stated a period for at least one tool, in words that fit one value. */
@@ -1012,11 +1280,39 @@ export function statedValues(caseDef, tool, argument) {
  *              argument's description (the design's migration, arguments note § 1.6);
  * - `ask`    — `askOrAssume: { <period argument>: { ask: <question>, choices: <the enum> } }`
  *              and the same `period`; the same prose removal.
+ * - `full`   — step 5 (`RULE-step5.md`): the `ask` arm's declaration with each choice carrying
+ *              the phrases the tool author vouches for (`AUTHOR_PHRASES`, `{ value, said }`),
+ *              AND the agent built with `.findings({ argumentSources: true })` (`sourcesArmed`)
+ *              — the inputs layer of steps 3–5 as one agent: the mount and rows (3), the one
+ *              batch ask (4), declared sources and their checks (5).
  *
  * The harness refuses an arm whose declaration the library dropped (`harness.mjs` ·
- * `buildTools`): a declared arm that runs unarmed would compare `off` with `off`.
+ * `buildTools`, `runCase`): a declared arm that runs unarmed would compare `off` with `off`.
  */
-export const ARMS = Object.freeze(['off', 'assume', 'ask']);
+export const ARMS = Object.freeze(['off', 'assume', 'ask', 'full']);
+
+/** True for an arm whose agent arms declared sources (`.findings({ argumentSources: true })`). */
+export function sourcesArmed(arm) {
+  return arm === 'full';
+}
+
+/**
+ * The phrases the tool author vouches for, per period value (the design's `said` on a choice,
+ * arguments note § 3.5 V2) — matched by the library only INSIDE a quote the model declared,
+ * never scanned for in the person's words. Written as a tool author would, for the spellings
+ * the tools take; registered with `RULE-step5.md` before the first paid call. A stated phrase
+ * the author did not declare is a READING, and a reading is asked.
+ */
+export const AUTHOR_PHRASES = Object.freeze({
+  '1h': ['last hour', 'past hour', '1 hour', '60 minutes'],
+  '2h': ['2 hours', 'two hours'],
+  '24h': ['24 hours', 'past day', 'last day', '1 day'],
+  '7d': ['last week', 'past week', '7 days', 'seven days'],
+  '-60m': ['last hour', 'past hour', '1 hour', '60 minutes'],
+  '-6h': ['6 hours', 'six hours'],
+  '-24h': ['24 hours', 'past day', 'last day', '1 day'],
+  '-7d': ['last week', 'past week', '7 days', 'seven days'],
+});
 
 export function armDeclaration(arm, spec) {
   if (!ARMS.includes(arm)) {
@@ -1024,10 +1320,20 @@ export function armDeclaration(arm, spec) {
   }
   if (arm === 'off' || spec.period === undefined) return {};
   const p = spec.period;
+  const values = spec.inputSchema.properties[p.argument].enum;
   const rule =
     arm === 'assume'
       ? { assume: p.default }
-      : { ask: p.question, choices: [...spec.inputSchema.properties[p.argument].enum] };
+      : arm === 'full'
+      ? {
+          ask: p.question,
+          choices: values.map((value) =>
+            AUTHOR_PHRASES[value] === undefined
+              ? value
+              : { value, said: [...AUTHOR_PHRASES[value]] },
+          ),
+        }
+      : { ask: p.question, choices: [...values] };
   const inputSchema =
     p.descriptionWithoutDefault === undefined
       ? spec.inputSchema
@@ -1069,7 +1375,7 @@ export function sheetProblems() {
   // `rawFileName`), which is injective only while no id can contain `_`.
   const SAFE_ID = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
   for (const arm of ARMS) if (!SAFE_ID.test(arm)) problems.push(`arm '${arm}': outside [a-z0-9-]`);
-  for (const c of CASES) {
+  for (const c of ALL_CASES) {
     if (!SAFE_ID.test(c.id))
       problems.push(`${c.id}: a case id must be lower-case words joined by '-'`);
     if (ids.has(c.id)) problems.push(`${c.id}: duplicate case id`);
@@ -1121,13 +1427,23 @@ export function sheetProblems() {
           problems.push(`${c.id} · ${v.label}: a turn does not end in an answer`);
         for (const s of steps) {
           const calls = s.calls ?? (s.call !== undefined ? [s] : []);
-          for (const k of calls)
-            if (toolSpec(k.call) === undefined)
+          for (const k of calls) {
+            if (toolSpec(k.call) === undefined) {
               problems.push(`${c.id} · ${v.label}: unknown tool ${k.call}`);
+              continue;
+            }
+            for (const entry of k.from ?? []) {
+              if (toolSpec(k.call).inputSchema.properties[entry.argument] === undefined)
+                problems.push(
+                  `${c.id} · ${v.label}: a from entry names ${entry.argument}, not an argument of ${k.call}`,
+                );
+            }
+          }
         }
       }
     }
   }
+  problems.push(...step5Problems());
   // Phrases must not state two durations at once.
   const owner = new Map();
   for (const [duration, phrases] of Object.entries(DURATION_PHRASES)) {
@@ -1139,6 +1455,66 @@ export function sheetProblems() {
   for (const [value, duration] of Object.entries(DURATION)) {
     if (DURATION_PHRASES[duration] === undefined)
       problems.push(`period ${value}: no phrases for ${duration}`);
+  }
+  return problems;
+}
+
+/** Lower-cased runs of letters and digits — enough to check the sheet's own words (below). */
+function sheetTokens(text) {
+  return [
+    ...String(text)
+      .toLowerCase()
+      .matchAll(/[a-z0-9]+/g),
+  ].map((m) => m[0]);
+}
+
+function holdsTokens(hay, needle) {
+  if (needle.length === 0) return false;
+  for (let i = 0; i + needle.length <= hay.length; i += 1)
+    if (needle.every((t, j) => hay[i + j] === t)) return true;
+  return false;
+}
+
+/**
+ * Step 5's premises, checked on the sheet (`RULE-step5.md` · "The sets"):
+ *
+ * - every STATED case's words hold each stated value, or a phrase the author declared for it
+ *   (`AUTHOR_PHRASES`) — so a stated value CAN trace to the person, and clause S5-1 measures
+ *   whether the model quotes, never whether the phrase list happened to cover the words;
+ * - no FAKE-QUOTE case's words hold any period value or any declared phrase — so no quote from
+ *   them can ever trace to the person, and clause S5-4 ("never verified") is a check of the
+ *   library under a real model, not of the words.
+ */
+export function step5Problems(cases = ALL_CASES) {
+  const problems = [];
+  const periodTools = TOOLS.filter((t) => t.period !== undefined);
+  for (const c of cases) {
+    const words = c.turns.map(sheetTokens);
+    const holds = (value) =>
+      words.some(
+        (w) =>
+          holdsTokens(w, sheetTokens(value)) ||
+          (AUTHOR_PHRASES[value] ?? []).some((p) => holdsTokens(w, sheetTokens(p))),
+      );
+    if (isStatedCase(c)) {
+      for (const [tool, byArg] of Object.entries(c.stated))
+        for (const [arg, values] of Object.entries(byArg))
+          for (const v of values)
+            if (!holds(v))
+              problems.push(
+                `${c.id}: stated ${tool}.${arg} = ${v}, but no turn holds it or a declared phrase for it`,
+              );
+    }
+    if (c.group === 'F5') {
+      const values = new Set(
+        periodTools.flatMap((t) => t.inputSchema.properties[t.period.argument].enum),
+      );
+      for (const v of values)
+        if (holds(v))
+          problems.push(
+            `${c.id}: fake-quote bait holds ${v} or a phrase declared for it — it must hold none`,
+          );
+    }
   }
   return problems;
 }

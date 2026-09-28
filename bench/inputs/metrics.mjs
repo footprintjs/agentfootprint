@@ -142,6 +142,34 @@ function argumentRows(state) {
 }
 
 /**
+ * The fields of one argument row the bench reads (arguments note § 5.1) — names, enums and a
+ * quote's token count; never the value or the quote itself, so a saved row carries nothing the
+ * tool's own view would hide. Fields absent on the row stay absent here.
+ */
+export function rowView(r) {
+  const quoteTokens =
+    typeof r.quote === 'string' && r.quote !== 'REDACTED' ? tokens(r.quote).length : undefined;
+  return {
+    ...(r.source !== undefined && { source: r.source }),
+    ...(r.asked !== undefined && { asked: r.asked }),
+    ...(r.proposed !== undefined && { proposed: true }),
+    ...(r.claimed !== undefined && { claimed: r.claimed }),
+    ...(r.matched !== undefined && { matched: r.matched }),
+    ...(r.reading === true && { reading: true }),
+    ...(r.earlier === true && { earlier: true }),
+    ...(r.setAside !== undefined && { setAside: r.setAside }),
+    ...(r.coincides !== undefined && { coincides: r.coincides }),
+    ...(r.failed !== undefined && { failed: r.failed }),
+    ...(quoteTokens !== undefined && { quoteTokens }),
+  };
+}
+
+/** Dropped `from` entries the rows count (`malformed`, arguments note § 2.2). */
+function malformedOf(rows) {
+  return rows.reduce((s, r) => s + (typeof r.malformed === 'number' ? r.malformed : 0), 0);
+}
+
+/**
  * Reads one raw run (`harness.mjs` · `runCase`) into the bench's row. Deterministic: the row
  * carries no clock, no run id and no duration, so the mock's rows are byte-stable and can be
  * pinned (`bench/inputs/results/mock.json`).
@@ -220,14 +248,18 @@ export function readRun(raw) {
         }
         const pairRows = rowsFor(call.id, argument);
         const current = pairRows[pairRows.length - 1];
-        if (current !== undefined) {
-          entry.row = {
-            ...(current.source !== undefined && { source: current.source }),
-            ...(current.asked !== undefined && { asked: current.asked }),
-            ...(current.proposed !== undefined && { proposed: true }),
-          };
+        if (current !== undefined) entry.row = rowView(current);
+        if (pairRows.some((r) => r.asked !== undefined)) {
+          entry.askedFor = true;
+          // Step 5 asks for two reasons; which one is kept only on a sources-armed row, so the
+          // rows of the arms that came before keep their bytes.
+          if (pairRows.some((r) => r.claimed !== undefined))
+            entry.askedAs = [...new Set(pairRows.map((r) => r.asked).filter(Boolean))].sort();
         }
-        if (pairRows.some((r) => r.asked !== undefined)) entry.askedFor = true;
+        // Step 5: the check's verdict on the model's OWN claim — the first row that carries a
+        // `claimed` (an ask that follows keeps it; the answer that supersedes it does not).
+        const verdict = pairRows.find((r) => r.claimed !== undefined);
+        if (verdict !== undefined && verdict !== current) entry.verdict = rowView(verdict);
         periodCalls.push(entry);
       }
       for (const argument of spec?.names ?? []) {
@@ -239,7 +271,18 @@ export function readRun(raw) {
           : seenResults.some((t) => containsTokens(t, needle))
           ? 'from-result'
           : 'nobody-said';
-        names.push({ toolCallId: call.id, tool: call.name, argument, value, cls, dispatched, ok });
+        const nameRows = rowsFor(call.id, argument);
+        const nameRow = nameRows[nameRows.length - 1];
+        names.push({
+          toolCallId: call.id,
+          tool: call.name,
+          argument,
+          value,
+          cls,
+          dispatched,
+          ok,
+          ...(nameRow !== undefined && { row: rowView(nameRow) }),
+        });
       }
     }
   }
@@ -263,10 +306,20 @@ export function readRun(raw) {
 
   const bySource = {};
   const byAsked = {};
+  const byClaimed = {};
+  const byFailed = {};
   for (const r of rows) {
     if (r.source !== undefined) bySource[r.source] = (bySource[r.source] ?? 0) + 1;
     if (r.asked !== undefined) byAsked[r.asked] = (byAsked[r.asked] ?? 0) + 1;
+    if (r.claimed !== undefined) byClaimed[r.claimed] = (byClaimed[r.claimed] ?? 0) + 1;
+    if (r.failed !== undefined) byFailed[r.failed] = (byFailed[r.failed] ?? 0) + 1;
   }
+  // Step 5's counts ride the row only when a check filed a claim, so every earlier arm's row
+  // (and the pinned mock baseline) keeps its bytes.
+  const sourcesCounts =
+    Object.keys(byClaimed).length === 0
+      ? {}
+      : { byClaimed, byFailed, malformed: malformedOf(rows) };
 
   return {
     key: raw.key,
@@ -301,7 +354,7 @@ export function readRun(raw) {
       asksInProse: answer !== undefined && okPeriod.length === 0 && answer.includes('?'),
     },
     standing: raw.standing,
-    argumentRows: { total: rows.length, bySource, byAsked },
+    argumentRows: { total: rows.length, bySource, byAsked, ...sourcesCounts },
     llm: { ...raw.usage },
     usd: raw.usd,
     requestsDigest: raw.requests.map((r) => r.digest).join('.'),
@@ -443,25 +496,151 @@ export function summarize(rows) {
   };
 }
 
-/** `summarize` per arm, per set, and per case — the shape `results.json` stores. */
-export function aggregate(rows) {
+/**
+ * `summarize` per arm, per set, and per case — the shape `results.json` stores. With
+ * `{ sources: true }` (a run that armed step 5) each arm also carries `sources`: step 5's reader
+ * (`summarizeSources`) over `STEP5_SETS`, per set and per case. Without it the shape is the one
+ * steps 2–4 registered, byte for byte.
+ */
+export function aggregate(rows, { sources = false } = {}) {
   const arms = [...new Set(rows.map((r) => r.arm))];
   const out = {};
   for (const arm of arms) {
     const mine = rows.filter((r) => r.arm === arm);
+    const ids = [...new Set(mine.map((r) => r.caseId))];
     out[arm] = {
       sets: Object.fromEntries(
         Object.entries(SETS).map(([name, pick]) => [name, summarize(mine.filter(pick))]),
       ),
       cases: Object.fromEntries(
-        [...new Set(mine.map((r) => r.caseId))].map((id) => [
-          id,
-          summarize(mine.filter((r) => r.caseId === id)),
-        ]),
+        ids.map((id) => [id, summarize(mine.filter((r) => r.caseId === id))]),
       ),
+      ...(sources && {
+        sources: {
+          sets: Object.fromEntries(
+            Object.entries(STEP5_SETS).map(([name, pick]) => [
+              name,
+              summarizeSources(mine.filter(pick)),
+            ]),
+          ),
+          cases: Object.fromEntries(
+            ids.map((id) => [id, summarizeSources(mine.filter((r) => r.caseId === id))]),
+          ),
+        },
+      }),
     };
   }
   return out;
+}
+
+// ── step 5: declared sources ─────────────────────────────────────────────────
+
+/**
+ * The sets `RULE-step5.md` reads. `unstated`, `stated` and `controls` are `SETS`' own (the stated
+ * set now also holds step 5's S5 cases, since it selects by the sheet's truths); the rest are
+ * step 5's groups (`cases.mjs` · `STEP5_CASES`).
+ */
+export const STEP5_SETS = Object.freeze({
+  unstated: SETS.unstated,
+  stated: SETS.stated,
+  fake: (row) => row.group === 'F5',
+  /** Every case where the person gave no period: P1 and the fake-quote bait. */
+  noPeriodGiven: (row) => row.group === 'P1' || row.group === 'F5',
+  limit: (row) => row.group === 'L5',
+  turn: (row) => row.group === 'T5',
+  controls: SETS.controls,
+  all: () => true,
+});
+
+/** The row that holds the check's verdict on the model's own claim, or `undefined`. */
+function claimRowOf(c) {
+  if (c.verdict !== undefined) return c.verdict;
+  return c.row?.claimed !== undefined ? c.row : undefined;
+}
+
+const TRACED = new Set(['said', 'answered', 'result', 'app']);
+
+/** A claim the check traced: said by quote or phrase, an earlier answer, a result, the app. */
+export function traced(r) {
+  return r !== undefined && TRACED.has(r.source) && r.reading !== true && r.failed === undefined;
+}
+
+/** A value filed as the PERSON's words with no ask: `said` by quote or phrase, not a reading. */
+export function saidByQuote(r) {
+  return r !== undefined && r.source === 'said' && r.reading !== true;
+}
+
+function countBy(list, key) {
+  const out = {};
+  for (const x of list)
+    if (x !== undefined) out[x[key] ?? 'none'] = (out[x[key] ?? 'none'] ?? 0) + 1;
+  return out;
+}
+
+/**
+ * Step 5's reader over a set of rows (`RULE-step5.md`; the arguments note § 7.2 measures). Every
+ * count is read from the argument rows the library filed (`rowView`) and the tools' own record
+ * of what ran; a rate carries its numerator and denominator, and a rate over nothing is
+ * `undefined`. On an arm that never armed sources every claim count is 0 — no row carries one.
+ */
+export function summarizeSources(rows) {
+  const calls = rows.flatMap((r) => r.periodCalls.filter((c) => c.ok));
+  const claims = calls.map(claimRowOf).filter((x) => x !== undefined);
+  const declared = claims.filter((x) => x.claimed !== 'none');
+  const person = calls.filter((c) => c.cls === 'person');
+  const periodRuns = rows.filter((r) => r.periodCalls.some((c) => c.ok));
+  const namesArgument = (r) => (r.standing?.reasons ?? []).some((x) => x.startsWith('argument-'));
+  const nameRows = rows.flatMap((r) => r.names.map((n) => n.row)).filter((x) => x !== undefined);
+  const nameClaims = nameRows.filter((x) => x.claimed !== undefined && x.claimed !== 'none');
+  return {
+    runs: rows.length,
+    periodCalls: calls.length,
+    claims: {
+      of: claims.length,
+      declared: declared.length,
+      byClaimed: countBy(claims, 'claimed'),
+      traced: declared.filter(traced).length,
+      failed: countBy(
+        declared.filter((x) => x.failed !== undefined),
+        'failed',
+      ),
+      readings: declared.filter((x) => x.reading === true).length,
+      matched: countBy(
+        declared.filter((x) => x.matched !== undefined),
+        'matched',
+      ),
+      oneTokenQuotes: declared.filter((x) => x.quoteTokens === 1).length,
+      hints: claims.filter((x) => x.coincides !== undefined).length,
+      setAside: claims.filter((x) => x.setAside !== undefined).length,
+    },
+    person: {
+      of: person.length,
+      saidNoAsk: person.filter((c) => saidByQuote(c.row) && c.askedFor !== true).length,
+    },
+    saidByQuote: calls.filter((c) => saidByQuote(c.row) || c.row?.source === 'app').length,
+    asked: {
+      runs: rows.filter((r) => r.periodCalls.some((c) => c.askedFor === true)).length,
+      calls: calls.filter((c) => c.askedFor === true).length,
+      unverified: calls.filter((c) => (c.askedAs ?? []).includes('unverified')).length,
+      missing: calls.filter(
+        (c) => c.askedFor === true && (c.askedAs === undefined || c.askedAs.includes('missing')),
+      ).length,
+    },
+    standing: {
+      periodRuns: periodRuns.length,
+      noArgumentReason: periodRuns.filter((r) => !namesArgument(r)).length,
+    },
+    names: {
+      rows: nameRows.length,
+      declared: nameClaims.length,
+      byClaimed: countBy(nameClaims, 'claimed'),
+      traced: nameClaims.filter(traced).length,
+      failed: countBy(
+        nameClaims.filter((x) => x.failed !== undefined),
+        'failed',
+      ),
+    },
+  };
 }
 
 // ── the tables ───────────────────────────────────────────────────────────────
@@ -523,6 +702,56 @@ export function formatReport(aggregates) {
       lines.push(`| **${name}** | ${columns(s).join(' | ')} |`);
     for (const [id, s] of Object.entries(a.cases))
       lines.push(`| ${id} | ${columns(s).join(' | ')} |`);
+    lines.push('');
+  }
+  return lines.join('\n');
+}
+
+const SOURCES_HEADER = [
+  'runs',
+  'period calls',
+  'claims declared/of',
+  'traced/declared',
+  'readings',
+  'failed',
+  "person's value said, no ask",
+  "filed as the person's",
+  'asked runs · unverified/missing calls',
+  'standing names no argument',
+  'names: traced/declared',
+];
+
+function sourcesColumns(s) {
+  const failed = Object.entries(s.claims.failed)
+    .map(([k, v]) => `${k} ${v}`)
+    .join(', ');
+  return [
+    String(s.runs),
+    String(s.periodCalls),
+    frac(s.claims.declared, s.claims.of),
+    frac(s.claims.traced, s.claims.declared),
+    String(s.claims.readings),
+    failed === '' ? '-' : failed,
+    frac(s.person.saidNoAsk, s.person.of),
+    String(s.saidByQuote),
+    `${s.asked.runs} · ${s.asked.unverified}/${s.asked.missing}`,
+    frac(s.standing.noArgumentReason, s.standing.periodRuns),
+    frac(s.names.traced, s.names.declared),
+  ];
+}
+
+/** Step 5's tables (`summarizeSources`), one per arm that has them, as markdown. */
+export function formatSourcesReport(aggregates) {
+  const lines = [];
+  for (const [arm, a] of Object.entries(aggregates)) {
+    if (a.sources === undefined) continue;
+    lines.push(`### arm \`${arm}\` — declared sources (step 5)`, '');
+    lines.push(`| set / case | ${SOURCES_HEADER.join(' | ')} |`);
+    lines.push(`|${' --- |'.repeat(SOURCES_HEADER.length + 1)}`);
+    for (const [name, s] of Object.entries(a.sources.sets))
+      lines.push(`| **${name}** | ${sourcesColumns(s).join(' | ')} |`);
+    for (const [id, s] of Object.entries(a.sources.cases))
+      lines.push(`| ${id} | ${sourcesColumns(s).join(' | ')} |`);
     lines.push('');
   }
   return lines.join('\n');

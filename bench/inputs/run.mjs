@@ -12,9 +12,9 @@
  *   node bench/inputs/run.mjs --labels <out dir>    # agreement of the window reader with hand labels
  *
  * Flags: --provider mock|anthropic · --model <id> (anthropic: a Haiku 4.5 id, the default
- * claude-haiku-4-5-20251001) · --arms off[,assume,ask] · --cases <id|group>,… · --runs N ·
+ * claude-haiku-4-5-20251001) · --arms off[,assume,ask,full] · --cases <id|group>,… · --runs N ·
  * --seed N · --max-usd X (required for anthropic) · --temperature T (sent only when given; the
- * registered runs send none) · --judge step3|step4 · --concurrency K (runs in flight at once,
+ * registered runs send none) · --judge step3|step4|step5 (step5 plans `ALL_CASES`) · --concurrency K (runs in flight at once,
  * started in the plan's order; default 1, at most 4 — RULE.md, the protocol) · --out <dir> ·
  * --dry-run.
  *
@@ -44,11 +44,18 @@ import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { gunzipSync, gzipSync } from 'node:zlib';
 
-import { ARMS, CASES, sheetProblems } from './cases.mjs';
-import { MAX_ITERATIONS, MAX_TOKENS, PRICES, buildTools, runCase } from './harness.mjs';
+import { ALL_CASES, ARMS, CASES, sheetProblems } from './cases.mjs';
+import {
+  MAX_ITERATIONS,
+  MAX_TOKENS,
+  PRICES,
+  buildTools,
+  measureServed,
+  runCase,
+} from './harness.mjs';
 import { blindSheet, labelAgreement, shuffled } from './labels.mjs';
-import { aggregate, formatReport, readRun } from './metrics.mjs';
-import { RULE_ID, formatVerdict, judgeStep3, judgeStep4 } from './rule.mjs';
+import { aggregate, formatReport, formatSourcesReport, readRun } from './metrics.mjs';
+import { RULE_ID, RULE5_ID, formatVerdict, judgeStep3, judgeStep4, judgeStep5 } from './rule.mjs';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const ROOT = join(HERE, '..', '..');
@@ -123,12 +130,16 @@ export function parseArgs(argv) {
     if (!ARMS.includes(arm)) throw new Error(`--arms: unknown arm '${arm}' (${ARMS.join(', ')})`);
   if (new Set(arms).size !== arms.length) throw new Error('--arms: an arm is named twice');
 
+  // Step 5 (`--judge step5`, or the `full` arm) plans the step-2 sheet AND step 5's cases
+  // (`cases.mjs` · `ALL_CASES`); every earlier step keeps the sheet it registered (`CASES`).
+  const step5 = flags.get('--judge') === 'step5' || arms.includes('full');
+  const sheet = step5 ? ALL_CASES : CASES;
   const picked = flags.get('--cases');
-  let cases = CASES;
+  let cases = sheet;
   if (picked !== undefined) {
     const want = picked.split(',').map((s) => s.trim());
-    cases = CASES.filter((c) => want.includes(c.id) || want.includes(c.group));
-    const unknown = want.filter((w) => !CASES.some((c) => c.id === w || c.group === w));
+    cases = ALL_CASES.filter((c) => want.includes(c.id) || want.includes(c.group));
+    const unknown = want.filter((w) => !ALL_CASES.some((c) => c.id === w || c.group === w));
     if (unknown.length > 0) throw new Error(`--cases: no case or group ${unknown.join(', ')}`);
   }
   const int = (name, fallback) => {
@@ -168,8 +179,9 @@ export function parseArgs(argv) {
   }
   const judge = flags.get('--judge');
   if (judge !== undefined) {
-    const need = { step3: 'assume', step4: 'ask' }[judge];
-    if (need === undefined) throw new Error(`--judge must be step3 or step4, saw '${judge}'`);
+    const need = { step3: 'assume', step4: 'ask', step5: 'full' }[judge];
+    if (need === undefined)
+      throw new Error(`--judge must be step3, step4 or step5, saw '${judge}'`);
     // A rescore reads its arms from the saved run; a new run must plan both.
     if (rescore === undefined && (!arms.includes('off') || !arms.includes(need))) {
       throw new Error(
@@ -283,7 +295,7 @@ function stamp() {
 
 /** Rows in a fixed order: arm (as given), case (sheet order), repetition. */
 function sortRows(rows, arms) {
-  const caseIndex = new Map(CASES.map((c, i) => [c.id, i]));
+  const caseIndex = new Map(ALL_CASES.map((c, i) => [c.id, i]));
   return [...rows].sort(
     (a, b) =>
       arms.indexOf(a.arm) - arms.indexOf(b.arm) ||
@@ -292,15 +304,30 @@ function sortRows(rows, arms) {
   );
 }
 
-function verdictsOf(judge, aggregates, labels) {
+function verdictsOf(judge, aggregates, labels, served) {
   if (judge === 'step3') return [judgeStep3(aggregates, labels)];
   if (judge === 'step4') return [judgeStep4(aggregates)];
+  if (judge === 'step5') return [judgeStep5(aggregates, served)];
   return [];
 }
 
-function writeOutputs(dir, { config, spend, rows, raws, verdicts }) {
-  const aggregates = aggregate(rows);
-  const results = { rule: RULE_ID, config, spend, rows, aggregates, verdicts };
+/** Step 5's reader (`metrics.mjs` · `summarizeSources`) joins the aggregates of a run that armed it. */
+function aggregateFor(rows, arms) {
+  return aggregate(rows, { sources: arms.includes('full') });
+}
+
+function writeOutputs(dir, { config, spend, rows, raws, verdicts, served }) {
+  const aggregates = aggregateFor(rows, config.arms);
+  const rule = config.judge === 'step5' || config.arms.includes('full') ? RULE5_ID : RULE_ID;
+  const results = {
+    rule,
+    config,
+    spend,
+    ...(served !== undefined && { served }),
+    rows,
+    aggregates,
+    verdicts,
+  };
   writeFileSync(join(dir, 'results.json'), `${JSON.stringify(results, null, 2)}\n`);
   const report = [
     `# Inputs bench — ${config.provider} · ${config.model} · arms ${config.arms.join(', ')}`,
@@ -310,6 +337,7 @@ function writeOutputs(dir, { config, spend, rows, raws, verdicts }) {
     }.`,
     '',
     formatReport(aggregates),
+    formatSourcesReport(aggregates),
     ...verdicts.map(formatVerdict),
     '',
   ].join('\n');
@@ -350,14 +378,15 @@ async function rescore(dir, judge) {
     .filter((f) => f.endsWith('.json.gz'))
     .map((f) => JSON.parse(gunzipSync(readFileSync(join(dir, 'raw', f))).toString('utf8')));
   const rows = sortRows(raws.map(readRun), results.config.arms);
-  const aggregates = aggregate(rows);
-  const verdicts = verdictsOf(judge ?? results.config.judge, aggregates, undefined);
+  const aggregates = aggregateFor(rows, results.config.arms);
+  const verdicts = verdictsOf(judge ?? results.config.judge, aggregates, undefined, results.served);
   const out = writeOutputs(dir, {
     config: results.config,
     spend: results.spend,
     rows,
     raws: undefined,
     verdicts,
+    served: results.served,
   });
   process.stdout.write(`${out.report}\n`);
 }
@@ -419,6 +448,20 @@ async function main() {
   const doors = await loadDoors();
   // Preflight: an arm this build cannot declare is refused before anything is written or spent.
   for (const arm of opts.arms) buildTools(doors, arm, [], { turn: 0 });
+  // Step 5's S5-9 reads the served decoration, measured on the scripted mock BEFORE any paid
+  // call ($0, deterministic: no model behaviour changes it).
+  const served =
+    opts.judge === 'step5' || opts.arms.includes('full')
+      ? await measureServed(doors, opts.cases)
+      : undefined;
+  if (served !== undefined) {
+    process.stdout.write(
+      `served (system + tools, chars per request): off ${served.off.perRequest.toFixed(0)} · ` +
+        `.findings() ${served.findings.perRequest.toFixed(
+          0,
+        )} · full ${served.full.perRequest.toFixed(0)}\n`,
+    );
+  }
   const sdkClient = opts.provider === 'anthropic' ? await loadSdkClient(opts.sdkFrom) : undefined;
   // A paid run is a record worth keeping: it lands beside the bench. A mock run proves the bench
   // itself and lands in the system's temp directory, unless --out says otherwise.
@@ -432,7 +475,7 @@ async function main() {
       );
   if (dir !== undefined) mkdirSync(join(dir, 'raw'), { recursive: true });
 
-  const byId = new Map(CASES.map((c) => [c.id, c]));
+  const byId = new Map(ALL_CASES.map((c) => [c.id, c]));
   const raws = [];
   const spend = { usd: 0, runs: 0 };
   let projected = DEFAULTS.priorRunUsd;
@@ -494,8 +537,8 @@ async function main() {
     );
     return undefined;
   }
-  const verdicts = verdictsOf(opts.judge, aggregate(rows), undefined);
-  const { report } = writeOutputs(dir, { config, spend, rows, raws, verdicts });
+  const verdicts = verdictsOf(opts.judge, aggregateFor(rows, opts.arms), undefined, served);
+  const { report } = writeOutputs(dir, { config, spend, rows, raws, verdicts, served });
   process.stdout.write(`${report}\nwritten: ${dir}\nspend: $${spend.usd.toFixed(4)}\n`);
   return undefined;
 }

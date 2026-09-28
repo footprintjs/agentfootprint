@@ -41,8 +41,10 @@ The cases live in `cases.mjs` · `CASES`. Every run gives the agent the same fiv
 | **C1** | Control: the period given exactly in the tool's spelling | `c1-exact-24h`, `c1-exact-7d` |
 | **C2** | Control: a question that needs no tool with a period | `c2-list-services` |
 
-P7, a composed run, belongs to step 5. What it measures (`failed: 'composed-message'`) exists
-only once declared sources are armed.
+Step 5 adds six cases after these (`cases.mjs` · `STEP5_CASES`; see "Step 5" below). The
+16 above, the step-2 sets and the pinned mock baseline do not move. P7, a composed run, is not
+cased: its check (`failed: 'composed-message'`) is decided by the run's mark, and the library's
+own integration tests pin it (`RULE-step5.md` · "Not in this rule").
 
 ## What is read, and from where
 
@@ -112,6 +114,32 @@ every field with the case's `means` for its (tool, argument), never the model's 
 case has no `means` for gets the argument's declared default and is recorded as unexpected. The
 run is then resumed, and each turn's record keeps the asks it answered (`turns[i].asks`).
 
+## Step 5 — declared sources
+
+`RULE-step5.md` is step 5's own rule, registered before its first paid call, and `rule.mjs` ·
+`judgeStep5` computes it (`--arms off,full --judge step5`, which plans `ALL_CASES`). The `full`
+arm is steps 3–5 as one agent. Every period argument has an `ask` rule whose choices carry the
+phrases the tool author vouches for (`cases.mjs` · `AUTHOR_PHRASES`), and the agent is built with
+`.findings({ argumentSources: true })`. The model says where each value came from
+(`_findings.from`), and the library checks it before the batch runs.
+
+The six added cases:
+
+- people who state the period in words the model must quote (S5);
+- fake-quote bait, where no period is given but the words read like one, and the sheet checks
+  they hold no value and no declared phrase (F5, `cases.mjs` · `step5Problems`);
+- the named limit, a period value used in another sense (L5);
+- an earlier answer re-used in turn 2 (T5).
+
+A scripted call's `from` rides the mock's call only under `full`, so the same script serves both
+arms.
+
+The reader adds `metrics.mjs` · `summarizeSources`: claims declared, traced, failed, readings,
+said-with-no-ask, filed-as-the-person's, asks by reason, and the standing's argument reasons.
+These are read from the argument rows' names and enums only (`rowView`), never from a value or a
+quote. The step-5 clause S5-9, the served decoration, is measured on the scripted mock before any
+paid call (`harness.mjs` · `measureServed`, $0) and saved as `results.json` · `served`.
+
 ## What it lets you measure
 
 The bench reads these from the record alone, per model and per prompt or skill version:
@@ -140,7 +168,7 @@ labels is measured.
 
 - **Absolute windows** ("between 1 and 3 am on Monday") stay app code in the design and are not
   cased here.
-- **Composed runs** (P7) are step 5's.
+- **Composed runs** (P7) are not cased, even in step 5 (`RULE-step5.md` · "Not in this rule").
 - **Temperature.** The registered runs send none, so every rate is the model's own distribution
   at its default setting.
 - **The mock** is scripted. Its rows prove the harness and the reader, never a model.
@@ -152,11 +180,12 @@ labels is measured.
 | `cases.mjs` | The case sheet: tools, fixture data, cases, truths, arms, the mock's scripts, and the sheet's own checks |
 | `harness.mjs` | Runs one (case, arm, repetition) through the library's doors and keeps what the run left |
 | `metrics.mjs` | The reader: a saved run becomes a row, and rows become the tables |
-| `rule.mjs` | `RULE.md` as code: the step-3 and step-4 verdicts |
+| `rule.mjs` | `RULE.md` and `RULE-step5.md` as code: the step-3, step-4 and step-5 verdicts |
 | `labels.mjs` | The blind sheet, and the reader's agreement with the hand labels |
 | `run.mjs` | The command line: plan, cap, run, save, report |
 | `RULE.md` | The registered success rule for steps 3 and 4 |
+| `RULE-step5.md` | The registered success rule for step 5 (declared sources) |
 | `results/mock.json` | The mock baseline, pinned byte for byte by `test/bench/inputs/unarmed-bytes.test.ts` |
 
 Tests: `test/bench/inputs/` (unit, property, integration on the mock and on a stubbed Anthropic
-client, byte identity).
+client, byte identity; step 5's rule, reader and `full` arm in `rule-step5.test.ts`).
