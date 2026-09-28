@@ -346,6 +346,18 @@ export function emitRow(
     emitArgumentRow(scope, row);
     return;
   }
+  // The results layer's period verdict (honesty layer 3, step 7b): the tool,
+  // the call, the stamps and the verdict word — never an instant.
+  if (row.kind === 'period') {
+    typedEmit(scope, 'agentfootprint.findings.period', {
+      toolCallId: row.toolCallId,
+      toolName: row.toolName,
+      iteration: row.iteration,
+      turn: row.turn,
+      verdict: row.verdict,
+    });
+    return;
+  }
   if (row.kind !== 'standing') return;
   const conflictKeys = newConflicts
     .filter((c) => c.witnesses.some((w) => w.toolCallId === row.toolCallId))

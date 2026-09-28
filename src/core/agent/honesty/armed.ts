@@ -17,12 +17,19 @@
 export interface HonestyLayers {
   /** The inputs layer (honesty layer 2) — `sf-inputs` is mounted. */
   readonly inputs?: true;
+  /** The results layer (honesty layer 3, step 7b) — `sf-results` is mounted at the loop head. */
+  readonly results?: true;
 }
 
 /**
- * The run constant for an agent whose inputs layer is mounted, or `undefined`
- * when it is not (then seed writes nothing).
+ * The run constant for an agent with any layer mounted, or `undefined` when
+ * none is (then seed writes nothing). An agent with only the inputs layer
+ * records `{ inputs: true }`, exactly as before the results layer existed.
  */
-export function honestyLayersOf(inputsLayer: boolean): HonestyLayers | undefined {
-  return inputsLayer ? { inputs: true } : undefined;
+export function honestyLayersOf(
+  inputsLayer: boolean,
+  resultsLayer = false,
+): HonestyLayers | undefined {
+  if (!inputsLayer && !resultsLayer) return undefined;
+  return { ...(inputsLayer && { inputs: true }), ...(resultsLayer && { results: true }) };
 }

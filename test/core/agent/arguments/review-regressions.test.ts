@@ -173,7 +173,13 @@ describe('a before-tool middleware rewrites an argument the layer FILLED', () =>
     // declared origin → assumed) AND the empty result the rewrite ran on.
     expect(argumentRows(agent)).toMatchObject([{ source: 'default', value: '2h' }]);
     const standing = (await agent.assessment())!;
-    expect(standing.reasons.map((r) => r.reason)).toEqual(['argument-assumed', 'empty-undeclared']);
+    // (+ `period-undeclared`, honesty step 7b: search_logs declares a ToolPeriod
+    // and its result declares no period.)
+    expect(standing.reasons.map((r) => r.reason)).toEqual([
+      'argument-assumed',
+      'empty-undeclared',
+      'period-undeclared',
+    ]);
     expect(standing.reasons[0]!.witness[0]).toMatchObject({ key: 'middlewareDecisions' });
   });
 
@@ -187,7 +193,8 @@ describe('a before-tool middleware rewrites an argument the layer FILLED', () =>
       .toolMiddleware(rewrite((a) => ({ ...a, window: '24h' }), { window: 'person' }))
       .build();
     await agent.run({ message: 'any errors on checkout in the last day?' });
-    expect(await reasonsOf(agent)).toEqual(['empty-undeclared']);
+    // (+ `period-undeclared`, honesty step 7b: a ToolPeriod tool whose result declares no period.)
+    expect(await reasonsOf(agent)).toEqual(['empty-undeclared', 'period-undeclared']);
   });
 
   it('a rewrite of ANOTHER argument keeps the fill’s clause, its boundary and its line', async () => {
@@ -336,7 +343,12 @@ describe('the note hides no reading of the result it follows', () => {
       .build();
     await agent.run({ message: 'errors on a?' });
     const standing = (await agent.assessment())!;
-    expect(standing.reasons.map((r) => r.reason)).toEqual(['argument-assumed', 'empty-undeclared']);
+    // (+ `period-undeclared`, honesty step 7b: a ToolPeriod tool whose result declares no period.)
+    expect(standing.reasons.map((r) => r.reason)).toEqual([
+      'argument-assumed',
+      'empty-undeclared',
+      'period-undeclared',
+    ]);
     expect(standing.checked.find((c) => c.check === 'result-shape')).toMatchObject({
       ran: 1,
       of: 1,
@@ -356,7 +368,14 @@ describe('the note hides no reading of the result it follows', () => {
       .build();
     await agent.run({ message: 'any errors on checkout?' });
     const standing = (await agent.assessment())!;
-    expect(standing.reasons.map((r) => r.reason)).toEqual(['argument-assumed', 'declared-absent']);
+    // (+ `period-undeclared`, honesty step 7b: the JSON-text envelope is not
+    // recognized at the door (adopted Q40), so no period of its reaches the
+    // record — a ToolPeriod tool's result with no period, recorded as silence.)
+    expect(standing.reasons.map((r) => r.reason)).toEqual([
+      'argument-assumed',
+      'declared-absent',
+      'period-undeclared',
+    ]);
     expect(standing.checked.find((c) => c.check === 'tool-coverage')).toMatchObject({
       ran: 1,
       of: 1,

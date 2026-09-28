@@ -27,11 +27,15 @@
  */
 
 import { COVERAGE_DECLARATION_KEYS } from '../../core/agent/coverage/items.js';
+import { refusal, refuseUnknownKeys } from '../../core/agent/coverage/refusal.js';
 import {
   CLARIFY_DECLARATION_KEYS,
   mintSemantics,
+  provenanceIssues,
+  WIRE_SPELLING,
   type DeclarationDoor,
   type RespelledObject,
+  type SemanticIssue,
   type SpelledField,
 } from './envelope.js';
 import type {
@@ -102,8 +106,9 @@ const CAMEL_SPELLING = {
 } as const satisfies { readonly [W in SpelledField]: DeclaredNameOf<W> };
 
 /**
- * The eight top-level fields, tied to the type in both directions. One word
- * each, so they are the same eight `semantic()` reads.
+ * The nine top-level fields, tied to the type in both directions. One word
+ * each — the eight `semantic()` reads, plus `period` (honesty step 7b), which
+ * only this door takes: the deprecated door gains no field.
  */
 const DECLARATION_KEYS: readonly string[] = Object.keys({
   series: true,
@@ -111,6 +116,7 @@ const DECLARATION_KEYS: readonly string[] = Object.keys({
   edges: true,
   grain: true,
   provenance: true,
+  period: true,
   coverage: true,
   clarify: true,
   render: true,
@@ -153,6 +159,58 @@ const DESCRIBED_DOOR: DeclarationDoor = {
   spelling: CAMEL_SPELLING,
 };
 
+// ─── The one provenance shape, for absent() too (honesty step 7b) ───────────
+
+/** A provenance declaration as an author writes it (camelCase) — and as the record keeps it. */
+export type DeclaredProvenance = NonNullable<DescribedResultDeclaration['provenance']>;
+
+/**
+ * Mint an author's (camelCase) `provenance` into the wire's spelling by THIS
+ * door's rules — `absent()` asks it (honesty step 7b), so an absence says its
+ * source and time in the shape, the spelling and the rule set a described
+ * result does: `measuredAt` and `source` required, `ageSeconds` a finite
+ * number ≥ 0, `sourceExportDate` a non-empty string, a snake_case key refused
+ * naming the camelCase one. THROWS the refusal (`refused: …`) at the line the
+ * author wrote. A fresh object, keys in the author's order.
+ */
+export function mintProvenance(declared: unknown): SemanticProvenance {
+  if (typeof declared === 'object' && declared !== null && !Array.isArray(declared)) {
+    refuseUnknownKeys(declared, Object.keys(PROVENANCE_NAMES), 'provenance');
+  }
+  const wire = toWire('provenance', declared);
+  const [first] = provenanceIssues(wire, CAMEL_SPELLING);
+  if (first !== undefined) throw refusal(`${first.message} (field: ${first.field})`);
+  return wire as SemanticProvenance;
+}
+
+/** What a recognizer read off an envelope's `provenance`. */
+export interface ProvenanceReading {
+  /** The record's camelCase form — present when the envelope declared a well-formed one. */
+  readonly provenance?: DeclaredProvenance;
+  /** The first fault, when it declared one the record cannot carry. */
+  readonly problem?: SemanticIssue;
+}
+
+/**
+ * Read a WIRE provenance (an absence minted anywhere — a Python helper, an
+ * older process) into the record's camelCase form, by the same rule set —
+ * never repaired. `{}` when none is declared (`undefined` or `null`).
+ */
+export function readProvenance(wire: unknown): ProvenanceReading {
+  if (wire === undefined || wire === null) return {};
+  const [problem] = provenanceIssues(wire, WIRE_SPELLING);
+  if (problem !== undefined) return { problem };
+  const p = wire as SemanticProvenance;
+  return {
+    provenance: {
+      measuredAt: p.measured_at,
+      source: p.source,
+      ...(p.age_seconds !== undefined && { ageSeconds: p.age_seconds }),
+      ...(p.source_export_date !== undefined && { sourceExportDate: p.source_export_date }),
+    },
+  };
+}
+
 /**
  * Return rows, a series or relationships from a system of record — WITH the
  * caveats that make them honest — in a shape the framework recognizes, the
@@ -173,6 +231,13 @@ const DESCRIBED_DOOR: DeclarationDoor = {
  * measured, taken from the data — the export's time, the moment of a live
  * read, the newest sample of a series, the end of a window — never typed in.
  * It is never parsed: the library passes your words through.
+ *
+ * **The period** (honesty step 7b). `period: { queried, held, readAt? }` says
+ * what time the READ covered — the instants it asked for, and what the store
+ * holds (or `'unknown'`) — as ISO 8601 instants with a zone. The model reads it
+ * as declared; the results layer compares the instants and files its verdict
+ * (covered · partly held · not held · unknown). A malformed period is refused
+ * here.
  *
  * Refuses (throws, at the call site — the `absent()` law) any declaration
  * this vocabulary cannot honor: series without `grain`, series or facts

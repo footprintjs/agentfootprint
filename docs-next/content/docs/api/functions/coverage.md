@@ -6,7 +6,7 @@ title: coverage
 
 > **coverage**\<`T`\>(`content`, `decl`): [`CoveredResult`](/docs/api/interfaces/CoveredResult)\<`T`\>
 
-Defined in: [src/core/agent/coverage/ledger.ts:98](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/coverage/ledger.ts#L98)
+Defined in: [src/core/agent/coverage/ledger.ts:118](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/coverage/ledger.ts#L118)
 
 Return a verdict with its own boundary attached.
 
@@ -16,8 +16,13 @@ skimmed past. The framework records the ledger and, with
 `.limitsTravelWithTheAnswer()` configured, appends it to the run's final
 answer where the model cannot drop it.
 
+`period` (honesty step 7b) says what time the read behind the value
+covered — `{ queried, held, readAt? }`, ISO 8601 instants with a zone; it is
+a boundary on its own, served inside `af_coverage` before `result`, and the
+results layer judges it. `coverage()` takes no `provenance`.
+
 Refuses (throws, where it is called) a boundary that declares nothing, a
-malformed item, and any key the boundary does not have — naming the
+malformed item or period, and any key the boundary does not have — naming the
 spelling meant when the key is a casing slip (`not_checked` →
 `notChecked`), so a list declared from plain JavaScript or JSON cannot
 vanish without a word. Every refusal starts `refused: `: inside `execute`
@@ -37,7 +42,7 @@ it becomes the call's error result, which the model reads.
 
 ### decl
 
-[`CoverageDeclaration`](/docs/api/interfaces/CoverageDeclaration)
+[`CoverageDeclaration`](/docs/api/interfaces/CoverageDeclaration) & `object`
 
 ## Returns
 

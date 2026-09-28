@@ -246,6 +246,16 @@ execute: ({ vm, summary }) => {
 },
 ```
 
+All three take a `period` — what time the READ covered: `{ queried: { from, to }, held:
+{ from, to } | 'unknown', readAt? }`, ISO 8601 instants WITH a zone, computed by the tool
+from its own data (the library never parses "last hour"). `absent()` also takes
+`describedResult()`'s `provenance: { measuredAt, source }`. The results layer files one
+verdict per call (`covered` · `partly-held` · `not-held` · `unknown` · `undeclared`) and
+the answer's standing reads "not sure" for all but `covered`; a tool that declares a period
+argument (`defineTool({ …, period: { argument: 'window' } })`, needs an `askOrAssume` rule)
+arms it and gets `undeclared` when its result says nothing; `.resultsLayer()` arms it for
+tools that declare a period only on their results.
+
 `describedResult()` is camelCase throughout (`measuredAt`, `ageSeconds`, `isCounter`,
 `filterNote`); the envelope the model reads stays snake_case. Series need `grain`
 (`{ interval, aggregation, isCounter }` — state `isCounter` for `sum`/`count`-like
@@ -278,7 +288,7 @@ const agent = Agent.create({ provider, model })
 agent.on('agentfootprint.context.evaluated', (e) => console.log(e.payload.activeIds));
 ```
 
-**122 typed events across 27 domains.** Two subscription shapes and no third:
+**123 typed events across 27 domains.** Two subscription shapes and no third:
 `'*'` (every event) and `'agentfootprint.<domain>.*'` (one domain). **`'agentfootprint.*'`
 is not a pattern** — TypeScript rejects it, and at runtime it would match nothing.
 

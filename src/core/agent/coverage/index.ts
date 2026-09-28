@@ -26,6 +26,7 @@ export {
   readCoverageLedger,
 } from './ledger.js';
 export { readCoverageResult, type CoverageFacts, type CoverageReading } from './read.js';
+export { PERIOD_WIRE, periodVerdict, type DeclaredPeriod, type PeriodRow } from './period.js';
 export type {
   AbsenceDeclaration,
   Coverage,

@@ -69,7 +69,13 @@ import {
   prepareFinalWithLimitsAsDataStage,
 } from './stages/prepareFinal.js';
 import { buildCacheSubflow } from './buildCacheSubflow.js';
-import { mountInputsLayer, type InputsMountDeps } from './honesty/mounts.js';
+import {
+  mountInputsLayer,
+  mountResultsLayer,
+  RESULTS_LOOP_TARGET,
+  type InputsMountDeps,
+  type ResultsMountDeps,
+} from './honesty/mounts.js';
 import type { RouteBranch } from './stages/route.js';
 import type { AgentState } from './types.js';
 
@@ -325,6 +331,16 @@ export interface AgentChartDeps {
   readonly inputsLayer?: InputsMountDeps;
 
   /**
+   * The results layer is armed (honesty layer 3, step 7b) — present ONLY when a
+   * tool the build can see declares a `ToolPeriod`, or the agent was built
+   * with `.resultsLayer()`. Mounts `sf-results` at the loop head, before the
+   * window strategy, and makes it the loop target (`honesty/mounts.ts` ·
+   * `mountResultsLayer`, the ONE helper both builders call). Absent — the
+   * default — and the chart is byte-identical.
+   */
+  readonly resultsLayer?: ResultsMountDeps;
+
+  /**
    * Tool choice by classifier is armed (`.toolChoice()`, 9.105.0). Gates
    * THREE mount args on the Tools branch's `inputMapper` — `userMessage`
    * (what the classifier reads), `priorToolChoices` (the parent's rows,
@@ -496,6 +512,12 @@ export function buildAgentChart(deps: AgentChartDeps): FlowChart {
     );
   }
 
+  // ── The results layer — conditional mount at the LOOP HEAD (honesty layer 3).
+  // Mounted before the window strategy and made the loop target below: it reads
+  // the batch ToolCalls just ran before any window strategy folds it away.
+  // Absent → the builder, untouched.
+  builder = mountResultsLayer(builder, deps.resultsLayer);
+
   // Window strategy — mounted immediately before the current loop target, and
   // it BECOMES the loop target below. That placement is the whole design: the
   // window changes once per iteration boundary, before the injection engine
@@ -511,7 +533,15 @@ export function buildAgentChart(deps: AgentChartDeps): FlowChart {
   }
   // Where `tool-calls` loops back to. With a window strategy the head moves
   // one stage earlier; without it, this is the id it has always been.
-  const loopTarget: string = deps.windowStage ? STAGE_IDS.COMPACT : SUBFLOW_IDS.INJECTION_ENGINE;
+  // The results layer (honesty layer 3) heads the loop when armed: every
+  // tool-calls loop enters it first, so it reads the batch just run before any
+  // window strategy folds it away (`honesty/mounts.ts` · `mountResultsLayer`).
+  const loopTarget: string =
+    deps.resultsLayer !== undefined
+      ? RESULTS_LOOP_TARGET
+      : deps.windowStage
+      ? STAGE_IDS.COMPACT
+      : SUBFLOW_IDS.INJECTION_ENGINE;
 
   builder = builder
     // Injection Engine — evaluates every Injection's trigger once

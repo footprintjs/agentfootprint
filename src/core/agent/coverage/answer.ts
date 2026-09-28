@@ -45,7 +45,28 @@
  */
 
 import { mergeItems } from './items.js';
+import { copyPeriod, periodLine, type DeclaredPeriod } from './period.js';
 import type { Coverage, CoverageItem, DeclaredCoverage } from './types.js';
+
+/**
+ * One declaring call's period, as the answer's limits carry it (honesty step
+ * 7b) — the tool, the call, and the period AS DECLARED: the data twin of one
+ * `Period:` line.
+ *
+ * @inline
+ */
+export interface AnswerPeriod extends DeclaredPeriod {
+  readonly toolName: string;
+  readonly toolCallId?: string;
+}
+
+/**
+ * The answer's limits as data — the three lists the block prints, and (honesty
+ * step 7b) the periods the calls declared, present only when one did.
+ *
+ * @inline
+ */
+export type AnswerCoverage = Coverage & { readonly periods?: readonly AnswerPeriod[] };
 
 /** The block's opening line. Stable — tests and readers match on it. */
 export const COVERAGE_BLOCK_HEADING = 'Coverage of this answer';
@@ -65,12 +86,45 @@ const SECTIONS = [
 ] as const;
 
 function renderSection(label: string, items: readonly CoverageItem[]): string {
-  const shown = items.slice(0, MAX_ENTRIES_PER_SECTION);
-  const lines = shown.map((i) => `- ${i.what}${i.why !== undefined ? ` — ${i.why}` : ''}`);
-  if (items.length > shown.length) {
-    lines.push(`- … and ${items.length - shown.length} more (in the run record)`);
+  return renderLines(
+    label,
+    items.map((i) => `${i.what}${i.why !== undefined ? ` — ${i.why}` : ''}`),
+  );
+}
+
+/** One labelled section of `- line` bullets, folded after the cap like every section. */
+function renderLines(label: string, texts: readonly string[]): string {
+  const shown = texts.slice(0, MAX_ENTRIES_PER_SECTION);
+  const lines = shown.map((text) => `- ${text}`);
+  if (texts.length > shown.length) {
+    lines.push(`- … and ${texts.length - shown.length} more (in the run record)`);
   }
   return `${label}:\n${lines.join('\n')}`;
+}
+
+/** The section heading the periods print under (honesty step 7b). Stable — readers match on it. */
+export const PERIOD_SECTION_LABEL = 'Period';
+
+/**
+ * The periods the run's declarations carried, one per DECLARING call and
+ * distinct period, in declaration order — a call whose `coverage()` and inner
+ * `absent()` declared the same period says it once. Fresh plain objects.
+ */
+function periodsOf(declared: readonly DeclaredCoverage[]): AnswerPeriod[] {
+  const out: AnswerPeriod[] = [];
+  const seen = new Set<string>();
+  for (const row of declared) {
+    if (row.period === undefined) continue;
+    const key = JSON.stringify([row.toolCallId ?? '', row.toolName, row.period]);
+    if (seen.has(key)) continue;
+    seen.add(key);
+    out.push({
+      toolName: row.toolName,
+      ...(row.toolCallId !== undefined && { toolCallId: row.toolCallId }),
+      ...copyPeriod(row.period),
+    });
+  }
+  return out;
 }
 
 // reads: scope.coverageDeclared ← read by ../stages/answerCoverage.ts · withAnswerCoverage, on the Route decider's
@@ -96,25 +150,40 @@ function renderSection(label: string, items: readonly CoverageItem[]): string {
  * caller as detached data. `undefined` when nothing was declared: the identity
  * case, the one every run whose tools declare nothing takes.
  */
-export function coverageOfAnswer(declared: readonly DeclaredCoverage[]): Coverage | undefined {
+export function coverageOfAnswer(
+  declared: readonly DeclaredCoverage[],
+): AnswerCoverage | undefined {
   if (declared.length === 0) return undefined;
-  const folded: Coverage = {
+  // The periods the calls declared (honesty step 7b) — the data twin of the
+  // block's `Period:` lines; the key only when one was declared, so a run whose
+  // tools declared none commits the value it always did.
+  const periods = periodsOf(declared);
+  const folded: AnswerCoverage = {
     checked: mergeItems(declared.map((d) => d.checked)).map(copyItem),
     notChecked: mergeItems(declared.map((d) => d.notChecked)).map(copyItem),
     cannotCover: mergeItems(declared.map((d) => d.cannotCover)).map(copyItem),
+    ...(periods.length > 0 && { periods }),
   };
   // The composer's second identity case, for the same reason: a hand-built row
   // that says nothing must not become a boundary that looks like one.
-  const entries = folded.checked.length + folded.notChecked.length + folded.cannotCover.length;
+  const entries =
+    folded.checked.length + folded.notChecked.length + folded.cannotCover.length + periods.length;
   return entries > 0 ? folded : undefined;
 }
 
-/** A coverage value as detached plain data — the same three lists, every item copied. */
-export function copyCoverage(value: Coverage): Coverage {
+/** A coverage value as detached plain data — the same three lists, every item copied (and its periods, when it carries them). */
+export function copyCoverage(value: AnswerCoverage): AnswerCoverage {
   return {
     checked: value.checked.map(copyItem),
     notChecked: value.notChecked.map(copyItem),
     cannotCover: value.cannotCover.map(copyItem),
+    ...(value.periods !== undefined && {
+      periods: value.periods.map((p) => ({
+        toolName: p.toolName,
+        ...(p.toolCallId !== undefined && { toolCallId: p.toolCallId }),
+        ...copyPeriod(p),
+      })),
+    }),
   };
 }
 
@@ -170,6 +239,18 @@ function coverageBlock(declared: readonly DeclaredCoverage[]): string {
   for (const [key, label] of SECTIONS) {
     const items = mergeItems(declared.map((d) => d[key]));
     if (items.length > 0) sections.push(renderSection(label, items));
+  }
+  // One `Period:` line per declaring call (honesty step 7b) — the period AS
+  // THE TOOL DECLARED IT (`period.ts` · `periodLine`). No period declared →
+  // no section, and the block is the bytes it always was.
+  const periods = periodsOf(declared);
+  if (periods.length > 0) {
+    sections.push(
+      renderLines(
+        PERIOD_SECTION_LABEL,
+        periods.map((p) => periodLine(p.toolName, p)),
+      ),
+    );
   }
   // Every declaration was empty in all three lists — impossible through the
   // two doors (both refuse a declaration that says nothing), but a hand-built

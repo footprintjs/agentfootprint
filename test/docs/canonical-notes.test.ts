@@ -40,6 +40,7 @@ import {
   COVERAGE_BLOCK_HEADING,
   COVERAGE_MARKER,
   COVERAGE_NOTE,
+  PERIOD_WIRE,
   SEMANTICS_MARKER,
   SEMANTICS_NOTE,
 } from '../../src/index.js';
@@ -54,6 +55,8 @@ interface CanonicalNotes {
   readonly notes: Record<string, string>;
   readonly markers: Record<string, string>;
   readonly headings: Record<string, string>;
+  /** Constants published WHOLE (honesty step 7b): the period's wire spelling. */
+  readonly wire: Record<string, Record<string, string>>;
 }
 
 const load = (): CanonicalNotes => JSON.parse(readFileSync(JSON_PATH, 'utf-8')) as CanonicalNotes;
@@ -85,6 +88,20 @@ describe('unit — the file is there, it parses, and every value is a usable str
       'SEMANTICS_MARKER',
     ]);
     expect(Object.keys(data.headings)).toEqual(['COVERAGE_BLOCK_HEADING']);
+    expect(Object.keys(data.wire)).toEqual(['PERIOD_WIRE']);
+  });
+
+  it('the period’s wire spelling: every reserved key and the literal unknown (honesty step 7b)', () => {
+    // What a Python helper needs to mint `period` byte for byte — read, never copied.
+    expect(load().wire.PERIOD_WIRE).toEqual({
+      key: 'period',
+      queried: 'queried',
+      held: 'held',
+      from: 'from',
+      to: 'to',
+      readAt: 'read_at',
+      heldUnknown: 'unknown',
+    });
   });
 
   it('says out loud that it is generated — an editable-looking file invites a hand edit', () => {
@@ -112,6 +129,13 @@ describe('integration — every published value byte-equals the exported constan
     ...data.markers,
     ...data.headings,
   };
+
+  it('PERIOD_WIRE — the JSON and the barrel are the same object of strings', () => {
+    expect(
+      data.wire.PERIOD_WIRE,
+      'canonical-notes.json is stale for PERIOD_WIRE — run `npm run build` after editing it.',
+    ).toEqual({ ...PERIOD_WIRE });
+  });
 
   for (const [name, value] of Object.entries(EXPORTED)) {
     it(`${name} — the JSON and the barrel are the same bytes`, () => {

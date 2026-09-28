@@ -62,6 +62,7 @@ import {
 import type { MemoryIdentity } from '../memory/identity/types.js';
 import type { FoldedSpan } from './agent/window/types.js';
 import { argumentRowIsWellFormed } from './agent/arguments/rows.js';
+import { periodRowIsWellFormed } from './agent/coverage/period.js';
 import {
   BASIS_VALUES,
   EXPECT_VALUES,
@@ -671,6 +672,12 @@ function ledgerRowIsWellFormed(row: unknown): boolean {
     // that carries this kind.
     case 'argument':
       return argumentRowIsWellFormed(r);
+    // The results layer's verdict on one call's period (honesty layer 3, step
+    // 7b) — the arm ships in the SAME change as the row kind. One owner of the
+    // row's shape: `agent/coverage/period.ts`. An older runtime refuses a
+    // checkpoint that carries this kind.
+    case 'period':
+      return periodRowIsWellFormed(r);
     default:
       return false;
   }
@@ -779,9 +786,11 @@ export function validateCheckpoint(value: unknown): AgentRunCheckpoint {
           "open | noise | ruled-out }, iteration) or 'unsettled-by-absence' (with toolCallId, " +
           'iteration, and optional non-empty notChecked / cannotCover lists of { what, why? } ' +
           "and a non-empty tryInstead string) or 'argument' (with toolCallId, toolName, " +
-          'argument, iteration, turn, and a source or an asked in its vocabulary); a row of ' +
+          'argument, iteration, turn, and a source or an asked in its vocabulary) or ' +
+          "'period' (with toolCallId, toolName, iteration, turn, and a verdict of covered, " +
+          'partly-held, not-held, unknown or undeclared); a row of ' +
           'any kind may carry a numeric turn. It is ' +
-          'written by an agent with `.findings()` or with the inputs layer armed, and ' +
+          'written by an agent with `.findings()` or with an honesty layer armed, and ' +
           're-seeded verbatim on continuation.',
       );
     }

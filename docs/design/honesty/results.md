@@ -15,6 +15,35 @@ Nothing here is built unless a line says "shipped" or "drafted".**
 > registered model-facing sentence. Beyond the page, in the same mint: a data list that is not a
 > list at all is refused as one (it used to crash with a `TypeError` on an object) —
 > `envelope.ts` · `copyDataList`.
+>
+> **Step 7b built, 2026-09-27** (branch `feat/results-period`, its second commit; not yet merged or
+> released; the paid bench cells R1–R3 are the Bench agent's, after its registered rule):
+> `coverage/period.ts` (the one shape `DeclaredPeriod`, the one rule set `periodProblem` behind
+> `mintPeriod` / `readPeriod`, `periodVerdict`, `periodLine`, `PERIOD_WIRE`, the `PeriodRow` and its
+> checkpoint door); `period` on the three doors and `provenance` on `absent()` only
+> (`lib/semantics/described.ts` · `mintProvenance` over `lib/semantics/envelope.ts` ·
+> `provenanceIssues`, one rule set with `describedResult()`); the coverage channel carrying both;
+> `canonical-notes.json` · `wire.PERIOD_WIRE`; the results subflow (`core/agent/results/`, mounted by
+> `honesty/mounts.ts` · `mountResultsLayer` at the loop head as the loop target); the period
+> reasons and `result-period` in `assessment/`; the `Period:` line and `answerCoverage.periods`;
+> the join (a period reason's witnesses are the period row and the argument row). Decisions this
+> build took where the page was silent, each for the reviewer: (1) the arm — a registered tool's
+> `ToolPeriod` arms the mount, and `AgentBuilder.resultsLayer()` arms it for provider-served tools
+> and for periods declared only on results (the page's "a result declares `period`" could not arm
+> a static chart by itself); without the layer a declared period is recorded, never judged, and
+> dev-warned once per tool; (2) the four step-3/4 byte references declare a `ToolPeriod`, so they
+> are armed runs and were regenerated — the delta is exactly the new mount, one `undeclared` row
+> and the run constant (recorded in `test/core/tools/byte-identity.test.ts`); (3) `undeclared` is
+> filed for every call of a `ToolPeriod` tool in the batch, including one that never ran (an
+> over-report until step 8's outcome row); (4) a call that declared two periods (`coverage()`
+> around `absent()`) gets the LEAST held verdict (`coverage/period.ts` · `leastHeld`); (5) the
+> `Period:` line prints the instants as declared, with no verdict word (the standing owns the
+> verdict's sentence) and no version stamp (the "Assumed" block precedent); (6) a period on
+> `coverage()` alone is a declared boundary, and so is a described result's for the
+> `check:semantics` class rules; (7) the `result-period` check name, the `findings.period` event
+> carrying no argument name, and the stage ids `declare-results` … `resolve-results` (Resolve
+> writes nothing in 7b — flag is the only verb after a call ran). The lens follow-up — reading
+> `period` on the three envelopes, the `period` row and `findings.period` — is the lens repo's.
 
 - Written against agentfootprint 9.118.1 (`8360b3b8` on npm; its fix `f83f277c` shipped the
   request's fix 0 and fix 1) and footprintjs 9.27.0.
@@ -624,8 +653,8 @@ a CAPABILITIES row, a `.changes` fragment, the docs-next page, an example, `npm 
 |---|---|---|---|
 | 1 | `coverage/emptiness.ts` · `readEmptiness` (one owner); the answer account and `assessAnswer` both call it; the account's described template | none — readers only | — |
 | 7a | `describedResult()` (drafted, § 6) | a new door | — |
-| 7a′ | the empty-data refusal names `absent()` (§ 1.3) | refusal text only | 7a |
-| 7b | `coverage/period.ts` (the rule and `periodVerdict`); `period` on the three doors and `provenance` on `absent()`; the coverage channel carries `period`; `canonical-notes.json`; the results subflow at the loop head, its period rows and reasons; the `Period:` line under the existing limits arm; the lens reads `period` | a result declares `period`, or its tool a `ToolPeriod` | 1, 3 — the `ToolPeriod` ships with step 3, owned by `arguments/`, and is refused without an argument rule ([inputs.md](inputs.md) § 1.3; Q12 below) |
+| 7a′ | the empty-data refusal names `absent()` (§ 1.3) — **built 2026-09-27** | refusal text only | 7a |
+| 7b | `coverage/period.ts` (the rule and `periodVerdict`); `period` on the three doors and `provenance` on `absent()`; the coverage channel carries `period`; `canonical-notes.json`; the results subflow at the loop head, its period rows and reasons; the `Period:` line under the existing limits arm; the lens reads `period` — **built 2026-09-27 except the lens (its own repo)** | a result declares `period`, or its tool a `ToolPeriod` | 1, 3 — the `ToolPeriod` ships with step 3, owned by `arguments/`, and is refused without an argument rule ([inputs.md](inputs.md) § 1.3; Q12 below) |
 | 7c | the composed note (§ 4.3) | none — a `changed` fragment, owner's call (Q3) | 7a |
 | 8 | the outcome row per call at one landing funnel: the door, its counts, the emptiness reading, refused / errored / truncated / placed; `coverage-undeclared` (Q5); fact-in-result; `expectation-missed` | the results layer | 5, 7b |
 

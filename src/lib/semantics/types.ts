@@ -37,6 +37,7 @@
  */
 
 import type { CoverageDeclaration, CoverageItem } from '../../core/agent/coverage/types.js';
+import type { DeclaredPeriod, PeriodOnWire } from '../../core/agent/coverage/period.js';
 
 /**
  * The reserved key that makes a semantic envelope recognizable. Reserved
@@ -293,6 +294,14 @@ export type DescribedResultDeclaration = {
   /** Where the values came from and how old they are. Required with
    *  `series` or `facts`. */
   readonly provenance?: DescribedProvenance;
+  /**
+   * What the READ behind the data covered in time (honesty step 7b) — the
+   * instants it asked for (`queried`), what the store holds (`held`, or
+   * `'unknown'` said out loud) and when the read ran (`readAt`). Every value
+   * is an ISO 8601 instant with a zone; the model reads it as declared, and
+   * the results layer files its verdict. `semantic()` does not take it.
+   */
+  readonly period?: DeclaredPeriod;
   /** The coverage()-vocabulary declaration this result absorbs. */
   readonly coverage?: CoverageDeclaration;
   /** A question the result hands back instead of picking silently. `null`
@@ -319,6 +328,9 @@ export interface ToolSemantics {
   readonly edges?: readonly SemanticEdge[];
   readonly grain?: SemanticGrain;
   readonly provenance?: SemanticProvenance;
+  /** What the read behind the data covered in time — honesty step 7b; minted
+   *  only by `describedResult()`. The model reads it as declared. */
+  readonly period?: PeriodOnWire;
   readonly coverage?: SemanticCoverage;
   /** DERIVED from `coverage` (not checked + cannot cover), one prose line
    *  per item — never author-set, so the list and the lists cannot drift. */

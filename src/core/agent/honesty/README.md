@@ -14,20 +14,29 @@ confidence. Four decision points, one layer each:
 |---|---|---|---|
 | 1 · choice | choose a tool | beside the inputs layer | a later step |
 | 2 · inputs | fill its inputs | `sf-inputs`, after the LLM call and before Route (`mounts.ts` · `mountInputsLayer`); its batch ask is raised by ToolCalls, first thing (`stages/argumentAsk.ts` · `askBeforeDispatch`) | **shipped: `assume`, and `ask` for a missing value** (one ask per batch) — `core/agent/arguments/README.md` |
-| 3 · results | read a result | the loop head | a later step |
+| 3 · results | read a result | `sf-results`, at the loop head — the loop target, before the window strategy (`mounts.ts` · `mountResultsLayer`) | **shipped: the period verdict** (step 7b) — one `period` row per call whose result declared its period or whose tool declares a `ToolPeriod` — `core/agent/results/README.md`; the reading checks and outcome rows are step 8 |
 | 4 · answer | give the answer | the first node of the final branch | the standing is a reader today (`assessment/`) |
 
 ## How a layer mounts
 
 ```ts
-// Both builders, at the same place — after the LLM call, before Route:
-builder = mountInputsLayer(builder, deps.inputsLayer); // undefined → the builder, untouched
+// Both builders, at the same places:
+builder = mountResultsLayer(builder, deps.resultsLayer); // the loop head — undefined → untouched
+// … the loop body …
+builder = mountInputsLayer(builder, deps.inputsLayer); // after the LLM call, before Route
 ```
 
+The results layer becomes the loop target when armed (`mounts.ts` ·
+`RESULTS_LOOP_TARGET`, the `Compact` precedent): ToolCalls and every re-ask
+branch loop back to it, so it reads the batch just run before the window
+strategy folds it away; a re-entry that ran no tool files nothing twice.
+
 - **Handed** (the input mapping, frozen inside the subflow): only what the layer reads — for
-  the inputs layer, the batch, Route's dispatch values and `turnNumber`. Never the whole
-  ledger; never a tool (tools are closures, read through the one dispatch resolver,
-  `stages/toolResolver.ts` · `buildToolResolver`).
+  the inputs layer, the batch, Route's dispatch values and `turnNumber`; for the results
+  layer, the batch's call ids and tool names, the periods their coverage rows carry, the
+  calls already judged this turn, and the stamps. Never the whole ledger; never a tool
+  (tools are closures, read through the one dispatch resolver, `stages/toolResolver.ts` ·
+  `buildToolResolver`).
 - **Returned** (the output mapping, `arrayMerge: Replace` — the loop-crossed mount law): the
   layer's rows, merged into the ONE ledger by its pure half (`findings/ledger.ts` ·
   `appendRows`) in ONE write per layer run, and the layer's working state (for the inputs
@@ -42,8 +51,9 @@ builder = mountInputsLayer(builder, deps.inputsLayer); // undefined → the buil
 
 ## The run constant
 
-`armed.ts` · `honestyLayersOf` — seed writes `honestyLayers: { inputs: true }` once, on a run
-whose inputs layer is mounted, and nothing on any other run. A reader of the record tells
+`armed.ts` · `honestyLayersOf` — seed writes `honestyLayers` once, on a run with a layer
+mounted — `{ inputs: true }`, `{ results: true }` or both — and nothing on any other run.
+While any layer is armed, the one ledger writer stamps every row it files with the turn. A reader of the record tells
 "this layer was armed and filed nothing" from "this layer was never armed" by this key.
 
 ## A pause inside a layer
@@ -59,7 +69,8 @@ correctly. See `core/agent/arguments/README.md`, "The batch ask".
 
 ## Not covered
 
-- Layers 1, 3 and the run-time half of layer 4 — later steps of the plan.
+- Layer 1, layer 3's reading checks and outcome rows (step 8), and the run-time half of
+  layer 4 — later steps of the plan.
 - A layer mounted inside another runner's chart (a composed pattern) — each `Agent` mounts
   its own.
 

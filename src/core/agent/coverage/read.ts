@@ -18,7 +18,12 @@
  */
 
 import type { ToolResultStatus } from '../../../lib/injection-engine/toolOutcome.js';
-import { coverageOfSemantics, readSemantics } from '../../../lib/semantics/envelope.js';
+import { readProvenance, type DeclaredProvenance } from '../../../lib/semantics/described.js';
+import {
+  coverageOfSemantics,
+  periodOfSemantics,
+  readSemantics,
+} from '../../../lib/semantics/envelope.js';
 import {
   coverageOfAbsence,
   readAbsence,
@@ -27,6 +32,7 @@ import {
 } from './absent.js';
 import { listsWithoutRecordOnly } from './items.js';
 import { coverageOfLedger, readCoverageLedger } from './ledger.js';
+import { readPeriod, warnDroppedDeclaration, type DeclaredPeriod } from './period.js';
 import type { Coverage, ToolAbsence, TryInsteadTool } from './types.js';
 
 /** One coverage statement found in a result, before the caller stamps it with
@@ -44,19 +50,48 @@ export interface CoverageFacts {
   readonly tryInstead?: string;
   /** Present for `'absence'` when it declared a typed tool (9.113.0) — a copy. */
   readonly tryInsteadTool?: TryInsteadTool;
+  /**
+   * Present for `'absence'` when it declared where it looked and when that
+   * source was measured (honesty step 7b) — the record's camelCase form, read
+   * by the ONE provenance rule a described result is held to; a copy.
+   */
+  readonly provenance?: DeclaredProvenance;
+  /**
+   * The period the declaration's read covered (honesty step 7b) — the record's
+   * camelCase form, read by the ONE period rule (`period.ts`); a copy. Absent
+   * when none was declared, and when the envelope declared one the rule set
+   * refuses — read, never repaired: it is left off the record (dev-warned) and
+   * the model still reads what the tool wrote.
+   */
+  readonly period?: DeclaredPeriod;
+}
+
+/**
+ * A declared period read off one envelope object, dropped from the record
+ * (and named once per tool in dev mode) when it is malformed.
+ */
+function periodOf(holder: { readonly period?: unknown }, toolName: string | undefined) {
+  const read = readPeriod(holder.period);
+  if (read.problem !== undefined) warnDroppedDeclaration(toolName, 'period', read.problem);
+  return read.period;
 }
 
 /** The facts one absence declares — the same for a bare absence and for one
  *  a ledger bounds, so the two sites cannot drift. */
-function absenceFacts(absence: ToolAbsence): CoverageFacts {
+function absenceFacts(absence: ToolAbsence, toolName: string | undefined): CoverageFacts {
   const tryInstead = tryInsteadOfAbsence(absence);
   const tryInsteadTool = tryInsteadToolOfAbsence(absence);
+  const source = readProvenance(absence.provenance);
+  if (source.problem !== undefined) warnDroppedDeclaration(toolName, 'provenance', source.problem);
+  const period = periodOf(absence, toolName);
   return {
     kind: 'absence',
     coverage: coverageOfAbsence(absence),
     lookedFor: absence.looked_for,
     ...(tryInstead !== undefined && { tryInstead }),
     ...(tryInsteadTool !== undefined && { tryInsteadTool }),
+    ...(source.provenance !== undefined && { provenance: source.provenance }),
+    ...(period !== undefined && { period }),
   };
 }
 
@@ -174,34 +209,56 @@ export function strip(value: unknown, seen: WeakSet<object> = new WeakSet()): un
 const ABSENT_STATUS: ToolResultStatus = 'absent';
 
 /**
- * Read one finalized tool result for coverage declarations.
+ * Read one finalized tool result for coverage declarations — and, since
+ * honesty step 7b, for the period each declaration's read covered and an
+ * absence's source and time. `toolName` names the tool in the one dev
+ * warning a malformed period or provenance gets (it is left off the record,
+ * never repaired); the dispatch door passes it, a post-hoc reader need not.
  *
  * The two shapes compose: `coverage(absent({…}), {…})` is a search that found
  * nothing AND a boundary around the search, so both are declared and the
  * delivered status is still `'absent'` — the ledger bounds the answer, it
  * does not change what the answer was.
  */
-export function readCoverageResult(value: unknown): CoverageReading | undefined {
+export function readCoverageResult(value: unknown, toolName?: string): CoverageReading | undefined {
   const absence = readAbsence(value);
   if (absence !== undefined) {
-    return { status: ABSENT_STATUS, declared: [absenceFacts(absence)] };
+    return { status: ABSENT_STATUS, declared: [absenceFacts(absence, toolName)] };
   }
   // A semantic envelope's `coverage` field (9.53.0) is ABSORBED here — the
   // one recognizer funnel — so the boundary a semantic tool declared flows
   // through the exact channel `coverage()` uses (the `tools.coverage_declared`
   // event, tracked state, the final-answer limits block) with zero extra
-  // wiring at any dispatch door. A semantic envelope without `coverage`
-  // declares no boundary, exactly like a bare result.
+  // wiring at any dispatch door. Its `period` (honesty step 7b) is absorbed
+  // the same way: an envelope with a period and no coverage lists files a
+  // `'ledger'` row whose three lists are empty. A semantic envelope with
+  // neither declares no boundary, exactly like a bare result.
   const sem = readSemantics(value);
   if (sem !== undefined) {
-    if (sem.coverage === undefined) return undefined;
-    return { declared: [{ kind: 'ledger', coverage: coverageOfSemantics(sem) }] };
+    const period = periodOfSemantics(sem);
+    if (sem.coverage === undefined && period === undefined) return undefined;
+    return {
+      declared: [
+        {
+          kind: 'ledger',
+          coverage: coverageOfSemantics(sem),
+          ...(period !== undefined && { period }),
+        },
+      ],
+    };
   }
   const covered = readCoverageLedger(value);
   if (covered === undefined) return undefined;
-  const declared: CoverageFacts[] = [{ kind: 'ledger', coverage: coverageOfLedger(covered) }];
+  const ledgerPeriod = periodOf(covered.af_coverage, toolName);
+  const declared: CoverageFacts[] = [
+    {
+      kind: 'ledger',
+      coverage: coverageOfLedger(covered),
+      ...(ledgerPeriod !== undefined && { period: ledgerPeriod }),
+    },
+  ];
   const inner = readAbsence(covered.result);
   if (inner === undefined) return { declared };
-  declared.push(absenceFacts(inner));
+  declared.push(absenceFacts(inner, toolName));
   return { status: ABSENT_STATUS, declared };
 }

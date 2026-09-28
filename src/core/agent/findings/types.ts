@@ -31,6 +31,7 @@
 
 import type { Assertion } from '../../../integrity/assertion/types.js';
 import type { ArgumentRow } from '../arguments/rows.js';
+import type { PeriodRow } from '../coverage/period.js';
 import type { CoverageItem } from '../coverage/types.js';
 
 /** The reserved optional property every SERVED tool schema carries when armed. */
@@ -436,7 +437,10 @@ export type FindingsRow =
   // The inputs layer's verdict on one ruled argument of one call (honesty
   // layer 2) — filed by the `sf-inputs` subflow, not by the model. Readers
   // that switch over every kind must skip one they do not know.
-  | ArgumentRow;
+  | ArgumentRow
+  // The results layer's verdict on one call's period (honesty layer 3, step
+  // 7b) — filed by the `sf-results` subflow at the loop head, not by the model.
+  | PeriodRow;
 
 /** The committed key: flat, append-only, a fresh array on every write. */
 export type FindingsLedger = readonly FindingsRow[];

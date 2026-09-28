@@ -6,7 +6,7 @@ title: milestoneTags
 
 > **milestoneTags**(`milestone`): readonly `string`[]
 
-Defined in: [src/conventions.ts:528](https://github.com/footprintjs/agentfootprint/blob/main/src/conventions.ts#L528)
+Defined in: [src/conventions.ts:558](https://github.com/footprintjs/agentfootprint/blob/main/src/conventions.ts#L558)
 
 The tags that DECLARE a [Milestone](/docs/api/interfaces/Milestone) on a stage: its kind tag and its
 label tag, in that order. What a declaration site spreads into `.tag(...)`

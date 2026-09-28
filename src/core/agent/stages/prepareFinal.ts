@@ -27,7 +27,8 @@
 
 import type { TypedScope } from 'footprintjs';
 import { typedEmit } from '../../../recorders/core/typedEmit.js';
-import { composeAnswerWithCoverage, copyCoverage, type Coverage } from '../coverage/index.js';
+import { composeAnswerWithCoverage, copyCoverage } from '../coverage/index.js';
+import type { AnswerCoverage } from '../coverage/answer.js';
 import type { AgentState } from '../types.js';
 
 /**
@@ -50,7 +51,7 @@ const captureTurnPayload = (
   scope: TypedScope<AgentState>,
   answer: string,
   commitValidated = false,
-  answerCoverage?: Coverage,
+  answerCoverage?: AnswerCoverage,
 ): void => {
   const iteration = scope.iteration;
   scope.finalContent = answer;

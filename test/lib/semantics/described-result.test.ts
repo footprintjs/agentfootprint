@@ -72,12 +72,15 @@ const SPELLED: ReadonlyArray<readonly [camel: string, snake: string]> = [
 ];
 
 /** A refusal from the camelCase door in the snake_case door's words — so the
- *  two can be compared as ONE rule said twice. */
+ *  two can be compared as ONE rule said twice. The one field only the new door
+ *  takes (`period`, honesty step 7b — the deprecated door gains nothing) is
+ *  dropped from the field list it names. */
 const inWireWords = (message: string): string =>
   [
     ...SPELLED,
     ['notCovered', 'not_covered'] as const,
     ['describedResult()', 'semantic()'] as const,
+    ['provenance, period, coverage', 'provenance, coverage'] as const,
   ].reduce((text, [camel, snake]) => text.split(camel).join(snake), message);
 
 /** The same declaration in both spellings — the one case table every

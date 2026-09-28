@@ -161,6 +161,15 @@ export interface AgentTurnEndPayload {
     readonly checked: readonly CoverageItemPayload[];
     readonly notChecked: readonly CoverageItemPayload[];
     readonly cannotCover: readonly CoverageItemPayload[];
+    /**
+     * The periods the calls' results declared (honesty step 7b) — one per
+     * declaring call, as declared; present only when one did. The data twin of
+     * a prose answer's `Period:` lines.
+     */
+    readonly periods?: readonly (PeriodPayload & {
+      readonly toolName: string;
+      readonly toolCallId?: string;
+    })[];
   };
 }
 
@@ -1038,6 +1047,25 @@ export interface FindingsArgumentPayload {
   readonly malformed?: number;
   /** The length of the value as the row holds it — absent when the tool's view hides it. */
   readonly valueChars?: number;
+}
+
+/**
+ * The results layer's verdict on ONE call's period (honesty layer 3, step 7b)
+ * — fired once per `period` row the `sf-results` subflow files at the loop
+ * head, after the call ran. The tool's name, the call's id, the stamps and the
+ * verdict word ONLY: never an instant (the declared period stays on the
+ * committed coverage row). `undeclared` means the tool declares a period
+ * argument and this result said nothing about what its read covered. A host
+ * counts "1 read the store did not hold" from these events; the standing fold
+ * never reads them (it reads the committed rows).
+ */
+export interface FindingsPeriodPayload {
+  readonly toolCallId: string;
+  readonly toolName: string;
+  readonly iteration: number;
+  /** The conversation turn the row was filed in. */
+  readonly turn: number;
+  readonly verdict: 'covered' | 'partly-held' | 'not-held' | 'unknown' | 'undeclared';
 }
 
 /**
@@ -2039,6 +2067,38 @@ export interface ToolAbsentPayload {
    * come without the other.
    */
   readonly tryInsteadTool?: TryInsteadToolPayload;
+  /**
+   * Where the search looked and when that source was measured, as the tool
+   * declared it (honesty step 7b) — `absent({ …, provenance })`, in the
+   * record's camelCase form. Default-omitted: an absence that declares no
+   * source carries no key, and one whose source the rule set refuses (an
+   * envelope minted elsewhere) carries none either (dev-warned).
+   */
+  readonly provenance?: ProvenancePayload;
+  /**
+   * What the search's READ covered in time, as the tool declared it (honesty
+   * step 7b) — instants verbatim, camelCase like `lookedFor`. Default-omitted.
+   */
+  readonly period?: PeriodPayload;
+}
+
+/** An absence's source and time as it rides an event — detached plain data. */
+export interface ProvenancePayload {
+  readonly measuredAt: string;
+  readonly source: string;
+  readonly ageSeconds?: number;
+  readonly sourceExportDate?: string;
+}
+
+/**
+ * A declared period as it rides an event (honesty step 7b) — detached plain
+ * data, the instants the tool declared, never parsed or reformatted.
+ */
+export interface PeriodPayload {
+  readonly queried: { readonly from: string; readonly to: string };
+  /** What the store holds, or `'unknown'` — the tool said it cannot vouch for it. */
+  readonly held: { readonly from: string; readonly to: string } | 'unknown';
+  readonly readAt?: string;
 }
 
 /** A suggestion to try another tool, as it rides an event: detached plain
@@ -2098,6 +2158,12 @@ export interface ToolCoverageDeclaredPayload {
   readonly checked?: readonly CoverageItemPayload[];
   readonly notChecked?: readonly CoverageItemPayload[];
   readonly cannotCover?: readonly CoverageItemPayload[];
+  /**
+   * What the read behind the value covered in time (honesty step 7b) — a
+   * `coverage()`'s `period`, or a described result's (whose boundary this
+   * event carries). Default-omitted.
+   */
+  readonly period?: PeriodPayload;
 }
 
 /** One piece of declared ground, as it rides an event: detached plain data,

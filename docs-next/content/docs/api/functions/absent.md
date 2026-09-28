@@ -6,7 +6,7 @@ title: absent
 
 > **absent**(`decl`): [`ToolAbsence`](/docs/api/interfaces/ToolAbsence)
 
-Defined in: [src/core/agent/coverage/absent.ts:269](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/coverage/absent.ts#L269)
+Defined in: [src/core/agent/coverage/absent.ts:279](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/coverage/absent.ts#L279)
 
 Say "I looked, and there is nothing" in a way a model cannot read as a
 failure — and cannot productively retry.
@@ -22,6 +22,12 @@ key is a casing slip (`not_checked` → `notChecked`), so a list declared
 from plain JavaScript or JSON cannot vanish without a word. Every refusal
 starts `refused: `: inside `execute` it becomes the call's error result,
 which the model reads.
+
+Since honesty step 7b an absence also says WHERE it looked and WHEN —
+`provenance: { measuredAt, source }`, the shape and rules `describedResult()`
+uses — and what time its read covered — `period: { queried, held, readAt? }`,
+ISO 8601 instants with a zone (`held` may be `'unknown'`). "Searched the 02:00
+export — nothing" becomes data; the results layer judges the period.
 
 ## Parameters
 

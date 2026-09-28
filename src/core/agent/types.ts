@@ -260,6 +260,17 @@ export interface AgentOptions {
    */
   readonly inputsLayer?: boolean;
   /**
+   * THE RESULTS LAYER (honesty layer 3) — mount `sf-results` at the loop head
+   * even when no REGISTERED tool declares a `ToolPeriod`. A registered tool
+   * with a `ToolPeriod` arms the layer by itself; this option is for tools a
+   * `ToolProvider` serves, which the build cannot see, and for tools that
+   * declare a `period` only on their results — without the layer those
+   * periods are recorded but no verdict is filed (one dev warning per tool
+   * says so). Prefer the builder's `.resultsLayer()`. Absent → the chart is
+   * byte-identical.
+   */
+  readonly resultsLayer?: boolean;
+  /**
    * THE INPUTS LAYER'S ASK (honesty layer 2) — the host's own context for the
    * one typed ask the library raises per batch when a call leaves an `ask`
    * argument out. Called each time such an ask is built; the object it
@@ -1906,7 +1917,8 @@ export interface AgentState {
    * The ANSWER's coverage, as data — `coverageDeclared` folded into the three
    * lists the limits block would have printed (merged in declaration order,
    * duplicates dropped, every entry kept: `coverage/answer.ts` ·
-   * `coverageOfAnswer`).
+   * `coverageOfAnswer`), and — only when a call declared one (honesty step
+   * 7b) — `periods`, the data twin of the block's `Period:` lines.
    *
    * Written only when the answer is TYPED (`.outputSchema()`) and
    * `.limitsTravelWithTheAnswer()` is on: a typed answer is JSON, and prose
@@ -1917,7 +1929,7 @@ export interface AgentState {
    * every other run commits exactly the keys it always did. Read it with
    * `agent.answerCoverage()`; `turn_end.answerCoverage` mirrors it.
    */
-  answerCoverage?: import('./coverage/index.js').Coverage;
+  answerCoverage?: import('./coverage/answer.js').AnswerCoverage;
   /**
    * The typed readings this run's tools settled (9.61.0) — one row per
    * (entity, field, value) flattened out of each recognized semantic

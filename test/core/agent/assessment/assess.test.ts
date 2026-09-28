@@ -488,6 +488,11 @@ describe('UNIT — the reason table', () => {
       'declared-absent',
       'coverage-gap',
       'empty-undeclared',
+      // Honesty layer 3 (the results layer's period verdicts, step 7b).
+      'period-not-held',
+      'period-partly-held',
+      'period-unknown',
+      'period-undeclared',
       'sources-conflict',
       'value-unsupported',
       'value-survived-revision',

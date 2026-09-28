@@ -849,6 +849,18 @@ export {
   type ToolAbsence,
   type TryInsteadTool,
 } from './core/agent/coverage/index.js';
+// The one period shape (honesty layer 3, step 7b): what a result's READ
+// covered in time — the instants it asked for, what the store holds (or
+// 'unknown', said out loud) — declared on `absent()`, `coverage()` and
+// `describedResult()`; the ONE verdict rule over it; the wire spelling as data
+// (`canonical-notes.json` publishes it); and the ledger row the results layer
+// files per call — a member of `FindingsRow`, returned by `agent.findings()`.
+export {
+  PERIOD_WIRE,
+  periodVerdict,
+  type DeclaredPeriod,
+  type PeriodRow,
+} from './core/agent/coverage/period.js';
 // The semantic tool-result envelope (9.53.0) — typed series/facts/edges with
 // the caveats that make them honest (grain, provenance, coverage) as DATA,
 // so honesty is inherited, not re-authored per tool. A sibling recognizer

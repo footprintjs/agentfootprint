@@ -125,6 +125,7 @@ import type {
   FindingsJudgeFailedPayload,
   FindingsContingentPayload,
   FindingsArgumentPayload,
+  FindingsPeriodPayload,
   ToolChoicePickedPayload,
   ToolChoiceOutcomePayload,
   ToolChoiceFailedPayload,
@@ -313,6 +314,8 @@ export const EVENT_NAMES = {
     contingent: 'agentfootprint.findings.contingent',
     // The inputs layer's verdict on one ruled argument of one call (honesty layer 2).
     argument: 'agentfootprint.findings.argument',
+    // The results layer's verdict on one call's period (honesty layer 3, step 7b).
+    period: 'agentfootprint.findings.period',
   },
   tool_choice: {
     picked: 'agentfootprint.tool_choice.picked',
@@ -793,6 +796,10 @@ export interface AgentfootprintEventMap {
     'agentfootprint.findings.argument',
     FindingsArgumentPayload
   >;
+  'agentfootprint.findings.period': AgentfootprintEventEnvelope<
+    'agentfootprint.findings.period',
+    FindingsPeriodPayload
+  >;
   // tool_choice (a classifier's pick beside the model's call — identities, numbers, a boolean)
   'agentfootprint.tool_choice.picked': AgentfootprintEventEnvelope<
     'agentfootprint.tool_choice.picked',
@@ -980,6 +987,7 @@ export const ALL_EVENT_TYPES: readonly AgentfootprintEventType[] = [
   'agentfootprint.findings.judge_failed',
   'agentfootprint.findings.contingent',
   'agentfootprint.findings.argument',
+  'agentfootprint.findings.period',
   'agentfootprint.tool_choice.picked',
   'agentfootprint.tool_choice.outcome',
   'agentfootprint.tool_choice.failed',

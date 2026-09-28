@@ -136,6 +136,31 @@ any other iterable still mints, copied into a fresh array (`envelope.ts` ·
 and the refusal is a registered model-facing sentence
 (`test/modelFacingSurfaces.test.ts`).
 
+## The period (honesty step 7b)
+
+`describedResult({ …, period })` — what the READ behind the data covered in
+time: `queried` (the instants it asked for), `held` (what the store holds, or
+`'unknown'`) and `readAt`, every value an ISO 8601 instant with a zone. A
+top-level field on `af_semantics` (after `provenance`), minted by the ONE period
+rule set (`core/agent/coverage/period.ts` · `mintPeriod`) and refused there in
+camelCase; `semanticsForModel` serves it as declared; the recognizer holds a
+foreign envelope's period to the same rule set (`period.ts` · `periodProblem`,
+wire spelling) — a fault is one more `semanticIssues` fault, so the envelope
+stays data. `readCoverageResult` absorbs it into the coverage channel like
+`coverage`: an envelope with a period and no coverage files a `'ledger'` row
+whose three lists are empty. `semantic()`, the deprecated door, gains no field.
+The results layer (`core/agent/results/`) files the verdict. The provenance
+rule is shared with `absent()` the same way (`described.ts` · `mintProvenance`,
+`envelope.ts` · `provenanceIssues`).
+
+```ts
+return describedResult({
+  facts: rows,
+  provenance: { measuredAt: snap.exportedAt, source: 'nightly export' },
+  period: { queried: { from, to }, held: { from: snap.heldFrom, to: snap.exportedAt } },
+});
+```
+
 ## The marker and the note cross a language boundary (9.70.0)
 
 `SEMANTICS_MARKER` and `SEMANTICS_NOTE` are bytes a foreign process must

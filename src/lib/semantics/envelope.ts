@@ -61,6 +61,13 @@ import {
   COVERAGE_DECLARATION_KEYS,
   normalizeCoverageList,
 } from '../../core/agent/coverage/items.js';
+import {
+  copyPeriod,
+  mintPeriod,
+  periodProblem,
+  readPeriod,
+  type DeclaredPeriod,
+} from '../../core/agent/coverage/period.js';
 import { refusal, refuseUnknownKeys } from '../../core/agent/coverage/refusal.js';
 import type {
   Coverage,
@@ -118,6 +125,10 @@ const ENVELOPE_KEYS = new Set([
   'edges',
   'grain',
   'provenance',
+  // Honesty step 7b: what the read behind the data covered in time. An OLDER
+  // reader refuses a whole envelope that carries it (this set is its law), so
+  // the changelog names the floor.
+  'period',
   'coverage',
   'not_covered',
   'clarify',
@@ -158,7 +169,7 @@ export type Spelling = Readonly<Record<SpelledField, string>>;
 
 /** The wire's own spelling — what `semanticIssues`, recognition, the gate
  *  and `semantic()` speak. */
-const WIRE_SPELLING: Spelling = {
+export const WIRE_SPELLING: Spelling = {
   is_counter: 'is_counter',
   measured_at: 'measured_at',
   age_seconds: 'age_seconds',
@@ -337,6 +348,77 @@ function checkItemList(
 }
 
 /**
+ * THE provenance rule — one present `provenance` object, in the wire's
+ * spelling, judged; every fault, each naming its field the way `s` spells it.
+ * `issuesIn` asks it for a described result, and `coverage/absent.ts` asks it
+ * for an absence's `provenance` (honesty step 7b), so the two doors cannot
+ * disagree about what a well-formed source and time is: `measured_at` and
+ * `source` required, `age_seconds` a finite number ≥ 0, `source_export_date`
+ * a non-empty string, no other key.
+ */
+export function provenanceIssues(provenance: unknown, s: Spelling): SemanticIssue[] {
+  const measuredAt = s.measured_at;
+  const ageSeconds = s.age_seconds;
+  const sourceExportDate = s.source_export_date;
+  if (!isPlainObject(provenance)) {
+    return [
+      malformed(
+        'provenance',
+        `\`provenance\` must be an object ({ ${measuredAt}, source, ${ageSeconds}?, ${sourceExportDate}? }).`,
+      ),
+    ];
+  }
+  const issues: SemanticIssue[] = [];
+  for (const key of Object.keys(provenance)) {
+    if (!PROVENANCE_KEYS.has(key))
+      issues.push(
+        malformed(`provenance.${key}`, `\`provenance.${key}\` is not a provenance field.`),
+      );
+  }
+  if (!isNonEmptyString(provenance.measured_at)) {
+    issues.push({
+      code: 'data-without-provenance',
+      field: `provenance.${measuredAt}`,
+      message:
+        `\`provenance.${measuredAt}\` must say when the WORLD was measured — a tool reading a ` +
+        'nightly export and answering in 4ms is serving yesterday, and only this field says so.',
+    });
+  }
+  if (!isNonEmptyString(provenance.source)) {
+    issues.push({
+      code: 'data-without-provenance',
+      field: 'provenance.source',
+      message: '`provenance.source` must name the system of record the values were read from.',
+    });
+  }
+  if (
+    provenance.age_seconds !== undefined &&
+    (typeof provenance.age_seconds !== 'number' ||
+      !Number.isFinite(provenance.age_seconds) ||
+      provenance.age_seconds < 0)
+  ) {
+    issues.push(
+      malformed(
+        `provenance.${ageSeconds}`,
+        `\`provenance.${ageSeconds}\` must be a finite number ≥ 0 or omitted.`,
+      ),
+    );
+  }
+  if (
+    provenance.source_export_date !== undefined &&
+    !isNonEmptyString(provenance.source_export_date)
+  ) {
+    issues.push(
+      malformed(
+        `provenance.${sourceExportDate}`,
+        `\`provenance.${sourceExportDate}\` must be a non-empty string or omitted.`,
+      ),
+    );
+  }
+  return issues;
+}
+
+/**
  * Judge one RENDERED envelope shape against the whole rule set. Empty = a
  * well-formed envelope this library can honor. Non-empty = the faults, each
  * naming its field.
@@ -374,8 +456,8 @@ function issuesIn(value: unknown, s: Spelling): SemanticIssue[] {
         malformed(
           key,
           `this result carries '${key}', which is not a field this vocabulary has. The ` +
-            `fields are: series, facts, edges, grain, provenance, coverage, clarify, render ` +
-            `(not_covered and note are derived).`,
+            `fields are: series, facts, edges, grain, provenance, period, coverage, clarify, ` +
+            `render (not_covered and note are derived).`,
         ),
       );
     }
@@ -551,77 +633,29 @@ function issuesIn(value: unknown, s: Spelling): SemanticIssue[] {
     }
   }
 
-  // ── provenance ──
+  // ── provenance ── (the ONE rule, `provenanceIssues`, which `absent()` asks too)
   const provenance = value.provenance;
   const hasData = series !== undefined || facts !== undefined;
-  const measuredAt = s.measured_at;
-  const ageSeconds = s.age_seconds;
-  const sourceExportDate = s.source_export_date;
   if (provenance !== undefined) {
-    if (!isPlainObject(provenance)) {
-      issues.push(
-        malformed(
-          'provenance',
-          `\`provenance\` must be an object ({ ${measuredAt}, source, ${ageSeconds}?, ${sourceExportDate}? }).`,
-        ),
-      );
-    } else {
-      for (const key of Object.keys(provenance)) {
-        if (!PROVENANCE_KEYS.has(key))
-          issues.push(
-            malformed(`provenance.${key}`, `\`provenance.${key}\` is not a provenance field.`),
-          );
-      }
-      if (!isNonEmptyString(provenance.measured_at)) {
-        issues.push({
-          code: 'data-without-provenance',
-          field: `provenance.${measuredAt}`,
-          message:
-            `\`provenance.${measuredAt}\` must say when the WORLD was measured — a tool reading a ` +
-            'nightly export and answering in 4ms is serving yesterday, and only this field says so.',
-        });
-      }
-      if (!isNonEmptyString(provenance.source)) {
-        issues.push({
-          code: 'data-without-provenance',
-          field: 'provenance.source',
-          message: '`provenance.source` must name the system of record the values were read from.',
-        });
-      }
-      if (
-        provenance.age_seconds !== undefined &&
-        (typeof provenance.age_seconds !== 'number' ||
-          !Number.isFinite(provenance.age_seconds) ||
-          provenance.age_seconds < 0)
-      ) {
-        issues.push(
-          malformed(
-            `provenance.${ageSeconds}`,
-            `\`provenance.${ageSeconds}\` must be a finite number ≥ 0 or omitted.`,
-          ),
-        );
-      }
-      if (
-        provenance.source_export_date !== undefined &&
-        !isNonEmptyString(provenance.source_export_date)
-      ) {
-        issues.push(
-          malformed(
-            `provenance.${sourceExportDate}`,
-            `\`provenance.${sourceExportDate}\` must be a non-empty string or omitted.`,
-          ),
-        );
-      }
-    }
+    issues.push(...provenanceIssues(provenance, s));
   } else if (hasData) {
     issues.push({
       code: 'data-without-provenance',
       field: 'provenance',
       message:
-        `this result carries series/facts with no \`provenance\` — \`provenance.${measuredAt}\` and ` +
+        `this result carries series/facts with no \`provenance\` — \`provenance.${s.measured_at}\` and ` +
         '`provenance.source` are required whenever the envelope carries data: a number with ' +
         'no age and no source cannot be trusted or audited.',
     });
+  }
+
+  // ── period ── (honesty step 7b — the ONE rule, `coverage/period.ts` · `periodProblem`).
+  // Judged in the WIRE's spelling whatever the door: the candidate a mint judges
+  // carries a period `mintPeriod` already refused in its author's words, so a
+  // fault here is always one read off an envelope minted elsewhere.
+  if (value.period !== undefined) {
+    const problem = periodProblem(value.period, 'wire');
+    if (problem !== undefined) issues.push(malformed(problem.field, problem.message));
   }
 
   // ── series ⇒ grain ──
@@ -886,6 +920,11 @@ export function mintSemantics(
 
   const coverage = mintedCoverage(decl.coverage);
   const notCovered = coverage !== undefined ? composeNotCovered(coverage) : [];
+  // Honesty step 7b: a top-level `period`, minted by the ONE period rule set
+  // (refused in the author's own camelCase words). Only `describedResult()`'s
+  // declaration has the key — `semantic()`, the deprecated door, gains no
+  // field, and its unknown-key refusal above already refused one.
+  const period = 'period' in decl ? mintPeriod((decl as { period?: unknown }).period) : undefined;
   const candidate: Record<string, unknown> = {
     [SEMANTICS_MARKER]: true,
     ...(decl.series !== undefined && { series: copyDataList(decl.series) }),
@@ -895,6 +934,7 @@ export function mintSemantics(
     ...(decl.provenance !== undefined && {
       provenance: door.toWire('provenance', decl.provenance),
     }),
+    ...(period !== undefined && { period }),
     ...(coverage !== undefined && { coverage }),
     ...(notCovered.length > 0 && { not_covered: notCovered }),
     ...('clarify' in decl &&
@@ -1030,6 +1070,8 @@ export function semanticsForModel(sem: ToolSemantics): Record<string, unknown> {
     ...(sem.edges !== undefined && { edges: sem.edges.map((e) => ({ ...e })) }),
     ...(sem.grain !== undefined && { grain: { ...sem.grain } }),
     ...(sem.provenance !== undefined && { provenance: { ...sem.provenance } }),
+    // Served as the tool declared it (honesty step 7b) — no verdict word.
+    ...(sem.period !== undefined && { period: periodOnWireCopy(sem.period) }),
     ...(sem.not_covered !== undefined &&
       sem.not_covered.length > 0 && { not_covered: [...sem.not_covered] }),
     ...(sem.clarify !== undefined &&
@@ -1038,6 +1080,26 @@ export function semanticsForModel(sem: ToolSemantics): Record<string, unknown> {
       }),
     note: typeof sem.note === 'string' ? sem.note : SEMANTICS_NOTE,
   };
+}
+
+/** A wire period as detached plain data — the projection's copy. */
+function periodOnWireCopy(period: NonNullable<ToolSemantics['period']>): unknown {
+  return {
+    queried: { from: period.queried.from, to: period.queried.to },
+    held: period.held === 'unknown' ? 'unknown' : { from: period.held.from, to: period.held.to },
+    ...(period.read_at !== undefined && { read_at: period.read_at }),
+  };
+}
+
+/**
+ * The period a RECOGNIZED envelope declared, in the record's camelCase form
+ * (honesty step 7b) — `undefined` when it declared none. Recognition already
+ * held the period to the rule set (a fault keeps the whole envelope data), so
+ * this is a read, never a judgement.
+ */
+export function periodOfSemantics(sem: ToolSemantics): DeclaredPeriod | undefined {
+  const read = readPeriod(sem.period);
+  return read.period === undefined ? undefined : copyPeriod(read.period);
 }
 
 /** The envelope's coverage in the normalized three-list shape the coverage

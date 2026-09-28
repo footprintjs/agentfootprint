@@ -51,6 +51,10 @@ grows as later honesty steps commit new rows.
 | `coverage-gap` | 3 | `coverageDeclared`: a `notChecked` or `cannotCover` item on a call of this turn; or `history`: the result's own envelope lists one, when its call has no coverage row |
 | `declared-absent` | 3 | `coverageDeclared`: an absence; or `history`: an empty rowset inside a declared `coverage()` boundary, or an absence in the result's own envelope when its call has no coverage row |
 | `empty-undeclared` | 3 | `history`: an empty rowset (a top-level array, or the app's `rowsAt` key) whose call has no coverage row |
+| `period-not-held` | 3 | `findingsLedger`: a `period` row of this turn with verdict `not-held` — the store holds none of what the read asked for (honesty step 7b) |
+| `period-partly-held` | 3 | `findingsLedger`: a `period` row of this turn with verdict `partly-held` |
+| `period-unknown` | 3 | `findingsLedger`: a `period` row of this turn with verdict `unknown` — the tool declared `held: 'unknown'`, on a non-empty result too (adopted Q33) |
+| `period-undeclared` | 3 | `findingsLedger`: a `period` row of this turn with verdict `undeclared` — the tool declares a `ToolPeriod` and its result declared no period |
 | `sources-conflict` | 3 | `findingsLedger`: a conflict row whose witnesses name a call of this turn |
 | `value-unsupported` | 4 | `unsupportedValues` (`revised: false`) |
 | `value-survived-revision` | 4 | `unsupportedValues` (`revised: true`) |
@@ -64,6 +68,20 @@ carries its `turn` — and the last row per (call, argument) is the current one.
 When the layer filed any, `checked` gains `argument-rules` (layer 2): every row
 is a verdict, so `ran` equals `of`. No argument row ever supports "known": a
 membership pass only keeps a reason from firing.
+
+The results layer's `period` rows (honesty layer 3, `core/agent/results/README.md`)
+are read the same way — this turn's, the last per call. `covered` fires nothing;
+each other verdict fires its `period-*` reason, and its witnesses are the `period`
+row AND, when the tool declares a `ToolPeriod`, the inputs layer's `argument` row
+for the same call and argument — who chose the period, beside what the read
+covered (the join, joined by call id and argument name; neither side parses the
+other's words). When the layer filed any, `checked` gains `result-period` (layer
+3). No period row ever supports "known".
+
+```ts
+// backup_runs read the 02:00 export for 09:00–10:00 → absent({ …, period }) → verdict not-held
+(await agent.assessment())?.reasons.map((r) => r.reason); // ['declared-absent', 'period-not-held']
+```
 
 Every result is read through the ONE emptiness reader,
 `core/agent/coverage/emptiness.ts` · `readEmptiness`, the one the answer account

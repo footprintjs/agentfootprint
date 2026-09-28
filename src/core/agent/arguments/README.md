@@ -183,6 +183,20 @@ the inner-dispatch refusal (`toolDispatch.ts` · `refuseUnaccountedRuledArgument
 refuses before `ctx.tools.call` takes its sequence number — an `await` there would reorder
 concurrent inner calls). `test/lib/trace-toolpack/browserGraph.test.ts` pins the split.
 
+## The period argument, and the results layer (honesty step 7b)
+
+`Tool.period` (`declare.ts` · `ToolPeriod`) is this layer's declaration — which
+argument sets the period, in which declared spelling — and it now ALSO arms the
+results layer (`core/agent/results/README.md`): a tool that declares a period
+argument owes a period on its results, so each call gets a `period` row at the
+loop head — the period's verdict, or `undeclared` when the result said nothing
+about what its read covered. The two rows join by the call id and the argument
+name (the `argument` row's `period: true`, the `period` row's `argument`): this
+layer says WHO chose the period, the results layer says WHAT the read covered,
+and neither parses the other's words. The answer's standing names both rows as
+the witnesses of a `period-*` reason. This layer's rows, served bytes and refusals
+are unchanged.
+
 ## Refused, and what the model reads
 
 | When | The call reads |

@@ -197,6 +197,7 @@ import {
   type ToolAbsence,
 } from '../coverage/index.js';
 import { readItemExtras, type CoverageSection } from '../coverage/items.js';
+import { copyPeriod } from '../coverage/period.js';
 import { servedToModel, strippedOnly } from '../coverage/read.js';
 import {
   explainStatusOnlyNearMiss,
@@ -261,6 +262,15 @@ export interface ToolCallsHandlerDeps {
    * `.inputsLayer()`; every other call runs exactly as it always did.
    */
   readonly inputsLayer?: true;
+  /**
+   * The results layer is mounted (honesty layer 3, step 7b) — a registered
+   * tool declares a `ToolPeriod`, or the agent was built with
+   * `.resultsLayer()`. Read in ONE place: a result that declares a `period`
+   * on an agent WITHOUT the layer is still recorded (the tool's declaration
+   * rides `coverageDeclared` and the events either way), and a dev warning
+   * says, once per tool, that no verdict will be filed for it.
+   */
+  readonly resultsLayer?: true;
   /**
    * The host's own context for the inputs layer's batch ask
    * (`AgentOptions.argumentAskContext`) — called when an ask is built, its
@@ -1094,6 +1104,37 @@ function argsForPausedCall(
   return {};
 }
 
+/** Tools already told that their declared period has no judge — once per tool per process. */
+const periodUnjudgedWarned = new Set<string>();
+
+/**
+ * A result declared a `period` on an agent whose results layer is NOT mounted
+ * (honesty step 7b): the period is recorded — it is the tool's declaration —
+ * but no verdict is filed, so the answer's standing cannot read it. Configured
+ * and inert must never look like configured and working, so dev mode says so,
+ * once per tool per process, naming the two arms.
+ */
+function warnPeriodUnjudged(toolName: string): void {
+  if (periodUnjudgedWarned.has(toolName) || !isDevMode()) return;
+  if (periodUnjudgedWarned.size < 500) periodUnjudgedWarned.add(toolName);
+  // eslint-disable-next-line no-console
+  console.warn(
+    `agentfootprint results: tool '${toolName}' declared the period its read covered, and this ` +
+      `agent does not mount the results layer, so no period verdict is filed and the answer's ` +
+      `standing cannot read it (the period itself is recorded). Arm it with .resultsLayer() on ` +
+      `the builder, or declare a ToolPeriod on the tool. This warning fires once per tool per ` +
+      `process.`,
+  );
+}
+
+/**
+ * Forget every "no judge for this period" warning issued so far.
+ * @internal test seam — the ledger is process-wide and warn-once.
+ */
+export function _resetPeriodUnjudgedWarnings(): void {
+  periodUnjudgedWarned.clear();
+}
+
 /**
  * Build the pausable tool-call handler for the agent's chart.
  */
@@ -1579,10 +1620,19 @@ export function buildToolCallsHandler(
     call: { readonly toolName: string; readonly toolCallId: string; readonly iteration: number },
     value: unknown,
   ): ToolResultStatus | undefined => {
-    const reading = readCoverageResult(value);
+    const reading = readCoverageResult(value, call.toolName);
     if (reading === undefined) return undefined;
     const rows: DeclaredCoverage[] = [];
     for (const facts of reading.declared) {
+      // Honesty step 7b: a declared period rides the event and the tracked row
+      // (read by the ONE period rule — a malformed one never reaches here), as
+      // a copy. Filed whatever the agent armed: it is the tool's declaration.
+      // Its VERDICT is the results layer's — say so when that layer is not
+      // mounted, so a period nobody judges is never silently inert.
+      const period = facts.period !== undefined ? copyPeriod(facts.period) : undefined;
+      if (period !== undefined && deps.resultsLayer !== true) {
+        warnPeriodUnjudged(call.toolName);
+      }
       // Copied item by item — event payloads are detached plain data, never
       // a shared reference into a value the tool still holds. The
       // record-only extras (`short`, `kind`) ride along when valid, read by
@@ -1614,6 +1664,10 @@ export function buildToolCallsHandler(
           // it never carry it.
           ...(facts.tryInstead !== undefined && { tryInstead: facts.tryInstead }),
           ...(facts.tryInsteadTool !== undefined && { tryInsteadTool: facts.tryInsteadTool }),
+          // Honesty step 7b — where the search looked and when (the event only:
+          // the limits block prints coverage, never a source), and the period.
+          ...(facts.provenance !== undefined && { provenance: { ...facts.provenance } }),
+          ...(period !== undefined && { period: copyPeriod(period) }),
         });
       } else {
         typedEmit(scope, 'agentfootprint.tools.coverage_declared', {
@@ -1623,6 +1677,7 @@ export function buildToolCallsHandler(
           ...(checked.length > 0 && { checked }),
           ...(notChecked.length > 0 && { notChecked }),
           ...(cannotCover.length > 0 && { cannotCover }),
+          ...(period !== undefined && { period: copyPeriod(period) }),
         });
       }
       rows.push({
@@ -1634,6 +1689,7 @@ export function buildToolCallsHandler(
         checked,
         notChecked,
         cannotCover,
+        ...(period !== undefined && { period }),
       });
     }
     scope.coverageDeclared = [...(scope.coverageDeclared ?? []), ...rows];
@@ -3019,8 +3075,12 @@ export function buildToolCallsHandler(
    * conversation turn — the ledger crosses turns on a continued conversation
    * and `iteration` restarts at 1 every run. `turnNumber` is read only then.
    */
+  // While ANY honesty layer is armed, the one writer stamps the turn (adopted
+  // Q6) — the inputs layer, or the results layer (step 7b).
   const turnStampOf = (scope: TypedScope<AgentState>): TurnStamp | undefined =>
-    deps.inputsLayer === true ? { turn: scope.turnNumber as number } : undefined;
+    deps.inputsLayer === true || deps.resultsLayer === true
+      ? { turn: scope.turnNumber as number }
+      : undefined;
   /**
    * THE PER-CALL PEEL (9.101.0, `.findings()`). Under the arm the reserved
    * `_findings` argument is taken off a call's args — UNLESS the tool that
