@@ -265,10 +265,12 @@ export interface ToolCallsHandlerDeps {
   /**
    * The results layer is mounted (honesty layer 3, step 7b) — a registered
    * tool declares a `ToolPeriod`, or the agent was built with
-   * `.resultsLayer()`. Read in ONE place: a result that declares a `period`
-   * on an agent WITHOUT the layer is still recorded (the tool's declaration
-   * rides `coverageDeclared` and the events either way), and a dev warning
-   * says, once per tool, that no verdict will be filed for it.
+   * `.resultsLayer()`. Present: dispatch stamps the batch with the iteration
+   * that ran it (`AgentState.toolResultsIteration`, how the layer tells a
+   * batch from a re-entry), and the one ledger writer stamps the turn.
+   * Absent: a result that declares a `period` is still recorded (the tool's
+   * declaration rides `coverageDeclared` and the events either way), and a
+   * dev warning says, once per tool, that no verdict will be filed for it.
    */
   readonly resultsLayer?: true;
   /**
@@ -1127,12 +1129,38 @@ function warnPeriodUnjudged(toolName: string): void {
   );
 }
 
+/** Tools already told that their `ToolPeriod` has no judge — once per tool per process. */
+const toolPeriodUnjudgedWarned = new Set<string>();
+
 /**
- * Forget every "no judge for this period" warning issued so far.
+ * A tool that declares a `ToolPeriod` was dispatched on an agent whose results
+ * layer is NOT mounted (honesty step 7b). Only a ToolProvider-served tool gets
+ * here — a registered one arms the layer at build — and its calls run, but no
+ * period verdict is filed for them, not even `undeclared`. The twin of
+ * {@link warnPeriodUnjudged} for the tool's declaration: dev mode says so,
+ * once per tool per process, naming the arm.
+ */
+function warnToolPeriodUnjudged(toolName: string): void {
+  if (toolPeriodUnjudgedWarned.has(toolName) || !isDevMode()) return;
+  if (toolPeriodUnjudgedWarned.size < 500) toolPeriodUnjudgedWarned.add(toolName);
+  // eslint-disable-next-line no-console
+  console.warn(
+    `agentfootprint results: tool '${toolName}' declares which argument sets its period (a ` +
+      `ToolPeriod), and this agent does not mount the results layer, so no period verdict — not ` +
+      `even 'undeclared' — is filed for its calls and the answer's standing cannot read them. A ` +
+      `ToolProvider served the tool, so the build could not see it: arm the layer with ` +
+      `.resultsLayer() on the builder. This warning fires once per tool per process.`,
+  );
+}
+
+/**
+ * Forget every "no judge for this period" warning issued so far — for a
+ * declared period and for a declared `ToolPeriod`.
  * @internal test seam — the ledger is process-wide and warn-once.
  */
 export function _resetPeriodUnjudgedWarnings(): void {
   periodUnjudgedWarned.clear();
+  toolPeriodUnjudgedWarned.clear();
 }
 
 /**
@@ -3070,6 +3098,18 @@ export function buildToolCallsHandler(
     return import('../arguments/dispatch.js').then((m) => m.unmountedRefusal(toolName));
   };
   /**
+   * The results layer's twin (honesty layer 3): with the layer NOT mounted, a
+   * call whose tool declares a `ToolPeriod` still runs — its VERDICT needs the
+   * layer, the call does not — so dev mode says, once per tool, that none will
+   * be filed (`warnToolPeriodUnjudged`). Nothing for a tool that declares none,
+   * or on an armed agent.
+   */
+  const warnUnmountedToolPeriod = (tool: Tool | undefined, toolName: string): void => {
+    if (deps.resultsLayer !== true && tool?.period !== undefined) {
+      warnToolPeriodUnjudged(toolName);
+    }
+  };
+  /**
    * The honesty layers' TURN STAMP (adopted Q6): while the inputs layer is
    * armed, every row this handler files through the one writer carries the
    * conversation turn — the ledger crosses turns on a continued conversation
@@ -3825,6 +3865,11 @@ export function buildToolCallsHandler(
         );
       }
       scope.toolResults = [];
+      // The results layer (honesty layer 3) judges each batch ONCE, at the
+      // first loop-head visit after it ran — told apart from a re-entry by
+      // the iteration that dispatched it, never by call id (a provider may
+      // reuse one). Written beside the batch, under the arm only.
+      if (deps.resultsLayer === true) scope.toolResultsIteration = iteration;
       // ── THE TOWERS AT DISPATCH (9.110.0) — one corpus per batch ────────
       // Built AFTER the standings above are on the record (a standing the
       // model declared on THIS batch's calls counts for this batch's
@@ -4151,6 +4196,7 @@ export function buildToolCallsHandler(
         // closed). Neither applies to a tool that declares nothing — and
         // neither awaits for one (`unmountedRules` answers it synchronously).
         const unmounted = unmountedRules(tool, tc.name);
+        warnUnmountedToolPeriod(tool, tc.name);
         const rulesRefusal =
           resolution?.refused ?? (unmounted === undefined ? undefined : await unmounted);
         if (!denied && rulesRefusal !== undefined) {
@@ -5467,6 +5513,13 @@ export function buildToolCallsHandler(
       const toolCallId = scope.pausedToolCallId as string;
       const toolName = scope.pausedToolName as string;
       const startMs = scope.pausedToolStartMs as number;
+      // A batch paused before anything stamped it — a checkpoint written by an
+      // older build, or by an agent without the results layer — is stamped
+      // here as it completes, so the loop head still judges it once (honesty
+      // layer 3). A batch dispatched under the arm already carries its stamp.
+      if (deps.resultsLayer === true && scope.toolResultsIteration === undefined) {
+        scope.toolResultsIteration = scope.iteration as number;
+      }
 
       // ── Middleware-ask decision path ─────────────────────────────────
       // Discriminated by `scope.pausedAsk`, restored from the checkpoint.

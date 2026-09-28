@@ -5,13 +5,15 @@
  * Test types:
  *   - UNIT      — each verdict's reason (`covered` fires none); the
  *                 `result-period` check; THIS turn's rows only (the turn
- *                 stamp); the last row per call wins; the join — a period
+ *                 stamp); every row counts, so a later row under a reused
+ *                 call id never hides an earlier verdict; the join — a period
  *                 reason's witnesses are its row and the inputs layer's row
  *                 for the same call's period argument; an unknown verdict
  *                 word is skipped, never guessed;
- *   - PROPERTY  — over 1,000 generated ledgers: a period reason fires iff a
- *                 current row of this turn carries its verdict; no period row
- *                 ever supports "known"; the fold never reads an instant.
+ *   - PROPERTY  — over 1,000 generated ledgers with repeated ids: a period
+ *                 reason fires iff a row of this turn carries its verdict; no
+ *                 period row ever supports "known"; the fold never reads an
+ *                 instant.
  */
 
 import { describe, expect, it } from 'vitest';
@@ -95,12 +97,33 @@ describe('UNIT — which rows the fold reads', () => {
     ).toEqual(['period-not-held']);
   });
 
-  it('the last row per call wins', () => {
+  it('every row counts — a later row under the same call id never hides an earlier verdict', () => {
+    // The layer files one row per judged call, so a second row under an id is
+    // ANOTHER call: a resumed leg repeats the failed leg's synthetic ids, and a
+    // provider may reuse an id across batches.
     const a = run({
       turnNumber: 1,
-      findingsLedger: [periodRow('c1', 'not-held'), periodRow('c1', 'covered')],
+      findingsLedger: [periodRow('c1', 'not-held'), periodRow('c1', 'covered', { iteration: 2 })],
     });
-    expect(a.reasons).toEqual([]);
+    expect(a.reasons).toEqual([
+      {
+        reason: 'period-not-held',
+        layer: 3,
+        witness: [{ kind: 'state', key: 'findingsLedger', path: '/0/verdict' }],
+      },
+    ]);
+    expect(a.checked).toEqual([
+      {
+        layer: 3,
+        check: 'result-period',
+        ran: 2,
+        of: 2,
+        witness: [
+          { kind: 'state', key: 'findingsLedger', path: '/0/verdict' },
+          { kind: 'state', key: 'findingsLedger', path: '/1/verdict' },
+        ],
+      },
+    ]);
   });
 
   it('a verdict word the fold does not know is skipped, never guessed — and still counted as filed', () => {
@@ -168,17 +191,18 @@ describe('PROPERTY — 1,000 generated ledgers', () => {
     undeclared: 'period-undeclared',
   };
 
-  it('a period reason fires iff a current row of this turn carries its verdict; never "known"', () => {
+  it('a period reason fires iff a row of this turn carries its verdict — ids repeat; never "known"', () => {
     for (let n = 0; n < 1000; n += 1) {
       const turn = 1 + Math.floor(rnd() * 2);
+      // Three ids over up to five rows: repeated ids are the common case here.
       const rows = Array.from({ length: Math.floor(rnd() * 6) }, () =>
         periodRow(pick(['a', 'b', 'c']), pick(VERDICTS), { turn: 1 + Math.floor(rnd() * 2) }),
       );
-      const current = new Map<string, string>();
-      for (const row of rows)
-        if (row.turn === turn) current.set(String(row.toolCallId), String(row.verdict));
       const expected = new Set(
-        [...current.values()].map((v) => REASON[v]).filter((r) => r !== undefined),
+        rows
+          .filter((row) => row.turn === turn)
+          .map((row) => REASON[String(row.verdict)])
+          .filter((r) => r !== undefined),
       );
       const a = run({ turnNumber: turn, findingsLedger: rows });
       const fired = new Set(a.reasons.map((r) => r.reason));

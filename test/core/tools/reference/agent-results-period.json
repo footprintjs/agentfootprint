@@ -644,7 +644,8 @@
             "toolCallId": "c1",
             "toolName": "backup_runs"
           }
-        ]
+        ],
+        "toolResultsIteration": 1
       },
       "redactedPaths": [],
       "runtimeStageId": "tool-calls#25",
@@ -655,6 +656,10 @@
         "milestone-label:Tool call"
       ],
       "trace": [
+        {
+          "path": "toolResultsIteration",
+          "verb": "set"
+        },
         {
           "path": "coverageDeclared",
           "verb": "set"
@@ -1105,7 +1110,8 @@
             "toolCallId": "c2",
             "toolName": "backup_runs"
           }
-        ]
+        ],
+        "toolResultsIteration": 2
       },
       "redactedPaths": [],
       "runtimeStageId": "tool-calls#50",
@@ -1116,6 +1122,10 @@
         "milestone-label:Tool call"
       ],
       "trace": [
+        {
+          "path": "toolResultsIteration",
+          "verb": "set"
+        },
         {
           "path": "coverageDeclared",
           "verb": "append"

@@ -1687,6 +1687,22 @@ export interface AgentState {
      *  edges key on it. */
     status?: import('./toolEffects.js').ToolResultStatus;
   }>;
+  /**
+   * The iteration that DISPATCHED the batch `toolResults` holds — written
+   * beside it by ToolCalls when dispatch starts (or, for a batch paused
+   * before anything stamped it, when it completes on resume), and ONLY while
+   * the results layer is mounted (honesty layer 3): an agent without it
+   * commits exactly the keys it always did.
+   *
+   * It is how the layer at the loop head knows a batch from a re-entry
+   * (`honesty/mounts.ts` · `batchToJudge`): ToolCalls advances `iteration`
+   * by one and loops straight to the layer, so the batch is new exactly when
+   * the loop head's `iteration` is this plus one — each batch judged once per
+   * run, never by call id, which a provider may reuse. Per run: a
+   * conversation checkpoint (`AgentRunCheckpoint`) never carries it, so a
+   * resumed leg starts without one.
+   */
+  toolResultsIteration?: number;
   /** The `Deliver` stage's record for THIS iteration: which messages-slot
    *  injections entered the window, and which were held back with the
    *  sentence saying why. Overwritten per iteration (the commit log keeps

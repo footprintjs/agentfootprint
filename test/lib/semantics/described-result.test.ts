@@ -539,6 +539,19 @@ describe('functional: a refusal names the field as the author spelled it', () =>
     for (const [, snake] of SPELLED) expect(message).not.toContain(snake);
   });
 
+  it('not a declaration at all: each door names ITS fields — period only on describedResult()', () => {
+    expect(refusalOf(() => describedResult(null as never))).toBe(
+      'refused: describedResult() takes a declaration — { series?, facts?, edges?, grain?, ' +
+        'provenance?, period?, coverage?, clarify?, render? } with at least one of ' +
+        'series/facts/edges/clarify.',
+    );
+    // The deprecated door keeps the words it always gave.
+    expect(refusalOf(() => semantic(null as never))).toBe(
+      'refused: semantic() takes a declaration — { series?, facts?, edges?, grain?, provenance?, ' +
+        'coverage?, clarify?, render? } with at least one of series/facts/edges/clarify.',
+    );
+  });
+
   it('is the SAME rule semantic() applies — one core, only the words differ', () => {
     for (const { camel, snake } of CASES) {
       // Strip provenance from every data case: both doors refuse, with one rule.

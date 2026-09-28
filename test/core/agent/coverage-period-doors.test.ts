@@ -362,6 +362,22 @@ describe('recognition: readCoverageResult carries the period (and an absence’s
     });
   });
 
+  it('period: null on af_semantics is a fault too — never read as "no period declared"', () => {
+    // The strict door's law: a key present with a value it cannot read keeps
+    // the whole envelope data — a JSON null is not an omission here.
+    const foreign = {
+      af_semantics: true,
+      facts: [{ entity: 'h' }],
+      provenance: { measured_at: 'now', source: 's' },
+      period: null,
+      note: 'x',
+    };
+    expect(readSemantics(foreign)).toBeUndefined();
+    expect(explainSemantics(foreign)).toEqual([
+      expect.objectContaining({ code: 'malformed-semantics', field: 'period' }),
+    ]);
+  });
+
   it('a well-formed period minted elsewhere (a Python helper, snake_case) is recognized as is', () => {
     const foreign = {
       af_semantics: true,

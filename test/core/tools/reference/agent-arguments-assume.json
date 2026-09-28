@@ -695,7 +695,8 @@
             "toolCallId": "c1",
             "toolName": "search_logs"
           }
-        ]
+        ],
+        "toolResultsIteration": 1
       },
       "redactedPaths": [],
       "runtimeStageId": "tool-calls#30",
@@ -706,6 +707,10 @@
         "milestone-label:Tool call"
       ],
       "trace": [
+        {
+          "path": "toolResultsIteration",
+          "verb": "set"
+        },
         {
           "path": "lastToolResult",
           "verb": "set"

@@ -899,9 +899,12 @@ export function mintSemantics(
   // the declared field types with an index signature for the rest of the
   // function (each declaration type is assignable to it, so it narrows).
   if (typeof decl !== 'object' || decl === null || Array.isArray(decl)) {
+    // The fields this door takes, from its own list — so `describedResult()`
+    // names `period?` and `semantic()` keeps the words it always gave.
+    const fields = door.declarationKeys.map((key) => `${key}?`).join(', ');
     throw refusal(
-      `${door.name}() takes a declaration — { series?, facts?, edges?, grain?, provenance?, ` +
-        `coverage?, clarify?, render? } with at least one of series/facts/edges/clarify.`,
+      `${door.name}() takes a declaration — { ${fields} } with at least one of ` +
+        `series/facts/edges/clarify.`,
     );
   }
   const derived = door.derivedKeys.find((key) => Object.prototype.hasOwnProperty.call(decl, key));

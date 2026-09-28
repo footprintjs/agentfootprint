@@ -22,12 +22,26 @@
  * every batch and before the next model call, and before any window strategy
  * folds the batch away. It reads the batch ToolCalls just ran (`toolResults`,
  * which still holds it at the loop head: identities only, never a result's
- * bytes), the periods those calls' results declared (their committed
- * `coverageDeclared` rows), and the ids of calls that already have a verdict
- * this turn — so a re-entry through the schema re-ask, the step nudge, the
- * evidence recheck or the wrap-up (which run no tool and leave the batch in
- * place) files nothing twice. On the first iteration there is no batch, and
- * every stage finds nothing to do.
+ * bytes) and the periods those calls' results declared (their committed
+ * `coverageDeclared` rows of the batch's iteration).
+ *
+ * ## Each batch once — told apart by its iteration, never by a call id
+ *
+ * The schema re-ask, the step nudge, the evidence recheck and the wrap-up run
+ * no tool and loop back here with the batch still in place. The layer tells
+ * the first visit from those by the iteration that DISPATCHED the batch,
+ * which ToolCalls stamps beside it (`AgentState.toolResultsIteration`, under
+ * the arm): ToolCalls advances the iteration by one and loops straight here,
+ * and every other way back advances it again — so the batch is new exactly
+ * when the loop head's iteration is the stamp plus one, and the mount hands
+ * the batch only then (`honesty/mounts.ts` · `batchToJudge`). A
+ * call id cannot say it: a provider's synthetic counter restarts with each
+ * provider instance (a resumed leg repeats the ids of the leg that failed,
+ * whose rows the conversation checkpoint carries), and nothing stops a
+ * provider reusing an id across batches of one run. If that invariant ever
+ * broke, a batch would be judged twice — an over-report, never a hidden one.
+ * On the first iteration there is no batch, and every stage finds nothing to
+ * do.
  *
  * ## One verdict per call
  *
@@ -93,14 +107,14 @@ export type PeriodArgumentOf = (toolName: string) => string | undefined;
 /** The subflow's own state — inputs frozen by the mount, then one key per stage. */
 export interface ResultsLayerState {
   // ── inputs (the mount's inputMapper; frozen inside the subflow) ──
+  /** The batch to judge — empty on a visit with none (the first iteration, or a re-entry). */
   readonly calls: readonly BatchCall[];
   /** The periods the batch's results declared — handed only when there are some. */
   readonly periods?: readonly CallPeriod[];
-  /** The batch's calls that already have a period row this turn — handed only when there are some. */
-  readonly filed?: readonly string[];
-  /** The iteration the batch ran in (the loop head's, less the one ToolCalls advanced). */
-  readonly batchIteration: number;
-  readonly turnNumber: number;
+  /** The iteration that dispatched the batch (`honesty/mounts.ts` · `batchToJudge`) — handed only with a batch. */
+  readonly batchIteration?: number;
+  /** The conversation turn — handed only with a batch. */
+  readonly turnNumber?: number;
   // ── staged by the stages ──
   periodPlan?: readonly PlannedPeriod[];
   periodChecks?: readonly CheckedPeriod[];
@@ -117,18 +131,17 @@ export interface ResultsLayerDeps {
 // ─── The three pure steps ───────────────────────────────────────────────
 
 /**
- * DECLARE, pure: the calls to judge, in batch order — each call not already
- * judged this turn whose result declared a period or whose tool declares a
- * `ToolPeriod`. A call id met twice in one batch is judged once (call ids are
- * the ledger's identity within a turn).
+ * DECLARE, pure: the calls to judge, in batch order — each call whose result
+ * declared a period or whose tool declares a `ToolPeriod`. A call id met twice
+ * in ONE batch is judged once, over every period declared under it (the least
+ * held wins, so merging can only over-report).
  */
 export function planPeriods(
   calls: readonly BatchCall[],
   periods: readonly CallPeriod[],
-  filed: readonly string[],
   periodArgumentOf: PeriodArgumentOf,
 ): PlannedPeriod[] {
-  const done = new Set(filed);
+  const done = new Set<string>();
   const plan: PlannedPeriod[] = [];
   for (const call of calls) {
     if (done.has(call.toolCallId)) continue;
@@ -208,8 +221,7 @@ export function declareResultsStage(
     toolCallId: p.toolCallId,
     period: copyPeriod(p.period),
   }));
-  const filed = [...((scope.filed as readonly string[] | undefined) ?? [])];
-  scope.periodPlan = planPeriods(calls, periods, filed, deps.periodArgumentOf);
+  scope.periodPlan = planPeriods(calls, periods, deps.periodArgumentOf);
 }
 
 /** VERIFY — the verdict on each planned call's period. Stages `periodChecks` (identities and a word). */

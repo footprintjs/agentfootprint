@@ -258,14 +258,40 @@ const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === 'object' && value !== null && !Array.isArray(value);
 
 /**
- * What the loop head hands the results layer — identities, the periods the
- * batch's results declared, and the calls already judged this turn. Read ONLY
- * when a batch is in place (`toolResults` has entries): on the first iteration
- * nothing else is read, so the layer never reads a key the run has not written.
+ * WHICH BATCH the loop head hands the results layer on this visit — the
+ * iteration that dispatched it, or `undefined` when there is none to judge.
+ *
+ * `stamp` is the iteration ToolCalls wrote beside the batch it dispatched
+ * (`AgentState.toolResultsIteration`, under the arm); `iteration` is the loop
+ * head's. ToolCalls advances the iteration by exactly one and loops straight
+ * here; every other way back — the schema re-ask, the step nudge, the evidence
+ * recheck, the wrap-up — runs no tool, leaves the batch in place and advances
+ * the iteration again. So the batch is new on this visit exactly when
+ * `iteration === stamp + 1`: each batch judged ONCE per run.
+ *
+ * Never by call id. A provider's synthetic counter restarts with each provider
+ * instance (`<prefix>-call-${++toolCallSeq}`), so a resumed leg repeats the ids
+ * of the leg that failed — whose rows the conversation checkpoint carries — and
+ * nothing stops a provider reusing an id across batches of one run. A stamp is
+ * per run: no conversation checkpoint carries it, so a resumed leg starts with
+ * none. Were the invariant above ever broken, a batch would be judged twice —
+ * an over-report, never a hidden verdict.
+ */
+export function batchToJudge(iteration: number, stamp: unknown): number | undefined {
+  return typeof stamp === 'number' && iteration === stamp + 1 ? stamp : undefined;
+}
+
+/**
+ * What the loop head hands the results layer — the batch's identities, the
+ * periods ITS results declared (the coverage rows of the batch's iteration, so
+ * a call id an earlier batch also used cannot lend it a period), and the
+ * stamps. Only on the first visit after ToolCalls ran the batch
+ * (`batchToJudge`); every other visit is handed an empty batch and reads
+ * nothing else, so the layer never reads a key the run has not written.
  */
 function resultsLayerInput(parent: Record<string, unknown>): ResultsLayerState {
-  const iteration = parent.iteration as number;
-  const turnNumber = parent.turnNumber as number;
+  const batchIteration = batchToJudge(parent.iteration as number, parent.toolResultsIteration);
+  if (batchIteration === undefined) return { calls: [] };
   const batch = (parent.toolResults as readonly unknown[] | undefined) ?? [];
   const calls: BatchCall[] = [];
   for (const entry of batch) {
@@ -273,24 +299,19 @@ function resultsLayerInput(parent: Record<string, unknown>): ResultsLayerState {
     if (typeof entry.toolCallId !== 'string' || typeof entry.toolName !== 'string') continue;
     calls.push({ toolCallId: entry.toolCallId, toolName: entry.toolName });
   }
-  const base = { calls, batchIteration: iteration - 1, turnNumber };
-  if (calls.length === 0) return base;
+  if (calls.length === 0) return { calls };
   const ids = new Set(calls.map((c) => c.toolCallId));
   const periods: CallPeriod[] = [];
   for (const row of (parent.coverageDeclared as readonly unknown[] | undefined) ?? []) {
-    if (!isRecord(row) || typeof row.toolCallId !== 'string' || !ids.has(row.toolCallId)) continue;
-    if (row.period === undefined) continue;
+    if (!isRecord(row) || row.iteration !== batchIteration || row.period === undefined) continue;
+    if (typeof row.toolCallId !== 'string' || !ids.has(row.toolCallId)) continue;
     periods.push({ toolCallId: row.toolCallId, period: copyPeriod(row.period as DeclaredPeriod) });
   }
-  const filed: string[] = [];
-  for (const row of (parent.findingsLedger as readonly unknown[] | undefined) ?? []) {
-    if (!isRecord(row) || row.kind !== 'period' || row.turn !== turnNumber) continue;
-    if (typeof row.toolCallId === 'string' && ids.has(row.toolCallId)) filed.push(row.toolCallId);
-  }
   return {
-    ...base,
+    calls,
+    batchIteration,
+    turnNumber: parent.turnNumber as number,
     ...(periods.length > 0 && { periods }),
-    ...(filed.length > 0 && { filed }),
   };
 }
 

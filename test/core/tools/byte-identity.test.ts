@@ -339,6 +339,21 @@
  * `host-103`, `not-held` for `host-999`); and the served tool messages carrying
  * each `period` as the tool declared it, snake_case (`read_at`).
  *
+ * Step 7b's first review round REGENERATED four of those five —
+ * `agent-arguments-assume`, `-assume-limits`, `-ask-resumed` and
+ * `agent-results-period` — when the layer stopped telling a batch from a
+ * re-entry by call id (a provider may reuse one; a resumed leg repeats the ids
+ * of the leg that failed) and started reading the iteration that dispatched
+ * the batch, which ToolCalls now stamps beside it under the arm. The four were
+ * copied aside, regenerated alone under `AF_TOOLS_REFERENCE=update -t …`, the
+ * other 22 `cmp`-equal after, and each diffed path by path: the delta is ONE
+ * family — every `tool-calls` bundle that dispatched a batch gains
+ * `toolResultsIteration` (the batch's iteration: 1, and 2 for the second batch
+ * of `agent-results-period`) in `overwrite`, with one `set` trace row that
+ * shifts the bundle's other trace rows by one. `agent-arguments-ask` did not
+ * move: its leg pauses on the ask before dispatch starts, so nothing is
+ * stamped. No served view, message, row or other key moved.
+ *
  * Every scenario is a real run — the receipt-conformance shapes, each in the
  * configuration that has no name collision — and what is compared is the
  * whole `commitLog` plus `servedAt(k)` for every located epoch, after ONE

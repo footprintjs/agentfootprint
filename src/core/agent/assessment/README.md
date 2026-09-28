@@ -70,7 +70,11 @@ is a verdict, so `ran` equals `of`. No argument row ever supports "known": a
 membership pass only keeps a reason from firing.
 
 The results layer's `period` rows (honesty layer 3, `core/agent/results/README.md`)
-are read the same way — this turn's, the last per call. `covered` fires nothing;
+are read for this turn too — but EVERY row, never the last per call: the layer
+files one row per judged call, so a second row under an id is another call (a
+leg resumed with `resumeOnError` repeats the failed leg's synthetic ids, and a
+provider may reuse an id across batches), and a later `covered` must not hide an
+earlier `not-held`. `covered` fires nothing;
 each other verdict fires its `period-*` reason, and its witnesses are the `period`
 row AND, when the tool declares a `ToolPeriod`, the inputs layer's `argument` row
 for the same call and argument — who chose the period, beside what the read

@@ -29,12 +29,15 @@ builder = mountInputsLayer(builder, deps.inputsLayer); // after the LLM call, be
 The results layer becomes the loop target when armed (`mounts.ts` ·
 `RESULTS_LOOP_TARGET`, the `Compact` precedent): ToolCalls and every re-ask
 branch loop back to it, so it reads the batch just run before the window
-strategy folds it away; a re-entry that ran no tool files nothing twice.
+strategy folds it away; a re-entry that ran no tool files nothing twice. It
+tells the two apart by the iteration that dispatched the batch — ToolCalls
+stamps it (`AgentState.toolResultsIteration`, under the arm) — never by call
+id, which a provider may reuse (`mounts.ts` · `batchToJudge`).
 
 - **Handed** (the input mapping, frozen inside the subflow): only what the layer reads — for
   the inputs layer, the batch, Route's dispatch values and `turnNumber`; for the results
-  layer, the batch's call ids and tool names, the periods their coverage rows carry, the
-  calls already judged this turn, and the stamps. Never the whole ledger; never a tool
+  layer, on the first visit after a batch ran and never again, the batch's call ids and tool
+  names, the periods its coverage rows carry, and the stamps. Never the whole ledger; never a tool
   (tools are closures, read through the one dispatch resolver, `stages/toolResolver.ts` ·
   `buildToolResolver`).
 - **Returned** (the output mapping, `arrayMerge: Replace` — the loop-crossed mount law): the

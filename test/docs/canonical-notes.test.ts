@@ -37,10 +37,12 @@ import { join } from 'node:path';
 import {
   ABSENCE_MARKER,
   ABSENCE_NOTE,
+  absent,
   COVERAGE_BLOCK_HEADING,
   COVERAGE_MARKER,
   COVERAGE_NOTE,
   PERIOD_WIRE,
+  readCoverageResult,
   SEMANTICS_MARKER,
   SEMANTICS_NOTE,
 } from '../../src/index.js';
@@ -135,6 +137,47 @@ describe('integration — every published value byte-equals the exported constan
       data.wire.PERIOD_WIRE,
       'canonical-notes.json is stale for PERIOD_WIRE — run `npm run build` after editing it.',
     ).toEqual({ ...PERIOD_WIRE });
+  });
+
+  it('PERIOD_WIRE round trip — a period minted from the JSON alone is the one the library mints and reads', () => {
+    // What a helper in another language does: every key from the published
+    // file, nothing typed from memory. The library's own mint must produce the
+    // same object, and the recognizer must read it back as declared.
+    const w = data.wire.PERIOD_WIRE;
+    const queried = { from: '2026-09-26T09:00:00Z', to: '2026-09-26T10:00:00Z' };
+    const held = { from: '2026-08-27T02:00:00Z', to: '2026-09-26T02:00:00Z' };
+    const readAt = '2026-09-26T10:00:03Z';
+    const byHand = (heldValue: unknown) => ({
+      [w.queried]: { [w.from]: queried.from, [w.to]: queried.to },
+      [w.held]: heldValue,
+      [w.readAt]: readAt,
+    });
+    for (const [declared, wire] of [
+      [held, byHand({ [w.from]: held.from, [w.to]: held.to })],
+      ['unknown', byHand(w.heldUnknown)],
+    ] as const) {
+      const minted = JSON.parse(
+        JSON.stringify(
+          absent({
+            what: 'failed backup runs',
+            checked: ['every job in the 02:00 export'],
+            period: { queried, held: declared, readAt },
+          }),
+        ),
+      ) as Record<string, unknown>;
+      expect(minted[w.key]).toEqual(wire);
+      const handMinted = {
+        [data.markers.ABSENCE_MARKER]: true,
+        checked: [{ what: 'every job in the 02:00 export' }],
+        [w.key]: wire,
+        note: data.notes.ABSENCE_NOTE,
+      };
+      expect(readCoverageResult(handMinted)?.declared[0]?.period).toEqual({
+        queried,
+        held: declared,
+        readAt,
+      });
+    }
   });
 
   for (const [name, value] of Object.entries(EXPORTED)) {

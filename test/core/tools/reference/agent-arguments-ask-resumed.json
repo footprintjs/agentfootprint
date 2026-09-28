@@ -50,7 +50,8 @@
             "toolCallId": "c1",
             "toolName": "search_logs"
           }
-        ]
+        ],
+        "toolResultsIteration": 1
       },
       "redactedPaths": [],
       "runtimeStageId": "tool-calls#31",
@@ -67,6 +68,10 @@
         },
         {
           "path": "argumentAsk",
+          "verb": "set"
+        },
+        {
+          "path": "toolResultsIteration",
           "verb": "set"
         },
         {

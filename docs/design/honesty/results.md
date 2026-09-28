@@ -44,6 +44,18 @@ Nothing here is built unless a line says "shipped" or "drafted".**
 > carrying no argument name, and the stage ids `declare-results` … `resolve-results` (Resolve
 > writes nothing in 7b — flag is the only verb after a call ran). The lens follow-up — reading
 > `period` on the three envelopes, the `period` row and `findings.period` — is the lens repo's.
+>
+> **Step 7b review, round 1 (2026-09-28).** The build told a re-entry from a new batch by
+> "a period row of this turn already names this call id" — and a call id is not a call: a
+> provider's synthetic ids restart with each provider instance, so a leg resumed with
+> `resumeOnError` repeated the failed leg's id and its call was never judged (a not-held read
+> answered "known"). Now ToolCalls stamps the batch with the iteration that dispatched it
+> (`AgentState.toolResultsIteration`, under the arm) and the mount hands the batch to the layer
+> only on the loop-head visit one iteration past that stamp (`honesty/mounts.ts` ·
+> `batchToJudge`) — each batch once per run (a batch paused before anything stamped it is
+> stamped as it completes on resume); a batch's periods are read from the coverage rows of its
+> own iteration; and the fold reads EVERY `period` row of the turn, never the last per call, so
+> a later `covered` under a reused id cannot hide an earlier `not-held`.
 
 - Written against agentfootprint 9.118.1 (`8360b3b8` on npm; its fix `f83f277c` shipped the
   request's fix 0 and fix 1) and footprintjs 9.27.0.

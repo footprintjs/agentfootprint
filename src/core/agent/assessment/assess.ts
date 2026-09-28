@@ -359,7 +359,7 @@ function readArgumentAsk(
   }
 }
 
-/** One current `period` row of this turn — the last per call. */
+/** One `period` row of this turn — one judged call. */
 interface PeriodRowRead {
   readonly index: number;
   readonly toolCallId: string;
@@ -369,15 +369,22 @@ interface PeriodRowRead {
 }
 
 /**
- * This turn's CURRENT period verdicts (honesty layer 3): the ledger's
- * `period` rows whose `turn` is the run's `turnNumber`, the LAST per call. A
- * record with no `turnNumber` reads every period row (it may over-report; it
- * never hides).
+ * This turn's period verdicts (honesty layer 3): EVERY `period` row whose
+ * `turn` is the run's `turnNumber`, in ledger order. A record with no
+ * `turnNumber` reads every period row (it may over-report; it never hides).
+ *
+ * Never collapsed by call id. The layer files one row per judged call — each
+ * batch judged once (`honesty/mounts.ts` · `batchToJudge`) — so a second row
+ * under an id is ANOTHER call: a provider's synthetic counter restarts with
+ * each provider instance, so a resumed leg repeats the ids of the leg that
+ * failed (whose rows ride the checkpoint, under the same turn), and a provider
+ * may reuse an id across batches. "The last per call" would let a later
+ * `covered` hide an earlier `not-held` the answer can still rest on.
  */
 function periodRows(state: Readonly<Record<string, unknown>>): readonly PeriodRowRead[] {
   const ledger = Array.isArray(state.findingsLedger) ? state.findingsLedger : [];
   const turn = typeof state.turnNumber === 'number' ? state.turnNumber : undefined;
-  const byCall = new Map<string, PeriodRowRead>();
+  const rows: PeriodRowRead[] = [];
   ledger.forEach((row: unknown, index) => {
     if (!isRecord(row) || row.kind !== 'period') return;
     if (turn !== undefined && row.turn !== turn) return;
@@ -385,14 +392,9 @@ function periodRows(state: Readonly<Record<string, unknown>>): readonly PeriodRo
     const verdict = str(row.verdict);
     if (toolCallId === undefined || verdict === undefined) return;
     const argument = str(row.argument);
-    byCall.set(toolCallId, {
-      index,
-      toolCallId,
-      verdict,
-      ...(argument !== undefined && { argument }),
-    });
+    rows.push({ index, toolCallId, verdict, ...(argument !== undefined && { argument }) });
   });
-  return [...byCall.values()];
+  return rows;
 }
 
 /** The reason each period verdict fires — `covered` fires none. */

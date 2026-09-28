@@ -109,6 +109,23 @@ async function ask(queried: { from: string; to: string }, limitsTravel: boolean)
 }
 // #endregion result-period
 
+/** Error lines over a look-back the `window` argument sets — declared, and a result that says nothing. */
+const searchLogs = defineTool({
+  name: 'search_logs',
+  description: 'Error lines for one service over a look-back period.',
+  inputSchema: {
+    type: 'object',
+    required: ['service', 'window'],
+    properties: {
+      service: { type: 'string', description: 'Service name.' },
+      window: { type: 'string', enum: ['1h', '2h', '24h'], description: 'Look-back.' },
+    },
+  },
+  askOrAssume: { window: { assume: '2h' } }, // a default nobody chose — recorded as one
+  period: { argument: 'window', spelling: 'lookback' }, // THIS argument sets the period
+  execute: async () => [], // …and the result does not say what its read covered
+});
+
 const LAST_HOUR = { from: '2026-09-26T09:00:00Z', to: '2026-09-26T10:00:00Z' };
 const INSIDE_THE_EXPORT = { from: '2026-09-25T00:00:00Z', to: '2026-09-26T00:00:00Z' };
 
@@ -151,6 +168,32 @@ export async function run(_input: string): Promise<string> {
         'holds 2026-08-27T02:00:00Z to 2026-09-26T02:00:00Z',
     ),
     'the answer to carry the Period line',
+  );
+
+  // 4. A tool that declares WHICH argument sets its period (a ToolPeriod) — and a
+  //    result that says nothing about what its read covered: `undeclared`.
+  const silent = Agent.create({
+    provider: mock({
+      replies: [
+        { toolCalls: [{ id: 'call-1', name: 'search_logs', args: { service: 'checkout' } }] },
+        { content: 'No errors on checkout.' },
+      ],
+    }),
+    model: 'small-model',
+  })
+    .tool(searchLogs) // a registered ToolPeriod arms the layer by itself — no .resultsLayer()
+    .build();
+  await silent.run({ message: 'Any errors on checkout?' });
+  const silentStanding = (await silent.assessment())!;
+  console.log(
+    '\na ToolPeriod, a silent result:',
+    JSON.stringify(periodRows(silent)[0]),
+    silentStanding.reasons.map((r) => r.reason),
+  );
+  check(periodRows(silent)[0]?.verdict === 'undeclared', 'the verdict undeclared');
+  check(
+    silentStanding.reasons.some((r) => r.reason === 'period-undeclared'),
+    'the standing to name the silence about the period',
   );
   return `${staleStanding.standing} · ${staleStanding.reasons.map((r) => r.reason).join(', ')}`;
 }

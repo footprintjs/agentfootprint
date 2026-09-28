@@ -11,8 +11,13 @@
  *                    Q33), undeclared (a `ToolPeriod` tool whose result
  *                    declared nothing); the coverage channel carries the
  *                    declared period; the event carries the verdict word only;
+ *                    without the layer, a declared period and a ToolPeriod a
+ *                    ToolProvider served are each dev-warned once per tool;
  *   - INTEGRATION  — both chart shapes; the loop head (a re-entry through the
- *                    schema re-ask files nothing twice); the window strategy
+ *                    schema re-ask files nothing twice, and a call id reused —
+ *                    by a resumed leg after `resumeOnError`, or across two
+ *                    batches of one run — is judged again: each batch once
+ *                    per run, never by call id); the window strategy
  *                    beside it; a paused batch resumed; the limits block's
  *                    `Period:` line and a typed answer's `periods`; a continued
  *                    conversation (the checkpoint door, this turn only); the
@@ -20,8 +25,8 @@
  *   - SECURITY     — no instant on the event or the row; the model is served
  *                    nothing new;
  *   - BYTE IDENTITY — nothing declared, nothing mounted: no `sf-results`, no
- *                    run constant, no row (and the 21 unarmed references in
- *                    test/core/tools/reference/ stay green).
+ *                    run constant, no batch stamp, no row (and the unarmed
+ *                    references in test/core/tools/reference/ stay green).
  * Unit: test/core/agent/results/subflow.test.ts. Property and boundary:
  * test/core/agent/coverage-period.test.ts. Performance and load:
  * test/core/agent/results/performance.test.ts.
@@ -38,12 +43,14 @@ import {
   describedResult,
   isPaused,
   pauseHere,
+  RunCheckpointError,
   slidingWindow,
   type DeclaredPeriod,
   type PeriodRow,
   type Tool,
 } from '../../../../src/index.js';
 import { accountForAnswer, recordRun } from '../../../../src/observe.js';
+import { staticTools } from '../../../../src/tool-providers/index.js';
 import type { LLMRequest, LLMResponse } from '../../../../src/adapters/types.js';
 import { validateCheckpoint } from '../../../../src/core/runCheckpoint.js';
 import { _resetPeriodWarnings } from '../../../../src/core/agent/coverage/period.js';
@@ -53,7 +60,8 @@ import { _resetPeriodUnjudgedWarnings } from '../../../../src/core/agent/stages/
 
 type Reply = { content: string; toolCalls?: { id: string; name: string; args: object }[] };
 
-function scripted(script: readonly Reply[]) {
+/** A scripted provider: one reply per call, or an `Error` the call throws (a vendor outage). */
+function scripted(script: readonly (Reply | Error)[]) {
   let i = 0;
   const requests: LLMRequest[] = [];
   return {
@@ -64,6 +72,7 @@ function scripted(script: readonly Reply[]) {
         requests.push(req);
         const reply = script[Math.min(i, script.length - 1)] ?? { content: 'done' };
         i += 1;
+        if (reply instanceof Error) throw reply;
         return {
           content: reply.content,
           toolCalls: reply.toolCalls ?? [],
@@ -424,6 +433,36 @@ describe('without the layer — a declared period is recorded, never judged in s
       disableDevMode();
     }
   });
+
+  it('a ToolPeriod the build could not see (a ToolProvider served it): the calls run, and dev mode says no verdict is filed', async () => {
+    enableDevMode();
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+    try {
+      const agent = Agent.create({
+        provider: scripted([
+          call('c1', 'search_logs', { service: 'checkout', window: '1h' }),
+          call('c2', 'search_logs', { service: 'payments', window: '1h' }),
+          answer('No errors.'),
+        ]).provider as never,
+        model: 'm',
+      })
+        .toolProvider(staticTools([searchLogs()]))
+        .inputsLayer() // the rules are honoured; the period is nobody's to judge
+        .build();
+      await agent.run({ message: 'any errors?' });
+      const state = agent.getSnapshot()!.sharedState as Record<string, unknown>;
+      expect(state.honestyLayers).toEqual({ inputs: true });
+      expect(state).not.toHaveProperty('toolResultsIteration');
+      expect(periodRows(agent)).toEqual([]);
+      const warnings = warn.mock.calls
+        .map((c) => String(c[0]))
+        .filter((w) => w.includes("tool 'search_logs' declares which argument sets its period"));
+      expect(warnings).toHaveLength(1); // two calls, one warning per tool
+      expect(warnings[0]).toContain('.resultsLayer()');
+    } finally {
+      disableDevMode();
+    }
+  });
 });
 
 // ─── INTEGRATION ─────────────────────────────────────────────────────
@@ -511,6 +550,152 @@ describe('the loop head — every re-entry reads the batch in place, and files n
     if (!isPaused(paused)) throw new Error('expected a pause');
     await agent.resume(paused.checkpoint, 'host-103');
     expect(periodRows(agent).map((r) => [r.toolCallId, r.verdict])).toEqual([['a', 'not-held']]);
+  });
+
+  it('a batch paused BEFORE anything stamped it (an agent without the layer) is still judged once when it completes', async () => {
+    const pausing = defineTool({
+      name: 'confirm_host',
+      description: 'Ask the operator to confirm a host.',
+      inputSchema: { type: 'object', properties: {} },
+      execute: async () => pauseHere({ question: 'Which host?' }),
+    });
+    const batch = {
+      content: '',
+      toolCalls: [
+        { id: 'a', name: 'backup_runs', args: { host: 'stale' } },
+        { id: 'b', name: 'confirm_host', args: {} },
+      ],
+    };
+    // Paused on an agent with no results layer — a checkpoint an older build
+    // writes the same way — so the batch carries no stamp…
+    const before = Agent.create({
+      provider: scripted([batch, answer('done')]).provider as never,
+      model: 'm',
+    })
+      .tool(backupRuns())
+      .tool(pausing)
+      .build();
+    const paused = await before.run({ message: 'go' });
+    if (!isPaused(paused)) throw new Error('expected a pause');
+    // …and resumed on one that mounts it: the batch is stamped as it completes.
+    const after = Agent.create({
+      provider: scripted([answer('done')]).provider as never,
+      model: 'm',
+    })
+      .tool(backupRuns())
+      .tool(pausing)
+      .resultsLayer()
+      .build();
+    await after.resume(paused.checkpoint, 'host-103');
+    expect(periodRows(after).map((r) => [r.toolCallId, r.iteration, r.verdict])).toEqual([
+      ['a', 1, 'not-held'],
+    ]);
+  });
+});
+
+describe('a call id is not a call — each batch is judged once per run, whatever ids it reuses', () => {
+  // A synthetic-id provider numbers its calls from a counter local to the
+  // provider instance (`<prefix>-call-${++toolCallSeq}`), so a resumed leg in a
+  // fresh process repeats the ids of the leg that failed; nothing stops a
+  // provider reusing an id across batches of one run either.
+  const failThenResume = async (first: string, second: string): Promise<Agent> => {
+    const failing = Agent.create({
+      provider: scripted([
+        call('gemini-call-1', 'backup_runs', { host: first, rows: true }),
+        new Error('503 Service Unavailable'),
+      ]).provider as never,
+      model: 'm',
+    })
+      .tool(backupRuns())
+      .resultsLayer()
+      .build();
+    const failed = await failing
+      .run({ message: 'Failed backups in the last hour?' })
+      .catch((e) => e);
+    if (!(failed instanceof RunCheckpointError)) throw new Error(`expected a checkpoint error`);
+    expect(failed.checkpoint.findingsLedger?.map((r) => [r.kind, r.toolCallId])).toEqual([
+      ['period', 'gemini-call-1'],
+    ]);
+    // A fresh process: a fresh agent and a fresh provider, whose counter restarts.
+    const resumed = Agent.create({
+      provider: scripted([
+        call('gemini-call-1', 'backup_runs', { host: second, rows: true }),
+        answer('2 failed.'),
+      ]).provider as never,
+      model: 'm',
+    })
+      .tool(backupRuns())
+      .resultsLayer()
+      .build();
+    await resumed.resumeOnError(failed.checkpoint);
+    return resumed;
+  };
+
+  it('resumeOnError: the resumed leg’s call is judged although the failed leg filed its id', async () => {
+    const resumed = await failThenResume('fresh', 'stale');
+    expect(periodRows(resumed).map((r) => [r.toolCallId, r.turn, r.iteration, r.verdict])).toEqual([
+      ['gemini-call-1', 1, 1, 'covered'], // the failed leg's row, restored as a record
+      ['gemini-call-1', 1, 1, 'not-held'], // this leg's call — the same id, another read
+    ]);
+    const standing = (await resumed.assessment())!;
+    expect(standing.standing).toBe('not-sure');
+    expect(standing.reasons.map((r) => r.reason)).toEqual(['period-not-held']);
+  });
+
+  it('…and the fold never lets a later row under the same id hide an earlier verdict', async () => {
+    const resumed = await failThenResume('stale', 'fresh');
+    expect(periodRows(resumed).map((r) => r.verdict)).toEqual(['not-held', 'covered']);
+    // The failed leg's result is still in the history the answer was written from.
+    expect(await reasonsOf(resumed)).toEqual(['period-not-held']);
+  });
+
+  for (const [first, second, verdicts] of [
+    ['fresh', 'stale', ['covered', 'not-held']],
+    ['stale', 'fresh', ['not-held', 'covered']],
+  ] as const) {
+    const label = verdicts.join(' → ');
+    it(`one run, one id in two batches (${label}): two rows, each its own batch’s period`, async () => {
+      const agent = Agent.create({
+        provider: scripted([
+          call('c1', 'backup_runs', { host: first, rows: true }),
+          call('c1', 'backup_runs', { host: second, rows: true }),
+          answer('2 failed.'),
+        ]).provider as never,
+        model: 'm',
+      })
+        .tool(backupRuns())
+        .resultsLayer()
+        .build();
+      await agent.run({ message: 'failed backups, twice' });
+      // Each batch reads ITS OWN coverage row (by iteration), never the
+      // earlier batch's under the same id.
+      expect(periodRows(agent).map((r) => [r.toolCallId, r.iteration, r.verdict])).toEqual([
+        ['c1', 1, verdicts[0]],
+        ['c1', 2, verdicts[1]],
+      ]);
+      expect(await reasonsOf(agent)).toEqual(['period-not-held']);
+    });
+  }
+
+  it('the batch stamp rides ToolCalls’ commit only under the arm', async () => {
+    const stampedBy = async (armed: boolean): Promise<string[]> => {
+      let builder = Agent.create({
+        provider: scripted([call('c1', 'backup_runs', { host: 'fresh', rows: true }), answer('ok')])
+          .provider as never,
+        model: 'm',
+      }).tool(backupRuns());
+      if (armed) builder = builder.resultsLayer();
+      const agent = builder.build();
+      await agent.run({ message: 'x' });
+      return agent
+        .getSnapshot()!
+        .commitLog.filter((b) =>
+          (b.trace as readonly { path: string }[]).some((t) => t.path === 'toolResultsIteration'),
+        )
+        .map((b) => `${b.stageId}=${JSON.stringify(b.overwrite.toolResultsIteration)}`);
+    };
+    expect(await stampedBy(true)).toEqual(['tool-calls=1']);
+    expect(await stampedBy(false)).toEqual([]);
   });
 });
 
@@ -706,6 +891,7 @@ describe('byte identity: nothing declared, nothing mounted', () => {
     const snapshot = agent.getSnapshot()!;
     expect(snapshot.commitLog.some((b) => b.stageId === 'sf-results')).toBe(false);
     expect(snapshot.sharedState).not.toHaveProperty('honestyLayers');
+    expect(snapshot.sharedState).not.toHaveProperty('toolResultsIteration');
     expect(agent.findings()).toBeUndefined();
   });
 });
