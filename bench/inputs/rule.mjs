@@ -537,3 +537,77 @@ export function judgeStep5(aggregates, served) {
     },
   };
 }
+
+// ── step 5, second registration: the sources-only door (RULE-step5b.md) ─────
+
+export const RULE5B_ID = 'inputs-rule-step5b (registered 2026-09-28)';
+
+/**
+ * Every number `RULE-step5b.md` compares against. S5-1 … S5-8 are step 5's own
+ * (`STEP5_MARGINS`, carried unchanged and computed by `judgeStep5`'s code); S5-9 keeps its
+ * 1.15 over a re-based agent; S5-10 is the added guard.
+ */
+export const STEP5B_MARGINS = Object.freeze({
+  ...STEP5_MARGINS,
+  /** S5-10 — L5 period calls filed as the person's words, as a share of L5 period calls. */
+  limitFiledCeiling: 0.1,
+});
+
+/**
+ * Step 5, second registration (`full-b`) — `RULE-step5b.md`. `aggregates` from ONE interleaved
+ * invocation of arms `off` and `full-b` with the step-5 reader; `served` from `harness.mjs` ·
+ * `measureServedB` ($0). S5-1 … S5-8 are `judgeStep5`'s clauses over the same rows, the armed
+ * arm being `full-b` — the same code and margins, so v1's transcription is carried, never
+ * re-typed. S5-9 is re-based: the served decoration `full-b` adds over the steps 3–4 agent (the
+ * same ruled tools, no sources). S5-10 is added: on L5, period calls filed as the person's words.
+ */
+export function judgeStep5b(aggregates, served) {
+  const armed = aggregates['full-b'];
+  if (aggregates.off === undefined || armed === undefined) {
+    throw new Error(
+      `step 5b compares arms 'off' and 'full-b' from ONE interleaved invocation; ` +
+        `this one ran: ${Object.keys(aggregates).join(', ') || 'nothing'}`,
+    );
+  }
+  const carried = judgeStep5({ off: aggregates.off, full: armed }, undefined);
+  const M = STEP5B_MARGINS;
+  const clauses = carried.clauses.filter((c) => c.id !== 'S5-9');
+
+  const base = served?.ruled?.perRequest;
+  const full = served?.fullB?.perRequest;
+  const ratioServed = base === undefined || full === undefined ? undefined : full / base;
+  clauses.push(
+    clause(
+      'S5-9',
+      'the served decoration declared sources add through the sources-only door (the `_findings.from` property on the ruled tools, and the armed ask sentence) over the steps 3–4 agent — the same ruled tools, no sources — characters of system prompt and tool schemas per request, on the scripted requests ($0)',
+      { ruled: base, fullB: full, ratio: ratioServed, off: served?.off?.perRequest },
+      `≤ ${M.servedRatio} × the steps 3–4 agent`,
+      ratioServed === undefined ? undefined : ratioServed <= M.servedRatio,
+    ),
+  );
+  const limit = armed.sources.sets.limit;
+  clauses.push(
+    clause(
+      'S5-10',
+      "on the other-sense limit (L5), period calls filed as the person's words stay under the ceiling",
+      {
+        filedAsPersons: limit.saidByQuote,
+        of: limit.periodCalls,
+        share: share(limit.saidByQuote, limit.periodCalls),
+      },
+      `≤ ${M.limitFiledCeiling}`,
+      limit.periodCalls === 0
+        ? undefined
+        : limit.saidByQuote / limit.periodCalls <= M.limitFiledCeiling,
+    ),
+  );
+  const { 'R5-j': cost, ...reported } = carried.reported;
+  return {
+    step: '5b',
+    rule: RULE5B_ID,
+    verdict: verdictOf(clauses),
+    clauses,
+    provocation: carried.provocation,
+    reported: { ...reported, 'R5-j': { ...cost, served } },
+  };
+}

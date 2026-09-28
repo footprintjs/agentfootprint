@@ -1291,9 +1291,27 @@ export function statedValues(caseDef, tool, argument) {
  */
 export const ARMS = Object.freeze(['off', 'assume', 'ask', 'full']);
 
-/** True for an arm whose agent arms declared sources (`.findings({ argumentSources: true })`). */
+/**
+ * Step 5's SECOND registration (`RULE-step5b.md`): the `full` arm's tools, with declared sources
+ * armed through the sources-only door `.inputsLayer({ argumentSources: true })` and NO
+ * `.findings()` — the arm the library documents after the redesign (decisions Q44). Kept out of
+ * `ARMS` so every registered step-2…5 arm list, and its tests, stay as they were.
+ */
+export const SOURCES_ONLY_ARM = 'full-b';
+
+/** Every arm the bench can run: the registered `ARMS`, then step 5's second registration. */
+export const ALL_ARMS = Object.freeze([...ARMS, SOURCES_ONLY_ARM]);
+
+/** True for an arm whose agent arms declared sources (`full`: `.findings()`; `full-b`: `.inputsLayer()`). */
 export function sourcesArmed(arm) {
-  return arm === 'full';
+  return arm === 'full' || arm === SOURCES_ONLY_ARM;
+}
+
+/** The builder door an arm arms declared sources through, or `undefined` for an unarmed arm. */
+export function sourcesDoor(arm) {
+  if (arm === 'full') return 'findings';
+  if (arm === SOURCES_ONLY_ARM) return 'inputsLayer';
+  return undefined;
 }
 
 /**
@@ -1315,8 +1333,8 @@ export const AUTHOR_PHRASES = Object.freeze({
 });
 
 export function armDeclaration(arm, spec) {
-  if (!ARMS.includes(arm)) {
-    throw new Error(`unknown arm '${arm}' — one of ${ARMS.join(', ')}`);
+  if (!ALL_ARMS.includes(arm)) {
+    throw new Error(`unknown arm '${arm}' — one of ${ALL_ARMS.join(', ')}`);
   }
   if (arm === 'off' || spec.period === undefined) return {};
   const p = spec.period;
@@ -1324,7 +1342,7 @@ export function armDeclaration(arm, spec) {
   const rule =
     arm === 'assume'
       ? { assume: p.default }
-      : arm === 'full'
+      : arm === 'full' || arm === SOURCES_ONLY_ARM
       ? {
           ask: p.question,
           choices: values.map((value) =>
@@ -1374,7 +1392,8 @@ export function sheetProblems() {
   // Refuse-by-domain: a run's file name joins arm, case and repetition with `__` (`run.mjs` ·
   // `rawFileName`), which is injective only while no id can contain `_`.
   const SAFE_ID = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
-  for (const arm of ARMS) if (!SAFE_ID.test(arm)) problems.push(`arm '${arm}': outside [a-z0-9-]`);
+  for (const arm of ALL_ARMS)
+    if (!SAFE_ID.test(arm)) problems.push(`arm '${arm}': outside [a-z0-9-]`);
   for (const c of ALL_CASES) {
     if (!SAFE_ID.test(c.id))
       problems.push(`${c.id}: a case id must be lower-case words joined by '-'`);

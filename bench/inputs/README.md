@@ -140,6 +140,14 @@ These are read from the argument rows' names and enums only (`rowView`), never f
 quote. The step-5 clause S5-9, the served decoration, is measured on the scripted mock before any
 paid call (`harness.mjs` · `measureServed`, $0) and saved as `results.json` · `served`.
 
+**Step 5, second registration.** v1 failed (`runs/haiku45-step5`: stated values were asked, not
+quoted, and riding `.findings()` cost 4.91 × the input tokens per call). After the redesign
+(decisions Q44), `RULE-step5b.md` registers the same 22 cases and clauses against the `full-b` arm
+(`cases.mjs` · `SOURCES_ONLY_ARM`): the `full` arm's tools through the sources-only door
+`.inputsLayer({ argumentSources: true })`, with no `.findings()`. S5-9 is re-based on the steps 3–4
+agent, and it adds S5-10, the L5 limit (`--arms off,full-b --judge step5b`,
+`rule.mjs` · `judgeStep5b`, `harness.mjs` · `measureServedB`).
+
 ## What it lets you measure
 
 The bench reads these from the record alone, per model and per prompt or skill version:
@@ -185,6 +193,7 @@ labels is measured.
 | `run.mjs` | The command line: plan, cap, run, save, report |
 | `RULE.md` | The registered success rule for steps 3 and 4 |
 | `RULE-step5.md` | The registered success rule for step 5 (declared sources) |
+| `RULE-step5b.md` | Step 5's second registration: the sources-only door (`full-b`) |
 | `results/mock.json` | The mock baseline, pinned byte for byte by `test/bench/inputs/unarmed-bytes.test.ts` |
 
 Tests: `test/bench/inputs/` (unit, property, integration on the mock and on a stubbed Anthropic

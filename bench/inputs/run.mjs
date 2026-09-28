@@ -12,9 +12,9 @@
  *   node bench/inputs/run.mjs --labels <out dir>    # agreement of the window reader with hand labels
  *
  * Flags: --provider mock|anthropic · --model <id> (anthropic: a Haiku 4.5 id, the default
- * claude-haiku-4-5-20251001) · --arms off[,assume,ask,full] · --cases <id|group>,… · --runs N ·
+ * claude-haiku-4-5-20251001) · --arms off[,assume,ask,full,full-b] · --cases <id|group>,… · --runs N ·
  * --seed N · --max-usd X (required for anthropic) · --temperature T (sent only when given; the
- * registered runs send none) · --judge step3|step4|step5 (step5 plans `ALL_CASES`) · --concurrency K (runs in flight at once,
+ * registered runs send none) · --judge step3|step4|step5|step5b (step5 and step5b plan `ALL_CASES`) · --concurrency K (runs in flight at once,
  * started in the plan's order; default 1, at most 4 — RULE.md, the protocol) · --out <dir> ·
  * --dry-run.
  *
@@ -44,18 +44,28 @@ import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { gunzipSync, gzipSync } from 'node:zlib';
 
-import { ALL_CASES, ARMS, CASES, sheetProblems } from './cases.mjs';
+import { ALL_ARMS, ALL_CASES, CASES, sheetProblems, sourcesArmed } from './cases.mjs';
 import {
   MAX_ITERATIONS,
   MAX_TOKENS,
   PRICES,
   buildTools,
   measureServed,
+  measureServedB,
   runCase,
 } from './harness.mjs';
 import { blindSheet, labelAgreement, shuffled } from './labels.mjs';
 import { aggregate, formatReport, formatSourcesReport, readRun } from './metrics.mjs';
-import { RULE_ID, RULE5_ID, formatVerdict, judgeStep3, judgeStep4, judgeStep5 } from './rule.mjs';
+import {
+  RULE_ID,
+  RULE5_ID,
+  RULE5B_ID,
+  formatVerdict,
+  judgeStep3,
+  judgeStep4,
+  judgeStep5,
+  judgeStep5b,
+} from './rule.mjs';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const ROOT = join(HERE, '..', '..');
@@ -127,12 +137,18 @@ export function parseArgs(argv) {
   }
   const arms = (flags.get('--arms') ?? 'off').split(',').map((s) => s.trim());
   for (const arm of arms)
-    if (!ARMS.includes(arm)) throw new Error(`--arms: unknown arm '${arm}' (${ARMS.join(', ')})`);
+    if (!ALL_ARMS.includes(arm))
+      throw new Error(`--arms: unknown arm '${arm}' (${ALL_ARMS.join(', ')})`);
   if (new Set(arms).size !== arms.length) throw new Error('--arms: an arm is named twice');
 
   // Step 5 (`--judge step5`, or the `full` arm) plans the step-2 sheet AND step 5's cases
   // (`cases.mjs` · `ALL_CASES`); every earlier step keeps the sheet it registered (`CASES`).
-  const step5 = flags.get('--judge') === 'step5' || arms.includes('full');
+  // Step 5's second registration (`--judge step5b`, arm `full-b`, `RULE-step5b.md`) plans the same.
+  const step5 =
+    flags.get('--judge') === 'step5' ||
+    flags.get('--judge') === 'step5b' ||
+    arms.includes('full') ||
+    arms.includes('full-b');
   const sheet = step5 ? ALL_CASES : CASES;
   const picked = flags.get('--cases');
   let cases = sheet;
@@ -179,9 +195,9 @@ export function parseArgs(argv) {
   }
   const judge = flags.get('--judge');
   if (judge !== undefined) {
-    const need = { step3: 'assume', step4: 'ask', step5: 'full' }[judge];
+    const need = { step3: 'assume', step4: 'ask', step5: 'full', step5b: 'full-b' }[judge];
     if (need === undefined)
-      throw new Error(`--judge must be step3, step4 or step5, saw '${judge}'`);
+      throw new Error(`--judge must be step3, step4, step5 or step5b, saw '${judge}'`);
     // A rescore reads its arms from the saved run; a new run must plan both.
     if (rescore === undefined && (!arms.includes('off') || !arms.includes(need))) {
       throw new Error(
@@ -308,17 +324,23 @@ function verdictsOf(judge, aggregates, labels, served) {
   if (judge === 'step3') return [judgeStep3(aggregates, labels)];
   if (judge === 'step4') return [judgeStep4(aggregates)];
   if (judge === 'step5') return [judgeStep5(aggregates, served)];
+  if (judge === 'step5b') return [judgeStep5b(aggregates, served)];
   return [];
 }
 
 /** Step 5's reader (`metrics.mjs` · `summarizeSources`) joins the aggregates of a run that armed it. */
 function aggregateFor(rows, arms) {
-  return aggregate(rows, { sources: arms.includes('full') });
+  return aggregate(rows, { sources: arms.some(sourcesArmed) });
 }
 
 function writeOutputs(dir, { config, spend, rows, raws, verdicts, served }) {
   const aggregates = aggregateFor(rows, config.arms);
-  const rule = config.judge === 'step5' || config.arms.includes('full') ? RULE5_ID : RULE_ID;
+  const rule =
+    config.judge === 'step5b' || config.arms.includes('full-b')
+      ? RULE5B_ID
+      : config.judge === 'step5' || config.arms.includes('full')
+      ? RULE5_ID
+      : RULE_ID;
   const results = {
     rule,
     config,
@@ -450,11 +472,31 @@ async function main() {
   for (const arm of opts.arms) buildTools(doors, arm, [], { turn: 0 });
   // Step 5's S5-9 reads the served decoration, measured on the scripted mock BEFORE any paid
   // call ($0, deterministic: no model behaviour changes it).
-  const served =
-    opts.judge === 'step5' || opts.arms.includes('full')
-      ? await measureServed(doors, opts.cases)
-      : undefined;
-  if (served !== undefined) {
+  const step5b = opts.judge === 'step5b' || opts.arms.includes('full-b');
+  const served = step5b
+    ? await measureServedB(doors, opts.cases)
+    : opts.judge === 'step5' || opts.arms.includes('full')
+    ? await measureServed(doors, opts.cases)
+    : undefined;
+  if (step5b) {
+    const line = (name) => {
+      const x = served[name];
+      return (
+        `${name} ${x.perRequest.toFixed(
+          0,
+        )} chars/request · ${x.projection.inputTokensPerRun.toFixed(
+          0,
+        )} in + ${x.projection.outputTokensPerRun.toFixed(0)} out tokens/run · ` +
+        `$${x.projection.usdPerRun.toFixed(5)}/run`
+      );
+    };
+    process.stdout.write(
+      `served on the scripted mock (${served.off.projection.runs} runs per agent): ` +
+        `${['off', 'ruled', 'fullB'].map(line).join(' | ')}; S5-9 ${(
+          served.fullB.perRequest / served.ruled.perRequest
+        ).toFixed(4)}\n`,
+    );
+  } else if (served !== undefined) {
     process.stdout.write(
       `served (system + tools, chars per request): off ${served.off.perRequest.toFixed(0)} · ` +
         `.findings() ${served.findings.perRequest.toFixed(
