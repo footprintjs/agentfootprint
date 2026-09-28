@@ -501,6 +501,16 @@ carries — the grain clause only with `grain`, the provenance clause only with 
 - **No period sentence.** The period is served as the data the tool declared; `"held": "unknown"`
   reads as what it is. A derived verdict word on the wire ("held covers: part") is rejected for v1
   (§ 9) and returns only if cells R1/R2 show the model misreading instants.
+  **2026-09-28, bench round 1 — the contingency fired.** The registered run
+  (`bench/results/runs/haiku45-step7b/`) showed the model restating `queried` as the ground a result
+  covered and never comparing it with `held`. The SERVE door now adds the verdict word inside the
+  served period (`period.verdict`: `not-held` · `partly-held` · `unknown`; nothing for `covered`)
+  and that word's one static clause after the note (`coverage/period.ts` · `PERIOD_VERDICT_CLAUSES`);
+  an absence whose store did not hold all of the time asked reads `ABSENCE_NOTE_HELD_ONLY`, which
+  drops the completeness claims. Computed at serve (`coverage/read.ts` · `servedToModel`,
+  `semanticsForModel`) by `periodVerdict` — the tool's own output is unchanged, so no foreign
+  helper mints anything new; a recognizer reading a served value back removes a word that agrees
+  with the instants and refuses one that does not. Neither word nor clause grounds.
 - **Nothing from the results layer.** It records verdicts and serves nothing (§ 3.5).
 - **The inputs layer's past-tense note** (*"window was not in the search_logs call this result
   answers; the call ran with "2h" …"*) is library text appended to the served result. It belongs to

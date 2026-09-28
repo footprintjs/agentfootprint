@@ -64,8 +64,10 @@ import {
 import {
   copyPeriod,
   mintPeriod,
+  noteWithClause,
   periodProblem,
   readPeriod,
+  servedPeriod,
   type DeclaredPeriod,
 } from '../../core/agent/coverage/period.js';
 import { refusal, refuseUnknownKeys } from '../../core/agent/coverage/refusal.js';
@@ -1065,23 +1067,34 @@ export function explainSemantics(value: unknown): readonly SemanticIssue[] | und
  * (UI hint), the three-list `coverage` detail (rides the coverage channel
  * and the record), and a `clarify: null`. Shallow-copied so the history
  * entry is not the object the tool still holds.
+ *
+ * The period is served as the tool declared it — plus, when the store did not
+ * hold all of the time the read asked about, the verdict word inside it and
+ * that word's one clause after the note (`coverage/period.ts` ·
+ * `servedPeriod`; honesty step 7b, bench round 1). A `covered` period and an
+ * envelope with none are served byte for byte as before.
  */
 export function semanticsForModel(sem: ToolSemantics): Record<string, unknown> {
+  const served = servedPeriod(sem.period);
+  const note = typeof sem.note === 'string' ? sem.note : SEMANTICS_NOTE;
   return {
     ...(sem.series !== undefined && { series: sem.series.map((p) => ({ ...p })) }),
     ...(sem.facts !== undefined && { facts: sem.facts.map((f) => ({ ...f })) }),
     ...(sem.edges !== undefined && { edges: sem.edges.map((e) => ({ ...e })) }),
     ...(sem.grain !== undefined && { grain: { ...sem.grain } }),
     ...(sem.provenance !== undefined && { provenance: { ...sem.provenance } }),
-    // Served as the tool declared it (honesty step 7b) — no verdict word.
-    ...(sem.period !== undefined && { period: periodOnWireCopy(sem.period) }),
+    // Served as the tool declared it (honesty step 7b), with the verdict word
+    // when the store did not hold all of it.
+    ...(sem.period !== undefined && {
+      period: served?.period ?? periodOnWireCopy(sem.period),
+    }),
     ...(sem.not_covered !== undefined &&
       sem.not_covered.length > 0 && { not_covered: [...sem.not_covered] }),
     ...(sem.clarify !== undefined &&
       sem.clarify !== null && {
         clarify: { question: sem.clarify.question, candidates: [...sem.clarify.candidates] },
       }),
-    note: typeof sem.note === 'string' ? sem.note : SEMANTICS_NOTE,
+    note: served === undefined ? note : noteWithClause(note, served.clause),
   };
 }
 

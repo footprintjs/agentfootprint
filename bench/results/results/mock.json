@@ -25,23 +25,23 @@
     "off/r2-payments-30-days/r1": "143d0d5dc35b42b1.3dc9cb13c44995bc",
     "on/r1-backups-fresh-export/r0": "889691a371e4bebb.cf484b64fd274a72",
     "on/r1-backups-fresh-export/r1": "889691a371e4bebb.cf484b64fd274a72",
-    "on/r1-backups-last-hour/r0": "889691a371e4bebb.03c6774a5c85ad57",
-    "on/r1-backups-last-hour/r1": "889691a371e4bebb.03c6774a5c85ad57",
-    "on/r1-backups-last-hour/r2": "889691a371e4bebb.52988ace93c24b1b",
-    "on/r1-host-last-hour/r0": "4fdde7483ecb98e8.a6372c43684090f4",
-    "on/r1-host-last-hour/r1": "4fdde7483ecb98e8.a6372c43684090f4",
+    "on/r1-backups-last-hour/r0": "889691a371e4bebb.22002a5d0c321627",
+    "on/r1-backups-last-hour/r1": "889691a371e4bebb.22002a5d0c321627",
+    "on/r1-backups-last-hour/r2": "889691a371e4bebb.17441f3237ad9c94",
+    "on/r1-host-last-hour/r0": "4fdde7483ecb98e8.8b9e4e424cfefceb",
+    "on/r1-host-last-hour/r1": "4fdde7483ecb98e8.8b9e4e424cfefceb",
     "on/r2-checkout-24-hours/r0": "95fcc6b90304dcc3.e30c3a06fe6009a6",
-    "on/r2-checkout-24-hours/r1": "95fcc6b90304dcc3.fa81df665cfb1473",
-    "on/r2-checkout-30-days/r0": "187c56e82f635c01.8c6f629aaf9112b7",
-    "on/r2-checkout-30-days/r1": "187c56e82f635c01.8c6f629aaf9112b7",
+    "on/r2-checkout-24-hours/r1": "95fcc6b90304dcc3.2e4d327344a23ab6",
+    "on/r2-checkout-30-days/r0": "187c56e82f635c01.1588a5f0138d2525",
+    "on/r2-checkout-30-days/r1": "187c56e82f635c01.1588a5f0138d2525",
     "on/r2-checkout-30-days/r2": "187c56e82f635c01",
-    "on/r2-payments-30-days/r0": "143d0d5dc35b42b1.570365c5ad7a5154",
-    "on/r2-payments-30-days/r1": "143d0d5dc35b42b1.570365c5ad7a5154",
+    "on/r2-payments-30-days/r0": "143d0d5dc35b42b1.9aef59252fbd586a",
+    "on/r2-payments-30-days/r1": "143d0d5dc35b42b1.9aef59252fbd586a",
     "on/r3-jobs-empty-known/r0": "ada9164db059ef8a.88dab7931e063186",
-    "on/r3-jobs-empty-unknown/r0": "ada9164db059ef8a.db5ac01e5f58ccb6",
+    "on/r3-jobs-empty-unknown/r0": "ada9164db059ef8a.52d335fd1d92c3dd",
     "on/r3-jobs-found-known/r0": "fa3b38242953c5f2.75a8047ee98cc308",
-    "on/r3-jobs-found-unknown/r0": "fa3b38242953c5f2.81106b8f698cc71d",
-    "on/r3-jobs-found-unknown/r1": "fa3b38242953c5f2.81106b8f698cc71d"
+    "on/r3-jobs-found-unknown/r0": "fa3b38242953c5f2.bb0ded4f1ada6d4d",
+    "on/r3-jobs-found-unknown/r1": "fa3b38242953c5f2.bb0ded4f1ada6d4d"
   },
   "rows": [
     {
@@ -756,7 +756,7 @@
       },
       "usage": {
         "calls": 2,
-        "input": 294,
+        "input": 352,
         "output": 13
       },
       "usd": 0
@@ -818,7 +818,7 @@
       },
       "usage": {
         "calls": 2,
-        "input": 294,
+        "input": 352,
         "output": 28
       },
       "usd": 0
@@ -874,7 +874,7 @@
       },
       "usage": {
         "calls": 2,
-        "input": 294,
+        "input": 349,
         "output": 13
       },
       "usd": 0
@@ -936,7 +936,7 @@
       },
       "usage": {
         "calls": 2,
-        "input": 301,
+        "input": 360,
         "output": 26
       },
       "usd": 0
@@ -992,7 +992,7 @@
       },
       "usage": {
         "calls": 2,
-        "input": 301,
+        "input": 360,
         "output": 13
       },
       "usd": 0
@@ -1152,7 +1152,7 @@
       },
       "usage": {
         "calls": 2,
-        "input": 307,
+        "input": 362,
         "output": 11
       },
       "usd": 0
@@ -1212,7 +1212,7 @@
       },
       "usage": {
         "calls": 2,
-        "input": 307,
+        "input": 362,
         "output": 26
       },
       "usd": 0
@@ -1268,7 +1268,7 @@
       },
       "usage": {
         "calls": 2,
-        "input": 285,
+        "input": 351,
         "output": 19
       },
       "usd": 0
@@ -1328,7 +1328,7 @@
       },
       "usage": {
         "calls": 2,
-        "input": 285,
+        "input": 351,
         "output": 25
       },
       "usd": 0
@@ -1482,7 +1482,7 @@
       },
       "usage": {
         "calls": 2,
-        "input": 482,
+        "input": 537,
         "output": 16
       },
       "usd": 0
@@ -1539,7 +1539,7 @@
       "falseNotSure": true,
       "usage": {
         "calls": 2,
-        "input": 266,
+        "input": 314,
         "output": 17
       },
       "usd": 0
@@ -1600,7 +1600,7 @@
       "falseNotSure": true,
       "usage": {
         "calls": 2,
-        "input": 266,
+        "input": 314,
         "output": 33
       },
       "usd": 0
@@ -1657,7 +1657,7 @@
       "falseNotSure": true,
       "usage": {
         "calls": 2,
-        "input": 284,
+        "input": 332,
         "output": 12
       },
       "usd": 0
@@ -2619,7 +2619,7 @@
             "covered": 6,
             "unknown": 3
           },
-          "inputPerCall": 147.97297297297297,
+          "inputPerCall": 167.7027027027027,
           "callsPerRun": 1.9473684210526316,
           "usd": 0
         },
@@ -2672,7 +2672,7 @@
               "not-held": 4,
               "partly-held": 5
             },
-            "inputPerCall": 143.6315789473684,
+            "inputPerCall": 171.57894736842104,
             "callsPerRun": 1.9,
             "usd": 0
           },
@@ -2724,7 +2724,7 @@
               "covered": 4,
               "partly-held": 1
             },
-            "inputPerCall": 169.375,
+            "inputPerCall": 176.25,
             "callsPerRun": 2,
             "usd": 0
           },
@@ -2777,7 +2777,7 @@
               "partly-held": 3,
               "covered": 2
             },
-            "inputPerCall": 155.33333333333334,
+            "inputPerCall": 176.11111111111111,
             "callsPerRun": 1.8,
             "usd": 0
           },
@@ -2831,7 +2831,7 @@
               "partly-held": 6,
               "covered": 4
             },
-            "inputPerCall": 151.25925925925927,
+            "inputPerCall": 172.96296296296296,
             "callsPerRun": 1.9285714285714286,
             "usd": 0
           },
@@ -2882,7 +2882,7 @@
             "verdicts": {
               "unknown": 3
             },
-            "inputPerCall": 136,
+            "inputPerCall": 160,
             "callsPerRun": 2,
             "usd": 0
           },
@@ -2985,7 +2985,7 @@
             "verdicts": {
               "unknown": 2
             },
-            "inputPerCall": 133,
+            "inputPerCall": 157,
             "callsPerRun": 2,
             "usd": 0
           },
@@ -3088,7 +3088,7 @@
               "not-held": 2,
               "partly-held": 1
             },
-            "inputPerCall": 147,
+            "inputPerCall": 175.5,
             "callsPerRun": 2,
             "usd": 0
           },
@@ -3137,7 +3137,7 @@
             "verdicts": {
               "not-held": 2
             },
-            "inputPerCall": 150.5,
+            "inputPerCall": 180,
             "callsPerRun": 2,
             "usd": 0
           },
@@ -3235,7 +3235,7 @@
             "verdicts": {
               "partly-held": 2
             },
-            "inputPerCall": 153.5,
+            "inputPerCall": 181,
             "callsPerRun": 2,
             "usd": 0
           },
@@ -3286,7 +3286,7 @@
             "verdicts": {
               "partly-held": 2
             },
-            "inputPerCall": 126.2,
+            "inputPerCall": 152.6,
             "callsPerRun": 1.6666666666666667,
             "usd": 0
           },
@@ -3338,7 +3338,7 @@
               "covered": 2,
               "partly-held": 1
             },
-            "inputPerCall": 191.75,
+            "inputPerCall": 205.5,
             "callsPerRun": 2,
             "usd": 0
           },
@@ -3389,7 +3389,7 @@
             "verdicts": {
               "unknown": 2
             },
-            "inputPerCall": 133,
+            "inputPerCall": 157,
             "callsPerRun": 2,
             "usd": 0
           },
@@ -3439,7 +3439,7 @@
             "verdicts": {
               "unknown": 1
             },
-            "inputPerCall": 142,
+            "inputPerCall": 166,
             "callsPerRun": 2,
             "usd": 0
           },
@@ -3592,7 +3592,7 @@
               "not-held": 4,
               "partly-held": 1
             },
-            "inputPerCall": 148.4,
+            "inputPerCall": 177.3,
             "callsPerRun": 2,
             "usd": 0
           },
@@ -3643,7 +3643,7 @@
             "verdicts": {
               "partly-held": 4
             },
-            "inputPerCall": 138.33333333333334,
+            "inputPerCall": 165.22222222222223,
             "callsPerRun": 1.8,
             "usd": 0
           }
@@ -3768,8 +3768,8 @@
         "threshold": "≤ 1.15 × off; ≤ 1.2 × off",
         "value": {
           "tokensOff": 127.25925925925925,
-          "tokensOn": 151.25925925925927,
-          "tokensRatio": 1.1885913853317813,
+          "tokensOn": 172.96296296296296,
+          "tokensRatio": 1.359138533178114,
           "callsOff": 1.9285714285714286,
           "callsOn": 1.9285714285714286,
           "callsRatio": 1

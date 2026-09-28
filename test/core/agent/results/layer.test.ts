@@ -53,7 +53,10 @@ import { accountForAnswer, recordRun } from '../../../../src/observe.js';
 import { staticTools } from '../../../../src/tool-providers/index.js';
 import type { LLMRequest, LLMResponse } from '../../../../src/adapters/types.js';
 import { validateCheckpoint } from '../../../../src/core/runCheckpoint.js';
-import { _resetPeriodWarnings } from '../../../../src/core/agent/coverage/period.js';
+import {
+  _resetPeriodWarnings,
+  PERIOD_VERDICT_CLAUSES,
+} from '../../../../src/core/agent/coverage/period.js';
 import { _resetPeriodUnjudgedWarnings } from '../../../../src/core/agent/stages/toolCalls.js';
 
 // ─── the harness ─────────────────────────────────────────────────────
@@ -228,13 +231,18 @@ describe('a result that declares its period — one verdict per call', () => {
         of: 1,
       });
 
-      // The model read the period as declared, and nothing more (the layer serves nothing).
+      // The model read the period as declared plus the SERVE door's verdict word
+      // and its one clause (bench round 1) — the layer itself serves nothing.
       const served = m.requests[1]!.messages.find((msg) => msg.role === 'tool')!;
       expect(String(served.content)).toContain(
         '"period":{"queried":{"from":"2026-09-26T09:00:00Z","to":"2026-09-26T10:00:00Z"}',
       );
-      expect(String(served.content)).toContain('"read_at":"2026-09-26T10:00:03Z"');
-      expect(String(served.content)).not.toContain('not-held');
+      expect(String(served.content)).toContain(
+        '"read_at":"2026-09-26T10:00:03Z","verdict":"not-held"}',
+      );
+      expect(String(served.content)).toContain(
+        JSON.stringify(PERIOD_VERDICT_CLAUSES['not-held']).slice(1, -1),
+      );
     });
   }
 

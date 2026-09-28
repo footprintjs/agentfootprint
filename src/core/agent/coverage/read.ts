@@ -25,6 +25,8 @@ import {
   readSemantics,
 } from '../../../lib/semantics/envelope.js';
 import {
+  ABSENCE_NOTE,
+  ABSENCE_NOTE_HELD_ONLY,
   coverageOfAbsence,
   readAbsence,
   tryInsteadOfAbsence,
@@ -32,7 +34,17 @@ import {
 } from './absent.js';
 import { listsWithoutRecordOnly } from './items.js';
 import { coverageOfLedger, readCoverageLedger } from './ledger.js';
-import { readPeriod, warnDroppedDeclaration, type DeclaredPeriod } from './period.js';
+import {
+  noteWithClause,
+  noteWithoutClause,
+  readPeriod,
+  servedPeriod,
+  SERVED_VERDICT_KEY,
+  unservedPeriod,
+  warnDroppedDeclaration,
+  type DeclaredPeriod,
+  type ServedPeriodVerdict,
+} from './period.js';
 import type { Coverage, ToolAbsence, TryInsteadTool } from './types.js';
 
 /** One coverage statement found in a result, before the caller stamps it with
@@ -71,7 +83,9 @@ export interface CoverageFacts {
  * (and named once per tool in dev mode) when it is malformed.
  */
 function periodOf(holder: { readonly period?: unknown }, toolName: string | undefined) {
-  const read = readPeriod(holder.period);
+  // A value the model was SERVED (a reader of history) carries the library's
+  // own verdict word; it is read as the period the tool declared.
+  const read = readPeriod(unservedPeriod(holder.period));
   if (read.problem !== undefined) warnDroppedDeclaration(toolName, 'period', read.problem);
   return read.period;
 }
@@ -118,6 +132,12 @@ export interface CoverageReading {
  * RECORD-ONLY: the events, the tracked `coverageDeclared` rows and the answer
  * account carry them; the model's request never does, so a tool that
  * declares them costs no request byte.
+ *
+ * And one thing ADDED, derived from what the tool declared (honesty step 7b,
+ * bench round 1): a declared `period` whose store did not hold all of the
+ * time the read asked about is served with its verdict word and that word's
+ * one note clause (see `withPeriodServed`). A `covered` period, a malformed
+ * one and a result with none gain nothing.
  *
  * The shapes, and nesting: a bare absence; a ledger — its own lists AND
  * whatever it bounds, read by this same function (so `coverage(absent(…))`,
@@ -187,23 +207,90 @@ export function strip(value: unknown, seen: WeakSet<object> = new WeakSet()): un
     seen.add(value);
   }
   const absence = readAbsence(value);
-  if (absence !== undefined) return listsWithoutRecordOnly(absence);
+  if (absence !== undefined) return withPeriodServed(listsWithoutRecordOnly(absence), 'absence');
   const sem = readSemantics(value);
   if (sem !== undefined) {
     // Defensive at the dispatch door: `declareSemantics` has already replaced
     // a top-level semantic envelope with `semanticsForModel`, which drops the
     // three-list coverage detail, before `afterMoment` runs. It is reached for
     // a semantic envelope a LEDGER bounds, and by a direct caller.
-    if (sem.coverage === undefined) return value;
-    const cov = listsWithoutRecordOnly(sem.coverage);
-    return cov === sem.coverage ? value : { ...(value as object), coverage: cov };
+    const cov = sem.coverage === undefined ? undefined : listsWithoutRecordOnly(sem.coverage);
+    const listed = cov === sem.coverage ? value : { ...(value as object), coverage: cov };
+    return withPeriodServed(listed as object, 'other');
   }
   const covered = readCoverageLedger(value);
   if (covered === undefined) return value;
-  const marker = listsWithoutRecordOnly(covered.af_coverage);
+  const marker = withPeriodServed(listsWithoutRecordOnly(covered.af_coverage), 'other');
   const result = strip(covered.result, seen);
   if (marker === covered.af_coverage && result === covered.result) return value;
   return { ...covered, af_coverage: marker, result };
+}
+
+/**
+ * One declaring object's period, SERVED (honesty step 7b, bench round 1): the
+ * verdict word inside `period` and that word's one clause after the note —
+ * and, on an absence whose store held only part or none of the period asked,
+ * `ABSENCE_NOTE_HELD_ONLY` in place of the note that claims the answer is
+ * complete. The same reference back when there is nothing to serve (no
+ * period, a malformed one, a `covered` one), so an undeclared result is
+ * served byte for byte.
+ *
+ * Why the door serves a conclusion the record already holds: the registered
+ * bench (`bench/results/`, round 1) showed the model restating `queried` as
+ * the ground a result covered, never comparing it with `held` — the case the
+ * design's § 9 kept this for. The word is `period.ts` · `periodVerdict`, the
+ * rule the `period` row is filed by, so the two cannot disagree.
+ */
+function withPeriodServed<T extends object>(holder: T, door: 'absence' | 'other'): T {
+  const rec = holder as Record<string, unknown>;
+  const served = servedPeriod(rec.period);
+  if (served === undefined) return holder;
+  const note =
+    door === 'absence' && served.verdict !== 'unknown' && rec.note === ABSENCE_NOTE
+      ? ABSENCE_NOTE_HELD_ONLY
+      : rec.note;
+  return { ...rec, period: served.period, note: noteWithClause(note, served.clause) } as T;
+}
+
+/**
+ * The inverse of the serve, for a reader of what the model was served: every
+ * declaring object's verdict word and period clause removed (the note swap is
+ * kept — it is the absence's own static note), the rest as found. The same
+ * reference back when nothing was served. Asked by the evidence projection
+ * (`evidence.ts` · `absenceEvidenceProjection`): words the library derived
+ * never ground an answer.
+ *
+ * It walks the shapes the serve writes — an object with a `period`, and a
+ * ledger's `af_coverage` and `result`, to any depth — and nothing else.
+ */
+export function withoutServedPeriod(
+  value: unknown,
+  seen: WeakSet<object> = new WeakSet(),
+): unknown {
+  if (typeof value !== 'object' || value === null || Array.isArray(value)) return value;
+  if (seen.has(value)) return value;
+  seen.add(value);
+  const own = unserved(value as Record<string, unknown>);
+  const covered = readCoverageLedger(own);
+  if (covered === undefined) return own;
+  const marker = unserved(covered.af_coverage as Record<string, unknown>);
+  const result = withoutServedPeriod(covered.result, seen);
+  if (marker === covered.af_coverage && result === covered.result) return own;
+  return { ...covered, af_coverage: marker, result };
+}
+
+/** One object with its served verdict word and clause removed, or itself. */
+function unserved(holder: Record<string, unknown>): Record<string, unknown> {
+  const declared = unservedPeriod(holder.period);
+  if (declared === holder.period) return holder;
+  const verdict = (holder.period as Record<string, unknown>)[
+    SERVED_VERDICT_KEY
+  ] as ServedPeriodVerdict;
+  const out: Record<string, unknown> = { ...holder, period: declared };
+  const note = noteWithoutClause(holder.note, verdict);
+  if (note === undefined) delete out.note;
+  else out.note = note;
+  return out;
 }
 
 const ABSENT_STATUS: ToolResultStatus = 'absent';

@@ -87,6 +87,22 @@ export const ABSENCE_NOTE =
   'needs a different question, not a retry.';
 
 /**
+ * The note the MODEL is served in place of {@link ABSENCE_NOTE} when the
+ * absence's own period is `partly-held` or `not-held` (honesty step 7b, bench
+ * round 1) — `coverage/read.ts` · `strip` swaps it in and appends the period's
+ * one clause. It keeps what stays true (the call ran, a retry returns the same
+ * result) and drops the two completeness claims that do not: "nothing was
+ * substituted for what was asked" and `checked` as the whole ground. Static,
+ * never interpolated, never minted — the tool's own output keeps
+ * {@link ABSENCE_NOTE}.
+ */
+export const ABSENCE_NOTE_HELD_ONLY =
+  'The search ran and matched nothing — the call did not fail, and calling this tool again ' +
+  'with the same arguments returns this same result. `checked` is the ground this answer ' +
+  'covers inside `period.held` only; anything under `not_checked` or `cannot_cover` is ground ' +
+  'it does NOT cover, and reaching that needs a different question, not a retry.';
+
+/**
  * The typed tool's keys, tied to {@link TryInsteadTool} in BOTH directions: a
  * key the interface gains, or one listed here that it does not have, fails to
  * compile. Any other key on a value is refused, so a misspelt `why` cannot

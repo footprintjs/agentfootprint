@@ -17,9 +17,14 @@
  *   4. THE CHANNEL. `readCoverageResult` carries each declaration's period (and
  *      an absence's provenance); a described result with only a period files a
  *      `'ledger'` fact with three empty lists.
- *   5. SERVED AS DECLARED. `servedToModel` strips nothing of it; the projection
- *      passes a described result's period through; an absence's period and
- *      provenance ground (tool knowledge, not the caller's echo).
+ *   5. SERVED AS DECLARED, PLUS ITS VERDICT (bench round 1). `servedToModel`
+ *      strips nothing of it and the projection passes a described result's
+ *      period through — with the verdict word inside it and that word's one
+ *      clause after the note when the store did not hold all of the time asked
+ *      (an absence then drops its completeness claims); nothing is added to a
+ *      `covered` period. The tool's own output never carries the word. An
+ *      absence's period and provenance ground (tool knowledge, not the
+ *      caller's echo); the served word and clause never do.
  *   6. BYTE IDENTITY. A door given no period (and `absent()` no provenance)
  *      mints the bytes it always minted.
  *
@@ -42,8 +47,16 @@ import {
 } from '../../../src/index.js';
 import { checkSemantics as gate } from '../../../src/lib/semantics/index.js';
 import { absenceEvidenceProjection } from '../../../src/core/agent/coverage/evidence.js';
-import { _resetPeriodWarnings } from '../../../src/core/agent/coverage/period.js';
+import { ABSENCE_NOTE, ABSENCE_NOTE_HELD_ONLY } from '../../../src/core/agent/coverage/absent.js';
+import { COVERAGE_NOTE } from '../../../src/core/agent/coverage/ledger.js';
+import {
+  _resetPeriodWarnings,
+  PERIOD_VERDICT_CLAUSES,
+  servedPeriod,
+  unservedPeriod,
+} from '../../../src/core/agent/coverage/period.js';
 import { servedToModel } from '../../../src/core/agent/coverage/read.js';
+import { SEMANTICS_NOTE } from '../../../src/lib/semantics/types.js';
 import { REFUSED_PREFIX } from '../../../src/core/agent/coverage/refusal.js';
 
 const Q = { from: '2026-09-26T09:00:00Z', to: '2026-09-26T10:00:00Z' };
@@ -51,6 +64,16 @@ const HELD = { from: '2026-08-27T02:00:00Z', to: '2026-09-26T02:00:00Z' };
 const PERIOD = { queried: Q, held: HELD, readAt: '2026-09-26T10:00:03Z' };
 const WIRE_PERIOD = { queried: Q, held: HELD, read_at: '2026-09-26T10:00:03Z' };
 const SOURCE = { measuredAt: '2026-09-26T02:00:00Z', source: 'nightly backup export' };
+// One period per verdict, over the same asked-about hour.
+const COVERED = { queried: Q, held: { from: '2026-08-27T10:00:00Z', to: '2026-09-26T10:00:00Z' } };
+const PARTLY = { queried: Q, held: { from: '2026-08-27T09:30:00Z', to: '2026-09-26T09:30:00Z' } };
+const UNKNOWN = { queried: Q, held: 'unknown' as const };
+type Camel = { queried: typeof Q; held: typeof Q | 'unknown'; readAt?: string };
+const mintedWire = (p: Camel): Record<string, unknown> => ({
+  queried: { ...p.queried },
+  held: p.held === 'unknown' ? 'unknown' : { ...p.held },
+  ...(p.readAt !== undefined && { read_at: p.readAt }),
+});
 
 const refusalOf = (mint: () => unknown): string => {
   try {
@@ -198,12 +221,18 @@ describe('unit: describedResult({ …, period }) — and semantic() gains nothin
     expect(readSemantics(env)).toBe(env);
   });
 
-  it('the model reads it as declared: the projection passes the period through', () => {
+  it('the model reads it as declared, plus the verdict word and its clause when not covered', () => {
     const view = semanticsForModel(
       describedResult({ facts: [{ entity: 'h' }], provenance: SOURCE, period: PERIOD }),
     );
     expect(Object.keys(view)).toEqual(['facts', 'provenance', 'period', 'note']);
-    expect(view.period).toEqual(WIRE_PERIOD);
+    expect(view.period).toEqual({ ...WIRE_PERIOD, verdict: 'not-held' });
+    expect(view.note).toBe(`${SEMANTICS_NOTE} ${PERIOD_VERDICT_CLAUSES['not-held']}`);
+    const covered = semanticsForModel(
+      describedResult({ facts: [{ entity: 'h' }], provenance: SOURCE, period: COVERED }),
+    );
+    expect(covered.period).toEqual(mintedWire(COVERED));
+    expect(covered.note).toBe(SEMANTICS_NOTE);
   });
 
   it('a malformed period is refused at the call site, in camelCase', () => {
@@ -396,11 +425,102 @@ describe('recognition: readCoverageResult carries the period (and an absence’s
 });
 
 // ─────────────────────────────────────────────────────────────────────────
+// Served bytes — the verdict word and its one clause (bench round 1)
+// ─────────────────────────────────────────────────────────────────────────
+
+describe('served bytes: the verdict word and its one clause (bench round 1)', () => {
+  it('servedPeriod: a word and a clause for every verdict but covered', () => {
+    expect(servedPeriod(mintedWire(PERIOD))).toMatchObject({
+      period: { ...WIRE_PERIOD, verdict: 'not-held' },
+      clause: PERIOD_VERDICT_CLAUSES['not-held'],
+    });
+    expect(servedPeriod(mintedWire(PARTLY))?.verdict).toBe('partly-held');
+    expect(servedPeriod(mintedWire(UNKNOWN))?.verdict).toBe('unknown');
+    expect(servedPeriod(mintedWire(COVERED))).toBeUndefined();
+    expect(servedPeriod(undefined)).toBeUndefined();
+    expect(servedPeriod({ queried: Q, held: 'unknown', verdict: 'unknown' })).toBeUndefined();
+  });
+
+  it('every clause is static: no digit, no instant — the times stay in the typed data', () => {
+    for (const clause of Object.values(PERIOD_VERDICT_CLAUSES)) {
+      expect(clause).not.toMatch(/\d/);
+      expect(clause).toContain('`period.queried`');
+    }
+    expect(ABSENCE_NOTE_HELD_ONLY).not.toMatch(/\d/);
+  });
+
+  it('an absence the store did not hold drops its completeness claims; unknown keeps them', () => {
+    const notHeld = servedToModel(absent({ what: 'x', checked: ['y'], period: PERIOD })) as {
+      note: string;
+    };
+    expect(notHeld.note).toBe(`${ABSENCE_NOTE_HELD_ONLY} ${PERIOD_VERDICT_CLAUSES['not-held']}`);
+    expect(notHeld.note).not.toContain('nothing was substituted');
+    const partly = servedToModel(absent({ what: 'x', checked: ['y'], period: PARTLY })) as {
+      note: string;
+    };
+    expect(partly.note).toBe(`${ABSENCE_NOTE_HELD_ONLY} ${PERIOD_VERDICT_CLAUSES['partly-held']}`);
+    const unknown = servedToModel(absent({ what: 'x', checked: ['y'], period: UNKNOWN })) as {
+      note: string;
+      period: Record<string, unknown>;
+    };
+    expect(unknown.note).toBe(`${ABSENCE_NOTE} ${PERIOD_VERDICT_CLAUSES.unknown}`);
+    expect(unknown.period).toEqual({ ...mintedWire(UNKNOWN), verdict: 'unknown' });
+  });
+
+  it('a ledger serves its own word and clause; the absence it bounds serves its own', () => {
+    const served = servedToModel(
+      coverage(absent({ what: 'x', checked: ['y'], period: PERIOD }), {
+        checked: ['z'],
+        period: PARTLY,
+      }),
+    ) as { af_coverage: Record<string, unknown>; result: Record<string, unknown> };
+    expect(served.af_coverage.period).toEqual({ ...mintedWire(PARTLY), verdict: 'partly-held' });
+    expect(served.af_coverage.note).toBe(
+      `${COVERAGE_NOTE} ${PERIOD_VERDICT_CLAUSES['partly-held']}`,
+    );
+    expect((served.result.period as Record<string, unknown>).verdict).toBe('not-held');
+  });
+
+  it('covered, undeclared, malformed: the same reference, byte for byte', () => {
+    const covered = absent({ what: 'x', checked: ['y'], period: COVERED });
+    expect(servedToModel(covered)).toBe(covered);
+    const bare = absent({ what: 'x', checked: ['y'] });
+    expect(servedToModel(bare)).toBe(bare);
+    const ledger = coverage(1, { checked: ['z'], period: COVERED });
+    expect(servedToModel(ledger)).toBe(ledger);
+    const view = semanticsForModel(
+      describedResult({ facts: [{ entity: 'h' }], provenance: SOURCE }),
+    );
+    expect(view).not.toHaveProperty('period');
+    expect(view.note).toBe(SEMANTICS_NOTE);
+  });
+
+  it('what the model was served reads back as the period the tool declared — no dev warning', () => {
+    enableDevMode();
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    try {
+      _resetPeriodWarnings();
+      const reading = readCoverageResult(
+        JSON.parse(
+          JSON.stringify(servedToModel(absent({ what: 'x', checked: ['y'], period: PERIOD }))),
+        ),
+        'backup_runs',
+      );
+      expect(reading?.declared[0]?.period).toEqual(PERIOD);
+      expect(warn).not.toHaveBeenCalled();
+    } finally {
+      warn.mockRestore();
+      disableDevMode();
+    }
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────
 // Security — served as declared, grounds as tool knowledge, never the echo
 // ─────────────────────────────────────────────────────────────────────────
 
 describe('security: what the model is served, and what may ground', () => {
-  it('servedToModel strips short/kind and nothing of the period or the provenance', () => {
+  it('servedToModel strips short/kind, keeps the period and provenance, adds only the verdict', () => {
     const minted = absent({
       what: 'x',
       checked: [{ what: 'every job', short: 'jobs' }],
@@ -408,9 +528,38 @@ describe('security: what the model is served, and what may ground', () => {
       period: PERIOD,
     });
     const served = servedToModel(minted) as Record<string, unknown>;
-    expect(served.period).toEqual(WIRE_PERIOD);
+    expect(served.period).toEqual({ ...WIRE_PERIOD, verdict: 'not-held' });
     expect(served.provenance).toEqual(minted.provenance);
     expect(JSON.stringify(served)).not.toContain('"short"');
+    // The tool's own output keeps the bytes it declared.
+    expect(minted.period).toEqual(WIRE_PERIOD);
+    expect(minted.note).toBe(ABSENCE_NOTE);
+  });
+
+  it('the served verdict word and clause never ground — the tool’s own period still does', () => {
+    const minted = absent({ what: 'x', checked: ['y'], period: PERIOD });
+    const projected = absenceEvidenceProjection(servedToModel(minted)) as Record<string, unknown>;
+    expect(projected.period).toEqual(WIRE_PERIOD);
+    expect(String(projected.note)).not.toContain('period.verdict');
+    const view = semanticsForModel(
+      describedResult({ facts: [{ entity: 'h' }], provenance: SOURCE, period: PARTLY }),
+    );
+    const own = absenceEvidenceProjection(JSON.parse(JSON.stringify(view))) as Record<
+      string,
+      unknown
+    >;
+    expect(own.period).toEqual(mintedWire(PARTLY));
+    expect(own.note).toBe(SEMANTICS_NOTE);
+    const ledger = servedToModel(
+      coverage(absent({ what: 'x', checked: ['y'], period: UNKNOWN }), {
+        checked: ['z'],
+        period: PARTLY,
+      }),
+    );
+    expect(JSON.stringify(absenceEvidenceProjection(ledger))).not.toContain('verdict');
+    // A word the library did not derive — one that disagrees with the instants — is the tool's.
+    const forged = { ...mintedWire(PARTLY), verdict: 'covered' };
+    expect(unservedPeriod(forged)).toBe(forged);
   });
 
   it('an absence’s period and provenance are the TOOL speaking — they ground; looked_for still does not', () => {

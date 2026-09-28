@@ -354,6 +354,18 @@
  * move: its leg pauses on the ask before dispatch starts, so nothing is
  * stamped. No served view, message, row or other key moved.
  *
+ * Step 7b's bench round 1 REGENERATED `agent-results-period` alone (copied
+ * aside, `AF_TOOLS_REFERENCE=update -t agent-results-period`, the other 26
+ * untouched): the serve door now adds the verdict word and its one clause to a
+ * period the store did not hold all of (`coverage/read.ts` · `withPeriodServed`).
+ * The delta is ONE family — the served `host-999` absence (`not-held`) gains
+ * `"verdict":"not-held"` inside its period and reads `ABSENCE_NOTE_HELD_ONLY`
+ * plus the `not-held` clause, in every place that served string is recorded
+ * (the tool message, `lastToolResult`, `toolResults`, the injection's raw
+ * content and hash, the sent view) and the request measurement that counts
+ * it. The `covered` `host-103` result, every row and every other key did not
+ * move.
+ *
  * Every scenario is a real run — the receipt-conformance shapes, each in the
  * configuration that has no name collision — and what is compared is the
  * whole `commitLog` plus `servedAt(k)` for every located epoch, after ONE

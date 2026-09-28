@@ -494,6 +494,112 @@ export function leastHeld(verdicts: readonly PeriodVerdict[]): PeriodVerdict | u
   return undefined;
 }
 
+// ─── The model's word ────────────────────────────────────────────────────
+
+/**
+ * The verdicts the MODEL is served — every verdict but `covered`, which is
+ * served as nothing at all.
+ *
+ * @inline
+ */
+export type ServedPeriodVerdict = Exclude<PeriodVerdict, 'covered'>;
+
+/** The key the served verdict word sits under, inside the served `period`. */
+export const SERVED_VERDICT_KEY = 'verdict';
+
+/**
+ * The ONE note clause per served verdict (honesty step 7b, bench round 1).
+ * Static library text: no instant, no tool value, nothing interpolated — the
+ * `ABSENCE_NOTE` law. Each states the CONSEQUENCE of its word in the terms the
+ * notes already teach ("ground this result does NOT cover"), because the bench
+ * showed a model repeating `period.queried` as the ground a result covered
+ * without ever comparing it with `period.held`.
+ */
+export const PERIOD_VERDICT_CLAUSES: Readonly<Record<ServedPeriodVerdict, string>> = Object.freeze({
+  'not-held':
+    '`period.verdict` is `not-held`: the store holds none of the time this read asked about ' +
+    '(`period.queried`), so all of that time is ground this result does NOT cover — this ' +
+    'result settles nothing about it, and the time the store does hold is `period.held`.',
+  'partly-held':
+    '`period.verdict` is `partly-held`: the store holds only part of the time this read asked ' +
+    'about (`period.queried`), so the part outside `period.held` is ground this result does ' +
+    'NOT cover — what this result says holds for `period.held` only.',
+  unknown:
+    '`period.verdict` is `unknown`: the tool cannot say what time its store holds, so this ' +
+    'result cannot vouch that it covers the time this read asked about (`period.queried`).',
+});
+
+/** A wire period as served: the tool's own keys, then the verdict word. */
+export interface ServedPeriod {
+  /** The wire period, copied, with {@link SERVED_VERDICT_KEY} last. */
+  readonly period: Readonly<Record<string, unknown>>;
+  readonly verdict: ServedPeriodVerdict;
+  /** {@link PERIOD_VERDICT_CLAUSES}`[verdict]`. */
+  readonly clause: string;
+}
+
+/**
+ * What the model is served for one declared wire period — `undefined` when
+ * there is nothing to add: no period, a period the rule set refuses (served
+ * as the tool wrote it — read, never repaired), or a `covered` one.
+ *
+ * The verdict is {@link periodVerdict} over the instants the tool declared —
+ * the one rule the record's `period` row is filed by, so the word the model
+ * reads and the row the fold reads cannot disagree. Computed at the SERVE
+ * door, never minted: the tool's own output keeps the bytes it declared, so a
+ * helper in another language mints nothing new.
+ *
+ * @example
+ * ```ts
+ * servedPeriod({
+ *   queried: { from: '2026-09-26T09:00:00Z', to: '2026-09-26T10:00:00Z' },
+ *   held: { from: '2026-08-27T02:00:00Z', to: '2026-09-26T02:00:00Z' },
+ * })?.period; // { queried: {…}, held: {…}, verdict: 'not-held' }
+ * ```
+ */
+export function servedPeriod(wire: unknown): ServedPeriod | undefined {
+  const { period } = readPeriod(wire);
+  if (period === undefined) return undefined;
+  const verdict = periodVerdict(period);
+  if (verdict === 'covered') return undefined;
+  const onWire = mintPeriod(period) as PeriodOnWire;
+  return {
+    period: { ...onWire, [SERVED_VERDICT_KEY]: verdict },
+    verdict,
+    clause: PERIOD_VERDICT_CLAUSES[verdict],
+  };
+}
+
+/**
+ * The inverse, for a reader of what the model was SERVED: a wire period with
+ * its served verdict word removed — when that word is exactly the one
+ * {@link servedPeriod} computes from the rest. Anything else (no word, a word
+ * that disagrees with the instants, a period the rule set refuses) comes back
+ * as the same reference, so the rule set still names it: a verdict is derived
+ * by the library, never declared by a tool.
+ */
+export function unservedPeriod(wire: unknown): unknown {
+  if (!isPlainObject(wire) || !(SERVED_VERDICT_KEY in wire)) return wire;
+  const { [SERVED_VERDICT_KEY]: word, ...declared } = wire;
+  return servedPeriod(declared)?.verdict === word ? declared : wire;
+}
+
+/**
+ * A served note with its period clause removed (the inverse of appending
+ * {@link PERIOD_VERDICT_CLAUSES}`[verdict]`), or the note as found.
+ */
+export function noteWithoutClause(note: unknown, verdict: ServedPeriodVerdict): unknown {
+  if (typeof note !== 'string') return note;
+  const clause = PERIOD_VERDICT_CLAUSES[verdict];
+  if (note === clause) return undefined;
+  return note.endsWith(` ${clause}`) ? note.slice(0, -(clause.length + 1)) : note;
+}
+
+/** A served note: the note as found, then the period clause. */
+export function noteWithClause(note: unknown, clause: string): string {
+  return typeof note === 'string' && note !== '' ? `${note} ${clause}` : clause;
+}
+
 // ─── The person's line ───────────────────────────────────────────────────
 
 /**
