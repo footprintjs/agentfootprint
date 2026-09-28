@@ -33,6 +33,18 @@
  * The stage bodies (`arguments/subflow.ts`) load through `import()` on first
  * use — the optional-family law — so a plain agent's graph never carries them.
  *
+ * ## Declared sources (`.findings({ argumentSources: true })`, `.inputsLayer({ argumentSources: true })`)
+ *
+ * Under the arm the mount also hands the layer the RAW pieces its checks read
+ * (`sourceInputs`): the served history, the composed system prompt's records,
+ * the ledger's standing rows and `answered` argument rows (never the whole
+ * ledger), the previous batch's result ids and the run's `userMessageFrom`
+ * constant — and two closures, both from `honesty/sourceCorpus.ts` (loaded on
+ * the first armed batch): the calls' `from` entries through the ONE reader of
+ * `_findings` (`sourceCorpus.ts` · `declaredSourcesOf`, over
+ * `findings/reserved.ts` · `readDeclaration`), and the corpora
+ * (`sourceCorpus.ts` · `sourceCorpusOf`).
+ *
  * ## The answer layer — the head of the final branch
  *
  * A footprintjs decider branch is one node with no continuation, so the answer
@@ -53,12 +65,14 @@ import { ArrayMergeMode } from 'footprintjs/advanced';
 import { flowChart } from 'footprintjs';
 import type { FlowChart, FlowChartBuilder, StructureRecorder, TypedScope } from 'footprintjs';
 
+import type { ExternalGround } from '../../../integrity/unsupported-argument/check.js';
 import { STAGE_IDS, SUBFLOW_IDS, milestoneTagsFor } from '../../../conventions.js';
+import type { SourceCorpus } from '../arguments/checks.js';
 import { isRefused, rulesOf } from '../arguments/declare.js';
 import { keptThisTurn } from '../arguments/kept.js';
 import type { ArgumentRow } from '../arguments/rows.js';
-import type { ArgumentResolution, ToolOf } from '../arguments/resolve.js';
-import type { InputsLayerDeps, InputsLayerState } from '../arguments/subflow.js';
+import type { ArgumentResolution, BatchCall, ToolOf } from '../arguments/resolve.js';
+import type { InputsLayerDeps, InputsLayerState, SourceInputs } from '../arguments/subflow.js';
 import { copyPeriod, type DeclaredPeriod, type PeriodRow } from '../coverage/period.js';
 import { appendRows, emitRow, type FindingsScope } from '../findings/ledger.js';
 import type { FindingsRow } from '../findings/types.js';
@@ -84,9 +98,73 @@ export interface InputsMountDeps {
    * rewrite and is never read. The mount itself does not read it.
    */
   readonly rewrites?: true;
+  /**
+   * DECLARED SOURCES ARE ARMED (`.findings({ argumentSources: true })` or
+   * `.inputsLayer({ argumentSources: true })`) — present only then. The mount hands the layer the pieces its checks read
+   * and the closures that read them; `externalGrounds` is the app's own
+   * vouched-for values (`AgentOptions.externalGrounds`), an `app` source with
+   * its label.
+   */
+  readonly sources?: {
+    readonly externalGrounds?: () => readonly ExternalGround[];
+    /**
+     * The findings ledger is armed beside declared sources (`.findings()`) —
+     * present only then: a call that declares a basis files a BASIS row in
+     * ToolCalls, and that row carries the count of dropped `from` entries.
+     * Absent (declared sources without the ledger), no basis row is ever
+     * filed, so the count rides the call's first argument row
+     * (`sourceCorpus.ts` · `declaredSourcesOf`).
+     */
+    readonly basisRows?: true;
+    /**
+     * A tool in reach may carry an arguments view — one the agent registers
+     * carries one (`core/toolShownArgs.ts` · `carriesArgumentView`), or a
+     * ToolProvider is wired (whatever it lists: its list is known only per
+     * iteration) — present only then: no quote the model wrote is shown on a
+     * row or an ask, since a quote may hold the value such a tool hides
+     * (`arguments/resolve.ts` · `quotesMayShow`).
+     */
+    readonly argumentViews?: true;
+  };
 }
 
 type StageModule = typeof import('../arguments/subflow.js');
+type CorpusModule = typeof import('./sourceCorpus.js');
+
+let corpusModule: Promise<CorpusModule> | undefined;
+
+/** The corpus builder, loaded once per process on first use (the optional-family law). */
+function loadCorpus(): Promise<CorpusModule> {
+  corpusModule ??= import('./sourceCorpus.js');
+  return corpusModule;
+}
+
+/**
+ * The raw pieces the declared-sources corpora are built from — read off the
+ * parent's committed state by the input mapping, only under the arm and only
+ * for a batch with calls. Never the whole ledger: its standing rows (the
+ * model's current reading of each result) and its `answered` argument rows
+ * (the person's earlier answers).
+ */
+function sourceInputsOf(parent: Record<string, unknown>): SourceInputs {
+  const ledger = ((parent.findingsLedger as readonly FindingsRow[] | undefined) ?? []).filter(
+    (row) => row.kind === 'standing' || (row.kind === 'argument' && row.source === 'answered'),
+  );
+  const injections = (parent.systemPromptInjections as readonly unknown[] | undefined) ?? [];
+  const previous = ((parent.toolResults as readonly Record<string, unknown>[] | undefined) ?? [])
+    .filter((r) => typeof r?.toolCallId === 'string')
+    .map((r) => ({
+      toolCallId: r.toolCallId as string,
+      ...(typeof r.toolName === 'string' && { toolName: r.toolName }),
+    }));
+  return {
+    history: [...((parent.history as readonly unknown[] | undefined) ?? [])],
+    ...(injections.length > 0 && { systemPromptInjections: [...injections] }),
+    ...(ledger.length > 0 && { ledger }),
+    ...(previous.length > 0 && { previousBatch: previous }),
+    ...(parent.userMessageFrom === 'composed' && { composed: true as const }),
+  };
+}
 
 let stageModule: Promise<StageModule> | undefined;
 
@@ -106,12 +184,48 @@ function emitRows(scope: TypedScope<InputsLayerState>, rows: readonly ArgumentRo
  * stages over the pure steps of `arguments/resolve.ts`.
  */
 export function buildInputsSubflow(deps: InputsMountDeps): FlowChart {
-  const layer: InputsLayerDeps = { toolOf: deps.toolOf, willDispatch, emitRows };
+  const sources = deps.sources;
+  const base: InputsLayerDeps = { toolOf: deps.toolOf, willDispatch, emitRows };
+  // Declared sources: the reader of each call's `from` and the corpora the checks
+  // read live in `sourceCorpus.ts`, loaded on the first armed batch — so neither
+  // is on a plain agent's graph.
+  let armed: Promise<InputsLayerDeps> | undefined;
+  const layerOf = (): InputsLayerDeps | Promise<InputsLayerDeps> => {
+    if (sources === undefined) return base;
+    armed ??= loadCorpus().then((corpus) => ({
+      ...base,
+      sources: {
+        ...(sources.argumentViews === true && { argumentViews: true as const }),
+        declaredOf: (calls: readonly BatchCall[]) =>
+          corpus.declaredSourcesOf(
+            calls,
+            deps.toolOf,
+            sources.basisRows === true ? { basisRows: true } : undefined,
+          ),
+        corpusOf: async (
+          inputs: SourceInputs,
+          calls: readonly BatchCall[],
+          turn: number,
+        ): Promise<SourceCorpus> =>
+          corpus.sourceCorpusOf(inputs, calls, turn, {
+            toolOf: deps.toolOf,
+            ...(sources.externalGrounds !== undefined && {
+              externalGrounds: sources.externalGrounds,
+            }),
+          }),
+      },
+    }));
+    return armed;
+  };
   type Stage = (scope: TypedScope<InputsLayerState>) => Promise<void>;
-  const declare: Stage = async (scope) => (await loadStages()).declareArgumentsStage(scope, layer);
-  const verify: Stage = async (scope) => (await loadStages()).verifyArgumentsStage(scope, layer);
-  const record: Stage = async (scope) => (await loadStages()).recordArgumentsStage(scope, layer);
-  const resolve: Stage = async (scope) => (await loadStages()).resolveArgumentsStage(scope, layer);
+  const declare: Stage = async (scope) =>
+    (await loadStages()).declareArgumentsStage(scope, await layerOf());
+  const verify: Stage = async (scope) =>
+    (await loadStages()).verifyArgumentsStage(scope, await layerOf());
+  const record: Stage = async (scope) =>
+    (await loadStages()).recordArgumentsStage(scope, await layerOf());
+  const resolve: Stage = async (scope) =>
+    (await loadStages()).resolveArgumentsStage(scope, await layerOf());
   return flowChart<InputsLayerState>('DeclareArguments', declare, STAGE_IDS.DECLARE_ARGUMENTS, {
     description:
       'Which calls of a dispatching batch carry argument rules, and which values are missing',
@@ -120,7 +234,9 @@ export function buildInputsSubflow(deps: InputsMountDeps): FlowChart {
       'VerifyArguments',
       verify as never,
       STAGE_IDS.VERIFY_ARGUMENTS,
-      'Where each ruled value came from: the declared default, or the model',
+      sources === undefined
+        ? 'Where each ruled value came from: the declared default, or the model'
+        : 'Where each value came from: the source the model declared, checked — or the declared default',
     )
     .addFunction(
       'RecordArguments',
@@ -161,14 +277,19 @@ export function mountInputsLayer<B extends FlowChartBuilder>(
         // The answers this turn kept for a call it could not finish — the key
         // exists only after such a refusal, so every other run hands nothing.
         const kept = keptThisTurn(parent.argumentAnswersKept, parent.turnNumber as number);
+        const calls = (parent.llmLatestToolCalls as readonly unknown[] | undefined) ?? [];
         return {
-          calls: (parent.llmLatestToolCalls as readonly unknown[] | undefined) ?? [],
+          calls,
           iteration: parent.iteration as number,
           maxIterations: parent.maxIterations as number,
           ...(costBudgetHit !== undefined && { costBudgetHit }),
           ...(costBudgetOnExceed !== undefined && { costBudgetOnExceed }),
           turnNumber: parent.turnNumber as number,
           ...(kept.length > 0 && { argumentAnswersKept: kept }),
+          // Declared sources: the pieces the checks read — only under the arm,
+          // and only for a batch with calls to check.
+          ...(deps.sources !== undefined &&
+            calls.length > 0 && { sourceInputs: sourceInputsOf(parent) }),
         };
       },
       outputMapper: (sf: Record<string, unknown>, parent: Record<string, unknown>) => {

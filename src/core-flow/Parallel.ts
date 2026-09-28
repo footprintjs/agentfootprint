@@ -37,6 +37,7 @@ import { compositionRecorder } from '../recorders/core/CompositionRecorder.js';
 import { typedEmit } from '../recorders/core/typedEmit.js';
 import { resilienceHooks } from '../recorders/core/resilienceHooks.js';
 import { resilienceRecorder } from '../recorders/core/ResilienceRecorder.js';
+import { composedInput, readsMessageFromIfAny } from '../core/messageFrom.js';
 
 export interface ParallelOptions {
   readonly name?: string;
@@ -265,6 +266,11 @@ export class Parallel extends RunnerBase<ParallelInput, ParallelOutput> {
       throw new Error('Parallel: must have at least 2 branches (use Sequence for a single runner)');
     }
     this.branches = branches;
+    // Holding a branch that reads `messageFrom`, it reads it too (`core/messageFrom.ts`).
+    readsMessageFromIfAny(
+      this,
+      branches.map((b) => b.runner),
+    );
     this.merge = merge;
     // Set BEFORE initChart — buildChart reads both fields.
     this.requiredIds = new Set(branches.filter((b) => b.required === true).map((b) => b.id));
@@ -598,7 +604,12 @@ export class Parallel extends RunnerBase<ParallelInput, ParallelOutput> {
     // JSDoc for why footprintjs can't attribute that class on its own.
     for (const branch of branches) {
       builder = builder.addSubFlowChart(branch.id, branch.runner.getSpec(), branch.name, {
-        inputMapper: (parent) => ({ message: (parent.userMessage as string) ?? '' }),
+        inputMapper: (parent) => {
+          // The caller's own message — composed only when this composition was
+          // handed a composed one (`core/messageFrom.ts`).
+          const input = { message: (parent.userMessage as string) ?? '' };
+          return parent.messageFrom === 'composed' ? composedInput(branch.runner, input) : input;
+        },
         outputMapper: wrapBranchOutputMapper(branch.id, this.branchErrors, (sfOutput) => ({
           branchResults: {
             [branch.id]: typeof sfOutput === 'string' ? sfOutput : '',

@@ -6,7 +6,9 @@
  * Pattern: pure functions over plain JSON; no scope, no I/O.
  * Role:    core/ layer leaf. `withFindingsArgument` runs at the ONE decoration
  *          site (the committed tool list in `buildToolsSlot`, and the seed
- *          fallback); `splitFindings` is the FIRST read of a tool call's args
+ *          fallback) — and so does its sources-only twin, `withSourcesArgument`
+ *          (declared sources without the ledger: ruled tools only, `from`
+ *          alone); `splitFindings` is the FIRST read of a tool call's args
  *          in the dispatch loop; `peelAnswerFindings` runs before the output
  *          schema judges an answer, reading the answer's text through
  *          `answerText.ts` — the scanner the stream shares, so the answer
@@ -41,6 +43,7 @@
  */
 
 import type { LLMToolSchema } from '../../../adapters/types.js';
+import { DECLARED_SOURCE_KINDS, readSources } from '../arguments/sources.js';
 import {
   BASIS_VALUES,
   EXPECT_VALUES,
@@ -192,6 +195,96 @@ export const FINDINGS_ARGUMENT_SCHEMA: PlainObject = deepFreeze({
 });
 
 /**
+ * The `from` property (honesty layer 2, declared sources) — where each
+ * argument value of the call came from, planted ONLY under the sources arm
+ * (`.findings({ argumentSources: true })` or `.inputsLayer({ argumentSources:
+ * true })`) and ONLY on a tool that declares argument rules
+ * (`withFindingsArgument`'s `from` option, `withSourcesArgument`): planted
+ * everywhere it would cost every served tool its bytes before any benefit is
+ * measured.
+ *
+ * THE ONE PLACE `from` IS EXPLAINED (step 5, review round 1 of the bench). The
+ * sources' meanings live in `source`'s description, what the record keeps in
+ * the array's, and there is no second copy in the system prompt: the paid
+ * step-5 run served both (a 447-character instruction line beside this
+ * property) and the explanation cost its characters twice on every request.
+ * The wording is positive on purpose — the first draft opened "Optional:" and
+ * closed "Leave an argument out rather than guess", and the model read `from`
+ * as a place to cite RESULTS (34 of its 35 `from` arrays named a result; not
+ * one named the person's words unless it also named a result). A value with
+ * no entry is not refused; the sentence says what the record then holds.
+ *
+ * Says what the model may declare and what the record keeps, and nothing
+ * about what serving does; judged by `unprovable` at the strictest lifetime
+ * in `test/modelFacingSurfaces.test.ts`.
+ */
+export const FINDINGS_FROM_PROPERTY: PlainObject = deepFreeze({
+  type: 'array',
+  description:
+    'Where each argument value the call sends came from, one entry per value, recorded with ' +
+    "the library's check of it; a value with no entry has no declared source on the record.",
+  items: {
+    type: 'object',
+    properties: {
+      argument: { type: 'string' },
+      source: {
+        type: 'string',
+        enum: [...DECLARED_SOURCE_KINDS],
+        description:
+          "'user': the person's words (quote); 'result': a tool result (id); 'turn': their " +
+          "answer when the run asked them; 'app': your instructions; 'assumed': your own choice.",
+      },
+      quote: { type: 'string', description: "Copied exactly from the person's messages." },
+      id: { type: 'string' },
+    },
+    required: ['argument', 'source'],
+  },
+});
+
+/**
+ * `planted` with `from` among its properties — a rebuilt, deep-frozen copy
+ * with `from` FIRST and in `required` beside the base's own: a model fills a
+ * required field it meets first (Haiku 4.5 filled the required `basis` on 266
+ * of 268 calls in the paid step-5 run, and the optional `from` on 35).
+ */
+function withFromProperty(planted: PlainObject): PlainObject {
+  const required = Array.isArray(planted.required) ? (planted.required as readonly string[]) : [];
+  return deepFreeze({
+    ...planted,
+    properties: { from: FINDINGS_FROM_PROPERTY, ...(planted.properties as PlainObject) },
+    required: [...required, 'from'],
+  });
+}
+
+/** The base decoration with `from` — built once, served by reference like the base. */
+const FINDINGS_ARGUMENT_SCHEMA_WITH_FROM: PlainObject = withFromProperty(FINDINGS_ARGUMENT_SCHEMA);
+
+/**
+ * The reserved property DECLARED SOURCES plant WITHOUT the findings ledger
+ * (`.inputsLayer({ argumentSources: true })` on an agent that never called
+ * `.findings()`): the versioned marker as its whole description — so
+ * `withoutFindingsArgument` recognises it exactly as it recognises the
+ * ledger's decoration — and `from` alone, required. No `basis`, no
+ * `previous`, no offer: nothing here asks the model for a standing, so none of
+ * the ledger's ~2,500 characters per served tool are paid for an arm that
+ * only reads where argument values came from.
+ */
+export const FINDINGS_SOURCES_SCHEMA: PlainObject = deepFreeze({
+  type: 'object',
+  description: FINDINGS_MARKER,
+  properties: { from: FINDINGS_FROM_PROPERTY },
+  required: ['from'],
+});
+
+/**
+ * The id of the always-on instruction `.findings()` registers (9.101.0) — the
+ * name a receipt's `system.pieces` carries and a test can look for; the
+ * declared-sources corpus leaves the library's own instruction out of the
+ * app's text by it.
+ */
+export const FINDINGS_INSTRUCTION_ID = 'findings-ledger';
+
+/**
  * The always-on system instruction `.findings()` registers (the twin of
  * `outputSchema()`'s piece). It asks; it promises nothing about serving.
  */
@@ -237,6 +330,8 @@ export const FINDINGS_CONTINGENT_LINE =
  * gate is armed too. Composed at `AgentBuilder.build` (the two doors may be
  * called in either order), and byte-identical to the constant when the gate
  * is absent — so the `.findings()`-only references are the bytes they were.
+ * Declared sources add NO line here: `from` is explained once, in its own
+ * property (`FINDINGS_FROM_PROPERTY`), on the ruled tools that carry it.
  */
 export function findingsInstructionFor(arms: { readonly contingent: boolean }): string {
   return arms.contingent
@@ -343,16 +438,33 @@ function offeredFindingsSchema(offer: readonly string[]): PlainObject {
  * no offer, so a JavaScript caller that makes that mistake serves the base
  * decoration instead of crashing every armed run at seed; the compiler is
  * the guard, this is the floor.
+ *
+ * `options.from` (honesty layer 2, declared sources) — the caller says the
+ * tool declares argument rules and the sources arm is on: the planted
+ * property gains `from` (`FINDINGS_FROM_PROPERTY`) FIRST and in its
+ * `required` (`withFromProperty`). Its description's first sentence is the
+ * base's, so `withoutFindingsArgument` still recognises the decoration. Every
+ * other tool keeps the base by reference.
  */
 export function withFindingsArgument(
   schema: LLMToolSchema,
   offer: readonly string[] = [],
+  options?: { readonly from?: boolean },
 ): LLMToolSchema {
   if (ownsReservedArgument(schema)) return schema;
   const properties = schema.inputSchema.properties;
   const existing = isPlainObject(properties) ? properties : undefined;
   const ids = Array.isArray(offer) ? offer : [];
-  const planted = ids.length === 0 ? FINDINGS_ARGUMENT_SCHEMA : offeredFindingsSchema(ids);
+  const from = options?.from === true;
+  // Declared sources (honesty layer 2): a ruled tool's decoration gains `from`.
+  const planted =
+    ids.length === 0
+      ? from
+        ? FINDINGS_ARGUMENT_SCHEMA_WITH_FROM
+        : FINDINGS_ARGUMENT_SCHEMA
+      : from
+      ? withFromProperty(offeredFindingsSchema(ids))
+      : offeredFindingsSchema(ids);
   return {
     ...schema,
     inputSchema: {
@@ -363,9 +475,40 @@ export function withFindingsArgument(
 }
 
 /**
+ * DECLARED SOURCES WITHOUT THE FINDINGS LEDGER (`.inputsLayer({
+ * argumentSources: true })`, no `.findings()`): a REBUILT copy of a RULED
+ * tool's schema with the reserved `_findings` argument carrying `from` alone
+ * (`FINDINGS_SOURCES_SCHEMA`, by reference) — the twin of
+ * `withFindingsArgument` for the one arm that plants the argument on ruled
+ * tools only. The SAME reference when the author's own schema already carries
+ * `_findings` (the author wins; `ownsReservedArgument`), and the caller plants
+ * nothing on a tool with no rules, so an unruled tool is served the bytes it
+ * always was. `required` and `additionalProperties` stay as the author wrote
+ * them.
+ *
+ * @example
+ * ```ts
+ * withSourcesArgument(searchLogs.schema).inputSchema.properties._findings; // FINDINGS_SOURCES_SCHEMA
+ * ```
+ */
+export function withSourcesArgument(schema: LLMToolSchema): LLMToolSchema {
+  if (ownsReservedArgument(schema)) return schema;
+  const properties = schema.inputSchema.properties;
+  const existing = isPlainObject(properties) ? properties : undefined;
+  return {
+    ...schema,
+    inputSchema: {
+      ...schema.inputSchema,
+      properties: { ...(existing ?? {}), [RESERVED_ARGUMENT]: FINDINGS_SOURCES_SCHEMA },
+    },
+  };
+}
+
+/**
  * True for the library's decoration and for nothing an author wrote: the
- * frozen base by reference, or any value — an offer copy, a `structuredClone`
- * of either — whose description opens with the versioned `FINDINGS_MARKER`.
+ * frozen base by reference, or any value — an offer copy, the sources-only
+ * decoration, a `structuredClone` of any of them — whose description opens
+ * with the versioned `FINDINGS_MARKER`.
  * The reference alone is not enough on the live path: the served list is the
  * committed `dynamicToolSchemas`, a clone of what `withFindingsArgument`
  * planted (`callLLM · registeredToolSchemas`), so it never holds there.
@@ -382,7 +525,8 @@ function isFindingsDecoration(value: unknown): boolean {
 /**
  * The served `inputSchema` WITHOUT the library's decoration: when
  * `properties._findings` is the decoration (`isFindingsDecoration` — the
- * base, an offer copy, or a committed clone of either), a rebuilt copy minus
+ * base, an offer copy, the sources-only decoration, or a committed clone of
+ * any of them), a rebuilt copy minus
  * that property; otherwise the SAME reference — an author's own `_findings`
  * is not the decoration and is read as written. Asked by readers that judge
  * the model's ARGUMENTS against the schema (`callLLM` · the choice seam's
@@ -390,13 +534,25 @@ function isFindingsDecoration(value: unknown): boolean {
  * offered ids never excuse a value.
  */
 export function withoutFindingsArgument(inputSchema: unknown): unknown {
-  if (!isPlainObject(inputSchema)) return inputSchema;
-  const properties = inputSchema.properties;
-  if (!isPlainObject(properties) || !isFindingsDecoration(properties[RESERVED_ARGUMENT])) {
-    return inputSchema;
-  }
+  if (!carriesFindingsDecoration(inputSchema)) return inputSchema;
+  const properties = (inputSchema as PlainObject).properties as PlainObject;
   const { [RESERVED_ARGUMENT]: _decoration, ...rest } = properties;
-  return { ...inputSchema, properties: rest };
+  return { ...(inputSchema as PlainObject), properties: rest };
+}
+
+/**
+ * Whether a SERVED `inputSchema` carries the library's `_findings` decoration
+ * (`isFindingsDecoration`) — so the model's `_findings` value on a call of
+ * that tool is its declaration, never the author's argument. The one
+ * predicate a reader of the model's arguments asks when only some served tools
+ * carry the decoration (declared sources without the findings ledger plant it
+ * on ruled tools only): `callLLM` · the choice seam peels such a call's
+ * arguments before judging them.
+ */
+export function carriesFindingsDecoration(inputSchema: unknown): boolean {
+  if (!isPlainObject(inputSchema)) return false;
+  const properties = inputSchema.properties;
+  return isPlainObject(properties) && isFindingsDecoration(properties[RESERVED_ARGUMENT]);
 }
 
 // ─── Reading a declaration ─────────────────────────────────────────────
@@ -406,6 +562,19 @@ export interface ReadDeclaration {
   readonly declaration?: FindingsDeclaration;
   /** Entries and fields dropped as malformed. */
   readonly malformed: number;
+  /**
+   * Of `malformed`, the `from` entries dropped — set only when `from` was read
+   * (the declared-sources arm), so the inputs layer can carry the count on an
+   * argument row when the call files no basis row.
+   */
+  readonly sourcesMalformed?: number;
+}
+
+/** Which optional parts of `_findings` a reader reads. Absent → none (the declaration as it always was). */
+export interface DeclarationArms {
+  /** `_findings.from` — the declared-sources arm (honesty layer 2): `.findings({ argumentSources:
+   *  true })` or `.inputsLayer({ argumentSources: true })`. */
+  readonly argumentSources?: boolean;
 }
 
 function isDeclaredAssertion(value: unknown): value is DeclaredAssertion {
@@ -467,9 +636,19 @@ function readPrevious(raw: unknown): { entry?: PreviousStanding; malformed: numb
  * The one validator both peels share. Enum-checks every field; a field that
  * fails is dropped and counted; nothing is defaulted. No `declaration` comes
  * back when nothing readable survived.
+ *
+ * `arms.argumentSources` (honesty layer 2) also reads `from` — judged against
+ * the call's own arguments (`args`, `_findings` taken off) by
+ * `arguments/sources.ts` · `readSources` — and counts a `from`-only
+ * declaration as readable. Unarmed, `from` is ignored exactly as any unknown
+ * key is, so a `.findings()`-only agent reads the bytes it always read.
  */
 /** @internal — shared with `peel.ts`. */
-export function readDeclaration(raw: unknown): ReadDeclaration {
+export function readDeclaration(
+  raw: unknown,
+  arms?: DeclarationArms,
+  args?: PlainObject,
+): ReadDeclaration {
   if (!isPlainObject(raw)) return { malformed: 1 };
   let malformed = 0;
   const out: {
@@ -478,6 +657,7 @@ export function readDeclaration(raw: unknown): ReadDeclaration {
     proposition?: string;
     predicts?: string;
     previous?: PreviousStanding[];
+    from?: FindingsDeclaration['from'];
   } = {};
   if (raw.basis !== undefined) {
     if (isOneOf<Basis>(raw.basis, BASIS_VALUES)) out.basis = raw.basis;
@@ -509,13 +689,25 @@ export function readDeclaration(raw: unknown): ReadDeclaration {
       out.previous = previous;
     }
   }
+  let sourcesMalformed: number | undefined;
+  if (arms?.argumentSources === true && raw.from !== undefined) {
+    const read = readSources(raw.from, args ?? {});
+    sourcesMalformed = read.malformed;
+    malformed += read.malformed;
+    if (Array.isArray(raw.from)) out.from = read.from;
+  }
   const readable =
     out.basis !== undefined ||
     out.expect !== undefined ||
     out.proposition !== undefined ||
     out.predicts !== undefined ||
-    out.previous !== undefined;
-  return { ...(readable && { declaration: out }), malformed };
+    out.previous !== undefined ||
+    out.from !== undefined;
+  return {
+    ...(readable && { declaration: out }),
+    malformed,
+    ...(sourcesMalformed !== undefined && { sourcesMalformed }),
+  };
 }
 
 // ─── The two peels ─────────────────────────────────────────────────────
@@ -531,12 +723,15 @@ export interface SplitFindings {
 /**
  * Take `_findings` off a tool call's args. The first read of `tc.args` in the
  * dispatch loop when armed: what comes back as `args` is what the call runs
- * with, and the model's declaration rides on `findings`.
+ * with, and the model's declaration rides on `findings`. `arms` is the
+ * reader's (`readDeclaration`): under declared sources the peel reads `from`
+ * exactly as the inputs layer did, so both reads of one `_findings` agree —
+ * the same readable declaration, the same malformed count.
  */
-export function splitFindings(args: PlainObject): SplitFindings {
+export function splitFindings(args: PlainObject, arms?: DeclarationArms): SplitFindings {
   if (!isPlainObject(args) || !hasOwn(args, RESERVED_ARGUMENT)) return { args };
   const { [RESERVED_ARGUMENT]: raw, ...rest } = args;
-  const { declaration, malformed } = readDeclaration(raw);
+  const { declaration, malformed } = readDeclaration(raw, arms, rest);
   return {
     args: rest,
     ...(declaration !== undefined && { findings: declaration }),

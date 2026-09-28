@@ -13,8 +13,10 @@
  * blob that contains `0xef01011` or `naa.0xef0101ab`, so the invented value
  * reads as grounded and the check quietly passes everything. So a tool result
  * that parses as JSON is WALKED — every key, every leaf — and each leaf is
- * indexed both whole and tokenized. A result that is not JSON is tokenized as
- * text. Either way the comparison is token-exact, never substring.
+ * indexed both whole and tokenized; so is the JSON a result OPENS with when a
+ * framework note follows it (`readResult`, over `servedJson.ts`). A result
+ * that is not JSON is tokenized as text. Either way the comparison is
+ * token-exact, never substring.
  *
  * ## What counts as evidence, and what deliberately does not
  *
@@ -95,16 +97,20 @@ import type { LLMMessage } from '../../../adapters/types.js';
 import type { InjectionRecord } from '../../../recorders/core/types.js';
 import { toolBytesOf } from '../../../lib/toolBytes.js';
 import { absenceEvidenceProjection } from '../coverage/index.js';
+import { isTruncatedToolResult } from '../toolResultCap.js';
 import { isCompactedSummary } from '../../../lib/saidByPerson.js';
 import { isLibraryAuthoredTurn } from './frames.js';
 import { lookupForms, normalizeToken, tokenize } from './normalize.js';
+import { jsonPrefixOf, leadingJsonValues } from './servedJson.js';
 
 /**
  * Ceiling on indexed tokens. Generous — a 200 000-token corpus is roughly a
  * 5 MB tool result — because the cost of hitting it is not "slower", it is
- * "the gate stops accusing" (see {@link EvidenceCorpus.truncated}).
+ * "the gate stops accusing" (see {@link EvidenceCorpus.truncated}). The
+ * declared-sources check reads a haystack to the same ceiling and says
+ * `uncheckable` past it (`evidence/resultCarries.ts` · `resultReader`).
  */
-const MAX_INDEX_TOKENS = 200_000;
+export const MAX_INDEX_TOKENS = 200_000;
 
 /**
  * How many results one indexed form remembers as its CARRIERS (9.110.0)
@@ -274,30 +280,89 @@ function walk(node: unknown, sink: Sink): void {
   }
 }
 
-/** Index one tool result: structurally when it is JSON, as text when it is not. */
-function indexResult(content: string, sink: Sink): void {
+/**
+ * How ONE result reads: its JSON walked (`parsed`) and any text beside it read
+ * as text (`tail`: a note after the JSON, or the whole words of a string the
+ * JSON was cut inside), or — when it opens with no JSON the grammar can read —
+ * its text.
+ */
+export type ResultReading =
+  | { readonly parsed: unknown; readonly tail?: string }
+  | { readonly text: string };
+
+/**
+ * One parsed value as evidence. An `absent(…)` frame grounds everything the
+ * TOOL authored and drops the one field that quotes the REQUEST
+ * (`looked_for`) — indexing that would ground every identifier a model
+ * invented as long as it handed the invention to one tool that found nothing.
+ * See `../coverage/evidence.ts` — it is the frames.ts argument on the tool
+ * side of the conversation. A capped result (`../toolResultCap.ts`) is walked
+ * as served AND its `head` — the tool's first characters, verbatim, usually
+ * JSON cut mid-value — is read as a result of its own, so a number or a
+ * boolean in it is found. Every other value keeps the walk it always had.
+ */
+function asEvidence(value: unknown): unknown {
+  const projection = absenceEvidenceProjection(value);
+  if (projection !== undefined) return projection;
+  if (!isTruncatedToolResult(value) || typeof value.head !== 'string') return value;
+  const head = readResult(value.head);
+  if (!('parsed' in head)) return value;
+  return head.tail === undefined ? [value, head.parsed] : [value, head.parsed, head.tail];
+}
+
+/**
+ * How ONE tool result is read — the one reading both the index
+ * (`indexResult`) and the per-result question (`resultCarries.ts` ·
+ * `resultReader`) take: the parsed JSON when it is JSON (`asEvidence`: an
+ * absence's `looked_for` projected away, a capped result's head read too), its
+ * text otherwise.
+ *
+ * A result that is NOT one JSON value but OPENS with one — the tool's JSON
+ * with a framework note joined after it (a step banner, an effect note, the
+ * repeated-call note), or several JSON blocks (an MCP text result's content
+ * blocks) — reads as those leading values, walked, and the text after them as
+ * `tail`; one cut short before it closes (a tool that truncated its own
+ * output) reads as the leaves the grammar can read, and — cut inside a
+ * string — that string's whole words as `tail` (`servedJson.ts` ·
+ * `jsonPrefixOf`: never the word the cut may have split). Read whole as text,
+ * `{"id":4417}` tokenises to `:4417`, and every number and boolean the tool
+ * returned would read as absent. Text that opens with a brace and is not JSON
+ * (a log line) stays text.
+ */
+export function readResult(content: string): ResultReading {
   const trimmed = content.trim();
-  if (trimmed.startsWith('{') || trimmed.startsWith('[')) {
-    try {
-      const parsed = JSON.parse(trimmed);
-      // An `absent(…)` frame grounds everything the TOOL authored and drops
-      // the one field that quotes the REQUEST (`looked_for`) — indexing that
-      // would ground every identifier a model invented as long as it handed
-      // the invention to one tool that found nothing. See
-      // `../coverage/evidence.ts` — it is the frames.ts argument on the tool
-      // side of the conversation. `undefined` (every other result ever
-      // returned) keeps the walk it always had.
-      const projection = absenceEvidenceProjection(parsed);
-      walk(projection ?? parsed, sink);
-      return;
-    } catch {
-      // Not JSON after all (a truncated result, a log line that happens to
-      // start with a brace). Fall through to the text path rather than lose
-      // the evidence entirely — a tool result that cannot be parsed is still
-      // something the model read.
-    }
+  if (!trimmed.startsWith('{') && !trimmed.startsWith('[')) return { text: content };
+  try {
+    return { parsed: asEvidence(JSON.parse(trimmed)) };
+  } catch {
+    // Not ONE JSON value: read what the grammar can, below.
   }
-  addText(sink, content);
+  const { values, rest } = leadingJsonValues(trimmed);
+  if (values.length === 0) {
+    const cut = jsonPrefixOf(trimmed);
+    if (cut === undefined) return { text: content };
+    return { parsed: cut.leaves, ...(cut.words !== undefined && { tail: cut.words }) };
+  }
+  // After the values: a further block cut short (its leaves, and the words of a cut string), or text.
+  const cut = rest === '' ? undefined : jsonPrefixOf(rest);
+  const walked = values.map(asEvidence);
+  const all = cut === undefined ? walked : [...walked, cut.leaves];
+  const tail = cut === undefined ? (rest === '' ? undefined : rest) : cut.words;
+  return {
+    parsed: all.length === 1 ? all[0] : all,
+    ...(tail !== undefined && { tail }),
+  };
+}
+
+/** Index one tool result: structurally where it is JSON, as text where it is not. */
+function indexResult(content: string, sink: Sink): void {
+  const read = readResult(content);
+  if ('text' in read) {
+    addText(sink, read.text);
+    return;
+  }
+  walk(read.parsed, sink);
+  if (read.tail !== undefined) addText(sink, read.tail);
 }
 
 // FOLD · the one owner of the corpus of values this run can prove it read from a tool result

@@ -306,6 +306,36 @@
  * settled), and the batch dispatched on its ordinary path — the tool message
  * carries the answered note after the tool's own bytes and `toolChars`.
  *
+ * Honesty step 5 (declared sources): one new reference, `agent-arguments-sources`
+ * (`.findings({ argumentSources: true })` beside a tool whose `ask` rule carries a
+ * declared phrase; the model's call declares `_findings.from` with a quote of the
+ * person's words); none of the 25 earlier ones moved (copied aside, the new one
+ * generated alone with `-t agent-arguments-sources` under
+ * `AF_TOOLS_REFERENCE=update`, the 25 `cmp`-equal after). What it holds, read
+ * from its bytes: the run constant `honestyLayers: { argumentSources: true,
+ * inputs: true }` on seed's commit; the served `search_logs` schema whose
+ * `_findings` carries `from` (at seed and on both epochs; no other tool is
+ * served here), and the findings instruction with its sources line in every
+ * recorded piece; the `sf-inputs` mount's output mapping writing ONE `argument`
+ * row — `source: 'said'`, `claimed: 'user'`, `matched: 'phrase'`, the quote in
+ * the tool's own view — and NO `argumentResolutions` (the call runs as sent:
+ * nothing to fill, nothing to ask); no `userMessageFrom` (a person's message).
+ *
+ * Step 5, round 1 of the paid bench's fixes: `agent-arguments-sources` MOVED,
+ * on purpose and only in what is served — `from`'s descriptions (no
+ * "Optional", what the record keeps, the sources named once), `from` in the
+ * ruled tool's `_findings.required`, the `ask` sentence naming
+ * `_findings.from`, and the findings instruction WITHOUT its sources line
+ * (the receipt's pieces and sizes follow); every row, key and verb is as it
+ * was. One new reference, `agent-arguments-sources-only`
+ * (`.inputsLayer({ argumentSources: true })`, no `.findings()`): the ruled
+ * tool's `_findings` carries `from` alone, the system prompt is the app's
+ * `bot` alone, no `findingsServe` constant, the ONE `argument` row
+ * (`said`, `matched: 'phrase'`) and no basis row. The other 25 did not move
+ * (run on the fixed tree before regenerating: 25/25 green, the 21 unarmed ones
+ * and steps 3–4's four among them; the two generated alone with
+ * `-t agent-arguments-sources` under `AF_TOOLS_REFERENCE=update`).
+ *
  * Honesty step 7b (the results layer): the FOUR inputs-layer references
  * REGENERATED — `agent-arguments-assume`, `-assume-limits`, `-ask` and
  * `-ask-resumed` — because their `search_logs` declares a `ToolPeriod`
@@ -381,6 +411,21 @@
  * projection does not read, and the final mount's output mapping is the
  * bytes it always was (it receives the answer string). The event and the
  * `turn_end` field are pinned by `test/core/agent/assessment/answer-layer.test.ts`.
+ *
+ * The merge of step 5 (declared sources) with steps 6 and 7b REGENERATED step
+ * 5's two references, `agent-arguments-sources` and `-sources-only`, alone
+ * (copied aside, `AF_TOOLS_REFERENCE=update -t agent-arguments-sources`; the
+ * other 28 green untouched): their `search_logs` declares a `ToolPeriod`
+ * (`period: { argument: 'window', spelling: 'lookback' }`), which is step 7b's
+ * arm. Read bundle by bundle with the `sf-results` bundles set aside and
+ * execution indices normalized, the delta is EXACTLY step 7b's families: seed's
+ * `honestyLayers` gains `results: true` (beside `inputs` and `argumentSources`);
+ * the `sf-results` visits at the loop head (iteration 1 writes nothing; the
+ * visit after ToolCalls appends ONE `period` row for `c1`, `argument: 'window'`);
+ * the dispatching `tool-calls` bundle gains `toolResultsIteration: 1` with one
+ * `set` trace row; and every later index shifts (the served views'
+ * `callRuntimeStageId` among them). The `argument` rows, the served schemas,
+ * messages and every other key did not move.
  *
  * Every scenario is a real run — the receipt-conformance shapes, each in the
  * configuration that has no name collision — and what is compared is the
@@ -507,6 +552,78 @@ const askingSearchLogs = () =>
     period: { argument: 'window', spelling: 'lookback' },
     execute: (args: Record<string, unknown>) => ({ service: args.service, errors: 0 }),
   });
+
+/**
+ * The same search under DECLARED SOURCES (step 5): its period is asked of the
+ * person, one choice carries a phrase the author vouches for, and the model
+ * declares where its value came from (`_findings.from`, a quote of the
+ * person's words) — the phrase checks the quote out, and the call runs.
+ */
+const sourcedSearchLogs = () =>
+  defineTool({
+    name: 'search_logs',
+    description: 'Error lines for one service over a look-back period.',
+    inputSchema: {
+      type: 'object',
+      required: ['service', 'window'],
+      properties: {
+        service: { type: 'string', description: 'Service name.' },
+        window: { type: 'string', enum: ['1h', '2h', '24h'], description: 'Look-back period.' },
+      },
+    },
+    askOrAssume: {
+      window: {
+        ask: 'Which period should the search cover?',
+        choices: [{ value: '24h', said: ['past day'] }, '1h'],
+      },
+    },
+    period: { argument: 'window', spelling: 'lookback' },
+    execute: (args: Record<string, unknown>) => ({ service: args.service, errors: 0 }),
+  });
+const SOURCED_THEN_DONE = [
+  call('c1', 'search_logs', {
+    service: 'checkout',
+    window: '24h',
+    _findings: {
+      basis: 'direct',
+      from: [{ argument: 'window', source: 'user', quote: 'the past day' }],
+    },
+  }),
+  answer('No errors.'),
+];
+
+/** …and without the findings ledger: `_findings` carries `from` alone, so the call declares no basis. */
+const SOURCED_ONLY_THEN_DONE = [
+  call('c1', 'search_logs', {
+    service: 'checkout',
+    window: '24h',
+    _findings: { from: [{ argument: 'window', source: 'user', quote: 'the past day' }] },
+  }),
+  answer('No errors.'),
+];
+
+/**
+ * The declared-sources run: the person's message carries the words the model
+ * quotes — beside the findings ledger (`.findings({ argumentSources: true })`),
+ * or without it (`.inputsLayer({ argumentSources: true })`, `ledger: false`).
+ */
+async function sourcesRun(ledger = true): Promise<Snapshot> {
+  const builder = Agent.create({
+    provider: scripted(ledger ? SOURCED_THEN_DONE : SOURCED_ONLY_THEN_DONE) as never,
+    model: 'mock',
+    maxIterations: 6,
+    reactMode: 'dynamic',
+  })
+    .system('bot')
+    .tool(sourcedSearchLogs());
+  const agent = (
+    ledger
+      ? builder.findings({ argumentSources: true })
+      : builder.inputsLayer({ argumentSources: true })
+  ).build();
+  await agent.run({ message: 'any errors on checkout in the past day?' });
+  return agent.getSnapshot()!;
+}
 
 /**
  * A backup search whose RESULTS declare the period their read covered (honesty
@@ -1175,6 +1292,13 @@ const SCENARIOS: Record<string, () => Promise<Snapshot>> = {
   // and the answer resumes the batch (the resumed leg). See the header.
   'agent-arguments-ask': () => askRun(false),
   'agent-arguments-ask-resumed': () => askRun(true),
+  // Honesty step 5 — declared sources: the model says the period came from the
+  // person's words, the declared phrase checks the quote out, the call runs. See
+  // the header.
+  'agent-arguments-sources': () => sourcesRun(),
+  // …and declared sources WITHOUT the findings ledger (step 5, round 1 of the
+  // bench fixes): `_findings` with `from` alone on the ruled tool.
+  'agent-arguments-sources-only': () => sourcesRun(false),
   // Honesty step 7b — the results layer, armed by `.resultsLayer()` over a tool
   // whose results declare their period (no ToolPeriod). See the header.
   'agent-results-period': () =>

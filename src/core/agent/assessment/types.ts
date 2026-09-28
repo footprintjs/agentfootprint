@@ -80,10 +80,19 @@ export type AssessmentPointer =
  *   (an `argument` row with `source: 'model'`), or a declared source that
  *   failed its check (honesty layer 2);
  * - `argument-asked` — the turn ended waiting on the inputs layer's own ask:
- *   a batch left `ask`-ruled arguments out, the library asked the person for
- *   them before anything ran, and no answer has come yet (the batch ask's
- *   working state, `argumentAsk`, still has a question out; the `asked` rows
- *   name which values). Nothing in that batch has run (honesty layer 2);
+ *   a batch left `ask`-ruled arguments out (or, under declared sources, sent
+ *   values the checks did not trace), the library asked the person for them
+ *   before anything ran, and no answer has come yet (the batch ask's working
+ *   state, `argumentAsk`, still has a question out; the `asked` rows name
+ *   which values). Nothing in that batch has run (honesty layer 2);
+ * - `argument-read` — a call of this turn ran on a value the model READ into
+ *   the person's words: the quote it declared is in their messages, the value
+ *   is not in it (an `argument` row with `source: 'said'` and `reading`;
+ *   honesty layer 2, declared sources);
+ * - `value-contingent` — a call of this turn ran on a value taken from a
+ *   result the model itself had set aside (`open`, `noise`, `ruled-out`): an
+ *   `argument` row with `source: 'result'` and `setAside`, or a
+ *   `ContingentRow` of this turn (honesty layer 2);
  * - `period-not-held` — a result declared the period its read covered, and
  *   the store holds NONE of what the read asked for (a `period` row with
  *   verdict `not-held` — the results layer, honesty layer 3): "the data ends
@@ -106,6 +115,8 @@ export type AssessmentReason =
   | 'argument-asked'
   | 'argument-assumed'
   | 'argument-unverified'
+  | 'argument-read'
+  | 'value-contingent'
   | 'declared-absent'
   | 'coverage-gap'
   | 'empty-undeclared'
@@ -140,12 +151,17 @@ export type AssessmentReason =
  * - `argument-rules` — the ruled arguments of this turn's calls that the
  *   inputs layer filed a verdict on (honesty layer 2), of the same — every
  *   `argument` row IS a verdict; present only when the layer filed one;
+ * - `argument-sources` — of the argument rows of this turn the declared-sources
+ *   check judged (a row that carries `claimed`: `.findings({ argumentSources:
+ *   true })`), the ones it reached a verdict on (every one but `uncheckable`);
+ *   present only when the arm filed one. A pass here never supports "known".
  * - `result-period` — this turn's calls the results layer filed a period
  *   verdict on (honesty layer 3), of the same — every `period` row IS a
  *   verdict, `covered` included; present only when the layer filed one.
  */
 export type AssessmentCheck =
   | 'argument-rules'
+  | 'argument-sources'
   | 'result-period'
   | 'tool-coverage'
   | 'result-shape'

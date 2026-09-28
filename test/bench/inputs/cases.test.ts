@@ -182,7 +182,7 @@ describe('UNIT — the registered arms', () => {
 
   it('a tool without a period is never declared, and an unknown arm is refused', () => {
     expect(armDeclaration('assume', toolSpec('list_hosts'))).toEqual({});
-    expect(ARMS).toEqual(['off', 'assume', 'ask']);
+    expect(ARMS).toEqual(['off', 'assume', 'ask', 'full']);
     expect(() => armDeclaration('maybe', toolSpec('search_logs'))).toThrow(/unknown arm 'maybe'/);
   });
 });

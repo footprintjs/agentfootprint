@@ -4,7 +4,7 @@ title: Sequence
 
 # Class: Sequence
 
-Defined in: [src/core-flow/Sequence.ts:98](https://github.com/footprintjs/agentfootprint/blob/main/src/core-flow/Sequence.ts#L98)
+Defined in: [src/core-flow/Sequence.ts:99](https://github.com/footprintjs/agentfootprint/blob/main/src/core-flow/Sequence.ts#L99)
 
 Every primitive (LLMCall, Agent), every composition (Sequence, Parallel,
 Conditional, Loop), and every pattern factory result implements Runner.
@@ -21,7 +21,7 @@ composition.
 
 > **new Sequence**(`opts`, `steps`): `Sequence`
 
-Defined in: [src/core-flow/Sequence.ts:110](https://github.com/footprintjs/agentfootprint/blob/main/src/core-flow/Sequence.ts#L110)
+Defined in: [src/core-flow/Sequence.ts:111](https://github.com/footprintjs/agentfootprint/blob/main/src/core-flow/Sequence.ts#L111)
 
 #### Parameters
 
@@ -64,7 +64,7 @@ instead of N `.on()` subscriptions.
 
 > `readonly` **id**: `string`
 
-Defined in: [src/core-flow/Sequence.ts:100](https://github.com/footprintjs/agentfootprint/blob/main/src/core-flow/Sequence.ts#L100)
+Defined in: [src/core-flow/Sequence.ts:101](https://github.com/footprintjs/agentfootprint/blob/main/src/core-flow/Sequence.ts#L101)
 
 ***
 
@@ -72,7 +72,7 @@ Defined in: [src/core-flow/Sequence.ts:100](https://github.com/footprintjs/agent
 
 > `readonly` **name**: `string`
 
-Defined in: [src/core-flow/Sequence.ts:99](https://github.com/footprintjs/agentfootprint/blob/main/src/core-flow/Sequence.ts#L99)
+Defined in: [src/core-flow/Sequence.ts:100](https://github.com/footprintjs/agentfootprint/blob/main/src/core-flow/Sequence.ts#L100)
 
 ## Methods
 
@@ -193,7 +193,7 @@ host.onSessionEnd(async (sessionId) => {
 
 > `static` **create**(`opts?`): [`SequenceBuilder`](/docs/api/classes/SequenceBuilder)
 
-Defined in: [src/core-flow/Sequence.ts:123](https://github.com/footprintjs/agentfootprint/blob/main/src/core-flow/Sequence.ts#L123)
+Defined in: [src/core-flow/Sequence.ts:130](https://github.com/footprintjs/agentfootprint/blob/main/src/core-flow/Sequence.ts#L130)
 
 #### Parameters
 
@@ -697,7 +697,7 @@ calling if you still want them. Does NOT touch attached recorders
 
 > **resume**(`checkpoint`, `input?`, `options?`): `Promise`\<`string` \| [`RunnerPauseOutcome`](/docs/api/interfaces/RunnerPauseOutcome)\>
 
-Defined in: [src/core-flow/Sequence.ts:169](https://github.com/footprintjs/agentfootprint/blob/main/src/core-flow/Sequence.ts#L169)
+Defined in: [src/core-flow/Sequence.ts:176](https://github.com/footprintjs/agentfootprint/blob/main/src/core-flow/Sequence.ts#L176)
 
 Resume a paused run from its checkpoint. Default behavior: rebuild the
 chart, wire the same core recorders + consumer recorders, call
@@ -732,7 +732,7 @@ returning. Subclass overrides only if it needs specialized behavior.
 
 > **run**(`input`, `options?`): `Promise`\<`string` \| [`RunnerPauseOutcome`](/docs/api/interfaces/RunnerPauseOutcome)\>
 
-Defined in: [src/core-flow/Sequence.ts:155](https://github.com/footprintjs/agentfootprint/blob/main/src/core-flow/Sequence.ts#L155)
+Defined in: [src/core-flow/Sequence.ts:162](https://github.com/footprintjs/agentfootprint/blob/main/src/core-flow/Sequence.ts#L162)
 
 Execute the runner. Subclass may override for specialized input
 mapping, but default invokes getSpec() + FlowChartExecutor.

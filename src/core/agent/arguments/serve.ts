@@ -79,6 +79,44 @@ export function assumeSentence(value: InputValue, hidden: boolean): string {
 export const ASK_SENTENCE =
   "The tool's rule asks the person for this value; leave it out unless the person gave it.";
 
+// LENS · tool-description · persistent-history
+// reads: the tool's own `ask` rule and the declared-sources arm — nothing about the call, the model or
+//        the person
+// law: says what the model may do and where it declares it; promises no outcome (the call may still be
+// denied by permission, refused, or asked about again).
+/**
+ * The sentence a ruled `ask` property carries under DECLARED SOURCES
+ * (`.findings({ argumentSources: true })`, `.inputsLayer({ argumentSources:
+ * true })`) in place of `ASK_SENTENCE`: the same rule, and — at the place the
+ * model decides whether to send the value — where it says the person gave it.
+ * Under the arm a present value with no traced source is asked of the person
+ * (`resolve.ts`), so "leave it out unless the person gave it" alone told the
+ * model that SENDING the value was the whole of its statement: in the paid
+ * step-5 run (`bench/inputs/runs/haiku45-step5`) it left the period out on 32
+ * of 32 calls where the person gave none — and a period the person HAD given
+ * was traced to their words, unasked, on 7 of 88 calls.
+ */
+export const ASK_SOURCES_SENTENCE =
+  "The tool's rule asks the person for this value; leave it out unless the person gave it, and " +
+  'then quote their words for it in `_findings.from`.';
+
+/** The options every served-schema composer here takes. */
+export interface ServeOptions {
+  /**
+   * Declared sources are armed (`.findings({ argumentSources: true })` or
+   * `.inputsLayer({ argumentSources: true })`) AND this tool's served schema
+   * carries `_findings.from`: an `ask` property says where the model declares
+   * the person's words, and an answered note says a later call may cite the
+   * answer. The CALLER decides it per tool, by the rule the planters and the
+   * dispatch peel ask (`findings/reserved.ts` · `ownsReservedArgument`, which
+   * this leaf cannot import): a tool whose author owns `_findings` is served
+   * undecorated, so a sentence naming `_findings.from` would tell the model to
+   * write into the author's own argument. Absent → the sentences steps 3 and 4
+   * serve, byte for byte.
+   */
+  readonly sources?: boolean;
+}
+
 function withSentence(property: PlainObject, sentence: string): PlainObject {
   const description = property.description;
   const text =
@@ -97,7 +135,8 @@ function withSentence(property: PlainObject, sentence: string): PlainObject {
  * The served copy of a ruled tool's schema: every argument an `assume` or an
  * `ask` rule governs leaves `required` (the library fills it, or asks the
  * person for it, when the call leaves it out) and its property's description
- * gains the rule's sentence. A rebuilt copy — the registry schema, which
+ * gains the rule's sentence (an `ask` rule's names `_findings.from` under the
+ * sources arm, `options.sources`). A rebuilt copy — the registry schema, which
  * `validateToolArgs` judges and `mcpServe` serves, is never edited. The SAME
  * reference back for a tool with no rules, rules that cannot be read (the
  * dispatch re-read refuses its calls) or no tool at all (a chart with no
@@ -112,6 +151,7 @@ function withSentence(property: PlainObject, sentence: string): PlainObject {
 export function withArgumentRules(
   schema: LLMToolSchema,
   tool: RuledToolLike | undefined,
+  options?: ServeOptions,
 ): LLMToolSchema {
   const rules = rulesOf(tool);
   if (rules === undefined || isRefused(rules)) return schema;
@@ -126,7 +166,8 @@ export function withArgumentRules(
     const property = properties[r.argument];
     if (!isPlainObject(property)) continue;
     if (r.rule === 'ask') {
-      properties[r.argument] = withSentence(property, ASK_SENTENCE);
+      const sentence = options?.sources === true ? ASK_SOURCES_SENTENCE : ASK_SENTENCE;
+      properties[r.argument] = withSentence(property, sentence);
       continue;
     }
     const value = r.assume as InputValue;
@@ -159,14 +200,18 @@ export function withArgumentRules(
  * when no served schema changed — so an armed agent whose wire carries no
  * ruled tool commits the bytes it always did. The tools slot's one decoration
  * site (`core/slots/buildToolsSlot.ts` · `commitWire`) calls it under the arm.
+ * `optionsOf` gives each schema its own `ServeOptions`: under declared sources
+ * one wire can hold a tool that carries `_findings.from` beside a provider's
+ * tool whose author owns `_findings`, which does not.
  */
 export function rulesOnWire(
   served: readonly LLMToolSchema[],
   winningTools: ReadonlyMap<string, RuledToolLike>,
+  optionsOf?: (schema: LLMToolSchema) => ServeOptions | undefined,
 ): readonly LLMToolSchema[] {
   let changed = false;
   const decorated = served.map((schema) => {
-    const next = withArgumentRules(schema, winningTools.get(schema.name));
+    const next = withArgumentRules(schema, winningTools.get(schema.name), optionsOf?.(schema));
     if (next !== schema) changed = true;
     return next;
   });
@@ -182,6 +227,12 @@ export interface FilledArgument {
   readonly hidden: boolean;
   /** `answered`: the person's answer to the batch ask filled it. Absent: the tool's rule assumed it. */
   readonly source?: 'answered';
+  /**
+   * The value the call had CARRIED, which the person's answer replaced
+   * (declared sources: an untraced value is asked about). Absent: the call
+   * had left the argument out.
+   */
+  readonly carried?: InputValue;
 }
 
 // LENS · tool-result · persistent-history
@@ -209,10 +260,16 @@ export interface FilledArgument {
  * //  the value the tool's rule assumes — recorded as assumed, not as the person's.]'
  * ```
  */
-export function filledNote(toolName: string, fills: readonly FilledArgument[]): string {
+export function filledNote(
+  toolName: string,
+  fills: readonly FilledArgument[],
+  options?: ServeOptions,
+): string {
   return fills
     .map((f) =>
-      f.source === 'answered' ? answeredClause(toolName, f) : assumedClause(toolName, f),
+      f.source === 'answered'
+        ? answeredClause(toolName, f, options?.sources === true)
+        : assumedClause(toolName, f),
     )
     .join('');
 }
@@ -227,16 +284,38 @@ function assumedClause(toolName: string, f: FilledArgument): string {
         "assumed, not as the person's.]";
 }
 
+/**
+ * The clause an answered note gains under declared sources: a later call may
+ * name the person's answer as its source — `turn`, checked against the
+ * ledger's `answered` rows (`checks.ts` · `checkTurn`). A permission, never a
+ * promise: the claim is still checked. In the paid step-5 run the model sent
+ * an answered period again on the next turn with no `from` entry (and so was
+ * asked again) or left it out (and so was asked again): nothing it was served
+ * said an earlier ANSWER was a source it could name.
+ */
+export const ANSWERED_SOURCE_CLAUSE =
+  "; a later call may cite that answer in `_findings.from` with source 'turn'";
+
 // LENS · tool-result · persistent-history
 // reads: the call's answered fill (the batch ask's answer bound to this toolCallId), kept only where the
-//        call RAN with it (`dispatch.ts` · `fillsThatRan`)
-// law: may omit, never deny; past tense, naming the call this result answers.
-function answeredClause(toolName: string, f: FilledArgument): string {
+//        call RAN with it (`dispatch.ts` · `fillsThatRan`), the value the call had carried, if any, and
+//        whether declared sources are armed (the `turn` clause)
+// law: may omit, never deny; past tense, naming the call this result answers; the `turn` clause is a
+// permission ("may cite"), never an outcome — the claim is checked like any other.
+function answeredClause(toolName: string, f: FilledArgument, sources: boolean): string {
+  const before =
+    f.carried === undefined
+      ? 'the call had left it out'
+      : f.hidden
+      ? 'the call had carried a value of its own'
+      : `the call had carried ${printedValue(f.carried)}`;
+  // A hidden answer is on the record as 'REDACTED' — a `turn` claim for it cannot be checked
+  // (`checks.ts` · `checkTurn`: `uncheckable`), so its clause offers none.
   return f.hidden
     ? `\n\n[${f.argument} in the ${toolName} call this result answers was chosen by the person ` +
-        "when asked (the value is hidden by the tool's view; the call had left it out).]"
+        `when asked (the value is hidden by the tool's view; ${before}).]`
     : `\n\n[${f.argument} = ${printedValue(f.value)} in the ${toolName} call this result answers ` +
-        'was chosen by the person when asked (the call had left it out).]';
+        `was chosen by the person when asked (${before})${sources ? ANSWERED_SOURCE_CLAUSE : ''}.]`;
 }
 
 // ─── The refusals ───────────────────────────────────────────────────────

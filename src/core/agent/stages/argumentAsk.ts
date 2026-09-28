@@ -185,7 +185,16 @@ export function askBeforeDispatch(
   deps: ArgumentAskDeps,
 ): AskedBatch {
   const asks: CallAsk[] = [...resolutions.values()].flatMap((r) =>
-    r.ask !== undefined && r.ask.length > 0 ? [{ toolCallId: r.toolCallId, ask: r.ask }] : [],
+    r.ask !== undefined && r.ask.length > 0
+      ? [
+          {
+            toolCallId: r.toolCallId,
+            ask: r.ask,
+            // Declared sources: the person's words a reading was made of, for the field.
+            ...(r.quoted !== undefined && { quoted: r.quoted }),
+          },
+        ]
+      : [],
   );
   if (asks.length === 0) return { resolutions, answered: false };
   const iteration = scope.iteration as number;

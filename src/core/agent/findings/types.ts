@@ -31,6 +31,7 @@
 
 import type { Assertion } from '../../../integrity/assertion/types.js';
 import type { ArgumentRow } from '../arguments/rows.js';
+import type { DeclaredSource } from '../arguments/sources.js';
 import type { PeriodRow } from '../coverage/period.js';
 import type { GroundedRow, StepsUnfinishedRow } from '../assessment/witness.js';
 import type { CoverageItem } from '../coverage/types.js';
@@ -107,6 +108,14 @@ export interface FindingsDeclaration {
   /** What the result should show if the proposition holds — one line, optional. */
   readonly predicts?: string;
   readonly previous?: readonly PreviousStanding[];
+  /**
+   * Where each argument value of THIS call came from — read only under the
+   * inputs layer's declared sources (`.inputsLayer({ argumentSources: true })`
+   * or `.findings({ argumentSources: true })`, `arguments/sources.ts` ·
+   * `readSources`); ignored otherwise, as an unknown key always was. A claim
+   * the library checks, never evidence.
+   */
+  readonly from?: readonly DeclaredSource[];
 }
 
 /** Where a standing was declared: on a later tool call, or on the answer. */

@@ -7,7 +7,8 @@ Fold-feeding: `Agent.ts` · `readSkillOfferFor` and `Agent.ts` ·
 filters with. Trace: `cost.ts`. Support: `tools.ts`, `runInput.ts`,
 `conversation.ts`, `translator.ts`, `humanizeLLMError.ts`, `outputFallback.ts`,
 `toolShownArgs.ts` (a tool's own `redact` policy on the arguments an event
-may show).
+may show), `messageFrom.ts` (which runners read `AgentInput.messageFrom`, and
+the one input a composition hands them).
 Note: "Lens" in `runner.ts`, `RunnerBase.ts`, `Agent.ts`, `translator.ts` and
 `LLMCall.ts` means the VIEWER PRODUCT, not the wire-facing role.
 

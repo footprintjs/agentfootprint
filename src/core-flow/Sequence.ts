@@ -30,6 +30,7 @@ import { streamRecorder } from '../recorders/core/StreamRecorder.js';
 import { agentRecorder } from '../recorders/core/AgentRecorder.js';
 import { compositionRecorder } from '../recorders/core/CompositionRecorder.js';
 import { typedEmit } from '../recorders/core/typedEmit.js';
+import { composedInput, readsMessageFromIfAny } from '../core/messageFrom.js';
 
 export interface SequenceOptions {
   /** Human-friendly name for events + topology. Default: 'Sequence'. */
@@ -116,6 +117,12 @@ export class Sequence extends RunnerBase<SequenceInput, SequenceOutput> {
       throw new Error('Sequence: must have at least one .step()');
     }
     this.steps = steps;
+    // A Sequence holding a step that reads `messageFrom` reads it too, so a
+    // composed message handed to it reaches its first step (`core/messageFrom.ts`).
+    readsMessageFromIfAny(
+      this,
+      steps.map((s) => s.runner),
+    );
     // Eager chart construction — see `RunnerBase.initChart` JSDoc.
     this.initChart(() => this.buildChart());
   }
@@ -239,9 +246,18 @@ export class Sequence extends RunnerBase<SequenceInput, SequenceOutput> {
     // Mount each step as a subflow via addSubFlowChartNext. The step's
     // input comes from parent.current (mapped via mapFromPrev); the
     // step's return becomes parent.current (via outputMapper).
-    for (const step of steps) {
+    steps.forEach((step, index) => {
       builder = builder.addSubFlowChartNext(`step-${step.id}`, step.runner.getSpec(), step.id, {
-        inputMapper: (parent) => step.mapFromPrev((parent.current as string) ?? ''),
+        // A step after the first is handed an EARLIER STEP'S output — another
+        // runner's words, marked for a runner that reads the marker
+        // (`core/messageFrom.ts` · `composedInput`); every other runner gets
+        // the input it always did.
+        inputMapper: (parent) => {
+          const input = step.mapFromPrev((parent.current as string) ?? '');
+          return index === 0 && parent.messageFrom !== 'composed'
+            ? input
+            : composedInput(step.runner, input);
+        },
         // `sfOutput` is the subflow's TraversalResult — for Runner-backed
         // subflows whose last stage returns a string, sfOutput IS that
         // string. We pipe it into parent.current for the next step's
@@ -250,7 +266,7 @@ export class Sequence extends RunnerBase<SequenceInput, SequenceOutput> {
           current: typeof sfOutput === 'string' ? sfOutput : '',
         }),
       });
-    }
+    });
 
     // Final stage: emit composition.exit and return the current string
     // so executor.run() yields it as the TraversalResult.

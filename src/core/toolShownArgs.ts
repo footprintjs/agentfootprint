@@ -55,6 +55,19 @@ export function argsRedactedBy(policy: RedactionPolicy): ShownArgs {
 }
 
 /**
+ * Whether `tool` carries an arguments view — its author declared that some
+ * argument's value must not reach the record (`flowchartAsTool({ redact })`,
+ * `runbookAsTool({ redact })`, or the symbol set by hand).
+ */
+export function carriesArgumentView(tool: unknown): boolean {
+  return (
+    tool !== null &&
+    typeof tool === 'object' &&
+    typeof (tool as Partial<ShowsArgs>)[SHOWN_ARGS] === 'function'
+  );
+}
+
+/**
  * What an event may say `tool` was called with: its own view when it carries
  * one, else the arguments themselves (same reference). Never throws — a view
  * that fails hides everything rather than show what it could not judge.

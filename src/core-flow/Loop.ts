@@ -36,6 +36,7 @@ import { streamRecorder } from '../recorders/core/StreamRecorder.js';
 import { agentRecorder } from '../recorders/core/AgentRecorder.js';
 import { compositionRecorder } from '../recorders/core/CompositionRecorder.js';
 import { typedEmit } from '../recorders/core/typedEmit.js';
+import { composedInput, readsMessageFromIfAny } from '../core/messageFrom.js';
 
 export interface LoopOptions {
   readonly name?: string;
@@ -135,6 +136,8 @@ export class Loop extends RunnerBase<LoopInput, LoopOutput> {
     this.maxWallclockMs = config.maxWallclockMs;
     this.until = config.until;
     this.bodyTranslator = config.bodyTranslator;
+    // A Loop whose body reads `messageFrom` reads it too (`core/messageFrom.ts`).
+    readsMessageFromIfAny(this, [body]);
     // Eager chart construction — see `RunnerBase.initChart` JSDoc.
     this.initChart(() => this.buildChart());
   }
@@ -328,7 +331,17 @@ export class Loop extends RunnerBase<LoopInput, LoopOutput> {
     })
       .addFunction('IterationStart', iterationStart, 'iteration-start', 'Loop iteration marker')
       .addSubFlowChartNext('body', body.getSpec(), 'body', {
-        inputMapper: (parent) => ({ message: (parent.current as string) ?? '' }),
+        // After the first iteration the body is handed its OWN previous output —
+        // another run's words, marked for a runner that reads the marker
+        // (`core/messageFrom.ts` · `composedInput`); every other body gets the
+        // input it always did.
+        inputMapper: (parent) => {
+          const input = { message: (parent.current as string) ?? '' };
+          return ((parent.iteration as number | undefined) ?? 1) > 1 ||
+            parent.messageFrom === 'composed'
+            ? composedInput(body, input)
+            : input;
+        },
         // Body's string return becomes next iteration's input via `current`.
         outputMapper: (sfOutput) => ({
           current: typeof sfOutput === 'string' ? sfOutput : '',

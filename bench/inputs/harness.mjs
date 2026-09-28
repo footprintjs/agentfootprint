@@ -28,6 +28,8 @@ import {
   TOOLS,
   armDeclaration,
   personAnswer,
+  sourcesArmed,
+  sourcesDoor,
   toolSpec,
 } from './cases.mjs';
 
@@ -177,7 +179,7 @@ export function buildTools(doors, arm, execLog, turnRef) {
       throw new Error(
         `arm '${arm}': this build's defineTool dropped \`askOrAssume\` on ${spec.name} — the ` +
           `inputs layer is not in it (step ${
-            arm === 'assume' ? 3 : 4
+            arm === 'assume' ? 3 : arm === 'ask' ? 4 : 5
           }). Refusing to run the arm unarmed.`,
       );
     }
@@ -264,8 +266,12 @@ export function composeMockAnswer(messages, answer) {
  * The scripted model for one run: plays `variant` step by step, turn by turn, and records the
  * digest of every request it is served. A request past the end of the script answers
  * "(the mock script ran out)" and sets `state.exhausted` — the harness reports it.
+ *
+ * A scripted call's `from` (step 5, `cases.mjs` · `STEP5_CASES`) rides the call as
+ * `_findings: { from }` only when `sources` is on — the arm armed declared sources. Unarmed, the
+ * call carries exactly its `args`, so the `off` arm's bytes never see it.
  */
-export function scriptedMock(doors, variant, turnRef, requests, state) {
+export function scriptedMock(doors, variant, turnRef, requests, state, sources = false) {
   let callNo = 0;
   return doors.mock({
     respond: (req) => {
@@ -284,7 +290,10 @@ export function scriptedMock(doors, variant, turnRef, requests, state) {
         toolCalls: calls.map((c) => ({
           id: `t${turnRef.turn + 1}c${(callNo += 1)}`,
           name: c.call,
-          args: { ...c.args },
+          args:
+            sources && c.from !== undefined
+              ? { ...c.args, _findings: { from: c.from.map((e) => ({ ...e })) } }
+              : { ...c.args },
         })),
       };
     },
@@ -386,6 +395,9 @@ export function runKey(arm, caseId, rep) {
  * @param {string} opts.model       `'mock'`, or a model with a `PRICES` row
  * @param {object} [opts.sdkClient] the Anthropic SDK client (anthropic only)
  * @param {number} [opts.temperature] sent only when set; the registered runs send none
+ * @param {boolean} [opts.withoutSources] measurement only (`measureServed`): a sources arm's
+ *   tools WITHOUT `argumentSources` — for `full`, `.findings()` alone (the agent step 5 rides
+ *   on); for `full-b`, no door at all (the steps 3–4 agent: the same ruled tools, no sources)
  */
 export async function runCase(opts) {
   const { doors, caseDef, arm, rep, provider: kind, model } = opts;
@@ -398,13 +410,17 @@ export async function runCase(opts) {
 
   const tools = buildTools(doors, arm, execLog, turnRef);
   let provider;
-  if (kind === 'mock') provider = scriptedMock(doors, variant, turnRef, requests, mockState);
+  const sources = sourcesArmed(arm) && opts.withoutSources !== true;
+  const findingsOnly =
+    sourcesArmed(arm) && opts.withoutSources === true && sourcesDoor(arm) === 'findings';
+  if (kind === 'mock')
+    provider = scriptedMock(doors, variant, turnRef, requests, mockState, sources);
   else if (kind === 'anthropic') {
     if (opts.sdkClient === undefined) throw new Error('provider anthropic needs opts.sdkClient');
     provider = anthropicWire(doors, opts.sdkClient, turnRef, requests);
   } else throw new Error(`unknown provider '${kind}' — mock or anthropic`);
 
-  const agent = doors.Agent.create({
+  let builder = doors.Agent.create({
     provider,
     model,
     maxIterations: MAX_ITERATIONS,
@@ -412,8 +428,16 @@ export async function runCase(opts) {
     ...(opts.temperature !== undefined && { temperature: opts.temperature }),
   })
     .system(SYSTEM_PROMPT)
-    .tools(tools)
-    .build();
+    .tools(tools);
+  // Step 5: declared sources — the one builder door (`AgentBuilder.findings`). It needs the
+  // inputs layer, which the arm's ruled tools arm; the library refuses it at build otherwise.
+  // `full-b` (`RULE-step5b.md`) arms the same checks through the sources-only door, without the
+  // ledger's schema (`AgentBuilder.inputsLayer`).
+  if (sources && sourcesDoor(arm) === 'inputsLayer')
+    builder = builder.inputsLayer({ argumentSources: true });
+  else if (sources) builder = builder.findings({ argumentSources: true });
+  else if (findingsOnly) builder = builder.findings();
+  const agent = builder.build();
 
   const recorder = doors.recordRun(agent);
   const turns = [];
@@ -446,6 +470,15 @@ export async function runCase(opts) {
   const durationMs = Date.now() - started;
   const recording = JSON.parse(JSON.stringify(recorder.toRecording()));
   recorder.stop();
+  // A sources arm on a build that ignores the option would run as the `ask` arm — refused, on
+  // the record the library itself commits (`stages/seed.ts` writes `honestyLayers`).
+  if (sources && recording.snapshot?.sharedState?.honestyLayers?.argumentSources !== true) {
+    throw new Error(
+      `arm '${arm}': the run's record does not say declared sources were armed ` +
+        '(`honestyLayers.argumentSources`) — this build does not carry step 5. Refusing to ' +
+        'score the arm as armed.',
+    );
+  }
 
   let standing;
   try {
@@ -477,4 +510,116 @@ export async function runCase(opts) {
     durationMs,
     recording: reduceRecording(recording),
   };
+}
+
+// ── the served decoration (step 5's ceiling, measured at $0) ─────────────────
+
+/**
+ * Characters of the system prompt and the tool schemas per model request — the served
+ * decoration, which no model behaviour changes — on the scripted mock over `cases` (every
+ * variant once), for three agents: `off`; `findings`, the `full` arm's tools with `.findings()`
+ * and no declared sources (the agent step 5 rides on); and `full`. `RULE-step5.md` · S5-9 reads
+ * `full.perRequest ÷ findings.perRequest`: what `from` and its instruction line add. Messages are
+ * left out on purpose — they carry what the model wrote, which the paid run's tokens measure.
+ */
+export async function measureServed(doors, cases) {
+  return servedOf(doors, cases, [
+    ['off', 'off', false],
+    ['findings', 'full', true],
+    ['full', 'full', false],
+  ]);
+}
+
+/**
+ * `RULE-step5b.md` · S5-9 (re-based) and the registration's cost projection, on the scripted
+ * mock over `cases` ($0): `off`; `ruled`, the `full-b` arm's ruled tools with NO sources (the
+ * steps 3–4 agent); and `fullB`, the same tools through `.inputsLayer({ argumentSources: true })`.
+ * S5-9 reads `fullB.perRequest ÷ ruled.perRequest`. Each agent also carries the projection's
+ * inputs: whole-request tokens (system, tools and messages) and reply tokens (text and tool
+ * calls) at the mock provider's own chars ÷ 4, over every scripted run, and `usdPerRun` at
+ * Haiku 4.5's list prices (`PRICES`, no cache).
+ */
+export async function measureServedB(doors, cases) {
+  return servedOf(
+    doors,
+    cases,
+    [
+      ['off', 'off', false],
+      ['ruled', 'full-b', true],
+      ['fullB', 'full-b', false],
+    ],
+    { tokens: true },
+  );
+}
+
+async function servedOf(doors, cases, agents, { tokens: withTokens = false } = {}) {
+  const out = {};
+  for (const [name, arm, withoutSources] of agents) {
+    let requests = 0;
+    let system = 0;
+    let tools = 0;
+    let requestChars = 0;
+    let replyChars = 0;
+    let runs = 0;
+    const spy = {
+      ...doors,
+      mock: (o) =>
+        doors.mock({
+          ...o,
+          respond: (req) => {
+            requests += 1;
+            system += (req.systemPrompt ?? '').length;
+            const served = JSON.stringify(
+              (req.tools ?? []).map((t) => ({
+                name: t.name,
+                description: t.description,
+                inputSchema: t.inputSchema,
+              })),
+            );
+            tools += served.length;
+            const reply = o.respond(req);
+            if (withTokens) {
+              requestChars +=
+                (req.systemPrompt ?? '').length +
+                served.length +
+                JSON.stringify(req.messages).length;
+              replyChars +=
+                (reply.content ?? '').length + JSON.stringify(reply.toolCalls ?? []).length;
+            }
+            return reply;
+          },
+        }),
+    };
+    for (const caseDef of cases)
+      for (let rep = 0; rep < caseDef.mock.length; rep += 1) {
+        runs += 1;
+        await runCase({
+          doors: spy,
+          caseDef,
+          arm,
+          rep,
+          provider: 'mock',
+          model: 'mock',
+          withoutSources,
+        });
+      }
+    out[name] = {
+      requests,
+      systemPerRequest: system / requests,
+      toolsPerRequest: tools / requests,
+      perRequest: (system + tools) / requests,
+    };
+    if (withTokens) {
+      const p = PRICES['claude-haiku-4-5-20251001'];
+      const input = requestChars / 4;
+      const output = replyChars / 4;
+      out[name].projection = {
+        runs,
+        inputTokensPerRun: input / runs,
+        outputTokensPerRun: output / runs,
+        usdPerRun: (input * p.input + output * p.output) / 1e6 / runs,
+      };
+    }
+  }
+  return out;
 }

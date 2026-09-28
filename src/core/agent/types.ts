@@ -255,10 +255,21 @@ export interface AgentOptions {
    * call and Route even when no REGISTERED tool declares `askOrAssume`. A
    * registered ruled tool arms the layer by itself; this option is for ruled
    * tools a `ToolProvider` serves, which the build cannot see — without it,
-   * their calls are refused rather than run unruled (fail closed). Prefer the
-   * builder's `.inputsLayer()`. Absent → the chart is byte-identical.
+   * their calls are refused rather than run unruled (fail closed).
+   *
+   * `{ argumentSources: true }` also arms DECLARED SOURCES without the
+   * findings ledger: each ruled tool's served schema carries the reserved
+   * `_findings` argument with `from` alone (where each argument value came
+   * from — the person's words as a `quote`, a result's `id`, an earlier
+   * answer, the app, or `'assumed'`), the layer checks each claim before the
+   * batch runs, and under an `ask` rule a value the checks do not trace is
+   * asked of the person — the same checks and rows as
+   * `findings({ argumentSources: true })`, without the ledger's schema on
+   * every tool. Any other value is refused at construction.
+   *
+   * Prefer the builder's `.inputsLayer()`. Absent → the chart is byte-identical.
    */
-  readonly inputsLayer?: boolean;
+  readonly inputsLayer?: boolean | { readonly argumentSources?: boolean };
   /**
    * THE RESULTS LAYER (honesty layer 3) — mount `sf-results` at the loop head
    * even when no REGISTERED tool declares a `ToolPeriod`. A registered tool
@@ -373,6 +384,20 @@ export interface AgentOptions {
     /** A calibrated classifier judging every tool result as a second source
      *  (`JudgmentRow`), never served in the model's place. Default none. */
     readonly judge?: Classifier;
+    /**
+     * DECLARED SOURCES (honesty layer 2) — the model says where each argument
+     * value of a ruled call came from, in `_findings.from` (the person's words
+     * as a `quote`, a result's `id`, an earlier answer, the app, or
+     * `'assumed'`), and the library CHECKS each claim before the batch runs
+     * (`arguments/checks.ts` · `checkSource`) and files the verdict on the
+     * call's argument rows. Under an `ask` rule, a present value the checks do
+     * not trace to a source is asked of the person. Requires the inputs layer
+     * (a registered tool that declares `askOrAssume`, or `.inputsLayer()`) —
+     * refused at build without it. Without the ledger:
+     * `inputsLayer: { argumentSources: true }`. Default off: no `from`
+     * property, no check, byte-identical.
+     */
+    readonly argumentSources?: boolean;
   };
   /**
    * Tool choice by classifier (9.105.0) — a SECOND READING of which tool
@@ -1274,6 +1299,22 @@ export interface AgentInput {
    * ```
    */
   readonly continueFrom?: AgentRunCheckpoint;
+
+  /**
+   * WHO WROTE `message`. Omitted (the default): a person — as every run has
+   * always been read. `'composed'`: another runner's output, handed on by a
+   * composition — `Sequence` and `Loop` pass it themselves for a step whose
+   * message is an earlier step's output, and code that composes runners by
+   * hand passes it the same way.
+   *
+   * Read only by the inputs layer's declared sources
+   * (`.inputsLayer({ argumentSources: true })` or `.findings({ argumentSources:
+   * true })`): a quote the model says came from
+   * the person, found only in a composed message, is filed as another model's
+   * words (`failed: 'composed-message'`) and never counts as "the person said
+   * it". Every other agent ignores it and records nothing.
+   */
+  readonly messageFrom?: 'person' | 'composed';
 }
 
 export type AgentOutput = string;
@@ -2069,6 +2110,18 @@ export interface AgentState {
    * them — never a row, an event or a lens view.
    */
   argumentAnswersKept?: readonly import('./arguments/kept.js').KeptAnswer[];
+  /**
+   * WHO WROTE `userMessage`, when it was not a person — `'composed'`: another
+   * runner's output handed on by a composition (`Sequence`, `Loop`, or your
+   * own code, through `AgentInput.messageFrom`). A run constant written once
+   * by seed, and ONLY on an agent whose declared sources are armed
+   * (`.inputsLayer({ argumentSources: true })` or `.findings({ argumentSources:
+   * true })`), its one reader: a quote found
+   * only in this run's own message is another model's words, never the
+   * person's (`failed: 'composed-message'`). Absent on every other run.
+   * (Its own key: the run input's `messageFrom` is read-only in scope.)
+   */
+  userMessageFrom?: 'composed';
 
   // ── Tool choice by classifier (`.toolChoice()`) ───────────────
   /**

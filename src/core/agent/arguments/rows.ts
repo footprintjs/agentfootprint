@@ -32,16 +32,16 @@ export type ArgumentSource = 'said' | 'answered' | 'result' | 'app' | 'default' 
 
 /**
  * Why the library asked: the call left the value out (`missing`); the value
- * was present and not traced to the person (`unverified` — the declared-sources
- * step files these); the person's answer did not fit the property's own schema
- * and the field was asked again (`invalid-answer`).
+ * was present and its declared source did not trace it (`unverified` — under
+ * declared sources, on an `ask` rule); the person's answer did not fit the
+ * property's own schema and the field was asked again (`invalid-answer`).
  */
 export type ArgumentAsked = 'missing' | 'unverified' | 'invalid-answer';
 
-/** What the model claimed about a value's source (`_findings.from`, step 5). */
+/** What the model claimed about a value's source (`_findings.from`; `'none'`: it declared nothing). */
 export type ArgumentClaim = 'user' | 'result' | 'turn' | 'app' | 'assumed' | 'none';
 
-/** Which declared-source check failed (step 5). */
+/** Which declared-source check failed — the claim is filed as written, never repaired. */
 export type ArgumentCheckFailed =
   | 'quote-not-found'
   | 'composed-message'
@@ -58,16 +58,24 @@ export type ArgumentCheckFailed =
  * The inputs layer's verdict on ONE ruled argument of ONE tool call — a row on
  * `AgentState.findingsLedger` (`kind: 'argument'`).
  *
- * This version files `source: 'default'` (the library filled the declared
- * default, or the model sent that same value itself — `proposed` says which),
- * `source: 'model'` (the model sent another value, and the record does not
- * show where it came from), `asked` with no source (the call left an `ask`
- * argument out and the person was asked — `missing` — or asked again after an
- * answer that did not fit — `invalid-answer`), and `source: 'answered'` (the
- * person's answer filled the value; `free` when it came through a free-text
- * field). The other members of each union are the layer's vocabulary for its
- * later steps — the declared sources (`said`, `result`, `app`, `claimed`,
- * `failed`, …); a reader skips what it does not know.
+ * Filed: `source: 'default'` (the library filled the declared default, or the
+ * model sent that same value itself — `proposed` says which), `source:
+ * 'model'` (the model sent another value, and the record does not trace it),
+ * `asked` with no source (the call left an `ask` argument out and the person
+ * was asked — `missing` — or asked again after an answer that did not fit —
+ * `invalid-answer`), and `source: 'answered'` (the person's answer filled the
+ * value; `free` when it came through a free-text field).
+ *
+ * Under declared sources (`.inputsLayer({ argumentSources: true })` or
+ * `.findings({ argumentSources: true })`) a present
+ * value's row also carries the model's claim and the library's check of it
+ * (`sourcedRowOf`): `claimed` (`'none'` when it declared nothing), `source`
+ * `said` / `result` / `app` / `answered` when the check traced it (`matched`,
+ * `reading`, `earlier`, `result`, `setAside`, `argumentsFrom`, `appSource`),
+ * `failed` when it did not, `coincides` for the library's own lookup (a hint,
+ * never a source), and `asked: 'unverified'` with the model's value as
+ * `proposed` when an `ask` rule asks about it. A FREE argument a `from` entry
+ * named is filed with no `rule`. A reader skips a member it does not know.
  */
 export interface ArgumentRow {
   readonly kind: 'argument';
@@ -99,6 +107,12 @@ export interface ArgumentRow {
   readonly proposed?: string;
   readonly claimed?: ArgumentClaim;
   readonly matched?: 'quote' | 'phrase' | 'spelling';
+  /**
+   * The model's `quote`, clipped (`QUOTE_CHARS`) — `'REDACTED'` on an agent
+   * where ANY tool in reach can hide arguments (it registers a tool that
+   * carries an argument view, or wires a ToolProvider — whatever it lists): a
+   * quote is free text, and may hold any value a tool hides, in any spelling.
+   */
   readonly quote?: string;
   readonly reading?: true;
   readonly earlier?: true;
@@ -269,6 +283,100 @@ export function argumentRowOf(
     value: shownValue(verdict.shownValue),
     ...(verdict.source === 'default' &&
       verdict.shownProposed !== undefined && { proposed: shownValue(verdict.shownProposed) }),
+  };
+}
+
+// ─── The declared sources' rows ─────────────────────────────────────────
+
+/**
+ * A quote's bound on a row — the bound a basis row's one-line texts carry
+ * (`findings/types.ts` · `PROPOSITION_CHARS`, which this leaf cannot import),
+ * the cut STATED in the text (`…[clipped N chars]`).
+ */
+export const QUOTE_CHARS = 240;
+
+/** A quote as a row holds it: at most `QUOTE_CHARS`, the cut stated. */
+export function shownQuote(quote: string): string {
+  if (quote.length <= QUOTE_CHARS) return quote;
+  return `${quote.slice(0, QUOTE_CHARS)} …[clipped ${quote.length - QUOTE_CHARS} chars]`;
+}
+
+/**
+ * The declared-sources check's verdict on one argument of one call, as the
+ * row builder is handed it — enums, flags, ids and labels. The value, the
+ * model's proposal and the quote arrive ALREADY in the tool's own argument
+ * view (`shownValue`, `shownProposed`: `'REDACTED'` where the view hides the
+ * argument; `shownQuoteText`: `'REDACTED'` while any tool in reach can hide
+ * arguments — a quote is free text and may hold any hidden value), so a raw
+ * value never reaches a row.
+ */
+export interface SourcedVerdict {
+  readonly toolCallId: string;
+  readonly toolName: string;
+  readonly argument: string;
+  /** Absent on a free argument a `from` entry named. */
+  readonly rule?: 'ask' | 'assume';
+  readonly period?: true;
+  /** Absent exactly when the person is asked (`asked: 'unverified'`). */
+  readonly source?: ArgumentSource;
+  readonly asked?: 'unverified';
+  /** The value the call runs with, in the shown view — absent on an asked row. */
+  readonly shownValue?: unknown;
+  /** The model's own value, in the shown view — on a `default` row (V1) and an asked row. */
+  readonly shownProposed?: unknown;
+  readonly claimed: ArgumentClaim;
+  readonly matched?: 'quote' | 'phrase' | 'spelling';
+  /** The model's quote — `'REDACTED'` while any tool in reach can hide arguments (`resolve.ts` · `quotesMayShow`). */
+  readonly shownQuoteText?: string;
+  readonly reading?: true;
+  readonly earlier?: true;
+  readonly result?: string;
+  readonly setAside?: 'open' | 'noise' | 'ruled-out';
+  readonly argumentsFrom?: 'listed' | 'unlisted';
+  readonly appSource?: string;
+  readonly coincides?: 'person' | 'result' | 'app';
+  readonly malformed?: number;
+  readonly failed?: ArgumentCheckFailed;
+}
+
+/**
+ * The row for one argument the declared-sources check judged (honesty layer
+ * 2, declared sources): the identity, the verdict's
+ * source (or `asked: 'unverified'` — the person is asked, and nothing runs on
+ * the model's value), the value in the tool's own view, and every field of the
+ * claim and the check as the verdict carries it. Written in the one field order
+ * `ArgumentRow` declares.
+ */
+export function sourcedRowOf(
+  verdict: SourcedVerdict,
+  stamp: { readonly turn: number; readonly iteration: number },
+): ArgumentRow {
+  return {
+    kind: 'argument',
+    turn: stamp.turn,
+    toolCallId: verdict.toolCallId,
+    toolName: verdict.toolName,
+    iteration: stamp.iteration,
+    argument: verdict.argument,
+    ...(verdict.rule !== undefined && { rule: verdict.rule }),
+    ...(verdict.period === true && { period: true as const }),
+    ...(verdict.source !== undefined && { source: verdict.source }),
+    ...(verdict.asked !== undefined && { asked: verdict.asked }),
+    ...(verdict.shownValue !== undefined && { value: shownValue(verdict.shownValue) }),
+    ...(verdict.shownProposed !== undefined && { proposed: shownValue(verdict.shownProposed) }),
+    claimed: verdict.claimed,
+    ...(verdict.matched !== undefined && { matched: verdict.matched }),
+    ...(verdict.shownQuoteText !== undefined && { quote: shownQuote(verdict.shownQuoteText) }),
+    ...(verdict.reading === true && { reading: true as const }),
+    ...(verdict.earlier === true && { earlier: true as const }),
+    ...(verdict.result !== undefined && { result: verdict.result }),
+    ...(verdict.setAside !== undefined && { setAside: verdict.setAside }),
+    ...(verdict.argumentsFrom !== undefined && { argumentsFrom: verdict.argumentsFrom }),
+    ...(verdict.appSource !== undefined && { appSource: clipValue(verdict.appSource) }),
+    ...(verdict.coincides !== undefined && { coincides: verdict.coincides }),
+    ...(verdict.malformed !== undefined &&
+      verdict.malformed > 0 && { malformed: verdict.malformed }),
+    ...(verdict.failed !== undefined && { failed: verdict.failed }),
   };
 }
 

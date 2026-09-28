@@ -66,9 +66,12 @@ the emission, hashed by the receipt like any other argument.
   the pause and halt carriers — is the peeled form.
 - **A tool that owns the name keeps it.** `ownsReservedArgument` is the one
   predicate: a registry schema declaring `_findings` is refused at build
-  (armed only); a provider or MCP schema declaring it is served undecorated,
-  and a call to that tool is not peeled — the value is the author's
-  argument, and it files no row.
+  (armed only — under `.findings()` every registry tool, under declared
+  sources every RULED one, whichever door armed them:
+  `buildToolRegistry.ts` · `assertReservedArgument`); a provider or MCP
+  schema declaring it is served undecorated, no sentence it is served names
+  `_findings.from`, and a call to that tool is not peeled — the value is the
+  author's argument, and it files no row.
 - **Served from the record, never rewritten into it.** The answer turn reads
   a piece composed from the folded ledger and a ticket where a judged
   noise or ruled-out result stood, on the wire only; `history` keeps every
@@ -1011,6 +1014,38 @@ both moments on both chart shapes; the row and the section carrying
 `test/core/agent/findings/unsettled-batch-settlement.test.ts`. The 21
 byte-identity references under `test/core/tools/reference/` are unchanged.
 
+## Where each argument value came from — `_findings.from` (honesty layer 2, step 5)
+
+Under `.findings({ argumentSources: true })` (the inputs layer's declared sources) the
+reserved argument carries one more part, on the calls of a RULED tool:
+
+```json
+"_findings": { "basis": "direct",
+  "from": [{ "argument": "window", "source": "user", "quote": "over the last week" }] }
+```
+
+- **Served** only there: `withFindingsArgument(schema, offer, { from: true })` plants
+  `FINDINGS_FROM_PROPERTY` FIRST and adds it to the property's `required` (`['basis',
+  'from']`), on a tool that carries argument rules (`arguments/declare.ts` · `carriesRules`);
+  every other tool keeps the base by reference. `from` is explained ONCE, in its own property
+  (its sources, a quote copied exactly, and what the record keeps) — the instruction gains no
+  line: the first cut served a second explanation in the system prompt and paid for it twice.
+- **Without this ledger** (`.inputsLayer({ argumentSources: true })`, no `.findings()`) the
+  same `from` is planted alone: `withSourcesArgument` plants `FINDINGS_SOURCES_SCHEMA` (the
+  versioned marker as its description, `from` required) on ruled tools only, so every other
+  tool — and the system prompt — is served as on a plain agent. `withoutFindingsArgument`
+  recognises it by the marker like every decoration, and `carriesFindingsDecoration` answers
+  for a served schema whether the model's `_findings` on it is a declaration: the choice seam
+  peels exactly those calls when only ruled tools carry it.
+- **Read** by the one reader, `readDeclaration(raw, { argumentSources: true }, args)`, through
+  `arguments/sources.ts` · `readSources`: a `from`-only declaration is readable, a malformed
+  entry is dropped and counted (`sourcesMalformed`, and into `malformed`), judged against the
+  call's own arguments. ToolCalls' peel reads it the same way (`splitFindings(args, arms)`), so
+  a basis row counts the dropped entries; unarmed, `from` is ignored as any unknown key is.
+- **Checked and filed** by the inputs layer (`arguments/checks.ts` · `checkSource`, its rows
+  `kind: 'argument'` on this ledger) — never by this folder: a declaration is a claim, and the
+  record keeps the library's verdict beside it.
+
 ## Files
 
 - `types.ts` — `RESERVED_ARGUMENT`, the vocabularies, `PROPOSITION_CHARS`,
@@ -1033,7 +1068,8 @@ byte-identity references under `test/core/tools/reference/` are unchanged.
 - `reserved.ts` — `FINDINGS_ARGUMENT_SCHEMA`, `FINDINGS_OFFER_CAP`,
   `withFindingsArgument`, `withoutFindingsArgument`, `splitFindings`,
   `FINDINGS_INSTRUCTION`, `FINDINGS_CONTINGENT_LINE` /
-  `findingsInstructionFor`, `FINDINGS_ANSWER_ASK`.
+  `findingsInstructionFor`, `FINDINGS_ANSWER_ASK`; declared sources' `FINDINGS_FROM_PROPERTY`,
+  `FINDINGS_SOURCES_SCHEMA` / `withSourcesArgument` and `carriesFindingsDecoration`.
 - `peel.ts` — `peelAnswerFindings`, plus `answerText.ts`'s
   `reservedMemberFilter` / `withoutReservedMembers` re-exported: the ONE
   module that statically imports the scanner, loaded through `import()` by

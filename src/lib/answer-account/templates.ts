@@ -42,7 +42,7 @@ export interface AccountTemplate {
 }
 
 /** Bumped whenever any template's words change (a pinned digest enforces it). */
-export const ANSWER_ACCOUNT_TEMPLATE_SET_VERSION = 6;
+export const ANSWER_ACCOUNT_TEMPLATE_SET_VERSION = 7;
 
 const t = (text: string, voucher: TemplateVoucher = 'library', version = 1): AccountTemplate =>
   Object.freeze({ version, text, voucher });
@@ -283,6 +283,10 @@ export const ANSWER_ACCOUNT_TEMPLATES = Object.freeze({
   'howSure.check.argumentRules': t(
     "Argument rules: {{ran}} of {{count:of,'ruled argument','ruled arguments'}} had a verdict on the record.",
   ),
+  // The inputs layer's declared sources (honesty layer 2, step 5) — set 7.
+  'howSure.check.argumentSources': t(
+    "Argument sources: {{ran}} of {{count:of,'value','values'}} had a source verdict on the record.",
+  ),
   // The results layer (honesty layer 3, step 7b) — set 6.
   'howSure.check.resultPeriod': t(
     "Result periods: {{ran}} of {{count:of,'call','calls'}} had a period verdict on the record.",
@@ -295,8 +299,17 @@ export const ANSWER_ACCOUNT_TEMPLATES = Object.freeze({
   'howSure.reason.argumentAssumed': t(
     "{{count:n,'value a call ran with was','values the calls ran with were'}} assumed: set by a tool's rule or a rewrite, not given in the conversation.",
   ),
+  // Set 7: a failed declared-source check fires this reason on ANY argument, so "ruled" went.
   'howSure.reason.argumentUnverified': t(
-    "{{count:n,'ruled value came','ruled values came'}} from the model, with no source on the record: not the conversation, a result or the app.",
+    "{{count:n,'value came','values came'}} from the model, with no source on the record: not the conversation, a result or the app.",
+    'library',
+    2,
+  ),
+  'howSure.reason.argumentRead': t(
+    "{{count:n,'value a call ran with was','values the calls ran with were'}} read into the conversation: the quoted words are on the record, the value itself is not in them.",
+  ),
+  'howSure.reason.valueContingent': t(
+    "{{count:n,'value was','values were'}} taken from a result the model itself had set aside.",
   ),
   'howSure.reason.coverageGap': t(
     "{{count:n,'call declared ground it did not check or can never cover','calls declared ground they did not check or can never cover'}}.",

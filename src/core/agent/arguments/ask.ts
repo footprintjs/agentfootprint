@@ -26,6 +26,11 @@
  *   joined `tool.argument` string, which two pairs could spell alike (the
  *   injective-key law). The (tool, argument, calls) behind each id rides the
  *   declaration's `context` under the library's reserved key.
+ * - **A value the model READ into the person's words** (declared sources: the
+ *   quote was found in the person's messages, the value is not in it) is asked
+ *   too, and its field's `context` entry carries those words as `quoted` —
+ *   the person's own words, never the model's value, and never while a tool
+ *   in reach can hide arguments (`resolve.ts` · `quotesMayShow`).
  * - **A fixed library question.** Each author's question is its field's
  *   `description`; joined questions could break the 4096-character bound at
  *   pause time although each passed it at definition.
@@ -58,15 +63,16 @@ import {
 import { shownArgsOf } from '../../toolShownArgs.js';
 import { validatePropertyValue } from '../toolArgsValidation.js';
 import {
+  convertSpelling,
   isRefused,
-  parsesUnderSpelling,
   rulesOf,
   type PeriodSpelling,
   type RuledArgument,
 } from './declare.js';
 import { ARGUMENT_ASK_KIND, ASK_CONTEXT_KEY, isArgumentAskContext } from './askMarker.js';
 import type { ArgumentFill, BatchCall, ToolOf } from './resolve.js';
-import { HIDDEN_VALUE, answeredRowOf, askedRowOf, type ArgumentRow } from './rows.js';
+import { isMissing } from './declare.js';
+import { HIDDEN_VALUE, answeredRowOf, askedRowOf, shownQuote, type ArgumentRow } from './rows.js';
 
 // The reserved key and its kind have ONE owner (`askMarker.ts`), which a
 // reader on every agent's graph can load without loading this module.
@@ -107,8 +113,14 @@ export interface AskMember {
   readonly period?: true;
   /** The member's declared spelling, when its field is a shared period. */
   readonly spelling?: PeriodSpelling;
-  /** Every call of the batch that left this argument out, in batch order. */
+  /** Every call of the batch that needs this argument asked, in batch order. */
   readonly toolCallIds: readonly string[];
+  /**
+   * Under declared sources: the person's own words a READING was made of
+   * (the first call's that carried one) — shown with the field, never the
+   * model's value.
+   */
+  readonly quoted?: string;
 }
 
 /** One field of the batch's ask. */
@@ -167,6 +179,8 @@ export interface ArgumentAskState {
 export interface CallAsk {
   readonly toolCallId: string;
   readonly ask: readonly string[];
+  /** Under declared sources: the person's words a reading was made of, per argument. */
+  readonly quoted?: readonly { readonly argument: string; readonly quote: string }[];
 }
 
 const RULED_ASK_TYPES: Readonly<Record<RuledArgument['type'], InputField['type']>> = {
@@ -190,24 +204,10 @@ function askRuleOf(
   return { rule, ...(spelling !== undefined && { spelling }) };
 }
 
-/**
- * Convert a period value between the two spellings the library converts —
- * `lookback` ↔ `signed-lookback`, by adding or removing the leading minus.
- * Nothing is ever turned into a duration; an `iso-range` is never converted.
- * `undefined` when the value does not parse under `from`.
- */
-export function convertSpelling(
-  value: InputValue,
-  from: PeriodSpelling,
-  to: PeriodSpelling,
-): InputValue | undefined {
-  if (!parsesUnderSpelling(value, from)) return undefined;
-  if (from === to) return value;
-  const text = value as string;
-  if (from === 'lookback' && to === 'signed-lookback') return `-${text}`;
-  if (from === 'signed-lookback' && to === 'lookback') return text.slice(1);
-  return undefined;
-}
+// The one conversion between declared period spellings lives beside the
+// spellings themselves (`declare.ts` · `convertSpelling`); re-exported here,
+// where the batch ask's readers have always found it.
+export { convertSpelling };
 
 const CONVERTIBLE: readonly PeriodSpelling[] = ['lookback', 'signed-lookback'];
 
@@ -236,8 +236,10 @@ export function periodsShareField(a: AskField, b: AskField): boolean {
 /** A field being gathered: its shape, its one member, the calls that need it. */
 interface PendingField {
   readonly field: Omit<AskField, 'members'>;
-  readonly member: Omit<AskMember, 'toolCallIds'>;
+  readonly member: Omit<AskMember, 'toolCallIds' | 'quoted'>;
   readonly ids: string[];
+  /** The first reading's words among the calls that need it. */
+  quoted?: string;
 }
 
 function pendingFieldOf(
@@ -297,20 +299,32 @@ export function planAskFields(
     const forTool = byTool.get(toolName) ?? new Map<string, PendingField>();
     byTool.set(toolName, forTool);
     for (const argument of entry.ask) {
+      const quote = entry.quoted?.find((q) => q.argument === argument)?.quote;
       const seen = forTool.get(argument);
       if (seen !== undefined) {
         if (!seen.ids.includes(entry.toolCallId)) seen.ids.push(entry.toolCallId);
+        if (seen.quoted === undefined && quote !== undefined) seen.quoted = quote;
         continue;
       }
       const read = askRuleOf(toolOf, toolName, argument);
       if (read === undefined) continue;
       const pending = pendingFieldOf(toolName, argument, read, entry.toolCallId);
+      if (quote !== undefined) pending.quoted = quote;
       forTool.set(argument, pending);
       order.push(pending);
     }
   }
   return mergeSharedPeriods(
-    order.map((p) => ({ ...p.field, members: [{ ...p.member, toolCallIds: [...p.ids] }] })),
+    order.map((p) => ({
+      ...p.field,
+      members: [
+        {
+          ...p.member,
+          toolCallIds: [...p.ids],
+          ...(p.quoted !== undefined && { quoted: p.quoted }),
+        },
+      ],
+    })),
   );
 }
 
@@ -384,6 +398,8 @@ interface ContextField {
   readonly argument: string;
   readonly calls: readonly string[];
   readonly moreCalls?: number;
+  /** The person's own words a reading was made of (declared sources) — never the model's value. */
+  readonly quoted?: string;
   readonly sharedWith?: readonly {
     readonly tool: string;
     readonly argument: string;
@@ -395,12 +411,14 @@ function contextFieldOf(id: string, field: AskField, callLimit: number): Context
   const [first, ...rest] = field.members;
   const calls = first.toolCallIds.slice(0, callLimit);
   const more = first.toolCallIds.length - calls.length;
+  const quoted = field.members.find((m) => m.quoted !== undefined)?.quoted;
   return {
     id,
     tool: first.toolName,
     argument: first.argument,
     calls,
     ...(more > 0 && { moreCalls: more }),
+    ...(quoted !== undefined && { quoted: shownQuote(quoted) }),
     ...(rest.length > 0 && {
       sharedWith: rest.map((m) => ({
         tool: m.toolName,
@@ -693,6 +711,14 @@ function answeredRows(
         tool === undefined
           ? HIDDEN_VALUE
           : shownArgsOf(tool, { ...call.args, [m.argument]: value })[m.argument];
+      // A value the call CARRIED and the answer replaced (declared sources: an untraced value is
+      // asked about) — the model's own, in the same view. Absent when the call left it out.
+      const carried = !isMissing(call.args, m.argument);
+      const shownProposed = !carried
+        ? undefined
+        : tool === undefined
+        ? HIDDEN_VALUE
+        : shownArgsOf(tool, call.args)[m.argument];
       return [
         answeredRowOf(
           {
@@ -702,6 +728,7 @@ function answeredRows(
             rule: 'ask',
             ...(m.period === true && { period: true as const }),
             shownValue,
+            ...(shownProposed !== undefined && { shownProposed }),
             ...(free && { free: true as const }),
           },
           stamp,

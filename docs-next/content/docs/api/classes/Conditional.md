@@ -4,7 +4,7 @@ title: Conditional
 
 # Class: Conditional
 
-Defined in: [src/core-flow/Conditional.ts:95](https://github.com/footprintjs/agentfootprint/blob/main/src/core-flow/Conditional.ts#L95)
+Defined in: [src/core-flow/Conditional.ts:96](https://github.com/footprintjs/agentfootprint/blob/main/src/core-flow/Conditional.ts#L96)
 
 Every primitive (LLMCall, Agent), every composition (Sequence, Parallel,
 Conditional, Loop), and every pattern factory result implements Runner.
@@ -21,7 +21,7 @@ composition.
 
 > **new Conditional**(`opts`, `branches`, `fallbackId`): `Conditional`
 
-Defined in: [src/core-flow/Conditional.ts:108](https://github.com/footprintjs/agentfootprint/blob/main/src/core-flow/Conditional.ts#L108)
+Defined in: [src/core-flow/Conditional.ts:109](https://github.com/footprintjs/agentfootprint/blob/main/src/core-flow/Conditional.ts#L109)
 
 #### Parameters
 
@@ -68,7 +68,7 @@ instead of N `.on()` subscriptions.
 
 > `readonly` **id**: `string`
 
-Defined in: [src/core-flow/Conditional.ts:97](https://github.com/footprintjs/agentfootprint/blob/main/src/core-flow/Conditional.ts#L97)
+Defined in: [src/core-flow/Conditional.ts:98](https://github.com/footprintjs/agentfootprint/blob/main/src/core-flow/Conditional.ts#L98)
 
 ***
 
@@ -76,7 +76,7 @@ Defined in: [src/core-flow/Conditional.ts:97](https://github.com/footprintjs/age
 
 > `readonly` **name**: `string`
 
-Defined in: [src/core-flow/Conditional.ts:96](https://github.com/footprintjs/agentfootprint/blob/main/src/core-flow/Conditional.ts#L96)
+Defined in: [src/core-flow/Conditional.ts:97](https://github.com/footprintjs/agentfootprint/blob/main/src/core-flow/Conditional.ts#L97)
 
 ## Methods
 
@@ -197,7 +197,7 @@ host.onSessionEnd(async (sessionId) => {
 
 > `static` **create**(`opts?`): [`ConditionalBuilder`](/docs/api/classes/ConditionalBuilder)
 
-Defined in: [src/core-flow/Conditional.ts:122](https://github.com/footprintjs/agentfootprint/blob/main/src/core-flow/Conditional.ts#L122)
+Defined in: [src/core-flow/Conditional.ts:128](https://github.com/footprintjs/agentfootprint/blob/main/src/core-flow/Conditional.ts#L128)
 
 #### Parameters
 
@@ -701,7 +701,7 @@ calling if you still want them. Does NOT touch attached recorders
 
 > **resume**(`checkpoint`, `input?`, `options?`): `Promise`\<`string` \| [`RunnerPauseOutcome`](/docs/api/interfaces/RunnerPauseOutcome)\>
 
-Defined in: [src/core-flow/Conditional.ts:169](https://github.com/footprintjs/agentfootprint/blob/main/src/core-flow/Conditional.ts#L169)
+Defined in: [src/core-flow/Conditional.ts:175](https://github.com/footprintjs/agentfootprint/blob/main/src/core-flow/Conditional.ts#L175)
 
 Resume a paused run from its checkpoint. Default behavior: rebuild the
 chart, wire the same core recorders + consumer recorders, call
@@ -736,7 +736,7 @@ returning. Subclass overrides only if it needs specialized behavior.
 
 > **run**(`input`, `options?`): `Promise`\<`string` \| [`RunnerPauseOutcome`](/docs/api/interfaces/RunnerPauseOutcome)\>
 
-Defined in: [src/core-flow/Conditional.ts:155](https://github.com/footprintjs/agentfootprint/blob/main/src/core-flow/Conditional.ts#L155)
+Defined in: [src/core-flow/Conditional.ts:161](https://github.com/footprintjs/agentfootprint/blob/main/src/core-flow/Conditional.ts#L161)
 
 Execute the runner. Subclass may override for specialized input
 mapping, but default invokes getSpec() + FlowChartExecutor.

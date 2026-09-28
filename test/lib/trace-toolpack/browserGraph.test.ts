@@ -192,6 +192,25 @@ describe.skipIf(!built)('the default browser graph of the root entry', () => {
     }
   });
 
+  it('LAW: the declared-sources checks and their corpora are off the root sync closure — only the reader stays', async () => {
+    // Under `.findings({ argumentSources: true })` the layer's VERIFY stage runs
+    // the checks (`arguments/checks.ts`, reached through `resolve.ts`) over the
+    // corpora the mount builds on first use (`honesty/sourceCorpus.ts`). The
+    // reader of `from` stays static: the one reader of `_findings`
+    // (`findings/reserved.ts` · `readDeclaration`) is synchronous and on every
+    // armed agent's graph (`arguments/README.md`, "What a plain agent carries").
+    const graph = await splitGraph(resolve(DIST, 'index.js'));
+    expect(graph.syncInputs.has('dist/esm/core/agent/arguments/sources.js')).toBe(true);
+    for (const lazy of [
+      'dist/esm/core/agent/arguments/checks.js',
+      'dist/esm/core/agent/evidence/resultCarries.js',
+      'dist/esm/core/agent/honesty/sourceCorpus.js',
+    ]) {
+      expect(graph.syncInputs.has(lazy), lazy).toBe(false);
+      expect(graph.dynamicInputs.has(lazy), lazy).toBe(true);
+    }
+  });
+
   it('LAW: the answer layer’s run-time half is off the root sync closure — the mount loads it on the first armed answer', async () => {
     // Only an agent with `.answerLayer()` starts its final branch with the
     // layer's stage; its body, the fold it runs and the line's composer are

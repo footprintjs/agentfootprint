@@ -21,10 +21,21 @@
  * no tool call, a run out of iterations, a halting cost budget — the batch is
  * going to the final branch, so nothing is planned and every later stage finds
  * an empty plan. The layer never files a row about a call Route will not run.
+ *
+ * ## Declared sources (`.inputsLayer({ argumentSources: true })`, `.findings({ argumentSources: true })`)
+ *
+ * Present only under the arm: `deps.sources` reads each call's `from` entries
+ * through the ONE reader of `_findings` (`findings/reserved.ts` ·
+ * `readDeclaration`, handed in as a closure, so this folder still never
+ * imports `findings/`), and Verify builds the corpora the checks read from the
+ * raw pieces the mount handed in (`sourceInputs`) — loaded on first use, never
+ * on a plain agent's graph. Every stage re-reads the entries rather than
+ * staging a second copy of the model's quotes.
  */
 
 import type { TypedScope } from 'footprintjs';
 
+import type { SourceCorpus } from './checks.js';
 import type { KeptAnswer } from './kept.js';
 import type { ArgumentRow } from './rows.js';
 import {
@@ -36,8 +47,32 @@ import {
   type BatchCall,
   type CheckedArgument,
   type PlannedCall,
+  type SourcesArm,
   type ToolOf,
 } from './resolve.js';
+import type { CallSources } from './sources.js';
+
+/**
+ * The raw pieces the declared-sources corpora are built from — what the mount
+ * hands the layer under the arm (`honesty/mounts.ts` · `mountInputsLayer`),
+ * read by `honesty/sourceCorpus.ts` · `sourceCorpusOf`. Never the whole
+ * ledger: only the rows the checks read.
+ */
+export interface SourceInputs {
+  /** The history the model was served for this batch — the person's, the results', the app's words. */
+  readonly history: readonly unknown[];
+  /** The composed system prompt's records — the app's own text. */
+  readonly systemPromptInjections?: readonly unknown[];
+  /** The ledger's standing rows and `answered` argument rows — never the whole ledger. */
+  readonly ledger?: readonly unknown[];
+  /** The previous batch's results, by id and tool name (`AgentState.toolResults`). */
+  readonly previousBatch?: readonly {
+    readonly toolCallId: string;
+    readonly toolName?: string;
+  }[];
+  /** The run's message came from a composition, not a person (`AgentInput.messageFrom`). */
+  readonly composed?: true;
+}
 
 /** The subflow's own state — inputs frozen by the mount, then one key per stage. */
 export interface InputsLayerState {
@@ -54,6 +89,8 @@ export interface InputsLayerState {
    * keeps one never carries the key.
    */
   readonly argumentAnswersKept?: readonly KeptAnswer[];
+  /** Under declared sources only: the raw pieces the corpora are built from. */
+  readonly sourceInputs?: SourceInputs;
   // ── staged by the four stages ──
   argumentPlan?: readonly PlannedCall[];
   argumentChecks?: readonly CheckedArgument[];
@@ -75,6 +112,50 @@ export interface InputsLayerDeps {
   }) => boolean;
   /** The ledger's emit half — one `findings.argument` event per row. */
   readonly emitRows: (scope: TypedScope<InputsLayerState>, rows: readonly ArgumentRow[]) => void;
+  /** Present exactly under declared sources (either door: `.inputsLayer({ argumentSources: true })`
+   *  or `.findings({ argumentSources: true })`). */
+  readonly sources?: {
+    /**
+     * A tool the agent registers carries an arguments view — present only
+     * then: no quote is shown on a row or an ask (`resolve.ts` · `quotesMayShow`).
+     */
+    readonly argumentViews?: true;
+    /** Each call's `from` entries, through the one reader of `_findings`. */
+    readonly declaredOf: (calls: readonly BatchCall[]) => readonly CallSources[];
+    /** The corpora the checks read, from the pieces the mount handed in (loaded on first use). */
+    readonly corpusOf: (
+      inputs: SourceInputs,
+      calls: readonly BatchCall[],
+      turn: number,
+    ) => Promise<SourceCorpus>;
+  };
+}
+
+/** The calls' declared sources, by call id — `undefined` when the arm is off. */
+function declaredOf(
+  deps: InputsLayerDeps,
+  calls: readonly BatchCall[],
+): ReadonlyMap<string, CallSources> | undefined {
+  if (deps.sources === undefined) return undefined;
+  return new Map(deps.sources.declaredOf(calls).map((d) => [d.toolCallId, d]));
+}
+
+/**
+ * The arm as the pure steps take it — the entries, and (from Verify on) the
+ * corpora and whether a tool in reach can hide arguments (the agent's
+ * build-time fact: a registered tool with an argument view, or a ToolProvider).
+ */
+function armOf(
+  declared: ReadonlyMap<string, CallSources> | undefined,
+  corpus?: SourceCorpus,
+  argumentViews?: true,
+): SourcesArm | undefined {
+  if (declared === undefined) return undefined;
+  return {
+    declared,
+    ...(corpus !== undefined && { corpus }),
+    ...(argumentViews === true && { argumentViews }),
+  };
 }
 
 /**
@@ -126,27 +207,56 @@ export function declareArgumentsStage(
     ...(costBudgetHit !== undefined && { costBudgetHit }),
     ...(costBudgetOnExceed !== undefined && { costBudgetOnExceed }),
   });
-  scope.argumentPlan = dispatches ? declareBatch(calls, deps.toolOf) : [];
+  scope.argumentPlan = dispatches
+    ? declareBatch(calls, deps.toolOf, armOf(declaredOf(deps, calls)))
+    : [];
 }
 
 /**
  * VERIFY — where each planned ruled value came from (`resolve.ts` ·
- * `verifyPlan`). Stages `argumentChecks` (identities and enums — no value).
+ * `verifyPlan`); under declared sources, each present value checked against
+ * the source the model declared (`checks.ts` · `checkSource`) over corpora
+ * built from the mount's `sourceInputs`. Stages `argumentChecks` (identities,
+ * enums and the checks' verdicts — no value, no quote).
  */
-export function verifyArgumentsStage(
+export async function verifyArgumentsStage(
   scope: TypedScope<InputsLayerState>,
   deps: InputsLayerDeps,
-): void {
+): Promise<void> {
   const plan = [...((scope.argumentPlan as readonly PlannedCall[] | undefined) ?? [])];
-  scope.argumentChecks =
-    plan.length === 0
-      ? []
-      : verifyPlan(
-          plan,
-          callsOf(scope),
-          deps.toolOf,
-          leavesAskOut(plan) ? keptOf(scope) : undefined,
-        );
+  if (plan.length === 0) {
+    scope.argumentChecks = [];
+    return;
+  }
+  const calls = callsOf(scope);
+  const declared = declaredOf(deps, calls);
+  // Read only under the arm: a tracked read of a key a run never writes is a phantom source.
+  const inputs =
+    deps.sources !== undefined ? (scope.sourceInputs as SourceInputs | undefined) : undefined;
+  const corpus =
+    declared !== undefined && deps.sources !== undefined && inputs !== undefined
+      ? await deps.sources.corpusOf(detached(inputs), calls, scope.turnNumber as number)
+      : undefined;
+  scope.argumentChecks = verifyPlan(
+    plan,
+    calls,
+    deps.toolOf,
+    leavesAskOut(plan) ? keptOf(scope) : undefined,
+    armOf(declared, corpus, deps.sources?.argumentViews),
+  );
+}
+
+/** The mount's frozen inputs as plain data — a frozen input read is a live view. */
+function detached(inputs: SourceInputs): SourceInputs {
+  return structuredClone({
+    history: [...(inputs.history ?? [])],
+    ...(inputs.systemPromptInjections !== undefined && {
+      systemPromptInjections: [...inputs.systemPromptInjections],
+    }),
+    ...(inputs.ledger !== undefined && { ledger: [...inputs.ledger] }),
+    ...(inputs.previousBatch !== undefined && { previousBatch: [...inputs.previousBatch] }),
+    ...(inputs.composed === true && { composed: true as const }),
+  });
 }
 
 /**
@@ -160,15 +270,17 @@ export function recordArgumentsStage(
   deps: InputsLayerDeps,
 ): void {
   const checked = [...((scope.argumentChecks as readonly CheckedArgument[] | undefined) ?? [])];
+  const calls = checked.length === 0 ? [] : callsOf(scope);
   const rows =
     checked.length === 0
       ? []
       : rowsOf(
           checked,
-          callsOf(scope),
+          calls,
           deps.toolOf,
           { turn: scope.turnNumber as number, iteration: scope.iteration as number },
           fillsKept(checked) ? keptOf(scope) : undefined,
+          armOf(declaredOf(deps, calls)),
         );
   scope.argumentRows = rows;
   if (rows.length > 0) deps.emitRows(scope, rows);
@@ -185,14 +297,18 @@ export function resolveArgumentsStage(
 ): void {
   const plan = [...((scope.argumentPlan as readonly PlannedCall[] | undefined) ?? [])];
   const checked = [...((scope.argumentChecks as readonly CheckedArgument[] | undefined) ?? [])];
-  scope.argumentResolutions =
-    plan.length === 0
-      ? []
-      : resolutionsOf(
-          plan,
-          checked,
-          deps.toolOf,
-          scope.iteration as number,
-          fillsKept(checked) ? keptOf(scope) : undefined,
-        );
+  if (plan.length === 0) {
+    scope.argumentResolutions = [];
+    return;
+  }
+  // The calls are read only under the arm — a reading's quote rides the ask.
+  const calls = deps.sources !== undefined ? callsOf(scope) : undefined;
+  scope.argumentResolutions = resolutionsOf(
+    plan,
+    checked,
+    deps.toolOf,
+    scope.iteration as number,
+    fillsKept(checked) ? keptOf(scope) : undefined,
+    calls !== undefined ? armOf(declaredOf(deps, calls)) : undefined,
+  );
 }

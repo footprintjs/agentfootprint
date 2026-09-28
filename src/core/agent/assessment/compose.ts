@@ -213,6 +213,7 @@ const MAX_CLAUSES = 12;
 
 const CHECK_WORDS: Readonly<Record<AssessmentCheck, string>> = {
   'argument-rules': 'argument rules',
+  'argument-sources': 'argument sources',
   'tool-coverage': 'tool coverage',
   'result-shape': 'what came back',
   'result-period': 'the time each result covered',
@@ -225,6 +226,10 @@ const REASON_WORDS: Readonly<Record<Exclude<AssessmentReason, 'argument-assumed'
   'argument-asked': 'the run asked you for values its calls need, and the answer has not come yet',
   'argument-unverified':
     'a value a call ran with came from the model, with no source on the record',
+  'argument-read':
+    'a value a call ran with was read into your words: the quoted words are on the record, the value is not in them',
+  'value-contingent':
+    'a value a call ran with was taken from a result the model itself had set aside',
   'coverage-gap': 'a tool said there is ground it did not check or cannot cover',
   'declared-absent': 'a tool said nothing matched',
   'empty-undeclared': 'a lookup came back empty without saying what it searched',

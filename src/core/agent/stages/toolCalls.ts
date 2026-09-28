@@ -128,6 +128,7 @@ import type { ToolMiddleware } from '../middleware/types.js';
 import { runToolChain, runToolAfterChain, type ToolArgs } from '../middleware/runChain.js';
 import { recordDecisions } from '../middleware/ledger.js';
 import { ownsReservedArgument, splitFindings, type SplitFindings } from '../findings/reserved.js';
+import { carriesRules } from '../arguments/declare.js';
 import { isResultMessage, knownResults } from '../findings/offer.js';
 import type { Classifier } from '../../../classify/types.js';
 import {
@@ -262,6 +263,21 @@ export interface ToolCallsHandlerDeps {
    * `.inputsLayer()`; every other call runs exactly as it always did.
    */
   readonly inputsLayer?: true;
+  /**
+   * DECLARED SOURCES ARE ARMED (honesty layer 2, `.findings({ argumentSources:
+   * true })` or `.inputsLayer({ argumentSources: true })`) — present only
+   * then, only ever `true`, and only beside `inputsLayer`. The per-call peel
+   * reads `_findings.from` exactly as the inputs layer read it
+   * (`findings/reserved.ts` · `splitFindings`'s arms), so a `from`-only
+   * declaration is readable and — beside `findings` — a dropped `from` entry
+   * is counted on the call's basis row. WITHOUT `findings` the peel takes the
+   * argument off a RULED tool's calls only (the only ones it was planted on)
+   * and files no basis row: the layer put the count on the call's first
+   * argument row. An answered note gains the clause that a later call may cite
+   * the answer. The checks themselves ran in the layer, before this stage;
+   * nothing else here reads `from`.
+   */
+  readonly argumentSources?: true;
   /**
    * The results layer is mounted (honesty layer 3, step 7b) — a registered
    * tool declares a `ToolPeriod`, or the agent was built with
@@ -1391,6 +1407,13 @@ async function judgeLanded(
  * fingerprints — and the only visible effect is a note arriving one call early.
  */
 const UNSCOPED_RUN = '#no-run-id';
+
+/**
+ * The inputs layer's note options for a call whose tool's served schema
+ * carries `_findings.from` under declared sources (`arguments/serve.ts` ·
+ * `ServeOptions`) — one frozen value, handed per call.
+ */
+const SOURCES_NOTE = Object.freeze({ sources: true as const });
 
 /**
  * What the dispatch moment of the contingent check needs for one batch
@@ -3139,15 +3162,33 @@ export function buildToolCallsHandler(
    * the same was refused at build, so this is a provider- or MCP-ingested
    * tool), and the model's value on that call is the author's argument: it
    * runs with the call and files no row, exactly as the committed schema
-   * says. Unarmed: `tc.args` itself, by reference — not one byte moves.
+   * says. DECLARED SOURCES WITHOUT THE LEDGER (`.inputsLayer({
+   * argumentSources: true })`, no `.findings()`) plant the argument on RULED
+   * tools only (`withSourcesArgument`), so only those calls are peeled — by
+   * the same rule the tools slot decorated with (`arguments/declare.ts` ·
+   * `carriesRules`). Unarmed: `tc.args` itself, by reference — not one byte
+   * moves.
    */
+  const peelsReserved = (tool: Tool | undefined): boolean =>
+    !ownsReservedArgument(tool?.schema) &&
+    (deps.findings === true || (deps.argumentSources === true && carriesRules(tool)));
+  const peelArms = deps.argumentSources === true ? { argumentSources: true } : undefined;
   const peelCall = (tc: {
     readonly name: string;
     readonly args: Readonly<Record<string, unknown>>;
   }): SplitFindings =>
-    deps.findings === true && !ownsReservedArgument(resolveTool(tc.name).tool?.schema)
-      ? splitFindings(tc.args)
-      : { args: tc.args };
+    peelsReserved(resolveTool(tc.name).tool) ? splitFindings(tc.args, peelArms) : { args: tc.args };
+  /**
+   * The inputs layer's note options: under declared sources an answered
+   * clause says a later call may cite the answer in `_findings.from` — only
+   * for a tool whose served schema CARRIES it. A tool whose author owns
+   * `_findings` was served undecorated and its calls are not peeled
+   * (`peelsReserved`'s rule, `ownsReservedArgument`; a registered one is
+   * refused at build), so its note is the step-4 note. Absent → the step-3/4
+   * note.
+   */
+  const noteOptionsFor = (tool: Tool | undefined): { readonly sources: true } | undefined =>
+    deps.argumentSources === true && !ownsReservedArgument(tool?.schema) ? SOURCES_NOTE : undefined;
   /** The record of an off-wire dispatch — once per such call, before it runs. */
   const noteOffWire = (
     scope: TypedScope<AgentState>,
@@ -3920,7 +3961,7 @@ export function buildToolCallsHandler(
         // call's row is on the pre-pause partial commit; a denied call keeps
         // its row — the declaration is a fact about the emission). Filed only
         // when the model DECLARED a basis; never inferred.
-        if (peeled.findings?.basis !== undefined) {
+        if (deps.findings === true && peeled.findings?.basis !== undefined) {
           recordFindings(
             scope,
             [basisRowFrom(tc, peeled.findings, iteration, peeled.malformed)],
@@ -5365,10 +5406,12 @@ export function buildToolCallsHandler(
         // bytes), so every reader of a result's content as the TOOL's words
         // reads through the cut (`lib/toolBytes.ts` · `toolBytesOf`): a value
         // that sits only in the library's note grounds nothing and hides no
-        // reading of the result.
+        // reading of the result. Under declared sources an answered clause
+        // also says a later call may cite the answer (`arguments/serve.ts` ·
+        // `ANSWERED_SOURCE_CLAUSE`).
         const layerNote =
           inputs !== undefined && executed
-            ? inputs.noteFor(tc.name, tool, resolution, callArgs)
+            ? inputs.noteFor(tc.name, tool, resolution, callArgs, args, noteOptionsFor(tool))
             : '';
         if (layerNote !== '') resultStr += layerNote;
         newHistory.push({
@@ -6214,12 +6257,8 @@ export function buildToolCallsHandler(
       const env = scope.$getEnv();
       const tool = lookupTool(toolName);
       // Peeled under the arm unless the tool owns the name — the same rule as
-      // `peelCall` on the dispatch side, asked of the same schema.
-      const args = argsForPausedCall(
-        scope,
-        toolCallId,
-        deps.findings === true && !ownsReservedArgument(tool?.schema),
-      );
+      // `peelCall` on the dispatch side, asked of the same tool.
+      const args = argsForPausedCall(scope, toolCallId, peelsReserved(tool));
       // No `error` flag: a human's answer is not a tool failure.
       const rawPauseResult = await afterMoment(scope, {
         ...(tool && { tool }),

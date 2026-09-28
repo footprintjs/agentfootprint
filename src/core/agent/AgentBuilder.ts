@@ -93,12 +93,13 @@ import { TRACE_TOOL_NAMES } from '../../lib/trace-toolpack/traceToolNames.js';
 import { Agent } from '../Agent.js';
 import { buildSkillGraphDeclared, type SkillGraphDeclaredMap } from './skillGraphDeclared.js';
 import type { AgentOptions, RunConfigFn } from './types.js';
-import { FINDINGS_INSTRUCTION, findingsInstructionFor } from './findings/reserved.js';
+import {
+  FINDINGS_INSTRUCTION,
+  FINDINGS_INSTRUCTION_ID,
+  findingsInstructionFor,
+} from './findings/reserved.js';
+import { readInputsLayerOption } from './honesty/armed.js';
 import { ONTOLOGY_INSTRUCTION, ONTOLOGY_INSTRUCTION_ID } from '../../ontology/instruction.js';
-
-/** The id of the always-on instruction `.findings()` registers (9.101.0) —
- *  the name a receipt's `system.pieces` carries and a test can look for. */
-const FINDINGS_INSTRUCTION_ID = 'findings-ledger';
 import type { CompactionOptions } from './window/types.js';
 import type { WindowStrategy } from './window/strategy.js';
 import type { LLMProvider } from '../../adapters/types.js';
@@ -340,8 +341,12 @@ export class AgentBuilder {
   private limitsTravelValue = false;
   /** `.inputsLayer()` (honesty layer 2). False for every agent that did not
    *  ask for it; a REGISTERED ruled tool arms the layer on its own, so this
-   *  is only for ruled tools a ToolProvider serves. */
+   *  is for ruled tools a ToolProvider serves — and for declared sources
+   *  without the findings ledger (`inputsLayerSourcesValue`). */
   private inputsLayerValue = false;
+  /** `.inputsLayer({ argumentSources: true })` (honesty layer 2): declared
+   *  sources without the findings ledger. False unless asked for. */
+  private inputsLayerSourcesValue = false;
   /** `.resultsLayer()` (honesty layer 3, step 7b). False for every agent that
    *  did not ask for it; a REGISTERED tool with a `ToolPeriod` arms the layer
    *  on its own, so this is for provider-served tools and for tools that
@@ -1947,6 +1952,17 @@ export class AgentBuilder {
    * because configured-and-inert looks exactly like configured-and-working.
    * This one line mounts the layer so those tools' rules apply.
    *
+   * `argumentSources: true` arms DECLARED SOURCES without the findings
+   * ledger: each ruled tool's served schema carries the reserved `_findings`
+   * argument with `from` alone — where each argument value came from (the
+   * person's words as a `quote`, a result's `id`, an earlier answer, the app,
+   * or `'assumed'`) — and the layer CHECKS each claim before the batch runs;
+   * under an `ask` rule a value the checks do not trace is asked of the
+   * person. The same checks and rows as `.findings({ argumentSources: true })`,
+   * without the ledger's `_findings` schema on every tool (about 2,500
+   * characters each) — `.findings()` beside it serves both, exactly as that
+   * door does.
+   *
    * Off → the chart is byte-identical (nothing mounted, decorated, read or
    * written).
    *
@@ -1955,15 +1971,35 @@ export class AgentBuilder {
    *     .toolProvider(fleetTools)   // lists a tool that declares askOrAssume
    *     .inputsLayer()
    *     .build();
+   *
+   * @example
+   *   // The model says where each ruled value came from; the library checks it.
+   *   const agent = Agent.create({ provider, model })
+   *     .tool(searchLogs)           // declares askOrAssume: { window: { ask, choices } }
+   *     .inputsLayer({ argumentSources: true })
+   *     .build();
    */
-  inputsLayer(): this {
+  inputsLayer(options?: { readonly argumentSources?: boolean }): this {
     if (this.inputsLayerValue) {
       throw new Error(
         'AgentBuilder.inputsLayer: already set. One agent mounts one inputs layer, over every ' +
           'ruled tool it can call — a second call has nothing left to add. Drop it.',
       );
     }
+    if (options !== undefined && (options === null || typeof options !== 'object')) {
+      throw new Error(
+        `AgentBuilder.inputsLayer: expected an options object or nothing, got ${typeof options}.`,
+      );
+    }
+    const argumentSources = options?.argumentSources;
+    if (argumentSources !== undefined && typeof argumentSources !== 'boolean') {
+      throw new Error(
+        `AgentBuilder.inputsLayer: argumentSources must be true or false, got ` +
+          `${JSON.stringify(argumentSources)}.`,
+      );
+    }
     this.inputsLayerValue = true;
+    this.inputsLayerSourcesValue = argumentSources === true;
     return this;
   }
 
@@ -2226,6 +2262,20 @@ export class AgentBuilder {
    * as the `'ledger-fact'` pin ceiling; a negative or non-integer value is
    * refused here.
    *
+   * `argumentSources: true` (honesty layer 2, declared sources) — on a tool
+   * that declares argument rules (`askOrAssume`), the reserved argument also
+   * carries `from`, first and required: the model says where each argument
+   * value came from (the person's words as a `quote`, a result's `id`, an
+   * earlier answer, the app, or `'assumed'`), and the inputs layer CHECKS each
+   * claim before the batch runs and files the verdict on the call's argument
+   * rows — under an `ask` rule, a value the checks do not trace is asked of the
+   * person, and the rule's sentence names `_findings.from`. No instruction line
+   * is added: `from` explains itself in its own property. It needs the inputs
+   * layer (a registered ruled tool, or `.inputsLayer()`) and is refused at
+   * build without it. The same arm WITHOUT this ledger:
+   * `.inputsLayer({ argumentSources: true })`. Off (the default): nothing is
+   * served, read or written.
+   *
    * Once per agent (a second call is refused, the `.window()` grammar).
    * Registers the always-on `findings-ledger` instruction — the byte-for-byte
    * twin of {@link outputSchema}'s piece, hashed per piece on every receipt,
@@ -2295,6 +2345,18 @@ export class AgentBuilder {
           'signal?) }` from agentfootprint/classify (`typesafe()`, `mockClassifier()`, or your own).',
       );
     }
+    // Declared sources (honesty layer 2): a boolean, or nothing. It needs the
+    // inputs layer, which only the whole agent can say is armed — `Agent`
+    // refuses it at build when no ruled tool and no `.inputsLayer()` arm one.
+    // (`.inputsLayer({ argumentSources: true })` arms the same thing without
+    // this ledger.)
+    const argumentSources = options?.argumentSources;
+    if (argumentSources !== undefined && typeof argumentSources !== 'boolean') {
+      throw new Error(
+        `AgentBuilder.findings: argumentSources must be true or false, got ` +
+          `${JSON.stringify(argumentSources)}.`,
+      );
+    }
     // `answerAsk` is stored as given, never normalised: `'none'` is the
     // default and `Agent.ts` threads the dial only under `'quote-facts'`, so
     // an explicit `'none'` and an absent one reach the run as the same thing.
@@ -2303,6 +2365,7 @@ export class AgentBuilder {
       ...(answerAsk !== undefined && { answerAsk }),
       ...(keep !== undefined && { keepLedgerFacts: keep }),
       ...(judge !== undefined && { judge }),
+      ...(argumentSources === true && { argumentSources: true }),
     };
     // The always-on ask — the `outputSchema()` twin: a system-slot instruction
     // that activates every iteration, so a long run keeps the vocabulary
@@ -3267,8 +3330,18 @@ export class AgentBuilder {
             ...(this.toolChoiceValue !== undefined && { toolChoice: this.toolChoiceValue }),
             // The declared ontology (9.106.0), the same door grammar.
             ...(this.ontologyValue !== undefined && { ontology: this.ontologyValue }),
-            // The inputs layer (honesty layer 2), the same door grammar.
-            ...(this.inputsLayerValue && { inputsLayer: true }),
+            // The inputs layer (honesty layer 2), the same door grammar — its
+            // object form only when it also arms declared sources. The door
+            // MERGES with an `inputsLayer` option given to `Agent.create`: sources
+            // armed by either stay armed, and a malformed option is still refused
+            // by the one reader rather than silently replaced by the door's value.
+            ...(this.inputsLayerValue && {
+              inputsLayer:
+                this.inputsLayerSourcesValue ||
+                readInputsLayerOption(this.opts.inputsLayer)?.argumentSources === true
+                  ? { argumentSources: true }
+                  : true,
+            }),
             // The results layer (honesty layer 3), the same door grammar.
             ...(this.resultsLayerValue && { resultsLayer: true }),
             // The answer layer (honesty layer 4), the same door grammar — the
@@ -3313,6 +3386,8 @@ export class AgentBuilder {
     // registered by `.findings()` is rebuilt in place, same id, same
     // activation, so an agent with the ledger alone keeps the exact bytes
     // `.findings()` registered.
+    // Declared sources (honesty layer 2) add NO line: `from` is explained
+    // once, in its own property on the ruled tools that carry it.
     if (this.findingsValue !== undefined && this.evidenceGate !== undefined) {
       const at = this.injectionList.findIndex((i) => i.id === FINDINGS_INSTRUCTION_ID);
       if (at >= 0) {

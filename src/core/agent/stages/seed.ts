@@ -29,7 +29,8 @@ import type { FoldedSpan } from '../window/types.js';
 import type { MessageMiddleware } from '../middleware/types.js';
 import { runMessageChain } from '../middleware/runChain.js';
 import { recordDecisions } from '../middleware/ledger.js';
-import { withFindingsArgument } from '../findings/reserved.js';
+import { withFindingsArgument, withSourcesArgument } from '../findings/reserved.js';
+import { carriesRules } from '../arguments/declare.js';
 import type { HonestyLayers } from '../honesty/armed.js';
 import type { FindingsLedger } from '../findings/types.js';
 import type { Ontology } from '../../../ontology/types.js';
@@ -136,6 +137,19 @@ export interface SeedStageDeps {
    * constant, written once. Absent → nothing is written.
    */
   readonly honestyLayers?: HonestyLayers;
+  /**
+   * DECLARED SOURCES ARE ARMED (honesty layer 2, `.findings({
+   * argumentSources: true })` or `.inputsLayer({ argumentSources: true })`) —
+   * present only then, only ever `true`. The static tool list seeded for
+   * iteration 1 plants `_findings.from` on each RULED tool, as the tools slot
+   * does on every later call — inside the ledger's decoration beside
+   * `findings` (`findings/reserved.ts` · `withFindingsArgument`'s `from`), or
+   * alone without it (`withSourcesArgument`) — and an `ask` rule's sentence
+   * names `_findings.from` (`arguments/serve.ts` · `ASK_SOURCES_SENTENCE`); a
+   * run whose caller passed `messageFrom: 'composed'` records the run constant
+   * `userMessageFrom`, which the checks read. Absent → none of it.
+   */
+  readonly argumentSources?: true;
   /**
    * Accessor for the current run's id, used to default the memory
    * identity when consumer didn't pass `agent.run({ identity })`. Set
@@ -636,17 +650,39 @@ function seedFrom(
   // base decoration — an explicit lambda, because passed point-free `.map`
   // would hand the index in as the offer (`reserved.ts · withFindingsArgument`).
   // The inputs layer's rules decorate FIRST (honesty layer 2) — the slot's
-  // order: rules, then `_findings`. Only when a registered tool is ruled.
+  // order: rules, then `_findings`. Only when a registered tool is ruled. One
+  // options value for every schema here, where the slot decides per schema
+  // (`ownsReservedArgument`): the seed serves REGISTERED tools only, and under
+  // declared sources a registered ruled tool whose author owns `_findings` is
+  // refused at build (`buildToolRegistry` · `assertReservedArgument`) — so
+  // every ruled schema here carries the `_findings.from` its sentence names.
   const ruledTools = deps.ruledTools;
+  const ruleOptions = deps.argumentSources === true ? { sources: true } : undefined;
   const ruled =
     ruledTools === undefined || decorate === undefined
       ? deps.toolSchemas
-      : deps.toolSchemas.map((s) => decorate(s, ruledTools.get(s.name)));
+      : deps.toolSchemas.map((s) => decorate(s, ruledTools.get(s.name), ruleOptions));
+  // Declared sources (honesty layer 2): a ruled tool's decoration carries `from` —
+  // inside the ledger's `_findings` under `.findings()`, or as the reserved
+  // argument's only property without it (the slot's `sourcesOnWire` twin).
+  const isRuled = (s: LLMToolSchema): boolean =>
+    deps.argumentSources === true && carriesRules(ruledTools?.get(s.name));
+  const planted = (s: LLMToolSchema): LLMToolSchema =>
+    isRuled(s) ? withFindingsArgument(s, [], { from: true }) : withFindingsArgument(s);
   scope.dynamicToolSchemas =
-    deps.findings === true ? ruled.map((s) => withFindingsArgument(s)) : ruled;
+    deps.findings === true
+      ? ruled.map((s) => planted(s))
+      : deps.argumentSources === true && ruled.some(isRuled)
+      ? ruled.map((s) => (isRuled(s) ? withSourcesArgument(s) : s))
+      : ruled;
   // The honesty layers' run constant (`honesty/armed.ts`) — written once, and
   // only when a layer is armed.
   if (deps.honestyLayers !== undefined) scope.honestyLayers = deps.honestyLayers;
+  // WHO WROTE THE MESSAGE, when it was not a person (declared sources' one
+  // reader): written only under the arm, and only for a composed message.
+  if (deps.argumentSources === true && args.messageFrom === 'composed') {
+    scope.userMessageFrom = 'composed';
+  }
   // The forced-output tool's NAME (9.88.0) — the one fact about it that lands
   // on the record. Value-conditional: an agent on the default `'instruct'`
   // strategy writes nothing here.

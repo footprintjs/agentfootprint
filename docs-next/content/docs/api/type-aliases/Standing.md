@@ -6,6 +6,6 @@ title: Standing
 
 > **Standing** = `"fact"` \| `"open"` \| `"noise"` \| `"ruled-out"`
 
-Defined in: [src/core/agent/findings/types.ts:48](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/findings/types.ts#L48)
+Defined in: [src/core/agent/findings/types.ts:49](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/findings/types.ts#L49)
 
 What the model says a previous result IS to it. Absent = undeclared, never 'open'.

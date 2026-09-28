@@ -162,11 +162,71 @@ renders, answers and cancels it like any other:
   the tool's own view hides; the `answered` rows carry what each tool's view
   allows.
 - **A value the model did send** runs as sent and is recorded as the model's
-  own — the library does not ask about it.
+  own — the library does not ask about it, unless declared sources are on (next
+  section).
 
 Your app can keep its own state on the ask (a routing step, a screen id):
 `Agent.create({ …, argumentAskContext: () => ({ routing: { step: 'metrics' } }) })`
 spreads the object into `context` beside the library's key, which it may not use.
+
+## Where each value came from — declared sources
+
+With `.inputsLayer({ argumentSources: true })`, the model says, for each argument
+of a ruled call, where the value came from — the person's words (copied as a
+`quote`), a tool result (its `id`), the person's earlier answer, the app's own
+text, or `'assumed'` — and the library **checks** each claim before anything in
+the batch runs. (`.findings({ argumentSources: true })` arms the same checks on
+an agent that also keeps the findings ledger.) A choice can carry words you
+vouch for as meaning it (`{ value: '7d', said: ['last week'] }`), so "over the
+last week" checks out as `7d` without the library ever parsing a time phrase:
+
+<CodeFile path="examples/features/77-declared-sources.ts" region="declared-sources" title="examples/features/77-declared-sources.ts (region: declared-sources)" />
+
+<CodeFile path="examples/features/77-declared-sources.ts" region="checked" title="examples/features/77-declared-sources.ts (region: checked)" />
+
+- **A checked value runs.** The quote must be in the person's own messages, and
+  the value in the quote or one of your phrases for it; a result id must name a
+  result the model was served, and the value must be in that result's own bytes
+  (a note the library added never counts); an earlier answer must be the
+  person's answer to the library's ask — the note on the result of the call that
+  ran with it tells the model it may cite that answer later. The row says what
+  was checked: `source: 'said'` with `matched: 'phrase'`, `'result'`,
+  `'answered'`, `'app'`.
+- **An unchecked value on an `ask` argument is asked** — nothing declared, a
+  failed claim, or a READING (the words are the person's, the value is not in
+  them). The ask shows the person their own words (`quoted`, unless a tool may
+  hide arguments — below), never the model's value; the answer replaces it, and
+  the row keeps the model's value as `proposed`.
+- **A failed claim is recorded as written**, never repaired
+  (`failed: 'quote-not-found'`, `'not-in-result'`, …), and the answer's standing
+  says the value is not traced.
+- **Checked is not verified.** Matching words cannot see a negation or another
+  sentence, so a checked value keeps a reason from firing and supports nothing:
+  the answer reads "consistent with the record", never "known".
+- **Another runner's message is not the person's.** `Sequence`, `Loop`,
+  `workflow()` and `graph()` mark a step's (or node's) message that is an earlier
+  one's output, and a quote from it fails; code that composes runners by hand
+  passes `messageFrom: 'composed'` to `run()`.
+- **A quote stays off the record while a tool may hide arguments.** A quote is
+  the person's free text and may hold a value another tool keeps out of the
+  record (a password given in the same sentence). So on an agent that registers
+  such a tool (`flowchartAsTool({ redact })`, `runbookAsTool({ redact })`) or
+  wires a tool provider (`.toolProvider()`, or `.selfExplain()`, which serves
+  its tools through one — a provider is asked for its tools each time the model
+  is called, so any provider counts), every row's `quote` reads `'REDACTED'` and
+  the ask shows no `quoted`. This is decided when the agent is built, so a quote
+  written before the hiding tool is called, or first listed, is hidden too. The
+  check itself still runs.
+- **It costs tokens, and it is off by default.** The `from` property rides only on
+  tools that declare `askOrAssume` — every other tool and the system prompt are
+  served as they would be without it. `.findings({ argumentSources: true })` needs
+  the inputs layer and is refused at build without it; `.inputsLayer(...)` is the
+  inputs layer.
+- **`_findings` is the library's name on a ruled tool.** With the arm on, a tool
+  that declares `askOrAssume` and also takes an argument of its own named
+  `_findings` is refused when the agent is built — rename the argument. A tool a
+  provider serves with its own `_findings` runs as written: nothing it is served
+  asks the model where its values came from.
 
 ## Hosted chat
 

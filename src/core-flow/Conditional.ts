@@ -33,6 +33,7 @@ import { streamRecorder } from '../recorders/core/StreamRecorder.js';
 import { agentRecorder } from '../recorders/core/AgentRecorder.js';
 import { compositionRecorder } from '../recorders/core/CompositionRecorder.js';
 import { typedEmit } from '../recorders/core/typedEmit.js';
+import { composedInput, readsMessageFromIfAny } from '../core/messageFrom.js';
 
 export interface ConditionalOptions {
   readonly name?: string;
@@ -114,6 +115,11 @@ export class Conditional extends RunnerBase<ConditionalInput, ConditionalOutput>
       throw new Error('Conditional: must have at least one .when() branch plus an .otherwise()');
     }
     this.branches = branches;
+    // Holding a branch that reads `messageFrom`, it reads it too (`core/messageFrom.ts`).
+    readsMessageFromIfAny(
+      this,
+      branches.map((b) => b.runner),
+    );
     this.fallbackId = fallbackId;
     // Eager chart construction — see `RunnerBase.initChart` JSDoc.
     this.initChart(() => this.buildChart());
@@ -272,7 +278,12 @@ export class Conditional extends RunnerBase<ConditionalInput, ConditionalOutput>
     );
     for (const b of branches) {
       decList = decList.addSubFlowChartBranch(b.id, b.runner.getSpec(), b.name, {
-        inputMapper: (parent) => ({ message: (parent.userMessage as string) ?? '' }),
+        inputMapper: (parent) => {
+          // The caller's own message — composed only when this composition was
+          // handed a composed one (`core/messageFrom.ts`).
+          const input = { message: (parent.userMessage as string) ?? '' };
+          return parent.messageFrom === 'composed' ? composedInput(b.runner, input) : input;
+        },
         // Branch's string return becomes sfOutput; propagate to parent
         // as `result` for the Finalize stage to read.
         outputMapper: (sfOutput) => ({

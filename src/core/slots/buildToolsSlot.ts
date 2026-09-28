@@ -37,7 +37,12 @@ import type { ToolClaim } from '../agent/buildToolRegistry.js';
 import type { ToolNameChannel } from '../../events/payloads.js';
 import type { ToolProvider, ToolDispatchContext } from '../../tool-providers/types.js';
 import { composeSlot, fnv1a, formatOverflowWarning, slotOverflow, truncate } from './helpers.js';
-import { withFindingsArgument } from '../agent/findings/reserved.js';
+import {
+  ownsReservedArgument,
+  withFindingsArgument,
+  withSourcesArgument,
+} from '../agent/findings/reserved.js';
+import { carriesRules } from '../agent/arguments/declare.js';
 import type { Classifier } from '../../classify/types.js';
 import type { ToolChoiceEntry } from '../agent/toolChoice/types.js';
 
@@ -192,6 +197,34 @@ export function mergeWire(candidates: readonly WireCandidate[]): {
 
 /** The inputs layer's wire decoration (`agent/arguments/serve.ts` · `rulesOnWire`). */
 type RulesOnWire = typeof import('../agent/arguments/serve.js').rulesOnWire;
+
+/**
+ * The rules' serve options for a schema that will CARRY `_findings.from`
+ * under declared sources (`agent/arguments/serve.ts` · `ServeOptions`) — one
+ * frozen value, handed per schema.
+ */
+const SOURCES_SERVED = Object.freeze({ sources: true as const });
+
+/**
+ * Declared sources WITHOUT the findings ledger: each RULED schema gains the
+ * reserved `_findings` argument carrying `from` alone
+ * (`findings/reserved.ts` · `withSourcesArgument`); every other schema is
+ * served as it was. The SAME list when nothing changed — a wire with no ruled
+ * tool commits the bytes it always did.
+ */
+function sourcesOnWire(
+  served: readonly LLMToolSchema[],
+  isRuled: (schema: LLMToolSchema) => boolean,
+): readonly LLMToolSchema[] {
+  let changed = false;
+  const decorated = served.map((schema) => {
+    if (!isRuled(schema)) return schema;
+    const next = withSourcesArgument(schema);
+    if (next !== schema) changed = true;
+    return next;
+  });
+  return changed ? decorated : served;
+}
 
 export interface ToolsSlotConfig {
   /** Tool registry exposed to the LLM. Empty → empty slot (LLMCall case). */
@@ -354,6 +387,20 @@ export interface ToolsSlotConfig {
    * is refused at dispatch, and a sentence promising a fill would be false.
    */
   readonly inputsLayer?: true;
+  /**
+   * DECLARED SOURCES ARE ARMED (honesty layer 2, `.findings({ argumentSources:
+   * true })` or `.inputsLayer({ argumentSources: true })`) — present ONLY
+   * then, only ever `true`, and only beside `inputsLayer`. At the same
+   * decoration site, a schema whose WINNING implementation carries argument
+   * rules (`arguments/declare.ts` · `carriesRules`) gets `from`: beside
+   * `findings`, the ledger's `_findings` variant with `from`
+   * (`findings/reserved.ts` · `withFindingsArgument`'s `from`); without it,
+   * the reserved argument with `from` alone (`withSourcesArgument`). An `ask`
+   * rule's sentence also names `_findings.from` (`arguments/serve.ts` ·
+   * `ASK_SOURCES_SENTENCE`). Every other schema keeps its decoration — the
+   * ledger's base by reference, or none. Absent → the decoration it always was.
+   */
+  readonly argumentSources?: true;
   /**
    * TOOL CHOICE BY CLASSIFIER IS ARMED (9.105.0, `.toolChoice()`) — present
    * ONLY then. Compose then asks `classifier` which of the merged wire's
@@ -927,10 +974,29 @@ export function buildToolsSlot(config: ToolsSlotConfig): FlowChart {
       // THE INPUTS LAYER'S RULES (honesty layer 2) decorate FIRST, from the
       // rules of the implementation that WINS each name — `served` itself,
       // by reference, when the layer is not armed or no served tool is ruled.
-      // `rules` is loaded (below) exactly when the layer is armed.
-      const ruled = rules !== undefined ? rules(served, winningTools) : served;
+      // `rules` is loaded (below) exactly when the layer is armed. Under
+      // declared sources an `ask` rule's sentence names `_findings.from` only
+      // on a schema that will CARRY it: a tool whose author owns `_findings`
+      // is left undecorated by both planters below (`ownsReservedArgument`,
+      // the rule the dispatch peel asks), so it keeps the unarmed sentence —
+      // a REGISTERED one is refused at build (`buildToolRegistry` ·
+      // `assertReservedArgument`), so this is a ToolProvider's tool.
+      const sourcesOf = (s: LLMToolSchema): typeof SOURCES_SERVED | undefined =>
+        config.argumentSources === true && !ownsReservedArgument(s) ? SOURCES_SERVED : undefined;
+      const ruled = rules !== undefined ? rules(served, winningTools, sourcesOf) : served;
+      // Declared sources (honesty layer 2): `_findings.from` on a RULED tool only —
+      // inside the ledger's decoration under `.findings()`, or as the reserved
+      // argument's only property without it (`withSourcesArgument`).
+      const isRuled = (s: LLMToolSchema): boolean =>
+        config.argumentSources === true && carriesRules(winningTools.get(s.name));
+      const from = (s: LLMToolSchema): { from: true } | undefined =>
+        isRuled(s) ? { from: true } : undefined;
       scope.toolSchemas =
-        config.findings === true ? ruled.map((s) => withFindingsArgument(s, offer)) : ruled;
+        config.findings === true
+          ? ruled.map((s) => withFindingsArgument(s, offer, from(s)))
+          : config.argumentSources === true
+          ? sourcesOnWire(ruled, isRuled)
+          : ruled;
       if (servedTools !== undefined) {
         // Dispatch follows the OFFER: a name narrowed off this epoch's wire
         // was not served, so it is not on `current` and takes the off-wire

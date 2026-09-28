@@ -110,7 +110,9 @@ grows as later honesty steps commit new rows.
 | `asked` | every | `pausedToolCallId`: the call a pause is still waiting on — a typed input (`requestInput`), a question (`askHuman` / `pauseHere`), a consent gate (a tool's `checkIn`, a middleware's `ask`) or a credential consent; never the pause event |
 | `argument-asked` | 2 | `argumentAsk`: the inputs layer's batch ask with a question still out (`waiting`) — nothing in that batch has run; this turn's current `asked` rows on `findingsLedger` name the values; never the pause event |
 | `argument-assumed` | 2 | `findingsLedger`: an `argument` row of this turn with `source: 'default'` — a tool's `askOrAssume` rule filled the value, or the model sent that same default; or `middlewareDecisions`: a before-tool rewrite of a ruled argument (`changedKeys`) with no declared origin (`allow(args, why, { from })`) |
-| `argument-unverified` | 2 | `findingsLedger`: an `argument` row of this turn with `source: 'model'` on a ruled argument, or with a failed declared-source check |
+| `argument-unverified` | 2 | `findingsLedger`: an `argument` row of this turn with `source: 'model'` on a ruled argument, or with a failed declared-source check (`failed`) on ANY argument — the model misstated the record |
+| `argument-read` | 2 | `findingsLedger`: an `argument` row of this turn with `source: 'said'` and `reading` — the quoted words are the person's, the value is the model's reading of them (declared sources) |
+| `value-contingent` | 2 | `findingsLedger`: an `argument` row of this turn with `source: 'result'` and `setAside` (the model named a result it had set aside); or a `contingent` row of this turn (stamped with it; unstamped on a call of this turn; unstamped on the answer on a first turn, or on a later turn when it follows — or is — a row the ledger shows to be this turn's: `assess.ts` · `firstRowOfTurn`) |
 | `coverage-gap` | 3 | `coverageDeclared`: a `notChecked` or `cannotCover` item on a call of this turn; or `history`: the result's own envelope lists one, when its call has no coverage row |
 | `declared-absent` | 3 | `coverageDeclared`: an absence; or `history`: an empty rowset inside a declared `coverage()` boundary, or an absence in the result's own envelope when its call has no coverage row |
 | `empty-undeclared` | 3 | `history`: an empty rowset (a top-level array, or the app's `rowsAt` key) whose call has no coverage row |
@@ -130,8 +132,14 @@ The inputs layer's rows (honesty layer 2, `core/agent/arguments/README.md`) are
 read for THIS turn only — the ledger crosses turns, and every `argument` row
 carries its `turn` — and the last row per (call, argument) is the current one.
 When the layer filed any, `checked` gains `argument-rules` (layer 2): every row
-is a verdict, so `ran` equals `of`. No argument row ever supports "known": a
-membership pass only keeps a reason from firing.
+is a verdict, so `ran` equals `of`. Under declared sources
+(`.findings({ argumentSources: true })`) `checked` gains `argument-sources` too:
+`of` is the rows the check judged (they carry `claimed`), `ran` the ones it
+reached a verdict on (all but `uncheckable`). A traced source — the person's
+quoted words or a declared phrase, their answer, a result, the app — fires
+nothing, so a turn whose values all check out reads "consistent with the
+record"; no argument row ever supports "known": a membership pass only keeps a
+reason from firing.
 
 The results layer's `period` rows (honesty layer 3, `core/agent/results/README.md`)
 are read for this turn too — but EVERY row, never the last per call: the layer
@@ -275,13 +283,33 @@ it at the study's freeze (adopted Q12).
 - **Evicted results.** Under `.window()`, a window strategy can remove this
   turn's early results from `history`; the commit log still has them, but the
   fold reads the final state, so an evicted undeclared `[]` fires nothing.
-- **Conflicts from an earlier turn that reuse a call id — on an agent without an
-  honesty layer.** A carried conflict row counts as this turn's when a witness
-  shares a `toolCallId` with a call of this turn — a provider that reuses ids
-  across turns makes an earlier turn's conflict read `sources-conflict`. It
-  over-reports and never hides. While the inputs layer is armed, the one writer
-  stamps every row with its conversation `turn` (honesty step 3), and a stamped
-  conflict row counts only in its own turn.
+- **Rows from an earlier turn that reuse a call id — on an agent without an
+  honesty layer.** Without a turn stamp, the fold places a ledger row in this
+  turn by the call ids it names, and a provider that reuses ids across turns
+  (numbering each response's calls from `0`, say) makes an earlier turn's row
+  look like this turn's in three places: a carried conflict row whose witness
+  shares an id with a call of this turn reads `sources-conflict`
+  (`readConflicts`); a contingent row declared on such a call reads
+  `value-contingent`; and `firstRowOfTurn` — which finds where this turn's rows
+  begin as the first unstamped row naming a call of this turn — can stop at an
+  EARLIER turn's row that named the reused id, so every contingent row declared
+  on the answer after it, an earlier turn's answer included, is read as this
+  turn's. Each over-reports ("not sure") and never hides. The cheap guard —
+  start the search after the last row naming an id that only earlier turns
+  called — does not help a provider that reuses every id, so it is not built.
+  While the inputs layer is armed, the one writer stamps every row with its
+  conversation `turn` (honesty step 3), and a stamped row counts only in its own
+  turn.
+- **An unstamped contingent row declared on the ANSWER, on a later turn the
+  ledger cannot place** (an agent without the inputs layer). Such a row names no
+  call of its own, and the ledger crosses turns on a continued conversation, so
+  on a turn after the first it counts only when it follows — or is — a row the
+  ledger shows to be this turn's: one stamped with this turn, or one that names
+  a call of this turn (a row cannot name a call before the call exists; a reused
+  id is the bullet above). A later turn that made no call and filed nothing else
+  leaves it unread: it may be an earlier turn's answer, and an earlier answer
+  must never make this one "not sure". Arm the inputs layer and every row
+  carries its turn.
 - **Subject placement.** Which entity the question names is on hold, so the fold
   reads every call of the turn.
 - **A finished step procedure** files no row, so it cannot count as a check that
