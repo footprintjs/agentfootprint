@@ -191,9 +191,9 @@ the batch runs. A choice can carry words you vouch for as meaning it
   `source: 'said'` with `matched: 'phrase'`, `'result'`, `'answered'`, `'app'`.
 - **An unchecked value on an `ask` argument is asked** — nothing declared, a
   failed claim, or a READING (the words are the person's, the value is not in
-  them). The ask shows the person their own words (`quoted`), never the model's
-  value; the answer replaces it, and the row keeps the model's value as
-  `proposed`.
+  them). The ask shows the person their own words (`quoted`, unless a tool may
+  hide arguments — below), never the model's value; the answer replaces it, and
+  the row keeps the model's value as `proposed`.
 - **A failed claim is recorded as written**, never repaired
   (`failed: 'quote-not-found'`, `'not-in-result'`, …), and the answer's standing
   says the value is not traced.
@@ -204,11 +204,16 @@ the batch runs. A choice can carry words you vouch for as meaning it
   `workflow()` and `graph()` mark a step's (or node's) message that is an earlier
   one's output, and a quote from it fails; code that composes runners by hand
   passes `messageFrom: 'composed'` to `run()`.
-- **A quote stays off the record while a tool hides arguments.** A quote is the
-  person's free text and may hold a value another tool keeps out of the record
-  (a password given in the same sentence), so on an agent with such a tool
-  (`flowchartAsTool({ redact })`) every row's `quote` reads `'REDACTED'` and the
-  ask shows no `quoted` — the check itself still runs.
+- **A quote stays off the record while a tool may hide arguments.** A quote is
+  the person's free text and may hold a value another tool keeps out of the
+  record (a password given in the same sentence). So on an agent that registers
+  such a tool (`flowchartAsTool({ redact })`, `runbookAsTool({ redact })`) or
+  wires a tool provider (`.toolProvider()`, or `.selfExplain()`, which serves
+  its tools through one — a provider is asked for its tools each time the model
+  is called, so any provider counts), every row's `quote` reads `'REDACTED'` and
+  the ask shows no `quoted`. This is decided when the agent is built, so a quote
+  written before the hiding tool is called, or first listed, is hidden too. The
+  check itself still runs.
 - **It costs tokens, and it is off by default.** The `from` property rides only on
   tools that declare `askOrAssume`, plus one instruction line. It needs the inputs
   layer and is refused at build without it.

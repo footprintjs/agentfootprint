@@ -5011,9 +5011,14 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
               ...(this.externalGrounds !== undefined && {
                 externalGrounds: this.externalGrounds,
               }),
-              // A registered tool that hides an argument keeps every quote off the
-              // record — a quote is free text that may hold the hidden value.
-              ...([...registryByName.values()].some(carriesArgumentView) && {
+              // A tool in reach that may hide an argument keeps every quote off the
+              // record — a quote is free text that may hold the hidden value. Decided
+              // once, here, over every party the layer's `toolOf` can resolve: the
+              // registry (each tool asked), and a ToolProvider — whatever it lists,
+              // since its list is known only per iteration and a tool it lists first
+              // AFTER a quote was filed would find that quote already on the record.
+              ...(([...registryByName.values()].some(carriesArgumentView) ||
+                this.externalToolProvider !== undefined) && {
                 argumentViews: true as const,
               }),
             },

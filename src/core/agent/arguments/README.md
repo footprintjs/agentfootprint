@@ -110,7 +110,7 @@ What each present value then does — the one table (`resolve.ts` · `verifyPlan
 A reading ASKS under an `ask` rule — otherwise any exact fragment of the person's message
 would carry any value past the rule — and the ask's field shows the person their own words
 (`context.agentfootprint.fields[].quoted`), never the model's value, and never while a tool in
-reach hides arguments (the row's quote reads `'REDACTED'` then too — below). The answer replaces the model's value: the `answered` row carries the
+reach can hide arguments (the row's quote reads `'REDACTED'` then too — below). The answer replaces the model's value: the `answered` row carries the
 model's value as `proposed`, and the note says so ("… was chosen by the person when asked (the
 call had carried "24h")."). A missing value is resolved as without the arm: it has no source to
 check.
@@ -127,17 +127,28 @@ what they were). An armed agent records it (`AgentState.userMessageFrom`), and a
 only in that message fails `composed-message`. Code that composes runners by hand passes
 `messageFrom: 'composed'` the same way.
 
-**A quote is shown only while no tool in reach hides arguments.** A quote is free text the model
-wrote, token-equal to the person's words: it may hold ANY value the person gave, in any
+**A quote is shown only while no tool in reach can hide arguments.** A quote is free text the
+model wrote, token-equal to the person's words: it may hold ANY value the person gave, in any
 spelling — a user name and a password in one sentence, a PIN typed "1 2 3 4" and passed as
-`1234` — and a tool's argument view covers only that tool's own arguments. So a row's `quote`
-(and the ask's `quoted`) reads `'REDACTED'` on an agent that registers a tool carrying an
-argument view (`core/toolShownArgs.ts` · `carriesArgumentView`: `flowchartAsTool({ redact })`,
-`runbookAsTool({ redact })`) — read once, at build, so a quote filed BEFORE the call that
-carries the hidden value is covered too — and in a batch where a call of the batch or of the
-served history resolves to such a tool (a ToolProvider's tool is seen once a call names it)
-(`resolve.ts` · `quotesMayShow`). The checks still read every quote in memory; only what the
-record SHOWS changes.
+`1234` — and a tool's argument view covers only that tool's own arguments. So every row's
+`quote` reads `'REDACTED'`, and no ask carries `quoted`, on an agent that:
+
+- registers a tool carrying an argument view (`core/toolShownArgs.ts` · `carriesArgumentView`:
+  `flowchartAsTool({ redact })`, `runbookAsTool({ redact })`) — through `.tool()`, a skill's
+  tools, or an MCP tool registered on the builder; or
+- wires a ToolProvider — `.toolProvider()`, or `.selfExplain()`, which serves its trace tools
+  through one — whatever it lists. A provider's list is known only per iteration, and a tool it
+  lists (or is first called) AFTER a quote was filed would find that quote already on the
+  record, so any provider counts, even one that never lists a hiding tool.
+
+The agent decides it ONCE, at build (`core/Agent.ts` · `buildChart`, the inputs layer's
+`sources` → `SourcesArm.argumentViews`), over every party the layer's `toolOf` can resolve (the
+registry and the provider — `stages/toolResolver.ts` · `buildToolResolver`), so no ordering
+leaks a quote: filed before the hiding call, in an earlier iteration or turn, or before a
+provider first lists the tool (`resolve.ts` · `quotesMayShow`). On an agent with neither, a
+quote is shown as the model wrote it (clipped, `rows.ts` · `QUOTE_CHARS`) — except beside a call
+whose name nothing answers, which has no view to ask. The checks still read every quote in
+memory; only what the record SHOWS changes.
 
 ## The batch ask — once, before anything runs
 
@@ -211,7 +222,7 @@ where footprintjs resumes it correctly.
 |---|---|
 | DECLARE | the tool author: `Tool.askOrAssume` (`{ assume }` or `{ ask, choices? }`) and `Tool.period` (`ToolPeriod`), judged by ONE assert (`declare.ts` · `assertAskOrAssume`) at definition (`core/tools.ts` · `defineTool`), at dispatch (`declare.ts` · `rulesOf` — a Tool built by hand or served by a ToolProvider never passed `defineTool`) and at MCP ingest (`lib/mcp/toolExtras.ts` · `readToolExtras`, which judges each rule against the listed tool's own `inputSchema`). A rule is refused, never repaired: an argument the schema does not offer or whose type is not exactly one of `string`, `number`, `integer`, `boolean`; a `wants` argument; a value or choice the PROPERTY's own schema rejects (never the root `required`); a period on an argument with no rule. The host declares its own ask context (`AgentOptions.argumentAskContext`). The MODEL declares, under `.findings({ argumentSources: true })`, where each value came from (`_findings.from`), read by the ONE reader of `_findings` (`findings/reserved.ts` · `readDeclaration`, through `sources.ts` · `readSources`): a malformed entry is dropped and counted, never defaulted. A composition declares a message it composed (`AgentInput.messageFrom`). |
 | VERIFY | `resolve.ts` · `verifyPlan` — the tables above; a pure function of the batch and the rules of the implementation that will run (`stages/toolResolver.ts` · `buildToolResolver`, the one dispatch resolver). The declared sources: `checks.ts` · `checkSource`, whole-token membership in the ONE place each source lives, over corpora the mount builds from the served record (`honesty/sourceCorpus.ts` · `sourceCorpusOf`) — a membership pass can REFUTE a claim and never supports one. The person's answer: `ask.ts` · `checkAnswer`, the property's own schema. |
-| RECORD | `rows.ts` · `ArgumentRow` — one row per ruled argument per call, its value in the tool's OWN argument view (`core/toolShownArgs.ts` · `shownArgsOf`: a hidden argument reads `'REDACTED'`), stamped with the conversation `turn`: `default`, `model`, `asked` (`missing`, `invalid-answer`; no value), `answered` (`free` for a free-text field; filed by the layer itself, with no `asked` row, when a kept answer fills the value). Under declared sources a present value's row also carries the check (`claimed`, `matched`, `quote` — `'REDACTED'` while any tool in reach hides arguments, since a quote is free text that may hold any hidden value (`resolve.ts` · `quotesMayShow`) — `reading`, `earlier`, `result`, `setAside`, `argumentsFrom`, `appSource`, `coincides`, `failed`), the model's value as `proposed` on an `asked: 'unverified'` row, a FREE argument a `from` entry named is filed with no `rule`, and the call's first row carries its dropped `from` entries (`malformed`) when no basis row does. The layer's rows are merged into the ONE ledger (`AgentState.findingsLedger`) by the ledger's pure half (`findings/ledger.ts` · `appendRows`) in ONE write per batch, through the mount's output mapper (`honesty/mounts.ts` · `mountInputsLayer`); the ask's `answered` and `invalid-answer` rows through the one writer (`findings/ledger.ts` · `recordFindings`), once per answer. One `agentfootprint.findings.argument` event per row (names, enums and counts — never a value). The `agentfootprint.pause.resume` event of the library's own ask carries the reply's shape with every value `'REDACTED'` (`askMarker.ts` · `argumentAskReplyForEvent`, read in `core/RunnerBase.ts` · `emitPauseResume`), because an answer may fill an argument the tool's view hides. |
+| RECORD | `rows.ts` · `ArgumentRow` — one row per ruled argument per call, its value in the tool's OWN argument view (`core/toolShownArgs.ts` · `shownArgsOf`: a hidden argument reads `'REDACTED'`), stamped with the conversation `turn`: `default`, `model`, `asked` (`missing`, `invalid-answer`; no value), `answered` (`free` for a free-text field; filed by the layer itself, with no `asked` row, when a kept answer fills the value). Under declared sources a present value's row also carries the check (`claimed`, `matched`, `quote` — `'REDACTED'` while any tool in reach can hide arguments (a registered tool with an argument view, or any ToolProvider), since a quote is free text that may hold any hidden value (`resolve.ts` · `quotesMayShow`) — `reading`, `earlier`, `result`, `setAside`, `argumentsFrom`, `appSource`, `coincides`, `failed`), the model's value as `proposed` on an `asked: 'unverified'` row, a FREE argument a `from` entry named is filed with no `rule`, and the call's first row carries its dropped `from` entries (`malformed`) when no basis row does. The layer's rows are merged into the ONE ledger (`AgentState.findingsLedger`) by the ledger's pure half (`findings/ledger.ts` · `appendRows`) in ONE write per batch, through the mount's output mapper (`honesty/mounts.ts` · `mountInputsLayer`); the ask's `answered` and `invalid-answer` rows through the one writer (`findings/ledger.ts` · `recordFindings`), once per answer. One `agentfootprint.findings.argument` event per row (names, enums and counts — never a value). The `agentfootprint.pause.resume` event of the library's own ask carries the reply's shape with every value `'REDACTED'` (`askMarker.ts` · `argumentAskReplyForEvent`, read in `core/RunnerBase.ts` · `emitPauseResume`), because an answer may fill an argument the tool's view hides. |
 | RESOLVE | **assume** (fill the declared default — `resolve.ts` · `resolutionsOf`), **ask** (the batch ask, `stages/argumentAsk.ts` · `askBeforeDispatch` — a missing `ask` value, and under declared sources an untraced present one), **refuse** (rules that cannot be read at dispatch; answers that never fit). ToolCalls applies each entry after `tool_start` (which keeps the model's proposal) and BEFORE the permission check, so policy judges the call that will really run (`dispatch.ts` · `withFills`). A ruled tool met on an agent WITHOUT the layer is refused rather than run unruled (`dispatch.ts` · `unmountedRefusal`, the sentence `serve.ts` · `unmountedRulesRefusal`). The refusals are decided after permission and BEFORE the before-tool middleware chain, so no middleware can ask a person about a call that will not run; the middleware-ask resume door re-applies them (`stages/toolCalls.ts` · `resume`). Inner dispatch (`ctx.tools.call`) refuses a ruled tool unless every ruled argument is given (`toolDispatch.ts` · `refuseUnaccountedRuledArguments`). |
 | FOLD | the answer's standing (`assessment/assess.ts` · `readArgumentVerdicts`, `readArgumentAsk`), this turn's rows only: a `default` row fires `argument-assumed`, a `model` row on a ruled argument fires `argument-unverified` — "not sure"; the batch ask still waiting (`AgentState.argumentAsk`'s `waiting`, with this turn's `asked` rows as witnesses) fires `argument-asked` — "ask". Under declared sources: a READING fires `argument-read`, a value from a result the model had set aside fires `value-contingent`, a failed claim on ANY argument fires `argument-unverified`, and a traced source (`said` via the quote or a phrase, `answered`, `result`, `app`) fires nothing — so an answer can read "consistent with the record" on checked values, and never "known" from them; `checked` gains `argument-sources`. An `answered` row fires nothing and supports nothing. A before-tool middleware that rewrote a ruled argument AFTER the layer checked it supersedes the row: assumed, unless it declared the value the person's or the app's (`allow(args, why, { from })`; `middleware/outcomes.ts` · `allow`), read by ONE owner (`middleware/rewrites.ts` · `argumentRewritesOf`). Every result the fold reads is the TOOL's own bytes (`lib/toolBytes.ts` · `toolBytesOf`). No row here ever SUPPORTS "known". |
 | SERVE | the model: the served schema drops a ruled argument from `required` and says the rule (`serve.ts` · `withArgumentRules`, `ASK_SENTENCE`); a call that ran on a filled value gets a past-tense note after the tool's own bytes (`serve.ts` · `filledNote`) — one clause per fill the call really ran with (`dispatch.ts` · `fillsThatRan`) — and its history message carries `toolChars`, the cut every reader of a result as the TOOL's words reads through (`lib/toolBytes.ts` · `toolBytesOf`). Under declared sources: the `from` property on a ruled tool's `_findings` (`findings/reserved.ts` · `FINDINGS_FROM_PROPERTY`), one instruction line (`findings/reserved.ts` · `FINDINGS_SOURCES_LINE`), and the answered note's "(the call had carried …)". The person: the typed ask (with `quoted`, the person's own words a reading was made of); the rows, the event, the standing — and, only under `.limitsTravelWithTheAnswer()`, an "Assumed (a tool's rule, not your words)" block (`serve.ts` · `assumedBlockOf`). The evidence gate treats a declared default as the app's words and an answered value as the person's (`evidence/evidenceIndex.ts` · `exemptFromRun`, `stages/route.ts` · `answeredValuesOf`). |
@@ -419,6 +430,18 @@ the PERFORMANCE block), and the resume adds no model call.
 - **The turn stamp** is written on EVERY row the one writer files while the layer is armed
   (this layer's rows, and the basis, standing, contingent, judgment and conflict rows filed
   beside them); on an agent without the layer, no row changes.
+- **Open for the owner — an `app` claim under an `ask` rule.** A value found in the app's own
+  text (the system messages, the composed system prompt, `externalGrounds`) is traced
+  (`checks.ts` · `isTraced`), so under an `ask` rule it runs unasked, as the person's quoted
+  words do. Whether an `ask` rule should accept only the PERSON (`said`, `answered`) and ask
+  about an `app` value is the owner's call; the code keeps `app` traced until then.
+- **Open for the owner — the default output-schema instruction as the app's text.**
+  `.outputSchema()` adds an always-on instruction (`core/outputSchema.ts` ·
+  `buildDefaultInstruction` — the library's sentence, plus the parser's own `description` —
+  unless the app passes its own `instruction`), and only the findings and ontology instructions
+  are left out of the app corpus (`honesty/sourceCorpus.ts` · `LIBRARY_INSTRUCTIONS`). So a
+  value that text spells checks out as `app`. Whether the library's default sentence counts as
+  the app's text is the owner's call; the corpus is unchanged until then.
 
 ## What it lets you measure
 

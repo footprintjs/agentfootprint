@@ -184,23 +184,32 @@ it at the study's freeze (adopted Q12).
 - **Evicted results.** Under `.window()`, a window strategy can remove this
   turn's early results from `history`; the commit log still has them, but the
   fold reads the final state, so an evicted undeclared `[]` fires nothing.
-- **Conflicts from an earlier turn that reuse a call id — on an agent without an
-  honesty layer.** A carried conflict row counts as this turn's when a witness
-  shares a `toolCallId` with a call of this turn — a provider that reuses ids
-  across turns makes an earlier turn's conflict read `sources-conflict`. It
-  over-reports and never hides. While the inputs layer is armed, the one writer
-  stamps every row with its conversation `turn` (honesty step 3), and a stamped
-  conflict row counts only in its own turn.
+- **Rows from an earlier turn that reuse a call id — on an agent without an
+  honesty layer.** Without a turn stamp, the fold places a ledger row in this
+  turn by the call ids it names, and a provider that reuses ids across turns
+  (numbering each response's calls from `0`, say) makes an earlier turn's row
+  look like this turn's in three places: a carried conflict row whose witness
+  shares an id with a call of this turn reads `sources-conflict`
+  (`readConflicts`); a contingent row declared on such a call reads
+  `value-contingent`; and `firstRowOfTurn` — which finds where this turn's rows
+  begin as the first unstamped row naming a call of this turn — can stop at an
+  EARLIER turn's row that named the reused id, so every contingent row declared
+  on the answer after it, an earlier turn's answer included, is read as this
+  turn's. Each over-reports ("not sure") and never hides. The cheap guard —
+  start the search after the last row naming an id that only earlier turns
+  called — does not help a provider that reuses every id, so it is not built.
+  While the inputs layer is armed, the one writer stamps every row with its
+  conversation `turn` (honesty step 3), and a stamped row counts only in its own
+  turn.
 - **An unstamped contingent row declared on the ANSWER, on a later turn the
   ledger cannot place** (an agent without the inputs layer). Such a row names no
   call of its own, and the ledger crosses turns on a continued conversation, so
   on a turn after the first it counts only when it follows — or is — a row the
   ledger shows to be this turn's: one stamped with this turn, or one that names
-  a call of this turn (a row cannot name a call before the call exists). A later
-  turn that made no call and filed nothing else leaves it unread: it may be an
-  earlier turn's answer, and an earlier answer must never make this one "not
-  sure". A provider that reuses call ids across turns can place an earlier row
-  in this turn — it over-reports there. Arm the inputs layer and every row
+  a call of this turn (a row cannot name a call before the call exists; a reused
+  id is the bullet above). A later turn that made no call and filed nothing else
+  leaves it unread: it may be an earlier turn's answer, and an earlier answer
+  must never make this one "not sure". Arm the inputs layer and every row
   carries its turn.
 - **Subject placement.** Which entity the question names is on hold, so the fold
   reads every call of the turn.

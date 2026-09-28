@@ -128,13 +128,6 @@ export interface SourceCorpus {
   readonly assistant: readonly string[];
   readonly app: readonly AppWords[];
   readonly answers: readonly EarlierAnswer[];
-  /**
-   * The names of the tools the served history's assistant turns called —
-   * names only. Never read by a check: the layer asks whether any of them
-   * hides arguments, so a quote that may hold a hidden value stays off the
-   * record (`resolve.ts` · `quotesMayShow`). Absent → none.
-   */
-  readonly calledTools?: readonly string[];
 }
 
 // ─── The subject and the verdict ────────────────────────────────────────

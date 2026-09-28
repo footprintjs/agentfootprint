@@ -141,7 +141,8 @@ function declaredOf(
 
 /**
  * The arm as the pure steps take it — the entries, and (from Verify on) the
- * corpora and whether a registered tool hides arguments.
+ * corpora and whether a tool in reach can hide arguments (the agent's
+ * build-time fact: a registered tool with an argument view, or a ToolProvider).
  */
 function armOf(
   declared: ReadonlyMap<string, CallSources> | undefined,

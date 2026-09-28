@@ -4,8 +4,9 @@
  *
  * Pattern: two pure readers over the JSON grammar (no imports, no state, no
  *          clock): `leadingJsonValues` (the complete values a text OPENS
- *          with, and the text after them) and `jsonPrefixLeaves` (the leaves
- *          of JSON text cut short, token by token).
+ *          with, and the text after them) and `jsonPrefixOf` (the leaves of
+ *          JSON text cut short, token by token, and the whole words of a
+ *          string the cut falls inside).
  * Role:    core/ layer, `evidence/`. Asked by `evidenceIndex.ts` ·
  *          `readResult` — the ONE reading of a result that the evidence index
  *          and the inputs layer's declared-sources check
@@ -113,14 +114,31 @@ export function leadingJsonValues(text: string): {
   return { values, rest: text.slice(at) };
 }
 
+/** What JSON text CUT SHORT reads as (`jsonPrefixOf`). */
+export interface JsonPrefix {
+  /**
+   * Every complete string (a key or a value) and every complete number and
+   * boolean, in order, each as the string the parsed walk would index
+   * (`String(4417)`, `'true'`); `null` is not a leaf.
+   */
+  readonly leaves: readonly string[];
+  /**
+   * When the text ends inside a string: its WHOLE words — the string up to the
+   * last space before the cut, unescaped (`"msg":"disk full on host-7 and mo`
+   * → `disk full on host-7 and`). Text, never a leaf: it is not the whole
+   * string. Absent when no whole word is left.
+   */
+  readonly words?: string;
+}
+
 /**
- * The leaves of JSON text CUT SHORT — an object or an array whose text ends
- * before it closes (a capped result's `head`, a result a tool truncated
- * itself) — read by the JSON grammar as far as it goes: every complete string
- * (a key or a value) and every complete number and boolean, in order, each as
- * the string the parsed walk would index (`String(4417)`, `'true'`); `null`
- * is not a leaf. The token the text ends inside is not a leaf — it may be cut
- * (`4417` cut at `44` is not the value `44`).
+ * JSON text CUT SHORT — an object or an array whose text ends before it
+ * closes (a capped result's `head`, a result a tool truncated itself) — read
+ * by the JSON grammar as far as it goes: its complete leaves, in order, and,
+ * when the text ends inside a string, that string's whole words (`words`).
+ * The token the text ends inside is never a leaf — it may be cut (`4417` cut
+ * at `44` is not the value `44`) — and the word a cut string ends in is never
+ * one of its words (`mo` may be `more`).
  *
  * `undefined` when the text is not JSON cut short: it does not open with `{`
  * or `[`, a token is not a JSON token (`[INFO] …`, `{level=info`) — the one
@@ -130,11 +148,13 @@ export function leadingJsonValues(text: string): {
  *
  * @example
  * ```ts
- * jsonPrefixLeaves('{"hosts":[{"id":4417,"up":true},{"id":22');
- * // ['hosts', 'id', '4417', 'up', 'true', 'id']
+ * jsonPrefixOf('{"hosts":[{"id":4417,"up":true},{"id":22');
+ * // { leaves: ['hosts', 'id', '4417', 'up', 'true', 'id'] }
+ * jsonPrefixOf('{"id":4417,"msg":"disk full on host-7 and mo');
+ * // { leaves: ['id', '4417', 'msg'], words: 'disk full on host-7 and' }
  * ```
  */
-export function jsonPrefixLeaves(text: string): readonly string[] | undefined {
+export function jsonPrefixOf(text: string): JsonPrefix | undefined {
   let at = skipSpace(text, 0);
   if (text[at] !== '{' && text[at] !== '[') return undefined;
   const leaves: string[] = [];
@@ -151,7 +171,11 @@ export function jsonPrefixLeaves(text: string): readonly string[] | undefined {
       at += 1;
     } else if (ch === '"') {
       const end = stringEnd(text, at);
-      if (end < 0) break; // the text ends inside this string: not a complete leaf
+      if (end < 0) {
+        // The text ends inside this string: not a complete leaf — its whole words are text.
+        const words = wholeWordsOf(text.slice(at + 1));
+        return words === undefined ? { leaves } : { leaves, words };
+      }
       const read = parseOne(text.slice(at, end));
       if (!read.ok) return undefined;
       leaves.push(read.value as string);
@@ -164,14 +188,31 @@ export function jsonPrefixLeaves(text: string): readonly string[] | undefined {
       const literal = text.slice(at, end);
       // The text ends inside this literal: it may be cut — but only a JSON
       // literal's beginning can be (`tr`, `-4`, `1.5e`); anything else is not JSON.
-      if (end === text.length) return isLiteralStart(literal) ? leaves : undefined;
+      if (end === text.length) return isLiteralStart(literal) ? { leaves } : undefined;
       if (literal === 'true' || literal === 'false') leaves.push(literal);
       else if (JSON_NUMBER.test(literal)) leaves.push(String(Number(literal)));
       else if (literal !== 'null') return undefined;
       at = end;
     }
   }
-  return leaves;
+  return { leaves };
+}
+
+/**
+ * The whole words of a string literal's body cut short (the characters after
+ * its opening quote): the body up to its LAST space, read as a JSON string. A
+ * space cannot sit inside an escape, so that part is complete; the word the
+ * cut may have split — and anything glued to it without a space — is left
+ * out. `undefined` when nothing but that word is left, or the part does not
+ * read as a JSON string (an escape the grammar refuses).
+ */
+function wholeWordsOf(body: string): string | undefined {
+  const lastSpace = body.lastIndexOf(' ');
+  if (lastSpace < 0) return undefined;
+  const read = parseOne(`"${body.slice(0, lastSpace)}"`);
+  if (!read.ok) return undefined;
+  const words = read.value as string;
+  return words.trim() === '' ? undefined : words;
 }
 
 /** The beginning of a JSON number: `-`, `4`, `1.`, `1.5e`, `1.5e-`, `12e+3`. */

@@ -22,12 +22,17 @@
  *                 not in q with no phrase for v in q, the value is a READING —
  *                 never traced, so an `ask` rule never runs it unasked;
  *   - SECURITY  — a quote found only in a composed run's own message fails as
- *                 `composed-message`, and only the run's OWN message is marked;
- *                 a quote is shown on a row or an ask only while no tool in
- *                 reach hides arguments (registered, called in the batch or
- *                 the served history, the call's own), and only a READING
- *                 rides the ask as the person's words; a `turn` claim never
- *                 resolves to another tool's or another argument's answer;
+ *                 `composed-message`, only the run's OWN message is marked, and
+ *                 the library's own lookup (`coincides`) never reads it as the
+ *                 person's; a quote is shown on a row or an ask only while no
+ *                 tool in reach can hide arguments (the agent's build-time
+ *                 fact; a call whose name nothing answers never shows one),
+ *                 and only a READING rides the ask as the person's words; a
+ *                 `turn` claim never resolves to another tool's or another
+ *                 argument's answer, and an answer the clip cut is
+ *                 `uncheckable`, never compared; a person's message or the
+ *                 app's text past the index's ceiling is `uncheckable`, never
+ *                 "not found";
  *                 a value only in a DIFFERENT result than
  *                 the one named fails `not-in-result`; a placement ticket
  *                 fails `placed-result`; a negation passes membership and is
@@ -51,8 +56,8 @@ import {
   verifyPlan,
 } from '../../../../src/core/agent/arguments/resolve.js';
 import { sourceCorpusOf } from '../../../../src/core/agent/honesty/sourceCorpus.js';
-import { SHOWN_ARGS } from '../../../../src/core/toolShownArgs.js';
 import { readSources } from '../../../../src/core/agent/arguments/sources.js';
+import { shownValue } from '../../../../src/core/agent/arguments/rows.js';
 import {
   MAX_INDEX_TOKENS,
   evidenceFromHistory,
@@ -411,6 +416,31 @@ describe('UNIT — V2: `user` + quote', () => {
     expect(v.failed).toBe('uncheckable');
   });
 
+  it('a person’s message or the app’s text past the index’s ceiling: a match beyond it is uncheckable — never "not found"', () => {
+    const huge = Array.from({ length: MAX_INDEX_TOKENS + 10 }, (_, i) => `w${i}`).join(' ');
+    const beyond = `w${MAX_INDEX_TOKENS + 5}`;
+    // One corpus, so the huge text is tokenised once (the checks' per-corpus cache).
+    const c = corpus({ person: [{ text: huge }], app: [{ text: huge }] });
+    const quote = checkSource(
+      subject({
+        claim: { argument: 'window', source: 'user', quote: `${beyond} w${MAX_INDEX_TOKENS + 6}` },
+      }),
+      c,
+    );
+    expect(quote).toEqual({ source: 'model', failed: 'uncheckable', claimed: 'user' });
+    const app = checkSource(
+      subject({ value: beyond, claim: { argument: 'window', source: 'app' } }),
+      c,
+    );
+    expect(app).toEqual({ source: 'model', failed: 'uncheckable', claimed: 'app' });
+    // Within the ceiling the same text answers as usual: the words are found (a reading here).
+    const within = checkSource(
+      subject({ claim: { argument: 'window', source: 'user', quote: 'w7 w8' } }),
+      c,
+    );
+    expect(within).toEqual({ source: 'said', reading: true, claimed: 'user' });
+  });
+
   it('SECURITY: a negation passes membership — and is still only `said`, never support', () => {
     const c = corpus({ person: [{ text: 'not the last 24 hours — the whole week' }] });
     const v = checkSource(
@@ -627,6 +657,28 @@ describe('UNIT — V4: `turn` resolves only to an earlier answer', () => {
     expect(nowhere.failed).toBe('not-in-earlier-turns');
   });
 
+  it('an answer the clip cut cannot be compared → uncheckable, never "not in earlier turns"', () => {
+    // A free-text `ask` (no choices): the person typed a long name, and the row holds it clipped.
+    const service = { argument: 'service', rule: 'ask', type: 'string', ask: {} } as never;
+    const typed =
+      'the checkout service that runs in the eu west region beside the payments gateway and ledger';
+    const onRow = shownValue(typed);
+    expect(onRow.length < typed.length && onRow.endsWith('…')).toBe(true);
+    const v = checkSource(
+      subject({
+        argument: 'service',
+        value: typed,
+        rule: service,
+        claim: { argument: 'service', source: 'turn' },
+      }),
+      corpus({
+        turn: 2,
+        answers: [{ toolName: 'search_logs', argument: 'service', value: onRow, turn: 1 }],
+      }),
+    );
+    expect(v).toEqual({ source: 'model', failed: 'uncheckable', claimed: 'turn' });
+  });
+
   it('an answer the tool’s view hid cannot be compared → uncheckable', () => {
     const v = checkSource(
       subject({ value: '7d', claim: { argument: 'window', source: 'turn' } }),
@@ -673,6 +725,21 @@ describe('UNIT — V5: `app`; V6: assumed or nothing; V1: the declared default',
     expect(
       checkSource(subject({ value: '1h' }), corpus({ person: [{ text: 'errors in 1h?' }] })),
     ).toEqual({ source: 'model', coincides: 'person', claimed: 'none' });
+  });
+
+  it('SECURITY: the library’s own lookup never reads a composed run’s message as the person’s', () => {
+    const composed = corpus({
+      person: [{ text: 'Plan from the planner: search the last 1h', composed: true }],
+    });
+    // Nothing declared: `1h` is only in another runner's words — no hint.
+    expect(checkSource(subject({ value: '1h' }), composed)).toEqual({
+      source: 'model',
+      claimed: 'none',
+    });
+    // A failed claim runs the same lookup.
+    expect(
+      checkSource(subject({ value: '1h', claim: { argument: 'window', source: 'app' } }), composed),
+    ).toEqual({ source: 'model', failed: 'not-in-app-text', claimed: 'app' });
   });
 
   it('SECURITY V1: the declared default is filed `default` — it never earns `app` or `result`', () => {
@@ -724,12 +791,7 @@ describe('UNIT — V5: `app`; V6: assumed or nothing; V1: the declared default',
 
 // ─── what the record may SHOW of a quote ────────────────────────────
 
-describe('SECURITY — a quote is shown only while no tool in reach hides arguments (`verifyPlan`)', () => {
-  const hides = (name: string): Tool =>
-    ({
-      ...defineTool({ name, description: 'd', execute: () => 'ok' }),
-      [SHOWN_ARGS]: (args: Record<string, unknown>) => ({ ...args, secret: 'REDACTED' }),
-    } as never);
+describe('SECURITY — a quote is shown only while no tool in reach can hide arguments (`verifyPlan`)', () => {
   const call = {
     id: 'c1',
     name: 'search_logs',
@@ -744,41 +806,37 @@ describe('SECURITY — a quote is shown only while no tool in reach hides argume
       },
     ],
   ]);
-  const shownFor = (
+  /** The batch's one checked argument, VERIFY's own entry. */
+  const checkedFor = (
     toolOf: (name: string) => Tool | undefined,
-    over: { calledTools?: string[]; argumentViews?: true } = {},
+    over: { argumentViews?: true } = {},
   ) => {
     const sources = {
       declared,
-      corpus: corpus(over.calledTools !== undefined ? { calledTools: over.calledTools } : {}),
+      corpus: corpus(),
       ...(over.argumentViews === true && { argumentViews: true as const }),
     };
     const plan = declareBatch([call], toolOf, sources);
-    return verifyPlan(plan, [call], toolOf, undefined, sources)[0]?.quoteShown;
+    return verifyPlan(plan, [call], toolOf, undefined, sources)[0];
   };
   const only = (name: string) => (name === 'search_logs' ? searchLogs : undefined);
 
-  it('no tool in reach hides arguments: the quote is shown', () => {
-    expect(shownFor(only)).toBe(true);
+  it('no tool in reach can hide arguments: the quote is shown', () => {
+    expect(checkedFor(only)?.quoteShown).toBe(true);
   });
 
-  it('a registered tool hides arguments (read at build): hidden — even before any call to it', () => {
-    expect(shownFor(only, { argumentViews: true })).toBeUndefined();
+  it('a tool in reach may hide arguments (the agent decides it once, at build — a registered view, or any ToolProvider): hidden', () => {
+    const checked = checkedFor(only, { argumentViews: true });
+    // The check still ran — only what the record SHOWS changes.
+    expect(checked).toMatchObject({ source: 'said', check: { matched: 'phrase' } });
+    expect(checked?.quoteShown).toBeUndefined();
   });
 
-  it('a tool the served history called hides arguments (a ToolProvider’s, seen once named): hidden', () => {
-    const toolOf = (name: string) => (name === 'vault' ? hides('vault') : only(name));
-    expect(shownFor(toolOf, { calledTools: ['vault'] })).toBeUndefined();
-    // Not called anywhere in reach: nothing is known to hide, the quote is shown.
-    expect(shownFor(toolOf)).toBe(true);
-  });
-
-  it('the call’s own tool hides arguments, or its name answers nothing: hidden', () => {
-    const own = (name: string) =>
-      name === 'search_logs'
-        ? ({ ...searchLogs, ...hides('x'), name: 'search_logs' } as Tool)
-        : undefined;
-    expect(shownFor(own)).toBeUndefined();
+  it('a call whose name nothing answers: hidden — there is no view to ask', () => {
+    // The `from` entry names a FREE argument of a tool nobody serves: checked, filed, never shown.
+    const checked = checkedFor(() => undefined);
+    expect(checked).toMatchObject({ toolCallId: 'c1', argument: 'window' });
+    expect(checked?.quoteShown).toBeUndefined();
   });
 
   it('only a READING rides the ask as the person’s words — never a quote the check did not find', () => {

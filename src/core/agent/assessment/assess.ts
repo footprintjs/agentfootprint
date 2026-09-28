@@ -390,7 +390,9 @@ function callsNamedBy(row: Readonly<Record<string, unknown>>): string[] {
  * that names a call of this turn. A row cannot name a call before the call
  * exists, and the one writer appends in order, so every row from there on was
  * filed this turn. `-1` when no row shows it — nothing on the ledger is shown
- * to be this turn's.
+ * to be this turn's. A provider that reuses call ids across turns breaks the
+ * first premise: an earlier turn's row naming the reused id is found first,
+ * and the fold over-reports from there (named in the README, "Not covered").
  */
 function firstRowOfTurn(
   ledger: readonly unknown[],

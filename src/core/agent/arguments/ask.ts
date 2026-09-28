@@ -30,7 +30,7 @@
  *   quote was found in the person's messages, the value is not in it) is asked
  *   too, and its field's `context` entry carries those words as `quoted` —
  *   the person's own words, never the model's value, and never while a tool
- *   in reach hides arguments (`resolve.ts` · `quotesMayShow`).
+ *   in reach can hide arguments (`resolve.ts` · `quotesMayShow`).
  * - **A fixed library question.** Each author's question is its field's
  *   `description`; joined questions could break the 4096-character bound at
  *   pause time although each passed it at definition.

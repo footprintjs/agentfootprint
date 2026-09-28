@@ -84,10 +84,12 @@ export interface InputsMountDeps {
   readonly sources?: {
     readonly externalGrounds?: () => readonly ExternalGround[];
     /**
-     * A tool the agent registers carries an arguments view
-     * (`core/toolShownArgs.ts` · `carriesArgumentView`) — present only then:
-     * no quote the model wrote is shown on a row or an ask, since a quote may
-     * hold the value that tool hides (`arguments/resolve.ts` · `quotesMayShow`).
+     * A tool in reach may carry an arguments view — one the agent registers
+     * carries one (`core/toolShownArgs.ts` · `carriesArgumentView`), or a
+     * ToolProvider is wired (whatever it lists: its list is known only per
+     * iteration) — present only then: no quote the model wrote is shown on a
+     * row or an ask, since a quote may hold the value such a tool hides
+     * (`arguments/resolve.ts` · `quotesMayShow`).
      */
     readonly argumentViews?: true;
   };

@@ -36,11 +36,13 @@ overturn. Nothing here is built yet.**
 > inputs layer) counts on a first turn, and on a later one only where the ledger shows it is
 > this turn's (§ 5.2's law: an earlier turn's row never makes this answer "not sure").
 > One rule is TIGHTER than § 5.1 wrote it: a row's `quote` (and the ask's `quoted`) reads
-> `'REDACTED'` while ANY tool in reach hides arguments — one the agent registers (read at
-> build, so a quote filed before the hiding call is covered), or one a call of the batch or of
-> the served history resolves to — not only when the quote's own argument is hidden: a quote is
-> free text, and a person who gives a user name and a password in one sentence puts the hidden
-> value inside another call's quote (`arguments/resolve.ts` · `quotesMayShow`). The bench's
+> `'REDACTED'` on an agent where ANY tool in reach can hide arguments — it registers a tool that
+> carries an argument view, or wires a ToolProvider (any provider: its list is known only per
+> iteration, and a tool it first lists after a quote was filed would find the quote already on
+> the record) — decided once at build, so no ordering leaks a quote; not only when the quote's
+> own argument is hidden: a quote is free text, and a person who gives a user name and a
+> password in one sentence puts the hidden value inside another call's quote
+> (`arguments/resolve.ts` · `quotesMayShow`). The bench's
 > step-5 arm and its registered rule are not part of the build; they are registered before the
 > step's first paid call.
 

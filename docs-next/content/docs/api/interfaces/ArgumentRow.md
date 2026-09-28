@@ -163,10 +163,10 @@ value the person's answer replaced.
 
 Defined in: [src/core/agent/arguments/rows.ts:115](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/arguments/rows.ts#L115)
 
-The model's `quote`, clipped (`QUOTE_CHARS`) — `'REDACTED'` while ANY tool
-in reach hides arguments (one the agent registers, or one a call of the
-batch or of the served history resolves to): a quote is free text, and
-may hold any value a tool hides, in any spelling.
+The model's `quote`, clipped (`QUOTE_CHARS`) — `'REDACTED'` on an agent
+where ANY tool in reach can hide arguments (it registers a tool that
+carries an argument view, or wires a ToolProvider — whatever it lists): a
+quote is free text, and may hold any value a tool hides, in any spelling.
 
 ***
 

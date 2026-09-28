@@ -39,7 +39,7 @@
  * A reading (`said` + `reading`: the person's words were found, the value is
  * not in them) ASKS under an `ask` rule — otherwise any exact fragment of the
  * person's message would carry any value past the rule — and the ask's field
- * shows the person their own words (`quoted`) unless a tool in reach hides
+ * shows the person their own words (`quoted`) unless a tool in reach may hide
  * arguments (`quotesMayShow`). The model's value never rides the ask.
  * "Equal" is the evidence module's same-value rule (`declare.ts` ·
  * `sameArgumentValue`). A present value equal to the default is filed as
@@ -59,7 +59,7 @@
  */
 
 import type { InputValue } from '../../inputRequest.js';
-import { carriesArgumentView, shownArgsOf } from '../../toolShownArgs.js';
+import { shownArgsOf } from '../../toolShownArgs.js';
 import { validatePropertyValue } from '../toolArgsValidation.js';
 import { checkSource, isTraced, type SourceCheck, type SourceCorpus } from './checks.js';
 import {
@@ -148,7 +148,7 @@ export interface CheckedArgument {
   readonly check?: SourceCheck;
   /**
    * The model's quote for this argument may be SHOWN — on the row and on the
-   * ask (`quotesMayShow`: no tool in reach hides arguments). Absent → a quote
+   * ask (`quotesMayShow`: no tool in reach can hide arguments). Absent → a quote
    * reads `'REDACTED'` on the row and rides no ask.
    */
   readonly quoteShown?: true;
@@ -165,9 +165,11 @@ export interface SourcesArm {
   /** Present from VERIFY on — DECLARE needs only the entries. */
   readonly corpus?: SourceCorpus;
   /**
-   * A tool the agent registers carries an arguments view
-   * (`core/toolShownArgs.ts` · `carriesArgumentView`) — read once, at build.
-   * Present only then; read by VERIFY (`quotesMayShow`).
+   * A tool in reach may carry an arguments view — one the agent registers
+   * carries one (`core/toolShownArgs.ts` · `carriesArgumentView`), or a
+   * ToolProvider is wired (any provider: its list is known only per
+   * iteration). Decided once, at build; present only then; read by VERIFY
+   * (`quotesMayShow`): no quote is shown on a row or an ask.
    */
   readonly argumentViews?: true;
 }
@@ -209,7 +211,7 @@ export interface ArgumentResolution {
    * value into the person's words (`said` + `reading`), those words — the
    * quote the model declared, found in the person's own messages — so the ask
    * can show the person what was read. Never the model's value, and never
-   * while a tool in reach hides arguments (`quotesMayShow`).
+   * while a tool in reach may hide arguments (`quotesMayShow`).
    */
   readonly quoted?: readonly { readonly argument: string; readonly quote: string }[];
 }
@@ -376,22 +378,17 @@ function placeChecked(
  * may hold ANY value the person gave, in any spelling (a user name and a
  * password in one sentence; a PIN typed "1 2 3 4" and passed as `1234`), and
  * no tool's view covers it — a tool hides its OWN arguments. So a quote is
- * shown only while no tool in reach hides arguments: none the agent registers
- * (`SourcesArm.argumentViews`, read at build — so a quote filed BEFORE the
- * call that carries a hidden value is hidden too), and none that a call of
- * this batch or of the served history resolves to (a ToolProvider's tool is
- * seen once a call names it). The checks still read every quote in memory;
+ * shown only on an agent where no tool in reach can hide arguments
+ * (`SourcesArm.argumentViews`, decided ONCE at build over every party
+ * `toolOf` can resolve — the registry, each tool asked, and any ToolProvider,
+ * whatever it lists). Decided before the first quote is filed, so no ordering
+ * can leak one: a quote filed BEFORE the call that carries the hidden value,
+ * in an earlier iteration or turn, or before a provider first lists the tool
+ * that hides it, is hidden too. The checks still read every quote in memory;
  * only what the record SHOWS is decided here.
  */
-function quotesMayShow(
-  calls: readonly BatchCall[],
-  toolOf: ToolOf,
-  sources: SourcesArm | undefined,
-): boolean {
-  if (sources?.corpus === undefined || sources.argumentViews === true) return false;
-  const names = new Set([...calls.map((c) => c.name), ...(sources.corpus.calledTools ?? [])]);
-  for (const name of names) if (carriesArgumentView(toolOf(name))) return false;
-  return true;
+function quotesMayShow(sources: SourcesArm | undefined): boolean {
+  return sources?.corpus !== undefined && sources.argumentViews !== true;
 }
 
 /**
@@ -413,9 +410,9 @@ export function verifyPlan(
 ): CheckedArgument[] {
   const byId = callById(calls);
   const checked: CheckedArgument[] = [];
-  // Quotes are shown on this batch's rows and ask only when no tool in reach hides
+  // Quotes are shown on this batch's rows and ask only when no tool in reach can hide
   // arguments — and never beside a call whose name nothing answers (no view to ask).
-  const quotesShown = quotesMayShow(calls, toolOf, sources);
+  const quotesShown = quotesMayShow(sources);
   const quoteOf = (call: BatchCall, argument: string): { quoteShown?: true } =>
     quotesShown &&
     toolOf(call.name) !== undefined &&
@@ -487,8 +484,8 @@ function ruleOf(c: CheckedArgument): 'ask' | 'assume' {
 /**
  * The row for a value the declared-sources check judged: the verdict, the
  * value (or, on an ask, the model's proposal) — each in the tool's OWN
- * argument view — and the quote, which reads `'REDACTED'` unless VERIFY found
- * no tool in reach that hides arguments (`quoteShown`, `quotesMayShow`).
+ * argument view — and the quote, which reads `'REDACTED'` unless no tool in
+ * reach can hide arguments (`quoteShown`, `quotesMayShow`).
  */
 function sourcedRow(
   c: CheckedArgument & { readonly check: SourceCheck },

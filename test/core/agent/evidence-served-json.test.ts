@@ -7,23 +7,30 @@
  * Test types (Convention 3):
  *   - UNIT      — `leadingJsonValues`: one value and the note after it,
  *                 several blocks, a block that never closes, text that opens
- *                 with a bracket and is not JSON; `jsonPrefixLeaves`: the
+ *                 with a bracket and is not JSON; `jsonPrefixOf`: the
  *                 complete leaves of a value cut short (keys, strings with
  *                 escapes, numbers in the parsed walk's spelling, booleans;
- *                 never `null`, never the token the text ends inside), and
- *                 `undefined` for a value that CLOSES or a token that is not
- *                 JSON; `readResult`: the tail, a cut block after complete
- *                 ones, an absence's `looked_for` still projected away behind
- *                 a note, a capped result's head read as a result;
+ *                 never `null`, never the token the text ends inside), the
+ *                 whole words of a string the cut falls inside (never the
+ *                 word it may have split; none when an escape is cut or no
+ *                 space is left), and `undefined` for a value that CLOSES or
+ *                 a token that is not JSON; `readResult`: the tail, a cut
+ *                 block after complete ones, a cut string's words as text,
+ *                 an absence's `looked_for` still projected away behind a
+ *                 note, a capped result's head read as a result;
  *   - PROPERTY  — (seeded — the repo carries no property library) over
  *                 generated JSON values: a value with a note after it reads
  *                 as that value plus the note; every prefix of a value's
  *                 text yields leaves that are, in order, a prefix of the
- *                 value's own leaves — the reading never invents a leaf;
+ *                 value's own leaves — the reading never invents a leaf —
+ *                 and a cut string's words are the start of the leaf it was
+ *                 cut from, up to a space in it — never a split word;
  *   - INTEGRATION — the evidence index (`evidenceFromHistory`, the gate's
  *                 corpus) finds a number, a boolean and a string in a result
  *                 a framework note follows, and files that result as their
  *                 carrier — the gate's false flag closed at the one reader;
+ *                 a whole word of a string a tool cut is grounded, the word
+ *                 the cut split is not;
  *   - BOUNDARY  — whole JSON reads exactly as before (the same parsed
  *                 value); plain text and a lone brace stay text.
  */
@@ -32,10 +39,7 @@ import { describe, expect, it } from 'vitest';
 
 import { absent } from '../../../src/core/agent/coverage/index.js';
 import { evidenceFromHistory, readResult } from '../../../src/core/agent/evidence/evidenceIndex.js';
-import {
-  jsonPrefixLeaves,
-  leadingJsonValues,
-} from '../../../src/core/agent/evidence/servedJson.js';
+import { jsonPrefixOf, leadingJsonValues } from '../../../src/core/agent/evidence/servedJson.js';
 
 const NOTE =
   "\n\n[identical call: 'list_hosts' has now returned exactly this result 2 times this turn, for exactly these arguments.]";
@@ -66,26 +70,57 @@ describe('UNIT — leadingJsonValues', () => {
   });
 });
 
-describe('UNIT — jsonPrefixLeaves', () => {
+describe('UNIT — jsonPrefixOf', () => {
+  const leavesOf = (text: string) => jsonPrefixOf(text)?.leaves;
+
   it('the complete leaves of a value cut short, in the parsed walk’s spelling', () => {
-    expect(
-      jsonPrefixLeaves('{"hosts":[{"id":4417,"up":true,"ratio":1.50,"x":null},{"id":22'),
-    ).toEqual(['hosts', 'id', '4417', 'up', 'true', 'ratio', '1.5', 'x', 'id']);
-    expect(jsonPrefixLeaves('["a\\"b","\\u0041", -0.0e1')).toEqual(['a"b', 'A']);
+    expect(leavesOf('{"hosts":[{"id":4417,"up":true,"ratio":1.50,"x":null},{"id":22')).toEqual([
+      'hosts',
+      'id',
+      '4417',
+      'up',
+      'true',
+      'ratio',
+      '1.5',
+      'x',
+      'id',
+    ]);
+    expect(leavesOf('["a\\"b","\\u0041", -0.0e1')).toEqual(['a"b', 'A']);
   });
 
   it('never the token the text ends inside — it may be cut', () => {
-    expect(jsonPrefixLeaves('{"id":4417,"name":"srv-44')).toEqual(['id', '4417', 'name']);
-    expect(jsonPrefixLeaves('{"up":tr')).toEqual(['up']);
-    expect(jsonPrefixLeaves('[12, 34')).toEqual(['12']);
+    expect(jsonPrefixOf('{"id":4417,"name":"srv-44')).toEqual({ leaves: ['id', '4417', 'name'] });
+    expect(jsonPrefixOf('{"up":tr')).toEqual({ leaves: ['up'] });
+    expect(jsonPrefixOf('[12, 34')).toEqual({ leaves: ['12'] });
+  });
+
+  it('a string the cut falls inside: its whole words, never the word the cut may have split', () => {
+    expect(jsonPrefixOf('{"id":4417,"msg":"disk full on host-7 and mo')).toEqual({
+      leaves: ['id', '4417', 'msg'],
+      words: 'disk full on host-7 and',
+    });
+    // Escapes before the last space are read; a cut KEY yields its words too.
+    expect(jsonPrefixOf('{"a \\"quoted\\" key na')).toEqual({
+      leaves: [],
+      words: 'a "quoted" key',
+    });
+    // Cut right after a space: every word before it is whole.
+    expect(jsonPrefixOf('["port fc1/3 down ')?.words).toBe('port fc1/3 down');
+  });
+
+  it('no words when no space is left, or the part before it is not a JSON string', () => {
+    expect(jsonPrefixOf('{"msg":"srv-4417,srv-22')).toEqual({ leaves: ['msg'] });
+    expect(jsonPrefixOf('{"msg":" host')).toEqual({ leaves: ['msg'] });
+    // `\ ` is no JSON escape: nothing is read from the cut string.
+    expect(jsonPrefixOf('{"msg":"a\\ b')).toEqual({ leaves: ['msg'] });
   });
 
   it('undefined for a value that CLOSES, a token that is not JSON, or a mismatched bracket', () => {
-    expect(jsonPrefixLeaves('{"a":1,}')).toBeUndefined();
-    expect(jsonPrefixLeaves('[INFO] 21:00:00 up')).toBeUndefined();
-    expect(jsonPrefixLeaves('{level=info')).toBeUndefined();
-    expect(jsonPrefixLeaves('{"a":[1}')).toBeUndefined();
-    expect(jsonPrefixLeaves('plain')).toBeUndefined();
+    expect(jsonPrefixOf('{"a":1,}')).toBeUndefined();
+    expect(jsonPrefixOf('[INFO] 21:00:00 up')).toBeUndefined();
+    expect(jsonPrefixOf('{level=info')).toBeUndefined();
+    expect(jsonPrefixOf('{"a":[1}')).toBeUndefined();
+    expect(jsonPrefixOf('plain')).toBeUndefined();
   });
 });
 
@@ -101,6 +136,17 @@ describe('UNIT — readResult', () => {
   it('complete blocks, then one cut short: the values, then the cut block’s leaves', () => {
     expect(readResult('{"id":1}\n{"id":2,"name":"b')).toEqual({
       parsed: [{ id: 1 }, ['id', '2', 'name']],
+    });
+  });
+
+  it('JSON a tool cut inside a string: the leaves, and the string’s whole words as `tail`', () => {
+    expect(readResult('{"id":4417,"msg":"disk full on host-7 and mo')).toEqual({
+      parsed: ['id', '4417', 'msg'],
+      tail: 'disk full on host-7 and',
+    });
+    expect(readResult('{"id":1}\n{"id":2,"msg":"link down on fc1/3 sin')).toEqual({
+      parsed: [{ id: 1 }, ['id', '2', 'msg']],
+      tail: 'link down on fc1/3',
     });
   });
 
@@ -181,16 +227,24 @@ describe('PROPERTY — the grammar never invents a leaf (500 generated values)',
 
   it('every prefix of a value’s text yields, in order, a prefix of the value’s own leaves', () => {
     const gen = generator(4242);
+    let withWords = 0;
     for (let i = 0; i < 500; i += 1) {
       const v = JSON.parse(JSON.stringify(gen())) as unknown;
       const text = JSON.stringify(v);
       const all = leavesOf(v);
       for (let cut = 1; cut < text.length; cut += 1 + (i % 3)) {
-        const leaves = jsonPrefixLeaves(text.slice(0, cut));
-        if (leaves === undefined) continue; // the prefix closed a value: not a cut prefix
-        expect(all.slice(0, leaves.length)).toEqual(leaves);
+        const read = jsonPrefixOf(text.slice(0, cut));
+        if (read === undefined) continue; // the prefix closed a value: not a cut prefix
+        expect(all.slice(0, read.leaves.length)).toEqual(read.leaves);
+        if (read.words === undefined) continue;
+        // The words are the start of the string the cut fell inside, up to a space in it.
+        withWords += 1;
+        const cutFrom = all[read.leaves.length] as string;
+        expect(cutFrom.startsWith(read.words)).toBe(true);
+        expect(cutFrom[read.words.length]).toBe(' ');
       }
     }
+    expect(withWords).toBeGreaterThan(0);
   });
 });
 
@@ -209,5 +263,17 @@ describe('INTEGRATION — the evidence index reads the tool’s JSON before a fr
     }
     // The raw tokenizer's junk forms are gone with the whole-text read.
     expect(index.values.has(':4417')).toBe(false);
+  });
+
+  it('a string a tool cut: its whole words are grounded, the word the cut split is not', () => {
+    const index = evidenceFromHistory([
+      { role: 'user', content: 'why is the disk full?' },
+      { role: 'tool', toolCallId: 'c3', content: '{"id":4417,"msg":"disk full on host-7 and mo' },
+    ]);
+    for (const form of ['4417', 'host-7', 'disk']) {
+      expect(index.values.has(form)).toBe(true);
+      expect(index.carriers.get(form)?.toolCallIds).toEqual(['c3']);
+    }
+    expect(index.values.has('mo')).toBe(false);
   });
 });

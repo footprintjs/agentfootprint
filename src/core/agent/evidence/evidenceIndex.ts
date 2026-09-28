@@ -97,7 +97,7 @@ import { absenceEvidenceProjection } from '../coverage/index.js';
 import { isTruncatedToolResult } from '../toolResultCap.js';
 import { isLibraryAuthoredTurn } from './frames.js';
 import { lookupForms, normalizeToken, tokenize } from './normalize.js';
-import { jsonPrefixLeaves, leadingJsonValues } from './servedJson.js';
+import { jsonPrefixOf, leadingJsonValues } from './servedJson.js';
 
 /**
  * Ceiling on indexed tokens. Generous — a 200 000-token corpus is roughly a
@@ -277,8 +277,10 @@ function walk(node: unknown, sink: Sink): void {
 }
 
 /**
- * How ONE result reads: its JSON walked (`parsed`) and any text after it
- * (`tail`), or — when it opens with no JSON the grammar can read — its text.
+ * How ONE result reads: its JSON walked (`parsed`) and any text beside it read
+ * as text (`tail`: a note after the JSON, or the whole words of a string the
+ * JSON was cut inside), or — when it opens with no JSON the grammar can read —
+ * its text.
  */
 export type ResultReading =
   | { readonly parsed: unknown; readonly tail?: string }
@@ -316,10 +318,12 @@ function asEvidence(value: unknown): unknown {
  * repeated-call note), or several JSON blocks (an MCP text result's content
  * blocks) — reads as those leading values, walked, and the text after them as
  * `tail`; one cut short before it closes (a tool that truncated its own
- * output) reads as the leaves the grammar can read (`servedJson.ts`). Read
- * whole as text, `{"id":4417}` tokenises to `:4417`, and every number and
- * boolean the tool returned would read as absent. Text that opens with a
- * brace and is not JSON (a log line) stays text.
+ * output) reads as the leaves the grammar can read, and — cut inside a
+ * string — that string's whole words as `tail` (`servedJson.ts` ·
+ * `jsonPrefixOf`: never the word the cut may have split). Read whole as text,
+ * `{"id":4417}` tokenises to `:4417`, and every number and boolean the tool
+ * returned would read as absent. Text that opens with a brace and is not JSON
+ * (a log line) stays text.
  */
 export function readResult(content: string): ResultReading {
   const trimmed = content.trim();
@@ -331,16 +335,18 @@ export function readResult(content: string): ResultReading {
   }
   const { values, rest } = leadingJsonValues(trimmed);
   if (values.length === 0) {
-    const leaves = jsonPrefixLeaves(trimmed);
-    return leaves !== undefined ? { parsed: leaves } : { text: content };
+    const cut = jsonPrefixOf(trimmed);
+    if (cut === undefined) return { text: content };
+    return { parsed: cut.leaves, ...(cut.words !== undefined && { tail: cut.words }) };
   }
-  // After the values: a further block cut short (its leaves), or text.
-  const cut = rest === '' ? undefined : jsonPrefixLeaves(rest);
+  // After the values: a further block cut short (its leaves, and the words of a cut string), or text.
+  const cut = rest === '' ? undefined : jsonPrefixOf(rest);
   const walked = values.map(asEvidence);
-  const all = cut === undefined ? walked : [...walked, cut];
+  const all = cut === undefined ? walked : [...walked, cut.leaves];
+  const tail = cut === undefined ? (rest === '' ? undefined : rest) : cut.words;
   return {
     parsed: all.length === 1 ? all[0] : all,
-    ...(cut === undefined && rest !== '' && { tail: rest }),
+    ...(tail !== undefined && { tail }),
   };
 }
 

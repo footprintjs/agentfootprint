@@ -39,7 +39,11 @@
  *                    argument's value) — and so does a quote beside a call of
  *                    ANOTHER tool while a tool that hides arguments is in
  *                    reach (the same batch, a later turn, before the hiding
- *                    call); the served note names no hidden value; a before-tool rewrite after the layer reads as
+ *                    call) — and on an agent with a ToolProvider, whatever
+ *                    the order (the hiding tool called in a later iteration,
+ *                    listed for the first time after the quote, never called
+ *                    before an ask; any provider counts, even one that lists
+ *                    no hiding tool); the served note names no hidden value; a before-tool rewrite after the layer reads as
  *                    assumed; events never carry a value or a quote;
  *   - PERFORMANCE  — what `from` and the instruction line add to a served
  *                    request (recorded, not claimed), and the checks' cost per
@@ -1174,6 +1178,92 @@ describe('SECURITY — library text is never evidence, and no value passes a too
       await agent.run({ message: 'password hunter2 and checkout errors over the last week' });
       expect(JSON.stringify(agent.findings())).not.toContain('hunter2');
       expect(argumentRows(agent)[0]).toMatchObject({ quote: 'REDACTED' });
+    });
+
+    describe('a ToolProvider’s tool — its list is known only per iteration, so ANY provider counts', () => {
+      const sentence =
+        'Log me in as bob with password hunter2 and show checkout errors from the last week';
+      /** The registered search plus a provider: `list` decides what the provider serves. */
+      const withProvider = (script: Reply[], list: (iteration: number) => Tool[]) =>
+        Agent.create({ provider: scripted(script).provider as never, model: 'm' })
+          .tool(askingSearch([]))
+          .toolProvider({ id: 'p', list: (ctx) => list(ctx.iteration) })
+          .findings({ argumentSources: true })
+          .build();
+
+      it('the quote is filed in iteration 1, the provider’s hiding tool is called in iteration 2: REDACTED', async () => {
+        const hiding = login();
+        const agent = withProvider(
+          [batch(quoting('c2', sentence, '7d')), batch(signIn('c1')), answer('No errors.')],
+          () => [hiding],
+        );
+        expect(await agent.run({ message: sentence })).toBe('No errors.');
+        const row = argumentRows(agent).find((r) => r.toolCallId === 'c2');
+        // The verdict is unchanged — only the text is withheld.
+        expect(row).toMatchObject({ source: 'said', matched: 'phrase', quote: 'REDACTED' });
+        expect(JSON.stringify(agent.findings())).not.toContain('hunter2');
+      });
+
+      it('a tool the provider lists for the FIRST time after the quote was filed: REDACTED', async () => {
+        const hiding = login();
+        const agent = withProvider(
+          [batch(quoting('c2', sentence, '7d')), batch(signIn('c1')), answer('No errors.')],
+          // Iteration 1 lists nothing: when the quote is filed, no hiding tool exists anywhere.
+          (iteration) => (iteration >= 2 ? [hiding] : []),
+        );
+        await agent.run({ message: sentence });
+        expect(argumentRows(agent).find((r) => r.toolCallId === 'c2')).toMatchObject({
+          quote: 'REDACTED',
+        });
+        expect(JSON.stringify(agent.findings())).not.toContain('hunter2');
+      });
+
+      it('a reading asked before the provider’s hiding tool was ever called: the ask, the rows and the checkpoint carry no quote', async () => {
+        const hiding = login();
+        const agent = withProvider(
+          [batch(quoting('c2', 'I am bob and my password is hunter2')), answer('ok')],
+          () => [hiding],
+        );
+        const paused = await agent.run({
+          message: 'I am bob and my password is hunter2, any errors on checkout?',
+        });
+        if (!isInputPause(paused)) throw new Error('expected the reading to be asked about');
+        expect(JSON.stringify(paused.awaitingInput.context)).not.toContain('hunter2');
+        expect(JSON.stringify(agent.findings())).not.toContain('hunter2');
+        expect(argumentRows(agent)[0]).toMatchObject({ asked: 'unverified', quote: 'REDACTED' });
+        // The stored run holds the conversation (the person's words, verbatim) — and no
+        // `quoted` the library wrote: the ask's field and the batch's resolution have none.
+        expect(JSON.stringify(paused.checkpoint)).not.toContain('"quoted"');
+      });
+
+      it('conservative by construction: a provider that never lists a hiding tool still hides the quote', async () => {
+        const agent = withProvider(
+          [batch(quoting('c2', 'errors from the last week', '7d')), answer('ok')],
+          () => [],
+        );
+        await agent.run({ message: 'checkout errors from the last week' });
+        expect(argumentRows(agent)[0]).toMatchObject({ source: 'said', quote: 'REDACTED' });
+      });
+
+      it('`.selfExplain()` serves its trace tools through a provider — it counts too; neither → the quote is shown', async () => {
+        const script = () => [
+          batch(quoting('c2', 'errors from the last week', '7d')),
+          answer('ok'),
+        ];
+        const explaining = Agent.create({
+          provider: scripted(script()).provider as never,
+          model: 'm',
+        })
+          .tool(askingSearch([]))
+          .selfExplain()
+          .findings({ argumentSources: true })
+          .build();
+        await explaining.run({ message: 'checkout errors from the last week' });
+        expect(argumentRows(explaining)[0]).toMatchObject({ quote: 'REDACTED' });
+        const plain = agentWith(script(), [askingSearch([])]);
+        await plain.run({ message: 'checkout errors from the last week' });
+        expect(argumentRows(plain)[0]).toMatchObject({ quote: 'errors from the last week' });
+      });
     });
   });
 
