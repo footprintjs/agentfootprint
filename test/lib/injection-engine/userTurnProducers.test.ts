@@ -259,7 +259,9 @@ const SITES: Readonly<Record<string, readonly Site[]>> = {
     { cls: 'never-in-history', why: 'wire translation: a text turn in the vendor shape' },
     { cls: 'never-in-history', why: 'wire translation: a tool-result turn in the vendor shape' },
   ],
-  'src/adapters/llm/BrowserAnthropicProvider.ts': [
+  // The Anthropic Messages body shared by browserAnthropic and invokeModelGateway
+  // (moved out of BrowserAnthropicProvider.ts unchanged).
+  'src/adapters/llm/anthropicMessagesWire.ts': [
     { cls: 'never-in-history', why: 'wire translation: a text turn in the vendor shape' },
     { cls: 'never-in-history', why: 'wire translation: a tool-result turn in the vendor shape' },
   ],

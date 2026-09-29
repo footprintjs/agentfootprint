@@ -198,6 +198,7 @@ import {
   type ToolAbsence,
 } from '../coverage/index.js';
 import { readItemExtras, type CoverageSection } from '../coverage/items.js';
+import { copyInProgressItem } from '../coverage/inProgress.js';
 import { copyPeriod } from '../coverage/period.js';
 import { servedToModel, strippedOnly } from '../coverage/read.js';
 import {
@@ -1707,6 +1708,9 @@ export function buildToolCallsHandler(
       const checked = copy(facts.coverage.checked, 'checked');
       const notChecked = copy(facts.coverage.notChecked, 'notChecked');
       const cannotCover = copy(facts.coverage.cannotCover, 'cannotCover');
+      // What a ledger's read found still running (`coverage/inProgress.ts`) —
+      // read by its ONE rule set, so every item here is well-formed; copied.
+      const inProgress = facts.inProgress?.map(copyInProgressItem);
       if (facts.kind === 'absence') {
         typedEmit(scope, 'agentfootprint.tools.absent', {
           toolName: call.toolName,
@@ -1736,6 +1740,7 @@ export function buildToolCallsHandler(
           ...(checked.length > 0 && { checked }),
           ...(notChecked.length > 0 && { notChecked }),
           ...(cannotCover.length > 0 && { cannotCover }),
+          ...(inProgress !== undefined && { inProgress: inProgress.map(copyInProgressItem) }),
           ...(period !== undefined && { period: copyPeriod(period) }),
         });
       }
@@ -1749,6 +1754,7 @@ export function buildToolCallsHandler(
         notChecked,
         cannotCover,
         ...(period !== undefined && { period }),
+        ...(inProgress !== undefined && { inProgress }),
       });
     }
     scope.coverageDeclared = [...(scope.coverageDeclared ?? []), ...rows];

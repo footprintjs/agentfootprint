@@ -498,8 +498,8 @@ no-op there; Bedrock model-aware). **CacheGate** decider: kill-switch / hit-rate
 (≥3 unique skills in 5 iters) → skip. *Gap:* `recentHitRate` not yet written back (v2.7).
 
 **Reliability — TWO independent systems:**
-1. **Provider decorators** (`src/resilience/`): `withRetry` (backoff; skips 4xx except 429; no stream
-   retry), `withFallback` (primary→fallback; first-chunk commit), `withCircuitBreaker` (per-instance,
+1. **Provider decorators** (`src/resilience/`): `withRetry` (backoff; skips 4xx except 429; `stream()` retried
+   only before its first chunk), `withFallback` (primary→fallback; first-chunk commit), `withCircuitBreaker` (per-instance,
    class state). Invisible to footprintjs. Compose: `withFallback(withCircuitBreaker(anthropic()), withCircuitBreaker(openai()))`.
 2. **Rules-based** (`src/reliability/` + `stages/reliabilityExecution.ts`): `Agent.reliability({preCheck,
    postDecide, providers, circuitBreaker, fallback})`. `executeWithReliability` runs *inside* the

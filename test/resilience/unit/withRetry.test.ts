@@ -2,7 +2,8 @@
  * withRetry — unit tests.
  *
  * Verifies retry policy: backoff, predicate gating, abort propagation,
- * and stream pass-through (no retry on streams by design).
+ * and the healthy-stream path (stream retry before the first chunk lives in
+ * withRetry-stream.test.ts).
  */
 
 import { describe, expect, it, vi } from 'vitest';
@@ -84,6 +85,33 @@ describe('withRetry', () => {
     expect(callCount()).toBe(1); // didn't retry
   });
 
+  it('skips retry for an error that declares retryable: false (no status needed)', async () => {
+    const refused = Object.assign(new Error('no key for this model'), { retryable: false });
+    const { provider, callCount } = makeFlakyProvider([refused, 'ok']);
+    const wrapped = withRetry(provider, { initialDelayMs: 1 });
+
+    await expect(wrapped.complete(noopRequest)).rejects.toThrow('no key for this model');
+    expect(callCount()).toBe(1);
+  });
+
+  it('judges an error without the literal false exactly as before', async () => {
+    // Absent, `true`, or a non-boolean: the status rules alone decide.
+    for (const extra of [{}, { retryable: true }, { retryable: 'no' }, { retryable: 0 }]) {
+      const err = Object.assign(new Error('flaky'), extra);
+      const { provider, callCount } = makeFlakyProvider([err, 'ok']);
+      const result = await withRetry(provider, { initialDelayMs: 1 }).complete(noopRequest);
+      expect(result.content).toBe('ok');
+      expect(callCount()).toBe(2);
+    }
+    // `retryable: true` does not override a 4xx status.
+    const err400 = Object.assign(new Error('bad request'), { status: 400, retryable: true });
+    const { provider, callCount } = makeFlakyProvider([err400, 'ok']);
+    await expect(withRetry(provider, { initialDelayMs: 1 }).complete(noopRequest)).rejects.toThrow(
+      'bad request',
+    );
+    expect(callCount()).toBe(1);
+  });
+
   it('does retry on 429 Too Many Requests', async () => {
     const error429 = Object.assign(new Error('rate limited'), { status: 429 });
     const { provider, callCount } = makeFlakyProvider([error429, 'ok']);
@@ -115,7 +143,7 @@ describe('withRetry', () => {
     expect(onRetry).toHaveBeenCalledWith(expect.any(Error), 2, 5);
   });
 
-  it('passes stream() through without retry', async () => {
+  it('delivers a healthy stream() unchanged', async () => {
     const inner: LLMProvider = {
       name: 'streamy',
       complete: async () => successResponse,
@@ -251,7 +279,7 @@ describe('withRetry — resilience reports', () => {
     await expect(wrapped.complete(noopRequest, {})).resolves.toMatchObject({ content: 'ok' });
   });
 
-  it('forwards hooks through the stream() pass-through', async () => {
+  it('forwards hooks through stream()', async () => {
     // Load-bearing: withRetry rebuilds a fresh provider object, so an
     // inner decorator's reports vanish unless stream() forwards.
     const seen: unknown[] = [];

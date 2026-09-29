@@ -2,7 +2,7 @@
 title: Type Aliases
 ---
 
-111 exported from `agentfootprint`.
+112 exported from `agentfootprint`.
 
 - [`ActKey`](/docs/api/type-aliases/ActKey)
 - [`AgentOutput`](/docs/api/type-aliases/AgentOutput)
@@ -55,6 +55,7 @@ title: Type Aliases
 - [`GraphOutput`](/docs/api/type-aliases/GraphOutput)
 - [`GroupKind`](/docs/api/type-aliases/GroupKind)
 - [`InjectionKey`](/docs/api/type-aliases/InjectionKey)
+- [`InProgressInput`](/docs/api/type-aliases/InProgressInput)
 - [`InputValue`](/docs/api/type-aliases/InputValue)
 - [`InstructionDeliveryLease`](/docs/api/type-aliases/InstructionDeliveryLease)
 - [`LLMCallOutput`](/docs/api/type-aliases/LLMCallOutput)

@@ -11,7 +11,7 @@ All resilience decorators are exported from the `agentfootprint/resilience` subp
 
 | Decorator | What it does |
 |---|---|
-| `withRetry(provider, opts?)` | Wraps a provider with retry-on-transient-error. Default policy skips `AbortError` + HTTP 4xx (except 429); retries 5xx, network errors, and unknown shapes. Exponential backoff with AbortSignal-aware sleep. |
+| `withRetry(provider, opts?)` | Wraps a provider with retry-on-transient-error. Default policy skips `AbortError`, HTTP 4xx (except 429) and an error that declares `retryable: false`; retries 5xx, network errors, and unknown shapes. Exponential backoff with AbortSignal-aware sleep. `stream()` is retried too, under the same policy, until its first chunk arrives — never after. |
 | `withFallback(primary, fallback, opts?)` | If primary throws a fallback-eligible error, retry on fallback. Stream pinning prevents provider-flip mid-stream. |
 | `fallbackProvider(...providers)` | Convenience composer — chains N providers into one fallback chain (right-fold of `withFallback`). |
 | `withCircuitBreaker(provider, opts?)` | Fails fast after N consecutive failures: opens for a cooldown, half-open probes before re-closing. Prevents thundering-herd retry on a downed provider. |
@@ -63,7 +63,7 @@ const provider = fallbackProvider(
 
 ## The default retry policy (and overriding it)
 
-By default `withRetry` skips `AbortError` and HTTP 4xx client errors (those don't benefit from retry) — except `429 Too Many Requests`, which IS retried — and retries everything else (5xx, network errors, unknown shapes) while `attempt < maxAttempts`. It reads `err.status` (or `err.statusCode`) when present, and retries when the status is unknown. Override `shouldRetry` to implement a custom policy:
+By default `withRetry` skips `AbortError` and HTTP 4xx client errors (those don't benefit from retry) — except `429 Too Many Requests`, which IS retried — and retries everything else (5xx, network errors, unknown shapes) while `attempt < maxAttempts`. It reads `err.status` (or `err.statusCode`) when present, and retries when the status is unknown — unless the error declares `retryable: false`, which is how an adapter says asking again cannot mend it (a refusal raised before any request, or a 2xx answer it could not read). Only the literal `false` is read; an error without the field is judged as before. Override `shouldRetry` to implement a custom policy:
 
 ```ts
 import { withRetry } from 'agentfootprint/resilience';
@@ -80,6 +80,16 @@ withRetry(provider, {
 ```
 
 `shouldFallback(err)` works the same way for `withFallback` — its default falls back on every error except `AbortError`.
+
+## Streaming: retried before the first chunk, never after
+
+A stream that fails before it has produced anything — a `429` at connect, a bare `500`, a connection reset during the handshake — is exactly as safe to re-open as a `complete()` is to re-send: the caller has seen nothing yet. So `withRetry` re-opens `stream()` under the same policy (`maxAttempts`, `shouldRetry`, backoff, `req.signal`), and reports it the same way — `error.retried` for each retry, `error.recovered` once the stream's first chunk arrives.
+
+Once that first chunk is in hand the stream is committed. A failure after it surfaces exactly as it always did: re-opening would replay tokens the caller has already shown. This is structural, not a flag — the retry loop only ever covers opening the stream and waiting for its first chunk, and returns *with* that chunk; the rest is handed straight through with nothing around it that could retry.
+
+<CodeFile path="examples/features/35-resilience-visibility.ts" region="stream-retry" title="examples/features/35-resilience-visibility.ts (region: stream-retry)" />
+
+A healthy stream is delivered chunk for chunk as the inner provider yields it, and a consumer that stops reading still closes the inner stream.
 
 ## Observability: automatic inside a run
 
@@ -122,7 +132,7 @@ Two fallbacks because there really were two billed primary calls — not a dupli
 - **`onStateChange` and the event are complements, not duplicates.** The hook fires wherever the breaker lives, in a run or not, which is why a Redis-backed counter belongs on it. The event fires only inside a run, which is why it can carry real correlation ids. Outside a run nothing passes hooks and the breaker reports nothing at all — standalone behaviour is byte-identical to before 9.32.
 - **A fallback success is reported as `fallback.triggered`, not `error.recovered`.** That payload has no field for which provider served, so claiming a recovery there would be inventing data. `withRetry` is the only source of `recovered`, and only for an attempt ≥ 2.
 - **`error.recovered.totalDurationMs` is new instrumentation**, measured by the decorator from its own first attempt — not a fact recovered from somewhere else.
-- **Streaming reports only a pre-first-chunk failure.** Once the primary's stream has yielded a chunk the stream is pinned; a later error re-throws rather than failing over, so there is nothing to report. A primary with no `stream()` at all reports nothing either — nothing failed.
+- **Streaming reports only a pre-first-chunk failure.** Once the primary's stream has yielded a chunk the stream is pinned; a later error re-throws rather than failing over or retrying, so there is nothing to report. `withRetry`'s stream `recovered` fires when the retried stream's first chunk arrives — before the first `stream.token` — not when the stream ends. A primary with no `stream()` at all reports nothing either — nothing failed.
 - **The memory extractors are a blind spot.** The LLM-backed beat / fact extractors call `complete()` from inside a port with no scope, so a decorator wrapped around an extractor's provider stays invisible to the trace.
 - **These events never reach the commit log — only recorders.** They travel footprintjs's emit channel, which dispatches to recorders' `onEmit` and nothing else; it never writes to a stage's transaction buffer, so a resilience report can never become a `CommitBundle`. Inside `Agent` / `LLMCall` / `Parallel` that is invisible to you, because those runners attach the bridge. On a bare executor with no `onEmit` recorder the report is discarded outright — not stored somewhere quieter.
 - **A wrapper of your own that forgets to forward `hooks` makes everything under it go dark, silently.** `complete(req, hooks?)` is optional in its second parameter, and TypeScript never rejects an implementation for declaring fewer parameters than its signature. So `const myWrapper = (p) => ({ name: p.name, complete: (req) => p.complete(req) })` type-checks, runs, passes its tests — and swallows every report from any decorator beneath it. There is no compile error and no runtime warning to catch it. Every wrapper this library ships forwards (the three decorators plus all eight adapter wrappers), so this can only be introduced from outside. If a decorated provider reports nothing in-run, check your own wrappers first.
@@ -239,7 +249,9 @@ after a chunk did **not**, so no output was duplicated; and `withRetry` made
 exactly one streaming attempt.
 
 Every limit above survived that run unchanged — per-process breaker state, no
-streaming retry, fallback only before the first chunk, and a consumer-written
+streaming retry (since lifted for a stream that fails before its first chunk,
+which `withRetry` now re-opens; after it, still none), fallback only before the
+first chunk, and a consumer-written
 wrapper that forgets to forward `hooks` going dark silently. The one gap it
 named is the one 9.32 closes: *"breaker transitions have no typed AgentFootprint
 event."* Now they do.

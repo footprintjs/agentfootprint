@@ -44,9 +44,10 @@
  * dropped, so five tools naming the same missing collector say it once.
  */
 
+import { copyInProgressItem, IN_PROGRESS_SECTION_LABEL, inProgressLine } from './inProgress.js';
 import { mergeItems } from './items.js';
 import { copyPeriod, periodLine, type DeclaredPeriod } from './period.js';
-import type { Coverage, CoverageItem, DeclaredCoverage } from './types.js';
+import type { Coverage, CoverageItem, DeclaredCoverage, InProgressItem } from './types.js';
 
 /**
  * One declaring call's period, as the answer's limits carry it (honesty step
@@ -58,6 +59,19 @@ import type { Coverage, CoverageItem, DeclaredCoverage } from './types.js';
 export interface AnswerPeriod extends DeclaredPeriod {
   readonly toolName: string;
   readonly toolCallId?: string;
+}
+
+/**
+ * One declaring call's in-progress items, as the answer's limits carry them —
+ * the tool, the call, and what its read found still running, as declared: the
+ * data twin of that call's lines under "In progress (outcome not known yet)".
+ *
+ * @inline
+ */
+export interface AnswerInProgress {
+  readonly toolName: string;
+  readonly toolCallId?: string;
+  readonly items: readonly InProgressItem[];
 }
 
 /**
@@ -79,6 +93,10 @@ export interface AnswerCoverage extends Coverage {
   /** The periods the calls declared (honesty step 7b) — one per declaring
    *  call, as declared; present only when one did. */
   readonly periods?: readonly AnswerPeriod[];
+  /** What the calls found still running — its outcome not known yet — one
+   *  entry per declaring call, as declared; present only when one did. Never a
+   *  reason on the answer's standing: a label that travels with the limits. */
+  readonly inProgress?: readonly AnswerInProgress[];
   readonly assumed?: readonly {
     readonly toolName: string;
     readonly argument: string;
@@ -174,6 +192,23 @@ function periodsOf(declared: readonly DeclaredCoverage[]): AnswerPeriod[] {
   return out;
 }
 
+/**
+ * The in-progress items the run's declarations carried, one entry per
+ * DECLARING call, in declaration order. Fresh plain objects.
+ */
+function inProgressOf(declared: readonly DeclaredCoverage[]): AnswerInProgress[] {
+  const out: AnswerInProgress[] = [];
+  for (const row of declared) {
+    if (row.inProgress === undefined || row.inProgress.length === 0) continue;
+    out.push({
+      toolName: row.toolName,
+      ...(row.toolCallId !== undefined && { toolCallId: row.toolCallId }),
+      items: row.inProgress.map(copyInProgressItem),
+    });
+  }
+  return out;
+}
+
 // reads: scope.coverageDeclared ← read by ../stages/answerCoverage.ts · withAnswerCoverage, on the Route decider's
 //        terminal decision, and only when the answer is TYPED — the data twin of `composeAnswerWithCoverage`, below.
 /**
@@ -206,12 +241,23 @@ export function coverageOfAnswer(
   // block's `Period:` lines; the key only when one was declared, so a run whose
   // tools declared none commits the value it always did.
   const periods = periodsOf(declared);
+  // What the calls found still running — the data twin of the block's
+  // "In progress" lines; the key only when a call declared some.
+  const inProgress = inProgressOf(declared);
   const sections = copyCoverage(foldSections(declared));
-  const folded: AnswerCoverage = periods.length > 0 ? { ...sections, periods } : sections;
+  const folded: AnswerCoverage = {
+    ...sections,
+    ...(periods.length > 0 && { periods }),
+    ...(inProgress.length > 0 && { inProgress }),
+  };
   // The composer's second identity case, for the same reason: a hand-built row
   // that says nothing must not become a boundary that looks like one.
   const entries =
-    folded.checked.length + folded.notChecked.length + folded.cannotCover.length + periods.length;
+    folded.checked.length +
+    folded.notChecked.length +
+    folded.cannotCover.length +
+    periods.length +
+    inProgress.length;
   return entries > 0 ? folded : undefined;
 }
 
@@ -245,6 +291,13 @@ export function copyAnswerCoverage(value: AnswerCoverage): AnswerCoverage {
   return {
     ...copyCoverage(value),
     ...(value.periods !== undefined && { periods: value.periods.map(copyAnswerPeriod) }),
+    ...(value.inProgress !== undefined && {
+      inProgress: value.inProgress.map((entry) => ({
+        toolName: entry.toolName,
+        ...(entry.toolCallId !== undefined && { toolCallId: entry.toolCallId }),
+        items: entry.items.map(copyInProgressItem),
+      })),
+    }),
     ...(value.assumed !== undefined && { assumed: value.assumed.map(copyAssumed) }),
   };
 }
@@ -343,6 +396,18 @@ function coverageBlock(declared: readonly DeclaredCoverage[]): string {
       renderLines(
         PERIOD_SECTION_LABEL,
         periods.map((p) => periodLine(p.toolName, p)),
+      ),
+    );
+  }
+  // What the calls found still running — one line per item, tool first, as
+  // declared (`inProgress.ts` · `inProgressLine`). None declared → no section,
+  // and the block is the bytes it always was.
+  const inProgress = inProgressOf(declared);
+  if (inProgress.length > 0) {
+    sections.push(
+      renderLines(
+        IN_PROGRESS_SECTION_LABEL,
+        inProgress.flatMap((entry) => entry.items.map((i) => inProgressLine(entry.toolName, i))),
       ),
     );
   }

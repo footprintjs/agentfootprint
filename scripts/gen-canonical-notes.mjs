@@ -39,7 +39,11 @@
  * `OBJECT_GROUPS` holds the one wire VOCABULARY published whole (honesty step
  * 7b): the period's reserved keys and its one literal, `PERIOD_WIRE` — a
  * frozen object of strings, so a Python helper mints `period` byte for byte
- * (`period.queried.from`, `read_at`, `'unknown'`) without copying a key.
+ * (`period.queried.from`, `read_at`, `'unknown'`) without copying a key. And
+ * `IN_PROGRESS_WIRE`: the key a ledger's in-progress list sits under
+ * (`in_progress`) and its one item key of its own (`count`). The clause the
+ * dispatch door serves beside it is NOT published — the library adds it, no
+ * foreign process mints it.
  *
  * Model-facing prose the library injects for itself — `WRAP_UP_INSTRUCTION`,
  * `NO_TOOL_VALUE`, the check-up boundary notes — is deliberately OUT. No
@@ -67,7 +71,7 @@ const GROUPS = {
 
 /** Constants published WHOLE — a frozen object whose every value is a non-empty string. */
 const OBJECT_GROUPS = {
-  wire: ['PERIOD_WIRE'],
+  wire: ['PERIOD_WIRE', 'IN_PROGRESS_WIRE'],
 };
 
 const barrel = await import(pathToFileURL(BARREL).href).catch((err) => {
@@ -84,7 +88,7 @@ const out = {
     'do not edit by hand. These are the strings a tool written in another language must ' +
     'reproduce byte for byte: the static notes each result shape carries, the reserved marker ' +
     "keys that make those shapes recognizable, the coverage block's heading, and the wire " +
-    "spelling of a result's period (every reserved key and the literal 'unknown'). Keys are " +
+    "spelling of a result's period (every reserved key and the literal 'unknown') and of a ledger's in-progress list. Keys are " +
     'the exported constant names, so the same value is reachable as a TypeScript import from ' +
     "the package's main entry point. The package version lives in package.json.",
 };

@@ -846,6 +846,7 @@ export {
   // A typed answer's limits as data (`agent.answerCoverage()`): the three
   // lists, and the values a tool's rule assumed (the inputs layer).
   type AnswerCoverage,
+  type AnswerInProgress,
   type Coverage,
   type CoverageDeclaration,
   type CoverageInput,
@@ -868,6 +869,17 @@ export {
   type DeclaredPeriod,
   type PeriodRow,
 } from './core/agent/coverage/period.js';
+// The third outcome (honesty layer 3): what a `coverage()`'s read found still
+// RUNNING — its outcome not known yet, neither a success nor a failure — as
+// the TOOL declares it (`inProgress`; the library never reads a vendor's state
+// name). The wire spelling as data (`canonical-notes.json` publishes it), the
+// served clause, the limits block's section label, and the typed shapes.
+export {
+  IN_PROGRESS_CLAUSE,
+  IN_PROGRESS_SECTION_LABEL,
+  IN_PROGRESS_WIRE,
+} from './core/agent/coverage/inProgress.js';
+export type { InProgressInput, InProgressItem } from './core/agent/coverage/types.js';
 // The semantic tool-result envelope (9.53.0) — typed series/facts/edges with
 // the caveats that make them honest (grain, provenance, coverage) as DATA,
 // so honesty is inherited, not re-authored per tool. A sibling recognizer

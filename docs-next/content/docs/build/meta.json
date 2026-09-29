@@ -53,6 +53,7 @@
     "anthropic",
     "openai",
     "aws-bedrock",
+    "invoke-model-gateway",
     "gemini",
     "ollama",
     "custom-provider",

@@ -38,9 +38,11 @@ import {
   ABSENCE_MARKER,
   ABSENCE_NOTE,
   absent,
+  coverage,
   COVERAGE_BLOCK_HEADING,
   COVERAGE_MARKER,
   COVERAGE_NOTE,
+  IN_PROGRESS_WIRE,
   PERIOD_WIRE,
   readCoverageResult,
   SEMANTICS_MARKER,
@@ -90,7 +92,7 @@ describe('unit — the file is there, it parses, and every value is a usable str
       'SEMANTICS_MARKER',
     ]);
     expect(Object.keys(data.headings)).toEqual(['COVERAGE_BLOCK_HEADING']);
-    expect(Object.keys(data.wire)).toEqual(['PERIOD_WIRE']);
+    expect(Object.keys(data.wire)).toEqual(['PERIOD_WIRE', 'IN_PROGRESS_WIRE']);
   });
 
   it('the period’s wire spelling: every reserved key and the literal unknown (honesty step 7b)', () => {
@@ -131,6 +133,41 @@ describe('integration — every published value byte-equals the exported constan
     ...data.markers,
     ...data.headings,
   };
+
+  it('IN_PROGRESS_WIRE — the JSON and the barrel are the same object of strings', () => {
+    expect(
+      data.wire.IN_PROGRESS_WIRE,
+      'canonical-notes.json is stale for IN_PROGRESS_WIRE — run `npm run build` after editing it.',
+    ).toEqual({ ...IN_PROGRESS_WIRE });
+    expect(data.wire.IN_PROGRESS_WIRE).toEqual({ key: 'in_progress', count: 'count' });
+  });
+
+  it('IN_PROGRESS_WIRE round trip — a ledger minted from the JSON alone is read back as declared', () => {
+    const w = data.wire.IN_PROGRESS_WIRE;
+    const handMinted = {
+      [data.markers.COVERAGE_MARKER]: {
+        checked: [{ what: 'every replication session on the array' }],
+        [w.key]: [{ what: 'sessions still synchronizing', [w.count]: 96 }],
+        note: data.notes.COVERAGE_NOTE,
+      },
+      result: { failed: 0, settled: 135 },
+    };
+    const minted = JSON.parse(
+      JSON.stringify(
+        coverage(
+          { failed: 0, settled: 135 },
+          {
+            checked: ['every replication session on the array'],
+            inProgress: [{ what: 'sessions still synchronizing', count: 96 }],
+          },
+        ),
+      ),
+    ) as unknown;
+    expect(minted).toEqual(handMinted);
+    expect(readCoverageResult(handMinted)?.declared[0]?.inProgress).toEqual([
+      { what: 'sessions still synchronizing', count: 96 },
+    ]);
+  });
 
   it('PERIOD_WIRE — the JSON and the barrel are the same object of strings', () => {
     expect(

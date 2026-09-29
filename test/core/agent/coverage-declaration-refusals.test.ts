@@ -271,7 +271,7 @@ describe('unit: the other keys each helper reads are held to the same rule', () 
     // `period` joined the fields `coverage()` reads in honesty step 7b.
     expect(message).toBe(
       `${REFUSED_PREFIX}'skipped' is not a field this vocabulary has. ` +
-        'The fields are: checked, notChecked, cannotCover, period.',
+        'The fields are: checked, notChecked, cannotCover, period, inProgress.',
     );
   });
 

@@ -57,6 +57,11 @@ Nothing here is built unless a line says "shipped" or "drafted".**
 > own iteration; and the fold reads EVERY `period` row of the turn, never the last per call, so
 > a later `covered` under a reused id cannot hide an earlier `not-held`.
 
+> **The third outcome, 2026-09-29** (branch `feat/result-in-progress`; not merged or released):
+> § 11 adds `inProgress` on `coverage()` — what a read found still running, its outcome not known
+> yet — served with one clause, recorded, printed with the limits, and label-only for the standing
+> (decisions.md Q45–Q50).
+
 - Written against agentfootprint 9.118.1 (`8360b3b8` on npm; its fix `f83f277c` shipped the
   request's fix 0 and fix 1) and footprintjs 9.27.0.
 - The layer page for [the architecture note](README.md) (revision 2) § 3.3. Where the two differ,
@@ -97,12 +102,12 @@ Nothing here is built unless a line says "shipped" or "drafted".**
 
 ### 1.1 The decision table
 
-| Door | Use it when | What the model reads | What the record keeps | Status delivered |
-|---|---|---|---|---|
-| `absent({ what, checked, … })` | the search ran and nothing matched | the whole envelope minus the record-only item keys `short` and `kind`: `af_absent`, `outcome: "nothing_found"`, `looked_for`, `checked`, `not_checked`, `cannot_cover`, `retry_returns_the_same`, `try_instead`, `try_instead_tool`, and `ABSENCE_NOTE` (385 characters) | the `agentfootprint.tools.absent` event (with `lookedFor`, the lists with `short`/`kind`, `tryInstead`, `tryInsteadTool`); one tracked `coverageDeclared` row of kind `'absence'`, which does not carry the suggestions | `'absent'` |
-| `coverage(value, { … })` | any other value that has limits: a verdict, a sentence, an object you will not reshape | `af_coverage` (the lists minus `short`/`kind`, and `COVERAGE_NOTE`, 318 characters), serialized BEFORE `result`, so the agent's truncation keeps the limits; then `result`, untouched | `agentfootprint.tools.coverage_declared`; one `coverageDeclared` row of kind `'ledger'` (plus the absence's own row when it wraps one) | none, or `'absent'` around an absence |
-| `describedResult({ … })` | rows, a series or relationships from a system of record — or a question handed back (`clarify`) | the projection `lib/semantics/envelope.ts` · `semanticsForModel`: the data, `grain`, `provenance`, the composed `not_covered` lines, a non-null `clarify`, and `SEMANTICS_NOTE` (329 characters) — never the marker, `render`, or the three coverage lists, so never `checked` | the FULL envelope on `agentfootprint.tools.semantics_declared`, filed before the result ceiling is measured, so it survives a refused oversized result; its `coverage` as a `coverageDeclared` row of kind `'ledger'`; flattened claim rows on `claimFacts` under `.claims()` | none |
-| no door | a value with no limits worth stating | the value as returned | `stream.tool_end` only; no coverage row | none |
+| Door                           | Use it when                                                                                     | What the model reads                                                                                                                                                                                                                                                           | What the record keeps                                                                                                                                                                                                                                                         | Status delivered                      |
+| ------------------------------ | ----------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------- |
+| `absent({ what, checked, … })` | the search ran and nothing matched                                                              | the whole envelope minus the record-only item keys `short` and `kind`: `af_absent`, `outcome: "nothing_found"`, `looked_for`, `checked`, `not_checked`, `cannot_cover`, `retry_returns_the_same`, `try_instead`, `try_instead_tool`, and `ABSENCE_NOTE` (385 characters)       | the `agentfootprint.tools.absent` event (with `lookedFor`, the lists with `short`/`kind`, `tryInstead`, `tryInsteadTool`); one tracked `coverageDeclared` row of kind `'absence'`, which does not carry the suggestions                                                       | `'absent'`                            |
+| `coverage(value, { … })`       | any other value that has limits: a verdict, a sentence, an object you will not reshape          | `af_coverage` (the lists minus `short`/`kind`, and `COVERAGE_NOTE`, 318 characters), serialized BEFORE `result`, so the agent's truncation keeps the limits; then `result`, untouched                                                                                          | `agentfootprint.tools.coverage_declared`; one `coverageDeclared` row of kind `'ledger'` (plus the absence's own row when it wraps one)                                                                                                                                        | none, or `'absent'` around an absence |
+| `describedResult({ … })`       | rows, a series or relationships from a system of record — or a question handed back (`clarify`) | the projection `lib/semantics/envelope.ts` · `semanticsForModel`: the data, `grain`, `provenance`, the composed `not_covered` lines, a non-null `clarify`, and `SEMANTICS_NOTE` (329 characters) — never the marker, `render`, or the three coverage lists, so never `checked` | the FULL envelope on `agentfootprint.tools.semantics_declared`, filed before the result ceiling is measured, so it survives a refused oversized result; its `coverage` as a `coverageDeclared` row of kind `'ledger'`; flattened claim rows on `claimFacts` under `.claims()` | none                                  |
+| no door                        | a value with no limits worth stating                                                            | the value as returned                                                                                                                                                                                                                                                          | `stream.tool_end` only; no coverage row                                                                                                                                                                                                                                       | none                                  |
 
 **The rule** (the request's, kept): rows from a system of record → `describedResult()`; any other
 value that has limits → `coverage()`; nothing matched → `absent()`. Never wrap one in another:
@@ -149,8 +154,8 @@ nothing" (`semanticIssues`). Two things are wrong with it:
   on its first empty read in production, where the model reads the refusal instead of "nothing
   matched".
 
-Change the message (one core, so both doors) to name the door: *refused: `facts` is empty — if
-nothing matched, return absent({ what, checked }) instead.* The wire is untouched. The model reads
+Change the message (one core, so both doors) to name the door: _refused: `facts` is empty — if
+nothing matched, return absent({ what, checked }) instead._ The wire is untouched. The model reads
 the refusal, so it is registered like every served sentence ([README.md](README.md) § 2.2, law 7). The
 check:semantics gate can say the same when a catalog sample exercises an empty branch. The docs and SKILL.md
 teach the branch the request asks for: `rows.length ? describedResult({ … }) : absent({ … })`.
@@ -169,14 +174,14 @@ the tool's RESPONSE: nothing is added to the system prompt or to the tool's sche
 The declaration is camelCase throughout and is respelled to the unchanged snake_case wire. Data
 rows keep the author's own keys.
 
-| Declared (`describedResult()`) | On the wire (`af_semantics`, unchanged) |
-|---|---|
-| `grain.isCounter` | `grain.is_counter` |
-| `provenance.measuredAt` · `ageSeconds` · `sourceExportDate` | `provenance.measured_at` · `age_seconds` · `source_export_date` |
-| `render.filterNote` · `chartHint` | `render.filter_note` · `chart_hint` |
-| `coverage.checked` · `notChecked` · `cannotCover` | `coverage.checked` · `not_checked` · `cannot_cover` |
-| `series` · `facts` · `edges` · `clarify` · `render.default/columns/sort` | the same names |
-| (never declared) | `not_covered` (composed from `coverage`) and `note` (the static sentence) |
+| Declared (`describedResult()`)                                           | On the wire (`af_semantics`, unchanged)                                   |
+| ------------------------------------------------------------------------ | ------------------------------------------------------------------------- |
+| `grain.isCounter`                                                        | `grain.is_counter`                                                        |
+| `provenance.measuredAt` · `ageSeconds` · `sourceExportDate`              | `provenance.measured_at` · `age_seconds` · `source_export_date`           |
+| `render.filterNote` · `chartHint`                                        | `render.filter_note` · `chart_hint`                                       |
+| `coverage.checked` · `notChecked` · `cannotCover`                        | `coverage.checked` · `not_checked` · `cannot_cover`                       |
+| `series` · `facts` · `edges` · `clarify` · `render.default/columns/sort` | the same names                                                            |
+| (never declared)                                                         | `not_covered` (composed from `coverage`) and `note` (the static sentence) |
 
 - `describedResult()` refuses the snake_case spelling, and `semantic()` keeps its declaration byte
   for byte. Neither door takes both spellings in one object, so a migration that swaps only the
@@ -210,7 +215,9 @@ const backupRuns = defineTool({
     const rows = snap.rows.filter((r) => r.host === host);
     const limits = {
       checked: [`every backup job in the export of ${snap.exportedAt}`], // a value we resolved
-      cannotCover: [{ what: 'jobs on the second backup product', why: 'not collected on this install' }],
+      cannotCover: [
+        { what: 'jobs on the second backup product', why: 'not collected on this install' },
+      ],
     };
     if (rows.length === 0) {
       return absent({ what: `backup runs for ${host}`, ...limits }); // `what` quotes the request: never evidence
@@ -299,12 +306,12 @@ interface ToolPeriod {
 
 ### 3.2 Three times, three jobs
 
-| Field | Read by | Compared? | Means |
-|---|---|---|---|
-| `provenance.measuredAt` (`describedResult()`, and `absent()` from 7b) | the model | never parsed | how old the data is, in the tool's own words |
-| `period.queried` | the library, and the model | yes, as instants | what the read asked for |
-| `period.held` | the library, and the model | yes, as instants | what the store holds; `'unknown'` said out loud |
-| `period.readAt` | the library | yes | when the read ran |
+| Field                                                                 | Read by                    | Compared?        | Means                                           |
+| --------------------------------------------------------------------- | -------------------------- | ---------------- | ----------------------------------------------- |
+| `provenance.measuredAt` (`describedResult()`, and `absent()` from 7b) | the model                  | never parsed     | how old the data is, in the tool's own words    |
+| `period.queried`                                                      | the library, and the model | yes, as instants | what the read asked for                         |
+| `period.held`                                                         | the library, and the model | yes, as instants | what the store holds; `'unknown'` said out loud |
+| `period.readAt`                                                       | the library                | yes              | when the read ran                               |
 
 When the tool knows the instants, it declares the period, and `measuredAt` may be the same instant
 in words. The library never cross-checks `measuredAt` against the period, because it never parses
@@ -377,8 +384,8 @@ function periodVerdict(p: DeclaredPeriod): PeriodVerdict;
   and served text belongs to the door (at mint, inside the tool's own result) or to the inputs
   layer's note.
 - **For the person, under the existing `.limitsTravelWithTheAnswer()` only:** one `Period:` line per
-  declaring call, from a versioned template over the row (*search_logs searched 08:00–10:00 UTC; the
-  store holds data up to 02:00*). With no declared period, the block is byte-identical. From step 6
+  declaring call, from a versioned template over the row (_search_logs searched 08:00–10:00 UTC; the
+  store holds data up to 02:00_). With no declared period, the block is byte-identical. From step 6
   the standing line owns this sentence when both arms are on (one composer for one fact).
 
 ### 3.6 Across versions and languages
@@ -404,12 +411,12 @@ row: the person's words, their answer to the ask, or the tool's `assume` default
 layer owns WHAT the read covered** (the declared period and its verdict). They join by
 `toolCallId`, and neither parses the other's words.
 
-| The question | The call | The result's period | Verdict | The standing reads |
-|---|---|---|---|---|
-| "Any errors in checkout?" (no period said) | `search_logs({ service, window: '2h' })`, `window` assumed by the tool's rule | queried 08:00–10:00, held 30 days | covered | *Not sure — searched 08:00–10:00 UTC, the 2 hours the tool's rule assumed; you did not give a period.* (`argument-assumed`, layer 2) |
-| "Any backup failures in the last hour?" | `backup_runs({ window: '1h' })`, the person's words | queried 09:00–10:00, held up to the 02:00 export | not-held | *Not sure — the data ends at 02:00; the hour you asked about is after it.* (`period-not-held`) |
-| "Errors in the last 30 days?" | `search_logs({ window: '30d' })` | queried 30 days, held 7 days | partly-held | *Not sure — the store holds only the last 7 days of the 30 searched.* (`period-partly-held`) |
-| any | a tool with a `ToolPeriod` returns a bare `[]` | none | undeclared | *Not sure — the tool declares a period argument but did not say what its read covered.* (`period-undeclared`) |
+| The question                               | The call                                                                      | The result's period                              | Verdict     | The standing reads                                                                                                                   |
+| ------------------------------------------ | ----------------------------------------------------------------------------- | ------------------------------------------------ | ----------- | ------------------------------------------------------------------------------------------------------------------------------------ |
+| "Any errors in checkout?" (no period said) | `search_logs({ service, window: '2h' })`, `window` assumed by the tool's rule | queried 08:00–10:00, held 30 days                | covered     | _Not sure — searched 08:00–10:00 UTC, the 2 hours the tool's rule assumed; you did not give a period._ (`argument-assumed`, layer 2) |
+| "Any backup failures in the last hour?"    | `backup_runs({ window: '1h' })`, the person's words                           | queried 09:00–10:00, held up to the 02:00 export | not-held    | _Not sure — the data ends at 02:00; the hour you asked about is after it._ (`period-not-held`)                                       |
+| "Errors in the last 30 days?"              | `search_logs({ window: '30d' })`                                              | queried 30 days, held 7 days                     | partly-held | _Not sure — the store holds only the last 7 days of the 30 searched._ (`period-partly-held`)                                         |
+| any                                        | a tool with a `ToolPeriod` returns a bare `[]`                                | none                                             | undeclared  | _Not sure — the tool declares a period argument but did not say what its read covered._ (`period-undeclared`)                        |
 
 The second row is the freshness gap closed for time-bounded reads, with no phrase parsing: the tool
 computed its queried period from its own argument, and the export's time bounds what it holds. A
@@ -430,21 +437,21 @@ bends "the library never parses '2h'" (Q6).
 **Rule: each door serves the ground its value cannot show for itself, and never a record-only key
 or a UI hint. The record keeps everything.**
 
-| Field | `absent()` | `coverage()` | `describedResult()` |
-|---|---|---|---|
-| the data | — (there is none) | `result`, untouched | `series` / `facts` / `edges` |
-| `checked` | **served** | **served** | **record only** (and the limits block) |
-| `not_checked`, `cannot_cover` | served, as lists | served, as lists | served as the composed `not_covered` lines ("what — why") |
-| `short`, `kind` on items | stripped | stripped | stripped |
-| `looked_for` | served, never evidence | — | — |
-| `try_instead`, `try_instead_tool` | served | — | — |
-| `grain` | — | — | served |
-| `provenance` | served (from 7b) | — (Q2) | served |
-| `period` | served as declared (7b) | served as declared (7b) | served as declared (7b) |
-| `clarify` | — | — | served when non-null; `null` is record only |
-| `render` | — | — | record only |
-| the marker | served (`af_absent: true`) | served (the `af_coverage` object) | dropped |
-| the static note | `ABSENCE_NOTE` | `COVERAGE_NOTE` | `SEMANTICS_NOTE` (Q3) |
+| Field                             | `absent()`                 | `coverage()`                      | `describedResult()`                                       |
+| --------------------------------- | -------------------------- | --------------------------------- | --------------------------------------------------------- |
+| the data                          | — (there is none)          | `result`, untouched               | `series` / `facts` / `edges`                              |
+| `checked`                         | **served**                 | **served**                        | **record only** (and the limits block)                    |
+| `not_checked`, `cannot_cover`     | served, as lists           | served, as lists                  | served as the composed `not_covered` lines ("what — why") |
+| `short`, `kind` on items          | stripped                   | stripped                          | stripped                                                  |
+| `looked_for`                      | served, never evidence     | —                                 | —                                                         |
+| `try_instead`, `try_instead_tool` | served                     | —                                 | —                                                         |
+| `grain`                           | —                          | —                                 | served                                                    |
+| `provenance`                      | served (from 7b)           | — (Q2)                            | served                                                    |
+| `period`                          | served as declared (7b)    | served as declared (7b)           | served as declared (7b)                                   |
+| `clarify`                         | —                          | —                                 | served when non-null; `null` is record only               |
+| `render`                          | —                          | —                                 | record only                                               |
+| the marker                        | served (`af_absent: true`) | served (the `af_coverage` object) | dropped                                                   |
+| the static note                   | `ABSENCE_NOTE`             | `COVERAGE_NOTE`                   | `SEMANTICS_NOTE` (Q3)                                     |
 
 ### 4.2 The request's question: why `describedResult()` does not serve `checked`
 
@@ -512,8 +519,8 @@ carries — the grain clause only with `grain`, the provenance clause only with 
   helper mints anything new; a recognizer reading a served value back removes a word that agrees
   with the instants and refuses one that does not. Neither word nor clause grounds.
 - **Nothing from the results layer.** It records verdicts and serves nothing (§ 3.5).
-- **The inputs layer's past-tense note** (*"window was not in the search_logs call this result
-  answers; the call ran with "2h" …"*) is library text appended to the served result. It belongs to
+- **The inputs layer's past-tense note** (_"window was not in the search_logs call this result
+  answers; the call ran with "2h" …"_) is library text appended to the served result. It belongs to
   [inputs.md](inputs.md); this layer's only duty is the boundary it states: library-written notes are never
   searched as evidence.
 
@@ -547,32 +554,32 @@ still never a guess. It takes the value the model read and the door the record s
 returned (the coverage rows; for the account also the `tools.semantics_declared` event; from step 8
 the outcome row):
 
-| What the record says came back | Reading | Rows counted by |
-|---|---|---|
-| an absence — bare, inside a `coverage()`, or delivered status `'absent'` | `declared-absent` | — |
-| a `coverage()` envelope | its wrapped `result`, read by these same routes and marked `bounded`; an empty wrapped rowset reads `declared-absent` — the same meaning as an absence, so the same reading | library or app |
-| a `describedResult()` with data | `non-empty`, with a count per kind (`facts`, `series`, `edges`) | library |
-| a `describedResult()` with only `clarify` | `clarify` — a question handed back, no data | — |
-| a bare top-level array | `empty-undeclared` or `non-empty` | library |
-| an object whose key the app declared in `rowsAt` | `empty-undeclared` or `non-empty` | app |
-| anything else | `unknown` — the record cannot read it | — |
+| What the record says came back                                           | Reading                                                                                                                                                                     | Rows counted by |
+| ------------------------------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------- |
+| an absence — bare, inside a `coverage()`, or delivered status `'absent'` | `declared-absent`                                                                                                                                                           | —               |
+| a `coverage()` envelope                                                  | its wrapped `result`, read by these same routes and marked `bounded`; an empty wrapped rowset reads `declared-absent` — the same meaning as an absence, so the same reading | library or app  |
+| a `describedResult()` with data                                          | `non-empty`, with a count per kind (`facts`, `series`, `edges`)                                                                                                             | library         |
+| a `describedResult()` with only `clarify`                                | `clarify` — a question handed back, no data                                                                                                                                 | —               |
+| a bare top-level array                                                   | `empty-undeclared` or `non-empty`                                                                                                                                           | library         |
+| an object whose key the app declared in `rowsAt`                         | `empty-undeclared` or `non-empty`                                                                                                                                           | app             |
+| anything else                                                            | `unknown` — the record cannot read it                                                                                                                                       | —               |
 
 **Both callers use it:** the `/observe` answer account (its "It found" sentence gains a described
-template — *`backup_runs` returned 2 facts from the backup API export, measured
-2026-08-19T10:12:00Z*, each value vouched for by the tool) and the standing fold (step 1). One rule,
+template — _`backup_runs` returned 2 facts from the backup API export, measured
+2026-08-19T10:12:00Z_, each value vouched for by the tool) and the standing fold (step 1). One rule,
 so the person's account and the answer's standing cannot disagree about what came back.
 
 ### 5.3 What the fold reads, per door
 
-| This turn's call returned | Reasons layer 3 can fire | Counts as "a check ran" | Can support "known" |
-|---|---|---|---|
-| `absent()` | `declared-absent`; `coverage-gap` (any `not_checked` / `cannot_cover`); a period reason | yes | never |
-| `coverage()` | `coverage-gap`; `declared-absent` when its wrapped rowset is empty; a period reason | yes | never |
-| `describedResult()` | `coverage-gap` (its coverage row); a period reason | yes | never here; its `claimFacts` feed layer 4's `.claims()` tie check, which can |
-| a bare empty rowset | `empty-undeclared` | yes | never |
-| a bare non-empty rowset | none | yes | never |
-| any other bare shape | none | no — not applicable | never |
-| a tool with a `ToolPeriod`, no period on the result | `period-undeclared` | yes | never |
+| This turn's call returned                           | Reasons layer 3 can fire                                                                | Counts as "a check ran" | Can support "known"                                                          |
+| --------------------------------------------------- | --------------------------------------------------------------------------------------- | ----------------------- | ---------------------------------------------------------------------------- |
+| `absent()`                                          | `declared-absent`; `coverage-gap` (any `not_checked` / `cannot_cover`); a period reason | yes                     | never                                                                        |
+| `coverage()`                                        | `coverage-gap`; `declared-absent` when its wrapped rowset is empty; a period reason     | yes                     | never                                                                        |
+| `describedResult()`                                 | `coverage-gap` (its coverage row); a period reason                                      | yes                     | never here; its `claimFacts` feed layer 4's `.claims()` tie check, which can |
+| a bare empty rowset                                 | `empty-undeclared`                                                                      | yes                     | never                                                                        |
+| a bare non-empty rowset                             | none                                                                                    | yes                     | never                                                                        |
+| any other bare shape                                | none                                                                                    | no — not applicable     | never                                                                        |
+| a tool with a `ToolPeriod`, no period on the result | `period-undeclared`                                                                     | yes                     | never                                                                        |
 
 The period reasons are `period-partly-held`, `period-not-held`, `period-unknown` and
 `period-undeclared` (§ 3.5); `covered` fires none.
@@ -585,10 +592,11 @@ files no coverage row fires `coverage-undeclared`. It is declared silence — ru
 a declaration that already exists and already travels over MCP.
 
 **How they read to the person** (versioned templates; layer 4 owns the rendering):
-- `declared-absent`: *Not sure — backup_runs searched every backup job in the 02:00 export and found
-  none for host-999; it cannot see the second backup product.*
-- `period-unknown`: *Not sure — search_logs does not know whether its store holds 08:00–10:00.*
-- `empty-undeclared`: *Not sure — list_ports returned nothing and did not say what it searched.*
+
+- `declared-absent`: _Not sure — backup_runs searched every backup job in the 02:00 export and found
+  none for host-999; it cannot see the second backup product._
+- `period-unknown`: _Not sure — search_logs does not know whether its store holds 08:00–10:00._
+- `empty-undeclared`: _Not sure — list_ports returned nothing and did not say what it searched._
 
 ### 5.4 Committed rows only — what that costs before step 8
 
@@ -610,9 +618,9 @@ a declaration that already exists and already travels over MCP.
 Layer 3 is the paper's evidence: RQ3's FOUND / DECLARED-ABSENT / NOT-COVERED / UNKNOWN standings map
 onto this reader ([README.md](README.md) § 4.3), and step 1's parity test runs both over the study's
 recorded runs. The period and `describedResult()` are not in the study's frozen library version (the
-host pins 9.116.0), so they go under Future Plans as a falsifiable claim: *declaring the held period
+host pins 9.116.0), so they go under Future Plans as a falsifiable claim: _declaring the held period
 moves stale-export answers from "consistent" to "not sure" without adding needless hedges on
-controls*.
+controls_.
 
 ---
 
@@ -624,20 +632,20 @@ The draft (first seen as 55 uncommitted paths; now one local commit, `d8258fd3`,
 branch `feat/described-result`, not pushed) covers the whole of step 7a. This table checks it
 against the request. "Present" means found in the draft by this pass; nothing here was run.
 
-| The request asks | The house law | In the draft (`d8258fd3`) |
-|---|---|---|
-| one core, two doors | `describedResult(decl)` respells and calls the core; `semantic(decl)` passes through; each door's refusals quote its author's spelling | present: `lib/semantics/envelope.ts` · `mintSemantics` with a `DeclarationDoor` per door; `lib/semantics/described.ts` · `DESCRIBED_DOOR` |
-| camelCase in, unchanged wire out | per-object rename tables tied to BOTH types, so a field with no wire name fails to compile | present: `GRAIN_NAMES`, `PROVENANCE_NAMES`, `RENDER_NAMES` with `satisfies` |
-| one spelling per door, never both | the other spelling is refused, naming the one meant | present, with tests ("neither door takes both spellings at once") |
-| no `measuredAt` alias in `semantic()` | — | none added |
-| input type split from the wire type | internal camelCase shapes, not exported by name | present: `DescribedGrain`, `DescribedProvenance`, `DescribedRender` (`@inline`) |
-| a missing source is a compile error | a conditional type, `@ts-expect-error` pins | present: `DescribedResultDeclaration`'s intersection; 8 pins in `test/type-regressions/DescribedResult.assignability.test.ts` |
-| keep the wire, the note, the notes file, the recognizers, the gate's name, the 17 types | — | kept |
-| the gate's advice names the new door | `lib/semantics/check.ts` · `classCoverageFinding` | present, with a regression test |
-| a 9.x minor; `@deprecated` in TSDoc only; no warning | fragments `added` + `deprecated` | present: `.changes/described-result.md`, `.changes/semantic-deprecated.md` |
-| the decision table; "where it lives"; values from the data; retitle "Semantic tool results" | Tools page, README, SKILL.md | present: `docs-next/content/docs/build/tools.mdx` (with captured model views), the retitled `semantic-results.mdx`, README, both SKILL.md copies, example 66 |
-| golden test: facts, series with grain, edges, clarify-only, render | camelCase ⇒ the same bytes as snake_case | present: unit pins plus a property test over 3,000 declarations |
-| the model reads a refusal that reads as one; the run continues | a run test | present: an integration test through the real loop |
+| The request asks                                                                            | The house law                                                                                                                          | In the draft (`d8258fd3`)                                                                                                                                    |
+| ------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| one core, two doors                                                                         | `describedResult(decl)` respells and calls the core; `semantic(decl)` passes through; each door's refusals quote its author's spelling | present: `lib/semantics/envelope.ts` · `mintSemantics` with a `DeclarationDoor` per door; `lib/semantics/described.ts` · `DESCRIBED_DOOR`                    |
+| camelCase in, unchanged wire out                                                            | per-object rename tables tied to BOTH types, so a field with no wire name fails to compile                                             | present: `GRAIN_NAMES`, `PROVENANCE_NAMES`, `RENDER_NAMES` with `satisfies`                                                                                  |
+| one spelling per door, never both                                                           | the other spelling is refused, naming the one meant                                                                                    | present, with tests ("neither door takes both spellings at once")                                                                                            |
+| no `measuredAt` alias in `semantic()`                                                       | —                                                                                                                                      | none added                                                                                                                                                   |
+| input type split from the wire type                                                         | internal camelCase shapes, not exported by name                                                                                        | present: `DescribedGrain`, `DescribedProvenance`, `DescribedRender` (`@inline`)                                                                              |
+| a missing source is a compile error                                                         | a conditional type, `@ts-expect-error` pins                                                                                            | present: `DescribedResultDeclaration`'s intersection; 8 pins in `test/type-regressions/DescribedResult.assignability.test.ts`                                |
+| keep the wire, the note, the notes file, the recognizers, the gate's name, the 17 types     | —                                                                                                                                      | kept                                                                                                                                                         |
+| the gate's advice names the new door                                                        | `lib/semantics/check.ts` · `classCoverageFinding`                                                                                      | present, with a regression test                                                                                                                              |
+| a 9.x minor; `@deprecated` in TSDoc only; no warning                                        | fragments `added` + `deprecated`                                                                                                       | present: `.changes/described-result.md`, `.changes/semantic-deprecated.md`                                                                                   |
+| the decision table; "where it lives"; values from the data; retitle "Semantic tool results" | Tools page, README, SKILL.md                                                                                                           | present: `docs-next/content/docs/build/tools.mdx` (with captured model views), the retitled `semantic-results.mdx`, README, both SKILL.md copies, example 66 |
+| golden test: facts, series with grain, edges, clarify-only, render                          | camelCase ⇒ the same bytes as snake_case                                                                                               | present: unit pins plus a property test over 3,000 declarations                                                                                              |
+| the model reads a refusal that reads as one; the run continues                              | a run test                                                                                                                             | present: an integration test through the real loop                                                                                                           |
 
 **Before it merges** (not verified by this pass): the full suite with the existing `semantic()`
 pins unchanged; the 21 byte references in `test/core/tools/reference/`; the docs site budget
@@ -671,19 +679,19 @@ Numbers are [README.md](README.md) § 7's. Each step: all seven test types (a ty
 is named), the byte references unchanged when nothing is declared, every new sentence registered,
 a CAPABILITIES row, a `.changes` fragment, the docs-next page, an example, `npm run docs:regen`.
 
-| Step | Ships (result layer) | Arm (off ⇒ byte-identical) | Needs |
-|---|---|---|---|
-| 1 | `coverage/emptiness.ts` · `readEmptiness` (one owner); the answer account and `assessAnswer` both call it; the account's described template | none — readers only | — |
-| 7a | `describedResult()` (drafted, § 6) | a new door | — |
-| 7a′ | the empty-data refusal names `absent()` (§ 1.3) — **built 2026-09-27** | refusal text only | 7a |
-| 7b | `coverage/period.ts` (the rule and `periodVerdict`); `period` on the three doors and `provenance` on `absent()`; the coverage channel carries `period`; `canonical-notes.json`; the results subflow at the loop head, its period rows and reasons; the `Period:` line under the existing limits arm; the lens reads `period` — **built 2026-09-27 except the lens (its own repo)** | a result declares `period`, or its tool a `ToolPeriod` | 1, 3 — the `ToolPeriod` ships with step 3, owned by `arguments/`, and is refused without an argument rule ([inputs.md](inputs.md) § 1.3; Q12 below) |
-| 7c | the composed note (§ 4.3) | none — a `changed` fragment, owner's call (Q3) | 7a |
-| 8 | the outcome row per call at one landing funnel: the door, its counts, the emptiness reading, refused / errored / truncated / placed; `coverage-undeclared` (Q5); fact-in-result; `expectation-missed` | the results layer | 5, 7b |
+| Step | Ships (result layer)                                                                                                                                                                                                                                                                                                                                                               | Arm (off ⇒ byte-identical)                             | Needs                                                                                                                                               |
+| ---- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1    | `coverage/emptiness.ts` · `readEmptiness` (one owner); the answer account and `assessAnswer` both call it; the account's described template                                                                                                                                                                                                                                        | none — readers only                                    | —                                                                                                                                                   |
+| 7a   | `describedResult()` (drafted, § 6)                                                                                                                                                                                                                                                                                                                                                 | a new door                                             | —                                                                                                                                                   |
+| 7a′  | the empty-data refusal names `absent()` (§ 1.3) — **built 2026-09-27**                                                                                                                                                                                                                                                                                                             | refusal text only                                      | 7a                                                                                                                                                  |
+| 7b   | `coverage/period.ts` (the rule and `periodVerdict`); `period` on the three doors and `provenance` on `absent()`; the coverage channel carries `period`; `canonical-notes.json`; the results subflow at the loop head, its period rows and reasons; the `Period:` line under the existing limits arm; the lens reads `period` — **built 2026-09-27 except the lens (its own repo)** | a result declares `period`, or its tool a `ToolPeriod` | 1, 3 — the `ToolPeriod` ships with step 3, owned by `arguments/`, and is refused without an argument rule ([inputs.md](inputs.md) § 1.3; Q12 below) |
+| 7c   | the composed note (§ 4.3)                                                                                                                                                                                                                                                                                                                                                          | none — a `changed` fragment, owner's call (Q3)         | 7a                                                                                                                                                  |
+| 8    | the outcome row per call at one landing funnel: the door, its counts, the emptiness reading, refused / errored / truncated / placed; `coverage-undeclared` (Q5); fact-in-result; `expectation-missed`                                                                                                                                                                              | the results layer                                      | 5, 7b                                                                                                                                               |
 
 **The folders.** `coverage/` keeps the doors and gains `period.ts` and `emptiness.ts` (their rules
 stay with their data). `results/` (new) holds only the subflow — Declare → Verify → Record →
-Resolve — and its README: *A result says what it covered, its period included; silence about a
-declared period is recorded as silence.* `lib/semantics/` keeps `describedResult()`. The layer's
+Resolve — and its README: _A result says what it covered, its period included; silence about a
+declared period is recorded as silence._ `lib/semantics/` keeps `describedResult()`. The layer's
 design page is this one, placed by step 0 at `docs/design/honesty/results.md`.
 
 ---
@@ -699,14 +707,14 @@ blind hand labels only, Haiku 4.5 only inside a budget the owner approves per ru
 kept only on a gain. Measured nulls to respect: the served findings piece showed no benefit at ten
 runs and cost fact fidelity (facts-in-answer 1.000 → 0.917); Haiku declared about half the time.
 
-| Cell | Provoking case | Control | Baseline | What the registered rule compares |
-|---|---|---|---|---|
-| R0 · rename | — | — | — | not a bench: the wire is identical, so golden and property tests decide (§ 6.1) |
-| R1 · stale export | "any failures in the last hour?" answered from a 02:00 export | the same question inside the held period | the same tool with the time only in `checked` prose | the share of flat "no failures" answers on provoking cases; needless hedges on controls |
-| R2 · short retention | "errors in the last 30 days?" from a store that holds 7 | a 24-hour question | no period | answers that scope their claim to what the store holds |
-| R3 · held unknown | a tool that declares `held: 'unknown'`, empty and non-empty results | the same tool with `held` known | — | answers that say they cannot tell whether the period was held; the false-"not sure" rate on non-empty results (decides Q1) |
-| R4 · served `checked` | an inventory whose partial population is declared only in `checked` | a complete population | today's projection (no `checked`) | scope statements ("these are the N in the export") against fact fidelity, which must not fall |
-| R5 · composed note | facts-only lookups | series with declared gaps (whose note is unchanged) | the full note | tokens per call; fact fidelity; `is_counter` misuse on series (only if the owner wants a hosted cell, Q3) |
+| Cell                  | Provoking case                                                      | Control                                             | Baseline                                            | What the registered rule compares                                                                                          |
+| --------------------- | ------------------------------------------------------------------- | --------------------------------------------------- | --------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------- |
+| R0 · rename           | —                                                                   | —                                                   | —                                                   | not a bench: the wire is identical, so golden and property tests decide (§ 6.1)                                            |
+| R1 · stale export     | "any failures in the last hour?" answered from a 02:00 export       | the same question inside the held period            | the same tool with the time only in `checked` prose | the share of flat "no failures" answers on provoking cases; needless hedges on controls                                    |
+| R2 · short retention  | "errors in the last 30 days?" from a store that holds 7             | a 24-hour question                                  | no period                                           | answers that scope their claim to what the store holds                                                                     |
+| R3 · held unknown     | a tool that declares `held: 'unknown'`, empty and non-empty results | the same tool with `held` known                     | —                                                   | answers that say they cannot tell whether the period was held; the false-"not sure" rate on non-empty results (decides Q1) |
+| R4 · served `checked` | an inventory whose partial population is declared only in `checked` | a complete population                               | today's projection (no `checked`)                   | scope statements ("these are the N in the export") against fact fidelity, which must not fall                              |
+| R5 · composed note    | facts-only lookups                                                  | series with declared gaps (whose note is unchanged) | the full note                                       | tokens per call; fact fidelity; `is_counter` misuse on series (only if the owner wants a hosted cell, Q3)                  |
 
 R1 and R2 also decide whether a derived verdict word on the wire earns its bytes (§ 9): only if the
 model misreads the declared instants.
@@ -738,42 +746,42 @@ gate against the seed, and the sealed side log that keeps every declared result)
 
 ## 9. Considered and rejected
 
-| Proposal | Why not |
-|---|---|
-| `typedResult()` | "typed" collides with `runTyped()` (owner decision) |
-| `found()`, `sourced()`, `evidence()`, `observed()`, `result()` | the request's table: contradicted by the library's own words, collisions, or a poor fit for edges and clarify-only results |
-| a `measuredAt` alias inside `semantic()` | two spellings in one door; a half-migrated call would mint silently |
-| `semantic()` gaining `period` | a deprecated door gains no fields |
-| the period as `CoverageItem.kind: 'window'` | a kind is a closed, record-only word; it cannot hold instants to compare |
-| the word `window` | it names the context window |
-| deriving the period from `measuredAt` | `measuredAt` is never parsed ("last year, roughly" passes) |
-| a per-bound unknown (`held: { from: 'unknown', to }`) | two comparison rules for one question; a tool that knows its retention can state both bounds, and one that does not says `'unknown'` |
-| a derived verdict word on the wire in v1 ("held covers: part") | a served-bytes change with no bench behind it, and a second implementation in every foreign minting helper. If R1/R2 show the model misreading instants, it returns on the `not_covered` precedent: derived at mint, refused on disagreement at recognition |
-| composing coverage items from the period (library prose inside the author's lists) | tool declarations stay in their own keys, and library-written text never grounds |
-| stamping the period verdict on the coverage row inside ToolCalls | a library verdict inside a tool-declaration row; verdicts are ledger rows, filed by the layer (law 8) |
-| the results layer appending a note to the result | the result is already in history when the loop head runs; served text belongs to the door (at mint) or to the inputs layer's note |
-| `describedResult()` accepting empty data as an absence | two doors for one meaning; the non-empty law keeps "nothing matched" to `absent()` |
-| serving `describedResult()`'s `checked` now | benchmark first (R4), and the findings-piece null says served bytes can cost fidelity |
-| reading the fold's emptiness from events | the fold reads committed rows only, so the running agent and a later reader fold the same bytes |
-| recognizing JSON-text envelopes in the fold alone | the run did not recognize them; with one owner, the fix belongs at the execute boundary (Q7) |
+| Proposal                                                                           | Why not                                                                                                                                                                                                                                                     |
+| ---------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `typedResult()`                                                                    | "typed" collides with `runTyped()` (owner decision)                                                                                                                                                                                                         |
+| `found()`, `sourced()`, `evidence()`, `observed()`, `result()`                     | the request's table: contradicted by the library's own words, collisions, or a poor fit for edges and clarify-only results                                                                                                                                  |
+| a `measuredAt` alias inside `semantic()`                                           | two spellings in one door; a half-migrated call would mint silently                                                                                                                                                                                         |
+| `semantic()` gaining `period`                                                      | a deprecated door gains no fields                                                                                                                                                                                                                           |
+| the period as `CoverageItem.kind: 'window'`                                        | a kind is a closed, record-only word; it cannot hold instants to compare                                                                                                                                                                                    |
+| the word `window`                                                                  | it names the context window                                                                                                                                                                                                                                 |
+| deriving the period from `measuredAt`                                              | `measuredAt` is never parsed ("last year, roughly" passes)                                                                                                                                                                                                  |
+| a per-bound unknown (`held: { from: 'unknown', to }`)                              | two comparison rules for one question; a tool that knows its retention can state both bounds, and one that does not says `'unknown'`                                                                                                                        |
+| a derived verdict word on the wire in v1 ("held covers: part")                     | a served-bytes change with no bench behind it, and a second implementation in every foreign minting helper. If R1/R2 show the model misreading instants, it returns on the `not_covered` precedent: derived at mint, refused on disagreement at recognition |
+| composing coverage items from the period (library prose inside the author's lists) | tool declarations stay in their own keys, and library-written text never grounds                                                                                                                                                                            |
+| stamping the period verdict on the coverage row inside ToolCalls                   | a library verdict inside a tool-declaration row; verdicts are ledger rows, filed by the layer (law 8)                                                                                                                                                       |
+| the results layer appending a note to the result                                   | the result is already in history when the loop head runs; served text belongs to the door (at mint) or to the inputs layer's note                                                                                                                           |
+| `describedResult()` accepting empty data as an absence                             | two doors for one meaning; the non-empty law keeps "nothing matched" to `absent()`                                                                                                                                                                          |
+| serving `describedResult()`'s `checked` now                                        | benchmark first (R4), and the findings-piece null says served bytes can cost fidelity                                                                                                                                                                       |
+| reading the fold's emptiness from events                                           | the fold reads committed rows only, so the running agent and a later reader fold the same bytes                                                                                                                                                             |
+| recognizing JSON-text envelopes in the fold alone                                  | the run did not recognize them; with one owner, the fix belongs at the execute boundary (Q7)                                                                                                                                                                |
 
 ### 9.1 Gaps this page leaves open, and where each goes
 
-| Gap (checked in code) | Goes to |
-|---|---|
-| Tool errors are untyped in the model-facing record: no error marker on the history message, no provider sets `is_error`, error text grounds identifiers ("host srv-99 not found"), and the offer treats an error as a result | step 8's outcome row; forwarding `is_error` is the request's separate, larger item |
-| Truncation is not carried into the standing: the evidence corpus and the offer read a verbatim head as full data, and `'partial'` carries no counts | step 8 (`result-truncated`); typed counts (rows returned of total) are not designed here |
-| Placement drops the boundary from the wire: a `coverage()`-wrapped payload is placed whole, and the ticket carries no `not_checked` | not designed here |
-| The limits block merges every coverage row of the run, including results the model set aside, and `coverageDeclared` is not carried into the next turn | layer 4 ("rests on", step 6) |
-| A typed `tryInsteadTool` is joined to nothing | layer 1, step 9 (`source-not-consulted`) |
-| `kind: 'existence'` has no run-time reader | on hold with the [honest-answer page](../2026-09-honest-answer-ledger.md)'s existence claims |
-| `clarify` is data only | stays so (a clarify never pauses); a reason is Q10 |
-| Freshness for questions with no time bound | `measuredAt` words only; no check without a declared bound |
-| Honesty depends on the transport (JSON text is not recognized) | Q7 |
-| A hand-written composite tool can swallow an inner absence (`core/agent/toolDispatch.ts` · `agentToolDispatch` returns inner results raw; only `runbookAsTool` folds inner coverage) | not designed here |
-| The declaration itself is trusted: nothing ties `checked` or `held` to what the tool really queried | the study's sealed side log, from outside |
-| No run-level empty fold ("every lookup this run was empty, N of N") | countable from step 8's rows; no reason proposed |
-| A raised absence (`requestInput({ absence })`) gets no ceiling, column check, evidence or status | unchanged; its rows ride the checkpoint |
+| Gap (checked in code)                                                                                                                                                                                                        | Goes to                                                                                      |
+| ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------- |
+| Tool errors are untyped in the model-facing record: no error marker on the history message, no provider sets `is_error`, error text grounds identifiers ("host srv-99 not found"), and the offer treats an error as a result | step 8's outcome row; forwarding `is_error` is the request's separate, larger item           |
+| Truncation is not carried into the standing: the evidence corpus and the offer read a verbatim head as full data, and `'partial'` carries no counts                                                                          | step 8 (`result-truncated`); typed counts (rows returned of total) are not designed here     |
+| Placement drops the boundary from the wire: a `coverage()`-wrapped payload is placed whole, and the ticket carries no `not_checked`                                                                                          | not designed here                                                                            |
+| The limits block merges every coverage row of the run, including results the model set aside, and `coverageDeclared` is not carried into the next turn                                                                       | layer 4 ("rests on", step 6)                                                                 |
+| A typed `tryInsteadTool` is joined to nothing                                                                                                                                                                                | layer 1, step 9 (`source-not-consulted`)                                                     |
+| `kind: 'existence'` has no run-time reader                                                                                                                                                                                   | on hold with the [honest-answer page](../2026-09-honest-answer-ledger.md)'s existence claims |
+| `clarify` is data only                                                                                                                                                                                                       | stays so (a clarify never pauses); a reason is Q10                                           |
+| Freshness for questions with no time bound                                                                                                                                                                                   | `measuredAt` words only; no check without a declared bound                                   |
+| Honesty depends on the transport (JSON text is not recognized)                                                                                                                                                               | Q7                                                                                           |
+| A hand-written composite tool can swallow an inner absence (`core/agent/toolDispatch.ts` · `agentToolDispatch` returns inner results raw; only `runbookAsTool` folds inner coverage)                                         | not designed here                                                                            |
+| The declaration itself is trusted: nothing ties `checked` or `held` to what the tool really queried                                                                                                                          | the study's sealed side log, from outside                                                    |
+| No run-level empty fold ("every lookup this run was empty, N of N")                                                                                                                                                          | countable from step 8's rows; no reason proposed                                             |
+| A raised absence (`requestInput({ absence })`) gets no ceiling, column check, evidence or status                                                                                                                             | unchanged; its rows ride the checkpoint                                                      |
 
 ---
 
@@ -863,6 +871,158 @@ Committed code (9.118.1) unless marked "draft":
 - Draft (local branch `feat/described-result`, commit `d8258fd3`, not on main): `lib/semantics/described.ts` · `describedResult`; `envelope.ts` ·
   `mintSemantics`; `types.ts` · `DescribedResultDeclaration`; the two `.changes` fragments; the
   tests named in § 6.1.
+
+---
+
+## 11. In progress — the third outcome
+
+**Design and build, 2026-09-29 (branch `feat/result-in-progress`, not merged or released). Adopted
+on the owner's go as Q45–Q50 in [decisions.md](decisions.md); the owner may overturn any of them.**
+
+### 11.1 The field evidence
+
+Three tools in the host app counted a vendor's in-flight state as a failure, because each test was
+equality with the success value: a backup job reported as running, and a replication session
+reported as synchronizing. Both measured cases would have been escalated falsely: a VM two hours
+into its backup read as unprotected, and an array with no unhealthy replication sessions read as
+having 97, because 96 were still transferring. The host's rule is now "a vendor state machine has at
+least three outcomes, and `!= success` is never the test": settled-ok, in progress, failed. When the
+vendor gives its own verdict field, that verdict wins over a state-name comparison.
+
+The fix for those tools is in the tools. The library's gap: the three doors let a tool say what it
+checked and what it found, but not "this item has not finished, and its outcome is not known yet".
+The model reads prose about it, and the record holds nothing.
+
+### 11.2 The declaration — one list, on `coverage()` only
+
+```ts
+return coverage(
+  { unhealthy: 0, settled: 135 },
+  {
+    checked: ['every replication session on the array (live query)'],
+    inProgress: [{ what: 'sessions still synchronizing', count: 96, short: 'syncing' }],
+  },
+);
+```
+
+- **The smallest shape is a fourth list.** `inProgress` items are a string or
+  `{ what, why?, short?, count? }` (`coverage/types.ts` · `InProgressItem`). `what`, `why` and
+  `short` follow the coverage-item rules (`short` is record-only; `coverage/items.ts` ·
+  `shortProblem` is the one rule). `count` says how many things one entry stands for, so "96
+  sessions" is one entry, not 96. `kind` is refused: it names ground a call did not reach, and an
+  item in progress is ground the call read.
+- **The tool declares what is in flight; the library never reads a state name.** A declared set of
+  vendor states (`inProgressStates: ['SYNCHRONIZING']`) was considered and rejected (§ 11.7).
+- **`coverage()` only.** `absent()` says "calling this tool again with the same arguments returns
+  this same result", and an item in progress says a later read will differ, so an absence cannot
+  carry one: `inProgress` is refused as an unknown key. A search that found no failures while
+  something is still running is `coverage({ failed: [] }, { checked, inProgress })`, and the
+  wrapped empty rowset already reads `declared-absent` (§ 5.2). `describedResult()` refuses it too,
+  in its strict `coverage` vocabulary: its projection serves no coverage lists (§ 4.2), so the list
+  would need a served line of its own. That is a named follow-up (Q49), after the bench.
+- **Refused at the mint** (`coverage/inProgress.ts` · `readInProgressList`, one rule set): a list
+  that is not an array; a blank item; an item with no `what`; `kind`; an unknown item key (a
+  misspelt `why` must not vanish); a `count` that is not a whole number of at least 1; a blank
+  `why`; a bad `short`; and `inProgress` without `checked`. The last refusal fires whether or not
+  the list is empty. A rule that fired only when something happened to be running would pass every
+  test and refuse on the first busy night in production, which is the § 1.3 lesson. The camelCase
+  door refuses `in_progress` and names `inProgress`.
+- **An empty list is omitted from the wire**, like every coverage list. `inProgress:
+running.map(…)` needs no branch.
+- **Read, never repaired, at the dispatch door** (`inProgress.ts` · `inProgressOf`). A foreign
+  `af_coverage` (a sidecar mints these) is read by the same rules. Extra item keys ride through, as
+  on every recognized envelope. A malformed list is left off the record with one dev warning per
+  tool, and the model still reads what the tool wrote.
+
+### 11.3 What the model is served
+
+- **`in_progress`**, inside `af_coverage` before `result` (so truncation keeps it). The record-only
+  `short` is stripped (`items.ts` · `WIRE_LISTS` gains `in_progress`); `count` is served.
+- **One static clause after the note** (`inProgress.ts` · `IN_PROGRESS_CLAUSE`), appended at the
+  dispatch door (`read.ts` · `strip`), not at the mint. That way an envelope a sidecar minted gets
+  it too, and the tool's own output keeps `COVERAGE_NOTE`, byte for byte. The clause reads:
+  _"`in_progress` is what the call this result answers found still running: its outcome is not
+  known yet, so it is neither a success nor a failure — report it as in progress, never as
+  either."_ It comes before a period clause, and the evidence projection removes both
+  (`withoutServedPeriod` → `withoutInProgressServed`), because words the library derived never
+  ground an answer.
+- **Served bytes change only when a tool declares a non-empty list.** The clause is registered in
+  `test/modelFacingSurfaces.test.ts`. It is new model-facing text, so it needs a paid bench cell
+  before anyone claims it helps (Q50).
+- **`canonical-notes.json` publishes `IN_PROGRESS_WIRE`** (`{ key: 'in_progress', count: 'count' }`)
+  so that a tool in another language mints it byte for byte. The clause is not published, because
+  the library adds it.
+
+### 11.4 How the fold reads it — label-only
+
+The request was for a reason such as `result-in-progress` that reads "not sure" only when the answer
+states a settled outcome for an item the result declared in progress. **That rule cannot be read
+from the record**, so this build is label-only (Q46):
+
+- The record holds the answer as prose. To tell "vm-42's backup is still running" from "vm-42 has no
+  backup", something has to read the words, which means a phrase parser or a model judge. The layer
+  refuses both (README § 4.2: the standing is folded from rows, never from a reading of language).
+- Matching the item's name (`short`) against the answer is not a substitute. It fires on the honest
+  answer ("vm-42's backup is still running"). It also misses the claim that caused the field bug,
+  "97 non-OK sessions", because that claim names no item.
+- A blanket reason in the style of `coverage-gap` (any declared item makes the answer "not sure")
+  would mark every answer from such a tool, the correct ones included, and would teach a reader to
+  ignore the word.
+
+So the declaration fires **no reason and no check**. The standing is byte-identical with and
+without it (pinned: `test/core/agent/coverage-in-progress.test.ts`, "label-only"). **The precise
+rule becomes possible when answers carry committed claim rows.** A `.claims()` disposition row
+whose subject is an in-progress item's `short` and whose value is a settled outcome can be read
+without reading prose. Today those dispositions are events only (`assessment/reasons.ts`, "WHAT IS
+NOT HERE"). When that row exists, `result-in-progress` joins the reasons table in the same change.
+
+### 11.5 How it travels with the answer's limits
+
+Under `.limitsTravelWithTheAnswer()` only:
+
+- **Prose:** one section after `Period:`, with one line per item and the tool name first
+  (`inProgress.ts` · `IN_PROGRESS_SECTION_LABEL`, `inProgressLine`):
+
+  ```
+  In progress (outcome not known yet):
+  - replication_sessions: sessions still synchronizing (96) — the array reports them transferring
+  ```
+
+  With nothing declared, the block keeps the bytes it always had.
+
+- **Typed data:** `answerCoverage.inProgress` (`coverage/answer.ts` · `AnswerInProgress`), one entry
+  per declaring call (`{ toolName, toolCallId?, items }`), carried on `turn_end.answerCoverage` and
+  `agent.answerCoverage()`. The data twin of the lines.
+- The standing line never mentions it, because the standing is not changed by it (§ 11.4).
+
+### 11.6 The record and the lens data
+
+- `tools.coverage_declared` gains `inProgress?` (`events/payloads.ts` · `InProgressItemPayload`,
+  `short` and `count` included). The `coverageDeclared` row (`DeclaredCoverage.inProgress`) carries
+  the same copy. Both keys are default-omitted.
+- The lens reads these two fields, plus `answerCoverage.inProgress`, and draws an in-progress
+  count beside checked / not checked / cannot cover. That follow-up belongs to the lens repo. The
+  `/observe` answer account is unchanged: it may omit, and never denies.
+- **What it lets you measure, from the record alone:** how often a tool declares an in-progress
+  census (per tool and per model), the number of items and their `count` totals per result, and,
+  paired with the answer text in a blind hand label, how often an answer reports an in-flight item
+  as a failure or as a success. That last one is the bench cell's metric (Q50). The record also
+  gives the declaration rate for tools whose vendor has an in-flight state, as the missing half of
+  the field rule.
+
+### 11.7 Considered and rejected
+
+- **A declared set of vendor states** (`defineTool({ inProgressStates: ['SYNCHRONIZING', …] })`,
+  with the library classifying each row). The library would need a path language to find the state
+  in each row, and it would compare state names. The field rule says the vendor's own verdict field
+  wins over a state name, and only the tool can weigh the two. Declared, never guessed: the tool
+  classifies.
+- **An item flag on `checked`** (`{ what, state: 'in-progress' }`). This would put a second meaning
+  on every reader of `checked`, since the served lists, the block and the fold all read it as
+  settled ground. A list of its own costs readers nothing.
+- **Minting the clause into the note.** A sidecar would then have to reproduce a composed note. A
+  door-served clause reaches every minter.
+- **A standing reason now** (§ 11.4).
 
 ---
 

@@ -25,6 +25,13 @@ interface ExampleResult {
   };
   recordedSequence: string[];
   standalone: { consumerHooks: string[]; ownSink: string[] };
+  streamRetry: {
+    reply: string;
+    tokens: string[];
+    sequence: string[];
+    opened: number;
+    midStream: { error: string; opened: number; tokens: string[] };
+  };
 }
 
 describe('resilience-visibility example — integration', () => {
@@ -57,5 +64,18 @@ describe('resilience-visibility example — integration', () => {
     // its own LLMCallHooks to collect the same reports outside a run.
     expect(result.standalone.consumerHooks.length).toBeGreaterThan(0);
     expect(result.standalone.ownSink.length).toBeGreaterThan(0);
+
+    // Scene 5 — a stream retried before its first chunk, never after.
+    expect(result.streamRetry.sequence).toEqual([
+      'error.retried',
+      'error.recovered',
+      'stream.token',
+      'stream.token',
+    ]);
+    expect(result.streamRetry.opened).toBe(2);
+    expect(result.streamRetry.tokens.join('')).toBe(result.streamRetry.reply);
+    expect(result.streamRetry.midStream.opened).toBe(1);
+    expect(result.streamRetry.midStream.tokens).toEqual(['Back']);
+    expect(result.streamRetry.midStream.error).toContain('reset mid-stream');
   });
 });

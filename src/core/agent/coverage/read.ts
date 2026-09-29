@@ -32,6 +32,7 @@ import {
   tryInsteadOfAbsence,
   tryInsteadToolOfAbsence,
 } from './absent.js';
+import { inProgressOf, withInProgressServed, withoutInProgressServed } from './inProgress.js';
 import { listsWithoutRecordOnly } from './items.js';
 import { coverageOfLedger, readCoverageLedger } from './ledger.js';
 import {
@@ -45,7 +46,7 @@ import {
   type DeclaredPeriod,
   type ServedPeriodVerdict,
 } from './period.js';
-import type { Coverage, ToolAbsence, TryInsteadTool } from './types.js';
+import type { Coverage, InProgressItem, ToolAbsence, TryInsteadTool } from './types.js';
 
 /** One coverage statement found in a result, before the caller stamps it with
  *  the call it came from. */
@@ -76,6 +77,13 @@ export interface CoverageFacts {
    * the model still reads what the tool wrote.
    */
   readonly period?: DeclaredPeriod;
+  /**
+   * Present for a `coverage()` ledger that declared a well-formed, non-empty
+   * `in_progress` — what its read found still running, its outcome not known
+   * yet (`inProgress.ts`). A malformed list is left off the record (dev-warned)
+   * and the model still reads what the tool wrote.
+   */
+  readonly inProgress?: readonly InProgressItem[];
 }
 
 /**
@@ -220,7 +228,12 @@ export function strip(value: unknown, seen: WeakSet<object> = new WeakSet()): un
   }
   const covered = readCoverageLedger(value);
   if (covered === undefined) return value;
-  const marker = withPeriodServed(listsWithoutRecordOnly(covered.af_coverage), 'other');
+  // The in-progress clause first, then the period's: the inverse below peels
+  // them off the note's end in the reverse order.
+  const marker = withPeriodServed(
+    withInProgressServed(listsWithoutRecordOnly(covered.af_coverage)),
+    'other',
+  );
   const result = strip(covered.result, seen);
   if (marker === covered.af_coverage && result === covered.result) return value;
   return { ...covered, af_coverage: marker, result };
@@ -273,7 +286,7 @@ export function withoutServedPeriod(
   const own = unserved(value as Record<string, unknown>);
   const covered = readCoverageLedger(own);
   if (covered === undefined) return own;
-  const marker = unserved(covered.af_coverage as Record<string, unknown>);
+  const marker = withoutInProgressServed(unserved(covered.af_coverage as Record<string, unknown>));
   const result = withoutServedPeriod(covered.result, seen);
   if (marker === covered.af_coverage && result === covered.result) return own;
   return { ...covered, af_coverage: marker, result };
@@ -337,11 +350,13 @@ export function readCoverageResult(value: unknown, toolName?: string): CoverageR
   const covered = readCoverageLedger(value);
   if (covered === undefined) return undefined;
   const ledgerPeriod = periodOf(covered.af_coverage, toolName);
+  const inProgress = inProgressOf(covered.af_coverage, toolName);
   const declared: CoverageFacts[] = [
     {
       kind: 'ledger',
       coverage: coverageOfLedger(covered),
       ...(ledgerPeriod !== undefined && { period: ledgerPeriod }),
+      ...(inProgress !== undefined && { inProgress }),
     },
   ];
   const inner = readAbsence(covered.result);

@@ -101,7 +101,7 @@ const provider = withRetry(anthropic({ apiKey }), {
 });
 ```
 
-The default `shouldRetry` skips `AbortError` and HTTP 4xx (client mistakes don't benefit from retry) — except `429 Too Many Requests`, which IS retried — and retries everything else (5xx, network errors, unknown shapes). Override it to implement per-error policies.
+The default `shouldRetry` skips `AbortError` and HTTP 4xx (client mistakes don't benefit from retry) — except `429 Too Many Requests`, which IS retried — and retries everything else (5xx, network errors, unknown shapes) except an error that declares `retryable: false`. Override it to implement per-error policies.
 
 `onRetry` is for standalone use. Inside a run you don't need it: the decorator's retries surface automatically as `agentfootprint.error.retried` and `agentfootprint.error.recovered`, correlated to the run. See [Resilience](/docs/monitor/resilience#observability-automatic-inside-a-run).
 

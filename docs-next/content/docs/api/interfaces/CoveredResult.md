@@ -4,7 +4,7 @@ title: CoveredResult<T>
 
 # Interface: CoveredResult\<T\>
 
-Defined in: [src/core/agent/coverage/types.ts:249](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/coverage/types.ts#L249)
+Defined in: [src/core/agent/coverage/types.ts:290](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/coverage/types.ts#L290)
 
 The rendered coverage ledger, wrapped around the result it bounds.
 
@@ -20,7 +20,7 @@ The rendered coverage ledger, wrapped around the result it bounds.
 
 > `readonly` **af\_coverage**: `object`
 
-Defined in: [src/core/agent/coverage/types.ts:250](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/coverage/types.ts#L250)
+Defined in: [src/core/agent/coverage/types.ts:291](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/coverage/types.ts#L291)
 
 #### cannot\_cover?
 
@@ -29,6 +29,13 @@ Defined in: [src/core/agent/coverage/types.ts:250](https://github.com/footprintj
 #### checked?
 
 > `readonly` `optional` **checked?**: readonly [`CoverageItem`](/docs/api/interfaces/CoverageItem)[]
+
+#### in\_progress?
+
+> `readonly` `optional` **in\_progress?**: readonly [`InProgressItem`](/docs/api/interfaces/InProgressItem)[]
+
+What the read found still running — its outcome not known yet.
+ Serialized before `result`, like the lists.
 
 #### not\_checked?
 
@@ -71,6 +78,6 @@ What the read behind the value covered in time — honesty step 7b.
 
 > `readonly` **result**: `T`
 
-Defined in: [src/core/agent/coverage/types.ts:260](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/coverage/types.ts#L260)
+Defined in: [src/core/agent/coverage/types.ts:304](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/coverage/types.ts#L304)
 
 The tool's own answer, untouched.

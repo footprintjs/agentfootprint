@@ -51,7 +51,7 @@ export const RECORD_ONLY_ITEM_KEYS: readonly string[] = ['short', 'kind'];
 
 /** What is wrong with a `short`, or `undefined` when it is fine. `what` is the
  *  item's own (trimmed) `what`. */
-function shortProblem(short: unknown, what: string): string | undefined {
+export function shortProblem(short: unknown, what: string): string | undefined {
   if (typeof short !== 'string' || short.trim() === '') {
     return '`short` must be a non-empty string — or omit it; the report then prints `what`.';
   }
@@ -292,9 +292,12 @@ export function mergeItems(lists: ReadonlyArray<readonly CoverageItem[]>): reado
   return out;
 }
 
-/** The three coverage lists as the WIRE spells them — an absence's, a
- *  ledger's `af_coverage` and a semantic envelope's `coverage`. */
-const WIRE_LISTS = ['checked', 'not_checked', 'cannot_cover'] as const;
+/** The coverage lists as the WIRE spells them — an absence's, a ledger's
+ *  `af_coverage` and a semantic envelope's `coverage` — and a ledger's
+ *  `in_progress` (`inProgress.ts`), whose items carry the same record-only
+ *  `short`. A key a holder does not carry is skipped, so the fourth costs an
+ *  envelope that never declares it nothing. */
+const WIRE_LISTS = ['checked', 'not_checked', 'cannot_cover', 'in_progress'] as const;
 
 /**
  * `holder` (an envelope or a ledger marker) with each wire list stripped of
