@@ -30,7 +30,7 @@ Whatever `execute` returns is what the model reads next. Plain data is fine unti
 
 **The rule:** rows from a system of record → `describedResult()`; any other value that has limits → `coverage()`; nothing matched → `absent()`. Never wrap one in another — `describedResult()` carries its own `coverage`. A person reading the final answer sees the same thing for all three: with [`.limitsTravelWithTheAnswer()`](#making-the-limits-survive--limitstravelwiththeanswer) on the agent, the coverage the tools declared is appended to the answer — provenance and grain never are.
 
-All three also take a `period` — what time the READ covered — and `absent()` takes the `provenance` `describedResult()` carries, so "searched the 02:00 export — nothing" is data, not prose. See [The period a result covered](#the-period-a-result-covered--period) below.
+All three also take a `period` — what time the READ covered — and `absent()` takes the `provenance` `describedResult()` carries, so "searched the 02:00 export — nothing" is data, not prose. See [The period a result covered](#the-period-a-result-covered--period) below. `coverage()` also takes `inProgress`, for items the read found still running, whose outcome is not known yet. See [Still running](#still-running--inprogress).
 
 One `execute` that uses all three:
 
@@ -1046,6 +1046,49 @@ data) — so upgrade the reading side (and the lens) before tools mint periods.
 An `mcpClient` in its default text mode hands envelopes over as JSON text, which
 is not recognized at the door at all — use `resultMode: 'structured'` for tools
 that return envelopes.
+
+## Still running — `inProgress`
+
+A backup that is two hours into its run has not failed, and it has not
+succeeded either. A replication session that is still synchronizing is the same.
+A vendor's states have at least three outcomes: settled-ok, in progress and
+failed. A tool whose test is "equals the success value" counts the middle one
+as a failure, and someone gets paged about an array with no unhealthy sessions.
+
+Only your tool knows which of its vendor's states are still running. When the
+vendor also gives its own verdict field, trust that field over a state name. So
+the tool classifies each item, and says which ones are still running on the
+`coverage()` it already returns:
+
+<CodeFile path="examples/features/79-result-in-progress.ts" region="result-in-progress" title="examples/features/79-result-in-progress.ts (region: result-in-progress)" />
+
+- **Each entry** is a string or `{ what, why?, short?, count? }`. `count` says
+  how many things the entry stands for, so write "96 sessions" as one entry, not
+  96. `short` is for the record only, as on every coverage item.
+- **The model reads** `in_progress` inside `af_coverage`, followed by one extra
+  sentence after the note: the outcome is not known yet, so it is neither a
+  success nor a failure. That sentence is served only when the list is non-empty.
+  A tool that declares nothing is served the same bytes as before.
+- **The record keeps it.** `tools.coverage_declared` and the `coverageDeclared`
+  row gain `inProgress`. With `.limitsTravelWithTheAnswer()`, a prose answer
+  gains an `In progress (outcome not known yet):` section with one line per item.
+  A typed answer gains `answerCoverage.inProgress` instead.
+- **The answer's standing does not change.** The declaration is a label, not a
+  reason. Whether an answer called an in-flight item "failed" is a reading of the
+  answer's words, and the library does not read words to decide a standing.
+
+**Gotchas.** `inProgress` needs `checked` beside it, even when the list is empty,
+because an item still running is part of what the call read. An empty list is
+simply omitted, so `running.length ? [...] : []` needs no other branch.
+`absent()` does not take it: an absence promises that a retry returns the same
+result, and an item still running promises the opposite. `describedResult()` does
+not take it yet. A tool in another language mints the key from
+`canonical-notes.json` (`IN_PROGRESS_WIRE`).
+
+**The names.** The entry types are `InProgressItem` (one entry) and `InProgressInput` (what you
+may write: a string or an `InProgressItem`). The sentence the model is served is
+`IN_PROGRESS_CLAUSE`. The section heading a reader matches on is `IN_PROGRESS_SECTION_LABEL`.
+One declaring call's entry in a typed answer's limits is `AnswerInProgress`.
 
 ## The result ceiling — refuse, never truncate (9.20.0)
 

@@ -6,6 +6,6 @@ title: COVERAGE_BLOCK_HEADING
 
 > `const` **COVERAGE\_BLOCK\_HEADING**: `"Coverage of this answer"` = `'Coverage of this answer'`
 
-Defined in: [src/core/agent/coverage/answer.ts:109](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/coverage/answer.ts#L109)
+Defined in: [src/core/agent/coverage/answer.ts:127](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/coverage/answer.ts#L127)
 
 The block's opening line. Stable — tests and readers match on it.

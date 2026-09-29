@@ -76,6 +76,36 @@ export interface CoverageItem {
 export type CoverageInput = string | CoverageItem;
 
 /**
+ * One thing the tool READ and found still RUNNING — a backup in progress, a
+ * replication session still synchronizing — whose outcome is therefore not
+ * known yet: neither a success nor a failure (`coverage()`'s `inProgress`).
+ *
+ * The TOOL decides which of its vendor's states are in flight — this library
+ * never reads a state name, and the vendor's own verdict field, when there is
+ * one, is the tool's to weigh. `what` is the author's prose, as for every
+ * coverage item; `short` is the same RECORD-ONLY short form. `count` says how
+ * many things this one entry stands for ("96 sessions still synchronizing" is
+ * one entry with `count: 96`); omitted, the entry is one thing. It is served —
+ * the model reads the number as the tool's own.
+ *
+ * No `kind`: that names ground a call did NOT reach, and an item in progress
+ * is ground it reached.
+ */
+export interface InProgressItem {
+  /** What is still running. Non-empty. */
+  readonly what: string;
+  /** Since when, or what the vendor reported — optional. */
+  readonly why?: string;
+  /** RECORD-ONLY short form, the {@link CoverageItem.short} rules. */
+  readonly short?: string;
+  /** How many things this entry stands for — a positive whole number; omitted = one. */
+  readonly count?: number;
+}
+
+/** What an author may write in `inProgress`: bare prose, or an {@link InProgressItem}. */
+export type InProgressInput = string | InProgressItem;
+
+/**
  * The three lists, normalized. This is the shape everything downstream reads —
  * the renderer, the event payload, the answer-level block.
  *
@@ -204,6 +234,17 @@ export type CoverageLedgerDeclaration = CoverageDeclaration & {
    * for, and what the store holds (or `'unknown'`). Refused when malformed.
    */
   readonly period?: DeclaredPeriod;
+  /**
+   * What the read found still RUNNING — its outcome not known yet (a backup in
+   * progress, a session still synchronizing). The tool decides what is in
+   * flight; the library never reads a vendor's state name. Needs `checked`
+   * beside it (an item in progress is ground the call read). An empty list
+   * says nothing and is omitted, like every coverage list. Served as
+   * `in_progress`, with one static clause after the note; recorded on the
+   * `coverageDeclared` row and `tools.coverage_declared`; printed under
+   * `.limitsTravelWithTheAnswer()`. It never changes the answer's standing.
+   */
+  readonly inProgress?: readonly InProgressInput[];
 };
 
 /**
@@ -251,6 +292,9 @@ export interface CoveredResult<T = unknown> {
     readonly checked?: readonly CoverageItem[];
     readonly not_checked?: readonly CoverageItem[];
     readonly cannot_cover?: readonly CoverageItem[];
+    /** What the read found still running — its outcome not known yet.
+     *  Serialized before `result`, like the lists. */
+    readonly in_progress?: readonly InProgressItem[];
     /** What the read behind the value covered in time — honesty step 7b.
      *  Serialized before `result`, like the lists. */
     readonly period?: PeriodOnWire;
@@ -282,4 +326,11 @@ export interface DeclaredCoverage extends Coverage {
    * files a `'ledger'` row whose three lists are empty.
    */
   readonly period?: DeclaredPeriod;
+  /**
+   * What the call found still running — its outcome not known yet — as the
+   * `coverage()` declared it (copied item by item; `short` and `count` when
+   * valid). Present only on a `'ledger'` row whose envelope declared a
+   * well-formed, non-empty `in_progress`.
+   */
+  readonly inProgress?: readonly InProgressItem[];
 }

@@ -18,6 +18,7 @@ export {
   COVERAGE_BLOCK_HEADING,
   coverageOfAnswer,
   type AnswerCoverage,
+  type AnswerInProgress,
 } from './answer.js';
 export { absenceEvidenceProjection } from './evidence.js';
 export { mergeItems, normalizeCoverageList, sameItem } from './items.js';
@@ -30,6 +31,12 @@ export {
 } from './ledger.js';
 export { readCoverageResult, type CoverageFacts, type CoverageReading } from './read.js';
 export { PERIOD_WIRE, periodVerdict, type DeclaredPeriod, type PeriodRow } from './period.js';
+export {
+  IN_PROGRESS_CLAUSE,
+  IN_PROGRESS_SECTION_LABEL,
+  IN_PROGRESS_WIRE,
+  inProgressLine,
+} from './inProgress.js';
 export type {
   AbsenceDeclaration,
   Coverage,
@@ -38,6 +45,8 @@ export type {
   CoverageItem,
   CoveredResult,
   DeclaredCoverage,
+  InProgressInput,
+  InProgressItem,
   ToolAbsence,
   TryInsteadTool,
 } from './types.js';

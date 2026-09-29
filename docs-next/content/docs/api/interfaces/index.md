@@ -2,7 +2,7 @@
 title: Interfaces
 ---
 
-320 exported from `agentfootprint`.
+322 exported from `agentfootprint`.
 
 - [`AbsenceDeclaration`](/docs/api/interfaces/AbsenceDeclaration)
 - [`ActOptions`](/docs/api/interfaces/ActOptions)
@@ -17,6 +17,7 @@ title: Interfaces
 - [`AnswerCoverage`](/docs/api/interfaces/AnswerCoverage)
 - [`AnswerEvidenceResolver`](/docs/api/interfaces/AnswerEvidenceResolver)
 - [`AnswerGroundingReading`](/docs/api/interfaces/AnswerGroundingReading)
+- [`AnswerInProgress`](/docs/api/interfaces/AnswerInProgress)
 - [`AnswerValidationOptions`](/docs/api/interfaces/AnswerValidationOptions)
 - [`AnswerValidationReport`](/docs/api/interfaces/AnswerValidationReport)
 - [`ArgumentRow`](/docs/api/interfaces/ArgumentRow)
@@ -145,6 +146,7 @@ title: Interfaces
 - [`InMemoryArtifacts`](/docs/api/interfaces/InMemoryArtifacts)
 - [`InMemoryArtifactsOptions`](/docs/api/interfaces/InMemoryArtifactsOptions)
 - [`InnerCallRecord`](/docs/api/interfaces/InnerCallRecord)
+- [`InProgressItem`](/docs/api/interfaces/InProgressItem)
 - [`InputCancellation`](/docs/api/interfaces/InputCancellation)
 - [`InputField`](/docs/api/interfaces/InputField)
 - [`InputRequestDeclaration`](/docs/api/interfaces/InputRequestDeclaration)

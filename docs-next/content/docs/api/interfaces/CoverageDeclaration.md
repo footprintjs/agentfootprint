@@ -4,7 +4,7 @@ title: CoverageDeclaration
 
 # Interface: CoverageDeclaration
 
-Defined in: [src/core/agent/coverage/types.ts:101](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/coverage/types.ts#L101)
+Defined in: [src/core/agent/coverage/types.ts:131](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/coverage/types.ts#L131)
 
 What a tool author passes to import('./ledger.js').coverage.
 
@@ -14,7 +14,7 @@ What a tool author passes to import('./ledger.js').coverage.
 
 > `readonly` `optional` **cannotCover?**: readonly [`CoverageInput`](/docs/api/type-aliases/CoverageInput)[]
 
-Defined in: [src/core/agent/coverage/types.ts:104](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/coverage/types.ts#L104)
+Defined in: [src/core/agent/coverage/types.ts:134](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/coverage/types.ts#L134)
 
 ***
 
@@ -22,7 +22,7 @@ Defined in: [src/core/agent/coverage/types.ts:104](https://github.com/footprintj
 
 > `readonly` `optional` **checked?**: readonly [`CoverageInput`](/docs/api/type-aliases/CoverageInput)[]
 
-Defined in: [src/core/agent/coverage/types.ts:102](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/coverage/types.ts#L102)
+Defined in: [src/core/agent/coverage/types.ts:132](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/coverage/types.ts#L132)
 
 ***
 
@@ -30,4 +30,4 @@ Defined in: [src/core/agent/coverage/types.ts:102](https://github.com/footprintj
 
 > `readonly` `optional` **notChecked?**: readonly [`CoverageInput`](/docs/api/type-aliases/CoverageInput)[]
 
-Defined in: [src/core/agent/coverage/types.ts:103](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/coverage/types.ts#L103)
+Defined in: [src/core/agent/coverage/types.ts:133](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/coverage/types.ts#L133)

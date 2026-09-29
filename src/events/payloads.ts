@@ -2249,6 +2249,23 @@ export interface ToolCoverageDeclaredPayload {
    * event carries). Default-omitted.
    */
   readonly period?: PeriodPayload;
+  /**
+   * What a `coverage()`'s read found still running — its outcome not known
+   * yet — as the tool declared it (a copy). Default-omitted: present only when
+   * the ledger declared a well-formed, non-empty `in_progress`.
+   */
+  readonly inProgress?: readonly InProgressItemPayload[];
+}
+
+/** One thing a read found still running, as it rides an event: detached plain
+ *  data, copied out of the tool's own declaration. */
+export interface InProgressItemPayload {
+  readonly what: string;
+  readonly why?: string;
+  /** RECORD-ONLY short form — the model was served the envelope without it. */
+  readonly short?: string;
+  /** How many things this entry stands for; absent = one. Served. */
+  readonly count?: number;
 }
 
 /** One piece of declared ground, as it rides an event: detached plain data,
