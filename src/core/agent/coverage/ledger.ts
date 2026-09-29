@@ -32,6 +32,7 @@
  * recognizer, same guarantee.
  */
 
+import { mintInProgress } from './inProgress.js';
 import { normalizeCoverageList } from './items.js';
 import { mintPeriod } from './period.js';
 import { refusal, refuseUnknownKeys } from './refusal.js';
@@ -49,6 +50,7 @@ const LEDGER_DECLARATION_KEYS: readonly string[] = Object.keys({
   notChecked: true,
   cannotCover: true,
   period: true,
+  inProgress: true,
 } satisfies Record<keyof CoverageLedgerDeclaration, true>);
 
 // The recognizer lives in the leaf `recognize.ts` (a post-hoc reader — the one
@@ -89,6 +91,14 @@ export const COVERAGE_NOTE =
  * a boundary on its own, served inside `af_coverage` before `result`, and the
  * results layer judges it. `coverage()` takes no `provenance`.
  *
+ * `inProgress` says what the read found still RUNNING — its outcome not known
+ * yet (a backup in progress, a replication session still synchronizing). The
+ * tool decides what is in flight; this library never reads a vendor's state
+ * name. Served as `in_progress` (the dispatch door adds one static clause after
+ * the note), recorded, and printed under `.limitsTravelWithTheAnswer()`; it
+ * never changes the answer's standing (`inProgress.ts`). It needs `checked`
+ * beside it — an item in progress is ground the call read.
+ *
  * Refuses (throws, where it is called) a boundary that declares nothing, a
  * malformed item or period, and any key the boundary does not have — naming the
  * spelling meant when the key is a casing slip (`not_checked` →
@@ -120,7 +130,8 @@ export function coverage<T>(content: T, decl: CoverageLedgerDeclaration): Covere
   if (typeof decl !== 'object' || decl === null) {
     throw refusal(
       `${fn}() takes the result and its boundary — coverage(result, { checked?, notChecked?, ` +
-        `cannotCover?, period? }). To return a result with no declared boundary, return it bare.`,
+        `cannotCover?, period?, inProgress? }). To return a result with no declared boundary, ` +
+        `return it bare.`,
     );
   }
   refuseUnknownKeys(decl, LEDGER_DECLARATION_KEYS);
@@ -132,6 +143,17 @@ export function coverage<T>(content: T, decl: CoverageLedgerDeclaration): Covere
   // malformed. A period IS a declared boundary (in time), so a ledger that
   // declares only a period is not the empty ledger refused below.
   const period = mintPeriod(decl.period);
+  // What the read found still running (`inProgress.ts` — the ONE rule set).
+  // Refused without `checked` whether or not the list is empty: a rule that
+  // fired only when something happened to be running would pass every test
+  // and refuse on the first busy night in production (the 7a′ lesson).
+  const inProgress = mintInProgress(decl.inProgress);
+  if (decl.inProgress != null && checked.length === 0) {
+    throw refusal(
+      '`inProgress` needs `checked` beside it — an item still running is ground the call ' +
+        'read, so say what the call read.',
+    );
+  }
   if (
     checked.length === 0 &&
     notChecked.length === 0 &&
@@ -150,6 +172,7 @@ export function coverage<T>(content: T, decl: CoverageLedgerDeclaration): Covere
       ...(checked.length > 0 && { checked }),
       ...(notChecked.length > 0 && { not_checked: notChecked }),
       ...(cannotCover.length > 0 && { cannot_cover: cannotCover }),
+      ...(inProgress.length > 0 && { in_progress: inProgress }),
       // Serialized BEFORE `result`, with the lists, so a truncated view keeps it.
       ...(period !== undefined && { period }),
       note: COVERAGE_NOTE,

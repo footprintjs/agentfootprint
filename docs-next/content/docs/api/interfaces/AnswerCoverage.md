@@ -4,7 +4,7 @@ title: AnswerCoverage
 
 # Interface: AnswerCoverage
 
-Defined in: [src/core/agent/coverage/answer.ts:78](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/coverage/answer.ts#L78)
+Defined in: [src/core/agent/coverage/answer.ts:92](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/coverage/answer.ts#L92)
 
 A TYPED answer's limits, as data — the three coverage lists the prose block
 would print, plus the values a tool's `assume` rule filled this turn (the
@@ -30,7 +30,7 @@ data twin of the block's `Period:` lines, present only when a call declared one.
 
 > `readonly` `optional` **assumed?**: readonly `object`[]
 
-Defined in: [src/core/agent/coverage/answer.ts:82](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/coverage/answer.ts#L82)
+Defined in: [src/core/agent/coverage/answer.ts:100](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/coverage/answer.ts#L100)
 
 ***
 
@@ -38,7 +38,7 @@ Defined in: [src/core/agent/coverage/answer.ts:82](https://github.com/footprintj
 
 > `readonly` **cannotCover**: readonly [`CoverageItem`](/docs/api/interfaces/CoverageItem)[]
 
-Defined in: [src/core/agent/coverage/types.ts:97](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/coverage/types.ts#L97)
+Defined in: [src/core/agent/coverage/types.ts:127](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/coverage/types.ts#L127)
 
 #### Inherited from
 
@@ -50,7 +50,7 @@ Defined in: [src/core/agent/coverage/types.ts:97](https://github.com/footprintjs
 
 > `readonly` **checked**: readonly [`CoverageItem`](/docs/api/interfaces/CoverageItem)[]
 
-Defined in: [src/core/agent/coverage/types.ts:95](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/coverage/types.ts#L95)
+Defined in: [src/core/agent/coverage/types.ts:125](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/coverage/types.ts#L125)
 
 #### Inherited from
 
@@ -58,11 +58,23 @@ Defined in: [src/core/agent/coverage/types.ts:95](https://github.com/footprintjs
 
 ***
 
+### inProgress?
+
+> `readonly` `optional` **inProgress?**: readonly `object`[]
+
+Defined in: [src/core/agent/coverage/answer.ts:99](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/coverage/answer.ts#L99)
+
+What the calls found still running — its outcome not known yet — one
+ entry per declaring call, as declared; present only when one did. Never a
+ reason on the answer's standing: a label that travels with the limits.
+
+***
+
 ### notChecked
 
 > `readonly` **notChecked**: readonly [`CoverageItem`](/docs/api/interfaces/CoverageItem)[]
 
-Defined in: [src/core/agent/coverage/types.ts:96](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/coverage/types.ts#L96)
+Defined in: [src/core/agent/coverage/types.ts:126](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/coverage/types.ts#L126)
 
 #### Inherited from
 
@@ -74,7 +86,7 @@ Defined in: [src/core/agent/coverage/types.ts:96](https://github.com/footprintjs
 
 > `readonly` `optional` **periods?**: readonly `object`[]
 
-Defined in: [src/core/agent/coverage/answer.ts:81](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/coverage/answer.ts#L81)
+Defined in: [src/core/agent/coverage/answer.ts:95](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/coverage/answer.ts#L95)
 
 The periods the calls declared (honesty step 7b) — one per declaring
  call, as declared; present only when one did.

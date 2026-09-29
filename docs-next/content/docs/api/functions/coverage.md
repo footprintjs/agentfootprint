@@ -6,7 +6,7 @@ title: coverage
 
 > **coverage**\<`T`\>(`content`, `decl`): [`CoveredResult`](/docs/api/interfaces/CoveredResult)\<`T`\>
 
-Defined in: [src/core/agent/coverage/ledger.ts:118](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/coverage/ledger.ts#L118)
+Defined in: [src/core/agent/coverage/ledger.ts:128](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/coverage/ledger.ts#L128)
 
 Return a verdict with its own boundary attached.
 
@@ -20,6 +20,14 @@ answer where the model cannot drop it.
 covered — `{ queried, held, readAt? }`, ISO 8601 instants with a zone; it is
 a boundary on its own, served inside `af_coverage` before `result`, and the
 results layer judges it. `coverage()` takes no `provenance`.
+
+`inProgress` says what the read found still RUNNING — its outcome not known
+yet (a backup in progress, a replication session still synchronizing). The
+tool decides what is in flight; this library never reads a vendor's state
+name. Served as `in_progress` (the dispatch door adds one static clause after
+the note), recorded, and printed under `.limitsTravelWithTheAnswer()`; it
+never changes the answer's standing (`inProgress.ts`). It needs `checked`
+beside it — an item in progress is ground the call read.
 
 Refuses (throws, where it is called) a boundary that declares nothing, a
 malformed item or period, and any key the boundary does not have — naming the

@@ -1663,6 +1663,33 @@ const PRODUCERS: readonly ModelFacingProducer[] = [
     compose: async () => servedPeriodNotes(),
   },
   {
+    id: 'result doors — the served in-progress clause (honesty layer 3, the third outcome)',
+    module: 'src/core/agent/coverage/inProgress.ts',
+    surface: TOOL_RESULT,
+    lifetimeBecause:
+      'the dispatch door appends it to the note of a `coverage()` ledger that declares a ' +
+      'non-empty `in_progress` (`coverage/read.ts` · `servedToModel`), inside the `role: "tool"` ' +
+      'result of that call, so it is written into `history` and re-read on every later call of ' +
+      'the turn — anchored to "the call this result answers" and to the result’s own ' +
+      '`in_progress` key, never to a time',
+    drivenBy: ['test/core/agent/coverage-in-progress.test.ts'],
+    reaches: [
+      /`in_progress` is what the call this result answers found still running: its outcome is not known yet, so it is neither a success nor a failure — report it as in progress, never as either\./,
+    ],
+    compose: async () => [
+      String(
+        (
+          servedToModel(
+            coverage(1, {
+              checked: ['every session'],
+              inProgress: ['sessions still synchronizing'],
+            }),
+          ) as { af_coverage: { note: string } }
+        ).af_coverage.note,
+      ),
+    ],
+  },
+  {
     id: 'answer layer — the standing line appended to a prose answer (honesty layer 4)',
     module: 'src/core/agent/assessment/compose.ts',
     surface: INJECTED_TURN,

@@ -20,22 +20,22 @@ Two result primitives, both **invented in field use** on a live triage agent
 before this library had any answer for either. We copied them; the credit
 belongs to the field.
 
-| | says | door |
-|---|---|---|
-| `absent()` | "I looked HERE, and there is nothing" | tool result, or a `requestInput` declaration's `absence` (§ 4) |
-| `coverage()` | "my verdict covers THIS and not THAT" | tool result |
+|              | says                                  | door                                                           |
+| ------------ | ------------------------------------- | -------------------------------------------------------------- |
+| `absent()`   | "I looked HERE, and there is nothing" | tool result, or a `requestInput` declaration's `absence` (§ 4) |
+| `coverage()` | "my verdict covers THIS and not THAT" | tool result                                                    |
 
 ## 1. `absent()` — the direction of the error is the argument
 
-A tool that finds nothing returns *something*: an empty array, a `null`, a
+A tool that finds nothing returns _something_: an empty array, a `null`, a
 sentence. From any of those a model cannot tell **"I looked and there is
 nothing"** from **"I could not look"**.
 
 That confusion is not symmetric, which is why it is worth a primitive:
 
-- a *nothing-found* misread as an *outage* sends an engineer to investigate a
+- a _nothing-found_ misread as an _outage_ sends an engineer to investigate a
   collector that is working perfectly — expensive, and self-correcting;
-- an *outage* misread as *nothing-found* declares a system healthy that was
+- an _outage_ misread as _nothing-found_ declares a system healthy that was
   **never checked** — cheap, silent, and wrong in the direction that hurts.
 
 So an absence must not share a shape with an error. An error is a result with
@@ -53,7 +53,9 @@ return absent({
   what: `FLOGI entries on ${port}`,
   checked: [`${sw}: the live fcns database`, 'window: the last 24h'],
   notChecked: [{ what: 'the archived FLOGI history', why: 'older than the 24h window' }],
-  cannotCover: [{ what: 'ports on the peer fabric', why: 'this collector is scoped to one fabric' }],
+  cannotCover: [
+    { what: 'ports on the peer fabric', why: 'this collector is scoped to one fabric' },
+  ],
   tryInstead: 'Ask for a different interface, or query the peer fabric by name.',
 });
 ```
@@ -61,7 +63,7 @@ return absent({
 ## 2. `coverage()` — what a clean result does NOT rule out
 
 "Everything looks fine" is produced from the checks that ran, and arrives with
-no way to tell whether *fine* means **verified** or **unexamined**. A ledger is
+no way to tell whether _fine_ means **verified** or **unexamined**. A ledger is
 three lists the tool knows and the model does not — and only the tool knows the
 third, which is why this cannot be prompt engineering.
 
@@ -93,7 +95,10 @@ return absent({
   what: `latency samples for cluster ${cluster}`,
   checked: [`collected latency samples over the last ${window}`],
   notChecked: [
-    { what: 'whether the cluster exists at all', why: 'this reads collected samples, not the cluster' },
+    {
+      what: 'whether the cluster exists at all',
+      why: 'this reads collected samples, not the cluster',
+    },
   ],
   tryInstead: 'Widen the window, or check cluster_inventory for the collected cluster names.',
 });
@@ -108,7 +113,10 @@ return absent({
   what: `latency samples for cluster ${cluster}`,
   checked: [`collected latency samples over the last ${window}`],
   notChecked: [
-    { what: 'whether the cluster exists at all', why: 'this reads collected samples, not the cluster' },
+    {
+      what: 'whether the cluster exists at all',
+      why: 'this reads collected samples, not the cluster',
+    },
   ],
   tryInstead: 'Widen the window, or check cluster_inventory for the collected cluster names.',
   tryInsteadTool: { tool: 'cluster_inventory', why: 'it lists the collected cluster names' },
@@ -124,13 +132,13 @@ keeps the sentence, and a reader of the tool takes the name without parsing.
 
 What each reader gets:
 
-| reader | `tryInstead` — the sentence | `tryInsteadTool` — the tool |
-|---|---|---|
-| the model (the `af_absent` JSON) | `"try_instead":"Widen the window, or …"` — byte-identical to 9.112.2 | `"try_instead_tool":{"tool":"cluster_inventory","why":"it lists the collected cluster names"}`, right after `try_instead` — the author's words; the library composes no sentence for it |
-| `agentfootprint.tools.absent` | `tryInstead: '<the sentence>'` | `tryInsteadTool: { tool, why }`, a copy |
-| the evidence corpus | the sentence grounds | `tool` and `why` ground; `looked_for` is still the one field withheld |
-| a dataset projection's guard (`lib/semantics/projection.ts`) | a declaration no adapter may change | the same |
-| `coverageDeclared` and the appended block | never carried | never carried — a suggestion is advice about a call not yet made, not ground the answer stands on |
+| reader                                                       | `tryInstead` — the sentence                                          | `tryInsteadTool` — the tool                                                                                                                                                             |
+| ------------------------------------------------------------ | -------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| the model (the `af_absent` JSON)                             | `"try_instead":"Widen the window, or …"` — byte-identical to 9.112.2 | `"try_instead_tool":{"tool":"cluster_inventory","why":"it lists the collected cluster names"}`, right after `try_instead` — the author's words; the library composes no sentence for it |
+| `agentfootprint.tools.absent`                                | `tryInstead: '<the sentence>'`                                       | `tryInsteadTool: { tool, why }`, a copy                                                                                                                                                 |
+| the evidence corpus                                          | the sentence grounds                                                 | `tool` and `why` ground; `looked_for` is still the one field withheld                                                                                                                   |
+| a dataset projection's guard (`lib/semantics/projection.ts`) | a declaration no adapter may change                                  | the same                                                                                                                                                                                |
+| `coverageDeclared` and the appended block                    | never carried                                                        | never carried — a suggestion is advice about a call not yet made, not ground the answer stands on                                                                                       |
 
 **What this release does with the name, and what it does not.** The name is
 carried (the event) and rendered (the envelope). Nothing JOINS it yet: the
@@ -215,13 +223,25 @@ optional item fields say so, and the answer account
 ```ts
 return absent({
   what: 'a VM disk in the RVTools export attributed to the array asked',
-  checked: [{ what: 'vDisk and vm_rdm_map: every VM disk in the RVTools export dated 2026-09-19',
-              short: 'every VM disk in the RVTools export of 2026-09-19' }],
+  checked: [
+    {
+      what: 'vDisk and vm_rdm_map: every VM disk in the RVTools export dated 2026-09-19',
+      short: 'every VM disk in the RVTools export of 2026-09-19',
+    },
+  ],
   notChecked: [
-    { what: 'whether that name is a storage array, and which VM disks are on it',
-      short: 'whether that name is a storage array', kind: 'existence', why: '…' },
-    { what: 'hosts that are not VMware — AIX LPARs and physical servers',
-      short: 'hosts that are not VMware', kind: 'scope', why: '…' },
+    {
+      what: 'whether that name is a storage array, and which VM disks are on it',
+      short: 'whether that name is a storage array',
+      kind: 'existence',
+      why: '…',
+    },
+    {
+      what: 'hosts that are not VMware — AIX LPARs and physical servers',
+      short: 'hosts that are not VMware',
+      kind: 'scope',
+      why: '…',
+    },
   ],
 });
 ```
@@ -479,7 +499,7 @@ execute: () => describedResult({ facts: rows, provenance: { measuredAt: exportTi
   → `measured_at` at `semantic()`, and the reverse at `describedResult()`. A
   different word gets the list of fields and nothing else.
 - **Not held to it, on purpose.** An ITEM's own keys (`{ what, why, short,
-  kind }`): an unknown one is still dropped — § 3's "Not the coverage lists'
+kind }`): an unknown one is still dropped — § 3's "Not the coverage lists'
   rules", unchanged, because refusing it would change what existing item
   lists built from rows mint. The data rows (`series`, `facts`, `edges`):
   they carry the tool's own columns and pass through. And an envelope minted
@@ -503,15 +523,15 @@ silence about what was searched is recorded as silence.
 model read and the door the RECORD says the call returned, and answers with
 typed routes only — never a guess:
 
-| What the record says came back | Reading |
-|---|---|
-| an absence — bare, inside a `coverage()`, or the delivered status `'absent'` | `declared-absent` |
-| a `describedResult()` with data (the envelope the record keeps) | `non-empty`, counted per kind |
-| a `describedResult()` with only `clarify` | `clarify` |
-| a `coverage()` envelope | its wrapped result, read by these same routes and marked `bounded`; an EMPTY wrapped rowset is `declared-absent` |
-| a bare top-level array | `undeclared-empty` or `non-empty` (library-counted) |
-| an object whose key the app declared in `rowsAt` | `undeclared-empty` or `non-empty` (app-counted) |
-| anything else | `unknown` |
+| What the record says came back                                               | Reading                                                                                                          |
+| ---------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------- |
+| an absence — bare, inside a `coverage()`, or the delivered status `'absent'` | `declared-absent`                                                                                                |
+| a `describedResult()` with data (the envelope the record keeps)              | `non-empty`, counted per kind                                                                                    |
+| a `describedResult()` with only `clarify`                                    | `clarify`                                                                                                        |
+| a `coverage()` envelope                                                      | its wrapped result, read by these same routes and marked `bounded`; an EMPTY wrapped rowset is `declared-absent` |
+| a bare top-level array                                                       | `undeclared-empty` or `non-empty` (library-counted)                                                              |
+| an object whose key the app declared in `rowsAt`                             | `undeclared-empty` or `non-empty` (app-counted)                                                                  |
+| anything else                                                                | `unknown`                                                                                                        |
 
 Two callers, one rule: the `/observe` answer account
 (`lib/answer-account/facts/calls.ts` for this run's calls,
@@ -548,7 +568,9 @@ through `declaredByValue` — which also says whether the envelope lists a gap:
   never recognized, the standing therefore says more than "It found" does.
 
 ```ts
-declaredByValue(JSON.stringify(absent({ what: 'VMs', checked: ['inventory'], notChecked: ['off VMs'] })));
+declaredByValue(
+  JSON.stringify(absent({ what: 'VMs', checked: ['inventory'], notChecked: ['off VMs'] })),
+);
 // → { absent: true, bounded: false, gap: true }
 ```
 
@@ -573,8 +595,8 @@ return absent({
   provenance: { measuredAt: snap.exportedAt, source: 'nightly backup export' }, // describedResult()'s shape
   period: {
     queried: { from: '2026-09-26T09:00:00Z', to: '2026-09-26T10:00:00Z' }, // what the READ asked for
-    held: { from: snap.heldFrom, to: snap.exportedAt },                    // what the store holds — or 'unknown'
-    readAt: '2026-09-26T10:00:03Z',                                         // when the read ran (optional)
+    held: { from: snap.heldFrom, to: snap.exportedAt }, // what the store holds — or 'unknown'
+    readAt: '2026-09-26T10:00:03Z', // when the read ran (optional)
   },
 });
 // on the wire: "provenance": { "measured_at", "source" }, "period": { "queried", "held", "read_at" }
@@ -633,6 +655,68 @@ doors, recognition, byte identity) and `test/core/agent/results/layer.test.ts`
 verdict mix per tool, the held-unknown share, and — from `tools.absent` — how
 often "nothing" names its source and time.
 
+## 8. In progress — the third outcome, declared, never guessed
+
+**The law: a vendor state machine has at least three outcomes (settled-ok, in
+progress, failed), and the TOOL says which of its items are still running.
+This library never reads a state name, and the declaration never changes the
+answer's standing.** A tool whose test is "equals the success value" counts
+the middle outcome as a failure. In the field, a backup two hours into its run
+read as unprotected, and an array whose 96 in-flight sessions were
+"synchronizing" read as "97 non-OK". Both would have been escalated. Only the
+tool knows its vendor's states, and when the vendor gives its own verdict
+field, that verdict wins over a state name. So the tool classifies, and this
+folder gives it a place to say so:
+
+```ts
+execute: async () => {
+  const s = await replicationSessions(array);          // the tool's own read
+  const failed = s.filter((x) => x.isHealthy === false);  // the vendor's verdict wins
+  const running = s.filter((x) => x.isHealthy !== false && x.transferring);
+  return coverage(
+    { unhealthy: failed.length, settled: s.length - failed.length - running.length },
+    {
+      checked: [`every replication session on ${array} (live query)`],
+      inProgress: running.length
+        ? [{ what: 'sessions still synchronizing', count: running.length, short: 'syncing' }]
+        : [],
+    },
+  );
+},
+```
+
+- **One list, `coverage()` only** (`inProgress.ts` · `readInProgressList`, the
+  one rule set). Items are a string or `{ what, why?, short?, count? }`. `short`
+  is record-only, as on every item. `count` is how many things one entry stands
+  for, and it is served. `kind` is refused, because an item in progress is
+  ground the call read. `inProgress` needs `checked` beside it, and that rule
+  fires even for an empty list, so it is never data-dependent. An empty list is
+  omitted from the wire. `absent()` refuses the key, because its note promises
+  a retry returns the same. `describedResult()` refuses it for now
+  (docs/design/honesty/results.md § 11.2).
+- **Served:** `in_progress` (minus `short`) inside `af_coverage`, before
+  `result`, and ONE static clause after the note (`IN_PROGRESS_CLAUSE`). The
+  dispatch door appends the clause (`read.ts` · `strip`), so a sidecar's
+  envelope gets it too. The tool's own output keeps `COVERAGE_NOTE`, and the
+  evidence projection removes the clause. A foreign list is read by the same
+  rules (extra item keys ride through). A malformed foreign list is left off
+  the record with one dev warning per tool, and it is served as written, with
+  no clause.
+- **Recorded:** `tools.coverage_declared` and the `coverageDeclared` row gain
+  `inProgress`. **For the person**, under `.limitsTravelWithTheAnswer()` only:
+  an `In progress (outcome not known yet):` section with one line per item and
+  the tool name first (`inProgressLine`), or `answerCoverage.inProgress` on a
+  typed answer. `canonical-notes.json` publishes `IN_PROGRESS_WIRE`.
+- **Label-only.** No reason and no check fire, and the standing is the same
+  with and without the declaration. "Not sure only when the answer states a
+  settled outcome for an in-flight item" is a reading of prose, which this
+  library refuses to do. It becomes a reason when answers carry committed claim
+  rows (design § 11.4).
+
+Pinned by `test/core/agent/coverage-in-progress.test.ts` (mint, recognition,
+serve, one agent run, a seeded property, byte identity). Worked example:
+`examples/features/79-result-in-progress.ts`.
+
 ## What the framework does with them
 
 Recognition is STRICT (the effects-envelope law): only a plain object carrying
@@ -642,16 +726,16 @@ has ever returned takes the path it always took, byte for byte.
 The table is what a RETURNED absence gets; a raised one (§ 4) differs in four
 ways — no delivered status, no ceiling, no column-type contract, no evidence.
 
-| | on an **absence** | on a **ledger** |
-|---|---|---|
-| delivered status | `'absent'` — the seventh `ToolResultStatus`, routable by `onToolStatus` | unchanged |
-| event | `agentfootprint.tools.absent` | `agentfootprint.tools.coverage_declared` |
-| tracked state | appended to `coverageDeclared` | appended to `coverageDeclared` |
-| evidence corpus | grounds **every field but `looked_for`** | indexed as ordinary data |
-| final answer | folds into the block, with `.limitsTravelWithTheAnswer()` — into `answerCoverage` (data) when the answer is typed | same |
-| suggestion (`tryInstead`, `tryInsteadTool`) | rides `tools.absent` as declared (9.113.0); never tracked, never appended | — (a ledger makes none) |
-| `provenance` (step 7b) | rides `tools.absent`, camelCase; served in the envelope; never tracked, never appended | — (`coverage()` takes none) |
-| `period` (step 7b) | rides `tools.absent` and the tracked row; served as declared; its verdict is the results layer's row; a `Period:` line under `.limitsTravelWithTheAnswer()` | same, on `tools.coverage_declared` |
+|                                             | on an **absence**                                                                                                                                           | on a **ledger**                          |
+| ------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------- |
+| delivered status                            | `'absent'` — the seventh `ToolResultStatus`, routable by `onToolStatus`                                                                                     | unchanged                                |
+| event                                       | `agentfootprint.tools.absent`                                                                                                                               | `agentfootprint.tools.coverage_declared` |
+| tracked state                               | appended to `coverageDeclared`                                                                                                                              | appended to `coverageDeclared`           |
+| evidence corpus                             | grounds **every field but `looked_for`**                                                                                                                    | indexed as ordinary data                 |
+| final answer                                | folds into the block, with `.limitsTravelWithTheAnswer()` — into `answerCoverage` (data) when the answer is typed                                           | same                                     |
+| suggestion (`tryInstead`, `tryInsteadTool`) | rides `tools.absent` as declared (9.113.0); never tracked, never appended                                                                                   | — (a ledger makes none)                  |
+| `provenance` (step 7b)                      | rides `tools.absent`, camelCase; served in the envelope; never tracked, never appended                                                                      | — (`coverage()` takes none)              |
+| `period` (step 7b)                          | rides `tools.absent` and the tracked row; served as declared; its verdict is the results layer's row; a `Period:` line under `.limitsTravelWithTheAnswer()` | same, on `tools.coverage_declared`       |
 
 ### What deliberately does NOT change
 
@@ -698,7 +782,7 @@ always grounded them.
 
 ## Survival: appended, not requested
 
-A ledger the model can drop is worthless, and *every* mechanism that ASKS the
+A ledger the model can drop is worthless, and _every_ mechanism that ASKS the
 model to carry it can be dropped — a note in the result is advice, a prompt rule
 is advice, and a judge that reads the answer back to ask "did it state its
 limits?" needs a second model to decide what counts, which is the one thing this
@@ -773,19 +857,20 @@ armed: the final branch cannot write back, and one key has one writer.
 
 ## Files
 
-| file | one job |
-|---|---|
-| `types.ts` | the shared vocabulary — `CoverageItem`, the three lists, the two rendered shapes, the typed suggestion (`TryInsteadTool`) |
-| `items.ts` | normalize and REFUSE a declaration, at the call site |
-| `refusal.ts` | how every helper refuses (§ 5): the one prefix, `refused: `, and the one unknown-key check, naming the spelling meant |
-| `recognize.ts` | the two recognizers (`readAbsence`, `readCoverageLedger`) and the two markers — a leaf, so a post-hoc reader loads them without the mints |
-| `absent.ts` | `absent()`, the static note, and the ONE rule set for a suggestion (`tryInsteadOfAbsence` and `tryInsteadToolOfAbsence` read by it); re-exports its recognizer |
-| `ledger.ts` | `coverage()` and the static note; re-exports its recognizer |
-| `emptiness.ts` | the ONE reader of what came back (§ 6) — typed routes, the door the record holds, what a value's own envelope declares (`declaredByValue`), the `rowsAt` rule |
-| `read.ts` | the ONE reader both dispatch boundaries and the raise site (`../stages/toolCalls.ts` · `declareRaisedAbsence`) call — lifts the suggestion beside the coverage |
-| `evidence.ts` | what an absence is allowed to ground |
-| `period.ts` | the ONE period shape (`DeclaredPeriod`), its ONE rule set (`periodProblem` — asked by every mint and every reader), the verdict (`periodVerdict`), the person's line (`periodLine`), the wire spelling as data (`PERIOD_WIRE`), and the results layer's `period` row with its checkpoint door |
-| `answer.ts` | folding the run's declarations into one appended block (a prose answer), or into the answer's coverage as data (`coverageOfAnswer`, a typed answer) |
+| file            | one job                                                                                                                                                                                                                                                                                       |
+| --------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `types.ts`      | the shared vocabulary — `CoverageItem`, the three lists, the two rendered shapes, the typed suggestion (`TryInsteadTool`)                                                                                                                                                                     |
+| `items.ts`      | normalize and REFUSE a declaration, at the call site                                                                                                                                                                                                                                          |
+| `refusal.ts`    | how every helper refuses (§ 5): the one prefix, `refused: `, and the one unknown-key check, naming the spelling meant                                                                                                                                                                         |
+| `recognize.ts`  | the two recognizers (`readAbsence`, `readCoverageLedger`) and the two markers — a leaf, so a post-hoc reader loads them without the mints                                                                                                                                                     |
+| `absent.ts`     | `absent()`, the static note, and the ONE rule set for a suggestion (`tryInsteadOfAbsence` and `tryInsteadToolOfAbsence` read by it); re-exports its recognizer                                                                                                                                |
+| `ledger.ts`     | `coverage()` and the static note; re-exports its recognizer                                                                                                                                                                                                                                   |
+| `emptiness.ts`  | the ONE reader of what came back (§ 6) — typed routes, the door the record holds, what a value's own envelope declares (`declaredByValue`), the `rowsAt` rule                                                                                                                                 |
+| `read.ts`       | the ONE reader both dispatch boundaries and the raise site (`../stages/toolCalls.ts` · `declareRaisedAbsence`) call — lifts the suggestion beside the coverage                                                                                                                                |
+| `evidence.ts`   | what an absence is allowed to ground                                                                                                                                                                                                                                                          |
+| `period.ts`     | the ONE period shape (`DeclaredPeriod`), its ONE rule set (`periodProblem` — asked by every mint and every reader), the verdict (`periodVerdict`), the person's line (`periodLine`), the wire spelling as data (`PERIOD_WIRE`), and the results layer's `period` row with its checkpoint door |
+| `inProgress.ts` | the third outcome (§ 8) — the ONE rule set for `inProgress` (`readInProgressList`: the mint refuses by it, the dispatch door reads by it), the served clause and its inverse, the person's line, and the wire spelling as data (`IN_PROGRESS_WIRE`)                                           |
+| `answer.ts`     | folding the run's declarations into one appended block (a prose answer), or into the answer's coverage as data (`coverageOfAnswer`, a typed answer)                                                                                                                                           |
 
 ## The notes cross a language boundary (9.70.0)
 

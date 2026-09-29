@@ -204,7 +204,7 @@ describe('unit: coverage(value, { …, period })', () => {
   it('takes no provenance (adopted Q34) — refused, naming the fields it has', () => {
     expect(refusalOf(() => coverage('ok', { checked: ['a'], provenance: SOURCE } as never))).toBe(
       `${REFUSED_PREFIX}'provenance' is not a field this vocabulary has. The fields are: ` +
-        'checked, notChecked, cannotCover, period.',
+        'checked, notChecked, cannotCover, period, inProgress.',
     );
   });
 });
