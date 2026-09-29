@@ -14,7 +14,7 @@
  * Flags: --provider mock|anthropic · --model <id> (anthropic: a Haiku 4.5 id, the default
  * claude-haiku-4-5-20251001) · --arms off[,assume,ask,full,full-b] · --cases <id|group>,… · --runs N ·
  * --seed N · --max-usd X (required for anthropic) · --temperature T (sent only when given; the
- * registered runs send none) · --judge step3|step4|step5|step5b (step5 and step5b plan `ALL_CASES`) · --concurrency K (runs in flight at once,
+ * registered runs send none) · --judge step3|step4|step5|step5b|step5c (step5, step5b and step5c plan `ALL_CASES`) · --concurrency K (runs in flight at once,
  * started in the plan's order; default 1, at most 4 — RULE.md, the protocol) · --out <dir> ·
  * --dry-run.
  *
@@ -60,11 +60,13 @@ import {
   RULE_ID,
   RULE5_ID,
   RULE5B_ID,
+  RULE5C_ID,
   formatVerdict,
   judgeStep3,
   judgeStep4,
   judgeStep5,
   judgeStep5b,
+  judgeStep5c,
 } from './rule.mjs';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
@@ -143,10 +145,12 @@ export function parseArgs(argv) {
 
   // Step 5 (`--judge step5`, or the `full` arm) plans the step-2 sheet AND step 5's cases
   // (`cases.mjs` · `ALL_CASES`); every earlier step keeps the sheet it registered (`CASES`).
-  // Step 5's second registration (`--judge step5b`, arm `full-b`, `RULE-step5b.md`) plans the same.
+  // Step 5's second registration (`--judge step5b`, arm `full-b`, `RULE-step5b.md`) plans the same,
+  // and so does its third (`--judge step5c`, the same arm, `RULE-step5c.md`).
   const step5 =
     flags.get('--judge') === 'step5' ||
     flags.get('--judge') === 'step5b' ||
+    flags.get('--judge') === 'step5c' ||
     arms.includes('full') ||
     arms.includes('full-b');
   const sheet = step5 ? ALL_CASES : CASES;
@@ -195,9 +199,15 @@ export function parseArgs(argv) {
   }
   const judge = flags.get('--judge');
   if (judge !== undefined) {
-    const need = { step3: 'assume', step4: 'ask', step5: 'full', step5b: 'full-b' }[judge];
+    const need = {
+      step3: 'assume',
+      step4: 'ask',
+      step5: 'full',
+      step5b: 'full-b',
+      step5c: 'full-b',
+    }[judge];
     if (need === undefined)
-      throw new Error(`--judge must be step3, step4, step5 or step5b, saw '${judge}'`);
+      throw new Error(`--judge must be step3, step4, step5, step5b or step5c, saw '${judge}'`);
     // A rescore reads its arms from the saved run; a new run must plan both.
     if (rescore === undefined && (!arms.includes('off') || !arms.includes(need))) {
       throw new Error(
@@ -325,6 +335,7 @@ function verdictsOf(judge, aggregates, labels, served) {
   if (judge === 'step4') return [judgeStep4(aggregates)];
   if (judge === 'step5') return [judgeStep5(aggregates, served)];
   if (judge === 'step5b') return [judgeStep5b(aggregates, served)];
+  if (judge === 'step5c') return [judgeStep5c(aggregates, served)];
   return [];
 }
 
@@ -336,7 +347,9 @@ function aggregateFor(rows, arms) {
 function writeOutputs(dir, { config, spend, rows, raws, verdicts, served }) {
   const aggregates = aggregateFor(rows, config.arms);
   const rule =
-    config.judge === 'step5b' || config.arms.includes('full-b')
+    config.judge === 'step5c'
+      ? RULE5C_ID
+      : config.judge === 'step5b' || config.arms.includes('full-b')
       ? RULE5B_ID
       : config.judge === 'step5' || config.arms.includes('full')
       ? RULE5_ID
@@ -472,7 +485,7 @@ async function main() {
   for (const arm of opts.arms) buildTools(doors, arm, [], { turn: 0 });
   // Step 5's S5-9 reads the served decoration, measured on the scripted mock BEFORE any paid
   // call ($0, deterministic: no model behaviour changes it).
-  const step5b = opts.judge === 'step5b' || opts.arms.includes('full-b');
+  const step5b = opts.judge === 'step5b' || opts.judge === 'step5c' || opts.arms.includes('full-b');
   const served = step5b
     ? await measureServedB(doors, opts.cases)
     : opts.judge === 'step5' || opts.arms.includes('full')

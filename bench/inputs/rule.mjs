@@ -611,3 +611,67 @@ export function judgeStep5b(aggregates, served) {
     reported: { ...reported, 'R5-j': { ...cost, served } },
   };
 }
+
+// ── step 5, third registration: the sources-only door after the enum fix (RULE-step5c.md) ──
+
+export const RULE5C_ID = 'inputs-rule-step5c (registered 2026-09-29)';
+
+/**
+ * Every number `RULE-step5c.md` compares against. S5-1 … S5-7 and S5-10 are v2's
+ * (`STEP5B_MARGINS`, carried unchanged). OWNER RULING 2026-09-28 raised the cost ceiling:
+ * S5-8's input tokens per call to 2.00 × off (calls per run stay at 1.20 × off) and S5-9's
+ * served decoration to 2.50 × the steps 3–4 agent.
+ */
+export const STEP5C_MARGINS = Object.freeze({
+  ...STEP5B_MARGINS,
+  /** S5-8 — input tokens per model call, armed ÷ off (owner ruling 2026-09-28; v1/v2: 1.15). */
+  inputTokensRatio: 2,
+  /** S5-9 — served decoration over the steps 3–4 agent (owner ruling 2026-09-28; v2: 1.15). */
+  servedRatio: 2.5,
+});
+
+/**
+ * Step 5, third registration (`full-b` after the enum fix) — `RULE-step5c.md`. The same arms,
+ * rows and reader as `judgeStep5b`, whose clauses are carried value for value; only S5-8 and
+ * S5-9 are re-judged, against `STEP5C_MARGINS`, from the values `judgeStep5b` measured. v1's
+ * and v2's functions do not move.
+ */
+export function judgeStep5c(aggregates, served) {
+  const v2 = judgeStep5b(aggregates, served);
+  const M = STEP5C_MARGINS;
+  const clauses = v2.clauses.map((c) => {
+    if (c.id === 'S5-8') {
+      const { inputPerCall: i, callsPerRun: k } = c.value;
+      const known = [i.off, i.armed, k.off, k.armed].every((x) => x !== undefined);
+      return clause(
+        'S5-8',
+        c.says,
+        c.value,
+        `input ≤ ${M.inputTokensRatio.toFixed(2)} × off; calls ≤ ${M.modelCallsRatio.toFixed(
+          2,
+        )} × off (owner ruling 2026-09-28)`,
+        known
+          ? i.armed <= M.inputTokensRatio * i.off && k.armed <= M.modelCallsRatio * k.off
+          : undefined,
+      );
+    }
+    if (c.id === 'S5-9') {
+      const { ratio } = c.value;
+      return clause(
+        'S5-9',
+        c.says,
+        c.value,
+        `≤ ${M.servedRatio.toFixed(2)} × the steps 3–4 agent (owner ruling 2026-09-28)`,
+        ratio === undefined ? undefined : ratio <= M.servedRatio,
+      );
+    }
+    return c;
+  });
+  return {
+    ...v2,
+    step: '5c',
+    rule: RULE5C_ID,
+    verdict: verdictOf(clauses),
+    clauses,
+  };
+}
