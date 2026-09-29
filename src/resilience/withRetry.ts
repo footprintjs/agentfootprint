@@ -6,10 +6,14 @@
  * Role:    Outer ring (Hexagonal). Composable: `withRetry(withFallback(...))`.
  *
  * Retries `complete()` on transient failures with exponential backoff.
- * `stream()` is delegated as-is — once tokens start flowing the
- * pipeline is stateful and cannot safely be restarted. If you need
- * retry semantics for streaming, fall back to `complete()` or
- * implement custom resumability at the consumer.
+ * `stream()` is retried under the SAME policy, but only until its first
+ * chunk arrives: a stream that fails before it has produced anything
+ * (HTTP 429, a 5xx, a reset at connect) is exactly as safe to re-open as a
+ * `complete()` is to re-send. Once the first chunk is in hand the stream is
+ * committed — the rest is plain delegation with no retry anywhere around it
+ * (`openStream` owns the only retry loop and returns WITH that chunk), so a
+ * mid-stream failure surfaces exactly as it did before: re-sending would
+ * replay tokens the caller has already shown.
  *
  * Default policy:
  *   • maxAttempts: 3 (initial + 2 retries)
@@ -23,8 +27,9 @@
  * the behaviour end to end and it held: this decorator absorbed two HTTP
  * 503-shaped failures and recovered on call three, with both
  * `agentfootprint.error.retried` and `agentfootprint.error.recovered` on the
- * typed stream, and it made exactly ONE streaming attempt, the limit as
- * designed. What was exercised was a SCRIPTED failing provider — the trial's
+ * typed stream, and it made exactly ONE streaming attempt — the limit as it
+ * was then designed; a stream is now retried before its first chunk (see
+ * above), still never after. What was exercised was a SCRIPTED failing provider — the trial's
  * own note is that those tests *"were local and deterministic, so they consumed
  * no GCP credit"*. **No live provider outage has been retried from this
  * repository**, so this is not the field-validated rung: a real 503 from a real
@@ -70,7 +75,8 @@ export interface WithRetryOptions {
 }
 
 /**
- * Wrap a provider so its `complete()` retries transient failures.
+ * Wrap a provider so its `complete()` — and its `stream()`, up to the first
+ * chunk — retries transient failures.
  *
  * @example
  *   import { withRetry } from 'agentfootprint/resilience';
@@ -106,61 +112,120 @@ export function withRetry(provider: LLMProvider, options: WithRetryOptions = {})
       carriesForcedToolChoice: provider.carriesForcedToolChoice,
     }),
     async complete(req: LLMRequest, hooks?: LLMCallHooks): Promise<LLMResponse> {
-      let lastError: unknown;
       // t0 for the `recovered` report's totalDurationMs. New
       // instrumentation (the decorator did not measure this before v7.8),
       // not a recovered fact.
       const startedMs = Date.now();
-      for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+      for (let attempt = 1; ; attempt++) {
         try {
           const res = await provider.complete(req, hooks);
-          // Only a success that FOLLOWED a failure is a recovery — a
-          // first-try success reports nothing (mirrors the rules loop's
-          // guard in reliabilityExecution.ts).
-          if (attempt > 1) {
-            hooks?.onResilience?.({
-              kind: 'recovered',
-              attempt,
-              totalDurationMs: Date.now() - startedMs,
-            });
-          }
+          reportRecovered(hooks, attempt, startedMs);
           return res;
         } catch (err) {
-          lastError = err;
-          if (attempt >= maxAttempts || !shouldRetry(err, attempt)) {
-            throw err;
-          }
-          const delay = Math.min(maxDelayMs, initialDelayMs * Math.pow(backoffFactor, attempt - 1));
-          onRetry?.(err, attempt + 1, delay);
-          hooks?.onResilience?.({
-            kind: 'retried',
-            attempt: attempt + 1,
-            maxAttempts,
-            lastError: err instanceof Error ? err.message : String(err),
-            backoffMs: delay,
-            reason: classifyRetryReason(err),
-          });
-          await sleep(delay, req.signal);
+          await backOffOrThrow(err, attempt, req, hooks);
         }
       }
-      // Unreachable — last attempt either returned or threw above.
-      throw lastError;
     },
   };
 
-  // Pass-through `stream()` if the underlying provider supports it.
-  // No retry on streams (mid-stream resumption is provider-specific).
-  // `hooks` must still be FORWARDED: a stacked inner decorator (e.g.
-  // withRetry(withFallback(...))) would otherwise go dark on the stream
-  // path.
+  /**
+   * The ONE retry decision both doors share: throw `err` when the budget is
+   * spent or the policy says no; otherwise report the retry (consumer hook +
+   * in-run hooks channel) and sleep the backoff, honouring `req.signal`.
+   */
+  async function backOffOrThrow(
+    err: unknown,
+    attempt: number,
+    req: LLMRequest,
+    hooks: LLMCallHooks | undefined,
+  ): Promise<void> {
+    if (attempt >= maxAttempts || !shouldRetry(err, attempt)) throw err;
+    const delay = Math.min(maxDelayMs, initialDelayMs * Math.pow(backoffFactor, attempt - 1));
+    onRetry?.(err, attempt + 1, delay);
+    hooks?.onResilience?.({
+      kind: 'retried',
+      attempt: attempt + 1,
+      maxAttempts,
+      lastError: err instanceof Error ? err.message : String(err),
+      backoffMs: delay,
+      reason: classifyRetryReason(err),
+    });
+    await sleep(delay, req.signal);
+  }
+
   if (provider.stream) {
-    wrapped.stream = (req: LLMRequest, hooks?: LLMCallHooks): AsyncIterable<LLMChunk> =>
-      // Guarded by `if (provider.stream)` above; assertion safe.
-      // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
-      provider.stream!(req, hooks);
+    // Guarded by `if (provider.stream)`; bound once so the closures below
+    // need no assertion. `hooks` is FORWARDED on every attempt: a stacked
+    // inner decorator (withRetry(withFallback(...))) would otherwise go dark
+    // on the stream path.
+    const innerStream = provider.stream.bind(provider);
+
+    /**
+     * Open the inner stream and wait for its FIRST step — the only span a
+     * retry can cover. Returns with that step in hand, so by the time the
+     * caller sees a chunk this loop has already been left for good.
+     */
+    const openStream = async (
+      req: LLMRequest,
+      hooks: LLMCallHooks | undefined,
+    ): Promise<{ iterator: AsyncIterator<LLMChunk>; first: IteratorResult<LLMChunk> }> => {
+      const startedMs = Date.now();
+      for (let attempt = 1; ; attempt++) {
+        try {
+          const iterator = innerStream(req, hooks)[Symbol.asyncIterator]();
+          const first = await iterator.next();
+          // The stream got through: its first step arrived. Reported here —
+          // not at the terminal chunk — because this is where retrying ends
+          // (a consumer that stops reading at `done: true` would otherwise
+          // never see it), and so `recovered` lands before the first token.
+          reportRecovered(hooks, attempt, startedMs);
+          return { iterator, first };
+        } catch (err) {
+          await backOffOrThrow(err, attempt, req, hooks);
+        }
+      }
+    };
+
+    wrapped.stream = async function* retryingStream(
+      req: LLMRequest,
+      hooks?: LLMCallHooks,
+    ): AsyncGenerator<LLMChunk, void, undefined> {
+      const { iterator, first } = await openStream(req, hooks);
+      if (first.done === true) return;
+      // From here on there is no catch: nothing below can start a retry.
+      let delegated = false;
+      try {
+        yield first.value;
+        delegated = true;
+        // `yield*` forwards the consumer's return()/throw() to the inner
+        // stream, exactly as the old pass-through did.
+        yield* { [Symbol.asyncIterator]: () => iterator };
+      } finally {
+        // A consumer that stopped at the first chunk still closes the wire.
+        if (!delegated) await iterator.return?.();
+      }
+    };
   }
 
   return wrapped;
+}
+
+/**
+ * Report a recovery — only a success that FOLLOWED a failure is one; a
+ * first-try success reports nothing (mirrors the rules loop's guard in
+ * reliabilityExecution.ts).
+ */
+function reportRecovered(
+  hooks: LLMCallHooks | undefined,
+  attempt: number,
+  startedMs: number,
+): void {
+  if (attempt === 1) return;
+  hooks?.onResilience?.({
+    kind: 'recovered',
+    attempt,
+    totalDurationMs: Date.now() - startedMs,
+  });
 }
 
 /**

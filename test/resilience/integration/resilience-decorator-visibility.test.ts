@@ -412,6 +412,86 @@ describe('resilience decorators — the declared events fire in-run, with real c
     expectRealCorrelation(seen[0]!.meta);
   });
 
+  // ── withRetry · stream() before the first chunk (scenario) ─────────
+
+  /** Streams `words`; the first `failTimes` opens throw `status` at connect. */
+  function streamingFlaky(failTimes: number, status: number, words: string[]) {
+    let opened = 0;
+    const provider: LLMProvider = {
+      name: 'stream-flaky',
+      complete: async () => okResponse(words.join('')),
+      stream: async function* () {
+        opened += 1;
+        if (opened <= failTimes) {
+          throw Object.assign(new Error(`stream ${status} at connect`), { status });
+        }
+        let i = 0;
+        for (const w of words) yield { tokenIndex: i++, content: w, done: false };
+        yield { tokenIndex: i, content: '', done: true, response: okResponse(words.join('')) };
+      },
+    };
+    return { provider, opened: () => opened };
+  }
+
+  it('a streaming provider that 429s before its first chunk is retried in-run', async () => {
+    const flaky = streamingFlaky(1, 429, ['re', 'covered']);
+    const agent = Agent.create({
+      provider: withRetry(flaky.provider, { initialDelayMs: 1 }),
+      model: 'm',
+      maxIterations: 2,
+    }).build();
+
+    const order: string[] = [];
+    const retried: { payload: ErrorRetriedPayload; meta: EventMeta }[] = [];
+    const recovered: ErrorRecoveredPayload[] = [];
+    agent.on('agentfootprint.error.retried', (e) => {
+      order.push('retried');
+      retried.push({ payload: e.payload, meta: e.meta });
+    });
+    agent.on('agentfootprint.error.recovered', (e) => {
+      order.push('recovered');
+      recovered.push(e.payload);
+    });
+    agent.on('agentfootprint.stream.token', () => order.push('token'));
+
+    const result = await agent.run({ message: 'hi' });
+
+    expect(result).toBe('recovered');
+    expect(flaky.opened()).toBe(2);
+    expect(order).toEqual(['retried', 'recovered', 'token', 'token']);
+    expect(retried[0]!.payload).toMatchObject({ attempt: 2, reason: 'http-429' });
+    expect(recovered[0]).toMatchObject({ attempt: 2 });
+    expectRealCorrelation(retried[0]!.meta);
+  });
+
+  it('byte identity: a healthy stream runs exactly as the old pass-through did', async () => {
+    // The reference is the historical withRetry stream path, verbatim: same
+    // name, `stream()` handed straight to the inner provider.
+    const passThrough = (inner: LLMProvider): LLMProvider => ({
+      name: `${inner.name}+retry`,
+      complete: (req, hooks) => inner.complete(req, hooks),
+      stream: (req, hooks) => inner.stream!(req, hooks),
+    });
+    const runOnce = async (wrap: boolean) => {
+      const inner = streamingFlaky(0, 503, ['same', ' bytes']).provider;
+      const agent = Agent.create({
+        provider: wrap ? withRetry(inner) : passThrough(inner),
+        model: 'm',
+        maxIterations: 2,
+      }).build();
+      const events: { type: string; payload: unknown }[] = [];
+      agent.on('agentfootprint.stream.*', (e) => events.push({ type: e.type, payload: e.payload }));
+      agent.on('agentfootprint.error.*', (e) => events.push({ type: e.type, payload: e.payload }));
+      const result = await agent.run({ message: 'hi' });
+      return { result, events: stripTimes(events) };
+    };
+
+    const plain = await runOnce(false);
+    const wrapped = await runOnce(true);
+    expect(wrapped).toEqual(plain);
+    expect(plain.events.some((e) => e.type === 'agentfootprint.stream.token')).toBe(true);
+  });
+
   // ── Second runner — proves the fix is not Agent-only ───────────────
 
   it('LLMCall (a different runner) also emits with real correlation', async () => {
@@ -786,3 +866,12 @@ describe('resilience decorators — outside a run, nothing is emitted', () => {
     expect(any).not.toHaveBeenCalled();
   });
 });
+
+/** Drop wall-clock fields so two runs of the same chart compare by value. */
+function stripTimes<T>(value: T): T {
+  return JSON.parse(
+    JSON.stringify(value, (k, v) =>
+      /(^|[a-z])(Ms|At|Time|timestamp|durationMs)$/i.test(k) ? 0 : v,
+    ),
+  ) as T;
+}

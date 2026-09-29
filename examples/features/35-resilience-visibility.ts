@@ -18,7 +18,7 @@
  * stamped and correlates with everything else in the run. Nothing to wire:
  * subscribe with `.on()` and the events are there.
  *
- * Four scenes:
+ * Five scenes:
  *   1. A dead primary and a fallback that serves → `fallback.triggered`
  *      names BOTH providers, and the meta is real (not the synthetic
  *      `consumer-emit#0` / `consumer-scope` a consumer-level emit gets).
@@ -32,6 +32,10 @@
  *   4. Outside a run nothing is emitted. The `onFallback` / `onRetry` /
  *      `onStateChange` hooks still fire, and a non-agentfootprint call
  *      path can hand the decorators its own `onResilience` sink.
+ *   5. A STREAMING vendor that answers 429 before its first chunk is
+ *      re-opened under the same policy (`error.retried` → `error.recovered`,
+ *      every token once); one that fails AFTER a chunk is not retried —
+ *      re-sending would replay tokens the caller has already shown.
  *
  * Offline + deterministic: hand-written providers, no API key, no network,
  * 1 ms backoff.
@@ -44,6 +48,7 @@ import { recordRun } from '../../src/doors/observe.js';
 import { withCircuitBreaker, withFallback, withRetry } from '../../src/doors/resilience.js';
 import type {
   LLMCallHooks,
+  LLMChunk,
   LLMProvider,
   LLMRequest,
   LLMResponse,
@@ -335,6 +340,92 @@ async function sceneStandalone(): Promise<{
   return { consumerHooks: fromBareCall, ownSink };
 }
 
+// ── Scene 5: a stream retried before its first chunk, never after ─────
+
+/**
+ * A streaming vendor. Each call to `stream()` plays the next script: a number
+ * is an HTTP status thrown at connect (before any chunk), a string list is
+ * the tokens it streams, and `'drop'` inside it is a reset mid-stream.
+ */
+function streamingProvider(
+  name: string,
+  scripts: (number | string[])[],
+): {
+  provider: LLMProvider;
+  opened: () => number;
+} {
+  let calls = 0;
+  const provider: LLMProvider = {
+    name,
+    complete: async () => answer('(complete path unused)'),
+    stream: async function* (): AsyncGenerator<LLMChunk> {
+      const script = scripts[Math.min(calls, scripts.length - 1)]!;
+      calls += 1;
+      if (typeof script === 'number') {
+        throw Object.assign(new Error(`${name} ${script} at connect (call ${calls})`), {
+          status: script,
+        });
+      }
+      let tokenIndex = 0;
+      for (const token of script) {
+        if (token === 'drop') {
+          throw Object.assign(new Error(`${name} 503: reset mid-stream`), { status: 503 });
+        }
+        yield { tokenIndex: tokenIndex++, content: token, done: false };
+      }
+      yield { tokenIndex, content: '', done: true, response: answer(script.join('')) };
+    },
+  };
+  return { provider, opened: () => calls };
+}
+
+async function sceneStreamRetry(): Promise<{
+  reply: string;
+  tokens: string[];
+  sequence: string[];
+  opened: number;
+  midStream: { error: string; opened: number; tokens: string[] };
+}> {
+  // #region stream-retry
+  // Rate-limited at connect, then it streams. Same policy as complete().
+  const vendor = streamingProvider('acme-llm', [429, ['Back', ' online.']]);
+  const provider = withRetry(vendor.provider, { maxAttempts: 3, initialDelayMs: 1 });
+  const agent = Agent.create({ provider, model: 'mock', maxIterations: 2 }).build();
+
+  const sequence: string[] = [];
+  const tokens: string[] = [];
+  agent.on('agentfootprint.error.*', (e) => sequence.push(e.type.replace('agentfootprint.', '')));
+  agent.on('agentfootprint.stream.token', (e) => {
+    sequence.push('stream.token');
+    tokens.push(e.payload.content);
+  });
+  const reply = String(await agent.run({ message: 'is the service up?' }));
+  // sequence: error.retried → error.recovered → stream.token → stream.token
+  // #endregion stream-retry
+
+  // A reset AFTER the first token is the stream's own failure: re-opening
+  // would show "Back" twice, so it surfaces exactly as before.
+  const dropping = streamingProvider('acme-llm', [['Back', 'drop']]);
+  const guarded = withRetry(dropping.provider, { maxAttempts: 3, initialDelayMs: 1 });
+  const midTokens: string[] = [];
+  const midAgent = Agent.create({ provider: guarded, model: 'mock', maxIterations: 2 }).build();
+  midAgent.on('agentfootprint.stream.token', (e) => midTokens.push(e.payload.content));
+  let error = '';
+  try {
+    await midAgent.run({ message: 'is the service up?' });
+  } catch (err) {
+    error = err instanceof Error ? err.message : String(err);
+  }
+
+  return {
+    reply,
+    tokens,
+    sequence,
+    opened: vendor.opened(),
+    midStream: { error, opened: dropping.opened(), tokens: midTokens },
+  };
+}
+
 // ── Main runner ──────────────────────────────────────────────────────
 
 export async function run(input: string): Promise<unknown> {
@@ -400,12 +491,31 @@ export async function run(input: string): Promise<unknown> {
   mustBe(s4.consumerHooks.length > 0, 'the standalone consumer hooks did not fire');
   mustBe(s4.ownSink.length > 0, 'a consumer-supplied onResilience sink saw nothing');
 
+  console.log('\n5. A stream rate-limited at connect is retried; one that dies mid-stream is not');
+  const s5 = await sceneStreamRetry();
+  console.log(`   ${s5.sequence.join(' → ')}`);
+  console.log(`   stream opened ${s5.opened}×, reply: ${s5.reply}`);
+  console.log(
+    `   mid-stream reset: opened ${s5.midStream.opened}×, tokens ${JSON.stringify(
+      s5.midStream.tokens,
+    )}, error: ${s5.midStream.error}`,
+  );
+  mustBe(
+    s5.sequence.join(',') === 'error.retried,error.recovered,stream.token,stream.token',
+    `unexpected stream sequence: ${s5.sequence.join(',')}`,
+  );
+  mustBe(s5.opened === 2, `expected the stream opened twice, got ${s5.opened}`);
+  mustBe(s5.tokens.join('') === s5.reply, 'the streamed tokens do not join to the reply');
+  mustBe(s5.midStream.opened === 1, 'a stream that failed after a chunk was re-opened');
+  mustBe(s5.midStream.error.includes('reset mid-stream'), 'the mid-stream failure was swallowed');
+
   console.log('\nOK — the failover is in the trace, with the run it belongs to.');
   return {
     failover: s1.failovers,
     retryThenRecover: { retried: s2.retried, recovered: s2.recovered },
     recordedSequence: s3.sequence,
     standalone: s4,
+    streamRetry: s5,
   };
 }
 

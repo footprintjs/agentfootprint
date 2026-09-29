@@ -2,7 +2,8 @@
  * withRetry — unit tests.
  *
  * Verifies retry policy: backoff, predicate gating, abort propagation,
- * and stream pass-through (no retry on streams by design).
+ * and the healthy-stream path (stream retry before the first chunk lives in
+ * withRetry-stream.test.ts).
  */
 
 import { describe, expect, it, vi } from 'vitest';
@@ -115,7 +116,7 @@ describe('withRetry', () => {
     expect(onRetry).toHaveBeenCalledWith(expect.any(Error), 2, 5);
   });
 
-  it('passes stream() through without retry', async () => {
+  it('delivers a healthy stream() unchanged', async () => {
     const inner: LLMProvider = {
       name: 'streamy',
       complete: async () => successResponse,
@@ -251,7 +252,7 @@ describe('withRetry — resilience reports', () => {
     await expect(wrapped.complete(noopRequest, {})).resolves.toMatchObject({ content: 'ok' });
   });
 
-  it('forwards hooks through the stream() pass-through', async () => {
+  it('forwards hooks through stream()', async () => {
     // Load-bearing: withRetry rebuilds a fresh provider object, so an
     // inner decorator's reports vanish unless stream() forwards.
     const seen: unknown[] = [];
