@@ -15,10 +15,14 @@ omission, which must be visible.
 
 ## Adapters make one attempt
 An adapter makes ONE attempt per call and never carries its own retry loop.
-What it owes the caller is a typed error with `status` set when there was one —
-the field `withRetry`'s default predicate reads (429 and 5xx retried, other 4xx
-not) — raised before the first streamed chunk. Retry policy is composed, so it is
-one policy the app can see and tune:
+What it owes the caller is a typed error carrying the two fields `withRetry`'s
+default predicate reads: `status` when there was one (429 and 5xx retried, other
+4xx not), and `retryable: false` on a failure with no status that asking again
+cannot mend — a refusal raised before any request (no key, no model), or a 2xx
+answer it could not read, where a re-send may run and bill the model again. The
+default predicate retries every error with no status, so an adapter that omits
+`retryable: false` gets those repeated. Retry policy is composed, so it is one
+policy the app can see and tune:
 
 ```ts
 import { invokeModelGateway } from 'agentfootprint/providers';

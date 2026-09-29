@@ -52,7 +52,11 @@ Every failure is an `InvokeModelGatewayError` with a `reason` (typed `InvokeMode
 
 ## Retries: compose `withRetry`
 
-The provider makes **one attempt per call** and has no retry loop of its own. `status` is set only on HTTP refusals, so `withRetry`'s default policy retries 429 and 5xx and nothing else. A 403 or 404 is an answer, not a passing fault, and fails straight away.
+The provider makes **one attempt per call** and has no retry loop of its own. Every `InvokeModelGatewayError` carries `retryable`: `true` for a 429, a 5xx and a network failure, `false` for everything else. `withRetry`'s default policy honours the `false`, so it retries exactly those three:
+
+- A 403 or 404 is an answer, not a passing fault, and fails straight away.
+- A refusal raised before any request (`no-key`, `no-model`) is never repeated, and nothing waits out a backoff for it.
+- A 2xx the provider could not read (`unreadable-response`) is never re-sent: the model may already have run, and billed.
 
 <CodeFile path="examples/features/79-invoke-model-gateway.ts" region="retry" title="examples/features/79-invoke-model-gateway.ts (region: retry)" />
 

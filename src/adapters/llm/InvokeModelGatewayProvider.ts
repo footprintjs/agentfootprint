@@ -33,10 +33,13 @@
  *
  * ─── Retries are NOT here ───────────────────────────────────────────
  *
- * This adapter makes ONE attempt per call. Every failure it raises before the
- * first token — a non-2xx, a network error — is an {@link InvokeModelGatewayError}
- * with `status` set when there was one, which is the field `withRetry`'s
- * default predicate reads (429 and 5xx retried, other 4xx not). Compose:
+ * This adapter makes ONE attempt per call. Every failure it raises is an
+ * {@link InvokeModelGatewayError} carrying the two fields `withRetry`'s default
+ * predicate reads: `status` on an HTTP refusal (429 and 5xx retried, other 4xx
+ * not) and `retryable: false` on every failure that asking again cannot mend —
+ * a refusal raised before any request, or a 2xx answer it could not read (a
+ * re-send may run and bill the model again). So the default policy retries a
+ * 429, a 5xx and a network failure, and nothing else. Compose:
  *
  *   withRetry(invokeModelGateway({ ... }))
  *
@@ -144,8 +147,13 @@ export type InvokeModelGatewayErrorReason =
  * Every failure `invokeModelGateway()` raises, told in words that name the
  * model and the fix. `reason` is the discriminator.
  *
- * `status` is set ONLY for `'http-status'`, so `withRetry`'s default predicate
- * retries 429 and 5xx and nothing else. The key is never in the message.
+ * `retryable` is `true` for a 429, a 5xx and a network failure and `false`
+ * for every other reason, and `withRetry`'s default predicate honours the
+ * `false` — so a refusal raised before any request (`no-key`, `no-model`,
+ * `invalid-options`) is never repeated, and a 2xx answer it could not read
+ * (`unreadable-response`) is never re-sent to a model that may already have
+ * run. `status` is set ONLY for `'http-status'`. The key is never in the
+ * message.
  */
 export class InvokeModelGatewayError extends Error {
   override readonly name = 'InvokeModelGatewayError';
@@ -154,6 +162,11 @@ export class InvokeModelGatewayError extends Error {
   readonly modelId?: string;
   /** The HTTP status, for `'http-status'` only. */
   readonly status?: number;
+  /**
+   * Whether asking again can mend it: a 429, a 5xx, or a network failure.
+   * `withRetry`'s default predicate reads the `false`.
+   */
+  readonly retryable: boolean;
   /** The gateway's `Retry-After` header, in seconds, when it sent a number. */
   readonly retryAfterSeconds?: number;
   /** The first 400 characters of the gateway's refusal body. */
@@ -175,11 +188,23 @@ export class InvokeModelGatewayError extends Error {
     this.reason = init.reason;
     if (init.modelId !== undefined) this.modelId = init.modelId;
     if (init.status !== undefined) this.status = init.status;
+    this.retryable = isTransient(init.reason, init.status);
     if (init.retryAfterSeconds !== undefined) this.retryAfterSeconds = init.retryAfterSeconds;
     if (init.bodyExcerpt !== undefined) this.bodyExcerpt = init.bodyExcerpt;
     if (init.toolName !== undefined) this.toolName = init.toolName;
     if (init.cause !== undefined) this.cause = init.cause;
   }
+}
+
+/**
+ * The ONE owner of which failures are worth asking again: the gateway throttled
+ * or failed (429, 5xx), or no answer came back. Everything else is either
+ * refused before a request (nothing to repeat) or an answer already given.
+ */
+function isTransient(reason: InvokeModelGatewayErrorReason, status: number | undefined): boolean {
+  if (reason === 'network') return true;
+  if (reason !== 'http-status' || status === undefined) return false;
+  return status === 429 || status >= 500;
 }
 
 // ─── Adapter ────────────────────────────────────────────────────────
@@ -275,7 +300,7 @@ export function invokeModelGateway(options: InvokeModelGatewayOptions): LLMProvi
             message:
               `model ${modelId} streamed arguments for tool '${call.name}' that are not JSON ` +
               `(${call.raw.length} chars). The call is refused rather than run with its ` +
-              `arguments dropped; a retry usually recovers.`,
+              `arguments dropped. Asking again usually recovers; nothing re-sends it for you.`,
           });
         },
       });

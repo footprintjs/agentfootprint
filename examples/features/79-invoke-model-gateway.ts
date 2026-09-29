@@ -154,7 +154,7 @@ export async function run(input: string): Promise<unknown> {
       model: HAIKU,
       fetch: scriptedGateway(log), // ← drop this line to talk to the real gateway
     }),
-  ); // 429 and 5xx are retried by withRetry, never inside the adapter
+  ); // a 429, a 5xx or a network failure is retried by withRetry, never inside the adapter
   // #endregion provider
 
   const agent = Agent.create({ provider, model: 'invoke-model-gateway' })

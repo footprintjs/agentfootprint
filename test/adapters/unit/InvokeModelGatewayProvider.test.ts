@@ -10,7 +10,8 @@
  * Test types (Convention 3): unit (request, response, stream, keys, errors) ·
  * scenario (an Agent tool loop over the adapter) · property (a seeded
  * generator re-chunks the stream at arbitrary byte boundaries; no fast-check
- * in the tree) · contract (withRetry composes on the typed status).
+ * in the tree) · contract (withRetry composes on the typed status and never
+ * repeats a refusal raised before a request or a 2xx it could not read).
  */
 import { describe, it, expect } from 'vitest';
 import {
@@ -670,6 +671,94 @@ describe('contract: withRetry composes on the typed status', () => {
     });
     await caught(provider.complete(ask()));
     expect(seen).toHaveLength(1);
+  });
+});
+
+describe('contract: withRetry never repeats what asking again cannot mend', () => {
+  // A delay nobody would wait out: if the default policy retried, the test
+  // would time out instead of passing.
+  const patient = { maxAttempts: 3, initialDelayMs: 60_000 };
+
+  it('a key function that returns none is read once, refused once, with no request and no wait', async () => {
+    const seen: Seen[] = [];
+    let reads = 0;
+    const provider = withRetry(
+      gateway(seen, [json(MESSAGE_REPLY)], {
+        apiKey: () => {
+          reads++;
+          return undefined;
+        },
+      }),
+      patient,
+    );
+    const err = (await caught(provider.complete(ask()))) as InvokeModelGatewayError;
+    expect(err.reason).toBe('no-key');
+    expect(err.retryable).toBe(false);
+    expect(reads).toBe(1);
+    expect(seen).toHaveLength(0);
+  });
+
+  it('a 2xx it cannot read is POSTed once — the model may already have run', async () => {
+    const seen: Seen[] = [];
+    const provider = withRetry(
+      gateway(seen, [text('<html>signed out</html>', 200), json(MESSAGE_REPLY)]),
+      patient,
+    );
+    const err = (await caught(provider.complete(ask()))) as InvokeModelGatewayError;
+    expect(err.reason).toBe('unreadable-response');
+    expect(seen).toHaveLength(1);
+  });
+
+  it('no model to ask is refused once, with no request', async () => {
+    const seen: Seen[] = [];
+    const provider = withRetry(gateway(seen, [], { model: undefined }), patient);
+    const err = (await caught(provider.complete(ask()))) as InvokeModelGatewayError;
+    expect(err.reason).toBe('no-model');
+    expect(seen).toHaveLength(0);
+  });
+
+  it('a network failure IS retried', async () => {
+    const seen: Seen[] = [];
+    const dropped: Reply = () => {
+      throw new TypeError('fetch failed');
+    };
+    const provider = withRetry(gateway(seen, [dropped, json(MESSAGE_REPLY)]), {
+      initialDelayMs: 0,
+    });
+    const res = await provider.complete(ask());
+    expect(res.providerRef).toBe('msg_1');
+    expect(seen).toHaveLength(2);
+  });
+
+  it('retryable is true for exactly a 429, a 5xx and a network failure', () => {
+    const reasons = [
+      'invalid-options',
+      'no-model',
+      'no-key',
+      'http-status',
+      'network',
+      'unreadable-response',
+      'stream',
+      'malformed-tool-args',
+    ] as const;
+    const statuses = [undefined, 400, 401, 403, 404, 408, 429, 499, 500, 503, 599];
+    for (const reason of reasons) {
+      for (const status of statuses) {
+        const err = new InvokeModelGatewayError({
+          reason,
+          message: 'x',
+          ...(status !== undefined && { status }),
+        });
+        const expected =
+          reason === 'network' ||
+          (reason === 'http-status' && status !== undefined && (status === 429 || status >= 500));
+        expect({ reason, status, retryable: err.retryable }).toStrictEqual({
+          reason,
+          status,
+          retryable: expected,
+        });
+      }
+    }
   });
 });
 

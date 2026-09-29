@@ -15,8 +15,9 @@
  *   • maxAttempts: 3 (initial + 2 retries)
  *   • backoff:     exponential — 200ms, 400ms, 800ms
  *   • shouldRetry: rejects 4xx-class errors (client mistakes don't
- *                  benefit from retry) and AbortError; retries 5xx,
- *                  network errors, and unknown shapes.
+ *                  benefit from retry), AbortError, and any error that
+ *                  declares `retryable: false`; retries 5xx, network
+ *                  errors, and unknown shapes.
  *
  * **Status: contract-shaped and tested — independently reproduced against a
  * local harness, 2026-08-13.** Somebody who is not this library's author ran
@@ -50,7 +51,8 @@ export interface WithRetryOptions {
   readonly maxDelayMs?: number;
   /**
    * Predicate to decide whether an error is worth retrying. Default
-   * skips AbortError + HTTP 4xx; retries everything else. Override
+   * skips AbortError, HTTP 4xx (except 429) and an error that declares
+   * `retryable: false`; retries everything else. Override
    * to add provider-specific signals (e.g., 429 with Retry-After).
    */
   readonly shouldRetry?: (error: unknown, attempt: number) => boolean;
@@ -187,11 +189,19 @@ function classifyRetryReason(err: unknown): string {
 // ── Defaults ────────────────────────────────────────────────────────
 
 /**
- * Skip retry for AbortError + 4xx-class errors. Retry on everything
- * else (network errors, 5xx, unknown shapes). Provider adapters that
- * surface HTTP status should set `error.status` for this to work; the
- * predicate falls back to retrying when status is unknown (better to
- * retry once than to surface a flaky failure).
+ * Skip retry for AbortError, 4xx-class errors, and an error that declares
+ * `retryable: false`. Retry on everything else (network errors, 5xx,
+ * unknown shapes). Provider adapters that surface HTTP status should set
+ * `error.status` for this to work; the predicate falls back to retrying
+ * when status is unknown (better to retry once than to surface a flaky
+ * failure).
+ *
+ * `retryable: false` is how an adapter says a failure with no HTTP status
+ * cannot recover by asking again — a refusal raised before any request
+ * (no key, no model), or a 2xx answer it could not read, where a re-send
+ * may run and bill the model a second time. Only the literal `false` is
+ * read: an error that does not declare the field is judged exactly as
+ * before, and `retryable: true` does not override a 4xx status.
  *
  * Exported (module-level, NOT on the resilience barrel) as the single
  * source of truth for the decorators' transience policy — shared by
@@ -200,6 +210,7 @@ function classifyRetryReason(err: unknown): string {
  */
 export function defaultShouldRetry(err: unknown, _attempt: number): boolean {
   if (isAbortError(err)) return false;
+  if ((err as { retryable?: unknown } | null)?.retryable === false) return false;
   const status =
     (err as { status?: number; statusCode?: number })?.status ??
     (err as { statusCode?: number })?.statusCode;
