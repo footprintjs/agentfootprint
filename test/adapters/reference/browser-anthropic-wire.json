@@ -1,0 +1,305 @@
+{
+  "parallelToolCalls=undefined": {
+    "bodies": [
+      "{\"model\":\"claude-sonnet-4-5-20250929\",\"max_tokens\":1124,\"messages\":[{\"role\":\"user\",\"content\":\"hi\"},{\"role\":\"assistant\",\"content\":[{\"type\":\"thinking\",\"thinking\":\"hm\",\"signature\":\"sig\"},{\"type\":\"redacted_thinking\",\"signature\":\"r\"},{\"type\":\"text\",\"text\":\"calling\"},{\"type\":\"tool_use\",\"id\":\"c1\",\"name\":\"t\",\"input\":{\"a\":\"1\"}},{\"type\":\"tool_use\",\"id\":\"c2\",\"name\":\"t\",\"input\":{}}]},{\"role\":\"user\",\"content\":[{\"type\":\"tool_result\",\"tool_use_id\":\"c1\",\"content\":\"r1\"},{\"type\":\"tool_result\",\"tool_use_id\":\"c2\",\"content\":\"r2\",\"cache_control\":{\"type\":\"ephemeral\",\"ttl\":\"1h\"}}]},{\"role\":\"assistant\",\"content\":\"\"},{\"role\":\"user\",\"content\":\"more\"}],\"system\":[{\"type\":\"text\",\"text\":\"be brief\",\"cache_control\":{\"type\":\"ephemeral\"}}],\"tools\":[{\"name\":\"t\",\"description\":\"d\",\"input_schema\":{\"type\":\"object\",\"properties\":{\"a\":{\"type\":\"string\"}}},\"cache_control\":{\"type\":\"ephemeral\"}}],\"temperature\":0.2,\"stop_sequences\":[\"X\"],\"thinking\":{\"type\":\"enabled\",\"budget_tokens\":100},\"tool_choice\":{\"type\":\"tool\",\"name\":\"t\"}}",
+      "{\"model\":\"claude-sonnet-4-5-20250929\",\"max_tokens\":1124,\"messages\":[{\"role\":\"user\",\"content\":\"hi\"},{\"role\":\"assistant\",\"content\":[{\"type\":\"thinking\",\"thinking\":\"hm\",\"signature\":\"sig\"},{\"type\":\"redacted_thinking\",\"signature\":\"r\"},{\"type\":\"text\",\"text\":\"calling\"},{\"type\":\"tool_use\",\"id\":\"c1\",\"name\":\"t\",\"input\":{\"a\":\"1\"}},{\"type\":\"tool_use\",\"id\":\"c2\",\"name\":\"t\",\"input\":{}}]},{\"role\":\"user\",\"content\":[{\"type\":\"tool_result\",\"tool_use_id\":\"c1\",\"content\":\"r1\"},{\"type\":\"tool_result\",\"tool_use_id\":\"c2\",\"content\":\"r2\",\"cache_control\":{\"type\":\"ephemeral\",\"ttl\":\"1h\"}}]},{\"role\":\"assistant\",\"content\":\"\"},{\"role\":\"user\",\"content\":\"more\"}],\"system\":[{\"type\":\"text\",\"text\":\"be brief\",\"cache_control\":{\"type\":\"ephemeral\"}}],\"tools\":[{\"name\":\"t\",\"description\":\"d\",\"input_schema\":{\"type\":\"object\",\"properties\":{\"a\":{\"type\":\"string\"}}},\"cache_control\":{\"type\":\"ephemeral\"}}],\"temperature\":0.2,\"stop_sequences\":[\"X\"],\"thinking\":{\"type\":\"enabled\",\"budget_tokens\":100},\"tool_choice\":{\"type\":\"tool\",\"name\":\"t\"},\"stream\":true}"
+    ],
+    "complete": {
+      "content": "ok",
+      "toolCalls": [
+        {
+          "id": "u",
+          "name": "t",
+          "args": {
+            "a": 1
+          }
+        }
+      ],
+      "usage": {
+        "input": 1,
+        "output": 2,
+        "cacheWrite": 5
+      },
+      "stopReason": "stop",
+      "providerRef": "m",
+      "rawThinking": [
+        {
+          "type": "thinking",
+          "thinking": "a"
+        },
+        {
+          "type": "text",
+          "text": "ok"
+        },
+        {
+          "type": "tool_use",
+          "id": "u",
+          "name": "t",
+          "input": {
+            "a": 1
+          }
+        }
+      ],
+      "wireManifest": {
+        "toolNames": [
+          "t"
+        ]
+      }
+    },
+    "chunks": [
+      {
+        "tokenIndex": 0,
+        "content": "Hel",
+        "done": false
+      },
+      {
+        "tokenIndex": 1,
+        "content": "lo",
+        "done": false
+      },
+      {
+        "tokenIndex": 2,
+        "content": "",
+        "done": true,
+        "response": {
+          "content": "Hello",
+          "toolCalls": [
+            {
+              "id": "t1",
+              "name": "t",
+              "args": {
+                "a": "x"
+              }
+            },
+            {
+              "id": "t2",
+              "name": "t",
+              "args": {}
+            }
+          ],
+          "usage": {
+            "input": 7,
+            "output": 9,
+            "cacheRead": 3
+          },
+          "stopReason": "tool_use",
+          "providerRef": "m1",
+          "rawThinking": [
+            {
+              "type": "thinking",
+              "thinking": "th",
+              "signature": "S"
+            }
+          ],
+          "wireManifest": {
+            "toolNames": [
+              "t"
+            ]
+          }
+        }
+      }
+    ]
+  },
+  "parallelToolCalls=false": {
+    "bodies": [
+      "{\"model\":\"claude-sonnet-4-5-20250929\",\"max_tokens\":1124,\"messages\":[{\"role\":\"user\",\"content\":\"hi\"},{\"role\":\"assistant\",\"content\":[{\"type\":\"thinking\",\"thinking\":\"hm\",\"signature\":\"sig\"},{\"type\":\"redacted_thinking\",\"signature\":\"r\"},{\"type\":\"text\",\"text\":\"calling\"},{\"type\":\"tool_use\",\"id\":\"c1\",\"name\":\"t\",\"input\":{\"a\":\"1\"}},{\"type\":\"tool_use\",\"id\":\"c2\",\"name\":\"t\",\"input\":{}}]},{\"role\":\"user\",\"content\":[{\"type\":\"tool_result\",\"tool_use_id\":\"c1\",\"content\":\"r1\"},{\"type\":\"tool_result\",\"tool_use_id\":\"c2\",\"content\":\"r2\",\"cache_control\":{\"type\":\"ephemeral\",\"ttl\":\"1h\"}}]},{\"role\":\"assistant\",\"content\":\"\"},{\"role\":\"user\",\"content\":\"more\"}],\"system\":[{\"type\":\"text\",\"text\":\"be brief\",\"cache_control\":{\"type\":\"ephemeral\"}}],\"tools\":[{\"name\":\"t\",\"description\":\"d\",\"input_schema\":{\"type\":\"object\",\"properties\":{\"a\":{\"type\":\"string\"}}},\"cache_control\":{\"type\":\"ephemeral\"}}],\"temperature\":0.2,\"stop_sequences\":[\"X\"],\"thinking\":{\"type\":\"enabled\",\"budget_tokens\":100},\"tool_choice\":{\"type\":\"tool\",\"name\":\"t\"}}",
+      "{\"model\":\"claude-sonnet-4-5-20250929\",\"max_tokens\":1124,\"messages\":[{\"role\":\"user\",\"content\":\"hi\"},{\"role\":\"assistant\",\"content\":[{\"type\":\"thinking\",\"thinking\":\"hm\",\"signature\":\"sig\"},{\"type\":\"redacted_thinking\",\"signature\":\"r\"},{\"type\":\"text\",\"text\":\"calling\"},{\"type\":\"tool_use\",\"id\":\"c1\",\"name\":\"t\",\"input\":{\"a\":\"1\"}},{\"type\":\"tool_use\",\"id\":\"c2\",\"name\":\"t\",\"input\":{}}]},{\"role\":\"user\",\"content\":[{\"type\":\"tool_result\",\"tool_use_id\":\"c1\",\"content\":\"r1\"},{\"type\":\"tool_result\",\"tool_use_id\":\"c2\",\"content\":\"r2\",\"cache_control\":{\"type\":\"ephemeral\",\"ttl\":\"1h\"}}]},{\"role\":\"assistant\",\"content\":\"\"},{\"role\":\"user\",\"content\":\"more\"}],\"system\":[{\"type\":\"text\",\"text\":\"be brief\",\"cache_control\":{\"type\":\"ephemeral\"}}],\"tools\":[{\"name\":\"t\",\"description\":\"d\",\"input_schema\":{\"type\":\"object\",\"properties\":{\"a\":{\"type\":\"string\"}}},\"cache_control\":{\"type\":\"ephemeral\"}}],\"temperature\":0.2,\"stop_sequences\":[\"X\"],\"thinking\":{\"type\":\"enabled\",\"budget_tokens\":100},\"tool_choice\":{\"type\":\"tool\",\"name\":\"t\"},\"stream\":true}"
+    ],
+    "complete": {
+      "content": "ok",
+      "toolCalls": [
+        {
+          "id": "u",
+          "name": "t",
+          "args": {
+            "a": 1
+          }
+        }
+      ],
+      "usage": {
+        "input": 1,
+        "output": 2,
+        "cacheWrite": 5
+      },
+      "stopReason": "stop",
+      "providerRef": "m",
+      "rawThinking": [
+        {
+          "type": "thinking",
+          "thinking": "a"
+        },
+        {
+          "type": "text",
+          "text": "ok"
+        },
+        {
+          "type": "tool_use",
+          "id": "u",
+          "name": "t",
+          "input": {
+            "a": 1
+          }
+        }
+      ],
+      "wireManifest": {
+        "toolNames": [
+          "t"
+        ]
+      }
+    },
+    "chunks": [
+      {
+        "tokenIndex": 0,
+        "content": "Hel",
+        "done": false
+      },
+      {
+        "tokenIndex": 1,
+        "content": "lo",
+        "done": false
+      },
+      {
+        "tokenIndex": 2,
+        "content": "",
+        "done": true,
+        "response": {
+          "content": "Hello",
+          "toolCalls": [
+            {
+              "id": "t1",
+              "name": "t",
+              "args": {
+                "a": "x"
+              }
+            },
+            {
+              "id": "t2",
+              "name": "t",
+              "args": {}
+            }
+          ],
+          "usage": {
+            "input": 7,
+            "output": 9,
+            "cacheRead": 3
+          },
+          "stopReason": "tool_use",
+          "providerRef": "m1",
+          "rawThinking": [
+            {
+              "type": "thinking",
+              "thinking": "th",
+              "signature": "S"
+            }
+          ],
+          "wireManifest": {
+            "toolNames": [
+              "t"
+            ]
+          }
+        }
+      }
+    ]
+  },
+  "parallelToolCalls=true": {
+    "bodies": [
+      "{\"model\":\"claude-sonnet-4-5-20250929\",\"max_tokens\":1124,\"messages\":[{\"role\":\"user\",\"content\":\"hi\"},{\"role\":\"assistant\",\"content\":[{\"type\":\"thinking\",\"thinking\":\"hm\",\"signature\":\"sig\"},{\"type\":\"redacted_thinking\",\"signature\":\"r\"},{\"type\":\"text\",\"text\":\"calling\"},{\"type\":\"tool_use\",\"id\":\"c1\",\"name\":\"t\",\"input\":{\"a\":\"1\"}},{\"type\":\"tool_use\",\"id\":\"c2\",\"name\":\"t\",\"input\":{}}]},{\"role\":\"user\",\"content\":[{\"type\":\"tool_result\",\"tool_use_id\":\"c1\",\"content\":\"r1\"},{\"type\":\"tool_result\",\"tool_use_id\":\"c2\",\"content\":\"r2\",\"cache_control\":{\"type\":\"ephemeral\",\"ttl\":\"1h\"}}]},{\"role\":\"assistant\",\"content\":\"\"},{\"role\":\"user\",\"content\":\"more\"}],\"system\":[{\"type\":\"text\",\"text\":\"be brief\",\"cache_control\":{\"type\":\"ephemeral\"}}],\"tools\":[{\"name\":\"t\",\"description\":\"d\",\"input_schema\":{\"type\":\"object\",\"properties\":{\"a\":{\"type\":\"string\"}}},\"cache_control\":{\"type\":\"ephemeral\"}}],\"temperature\":0.2,\"stop_sequences\":[\"X\"],\"thinking\":{\"type\":\"enabled\",\"budget_tokens\":100},\"tool_choice\":{\"type\":\"tool\",\"name\":\"t\"}}",
+      "{\"model\":\"claude-sonnet-4-5-20250929\",\"max_tokens\":1124,\"messages\":[{\"role\":\"user\",\"content\":\"hi\"},{\"role\":\"assistant\",\"content\":[{\"type\":\"thinking\",\"thinking\":\"hm\",\"signature\":\"sig\"},{\"type\":\"redacted_thinking\",\"signature\":\"r\"},{\"type\":\"text\",\"text\":\"calling\"},{\"type\":\"tool_use\",\"id\":\"c1\",\"name\":\"t\",\"input\":{\"a\":\"1\"}},{\"type\":\"tool_use\",\"id\":\"c2\",\"name\":\"t\",\"input\":{}}]},{\"role\":\"user\",\"content\":[{\"type\":\"tool_result\",\"tool_use_id\":\"c1\",\"content\":\"r1\"},{\"type\":\"tool_result\",\"tool_use_id\":\"c2\",\"content\":\"r2\",\"cache_control\":{\"type\":\"ephemeral\",\"ttl\":\"1h\"}}]},{\"role\":\"assistant\",\"content\":\"\"},{\"role\":\"user\",\"content\":\"more\"}],\"system\":[{\"type\":\"text\",\"text\":\"be brief\",\"cache_control\":{\"type\":\"ephemeral\"}}],\"tools\":[{\"name\":\"t\",\"description\":\"d\",\"input_schema\":{\"type\":\"object\",\"properties\":{\"a\":{\"type\":\"string\"}}},\"cache_control\":{\"type\":\"ephemeral\"}}],\"temperature\":0.2,\"stop_sequences\":[\"X\"],\"thinking\":{\"type\":\"enabled\",\"budget_tokens\":100},\"tool_choice\":{\"type\":\"tool\",\"name\":\"t\"},\"stream\":true}"
+    ],
+    "complete": {
+      "content": "ok",
+      "toolCalls": [
+        {
+          "id": "u",
+          "name": "t",
+          "args": {
+            "a": 1
+          }
+        }
+      ],
+      "usage": {
+        "input": 1,
+        "output": 2,
+        "cacheWrite": 5
+      },
+      "stopReason": "stop",
+      "providerRef": "m",
+      "rawThinking": [
+        {
+          "type": "thinking",
+          "thinking": "a"
+        },
+        {
+          "type": "text",
+          "text": "ok"
+        },
+        {
+          "type": "tool_use",
+          "id": "u",
+          "name": "t",
+          "input": {
+            "a": 1
+          }
+        }
+      ],
+      "wireManifest": {
+        "toolNames": [
+          "t"
+        ]
+      }
+    },
+    "chunks": [
+      {
+        "tokenIndex": 0,
+        "content": "Hel",
+        "done": false
+      },
+      {
+        "tokenIndex": 1,
+        "content": "lo",
+        "done": false
+      },
+      {
+        "tokenIndex": 2,
+        "content": "",
+        "done": true,
+        "response": {
+          "content": "Hello",
+          "toolCalls": [
+            {
+              "id": "t1",
+              "name": "t",
+              "args": {
+                "a": "x"
+              }
+            },
+            {
+              "id": "t2",
+              "name": "t",
+              "args": {}
+            }
+          ],
+          "usage": {
+            "input": 7,
+            "output": 9,
+            "cacheRead": 3
+          },
+          "stopReason": "tool_use",
+          "providerRef": "m1",
+          "rawThinking": [
+            {
+              "type": "thinking",
+              "thinking": "th",
+              "signature": "S"
+            }
+          ],
+          "wireManifest": {
+            "toolNames": [
+              "t"
+            ]
+          }
+        }
+      }
+    ]
+  }
+}

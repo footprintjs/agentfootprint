@@ -1,0 +1,67 @@
+---
+title: Your gateway (InvokeModel)
+description: invokeModelGateway() — Anthropic models behind your organisation's gateway that forwards the Bedrock InvokeModel operation over plain HTTPS with an API-key header. Streaming, tool calls, a key per model, typed errors.
+---
+
+> Many organisations reach Claude through their own gateway: plain HTTPS, an API-key header, and the Bedrock **InvokeModel** operation. `bedrock()` signs with AWS credentials against the **Converse** operation, and `providerFromEnv()` has no base URL for this wire — so neither reaches it. `invokeModelGateway()` does, with no SDK.
+
+## Use
+
+<CodeFile path="examples/features/79-invoke-model-gateway.ts" region="provider" title="examples/features/79-invoke-model-gateway.ts (region: provider)" />
+
+Then `Agent.create({ provider, model: 'invoke-model-gateway' })`. Prefer `new`? `new InvokeModelGatewayProvider(options)` is the same provider as a class. The shorthand `'invoke-model-gateway'` sends the `model` you configured; any other model name is sent as given, so one provider can serve several models.
+
+The options object is typed `InvokeModelGatewayOptions`:
+
+| Option | What it is |
+|---|---|
+| `baseUrl` | The gateway root. Requests go to `{baseUrl}/model/{modelId}/invoke` and `…/invoke-with-response-stream`. |
+| `apiKeyHeader` | The header your gateway reads the key from (`'api-key'`, `'x-api-key'`, …). Required — a guessed default would fail as a 401 that looks like a bad key. For a bearer scheme, use `'authorization'` and put `'Bearer …'` in the key. |
+| `apiKey` | An `InvokeModelGatewayKey`: a key; a map from model id to key; or a function of the model id, called before every request (a rotated key is picked up without rebuilding the provider). |
+| `model` | The model id your gateway knows, e.g. `us.anthropic.claude-haiku-4-5-20251001-v1:0`. |
+| `defaultMaxTokens` | `max_tokens` when the request sets none. Default 4096. |
+| `parallelToolCalls` | `false` limits the model to one tool per reply. |
+| `fetch` | An `InvokeModelGatewayFetch` to use instead of the global `fetch`: an mTLS agent, a proxy, or a test double. |
+
+## A key per model
+
+Gateways often scope a key to some models, and asking with the wrong one gets a **403**. Give each model id its own key with a map (as above) or a function. A model the map does not name is refused before any request is sent, and the error lists the ids the map does name. The key itself is never in an error message.
+
+## What goes on the wire
+
+The body is Anthropic's Messages API, with `anthropic_version: "bedrock-2023-05-31"` and **no** `model` field (the model is in the path). The system prompt rides the top-level `system` field; tool calls go out as `tool_use` blocks and results come back as `tool_result` blocks on a user turn. A forced tool (`tool_choice`) is supported.
+
+`stream()` reads the SSE the gateway sends after decoding AWS's binary framing. Bare `data:` lines and `event:` + `data:` pairs both work. Text arrives as chunks; tool arguments are reassembled from their `input_json_delta` fragments, and the final chunk carries the full response (tool calls, usage, stop reason).
+
+## Errors
+
+Every failure is an `InvokeModelGatewayError` with a `reason` (typed `InvokeModelGatewayErrorReason`) and the `modelId`:
+
+| `reason` | Meaning | Also set |
+|---|---|---|
+| `http-status` | The gateway answered non-2xx. A 403 message says the key is not allowed that model. | `status`, `bodyExcerpt`, `retryAfterSeconds` (from `Retry-After`) |
+| `network` | No answer at all (DNS, TLS, connection reset). | `cause` |
+| `no-key` | No key for this model id. | — |
+| `no-model` | The shorthand was asked for and no `model` is configured. | — |
+| `unreadable-response` | A 2xx body that is not a Messages response (for example an HTML page from a proxy). | `bodyExcerpt` |
+| `stream` | The stream sent an error event, a forwarded AWS exception, or an event that is not JSON. | — |
+| `malformed-tool-args` | Streamed tool arguments that are not JSON. The call is refused, never run with `{}`. | `toolName` |
+| `invalid-options` | Thrown when you create the provider: the options cannot make a request. | — |
+
+"Prompt is too long" becomes a [`ContextWindowExceededError`](doc:error-handling) instead, and a cancelled request is passed through as the `AbortError` it is.
+
+## Retries: compose `withRetry`
+
+The provider makes **one attempt per call** and has no retry loop of its own. `status` is set only on HTTP refusals, so `withRetry`'s default policy retries 429 and 5xx and nothing else. A 403 or 404 is an answer, not a passing fault, and fails straight away.
+
+<CodeFile path="examples/features/79-invoke-model-gateway.ts" region="retry" title="examples/features/79-invoke-model-gateway.ts (region: retry)" />
+
+<Callout type="warn">
+Today `withRetry` retries `complete()` only; it passes `stream()` through unchanged. An agent that streams gets no retry until `withRetry` learns to retry a stream that fails **before its first chunk**. Every failure this provider raises on `stream()` (an HTTP status, a network error) happens before the first chunk, so that change will cover it without any change to this provider.
+</Callout>
+
+## Next steps
+
+- [AWS Bedrock](doc:aws-bedrock) — `bedrock()`, for AWS credentials and the Converse API
+- [Resilience](doc:resilience) — `withRetry` / `withFallback`
+- [Custom provider](doc:custom-provider) — `createProvider({ kind: 'invoke-model-gateway', ... })`

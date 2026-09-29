@@ -129,6 +129,16 @@ export {
 } from './adapters/llm/BrowserAnthropicProvider.js';
 
 export {
+  invokeModelGateway,
+  InvokeModelGatewayProvider,
+  InvokeModelGatewayError,
+  type InvokeModelGatewayOptions,
+  type InvokeModelGatewayKey,
+  type InvokeModelGatewayFetch,
+  type InvokeModelGatewayErrorReason,
+} from './adapters/llm/InvokeModelGatewayProvider.js';
+
+export {
   browserOpenai,
   BrowserOpenAIProvider,
   type BrowserOpenAIProviderOptions,
