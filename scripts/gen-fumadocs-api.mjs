@@ -114,12 +114,33 @@ writeFileSync(
     2,
   ) + '\n',
 );
+// 5. one index page per kind folder. The sidebar lists ONLY these (the site's
+// layout trims the symbol pages out of the navigation tree — lib/api-tree.mjs),
+// because the tree is serialized into every page of the static export: listing
+// all ~680 symbols there made every page ~1 MB. Each symbol stays reachable
+// here, by search, and at its unchanged URL.
 for (const [folder, title] of Object.entries(FOLDER_TITLES)) {
   const fdir = join(OUT, folder);
   if (existsSync(fdir)) {
     writeFileSync(
       join(fdir, 'meta.json'),
       JSON.stringify({ title, pages: ['...'] }, null, 2) + '\n',
+    );
+    const entries = readdirSync(fdir)
+      .filter((f) => f.endsWith('.md') && f !== 'index.md')
+      .map((f) => {
+        const base = f.replace(/\.md$/, '');
+        const title = readFileSync(join(fdir, f), 'utf8').match(/^title:\s*(.+)$/m)?.[1] ?? '';
+        const deprecated = title.includes('~~');
+        return { name: base, deprecated, href: `/docs/api/${folder}/${base}` };
+      })
+      .sort((a, b) => a.name.localeCompare(b.name));
+    const list = entries
+      .map((e) => `- [\`${e.name}\`](${e.href})${e.deprecated ? ' — deprecated' : ''}`)
+      .join('\n');
+    writeFileSync(
+      join(fdir, 'index.md'),
+      `---\ntitle: ${title}\n---\n\n${entries.length} exported from \`agentfootprint\`.\n\n${list}\n`,
     );
   }
 }

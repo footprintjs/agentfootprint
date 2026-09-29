@@ -12,7 +12,7 @@
     "check:links": "node ../scripts/check-doc-links.mjs --strict",
     "check:site-budget": "node scripts/check-site-budget.mjs out",
     "check:tryit": "tsx scripts/check-tryit-demo.mts",
-    "check:page-tree": "node --test scripts/test/page-tree-payload.test.mjs",
+    "check:page-tree": "node --test scripts/test/page-tree-payload.test.mjs scripts/test/api-tree.test.mjs",
     "check:export-prune": "node --test scripts/test/prune-export.test.mjs",
     "prune:export": "node scripts/prune-export.mjs out",
     "predev": "node ../scripts/gen-fumadocs-api.mjs && node scripts/gen-agent-flowchart.mjs && node scripts/gen-replay-trace.mjs",

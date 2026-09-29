@@ -214,7 +214,18 @@ const SEARCH_LIMITS = { raw: 12_000_000, gzip: 2_155_000, records: 2_000 };
 // 7,411 files (the local clean build read 699.52 MB). Owner-approved raise
 // (owner confirmed 2026-09-28); docs-site cleanup planned. ~2% over the CI
 // measurement, the rule every raise here follows.
-const OUTPUT_LIMITS = { bytes: 716_000_000, files: 7_560, duplicateRscBytes: 0 };
+// LOWERED 2026-09-29, bytes: 716 MB -> 210 MB — the docs-site cleanup the two
+// raises above were waiting for. Measured: every page of the export carried the
+// whole sidebar tree, and the tree listed each of the ~680 generated API
+// symbols (Fumadocs files the unlisted API root under `fallback`, which it
+// serializes too), so a 12 KB API page shipped ~890 KB and a guide page ~1 MB.
+// The layout now passes each page a tree without the symbol pages
+// (lib/api-tree.mjs · splitApiTree; scripts/test/api-tree.test.mjs): guide
+// pages get the guides, API pages get the API kinds, each kind's index page
+// lists its symbols, and every symbol keeps its URL. Clean rebuild with
+// EXPORT=true: 205.33 MB across 7,450 files (was 699.52 MB). ~2% over, as every
+// ceiling here — a growth past it is a real regression, not this tree again.
+const OUTPUT_LIMITS = { bytes: 210_000_000, files: 7_560, duplicateRscBytes: 0 };
 // Raised for 9.61.0: 394.1 KB → 400.3 KB. The skill-graph demo imports
 // `defineTool` from 'agentfootprint', so the library's MAIN ENTRY and its
 // whole transitive graph ride this chunk — and this release added the
