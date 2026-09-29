@@ -2,6 +2,7 @@ import { docs } from 'collections/server';
 import { loader } from 'fumadocs-core/source';
 import { icons } from 'lucide-react';
 import { createElement } from 'react';
+import { splitApiTree } from './api-tree.mjs';
 
 export const source = loader({
   baseUrl: '/docs',
@@ -17,3 +18,10 @@ export const source = loader({
     return undefined;
   },
 });
+
+/**
+ * The sidebar trees, split so no page serializes every API symbol
+ * (lib/api-tree.mjs has the measurement and the rule). Guide pages get
+ * `guideTree`; `/docs/api/*` pages get `apiTree`.
+ */
+export const navTrees = splitApiTree(source.getPageTree());

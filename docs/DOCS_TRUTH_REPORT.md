@@ -47,7 +47,7 @@ The repo has four documentation locations and they are not equivalent. Getting t
 | Location | Files | Counts as documentation? |
 |---|---|---|
 | `docs-next/content/docs/**.mdx` (hand-written) | 113 | **Yes — the truth source.** This is what the published site renders and what a reader sees. |
-| `docs-next/content/docs/api/**` (TypeDoc-generated) | 678 | **No — excluded.** |
+| `docs-next/content/docs/api/**` (TypeDoc-generated) | 683 | **No — excluded.** |
 | `docs/api-reference/**` (TypeDoc-generated) | 0 | **No — excluded.** |
 | `docs/**.md` + `README.md` (repo-internal prose) | 58 | **No** — but tracked as its own state, "written but not published". |
 
