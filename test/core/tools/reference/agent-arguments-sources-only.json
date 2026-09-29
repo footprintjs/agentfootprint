@@ -26,6 +26,10 @@
                       "items": {
                         "properties": {
                           "argument": {
+                            "description": "The name of the argument this entry is for.",
+                            "enum": [
+                              "window"
+                            ],
                             "type": "string"
                           },
                           "id": {
@@ -585,14 +589,14 @@
                 "jsonChars": 5
               },
               "tools": {
-                "jsonBytes": 1258,
-                "jsonChars": 1258
+                "jsonBytes": 1336,
+                "jsonChars": 1336
               }
             },
             "status": "measured",
             "total": {
-              "jsonBytes": 1385,
-              "jsonChars": 1385
+              "jsonBytes": 1463,
+              "jsonChars": 1463
             }
           },
           "system": {
@@ -1069,14 +1073,14 @@
                 "jsonChars": 5
               },
               "tools": {
-                "jsonBytes": 1258,
-                "jsonChars": 1258
+                "jsonBytes": 1336,
+                "jsonChars": 1336
               }
             },
             "status": "measured",
             "total": {
-              "jsonBytes": 1706,
-              "jsonChars": 1706
+              "jsonBytes": 1784,
+              "jsonChars": 1784
             }
           },
           "system": {
@@ -1277,6 +1281,10 @@
                         "items": {
                           "properties": {
                             "argument": {
+                              "description": "The name of the argument this entry is for.",
+                              "enum": [
+                                "window"
+                              ],
                               "type": "string"
                             },
                             "id": {
@@ -1441,6 +1449,10 @@
                         "items": {
                           "properties": {
                             "argument": {
+                              "description": "The name of the argument this entry is for.",
+                              "enum": [
+                                "window"
+                              ],
                               "type": "string"
                             },
                             "id": {

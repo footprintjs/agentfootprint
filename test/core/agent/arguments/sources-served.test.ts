@@ -67,11 +67,12 @@ import {
 } from '../../../../src/core/agent/arguments/serve.js';
 import {
   FINDINGS_ARGUMENT_SCHEMA,
-  FINDINGS_FROM_PROPERTY,
+  FINDINGS_FROM_ARGUMENT_DESCRIPTION,
   FINDINGS_INSTRUCTION,
-  FINDINGS_SOURCES_SCHEMA,
   carriesFindingsDecoration,
+  findingsFromProperty,
   findingsInstructionFor,
+  findingsSourcesSchema,
   withFindingsArgument,
   withSourcesArgument,
   withoutFindingsArgument,
@@ -195,21 +196,26 @@ afterEach(() => {
 
 // ─── UNIT — the served text ──────────────────────────────────────────
 
+/** The served `from` of a tool whose ruled argument is `window` (the fixtures' one rule). */
+const WINDOW_FROM = findingsFromProperty(['window']);
+/** The sources-only decoration of that tool. */
+const WINDOW_SOURCES = findingsSourcesSchema(['window']);
+
 describe('UNIT — `from` is explained once, positively, in its own property', () => {
-  const text = JSON.stringify(FINDINGS_FROM_PROPERTY);
+  const text = JSON.stringify(WINDOW_FROM);
 
   it('carries no "Optional" and no "leave an argument out" — and says what the record keeps', () => {
     expect(text).not.toMatch(/optional/i);
     expect(text).not.toMatch(/leave an argument out/i);
-    expect(FINDINGS_FROM_PROPERTY.description).toMatch(/one entry per value/);
-    expect(FINDINGS_FROM_PROPERTY.description).toMatch(
+    expect(WINDOW_FROM.description).toMatch(/one entry per value/);
+    expect(WINDOW_FROM.description).toMatch(
       /a value with no entry has no declared source on the record/,
     );
-    expect(Object.isFrozen(FINDINGS_FROM_PROPERTY)).toBe(true);
+    expect(Object.isFrozen(WINDOW_FROM)).toBe(true);
   });
 
   it('names every source the reader accepts, and no longer points at `previous[]`', () => {
-    const items = FINDINGS_FROM_PROPERTY.items as Schema;
+    const items = WINDOW_FROM.items as Schema;
     const source = items.properties.source!;
     for (const kind of source.enum as string[]) {
       expect(source.description as string).toContain(`'${kind}'`);
@@ -224,8 +230,9 @@ describe('UNIT — `from` is explained once, positively, in its own property', (
       description: 'Error lines.',
       inputSchema: { type: 'object', properties: { window: { type: 'string' } } },
     };
-    const planted = (withFindingsArgument(schema, [], { from: true }).inputSchema.properties as any)
-      ._findings as Schema;
+    const planted = (
+      withFindingsArgument(schema, [], { from: ['window'] }).inputSchema.properties as any
+    )._findings as Schema;
     expect(Object.keys(planted.properties)).toEqual([
       'from',
       ...Object.keys(FINDINGS_ARGUMENT_SCHEMA.properties as object),
@@ -234,7 +241,7 @@ describe('UNIT — `from` is explained once, positively, in its own property', (
     expect(planted.description).toBe(FINDINGS_ARGUMENT_SCHEMA.description);
     // …with an offer too — the offer's enum still rides `previous[].toolCallId`.
     const offered = (
-      withFindingsArgument(schema, ['t1'], { from: true }).inputSchema.properties as any
+      withFindingsArgument(schema, ['t1'], { from: ['window'] }).inputSchema.properties as any
     )._findings as Schema;
     expect(Object.keys(offered.properties)[0]).toBe('from');
     expect(offered.required).toEqual(['basis', 'from']);
@@ -265,19 +272,21 @@ describe('UNIT — the sources-only decoration (declared sources without the fin
   };
 
   it('`_findings` carries `from` alone, required, under the versioned marker', () => {
-    expect(FINDINGS_SOURCES_SCHEMA).toEqual({
+    expect(findingsSourcesSchema(['service'])).toEqual({
       type: 'object',
       description: 'Findings v1 (reserved by the agent runtime).',
-      properties: { from: FINDINGS_FROM_PROPERTY },
+      properties: { from: findingsFromProperty(['service']) },
       required: ['from'],
     });
-    expect(Object.isFrozen(FINDINGS_SOURCES_SCHEMA)).toBe(true);
+    expect(Object.isFrozen(findingsSourcesSchema(['service']))).toBe(true);
   });
 
   it('`withSourcesArgument` rebuilds the schema — `required` and `additionalProperties` as the author wrote them', () => {
-    const served = withSourcesArgument(ruled);
+    const served = withSourcesArgument(ruled, ['service']);
     expect(served).not.toBe(ruled);
-    expect((served.inputSchema.properties as any)._findings).toBe(FINDINGS_SOURCES_SCHEMA);
+    expect((served.inputSchema.properties as any)._findings).toEqual(
+      findingsSourcesSchema(['service']),
+    );
     expect(served.inputSchema.required).toEqual(['service']);
     expect(served.inputSchema.additionalProperties).toBe(false);
     expect((ruled.inputSchema.properties as any)._findings).toBeUndefined();
@@ -289,7 +298,7 @@ describe('UNIT — the sources-only decoration (declared sources without the fin
       description: 'Notes.',
       inputSchema: { type: 'object', properties: { _findings: { type: 'string' } } },
     };
-    expect(withSourcesArgument(owned)).toBe(owned);
+    expect(withSourcesArgument(owned, ['_findings'])).toBe(owned);
     expect(carriesFindingsDecoration(owned.inputSchema)).toBe(false);
     expect(withoutFindingsArgument(owned.inputSchema)).toBe(owned.inputSchema);
   });
@@ -298,8 +307,8 @@ describe('UNIT — the sources-only decoration (declared sources without the fin
     const variants = [
       withFindingsArgument(ruled),
       withFindingsArgument(ruled, ['t1']),
-      withFindingsArgument(ruled, [], { from: true }),
-      withSourcesArgument(ruled),
+      withFindingsArgument(ruled, [], { from: ['service'] }),
+      withSourcesArgument(ruled, ['service']),
     ].map((s) => structuredClone(s).inputSchema);
     for (const input of variants) {
       expect(carriesFindingsDecoration(input)).toBe(true);
@@ -383,6 +392,87 @@ describe('UNIT — `AgentOptions.inputsLayer`, read once', () => {
   });
 });
 
+// ─── UNIT + FUNCTIONAL — `from[].argument` is a NAME from THE TOOL'S list ──
+
+/** A second ruled tool, two rules in declared order — `host_id` asked, `limit` assumed. */
+const topTalkers = defineTool({
+  name: 'top_talkers',
+  description: 'The busiest ports on one host.',
+  inputSchema: {
+    type: 'object',
+    properties: {
+      host_id: { type: 'string', description: 'Host id.' },
+      limit: { type: 'integer', description: 'How many ports.' },
+      detail: { type: 'boolean' },
+    },
+  },
+  askOrAssume: { host_id: { ask: 'Which host?' }, limit: { assume: 10 } },
+  execute: async () => ({ ports: [] }),
+});
+
+/** The served `from[].argument` of one tool on one request. */
+const argumentOf = (req: LLMRequest, name: string): Record<string, unknown> => {
+  const findings = propertiesOf(req, name)._findings as unknown as Schema;
+  const from = findings.properties.from as unknown as { items: Schema };
+  return from.items.properties.argument!;
+};
+
+describe('`from[].argument` is an enum of the tool’s own ruled argument names (step 5, bench v2)', () => {
+  it('UNIT: the enum is the list handed, in its order, with the one-line description — a copy, frozen', () => {
+    const names = ['window', 'limit'];
+    const built = findingsFromProperty(names);
+    const argument = (built.items as Schema).properties.argument!;
+    expect(argument).toEqual({
+      type: 'string',
+      enum: ['window', 'limit'],
+      description: 'The name of the argument this entry is for.',
+    });
+    expect(FINDINGS_FROM_ARGUMENT_DESCRIPTION).toBe('The name of the argument this entry is for.');
+    names.push('later');
+    expect(argument.enum).toEqual(['window', 'limit']);
+    expect(Object.isFrozen(argument.enum)).toBe(true);
+    // Everything but the enum is the same bytes on every tool.
+    const other = findingsFromProperty(['host_id']);
+    const strip = (v: object) =>
+      JSON.stringify(v, (key, value) => (key === 'argument' ? { ...value, enum: [] } : value));
+    expect(strip(other)).toBe(strip(built));
+  });
+
+  it('UNIT: no ruled names plants no `from` — the base by reference, the schema by reference', () => {
+    const schema = {
+      name: 'x',
+      description: 'X.',
+      inputSchema: { type: 'object', properties: { a: { type: 'string' } } },
+    };
+    expect(
+      (withFindingsArgument(schema, [], { from: [] }).inputSchema.properties as any)._findings,
+    ).toBe(FINDINGS_ARGUMENT_SCHEMA);
+    expect(withSourcesArgument(schema, [])).toBe(schema);
+  });
+
+  it.each([
+    ['without the ledger (`.inputsLayer`)', false],
+    ['beside the ledger (`.findings`)', true],
+  ])(
+    'FUNCTIONAL %s: each ruled tool is served ITS names; an unruled tool no `from`',
+    async (_label, ledger) => {
+      const m = scripted([answer('hi')]);
+      let b = Agent.create({ provider: m.provider as never, model: 'm' })
+        .tool(askingSearch([]))
+        .tool(topTalkers)
+        .tool(listServices);
+      b = ledger ? b.findings({ argumentSources: true }) : b.inputsLayer({ argumentSources: true });
+      await b.build().run({ message: 'hello' });
+      const req = m.requests[0]!;
+      expect(argumentOf(req, 'search_logs').enum).toEqual(['window']);
+      expect(argumentOf(req, 'top_talkers').enum).toEqual(['host_id', 'limit']);
+      expect(argumentOf(req, 'top_talkers').description).toBe(FINDINGS_FROM_ARGUMENT_DESCRIPTION);
+      const unruled = propertiesOf(req, 'list_services')._findings as unknown as Schema | undefined;
+      expect(unruled?.properties?.from).toBeUndefined();
+    },
+  );
+});
+
 // ─── FUNCTIONAL — declared sources without the findings ledger ─────────
 
 describe('FUNCTIONAL — `.inputsLayer({ argumentSources: true })`: `from` on ruled tools, and nothing else', () => {
@@ -400,7 +490,7 @@ describe('FUNCTIONAL — `.inputsLayer({ argumentSources: true })`: `from` on ru
     };
     const { req, agent } = await serve(true);
     const plain = (await serve(false)).req;
-    expect(propertiesOf(req, 'search_logs')._findings).toEqual(FINDINGS_SOURCES_SCHEMA);
+    expect(propertiesOf(req, 'search_logs')._findings).toEqual(WINDOW_SOURCES);
     expect(propertiesOf(req, 'search_logs').window!.description).toBe(
       `Look-back period. ${ASK_SOURCES_SENTENCE}`,
     );
@@ -611,7 +701,7 @@ describe('FUNCTIONAL — `.inputsLayer({ argumentSources: true })`: `from` on ru
       .inputsLayer()
       .build();
     await agent.run({ message: 'hello' });
-    expect(propertiesOf(m.requests[0]!, 'search_logs')._findings).toEqual(FINDINGS_SOURCES_SCHEMA);
+    expect(propertiesOf(m.requests[0]!, 'search_logs')._findings).toEqual(WINDOW_SOURCES);
     const state = agent.getSnapshot()!.sharedState as Record<string, unknown>;
     // (+ `results: true`, honesty step 7b: search_logs declares a ToolPeriod.)
     expect(state.honestyLayers).toEqual({ inputs: true, argumentSources: true, results: true });
@@ -812,7 +902,7 @@ describe('SECURITY — the author’s `_findings` and a hidden answer', () => {
     expect(propertiesOf(first, 'search_logs').window!.description).toBe(
       `Look-back period. ${ASK_SOURCES_SENTENCE}`,
     );
-    expect(propertiesOf(first, 'search_logs')._findings).toEqual(FINDINGS_SOURCES_SCHEMA);
+    expect(propertiesOf(first, 'search_logs')._findings).toEqual(WINDOW_SOURCES);
     await agent.resume(stored(paused), replyTo(paused, { f1: '24h' }));
     // Run as written: the value is the author's argument, never peeled, and nothing was declared.
     expect(ran).toEqual([{ service: 'checkout', window: '24h', _findings: 'mine' }]);

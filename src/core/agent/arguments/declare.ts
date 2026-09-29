@@ -730,8 +730,25 @@ export function isRefused(value: ToolRules | RulesRefused | undefined): value is
  * only such a tool's calls are checked and filed.
  */
 export function carriesRules(tool: RuledToolLike | undefined): boolean {
+  return ruledArgumentNames(tool).length > 0;
+}
+
+/**
+ * The names of the arguments a tool's rules rule, in the rules' declared
+ * order — empty when the tool has no rules or they cannot be read. The
+ * declared sources' served `from[].argument` enum is exactly this list
+ * (`findings/reserved.ts` · `findingsFromProperty`), so a model is offered
+ * the tool's ruled argument NAMES and never a slot to put a value in.
+ *
+ * @example
+ * ```ts
+ * ruledArgumentNames(searchLogs); // ['window'] — `askOrAssume: { window: { ask: '…' } }`
+ * ```
+ */
+export function ruledArgumentNames(tool: RuledToolLike | undefined): readonly string[] {
   const rules = rulesOf(tool);
-  return rules !== undefined && !isRefused(rules) && rules.ruled.length > 0;
+  if (rules === undefined || isRefused(rules)) return [];
+  return rules.ruled.map((r) => r.argument);
 }
 
 /** The value of one declared choice — a bare value, or `{ value, said? }`. */

@@ -78,10 +78,10 @@ import { WRAP_UP_INSTRUCTION } from '../src/core/agent/stages/wrapUp.js';
 import {
   FINDINGS_ANSWER_ASK,
   FINDINGS_ARGUMENT_SCHEMA,
-  FINDINGS_FROM_PROPERTY,
   FINDINGS_INSTRUCTION,
-  FINDINGS_SOURCES_SCHEMA,
+  findingsFromProperty,
   findingsInstructionFor,
+  findingsSourcesSchema,
 } from '../src/core/agent/findings/reserved.js';
 import { findingsLedgerPiece } from '../src/core/agent/findings/serve.js';
 import {
@@ -940,7 +940,7 @@ function findingsSchemaDescriptions(schema: unknown = FINDINGS_ARGUMENT_SCHEMA):
 /**
  * The declared-sources arm's served surface (honesty layer 2, step 5): the
  * `from` property planted on a RULED tool's `_findings` — inside the ledger's
- * decoration, or alone (`FINDINGS_SOURCES_SCHEMA`, declared sources without
+ * decoration, or alone (`findingsSourcesSchema`, declared sources without
  * the ledger). It rides the request only — rebuilt onto every served schema —
  * but it is judged at the STRICTEST lifetime (the design's rule for every
  * served honesty sentence). There is no instruction line any more: `from` is
@@ -1615,17 +1615,19 @@ const PRODUCERS: readonly ModelFacingProducer[] = [
       'test/core/agent/arguments/sources-layer.test.ts',
       'test/core/agent/arguments/sources-served.test.ts',
     ],
-    // Every description the property carries — the array's, the source's, the quote's — and
-    // the sources-only decoration's own (the versioned marker alone).
+    // Every description the property carries — the array's, the argument's (its enum is the
+    // tool's own ruled names), the source's, the quote's — and the sources-only decoration's
+    // own (the versioned marker alone).
     reaches: [
       /^Where each argument value the call sends came from, one entry per value, recorded with the library's check of it; a value with no entry has no declared source on the record\.$/m,
+      /^The name of the argument this entry is for\.$/m,
       /^'user': the person's words \(quote\); 'result': a tool result \(id\); 'turn': their answer when the run asked them; 'app': your instructions; 'assumed': your own choice\.$/m,
       /^Copied exactly from the person's messages\.$/m,
       /^Findings v1 \(reserved by the agent runtime\)\.$/m,
     ],
     compose: async () => [
-      ...findingsSchemaDescriptions(FINDINGS_FROM_PROPERTY),
-      ...findingsSchemaDescriptions(FINDINGS_SOURCES_SCHEMA),
+      ...findingsSchemaDescriptions(findingsFromProperty(['window', 'limit'])),
+      ...findingsSchemaDescriptions(findingsSourcesSchema(['window'])),
     ],
   },
   {

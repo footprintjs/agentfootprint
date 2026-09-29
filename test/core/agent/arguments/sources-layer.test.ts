@@ -72,7 +72,7 @@ import type { LLMRequest, LLMResponse } from '../../../../src/adapters/types.js'
 import type { ArgumentRow } from '../../../../src/core/agent/arguments/rows.js';
 import { checkSource } from '../../../../src/core/agent/arguments/checks.js';
 import {
-  FINDINGS_FROM_PROPERTY,
+  findingsFromProperty,
   FINDINGS_INSTRUCTION_ID,
 } from '../../../../src/core/agent/findings/reserved.js';
 import { sourceCorpusOf } from '../../../../src/core/agent/honesty/sourceCorpus.js';
@@ -248,7 +248,7 @@ describe('what the model is served — `from` on ruled tools only, explained onc
       required: string[];
       description: string;
     };
-    expect(ruled.properties.from).toEqual(FINDINGS_FROM_PROPERTY);
+    expect(ruled.properties.from).toEqual(findingsFromProperty(['window']));
     expect(Object.keys(ruled.properties)[0]).toBe('from');
     expect(ruled.required).toEqual(['basis', 'from']);
     expect(findingsProperty(req, 'list_services').properties!.from).toBeUndefined();
@@ -379,6 +379,57 @@ describe('the checks decide what runs — an untraced value on an `ask` argument
         'asked (the call had carried "24h"); a later call may cite that answer in `_findings.from` ' +
         "with source 'turn'.]",
     );
+  });
+
+  it('a VALUE where the argument NAME belongs is refused and counted, never repaired — the value is ASKED, not verified', async () => {
+    // Bench v2 (haiku45-step5b): 39 entries read `argument: "24h"`. The served enum names
+    // `window`; an entry naming anything else is dropped by the one reader, so `window` has
+    // no declared source — even though the person's message holds a phrase for "24h".
+    const ran: Record<string, unknown>[] = [];
+    const m = scripted([
+      batch({
+        id: 'c1',
+        name: 'search_logs',
+        args: {
+          service: 'checkout',
+          window: '24h',
+          _findings: from({ argument: '24h', source: 'user', quote: 'last 24 hours' }),
+        },
+      }),
+      answer('ok'),
+    ]);
+    const agent = Agent.create({ provider: m.provider as never, model: 'm' })
+      .tool(askingSearch(ran))
+      .findings({ argumentSources: true })
+      .build();
+    const paused = await agent.run({ message: 'Any errors on checkout in the last 24 hours?' });
+    const served = findingsProperty(m.requests[0]!, 'search_logs') as {
+      properties: { from: { items: { properties: { argument: { enum: string[] } } } } };
+    };
+    expect(served.properties.from.items.properties.argument.enum).toEqual(['window']);
+    expect(ran).toEqual([]);
+    if (!isInputPause(paused)) throw new Error('expected the ask');
+    expect(paused.awaitingInput.supplied).toEqual({});
+    expect(argumentRows(agent)).toEqual([
+      expect.objectContaining({
+        asked: 'unverified',
+        proposed: '24h',
+        claimed: 'none',
+        rule: 'ask',
+      }),
+    ]);
+    expect(argumentRows(agent)[0]!.source).toBeUndefined();
+    expect((await agent.assessment())?.standing).toBe('ask');
+    // The person answers; the run goes on with THEIR value, and the dropped entry is counted
+    // on the call's basis row (filed when the call runs) — never turned into a `window` claim.
+    const done = await agent.resume(stored(paused), replyTo(paused, { f1: '24h' }));
+    expect(done).toBe('ok');
+    expect(ran).toEqual([{ service: 'checkout', window: '24h' }]);
+    expect(argumentRows(agent)[1]).toMatchObject({ source: 'answered', value: '24h' });
+    expect((agent.findings() ?? []).find((r) => r.kind === 'basis')).toMatchObject({
+      basis: 'direct',
+      malformed: 1,
+    });
   });
 
   it('a READING asks — with the person’s own words as `quoted`, never the model’s value', async () => {

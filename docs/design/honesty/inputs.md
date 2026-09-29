@@ -75,7 +75,7 @@ overturn. Nothing here is built yet.**
 > cost when undeclared" — forbid charging every tool the ledger's schema for a feature that needs
 > `from` on ruled tools only. `.inputsLayer({ argumentSources: true })` arms the same checks and
 > rows WITHOUT the findings ledger: `_findings` with `from` alone (`findings/reserved.ts` ·
-> `FINDINGS_SOURCES_SCHEMA`) on ruled tools only, so every other tool and the system prompt are
+> `findingsSourcesSchema`, its `argument` an enum of the tool's ruled names) on ruled tools only, so every other tool and the system prompt are
 > served as on a plain agent (the ledger costs every tool about 2,500 characters, which the arm
 > needed only for `from`). `.findings({ argumentSources: true })` stays and serves the same
 > checks, and `.findings()` + `.inputsLayer({ argumentSources: true })` serves the same bytes;

@@ -195,6 +195,13 @@ export const FINDINGS_ARGUMENT_SCHEMA: PlainObject = deepFreeze({
 });
 
 /**
+ * `from[].argument`'s description — what the enum's values ARE: the name of
+ * an argument, never its value. Judged by `unprovable` with the rest of the
+ * property in `test/modelFacingSurfaces.test.ts`.
+ */
+export const FINDINGS_FROM_ARGUMENT_DESCRIPTION = 'The name of the argument this entry is for.';
+
+/**
  * The `from` property (honesty layer 2, declared sources) — where each
  * argument value of the call came from, planted ONLY under the sources arm
  * (`.findings({ argumentSources: true })` or `.inputsLayer({ argumentSources:
@@ -214,67 +221,95 @@ export const FINDINGS_ARGUMENT_SCHEMA: PlainObject = deepFreeze({
  * one named the person's words unless it also named a result). A value with
  * no entry is not refused; the sentence says what the record then holds.
  *
+ * THE ARGUMENT IS A NAME FROM A LIST (step 5, bench v2). `argument` is an
+ * `enum` of THE TOOL'S OWN ruled argument names, with a one-line
+ * description: served as a bare `{ type: 'string' }`, Haiku 4.5 sent `from`
+ * on 85 of 141 ruled calls and put the VALUE where the name belongs on 39
+ * (`argument: "24h"`). The reader is unchanged — an entry naming anything
+ * the call does not carry is dropped and counted, never repaired
+ * (`arguments/sources.ts` · `readSources`), so the value it was meant for has
+ * no declared source and is resolved as one (asked under an `ask` rule).
+ *
  * Says what the model may declare and what the record keeps, and nothing
  * about what serving does; judged by `unprovable` at the strictest lifetime
  * in `test/modelFacingSurfaces.test.ts`.
+ *
+ * @example
+ * ```ts
+ * findingsFromProperty(['window', 'limit']).items.properties.argument;
+ * // { type: 'string', enum: ['window', 'limit'], description: FINDINGS_FROM_ARGUMENT_DESCRIPTION }
+ * ```
  */
-export const FINDINGS_FROM_PROPERTY: PlainObject = deepFreeze({
-  type: 'array',
-  description:
-    'Where each argument value the call sends came from, one entry per value, recorded with ' +
-    "the library's check of it; a value with no entry has no declared source on the record.",
-  items: {
-    type: 'object',
-    properties: {
-      argument: { type: 'string' },
-      source: {
-        type: 'string',
-        enum: [...DECLARED_SOURCE_KINDS],
-        description:
-          "'user': the person's words (quote); 'result': a tool result (id); 'turn': their " +
-          "answer when the run asked them; 'app': your instructions; 'assumed': your own choice.",
+export function findingsFromProperty(ruled: readonly string[]): PlainObject {
+  return deepFreeze({
+    type: 'array',
+    description:
+      'Where each argument value the call sends came from, one entry per value, recorded with ' +
+      "the library's check of it; a value with no entry has no declared source on the record.",
+    items: {
+      type: 'object',
+      properties: {
+        argument: {
+          type: 'string',
+          enum: [...ruled],
+          description: FINDINGS_FROM_ARGUMENT_DESCRIPTION,
+        },
+        source: {
+          type: 'string',
+          enum: [...DECLARED_SOURCE_KINDS],
+          description:
+            "'user': the person's words (quote); 'result': a tool result (id); 'turn': their " +
+            "answer when the run asked them; 'app': your instructions; 'assumed': your own choice.",
+        },
+        quote: { type: 'string', description: "Copied exactly from the person's messages." },
+        id: { type: 'string' },
       },
-      quote: { type: 'string', description: "Copied exactly from the person's messages." },
-      id: { type: 'string' },
+      required: ['argument', 'source'],
     },
-    required: ['argument', 'source'],
-  },
-});
+  });
+}
 
 /**
  * `planted` with `from` among its properties — a rebuilt, deep-frozen copy
  * with `from` FIRST and in `required` beside the base's own: a model fills a
  * required field it meets first (Haiku 4.5 filled the required `basis` on 266
  * of 268 calls in the paid step-5 run, and the optional `from` on 35).
+ * `ruled` — the tool's ruled argument names (`findingsFromProperty`).
  */
-function withFromProperty(planted: PlainObject): PlainObject {
+function withFromProperty(planted: PlainObject, ruled: readonly string[]): PlainObject {
   const required = Array.isArray(planted.required) ? (planted.required as readonly string[]) : [];
   return deepFreeze({
     ...planted,
-    properties: { from: FINDINGS_FROM_PROPERTY, ...(planted.properties as PlainObject) },
+    properties: { from: findingsFromProperty(ruled), ...(planted.properties as PlainObject) },
     required: [...required, 'from'],
   });
 }
 
-/** The base decoration with `from` — built once, served by reference like the base. */
-const FINDINGS_ARGUMENT_SCHEMA_WITH_FROM: PlainObject = withFromProperty(FINDINGS_ARGUMENT_SCHEMA);
-
 /**
  * The reserved property DECLARED SOURCES plant WITHOUT the findings ledger
  * (`.inputsLayer({ argumentSources: true })` on an agent that never called
- * `.findings()`): the versioned marker as its whole description — so
- * `withoutFindingsArgument` recognises it exactly as it recognises the
- * ledger's decoration — and `from` alone, required. No `basis`, no
- * `previous`, no offer: nothing here asks the model for a standing, so none of
- * the ledger's ~2,500 characters per served tool are paid for an arm that
- * only reads where argument values came from.
+ * `.findings()`), for a tool whose ruled argument names are `ruled`: the
+ * versioned marker as its whole description — so `withoutFindingsArgument`
+ * recognises it exactly as it recognises the ledger's decoration — and
+ * `from` alone, required. No `basis`, no `previous`, no offer: nothing here
+ * asks the model for a standing, so none of the ledger's ~2,500 characters
+ * per served tool are paid for an arm that only reads where argument values
+ * came from.
+ *
+ * @example
+ * ```ts
+ * findingsSourcesSchema(['window']);
+ * // { type: 'object', description: FINDINGS_MARKER, properties: { from: findingsFromProperty(['window']) }, required: ['from'] }
+ * ```
  */
-export const FINDINGS_SOURCES_SCHEMA: PlainObject = deepFreeze({
-  type: 'object',
-  description: FINDINGS_MARKER,
-  properties: { from: FINDINGS_FROM_PROPERTY },
-  required: ['from'],
-});
+export function findingsSourcesSchema(ruled: readonly string[]): PlainObject {
+  return deepFreeze({
+    type: 'object',
+    description: FINDINGS_MARKER,
+    properties: { from: findingsFromProperty(ruled) },
+    required: ['from'],
+  });
+}
 
 /**
  * The id of the always-on instruction `.findings()` registers (9.101.0) — the
@@ -331,7 +366,7 @@ export const FINDINGS_CONTINGENT_LINE =
  * called in either order), and byte-identical to the constant when the gate
  * is absent — so the `.findings()`-only references are the bytes they were.
  * Declared sources add NO line here: `from` is explained once, in its own
- * property (`FINDINGS_FROM_PROPERTY`), on the ruled tools that carry it.
+ * property (`findingsFromProperty`), on the ruled tools that carry it.
  */
 export function findingsInstructionFor(arms: { readonly contingent: boolean }): string {
   return arms.contingent
@@ -439,32 +474,29 @@ function offeredFindingsSchema(offer: readonly string[]): PlainObject {
  * decoration instead of crashing every armed run at seed; the compiler is
  * the guard, this is the floor.
  *
- * `options.from` (honesty layer 2, declared sources) — the caller says the
- * tool declares argument rules and the sources arm is on: the planted
- * property gains `from` (`FINDINGS_FROM_PROPERTY`) FIRST and in its
- * `required` (`withFromProperty`). Its description's first sentence is the
- * base's, so `withoutFindingsArgument` still recognises the decoration. Every
- * other tool keeps the base by reference.
+ * `options.from` (honesty layer 2, declared sources) — the tool's RULED
+ * argument names, handed when the tool declares argument rules and the
+ * sources arm is on (`arguments/declare.ts` · `ruledArgumentNames`): the
+ * planted property gains `from` (`findingsFromProperty(from)` — its
+ * `argument` an enum of exactly those names) FIRST and in its `required`
+ * (`withFromProperty`). Its description's first sentence is the base's, so
+ * `withoutFindingsArgument` still recognises the decoration. An empty or
+ * absent list plants no `from`: every other tool keeps the base by reference.
  */
 export function withFindingsArgument(
   schema: LLMToolSchema,
   offer: readonly string[] = [],
-  options?: { readonly from?: boolean },
+  options?: { readonly from?: readonly string[] },
 ): LLMToolSchema {
   if (ownsReservedArgument(schema)) return schema;
   const properties = schema.inputSchema.properties;
   const existing = isPlainObject(properties) ? properties : undefined;
   const ids = Array.isArray(offer) ? offer : [];
-  const from = options?.from === true;
+  const requested = options?.from;
+  const ruled: readonly string[] = Array.isArray(requested) ? requested : [];
   // Declared sources (honesty layer 2): a ruled tool's decoration gains `from`.
-  const planted =
-    ids.length === 0
-      ? from
-        ? FINDINGS_ARGUMENT_SCHEMA_WITH_FROM
-        : FINDINGS_ARGUMENT_SCHEMA
-      : from
-      ? withFromProperty(offeredFindingsSchema(ids))
-      : offeredFindingsSchema(ids);
+  const base = ids.length === 0 ? FINDINGS_ARGUMENT_SCHEMA : offeredFindingsSchema(ids);
+  const planted = ruled.length > 0 ? withFromProperty(base, ruled) : base;
   return {
     ...schema,
     inputSchema: {
@@ -478,28 +510,35 @@ export function withFindingsArgument(
  * DECLARED SOURCES WITHOUT THE FINDINGS LEDGER (`.inputsLayer({
  * argumentSources: true })`, no `.findings()`): a REBUILT copy of a RULED
  * tool's schema with the reserved `_findings` argument carrying `from` alone
- * (`FINDINGS_SOURCES_SCHEMA`, by reference) — the twin of
+ * (`findingsSourcesSchema(ruled)` — `ruled` the tool's ruled argument names,
+ * `arguments/declare.ts` · `ruledArgumentNames`) — the twin of
  * `withFindingsArgument` for the one arm that plants the argument on ruled
  * tools only. The SAME reference when the author's own schema already carries
  * `_findings` (the author wins; `ownsReservedArgument`), and the caller plants
  * nothing on a tool with no rules, so an unruled tool is served the bytes it
- * always was. `required` and `additionalProperties` stay as the author wrote
- * them.
+ * always was — and so is a schema handed with no ruled names (an enum of
+ * nothing would be a property no call can satisfy). `required` and
+ * `additionalProperties` stay as the author wrote them.
  *
  * @example
  * ```ts
- * withSourcesArgument(searchLogs.schema).inputSchema.properties._findings; // FINDINGS_SOURCES_SCHEMA
+ * withSourcesArgument(searchLogs.schema, ['window']).inputSchema.properties._findings;
+ * // findingsSourcesSchema(['window'])
  * ```
  */
-export function withSourcesArgument(schema: LLMToolSchema): LLMToolSchema {
+export function withSourcesArgument(
+  schema: LLMToolSchema,
+  ruled: readonly string[],
+): LLMToolSchema {
   if (ownsReservedArgument(schema)) return schema;
+  if (!Array.isArray(ruled) || ruled.length === 0) return schema;
   const properties = schema.inputSchema.properties;
   const existing = isPlainObject(properties) ? properties : undefined;
   return {
     ...schema,
     inputSchema: {
       ...schema.inputSchema,
-      properties: { ...(existing ?? {}), [RESERVED_ARGUMENT]: FINDINGS_SOURCES_SCHEMA },
+      properties: { ...(existing ?? {}), [RESERVED_ARGUMENT]: findingsSourcesSchema(ruled) },
     },
   };
 }

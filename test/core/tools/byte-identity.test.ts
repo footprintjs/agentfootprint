@@ -427,6 +427,17 @@
  * `callRuntimeStageId` among them). The `argument` rows, the served schemas,
  * messages and every other key did not move.
  *
+ * Step 5, bench v2's fix (the model put the VALUE where the argument NAME
+ * belongs — `argument: "24h"`) REGENERATED the same two references, alone
+ * (copied aside, `AF_TOOLS_REFERENCE=update -t agent-arguments-sources`; the
+ * other 28 green untouched). The whole delta, line by line: every served
+ * `search_logs` schema's `_findings.from.items.properties.argument` gains
+ * `"enum": ["window"]` (the tool's one ruled argument) and `"description":
+ * "The name of the argument this entry is for."` — four served copies in
+ * `agent-arguments-sources`, three in `-sources-only` — and each request's
+ * `jsonBytes`/`jsonChars` measure grows by those 78 characters per served
+ * copy. Nothing else moved: no row, no message, no other schema.
+ *
  * Every scenario is a real run — the receipt-conformance shapes, each in the
  * configuration that has no name collision — and what is compared is the
  * whole `commitLog` plus `servedAt(k)` for every located epoch, after ONE

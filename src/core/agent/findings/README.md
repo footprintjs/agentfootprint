@@ -1024,14 +1024,22 @@ reserved argument carries one more part, on the calls of a RULED tool:
   "from": [{ "argument": "window", "source": "user", "quote": "over the last week" }] }
 ```
 
-- **Served** only there: `withFindingsArgument(schema, offer, { from: true })` plants
-  `FINDINGS_FROM_PROPERTY` FIRST and adds it to the property's `required` (`['basis',
-  'from']`), on a tool that carries argument rules (`arguments/declare.ts` · `carriesRules`);
-  every other tool keeps the base by reference. `from` is explained ONCE, in its own property
+- **Served** only there: `withFindingsArgument(schema, offer, { from: ruledNames })` plants
+  `findingsFromProperty(ruledNames)` FIRST and adds it to the property's `required` (`['basis',
+  'from']`), on a tool that carries argument rules — `ruledNames` is that tool's own list
+  (`arguments/declare.ts` · `ruledArgumentNames`); every other tool keeps the base by reference.
+  **`argument` is a NAME from that list**: an `enum` of the tool's ruled argument names with a
+  one-line description (`FINDINGS_FROM_ARGUMENT_DESCRIPTION`, "The name of the argument this
+  entry is for."). Served as a bare string, Haiku 4.5 put the VALUE where the name belongs on 39
+  of 85 `from`-carrying calls (`argument: "24h"`, bench v2). The reader did not change: such an
+  entry is dropped and counted, never repaired, so the value has no declared source and is
+  resolved as one (asked under an `ask` rule — `test/core/agent/arguments/sources-layer.test.ts`).
+  A free argument (no rule) is not offered on the wire; an entry naming one is still read. `from` is explained ONCE, in its own property
   (its sources, a quote copied exactly, and what the record keeps) — the instruction gains no
   line: the first cut served a second explanation in the system prompt and paid for it twice.
 - **Without this ledger** (`.inputsLayer({ argumentSources: true })`, no `.findings()`) the
-  same `from` is planted alone: `withSourcesArgument` plants `FINDINGS_SOURCES_SCHEMA` (the
+  same `from` is planted alone: `withSourcesArgument(schema, ruledNames)` plants
+  `findingsSourcesSchema(ruledNames)` (the
   versioned marker as its description, `from` required) on ruled tools only, so every other
   tool — and the system prompt — is served as on a plain agent. `withoutFindingsArgument`
   recognises it by the marker like every decoration, and `carriesFindingsDecoration` answers
@@ -1068,8 +1076,8 @@ reserved argument carries one more part, on the calls of a RULED tool:
 - `reserved.ts` — `FINDINGS_ARGUMENT_SCHEMA`, `FINDINGS_OFFER_CAP`,
   `withFindingsArgument`, `withoutFindingsArgument`, `splitFindings`,
   `FINDINGS_INSTRUCTION`, `FINDINGS_CONTINGENT_LINE` /
-  `findingsInstructionFor`, `FINDINGS_ANSWER_ASK`; declared sources' `FINDINGS_FROM_PROPERTY`,
-  `FINDINGS_SOURCES_SCHEMA` / `withSourcesArgument` and `carriesFindingsDecoration`.
+  `findingsInstructionFor`, `FINDINGS_ANSWER_ASK`; declared sources' `findingsFromProperty`
+  (+ `FINDINGS_FROM_ARGUMENT_DESCRIPTION`), `findingsSourcesSchema` / `withSourcesArgument` and `carriesFindingsDecoration`.
 - `peel.ts` — `peelAnswerFindings`, plus `answerText.ts`'s
   `reservedMemberFilter` / `withoutReservedMembers` re-exported: the ONE
   module that statically imports the scanner, loaded through `import()` by

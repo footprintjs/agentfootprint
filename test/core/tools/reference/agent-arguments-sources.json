@@ -43,6 +43,10 @@
                       "items": {
                         "properties": {
                           "argument": {
+                            "description": "The name of the argument this entry is for.",
+                            "enum": [
+                              "window"
+                            ],
                             "type": "string"
                           },
                           "id": {
@@ -717,14 +721,14 @@
                 "jsonChars": 1199
               },
               "tools": {
-                "jsonBytes": 3545,
-                "jsonChars": 3541
+                "jsonBytes": 3623,
+                "jsonChars": 3619
               }
             },
             "status": "measured",
             "total": {
-              "jsonBytes": 4876,
-              "jsonChars": 4862
+              "jsonBytes": 4954,
+              "jsonChars": 4940
             }
           },
           "system": {
@@ -1164,6 +1168,10 @@
                       "items": {
                         "properties": {
                           "argument": {
+                            "description": "The name of the argument this entry is for.",
+                            "enum": [
+                              "window"
+                            ],
                             "type": "string"
                           },
                           "id": {
@@ -1412,14 +1420,14 @@
                 "jsonChars": 1199
               },
               "tools": {
-                "jsonBytes": 3627,
-                "jsonChars": 3621
+                "jsonBytes": 3705,
+                "jsonChars": 3699
               }
             },
             "status": "measured",
             "total": {
-              "jsonBytes": 5296,
-              "jsonChars": 5280
+              "jsonBytes": 5374,
+              "jsonChars": 5358
             }
           },
           "system": {
@@ -1647,6 +1655,10 @@
                         "items": {
                           "properties": {
                             "argument": {
+                              "description": "The name of the argument this entry is for.",
+                              "enum": [
+                                "window"
+                              ],
                               "type": "string"
                             },
                             "id": {
@@ -1914,6 +1926,10 @@
                         "items": {
                           "properties": {
                             "argument": {
+                              "description": "The name of the argument this entry is for.",
+                              "enum": [
+                                "window"
+                              ],
                               "type": "string"
                             },
                             "id": {

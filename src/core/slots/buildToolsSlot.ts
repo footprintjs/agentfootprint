@@ -42,7 +42,7 @@ import {
   withFindingsArgument,
   withSourcesArgument,
 } from '../agent/findings/reserved.js';
-import { carriesRules } from '../agent/arguments/declare.js';
+import { ruledArgumentNames } from '../agent/arguments/declare.js';
 import type { Classifier } from '../../classify/types.js';
 import type { ToolChoiceEntry } from '../agent/toolChoice/types.js';
 
@@ -214,12 +214,13 @@ const SOURCES_SERVED = Object.freeze({ sources: true as const });
  */
 function sourcesOnWire(
   served: readonly LLMToolSchema[],
-  isRuled: (schema: LLMToolSchema) => boolean,
+  ruledNames: (schema: LLMToolSchema) => readonly string[],
 ): readonly LLMToolSchema[] {
   let changed = false;
   const decorated = served.map((schema) => {
-    if (!isRuled(schema)) return schema;
-    const next = withSourcesArgument(schema);
+    const names = ruledNames(schema);
+    if (names.length === 0) return schema;
+    const next = withSourcesArgument(schema, names);
     if (next !== schema) changed = true;
     return next;
   });
@@ -392,7 +393,7 @@ export interface ToolsSlotConfig {
    * true })` or `.inputsLayer({ argumentSources: true })`) — present ONLY
    * then, only ever `true`, and only beside `inputsLayer`. At the same
    * decoration site, a schema whose WINNING implementation carries argument
-   * rules (`arguments/declare.ts` · `carriesRules`) gets `from`: beside
+   * rules (`arguments/declare.ts` · `ruledArgumentNames`) gets `from`, its `argument` an enum of those names: beside
    * `findings`, the ledger's `_findings` variant with `from`
    * (`findings/reserved.ts` · `withFindingsArgument`'s `from`); without it,
    * the reserved argument with `from` alone (`withSourcesArgument`). An `ask`
@@ -987,15 +988,14 @@ export function buildToolsSlot(config: ToolsSlotConfig): FlowChart {
       // Declared sources (honesty layer 2): `_findings.from` on a RULED tool only —
       // inside the ledger's decoration under `.findings()`, or as the reserved
       // argument's only property without it (`withSourcesArgument`).
-      const isRuled = (s: LLMToolSchema): boolean =>
-        config.argumentSources === true && carriesRules(winningTools.get(s.name));
-      const from = (s: LLMToolSchema): { from: true } | undefined =>
-        isRuled(s) ? { from: true } : undefined;
+      // The served `from[].argument` enum is the winning tool's own ruled names.
+      const ruledNames = (s: LLMToolSchema): readonly string[] =>
+        config.argumentSources === true ? ruledArgumentNames(winningTools.get(s.name)) : [];
       scope.toolSchemas =
         config.findings === true
-          ? ruled.map((s) => withFindingsArgument(s, offer, from(s)))
+          ? ruled.map((s) => withFindingsArgument(s, offer, { from: ruledNames(s) }))
           : config.argumentSources === true
-          ? sourcesOnWire(ruled, isRuled)
+          ? sourcesOnWire(ruled, ruledNames)
           : ruled;
       if (servedTools !== undefined) {
         // Dispatch follows the OFFER: a name narrowed off this epoch's wire
