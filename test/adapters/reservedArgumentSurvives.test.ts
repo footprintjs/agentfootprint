@@ -28,7 +28,9 @@
  * mapping of its own — it composes `openai()` — and is still driven end to end
  * because that composition IS its promise. The spec's list of seven names
  * therefore reads as nine wires: "Foundry" is hosted + local, "Browser" is
- * Anthropic + OpenAI (`BrowserAzureOpenAIProvider` composes the latter).
+ * Anthropic + OpenAI (`BrowserAzureOpenAIProvider` composes the latter). A
+ * tenth joined later: `invokeModelGateway` puts the browser Anthropic body
+ * (`anthropicMessagesWire.ts · toAnthropicTool`) on the InvokeModel wire.
  *
  * The schema literal below is inlined ON PURPOSE. Its owner is
  * `src/core/agent/findings/reserved.ts · FINDINGS_ARGUMENT_SCHEMA`, which lands
@@ -43,8 +45,8 @@
  * offeredFindingsSchema`) — the model copies an allowed id instead of
  * counting. An adapter that dropped, reordered or coerced that enum would
  * make the offer unanswerable on its wire with no error anywhere, so the
- * nine wires are driven a second time with the offered shape, through ONE
- * table (`DRIVERS`) that a drift guard pins to the same nine names.
+ * wires are driven a second time with the offered shape, through ONE
+ * table (`DRIVERS`) that a drift guard pins to the same names.
  */
 
 import { readdirSync, readFileSync } from 'node:fs';
@@ -56,6 +58,7 @@ import { describe, expect, it } from 'vitest';
 import { anthropic } from '../../src/adapters/llm/AnthropicProvider.js';
 import { bedrock } from '../../src/adapters/llm/BedrockProvider.js';
 import { browserAnthropic } from '../../src/adapters/llm/BrowserAnthropicProvider.js';
+import { invokeModelGateway } from '../../src/adapters/llm/InvokeModelGatewayProvider.js';
 import { browserOpenai } from '../../src/adapters/llm/BrowserOpenAIProvider.js';
 import { foundryLocal } from '../../src/adapters/llm/FoundryLocalProvider.js';
 import { foundry } from '../../src/adapters/llm/FoundryProvider.js';
@@ -433,6 +436,20 @@ describe('_findings survives the Browser mappings (fetch twins of Anthropic and 
   });
 });
 
+describe('_findings survives the gateway mapping (the Anthropic body on the InvokeModel wire)', () => {
+  it('InvokeModelGatewayProvider · anthropicMessagesWire.toAnthropicTool → body.tools[].input_schema', async () => {
+    const bodies: unknown[] = [];
+    await invokeModelGateway({
+      baseUrl: 'https://gateway.example.test',
+      apiKeyHeader: 'api-key',
+      apiKey: 'k',
+      model: 'm',
+      fetch: recordingFetch(ANTHROPIC_REPLY, bodies),
+    }).complete(REQUEST);
+    expectSurvived(at(bodies[0], 'tools', 0, 'input_schema'), 'invoke-model-gateway');
+  });
+});
+
 // ─── The nine wires again, with the offer bound in (packet 6) ──────
 // ONE table: each driver maps a request through its adapter and hands back
 // the parameters object the wire carries, exactly where the test above for
@@ -521,6 +538,20 @@ const DRIVERS: readonly Driver[] = [
     },
   },
   {
+    wire: 'invoke-model-gateway',
+    drive: async (request) => {
+      const bodies: unknown[] = [];
+      await invokeModelGateway({
+        baseUrl: 'https://gateway.example.test',
+        apiKeyHeader: 'api-key',
+        apiKey: 'k',
+        model: 'm',
+        fetch: recordingFetch(ANTHROPIC_REPLY, bodies),
+      }).complete(request);
+      return at(bodies[0], 'tools', 0, 'input_schema');
+    },
+  },
+  {
     wire: 'browser-openai',
     drive: async (request) => {
       const bodies: unknown[] = [];
@@ -565,7 +596,7 @@ describe('the offer enum on previous[].toolCallId survives every wire mapping (p
     });
   }
 
-  it('the table drives the same nine wires the individual tests above drive', () => {
+  it('the table drives the same ten wires the individual tests above drive', () => {
     expect(DRIVERS.map((d) => d.wire).sort()).toStrictEqual(
       [
         'anthropic',
@@ -575,6 +606,7 @@ describe('the offer enum on previous[].toolCallId survives every wire mapping (p
         'foundry',
         'foundry-local',
         'gemini',
+        'invoke-model-gateway',
         'ollama',
         'openai',
       ].sort(),
@@ -666,12 +698,14 @@ describe('the served schema and the list of wires', () => {
     expect(sites).toStrictEqual([
       'AnthropicProvider.ts',
       'BedrockProvider.ts',
-      'BrowserAnthropicProvider.ts',
       'BrowserOpenAIProvider.ts',
       'FoundryLocalProvider.ts',
       'GeminiProvider.ts',
       'OllamaProvider.ts',
       'OpenAIProvider.ts',
+      // The Anthropic Messages body shared by browserAnthropic and
+      // invokeModelGateway — both drive it above.
+      'anthropicMessagesWire.ts',
     ]);
   });
 });

@@ -11,7 +11,7 @@ All resilience decorators are exported from the `agentfootprint/resilience` subp
 
 | Decorator | What it does |
 |---|---|
-| `withRetry(provider, opts?)` | Wraps a provider with retry-on-transient-error. Default policy skips `AbortError` + HTTP 4xx (except 429); retries 5xx, network errors, and unknown shapes. Exponential backoff with AbortSignal-aware sleep. `stream()` is retried too, under the same policy, until its first chunk arrives — never after. |
+| `withRetry(provider, opts?)` | Wraps a provider with retry-on-transient-error. Default policy skips `AbortError`, HTTP 4xx (except 429) and an error that declares `retryable: false`; retries 5xx, network errors, and unknown shapes. Exponential backoff with AbortSignal-aware sleep. `stream()` is retried too, under the same policy, until its first chunk arrives — never after. |
 | `withFallback(primary, fallback, opts?)` | If primary throws a fallback-eligible error, retry on fallback. Stream pinning prevents provider-flip mid-stream. |
 | `fallbackProvider(...providers)` | Convenience composer — chains N providers into one fallback chain (right-fold of `withFallback`). |
 | `withCircuitBreaker(provider, opts?)` | Fails fast after N consecutive failures: opens for a cooldown, half-open probes before re-closing. Prevents thundering-herd retry on a downed provider. |
@@ -63,7 +63,7 @@ const provider = fallbackProvider(
 
 ## The default retry policy (and overriding it)
 
-By default `withRetry` skips `AbortError` and HTTP 4xx client errors (those don't benefit from retry) — except `429 Too Many Requests`, which IS retried — and retries everything else (5xx, network errors, unknown shapes) while `attempt < maxAttempts`. It reads `err.status` (or `err.statusCode`) when present, and retries when the status is unknown. Override `shouldRetry` to implement a custom policy:
+By default `withRetry` skips `AbortError` and HTTP 4xx client errors (those don't benefit from retry) — except `429 Too Many Requests`, which IS retried — and retries everything else (5xx, network errors, unknown shapes) while `attempt < maxAttempts`. It reads `err.status` (or `err.statusCode`) when present, and retries when the status is unknown — unless the error declares `retryable: false`, which is how an adapter says asking again cannot mend it (a refusal raised before any request, or a 2xx answer it could not read). Only the literal `false` is read; an error without the field is judged as before. Override `shouldRetry` to implement a custom policy:
 
 ```ts
 import { withRetry } from 'agentfootprint/resilience';

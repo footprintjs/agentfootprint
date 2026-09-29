@@ -34,6 +34,10 @@ import {
   type BrowserAnthropicProviderOptions,
 } from './BrowserAnthropicProvider.js';
 import { browserOpenai, type BrowserOpenAIProviderOptions } from './BrowserOpenAIProvider.js';
+import {
+  invokeModelGateway,
+  type InvokeModelGatewayOptions,
+} from './InvokeModelGatewayProvider.js';
 
 /** Built-in provider kinds. Custom providers don't go through this factory. */
 export type ProviderKind =
@@ -46,7 +50,8 @@ export type ProviderKind =
   | 'bedrock'
   | 'gemini'
   | 'browser-anthropic'
-  | 'browser-openai';
+  | 'browser-openai'
+  | 'invoke-model-gateway';
 
 /**
  * Common subset of options accepted across all built-in providers.
@@ -64,7 +69,8 @@ export type CreateProviderOptions =
   | ({ readonly kind: 'bedrock' } & BedrockProviderOptions)
   | ({ readonly kind: 'gemini' } & GeminiProviderOptions)
   | ({ readonly kind: 'browser-anthropic' } & BrowserAnthropicProviderOptions)
-  | ({ readonly kind: 'browser-openai' } & BrowserOpenAIProviderOptions);
+  | ({ readonly kind: 'browser-openai' } & BrowserOpenAIProviderOptions)
+  | ({ readonly kind: 'invoke-model-gateway' } & InvokeModelGatewayOptions);
 
 /**
  * Build any built-in LLMProvider from a tagged options object.
@@ -91,6 +97,8 @@ export function createProvider(options: CreateProviderOptions): LLMProvider {
       return browserAnthropic(options);
     case 'browser-openai':
       return browserOpenai(options);
+    case 'invoke-model-gateway':
+      return invokeModelGateway(options);
     default: {
       // Exhaustiveness check — TypeScript will surface a missing case here.
       const _exhaustive: never = options;

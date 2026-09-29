@@ -152,7 +152,7 @@ const provider = withRetry(new MyCustomProvider({ apiKey: '...' }), {
 });
 ```
 
-`withRetry` classifies retryability by HTTP status: it reads `err.status` (or `err.statusCode`) off the thrown error, skips `AbortError` and 4xx client errors — except `429 Too Many Requests`, which IS retried — and retries 5xx, network errors, and unknown shapes. So if your provider throws errors that should be retryable, surface the upstream HTTP status on the error:
+`withRetry` classifies retryability by HTTP status: it reads `err.status` (or `err.statusCode`) off the thrown error, skips `AbortError` and 4xx client errors — except `429 Too Many Requests`, which IS retried — and retries 5xx, network errors, and unknown shapes — unless the error declares `retryable: false`, which it never retries. So if your provider throws errors that should be retryable, surface the upstream HTTP status on the error:
 
 ```ts
 async complete(req: LLMRequest): Promise<LLMResponse> {
@@ -212,7 +212,8 @@ const provider = createProvider({
 ```
 
 The kinds are `mock`, `anthropic`, `openai`, `ollama`, `foundry`, `foundry-local`,
-`bedrock`, `gemini`, `browser-anthropic` and `browser-openai` (the type is exported as
+`bedrock`, `gemini`, `browser-anthropic`, `browser-openai` and `invoke-model-gateway`
+([your gateway](doc:invoke-model-gateway)) (the type is exported as
 `ProviderKind`). An unknown kind throws, naming it.
 
 Gotchas:
