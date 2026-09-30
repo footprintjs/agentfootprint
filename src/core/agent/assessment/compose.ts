@@ -241,6 +241,8 @@ const REASON_WORDS: Readonly<Record<Exclude<AssessmentReason, 'argument-assumed'
   'value-unsupported': 'names or numbers in the answer appear in no tool result',
   'value-survived-revision':
     'names or numbers in the answer appear in no tool result, even after one revision',
+  'derived-from-reading':
+    "a time in the answer is the library's own spelling of your words, not something you said or a tool returned",
   'stopped-early': 'the run stopped before the model finished',
   'steps-unfinished': "the answer came before the skill's declared steps finished",
   'answer-check-failed': "the app's answer checks failed this answer",

@@ -1639,6 +1639,15 @@
   ],
   "source": "library"
  },
+ "howSure.reason.derivedFromReading@1": {
+  "text": "A time in the answer is the library's own spelling of your words — an implied year, an offset or a converted form — not something you said or a tool returned.",
+  "parts": [
+   {
+    "text": "A time in the answer is the library's own spelling of your words — an implied year, an offset or a converted form — not something you said or a tool returned."
+   }
+  ],
+  "source": "library"
+ },
  "howSure.reason.stoppedEarly@1": {
   "text": "The run stopped before the model finished.",
   "parts": [

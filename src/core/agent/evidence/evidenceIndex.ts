@@ -52,8 +52,10 @@
  * the person typed into a typed ask (`requestInput` — its `input_received`
  * result is a `role: 'tool'` message carrying THEIR words), and the
  * system-prompt content this turn was built from — each text with the other
- * spellings of the dates and clock times in it (`normalize.ts` ·
- * `dateAndClockForms`: `8 Am` is also `8:00`, `2026-10-09` also `2026`). A compaction summary is a
+ * spellings of the dates and clock times in it (`core/time/forms.ts` ·
+ * `timeFormsOf`'s `said` list: `8 Am` is also `8:00`, `2026-10-09` also
+ * `2026`) — and, under `.time()`, the said spellings of the turn's recorded
+ * windows (`timeSaid`). A compaction summary is a
  * user-role turn a MODEL wrote, so its text is not in it — the summary
  * carries the forms its folded person/app turns exempted instead
  * (`LLMMessage.foldedExempt`, {@link exemptLineageOf}). A value the user supplied is
@@ -104,7 +106,8 @@ import { absenceEvidenceProjection } from '../coverage/index.js';
 import { isTruncatedToolResult } from '../toolResultCap.js';
 import { isCompactedSummary } from '../../../lib/saidByPerson.js';
 import { isLibraryAuthoredTurn } from './frames.js';
-import { dateAndClockForms, lookupForms, normalizeToken, tokenize } from './normalize.js';
+import { timeFormsOf } from '../../time/forms.js';
+import { lookupForms, normalizeToken, tokenize } from './normalize.js';
 import { jsonPrefixOf, leadingJsonValues } from './servedJson.js';
 
 /**
@@ -424,13 +427,15 @@ export function evidenceFromHistory(history: readonly LLMMessage[]): EvidenceCor
 
 /**
  * Index one piece of EXEMPT text — something the person or the app said —
- * with the other spellings of every date and clock time in it
- * (`normalize.ts` · `dateAndClockForms`). The exempt corpus's one text door:
- * the tool-evidence index reads `addText` and never gains these forms.
+ * with the other spellings of every date and clock time in it — the SAID
+ * list of `core/time/forms.ts` · `timeFormsOf`, the one owner of which
+ * spellings of a time are the person's (time design § 9.5). The exempt
+ * corpus's one text door: the tool-evidence index reads `addText` and never
+ * gains these forms.
  */
 function addExempt(sink: Sink, text: string): void {
   addText(sink, text);
-  for (const form of dateAndClockForms(text)) add(sink, form);
+  for (const form of timeFormsOf({ text }).said) add(sink, form);
 }
 
 /**
@@ -591,6 +596,13 @@ export function exemptFromRun(args: {
    * answer reaches the gate through. Absent → the corpus it always was.
    */
   readonly answeredValues?: readonly string[];
+  /**
+   * Under `.time()` (step T7): the SAID spellings of this turn's recorded
+   * windows (`core/time/forms.ts` · `timeFormsOf`) — the parts the person
+   * wrote, confirmed, typed or set, at the grain they gave them. Absent →
+   * the corpus it always was.
+   */
+  readonly timeSaid?: readonly string[];
 }): ReadonlySet<string> {
   // The same accumulator, walked with no turn boundaries: an exemption is a
   // fact about WHO supplied a value, and the turn it arrived in changes
@@ -625,6 +637,40 @@ export function exemptFromRun(args: {
   for (const value of args.answeredValues ?? []) {
     add(sink, value);
     addExempt(sink, value);
+  }
+  // The person's time parts at grain (time design § 9.5): spellings, each one
+  // value — indexed whole, never tokenized further.
+  for (const form of args.timeSaid ?? []) add(sink, form);
+  return new Set(sink.values.keys());
+}
+
+// FOLD · the one owner of the lookup set of the library's own time spellings (the `derived` lineage)
+// consumers read this and never re-derive it: stages/route.ts · judgeEvidence (checkAnswer's `derived`)
+// detached: yes — a fresh Set per call.
+/**
+ * The lookup forms of the spellings the library DERIVED from this turn's
+ * time readings (`core/time/forms.ts` · `timeFormsOf`'s `derived` list, the
+ * values the library filled from a window, the served time line) — each
+ * value indexed whole and by its tokens, exactly as the exempt corpus
+ * indexes a text. A value the answer took only from here is filed
+ * `derived-from-reading` (time design § 9.5): never invented, never known.
+ *
+ * @example
+ * ```ts
+ * derivedFormsOf(['2026-10-09T15:00:00Z', 'PDT']).has('pdt'); // true
+ * ```
+ */
+export function derivedFormsOf(spellings: readonly string[]): ReadonlySet<string> {
+  const sink: Sink = {
+    values: new Map<string, number>(),
+    carriers: new Map(),
+    budget: MAX_INDEX_TOKENS,
+    turn: 0,
+    toolCallId: undefined,
+  };
+  for (const spelling of spellings) {
+    add(sink, spelling);
+    addText(sink, spelling);
   }
   return new Set(sink.values.keys());
 }

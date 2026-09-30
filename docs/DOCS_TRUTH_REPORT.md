@@ -6,12 +6,12 @@ _Recorded 2026-09-25._
 
 ## In plain words
 
-The package publishes **17 import paths** carrying **2443 distinct named exports**, plus **124 typed events**. For each one this report asks three separate questions: is it really *exported* (declared), is it *described in prose on the published docs site* (documented), and does a *real run actually use it* (exercised).
+The package publishes **17 import paths** carrying **2445 distinct named exports**, plus **124 typed events**. For each one this report asks three separate questions: is it really *exported* (declared), is it *described in prose on the published docs site* (documented), and does a *real run actually use it* (exercised).
 
-**1712 of 2443 exports (70%) are described in prose on the site.** The rest split into five different problems, which is the whole point of keeping the columns apart:
+**1712 of 2445 exports (70%) are described in prose on the site.** The rest split into five different problems, which is the whole point of keeping the columns apart:
 
 - **31 exist, provably work, and are undocumented.** A reference run exercises them and no page on the site describes them. This is the honest headline number for "features that work and nobody has written about". It is the list to work through.
-- **92 are already written up, just not published.** Prose about them exists inside the repo (`docs/`, `README.md`) but never made it onto the site. These are cheap wins: the writing is done, it needs moving.
+- **94 are already written up, just not published.** Prose about them exists inside the repo (`docs/`, `README.md`) but never made it onto the site. These are cheap wins: the writing is done, it needs moving.
 - **18 appear only inside a code sample** and nowhere in the surrounding text. A reader scanning the page never learns they exist, and site search does not find them.
 - **590 are undocumented and no reference run touches them.** This report will not guess whether they work. They are reported as UNKNOWN, which is the honest answer, and they need a human pass.
 - **1479 are documented but no reference run exercises them.** For a function or a class that is the shape a dead or unimplemented feature has. For a type or an interface it is mostly noise, because a type is used, not called — so read that class by kind, and the tables below split it.
@@ -24,15 +24,15 @@ A previous inventory put the undocumented-feature count at roughly 36. That figu
 
 | Counting rule | Undocumented |
 |---|---|
-| every named export not in site prose | 731 |
+| every named export not in site prose | 733 |
 | … of those, absent from every prose anywhere in the repo | 621 |
-| only functions and classes (things you can call) | 156 |
-| only exports on the root barrel | 139 |
-| **functions and classes on the root barrel** | **23** |
+| only functions and classes (things you can call) | 157 |
+| only exports on the root barrel | 141 |
+| **functions and classes on the root barrel** | **24** |
 | functions and classes that a reference run proves work | 9 |
 | typed events | 31 |
 
-The closest analogue to the remembered 36 is the **23 callable things on the root barrel with no prose description** — near enough that the old inventory was probably counting something like it, and far enough from 731 that quoting a single "undocumented" number without saying which rule produced it is how a figure like 36 drifts. Every table below states its rule.
+The closest analogue to the remembered 36 is the **24 callable things on the root barrel with no prose description** — near enough that the old inventory was probably counting something like it, and far enough from 733 that quoting a single "undocumented" number without saying which rule produced it is how a figure like 36 drifts. Every table below states its rule.
 
 **The worst class is empty: nowhere do the published docs tell a reader to import something that does not exist.** That check is not baselined — it fails the build immediately, always, because a reader who copies such a line is simply broken.
 
@@ -610,17 +610,19 @@ The site describes it and it really is exported, but no reference run touches it
 
 ### 5. Written but not published
 
-Prose about these exists in the repo (`docs/`, `README.md`) but nothing on the site mentions them. The writing is already done — this is a publishing job, not an authoring job, which makes it the cheapest class to close. **92 symbols.**
+Prose about these exists in the repo (`docs/`, `README.md`) but nothing on the site mentions them. The writing is already done — this is a publishing job, not an authoring job, which makes it the cheapest class to close. **94 symbols.**
 
 | Symbol | Kind | Exported from | Already written up in |
 |---|---|---|---|
 | `applyOutputSchema` | function | `agentfootprint` | `docs/design/2026-09-findings-ledger-spec.md` |
+| `englishTimeReader` | function | `agentfootprint` | `docs/design/time/README.md` |
 | `isPauseRequest` | function | `agentfootprint` | `docs/design/2026-09-honest-answer-ledger-decisions.md`, `docs/design/2026-09-honest-answer-ledger.md` |
 | `makeRunId` | function | `agentfootprint` | `docs/MENTAL_MODEL.md` |
 | `stageRole` | function | `agentfootprint` | `docs/design/honesty/inputs.md`, `docs/proposals/005-trajectory-assembler.md` |
 | `toolContractCheckup` | function | `agentfootprint` | `docs/proposals/010-contextual-error-types.md` |
 | `INJECTION_KEYS` | const | `agentfootprint` | `docs/design/2026-09-findings-ledger-worklog.md`, `docs/design/honesty/README.md`, `docs/design/honesty/choice.md` |
 | `EmitEvent` | interface | `agentfootprint` | `docs/proposals/001-lens-subflow-recorder.md` |
+| `EnglishTimeReaderOptions` | interface | `agentfootprint` | `docs/design/time/README.md` |
 | `FlowchartAsToolOptions` | interface | `agentfootprint` | `docs/design/2026-09-recorded-not-built.md` |
 | `FlowchartHandle` | interface | `agentfootprint` `agentfootprint/observe` | `docs/MENTAL_MODEL.md`, `docs/design/local-observability-and-pii.md` |
 | `GroupTranslator` | interface | `agentfootprint` | `docs/MENTAL_MODEL.md` |
@@ -885,7 +887,7 @@ Whether a symbol comes from the root barrel or only from a subpath is a document
 
 | Import path | Exports | Described in site prose | Coverage |
 |---|---|---|---|
-| `agentfootprint` | 748 | 609 | 81% |
+| `agentfootprint` | 750 | 609 | 81% |
 | `agentfootprint/providers` | 163 | 134 | 82% |
 | `agentfootprint/memory` | 223 | 112 | 50% |
 | `agentfootprint/rag` | 49 | 49 | 100% |

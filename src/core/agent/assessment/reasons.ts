@@ -148,6 +148,13 @@ export const REASONS: readonly ReasonEntry[] = Object.freeze([
     class: 'not-sure',
     reads: 'unsupportedValues (revised: true)',
   },
+  {
+    reason: 'derived-from-reading',
+    layer: 4,
+    class: 'not-sure',
+    reads:
+      "findingsLedger: a time-derived row of this turn — the answer states a time value no tool result carried that the library itself spelled from a reading of the person's words (an implied year, an offset, the end-of-grain minute, the served time line)",
+  },
   { reason: 'stopped-early', layer: 4, class: 'not-sure', reads: 'stoppedEarly' },
   {
     reason: 'steps-unfinished',

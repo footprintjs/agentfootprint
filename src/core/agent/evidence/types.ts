@@ -182,7 +182,8 @@ export interface EvidenceVerdict {
   readonly candidates: number;
   /**
    * How many of those candidates the gate actually LOOKED UP in the tool
-   * results — `grounded.length + unsupported.length`, before any slice.
+   * results — `grounded.length + unsupported.length` (+ `derived.length`
+   * under `.time()`), before any slice.
    * `candidates` also counts EXEMPT values (the person's message, the
    * conversation, the app's own instructions — skipped before any lookup),
    * so `candidates - lookedUp` is how many the run never had to look up. A
@@ -201,6 +202,16 @@ export interface EvidenceVerdict {
    * read only under `.findings()`.
    */
   readonly grounded: readonly GroundedValue[];
+  /**
+   * Under `.time()` (step T7): the values no tool result carried that the
+   * library itself spelled from a time reading of this turn — an implied
+   * year, an offset, the end-of-grain minute, the served time line
+   * (`core/time/forms.ts` · `timeFormsOf`'s `derived` list). Never
+   * `unsupported` (the library produced them) and never the person's: the
+   * answer's standing reads them as `derived-from-reading`, "not sure" at
+   * most. Absent when the gate was not handed the list.
+   */
+  readonly derived?: readonly UnsupportedValue[];
   /**
    * True when the evidence index hit its ceiling and is INCOMPLETE.
    *

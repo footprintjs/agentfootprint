@@ -32,7 +32,7 @@ import { contingentRowsOf, hasSetAsideStanding } from '../findings/contingent.js
 import { withUnsettledRows } from '../findings/unsettled.js';
 import type { DeclaredCoverage } from '../coverage/types.js';
 import type { FindingsLedger } from '../findings/types.js';
-import { HIDDEN_VALUE } from '../arguments/rows.js';
+import { HIDDEN_VALUE, TIME_WINDOW_SOURCE } from '../arguments/rows.js';
 import {
   judgeAnswer,
   recordOutputAttempt,
@@ -45,8 +45,10 @@ import {
   type StepPlanFor,
 } from '../../../lib/injection-engine/skillSteps.js';
 import { checkAnswer, evidenceRefusalSentence, MAX_REPORTED_VALUES } from '../evidence/gate.js';
-import { evidenceFromHistory, exemptFromRun } from '../evidence/evidenceIndex.js';
-import type { ResolvedEvidenceGate } from '../evidence/types.js';
+import { derivedFormsOf, evidenceFromHistory, exemptFromRun } from '../evidence/evidenceIndex.js';
+import { timeFormsOf, turnFormsWindowsOf } from '../../time/forms.js';
+import { timeDerivedRow } from '../../time/rows.js';
+import type { EvidenceVerdict, ResolvedEvidenceGate } from '../evidence/types.js';
 import { priorTurnEvidenceOf } from '../../../integrity/prior-turn-evidence/check.js';
 import { fileIntegrityFindings } from '../integrityFindings.js';
 import { unsupportedClaimsOf } from '../../../integrity/unsupported-claim/check.js';
@@ -124,7 +126,20 @@ export interface InputsRouteArm {
   readonly declaredDefaults?: DeclaredDefaults;
   /** This turn's answered values (the batch ask, step 4) — the person's own words. */
   readonly answeredValues?: AnsweredValues;
+  /**
+   * Under `.time()` (step T7): this turn's time spellings, split by lineage
+   * (`timeLineageOf`) — the `said` ones join the exempt corpus, the `derived`
+   * ones file a `time-derived` row instead of a flag. Absent → the gate as
+   * it was.
+   */
+  readonly timeLineage?: TimeLineage;
 }
+
+/** This turn's time spellings by lineage — see {@link timeLineageOf}. */
+export type TimeLineage = (scope: TypedScope<AgentState>) => {
+  readonly said: readonly string[];
+  readonly derived: readonly string[];
+};
 
 /**
  * The values the PERSON gave this turn by answering the inputs layer's batch
@@ -138,17 +153,70 @@ export interface InputsRouteArm {
  */
 export type AnsweredValues = (scope: TypedScope<AgentState>) => readonly string[];
 
-/** The one reader of this turn's answered values, off the ledger's `answered` rows. */
+/**
+ * The one reader of this turn's answered values, off the ledger's `answered`
+ * rows. A value the LIBRARY converted from a window the person settled in the
+ * time ask (`isWindowFillRow`) is not in it: the window is theirs, its spelling
+ * in a tool's form is the library's — `timeLineageOf` files it as derived.
+ */
 export const answeredValuesOf: AnsweredValues = (scope) => {
   const turn = scope.turnNumber as number;
   const values: string[] = [];
-  for (const row of [...((scope.findingsLedger as FindingsLedger | undefined) ?? [])]) {
+  const ledger = [...((scope.findingsLedger as FindingsLedger | undefined) ?? [])];
+  for (const row of ledger) {
     if (row.kind !== 'argument' || row.turn !== turn || row.source !== 'answered') continue;
+    if (isWindowFillRow(row, ledger)) continue;
     if (row.value === undefined || row.value === HIDDEN_VALUE || values.includes(row.value))
       continue;
     values.push(row.value);
   }
   return values;
+};
+
+/**
+ * Whether an `argument` row holds a value the library filled from a window of
+ * the person's (the time layer): converted from a window the person settled
+ * in the time ask (an `answered` period row filed beside a `time-answer` row
+ * of the same moment, or `matched: 'mention'`), from a `model` reading
+ * (`reading`), or from the run's `time.window` (`appSource`).
+ */
+function isWindowFillRow(row: FindingsLedger[number], ledger: FindingsLedger): boolean {
+  if (row.kind !== 'argument') return false;
+  if (row.matched === 'mention' || row.appSource === TIME_WINDOW_SOURCE) return true;
+  if (row.source !== 'answered' || row.period !== true) return false;
+  return ledger.some(
+    (r) => r.kind === 'time-answer' && r.turn === row.turn && r.iteration === row.iteration,
+  );
+}
+
+// FOLD · the one owner of this turn's time spellings by lineage, as the evidence gate reads them
+// consumers read this and never re-derive it: judgeEvidence (the exempt corpus's `timeSaid`, checkAnswer's `derived`)
+// detached: yes — fresh arrays per call, read from the committed ledger and the served time line.
+/**
+ * This turn's time spellings, split by lineage (time design § 9.5, step T7):
+ * per recorded window (`core/time/forms.ts` · `turnFormsWindowsOf`), the
+ * spellings `timeFormsOf` files as the person's and as the library's; plus,
+ * as the library's, every value it filled from a window into a call
+ * (`isWindowFillRow`) and the served time line (`timeLine` — library text,
+ * never evidence, so an answer that echoes it is not the person's).
+ */
+export const timeLineageOf: TimeLineage = (scope) => {
+  const ledger = [...((scope.findingsLedger as FindingsLedger | undefined) ?? [])];
+  const said: string[] = [];
+  const derived: string[] = [];
+  for (const window of turnFormsWindowsOf(ledger)) {
+    const forms = timeFormsOf({ window });
+    said.push(...forms.said);
+    derived.push(...forms.derived);
+  }
+  const turn = scope.turnNumber as number;
+  for (const row of ledger) {
+    if (row.kind !== 'argument' || row.turn !== turn || !isWindowFillRow(row, ledger)) continue;
+    if (row.value !== undefined && row.value !== HIDDEN_VALUE) derived.push(row.value);
+  }
+  const line = scope.timeLine as { readonly text: string } | undefined;
+  if (line !== undefined) derived.push(line.text);
+  return { said, derived };
 };
 
 /**
@@ -688,9 +756,12 @@ function judgeEvidence(
 
   const history = scope.history as readonly LLMMessage[];
   const evidence = evidenceFromHistory(history);
+  // Under `.time()` (step T7): the turn's time spellings by lineage.
+  const time = inputs?.timeLineage?.(scope);
   const verdict = checkAnswer(answer, {
     gate,
     evidence,
+    ...(time !== undefined && { derived: derivedFormsOf(time.derived) }),
     exempt: exemptFromRun({
       userMessage: scope.userMessage as string | undefined,
       history,
@@ -703,6 +774,7 @@ function judgeEvidence(
       ...(inputs?.answeredValues !== undefined && {
         answeredValues: inputs.answeredValues(scope),
       }),
+      ...(time !== undefined && { timeSaid: time.said }),
     }),
   });
 
@@ -755,6 +827,7 @@ function judgeEvidence(
   }
 
   if (verdict.unsupported.length === 0) {
+    fileTimeDerived(scope, verdict.derived, iteration);
     typedEmit(scope, 'agentfootprint.agent.evidence_checked', {
       iteration,
       posture: gate.posture,
@@ -804,6 +877,7 @@ function judgeEvidence(
   }
 
   const refused = gate.posture === 'rails' && !verdict.evidenceTruncated;
+  fileTimeDerived(scope, verdict.derived, iteration);
   scope.unsupportedValues = {
     values: verdict.unsupported.slice(0, MAX_REPORTED_VALUES),
     candidates: verdict.candidates,
@@ -834,6 +908,22 @@ function judgeEvidence(
     );
   }
   return undefined;
+}
+
+/**
+ * File the answer's `time-derived` row (step T7) — once per judged answer that
+ * STANDS (a draft sent back for revision files nothing: the revision is judged
+ * again), and only when the gate found a value the library itself spelled from
+ * a time reading. `derived` is absent without `.time()`: nothing is filed.
+ */
+function fileTimeDerived(
+  scope: TypedScope<AgentState>,
+  derived: EvidenceVerdict['derived'],
+  iteration: number,
+): void {
+  if (derived === undefined || derived.length === 0) return;
+  const values = derived.map((v) => v.value);
+  recordFindings(scope, [timeDerivedRow(values, { turn: scope.turnNumber as number, iteration })]);
 }
 
 /**

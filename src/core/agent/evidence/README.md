@@ -45,7 +45,7 @@ looks the way it does, and it is stated again at the top of `gate.ts`.
 | file | one job |
 |---|---|
 | `types.ts` | the public vocabulary: posture, shape, options, verdict |
-| `normalize.ts` | one spelling per value, on BOTH sides (`41,200` ≡ `41200`); and `dateAndClockForms`, the other spellings of a date or clock time the person or app wrote — read by the exempt corpus only |
+| `normalize.ts` | one spelling per value, on BOTH sides (`41,200` ≡ `41200`). The other spellings of a date or clock time are NOT here: since time step T7 they are asked of `core/time/forms.ts` · `timeFormsOf` (its `said` list, by the exempt corpus only) |
 | `extract.ts` | which tokens in an answer are DATA — the conservative rule |
 | `evidenceIndex.ts` | the structural walk of tool results, and the exempt corpus; `readResult` is the ONE reading of a result |
 | `servedJson.ts` | a served result that is NOT one JSON value, read by the JSON grammar: its leading value(s) — the tool's JSON before a framework note (a step banner, an effect note, the repeated-call note), an MCP text result's several blocks — and the text after them, and the complete leaves of JSON cut short (a capped result's `head`, a tool that truncated its own output) — never the token the cut falls inside — plus, when the cut falls inside a string, that string's whole words up to its last space, read as text (the word the cut may have split is left out: `mo` may be `more`). Read whole as text, `{"id":4417}` tokenises to `:4417`: every number and boolean the tool returned read as absent, a false flag at the gate and a false `not-in-result` in the inputs layer. Text that opens with a bracket and is not JSON stays text |
@@ -264,8 +264,10 @@ person (or the app) wrote is exempt in its other spellings. Nothing else is
 widened: a value is exempt only when it IS, or respells, something the person
 or the app said.** One owner each: `evidenceIndex.ts` · `typedAskAnswerOf`
 (read by `addHistoryExempt`, so the corpus and a fold's lineage take it the
-same way) and `normalize.ts` · `dateAndClockForms` (read through
-`evidenceIndex.ts` · `addExempt`, the exempt corpus's one text door).
+same way) and `core/time/forms.ts` · `timeFormsOf({ text })`'s `said` list
+(read through `evidenceIndex.ts` · `addExempt`, the exempt corpus's one text
+door — until time step T7 this was a table private to this folder,
+`normalize.ts` · `dateAndClockForms`; the job moved, the cases did not).
 
 Why: a person asked "what clients connected to SHISOLPLPAP006 during 10/09/26
 8 Am to 8:40 AM PST" and answered the app's typed ask (`requestInput`) with
@@ -295,10 +297,10 @@ question. A corpus with no date or clock time in it is byte-for-byte the one
 it always was.
 
 ```ts
-dateAndClockForms('what connected 8 Am to 8:40 AM PST');
+timeFormsOf({ text: 'what connected 8 Am to 8:40 AM PST' }).said;
 // ['8:00', '08:00', '8:00am', '8:40', '08:40', '8:40am']
-dateAndClockForms('2026-10-09'); // ['2026', '10', '9']
-dateAndClockForms('took 2h');    // []
+timeFormsOf({ text: '2026-10-09' }).said; // ['2026', '10', '9']
+timeFormsOf({ text: 'took 2h' }).said;    // []
 
 // The answer to a typed ask, as `Agent.resume` lands it:
 const answered = {
@@ -315,6 +317,57 @@ exemptFromRun({ history: [answered] }).has('2031'); // false — nobody said it
 Pinned by `test/core/agent/evidence/person-values-normalized.test.ts` (the
 field case end to end, an invented `9:15` and year still flagged, redaction,
 the fold's lineage, byte identity).
+
+## Evidence lineage at grain — the person's time parts and the library's spellings (time step T7)
+
+**Under `.time()` beside the inputs layer, the gate tells THREE lineages of a
+time value apart: the person's (exempt), the library's (`derived-from-reading`
+— never invented, never known), and nobody's (flagged). It keeps no time table
+of its own: it asks `core/time/forms.ts` · `timeFormsOf`, the one owner of
+which spelling of a time is whose (time design § 9.5).**
+
+Why: every reading of chat time words is confirmed by the person (TQ29), so an
+answer about "8 AM to 8:40 AM PST" writes spellings the person never typed —
+`08:41` (the end of the said minute), `-07:00`, `PDT`, `15:00Z`, the epoch the
+call ran with, the served time line's values. Flagging them is a false "not
+traced"; exempting them would let the model's echo of LIBRARY text pass as the
+person's words. Neither is true, so the record says which.
+
+| the value in the answer | lineage | the gate | the standing |
+|---|---|---|---|
+| a part the person WROTE, at the grain they wrote it (`8:00` for "8 AM", `08:40`, `2026-10-09` for a confirmed `10/09/26`), or any part of a window they typed in the ask or set in a UI | said | exempt (`exemptFromRun`'s `timeSaid`) | nothing fires |
+| an implied year, the abbreviation in effect, an offset, the end-of-grain minute, a UTC or epoch spelling, a look-back's duration, a value the library filled from the window, a value of the served time line, any part of a `model` reading | `derived-from-reading` | not flagged: `EvidenceVerdict.derived`, filed as ONE `time-derived` row per judged answer that stands (`core/time/rows.ts`) | `derived-from-reading` — "not sure", never "known" |
+| anything else (`09:15` nobody read, `2031`) | none | flagged, as always | `value-unsupported` |
+
+The order is exempt → the tools' results → derived: a value a tool returned is
+grounded whatever the library also spelled. The turn's lineage is read by ONE
+reader, `stages/route.ts` · `timeLineageOf` (the confirmed windows through
+`forms.ts` · `turnFormsWindowsOf`, which re-resolves a confirmed `rule`
+reading's recorded parses with the recorded clock — never the reader — to name
+the parts the person wrote); `answeredValuesOf` stops exempting a value the
+library converted from a window the person settled (`isWindowFillRow`). With
+no `time-answer` row (no reader, or nothing confirmed) the answered values are
+what they always were, and without `.time()` the gate is handed no lineage at
+all: its verdict, its events and its rows are byte-for-byte the ones before.
+
+```ts
+const { said, derived } = timeFormsOf({
+  window: {
+    source: 'answered', answer: 'confirmed', zone: 'America/Los_Angeles',
+    range: { from: '2026-10-09T08:00:00-07:00', to: '2026-10-09T08:41:00-07:00' },
+    reading: { said: ['year', 'month', 'day', 'hour', 'minute', 'meridiem', 'zone'],
+               grain: 'minute', notes: [{ kind: 'end-of-grain' }] },
+  },
+});
+said.includes('08:40');    // true  — the person's "8:40 AM"
+derived.includes('08:41'); // true  — the end of that minute is the library's
+derived.includes('PDT');   // true  — they said PST
+```
+
+Pinned by `test/core/time/forms.test.ts` (the lists, the text rule equal to
+the retired table over seeded texts, the reader over a ledger, the row, the
+fold) and `test/core/time/lineage-run.test.ts` (the field run end to end; an
+invented time and year still flagged; byte identity without `.time()`).
 
 ## A glued-unit number is met on the lookup side only (9.110.0)
 

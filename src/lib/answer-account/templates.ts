@@ -338,6 +338,9 @@ export const ANSWER_ACCOUNT_TEMPLATES = Object.freeze({
   'howSure.reason.valueSurvivedRevision': t(
     'Names or numbers in the answer appear in no tool result, even after one revision.',
   ),
+  'howSure.reason.derivedFromReading': t(
+    "A time in the answer is the library's own spelling of your words — an implied year, an offset or a converted form — not something you said or a tool returned.",
+  ),
   'howSure.reason.stoppedEarly': t('The run stopped before the model finished.'),
   // The answer layer's witness (honesty layer 4) — set 5.
   'howSure.reason.stepsUnfinished': t(

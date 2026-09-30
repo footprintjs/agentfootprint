@@ -984,7 +984,7 @@ deterministic and are measured over retained recorded runs or unit tables, with 
 | T5a | **Declared mapping and exact conversions** — *landed; implementation note T5a below* | `ToolPeriod.forms` (bounds, joined, object, day, lookback with `units`) and the sugar (`accepts`, `wall-range`, `zoneArgument`); the facts `direction`, `retention`, `maxRange`, `granularity`, `filtersToAsked`, `wallZone`; `_meta.agentfootprint.period` read by `readToolExtras`; the exact rows of § 7.2; `ctx.time` in process and in `_meta.agentfootprint.time`; fill from one mention (a `control` window included), binding by quote, the record-and-run law for a differing model window; the tool facts join T4's re-validation | a tool's new `period` fields | T4, TQ1 | every exact row of § 7.2; a two-argument epoch-ms Python tool over the mock MCP client; a model window that differs → runs, row `model-chosen`, fold "not sure"; a drill-down and a comparison call run untouched; "this morning vs yesterday morning" from the fixture reader → two mentions, no fill, each call bound by quote | $0 |
 | T5b | **Widening and pre-dispatch refusals** — *landed; implementation note T5b below* | the inexact rows of § 7.2 (the covering look-back, `day` wider, `filtersToAsked`), the dispatch drift § 7.4, the refusals (outside `direction`, wholly beyond `retention`, over `maxRange`, a multi-day range to a `day` tool, a `wall` DST gap), `partly-beyond-retention` | a tool's new `period` fields | T5a | every inexact row of § 7.2 and every row of § 7.4; a range half inside `retention` dispatches; a future window to a `past` tool is refused with the reason | $0 |
 | T6b | **The English default and the paid bench** — *landed (the bench not yet run); implementation note T6b below — owner decision "Always confirm" (TQ29): every chat reading is proposed and confirmed, never said* | `englishTimeReader` (a tokenizer; the v1 rows of § 5.3), the served sentence (TQ13), the lazy ask wired to real words | `.time({ reader: englishTimeReader() })` | T5b | the host's field sentences as the table ("10/09/26 8 AM to 8:40 AM PST" → a zone ask for `PST`, "yesterday", a future date); every non-v1 row of § 5.3 reads "unreadable" | **paid**: the provoking set — calls with the right window, and absolute windows asked of a look-back-only tool (wrong-window answers, armed vs unarmed); needless-ask rate on controls |
-| T7 | **Evidence lineage at grain** | `forms.ts` · `timeFormsOf` with its `said` and `derived` lists; the lineage kind `derived-from-reading`; the gate asks it; the private table from `fix/person-values-normalized` retires | `.time()` | T6b; `fix/person-values-normalized` landed first (TQ25) | "8 AM" vs `8:00`/`08:00` → `said`; a corrected abbreviation, an implied year, `-07:00`, `08:41`, the served sentence echoed → `derived-from-reading`, never "known"; a time no reading produced still fails; the landed fix's cases still pass after it retires | $0 over retained recordings: false "not traced" on time values |
+| T7 | **Evidence lineage at grain** — *landed; implementation note T7 below* | `forms.ts` · `timeFormsOf` with its `said` and `derived` lists; the lineage kind `derived-from-reading`; the gate asks it; the private table from `fix/person-values-normalized` retires | `.time()` | T6b; `fix/person-values-normalized` landed first (TQ25) | "8 AM" vs `8:00`/`08:00` → `said`; a corrected abbreviation, an implied year, `-07:00`, `08:41`, the served sentence echoed → `derived-from-reading`, never "known"; a time no reading produced still fails; the landed fix's cases still pass after it retires | $0 over retained recordings: false "not traced" on time values |
 | T8 | **Result checks** | `period-differs-from-asked { missing, extra }`, `period-shifted`, `period-beyond-retention`, `clocks-differ` (declared wall-clock zones, a label); fold reasons; limits lines | the results layer + `.time()` | T5b, T3 | a tool clamping 30d to 7d (`missing`); a covering look-back (`extra`); a look-back after a 30-minute pause (both); an inclusive `queried.to == asked.to − 1 step` reads as covered; `Z` vs `-07:00` periods raise no `clocks-differ` | **paid**: false "not sure" rate on correct answers (Q33's cell R3 method) |
 | T9a | **Lens** (lens repo) | the rows of § 10.6 | the lens's own | T8; floor = the af release that ships T8 | lens fixtures per row kind | $0 |
 | T9b | **Host panel** (host repo) | the rules of § 10.3, `time.window` from a brush | the host's own | T2, T3, T5a; floor = the af release that ships T5a | the panel's hand count | $0 |
@@ -1477,6 +1477,45 @@ deterministic and are measured over retained recorded runs or unit tables, with 
   an edited one → `edited`; an assumed period is asked; the served line after the confirmation names
   the window and its source), `period-run.test.ts` (the T5a fills now run on the call AFTER the
   confirmation; the served line before it names the confirmed window and its source).
+- **T7.** Landed with these smallest faithful choices. (1) **The owner.** `core/time/forms.ts` ·
+  `timeFormsOf` takes a `text` (the person's message, a typed answer, the app's prompt — only
+  `said` spellings: the retired `evidence/normalize.ts` · `dateAndClockForms` rules, moved as they
+  were; its cases pass unchanged, and a seeded property pins the new code equal to the old table)
+  or a recorded `window` (`said` + `derived`). The 24-hour pass restates the gate tokenizer's
+  boundary inside the leaf (the leaf imports nothing outside `core/time/`); the property pins them
+  equal. (2) **What is said under "Always confirm" (TQ29).** Every chat reading is filed with
+  `said: []`, so the parts the person WROTE are recovered by resolving the recorded parses again
+  (`withZoneAnswered` with the answered zone, the turn's recorded clock, `confirm: false` — never
+  the reader) and taking the candidate whose range IS the confirmed window (`forms.ts` ·
+  `writtenReadingOf`). Its `said` parts at its grain are the person's (`8:00`, `08:40`,
+  `2026-10-09` for `10/09/26`, the two-digit year counted as said); the end-of-grain minute, the
+  implied year, the abbreviation in effect, offsets, UTC and epoch spellings are derived. A window
+  typed in the ask (`edited`) or set in a UI (`control`) is the person's in every part; a `model`
+  reading, a confirmed window whose reading cannot be named, and a record the resolver cannot read
+  name nothing as said (the safe direction). A bare month or day number and a UTC clock's 12-hour
+  spellings are never derived — too common to be a lineage. (3) **The gate.** Order: exempt → the
+  tools' results → derived. `EvidenceVerdict.derived` (present only when the gate was handed the
+  list) holds the values found only in the library's spellings; `lookedUp` counts them. The turn's
+  lineage has ONE reader, `stages/route.ts` · `timeLineageOf`: the windows' said spellings join the
+  exempt corpus (`exemptFromRun`'s `timeSaid`), and the derived ones gain the values the library
+  filled from a window into a call (`isWindowFillRow`) and the served time line's text. Because a
+  window's converted values are the library's, `answeredValuesOf` stops exempting an `answered`
+  period row filed beside a `time-answer` row of the same moment — with no `time-answer` row the
+  answered values are unchanged. Armed through the inputs layer's Route arm
+  (`InputsRouteArm.timeLineage`) when `.time()` is set beside the gate — the only configuration
+  where readings, answers and fills exist. (4) **The record.** A new row kind, `time-derived`
+  (`rows.ts` · `TimeDerivedRow`: `values`, at most 12, each at most 64 characters; the checkpoint
+  door's arm in `timeRowIsWellFormed`), filed once per judged answer that STANDS — the clean path
+  and the flagged or refused path, never a draft sent back for revision. (5) **The fold.** A new
+  reason, `derived-from-reading` (layer 4, `not-sure`, `assess.ts` · `readTimeDerived` over this
+  turn's rows), with its standing words (`compose.ts`) and its account line
+  (`howSure.reason.derivedFromReading`) registered. **Known limits:** a turn with a revision or an
+  answer-validation re-ask files a row per judged answer that stood, so an earlier draft's row can
+  keep "not sure" on a later clean answer of the same turn (the safe direction); a value in the
+  served time line is derived even where it is a tool name or argument word, which only matters if
+  such a word is also an answer candidate. Pinned by `test/core/time/forms.test.ts` and
+  `test/core/time/lineage-run.test.ts`; the landed fix's cases by
+  `test/core/agent/evidence/person-values-normalized.test.ts`.
 
 **Why this order.** T1 settles the grammar every other step leans on and is free. T2 is already
 written and only needs rebasing and the value check. T3 gives the first visible win (the limits

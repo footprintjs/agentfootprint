@@ -123,6 +123,7 @@ grows as later honesty steps commit new rows.
 | `sources-conflict` | 3 | `findingsLedger`: a conflict row whose witnesses name a call of this turn |
 | `value-unsupported` | 4 | `unsupportedValues` (`revised: false`) |
 | `value-survived-revision` | 4 | `unsupportedValues` (`revised: true`) |
+| `derived-from-reading` | 4 | `findingsLedger`: a `time-derived` row of this turn — the answer states a time value no tool result carried that the library itself spelled from a reading of the person's words (an implied year, an offset, the end-of-grain minute, the served time line; the time layer, step T7 — `core/time/forms.ts` · `timeFormsOf`). Folded like `argument-assumed`: "not sure", never "known" |
 | `stopped-early` | 4 | `stoppedEarly` |
 | `steps-unfinished` | 4 | `findingsLedger`: a `steps-unfinished` witness row of this turn — the answer came before the active skill's declared steps finished (filed while the answer layer is armed) |
 | `answer-check-failed` | 4 | `answerValidation`: `status: 'failed'` |

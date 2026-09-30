@@ -499,6 +499,8 @@ describe('UNIT — the reason table', () => {
       'sources-conflict',
       'value-unsupported',
       'value-survived-revision',
+      // The time layer (step T7): a time value the library spelled from a reading.
+      'derived-from-reading',
       'stopped-early',
       // Honesty layer 4 (the answer layer's witness row, step 6).
       'steps-unfinished',

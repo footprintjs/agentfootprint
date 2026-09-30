@@ -233,6 +233,7 @@ const REASON_LINES: Readonly<Record<AssessmentReason, TemplateId>> = {
   'sources-conflict': 'howSure.reason.sourcesConflict',
   'value-unsupported': 'howSure.reason.valueUnsupported',
   'value-survived-revision': 'howSure.reason.valueSurvivedRevision',
+  'derived-from-reading': 'howSure.reason.derivedFromReading',
   'stopped-early': 'howSure.reason.stoppedEarly',
   'steps-unfinished': 'howSure.reason.stepsUnfinished',
   'answer-check-failed': 'howSure.reason.answerCheckFailed',

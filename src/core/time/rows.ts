@@ -15,7 +15,7 @@
  *          precedent: no event field ships without a reader in the same
  *          release). The lens reads the rows.
  *
- * Six kinds, each filed only while `.time()` is armed:
+ * Seven kinds, each filed only while `.time()` is armed:
  *
  * | Kind | Filed | Carries |
  * |------|-------|---------|
@@ -25,6 +25,7 @@
  * | `call-window` | by the inputs layer, once per call to a tool that declares period forms, before it dispatches | which window the call carries: filled from the turn's one window (exactly, or wider — with what the read adds), bound to one (by quote or value), the model's own (beside the person's when it differs), unread, not filled and why, or refused before dispatch and why |
  * | `time-reading` | by seed, once per MENTION the armed reader (`.time({ reader })`) found in the person's message — or ONE row with `mentions: 0` when it found none, so a retry knows the message was read | the quote, the parts, every candidate `resolve.ts` made of them, how the reading settled (`choice` — never settled by the library: every reading is a PROPOSAL, `open` with `confirm`, its candidates `said: []`), the reader's id, version, kind and locale, and the tz database version; a refused mention keeps only why |
  * | `time-answer` | by the batch ask, once per mention the person settled in the time ask — the only door by which a window of words becomes the person's | the mention, the window and its zone, and `how`: `confirmed` (they picked a reading the library offered — the click) or `edited` (they wrote their own) |
+ * | `time-derived` | by the Route decider, once per judged answer that stands, when the evidence gate found values no tool result carried that the library itself spelled from this turn's time readings (§ 9.5, step T7 — `forms.ts` · `timeFormsOf`'s `derived` list) | the values, normalized and clipped as the gate reports them — the lineage `derived-from-reading`: never invented, never the person's |
  *
  * Readers that switch over every row kind must skip one they do not know.
  */
@@ -217,6 +218,27 @@ export interface CallWindowRow {
   readonly argument?: string;
 }
 
+/**
+ * The answer's values the library itself spelled from a time reading of this
+ * turn (§ 9.5, step T7) — an implied year, an offset, the end-of-grain
+ * minute, a value of the served time line. The lineage `derived-from-reading`:
+ * the answer's standing reads it as "not sure" at most, never "known", and the
+ * gate never calls these invented.
+ */
+export interface TimeDerivedRow {
+  readonly kind: 'time-derived';
+  readonly turn: number;
+  readonly iteration: number;
+  /** The values as the gate reports them — normalized, clipped, at most `MAX_DERIVED_VALUES`. */
+  readonly values: readonly string[];
+}
+
+/** The most values one `time-derived` row carries (the gate's report bound). */
+export const MAX_DERIVED_VALUES = 12;
+
+/** The longest value a `time-derived` row carries (the gate's clip). */
+export const MAX_DERIVED_VALUE_CHARS = 64;
+
 /** Every time-layer row kind. */
 export type TimeRow =
   | ClockRow
@@ -224,7 +246,8 @@ export type TimeRow =
   | CallRow
   | TimeReadingRow
   | CallWindowRow
-  | TimeAnswerRow;
+  | TimeAnswerRow
+  | TimeDerivedRow;
 
 // ─── Building ────────────────────────────────────────────────────────────
 
@@ -474,6 +497,19 @@ export function timeAnswerRow(
   };
 }
 
+/** The `time-derived` row for one judged answer — `values` cut to {@link MAX_DERIVED_VALUES}. */
+export function timeDerivedRow(
+  values: readonly string[],
+  at: { readonly turn: number; readonly iteration: number },
+): TimeDerivedRow {
+  return {
+    kind: 'time-derived',
+    turn: at.turn,
+    iteration: at.iteration,
+    values: values.slice(0, MAX_DERIVED_VALUES),
+  };
+}
+
 /** The `time-answer` rows filed for `turn`, in the order filed. */
 export function answersOf(
   ledger: readonly unknown[] | undefined,
@@ -710,9 +746,21 @@ function isAnswerRow(row: Readonly<Record<string, unknown>>): boolean {
   );
 }
 
+/** A `time-derived` row: one to `MAX_DERIVED_VALUES` non-empty values — and no other key. */
+function isDerivedRow(row: Readonly<Record<string, unknown>>): boolean {
+  const values = row.values;
+  return (
+    Object.keys(row).length === 4 &&
+    Array.isArray(values) &&
+    values.length >= 1 &&
+    values.length <= MAX_DERIVED_VALUES &&
+    values.every((v) => nonEmpty(v) && (v as string).length <= MAX_DERIVED_VALUE_CHARS)
+  );
+}
+
 /**
  * The checkpoint door's test for a time-layer row — `true` only for a row of
- * one of the six kinds with every field this module files, well formed.
+ * one of the seven kinds with every field this module files, well formed.
  * Any other kind answers `false` (the caller routes by kind first).
  */
 export function timeRowIsWellFormed(row: Readonly<Record<string, unknown>>): boolean {
@@ -741,6 +789,8 @@ export function timeRowIsWellFormed(row: Readonly<Record<string, unknown>>): boo
       return isCallWindowRow(row);
     case 'time-answer':
       return isAnswerRow(row);
+    case 'time-derived':
+      return isDerivedRow(row);
     default:
       return false;
   }
@@ -754,7 +804,8 @@ export function isTimeRowKind(kind: unknown): kind is TimeRow['kind'] {
     kind === 'call' ||
     kind === 'time-reading' ||
     kind === 'call-window' ||
-    kind === 'time-answer'
+    kind === 'time-answer' ||
+    kind === 'time-derived'
   );
 }
 
