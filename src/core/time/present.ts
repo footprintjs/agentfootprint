@@ -11,7 +11,7 @@
  *
  * ## The form — locale-neutral, the zone always named
  *
- * No reader is armed in this release, so there is no locale to speak: the
+ * With no locale (no reader armed) there is no language to speak: the
  * form is ISO-like and the same in every language — a date, a 24-hour wall
  * time in the presentation zone, then the zone's name and its offset at that
  * moment:
@@ -27,6 +27,14 @@
  * milliseconds), never finer. When the two ends sit on different offsets (the
  * span crosses a DST change) each end names its own; otherwise the offset is
  * named once.
+ *
+ * ## With a locale (the reader's, § 11)
+ *
+ * A {@link Presentation} with a `locale` — the armed reader's, the language
+ * the person wrote in — is rendered through `Intl.DateTimeFormat` in that
+ * locale, at the same precision, the zone named by its short name
+ * (`Fri, Oct 9, 2026, 8:00 – 8:40 AM PDT` in `en-US`). The words are the
+ * runtime's ICU data; the instants behind the label are the record.
  *
  * ## The said end (§ 3.3)
  *
@@ -52,9 +60,15 @@ import { instantOf, type InstantText, type ParsedInstant } from './instant.js';
 import type { TimeRange } from './range.js';
 import { isZoneName, offsetAt, wallAt, type WallTime, type ZoneName } from './zone.js';
 
-/** Where a label is rendered — the presentation zone. A locale joins it when a reader is armed (a later step). */
+/**
+ * Where a label is rendered — the presentation zone, and the locale when a
+ * reader is armed (its `locale`: the language the person wrote in). Without a
+ * locale the form is the locale-neutral one above.
+ */
 export interface Presentation {
   readonly zone: ZoneName;
+  /** A BCP 47 language tag (`'en-US'`). Rendered through `Intl`; the zone is always named. */
+  readonly locale?: string;
 }
 
 /** How finely a person said a time (time design § 3.2). */
@@ -157,6 +171,81 @@ function assertZone(presentation: Presentation, caller: string): ZoneName {
   return presentation.zone;
 }
 
+/** The fields `Intl` writes at each precision — the date always, the zone always named. */
+const LOCALE_FIELDS: Readonly<Record<Precision, Intl.DateTimeFormatOptions>> = {
+  year: { year: 'numeric' },
+  month: { year: 'numeric', month: 'short' },
+  day: { weekday: 'short', year: 'numeric', month: 'short', day: 'numeric' },
+  hour: {
+    weekday: 'short',
+    year: 'numeric',
+    month: 'short',
+    day: 'numeric',
+    hour: 'numeric',
+    minute: '2-digit',
+  },
+  minute: {
+    weekday: 'short',
+    year: 'numeric',
+    month: 'short',
+    day: 'numeric',
+    hour: 'numeric',
+    minute: '2-digit',
+  },
+  second: {
+    weekday: 'short',
+    year: 'numeric',
+    month: 'short',
+    day: 'numeric',
+    hour: 'numeric',
+    minute: '2-digit',
+    second: '2-digit',
+  },
+  millisecond: {
+    weekday: 'short',
+    year: 'numeric',
+    month: 'short',
+    day: 'numeric',
+    hour: 'numeric',
+    minute: '2-digit',
+    second: '2-digit',
+    fractionalSecondDigits: 3,
+  },
+};
+
+/** The locale's formatter at `precision` in `zone`; throws a `TypeError` on a tag `Intl` cannot read. */
+function localeFormatter(
+  locale: string,
+  zone: ZoneName,
+  precision: Precision,
+  caller: string,
+): Intl.DateTimeFormat {
+  try {
+    return new Intl.DateTimeFormat(locale, {
+      ...LOCALE_FIELDS[precision],
+      timeZone: zone,
+      timeZoneName: 'short',
+    });
+  } catch {
+    throw new TypeError(`${caller}: ${JSON.stringify(locale)} is not a language tag.`);
+  }
+}
+
+/** Two instants (`b` not before `a`) in the locale's own words: one label, or a range. */
+function renderLocale(
+  aMs: number,
+  bMs: number,
+  presentation: Presentation,
+  zone: ZoneName,
+  precision: Precision,
+  caller: string,
+): string {
+  const formatter = localeFormatter(presentation.locale as string, zone, precision, caller);
+  return aMs === bMs
+    ? formatter.format(new Date(aMs))
+    : formatter.formatRange(new Date(aMs), new Date(bMs));
+}
+
 function readInstant(value: unknown, caller: string): ParsedInstant {
   const instant = instantOf(value, 'lenient');
   if (instant === undefined) {
@@ -200,7 +289,12 @@ function render(a: Point, b: Point, zone: ZoneName, precision: Precision): strin
  */
 export function presentInstant(value: InstantText, presentation: Presentation): string {
   const zone = assertZone(presentation, 'presentInstant');
-  const point = pointOf(readInstant(value, 'presentInstant'), zone);
+  const instant = readInstant(value, 'presentInstant');
+  const point = pointOf(instant, zone);
+  if (presentation.locale !== undefined) {
+    const precision = naturalPrecision(point.wall);
+    return renderLocale(instant.ms, instant.ms, presentation, zone, precision, 'presentInstant');
+  }
   return `${spellPoint(point, naturalPrecision(point.wall))} ${zoneTag(zone, point.offset)}`;
 }
 
@@ -215,9 +309,15 @@ export function presentSpan(
   presentation: Presentation,
 ): string {
   const zone = assertZone(presentation, 'presentSpan');
-  const a = pointOf(readInstant(from, 'presentSpan'), zone);
-  const b = pointOf(readInstant(to, 'presentSpan'), zone);
-  return render(a, b, zone, finer(naturalPrecision(a.wall), naturalPrecision(b.wall)));
+  const fromInstant = readInstant(from, 'presentSpan');
+  const toInstant = readInstant(to, 'presentSpan');
+  const a = pointOf(fromInstant, zone);
+  const b = pointOf(toInstant, zone);
+  const precision = finer(naturalPrecision(a.wall), naturalPrecision(b.wall));
+  if (presentation.locale !== undefined && fromInstant.ms <= toInstant.ms) {
+    return renderLocale(fromInstant.ms, toInstant.ms, presentation, zone, precision, 'presentSpan');
+  }
+  return render(a, b, zone, precision);
 }
 
 /**
@@ -237,7 +337,11 @@ export function presentRange(range: TimeRange, presentation: Presentation, grain
   const a = pointOf(from, zone);
   if (grain === undefined) {
     const b = pointOf(to, zone);
-    return render(a, b, zone, finer(naturalPrecision(a.wall), naturalPrecision(b.wall)));
+    const precision = finer(naturalPrecision(a.wall), naturalPrecision(b.wall));
+    if (presentation.locale !== undefined) {
+      return renderLocale(from.ms, to.ms, presentation, zone, precision, 'presentRange');
+    }
+    return render(a, b, zone, precision);
   }
   const precision = PRECISION_OF[grain];
   if (precision === undefined) {
@@ -246,6 +350,9 @@ export function presentRange(range: TimeRange, presentation: Presentation, grain
   // The last instant inside the range: one millisecond (or the sub-millisecond
   // remainder) before `to`. Written at the grain, that is the end as said.
   const lastMs = to.nanos > 0 ? to.ms : to.ms - 1;
+  if (presentation.locale !== undefined) {
+    return renderLocale(from.ms, lastMs, presentation, zone, precision, 'presentRange');
+  }
   const b = { wall: wallAt(zone, lastMs), offset: spellOffset(offsetAt(zone, lastMs)) };
   return render(a, b, zone, precision);
 }

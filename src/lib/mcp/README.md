@@ -31,6 +31,9 @@ await mcpServe(tools, {
 - `gatewayTransport.ts`, `transportUrl.ts`, `throttleRetry.ts` — transport.
 - `toolExtras.ts` — our own declarations, carried over MCP.
 - `toolResult.ts` — text and explicitly opted-in structured result decoding.
+- `elicitation.ts` — a typed ask (`AwaitingInput`) as an MCP elicitation and the
+  client's content back as an `InputResponse` (`elicitationOf`,
+  `answerFromElicitation`); a time range travels as two `date-time` properties.
 - `connectionRefusals.ts`, `sdkLoadFailure.ts` — the two refusals, authored once.
 - `types.ts`, `index.ts`.
 

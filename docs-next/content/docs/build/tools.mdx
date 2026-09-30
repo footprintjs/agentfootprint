@@ -1052,6 +1052,19 @@ reads the row instead.
 
 <CodeFile path="examples/features/82-time-reader.ts" region="time-reader" title="examples/features/82-time-reader.ts (region: time-reader)" />
 
+**The time ask.** A `requestInput` field with a `format` — `'instant'`,
+`'time-range'` (an ISO 8601 interval `from/to`) or `'zone'` (an IANA name) — is
+checked before your app sees the answer. One that ends before it starts, has no
+offset, names no zone, or (under `.time()`, which knows the person's zone) writes
+a wall time the clocks skip is not taken: `agent.resume` returns the same ask with
+`refused: { answer, reason }` and `repeat: { count }`, and nothing runs. The reason
+is a sentence from `defaultTimeAskMessages`; `.time({ messages })` rewords any key.
+`labels` name each choice, a time field's choices keep free entry open unless
+`strict`, and `elicitationOf` / `answerFromElicitation` carry the ask over MCP (a
+range as two `date-time` properties).
+
+<CodeFile path="examples/features/83-time-ask.ts" region="time-ask" title="examples/features/83-time-ask.ts (region: time-ask)" />
+
 A typed answer (`.outputSchema()`) carries the same as data:
 `agent.answerCoverage().periods` — `{ toolName, toolCallId, queried, held, readAt? }`
 per declaring call — and `turn_end.answerCoverage.periods`.

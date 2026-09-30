@@ -1078,6 +1078,24 @@ export type {
   TimePolicy,
   TimeWindow,
 } from './core/time/resolve.js';
+// The time ask (step T4) — a `requestInput` field with a `format`
+// (`'instant' | 'time-range' | 'zone'`) is checked at the resume door; a
+// refused answer is asked again with a catalog reason. The catalog is data an
+// app can override (`.time({ messages })`), and an MCP host carries the ask as
+// an elicitation (`elicitationOf` / `answerFromElicitation`).
+export type {
+  TimeAnswerProblem,
+  TimeAskMessageKey,
+  TimeAskMessages,
+  TimeFormat,
+} from './core/time/ask.js';
+export { defaultTimeAskMessages } from './locales/timeAsk.js';
+export {
+  answerFromElicitation,
+  elicitationOf,
+  type ElicitationProperty,
+  type ElicitationRequest,
+} from './lib/mcp/elicitation.js';
 // Artifacts, the optional streaming leg (9.25.0) — `putStream`/`getStream` are
 // FEATURE-DETECTED members of the port, so a store that cannot move bytes
 // without holding them whole leaves them absent rather than faking one. The

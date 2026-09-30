@@ -97,6 +97,13 @@ export { defaultStatusTemplates };
 export type { StatusTemplates } from '../recorders/observability/status/statusTemplates.js';
 
 /**
+ * The time ask's sentences (the time layer, step T4) — a refused time
+ * answer's reason, the ask's questions, the label on a reading to confirm.
+ * Override keys through `.time({ messages })`.
+ */
+export { defaultTimeAskMessages } from './timeAsk.js';
+
+/**
  * Spread `overrides` on top of `defaults` so every key in `defaults`
  * has a value (the override or the original). The result is a fresh
  * object — neither input is mutated.

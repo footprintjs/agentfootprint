@@ -25,8 +25,14 @@ It is a leaf: it imports nothing outside itself (pinned by
 | `reader.ts` | the `TimeReader` port (`id`, `version`, `locale`, `kind: 'rule' \| 'model'`, `read`) and its result, `TimeParts` — zone-less parts, never instants; `readerIssue` (the builder's check) and `checkReading` (a quote must be a verbatim substring of the text; parts well formed; a refused mention keeps no text) |
 | `resolve.ts` | parts + clock + policy → every candidate window (`resolveMention`: date orders, am/pm, the year, both instants of a DST overlap or gap, a day word, a look-back, a range read to the end of its grain, a said IANA zone or offset — an abbreviation is asked, never mapped), and `chooseReading` (`only` · `policy` · `open` with its questions · `none`); the v1 `TimePolicy` (`dateOrder`, `year`, both `'ask'` by default); the checks for a recorded candidate and choice |
 | `rows.ts` | the layer's four ledger rows and the checkpoint door's test for each (`timeRowIsWellFormed`): `clock` (one per turn, filed by seed), `clock-on-resume` (a resume's differing `time`, recorded not applied), `call` (one per dispatched call, `dispatchedAt`), `time-reading` (one per mention the armed reader found, or one `mentions: 0` row; `timeReadingRows` builds them, `readingsOf` reads a turn's back); `clockOf` reads the latest turn's clock |
-| `present.ts` | time for a PERSON: `presentInstant`, `presentSpan` (two inclusive ends, as declared), `presentRange` (a half-open range with the end AS SAID — `[08:00, 08:41)` at minute grain shows `08:40`); locale-neutral, the zone always named, each end's offset when a span crosses a DST change |
+| `present.ts` | time for a PERSON: `presentInstant`, `presentSpan` (two inclusive ends, as declared), `presentRange` (a half-open range with the end AS SAID — `[08:00, 08:41)` at minute grain shows `08:40`); locale-neutral with no locale, the zone always named, each end's offset when a span crosses a DST change; with a `locale` (the reader's) through `Intl` in that language, the zone's short name |
+| `ask.ts` | the one time ask (§ 6): `TimeFormat` (`instant` · `time-range` · `zone`), `checkTimeAnswer` — the ONE judge of a time field's answer (strict instants with an offset, `from` before `to`, an IANA zone, and under a known zone no wall time the clocks skip) — refusals as codes with facts; the catalog's keys (`TIME_ASK_MESSAGE_KEYS`), `readTimeAskMessages` (the app's overrides), `refusalReason` (the re-ask's reason); `timeAskOf` — the field an `open` reading needs (the candidates as labelled choices, a zone asked as `format: 'zone'`, a `model` reading offered to confirm) |
 
+`core/inputRequest.ts` asks `ask.ts`: a field's `format` is judged at definition (each choice, each
+supplied value) and at the resume door (`applyInputResponse`, the person's answer — a refused one
+comes back as the same ask with `refused` and `repeat`); `Agent.resume` hands it the paused turn's
+clock zone and the app's `.time({ messages })`. The sentences live in `src/locales/timeAsk.ts`
+(`defaultTimeAskMessages`), and `lib/mcp/elicitation.ts` carries the ask over MCP.
 Who asks it today: `coverage/period.ts` reads a declared period's instants through
 `instant.ts` · `instantOf` in the lenient profile (`periodVerdict` is unchanged, inclusive at both
 ends) and, under `.time()`, renders `periodLine` through `present.ts` in the run's zone;
@@ -45,8 +51,10 @@ axis through `axis.ts` · `timeAxisIssues`. From the package: `axis.ts` (through
 (`RunTime`, `TimeClock`, `TimeOptions`, `TimeRange`, and the three row types) from the main barrel;
 since the reader (step T6a) also the port's types (`TimeReader`, `TimeParts`, `TimeReading`, …),
 the resolver's (`TimeCandidate`, `ResolvedWindow`, `ReadingChoice`, `TimePolicy`, …) and
-`TimeReadingRow`; the doors are `AgentBuilder.time` and `run({ time })`. The grammar functions stay
-internal.
+`TimeReadingRow`; since the ask (step T4) its types (`TimeFormat`, `TimeAnswerProblem`,
+`TimeAskMessageKey`, `TimeAskMessages`) and the catalog `defaultTimeAskMessages` (also from
+`agentfootprint/observe`, beside the other catalogs); the doors are `AgentBuilder.time`,
+`run({ time })` and `InputField.format`. The grammar functions stay internal.
 
 **The clock law: a declared, recorded input, never a hidden read.** `.time()` arms it. The zone is
 per run (`run({ time: { zone } })`), the builder's `.time({ zone })` a fallback, and with neither
@@ -75,6 +83,16 @@ reader's candidates are never `said`, and even a single window stays `open` unti
 confirms it (`confirm`). Each row records the reader's id, version, kind and locale and the tz
 database version (`zone.ts` · `tzdataVersion`), because either can change between releases.
 
+**The ask law: the library checks a time answer before the app sees it, and says why in words
+the app can replace.** A `requestInput` field with a `format` is a time field; its answer is judged by
+`checkTimeAnswer` at the resume door — the same judge that refused a malformed choice at definition.
+A refused answer is not taken: the ask comes back with `refused: { answer, reason }` and
+`repeat: { count }`, the field `missing` again, and nothing runs (no model call, no row: the run never
+restarted). The reason is a catalog sentence, and only a check the app armed can produce one (a
+`format`, or the DST check under `.time()`, which knows the person's zone). A reading's choices are
+offered as labelled `enum` values in the reader's locale, free entry open unless `strict`; a
+`model` reader's window is offered as the library's reading to confirm, never as the person's words.
+
 **The presentation law: a label is never data.** `present.ts` renders for a person — the typed
 record keeps the instants. With no reader armed (a later step) the form is locale-neutral:
 `2026-10-09 08:00–08:40 America/Los_Angeles (UTC-07:00)`.
@@ -100,6 +118,7 @@ import { draftClock } from './clock.js';
 import { presentRange } from './present.js';
 import { checkReading } from './reader.js';
 import { chooseReading, DEFAULT_TIME_POLICY, resolveMention } from './resolve.js';
+import { checkTimeAnswer } from './ask.js';
 
 instantOf('2026-10-09t08:00z', 'lenient'); // a result may declare it
 instantOf('2026-10-09t08:00z', 'strict'); //  undefined — a tool is never sent it
@@ -131,6 +150,13 @@ draftClock({}, {}); // 'no-zone' — the Agent refuses the run
 // "to 8:40", read to the end of its minute, shown to the person as 08:40.
 presentRange(asked, { zone: 'America/Los_Angeles' }, 'minute');
 // '2026-10-09 08:00–08:40 America/Los_Angeles (UTC-07:00)'
+presentRange(asked, { zone: 'America/Los_Angeles', locale: 'en-US' }, 'minute');
+// 'Fri, Oct 9, 2026, 8:00 – 8:40 AM PDT' — the reader's language
+
+// The time ask: one judge of an answer, a reason from the catalog.
+checkTimeAnswer('time-range', '2026-10-09T08:41-07:00/2026-10-09T08:00-07:00');
+// { problem: 'out-of-order', facts: { from: …, to: … } } → re-asked, never taken
+checkTimeAnswer('instant', '2026-03-08T02:30-08:00', 'America/Los_Angeles'); // { problem: 'dst-gap', … }
 
 // A reader's parts, resolved: '10/09/26' has three orders; the default policy asks.
 const clock = { now: '2026-10-09T15:40:00Z', zone: 'America/Los_Angeles' };
@@ -168,6 +194,18 @@ Agent.create({ provider, model })
 //   choice: { by: 'policy', candidate: 0, policy: { dateOrder: 'MDY' } }, reader: {...}, tzdata: '2025b' }
 ```
 
+The time ask through an agent (`examples/features/83-time-ask.ts`):
+
+```ts
+execute: () => requestInput({
+  id: 'window', question: 'Which window should the search cover?',
+  fields: [{ id: 'window', type: 'string', format: 'time-range' }],
+}),
+// agent.resume(cp, { requestId, values: { window: '2026-10-09T08:40-07:00/2026-10-09T08:00-07:00' } })
+// → paused again: awaitingInput.refused = { answer: {…}, reason: 'The start … is not before the end ….' },
+//   awaitingInput.repeat = { count: 1 } — nothing ran
+```
+
 ## What changed when the grammars moved here (the design's § 12.1)
 
 | # | Behaviour | Now |
@@ -182,11 +220,14 @@ Agent.create({ provider, model })
 
 ## Not covered yet
 
-- The ask (T4), tool conversions and `ctx.time` (T5), the English reader (T6b), the lineage (T7)
-  and the checks (T8) — later steps of the plan (§ 13); each adds a file here. A reading is
-  RECORDED and nothing uses it yet: an `open` choice waits for T4's ask, nothing is served to the
-  model, and the presentation stays locale-neutral in the clock's zone (the reader's `locale` is on
-  every row for the step that first shows a reading to a person).
+- Tool conversions and `ctx.time` (T5), the English reader (T6b), the lineage (T7) and the checks
+  (T8) — later steps of the plan (§ 13). A reading is RECORDED and `ask.ts` · `timeAskOf` builds
+  the field its `open` choice needs, but the runtime raises it only once a tool that declares a
+  period is about to be called (the lazy rule, § 5.2) — that binding is T5a, as is joining the
+  tool's facts (`direction`, `retention`, `maxRange`) to the answer's check. Nothing is served to
+  the model, and the answer's limits lines stay locale-neutral in the clock's zone.
+- Over MCP a time field with choices travels as the choices plus the free-entry properties (a
+  person answers one or the other); MCP has no range, so a range is two `date-time` properties.
 - v1 resolves a day word only (`today`, `yesterday`, `tomorrow`); a part of the day, a calendar
   week, month or year, and a window anchored on the previous one are named `unsupported`. A
   resumeOnError retry keeps the first attempt's reading, resolved against that attempt's clock.

@@ -231,9 +231,15 @@ import {
   ResumeIdentityConflictError,
   RunInFlightError,
 } from './conversation.js';
-import { applyInputResponse, readAwaitingInput, type AnsweredAsk } from './inputRequest.js';
+import {
+  applyInputResponse,
+  readAwaitingInput,
+  type AnsweredAsk,
+  type TimeAnswerContext,
+} from './inputRequest.js';
 import { applyOutputSchema, OutputSchemaError, type OutputSchemaParser } from './outputSchema.js';
 import { InvalidRunInputError, normalizeRunInput } from './runInput.js';
+import { clockOf } from './time/rows.js';
 import {
   draftClock,
   readRunTime,
@@ -2474,7 +2480,11 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
     let answeredAsk: AnsweredAsk | undefined;
     if (awaitingInput !== undefined) {
       this.assertNotRunning('Agent.resume');
-      const answered = applyInputResponse(awaitingInput, input);
+      const answered = applyInputResponse(
+        awaitingInput,
+        input,
+        this.timeAnswerContextOf(checkpoint.sharedState),
+      );
       if ('cancel' in answered) {
         throw new TypeError(
           '[input request] Cancel a hosted request through its host, or abandonPause() before starting another run.',
@@ -2749,6 +2759,26 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
     const spans = state?.foldedSpans;
     if (spans === undefined || spans.length === 0) return undefined;
     return structuredClone(spans) as readonly FoldedSpan[];
+  }
+
+  /**
+   * What the resume door checks a time field's answer with (the time design
+   * § 6.2, step T4): the paused turn's clock zone — the kept `clock` row, so
+   * a resume that passes another `time` changes nothing — and the app's
+   * catalog overrides. `undefined` without `.time()`: a `format` field is
+   * then judged for shape, order and offset only, in the default words.
+   *
+   * @internal
+   */
+  private timeAnswerContextOf(state: unknown): TimeAnswerContext | undefined {
+    if (this.timeOptions === undefined) return undefined;
+    const ledger = (state as Partial<AgentState> | undefined)?.findingsLedger;
+    const zone = clockOf(Array.isArray(ledger) ? ledger : undefined)?.zone;
+    const messages = this.timeOptions.messages;
+    return {
+      ...(zone !== undefined && { zone }),
+      ...(messages !== undefined && { messages }),
+    };
   }
 
   /**

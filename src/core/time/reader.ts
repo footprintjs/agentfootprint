@@ -145,6 +145,19 @@ const MAX_COUNT = 100_000;
 const nonEmpty = (value: unknown): value is string =>
   typeof value === 'string' && value.trim().length > 0 && value.length <= 128;
 
+/**
+ * Whether `Intl` reads `value` as a BCP 47 language tag — the time ask renders
+ * its labels in the reader's locale (`present.ts`), so a tag it cannot read is
+ * refused at the builder, never met at the first label.
+ */
+function isLanguageTag(value: string): boolean {
+  try {
+    return Intl.getCanonicalLocales(value).length === 1;
+  } catch {
+    return false;
+  }
+}
+
 /** Why `value` is not a {@link TimeReader}, or `undefined` when it is one. */
 export function readerIssue(value: unknown): string | undefined {
   if (value === null || typeof value !== 'object') {
@@ -153,7 +166,9 @@ export function readerIssue(value: unknown): string | undefined {
   const r = value as Record<string, unknown>;
   if (!nonEmpty(r.id)) return 'reader.id must be a non-empty string';
   if (!nonEmpty(r.version)) return 'reader.version must be a non-empty string';
-  if (!nonEmpty(r.locale)) return "reader.locale must be a language tag such as 'en-US'";
+  if (!nonEmpty(r.locale) || !isLanguageTag(r.locale)) {
+    return "reader.locale must be a language tag such as 'en-US'";
+  }
   if (r.kind !== 'rule' && r.kind !== 'model') return "reader.kind must be 'rule' or 'model'";
   if (typeof r.read !== 'function') return 'reader.read must be a function';
   return undefined;

@@ -43,6 +43,7 @@ import { isTimeRange, type TimeRange } from './range.js';
 import { isZoneName, type ZoneName } from './zone.js';
 import { readerIssue, type TimeReader } from './reader.js';
 import { readPolicy, type TimePolicy } from './resolve.js';
+import { readTimeAskMessages, type TimeAskMessages } from './ask.js';
 
 // ─── The shapes ─────────────────────────────────────────────────────────
 
@@ -106,6 +107,12 @@ export interface TimeOptions {
     readonly dateOrder?: TimePolicy['dateOrder'];
     readonly year?: TimePolicy['year'];
   };
+  /**
+   * Your words for the time ask (`defaultTimeAskMessages` keys → sentence):
+   * the reason a refused time answer is re-asked with, the ask's questions,
+   * the label on a reading to confirm. A key you leave out keeps the default.
+   */
+  readonly messages?: Partial<TimeAskMessages>;
 }
 
 /** {@link RunTime} as read: every value checked and kept as written, a `Date` spelled in UTC. */
@@ -120,6 +127,8 @@ export interface ReadTimeOptions {
   readonly zone?: ZoneName;
   readonly reader?: TimeReader;
   readonly policy?: TimePolicy;
+  /** The app's catalog overrides — every key one the catalog has. */
+  readonly messages?: Partial<TimeAskMessages>;
 }
 
 /** What a turn's clock is before seed knows the turn's start. */
@@ -136,7 +145,7 @@ export type Read<T> = { readonly value: T } | { readonly problem: string };
 // ─── Reading the two inputs ──────────────────────────────────────────────
 
 const RUN_KEYS: readonly string[] = ['now', 'zone', 'window'];
-const OPTION_KEYS: readonly string[] = ['zone', 'reader', 'policy'];
+const OPTION_KEYS: readonly string[] = ['zone', 'reader', 'policy', 'messages'];
 
 function isPlainObject(value: unknown): value is Record<string, unknown> {
   if (value === null || typeof value !== 'object' || Array.isArray(value)) return false;
@@ -233,12 +242,12 @@ export function readRunTime(value: unknown): Read<ReadRunTime | undefined> {
 export function readTimeOptions(value: unknown): Read<ReadTimeOptions> {
   if (value === undefined) return { value: {} };
   if (!isPlainObject(value)) {
-    return { problem: 'options must be an object — { zone?, reader?, policy? }' };
+    return { problem: 'options must be an object — { zone?, reader?, policy?, messages? }' };
   }
   const extra = unknownKeys(value, OPTION_KEYS);
   if (extra.length > 0) {
     return {
-      problem: `options take { zone?, reader?, policy? } — unknown key ${extra
+      problem: `options take { zone?, reader?, policy?, messages? } — unknown key ${extra
         .map((k) => `'${k}'`)
         .join(', ')}`,
     };
@@ -249,13 +258,21 @@ export function readTimeOptions(value: unknown): Read<ReadTimeOptions> {
     if ('problem' in read) return read;
     zone = read.value;
   }
+  let messages: Partial<TimeAskMessages> | undefined;
+  if (value.messages !== undefined) {
+    const read = readTimeAskMessages(value.messages);
+    if ('problem' in read) return read;
+    messages = read.value;
+  }
   if (value.reader === undefined) {
     // A policy with no reader has nothing to choose among — it would look
     // configured and do nothing.
     if (value.policy !== undefined) {
       return { problem: "policy chooses among a reader's readings — arm a reader with it" };
     }
-    return { value: zone !== undefined ? { zone } : {} };
+    return {
+      value: { ...(zone !== undefined && { zone }), ...(messages !== undefined && { messages }) },
+    };
   }
   const issue = readerIssue(value.reader);
   if (issue !== undefined) return { problem: issue };
@@ -266,6 +283,7 @@ export function readTimeOptions(value: unknown): Read<ReadTimeOptions> {
       ...(zone !== undefined && { zone }),
       reader: value.reader as TimeReader,
       policy,
+      ...(messages !== undefined && { messages }),
     },
   };
 }

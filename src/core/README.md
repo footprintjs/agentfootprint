@@ -91,6 +91,29 @@ const collect = defineTool({
 //     else if (out.awaitingInput.repeat) show 'Your previous answer was not accepted.'
 ```
 
+**A time field is checked by the library (the time layer, step T4).** A field
+with `format: 'instant' | 'time-range' | 'zone'` (refused unless
+`type: 'string'`) is judged at the resume door by the time layer's one judge
+(`time/ask.ts` · `checkTimeAnswer`, called from `inputRequest.ts` ·
+`applyInputResponse`): an answer with no offset, out of order, not a range or
+not a zone — and, under `.time()`, a wall time the person's zone skips — is NOT
+taken. `Agent.resume` returns the same ask with `refused: { answer, reason }`
+(the reason a catalog sentence, `defaultTimeAskMessages`, overridable through
+`.time({ messages })`) and `repeat: { count }`, the field `missing` again, and
+runs nothing. `labels` name each `enum` choice; a `format` field's choices keep
+free entry open unless `strict`. The same field is carried over MCP by
+`lib/mcp/elicitation.ts` (a range as two `date-time` properties).
+
+```ts
+requestInput({
+  id: 'window',
+  question: 'Which window should the search cover?',
+  fields: [{ id: 'window', type: 'string', format: 'time-range' }],
+});
+// resume with { window: '2026-10-09T08:40-07:00/2026-10-09T08:00-07:00' } →
+// awaitingInput.refused.reason === 'The start 2026-10-09T08:40-07:00 is not before the end 2026-10-09T08:00-07:00.'
+```
+
 Pinned by `test/core/scenario/input-request-refusal.test.ts`.
 
 ## A batch that pauses settles its un-dispatched siblings (9.113.0)

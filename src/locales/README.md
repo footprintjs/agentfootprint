@@ -12,3 +12,7 @@ seam where its facts are known, never looked up by key here.
 
 ## Files
 - `index.ts` — the catalogs and the merge.
+- `timeAsk.ts` — the time ask's sentences (`defaultTimeAskMessages`): a refused
+  time answer's reason, the ask's questions, the label on a reading to confirm.
+  A PERSON reads them on a re-ask; an app overrides keys through
+  `.time({ messages })`.

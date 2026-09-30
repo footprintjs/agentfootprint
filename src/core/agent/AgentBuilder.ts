@@ -2152,6 +2152,13 @@ export class AgentBuilder {
    *   default, or `'current'`); a pick is recorded as assumed. A
    *   `kind: 'model'` reader's window is never taken as the person's words:
    *   it waits for the person to confirm it.
+   * - **The time ask checks the answer** (a `requestInput` field with a
+   *   `format`: `'instant'`, `'time-range'` or `'zone'`). A resume whose answer
+   *   has no offset, ends before it starts, names no zone, or — under
+   *   `.time()`, which knows the person's zone — writes a wall time the clocks
+   *   skip is not taken: the ask comes back with `refused: { answer, reason }`
+   *   and `repeat: { count }`, and nothing runs. The reason is a catalog
+   *   sentence (`defaultTimeAskMessages`); `messages` overrides any key.
    *
    * Off → nothing is filed, read or rendered differently, and `time` on a run
    * is refused (a door that ignored it would look configured and do nothing).
