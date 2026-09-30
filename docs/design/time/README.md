@@ -985,7 +985,7 @@ deterministic and are measured over retained recorded runs or unit tables, with 
 | T5b | **Widening and pre-dispatch refusals** — *landed; implementation note T5b below* | the inexact rows of § 7.2 (the covering look-back, `day` wider, `filtersToAsked`), the dispatch drift § 7.4, the refusals (outside `direction`, wholly beyond `retention`, over `maxRange`, a multi-day range to a `day` tool, a `wall` DST gap), `partly-beyond-retention` | a tool's new `period` fields | T5a | every inexact row of § 7.2 and every row of § 7.4; a range half inside `retention` dispatches; a future window to a `past` tool is refused with the reason | $0 |
 | T6b | **The English default and the paid bench** — *landed (the bench not yet run); implementation note T6b below — owner decision "Always confirm" (TQ29): every chat reading is proposed and confirmed, never said* | `englishTimeReader` (a tokenizer; the v1 rows of § 5.3), the served sentence (TQ13), the lazy ask wired to real words | `.time({ reader: englishTimeReader() })` | T5b | the host's field sentences as the table ("10/09/26 8 AM to 8:40 AM PST" → a zone ask for `PST`, "yesterday", a future date); every non-v1 row of § 5.3 reads "unreadable" | **paid**: the provoking set — calls with the right window, and absolute windows asked of a look-back-only tool (wrong-window answers, armed vs unarmed); needless-ask rate on controls |
 | T7 | **Evidence lineage at grain** — *landed; implementation note T7 below* | `forms.ts` · `timeFormsOf` with its `said` and `derived` lists; the lineage kind `derived-from-reading`; the gate asks it; the private table from `fix/person-values-normalized` retires | `.time()` | T6b; `fix/person-values-normalized` landed first (TQ25) | "8 AM" vs `8:00`/`08:00` → `said`; a corrected abbreviation, an implied year, `-07:00`, `08:41`, the served sentence echoed → `derived-from-reading`, never "known"; a time no reading produced still fails; the landed fix's cases still pass after it retires | $0 over retained recordings: false "not traced" on time values |
-| T8 | **Result checks** — *landed (the bench not yet run); implementation note T8 below* | `period-differs-from-asked { missing, extra }`, `period-shifted`, `period-beyond-retention`, `clocks-differ` (declared wall-clock zones, a label); fold reasons; limits lines | the results layer + `.time()` | T5b, T3 | a tool clamping 30d to 7d (`missing`); a covering look-back (`extra`); a look-back after a 30-minute pause (both); an inclusive `queried.to == asked.to − 1 step` reads as covered; `Z` vs `-07:00` periods raise no `clocks-differ` | **paid**: false "not sure" rate on correct answers (Q33's cell R3 method) |
+| T8 | **Result checks** — *landed; the bench ran (NOT-MEASURABLE, implementation note T8 (8))* | `period-differs-from-asked { missing, extra }`, `period-shifted`, `period-beyond-retention`, `clocks-differ` (declared wall-clock zones, a label); fold reasons; limits lines | the results layer + `.time()` | T5b, T3 | a tool clamping 30d to 7d (`missing`); a covering look-back (`extra`); a look-back after a 30-minute pause (both); an inclusive `queried.to == asked.to − 1 step` reads as covered; `Z` vs `-07:00` periods raise no `clocks-differ` | **paid**: false "not sure" rate on correct answers (Q33's cell R3 method) |
 | T9a | **Lens** (lens repo) | the rows of § 10.6 | the lens's own | T8; floor = the af release that ships T8 | lens fixtures per row kind | $0 |
 | T9b | **Host panel** (host repo) | the rules of § 10.3, `time.window` from a brush | the host's own | T2, T3, T5a; floor = the af release that ships T5a | the panel's hand count | $0 |
 | T9c | **Metrics dashboard** (host repo) | the mapping of § 10.5 | the host's own | T5b; floor = the af release that ships T5b | the dashboard reads a tool's `period` instead of its table | $0 |
@@ -1579,7 +1579,18 @@ deterministic and are measured over retained recorded runs or unit tables, with 
   opens by naming its source (`TIME_LIMITS_SOURCE`: a note from the library, not from the person —
   answer the person directly): the channel is a `user` message, and the bench's first paid rounds
   showed an unmarked line answered as the person's correction ("You're right"). Pinned by
-  `test/core/time/limits-served.test.ts` and its row in `test/modelFacingSurfaces.test.ts`.
+  `test/core/time/limits-served.test.ts` and its row in `test/modelFacingSurfaces.test.ts`. (8) **The bench** (`bench/time-checks/`, rule `time-rule-t8`,
+  Haiku 4.5, arm off = the build before T8): round 2 (`bench/time/runs/t8`, 360 runs, $1.19) is
+  NOT-MEASURABLE — every gated clause passed but A1 (claims past what was read), whose baseline
+  claimed past on 13/79 answered provoking runs, under the registered 0.20 provocation floor. The
+  fold agreed with the truth on 179/180 `on` runs (0/180 `off`), no T8 "not sure" on 75 covered
+  reads, clocks labelled 17/17 and never on offsets (0/20), the line served on 104/104 checked
+  runs, ×1.05 input tokens per call. Two things the rule does not gate: the baseline standing was
+  already "not sure" on 105/106 missing-truth runs (the model writes its own bounds, so
+  `argument-unverified` fires) — T8 adds the REASON, not the word; and after a pause the served
+  "shifted window" line did not stop claims ("1 error in the last 30 minutes": 11/20 on vs 6/20
+  off). TQ8's F rests on one run (1/1) — no decision. Rounds 0 and 1 were stopped at 41 and 46
+  runs for the line's voice (answered as the person's correction) and a harness store bug.
 
 **Why this order.** T1 settles the grammar every other step leans on and is free. T2 is already
 written and only needs rebasing and the value check. T3 gives the first visible win (the limits
