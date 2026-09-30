@@ -179,9 +179,30 @@ describe('every non-v1 phrase reads "unreadable" — the whole phrase, never a p
     ['since 8 AM', 'since 8 AM'], // a modifier changes a v1 phrase
     ['around 8:40', 'around 8:40'],
     ['earlier today', 'earlier today'],
-    ['from 8 AM to now', '8 AM to now'],
+    ['from 8 AM to now', 'from 8 AM to now'],
     ['at noon', 'noon'],
     ["at 8 o'clock", "8 o'clock"],
+    // A range whose other side is no v1 time — the v1 side alone would narrow the window.
+    ['8:40 AM till 9', '8:40 AM till 9'],
+    ['yesterday 8:40 PM to 9', 'yesterday 8:40 PM to 9'],
+    ['8 to 9:30', '8 to 9:30'],
+    ['between 8 and 9:30', 'between 8 and 9:30'],
+    ['between 8:30 and 9', '8:30 and 9'],
+    ['8-9:30', '8-9:30'],
+    ['14:00 to 16', '14:00 to 16'],
+    ['8 and 9 AM', '8 and 9 AM'],
+    ['10/9-12', '10/9-12'],
+    // More modifiers that change a v1 phrase.
+    ['from 3 PM yesterday', 'from 3 PM yesterday'], // `from` with no `to`: a start, not an hour
+    ['past 8 PM', 'past 8 PM'],
+    ['prior to 8 AM', 'prior to 8 AM'],
+    ['up to 8 AM', 'up to 8 AM'],
+    ['no later than 8 AM', 'no later than 8 AM'],
+    ['starting 8 AM', 'starting 8 AM'],
+    ['8 AM-ish', '8 AM-ish'],
+    // A meridiem the number contradicts — never the time with the meridiem dropped.
+    ['at 13:00 PM', '13:00 PM'],
+    ['at 13 PM', '13 PM'],
   ];
   for (const [text, quote] of table) {
     it(`“${text}” → unreadable “${quote}”`, () => {
@@ -276,7 +297,6 @@ describe('the field sentences — parts, then resolve, the policy and the ask', 
 describe('boundary', () => {
   it('impossible clock times are not read; an impossible date resolves to nothing', () => {
     expect(read('at 25:00').mentions).toEqual([]);
-    expect(read('at 13 PM').mentions).toEqual([]);
     expect(read('at 8:61').mentions).toEqual([]);
     const [m] = read('on 02/30/26').mentions;
     expect(resolveMention(m!.parses, CLOCK, RULE).candidates).toEqual([]);
@@ -286,6 +306,24 @@ describe('boundary', () => {
     expect(read('8 servers').mentions).toEqual([]);
     expect(read('8 to 9 AM').mentions[0]!.parses).toEqual([
       { rangeOf: [{ wall: { h: 8 } }, { wall: { h: 9, meridiem: 'am' } }] },
+    ]);
+  });
+
+  it('a dangling connector taints only its own phrase; `from … to` and `from <day>` still read', () => {
+    expect(read('8 AM and 9 AM').mentions.map((m) => m.parses)).toEqual([
+      [{ wall: { h: 8, meridiem: 'am' } }],
+      [{ wall: { h: 9, meridiem: 'am' } }],
+    ]);
+    expect(read('9 AM and 3 retries').mentions).toEqual([
+      { quote: '9 AM', parses: [{ wall: { h: 9, meridiem: 'am' } }] },
+    ]);
+    expect(read('from 8 AM to 9 AM').mentions[0]).toMatchObject({ quote: '8 AM to 9 AM' });
+    expect(read('from 8 AM to 9 AM').mentions[0]!.problem).toBeUndefined();
+    expect(read('logs from yesterday').mentions).toEqual([
+      { quote: 'yesterday', parses: [{ relative: { unit: 'day', offset: -1 } }] },
+    ]);
+    expect(read('errors 500-503 yesterday').mentions).toEqual([
+      { quote: 'yesterday', parses: [{ relative: { unit: 'day', offset: -1 } }] },
     ]);
   });
 

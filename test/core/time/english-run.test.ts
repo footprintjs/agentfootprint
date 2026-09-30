@@ -348,6 +348,34 @@ describe('phrases v1 does not read — one unreadable row, no window ask', () =>
   }
 });
 
+describe('a range the reader reads only half of — never a silent narrower window', () => {
+  for (const [message, quote] of [
+    ['Show client activity yesterday 8:40 PM to 9', 'yesterday 8:40 PM to 9'],
+    ['Show client activity yesterday 14:00 to 16', 'yesterday 14:00 to 16'],
+  ] as const) {
+    it(`"${quote}" → one unreadable row; the tool never runs on a one-minute window`, async () => {
+      const seen: Record<string, unknown>[] = [];
+      const { agent, requests } = build(
+        [call('c1', 'client_activity', {}), answer('ok')],
+        [epochTool(seen)],
+        (b) => b.time({ zone: LA, reader }),
+      );
+      const first = paused(await agent.run({ message, time: { now: NOW } }));
+      expect(seen).toEqual([]);
+      expect(ofKind(agent, 'time-reading')).toMatchObject([
+        { quote, problem: 'unreadable', choice: { by: 'none', why: 'unreadable' } },
+      ]);
+      expect(first.awaitingInput.fields.map((f) => f.description)).toEqual([
+        'From when?',
+        'Until when?',
+      ]);
+      // Nothing settled, so nothing is served as a reading.
+      const activity = (requests[0]!.tools ?? []).find((t) => t.name === 'client_activity')!;
+      expect(activity.description).toBe('Client operations over a window.');
+    });
+  }
+});
+
 describe('a future date to a `past` tool — refused before dispatch', () => {
   it('"10/20/26" under MDY is refused with the reason, and the tool never runs', async () => {
     const seen: Record<string, unknown>[] = [];

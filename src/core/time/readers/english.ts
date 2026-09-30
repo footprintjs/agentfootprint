@@ -33,9 +33,13 @@
  * look-back cannot take (`last 3 months`), a look-ahead (`next 2 hours`), an
  * ordinal day (`the 9th`), `8 o'clock`, and any v1 phrase a modifier changes
  * (`since 8 AM`, `before yesterday`, `around 8:40`, `earlier today`,
- * `8 AM to now`). Such a phrase is ONE mention with `problem: 'unreadable'`,
- * quoting the whole phrase: reading `yesterday` out of `yesterday morning`
- * would silently widen what the person said.
+ * `8 AM to now`, `past 8 PM`, `8 AM-ish`, `from 3 PM yesterday` with no `to`), a
+ * range whose other side is no v1 time (`8 to 9:30`, `8:40 AM till 9`,
+ * `8 and 9 AM`), and a meridiem the number contradicts (`13:00 PM`). Such a
+ * phrase is ONE mention with `problem: 'unreadable'`, quoting the whole
+ * phrase: reading `yesterday` out of `yesterday morning` would silently widen
+ * what the person said, and reading `8:40 AM` out of `8:40 AM till 9` would
+ * silently narrow it.
  *
  * A numeric date the tokens could split two ways stays ONE parse — `10/09/26`
  * is three numbers; which is the month is the policy's or the person's.
@@ -129,14 +133,38 @@ const NOT_READ: readonly RegExp[] = [
   /\bon\s+the\s+\d{1,2}(?:st|nd|rd|th)\b/gi,
   /\bthe\s+\d{1,2}(?:st|nd|rd|th)\s+of\b/gi,
   /\b\d{1,2}\s*o['’]?\s?clock\b/gi,
+  // A meridiem on a number that is no 12-hour time (`13:00 PM`, `0 AM`): the words contradict.
+  /(?<![\w:.+/])\d{1,2}(?::\d{2}){0,2}\s?(?:am|pm|a\.m\.|p\.m\.)(?![a-z])/gi,
 ];
 
 /** A word right before a phrase that changes what it means: the phrase is not read. */
-const MODIFIER_BEFORE =
-  /(?:^|[^\w])(since|before|after|by|around|circa|approx(?:imately)?|until|till|earlier|later|early|late|within|~)\s*$/i;
+const MODIFIER_BEFORE = new RegExp(
+  '(?:^|[^\\w])(since|before|after|by|around|circa|approx(?:imately)?|until|till|earlier|later|' +
+    'early|late|within|past|beyond|prior\\s+to|up\\s+to|no\\s+(?:later|earlier|sooner)\\s+than|' +
+    'as\\s+of|(?:starting|beginning)(?:\\s+(?:at|from|on))?|~)\\s*$',
+  'i',
+);
+/** `from` with no `to`: a time after it is where a window STARTS (`from 3 PM yesterday`), not an hour. */
+const FROM_BEFORE = /(?:^|[^\w])(from)\s*$/i;
 /** …and right after it. */
 const MODIFIER_AFTER =
-  /^\s*(?:ago\b|onwards?\b|ish\b|or\s+so\b|or\s+(?:later|earlier)\b|(?:to|until|till|through|thru|-|–|—)\s*now\b)/i;
+  /^(?:\s*-?\s*ish\b|\s*(?:ago\b|onwards?\b|or\s+so\b|(?:or|and)\s+(?:later|earlier|after|before)\b|at\s+the\s+(?:latest|earliest)\b|(?:to|until|till|through|thru|-|–|—)\s*now\b))/i;
+
+/**
+ * A range connector with a number on its far side, next to a phrase — a range
+ * whose other side is no v1 time (`8 to 9:30`, `8:40 AM till 9`, `14:00 to 16`).
+ * Reading the v1 side alone would narrow what the person said, so the whole
+ * phrase is one unreadable mention.
+ */
+const DANGLING_BEFORE =
+  /(?:\bbetween\s+)?(?<![\w:./])\d{1,2}(?::\d{2})?\s*(?:(?:to|until|till|through|thru)\s*|[-–—]\s*)$/i;
+const DANGLING_AFTER =
+  /^\s*(?:(?:to|until|till|through|thru)\b|[-–—])\s*\d{1,2}(?::\d{2})?(?![\w:]|\.\d)/i;
+/** …`and` says "range" only beside a clock time: `8 and 9 AM`, `between 8:30 and 9`. */
+const DANGLING_AND_BEFORE = /(?:\bbetween\s+)?(?<![\w:./])\d{1,2}(?::\d{2})?\s+and\s+$/i;
+/** Without `between`, `9 AM and 3 retries` is two things — a word after the number says so. */
+const DANGLING_AND_AFTER = /^\s+and\s+\d{1,2}(?::\d{2})?(?![\w:]|\.\d)(?!\s*[a-z])/i;
+const DANGLING_AND_AFTER_BETWEEN = /^\s+and\s+\d{1,2}(?::\d{2})?(?![\w:]|\.\d)/i;
 
 // ─── The v1 phrases ──────────────────────────────────────────────────────
 
@@ -172,7 +200,11 @@ const WALL_MERIDIEM = new RegExp(
   `${TIME_NOT_AFTER}(\\d{1,2})(?::(\\d{2})(?::(\\d{2}))?)?\\s?(am|pm|a\\.m\\.|p\\.m\\.)(?![a-z])`,
   'gi',
 );
-const WALL_COLON = new RegExp(`${TIME_NOT_AFTER}(\\d{1,2}):(\\d{2})(?::(\\d{2}))?(?![\\d:])`, 'g');
+const WALL_COLON = new RegExp(
+  // A meridiem after it is `WALL_MERIDIEM`'s — or, when that refuses it (`13:00 PM`), unreadable.
+  `${TIME_NOT_AFTER}(\\d{1,2}):(\\d{2})(?::(\\d{2}))?(?![\\d:])(?!\\s?(?:am|pm|a\\.m\\.|p\\.m\\.)(?![a-z]))`,
+  'gi',
+);
 /** A bare hour — a time only as a range's first side whose second side carries a meridiem. */
 const BARE_HOUR = new RegExp(
   `${NOT_AFTER}(\\d{1,2})(?=\\s*(?:to|until|till|through|thru|and|-|–|—)\\s*` +
@@ -443,13 +475,59 @@ function groupsOf(text: string, atoms: readonly Atom[], notRead: readonly Span[]
       unreadable: item.atom === undefined,
     });
   }
+  for (const group of groups) widenForDangling(text, group);
   for (const group of groups) widenForModifiers(text, group);
-  return groups.filter((g) => g.unreadable || g.items.some((i) => i.atom?.kind !== 'bare'));
+  return mergeOverlaps(groups).filter(
+    (g) => g.unreadable || g.items.some((i) => i.atom?.kind !== 'bare'),
+  );
+}
+
+const DANGLING_REACH = 64;
+
+/** A range connector left dangling beside a phrase, a number past it: the whole phrase is not read. */
+function widenForDangling(text: string, group: Group): void {
+  // A dangling side is a few characters long: look only that far, so a long text stays linear.
+  const from = Math.max(0, group.start - DANGLING_REACH);
+  const head = text.slice(from, group.start);
+  const tail = text.slice(group.end, group.end + DANGLING_REACH);
+  const clock = group.items.some((i) => i.atom?.wall !== undefined);
+  const between = /\bbetween\s+$/i.test(head);
+  const before = DANGLING_BEFORE.exec(head) ?? (clock ? DANGLING_AND_BEFORE.exec(head) : null);
+  if (before !== null) {
+    group.start = from + before.index;
+    group.unreadable = true;
+  }
+  const andAfter = between ? DANGLING_AND_AFTER_BETWEEN : DANGLING_AND_AFTER;
+  const after = DANGLING_AFTER.exec(tail) ?? (clock ? andAfter.exec(tail) : null);
+  if (after !== null) {
+    group.end += after[0].length;
+    group.unreadable = true;
+  }
+}
+
+/** Groups a widening made overlap are one phrase (`8 and 9 AM` held the bare `8` on its own). */
+function mergeOverlaps(groups: readonly Group[]): Group[] {
+  const out: Group[] = [];
+  for (const group of [...groups].sort((a, b) => a.start - b.start)) {
+    const last = out[out.length - 1];
+    if (last !== undefined && group.start < last.end) {
+      last.items.push(...group.items);
+      last.end = Math.max(last.end, group.end);
+      last.unreadable = true;
+      continue;
+    }
+    out.push(group);
+  }
+  return out;
 }
 
 /** A modifier before or after a v1 phrase changes it: the whole phrase is not read. */
 function widenForModifiers(text: string, group: Group): void {
-  const before = MODIFIER_BEFORE.exec(text.slice(0, group.start));
+  const head = text.slice(0, group.start);
+  const clock = group.items.some((i) => i.atom?.wall !== undefined);
+  const before =
+    MODIFIER_BEFORE.exec(head) ??
+    (group.rangeAt === undefined && clock ? FROM_BEFORE.exec(head) : null);
   if (before !== null) {
     group.start = before.index + before[0].lastIndexOf(before[1] as string);
     group.unreadable = true;
