@@ -153,7 +153,7 @@ describe('one call', () => {
     });
   });
 
-  it('fills nothing with no window, with two mentions, or with no exact form', () => {
+  it('fills nothing with no window, with two mentions, or with no form that holds it', () => {
     expect(callWindowOf(call({}), none, CTX)).toEqual({ how: 'not-filled', why: 'no-window' });
     expect(callWindowOf(call({}), two, CTX)).toEqual({
       how: 'not-filled',
@@ -163,8 +163,17 @@ describe('one call', () => {
       ...call({}),
       forms: [{ kind: 'lookback', argument: 'w', signed: false } as PeriodForm],
     };
-    const yesterday = turnWindowsOf([reading(0, 1, 'yesterday 8 to 8:40', YESTERDAY)], clock());
-    expect(callWindowOf(lookbackOnly, yesterday, CTX)).toEqual({
+    // A window still to come: no look-back reaches it, exactly or widened (step T5b widens a past one).
+    const tomorrow = turnWindowsOf(
+      [
+        reading(0, 1, 'tomorrow 8 to 8:40', {
+          from: '2026-10-10T08:00:00-07:00',
+          to: '2026-10-10T08:41:00-07:00',
+        }),
+      ],
+      clock(),
+    );
+    expect(callWindowOf(lookbackOnly, tomorrow, CTX)).toEqual({
       how: 'not-filled',
       why: 'no-exact-form',
     });

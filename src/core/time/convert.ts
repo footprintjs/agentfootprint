@@ -34,11 +34,25 @@
  * | a look-back | `bounds` / `joined` / `object` | `[now − L, now)` in that `as` | |
  * | a range | `bounds` / `joined` / `object`, `as` `iso` · `epoch-ms` · `epoch-s` | the range; a `to` bound per its `edge` | `epoch-s` rounds outward to whole seconds: `rounded` |
  * | a range | `as: 'wall'` / `'date'` + a zone | the wall times (dates) in the zone | exact only when the tool reads back the same instants (no doubled hour; a date only at midnights) |
- * | a whole day | `day` | that day | any other range is not exact (the wider row is T5b's) |
+ * | a whole day | `day` | that day | any other range is not exact — see the inexact rows |
  * | a range ending at now (within `granularity`) | `lookback` | the smallest spelling in `units` that covers `from` | `rounded` when it is longer |
  *
  * Every other row of § 7.2 is not exact, and {@link convertExact} answers
- * `undefined` for it — the widening and the refusals are the next step's.
+ * `undefined` for it.
+ *
+ * ## The inexact rows (§ 7.2, step T5b) — what {@link convertWidened} sends
+ *
+ * | Asked | Form | Sent | Reads |
+ * |-------|------|------|-------|
+ * | a range inside one calendar day (in the form's zone) | `day` | that day | the whole day — the rest of it is `extra` |
+ * | a range ending before now (past the tool's step) | `lookback` | the covering look-back from now, in the form's units | `[now − L, now]` — the gap after the range (and any rounding before it) is `extra` |
+ *
+ * A form whose read would be wider than the tool's `maxRange` is skipped.
+ * The refusals are tests the binding asks: a range across days when every
+ * form is a `day` ({@link spansDaysForDayOnly}), a sent wall time the zone
+ * skips ({@link wallGapArgument}), and the facts ({@link periodFactProblem};
+ * a range only partly older than `retention` runs —
+ * {@link partlyBeyondRetention}).
  *
  * ## Precision and the inclusive edge
  *
@@ -778,6 +792,180 @@ export function convertExact(
   return undefined;
 }
 
+// ─── The inexact rows (§ 7.2, step T5b) ──────────────────────────────────
+
+/**
+ * One conversion that holds MORE than the window: the form, the values, the
+ * range the tool reads with them (`sent`, half-open) and the parts of it the
+ * window did not ask for (`extra` — one or two ranges, in time order).
+ */
+export interface WidenedConversion extends Conversion {
+  readonly sent: TimeRange;
+  readonly extra: readonly TimeRange[];
+}
+
+/** The parts of `[sentFrom, sentTo)` outside `[from, to)`, in time order. */
+function extraOf(sentFrom: number, sentTo: number, from: number, to: number): TimeRange[] {
+  const parts: TimeRange[] = [];
+  const before = from > sentFrom ? spanRange(sentFrom, from) : undefined;
+  const after = sentTo > to ? spanRange(to, sentTo) : undefined;
+  if (before !== undefined) parts.push(before);
+  if (after !== undefined) parts.push(after);
+  return parts;
+}
+
+/** The calendar date an instant falls on in `zone`. */
+function dateAt(zone: ZoneName, ms: number) {
+  const wall = wallAt(zone, ms);
+  return { year: wall.year, month: wall.month, day: wall.day };
+}
+
+/** A `day` form widened: the one calendar day that holds the whole window. */
+function dayWidened(
+  window: WindowToConvert,
+  form: Extract<PeriodForm, { kind: 'day' }>,
+  ctx: ConvertContext,
+): Omit<WidenedConversion, 'form'> | undefined {
+  const zone = formZone(form, ctx);
+  const span = absoluteOf(window, ctx.now);
+  if (zone === undefined || span === undefined) return undefined;
+  const [from, to] = span;
+  const date = dateAt(zone, from.ms);
+  if (spellDate(dateAt(zone, to.ms - 1)) !== spellDate(date)) return undefined;
+  const start = midnightOf(date, zone);
+  const end = midnightOf(nextDay(date), zone);
+  if (start === undefined || end === undefined) return undefined;
+  const sent = spanRange(start, end);
+  if (sent === undefined) return undefined;
+  const zoneValue = form.zone !== undefined ? { [form.zone.argument]: ctx.zone } : {};
+  return {
+    values: { [form.argument]: spellDate(date), ...zoneValue },
+    sent,
+    extra: extraOf(start, end, from.ms, to.ms),
+  };
+}
+
+/**
+ * A `lookback` form widened: a range that ENDS BEFORE now (past the tool's
+ * step) is covered by the look-back from now that reaches its `from` — the
+ * smallest length in the form's units. A range ending at now is the exact
+ * row's; one ending after it no look-back can hold.
+ */
+function lookbackWidened(
+  window: WindowToConvert,
+  form: Extract<PeriodForm, { kind: 'lookback' }>,
+  ctx: ConvertContext,
+): Omit<WidenedConversion, 'form'> | undefined {
+  if (window.lookback !== undefined) return undefined;
+  const now = msOf(ctx.now);
+  const from = msOf(window.range.from);
+  const to = msOf(window.range.to);
+  if (now === undefined || from === undefined || to === undefined) return undefined;
+  if (to.ms >= now.ms - ctx.granularityMs) return undefined;
+  const units = form.units ?? LOOKBACK_UNITS;
+  const finest = finestUnitMs(units);
+  const length = Math.ceil((now.ms - from.ms) / finest) * finest;
+  const spelled = spellDuration(length, units);
+  if (spelled === undefined) return undefined;
+  // The look-back reads `[now − L, now]`, both ends inside (`range.ts` · `lookbackRange`).
+  const sent = lookbackRange(ctx.now, spelled, units);
+  const sentTo = (msOf(sent.to) as Ms).ms;
+  return {
+    values: { [form.argument]: `${form.signed ? '-' : ''}${spelled}` },
+    sent,
+    extra: extraOf(now.ms - length, sentTo, from.ms, to.ms),
+  };
+}
+
+/**
+ * The first form (in declared order) that holds `window` by READING MORE than
+ * it — the inexact rows of § 7.2: a range inside one calendar day → that day
+ * (`day`); a range ending before now → the covering look-back from now
+ * (`lookback`). `widestMs` (the tool's `maxRange`) skips a form whose read
+ * would be wider than the tool reads at once. Asked only after
+ * {@link convertExact} found no exact form.
+ */
+export function convertWidened(
+  window: WindowToConvert,
+  forms: readonly PeriodForm[],
+  ctx: ConvertContext,
+  widestMs?: number,
+): WidenedConversion | undefined {
+  for (let i = 0; i < forms.length; i++) {
+    const form = forms[i] as PeriodForm;
+    const done =
+      form.kind === 'day'
+        ? dayWidened(window, form, ctx)
+        : form.kind === 'lookback'
+        ? lookbackWidened(window, form, ctx)
+        : undefined;
+    if (done === undefined || done.extra.length === 0) continue;
+    const sentFrom = msOf(done.sent.from) as Ms;
+    const sentTo = msOf(done.sent.to) as Ms;
+    if (widestMs !== undefined && sentTo.ms - sentFrom.ms > widestMs) continue;
+    return { form: i, ...done };
+  }
+  return undefined;
+}
+
+/**
+ * Whether every form is a `day` and the window spans more than one calendar
+ * day in the form's zone — the row § 7.2 refuses before dispatch: one call per
+ * day is the model's choice, not the library's.
+ */
+export function spansDaysForDayOnly(
+  window: WindowToConvert,
+  forms: readonly PeriodForm[],
+  ctx: ConvertContext,
+): boolean {
+  if (forms.length === 0 || !forms.every((f) => f.kind === 'day')) return false;
+  const span = absoluteOf(window, ctx.now);
+  if (span === undefined) return false;
+  return forms.every((f) => {
+    const zone = formZone(f, ctx);
+    if (zone === undefined) return false;
+    return spellDate(dateAt(zone, span[0].ms)) !== spellDate(dateAt(zone, span[1].ms - 1));
+  });
+}
+
+/**
+ * The first argument of `form` whose sent value is a wall time the zone
+ * SKIPS (a spring-forward gap) — the tool would read a time that never
+ * happened; refused before dispatch (§ 7.2). `undefined` when the form reads
+ * no wall bound, the zone is unknown, or every wall value exists.
+ */
+export function wallGapArgument(
+  args: Readonly<Record<string, unknown>>,
+  form: PeriodForm,
+  ctx: { readonly appZone?: ZoneName },
+): string | undefined {
+  if (form.kind === 'day' || form.kind === 'lookback') return undefined;
+  const sentZone = 'zone' in form && form.zone !== undefined ? args[form.zone.argument] : undefined;
+  const zone = formZone(form, {
+    zone: isZoneName(sentZone) ? sentZone : undefined,
+    ...(ctx.appZone !== undefined && { appZone: ctx.appZone }),
+  });
+  if (zone === undefined) return undefined;
+  const inGap = (value: unknown): boolean => {
+    const read = wallOf(value);
+    return read !== undefined && readWall(read.wall, zone).kind === 'gap';
+  };
+  if (form.kind === 'bounds') {
+    for (const bound of [form.from, form.to]) {
+      if (bound.as === 'wall' && inGap(args[bound.argument])) return bound.argument;
+    }
+    return undefined;
+  }
+  if (form.as !== 'wall') return undefined;
+  const value = args[form.argument];
+  if (form.kind === 'joined') {
+    if (typeof value !== 'string') return undefined;
+    return value.split(form.joiner).some(inGap) ? form.argument : undefined;
+  }
+  if (!isPlain(value)) return undefined;
+  return inGap(value[form.keys.from]) || inGap(value[form.keys.to]) ? form.argument : undefined;
+}
+
 // ─── Reading a sent value back ───────────────────────────────────────────
 
 /** A bound read back: the instant it names as a half-open end, in milliseconds. */
@@ -958,3 +1146,47 @@ export function periodFactProblem(
   if (widest !== undefined && to.ms - from.ms > widest) return 'over-max-range';
   return undefined;
 }
+
+/**
+ * Whether a half-open range is PARTLY older than what the source keeps — it
+ * starts before `now − retention` and ends after it. It dispatches as asked
+ * (§ 7.2); the result's `held` decides `partly-held`. `false` when the tool
+ * declares no `retention`.
+ */
+export function partlyBeyondRetention(
+  range: TimeRange,
+  facts: PeriodFacts,
+  now: InstantText,
+): boolean {
+  const retention =
+    facts.retention === undefined ? undefined : durationMs(facts.retention, FACT_UNITS);
+  const from = instantOf(range.from, 'strict');
+  const to = instantOf(range.to, 'strict');
+  const at = instantOf(now, 'strict');
+  if (retention === undefined || from === undefined || to === undefined || at === undefined) {
+    return false;
+  }
+  const oldest = at.ms - retention;
+  return from.ms < oldest && to.ms > oldest;
+}
+
+/** The widest window the tool reads at once (`maxRange`) in milliseconds, when it declares one. */
+export function widestMsOf(facts: PeriodFacts | undefined): number | undefined {
+  return facts?.maxRange === undefined ? undefined : durationMs(facts.maxRange, FACT_UNITS);
+}
+
+/**
+ * Why a call is refused before dispatch (§ 7.2, step T5b): one of the tool's
+ * facts ({@link PeriodFactProblem}), a range across days to a tool that reads
+ * one day (`multi-day`), or a wall time the zone skips (`dst-gap`).
+ */
+export type TimeRefusal = PeriodFactProblem | 'multi-day' | 'dst-gap';
+
+export const TIME_REFUSALS: readonly TimeRefusal[] = Object.freeze([
+  'time-future',
+  'time-past',
+  'beyond-retention',
+  'over-max-range',
+  'multi-day',
+  'dst-gap',
+]);

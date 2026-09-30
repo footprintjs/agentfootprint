@@ -8,7 +8,7 @@
  *          checkpoint door (`core/runCheckpoint.ts` · `ledgerRowIsWellFormed`)
  *          refuses exactly what the library never files.
  * Role:    core/ leaf (the time layer). Imports `instant.ts`, `zone.ts`,
- *          `range.ts`, `clock.ts`, `reader.ts`, `resolve.ts` and `bind.ts`' types only — the
+ *          `range.ts`, `clock.ts`, `reader.ts`, `resolve.ts`, `convert.ts` (the refusal codes) and `bind.ts`' types only — the
  *          rows are plain records the agent loop files (`stages/seed.ts`,
  *          `stages/toolCalls.ts`).
  * Emits:   N/A — the rows fire no event of their own (the `conflict` row's
@@ -21,8 +21,8 @@
  * |------|-------|---------|
  * | `clock` | once per turn, by seed | the turn's {@link TimeClock} and, when the run passed one, the `control` window |
  * | `clock-on-resume` | first thing in the resumed leg's ToolCalls stage — either pause shape: the pausable resume door, or the stage re-run an `interrupt()` pause makes — when a resume passed a `time` that differs from the kept clock | what was passed and what was kept — the kept clock still rules |
- * | `call` | once per dispatched call, just before the tool runs | `dispatchedAt`: the wall clock at dispatch (a look-back is evaluated by the TOOL at dispatch, which after a pause is later than `now`) |
- * | `call-window` | by the inputs layer, once per call to a tool that declares period forms, before it dispatches | which window the call carries: filled from the turn's one window, bound to one (by quote or value), the model's own (beside the person's when it differs), unread, or not filled and why |
+ * | `call` | once per dispatched call, just before the tool runs | `dispatchedAt`: the wall clock at dispatch (a look-back is evaluated by the TOOL at dispatch, which after a pause is later than `now`); `drift` when a look-back was sent more than the tool's step after `now` — `redrawn` into an absolute form, or `shifted` (§ 7.4, `drift.ts`) |
+ * | `call-window` | by the inputs layer, once per call to a tool that declares period forms, before it dispatches | which window the call carries: filled from the turn's one window (exactly, or wider — with what the read adds), bound to one (by quote or value), the model's own (beside the person's when it differs), unread, not filled and why, or refused before dispatch and why |
  * | `time-reading` | by seed, once per MENTION the armed reader (`.time({ reader })`) found in the person's message — or ONE row with `mentions: 0` when it found none, so a retry knows the message was read | the quote, the parts, every candidate `resolve.ts` made of them, how the reading settled (`choice`), the reader's id, version, kind and locale, and the tz database version; a refused mention keeps only why |
  *
  * Readers that switch over every row kind must skip one they do not know.
@@ -34,6 +34,7 @@ import { isZoneName, type ZoneName } from './zone.js';
 import { clockChange, type ClockChange, type ReadRunTime, type TimeClock } from './clock.js';
 import { isTimeParts, type CheckedMention, type MentionRefusal, type TimeParts } from './reader.js';
 import type { CallWindow, TurnWindow, WindowSource } from './bind.js';
+import { TIME_REFUSALS, type TimeRefusal } from './convert.js';
 import {
   candidateIsWellFormed,
   chooseReading,
@@ -81,7 +82,21 @@ export interface CallRow {
   readonly toolName: string;
   /** The wall clock when the library handed the call to the tool — UTC, millisecond precision. */
   readonly dispatchedAt: InstantText;
+  /**
+   * The clock at dispatch (§ 7.4, step T5b) — present only when the call sent
+   * a LOOK-BACK and `dispatchedAt − now` (`byMs`, signed) is more than the
+   * tool's step. `redrawn`: the library's own look-back fill was re-sent as
+   * the asked range in absolute form `form`; `shifted`: the look-back ran as
+   * sent (the model's value, or no absolute form), so the tool read a window
+   * shifted by `byMs` — `period-shifted`.
+   */
+  readonly drift?: CallDrift;
 }
+
+/** A look-back call's dispatch drift (§ 7.4) — see {@link CallRow.drift}. */
+export type CallDrift =
+  | { readonly byMs: number; readonly outcome: 'redrawn'; readonly form: number }
+  | { readonly byMs: number; readonly outcome: 'shifted' };
 
 /** The reader a reading came from, as recorded. */
 export interface TimeReaderStamp {
@@ -140,9 +155,15 @@ export interface PersonWindow extends TimeRange {
  * | `model` | the sent window, and no window of the person's this turn |
  * | `unread` | a period argument was sent and no form reads the call back as a range |
  * | `not-filled` | the period was left out and nothing was filled (`why`) — the tool's own rule applied |
+ * | `refused` | refused before dispatch (`refused`: a fact the window breaks, `multi-day`, `dst-gap` with its `argument`) — the call did not run |
  *
  * `asked` is the half-open range the call asks for: the person's on a fill,
  * the sent value read back otherwise — what `ctx.time.asked` hands the tool.
+ * A WIDENED fill (no form holds the window exactly — § 7.2) carries `sent`,
+ * the range the tool reads, and either `differs.extra` (the parts read but
+ * not asked — `period-differs-from-asked`) or `trimmedByTool` (the tool
+ * declares `filtersToAsked`). `partlyBeyondRetention` marks a window that
+ * starts before the source's oldest data and ends after it: it dispatched.
  */
 export interface CallWindowRow {
   readonly kind: 'call-window';
@@ -158,6 +179,17 @@ export interface CallWindowRow {
   readonly by?: 'quote' | 'value';
   readonly rounded?: true;
   readonly why?: 'no-window' | 'several-mentions' | 'open-reading' | 'no-exact-form';
+  /** A widened fill: the range the tool reads with the sent values. */
+  readonly sent?: TimeRange;
+  /** A widened fill the tool does not trim: the parts read but not asked. */
+  readonly differs?: { readonly extra: readonly TimeRange[] };
+  /** A widened fill to a tool that declares `filtersToAsked`. */
+  readonly trimmedByTool?: true;
+  readonly partlyBeyondRetention?: true;
+  /** Why the call was refused before dispatch. */
+  readonly refused?: TimeRefusal;
+  /** On a `dst-gap` refusal: the argument whose wall time the zone skips. */
+  readonly argument?: string;
 }
 
 /** Every time-layer row kind. */
@@ -193,6 +225,7 @@ export function callRow(
   call: { readonly toolCallId: string; readonly toolName: string },
   at: { readonly turn: number; readonly iteration: number },
   nowMs: number,
+  drift?: CallDrift,
 ): CallRow {
   return {
     kind: 'call',
@@ -201,6 +234,7 @@ export function callRow(
     toolCallId: call.toolCallId,
     toolName: call.toolName,
     dispatchedAt: new Date(nowMs).toISOString(),
+    ...(drift !== undefined && { drift }),
   };
 }
 
@@ -288,15 +322,28 @@ export function callWindowRow(
     toolName: call.toolName,
     how: decision.how,
   };
+  const partly =
+    'partlyBeyondRetention' in decision && decision.partlyBeyondRetention === true
+      ? { partlyBeyondRetention: true as const }
+      : {};
   switch (decision.how) {
-    case 'filled':
+    case 'filled': {
+      const c = decision.conversion;
+      const widened = 'sent' in c ? c : undefined;
       return {
         ...base,
-        form: decision.conversion.form,
+        form: c.form,
         asked: { from: decision.window.range.from, to: decision.window.range.to },
         person: personOf(decision.window),
-        ...(decision.conversion.rounded === true && { rounded: true as const }),
+        ...(c.rounded === true && { rounded: true as const }),
+        ...(widened !== undefined && { sent: widened.sent }),
+        ...(widened !== undefined &&
+          (decision.trimmedByTool === true
+            ? { trimmedByTool: true as const }
+            : { differs: { extra: widened.extra } })),
+        ...partly,
       };
+    }
     case 'bound':
       return {
         ...base,
@@ -304,6 +351,7 @@ export function callWindowRow(
         asked: decision.asked,
         person: personOf(decision.window),
         by: decision.by,
+        ...partly,
       };
     case 'model-chosen':
       return {
@@ -311,13 +359,23 @@ export function callWindowRow(
         form: decision.form,
         asked: decision.asked,
         ...(decision.person !== undefined && { person: personOf(decision.person) }),
+        ...partly,
       };
     case 'model':
-      return { ...base, form: decision.form, asked: decision.asked };
+      return { ...base, form: decision.form, asked: decision.asked, ...partly };
     case 'unread':
       return base;
     case 'not-filled':
       return { ...base, why: decision.why };
+    case 'refused':
+      return {
+        ...base,
+        refused: decision.refused,
+        ...(decision.form !== undefined && { form: decision.form }),
+        ...(decision.asked !== undefined && { asked: decision.asked }),
+        ...(decision.person !== undefined && { person: personOf(decision.person) }),
+        ...(decision.argument !== undefined && { argument: decision.argument }),
+      };
   }
 }
 
@@ -446,7 +504,7 @@ function isReadingRow(row: Readonly<Record<string, unknown>>): boolean {
   );
 }
 
-const HOWS = ['filled', 'bound', 'model-chosen', 'model', 'unread', 'not-filled'];
+const HOWS = ['filled', 'bound', 'model-chosen', 'model', 'unread', 'not-filled', 'refused'];
 const WHYS = ['no-window', 'several-mentions', 'open-reading', 'no-exact-form'];
 
 function isPersonWindow(value: unknown): boolean {
@@ -460,45 +518,108 @@ function isPersonWindow(value: unknown): boolean {
   );
 }
 
+function isRangeList(value: unknown): boolean {
+  return Array.isArray(value) && value.length >= 1 && value.length <= 2 && value.every(isTimeRange);
+}
+
+/** A widened fill's fields: `sent` with exactly one of `differs` / `trimmedByTool`, or none of the three. */
+function widenedOk(row: Readonly<Record<string, unknown>>): boolean {
+  if (row.sent === undefined) return row.differs === undefined && row.trimmedByTool === undefined;
+  if (!isTimeRange(row.sent)) return false;
+  if (row.trimmedByTool !== undefined)
+    return row.trimmedByTool === true && row.differs === undefined;
+  const differs = row.differs;
+  if (differs === null || typeof differs !== 'object' || Array.isArray(differs)) return false;
+  const d = differs as Record<string, unknown>;
+  return Object.keys(d).length === 1 && isRangeList(d.extra);
+}
+
 function isCallWindowRow(row: Readonly<Record<string, unknown>>): boolean {
   if (typeof row.toolCallId !== 'string' || typeof row.toolName !== 'string') return false;
   if (!HOWS.includes(row.how as string)) return false;
   const has = (k: string): boolean => row[k] !== undefined;
   const only = (...keys: string[]): boolean =>
-    ['form', 'asked', 'person', 'by', 'rounded', 'why'].every((k) => keys.includes(k) || !has(k));
+    [
+      'form',
+      'asked',
+      'person',
+      'by',
+      'rounded',
+      'why',
+      'sent',
+      'differs',
+      'trimmedByTool',
+      'partlyBeyondRetention',
+      'refused',
+      'argument',
+    ].every((k) => keys.includes(k) || !has(k));
   const formOk = isCount(row.form);
   const askedOk = isTimeRange(row.asked);
+  const partlyOk = row.partlyBeyondRetention === undefined || row.partlyBeyondRetention === true;
   switch (row.how) {
     case 'filled':
       return (
-        only('form', 'asked', 'person', 'rounded') &&
+        only(
+          'form',
+          'asked',
+          'person',
+          'rounded',
+          'sent',
+          'differs',
+          'trimmedByTool',
+          'partlyBeyondRetention',
+        ) &&
         formOk &&
         askedOk &&
         isPersonWindow(row.person) &&
-        (row.rounded === undefined || row.rounded === true)
+        (row.rounded === undefined || row.rounded === true) &&
+        widenedOk(row) &&
+        partlyOk
       );
     case 'bound':
       return (
-        only('form', 'asked', 'person', 'by') &&
+        only('form', 'asked', 'person', 'by', 'partlyBeyondRetention') &&
         formOk &&
         askedOk &&
         isPersonWindow(row.person) &&
-        (row.by === 'quote' || row.by === 'value')
+        (row.by === 'quote' || row.by === 'value') &&
+        partlyOk
       );
     case 'model-chosen':
       return (
-        only('form', 'asked', 'person') &&
+        only('form', 'asked', 'person', 'partlyBeyondRetention') &&
         formOk &&
         askedOk &&
-        (row.person === undefined || isPersonWindow(row.person))
+        (row.person === undefined || isPersonWindow(row.person)) &&
+        partlyOk
       );
     case 'model':
-      return only('form', 'asked') && formOk && askedOk;
+      return only('form', 'asked', 'partlyBeyondRetention') && formOk && askedOk && partlyOk;
     case 'unread':
       return only();
+    case 'refused':
+      return (
+        only('form', 'asked', 'person', 'refused', 'argument') &&
+        TIME_REFUSALS.includes(row.refused as TimeRefusal) &&
+        (row.form === undefined || formOk) &&
+        (row.asked === undefined || askedOk) &&
+        (row.person === undefined || isPersonWindow(row.person)) &&
+        // A skipped wall time names its argument and has no range; every other refusal has a range.
+        (row.refused === 'dst-gap'
+          ? typeof row.argument === 'string' && formOk && row.asked === undefined
+          : row.argument === undefined && askedOk)
+      );
     default:
       return only('why') && WHYS.includes(row.why as string);
   }
+}
+
+function isCallDrift(value: unknown): boolean {
+  if (value === null || typeof value !== 'object' || Array.isArray(value)) return false;
+  const d = value as Record<string, unknown>;
+  if (typeof d.byMs !== 'number' || !Number.isSafeInteger(d.byMs) || d.byMs === 0) return false;
+  if (d.outcome === 'redrawn') return Object.keys(d).length === 3 && isCount(d.form);
+  return d.outcome === 'shifted' && Object.keys(d).length === 2;
 }
 
 /**
@@ -523,7 +644,8 @@ export function timeRowIsWellFormed(row: Readonly<Record<string, unknown>>): boo
       return (
         typeof row.toolCallId === 'string' &&
         typeof row.toolName === 'string' &&
-        isInstant(row.dispatchedAt)
+        isInstant(row.dispatchedAt) &&
+        (row.drift === undefined || isCallDrift(row.drift))
       );
     case 'time-reading':
       return isReadingRow(row);

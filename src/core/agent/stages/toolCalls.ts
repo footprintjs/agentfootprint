@@ -133,7 +133,14 @@ import type { ToolMiddleware } from '../middleware/types.js';
 import { runToolChain, runToolAfterChain, type ToolArgs } from '../middleware/runChain.js';
 import { recordDecisions } from '../middleware/ledger.js';
 import { ownsReservedArgument, splitFindings, type SplitFindings } from '../findings/reserved.js';
-import { carriesRules } from '../arguments/declare.js';
+import {
+  carriesRules,
+  isRefused,
+  periodFactsOf,
+  periodFormsOf,
+  rulesOf,
+  type RuledToolLike,
+} from '../arguments/declare.js';
 import { isResultMessage, knownResults } from '../findings/offer.js';
 import type { Classifier } from '../../../classify/types.js';
 import {
@@ -154,6 +161,8 @@ import type { FindingsLedger, StandingRow } from '../findings/types.js';
 import type { ReadRunTime } from '../../time/clock.js';
 import { callRow, callWindowOfCall, clockOf, clockOnResumeRow } from '../../time/rows.js';
 import { timeContextOf, type TimeContext } from '../../time/wire.js';
+import { granularityMsOf } from '../../time/convert.js';
+import { driftAtDispatch } from '../../time/drift.js';
 import type { ZoneName } from '../../time/zone.js';
 import {
   evidenceFromHistory,
@@ -1510,18 +1519,69 @@ function towersFor(
 type InputsDispatch = typeof import('../arguments/dispatch.js');
 
 /**
- * The time layer's `call` row for one dispatch (`core/time/rows.ts` ·
+ * The time layer at one dispatch: the `call` row (`core/time/rows.ts` ·
  * `callRow`) — the wall clock read at the moment the library hands the call
- * to the tool. Filed through the one writer; no event (the row is the record).
+ * to the tool — and, for a call that sent a look-back, the clock at dispatch
+ * (§ 7.4, `core/time/drift.ts` · `driftAtDispatch`): past the tool's step the
+ * library's OWN look-back fill is re-sent as the asked range in the tool's
+ * absolute form (`args` comes back redrawn), and any other look-back runs as
+ * sent and is recorded shifted. Filed through the one writer; no event (the
+ * row is the record).
  */
-function recordCallDispatched(
+function timeAtDispatch(
   scope: TypedScope<AgentState>,
   call: { readonly toolCallId: string; readonly toolName: string },
   iteration: number,
-): TimeContext | undefined {
-  const row = callRow(call, { turn: scope.turnNumber as number, iteration }, Date.now());
+  tool: RuledToolLike | undefined,
+  args: Readonly<Record<string, unknown>>,
+  appZone: ZoneName | undefined,
+): { readonly context: TimeContext | undefined; readonly args: Readonly<Record<string, unknown>> } {
+  const atMs = Date.now();
+  const dispatchedAt = new Date(atMs).toISOString();
+  const ledger = scope.findingsLedger as FindingsLedger | undefined;
+  const turn = scope.turnNumber as number;
+  const window = callWindowOfCall(ledger, call.toolCallId, turn);
+  const clock = clockOf(ledger);
+  const rules = window !== undefined && clock !== undefined ? rulesOf(tool) : undefined;
+  const drift =
+    rules !== undefined && !isRefused(rules) && clock !== undefined
+      ? driftAtDispatch(window, periodFormsOf(rules.period), {
+          now: clock.now,
+          dispatchedAt,
+          granularityMs: granularityMsOf(periodFactsOf(rules.period)),
+          zone: clock.zone,
+          ...(appZone !== undefined && { appZone }),
+        })
+      : undefined;
+  const row = callRow(
+    call,
+    { turn, iteration },
+    atMs,
+    drift === undefined
+      ? undefined
+      : drift.outcome === 'redrawn'
+      ? { byMs: drift.byMs, outcome: 'redrawn', form: drift.form }
+      : { byMs: drift.byMs, outcome: 'shifted' },
+  );
   recordFindings(scope, [row]);
-  return callTimeContext(scope, call.toolCallId, row.dispatchedAt);
+  const redrawn =
+    drift?.outcome === 'redrawn' ? redrawnArgs(args, tool, window?.form, drift.values) : args;
+  return { context: callTimeContext(scope, call.toolCallId, row.dispatchedAt), args: redrawn };
+}
+
+/** `args` with the look-back form's argument dropped and the absolute form's values written — a fresh object. */
+function redrawnArgs(
+  args: Readonly<Record<string, unknown>>,
+  tool: RuledToolLike | undefined,
+  lookbackForm: number | undefined,
+  values: Readonly<Record<string, unknown>>,
+): Readonly<Record<string, unknown>> {
+  const rules = rulesOf(tool);
+  const forms = rules === undefined || isRefused(rules) ? [] : periodFormsOf(rules.period);
+  const lookback = lookbackForm === undefined ? undefined : forms[lookbackForm];
+  const next: Record<string, unknown> = { ...args };
+  if (lookback !== undefined && lookback.kind === 'lookback') delete next[lookback.argument];
+  return { ...next, ...values };
 }
 
 /**
@@ -3697,10 +3757,19 @@ export function buildToolCallsHandler(
     try {
       // The time layer's dispatch moment — a resumed call is dispatched NOW,
       // so its `dispatchedAt` is the resume's, not the pause's.
-      const callTime =
+      const dispatched =
         deps.time !== undefined
-          ? recordCallDispatched(scope, { toolCallId, toolName }, iteration)
+          ? timeAtDispatch(
+              scope,
+              { toolCallId, toolName },
+              iteration,
+              tool,
+              args,
+              deps.time.appZone,
+            )
           : undefined;
+      const callTime = dispatched?.context;
+      if (dispatched !== undefined) args = dispatched.args;
       // `let`, not `const`: the semantic projection below replaces the value
       // on the non-envelope path exactly as the batch loop does.
       let result = await tool.execute(args, {
@@ -4812,10 +4881,21 @@ export function buildToolCallsHandler(
               }
               noteOffWire(scope, resolved, { toolName: tc.name, toolCallId: tc.id, iteration });
               // The time layer's dispatch moment — just before the tool runs.
-              const callTime =
+              // A look-back the clock drifted past is redrawn here (§ 7.4) — `callArgs`
+              // carries what the tool ran with, so the note and the results layer read it.
+              const dispatched =
                 deps.time !== undefined
-                  ? recordCallDispatched(scope, { toolCallId: tc.id, toolName: tc.name }, iteration)
+                  ? timeAtDispatch(
+                      scope,
+                      { toolCallId: tc.id, toolName: tc.name },
+                      iteration,
+                      tool,
+                      callArgs,
+                      deps.time.appZone,
+                    )
                   : undefined;
+              const callTime = dispatched?.context;
+              if (dispatched !== undefined) callArgs = dispatched.args as ToolArgs;
               // Set BEFORE the await: a tool that throws has still run, and a
               // tool that does not exist has not. This flag is the entire
               // precondition of the after-tool moment below.

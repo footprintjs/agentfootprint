@@ -235,6 +235,30 @@ defineTool({
 //    { kind: 'call-window', how: 'filled', form: 0, … }]
 ```
 
+**Wider, refused, drifted (step T5b).** When no form holds the window exactly, the fill takes
+the first form that holds MORE (`core/time/convert.ts` · `convertWidened`: a range inside one
+day → that `day`; a range ending before now → the covering look-back from now, never wider
+than the tool's `maxRange`) — the argument rows are the same, the `call-window` row adds `sent`
+and `differs.extra` (or `trimmedByTool` under `filtersToAsked`), and the note's window clause
+says the value reads a wider one (`ArgumentFill.wider`). A call whose window breaks one of the
+tool's facts (`direction`; wholly beyond `retention`; over `maxRange`), spans days for a
+`day`-only tool, or sends a wall time the zone skips is REFUSED before dispatch — the one
+`ArgumentResolution.refused` door the unreadable-rules refusal already uses, with the sentence
+`serve.ts` · `timeRefusal` — and files no argument row (its `call-window` row, `how: 'refused'`,
+is the record); a window only partly beyond `retention` runs, marked `partlyBeyondRetention`.
+A window the model sent in one form leaves another form's missing arguments alone — never
+filled or asked (`resolve.ts` · `untakenFormArgumentsOf`). At dispatch, a look-back the clock
+drifted past (§ 7.4) is redrawn only when the library wrote it (`stages/toolCalls.ts` ·
+`timeAtDispatch` over `core/time/drift.ts`); the `call` row records `drift`.
+
+```ts
+// period: { argument: 'window', spelling: 'lookback', direction: 'past' }, "yesterday", {} sent →
+//   the tool runs with { window: '1960m' };
+//   { kind: 'call-window', how: 'filled', sent: {…}, differs: { extra: [{ from: '…T07:00:00Z', to: now }] } }
+// the model sends a window still to come → the tool does not run; the model reads
+//   "search_logs was not run on that call: the window it asked for had not happened yet, …"
+```
+
 Without `.time()` nothing here runs: a period is judged and read as the sections above say.
 
 ## The batch ask — once, before anything runs

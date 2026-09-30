@@ -94,7 +94,7 @@ import {
   windowRowOf,
   type ArgumentRow,
 } from './rows.js';
-import { unreadableRulesRefusal } from './serve.js';
+import { timeRefusal, unreadableRulesRefusal } from './serve.js';
 import type { CallSources, DeclaredSource } from './sources.js';
 
 /** One call of the batch, as the model emitted it (its raw arguments). */
@@ -229,6 +229,12 @@ export type ArgumentFill =
       readonly value: InputValue | Readonly<Record<string, InputValue>>;
       readonly source: 'window';
       readonly from: WindowSource;
+      /**
+       * No form holds the window exactly, so the value reads a WIDER one (step
+       * T5b): `reads-more` — the call reads parts nobody asked for;
+       * `tool-trims` — the tool declares `filtersToAsked` and drops them.
+       */
+      readonly wider?: 'reads-more' | 'tool-trims';
     };
 
 /**
@@ -488,6 +494,7 @@ export function timeDecisionsOf(
           forms,
           isMissing: (argument) => isMissing(call.args, argument),
           ...(quotes !== undefined && { quotes }),
+          facts: periodFactsOf(rules.period),
         },
         time.turn,
         {
@@ -527,6 +534,32 @@ function filledArguments(decision: CallWindow | undefined): ReadonlySet<string> 
 function formArgumentsOf(toolOf: ToolOf, toolName: string): ReadonlySet<string> {
   const forms = periodFormsOf(readableRules(toolOf, toolName)?.period);
   return new Set(forms.flatMap((f) => formArguments(f).map((a) => a.argument)));
+}
+
+/**
+ * The arguments of every form OTHER than the one a present window was read
+ * back from (`bound`, `model-chosen`, `model`) that the read form does not
+ * also name — an alternative the call did not take. Empty for any other
+ * decision; a ruled argument outside every form is never in it.
+ */
+function untakenFormArgumentsOf(
+  toolOf: ToolOf,
+  toolName: string,
+  decision: CallWindow | undefined,
+): ReadonlySet<string> {
+  if (
+    decision === undefined ||
+    (decision.how !== 'bound' && decision.how !== 'model-chosen' && decision.how !== 'model')
+  ) {
+    return new Set();
+  }
+  const forms = periodFormsOf(readableRules(toolOf, toolName)?.period);
+  const used = forms[decision.form];
+  if (used === undefined) return new Set();
+  const mine = new Set(formArguments(used).map((a) => a.argument));
+  return new Set(
+    forms.flatMap((f) => formArguments(f).map((a) => a.argument)).filter((a) => !mine.has(a)),
+  );
 }
 
 /** The argument-row source a window fills with: the person's words, a reading of them, or the app's control. */
@@ -608,8 +641,15 @@ export function verifyPlan(
     if (call === undefined) continue;
     const rules = readableRules(toolOf, planned.toolName);
     const decision = decisions.get(planned.toolCallId);
+    // Refused before dispatch on its window (step T5b): the call will not run, so none of its
+    // arguments is filled, asked or filed — its `call-window` row is the record.
+    if (decision?.how === 'refused') continue;
     const filled = filledArguments(decision);
     const alternatives = filled.size > 0 ? formArgumentsOf(toolOf, planned.toolName) : filled;
+    // A window the model SENT in one form: another form's missing arguments were an alternative
+    // it did not take — never filled or asked (step T5b: a look-back sent to a tool that also
+    // takes bounds must run, so the clock at dispatch can record it).
+    const untaken = untakenFormArgumentsOf(toolOf, planned.toolName, decision);
     for (const p of planned.ruled) {
       const base = {
         toolCallId: planned.toolCallId,
@@ -626,6 +666,7 @@ export function verifyPlan(
         continue;
       }
       if (alternatives.has(p.argument)) continue;
+      if (p.missing && untaken.has(p.argument)) continue;
       const rule = rules?.ruled.find((r) => r.argument === p.argument);
       const check = p.missing ? undefined : sourceCheckOf(sources, toolOf, call, p.argument, rule);
       if (check !== undefined) {
@@ -904,6 +945,20 @@ export function resolutionsOf(
       });
       continue;
     }
+    const decision = decisions?.get(planned.toolCallId);
+    if (decision?.how === 'refused') {
+      resolutions.push({
+        toolCallId: planned.toolCallId,
+        iteration,
+        refused: timeRefusal(
+          planned.toolName,
+          decision.refused,
+          periodFactsOf(readableRules(toolOf, planned.toolName)?.period),
+          decision.argument,
+        ),
+      });
+      continue;
+    }
     const fills: ArgumentFill[] = [];
     const ask: string[] = [];
     const quoted: { argument: string; quote: string }[] = [];
@@ -929,14 +984,20 @@ export function resolutionsOf(
     }
     // Under `.time()`: every argument the turn's one window fills — the ruled ones filed above,
     // and an `object` form's (a ruled argument is a flat value, so an object carries no rule).
-    const decision = decisions?.get(planned.toolCallId);
     if (decision?.how === 'filled') {
+      const wider =
+        'sent' in decision.conversion
+          ? decision.trimmedByTool === true
+            ? ('tool-trims' as const)
+            : ('reads-more' as const)
+          : undefined;
       for (const [argument, value] of Object.entries(decision.conversion.values)) {
         fills.push({
           argument,
           value: value as InputValue | Readonly<Record<string, InputValue>>,
           source: 'window',
           from: decision.window.source,
+          ...(wider !== undefined && { wider }),
         });
       }
     }

@@ -24,10 +24,11 @@ It is a leaf: it imports nothing outside itself (pinned by
 | `clock.ts` | the run clock (§ 4): `TimeClock { now, nowSource, zone, zoneSource }`; the two inputs read or refused by name — the run's `time: { now, zone, window }` (`readRunTime`) and the builder's `.time({ zone })` (`readTimeOptions`); `draftClock` (the run's zone wins, the builder's is a fallback, neither is `'no-zone'`), `completeClock` (`now` is the app's, else the turn's start: `nowSource: 'default'`), `clockChange` (what a resume passed that differs from the kept clock) |
 | `reader.ts` | the `TimeReader` port (`id`, `version`, `locale`, `kind: 'rule' \| 'model'`, `read`) and its result, `TimeParts` — zone-less parts, never instants; `readerIssue` (the builder's check) and `checkReading` (a quote must be a verbatim substring of the text; parts well formed; a refused mention keeps no text) |
 | `resolve.ts` | parts + clock + policy → every candidate window (`resolveMention`: date orders, am/pm, the year, both instants of a DST overlap or gap, a day word, a look-back, a range read to the end of its grain, a said IANA zone or offset — an abbreviation is asked, never mapped), and `chooseReading` (`only` · `policy` · `open` with its questions · `none`); the v1 `TimePolicy` (`dateOrder`, `year`, both `'ask'` by default); the checks for a recorded candidate and choice |
-| `convert.ts` | a tool's period FORMS (§ 7.1: `bounds` · `joined` · `object` · `day` · `lookback`, each bound `iso` · `epoch-ms` · `epoch-s` · `date` · `wall`) and the facts about its source (`PeriodFacts`); the sugar (`sugarForms` — today's `{ argument, spelling }`, `accepts`, `wall-range` + `zoneArgument`); one form's own rules (`formIssue`, `formArguments`, `parsesUnderForm`); the EXACT rows of § 7.2 (`convertExact`) and the inverse a binding reads (`readBack`, `sameRange`); a range against the facts (`periodFactProblem`) |
-| `bind.ts` | which window a call carries (§ 5.6, § 7.3): the turn's windows read from the record (`turnWindowsOf` — a settled `time-reading` mention, the clock's `control` window) and one call's decision (`callWindowOf`: `filled` · `bound` by quote or value · `model-chosen` · `model` · `unread` · `not-filled`) |
+| `convert.ts` | a tool's period FORMS (§ 7.1: `bounds` · `joined` · `object` · `day` · `lookback`, each bound `iso` · `epoch-ms` · `epoch-s` · `date` · `wall`) and the facts about its source (`PeriodFacts`); the sugar (`sugarForms` — today's `{ argument, spelling }`, `accepts`, `wall-range` + `zoneArgument`); one form's own rules (`formIssue`, `formArguments`, `parsesUnderForm`); the EXACT rows of § 7.2 (`convertExact`) and the inverse a binding reads (`readBack`, `sameRange`); the INEXACT rows (`convertWidened` — a range inside one day → that `day`, a range ending before now → the covering look-back; each with the range it reads and what it adds) and the refusal tests (`spansDaysForDayOnly`, `wallGapArgument`); a range against the facts (`periodFactProblem`, `partlyBeyondRetention`, `TimeRefusal`) |
+| `bind.ts` | which window a call carries (§ 5.6, § 7.3): the turn's windows read from the record (`turnWindowsOf` — a settled `time-reading` mention, the clock's `control` window) and one call's decision (`callWindowOf`: `filled` — exactly, or widened · `bound` by quote or value · `model-chosen` · `model` · `unread` · `not-filled` · `refused` before dispatch on a fact, a multi-day range to a `day`-only tool, or a skipped wall time) |
+| `drift.ts` | the clock at dispatch (§ 7.4): `driftAtDispatch` — a call that sent a look-back, dispatched more than the tool's step after the turn's `now`, is `redrawn` (the library's own fill, re-sent as the asked range in the tool's first absolute form) or `shifted` (the model's look-back, or no absolute form — runs as sent) |
 | `wire.ts` | the JSON that crosses a transport (§ 7.5): `TimeContext` — `ctx.time` in process, the `tools/call` request's `_meta.agentfootprint.time` over MCP — versioned (`timeContextOf`, `readTimeContext`) |
-| `rows.ts` | the layer's five ledger rows and the checkpoint door's test for each (`timeRowIsWellFormed`): `clock` (one per turn, filed by seed), `clock-on-resume` (a resume's differing `time`, recorded not applied), `call` (one per dispatched call, `dispatchedAt`), `time-reading` (one per mention the armed reader found, or one `mentions: 0` row; `timeReadingRows` builds them, `readingsOf` reads a turn's back), `call-window` (one per call to a tool whose period declares forms, filed by the inputs layer — `callWindowRow`, read back by `callWindowOfCall`); `clockOf` reads the latest turn's clock |
+| `rows.ts` | the layer's five ledger rows and the checkpoint door's test for each (`timeRowIsWellFormed`): `clock` (one per turn, filed by seed), `clock-on-resume` (a resume's differing `time`, recorded not applied), `call` (one per dispatched call, `dispatchedAt`, and `drift` when a look-back drifted), `time-reading` (one per mention the armed reader found, or one `mentions: 0` row; `timeReadingRows` builds them, `readingsOf` reads a turn's back), `call-window` (one per call to a tool whose period declares forms, filed by the inputs layer — `callWindowRow`, read back by `callWindowOfCall`); `clockOf` reads the latest turn's clock |
 | `present.ts` | time for a PERSON: `presentInstant`, `presentSpan` (two inclusive ends, as declared), `presentRange` (a half-open range with the end AS SAID — `[08:00, 08:41)` at minute grain shows `08:40`); locale-neutral with no locale, the zone always named, each end's offset when a span crosses a DST change; with a `locale` (the reader's) through `Intl` in that language, the zone's short name |
 | `ask.ts` | the one time ask (§ 6): `TimeFormat` (`instant` · `time-range` · `zone`), `checkTimeAnswer` — the ONE judge of a time field's answer (strict instants with an offset, `from` before `to`, an IANA zone, under a known zone no wall time the clocks skip, and — handed a tool's facts and the clock — inside its `direction`, `retention` and `maxRange`) — refusals as codes with facts; the catalog's keys (`TIME_ASK_MESSAGE_KEYS`), `readTimeAskMessages` (the app's overrides), `refusalReason` (the re-ask's reason); `timeAskOf` — the field an `open` reading needs (the candidates as labelled choices, a zone asked as `format: 'zone'`, a `model` reading offered to confirm) |
 
@@ -111,6 +112,26 @@ filed `said` + `matched: 'mention'`) or by value, else recorded `model-chosen` b
 — a drill-down and a comparison are normal work, and the standing reads "not sure". One
 `call-window` row per call says which; `ctx.time` (`wire.ts`) hands the tool the range the call asks
 for, read off that row, with the zone, the frozen `now` and the dispatch moment.
+
+**The widening law: when no form holds the window exactly, read MORE and say so — never less,
+never silently.** The fill takes the first exact form, else the first form that holds more
+(`convertWidened`): a `day` for a range inside one day, the covering look-back from now for a
+range that ended before now (never wider than the tool's `maxRange`). The `call-window` row
+carries `sent` (what the tool reads) and `differs.extra` (what it adds) — or `trimmedByTool` when
+the tool declares `filtersToAsked` — and the note tells the model the value reads a wider one.
+Whether to widen is not the tool's to say; a tool declares only facts. **The refusal law: a call
+the tool cannot honestly read is refused before it runs, with the reason.** A window outside the
+tool's `direction`, wholly older than its `retention`, wider than its `maxRange`, spanning days
+for a `day`-only tool, or a sent wall time the zone skips — filled or sent — files `how:
+'refused'` and the model reads a past-tense sentence naming the declared fact
+(`arguments/serve.ts` · `timeRefusal`); splitting a window into several calls is the model's
+choice. A window only PARTLY older than `retention` runs, marked `partlyBeyondRetention`.
+**The drift law: only the library's own fill is redrawn.** At dispatch
+(`stages/toolCalls.ts` · `timeAtDispatch`) a look-back sent more than the tool's step (one
+minute) after the turn's `now` — after a pause, or an app `now` far from the wall clock — is
+re-sent as the asked range in the tool's first absolute form when the library wrote it; the
+model's look-back, or one with no absolute form, runs as sent. The `call` row records
+`drift: { byMs, outcome }`.
 
 **The presentation law: a label is never data.** `present.ts` renders for a person — the typed
 record keeps the instants. With no reader armed (a later step) the form is locale-neutral:
@@ -246,6 +267,20 @@ defineTool({
 //                       { kind: 'call-window', how: 'filled', form: 0, asked: {…}, person: { …, source: 'said', mention: 0 } }
 convertExact({ range: asked }, sugarForms({ argument: 'w', spelling: 'iso-range' }), clock);
 // { form: 0, values: { w: '2026-10-09T08:00:00-07:00..2026-10-09T08:40:59-07:00' } } — inclusive end, to the second
+```
+
+Wider than asked, refused, drifted (`examples/features/85-time-widen-and-refuse.ts`):
+
+```ts
+// "yesterday" to a look-back-only tool (now 2026-10-09T15:40Z, Los Angeles):
+convertWidened({ range: yesterday }, [{ kind: 'lookback', argument: 'w', signed: false }], clock);
+// { form: 0, values: { w: '1960m' }, sent: { from: '2026-10-08T07:00:00Z', to: '2026-10-09T15:40:00.001Z' },
+//   extra: [{ from: '2026-10-09T07:00:00Z', to: '2026-10-09T15:40:00.001Z' }] }
+// A window still to come, sent to `period: { …, direction: 'past' }`:
+//   { kind: 'call-window', how: 'refused', refused: 'time-future', asked: {…} } — the tool never ran
+driftAtDispatch({ how: 'filled', form: 0, asked }, [lookback, epochBounds],
+  { now, dispatchedAt: thirtyMinutesLater, granularityMs: 60_000, zone });
+// { byMs: 1800000, outcome: 'redrawn', form: 1, values: { start: …, end: … } }
 ```
 
 ## What changed when the grammars moved here (the design's § 12.1)

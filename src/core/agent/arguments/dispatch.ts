@@ -206,6 +206,7 @@ export function noteFor(
           hidden: hidesArgument(tool, f.argument, f.value as InputValue),
           source: 'window' as const,
           from: f.from,
+          ...(f.wider !== undefined && { wider: f.wider }),
         };
       }
       const carried = f.source === 'answered' ? carriedValue(proposed, f.argument) : undefined;
