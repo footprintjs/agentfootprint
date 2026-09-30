@@ -197,7 +197,19 @@ describe('stageDatasetArtifacts — refused before the first write', () => {
   });
 });
 
-describe('sqliteArtifacts — the column is added in place', () => {
+/** `node:sqlite` ships from Node 22.5; CI also runs Node 20, where the SQLite
+ * store cannot be constructed at all — a missing runtime, skipped visibly
+ * (the store-conformance battery's rule). */
+const sqliteAvailable = await (async (): Promise<boolean> => {
+  try {
+    const mod = (await import('node:sqlite')) as { DatabaseSync?: unknown };
+    return typeof mod.DatabaseSync === 'function';
+  } catch {
+    return false;
+  }
+})();
+
+describe.skipIf(!sqliteAvailable)('sqliteArtifacts — the column is added in place', () => {
   it('a file written before the column existed opens, and carries a declaration afterwards', async () => {
     const dir = mkdtempSync(join(tmpdir(), 'af-time-axis-'));
     try {
