@@ -593,11 +593,15 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
    *  Undefined on every agent that did not ask — then no clock is read, no
    *  time row is filed and `time` on a run is refused. */
   private readonly timeOptions?: ReadTimeOptions;
-  /** The clock the CURRENT run's seed stamps — set by `run()` (refusing a
-   *  run with no zone), read by seed through `SeedStageDeps.timeClock`. */
+  /** The clock the CURRENT `run()`'s seed stamps — set by `run()` (refusing a
+   *  run with no zone), read by seed through `SeedStageDeps.timeClock`, and
+   *  cleared when `run()` ends, so a later turn this agent did not start (its
+   *  chart mounted in a composition) never stamps a clock nobody declared for
+   *  it (`seedClockDraft`). */
   private runClockDraft: ClockDraft | undefined;
-  /** The `time` the CURRENT resume passed, as read — compared with the kept
-   *  clock by the ToolCalls resume door; cleared by every fresh run. */
+  /** The `time` the CURRENT resume passed, as read — TAKEN once by the first
+   *  ToolCalls pass of the resumed leg (`ToolCallsHandlerDeps.time`), and
+   *  cleared when `run()` or `resume()` ends. */
   private resumePassedTime: ReadRunTime | undefined;
   /** Tool choice by classifier (9.105.0, `.toolChoice()`): the classifier,
    *  the serve dial and the app's own doors. Threaded to the tools slot (the
@@ -1888,7 +1892,6 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
     // (helper used in the catch block below — module-private function
     // declared at file end via hoisting)
     this.answeredAsk = undefined;
-    this.runClockDraft = clockDraft;
     this.resumePassedTime = undefined;
     const executor = this.createExecutor(engineOptions);
     this.inFlightRunId = this.currentRunContext.runId;
@@ -1916,6 +1919,9 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
     this.lastRunAnswer = undefined;
     // One run can never raise on another run's consent block.
     this.consentOutstanding.clear();
+    // Set here, beside the `try` whose `finally` clears it, so no exit path
+    // can leave it behind for a turn this `run()` did not start.
+    this.runClockDraft = clockDraft;
 
     try {
       const result = await executor.run({
@@ -2028,6 +2034,11 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
       }
       throw cause;
     } finally {
+      // The time layer's per-run inputs end with the run: a stale draft would
+      // be stamped by the next seed this agent did not start (a composition
+      // mounting its chart) as if the app had declared it.
+      this.runClockDraft = undefined;
+      this.resumePassedTime = undefined;
       // The run's disposition rows, on EVERY path — success, failure, pause —
       // and BEFORE the recording stops, so a recording carries its run's
       // checker accounting (9.60.0).
@@ -2251,6 +2262,33 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
           "this agent's time layer needs the person's zone — pass run({ message, time: { zone: " +
           "'America/Los_Angeles' } }) or declare a fallback with .time({ zone }); the server's " +
           'zone is never used',
+      });
+    }
+    return draft;
+  }
+
+  /**
+   * The clock draft seed stamps (the time layer): the one `run()` read — or,
+   * for a turn this agent's `run()` did not start (its chart mounted in a
+   * composition, which passes no `time`), the builder's fallback zone with
+   * the turn's start as `now` (`zoneSource: 'builder'`, `nowSource:
+   * 'default'` — the same record a `run()` with no `time` files). With no
+   * fallback zone that turn is refused, as `run()` refuses it: the server's
+   * zone is never used.
+   *
+   * @internal
+   */
+  private seedClockDraft(): ClockDraft {
+    if (this.runClockDraft !== undefined) return this.runClockDraft;
+    const draft = draftClock(undefined, this.timeOptions ?? {});
+    if (draft === 'no-zone') {
+      throw new InvalidRunInputError({
+        runner: 'Agent (mounted in a composition)',
+        received: 'a turn with no time zone',
+        hint:
+          "this agent's time layer needs the person's zone, and a composition passes no time to " +
+          "the agents it mounts — declare a fallback with .time({ zone: 'America/Los_Angeles' }); " +
+          "the server's zone is never used",
       });
     }
     return draft;
@@ -2506,7 +2544,6 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
     // (and only when) it completes.
     const recording = this.startRunRecording();
     this.answeredAsk = answeredAsk;
-    this.resumePassedTime = passedTime;
     const executor = this.createExecutor(resumeOptions);
     this.inFlightRunId = this.currentRunContext.runId;
     // A resumed turn is two runs, and each keeps its own ledger — exactly
@@ -2515,6 +2552,8 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
     this.lastRunAnswer = undefined;
     // One run can never raise on another run's consent block.
     this.consentOutstanding.clear();
+    // Beside the `try` whose `finally` clears it (the fresh-run path's terms).
+    this.resumePassedTime = passedTime;
     try {
       const result = await executor.resume(checkpoint, input, resumeOptions);
       const finalized = this.finalizeResult(executor, result);
@@ -2531,6 +2570,8 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
       await this.endRunToolSessions(cause);
       throw cause;
     } finally {
+      // A resume's passed `time` ends with the resume (the fresh-run path's terms).
+      this.resumePassedTime = undefined;
       // Same terms as the fresh-run path: rows on every exit, before the
       // recording stops (9.60.0).
       this.fileIntegrityDisposition();
@@ -4248,7 +4289,7 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
       // The time layer's clock: the draft `run()` read (refusing a run with no
       // zone), stamped by seed as the turn's one `clock` row. Absent → the
       // deps object seed always had.
-      ...(this.timeOptions !== undefined && { timeClock: () => this.runClockDraft }),
+      ...(this.timeOptions !== undefined && { timeClock: () => this.seedClockDraft() }),
       // Declared sources (honesty layer 2): the seed twin plants `_findings.from`
       // on ruled tools, and the run's `messageFrom` constant is written — only
       // under the arm (refused at build without the inputs layer).
@@ -5184,7 +5225,13 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
       // The time layer: each dispatched call files its `call` row, and the
       // resume door compares a resume's passed `time` with the kept clock.
       ...(this.timeOptions !== undefined && {
-        time: { passedOnResume: () => this.resumePassedTime },
+        time: {
+          takePassedOnResume: () => {
+            const passed = this.resumePassedTime;
+            this.resumePassedTime = undefined;
+            return passed;
+          },
+        },
       }),
       emitForRun: (type, payload, runContext) => this.emitLateFact(type, payload, runContext),
       toolSessions: () => this.toolSessions(),

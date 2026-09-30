@@ -942,6 +942,8 @@ await agent.run({
   | e | Adding `s` to the look-back would **widen `lookback` for every existing declarer**, whose backend may not take seconds | one grammar, one unit set | **not done by default**: the unit set is per use, a look-back's default stays `mhdw`, and `s` is opted into through `units` (§ 7.1, TQ11) |
 
 - Without `.time()` and without a new `ToolPeriod` field, no row, event, served byte or ask changes.
+  One refusal is new off the arm (T3): `time` passed to an agent without `.time()` is refused by
+  name, because a door that ignored it would look configured and do nothing.
 - A tool's new `ToolPeriod` fields serve bytes only inside that tool's own schema and results (the
   honesty design's clause 7).
 
@@ -1048,12 +1050,21 @@ deterministic and are measured over retained recorded runs or unit tables, with 
   `AgentRunOptions.time` for the doors with no message bag (`followUp`, `resume`,
   `resumeOnError`); the input wins, as `identity` does. `time` passed to an agent WITHOUT
   `.time()` is refused (a door that ignored it would look configured and do nothing) — the one
-  behaviour change off the arm, named in the changelog. (4) **Frozen means across a pause.** The
-  only pausable stage is ToolCalls, so `clock-on-resume` is filed first thing at its resume door
-  (`stages/toolCalls.ts` · `recordClockOnResume`), comparing the passed values with the kept
-  `clock` row as text (the record keeps spellings); a paused turn with no clock (written by a
-  runtime without the layer) files nothing. `resumeOnError` and a continued conversation are new
-  runs and stamp their own clock. (5) A zone is recorded **as the app wrote it** once
+  behaviour change off the arm, named in the changelog. (4) **Frozen means across a pause.** Every
+  pause is raised in ToolCalls, in two shapes: the pausable handler's pause (a check-in, a
+  middleware ask, a tool's own pause), whose resume enters the `resume` door, and the inputs
+  layer's argument ask, which pauses through `interrupt()`, so its resume RE-RUNS `execute` from
+  its top. `clock-on-resume` is filed first thing at BOTH entries (`stages/toolCalls.ts` ·
+  `recordClockOnResume`); the passed value is taken once (`ToolCallsHandlerDeps.time` ·
+  `takePassedOnResume`), so the resumed leg files it once whichever door it came through and a
+  fresh run files nothing. It compares the passed values with the kept `clock` row as text (the
+  record keeps spellings); a paused turn with no clock (written by a runtime without the layer)
+  files nothing. `resumeOnError` and a continued conversation are new runs and stamp their own
+  clock. **A turn `run()` did not start** — the agent's chart mounted in a composition, which
+  passes no `time` — stamps the builder's fallback zone with the turn's start (`zoneSource:
+  'builder'`, `nowSource: 'default'`, the record a `run()` with no `time` files), and is refused
+  when there is no fallback (`Agent` · `seedClockDraft`); the draft `run()` read ends with that
+  `run()`, so an earlier direct run's clock is never stamped on a later turn. (5) A zone is recorded **as the app wrote it** once
   `zone.ts` · `isZoneName` accepts it: `Intl`'s canonical form can be an older link the person
   never named (`Asia/Kolkata` → `Asia/Calcutta` on Node 22). (6) **Presentation.** No reader
   exists yet, so `present.ts` is locale-neutral only (`2026-10-09 08:00–08:40

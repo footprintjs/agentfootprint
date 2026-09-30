@@ -64,7 +64,7 @@ import type { FoldedSpan } from './agent/window/types.js';
 import { argumentRowIsWellFormed } from './agent/arguments/rows.js';
 import { periodRowIsWellFormed } from './agent/coverage/period.js';
 import { witnessRowIsWellFormed } from './agent/assessment/witness.js';
-import { timeRowIsWellFormed } from './time/rows.js';
+import { isTimeRowKind, timeRowIsWellFormed } from './time/rows.js';
 import {
   BASIS_VALUES,
   EXPECT_VALUES,
@@ -628,6 +628,11 @@ function ledgerRowIsWellFormed(row: unknown): boolean {
   // each row it files while a layer is armed); readers compare it as a number,
   // so a stamp of any other type would quietly drop its row from its own turn.
   if (r.turn !== undefined && typeof r.turn !== 'number') return false;
+  // The time layer's rows (`.time()`): the turn's clock stamp, a resume's
+  // differing `time`, and each call's dispatch moment. The arm ships in the
+  // SAME change as the kinds; one owner of their kinds and shape
+  // (`core/time/rows.ts`). An older runtime refuses a checkpoint carrying one.
+  if (isTimeRowKind(r.kind)) return timeRowIsWellFormed(r);
   switch (r.kind) {
     case 'basis':
       return (
@@ -716,14 +721,6 @@ function ledgerRowIsWellFormed(row: unknown): boolean {
     case 'grounded':
     case 'steps-unfinished':
       return witnessRowIsWellFormed(r);
-    // The time layer's rows (`.time()`): the turn's clock stamp, a resume's
-    // differing `time`, and each call's dispatch moment. The arms ship in the
-    // SAME change as the kinds; one owner of their shape (`core/time/rows.ts`).
-    // An older runtime refuses a checkpoint that carries any of them.
-    case 'clock':
-    case 'clock-on-resume':
-    case 'call':
-      return timeRowIsWellFormed(r);
     default:
       return false;
   }

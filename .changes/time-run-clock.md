@@ -12,7 +12,9 @@ record (`agent.findings()`): one `clock` row per turn, a window set in a UI (`ti
 recorded as `source: 'control'`, and one `call` row per dispatched call with `dispatchedAt` — the
 moment the tool actually ran, which after a pause is later than `now`. A paused turn keeps its
 clock: `resume(checkpoint, answer, { time })` with a different `time` is recorded as a
-`clock-on-resume` row and not applied. With `.limitsTravelWithTheAnswer()`, each `Period:` line
+`clock-on-resume` row and not applied — whichever pause it was, including the inputs layer's
+argument ask. An agent mounted in a composition (which passes no `time`) records its fallback
+zone with the turn's start as a default, and is refused without a fallback. With `.limitsTravelWithTheAnswer()`, each `Period:` line
 is shown in the person's zone with the zone named — `2026-10-09 08:00–08:40
 America/Los_Angeles (UTC-07:00)` instead of raw UTC instants — while the typed record keeps the
 instants as declared. Nothing is served to the model. Without `.time()` nothing changes, except

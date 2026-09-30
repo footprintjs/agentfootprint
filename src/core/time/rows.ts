@@ -19,7 +19,7 @@
  * | Kind | Filed | Carries |
  * |------|-------|---------|
  * | `clock` | once per turn, by seed | the turn's {@link TimeClock} and, when the run passed one, the `control` window |
- * | `clock-on-resume` | by the ToolCalls resume door, when a resume passed a `time` that differs from the kept clock | what was passed and what was kept — the kept clock still rules |
+ * | `clock-on-resume` | first thing in the resumed leg's ToolCalls stage — either pause shape: the pausable resume door, or the stage re-run an `interrupt()` pause makes — when a resume passed a `time` that differs from the kept clock | what was passed and what was kept — the kept clock still rules |
  * | `call` | once per dispatched call, just before the tool runs | `dispatchedAt`: the wall clock at dispatch (a look-back is evaluated by the TOOL at dispatch, which after a pause is later than `now`) |
  *
  * Readers that switch over every row kind must skip one they do not know.
@@ -28,7 +28,7 @@
 import { instantOf, type InstantText } from './instant.js';
 import { isTimeRange, type TimeRange } from './range.js';
 import { isZoneName, type ZoneName } from './zone.js';
-import type { ClockChange, TimeClock } from './clock.js';
+import { clockChange, type ClockChange, type ReadRunTime, type TimeClock } from './clock.js';
 
 /** A window set in a UI, as the clock row records it. */
 export interface ControlWindow extends TimeRange {
@@ -113,13 +113,39 @@ export function callRow(
   };
 }
 
+/**
+ * The row for a resume whose passed `time` differs from the turn's kept clock
+ * (`clock.ts` · `clockChange`), or `undefined` when nothing differs. The kept
+ * clock is the turn's `clock` row; it is never replaced.
+ */
+export function clockOnResumeRow(
+  passed: ReadRunTime,
+  kept: ClockRow,
+  at: { readonly turn: number; readonly iteration: number },
+): ClockOnResumeRow | undefined {
+  const change = clockChange(passed, {
+    now: kept.now,
+    zone: kept.zone,
+    ...(kept.window !== undefined && { window: { from: kept.window.from, to: kept.window.to } }),
+  });
+  if (change === undefined) return undefined;
+  return {
+    kind: 'clock-on-resume',
+    turn: at.turn,
+    iteration: at.iteration,
+    passed: change.passed,
+    kept: change.kept,
+  };
+}
+
 // ─── Reading ─────────────────────────────────────────────────────────────
 
 /**
  * The clock of the LATEST turn on the ledger — the last `clock` row — or
  * `undefined` when none was filed (an agent without `.time()`, or a turn
  * paused by a runtime that had none). A continued conversation carries one
- * row per turn; the last one is this turn's, because seed files it first.
+ * row per turn; the last one is this turn's, because each turn's seed files
+ * exactly one (last in seed, before any stage of the turn can read it).
  */
 export function clockOf(ledger: readonly unknown[] | undefined): ClockRow | undefined {
   if (ledger === undefined) return undefined;

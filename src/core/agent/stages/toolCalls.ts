@@ -151,8 +151,8 @@ import {
 } from '../findings/contingent.js';
 import { withUnsettledRows } from '../findings/unsettled.js';
 import type { FindingsLedger, StandingRow } from '../findings/types.js';
-import { clockChange, type ReadRunTime } from '../../time/clock.js';
-import { callRow, clockOf, type ClockOnResumeRow } from '../../time/rows.js';
+import type { ReadRunTime } from '../../time/clock.js';
+import { callRow, clockOf, clockOnResumeRow } from '../../time/rows.js';
 import {
   evidenceFromHistory,
   exemptFromRun,
@@ -661,14 +661,15 @@ export interface ToolCallsHandlerDeps {
    * THE TIME LAYER (`.time()`) — present only then. Each dispatched call files
    * one `call` row with `dispatchedAt` (the wall clock, just before the tool
    * runs: a tool evaluates a look-back against its own clock at dispatch,
-   * which after a pause is later than the turn's `now`). `passedOnResume` is
-   * the `time` the current resume passed, as read — the resume door compares
-   * it with the turn's kept clock and files `clock-on-resume` when they
-   * differ; the kept clock is never replaced.
+   * which after a pause is later than the turn's `now`). `takePassedOnResume`
+   * hands over the `time` the current resume passed, as read, ONCE (a second
+   * call answers `undefined`) — the first ToolCalls pass of the resumed leg
+   * compares it with the turn's kept clock and files `clock-on-resume` when
+   * they differ; the kept clock is never replaced.
    *
    * @internal
    */
-  readonly time?: { readonly passedOnResume: () => ReadRunTime | undefined };
+  readonly time?: { readonly takePassedOnResume: () => ReadRunTime | undefined };
   /**
    * Put one artifact fact on the record for the run it BELONGS to — the door
    * a `ctx.artifacts` fact takes when it lands after that run ended (a tool's
@@ -1517,30 +1518,33 @@ function recordCallDispatched(
 
 /**
  * A resume's passed `time` against the paused turn's kept clock — one
- * `clock-on-resume` row when they differ (`core/time/clock.ts` ·
- * `clockChange`), nothing when nothing was passed, nothing differs, or the
- * paused turn has no clock (a checkpoint written by an agent without the
+ * `clock-on-resume` row when they differ (`core/time/rows.ts` ·
+ * `clockOnResumeRow`), nothing when nothing was passed, nothing differs, or
+ * the paused turn has no clock (a checkpoint written by an agent without the
  * layer: there is no frozen clock to keep, and a resume never starts one
  * mid-turn).
+ *
+ * Called FIRST at both of this stage's entries, because a resume re-enters
+ * through either: the pausable `resume` door (a check-in, a middleware ask, a
+ * tool's own pause) or `execute` re-run from its top (the inputs layer's
+ * argument ask pauses through footprintjs's `interrupt()`). The passed value
+ * is TAKEN (`ToolCallsHandlerDeps.time` · `takePassedOnResume`), so the leg
+ * files it once whichever door it came through, and a fresh run — which
+ * passed none — files nothing.
  */
-function recordClockOnResume(scope: TypedScope<AgentState>, passed: ReadRunTime | undefined): void {
+function recordClockOnResume(
+  scope: TypedScope<AgentState>,
+  time: NonNullable<ToolCallsHandlerDeps['time']>,
+): void {
+  const passed = time.takePassedOnResume();
   if (passed === undefined) return;
   const kept = clockOf(scope.findingsLedger as FindingsLedger | undefined);
   if (kept === undefined) return;
-  const change = clockChange(passed, {
-    now: kept.now,
-    zone: kept.zone,
-    ...(kept.window !== undefined && { window: { from: kept.window.from, to: kept.window.to } }),
-  });
-  if (change === undefined) return;
-  const row: ClockOnResumeRow = {
-    kind: 'clock-on-resume',
+  const row = clockOnResumeRow(passed, kept, {
     turn: scope.turnNumber as number,
     iteration: scope.iteration as number,
-    passed: change.passed,
-    kept: change.kept,
-  };
-  recordFindings(scope, [row]);
+  });
+  if (row !== undefined) recordFindings(scope, [row]);
 }
 
 export function buildToolCallsHandler(
@@ -3842,6 +3846,11 @@ export function buildToolCallsHandler(
       // microtask, no behaviour change whatsoever.
       const durable = deps.awaitDurable?.();
       if (durable) await durable;
+      // The time layer: a resume whose pause was the inputs layer's argument
+      // ask re-runs THIS function from its top — the kept clock is recorded
+      // against the resume's `time` here, first, exactly as the resume door
+      // does (TQ21). A fresh run passed no resume `time`: nothing is filed.
+      if (deps.time !== undefined) recordClockOnResume(scope, deps.time);
 
       // Materialize ONCE — `scope.llmLatestToolCalls` is a live TypedScope
       // deep-Proxy view; spreading yields the raw (plain, structured-clone-
@@ -5653,7 +5662,7 @@ export function buildToolCallsHandler(
       // The time layer: the paused turn's clock is KEPT — its words were
       // resolved against it. A resume that passed a different `time` is
       // recorded here, first, and never applied (TQ21).
-      if (deps.time !== undefined) recordClockOnResume(scope, deps.time.passedOnResume());
+      if (deps.time !== undefined) recordClockOnResume(scope, deps.time);
 
       // Consumer-supplied resume input becomes the paused tool's result.
       // The subflow's pre-pause scope is restored automatically by

@@ -19,8 +19,9 @@
  *                 call dispatched after the resume carries the RESUME's `dispatchedAt`; the
  *                 limits block renders in the run's zone (golden-file line); `followUp` and a
  *                 continued conversation carry the rows through the checkpoint door; both chart
- *                 shapes; the other `.limitsTravelWithTheAnswer()` variants (inputs layer,
- *                 answer layer);
+ *                 shapes; the answer layer's `.limitsTravelWithTheAnswer()` variant (the
+ *                 inputs layer's variant, seed's other paths, the argument ask's resume,
+ *                 the check-in door and a composition: clock-run-doors.test.ts);
  *   security    — the model is served nothing new (the request bytes of an armed and an
  *                 unarmed run are equal); the rows carry no message text;
  *   byte identity — without `.time()` nothing is filed and the answer is the declared instants

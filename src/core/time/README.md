@@ -30,7 +30,9 @@ Who asks it today: `coverage/period.ts` reads a declared period's instants throu
 ends) and, under `.time()`, renders `periodLine` through `present.ts` in the run's zone;
 `Agent.run` / `Agent.resume` read the run's `time` through `clock.ts` (refusing a run with no zone
 before the turn starts); `stages/seed.ts` · `stampClock` files the turn's `clock` row;
-`stages/toolCalls.ts` files each `call` row and, at a resume, `clock-on-resume`;
+`stages/toolCalls.ts` files each `call` row and, first thing in a resumed leg (either pause
+shape: the `resume` door, or `execute` re-run after the argument ask's `interrupt()`),
+`clock-on-resume`;
 `core/runCheckpoint.ts` · `ledgerRowIsWellFormed` routes the three kinds to `rows.ts`; `arguments/declare.ts` · `parsesUnderSpelling` reads a look-back through `duration.ts` and
 an `iso-range` through `range.ts` · `splitRange` in the strict profile; `artifacts/minting.ts` ·
 `prepareArtifact` and `artifacts/datasetResult.ts` · `stageDatasetArtifacts` judge a dataset's
@@ -44,7 +46,9 @@ per run (`run({ time: { zone } })`), the builder's `.time({ zone })` a fallback,
 the run is refused — never the server's zone. `now` is the app's, else the turn's start, recorded
 `nowSource: 'default'`. Seed files one `clock` row per turn, after the turn number is final; it is
 never written again that turn. A resume that passes a different `time` keeps the frozen clock and
-files `clock-on-resume { passed, kept }`. The layer reads the wall clock at exactly two points, both
+files `clock-on-resume { passed, kept }`. A turn `run()` did not start (the agent's chart mounted
+in a composition, which passes no `time`) stamps the builder's fallback as a default, or is refused
+without one — the draft a `run()` read ends with that `run()`. The layer reads the wall clock at exactly two points, both
 recorded: a default `now`, and each call's `dispatchedAt`. A zone is recorded as the app wrote it —
 `Intl`'s canonical form can be an older link (`Asia/Kolkata` → `Asia/Calcutta`). The rows fire no
 event (the record is the reader's); nothing is served to the model.
