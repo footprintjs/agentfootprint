@@ -1291,9 +1291,18 @@ deterministic and are measured over retained recorded runs or unit tables, with 
   right after a date or time (so `8 AM NAS` is not a zone). A leading-zero `08:00` stays am/pm-open
   — the tokenizer says what was written, and the resolver asks. (3) **The sentence** (TQ13) names
   only SETTLED windows, in each tool's form — exact, else the wider read the fill would use, said
-  so; a value the tool's view hides is named hidden. It rides the tool's DESCRIPTION at the slot's
-  one decoration site; the mount hands the windows in (`AgentChartDeps.timeReader`, both chart
-  shapes, pinned in all three react modes); the seed's static twin carries none (no reading exists at seed — the findings-offer
+  so; a value the tool's view hides is named hidden. **Placement (the T6b bench's pre-run check,
+  the step-7b serving strategy):** it is ONE request-only `user` line appended LAST to the request
+  — the conclusion at the decision point, never a tool description — composed at the slot's one
+  decoration site from the tools really served (`arguments/serve.ts` · `timeWindowsLine`), carried
+  on `timeLine` (`{ iteration, text }`, served only on the iteration that composed it, so classic
+  mode's cached slot never serves a stale line) and appended by `callLLM`; `servedView` rebuilds it
+  (reason `time-window-line`). A settled window is named in the person's zone with its source and
+  each period tool's values, and the answer is told to state it; a quote still PENDING (a proposal
+  the person has not answered, `bind.ts` · `pendingQuotesOf`) names no window — only that it is not
+  confirmed and the one move that asks the person (leave the period arguments out; a window written
+  into the call runs unconfirmed). The mount hands the windows in (`AgentChartDeps.timeReader`, both
+  chart shapes); the seed's static twin carries none (no reading exists at seed — the findings-offer
   precedent). The `control` window is not named (the arm is the reader's). (4) **The lazy ask
   replaces a tool's OWN ask** for its period arguments: a tool whose rule assumes the period keeps
   its default under an open reading (unchanged from T5a). One window field serves every call of

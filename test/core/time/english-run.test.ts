@@ -83,6 +83,8 @@ const LA = 'America/Los_Angeles';
 const NOW = '2026-10-09T15:40:00Z';
 const NOW_MS = Date.parse(NOW);
 const FIELD = 'Show client activity 10/09/26 8 AM to 8:40 AM PST';
+/** `[NOW − 2h, NOW)` as `time/present.ts` · `presentRange` writes it in Los Angeles. */
+const WINDOW_2H = '2026-10-09 06:40–08:40 America/Los_Angeles (UTC-07:00)';
 
 type Row = { kind: string } & Record<string, unknown>;
 const rows = (agent: { findings(): unknown }): Row[] =>
@@ -153,6 +155,25 @@ function lookbackTool(seen: Record<string, unknown>[] = []) {
 }
 
 const reader = englishTimeReader();
+
+/** The pending half of the served time line (`arguments/serve.ts` · `timeWindowsLine`). */
+const pendingLine = (quote: string, moves: string): string =>
+  `The person has not confirmed what their time words “${quote}” mean yet: call ${moves}, and ` +
+  'the library confirms its reading with the person, zone shown, before the call runs (or ' +
+  'refuses the call and says why); a window written into the call runs unconfirmed.';
+
+/**
+ * The late time line of a request (step T6b): the request-only `user` line appended LAST, after
+ * the person's message or the latest tool result — `undefined` when the request carries none.
+ */
+function timeLineOf(req: LLMRequest | undefined): string | undefined {
+  const last = req?.messages[req.messages.length - 1];
+  if (last?.role !== 'user' || typeof last.content !== 'string') return undefined;
+  return last.content.startsWith("The person's time words") ||
+    last.content.startsWith('The person has not confirmed what their time words')
+    ? last.content
+    : undefined;
+}
 
 function paused(result: unknown) {
   if (!isInputPause(result)) throw new Error('expected an input pause');
@@ -415,9 +436,14 @@ describe('every chat reading is a confirmation — never filed as said (the owne
         how: 'not-filled',
         why: 'open-reading',
       });
-      // Nothing settled, so nothing is served as a window.
+      // Nothing settled, so no window is served — only the library's conclusion that the words
+      // are not confirmed yet, and the one move that lets the person confirm them, LATE: the last
+      // line of the request, never the tool's description (step T6b's serving placement).
       const activity = (requests[0]!.tools ?? []).find((t) => t.name === 'client_activity')!;
       expect(activity.description).toBe('Client operations over a window.');
+      expect(timeLineOf(requests[0])).toBe(
+        pendingLine(quote, 'client_activity with start_time, end_time left out'),
+      );
       // One field, pre-filled with the reading and its zone, free entry open.
       expect(first.awaitingInput.fields).toHaveLength(1);
       const field = first.awaitingInput.fields[0]!;
@@ -567,27 +593,35 @@ describe('the one served time sentence — the confirmed window and its source',
       const first = paused(
         await agent.run({ message: 'any errors in the last 2 hours?', time: { now: NOW } }),
       );
-      // Before the confirmation: a proposal is never served as a window.
-      for (const t of requests[0]!.tools ?? []) {
-        expect(t.description).not.toContain('Time words in the person');
-      }
+      // Before the confirmation: a proposal is never served as a window — the late line says the
+      // words are not confirmed yet and names each period tool's arguments to leave out. The tool
+      // descriptions carry nothing.
+      expect(requests[0]!.tools!.map((t) => t.description)).toEqual([
+        'Error lines over a look-back window.',
+        'Client operations over a window.',
+      ]);
+      expect(timeLineOf(requests[0])).toBe(
+        pendingLine(
+          'last 2 hours',
+          'search_logs with window left out, or client_activity with start_time, end_time left out',
+        ),
+      );
       await agent.resume(first.checkpoint as never, {
         requestId: first.awaitingInput.requestId,
         values: { f1: first.awaitingInput.fields[0]!.enum![0]! },
       });
-      const tools = requests[1]!.tools ?? [];
-      const search = tools.find((t) => t.name === 'search_logs')!;
-      const activity = tools.find((t) => t.name === 'client_activity')!;
-      expect(search.description).toBe(
-        "Error lines over a look-back window. Time words in the person's message, as the library " +
-          'holds them: “last 2 hours” → window "2h" (the window the person confirmed when asked ' +
-          'what their words meant); a call may pass these values as written.',
-      );
-      expect(activity.description).toBe(
-        "Client operations over a window. Time words in the person's message, as the library " +
-          `holds them: “last 2 hours” → start_time ${NOW_MS - 2 * 3_600_000}, end_time ${NOW_MS} ` +
-          '(the window the person confirmed when asked what their words meant); a call may pass ' +
-          'these values as written.',
+      // After it: the late line names the window in the person's zone, WHOSE it is, and each
+      // tool's own values; the answer is told to state it. Nothing is pending any more.
+      expect(requests[1]!.tools!.map((t) => t.description)).toEqual([
+        'Error lines over a look-back window.',
+        'Client operations over a window.',
+      ]);
+      expect(timeLineOf(requests[1])).toBe(
+        "The person's time words, as the library holds them: “last 2 hours” is " +
+          `${WINDOW_2H}, the window the person confirmed when asked what their words meant — ` +
+          `search_logs window "2h"; client_activity start_time ${NOW_MS - 2 * 3_600_000}, ` +
+          `end_time ${NOW_MS}. A call may pass these values as written; an answer built on them ` +
+          'states that window.',
       );
       expect(ofKind(agent, 'time-reading')).toHaveLength(1);
     });
@@ -609,6 +643,9 @@ describe('the one served time sentence — the confirmed window and its source',
       values: { f1: first.awaitingInput.fields[0]!.enum![0]! },
     });
     expect(JSON.stringify(requests[1]!.tools)).toBe(JSON.stringify(requests[0]!.tools));
+    // The slot did not re-run, so its iteration-1 line (pending) is stale and is NOT served.
+    expect(timeLineOf(requests[0])).toContain('has not confirmed');
+    expect(timeLineOf(requests[1])).toBeUndefined();
     expect(seen).toEqual([{ window: '2h' }, { window: '2h' }]);
     expect(ofKind(agent, 'call-window').filter((r) => r.toolCallId === 'c1')).toMatchObject([
       { how: 'filled', person: { source: 'answered', mention: 0 } },
@@ -626,11 +663,10 @@ describe('the one served time sentence — the confirmed window and its source',
       requestId: first.awaitingInput.requestId,
       values: { f1: '2026-10-08T20:00:00-07:00/2026-10-08T21:00:00-07:00' },
     });
-    const activity = requests[1]!.tools!.find((t) => t.name === 'client_activity')!;
-    expect(activity.description).toContain(
-      `“yesterday” → start_time ${Date.parse('2026-10-08T20:00:00-07:00')}, end_time ` +
-        `${Date.parse('2026-10-08T21:00:00-07:00')} (the window the person gave when asked what ` +
-        'their words meant)',
+    expect(timeLineOf(requests[1])).toContain(
+      ', the window the person gave when asked what their words meant — client_activity ' +
+        `start_time ${Date.parse('2026-10-08T20:00:00-07:00')}, end_time ` +
+        `${Date.parse('2026-10-08T21:00:00-07:00')}.`,
     );
   });
 
@@ -644,6 +680,9 @@ describe('the one served time sentence — the confirmed window and its source',
     );
     await armed.agent.run({ message: 'any errors at all?', time: { now: NOW } });
     expect(JSON.stringify(armed.requests[0]!.tools)).toBe(JSON.stringify(plain.requests[0]!.tools));
+    // …and no late line: a message with no time words serves nothing new.
+    expect(armed.requests[0]!.messages).toHaveLength(plain.requests[0]!.messages.length);
+    expect(timeLineOf(armed.requests[0])).toBeUndefined();
     expect(plain.requests[0]!.tools!.every((t) => !t.description.includes('library read'))).toBe(
       true,
     );

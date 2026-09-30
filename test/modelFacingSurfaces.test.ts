@@ -89,7 +89,7 @@ import {
   keptAnswersNote,
   secondPauseRefusal,
   timeRefusal,
-  timeWindowsSentence,
+  timeWindowsLine,
   unansweredRefusal,
   unmountedRulesRefusal,
   unreadableRulesRefusal,
@@ -708,11 +708,13 @@ const RULED_PROPERTY_DESCRIPTION: Surface = {
 };
 
 /**
- * The one served time sentence (time step T6b): "yesterday" in a look-back
- * tool's and an epoch tool's form — as the window the person CONFIRMED in the
- * time ask, as one they EDITED, and as a `model` reader's unconfirmed reading.
+ * The one served time line (time step T6b), served LATE: "yesterday" in a
+ * look-back tool's and an epoch tool's form — as the window the person
+ * CONFIRMED in the time ask, as one they EDITED, as a `model` reader's
+ * unconfirmed reading, and PENDING (a proposal the person has not answered),
+ * alone and beside a settled window; once more with a view that hides a value.
  */
-function timeWindowSentences(): string[] {
+function timeWindowLines(): string[] {
   const lookback = defineTool({
     name: 'search_logs',
     description: 'Error lines over a look-back window.',
@@ -756,10 +758,22 @@ function timeWindowSentences(): string[] {
     { source: 'answered' as const, answer: 'edited' as const },
     { source: 'derived-from-reading' as const },
   ].map((who) => ({ now: '2026-10-09T15:40:00Z', windows: [{ ...window, ...who }] }));
-  return sets.flatMap((windows) =>
-    [lookback, epoch, hiding].flatMap((t) => {
-      const sentence = timeWindowsSentence(t as never, windows);
-      return sentence === undefined ? [] : [sentence];
+  const pendingSets = [
+    { now: '2026-10-09T15:40:00Z', windows: [], pending: ['yesterday'] },
+    { ...sets[0]!, pending: ['10/09/26 8 AM to 8:40 AM PST', 'last 2 hours'] },
+  ];
+  const wires = [
+    new Map<string, unknown>([
+      ['search_logs', lookback],
+      ['client_activity', epoch],
+    ]),
+    new Map<string, unknown>([['client_activity', hiding]]),
+  ];
+  return [...sets, ...pendingSets].flatMap((windows) =>
+    wires.flatMap((winning) => {
+      const served = [...winning.values()].map((t) => (t as { schema: unknown }).schema);
+      const line = timeWindowsLine(served as never, winning as never, windows);
+      return line === undefined ? [] : [line];
     }),
   );
 }
@@ -1568,25 +1582,25 @@ const PRODUCERS: readonly ModelFacingProducer[] = [
     compose: async () => ruledSchemaDescriptions(),
   },
   {
-    id: 'time layer — the person’s windows on a tool that declares a period (TQ13, step T6b)',
+    id: 'time layer — the person’s windows, served late at the decision point (TQ13, step T6b)',
     module: 'src/core/agent/arguments/serve.ts',
-    surface: RULED_PROPERTY_DESCRIPTION,
+    surface: { channel: 'injected-turn', lifetime: 'request-ephemeral' },
     lifetimeBecause:
-      "appended to the tool's description on the served copy of the schema, rebuilt per request " +
-      'at the one decoration site from the turn’s recorded readings and the person’s answers in ' +
-      'the time ask; judged at the strictest lifetime because it names, in the past tense, each ' +
-      'window’s SOURCE (the person confirmed it, gave it, or it is a reading they have not ' +
-      'confirmed), and a permission, never an outcome — a later re-read in the same turn cannot ' +
-      'falsify it',
+      'composed at the tools slot’s one decoration site from the turn’s recorded readings, the ' +
+      'person’s answers in the time ask and the tools really served, stamped with its iteration, ' +
+      'and appended by `callLLM` as the LAST `role: "user"` line of that one request — never ' +
+      'written to history, so every later call re-reads a fresh composition (a pending quote the ' +
+      'person then confirms is never re-read as pending)',
     drivenBy: ['test/core/time/english-run.test.ts'],
     reaches: [
-      /^Time words in the person's message, as the library holds them: “yesterday” → window "1960m" \(the window the person confirmed when asked what their words meant, a wider read than the words named\); a call may pass these values as written\.$/m,
-      /“yesterday” → start_time 1791442800000, end_time 1791529200000 \(the window the person confirmed when asked what their words meant\)/,
-      /start_time \(hidden by the tool's view\), end_time 1791529200000/,
-      /\(the window the person gave when asked what their words meant\)/,
-      /\(a reading of the person's words they have not confirmed, not their words\)/,
+      /^The person's time words, as the library holds them: “yesterday” is 2026-10-08 00:00–23:59 America\/Los_Angeles \(UTC-07:00\), the window the person confirmed when asked what their words meant — search_logs window "1960m" \(a wider read than the words named\); client_activity start_time 1791442800000, end_time 1791529200000\. A call may pass these values as written; an answer built on them states that window\.$/m,
+      /client_activity start_time \(hidden by the tool's view\), end_time 1791529200000/,
+      /, the window the person gave when asked what their words meant — /,
+      /, a reading of the person's words they have not confirmed, not their words — /,
+      /^The person has not confirmed what their time words “yesterday” mean yet: call search_logs with window left out, or client_activity with start_time, end_time left out, and the library confirms its reading with the person, zone shown, before the call runs \(or refuses the call and says why\); a window written into the call runs unconfirmed\.$/m,
+      / that window\. The person has not confirmed what their time words “10\/09\/26 8 AM to 8:40 AM PST”, “last 2 hours” mean yet: /,
     ],
-    compose: async () => timeWindowSentences(),
+    compose: async () => timeWindowLines(),
   },
   {
     id: 'inputs layer — the note on a result whose call ran on a filled value (honesty layer 2)',

@@ -504,6 +504,9 @@ export function buildDynamicAgentChart(deps: AgentChartDeps): FlowChart {
         // working key the call-llm stage appends to; the boundary's own
         // outputMapper carries it the rest of the way. Value-conditional.
         ...(sf.toolChoices !== undefined && { toolChoices: sf.toolChoices }),
+        // The time layer's late line (step T6b), onto the key `callLLM` appends last to the
+        // request — under the reader's arm only (the slot writes it every composition then).
+        ...(sf.timeLine !== undefined && { timeLine: sf.timeLine }),
       }),
       arrayMerge: ArrayMergeMode.Replace,
       // STRUCTURE-ONLY merge target. When skills are off, UpdateSkillHistory

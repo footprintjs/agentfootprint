@@ -663,6 +663,24 @@ export function buildCallLLMStage(
         });
       }
     }
+    // THE TIME LINE (step T6b, `.time({ reader })` only) — the library's conclusion about the
+    // person's time words, LAST, at the decision point: a settled window with its source and each
+    // tool's values, or a quote not confirmed yet and the one move that asks the person. Composed
+    // by the tools slot from the tools it served (`agent/arguments/serve.ts` · `timeWindowsLine`)
+    // and served only on the iteration that composed it — a slot that did not re-run (classic
+    // mode) leaves an older line, which is never served. Request-only like the nudge above; not
+    // on the wrap-up call, whose tools are withheld. `servedView` rebuilds it from the same key.
+    const timeLine = scope.timeLine;
+    if (
+      timeLine !== undefined &&
+      timeLine.iteration === iteration &&
+      timeLine.text.length > 0 &&
+      scope.wrapUpAsked !== true
+    ) {
+      const line: LLMMessage = { role: 'user', content: timeLine.text };
+      requestOnly.push({ message: line, reason: 'time-window-line' });
+      wireMessages = [...wireMessages, line];
+    }
 
     typedEmit(scope, 'agentfootprint.stream.llm_start', {
       iteration,

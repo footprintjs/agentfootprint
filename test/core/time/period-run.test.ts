@@ -224,11 +224,14 @@ describe('the fill — the turn’s one window, into the tool’s form, exactly'
         how: 'confirmed',
       },
     ]);
-    // The served line before the next call names the confirmed window and its source.
-    const served = requests[1]!.tools!.find((t) => t.name === 'client_activity')!;
-    expect(served.description).toContain(
-      `“10/09/26 8 AM to 8:40 AM” → start_time ${FROM_MS}, end_time ${TO_MS} (the window the ` +
-        'person confirmed when asked what their words meant)',
+    // The served line before the next call — the request's LAST line, late at the decision
+    // point (step T6b) — names the confirmed window, its source and the tool's own values.
+    const lines = requests[1]!.messages;
+    expect(lines[lines.length - 1]).toMatchObject({ role: 'user' });
+    expect(lines[lines.length - 1]!.content as string).toContain(
+      '“10/09/26 8 AM to 8:40 AM” is 2026-10-09 08:00–08:40 America/Los_Angeles (UTC-07:00), the ' +
+        'window the person confirmed when asked what their words meant — client_activity ' +
+        `start_time ${FROM_MS}, end_time ${TO_MS}.`,
     );
 
     // The later call ran with the window in its own form, the end exclusive…

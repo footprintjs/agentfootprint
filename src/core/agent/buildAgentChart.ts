@@ -890,6 +890,9 @@ export function buildAgentChart(deps: AgentChartDeps): FlowChart {
         // The classifier's pick (9.105.0), back onto the parent key the
         // call-llm stage appends the outcome row to. Value-conditional.
         ...(sf.toolChoices !== undefined && { toolChoices: sf.toolChoices }),
+        // The time layer's late line (step T6b), onto the key `callLLM` appends last to the
+        // request — under the reader's arm only (the slot writes it every composition then).
+        ...(sf.timeLine !== undefined && { timeLine: sf.timeLine }),
       }),
       // Same array-concat hazard as InjectionEngine — replace, don't
       // concatenate. Without Replace the deduped tool list re-acquires

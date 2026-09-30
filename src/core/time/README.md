@@ -62,8 +62,11 @@ the resolver's (`TimeCandidate`, `ResolvedWindow`, `ReadingChoice`, `TimePolicy`
 `englishTimeReader` and `EnglishTimeReaderOptions`; the doors are `AgentBuilder.time`,
 `run({ time })` and `InputField.format`. The grammar functions stay internal.
 Since step T6b the windows the person CONFIRMED (and a `model` reader's readings) are also
-SERVED, with their source: the Tools mount reads them off the ledger (`bind.ts` · `readerWindowsOf`) and the slot's one decoration site appends the sentence
-(`arguments/serve.ts` · `timeWindowsSentence`); and a mention still open is ASKED through the batch
+SERVED, with their source, and a mention still pending is served as NOT confirmed: the Tools mount
+reads them off the ledger (`bind.ts` · `readerWindowsOf`, `pendingQuotesOf`), the slot's one
+decoration site composes ONE late line (`arguments/serve.ts` · `timeWindowsLine`) and `callLLM`
+appends it last to the request, request-only — the conclusion at the decision point, never a
+tool description; and a mention still open is ASKED through the batch
 ask (`arguments/ask.ts` · `planAskFields`'s window field, `stages/argumentAsk.ts` · `windowPlanOf`),
 re-read after a zone answer with `resolve.ts` · `withZoneAnswered`.
 

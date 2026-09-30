@@ -218,7 +218,7 @@ export interface ReceiptMessage {
 export interface ReceiptRequestOnlyMessage {
   readonly role: ContextRole;
   readonly hash: string;
-  /** Which library mechanism composed it. `'staged-refs-nudge'` today. */
+  /** Which library mechanism composed it. `'staged-refs-nudge'` or `'time-window-line'` (step T6b). */
   readonly reason: string;
 }
 

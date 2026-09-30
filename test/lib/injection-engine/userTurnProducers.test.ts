@@ -199,6 +199,14 @@ const SITES: Readonly<Record<string, readonly Site[]>> = {
         'from scratch each iteration. `scope.history` is deliberately untouched, which is ' +
         'why it needs no frame.',
     },
+    {
+      cls: 'never-in-history',
+      why:
+        "the time layer's late line (step T6b): the tools slot's composition for THIS " +
+        'iteration, appended LAST to `wireMessages` for one request and never to ' +
+        "`scope.history` — the library's conclusion about the person's time words, re-read " +
+        'fresh by every later call.',
+    },
   ],
   'src/lib/time-travel/servedView.ts': [
     {
@@ -208,6 +216,12 @@ const SITES: Readonly<Record<string, readonly Site[]>> = {
         'the committed record so a reader can see the one model-facing line the run never ' +
         'persisted. It goes onto a `ServedView`, which is a reading of a finished run — no ' +
         'scope, no history, no request.',
+    },
+    {
+      cls: 'never-in-history',
+      why:
+        "not a producer either: the REBUILD of the time layer's late line (step T6b), read " +
+        'from the committed `timeLine` key onto a `ServedView` — a reading of a finished run.',
     },
   ],
   'src/core/agent/stages/reliabilityExecution.ts': [

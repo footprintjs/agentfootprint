@@ -208,21 +208,57 @@ export interface ReaderWindows {
   readonly now: InstantText;
   /** Each settled mention's window (`answered`, or a `model` reading's), in mention order — never the `control` window. */
   readonly windows: readonly TurnWindow[];
+  /**
+   * The quote of each mention the library holds only as a PROPOSAL — a `rule`
+   * reading the person has not answered yet (its choice still `open`: a zone
+   * to name, readings to confirm) — in mention order. The served sentence
+   * names them as not confirmed, so a model that would write its own window
+   * leaves the period out and the time ask confirms it (step T6b bench,
+   * `bench/time/`). Absent when none is pending.
+   */
+  readonly pending?: readonly string[];
+}
+
+/**
+ * The quotes of this turn's mentions still waiting on the person: a reading
+ * with a quote whose choice is `open`, not answered in the time ask, and not a
+ * `model` reading's one window (that one is served as a reading). Unreadable
+ * and refused mentions offer nothing to confirm and are not named.
+ */
+export function pendingQuotesOf(
+  readings: readonly TimeReadingRow[],
+  answers: readonly TimeAnswerRow[] = [],
+): readonly string[] {
+  const answered = new Set(answers.map((a) => a.mention));
+  const quotes: string[] = [];
+  for (const row of readings) {
+    if (row.mentions === 0 || row.refused !== undefined || row.quote === undefined) continue;
+    if (row.choice?.by !== 'open') continue;
+    if (row.mention !== undefined && answered.has(row.mention)) continue;
+    if (readingCandidate(row) !== undefined) continue;
+    quotes.push(row.quote);
+  }
+  return quotes;
 }
 
 /**
  * The latest turn's windows of the person's words, read off the ledger (its
  * last `clock` row and that turn's `time-reading` and `time-answer` rows) —
- * `undefined` when the turn has no clock or no settled mention. A `rule`
- * reading is named only once the person answered it in the time ask. The
+ * `undefined` when the turn has no clock, no settled mention and none
+ * pending. A `rule` reading is named as a window only once the person
+ * answered it in the time ask; before that its quote is `pending`. The
  * `control` window is not a reading and is not named (TQ13).
  */
 export function readerWindowsOf(ledger: readonly unknown[] | undefined): ReaderWindows | undefined {
   const clock = clockOf(ledger);
   if (clock === undefined) return undefined;
   const turn = clock.turn;
-  const { windows } = turnWindowsOf(readingsOf(ledger, turn), undefined, answersOf(ledger, turn));
-  return windows.length === 0 ? undefined : { now: clock.now, windows };
+  const readings = readingsOf(ledger, turn);
+  const answers = answersOf(ledger, turn);
+  const { windows } = turnWindowsOf(readings, undefined, answers);
+  const pending = pendingQuotesOf(readings, answers);
+  if (windows.length === 0 && pending.length === 0) return undefined;
+  return { now: clock.now, windows, ...(pending.length > 0 && { pending }) };
 }
 
 // ─── One call ────────────────────────────────────────────────────────────

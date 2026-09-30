@@ -274,11 +274,30 @@ wider), filed `answered` per argument, filled with `ArgumentFill.window` (the no
 "from the window the person chose when asked what their words meant"), and settles the mention
 with a `time-answer` row (`how: 'confirmed'` for the click on a pre-filled reading, `'edited'` for a
 window the person wrote) — so later calls of the turn are filled from it (`answered` +
-`matched: 'mention'`) and it is not asked again. SERVED: from then on each tool that declares a
-period carries ONE sentence after its description naming that window in its own form WITH ITS
-SOURCE (`serve.ts` · `timeWindowsSentence`, through `rulesOnWire`'s `windows` at the slot's one
-decoration site; the mount reads them with `core/time/bind.ts` · `readerWindowsOf`). When every
-reading breaks a tool's facts nothing is asked and the call is refused (`timeRefusal`).
+`matched: 'mention'`) and it is not asked again. SERVED — LATE, at the decision point, never on a
+tool description: ONE request-only `user` line appended last to each request (`serve.ts` ·
+`timeWindowsLine`, composed at the slot's one decoration site from the tools really served, carried
+on `timeLine` = `{ iteration, text }`, appended by `callLLM`, rebuilt by `servedView`; the mount
+reads the windows with `core/time/bind.ts` · `readerWindowsOf`). It is the library's CONCLUSION,
+never raw facts: a settled window in the person's zone WITH ITS SOURCE and each period tool's own
+values ("may pass"), and the answer is told to state it; a quote still PENDING names no window —
+only that the person has not confirmed it and the one move that asks them (leave the period
+arguments out; a window written into the call runs unconfirmed). Why late: the step-7b bench
+measured raw facts served early wrong 73/80 and the conclusion served at the decision point 20/80.
+When every reading breaks a tool's facts nothing is asked and the call is refused (`timeRefusal`).
+
+```ts
+// "client activity yesterday?" under the reader's arm, first request — its LAST message:
+//   { role: 'user', content: 'The person has not confirmed what their time words “yesterday” mean
+//     yet: call client_activity with start_time, end_time left out, and the library confirms its
+//     reading with the person, zone shown, before the call runs (or refuses the call and says
+//     why); a window written into the call runs unconfirmed.' }
+// after the person confirms, the next request's last message:
+//   'The person's time words, as the library holds them: “yesterday” is 2026-10-08 00:00–23:59
+//    America/Los_Angeles (UTC-07:00), the window the person confirmed when asked what their words
+//    meant — client_activity start_time 1791442800000, end_time 1791529200000. A call may pass
+//    these values as written; an answer built on them states that window.'
+```
 
 ```ts
 // .time({ zone: LA, reader: englishTimeReader() }), "10/09/26 8 AM to 8:40 AM PST", {} sent →

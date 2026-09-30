@@ -55,6 +55,7 @@ import { describe, expect, it } from 'vitest';
 import {
   Agent,
   defineTool,
+  englishTimeReader,
   epochLocations,
   flowchartAsTool,
   inMemoryArtifacts,
@@ -990,6 +991,59 @@ describe('the staged-refs nudge', () => {
     expect(servedAt(r.snapshot, 1)!.messages.requestOnly).toEqual([]);
     clean(r);
   });
+
+  for (const mode of ['dynamic', 'dynamic-grouped'] as const) {
+    it(`rebuilds the time layer's late line (step T6b) from the committed key, last and request-only (${mode})`, async () => {
+      const activity = defineTool({
+        name: 'client_activity',
+        description: 'Client operations over a window.',
+        inputSchema: {
+          type: 'object',
+          properties: { start_time: { type: 'integer' }, end_time: { type: 'integer' } },
+        },
+        askOrAssume: { start_time: { ask: 'From when?' }, end_time: { ask: 'Until when?' } },
+        period: {
+          forms: [
+            {
+              kind: 'bounds',
+              from: { argument: 'start_time', as: 'epoch-ms' },
+              to: { argument: 'end_time', as: 'epoch-ms', edge: 'exclusive' },
+            },
+          ],
+        } as never,
+        execute: () => '{"ops":42}',
+      });
+      const { provider, wire } = scripted([answer('which window?')]);
+      const agent = Agent.create({
+        provider: provider as never,
+        model: 'mock',
+        maxIterations: 4,
+        reactMode: mode,
+      })
+        .tool(activity)
+        .time({ zone: 'America/Los_Angeles', reader: englishTimeReader() })
+        .build();
+      await agent.run({
+        message: 'client activity yesterday?',
+        time: { now: '2026-10-09T15:40:00Z' },
+      });
+      const r: Run = { snapshot: agent.getSnapshot()!, wire };
+      const first = servedAt(r.snapshot, 1)!;
+      expect(first.messages.requestOnly).toHaveLength(1);
+      expect(first.messages.requestOnly[0]).toMatchObject({
+        role: 'user',
+        reason: 'time-window-line',
+      });
+      expect(first.messages.requestOnly[0]!.text).toMatch(
+        /^The person has not confirmed what their time words “yesterday” mean yet: call client_activity with start_time, end_time left out/,
+      );
+      // What went out: the line is the request's LAST message; the history never holds it.
+      const sent = wire[0]!.messages;
+      expect(sent[sent.length - 1]!.content).toBe(first.messages.requestOnly[0]!.text);
+      expect(JSON.stringify(first.messages.asSent)).not.toContain('has not confirmed');
+      clean(r);
+    });
+  }
 });
 
 describe('an LLMCall chart', () => {

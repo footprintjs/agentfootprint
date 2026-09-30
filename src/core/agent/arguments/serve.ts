@@ -37,6 +37,7 @@ import { HIDDEN_VALUE, type ArgumentRow } from './rows.js';
 import {
   convertExact,
   convertWidened,
+  formArguments,
   granularityMsOf,
   widestMsOf,
   type PeriodFacts,
@@ -44,6 +45,7 @@ import {
 } from '../../time/convert.js';
 import type { ReaderWindows } from '../../time/bind.js';
 import type { ZoneName } from '../../time/zone.js';
+import { presentRange } from '../../time/present.js';
 
 type PlainObject = Record<string, unknown>;
 
@@ -218,109 +220,63 @@ export function rulesOnWire(
   served: readonly LLMToolSchema[],
   winningTools: ReadonlyMap<string, RuledToolLike>,
   optionsOf?: (schema: LLMToolSchema) => ServeOptions | undefined,
-  windows?: ServedWindows,
 ): readonly LLMToolSchema[] {
   let changed = false;
   const decorated = served.map((schema) => {
-    const tool = winningTools.get(schema.name);
-    const ruled = withArgumentRules(schema, tool, optionsOf?.(schema));
-    const next = windows === undefined ? ruled : withTimeWindows(ruled, tool, windows);
+    const next = withArgumentRules(schema, winningTools.get(schema.name), optionsOf?.(schema));
     if (next !== schema) changed = true;
     return next;
   });
   return changed ? decorated : served;
 }
 
-// ─── The person's windows, on a tool that declares a period (time design TQ13) ───
+// ─── The person's windows, served LATE at the decision point (time design TQ13) ───
 
 /**
- * What the served sentence reads: the turn's SETTLED windows of the person's
+ * What the served line reads: the turn's SETTLED windows of the person's
  * words (`core/time/bind.ts` · `readerWindowsOf` — each mention's quote and
  * its one window: the one the person confirmed or gave in the time ask, or a
- * `model` reader's reading; a proposal still open or an unreadable mention is
- * not named), the turn's clock, and the app's `.time({ zone })`.
+ * `model` reader's reading), the quotes still PENDING (a proposal the person
+ * has not answered), the turn's clock, and the app's `.time({ zone })`. An
+ * unreadable mention is in neither list.
  */
 export interface ServedWindows extends ReaderWindows {
   readonly appZone?: ZoneName;
 }
 
-/** A converted value as the sentence prints it — an object form's as JSON. */
+/** A converted value as the line prints it — an object form's as JSON. */
 function printedArgument(value: unknown): string {
   return typeof value === 'object' && value !== null
     ? JSON.stringify(value)
     : printedValue(value as InputValue);
 }
 
-// LENS · tool-description · persistent-history
-// reads: the turn's settled windows of the person's words (each mention's quote, its one window and
-//        WHOSE it is — the person's answer in the time ask, or a model reader's reading —
-//        `bind.ts` · `readerWindowsOf` off the `time-reading` and `time-answer` rows), the turn's
-//        clock, and THIS tool's declared period forms and facts — converted by the one owner
-//        (`core/time/convert.ts`)
-// law: past tense about what happened; names each window's SOURCE (a reading is never called the
-//      person's words; an answer is named as the person's answer when asked); a permission
-//      ("may pass"), never an outcome — whether a call is filled, bound or refused is decided at
-//      dispatch and recorded there.
-/**
- * The ONE served time sentence (TQ13): on a tool that declares a period, each
- * settled window of the person's words this turn, in THIS tool's own form —
- * the exact conversion, else the wider one the fill would use (said so) — and
- * WHOSE it is: the window the person confirmed (picked as offered) or gave
- * (wrote their own) when the time ask asked them, or a `model` reader's
- * reading they have not confirmed. So the model never re-derives a window
- * from words. A window no form of the tool holds is not named; `undefined`
- * when none is. The values are library spellings (§ 9.5). A value the tool's
- * own argument view hides is named as hidden.
- *
- * @example
- * ```ts
- * timeWindowsSentence(clientActivity, {
- *   now,
- *   windows: [{ quote: 'yesterday', range, zone, source: 'answered', mention: 0, answer: 'confirmed' }],
- * });
- * // 'Time words in the person's message, as the library holds them: “yesterday” → start_time
- * //  1791442800000, end_time 1791529200000 (the window the person confirmed when asked what their
- * //  words meant); a call may pass these values as written.'
- * ```
- */
-export function timeWindowsSentence(
-  tool: RuledToolLike | undefined,
-  windows: ServedWindows,
-): string | undefined {
-  const rules = rulesOf(tool);
-  if (rules === undefined || isRefused(rules)) return undefined;
-  const forms = periodFormsOf(rules.period);
-  if (forms.length === 0) return undefined;
-  const facts = periodFactsOf(rules.period);
-  const clauses: string[] = [];
-  for (const w of windows.windows) {
-    if (w.quote === undefined) continue;
-    const ctx = {
-      now: windows.now,
-      zone: w.zone,
-      ...(windows.appZone !== undefined && { appZone: windows.appZone }),
-      granularityMs: granularityMsOf(facts),
-    };
-    const window = { range: w.range, ...(w.lookback !== undefined && { lookback: w.lookback }) };
-    const exact = convertExact(window, forms, ctx);
-    const conversion = exact ?? convertWidened(window, forms, ctx, widestMsOf(facts));
-    if (conversion === undefined) continue;
-    const values = Object.entries(conversion.values).map(([argument, value]) =>
-      hidesArgument(tool, argument, value as InputValue)
-        ? `${argument} (hidden by the tool's view)`
-        : `${argument} ${printedArgument(value)}`,
-    );
-    const wider = exact === undefined ? ', a wider read than the words named' : '';
-    clauses.push(`“${w.quote}” → ${values.join(', ')} (${whoseWindow(w)}${wider})`);
-  }
-  if (clauses.length === 0) return undefined;
-  return (
-    "Time words in the person's message, as the library holds them: " +
-    `${clauses.join('; ')}; a call may pass these values as written.`
-  );
+/** A served tool that declares a period — the only tools the line speaks about. */
+interface PeriodTool {
+  readonly name: string;
+  readonly tool: RuledToolLike;
+  readonly forms: ReturnType<typeof periodFormsOf>;
+  readonly facts: ReturnType<typeof periodFactsOf>;
 }
 
-/** Whose one window of the person's words is — the served sentence's source clause. */
+/** The served tools (in served order) whose winning implementation declares period forms. */
+function periodToolsOf(
+  served: readonly LLMToolSchema[],
+  winningTools: ReadonlyMap<string, RuledToolLike>,
+): readonly PeriodTool[] {
+  const out: PeriodTool[] = [];
+  for (const schema of served) {
+    const tool = winningTools.get(schema.name);
+    const rules = rulesOf(tool);
+    if (tool === undefined || rules === undefined || isRefused(rules)) continue;
+    const forms = periodFormsOf(rules.period);
+    if (forms.length === 0) continue;
+    out.push({ name: schema.name, tool, forms, facts: periodFactsOf(rules.period) });
+  }
+  return out;
+}
+
+/** Whose one window of the person's words is — the line's source clause. */
 function whoseWindow(w: ServedWindows['windows'][number]): string {
   if (w.source === 'answered') {
     return w.answer === 'edited'
@@ -331,22 +287,132 @@ function whoseWindow(w: ServedWindows['windows'][number]): string {
 }
 
 /**
- * The served copy of a schema with the time sentence after its description —
- * the SAME reference back when the sentence names nothing, so a turn whose
- * reader settled no window serves the bytes it always did.
+ * A window for a person, in its zone, to the minute with its end AS SAID — the last minute inside
+ * the half-open range (`time/present.ts` · `presentRange`); the ISO interval if it cannot be.
  */
-export function withTimeWindows(
-  schema: LLMToolSchema,
-  tool: RuledToolLike | undefined,
+function presentedWindow(w: ServedWindows['windows'][number]): string {
+  try {
+    return presentRange(w.range, { zone: w.zone }, 'minute');
+  } catch {
+    return `${w.range.from}/${w.range.to}`;
+  }
+}
+
+/** One tool's values for one settled window — exact, else the wider read the fill would use, said so. */
+function toolValues(
+  pt: PeriodTool,
+  w: ServedWindows['windows'][number],
   windows: ServedWindows,
-): LLMToolSchema {
-  const sentence = timeWindowsSentence(tool, windows);
-  if (sentence === undefined) return schema;
-  const description = schema.description ?? '';
-  return {
-    ...schema,
-    description: description.trim() === '' ? sentence : `${description.trimEnd()} ${sentence}`,
+): string | undefined {
+  const ctx = {
+    now: windows.now,
+    zone: w.zone,
+    ...(windows.appZone !== undefined && { appZone: windows.appZone }),
+    granularityMs: granularityMsOf(pt.facts),
   };
+  const window = { range: w.range, ...(w.lookback !== undefined && { lookback: w.lookback }) };
+  const exact = convertExact(window, pt.forms, ctx);
+  const conversion = exact ?? convertWidened(window, pt.forms, ctx, widestMsOf(pt.facts));
+  if (conversion === undefined) return undefined;
+  const values = Object.entries(conversion.values).map(([argument, value]) =>
+    hidesArgument(pt.tool, argument, value as InputValue)
+      ? `${argument} (hidden by the tool's view)`
+      : `${argument} ${printedArgument(value)}`,
+  );
+  const wider = exact === undefined ? ' (a wider read than the words named)' : '';
+  return `${pt.name} ${values.join(', ')}${wider}`;
+}
+
+/** The settled half: each window, whose it is, and each tool's values for it. */
+function settledSentence(tools: readonly PeriodTool[], windows: ServedWindows): string | undefined {
+  const clauses: string[] = [];
+  for (const w of windows.windows) {
+    if (w.quote === undefined) continue;
+    const values = tools.flatMap((pt) => toolValues(pt, w, windows) ?? []);
+    if (values.length === 0) continue;
+    clauses.push(`“${w.quote}” is ${presentedWindow(w)}, ${whoseWindow(w)} — ${values.join('; ')}`);
+  }
+  if (clauses.length === 0) return undefined;
+  const these = clauses.length === 1 ? 'that window' : 'those windows';
+  return (
+    `The person's time words, as the library holds them: ${clauses.join('. ')}. ` +
+    `A call may pass these values as written; an answer built on them states ${these}.`
+  );
+}
+
+/** The pending half: the quotes no one has confirmed, and the one move that asks the person. */
+function pendingSentence(
+  tools: readonly PeriodTool[],
+  pending: readonly string[] | undefined,
+): string | undefined {
+  if (pending === undefined || pending.length === 0) return undefined;
+  const moves = tools.flatMap((pt) => {
+    const args = [...new Set(pt.forms.flatMap((f) => formArguments(f).map((a) => a.argument)))];
+    return args.length === 0 ? [] : [`${pt.name} with ${args.join(', ')} left out`];
+  });
+  if (moves.length === 0) return undefined;
+  const quotes = pending.map((q) => `“${q}”`).join(', ');
+  return (
+    `The person has not confirmed what their time words ${quotes} mean yet: call ` +
+    `${moves.join(', or ')}, and the library confirms its reading with the person, zone shown, ` +
+    'before the call runs (or refuses the call and says why); a window written into the call ' +
+    'runs unconfirmed.'
+  );
+}
+
+// LENS · late-line · request-ephemeral
+// reads: the turn's settled windows of the person's words (each mention's quote, its one window and
+//        WHOSE it is — the person's answer in the time ask, or a model reader's reading), the
+//        quotes still pending (a rule reading the person has not answered — `bind.ts` ·
+//        `pendingQuotesOf`), the turn's clock, and the SERVED tools' declared period forms and
+//        facts — converted by the one owner (`core/time/convert.ts`)
+// law: the library's CONCLUSION, never raw facts: a settled window is named with its source (a
+//      reading is never called the person's words) and the values each tool takes, as a
+//      permission ("may pass"); a pending quote names no window and no reading (a proposal is not
+//      a fact the model may pass) — only that it is not confirmed and the one move that asks the
+//      person. Whether a call is filled, bound or refused is decided at dispatch and recorded there.
+/**
+ * The ONE served time line (TQ13; step T6b's serving placement): one
+ * request-only `user` line appended LAST to the request, at the decision
+ * point — composed at the tools slot's one decoration site
+ * (`core/slots/buildToolsSlot.ts` · `commitWire`) from the tools it really
+ * serves, carried to `callLLM` on `timeLine`, and rebuilt by
+ * `lib/time-travel/servedView.ts` from the same committed key. Two halves:
+ *
+ * - SETTLED — each window the person confirmed or gave in the time ask (or a
+ *   `model` reader's reading), in the person's zone, WHOSE it is, and each
+ *   served period tool's values for it — the exact conversion, else the wider
+ *   one the fill would use (said so); a value the tool's view hides is named
+ *   hidden. So the model never re-derives a window from words, and the answer
+ *   states the window it was built on.
+ * - PENDING — a proposal the person has not answered is no window yet, and a
+ *   call that writes its own window runs as sent, unconfirmed (§ 7.3). The
+ *   line says so and names the arguments to leave out; the time ask then
+ *   confirms the window with the person before the call runs.
+ *
+ * `undefined` when no served tool declares a period or neither half has
+ * anything to say — a turn with no time words serves no line at all.
+ *
+ * @example
+ * ```ts
+ * timeWindowsLine(served, winningTools, { now, windows: [], pending: ['yesterday'] });
+ * // 'The person has not confirmed what their time words “yesterday” mean yet: call
+ * //  client_activity with start_time, end_time left out, and the library confirms its reading
+ * //  with the person, zone shown, before the call runs (or refuses the call and says why); a
+ * //  window written into the call runs unconfirmed.'
+ * ```
+ */
+export function timeWindowsLine(
+  served: readonly LLMToolSchema[],
+  winningTools: ReadonlyMap<string, RuledToolLike>,
+  windows: ServedWindows,
+): string | undefined {
+  const tools = periodToolsOf(served, winningTools);
+  if (tools.length === 0) return undefined;
+  const settled = settledSentence(tools, windows);
+  const pending = pendingSentence(tools, windows.pending);
+  if (settled === undefined) return pending;
+  return pending === undefined ? settled : `${settled} ${pending}`;
 }
 
 // ─── The note on a result ───────────────────────────────────────────────
