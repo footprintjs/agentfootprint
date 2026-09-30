@@ -5,6 +5,123 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [9.130.0] - 2026-09-30
+
+### Added
+
+- **`invokeModelGateway({ timeoutMs })`: a deadline for each request.** Before this, a gateway that never answered held the run until the caller's own signal fired, if one was set. `timeoutMs` bounds the response headers, a `complete()` body, and each stream read: the first chunk, then every gap between chunks. A stream that keeps sending is never cut off. A missed deadline aborts the request and raises `InvokeModelGatewayError` with `reason: 'timeout'` and `retryable: true`, so `withRetry` asks again as long as no chunk has reached the caller. The caller's `req.signal` still wins. With no `timeoutMs` there is no deadline and the request is sent exactly as before.
+
+### Fixed
+
+- **An empty assistant turn no longer fails the request with a 400.** An assistant message with no text and no tool calls was sent to the Anthropic Messages API as `content: ''`. The API accepts empty content only on a final assistant message, so a history carrying one mid-conversation failed the whole request with a 400 that no retry could mend. The turn is now left out of the body, the same way a system message is. This fixes `anthropic()`, `browserAnthropic()` and `invokeModelGateway()`, which now all build their messages through one shared mapping (`anthropic()` used to keep a private copy of it).
+
+  `bedrock()` had the same bug on its own wire: an empty assistant turn went to Converse as a blank text block, which Converse refuses. It is now left out too.
+
+- **`withRetry` waits as long as the failure asked.** It used to back off on its own schedule (200 ms, 400 ms, …) even when the server said how long to wait, so a gateway answering "Try again in 4 seconds" could see every attempt spent inside those 4 seconds. Now, when an error declares `retryAfterMs` (or `retryAfterSeconds`), the wait is the longer of the schedule and the stated wait, capped by `maxDelayMs` so a hostile header cannot stall a run. `req.signal` still ends the wait early. `anthropic()`, `openai()` and `bedrock()` declare the wait from the `retry-after-ms` / `Retry-After` headers. `invokeModelGateway()` also reads its gateway's "Try again in N seconds" body and exposes it as `InvokeModelGatewayError.retryAfterMs`. The `error.retried` event carries the stated wait as `statedWaitMs`, next to the `backoffMs` actually waited. With no stated wait, retries and events are unchanged.
+
+## [9.129.0] - 2026-09-30
+
+### Added
+
+- **A time answer is checked before your app sees it: `format` on a `requestInput` field.** An app
+  that asks the person for a window used to re-check every answer itself — backwards, no offset,
+  `PST` for a zone — and a re-ask often repeated the question with no word about why. Declare the
+  field's `format`: `'instant'` (an ISO 8601 date-time with its offset), `'time-range'` (an ISO 8601
+  interval `from/to` of two, `from` before `to`) or `'zone'` (an IANA name such as
+  `America/Los_Angeles`); it is refused unless `type: 'string'`, and a choice or supplied value that
+  is not its format is refused at definition. At `agent.resume` an answer the check refuses is not
+  taken: the same ask comes back with `refused: { answer, reason }` and `repeat: { count }`, the
+  field missing again, and nothing runs — no model call. Under `.time()`, which knows the person's
+  zone, a wall time the clocks skip (`2026-03-08T02:30-08:00` in Los Angeles) is refused too. The
+  reason is a sentence from `defaultTimeAskMessages` (exported from the main entry and
+  `agentfootprint/observe`); `.time({ messages: { 'answer.no-offset': '…' } })` rewords any key,
+  and an unknown key is refused. This refines 9.127.0's "the library never writes a reason": it
+  writes one only for a check the app armed by declaring the field. `labels` name each `enum`
+  choice; a time field's choices keep free entry open unless `strict: true`. Over MCP,
+  `elicitationOf(awaitingInput)` builds the elicitation request (a range as two `date-time`
+  properties, choices as `enum` + `enumNames`) and `answerFromElicitation` turns the client's content
+  back into the resume's answer. With a reader armed, a reading's labels now render in the reader's
+  `locale` (`Fri, Oct 9, 2026, 8:00 – 8:40 AM PDT`), and a reader whose `locale` is not a language
+  tag is refused at the builder. Without a `format` field nothing changes.
+
+- **Compare a dataset's times as instants, never as spellings: `normaliseInstants`.** A dataset
+  that declares its `timeAxis` can now be read through one view: `normaliseInstants(rows, axis)`
+  turns the declared column — epoch seconds, epoch milliseconds, or ISO strings in any offset —
+  into UTC instants at one precision, sorted, each with the row it came from, so comparing two as
+  text compares them in time. It only reads the rows; the stored bytes never change. A string with
+  no offset under an axis with no `zone` could be any of 24 hours, so it is never read as UTC: the
+  view counts it (`status: 'naive-values'`), or places nothing under `{ naive: 'refuse' }`. Under a
+  declared `zone`, a wall time the autumn clock change doubles is placed by the rows' order and
+  noted; one the order cannot place (a lone `01:30`, rows out of order) is counted, and a wall time
+  the spring change skips is counted too. The axis now shares the library's one time grammar, which
+  changes two things at mint: an `interval` may have any number of digits (`1000000m` used to be
+  refused), and a `zone` must be an IANA name — an abbreviation such as `PST`, a bare offset such as
+  `+05:30`, or `utc` in lower case is refused by name (the platform used to accept them, reading
+  `PST` as Los Angeles time, which is -07:00 half the year). A ticket minted earlier with such a
+  zone now reads `malformed` from `readTimeAxis`, so a viewer shows it as an error instead of
+  guessing.
+
+- **Read the person's words for time through your own reader — and have every reading recorded:
+  `.time({ reader, policy })`.** "10/09/26 8 AM to 8:40 AM" is 9 October to an American and
+  10 September to most of the world; a parser that silently picks one answers a question nobody
+  asked. Arm a `TimeReader` (`{ id, version, locale, kind: 'rule' | 'model', read }`): it returns
+  the zone-less PARTS it sees and the verbatim quote — `10/09/26` is three numbers, the order
+  undecided — and the library resolves them against the run's clock into every candidate window:
+  the three date orders, am and pm for a bare `8:40`, both instants of a wall time the clocks go
+  back through, a day word such as "yesterday", a look-back such as "last 40 minutes", a range read
+  to the end of its grain ("to 8:40" runs to 08:41). A zone abbreviation such as `PST` is left to
+  the person, never mapped. The policy picks among the candidates — `dateOrder: 'ask'` (default) or
+  `'MDY'` / `'DMY'` / `'YMD'`, `year: 'ask'` (default) or `'current'` — and a pick is recorded as
+  assumed. On the record (`agent.findings()`): one `time-reading` row per mention with the quote,
+  the parts, every candidate and how the reading settled (`only`, `policy`, `open` with the
+  questions only the person can answer, or `none`), plus the reader's id, version, kind and locale
+  and the tz database version. The reader runs once per message, and only on a message a person
+  wrote: a message this library wrote in a person's voice and a composed run's message are never
+  read, and a resume or a `resumeOnError` retry reads the recorded row instead of calling the
+  reader again (a message with no time files one row saying so). A `kind: 'model'` reader's window
+  is never taken as the person's words — it waits for the person to confirm it. A quote the reader
+  invents is refused and nothing of it is kept; a reader that returns something other than
+  `{ mentions: [] }` fails the run, naming it. Nothing is served to the model yet. Without a reader
+  nothing changes; a `policy` without a reader is refused. A checkpoint that carries the new row is
+  refused by an older runtime.
+
+- **Say when "now" is and which zone the person is in — and have it recorded: `.time()`.** A
+  multi-user app serves people in many zones, and "since 8" means 8 in the person's zone, not the
+  server's. Arm the clock with `.time()` and pass it per run: `agent.run({ message, time: { now:
+  message.sentAt, zone: 'America/Los_Angeles' } })`. The run's zone wins; `.time({ zone })` is an
+  optional fallback; a run with neither is refused before it starts, by name — the server's zone is
+  never used. A zone is an IANA name (`PST` or `+05:30` is refused). With no `now`, the turn's start
+  is used and recorded as a default nobody chose (`nowSource: 'default'`). The clock is on the
+  record (`agent.findings()`): one `clock` row per turn, a window set in a UI (`time: { window }`)
+  recorded as `source: 'control'`, and one `call` row per dispatched call with `dispatchedAt` — the
+  moment the tool actually ran, which after a pause is later than `now`. A paused turn keeps its
+  clock: `resume(checkpoint, answer, { time })` with a different `time` is recorded as a
+  `clock-on-resume` row and not applied — whichever pause it was, including the inputs layer's
+  argument ask. An agent mounted in a composition (which passes no `time`) records its fallback
+  zone with the turn's start as a default, and is refused without a fallback. With `.limitsTravelWithTheAnswer()`, each `Period:` line
+  is shown in the person's zone with the zone named — `2026-10-09 08:00–08:40
+  America/Los_Angeles (UTC-07:00)` instead of raw UTC instants — while the typed record keeps the
+  instants as declared. Nothing is served to the model. Without `.time()` nothing changes, except
+  that passing `time` to such an agent is now refused (it would otherwise look configured and do
+  nothing). A checkpoint that carries the new rows is refused by an older runtime.
+
+- **A tool declares every shape its period takes, and the library writes the person's window into it — exactly.** Real tools spell a period as two epoch-millisecond arguments, a joined ISO range, a date, a look-back; `Tool.period` now says so. `forms` lists each shape in preference order — `bounds` (a `from` and a `to` argument, each `iso`, `epoch-ms`, `epoch-s`, `date` or `wall`, the `to` bound's `edge` declared), `joined`, `object`, `day`, `lookback` with its `units` (`s` only by opt-in) — and today's `{ argument, spelling }` is shorthand for it, with `accepts` for several spellings and a new `wall-range` spelling beside a `zoneArgument`. The facts about the source ride beside it: `direction`, `retention`, `maxRange`, `granularity`, `filtersToAsked`, and `wallZone: 'app'` for a wall form read in the app's `.time()` zone. Every argument a form names must exist, be the right type (a number for an epoch) and carry an `askOrAssume` rule (an `object` form's argument excepted); a malformed declaration is refused at `defineTool`, at dispatch, and dropped with one warning at MCP ingest, where the same object travels in `_meta.agentfootprint.period`. Under `.time()`: when the model leaves the period out and the turn holds exactly ONE window of the person's — a mention the armed reader read and the policy settled, or a `time.window` set in a UI — the library fills it, converted into the first form that holds it exactly (an epoch-seconds bound or a look-back's length rounds outward, recorded), and files the arguments as the person's (`source: 'said'`, `matched: 'mention'`; a `model` reader's window as a reading; a UI window as `app`, `appSource: 'time.window'`) with a served past-tense note. Two mentions ("today vs yesterday") fill nothing. A window the model sent is never written over: equal to the person's, it is bound — by the quote the model declared under declared sources, or by value; different, it runs as sent and is recorded `model-chosen` beside the person's, and the answer's standing reads "not sure". One new ledger row per such call, `call-window`, says which. The tool is handed `ctx.time = { version, asked, zone, now, dispatchedAt }` — in process on its execution context, over MCP in the `tools/call` request's `_meta.agentfootprint.time` (the mock MCP client hands it to a handler's second argument; `mcpServe` hands it to the served tool). A time answer is also judged against a tool's facts: a period answer to the batch ask outside the tool's `direction`, wholly older than its `retention` or wider than its `maxRange` is asked again, and `checkTimeAnswer` takes the facts for a `time-range` field (four new catalog keys, `answer.time-future`, `answer.time-past`, `answer.beyond-retention`, `answer.over-max-range`). Without `.time()` a period is judged and read as before, and no row, served byte or context changes.
+
+- **When a tool cannot read the person's window exactly, the library reads more and says so — or refuses the call before it runs, with the reason.** Under `.time()`, a period the model left out is filled into the first form that holds the person's window exactly and, when none does, into the first that holds MORE: a range inside one calendar day goes to a `day` form as that day, and a range that ended before now goes to a look-back form as the covering look-back from now ("yesterday" → `1960m`) — never wider than the tool's `maxRange`. The `call-window` row carries `sent` (what the tool reads) and `differs.extra` (the parts nobody asked for), or `trimmedByTool` when the tool declares `filtersToAsked`, and the served note says the value reads a wider one. A call whose window — filled or sent — lies outside the tool's `direction`, is wholly older than its `retention`, is wider than its `maxRange`, spans several days for a tool whose every form is a `day`, or sends a wall time the zone's clocks skip is refused before dispatch: the tool does not run, the model reads a past-tense sentence naming the declared fact, and the row reads `how: 'refused'` with the reason (`time-future`, `time-past`, `beyond-retention`, `over-max-range`, `multi-day`, `dst-gap`); a window only partly older than `retention` runs, marked `partlyBeyondRetention`. The clock at dispatch: a look-back sent more than the tool's `granularity` (one minute when none) after the turn's `now` — after a pause, or an app `now` far from the wall clock — is re-sent as the asked range in the tool's first absolute form when the library wrote it, and runs as sent when the model did (never written over); the `call` row records `drift: { byMs, outcome: 'redrawn' | 'shifted' }`. A window the model sent in one form no longer has another form's missing `ask` arguments asked for. Without `.time()` a tool's facts refuse nothing and no row, served byte or argument changes.
+
+### Fixed
+
+- **A period argument naming a day that does not exist is refused, not rolled forward.** A tool
+  that declares `period: { spelling: 'iso-range' }` used to accept a declared value such as
+  `2026-02-30T08:00Z..2026-03-01T08:00Z` or one at hour `24`, because the check leaned on
+  `Date.parse`, which quietly reads 30 February as 2 March and hour 24 as the next midnight — so a
+  tool could be sent an instant nobody asked for. Both are now refused at definition (and at MCP
+  ingest), naming the value. Nothing else about the spellings changed: lower-case `t`/`z` and the
+  leap second stay refused for an argument, a look-back keeps any number of digits (`1000000m`),
+  and `30s` is still not a look-back. Underneath, every time grammar in the library — instants,
+  durations, zones and ranges — now has one owner, so a result's declared period and a tool's
+  argument can no longer disagree about what an instant is.
+
 ## [9.128.1] - 2026-09-30
 
 ### Fixed

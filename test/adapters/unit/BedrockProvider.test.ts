@@ -152,6 +152,28 @@ describe('BedrockProvider — scenario (tool round-trip)', () => {
       toolResult: { toolUseId: 'c1', content: [{ text: '72F' }] },
     });
   });
+
+  it('drops an assistant turn with no text and no tool calls — Converse refuses a blank text block', async () => {
+    const recorder = { commands: [] as unknown[] };
+    const fx = makeFakeFixtures(baseResponse, recorder);
+    const p = bedrock({ _client: fx.client, _commands: fx.Commands });
+
+    const history: LLMMessage[] = [
+      { role: 'user', content: 'a' },
+      { role: 'assistant', content: '' },
+      { role: 'user', content: 'b' },
+      { role: 'assistant', content: '' },
+    ];
+    await p.complete({ ...baseRequest, messages: history });
+
+    const cmd = recorder.commands[0] as {
+      input: { messages: Array<{ role: string; content: Array<Record<string, unknown>> }> };
+    };
+    expect(cmd.input.messages.map((m) => m.role)).toEqual(['user', 'user']);
+    for (const m of cmd.input.messages) {
+      for (const block of m.content) expect(block).not.toEqual({ text: '' });
+    }
+  });
 });
 
 // ─── Integration — stream ──────────────────────────────────────────

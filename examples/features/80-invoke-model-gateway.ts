@@ -15,10 +15,12 @@
  *     from `input_json_delta`, the result goes back as a `tool_result`.
  *  2. **A key per model.** The gateway scopes keys to models; a map picks the
  *     right one by model id before every request.
- *  3. **Retries are composed.** A 429 arrives, `withRetry` waits and asks
- *     again. A 403 is not retried — the error names the model instead.
- *     (`withRetry` retries `complete()`; retrying a stream that fails before
- *     its first chunk is a separate change to `withRetry`, not this adapter.)
+ *  3. **Retries are composed.** A 429 arrives saying "Try again in 1
+ *     seconds"; the adapter declares that wait (`retryAfterMs`) and
+ *     `withRetry` waits it — not its own shorter schedule — then asks again.
+ *     A 403 is not retried — the error names the model instead.
+ *  4. **A deadline per request.** `timeoutMs` turns a gateway that never
+ *     answers into a typed, retryable `'timeout'` instead of a hung run.
  *
  * Run it:
  *   npm run example examples/features/80-invoke-model-gateway.ts
@@ -76,10 +78,8 @@ function scriptedGateway(log: string[], throttleFirst = false): InvokeModelGatew
     }
     if (!throttled) {
       throttled = true;
-      return new Response('Rate limit is exceeded.', {
-        status: 429,
-        headers: { 'retry-after': '1' },
-      });
+      // This gateway states its wait in the BODY, often with no Retry-After.
+      return new Response('Rate limit is exceeded. Try again in 1 seconds.', { status: 429 });
     }
     if (url.endsWith('/invoke')) {
       // complete(): one Messages JSON body, not a stream.
@@ -167,10 +167,11 @@ export async function run(input: string): Promise<unknown> {
   return answer;
 }
 
-/** A 429, absorbed by withRetry: two requests, one answer. */
+/** A 429, absorbed by withRetry: two requests, one answer, after the stated wait. */
 export async function throttledOnce(): Promise<string> {
   // #region retry
   const log: string[] = [];
+  let waited = 0;
   const provider = withRetry(
     invokeModelGateway({
       baseUrl: 'https://llm-gateway.example.com/bedrock',
@@ -179,14 +180,47 @@ export async function throttledOnce(): Promise<string> {
       model: SONNET,
       fetch: scriptedGateway(log, true),
     }),
-    { initialDelayMs: 10 },
+    {
+      initialDelayMs: 10,
+      // The 429 said "Try again in 1 seconds": the wait is max(10 ms, 1000 ms),
+      // capped by maxDelayMs (default 10 s) so no header can stall a run.
+      onRetry: (_err, _attempt, delayMs) => (waited = delayMs),
+    },
   );
   await provider.complete({
     model: 'invoke-model-gateway',
     messages: [{ role: 'user', content: 'hi' }],
   });
   // #endregion retry
-  return `${log.length} requests, answered after the 429`;
+  return `${log.length} requests, answered after the 429 (waited ${waited} ms, as asked)`;
+}
+
+/** A gateway that never answers — refused by the deadline, typed and retryable. */
+export async function timedOut(): Promise<string> {
+  // #region timeout
+  const provider = invokeModelGateway({
+    baseUrl: 'https://llm-gateway.example.com/bedrock',
+    apiKeyHeader: 'api-key',
+    apiKey: 'sonnet-key',
+    model: SONNET,
+    // Bounds the response, a complete() body, and EACH stream read (the first
+    // chunk and every gap) — a stream that keeps talking is never cut off.
+    timeoutMs: 50,
+    fetch: () => new Promise<Response>(() => undefined), // never answers
+  });
+  try {
+    await provider.complete({
+      model: 'invoke-model-gateway',
+      messages: [{ role: 'user', content: 'hi' }],
+    });
+    return '(answered — unexpected)';
+  } catch (err) {
+    if (err instanceof InvokeModelGatewayError && err.reason === 'timeout') {
+      return `${err.reason}, retryable: ${err.retryable}`;
+    }
+    throw err;
+  }
+  // #endregion timeout
 }
 
 /** The refusal a key scoped to another model gets — named, and not retried. */
@@ -220,6 +254,8 @@ if (isCliEntry(import.meta.url)) {
     console.log(`  ${await throttledOnce()}`);
     console.log('\n— the wrong key for a model —');
     console.log(`  ${await scopedKeyRefusal()}`);
+    console.log('\n— a gateway that never answers —');
+    console.log(`  ${await timedOut()}`);
     printResult(answer);
   })().catch((err: unknown) => {
     console.error(err);

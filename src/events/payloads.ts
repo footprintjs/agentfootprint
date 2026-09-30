@@ -2950,8 +2950,15 @@ export interface ErrorRetriedPayload {
   readonly attempt: number;
   readonly maxAttempts: number;
   readonly lastError: string;
+  /** How long the decorator waited before the attempt. */
   readonly backoffMs: number;
   readonly reason: string;
+  /**
+   * The wait the failure STATED (Retry-After, a gateway's "try again in N
+   * seconds"), in ms. Absent when it stated none; `backoffMs` is max(the
+   * schedule, this), capped by `maxDelayMs`.
+   */
+  readonly statedWaitMs?: number;
 }
 
 export interface ErrorRecoveredPayload {

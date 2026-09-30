@@ -269,12 +269,8 @@ const SITES: Readonly<Record<string, readonly Site[]>> = {
   // Provider adapters: they translate an LLMMessage the agent already owns
   // into the vendor's own request shape. Nothing they build is ever read back
   // into `history` — the direction is one-way, onto the wire.
-  'src/adapters/llm/AnthropicProvider.ts': [
-    { cls: 'never-in-history', why: 'wire translation: a text turn in the vendor shape' },
-    { cls: 'never-in-history', why: 'wire translation: a tool-result turn in the vendor shape' },
-  ],
-  // The Anthropic Messages body shared by browserAnthropic and invokeModelGateway
-  // (moved out of BrowserAnthropicProvider.ts unchanged).
+  // The Anthropic Messages body shared by anthropic, browserAnthropic and
+  // invokeModelGateway (anthropic() gave up its private copy of this mapping).
   'src/adapters/llm/anthropicMessagesWire.ts': [
     { cls: 'never-in-history', why: 'wire translation: a text turn in the vendor shape' },
     { cls: 'never-in-history', why: 'wire translation: a tool-result turn in the vendor shape' },

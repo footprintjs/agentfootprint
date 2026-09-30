@@ -43,6 +43,24 @@ class NoKeyError extends Error {
 withRetry(provider); // a NoKeyError is thrown once, with no backoff wait
 ```
 
+## A stated wait beats the schedule — and the decorator never parses prose
+When a failure says how long to wait, `withRetry` waits max(its own delay, the
+stated wait), capped by `maxDelayMs` so a hostile header cannot stall a run;
+`req.signal` still ends the wait. The wait is read through ONE helper
+(`statedWait.ts` · `statedRetryAfterMs`): the error's `retryAfterMs`, else its
+`retryAfterSeconds`. The ADAPTER that knows its wire declares the field — a
+`Retry-After` header (`adapters/llm/retryAfter.ts`), or a gateway's "Try again
+in N seconds" (`InvokeModelGatewayProvider.ts` · `statedWaitMs`). The report
+carries `statedWaitMs` beside `backoffMs`; with no stated wait the report is
+byte-identical to the schedule-only one.
+
+```ts
+throw Object.assign(new Error('429'), { status: 429, retryAfterMs: 4000 });
+// withRetry(provider) waits 4000 ms (not 200), reports
+// { kind: 'retried', backoffMs: 4000, statedWaitMs: 4000, … }
+```
+
 ## Files
 - `withRetry.ts`, `withFallback.ts`, `withCircuitBreaker.ts`,
   `fallbackProvider.ts`, `index.ts`.
+- `statedWait.ts` — the one reader of a failure's stated wait.
