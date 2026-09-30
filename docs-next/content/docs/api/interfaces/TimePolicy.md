@@ -4,7 +4,7 @@ title: TimePolicy
 
 # Interface: TimePolicy
 
-Defined in: [src/core/time/resolve.ts:151](https://github.com/footprintjs/agentfootprint/blob/main/src/core/time/resolve.ts#L151)
+Defined in: [src/core/time/resolveRecord.ts:103](https://github.com/footprintjs/agentfootprint/blob/main/src/core/time/resolveRecord.ts#L103)
 
 The v1 policy (§ 11): the two switches with two careful answers.
 
@@ -14,7 +14,7 @@ The v1 policy (§ 11): the two switches with two careful answers.
 
 > `readonly` **dateOrder**: `"ask"` \| `"MDY"` \| `"DMY"` \| `"YMD"`
 
-Defined in: [src/core/time/resolve.ts:153](https://github.com/footprintjs/agentfootprint/blob/main/src/core/time/resolve.ts#L153)
+Defined in: [src/core/time/resolveRecord.ts:105](https://github.com/footprintjs/agentfootprint/blob/main/src/core/time/resolveRecord.ts#L105)
 
 `'ask'`: a numeric date's readings become choices. Or the one order this app's people write.
 
@@ -24,6 +24,6 @@ Defined in: [src/core/time/resolve.ts:153](https://github.com/footprintjs/agentf
 
 > `readonly` **year**: `"ask"` \| `"current"`
 
-Defined in: [src/core/time/resolve.ts:155](https://github.com/footprintjs/agentfootprint/blob/main/src/core/time/resolve.ts#L155)
+Defined in: [src/core/time/resolveRecord.ts:107](https://github.com/footprintjs/agentfootprint/blob/main/src/core/time/resolveRecord.ts#L107)
 
 `'ask'`: a date said without a year is asked. `'current'`: the clock's year, recorded as assumed.

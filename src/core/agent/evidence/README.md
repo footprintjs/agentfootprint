@@ -341,7 +341,7 @@ person's words. Neither is true, so the record says which.
 
 The order is exempt → the tools' results → derived: a value a tool returned is
 grounded whatever the library also spelled. The turn's lineage is read by ONE
-reader, `stages/route.ts` · `timeLineageOf` (the confirmed windows through
+reader, `stages/timeLineage.ts` · `timeLineageOf` (the confirmed windows through
 `forms.ts` · `turnFormsWindowsOf`, which re-resolves a confirmed `rule`
 reading's recorded parses with the recorded clock — never the reader — to name
 the parts the person wrote); `answeredValuesOf` stops exempting a value the

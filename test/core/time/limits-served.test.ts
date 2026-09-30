@@ -210,3 +210,88 @@ describe('timeLimitsSentence — the composition', () => {
     );
   });
 });
+
+describe('the limits facts cross the Tools mount unrendered — `timeLimitFactsOf` ↔ `timeLimitLinesOf`', () => {
+  // The mount's `inputMapper` is synchronous and on every agent's graph, so it
+  // hands FACTS (`coverage/timeLimitFacts.ts`) and the slot renders them under
+  // the arm (`serve.ts` · `timeLimitsLine`). The facts must be absent exactly
+  // when the rendered lines are, or the mount arg stops being value-conditional.
+  const clock = {
+    kind: 'clock',
+    turn: 1,
+    iteration: 1,
+    now: NOW,
+    nowSource: 'app',
+    zone: LA,
+    zoneSource: 'run',
+  };
+  const range = (from: string, to: string) => ({ from, to });
+  const period = (extra: Record<string, unknown>) => ({
+    kind: 'period',
+    turn: 1,
+    toolCallId: 'c1',
+    toolName: 'client_activity',
+    iteration: 1,
+    verdict: 'covered',
+    ...extra,
+  });
+  const clamp = period({
+    differs: {
+      against: 'asked',
+      asked: range(iso(NOW_MS - 30 * DAY), NOW),
+      read: [range(iso(NOW_MS - 7 * DAY), NOW)],
+      source: 'declared',
+      missing: [range(iso(NOW_MS - 30 * DAY), iso(NOW_MS - 7 * DAY))],
+      extra: [],
+    },
+  });
+  const source = (toolCallId: string, zone: string) => ({
+    kind: 'source-clock',
+    turn: 1,
+    iteration: 1,
+    toolCallId,
+    toolName: toolCallId,
+    zone,
+  });
+  const ledgers: Record<string, readonly unknown[]> = {
+    'no clock': [clamp],
+    'a matching read': [clock, period({})],
+    'a partly-beyond-retention read only': [clock, period({ partlyBeyondRetention: true })],
+    'a clamp': [clock, clamp],
+    'a shifted look-back': [clock, period({ shifted: { byMs: 120_000 } })],
+    'one wall-clock source': [clock, source('orders', 'America/New_York')],
+    'two sources on different clocks': [
+      clock,
+      source('orders', 'America/New_York'),
+      source('tickets', 'Europe/Berlin'),
+    ],
+  };
+
+  for (const [name, ledger] of Object.entries(ledgers)) {
+    for (const audience of ['person', 'model'] as const) {
+      it(`${name} (${audience}): facts present ⇔ lines present, and the facts render to the lines`, async () => {
+        const { timeLimitFactsOf } = await import(
+          '../../../src/core/agent/coverage/timeLimitFacts.js'
+        );
+        const { renderTimeLimits, timeLimitLinesOf } = await import(
+          '../../../src/core/agent/coverage/timeLimits.js'
+        );
+        const facts = timeLimitFactsOf(ledger, 1, audience);
+        const lines = timeLimitLinesOf(ledger, 1, audience);
+        expect(facts === undefined, name).toBe(lines === undefined);
+        expect(renderTimeLimits(facts, audience)).toEqual(lines);
+      });
+    }
+  }
+
+  it('a matching read and one declared clock serve the model nothing — no key crosses', async () => {
+    const { timeLimitFactsOf } = await import('../../../src/core/agent/coverage/timeLimitFacts.js');
+    expect(timeLimitFactsOf([clock, period({})], 1, 'model')).toBeUndefined();
+    expect(
+      timeLimitFactsOf([clock, source('orders', 'America/New_York')], 1, 'model'),
+    ).toBeUndefined();
+    expect(
+      timeLimitFactsOf([clock, source('orders', 'America/New_York')], 1, 'person'),
+    ).toBeDefined();
+  });
+});

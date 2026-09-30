@@ -288,7 +288,7 @@ import { MessageDeniedError } from './agent/middleware/errors.js';
 import { buildCallLLMStage } from './agent/stages/callLLM.js';
 import { buildToolCallsHandler, notServedResult } from './agent/stages/toolCalls.js';
 import { buildToolResolver } from './agent/stages/toolResolver.js';
-import { answeredValuesOf, declaredDefaultsFrom, timeLineageOf } from './agent/stages/route.js';
+import { answeredValuesOf, declaredDefaultsFrom } from './agent/stages/route.js';
 import { isRefused, rulesOf } from './agent/arguments/declare.js';
 import {
   honestyLayersOf,
@@ -5080,7 +5080,7 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
                 answeredValues: answeredValuesOf,
                 // Under `.time()` (step T7): the turn's time spellings by
                 // lineage — said ones exempt, derived ones filed, not flagged.
-                ...(this.timeOptions !== undefined && { timeLineage: timeLineageOf }),
+                ...(this.timeOptions !== undefined && { timeLineage: true as const }),
               }),
           }
         : undefined,

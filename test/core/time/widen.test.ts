@@ -39,12 +39,11 @@ import {
 } from '../../../src/core/time/convert.js';
 import { driftAtDispatch } from '../../../src/core/time/drift.js';
 import {
-  callRow,
-  callWindowRow,
   timeRowIsWellFormed,
   type ClockRow,
   type TimeReadingRow,
 } from '../../../src/core/time/rows.js';
+import { callRow, callWindowRow } from '../../../src/core/time/rowsBuild.js';
 
 const LA = 'America/Los_Angeles';
 const NOW = '2026-10-09T15:40:00Z';

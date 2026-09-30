@@ -98,6 +98,7 @@ import {
 } from '../src/core/agent/arguments/serve.js';
 import { rulesOf } from '../src/core/agent/arguments/declare.js';
 import { periodCheckLine } from '../src/core/agent/coverage/period.js';
+import { bindPresentation } from '../src/core/time/present.js';
 import {
   factExpectation,
   WINDOW_FORM_EXPECTATION,
@@ -789,7 +790,7 @@ function timeWindowLines(): string[] {
  * different zones — each alone, and together.
  */
 function timeLimitLines(): string[] {
-  const zone = { zone: 'America/Los_Angeles' };
+  const zone = bindPresentation({ zone: 'America/Los_Angeles' });
   const range = (from: string, to: string) => ({ from, to });
   const base = { kind: 'period', turn: 1, iteration: 1, verdict: 'covered' } as const;
   const clamp = periodCheckLine(

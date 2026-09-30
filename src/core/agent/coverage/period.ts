@@ -47,18 +47,13 @@
 import { isDevMode } from 'footprintjs';
 
 import { compareInstants, instantOf, type Instant } from '../../time/instant.js';
-import {
-  presentInstant,
-  presentRange,
-  presentSpan,
-  type Presentation,
-} from '../../time/present.js';
+import type { BoundPresentation } from '../../time/present.js';
 import {
   isPeriodDiffers,
   isShifted,
   type PeriodDiffers,
   type SourceClock,
-} from '../../time/check.js';
+} from '../../time/checkRecord.js';
 
 import { refusal, spellingMeant } from './refusal.js';
 
@@ -584,7 +579,7 @@ export function noteWithClause(note: unknown, clause: string): string {
 export function periodLine(
   toolName: string,
   period: DeclaredPeriod,
-  presentation?: Presentation,
+  presentation?: BoundPresentation,
 ): string {
   if (presentation !== undefined) return periodLineInZone(toolName, period, presentation);
   const queried = `${toolName} queried ${period.queried.from} to ${period.queried.to}`;
@@ -608,7 +603,7 @@ export function periodLine(
  * periodLine('backup_runs', {
  *   queried: { from: '2026-09-26T09:00:00Z', to: '2026-09-26T10:00:00Z' },
  *   held: 'unknown',
- * }, { zone: 'America/Los_Angeles' });
+ * }, bindPresentation({ zone: 'America/Los_Angeles' })); // core/time/present.ts
  * // 'backup_runs queried 2026-09-26 02:00–03:00 America/Los_Angeles (UTC-07:00);
  * //  what the store holds is unknown'
  * ```
@@ -616,19 +611,18 @@ export function periodLine(
 function periodLineInZone(
   toolName: string,
   period: DeclaredPeriod,
-  presentation: Presentation,
+  presentation: BoundPresentation,
 ): string {
-  const queried = `${toolName} queried ${presentSpan(
+  const queried = `${toolName} queried ${presentation.span(
     period.queried.from,
     period.queried.to,
-    presentation,
   )}`;
   const held =
     period.held === 'unknown'
       ? 'what the store holds is unknown'
-      : `the store holds ${presentSpan(period.held.from, period.held.to, presentation)}`;
+      : `the store holds ${presentation.span(period.held.from, period.held.to)}`;
   const readAt =
-    period.readAt !== undefined ? `; read at ${presentInstant(period.readAt, presentation)}` : '';
+    period.readAt !== undefined ? `; read at ${presentation.instant(period.readAt)}` : '';
   return `${queried}; ${held}${readAt}`;
 }
 
@@ -713,12 +707,13 @@ export function periodRowIsWellFormed(row: Readonly<Record<string, unknown>>): b
  * The one limits line for a call whose `period` row carries a time check
  * (time design § 10.2, step T8) — `undefined` when it carries none. Static
  * words around the two ranges, rendered in the presentation zone by the time
- * layer's one renderer (`core/time/present.ts` · `presentRange`, to the
- * second, the zone named); the raw instants stay on the row.
+ * layer's one renderer, HANDED in bound (`core/time/present.ts` ·
+ * `bindPresentation` → `range`, to the second, the zone named — coverage never
+ * imports the renderer); the raw instants stay on the row.
  *
  * @example
  * ```ts
- * periodCheckLine(row, { zone: 'America/Los_Angeles' });
+ * periodCheckLine(row, bindPresentation({ zone: 'America/Los_Angeles' })); // core/time/present.ts
  * // 'search_logs read more than was asked — asked: 2026-10-08 00:00:00–23:59:59 America/Los_Angeles
  * //  (UTC-07:00); read: 2026-10-08 00:00:00–2026-10-09 08:40:00 America/Los_Angeles (UTC-07:00)'
  * ```
@@ -730,7 +725,7 @@ export function periodRowIsWellFormed(row: Readonly<Record<string, unknown>>): b
  */
 export function periodCheckLine(
   row: PeriodRow,
-  presentation: Presentation,
+  presentation: BoundPresentation,
   audience: 'person' | 'model' = 'person',
 ): string | undefined {
   const parts: string[] = [];
@@ -745,10 +740,10 @@ export function periodCheckLine(
           ? 'a shifted window'
           : 'a different window'
         : `${d.missing.length > 0 ? 'less' : 'more'} than ${reference}`;
-    const reads = d.read.map((r) => presentRange(r, presentation, 'second')).join('; ');
+    const reads = d.read.map((r) => presentation.range(r, 'second')).join('; ');
     parts.push(
       `${row.toolName} read ${what} — ${person ? theirs : 'asked'}: ` +
-        `${presentRange(d.asked, presentation, 'second')}; read: ${reads}`,
+        `${presentation.range(d.asked, 'second')}; read: ${reads}`,
     );
   } else if (row.shifted !== undefined) {
     parts.push(`${row.toolName}'s look-back ran after the clock moved on`);

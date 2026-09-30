@@ -1276,7 +1276,7 @@ deterministic and are measured over retained recorded runs or unit tables, with 
   not run. (1) **The files.** `core/time/readers/english.ts` · `englishTimeReader` (a tokenizer;
   its word table is data inside the file, because `core/time/` is a leaf — a second language moves
   it beside `src/locales/`; `readers/` imports only the port, pinned); `resolve.ts` ·
-  `withZoneAnswered`; `bind.ts` · `readerWindowsOf` and `TurnWindows.open`; the sentence in
+  `withZoneAnswered`; `windows.ts` · `readerWindowsOf` and `TurnWindows.open`; the sentence in
   `arguments/serve.ts` · `timeWindowsSentence` / `withTimeWindows` (through `rulesOnWire`'s
   `windows`); the window field in `arguments/ask.ts` (`AskField.window`, `planAskFields`'s plan,
   `bindAnswer`); the plan in `stages/argumentAsk.ts` · `windowPlanOf`. Exported: `englishTimeReader`
@@ -1496,7 +1496,7 @@ deterministic and are measured over retained recorded runs or unit tables, with 
   spellings are never derived — too common to be a lineage. (3) **The gate.** Order: exempt → the
   tools' results → derived. `EvidenceVerdict.derived` (present only when the gate was handed the
   list) holds the values found only in the library's spellings; `lookedUp` counts them. The turn's
-  lineage has ONE reader, `stages/route.ts` · `timeLineageOf`: the windows' said spellings join the
+  lineage has ONE reader, `stages/timeLineage.ts` · `timeLineageOf`: the windows' said spellings join the
   exempt corpus (`exemptFromRun`'s `timeSaid`), and the derived ones gain the values the library
   filled from a window into a call (`isWindowFillRow`) and the served time line's text. Because a
   window's converted values are the library's, `answeredValuesOf` stops exempting an `answered`

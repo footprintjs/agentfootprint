@@ -42,7 +42,7 @@ import { instantOf, type InstantText } from './instant.js';
 import { isTimeRange, type TimeRange } from './range.js';
 import { isZoneName, type ZoneName } from './zone.js';
 import { readerIssue, type TimeReader } from './reader.js';
-import { readPolicy, type TimePolicy } from './resolve.js';
+import { readPolicy, type TimePolicy } from './resolveRecord.js';
 import { readTimeAskMessages, type TimeAskMessages } from './ask.js';
 
 // ─── The shapes ─────────────────────────────────────────────────────────
@@ -312,7 +312,7 @@ export function draftClock(
 /** The clock, once the turn's start is known: `now` is the app's, else that start. */
 export function completeClock(draft: ClockDraft, turnStartMs: number): TimeClock {
   // Fixed width (`toISOString`, milliseconds always written) — the spelling
-  // `rows.ts` · `callRow` gives `dispatchedAt`, so the two wall-clock reads
+  // `rowsBuild.ts` · `callRow` gives `dispatchedAt`, so the two wall-clock reads
   // compare as text too.
   const now = draft.now ?? new Date(turnStartMs).toISOString();
   return {

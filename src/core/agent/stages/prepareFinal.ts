@@ -33,11 +33,11 @@ import {
   copyAnswerCoverage,
   type AnswerCoverage,
 } from '../coverage/index.js';
-import { timeLimitLinesOf, type TimeLimitLines } from '../coverage/timeLimits.js';
+import type { TimeLimitLines } from '../coverage/timeLimits.js';
 import type { AgentState } from '../types.js';
 import type { FindingsLedger } from '../findings/types.js';
 import { presentationZoneOf } from '../../time/rows.js';
-import type { Presentation } from '../../time/present.js';
+import type { BoundPresentation } from '../../time/present.js';
 
 /**
  * The stage body, with the answer passed IN.
@@ -233,9 +233,14 @@ export const prepareFinalWithLimitsStage = (scope: TypedScope<AgentState>): void
  * the ledger here. `undefined` when no clock was filed (a paused turn from a
  * runtime without the layer): the lines are then the declared instants.
  */
-function presentationOf(scope: TypedScope<AgentState>): Presentation | undefined {
+async function presentationOf(
+  scope: TypedScope<AgentState>,
+): Promise<BoundPresentation | undefined> {
   const zone = presentationZoneOf(scope.findingsLedger as FindingsLedger | undefined);
-  return zone === undefined ? undefined : { zone };
+  if (zone === undefined) return undefined;
+  // The renderer loads only here, under `.time()` — the optional-family law.
+  const { bindPresentation } = await import('../../time/present.js');
+  return bindPresentation({ zone });
 }
 
 /**
@@ -245,7 +250,10 @@ function presentationOf(scope: TypedScope<AgentState>): Presentation | undefined
  * `Clocks` lines (`source-clock` rows; `core/time/check.ts` · `clocksDiffer`).
  * `undefined` when there is no clock (nothing to render in) or nothing to say.
  */
-function timeLinesOf(scope: TypedScope<AgentState>): TimeLimitLines | undefined {
+async function timeLinesOf(scope: TypedScope<AgentState>): Promise<TimeLimitLines | undefined> {
+  // The composer (and the renderer it binds) loads only here, under `.time()` — the
+  // optional-family law, as `presentationOf`.
+  const { timeLimitLinesOf } = await import('../coverage/timeLimits.js');
   return timeLimitLinesOf(
     scope.findingsLedger as FindingsLedger | undefined,
     scope.turnNumber as number | undefined,
@@ -259,9 +267,11 @@ function timeLinesOf(scope: TypedScope<AgentState>): TimeLimitLines | undefined 
  * checks' lines and the wall-clock sources (`timeLinesOf`). The typed record
  * keeps the declared instants; only the person's line changes.
  */
-export const prepareFinalWithLimitsInZoneStage = (scope: TypedScope<AgentState>): void => {
+export const prepareFinalWithLimitsInZoneStage = async (
+  scope: TypedScope<AgentState>,
+): Promise<void> => {
   const declared = scope.coverageDeclared ?? [];
-  const time = timeLinesOf(scope);
+  const time = await timeLinesOf(scope);
   const answer =
     declared.length > 0 || time !== undefined
       ? composeAnswerWithCoverage(
@@ -269,7 +279,7 @@ export const prepareFinalWithLimitsInZoneStage = (scope: TypedScope<AgentState>)
           declared,
           '',
           '',
-          presentationOf(scope),
+          await presentationOf(scope),
           time,
         )
       : scope.llmLatestContent;
@@ -317,7 +327,7 @@ export function prepareFinalWithLimitsAndAssumedStage(
         ? () => [...((scope.middlewareDecisions as readonly unknown[] | undefined) ?? [])]
         : undefined,
     );
-    const time = inZone ? timeLinesOf(scope) : undefined;
+    const time = inZone ? await timeLinesOf(scope) : undefined;
     const answer =
       declared.length > 0 || assumed !== '' || time !== undefined
         ? composeAnswerWithCoverage(
@@ -325,7 +335,7 @@ export function prepareFinalWithLimitsAndAssumedStage(
             declared,
             assumed,
             '',
-            inZone ? presentationOf(scope) : undefined,
+            inZone ? await presentationOf(scope) : undefined,
             time,
           )
         : scope.llmLatestContent;
@@ -454,7 +464,7 @@ export function prepareFinalWithAnswerLayerStage(o: {
           : undefined,
       );
     }
-    const time = o.limits && o.inZone === true ? timeLinesOf(scope) : undefined;
+    const time = o.limits && o.inZone === true ? await timeLinesOf(scope) : undefined;
     const answer =
       declared.length > 0 || assumed !== '' || line !== '' || time !== undefined
         ? composeAnswerWithCoverage(
@@ -463,7 +473,7 @@ export function prepareFinalWithAnswerLayerStage(o: {
             assumed,
             line,
             o.inZone === true && (declared.length > 0 || time !== undefined)
-              ? presentationOf(scope)
+              ? await presentationOf(scope)
               : undefined,
             time,
           )

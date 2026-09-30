@@ -79,7 +79,8 @@ import {
   withZoneAnswered,
   type TimePolicy,
 } from '../../time/resolve.js';
-import { timeAskOf, type TimeAskMessages } from '../../time/ask.js';
+import type { TimeAskMessages } from '../../time/ask.js';
+import { timeAskOf } from '../../time/readingAsk.js';
 import { timeAnswerRow, type TimeAnswerRow, type TimeReadingRow } from '../../time/rows.js';
 import type { ZoneName } from '../../time/zone.js';
 import { shownArgsOf } from '../../toolShownArgs.js';
@@ -243,7 +244,7 @@ export interface CallAsk {
 
 /**
  * The lazy word-driven ask's plan (time design § 5.2): the question the open
- * mention needs (`core/time/ask.ts` · `timeAskOf`) and its mention index.
+ * mention needs (`core/time/readingAsk.ts` · `timeAskOf`) and its mention index.
  * Handed by the stage glue only when the turn's one mention is open.
  */
 export interface WindowAskPlan {

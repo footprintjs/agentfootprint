@@ -28,6 +28,7 @@ import { composeAnswerWithCoverage } from '../../../src/core/agent/coverage/answ
 import { periodLine } from '../../../src/core/agent/coverage/period.js';
 import type { DeclaredCoverage } from '../../../src/core/agent/coverage/index.js';
 import {
+  bindPresentation,
   presentInstant,
   presentRange,
   presentSpan,
@@ -174,7 +175,13 @@ const GOLDEN = new URL('./fixtures/limits-lines.golden.json', import.meta.url);
 describe('the limits block per zone — golden files', () => {
   const observed: Record<string, string> = {};
   for (const zone of ZONES) {
-    observed[zone] = composeAnswerWithCoverage('Two failures.', DECLARED, '', '', { zone });
+    observed[zone] = composeAnswerWithCoverage(
+      'Two failures.',
+      DECLARED,
+      '',
+      '',
+      bindPresentation({ zone }),
+    );
   }
 
   it('every zone renders the block its golden file holds', () => {

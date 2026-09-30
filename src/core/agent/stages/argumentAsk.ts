@@ -64,7 +64,8 @@ import type { FindingsLedger } from '../findings/types.js';
 import type { AgentState } from '../types.js';
 import { answersOf, clockOf, readingsOf, type TimeReadingRow } from '../../time/rows.js';
 import type { ZoneName } from '../../time/zone.js';
-import { timeAskOf, type TimeAskMessages } from '../../time/ask.js';
+import type { TimeAskMessages } from '../../time/ask.js';
+import { timeAskOf } from '../../time/readingAsk.js';
 import { spellRange } from '../../time/range.js';
 import type { TimePolicy } from '../../time/resolve.js';
 import { defaultTimeAskMessages } from '../../../locales/timeAsk.js';
@@ -115,7 +116,7 @@ function askTimeOf(scope: TypedScope<AgentState>, deps: ArgumentAskDeps): AskTim
 
 /**
  * The lazy word-driven ask's plan (time design § 5.2): the question the
- * turn's one OPEN mention needs, built by the one owner (`core/time/ask.ts` ·
+ * turn's one OPEN mention needs, built by the one owner (`core/time/readingAsk.ts` ·
  * `timeAskOf`) — only under the reader's arm, only when a call of the batch
  * left its period out while that mention was open (`ArgumentResolution.window`).
  */

@@ -46,7 +46,6 @@ import {
 } from '../../../lib/injection-engine/skillSteps.js';
 import { checkAnswer, evidenceRefusalSentence, MAX_REPORTED_VALUES } from '../evidence/gate.js';
 import { derivedFormsOf, evidenceFromHistory, exemptFromRun } from '../evidence/evidenceIndex.js';
-import { timeFormsOf, turnFormsWindowsOf } from '../../time/forms.js';
 import { timeDerivedRow } from '../../time/rows.js';
 import type { EvidenceVerdict, ResolvedEvidenceGate } from '../evidence/types.js';
 import { priorTurnEvidenceOf } from '../../../integrity/prior-turn-evidence/check.js';
@@ -128,18 +127,32 @@ export interface InputsRouteArm {
   readonly answeredValues?: AnsweredValues;
   /**
    * Under `.time()` (step T7): this turn's time spellings, split by lineage
-   * (`timeLineageOf`) — the `said` ones join the exempt corpus, the `derived`
-   * ones file a `time-derived` row instead of a flag. Absent → the gate as
-   * it was.
+   * (`./timeLineage.ts` · `timeLineageOf`) — the `said` ones join the exempt
+   * corpus, the `derived` ones file a `time-derived` row instead of a flag.
+   * The reader loads through `import()` when the gate judges (`loadTimeLineage`
+   * — it re-resolves recorded readings, so the resolver stays off a plain
+   * agent's graph: the optional-family law). Absent → the gate as it was.
    */
-  readonly timeLineage?: TimeLineage;
+  readonly timeLineage?: true;
 }
 
-/** This turn's time spellings by lineage — see {@link timeLineageOf}. */
+/** This turn's time spellings by lineage — see `./timeLineage.ts` · `timeLineageOf`. */
 export type TimeLineage = (scope: TypedScope<AgentState>) => {
   readonly said: readonly string[];
   readonly derived: readonly string[];
 };
+
+/**
+ * The lineage reader for an armed gate (`InputsRouteArm.timeLineage`), loaded
+ * through `import()` — `undefined` when `.time()` is not armed. Reads no scope,
+ * so loading it before the judges moves no read in the trace.
+ */
+async function loadTimeLineage(
+  inputs: InputsRouteArm | undefined,
+): Promise<TimeLineage | undefined> {
+  if (inputs?.timeLineage !== true) return undefined;
+  return (await import('./timeLineage.js')).timeLineageOf;
+}
 
 /**
  * The values the PERSON gave this turn by answering the inputs layer's batch
@@ -180,7 +193,7 @@ export const answeredValuesOf: AnsweredValues = (scope) => {
  * of the same moment, or `matched: 'mention'`), from a `model` reading
  * (`reading`), or from the run's `time.window` (`appSource`).
  */
-function isWindowFillRow(row: FindingsLedger[number], ledger: FindingsLedger): boolean {
+export function isWindowFillRow(row: FindingsLedger[number], ledger: FindingsLedger): boolean {
   if (row.kind !== 'argument') return false;
   if (row.matched === 'mention' || row.appSource === TIME_WINDOW_SOURCE) return true;
   if (row.source !== 'answered' || row.period !== true) return false;
@@ -188,36 +201,6 @@ function isWindowFillRow(row: FindingsLedger[number], ledger: FindingsLedger): b
     (r) => r.kind === 'time-answer' && r.turn === row.turn && r.iteration === row.iteration,
   );
 }
-
-// FOLD · the one owner of this turn's time spellings by lineage, as the evidence gate reads them
-// consumers read this and never re-derive it: judgeEvidence (the exempt corpus's `timeSaid`, checkAnswer's `derived`)
-// detached: yes — fresh arrays per call, read from the committed ledger and the served time line.
-/**
- * This turn's time spellings, split by lineage (time design § 9.5, step T7):
- * per recorded window (`core/time/forms.ts` · `turnFormsWindowsOf`), the
- * spellings `timeFormsOf` files as the person's and as the library's; plus,
- * as the library's, every value it filled from a window into a call
- * (`isWindowFillRow`) and the served time line (`timeLine` — library text,
- * never evidence, so an answer that echoes it is not the person's).
- */
-export const timeLineageOf: TimeLineage = (scope) => {
-  const ledger = [...((scope.findingsLedger as FindingsLedger | undefined) ?? [])];
-  const said: string[] = [];
-  const derived: string[] = [];
-  for (const window of turnFormsWindowsOf(ledger)) {
-    const forms = timeFormsOf({ window });
-    said.push(...forms.said);
-    derived.push(...forms.derived);
-  }
-  const turn = scope.turnNumber as number;
-  for (const row of ledger) {
-    if (row.kind !== 'argument' || row.turn !== turn || !isWindowFillRow(row, ledger)) continue;
-    if (row.value !== undefined && row.value !== HIDDEN_VALUE) derived.push(row.value);
-  }
-  const line = scope.timeLine as { readonly text: string } | undefined;
-  if (line !== undefined) derived.push(line.text);
-  return { said, derived };
-};
 
 /**
  * THE ANSWER LAYER IS ARMED (honesty layer 4) — what Route is handed then:
@@ -740,6 +723,8 @@ function judgeEvidence(
    *  files its committed witness row, and the contingent rows carry the turn
    *  stamp. Absent → the `grounded` event alone, as always. */
   answerLayer?: AnswerRouteArm,
+  /** Under `.time()`: the loaded lineage reader (`loadTimeLineage`). Absent → the gate as it was. */
+  timeLineage?: TimeLineage,
 ): 'evidence-recheck' | undefined {
   if (gate === undefined) return undefined;
   const answer = (scope.llmLatestContent as string | undefined) ?? '';
@@ -757,7 +742,7 @@ function judgeEvidence(
   const history = scope.history as readonly LLMMessage[];
   const evidence = evidenceFromHistory(history);
   // Under `.time()` (step T7): the turn's time spellings by lineage.
-  const time = inputs?.timeLineage?.(scope);
+  const time = timeLineage?.(scope);
   const verdict = checkAnswer(answer, {
     gate,
     evidence,
@@ -1379,6 +1364,7 @@ function buildJudgingDecider(
     // before every judge below — the enforcing decider's order. The two
     // re-ask exits put the emission back (`restoreEmission`).
     const emission = await peelAnswerStandings(scope, findings, inputs, answer);
+    const timeLineage = await loadTimeLineage(inputs);
     // A withheld answer is judged by nothing below, so the recency row says so
     // here rather than sitting untouched (see `noteRecency`).
     if (denied) noteRecency(noticePriorTurnEvidence, integrityLedger, 'not-applicable');
@@ -1401,6 +1387,7 @@ function buildJudgingDecider(
         findings,
         inputs,
         answer,
+        timeLineage,
       ) === 'evidence-recheck'
     ) {
       restoreEmission(scope, emission);
@@ -1484,6 +1471,7 @@ function buildEnforcingDecider(
     // the one peel every decider runs). The string it held before the key
     // came off is what every RE-ASK exit puts back (`reAsk`).
     const emission = await peelAnswerStandings(scope, findings, inputs, answer);
+    const timeLineage = await loadTimeLineage(inputs);
     const reAsk = (
       branch: 'output-retry' | 'step-nudge' | 'evidence-recheck',
       rationale: string,
@@ -1538,6 +1526,7 @@ function buildEnforcingDecider(
           findings,
           inputs,
           answer,
+          timeLineage,
         ) === 'evidence-recheck'
       ) {
         return reAsk('evidence-recheck', evidenceRecheckRationale(scope));

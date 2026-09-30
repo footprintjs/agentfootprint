@@ -5,10 +5,13 @@
  * Pattern: a pure function over recorded values — the person's text, or one
  *          window the record holds — never over the answer. The evidence gate
  *          asks it (`evidence/evidenceIndex.ts` · `exemptFromRun`,
- *          `stages/route.ts` · `timeLineageOf`) and never keeps a time table of
+ *          `stages/timeLineage.ts` · `timeLineageOf`) and never keeps a time table of
  *          its own.
- * Role:    core/ leaf (the time layer). Imports `bind.ts`, `rows.ts`,
- *          `resolve.ts`, `instant.ts` and `zone.ts` only.
+ * Role:    core/ leaf (the time layer). Imports `windows.ts`, `rows.ts`,
+ *          `resolve.ts`, `textForms.ts` (the text rule, split out so the
+ *          evidence gate's synchronous corpus never loads the resolver),
+ *          `instant.ts` and `zone.ts` only. Loaded under `.time()` only,
+ *          through `import()` (`stages/timeLineage.ts`).
  * Emits:   N/A.
  *
  * ## The two lists
@@ -29,7 +32,8 @@
  * echoing the served time line back would read as the person's words.
  */
 
-import { turnWindowsOf, type TurnWindow } from './bind.js';
+import { clockSpellings, pad2, Spellings, timeFormsOfText, type TimeForms } from './textForms.js';
+import { turnWindowsOf, type TurnWindow } from './windows.js';
 import { instantOf, spellInstant } from './instant.js';
 import {
   resolveMention,
@@ -41,11 +45,7 @@ import {
 import { answersOf, clockOf, readingsOf, type TimeReadingRow } from './rows.js';
 import { offsetAt, wallAt, type WallTime, type ZoneName } from './zone.js';
 
-/** The two lineages of the spellings of one source — see the file header. */
-export interface TimeForms {
-  readonly said: readonly string[];
-  readonly derived: readonly string[];
-}
+export type { TimeForms };
 
 /** One window the record holds, as the spellings read it. */
 export interface FormsWindow extends Pick<TurnWindow, 'source' | 'range' | 'zone' | 'lookback'> {
@@ -63,7 +63,7 @@ export interface FormsWindow extends Pick<TurnWindow, 'source' | 'range' | 'zone
 export type TimeFormsSource = { readonly text: string } | { readonly window: FormsWindow };
 
 // FOLD · the one owner of which spellings of a time count as the person's and which the library derived
-// consumers read this and never re-derive it: evidence/evidenceIndex.ts · addExempt (the text rule), stages/route.ts · timeLineageOf (the turn's windows)
+// consumers read this and never re-derive it: evidence/evidenceIndex.ts · addExempt (the text rule), stages/timeLineage.ts · timeLineageOf (the turn's windows)
 // detached: yes — fresh arrays of strings per call.
 /**
  * The spellings of one source's times, split by lineage (§ 9.5).
@@ -89,7 +89,7 @@ export type TimeFormsSource = { readonly text: string } | { readonly window: For
  * ```
  */
 export function timeFormsOf(source: TimeFormsSource): TimeForms {
-  if ('text' in source) return { said: textForms(source.text), derived: [] };
+  if ('text' in source) return timeFormsOfText(source.text);
   return windowForms(source.window);
 }
 
@@ -151,84 +151,6 @@ function writtenReadingOf(
     // A record the resolver cannot read names no parts: nothing is the person's.
     return undefined;
   }
-}
-
-// ─── The person's text ─────────────────────────────────────────────────────
-
-/** An ISO calendar date in text — `2026-10-09`, also the date half of `2026-10-09T08:00`. */
-const ISO_DATE = /(?<![\d-])(\d{4})-(\d{2})-(\d{2})(?![\d])/g;
-
-/**
- * A 12-hour clock reading in text — `8 Am`, `8:40 AM`, `8pm`, `8:40 p.m.`.
- * Read off the TEXT, not tokens, because the suffix is its own token.
- */
-const TWELVE_HOUR = /(?<![\d:.])(\d{1,2})(?::(\d{2}))?\s*([ap])\.?m(?![a-z])/gi;
-
-/**
- * The evidence tokenizer's boundary (`evidence/normalize.ts` · `tokenize`),
- * restated for this leaf so a 24-hour reading is recognised as the same
- * whole token the gate compares — pinned equal by `test/core/time/forms.test.ts`.
- */
-const NOT_IN_TOKEN = /[^A-Za-z0-9:_\-/.,%+@#$]+/;
-const LIST_COMMA = /,(?!\d)|(?<!\d),/;
-const LEADING = /^[$#@+'"`([{<]+/;
-const TRAILING = /[.,;:!?%'"`)\]}>]+$/;
-const TWENTY_FOUR_HOUR = /^(\d{1,2}):(\d{2})$/;
-
-/** The whole tokens of `text` that are a 24-hour clock reading, lower-cased as the gate reads them. */
-function clockTokens(text: string): readonly string[] {
-  const out: string[] = [];
-  for (const rough of text.split(NOT_IN_TOKEN)) {
-    for (const piece of rough.split(LIST_COMMA)) {
-      const token = piece.toLowerCase().trim().replace(LEADING, '').replace(TRAILING, '');
-      if (TWENTY_FOUR_HOUR.test(token)) out.push(token);
-    }
-  }
-  return out;
-}
-
-/** The said spellings of every date and clock time written in `text` (the file header's text rule). */
-function textForms(text: string): readonly string[] {
-  const out = new Spellings();
-  for (const [, year = '', mm, dd] of text.matchAll(ISO_DATE)) {
-    const month = Number(mm);
-    const day = Number(dd);
-    if (month < 1 || month > 12 || day < 1 || day > 31) continue;
-    out.push(year, String(month), String(day));
-  }
-  for (const [, hh, mm, half = ''] of text.matchAll(TWELVE_HOUR)) {
-    const hour = Number(hh);
-    const minutes = mm ?? '00';
-    if (hour < 1 || hour > 12 || Number(minutes) > 59) continue;
-    const h24 = (hour % 12) + (half.toLowerCase() === 'p' ? 12 : 0);
-    out.push(...clockSpellings(h24, minutes));
-  }
-  // A reading the 12-hour pass already took is not read again as 24-hour:
-  // `8:40 p.m.` is 20:40, never also 08:40.
-  for (const token of clockTokens(text.replace(TWELVE_HOUR, ' '))) {
-    const [, hh = '', minutes = ''] = TWENTY_FOUR_HOUR.exec(token) ?? [];
-    const h24 = Number(hh);
-    if (h24 > 23 || Number(minutes) > 59) continue;
-    out.push(...clockSpellings(h24, minutes));
-  }
-  return out.list();
-}
-
-/**
- * The spellings of ONE clock time: the 24-hour form bare and padded
- * (`8:00`, `08:00`, `20:00`), the 12-hour colon form (`8:00`) and its glued
- * suffix form (`8:00pm`). After tokenizing, `8:00 PM` and `8:00 AM` both read
- * `8:00` — the same hour on a 12-hour dial.
- */
-function clockSpellings(h24: number, minutes: string): readonly string[] {
-  const h12 = h24 % 12 === 0 ? 12 : h24 % 12;
-  const suffix = h24 < 12 ? 'am' : 'pm';
-  return [
-    `${h24}:${minutes}`,
-    `${pad2(h24)}:${minutes}`,
-    `${h12}:${minutes}`,
-    `${h12}:${minutes}${suffix}`,
-  ];
 }
 
 // ─── One recorded window ───────────────────────────────────────────────────
@@ -372,23 +294,10 @@ function abbreviationOf(zone: ZoneName, ms: number): readonly string[] {
 
 // ─── Small parts ───────────────────────────────────────────────────────────
 
-const pad2 = (n: number): string => String(n).padStart(2, '0');
-
 const isoDate = (wall: WallTime): string =>
   `${String(wall.year).padStart(4, '0')}-${pad2(wall.month)}-${pad2(wall.day)}`;
 
 /** An instant's milliseconds, or `undefined` when the text is not one. */
 function instantMs(value: string): number | undefined {
   return instantOf(value, 'lenient')?.ms;
-}
-
-/** An insertion-ordered set of spellings. */
-class Spellings {
-  private readonly seen = new Set<string>();
-  push(...forms: readonly string[]): void {
-    for (const form of forms) if (form !== '') this.seen.add(form);
-  }
-  list(): readonly string[] {
-    return [...this.seen];
-  }
 }

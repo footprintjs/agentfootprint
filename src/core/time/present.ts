@@ -321,6 +321,30 @@ export function presentSpan(
 }
 
 /**
+ * A presentation bound into the three renderers the coverage limits lines use
+ * (`agent/coverage/period.ts` · `periodLine` for a `Period:` line, and
+ * `periodCheckLine` for a result check's ranges). The coverage module is on every
+ * agent's graph and this one loads only under `.time()`, so it is HANDED the
+ * renderers (`agent/stages/prepareFinal.ts` loads this module through
+ * `import()`) and never imports them — the optional-family law of docs-next's
+ * site budget.
+ */
+export interface BoundPresentation {
+  readonly span: (from: InstantText, to: InstantText) => string;
+  readonly instant: (value: InstantText) => string;
+  readonly range: (range: TimeRange, grain?: Grain) => string;
+}
+
+/** {@link presentSpan}, {@link presentInstant} and {@link presentRange}, bound to one presentation. */
+export function bindPresentation(presentation: Presentation): BoundPresentation {
+  return {
+    span: (from, to) => presentSpan(from, to, presentation),
+    instant: (value) => presentInstant(value, presentation),
+    range: (range, grain) => presentRange(range, presentation, grain),
+  };
+}
+
+/**
  * A half-open range for a person. With the `grain` the person said, the end
  * is the end AS SAID (§ 3.3): the last instant inside the range, written at
  * that grain — `[08:00, 08:41)` at `'minute'` shows `08:00–08:40`, and a

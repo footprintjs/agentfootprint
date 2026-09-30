@@ -24,12 +24,13 @@
  *                 the zone (or is one of a DST pair), and `to − from` is the grain;
  *   security    — hostile parts (`__proto__` keys, huge numbers, nested ranges, 1 MB tokens)
  *                 are refused as malformed, never thrown on;
- *   performance — 5 000 resolutions of a range with every ambiguity inside a budget;
- *   load        — not applicable: pure functions with no shared state (the per-turn reading's
+ *   performance — 5 000 resolutions of a range with every ambiguity inside a COUNTED budget:
+ *                 one formatter, and `Intl` asked at most once per (zone, instant);
+ *   load        — not applicable: pure functions (the zone memo is a cache, not state; the per-turn reading's
  *                 load case is in reader-run.test.ts).
  */
 
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 
 import { checkReading, readerIssue, type TimeParts } from '../../../src/core/time/reader.js';
 import {
@@ -40,7 +41,8 @@ import {
   type TimeCandidate,
   type TimePolicy,
 } from '../../../src/core/time/resolve.js';
-import { timeReadingRows, timeRowIsWellFormed } from '../../../src/core/time/rows.js';
+import { timeRowIsWellFormed } from '../../../src/core/time/rows.js';
+import { timeReadingRows } from '../../../src/core/time/rowsBuild.js';
 import { tzdataVersion, wallAt } from '../../../src/core/time/zone.js';
 import { int, pick, prng } from './fixtures/generate.js';
 
@@ -658,15 +660,37 @@ describe('property — a fixed date and a 24-hour time resolve to their own wall
 // ─── Performance ─────────────────────────────────────────────────────────
 
 describe('performance', () => {
-  it('5 000 resolutions of a range with every ambiguity inside a budget', () => {
+  // Counted, not timed: a wall-clock budget measures the CI machine. `Intl` is
+  // the whole cost of a resolution (core/time/zone.ts · "Cost"), so the budget
+  // is how often it is asked. One cold resolution of this range asks 65 times;
+  // before the zone memo and `readWall`'s fast path, EVERY resolution asked 90
+  // times (450 000 readings for this loop — 1.4 s locally, 5–7 s on CI).
+  it('5 000 resolutions of a range with every ambiguity build one formatter and read each instant once', () => {
     const parts: TimeParts = {
       date: { kind: 'numeric', fields: [10, 9] },
       rangeOf: [{ wall: { h: 8 } }, { wall: { h: 9, m: 40 } }],
     };
-    const start = performance.now();
-    for (let i = 0; i < 5000; i += 1) {
-      chooseReading(resolveMention([parts], CLOCK, RULE), DEFAULT_TIME_POLICY, 'rule');
+    const Real = Intl.DateTimeFormat;
+    let built = 0;
+    class Counting extends Real {
+      constructor(...args: ConstructorParameters<typeof Real>) {
+        super(...args);
+        built += 1;
+      }
     }
-    expect(performance.now() - start).toBeLessThan(8000);
+    const spy = vi.spyOn(Real.prototype, 'formatToParts');
+    let reads = 0;
+    (Intl as { DateTimeFormat: typeof Real }).DateTimeFormat = Counting as typeof Real;
+    try {
+      for (let i = 0; i < 5000; i += 1) {
+        chooseReading(resolveMention([parts], CLOCK, RULE), DEFAULT_TIME_POLICY, 'rule');
+      }
+    } finally {
+      (Intl as { DateTimeFormat: typeof Real }).DateTimeFormat = Real;
+      reads = spy.mock.calls.length;
+      spy.mockRestore();
+    }
+    expect(built).toBeLessThanOrEqual(1);
+    expect(reads).toBeLessThanOrEqual(90);
   });
 });

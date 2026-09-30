@@ -4,7 +4,7 @@ title: PeriodFacts
 
 # Interface: PeriodFacts
 
-Defined in: [src/core/time/convert.ts:190](https://github.com/footprintjs/agentfootprint/blob/main/src/core/time/convert.ts#L190)
+Defined in: [src/core/time/periodForm.ts:130](https://github.com/footprintjs/agentfootprint/blob/main/src/core/time/periodForm.ts#L130)
 
 Facts about the source — never policy (§ 7.1). Durations are in `smhdw`.
 
@@ -14,7 +14,7 @@ Facts about the source — never policy (§ 7.1). Durations are in `smhdw`.
 
 > `readonly` `optional` **direction?**: [`PeriodDirection`](/docs/api/type-aliases/PeriodDirection)
 
-Defined in: [src/core/time/convert.ts:191](https://github.com/footprintjs/agentfootprint/blob/main/src/core/time/convert.ts#L191)
+Defined in: [src/core/time/periodForm.ts:131](https://github.com/footprintjs/agentfootprint/blob/main/src/core/time/periodForm.ts#L131)
 
 ***
 
@@ -22,7 +22,7 @@ Defined in: [src/core/time/convert.ts:191](https://github.com/footprintjs/agentf
 
 > `readonly` `optional` **filtersToAsked?**: `boolean`
 
-Defined in: [src/core/time/convert.ts:195](https://github.com/footprintjs/agentfootprint/blob/main/src/core/time/convert.ts#L195)
+Defined in: [src/core/time/periodForm.ts:135](https://github.com/footprintjs/agentfootprint/blob/main/src/core/time/periodForm.ts#L135)
 
 ***
 
@@ -30,7 +30,7 @@ Defined in: [src/core/time/convert.ts:195](https://github.com/footprintjs/agentf
 
 > `readonly` `optional` **granularity?**: `string`
 
-Defined in: [src/core/time/convert.ts:194](https://github.com/footprintjs/agentfootprint/blob/main/src/core/time/convert.ts#L194)
+Defined in: [src/core/time/periodForm.ts:134](https://github.com/footprintjs/agentfootprint/blob/main/src/core/time/periodForm.ts#L134)
 
 ***
 
@@ -38,7 +38,7 @@ Defined in: [src/core/time/convert.ts:194](https://github.com/footprintjs/agentf
 
 > `readonly` `optional` **maxRange?**: `string`
 
-Defined in: [src/core/time/convert.ts:193](https://github.com/footprintjs/agentfootprint/blob/main/src/core/time/convert.ts#L193)
+Defined in: [src/core/time/periodForm.ts:133](https://github.com/footprintjs/agentfootprint/blob/main/src/core/time/periodForm.ts#L133)
 
 ***
 
@@ -46,4 +46,4 @@ Defined in: [src/core/time/convert.ts:193](https://github.com/footprintjs/agentf
 
 > `readonly` `optional` **retention?**: `string`
 
-Defined in: [src/core/time/convert.ts:192](https://github.com/footprintjs/agentfootprint/blob/main/src/core/time/convert.ts#L192)
+Defined in: [src/core/time/periodForm.ts:132](https://github.com/footprintjs/agentfootprint/blob/main/src/core/time/periodForm.ts#L132)

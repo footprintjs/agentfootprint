@@ -20,6 +20,20 @@
  * `GMT`, AND `Intl` knows it. An abbreviation reaches a zone only through a
  * recorded map (a later step), never here.
  *
+ * ## Cost — one `formatToParts` per (zone, instant), memoised
+ *
+ * Asking `Intl` is the whole cost of this module (a `formatToParts` is
+ * microseconds; everything else is arithmetic), and a resolution asks the
+ * same instants again: every candidate a DST probe validates is then spelled
+ * with its offset. So the formatter is built once per zone and the reading of
+ * each (zone, instant) is kept — the tz database cannot change inside a
+ * process — in a bounded memo cleared when full, like the formatter cache.
+ * `readWall` also skips the one probe it can prove redundant: when the offset
+ * a day before, at, and a day after the wall time agree, no change falls in
+ * that window, so the one candidate needs no check. What this buys is pinned
+ * as a COUNT by the performance case of test/core/time/resolve.test.ts, not a
+ * duration.
+ *
  * ## DST — the four words
  *
  * | Wall time | `compatible` | `earlier` | `later` | `reject` |
@@ -106,9 +120,37 @@ export function canonicalZone(value: unknown): ZoneName | undefined {
   return (formatterFor(value) as Intl.DateTimeFormat).resolvedOptions().timeZone;
 }
 
-/** The wall time an instant shows in `zone` (milliseconds kept). */
+/** The wall time an instant shows in `zone` (milliseconds kept). Frozen: the reading is shared through the memo. */
 export function wallAt(zone: ZoneName, ms: number): WallTime {
-  const formatter = zoneFormatter(zone, 'wallAt');
+  return shownWall(zoneFormatter(zone, 'wallAt'), zone, ms);
+}
+
+const MAX_READINGS = 4096;
+/** zone → instant → the wall time `Intl` shows there; `readingCount` bounds the whole memo. */
+const readings = new Map<string, Map<number, WallTime>>();
+let readingCount = 0;
+
+/** The memoised reading of `ms` in `zone` (the module header's cost note); `formatter` is `zone`'s, already checked. */
+function shownWall(formatter: Intl.DateTimeFormat, zone: ZoneName, ms: number): WallTime {
+  const hit = readings.get(zone)?.get(ms);
+  if (hit !== undefined) return hit;
+  const wall = Object.freeze(formatWall(formatter, ms));
+  if (readingCount >= MAX_READINGS) {
+    readings.clear();
+    readingCount = 0;
+  }
+  let byInstant = readings.get(zone);
+  if (byInstant === undefined) {
+    byInstant = new Map();
+    readings.set(zone, byInstant);
+  }
+  byInstant.set(ms, wall);
+  readingCount += 1;
+  return wall;
+}
+
+/** One `Intl` reading — the only call in this module that costs. */
+function formatWall(formatter: Intl.DateTimeFormat, ms: number): WallTime {
   const parts: Record<string, string> = {};
   for (const part of formatter.formatToParts(new Date(ms))) parts[part.type] = part.value;
   const shownYear = Number(parts.year);
@@ -191,7 +233,11 @@ export function readWall(wall: WallTime, zone: ZoneName): WallReading {
   // Every real zone changes offset at most once within a day either side.
   const before = offsetMsAt(zone, w - 86_400_000);
   const after = offsetMsAt(zone, w + 86_400_000);
-  const offsets = [...new Set([before, offsetMsAt(zone, w), after])];
+  const at = offsetMsAt(zone, w);
+  // One offset across the two days: no change in the window, so `w - at` (at
+  // most 14 h from `w`) shows `wall` — the check below would ask `Intl` for nothing.
+  if (before === at && at === after) return { kind: 'unique', ms: w - at };
+  const offsets = [...new Set([before, at, after])];
   const valid = offsets.map((o) => w - o).filter((t) => offsetMsAt(zone, t) === w - t);
   const instants = [...new Set(valid)].sort((a, b) => a - b);
   if (instants.length === 1) return { kind: 'unique', ms: instants[0] as number };

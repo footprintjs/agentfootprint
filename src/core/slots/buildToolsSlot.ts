@@ -47,7 +47,7 @@ import type { Classifier } from '../../classify/types.js';
 import type { ToolChoiceEntry } from '../agent/toolChoice/types.js';
 import type { ReaderWindows } from '../time/bind.js';
 import type { ZoneName } from '../time/zone.js';
-import type { TimeLimitLines } from '../agent/coverage/answer.js';
+import type { TimeLimitFacts } from '../agent/coverage/timeLimitFacts.js';
 
 /**
  * Mutable cache shared between `buildToolsSlot` (writer) and
@@ -204,7 +204,7 @@ export function mergeWire(candidates: readonly WireCandidate[]): {
  */
 type RulesOnWire = Pick<
   typeof import('../agent/arguments/serve.js'),
-  'rulesOnWire' | 'timeWindowsLine' | 'timeLimitsSentence'
+  'rulesOnWire' | 'timeWindowsLine' | 'timeLimitsLine'
 >;
 
 /**
@@ -420,7 +420,7 @@ export interface ToolsSlotConfig {
    * when there is nothing to say); the mount carries it to `callLLM`, which
    * appends it LAST to the request, never to history. The tool schemas are not
    * touched. Reads one mount arg under this gate only, `timeWindows`
-   * (`core/time/bind.ts` · `readerWindowsOf` — absent on a turn with none).
+   * (`core/time/windows.ts` · `readerWindowsOf` — absent on a turn with none).
    * `appZone` is
    * the app's `.time({ zone })`.
    */
@@ -428,9 +428,10 @@ export interface ToolsSlotConfig {
   /**
    * THE TIME LAYER IS ARMED (`.time()`, step T8) — present ONLY then, and only
    * beside `inputsLayer`. The same site appends the turn's time limits
-   * (`agent/arguments/serve.ts` · `timeLimitsSentence`) to the ONE served time
-   * line, from one mount arg, `timeLimits` (`coverage/timeLimits.ts` ·
-   * `timeLimitLinesOf` — absent on a turn whose reads match what was asked).
+   * (`agent/arguments/serve.ts` · `timeLimitsLine`, which renders them) to the
+   * ONE served time line, from one mount arg, `timeLimits` — unrendered facts
+   * (`coverage/timeLimitFacts.ts` · `timeLimitFactsOf` — absent on a turn
+   * whose reads match what was asked).
    * Without the reader the line is written only when it says something; the
    * iteration stamp keeps an older one from being served.
    */
@@ -647,7 +648,7 @@ export function buildToolsSlot(config: ToolsSlotConfig): FlowChart {
       stepPointer?: StepPointerCarrier;
       findingsOffer?: readonly string[];
       timeWindows?: ReaderWindows;
-      timeLimits?: TimeLimitLines;
+      timeLimits?: TimeLimitFacts;
       userMessage?: string;
       priorToolChoices?: readonly ToolChoiceEntry[];
       wrapUpAsked?: boolean;
@@ -1041,7 +1042,7 @@ export function buildToolsSlot(config: ToolsSlotConfig): FlowChart {
                 }),
               });
         const limits =
-          config.timeLimits === true ? rules.timeLimitsSentence(args.timeLimits) : undefined;
+          config.timeLimits === true ? rules.timeLimitsLine(args.timeLimits) : undefined;
         const text = [windows, limits].filter((t) => t !== undefined).join(' ');
         if (config.timeWindows !== undefined || text.length > 0) {
           scope.timeLine = { iteration, text };
@@ -1183,7 +1184,7 @@ export function buildToolsSlot(config: ToolsSlotConfig): FlowChart {
         ? import('../agent/arguments/serve.js').then((m) => ({
             rulesOnWire: m.rulesOnWire,
             timeWindowsLine: m.timeWindowsLine,
-            timeLimitsSentence: m.timeLimitsSentence,
+            timeLimitsLine: m.timeLimitsLine,
           }))
         : undefined;
     if (toolChoice === undefined) {

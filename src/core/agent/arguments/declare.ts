@@ -66,7 +66,7 @@ import {
   type PeriodFacts,
   type PeriodForm,
   type PeriodSpelling,
-} from '../../time/convert.js';
+} from '../../time/periodForm.js';
 import { isDuration, LOOKBACK_UNITS, type DurationText } from '../../time/duration.js';
 import { splitRange } from '../../time/range.js';
 import { canonicalForm, tokenize } from '../evidence/normalize.js';
@@ -98,7 +98,7 @@ export type ArgumentRule =
 /** Per argument name, its rule. Arguments with no rule run free. */
 export type AskOrAssume = Readonly<Record<string, ArgumentRule>>;
 
-export type { PeriodSpelling, PeriodForm, PeriodFacts } from '../../time/convert.js';
+export type { PeriodSpelling, PeriodForm, PeriodFacts } from '../../time/periodForm.js';
 export { PERIOD_SPELLINGS };
 
 /**

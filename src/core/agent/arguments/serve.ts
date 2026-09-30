@@ -31,6 +31,8 @@ import type { LLMToolSchema } from '../../../adapters/types.js';
 import { shownArgsOf } from '../../toolShownArgs.js';
 import type { InputValue } from '../../inputRequest.js';
 import { ASSUMED_BLOCK_HEADING, type TimeLimitLines } from '../coverage/answer.js';
+import type { TimeLimitFacts } from '../coverage/timeLimitFacts.js';
+import { renderTimeLimits } from '../coverage/timeLimits.js';
 import { argumentRewritesOf, type ArgumentRewrite } from '../middleware/rewrites.js';
 import { isRefused, periodFactsOf, periodFormsOf, rulesOf, type RuledToolLike } from './declare.js';
 import { HIDDEN_VALUE, type ArgumentRow } from './rows.js';
@@ -234,7 +236,7 @@ export function rulesOnWire(
 
 /**
  * What the served line reads: the turn's SETTLED windows of the person's
- * words (`core/time/bind.ts` · `readerWindowsOf` — each mention's quote and
+ * words (`core/time/windows.ts` · `readerWindowsOf` — each mention's quote and
  * its one window: the one the person confirmed or gave in the time ask, or a
  * `model` reader's reading), the quotes still PENDING (a proposal the person
  * has not answered), the turn's clock, and the app's `.time({ zone })`. An
@@ -428,6 +430,23 @@ export function timeWindowsLine(
   const pending = pendingSentence(tools, windows);
   if (settled === undefined) return pending;
   return pending === undefined ? settled : `${settled} ${pending}`;
+}
+
+/**
+ * The served time limits from the Tools mount's `timeLimits` FACTS
+ * (`coverage/timeLimitFacts.ts` · `TimeLimitFacts`): rendered for the MODEL
+ * (`coverage/timeLimits.ts` · `renderTimeLimits` — the one composer the
+ * limits block asks too), then {@link timeLimitsSentence}. The facts cross
+ * the mount unrendered so the renderer loads here, under the arm, and never
+ * on the graph a plain agent loads.
+ *
+ * @example
+ * ```ts
+ * timeLimitsLine(undefined); // undefined — the turn's reads match what was asked
+ * ```
+ */
+export function timeLimitsLine(facts: TimeLimitFacts | undefined): string | undefined {
+  return timeLimitsSentence(renderTimeLimits(facts, 'model'));
 }
 
 // LENS · late-line · request-ephemeral

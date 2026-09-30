@@ -40,7 +40,8 @@
  *
  * ## The choices a reading offers (§ 6.1, § 6.3)
  *
- * {@link timeAskOf} turns a `time-reading` row whose choice is `open` into one
+ * `readingAsk.ts` · `timeAskOf` (split out: it renders labels through
+ * `present.ts`, which only an armed agent loads) turns a `time-reading` row whose choice is `open` into one
  * field: a `format: 'zone'` field when the person named a zone the layer
  * cannot read (`PST`), else a `format: 'time-range'` field whose `enum` is
  * the candidates left (each an ISO interval) and whose `labels` render each in
@@ -66,13 +67,9 @@
  * ```
  */
 
-import { periodFactProblem, type PeriodFacts } from './convert.js';
+import { periodFactProblem, type PeriodFacts } from './periodForm.js';
 import { compareInstants, instantOf, utcWallMs, type InstantText } from './instant.js';
-import { spellRange } from './range.js';
 import { isZoneName, readWall, type ZoneName } from './zone.js';
-import { presentRange } from './present.js';
-import type { TimeReadingRow } from './rows.js';
-import type { TimeCandidate } from './resolve.js';
 
 // ─── The formats ─────────────────────────────────────────────────────────
 
@@ -113,7 +110,7 @@ const WALL = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})(?::(\d{2}))?/;
 /** A quoted value in a sentence is cut here: a reason names the answer, it does not repeat an essay. */
 const QUOTE_CHARS = 64;
 
-const quoted = (value: string): string =>
+export const quoted = (value: string): string =>
   value.length <= QUOTE_CHARS ? value : `${value.slice(0, QUOTE_CHARS - 1)}…`;
 
 /**
@@ -295,90 +292,4 @@ export function refusalReason(
     .map((r) => fillMessage(messages[`answer.${r.problem}`], r.facts))
     .join(' ');
   return reason.length <= MAX_SENTENCE ? reason : `${reason.slice(0, MAX_SENTENCE - 1)}…`;
-}
-
-// ─── The choices a reading offers ─────────────────────────────────────────
-
-/** A time field built from a reading — the fields of `core/inputRequest.ts` · `InputField` it sets. */
-export interface TimeAskField {
-  readonly id: string;
-  readonly type: 'string';
-  readonly required: true;
-  readonly format: TimeFormat;
-  readonly enum?: readonly string[];
-  readonly labels?: readonly string[];
-}
-
-/** One question about one mention: the question and its field. */
-export interface TimeAsk {
-  readonly question: string;
-  readonly field: TimeAskField;
-}
-
-/** The zone token the person wrote in the mention's first parse that has one. */
-function saidZoneToken(row: TimeReadingRow): string {
-  for (const parts of row.parses ?? []) {
-    const token = parts.zoneToken ?? parts.rangeOf?.[0].zoneToken ?? parts.rangeOf?.[1].zoneToken;
-    if (token !== undefined) return token;
-  }
-  return '';
-}
-
-/**
- * The ask a `time-reading` row needs, or `undefined` when its reading is
- * settled (`only`, `policy`) or cannot be asked about (`none`, a refused
- * mention). `messages` is the whole catalog (the caller composes the app's
- * overrides over `defaultTimeAskMessages`); `id` names the field.
- */
-export function timeAskOf(
-  row: TimeReadingRow,
-  messages: TimeAskMessages,
-  id = 'time',
-): TimeAsk | undefined {
-  const choice = row.choice;
-  if (choice?.by !== 'open' || row.quote === undefined) return undefined;
-  const quote = quoted(row.quote);
-  if (choice.open.includes('zone')) {
-    return {
-      question: fillMessage(messages['ask.zone'], { quote, token: quoted(saidZoneToken(row)) }),
-      field: { id, type: 'string', required: true, format: 'zone' },
-    };
-  }
-  const candidates = row.candidates ?? [];
-  const seen = new Set<string>();
-  const offered: { value: string; candidate: TimeCandidate }[] = [];
-  for (const index of choice.remaining) {
-    const candidate = candidates[index];
-    if (candidate === undefined) continue;
-    const value = spellRange(candidate.range);
-    if (seen.has(value)) continue;
-    seen.add(value);
-    offered.push({ value, candidate });
-  }
-  if (offered.length === 0) return undefined;
-  // The row owns "a reading needs confirming" (`rows.ts` · `timeReadingRows` puts 'confirm'
-  // on every reading's open choice); this only reads it.
-  const confirm = choice.open.includes('confirm');
-  const labels = offered.map(({ candidate }) => {
-    const window = presentRange(
-      candidate.range,
-      { zone: candidate.zone, locale: row.reader.locale },
-      candidate.grain,
-    );
-    if (!confirm) return window;
-    // The zone is named: the reading leaned on it, and the person may have meant another.
-    return fillMessage(messages['choice.confirm'], { quote, window, zone: candidate.zone });
-  });
-  const question = fillMessage(messages[confirm ? 'ask.confirm' : 'ask.which'], { quote });
-  return {
-    question,
-    field: {
-      id,
-      type: 'string',
-      required: true,
-      format: 'time-range',
-      enum: offered.map((o) => o.value),
-      labels,
-    },
-  };
 }

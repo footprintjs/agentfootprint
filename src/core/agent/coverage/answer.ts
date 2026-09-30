@@ -47,7 +47,7 @@
 import { copyInProgressItem, IN_PROGRESS_SECTION_LABEL, inProgressLine } from './inProgress.js';
 import { mergeItems } from './items.js';
 import { copyPeriod, periodLine, type DeclaredPeriod } from './period.js';
-import type { Presentation } from '../../time/present.js';
+import type { BoundPresentation } from '../../time/present.js';
 import type { Coverage, CoverageItem, DeclaredCoverage, InProgressItem } from './types.js';
 
 /**
@@ -383,7 +383,7 @@ export function composeAnswerWithCoverage(
   declared: readonly DeclaredCoverage[],
   assumed = '',
   standing = '',
-  presentation?: Presentation,
+  presentation?: BoundPresentation,
   time?: TimeLimitLines,
 ): string {
   const blocks: string[] = [];
@@ -404,7 +404,7 @@ export function composeAnswerWithCoverage(
 /** The coverage block alone — `''` when the declarations say nothing. */
 function coverageBlock(
   declared: readonly DeclaredCoverage[],
-  presentation: Presentation | undefined,
+  presentation: BoundPresentation | undefined,
   time?: TimeLimitLines,
 ): string {
   const timeLines = (time?.period.length ?? 0) + (time?.clocks.length ?? 0);

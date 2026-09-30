@@ -35,6 +35,7 @@ import {
   type PeriodCheckInput,
 } from '../../../src/core/time/check.js';
 import { timeRowIsWellFormed } from '../../../src/core/time/rows.js';
+import { bindPresentation } from '../../../src/core/time/present.js';
 import {
   clockLines,
   periodCheckLine,
@@ -236,11 +237,11 @@ describe('unit — clocks and lines', () => {
         now: NOW,
       }) as object),
     };
-    expect(periodCheckLine(row, { zone: LA })).toBe(
+    expect(periodCheckLine(row, bindPresentation({ zone: LA }))).toBe(
       'search_logs read more than was asked — asked: 2026-10-09 07:00:00–07:59:59 America/Los_Angeles (UTC-07:00); read: 2026-10-09 07:00:00–08:39:59 America/Los_Angeles (UTC-07:00)',
     );
     expect(
-      periodCheckLine({ ...row, differs: undefined } as PeriodRow, { zone: LA }),
+      periodCheckLine({ ...row, differs: undefined } as PeriodRow, bindPresentation({ zone: LA })),
     ).toBeUndefined();
   });
 });

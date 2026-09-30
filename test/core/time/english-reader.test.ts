@@ -45,8 +45,9 @@ import {
   resolveMention,
   withZoneAnswered,
 } from '../../../src/core/time/resolve.js';
-import { timeAskOf } from '../../../src/core/time/ask.js';
-import { timeReadingRows, timeRowIsWellFormed } from '../../../src/core/time/rows.js';
+import { timeAskOf } from '../../../src/core/time/readingAsk.js';
+import { timeRowIsWellFormed } from '../../../src/core/time/rows.js';
+import { timeReadingRows } from '../../../src/core/time/rowsBuild.js';
 import { turnWindowsOf } from '../../../src/core/time/bind.js';
 import { periodFactProblem } from '../../../src/core/time/convert.js';
 import { defaultTimeAskMessages } from '../../../src/locales/timeAsk.js';

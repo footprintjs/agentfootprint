@@ -21,12 +21,12 @@ import { describe, expect, it } from 'vitest';
 import { callWindowOf, turnWindowsOf, type TurnWindows } from '../../../src/core/time/bind.js';
 import { sugarForms, type PeriodForm } from '../../../src/core/time/convert.js';
 import {
-  callWindowRow,
   timeRowIsWellFormed,
   type ClockRow,
   type TimeAnswerRow,
   type TimeReadingRow,
 } from '../../../src/core/time/rows.js';
+import { callWindowRow } from '../../../src/core/time/rowsBuild.js';
 
 const LA = 'America/Los_Angeles';
 const NOW = '2026-10-09T15:40:00Z';

@@ -106,7 +106,7 @@ import { absenceEvidenceProjection } from '../coverage/index.js';
 import { isTruncatedToolResult } from '../toolResultCap.js';
 import { isCompactedSummary } from '../../../lib/saidByPerson.js';
 import { isLibraryAuthoredTurn } from './frames.js';
-import { timeFormsOf } from '../../time/forms.js';
+import { timeFormsOfText } from '../../time/textForms.js';
 import { lookupForms, normalizeToken, tokenize } from './normalize.js';
 import { jsonPrefixOf, leadingJsonValues } from './servedJson.js';
 
@@ -428,14 +428,15 @@ export function evidenceFromHistory(history: readonly LLMMessage[]): EvidenceCor
 /**
  * Index one piece of EXEMPT text — something the person or the app said —
  * with the other spellings of every date and clock time in it — the SAID
- * list of `core/time/forms.ts` · `timeFormsOf`, the one owner of which
+ * list of `core/time/textForms.ts` · `timeFormsOfText` (the text rule of
+ * `core/time/forms.ts` · `timeFormsOf`), the one owner of which
  * spellings of a time are the person's (time design § 9.5). The exempt
  * corpus's one text door: the tool-evidence index reads `addText` and never
  * gains these forms.
  */
 function addExempt(sink: Sink, text: string): void {
   addText(sink, text);
-  for (const form of timeFormsOf({ text }).said) add(sink, form);
+  for (const form of timeFormsOfText(text).said) add(sink, form);
 }
 
 /**

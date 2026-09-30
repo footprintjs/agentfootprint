@@ -133,14 +133,7 @@ import type { ToolMiddleware } from '../middleware/types.js';
 import { runToolChain, runToolAfterChain, type ToolArgs } from '../middleware/runChain.js';
 import { recordDecisions } from '../middleware/ledger.js';
 import { ownsReservedArgument, splitFindings, type SplitFindings } from '../findings/reserved.js';
-import {
-  carriesRules,
-  isRefused,
-  periodFactsOf,
-  periodFormsOf,
-  rulesOf,
-  type RuledToolLike,
-} from '../arguments/declare.js';
+import { carriesRules } from '../arguments/declare.js';
 import { isResultMessage, knownResults } from '../findings/offer.js';
 import type { Classifier } from '../../../classify/types.js';
 import {
@@ -159,19 +152,9 @@ import {
 import { withUnsettledRows } from '../findings/unsettled.js';
 import type { FindingsLedger, StandingRow } from '../findings/types.js';
 import type { ReadRunTime } from '../../time/clock.js';
-import {
-  callRow,
-  callWindowOfCall,
-  clockOf,
-  clockOnResumeRow,
-  sourceClockRow,
-  sourceClocksOf,
-} from '../../time/rows.js';
-import { timeContextOf, type TimeContext } from '../../time/wire.js';
-import { granularityMsOf } from '../../time/convert.js';
-import { driftAtDispatch } from '../../time/drift.js';
+import { sourceClockRow, sourceClocksOf } from '../../time/rows.js';
 import type { ZoneName } from '../../time/zone.js';
-import type { TimePolicy } from '../../time/resolve.js';
+import type { TimePolicy } from '../../time/resolveRecord.js';
 import type { TimeAskMessages } from '../../time/ask.js';
 import {
   evidenceFromHistory,
@@ -1537,57 +1520,6 @@ function towersFor(
 type InputsDispatch = typeof import('../arguments/dispatch.js');
 
 /**
- * The time layer at one dispatch: the `call` row (`core/time/rows.ts` ·
- * `callRow`) — the wall clock read at the moment the library hands the call
- * to the tool — and, for a call that sent a look-back, the clock at dispatch
- * (§ 7.4, `core/time/drift.ts` · `driftAtDispatch`): past the tool's step the
- * library's OWN look-back fill is re-sent as the asked range in the tool's
- * absolute form (`args` comes back redrawn), and any other look-back runs as
- * sent and is recorded shifted. Filed through the one writer; no event (the
- * row is the record).
- */
-function timeAtDispatch(
-  scope: TypedScope<AgentState>,
-  call: { readonly toolCallId: string; readonly toolName: string },
-  iteration: number,
-  tool: RuledToolLike | undefined,
-  args: Readonly<Record<string, unknown>>,
-  appZone: ZoneName | undefined,
-): { readonly context: TimeContext | undefined; readonly args: Readonly<Record<string, unknown>> } {
-  const atMs = Date.now();
-  const dispatchedAt = new Date(atMs).toISOString();
-  const ledger = scope.findingsLedger as FindingsLedger | undefined;
-  const turn = scope.turnNumber as number;
-  const window = callWindowOfCall(ledger, call.toolCallId, turn);
-  const clock = clockOf(ledger);
-  const rules = window !== undefined && clock !== undefined ? rulesOf(tool) : undefined;
-  const drift =
-    rules !== undefined && !isRefused(rules) && clock !== undefined
-      ? driftAtDispatch(window, periodFormsOf(rules.period), {
-          now: clock.now,
-          dispatchedAt,
-          granularityMs: granularityMsOf(periodFactsOf(rules.period)),
-          zone: clock.zone,
-          ...(appZone !== undefined && { appZone }),
-        })
-      : undefined;
-  const row = callRow(
-    call,
-    { turn, iteration },
-    atMs,
-    drift === undefined
-      ? undefined
-      : drift.outcome === 'redrawn'
-      ? { byMs: drift.byMs, outcome: 'redrawn', form: drift.form }
-      : { byMs: drift.byMs, outcome: 'shifted' },
-  );
-  recordFindings(scope, [row]);
-  const redrawn =
-    drift?.outcome === 'redrawn' ? redrawnArgs(args, tool, window?.form, drift.values) : args;
-  return { context: callTimeContext(scope, call.toolCallId, row.dispatchedAt), args: redrawn };
-}
-
-/**
  * File the `source-clock` row for one call's dataset whose declared time axis
  * names `zone` (step T8) — once per call and zone this turn, through the one
  * writer; no event (the row is the record).
@@ -1612,72 +1544,10 @@ function recordSourceClock(
 const madeInRun = (bindRun: { readonly runContext?: { readonly runId: string } } | undefined) =>
   bindRun?.runContext?.runId;
 
-/** `args` with the look-back form's argument dropped and the absolute form's values written — a fresh object. */
-function redrawnArgs(
-  args: Readonly<Record<string, unknown>>,
-  tool: RuledToolLike | undefined,
-  lookbackForm: number | undefined,
-  values: Readonly<Record<string, unknown>>,
-): Readonly<Record<string, unknown>> {
-  const rules = rulesOf(tool);
-  const forms = rules === undefined || isRefused(rules) ? [] : periodFormsOf(rules.period);
-  const lookback = lookbackForm === undefined ? undefined : forms[lookbackForm];
-  const next: Record<string, unknown> = { ...args };
-  if (lookback !== undefined && lookback.kind === 'lookback') delete next[lookback.argument];
-  return { ...next, ...values };
-}
-
-/**
- * `ctx.time` for one call (`core/time/wire.ts` · `TimeContext`, time design
- * § 7.5) — present only when the inputs layer filed a `call-window` row for
- * it this turn (its tool's period declares forms) and the turn has a clock:
- * the range the call asks for, the person's zone, the frozen `now` and the
- * dispatch moment just recorded. Read from the committed ledger, never
- * recomputed.
- */
-function callTimeContext(
-  scope: TypedScope<AgentState>,
-  toolCallId: string,
-  dispatchedAt: string,
-): TimeContext | undefined {
-  const ledger = scope.findingsLedger as FindingsLedger | undefined;
-  const window = callWindowOfCall(ledger, toolCallId, scope.turnNumber as number);
-  if (window === undefined) return undefined;
-  const clock = clockOf(ledger);
-  if (clock === undefined) return undefined;
-  return structuredClone(timeContextOf(window, clock, dispatchedAt));
-}
-
-/**
- * A resume's passed `time` against the paused turn's kept clock — one
- * `clock-on-resume` row when they differ (`core/time/rows.ts` ·
- * `clockOnResumeRow`), nothing when nothing was passed, nothing differs, or
- * the paused turn has no clock (a checkpoint written by an agent without the
- * layer: there is no frozen clock to keep, and a resume never starts one
- * mid-turn).
- *
- * Called FIRST at both of this stage's entries, because a resume re-enters
- * through either: the pausable `resume` door (a check-in, a middleware ask, a
- * tool's own pause) or `execute` re-run from its top (the inputs layer's
- * argument ask pauses through footprintjs's `interrupt()`). The passed value
- * is TAKEN (`ToolCallsHandlerDeps.time` · `takePassedOnResume`), so the leg
- * files it once whichever door it came through, and a fresh run — which
- * passed none — files nothing.
- */
-function recordClockOnResume(
-  scope: TypedScope<AgentState>,
-  time: NonNullable<ToolCallsHandlerDeps['time']>,
-): void {
-  const passed = time.takePassedOnResume();
-  if (passed === undefined) return;
-  const kept = clockOf(scope.findingsLedger as FindingsLedger | undefined);
-  if (kept === undefined) return;
-  const row = clockOnResumeRow(passed, kept, {
-    turn: scope.turnNumber as number,
-    iteration: scope.iteration as number,
-  });
-  if (row !== undefined) recordFindings(scope, [row]);
-}
+// The time layer's half of dispatch — the `call` row, the drift redraw,
+// `ctx.time` and the `clock-on-resume` row — lives in `./timeLayer.ts`,
+// loaded through `import()` only when `.time()` armed the agent (`deps.time`),
+// under the same optional-family law.
 
 export function buildToolCallsHandler(
   deps: ToolCallsHandlerDeps,
@@ -3814,7 +3684,7 @@ export function buildToolCallsHandler(
       // so its `dispatchedAt` is the resume's, not the pause's.
       const dispatched =
         deps.time !== undefined
-          ? timeAtDispatch(
+          ? (await import('./timeLayer.js')).timeAtDispatch(
               scope,
               { toolCallId, toolName },
               iteration,
@@ -4007,7 +3877,9 @@ export function buildToolCallsHandler(
       // ask re-runs THIS function from its top — the kept clock is recorded
       // against the resume's `time` here, first, exactly as the resume door
       // does (TQ21). A fresh run passed no resume `time`: nothing is filed.
-      if (deps.time !== undefined) recordClockOnResume(scope, deps.time);
+      if (deps.time !== undefined) {
+        (await import('./timeLayer.js')).recordClockOnResume(scope, deps.time);
+      }
 
       // Materialize ONCE — `scope.llmLatestToolCalls` is a live TypedScope
       // deep-Proxy view; spreading yields the raw (plain, structured-clone-
@@ -4943,7 +4815,7 @@ export function buildToolCallsHandler(
               // carries what the tool ran with, so the note and the results layer read it.
               const dispatched =
                 deps.time !== undefined
-                  ? timeAtDispatch(
+                  ? (await import('./timeLayer.js')).timeAtDispatch(
                       scope,
                       { toolCallId: tc.id, toolName: tc.name },
                       iteration,
@@ -5838,7 +5710,9 @@ export function buildToolCallsHandler(
       // The time layer: the paused turn's clock is KEPT — its words were
       // resolved against it. A resume that passed a different `time` is
       // recorded here, first, and never applied (TQ21).
-      if (deps.time !== undefined) recordClockOnResume(scope, deps.time);
+      if (deps.time !== undefined) {
+        (await import('./timeLayer.js')).recordClockOnResume(scope, deps.time);
+      }
 
       // Consumer-supplied resume input becomes the paused tool's result.
       // The subflow's pre-pause scope is restored automatically by

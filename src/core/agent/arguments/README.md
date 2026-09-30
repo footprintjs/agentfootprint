@@ -216,7 +216,7 @@ pure decision per call (`resolve.ts` · `timeDecisionsOf` over `core/time/bind.t
 
 One `call-window` row per such call says which (`core/time/rows.ts` · `CallWindowRow`),
 merged in the same ONE write as the argument rows; the tool is handed `ctx.time`, read off that
-row at dispatch (`stages/toolCalls.ts` · `callTimeContext`). The batch ask's answer for a period
+row at dispatch (`stages/timeLayer.ts` · `callTimeContext`). The batch ask's answer for a period
 argument is also judged against the tool's `direction`, `retention` and `maxRange` at the turn's
 clock (`ask.ts` · `checkAnswer`, `factExpectation`): outside them it is `invalid-answer`, asked
 again.
@@ -267,7 +267,7 @@ its period out while the turn's one mention is open (`not-filled` / `open-readin
 period is asked too (`resolve.ts` · `verifyPlan`: its default never stands in for words the person
 wrote); the batch ask then asks ONE window field for every such call instead of one field per
 argument (`ask.ts` · `planAskFields` with the plan `stages/argumentAsk.ts` · `windowPlanOf` builds
-from `core/time/ask.ts` · `timeAskOf`): the zone first for an abbreviation, then the readings
+from `core/time/readingAsk.ts` · `timeAskOf`): the zone first for an abbreviation, then the readings
 every member tool's facts allow as labelled, pre-filled `time-range` choices naming each window's
 zone, free entry open. The answer is converted into each call's forms (`bindAnswer` → exactly, else
 wider), filed `answered` per argument, filled with `ArgumentFill.window` (the note's window clause:
@@ -278,7 +278,7 @@ window the person wrote) — so later calls of the turn are filled from it (`ans
 tool description: ONE request-only `user` line appended last to each request (`serve.ts` ·
 `timeWindowsLine`, composed at the slot's one decoration site from the tools really served, carried
 on `timeLine` = `{ iteration, text }`, appended by `callLLM`, rebuilt by `servedView`; the mount
-reads the windows with `core/time/bind.ts` · `readerWindowsOf`). It is the library's CONCLUSION,
+reads the windows with `core/time/windows.ts` · `readerWindowsOf`). It is the library's CONCLUSION,
 never raw facts: a settled window in the person's zone WITH ITS SOURCE and each period tool's own
 values ("may pass"), and the answer is told to state it; a quote still PENDING names no window —
 only that it is not settled and the NEXT STEP that asks the person (the call with the period
