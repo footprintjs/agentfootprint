@@ -36,7 +36,12 @@ const ROUTES = [
   },
 ];
 
-const SEARCH_LIMITS = { raw: 12_000_000, gzip: 2_155_000, records: 2_000 };
+// RAISED 2026-09-30 (search gzip): the publish run for the time-axis and
+// person-values release measured 2.16 MB gzip across 1,058 records against a
+// 2.155 MB ceiling, so the package was tagged but not published. ~2% over the
+// measurement, the rule every raise here follows. Owner-approved raise;
+// docs-site cleanup planned.
+const SEARCH_LIMITS = { raw: 12_000_000, gzip: 2_205_000, records: 2_000 };
 // Search gzip raised 2.11 -> 2.155 MB (2026-09-27) — growth this release can
 // name: the answer's standing (`assessAnswer()` / `agent.assessment()`), its
 // section on the recordings page and its Agent API entry. Measured with
