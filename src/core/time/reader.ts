@@ -26,7 +26,7 @@
  * person's words — a `rule` reading as much as a `model` one (the owner's
  * decision "Always confirm", time design TQ29): a reading only PROPOSES a
  * window, offered through the time ask with its zone, and only what the
- * person picks or types in that form is theirs (`rows.ts` ·
+ * person picks or types in that form is theirs (`rowsBuild.ts` ·
  * `timeReadingRows`).
  *
  * @example

@@ -4,7 +4,7 @@ title: TimeReading
 
 # Interface: TimeReading
 
-Defined in: [src/core/time/reader.ts:74](https://github.com/footprintjs/agentfootprint/blob/main/src/core/time/reader.ts#L74)
+Defined in: [src/core/time/reader.ts:83](https://github.com/footprintjs/agentfootprint/blob/main/src/core/time/reader.ts#L83)
 
 What a reader returns: every time mention it found, in the order the text wrote them.
 
@@ -14,4 +14,4 @@ What a reader returns: every time mention it found, in the order the text wrote 
 
 > `readonly` **mentions**: readonly [`TimeMention`](/docs/api/interfaces/TimeMention)[]
 
-Defined in: [src/core/time/reader.ts:75](https://github.com/footprintjs/agentfootprint/blob/main/src/core/time/reader.ts#L75)
+Defined in: [src/core/time/reader.ts:84](https://github.com/footprintjs/agentfootprint/blob/main/src/core/time/reader.ts#L84)

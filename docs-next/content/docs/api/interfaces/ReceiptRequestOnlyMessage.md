@@ -24,7 +24,7 @@ Defined in: [src/lib/time-travel/receipt.ts:220](https://github.com/footprintjs/
 
 Defined in: [src/lib/time-travel/receipt.ts:222](https://github.com/footprintjs/agentfootprint/blob/main/src/lib/time-travel/receipt.ts#L222)
 
-Which library mechanism composed it. `'staged-refs-nudge'` today.
+Which library mechanism composed it. `'staged-refs-nudge'` or `'time-window-line'` (step T6b).
 
 ***
 

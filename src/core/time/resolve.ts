@@ -49,7 +49,7 @@
  * window is never settled by the library: it stays `open` until the person
  * confirms it (§ 5.5), and its candidates carry `said: []`. Since the
  * owner's decision "Always confirm" (time design TQ29) neither is ANY
- * reading the record files: `rows.ts` · `timeReadingRows` passes
+ * reading the record files: `rowsBuild.ts` · `timeReadingRows` passes
  * `confirm: true` for every reader's reading, so only the person's answer
  * in the time ask settles a window. The `confirm` parameter's default
  * (`kind === 'model'`) is the unit's, for a caller that resolves parts

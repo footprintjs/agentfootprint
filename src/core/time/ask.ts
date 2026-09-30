@@ -49,7 +49,7 @@
  * `kind: 'model'` reader's window is offered as the LIBRARY'S reading to
  * confirm ("I read “yesterday” as … — is that right?"), never as the person's
  * words (§ 5.5). So is EVERY `rule` reading (the owner's decision "Always
- * confirm", time design TQ29 — `rows.ts` · `timeReadingRows`): the choice is
+ * confirm", time design TQ29 — `rowsBuild.ts` · `timeReadingRows`): the choice is
  * the reading pre-filled WITH ITS ZONE ("I read “yesterday” as Thu, Oct 8,
  * 2026, PDT in America/Los_Angeles — is that right?"), so a person who meant
  * another zone's day corrects it in one answer. Free entry stays open: a

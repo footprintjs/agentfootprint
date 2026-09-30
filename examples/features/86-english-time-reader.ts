@@ -19,9 +19,11 @@
  *     (`PST` — no map ships). The click is recorded (`time-answer`,
  *     `how: 'confirmed'`); a window the person writes instead is theirs too
  *     (`how: 'edited'`); the window is written into the tool's own arguments;
- *   - once confirmed, the window is served on each tool that declares a
- *     period, in that tool's own form, with its source ("the window the
- *     person confirmed when asked what their words meant").
+ *   - once confirmed, the window is served to the model LATE — one time line
+ *     appended last to the request, never on a tool description — naming
+ *     each tool that declares a period in that tool's own form, with its
+ *     source ("the window the person confirmed when asked what their words
+ *     meant").
  *
  * Run:  npm run example examples/features/86-english-time-reader.ts
  */
@@ -44,7 +46,7 @@ export const meta: ExampleMeta = {
     'englishTimeReader() tokenizes a small, closed set of time phrases and says "unreadable" for ' +
     'the rest; every reading is only a proposal, confirmed in one click with its window and zone ' +
     '("10/09/26 … PST": the zone first, then the readings as labelled choices); once confirmed ' +
-    'it is served on each tool that declares a period, in the form that tool takes.',
+    'it is served late, in one time line at the end of the request, in the form each tool takes.',
   defaultInput: 'Show client activity 10/09/26 8 AM to 8:40 AM PST',
   providerSlots: [],
   tags: ['features', 'observability'],
@@ -86,8 +88,9 @@ function desk(served: string[]) {
     provider: mock({
       respond: (request: LLMRequest) => {
         calls += 1;
-        const tool = request.tools?.find((t) => t.name === 'client_activity');
-        if (tool !== undefined) served.push(tool.description);
+        // The time line is served LATE: the request's last message, never a tool description.
+        const last = request.messages.at(-1);
+        served.push(typeof last?.content === 'string' ? last.content : '');
         return calls === 1
           ? { content: '', toolCalls: [{ id: `c${calls}`, name: 'client_activity', args: {} }] }
           : { content: '42 client operations in that window.' };
@@ -124,9 +127,9 @@ export async function run(input: string): Promise<string> {
     (r) => r.kind === 'time-answer',
   );
   check(answers[0]?.how === 'confirmed', 'the click recorded as the person’s answer');
-  console.log('served on client_activity after the click:', served[1]);
+  console.log('the time line served after the click:', served[1]);
   check(
-    served[1]?.includes('(the window the person confirmed when asked what their words meant)') ===
+    served[1]?.includes('the window the person confirmed when asked what their words meant') ===
       true,
     'the served line names the confirmed window and its source',
   );

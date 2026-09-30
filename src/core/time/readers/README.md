@@ -32,7 +32,7 @@ window recorded as the person's words is the failure that matters. So the owner
 decided (2026-09-30, time design TQ29): the reader proposes, the person confirms.
 
 **Where the law lives.** In the LIBRARY, for every reader of either kind
-(`../rows.ts` · `timeReadingRows`): each `time-reading` row's candidates carry
+(`../rowsBuild.ts` · `timeReadingRows`): each `time-reading` row's candidates carry
 `said: []` and its choice stays `open` with `confirm` (the policy may still
 narrow the readings — `dateOrder: 'MDY'` leaves one to confirm). This reader
 returns parts and a verbatim quote only — no confirm flag, no leftover list, no

@@ -49,7 +49,7 @@
  * through the time ask pre-filled and editable, with its window AND its zone
  * ("I read “last 2 hours” as … in America/Los_Angeles — is that right?").
  * Only what the person picks or types in that form is theirs. The library
- * owns the law (`../rows.ts` · `timeReadingRows`), so this reader returns
+ * owns the law (`../rowsBuild.ts` · `timeReadingRows`), so this reader returns
  * parts and quotes only — no confirm flag, no leftover list, no allow-list.
  * A form may later skip the click only when a registered benchmark shows it
  * is always read right (TQ29's growth rule).

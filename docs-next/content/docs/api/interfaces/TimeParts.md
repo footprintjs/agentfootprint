@@ -4,7 +4,7 @@ title: TimeParts
 
 # Interface: TimeParts
 
-Defined in: [src/core/time/reader.ts:119](https://github.com/footprintjs/agentfootprint/blob/main/src/core/time/reader.ts#L119)
+Defined in: [src/core/time/reader.ts:128](https://github.com/footprintjs/agentfootprint/blob/main/src/core/time/reader.ts#L128)
 
 Zone-less parts, in the order the text wrote them. Every field present was said.
 
@@ -14,7 +14,7 @@ Zone-less parts, in the order the text wrote them. Every field present was said.
 
 > `readonly` `optional` **anchor?**: `"previous"`
 
-Defined in: [src/core/time/reader.ts:128](https://github.com/footprintjs/agentfootprint/blob/main/src/core/time/reader.ts#L128)
+Defined in: [src/core/time/reader.ts:137](https://github.com/footprintjs/agentfootprint/blob/main/src/core/time/reader.ts#L137)
 
 `'the hour before that'` — resolved from the recorded previous window only.
 
@@ -24,7 +24,7 @@ Defined in: [src/core/time/reader.ts:128](https://github.com/footprintjs/agentfo
 
 > `readonly` `optional` **date?**: [`TimeDate`](/docs/api/type-aliases/TimeDate)
 
-Defined in: [src/core/time/reader.ts:120](https://github.com/footprintjs/agentfootprint/blob/main/src/core/time/reader.ts#L120)
+Defined in: [src/core/time/reader.ts:129](https://github.com/footprintjs/agentfootprint/blob/main/src/core/time/reader.ts#L129)
 
 ***
 
@@ -32,7 +32,7 @@ Defined in: [src/core/time/reader.ts:120](https://github.com/footprintjs/agentfo
 
 > `readonly` `optional` **partOfDay?**: `string`
 
-Defined in: [src/core/time/reader.ts:126](https://github.com/footprintjs/agentfootprint/blob/main/src/core/time/reader.ts#L126)
+Defined in: [src/core/time/reader.ts:135](https://github.com/footprintjs/agentfootprint/blob/main/src/core/time/reader.ts#L135)
 
 `'morning'` — a KEY into a table, never hours.
 
@@ -42,7 +42,7 @@ Defined in: [src/core/time/reader.ts:126](https://github.com/footprintjs/agentfo
 
 > `readonly` `optional` **rangeOf?**: readonly \[`TimeParts`, `TimeParts`\]
 
-Defined in: [src/core/time/reader.ts:130](https://github.com/footprintjs/agentfootprint/blob/main/src/core/time/reader.ts#L130)
+Defined in: [src/core/time/reader.ts:139](https://github.com/footprintjs/agentfootprint/blob/main/src/core/time/reader.ts#L139)
 
 `'8 AM to 8:40 AM'`.
 
@@ -52,7 +52,7 @@ Defined in: [src/core/time/reader.ts:130](https://github.com/footprintjs/agentfo
 
 > `readonly` `optional` **relative?**: [`TimeRelative`](/docs/api/type-aliases/TimeRelative)
 
-Defined in: [src/core/time/reader.ts:124](https://github.com/footprintjs/agentfootprint/blob/main/src/core/time/reader.ts#L124)
+Defined in: [src/core/time/reader.ts:133](https://github.com/footprintjs/agentfootprint/blob/main/src/core/time/reader.ts#L133)
 
 ***
 
@@ -60,7 +60,7 @@ Defined in: [src/core/time/reader.ts:124](https://github.com/footprintjs/agentfo
 
 > `readonly` `optional` **wall?**: [`TimeWall`](/docs/api/interfaces/TimeWall)
 
-Defined in: [src/core/time/reader.ts:121](https://github.com/footprintjs/agentfootprint/blob/main/src/core/time/reader.ts#L121)
+Defined in: [src/core/time/reader.ts:130](https://github.com/footprintjs/agentfootprint/blob/main/src/core/time/reader.ts#L130)
 
 ***
 
@@ -68,6 +68,6 @@ Defined in: [src/core/time/reader.ts:121](https://github.com/footprintjs/agentfo
 
 > `readonly` `optional` **zoneToken?**: `string`
 
-Defined in: [src/core/time/reader.ts:123](https://github.com/footprintjs/agentfootprint/blob/main/src/core/time/reader.ts#L123)
+Defined in: [src/core/time/reader.ts:132](https://github.com/footprintjs/agentfootprint/blob/main/src/core/time/reader.ts#L132)
 
 As written: `'PST'`, `'-07:00'`, `'America/Los_Angeles'` — `resolve.ts` maps it.

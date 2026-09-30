@@ -81,6 +81,29 @@ Agent.create({ provider, model })
 //   candidates: [...], choice: { by: 'policy', candidate: 0, policy: { dateOrder: 'MDY' } }, … }
 ```
 
+### The library's English reader
+
+`englishTimeReader()` is the reader the library ships: a `kind: 'rule'`
+tokenizer with no dependency. It reads a small, closed set — ISO dates and
+instants, numeric dates (the order left open), clock times, a range of two, a
+zone written after them, today / yesterday / tomorrow, "last 40 minutes" — and
+files every other time phrase it recognises as ONE unreadable mention quoting
+the whole phrase. `EnglishTimeReaderOptions` takes only a `locale` for the
+labels of the ask; it never decides a date order.
+
+A reading only PROPOSES. Nothing typed in chat is filed as the person's words:
+when a tool that declares a period is about to be called, the reading is
+offered as a pre-filled, editable confirmation naming its window and its zone,
+and only the person's answer settles it.
+
+```ts
+import { Agent, englishTimeReader } from 'agentfootprint';
+
+Agent.create({ provider, model })
+  .time({ zone: 'America/Los_Angeles', reader: englishTimeReader() })
+  .build();
+```
+
 ## The time ask
 
 A `requestInput` field with a `format` is a time field. `TimeFormat` is one of
@@ -190,6 +213,8 @@ normaliseInstants([{ t: '2026-09-14T10:00:00' }], { column: 't', unit: 'iso' });
 
 ## What is not here yet
 
-The English default reader, the lineage of a derived window, and result checks
-that compare a result's period with the asked one are later steps. Until then
-an `open` reading fills nothing and the tool's own `askOrAssume` rule applies.
+The English reader reads English digits only: words for numbers ("two
+hours"), named months, week days and parts of the day read as unreadable. A
+turn with no time words does not carry the last window yet. The result checks
+read only what the record holds: a call whose tool declares no period forms
+has no asked range, so only its declared read is checked against `retention`.

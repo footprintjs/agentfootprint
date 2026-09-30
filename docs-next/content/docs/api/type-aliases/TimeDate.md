@@ -6,7 +6,7 @@ title: TimeDate
 
 > **TimeDate** = \{ `fields`: readonly `number`[]; `kind`: `"numeric"`; `yearDigits?`: `2` \| `4`; \} \| \{ `day`: `number`; `kind`: `"fixed"`; `month`: `number`; `year?`: `number`; \}
 
-Defined in: [src/core/time/reader.ts:89](https://github.com/footprintjs/agentfootprint/blob/main/src/core/time/reader.ts#L89)
+Defined in: [src/core/time/reader.ts:98](https://github.com/footprintjs/agentfootprint/blob/main/src/core/time/reader.ts#L98)
 
 A date as the text wrote it.
 
