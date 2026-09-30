@@ -27,7 +27,7 @@ import { SqliteUnavailableError } from '../lib/sqliteUnavailable.js';
 import { identityNamespace } from '../memory/identity/index.js';
 import { prepareArtifact } from './minting.js';
 import { isArtifactRef } from './naming.js';
-import type { DatasetTimeAxis } from './timeAxis.js';
+import type { DatasetTimeAxis } from '../core/time/axis.js';
 import {
   computeArtifactDigest,
   decodeArtifactData,

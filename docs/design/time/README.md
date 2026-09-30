@@ -670,7 +670,7 @@ Two declarations answer two questions, and share every rule in `core/time/`:
 | Declaration | Question | Home | Status |
 |---|---|---|---|
 | `DeclaredPeriod { queried, held \| 'unknown', readAt? }` | what did this **read** cover? | `coverage/period.ts` (rules move to `core/time/instant.ts`) | shipped (step 7b); the host mints none yet |
-| `DatasetTimeAxis { column, unit, zone?, interval?, aggregate? }` | which **column** is time, in what clock, at what grain? | in flight `artifacts/timeAxis.ts` → `core/time/axis.ts` | in flight |
+| `DatasetTimeAxis { column, unit, zone?, interval?, aggregate? }` | which **column** is time, in what clock, at what grain? | `core/time/axis.ts` (moved from `artifacts/timeAxis.ts`, T2) | shipped; `normaliseInstants` with T2 |
 
 - **One grammar.** `interval` uses `core/time/duration.ts`; `zone` uses `core/time/zone.ts`. The
   in-flight branch's private `INTERVAL` regex goes away.
@@ -975,7 +975,7 @@ deterministic and are measured over retained recorded runs or unit tables, with 
 |---|---|---|---|---|---|---|
 | T0 | **This page** | `docs/design/time/` | — | — | — | — |
 | T1 | **One owner** — *landed; implementation note T1 below* | `src/core/time/` `instant.ts` (two profiles), `duration.ts` (per-use units), `zone.ts`, `range.ts` (the § 3.3 edge conversions, `parseRange` / `spellRange`); `period.ts`, `declare.ts` import from it; the § 12.1 rows settled and pinned | none (refactor + the two named refusals) | TQ1, TQ11 | property: every instant the lenient profile accepted before is accepted after (`periodVerdict` byte-identical, inclusive); every `iso-range` argument accepted before is accepted after except rows a–b; `1000000m` still accepted; `30s` still refused for a default look-back; round-trip `durationMs` ↔ `spellDuration` and `parseRange` ↔ `spellRange`; every § 3.3 boundary round-trips; DST table for 20 zones through `Intl` | $0 |
-| T2 | **The declared time axis, on T1** | the in-flight `feat/dataset-time-axis` rebased: `core/time/axis.ts`, `normaliseInstants` as a read-side view with the value check, the `naive-values` status replacing "(or are UTC)", the fall-back overlap rule (§ 8); `artifacts/` re-exports | a dataset declares `timeAxis` | T1 | epoch-s / epoch-ms / mixed offsets normalise to sorted UTC; offset-less values under a zone-less `iso` axis are counted (or refused, by choice), never read as UTC; two `01:30` rows across a fall-back resolve by row order, a lone one is `dst-ambiguous`; stored bytes unchanged | $0; host panel hand count |
+| T2 | **The declared time axis, on T1** — *landed; implementation note T2 below* | the in-flight `feat/dataset-time-axis` rebased: `core/time/axis.ts`, `normaliseInstants` as a read-side view with the value check, the `naive-values` status replacing "(or are UTC)", the fall-back overlap rule (§ 8); `artifacts/` re-exports | a dataset declares `timeAxis` | T1 | epoch-s / epoch-ms / mixed offsets normalise to sorted UTC; offset-less values under a zone-less `iso` axis are counted (or refused, by choice), never read as UTC; two `01:30` rows across a fall-back resolve by row order, a lone one is `dst-ambiguous`; stored bytes unchanged | $0; host panel hand count |
 | T3 | **The clock and the presentation** | run option `time` (`now`, `zone`, `window`), `.time({ zone })` as the fallback, the `clock` stamp with `nowSource` / `zoneSource`, `clock-on-resume`, `dispatchedAt` on call rows, the checkpoint arm, `present.ts` (the said end; locale-neutral with no reader), `periodLine` in the presentation zone | `.time()` | T1 | the clock survives pause/resume unchanged, and a resume passing a new `time` is recorded, not applied; no zone anywhere → the run is refused; `dispatchedAt` after a resume is the resume's; `nowSource: 'default'` recorded; limits line golden files per zone, "to 8:40" shown as 08:40 | $0 |
 | T6a | **The reader port and the resolver** | `TimeReader` (`kind`, `version`, `locale`), `TimeParts`, `resolve.ts` over parts + clock + the v1 policy (`dateOrder`, `year`) and the fixed laws (DST, end edge), the `time-reading` row (reader version, tzdata version) read back on resume, the `saidByPerson` gate, the `model`-reading rule | `.time({ reader })` | T3 | against a **fixture reader** that returns fixed parts: every candidate for `10/09/26`, a bare `8:40`, a DST overlap; an out-of-text quote is refused; a replay never calls the reader; a library-written `role: 'user'` turn is never read | $0 |
 | T4 | **The time ask** | `InputField.format` (refused unless `type: 'string'`), re-validation of shape, order and zone, labelled choices, catalog reasons (TQ7), MCP `date-time` mapping | a `format` field or `.time()` | T3, T6a | answers out of order, zone-less, in a DST gap → re-ask with `refused` and `repeat`; a `model` reading offered to confirm | $0; host hand count |
@@ -1004,6 +1004,31 @@ deterministic and are measured over retained recorded runs or unit tables, with 
   look-back row of § 3.3 is `[until − L, until]`, both ends inside, so `range.ts` ·
   `lookbackRange` reads it back as half-open `[until − L, until + 1 ms)` (the inclusive-span rule
   with a 1 ms step), and `lookbackOf` inverts it.
+
+- **T2.** Landed with these smallest faithful choices. (1) There was no branch to rebase: the axis
+  had shipped on main, so `artifacts/timeAxis.ts` MOVED to `core/time/axis.ts` (its five internal
+  importers repointed; `artifacts/index.ts` re-exports it and `normaliseInstants`, so the package
+  surface only grows). The two behaviour changes T1's note foresaw are named in the changelog: an
+  `interval` has no digit cap (`duration.ts` under `AXIS_UNITS`), and a `zone` goes through
+  `zone.ts` · `isZoneName`, so `PST`, a bare offset, `utc` and `EST5EDT` are refused at mint and an
+  older ticket carrying one reads `malformed`. (2) The view's shape: `NormalisedAxis` is
+  `instants | naive-values | refused`; `count` is `naive + dstAmbiguous` (the two "clock unknown"
+  counts), and `dstGap`, `unreadable` and `missing` are counted under every status. `points` are
+  sorted in time (ties by row), each carrying its row index, spelled at the column's finest
+  precision with a fixed-width fraction — `instant.ts` · `spellInstant` drops trailing zeros, and
+  `…:00Z` would sort after `…:00.5Z` as text. (3) "Rows not in time order" is made exact: over the
+  zoned wall values in row order, a value not after the one before it is a step back; the column
+  can place overlap values only when every step back lies between two overlap values of the same
+  day, and a day places them only with exactly one step. An EQUAL repeat is a step (the two-`01:30`
+  case), so a column that repeats wall times elsewhere (long format, one row per series) places
+  none — counted `dstAmbiguous`, never guessed. (4) Under a zoned axis, a value that carries its
+  own offset is read as that instant. A date alone (`2026-09-14`) is naive under a zone-less axis
+  and midnight wall time under a zoned one. Epoch values must be numbers, read through their
+  decimal spelling (so `…400.123` is exactly 123 ms); an exponent spelling, a digit string or a
+  year past 9999 is `unreadable`. (5) No ledger row kind, served sentence or byte reference: the
+  view is a pure read-side function; the Record clause's axis counts are its fields until a
+  consumer records them. The feature example is the existing
+  `examples/artifacts/dataset-time-axis.ts` (a `normalise` region), where datasets are taught.
 
 **Why this order.** T1 settles the grammar every other step leans on and is free. T2 is already
 written and only needs rebasing and the value check. T3 gives the first visible win (the limits
