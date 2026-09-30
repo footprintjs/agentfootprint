@@ -1332,13 +1332,32 @@ deterministic and are measured over retained recorded runs or unit tables, with 
   **The trade-off, owner-approved:** more confirmations — `9 AM and 3 retries`, `I want to see
   yesterday` (`to`), `logs from yesterday` (`from`), `errors in the last 2 hours to date` all
   confirm; an extra confirmation is honest, a partial reading recorded as said is not. A time
-  said with no word or mark of the set (`8 AM for the whole sprint`) is the remaining gap — a
-  word to add to the one list. Pinned by `english-reader.test.ts` (every row the three reviews
+  said with no word or mark of the set (`8 AM for the whole sprint`) was the remaining gap — (7)
+  closes it for a point time. Pinned by `english-reader.test.ts` (every row the three reviews
   cited is confirmed or unreadable, never said; a generated matrix of v1 phrase × separator ×
   opener × time-like tail, reversed and with seeded fillers, where a reading is said only when
   the tail lies inside a mention and an independent oracle finds nothing time-like outside every
   mention; exact controls stay said) and `english-run.test.ts` (a half-read range pauses on the
   confirmation, and the tool runs only on the person's answer).
+  (7) **A point is not a window** (fifth review round — the class closed by SHAPE, not by
+  words). Every round leaked the next word or mark (`8 AM forward`, `post 8 AM`, `>8 AM`, `start
+  8:40 AM, end 9:30 PM`, `8 AM into 9 PM`, `8 AM ⇨ 9 PM`), so the library, not the reader,
+  decides when a `rule` reading may be the person's window (`rows.ts` · `confirmNeededOf`, one
+  owner, with `isWindowComplete`): a reading that names ONE clock time or instant with no second
+  bound is never filed as said — its row records `confirmNeeded: { point: true }` and the ask
+  offers it ("I read 08:00–09:00 — is that the window you mean?"); a message with more than one
+  mention confirms every reading (`confirmNeeded: { several: true }`) unless the two were read as
+  one range. Only a WINDOW-COMPLETE reading, alone, may be said: a range whose bounds were read
+  in one span, a relative span (`last 2 hours`), a whole calendar unit (`yesterday`,
+  `2026-09-26`). The reader's scan counts marks by RULE (`readers/english.ts` · `COUNTED_MARK`:
+  any `\p{S}`/`\p{P}` but sentence punctuation, quotes and brackets, unless alone between two
+  letters). `confirmNeeded` gains `point` and `several` beside `leftover` (at least one key; the
+  checkpoint door checks it); a `model` reading is unchanged (it always confirms). The price, in
+  the direction of (6): a point time (`at 8 AM`) and two separate days (`today vs yesterday`) now
+  pause for a confirmation where they were filed as said. **The known limit:** a window-complete
+  reading beside an open-range word the scan does not list (`errors yesterday henceforth`) is
+  still read as the day and filed as said — pinned as the limit in `english-reader.test.ts`; the
+  paid bench measures how often it occurs.
 
 **Why this order.** T1 settles the grammar every other step leans on and is free. T2 is already
 written and only needs rebasing and the value check. T3 gives the first visible win (the limits

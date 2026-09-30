@@ -535,7 +535,9 @@ describe('timeReadingRows + the checkpoint door', () => {
       mentions: 3,
       mention: 0,
       quote: '10/09/26',
-      choice: { by: 'open', remaining: [0, 1, 2], open: ['date-order'] },
+      // Three mentions: which one is the window is not said — confirmed (`rows.ts` · `confirmNeededOf`).
+      choice: { by: 'open', remaining: [0, 1, 2], open: ['date-order', 'confirm'] },
+      confirmNeeded: { several: true },
     });
     expect(rows[1]).toEqual({
       kind: 'time-reading',

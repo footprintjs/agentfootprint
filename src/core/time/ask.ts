@@ -49,8 +49,10 @@
  * confirm ("I read “yesterday” as … — is that right?"), never as the person's
  * words (§ 5.5). So is a `rule` reader's INCOMPLETE reading (`confirmNeeded`,
  * step T6b): the question names what the reader did not read ("I read only
- * “8:40 AM” as a time, not “til 9.30”…") and the one choice is the reading,
- * offered to confirm or replace. Free entry stays open: a field is `strict` only when the app
+ * “8:40 AM” as a time, not “til 9.30”…") — or, for a point time or one of
+ * several mentions (`rows.ts` · `confirmNeededOf`), asks the plain
+ * confirmation — and the one choice is the reading ("I read 08:00–09:00 — is
+ * that the window you mean?"), offered to confirm or replace. Free entry stays open: a field is `strict` only when the app
  * says so.
  *
  * @example
@@ -215,8 +217,9 @@ export function checkTimeAnswer(
  * Every sentence the time ask can put before a person — the keys of the
  * catalog (`src/locales/timeAsk.ts`). `answer.*` is a refusal's reason, one
  * per {@link TimeAnswerProblem}; `ask.*` a question; `choice.confirm` the
- * label on a `model` reader's window; `*.confirm-part` the question and label
- * on an incomplete reading. Placeholders are `{{name}}`.
+ * label on a `model` reader's window; `choice.confirm-part` the label on a
+ * `rule` reading that is not the person's window (`confirmNeeded`), and
+ * `ask.confirm-part` its question when it names leftover words. Placeholders are `{{name}}`.
  */
 export const TIME_ASK_MESSAGE_KEYS = Object.freeze([
   'answer.not-an-instant',
@@ -373,11 +376,12 @@ export function timeAskOf(
       window,
     });
   });
-  const leftover = quoted(row.confirmNeeded?.leftover.join(' ') ?? '');
+  // Words left unread are named; a point time or several mentions ask the plain confirmation.
+  const left = row.confirmNeeded?.leftover;
   const question = !confirm
     ? fillMessage(messages['ask.which'], { quote })
-    : part
-    ? fillMessage(messages['ask.confirm-part'], { quote, leftover })
+    : left !== undefined
+    ? fillMessage(messages['ask.confirm-part'], { quote, leftover: quoted(left.join(' ')) })
     : fillMessage(messages['ask.confirm'], { quote });
   return {
     question,

@@ -330,7 +330,7 @@ describe('a window the model chose — record and run', () => {
     expect(standing.reasons.map((r) => r.reason)).toContain('argument-unverified');
   });
 
-  it('"today vs yesterday": two mentions, no fill, each call bound by its quote', async () => {
+  it('"today vs yesterday": two mentions are confirmed — no quote binds either, the run asks', async () => {
     const reader = fixtureReader(() => ({
       mentions: [
         { quote: 'today', parses: [{ relative: { unit: 'day', offset: 0 } }] },
@@ -376,37 +376,25 @@ describe('a window the model chose — record and run', () => {
       message: 'compare client activity today vs yesterday',
       time: { now: NOW },
     });
-    expect(isInputPause(out)).toBe(false); // nothing asked
-    expect(seen.map((s) => s.args)).toEqual([
-      day('2026-10-09', '2026-10-10'),
-      day('2026-10-08', '2026-10-09'),
+    // Two mentions, not read as one range: which is the window is not said, so neither is the
+    // person's words (`rows.ts` · `confirmNeededOf`) — no quote binds; the run asks first.
+    expect(isInputPause(out)).toBe(true);
+    expect(seen).toEqual([]);
+    expect(ofKind(agent, 'time-reading').map((r) => [r.quote, r.confirmNeeded])).toEqual([
+      ['today', { several: true }],
+      ['yesterday', { several: true }],
     ]);
-    expect(
-      ofKind(agent, 'call-window').map((r) => [
-        r.toolCallId,
-        r.how,
-        r.by,
-        (r.person as { mention: number }).mention,
-      ]),
-    ).toEqual([
-      ['c1', 'bound', 'quote', 0],
-      ['c2', 'bound', 'quote', 1],
-    ]);
-    expect(
-      ofKind(agent, 'argument').map((r) => [r.toolCallId, r.source, r.matched, r.reading]),
-    ).toEqual([
-      ['c1', 'said', 'mention', undefined],
-      ['c1', 'said', 'mention', undefined],
-      ['c2', 'said', 'mention', undefined],
-      ['c2', 'said', 'mention', undefined],
+    expect(ofKind(agent, 'call-window').map((r) => [r.toolCallId, r.how])).toEqual([
+      ['c1', 'model'],
+      ['c2', 'model'],
     ]);
   });
 
   it('a made-up quote that wraps the mention is a failed claim — never raised to the person’s words', async () => {
     const reader = fixtureReader(() => ({
       mentions: [
+        // One mention: two would be confirmed before any quote could bind (`rows.ts` · `confirmNeededOf`).
         { quote: 'today', parses: [{ relative: { unit: 'day', offset: 0 } }] },
-        { quote: 'yesterday', parses: [{ relative: { unit: 'day', offset: -1 } }] },
       ],
     }));
     const today = {

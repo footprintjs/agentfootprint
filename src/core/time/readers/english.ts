@@ -45,9 +45,10 @@
  * broad time-or-range set left (`LEFTOVER_WORDS` — any digit in any script,
  * number and hour words, ordinals, day, relative, week day and month words,
  * units, parts of the day, range words such as `to`, `until`, `from`,
- * `between`, zone words; a dash, arrow, tilde, `..`, `…`, `/`, `&` or `+`
- * between tokens; `and`/`plus` right after a time; `AM` and the zone
- * abbreviations in capitals)? Nothing left: every reading is COMPLETE — the
+ * `between`, zone words; `..`, and ANY symbol or punctuation mark but
+ * sentence punctuation, quotes and brackets — by rule, not by list — unless
+ * it stands alone between two letters (`check-in`); `and`/`plus` right after
+ * a time; `AM` and the zone abbreviations in capitals)? Nothing left: every reading is COMPLETE — the
  * person's words. Something left: every reading names those tokens
  * (`TimeMention.leftover`) and is CONFIRMED through the time ask, never filed
  * as said. So `8:40 AM til 9.30`, `8 AM until the deploy` and
@@ -56,6 +57,15 @@
  * common word of the set (`9 AM and 3 retries`, `I want to see yesterday`,
  * `errors in the last 2 hours to date`) is confirmed, not read — an extra
  * confirmation is honest; a partial reading recorded as said is not.
+ *
+ * The scan is not the only guard. The LIBRARY files a `rule` reading as the
+ * person's window only when it is window-complete and alone (`rows.ts` ·
+ * `confirmNeededOf`): a point time (`8 AM`, whatever word stands beside it —
+ * `8 AM forward`, `post 8 AM`) and a message with two mentions (`start 8:40
+ * AM, end 9:30 PM`) are confirmed whatever the scan found. What only this
+ * scan guards is a WHOLE-DAY or relative-span reading beside an open-range
+ * word it does not list (`yesterday henceforth` reads as the day) — the known
+ * limit, measured by the bench.
  *
  * A numeric date the tokens could split two ways stays ONE parse — `10/09/26`
  * is three numbers; which is the month is the policy's or the person's.
@@ -222,25 +232,35 @@ const LEFTOVER_WORDS = [
   'pacific|eastern|central|mountain|zone|timezone|utc|gmt|local',
 ].join('|');
 /**
+ * The marks the scan does NOT count: sentence punctuation, quotes and
+ * brackets. Every other symbol or punctuation mark (`\p{S}`, `\p{P}`) counts
+ * — by RULE, not by list: a dash, an arrow of any block, `>`, `<`, `≥`, `=`,
+ * `|`, `»`, `~`, `…`, `+`, `/`, `&`, `_` alike. `:` is not counted (`Start:`);
+ * a message it joins holds two mentions, which confirms on its own
+ * (`rows.ts` · `confirmNeededOf`).
+ */
+const NEUTRAL_MARKS = '.,;:!?\'"()\\[\\]’‘“”';
+/** One counted mark: a symbol or punctuation mark outside {@link NEUTRAL_MARKS}. */
+const COUNTED_MARK = `(?![${NEUTRAL_MARKS}])[\\p{S}\\p{P}]`;
+/**
  * What the scan counts: a digit run in any script (`9.30` is one token), a
- * word of {@link LEFTOVER_WORDS}, a dotted meridiem, `o'clock`, and a range
- * mark (a dash, an arrow, a tilde, `..`, `…`, `/`, `&`, `+`). Lower-case `am`
- * is not counted: it is English, and a meridiem is only ever said with a
- * number, which the scan counts already.
+ * word of {@link LEFTOVER_WORDS}, a dotted meridiem, `o'clock`, `..`, and any run
+ * of {@link COUNTED_MARK} (`->` is one token). Lower-case `am` is not counted: it is English, and a
+ * meridiem is only ever said with a number, which the scan counts already.
  */
 const LEFTOVER = new RegExp(
   '\\p{Nd}+(?:[.:,]\\p{Nd}+)*' +
     `|\\b(?:${LEFTOVER_WORDS})(?:-?ish)?\\b` +
     "|\\b[ap]\\.m\\b\\.?|\\bo['’]?\\s?clock\\b" +
-    '|\\.\\.+|…|->|=>|<-|[-‐‑‒–—―−~～→←↔⇒⟶/&+]',
+    `|\\.\\.+|(?:${COUNTED_MARK})+`,
   'giu',
 );
 /** Time-like only in capitals: `AM` (`am` is English) and the zone abbreviations. */
 const LEFTOVER_CASED = new RegExp(`\\b(?:AM|${ZONE_ABBREVIATIONS.join('|')})\\b`, 'gu');
 /** A word that joins a range or a sum — counted only right after a time (`8 AM and the deploy`). */
 const JOINER = /\b(?:and|plus|minus)\b/giu;
-/** A lone mark between two letters is part of a word (`check-in`, `and/or`), not a range. */
-const MARK = /^[-‐‑‒–—―−~～→←↔⇒⟶/&+]$/u;
+/** A lone mark between two letters is part of a word (`check-in`, `and/or`, `request_id`), not a range. */
+const MARK = new RegExp(`^${COUNTED_MARK}$`, 'u');
 const LETTER = /\p{L}/u;
 /** What may stand between a time and the joiner after it. */
 const BETWEEN_JOIN = /[\s,;:()"'[\]]/u;

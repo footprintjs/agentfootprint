@@ -258,13 +258,26 @@ describe('timeAskOf — unit', () => {
     ).toBeUndefined();
     expect(
       timeAskOf(
-        rowFor('at 2026-10-09 20:40', '2026-10-09 20:40', {
+        rowFor('on 2026-10-09', '2026-10-09', {
           date: { kind: 'fixed', year: 2026, month: 10, day: 9 },
-          wall: { h: 20, m: 40 },
         }),
         defaultTimeAskMessages,
       ),
     ).toBeUndefined();
+  });
+
+  it('a point time is not a window: its one reading is offered to confirm (`rows.ts` · `confirmNeededOf`)', () => {
+    const row = rowFor('at 2026-10-09 20:40', '2026-10-09 20:40', {
+      date: { kind: 'fixed', year: 2026, month: 10, day: 9 },
+      wall: { h: 20, m: 40 },
+    });
+    expect(row.confirmNeeded).toEqual({ point: true });
+    const ask = timeAskOf(row, defaultTimeAskMessages);
+    expect(ask?.question).toBe('Is this the time you meant by “2026-10-09 20:40”?');
+    expect(ask?.field.enum).toEqual(['2026-10-09T20:40:00-07:00/2026-10-09T20:41:00-07:00']);
+    expect(plain(ask?.field.labels?.[0] ?? '')).toBe(
+      'I read Fri, Oct 9, 2026, 8:40 PM PDT — is that the window you mean?',
+    );
   });
 
   it('a wall time the clocks go back through → both instants as choices', () => {
@@ -279,9 +292,10 @@ describe('timeAskOf — unit', () => {
       '2026-11-01T01:30:00-07:00/2026-11-01T01:31:00-07:00',
       '2026-11-01T01:30:00-08:00/2026-11-01T01:31:00-08:00',
     ]);
+    // A point time: each instant is offered to confirm, never as the person's window.
     expect(ask?.field.labels?.map(plain)).toEqual([
-      'Sun, Nov 1, 2026, 1:30 AM PDT',
-      'Sun, Nov 1, 2026, 1:30 AM PST',
+      'I read Sun, Nov 1, 2026, 1:30 AM PDT — is that the window you mean?',
+      'I read Sun, Nov 1, 2026, 1:30 AM PST — is that the window you mean?',
     ]);
   });
 

@@ -23,7 +23,7 @@
  * | `clock-on-resume` | first thing in the resumed leg's ToolCalls stage — either pause shape: the pausable resume door, or the stage re-run an `interrupt()` pause makes — when a resume passed a `time` that differs from the kept clock | what was passed and what was kept — the kept clock still rules |
  * | `call` | once per dispatched call, just before the tool runs | `dispatchedAt`: the wall clock at dispatch (a look-back is evaluated by the TOOL at dispatch, which after a pause is later than `now`); `drift` when a look-back was sent more than the tool's step after `now` — `redrawn` into an absolute form, or `shifted` (§ 7.4, `drift.ts`) |
  * | `call-window` | by the inputs layer, once per call to a tool that declares period forms, before it dispatches | which window the call carries: filled from the turn's one window (exactly, or wider — with what the read adds), bound to one (by quote or value), the model's own (beside the person's when it differs), unread, not filled and why, or refused before dispatch and why |
- * | `time-reading` | by seed, once per MENTION the armed reader (`.time({ reader })`) found in the person's message — or ONE row with `mentions: 0` when it found none, so a retry knows the message was read | the quote, the parts, every candidate `resolve.ts` made of them, how the reading settled (`choice`), `confirmNeeded` with the leftover tokens when the reading is incomplete, the reader's id, version, kind and locale, and the tz database version; a refused mention keeps only why |
+ * | `time-reading` | by seed, once per MENTION the armed reader (`.time({ reader })`) found in the person's message — or ONE row with `mentions: 0` when it found none, so a retry knows the message was read | the quote, the parts, every candidate `resolve.ts` made of them, how the reading settled (`choice`), `confirmNeeded` when a `rule` reading is not the person's window (`leftover` tokens it did not read, a `point` time, `several` mentions — {@link confirmNeededOf}), the reader's id, version, kind and locale, and the tz database version; a refused mention keeps only why |
  *
  * Readers that switch over every row kind must skip one they do not know.
  */
@@ -140,13 +140,59 @@ export interface TimeReadingRow {
   /** How the reading settled under the policy — `open` waits for the person. */
   readonly choice?: ReadingChoice;
   /**
-   * The reading is INCOMPLETE: the reader found these time-like tokens
-   * outside every span it read (`reader.ts` · `TimeMention.leftover`). It is
-   * never the person's words — its candidates carry `said: []` and its
-   * choice stays `open` with `confirm` until the person confirms it through
-   * the time ask (step T6b).
+   * The reading is not the person's WINDOW as said — why, at least one of
+   * ({@link confirmNeededOf}). It is never their words: its candidates carry
+   * `said: []` and its choice stays `open` with `confirm` until the person
+   * confirms it through the time ask (step T6b).
    */
-  readonly confirmNeeded?: { readonly leftover: readonly string[] };
+  readonly confirmNeeded?: ConfirmNeeded;
+}
+
+/** Why a reading waits for the person's confirmation — at least one key. */
+export interface ConfirmNeeded {
+  /** Time-like tokens the reader found outside every span it read (`reader.ts` · `TimeMention.leftover`). */
+  readonly leftover?: readonly string[];
+  /** A `rule` reading names ONE time (`8 AM`, `2026-10-09T08:00`), not a window: its hour is the library's guess. */
+  readonly point?: true;
+  /** The message held more than one mention, not read as one range: which is the window is not said. */
+  readonly several?: true;
+}
+
+/**
+ * Whether one parse names a WINDOW by itself: a range whose two bounds were
+ * read in one span (`rangeOf`), or a whole calendar unit or relative span with
+ * no clock time (`yesterday`, `2026-09-26`, `last 2 hours`). A clock time
+ * with no second bound (`8 AM`, `yesterday 8:40 PM`, an ISO instant) is a
+ * POINT — the window around it (`08:00–09:00`, `resolve.ts`' end of grain)
+ * is the library's reading, never the person's words.
+ */
+export const isWindowComplete = (parts: TimeParts): boolean =>
+  parts.rangeOf !== undefined || parts.wall === undefined;
+
+/**
+ * Why a checked mention is not the person's window — the one owner of the law
+ * (step T6b, fifth review round). A word list can never prove a reading is
+ * whole, so the reading's SHAPE decides: any reader's `leftover`; and, for a
+ * `rule` reader (a `model` reading is confirmed whatever its shape), a POINT
+ * time — whatever words stood beside it (`8 AM forward`, `>8 AM`, `post 8 AM`)
+ * — and a message with more than one mention (`start 8:40 AM, end 9:30 PM`),
+ * which only a range read in one span may join. `undefined`: the reading is
+ * window-complete and alone — the person's words.
+ */
+export function confirmNeededOf(
+  mention: { readonly parses: readonly TimeParts[]; readonly leftover?: readonly string[] },
+  mentions: number,
+  kind: 'rule' | 'model',
+): ConfirmNeeded | undefined {
+  const rule = kind === 'rule' && mention.parses.length > 0;
+  const point = rule && mention.parses.some((p) => !isWindowComplete(p));
+  const several = rule && mentions > 1;
+  if (mention.leftover === undefined && !point && !several) return undefined;
+  return {
+    ...(mention.leftover !== undefined && { leftover: [...mention.leftover] }),
+    ...(point && { point: true as const }),
+    ...(several && { several: true as const }),
+  };
 }
 
 /**
@@ -313,7 +359,7 @@ export function timeReadingRows(input: {
   if (mentions.length === 0) return [base];
   return mentions.map((m, mention) => {
     if ('refused' in m) return { ...base, mention, refused: m.refused };
-    const confirmNeeded = m.leftover === undefined ? undefined : { leftover: [...m.leftover] };
+    const confirmNeeded = confirmNeededOf(m, mentions.length, reader.kind);
     const confirm = needsConfirm({ reader, confirmNeeded });
     const resolution = resolveMention(
       m.parses,
@@ -522,19 +568,28 @@ const MENTION_FIELDS = [
   'confirmNeeded',
 ];
 
-/** `{ leftover }`: 1 to 16 non-empty tokens (`reader.ts` · `MAX_LEFTOVER`), only beside parses. */
+/**
+ * {@link ConfirmNeeded}: only beside parses, at least one key of `leftover`
+ * (1 to 16 non-empty tokens — `reader.ts` · `MAX_LEFTOVER`), `point: true`,
+ * `several: true`, and no other key.
+ */
 function isConfirmNeeded(value: unknown, parses: readonly unknown[]): boolean {
   if (value === undefined) return true;
   if (value === null || typeof value !== 'object' || Array.isArray(value)) return false;
   const v = value as Record<string, unknown>;
+  const keys = Object.keys(v);
   const leftover = v.leftover;
   return (
-    Object.keys(v).length === 1 &&
     parses.length > 0 &&
-    Array.isArray(leftover) &&
-    leftover.length >= 1 &&
-    leftover.length <= MAX_LEFTOVER &&
-    leftover.every((t) => nonEmpty(t) && (t as string).length <= 64)
+    keys.length >= 1 &&
+    keys.every((k) => k === 'leftover' || k === 'point' || k === 'several') &&
+    (v.point === undefined || v.point === true) &&
+    (v.several === undefined || v.several === true) &&
+    (leftover === undefined ||
+      (Array.isArray(leftover) &&
+        leftover.length >= 1 &&
+        leftover.length <= MAX_LEFTOVER &&
+        leftover.every((t) => nonEmpty(t) && (t as string).length <= 64)))
   );
 }
 

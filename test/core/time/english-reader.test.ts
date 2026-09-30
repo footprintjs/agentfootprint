@@ -15,7 +15,9 @@
  *                 sentences end to end through resolve, choose and the ask ("10/09/26 8 AM to
  *                 8:40 AM PST" → a zone ask for `PST`, then three date orders, `MDY` → PDT;
  *                 "yesterday"; a future date refused by a `past` tool's facts);
- *   leftover rule — every row the recheck rounds cited is confirmed or unreadable, never said; a
+ *   leftover rule — every row the recheck rounds cited is confirmed or unreadable, never said (as
+ *                 the RECORD files it: `rows.ts` · `confirmNeededOf` — a point time and a second
+ *                 mention confirm whatever the scan found; a point × any tail is never said); a
  *                 generated matrix (v1 phrase × separator × opener × time-like tail, reversed,
  *                 seeded fillers) proves a reading is said only when an independent oracle finds
  *                 nothing time-like outside every mention; plain exact phrases stay said;
@@ -43,7 +45,11 @@ import {
   withZoneAnswered,
 } from '../../../src/core/time/resolve.js';
 import { timeAskOf } from '../../../src/core/time/ask.js';
-import { timeReadingRows, timeRowIsWellFormed } from '../../../src/core/time/rows.js';
+import {
+  confirmNeededOf,
+  timeReadingRows,
+  timeRowIsWellFormed,
+} from '../../../src/core/time/rows.js';
 import { periodFactProblem } from '../../../src/core/time/convert.js';
 import { defaultTimeAskMessages } from '../../../src/locales/timeAsk.js';
 import { int, pick, prng } from './fixtures/generate.js';
@@ -219,9 +225,33 @@ describe('every non-v1 phrase reads "unreadable" — the whole phrase, never a p
 
 // ─── the leftover rule: the person's words only when nothing time-like is left ───
 
-/** The mentions filed as the person's words: read, and no leftover. */
-const saidOf = (text: string) =>
-  read(text).mentions.filter((m) => m.problem === undefined && m.leftover === undefined);
+/** The `time-reading` rows the library files for the text, as seed would. */
+const rowsOf = (text: string) =>
+  timeReadingRows({
+    mentions: checkReading(text, read(text), reader.id),
+    clock: { now: CLOCK.now, nowSource: 'app', zone: LA, zoneSource: 'app' } as never,
+    policy: DEFAULT_TIME_POLICY,
+    reader: { id: reader.id, version: reader.version, kind: 'rule', locale: 'en-US' },
+    tzdata: 'test',
+    at: { turn: 1, iteration: 1 },
+  });
+
+/**
+ * The readings that may be filed as the person's words: read, and nothing to
+ * confirm — no leftover, no point time, no second mention (`rows.ts` ·
+ * `confirmNeededOf`). What the record decides, not what the reader returned.
+ */
+function saidOf(text: string): { quote: string; parses: readonly TimeParts[] }[] {
+  const mentions = checkReading(text, read(text), reader.id);
+  return mentions.flatMap((m) =>
+    'refused' in m || m.problem !== undefined || confirmNeededOf(m, mentions.length, 'rule')
+      ? []
+      : [{ quote: m.quote, parses: m.parses }],
+  );
+}
+
+/** Whether a parse names one clock time with no second bound — a POINT, never a window. */
+const isPoint = (p: TimeParts): boolean => p.rangeOf === undefined && p.wall !== undefined;
 
 /** Where each mention stands in the text — quotes are in order and never overlap. */
 function spansOf(text: string): { start: number; end: number }[] {
@@ -307,6 +337,22 @@ describe('the leftover rule — a reading is the person’s only when nothing ti
     '9 AM and 3 retries', '8 AM and 9 AM', 'the 5 slowest calls yesterday',
     'which one failed yesterday', 'errors 500-503 yesterday', 'errors in the last 2 hours to date',
     'I want to see yesterday', 'logs from yesterday', '8:40 AM ~ 9:30 PM', 'since 8 AM, and today',
+    // round 5: open-range words beside a point time — a point is never a window
+    'errors 8 AM forward', '8 AM going forward', 'errors 8 AM on', 'errors 8 AM on out',
+    'errors 8 AM hence', 'errors 8 AM henceforth', '8 AM thereafter', 'errors 8 AM ff',
+    'errors >8 AM', 'errors >= 8 AM', 'errors ≥ 8 AM', 'errors < 9 PM', 'errors newer than 8 AM',
+    'errors older than 8 AM', 'errors at least 8 AM', 'errors kicking off 8 AM', 'post 8 AM errors',
+    'pre 9 AM errors', 'post-8 AM', 'errors 8:40', 'errors >8:40', '8 AM', '2026-10-09T08:00',
+    'yesterday 8:40 PM', 'yesterday at 8 AM',
+    // round 5: two point readings with an unread range token between them — several mentions
+    'Start: 8:40 AM\nEnd: 9:30 PM', 'start 8:40 AM, end 9:30 PM', 'begin 8 AM finish 9 PM',
+    '8 AM start, 9 PM stop', 'window opens 8 AM, closes 9 PM', '8 AM into 9 PM', '8am > 9pm',
+    '8am<9pm', '8am >= 9pm', '8 AM | 9 PM', '8 AM » 9 PM', '8 AM ➔ 9 PM', '8 AM ➜ 9 PM',
+    '8 AM ⇢ 9 PM', '8 AM ⇨ 9 PM', '8 AM ⟹ 9 PM', '8 AM ▶ 9 PM', '8 AM ⁓ 9 PM', '8 AM ‥ 9 PM',
+    '8 AM ･･ 9 PM', '8 AM = 9 PM', '8 AM : 9 PM', '8 AM _ 9 PM', '8 AM bis 9 PM', '8 AM à 9 PM',
+    '8 AM hasta 9 PM', '8 AM 到 9 PM', 'yesterday into today', 'today vs yesterday',
+    // round 5: a mark by rule, not by list, beside a whole-unit reading
+    '>yesterday', 'yesterday ≥', '≤ last 2 hours', 'yesterday »', '= 2026-09-26', 'yesterday ➜',
   ] as const; // prettier-ignore
   for (const text of CITED) {
     it(`${JSON.stringify(text)} → confirmed or unreadable, never said`, () => {
@@ -350,7 +396,103 @@ describe('the leftover rule — a reading is the person’s only when nothing ti
       expect(mentions[0], text).toMatchObject({ quote });
       expect(mentions[0]!.problem, text).toBeUndefined();
       expect(mentions[0]!.leftover, text).toBeUndefined();
+      // …and the record files it as said: window-complete, alone.
+      expect(
+        saidOf(text).map((r) => r.quote),
+        text,
+      ).toEqual([quote]);
     }
+    for (const text of ['last 2 hours', 'yesterday', '2026-09-26', 'errors on 10/09/26']) {
+      expect(saidOf(text), text).toHaveLength(1);
+    }
+  });
+
+  it('a point is not a window: a point time with ANY tail is never said', () => {
+    const POINTS = [
+      '8 AM', '8:40', '20:40', '8:40 p.m.', '8AM', 'yesterday 8:40 PM', '10/09/26 8 AM',
+      '2026-10-09T08:00', '2026-10-09 08:00', '8 AM PST', '8 AM America/Los_Angeles',
+    ] as const; // prettier-ignore
+    const FIXED_TAILS = [
+      '', ' forward', ' onward', ' on', ' hence', ' henceforth', ' thereafter', ' ff', ' and later',
+      ' going forward', ' +', ' >', ' ≥', ' →', ' into the night', ' until the deploy', ' please',
+      '?', '.', ' for the whole sprint', ' vs yesterday', ' start', ' end', ' open', ' close',
+    ] as const; // prettier-ignore
+    const r = prng(0x5eed);
+    const ALPHABET = 'abcdefghij klmnop>=<≥≤~→…+|»_:;,.!?-/&()0123456789AMPM到à\n'.split('');
+    const tails = [...FIXED_TAILS];
+    for (let i = 0; i < 600; i++) {
+      tails.push(Array.from({ length: int(r, 1, 12) }, () => pick(r, ALPHABET)).join(''));
+    }
+    const wrong: string[] = [];
+    for (const point of POINTS) {
+      for (const tail of tails) {
+        for (const text of [`${point}${tail}`, `${tail} ${point}`, `errors ${point}${tail}`]) {
+          const said = saidOf(text);
+          // A said row may only ever be window-complete; the point's own reading never is.
+          if (said.some((m) => m.parses.some(isPoint))) wrong.push(JSON.stringify(text));
+        }
+      }
+    }
+    expect(wrong.slice(0, 20)).toEqual([]);
+    // And it lands as a confirmation: the point's row names `point`, its choice waits for the person.
+    const [row] = rowsOf('errors 8 AM forward');
+    expect(row).toMatchObject({
+      quote: '8 AM',
+      confirmNeeded: { point: true },
+      choice: { by: 'open', open: ['confirm'] },
+    });
+    expect(timeAskOf(row!, defaultTimeAskMessages)?.field.labels?.[0]).toMatch(
+      /^I read .+ — is that the window you mean\?$/,
+    );
+  });
+
+  it('more than one reading is confirmed, unless it was read as one range', () => {
+    expect(rowsOf('start 8:40 AM, end 9:30 PM').map((r) => r.confirmNeeded)).toEqual([
+      { point: true, several: true },
+      { point: true, several: true },
+    ]);
+    expect(rowsOf('today vs yesterday').map((r) => r.confirmNeeded)).toEqual([
+      { several: true },
+      { several: true },
+    ]);
+    expect(saidOf('8:40 AM to 9:30 PM')).toHaveLength(1);
+  });
+
+  it('a mark by rule: any symbol but sentence punctuation, quotes and brackets is left over', () => {
+    for (const mark of [
+      '>',
+      '<',
+      '≥',
+      '≤',
+      '|',
+      '»',
+      '➔',
+      '⇨',
+      '⟹',
+      '▶',
+      '⁓',
+      '‥',
+      '=',
+      '_',
+      '#',
+      '*',
+    ]) {
+      expect(read(`yesterday ${mark}`).mentions[0]!.leftover, mark).toEqual([mark]);
+    }
+    for (const text of [
+      'errors (yesterday)?',
+      '“yesterday”',
+      'errors: yesterday!',
+      'request_id yesterday',
+    ]) {
+      expect(read(text).mentions[0]!.leftover, text).toBeUndefined();
+    }
+  });
+
+  it('the known limit: a whole-day reading beside an unlisted open-range word is read as the day', () => {
+    // The scan does not list `henceforth`; the day is window-complete and alone, so it is said.
+    // Recorded, not hidden — the paid bench measures how often a person writes it.
+    expect(saidOf('errors yesterday henceforth').map((r) => r.quote)).toEqual(['yesterday']);
   });
 
   it('a lone mark inside a word is no range; between two readings it is', () => {
@@ -635,7 +777,7 @@ describe('boundary', () => {
     });
     expect(row).toMatchObject({
       quote: '8:40 AM',
-      confirmNeeded: { leftover: ['til', '9.30'] },
+      confirmNeeded: { leftover: ['til', '9.30'], point: true },
       choice: { by: 'open', open: ['confirm'] },
     });
     expect(row!.candidates!.every((c) => c.said.length === 0)).toBe(true);
@@ -645,8 +787,18 @@ describe('boundary', () => {
       { leftover: [] },
       { leftover: ['til'], extra: 1 },
       { leftover: [''] },
+      {},
+      { point: false },
+      { several: 1 },
     ]) {
       expect(timeRowIsWellFormed({ ...row, confirmNeeded } as never)).toBe(false);
+    }
+    for (const confirmNeeded of [
+      { point: true },
+      { several: true },
+      { leftover: ['til'], point: true },
+    ]) {
+      expect(timeRowIsWellFormed({ ...row, confirmNeeded } as never)).toBe(true);
     }
     const ask = timeAskOf(row!, defaultTimeAskMessages);
     expect(ask?.question).toBe(

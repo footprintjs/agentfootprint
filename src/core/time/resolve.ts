@@ -45,8 +45,9 @@
  * the questions an ask must settle), or none. A `kind: 'model'` reader's
  * window is never settled by the library: it stays `open` until the person
  * confirms it (§ 5.5), and its candidates carry `said: []`. Neither is a
- * `rule` reader's INCOMPLETE reading — one whose mention names `leftover`
- * tokens (`reader.ts` · `TimeMention.leftover`): the callers pass
+ * `rule` reader's reading that is not the person's window — `leftover`
+ * tokens (`reader.ts` · `TimeMention.leftover`), a point time, or one of
+ * several mentions (`rows.ts` · `confirmNeededOf`): the callers pass
  * `confirm: true` for it (`rows.ts` · `needsConfirm`).
  *
  * @example

@@ -34,8 +34,11 @@ read — it only has to notice that something is left.
   `now`, `about`, `around` …); week day and month names, whole and short; units
   (`hr`, `min`, `sec`, `hours` …); parts of the day (`morning`, `EOD`, `lunch`,
   `close` …); range words (`to`, `until`, `till`, `til`, `through`, `thru`,
-  `between`, `from`); zone words (`pacific`, `utc` …); a dash, arrow, tilde, `..`,
-  `…`, `/`, `&` or `+` between tokens (not inside a word: `check-in`, `and/or`);
+  `between`, `from`); zone words (`pacific`, `utc` …); `..`; and ANY symbol or
+  punctuation mark except sentence punctuation (`. , ; : ! ?`), quotes and brackets —
+  by rule, not by list, so `>`, `<`, `≥`, `=`, `|`, `»`, `_` and every arrow block
+  count (`english.ts` · `COUNTED_MARK`) — unless it stands alone between two letters
+  (`check-in`, `and/or`, `request_id`);
   `and`, `plus`, `minus` right after a time. In capitals only: `AM` and the zone
   abbreviations — lower-case `am` is English, and a meridiem is only ever said
   with a number, which the scan counts already.
@@ -59,11 +62,41 @@ reader.read('8 AM until the deploy', ctx);          // 8 AM, leftover ['until'] 
 reader.read('9 AM and 3 retries', ctx);             // 9 AM, leftover ['and', '3'] → confirm (the price)
 ```
 
+## A point is not a window; one reading, not several
+
+The scan is a word list, and five review rounds showed a word list always leaks
+the next spelling (`8 AM forward`, `post 8 AM`, `>8 AM`, `start 8:40 AM, end 9:30
+PM`, `8 AM into 9 PM`). So the LIBRARY closes the class by the reading's SHAPE,
+for every `rule` reader (`../rows.ts` · `confirmNeededOf`, the one owner):
+
+- **A point time is not a window.** A reading that names one clock time or
+  instant with no second bound (`8 AM`, `8:40`, `yesterday 8:40 PM`,
+  `2026-10-09T08:00`) is never filed as the person's window, whatever stood
+  beside it: the row records `confirmNeeded: { point: true }` and the ask offers
+  it — *"I read 08:00–09:00 — is that the window you mean?"*. Only a
+  WINDOW-COMPLETE reading may be said: a range whose two bounds were read in one
+  span, a relative span (`last 2 hours`), or a whole calendar unit (`yesterday`,
+  `2026-09-26`).
+- **More than one reading confirms**, unless the two were read as one range: the
+  rows record `confirmNeeded: { several: true }` (`today vs yesterday`, `start
+  8:40 AM, end 9:30 PM`).
+
+```ts
+reader.read('errors 8 AM forward', ctx); // 8 AM — no leftover, but a POINT → confirmed
+reader.read('8 AM into 9 PM', ctx);      // two points, two mentions → both confirmed
+reader.read('last 2 hours', ctx);        // window-complete, alone → the person's words
+```
+
+**The known limit.** What only the scan still guards is a window-complete reading
+beside an open-range word it does not list: `errors yesterday henceforth` reads as
+the day, filed as said. Pinned as the limit by `english-reader.test.ts`; the paid
+bench measures how often a person writes it.
+
 **The trade-off (owner-approved).** More confirmations: any message that holds a
 time-or-range word the reading did not cover confirms — `9 AM and 3 retries`,
 `the 5 slowest calls yesterday`, `I want to see yesterday` (`to`), `logs from
 yesterday` (`from`), `errors in the last 2 hours to date`, `May I see yesterday's
 errors`. An extra confirmation is honest; a partial reading recorded as said is
-not. What the scan still cannot see is a time said with NO word or mark of the
-set (`8 AM for the whole sprint`) — a word to add to the one list, never a
-connector or a clause rule.
+not. Since a point time always confirms, what the scan still cannot see is a
+window-complete reading beside a word outside the set (`yesterday henceforth`,
+above) — a word to add to the one list, never a connector or a clause rule.

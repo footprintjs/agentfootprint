@@ -103,8 +103,9 @@ export interface TurnWindows {
 
 /**
  * The one window a reading settled on, if it settled on one (a `model`
- * reading waits only for confirmation). An INCOMPLETE reading
- * (`confirmNeeded`) settles on nothing: it is never filed until the person
+ * reading waits only for confirmation). A reading that is not the person's
+ * window (`confirmNeeded`: leftover words, a point time, several mentions —
+ * `rows.ts` · `confirmNeededOf`) settles on nothing: it is never filed until the person
  * confirms it through the time ask (step T6b).
  */
 function settledCandidate(row: TimeReadingRow): TimeCandidate | undefined {

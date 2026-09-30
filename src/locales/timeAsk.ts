@@ -17,11 +17,11 @@
  * | `answer.time-future`, `answer.time-past` | `from`, `to` |
  * | `answer.beyond-retention` | `from`, `to`, `retention` (the source's, as declared) |
  * | `answer.over-max-range` | `from`, `to`, `maxRange` (the source's, as declared) |
- * | `ask.which`, `ask.confirm` | `quote` — the person's words the reading came from |
+ * | `ask.which`, `ask.confirm` | `quote` — the person's words the reading came from (`ask.confirm` also asks about a point time or one of several mentions) |
  * | `ask.confirm-part` | `quote` — what the reader read; `leftover` — the time-like words it did not read |
  * | `ask.zone` | `quote`, `token` — the zone they wrote |
  * | `choice.confirm` | `quote`, `window` — the label of the library's reading |
- * | `choice.confirm-part` | `quote`, `window` — the label of an incomplete reading |
+ * | `choice.confirm-part` | `quote`, `window` — the label of a reading that is not the person's window (leftover words, a point time, several mentions) |
  *
  * Only a check the app armed can produce one of these: a field with a
  * `format`, or the choices of a reading under `.time()`.
