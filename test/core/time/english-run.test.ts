@@ -24,7 +24,12 @@
  *                 person's window (`how: 'edited'`); a tool whose rule ASSUMES its period is asked,
  *                 its default never standing in for the words; "yesterday morning" and "last
  *                 week" → one `unreadable` row each, no pre-fill (the tool's own rule asks); a
- *                 future date to a `past` tool is refused before dispatch;
+ *                 future date to a `past` tool is refused before dispatch; the reader edges
+ *                 (packet "reader"): "yesterday 8 AM to 9 AM" is offered and run as one hour,
+ *                 "yesterday London time" as the London day (an edit recorded in London, an
+ *                 edit in a bare offset in that offset's zone), and the field sentence under the
+ *                 app's PST map + MDY is ONE confirmation offering the zone's and the letters'
+ *                 readings;
  *   integration — the ask's checkpoint crosses a JSON round trip onto a FRESH agent and binds;
  *                 after the confirmation the next request serves the window with its source in
  *                 both dynamic modes; classic mode caches its tools (the known limit) and still
@@ -220,7 +225,7 @@ describe('the field sentence — the zone, then the date order, then the tool ru
     });
     expect(ofKind(agent, 'time-reading')[0]).toMatchObject({
       quote: '10/09/26 8 AM to 8:40 AM PST',
-      reader: { id: 'agentfootprint/english', version: '1.0.0', kind: 'rule', locale: 'en-US' },
+      reader: { id: 'agentfootprint/english', version: '1.1.0', kind: 'rule', locale: 'en-US' },
       choice: { by: 'open', remaining: [], open: ['zone'] },
     });
     expect(ofKind(agent, 'call-window')[0]).toMatchObject({
@@ -408,7 +413,7 @@ describe('every chat reading is a confirmation — never filed as said (the owne
     ['Show client activity yesterday 8:40 PM until the deploy', 'yesterday 8:40 PM'],
     ['Start: yesterday 8:40 PM\nEnd: 9.30 — show client activity', 'yesterday 8:40 PM'],
     ['Show client activity 8 AM forward', '8 AM'],
-    ['Show client activity yesterday London time', 'yesterday'],
+    ['Show client activity yesterday London time', 'yesterday London time'],
     ['client activity for the last 2 hours of the outage', 'last 2 hours'],
     ['client activity last 2 hours ending at the outage', 'last 2 hours'],
     ['client activity newer than 2026-10-09T08:00Z', '2026-10-09T08:00Z'],
@@ -453,10 +458,10 @@ describe('every chat reading is a confirmation — never filed as said (the owne
       expect(field.enum!.length).toBeGreaterThan(0);
       expect(field.labels![0]!.replace(/\s/g, ' ')).toMatch(
         new RegExp(
-          `^I read “${quote.replace(
-            /[.*+?^${}()|[\]\\]/g,
-            '\\$&',
-          )}” as .+ in America/Los_Angeles — is that right\\?$`,
+          `^I read “${quote.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}” as .+ in ${
+            // A zone the person named is the proposal's zone (packet "reader"); else the run's.
+            quote.endsWith('London time') ? 'Europe/London' : 'America/Los_Angeles'
+          } — is that right\\?$`,
         ),
       );
       expect(ofKind(agent, 'time-answer')).toEqual([]);
@@ -707,5 +712,111 @@ describe('the one served time sentence — the confirmed window and its source',
     expect(plain.requests[0]!.tools!.every((t) => !t.description.includes('library read'))).toBe(
       true,
     );
+  });
+});
+
+// ─── reader edges (time follow-ups, packet "reader") ────────────────────
+
+describe('reader edges — the end edge, a named zone, the app’s abbreviation map, through real agents', () => {
+  it('“yesterday 8 AM to 9 AM” is offered as one hour and the tool receives 08:00–09:00', async () => {
+    const seen: Record<string, unknown>[] = [];
+    const { agent } = build(
+      [call('c1', 'client_activity', {}), answer('ok')],
+      [epochTool(seen)],
+      (b) => b.time({ zone: LA, reader }),
+    );
+    const first = paused(
+      await agent.run({ message: 'Any errors yesterday 8 AM to 9 AM?', time: { now: NOW } }),
+    );
+    const field = first.awaitingInput.fields[0]!;
+    expect(field.enum).toEqual(['2026-10-08T08:00:00-07:00/2026-10-08T09:00:00-07:00']);
+    expect(field.labels![0]!.replace(/\s/g, ' ')).toContain('8:00 – 9:00 AM PDT');
+    const done = await agent.resume(first.checkpoint as never, {
+      requestId: first.awaitingInput.requestId,
+      values: { f1: field.enum![0]! },
+    });
+    expect(isInputPause(done)).toBe(false);
+    expect(seen[0]).toMatchObject({
+      start_time: Date.parse('2026-10-08T15:00:00Z'),
+      end_time: Date.parse('2026-10-08T16:00:00Z'),
+    });
+  });
+
+  it('“yesterday London time” is proposed as the London day; an edit is recorded in London', async () => {
+    const seen: Record<string, unknown>[] = [];
+    const { agent } = build(
+      [call('c1', 'client_activity', {}), answer('ok')],
+      [epochTool(seen)],
+      (b) => b.time({ zone: LA, reader }),
+    );
+    const first = paused(
+      await agent.run({
+        message: 'Show client activity yesterday London time',
+        time: { now: NOW },
+      }),
+    );
+    const field = first.awaitingInput.fields[0]!;
+    expect(field.enum).toEqual(['2026-10-08T00:00:00+01:00/2026-10-09T00:00:00+01:00']);
+    expect(field.labels![0]).toContain('in Europe/London — is that right?');
+    const [row] = ofKind(agent, 'time-reading');
+    expect(row).toMatchObject({ quote: 'yesterday London time' });
+    expect((row!.candidates as { implied: string[] }[])[0]!.implied).not.toContain('zone');
+    const EDITED = '2026-10-08T06:00:00+01:00/2026-10-08T18:00:00+01:00';
+    const done = await agent.resume(first.checkpoint as never, {
+      requestId: first.awaitingInput.requestId,
+      values: { f1: EDITED },
+    });
+    expect(isInputPause(done)).toBe(false);
+    expect(ofKind(agent, 'time-answer')).toMatchObject([
+      { from: '2026-10-08T06:00:00+01:00', zone: 'Europe/London', how: 'edited' },
+    ]);
+  });
+
+  it('an edit typed in an offset no offered zone shows is recorded in that offset’s zone, not the app’s', async () => {
+    const { agent } = build([call('c1', 'client_activity', {}), answer('ok')], [epochTool()], (b) =>
+      b.time({ zone: LA, reader }),
+    );
+    const first = paused(
+      await agent.run({ message: 'Show client activity yesterday', time: { now: NOW } }),
+    );
+    await agent.resume(first.checkpoint as never, {
+      requestId: first.awaitingInput.requestId,
+      values: { f1: '2026-10-08T00:00:00Z/2026-10-09T00:00:00Z' },
+    });
+    expect(ofKind(agent, 'time-answer')).toMatchObject([{ zone: 'UTC', how: 'edited' }]);
+  });
+
+  it('the field sentence under the app’s PST map and MDY: ONE confirmation, zone reading first', async () => {
+    const seen: Record<string, unknown>[] = [];
+    const { agent } = build(
+      [call('c1', 'client_activity', {}), answer('42 operations')],
+      [epochTool(seen)],
+      (b) =>
+        b.time({
+          zone: LA,
+          reader,
+          policy: {
+            dateOrder: 'MDY',
+            abbreviations: { PST: { zone: LA, offset: '-08:00' } },
+          },
+        }),
+    );
+    const first = paused(await agent.run({ message: FIELD, time: { now: NOW } }));
+    expect(first.awaitingInput.fields).toHaveLength(1);
+    const field = first.awaitingInput.fields[0]!;
+    expect(field.format).toBe('time-range');
+    expect(field.enum).toEqual([
+      '2026-10-09T08:00:00-07:00/2026-10-09T08:41:00-07:00',
+      '2026-10-09T08:00:00-08:00/2026-10-09T08:41:00-08:00',
+    ]);
+    expect(field.labels![0]).toContain('in America/Los_Angeles');
+    expect(field.labels![1]).toContain('in Etc/GMT+8');
+    const done = await agent.resume(first.checkpoint as never, {
+      requestId: first.awaitingInput.requestId,
+      values: { f1: field.enum![0]! },
+    });
+    expect(isInputPause(done)).toBe(false);
+    expect(seen[0]).toMatchObject({ start_time: 1791558000000, end_time: 1791560460000 });
+    expect(ofKind(agent, 'time-answer')).toMatchObject([{ zone: LA, how: 'confirmed' }]);
   });
 });

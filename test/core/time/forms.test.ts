@@ -131,7 +131,11 @@ describe('one recorded window — said at grain, the rest derived', () => {
         answer: 'confirmed',
         range: { from: '2026-09-26T00:00:00-07:00', to: '2026-09-27T00:00:00-07:00' },
         zone: LA,
-        reading: { said: ['year', 'month', 'day'], grain: 'day', notes: [] },
+        reading: {
+          said: ['year', 'month', 'day'],
+          grain: 'day',
+          notes: [{ kind: 'end-of-grain' }],
+        },
       },
     });
     expect(said).toEqual(['2026', '9', '26', '2026-09-26']);

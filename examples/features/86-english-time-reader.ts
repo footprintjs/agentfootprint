@@ -16,7 +16,10 @@
  *     editable one-click confirmation naming its window AND its zone ("I read
  *     “yesterday” as Thu, Oct 8, 2026, PDT in America/Los_Angeles — is that
  *     right?") — the zone asked first when the person wrote an abbreviation
- *     (`PST` — no map ships). The click is recorded (`time-answer`,
+ *     (`PST` — no map ships; an app that declares `policy.abbreviations`
+ *     gets ONE confirmation offering the zone's reading and the letters'),
+ *     and a zone named by place stays the person's (`yesterday London time`
+ *     is the London day). The click is recorded (`time-answer`,
  *     `how: 'confirmed'`); a window the person writes instead is theirs too
  *     (`how: 'edited'`); the window is written into the tool's own arguments;
  *   - once confirmed, the window is served to the model LATE — one time line
@@ -81,8 +84,11 @@ const clientActivity = defineTool({
   },
 });
 
+/** The app's own abbreviations, as data — no map ships; each maps to its zone AND its letters' offset. */
+const US_WEST = { PST: { zone: 'America/Los_Angeles', offset: '-08:00' } };
+
 /** An agent whose model calls the tool once, leaving the period out, then answers. */
-function desk(served: string[]) {
+function desk(served: string[], policy?: { dateOrder: 'MDY'; abbreviations: typeof US_WEST }) {
   let calls = 0;
   return Agent.create({
     provider: mock({
@@ -99,7 +105,11 @@ function desk(served: string[]) {
     model: 'small-model',
   })
     .tool(clientActivity)
-    .time({ zone: 'America/Los_Angeles', reader: englishTimeReader() })
+    .time({
+      zone: 'America/Los_Angeles',
+      reader: englishTimeReader(),
+      ...(policy !== undefined && { policy }),
+    })
     .build();
 }
 // #endregion english-reader
@@ -161,6 +171,29 @@ export async function run(input: string): Promise<string> {
     rows.some((r) => r.kind === 'argument' && r.source === 'answered'),
     'the chosen window filed as the person’s answer',
   );
+
+  // 3. A zone the person names stays theirs: "yesterday London time" is proposed as the London day.
+  const london = desk([]);
+  const named = await london.run({ message: 'Any client activity yesterday London time?', time });
+  check(isInputPause(named), 'a confirmation of the London day');
+  if (!isInputPause(named)) return String(named);
+  console.log('\noffered:', named.awaitingInput.fields[0]?.labels?.[0]);
+  check(
+    named.awaitingInput.fields[0]?.enum?.[0] ===
+      '2026-10-08T00:00:00+01:00/2026-10-09T00:00:00+01:00',
+    'the day in Europe/London, never the app zone',
+  );
+
+  // 4. With the app's own map and date order, the field sentence is ONE confirmation: PST as
+  //    the zone's −07:00 and as its letters' −08:00 — offered both ways, never corrected.
+  const mapped = desk([], { dateOrder: 'MDY', abbreviations: US_WEST });
+  const once = await mapped.run({ message: input, time });
+  check(isInputPause(once), 'one confirmation');
+  if (!isInputPause(once)) return String(once);
+  const both = once.awaitingInput.fields[0];
+  console.log('asked:', both?.description);
+  both?.enum?.forEach((value, i) => console.log(`  ${String(value)}  (${both.labels?.[i]})`));
+  check(both?.format === 'time-range' && both.enum?.length === 2, 'both readings of PST, one ask');
   return String(done);
 }
 

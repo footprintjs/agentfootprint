@@ -71,7 +71,7 @@ import {
   type PeriodFactProblem,
   type PeriodFacts,
 } from '../../time/convert.js';
-import type { InstantText } from '../../time/instant.js';
+import { instantOf, type InstantText } from '../../time/instant.js';
 import { parseRange, spellRange, type TimeRange } from '../../time/range.js';
 import {
   chooseReading,
@@ -82,7 +82,7 @@ import {
 import type { TimeAskMessages } from '../../time/ask.js';
 import { timeAskOf } from '../../time/readingAsk.js';
 import { timeAnswerRow, type TimeAnswerRow, type TimeReadingRow } from '../../time/rows.js';
-import type { ZoneName } from '../../time/zone.js';
+import { fixedOffsetZone, offsetAt, type ZoneName } from '../../time/zone.js';
 import { shownArgsOf } from '../../toolShownArgs.js';
 import { validatePropertyValue } from '../toolArgsValidation.js';
 import {
@@ -1018,10 +1018,11 @@ function bindWindowAnswer(
     const row = reading.row;
     // The re-read stays a PROPOSAL: the zone was the person's, the window is still words.
     const resolution = resolveMention(
-      withZoneAnswered(row.parses ?? [], answer),
+      withZoneAnswered(row.parses ?? [], answer, reading.policy),
       { now: time.now, zone: time.zone },
       row.reader,
       true,
+      reading.policy,
     );
     const choice = chooseReading(resolution, reading.policy, row.reader.kind, undefined, true);
     if (choice.by === 'open') {
@@ -1060,11 +1061,38 @@ function bindWindowAnswer(
   const range = typeof answer === 'string' ? parseRange(answer) : undefined;
   if (range === undefined) return { expected: WINDOW_FORM_EXPECTATION };
   const at = field.choices?.indexOf(answer) ?? -1;
-  const zone = (at >= 0 ? window.zones?.[at] : undefined) ?? time.zone;
+  const zone =
+    at >= 0 ? window.zones?.[at] ?? time.zone : editedZone(range, window.zones, time.zone);
   if (zone === undefined) return { expected: WINDOW_FORM_EXPECTATION };
   const bound = windowFills(field, range, zone, byId, toolOf, time);
   if (!('fills' in bound)) return bound;
   return { fills: bound.fills, answered: { range, zone, how: at >= 0 ? 'confirmed' : 'edited' } };
+}
+
+/**
+ * The zone a window the person TYPED is recorded in: the first of the
+ * offered readings' zones — then the app's — whose offsets at both ends are
+ * the ones typed; else the fixed-offset zone the typed offsets spell
+ * (`Etc/GMT-1` for `+01:00`, `zone.ts` · `fixedOffsetZone`); else the app's.
+ * A London day typed with `+01:00` under an app in Los Angeles is recorded
+ * in Europe/London (the zone the mention named), never in the app's zone.
+ */
+function editedZone(
+  range: TimeRange,
+  offered: readonly ZoneName[] | undefined,
+  appZone: ZoneName | undefined,
+): ZoneName | undefined {
+  const from = instantOf(range.from, 'lenient');
+  const to = instantOf(range.to, 'lenient');
+  if (from === undefined || to === undefined) return appZone;
+  const shows = (zone: ZoneName): boolean =>
+    offsetAt(zone, from.ms) === from.offsetMinutes && offsetAt(zone, to.ms) === to.offsetMinutes;
+  const zones = [...(offered ?? []), ...(appZone !== undefined ? [appZone] : [])];
+  const match = zones.find(shows);
+  if (match !== undefined) return match;
+  const fixed =
+    from.offsetMinutes === to.offsetMinutes ? fixedOffsetZone(from.offsetMinutes) : undefined;
+  return fixed ?? appZone;
 }
 
 /** What the first reading breaks, when EVERY reading breaks one member tool's facts — the refusal's words. */

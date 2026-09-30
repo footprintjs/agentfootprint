@@ -26,6 +26,7 @@ import { spellRange } from './range.js';
 import { presentRange } from './present.js';
 import type { TimeReadingRow } from './rows.js';
 import type { TimeCandidate } from './resolve.js';
+import { widenedGrain } from './resolveRecord.js';
 
 // ─── The choices a reading offers ─────────────────────────────────────────
 
@@ -90,10 +91,11 @@ export function timeAskOf(
   // on every reading's open choice); this only reads it.
   const confirm = choice.open.includes('confirm');
   const labels = offered.map(({ candidate }) => {
+    // The end as said only when it was widened: "8 AM to 9 AM" is shown 8:00 – 9:00, not 8:59.
     const window = presentRange(
       candidate.range,
       { zone: candidate.zone, locale: row.reader.locale },
-      candidate.grain,
+      widenedGrain(candidate),
     );
     if (!confirm) return window;
     // The zone is named: the reading leaned on it, and the person may have meant another.

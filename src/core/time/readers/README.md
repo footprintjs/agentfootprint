@@ -47,7 +47,17 @@ wrote their own). Both are the person's answer: the argument rows are
 source ("the window the person confirmed when asked what their words meant").
 An unreadable phrase proposes nothing: the tool's own rule asks, with no pre-fill.
 
+**A zone the person named is part of the reading** — after a clock time, a date
+or a day word, as written: `yesterday London time` → `{ relative: day −1,
+zoneToken: 'London time' }`. Which zone the words name is `../resolve.ts`'s (the
+tz database's one zone for the place, an abbreviation only through the app's
+map, else asked); reading `yesterday` alone would propose the app's zone for a
+day the person put in London. A form the text itself fixes is marked: an ISO
+time is a 24-hour clock (`clock: '24h'`), so `T08:00` is never also 8 PM.
+
 ```ts
+reader.read('yesterday London time', ctx);      // { quote: 'yesterday London time', parses: [{ …, zoneToken: 'London time' }] }
+reader.read('8 to 9:30', ctx);                  // unreadable — `8` is no time here, and 9:30 alone would drop the start
 reader.read('errors in the last 2 hours', ctx); // { quote: 'last 2 hours', parses: [...] } — a proposal
 reader.read('8:40 AM til 9.30', ctx);           // { quote: '8:40 AM', parses: [...] } — a proposal; the person corrects it
 reader.read('yesterday morning', ctx);          // unreadable — the tool's own rule asks, no pre-fill

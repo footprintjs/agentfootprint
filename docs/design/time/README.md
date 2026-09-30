@@ -208,8 +208,16 @@ Rules:
 
 Inside the library a range is half-open `[from, to)`. When a person says an end at a grain ("to
 8:40"), the default reading runs to the end of that grain — `[08:00, 08:41)` — and records
-`{ kind: 'end-of-grain' }` (Elasticsearch's `lte` rounding). In v1 this is a fixed law, not a
-switch; an `exact` reading waits for a bench that shows the need (§ 11, TQ9). A tool's declared `granularity` rounds a range outward, never inward,
+`{ kind: 'end-of-grain' }` (Elasticsearch's `lte` rounding). A lone point is its grain ("9 AM" is
+`[09:00, 10:00)`) and a day ends at the next midnight, both noted the same way. **One exception
+(time follow-ups, packet "reader", 2026-09-30):** a range END said as an o'clock hour is a
+boundary on the clock face, not a grain to fill — "8 AM to 9 AM" is `[08:00, 09:00)`, one hour, with
+no `end-of-grain` note (`resolve.ts` · `endOf`). The bench record showed the old reading proposing
+`08:00–10:00` for "8 AM to 9 AM" on every run (the truth, and the person, want 09:00), and the
+minute law was only ever worked at minute grain. Whether an end was widened has ONE answer,
+`resolveRecord.ts` · `widenedGrain` (the note, never `grain`): the label renders `to − 1 grain`
+only then, and `forms.ts` spells the said end the same way. In v1 this is otherwise a fixed law,
+not a switch; an `exact` reading waits for a bench that shows the need (§ 11, TQ9). A tool's declared `granularity` rounds a range outward, never inward,
 and records the rounding.
 
 The places a range crosses do **not** share that edge. Each boundary converts, and each
@@ -322,7 +330,7 @@ interface TimeParts {
   readonly date?:
     | { readonly kind: 'numeric'; readonly fields: readonly number[]; readonly yearDigits?: 2 | 4 } // '10/09/26' — order NOT decided
     | { readonly kind: 'fixed'; readonly year?: number; readonly month: number; readonly day: number }; // ISO or a named month: the text fixes the order
-  readonly wall?: { readonly h: number; readonly m?: number; readonly s?: number; readonly meridiem?: 'am' | 'pm' };
+  readonly wall?: { readonly h: number; readonly m?: number; readonly s?: number; readonly meridiem?: 'am' | 'pm'; readonly clock?: '24h' }; // clock: the FORM is a 24-hour clock (ISO) — never also pm
   readonly zoneToken?: string;             // as written: 'PST', '-07:00', 'America/Los_Angeles' — resolve.ts maps it
   readonly relative?:
     | { readonly unit: 'minute' | 'hour' | 'day' | 'week' | 'month' | 'year'; readonly offset: number } // 'yesterday' = { day, -1 }
@@ -387,8 +395,9 @@ the others wait until a bench shows people need them:
 | numeric dates | `10/09/26` | `date: numeric [10, 9, 26]` | up to three (MDY, DMY, YMD), each tagged | v1 |
 | clock times, with or without a meridiem | `8 AM`, `8:40`, `20:40` | `wall` | `8:40` alone → am and pm when no other part settles it | v1 |
 | a range between two of the above | `8 AM to 8:40 AM`, `08:00–08:40` | `rangeOf` | one per combination of the sides' candidates | v1 |
-| a zone | IANA (`America/Los_Angeles`), a numeric offset | `zoneToken`, as written | directly | v1 |
-| a zone abbreviation | `PST` | `zoneToken: 'PST'` | v1 has no abbreviation map, so the zone is asked (`format: 'zone'`); later, **only through the policy's map**, and one whose DST state disagrees with the date is asked with both readings as choices (`abbreviationMismatch: 'ask'`, § 11) | tokenized; resolved by the ask |
+| a zone | IANA (`America/Los_Angeles`), a numeric offset — after a time, a date or a day word | `zoneToken`, as written | directly | v1 |
+| a place named with `time` | `yesterday London time`, `8 AM New York time` | `zoneToken: 'London time'`, as written | the ONE zone the tz database names for the place (`zone.ts` · `zoneOfPlace`, noted `zone-read`); none or several (`India time`, `Pacific time`) → the zone is asked | v1 (reader follow-up) |
+| a zone abbreviation | `PST` | `zoneToken: 'PST'` | **only through the app's map** (`policy.abbreviations`, none ships): its zone's reading, and — when its DST state disagrees with the date — its letters' literal offset too, both offered in ONE confirmation (`open: ['abbreviation', 'confirm']`); with no map, or one missing it, the zone is asked (`format: 'zone'`) | tokenized; mapped only by the app's policy |
 | day words | today, yesterday, tomorrow | `relative: { day, offset }` | anchored on the clock, in the person's zone | v1 |
 | relative spans | last 40 minutes, past 2 hours, the last hour | `relative: { unit, count }` | a look-back (§ 3.2) | v1 — proposed and confirmed like every reading (TQ29) |
 | night words | tonight, overnight | `relative` + `partOfDay` | a span that crosses midnight | later |
@@ -903,6 +912,7 @@ await agent.run({
 | `reader` | **none** | reading the person's words is armed separately; no reader means no `time-reading` rows and no word-driven asks (T-words, § 5.4) |
 | `policy.dateOrder` | `'ask'` | no silent MDY (dateparser's documented trap) |
 | `policy.year` | `'ask'` | a year the person did not say is a guess, and near New Year the current and previous years are both plausible (dateparser's `PREFER_DATES_FROM` exists for exactly this) |
+| `policy.abbreviations` | absent — no map ships | added by the reader follow-ups after the T6b bench (the field sentence's `PST` opened a bare zone ask with no pre-fill on every run, then a second round for the date order): a map the APP declares, `{ PST: { zone: 'America/Los_Angeles', offset: '-08:00' } }`; a mapped abbreviation is read as its zone and, when they disagree, as its letters — both offered in one confirmation, never corrected. Without it every byte is v1's |
 | tool `period` facts | absent: nothing checked | `direction`, `retention`, `maxRange`, `granularity`, `filtersToAsked` are facts about the tool (§ 7.1); a tool never sets policy |
 
 **Fixed laws in v1**, each a switch later only if a bench shows the need:
@@ -910,9 +920,9 @@ await agent.run({
 | Behaviour | v1 law | A later switch would add |
 |---|---|---|
 | presentation | the zone the person meant, else the run's; the reader's `locale`, or a locale-neutral ISO form with the zone named when no reader is armed | `present: { zone, locale }` |
-| the end of "to 8:40" | end of grain, recorded (§ 3.3, TQ9) | `endEdge: 'exact'` |
+| the end of "to 8:40" | end of grain, recorded — except an o'clock range end, which ends AT the hour (§ 3.3, TQ9) | `endEdge: 'exact'` |
 | a wall time in a DST gap or overlap | ask, with both instants (Temporal's `reject`) | `dst` |
-| a zone abbreviation | asked as a zone (`format: 'zone'`); no map ships | `abbreviations` (a map, e.g. US zones, as data), with `abbreviationMismatch: 'ask'` as its default — a literal `PST` is −08:00, so correcting it to −07:00 is a guess, and the host itself refuses a mismatch (`host:be-server/timeContext.ts` · `zoneMismatch`) |
+| a zone abbreviation | asked as a zone (`format: 'zone'`) unless the app declares `policy.abbreviations` (landed with the reader follow-ups: `{ PST: { zone, offset } }`, as data; no map ships — a shipped US table is an owner call); a mapped abbreviation whose DST state disagrees is offered BOTH ways — a literal `PST` is −08:00, so correcting it to −07:00 is a guess, and the host itself refuses a mismatch (`host:be-server/timeContext.ts` · `zoneMismatch`) | `abbreviationMismatch` beyond `'ask'` — not added: one careful value is a law, not a switch |
 | parts of a day, night words, calendar spans | not read (§ 5.3) | `partsOfDay` (a table applied in `resolve.ts`) |
 | the model's window differs from the person's | record and run (§ 7.3, TQ6) | `mismatch: 'refuse'` |
 | a turn with no time words | carry the last window through a recorded row (§ 5.6, TQ17) | `carry: 'off'` |
