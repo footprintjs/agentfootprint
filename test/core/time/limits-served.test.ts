@@ -32,7 +32,7 @@ const DAY = 86_400_000;
 const iso = (ms: number) => new Date(ms).toISOString();
 const LA = 'America/Los_Angeles';
 const LEAD =
-  "A note from the library's check of the tool results, not a message from the person: the time the tools read is not the time asked about";
+  '[A note from the library that ran the tools, not from the person: answer the person directly, as you would from the tool results alone.] The time the tools read is not the time asked about';
 
 function scripted(script: readonly Reply[], requests: LLMRequest[]) {
   let i = 0;
@@ -143,7 +143,10 @@ describe('the time limits line — served late, after the read', () => {
     const line = lastLine(requests[1]!);
     expect(line).toMatch(
       new RegExp(
-        `^${LEAD} — client_activity read less than was asked — asked: 2026-09-09 08:40:00`,
+        `^${LEAD.replace(
+          /[[\].]/g,
+          '\\$&',
+        )} — client_activity read less than was asked — asked: 2026-09-09 08:40:00`,
       ),
     );
     expect(line).toMatch(
@@ -203,7 +206,7 @@ describe('timeLimitsSentence — the composition', () => {
         clocks: ["the sources' clocks differ (UTC, America/New_York) — compared as instants"],
       }),
     ).toBe(
-      "A note from the library's check of the tool results, not a message from the person: Clocks: the sources' clocks differ (UTC, America/New_York) — compared as instants.",
+      "[A note from the library that ran the tools, not from the person: answer the person directly, as you would from the tool results alone.] Clocks: the sources' clocks differ (UTC, America/New_York) — compared as instants.",
     );
   });
 });

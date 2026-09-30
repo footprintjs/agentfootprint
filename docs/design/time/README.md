@@ -1575,7 +1575,10 @@ deterministic and are measured over retained recorded runs or unit tables, with 
   the tools slot's decoration site from the mount arg `timeLimits` and appended LAST to every
   later request of the turn by `callLLM` — never to history, so `servedView` rebuilds it from the
   same `timeLine` key. The gate widens from `.time({ reader })` to `.time()`: without a reader the
-  line is written only when it says something. A turn whose reads match serves nothing. Pinned by
+  line is written only when it says something. A turn whose reads match serves nothing. The line
+  opens by naming its source (`TIME_LIMITS_SOURCE`: a note from the library, not from the person —
+  answer the person directly): the channel is a `user` message, and the bench's first paid rounds
+  showed an unmarked line answered as the person's correction ("You're right"). Pinned by
   `test/core/time/limits-served.test.ts` and its row in `test/modelFacingSurfaces.test.ts`.
 
 **Why this order.** T1 settles the grammar every other step leans on and is free. T2 is already

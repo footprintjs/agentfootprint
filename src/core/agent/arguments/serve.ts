@@ -452,8 +452,8 @@ export function timeWindowsLine(
  * @example
  * ```ts
  * timeLimitsSentence({ period: ['client_activity read less than was asked — asked: …; read: …'], clocks: [] });
- * // "A note from the library's check of the tool results, not a message from the person: the time
- * //  the tools read is not the time asked about — client_activity read less than was asked —
+ * // "[A note from the library that ran the tools, not from the person: answer the person directly,
+ * //  as you would from the tool results alone.] The time the tools read is not the time asked about — client_activity read less than was asked —
  * //  asked: …; read: …. So the answer to the person states the time each result read and claims
  * //  nothing about time no result read."
  * ```
@@ -471,18 +471,23 @@ export function timeLimitsSentence(lines: TimeLimitLines | undefined): string | 
   if (lines.clocks.length > 0) {
     parts.push(`Clocks: ${lines.clocks.join('; ')}.`);
   }
-  return parts.length === 0 ? undefined : `${TIME_LIMITS_SOURCE} ${parts.join(' ')}`;
+  if (parts.length === 0) return undefined;
+  const [first, ...rest] = parts;
+  const lead = first!.charAt(0).toUpperCase() + first!.slice(1);
+  return [TIME_LIMITS_SOURCE, lead, ...rest].join(' ');
 }
 
 /**
  * The line's opening: WHO says it. The line is a request-only `user`
  * message, and the T8 bench's first paid round (stopped at 41 runs) showed
  * the model reading an unmarked one as the person correcting it — 15 of 15
- * served answers opened "You're right" / "I apologize". Naming the library
- * as the source keeps the conclusion and drops the false correction.
+ * served answers opened "You're right" / "I apologize"; naming the library
+ * alone (round 1, stopped at 46) still drew "Thank you for the
+ * clarification". The opening now also says how to use it: answer the person
+ * directly, as from the tool results alone.
  */
 export const TIME_LIMITS_SOURCE =
-  "A note from the library's check of the tool results, not a message from the person:";
+  '[A note from the library that ran the tools, not from the person: answer the person directly, as you would from the tool results alone.]';
 
 // ─── The note on a result ───────────────────────────────────────────────
 

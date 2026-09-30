@@ -135,7 +135,7 @@ function searchLogs(doors, args, dispatchedAt, runStart) {
   const query = typeof args.query === 'string' ? args.query.toLowerCase() : '';
   const lines = ERROR_LINES.map((l) => ({ at: l.at(runStart), text: l.text }))
     .filter((l) => l.at >= read.from && l.at < read.to)
-    .filter((l) => query === '' || l.text.toLowerCase().includes(query))
+    .filter((l) => query === '' || `error ${l.text}`.toLowerCase().includes(query))
     .sort((a, b) => a.at - b.at);
   return {
     read,
@@ -146,6 +146,7 @@ function searchLogs(doors, args, dispatchedAt, runStart) {
         ...lines.map((l) => ({
           entity: 'error line',
           time: `${wallStamp(l.at, ZONE)} PDT`,
+          level: 'ERROR',
           text: l.text,
         })),
       ],
