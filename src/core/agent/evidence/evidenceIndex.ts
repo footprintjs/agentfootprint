@@ -48,8 +48,12 @@
  *     found nothing. See `../coverage/evidence.ts`.
  *
  * The EXEMPT index is built from a different corpus with the same machinery:
- * the user's own message, the conversation's user/system turns, and the
- * system-prompt content this turn was built from. A compaction summary is a
+ * the user's own message, the conversation's user/system turns, the values
+ * the person typed into a typed ask (`requestInput` — its `input_received`
+ * result is a `role: 'tool'` message carrying THEIR words), and the
+ * system-prompt content this turn was built from — each text with the other
+ * spellings of the dates and clock times in it (`normalize.ts` ·
+ * `dateAndClockForms`: `8 Am` is also `8:00`, `2026-10-09` also `2026`). A compaction summary is a
  * user-role turn a MODEL wrote, so its text is not in it — the summary
  * carries the forms its folded person/app turns exempted instead
  * (`LLMMessage.foldedExempt`, {@link exemptLineageOf}). A value the user supplied is
@@ -100,7 +104,7 @@ import { absenceEvidenceProjection } from '../coverage/index.js';
 import { isTruncatedToolResult } from '../toolResultCap.js';
 import { isCompactedSummary } from '../../../lib/saidByPerson.js';
 import { isLibraryAuthoredTurn } from './frames.js';
-import { lookupForms, normalizeToken, tokenize } from './normalize.js';
+import { dateAndClockForms, lookupForms, normalizeToken, tokenize } from './normalize.js';
 import { jsonPrefixOf, leadingJsonValues } from './servedJson.js';
 
 /**
@@ -418,6 +422,52 @@ export function evidenceFromHistory(history: readonly LLMMessage[]): EvidenceCor
   };
 }
 
+/**
+ * Index one piece of EXEMPT text — something the person or the app said —
+ * with the other spellings of every date and clock time in it
+ * (`normalize.ts` · `dateAndClockForms`). The exempt corpus's one text door:
+ * the tool-evidence index reads `addText` and never gains these forms.
+ */
+function addExempt(sink: Sink, text: string): void {
+  addText(sink, text);
+  for (const form of dateAndClockForms(text)) add(sink, form);
+}
+
+/**
+ * The values the PERSON typed into a typed ask (`requestInput`), read off the
+ * `input_received` result their answer landed as — `undefined` for every
+ * other message. Only a field whose origin is `'response'` is theirs: a
+ * `'declaration'` value is one the asking tool already knew, and stays the
+ * tool's words (it is in the evidence corpus, where it always was). Read
+ * from the message AS IT STANDS — the tool-result rules (redaction first)
+ * ran on the answer before it landed, so a hidden field reads as its
+ * placeholder and exempts nothing, exactly as a redacted person turn does.
+ * A result with no `origins` exempts nothing: no field can be proven theirs.
+ */
+function typedAskAnswerOf(msg: LLMMessage): readonly string[] | undefined {
+  if (msg.role !== 'tool' || typeof msg.content !== 'string') return undefined;
+  // Every other tool result is read by the evidence index already; this
+  // corpus parses only the ones that can be an answer.
+  if (!msg.content.includes('"input_received"')) return undefined;
+  const read = readResult(toolBytesOf(msg));
+  if (!('parsed' in read)) return undefined;
+  const landed = read.parsed;
+  if (!isRecord(landed) || landed.status !== 'input_received') return undefined;
+  const { values, origins } = landed;
+  if (!isRecord(values) || !isRecord(origins)) return undefined;
+  const given: string[] = [];
+  for (const [field, value] of Object.entries(values)) {
+    if (origins[field] !== 'response') continue;
+    if (typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean')
+      given.push(String(value));
+  }
+  return given;
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
 /** Insert an already-normalized lookup form (a fold's carried lineage). */
 function addForm(sink: Sink, form: string): void {
   if (form === '' || sink.values.has(form)) return;
@@ -434,6 +484,18 @@ function addForm(sink: Sink, form: string): void {
  */
 function addHistoryExempt(sink: Sink, history: readonly LLMMessage[]): void {
   for (const msg of history) {
+    // The person's answer to a typed ask (`requestInput`) lands as a
+    // `role: 'tool'` message, but it is their words, not an observation:
+    // exempt like a value in their message — and, being read here, carried
+    // by a fold's lineage exactly as their message is.
+    const answered = typedAskAnswerOf(msg);
+    if (answered !== undefined) {
+      for (const value of answered) {
+        add(sink, value);
+        addExempt(sink, value);
+      }
+      continue;
+    }
     if (msg.role !== 'user' && msg.role !== 'system') continue;
     // A compaction summary's TEXT is a model's claim about the conversation,
     // not something the person or the app supplied — indexing it exempted
@@ -451,7 +513,7 @@ function addHistoryExempt(sink: Sink, history: readonly LLMMessage[]): void {
     // would exempt exactly what it challenged — the gate laundering its own
     // accusation. See frames.ts.
     if (isLibraryAuthoredTurn(msg.content)) continue;
-    addText(sink, msg.content);
+    addExempt(sink, msg.content);
   }
 }
 
@@ -462,9 +524,11 @@ function addHistoryExempt(sink: Sink, history: readonly LLMMessage[]): void {
  * The exemption lineage of a span about to be folded: every lookup form the
  * exempt corpus holds for these messages, in first-seen order — the person's
  * and the app's turns by the corpus's own rule, a nested summary by the
- * lineage IT carried. Tool results contribute nothing here: a summarized tool
- * value keeps its tool source and is judged against the tool results still in
- * the window, exactly like a value whose result a drop removed.
+ * lineage IT carried, and a typed-ask answer by the values the person typed
+ * into it (its `input_received` result is their words). Every other tool
+ * result contributes nothing here: a summarized tool value keeps its tool
+ * source and is judged against the tool results still in the window, exactly
+ * like a value whose result a drop removed.
  *
  * @example
  * ```ts
@@ -541,26 +605,26 @@ export function exemptFromRun(args: {
     turn: 0,
     toolCallId: undefined,
   };
-  if (args.userMessage) addText(sink, args.userMessage);
+  if (args.userMessage) addExempt(sink, args.userMessage);
   addHistoryExempt(sink, args.history);
   for (const rec of args.systemPromptInjections ?? []) {
-    if (rec.rawContent) addText(sink, rec.rawContent);
+    if (rec.rawContent) addExempt(sink, rec.rawContent);
     // The summary is what a redacted record has instead. Indexing it cannot
     // create a false exemption for a value nobody supplied — the summary is
     // built from the content itself.
-    else if (rec.contentSummary) addText(sink, rec.contentSummary);
+    else if (rec.contentSummary) addExempt(sink, rec.contentSummary);
   }
   // A tool's declared default is the app's declaration (honesty layer 2): the
   // value itself and its tokens, exactly as a prompt's text is indexed.
   for (const value of args.declaredDefaults ?? []) {
     add(sink, value);
-    addText(sink, value);
+    addExempt(sink, value);
   }
   // The person's answer to the library's ask: their own words, exempt like a
   // value in their message (honesty layer 2, step 4).
   for (const value of args.answeredValues ?? []) {
     add(sink, value);
-    addText(sink, value);
+    addExempt(sink, value);
   }
   return new Set(sink.values.keys());
 }

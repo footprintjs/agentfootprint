@@ -152,3 +152,105 @@ export function canonicalForm(normalized: string): string {
   const forms = lookupForms(normalized);
   return forms[forms.length - 1] ?? normalized;
 }
+
+// ─── Spellings of a person's date or clock time (exempt corpus only) ─────
+
+/** An ISO calendar date in text — `2026-10-09`, also the date half of `2026-10-09T08:00`. */
+const ISO_DATE = /(?<![\d-])(\d{4})-(\d{2})-(\d{2})(?![\d])/g;
+
+/**
+ * A 12-hour clock reading in text — `8 Am`, `8:40 AM`, `8pm`, `8:40 p.m.`.
+ * Read off the TEXT, not the tokens, because the suffix is its own token
+ * (`8 Am` tokenizes to `8` and `am`).
+ */
+const TWELVE_HOUR = /(?<![\d:.])(\d{1,2})(?::(\d{2}))?\s*([ap])\.?m(?![a-z])/gi;
+
+/** A 24-hour clock reading, as a normalized token — `8:00`, `08:40`, `20:00`. */
+const TWENTY_FOUR_HOUR = /^(\d{1,2}):(\d{2})$/;
+
+/**
+ * The spellings of ONE clock time (0–23 h, 0–59 min): the 24-hour form bare
+ * and padded (`8:00`, `08:00`, `20:00`), the 12-hour colon form a
+ * `8:00 PM` tokenizes to (`8:00`), and its glued suffix form (`8:00pm`,
+ * which the extractor reads as one identifier).
+ */
+function clockSpellings(h24: number, minutes: string): readonly string[] {
+  const h12 = h24 % 12 === 0 ? 12 : h24 % 12;
+  const suffix = h24 < 12 ? 'am' : 'pm';
+  const forms = [
+    `${h24}:${minutes}`,
+    `${String(h24).padStart(2, '0')}:${minutes}`,
+    `${h12}:${minutes}`,
+    `${h12}:${minutes}${suffix}`,
+  ];
+  return forms.filter((f, i) => forms.indexOf(f) === i);
+}
+
+// FOLD · the one owner of which other spellings a date or clock time the person (or the app) wrote counts as
+// consumers read this and never re-derive it: evidenceIndex.ts · addExempt (the exempt corpus and its compaction lineage), and nothing else — the tool-evidence index is never widened by it
+// detached: yes — a fresh array of normalized strings per call.
+/**
+ * The other spellings of every DATE and CLOCK TIME in one piece of exempt
+ * text — the person's message, their typed answer, the app's prompt — so a
+ * value the person gave is not accused when the answer writes it another
+ * way. Read by the exempt corpus only (`evidenceIndex.ts` · `addExempt`):
+ * the tool-evidence index never gains these, so a tool's timestamp cannot
+ * ground a year the answer invented.
+ *
+ * Three rules, each a SPELLING, never an interpretation:
+ *
+ *   • an ISO date (`2026-10-09`) → its year, month and day (`2026`, `10`,
+ *     `9`) — the person who chose 2026-10-09 in a form said "2026". Slash
+ *     spellings (`10/09/2026`) are NOT produced: their order is a locale, and
+ *     choosing one is reading the date, not respelling it;
+ *   • a 12-hour reading (`8 Am`, `8:40 AM`, `8pm`) → its 24-hour forms
+ *     (`8:00`, `08:00`, `8:40`, `20:00`) and its colon and glued forms;
+ *   • a 24-hour reading (`20:00`, `08:40`) → the same set, so an answer that
+ *     writes `8:00 PM` is not accused of inventing `8:00`. The bound, stated:
+ *     after tokenizing, `8:00 PM` and `8:00 AM` both read `8:00`, so a person
+ *     who wrote `20:00` also exempts an answer's `8:00` — the same hour on a
+ *     12-hour dial.
+ *
+ * Durations are never read (`2h`, `90 min`): a quantity is not a time of
+ * day, and parsing one is the interpretation the design forbids.
+ *
+ * @example
+ * ```ts
+ * dateAndClockForms('what connected 8 Am to 8:40 AM PST');
+ * // ['8:00', '08:00', '8:00am', '8:40', '08:40', '8:40am']
+ * dateAndClockForms('2026-10-09'); // ['2026', '10', '9']
+ * dateAndClockForms('took 2h');    // []
+ * ```
+ */
+export function dateAndClockForms(text: string): readonly string[] {
+  const out: string[] = [];
+  const push = (form: string): void => {
+    if (!out.includes(form)) out.push(form);
+  };
+  for (const [, year = '', mm, dd] of text.matchAll(ISO_DATE)) {
+    const month = Number(mm);
+    const day = Number(dd);
+    if (month < 1 || month > 12 || day < 1 || day > 31) continue;
+    push(year);
+    push(String(month));
+    push(String(day));
+  }
+  for (const [, hh, mm, half = ''] of text.matchAll(TWELVE_HOUR)) {
+    const hour = Number(hh);
+    const minutes = mm ?? '00';
+    if (hour < 1 || hour > 12 || Number(minutes) > 59) continue;
+    const pm = half.toLowerCase() === 'p';
+    const h24 = (hour % 12) + (pm ? 12 : 0);
+    for (const form of clockSpellings(h24, minutes)) push(form);
+  }
+  // A reading the 12-hour pass already took is not read again as 24-hour:
+  // `8:40 p.m.` is 20:40, never also 08:40.
+  for (const token of tokenize(text.replace(TWELVE_HOUR, ' '))) {
+    const [, hh, minutes = ''] = TWENTY_FOUR_HOUR.exec(token) ?? [];
+    if (hh === undefined) continue;
+    const h24 = Number(hh);
+    if (h24 > 23 || Number(minutes) > 59) continue;
+    for (const form of clockSpellings(h24, minutes)) push(form);
+  }
+  return out;
+}
