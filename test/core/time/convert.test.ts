@@ -11,7 +11,8 @@
  *                 look-back with the sign added or removed; look-back → bounds as `[now − L, now)`;
  *                 a range → iso / epoch-ms / epoch-s (rounded outward) / wall / date; a whole day →
  *                 `day`; a range ending at now → the covering look-back, rounded); the rows that are
- *                 NOT exact answer `undefined`; the facts against a range;
+ *                 NOT exact answer `undefined`; the facts against a range; an unread pair told
+ *                 apart — a zone still to come, or bounds that name no window;
  *   property    — every conversion reads back as the range it came from (seeded ranges, every
  *                 exact form, both edges);
  *   boundary    — a doubled wall hour is not exact; a sub-millisecond instant is not exact;
@@ -27,6 +28,7 @@ import {
   parsesUnderForm,
   periodFactProblem,
   readBack,
+  readBackLacksZone,
   sameRange,
   sugarForms,
   type PeriodForm,
@@ -330,6 +332,22 @@ describe('reading a sent value back (§ 3.3)', () => {
         CTX,
       ),
     ).toBeUndefined();
+  });
+
+  it('tells a zone still to come from bounds that name no window', () => {
+    const wall = { start: '2026-10-09T08:00', end: '2026-10-09T08:40' };
+    // No zone argument yet: nothing to read in — the zone's own ask decides.
+    expect(readBack(wall, bounds('wall'), CTX)).toBeUndefined();
+    expect(readBackLacksZone(wall, bounds('wall'), CTX)).toBe(true);
+    // The zone is there: an unread pair is the pair's own fault.
+    expect(readBackLacksZone({ ...wall, tz: LA }, bounds('wall'), CTX)).toBe(false);
+    // Epoch bounds need no zone — the end before the start names no window.
+    const swapped = { start: Date.parse(ASKED.to), end: Date.parse(ASKED.from) };
+    expect(readBack(swapped, bounds('epoch-ms', 'exclusive'), CTX)).toBeUndefined();
+    expect(readBackLacksZone(swapped, bounds('epoch-ms', 'exclusive'), CTX)).toBe(false);
+    expect(
+      readBackLacksZone({ w: '2h' }, { kind: 'lookback', argument: 'w', signed: false }, CTX),
+    ).toBe(false);
   });
 
   it('property — every exact conversion reads back as the range it came from', () => {

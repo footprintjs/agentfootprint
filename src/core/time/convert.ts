@@ -687,6 +687,34 @@ function spanRange(fromMs: number, toMs: number): TimeRange | undefined {
   return from === undefined || to === undefined ? undefined : { from, to };
 }
 
+/** The zone `form`'s arguments are read in: the zone argument's value when the form has one, else the app's. */
+function readZone(
+  args: Readonly<Record<string, unknown>>,
+  form: PeriodForm,
+  ctx: { readonly appZone?: ZoneName },
+): ZoneName | undefined {
+  const sentZone = 'zone' in form && form.zone !== undefined ? args[form.zone.argument] : undefined;
+  return formZone(form, {
+    zone: isZoneName(sentZone) ? sentZone : undefined,
+    ...(ctx.appZone !== undefined && { appZone: ctx.appZone }),
+  });
+}
+
+/**
+ * Whether {@link readBack} cannot read `args` for want of a zone alone — a
+ * wall or date form whose zone argument is not in the call yet and no app
+ * zone stands in. A caller that finds every bound present and still gets no
+ * range tells "the zone is still to come" (this) from "the bounds name no
+ * window" (misspelled, a wall time the zone skips, `from` not before `to`).
+ */
+export function readBackLacksZone(
+  args: Readonly<Record<string, unknown>>,
+  form: PeriodForm,
+  ctx: { readonly appZone?: ZoneName },
+): boolean {
+  return form.kind !== 'lookback' && needsZone(form) && readZone(args, form, ctx) === undefined;
+}
+
 /**
  * The half-open range the arguments of `form` name — the § 3.3 conversion back
  * from each bound — or `undefined` when they do not name one (missing,
@@ -708,14 +736,8 @@ export function readBack(
     if (!isDuration(length, units) || durationMs(length, units) === undefined) return undefined;
     return lookbackRange(ctx.now, length, units);
   }
-  const sentZone = 'zone' in form && form.zone !== undefined ? args[form.zone.argument] : undefined;
-  if ('zone' in form && form.zone !== undefined && !isZoneName(sentZone)) {
-    if (needsZone(form)) return undefined;
-  }
-  const zone = formZone(form, {
-    zone: isZoneName(sentZone) ? sentZone : undefined,
-    appZone: ctx.appZone,
-  });
+  const zone = readZone(args, form, ctx);
+  if (needsZone(form) && zone === undefined) return undefined;
   if (form.kind === 'day') {
     if (zone === undefined) return undefined;
     const date = dateOf(args[form.argument]);

@@ -66,6 +66,7 @@ import {
   granularityMsOf,
   periodFactProblem,
   readBack,
+  readBackLacksZone,
   type PeriodFactProblem,
   type PeriodFacts,
   type TimeRefusal,
@@ -919,7 +920,9 @@ function factBroken(
  * arguments are then all present is read back (`convert.ts` · `readBack`) and
  * judged against `direction`, `retention` and `maxRange` at the turn's clock
  * (`periodFactProblem`). A pair that breaks one sends each of its fields
- * asked in this pass back to be asked again, naming the fact — the same
+ * asked in this pass back to be asked again, naming the fact; a pair whose
+ * bounds are all present yet name no window (the end given before the start)
+ * goes back the same way, naming the window form — the same
  * bounded re-ask a single argument gets, so a future start and end the
  * person gave never reach a tool whose source holds only the past, with or
  * without the reader.
@@ -977,16 +980,31 @@ function pairsBroken(
       const asked = names.filter((a) => answers.has(a));
       if (asked.length === 0 || bounds.some((a) => args[a.argument] === undefined)) continue;
       const range = readBack(args, form, time);
-      const problem = range === undefined ? undefined : periodFactProblem(range, facts, time.now);
-      if (problem === undefined) continue;
+      // Every bound is present: no range means the pair names no window (a start not before its
+      // end, a misspelled bound) — never "no problem", or it reaches the tool unjudged. Only a
+      // zone still to come leaves the pair for the zone's own ask.
+      const expectation =
+        range !== undefined
+          ? pairExpectation(periodFactProblem(range, facts, time.now), facts)
+          : readBackLacksZone(args, form, time)
+          ? undefined
+          : WINDOW_FORM_EXPECTATION;
+      if (expectation === undefined) continue;
       for (const a of asked) {
         const field = (answers.get(a) as { field: number }).field;
-        if (now.has(field) && !broken.has(field))
-          broken.set(field, factExpectation(problem, facts));
+        if (now.has(field) && !broken.has(field)) broken.set(field, expectation);
       }
     }
   }
   return broken;
+}
+
+/** A pair's fact problem in the refusal's words — `undefined` when the pair breaks none. */
+function pairExpectation(
+  problem: PeriodFactProblem | undefined,
+  facts: PeriodFacts,
+): string | undefined {
+  return problem === undefined ? undefined : factExpectation(problem, facts);
 }
 
 // LENS · tool-result · persistent-history (through `serve.ts` · `unansweredRefusal`)

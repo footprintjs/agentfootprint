@@ -20,7 +20,8 @@
  *                 `assume: '1h'` never runs; a date whose readings a look-back tool can read only
  *                 in part offers only those; a future start/end the person gave is asked again
  *                 naming the fact, then refused — the tool never runs — with the reader and
- *                 without; a past pair runs;
+ *                 without; so is a future pair given end-first, which names no window at all;
+ *                 a past pair runs;
  *   integration — the clock at dispatch after the ask: the asking call's covering look-back ran
  *                 after the clock moved on and is recorded shifted, never silently; the served line
  *                 after a refusal names it as a conclusion instead of the pending ask (the T6b
@@ -376,6 +377,35 @@ describe('a start and end the person gave are one window — judged against dire
       'a window that has already happened (the source holds only the past)',
     );
   });
+
+  it.each([
+    ['without the reader', (b: ReturnType<typeof Agent.create>) => b.time({ zone: LA })],
+    [
+      'with the reader',
+      (b: ReturnType<typeof Agent.create>) => b.time({ zone: LA, reader: englishTimeReader() }),
+    ],
+  ])(
+    '%s: a future pair given end-first names no window — asked again, then refused, never run',
+    async (_, arm) => {
+      const seen: Record<string, unknown>[] = [];
+      const { agent, requests } = await build(
+        [call('c1', 'client_activity'), answer('cannot')],
+        [epochTool({ direction: 'past' }, seen)],
+        arm,
+      );
+      let out = await agent.run({ message: 'Show client activity', time: { now: NOW } });
+      for (let round = 0; round < 3; round++) {
+        expect(isInputPause(out)).toBe(true);
+        out = await resumeWith(agent as never, out, { f1: tomorrowTo, f2: tomorrowFrom });
+      }
+      expect(isInputPause(out)).toBe(false);
+      expect(seen).toEqual([]);
+      expect(ofKind(agent, 'argument').filter((r) => r.source === 'answered')).toEqual([]);
+      expect(lastToolMessage(requests)).toContain(
+        "a window one of the tool's declared period forms can hold",
+      );
+    },
+  );
 
   it('a past pair the person gave runs as given', async () => {
     const seen: Record<string, unknown>[] = [];
