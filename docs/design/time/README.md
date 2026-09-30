@@ -390,7 +390,7 @@ the others wait until a bench shows people need them:
 | a zone | IANA (`America/Los_Angeles`), a numeric offset | `zoneToken`, as written | directly | v1 |
 | a zone abbreviation | `PST` | `zoneToken: 'PST'` | v1 has no abbreviation map, so the zone is asked (`format: 'zone'`); later, **only through the policy's map**, and one whose DST state disagrees with the date is asked with both readings as choices (`abbreviationMismatch: 'ask'`, § 11) | tokenized; resolved by the ask |
 | day words | today, yesterday, tomorrow | `relative: { day, offset }` | anchored on the clock, in the person's zone | v1 |
-| relative spans | last 40 minutes, past 2 hours | `relative: { unit, count }` | a look-back (§ 3.2) | v1 |
+| relative spans | last 40 minutes, past 2 hours, the last hour | `relative: { unit, count }` | a look-back (§ 3.2) | v1 — with an explicit ISO instant or range, the only forms filed as said (T6b (8)) |
 | night words | tonight, overnight | `relative` + `partOfDay` | a span that crosses midnight | later |
 | parts of a day | morning, afternoon, evening | `partOfDay: 'morning'` | the policy's table (`morning` = `[06:00, 12:00)`), noted as `{ kind: 'part-of-day', table: 'default' }` | later |
 | calendar spans | last week | `relative: { week, offset: -1 }` | a calendar range, which needs a week-start rule | later |
@@ -1358,6 +1358,42 @@ deterministic and are measured over retained recorded runs or unit tables, with 
   reading beside an open-range word the scan does not list (`errors yesterday henceforth`) is
   still read as the day and filed as said — pinned as the limit in `english-reader.test.ts`; the
   paid bench measures how often it occurs.
+  (8) **An allow-list, not a deny-list** (sixth review round — the contract flipped; TQ27). Five
+  rounds each found the next spelling the scan missed, and the sixth found two classes that are
+  no open-range word: a zone named in words or as an IANA name beside a calendar word
+  (`yesterday London time`, `server time`, `in Asia/Kolkata` — the day filed in the run's zone,
+  8 to 17 hours off) and a look-back anchored to an event (`the last 2 hours of the outage`,
+  filed as a look-back from now). English has an endless tail, so the English reader stops
+  listing what to distrust and TRUSTS a short allow-list, grown only from evidence
+  (`readers/english.ts` · `isAllowListed`): (i) a RELATIVE SPAN from now — `last|past N
+  minutes|hours|days|weeks`, `the last|past hour|day|week` — which needs no zone; (ii) an
+  EXPLICIT ISO-8601 instant or range whose every bound carries an offset or an IANA zone. Every
+  other form it reads — calendar words, a date or clock time with no zone, a range in words, an
+  abbreviation — carries `confirm: true` on the port (`reader.ts` · `TimeMention.confirm`,
+  checked: only `true`, only beside parses), recorded as `confirmNeeded: { form: true }` beside
+  `leftover`/`point`/`several` (`rows.ts` · `confirmNeededOf`, the one owner; the checkpoint door
+  checks the key), and is offered through the time ask pre-filled with the reading AND its zone
+  (`choice.confirm`: "I read “yesterday” as Thu, Oct 8, 2026, PDT in America/Los_Angeles — is
+  that right?"; both confirm labels take `{{zone}}`), so a person who meant London time corrects
+  it in one answer. The allow-list lives in the READER, not the library: it is a claim about
+  what one reader reads right, which a bench measures per reader; a fixture or app `rule` reader
+  keeps vouching its own forms. The library's shape law stays the floor, with one exemption: an
+  explicit instant (`rows.ts` · `isExplicitInstant` — a year-dated date, a clock time, `Z`, a
+  numeric offset, `UTC` or an IANA name) is no point the library widened; its window is the
+  instant at the grain written. The scan grows too, conservatively: `time`, the IANA area words
+  (so `Asia/Kolkata` counts although its `/` sits between letters), anchors and open ends
+  (`preceding`, `prior`, `pre`, `post`, `onward`, `forward`, `hence`, `henceforth`,
+  `thereafter`), exclusions and filters (`excluding`, `except`, `outside`, `weekdays`,
+  `business`, `working`), and `of` right after a look-back. `previous N …`, `last N seconds` and
+  a bare `last week` are no longer read (unreadable). **The trade-off:** every calendar word now
+  pauses once for a one-answer confirmation where it was filed as said (`yesterday` to a
+  look-back-only tool included); a day read in the wrong zone, recorded as the person's words,
+  was the worse failure. **The known limit now:** a look-back from now beside an anchor word the
+  scan does not list (`logs last 2 hours surrounding the outage`) — pinned in
+  `english-reader.test.ts`. Pinned also: every row the six reviews cited is confirmed or
+  unreadable, never said; each allow-listed form is said; a seeded property — a message whose
+  time content is off the allow-list never yields said, and every said quote matches an oracle of
+  the two forms written apart from the reader.
 
 **Why this order.** T1 settles the grammar every other step leans on and is free. T2 is already
 written and only needs rebasing and the value check. T3 gives the first visible win (the limits
@@ -1410,6 +1446,7 @@ probe, the future check, and its private time vocabulary in the metrics adapters
 | TQ24 | Where does "the future is not readable" live? | **On the tool**: `period.direction: 'past' \| 'future' \| 'any'`, beside `retention`; absent, not checked. No global `future` policy. | Readability is a fact about the source (a log store holds no tomorrow); a global default fits an analysis agent and is wrong for a scheduling agent. |
 | TQ25 | The gate's person-values fix: wait for T7, or land now? | **Land `fix/person-values-normalized` now** for the field bug; T7 retires its private table and keeps its cases. | The field bug is live today; T7 is several steps away. |
 | TQ26 | A window set in a UI (a brush, a range picker)? | **A run input, `time.window`, recorded with `source: 'control'`**; it counts as the person's, like an answer, and as one mention for the fill rule. | It was not given in reply to a library ask, so filing it as `answered` would bend that word; one input serves panel, dashboard and chat. |
+| TQ27 | The English reader: which readings are the person's words — a deny-list shrunk each review, or an allow-list grown from evidence? (added 2026-09-30, T6b sixth review round — decided for the library under the standing rule, not among the questions the owner answered above) | **An allow-list, in the reader**: a look-back from now and an explicit ISO instant or range with an offset or IANA zone are said; every other form it reads is confirmed with its zone (`TimeMention.confirm` → `confirmNeeded.form`). A form joins the list only when the paid bench shows it is read right. | Six review rounds each found the next spelling a deny-list missed (zones named in words, event anchors, open ends); an allow-list fails toward a confirmation, a deny-list toward a wrong window recorded as said. The price — a confirmation on every calendar word — is one answer; the zone is shown so the correction is one click. |
 | TQ16 | The names: `.time()`, `TimeReader`, `TimeParts`, `TimeClock`, `ResolvedWindow`, `PeriodForm`, `wall-range`, `period-differs-from-asked`, `derived-from-reading` | **Keep the drafts** for T1–T3; rename freely before T5a ships. | Nothing is public until T3. |
 
 ---

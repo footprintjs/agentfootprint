@@ -14,7 +14,8 @@
  *   functional  — the field sentence "10/09/26 8 AM to 8:40 AM PST": a zone ask naming `PST`,
  *                 then the three date orders as labelled choices, then the tool runs with the
  *                 chosen window in its own form (`answered` rows, the note says whose window);
- *                 under `dateOrder: 'MDY'` the zone answer settles it (one ask); "yesterday" →
+ *                 under `dateOrder: 'MDY'` the zone answer leaves ONE reading, confirmed with its
+ *                 zone (it is off the reader's allow-list — never said); "last 2 hours" →
  *                 the sentence names the window in the tool's form (a look-back, said wider);
  *                 "yesterday morning" and "last week" → one `unreadable` row each, no window ask
  *                 (the tool's own rule asks); a range read only in half ("… 8:40 PM till 9.30")
@@ -209,7 +210,8 @@ describe('the field sentence — the zone, then the date order, then the tool ru
     );
     const field = second.awaitingInput.fields[0]!;
     expect(field.format).toBe('time-range');
-    expect(field.description).toBe('Which time did you mean by “10/09/26 8 AM to 8:40 AM PST”?');
+    // Off the reader's allow-list (a numeric date): every reading is offered to CONFIRM, with its zone.
+    expect(field.description).toBe('Is this the time you meant by “10/09/26 8 AM to 8:40 AM PST”?');
     expect(field.enum).toEqual([
       '2026-10-09T08:00:00-07:00/2026-10-09T08:41:00-07:00',
       '2026-09-10T08:00:00-07:00/2026-09-10T08:41:00-07:00',
@@ -217,6 +219,7 @@ describe('the field sentence — the zone, then the date order, then the tool ru
     ]);
     expect(field.labels).toHaveLength(3);
     expect(field.labels![0]).toContain('PDT');
+    expect(field.labels![0]).toContain('in America/Los_Angeles');
     expect(seen).toEqual([]);
 
     const done = await agent.resume(second.checkpoint as never, {
@@ -238,7 +241,7 @@ describe('the field sentence — the zone, then the date order, then the tool ru
     );
   });
 
-  it("under `dateOrder: 'MDY'` the zone answer settles the window — one ask", async () => {
+  it("under `dateOrder: 'MDY'` the zone answer leaves one reading — confirmed with its zone", async () => {
     const seen: Record<string, unknown>[] = [];
     const { agent } = build(
       [call('c1', 'client_activity', {}), answer('42 operations')],
@@ -246,9 +249,21 @@ describe('the field sentence — the zone, then the date order, then the tool ru
       (b) => b.time({ zone: LA, reader, policy: { dateOrder: 'MDY' } }),
     );
     const first = paused(await agent.run({ message: FIELD, time: { now: NOW } }));
-    const done = await agent.resume(first.checkpoint as never, {
-      requestId: first.awaitingInput.requestId,
-      values: { f1: LA },
+    const second = paused(
+      await agent.resume(first.checkpoint as never, {
+        requestId: first.awaitingInput.requestId,
+        values: { f1: LA },
+      }),
+    );
+    const field = second.awaitingInput.fields[0]!;
+    expect(field.enum).toEqual(['2026-10-09T08:00:00-07:00/2026-10-09T08:41:00-07:00']);
+    expect(field.labels![0]!.replace(/\s/g, ' ')).toBe(
+      'I read “10/09/26 8 AM to 8:40 AM PST” as Fri, Oct 9, 2026, 8:00 – 8:40 AM PDT in America/Los_Angeles — is that right?',
+    );
+    expect(seen).toEqual([]);
+    const done = await agent.resume(second.checkpoint as never, {
+      requestId: second.awaitingInput.requestId,
+      values: { f1: field.enum![0]! },
     });
     expect(isInputPause(done)).toBe(false);
     expect(seen[0]).toMatchObject({ start_time: 1791558000000, end_time: 1791560460000 });
@@ -265,9 +280,17 @@ describe('the field sentence — the zone, then the date order, then the tool ru
     const first = paused(await one.agent.run({ message: FIELD, time: { now: NOW } }));
     const checkpoint = JSON.parse(JSON.stringify(first.checkpoint));
     const two = make([answer('42 operations')]);
-    const done = await two.agent.resume(checkpoint, {
-      requestId: first.awaitingInput.requestId,
-      values: { f1: LA },
+    const second = paused(
+      await two.agent.resume(checkpoint, {
+        requestId: first.awaitingInput.requestId,
+        values: { f1: LA },
+      }),
+    );
+    const again = JSON.parse(JSON.stringify(second.checkpoint));
+    const three = make([answer('42 operations')]);
+    const done = await three.agent.resume(again, {
+      requestId: second.awaitingInput.requestId,
+      values: { f1: second.awaitingInput.fields[0]!.enum![0]! },
     });
     expect(isInputPause(done)).toBe(false);
     expect(seen[0]).toMatchObject({ start_time: 1791558000000 });
@@ -475,30 +498,49 @@ describe('a future date to a `past` tool — refused before dispatch', () => {
 
 describe('the one served time sentence — on each tool that declares a period', () => {
   for (const mode of ['dynamic', 'dynamic-grouped', 'classic'] as const) {
-    it(`"yesterday" is served in each tool's own form (${mode})`, async () => {
+    it(`"last 2 hours" is served in each tool's own form (${mode})`, async () => {
       const { agent, requests } = build(
         [answer('none')],
         [lookbackTool(), epochTool()],
         (b) => b.time({ zone: LA, reader }),
         mode,
       );
-      await agent.run({ message: 'any errors yesterday?', time: { now: NOW } });
+      await agent.run({ message: 'any errors in the last 2 hours?', time: { now: NOW } });
       const tools = requests[0]!.tools ?? [];
       const search = tools.find((t) => t.name === 'search_logs')!;
       const activity = tools.find((t) => t.name === 'client_activity')!;
       expect(search.description).toBe(
         "Error lines over a look-back window. The library read time words in the person's " +
-          'message as: “yesterday” → window "1960m" (a wider read than the words named) — a ' +
+          'message as: “last 2 hours” → window "2h" — a ' +
           'reading of their words, not their words; a call may pass these values as written.',
       );
       expect(activity.description).toBe(
         "Client operations over a window. The library read time words in the person's message " +
-          'as: “yesterday” → start_time 1791442800000, end_time 1791529200000 — a reading of ' +
+          `as: “last 2 hours” → start_time ${
+            NOW_MS - 2 * 3_600_000
+          }, end_time ${NOW_MS} — a reading of ` +
           'their words, not their words; a call may pass these values as written.',
       );
       expect(ofKind(agent, 'time-reading')).toHaveLength(1);
     });
   }
+
+  it('"yesterday" is off the allow-list: nothing is served until the person confirms it', async () => {
+    const plain = build([answer('none')], [lookbackTool(), epochTool()], (b) =>
+      b.time({ zone: LA }),
+    );
+    await plain.agent.run({ message: 'any errors yesterday?', time: { now: NOW } });
+    const armed = build([answer('none')], [lookbackTool(), epochTool()], (b) =>
+      b.time({ zone: LA, reader }),
+    );
+    await armed.agent.run({ message: 'any errors yesterday?', time: { now: NOW } });
+    expect(JSON.stringify(armed.requests[0]!.tools)).toBe(JSON.stringify(plain.requests[0]!.tools));
+    expect(ofKind(armed.agent, 'time-reading')[0]).toMatchObject({
+      quote: 'yesterday',
+      confirmNeeded: { form: true },
+      choice: { by: 'open', open: ['confirm'] },
+    });
+  });
 
   it('byte identity — no reader: the tool list equals the unarmed twin’s; a turn with nothing settled too', async () => {
     const plain = build([answer('none')], [lookbackTool(), epochTool()], (b) =>

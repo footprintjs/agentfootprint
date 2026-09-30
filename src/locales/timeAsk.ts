@@ -20,8 +20,8 @@
  * | `ask.which`, `ask.confirm` | `quote` — the person's words the reading came from (`ask.confirm` also asks about a point time or one of several mentions) |
  * | `ask.confirm-part` | `quote` — what the reader read; `leftover` — the time-like words it did not read |
  * | `ask.zone` | `quote`, `token` — the zone they wrote |
- * | `choice.confirm` | `quote`, `window` — the label of the library's reading |
- * | `choice.confirm-part` | `quote`, `window` — the label of a reading that is not the person's window (leftover words, a point time, several mentions) |
+ * | `choice.confirm` | `quote`, `window` — the label of a reading to confirm (a model reader's; a rule reading off the said allow-list, a point time, one of several mentions); `zone` — the zone it was read in |
+ * | `choice.confirm-part` | `quote`, `window`, `zone` — the label of a reading that left words unread |
  *
  * Only a check the app armed can produce one of these: a field with a
  * `format`, or the choices of a reading under `.time()`.
@@ -54,6 +54,6 @@ export const defaultTimeAskMessages: TimeAskMessages = Object.freeze({
   'ask.confirm-part':
     'I read only “{{quote}}” as a time, not “{{leftover}}”. Is this the window you mean?',
   'ask.zone': 'Which time zone did you mean by “{{token}}” in “{{quote}}”?',
-  'choice.confirm': 'I read “{{quote}}” as {{window}} — is that right?',
-  'choice.confirm-part': 'I read {{window}} — is that the window you mean?',
+  'choice.confirm': 'I read “{{quote}}” as {{window}} in {{zone}} — is that right?',
+  'choice.confirm-part': 'I read {{window}} in {{zone}} — is that the window you mean?',
 });

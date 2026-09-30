@@ -276,7 +276,7 @@ describe('timeAskOf — unit', () => {
     expect(ask?.question).toBe('Is this the time you meant by “2026-10-09 20:40”?');
     expect(ask?.field.enum).toEqual(['2026-10-09T20:40:00-07:00/2026-10-09T20:41:00-07:00']);
     expect(plain(ask?.field.labels?.[0] ?? '')).toBe(
-      'I read Fri, Oct 9, 2026, 8:40 PM PDT — is that the window you mean?',
+      'I read “2026-10-09 20:40” as Fri, Oct 9, 2026, 8:40 PM PDT in America/Los_Angeles — is that right?',
     );
   });
 
@@ -292,10 +292,10 @@ describe('timeAskOf — unit', () => {
       '2026-11-01T01:30:00-07:00/2026-11-01T01:31:00-07:00',
       '2026-11-01T01:30:00-08:00/2026-11-01T01:31:00-08:00',
     ]);
-    // A point time: each instant is offered to confirm, never as the person's window.
+    // A point time: each instant is offered to confirm, with its zone — never as the person's window.
     expect(ask?.field.labels?.map(plain)).toEqual([
-      'I read Sun, Nov 1, 2026, 1:30 AM PDT — is that the window you mean?',
-      'I read Sun, Nov 1, 2026, 1:30 AM PST — is that the window you mean?',
+      'I read “2026-11-01 01:30” as Sun, Nov 1, 2026, 1:30 AM PDT in America/Los_Angeles — is that right?',
+      'I read “2026-11-01 01:30” as Sun, Nov 1, 2026, 1:30 AM PST in America/Los_Angeles — is that right?',
     ]);
   });
 
@@ -324,7 +324,7 @@ describe('timeAskOf — unit', () => {
     expect(ask?.question).toBe('Is this the time you meant by “yesterday”?');
     expect(ask?.field.enum).toEqual(['2026-10-08T00:00:00-07:00/2026-10-09T00:00:00-07:00']);
     expect(ask?.field.labels?.map(plain)).toEqual([
-      'I read “yesterday” as Thu, Oct 8, 2026, PDT — is that right?',
+      'I read “yesterday” as Thu, Oct 8, 2026, PDT in America/Los_Angeles — is that right?',
     ]);
   });
 

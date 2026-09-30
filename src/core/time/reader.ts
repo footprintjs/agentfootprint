@@ -21,6 +21,7 @@
  * | each mention's `quote`: a non-empty VERBATIM substring of the text read | the mention is refused (`quote-not-in-text`) and keeps no text |
  * | each mention's parts: the {@link TimeParts} shape, every field in range, no unknown key, at most {@link MAX_PARSES} | the mention is refused (`malformed`) |
  * | each mention's `leftover`: only beside parses, 1 to {@link MAX_LEFTOVER} tokens, each a verbatim substring of the text | the mention is refused (`malformed`) |
+ * | each mention's `confirm`: only `true`, only beside parses | the mention is refused (`malformed`) |
  *
  * None of these checks what a word MEANS: a model that reads "yesterday" as
  * the wrong day passes every one of them. That is why a `kind: 'model'`
@@ -93,6 +94,16 @@ export interface TimeMention {
    * read every time-like token of the message.
    */
   readonly leftover?: readonly string[];
+  /**
+   * The reader READ the phrase but does not vouch its form as the person's
+   * window: it is off the reader's allow-list of forms it files as said, so it
+   * is confirmed through the time ask with its zone (`rows.ts` ·
+   * `ConfirmNeeded.form`, step T6b). The English reader sets it on everything
+   * but a look-back from now and an explicit ISO instant or range — a
+   * calendar word or a zone-less date leans on the run's zone. Absent, the
+   * reader vouches the form.
+   */
+  readonly confirm?: true;
 }
 
 /** A date as the text wrote it. */
@@ -198,6 +209,7 @@ export type CheckedMention =
       readonly parses: readonly TimeParts[];
       readonly problem?: 'unreadable';
       readonly leftover?: readonly string[];
+      readonly confirm?: true;
     }
   | { readonly refused: MentionRefusal };
 
@@ -306,10 +318,10 @@ function isLeftover(text: string, value: unknown): boolean {
 }
 
 function checkMention(text: string, value: unknown): CheckedMention {
-  if (!isRecord(value) || !onlyKeys(value, ['quote', 'parses', 'problem', 'leftover'])) {
+  if (!isRecord(value) || !onlyKeys(value, ['quote', 'parses', 'problem', 'leftover', 'confirm'])) {
     return { refused: 'malformed' };
   }
-  const { quote, parses, problem, leftover } = value;
+  const { quote, parses, problem, leftover, confirm } = value;
   if (!Array.isArray(parses) || parses.length > MAX_PARSES) return { refused: 'malformed' };
   if (problem !== undefined && problem !== 'unreadable') return { refused: 'malformed' };
   // An unreadable mention carries no parses; a readable one carries at least one.
@@ -317,6 +329,10 @@ function checkMention(text: string, value: unknown): CheckedMention {
   if (!parses.every((p) => isTimeParts(p))) return { refused: 'malformed' };
   // A leftover names what a READING left out — an unreadable mention has no reading.
   if (leftover !== undefined && (problem !== undefined || !isLeftover(text, leftover))) {
+    return { refused: 'malformed' };
+  }
+  // So does a `confirm` — it asks that a READING be confirmed.
+  if (confirm !== undefined && (confirm !== true || problem !== undefined)) {
     return { refused: 'malformed' };
   }
   if (typeof quote !== 'string' || quote.length === 0 || !text.includes(quote)) {
@@ -327,6 +343,7 @@ function checkMention(text: string, value: unknown): CheckedMention {
     parses: parses as TimeParts[],
     ...(problem === 'unreadable' && { problem: 'unreadable' as const }),
     ...(leftover !== undefined && { leftover: [...(leftover as string[])] }),
+    ...(confirm === true && { confirm: true as const }),
   };
 }
 

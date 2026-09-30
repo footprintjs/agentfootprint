@@ -23,14 +23,15 @@
  * | a range between two of the above | `8 AM to 8:40 AM`, `08:00–08:40`, `between 8 and 9 AM` | `rangeOf` (a day or zone said once for both sides is the whole mention's) |
  * | a zone after a time or date | `America/Los_Angeles`, `UTC-07:00`, `PST` | `zoneToken`, as written (an abbreviation is ASKED — v1 ships no map) |
  * | a day word | today, yesterday, tomorrow | `relative: { unit: 'day', offset }` |
- * | a relative span with digits | last 40 minutes, past 2 hours | `relative: { unit, count }` — a look-back |
+ * | a relative span from now | last 40 minutes, past 2 hours, the last hour, the past week | `relative: { unit, count }` — a look-back in minutes, hours, days or weeks |
  *
  * ## What it says "unreadable" for — never a partial reading
  *
  * Parts of the day (`yesterday morning`, `tonight`, `noon`), calendar spans
  * (`last week`, `this month`), week days and named months (`Friday`,
- * `Oct 9`), `N hours ago`, spans in words (`last two hours`) or with a unit a
- * look-back cannot take (`last 3 months`), a look-ahead (`next 2 hours`), an
+ * `Oct 9`), `N hours ago`, spans in words (`last two hours`), with a unit off
+ * the allow-list (`last 30 seconds`, `last 3 months`) or said with `previous`
+ * (`previous 7 days` — often relative to another window), a look-ahead (`next 2 hours`), an
  * ordinal day (`the 9th`), `8 o'clock`, and any v1 phrase a modifier changes
  * (`since 8 AM`, `before yesterday`, `around 8:40`, `earlier today`,
  * `8 AM to now`, `past 8 PM`, `8 AM-ish`, `from 3 PM yesterday` with no `to`) and
@@ -45,7 +46,10 @@
  * broad time-or-range set left (`LEFTOVER_WORDS` — any digit in any script,
  * number and hour words, ordinals, day, relative, week day and month words,
  * units, parts of the day, range words such as `to`, `until`, `from`,
- * `between`, zone words; `..`, and ANY symbol or punctuation mark but
+ * `between`, zone words (`time`, `utc`, the IANA areas such as `europe`, `asia`);
+ * anchors, open ends, exclusions and filters (`preceding`, `prior`, `post`, `onward`,
+ * `henceforth`, `excluding`, `except`, `weekdays`, `business`); `of` right after a
+ * look-back (`the last 2 hours of the outage`); `..`, and ANY symbol or punctuation mark but
  * sentence punctuation, quotes and brackets — by rule, not by list — unless
  * it stands alone between two letters (`check-in`); `and`/`plus` right after
  * a time; `AM` and the zone abbreviations in capitals)? Nothing left: every reading is COMPLETE — the
@@ -58,14 +62,26 @@
  * `errors in the last 2 hours to date`) is confirmed, not read — an extra
  * confirmation is honest; a partial reading recorded as said is not.
  *
- * The scan is not the only guard. The LIBRARY files a `rule` reading as the
- * person's window only when it is window-complete and alone (`rows.ts` ·
- * `confirmNeededOf`): a point time (`8 AM`, whatever word stands beside it —
- * `8 AM forward`, `post 8 AM`) and a message with two mentions (`start 8:40
- * AM, end 9:30 PM`) are confirmed whatever the scan found. What only this
- * scan guards is a WHOLE-DAY or relative-span reading beside an open-range
- * word it does not list (`yesterday henceforth` reads as the day) — the known
- * limit, measured by the bench.
+ * ## The allow-list — the only forms filed as the person's words
+ *
+ * Five review rounds showed English has an endless tail (a zone named in
+ * words — `London time`, `server time`, `in Asia/Kolkata` — an event anchor,
+ * an open end), so the reader TRUSTS only an allow-list and grows it from
+ * evidence (`isAllowListed`): (1) a RELATIVE SPAN from now — `last|past N
+ * minutes|hours|days|weeks`, `the last|past hour|day|week` (no zone needed);
+ * (2) an EXPLICIT ISO-8601 instant or range whose every bound carries an
+ * offset or an IANA zone (`2026-10-09T08:00-07:00`,
+ * `2026-10-09T08:00Z/2026-10-09T09:00Z`). Everything else it reads — a
+ * calendar word, a date or clock time without a zone, a range in words — is
+ * marked `confirm` (`TimeMention.confirm`) and offered through the time ask
+ * WITH ITS ZONE ("I read “yesterday” as Thu, Oct 8, 2026, PDT in
+ * America/Los_Angeles — is that right?"), so a person who meant London time
+ * corrects it in one answer. An allow-listed reading is said only when the
+ * leftover scan finds nothing either, and the LIBRARY still confirms a point
+ * time that is no explicit instant and a message with two mentions (`rows.ts`
+ * · `confirmNeededOf`). What only the scan guards now is a look-back beside
+ * an anchor word it does not list (`last 2 hours surrounding the outage`) —
+ * the known limit, measured by the bench.
  *
  * A numeric date the tokens could split two ways stays ONE parse — `10/09/26`
  * is three numbers; which is the month is the policy's or the person's.
@@ -76,12 +92,15 @@
  * reader.read('errors on 10/09/26 8 AM to 8:40 AM PST', { locale: 'en-US' });
  * // { mentions: [{ quote: '10/09/26 8 AM to 8:40 AM PST', parses: [{
  * //   date: { kind: 'numeric', fields: [10, 9, 26], yearDigits: 2 }, zoneToken: 'PST',
- * //   rangeOf: [{ wall: { h: 8, meridiem: 'am' } }, { wall: { h: 8, m: 40, meridiem: 'am' } }] }] }] }
+ * //   rangeOf: [{ wall: { h: 8, meridiem: 'am' } }, { wall: { h: 8, m: 40, meridiem: 'am' } }] }],
+ * //   confirm: true }] } — off the allow-list: confirmed with its zone
+ * reader.read('errors in the last 2 hours', { locale: 'en-US' });
+ * // { mentions: [{ quote: 'last 2 hours', parses: [{ relative: { unit: 'hour', count: 2 } }] }] }
  * reader.read('what failed yesterday morning?', { locale: 'en-US' });
  * // { mentions: [{ quote: 'yesterday morning', parses: [], problem: 'unreadable' }] }
  * reader.read('8:40 AM til 9.30', { locale: 'en-US' });
  * // { mentions: [{ quote: '8:40 AM', parses: [{ wall: { h: 8, m: 40, meridiem: 'am' } }],
- * //   leftover: ['til', '9.30'] }] } — confirmed, never said
+ * //   leftover: ['til', '9.30'], confirm: true }] } — confirmed, never said
  * ```
  */
 
@@ -107,9 +126,8 @@ export const ENGLISH_TIME_READER_VERSION = '1.0.0';
 
 const DAY_WORDS: Readonly<Record<string, number>> = { today: 0, yesterday: -1, tomorrow: 1 };
 
-const SPAN_UNITS: Readonly<Record<string, 'second' | 'minute' | 'hour' | 'day' | 'week'>> = {
-  second: 'second',
-  sec: 'second',
+/** The units a look-back is read in — the allow-listed spans (`rows.ts` · `isSaidForm`). */
+const SPAN_UNITS: Readonly<Record<string, 'minute' | 'hour' | 'day' | 'week'>> = {
   minute: 'minute',
   min: 'minute',
   hour: 'hour',
@@ -219,6 +237,9 @@ const LEFTOVER_WORDS = [
   'fortnights?|months?|years?|decades?|quarters?|seconds?|secs?|minutes?|mins?|hours?|hrs?',
   'last|next|previous|past|ago|since|before|after|then|earlier|later|early|late|now|present',
   'current|recent|recently|during|within|about|around|approx|approximately|roughly|circa|ish',
+  // anchors, open ends and exclusions a reading does not carry
+  'preceding|following|prior|pre|post|onwards?|forwards?|hence|henceforth|thereafter|thenceforth',
+  'excluding|except|excl|outside|weekdays?|workdays?|weeknights?|business|working',
   // week days and months, whole and short
   '(?:mon|tues|wednes|thurs|fri|satur|sun)days?|mon|tue|tues|wed|weds|thu|thur|thurs|fri|sat|sun',
   'january|february|march|april|may|june|july|august|september|october|november|december',
@@ -228,8 +249,9 @@ const LEFTOVER_WORDS = [
   'dinner|sunrise|sunset|dawn|dusk|daybreak|nightfall|close|closing|shift|pm',
   // range words
   'to|until|till|til|through|thru|between|from|onto|unto|upto',
-  // zone words
-  'pacific|eastern|central|mountain|zone|timezone|utc|gmt|local',
+  // zone words — a zone said in words (`London time`, `server time`) or an IANA area
+  'pacific|eastern|central|mountain|zone|zones|timezone|time|utc|gmt|local',
+  'africa|america|antarctica|arctic|asia|atlantic|australia|europe|indian',
 ].join('|');
 /**
  * The marks the scan does NOT count: sentence punctuation, quotes and
@@ -259,6 +281,11 @@ const LEFTOVER = new RegExp(
 const LEFTOVER_CASED = new RegExp(`\\b(?:AM|${ZONE_ABBREVIATIONS.join('|')})\\b`, 'gu');
 /** A word that joins a range or a sum — counted only right after a time (`8 AM and the deploy`). */
 const JOINER = /\b(?:and|plus|minus)\b/giu;
+/**
+ * `of` right after a look-back anchors it to an event (`the last 2 hours of the
+ * outage`), not to now — counted only there (`last 7 days of data` confirms).
+ */
+const SPAN_OF = /^\s+(of)\b/i;
 /** A lone mark between two letters is part of a word (`check-in`, `and/or`, `request_id`), not a range. */
 const MARK = new RegExp(`^${COUNTED_MARK}$`, 'u');
 const LETTER = /\p{L}/u;
@@ -318,8 +345,9 @@ const BARE_HOUR = new RegExp(
   'gi',
 );
 const DAY_WORD = /\b(today|yesterday|tomorrow)\b/gi;
-const SPAN =
-  /\b(?:last|past|previous)\s+(\d{1,6})\s*(seconds?|secs?|minutes?|mins?|hours?|hrs?|days?|weeks?)\b/gi;
+const SPAN = /\b(?:last|past)\s+(\d{1,6})\s*(minutes?|mins?|hours?|hrs?|days?|weeks?)\b/gi;
+/** `the last hour`, `the past week` — a look-back of one unit; without `the`, `last week` is a calendar week (not read). */
+const ONE_SPAN = /\bthe\s+(?:last|past)\s+(hour|day|week)\b/gi;
 
 /** A zone right after a phrase: optional `(`, or `in`, then the token (and a closing `)`). */
 const ZONE_AFTER = new RegExp(
@@ -434,6 +462,15 @@ function wordAtoms(text: string): Atom[] {
       end: m.index + m[0].length,
       kind: 'span',
       relative: { unit, count },
+    });
+  }
+  for (const m of matches(ONE_SPAN, text)) {
+    const unit = SPAN_UNITS[(m[1] as string).toLowerCase()] as 'hour' | 'day' | 'week';
+    out.push({
+      start: m.index,
+      end: m.index + m[0].length,
+      kind: 'span',
+      relative: { unit, count: 1 },
     });
   }
   return out;
@@ -616,6 +653,13 @@ function leftoverOf(text: string, groups: readonly Group[]): string[] {
       found.push({ start: at, end: at + m[0].length });
     }
   }
+  for (const g of groups) {
+    const after = g.unreadable ? null : SPAN_OF.exec(text.slice(g.end));
+    if (after !== null && g.items[g.items.length - 1]?.atom?.kind === 'span') {
+      const at = g.end + after[0].length - (after[1] as string).length;
+      found.push({ start: at, end: at + (after[1] as string).length });
+    }
+  }
   const timeEnds = new Set([...found.map((s) => s.end - 1), ...spanEnds(inSpan)]);
   for (const m of matches(JOINER, masked)) {
     let j = m.index - 1;
@@ -769,6 +813,52 @@ function partsOf(group: Group): TimeParts | undefined {
   return isTimeParts(parts) ? parts : undefined;
 }
 
+// ─── The allow-list: the forms this reader files as said ─────────────────
+//
+// Five review rounds showed English has an endless tail: a zone named in words
+// (`London time`, `server time`, `in Asia/Kolkata`), an event anchor, an open
+// end. So the reader TRUSTS only what it has evidence it reads right, and
+// grows the list from a benchmark — never shrinks a deny-list forever. Every
+// other phrase it reads is marked `confirm` and offered with its zone.
+
+/** A zone token that fixes the offset by itself: `Z`, a numeric offset, `UTC`, an IANA `Area/Location`. */
+const EXPLICIT_ZONE = new RegExp(`^(?:Z|UTC|[+-]\\d{1,2}(?::?\\d{2})?|(?:${IANA_AREAS})/.+)$`);
+
+/** One bound of an explicit ISO reading: a year-dated date, a clock time, an explicit zone (each maybe said once for a range). */
+function isZonedBound(side: TimeParts, outer: TimeParts): boolean {
+  const date = side.date ?? outer.date;
+  const zone = side.zoneToken ?? outer.zoneToken;
+  return (
+    date?.kind === 'fixed' &&
+    date.year !== undefined &&
+    side.wall !== undefined &&
+    side.relative === undefined &&
+    zone !== undefined &&
+    EXPLICIT_ZONE.test(zone)
+  );
+}
+
+/**
+ * Whether a reading is on the allow-list — the ONLY forms this reader files as
+ * the person's words: (1) a RELATIVE SPAN from now (`last|past N
+ * minutes|hours|days|weeks`, `the last|past hour|day|week` — no zone, no
+ * date order, nothing supplied); (2) an EXPLICIT ISO-8601 instant or range
+ * whose every bound carries an offset or an IANA zone
+ * (`2026-10-09T08:00-07:00`, `2026-10-09T08:00Z/2026-10-09T09:00Z`). The
+ * reader's named dates are ISO only (a named month is unreadable), so a
+ * year-dated `fixed` date here IS an ISO one.
+ */
+function isAllowListed(parts: TimeParts): boolean {
+  const r = parts.relative;
+  if (r !== undefined) return Object.keys(parts).length === 1 && 'count' in r;
+  if (parts.rangeOf === undefined) return isZonedBound(parts, {});
+  return (
+    parts.wall === undefined &&
+    isZonedBound(parts.rangeOf[0], parts) &&
+    isZonedBound(parts.rangeOf[1], parts)
+  );
+}
+
 /** The text's mentions, in the order written — at most `MAX_MENTIONS`, the port's bound. */
 function mentionsOf(text: string): TimeMention[] {
   const atoms = atomsOf(text);
@@ -782,7 +872,12 @@ function mentionsOf(text: string): TimeMention[] {
     mentions.push(
       parts === undefined
         ? { quote, parses: [], problem: 'unreadable' }
-        : { quote, parses: [parts], ...(leftover.length > 0 && { leftover: [...leftover] }) },
+        : {
+            quote,
+            parses: [parts],
+            ...(leftover.length > 0 && { leftover: [...leftover] }),
+            ...(!isAllowListed(parts) && { confirm: true as const }),
+          },
     );
   }
   return mentions.slice(0, MAX_MENTIONS);

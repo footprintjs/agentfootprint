@@ -353,6 +353,27 @@ describe('the leftover rule — a reading is the person’s only when nothing ti
     '8 AM hasta 9 PM', '8 AM 到 9 PM', 'yesterday into today', 'today vs yesterday',
     // round 5: a mark by rule, not by list, beside a whole-unit reading
     '>yesterday', 'yesterday ≥', '≤ last 2 hours', 'yesterday »', '= 2026-09-26', 'yesterday ➜',
+    // round 6: a zone named in words or as an IANA name beside a calendar word or a zone-less date
+    'any backup failures yesterday London time?', 'errors yesterday, Singapore time',
+    'cpu spikes yesterday Sydney time', 'errors yesterday India time', 'errors yesterday server time',
+    'backups 2026-09-26 London time', 'errors yesterday Europe/London', 'errors yesterday in Asia/Kolkata',
+    'errors yesterday in Tokyo', 'errors yesterday Pacific time', 'errors yesterday IST',
+    'errors yesterday UTC', 'errors yesterday PT', 'backups 2026-09-26 in Asia/Tokyo',
+    // round 6: a look-back anchored to an event, not to now
+    'logs for the last 2 hours of the outage', 'logs for the last 30 minutes of the incident',
+    'show logs for the last 30 minutes of the job', 'errors in the last 15 minutes of the deploy',
+    'logs for the last 2 hours of the maintenance window', 'logs the past 24 hours preceding the outage',
+    'logs the last 2 hours before the outage', 'logs the last 2 hours after the deploy',
+    'logs the last 2 hours leading up to the outage', 'logs the last 2 hours prior to the restart',
+    // round 6: open ranges, negation, filters and comparisons
+    'logs yesterday post-deploy', 'logs yesterday pre-deploy', 'errors yesterday going forward',
+    'errors yesterday henceforth', 'logs excluding yesterday', 'logs except yesterday',
+    'logs excluding the last 2 hours', 'errors in the last 7 days on weekdays',
+    'last 7 days vs the previous 7 days', 'yesterday vs today', 'errors 2-4 yesterday',
+    // round 6: every calendar word, zone-less date and clock time is confirmed, never said
+    'errors today', 'errors tomorrow', 'errors on 10/09/26', '2026-09-26', 'from 8 AM to 9 AM yesterday',
+    '8 to 9 AM', '2026-09-26 08:00..08:40', '2026-10-01..2026-10-09', '2026-10-09T08:00 PST',
+    '2026-10-09T08:00', 'errors 8:40 AM – 9:30 PM', 'previous 7 days', 'last 30 seconds', 'last week',
   ] as const; // prettier-ignore
   for (const text of CITED) {
     it(`${JSON.stringify(text)} → confirmed or unreadable, never said`, () => {
@@ -368,6 +389,7 @@ describe('the leftover rule — a reading is the person’s only when nothing ti
         quote: '8:40 AM',
         parses: [{ wall: { h: 8, m: 40, meridiem: 'am' } }],
         leftover: ['til', '9.30'],
+        confirm: true,
       },
     ]);
     expect(read('Start: 8:40 AM\nEnd: 9.30').mentions[0]!.leftover).toEqual(['9.30']);
@@ -376,34 +398,38 @@ describe('the leftover rule — a reading is the person’s only when nothing ti
     expect(read('yesterday & today').mentions.map((m) => m.leftover)).toEqual([['&'], ['&']]);
   });
 
-  it('controls — a plain, exact phrase is the person’s words', () => {
-    const CONTROLS: readonly [string, string][] = [
-      ['from 8 AM to 9 AM yesterday', '8 AM to 9 AM yesterday'],
-      ['2026-09-26 08:00..08:40', '2026-09-26 08:00..08:40'],
-      ['2026-10-01..2026-10-09', '2026-10-01..2026-10-09'],
-      ['errors yesterday?', 'yesterday'],
-      ['Show client activity 10/09/26 8 AM to 8:40 AM PST', '10/09/26 8 AM to 8:40 AM PST'],
-      ['between yesterday and 9:30 PM', 'yesterday and 9:30 PM'],
-      ['Show client activity for the last 40 minutes', 'last 40 minutes'],
-      ['check-in errors yesterday', 'yesterday'],
-      ['I am checking yesterday’s errors, what failed?', 'yesterday'],
-      ['8 to 9 AM', '8 to 9 AM'],
-      ['Show client activity 8:40 AM – 9:30 PM', '8:40 AM – 9:30 PM'],
+  it('controls — a plain, exact phrase is read whole; only an allow-listed form is the person’s words', () => {
+    // [text, quote, said] — every one read whole (no leftover); `said` only on the allow-list.
+    const CONTROLS: readonly [string, string, boolean][] = [
+      ['from 8 AM to 9 AM yesterday', '8 AM to 9 AM yesterday', false],
+      ['2026-09-26 08:00..08:40', '2026-09-26 08:00..08:40', false],
+      ['2026-10-01..2026-10-09', '2026-10-01..2026-10-09', false],
+      ['errors yesterday?', 'yesterday', false],
+      ['Show client activity 10/09/26 8 AM to 8:40 AM PST', '10/09/26 8 AM to 8:40 AM PST', false],
+      ['between yesterday and 9:30 PM', 'yesterday and 9:30 PM', false],
+      ['check-in errors yesterday', 'yesterday', false],
+      ['I am checking yesterday’s errors, what failed?', 'yesterday', false],
+      ['8 to 9 AM', '8 to 9 AM', false],
+      ['Show client activity 8:40 AM – 9:30 PM', '8:40 AM – 9:30 PM', false],
+      ['Show client activity for the last 40 minutes', 'last 40 minutes', true],
+      ['errors in the past 24 hours', 'past 24 hours', true],
+      ['errors in the last hour', 'the last hour', true],
+      ['errors over the past week', 'the past week', true],
+      ['errors 2026-10-09T08:00-07:00', '2026-10-09T08:00-07:00', true],
+      ['errors 2026-10-09T08:00Z/2026-10-09T09:00Z', '2026-10-09T08:00Z/2026-10-09T09:00Z', true],
+      ['errors 2026-10-09T08:00 America/Los_Angeles', '2026-10-09T08:00 America/Los_Angeles', true],
     ];
-    for (const [text, quote] of CONTROLS) {
+    for (const [text, quote, said] of CONTROLS) {
       const mentions = read(text).mentions;
       expect(mentions, text).toHaveLength(1);
       expect(mentions[0], text).toMatchObject({ quote });
       expect(mentions[0]!.problem, text).toBeUndefined();
       expect(mentions[0]!.leftover, text).toBeUndefined();
-      // …and the record files it as said: window-complete, alone.
+      // …and the record files it as said only when its form is on the allow-list.
       expect(
         saidOf(text).map((r) => r.quote),
         text,
-      ).toEqual([quote]);
-    }
-    for (const text of ['last 2 hours', 'yesterday', '2026-09-26', 'errors on 10/09/26']) {
-      expect(saidOf(text), text).toHaveLength(1);
+      ).toEqual(said ? [quote] : []);
     }
   });
 
@@ -448,14 +474,18 @@ describe('the leftover rule — a reading is the person’s only when nothing ti
 
   it('more than one reading is confirmed, unless it was read as one range', () => {
     expect(rowsOf('start 8:40 AM, end 9:30 PM').map((r) => r.confirmNeeded)).toEqual([
-      { point: true, several: true },
-      { point: true, several: true },
+      { point: true, several: true, form: true },
+      { point: true, several: true, form: true },
     ]);
     expect(rowsOf('today vs yesterday').map((r) => r.confirmNeeded)).toEqual([
+      { several: true, form: true },
+      { several: true, form: true },
+    ]);
+    expect(rowsOf('last 2 hours vs the last hour').map((r) => r.confirmNeeded)).toEqual([
       { several: true },
       { several: true },
     ]);
-    expect(saidOf('8:40 AM to 9:30 PM')).toHaveLength(1);
+    expect(saidOf('2026-10-09T08:40Z to 2026-10-09T21:30Z')).toHaveLength(1);
   });
 
   it('a mark by rule: any symbol but sentence punctuation, quotes and brackets is left over', () => {
@@ -489,16 +519,92 @@ describe('the leftover rule — a reading is the person’s only when nothing ti
     }
   });
 
-  it('the known limit: a whole-day reading beside an unlisted open-range word is read as the day', () => {
-    // The scan does not list `henceforth`; the day is window-complete and alone, so it is said.
-    // Recorded, not hidden — the paid bench measures how often a person writes it.
-    expect(saidOf('errors yesterday henceforth').map((r) => r.quote)).toEqual(['yesterday']);
+  it('the allow-list: only a look-back from now and an explicit ISO instant or range are said', () => {
+    const SAID = [
+      'last 2 hours', 'errors in the last 40 minutes', 'past 3 days', 'cpu over the last 2 weeks',
+      'the last hour', 'errors in the past day', 'the past week', 'LAST 24 HOURS',
+      '2026-10-09T08:00-07:00', '2026-10-09T08:00:30+05:30', '2026-10-09T08:00Z',
+      '2026-10-09T08:00 UTC', '2026-10-09T08:00 America/Los_Angeles', '2026-10-09 08:00 (Europe/London)',
+      '2026-10-09T08:00Z/2026-10-09T09:00Z', '2026-10-09T08:00Z to 2026-10-09T09:00Z',
+      '2026-10-09T08:00-07:00..2026-10-09T09:00-07:00', '2026-09-26 08:00..08:40 UTC',
+    ] as const; // prettier-ignore
+    for (const text of SAID) {
+      expect(saidOf(text), text).toHaveLength(1);
+      expect(read(text).mentions[0]!.confirm, text).toBeUndefined();
+    }
+    // Read, but off the allow-list: `confirm` on the port, `form` on the row, offered with its zone.
+    const [row] = rowsOf('errors yesterday');
+    expect(row).toMatchObject({
+      quote: 'yesterday',
+      confirmNeeded: { form: true },
+      choice: { by: 'open', open: ['confirm'] },
+    });
+    expect(row!.candidates!.every((c) => c.said.length === 0)).toBe(true);
+    const ask = timeAskOf(row!, defaultTimeAskMessages);
+    expect(ask?.question).toBe('Is this the time you meant by “yesterday”?');
+    expect(ask?.field.enum).toEqual(['2026-10-08T00:00:00-07:00/2026-10-09T00:00:00-07:00']);
+    expect(ask?.field.labels?.[0]?.replace(/\s/g, ' ')).toBe(
+      'I read “yesterday” as Thu, Oct 8, 2026, PDT in America/Los_Angeles — is that right?',
+    );
+    // A span the list does not hold is not read at all.
+    for (const text of ['previous 7 days', 'last 30 seconds', 'last week', 'past hour']) {
+      expect(read(text).mentions[0]?.problem, text).toBe('unreadable');
+    }
+  });
+
+  it('property: a message whose time content is not an allow-listed form never yields said', () => {
+    const OFF_LIST = [
+      'yesterday', 'today', 'tomorrow', '8:40 AM', '20:40', '8 AM to 9 AM', 'yesterday 8:40 PM',
+      '10/09/26', '2026-09-26', '2026-10-09T08:00', '2026-10-09T08:00 PST', '2026-09-26 08:00..08:40',
+      'between yesterday and 9:30 PM', '8 to 9 AM', '10/09/26 8 AM to 8:40 AM PST', 'YESTERDAY',
+    ] as const; // prettier-ignore
+    const ON_LIST = ['last 2 hours', 'the past day', '2026-10-09T08:00Z'] as const;
+    const FILLER = [
+      'errors', 'logs', 'please', 'the', 'for', 'in', 'London', 'time', 'server', 'of', 'outage',
+      'Asia/Kolkata', 'Europe/London', 'deploy', 'vs', 'and', ',', '?', 'show', 'cpu', 'IST',
+    ] as const; // prettier-ignore
+    // An oracle written apart from the reader: what a said quote may look like.
+    const LOOKBACK =
+      /^(?:the\s+)?(?:last|past)\s+(?:\d+\s*(?:minutes?|mins?|hours?|hrs?|days?|weeks?)|hour|day|week)$/i;
+    const ISO_ZONED =
+      /^\d{4}-\d{2}-\d{2}[T ]\d{2}:\d{2}.*(?:Z|[+-]\d{2}:?\d{2}|UTC|[A-Z][a-z]+\/[A-Za-z_]+)\)?$/;
+    const r = prng(0xa110);
+    const wrong: string[] = [];
+    for (let i = 0; i < 3000; i++) {
+      const on = r() < 0.3;
+      const words: string[] = Array.from({ length: int(r, 0, 4) }, () => pick(r, FILLER));
+      words.splice(int(r, 0, words.length), 0, on ? pick(r, ON_LIST) : pick(r, OFF_LIST));
+      const text = words.join(' ');
+      const said = saidOf(text);
+      // An ISO time the generator happened to follow with an IANA name IS an allow-listed form.
+      const zoned = /\d{2}:\d{2}\s+(?:Asia|Europe)\//.test(text);
+      if (!on && !zoned && said.length > 0)
+        wrong.push(`${JSON.stringify(text)} said with no allow-listed form`);
+      for (const m of said) {
+        if (!LOOKBACK.test(m.quote) && !ISO_ZONED.test(m.quote)) {
+          wrong.push(`${JSON.stringify(text)} said ${JSON.stringify(m.quote)}`);
+        }
+      }
+    }
+    expect(wrong.slice(0, 20)).toEqual([]);
+  });
+
+  it('the known limit: a look-back beside an unlisted anchoring word is read as the look-back', () => {
+    // A calendar word always confirms now (it leans on the zone): the old limit is closed.
+    expect(saidOf('errors yesterday henceforth')).toEqual([]);
+    // What the scan still cannot see: a look-back from now beside an anchor word it does not
+    // list. Recorded, not hidden — the paid bench measures how often a person writes it.
+    expect(saidOf('logs last 2 hours surrounding the outage').map((r) => r.quote)).toEqual([
+      'last 2 hours',
+    ]);
   });
 
   it('a lone mark inside a word is no range; between two readings it is', () => {
-    expect(saidOf('check-in errors yesterday')).toHaveLength(1);
-    expect(saidOf('and/or yesterday')).toHaveLength(1);
+    expect(saidOf('check-in errors in the last 2 hours')).toHaveLength(1);
+    expect(saidOf('and/or last 2 hours')).toHaveLength(1);
+    expect(read('check-in errors yesterday').mentions[0]!.leftover).toBeUndefined();
     expect(saidOf('yesterday/today')).toEqual([]);
+    expect(saidOf('last 2 hours/last 3 hours')).toEqual([]);
   });
 
   // The generator's dimensions: a v1 phrase, a separator, an opener, a time-like tail.
@@ -567,7 +673,8 @@ describe('the leftover rule — a reading is the person’s only when nothing ti
     }
     expect(n).toBeGreaterThan(40_000);
     expect(wrong.slice(0, 20)).toEqual([]);
-  });
+    // ~80 000 readings: a coverage matrix, not a latency budget (that is `performance` below).
+  }, 30_000);
 
   it('every opener between the separator and the tail: said only when nothing is left', () => {
     const wrong: string[] = [];
@@ -651,6 +758,7 @@ describe('the field sentences — parts, then resolve, the policy and the ask', 
           rangeOf: [{ wall: { h: 8, meridiem: 'am' } }, { wall: { h: 8, m: 40, meridiem: 'am' } }],
         },
       ],
+      confirm: true,
     });
     const [row] = timeReadingRows({
       mentions: checkReading(FIELD, read(FIELD), reader.id),
@@ -726,7 +834,12 @@ describe('boundary', () => {
 
   it('`from … to` and `from <day>` still read; a number beside a time is confirmed (the leftover rule)', () => {
     expect(read('9 AM and 3 retries').mentions).toEqual([
-      { quote: '9 AM', parses: [{ wall: { h: 9, meridiem: 'am' } }], leftover: ['and', '3'] },
+      {
+        quote: '9 AM',
+        parses: [{ wall: { h: 9, meridiem: 'am' } }],
+        leftover: ['and', '3'],
+        confirm: true,
+      },
     ]);
     expect(read('from 8 AM to 9 AM').mentions[0]).toMatchObject({ quote: '8 AM to 9 AM' });
     expect(read('from 8 AM to 9 AM').mentions[0]!.problem).toBeUndefined();
@@ -736,6 +849,7 @@ describe('boundary', () => {
         quote: 'yesterday',
         parses: [{ relative: { unit: 'day', offset: -1 } }],
         leftover: ['from'],
+        confirm: true,
       },
     ]);
     expect(read('errors 500-503 yesterday').mentions).toEqual([
@@ -743,6 +857,7 @@ describe('boundary', () => {
         quote: 'yesterday',
         parses: [{ relative: { unit: 'day', offset: -1 } }],
         leftover: ['500', '-', '503'],
+        confirm: true,
       },
     ]);
   });
@@ -790,6 +905,7 @@ describe('boundary', () => {
       {},
       { point: false },
       { several: 1 },
+      { form: false },
     ]) {
       expect(timeRowIsWellFormed({ ...row, confirmNeeded } as never)).toBe(false);
     }
@@ -797,6 +913,8 @@ describe('boundary', () => {
       { point: true },
       { several: true },
       { leftover: ['til'], point: true },
+      { form: true },
+      { leftover: ['til'], point: true, several: true, form: true },
     ]) {
       expect(timeRowIsWellFormed({ ...row, confirmNeeded } as never)).toBe(true);
     }
