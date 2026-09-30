@@ -1309,7 +1309,23 @@ deterministic and are measured over retained recorded runs or unit tables, with 
   `open-reading` — so `ctx.time.asked` is absent on such a call; no new row kind, no new byte
   reference (every existing one unchanged). Three sentences registered: the served time sentence,
   the answered-window clause, and two expectations of an exhausted window field
-  (`WINDOW_FORM_EXPECTATION`, `WINDOW_ZONE_EXPECTATION`).
+  (`WINDOW_FORM_EXPECTATION`, `WINDOW_ZONE_EXPECTATION`). (6) **The clause rule** (third
+  review round). Two rounds of connector and opener lists each leaked the next spelling into a
+  PARTIAL reading (`til`, `→`, `~`, `up to`, `to approx. 9.30`, `to EOD`, `between yesterday and
+  1600`, `9.30 AM to 10:15`); a deny-list cannot win, so the reader is an allow rule
+  (`readers/english.ts` · `settleClauses`): a v1 phrase is read only when the rest of its clause
+  holds no other time-like token (any digit in any script, an hour or number word, a day, week
+  day or month word, a meridiem, a unit, a time-of-day word such as `now` or `EOD`); otherwise
+  the whole clause is ONE unreadable mention quoting it. A clause ends at `.` `!` `?` `;` `,` or a
+  newline only before the text's end or a capitalised non-time word — a first draft's "`, ` + a
+  non-time word" leaked `8:40 AM, to 9.30` and `yesterday, between 8 and 9`. The dangling-range
+  lists are gone; the grammar keeps ONE allow-list of the connectors it READS
+  (`RANGE_CONNECTOR`). **The trade-off, owner-approved:** a time beside an unrelated number or
+  time word is asked, not read (`9 AM and 3 retries`, `8 AM and 9 AM`, `which one failed
+  yesterday`) — an extra ask is honest, a partial reading recorded as said is not. Known gaps:
+  Roman numerals and time words outside the list (`till closing`) — a word to add, never a
+  connector. Pinned by `english-reader.test.ts` (every recheck row, and a generated matrix of
+  v1 phrase × separator × opener × time-like tail, reversed, with `between`, and seeded fillers).
 
 **Why this order.** T1 settles the grammar every other step leans on and is free. T2 is already
 written and only needs rebasing and the value check. T3 gives the first visible win (the limits

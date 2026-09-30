@@ -33,22 +33,25 @@
  * look-back cannot take (`last 3 months`), a look-ahead (`next 2 hours`), an
  * ordinal day (`the 9th`), `8 o'clock`, and any v1 phrase a modifier changes
  * (`since 8 AM`, `before yesterday`, `around 8:40`, `earlier today`,
- * `8 AM to now`, `past 8 PM`, `8 AM-ish`, `from 3 PM yesterday` with no `to`), a
- * range whose other side is no v1 time, and a meridiem the number contradicts
- * (`13:00 PM`). Such a phrase is ONE mention with `problem: 'unreadable'`,
- * quoting the whole phrase: reading `yesterday` out of `yesterday morning`
- * would silently widen what the person said, and reading `8:40 AM` out of
- * `8:40 AM till 9.30` would silently narrow it.
+ * `8 AM to now`, `past 8 PM`, `8 AM-ish`, `from 3 PM yesterday` with no `to`) and
+ * a meridiem the number contradicts (`13:00 PM`). Such a phrase is ONE mention
+ * with `problem: 'unreadable'`, quoting the whole phrase: reading `yesterday`
+ * out of `yesterday morning` would silently widen what the person said.
  *
- * The range rule is structural, not a list of spellings (`widenForDangling`):
- * a connector (`to`, `until`, `till`, `through`, `thru`, `-`, `–`, `—`, and
- * `and` after `between` or beside a clock time) next to a phrase says RANGE.
- * A far side that is a v1 time has already been joined; a connector still
- * left over whose far side BEGINS like a time — a digit-led token in any
- * spelling (`9`, `9.30`, `930`, `1600`, `9h`) or an hour in words (`nine`) —
- * makes the whole range unreadable, read to the end of its clause (`,` `;`
- * `.` `?` `!` or the text's end). A far side that does not begin like a time
- * leaves the connector as English (`yesterday to compare`).
+ * ## The clause rule — read whole or not at all
+ *
+ * ONE allow rule, no list of connectors (`settleClauses`): a v1 phrase is read
+ * only when the rest of its CLAUSE says nothing else time-like — no digit in
+ * any script, no hour or number word, no day, week day or month word, no
+ * meridiem, unit or time-of-day word (`TIME_LIKE`). Otherwise the whole
+ * clause is ONE unreadable mention quoting it, so `8:40 AM til 9.30`,
+ * `8:40 AM → EOD`, `between yesterday and 1600` or `9.30 AM to 10:15` never
+ * leave one side read alone. A clause ends at `.` `!` `?` `;` `,` or a
+ * newline followed by the text's end or a capitalised word that is not
+ * time-like (`CLAUSE_MARK`). The trade-off, owner-approved: a clause that
+ * mixes a time with an unrelated number (`9 AM and 3 retries`, `8 AM and
+ * 9 AM`) is asked, not read — an extra ask is honest; a partial reading
+ * recorded as said is not.
  *
  * A numeric date the tokens could split two ways stays ONE parse — `10/09/26`
  * is three numbers; which is the month is the policy's or the person's.
@@ -146,6 +149,17 @@ const NOT_READ: readonly RegExp[] = [
   /(?<![\w:.+/])\d{1,2}(?::\d{2}){0,2}\s?(?:am|pm|a\.m\.|p\.m\.)(?![a-z])/gi,
 ];
 
+// ─── The range grammar (one owner) ──────────────────────────────────────
+//
+// The connectors a v1 range is READ with — an allow-list, the grammar's own:
+// the joins (`joins`), the bare hour's lookahead (`BARE_HOUR`) and `… to now`
+// (`MODIFIER_AFTER`) all build from it. It never decides what is NOT read:
+// that is the clause rule below, which needs no connector at all.
+
+const RANGE_WORDS = 'to|until|till|through|thru';
+/** A range connector the grammar reads: a word, or a hyphen, en dash or em dash. */
+const RANGE_CONNECTOR = `(?:(?:${RANGE_WORDS})(?![a-z])|[–—-])`;
+
 /** A word right before a phrase that changes what it means: the phrase is not read. */
 const MODIFIER_BEFORE = new RegExp(
   '(?:^|[^\\w])(since|before|after|by|around|circa|approx(?:imately)?|until|till|earlier|later|' +
@@ -156,62 +170,57 @@ const MODIFIER_BEFORE = new RegExp(
 /** `from` with no `to`: a time after it is where a window STARTS (`from 3 PM yesterday`), not an hour. */
 const FROM_BEFORE = /(?:^|[^\w])(from)\s*$/i;
 /** …and right after it. */
-const MODIFIER_AFTER =
-  /^(?:\s*-?\s*ish\b|\s*(?:ago\b|onwards?\b|or\s+so\b|(?:or|and)\s+(?:later|earlier|after|before)\b|at\s+the\s+(?:latest|earliest)\b|(?:to|until|till|through|thru|-|–|—)\s*now\b))/i;
-
-// ─── A range left dangling ───────────────────────────────────────────────
-//
-// ONE structural rule: a range connector next to a phrase says RANGE. When
-// the far side is a time (`8:40 AM to 9 AM`) the grouping has already joined
-// it; when a connector is still left over, its far side is no v1 time, and
-// the whole range is one unreadable phrase — never the v1 side alone. The
-// far side is recognised by how a time BEGINS (a numeral in any spelling, or
-// an hour in words), never by what it must look like after that, so no
-// spelling the reader does not know can slip past: `9`, `9.30`, `930`,
-// `1600`, `9h`, `nine`, `half past nine` all count.
-
-/** An hour said in words — how a spelled-out range side begins. */
-const HOUR_WORDS =
-  'zero|oh|one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve|thirteen|fourteen|' +
-  'fifteen|sixteen|seventeen|eighteen|nineteen|twenty|thirty|forty|fifty|noon|midday|midnight|' +
-  'half|quarter';
-/**
- * How a range side begins: a token that starts with a digit, whatever runs
- * on after it (`9`, `9.30`, `930`, `9:30:00`, `9h`, `21h30`) — it never ends
- * on a sentence's `.` — or an hour in words.
- */
-const SIDE_START = `(?:\\d(?:[\\w:.]{0,24}\\w)?|(?:${HOUR_WORDS})(?![a-z]))`;
-
-/** At a phrase's end: the connector, then words a side may open with (`to about 9`, `till the 9th`). */
-const CONNECTOR_AT = /\s*(?:(to|until|till|through|thru|and)(?![a-z])|[-–—])\s*/iy;
-const SIDE_OPENER =
-  /(?:(?:at|about|around|approx(?:imately)?|roughly|circa|nearly|almost|maybe|say|the)(?![a-z])\s*|~\s*)*/iy;
-const SIDE_AT = new RegExp(SIDE_START, 'iy');
-/**
- * Without `between`, `and` joins two things as often as two ends (`9 AM and
- * 3 retries`): it says "range" only when what follows the far side's number
- * is the clause's end or a time word (`8:30 and 9`, `8:30 and 9 yesterday`).
- */
-const TIME_WORDS =
-  'am|pm|a\\.m\\.|p\\.m\\.|today|yesterday|tomorrow|tonight|morning|afternoon|evening|night|noon|' +
-  `midnight|o['’]?\\s?clock|utc|gmt|${IANA_AREAS}|${ZONE_ABBREVIATIONS.join('|')}`;
-const AND_CLOSES = new RegExp(
-  `\\s*(?:$|[;,\\n)]|[.!?:](?=\\s|$)|(?:${TIME_WORDS})(?![a-z]))`,
-  'iy',
-);
-/**
- * Before a phrase: `8 to 9:30`, `1600-17:00`, `nine thirty till 14:00`,
- * `half past nine to 14:00`, `between 8 and 9:30` — the side is the whole run
- * of time words before the connector, so the quote never starts inside it.
- */
-const SIDE_RUN = `(?:(?:${SIDE_START}|past)\\s+)*${SIDE_START}`;
-const DANGLING_BEFORE = new RegExp(
-  `(?:\\bbetween\\s+)?(?<![\\w:./])${SIDE_RUN}` +
-    '\\s*(?:(?:to|until|till|through|thru)(?![a-z])\\s*|[-–—]\\s*|\\s(and)\\s+)$',
+const MODIFIER_AFTER = new RegExp(
+  '^(?:\\s*-?\\s*ish\\b|\\s*(?:ago\\b|onwards?\\b|or\\s+so\\b|(?:or|and)\\s+(?:later|earlier|after|before)\\b|' +
+    `at\\s+the\\s+(?:latest|earliest)\\b|${RANGE_CONNECTOR}\\s*now\\b))`,
   'i',
 );
-/** Where a clause ends: the far side of a dangling range reaches that far (`a.m.` is no end). */
-const CLAUSE_END = /[;,\n)]|(?<![ap]\.m)[.!?:](?=\s|$)/gi;
+
+// ─── The clause rule ─────────────────────────────────────────────────────
+//
+// ONE rule, an allow rule: a v1 phrase is read only when the rest of its
+// clause says nothing else time-like. A clause with a second time-like token —
+// a digit in any script, an hour or number word, a day, week day or month
+// word, a meridiem, a unit, a time-of-day word — is read WHOLE (one v1 phrase
+// covering all of it) or not at all: ONE unreadable mention quoting the
+// clause. So no spelling of a range's far side, connector or opener the
+// reader does not know (`til`, `→`, `~`, `up to`, `to approx. 9.30`, `to EOD`)
+// can leave a partial reading behind. The price, owner-approved: a clause that
+// mixes a time with an unrelated number (`9 AM and 3 retries`, `the 5 slowest
+// calls yesterday`) is asked, not read — an extra ask is honest; a partial
+// reading recorded as said is not.
+
+/** An hour or a number said in words (and its `-ish`) — `one` too: `which one` is asked, never guessed. */
+const HOUR_WORDS =
+  'zero|one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve|thirteen|fourteen|fifteen|' +
+  'sixteen|seventeen|eighteen|nineteen|twenty|thirty|forty|fifty|noon|midday|midnight|half|quarter';
+const DAY_TOKENS = 'today|yesterday|tomorrow|tonight|tmrw|tmr|tmw|yday|yest|days?|weekends?';
+const WEEKDAY_TOKENS = '(?:mon|tues|wednes|thurs|fri|satur|sun)days?|mon|tues?|thu(?:rs?)?|fri';
+const MONTH_TOKENS =
+  'january|february|july|september|october|november|december|jan|feb|apr|jun|jul|aug|sept?|oct|nov|dec';
+const UNIT_TOKENS =
+  'seconds?|secs|minutes?|mins|hours?|hrs|weeks?|fortnights?|months?|years?|decades?|quarters?';
+const DAYTIME_TOKENS =
+  'now|present|eod|eob|cob|eow|eom|lunch(?:time)?|breakfast|brunch|dinner|supper|sunrise|sunset|' +
+  'sundown|sunup|daybreak|nightfall|dawn|dusk|mornings?|afternoons?|evenings?|nights?|overnight|pm';
+/** Case-insensitive: every token above, `-ish` allowed, and the spellings no word boundary ends. */
+const TIME_LIKE = new RegExp(
+  '\\p{Nd}|\\b(?:' +
+    [HOUR_WORDS, DAY_TOKENS, WEEKDAY_TOKENS, MONTH_TOKENS, UNIT_TOKENS, DAYTIME_TOKENS].join('|') +
+    ")(?:-?ish)?\\b|\\b[ap]\\.m\\b|\\bo['’]?\\s?clock\\b|\\b(?:end|close|start)\\s+of\\s+(?:the\\s+)?(?:business|play|shift)\\b",
+  'giu',
+);
+/** Case-sensitive: words that are time only capitalised (`May`, `AM`) — `may` and `am` are English. */
+const TIME_LIKE_CASED = /\b(?:AM|March|April|May|June|August|Mar|Wed|Sat|Sun)\b/gu;
+/**
+ * A clause ends at `.` `!` `?` `;` `,` or a newline — only when what follows
+ * is the text's end or a CAPITALISED word that is not time-like (`… for
+ * checkout. Thanks`) — the whole token is asked, so `. T09:30` is no end. A
+ * lower-case word after the mark continues the clause:
+ * `8:40 AM, to 9.30`, `yesterday, between 8 and 9` and `8 a.m. to 9` are one
+ * clause each.
+ */
+const CLAUSE_MARK = /[.!?;,\n](?=\s*(?:$|(\p{Lu}\S*)))/gu;
 
 // ─── The v1 phrases ──────────────────────────────────────────────────────
 
@@ -254,7 +263,7 @@ const WALL_COLON = new RegExp(
 );
 /** A bare hour — a time only as a range's first side whose second side carries a meridiem. */
 const BARE_HOUR = new RegExp(
-  `${NOT_AFTER}(\\d{1,2})(?=\\s*(?:to|until|till|through|thru|and|-|–|—)\\s*` +
+  `${NOT_AFTER}(\\d{1,2})(?=\\s*(?:${RANGE_CONNECTOR}|and)\\s*` +
     '\\d{1,2}(?::\\d{2})?\\s?(?:am|pm|a\\.m\\.|p\\.m\\.)(?![a-z]))',
   'gi',
 );
@@ -439,7 +448,8 @@ function notReadSpans(text: string, atoms: readonly Atom[]): Span[] {
 
 // ─── Mentions ────────────────────────────────────────────────────────────
 
-const CONNECTOR = /^(?:to|until|till|through|thru|-|–|—)$/i;
+/** A gap token that is one of the grammar's range connectors. */
+const CONNECTOR = new RegExp(`^${RANGE_CONNECTOR}$`, 'i');
 const GLUE = /^(?:,|at|on|in|of|the|@|from|between)$/i;
 
 /** The words and marks between two phrases. */
@@ -522,95 +532,108 @@ function groupsOf(text: string, atoms: readonly Atom[], notRead: readonly Span[]
       unreadable: item.atom === undefined,
     });
   }
-  const ends = clauseEndsOf(text);
-  const atomStarts = new Set(atoms.map((a) => a.start));
-  for (const group of groups) widenForDangling(text, group, ends, atomStarts);
   for (const group of groups) widenForModifiers(text, group);
-  return mergeOverlaps(groups).filter(
+  const kept = mergeOverlaps(groups).filter(
     (g) => g.unreadable || g.items.some((i) => i.atom?.kind !== 'bare'),
   );
-}
-
-const DANGLING_REACH = 64;
-
-/** A range connector left dangling beside a phrase: the whole range is one unreadable phrase. */
-function widenForDangling(
-  text: string,
-  group: Group,
-  ends: ClauseEnds,
-  atomStarts: ReadonlySet<number>,
-): void {
-  // A dangling first side is a few characters long: look only that far, so a long text stays linear.
-  const from = Math.max(0, group.start - DANGLING_REACH);
-  const head = text.slice(from, group.start);
-  const clock = group.items.some((i) => i.atom?.wall !== undefined);
-  const between = /\bbetween\s+$/i.exec(head);
-  const before = DANGLING_BEFORE.exec(head);
-  if (before !== null && (before[1] === undefined || clock)) {
-    group.start = from + before.index;
-    group.unreadable = true;
-  }
-  const farSide = danglingFarSide(text, group.end, clock, between !== null, atomStarts);
-  if (farSide === undefined) return;
-  // The far side is no v1 time: the range is read to its clause's end, all of it.
-  group.end = Math.max(group.end, ends.after(farSide));
-  if (between !== null) group.start = Math.min(group.start, from + between.index);
-  group.unreadable = true;
+  return settleClauses(text, kept);
 }
 
 /**
- * The rule, in three steps over the text after a phrase: a connector (else
- * no range), then a side that begins like a time (else the connector was
- * English, not a range: `yesterday to compare`), then — for `and` without
- * `between` only — whether it is a range at all or a list (`8 AM and 9 AM`,
- * `9 AM and 3 retries`). Returns where the far side's first token ends.
+ * The clause rule: a clause holding ONE group and nothing else time-like
+ * keeps it (read, or unreadable as that phrase); any other clause holding a
+ * group is ONE unreadable mention quoting the clause — never a partial reading,
+ * and never a quote that leaves out part of what the ask must show.
  */
-function danglingFarSide(
-  text: string,
-  at: number,
-  clock: boolean,
-  between: boolean,
-  atomStarts: ReadonlySet<number>,
-): number | undefined {
-  CONNECTOR_AT.lastIndex = at;
-  const connector = CONNECTOR_AT.exec(text);
-  if (connector === null) return undefined;
-  const and = connector[1]?.toLowerCase() === 'and';
-  if (and && !clock) return undefined;
-  SIDE_OPENER.lastIndex = CONNECTOR_AT.lastIndex;
-  SIDE_OPENER.exec(text);
-  const sideAt = SIDE_OPENER.lastIndex;
-  SIDE_AT.lastIndex = sideAt;
-  if (SIDE_AT.exec(text) === null) return undefined;
-  if (and && !between) {
-    if (atomStarts.has(sideAt)) return undefined;
-    AND_CLOSES.lastIndex = SIDE_AT.lastIndex;
-    if (AND_CLOSES.exec(text) === null) return undefined;
-  }
-  return SIDE_AT.lastIndex;
-}
-
-/** The text's clause ends, found once — each dangling range asks where its clause ends. */
-interface ClauseEnds {
-  after(at: number): number;
-}
-
-function clauseEndsOf(text: string): ClauseEnds {
-  const ends = [...text.matchAll(CLAUSE_END)].map((m) => m.index);
-  return {
-    after(at: number): number {
-      let lo = 0;
-      let hi = ends.length;
-      while (lo < hi) {
-        const mid = (lo + hi) >> 1;
-        if ((ends[mid] as number) < at) lo = mid + 1;
-        else hi = mid;
-      }
-      let end = ends[lo] ?? text.length;
-      while (end > at && /\s/.test(text[end - 1] as string)) end--;
-      return end;
-    },
+function settleClauses(text: string, groups: readonly Group[]): Group[] {
+  const marks = clauseMarksOf(text);
+  const out: Group[] = [];
+  let unit: { start: number; end: number; groups: Group[] } | undefined;
+  const flush = (): void => {
+    if (unit === undefined) return;
+    const [only] = unit.groups;
+    if (unit.groups.length === 1 && only !== undefined && !timeLikeBeside(text, unit, only)) {
+      out.push(only);
+      return;
+    }
+    out.push({
+      start: unit.start,
+      end: unit.end,
+      items: unit.groups.flatMap((g) => g.items),
+      unreadable: true,
+    });
   };
+  for (const group of groups) {
+    const start = clauseStart(text, marks, group.start);
+    const end = clauseEnd(text, marks, group.end);
+    if (unit !== undefined && start < unit.end) {
+      unit.groups.push(group);
+      unit.end = Math.max(unit.end, end);
+      continue;
+    }
+    flush();
+    unit = { start, end, groups: [group] };
+  }
+  flush();
+  return out;
+}
+
+/** Whether the clause says anything time-like outside the group's own span. */
+function timeLikeBeside(text: string, clause: Span, group: Span): boolean {
+  const body = text.slice(clause.start, clause.end);
+  for (const re of [TIME_LIKE, TIME_LIKE_CASED]) {
+    for (const m of matches(re, body)) {
+      const at = clause.start + m.index;
+      if (at < group.start || at + m[0].length > group.end) return true;
+    }
+  }
+  return false;
+}
+
+/** Where each clause mark stands — only the marks that end a clause (`CLAUSE_MARK`). */
+function clauseMarksOf(text: string): number[] {
+  const out: number[] = [];
+  for (const m of matches(CLAUSE_MARK, text)) {
+    const word = m[1];
+    if (word !== undefined && isTimeLike(word)) continue;
+    out.push(m.index);
+  }
+  return out;
+}
+
+function isTimeLike(word: string): boolean {
+  for (const re of [TIME_LIKE, TIME_LIKE_CASED]) {
+    re.lastIndex = 0;
+    if (re.test(word)) return true;
+  }
+  return false;
+}
+
+/** The index of the first mark at or after `at` (binary search over sorted marks). */
+function firstMarkFrom(marks: readonly number[], at: number): number {
+  let lo = 0;
+  let hi = marks.length;
+  while (lo < hi) {
+    const mid = (lo + hi) >> 1;
+    if ((marks[mid] as number) < at) lo = mid + 1;
+    else hi = mid;
+  }
+  return lo;
+}
+
+/** The clause's first non-space character before a phrase starting at `at`. */
+function clauseStart(text: string, marks: readonly number[], at: number): number {
+  const i = firstMarkFrom(marks, at) - 1;
+  let start = i >= 0 ? (marks[i] as number) + 1 : 0;
+  while (start < at && /\s/.test(text[start] as string)) start++;
+  return start;
+}
+
+/** Where the clause ends after a phrase ending at `at` — trailing space left out. */
+function clauseEnd(text: string, marks: readonly number[], at: number): number {
+  let end = marks[firstMarkFrom(marks, at)] ?? text.length;
+  while (end > at && /\s/.test(text[end - 1] as string)) end--;
+  return end;
 }
 
 /** Groups a widening made overlap are one phrase (`8 and 9 AM` held the bare `8` on its own). */

@@ -349,12 +349,13 @@ describe('phrases v1 does not read — one unreadable row, no window ask', () =>
 });
 
 describe('a range the reader reads only half of — never a silent narrower window', () => {
+  // The clause rule: the quote is the whole clause — here, the whole message.
   for (const [message, quote] of [
-    ['Show client activity yesterday 8:40 PM to 9', 'yesterday 8:40 PM to 9'],
-    ['Show client activity yesterday 14:00 to 16', 'yesterday 14:00 to 16'],
-    ['Show client activity yesterday 8:40 PM till 9.30', 'yesterday 8:40 PM till 9.30'],
-    ['Show client activity yesterday 14:00 to 1600', 'yesterday 14:00 to 1600'],
-  ] as const) {
+    'Show client activity yesterday 8:40 PM to 9',
+    'Show client activity yesterday 14:00 to 16',
+    'Show client activity yesterday 8:40 PM till 9.30',
+    'Show client activity yesterday 14:00 to 1600',
+  ].map((m) => [m, m] as const)) {
     it(`"${quote}" → one unreadable row; the tool never runs on a one-minute window`, async () => {
       const seen: Record<string, unknown>[] = [];
       const { agent, requests } = build(
