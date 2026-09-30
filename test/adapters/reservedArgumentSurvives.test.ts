@@ -696,15 +696,14 @@ describe('the served schema and the list of wires', () => {
       .filter((f) => /\.\.\.\s*schema\.inputSchema\b/.test(readFileSync(join(dir, f), 'utf8')))
       .sort();
     expect(sites).toStrictEqual([
-      'AnthropicProvider.ts',
       'BedrockProvider.ts',
       'BrowserOpenAIProvider.ts',
       'FoundryLocalProvider.ts',
       'GeminiProvider.ts',
       'OllamaProvider.ts',
       'OpenAIProvider.ts',
-      // The Anthropic Messages body shared by browserAnthropic and
-      // invokeModelGateway — both drive it above.
+      // The Anthropic Messages body shared by anthropic, browserAnthropic and
+      // invokeModelGateway — all three drive it above.
       'anthropicMessagesWire.ts',
     ]);
   });

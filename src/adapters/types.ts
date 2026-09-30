@@ -475,7 +475,16 @@ export type ResilienceReport =
       readonly maxAttempts: number;
       /** Message of the error that caused this retry. */
       readonly lastError: string;
+      /** How long the decorator waits before the attempt — the stated wait when one won. */
       readonly backoffMs: number;
+      /**
+       * The wait the failure itself STATED (a `Retry-After` header, a
+       * gateway's "try again in N seconds"), in ms, as the adapter declared
+       * it on `retryAfterMs`. Absent when it stated none. `backoffMs` is
+       * max(the schedule, this), capped by the policy's `maxDelayMs` — so a
+       * reader sees both what was asked and what was done.
+       */
+      readonly statedWaitMs?: number;
       /**
        * Classification OF THE ERROR — **not** of the predicate's
        * reasoning. `shouldRetry` returns a bare boolean, so when a custom

@@ -39,6 +39,7 @@ import type {
 } from '../types.js';
 import { lazyRequire } from '../../lib/lazyRequire.js';
 import { asContextWindowExceeded } from './contextWindow.js';
+import { retryAfterMsFromError } from './retryAfter.js';
 
 // ─── Bedrock Converse SDK shape (duck-typed) ───────────────────────
 
@@ -448,10 +449,11 @@ function toBedrockMessages(messages: readonly LLMMessage[]): BedrockMessage[] {
           });
         }
       }
-      result.push({
-        role: 'assistant',
-        content: blocks.length > 0 ? blocks : [{ text: '' }],
-      });
+      // An assistant turn with no text and no tool calls carries nothing, and
+      // Converse refuses a blank text block — drop it, the same rule the
+      // Anthropic wire keeps (`anthropicMessagesWire.ts` · `toAnthropicMessages`).
+      if (blocks.length === 0) continue;
+      result.push({ role: 'assistant', content: blocks });
       continue;
     }
     if (m.role === 'tool') {
@@ -606,12 +608,16 @@ function wrapError(err: unknown): Error {
   const tooBig = asContextWindowExceeded(err, { provider: 'bedrock' });
   if (tooBig) return tooBig;
   if (err instanceof Error) {
+    // A Retry-After on the raw response (`$response.headers`), declared for
+    // withRetry — absent when none, so the error shape is unchanged.
+    const retryAfterMs = retryAfterMsFromError(err);
     return Object.assign(new Error(`[bedrock] ${err.message}`), {
       name: 'BedrockProviderError',
       cause: err,
       status:
         (err as { $metadata?: { httpStatusCode?: number } }).$metadata?.httpStatusCode ??
         (err as { status?: number }).status,
+      ...(retryAfterMs !== undefined && { retryAfterMs }),
     });
   }
   return new Error(`[bedrock] ${String(err)}`);

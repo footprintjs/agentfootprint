@@ -46,6 +46,42 @@ adds only its framing (URL, headers, `model` field or path, SSE line format) and
 decides what a malformed streamed tool argument becomes — `browserAnthropic` keeps
 `{}`, `invokeModelGateway` refuses. Pinned byte for byte by
 `test/adapters/unit/BrowserAnthropic.sharedWire.byte-identity.test.ts`.
+`anthropic()` (the SDK adapter) builds its messages through the same
+`toAnthropicMessages` — it once kept a private copy, and a fix to one missed the
+other.
+
+## An empty assistant turn never reaches the wire
+`anthropicMessagesWire.ts` · `toAnthropicMessages` DROPS an assistant turn with
+no thinking, no text and no tool calls (index map `-1`, like a system message).
+The API accepts empty content only on a final prefill; mid-history it is a 400
+that no retry can mend. The library sends no prefill. The neighbours may now
+share a role — the API combines consecutive same-role turns.
+
+```ts
+toAnthropicMessages([
+  { role: 'user', content: 'hi' },
+  { role: 'assistant', content: '' }, // dropped
+  { role: 'user', content: 'still there?' },
+]); // → two user turns, no `content: ''`
+```
+
+## The adapter declares the stated wait; resilience never parses
+A throttled response states how long to wait. The adapter that can see it puts
+it on its error as `retryAfterMs` — `retryAfter.ts` · `retryAfterMsFromError`
+reads `retry-after-ms` / `Retry-After` for `anthropic()`, `openai()` and
+`bedrock()`; `invokeModelGateway()` also reads its gateway's "Try again in N
+seconds" body. `withRetry` waits at least that long (resilience/README.md).
+
+## `invokeModelGateway({ timeoutMs })` — a deadline per wait
+Bounds the response headers, a `complete()` body, and EACH stream read (first
+chunk, then every gap — a stream that keeps talking is never cut off). A miss
+aborts the request and raises `reason: 'timeout'`, `retryable: true`; the
+caller's `req.signal` still wins. Omitted: the fetch gets exactly `req.signal`,
+as before.
+
+```ts
+invokeModelGateway({ baseUrl, apiKeyHeader: 'api-key', apiKey, model, timeoutMs: 30_000 });
+```
 
 ## Files
 - `AnthropicProvider.ts`, `OpenAIProvider.ts`, `BedrockProvider.ts`,
@@ -56,7 +92,10 @@ decides what a malformed streamed tool argument becomes — `browserAnthropic` k
 - `InvokeModelGatewayProvider.ts` — Anthropic models behind a gateway that
   forwards the Bedrock InvokeModel operation with an API-key header (fetch, no SDK).
 - `anthropicMessagesWire.ts` — the Anthropic Messages body, response mapping and
-  stream assembly, shared by the two fetch adapters above.
+  stream assembly, shared by the two fetch adapters above (and the message
+  mapping by `anthropic()`).
+- `retryAfter.ts` — the one reader of `retry-after-ms` / `Retry-After`, for the
+  `retryAfterMs` an adapter declares.
 - `contextWindow.ts` — `ContextWindowExceededError`: the budget refusal, named.
 - `anthropicCacheWire.ts`, `azureUrl.ts`, `googleGenAI.ts`, `createProvider.ts`,
   `wireManifest.ts` — shared client/URL/cache helpers and the read-back of what

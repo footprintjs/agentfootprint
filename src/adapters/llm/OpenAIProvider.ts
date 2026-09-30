@@ -31,6 +31,7 @@ import type {
 } from '../types.js';
 import { lazyRequire } from '../../lib/lazyRequire.js';
 import { asContextWindowExceeded } from './contextWindow.js';
+import { retryAfterMsFromError } from './retryAfter.js';
 import { azureBaseUrl } from './azureUrl.js';
 import { AZURE_AI_SCOPE, AZURE_COGNITIVE_SERVICES_SCOPE } from '../identity/azure.js';
 import type { AccessTokenLike, TokenCredentialLike } from '../identity/azure.js';
@@ -1080,10 +1081,14 @@ function wrapError(err: unknown): Error {
   const tooBig = asContextWindowExceeded(err, { provider: 'openai' });
   if (tooBig) return tooBig;
   if (err instanceof Error) {
+    // The wait the response stated (retry-after-ms / retry-after), declared
+    // for withRetry — absent when none, so the error shape is unchanged.
+    const retryAfterMs = retryAfterMsFromError(err);
     return Object.assign(new Error(`[openai] ${err.message}`), {
       name: 'OpenAIProviderError',
       cause: err,
       status: (err as { status?: number }).status,
+      ...(retryAfterMs !== undefined && { retryAfterMs }),
     });
   }
   return new Error(`[openai] ${String(err)}`);

@@ -20,17 +20,19 @@
 import type {
   LLMCallHooks,
   LLMChunk,
-  LLMMessage,
   LLMProvider,
   LLMRequest,
   LLMResponse,
-  LLMToolSchema,
   WireRole,
 } from '../types.js';
 import { lazyRequire } from '../../lib/lazyRequire.js';
 import { asContextWindowExceeded } from './contextWindow.js';
+import { retryAfterMsFromError } from './retryAfter.js';
 import { applyCacheMarkers, readCacheUsage } from './anthropicCacheWire.js';
 import { toolManifestOf } from './wireManifest.js';
+// The message and tool mapping has ONE owner, shared with browserAnthropic()
+// and invokeModelGateway() — a private copy here once drifted from it.
+import { toAnthropicMessages, toAnthropicTool } from './anthropicMessagesWire.js';
 
 // ─── Anthropic SDK shape (duck-typed; no hard import) ──────────────
 
@@ -369,117 +371,6 @@ function buildParams(
   return params;
 }
 
-/**
- * Convert messages to Anthropic message params.
- *
- * Key transforms:
- *   • `role: 'system'` → extracted by the caller (we filter it out
- *     here since systemPrompt is a separate API field).
- *   • `role: 'assistant'` with `toolCalls` → text + tool_use blocks.
- *   • `role: 'tool'` → coalesced into a `user` message with
- *     tool_result blocks (Anthropic's expected shape). Consecutive
- *     tool messages merge into one user turn.
- *
- * `indexMap` (optional) records where each request message landed in the
- * result — `-1` for one that did not survive — so a messages cache marker
- * can be translated between the two index spaces. Mirrors
- * BrowserAnthropicProvider; see anthropicCacheWire.MessageIndexMap.
- */
-function toAnthropicMessages(
-  messages: readonly LLMMessage[],
-  indexMap?: number[],
-): AnthropicMessageParam[] {
-  const result: AnthropicMessageParam[] = [];
-  for (const m of messages) {
-    if (m.role === 'system') {
-      indexMap?.push(-1); // System lives outside message array.
-      continue;
-    }
-    if (m.role === 'user') {
-      indexMap?.push(result.length);
-      result.push({ role: 'user', content: m.content });
-      continue;
-    }
-    if (m.role === 'assistant') {
-      const blocks: AnthropicContentBlock[] = [];
-      // v2.14 — thinking blocks come FIRST per Anthropic's wire format
-      // ordering rule. Anthropic validates server-side that signed
-      // blocks appear before text + tool_use; out-of-order = HTTP 400.
-      // Signature passes through BYTE-EXACT — no String() coercion,
-      // no JSON-roundtrip, no trim. Matches the Phase 4a normalization
-      // invariant (the signature on `LLMMessage.thinkingBlocks` is the
-      // exact value Anthropic emitted on the prior turn).
-      if (m.thinkingBlocks && m.thinkingBlocks.length > 0) {
-        for (const tb of m.thinkingBlocks) {
-          if (tb.type === 'redacted_thinking') {
-            blocks.push({
-              type: 'redacted_thinking',
-              ...(tb.signature !== undefined && { signature: tb.signature }),
-            });
-          } else {
-            blocks.push({
-              type: 'thinking',
-              thinking: tb.content,
-              ...(tb.signature !== undefined && { signature: tb.signature }),
-            });
-          }
-        }
-      }
-      if (m.content) blocks.push({ type: 'text', text: m.content });
-      if (m.toolCalls) {
-        for (const tc of m.toolCalls) {
-          blocks.push({
-            type: 'tool_use',
-            id: tc.id,
-            name: tc.name,
-            input: { ...tc.args },
-          });
-        }
-      }
-      // v2.14 — when thinkingBlocks present, content MUST be the array
-      // (otherwise the signed blocks aren't sent). Without thinking,
-      // preserve the original `m.content || ''` fallback for empty
-      // assistant turns.
-      const hasThinking = m.thinkingBlocks !== undefined && m.thinkingBlocks.length > 0;
-      indexMap?.push(result.length);
-      result.push({
-        role: 'assistant',
-        content: blocks.length > 0 ? blocks : hasThinking ? blocks : m.content || '',
-      });
-      continue;
-    }
-    if (m.role === 'tool') {
-      const block: AnthropicContentBlock = {
-        type: 'tool_result',
-        tool_use_id: m.toolCallId ?? '',
-        content: m.content,
-      };
-      // Merge into preceding user turn when contiguous (Anthropic expects
-      // multiple tool_results in one user message after a multi-tool turn).
-      const last = result[result.length - 1];
-      if (last && last.role === 'user' && Array.isArray(last.content)) {
-        // Coalesced into the user turn already open — several request
-        // messages share one body index.
-        indexMap?.push(result.length - 1);
-        last.content.push(block);
-      } else {
-        indexMap?.push(result.length);
-        result.push({ role: 'user', content: [block] });
-      }
-      continue;
-    }
-  }
-  return result;
-}
-
-function toAnthropicTool(schema: LLMToolSchema): AnthropicTool {
-  return {
-    name: schema.name,
-    description: schema.description,
-    input_schema: { ...schema.inputSchema },
-  };
-}
-
 function fromAnthropicResponse(message: AnthropicMessage): LLMResponse {
   const textParts: string[] = [];
   const toolCalls: { id: string; name: string; args: Record<string, unknown> }[] = [];
@@ -543,11 +434,15 @@ function wrapError(err: unknown): Error {
   const tooBig = asContextWindowExceeded(err, { provider: 'anthropic' });
   if (tooBig) return tooBig;
   if (err instanceof Error) {
+    // The wait the response stated (retry-after-ms / retry-after), declared
+    // for withRetry — absent when none, so the error shape is unchanged.
+    const retryAfterMs = retryAfterMsFromError(err);
     return Object.assign(new Error(`[anthropic] ${err.message}`), {
       name: 'AnthropicProviderError',
       cause: err,
       // Preserve `status` if the SDK attached one — withRetry uses it.
       status: (err as { status?: number }).status,
+      ...(retryAfterMs !== undefined && { retryAfterMs }),
     });
   }
   return new Error(`[anthropic] ${String(err)}`);

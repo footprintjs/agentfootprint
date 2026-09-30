@@ -22,6 +22,7 @@ The options object is typed `InvokeModelGatewayOptions`:
 | `defaultMaxTokens` | `max_tokens` when the request sets none. Default 4096. |
 | `parallelToolCalls` | `false` limits the model to one tool per reply. |
 | `fetch` | An `InvokeModelGatewayFetch` to use instead of the global `fetch`: an mTLS agent, a proxy, or a test double. |
+| `timeoutMs` | A deadline per request, in ms. Omitted: no deadline. See **Deadline** below. |
 
 ## A key per model
 
@@ -31,6 +32,8 @@ Gateways often scope a key to some models, and asking with the wrong one gets a 
 
 The body is Anthropic's Messages API, with `anthropic_version: "bedrock-2023-05-31"` and **no** `model` field (the model is in the path). The system prompt rides the top-level `system` field; tool calls go out as `tool_use` blocks and results come back as `tool_result` blocks on a user turn. A forced tool (`tool_choice`) is supported.
 
+An assistant turn in the history with no text and no tool calls is left out of the body. The API accepts empty content only on a final assistant message, so sending one mid-conversation would fail the whole request with a 400 that no retry can mend. The turns on either side may then share a role; the API combines consecutive same-role turns.
+
 `stream()` reads the SSE the gateway sends after decoding AWS's binary framing. Bare `data:` lines and `event:` + `data:` pairs both work. Text arrives as chunks; tool arguments are reassembled from their `input_json_delta` fragments, and the final chunk carries the full response (tool calls, usage, stop reason).
 
 ## Errors
@@ -39,8 +42,9 @@ Every failure is an `InvokeModelGatewayError` with a `reason` (typed `InvokeMode
 
 | `reason` | Meaning | Also set |
 |---|---|---|
-| `http-status` | The gateway answered non-2xx. A 403 message says the key is not allowed that model. | `status`, `bodyExcerpt`, `retryAfterSeconds` (from `Retry-After`) |
+| `http-status` | The gateway answered non-2xx. A 403 message says the key is not allowed that model. | `status`, `bodyExcerpt`, `retryAfterSeconds` (from `Retry-After`), `retryAfterMs` (the stated wait — header, else the body's "try again in N seconds") |
 | `network` | No answer at all (DNS, TLS, connection reset). | `cause` |
+| `timeout` | No answer — headers, body, or the next stream chunk — within `timeoutMs`. Retryable. | — |
 | `no-key` | No key for this model id. | — |
 | `no-model` | The shorthand was asked for and no `model` is configured. | — |
 | `unreadable-response` | A 2xx body that is not a Messages response (for example an HTML page from a proxy). | `bodyExcerpt` |
@@ -52,17 +56,29 @@ Every failure is an `InvokeModelGatewayError` with a `reason` (typed `InvokeMode
 
 ## Retries: compose `withRetry`
 
-The provider makes **one attempt per call** and has no retry loop of its own. Every `InvokeModelGatewayError` carries `retryable`: `true` for a 429, a 5xx and a network failure, `false` for everything else. `withRetry`'s default policy honours the `false`, so it retries exactly those three:
+The provider makes **one attempt per call** and has no retry loop of its own. Every `InvokeModelGatewayError` carries `retryable`: `true` for a 429, a 5xx, a network failure and a timeout, `false` for everything else. `withRetry`'s default policy honours the `false`, so it retries exactly those four:
 
 - A 403 or 404 is an answer, not a passing fault, and fails straight away.
 - A refusal raised before any request (`no-key`, `no-model`) is never repeated, and nothing waits out a backoff for it.
 - A 2xx the provider could not read (`unreadable-response`) is never re-sent: the model may already have run, and billed.
 
+**The wait the gateway states is honoured.** A throttling gateway often says how long to wait only in the 429 body — "Rate limit is exceeded. Try again in 4 seconds." — with no `Retry-After` header. The provider reads that wording (the header wins when both are present) and declares it as `retryAfterMs`; `withRetry` then waits the longer of its own backoff and the stated wait, capped by `maxDelayMs` (default 10 s). Without this, short backoffs spent every attempt inside the stated wait.
+
 <CodeFile path="examples/features/80-invoke-model-gateway.ts" region="retry" title="examples/features/80-invoke-model-gateway.ts (region: retry)" />
 
-<Callout type="warn">
-Today `withRetry` retries `complete()` only; it passes `stream()` through unchanged. An agent that streams gets no retry until `withRetry` learns to retry a stream that fails **before its first chunk**. Every failure this provider raises on `stream()` (an HTTP status, a network error) happens before the first chunk, so that change will cover it without any change to this provider.
-</Callout>
+`withRetry` retries `stream()` too, but only until its first chunk: every failure this provider raises before the first chunk (an HTTP status, a network error, a timeout) is retried, and nothing after it is.
+
+## Deadline: `timeoutMs`
+
+With no deadline, a gateway that never answers holds the run until your own `req.signal` fires, if you set one. `timeoutMs` bounds each wait:
+
+- the response headers;
+- a `complete()` body;
+- **each** stream read: the first chunk, then every gap between chunks. A stream that keeps sending is never cut off, however long it runs.
+
+A missed deadline aborts the request (a real `fetch` drops the connection) and raises `reason: 'timeout'` with `retryable: true`. Your `req.signal` still wins: aborting it rejects with your `AbortError`, as before. With no `timeoutMs` the request is sent exactly as it was before this option existed.
+
+<CodeFile path="examples/features/80-invoke-model-gateway.ts" region="timeout" title="examples/features/80-invoke-model-gateway.ts (region: timeout)" />
 
 ## Next steps
 
