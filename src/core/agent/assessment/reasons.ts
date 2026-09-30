@@ -131,6 +131,20 @@ export const REASONS: readonly ReasonEntry[] = Object.freeze([
       "findingsLedger: a period row of this turn with verdict 'undeclared' — the tool declares a ToolPeriod and the result declared no period",
   },
   {
+    reason: 'period-differs-from-asked',
+    layer: 3,
+    class: 'not-sure',
+    reads:
+      "findingsLedger: a period row of this turn with differs (the time layer, step T8) — what the call read is not the range it asked for (missing: asked, not read; extra: read, not asked — TQ8: extra alone is 'not sure' too), or, for a window the model chose, not the person's window",
+  },
+  {
+    reason: 'period-beyond-retention',
+    layer: 3,
+    class: 'not-sure',
+    reads:
+      'findingsLedger: a period row of this turn with beyondRetention (the time layer, step T8) — the window was wholly older than the tool declares its source keeps: refused before dispatch, or read that way',
+  },
+  {
     reason: 'sources-conflict',
     layer: 3,
     class: 'not-sure',

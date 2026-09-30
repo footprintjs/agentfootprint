@@ -496,6 +496,9 @@ describe('UNIT — the reason table', () => {
       'period-partly-held',
       'period-unknown',
       'period-undeclared',
+      // The time layer's result checks (step T8).
+      'period-differs-from-asked',
+      'period-beyond-retention',
       'sources-conflict',
       'value-unsupported',
       'value-survived-revision',

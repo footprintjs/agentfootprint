@@ -985,7 +985,7 @@ deterministic and are measured over retained recorded runs or unit tables, with 
 | T5b | **Widening and pre-dispatch refusals** — *landed; implementation note T5b below* | the inexact rows of § 7.2 (the covering look-back, `day` wider, `filtersToAsked`), the dispatch drift § 7.4, the refusals (outside `direction`, wholly beyond `retention`, over `maxRange`, a multi-day range to a `day` tool, a `wall` DST gap), `partly-beyond-retention` | a tool's new `period` fields | T5a | every inexact row of § 7.2 and every row of § 7.4; a range half inside `retention` dispatches; a future window to a `past` tool is refused with the reason | $0 |
 | T6b | **The English default and the paid bench** — *landed (the bench not yet run); implementation note T6b below — owner decision "Always confirm" (TQ29): every chat reading is proposed and confirmed, never said* | `englishTimeReader` (a tokenizer; the v1 rows of § 5.3), the served sentence (TQ13), the lazy ask wired to real words | `.time({ reader: englishTimeReader() })` | T5b | the host's field sentences as the table ("10/09/26 8 AM to 8:40 AM PST" → a zone ask for `PST`, "yesterday", a future date); every non-v1 row of § 5.3 reads "unreadable" | **paid**: the provoking set — calls with the right window, and absolute windows asked of a look-back-only tool (wrong-window answers, armed vs unarmed); needless-ask rate on controls |
 | T7 | **Evidence lineage at grain** — *landed; implementation note T7 below* | `forms.ts` · `timeFormsOf` with its `said` and `derived` lists; the lineage kind `derived-from-reading`; the gate asks it; the private table from `fix/person-values-normalized` retires | `.time()` | T6b; `fix/person-values-normalized` landed first (TQ25) | "8 AM" vs `8:00`/`08:00` → `said`; a corrected abbreviation, an implied year, `-07:00`, `08:41`, the served sentence echoed → `derived-from-reading`, never "known"; a time no reading produced still fails; the landed fix's cases still pass after it retires | $0 over retained recordings: false "not traced" on time values |
-| T8 | **Result checks** | `period-differs-from-asked { missing, extra }`, `period-shifted`, `period-beyond-retention`, `clocks-differ` (declared wall-clock zones, a label); fold reasons; limits lines | the results layer + `.time()` | T5b, T3 | a tool clamping 30d to 7d (`missing`); a covering look-back (`extra`); a look-back after a 30-minute pause (both); an inclusive `queried.to == asked.to − 1 step` reads as covered; `Z` vs `-07:00` periods raise no `clocks-differ` | **paid**: false "not sure" rate on correct answers (Q33's cell R3 method) |
+| T8 | **Result checks** — *landed (the bench not yet run); implementation note T8 below* | `period-differs-from-asked { missing, extra }`, `period-shifted`, `period-beyond-retention`, `clocks-differ` (declared wall-clock zones, a label); fold reasons; limits lines | the results layer + `.time()` | T5b, T3 | a tool clamping 30d to 7d (`missing`); a covering look-back (`extra`); a look-back after a 30-minute pause (both); an inclusive `queried.to == asked.to − 1 step` reads as covered; `Z` vs `-07:00` periods raise no `clocks-differ` | **paid**: false "not sure" rate on correct answers (Q33's cell R3 method) |
 | T9a | **Lens** (lens repo) | the rows of § 10.6 | the lens's own | T8; floor = the af release that ships T8 | lens fixtures per row kind | $0 |
 | T9b | **Host panel** (host repo) | the rules of § 10.3, `time.window` from a brush | the host's own | T2, T3, T5a; floor = the af release that ships T5a | the panel's hand count | $0 |
 | T9c | **Metrics dashboard** (host repo) | the mapping of § 10.5 | the host's own | T5b; floor = the af release that ships T5b | the dashboard reads a tool's `period` instead of its table | $0 |
@@ -1516,6 +1516,50 @@ deterministic and are measured over retained recorded runs or unit tables, with 
   such a word is also an answer candidate. Pinned by `test/core/time/forms.test.ts` and
   `test/core/time/lineage-run.test.ts`; the landed fix's cases by
   `test/core/agent/evidence/person-values-normalized.test.ts`.
+
+- **T8.** Landed with these smallest faithful choices; the paid bench is its own stage and has
+  not run. (1) **The owner.** `core/time/check.ts` · `periodTimeCheck` — one pure check per judged
+  call over what the record holds: the `call-window` row, the `call` row's `drift`, the declared
+  periods and the tool's facts. What was READ, first found wins: the result's declared `queried`
+  (§ 3.3's `[from, to + step)`, `step` the `granularity`, else 1 ms; several declared periods are
+  several reads), else a widened fill's `sent` (unless `trimmedByTool`), else the asked range
+  moved by a `shifted` drift, else the asked range (a fill, a binding, a redrawn look-back). What
+  it is compared WITH: the call's `asked` — for `how: 'model-chosen'`, the person's window (§ 9.3
+  folds through this one reason, as the T5a note foresaw; `against: 'person'` on the row). A
+  refused, not-filled or unread call is compared with nothing. (2) **Two differences are not
+  differences.** A piece no longer than 1 ms (a closed end read as open: a look-back's
+  `[now − L, now]` against `[now − L, now)`, or a result that copied `ctx.time.asked.to` into an
+  inclusive `queried.to` with no `granularity`), and a read of the asked length moved by no more
+  than the tool's step (one minute when none — § 7.4's first row). With a declared `granularity`,
+  `queried.to == asked.to` is one step wider, as § 3.3 reads it. (3) **The record.** No new row
+  for the checks: the call's `period` row gains `differs { against, asked, read, source, stepMs?,
+  missing, extra }`, `shifted { byMs }`, `beyondRetention`, `partlyBeyondRetention` (§ 12.2's
+  "period rows gain"), each only when it holds and only under `.time()` — the mount hands the
+  layer the time rows only when the turn has a clock (`honesty/mounts.ts` · `timeOfBatch`), so an
+  unarmed row is byte-identical; the arm is `periodRowIsWellFormed`. The event gains `timeChecks`
+  (names, never a range). `period-beyond-retention` is a refusal the call-window row already
+  carries (`refused: 'beyond-retention'`), or a read wholly before `now − retention`;
+  `partlyBeyondRetention` folds nothing — the result's `held` decides (§ 9.4). (4) **The fold.**
+  Two reasons, layer 3, "not sure": `period-differs-from-asked` (`missing` or `extra` — TQ8's
+  default; a result declaring exactly the asked range clears it) and `period-beyond-retention`;
+  each joins the call's `argument` row as a witness, like the verdict reasons. `period-shifted`
+  and `clocks-differ` are not reasons: a shift folds through `differs`, and clocks are a label.
+  (5) **Clocks.** A declared axis zone was an event only (`artifacts.minted`), and a reason or a
+  line reads committed rows, so ToolCalls files ONE new row kind under `.time()`, `source-clock`
+  (`rows.ts` · `SourceClockRow`, one per call and zone, the checkpoint arm in
+  `timeRowIsWellFormed`); `clocks-differ` is READ from those rows (`check.ts` · `clocksDiffer`),
+  never filed twice. A period's offset is never read. (6) **The lines.** Under
+  `.limitsTravelWithTheAnswer()` with `.time()`, one line per call whose row carries a check,
+  under `Period` after the declared periods (`coverage/period.ts` · `periodCheckLine`: "read
+  less / more than was asked", "a shifted window", "a different window", with both ranges rendered
+  to the second in the presentation zone), and a `Clocks` section (`clockLines`); the block now
+  also prints when only these lines exist. The § 10.2 one-line-per-tool layout ("Period
+  (client_activity): … — read …, wider than asked") is not adopted: the declared `Period:` line
+  keeps its T3 bytes and the check's line follows it. **Known limits:** a typed answer carries the
+  checks on the rows (`agent.findings()`), not in `answerCoverage`; a refused call's `period`
+  row still reads `undeclared` beside `period-beyond-retention` (the T5b precedent: a refusal
+  result declares no period); § 9.1's `partly-future` stays unchecked. Pinned by
+  `test/core/time/check.test.ts` and `test/core/time/result-checks-run.test.ts`.
 
 **Why this order.** T1 settles the grammar every other step leans on and is free. T2 is already
 written and only needs rebasing and the value check. T3 gives the first visible win (the limits

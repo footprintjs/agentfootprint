@@ -472,6 +472,9 @@ interface PeriodRowRead {
   readonly verdict: string;
   /** The argument the tool's `ToolPeriod` names — the join key to the call's argument row. */
   readonly argument?: string;
+  /** The time layer's checks on the row (step T8) — filed only under `.time()`. */
+  readonly differs: boolean;
+  readonly beyondRetention: boolean;
 }
 
 /**
@@ -498,7 +501,14 @@ function periodRows(state: Readonly<Record<string, unknown>>): readonly PeriodRo
     const verdict = str(row.verdict);
     if (toolCallId === undefined || verdict === undefined) return;
     const argument = str(row.argument);
-    rows.push({ index, toolCallId, verdict, ...(argument !== undefined && { argument }) });
+    rows.push({
+      index,
+      toolCallId,
+      verdict,
+      ...(argument !== undefined && { argument }),
+      differs: isRecord(row.differs),
+      beyondRetention: row.beyondRetention === true,
+    });
   });
   return rows;
 }
@@ -538,15 +548,30 @@ function readPeriodVerdicts(
   for (const row of rows) {
     const at = statePointer('findingsLedger', row.index, 'verdict');
     witness.push(at);
-    const reason = PERIOD_REASONS[row.verdict];
-    if (reason === undefined) continue;
-    fire(g, reason, at);
     const chosenBy = argumentVerdicts.find(
       (a) => a.toolCallId === row.toolCallId && a.argument === row.argument,
     );
-    if (row.argument !== undefined && chosenBy !== undefined) {
-      fire(g, reason, statePointer('findingsLedger', chosenBy.index, 'argument'));
+    const fireJoined = (reason: AssessmentReason, pointer: AssessmentPointer): void => {
+      fire(g, reason, pointer);
+      if (row.argument !== undefined && chosenBy !== undefined) {
+        fire(g, reason, statePointer('findingsLedger', chosenBy.index, 'argument'));
+      }
+    };
+    // The time layer's result checks (step T8), under `.time()` only: the
+    // read is not what was asked (TQ8 — `extra` alone too), or the window was
+    // older than the source keeps.
+    if (row.differs) {
+      fireJoined('period-differs-from-asked', statePointer('findingsLedger', row.index, 'differs'));
     }
+    if (row.beyondRetention) {
+      fireJoined(
+        'period-beyond-retention',
+        statePointer('findingsLedger', row.index, 'beyondRetention'),
+      );
+    }
+    const reason = PERIOD_REASONS[row.verdict];
+    if (reason === undefined) continue;
+    fireJoined(reason, at);
   }
   g.checked.push({ layer: 3, check: 'result-period', ran: rows.length, of: rows.length, witness });
 }

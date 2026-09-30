@@ -1612,6 +1612,24 @@
   ],
   "source": "library"
  },
+ "howSure.reason.periodDiffersFromAsked@1": {
+  "text": "2 calls read a different stretch of time than the one asked about.",
+  "parts": [
+   {
+    "text": "2 calls read a different stretch of time than the one asked about."
+   }
+  ],
+  "source": "library"
+ },
+ "howSure.reason.periodBeyondRetention@1": {
+  "text": "2 calls asked about time older than their tools declare their sources keep.",
+  "parts": [
+   {
+    "text": "2 calls asked about time older than their tools declare their sources keep."
+   }
+  ],
+  "source": "library"
+ },
  "howSure.reason.sourcesConflict@1": {
   "text": "2 conflicts between results the model stood on.",
   "parts": [

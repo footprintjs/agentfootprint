@@ -159,7 +159,14 @@ import {
 import { withUnsettledRows } from '../findings/unsettled.js';
 import type { FindingsLedger, StandingRow } from '../findings/types.js';
 import type { ReadRunTime } from '../../time/clock.js';
-import { callRow, callWindowOfCall, clockOf, clockOnResumeRow } from '../../time/rows.js';
+import {
+  callRow,
+  callWindowOfCall,
+  clockOf,
+  clockOnResumeRow,
+  sourceClockRow,
+  sourceClocksOf,
+} from '../../time/rows.js';
 import { timeContextOf, type TimeContext } from '../../time/wire.js';
 import { granularityMsOf } from '../../time/convert.js';
 import { driftAtDispatch } from '../../time/drift.js';
@@ -691,7 +698,7 @@ export interface ToolCallsHandlerDeps {
     /**
      * Present exactly under `.time({ reader })` (step T6b): the batch ask asks
      * a period left out while the turn's one mention is open as THAT
-     * mention's window (`./argumentAsk.ts` · the lazy word-driven ask).
+     * mention's window — the lazy word-driven ask (`./argumentAsk.ts` · `windowPlanOf`).
      */
     readonly reader?: {
       readonly policy: TimePolicy;
@@ -1579,6 +1586,31 @@ function timeAtDispatch(
     drift?.outcome === 'redrawn' ? redrawnArgs(args, tool, window?.form, drift.values) : args;
   return { context: callTimeContext(scope, call.toolCallId, row.dispatchedAt), args: redrawn };
 }
+
+/**
+ * File the `source-clock` row for one call's dataset whose declared time axis
+ * names `zone` (step T8) — once per call and zone this turn, through the one
+ * writer; no event (the row is the record).
+ */
+function recordSourceClock(
+  scope: TypedScope<AgentState>,
+  call: { readonly toolCallId: string; readonly toolName: string },
+  zone: string,
+): void {
+  const ledger = scope.findingsLedger as FindingsLedger | undefined;
+  const turn = scope.turnNumber as number;
+  const filed = sourceClocksOf(ledger, turn).some(
+    (r) => r.toolCallId === call.toolCallId && r.zone === zone,
+  );
+  if (filed) return;
+  recordFindings(scope, [
+    sourceClockRow(call, { turn, iteration: scope.iteration as number }, zone),
+  ]);
+}
+
+/** The run a capability binding was made in — `undefined` when there is no binding. */
+const madeInRun = (bindRun: { readonly runContext?: { readonly runId: string } } | undefined) =>
+  bindRun?.runContext?.runId;
 
 /** `args` with the look-back form's argument dropped and the absolute form's values written — a fresh object. */
 function redrawnArgs(
@@ -2809,6 +2841,18 @@ export function buildToolCallsHandler(
             ...(meta.timeAxis !== undefined && { timeAxis: meta.timeAxis }),
             tool: toolName,
           });
+          // Under `.time()` (step T8): a dataset whose declared axis names a
+          // zone is a wall-clock source — one `source-clock` row per call and
+          // zone, for the limits block's `Clocks` lines. Only in the run the
+          // binding was made in (a late mint's run has ended).
+          const zone = meta.timeAxis?.zone;
+          if (
+            deps.time !== undefined &&
+            zone !== undefined &&
+            (madeInRun(bindRun) === undefined || madeInRun(bindRun) === deps.currentRun?.().runId)
+          ) {
+            recordSourceClock(scope, { toolCallId, toolName }, zone);
+          }
           return;
         }
         case 'resolved':

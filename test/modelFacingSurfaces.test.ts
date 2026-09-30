@@ -1963,6 +1963,8 @@ const PRODUCERS: readonly ModelFacingProducer[] = [
       /a value a call ran with was read into your words: the quoted words are on the record, the value is not in them/,
       /a value a call ran with was taken from a result the model itself had set aside/,
       /a time in the answer is the library's own spelling of your words, not something you said or a tool returned/,
+      /a tool read a different stretch of time than the one asked about/,
+      /the time asked about is older than a tool declares its source keeps/,
       /^Consistent with the run's record — 2 checks ran and none fired/m,
       /^Consistent with the run's record — 1 check ran and did not fire: argument rules\./m,
       /^Known — the app's answer checks passed this exact answer\.$/m,
@@ -2038,6 +2040,9 @@ const PRODUCERS: readonly ModelFacingProducer[] = [
               'period-partly-held',
               'period-unknown',
               'period-undeclared',
+              // The time layer's result checks (step T8).
+              'period-differs-from-asked',
+              'period-beyond-retention',
             ],
           },
           [],

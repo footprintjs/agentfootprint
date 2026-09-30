@@ -1098,6 +1098,18 @@ export interface FindingsPeriodPayload {
   /** The conversation turn the row was filed in. */
   readonly turn: number;
   readonly verdict: 'covered' | 'partly-held' | 'not-held' | 'unknown' | 'undeclared';
+  /**
+   * The time layer's result checks that hold on the row (step T8, under
+   * `.time()` only) — their names, never a range: `period-differs-from-asked`,
+   * `period-shifted`, `period-beyond-retention`, `partly-beyond-retention`.
+   * Absent when none holds, and on every unarmed run.
+   */
+  readonly timeChecks?: readonly (
+    | 'period-differs-from-asked'
+    | 'period-shifted'
+    | 'period-beyond-retention'
+    | 'partly-beyond-retention'
+  )[];
 }
 
 /**

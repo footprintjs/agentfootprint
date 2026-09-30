@@ -64,6 +64,8 @@ import {
   type DeclaredPeriod,
   type PeriodRow,
 } from '../coverage/period.js';
+import { periodTimeCheck, type PeriodCheckInput, type PeriodTimeCheck } from '../../time/check.js';
+import type { PeriodFacts } from '../../time/convert.js';
 
 /** One call of the batch ToolCalls just ran — identities only. */
 export interface RanCall {
@@ -85,15 +87,32 @@ export interface PlannedPeriod {
   readonly declared: readonly DeclaredPeriod[];
   /** The argument the tool's `ToolPeriod` names — absent when it declares none. */
   readonly argument?: string;
+  /** Under `.time()` (step T8): what the time layer's result checks read besides the declared periods. */
+  readonly time?: Omit<PeriodCheckInput, 'declared'>;
 }
 
-/** A judged call — the verdict, no instants. */
+/** A judged call — the verdict and, under `.time()`, the time layer's checks that hold. */
 export interface CheckedPeriod {
   readonly toolCallId: string;
   readonly toolName: string;
   readonly verdict: PeriodRow['verdict'];
   readonly argument?: string;
+  readonly time?: PeriodTimeCheck;
 }
+
+/**
+ * One call's time-layer record, handed by the mount under `.time()` only
+ * (step T8): its `call-window` row's fields the check reads and its `call`
+ * row's `drift` — read off the ledger, never recomputed.
+ */
+export interface CallTime {
+  readonly toolCallId: string;
+  readonly window?: PeriodCheckInput['window'];
+  readonly drift?: PeriodCheckInput['drift'];
+}
+
+/** A tool's declared period facts, by tool name — the inputs layer's declaration, read (step T8). */
+export type PeriodFactsOf = (toolName: string) => PeriodFacts | undefined;
 
 /**
  * The argument a tool's `ToolPeriod` names, by tool name — read off the
@@ -115,6 +134,10 @@ export interface ResultsLayerState {
   readonly batchIteration?: number;
   /** The conversation turn — handed only with a batch. */
   readonly turnNumber?: number;
+  /** Under `.time()` (step T8): the batch's calls' time rows — handed only when the turn has a clock. */
+  readonly times?: readonly CallTime[];
+  /** Under `.time()`: the turn's clock `now` — handed with `times`. */
+  readonly now?: string;
   // ── staged by the stages ──
   periodPlan?: readonly PlannedPeriod[];
   periodChecks?: readonly CheckedPeriod[];
@@ -124,6 +147,8 @@ export interface ResultsLayerState {
 /** What the stages are handed from outside the folder — closures, never scope. */
 export interface ResultsLayerDeps {
   readonly periodArgumentOf: PeriodArgumentOf;
+  /** The tool's declared period facts (`retention`, `granularity`) — read only for a call with time rows. */
+  readonly periodFactsOf?: PeriodFactsOf;
   /** The ledger's emit half — one `findings.period` event per row. */
   readonly emitRows: (scope: TypedScope<ResultsLayerState>, rows: readonly PeriodRow[]) => void;
 }
@@ -140,6 +165,11 @@ export function planPeriods(
   calls: readonly RanCall[],
   periods: readonly CallPeriod[],
   periodArgumentOf: PeriodArgumentOf,
+  time?: {
+    readonly times: readonly CallTime[];
+    readonly now: string;
+    readonly periodFactsOf?: PeriodFactsOf;
+  },
 ): PlannedPeriod[] {
   const done = new Set<string>();
   const plan: PlannedPeriod[] = [];
@@ -149,11 +179,22 @@ export function planPeriods(
     const declared = periods.filter((p) => p.toolCallId === call.toolCallId).map((p) => p.period);
     const argument = periodArgumentOf(call.toolName);
     if (declared.length === 0 && argument === undefined) continue;
+    const rows = time?.times.find((t) => t.toolCallId === call.toolCallId);
+    const facts = rows === undefined ? undefined : time?.periodFactsOf?.(call.toolName);
     plan.push({
       toolCallId: call.toolCallId,
       toolName: call.toolName,
       declared,
       ...(argument !== undefined && { argument }),
+      ...(rows !== undefined &&
+        time !== undefined && {
+          time: {
+            now: time.now,
+            ...(rows.window !== undefined && { window: rows.window }),
+            ...(rows.drift !== undefined && { drift: rows.drift }),
+            ...(facts !== undefined && { facts }),
+          },
+        }),
     });
   }
   return plan;
@@ -165,16 +206,25 @@ export function planPeriods(
  * `ToolPeriod`, or it would not be planned).
  */
 export function checkPeriods(plan: readonly PlannedPeriod[]): CheckedPeriod[] {
-  return plan.map((p) => ({
-    toolCallId: p.toolCallId,
-    toolName: p.toolName,
-    verdict:
-      p.declared.length === 0
-        ? 'undeclared'
-        : // Non-empty, so `leastHeld` answers.
-          (leastHeld(p.declared.map(periodVerdict)) as PeriodRow['verdict']),
-    ...(p.argument !== undefined && { argument: p.argument }),
-  }));
+  return plan.map((p) => {
+    // Under `.time()` (step T8): the time layer's result checks — `undefined`
+    // when none holds, so the row gains nothing.
+    const time =
+      p.time === undefined
+        ? undefined
+        : periodTimeCheck({ ...p.time, declared: p.declared.map((d) => d.queried) });
+    return {
+      toolCallId: p.toolCallId,
+      toolName: p.toolName,
+      verdict:
+        p.declared.length === 0
+          ? 'undeclared'
+          : // Non-empty, so `leastHeld` answers.
+            (leastHeld(p.declared.map(periodVerdict)) as PeriodRow['verdict']),
+      ...(p.argument !== undefined && { argument: p.argument }),
+      ...(time !== undefined && { time }),
+    };
+  });
 }
 
 /** RECORD, pure: one `period` row per judged call, stamped with the turn and the batch's iteration. */
@@ -190,6 +240,7 @@ export function periodRowsOf(
     iteration: stamp.iteration,
     verdict: c.verdict,
     ...(c.argument !== undefined && { argument: c.argument }),
+    ...c.time,
   }));
 }
 
@@ -221,7 +272,20 @@ export function declareResultsStage(
     toolCallId: p.toolCallId,
     period: copyPeriod(p.period),
   }));
-  scope.periodPlan = planPeriods(calls, periods, deps.periodArgumentOf);
+  const times = scope.times as readonly CallTime[] | undefined;
+  const now = scope.now as string | undefined;
+  scope.periodPlan = planPeriods(
+    calls,
+    periods,
+    deps.periodArgumentOf,
+    times === undefined || now === undefined
+      ? undefined
+      : {
+          times: JSON.parse(JSON.stringify(times)) as CallTime[], // a frozen input is a live view — plain data once
+          now,
+          ...(deps.periodFactsOf !== undefined && { periodFactsOf: deps.periodFactsOf }),
+        },
+  );
 }
 
 /** VERIFY — the verdict on each planned call's period. Stages `periodChecks` (identities and a word). */

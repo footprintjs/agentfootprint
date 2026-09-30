@@ -71,6 +71,7 @@ import type { SourceCorpus } from '../arguments/checks.js';
 import {
   isRefused,
   periodArgumentOf as periodArgumentNamed,
+  periodFactsOf as periodFactsDeclared,
   rulesOf,
 } from '../arguments/declare.js';
 import { keptThisTurn } from '../arguments/kept.js';
@@ -82,7 +83,15 @@ import type {
   SourceInputs,
   TimeInputs,
 } from '../arguments/subflow.js';
-import { answersOf, clockOf, readingsOf, type CallWindowRow } from '../../time/rows.js';
+import {
+  answersOf,
+  callRowOfCall,
+  callWindowOfCall,
+  clockOf,
+  readingsOf,
+  type CallWindowRow,
+} from '../../time/rows.js';
+import type { PeriodFacts } from '../../time/convert.js';
 import type { ZoneName } from '../../time/zone.js';
 import { copyPeriod, type DeclaredPeriod, type PeriodRow } from '../coverage/period.js';
 import { appendRows, emitRow, type FindingsScope } from '../findings/ledger.js';
@@ -90,6 +99,7 @@ import type { FindingsRow } from '../findings/types.js';
 import type {
   RanCall,
   CallPeriod,
+  CallTime,
   ResultsLayerDeps,
   ResultsLayerState,
 } from '../results/subflow.js';
@@ -402,12 +412,25 @@ function periodArgumentOf(toolOf: ToolOf): (toolName: string) => string | undefi
 }
 
 /**
+ * The facts a tool's `ToolPeriod` declares about its source (`retention`,
+ * `granularity`, …) — read by the same reader, for the time layer's result
+ * checks (step T8). A tool whose rules cannot be read declares none.
+ */
+function periodFactsOf(toolOf: ToolOf): (toolName: string) => PeriodFacts | undefined {
+  return (toolName) => {
+    const rules = rulesOf(toolOf(toolName));
+    return rules === undefined || isRefused(rules) ? undefined : periodFactsDeclared(rules.period);
+  };
+}
+
+/**
  * The `sf-results` subflow: Declare → Verify → Record → Resolve, four thin
  * stages over the pure steps of `results/subflow.ts`.
  */
 export function buildResultsSubflow(deps: ResultsMountDeps): FlowChart {
   const layer: ResultsLayerDeps = {
     periodArgumentOf: periodArgumentOf(deps.toolOf),
+    periodFactsOf: periodFactsOf(deps.toolOf),
     emitRows: emitPeriodRows,
   };
   type Stage = (scope: TypedScope<ResultsLayerState>) => Promise<void>;
@@ -495,11 +518,58 @@ function resultsLayerInput(parent: Record<string, unknown>): ResultsLayerState {
     if (typeof row.toolCallId !== 'string' || !ids.has(row.toolCallId)) continue;
     periods.push({ toolCallId: row.toolCallId, period: copyPeriod(row.period as DeclaredPeriod) });
   }
+  const time = timeOfBatch(parent, calls);
   return {
     calls,
     batchIteration,
     turnNumber: parent.turnNumber as number,
     ...(periods.length > 0 && { periods }),
+    ...time,
+  };
+}
+
+/**
+ * Under `.time()` (step T8): each call's time rows — its `call-window` row
+ * and its `call` row's `drift` — and the turn's clock `now`, for the result
+ * checks (`core/time/check.ts` · `periodTimeCheck`). Nothing when the turn has
+ * no clock (an agent without `.time()`), so an unarmed run hands the layer the
+ * input it always did.
+ */
+function timeOfBatch(
+  parent: Record<string, unknown>,
+  calls: readonly RanCall[],
+): Pick<ResultsLayerState, 'times' | 'now'> {
+  const ledger = parent.findingsLedger as readonly unknown[] | undefined;
+  const clock = clockOf(ledger);
+  const turn = parent.turnNumber as number;
+  if (clock === undefined || clock.turn !== turn) return {};
+  const times: CallTime[] = [];
+  for (const call of calls) {
+    const window = callWindowOfCall(ledger, call.toolCallId, turn);
+    const drift = callRowOfCall(ledger, call.toolCallId, turn)?.drift;
+    if (window === undefined && drift === undefined) {
+      times.push({ toolCallId: call.toolCallId });
+      continue;
+    }
+    times.push({
+      toolCallId: call.toolCallId,
+      ...(window !== undefined && { window: windowForCheck(window) }),
+      ...(drift !== undefined && { drift }),
+    });
+  }
+  return { times, now: clock.now };
+}
+
+/** The fields of a `call-window` row the result checks read — plain data. */
+function windowForCheck(row: CallWindowRow): NonNullable<CallTime['window']> {
+  return {
+    how: row.how,
+    ...(row.asked !== undefined && { asked: { from: row.asked.from, to: row.asked.to } }),
+    ...(row.person !== undefined && { person: row.person }),
+    ...(row.sent !== undefined && { sent: { from: row.sent.from, to: row.sent.to } }),
+    ...(row.trimmedByTool === true && { trimmedByTool: true as const }),
+    ...(row.partlyBeyondRetention === true && { partlyBeyondRetention: true as const }),
+    ...(row.refused !== undefined && { refused: row.refused }),
   };
 }
 

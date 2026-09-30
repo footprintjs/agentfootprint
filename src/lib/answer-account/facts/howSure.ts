@@ -230,6 +230,8 @@ const REASON_LINES: Readonly<Record<AssessmentReason, TemplateId>> = {
   'period-partly-held': 'howSure.reason.periodPartlyHeld',
   'period-unknown': 'howSure.reason.periodUnknown',
   'period-undeclared': 'howSure.reason.periodUndeclared',
+  'period-differs-from-asked': 'howSure.reason.periodDiffersFromAsked',
+  'period-beyond-retention': 'howSure.reason.periodBeyondRetention',
   'sources-conflict': 'howSure.reason.sourcesConflict',
   'value-unsupported': 'howSure.reason.valueUnsupported',
   'value-survived-revision': 'howSure.reason.valueSurvivedRevision',
@@ -253,6 +255,8 @@ const COUNTED: ReadonlySet<AssessmentReason> = new Set([
   'period-partly-held',
   'period-unknown',
   'period-undeclared',
+  'period-differs-from-asked',
+  'period-beyond-retention',
   'sources-conflict',
 ]);
 
@@ -272,6 +276,8 @@ const COUNTS_CALLS: ReadonlySet<AssessmentReason> = new Set([
   'period-partly-held',
   'period-unknown',
   'period-undeclared',
+  'period-differs-from-asked',
+  'period-beyond-retention',
 ]);
 
 /** The call a committed row names — the row a state witness points into (`/<index>/…`). */

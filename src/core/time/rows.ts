@@ -15,7 +15,7 @@
  *          precedent: no event field ships without a reader in the same
  *          release). The lens reads the rows.
  *
- * Seven kinds, each filed only while `.time()` is armed:
+ * Eight kinds, each filed only while `.time()` is armed:
  *
  * | Kind | Filed | Carries |
  * |------|-------|---------|
@@ -26,6 +26,7 @@
  * | `time-reading` | by seed, once per MENTION the armed reader (`.time({ reader })`) found in the person's message — or ONE row with `mentions: 0` when it found none, so a retry knows the message was read | the quote, the parts, every candidate `resolve.ts` made of them, how the reading settled (`choice` — never settled by the library: every reading is a PROPOSAL, `open` with `confirm`, its candidates `said: []`), the reader's id, version, kind and locale, and the tz database version; a refused mention keeps only why |
  * | `time-answer` | by the batch ask, once per mention the person settled in the time ask — the only door by which a window of words becomes the person's | the mention, the window and its zone, and `how`: `confirmed` (they picked a reading the library offered — the click) or `edited` (they wrote their own) |
  * | `time-derived` | by the Route decider, once per judged answer that stands, when the evidence gate found values no tool result carried that the library itself spelled from this turn's time readings (§ 9.5, step T7 — `forms.ts` · `timeFormsOf`'s `derived` list) | the values, normalized and clipped as the gate reports them — the lineage `derived-from-reading`: never invented, never the person's |
+ * | `source-clock` | by ToolCalls, once per call and zone, when the call minted a dataset whose declared time axis names a `zone` (§ 9.6, step T8) | the tool, the call and the zone its rows' wall times are in — read by the limits block's `Clocks` lines and `check.ts` · `clocksDiffer` |
  *
  * Readers that switch over every row kind must skip one they do not know.
  */
@@ -239,6 +240,21 @@ export const MAX_DERIVED_VALUES = 12;
 /** The longest value a `time-derived` row carries (the gate's clip). */
 export const MAX_DERIVED_VALUE_CHARS = 64;
 
+/**
+ * A wall-clock source (§ 9.6, step T8): the call minted a dataset whose
+ * declared time axis (`axis.ts` · `DatasetTimeAxis`, its `zone`) says its rows are
+ * wall times in `zone`. One row per call and zone. A period's offset is never
+ * read as a clock — only a declared axis zone files this row.
+ */
+export interface SourceClockRow {
+  readonly kind: 'source-clock';
+  readonly turn: number;
+  readonly iteration: number;
+  readonly toolCallId: string;
+  readonly toolName: string;
+  readonly zone: ZoneName;
+}
+
 /** Every time-layer row kind. */
 export type TimeRow =
   | ClockRow
@@ -247,7 +263,8 @@ export type TimeRow =
   | TimeReadingRow
   | CallWindowRow
   | TimeAnswerRow
-  | TimeDerivedRow;
+  | TimeDerivedRow
+  | SourceClockRow;
 
 // ─── Building ────────────────────────────────────────────────────────────
 
@@ -510,6 +527,61 @@ export function timeDerivedRow(
   };
 }
 
+/** The `source-clock` row for one call's dataset whose declared axis names `zone`. */
+export function sourceClockRow(
+  call: { readonly toolCallId: string; readonly toolName: string },
+  at: { readonly turn: number; readonly iteration: number },
+  zone: ZoneName,
+): SourceClockRow {
+  return {
+    kind: 'source-clock',
+    turn: at.turn,
+    iteration: at.iteration,
+    toolCallId: call.toolCallId,
+    toolName: call.toolName,
+    zone,
+  };
+}
+
+/** This turn's `call` row for one call — the last filed (a resumed leg files its own). */
+export function callRowOfCall(
+  ledger: readonly unknown[] | undefined,
+  toolCallId: string,
+  turn: number,
+): CallRow | undefined {
+  if (ledger === undefined) return undefined;
+  for (let i = ledger.length - 1; i >= 0; i--) {
+    const r = ledger[i] as Partial<CallRow> | null;
+    if (
+      r !== null &&
+      typeof r === 'object' &&
+      r.kind === 'call' &&
+      r.toolCallId === toolCallId &&
+      r.turn === turn
+    ) {
+      return r as CallRow;
+    }
+  }
+  return undefined;
+}
+
+/** The `source-clock` rows filed for `turn`, in the order filed. */
+export function sourceClocksOf(
+  ledger: readonly unknown[] | undefined,
+  turn: number | undefined,
+): readonly SourceClockRow[] {
+  if (ledger === undefined) return [];
+  return ledger.filter((row): row is SourceClockRow => {
+    const r = row as { readonly kind?: unknown; readonly turn?: unknown } | null;
+    return (
+      r !== null &&
+      typeof r === 'object' &&
+      r.kind === 'source-clock' &&
+      (turn === undefined || r.turn === turn)
+    );
+  });
+}
+
 /** The `time-answer` rows filed for `turn`, in the order filed. */
 export function answersOf(
   ledger: readonly unknown[] | undefined,
@@ -760,7 +832,7 @@ function isDerivedRow(row: Readonly<Record<string, unknown>>): boolean {
 
 /**
  * The checkpoint door's test for a time-layer row — `true` only for a row of
- * one of the seven kinds with every field this module files, well formed.
+ * one of the eight kinds with every field this module files, well formed.
  * Any other kind answers `false` (the caller routes by kind first).
  */
 export function timeRowIsWellFormed(row: Readonly<Record<string, unknown>>): boolean {
@@ -791,6 +863,12 @@ export function timeRowIsWellFormed(row: Readonly<Record<string, unknown>>): boo
       return isAnswerRow(row);
     case 'time-derived':
       return isDerivedRow(row);
+    case 'source-clock':
+      return (
+        typeof row.toolCallId === 'string' &&
+        typeof row.toolName === 'string' &&
+        isZoneName(row.zone)
+      );
     default:
       return false;
   }
@@ -805,7 +883,8 @@ export function isTimeRowKind(kind: unknown): kind is TimeRow['kind'] {
     kind === 'time-reading' ||
     kind === 'call-window' ||
     kind === 'time-answer' ||
-    kind === 'time-derived'
+    kind === 'time-derived' ||
+    kind === 'source-clock'
   );
 }
 

@@ -331,6 +331,13 @@ export const ANSWER_ACCOUNT_TEMPLATES = Object.freeze({
   'howSure.reason.periodUndeclared': t(
     "{{count:n,'call did not say what period its read covered, though its tool declares a period argument','calls did not say what period their reads covered, though their tools declare a period argument'}}.",
   ),
+  // The time layer's result checks (step T8).
+  'howSure.reason.periodDiffersFromAsked': t(
+    "{{count:n,'call read a different stretch of time than the one asked about','calls read a different stretch of time than the one asked about'}}.",
+  ),
+  'howSure.reason.periodBeyondRetention': t(
+    "{{count:n,'call asked about time older than its tool declares its source keeps','calls asked about time older than their tools declare their sources keep'}}.",
+  ),
   'howSure.reason.sourcesConflict': t(
     "{{count:n,'conflict','conflicts'}} between results the model stood on.",
   ),

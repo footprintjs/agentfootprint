@@ -237,6 +237,8 @@ const REASON_WORDS: Readonly<Record<Exclude<AssessmentReason, 'argument-assumed'
   'period-partly-held': "a tool's data covers only part of the time the question asked about",
   'period-unknown': 'a tool could not say what time its data covers',
   'period-undeclared': 'a tool did not say what time its result covers',
+  'period-differs-from-asked': 'a tool read a different stretch of time than the one asked about',
+  'period-beyond-retention': 'the time asked about is older than a tool declares its source keeps',
   'sources-conflict': 'two results the answer stood on disagree',
   'value-unsupported': 'names or numbers in the answer appear in no tool result',
   'value-survived-revision':

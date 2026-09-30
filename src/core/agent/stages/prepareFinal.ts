@@ -33,9 +33,12 @@ import {
   copyAnswerCoverage,
   type AnswerCoverage,
 } from '../coverage/index.js';
+import type { TimeLimitLines } from '../coverage/answer.js';
+import { clockLines, periodCheckLine, type PeriodRow } from '../coverage/period.js';
 import type { AgentState } from '../types.js';
 import type { FindingsLedger } from '../findings/types.js';
-import { presentationZoneOf } from '../../time/rows.js';
+import { presentationZoneOf, sourceClocksOf } from '../../time/rows.js';
+import { clocksDiffer, distinctSources } from '../../time/check.js';
 import type { Presentation } from '../../time/present.js';
 
 /**
@@ -238,16 +241,48 @@ function presentationOf(scope: TypedScope<AgentState>): Presentation | undefined
 }
 
 /**
+ * The time layer's limits lines for THIS turn (step T8), composed from the
+ * record: one line per `period` row whose result checks hold
+ * (`coverage/period.ts` · `periodCheckLine`) and the wall-clock sources'
+ * `Clocks` lines (`source-clock` rows; `core/time/check.ts` · `clocksDiffer`).
+ * `undefined` when there is no clock (nothing to render in) or nothing to say.
+ */
+function timeLinesOf(scope: TypedScope<AgentState>): TimeLimitLines | undefined {
+  const presentation = presentationOf(scope);
+  if (presentation === undefined) return undefined;
+  const ledger = (scope.findingsLedger as FindingsLedger | undefined) ?? [];
+  const turn = scope.turnNumber as number | undefined;
+  const period: string[] = [];
+  for (const row of ledger) {
+    if (row.kind !== 'period' || (turn !== undefined && row.turn !== turn)) continue;
+    const line = periodCheckLine(row as PeriodRow, presentation);
+    if (line !== undefined) period.push(line);
+  }
+  const sources = distinctSources(sourceClocksOf(ledger, turn));
+  const clocks = clockLines(sources, clocksDiffer(sources));
+  return period.length + clocks.length === 0 ? undefined : { period, clocks };
+}
+
+/**
  * `prepareFinalWithLimitsStage` under `.time()` (the time layer): the same
  * block, each `Period:` line rendered in the run's clock zone with the zone
- * named (`coverage/period.ts` · `periodLine`). The typed record keeps the
- * declared instants; only the person's line changes.
+ * named (`coverage/period.ts` · `periodLine`), and — step T8 — the result
+ * checks' lines and the wall-clock sources (`timeLinesOf`). The typed record
+ * keeps the declared instants; only the person's line changes.
  */
 export const prepareFinalWithLimitsInZoneStage = (scope: TypedScope<AgentState>): void => {
-  const declared = scope.coverageDeclared;
+  const declared = scope.coverageDeclared ?? [];
+  const time = timeLinesOf(scope);
   const answer =
-    declared !== undefined && declared.length > 0
-      ? composeAnswerWithCoverage(scope.llmLatestContent, declared, '', '', presentationOf(scope))
+    declared.length > 0 || time !== undefined
+      ? composeAnswerWithCoverage(
+          scope.llmLatestContent,
+          declared,
+          '',
+          '',
+          presentationOf(scope),
+          time,
+        )
       : scope.llmLatestContent;
   captureTurnPayload(scope, answer);
 };
@@ -293,14 +328,16 @@ export function prepareFinalWithLimitsAndAssumedStage(
         ? () => [...((scope.middlewareDecisions as readonly unknown[] | undefined) ?? [])]
         : undefined,
     );
+    const time = inZone ? timeLinesOf(scope) : undefined;
     const answer =
-      declared.length > 0 || assumed !== ''
+      declared.length > 0 || assumed !== '' || time !== undefined
         ? composeAnswerWithCoverage(
             scope.llmLatestContent,
             declared,
             assumed,
             '',
             inZone ? presentationOf(scope) : undefined,
+            time,
           )
         : scope.llmLatestContent;
     captureTurnPayload(scope, answer);
@@ -428,14 +465,18 @@ export function prepareFinalWithAnswerLayerStage(o: {
           : undefined,
       );
     }
+    const time = o.limits && o.inZone === true ? timeLinesOf(scope) : undefined;
     const answer =
-      declared.length > 0 || assumed !== '' || line !== ''
+      declared.length > 0 || assumed !== '' || line !== '' || time !== undefined
         ? composeAnswerWithCoverage(
             scope.llmLatestContent,
             declared,
             assumed,
             line,
-            o.inZone === true && declared.length > 0 ? presentationOf(scope) : undefined,
+            o.inZone === true && (declared.length > 0 || time !== undefined)
+              ? presentationOf(scope)
+              : undefined,
+            time,
           )
         : scope.llmLatestContent;
     captureTurnPayload(scope, answer, false, undefined, assessed);

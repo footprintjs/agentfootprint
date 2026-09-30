@@ -40,6 +40,7 @@ import type {
   ClockOnResumeRow,
   ClockRow,
   TimeAnswerRow,
+  SourceClockRow,
   TimeDerivedRow,
   TimeReadingRow,
 } from '../../time/rows.js';
@@ -474,14 +475,16 @@ export type FindingsRow =
   // declares forms carries (`call-window`); and, from the batch ask, the window
   // the person settled for a mention in the time ask (`time-answer`); and,
   // from the Route decider, the answer's values the library itself spelled
-  // from a time reading (`time-derived`, step T7).
+  // from a time reading (`time-derived`, step T7); and, from ToolCalls, each
+  // dataset whose declared time axis names a zone (`source-clock`, step T8).
   | ClockRow
   | ClockOnResumeRow
   | CallRow
   | TimeReadingRow
   | CallWindowRow
   | TimeAnswerRow
-  | TimeDerivedRow;
+  | TimeDerivedRow
+  | SourceClockRow;
 
 /** The committed key: flat, append-only, a fresh array on every write. */
 export type FindingsLedger = readonly FindingsRow[];
