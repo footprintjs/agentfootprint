@@ -30,7 +30,7 @@
 import type { LLMToolSchema } from '../../../adapters/types.js';
 import { shownArgsOf } from '../../toolShownArgs.js';
 import type { InputValue } from '../../inputRequest.js';
-import { ASSUMED_BLOCK_HEADING } from '../coverage/answer.js';
+import { ASSUMED_BLOCK_HEADING, type TimeLimitLines } from '../coverage/answer.js';
 import { argumentRewritesOf, type ArgumentRewrite } from '../middleware/rewrites.js';
 import { isRefused, periodFactsOf, periodFormsOf, rulesOf, type RuledToolLike } from './declare.js';
 import { HIDDEN_VALUE, type ArgumentRow } from './rows.js';
@@ -428,6 +428,49 @@ export function timeWindowsLine(
   const pending = pendingSentence(tools, windows);
   if (settled === undefined) return pending;
   return pending === undefined ? settled : `${settled} ${pending}`;
+}
+
+// LENS · late-line · request-ephemeral
+// reads: the turn's `period` rows whose result checks hold and its `source-clock` rows, composed by
+//        the ONE owner of the limits lines (`coverage/timeLimits.ts` · `timeLimitLinesOf`,
+//        audience `model`) — the same lines the limits block prints for the person after the answer
+// law: the library's CONCLUSION about what each call READ against what it ASKED (step T8), both
+//      ranges in the person's zone, and what an answer built on it states; it names what the record
+//      holds for calls that already ran and promises nothing a later call can break.
+/**
+ * The time limits an answer states (time step T8's serving placement): the
+ * result checks that hold this turn — a read narrower, wider or shifted from
+ * what was asked, a window older than the source keeps, sources on different
+ * clocks — served to the MODEL as the library's conclusion, LATE, at the
+ * decision point, in the ONE served time line (TQ13) after the windows'
+ * halves. The step-7b bench showed why: raw facts on a result are not
+ * compared by the model, a conclusion served at the decision point is.
+ *
+ * `undefined` when nothing holds — a turn whose reads match what was asked
+ * serves no sentence at all.
+ *
+ * @example
+ * ```ts
+ * timeLimitsSentence({ period: ['client_activity read less than was asked — asked: …; read: …'], clocks: [] });
+ * // 'The time the tools read is not the time asked about, and an answer says so: client_activity
+ * //  read less than was asked — asked: …; read: …. An answer built on these results states the
+ * //  time each one read and claims nothing about time it did not read.'
+ * ```
+ */
+export function timeLimitsSentence(lines: TimeLimitLines | undefined): string | undefined {
+  if (lines === undefined) return undefined;
+  const parts: string[] = [];
+  if (lines.period.length > 0) {
+    parts.push(
+      `The time the tools read is not the time asked about, and an answer says so: ` +
+        `${lines.period.join('; ')}. An answer built on these results states the time each one ` +
+        `read and claims nothing about time it did not read.`,
+    );
+  }
+  if (lines.clocks.length > 0) {
+    parts.push(`Clocks: ${lines.clocks.join('; ')}.`);
+  }
+  return parts.length === 0 ? undefined : parts.join(' ');
 }
 
 // ─── The note on a result ───────────────────────────────────────────────

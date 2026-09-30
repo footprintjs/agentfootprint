@@ -33,12 +33,10 @@ import {
   copyAnswerCoverage,
   type AnswerCoverage,
 } from '../coverage/index.js';
-import type { TimeLimitLines } from '../coverage/answer.js';
-import { clockLines, periodCheckLine, type PeriodRow } from '../coverage/period.js';
+import { timeLimitLinesOf, type TimeLimitLines } from '../coverage/timeLimits.js';
 import type { AgentState } from '../types.js';
 import type { FindingsLedger } from '../findings/types.js';
-import { presentationZoneOf, sourceClocksOf } from '../../time/rows.js';
-import { clocksDiffer, distinctSources } from '../../time/check.js';
+import { presentationZoneOf } from '../../time/rows.js';
 import type { Presentation } from '../../time/present.js';
 
 /**
@@ -248,19 +246,10 @@ function presentationOf(scope: TypedScope<AgentState>): Presentation | undefined
  * `undefined` when there is no clock (nothing to render in) or nothing to say.
  */
 function timeLinesOf(scope: TypedScope<AgentState>): TimeLimitLines | undefined {
-  const presentation = presentationOf(scope);
-  if (presentation === undefined) return undefined;
-  const ledger = (scope.findingsLedger as FindingsLedger | undefined) ?? [];
-  const turn = scope.turnNumber as number | undefined;
-  const period: string[] = [];
-  for (const row of ledger) {
-    if (row.kind !== 'period' || (turn !== undefined && row.turn !== turn)) continue;
-    const line = periodCheckLine(row as PeriodRow, presentation);
-    if (line !== undefined) period.push(line);
-  }
-  const sources = distinctSources(sourceClocksOf(ledger, turn));
-  const clocks = clockLines(sources, clocksDiffer(sources));
-  return period.length + clocks.length === 0 ? undefined : { period, clocks };
+  return timeLimitLinesOf(
+    scope.findingsLedger as FindingsLedger | undefined,
+    scope.turnNumber as number | undefined,
+  );
 }
 
 /**

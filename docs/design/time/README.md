@@ -1566,7 +1566,17 @@ deterministic and are measured over retained recorded runs or unit tables, with 
   checks on the rows (`agent.findings()`), not in `answerCoverage`; a refused call's `period`
   row still reads `undeclared` beside `period-beyond-retention` (the T5b precedent: a refusal
   result declares no period); § 9.1's `partly-future` stays unchecked. Pinned by
-  `test/core/time/check.test.ts` and `test/core/time/result-checks-run.test.ts`.
+  `test/core/time/check.test.ts` and `test/core/time/result-checks-run.test.ts`. (7) **Served to the model** (added before the paid bench, the owner's
+  serving strategy: the library's conclusion, late, at the decision point). The same lines,
+  composed by ONE owner for both readers (`coverage/timeLimits.ts` · `timeLimitLinesOf`; the
+  limits block asks it for the person, the served line for the model with "the person's window"
+  for "your window" and, of the clocks, only the label that two differ), join the ONE served time
+  line (TQ13) after the windows' halves: `arguments/serve.ts` · `timeLimitsSentence`, composed at
+  the tools slot's decoration site from the mount arg `timeLimits` and appended LAST to every
+  later request of the turn by `callLLM` — never to history, so `servedView` rebuilds it from the
+  same `timeLine` key. The gate widens from `.time({ reader })` to `.time()`: without a reader the
+  line is written only when it says something. A turn whose reads match serves nothing. Pinned by
+  `test/core/time/limits-served.test.ts` and its row in `test/modelFacingSurfaces.test.ts`.
 
 **Why this order.** T1 settles the grammar every other step leans on and is free. T2 is already
 written and only needs rebasing and the value check. T3 gives the first visible win (the limits

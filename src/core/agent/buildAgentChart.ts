@@ -60,6 +60,8 @@ import { mountMemoryRead, mountMemoryWrite } from '../../memory/wire/mountMemory
 import { withMemoryRecall } from './memoryRecallInjections.js';
 import { offeredResultIds } from './findings/offer.js';
 import { readerWindowsOf } from '../time/bind.js';
+import { clockOf } from '../time/rows.js';
+import { timeLimitLinesOf, type TimeLimitLines } from './coverage/timeLimits.js';
 import type { FindingsLedger } from './findings/types.js';
 import { breakFinalStage, breakFinalWithValidationStage } from './stages/breakFinal.js';
 import { prepareFinalFor } from './stages/prepareFinal.js';
@@ -308,6 +310,17 @@ export interface AgentChartDeps {
   readonly timeReader?: true;
 
   /**
+   * The time layer is armed with the inputs layer (`.time()` over a tool that
+   * declares a period, step T8). Gates ONE mount arg on the Tools branch's
+   * `inputMapper`: `timeLimits`, the turn's result-check lines for the model
+   * (`coverage/timeLimits.ts` · `timeLimitLinesOf`, audience `model`, off
+   * `parent.findingsLedger`) — value-conditional, so a turn whose reads match
+   * what was asked crosses no key. The slot serves them in the one time line
+   * (`ToolsSlotConfig.timeLimits`).
+   */
+  readonly timeLimits?: true;
+
+  /**
    * An escalation brain is declared (9.19.0). In the GROUPED chart this
    * gates threading `skillEscalated` across the `sf-llm-call` boundary —
    * the flip is written by tool-calls on the OUTER scope and read by
@@ -415,6 +428,13 @@ export function timeWindowsArg(ledger: unknown): {
 } {
   const windows = readerWindowsOf(ledger as readonly unknown[] | undefined);
   return windows === undefined ? {} : { timeWindows: windows };
+}
+
+/** The Tools mount's `timeLimits` arg — the turn's result-check lines for the model, or no key. */
+export function timeLimitsArg(ledger: unknown): { timeLimits?: TimeLimitLines } {
+  const rows = ledger as readonly unknown[] | undefined;
+  const lines = timeLimitLinesOf(rows, clockOf(rows)?.turn, 'model');
+  return lines === undefined ? {} : { timeLimits: lines };
 }
 
 export function buildAgentChart(deps: AgentChartDeps): FlowChart {
@@ -834,6 +854,9 @@ export function buildAgentChart(deps: AgentChartDeps): FlowChart {
         // value-conditional: a turn with none crosses no key. See
         // `AgentChartDeps.timeReader`.
         ...(deps.timeReader === true && timeWindowsArg(parent.findingsLedger)),
+        // The turn's result-check lines (step T8), under `.time()` only and
+        // value-conditional. See `AgentChartDeps.timeLimits`.
+        ...(deps.timeLimits === true && timeLimitsArg(parent.findingsLedger)),
         // Tool choice by classifier (9.105.0), under the arm only: the
         // message the classifier reads, the rows so far (aliased — a mount
         // input is frozen inside; the slot writes `toolChoices` fresh) and

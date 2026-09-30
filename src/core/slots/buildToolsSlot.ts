@@ -47,6 +47,7 @@ import type { Classifier } from '../../classify/types.js';
 import type { ToolChoiceEntry } from '../agent/toolChoice/types.js';
 import type { ReaderWindows } from '../time/bind.js';
 import type { ZoneName } from '../time/zone.js';
+import type { TimeLimitLines } from '../agent/coverage/answer.js';
 
 /**
  * Mutable cache shared between `buildToolsSlot` (writer) and
@@ -203,7 +204,7 @@ export function mergeWire(candidates: readonly WireCandidate[]): {
  */
 type RulesOnWire = Pick<
   typeof import('../agent/arguments/serve.js'),
-  'rulesOnWire' | 'timeWindowsLine'
+  'rulesOnWire' | 'timeWindowsLine' | 'timeLimitsSentence'
 >;
 
 /**
@@ -425,6 +426,16 @@ export interface ToolsSlotConfig {
    */
   readonly timeWindows?: { readonly appZone?: ZoneName };
   /**
+   * THE TIME LAYER IS ARMED (`.time()`, step T8) — present ONLY then, and only
+   * beside `inputsLayer`. The same site appends the turn's time limits
+   * (`agent/arguments/serve.ts` · `timeLimitsSentence`) to the ONE served time
+   * line, from one mount arg, `timeLimits` (`coverage/timeLimits.ts` ·
+   * `timeLimitLinesOf` — absent on a turn whose reads match what was asked).
+   * Without the reader the line is written only when it says something; the
+   * iteration stamp keeps an older one from being served.
+   */
+  readonly timeLimits?: true;
+  /**
    * TOOL CHOICE BY CLASSIFIER IS ARMED (9.105.0, `.toolChoice()`) — present
    * ONLY then. Compose then asks `classifier` which of the merged wire's
    * tools (minus the doors) answers the current step, files the pick under
@@ -636,6 +647,7 @@ export function buildToolsSlot(config: ToolsSlotConfig): FlowChart {
       stepPointer?: StepPointerCarrier;
       findingsOffer?: readonly string[];
       timeWindows?: ReaderWindows;
+      timeLimits?: TimeLimitLines;
       userMessage?: string;
       priorToolChoices?: readonly ToolChoiceEntry[];
       wrapUpAsked?: boolean;
@@ -1015,9 +1027,12 @@ export function buildToolsSlot(config: ToolsSlotConfig): FlowChart {
       // served at the decision point is followed, raw facts early are not). Under the reader's arm
       // only, written EVERY composition — the line, or '' — stamped with the iteration that
       // composed it, so a slot that does not re-run (classic mode) never serves a stale line.
-      if (config.timeWindows !== undefined && rules !== undefined) {
-        const line =
-          args.timeWindows === undefined
+      // THE TIME LIMITS (step T8) join the same line, after the windows: what the calls that ran
+      // READ against what they ASKED, the conclusion an answer states — composed from the record
+      // by the one owner the limits block also asks, so the model and the person read one text.
+      if ((config.timeWindows !== undefined || config.timeLimits === true) && rules !== undefined) {
+        const windows =
+          config.timeWindows === undefined || args.timeWindows === undefined
             ? undefined
             : rules.timeWindowsLine(ruled, winningTools, {
                 ...args.timeWindows,
@@ -1025,7 +1040,12 @@ export function buildToolsSlot(config: ToolsSlotConfig): FlowChart {
                   appZone: config.timeWindows.appZone,
                 }),
               });
-        scope.timeLine = { iteration, text: line ?? '' };
+        const limits =
+          config.timeLimits === true ? rules.timeLimitsSentence(args.timeLimits) : undefined;
+        const text = [windows, limits].filter((t) => t !== undefined).join(' ');
+        if (config.timeWindows !== undefined || text.length > 0) {
+          scope.timeLine = { iteration, text };
+        }
       }
       // Declared sources (honesty layer 2): `_findings.from` on a RULED tool only —
       // inside the ledger's decoration under `.findings()`, or as the reserved
@@ -1163,6 +1183,7 @@ export function buildToolsSlot(config: ToolsSlotConfig): FlowChart {
         ? import('../agent/arguments/serve.js').then((m) => ({
             rulesOnWire: m.rulesOnWire,
             timeWindowsLine: m.timeWindowsLine,
+            timeLimitsSentence: m.timeLimitsSentence,
           }))
         : undefined;
     if (toolChoice === undefined) {

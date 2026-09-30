@@ -44,7 +44,9 @@ Who asks it today: `coverage/period.ts` reads a declared period's instants throu
 `instant.ts` · `instantOf` in the lenient profile (`periodVerdict` is unchanged, inclusive at both
 ends) and, under `.time()`, renders `periodLine` through `present.ts` in the run's zone — and,
 since step T8, each result check's line (`periodCheckLine`) and the wall-clock sources
-(`clockLines`); the results layer (`results/subflow.ts` · `checkPeriods`, handed each call's
+(`clockLines`), composed per turn by `coverage/timeLimits.ts` · `timeLimitLinesOf` for the limits
+block AND for the model's served time line (`arguments/serve.ts` · `timeLimitsSentence`, late, at
+the decision point); the results layer (`results/subflow.ts` · `checkPeriods`, handed each call's
 `call-window` and `call` rows by `honesty/mounts.ts` · `timeOfBatch`) asks `check.ts` ·
 `periodTimeCheck` and files the answer on the call's `period` row, which the answer's standing folds
 (`period-differs-from-asked`, `period-beyond-retention`); `stages/toolCalls.ts` files a

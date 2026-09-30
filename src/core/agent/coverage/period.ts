@@ -722,13 +722,23 @@ export function periodRowIsWellFormed(row: Readonly<Record<string, unknown>>): b
  * // 'search_logs read more than was asked — asked: 2026-10-08 00:00:00–23:59:59 America/Los_Angeles
  * //  (UTC-07:00); read: 2026-10-08 00:00:00–2026-10-09 08:40:00 America/Los_Angeles (UTC-07:00)'
  * ```
+ *
+ * `audience` names who reads the line: the PERSON (the limits block, the
+ * default — their window is "your window") or the MODEL (the served time line,
+ * `agent/arguments/serve.ts` · `timeLimitsSentence` — the same window is "the
+ * person's window"). Only that reference differs.
  */
-export function periodCheckLine(row: PeriodRow, presentation: Presentation): string | undefined {
+export function periodCheckLine(
+  row: PeriodRow,
+  presentation: Presentation,
+  audience: 'person' | 'model' = 'person',
+): string | undefined {
   const parts: string[] = [];
   const d = row.differs;
   if (d !== undefined) {
     const person = d.against === 'person';
-    const reference = person ? 'your window' : 'was asked';
+    const theirs = audience === 'model' ? "the person's window" : 'your window';
+    const reference = person ? theirs : 'was asked';
     const what =
       d.missing.length > 0 && d.extra.length > 0
         ? row.shifted !== undefined
@@ -737,7 +747,7 @@ export function periodCheckLine(row: PeriodRow, presentation: Presentation): str
         : `${d.missing.length > 0 ? 'less' : 'more'} than ${reference}`;
     const reads = d.read.map((r) => presentRange(r, presentation, 'second')).join('; ');
     parts.push(
-      `${row.toolName} read ${what} — ${person ? 'your window' : 'asked'}: ` +
+      `${row.toolName} read ${what} — ${person ? theirs : 'asked'}: ` +
         `${presentRange(d.asked, presentation, 'second')}; read: ${reads}`,
     );
   } else if (row.shifted !== undefined) {

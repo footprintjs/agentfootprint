@@ -89,6 +89,7 @@ import {
   keptAnswersNote,
   secondPauseRefusal,
   timeRefusal,
+  timeLimitsSentence,
   timeWindowsLine,
   unansweredRefusal,
   unmountedRulesRefusal,
@@ -96,6 +97,7 @@ import {
   withArgumentRules,
 } from '../src/core/agent/arguments/serve.js';
 import { rulesOf } from '../src/core/agent/arguments/declare.js';
+import { periodCheckLine } from '../src/core/agent/coverage/period.js';
 import {
   factExpectation,
   WINDOW_FORM_EXPECTATION,
@@ -778,6 +780,74 @@ function timeWindowLines(): string[] {
       return line === undefined ? [] : [line];
     }),
   );
+}
+
+/**
+ * The time limits an answer states (time step T8), served late: a clamp (less
+ * than was asked), a model-chosen look-back wider than the person's window, a
+ * refusal older than the source keeps, and two wall-clock sources on
+ * different zones — each alone, and together.
+ */
+function timeLimitLines(): string[] {
+  const zone = { zone: 'America/Los_Angeles' };
+  const range = (from: string, to: string) => ({ from, to });
+  const base = { kind: 'period', turn: 1, iteration: 1, verdict: 'covered' } as const;
+  const clamp = periodCheckLine(
+    {
+      ...base,
+      toolCallId: 'c1',
+      toolName: 'client_activity',
+      differs: {
+        against: 'asked',
+        asked: range('2026-09-09T15:40:00Z', '2026-10-09T15:40:00Z'),
+        read: [range('2026-10-02T15:40:00Z', '2026-10-09T15:40:00Z')],
+        source: 'queried',
+        missing: [range('2026-09-09T15:40:00Z', '2026-10-02T15:40:00Z')],
+        extra: [],
+      },
+    } as never,
+    zone,
+    'model',
+  )!;
+  const wider = periodCheckLine(
+    {
+      ...base,
+      toolCallId: 'c2',
+      toolName: 'search_logs',
+      differs: {
+        against: 'person',
+        asked: range('2026-10-08T15:00:00Z', '2026-10-08T16:00:00Z'),
+        read: [range('2026-10-08T15:00:00Z', '2026-10-09T15:40:00Z')],
+        source: 'asked',
+        missing: [],
+        extra: [range('2026-10-08T16:00:00Z', '2026-10-09T15:40:00Z')],
+      },
+    } as never,
+    zone,
+    'model',
+  )!;
+  const old = periodCheckLine(
+    {
+      ...base,
+      toolCallId: 'c3',
+      toolName: 'client_activity',
+      verdict: 'undeclared',
+      beyondRetention: true,
+    } as never,
+    zone,
+    'model',
+  )!;
+  const clocks = ["the sources' clocks differ (UTC, America/New_York) — compared as instants"];
+  return [
+    { period: [clamp], clocks: [] },
+    { period: [wider], clocks: [] },
+    { period: [old], clocks: [] },
+    { period: [], clocks },
+    { period: [clamp, wider, old], clocks },
+  ].flatMap((lines) => {
+    const line = timeLimitsSentence(lines);
+    return line === undefined ? [] : [line];
+  });
 }
 
 /** A ruled tool, and the same tool with an argument view that hides the ruled value. */
@@ -1604,6 +1674,24 @@ const PRODUCERS: readonly ModelFacingProducer[] = [
       /^The window for “yesterday” is not settled: the person has not confirmed it, and the call that ran used a window written into it, unconfirmed\. An answer built on that call says its window was not confirmed by the person\.$/m,
     ],
     compose: async () => timeWindowLines(),
+  },
+  {
+    id: 'time layer — the time limits an answer states, served late at the decision point (step T8)',
+    module: 'src/core/agent/arguments/serve.ts',
+    surface: { channel: 'injected-turn', lifetime: 'request-ephemeral' },
+    lifetimeBecause:
+      'composed at the tools slot’s one decoration site from the turn’s `period` rows whose result ' +
+      'checks hold and its `source-clock` rows (`coverage/timeLimits.ts` · `timeLimitLinesOf`, the ' +
+      'owner the limits block also asks), appended to the ONE served time line, which `callLLM` ' +
+      'serves as the LAST `role: "user"` line of that one request — never written to history',
+    drivenBy: ['test/core/time/limits-served.test.ts'],
+    reaches: [
+      /^The time the tools read is not the time asked about, and an answer says so: client_activity read less than was asked — asked: .+; read: .+\. An answer built on these results states the time each one read and claims nothing about time it did not read\.$/m,
+      /search_logs read more than the person's window — the person's window: /,
+      /client_activity: the time asked about is older than the oldest data the tool declares its source keeps/,
+      /^Clocks: the sources' clocks differ \(UTC, America\/New_York\) — compared as instants\.$/m,
+    ],
+    compose: async () => timeLimitLines(),
   },
   {
     id: 'inputs layer — the note on a result whose call ran on a filled value (honesty layer 2)',

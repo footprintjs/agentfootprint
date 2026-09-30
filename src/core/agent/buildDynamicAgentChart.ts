@@ -68,7 +68,7 @@ import type { FindingsLedger } from './findings/types.js';
 import { breakFinalStage, breakFinalWithValidationStage } from './stages/breakFinal.js';
 import { prepareFinalFor } from './stages/prepareFinal.js';
 import { buildCacheSubflow } from './buildCacheSubflow.js';
-import { timeWindowsArg, type AgentChartDeps } from './buildAgentChart.js';
+import { timeLimitsArg, timeWindowsArg, type AgentChartDeps } from './buildAgentChart.js';
 import {
   mountInputsLayer,
   mountResultsLayer,
@@ -456,6 +456,8 @@ export function buildDynamicAgentChart(deps: AgentChartDeps): FlowChart {
         // The reader's settled windows (step T6b) — the flat chart's line, read INSIDE
         // sf-llm-call off the boundary's `findingsLedger`. See `AgentChartDeps.timeReader`.
         ...(deps.timeReader === true && timeWindowsArg(parent.findingsLedger)),
+        // The turn's result-check lines (step T8). See `AgentChartDeps.timeLimits`.
+        ...(deps.timeLimits === true && timeLimitsArg(parent.findingsLedger)),
         // Tool choice by classifier (9.105.0) — the flat chart's three args,
         // read INSIDE sf-llm-call: `userMessage` and `wrapUpAsked` are the
         // boundary's own inputs, `toolChoices` is `dynamicTurnSeed`'s copy
