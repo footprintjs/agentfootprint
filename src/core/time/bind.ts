@@ -217,6 +217,28 @@ export interface ReaderWindows {
    * `bench/time/`). Absent when none is pending.
    */
   readonly pending?: readonly string[];
+  /**
+   * A mention is pending AND a call of this turn already ran on a window the
+   * model wrote into it (a `call-window` row `how: 'model'` — § 7.3: it runs
+   * as sent, unconfirmed). The served line then names that limit for the
+   * answer instead of the move that would have asked the person. Absent
+   * otherwise.
+   */
+  readonly ranUnconfirmed?: true;
+}
+
+/** Whether a call of `turn` ran on a window the model wrote (`call-window` `how: 'model'`). */
+function ranOnSentWindow(ledger: readonly unknown[] | undefined, turn: number): boolean {
+  return (ledger ?? []).some((row) => {
+    const r = row as { readonly kind?: unknown; readonly turn?: unknown; readonly how?: unknown };
+    return (
+      r !== null &&
+      typeof r === 'object' &&
+      r.kind === 'call-window' &&
+      r.turn === turn &&
+      r.how === 'model'
+    );
+  });
 }
 
 /**
@@ -258,7 +280,12 @@ export function readerWindowsOf(ledger: readonly unknown[] | undefined): ReaderW
   const { windows } = turnWindowsOf(readings, undefined, answers);
   const pending = pendingQuotesOf(readings, answers);
   if (windows.length === 0 && pending.length === 0) return undefined;
-  return { now: clock.now, windows, ...(pending.length > 0 && { pending }) };
+  return {
+    now: clock.now,
+    windows,
+    ...(pending.length > 0 && { pending }),
+    ...(pending.length > 0 && ranOnSentWindow(ledger, turn) && { ranUnconfirmed: true as const }),
+  };
 }
 
 // ─── One call ────────────────────────────────────────────────────────────

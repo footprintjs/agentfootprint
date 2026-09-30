@@ -157,10 +157,11 @@ function lookbackTool(seen: Record<string, unknown>[] = []) {
 const reader = englishTimeReader();
 
 /** The pending half of the served time line (`arguments/serve.ts` · `timeWindowsLine`). */
-const pendingLine = (quote: string, moves: string): string =>
-  `The person has not confirmed what their time words “${quote}” mean yet: call ${moves}, and ` +
-  'the library confirms its reading with the person, zone shown, before the call runs (or ' +
-  'refuses the call and says why); a window written into the call runs unconfirmed.';
+const pendingLine = (quote: string, calls: string): string =>
+  `The window for “${quote}” is not settled yet: the person confirms it in the library's own ` +
+  `form, which shows its reading of those words with the zone and opens when ${calls} (or the ` +
+  'call is refused with the reason). So the next step is that call — not a question about the ' +
+  'time in the reply, and not a window written into the call, which would run unconfirmed.';
 
 /**
  * The late time line of a request (step T6b): the request-only `user` line appended LAST, after
@@ -170,7 +171,7 @@ function timeLineOf(req: LLMRequest | undefined): string | undefined {
   const last = req?.messages[req.messages.length - 1];
   if (last?.role !== 'user' || typeof last.content !== 'string') return undefined;
   return last.content.startsWith("The person's time words") ||
-    last.content.startsWith('The person has not confirmed what their time words')
+    last.content.startsWith('The window for “')
     ? last.content
     : undefined;
 }
@@ -442,7 +443,7 @@ describe('every chat reading is a confirmation — never filed as said (the owne
       const activity = (requests[0]!.tools ?? []).find((t) => t.name === 'client_activity')!;
       expect(activity.description).toBe('Client operations over a window.');
       expect(timeLineOf(requests[0])).toBe(
-        pendingLine(quote, 'client_activity with start_time, end_time left out'),
+        pendingLine(quote, 'client_activity is called with start_time, end_time left out'),
       );
       // One field, pre-filled with the reading and its zone, free entry open.
       expect(first.awaitingInput.fields).toHaveLength(1);
@@ -603,7 +604,8 @@ describe('the one served time sentence — the confirmed window and its source',
       expect(timeLineOf(requests[0])).toBe(
         pendingLine(
           'last 2 hours',
-          'search_logs with window left out, or client_activity with start_time, end_time left out',
+          'search_logs is called with window left out, or client_activity is called with ' +
+            'start_time, end_time left out',
         ),
       );
       await agent.resume(first.checkpoint as never, {
@@ -644,12 +646,31 @@ describe('the one served time sentence — the confirmed window and its source',
     });
     expect(JSON.stringify(requests[1]!.tools)).toBe(JSON.stringify(requests[0]!.tools));
     // The slot did not re-run, so its iteration-1 line (pending) is stale and is NOT served.
-    expect(timeLineOf(requests[0])).toContain('has not confirmed');
+    expect(timeLineOf(requests[0])).toContain('is not settled yet');
     expect(timeLineOf(requests[1])).toBeUndefined();
     expect(seen).toEqual([{ window: '2h' }, { window: '2h' }]);
     expect(ofKind(agent, 'call-window').filter((r) => r.toolCallId === 'c1')).toMatchObject([
       { how: 'filled', person: { source: 'answered', mention: 0 } },
     ]);
+  });
+
+  it('a call that ran on a window the model wrote while a reading waited: the next line names the limit, not the move', async () => {
+    const { agent, requests } = build(
+      [call('c0', 'search_logs', { window: '2h' }), answer('none')],
+      [lookbackTool()],
+      (b) => b.time({ zone: LA, reader }),
+    );
+    const out = await agent.run({ message: 'any errors in the last 2 hours?', time: { now: NOW } });
+    expect(isInputPause(out)).toBe(false);
+    expect(timeLineOf(requests[0])).toBe(
+      pendingLine('last 2 hours', 'search_logs is called with window left out'),
+    );
+    expect(ofKind(agent, 'call-window')[0]).toMatchObject({ how: 'model' });
+    expect(timeLineOf(requests[1])).toBe(
+      'The window for “last 2 hours” is not settled: the person has not confirmed it, and the ' +
+        'call that ran used a window written into it, unconfirmed. An answer built on that call ' +
+        'says its window was not confirmed by the person.',
+    );
   });
 
   it('an edited window is served as the window the person gave', async () => {

@@ -281,17 +281,24 @@ on `timeLine` = `{ iteration, text }`, appended by `callLLM`, rebuilt by `served
 reads the windows with `core/time/bind.ts` · `readerWindowsOf`). It is the library's CONCLUSION,
 never raw facts: a settled window in the person's zone WITH ITS SOURCE and each period tool's own
 values ("may pass"), and the answer is told to state it; a quote still PENDING names no window —
-only that the person has not confirmed it and the one move that asks them (leave the period
-arguments out; a window written into the call runs unconfirmed). Why late: the step-7b bench
+only that it is not settled and the NEXT STEP that asks the person (the call with the period
+arguments left out — not a question in the reply, which the first paid T6b run showed the
+model reaching for, and not a written window, which runs unconfirmed); once a call already ran on
+a written window, the limit the answer states instead. Why late: the step-7b bench
 measured raw facts served early wrong 73/80 and the conclusion served at the decision point 20/80.
 When every reading breaks a tool's facts nothing is asked and the call is refused (`timeRefusal`).
 
 ```ts
 // "client activity yesterday?" under the reader's arm, first request — its LAST message:
-//   { role: 'user', content: 'The person has not confirmed what their time words “yesterday” mean
-//     yet: call client_activity with start_time, end_time left out, and the library confirms its
-//     reading with the person, zone shown, before the call runs (or refuses the call and says
-//     why); a window written into the call runs unconfirmed.' }
+//   { role: 'user', content: 'The window for “yesterday” is not settled yet: the person confirms it
+//     in the library's own form, which shows its reading of those words with the zone and opens
+//     when client_activity is called with start_time, end_time left out (or the call is refused
+//     with the reason). So the next step is that call — not a question about the time in the
+//     reply, and not a window written into the call, which would run unconfirmed.' }
+// once a call of the turn already ran on a window the model wrote, the line names the limit:
+//   'The window for “yesterday” is not settled: the person has not confirmed it, and the call that
+//    ran used a window written into it, unconfirmed. An answer built on that call says its window
+//    was not confirmed by the person.'
 // after the person confirms, the next request's last message:
 //   'The person's time words, as the library holds them: “yesterday” is 2026-10-08 00:00–23:59
 //    America/Los_Angeles (UTC-07:00), the window the person confirmed when asked what their words

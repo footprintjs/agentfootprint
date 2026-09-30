@@ -1035,12 +1035,12 @@ describe('the staged-refs nudge', () => {
         reason: 'time-window-line',
       });
       expect(first.messages.requestOnly[0]!.text).toMatch(
-        /^The person has not confirmed what their time words “yesterday” mean yet: call client_activity with start_time, end_time left out/,
+        /^The window for “yesterday” is not settled yet: .* opens when client_activity is called with start_time, end_time left out/,
       );
       // What went out: the line is the request's LAST message; the history never holds it.
       const sent = wire[0]!.messages;
       expect(sent[sent.length - 1]!.content).toBe(first.messages.requestOnly[0]!.text);
-      expect(JSON.stringify(first.messages.asSent)).not.toContain('has not confirmed');
+      expect(JSON.stringify(first.messages.asSent)).not.toContain('is not settled yet');
       clean(r);
     });
   }

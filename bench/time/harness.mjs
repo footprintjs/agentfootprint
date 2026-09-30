@@ -119,12 +119,6 @@ export function buildAgent(doors, arm, provider, model, tools, nowIso, temperatu
   return builder.build();
 }
 
-/** The two openings of the library's late time line (`arguments/serve.ts` · `timeWindowsLine`). */
-export const TIME_LINE_OPENINGS = Object.freeze([
-  "The person's time words, as the library holds them:",
-  'The person has not confirmed what their time words',
-]);
-
 /** A message's text: a string, or its text blocks joined (the Anthropic wire). */
 function textOf(content) {
   if (typeof content === 'string') return content;
@@ -135,27 +129,33 @@ function textOf(content) {
     .join('\n');
 }
 
-/** The request's late time line — its LAST message when that is the library's line — or `undefined`. */
-export function timeLineOf(messages) {
+/**
+ * The request's late time line (`arguments/serve.ts` · `timeWindowsLine`), or `undefined`: the
+ * request's LAST message when it is a `user` TEXT message that is not the person's own message.
+ * Recognised by position, never by wording — the only request-only user line these agents can
+ * carry is the time line (no evidence gate, so no staged-refs nudge), and a tool result is a
+ * block, not text.
+ */
+export function timeLineOf(messages, personMessage) {
   const last = (messages ?? [])[(messages ?? []).length - 1];
   if (last?.role !== 'user') return undefined;
   const text = textOf(last.content);
-  return TIME_LINE_OPENINGS.some((o) => text.startsWith(o)) ? text : undefined;
+  return text.length > 0 && text !== personMessage ? text : undefined;
 }
 
 /** What the bench keeps of one served request: its digest and the late time line it carried. */
-function servedOf(projected) {
-  const line = timeLineOf(projected.messages);
+function servedOf(projected, personMessage) {
+  const line = timeLineOf(projected.messages, personMessage);
   return { digest: digest(projected), ...(line !== undefined && { timeLine: line }) };
 }
 
 /** The scripted model: plays the variant's steps, then answers; records each served request. */
-export function scriptedMock(doors, variant, now, requests, state) {
+export function scriptedMock(doors, variant, now, requests, state, personMessage) {
   let callNo = 0;
   const steps = variant.steps(now);
   return doors.mock({
     respond: (req) => {
-      requests.push(servedOf(projectRequest(req)));
+      requests.push(servedOf(projectRequest(req), personMessage));
       const step = steps[state.step];
       state.step += 1;
       if (step === undefined) return { content: 'Here is what the tool returned.' };
@@ -167,9 +167,9 @@ export function scriptedMock(doors, variant, now, requests, state) {
 }
 
 /** The package's Anthropic adapter over the caller's SDK client, recording each wire body served. */
-export function anthropicWire(doors, sdkClient, requests) {
+export function anthropicWire(doors, sdkClient, requests, personMessage) {
   const record = (params) => {
-    const line = timeLineOf(params.messages);
+    const line = timeLineOf(params.messages, personMessage);
     requests.push({ digest: digest(params), ...(line !== undefined && { timeLine: line }) });
   };
   const client = {
@@ -212,10 +212,11 @@ export async function runCase(opts) {
   const variant = kind === 'mock' ? caseDef.mock[rep % caseDef.mock.length] : undefined;
   const tools = buildTools(doors, readLog);
   let provider;
-  if (kind === 'mock') provider = scriptedMock(doors, variant, nowMs, requests, mockState);
+  if (kind === 'mock')
+    provider = scriptedMock(doors, variant, nowMs, requests, mockState, caseDef.message);
   else if (kind === 'anthropic') {
     if (opts.sdkClient === undefined) throw new Error('provider anthropic needs opts.sdkClient');
-    provider = anthropicWire(doors, opts.sdkClient, requests);
+    provider = anthropicWire(doors, opts.sdkClient, requests, caseDef.message);
   } else throw new Error(`unknown provider '${kind}' — mock or anthropic`);
 
   const agent = buildAgent(doors, arm, provider, model, tools, now, opts.temperature);

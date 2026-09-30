@@ -49,7 +49,8 @@ export function readRun(raw) {
   const windows = raw.rows.filter((r) => r.kind === 'call-window');
   const firstWindowRow = windows[0];
   const lines = raw.requests.map((q) => q.timeLine).filter((l) => l !== undefined);
-  const pendingServed = lines.some((l) => l.startsWith('The person has not confirmed'));
+  const pendingServed = lines.some((l) => l.includes('is not settled yet:'));
+  const limitServed = lines.some((l) => l.includes('is not settled: the person has not confirmed'));
   const settledServed = lines.some((l) => l.startsWith("The person's time words"));
   const saidRows =
     raw.rows.filter(
@@ -89,6 +90,7 @@ export function readRun(raw) {
     answered: raw.rows.filter((r) => r.kind === 'time-answer').map((r) => r.how),
     timeLines: lines.length,
     pendingServed,
+    limitServed,
     settledServed,
     saidRows,
     calls,
@@ -148,6 +150,8 @@ export function aggregate(rows) {
     bypass: onReadable.filter((r) => r.bypass).length,
     pendingServed: onReadable.filter((r) => r.pendingServed).length,
     settledServed: onReadable.filter((r) => r.settledServed).length,
+    limitServed: onReadable.filter((r) => r.limitServed).length,
+    proseOnly: onReadable.filter((r) => r.periodReads === 0 && !r.confirmRaised).length,
   };
   const tokens = {};
   for (const arm of ['off', 'on']) {
@@ -186,8 +190,9 @@ export function formatReport(agg) {
     `Readable cases, arm on: a confirmation was raised on ${p.raised.k}/${p.raised.n} runs — the pre-fill ` +
       `was the person's window on ${p.prefillRight} (one click), another offered reading on ${p.otherOption}, ` +
       `edited on ${p.edited}; a zone was asked on ${p.zoneAsked}; the pending line was served on ` +
-      `${p.pendingServed}, the settled line on ${p.settledServed}; the model wrote its own window while the ` +
-      `reading waited on ${p.bypass}.`,
+      `${p.pendingServed}, the settled line on ${p.settledServed}, the limit line on ${p.limitServed}; the ` +
+      `model wrote its own window while the reading waited on ${p.bypass}; the run read no window and ` +
+      `raised no confirmation (an answer in prose) on ${p.proseOnly}.`,
   );
   const t = agg.tokens;
   lines.push(

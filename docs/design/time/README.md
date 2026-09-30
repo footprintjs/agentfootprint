@@ -1300,8 +1300,13 @@ deterministic and are measured over retained recorded runs or unit tables, with 
   (reason `time-window-line`). A settled window is named in the person's zone with its source and
   each period tool's values, and the answer is told to state it; a quote still PENDING (a proposal
   the person has not answered, `bind.ts` · `pendingQuotesOf`) names no window — only that it is not
-  confirmed and the one move that asks the person (leave the period arguments out; a window written
-  into the call runs unconfirmed). The mount hands the windows in (`AgentChartDeps.timeReader`, both
+  settled and the NEXT STEP that asks the person: the call with the period arguments left out, not a
+  question about the time in the reply and not a written window (which runs unconfirmed). The first
+  paid run (`bench/time/runs/haiku45-t6b`, stopped at 78 of 390) showed why the move must be named
+  as the next step: the line phrased as "the person has not confirmed…" sent Haiku to ask the person
+  in prose on 15 of 18 readable runs, so no confirmation opened. Once a call of the turn already ran
+  on a written window (`ReaderWindows.ranUnconfirmed`), the line names the limit an answer states
+  instead of the move. The mount hands the windows in (`AgentChartDeps.timeReader`, both
   chart shapes); the seed's static twin carries none (no reading exists at seed — the findings-offer
   precedent). The `control` window is not named (the arm is the reader's). (4) **The lazy ask
   replaces a tool's OWN ask** for its period arguments: a tool whose rule assumes the period keeps

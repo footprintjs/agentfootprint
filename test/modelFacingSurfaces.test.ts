@@ -761,6 +761,8 @@ function timeWindowLines(): string[] {
   const pendingSets = [
     { now: '2026-10-09T15:40:00Z', windows: [], pending: ['yesterday'] },
     { ...sets[0]!, pending: ['10/09/26 8 AM to 8:40 AM PST', 'last 2 hours'] },
+    // …and after a call already ran on a window the model wrote: the limit, not the move.
+    { now: '2026-10-09T15:40:00Z', windows: [], pending: ['yesterday'], ranUnconfirmed: true },
   ];
   const wires = [
     new Map<string, unknown>([
@@ -1597,8 +1599,9 @@ const PRODUCERS: readonly ModelFacingProducer[] = [
       /client_activity start_time \(hidden by the tool's view\), end_time 1791529200000/,
       /, the window the person gave when asked what their words meant — /,
       /, a reading of the person's words they have not confirmed, not their words — /,
-      /^The person has not confirmed what their time words “yesterday” mean yet: call search_logs with window left out, or client_activity with start_time, end_time left out, and the library confirms its reading with the person, zone shown, before the call runs \(or refuses the call and says why\); a window written into the call runs unconfirmed\.$/m,
-      / that window\. The person has not confirmed what their time words “10\/09\/26 8 AM to 8:40 AM PST”, “last 2 hours” mean yet: /,
+      /^The window for “yesterday” is not settled yet: the person confirms it in the library's own form, which shows its reading of those words with the zone and opens when search_logs is called with window left out, or client_activity is called with start_time, end_time left out \(or the call is refused with the reason\)\. So the next step is that call — not a question about the time in the reply, and not a window written into the call, which would run unconfirmed\.$/m,
+      / that window\. The window for “10\/09\/26 8 AM to 8:40 AM PST”, “last 2 hours” is not settled yet: /,
+      /^The window for “yesterday” is not settled: the person has not confirmed it, and the call that ran used a window written into it, unconfirmed\. An answer built on that call says its window was not confirmed by the person\.$/m,
     ],
     compose: async () => timeWindowLines(),
   },

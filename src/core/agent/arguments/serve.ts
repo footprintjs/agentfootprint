@@ -340,23 +340,34 @@ function settledSentence(tools: readonly PeriodTool[], windows: ServedWindows): 
   );
 }
 
-/** The pending half: the quotes no one has confirmed, and the one move that asks the person. */
-function pendingSentence(
-  tools: readonly PeriodTool[],
-  pending: readonly string[] | undefined,
-): string | undefined {
+/**
+ * The pending half: the quotes no one has confirmed. Before any call ran on a window of the
+ * model's own, the one move that asks the person — the call with the period left out — named as
+ * the next step, with the two moves that do not (a question in the reply, a written window).
+ * After one did, the limit the answer states instead.
+ */
+function pendingSentence(tools: readonly PeriodTool[], windows: ServedWindows): string | undefined {
+  const pending = windows.pending;
   if (pending === undefined || pending.length === 0) return undefined;
-  const moves = tools.flatMap((pt) => {
-    const args = [...new Set(pt.forms.flatMap((f) => formArguments(f).map((a) => a.argument)))];
-    return args.length === 0 ? [] : [`${pt.name} with ${args.join(', ')} left out`];
-  });
-  if (moves.length === 0) return undefined;
   const quotes = pending.map((q) => `“${q}”`).join(', ');
+  if (windows.ranUnconfirmed === true) {
+    return (
+      `The window for ${quotes} is not settled: the person has not confirmed it, and the call ` +
+      'that ran used a window written into it, unconfirmed. An answer built on that call says ' +
+      'its window was not confirmed by the person.'
+    );
+  }
+  const calls = tools.flatMap((pt) => {
+    const args = [...new Set(pt.forms.flatMap((f) => formArguments(f).map((a) => a.argument)))];
+    return args.length === 0 ? [] : [`${pt.name} is called with ${args.join(', ')} left out`];
+  });
+  if (calls.length === 0) return undefined;
   return (
-    `The person has not confirmed what their time words ${quotes} mean yet: call ` +
-    `${moves.join(', or ')}, and the library confirms its reading with the person, zone shown, ` +
-    'before the call runs (or refuses the call and says why); a window written into the call ' +
-    'runs unconfirmed.'
+    `The window for ${quotes} is not settled yet: the person confirms it in the library's own ` +
+    `form, which shows its reading of those words with the zone and opens when ` +
+    `${calls.join(', or ')} (or the call is refused with the reason). So the next step is that ` +
+    'call — not a question about the time in the reply, and not a window written into the call, ' +
+    'which would run unconfirmed.'
   );
 }
 
@@ -387,8 +398,11 @@ function pendingSentence(
  *   states the window it was built on.
  * - PENDING — a proposal the person has not answered is no window yet, and a
  *   call that writes its own window runs as sent, unconfirmed (§ 7.3). The
- *   line says so and names the arguments to leave out; the time ask then
- *   confirms the window with the person before the call runs.
+ *   line names the next step — the call with the period arguments left out,
+ *   so the library's own form confirms the window with the person — and the
+ *   two moves that are not it (a question about the time in the reply, a
+ *   written window). Once a call of the turn already ran on a written window
+ *   (`ranUnconfirmed`), it names the limit an answer states instead.
  *
  * `undefined` when no served tool declares a period or neither half has
  * anything to say — a turn with no time words serves no line at all.
@@ -396,10 +410,11 @@ function pendingSentence(
  * @example
  * ```ts
  * timeWindowsLine(served, winningTools, { now, windows: [], pending: ['yesterday'] });
- * // 'The person has not confirmed what their time words “yesterday” mean yet: call
- * //  client_activity with start_time, end_time left out, and the library confirms its reading
- * //  with the person, zone shown, before the call runs (or refuses the call and says why); a
- * //  window written into the call runs unconfirmed.'
+ * // 'The window for “yesterday” is not settled yet: the person confirms it in the library's own
+ * //  form, which shows its reading of those words with the zone and opens when client_activity
+ * //  is called with start_time, end_time left out (or the call is refused with the reason). So
+ * //  the next step is that call — not a question about the time in the reply, and not a window
+ * //  written into the call, which would run unconfirmed.'
  * ```
  */
 export function timeWindowsLine(
@@ -410,7 +425,7 @@ export function timeWindowsLine(
   const tools = periodToolsOf(served, winningTools);
   if (tools.length === 0) return undefined;
   const settled = settledSentence(tools, windows);
-  const pending = pendingSentence(tools, windows.pending);
+  const pending = pendingSentence(tools, windows);
   if (settled === undefined) return pending;
   return pending === undefined ? settled : `${settled} ${pending}`;
 }
