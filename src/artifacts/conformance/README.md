@@ -118,6 +118,7 @@ There is deliberately no way to make a case quietly disappear.
 | `oversized-payload-is-refused-before-the-write`            | over the whole budget is refused at the door, and nothing partial lands           |
 | `parent-refs-are-proven-at-mint`                           | a foreign key cannot dangle at birth, and cannot be proven across scopes          |
 | `malformed-puts-are-refused-by-name`                       | blank kind, blank mediaType, unknown digest, a payload JSON cannot carry          |
+| `a-declared-time-axis-rides-the-ticket`                    | a declared time axis survives put, head, list and get; a malformed one stores nothing |
 | `refusals-carry-no-payload-and-no-scope`                   | a refusal teaches without quoting the payload, the tenant or the principal        |
 | `digest-is-minted-over-the-payload-and-rides-the-ticket`   | one algorithm, one spelling, same bytes ⇒ same digest, absent unless asked for    |
 | `get-refuses-a-payload-that-no-longer-matches-its-digest`  | the verifying read refuses by name; the ticket survives its parcel                |

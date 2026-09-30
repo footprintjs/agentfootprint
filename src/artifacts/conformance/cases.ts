@@ -852,6 +852,58 @@ const malformedRefused: ArtifactStoreCase = {
   },
 };
 
+const timeAxisRidesTheTicket: ArtifactStoreCase = {
+  name: 'a-declared-time-axis-rides-the-ticket',
+  law: 'A declared time axis is judged at mint — refused by name when malformed, stored nowhere — and a well-formed one comes back unchanged on the put, head, list and get.',
+  async run(store, kit) {
+    const scope = kit.scope('time-axis');
+    const timeAxis = {
+      column: 'hour',
+      unit: 'iso',
+      interval: '1h',
+      aggregate: { read_iops: 'avg', peak_iops: 'max' },
+    } as const;
+    const { meta } = await store.put(scope, {
+      kind: 'dataset/rows',
+      mediaType: 'application/json',
+      data: [{ hour: '2026-09-14T10:00:00Z', read_iops: 1, peak_iops: 2 }],
+      timeAxis,
+    });
+    const described = [
+      ['put', meta],
+      ['head', await store.head(scope, meta.ref)],
+      ['list', (await store.list(scope)).artifacts.find((m) => m.ref === meta.ref)],
+      ['get', (await store.get(scope, meta.ref))?.meta],
+    ] as const;
+    for (const [verb, seen] of described) {
+      check(
+        sameValue(seen?.timeAxis, timeAxis),
+        `${verb} described the ticket with timeAxis ${JSON.stringify(seen?.timeAxis)}. The ` +
+          `declaration is the only thing that tells a consumer which column is time — a store ` +
+          `that drops it turns a time series back into a table nobody asked for.`,
+      );
+    }
+
+    const bad = await attempt(() =>
+      store.put(scope, {
+        kind: 'dataset/rows',
+        mediaType: 'application/json',
+        data: [],
+        timeAxis: { column: 'ts', unit: 'seconds' } as never,
+      }),
+    );
+    check(
+      isRefusal(bad, 'invalid'),
+      `a put declaring a malformed time axis was answered with ${textOf(bad)}. A declaration ` +
+        `the store repaired or ignored is a promise the producer never made.`,
+    );
+    check(
+      (await store.list(scope)).artifacts.length === 1,
+      'a put refused for a malformed time axis left a ticket in the scope.',
+    );
+  },
+};
+
 const refusalsKeepSecrets: ArtifactStoreCase = {
   name: 'refusals-carry-no-payload-and-no-scope',
   law: 'A refusal teaches what to do without quoting the payload, the tenant or the principal.',
@@ -1157,6 +1209,7 @@ export const artifactStoreConformance: readonly ArtifactStoreCase[] = [
   oversizedRefused,
   parentRefsProven,
   malformedRefused,
+  timeAxisRidesTheTicket,
   refusalsKeepSecrets,
   digestRidesTheTicket,
   getVerifiesDigest,

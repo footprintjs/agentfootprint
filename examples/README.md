@@ -312,6 +312,7 @@ _Run `npm run examples:readme` after adding/editing examples._
 | # | File | Title | Description |
 |---|---|---|---|
 | — | [`dataset-result.ts`](artifacts/dataset-result.ts) | Publish a dataset, then follow its reference | Declare producer-owned rowsets, keep source lineage, and redeem the reference on a later turn. |
+| — | [`dataset-time-axis.ts`](artifacts/dataset-time-axis.ts) | Declare which column is time | A tool declares the time column, its unit and how each row summarises its interval; a viewer reads the ticket instead of guessing. |
 
 ### [`deploy/`](deploy/) — examples
 

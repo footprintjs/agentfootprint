@@ -6,15 +6,15 @@ _Recorded 2026-09-25._
 
 ## In plain words
 
-The package publishes **17 import paths** carrying **2380 distinct named exports**, plus **124 typed events**. For each one this report asks three separate questions: is it really *exported* (declared), is it *described in prose on the published docs site* (documented), and does a *real run actually use it* (exercised).
+The package publishes **17 import paths** carrying **2389 distinct named exports**, plus **124 typed events**. For each one this report asks three separate questions: is it really *exported* (declared), is it *described in prose on the published docs site* (documented), and does a *real run actually use it* (exercised).
 
-**1649 of 2380 exports (69%) are described in prose on the site.** The rest split into five different problems, which is the whole point of keeping the columns apart:
+**1658 of 2389 exports (69%) are described in prose on the site.** The rest split into five different problems, which is the whole point of keeping the columns apart:
 
 - **31 exist, provably work, and are undocumented.** A reference run exercises them and no page on the site describes them. This is the honest headline number for "features that work and nobody has written about". It is the list to work through.
 - **92 are already written up, just not published.** Prose about them exists inside the repo (`docs/`, `README.md`) but never made it onto the site. These are cheap wins: the writing is done, it needs moving.
 - **18 appear only inside a code sample** and nowhere in the surrounding text. A reader scanning the page never learns they exist, and site search does not find them.
 - **590 are undocumented and no reference run touches them.** This report will not guess whether they work. They are reported as UNKNOWN, which is the honest answer, and they need a human pass.
-- **1416 are documented but no reference run exercises them.** For a function or a class that is the shape a dead or unimplemented feature has. For a type or an interface it is mostly noise, because a type is used, not called — so read that class by kind, and the tables below split it.
+- **1425 are documented but no reference run exercises them.** For a function or a class that is the shape a dead or unimplemented feature has. For a type or an interface it is mostly noise, because a type is used, not called — so read that class by kind, and the tables below split it.
 
 On events: **70** of the 124 typed events are both described on the site and were seen firing in a real run. **23** are described but were never observed firing — that is exactly the shape the resilience events had for months (fully declared, with payload types, and zero emitters), so this number is worth a look every time it moves. **31** are not described in prose on the site at all.
 
@@ -47,7 +47,7 @@ The repo has four documentation locations and they are not equivalent. Getting t
 | Location | Files | Counts as documentation? |
 |---|---|---|
 | `docs-next/content/docs/**.mdx` (hand-written) | 114 | **Yes — the truth source.** This is what the published site renders and what a reader sees. |
-| `docs-next/content/docs/api/**` (TypeDoc-generated) | 691 | **No — excluded.** |
+| `docs-next/content/docs/api/**` (TypeDoc-generated) | 700 | **No — excluded.** |
 | `docs/api-reference/**` (TypeDoc-generated) | 0 | **No — excluded.** |
 | `docs/**.md` + `README.md` (repo-internal prose) | 58 | **No** — but tracked as its own state, "written but not published". |
 
@@ -155,7 +155,7 @@ The site describes it and it really is exported, but no reference run touches it
 | `agentfootprint.integrity.context_error` | `docs-next/content/docs/monitor/arming-context-integrity.mdx`, `docs-next/content/docs/monitor/column-types.mdx` |
 | `agentfootprint.integrity.external_ground_used` | `docs-next/content/docs/monitor/arming-context-integrity.mdx` |
 
-**Functions and classes described on the site but not touched by any reference run (442).** The other 974 in this class are types, interfaces and constants, which a run cannot "call" — they are named in `docs/docs-truth/baseline.json` rather than here.
+**Functions and classes described on the site but not touched by any reference run (445).** The other 980 in this class are types, interfaces and constants, which a run cannot "call" — they are named in `docs/docs-truth/baseline.json` rather than here.
 
 | Symbol | Kind | Exported from |
 |---|---|---|
@@ -183,6 +183,7 @@ The site describes it and it really is exported, but no reference run touches it
 | `composeNotCovered` | function | `agentfootprint` |
 | `contextEngineering` | function | `agentfootprint` |
 | `describedResult` | function | `agentfootprint` |
+| `describeTimeAxis` | function | `agentfootprint` |
 | `epochAt` | function | `agentfootprint` |
 | `epochLocations` | function | `agentfootprint` |
 | `explainSemantics` | function | `agentfootprint` |
@@ -221,6 +222,7 @@ The site describes it and it really is exported, but no reference run touches it
 | `readCoverageResult` | function | `agentfootprint` |
 | `readRowset` | function | `agentfootprint` |
 | `readSemantics` | function | `agentfootprint` |
+| `readTimeAxis` | function | `agentfootprint` |
 | `readToolResultEnvelope` | function | `agentfootprint` |
 | `recordingDispatch` | function | `agentfootprint` |
 | `recordingPutInput` | function | `agentfootprint` |
@@ -234,6 +236,7 @@ The site describes it and it really is exported, but no reference run touches it
 | `sqliteArtifacts` | function | `agentfootprint` |
 | `stageDatasetArtifacts` | function | `agentfootprint` |
 | `summarizeOldest` | function | `agentfootprint` |
+| `timeAxisIssues` | function | `agentfootprint` |
 | `toolDigestInput` | function | `agentfootprint` |
 | `toolSessionKey` | function | `agentfootprint` |
 | `toolSessionsOf` | function | `agentfootprint` |
@@ -879,7 +882,7 @@ Whether a symbol comes from the root barrel or only from a subpath is a document
 
 | Import path | Exports | Described in site prose | Coverage |
 |---|---|---|---|
-| `agentfootprint` | 685 | 546 | 80% |
+| `agentfootprint` | 694 | 555 | 80% |
 | `agentfootprint/providers` | 163 | 134 | 82% |
 | `agentfootprint/memory` | 223 | 112 | 50% |
 | `agentfootprint/rag` | 49 | 49 | 100% |

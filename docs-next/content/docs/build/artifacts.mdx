@@ -131,6 +131,38 @@ Runnable chatbot-only example, including a second-turn calculation:
 The storage design follows the established
 [claim-check pattern](https://www.enterpriseintegrationpatterns.com/patterns/messaging/StoreInLibrary.html).
 
+### Declare which column is time
+
+A viewer handed rows has to guess whether they are a time series: `ts` holding
+`1726300800` is epoch seconds to the tool that wrote it and a large number to
+everything else. Guessing draws some series and leaves the rest as tables. So the
+producer says it, on the ticket: `timeAxis` names the time column, how its values
+are written (`'iso'`, `'epoch-s'`, `'epoch-ms'`), the IANA `zone` when ISO values
+are wall-clock, and how each row summarises its interval.
+
+<CodeFile path="examples/artifacts/dataset-time-axis.ts" region="declare" title="examples/artifacts/dataset-time-axis.ts (region: declare)" />
+
+The declaration rides `ArtifactMeta.timeAxis` through every store and the
+`artifacts.minted` event. A viewer reads it with `readTimeAxis(meta)` and titles the
+chart with `describeTimeAxis(axis)`, the one wording every screen shares:
+
+<CodeFile path="examples/artifacts/dataset-time-axis.ts" region="read" title="examples/artifacts/dataset-time-axis.ts (region: read)" />
+
+The declaration's type is `DatasetTimeAxis`. Its unit is a `TimeAxisUnit` and each
+summary word is a `TimeAxisAggregate`; the closed sets are exported as
+`TIME_AXIS_UNITS` and `TIME_AXIS_AGGREGATES`. `readTimeAxis` returns a
+`TimeAxisReading`: absent, declared, or malformed with its issues, for a ticket
+written by a foreign store. `timeAxisIssues(value)` is the judge the store itself
+uses. It returns every problem in words, and an empty list means the declaration
+is well-formed.
+
+**Gotchas.** A malformed declaration is refused at mint, never repaired. That covers
+an unknown key, a zone on an epoch, a summary with no `interval`, or an `interval`
+with no `aggregate` (`'raw'` says nothing was reduced). `stageDatasetArtifacts`
+judges it before its first write. The store never scans rows, so a declared column
+missing from the rows is for the viewer to report as an error, not to hide. An
+undeclared dataset is unchanged, and the viewer keeps whatever heuristic it had.
+
 The store alone still leaves the model doing the redeeming by hand (`ctx.artifacts.get` inside the tool). Three legs make the ref a first-class citizen of dispatch itself.
 
 ### `wants` — refs as tool arguments, resolved before execute

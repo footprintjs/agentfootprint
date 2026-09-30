@@ -432,7 +432,7 @@ describe('the declarations are the whole list, and each one is argued', () => {
 describe('the battery covers what it claims to', () => {
   it('holds every case the port names, each with a law, each name unique', () => {
     // A battery that quietly lost a case would pass every store trivially.
-    expect(artifactStoreConformance.length).toBe(19);
+    expect(artifactStoreConformance.length).toBe(20);
     const names = artifactStoreConformance.map((c) => c.name);
     expect(new Set(names).size).toBe(names.length);
     for (const testCase of artifactStoreConformance) {
