@@ -1529,9 +1529,16 @@ deterministic and are measured over retained recorded runs or unit tables, with 
   refused, not-filled or unread call is compared with nothing. (2) **Two differences are not
   differences.** A piece no longer than 1 ms (a closed end read as open: a look-back's
   `[now − L, now]` against `[now − L, now)`, or a result that copied `ctx.time.asked.to` into an
-  inclusive `queried.to` with no `granularity`), and a read of the asked length moved by no more
-  than the tool's step (one minute when none — § 7.4's first row). With a declared `granularity`,
-  `queried.to == asked.to` is one step wider, as § 3.3 reads it. (3) **The record.** No new row
+  inclusive `queried.to` with no `granularity`), and § 7.4's first row ALONE: a call that sent a
+  look-back (`drift.ts` · `sentLookback`, over the `call-window` row's `form` and the tool's
+  forms), with no drift recorded, whose one declared read has the asked length and moved LATER by
+  no more than the tool's step (one minute when none) — the tool's clock ran a little past `now`;
+  that read is then the asked range. Dispatch drift only ever moves a read later, so a read moved
+  EARLIER, a window sent as bounds, or a look-back with a recorded drift (`redrawn` ran as bounds;
+  `shifted` is § 7.4's third row) is compared as read, and its `missing` stands — a day rounded
+  back to midnight, an hour read 59 minutes early, a minute moved back with no step: each is "not
+  sure" (§ 9.2), never a false "known". With a declared `granularity`, `queried.to == asked.to` is
+  one step wider, as § 3.3 reads it. (3) **The record.** No new row
   for the checks: the call's `period` row gains `differs { against, asked, read, source, stepMs?,
   missing, extra }`, `shifted { byMs }`, `beyondRetention`, `partlyBeyondRetention` (§ 12.2's
   "period rows gain"), each only when it holds and only under `.time()` — the mount hands the

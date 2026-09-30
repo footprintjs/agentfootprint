@@ -75,6 +75,25 @@ export type DispatchDrift =
   | { readonly byMs: number; readonly outcome: 'shifted' };
 
 /**
+ * Whether the call SENT a look-back: its `call-window` row names a form, that
+ * form is a `lookback`, and the call dispatched with a window in it (filled,
+ * bound, or the model's). The one reading of it — the drift decision here and
+ * the result checks' step allowance (`check.ts` · `differsOf`) both ask it.
+ */
+export function sentLookback(
+  window: Pick<DispatchedWindow, 'how' | 'form'>,
+  forms: readonly PeriodForm[],
+): boolean {
+  if (window.form === undefined || forms[window.form]?.kind !== 'lookback') return false;
+  return (
+    window.how === 'filled' ||
+    window.how === 'bound' ||
+    window.how === 'model-chosen' ||
+    window.how === 'model'
+  );
+}
+
+/**
  * The drift decision for one dispatched call (the module table), or
  * `undefined` when the call sent no look-back or the drift is within the
  * tool's step. Pure.
@@ -84,14 +103,7 @@ export function driftAtDispatch(
   forms: readonly PeriodForm[],
   clock: DispatchClock,
 ): DispatchDrift | undefined {
-  if (window === undefined || window.form === undefined) return undefined;
-  if (forms[window.form]?.kind !== 'lookback') return undefined;
-  const sentLookback =
-    window.how === 'filled' ||
-    window.how === 'bound' ||
-    window.how === 'model-chosen' ||
-    window.how === 'model';
-  if (!sentLookback) return undefined;
+  if (window === undefined || !sentLookback(window, forms)) return undefined;
   const now = instantOf(clock.now, 'strict');
   const at = instantOf(clock.dispatchedAt, 'strict');
   if (now === undefined || at === undefined) return undefined;

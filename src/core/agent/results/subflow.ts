@@ -65,7 +65,7 @@ import {
   type PeriodRow,
 } from '../coverage/period.js';
 import { periodTimeCheck, type PeriodCheckInput, type PeriodTimeCheck } from '../../time/check.js';
-import type { PeriodFacts } from '../../time/convert.js';
+import type { PeriodFacts, PeriodForm } from '../../time/convert.js';
 
 /** One call of the batch ToolCalls just ran — identities only. */
 export interface RanCall {
@@ -114,6 +114,9 @@ export interface CallTime {
 /** A tool's declared period facts, by tool name — the inputs layer's declaration, read (step T8). */
 export type PeriodFactsOf = (toolName: string) => PeriodFacts | undefined;
 
+/** A tool's declared period forms, by tool name — whether a call sent a look-back (§ 7.4, step T8). */
+export type PeriodFormsOf = (toolName: string) => readonly PeriodForm[] | undefined;
+
 /**
  * The argument a tool's `ToolPeriod` names, by tool name — read off the
  * implementation the shared dispatch resolver says answered the name
@@ -149,6 +152,8 @@ export interface ResultsLayerDeps {
   readonly periodArgumentOf: PeriodArgumentOf;
   /** The tool's declared period facts (`retention`, `granularity`) — read only for a call with time rows. */
   readonly periodFactsOf?: PeriodFactsOf;
+  /** The tool's declared period forms — read only for a call with time rows. */
+  readonly periodFormsOf?: PeriodFormsOf;
   /** The ledger's emit half — one `findings.period` event per row. */
   readonly emitRows: (scope: TypedScope<ResultsLayerState>, rows: readonly PeriodRow[]) => void;
 }
@@ -169,6 +174,7 @@ export function planPeriods(
     readonly times: readonly CallTime[];
     readonly now: string;
     readonly periodFactsOf?: PeriodFactsOf;
+    readonly periodFormsOf?: PeriodFormsOf;
   },
 ): PlannedPeriod[] {
   const done = new Set<string>();
@@ -181,6 +187,7 @@ export function planPeriods(
     if (declared.length === 0 && argument === undefined) continue;
     const rows = time?.times.find((t) => t.toolCallId === call.toolCallId);
     const facts = rows === undefined ? undefined : time?.periodFactsOf?.(call.toolName);
+    const forms = rows === undefined ? undefined : time?.periodFormsOf?.(call.toolName);
     plan.push({
       toolCallId: call.toolCallId,
       toolName: call.toolName,
@@ -193,6 +200,7 @@ export function planPeriods(
             ...(rows.window !== undefined && { window: rows.window }),
             ...(rows.drift !== undefined && { drift: rows.drift }),
             ...(facts !== undefined && { facts }),
+            ...(forms !== undefined && forms.length > 0 && { forms: [...forms] }),
           },
         }),
     });
@@ -284,6 +292,7 @@ export function declareResultsStage(
           times: JSON.parse(JSON.stringify(times)) as CallTime[], // a frozen input is a live view — plain data once
           now,
           ...(deps.periodFactsOf !== undefined && { periodFactsOf: deps.periodFactsOf }),
+          ...(deps.periodFormsOf !== undefined && { periodFormsOf: deps.periodFormsOf }),
         },
   );
 }

@@ -72,6 +72,7 @@ import {
   isRefused,
   periodArgumentOf as periodArgumentNamed,
   periodFactsOf as periodFactsDeclared,
+  periodFormsOf as periodFormsDeclared,
   rulesOf,
 } from '../arguments/declare.js';
 import { keptThisTurn } from '../arguments/kept.js';
@@ -91,7 +92,7 @@ import {
   readingsOf,
   type CallWindowRow,
 } from '../../time/rows.js';
-import type { PeriodFacts } from '../../time/convert.js';
+import type { PeriodFacts, PeriodForm } from '../../time/convert.js';
 import type { ZoneName } from '../../time/zone.js';
 import { copyPeriod, type DeclaredPeriod, type PeriodRow } from '../coverage/period.js';
 import { appendRows, emitRow, type FindingsScope } from '../findings/ledger.js';
@@ -424,6 +425,17 @@ function periodFactsOf(toolOf: ToolOf): (toolName: string) => PeriodFacts | unde
 }
 
 /**
+ * The forms a tool's `ToolPeriod` declares — read by the same reader, so the
+ * result checks know whether a call SENT a look-back (§ 7.4, step T8).
+ */
+function periodFormsOf(toolOf: ToolOf): (toolName: string) => readonly PeriodForm[] | undefined {
+  return (toolName) => {
+    const rules = rulesOf(toolOf(toolName));
+    return rules === undefined || isRefused(rules) ? undefined : periodFormsDeclared(rules.period);
+  };
+}
+
+/**
  * The `sf-results` subflow: Declare → Verify → Record → Resolve, four thin
  * stages over the pure steps of `results/subflow.ts`.
  */
@@ -431,6 +443,7 @@ export function buildResultsSubflow(deps: ResultsMountDeps): FlowChart {
   const layer: ResultsLayerDeps = {
     periodArgumentOf: periodArgumentOf(deps.toolOf),
     periodFactsOf: periodFactsOf(deps.toolOf),
+    periodFormsOf: periodFormsOf(deps.toolOf),
     emitRows: emitPeriodRows,
   };
   type Stage = (scope: TypedScope<ResultsLayerState>) => Promise<void>;
@@ -533,9 +546,13 @@ function resultsLayerInput(parent: Record<string, unknown>): ResultsLayerState {
  * and its `call` row's `drift` — and the turn's clock `now`, for the result
  * checks (`core/time/check.ts` · `periodTimeCheck`). Nothing when the turn has
  * no clock (an agent without `.time()`), so an unarmed run hands the layer the
- * input it always did.
+ * input it always did. "This turn" is checked, not assumed: a ledger carried
+ * forward (a checkpoint's `findingsLedger` from an agent that had `.time()`,
+ * resumed and then run on by one that has not) holds an EARLIER turn's clock,
+ * and that clock's `now` must not judge this turn's calls. Exported for that
+ * test only.
  */
-function timeOfBatch(
+export function timeOfBatch(
   parent: Record<string, unknown>,
   calls: readonly RanCall[],
 ): Pick<ResultsLayerState, 'times' | 'now'> {
@@ -564,6 +581,7 @@ function timeOfBatch(
 function windowForCheck(row: CallWindowRow): NonNullable<CallTime['window']> {
   return {
     how: row.how,
+    ...(row.form !== undefined && { form: row.form }),
     ...(row.asked !== undefined && { asked: { from: row.asked.from, to: row.asked.to } }),
     ...(row.person !== undefined && { person: row.person }),
     ...(row.sent !== undefined && { sent: { from: row.sent.from, to: row.sent.to } }),

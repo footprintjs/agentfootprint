@@ -359,24 +359,146 @@ describe('boundary', () => {
     expect(rangeDifference(HOUR, [at(2)])?.extra).toHaveLength(1);
   });
 
-  it('a read shifted by exactly the step is the asked range; a millisecond more is not', () => {
+  it('§ 7.4: a look-back read up to one step LATER is the asked range; a millisecond more is not', () => {
+    const forms = [{ kind: 'lookback', argument: 'window', signed: false }] as const;
+    const lookback = { how: 'filled', form: 0, asked: HOUR } as const;
     const shift = (ms: number) => ({
       from: iso(Date.parse(HOUR.from) + ms),
       to: iso(Date.parse(HOUR.to) + ms - 1),
     });
     const at = (ms: number) =>
-      periodTimeCheck({ window: filled(), declared: [shift(ms)], now: NOW })?.differs;
+      periodTimeCheck({ window: lookback, forms, declared: [shift(ms)], now: NOW })?.differs;
     expect(at(60_000)).toBeUndefined();
     expect(at(60_001)).toMatchObject({ missing: [expect.anything()], extra: [expect.anything()] });
-    // A declared step widens the tolerance with it.
+    // A declared step widens the tolerance with it — and a move past it still differs.
+    const stepped = (ms: number) =>
+      periodTimeCheck({
+        window: lookback,
+        forms,
+        declared: [
+          { from: iso(Date.parse(HOUR.from) + ms), to: iso(Date.parse(HOUR.to) + ms - 60_000) },
+        ],
+        facts: { granularity: '1m' },
+        now: NOW,
+      })?.differs;
+    expect(stepped(60_000)).toBeUndefined();
+    expect(stepped(120_000)).toBeDefined();
+  });
+
+  it('a read moved EARLIER is never the asked range — its newest part is `missing`', () => {
+    const forms = [{ kind: 'lookback', argument: 'window', signed: false }] as const;
+    const asked = { from: '2026-10-09T08:00:00Z', to: '2026-10-09T08:40:00Z' };
+    // No step: the declaration moved 60 s back, read back with § 3.3's 1 ms step.
+    const back = periodTimeCheck({
+      window: { how: 'filled', form: 0, asked },
+      forms,
+      declared: [{ from: '2026-10-09T07:59:00Z', to: '2026-10-09T08:38:59.999Z' }],
+      now: NOW,
+    })?.differs;
+    expect(back).toMatchObject({
+      source: 'declared',
+      stepMs: 1,
+      missing: [{ from: '2026-10-09T08:39:00Z', to: asked.to }],
+      extra: [{ from: '2026-10-09T07:59:00Z', to: asked.from }],
+    });
+    // An hour step: the read moved 59 minutes back.
     expect(
       periodTimeCheck({
-        window: filled(),
-        declared: [{ from: iso(Date.parse(HOUR.from) + 120_000), to: '2026-10-09T15:01:00Z' }],
-        facts: { granularity: '1m' },
+        window: {
+          how: 'filled',
+          form: 0,
+          asked: { from: '2026-10-09T08:00:00Z', to: '2026-10-09T10:00:00Z' },
+        },
+        forms,
+        declared: [{ from: '2026-10-09T07:01:00Z', to: '2026-10-09T08:01:00Z' }],
+        facts: { granularity: '1h' },
+        now: NOW,
+      })?.differs?.missing,
+    ).toEqual([{ from: '2026-10-09T09:01:00Z', to: '2026-10-09T10:00:00Z' }]);
+    // A day step: a day rounded back to midnight left the newest 15 h 40 min unread.
+    expect(
+      periodTimeCheck({
+        window: {
+          how: 'filled',
+          asked: { from: '2026-10-08T15:40:00Z', to: '2026-10-09T15:40:00Z' },
+        },
+        declared: [{ from: '2026-10-08T00:00:00Z', to: '2026-10-08T00:00:00Z' }],
+        facts: { granularity: '1d' },
+        now: NOW,
+      })?.differs?.missing,
+    ).toEqual([{ from: '2026-10-09T00:00:00Z', to: '2026-10-09T15:40:00Z' }]);
+  });
+
+  it('the allowance is § 7.4’s alone: a window sent as bounds, or a look-back with a recorded drift, differs as read', () => {
+    const forms = [
+      { kind: 'lookback', argument: 'window', signed: false },
+      {
+        kind: 'bounds',
+        from: { argument: 'start', as: 'epoch-ms' },
+        to: { argument: 'end', as: 'epoch-ms', edge: 'exclusive' },
+      },
+    ] as const;
+    const later = [
+      { from: iso(Date.parse(HOUR.from) + 30_000), to: iso(Date.parse(HOUR.to) + 29_999) },
+    ];
+    const bounds = periodTimeCheck({
+      window: { how: 'filled', form: 1, asked: HOUR },
+      forms,
+      declared: later,
+      now: NOW,
+    })?.differs;
+    expect(bounds?.missing).toEqual([{ from: HOUR.from, to: '2026-10-09T14:00:30Z' }]);
+    // No forms known: nothing says a look-back was sent.
+    expect(
+      periodTimeCheck({
+        window: { how: 'filled', form: 0, asked: HOUR },
+        declared: later,
         now: NOW,
       })?.differs,
     ).toBeDefined();
+    // A redrawn look-back ran as bounds; a shifted one is § 7.4's third row.
+    for (const drift of [
+      { byMs: 30 * 60_000, outcome: 'redrawn', form: 1 },
+      { byMs: 30 * 60_000, outcome: 'shifted' },
+    ] as const) {
+      expect(
+        periodTimeCheck({
+          window: { how: 'filled', form: 0, asked: HOUR },
+          forms,
+          drift,
+          declared: later,
+          now: NOW,
+        })?.differs?.missing,
+      ).toHaveLength(1);
+    }
+    // Within the step, sent as a look-back: the asked range.
+    expect(
+      periodTimeCheck({
+        window: { how: 'filled', form: 0, asked: HOUR },
+        forms,
+        declared: later,
+        now: NOW,
+      }),
+    ).toBeUndefined();
+  });
+
+  it('a model-chosen look-back within the step is its asked range — then judged against the person’s', () => {
+    const forms = [{ kind: 'lookback', argument: 'window', signed: false }] as const;
+    const asked = { from: '2026-10-09T14:40:00Z', to: '2026-10-09T15:40:00Z' };
+    const person = { ...HOUR, source: 'control' };
+    const differs = periodTimeCheck({
+      window: { how: 'model-chosen', form: 0, asked, person } as never,
+      forms,
+      declared: [{ from: '2026-10-09T14:40:20Z', to: '2026-10-09T15:40:19.999Z' }],
+      now: NOW,
+    })?.differs;
+    expect(differs).toMatchObject({
+      against: 'person',
+      read: [asked],
+      source: 'asked',
+      missing: [{ from: HOUR.from, to: '2026-10-09T14:40:00Z' }],
+      extra: [{ from: HOUR.to, to: asked.to }],
+    });
   });
 
   it('an inclusive `queried.to == asked.to − 1 step` is exact; `== asked.to` is one step wider', () => {

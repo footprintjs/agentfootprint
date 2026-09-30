@@ -36,9 +36,14 @@
  *
  * Two differences are not differences: a piece no longer than one
  * millisecond (a closed end read as open — `[now − L, now]` against
- * `[now − L, now)`), and a read of the same length moved by no more than the
- * tool's step (one minute when none — § 7.4's first row: within the step a
- * look-back IS the asked range).
+ * `[now − L, now)`), and § 7.4's first row — a call that SENT a look-back
+ * (`drift.ts` · `sentLookback`), with no drift recorded (the dispatch was
+ * within the step), whose declared read has the asked length and moved LATER
+ * by no more than the tool's step (one minute when none): the tool evaluated
+ * the look-back on its own clock, a little after `now`, and that read IS the
+ * asked range. Nothing else moves: a read moved EARLIER, a read of a window
+ * sent as bounds, or a look-back with a recorded drift is compared as read —
+ * its `missing` stands, and the answer is "not sure" (§ 9.2).
  *
  * ## Retention (§ 9.4)
  *
@@ -68,7 +73,8 @@
 import { instantOf, spellInstant, type InstantText } from './instant.js';
 import { fromInclusive, stepMsOf, type InclusiveSpan, type TimeRange } from './range.js';
 import { durationMs } from './duration.js';
-import { FACT_UNITS, granularityMsOf, type PeriodFacts } from './convert.js';
+import { FACT_UNITS, granularityMsOf, type PeriodFacts, type PeriodForm } from './convert.js';
+import { sentLookback } from './drift.js';
 import type { CallDrift, CallWindowRow } from './rows.js';
 import type { ZoneName } from './zone.js';
 
@@ -114,13 +120,22 @@ export interface PeriodCheckInput {
   /** The call's `call-window` row — absent when the tool declares no forms. */
   readonly window?: Pick<
     CallWindowRow,
-    'how' | 'asked' | 'person' | 'sent' | 'trimmedByTool' | 'partlyBeyondRetention' | 'refused'
+    | 'how'
+    | 'form'
+    | 'asked'
+    | 'person'
+    | 'sent'
+    | 'trimmedByTool'
+    | 'partlyBeyondRetention'
+    | 'refused'
   >;
   /** The call's `call` row's `drift`. */
   readonly drift?: CallDrift;
   /** The `queried` span of every period the call's result declared (inclusive ends). */
   readonly declared?: readonly InclusiveSpan[];
   readonly facts?: PeriodFacts;
+  /** The tool's period forms — with the window's `form`, whether the call sent a look-back (§ 7.4). */
+  readonly forms?: readonly PeriodForm[];
   /** The turn's clock `now`. */
   readonly now: InstantText;
 }
@@ -196,24 +211,37 @@ export function rangeDifference(
   return { missing, extra: kept(extraSpans.sort((x, y) => x[0] - y[0])) };
 }
 
-/** A read of the asked length moved by no more than the step — the asked range (§ 7.4). */
-function shiftedWithinStep(asked: TimeRange, read: readonly TimeRange[], stepMs: number): boolean {
-  if (read.length !== 1) return false;
-  const a = spanOf(asked);
-  const r = spanOf(read[0] as TimeRange);
+/**
+ * § 7.4's first row: a look-back sent within the step, whose ONE declared
+ * read has the asked length and starts no earlier than the asked range and no
+ * more than the tool's step later — the tool's own clock ran a little past
+ * `now`. Only forward: dispatch drift never moves a read earlier, so an
+ * earlier read is a read that missed the newest part of what was asked.
+ */
+function lookbackWithinStep(input: PeriodCheckInput, read: ReadOf): boolean {
+  const window = input.window;
+  if (read.source !== 'declared' || read.read.length !== 1) return false;
+  if (window?.asked === undefined || input.drift !== undefined) return false;
+  if (!sentLookback(window, input.forms ?? [])) return false;
+  const a = spanOf(window.asked);
+  const r = spanOf(read.read[0] as TimeRange);
   if (a === undefined || r === undefined) return false;
   const lengthGap = Math.abs(r[1] - r[0] - (a[1] - a[0]));
-  return lengthGap <= WIDTH_OF_AN_INSTANT_MS && Math.abs(r[0] - a[0]) <= stepMs;
+  const moved = r[0] - a[0];
+  return lengthGap <= WIDTH_OF_AN_INSTANT_MS && moved >= 0 && moved <= granularityMsOf(input.facts);
 }
 
 // ─── The check ───────────────────────────────────────────────────────────
 
+/** What one call read, where that came from, and the step a declared end was read back with. */
+interface ReadOf {
+  readonly read: TimeRange[];
+  readonly source: ReadSource;
+  readonly stepMs?: number;
+}
+
 /** What the call read, first found wins (the module table) — `undefined` when nothing says. */
-function readOf(
-  input: PeriodCheckInput,
-):
-  | { readonly read: TimeRange[]; readonly source: ReadSource; readonly stepMs?: number }
-  | undefined {
+function readOf(input: PeriodCheckInput): ReadOf | undefined {
   const declared = input.declared ?? [];
   if (declared.length > 0) {
     const stepMs = stepMsOf(input.facts?.granularity, FACT_UNITS);
@@ -250,9 +278,13 @@ function referenceOf(
 
 function differsOf(input: PeriodCheckInput): PeriodDiffers | undefined {
   const reference = referenceOf(input.window);
-  const read = readOf(input);
-  if (reference === undefined || read === undefined) return undefined;
-  if (shiftedWithinStep(reference.asked, read.read, granularityMsOf(input.facts))) return undefined;
+  const found = readOf(input);
+  if (reference === undefined || found === undefined) return undefined;
+  // Within the step the look-back IS the asked range (§ 7.4) — then judged like one.
+  const read: ReadOf =
+    lookbackWithinStep(input, found) && input.window?.asked !== undefined
+      ? { read: [input.window.asked], source: 'asked' }
+      : found;
   const difference = rangeDifference(reference.asked, read.read);
   if (difference === undefined) return undefined;
   if (difference.missing.length === 0 && difference.extra.length === 0) return undefined;

@@ -40,6 +40,7 @@ import {
 } from '../../../src/index.js';
 import type { LLMRequest, LLMResponse } from '../../../src/adapters/types.js';
 import { validateCheckpoint } from '../../../src/core/runCheckpoint.js';
+import { timeOfBatch } from '../../../src/core/agent/honesty/mounts.js';
 
 // ─── the harness ─────────────────────────────────────────────────────
 
@@ -345,6 +346,38 @@ describe('period-differs-from-asked — what was read against what was asked', (
     expect(await reasonsOf(agent)).toContain('period-differs-from-asked');
   });
 
+  it('§ 7.4: a look-back the tool read a few seconds LATER is the asked range; EARLIER leaves `missing`', async () => {
+    const lastHour = { from: iso(NOW_MS - 3_600_000), to: NOW };
+    const movedBy =
+      (ms: number): Declare =>
+      (_a, ctx) => ({
+        queried: {
+          from: iso(Date.parse(ctx.time!.asked!.from) + ms),
+          to: iso(Date.parse(ctx.time!.asked!.to) + ms - 1),
+        },
+        held: 'unknown',
+      });
+    const run = async (ms: number) => {
+      const { agent } = await build(
+        [call('c1', 'search_logs'), answer('none')],
+        [lookbackTool({}, movedBy(ms))],
+        timeArm,
+      );
+      await agent.run({ message: 'errors', time: { now: NOW, window: lastHour } });
+      return { row: ofKind(agent, 'period')[0], reasons: await reasonsOf(agent) };
+    };
+    // The tool's clock ran 5 s past `now` (the dispatch was within the step).
+    const later = await run(5_000);
+    expect(later.row).not.toHaveProperty('differs');
+    expect(later.reasons).not.toContain('period-differs-from-asked');
+    // A read 5 s EARLIER never read the newest 5 s that were asked for.
+    const earlier = await run(-5_000);
+    expect(earlier.row).toMatchObject({
+      differs: { source: 'declared', missing: [{ from: '2026-10-09T15:39:55Z', to: NOW }] },
+    });
+    expect(earlier.reasons).toContain('period-differs-from-asked');
+  });
+
   it('a call filled exactly and read exactly adds nothing to its row', async () => {
     const hour = { from: '2026-10-09T14:00:00Z', to: '2026-10-09T15:00:00Z' };
     const { agent } = await build(
@@ -541,6 +574,26 @@ describe('the rows cross the checkpoint door', () => {
 // ─── byte identity ───────────────────────────────────────────────────
 
 describe('off: without .time() nothing is checked, filed or printed', () => {
+  it('a clock carried from an earlier turn judges nothing this turn', () => {
+    const clock = { kind: 'clock', turn: 1, iteration: 0, now: NOW, zone: LA };
+    const window = {
+      kind: 'call-window',
+      turn: 2,
+      iteration: 1,
+      toolCallId: 'c1',
+      toolName: 'client_activity',
+      how: 'filled',
+      asked: { from: iso(NOW_MS - DAY), to: NOW },
+    };
+    const calls = [{ toolCallId: 'c1', toolName: 'client_activity' }];
+    // Turn 2 has no clock of its own (its agent has no `.time()`): nothing is handed.
+    expect(timeOfBatch({ findingsLedger: [clock, window], turnNumber: 2 }, calls)).toEqual({});
+    // The turn the clock names: its rows are handed with its `now`.
+    expect(
+      timeOfBatch({ findingsLedger: [clock, { ...window, turn: 1 }], turnNumber: 1 }, calls),
+    ).toMatchObject({ now: NOW, times: [{ toolCallId: 'c1', window: { how: 'filled' } }] });
+  });
+
   it('the period row, the event and the limits block are the bytes they were', async () => {
     const clamp: Declare = () => ({
       queried: { from: iso(NOW_MS - 7 * DAY), to: iso(NOW_MS - 1) },
