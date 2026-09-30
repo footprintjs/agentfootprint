@@ -20,7 +20,8 @@
  *   integration — the clock at dispatch: 30 minutes after the turn's `now` the library's look-back
  *                 fill is redrawn into the tool's absolute form (the tool runs with it, `ctx.time`
  *                 unchanged), the model's own look-back runs as sent and is recorded shifted; the
- *                 rows cross the checkpoint door;
+ *                 same redraw after a check-in pause, at the resume door; the rows cross the
+ *                 checkpoint door;
  *   byte identity — without `.time()` a tool's facts refuse nothing and nothing is filed.
  * Unit, property, security, boundary, performance: widen.test.ts.
  */
@@ -29,7 +30,9 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import {
   Agent,
+  checkInApproved,
   defineTool,
+  isPaused,
   type TimeReader,
   type Tool,
   type ToolExecutionContext,
@@ -128,9 +131,11 @@ function epochTool(
   facts: Record<string, unknown> = {},
   seen: Record<string, unknown>[] = [],
   withLookback = false,
+  checkIn = false,
 ) {
   return defineTool({
     name: 'client_activity',
+    ...(checkIn && { checkIn: 'always' as const }),
     description: 'Client operations over a window.',
     inputSchema: {
       type: 'object',
@@ -440,6 +445,27 @@ describe('the clock at dispatch (§ 7.4)', () => {
     expect(seen[0]).toMatchObject({ window: '1h' });
     expect(ofKind(agent, 'call')[0]).toMatchObject({
       drift: { byMs: 30 * 60_000, outcome: 'shifted' },
+    });
+  });
+
+  it('after a check-in pause, the resume door redraws the fill — the tool runs with what the row says', async () => {
+    const seen: Record<string, unknown>[] = [];
+    const { agent } = await build(
+      [call('c1', 'client_activity', {}), answer('x')],
+      [epochTool({}, seen, true, true)],
+      (b) => b.time({ zone: LA }),
+    );
+    const paused = await agent.run({ message: 'activity', time: { now: NOW, window: lastHour } });
+    expect(isPaused(paused)).toBe(true);
+    expect(seen).toEqual([]);
+    // The person approves half an hour later: the call is dispatched NOW.
+    vi.setSystemTime(NOW_MS + 30 * 60_000);
+    await agent.resume((paused as { checkpoint: never }).checkpoint, checkInApproved({ by: 'ops' }));
+    expect(seen).toHaveLength(1);
+    expect(seen[0]).toMatchObject({ start_time: Date.parse(lastHour.from), end_time: NOW_MS });
+    expect(seen[0]).not.toHaveProperty('window');
+    expect(ofKind(agent, 'call').at(-1)).toMatchObject({
+      drift: { outcome: 'redrawn', form: 1 },
     });
   });
 
