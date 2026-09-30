@@ -453,8 +453,8 @@ export function timeWindowsLine(
  * ```ts
  * timeLimitsSentence({ period: ['client_activity read less than was asked — asked: …; read: …'], clocks: [] });
  * // 'The time the tools read is not the time asked about, and an answer says so: client_activity
- * //  read less than was asked — asked: …; read: …. An answer built on these results states the
- * //  time each one read and claims nothing about time it did not read.'
+ * //  read less than was asked — asked: …; read: …. An answer states the time each result read
+ * //  and claims nothing about time no result read.'
  * ```
  */
 export function timeLimitsSentence(lines: TimeLimitLines | undefined): string | undefined {
@@ -463,8 +463,8 @@ export function timeLimitsSentence(lines: TimeLimitLines | undefined): string | 
   if (lines.period.length > 0) {
     parts.push(
       `The time the tools read is not the time asked about, and an answer says so: ` +
-        `${lines.period.join('; ')}. An answer built on these results states the time each one ` +
-        `read and claims nothing about time it did not read.`,
+        `${lines.period.join('; ')}. An answer states the time each result read and claims ` +
+        `nothing about time no result read.`,
     );
   }
   if (lines.clocks.length > 0) {

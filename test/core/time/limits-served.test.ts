@@ -146,7 +146,7 @@ describe('the time limits line — served late, after the read', () => {
       ),
     );
     expect(line).toMatch(
-      /; read: 2026-10-02 08:40:00 – 2026-10-09 08:39:59 America\/Los_Angeles \(UTC-07:00\)\. An answer built on these results states the time each one read and claims nothing about time it did not read\.$/,
+      /; read: 2026-10-02 08:40:00 – 2026-10-09 08:39:59 America\/Los_Angeles \(UTC-07:00\)\. An answer states the time each result read and claims nothing about time no result read\.$/,
     );
   });
 

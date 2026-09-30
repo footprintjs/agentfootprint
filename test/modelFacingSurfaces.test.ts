@@ -1686,7 +1686,7 @@ const PRODUCERS: readonly ModelFacingProducer[] = [
       'serves as the LAST `role: "user"` line of that one request — never written to history',
     drivenBy: ['test/core/time/limits-served.test.ts'],
     reaches: [
-      /^The time the tools read is not the time asked about, and an answer says so: client_activity read less than was asked — asked: .+; read: .+\. An answer built on these results states the time each one read and claims nothing about time it did not read\.$/m,
+      /^The time the tools read is not the time asked about, and an answer says so: client_activity read less than was asked — asked: .+; read: .+\. An answer states the time each result read and claims nothing about time no result read\.$/m,
       /search_logs read more than the person's window — the person's window: /,
       /client_activity: the time asked about is older than the oldest data the tool declares its source keeps/,
       /^Clocks: the sources' clocks differ \(UTC, America\/New_York\) — compared as instants\.$/m,
