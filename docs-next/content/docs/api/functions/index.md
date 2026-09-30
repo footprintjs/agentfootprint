@@ -2,7 +2,7 @@
 title: Functions
 ---
 
-140 exported from `agentfootprint`.
+143 exported from `agentfootprint`.
 
 - [`absenceSignalOf`](/docs/api/functions/absenceSignalOf)
 - [`absent`](/docs/api/functions/absent)
@@ -42,6 +42,7 @@ title: Functions
 - [`defineTool`](/docs/api/functions/defineTool)
 - [`deny`](/docs/api/functions/deny)
 - [`describedResult`](/docs/api/functions/describedResult)
+- [`describeTimeAxis`](/docs/api/functions/describeTimeAxis)
 - [`epochAt`](/docs/api/functions/epochAt)
 - [`epochLocations`](/docs/api/functions/epochLocations)
 - [`explainSemantics`](/docs/api/functions/explainSemantics)
@@ -107,6 +108,7 @@ title: Functions
 - [`readCoverageResult`](/docs/api/functions/readCoverageResult)
 - [`readRowset`](/docs/api/functions/readRowset)
 - [`readSemantics`](/docs/api/functions/readSemantics)
+- [`readTimeAxis`](/docs/api/functions/readTimeAxis)
 - [`readToolResultEnvelope`](/docs/api/functions/readToolResultEnvelope)
 - [`receiptAt`](/docs/api/functions/receiptAt)
 - [`receiptHash`](/docs/api/functions/receiptHash)
@@ -132,6 +134,7 @@ title: Functions
 - [`stageRole`](/docs/api/functions/stageRole)
 - [`summarizeOldest`](/docs/api/functions/summarizeOldest)
 - [`swarm`](/docs/api/functions/swarm)
+- [`timeAxisIssues`](/docs/api/functions/timeAxisIssues)
 - [`tokenBudget`](/docs/api/functions/tokenBudget)
 - [`toolContractCheckup`](/docs/api/functions/toolContractCheckup)
 - [`toolDigestInput`](/docs/api/functions/toolDigestInput)

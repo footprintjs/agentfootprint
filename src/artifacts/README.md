@@ -69,6 +69,33 @@ For MCP, opt into `resultMode: 'structured'` or the explicitly declared JSON-tex
 fallback before wrapping the tools. The default MCP text result cannot recover
 discarded structured data. See `src/lib/mcp/README.md`.
 
+### A declared time axis (`timeAxis.ts`)
+
+**Law: declared, never guessed; judged at mint, never repaired.** A producer puts
+`timeAxis` beside its rows and the ticket carries it (`ArtifactMeta.timeAxis`): the
+time `column`, its `unit` (`'iso' | 'epoch-s' | 'epoch-ms'`), an IANA `zone` for
+wall-clock ISO values only, and how each row summarises its `interval`
+(`aggregate`: `'raw'`, one of `avg min max sum count last`, or a record of measure
+column to one of them). `timeAxisIssues` is the one judge. `prepareArtifact` refuses
+a malformed declaration for every store, and `stageDatasetArtifacts` refuses it
+before its first write, so it never comes back as a `store-unavailable` receipt.
+The shape is closed: a misspelt key is refused by name, never dropped. Consumers
+use `readTimeAxis(meta)`, which returns absent, declared or malformed, and
+`describeTimeAxis(axis)`, which gives the one title wording ("hourly avg and max").
+The store never scans rows. A declared column the rows lack is the consumer's to
+report, visibly. `sqliteArtifacts` adds the `time_axis` column in place on an older
+file, and the JSON-envelope stores carry it unchanged.
+
+```ts
+await ctx.artifacts.put({
+  kind: 'dataset/rows',
+  mediaType: 'application/json',
+  data: rows,
+  timeAxis: { column: 'ts', unit: 'epoch-s', interval: '1h',
+    aggregate: { avg_iops: 'avg', peak_iops: 'max' } },
+});
+```
+
 **Regression:** `test/artifacts/datasetResult.test.ts` covers partial storage,
 retention and pass-through behavior; `datasetResult-agent.test.ts` checks real
 Agent dispatch, reference-only context and later `wants` resolution across source

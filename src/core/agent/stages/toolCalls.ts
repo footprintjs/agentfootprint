@@ -2645,6 +2645,7 @@ export function buildToolCallsHandler(
             ...(meta.expiresAt !== undefined && { expiresAt: meta.expiresAt }),
             ...(meta.origin !== undefined && { origin: meta.origin }),
             ...(meta.parentRefs !== undefined && { parentRefs: meta.parentRefs }),
+            ...(meta.timeAxis !== undefined && { timeAxis: meta.timeAxis }),
             tool: toolName,
           });
           return;

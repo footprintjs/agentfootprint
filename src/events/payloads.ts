@@ -22,6 +22,7 @@ import type { LLMMessage, PermissionCapability } from '../adapters/types.js';
 import type { MemoryFlavor, MemoryStrategyKind, MemoryType } from '../memory/define.types.js';
 import type { ArtifactOp, ArtifactRefusalReason } from '../artifacts/capability.js';
 import type { ArtifactOrigin, ArtifactSweepReason } from '../artifacts/types.js';
+import type { DatasetTimeAxis } from '../artifacts/timeAxis.js';
 import type { ThinkingBlock } from '../thinking/types.js';
 import type { LoopMoment } from '../core/agent/moments.js';
 import type { InstructionDeliveryLease, ToolResultStatus } from '../core/agent/toolEffects.js';
@@ -3238,6 +3239,8 @@ export interface ArtifactMintedPayload {
   readonly origin?: ArtifactOrigin;
   /** Derivation facts — validated at mint, so they cannot dangle at birth. */
   readonly parentRefs?: readonly string[];
+  /** The rows' declared time axis — validated at mint (see `ArtifactMeta.timeAxis`). */
+  readonly timeAxis?: DatasetTimeAxis;
   /** The tool whose execute minted it. ABSENT when no tool did — the run's own
    *  recording (9.26.0, the `recordings` dial) or a host filing for its turn
    *  through `HostReply.turnArtifacts`; the event's `meta.sessionId` then names

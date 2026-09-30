@@ -2,7 +2,7 @@
 title: Type Aliases
 ---
 
-112 exported from `agentfootprint`.
+115 exported from `agentfootprint`.
 
 - [`ActKey`](/docs/api/type-aliases/ActKey)
 - [`AgentOutput`](/docs/api/type-aliases/AgentOutput)
@@ -96,6 +96,9 @@ title: Type Aliases
 - [`StreamingArtifactStore`](/docs/api/type-aliases/StreamingArtifactStore)
 - [`TeardownReason`](/docs/api/type-aliases/TeardownReason)
 - [`TeardownScope`](/docs/api/type-aliases/TeardownScope)
+- [`TimeAxisAggregate`](/docs/api/type-aliases/TimeAxisAggregate)
+- [`TimeAxisReading`](/docs/api/type-aliases/TimeAxisReading)
+- [`TimeAxisUnit`](/docs/api/type-aliases/TimeAxisUnit)
 - [`TokenKind`](/docs/api/type-aliases/TokenKind)
 - [`ToolArgValidationMode`](/docs/api/type-aliases/ToolArgValidationMode)
 - [`ToolArtifactPutInput`](/docs/api/type-aliases/ToolArtifactPutInput)

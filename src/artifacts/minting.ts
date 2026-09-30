@@ -13,6 +13,7 @@
 import { isArtifactRef, mintArtifactRef } from './naming.js';
 import { computeArtifactDigest, measureArtifactBytes } from './payload.js';
 import { resolveExpiresAt, type ArtifactRetention } from './retention.js';
+import { timeAxisIssues, type DatasetTimeAxis } from './timeAxis.js';
 import {
   InvalidArtifactError,
   UnknownParentRefError,
@@ -69,6 +70,13 @@ export async function prepareArtifact(
     );
   }
 
+  // A declared time axis is judged, never repaired: a ticket whose
+  // description the store had "fixed" would carry a promise nobody made.
+  if (input.timeAxis !== undefined) {
+    const issues = timeAxisIssues(input.timeAxis);
+    if (issues.length > 0) throw new InvalidArtifactError(issues.join(' '));
+  }
+
   // Parents are FACTS, proven at birth — a foreign key that cannot dangle.
   if (input.parentRefs !== undefined && input.parentRefs.length > 0) {
     const unresolved: ArtifactRef[] = [];
@@ -96,6 +104,18 @@ export async function prepareArtifact(
     ...(input.origin !== undefined && { origin: input.origin }),
     ...(input.parentRefs !== undefined &&
       input.parentRefs.length > 0 && { parentRefs: [...input.parentRefs] }),
+    ...(input.timeAxis !== undefined && { timeAxis: copyTimeAxis(input.timeAxis) }),
   };
   return { meta, bytes };
+}
+
+/** The ticket keeps its OWN copy — a caller mutating its declaration after
+ *  the put must not rewrite a minted description. */
+function copyTimeAxis(axis: DatasetTimeAxis): DatasetTimeAxis {
+  const { aggregate } = axis;
+  return {
+    ...axis,
+    ...(aggregate !== undefined &&
+      typeof aggregate === 'object' && { aggregate: { ...aggregate } }),
+  };
 }

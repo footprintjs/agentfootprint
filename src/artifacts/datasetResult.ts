@@ -1,7 +1,8 @@
 /** Declared datasets -> scope-bound artifacts. No transport, row discovery or domain vocabulary. */
 import type { Tool, ToolExecutionContext } from '../core/tools.js';
 import type { ToolArtifactPutInput, ToolArtifacts } from './capability.js';
-import type { ArtifactMeta } from './types.js';
+import { InvalidArtifactError, type ArtifactMeta } from './types.js';
+import { timeAxisIssues } from './timeAxis.js';
 import {
   projectionSemanticsIssues,
   snapshotProjectionSemantics,
@@ -156,6 +157,15 @@ function assertInputs(datasets: readonly DatasetArtifactInput[]): void {
         !Object.prototype.hasOwnProperty.call(input, 'data')
       ) {
         throw new TypeError('Each dataset/source artifact requires kind, mediaType and data.');
+      }
+      // Judged BEFORE the first write: a malformed declaration refused at the
+      // store would come back as a 'store-unavailable' receipt, which is a
+      // different fact from "the producer declared something unreadable".
+      if (input.timeAxis !== undefined) {
+        const issues = timeAxisIssues(input.timeAxis);
+        if (issues.length > 0) {
+          throw new InvalidArtifactError(`Dataset '${entry.key}': ${issues.join(' ')}`);
+        }
       }
       if (input.parentRefs !== undefined) {
         if (!Array.isArray(input.parentRefs)) {

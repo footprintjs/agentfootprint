@@ -225,7 +225,15 @@ const SEARCH_LIMITS = { raw: 12_000_000, gzip: 2_155_000, records: 2_000 };
 // lists its symbols, and every symbol keeps its URL. Clean rebuild with
 // EXPORT=true: 205.33 MB across 7,450 files (was 699.52 MB). ~2% over, as every
 // ceiling here — a growth past it is a real regression, not this tree again.
-const OUTPUT_LIMITS = { bytes: 210_000_000, files: 7_560, duplicateRscBytes: 0 };
+// RAISED 2026-09-29, files only, for the declared dataset time axis — PENDING
+// OWNER APPROVAL (a separate commit so it can be dropped). Measured: 7,612
+// files, 206.19 MB, duplicate RSC pairs 0 (EXPORT=true, fresh worktree). The
+// change adds nine public symbols (DatasetTimeAxis, readTimeAxis,
+// describeTimeAxis, timeAxisIssues, TimeAxisReading, TimeAxisUnit,
+// TimeAxisAggregate, TIME_AXIS_UNITS, TIME_AXIS_AGGREGATES), ~7 export files
+// per API route; main already sat ~11 files under the old ceiling, so even one
+// new symbol page with its siblings crosses it. ~2% over the measurement.
+const OUTPUT_LIMITS = { bytes: 210_000_000, files: 7_765, duplicateRscBytes: 0 };
 // Raised for 9.61.0: 394.1 KB → 400.3 KB. The skill-graph demo imports
 // `defineTool` from 'agentfootprint', so the library's MAIN ENTRY and its
 // whole transitive graph ride this chunk — and this release added the

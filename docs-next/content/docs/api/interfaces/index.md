@@ -2,7 +2,7 @@
 title: Interfaces
 ---
 
-324 exported from `agentfootprint`.
+325 exported from `agentfootprint`.
 
 - [`AbsenceDeclaration`](/docs/api/interfaces/AbsenceDeclaration)
 - [`ActOptions`](/docs/api/interfaces/ActOptions)
@@ -94,6 +94,7 @@ title: Interfaces
 - [`DatasetPublication`](/docs/api/interfaces/DatasetPublication)
 - [`DatasetResultAdapter`](/docs/api/interfaces/DatasetResultAdapter)
 - [`DatasetResultPlan`](/docs/api/interfaces/DatasetResultPlan)
+- [`DatasetTimeAxis`](/docs/api/interfaces/DatasetTimeAxis)
 - [`DebateOptions`](/docs/api/interfaces/DebateOptions)
 - [`DecisionValue`](/docs/api/interfaces/DecisionValue)
 - [`DeclaredCoverage`](/docs/api/interfaces/DeclaredCoverage)

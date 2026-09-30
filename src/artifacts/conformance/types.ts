@@ -32,6 +32,7 @@ export type ArtifactStoreCaseName =
   | 'oversized-payload-is-refused-before-the-write'
   | 'parent-refs-are-proven-at-mint'
   | 'malformed-puts-are-refused-by-name'
+  | 'a-declared-time-axis-rides-the-ticket'
   | 'refusals-carry-no-payload-and-no-scope'
   | 'digest-is-minted-over-the-payload-and-rides-the-ticket'
   | 'get-refuses-a-payload-that-no-longer-matches-its-digest'
