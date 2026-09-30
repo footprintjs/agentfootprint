@@ -65,6 +65,23 @@ Defined in: [src/core/inputRequest.ts:15](https://github.com/footprintjs/agentfo
 
 ***
 
+### refused?
+
+> `readonly` `optional` **refused?**: [`InputRefusal`](/docs/api/interfaces/InputRefusal)
+
+Defined in: [src/core/inputRequest.ts:48](https://github.com/footprintjs/agentfootprint/blob/main/src/core/inputRequest.ts#L48)
+
+The previous answer to this ask was REFUSED, and why: the app
+validated what the person gave, turned it down, and asks again. Carried
+on the awaiting-input shape the person receives — the checkpoint's
+`pauseData`, the pause outcome, the `pause.request` event — so a UI can
+say "Your answer '…' was not accepted: <reason>" instead of repeating
+the same question in silence. The reason is the APP'S words; the library
+never writes one. `answer` is optional and judged against `fields` like
+any answer; `null` is the field omitted.
+
+***
+
 ### supplied?
 
 > `readonly` `optional` **supplied?**: `Readonly`\<`Record`\<`string`, [`InputValue`](/docs/api/type-aliases/InputValue)\>\>

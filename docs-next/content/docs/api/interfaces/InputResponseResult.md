@@ -4,7 +4,7 @@ title: InputResponseResult
 
 # Interface: InputResponseResult
 
-Defined in: [src/core/inputRequest.ts:70](https://github.com/footprintjs/agentfootprint/blob/main/src/core/inputRequest.ts#L70)
+Defined in: [src/core/inputRequest.ts:106](https://github.com/footprintjs/agentfootprint/blob/main/src/core/inputRequest.ts#L106)
 
 The dedicated collecting tool's result; it contains inputs, not observations.
 
@@ -14,7 +14,7 @@ The dedicated collecting tool's result; it contains inputs, not observations.
 
 > `readonly` `optional` **context?**: `Readonly`\<`Record`\<`string`, `unknown`\>\>
 
-Defined in: [src/core/inputRequest.ts:75](https://github.com/footprintjs/agentfootprint/blob/main/src/core/inputRequest.ts#L75)
+Defined in: [src/core/inputRequest.ts:111](https://github.com/footprintjs/agentfootprint/blob/main/src/core/inputRequest.ts#L111)
 
 ***
 
@@ -22,7 +22,7 @@ Defined in: [src/core/inputRequest.ts:75](https://github.com/footprintjs/agentfo
 
 > `readonly` **origin**: `object`
 
-Defined in: [src/core/inputRequest.ts:76](https://github.com/footprintjs/agentfootprint/blob/main/src/core/inputRequest.ts#L76)
+Defined in: [src/core/inputRequest.ts:112](https://github.com/footprintjs/agentfootprint/blob/main/src/core/inputRequest.ts#L112)
 
 #### offeredSkillIds?
 
@@ -52,7 +52,7 @@ lists every call each field is for.
 
 > `readonly` **origins**: `Readonly`\<`Record`\<`string`, `"declaration"` \| `"response"`\>\>
 
-Defined in: [src/core/inputRequest.ts:74](https://github.com/footprintjs/agentfootprint/blob/main/src/core/inputRequest.ts#L74)
+Defined in: [src/core/inputRequest.ts:110](https://github.com/footprintjs/agentfootprint/blob/main/src/core/inputRequest.ts#L110)
 
 ***
 
@@ -60,7 +60,7 @@ Defined in: [src/core/inputRequest.ts:74](https://github.com/footprintjs/agentfo
 
 > `readonly` **requestId**: `string`
 
-Defined in: [src/core/inputRequest.ts:72](https://github.com/footprintjs/agentfootprint/blob/main/src/core/inputRequest.ts#L72)
+Defined in: [src/core/inputRequest.ts:108](https://github.com/footprintjs/agentfootprint/blob/main/src/core/inputRequest.ts#L108)
 
 ***
 
@@ -68,7 +68,7 @@ Defined in: [src/core/inputRequest.ts:72](https://github.com/footprintjs/agentfo
 
 > `readonly` **status**: `"input_received"`
 
-Defined in: [src/core/inputRequest.ts:71](https://github.com/footprintjs/agentfootprint/blob/main/src/core/inputRequest.ts#L71)
+Defined in: [src/core/inputRequest.ts:107](https://github.com/footprintjs/agentfootprint/blob/main/src/core/inputRequest.ts#L107)
 
 ***
 
@@ -76,4 +76,4 @@ Defined in: [src/core/inputRequest.ts:71](https://github.com/footprintjs/agentfo
 
 > `readonly` **values**: `Readonly`\<`Record`\<`string`, [`InputValue`](/docs/api/type-aliases/InputValue)\>\>
 
-Defined in: [src/core/inputRequest.ts:73](https://github.com/footprintjs/agentfootprint/blob/main/src/core/inputRequest.ts#L73)
+Defined in: [src/core/inputRequest.ts:109](https://github.com/footprintjs/agentfootprint/blob/main/src/core/inputRequest.ts#L109)

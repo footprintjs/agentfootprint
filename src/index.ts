@@ -241,6 +241,8 @@ export type {
   InputResponse,
   InputCancellation,
   InputResponseResult,
+  InputRefusal,
+  InputRepeat,
 } from './core/inputRequest.js';
 export { InputRequestError } from './core/inputRequest.js';
 

@@ -4,7 +4,7 @@ title: InputRequestError
 
 # Class: InputRequestError
 
-Defined in: [src/core/inputRequest.ts:106](https://github.com/footprintjs/agentfootprint/blob/main/src/core/inputRequest.ts#L106)
+Defined in: [src/core/inputRequest.ts:142](https://github.com/footprintjs/agentfootprint/blob/main/src/core/inputRequest.ts#L142)
 
 A malformed or stale data reply; no value was consumed and the ask remains live.
 
@@ -18,7 +18,7 @@ A malformed or stale data reply; no value was consumed and the ask remains live.
 
 > **new InputRequestError**(`reason`): `InputRequestError`
 
-Defined in: [src/core/inputRequest.ts:108](https://github.com/footprintjs/agentfootprint/blob/main/src/core/inputRequest.ts#L108)
+Defined in: [src/core/inputRequest.ts:144](https://github.com/footprintjs/agentfootprint/blob/main/src/core/inputRequest.ts#L144)
 
 #### Parameters
 
@@ -52,7 +52,7 @@ Defined in: node\_modules/typescript/lib/lib.es2022.error.d.ts:24
 
 > `readonly` **code**: `"ERR_INPUT_REQUEST_INVALID"`
 
-Defined in: [src/core/inputRequest.ts:107](https://github.com/footprintjs/agentfootprint/blob/main/src/core/inputRequest.ts#L107)
+Defined in: [src/core/inputRequest.ts:143](https://github.com/footprintjs/agentfootprint/blob/main/src/core/inputRequest.ts#L143)
 
 ***
 

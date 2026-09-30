@@ -35,6 +35,40 @@ export interface InputRequestDeclaration {
    * carries it, as it does a returned miss.
    */
   readonly absence?: ToolAbsence;
+  /**
+   * The previous answer to this ask was REFUSED, and why: the app
+   * validated what the person gave, turned it down, and asks again. Carried
+   * on the awaiting-input shape the person receives — the checkpoint's
+   * `pauseData`, the pause outcome, the `pause.request` event — so a UI can
+   * say "Your answer '…' was not accepted: <reason>" instead of repeating
+   * the same question in silence. The reason is the APP'S words; the library
+   * never writes one. `answer` is optional and judged against `fields` like
+   * any answer; `null` is the field omitted.
+   */
+  readonly refused?: InputRefusal;
+}
+/** An app's refusal of the previous answer to the same ask — see `InputRequestDeclaration.refused`. */
+export interface InputRefusal {
+  /** The refused values, field id → value, as the person gave them. */
+  readonly answer?: Readonly<Record<string, InputValue>>;
+  /** Why it was refused, in the app's own words (non-blank, at most 4096 characters). */
+  readonly reason: string;
+}
+/**
+ * The runtime's mark on a RE-ASK: the same ask (same declaration
+ * `id`) raised again in the same turn after the person answered it. Facts
+ * only — never a reason. Stamped by the runtime, never declarable.
+ */
+export interface InputRepeat {
+  /** How many times the person has already answered this ask in this turn. */
+  readonly count: number;
+  /**
+   * The person's previous answer (the fields they supplied) as the RECORD
+   * holds it — after the tool-result rules, redaction first among them, ran
+   * on it. Absent when the record no longer holds it in that shape (a rule
+   * replaced the result, placement moved it), never reconstructed.
+   */
+  readonly previousAnswer?: Readonly<Record<string, InputValue>>;
 }
 /** The stamped request as the person, the model and the durable pause read it — never the `absence`. */
 export interface AwaitingInput extends Omit<InputRequestDeclaration, 'absence'> {
@@ -44,6 +78,8 @@ export interface AwaitingInput extends Omit<InputRequestDeclaration, 'absence'> 
   readonly supplied: Readonly<Record<string, InputValue>>;
   readonly origins: Readonly<Record<string, 'declaration' | 'response'>>;
   readonly missing: readonly string[];
+  /** Present only on a re-ask — see `InputRepeat`. */
+  readonly repeat?: InputRepeat;
   readonly origin: {
     readonly originalRequest: string;
     /**
@@ -160,7 +196,7 @@ export function validateInputDeclaration(raw: unknown): InputRequestDeclaration 
   }
   if (
     Object.keys(raw).some(
-      (k) => !['id', 'question', 'fields', 'supplied', 'context', 'absence'].includes(k),
+      (k) => !['id', 'question', 'fields', 'supplied', 'context', 'absence', 'refused'].includes(k),
     )
   )
     fail('unknown declaration field');
@@ -215,6 +251,7 @@ export function validateInputDeclaration(raw: unknown): InputRequestDeclaration 
   // optional value (`agent/coverage/absent.ts` · `notGiven`): refusing it
   // would turn a question into a tool error, and it carries no miss to file.
   const absence = raw.absence == null ? undefined : recognizedAbsence(raw.absence);
+  const refused = raw.refused == null ? undefined : validateRefusal(fields, raw.refused);
   return {
     id: raw.id,
     question: raw.question,
@@ -222,7 +259,100 @@ export function validateInputDeclaration(raw: unknown): InputRequestDeclaration 
     ...(raw.supplied !== undefined && { supplied }),
     ...(context !== undefined && { context }),
     ...(absence !== undefined && { absence }),
+    ...(refused !== undefined && { refused }),
   };
+}
+
+/** The app's refusal: its reason in its own words, and the refused answer judged like any answer. */
+function validateRefusal(fields: readonly InputField[], raw: unknown): InputRefusal {
+  if (
+    !object(raw) ||
+    !nonempty(raw.reason) ||
+    Object.keys(raw).some((k) => !['answer', 'reason'].includes(k))
+  )
+    fail('refused must be { reason, answer? } with a non-blank reason in the app’s own words');
+  return {
+    ...(raw.answer != null && { answer: validateValues(fields, raw.answer) }),
+    reason: raw.reason,
+  };
+}
+
+/** A stored re-ask mark: a positive whole count, and a previous answer judged like any answer. */
+function validateRepeat(fields: readonly InputField[], raw: unknown): InputRepeat {
+  if (
+    !object(raw) ||
+    typeof raw.count !== 'number' ||
+    !Number.isInteger(raw.count) ||
+    raw.count < 1 ||
+    Object.keys(raw).some((k) => !['count', 'previousAnswer'].includes(k))
+  )
+    fail('malformed repeat mark');
+  return {
+    count: raw.count,
+    ...(raw.previousAnswer !== undefined && {
+      previousAnswer: validateValues(fields, raw.previousAnswer),
+    }),
+  };
+}
+
+/** Where the same ask was last answered in this turn — what the runtime knows at a re-ask. */
+export interface AnsweredAsk {
+  /** The declaration `id` that was answered. */
+  readonly id: string;
+  /** The answered request's runtime token — how its landed result is found in the record. */
+  readonly requestId: string;
+  /** How many times this ask has been answered in this turn, this answer included. */
+  readonly count: number;
+}
+
+/**
+ * The re-ask mark for a declaration, or `undefined` when this is not a re-ask.
+ * The previous answer is READ FROM THE RECORD — the
+ * `input_received` result that landed for `answered.requestId`, after the
+ * tool-result rules ran on it — so it is redacted exactly as the answer is.
+ * Only the fields the PERSON supplied (origin `'response'`) are kept; when
+ * the record holds no such result, or its values no longer satisfy the
+ * fields, the mark carries the count alone.
+ */
+export function repeatOf(
+  declaration: InputRequestDeclaration,
+  answered: AnsweredAsk | undefined,
+  history: readonly { readonly role: string; readonly content: unknown }[],
+): InputRepeat | undefined {
+  if (answered === undefined || answered.id !== declaration.id) return undefined;
+  const previousAnswer = landedAnswer(declaration.fields, answered.requestId, history);
+  return { count: answered.count, ...(previousAnswer !== undefined && { previousAnswer }) };
+}
+
+function landedAnswer(
+  fields: readonly InputField[],
+  requestId: string,
+  history: readonly { readonly role: string; readonly content: unknown }[],
+): Record<string, InputValue> | undefined {
+  for (let i = history.length - 1; i >= 0; i--) {
+    const message = history[i]!;
+    if (message.role !== 'tool' || typeof message.content !== 'string') continue;
+    let landed: unknown;
+    try {
+      landed = JSON.parse(message.content);
+    } catch {
+      continue;
+    }
+    if (!object(landed) || landed.status !== 'input_received' || landed.requestId !== requestId)
+      continue;
+    if (!object(landed.values)) return undefined;
+    const origins = object(landed.origins) ? landed.origins : undefined;
+    const given = Object.fromEntries(
+      Object.entries(landed.values).filter(([k]) => !origins || origins[k] === 'response'),
+    );
+    if (Object.keys(given).length === 0) return undefined;
+    try {
+      return validateValues(fields, given);
+    } catch {
+      return undefined;
+    }
+  }
+  return undefined;
 }
 
 /**
@@ -253,6 +383,7 @@ export function stampInputRequest(
   declaration: InputRequestDeclaration,
   requestId: string,
   origin: AwaitingInput['origin'],
+  repeat?: InputRepeat,
 ): AwaitingInput {
   // The `absence` is filed at the raise and read by nothing after it — it
   // never rides the awaiting-input shape the person, the model and the
@@ -269,6 +400,7 @@ export function stampInputRequest(
     missing: clean.fields
       .filter((f) => f.required !== false && !own(supplied, f.id))
       .map((f) => f.id),
+    ...(repeat !== undefined && { repeat: validateRepeat(clean.fields, repeat) }),
     origin: JSON.parse(JSON.stringify(origin)) as AwaitingInput['origin'],
   };
 }
@@ -292,7 +424,9 @@ export function readAwaitingInput(pauseData: unknown): AwaitingInput | undefined
     fields: value.fields,
     supplied: value.supplied,
     ...(value.context !== undefined && { context: value.context }),
+    ...(value.refused !== undefined && { refused: value.refused }),
   });
+  if (value.repeat !== undefined) validateRepeat(clean.fields, value.repeat);
   const origins = value.origins;
   if (
     !object(origins) ||
