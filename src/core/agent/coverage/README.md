@@ -607,7 +607,8 @@ return absent({
   `describedResult()` (a top-level field) all mint it by `period.ts` ·
   `mintPeriod`; `semantic()` gains nothing. Every value is an ISO 8601 instant
   WITH a zone — the library compares instants, and one with no zone is refused
-  rather than guessed; `from` is never after `to`; `held` is a span or the
+  rather than guessed (read by the time layer's one parser,
+  `core/time/instant.ts` · `instantOf`, in its lenient RFC 3339 profile); `from` is never after `to`; `held` is a span or the
   literal `'unknown'`, said out loud. A `period` is a declared boundary on its
   own: `coverage(value, { period })` with no lists is accepted.
 - **`provenance` on `absent()` only** (adopted Q34; `coverage()` takes none — a

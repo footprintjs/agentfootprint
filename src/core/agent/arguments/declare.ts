@@ -43,6 +43,8 @@
 import { isDevMode } from 'footprintjs';
 
 import { isInputFieldValue, type InputValue } from '../../inputRequest.js';
+import { isDuration, LOOKBACK_UNITS } from '../../time/duration.js';
+import { splitRange } from '../../time/range.js';
 import { canonicalForm, tokenize } from '../evidence/normalize.js';
 import { validatePropertyValue } from '../toolArgsValidation.js';
 
@@ -172,31 +174,30 @@ export function sameArgumentValue(a: unknown, b: unknown): boolean {
 
 // ─── Spellings ──────────────────────────────────────────────────────────
 
-const LOOKBACK = /^[1-9][0-9]*[mhdw]$/;
-const SIGNED_LOOKBACK = /^-[1-9][0-9]*[mhdw]$/;
-const ISO_INSTANT = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(?::\d{2}(?:\.\d{1,9})?)?(?:Z|[+-]\d{2}:\d{2})$/;
+// The grammars live in the time layer (`src/core/time/`): a look-back is
+// `duration.ts` under today's units (`LOOKBACK_UNITS`, `mhdw` — no `s`, no
+// digit cap), and an `iso-range` is `range.ts` · `splitRange` under `..` in
+// the STRICT instant profile (upper-case `T`/`Z`, no leap second, the day
+// checked against its month, no hour 24).
 
 /**
  * Whether `value` is spelled the way `spelling` declares. `lookback` is a
  * positive integer and a unit (`m`, `h`, `d`, `w`); `signed-lookback` the
  * same with a leading minus; `iso-range` two ISO 8601 instants WITH a zone,
- * joined by `..`. A format check, never a conversion: nothing is ever turned
- * into a duration, and no instant is compared with "now".
+ * joined by `..`, each a day that exists (`2026-02-30` and hour `24` are
+ * refused — `Date.parse` used to roll them forward). A format check, never a
+ * conversion: nothing is ever turned into a duration, and no instant is
+ * compared with "now".
  */
 export function parsesUnderSpelling(value: unknown, spelling: PeriodSpelling): boolean {
   if (typeof value !== 'string') return false;
   switch (spelling) {
     case 'lookback':
-      return LOOKBACK.test(value);
+      return isDuration(value, LOOKBACK_UNITS);
     case 'signed-lookback':
-      return SIGNED_LOOKBACK.test(value);
-    case 'iso-range': {
-      const halves = value.split('..');
-      return (
-        halves.length === 2 &&
-        halves.every((h) => ISO_INSTANT.test(h) && !Number.isNaN(Date.parse(h)))
-      );
-    }
+      return value.startsWith('-') && isDuration(value.slice(1), LOOKBACK_UNITS);
+    case 'iso-range':
+      return splitRange(value, '..', 'strict') !== undefined;
   }
 }
 

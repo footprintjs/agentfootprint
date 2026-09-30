@@ -174,7 +174,8 @@ Ports, adapters, transports and leaf utilities: `src/adapters/**`,
 `src/locales/`, `src/rag/**`, `src/lib/mcp/`, `src/lib/claim/`, `src/bridge/`,
 `src/debug/` (a re-export-only barrel over the context-error finders),
 `src/artifacts/conformance/`, `src/cache/strategies/`,
-`src/core/agent/delivery/`, `src/core/agent/window/strategies/` (which chooses
+`src/core/agent/delivery/`, `src/core/time/` (the one owner of every time grammar),
+`src/core/agent/window/strategies/` (which chooses
 BETWEEN drop notices — see its README), `src/memory/embedding/`,
 `src/memory/entry/`, `src/memory/identity/`, `src/memory/store/`,
 `src/memory/turn/`, and `src/recorders/observability/internal/`.

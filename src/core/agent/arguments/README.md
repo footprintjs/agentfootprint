@@ -338,6 +338,12 @@ and neither parses the other's words. The answer's standing names both rows as
 the witnesses of a `period-*` reason. This layer's rows, served bytes and refusals
 are unchanged.
 
+**The spellings are the time layer's grammar** (`src/core/time/README.md`). A look-back is
+`duration.ts` under today's units (`mhdw`, any number of digits; `30s` is not a look-back), and an
+`iso-range` is `range.ts` · `splitRange` under `..` in the STRICT instant profile: upper-case
+`T`/`Z`, no leap second, and a day that exists — `2026-02-30T08:00Z..…` and hour `24` are refused
+at definition, where `Date.parse` used to roll them forward. This file keeps no regex of its own.
+
 ## Refused, and what the model reads
 
 | When | The call reads |

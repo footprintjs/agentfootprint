@@ -10,7 +10,8 @@
  *          repairing it. Both ask {@link periodProblem}, so a mint and a read
  *          cannot disagree about what a well-formed period is.
  * Role:    core/ layer leaf of the result doors (honesty layer 3). Imports only
- *          `refusal.ts` and the dev-mode flag. The results layer
+ *          `refusal.ts`, the dev-mode flag and the time layer's one instant
+ *          parser (`core/time/instant.ts` · `instantOf`, lenient profile). The results layer
  *          (`../results/subflow.ts`) files one verdict per call from
  *          {@link periodVerdict}; the limits block prints one line per
  *          declaring call from {@link periodLine}.
@@ -43,6 +44,8 @@
  */
 
 import { isDevMode } from 'footprintjs';
+
+import { compareInstants, instantOf, type Instant } from '../../time/instant.js';
 
 import { refusal, spellingMeant } from './refusal.js';
 
@@ -131,71 +134,11 @@ export type PeriodVerdict = 'covered' | 'partly-held' | 'not-held' | 'unknown';
 
 // ─── Instants ────────────────────────────────────────────────────────────
 
-/**
- * An ISO 8601 instant with a zone, in the RFC 3339 profile: a calendar date,
- * `T`, hours and minutes, optional seconds with an optional fraction (up to 9
- * digits), then `Z` or `±HH:MM`. `t`/`z` in lower case are RFC 3339's too.
- */
-const INSTANT =
-  /^(\d{4})-(\d{2})-(\d{2})[Tt](\d{2}):(\d{2})(?::(\d{2})(?:\.(\d{1,9}))?)?(?:([Zz])|([+-])(\d{2}):(\d{2}))$/;
-
-/** One instant, comparable exactly: whole milliseconds since the epoch, and the fraction below one second in nanoseconds. */
-interface Instant {
-  readonly ms: number;
-  readonly nanos: number;
-}
-
-const daysIn = (year: number, month: number): number =>
-  month === 2
-    ? year % 4 === 0 && (year % 100 !== 0 || year % 400 === 0)
-      ? 29
-      : 28
-    : [4, 6, 9, 11].includes(month)
-    ? 30
-    : 31;
-
-/**
- * The instant a string names, or `undefined` when it is not an ISO 8601
- * instant with a zone (a date alone, a time with no zone, a day that does not
- * exist, prose). Exact: no `Date.parse` guessing, no sub-millisecond loss.
- */
-function instantOf(value: unknown): Instant | undefined {
-  if (typeof value !== 'string') return undefined;
-  const m = INSTANT.exec(value);
-  if (m === null) return undefined;
-  const [year, month, day, hour, minute] = [m[1], m[2], m[3], m[4], m[5]].map(Number) as [
-    number,
-    number,
-    number,
-    number,
-    number,
-  ];
-  const second = m[6] === undefined ? 0 : Number(m[6]);
-  if (month < 1 || month > 12 || day < 1 || day > daysIn(year, month)) return undefined;
-  // 60 is RFC 3339's leap second; it compares as the next minute's :00.
-  if (hour > 23 || minute > 59 || second > 60) return undefined;
-  let offsetMinutes = 0;
-  if (m[8] === undefined) {
-    const sign = m[9] === '-' ? -1 : 1;
-    const oh = Number(m[10]);
-    const om = Number(m[11]);
-    if (oh > 23 || om > 59) return undefined;
-    offsetMinutes = sign * (oh * 60 + om);
-  }
-  // `setUTCFullYear`, never `Date.UTC`: the latter reads years 0–99 as 1900–1999.
-  const date = new Date(0);
-  date.setUTCFullYear(year, month - 1, day);
-  date.setUTCHours(hour, minute, second, 0);
-  const nanos = m[7] === undefined ? 0 : Number(m[7].padEnd(9, '0'));
-  return { ms: date.getTime() - offsetMinutes * 60_000, nanos };
-}
-
-/** -1 / 0 / 1 — `a` before, at, or after `b`. */
-function compare(a: Instant, b: Instant): number {
-  if (a.ms !== b.ms) return a.ms < b.ms ? -1 : 1;
-  if (a.nanos !== b.nanos) return a.nanos < b.nanos ? -1 : 1;
-  return 0;
-}
+// The one instant parser lives in `core/time/instant.ts` (`instantOf`). A
+// period a result DECLARES is read in its LENIENT profile — RFC 3339 as a
+// foreign minter may write it (`t`/`z`, the leap second `:60`) — exactly the
+// rule this file owned before the time layer took it; the verdict below is
+// unchanged byte for byte.
 
 // ─── The ONE rule set ────────────────────────────────────────────────────
 
@@ -250,7 +193,7 @@ function unknownKey(
 
 /** The problem with one instant field, or `undefined` when it names an instant. */
 function instantProblem(value: unknown, at: string): PeriodProblem | undefined {
-  if (instantOf(value) !== undefined) return undefined;
+  if (instantOf(value, 'lenient') !== undefined) return undefined;
   return {
     field: at,
     message:
@@ -273,7 +216,12 @@ function spanProblem(value: unknown, at: string): PeriodProblem | undefined {
   const bad = instantProblem(value.from, `${at}.from`) ?? instantProblem(value.to, `${at}.to`);
   if (bad !== undefined) return bad;
   // Both parse — checked just above.
-  if (compare(instantOf(value.from) as Instant, instantOf(value.to) as Instant) > 0) {
+  if (
+    compareInstants(
+      instantOf(value.from, 'lenient') as Instant,
+      instantOf(value.to, 'lenient') as Instant,
+    ) > 0
+  ) {
     return {
       field: at,
       message:
@@ -472,12 +420,12 @@ export function periodVerdict(period: DeclaredPeriod): PeriodVerdict {
   const problem = periodProblem(period, 'camel');
   if (problem !== undefined) throw new TypeError(`periodVerdict: ${problem.message}`);
   if (period.held === 'unknown') return 'unknown';
-  const qFrom = instantOf(period.queried.from) as Instant;
-  const qTo = instantOf(period.queried.to) as Instant;
-  const hFrom = instantOf(period.held.from) as Instant;
-  const hTo = instantOf(period.held.to) as Instant;
-  if (compare(hFrom, qFrom) <= 0 && compare(qTo, hTo) <= 0) return 'covered';
-  if (compare(qTo, hFrom) < 0 || compare(qFrom, hTo) > 0) return 'not-held';
+  const qFrom = instantOf(period.queried.from, 'lenient') as Instant;
+  const qTo = instantOf(period.queried.to, 'lenient') as Instant;
+  const hFrom = instantOf(period.held.from, 'lenient') as Instant;
+  const hTo = instantOf(period.held.to, 'lenient') as Instant;
+  if (compareInstants(hFrom, qFrom) <= 0 && compareInstants(qTo, hTo) <= 0) return 'covered';
+  if (compareInstants(qTo, hFrom) < 0 || compareInstants(qFrom, hTo) > 0) return 'not-held';
   return 'partly-held';
 }
 
