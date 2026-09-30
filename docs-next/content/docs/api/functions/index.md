@@ -2,12 +2,13 @@
 title: Functions
 ---
 
-143 exported from `agentfootprint`.
+146 exported from `agentfootprint`.
 
 - [`absenceSignalOf`](/docs/api/functions/absenceSignalOf)
 - [`absent`](/docs/api/functions/absent)
 - [`actKeyFor`](/docs/api/functions/actKeyFor)
 - [`allow`](/docs/api/functions/allow)
+- [`answerFromElicitation`](/docs/api/functions/answerFromElicitation)
 - [`applyOutputSchema`](/docs/api/functions/applyOutputSchema)
 - [`ask`](/docs/api/functions/ask)
 - [`assertAskComponent`](/docs/api/functions/assertAskComponent)
@@ -43,6 +44,7 @@ title: Functions
 - [`deny`](/docs/api/functions/deny)
 - [`describedResult`](/docs/api/functions/describedResult)
 - [`describeTimeAxis`](/docs/api/functions/describeTimeAxis)
+- [`elicitationOf`](/docs/api/functions/elicitationOf)
 - [`epochAt`](/docs/api/functions/epochAt)
 - [`epochLocations`](/docs/api/functions/epochLocations)
 - [`explainSemantics`](/docs/api/functions/explainSemantics)
@@ -95,6 +97,7 @@ title: Functions
 - [`milestoneTags`](/docs/api/functions/milestoneTags)
 - [`milestoneTagsFor`](/docs/api/functions/milestoneTagsFor)
 - [`mintArtifactRef`](/docs/api/functions/mintArtifactRef)
+- [`normaliseInstants`](/docs/api/functions/normaliseInstants)
 - [`pauseDemandsDecision`](/docs/api/functions/pauseDemandsDecision)
 - [`pauseHere`](/docs/api/functions/pauseHere)
 - [`periodVerdict`](/docs/api/functions/periodVerdict)

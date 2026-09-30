@@ -142,7 +142,7 @@ own finding prose — `src/integrity/empty-lookup/`,
 `src/integrity/prior-turn-evidence/`, `src/integrity/unsupported-argument/`,
 `src/integrity/unsupported-claim/`, `src/integrity/dangling-reference/`,
 `src/integrity/column-types/` and `src/integrity/invariant-violation/` (each
-`check.ts`'s finding `message`, plus `invariant-violation`'s `wire.ts` ·
+`check.ts`'s finding `message`, plus `invariant-violation/wire.ts` ·
 `fileDirection`, emitted for every ContextError by
 `src/core/agent/integrityFindings.ts` · `fileIntegrityFindings` and served
 verbatim to a debugging model by

@@ -460,7 +460,10 @@ describe('the clock at dispatch (§ 7.4)', () => {
     expect(seen).toEqual([]);
     // The person approves half an hour later: the call is dispatched NOW.
     vi.setSystemTime(NOW_MS + 30 * 60_000);
-    await agent.resume((paused as { checkpoint: never }).checkpoint, checkInApproved({ by: 'ops' }));
+    await agent.resume(
+      (paused as { checkpoint: never }).checkpoint,
+      checkInApproved({ by: 'ops' }),
+    );
     expect(seen).toHaveLength(1);
     expect(seen[0]).toMatchObject({ start_time: Date.parse(lastHour.from), end_time: NOW_MS });
     expect(seen[0]).not.toHaveProperty('window');

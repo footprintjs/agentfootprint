@@ -4,7 +4,7 @@ title: InputRequestDeclaration
 
 # Interface: InputRequestDeclaration
 
-Defined in: [src/core/inputRequest.ts:13](https://github.com/footprintjs/agentfootprint/blob/main/src/core/inputRequest.ts#L13)
+Defined in: [src/core/inputRequest.ts:47](https://github.com/footprintjs/agentfootprint/blob/main/src/core/inputRequest.ts#L47)
 
 ## Properties
 
@@ -12,7 +12,7 @@ Defined in: [src/core/inputRequest.ts:13](https://github.com/footprintjs/agentfo
 
 > `readonly` `optional` **absence?**: [`ToolAbsence`](/docs/api/interfaces/ToolAbsence)
 
-Defined in: [src/core/inputRequest.ts:37](https://github.com/footprintjs/agentfootprint/blob/main/src/core/inputRequest.ts#L37)
+Defined in: [src/core/inputRequest.ts:71](https://github.com/footprintjs/agentfootprint/blob/main/src/core/inputRequest.ts#L71)
 
 What the tool LOOKED AT before it asked (9.114.0): the envelope `absent()`
 returns, when a lookup found nothing and raises this request about the
@@ -35,7 +35,7 @@ carries it, as it does a returned miss.
 
 > `readonly` `optional` **context?**: `Readonly`\<`Record`\<`string`, `unknown`\>\>
 
-Defined in: [src/core/inputRequest.ts:20](https://github.com/footprintjs/agentfootprint/blob/main/src/core/inputRequest.ts#L20)
+Defined in: [src/core/inputRequest.ts:54](https://github.com/footprintjs/agentfootprint/blob/main/src/core/inputRequest.ts#L54)
 
 Opaque JSON authored by the collecting tool, never editable by the reply.
 
@@ -45,7 +45,7 @@ Opaque JSON authored by the collecting tool, never editable by the reply.
 
 > `readonly` **fields**: readonly [`InputField`](/docs/api/interfaces/InputField)[]
 
-Defined in: [src/core/inputRequest.ts:16](https://github.com/footprintjs/agentfootprint/blob/main/src/core/inputRequest.ts#L16)
+Defined in: [src/core/inputRequest.ts:50](https://github.com/footprintjs/agentfootprint/blob/main/src/core/inputRequest.ts#L50)
 
 ***
 
@@ -53,7 +53,7 @@ Defined in: [src/core/inputRequest.ts:16](https://github.com/footprintjs/agentfo
 
 > `readonly` **id**: `string`
 
-Defined in: [src/core/inputRequest.ts:14](https://github.com/footprintjs/agentfootprint/blob/main/src/core/inputRequest.ts#L14)
+Defined in: [src/core/inputRequest.ts:48](https://github.com/footprintjs/agentfootprint/blob/main/src/core/inputRequest.ts#L48)
 
 ***
 
@@ -61,7 +61,7 @@ Defined in: [src/core/inputRequest.ts:14](https://github.com/footprintjs/agentfo
 
 > `readonly` **question**: `string`
 
-Defined in: [src/core/inputRequest.ts:15](https://github.com/footprintjs/agentfootprint/blob/main/src/core/inputRequest.ts#L15)
+Defined in: [src/core/inputRequest.ts:49](https://github.com/footprintjs/agentfootprint/blob/main/src/core/inputRequest.ts#L49)
 
 ***
 
@@ -69,16 +69,19 @@ Defined in: [src/core/inputRequest.ts:15](https://github.com/footprintjs/agentfo
 
 > `readonly` `optional` **refused?**: [`InputRefusal`](/docs/api/interfaces/InputRefusal)
 
-Defined in: [src/core/inputRequest.ts:48](https://github.com/footprintjs/agentfootprint/blob/main/src/core/inputRequest.ts#L48)
+Defined in: [src/core/inputRequest.ts:85](https://github.com/footprintjs/agentfootprint/blob/main/src/core/inputRequest.ts#L85)
 
 The previous answer to this ask was REFUSED, and why: the app
 validated what the person gave, turned it down, and asks again. Carried
 on the awaiting-input shape the person receives — the checkpoint's
 `pauseData`, the pause outcome, the `pause.request` event — so a UI can
 say "Your answer '…' was not accepted: <reason>" instead of repeating
-the same question in silence. The reason is the APP'S words; the library
-never writes one. `answer` is optional and judged against `fields` like
-any answer; `null` is the field omitted.
+the same question in silence. The reason is the APP'S words — with one
+exception the app arms itself: a time field's answer the library's check
+refused (`InputField.format`), whose reason is a catalog sentence the app
+can override (`defaultTimeAskMessages`, `.time({ messages })`). `answer`
+is optional and judged against `fields` like any answer; `null` is the
+field omitted.
 
 ***
 
@@ -86,6 +89,6 @@ any answer; `null` is the field omitted.
 
 > `readonly` `optional` **supplied?**: `Readonly`\<`Record`\<`string`, [`InputValue`](/docs/api/type-aliases/InputValue)\>\>
 
-Defined in: [src/core/inputRequest.ts:18](https://github.com/footprintjs/agentfootprint/blob/main/src/core/inputRequest.ts#L18)
+Defined in: [src/core/inputRequest.ts:52](https://github.com/footprintjs/agentfootprint/blob/main/src/core/inputRequest.ts#L52)
 
 Values the collection tool already knows; never labelled as a person's answer.

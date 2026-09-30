@@ -238,7 +238,15 @@ const SEARCH_LIMITS = { raw: 12_000_000, gzip: 2_205_000, records: 2_000 };
 // TimeAxisAggregate, TIME_AXIS_UNITS, TIME_AXIS_AGGREGATES), ~7 export files
 // per API route; main already sat ~11 files under the old ceiling, so even one
 // new symbol page with its siblings crosses it. ~2% over the measurement.
-const OUTPUT_LIMITS = { bytes: 210_000_000, files: 7_765, duplicateRscBytes: 0 };
+// RAISED 2026-09-30, bytes and files, for the time layer (steps T1-T5b):
+// owner-approved raise. Measured after a clean rebuild (out/ and .next/
+// removed first), EXPORT=true: 214.38 MB across 8,107 files, duplicate RSC
+// pairs 0. The layer adds 54 generated API pages (the clock, the reader port
+// and resolver, the time ask and its MCP elicitation, a tool's period forms
+// and facts, the ledger rows, the axis view) plus the hand-written Time guide
+// page, ~6 export files per API route. ~2% over the measurement, the rule
+// every raise here follows.
+const OUTPUT_LIMITS = { bytes: 218_700_000, files: 8_270, duplicateRscBytes: 0 };
 // Raised for 9.61.0: 394.1 KB → 400.3 KB. The skill-graph demo imports
 // `defineTool` from 'agentfootprint', so the library's MAIN ENTRY and its
 // whole transitive graph ride this chunk — and this release added the

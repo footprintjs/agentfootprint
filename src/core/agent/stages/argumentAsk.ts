@@ -84,7 +84,7 @@ export interface ArgumentAskDeps {
   /**
    * Present exactly under `.time()`: an answer for a period argument is also
    * judged against the tool's declared facts at the turn's clock
-   * (`ask.ts` · `checkAnswer`) — `appZone` is the app's `.time({ zone })`.
+   * (`arguments/ask.ts` · `checkAnswer`) — `appZone` is the app's `.time({ zone })`.
    */
   readonly time?: { readonly appZone?: ZoneName };
 }

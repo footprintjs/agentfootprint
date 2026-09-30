@@ -1,0 +1,30 @@
+---
+title: AxisPoint
+---
+
+# Interface: AxisPoint
+
+Defined in: [src/core/time/axis.ts:331](https://github.com/footprintjs/agentfootprint/blob/main/src/core/time/axis.ts#L331)
+
+One placed value: the row it came from and its UTC instant.
+
+## Properties
+
+### at
+
+> `readonly` **at**: `string`
+
+Defined in: [src/core/time/axis.ts:336](https://github.com/footprintjs/agentfootprint/blob/main/src/core/time/axis.ts#L336)
+
+The instant in UTC (`Z`), at the view's one precision — so comparing two
+ spellings as text compares them in time.
+
+***
+
+### row
+
+> `readonly` **row**: `number`
+
+Defined in: [src/core/time/axis.ts:333](https://github.com/footprintjs/agentfootprint/blob/main/src/core/time/axis.ts#L333)
+
+The row's index in the rows as stored.

@@ -6,6 +6,6 @@ title: RESERVED_ARGUMENT
 
 > `const` **RESERVED\_ARGUMENT**: `"_findings"`
 
-Defined in: [src/core/agent/findings/types.ts:40](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/findings/types.ts#L40)
+Defined in: [src/core/agent/findings/types.ts:47](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/findings/types.ts#L47)
 
 The reserved optional property every SERVED tool schema carries when armed.

@@ -2,7 +2,7 @@
 title: Variables
 ---
 
-68 exported from `agentfootprint`.
+69 exported from `agentfootprint`.
 
 - [`ABSENCE_MARKER`](/docs/api/variables/ABSENCE_MARKER)
 - [`ABSENCE_NOTE`](/docs/api/variables/ABSENCE_NOTE)
@@ -30,6 +30,7 @@ title: Variables
 - [`DEFAULT_SESSION_STORAGE_KEY`](/docs/api/variables/DEFAULT_SESSION_STORAGE_KEY)
 - [`DEFAULT_WALK_CAP`](/docs/api/variables/DEFAULT_WALK_CAP)
 - [`defaultCommentaryTemplates`](/docs/api/variables/defaultCommentaryTemplates)
+- [`defaultTimeAskMessages`](/docs/api/variables/defaultTimeAskMessages)
 - [`DROP_NOTICE_PREFIX`](/docs/api/variables/DROP_NOTICE_PREFIX)
 - [`EMPTY_LOOKUP_CEILING`](/docs/api/variables/EMPTY_LOOKUP_CEILING)
 - [`ENGINEERED_SOURCES`](/docs/api/variables/ENGINEERED_SOURCES)

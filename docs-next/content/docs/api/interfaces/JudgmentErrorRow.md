@@ -4,7 +4,7 @@ title: JudgmentErrorRow
 
 # Interface: JudgmentErrorRow
 
-Defined in: [src/core/agent/findings/types.ts:282](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/findings/types.ts#L282)
+Defined in: [src/core/agent/findings/types.ts:289](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/findings/types.ts#L289)
 
 The judge was asked and produced no answer (9.104.0): the provider's
 status and error text (the PROVIDER's words, not the model's — allowed on
@@ -17,7 +17,7 @@ judgment is an absent judgment with a reason.
 
 > `readonly` **iteration**: `number`
 
-Defined in: [src/core/agent/findings/types.ts:292](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/findings/types.ts#L292)
+Defined in: [src/core/agent/findings/types.ts:299](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/findings/types.ts#L299)
 
 ***
 
@@ -25,7 +25,7 @@ Defined in: [src/core/agent/findings/types.ts:292](https://github.com/footprintj
 
 > `readonly` **judge**: `object`
 
-Defined in: [src/core/agent/findings/types.ts:288](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/findings/types.ts#L288)
+Defined in: [src/core/agent/findings/types.ts:295](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/findings/types.ts#L295)
 
 The classifier's port name; the model string is unknown when the call failed.
 
@@ -39,7 +39,7 @@ The classifier's port name; the model string is unknown when the call failed.
 
 > `readonly` **kind**: `"judgment-error"`
 
-Defined in: [src/core/agent/findings/types.ts:283](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/findings/types.ts#L283)
+Defined in: [src/core/agent/findings/types.ts:290](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/findings/types.ts#L290)
 
 ***
 
@@ -47,7 +47,7 @@ Defined in: [src/core/agent/findings/types.ts:283](https://github.com/footprintj
 
 > `readonly` **latencyMs**: `number`
 
-Defined in: [src/core/agent/findings/types.ts:291](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/findings/types.ts#L291)
+Defined in: [src/core/agent/findings/types.ts:298](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/findings/types.ts#L298)
 
 ***
 
@@ -55,7 +55,7 @@ Defined in: [src/core/agent/findings/types.ts:291](https://github.com/footprintj
 
 > `readonly` **message**: `string`
 
-Defined in: [src/core/agent/findings/types.ts:290](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/findings/types.ts#L290)
+Defined in: [src/core/agent/findings/types.ts:297](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/findings/types.ts#L297)
 
 ***
 
@@ -63,7 +63,7 @@ Defined in: [src/core/agent/findings/types.ts:290](https://github.com/footprintj
 
 > `readonly` **source**: `"judge"`
 
-Defined in: [src/core/agent/findings/types.ts:286](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/findings/types.ts#L286)
+Defined in: [src/core/agent/findings/types.ts:293](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/findings/types.ts#L293)
 
 ***
 
@@ -71,7 +71,7 @@ Defined in: [src/core/agent/findings/types.ts:286](https://github.com/footprintj
 
 > `readonly` `optional` **status?**: `number`
 
-Defined in: [src/core/agent/findings/types.ts:289](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/findings/types.ts#L289)
+Defined in: [src/core/agent/findings/types.ts:296](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/findings/types.ts#L296)
 
 ***
 
@@ -79,7 +79,7 @@ Defined in: [src/core/agent/findings/types.ts:289](https://github.com/footprintj
 
 > `readonly` **toolCallId**: `string`
 
-Defined in: [src/core/agent/findings/types.ts:284](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/findings/types.ts#L284)
+Defined in: [src/core/agent/findings/types.ts:291](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/findings/types.ts#L291)
 
 ***
 
@@ -87,7 +87,7 @@ Defined in: [src/core/agent/findings/types.ts:284](https://github.com/footprintj
 
 > `readonly` **toolName**: `string`
 
-Defined in: [src/core/agent/findings/types.ts:285](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/findings/types.ts#L285)
+Defined in: [src/core/agent/findings/types.ts:292](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/findings/types.ts#L292)
 
 ***
 
@@ -95,7 +95,7 @@ Defined in: [src/core/agent/findings/types.ts:285](https://github.com/footprintj
 
 > `readonly` `optional` **turn?**: `number`
 
-Defined in: [src/core/agent/findings/types.ts:299](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/findings/types.ts#L299)
+Defined in: [src/core/agent/findings/types.ts:306](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/findings/types.ts#L306)
 
 The conversation turn the row was filed in (`AgentState.turnNumber`) —
 stamped by the one writer while an honesty layer is armed (the inputs

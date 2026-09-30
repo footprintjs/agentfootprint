@@ -6,7 +6,7 @@ title: readTimeAxis
 
 > **readTimeAxis**(`meta`): [`TimeAxisReading`](/docs/api/type-aliases/TimeAxisReading)
 
-Defined in: [src/artifacts/timeAxis.ts:204](https://github.com/footprintjs/agentfootprint/blob/main/src/artifacts/timeAxis.ts#L204)
+Defined in: [src/core/time/axis.ts:229](https://github.com/footprintjs/agentfootprint/blob/main/src/core/time/axis.ts#L229)
 
 Read the declaration off a ticket (`ArtifactMeta`, or anything shaped like
  one). Absent is absent; anything present is judged.
