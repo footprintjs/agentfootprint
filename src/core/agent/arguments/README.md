@@ -259,6 +259,30 @@ drifted past (§ 7.4) is redrawn only when the library wrote it (`stages/toolCal
 //   "search_logs was not run on that call: the window it asked for had not happened yet, …"
 ```
 
+**Served, and asked lazily (step T6b, `.time({ reader })`).** Two more things ride the same
+layer once a reader is armed. SERVED: each tool that declares a period carries ONE sentence after
+its description naming every window the reader SETTLED this turn in that tool's own form
+(`serve.ts` · `timeWindowsSentence`, through `rulesOnWire`'s `windows` at the slot's one decoration
+site; the mount reads them with `core/time/bind.ts` · `readerWindowsOf`) — a reading, never the
+person's words. ASKED: a call that left its period out while the turn's one mention is still OPEN
+(`not-filled` / `open-reading`) and whose tool's own rule ASKS for a period argument carries
+`ArgumentResolution.window`; the batch ask then asks ONE window field for every such call instead
+of one field per argument (`ask.ts` · `planAskFields` with the plan `stages/argumentAsk.ts` ·
+`windowPlanOf` builds from `core/time/ask.ts` · `timeAskOf`): the zone first for an abbreviation,
+then the readings every member tool's facts allow as labelled `time-range` choices. The answer is
+converted into each call's forms (`bindAnswer` → exactly, else wider), filed `answered` per argument,
+and filled with `ArgumentFill.window` (the note's window clause: "from the window the person chose
+when asked what their words meant"). When every reading breaks a tool's facts nothing is asked and
+the call is refused (`timeRefusal`).
+
+```ts
+// .time({ zone: LA, reader: englishTimeReader() }), "10/09/26 8 AM to 8:40 AM PST", {} sent →
+//   awaitingInput.fields: [{ id: 'f1', format: 'zone', description: 'Which time zone did you mean by “PST” in …?' }]
+//   resume { f1: 'America/Los_Angeles' } → [{ id: 'f1', format: 'time-range', enum: [3 windows], labels: [...] }]
+//   resume { f1: enum[0] } → the tool runs with { start_time: 1791558000000, end_time: 1791560460000 };
+//   rows: { argument: 'start_time', source: 'answered' }, { argument: 'end_time', source: 'answered' }
+```
+
 Without `.time()` nothing here runs: a period is judged and read as the sections above say.
 
 ## The batch ask — once, before anything runs
@@ -454,8 +478,9 @@ the PERFORMANCE block), and the resume adds no model call.
   week" quoted as "the last 24 hours" passes), another sentence, or a one-token quote taken from
   another sense ("the 24h dashboard" quoted as "24h"). That is why no membership pass ever
   supports "known" — it only keeps a reason from firing — and why the bench counts one-token
-  quotes. The library never parses a time phrase: only phrases an author declared (`said` on a
-  choice) are matched, as whole tokens, inside a quote the model declared.
+  quotes. This check never parses a time phrase: only phrases an author declared (`said` on a
+  choice) are matched, as whole tokens, inside a quote the model declared (the person's words are
+  read as time only through a reader the app arms — `src/core/time/`).
 - **Unicode folding.** A character outside the token alphabet (full-width `２４ｈ`) vanishes on
   both sides; a value or quote left with no token is `uncheckable`. Folding, if wanted, belongs
   in `evidence/normalize.ts` for the evidence gate and this layer together.

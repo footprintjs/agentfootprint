@@ -4836,6 +4836,14 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
       // The inputs layer (honesty layer 2): the same site decorates a ruled
       // tool's schema first — value-conditional, the same grammar.
       ...(inputsArmed && { inputsLayer: true as const }),
+      // …and, under `.time({ reader })` (step T6b), the ONE served time sentence on each tool
+      // that declares a period: the windows the reader settled this turn, in that tool's form.
+      ...(inputsArmed &&
+        this.timeOptions?.reader !== undefined && {
+          timeWindows: {
+            ...(this.timeOptions.zone !== undefined && { appZone: this.timeOptions.zone }),
+          },
+        }),
       // …and, under declared sources, plants `_findings.from` on ruled tools only.
       ...(argumentSources && { argumentSources: true as const }),
       // Tool choice by classifier (9.105.0): the pick and the narrowing live
@@ -5274,6 +5282,16 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
             return passed;
           },
           ...(this.timeOptions.zone !== undefined && { appZone: this.timeOptions.zone }),
+          // The reader (step T6b): the batch ask asks an open mention's window.
+          ...(this.timeOptions.reader !== undefined &&
+            this.timeOptions.policy !== undefined && {
+              reader: {
+                policy: this.timeOptions.policy,
+                ...(this.timeOptions.messages !== undefined && {
+                  messages: this.timeOptions.messages,
+                }),
+              },
+            }),
         },
       }),
       emitForRun: (type, payload, runContext) => this.emitLateFact(type, payload, runContext),
@@ -5441,6 +5459,8 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
       // The time layer: the prose limits block renders its `Period:` lines in
       // the run's clock zone. Absent → the final stage it always mounted.
       ...(this.timeOptions !== undefined && { timeLayer: true as const }),
+      // The reader (step T6b): the Tools mount hands the slot the turn's settled windows.
+      ...(inputsArmed && this.timeOptions?.reader !== undefined && { timeReader: true as const }),
       ...(this.answerValidationConfig !== undefined && { hasAnswerValidation: true }),
       // The out-of-budget wrap-up branch (9.56.0) — the conditional-mount law
       // above, decided once beside the Route decider that routes to it so the

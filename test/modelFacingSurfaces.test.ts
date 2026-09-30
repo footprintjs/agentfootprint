@@ -89,13 +89,18 @@ import {
   keptAnswersNote,
   secondPauseRefusal,
   timeRefusal,
+  timeWindowsSentence,
   unansweredRefusal,
   unmountedRulesRefusal,
   unreadableRulesRefusal,
   withArgumentRules,
 } from '../src/core/agent/arguments/serve.js';
 import { rulesOf } from '../src/core/agent/arguments/declare.js';
-import { factExpectation } from '../src/core/agent/arguments/ask.js';
+import {
+  factExpectation,
+  WINDOW_FORM_EXPECTATION,
+  WINDOW_ZONE_EXPECTATION,
+} from '../src/core/agent/arguments/ask.js';
 import { SHOWN_ARGS } from '../src/core/toolShownArgs.js';
 import { defineOntology, ONTOLOGY_INSTRUCTION, ontologyPiece } from '../src/ontology/index.js';
 import type { FindingsLedger } from '../src/core/agent/findings/types.js';
@@ -701,6 +706,58 @@ const RULED_PROPERTY_DESCRIPTION: Surface = {
   channel: 'tool-description',
   lifetime: 'persistent-history',
 };
+
+/** The one served time sentence (time step T6b): "yesterday" in a look-back tool's and an epoch tool's form. */
+function timeWindowSentences(): string[] {
+  const lookback = defineTool({
+    name: 'search_logs',
+    description: 'Error lines over a look-back window.',
+    inputSchema: { type: 'object', properties: { window: { type: 'string' } } },
+    askOrAssume: { window: { assume: '1h' } },
+    period: { argument: 'window', spelling: 'lookback' } as never,
+    execute: () => 'ok',
+  });
+  const epoch = defineTool({
+    name: 'client_activity',
+    description: 'Client operations over a window.',
+    inputSchema: {
+      type: 'object',
+      properties: { start_time: { type: 'integer' }, end_time: { type: 'integer' } },
+    },
+    askOrAssume: { start_time: { ask: 'From when?' }, end_time: { ask: 'Until when?' } },
+    period: {
+      forms: [
+        {
+          kind: 'bounds',
+          from: { argument: 'start_time', as: 'epoch-ms' },
+          to: { argument: 'end_time', as: 'epoch-ms', edge: 'exclusive' },
+        },
+      ],
+    } as never,
+    execute: () => 'ok',
+  });
+  const hiding = {
+    ...epoch,
+    [SHOWN_ARGS]: (args: Record<string, unknown>) =>
+      'start_time' in args ? { ...args, start_time: 'REDACTED' } : args,
+  };
+  const windows = {
+    now: '2026-10-09T15:40:00Z',
+    windows: [
+      {
+        source: 'said' as const,
+        mention: 0,
+        quote: 'yesterday',
+        range: { from: '2026-10-08T00:00:00-07:00', to: '2026-10-09T00:00:00-07:00' },
+        zone: 'America/Los_Angeles',
+      },
+    ],
+  };
+  return [lookback, epoch, hiding].flatMap((t) => {
+    const sentence = timeWindowsSentence(t as never, windows);
+    return sentence === undefined ? [] : [sentence];
+  });
+}
 
 /** A ruled tool, and the same tool with an argument view that hides the ruled value. */
 function ruledSchemaDescriptions(): string[] {
@@ -1506,6 +1563,23 @@ const PRODUCERS: readonly ModelFacingProducer[] = [
     compose: async () => ruledSchemaDescriptions(),
   },
   {
+    id: 'time layer — the person’s windows on a tool that declares a period (TQ13, step T6b)',
+    module: 'src/core/agent/arguments/serve.ts',
+    surface: RULED_PROPERTY_DESCRIPTION,
+    lifetimeBecause:
+      "appended to the tool's description on the served copy of the schema, rebuilt per request " +
+      'at the one decoration site from the turn’s recorded readings; judged at the strictest ' +
+      'lifetime because it says, in the past tense, what the library READ and names it a reading, ' +
+      'and a permission, never an outcome — a later re-read in the same turn cannot falsify it',
+    drivenBy: ['test/core/time/english-run.test.ts'],
+    reaches: [
+      /^The library read time words in the person's message as: “yesterday” → window "1960m" \(a wider read than the words named\) — a reading of their words, not their words; a call may pass these values as written\.$/m,
+      /“yesterday” → start_time 1791442800000, end_time 1791529200000 — a reading of their words/,
+      /start_time \(hidden by the tool's view\), end_time 1791529200000/,
+    ],
+    compose: async () => timeWindowSentences(),
+  },
+  {
     id: 'inputs layer — the note on a result whose call ran on a filled value (honesty layer 2)',
     module: 'src/core/agent/arguments/serve.ts',
     surface: TOOL_RESULT,
@@ -1535,6 +1609,9 @@ const PRODUCERS: readonly ModelFacingProducer[] = [
       /the call ran with "1960m", from the window the person's own words gave — recorded as the person's; the tool's form could not hold that window exactly, so the value reads a wider one — recorded as wider than asked\.\]/,
       /so the value reads a wider one, and the tool declares that it drops the rows outside the asked window\.\]/,
       /\(the value is hidden by the tool's view\); the tool's form could not hold that window exactly/,
+      // Time layer step T6b: the window the person CHOSE when the library asked about their words.
+      /the call ran with 1791558000000, from the window the person chose when asked what their words meant — recorded as the person's answer\.\]/,
+      /recorded as the person's answer; the tool's form could not hold that window exactly, so the value reads a wider one — recorded as wider than asked\.\]/,
     ],
     compose: async () => [
       filledNote('search_logs', [{ argument: 'window', value: '2h', hidden: false }]),
@@ -1647,6 +1724,25 @@ const PRODUCERS: readonly ModelFacingProducer[] = [
           from: 'said',
         },
       ]),
+      filledNote('client_activity', [
+        {
+          argument: 'start_time',
+          value: 1791558000000,
+          hidden: false,
+          source: 'window',
+          from: 'answered',
+        },
+      ]),
+      filledNote('search_logs', [
+        {
+          argument: 'window',
+          value: '1960m',
+          hidden: false,
+          source: 'window',
+          from: 'answered',
+          wider: 'reads-more',
+        },
+      ]),
     ],
   },
   {
@@ -1704,6 +1800,9 @@ const PRODUCERS: readonly ModelFacingProducer[] = [
       /\(window: a window still to come \(the source holds only the future\)\)/,
       /\(window: a window inside what the source keeps \(30d\)\)/,
       /\(window: a window no wider than 24h\)/,
+      // Time layer step T6b: the window asked of the person fits no form, or no time exists in the zone.
+      /did not fit what the tool accepts \(start_time: a window one of the tool's declared period forms can hold\)/,
+      /\(start_time: a time zone in which the time the person wrote exists\)/,
       /its check-in consent gate needed a person’s approval for those arguments/,
       /the tool asked to pause for a person, and this batch had already paused once/,
       // The review of step 4: a refused call's answers are KEPT, and the model is told so.
@@ -1720,6 +1819,12 @@ const PRODUCERS: readonly ModelFacingProducer[] = [
           },
         ]),
       ),
+      unansweredRefusal('client_activity', [
+        { argument: 'start_time', expected: WINDOW_FORM_EXPECTATION },
+      ]),
+      unansweredRefusal('client_activity', [
+        { argument: 'start_time', expected: WINDOW_ZONE_EXPECTATION },
+      ]),
       secondPauseRefusal('purge_logs', 'check-in'),
       secondPauseRefusal('collect_window', 'tool-pause'),
       secondPauseRefusal('purge_logs', 'check-in') + keptAnswersNote('purge_logs', ['window']),

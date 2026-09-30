@@ -32,9 +32,18 @@ import { shownArgsOf } from '../../toolShownArgs.js';
 import type { InputValue } from '../../inputRequest.js';
 import { ASSUMED_BLOCK_HEADING } from '../coverage/answer.js';
 import { argumentRewritesOf, type ArgumentRewrite } from '../middleware/rewrites.js';
-import { isRefused, rulesOf, type RuledToolLike } from './declare.js';
+import { isRefused, periodFactsOf, periodFormsOf, rulesOf, type RuledToolLike } from './declare.js';
 import { HIDDEN_VALUE, type ArgumentRow } from './rows.js';
-import type { PeriodFacts, TimeRefusal } from '../../time/convert.js';
+import {
+  convertExact,
+  convertWidened,
+  granularityMsOf,
+  widestMsOf,
+  type PeriodFacts,
+  type TimeRefusal,
+} from '../../time/convert.js';
+import type { ReaderWindows } from '../../time/bind.js';
+import type { ZoneName } from '../../time/zone.js';
 
 type PlainObject = Record<string, unknown>;
 
@@ -209,14 +218,116 @@ export function rulesOnWire(
   served: readonly LLMToolSchema[],
   winningTools: ReadonlyMap<string, RuledToolLike>,
   optionsOf?: (schema: LLMToolSchema) => ServeOptions | undefined,
+  windows?: ServedWindows,
 ): readonly LLMToolSchema[] {
   let changed = false;
   const decorated = served.map((schema) => {
-    const next = withArgumentRules(schema, winningTools.get(schema.name), optionsOf?.(schema));
+    const tool = winningTools.get(schema.name);
+    const ruled = withArgumentRules(schema, tool, optionsOf?.(schema));
+    const next = windows === undefined ? ruled : withTimeWindows(ruled, tool, windows);
     if (next !== schema) changed = true;
     return next;
   });
   return changed ? decorated : served;
+}
+
+// ─── The person's windows, on a tool that declares a period (time design TQ13) ───
+
+/**
+ * What the served sentence reads: the turn's windows the armed reader SETTLED
+ * (`core/time/bind.ts` · `readerWindowsOf` — each mention's quote and its one
+ * window; an open or unreadable mention is not named), the turn's clock, and
+ * the app's `.time({ zone })`.
+ */
+export interface ServedWindows extends ReaderWindows {
+  readonly appZone?: ZoneName;
+}
+
+/** A converted value as the sentence prints it — an object form's as JSON. */
+function printedArgument(value: unknown): string {
+  return typeof value === 'object' && value !== null
+    ? JSON.stringify(value)
+    : printedValue(value as InputValue);
+}
+
+// LENS · tool-description · persistent-history
+// reads: the turn's `time-reading` rows the armed reader settled (each mention's quote and its one
+//        window — `bind.ts` · `readerWindowsOf`), the turn's clock, and THIS tool's declared period
+//        forms and facts — converted by the one owner (`core/time/convert.ts`)
+// law: past tense about what the library READ; names the reading as a reading (never the person's
+//      words); a permission ("may pass"), never an outcome — whether a call is filled, bound or
+//      refused is decided at dispatch and recorded there.
+/**
+ * The ONE served time sentence (TQ13): on a tool that declares a period, each
+ * window the reader settled this turn, in THIS tool's own form — the exact
+ * conversion, else the wider one the fill would use (said so). So the model
+ * never re-derives a window from words. A window no form of the tool holds is
+ * not named; `undefined` when none is. The values are library text — spellings
+ * derived from a reading, never the person's words (§ 9.5). A value the
+ * tool's own argument view hides is named as hidden.
+ *
+ * @example
+ * ```ts
+ * timeWindowsSentence(clientActivity, { now, windows: [{ quote: 'yesterday', range, zone, source: 'said' }] });
+ * // 'The library read time words in the person's message as: “yesterday” → start_time 1791442800000,
+ * //  end_time 1791529200000 — a reading of their words, not their words; a call may pass these
+ * //  values as written.'
+ * ```
+ */
+export function timeWindowsSentence(
+  tool: RuledToolLike | undefined,
+  windows: ServedWindows,
+): string | undefined {
+  const rules = rulesOf(tool);
+  if (rules === undefined || isRefused(rules)) return undefined;
+  const forms = periodFormsOf(rules.period);
+  if (forms.length === 0) return undefined;
+  const facts = periodFactsOf(rules.period);
+  const clauses: string[] = [];
+  for (const w of windows.windows) {
+    if (w.quote === undefined) continue;
+    const ctx = {
+      now: windows.now,
+      zone: w.zone,
+      ...(windows.appZone !== undefined && { appZone: windows.appZone }),
+      granularityMs: granularityMsOf(facts),
+    };
+    const window = { range: w.range, ...(w.lookback !== undefined && { lookback: w.lookback }) };
+    const exact = convertExact(window, forms, ctx);
+    const conversion = exact ?? convertWidened(window, forms, ctx, widestMsOf(facts));
+    if (conversion === undefined) continue;
+    const values = Object.entries(conversion.values).map(([argument, value]) =>
+      hidesArgument(tool, argument, value as InputValue)
+        ? `${argument} (hidden by the tool's view)`
+        : `${argument} ${printedArgument(value)}`,
+    );
+    const wider = exact === undefined ? ' (a wider read than the words named)' : '';
+    clauses.push(`“${w.quote}” → ${values.join(', ')}${wider}`);
+  }
+  if (clauses.length === 0) return undefined;
+  return (
+    `The library read time words in the person's message as: ${clauses.join('; ')} — a reading ` +
+    'of their words, not their words; a call may pass these values as written.'
+  );
+}
+
+/**
+ * The served copy of a schema with the time sentence after its description —
+ * the SAME reference back when the sentence names nothing, so a turn whose
+ * reader settled no window serves the bytes it always did.
+ */
+export function withTimeWindows(
+  schema: LLMToolSchema,
+  tool: RuledToolLike | undefined,
+  windows: ServedWindows,
+): LLMToolSchema {
+  const sentence = timeWindowsSentence(tool, windows);
+  if (sentence === undefined) return schema;
+  const description = schema.description ?? '';
+  return {
+    ...schema,
+    description: description.trim() === '' ? sentence : `${description.trimEnd()} ${sentence}`,
+  };
 }
 
 // ─── The note on a result ───────────────────────────────────────────────
@@ -233,8 +344,12 @@ export interface FilledArgument {
    * whose. Absent: the tool's rule assumed it.
    */
   readonly source?: 'answered' | 'window';
-  /** On a `window` fill: the person's words, a `model` reader's unconfirmed reading of them, or a UI control. */
-  readonly from?: 'said' | 'derived-from-reading' | 'control';
+  /**
+   * On a `window` fill: the person's words, a `model` reader's unconfirmed
+   * reading of them, a UI control — or the window the person CHOSE when the
+   * library asked about their words (`answered`, the lazy word-driven ask).
+   */
+  readonly from?: 'said' | 'derived-from-reading' | 'control' | 'answered';
   /**
    * On a `window` fill: no form held the window exactly, so the value reads a
    * WIDER one (the time layer, step T5b) — `reads-more`, or `tool-trims` when
@@ -306,6 +421,9 @@ function windowClause(toolName: string, f: FilledArgument): string {
   const whose =
     f.from === 'control'
       ? 'from the window the person set in the app — recorded as set in the app'
+      : f.from === 'answered'
+      ? 'from the window the person chose when asked what their words meant — recorded as ' +
+        "the person's answer"
       : f.from === 'derived-from-reading'
       ? "from a reading of the person's words they have not confirmed — recorded as a reading, " +
         "not as the person's"

@@ -128,8 +128,39 @@ describe("the turn's windows, read from the record", () => {
       refused: 'quote-not-in-text',
     };
     const turn = turnWindowsOf([open, refused], clock());
-    expect(turn).toEqual({ windows: [], mentions: 1 });
+    // The open mention's readings ride along (step T6b): a tool's facts can already rule them out.
+    expect(turn).toEqual({ windows: [], mentions: 1, open: [[MORNING]] });
     expect(callWindowOf(call({}), turn, CTX)).toEqual({ how: 'not-filled', why: 'open-reading' });
+  });
+
+  it('an open mention whose EVERY reading breaks the tool’s facts → refused, nothing asked (§ 6.3, T6b)', () => {
+    const open: TimeReadingRow = {
+      ...reading(0, 1, '10/09', MORNING),
+      choice: { by: 'open', remaining: [0], open: ['date-order'] },
+    };
+    const turn = turnWindowsOf([open], clock());
+    // MORNING ends at 08:41 PDT, after now (08:40): not wholly past — a `future` tool may read it.
+    expect(callWindowOf({ ...call({}), facts: { direction: 'future' } }, turn, CTX)).toEqual({
+      how: 'not-filled',
+      why: 'open-reading',
+    });
+    expect(callWindowOf({ ...call({}), facts: { retention: '1h' } }, turn, CTX)).toEqual({
+      how: 'not-filled',
+      why: 'open-reading',
+    });
+    const past = turnWindowsOf(
+      [
+        {
+          ...reading(0, 1, '10/08', YESTERDAY),
+          choice: { by: 'open', remaining: [0], open: ['year'] },
+        },
+      ],
+      clock(),
+    );
+    expect(callWindowOf({ ...call({}), facts: { direction: 'future' } }, past, CTX)).toEqual({
+      how: 'refused',
+      refused: 'time-past',
+    });
   });
 });
 

@@ -265,6 +265,30 @@ function zoneOf(token: string | undefined, clockZone: ZoneName): ZoneRead {
   return { kind: 'unknown' };
 }
 
+/**
+ * The parts with every zone token this layer cannot read (an abbreviation such
+ * as `PST`) replaced by the zone the PERSON named when asked (§ 6.3) — the
+ * whole mention's and each range side's. A token it can read is kept.
+ *
+ * @example
+ * ```ts
+ * withZoneAnswered([{ wall: { h: 8, meridiem: 'am' }, zoneToken: 'PST' }], 'America/Los_Angeles');
+ * // [{ wall: { h: 8, meridiem: 'am' }, zoneToken: 'America/Los_Angeles' }]
+ * ```
+ */
+export function withZoneAnswered(parses: readonly TimeParts[], zone: ZoneName): TimeParts[] {
+  const fix = (parts: TimeParts): TimeParts =>
+    parts.zoneToken !== undefined && zoneOf(parts.zoneToken, zone).kind === 'unknown'
+      ? { ...parts, zoneToken: zone }
+      : parts;
+  return parses.map((parts) => {
+    const outer = fix(parts);
+    return outer.rangeOf === undefined
+      ? outer
+      : { ...outer, rangeOf: [fix(outer.rangeOf[0]), fix(outer.rangeOf[1])] as const };
+  });
+}
+
 /** The wall time an instant shows under a zone read. */
 function wallIn(zone: ZoneRead, ms: number): WallTime {
   if (zone.kind === 'iana') return wallAt(zone.zone, ms);

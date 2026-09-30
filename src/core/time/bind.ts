@@ -65,7 +65,7 @@ import type { DurationText } from './duration.js';
 import type { InstantText } from './instant.js';
 import type { TimeRange } from './range.js';
 import type { TimeCandidate } from './resolve.js';
-import type { ClockRow, TimeReadingRow } from './rows.js';
+import { clockOf, readingsOf, type ClockRow, type TimeReadingRow } from './rows.js';
 import type { ZoneName } from './zone.js';
 
 // ─── The turn's windows ──────────────────────────────────────────────────
@@ -92,6 +92,13 @@ export interface TurnWindows {
   readonly windows: readonly TurnWindow[];
   /** Every mention with a quote, plus the `control` window — the "exactly one" count. */
   readonly mentions: number;
+  /**
+   * Per mention still OPEN (the person has not chosen), the ranges of the
+   * readings left — what a tool's facts can already rule out (§ 6.3: every
+   * reading outside a tool's `direction` → nothing is asked, the call is
+   * refused). Absent when no mention is open with candidates.
+   */
+  readonly open?: readonly (readonly TimeRange[])[];
 }
 
 /** The one window a reading settled on, if it settled on one (a `model` reading waits only for confirmation). */
@@ -117,12 +124,24 @@ export function turnWindowsOf(
   clock: ClockRow | undefined,
 ): TurnWindows {
   const windows: TurnWindow[] = [];
+  const open: TimeRange[][] = [];
   let mentions = 0;
   for (const row of readings) {
     if (row.mentions === 0 || row.refused !== undefined || row.quote === undefined) continue;
     mentions++;
     const candidate = settledCandidate(row);
-    if (candidate === undefined) continue;
+    if (candidate === undefined) {
+      const choice = row.choice;
+      const left =
+        choice?.by === 'open'
+          ? choice.remaining.flatMap((i) => {
+              const c = row.candidates?.[i];
+              return c === undefined ? [] : [c.range];
+            })
+          : [];
+      if (left.length > 0) open.push(left);
+      continue;
+    }
     windows.push({
       source: row.reader.kind === 'model' ? 'derived-from-reading' : 'said',
       ...(row.mention !== undefined && { mention: row.mention }),
@@ -140,7 +159,27 @@ export function turnWindowsOf(
       zone: clock.zone,
     });
   }
-  return { windows, mentions };
+  return { windows, mentions, ...(open.length > 0 && { open }) };
+}
+
+/** The windows the armed reader settled this turn, with the turn's clock — what the served sentence names. */
+export interface ReaderWindows {
+  readonly now: InstantText;
+  /** Each settled mention's window, in mention order — never the `control` window. */
+  readonly windows: readonly TurnWindow[];
+}
+
+/**
+ * The latest turn's windows the armed READER settled, read off the ledger (its
+ * last `clock` row and that turn's `time-reading` rows) — `undefined` when the
+ * turn has no clock or no settled mention. The `control` window is not a
+ * reading and is not named (the served sentence is the reader's, TQ13).
+ */
+export function readerWindowsOf(ledger: readonly unknown[] | undefined): ReaderWindows | undefined {
+  const clock = clockOf(ledger);
+  if (clock === undefined) return undefined;
+  const { windows } = turnWindowsOf(readingsOf(ledger, clock.turn), undefined);
+  return windows.length === 0 ? undefined : { now: clock.now, windows };
 }
 
 // ─── One call ────────────────────────────────────────────────────────────
@@ -291,8 +330,19 @@ function fillWindow(call: CallToBind, turn: TurnWindows, ctx: BindContext): Call
   if (turn.mentions === 0) return { how: 'not-filled', why: 'no-window' };
   if (turn.mentions > 1) return { how: 'not-filled', why: 'several-mentions' };
   const window = turn.windows[0];
-  if (window === undefined) return { how: 'not-filled', why: 'open-reading' };
   const facts = call.facts;
+  if (window === undefined) {
+    // An open reading: when the tool's facts rule out EVERY reading left, nothing is asked —
+    // the call is refused with the first reading's reason (§ 6.3).
+    const left = turn.open?.[0] ?? [];
+    const problems =
+      facts === undefined ? [] : left.map((range) => periodFactProblem(range, facts, ctx.now));
+    const first = problems[0];
+    if (left.length > 0 && first !== undefined && problems.every((p) => p !== undefined)) {
+      return { how: 'refused', refused: first };
+    }
+    return { how: 'not-filled', why: 'open-reading' };
+  }
   const problem = facts === undefined ? undefined : periodFactProblem(window.range, facts, ctx.now);
   if (problem !== undefined) {
     return { how: 'refused', refused: problem, asked: window.range, person: window };

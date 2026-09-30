@@ -1083,6 +1083,10 @@ export type {
   TimeRelative,
   TimeWall,
 } from './core/time/reader.js';
+// The library's careful English reader (step T6b) — a tokenizer over the v1
+// phrases, "unreadable" for the rest: `.time({ reader: englishTimeReader() })`.
+export { englishTimeReader } from './core/time/readers/english.js';
+export type { EnglishTimeReaderOptions } from './core/time/readers/english.js';
 export type {
   OpenQuestion,
   ReadingChoice,

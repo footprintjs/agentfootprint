@@ -45,6 +45,8 @@ import {
 import { carriesRules } from '../agent/arguments/declare.js';
 import type { Classifier } from '../../classify/types.js';
 import type { ToolChoiceEntry } from '../agent/toolChoice/types.js';
+import type { ReaderWindows } from '../time/bind.js';
+import type { ZoneName } from '../time/zone.js';
 
 /**
  * Mutable cache shared between `buildToolsSlot` (writer) and
@@ -402,6 +404,18 @@ export interface ToolsSlotConfig {
    */
   readonly argumentSources?: true;
   /**
+   * THE TIME LAYER'S READER IS ARMED (`.time({ reader })`, step T6b) —
+   * present ONLY then, and only beside `inputsLayer`. At the same decoration
+   * site, a schema whose winning implementation declares period forms gets the
+   * ONE served time sentence after its description (`agent/arguments/serve.ts`
+   * · `timeWindowsSentence`): each window the reader SETTLED this turn, in
+   * that tool's own form. Reads one mount arg under this gate only,
+   * `timeWindows` (`core/time/bind.ts` · `readerWindowsOf` — absent on a turn
+   * with none, so such a turn serves the bytes it always did). `appZone` is
+   * the app's `.time({ zone })`.
+   */
+  readonly timeWindows?: { readonly appZone?: ZoneName };
+  /**
    * TOOL CHOICE BY CLASSIFIER IS ARMED (9.105.0, `.toolChoice()`) — present
    * ONLY then. Compose then asks `classifier` which of the merged wire's
    * tools (minus the doors) answers the current step, files the pick under
@@ -612,6 +626,7 @@ export function buildToolsSlot(config: ToolsSlotConfig): FlowChart {
       turnRoute?: TurnRoute;
       stepPointer?: StepPointerCarrier;
       findingsOffer?: readonly string[];
+      timeWindows?: ReaderWindows;
       userMessage?: string;
       priorToolChoices?: readonly ToolChoiceEntry[];
       wrapUpAsked?: boolean;
@@ -983,7 +998,19 @@ export function buildToolsSlot(config: ToolsSlotConfig): FlowChart {
       // `assertReservedArgument`), so this is a ToolProvider's tool.
       const sourcesOf = (s: LLMToolSchema): typeof SOURCES_SERVED | undefined =>
         config.argumentSources === true && !ownsReservedArgument(s) ? SOURCES_SERVED : undefined;
-      const ruled = rules !== undefined ? rules(served, winningTools, sourcesOf) : served;
+      // THE TIME SENTENCE (step T6b) rides the rules' decoration: the reader's settled windows,
+      // each in the served tool's own form — only under the reader's arm, only when the mount
+      // handed a turn's windows in.
+      const windows =
+        config.timeWindows !== undefined && args.timeWindows !== undefined
+          ? {
+              ...args.timeWindows,
+              ...(config.timeWindows.appZone !== undefined && {
+                appZone: config.timeWindows.appZone,
+              }),
+            }
+          : undefined;
+      const ruled = rules !== undefined ? rules(served, winningTools, sourcesOf, windows) : served;
       // Declared sources (honesty layer 2): `_findings.from` on a RULED tool only —
       // inside the ledger's decoration under `.findings()`, or as the reserved
       // argument's only property without it (`withSourcesArgument`).

@@ -222,7 +222,17 @@ export type ArgumentFill =
   | {
       readonly argument: string;
       readonly value: InputValue;
-      readonly source: 'default' | 'answered';
+      readonly source: 'default';
+    }
+  | {
+      readonly argument: string;
+      /** A window answered for an `object` form is an object (the lazy word-driven ask). */
+      readonly value: InputValue | Readonly<Record<string, InputValue>>;
+      readonly source: 'answered';
+      /** The value was written by the library from the WINDOW the person chose (the lazy word-driven ask). */
+      readonly window?: true;
+      /** …and no form held that window exactly, so it reads a wider one (as a `window` fill's `wider`). */
+      readonly wider?: 'reads-more' | 'tool-trims';
     }
   | {
       readonly argument: string;
@@ -267,6 +277,14 @@ export interface ArgumentResolution {
    * while a tool in reach may hide arguments (`quotesMayShow`).
    */
   readonly quoted?: readonly { readonly argument: string; readonly quote: string }[];
+  /**
+   * Under `.time({ reader })`: the call left its period out while the turn's
+   * one mention was still OPEN (`core/time/bind.ts` · `not-filled` /
+   * `open-reading`) — its period arguments in `ask` are asked as that
+   * mention's window, in one field for the batch (`ask.ts` · `planAskFields`,
+   * the lazy word-driven ask of time design § 5.2), not one by one.
+   */
+  readonly window?: true;
 }
 
 // ─── DECLARE ────────────────────────────────────────────────────────────
@@ -1001,6 +1019,13 @@ export function resolutionsOf(
         });
       }
     }
+    // The lazy word-driven ask: a period left out while the turn's one mention is open is asked
+    // as that mention's window — only where the tool's own rule asks for a period argument.
+    const forms = formArgumentsOf(toolOf, planned.toolName);
+    const window =
+      decision?.how === 'not-filled' &&
+      decision.why === 'open-reading' &&
+      ask.some((a) => forms.has(a));
     if (fills.length > 0 || ask.length > 0) {
       resolutions.push({
         toolCallId: planned.toolCallId,
@@ -1008,6 +1033,7 @@ export function resolutionsOf(
         ...(fills.length > 0 && { fills }),
         ...(ask.length > 0 && { ask }),
         ...(quoted.length > 0 && { quoted }),
+        ...(window && { window: true as const }),
       });
     }
   }

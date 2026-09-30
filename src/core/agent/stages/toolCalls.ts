@@ -164,6 +164,8 @@ import { timeContextOf, type TimeContext } from '../../time/wire.js';
 import { granularityMsOf } from '../../time/convert.js';
 import { driftAtDispatch } from '../../time/drift.js';
 import type { ZoneName } from '../../time/zone.js';
+import type { TimePolicy } from '../../time/resolve.js';
+import type { TimeAskMessages } from '../../time/ask.js';
 import {
   evidenceFromHistory,
   exemptFromRun,
@@ -686,6 +688,15 @@ export interface ToolCallsHandlerDeps {
   readonly time?: {
     readonly takePassedOnResume: () => ReadRunTime | undefined;
     readonly appZone?: ZoneName;
+    /**
+     * Present exactly under `.time({ reader })` (step T6b): the batch ask asks
+     * a period left out while the turn's one mention is open as THAT
+     * mention's window (`./argumentAsk.ts` · the lazy word-driven ask).
+     */
+    readonly reader?: {
+      readonly policy: TimePolicy;
+      readonly messages?: Partial<TimeAskMessages>;
+    };
   };
   /**
    * Put one artifact fact on the record for the run it BELONGS to — the door
@@ -4005,7 +4016,10 @@ export function buildToolCallsHandler(
           runId: () => deps.currentRun?.().runId,
           ...(deps.argumentAskContext !== undefined && { hostContext: deps.argumentAskContext }),
           ...(deps.time !== undefined && {
-            time: { ...(deps.time.appZone !== undefined && { appZone: deps.time.appZone }) },
+            time: {
+              ...(deps.time.appZone !== undefined && { appZone: deps.time.appZone }),
+              ...(deps.time.reader !== undefined && { reader: deps.time.reader }),
+            },
           }),
         });
         resolutions = asked.resolutions;

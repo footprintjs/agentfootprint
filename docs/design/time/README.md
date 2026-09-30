@@ -983,7 +983,7 @@ deterministic and are measured over retained recorded runs or unit tables, with 
 | T4 | **The time ask** — *landed; implementation note T4 below* | `InputField.format` (refused unless `type: 'string'`), re-validation of shape, order and zone, labelled choices, catalog reasons (TQ7), MCP `date-time` mapping | a `format` field or `.time()` | T3, T6a | answers out of order, zone-less, in a DST gap → re-ask with `refused` and `repeat`; a `model` reading offered to confirm | $0; host hand count |
 | T5a | **Declared mapping and exact conversions** — *landed; implementation note T5a below* | `ToolPeriod.forms` (bounds, joined, object, day, lookback with `units`) and the sugar (`accepts`, `wall-range`, `zoneArgument`); the facts `direction`, `retention`, `maxRange`, `granularity`, `filtersToAsked`, `wallZone`; `_meta.agentfootprint.period` read by `readToolExtras`; the exact rows of § 7.2; `ctx.time` in process and in `_meta.agentfootprint.time`; fill from one mention (a `control` window included), binding by quote, the record-and-run law for a differing model window; the tool facts join T4's re-validation | a tool's new `period` fields | T4, TQ1 | every exact row of § 7.2; a two-argument epoch-ms Python tool over the mock MCP client; a model window that differs → runs, row `model-chosen`, fold "not sure"; a drill-down and a comparison call run untouched; "this morning vs yesterday morning" from the fixture reader → two mentions, no fill, each call bound by quote | $0 |
 | T5b | **Widening and pre-dispatch refusals** — *landed; implementation note T5b below* | the inexact rows of § 7.2 (the covering look-back, `day` wider, `filtersToAsked`), the dispatch drift § 7.4, the refusals (outside `direction`, wholly beyond `retention`, over `maxRange`, a multi-day range to a `day` tool, a `wall` DST gap), `partly-beyond-retention` | a tool's new `period` fields | T5a | every inexact row of § 7.2 and every row of § 7.4; a range half inside `retention` dispatches; a future window to a `past` tool is refused with the reason | $0 |
-| T6b | **The English default and the paid bench** | `englishTimeReader` (a tokenizer; the v1 rows of § 5.3), the served sentence (TQ13), the lazy ask wired to real words | `.time({ reader: englishTimeReader() })` | T5b | the host's field sentences as the table ("10/09/26 8 AM to 8:40 AM PST" → a zone ask for `PST`, "yesterday", a future date); every non-v1 row of § 5.3 reads "unreadable" | **paid**: the provoking set — calls with the right window, and absolute windows asked of a look-back-only tool (wrong-window answers, armed vs unarmed); needless-ask rate on controls |
+| T6b | **The English default and the paid bench** — *landed (the bench not yet run); implementation note T6b below* | `englishTimeReader` (a tokenizer; the v1 rows of § 5.3), the served sentence (TQ13), the lazy ask wired to real words | `.time({ reader: englishTimeReader() })` | T5b | the host's field sentences as the table ("10/09/26 8 AM to 8:40 AM PST" → a zone ask for `PST`, "yesterday", a future date); every non-v1 row of § 5.3 reads "unreadable" | **paid**: the provoking set — calls with the right window, and absolute windows asked of a look-back-only tool (wrong-window answers, armed vs unarmed); needless-ask rate on controls |
 | T7 | **Evidence lineage at grain** | `forms.ts` · `timeFormsOf` with its `said` and `derived` lists; the lineage kind `derived-from-reading`; the gate asks it; the private table from `fix/person-values-normalized` retires | `.time()` | T6b; `fix/person-values-normalized` landed first (TQ25) | "8 AM" vs `8:00`/`08:00` → `said`; a corrected abbreviation, an implied year, `-07:00`, `08:41`, the served sentence echoed → `derived-from-reading`, never "known"; a time no reading produced still fails; the landed fix's cases still pass after it retires | $0 over retained recordings: false "not traced" on time values |
 | T8 | **Result checks** | `period-differs-from-asked { missing, extra }`, `period-shifted`, `period-beyond-retention`, `clocks-differ` (declared wall-clock zones, a label); fold reasons; limits lines | the results layer + `.time()` | T5b, T3 | a tool clamping 30d to 7d (`missing`); a covering look-back (`extra`); a look-back after a 30-minute pause (both); an inclusive `queried.to == asked.to − 1 step` reads as covered; `Z` vs `-07:00` periods raise no `clocks-differ` | **paid**: false "not sure" rate on correct answers (Q33's cell R3 method) |
 | T9a | **Lens** (lens repo) | the rows of § 10.6 | the lens's own | T8; floor = the af release that ships T8 | lens fixtures per row kind | $0 |
@@ -1271,6 +1271,45 @@ deterministic and are measured over retained recorded runs or unit tables, with 
   in this step:** § 9.1's `partly-future` (a range straddling now to a `past` tool dispatches
   unmarked), and nothing new is exported — `CallRow['drift']` and `CallWindowRow['refused']` name
   the new shapes without adding API-reference routes.
+
+- **T6b.** Landed with these smallest faithful choices; the paid bench is its own stage and has
+  not run. (1) **The files.** `core/time/readers/english.ts` · `englishTimeReader` (a tokenizer;
+  its word table is data inside the file, because `core/time/` is a leaf — a second language moves
+  it beside `src/locales/`; `readers/` imports only the port, pinned); `resolve.ts` ·
+  `withZoneAnswered`; `bind.ts` · `readerWindowsOf` and `TurnWindows.open`; the sentence in
+  `arguments/serve.ts` · `timeWindowsSentence` / `withTimeWindows` (through `rulesOnWire`'s
+  `windows`); the window field in `arguments/ask.ts` (`AskField.window`, `planAskFields`'s plan,
+  `bindAnswer`); the plan in `stages/argumentAsk.ts` · `windowPlanOf`. Exported: `englishTimeReader`
+  and `EnglishTimeReaderOptions` (TQ12). (2) **What "unreadable" covers.** Every phrase of the
+  "later" rows, and more it recognises as time — week days, named months, "ago", spans in words
+  or in units a look-back cannot take, a look-ahead, an ordinal day, `8 o'clock`, and a v1 phrase a
+  modifier changes (`since`, `before`, `after`, `around`, `until`, `earlier`, `…to now`) — is ONE
+  mention quoting the WHOLE phrase: reading `yesterday` out of `yesterday morning` would widen what
+  was said. An unreadable mention still counts as a mention (the T5a fill rule), so "yesterday
+  morning" beside "today" fills nothing. A bare hour (`8`) is a time only as a range's first side
+  whose second carries a meridiem; an abbreviation is tokenized only from a closed list, and only
+  right after a date or time (so `8 AM NAS` is not a zone). A leading-zero `08:00` stays am/pm-open
+  — the tokenizer says what was written, and the resolver asks. (3) **The sentence** (TQ13) names
+  only SETTLED windows, in each tool's form — exact, else the wider read the fill would use, said
+  so; a value the tool's view hides is named hidden. It rides the tool's DESCRIPTION at the slot's
+  one decoration site; the mount hands the windows in (`AgentChartDeps.timeReader`, both chart
+  shapes, pinned in all three react modes); the seed's static twin carries none (no reading exists at seed — the findings-offer
+  precedent). The `control` window is not named (the arm is the reader's). (4) **The lazy ask
+  replaces a tool's OWN ask** for its period arguments: a tool whose rule assumes the period keeps
+  its default under an open reading (unchanged from T5a). One window field serves every call of
+  the batch left open. A zone answer re-reads the mention with the answered zone in place of each
+  token the layer cannot read (`withZoneAnswered`); one window binds, several become the follow-up
+  question in the same ask (`AskProgress.next`). § 6.3's facts rows landed with it: only the
+  readings every member tool's facts allow are offered, and when EVERY reading of the open mention
+  breaks a tool's facts, `bind.ts` · `fillWindow` refuses the call before any ask (`how:
+  'refused'`, no `asked`); after a zone answer, the same case refuses the calls through the batch
+  ask's exhausted refusal. (5) **The record.** The answered window is filed `answered` per argument
+  it filled and filled with `ArgumentFill.window` (+ `wider`); the note's window clause gains
+  `from: 'answered'`. The call's `call-window` row, filed before the ask, stays `not-filled` /
+  `open-reading` — so `ctx.time.asked` is absent on such a call; no new row kind, no new byte
+  reference (every existing one unchanged). Three sentences registered: the served time sentence,
+  the answered-window clause, and two expectations of an exhausted window field
+  (`WINDOW_FORM_EXPECTATION`, `WINDOW_ZONE_EXPECTATION`).
 
 **Why this order.** T1 settles the grammar every other step leans on and is free. T2 is already
 written and only needs rebasing and the value check. T3 gives the first visible win (the limits
