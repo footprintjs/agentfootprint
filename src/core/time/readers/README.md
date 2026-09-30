@@ -1,3 +1,5 @@
+**Support** — the library's time readers: a reader proposes time parts from a person's words; it decides nothing.
+
 # core/time/readers — the library's time readers
 
 A reader turns a person's words into time PARTS and a verbatim quote, behind the

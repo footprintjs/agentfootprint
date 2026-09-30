@@ -4896,6 +4896,9 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
       // constant on every call, under the one gate — an unarmed agent reads
       // no new key.
       ...(this.ontology !== undefined && { ontology: true as const }),
+      // The time layer's served line (step T6b): read only where the Tools
+      // mount can compose it — the `timeReader` arm of the chart deps.
+      ...(inputsArmed && this.timeOptions?.reader !== undefined && { timeLine: true as const }),
       // The receipt's salt (9.88.0) — read per call, like seed's own accessor.
       getRunId: () => this.currentRunContext?.runId,
       // …and its off switch. Value-conditional, so an agent on the default

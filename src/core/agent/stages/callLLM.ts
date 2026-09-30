@@ -190,6 +190,12 @@ export interface CallLLMStageDeps {
    * key is the phantom context source `window/evictedTurns.ts` names.
    */
   readonly ontology?: true;
+  /**
+   * The time layer's served line is armed (`.time({ reader })` beside the
+   * inputs layer, step T6b) — only then does the stage read `scope.timeLine`.
+   * An unarmed agent never reads the key (the `ontology` precedent above).
+   */
+  readonly timeLine?: true;
   /** Optional pricing adapter for cost tracking. */
   readonly pricingTable?: PricingTable;
   /** Optional cumulative USD cap per run. */
@@ -670,7 +676,7 @@ export function buildCallLLMStage(
     // and served only on the iteration that composed it — a slot that did not re-run (classic
     // mode) leaves an older line, which is never served. Request-only like the nudge above; not
     // on the wrap-up call, whose tools are withheld. `servedView` rebuilds it from the same key.
-    const timeLine = scope.timeLine;
+    const timeLine = deps.timeLine === true ? scope.timeLine : undefined;
     if (
       timeLine !== undefined &&
       timeLine.iteration === iteration &&

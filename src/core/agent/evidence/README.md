@@ -264,10 +264,10 @@ person (or the app) wrote is exempt in its other spellings. Nothing else is
 widened: a value is exempt only when it IS, or respells, something the person
 or the app said.** One owner each: `evidenceIndex.ts` · `typedAskAnswerOf`
 (read by `addHistoryExempt`, so the corpus and a fold's lineage take it the
-same way) and `core/time/forms.ts` · `timeFormsOf({ text })`'s `said` list
+same way) and `core/time/forms.ts` · `timeFormsOf`'s `said` list for a text
 (read through `evidenceIndex.ts` · `addExempt`, the exempt corpus's one text
 door — until time step T7 this was a table private to this folder,
-`normalize.ts` · `dateAndClockForms`; the job moved, the cases did not).
+its `dateAndClockForms` in `normalize.ts`; the job moved, the cases did not).
 
 Why: a person asked "what clients connected to SHISOLPLPAP006 during 10/09/26
 8 Am to 8:40 AM PST" and answered the app's typed ask (`requestInput`) with
