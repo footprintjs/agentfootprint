@@ -697,6 +697,9 @@ const REFUSES_A_SECOND_CALL = [
   // The answer layer (honesty layer 4) — one standing per answer; a second
   // call would let a later `standingLine` silently win.
   'answerLayer',
+  // The time layer's clock — one clock configuration per agent; a second call
+  // would let a later fallback zone silently win.
+  'time',
   'limitsTravelWithTheAnswer',
   'maps',
   'namesAndNumbersFromEvidence',
@@ -850,6 +853,7 @@ describe('silent success — the doctrine sweep', () => {
       inputsLayer: () => base().inputsLayer().inputsLayer(),
       resultsLayer: () => base().resultsLayer().resultsLayer(),
       answerLayer: () => base().answerLayer().answerLayer({ standingLine: true }),
+      time: () => base().time().time({ zone: 'UTC' }),
       limitsTravelWithTheAnswer: () =>
         base().limitsTravelWithTheAnswer().limitsTravelWithTheAnswer(),
       maps: () => base().maps().maps(),

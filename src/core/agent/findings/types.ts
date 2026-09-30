@@ -34,6 +34,7 @@ import type { ArgumentRow } from '../arguments/rows.js';
 import type { DeclaredSource } from '../arguments/sources.js';
 import type { PeriodRow } from '../coverage/period.js';
 import type { GroundedRow, StepsUnfinishedRow } from '../assessment/witness.js';
+import type { CallRow, ClockOnResumeRow, ClockRow } from '../../time/rows.js';
 import type { CoverageItem } from '../coverage/types.js';
 
 /** The reserved optional property every SERVED tool schema carries when armed. */
@@ -456,7 +457,13 @@ export type FindingsRow =
   // clean pass, and an answer given before its declared steps finished.
   // Filed only while the answer layer is armed (`assessment/witness.ts`).
   | GroundedRow
-  | StepsUnfinishedRow;
+  | StepsUnfinishedRow
+  // The time layer's rows (`core/time/rows.ts`), filed only under `.time()`:
+  // the turn's clock stamp, a resume's differing `time` (recorded, not
+  // applied), and each dispatched call's wall-clock moment.
+  | ClockRow
+  | ClockOnResumeRow
+  | CallRow;
 
 /** The committed key: flat, append-only, a fresh array on every write. */
 export type FindingsLedger = readonly FindingsRow[];

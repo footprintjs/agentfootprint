@@ -11,7 +11,8 @@
  *          cannot disagree about what a well-formed period is.
  * Role:    core/ layer leaf of the result doors (honesty layer 3). Imports only
  *          `refusal.ts`, the dev-mode flag and the time layer's one instant
- *          parser (`core/time/instant.ts` · `instantOf`, lenient profile). The results layer
+ *          parser (`core/time/instant.ts` · `instantOf`, lenient profile) and its
+ *          person-facing renderer (`core/time/present.ts`). The results layer
  *          (`../results/subflow.ts`) files one verdict per call from
  *          {@link periodVerdict}; the limits block prints one line per
  *          declaring call from {@link periodLine}.
@@ -46,6 +47,7 @@
 import { isDevMode } from 'footprintjs';
 
 import { compareInstants, instantOf, type Instant } from '../../time/instant.js';
+import { presentInstant, presentSpan, type Presentation } from '../../time/present.js';
 
 import { refusal, spellingMeant } from './refusal.js';
 
@@ -554,7 +556,9 @@ export function noteWithClause(note: unknown, clause: string): string {
  * The `Period:` line the limits block prints for one declaring call — the
  * period AS THE TOOL DECLARED IT, instants verbatim (no reformatting, no zone
  * conversion, no verdict word: the answer's standing owns the verdict's
- * sentence). Static words around the tool's own values.
+ * sentence). Static words around the tool's own values. With a
+ * `presentation` (the run's clock zone, only under `.time()`), the instants
+ * are rendered in that zone instead — see {@link periodLineInZone}.
  *
  * @example
  * ```ts
@@ -566,13 +570,54 @@ export function noteWithClause(note: unknown, clause: string): string {
  * //  2026-08-27T02:00:00Z to 2026-09-26T02:00:00Z'
  * ```
  */
-export function periodLine(toolName: string, period: DeclaredPeriod): string {
+export function periodLine(
+  toolName: string,
+  period: DeclaredPeriod,
+  presentation?: Presentation,
+): string {
+  if (presentation !== undefined) return periodLineInZone(toolName, period, presentation);
   const queried = `${toolName} queried ${period.queried.from} to ${period.queried.to}`;
   const held =
     period.held === 'unknown'
       ? 'what the store holds is unknown'
       : `the store holds ${period.held.from} to ${period.held.to}`;
   const readAt = period.readAt !== undefined ? ` (read at ${period.readAt})` : '';
+  return `${queried}; ${held}${readAt}`;
+}
+
+/**
+ * The same line under `.time()` (time design § 10.2): every instant rendered
+ * in the presentation zone by the time layer's one renderer
+ * (`core/time/present.ts`), the zone named, each end AS DECLARED (a declared
+ * period is inclusive, so no end moves). The raw instants stay in the typed
+ * record (`coverageDeclared`, `answerCoverage`); a label is never parsed back.
+ *
+ * @example
+ * ```ts
+ * periodLine('backup_runs', {
+ *   queried: { from: '2026-09-26T09:00:00Z', to: '2026-09-26T10:00:00Z' },
+ *   held: 'unknown',
+ * }, { zone: 'America/Los_Angeles' });
+ * // 'backup_runs queried 2026-09-26 02:00–03:00 America/Los_Angeles (UTC-07:00);
+ * //  what the store holds is unknown'
+ * ```
+ */
+function periodLineInZone(
+  toolName: string,
+  period: DeclaredPeriod,
+  presentation: Presentation,
+): string {
+  const queried = `${toolName} queried ${presentSpan(
+    period.queried.from,
+    period.queried.to,
+    presentation,
+  )}`;
+  const held =
+    period.held === 'unknown'
+      ? 'what the store holds is unknown'
+      : `the store holds ${presentSpan(period.held.from, period.held.to, presentation)}`;
+  const readAt =
+    period.readAt !== undefined ? `; read at ${presentInstant(period.readAt, presentation)}` : '';
   return `${queried}; ${held}${readAt}`;
 }
 

@@ -21,15 +21,37 @@ It is a leaf: it imports nothing outside itself (pinned by
 | `zone.ts` | IANA zone names through `Intl` (an abbreviation such as `PST` and a bare offset are refused, although `Intl` takes them), `offsetAt`, `wallAt`, and wall time → instant under Temporal's four DST words (`readWall`, `wallToInstant`) |
 | `axis.ts` | a dataset's declared time axis (`DatasetTimeAxis`, moved from `artifacts/timeAxis.ts`; `artifacts/index.ts` re-exports it): the one judge `timeAxisIssues` (the interval is a duration under `AXIS_UNITS`, the zone a zone name), `readTimeAxis`, `describeTimeAxis`, and the read-side view `normaliseInstants` — UTC instants at one precision, sorted, with every unplaced value counted (`naive`, `dstAmbiguous`, `dstGap`, `unreadable`, `missing`) |
 | `range.ts` | `TimeRange` (half-open `[from, to)`), its two spellings (`parseRange` / `spellRange` — the ISO 8601 interval `from/to` and the joined `from..to`; `splitRange` is the format check), one conversion per boundary a range crosses (`fromInclusive` / `toInclusive`, `boundInto` / `boundFrom`, `lookbackRange` / `lookbackOf`), `covers`, `overlaps`, `roundOutward` |
+| `clock.ts` | the run clock (§ 4): `TimeClock { now, nowSource, zone, zoneSource }`; the two inputs read or refused by name — the run's `time: { now, zone, window }` (`readRunTime`) and the builder's `.time({ zone })` (`readTimeOptions`); `draftClock` (the run's zone wins, the builder's is a fallback, neither is `'no-zone'`), `completeClock` (`now` is the app's, else the turn's start: `nowSource: 'default'`), `clockChange` (what a resume passed that differs from the kept clock) |
+| `rows.ts` | the layer's three ledger rows and the checkpoint door's test for each (`timeRowIsWellFormed`): `clock` (one per turn, filed by seed), `clock-on-resume` (a resume's differing `time`, recorded not applied), `call` (one per dispatched call, `dispatchedAt`); `clockOf` reads the latest turn's clock |
+| `present.ts` | time for a PERSON: `presentInstant`, `presentSpan` (two inclusive ends, as declared), `presentRange` (a half-open range with the end AS SAID — `[08:00, 08:41)` at minute grain shows `08:40`); locale-neutral, the zone always named, each end's offset when a span crosses a DST change |
 
 Who asks it today: `coverage/period.ts` reads a declared period's instants through
 `instant.ts` · `instantOf` in the lenient profile (`periodVerdict` is unchanged, inclusive at both
-ends); `arguments/declare.ts` · `parsesUnderSpelling` reads a look-back through `duration.ts` and
+ends) and, under `.time()`, renders `periodLine` through `present.ts` in the run's zone;
+`Agent.run` / `Agent.resume` read the run's `time` through `clock.ts` (refusing a run with no zone
+before the turn starts); `stages/seed.ts` · `stampClock` files the turn's `clock` row;
+`stages/toolCalls.ts` files each `call` row and, at a resume, `clock-on-resume`;
+`core/runCheckpoint.ts` · `ledgerRowIsWellFormed` routes the three kinds to `rows.ts`; `arguments/declare.ts` · `parsesUnderSpelling` reads a look-back through `duration.ts` and
 an `iso-range` through `range.ts` · `splitRange` in the strict profile; `artifacts/minting.ts` ·
 `prepareArtifact` and `artifacts/datasetResult.ts` · `stageDatasetArtifacts` judge a dataset's
-axis through `axis.ts` · `timeAxisIssues`. Only `axis.ts` is exported from the package (through
-`artifacts/index.ts`, where datasets live); the rest of the public time surface arrives with the
-run clock (step T3).
+axis through `axis.ts` · `timeAxisIssues`. From the package: `axis.ts` (through
+`artifacts/index.ts`, where datasets live), and — since the run clock (step T3) — the clock's types
+(`RunTime`, `TimeClock`, `TimeOptions`, `TimeRange`, and the three row types) from the main barrel;
+the doors are `AgentBuilder.time` and `run({ time })`. The grammar functions stay internal.
+
+**The clock law: a declared, recorded input, never a hidden read.** `.time()` arms it. The zone is
+per run (`run({ time: { zone } })`), the builder's `.time({ zone })` a fallback, and with neither
+the run is refused — never the server's zone. `now` is the app's, else the turn's start, recorded
+`nowSource: 'default'`. Seed files one `clock` row per turn, after the turn number is final; it is
+never written again that turn. A resume that passes a different `time` keeps the frozen clock and
+files `clock-on-resume { passed, kept }`. The layer reads the wall clock at exactly two points, both
+recorded: a default `now`, and each call's `dispatchedAt`. A zone is recorded as the app wrote it —
+`Intl`'s canonical form can be an older link (`Asia/Kolkata` → `Asia/Calcutta`). The rows fire no
+event (the record is the reader's); nothing is served to the model.
+
+**The presentation law: a label is never data.** `present.ts` renders for a person — the typed
+record keeps the instants. With no reader armed (a later step) the form is locale-neutral:
+`2026-10-09 08:00–08:40 America/Los_Angeles (UTC-07:00)`.
 
 **The axis law: a value with no known clock is never read as UTC.** `normaliseInstants` is a
 read-side view: it reads the rows and never writes them. An ISO value with no offset under an
@@ -48,6 +70,8 @@ import { durationMs, LOOKBACK_UNITS } from './duration.js';
 import { wallToInstant } from './zone.js';
 import { parseRange, toInclusive } from './range.js';
 import { normaliseInstants } from './axis.js';
+import { draftClock } from './clock.js';
+import { presentRange } from './present.js';
 
 instantOf('2026-10-09t08:00z', 'lenient'); // a result may declare it
 instantOf('2026-10-09t08:00z', 'strict'); //  undefined — a tool is never sent it
@@ -70,6 +94,27 @@ normaliseInstants(
 ); // points '2026-11-01T08:30:00Z' (earlier) then '2026-11-01T09:30:00Z' (later), each noted
 normaliseInstants([{ t: '2026-09-14T10:00:00' }], { column: 't', unit: 'iso' });
 // { status: 'naive-values', count: 1, points: [] } — never read as UTC
+
+// The run clock: the run's zone wins, the builder's is a fallback, neither is refused.
+draftClock({ now: '2026-10-09T15:40:00Z' }, { zone: 'America/Los_Angeles' });
+// { now: '2026-10-09T15:40:00Z', zone: 'America/Los_Angeles', zoneSource: 'builder' }
+draftClock({}, {}); // 'no-zone' — the Agent refuses the run
+
+// "to 8:40", read to the end of its minute, shown to the person as 08:40.
+presentRange(asked, { zone: 'America/Los_Angeles' }, 'minute');
+// '2026-10-09 08:00–08:40 America/Los_Angeles (UTC-07:00)'
+```
+
+Through an agent (`examples/features/81-run-clock.ts`):
+
+```ts
+const agent = Agent.create({ provider, model })
+  .tool(backupFailures)
+  .time({ zone: 'America/Los_Angeles' }) // the fallback; each run's own zone wins
+  .limitsTravelWithTheAnswer()
+  .build();
+await agent.run({ message, time: { now: message.sentAt, zone: session.zone } });
+agent.findings(); // [{ kind: 'clock', now, nowSource: 'app', zone, zoneSource: 'run', … }, { kind: 'call', dispatchedAt, … }]
 ```
 
 ## What changed when the grammars moved here (the design's § 12.1)
@@ -86,8 +131,12 @@ normaliseInstants([{ t: '2026-09-14T10:00:00' }], { column: 't', unit: 'iso' });
 
 ## Not covered yet
 
-- The run clock, the person's words, the ask, tool conversions, the checks — later steps of the
-  plan (§ 13); each adds a file here.
+- The person's words (a reader, T6a), the ask (T4), tool conversions and `ctx.time` (T5), the
+  checks (T8) — later steps of the plan (§ 13); each adds a file here. Until the reader, the
+  presentation has no locale and the clock resolves no words: it is recorded, and the `Period:`
+  lines are rendered in its zone.
+- A clock is stamped once per RUN: `resumeOnError` and a continued conversation are new runs and
+  stamp their own (a pause-and-resume is the one frozen case).
 - The axis's `interval` is checked for shape only; nothing yet checks the rows' spacing against
   it, and the chart domain rule of the design's § 8 (one call's asked period) belongs to the
   consumers.

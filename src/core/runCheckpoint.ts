@@ -64,6 +64,7 @@ import type { FoldedSpan } from './agent/window/types.js';
 import { argumentRowIsWellFormed } from './agent/arguments/rows.js';
 import { periodRowIsWellFormed } from './agent/coverage/period.js';
 import { witnessRowIsWellFormed } from './agent/assessment/witness.js';
+import { timeRowIsWellFormed } from './time/rows.js';
 import {
   BASIS_VALUES,
   EXPECT_VALUES,
@@ -715,6 +716,14 @@ function ledgerRowIsWellFormed(row: unknown): boolean {
     case 'grounded':
     case 'steps-unfinished':
       return witnessRowIsWellFormed(r);
+    // The time layer's rows (`.time()`): the turn's clock stamp, a resume's
+    // differing `time`, and each call's dispatch moment. The arms ship in the
+    // SAME change as the kinds; one owner of their shape (`core/time/rows.ts`).
+    // An older runtime refuses a checkpoint that carries any of them.
+    case 'clock':
+    case 'clock-on-resume':
+    case 'call':
+      return timeRowIsWellFormed(r);
     default:
       return false;
   }
@@ -833,8 +842,12 @@ export function validateCheckpoint(value: unknown): AgentRunCheckpoint {
           'partly-held, not-held, unknown or undeclared) or ' +
           "'grounded' (with turn, iteration, posture, candidates, lookedUp) or " +
           "'steps-unfinished' (with turn, iteration, skillId, remaining[] of { index, tool }, " +
-          'total, action: accepted | cut-short); a row of any kind may carry a numeric turn. ' +
-          'It is written by an agent with `.findings()` or with an honesty layer armed, and ' +
+          'total, action: accepted | cut-short) or ' +
+          "'clock' (with turn, iteration, now, nowSource, zone, zoneSource) or " +
+          "'clock-on-resume' (with turn, iteration, passed, kept) or " +
+          "'call' (with turn, iteration, toolCallId, toolName, dispatchedAt); " +
+          'a row of any kind may carry a numeric turn. ' +
+          'It is written by an agent with `.findings()`, an honesty layer or `.time()` armed, and ' +
           're-seeded verbatim on continuation.',
       );
     }

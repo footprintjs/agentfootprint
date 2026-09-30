@@ -642,7 +642,11 @@ return absent({
   line per declaring call, the period AS DECLARED (`period.ts` · `periodLine`,
   in `answer.ts` · `composeAnswerWithCoverage`); a typed answer carries the same
   as `periods` in its limits data (`answer.ts` · `coverageOfAnswer`). With no
-  period declared the block is the bytes it always was.
+  period declared the block is the bytes it always was. Under `.time()` (the
+  time layer's run clock) the line's instants are rendered in the run's zone by
+  `core/time/present.ts`, the zone named, each end as declared
+  (`backup_runs queried 2026-10-09 08:00–08:40 America/Los_Angeles (UTC-07:00); …`);
+  the typed data keeps the declared instants.
 - **Across processes.** `canonical-notes.json` publishes the period's wire
   spelling (`PERIOD_WIRE`: every key and the literal `'unknown'`), so a Python
   helper mints it byte for byte. An OLDER reader serves a period on `af_absent`

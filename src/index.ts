@@ -1042,6 +1042,12 @@ export {
   type TimeAxisReading,
   type TimeAxisUnit,
 } from './artifacts/index.js';
+// The time layer's run clock (time design § 4, step T3) — `.time()` and the
+// run's `time` input, and the rows the clock files on the ledger. Types only:
+// the doors are `AgentBuilder.time` and `run({ time })`.
+export type { RunTime, TimeClock, TimeOptions } from './core/time/clock.js';
+export type { TimeRange } from './core/time/range.js';
+export type { CallRow, ClockOnResumeRow, ClockRow, ControlWindow } from './core/time/rows.js';
 // Artifacts, the optional streaming leg (9.25.0) — `putStream`/`getStream` are
 // FEATURE-DETECTED members of the port, so a store that cannot move bytes
 // without holding them whole leaves them absent rather than faking one. The

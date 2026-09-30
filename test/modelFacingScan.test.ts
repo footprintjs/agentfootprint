@@ -541,6 +541,18 @@ const LEDGER: Readonly<Record<string, readonly Entry[]>> = {
       count: 1,
       why: 'a checkpoint-ownership error thrown to the host',
     },
+    {
+      kind: 'not-model-facing',
+      count: 1,
+      why: 'the stored-conversation ledger refusal thrown to the host; it names the time rows’ `now` field',
+    },
+  ],
+  'src/core/time/clock.ts': [
+    {
+      kind: 'not-model-facing',
+      count: 3,
+      why: 'the run clock input’s refusals (`now`, `time` shape), thrown to the caller of run() / resume() before the turn starts',
+    },
   ],
   'src/core/runbook/recording.ts': [
     {
@@ -1095,12 +1107,17 @@ describe('every model-facing-shaped literal in src/ is accounted for', () => {
         // `RequestArtifactsRevokedError`, rejected into HOST code that used a
         // `handle.artifactsForRequest` binding after its instance was retired;
         // no model reads it. hosting/errors.ts not-model-facing 7 → 8.
-        files: 96,
-        total: 188,
+        // Unreleased (time layer, step T3): four host-facing refusals naming the
+        // run clock's `now` — the run input's three in core/time/clock.ts (one
+        // new file) and the checkpoint door's ledger refusal, which now names
+        // the time rows (runCheckpoint.ts 1 → 2). Thrown to the caller before
+        // the turn starts, or at the door; no model reads them.
+        files: 97,
+        total: 192,
         registry: 8,
         ephemeral: 20,
         unrepaired: 33,
-        notModelFacing: 127,
+        notModelFacing: 131,
         unrepairedEntries: 13,
       });
       // And the ledger's own total is the number of literals the scan flagged —

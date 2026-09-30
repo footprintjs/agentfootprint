@@ -289,6 +289,14 @@ export interface AgentChartDeps {
   readonly hasAnswerValidation?: boolean;
 
   /**
+   * The time layer (`.time()`) is armed: under `attachCoverageLimits`, the
+   * final stage renders each `Period:` line in the run's clock zone
+   * (`stages/prepareFinal.ts` · `prepareFinalFor`). Absent → the stage the
+   * chart has always mounted.
+   */
+  readonly timeLayer?: true;
+
+  /**
    * An escalation brain is declared (9.19.0). In the GROUPED chart this
    * gates threading `skillEscalated` across the `sf-llm-call` boundary —
    * the flip is written by tool-calls on the OUTER scope and read by

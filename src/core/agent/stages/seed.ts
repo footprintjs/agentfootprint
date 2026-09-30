@@ -35,6 +35,9 @@ import type { HonestyLayers } from '../honesty/armed.js';
 import type { FindingsLedger } from '../findings/types.js';
 import type { Ontology } from '../../../ontology/types.js';
 import type { Tool } from '../../tools.js';
+import { completeClock, type ClockDraft } from '../../time/clock.js';
+import { clockRow } from '../../time/rows.js';
+import { recordFindings } from '../findings/ledger.js';
 
 /**
  * A stored conversation handed to the next run — what
@@ -137,6 +140,14 @@ export interface SeedStageDeps {
    * constant, written once. Absent → nothing is written.
    */
   readonly honestyLayers?: HonestyLayers;
+  /**
+   * THE TIME LAYER'S CLOCK (`.time()`) — the current run's clock draft, read
+   * once, after the turn is known: seed completes it with the turn's start
+   * (`turnStartMs`, when the app passed no `now`) and files ONE `clock` row
+   * (`core/time/rows.ts` · `clockRow`). Absent on an agent without the layer,
+   * so nothing is read or written.
+   */
+  readonly timeClock?: () => ClockDraft | undefined;
   /**
    * DECLARED SOURCES ARE ARMED (honesty layer 2, `.findings({
    * argumentSources: true })` or `.inputsLayer({ argumentSources: true })`) —
@@ -423,11 +434,13 @@ export function buildSeedStage(
       const loading = loadRuleDecoration(deps);
       if (loading === undefined) {
         seedFrom(scope, scope.$getArgs<AgentInput>().message, deps, undefined);
+        stampClock(scope, deps);
         return;
       }
-      return loading.then((decorate) =>
-        seedFrom(scope, scope.$getArgs<AgentInput>().message, deps, decorate),
-      );
+      return loading.then((decorate) => {
+        seedFrom(scope, scope.$getArgs<AgentInput>().message, deps, decorate);
+        stampClock(scope, deps);
+      });
     };
   }
   if (chain.length === 0) {
@@ -436,6 +449,7 @@ export function buildSeedStage(
       const decorate = loading === undefined ? undefined : await loading;
       seedFrom(scope, scope.$getArgs<AgentInput>().message, deps, decorate);
       await anchorTurnNumber(scope, stores);
+      stampClock(scope, deps);
     };
   }
   return async (scope) => {
@@ -458,6 +472,7 @@ export function buildSeedStage(
       // useless), and a fully-seeded state means `resumeOnError` and every
       // recorder see the shape they expect rather than a half-built one.
       seedFrom(scope, verdict.content, deps, decorate);
+      stampClock(scope, deps);
       scope.messageDeniedReason = verdict.reason;
       scope.messageDeniedPhase = 'input';
       scope.messageDeniedBy = verdict.middleware;
@@ -471,7 +486,29 @@ export function buildSeedStage(
     }
     seedFrom(scope, verdict.content, deps, decorate);
     if (stores.length > 0) await anchorTurnNumber(scope, stores);
+    stampClock(scope, deps);
   };
+}
+
+/**
+ * The turn's clock stamp (the time layer) — filed LAST in seed, after the
+ * turn number is final (`anchorTurnNumber` may raise it), so the row names
+ * the turn every later row of this turn names. One row per run; the clock is
+ * a run constant from here on and is never written again this turn (a
+ * resume keeps it — `stages/toolCalls.ts` records a differing `time` as
+ * `clock-on-resume`). No accessor, or no draft → nothing is written.
+ */
+function stampClock(scope: TypedScope<AgentState>, deps: SeedStageDeps): void {
+  const draft = deps.timeClock?.();
+  if (draft === undefined) return;
+  const clock = completeClock(draft, scope.turnStartMs as number);
+  recordFindings(scope, [
+    clockRow(
+      clock,
+      { turn: scope.turnNumber as number, iteration: scope.iteration as number },
+      draft.window,
+    ),
+  ]);
 }
 
 /**
