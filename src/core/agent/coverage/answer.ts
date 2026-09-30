@@ -47,7 +47,7 @@
 import { copyInProgressItem, IN_PROGRESS_SECTION_LABEL, inProgressLine } from './inProgress.js';
 import { mergeItems } from './items.js';
 import { copyPeriod, periodLine, type DeclaredPeriod } from './period.js';
-import type { Presentation } from '../../time/present.js';
+import type { BoundPresentation } from '../../time/present.js';
 import type { Coverage, CoverageItem, DeclaredCoverage, InProgressItem } from './types.js';
 
 /**
@@ -368,7 +368,7 @@ export function composeAnswerWithCoverage(
   declared: readonly DeclaredCoverage[],
   assumed = '',
   standing = '',
-  presentation?: Presentation,
+  presentation?: BoundPresentation,
 ): string {
   const blocks: string[] = [];
   // The answer layer's standing line (honesty layer 4, its own opt-in arm)
@@ -388,7 +388,7 @@ export function composeAnswerWithCoverage(
 /** The coverage block alone — `''` when the declarations say nothing. */
 function coverageBlock(
   declared: readonly DeclaredCoverage[],
-  presentation: Presentation | undefined,
+  presentation: BoundPresentation | undefined,
 ): string {
   if (declared.length === 0) return '';
   const folded = foldSections(declared);

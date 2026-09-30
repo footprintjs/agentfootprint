@@ -216,7 +216,7 @@ pure decision per call (`resolve.ts` · `timeDecisionsOf` over `core/time/bind.t
 
 One `call-window` row per such call says which (`core/time/rows.ts` · `CallWindowRow`),
 merged in the same ONE write as the argument rows; the tool is handed `ctx.time`, read off that
-row at dispatch (`stages/toolCalls.ts` · `callTimeContext`). The batch ask's answer for a period
+row at dispatch (`stages/timeLayer.ts` · `callTimeContext`). The batch ask's answer for a period
 argument is also judged against the tool's `direction`, `retention` and `maxRange` at the turn's
 clock (`ask.ts` · `checkAnswer`, `factExpectation`): outside them it is `invalid-answer`, asked
 again.

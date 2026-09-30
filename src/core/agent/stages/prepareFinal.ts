@@ -36,7 +36,7 @@ import {
 import type { AgentState } from '../types.js';
 import type { FindingsLedger } from '../findings/types.js';
 import { presentationZoneOf } from '../../time/rows.js';
-import type { Presentation } from '../../time/present.js';
+import type { BoundPresentation } from '../../time/present.js';
 
 /**
  * The stage body, with the answer passed IN.
@@ -232,9 +232,14 @@ export const prepareFinalWithLimitsStage = (scope: TypedScope<AgentState>): void
  * the ledger here. `undefined` when no clock was filed (a paused turn from a
  * runtime without the layer): the lines are then the declared instants.
  */
-function presentationOf(scope: TypedScope<AgentState>): Presentation | undefined {
+async function presentationOf(
+  scope: TypedScope<AgentState>,
+): Promise<BoundPresentation | undefined> {
   const zone = presentationZoneOf(scope.findingsLedger as FindingsLedger | undefined);
-  return zone === undefined ? undefined : { zone };
+  if (zone === undefined) return undefined;
+  // The renderer loads only here, under `.time()` — the optional-family law.
+  const { bindPresentation } = await import('../../time/present.js');
+  return bindPresentation({ zone });
 }
 
 /**
@@ -243,11 +248,19 @@ function presentationOf(scope: TypedScope<AgentState>): Presentation | undefined
  * named (`coverage/period.ts` · `periodLine`). The typed record keeps the
  * declared instants; only the person's line changes.
  */
-export const prepareFinalWithLimitsInZoneStage = (scope: TypedScope<AgentState>): void => {
+export const prepareFinalWithLimitsInZoneStage = async (
+  scope: TypedScope<AgentState>,
+): Promise<void> => {
   const declared = scope.coverageDeclared;
   const answer =
     declared !== undefined && declared.length > 0
-      ? composeAnswerWithCoverage(scope.llmLatestContent, declared, '', '', presentationOf(scope))
+      ? composeAnswerWithCoverage(
+          scope.llmLatestContent,
+          declared,
+          '',
+          '',
+          await presentationOf(scope),
+        )
       : scope.llmLatestContent;
   captureTurnPayload(scope, answer);
 };
@@ -300,7 +313,7 @@ export function prepareFinalWithLimitsAndAssumedStage(
             declared,
             assumed,
             '',
-            inZone ? presentationOf(scope) : undefined,
+            inZone ? await presentationOf(scope) : undefined,
           )
         : scope.llmLatestContent;
     captureTurnPayload(scope, answer);
@@ -435,7 +448,7 @@ export function prepareFinalWithAnswerLayerStage(o: {
             declared,
             assumed,
             line,
-            o.inZone === true && declared.length > 0 ? presentationOf(scope) : undefined,
+            o.inZone === true && declared.length > 0 ? await presentationOf(scope) : undefined,
           )
         : scope.llmLatestContent;
     captureTurnPayload(scope, answer, false, undefined, assessed);

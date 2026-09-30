@@ -35,13 +35,9 @@ import type { HonestyLayers } from '../honesty/armed.js';
 import type { FindingsLedger } from '../findings/types.js';
 import type { Ontology } from '../../../ontology/types.js';
 import type { Tool } from '../../tools.js';
-import { completeClock, type ClockDraft } from '../../time/clock.js';
-import { clockOf, clockRow, readingsOf, timeReadingRows } from '../../time/rows.js';
-import { checkReading, type TimeReader, type TimeReading } from '../../time/reader.js';
+import type { ClockDraft } from '../../time/clock.js';
+import type { TimeReader } from '../../time/reader.js';
 import type { TimePolicy } from '../../time/resolve.js';
-import { tzdataVersion } from '../../time/zone.js';
-import { isSaidByPerson } from '../../../lib/saidByPerson.js';
-import { recordFindings } from '../findings/ledger.js';
 
 /**
  * A stored conversation handed to the next run — what
@@ -148,14 +144,14 @@ export interface SeedStageDeps {
    * THE TIME LAYER'S CLOCK (`.time()`) — the current run's clock draft, read
    * once, after the turn is known: seed completes it with the turn's start
    * (`turnStartMs`, when the app passed no `now`) and files ONE `clock` row
-   * (`core/time/rows.ts` · `clockRow`). Absent on an agent without the layer,
+   * (`core/time/rowsBuild.ts` · `clockRow`). Absent on an agent without the layer,
    * so nothing is read or written.
    */
   readonly timeClock?: () => ClockDraft | undefined;
   /**
    * THE TIME LAYER'S READER (`.time({ reader, policy })`) — seed reads the
    * turn's message through it ONCE, after the clock is stamped, and files
-   * one `time-reading` row per mention (`core/time/rows.ts` ·
+   * one `time-reading` row per mention (`core/time/rowsBuild.ts` ·
    * `timeReadingRows`). Only a message a person wrote (`lib/saidByPerson.ts`
    * · `isSaidByPerson`, and never a composed run's message); never again for
    * a turn that already has its rows (a retry). Absent → nothing is read.
@@ -438,22 +434,21 @@ export function buildSeedStage(
   // and without memory must produce the same stage shape, the same committed
   // keys and the same request bytes as before.
   //
-  // A registered RULED tool (the inputs layer, honesty layer 2) is the one
-  // exception to "the same synchronous function": its schema decoration loads
-  // on first use (`loadRuleDecoration`), so that seed returns a promise — and
-  // only that agent's seed does.
+  // A registered RULED tool (the inputs layer, honesty layer 2) and `.time()`
+  // are the two exceptions to "the same synchronous function": the rule
+  // schema decoration (`loadRuleDecoration`) and the time layer's half
+  // (`fileTime`) each load on first use, so that seed returns a promise — and
+  // only an agent that armed one does.
   if (chain.length === 0 && stores.length === 0) {
     return (scope) => {
       const loading = loadRuleDecoration(deps);
       if (loading === undefined) {
         seedFrom(scope, scope.$getArgs<AgentInput>().message, deps, undefined);
-        stampClock(scope, deps);
-        return readTimeWords(scope, deps);
+        return fileTime(scope, deps);
       }
       return loading.then((decorate) => {
         seedFrom(scope, scope.$getArgs<AgentInput>().message, deps, decorate);
-        stampClock(scope, deps);
-        return readTimeWords(scope, deps);
+        return fileTime(scope, deps);
       });
     };
   }
@@ -463,8 +458,7 @@ export function buildSeedStage(
       const decorate = loading === undefined ? undefined : await loading;
       seedFrom(scope, scope.$getArgs<AgentInput>().message, deps, decorate);
       await anchorTurnNumber(scope, stores);
-      stampClock(scope, deps);
-      await readTimeWords(scope, deps);
+      await fileTime(scope, deps);
     };
   }
   return async (scope) => {
@@ -487,7 +481,7 @@ export function buildSeedStage(
       // useless), and a fully-seeded state means `resumeOnError` and every
       // recorder see the shape they expect rather than a half-built one.
       seedFrom(scope, verdict.content, deps, decorate);
-      stampClock(scope, deps);
+      if (deps.timeClock !== undefined) (await import('./timeLayer.js')).stampClock(scope, deps);
       scope.messageDeniedReason = verdict.reason;
       scope.messageDeniedPhase = 'input';
       scope.messageDeniedBy = verdict.middleware;
@@ -501,75 +495,23 @@ export function buildSeedStage(
     }
     seedFrom(scope, verdict.content, deps, decorate);
     if (stores.length > 0) await anchorTurnNumber(scope, stores);
-    stampClock(scope, deps);
-    await readTimeWords(scope, deps);
+    await fileTime(scope, deps);
   };
 }
 
 /**
- * The turn's clock stamp (the time layer) — filed LAST in seed, after the
- * turn number is final (`anchorTurnNumber` may raise it), so the row names
- * the turn every later row of this turn names. One row per run; the clock is
- * a run constant from here on and is never written again this turn (a
- * resume keeps it — `stages/toolCalls.ts` records a differing `time` as
- * `clock-on-resume`). No accessor, or no draft → nothing is written.
+ * The time layer's half of seed — the turn's clock stamp, then the person's
+ * words read for time (`./timeLayer.ts` · `stampClock`, `readTimeWords`),
+ * filed LAST, after the turn number is final. Loaded through `import()` only
+ * when `.time()` armed the agent — the optional-family law of docs-next's
+ * site budget — so a plain seed never loads it and stays synchronous.
  */
-function stampClock(scope: TypedScope<AgentState>, deps: SeedStageDeps): void {
-  const draft = deps.timeClock?.();
-  if (draft === undefined) return;
-  const clock = completeClock(draft, scope.turnStartMs as number);
-  recordFindings(scope, [
-    clockRow(
-      clock,
-      { turn: scope.turnNumber as number, iteration: scope.iteration as number },
-      draft.window,
-    ),
-  ]);
-}
-
-/**
- * The person's words, read for time (the time layer's reader) — right after
- * the turn's clock, which the reading resolves against. Reads ONLY this
- * turn's entry, and only when a person wrote it: a message this library
- * authored in a person's voice, a delivered injection and a composed run's
- * message (another runner's output) are never read. A turn that already
- * has its rows (a `resumeOnError` retry re-seeds the same turn) is read
- * back, never re-read: a model-backed reader must not answer differently
- * the second time. A sync reader keeps seed's shape; an async one makes it
- * wait. A reader that throws fails the run.
- */
-function readTimeWords(scope: TypedScope<AgentState>, deps: SeedStageDeps): void | Promise<void> {
-  const armed = deps.timeReader;
-  if (armed === undefined) return;
-  if (scope.$getArgs<AgentInput>().messageFrom === 'composed') return;
-  const ledger = scope.findingsLedger as FindingsLedger | undefined;
-  const turn = scope.turnNumber as number;
-  if (readingsOf(ledger, turn).length > 0) return;
-  const clock = clockOf(ledger);
-  const history = scope.history as readonly LLMMessage[];
-  const entry = history[history.length - 1];
-  if (clock === undefined || entry === undefined || !isSaidByPerson(entry)) return;
-  const text = entry.content;
-  const { reader, policy } = armed;
-  const file = (reading: TimeReading): void => {
-    const mentions = checkReading(text, reading, reader.id);
-    recordFindings(
-      scope,
-      timeReadingRows({
-        mentions,
-        clock,
-        policy,
-        reader,
-        tzdata: tzdataVersion(),
-        at: { turn, iteration: scope.iteration as number },
-      }),
-    );
-  };
-  const reading = reader.read(text, { locale: reader.locale });
-  if (reading !== null && typeof (reading as { then?: unknown }).then === 'function') {
-    return Promise.resolve(reading).then(file);
-  }
-  file(reading as TimeReading);
+function fileTime(scope: TypedScope<AgentState>, deps: SeedStageDeps): void | Promise<void> {
+  if (deps.timeClock === undefined && deps.timeReader === undefined) return;
+  return import('./timeLayer.js').then((time) => {
+    time.stampClock(scope, deps);
+    return time.readTimeWords(scope, deps);
+  });
 }
 
 /**

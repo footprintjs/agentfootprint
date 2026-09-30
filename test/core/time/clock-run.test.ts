@@ -27,7 +27,8 @@
  *   byte identity — without `.time()` nothing is filed and the answer is the declared instants
  *                 (the unarmed references in test/core/tools/reference/ stay green; the armed
  *                 case is the `agent-time-clock` reference there);
- *   load        — 200 calls in one run file 200 call rows, in order, inside a budget.
+ *   load        — 200 calls in one run file 200 call rows, in order, at no more than twice the
+ *                 CPU of the same run unarmed (a relative budget — see the test).
  * Unit, property, performance: clock.test.ts and present.test.ts.
  */
 
@@ -471,25 +472,40 @@ describe('the model is served nothing new', () => {
 // ─── load ────────────────────────────────────────────────────────────
 
 describe('load', () => {
-  it('200 calls in one run file 200 call rows, in order, inside 10 s', async () => {
+  // A RELATIVE budget. The 200-call run is slow with the layer off too — the
+  // agent loop's own cost grows with the conversation (measured on one machine:
+  // 50 calls 0.4 s, 100 calls 1.4 s, 200 calls 5.2–5.9 s on origin/main and
+  // 5.1–5.7 s here unarmed; 5.7–6.4 s armed, +3–9 % CPU) — so an absolute
+  // wall-clock number measured the CI machine (16–22 s), not the layer. What
+  // the layer must not do is add cost that grows with the run (a scan of every
+  // row per call, a re-fold, a clone of the ledger): that shows up as a RATIO
+  // against the same run unarmed, in the same process. CPU time, not wall
+  // time, so a busy neighbour does not move it.
+  const cpuMsOf = async (armed: boolean) => {
     const N = 200;
     const script: Reply[] = [];
     for (let i = 0; i < N; i++) script.push(call(`c${i}`, 'backup_runs'));
     script.push(answer('done'));
     const s = scripted(script);
-    const agent = Agent.create({
+    const builder = Agent.create({
       provider: s.provider as never,
       model: 'mock',
       maxIterations: N + 5,
-    })
-      .tool(backupRuns())
-      .time({ zone: LA })
-      .build();
-    const t0 = performance.now();
-    await agent.run({ message: 'go', time: { now: NOW } });
-    expect(performance.now() - t0).toBeLessThan(10_000);
+    }).tool(backupRuns());
+    const agent = (armed ? builder.time({ zone: LA }) : builder).build();
+    const before = process.cpuUsage();
+    await agent.run(armed ? { message: 'go', time: { now: NOW } } : { message: 'go' });
+    const used = process.cpuUsage(before);
+    return { agent, N, cpuMs: (used.user + used.system) / 1000 };
+  };
+
+  it('200 calls in one run file 200 call rows, in order, at most 2× the unarmed run’s CPU', async () => {
+    const plain = await cpuMsOf(false);
+    const { agent, N, cpuMs } = await cpuMsOf(true);
+    expect(cpuMs).toBeLessThanOrEqual(2 * plain.cpuMs);
     const calls = ofKind<CallRow>(agent, 'call');
     expect(calls.map((c) => c.toolCallId)).toEqual(Array.from({ length: N }, (_, i) => `c${i}`));
     expect(ofKind<ClockRow>(agent, 'clock')).toHaveLength(1);
-  }, 20_000);
+    expect(ofKind<CallRow>(plain.agent, 'call')).toHaveLength(0);
+  }, 120_000);
 });

@@ -47,7 +47,7 @@
 import { isDevMode } from 'footprintjs';
 
 import { compareInstants, instantOf, type Instant } from '../../time/instant.js';
-import { presentInstant, presentSpan, type Presentation } from '../../time/present.js';
+import type { BoundPresentation } from '../../time/present.js';
 
 import { refusal, spellingMeant } from './refusal.js';
 
@@ -573,7 +573,7 @@ export function noteWithClause(note: unknown, clause: string): string {
 export function periodLine(
   toolName: string,
   period: DeclaredPeriod,
-  presentation?: Presentation,
+  presentation?: BoundPresentation,
 ): string {
   if (presentation !== undefined) return periodLineInZone(toolName, period, presentation);
   const queried = `${toolName} queried ${period.queried.from} to ${period.queried.to}`;
@@ -597,7 +597,7 @@ export function periodLine(
  * periodLine('backup_runs', {
  *   queried: { from: '2026-09-26T09:00:00Z', to: '2026-09-26T10:00:00Z' },
  *   held: 'unknown',
- * }, { zone: 'America/Los_Angeles' });
+ * }, bindPresentation({ zone: 'America/Los_Angeles' })); // core/time/present.ts
  * // 'backup_runs queried 2026-09-26 02:00–03:00 America/Los_Angeles (UTC-07:00);
  * //  what the store holds is unknown'
  * ```
@@ -605,19 +605,18 @@ export function periodLine(
 function periodLineInZone(
   toolName: string,
   period: DeclaredPeriod,
-  presentation: Presentation,
+  presentation: BoundPresentation,
 ): string {
-  const queried = `${toolName} queried ${presentSpan(
+  const queried = `${toolName} queried ${presentation.span(
     period.queried.from,
     period.queried.to,
-    presentation,
   )}`;
   const held =
     period.held === 'unknown'
       ? 'what the store holds is unknown'
-      : `the store holds ${presentSpan(period.held.from, period.held.to, presentation)}`;
+      : `the store holds ${presentation.span(period.held.from, period.held.to)}`;
   const readAt =
-    period.readAt !== undefined ? `; read at ${presentInstant(period.readAt, presentation)}` : '';
+    period.readAt !== undefined ? `; read at ${presentation.instant(period.readAt)}` : '';
   return `${queried}; ${held}${readAt}`;
 }
 

@@ -18,19 +18,23 @@ It is a leaf: it imports nothing outside itself (pinned by
 |---|---|
 | `instant.ts` | the one instant parser, `instantOf(value, profile)`, with two named profiles: `lenient` (RFC 3339 as a foreign minter may write it — a period a result declares) and `strict` (upper-case `T`/`Z`, no leap second — a value the library sends to a tool). Plus `compareInstants`, `shiftInstant`, `spellInstant`, `toUtc` |
 | `duration.ts` | the one duration grammar `^[1-9][0-9]*[smhdw]$`, no digit cap, with a unit set named per use (`LOOKBACK_UNITS` = `mhdw`, `AXIS_UNITS` = `smhdw`); `durationMs`, `spellDuration` (the smallest exact spelling) |
-| `zone.ts` | IANA zone names through `Intl` (an abbreviation such as `PST` and a bare offset are refused, although `Intl` takes them), `offsetAt`, `wallAt`, and wall time → instant under Temporal's four DST words (`readWall`, `wallToInstant`) |
+| `zone.ts` | IANA zone names through `Intl` (an abbreviation such as `PST` and a bare offset are refused, although `Intl` takes them), `offsetAt`, `wallAt`, and wall time → instant under Temporal's four DST words (`readWall`, `wallToInstant`); one `Intl` reading per (zone, instant), memoised and bounded — the cost is pinned as a count, not a duration, by the performance case of `test/core/time/resolve.test.ts` |
 | `axis.ts` | a dataset's declared time axis (`DatasetTimeAxis`, moved from `artifacts/timeAxis.ts`; `artifacts/index.ts` re-exports it): the one judge `timeAxisIssues` (the interval is a duration under `AXIS_UNITS`, the zone a zone name), `readTimeAxis`, `describeTimeAxis`, and the read-side view `normaliseInstants` — UTC instants at one precision, sorted, with every unplaced value counted (`naive`, `dstAmbiguous`, `dstGap`, `unreadable`, `missing`) |
 | `range.ts` | `TimeRange` (half-open `[from, to)`), its two spellings (`parseRange` / `spellRange` — the ISO 8601 interval `from/to` and the joined `from..to`; `splitRange` is the format check), one conversion per boundary a range crosses (`fromInclusive` / `toInclusive`, `boundInto` / `boundFrom`, `lookbackRange` / `lookbackOf`), `covers`, `overlaps`, `roundOutward` |
 | `clock.ts` | the run clock (§ 4): `TimeClock { now, nowSource, zone, zoneSource }`; the two inputs read or refused by name — the run's `time: { now, zone, window }` (`readRunTime`) and the builder's `.time({ zone })` (`readTimeOptions`); `draftClock` (the run's zone wins, the builder's is a fallback, neither is `'no-zone'`), `completeClock` (`now` is the app's, else the turn's start: `nowSource: 'default'`), `clockChange` (what a resume passed that differs from the kept clock) |
 | `reader.ts` | the `TimeReader` port (`id`, `version`, `locale`, `kind: 'rule' \| 'model'`, `read`) and its result, `TimeParts` — zone-less parts, never instants; `readerIssue` (the builder's check) and `checkReading` (a quote must be a verbatim substring of the text; parts well formed; a refused mention keeps no text) |
+| `resolveRecord.ts` | what the resolver writes down, split out for the synchronous doors: the candidate and choice shapes, `DEFAULT_TIME_POLICY` and `readPolicy` (read at `.time()`), and the checkpoint door's checks for a recorded candidate and choice (`candidateIsWellFormed`, `choiceIsWellFormed`) — `resolve.ts` re-exports them |
 | `resolve.ts` | parts + clock + policy → every candidate window (`resolveMention`: date orders, am/pm, the year, both instants of a DST overlap or gap, a day word, a look-back, a range read to the end of its grain, a said IANA zone or offset — an abbreviation is asked, never mapped), and `chooseReading` (`only` · `policy` · `open` with its questions · `none`); the v1 `TimePolicy` (`dateOrder`, `year`, both `'ask'` by default); the checks for a recorded candidate and choice |
+| `periodForm.ts` | a tool's period forms AS DECLARED, split out for the synchronous doors (`defineTool({ period })`, the time answer's check, the checkpoint door's refusal codes): the shapes, the sugar, each form's own rules, a declared value's spelling, `periodFactProblem` and `TIME_REFUSALS` — `convert.ts` re-exports every public name |
 | `convert.ts` | a tool's period FORMS (§ 7.1: `bounds` · `joined` · `object` · `day` · `lookback`, each bound `iso` · `epoch-ms` · `epoch-s` · `date` · `wall`) and the facts about its source (`PeriodFacts`); the sugar (`sugarForms` — today's `{ argument, spelling }`, `accepts`, `wall-range` + `zoneArgument`); one form's own rules (`formIssue`, `formArguments`, `parsesUnderForm`); the EXACT rows of § 7.2 (`convertExact`) and the inverse a binding reads (`readBack`, `sameRange`); the INEXACT rows (`convertWidened` — a range inside one day → that `day`, a range ending before now → the covering look-back; each with the range it reads and what it adds) and the refusal tests (`spansDaysForDayOnly`, `wallGapArgument`); a range against the facts (`periodFactProblem`, `partlyBeyondRetention`, `TimeRefusal`) |
 | `bind.ts` | which window a call carries (§ 5.6, § 7.3): the turn's windows read from the record (`turnWindowsOf` — a settled `time-reading` mention, the clock's `control` window) and one call's decision (`callWindowOf`: `filled` — exactly, or widened · `bound` by quote or value · `model-chosen` · `model` · `unread` · `not-filled` · `refused` before dispatch on a fact, a multi-day range to a `day`-only tool, or a skipped wall time) |
 | `drift.ts` | the clock at dispatch (§ 7.4): `driftAtDispatch` — a call that sent a look-back, dispatched more than the tool's step after the turn's `now`, is `redrawn` (the library's own fill, re-sent as the asked range in the tool's first absolute form) or `shifted` (the model's look-back, or no absolute form — runs as sent) |
 | `wire.ts` | the JSON that crosses a transport (§ 7.5): `TimeContext` — `ctx.time` in process, the `tools/call` request's `_meta.agentfootprint.time` over MCP — versioned (`timeContextOf`, `readTimeContext`) |
 | `rows.ts` | the layer's five ledger rows and the checkpoint door's test for each (`timeRowIsWellFormed`): `clock` (one per turn, filed by seed), `clock-on-resume` (a resume's differing `time`, recorded not applied), `call` (one per dispatched call, `dispatchedAt`, and `drift` when a look-back drifted), `time-reading` (one per mention the armed reader found, or one `mentions: 0` row; `timeReadingRows` builds them, `readingsOf` reads a turn's back), `call-window` (one per call to a tool whose period declares forms, filed by the inputs layer — `callWindowRow`, read back by `callWindowOfCall`); `clockOf` reads the latest turn's clock |
+| `rowsBuild.ts` | the BUILDERS of the five rows (`clockRow`, `callRow`, `clockOnResumeRow`, `timeReadingRows`, `callWindowRow`) — split from `rows.ts` because `timeReadingRows` runs the resolver; never re-exported by `rows.ts` |
 | `present.ts` | time for a PERSON: `presentInstant`, `presentSpan` (two inclusive ends, as declared), `presentRange` (a half-open range with the end AS SAID — `[08:00, 08:41)` at minute grain shows `08:40`); locale-neutral with no locale, the zone always named, each end's offset when a span crosses a DST change; with a `locale` (the reader's) through `Intl` in that language, the zone's short name |
-| `ask.ts` | the one time ask (§ 6): `TimeFormat` (`instant` · `time-range` · `zone`), `checkTimeAnswer` — the ONE judge of a time field's answer (strict instants with an offset, `from` before `to`, an IANA zone, under a known zone no wall time the clocks skip, and — handed a tool's facts and the clock — inside its `direction`, `retention` and `maxRange`) — refusals as codes with facts; the catalog's keys (`TIME_ASK_MESSAGE_KEYS`), `readTimeAskMessages` (the app's overrides), `refusalReason` (the re-ask's reason); `timeAskOf` — the field an `open` reading needs (the candidates as labelled choices, a zone asked as `format: 'zone'`, a `model` reading offered to confirm) |
+| `ask.ts` | the one time ask (§ 6): `TimeFormat` (`instant` · `time-range` · `zone`), `checkTimeAnswer` — the ONE judge of a time field's answer (strict instants with an offset, `from` before `to`, an IANA zone, under a known zone no wall time the clocks skip, and — handed a tool's facts and the clock — inside its `direction`, `retention` and `maxRange`) — refusals as codes with facts; the catalog's keys (`TIME_ASK_MESSAGE_KEYS`), `readTimeAskMessages` (the app's overrides), `refusalReason` (the re-ask's reason) |
+| `readingAsk.ts` | `timeAskOf` — the field an `open` reading needs (the candidates as labelled choices, a zone asked as `format: 'zone'`, a `model` reading offered to confirm); split from `ask.ts` because its labels render through `present.ts` |
 
 `core/inputRequest.ts` asks `ask.ts`: a field's `format` is judged at definition (each choice, each
 supplied value) and at the resume door (`applyInputResponse`, the person's answer — a refused one
@@ -283,6 +287,33 @@ driftAtDispatch({ how: 'filled', form: 0, asked }, [lookback, epochBounds],
 // { byMs: 1800000, outcome: 'redrawn', form: 1, values: { start: …, end: … } }
 ```
 
+## What a plain agent carries (the default graph)
+
+The optional-family law of docs-next's site budget (`docs-next/scripts/check-site-budget.mjs`): an
+agent that never arms `.time()` loads only what a SYNCHRONOUS door needs before any run starts —
+`.time()`'s options (`clock.ts`), `defineTool({ period })` (`periodForm.ts`, through
+`arguments/declare.ts`), a time answer's check at the resume door (`ask.ts`, through
+`core/inputRequest.ts`) and the checkpoint door's row checks (`rows.ts`, `resolveRecord.ts`, with
+the leaves `instant.ts`, `zone.ts`, `range.ts`, `duration.ts`, `reader.ts`). Everything the RUN does
+under `.time()` loads through `import()` where the path is already async: seed and ToolCalls load
+`agent/stages/timeLayer.ts` (the clock stamp, the reading of the person's words, the dispatch
+moment, `clock-on-resume`), which brings `resolve.ts`, `convert.ts`, `drift.ts`, `wire.ts` and
+`rowsBuild.ts`; prepareFinal's in-zone limits line loads `present.ts` and hands `coverage/period.ts`
+a bound renderer (`bindPresentation`) — coverage never imports the renderer. A bundler places a
+module on the synchronous graph when ANY synchronous module imports it, whatever the importer uses,
+so the rule is by FILE: a synchronous door imports the split-out record half (`resolveRecord.ts`,
+`periodForm.ts`, `rows.ts`), never the module that re-exports it, and `rows.ts` does not re-export
+its builders. Pinned by `test/lib/trace-toolpack/browserGraph.test.ts` (the time layer's law).
+
+```ts
+// agent/stages/seed.ts · fileTime — a plain seed returns before the import and stays synchronous
+if (deps.timeClock === undefined && deps.timeReader === undefined) return;
+return import('./timeLayer.js').then((time) => {
+  time.stampClock(scope, deps);
+  return time.readTimeWords(scope, deps);
+});
+```
+
 ## What changed when the grammars moved here (the design's § 12.1)
 
 | # | Behaviour | Now |
@@ -303,7 +334,7 @@ driftAtDispatch({ how: 'filled', form: 0, asked }, [lookback, epochBounds],
   (T5b): today a window no form holds exactly is not filled, and the tool's own rule applies. The
   facts already join the answer's check (`checkTimeAnswer`, and the batch ask's period answer).
 - The lazy word-driven ask (§ 5.2) is not raised yet: an `open` reading fills nothing and the tool's
-  own `askOrAssume` rule asks, as before; `ask.ts` · `timeAskOf` builds the field it will raise with
+  own `askOrAssume` rule asks, as before; `readingAsk.ts` · `timeAskOf` builds the field it will raise with
   the English reader (T6b). A turn with no time words does not carry the last window yet
   (`time-carried`, § 5.6). The English reader (T6b), the lineage (T7) and the result checks and
   their fold reasons (T8) are later steps; a `model-chosen` window folds through the argument row

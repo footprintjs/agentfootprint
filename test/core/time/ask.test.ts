@@ -30,14 +30,15 @@ import {
   fillMessage,
   readTimeAskMessages,
   refusalReason,
-  timeAskOf,
   TIME_ASK_MESSAGE_KEYS,
 } from '../../../src/core/time/ask.js';
+import { timeAskOf } from '../../../src/core/time/readingAsk.js';
 import { instantOf } from '../../../src/core/time/instant.js';
 import { presentRange } from '../../../src/core/time/present.js';
 import { checkReading, readerIssue, type TimeParts } from '../../../src/core/time/reader.js';
 import { DEFAULT_TIME_POLICY, type TimePolicy } from '../../../src/core/time/resolve.js';
-import { timeReadingRows, type TimeReadingRow } from '../../../src/core/time/rows.js';
+import type { TimeReadingRow } from '../../../src/core/time/rows.js';
+import { timeReadingRows } from '../../../src/core/time/rowsBuild.js';
 import { defaultTimeAskMessages } from '../../../src/locales/timeAsk.js';
 import { instantish, prng } from './fixtures/generate.js';
 

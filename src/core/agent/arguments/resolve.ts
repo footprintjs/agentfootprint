@@ -67,7 +67,8 @@ import {
 } from '../../time/bind.js';
 import { formArguments, granularityMsOf } from '../../time/convert.js';
 import type { InstantText } from '../../time/instant.js';
-import { callWindowRow, type CallWindowRow } from '../../time/rows.js';
+import type { CallWindowRow } from '../../time/rows.js';
+import { callWindowRow } from '../../time/rowsBuild.js';
 import type { ZoneName } from '../../time/zone.js';
 import { shownArgsOf } from '../../toolShownArgs.js';
 import { validatePropertyValue } from '../toolArgsValidation.js';

@@ -30,13 +30,12 @@ import {
 } from '../../../src/core/time/clock.js';
 import { instantOf } from '../../../src/core/time/instant.js';
 import {
-  callRow,
   clockOf,
-  clockRow,
   isTimeRowKind,
   presentationZoneOf,
   timeRowIsWellFormed,
 } from '../../../src/core/time/rows.js';
+import { callRow, clockRow } from '../../../src/core/time/rowsBuild.js';
 import { instantish, prng } from './fixtures/generate.js';
 
 const LA = 'America/Los_Angeles';

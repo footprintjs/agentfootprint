@@ -6,7 +6,7 @@ title: PeriodForm
 
 > **PeriodForm** = \{ `from`: [`Bound`](/docs/api/interfaces/Bound); `kind`: `"bounds"`; `to`: `ToBound`; `zone?`: [`ZoneArgument`](/docs/api/interfaces/ZoneArgument); \} \| \{ `argument`: `string`; `as`: [`BoundAs`](/docs/api/type-aliases/BoundAs); `edge?`: `Edge`; `joiner`: `".."` \| `"/"`; `kind`: `"joined"`; `zone?`: [`ZoneArgument`](/docs/api/interfaces/ZoneArgument); \} \| \{ `argument`: `string`; `as`: [`BoundAs`](/docs/api/type-aliases/BoundAs); `edge`: `Edge`; `keys`: \{ `from`: `string`; `to`: `string`; \}; `kind`: `"object"`; `zone?`: [`ZoneArgument`](/docs/api/interfaces/ZoneArgument); \} \| \{ `argument`: `string`; `kind`: `"day"`; `zone?`: [`ZoneArgument`](/docs/api/interfaces/ZoneArgument); \} \| \{ `argument`: `string`; `kind`: `"lookback"`; `signed`: `boolean`; `units?`: `string`; \}
 
-Defined in: [src/core/time/convert.ts:145](https://github.com/footprintjs/agentfootprint/blob/main/src/core/time/convert.ts#L145)
+Defined in: [src/core/time/periodForm.ts:85](https://github.com/footprintjs/agentfootprint/blob/main/src/core/time/periodForm.ts#L85)
 
 Every shape a tool's period can take — one `TimeRange` onto one or more arguments.
 

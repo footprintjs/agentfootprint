@@ -452,7 +452,42 @@ const OUTPUT_LIMITS = { bytes: 218_700_000, files: 8_270, duplicateRscBytes: 0 }
 // modules (`evidenceIndex`, `composeRequest`, each minified alone), so the
 // branch reads ~450.8 KB locally; local builds read ~1.3 KB under CI, so CI
 // should land near 452 KB. Ceiling ~2% over that.
-const DEMO_ASYNC_GZIP_LIMIT = 460_000;
+//
+// RAISED to 481 KB (2026-09-30) — owner-approved raise; docs-site cleanup
+// planned. The growth is the time layer (`.time()`, PR #42), and the shrink
+// came FIRST. The branch as opened measured 480.3 KB on CI (478.7 KB in a
+// local EXPORT=true build) because its run-time half sat on the default graph:
+// seed and ToolCalls imported the resolver, the period conversions, the drift
+// check and the row builders statically, and the coverage `Period:` line
+// imported the renderer. The clean shrink moved all of it behind `import()`
+// under the arm — `core/agent/stages/timeLayer.ts` (seed's clock stamp and
+// reading, ToolCalls' dispatch moment, `clock-on-resume`), prepareFinal's
+// in-zone line loading `core/time/present.ts` and handing coverage a bound
+// renderer — and split each time module a synchronous door shares with the
+// run into its record half and its engine (`resolveRecord.ts` / `resolve.ts`,
+// `periodForm.ts` / `convert.ts`, `rows.ts` / `rowsBuild.ts`, `ask.ts` /
+// `readingAsk.ts`): a bundler puts a whole FILE on the sync graph when any
+// sync module imports it, so a lazy function sharing a file with a sync one
+// rides along. Local EXPORT=true build, 17 async assets every time:
+//   main at a04f07c4                                      456.6 KB
+//   the branch as opened (5f7a7a2e)                       478.7 KB  (CI 480.3)
+//   after the shrink                                      470.3 KB  (CI ~471.9)
+// What cannot move is what a SYNCHRONOUS door needs before any run starts:
+// `defineTool({ period })` judges period forms at definition
+// (`arguments/declare.ts` -> `core/time/periodForm.ts`), `requestInput` and
+// the resume door judge a time `format` (`core/inputRequest.ts` ->
+// `core/time/ask.ts`, with the catalog `locales/timeAsk.ts`), the checkpoint
+// door checks time rows (`runCheckpoint.ts` · `validateCheckpoint`, also the
+// hosting envelopes' sync validators -> `core/time/rows.ts`,
+// `resolveRecord.ts`), and `.time()` reads its options at build (`clock.ts`),
+// with their leaves (`instant.ts`, `zone.ts`, `range.ts`, `duration.ts`,
+// `reader.ts`). Moving any of them makes a public sync door async — a
+// behaviour change, not a packaging one. The law is pinned at the graph by
+// test/lib/trace-toolpack/browserGraph.test.ts (the time layer's case) and
+// listed in src/core/time/README.md, "What a plain agent carries". Ceiling ~2%
+// over CI's expected ~471.9 KB (local builds read ~1.6 KB under CI on this
+// branch: 478.7 vs 480.3), as every raise here.
+const DEMO_ASYNC_GZIP_LIMIT = 481_000;
 
 function formatBytes(bytes) {
   if (bytes < 1_000) return `${bytes} B`;
