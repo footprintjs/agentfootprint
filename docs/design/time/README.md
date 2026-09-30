@@ -21,6 +21,8 @@ decides.**
 
 ## For the owner
 
+> **Decided 2026-09-30.** The owner approved the design and every recommended answer in § 14 (TQ1–TQ26), and asked for it to be implemented in the order of § 13. Any answer can still be reopened.
+
 1. **What is broken.** Time is read in several places today, by the library and by the app, and
    they disagree: one part accepts a date another refuses, a date in the future got through, a tool
    was sent a window it cannot read, and charts guess which column is the time.
@@ -1009,6 +1011,8 @@ probe, the future check, and its private time vocabulary in the metrics adapters
 ---
 
 ## 14. Open questions for the owner
+
+**Answered 2026-09-30:** each question took its recommended answer (owner: "implement").
 
 | # | Question | Recommended answer | Why |
 |---|---|---|---|
