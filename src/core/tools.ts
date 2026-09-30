@@ -25,6 +25,7 @@ import {
 } from '../integrity/column-types/types.js';
 import { assertAskComponent, type AskComponent } from './askComponent.js';
 import { assertAskOrAssume, type AskOrAssume, type ToolPeriod } from './agent/arguments/declare.js';
+import type { TimeContext } from './time/wire.js';
 import type { CheckInDemand } from './checkin.js';
 import type { TeardownOptions, TeardownScope } from './toolSessions.js';
 
@@ -379,10 +380,20 @@ export interface Tool<TArgs = Record<string, unknown>, TResult = unknown> {
    */
   readonly askOrAssume?: AskOrAssume;
   /**
-   * WHICH ARGUMENT SETS THE PERIOD the answer covers, and how its values are
-   * spelled (`lookback` `24h`, `signed-lookback` `-24h`, `iso-range`). The
-   * argument must carry an `askOrAssume` rule. Rows for it carry
-   * `period: true`. Omitted → byte-identical.
+   * WHICH ARGUMENTS SET THE PERIOD the answer covers, how their values are
+   * spelled, and the facts about the source. Today's single argument
+   * (`argument` + `spelling`: `lookback` `24h`, `signed-lookback` `-24h`,
+   * `iso-range`, `wall-range` with a `zoneArgument`; or `accepts` for
+   * several) is sugar over `forms` — every shape the tool takes: `bounds`
+   * (two arguments, each an `iso` instant, `epoch-ms`, `epoch-s`, a `date` or
+   * a `wall` time), `joined`, `object`, `day`, `lookback` with its `units`.
+   * Facts: `direction`, `retention`, `maxRange`, `granularity`,
+   * `filtersToAsked`. Each argument must carry an `askOrAssume` rule (an
+   * `object` form's argument excepted — a ruled argument is flat). Rows for
+   * them carry `period: true`. Under `.time()` the library fills a period
+   * the model left out from the turn's one window, binds a sent one to the
+   * person's window, and hands the tool `ctx.time`. Carried over MCP in
+   * `_meta.agentfootprint.period`. Omitted → byte-identical.
    */
   readonly period?: ToolPeriod;
   execute(args: TArgs, ctx: ToolExecutionContext): Promise<TResult> | TResult;
@@ -716,6 +727,17 @@ export interface ToolExecutionContext {
   readonly toolCallId: string;
   /** Current iteration number of the ReAct loop. */
   readonly iteration: number;
+  /**
+   * The call's time (the time layer, step T5a — `core/time/wire.ts`): the
+   * half-open range the call asks for (`asked`, edge `'exclusive'` — the
+   * person's window when the library filled or bound it, the sent value read
+   * back otherwise), the person's zone, the turn's frozen `now` and the
+   * moment the library dispatched the call. Present only under `.time()` on a
+   * call to a tool whose `period` declares forms, so the tool can declare the
+   * `period.queried` its read covered without parsing its own argument. Over
+   * MCP it travels in the call's `_meta.agentfootprint.time`.
+   */
+  readonly time?: TimeContext;
   /** Abort signal propagated from run({ env: { signal } }). */
   readonly signal?: AbortSignal;
   /**

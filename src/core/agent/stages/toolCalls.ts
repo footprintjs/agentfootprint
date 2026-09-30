@@ -152,7 +152,9 @@ import {
 import { withUnsettledRows } from '../findings/unsettled.js';
 import type { FindingsLedger, StandingRow } from '../findings/types.js';
 import type { ReadRunTime } from '../../time/clock.js';
-import { callRow, clockOf, clockOnResumeRow } from '../../time/rows.js';
+import { callRow, callWindowOfCall, clockOf, clockOnResumeRow } from '../../time/rows.js';
+import { timeContextOf, type TimeContext } from '../../time/wire.js';
+import type { ZoneName } from '../../time/zone.js';
 import {
   evidenceFromHistory,
   exemptFromRun,
@@ -665,11 +667,17 @@ export interface ToolCallsHandlerDeps {
    * hands over the `time` the current resume passed, as read, ONCE (a second
    * call answers `undefined`) — the first ToolCalls pass of the resumed leg
    * compares it with the turn's kept clock and files `clock-on-resume` when
-   * they differ; the kept clock is never replaced.
+   * they differ; the kept clock is never replaced. A call whose tool's period
+   * declares forms is handed `ctx.time` (read off its `call-window` row), and
+   * the batch ask judges a period answer against the tool's facts at the
+   * turn's clock (`appZone`: the app's `.time({ zone })`).
    *
    * @internal
    */
-  readonly time?: { readonly takePassedOnResume: () => ReadRunTime | undefined };
+  readonly time?: {
+    readonly takePassedOnResume: () => ReadRunTime | undefined;
+    readonly appZone?: ZoneName;
+  };
   /**
    * Put one artifact fact on the record for the run it BELONGS to — the door
    * a `ctx.artifacts` fact takes when it lands after that run ended (a tool's
@@ -1510,10 +1518,31 @@ function recordCallDispatched(
   scope: TypedScope<AgentState>,
   call: { readonly toolCallId: string; readonly toolName: string },
   iteration: number,
-): void {
-  recordFindings(scope, [
-    callRow(call, { turn: scope.turnNumber as number, iteration }, Date.now()),
-  ]);
+): TimeContext | undefined {
+  const row = callRow(call, { turn: scope.turnNumber as number, iteration }, Date.now());
+  recordFindings(scope, [row]);
+  return callTimeContext(scope, call.toolCallId, row.dispatchedAt);
+}
+
+/**
+ * `ctx.time` for one call (`core/time/wire.ts` · `TimeContext`, time design
+ * § 7.5) — present only when the inputs layer filed a `call-window` row for
+ * it this turn (its tool's period declares forms) and the turn has a clock:
+ * the range the call asks for, the person's zone, the frozen `now` and the
+ * dispatch moment just recorded. Read from the committed ledger, never
+ * recomputed.
+ */
+function callTimeContext(
+  scope: TypedScope<AgentState>,
+  toolCallId: string,
+  dispatchedAt: string,
+): TimeContext | undefined {
+  const ledger = scope.findingsLedger as FindingsLedger | undefined;
+  const window = callWindowOfCall(ledger, toolCallId, scope.turnNumber as number);
+  if (window === undefined) return undefined;
+  const clock = clockOf(ledger);
+  if (clock === undefined) return undefined;
+  return structuredClone(timeContextOf(window, clock, dispatchedAt));
 }
 
 /**
@@ -3668,12 +3697,16 @@ export function buildToolCallsHandler(
     try {
       // The time layer's dispatch moment — a resumed call is dispatched NOW,
       // so its `dispatchedAt` is the resume's, not the pause's.
-      if (deps.time !== undefined) recordCallDispatched(scope, { toolCallId, toolName }, iteration);
+      const callTime =
+        deps.time !== undefined
+          ? recordCallDispatched(scope, { toolCallId, toolName }, iteration)
+          : undefined;
       // `let`, not `const`: the semantic projection below replaces the value
       // on the non-envelope path exactly as the batch loop does.
       let result = await tool.execute(args, {
         toolCallId,
         iteration,
+        ...(callTime !== undefined && { time: callTime }),
         ...(env.signal && { signal: env.signal }),
         credentials: reportingCredentials(credentials, scope, toolName),
         hasCredentials,
@@ -3902,6 +3935,9 @@ export function buildToolCallsHandler(
           toolOf: (toolName) => resolveTool(toolName).tool,
           runId: () => deps.currentRun?.().runId,
           ...(deps.argumentAskContext !== undefined && { hostContext: deps.argumentAskContext }),
+          ...(deps.time !== undefined && {
+            time: { ...(deps.time.appZone !== undefined && { appZone: deps.time.appZone }) },
+          }),
         });
         resolutions = asked.resolutions;
         if (asked.answered) askedLayer = inputs;
@@ -4776,9 +4812,10 @@ export function buildToolCallsHandler(
               }
               noteOffWire(scope, resolved, { toolName: tc.name, toolCallId: tc.id, iteration });
               // The time layer's dispatch moment — just before the tool runs.
-              if (deps.time !== undefined) {
-                recordCallDispatched(scope, { toolCallId: tc.id, toolName: tc.name }, iteration);
-              }
+              const callTime =
+                deps.time !== undefined
+                  ? recordCallDispatched(scope, { toolCallId: tc.id, toolName: tc.name }, iteration)
+                  : undefined;
               // Set BEFORE the await: a tool that throws has still run, and a
               // tool that does not exist has not. This flag is the entire
               // precondition of the after-tool moment below.
@@ -4786,6 +4823,7 @@ export function buildToolCallsHandler(
               result = await tool.execute(callArgs, {
                 toolCallId: tc.id,
                 iteration,
+                ...(callTime !== undefined && { time: callTime }),
                 ...(env.signal && { signal: env.signal }),
                 credentials: reportingCredentials(credentials, scope, tc.name),
                 hasCredentials,

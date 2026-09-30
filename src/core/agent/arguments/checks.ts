@@ -151,7 +151,7 @@ export interface SourceSubject {
 export interface SourceCheck {
   readonly source: 'said' | 'answered' | 'result' | 'app' | 'default' | 'model';
   readonly claimed: ArgumentClaim;
-  readonly matched?: 'quote' | 'phrase' | 'spelling';
+  readonly matched?: 'quote' | 'phrase' | 'spelling' | 'mention';
   readonly reading?: true;
   readonly earlier?: true;
   readonly result?: string;

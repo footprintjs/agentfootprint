@@ -1068,7 +1068,7 @@ export interface FindingsArgumentPayload {
   readonly source?: ArgumentSource;
   readonly asked?: ArgumentAsked;
   readonly claimed?: ArgumentClaim;
-  readonly matched?: 'quote' | 'phrase' | 'spelling';
+  readonly matched?: 'quote' | 'phrase' | 'spelling' | 'mention';
   readonly reading?: true;
   readonly earlier?: true;
   readonly setAside?: 'open' | 'noise' | 'ruled-out';

@@ -68,11 +68,22 @@ import type { FlowChart, FlowChartBuilder, StructureRecorder, TypedScope } from 
 import type { ExternalGround } from '../../../integrity/unsupported-argument/check.js';
 import { STAGE_IDS, SUBFLOW_IDS, milestoneTagsFor } from '../../../conventions.js';
 import type { SourceCorpus } from '../arguments/checks.js';
-import { isRefused, rulesOf } from '../arguments/declare.js';
+import {
+  isRefused,
+  periodArgumentOf as periodArgumentNamed,
+  rulesOf,
+} from '../arguments/declare.js';
 import { keptThisTurn } from '../arguments/kept.js';
 import type { ArgumentRow } from '../arguments/rows.js';
 import type { ArgumentResolution, BatchCall, ToolOf } from '../arguments/resolve.js';
-import type { InputsLayerDeps, InputsLayerState, SourceInputs } from '../arguments/subflow.js';
+import type {
+  InputsLayerDeps,
+  InputsLayerState,
+  SourceInputs,
+  TimeInputs,
+} from '../arguments/subflow.js';
+import { clockOf, readingsOf, type CallWindowRow } from '../../time/rows.js';
+import type { ZoneName } from '../../time/zone.js';
 import { copyPeriod, type DeclaredPeriod, type PeriodRow } from '../coverage/period.js';
 import { appendRows, emitRow, type FindingsScope } from '../findings/ledger.js';
 import type { FindingsRow } from '../findings/types.js';
@@ -126,6 +137,28 @@ export interface InputsMountDeps {
      */
     readonly argumentViews?: true;
   };
+  /**
+   * THE TIME LAYER IS ARMED (`.time()`) — present only then. The mount hands
+   * the layer this turn's `clock` row and `time-reading` rows (`timeInputs`),
+   * and the layer files one `call-window` row per call to a tool whose period
+   * declares forms (`core/time/bind.ts`), merged into the ledger beside the
+   * argument rows in the same ONE write.
+   */
+  readonly time?: {
+    /** The app's `.time({ zone })` — the zone of a form declaring `wallZone: 'app'`. */
+    readonly appZone?: ZoneName;
+  };
+}
+
+/**
+ * This turn's clock and readings, off the parent's ledger — `undefined` when
+ * the turn has no clock (a turn paused by a runtime without the layer).
+ */
+function timeInputsOf(parent: Record<string, unknown>): TimeInputs | undefined {
+  const ledger = parent.findingsLedger as readonly unknown[] | undefined;
+  const clock = clockOf(ledger);
+  if (clock === undefined) return undefined;
+  return { clock, readings: [...readingsOf(ledger, parent.turnNumber as number)] };
 }
 
 type StageModule = typeof import('../arguments/subflow.js');
@@ -185,7 +218,12 @@ function emitRows(scope: TypedScope<InputsLayerState>, rows: readonly ArgumentRo
  */
 export function buildInputsSubflow(deps: InputsMountDeps): FlowChart {
   const sources = deps.sources;
-  const base: InputsLayerDeps = { toolOf: deps.toolOf, willDispatch, emitRows };
+  const base: InputsLayerDeps = {
+    toolOf: deps.toolOf,
+    willDispatch,
+    emitRows,
+    ...(deps.time !== undefined && { time: deps.time }),
+  };
   // Declared sources: the reader of each call's `from` and the corpora the checks
   // read live in `sourceCorpus.ts`, loaded on the first armed batch — so neither
   // is on a plain agent's graph.
@@ -278,6 +316,9 @@ export function mountInputsLayer<B extends FlowChartBuilder>(
         // exists only after such a refusal, so every other run hands nothing.
         const kept = keptThisTurn(parent.argumentAnswersKept, parent.turnNumber as number);
         const calls = (parent.llmLatestToolCalls as readonly unknown[] | undefined) ?? [];
+        // The time layer: this turn's clock and readings — only under the arm, for a batch with calls.
+        const timeInputs =
+          deps.time !== undefined && calls.length > 0 ? timeInputsOf(parent) : undefined;
         return {
           calls,
           iteration: parent.iteration as number,
@@ -290,10 +331,15 @@ export function mountInputsLayer<B extends FlowChartBuilder>(
           // and only for a batch with calls to check.
           ...(deps.sources !== undefined &&
             calls.length > 0 && { sourceInputs: sourceInputsOf(parent) }),
+          ...(timeInputs !== undefined && { timeInputs }),
         };
       },
       outputMapper: (sf: Record<string, unknown>, parent: Record<string, unknown>) => {
-        const rows = (sf.argumentRows as readonly ArgumentRow[] | undefined) ?? [];
+        const rows: readonly FindingsRow[] = [
+          ...((sf.argumentRows as readonly ArgumentRow[] | undefined) ?? []),
+          // The time layer's `call-window` rows ride the same ONE write; they fire no event.
+          ...((sf.argumentWindowRows as readonly CallWindowRow[] | undefined) ?? []),
+        ];
         const resolutions =
           (sf.argumentResolutions as readonly ArgumentResolution[] | undefined) ?? [];
         return {
@@ -346,7 +392,7 @@ function emitPeriodRows(scope: TypedScope<ResultsLayerState>, rows: readonly Per
 function periodArgumentOf(toolOf: ToolOf): (toolName: string) => string | undefined {
   return (toolName) => {
     const rules = rulesOf(toolOf(toolName));
-    return rules === undefined || isRefused(rules) ? undefined : rules.period?.argument;
+    return rules === undefined || isRefused(rules) ? undefined : periodArgumentNamed(rules.period);
   };
 }
 

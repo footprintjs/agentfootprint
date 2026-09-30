@@ -60,11 +60,21 @@ import {
   type InputRequestDeclaration,
   type InputValue,
 } from '../../inputRequest.js';
+import {
+  periodFactProblem,
+  readBack,
+  type PeriodFactProblem,
+  type PeriodFacts,
+} from '../../time/convert.js';
+import type { InstantText } from '../../time/instant.js';
+import type { ZoneName } from '../../time/zone.js';
 import { shownArgsOf } from '../../toolShownArgs.js';
 import { validatePropertyValue } from '../toolArgsValidation.js';
 import {
   convertSpelling,
   isRefused,
+  periodFactsOf,
+  periodFormsOf,
   rulesOf,
   type PeriodSpelling,
   type RuledArgument,
@@ -611,6 +621,7 @@ export function checkAnswer(
   field: AskField,
   answer: InputValue,
   toolOf: ToolOf,
+  time?: AskTime,
 ): { readonly fits: boolean; readonly expected?: string } {
   for (const member of field.members) {
     const value = memberValue(field, member, answer);
@@ -622,8 +633,74 @@ export function checkAnswer(
       const expected = verdict.issues[0]?.expected;
       return { fits: false, ...(expected !== undefined && { expected }) };
     }
+    const fact = time === undefined ? undefined : factBroken(toolOf, member, value, time);
+    if (fact !== undefined)
+      return { fits: false, expected: factExpectation(fact.problem, fact.facts) };
   }
   return { fits: true };
+}
+
+/** Under `.time()`: the turn's clock and the app's zone — what a period answer is judged against. */
+export interface AskTime {
+  readonly now: InstantText;
+  readonly appZone?: ZoneName;
+}
+
+/**
+ * The tool's declared fact an answer for its period argument breaks (the time
+ * layer, step T5a — `core/time/convert.ts` · `periodFactProblem`): the answer,
+ * read back through the single-argument form that names the argument, against
+ * `direction`, `retention` and `maxRange` at the turn's clock. `undefined` for
+ * a tool that declares none of the three, an argument no single-argument form
+ * names (one bound of two), or an answer no form reads back.
+ */
+function factBroken(
+  toolOf: ToolOf,
+  member: AskMember,
+  value: InputValue,
+  time: AskTime,
+): { readonly problem: PeriodFactProblem; readonly facts: PeriodFacts } | undefined {
+  if (member.period !== true) return undefined;
+  const rules = rulesOf(toolOf(member.toolName));
+  if (rules === undefined || isRefused(rules)) return undefined;
+  const facts = periodFactsOf(rules.period);
+  if (
+    facts.direction === undefined &&
+    facts.retention === undefined &&
+    facts.maxRange === undefined
+  ) {
+    return undefined;
+  }
+  for (const form of periodFormsOf(rules.period)) {
+    if (form.kind === 'bounds' || form.kind === 'object' || form.argument !== member.argument)
+      continue;
+    const range = readBack({ [member.argument]: value }, form, time);
+    if (range === undefined) continue;
+    const problem = periodFactProblem(range, facts, time.now);
+    return problem === undefined ? undefined : { problem, facts };
+  }
+  return undefined;
+}
+
+// LENS · tool-result · persistent-history (through `serve.ts` · `unansweredRefusal`)
+// reads: the tool's declared fact the person's answers kept breaking, and its declared value
+// law: names the rule, never the answer; a fact about the source, in the present tense of the source.
+/**
+ * What an answer for a period argument must be, in the words the refusal of
+ * an exhausted ask names it (`serve.ts` · `unansweredRefusal`'s `expected`) —
+ * the tool's own fact, never the person's answer.
+ */
+export function factExpectation(problem: PeriodFactProblem, facts: PeriodFacts): string {
+  switch (problem) {
+    case 'time-future':
+      return 'a window that has already happened (the source holds only the past)';
+    case 'time-past':
+      return 'a window still to come (the source holds only the future)';
+    case 'beyond-retention':
+      return `a window inside what the source keeps (${facts.retention ?? 'its retention'})`;
+    case 'over-max-range':
+      return `a window no wider than ${facts.maxRange ?? 'the source reads at once'}`;
+  }
 }
 
 /** What binding one answer did: the new state and the rows it files. */
@@ -647,6 +724,7 @@ export function bindAnswer(
   calls: readonly BatchCall[],
   toolOf: ToolOf,
   stamp: { readonly turn: number; readonly iteration: number },
+  time?: AskTime,
 ): BoundAnswer {
   const waiting = state.waiting;
   if (waiting === undefined) return { state, rows: [] };
@@ -658,7 +736,7 @@ export function bindAnswer(
     const answer = values[`f${k + 1}`];
     const was = progress[index];
     const check =
-      answer === undefined ? { fits: false as const } : checkAnswer(field, answer, toolOf);
+      answer === undefined ? { fits: false as const } : checkAnswer(field, answer, toolOf, time);
     if (answer !== undefined && check.fits) {
       progress[index] = { rounds: was.rounds, answer };
       rows.push(...answeredRows(field, answer, byId, toolOf, stamp));

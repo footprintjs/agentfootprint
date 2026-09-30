@@ -34,16 +34,40 @@
  *
  * Which argument bounds the period the answer covers, and how its values are
  * SPELLED: `lookback` (`30m`, `24h`, `7d`, `2w`), `signed-lookback` (`-24h`),
- * or `iso-range` (two ISO 8601 instants joined by `..`). Declared formats, never
- * phrases: the library checks a value parses under its spelling and never turns
- * one into a duration. A period on an argument with no rule is refused
- * (adopted Q13): a period argument is exactly what a rule is for.
+ * `iso-range` (two ISO 8601 instants joined by `..`) or `wall-range` (two wall
+ * times joined by `..`, with the zone in `zoneArgument`). Declared formats,
+ * never phrases. A period on an argument with no rule is refused (adopted
+ * Q13): a period argument is exactly what a rule is for.
+ *
+ * Since the time layer's step T5a the single-argument form is SUGAR over
+ * `forms` (`core/time/convert.ts` · `sugarForms`): a tool declares every shape
+ * its period takes — two arguments (`bounds`), one joined string, an object, a
+ * `day`, a look-back with its `units` — and the facts about its source
+ * (`direction`, `retention`, `maxRange`, `granularity`, `filtersToAsked`).
+ * Under `.time()` the library fills a period the model left out from the
+ * turn's one window, binds a sent one to the person's window, and hands the
+ * tool `ctx.time` (`core/time/bind.ts`). Without `.time()` a period is judged
+ * and read exactly as before.
  */
 
 import { isDevMode } from 'footprintjs';
 
 import { isInputFieldValue, type InputValue } from '../../inputRequest.js';
-import { isDuration, LOOKBACK_UNITS } from '../../time/duration.js';
+import {
+  FACT_UNITS,
+  formArguments,
+  formIssue,
+  needsZone,
+  parsesUnderForm,
+  PERIOD_SPELLINGS,
+  primaryArgument,
+  sugarForms,
+  type PeriodDirection,
+  type PeriodFacts,
+  type PeriodForm,
+  type PeriodSpelling,
+} from '../../time/convert.js';
+import { isDuration, LOOKBACK_UNITS, type DurationText } from '../../time/duration.js';
 import { splitRange } from '../../time/range.js';
 import { canonicalForm, tokenize } from '../evidence/normalize.js';
 import { validatePropertyValue } from '../toolArgsValidation.js';
@@ -74,31 +98,55 @@ export type ArgumentRule =
 /** Per argument name, its rule. Arguments with no rule run free. */
 export type AskOrAssume = Readonly<Record<string, ArgumentRule>>;
 
-/** The declared formats a period argument's values may be spelled in. */
-export type PeriodSpelling = 'lookback' | 'signed-lookback' | 'iso-range';
+export type { PeriodSpelling, PeriodForm, PeriodFacts } from '../../time/convert.js';
+export { PERIOD_SPELLINGS };
 
 /**
- * Which argument sets the period a tool's answer covers, and how its values
- * are spelled. The one period shape's TOOL half; the result half
- * (`DeclaredPeriod`: what a read queried and what the store holds) belongs to
- * the result doors.
+ * Which arguments set the period a tool's answer covers, how their values are
+ * spelled, and the facts about the source. The one period shape's TOOL half;
+ * the result half (`DeclaredPeriod`: what a read queried and what the store
+ * holds) belongs to the result doors.
+ *
+ * Two ways to name the shape, never both: today's single argument
+ * (`argument` + `spelling`, or `accepts` for several spellings, and
+ * `zoneArgument` beside a `wall-range`), which is sugar over the general
+ * `forms` — every shape the tool accepts, in preference order.
  *
  * @example
  * ```ts
  * period: { argument: 'window', spelling: 'lookback' }  // '2h', '24h', '7d'
+ * period: {
+ *   forms: [{ kind: 'bounds',
+ *             from: { argument: 'start_time', as: 'epoch-ms' },
+ *             to:   { argument: 'end_time',   as: 'epoch-ms', edge: 'exclusive' } }],
+ *   direction: 'past', retention: '30d',
+ * }
  * ```
  */
 export interface ToolPeriod {
-  readonly argument: string;
+  // ── the single-argument form, sugar over `forms` ──
+  readonly argument?: string;
   readonly spelling?: PeriodSpelling;
+  /** Every single-argument spelling the argument takes, in preference order. */
+  readonly accepts?: readonly PeriodSpelling[];
+  /** The argument that carries the zone of a `wall-range`. */
+  readonly zoneArgument?: string;
+  // ── the general form ──
+  readonly forms?: readonly PeriodForm[];
+  /** A `wall` / `date` / `day` form with no zone argument reads in the app's `.time({ zone })` — explicit, never implied. */
+  readonly wallZone?: 'app';
+  // ── facts about the source — never policy ──
+  /** Which side of now the source can hold; absent: not checked. */
+  readonly direction?: PeriodDirection;
+  /** The oldest data the source keeps (`30d`). */
+  readonly retention?: DurationText;
+  /** The widest window the tool accepts at once (`24h`). */
+  readonly maxRange?: DurationText;
+  /** The source's smallest step (`1m`). */
+  readonly granularity?: DurationText;
+  /** The tool reads `ctx.time.asked` and drops rows outside it. */
+  readonly filtersToAsked?: boolean;
 }
-
-/** The spellings, in the order the docs list them. */
-export const PERIOD_SPELLINGS: readonly PeriodSpelling[] = Object.freeze([
-  'lookback',
-  'signed-lookback',
-  'iso-range',
-]);
 
 // ─── The bounds ─────────────────────────────────────────────────────────
 
@@ -198,6 +246,12 @@ export function parsesUnderSpelling(value: unknown, spelling: PeriodSpelling): b
       return value.startsWith('-') && isDuration(value.slice(1), LOOKBACK_UNITS);
     case 'iso-range':
       return splitRange(value, '..', 'strict') !== undefined;
+    case 'wall-range':
+      return parsesUnderForm(
+        value,
+        { kind: 'joined', argument: '_', as: 'wall', joiner: '..' },
+        '_',
+      );
   }
 }
 
@@ -479,23 +533,22 @@ function declaredValues(rule: PlainObject): unknown[] {
   return choices.map((entry: unknown) => (isPlainObject(entry) ? entry.value : entry));
 }
 
-function assertPeriod(toolName: string, period: unknown, rules: PlainObject | undefined): void {
-  if (!isPlainObject(period)) {
-    refuse(toolName, 'period', 'must be { argument, spelling? }.');
-  }
-  for (const key of Object.keys(period)) {
-    if (key !== 'argument' && key !== 'spelling') {
-      refuse(
-        toolName,
-        'period',
-        `unknown key '${key}' — a period reads \`argument\` and \`spelling\`.`,
-      );
-    }
-  }
-  const argument = period.argument;
-  if (typeof argument !== 'string' || argument.trim() === '') {
-    refuse(toolName, 'period.argument', 'must name the argument that sets the period.');
-  }
+const SUGAR_KEYS = ['argument', 'spelling', 'accepts', 'zoneArgument'];
+const FACT_KEYS = ['direction', 'retention', 'maxRange', 'granularity', 'filtersToAsked'];
+const PERIOD_KEYS = [...SUGAR_KEYS, 'forms', 'wallZone', ...FACT_KEYS];
+/** Forms per period — a tool spells its period in a handful of shapes, never dozens. */
+export const MAX_PERIOD_FORMS = 8;
+
+const has = (o: PlainObject, key: string): boolean =>
+  Object.prototype.hasOwnProperty.call(o, key) && o[key] !== undefined;
+
+/** The rule an argument carries, or a refusal naming the period field that needs it. */
+function periodRule(
+  toolName: string,
+  where: string,
+  argument: string,
+  rules: PlainObject | undefined,
+): PlainObject {
   const rule =
     rules !== undefined && Object.prototype.hasOwnProperty.call(rules, argument)
       ? rules[argument]
@@ -503,29 +556,264 @@ function assertPeriod(toolName: string, period: unknown, rules: PlainObject | un
   if (!isPlainObject(rule)) {
     refuse(
       toolName,
-      'period.argument',
+      where,
       `'${argument}' carries no askOrAssume rule. A period argument is exactly what a rule ` +
         `is for — declare askOrAssume.${argument} (assume a default, or ask), or drop the period.`,
     );
   }
-  const spelling = period.spelling;
-  if (spelling === undefined) return;
-  if (typeof spelling !== 'string' || !(PERIOD_SPELLINGS as readonly string[]).includes(spelling)) {
+  return rule;
+}
+
+/** The property schema a form's argument names, or a refusal. */
+function formProperty(
+  toolName: string,
+  where: string,
+  argument: string,
+  inputSchema: Readonly<Record<string, unknown>> | undefined,
+): PlainObject {
+  const properties = isPlainObject(inputSchema?.properties)
+    ? (inputSchema?.properties as PlainObject)
+    : undefined;
+  const property =
+    properties !== undefined && Object.prototype.hasOwnProperty.call(properties, argument)
+      ? properties[argument]
+      : undefined;
+  if (!isPlainObject(property)) {
+    refuse(toolName, where, `the tool's inputSchema declares no property '${argument}'.`);
+  }
+  return property;
+}
+
+/** The single-argument half, judged: the argument, its spellings, the zone argument. */
+function assertSugar(toolName: string, period: PlainObject, rules: PlainObject | undefined): void {
+  const argument = period.argument;
+  if (typeof argument !== 'string' || argument.trim() === '') {
+    refuse(toolName, 'period.argument', 'must name the argument that sets the period.');
+  }
+  const rule = periodRule(toolName, 'period.argument', argument, rules);
+  if (has(period, 'spelling') && has(period, 'accepts')) {
     refuse(
       toolName,
-      'period.spelling',
-      `${describeValue(spelling)} is not one of ${PERIOD_SPELLINGS.join(', ')}.`,
+      'period',
+      'declares both `spelling` and `accepts` — `accepts` lists every spelling.',
     );
   }
-  for (const value of declaredValues(rule)) {
-    if (!parsesUnderSpelling(value, spelling as PeriodSpelling)) {
+  const spellings: unknown[] = has(period, 'accepts')
+    ? Array.isArray(period.accepts)
+      ? period.accepts
+      : [period.accepts]
+    : has(period, 'spelling')
+    ? [period.spelling]
+    : [];
+  const where = has(period, 'accepts') ? 'period.accepts' : 'period.spelling';
+  if (has(period, 'accepts') && (!Array.isArray(period.accepts) || period.accepts.length === 0)) {
+    refuse(toolName, 'period.accepts', 'must be a non-empty array of spellings.');
+  }
+  const seen = new Set<string>();
+  for (const spelling of spellings) {
+    if (
+      typeof spelling !== 'string' ||
+      !(PERIOD_SPELLINGS as readonly string[]).includes(spelling)
+    ) {
       refuse(
         toolName,
-        'period.spelling',
-        `the declared value ${describeValue(value)} is not spelled '${spelling}'.`,
+        where,
+        `${describeValue(spelling)} is not one of ${PERIOD_SPELLINGS.join(', ')}.`,
+      );
+    }
+    if (seen.has(spelling)) refuse(toolName, where, `repeats the spelling '${spelling}'.`);
+    seen.add(spelling);
+  }
+  const wall = seen.has('wall-range');
+  if (has(period, 'zoneArgument')) {
+    const zone = period.zoneArgument;
+    if (!wall) {
+      refuse(
+        toolName,
+        'period.zoneArgument',
+        "goes with 'wall-range' only — no other spelling reads a zone.",
+      );
+    }
+    if (typeof zone !== 'string' || zone.trim() === '' || zone === argument) {
+      refuse(
+        toolName,
+        'period.zoneArgument',
+        'must name another argument, the one that carries the zone.',
+      );
+    }
+    periodRule(toolName, 'period.zoneArgument', zone, rules);
+  } else if (wall && period.wallZone !== 'app') {
+    refuse(
+      toolName,
+      'period.accepts',
+      "'wall-range' reads wall times, which need a zone — name the argument that carries it " +
+        "(`zoneArgument`), or declare `wallZone: 'app'` to read them in the app's .time() zone.",
+    );
+  }
+  // Every declared value (the default, each choice) must be spelled one of the declared ways.
+  if (spellings.length === 0) return;
+  for (const value of declaredValues(rule)) {
+    const fits = (spellings as PeriodSpelling[]).some((s) => parsesUnderSpelling(value, s));
+    if (!fits) {
+      refuse(
+        toolName,
+        where,
+        `the declared value ${describeValue(value)} is not spelled '${spellings.join("' or '")}'.`,
       );
     }
   }
+}
+
+/** The general half, judged: each form's shape, its arguments against the schema and the rules. */
+function assertForms(
+  toolName: string,
+  period: PlainObject,
+  rules: PlainObject | undefined,
+  inputSchema: Readonly<Record<string, unknown>> | undefined,
+): void {
+  const forms = period.forms;
+  if (!Array.isArray(forms) || forms.length === 0 || forms.length > MAX_PERIOD_FORMS) {
+    refuse(
+      toolName,
+      'period.forms',
+      `must be a non-empty array of at most ${MAX_PERIOD_FORMS} forms.`,
+    );
+  }
+  forms.forEach((form: unknown, i: number) => {
+    const where = `period.forms[${i}]`;
+    const issue = formIssue(form);
+    if (issue !== undefined) refuse(toolName, where, issue);
+    const f = form as PeriodForm;
+    if (needsZone(f) && !('zone' in f && f.zone !== undefined) && period.wallZone !== 'app') {
+      refuse(
+        toolName,
+        where,
+        "reads wall-clock values (a 'wall' or 'date' bound, or a 'day'), which need a zone — " +
+          "name the argument that carries it (`zone: { argument }`), or declare `wallZone: 'app'` " +
+          "to read them in the app's .time() zone.",
+      );
+    }
+    for (const named of formArguments(f)) {
+      const property = formProperty(toolName, where, named.argument, inputSchema);
+      if (named.role === 'object') {
+        assertObjectProperty(toolName, where, f, property);
+        continue;
+      }
+      const type = property.type;
+      const fits =
+        named.type === 'number' ? type === 'number' || type === 'integer' : type === 'string';
+      if (!fits) {
+        refuse(
+          toolName,
+          where,
+          `'${named.argument}' is ${describeValue(type)} in the schema; ${
+            named.type === 'number'
+              ? "an epoch bound ('epoch-ms', 'epoch-s') is a number or an integer"
+              : 'this bound is a string'
+          }.`,
+        );
+      }
+      const rule = periodRule(toolName, where, named.argument, rules);
+      for (const value of declaredValues(rule)) {
+        if (!parsesUnderForm(value, f, named.argument)) {
+          refuse(
+            toolName,
+            where,
+            `the declared value ${describeValue(value)} of '${
+              named.argument
+            }' is not spelled the way this form reads it.`,
+          );
+        }
+      }
+    }
+  });
+}
+
+/**
+ * An `object` form's argument: an object property holding both keys, each the
+ * type its `as` needs. It carries no rule — a ruled argument is a flat value in
+ * this version — so a value the model leaves out is filled only from the
+ * person's window, never assumed or asked.
+ */
+function assertObjectProperty(
+  toolName: string,
+  where: string,
+  form: PeriodForm,
+  property: PlainObject,
+): void {
+  if (form.kind !== 'object') return;
+  const inner = isPlainObject(property.properties) ? (property.properties as PlainObject) : {};
+  const want = form.as === 'epoch-ms' || form.as === 'epoch-s' ? ['number', 'integer'] : ['string'];
+  for (const key of [form.keys.from, form.keys.to]) {
+    const p = inner[key];
+    if (property.type !== 'object' || !isPlainObject(p) || !want.includes(p.type as string)) {
+      refuse(
+        toolName,
+        where,
+        `'${form.argument}' must be an object property whose '${key}' is a ${want.join(' or ')}.`,
+      );
+    }
+  }
+}
+
+/** The facts about the source, judged: every duration in `smhdw`, `direction` one of three. */
+function assertFacts(toolName: string, period: PlainObject): void {
+  if (has(period, 'direction') && !['past', 'future', 'any'].includes(period.direction as string)) {
+    refuse(toolName, 'period.direction', "must be 'past', 'future' or 'any'.");
+  }
+  for (const key of ['retention', 'maxRange', 'granularity']) {
+    if (has(period, key) && !isDuration(period[key], FACT_UNITS)) {
+      refuse(
+        toolName,
+        `period.${key}`,
+        `${describeValue(
+          period[key],
+        )} is not a duration — a positive whole number and one of s, m, h, d, w (\`30d\`).`,
+      );
+    }
+  }
+  if (has(period, 'filtersToAsked') && typeof period.filtersToAsked !== 'boolean') {
+    refuse(toolName, 'period.filtersToAsked', 'must be true or false.');
+  }
+  if (has(period, 'wallZone') && period.wallZone !== 'app') {
+    refuse(
+      toolName,
+      'period.wallZone',
+      "must be 'app' — the one zone a tool may name without an argument.",
+    );
+  }
+}
+
+function assertPeriod(
+  toolName: string,
+  period: unknown,
+  rules: PlainObject | undefined,
+  inputSchema: Readonly<Record<string, unknown>> | undefined,
+): void {
+  if (!isPlainObject(period)) {
+    refuse(toolName, 'period', 'must be { argument, spelling? } or { forms }.');
+  }
+  for (const key of Object.keys(period)) {
+    if (!PERIOD_KEYS.includes(key)) {
+      refuse(
+        toolName,
+        'period',
+        `unknown key '${key}' — a period reads ${PERIOD_KEYS.map((k) => `\`${k}\``).join(', ')}.`,
+      );
+    }
+  }
+  const sugar = SUGAR_KEYS.some((k) => has(period, k));
+  if (sugar && has(period, 'forms')) {
+    refuse(
+      toolName,
+      'period',
+      'declares both the single-argument form (`argument`, `spelling`, `accepts`, `zoneArgument`) ' +
+        'and `forms` — the first is shorthand for the second; declare one.',
+    );
+  }
+  if (has(period, 'forms')) assertForms(toolName, period, rules, inputSchema);
+  else assertSugar(toolName, period, rules);
+  assertFacts(toolName, period);
 }
 
 /**
@@ -584,7 +872,7 @@ export function assertAskOrAssume(
       );
     }
   }
-  if (period !== undefined) assertPeriod(toolName, period, rules);
+  if (period !== undefined) assertPeriod(toolName, period, rules, inputSchema);
   warnDefaultProse(toolName, forms, inputSchema);
 }
 
@@ -664,6 +952,54 @@ export interface RuledArgument {
 export interface ToolRules {
   readonly ruled: readonly RuledArgument[];
   readonly period?: ToolPeriod;
+}
+
+/**
+ * Every form a tool's period takes, the sugar read (`core/time/convert.ts` ·
+ * `sugarForms`) — empty when it declares none, or names an argument and no
+ * spelling.
+ */
+export function periodFormsOf(period: ToolPeriod | undefined): readonly PeriodForm[] {
+  return period === undefined ? [] : sugarForms(period);
+}
+
+/**
+ * Every argument a period names — the single argument, or each form's bound,
+ * object and zone arguments. What a row's `period: true` marks.
+ */
+export function periodArgumentsOf(period: ToolPeriod | undefined): ReadonlySet<string> {
+  if (period === undefined) return new Set();
+  const names = new Set<string>();
+  if (period.argument !== undefined) names.add(period.argument);
+  if (period.zoneArgument !== undefined) names.add(period.zoneArgument);
+  for (const form of period.forms ?? []) {
+    for (const a of formArguments(form)) names.add(a.argument);
+  }
+  return names;
+}
+
+/**
+ * The ONE argument a period is known by — the single `argument`, else the
+ * first form's first bound. The results layer's join key (a `period` row names
+ * it, and joins the call's `argument` row by it).
+ */
+export function periodArgumentOf(period: ToolPeriod | undefined): string | undefined {
+  if (period === undefined) return undefined;
+  if (period.argument !== undefined) return period.argument;
+  const first = period.forms?.[0];
+  return first === undefined ? undefined : primaryArgument(first);
+}
+
+/** The facts a period declares about its source, only those it declares. */
+export function periodFactsOf(period: ToolPeriod | undefined): PeriodFacts {
+  if (period === undefined) return {};
+  return {
+    ...(period.direction !== undefined && { direction: period.direction }),
+    ...(period.retention !== undefined && { retention: period.retention }),
+    ...(period.maxRange !== undefined && { maxRange: period.maxRange }),
+    ...(period.granularity !== undefined && { granularity: period.granularity }),
+    ...(period.filtersToAsked !== undefined && { filtersToAsked: period.filtersToAsked }),
+  };
 }
 
 /** Why a tool's rules could not be read — the assert's own sentence. */
@@ -783,13 +1119,14 @@ function readRules(
   period: ToolPeriod | undefined,
   inputSchema: Readonly<Record<string, unknown>> | undefined,
 ): ToolRules {
+  const named = periodArgumentsOf(period);
   const ruled: RuledArgument[] = Object.entries(askOrAssume ?? {}).map(([argument, rule]) => ({
     argument,
     rule: 'ask' in rule ? ('ask' as const) : ('assume' as const),
     ...('assume' in rule && { assume: rule.assume }),
     ...('ask' in rule && { ask: readAsk(rule) }),
     type: propertyTypeOf(inputSchema, argument),
-    ...(period?.argument === argument && { period: true as const }),
+    ...(named.has(argument) && { period: true as const }),
   }));
   return { ruled, ...(period !== undefined && { period }) };
 }

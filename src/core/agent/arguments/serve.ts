@@ -223,10 +223,17 @@ export function rulesOnWire(
 /** One filled argument, as the note names it. */
 export interface FilledArgument {
   readonly argument: string;
-  readonly value: InputValue;
+  /** A window fill of an `object` form is an object (printed as JSON). */
+  readonly value: InputValue | Readonly<Record<string, InputValue>>;
   readonly hidden: boolean;
-  /** `answered`: the person's answer to the batch ask filled it. Absent: the tool's rule assumed it. */
-  readonly source?: 'answered';
+  /**
+   * `answered`: the person's answer to the batch ask filled it. `window`: the
+   * turn's one window of the person's did (the time layer), `from` saying
+   * whose. Absent: the tool's rule assumed it.
+   */
+  readonly source?: 'answered' | 'window';
+  /** On a `window` fill: the person's words, a `model` reader's unconfirmed reading of them, or a UI control. */
+  readonly from?: 'said' | 'derived-from-reading' | 'control';
   /**
    * The value the call had CARRIED, which the person's answer replaced
    * (declared sources: an untraced value is asked about). Absent: the call
@@ -269,9 +276,38 @@ export function filledNote(
     .map((f) =>
       f.source === 'answered'
         ? answeredClause(toolName, f, options?.sources === true)
+        : f.source === 'window'
+        ? windowClause(toolName, f)
         : assumedClause(toolName, f),
     )
     .join('');
+}
+
+/** A filled value as a note prints it — an object form's value as JSON. */
+function printedFill(value: FilledArgument['value']): string {
+  return typeof value === 'object' ? JSON.stringify(value) : printedValue(value);
+}
+
+// LENS · tool-result · persistent-history
+// reads: the call's window fill (`argumentResolutions`: the turn's ONE window of the person's, converted
+//        into the tool's form — `core/time/bind.ts`), kept only where the call RAN with it, and whose window
+//        it was (the person's words, a model reader's unconfirmed reading of them, a UI control)
+// law: may omit, never deny; past tense, naming the call this result answers; a reading of the person's
+//      words is never called their words.
+/** The clause for a value the turn's one window of the person's filled (the time layer, step T5a). */
+function windowClause(toolName: string, f: FilledArgument): string {
+  const whose =
+    f.from === 'control'
+      ? 'from the window the person set in the app — recorded as set in the app'
+      : f.from === 'derived-from-reading'
+      ? "from a reading of the person's words they have not confirmed — recorded as a reading, " +
+        "not as the person's"
+      : "from the window the person's own words gave — recorded as the person's";
+  return f.hidden
+    ? `\n\n[${f.argument} was not in the ${toolName} call this result answers; the call ran with ` +
+        `a value ${whose} (the value is hidden by the tool's view).]`
+    : `\n\n[${f.argument} was not in the ${toolName} call this result answers; the call ran with ` +
+        `${printedFill(f.value)}, ${whose}.]`;
 }
 
 function assumedClause(toolName: string, f: FilledArgument): string {
@@ -280,7 +316,7 @@ function assumedClause(toolName: string, f: FilledArgument): string {
         "with the value the tool's rule assumes (the value is hidden by the tool's view) — " +
         "recorded as assumed, not as the person's.]"
     : `\n\n[${f.argument} was not in the ${toolName} call this result answers; the call ran ` +
-        `with ${printedValue(f.value)}, the value the tool's rule assumes — recorded as ` +
+        `with ${printedFill(f.value)}, the value the tool's rule assumes — recorded as ` +
         "assumed, not as the person's.]";
 }
 
@@ -314,7 +350,7 @@ function answeredClause(toolName: string, f: FilledArgument, sources: boolean): 
   return f.hidden
     ? `\n\n[${f.argument} in the ${toolName} call this result answers was chosen by the person ` +
         `when asked (the value is hidden by the tool's view; ${before}).]`
-    : `\n\n[${f.argument} = ${printedValue(f.value)} in the ${toolName} call this result answers ` +
+    : `\n\n[${f.argument} = ${printedFill(f.value)} in the ${toolName} call this result answers ` +
         `was chosen by the person when asked (${before})${sources ? ANSWERED_SOURCE_CLAUSE : ''}.]`;
 }
 

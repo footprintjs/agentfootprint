@@ -94,6 +94,7 @@ import {
   withArgumentRules,
 } from '../src/core/agent/arguments/serve.js';
 import { rulesOf } from '../src/core/agent/arguments/declare.js';
+import { factExpectation } from '../src/core/agent/arguments/ask.js';
 import { SHOWN_ARGS } from '../src/core/toolShownArgs.js';
 import { defineOntology, ONTOLOGY_INSTRUCTION, ontologyPiece } from '../src/ontology/index.js';
 import type { FindingsLedger } from '../src/core/agent/findings/types.js';
@@ -1523,6 +1524,12 @@ const PRODUCERS: readonly ModelFacingProducer[] = [
       // …and, under the arm, a later call may cite the answer (never for a hidden one).
       /was chosen by the person when asked \(the call had left it out\); a later call may cite that answer in `_findings\.from` with source 'turn'\.\]$/m,
       /\(the call had carried "2h"\); a later call may cite that answer in `_findings\.from` with source 'turn'\.\]$/m,
+      // Time layer step T5a: the turn's one window of the person's filled the value.
+      /the call ran with 1791558000000, from the window the person's own words gave — recorded as the person's\.\]/,
+      /from a reading of the person's words they have not confirmed — recorded as a reading, not as the person's\.\]/,
+      /the call ran with "2026-10-09T14:00:00Z\.\.2026-10-09T14:59:59Z", from the window the person set in the app — recorded as set in the app\.\]/,
+      /the call ran with a value from the window the person's own words gave — recorded as the person's \(the value is hidden by the tool's view\)\.\]/,
+      /the call ran with \{"gte":1791558000000,"lt":1791560460000\}, from the window/,
     ],
     compose: async () => [
       filledNote('search_logs', [{ argument: 'window', value: '2h', hidden: false }]),
@@ -1558,6 +1565,52 @@ const PRODUCERS: readonly ModelFacingProducer[] = [
       filledNote('search_logs', [{ argument: 'window', value: '2h', hidden: false }], {
         sources: true,
       }),
+      // Time layer step T5a: a window fill, from each of the three sources, and hidden.
+      filledNote('client_activity', [
+        {
+          argument: 'start_time',
+          value: 1791558000000,
+          hidden: false,
+          source: 'window',
+          from: 'said',
+        },
+      ]),
+      filledNote('client_activity', [
+        {
+          argument: 'start_time',
+          value: 1791558000000,
+          hidden: false,
+          source: 'window',
+          from: 'derived-from-reading',
+        },
+      ]),
+      filledNote('search_logs', [
+        {
+          argument: 'window',
+          value: '2026-10-09T14:00:00Z..2026-10-09T14:59:59Z',
+          hidden: false,
+          source: 'window',
+          from: 'control',
+        },
+      ]),
+      filledNote('client_activity', [
+        {
+          argument: 'start_time',
+          value: 1791558000000,
+          hidden: true,
+          source: 'window',
+          from: 'said',
+        },
+      ]),
+      filledNote('client_activity', [
+        {
+          argument: 'range',
+          value: { gte: 1791558000000, lt: 1791560460000 },
+          hidden: false,
+          source: 'window',
+          from: 'said',
+        },
+      ]),
     ],
   },
   {
@@ -1586,6 +1639,11 @@ const PRODUCERS: readonly ModelFacingProducer[] = [
     drivenBy: ['test/core/agent/arguments/ask-layer.test.ts'],
     reaches: [
       /the person's answers for limit did not fit what the tool accepts \(limit: integer\)/,
+      // Time layer step T5a: the tool's declared facts joined the re-check.
+      /\(window: a window that has already happened \(the source holds only the past\)\)/,
+      /\(window: a window still to come \(the source holds only the future\)\)/,
+      /\(window: a window inside what the source keeps \(30d\)\)/,
+      /\(window: a window no wider than 24h\)/,
       /its check-in consent gate needed a person’s approval for those arguments/,
       /the tool asked to pause for a person, and this batch had already paused once/,
       // The review of step 4: a refused call's answers are KEPT, and the model is told so.
@@ -1594,6 +1652,14 @@ const PRODUCERS: readonly ModelFacingProducer[] = [
     ],
     compose: async () => [
       unansweredRefusal('top_talkers', [{ argument: 'limit', expected: 'integer' }]),
+      ...(['time-future', 'time-past', 'beyond-retention', 'over-max-range'] as const).map((p) =>
+        unansweredRefusal('search_logs', [
+          {
+            argument: 'window',
+            expected: factExpectation(p, { retention: '30d', maxRange: '24h' }),
+          },
+        ]),
+      ),
       secondPauseRefusal('purge_logs', 'check-in'),
       secondPauseRefusal('collect_window', 'tool-pause'),
       secondPauseRefusal('purge_logs', 'check-in') + keptAnswersNote('purge_logs', ['window']),

@@ -197,6 +197,46 @@ quote is shown as the model wrote it (clipped, `rows.ts` · `QUOTE_CHARS`) — e
 whose name nothing answers, which has no view to ask. The checks still read every quote in
 memory; only what the record SHOWS changes.
 
+## Under `.time()` — the person's window, into a period's own arguments (time layer, step T5a)
+
+A `ToolPeriod` names every shape the period takes (`forms`; `{ argument, spelling }` is
+shorthand — `core/time/convert.ts` · `sugarForms`) and facts about the source; each argument a
+form names carries a rule, as the single argument always did (an `object` form's argument
+excepted: a ruled argument is flat). With `.time()` armed, the mount hands the layer this turn's
+`clock` and `time-reading` rows (`honesty/mounts.ts` · `timeInputsOf`), and each stage asks ONE
+pure decision per call (`resolve.ts` · `timeDecisionsOf` over `core/time/bind.ts` ·
+`callWindowOf`) — the table's rows for the period's arguments become:
+
+| The call's period arguments | Row | Runs with |
+|---|---|---|
+| all left out, the turn holds ONE window of the person's, a form holds it exactly | `said` + `matched: 'mention'` (a `model` reader's window: + `reading`; a UI `time.window`: `app`, `appSource: 'time.window'`) | the window in the form's spelling — a FILL, noted past tense on the result (`serve.ts` · `filledNote`'s window clause); another form's arguments are left alone |
+| all left out, no window / two mentions / an open reading / no exact form | as the table above (the rule assumes or asks) | as the table above |
+| sent, and the declared `user` quote names a mention whose window it IS | `said` + `matched: 'mention'` (a reading stays a reading) | as sent — never asked |
+| sent, equal to a window by value, or different from the person's | the check's own verdict (`model`, a reading, …) | as sent — a differing window is NOT asked about (the v1 law: record and run) |
+
+One `call-window` row per such call says which (`core/time/rows.ts` · `CallWindowRow`),
+merged in the same ONE write as the argument rows; the tool is handed `ctx.time`, read off that
+row at dispatch (`stages/toolCalls.ts` · `callTimeContext`). The batch ask's answer for a period
+argument is also judged against the tool's `direction`, `retention` and `maxRange` at the turn's
+clock (`ask.ts` · `checkAnswer`, `factExpectation`): outside them it is `invalid-answer`, asked
+again.
+
+```ts
+defineTool({
+  name: 'client_activity',
+  inputSchema: { type: 'object', properties: { start_time: { type: 'integer' }, end_time: { type: 'integer' } } },
+  askOrAssume: { start_time: { ask: 'From when?' }, end_time: { ask: 'Until when?' } },
+  period: { forms: [{ kind: 'bounds', from: { argument: 'start_time', as: 'epoch-ms' },
+                      to: { argument: 'end_time', as: 'epoch-ms', edge: 'exclusive' } }] },
+  execute: (args, ctx) => query(args, ctx.time?.asked),
+});
+// agent.time({ zone, reader }) — "10/09/26 8 AM to 8:40 AM", the model sends {} →
+//   [{ argument: 'start_time', source: 'said', matched: 'mention', value: '1791558000000' }, …,
+//    { kind: 'call-window', how: 'filled', form: 0, … }]
+```
+
+Without `.time()` nothing here runs: a period is judged and read as the sections above say.
+
 ## The batch ask — once, before anything runs
 
 The layer names, per call, the `ask` arguments the call left out — and, under declared

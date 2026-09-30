@@ -981,7 +981,7 @@ deterministic and are measured over retained recorded runs or unit tables, with 
 | T3 | **The clock and the presentation** — *landed; implementation note T3 below* | run option `time` (`now`, `zone`, `window`), `.time({ zone })` as the fallback, the `clock` stamp with `nowSource` / `zoneSource`, `clock-on-resume`, `dispatchedAt` on call rows, the checkpoint arm, `present.ts` (the said end; locale-neutral with no reader), `periodLine` in the presentation zone | `.time()` | T1 | the clock survives pause/resume unchanged, and a resume passing a new `time` is recorded, not applied; no zone anywhere → the run is refused; `dispatchedAt` after a resume is the resume's; `nowSource: 'default'` recorded; limits line golden files per zone, "to 8:40" shown as 08:40 | $0 |
 | T6a | **The reader port and the resolver** — *landed; implementation note T6a below* | `TimeReader` (`kind`, `version`, `locale`), `TimeParts`, `resolve.ts` over parts + clock + the v1 policy (`dateOrder`, `year`) and the fixed laws (DST, end edge), the `time-reading` row (reader version, tzdata version) read back on resume, the `saidByPerson` gate, the `model`-reading rule | `.time({ reader })` | T3 | against a **fixture reader** that returns fixed parts: every candidate for `10/09/26`, a bare `8:40`, a DST overlap; an out-of-text quote is refused; a replay never calls the reader; a library-written `role: 'user'` turn is never read | $0 |
 | T4 | **The time ask** — *landed; implementation note T4 below* | `InputField.format` (refused unless `type: 'string'`), re-validation of shape, order and zone, labelled choices, catalog reasons (TQ7), MCP `date-time` mapping | a `format` field or `.time()` | T3, T6a | answers out of order, zone-less, in a DST gap → re-ask with `refused` and `repeat`; a `model` reading offered to confirm | $0; host hand count |
-| T5a | **Declared mapping and exact conversions** | `ToolPeriod.forms` (bounds, joined, object, day, lookback with `units`) and the sugar (`accepts`, `wall-range`, `zoneArgument`); the facts `direction`, `retention`, `maxRange`, `granularity`, `filtersToAsked`, `wallZone`; `_meta.agentfootprint.period` read by `readToolExtras`; the exact rows of § 7.2; `ctx.time` in process and in `_meta.agentfootprint.time`; fill from one mention (a `control` window included), binding by quote, the record-and-run law for a differing model window; the tool facts join T4's re-validation | a tool's new `period` fields | T4, TQ1 | every exact row of § 7.2; a two-argument epoch-ms Python tool over the mock MCP client; a model window that differs → runs, row `model-chosen`, fold "not sure"; a drill-down and a comparison call run untouched; "this morning vs yesterday morning" from the fixture reader → two mentions, no fill, each call bound by quote | $0 |
+| T5a | **Declared mapping and exact conversions** — *landed; implementation note T5a below* | `ToolPeriod.forms` (bounds, joined, object, day, lookback with `units`) and the sugar (`accepts`, `wall-range`, `zoneArgument`); the facts `direction`, `retention`, `maxRange`, `granularity`, `filtersToAsked`, `wallZone`; `_meta.agentfootprint.period` read by `readToolExtras`; the exact rows of § 7.2; `ctx.time` in process and in `_meta.agentfootprint.time`; fill from one mention (a `control` window included), binding by quote, the record-and-run law for a differing model window; the tool facts join T4's re-validation | a tool's new `period` fields | T4, TQ1 | every exact row of § 7.2; a two-argument epoch-ms Python tool over the mock MCP client; a model window that differs → runs, row `model-chosen`, fold "not sure"; a drill-down and a comparison call run untouched; "this morning vs yesterday morning" from the fixture reader → two mentions, no fill, each call bound by quote | $0 |
 | T5b | **Widening and pre-dispatch refusals** | the inexact rows of § 7.2 (the covering look-back, `day` wider, `filtersToAsked`), the dispatch drift § 7.4, the refusals (outside `direction`, wholly beyond `retention`, over `maxRange`, a multi-day range to a `day` tool, a `wall` DST gap), `partly-beyond-retention` | a tool's new `period` fields | T5a | every inexact row of § 7.2 and every row of § 7.4; a range half inside `retention` dispatches; a future window to a `past` tool is refused with the reason | $0 |
 | T6b | **The English default and the paid bench** | `englishTimeReader` (a tokenizer; the v1 rows of § 5.3), the served sentence (TQ13), the lazy ask wired to real words | `.time({ reader: englishTimeReader() })` | T5b | the host's field sentences as the table ("10/09/26 8 AM to 8:40 AM PST" → a zone ask for `PST`, "yesterday", a future date); every non-v1 row of § 5.3 reads "unreadable" | **paid**: the provoking set — calls with the right window, and absolute windows asked of a look-back-only tool (wrong-window answers, armed vs unarmed); needless-ask rate on controls |
 | T7 | **Evidence lineage at grain** | `forms.ts` · `timeFormsOf` with its `said` and `derived` lists; the lineage kind `derived-from-reading`; the gate asks it; the private table from `fix/person-values-normalized` retires | `.time()` | T6b; `fix/person-values-normalized` landed first (TQ25) | "8 AM" vs `8:00`/`08:00` → `said`; a corrected abbreviation, an implied year, `-07:00`, `08:41`, the served sentence echoed → `derived-from-reading`, never "known"; a time no reading produced still fails; the landed fix's cases still pass after it retires | $0 over retained recordings: false "not traced" on time values |
@@ -1163,6 +1163,62 @@ deterministic and are measured over retained recorded runs or unit tables, with 
   for an instant or a zone) unless `strict`, and the answer names one or the other; a number or
   boolean `enum` has no MCP spelling and is refused. (6) The inputs layer's own batch ask
   (`arguments/ask.ts`) is untouched: its fields carry no `format` until T5a joins the tool facts.
+
+- **T5a.** Landed with these smallest faithful choices. (1) **The files.** `core/time/convert.ts`
+  (the forms, the sugar, each form's own rules, the exact rows — `convertExact` — the inverse a
+  binding reads — `readBack` — and the facts against a range — `periodFactProblem`),
+  `core/time/bind.ts` (the turn's windows read from the record — `turnWindowsOf` — and one call's
+  decision — `callWindowOf`), `core/time/wire.ts` (`TimeContext`, versioned `version: 1`); the
+  declaration stays owned by `arguments/declare.ts` (`ToolPeriod` grows; `periodFormsOf`,
+  `periodArgumentsOf`, `periodArgumentOf` — the results layer's join key, the first form's first
+  bound when there is no single `argument` — and `periodFactsOf`). (2) **Where the record lives.**
+  "The argument row gains window, converted, the mention…" became ONE new time-layer row per call,
+  `call-window` (`rows.ts` · `CallWindowRow`, its checkpoint arm in `timeRowIsWellFormed`): a
+  form's bounds span two ruled arguments, and one call has one window. It carries `how` (`filled`
+  · `bound` · `model-chosen` · `model` · `unread` · `not-filled` with `why`), the form index,
+  `asked` (the range the call asks for), `person` (the person's window: range, source, mention),
+  `by` and `rounded`. The argument rows keep their vocabulary and gain one value: `matched:
+  'mention'` (a fill from a `rule` reading, or a sent value whose declared quote names the
+  mention and whose window it is); a `model` reader's window adds `reading` (it folds "not sure"
+  through `argument-read`); a UI window is `app` with `appSource: 'time.window'`. No fold reason
+  was added: a `model-chosen` window folds "not sure" through the argument row
+  (`argument-unverified`) until T8's `period-differs-from-asked`. (3) **The arm** is `.time()` plus
+  a tool whose period names a form — today's `{ argument, spelling }` sugar included, since it IS
+  a form; without `.time()` a new field is judged and read, and nothing is filled, filed or
+  handed (every byte reference unchanged). (4) **Exactness.** An ISO or wall bound is written to
+  the second (to the millisecond only when the instant needs it), and an inclusive `to` is the
+  last instant at that precision (`…08:40:59`); read back, a bound's precision is how it was
+  written. A `wall` or `date` bound is exact only when the tool reads back the same instants — a
+  doubled hour is not exact (the DST-gap refusal is T5b's) — and a `date` bound needs a zone as a
+  `wall` one does. A `from` bound is always inclusive (`edge: 'exclusive'` on it is refused). A
+  look-back window goes to a bounds form as `[now − L, now)`, and a binding recognises that
+  spelling as the look-back. "A range ending at now" means its end within the tool's
+  `granularity` (one minute when none) of the clock's `now`; moving the end to now, or growing the
+  length to the units, is recorded `rounded`. (5) **The fill.** "Exactly one mention resolves"
+  counts every mention that kept its quote (resolved or still open) plus the `control` window: a
+  message with one settled and one open mention fills nothing. Every argument of every form must
+  be missing (a zone argument sent alone blocks the fill); a filled call's other forms'
+  arguments are left alone — no row, no default, no ask. An `open` reading fills nothing and the
+  tool's own rule applies: the lazy word-driven ask is raised with the English reader (T6b); the
+  carried window (`time-carried`) is not in this step. (6) **The binding.** A declared quote names
+  a mention when one holds the other, case and whitespace aside. A differing window runs as sent
+  under declared sources too — the v1 law — so a present period value that the source check would
+  have asked about (`asked: 'unverified'`) is no longer asked when the turn has a window of the
+  person's; a value bound by VALUE runs with the check's own verdict (never raised to the person's
+  words). (7) **An `object` form's argument carries no rule** (a ruled argument is flat in v1, so
+  the rule law cannot extend to it): it is filled only from the person's window and files no
+  argument row. (8) **`ctx.time`** is read off the call's `call-window` row at dispatch (`asked`
+  absent when no form read the call back), in process on `ToolExecutionContext.time`, over MCP in
+  the `tools/call` request's `_meta.agentfootprint.time` (`mcpClient` sends it, the mock client
+  hands it to a handler's second argument, `mcpServe` hands a readable one to the served tool).
+  (9) **The facts join the re-validation** in two places: `ask.ts` · `checkTimeAnswer` takes a
+  tool's facts and the clock for a `time-range` answer (four catalog keys:
+  `answer.time-future`, `answer.time-past`, `answer.beyond-retention`, `answer.over-max-range`),
+  and the batch ask's answer for a period argument is read back through its single-argument form
+  and asked again (`invalid-answer`) outside the facts — the refusal of an exhausted ask names the
+  fact (`arguments/ask.ts` · `factExpectation`, registered as served). Refusing a CALL on its facts
+  is T5b's. (10) The design's "this morning vs yesterday morning" test is "today vs yesterday": v1
+  resolves no part of the day (T6a note (6)).
 
 **Why this order.** T1 settles the grammar every other step leans on and is free. T2 is already
 written and only needs rebasing and the value check. T3 gives the first visible win (the limits

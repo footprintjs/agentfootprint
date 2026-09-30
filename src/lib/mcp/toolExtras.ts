@@ -70,6 +70,7 @@ import {
   type AskOrAssume,
   type ToolPeriod,
 } from '../../core/agent/arguments/declare.js';
+import { readTimeContext, TIME_CONTEXT_META_KEY, type TimeContext } from '../../core/time/wire.js';
 
 /**
  * The single `_meta` key every agentfootprint declaration travels under.
@@ -142,9 +143,36 @@ export interface McpToolExtras {
    * default.
    */
   readonly askOrAssume?: AskOrAssume;
-  /** Which argument sets the period the answer covers — see {@link Tool.period}.
-   *  Kept only beside a kept `askOrAssume` that rules the argument. */
+  /** Which arguments set the period the answer covers, the forms they take
+   *  and the facts about the source — see {@link Tool.period}. Judged
+   *  against the listed tool's own `inputSchema` and the KEPT `askOrAssume`
+   *  (every argument a form names must carry a kept rule). A host tool
+   *  written in another language declares the same object, field for field. */
   readonly period?: ToolPeriod;
+}
+
+// ─── A call's own metadata: the time layer's `ctx.time` ──────────────
+
+/**
+ * The `_meta` bag a `tools/call` request carries for a call handed
+ * `ctx.time` (the time layer, `core/time/wire.ts` · `TimeContext`): the
+ * same object, under the one namespaced key — so a host tool in another
+ * process can declare the `period.queried` its read covered without parsing
+ * its own argument.
+ */
+export function callMetaOf(time: TimeContext): Readonly<Record<string, unknown>> {
+  return { [MCP_TOOL_EXTRAS_KEY]: { [TIME_CONTEXT_META_KEY]: time } };
+}
+
+/**
+ * The call's time a `tools/call` request carried in its `_meta` bag, read —
+ * or `undefined` when it carried none, or one this runtime cannot read (a
+ * different version, a malformed field): never repaired, never guessed. What
+ * `mcpServe` hands a served tool as `ctx.time`.
+ */
+export function callTimeOf(meta: unknown): TimeContext | undefined {
+  const bag = bagOf(meta);
+  return bag === undefined ? undefined : readTimeContext(bag[TIME_CONTEXT_META_KEY]);
 }
 
 /**

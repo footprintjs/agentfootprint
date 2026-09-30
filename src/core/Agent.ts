@@ -5273,6 +5273,7 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
             this.resumePassedTime = undefined;
             return passed;
           },
+          ...(this.timeOptions.zone !== undefined && { appZone: this.timeOptions.zone }),
         },
       }),
       emitForRun: (type, payload, runContext) => this.emitLateFact(type, payload, runContext),
@@ -5370,6 +5371,13 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
         inputsLayer: {
           toolOf: (toolName: string) => resolveForLayer(toolName).tool,
           ...(this.toolMiddleware.length > 0 && { rewrites: true as const }),
+          // The time layer (step T5a): a tool whose period declares forms is filled from the
+          // turn's one window, bound to the person's window, or recorded as the model's.
+          ...(this.timeOptions !== undefined && {
+            time: {
+              ...(this.timeOptions.zone !== undefined && { appZone: this.timeOptions.zone }),
+            },
+          }),
           // Declared sources: the layer reads `_findings.from` and checks it against
           // the corpora the mount hands in — the app's `externalGrounds` among them.
           ...(argumentSources && {

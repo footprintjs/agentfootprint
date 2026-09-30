@@ -14,6 +14,9 @@
  * | `answer.not-an-instant`, `answer.no-offset`, `answer.not-a-range`, `answer.not-a-zone` | `value` — the answer as given (cut at 64 characters) |
  * | `answer.out-of-order` | `from`, `to` |
  * | `answer.dst-gap` | `value`, `wall` (the wall time as written), `zone` |
+ * | `answer.time-future`, `answer.time-past` | `from`, `to` |
+ * | `answer.beyond-retention` | `from`, `to`, `retention` (the source's, as declared) |
+ * | `answer.over-max-range` | `from`, `to`, `maxRange` (the source's, as declared) |
  * | `ask.which`, `ask.confirm` | `quote` — the person's words the reading came from |
  * | `ask.zone` | `quote`, `token` — the zone they wrote |
  * | `choice.confirm` | `quote`, `window` — the label of the library's reading |
@@ -36,6 +39,14 @@ export const defaultTimeAskMessages: TimeAskMessages = Object.freeze({
   'answer.dst-gap':
     '{{wall}} does not exist in {{zone}}: the clocks skip that hour on that day. Pick a time before or after it.',
   'answer.not-a-zone': '“{{value}}” is not a time zone name. Name one such as America/Los_Angeles.',
+  'answer.time-future':
+    'That window has not happened yet: it starts at {{from}}, and this source holds only the past.',
+  'answer.time-past':
+    'That window is over: it ends at {{to}}, and this source holds only what is still to come.',
+  'answer.beyond-retention':
+    'That window is older than this source keeps ({{retention}}): nothing from {{from}} to {{to}} is still held.',
+  'answer.over-max-range':
+    'That window is wider than this source reads at once ({{maxRange}}). Pick a shorter one.',
   'ask.which': 'Which time did you mean by “{{quote}}”?',
   'ask.confirm': 'Is this the time you meant by “{{quote}}”?',
   'ask.zone': 'Which time zone did you mean by “{{token}}” in “{{quote}}”?',

@@ -8,20 +8,21 @@
  *          checkpoint door (`core/runCheckpoint.ts` · `ledgerRowIsWellFormed`)
  *          refuses exactly what the library never files.
  * Role:    core/ leaf (the time layer). Imports `instant.ts`, `zone.ts`,
- *          `range.ts`, `clock.ts`, `reader.ts` and `resolve.ts` only — the
+ *          `range.ts`, `clock.ts`, `reader.ts`, `resolve.ts` and `bind.ts`' types only — the
  *          rows are plain records the agent loop files (`stages/seed.ts`,
  *          `stages/toolCalls.ts`).
  * Emits:   N/A — the rows fire no event of their own (the `conflict` row's
  *          precedent: no event field ships without a reader in the same
  *          release). The lens reads the rows.
  *
- * Four kinds, each filed only while `.time()` is armed:
+ * Five kinds, each filed only while `.time()` is armed:
  *
  * | Kind | Filed | Carries |
  * |------|-------|---------|
  * | `clock` | once per turn, by seed | the turn's {@link TimeClock} and, when the run passed one, the `control` window |
  * | `clock-on-resume` | first thing in the resumed leg's ToolCalls stage — either pause shape: the pausable resume door, or the stage re-run an `interrupt()` pause makes — when a resume passed a `time` that differs from the kept clock | what was passed and what was kept — the kept clock still rules |
  * | `call` | once per dispatched call, just before the tool runs | `dispatchedAt`: the wall clock at dispatch (a look-back is evaluated by the TOOL at dispatch, which after a pause is later than `now`) |
+ * | `call-window` | by the inputs layer, once per call to a tool that declares period forms, before it dispatches | which window the call carries: filled from the turn's one window, bound to one (by quote or value), the model's own (beside the person's when it differs), unread, or not filled and why |
  * | `time-reading` | by seed, once per MENTION the armed reader (`.time({ reader })`) found in the person's message — or ONE row with `mentions: 0` when it found none, so a retry knows the message was read | the quote, the parts, every candidate `resolve.ts` made of them, how the reading settled (`choice`), the reader's id, version, kind and locale, and the tz database version; a refused mention keeps only why |
  *
  * Readers that switch over every row kind must skip one they do not know.
@@ -32,6 +33,7 @@ import { isTimeRange, type TimeRange } from './range.js';
 import { isZoneName, type ZoneName } from './zone.js';
 import { clockChange, type ClockChange, type ReadRunTime, type TimeClock } from './clock.js';
 import { isTimeParts, type CheckedMention, type MentionRefusal, type TimeParts } from './reader.js';
+import type { CallWindow, TurnWindow, WindowSource } from './bind.js';
 import {
   candidateIsWellFormed,
   chooseReading,
@@ -118,8 +120,48 @@ export interface TimeReadingRow {
   readonly choice?: ReadingChoice;
 }
 
+/** The person's window a `call-window` row names — its range, who gave it, and its mention. */
+export interface PersonWindow extends TimeRange {
+  readonly source: WindowSource;
+  /** The `time-reading` row's mention index — absent on a `control` window. */
+  readonly mention?: number;
+}
+
+/**
+ * Which window one call to a tool that declares period forms carries (time
+ * design § 7.3) — one row per such call, filed by the inputs layer beside the
+ * call's `argument` rows, before the call dispatches.
+ *
+ * | `how` | Means |
+ * |-------|-------|
+ * | `filled` | the model left the period out; the turn's one window (`person`) went into form `form` exactly (`rounded`: an epoch-seconds bound or a look-back's length moved outward) |
+ * | `bound` | the sent window IS the person's window `person` — named by the model's quote (`by: 'quote'`) or equal in value (`by: 'value'`) |
+ * | `model-chosen` | the sent window (`asked`) differs from the person's (`person`, when one window is theirs): it ran as sent (the v1 law) |
+ * | `model` | the sent window, and no window of the person's this turn |
+ * | `unread` | a period argument was sent and no form reads the call back as a range |
+ * | `not-filled` | the period was left out and nothing was filled (`why`) — the tool's own rule applied |
+ *
+ * `asked` is the half-open range the call asks for: the person's on a fill,
+ * the sent value read back otherwise — what `ctx.time.asked` hands the tool.
+ */
+export interface CallWindowRow {
+  readonly kind: 'call-window';
+  readonly turn: number;
+  readonly iteration: number;
+  readonly toolCallId: string;
+  readonly toolName: string;
+  readonly how: CallWindow['how'];
+  /** The index of the tool's form the call used (filled into, or read back from). */
+  readonly form?: number;
+  readonly asked?: TimeRange;
+  readonly person?: PersonWindow;
+  readonly by?: 'quote' | 'value';
+  readonly rounded?: true;
+  readonly why?: 'no-window' | 'several-mentions' | 'open-reading' | 'no-exact-form';
+}
+
 /** Every time-layer row kind. */
-export type TimeRow = ClockRow | ClockOnResumeRow | CallRow | TimeReadingRow;
+export type TimeRow = ClockRow | ClockOnResumeRow | CallRow | TimeReadingRow | CallWindowRow;
 
 // ─── Building ────────────────────────────────────────────────────────────
 
@@ -225,7 +267,83 @@ export function timeReadingRows(input: {
   });
 }
 
+const personOf = (w: TurnWindow): PersonWindow => ({
+  from: w.range.from,
+  to: w.range.to,
+  source: w.source,
+  ...(w.mention !== undefined && { mention: w.mention }),
+});
+
+/** The `call-window` row for one call's decision (`bind.ts` · `callWindowOf`). */
+export function callWindowRow(
+  call: { readonly toolCallId: string; readonly toolName: string },
+  decision: CallWindow,
+  at: { readonly turn: number; readonly iteration: number },
+): CallWindowRow {
+  const base = {
+    kind: 'call-window' as const,
+    turn: at.turn,
+    iteration: at.iteration,
+    toolCallId: call.toolCallId,
+    toolName: call.toolName,
+    how: decision.how,
+  };
+  switch (decision.how) {
+    case 'filled':
+      return {
+        ...base,
+        form: decision.conversion.form,
+        asked: { from: decision.window.range.from, to: decision.window.range.to },
+        person: personOf(decision.window),
+        ...(decision.conversion.rounded === true && { rounded: true as const }),
+      };
+    case 'bound':
+      return {
+        ...base,
+        form: decision.form,
+        asked: decision.asked,
+        person: personOf(decision.window),
+        by: decision.by,
+      };
+    case 'model-chosen':
+      return {
+        ...base,
+        form: decision.form,
+        asked: decision.asked,
+        ...(decision.person !== undefined && { person: personOf(decision.person) }),
+      };
+    case 'model':
+      return { ...base, form: decision.form, asked: decision.asked };
+    case 'unread':
+      return base;
+    case 'not-filled':
+      return { ...base, why: decision.why };
+  }
+}
+
 // ─── Reading ─────────────────────────────────────────────────────────────
+
+/** This turn's `call-window` row for one call, if the inputs layer filed one — `ctx.time` reads it. */
+export function callWindowOfCall(
+  ledger: readonly unknown[] | undefined,
+  toolCallId: string,
+  turn: number,
+): CallWindowRow | undefined {
+  if (ledger === undefined) return undefined;
+  for (let i = ledger.length - 1; i >= 0; i--) {
+    const r = ledger[i] as Partial<CallWindowRow> | null;
+    if (
+      r !== null &&
+      typeof r === 'object' &&
+      r.kind === 'call-window' &&
+      r.toolCallId === toolCallId &&
+      r.turn === turn
+    ) {
+      return r as CallWindowRow;
+    }
+  }
+  return undefined;
+}
 
 /** The `time-reading` rows filed for `turn` — read back on a resume or a retry, never re-read. */
 export function readingsOf(
@@ -328,9 +446,64 @@ function isReadingRow(row: Readonly<Record<string, unknown>>): boolean {
   );
 }
 
+const HOWS = ['filled', 'bound', 'model-chosen', 'model', 'unread', 'not-filled'];
+const WHYS = ['no-window', 'several-mentions', 'open-reading', 'no-exact-form'];
+
+function isPersonWindow(value: unknown): boolean {
+  if (value === null || typeof value !== 'object' || Array.isArray(value)) return false;
+  const { source, mention, ...range } = value as Record<string, unknown>;
+  return (
+    (source === 'said' || source === 'derived-from-reading' || source === 'control') &&
+    (mention === undefined || isCount(mention)) &&
+    (source === 'control') === (mention === undefined) &&
+    isTimeRange(range)
+  );
+}
+
+function isCallWindowRow(row: Readonly<Record<string, unknown>>): boolean {
+  if (typeof row.toolCallId !== 'string' || typeof row.toolName !== 'string') return false;
+  if (!HOWS.includes(row.how as string)) return false;
+  const has = (k: string): boolean => row[k] !== undefined;
+  const only = (...keys: string[]): boolean =>
+    ['form', 'asked', 'person', 'by', 'rounded', 'why'].every((k) => keys.includes(k) || !has(k));
+  const formOk = isCount(row.form);
+  const askedOk = isTimeRange(row.asked);
+  switch (row.how) {
+    case 'filled':
+      return (
+        only('form', 'asked', 'person', 'rounded') &&
+        formOk &&
+        askedOk &&
+        isPersonWindow(row.person) &&
+        (row.rounded === undefined || row.rounded === true)
+      );
+    case 'bound':
+      return (
+        only('form', 'asked', 'person', 'by') &&
+        formOk &&
+        askedOk &&
+        isPersonWindow(row.person) &&
+        (row.by === 'quote' || row.by === 'value')
+      );
+    case 'model-chosen':
+      return (
+        only('form', 'asked', 'person') &&
+        formOk &&
+        askedOk &&
+        (row.person === undefined || isPersonWindow(row.person))
+      );
+    case 'model':
+      return only('form', 'asked') && formOk && askedOk;
+    case 'unread':
+      return only();
+    default:
+      return only('why') && WHYS.includes(row.why as string);
+  }
+}
+
 /**
  * The checkpoint door's test for a time-layer row — `true` only for a row of
- * one of the four kinds with every field this module files, well formed.
+ * one of the five kinds with every field this module files, well formed.
  * Any other kind answers `false` (the caller routes by kind first).
  */
 export function timeRowIsWellFormed(row: Readonly<Record<string, unknown>>): boolean {
@@ -354,6 +527,8 @@ export function timeRowIsWellFormed(row: Readonly<Record<string, unknown>>): boo
       );
     case 'time-reading':
       return isReadingRow(row);
+    case 'call-window':
+      return isCallWindowRow(row);
     default:
       return false;
   }
@@ -362,7 +537,11 @@ export function timeRowIsWellFormed(row: Readonly<Record<string, unknown>>): boo
 /** Whether a ledger row is one of the time layer's kinds (the router's question). */
 export function isTimeRowKind(kind: unknown): kind is TimeRow['kind'] {
   return (
-    kind === 'clock' || kind === 'clock-on-resume' || kind === 'call' || kind === 'time-reading'
+    kind === 'clock' ||
+    kind === 'clock-on-resume' ||
+    kind === 'call' ||
+    kind === 'time-reading' ||
+    kind === 'call-window'
   );
 }
 

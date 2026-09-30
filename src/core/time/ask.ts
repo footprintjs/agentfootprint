@@ -22,6 +22,15 @@
  * | `instant` | an ISO 8601 date-time WITH its offset, strict profile (`2026-10-09T08:00-07:00`) | `not-an-instant`; `no-offset` (a date-time with no zone); `dst-gap` |
  * | `time-range` | an ISO 8601 interval `from/to` of two such instants, `from` before `to` | `not-a-range`; either end's refusal; `out-of-order` |
  * | `zone` | an IANA zone name (`America/Los_Angeles`) — never an abbreviation or a bare offset | `not-a-zone` |
+ * | `time-range`, for a tool's period | the same, inside the tool's declared facts | `time-future`; `time-past`; `beyond-retention`; `over-max-range` |
+ *
+ * A `time-range` answer given for a tool's period is also judged against the
+ * tool's declared FACTS (§ 6.2, step T5a — `convert.ts` ·
+ * `periodFactProblem`), when the caller hands them with the turn's clock:
+ * `time-future` (a `past` source asked for a window after now), `time-past`
+ * (a `future` source asked for one that ended), `beyond-retention` (the WHOLE
+ * window older than the source keeps — a partial overlap is taken) and
+ * `over-max-range` (wider than the source reads at once).
  *
  * `dst-gap` is asked only when the ask knows the person's zone (the run
  * clock's, under `.time()`): a wall time that zone's clocks skip, written with
@@ -53,7 +62,8 @@
  * ```
  */
 
-import { compareInstants, instantOf, utcWallMs } from './instant.js';
+import { periodFactProblem, type PeriodFacts } from './convert.js';
+import { compareInstants, instantOf, utcWallMs, type InstantText } from './instant.js';
 import { spellRange } from './range.js';
 import { isZoneName, readWall, type ZoneName } from './zone.js';
 import { presentRange } from './present.js';
@@ -81,7 +91,11 @@ export type TimeAnswerProblem =
   | 'not-a-range'
   | 'out-of-order'
   | 'dst-gap'
-  | 'not-a-zone';
+  | 'not-a-zone'
+  | 'time-future'
+  | 'time-past'
+  | 'beyond-retention'
+  | 'over-max-range';
 
 /** One refused answer: the code and the facts its sentence names (the value as given, capped). */
 export interface TimeAnswerRefusal {
@@ -138,16 +152,24 @@ function checkInstant(value: string, zone: ZoneName | undefined): TimeAnswerRefu
   return undefined;
 }
 
+/** A tool's declared facts and the turn's clock — what a `time-range` answer for that tool's period is judged against. */
+export interface ToolTimeFacts {
+  readonly facts: PeriodFacts;
+  readonly now: InstantText;
+}
+
 /**
  * Why `value` is not a well-formed answer of `format`, or `undefined` when it
  * is one. `zone` — the person's zone, when the ask knows it (the run clock's)
  * — arms the DST-gap check; without it the answer is judged for shape, order
- * and offset only.
+ * and offset only. `tool` — a tool's declared facts and the clock — judges a
+ * well-formed `time-range` against them too.
  */
 export function checkTimeAnswer(
   format: TimeFormat,
   value: string,
   zone?: ZoneName,
+  tool?: ToolTimeFacts,
 ): TimeAnswerRefusal | undefined {
   const known = zone !== undefined && isZoneName(zone) ? zone : undefined;
   switch (format) {
@@ -168,7 +190,18 @@ export function checkTimeAnswer(
       if (a === undefined || b === undefined || compareInstants(a, b) >= 0) {
         return { problem: 'out-of-order', facts: { from: quoted(from), to: quoted(to) } };
       }
-      return undefined;
+      if (tool === undefined) return undefined;
+      const problem = periodFactProblem({ from, to }, tool.facts, tool.now);
+      if (problem === undefined) return undefined;
+      return {
+        problem,
+        facts: {
+          from: quoted(from),
+          to: quoted(to),
+          ...(tool.facts.retention !== undefined && { retention: tool.facts.retention }),
+          ...(tool.facts.maxRange !== undefined && { maxRange: tool.facts.maxRange }),
+        },
+      };
     }
   }
 }
@@ -188,6 +221,10 @@ export const TIME_ASK_MESSAGE_KEYS = Object.freeze([
   'answer.out-of-order',
   'answer.dst-gap',
   'answer.not-a-zone',
+  'answer.time-future',
+  'answer.time-past',
+  'answer.beyond-retention',
+  'answer.over-max-range',
   'ask.which',
   'ask.confirm',
   'ask.zone',

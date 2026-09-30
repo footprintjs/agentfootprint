@@ -1049,12 +1049,28 @@ export type { RunTime, TimeClock, TimeOptions } from './core/time/clock.js';
 export type { TimeRange } from './core/time/range.js';
 export type {
   CallRow,
+  CallWindowRow,
   ClockOnResumeRow,
   ClockRow,
   ControlWindow,
+  PersonWindow,
   TimeReaderStamp,
   TimeReadingRow,
 } from './core/time/rows.js';
+// A tool's period forms and facts (step T5a) — `Tool.period`'s general form:
+// every shape the tool's period takes and the facts about its source; and the
+// call's time a tool is handed (`ctx.time`, over MCP `_meta.agentfootprint.time`).
+// Types only: the door is `defineTool({ period })`.
+export type {
+  Bound,
+  BoundAs,
+  PeriodDirection,
+  PeriodFacts,
+  PeriodForm,
+  PeriodSpelling,
+  ZoneArgument,
+} from './core/time/convert.js';
+export type { TimeContext } from './core/time/wire.js';
 // The time layer's reader port (step T6a) — `.time({ reader, policy })`: a
 // strategy returns zone-less PARTS, the library resolves them. Types only.
 export type {
