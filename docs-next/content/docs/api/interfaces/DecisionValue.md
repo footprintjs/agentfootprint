@@ -4,7 +4,7 @@ title: DecisionValue
 
 # Interface: DecisionValue
 
-Defined in: src/core/checkin.ts:156
+Defined in: [src/core/checkin.ts:156](https://github.com/footprintjs/agentfootprint/blob/main/src/core/checkin.ts#L156)
 
 What a person CHOSE, when the answer is a value rather than a yes or a no.
 
@@ -39,7 +39,7 @@ Every field must survive `structuredClone`: a decision rides the checkpoint.
 
 > `readonly` `optional` **coverage?**: `object`
 
-Defined in: src/core/checkin.ts:170
+Defined in: [src/core/checkin.ts:170](https://github.com/footprintjs/agentfootprint/blob/main/src/core/checkin.ts#L170)
 
 What the person could actually see when they chose.
 
@@ -65,7 +65,7 @@ only the screen knows which happened.
 
 > `readonly` `optional` **from?**: `string`
 
-Defined in: src/core/checkin.ts:162
+Defined in: [src/core/checkin.ts:162](https://github.com/footprintjs/agentfootprint/blob/main/src/core/checkin.ts#L162)
 
 The artifact the choice was made against, when there was one.
 
@@ -75,7 +75,7 @@ The artifact the choice was made against, when there was one.
 
 > `readonly` **kind**: `string`
 
-Defined in: src/core/checkin.ts:158
+Defined in: [src/core/checkin.ts:158](https://github.com/footprintjs/agentfootprint/blob/main/src/core/checkin.ts#L158)
 
 Consumer vocabulary for what this value IS — e.g. `'row-choice'`.
 
@@ -85,6 +85,6 @@ Consumer vocabulary for what this value IS — e.g. `'row-choice'`.
 
 > `readonly` **value**: `unknown`
 
-Defined in: src/core/checkin.ts:160
+Defined in: [src/core/checkin.ts:160](https://github.com/footprintjs/agentfootprint/blob/main/src/core/checkin.ts#L160)
 
 The chosen value itself. JSON, clone-safe, small.

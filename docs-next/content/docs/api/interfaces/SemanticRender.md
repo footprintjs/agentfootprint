@@ -4,7 +4,7 @@ title: SemanticRender
 
 # Interface: SemanticRender
 
-Defined in: src/lib/semantics/types.ts:138
+Defined in: [src/lib/semantics/types.ts:138](https://github.com/footprintjs/agentfootprint/blob/main/src/lib/semantics/types.ts#L138)
 
 Rendering HINTS — the tool never renders. A UI that understands them draws
 a better table; one that does not loses nothing, because everything load-
@@ -16,7 +16,7 @@ bearing is in the data fields. Dropped from the model's view entirely.
 
 > `readonly` `optional` **chart\_hint?**: `string`
 
-Defined in: src/lib/semantics/types.ts:148
+Defined in: [src/lib/semantics/types.ts:148](https://github.com/footprintjs/agentfootprint/blob/main/src/lib/semantics/types.ts#L148)
 
 Chart-shape hint ('line per entity').
 
@@ -26,7 +26,7 @@ Chart-shape hint ('line per entity').
 
 > `readonly` `optional` **columns?**: readonly `string`[]
 
-Defined in: src/lib/semantics/types.ts:142
+Defined in: [src/lib/semantics/types.ts:142](https://github.com/footprintjs/agentfootprint/blob/main/src/lib/semantics/types.ts#L142)
 
 Column order for a tabular view.
 
@@ -36,7 +36,7 @@ Column order for a tabular view.
 
 > `readonly` **default**: `string`
 
-Defined in: src/lib/semantics/types.ts:140
+Defined in: [src/lib/semantics/types.ts:140](https://github.com/footprintjs/agentfootprint/blob/main/src/lib/semantics/types.ts#L140)
 
 The default presentation ('table', 'chart', 'prose', …). A hint.
 
@@ -46,7 +46,7 @@ The default presentation ('table', 'chart', 'prose', …). A hint.
 
 > `readonly` `optional` **filter\_note?**: `string`
 
-Defined in: src/lib/semantics/types.ts:146
+Defined in: [src/lib/semantics/types.ts:146](https://github.com/footprintjs/agentfootprint/blob/main/src/lib/semantics/types.ts#L146)
 
 A note about what filtering already happened ('replicas excluded').
 
@@ -56,6 +56,6 @@ A note about what filtering already happened ('replicas excluded').
 
 > `readonly` `optional` **sort?**: `string`
 
-Defined in: src/lib/semantics/types.ts:144
+Defined in: [src/lib/semantics/types.ts:144](https://github.com/footprintjs/agentfootprint/blob/main/src/lib/semantics/types.ts#L144)
 
 Sort hint ('avg_iops desc').

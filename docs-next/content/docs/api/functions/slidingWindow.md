@@ -6,7 +6,7 @@ title: slidingWindow
 
 > **slidingWindow**(`options`): [`WindowStrategy`](/docs/api/interfaces/WindowStrategy)
 
-Defined in: src/core/agent/window/strategies/slidingWindow.ts:53
+Defined in: [src/core/agent/window/strategies/slidingWindow.ts:53](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/window/strategies/slidingWindow.ts#L53)
 
 Keep the most recent `keepRecentTurns` turns in the live window and drop
 the older ones — except anything that refuses.

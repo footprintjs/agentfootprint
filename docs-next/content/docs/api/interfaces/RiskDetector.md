@@ -4,7 +4,7 @@ title: "~~Interface: RiskDetector~~"
 
 # ~~Interface: RiskDetector~~
 
-Defined in: src/adapters/types.ts:750
+Defined in: [src/adapters/types.ts:750](https://github.com/footprintjs/agentfootprint/blob/main/src/adapters/types.ts#L750)
 
 ## Deprecated
 
@@ -27,7 +27,7 @@ middleware and refuse there.
 
 > `readonly` **name**: `string`
 
-Defined in: src/adapters/types.ts:751
+Defined in: [src/adapters/types.ts:751](https://github.com/footprintjs/agentfootprint/blob/main/src/adapters/types.ts#L751)
 
 ## Methods
 
@@ -35,7 +35,7 @@ Defined in: src/adapters/types.ts:751
 
 > **check**(`content`, `context`): `Promise`\<[`RiskResult`](/docs/api/interfaces/RiskResult)\>
 
-Defined in: src/adapters/types.ts:752
+Defined in: [src/adapters/types.ts:752](https://github.com/footprintjs/agentfootprint/blob/main/src/adapters/types.ts#L752)
 
 #### Parameters
 

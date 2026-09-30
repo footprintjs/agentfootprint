@@ -6,7 +6,7 @@ title: foldedSpanFor
 
 > **foldedSpanFor**(`conversation`, `message`): [`FoldedSpan`](/docs/api/interfaces/FoldedSpan) \| `undefined`
 
-Defined in: src/core/agent/window/folded.ts:106
+Defined in: [src/core/agent/window/folded.ts:106](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/window/folded.ts#L106)
 
 What one summary message in a conversation stands for.
 

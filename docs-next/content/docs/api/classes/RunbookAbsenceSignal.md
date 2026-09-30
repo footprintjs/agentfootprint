@@ -4,7 +4,7 @@ title: RunbookAbsenceSignal
 
 # Class: RunbookAbsenceSignal
 
-Defined in: src/core/runbook/dispatch.ts:44
+Defined in: [src/core/runbook/dispatch.ts:44](https://github.com/footprintjs/agentfootprint/blob/main/src/core/runbook/dispatch.ts#L44)
 
 The control signal an un-survivable inner absence throws through the
 chart. The engine commits staged state and rethrows (commit-on-error is
@@ -21,7 +21,7 @@ returns the absence verbatim.
 
 > **new RunbookAbsenceSignal**(`absence`, `innerTool`): `RunbookAbsenceSignal`
 
-Defined in: src/core/runbook/dispatch.ts:46
+Defined in: [src/core/runbook/dispatch.ts:46](https://github.com/footprintjs/agentfootprint/blob/main/src/core/runbook/dispatch.ts#L46)
 
 #### Parameters
 
@@ -47,7 +47,7 @@ Defined in: src/core/runbook/dispatch.ts:46
 
 > `readonly` **absence**: [`ToolAbsence`](/docs/api/interfaces/ToolAbsence)
 
-Defined in: src/core/runbook/dispatch.ts:46
+Defined in: [src/core/runbook/dispatch.ts:46](https://github.com/footprintjs/agentfootprint/blob/main/src/core/runbook/dispatch.ts#L46)
 
 ***
 
@@ -55,7 +55,7 @@ Defined in: src/core/runbook/dispatch.ts:46
 
 > `readonly` **af\_runbook\_absence**: `true` = `true`
 
-Defined in: src/core/runbook/dispatch.ts:45
+Defined in: [src/core/runbook/dispatch.ts:45](https://github.com/footprintjs/agentfootprint/blob/main/src/core/runbook/dispatch.ts#L45)
 
 ***
 

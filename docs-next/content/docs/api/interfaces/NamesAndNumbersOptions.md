@@ -4,7 +4,7 @@ title: NamesAndNumbersOptions
 
 # Interface: NamesAndNumbersOptions
 
-Defined in: src/core/agent/evidence/types.ts:80
+Defined in: [src/core/agent/evidence/types.ts:80](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/evidence/types.ts#L80)
 
 Options for `.namesAndNumbersFromEvidence()`.
 
@@ -14,7 +14,7 @@ Options for `.namesAndNumbersFromEvidence()`.
 
 > `readonly` `optional` **exempt?**: readonly (`string` \| `RegExp`)[]
 
-Defined in: src/core/agent/evidence/types.ts:94
+Defined in: [src/core/agent/evidence/types.ts:94](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/evidence/types.ts#L94)
 
 Values (or patterns) that are never flagged, whatever the extractor
 thinks. A literal string is compared after normalisation; a RegExp is
@@ -30,7 +30,7 @@ constant your app knows is safe.
 
 > `readonly` `optional` **minDigits?**: `number`
 
-Defined in: src/core/agent/evidence/types.ts:105
+Defined in: [src/core/agent/evidence/types.ts:105](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/evidence/types.ts#L105)
 
 How many digits a BARE number needs before it is treated as data rather
 than prose. Default `4`.
@@ -47,7 +47,7 @@ positives that follow.
 
 > `readonly` `optional` **nudge?**: `boolean`
 
-Defined in: src/core/agent/evidence/types.ts:126
+Defined in: [src/core/agent/evidence/types.ts:126](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/evidence/types.ts#L126)
 
 The staged-refs nudge. Default `false` — off, byte-identical.
 
@@ -74,7 +74,7 @@ byte-identical requests.
 
 > `readonly` `optional` **posture?**: [`EvidencePosture`](/docs/api/type-aliases/EvidencePosture)
 
-Defined in: src/core/agent/evidence/types.ts:82
+Defined in: [src/core/agent/evidence/types.ts:82](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/evidence/types.ts#L82)
 
 Default `'assist'` — record and flag, change nothing.
 
@@ -84,7 +84,7 @@ Default `'assist'` — record and flag, change nothing.
 
 > `readonly` `optional` **recoveryInstruction?**: [`EvidenceRecoveryInstruction`](/docs/api/type-aliases/EvidenceRecoveryInstruction)
 
-Defined in: src/core/agent/evidence/types.ts:132
+Defined in: [src/core/agent/evidence/types.ts:132](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/evidence/types.ts#L132)
 
 Extra guidance after an evidence check requests revision. At most 4000
 UTF-16 code units; callbacks receive a frozen context and must return
@@ -98,6 +98,6 @@ is request-only and never becomes evidence, user history or an exemption.
 
 > `readonly` `optional` **shapes?**: readonly [`EvidenceShape`](/docs/api/interfaces/EvidenceShape)[]
 
-Defined in: src/core/agent/evidence/types.ts:84
+Defined in: [src/core/agent/evidence/types.ts:84](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/evidence/types.ts#L84)
 
 Extra identifier shapes for this domain. Composes with the defaults.

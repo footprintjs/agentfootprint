@@ -4,7 +4,7 @@ title: ParallelOptions
 
 # Interface: ParallelOptions
 
-Defined in: src/core-flow/Parallel.ts:42
+Defined in: [src/core-flow/Parallel.ts:42](https://github.com/footprintjs/agentfootprint/blob/main/src/core-flow/Parallel.ts#L42)
 
 ## Properties
 
@@ -12,7 +12,7 @@ Defined in: src/core-flow/Parallel.ts:42
 
 > `readonly` `optional` **groupTranslator?**: [`GroupTranslator`](/docs/api/interfaces/GroupTranslator)\<`unknown`\>
 
-Defined in: src/core-flow/Parallel.ts:74
+Defined in: [src/core-flow/Parallel.ts:74](https://github.com/footprintjs/agentfootprint/blob/main/src/core-flow/Parallel.ts#L74)
 
 Optional per-COMPOSITION translator (UI-agnostic). When attached,
 `runner.getUIGroup()` invokes it with the Parallel's
@@ -33,7 +33,7 @@ When omitted, `getUIGroup()` returns `undefined`.
 
 > `readonly` `optional` **id?**: `string`
 
-Defined in: src/core-flow/Parallel.ts:44
+Defined in: [src/core-flow/Parallel.ts:44](https://github.com/footprintjs/agentfootprint/blob/main/src/core-flow/Parallel.ts#L44)
 
 ***
 
@@ -41,7 +41,7 @@ Defined in: src/core-flow/Parallel.ts:44
 
 > `readonly` `optional` **name?**: `string`
 
-Defined in: src/core-flow/Parallel.ts:43
+Defined in: [src/core-flow/Parallel.ts:43](https://github.com/footprintjs/agentfootprint/blob/main/src/core-flow/Parallel.ts#L43)
 
 ***
 
@@ -49,7 +49,7 @@ Defined in: src/core-flow/Parallel.ts:43
 
 > `readonly` `optional` **structureRecorders?**: readonly `StructureRecorder`[]
 
-Defined in: src/core-flow/Parallel.ts:59
+Defined in: [src/core-flow/Parallel.ts:59](https://github.com/footprintjs/agentfootprint/blob/main/src/core-flow/Parallel.ts#L59)
 
 Optional build-time recorders passed through to footprintjs's
 `flowChart()` factory. Each recorder observes per-node build

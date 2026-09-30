@@ -6,7 +6,7 @@ title: describeTimeAxis
 
 > **describeTimeAxis**(`axis`): `string` \| `undefined`
 
-Defined in: src/artifacts/timeAxis.ts:260
+Defined in: [src/artifacts/timeAxis.ts:260](https://github.com/footprintjs/agentfootprint/blob/main/src/artifacts/timeAxis.ts#L260)
 
 The declared SUMMARY in words, for a chart title — the one wording every
 consumer shares, so two screens never describe one ticket two ways.

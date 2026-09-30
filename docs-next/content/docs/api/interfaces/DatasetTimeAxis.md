@@ -4,7 +4,7 @@ title: DatasetTimeAxis
 
 # Interface: DatasetTimeAxis
 
-Defined in: src/artifacts/timeAxis.ts:65
+Defined in: [src/artifacts/timeAxis.ts:65](https://github.com/footprintjs/agentfootprint/blob/main/src/artifacts/timeAxis.ts#L65)
 
 A dataset's declared time axis.
 
@@ -27,7 +27,7 @@ raw samples every five minutes, epoch seconds
 
 > `readonly` `optional` **aggregate?**: [`TimeAxisAggregate`](/docs/api/type-aliases/TimeAxisAggregate) \| `"raw"` \| `Readonly`\<`Record`\<`string`, [`TimeAxisAggregate`](/docs/api/type-aliases/TimeAxisAggregate)\>\>
 
-Defined in: src/artifacts/timeAxis.ts:89
+Defined in: [src/artifacts/timeAxis.ts:89](https://github.com/footprintjs/agentfootprint/blob/main/src/artifacts/timeAxis.ts#L89)
 
 How each row summarises its interval. `'raw'` — every row is a sample as
 collected, nothing was reduced. One aggregate — every measure column was
@@ -44,7 +44,7 @@ half a declaration.
 
 > `readonly` **column**: `string`
 
-Defined in: src/artifacts/timeAxis.ts:67
+Defined in: [src/artifacts/timeAxis.ts:67](https://github.com/footprintjs/agentfootprint/blob/main/src/artifacts/timeAxis.ts#L67)
 
 The column that holds time.
 
@@ -54,7 +54,7 @@ The column that holds time.
 
 > `readonly` `optional` **interval?**: `string`
 
-Defined in: src/artifacts/timeAxis.ts:78
+Defined in: [src/artifacts/timeAxis.ts:78](https://github.com/footprintjs/agentfootprint/blob/main/src/artifacts/timeAxis.ts#L78)
 
 Width of the interval one row stands for: a positive integer and one of
  `s m h d w` (`'30s'`, `'5m'`, `'1h'`, `'1d'`, `'1w'`). With
@@ -66,7 +66,7 @@ Width of the interval one row stands for: a positive integer and one of
 
 > `readonly` **unit**: [`TimeAxisUnit`](/docs/api/type-aliases/TimeAxisUnit)
 
-Defined in: src/artifacts/timeAxis.ts:70
+Defined in: [src/artifacts/timeAxis.ts:70](https://github.com/footprintjs/agentfootprint/blob/main/src/artifacts/timeAxis.ts#L70)
 
 `'iso'` — ISO-8601 strings; `'epoch-s'` / `'epoch-ms'` — numbers since
  1970-01-01T00:00:00Z in seconds / milliseconds.
@@ -77,7 +77,7 @@ Defined in: src/artifacts/timeAxis.ts:70
 
 > `readonly` `optional` **zone?**: `string`
 
-Defined in: src/artifacts/timeAxis.ts:74
+Defined in: [src/artifacts/timeAxis.ts:74](https://github.com/footprintjs/agentfootprint/blob/main/src/artifacts/timeAxis.ts#L74)
 
 IANA zone (`'Europe/London'`) the values are WALL-CLOCK in. `'iso'`
  only — an epoch is an instant and has no zone to declare. Absent: the

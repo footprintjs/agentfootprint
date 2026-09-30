@@ -4,7 +4,7 @@ title: InputCancellation
 
 # Interface: InputCancellation
 
-Defined in: src/core/inputRequest.ts:101
+Defined in: [src/core/inputRequest.ts:101](https://github.com/footprintjs/agentfootprint/blob/main/src/core/inputRequest.ts#L101)
 
 ## Properties
 
@@ -12,7 +12,7 @@ Defined in: src/core/inputRequest.ts:101
 
 > `readonly` **cancel**: `true`
 
-Defined in: src/core/inputRequest.ts:103
+Defined in: [src/core/inputRequest.ts:103](https://github.com/footprintjs/agentfootprint/blob/main/src/core/inputRequest.ts#L103)
 
 ***
 
@@ -20,4 +20,4 @@ Defined in: src/core/inputRequest.ts:103
 
 > `readonly` **requestId**: `string`
 
-Defined in: src/core/inputRequest.ts:102
+Defined in: [src/core/inputRequest.ts:102](https://github.com/footprintjs/agentfootprint/blob/main/src/core/inputRequest.ts#L102)

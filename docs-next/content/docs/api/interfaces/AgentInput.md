@@ -4,7 +4,7 @@ title: AgentInput
 
 # Interface: AgentInput
 
-Defined in: src/core/agent/types.ts:1226
+Defined in: [src/core/agent/types.ts:1226](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/types.ts#L1226)
 
 ## Properties
 
@@ -12,7 +12,7 @@ Defined in: src/core/agent/types.ts:1226
 
 > `readonly` `optional` **continueFrom?**: [`AgentRunCheckpoint`](/docs/api/interfaces/AgentRunCheckpoint)
 
-Defined in: src/core/agent/types.ts:1301
+Defined in: [src/core/agent/types.ts:1301](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/types.ts#L1301)
 
 The conversation this turn continues — an `AgentRunCheckpoint` from
 `agent.checkpoint()`, persisted anywhere and handed back here.
@@ -49,7 +49,7 @@ await agent.run({ message: 'Make it three.', continueFrom: conversation });
 
 > `readonly` `optional` **identity?**: `MemoryIdentity`
 
-Defined in: src/core/agent/types.ts:1270
+Defined in: [src/core/agent/types.ts:1270](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/types.ts#L1270)
 
 WHO this run is for — the scoping tuple, not a session handle.
 
@@ -97,7 +97,7 @@ system-prompt slot as a `<memory>` block rather than as message turns.
 
 > `readonly` **message**: `string`
 
-Defined in: src/core/agent/types.ts:1227
+Defined in: [src/core/agent/types.ts:1227](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/types.ts#L1227)
 
 ***
 
@@ -105,7 +105,7 @@ Defined in: src/core/agent/types.ts:1227
 
 > `readonly` `optional` **messageFrom?**: `"person"` \| `"composed"`
 
-Defined in: src/core/agent/types.ts:1317
+Defined in: [src/core/agent/types.ts:1317](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/types.ts#L1317)
 
 WHO WROTE `message`. Omitted (the default): a person — as every run has
 always been read. `'composed'`: another runner's output, handed on by a

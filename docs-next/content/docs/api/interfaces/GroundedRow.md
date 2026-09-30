@@ -4,7 +4,7 @@ title: GroundedRow
 
 # Interface: GroundedRow
 
-Defined in: src/core/agent/assessment/witness.ts:55
+Defined in: [src/core/agent/assessment/witness.ts:55](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/assessment/witness.ts#L55)
 
 The evidence gate's CLEAN verdict on the answer (`action: 'grounded'` on
 `agentfootprint.agent.evidence_checked`): every name and number the answer
@@ -23,7 +23,7 @@ a membership pass never makes an answer "known".
 
 > `readonly` `optional` **afterRevision?**: `true`
 
-Defined in: src/core/agent/assessment/witness.ts:68
+Defined in: [src/core/agent/assessment/witness.ts:68](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/assessment/witness.ts#L68)
 
 Set when the grounded answer was the one revision the gate asked for.
 
@@ -33,7 +33,7 @@ Set when the grounded answer was the one revision the gate asked for.
 
 > `readonly` **candidates**: `number`
 
-Defined in: src/core/agent/assessment/witness.ts:64
+Defined in: [src/core/agent/assessment/witness.ts:64](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/assessment/witness.ts#L64)
 
 How many distinct values the answer had to ground, exempt ones included.
 
@@ -43,7 +43,7 @@ How many distinct values the answer had to ground, exempt ones included.
 
 > `readonly` **iteration**: `number`
 
-Defined in: src/core/agent/assessment/witness.ts:60
+Defined in: [src/core/agent/assessment/witness.ts:60](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/assessment/witness.ts#L60)
 
 The iteration whose answer the gate judged.
 
@@ -53,7 +53,7 @@ The iteration whose answer the gate judged.
 
 > `readonly` **kind**: `"grounded"`
 
-Defined in: src/core/agent/assessment/witness.ts:56
+Defined in: [src/core/agent/assessment/witness.ts:56](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/assessment/witness.ts#L56)
 
 ***
 
@@ -61,7 +61,7 @@ Defined in: src/core/agent/assessment/witness.ts:56
 
 > `readonly` **lookedUp**: `number`
 
-Defined in: src/core/agent/assessment/witness.ts:66
+Defined in: [src/core/agent/assessment/witness.ts:66](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/assessment/witness.ts#L66)
 
 How many of `candidates` the gate looked up in the tool results (the rest were exempt).
 
@@ -71,7 +71,7 @@ How many of `candidates` the gate looked up in the tool results (the rest were e
 
 > `readonly` **posture**: `WitnessPosture`
 
-Defined in: src/core/agent/assessment/witness.ts:62
+Defined in: [src/core/agent/assessment/witness.ts:62](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/assessment/witness.ts#L62)
 
 The posture in force.
 
@@ -81,6 +81,6 @@ The posture in force.
 
 > `readonly` **turn**: `number`
 
-Defined in: src/core/agent/assessment/witness.ts:58
+Defined in: [src/core/agent/assessment/witness.ts:58](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/assessment/witness.ts#L58)
 
 `AgentState.turnNumber` when the row was filed — the conversation turn.

@@ -4,7 +4,7 @@ title: ResumeIdentityConflictError
 
 # Class: ResumeIdentityConflictError
 
-Defined in: src/core/conversation.ts:145
+Defined in: [src/core/conversation.ts:145](https://github.com/footprintjs/agentfootprint/blob/main/src/core/conversation.ts#L145)
 
 Thrown by `resume(checkpoint, input, options)` when the run would carry two
 identities — refused before anything runs:
@@ -39,7 +39,7 @@ provoked it. Nothing has run and no state has moved when it is thrown.
 
 > **new ResumeIdentityConflictError**(): `ResumeIdentityConflictError`
 
-Defined in: src/core/conversation.ts:148
+Defined in: [src/core/conversation.ts:148](https://github.com/footprintjs/agentfootprint/blob/main/src/core/conversation.ts#L148)
 
 #### Returns
 
@@ -67,7 +67,7 @@ Defined in: ../../../../../../../../Users/sanjay/github/footprintjs/agentfootpri
 
 > `readonly` **code**: `"ERR_SESSION_OWNERSHIP_CONFLICT"`
 
-Defined in: src/core/conversation.ts:146
+Defined in: [src/core/conversation.ts:146](https://github.com/footprintjs/agentfootprint/blob/main/src/core/conversation.ts#L146)
 
 ***
 

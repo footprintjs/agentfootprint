@@ -6,7 +6,7 @@ title: assertAskComponent
 
 > **assertAskComponent**(`value`, `door`): `asserts value is AskComponent`
 
-Defined in: src/core/askComponent.ts:117
+Defined in: [src/core/askComponent.ts:117](https://github.com/footprintjs/agentfootprint/blob/main/src/core/askComponent.ts#L117)
 
 Refuse a malformed component BY NAME, at whichever door it arrived through.
 

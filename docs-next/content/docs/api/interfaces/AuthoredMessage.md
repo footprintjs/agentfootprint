@@ -4,7 +4,7 @@ title: AuthoredMessage
 
 # Interface: AuthoredMessage
 
-Defined in: src/lib/saidByPerson.ts:71
+Defined in: [src/lib/saidByPerson.ts:71](https://github.com/footprintjs/agentfootprint/blob/main/src/lib/saidByPerson.ts#L71)
 
 The fields authorship is decided from — structural, so both
 `LLMMessage` (the wire shape) and `InjectionContext.history[n]` (the
@@ -20,7 +20,7 @@ import nothing into a mirror that can drift.
 
 > `readonly` **content**: `string`
 
-Defined in: src/lib/saidByPerson.ts:73
+Defined in: [src/lib/saidByPerson.ts:73](https://github.com/footprintjs/agentfootprint/blob/main/src/lib/saidByPerson.ts#L73)
 
 ***
 
@@ -28,7 +28,7 @@ Defined in: src/lib/saidByPerson.ts:73
 
 > `readonly` `optional` **injectedBy?**: `unknown`
 
-Defined in: src/lib/saidByPerson.ts:74
+Defined in: [src/lib/saidByPerson.ts:74](https://github.com/footprintjs/agentfootprint/blob/main/src/lib/saidByPerson.ts#L74)
 
 ***
 
@@ -36,4 +36,4 @@ Defined in: src/lib/saidByPerson.ts:74
 
 > `readonly` **role**: `string`
 
-Defined in: src/lib/saidByPerson.ts:72
+Defined in: [src/lib/saidByPerson.ts:72](https://github.com/footprintjs/agentfootprint/blob/main/src/lib/saidByPerson.ts#L72)

@@ -4,7 +4,7 @@ title: ToolPeriod
 
 # Interface: ToolPeriod
 
-Defined in: src/core/agent/arguments/declare.ts:89
+Defined in: [src/core/agent/arguments/declare.ts:89](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/arguments/declare.ts#L89)
 
 Which argument sets the period a tool's answer covers, and how its values
 are spelled. The one period shape's TOOL half; the result half
@@ -23,7 +23,7 @@ period: { argument: 'window', spelling: 'lookback' }  // '2h', '24h', '7d'
 
 > `readonly` **argument**: `string`
 
-Defined in: src/core/agent/arguments/declare.ts:90
+Defined in: [src/core/agent/arguments/declare.ts:90](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/arguments/declare.ts#L90)
 
 ***
 
@@ -31,4 +31,4 @@ Defined in: src/core/agent/arguments/declare.ts:90
 
 > `readonly` `optional` **spelling?**: `PeriodSpelling`
 
-Defined in: src/core/agent/arguments/declare.ts:91
+Defined in: [src/core/agent/arguments/declare.ts:91](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/arguments/declare.ts#L91)

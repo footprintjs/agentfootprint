@@ -4,7 +4,7 @@ title: CheckInTrail
 
 # Interface: CheckInTrail
 
-Defined in: src/core/checkin.ts:112
+Defined in: [src/core/checkin.ts:112](https://github.com/footprintjs/agentfootprint/blob/main/src/core/checkin.ts#L112)
 
 A compact grouped summary of the run so far.
 
@@ -14,7 +14,7 @@ A compact grouped summary of the run so far.
 
 > `readonly` **iteration**: `number`
 
-Defined in: src/core/checkin.ts:114
+Defined in: [src/core/checkin.ts:114](https://github.com/footprintjs/agentfootprint/blob/main/src/core/checkin.ts#L114)
 
 Which ReAct iteration this check-in fired on.
 
@@ -24,7 +24,7 @@ Which ReAct iteration this check-in fired on.
 
 > `readonly` **summary**: `string`
 
-Defined in: src/core/checkin.ts:118
+Defined in: [src/core/checkin.ts:118](https://github.com/footprintjs/agentfootprint/blob/main/src/core/checkin.ts#L118)
 
 One-line human summary, e.g. `"3 tools run over 2 iterations"`.
 
@@ -34,6 +34,6 @@ One-line human summary, e.g. `"3 tools run over 2 iterations"`.
 
 > `readonly` **toolCalls**: readonly `object`[]
 
-Defined in: src/core/checkin.ts:116
+Defined in: [src/core/checkin.ts:116](https://github.com/footprintjs/agentfootprint/blob/main/src/core/checkin.ts#L116)
 
 The tool calls already completed this run, oldest first.

@@ -4,7 +4,7 @@ title: "~~Interface: RiskResult~~"
 
 # ~~Interface: RiskResult~~
 
-Defined in: src/adapters/types.ts:723
+Defined in: [src/adapters/types.ts:723](https://github.com/footprintjs/agentfootprint/blob/main/src/adapters/types.ts#L723)
 
 ## Deprecated
 
@@ -16,7 +16,7 @@ No implementation exists — see [RiskDetector](/docs/api/interfaces/RiskDetecto
 
 > `readonly` **category**: `"pii"` \| `"prompt_injection"` \| `"runaway_loop"` \| `"cost_overrun"` \| `"hallucination_flag"`
 
-Defined in: src/adapters/types.ts:726
+Defined in: [src/adapters/types.ts:726](https://github.com/footprintjs/agentfootprint/blob/main/src/adapters/types.ts#L726)
 
 ***
 
@@ -24,7 +24,7 @@ Defined in: src/adapters/types.ts:726
 
 > `readonly` **evidence**: `Readonly`\<`Record`\<`string`, `unknown`\>\>
 
-Defined in: src/adapters/types.ts:732
+Defined in: [src/adapters/types.ts:732](https://github.com/footprintjs/agentfootprint/blob/main/src/adapters/types.ts#L732)
 
 ***
 
@@ -32,7 +32,7 @@ Defined in: src/adapters/types.ts:732
 
 > `readonly` **flagged**: `boolean`
 
-Defined in: src/adapters/types.ts:724
+Defined in: [src/adapters/types.ts:724](https://github.com/footprintjs/agentfootprint/blob/main/src/adapters/types.ts#L724)
 
 ***
 
@@ -40,7 +40,7 @@ Defined in: src/adapters/types.ts:724
 
 > `readonly` **severity**: `"low"` \| `"medium"` \| `"high"` \| `"critical"`
 
-Defined in: src/adapters/types.ts:725
+Defined in: [src/adapters/types.ts:725](https://github.com/footprintjs/agentfootprint/blob/main/src/adapters/types.ts#L725)
 
 ***
 
@@ -48,4 +48,4 @@ Defined in: src/adapters/types.ts:725
 
 > `readonly` **suggestedAction**: `"warn"` \| `"redact"` \| `"abort"`
 
-Defined in: src/adapters/types.ts:733
+Defined in: [src/adapters/types.ts:733](https://github.com/footprintjs/agentfootprint/blob/main/src/adapters/types.ts#L733)

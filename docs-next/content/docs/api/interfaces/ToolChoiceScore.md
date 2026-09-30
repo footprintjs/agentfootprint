@@ -4,7 +4,7 @@ title: ToolChoiceScore
 
 # Interface: ToolChoiceScore
 
-Defined in: src/core/agent/toolChoice/types.ts:50
+Defined in: [src/core/agent/toolChoice/types.ts:50](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/toolChoice/types.ts#L50)
 
 One offered name with the probability the provider gave it.
 
@@ -14,7 +14,7 @@ One offered name with the probability the provider gave it.
 
 > `readonly` **name**: `string`
 
-Defined in: src/core/agent/toolChoice/types.ts:51
+Defined in: [src/core/agent/toolChoice/types.ts:51](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/toolChoice/types.ts#L51)
 
 ***
 
@@ -22,4 +22,4 @@ Defined in: src/core/agent/toolChoice/types.ts:51
 
 > `readonly` **score**: `number`
 
-Defined in: src/core/agent/toolChoice/types.ts:52
+Defined in: [src/core/agent/toolChoice/types.ts:52](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/toolChoice/types.ts#L52)
