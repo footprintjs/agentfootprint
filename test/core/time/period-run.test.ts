@@ -402,6 +402,126 @@ describe('a window the model chose — record and run', () => {
     ]);
   });
 
+  it('a made-up quote that wraps the mention is a failed claim — never raised to the person’s words', async () => {
+    const reader = fixtureReader(() => ({
+      mentions: [
+        { quote: 'today', parses: [{ relative: { unit: 'day', offset: 0 } }] },
+        { quote: 'yesterday', parses: [{ relative: { unit: 'day', offset: -1 } }] },
+      ],
+    }));
+    const today = {
+      start_time: Date.parse('2026-10-09T00:00:00-07:00'),
+      end_time: Date.parse('2026-10-10T00:00:00-07:00'),
+    };
+    const invented = 'the person said all of today please, every hour'; // not in the message
+    const { client, seen } = epochServer();
+    const { agent } = await build(
+      [
+        call('c1', 'client_activity', {
+          ...today,
+          _findings: {
+            from: [
+              { argument: 'start_time', source: 'user', quote: invented },
+              { argument: 'end_time', source: 'user', quote: invented },
+            ],
+          },
+        }),
+        answer('compared'),
+      ],
+      await client.tools(),
+      (b) => b.time({ zone: LA, reader }).inputsLayer({ argumentSources: true }),
+    );
+    const out = await agent.run({
+      message: 'compare client activity today vs yesterday',
+      time: { now: NOW },
+    });
+    expect(isInputPause(out)).toBe(false); // runs as sent, like a value binding
+    expect(seen.map((s) => s.args)).toEqual([today]);
+    expect(ofKind(agent, 'call-window')[0]).toMatchObject({ how: 'bound', by: 'quote' });
+    expect(ofKind(agent, 'argument').map((r) => [r.source, r.matched, r.failed])).toEqual([
+      ['model', undefined, 'quote-not-found'],
+      ['model', undefined, 'quote-not-found'],
+    ]);
+    const standing = (await agent.assessment())!;
+    expect(standing.standing).toBe('not-sure');
+    expect(standing.reasons.map((r) => r.reason)).toContain('argument-unverified');
+  });
+
+  it('under declared sources, a differing window and one bound by value run as sent — never asked (note 6)', async () => {
+    const drill = {
+      start_time: Date.parse('2026-10-09T08:10:00-07:00'),
+      end_time: Date.parse('2026-10-09T08:20:00-07:00'),
+    };
+    const persons = { start_time: FROM_MS, end_time: TO_MS };
+    for (const [args, how, by] of [
+      [drill, 'model-chosen', undefined],
+      [persons, 'bound', 'value'],
+    ] as const) {
+      const { client, seen } = epochServer();
+      const { agent } = await build(
+        [call('c1', 'client_activity', args), answer('done')],
+        await client.tools(),
+        (b) =>
+          b
+            .time({ zone: LA, reader: rangeReader(), policy: { dateOrder: 'MDY' } })
+            .inputsLayer({ argumentSources: true }),
+      );
+      const out = await agent.run({ message: MESSAGE, time: { now: NOW } });
+      expect(isInputPause(out)).toBe(false);
+      expect(seen.map((s) => s.args)).toEqual([args]);
+      expect(ofKind(agent, 'call-window')[0]).toMatchObject({ how, ...(by && { by }) });
+      const argumentRows = ofKind(agent, 'argument');
+      expect(argumentRows.map((r) => [r.source, r.asked])).toEqual([
+        ['model', undefined],
+        ['model', undefined],
+      ]);
+    }
+  });
+
+  it('a filled call’s other forms are left alone — no row, no default, no ask', async () => {
+    const seen: Record<string, unknown>[] = [];
+    const tool = defineTool({
+      name: 'client_activity',
+      description: 'Client operations over a window.',
+      inputSchema: {
+        type: 'object',
+        properties: {
+          start_time: { type: 'integer' },
+          end_time: { type: 'integer' },
+          window: { type: 'string' },
+        },
+      },
+      askOrAssume: {
+        start_time: { ask: 'From when?' },
+        end_time: { ask: 'Until when?' },
+        window: { ask: 'How far back?' },
+      },
+      period: {
+        forms: [
+          {
+            kind: 'bounds',
+            from: { argument: 'start_time', as: 'epoch-ms' },
+            to: { argument: 'end_time', as: 'epoch-ms', edge: 'exclusive' },
+          },
+          { kind: 'lookback', argument: 'window', signed: false },
+        ],
+      },
+      execute: (args) => {
+        seen.push({ ...(args as Record<string, unknown>) });
+        return '{"ops":42}';
+      },
+    });
+    const { agent } = await build(
+      [call('c1', 'client_activity', {}), answer('done')],
+      [tool],
+      (b) => b.time({ zone: LA, reader: rangeReader(), policy: { dateOrder: 'MDY' } }),
+    );
+    const out = await agent.run({ message: MESSAGE, time: { now: NOW } });
+    expect(isInputPause(out)).toBe(false); // the look-back form's `ask` is never raised
+    expect(seen).toEqual([{ start_time: FROM_MS, end_time: TO_MS }]);
+    expect(ofKind(agent, 'argument').map((r) => r.argument)).toEqual(['start_time', 'end_time']);
+  });
+
   it('two mentions and the period left out: nothing is filled, the tool’s own rule asks', async () => {
     const reader = fixtureReader(() => ({
       mentions: [
@@ -469,7 +589,7 @@ describe('the declaration — refused at definition, dropped at MCP ingest, neve
           {
             kind: 'bounds',
             from: { argument: 'w', as: 'epoch-ms' },
-            to: { argument: 'b', as: 'epoch-ms' },
+            to: { argument: 'b', as: 'epoch-ms', edge: 'exclusive' },
           },
         ],
       },
@@ -482,7 +602,7 @@ describe('the declaration — refused at definition, dropped at MCP ingest, neve
           {
             kind: 'bounds',
             from: { argument: 'a', as: 'epoch-s' },
-            to: { argument: 'c', as: 'epoch-s' },
+            to: { argument: 'c', as: 'epoch-s', edge: 'exclusive' },
           },
         ],
       },
@@ -496,8 +616,28 @@ describe('the declaration — refused at definition, dropped at MCP ingest, neve
       { argument: 'w', spelling: 'iso-range', direction: 'forward' },
     ],
     ['an unknown key', { argument: 'w', spelling: 'iso-range', widen: 'refuse' }],
+    [
+      'a bounds end with no edge (TQ18)',
+      {
+        forms: [
+          {
+            kind: 'bounds',
+            from: { argument: 'a', as: 'epoch-ms' },
+            to: { argument: 'b', as: 'epoch-ms' },
+          },
+        ],
+      },
+    ],
   ])('refuses %s', (_what, period) => {
     expect(() => define(period)).toThrow(/defineTool\('t'\): period/);
+  });
+
+  it('TQ18: an `object` form with no edge is refused at definition — only the sugar defaults', () => {
+    expect(() =>
+      define({
+        forms: [{ kind: 'object', argument: 'w', keys: { from: 'f', to: 't' }, as: 'iso' }],
+      }),
+    ).toThrow(/period\.forms\[0\].*edge is missing/);
   });
 
   it('takes the design’s declarations: accepts + zoneArgument + facts, and a two-argument form', () => {
@@ -546,6 +686,24 @@ describe('the declaration — refused at definition, dropped at MCP ingest, neve
     };
     expect(readToolExtras(bad, origin).period).toBeUndefined();
     expect(warn).toHaveBeenCalledTimes(1);
+    // TQ18 at ingest: a served `to` bound that does not say its edge is dropped, never guessed.
+    const edgeless = {
+      agentfootprint: {
+        ...PERIOD_META.agentfootprint,
+        period: {
+          forms: [
+            {
+              kind: 'bounds',
+              from: { argument: 'start_time', as: 'epoch-ms' },
+              to: { argument: 'end_time', as: 'epoch-ms' },
+            },
+          ],
+        },
+      },
+    };
+    expect(readToolExtras(edgeless, { ...origin, tool: 'edgeless' }).period).toBeUndefined();
+    expect(warn).toHaveBeenCalledTimes(2);
+    expect(String(warn.mock.calls[1]?.[0])).toMatch(/edge is missing/);
     warn.mockRestore();
   });
 });

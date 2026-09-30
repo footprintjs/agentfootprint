@@ -105,11 +105,21 @@ export const BOUND_AS: readonly BoundAs[] = Object.freeze([
   'wall',
 ]);
 
-/** One bound of a two-argument period. A `from` bound is inclusive; a `to` bound says its edge (default `inclusive`). */
+/**
+ * One bound of a two-argument period. A `from` bound is inclusive (its `edge`,
+ * when written, can only say so); a `to` bound MUST say its edge
+ * ({@link ToBound}) — TQ18: the library never guesses a tool's edge, only the
+ * sugar defaults (`inclusive`).
+ */
 export interface Bound {
   readonly argument: string;
   readonly as: BoundAs;
   readonly edge?: Edge;
+}
+
+/** The end bound of a `bounds` form — its edge is declared, never defaulted (TQ18). */
+export interface ToBound extends Bound {
+  readonly edge: Edge;
 }
 
 /** The argument a wall or date form reads its zone from. */
@@ -122,7 +132,7 @@ export type PeriodForm =
   | {
       readonly kind: 'bounds';
       readonly from: Bound;
-      readonly to: Bound;
+      readonly to: ToBound;
       readonly zone?: ZoneArgument;
     }
   | {
@@ -138,7 +148,8 @@ export type PeriodForm =
       readonly argument: string;
       readonly keys: { readonly from: string; readonly to: string };
       readonly as: BoundAs;
-      readonly edge?: Edge;
+      /** Declared, never defaulted (TQ18). */
+      readonly edge: Edge;
       readonly zone?: ZoneArgument;
     }
   | { readonly kind: 'day'; readonly argument: string; readonly zone?: ZoneArgument }
@@ -242,7 +253,8 @@ const FORM_KEYS: Readonly<Record<PeriodForm['kind'], readonly string[]>> = Objec
 });
 
 function boundIssue(value: unknown, which: 'from' | 'to'): string | undefined {
-  if (!isPlain(value)) return `${which} must be { argument, as, edge? }.`;
+  if (!isPlain(value))
+    return which === 'to' ? 'to must be { argument, as, edge }.' : 'from must be { argument, as }.';
   for (const key of Object.keys(value)) {
     if (key !== 'argument' && key !== 'as' && key !== 'edge') {
       return `${which} has an unknown key '${key}' — a bound reads \`argument\`, \`as\` and \`edge\`.`;
@@ -258,8 +270,13 @@ function boundIssue(value: unknown, which: 'from' | 'to'): string | undefined {
   if (which === 'from' && value.edge === 'exclusive') {
     return "from.edge is 'exclusive' — a start bound holds the instant it names; only a `to` bound says its edge.";
   }
+  if (which === 'to' && value.edge === undefined) return EDGE_UNDECLARED('to.edge');
   return undefined;
 }
+
+/** TQ18: a `bounds` / `object` form declares its end edge — the library never guesses it. */
+const EDGE_UNDECLARED = (where: string): string =>
+  `${where} is missing — say whether the end instant is inside ('inclusive') or just past ('exclusive'); the library never guesses a tool's edge.`;
 
 function zoneIssue(value: unknown): string | undefined {
   if (value === undefined) return undefined;
@@ -324,6 +341,7 @@ export function formIssue(form: unknown): string | undefined {
       }
       if (!BOUND_AS.includes(form.as as BoundAs))
         return `as must be one of ${BOUND_AS.join(', ')}.`;
+      if (form.edge === undefined) return EDGE_UNDECLARED('edge');
       return edgeIssue(form.edge) ?? zoneIssue(form.zone);
     }
     case 'day':
@@ -707,7 +725,13 @@ function convertOne(
   }
   const fromAs = form.kind === 'bounds' ? form.from.as : form.as;
   const toAs = form.kind === 'bounds' ? form.to.as : form.as;
-  const edge = (form.kind === 'bounds' ? form.to.edge : form.edge) ?? 'inclusive';
+  // `bounds` / `object` declare their edge (TQ18); only a `joined` form (the sugar's) defaults.
+  const edge =
+    form.kind === 'joined'
+      ? form.edge ?? 'inclusive'
+      : form.kind === 'bounds'
+      ? form.to.edge
+      : form.edge;
   const a = writeBound(from, 'from', fromAs, 'inclusive', zone);
   const b = writeBound(to, 'to', toAs, edge, zone);
   if (a === undefined || b === undefined) return undefined;
@@ -851,7 +875,7 @@ export function readBack(
     toValue = args[form.to.argument];
     fromAs = form.from.as;
     toAs = form.to.as;
-    edge = form.to.edge ?? 'inclusive';
+    edge = form.to.edge;
   } else if (form.kind === 'joined') {
     const text = args[form.argument];
     if (typeof text !== 'string') return undefined;
@@ -867,7 +891,7 @@ export function readBack(
     fromValue = object[form.keys.from];
     toValue = object[form.keys.to];
     fromAs = toAs = form.as;
-    edge = form.edge ?? 'inclusive';
+    edge = form.edge;
   }
   const from = readBound(fromValue, 'from', fromAs, 'inclusive', zone);
   const to = readBound(toValue, 'to', toAs, edge, zone);

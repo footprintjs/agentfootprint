@@ -235,13 +235,15 @@ export function callWindowOf(call: CallToBind, turn: TurnWindows, ctx: BindConte
   }
   if (asked === undefined) return { how: 'unread' };
   if (turn.windows.length === 0) return { how: 'model', form, asked };
-  const quoted =
+  // The windows the declared quote names; when it names several, the one the value matches wins.
+  const named =
     call.quotes === undefined
-      ? undefined
-      : turn.windows.find(
+      ? []
+      : turn.windows.filter(
           (w) =>
             w.quote !== undefined && call.quotes?.some((q) => quoteNames(q, w.quote as string)),
         );
+  const quoted = named.find((w) => isWindow(asked as TimeRange, w, ctx.now)) ?? named[0];
   if (quoted !== undefined) {
     return isWindow(asked, quoted, ctx.now)
       ? { how: 'bound', form, asked, window: quoted, by: 'quote' }

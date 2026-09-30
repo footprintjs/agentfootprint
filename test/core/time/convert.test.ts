@@ -40,11 +40,11 @@ const ASKED = { from: '2026-10-09T08:00:00-07:00', to: '2026-10-09T08:41:00-07:0
 
 const bounds = (
   as: 'iso' | 'epoch-ms' | 'epoch-s' | 'wall' | 'date',
-  edge?: 'inclusive' | 'exclusive',
+  edge: 'inclusive' | 'exclusive' = 'inclusive',
 ): PeriodForm => ({
   kind: 'bounds',
   from: { argument: 'start', as },
-  to: { argument: 'end', as, ...(edge !== undefined && { edge }) },
+  to: { argument: 'end', as, edge },
   ...((as === 'wall' || as === 'date') && { zone: { argument: 'tz' } }),
 });
 
@@ -91,29 +91,53 @@ describe("a form's own rules", () => {
     ['an unknown key', { kind: 'day', argument: 'd', joiner: '..' }],
     [
       'a bound with no `as`',
-      { kind: 'bounds', from: { argument: 'a' }, to: { argument: 'b', as: 'iso' } },
+      {
+        kind: 'bounds',
+        from: { argument: 'a' },
+        to: { argument: 'b', as: 'iso', edge: 'exclusive' },
+      },
     ],
     [
       'one argument for both bounds',
-      { kind: 'bounds', from: { argument: 'a', as: 'iso' }, to: { argument: 'a', as: 'iso' } },
+      {
+        kind: 'bounds',
+        from: { argument: 'a', as: 'iso' },
+        to: { argument: 'a', as: 'iso', edge: 'exclusive' },
+      },
     ],
     [
       'an exclusive start',
       {
         kind: 'bounds',
         from: { argument: 'a', as: 'iso', edge: 'exclusive' },
-        to: { argument: 'b', as: 'iso' },
+        to: { argument: 'b', as: 'iso', edge: 'exclusive' },
       },
     ],
     ['a third joiner', { kind: 'joined', argument: 'w', as: 'iso', joiner: '-' }],
     [
       'object keys that repeat',
-      { kind: 'object', argument: 'w', keys: { from: 'x', to: 'x' }, as: 'iso' },
+      { kind: 'object', argument: 'w', keys: { from: 'x', to: 'x' }, as: 'iso', edge: 'inclusive' },
     ],
     ['units outside smhdw', { kind: 'lookback', argument: 'w', signed: false, units: 'mhy' }],
     ['a zone that is not { argument }', { kind: 'day', argument: 'd', zone: 'UTC' }],
   ])('refuses %s', (_what, form) => {
     expect(formIssue(form)).toMatch(/\S/);
+  });
+
+  it('TQ18: a `bounds` end and an `object` form must declare their edge — the library never guesses it', () => {
+    expect(
+      formIssue({
+        kind: 'bounds',
+        from: { argument: 'a', as: 'iso' },
+        to: { argument: 'b', as: 'iso' },
+      }),
+    ).toMatch(/to\.edge is missing/);
+    expect(
+      formIssue({ kind: 'object', argument: 'o', keys: { from: 'f', to: 't' }, as: 'iso' }),
+    ).toMatch(/edge is missing/);
+    // Only the sugar defaults — its `joined` form writes `edge: 'inclusive'` itself; a
+    // hand-written `joined` form is the sugar's shape and keeps the default.
+    expect(formIssue({ kind: 'joined', argument: 'w', as: 'iso', joiner: '/' })).toBeUndefined();
   });
 
   it('takes every well-formed kind', () => {
@@ -232,6 +256,9 @@ describe('the exact rows of § 7.2', () => {
       tz: LA,
     });
     expect(convertExact({ range: ASKED }, [dayForm], CTX)).toBeUndefined();
+    // From midnight but short of the next one: not a whole day — sending the day would widen it.
+    const shortOfMidnight = { from: '2026-10-09T00:00:00-07:00', to: '2026-10-09T23:00:00-07:00' };
+    expect(convertExact({ range: shortOfMidnight }, [dayForm], CTX)).toBeUndefined();
   });
 
   it('a range ending at now → the smallest covering look-back in the units, rounded', () => {

@@ -546,12 +546,12 @@ interface ToolPeriod {
 type PeriodSpelling = 'lookback' | 'signed-lookback' | 'iso-range' | 'wall-range'; // 'wall-range' new
 
 type BoundAs = 'iso' | 'epoch-ms' | 'epoch-s' | 'date' | 'wall';
-interface Bound { readonly argument: string; readonly as: BoundAs; readonly edge?: 'inclusive' | 'exclusive' }
+interface Bound { readonly argument: string; readonly as: BoundAs; readonly edge?: 'inclusive' | 'exclusive' } // required on a `to` bound (TQ18)
 
 type PeriodForm =
   | { readonly kind: 'bounds'; readonly from: Bound; readonly to: Bound; readonly zone?: { readonly argument: string } }  // start_time / end_time
   | { readonly kind: 'joined'; readonly argument: string; readonly as: BoundAs; readonly joiner: '..' | '/'; readonly edge?: 'inclusive' | 'exclusive'; readonly zone?: { readonly argument: string } }
-  | { readonly kind: 'object'; readonly argument: string; readonly keys: { readonly from: string; readonly to: string }; readonly as: BoundAs; readonly edge?: 'inclusive' | 'exclusive'; readonly zone?: { readonly argument: string } }
+  | { readonly kind: 'object'; readonly argument: string; readonly keys: { readonly from: string; readonly to: string }; readonly as: BoundAs; readonly edge: 'inclusive' | 'exclusive'; readonly zone?: { readonly argument: string } }
   | { readonly kind: 'day'; readonly argument: string; readonly zone?: { readonly argument: string } } // date only: one calendar day
   | { readonly kind: 'lookback'; readonly argument: string; readonly signed: boolean; readonly units?: string }; // units ⊆ 'smhdw', default 'mhdw'
 ```
@@ -1182,7 +1182,9 @@ deterministic and are measured over retained recorded runs or unit tables, with 
   mention and whose window it is); a `model` reader's window adds `reading` (it folds "not sure"
   through `argument-read`); a UI window is `app` with `appSource: 'time.window'`. No fold reason
   was added: a `model-chosen` window folds "not sure" through the argument row
-  (`argument-unverified`) until T8's `period-differs-from-asked`. (3) **The arm** is `.time()` plus
+  (`argument-unverified`) until T8's `period-differs-from-asked` — only when that row is
+  untraced; a differing window whose rows trace to a result (`source: 'result'`) folds "known"
+  until T8. (3) **The arm** is `.time()` plus
   a tool whose period names a form — today's `{ argument, spelling }` sugar included, since it IS
   a form; without `.time()` a new field is judged and read, and nothing is filled, filed or
   handed (every byte reference unchanged). (4) **Exactness.** An ISO or wall bound is written to
@@ -1190,7 +1192,10 @@ deterministic and are measured over retained recorded runs or unit tables, with 
   last instant at that precision (`…08:40:59`); read back, a bound's precision is how it was
   written. A `wall` or `date` bound is exact only when the tool reads back the same instants — a
   doubled hour is not exact (the DST-gap refusal is T5b's) — and a `date` bound needs a zone as a
-  `wall` one does. A `from` bound is always inclusive (`edge: 'exclusive'` on it is refused). A
+  `wall` one does. A `from` bound is always inclusive (`edge: 'exclusive'` on it is refused). TQ18 is enforced:
+  a `bounds` form's `to.edge` and an `object` form's `edge` are REQUIRED — refused at definition
+  and dropped at MCP ingest when absent (`convert.ts` · `formIssue`); only the sugar (and the
+  `joined` form it writes) defaults to `inclusive`. A
   look-back window goes to a bounds form as `[now − L, now)`, and a binding recognises that
   spelling as the look-back. "A range ending at now" means its end within the tool's
   `granularity` (one minute when none) of the clock's `now`; moving the end to now, or growing the
@@ -1201,7 +1206,12 @@ deterministic and are measured over retained recorded runs or unit tables, with 
   arguments are left alone — no row, no default, no ask. An `open` reading fills nothing and the
   tool's own rule applies: the lazy word-driven ask is raised with the English reader (T6b); the
   carried window (`time-carried`) is not in this step. (6) **The binding.** A declared quote names
-  a mention when one holds the other, case and whitespace aside. A differing window runs as sent
+  a mention when one holds the other, case and whitespace aside; when it names several, the one
+  whose window the sent value is wins. The binding raises the argument rows to the person's words
+  (`said`, `matched: 'mention'`) ONLY when the quote itself checked out (found in the person's
+  words, nothing `failed`) — a made-up quote that merely CONTAINS the mention, or another runner's
+  words, keeps its failed verdict and runs as sent, like a value binding (`resolve.ts` ·
+  `checkUnderWindow`). A differing window runs as sent
   under declared sources too — the v1 law — so a present period value that the source check would
   have asked about (`asked: 'unverified'`) is no longer asked when the turn has a window of the
   person's; a value bound by VALUE runs with the check's own verdict (never raised to the person's
@@ -1213,8 +1223,9 @@ deterministic and are measured over retained recorded runs or unit tables, with 
   hands it to a handler's second argument, `mcpServe` hands a readable one to the served tool).
   (9) **The facts join the re-validation** in two places: `ask.ts` · `checkTimeAnswer` takes a
   tool's facts and the clock for a `time-range` answer (four catalog keys:
-  `answer.time-future`, `answer.time-past`, `answer.beyond-retention`, `answer.over-max-range`),
-  and the batch ask's answer for a period argument is read back through its single-argument form
+  `answer.time-future`, `answer.time-past`, `answer.beyond-retention`, `answer.over-max-range`)
+  — a seam with no production caller yet: no `InputField` carries a tool's facts in T5a, so those
+  four sentences are not served until a field does; the batch ask's answer for a period argument is read back through its single-argument form
   and asked again (`invalid-answer`) outside the facts — the refusal of an exhausted ask names the
   fact (`arguments/ask.ts` · `factExpectation`, registered as served). Refusing a CALL on its facts
   is T5b's. (10) The design's "this morning vs yesterday morning" test is "today vs yesterday": v1

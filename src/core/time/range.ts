@@ -19,7 +19,7 @@
  * | Boundary | Its edge | Into it from `[from, to)` | Back |
  * |----------|----------|---------------------------|------|
  * | a result's `DeclaredPeriod.queried` / `held` | inclusive at both ends | not converted — the tool declares it | {@link fromInclusive} with the tool's step (`granularity`, else 1 ms) |
- * | a tool argument bound | declared per bound, default inclusive | {@link boundInto} | {@link boundFrom} |
+ * | a tool argument bound | declared on every `bounds`/`object` end (TQ18); only the sugar defaults inclusive | {@link boundInto} | {@link boundFrom} |
  * | a look-back argument | `[until − L, until]` | {@link lookbackRange} | {@link lookbackOf} |
  * | an ask answer / an ISO 8601 interval | `from/to`, half-open | identity: {@link spellRange} | identity: {@link parseRange} |
  * | an inclusive interval clause (SQL `BETWEEN`, a chart brush) | inclusive at both ends | {@link toInclusive} | {@link fromInclusive} |

@@ -538,12 +538,21 @@ const sourceOfWindow = (window: WindowSource): 'said' | 'app' =>
  * window by the model's quote → the person's words (`said`, `matched:
  * 'mention'`; a `model` reader's window stays a reading); a window that
  * DIFFERS from the person's runs as sent (the v1 law, § 7.3) — never asked.
+ * The binding raises the row ONLY when the quote itself checked out — found in
+ * the person's words (`source: 'said'`, nothing `failed`). A quote the check
+ * refused (made up, or another runner's words) is a claim that failed: the
+ * row keeps its own verdict and the call runs as sent, like a value binding.
  */
 function checkUnderWindow(
   check: SourceCheck,
   decision: CallWindow | undefined,
 ): { readonly check: SourceCheck; readonly runs: boolean } {
-  if (decision?.how === 'bound' && decision.by === 'quote') {
+  if (
+    decision?.how === 'bound' &&
+    decision.by === 'quote' &&
+    check.failed === undefined &&
+    check.source === 'said'
+  ) {
     const { failed: _f, coincides: _c, reading: _r, ...kept } = check;
     void _f;
     void _c;
