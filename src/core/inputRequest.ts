@@ -603,6 +603,23 @@ function reaskRefused(
 }
 
 /**
+ * The refusal an ACCEPTED reply leaves standing. A refusal names the answer
+ * it turned down (`InputRefusal.answer`); once the person has answered every
+ * one of those fields again — and this reply was accepted — the refusal is
+ * about an answer that no longer stands, so it is dropped: a UI must not say
+ * "your answer was not accepted" beside a field it just took. A refusal that
+ * names no answer, or one this reply did not answer again in full, stays.
+ */
+function refusalStillStanding(
+  refusal: InputRefusal | undefined,
+  values: Readonly<Record<string, InputValue>>,
+): InputRefusal | undefined {
+  if (refusal?.answer === undefined) return refusal;
+  const named = Object.keys(refusal.answer);
+  return named.length > 0 && named.every((id) => own(values, id)) ? undefined : refusal;
+}
+
+/**
  * Accept typed fields, or explicit cancellation, without coercing free text.
  * A time field's answer (`InputField.format`) is checked here too; one the
  * check refuses comes back as the same ask with `refused` and `repeat`, its
@@ -628,8 +645,11 @@ export function applyInputResponse(
   const refused = refusedTimeAnswers(waiting.fields, values, time?.zone);
   if (refused.length > 0) return reaskRefused(waiting, values, refused, time);
   const supplied = { ...waiting.supplied, ...values };
+  const { refused: previous, ...kept } = waiting;
+  const standing = refusalStillStanding(previous, values);
   return {
-    ...waiting,
+    ...kept,
+    ...(standing !== undefined && { refused: standing }),
     supplied,
     origins: {
       ...waiting.origins,

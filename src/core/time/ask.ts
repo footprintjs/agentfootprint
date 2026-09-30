@@ -314,7 +314,9 @@ export function timeAskOf(
     offered.push({ value, candidate });
   }
   if (offered.length === 0) return undefined;
-  const confirm = row.reader.kind === 'model' || choice.open.includes('confirm');
+  // The resolver owns "a model reading needs confirming" (`resolve.ts` puts
+  // 'confirm' on every open choice a model reader made); this only reads it.
+  const confirm = choice.open.includes('confirm');
   const labels = offered.map(({ candidate }) => {
     const window = presentRange(
       candidate.range,

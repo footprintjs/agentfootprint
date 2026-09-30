@@ -1126,7 +1126,13 @@ deterministic and are measured over retained recorded runs or unit tables, with 
   refused answer is not taken, and the same ask (same `requestId`) comes back with
   `refused: { answer, reason }` — only the refused fields' values — and `repeat: { count }` (no
   `previousAnswer`: the refused answer never reached the record), its fields `missing` again even
-  when optional, so `Agent.resume`'s existing branch returns the pause and nothing runs.
+  when optional, so `Agent.resume`'s existing branch returns the pause and nothing runs. A
+  refused answer counts as an answer: `repeat.count` is "the person already answered this ask",
+  so it feeds the answered-ask count a tool's own later re-ask of the same declaration reads
+  (`InputRepeat`). When a later reply is ACCEPTED and answers again every field a `refused` names
+  (`refused.answer` — the door's own, or an app's), that refusal is dropped from the next pause
+  (`inputRequest.ts` · `refusalStillStanding`), so a UI never says "not accepted" beside a field
+  it just took; the `repeat` mark stays, a fact about the turn.
   `Agent.resume` passes the paused turn's KEPT clock zone (`time/rows.ts` · `clockOf` on the
   checkpoint's ledger) and the app's overrides (`Agent` · `timeAnswerContextOf`). No run starts, so
   no row is filed: there is no new row kind (no `ledgerRowIsWellFormed` arm) and nothing reaches

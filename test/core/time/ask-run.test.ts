@@ -13,6 +13,8 @@
  *                 `missing` again, no model call; a good answer then runs and the tool's result
  *                 carries it; `.time({ messages })` words the reason; a `zone` field refuses `PST`;
  *                 a non-`strict` field with choices keeps free entry open, a `strict` one does not;
+ *                 an accepted fix drops the refusal it answered (the rest still asked), a refusal
+ *                 stays while a field it names is unanswered, a refused OPTIONAL field is asked again;
  *                 the definition refusals (`format` off a string field, a malformed choice or
  *                 supplied value, labels not one per choice, `strict` where it changes nothing);
  *   integration — the re-ask crosses a JSON round trip of its checkpoint onto a FRESH agent and
@@ -282,6 +284,73 @@ describe('a refused time answer is asked again — functional', () => {
         values: { window: '2026-10-09T07:00-07:00/2026-10-09T07:30-07:00' },
       }),
     ).rejects.toThrow(InputRequestError);
+  });
+
+  it('an accepted fix drops the refusal it answered; the pause still asks for the rest', async () => {
+    const who: InputField = { id: 'who', type: 'string' };
+    const { agent, first } = await firstAsk({ fields: [WINDOW_FIELD, who] });
+    const second = paused(
+      await agent.resume(first.checkpoint, {
+        requestId: first.awaitingInput.requestId,
+        values: { window: '2026-10-09T09:00Z/2026-10-09T08:00Z' },
+      }),
+    );
+    expect(second.awaitingInput.refused?.answer).toEqual({
+      window: '2026-10-09T09:00Z/2026-10-09T08:00Z',
+    });
+    const third = paused(
+      await agent.resume(second.checkpoint, {
+        requestId: second.awaitingInput.requestId,
+        values: { window: '2026-10-09T08:00Z/2026-10-09T09:00Z' },
+      }),
+    );
+    expect(third.awaitingInput.supplied).toEqual({ window: '2026-10-09T08:00Z/2026-10-09T09:00Z' });
+    expect(third.awaitingInput.missing).toEqual(['who']);
+    expect(third.awaitingInput.refused).toBeUndefined(); // the fix was taken: nothing "not accepted"
+    expect(third.awaitingInput.repeat).toEqual({ count: 1 }); // a fact about the turn, kept
+    const done = await agent.resume(third.checkpoint, {
+      requestId: third.awaitingInput.requestId,
+      values: { who: 'me' },
+    });
+    expect(isInputPause(done)).toBe(false);
+  });
+
+  it('a refusal stays while a field it names is not answered again', async () => {
+    const at: InputField = { id: 'at', type: 'string', format: 'instant' };
+    const who: InputField = { id: 'who', type: 'string' };
+    const { agent, first } = await firstAsk({ fields: [WINDOW_FIELD, at, who] });
+    const second = paused(
+      await agent.resume(first.checkpoint, {
+        requestId: first.awaitingInput.requestId,
+        values: { window: '2026-10-09T09:00Z/2026-10-09T08:00Z', at: 'noon' },
+      }),
+    );
+    expect(Object.keys(second.awaitingInput.refused?.answer ?? {})).toEqual(['window', 'at']);
+    const third = paused(
+      await agent.resume(second.checkpoint, {
+        requestId: second.awaitingInput.requestId,
+        values: { who: 'me' },
+      }),
+    );
+    expect(third.awaitingInput.refused).toEqual(second.awaitingInput.refused);
+    expect(third.awaitingInput.missing).toEqual(['window', 'at']);
+  });
+
+  it('a refused OPTIONAL time field is asked again, even with every required field supplied', async () => {
+    const who: InputField = { id: 'who', type: 'string' };
+    const at: InputField = { id: 'at', type: 'string', format: 'instant', required: false };
+    const { agent, requests, first } = await firstAsk({ fields: [WINDOW_FIELD, who, at] });
+    const before = requests.length;
+    const second = paused(
+      await agent.resume(first.checkpoint, {
+        requestId: first.awaitingInput.requestId,
+        values: { who: 'me', window: GOOD, at: 'noon' },
+      }),
+    );
+    expect(requests.length).toBe(before); // nothing ran: the tried answer is not dropped quietly
+    expect(second.awaitingInput.missing).toEqual(['at']);
+    expect(second.awaitingInput.refused?.answer).toEqual({ at: 'noon' });
+    expect(second.awaitingInput.supplied).toEqual({ who: 'me', window: GOOD });
   });
 });
 
