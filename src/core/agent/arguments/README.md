@@ -259,28 +259,34 @@ drifted past (§ 7.4) is redrawn only when the library wrote it (`stages/toolCal
 //   "search_logs was not run on that call: the window it asked for had not happened yet, …"
 ```
 
-**Served, and asked lazily (step T6b, `.time({ reader })`).** Two more things ride the same
-layer once a reader is armed. SERVED: each tool that declares a period carries ONE sentence after
-its description naming every window the reader SETTLED this turn in that tool's own form
-(`serve.ts` · `timeWindowsSentence`, through `rulesOnWire`'s `windows` at the slot's one decoration
-site; the mount reads them with `core/time/bind.ts` · `readerWindowsOf`) — a reading, never the
-person's words. ASKED: a call that left its period out while the turn's one mention is still OPEN
-(`not-filled` / `open-reading`) and whose tool's own rule ASKS for a period argument carries
-`ArgumentResolution.window`; the batch ask then asks ONE window field for every such call instead
-of one field per argument (`ask.ts` · `planAskFields` with the plan `stages/argumentAsk.ts` ·
-`windowPlanOf` builds from `core/time/ask.ts` · `timeAskOf`): the zone first for an abbreviation,
-then the readings every member tool's facts allow as labelled `time-range` choices. The answer is
-converted into each call's forms (`bindAnswer` → exactly, else wider), filed `answered` per argument,
-and filled with `ArgumentFill.window` (the note's window clause: "from the window the person chose
-when asked what their words meant"). When every reading breaks a tool's facts nothing is asked and
-the call is refused (`timeRefusal`).
+**Proposed, asked lazily, then served (step T6b, `.time({ reader })`).** A reading of the
+person's chat words is never their words (the owner's decision "Always confirm", time design
+TQ29): every mention stays OPEN until the person answers in the time ask. ASKED: a call that left
+its period out while the turn's one mention is open (`not-filled` / `open-reading`) carries
+`ArgumentResolution.window` — whatever the tool's own rule, because a tool whose rule ASSUMES its
+period is asked too (`resolve.ts` · `verifyPlan`: its default never stands in for words the person
+wrote); the batch ask then asks ONE window field for every such call instead of one field per
+argument (`ask.ts` · `planAskFields` with the plan `stages/argumentAsk.ts` · `windowPlanOf` builds
+from `core/time/ask.ts` · `timeAskOf`): the zone first for an abbreviation, then the readings
+every member tool's facts allow as labelled, pre-filled `time-range` choices naming each window's
+zone, free entry open. The answer is converted into each call's forms (`bindAnswer` → exactly, else
+wider), filed `answered` per argument, filled with `ArgumentFill.window` (the note's window clause:
+"from the window the person chose when asked what their words meant"), and settles the mention
+with a `time-answer` row (`how: 'confirmed'` for the click on a pre-filled reading, `'edited'` for a
+window the person wrote) — so later calls of the turn are filled from it (`answered` +
+`matched: 'mention'`) and it is not asked again. SERVED: from then on each tool that declares a
+period carries ONE sentence after its description naming that window in its own form WITH ITS
+SOURCE (`serve.ts` · `timeWindowsSentence`, through `rulesOnWire`'s `windows` at the slot's one
+decoration site; the mount reads them with `core/time/bind.ts` · `readerWindowsOf`). When every
+reading breaks a tool's facts nothing is asked and the call is refused (`timeRefusal`).
 
 ```ts
 // .time({ zone: LA, reader: englishTimeReader() }), "10/09/26 8 AM to 8:40 AM PST", {} sent →
 //   awaitingInput.fields: [{ id: 'f1', format: 'zone', description: 'Which time zone did you mean by “PST” in …?' }]
 //   resume { f1: 'America/Los_Angeles' } → [{ id: 'f1', format: 'time-range', enum: [3 windows], labels: [...] }]
 //   resume { f1: enum[0] } → the tool runs with { start_time: 1791558000000, end_time: 1791560460000 };
-//   rows: { argument: 'start_time', source: 'answered' }, { argument: 'end_time', source: 'answered' }
+//   rows: { argument: 'start_time', source: 'answered' }, { argument: 'end_time', source: 'answered' },
+//         { kind: 'time-answer', mention: 0, from, to, zone: 'America/Los_Angeles', how: 'confirmed' }
 ```
 
 Without `.time()` nothing here runs: a period is judged and read as the sections above say.

@@ -4,9 +4,12 @@
  * differing model window and run it.
  *
  * Pattern: Walker over recorded rows. The turn's WINDOWS are read from what
- *          the record already holds — the `time-reading` rows of this turn
- *          (a mention that resolved to one window) and the `clock` row's
- *          `control` window — never from words. One call's decision
+ *          the record already holds — this turn's `time-answer` rows (a
+ *          mention the person settled in the time ask), a `model` reader's
+ *          `time-reading` rows (a reading, never the person's) and the
+ *          `clock` row's `control` window — never from words. A `rule`
+ *          reading settles nothing: it is a proposal the person confirms
+ *          (the owner's decision "Always confirm", time design TQ29). One call's decision
  *          ({@link callWindowOf}) is a pure function of its arguments, the
  *          tool's forms and those windows.
  * Role:    core/ leaf (the time layer). Imports `convert.ts`, `range.ts`,
@@ -65,13 +68,26 @@ import type { DurationText } from './duration.js';
 import type { InstantText } from './instant.js';
 import type { TimeRange } from './range.js';
 import type { TimeCandidate } from './resolve.js';
-import { clockOf, readingsOf, type ClockRow, type TimeReadingRow } from './rows.js';
+import {
+  answersOf,
+  clockOf,
+  readingsOf,
+  type ClockRow,
+  type TimeAnswerRow,
+  type TimeReadingRow,
+} from './rows.js';
 import type { ZoneName } from './zone.js';
 
 // ─── The turn's windows ──────────────────────────────────────────────────
 
-/** Who a window is: the person's words (a `rule` reader), a `model` reader's unconfirmed reading, or a UI control. */
-export type WindowSource = 'said' | 'derived-from-reading' | 'control';
+/**
+ * Who a window is: the window the person settled in the time ask
+ * (`answered`), a `model` reader's unconfirmed reading (`derived-from-reading`),
+ * or a UI control. `said` — a `rule` reading filed as the person's words — is
+ * no longer filed (the owner's decision "Always confirm", time design TQ29);
+ * it stays in the union so a record an earlier version filed still reads.
+ */
+export type WindowSource = 'said' | 'derived-from-reading' | 'answered' | 'control';
 
 /** One window of the turn — a mention that resolved to one window, or the `control` window. */
 export interface TurnWindow {
@@ -85,6 +101,8 @@ export interface TurnWindow {
   readonly lookback?: DurationText;
   /** The zone the person meant, else the clock's. */
   readonly zone: ZoneName;
+  /** On an `answered` window: whether the person picked the offered reading (`confirmed`) or wrote their own (`edited`). */
+  readonly answer?: TimeAnswerRow['how'];
 }
 
 /** The turn's windows, and how many mentions the turn holds in all (resolved or not). */
@@ -102,40 +120,57 @@ export interface TurnWindows {
 }
 
 /**
- * The one window a reading settled on, if it settled on one (a `model`
- * reading waits only for confirmation). A reading that is not the person's
- * window (`confirmNeeded`: leftover words, a point time, several mentions —
- * `rows.ts` · `confirmNeededOf`) settles on nothing: it is never filed until the person
- * confirms it through the time ask (step T6b).
+ * The one window a `model` reading offers, when it waits only for the
+ * person's confirmation — a reading, filled as `derived-from-reading`. A
+ * `rule` reading settles on nothing: it is a PROPOSAL the time ask offers,
+ * and only the person's answer settles it (the owner's decision "Always
+ * confirm", time design TQ29).
  */
-function settledCandidate(row: TimeReadingRow): TimeCandidate | undefined {
+function readingCandidate(row: TimeReadingRow): TimeCandidate | undefined {
   const choice = row.choice;
-  const candidates = row.candidates ?? [];
-  if (choice === undefined || row.confirmNeeded !== undefined) return undefined;
-  if (choice.by === 'only' || choice.by === 'policy') return candidates[choice.candidate];
-  if (choice.by === 'open' && choice.open.length === 1 && choice.open[0] === 'confirm') {
-    return candidates[choice.remaining[0] as number];
-  }
-  return undefined;
+  if (row.reader.kind !== 'model' || choice?.by !== 'open') return undefined;
+  if (choice.open.length !== 1 || choice.open[0] !== 'confirm') return undefined;
+  return row.candidates?.[choice.remaining[0] as number];
 }
 
 /**
- * This turn's windows, read from the record: each `time-reading` row whose
- * mention settled on one window (a `rule` reader's is `said`; a `model`
- * reader's, which waits only for the person's confirmation, is
- * `derived-from-reading`) and the clock's `control` window.
+ * This turn's windows, read from the record: per mention, the window the
+ * person settled in the time ask (`answered`, its latest `time-answer` row),
+ * else a `model` reader's one window waiting for confirmation
+ * (`derived-from-reading`); and the clock's `control` window. A `rule`
+ * reading the person has not answered is counted and is OPEN.
  */
 export function turnWindowsOf(
   readings: readonly TimeReadingRow[],
   clock: ClockRow | undefined,
+  answers: readonly TimeAnswerRow[] = [],
 ): TurnWindows {
   const windows: TurnWindow[] = [];
   const open: TimeRange[][] = [];
   let mentions = 0;
+  const answered = new Map(answers.map((a) => [a.mention, a]));
   for (const row of readings) {
     if (row.mentions === 0 || row.refused !== undefined || row.quote === undefined) continue;
     mentions++;
-    const candidate = settledCandidate(row);
+    const answer = row.mention === undefined ? undefined : answered.get(row.mention);
+    if (answer !== undefined) {
+      const range = { from: answer.from, to: answer.to };
+      // The person picked a look-back the library offered: it stays a look-back from now.
+      const offered = row.candidates?.find(
+        (c) => c.window.kind === 'lookback' && sameRange(c.range, range),
+      )?.window;
+      windows.push({
+        source: 'answered',
+        mention: answer.mention,
+        quote: row.quote,
+        range,
+        ...(offered?.kind === 'lookback' && { lookback: offered.duration }),
+        zone: answer.zone,
+        answer: answer.how,
+      });
+      continue;
+    }
+    const candidate = readingCandidate(row);
     if (candidate === undefined) {
       const choice = row.choice;
       const left =
@@ -149,7 +184,7 @@ export function turnWindowsOf(
       continue;
     }
     windows.push({
-      source: row.reader.kind === 'model' ? 'derived-from-reading' : 'said',
+      source: 'derived-from-reading',
       ...(row.mention !== undefined && { mention: row.mention }),
       quote: row.quote,
       range: candidate.range,
@@ -168,23 +203,25 @@ export function turnWindowsOf(
   return { windows, mentions, ...(open.length > 0 && { open }) };
 }
 
-/** The windows the armed reader settled this turn, with the turn's clock — what the served sentence names. */
+/** The windows of the person's words this turn, with the turn's clock — what the served sentence names. */
 export interface ReaderWindows {
   readonly now: InstantText;
-  /** Each settled mention's window, in mention order — never the `control` window. */
+  /** Each settled mention's window (`answered`, or a `model` reading's), in mention order — never the `control` window. */
   readonly windows: readonly TurnWindow[];
 }
 
 /**
- * The latest turn's windows the armed READER settled, read off the ledger (its
- * last `clock` row and that turn's `time-reading` rows) — `undefined` when the
- * turn has no clock or no settled mention. The `control` window is not a
- * reading and is not named (the served sentence is the reader's, TQ13).
+ * The latest turn's windows of the person's words, read off the ledger (its
+ * last `clock` row and that turn's `time-reading` and `time-answer` rows) —
+ * `undefined` when the turn has no clock or no settled mention. A `rule`
+ * reading is named only once the person answered it in the time ask. The
+ * `control` window is not a reading and is not named (TQ13).
  */
 export function readerWindowsOf(ledger: readonly unknown[] | undefined): ReaderWindows | undefined {
   const clock = clockOf(ledger);
   if (clock === undefined) return undefined;
-  const { windows } = turnWindowsOf(readingsOf(ledger, clock.turn), undefined);
+  const turn = clock.turn;
+  const { windows } = turnWindowsOf(readingsOf(ledger, turn), undefined, answersOf(ledger, turn));
   return windows.length === 0 ? undefined : { now: clock.now, windows };
 }
 

@@ -47,15 +47,12 @@
  * the reader's locale, the zone named, with the end the person said. A
  * `kind: 'model'` reader's window is offered as the LIBRARY'S reading to
  * confirm ("I read “yesterday” as … — is that right?"), never as the person's
- * words (§ 5.5). So is a `rule` reading that is not the person's window
- * (`confirmNeeded`, step T6b): the question names what the reader did not read
- * ("I read only “8:40 AM” as a time, not “til 9.30”…") — or, for a form off the
- * said allow-list, a point time or one of several mentions (`rows.ts` ·
- * `confirmNeededOf`), asks the plain confirmation — and the one choice is the
- * reading WITH ITS ZONE ("I read “yesterday” as Thu, Oct 8, 2026, PDT in
- * America/Los_Angeles — is that right?"), so a person who meant another zone's
- * day corrects it in one answer. Free entry stays open: a field is `strict`
- * only when the app says so.
+ * words (§ 5.5). So is EVERY `rule` reading (the owner's decision "Always
+ * confirm", time design TQ29 — `rows.ts` · `timeReadingRows`): the choice is
+ * the reading pre-filled WITH ITS ZONE ("I read “yesterday” as Thu, Oct 8,
+ * 2026, PDT in America/Los_Angeles — is that right?"), so a person who meant
+ * another zone's day corrects it in one answer. Free entry stays open: a
+ * field is `strict` only when the app says so.
  *
  * @example
  * ```ts
@@ -219,10 +216,8 @@ export function checkTimeAnswer(
  * Every sentence the time ask can put before a person — the keys of the
  * catalog (`src/locales/timeAsk.ts`). `answer.*` is a refusal's reason, one
  * per {@link TimeAnswerProblem}; `ask.*` a question; `choice.confirm` the
- * label on a reading to confirm (a `model` reader's, or a `rule` reading off
- * the said allow-list); `choice.confirm-part` the label on a `rule` reading
- * that left words unread (`confirmNeeded.leftover`), and `ask.confirm-part`
- * its question. Placeholders are `{{name}}`; both labels also take `zone`.
+ * label on a reading to confirm — every reading the armed reader made.
+ * Placeholders are `{{name}}`; the label also takes `zone`.
  */
 export const TIME_ASK_MESSAGE_KEYS = Object.freeze([
   'answer.not-an-instant',
@@ -237,10 +232,8 @@ export const TIME_ASK_MESSAGE_KEYS = Object.freeze([
   'answer.over-max-range',
   'ask.which',
   'ask.confirm',
-  'ask.confirm-part',
   'ask.zone',
   'choice.confirm',
-  'choice.confirm-part',
 ] as const);
 
 export type TimeAskMessageKey = (typeof TIME_ASK_MESSAGE_KEYS)[number];
@@ -363,11 +356,9 @@ export function timeAskOf(
     offered.push({ value, candidate });
   }
   if (offered.length === 0) return undefined;
-  // The resolver owns "a reading needs confirming" (`resolve.ts` puts 'confirm'
-  // on every open choice a model reader or an incomplete reading made); this only reads it.
+  // The row owns "a reading needs confirming" (`rows.ts` · `timeReadingRows` puts 'confirm'
+  // on every reading's open choice); this only reads it.
   const confirm = choice.open.includes('confirm');
-  // Words left unread are named; any other reading to confirm asks the plain confirmation.
-  const left = row.confirmNeeded?.leftover;
   const labels = offered.map(({ candidate }) => {
     const window = presentRange(
       candidate.range,
@@ -376,17 +367,9 @@ export function timeAskOf(
     );
     if (!confirm) return window;
     // The zone is named: the reading leaned on it, and the person may have meant another.
-    return fillMessage(messages[left !== undefined ? 'choice.confirm-part' : 'choice.confirm'], {
-      quote,
-      window,
-      zone: candidate.zone,
-    });
+    return fillMessage(messages['choice.confirm'], { quote, window, zone: candidate.zone });
   });
-  const question = !confirm
-    ? fillMessage(messages['ask.which'], { quote })
-    : left !== undefined
-    ? fillMessage(messages['ask.confirm-part'], { quote, leftover: quoted(left.join(' ')) })
-    : fillMessage(messages['ask.confirm'], { quote });
+  const question = fillMessage(messages[confirm ? 'ask.confirm' : 'ask.which'], { quote });
   return {
     question,
     field: {

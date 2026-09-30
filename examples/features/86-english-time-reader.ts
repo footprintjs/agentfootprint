@@ -1,7 +1,7 @@
 /**
  * 86 — the library's English reader: the person's time words read carefully,
- * served to the model in each tool's own form, and asked about only when a
- * tool needs a window the words did not settle.
+ * PROPOSED to the person with their window and zone, and — once the person
+ * confirms — served to the model in each tool's own form.
  *
  *   .time({ zone: 'America/Los_Angeles', reader: englishTimeReader() })
  *
@@ -10,13 +10,18 @@
  *     after them, today / yesterday / tomorrow, "last 40 minutes" — and says
  *     "unreadable" for every other time phrase ("yesterday morning", "last
  *     week"), never a partial reading;
- *   - a window it settled is served ONCE, on each tool that declares a period,
- *     in that tool's own form ("yesterday" → `start_time …, end_time …`), named
- *     a reading, never the person's words;
- *   - a window it could not settle is asked only when a tool that declares a
- *     period is about to be called: the zone first when the person wrote an
- *     abbreviation (`PST` — no map ships), then the readings as labelled
- *     choices; the chosen window is written into the tool's own arguments.
+ *   - a reading only PROPOSES (the owner's decision "Always confirm"): nothing
+ *     typed in chat is filed as the person's words. When a tool that declares
+ *     a period is about to be called, the reading is offered as a pre-filled,
+ *     editable one-click confirmation naming its window AND its zone ("I read
+ *     “yesterday” as Thu, Oct 8, 2026, PDT in America/Los_Angeles — is that
+ *     right?") — the zone asked first when the person wrote an abbreviation
+ *     (`PST` — no map ships). The click is recorded (`time-answer`,
+ *     `how: 'confirmed'`); a window the person writes instead is theirs too
+ *     (`how: 'edited'`); the window is written into the tool's own arguments;
+ *   - once confirmed, the window is served on each tool that declares a
+ *     period, in that tool's own form, with its source ("the window the
+ *     person confirmed when asked what their words meant").
  *
  * Run:  npm run example examples/features/86-english-time-reader.ts
  */
@@ -37,9 +42,9 @@ export const meta: ExampleMeta = {
   group: 'features',
   description:
     'englishTimeReader() tokenizes a small, closed set of time phrases and says "unreadable" for ' +
-    'the rest; a window it settled is served on each tool that declares a period, in the form ' +
-    'that tool takes; one it could not settle ("10/09/26 … PST") is asked only when a tool needs ' +
-    'it — the zone first, then the readings as labelled choices.',
+    'the rest; every reading is only a proposal, confirmed in one click with its window and zone ' +
+    '("10/09/26 … PST": the zone first, then the readings as labelled choices); once confirmed ' +
+    'it is served on each tool that declares a period, in the form that tool takes.',
   defaultInput: 'Show client activity 10/09/26 8 AM to 8:40 AM PST',
   providerSlots: [],
   tags: ['features', 'observability'],
@@ -99,11 +104,32 @@ function desk(served: string[]) {
 const time = { now: '2026-10-09T15:40:00Z' };
 
 export async function run(input: string): Promise<string> {
-  // 1. "yesterday" is settled: the model is served it in the tool's own form.
+  // 1. "yesterday" is only PROPOSED: nothing is served, the call pauses on a one-click
+  //    confirmation naming the window and its zone.
   const served: string[] = [];
-  await desk(served).run({ message: 'Any client activity yesterday?', time });
-  console.log('served on client_activity:', served[0]);
-  check(served[0]?.includes('“yesterday” → start_time') === true, 'the served time sentence');
+  const proposal = desk(served);
+  const asked = await proposal.run({ message: 'Any client activity yesterday?', time });
+  check(isInputPause(asked), 'a confirmation');
+  if (!isInputPause(asked)) return String(asked);
+  const offer = asked.awaitingInput.fields[0];
+  console.log('asked:', offer?.description);
+  console.log('  offered:', offer?.labels?.[0]);
+  check(offer?.labels?.[0]?.includes('in America/Los_Angeles') === true, 'the window and its zone');
+  check(served[0]?.includes('Time words') !== true, 'nothing served before the confirmation');
+  await proposal.resume(asked.checkpoint, {
+    requestId: asked.awaitingInput.requestId,
+    values: { f1: offer?.enum?.[0] as string },
+  });
+  const answers = ((proposal.findings() ?? []) as readonly { kind: string; how?: string }[]).filter(
+    (r) => r.kind === 'time-answer',
+  );
+  check(answers[0]?.how === 'confirmed', 'the click recorded as the person’s answer');
+  console.log('served on client_activity after the click:', served[1]);
+  check(
+    served[1]?.includes('(the window the person confirmed when asked what their words meant)') ===
+      true,
+    'the served line names the confirmed window and its source',
+  );
 
   // 2. The field sentence: the zone is asked for `PST`, then the three date orders.
   handed.length = 0;

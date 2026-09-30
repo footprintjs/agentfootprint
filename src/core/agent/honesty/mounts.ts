@@ -82,7 +82,7 @@ import type {
   SourceInputs,
   TimeInputs,
 } from '../arguments/subflow.js';
-import { clockOf, readingsOf, type CallWindowRow } from '../../time/rows.js';
+import { answersOf, clockOf, readingsOf, type CallWindowRow } from '../../time/rows.js';
 import type { ZoneName } from '../../time/zone.js';
 import { copyPeriod, type DeclaredPeriod, type PeriodRow } from '../coverage/period.js';
 import { appendRows, emitRow, type FindingsScope } from '../findings/ledger.js';
@@ -158,7 +158,12 @@ function timeInputsOf(parent: Record<string, unknown>): TimeInputs | undefined {
   const ledger = parent.findingsLedger as readonly unknown[] | undefined;
   const clock = clockOf(ledger);
   if (clock === undefined) return undefined;
-  return { clock, readings: [...readingsOf(ledger, parent.turnNumber as number)] };
+  const turn = parent.turnNumber as number;
+  return {
+    clock,
+    readings: [...readingsOf(ledger, turn)],
+    answers: [...answersOf(ledger, turn)],
+  };
 }
 
 type StageModule = typeof import('../arguments/subflow.js');

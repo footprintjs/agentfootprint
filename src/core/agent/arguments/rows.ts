@@ -304,22 +304,27 @@ export function argumentRowOf(
 
 /**
  * The row for a value the library filled from the turn's ONE window of the
- * person's (the time layer, `core/time/bind.ts`): from the person's words
- * (`said`, `matched: 'mention'`), from a `model` reader's unconfirmed reading
- * of them (the same, and `reading` — it can support "not sure", never
- * "known"), or from a window set in a UI (`app`, `appSource: 'time.window'`).
- * The call's `call-window` row names the window and the form.
+ * person's (the time layer, `core/time/bind.ts`): from the window the person
+ * settled in the time ask (`answered`, `matched: 'mention'`), from a `model`
+ * reader's unconfirmed reading of their words (`said`, `matched: 'mention'`
+ * and `reading` — it can support "not sure", never "known"), or from a window
+ * set in a UI (`app`, `appSource: 'time.window'`). A `said` window with no
+ * `reading` is read back only from a record an earlier version filed. The
+ * call's `call-window` row names the window and the form.
  */
 export function windowRowOf(
   who: ArgumentIdentity & {
     readonly shownValue: unknown;
-    readonly window: 'said' | 'derived-from-reading' | 'control';
+    readonly window: 'said' | 'derived-from-reading' | 'answered' | 'control';
   },
   stamp: { readonly turn: number; readonly iteration: number },
 ): ArgumentRow {
   const value = shownValue(who.shownValue);
   if (who.window === 'control') {
     return { ...identityOf(who, stamp), source: 'app', value, appSource: TIME_WINDOW_SOURCE };
+  }
+  if (who.window === 'answered') {
+    return { ...identityOf(who, stamp), source: 'answered', value, matched: 'mention' };
   }
   return {
     ...identityOf(who, stamp),

@@ -234,10 +234,11 @@ export function rulesOnWire(
 // ─── The person's windows, on a tool that declares a period (time design TQ13) ───
 
 /**
- * What the served sentence reads: the turn's windows the armed reader SETTLED
- * (`core/time/bind.ts` · `readerWindowsOf` — each mention's quote and its one
- * window; an open or unreadable mention is not named), the turn's clock, and
- * the app's `.time({ zone })`.
+ * What the served sentence reads: the turn's SETTLED windows of the person's
+ * words (`core/time/bind.ts` · `readerWindowsOf` — each mention's quote and
+ * its one window: the one the person confirmed or gave in the time ask, or a
+ * `model` reader's reading; a proposal still open or an unreadable mention is
+ * not named), the turn's clock, and the app's `.time({ zone })`.
  */
 export interface ServedWindows extends ReaderWindows {
   readonly appZone?: ZoneName;
@@ -251,27 +252,35 @@ function printedArgument(value: unknown): string {
 }
 
 // LENS · tool-description · persistent-history
-// reads: the turn's `time-reading` rows the armed reader settled (each mention's quote and its one
-//        window — `bind.ts` · `readerWindowsOf`), the turn's clock, and THIS tool's declared period
-//        forms and facts — converted by the one owner (`core/time/convert.ts`)
-// law: past tense about what the library READ; names the reading as a reading (never the person's
-//      words); a permission ("may pass"), never an outcome — whether a call is filled, bound or
-//      refused is decided at dispatch and recorded there.
+// reads: the turn's settled windows of the person's words (each mention's quote, its one window and
+//        WHOSE it is — the person's answer in the time ask, or a model reader's reading —
+//        `bind.ts` · `readerWindowsOf` off the `time-reading` and `time-answer` rows), the turn's
+//        clock, and THIS tool's declared period forms and facts — converted by the one owner
+//        (`core/time/convert.ts`)
+// law: past tense about what happened; names each window's SOURCE (a reading is never called the
+//      person's words; an answer is named as the person's answer when asked); a permission
+//      ("may pass"), never an outcome — whether a call is filled, bound or refused is decided at
+//      dispatch and recorded there.
 /**
  * The ONE served time sentence (TQ13): on a tool that declares a period, each
- * window the reader settled this turn, in THIS tool's own form — the exact
- * conversion, else the wider one the fill would use (said so). So the model
- * never re-derives a window from words. A window no form of the tool holds is
- * not named; `undefined` when none is. The values are library text — spellings
- * derived from a reading, never the person's words (§ 9.5). A value the
- * tool's own argument view hides is named as hidden.
+ * settled window of the person's words this turn, in THIS tool's own form —
+ * the exact conversion, else the wider one the fill would use (said so) — and
+ * WHOSE it is: the window the person confirmed (picked as offered) or gave
+ * (wrote their own) when the time ask asked them, or a `model` reader's
+ * reading they have not confirmed. So the model never re-derives a window
+ * from words. A window no form of the tool holds is not named; `undefined`
+ * when none is. The values are library spellings (§ 9.5). A value the tool's
+ * own argument view hides is named as hidden.
  *
  * @example
  * ```ts
- * timeWindowsSentence(clientActivity, { now, windows: [{ quote: 'yesterday', range, zone, source: 'said' }] });
- * // 'The library read time words in the person's message as: “yesterday” → start_time 1791442800000,
- * //  end_time 1791529200000 — a reading of their words, not their words; a call may pass these
- * //  values as written.'
+ * timeWindowsSentence(clientActivity, {
+ *   now,
+ *   windows: [{ quote: 'yesterday', range, zone, source: 'answered', mention: 0, answer: 'confirmed' }],
+ * });
+ * // 'Time words in the person's message, as the library holds them: “yesterday” → start_time
+ * //  1791442800000, end_time 1791529200000 (the window the person confirmed when asked what their
+ * //  words meant); a call may pass these values as written.'
  * ```
  */
 export function timeWindowsSentence(
@@ -301,14 +310,24 @@ export function timeWindowsSentence(
         ? `${argument} (hidden by the tool's view)`
         : `${argument} ${printedArgument(value)}`,
     );
-    const wider = exact === undefined ? ' (a wider read than the words named)' : '';
-    clauses.push(`“${w.quote}” → ${values.join(', ')}${wider}`);
+    const wider = exact === undefined ? ', a wider read than the words named' : '';
+    clauses.push(`“${w.quote}” → ${values.join(', ')} (${whoseWindow(w)}${wider})`);
   }
   if (clauses.length === 0) return undefined;
   return (
-    `The library read time words in the person's message as: ${clauses.join('; ')} — a reading ` +
-    'of their words, not their words; a call may pass these values as written.'
+    "Time words in the person's message, as the library holds them: " +
+    `${clauses.join('; ')}; a call may pass these values as written.`
   );
+}
+
+/** Whose one window of the person's words is — the served sentence's source clause. */
+function whoseWindow(w: ServedWindows['windows'][number]): string {
+  if (w.source === 'answered') {
+    return w.answer === 'edited'
+      ? 'the window the person gave when asked what their words meant'
+      : 'the window the person confirmed when asked what their words meant';
+  }
+  return "a reading of the person's words they have not confirmed, not their words";
 }
 
 /**

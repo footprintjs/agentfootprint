@@ -13,10 +13,12 @@
  *   }
  *
  *   - under `.time()`, when the model leaves the period out and the turn has
- *     exactly ONE window of the person's (a reading of their words, or a
- *     `time.window` set in a UI), the library fills it — converted into the
- *     first form that holds it exactly — and files the arguments as the
- *     person's (`said`, `matched: 'mention'`) with one `call-window` row;
+ *     exactly ONE window of the person's (one they confirmed or wrote in the
+ *     time ask — a reading of their words only PROPOSES, the owner's decision
+ *     "Always confirm" — or a `time.window` set in a UI), the library fills it
+ *     — converted into the first form that holds it exactly — and files the
+ *     arguments as the person's (`answered`, `matched: 'mention'`) with one
+ *     `call-window` row;
  *   - a window the model sent is never written over: equal to the person's, it
  *     is bound (by the quote the model declared, or by value); different, it
  *     runs as sent and is recorded `model-chosen` beside the person's — the
@@ -28,7 +30,7 @@
  * Run:  npm run example examples/features/84-tool-period-forms.ts
  */
 
-import { Agent, defineTool, type TimeReader } from '../../src/index.js';
+import { Agent, defineTool, isInputPause, type TimeReader } from '../../src/index.js';
 import { mock } from '../../src/doors/providers.js';
 import { isCliEntry, printResult, type ExampleMeta } from '../helpers/cli.js';
 
@@ -109,6 +111,7 @@ const desk = Agent.create({
   provider: mock({
     replies: [
       { content: '', toolCalls: [{ id: 'c1', name: 'client_activity', args: {} }] },
+      { content: '', toolCalls: [{ id: 'c2', name: 'client_activity', args: {} }] },
       { content: '42 client operations between 08:00 and 08:40.' },
     ],
   }),
@@ -120,16 +123,26 @@ const desk = Agent.create({
 // #endregion period-forms
 
 export async function run(input: string): Promise<string> {
-  const out = await desk.run({ message: input, time: { now: '2026-10-09T15:40:00Z' } });
-  console.log('the tool was handed:', JSON.stringify(handed[0], null, 2));
-  const rows = (desk.findings() ?? []) as readonly { kind: string }[];
-  const window = rows.find((r) => r.kind === 'call-window');
+  // The reading only proposes: the first call pauses until the person confirms the window.
+  const asked = await desk.run({ message: input, time: { now: '2026-10-09T15:40:00Z' } });
+  check(isInputPause(asked), 'the reading offered to confirm');
+  if (!isInputPause(asked)) return String(asked);
+  const out = await desk.resume(asked.checkpoint, {
+    requestId: asked.awaitingInput.requestId,
+    values: { f1: asked.awaitingInput.fields[0]?.enum?.[0] as string },
+  });
+  // The later call of the turn is filled from the confirmed window, in the tool's own form.
+  console.log('the tool was handed:', JSON.stringify(handed[1], null, 2));
+  const rows = (desk.findings() ?? []) as readonly { kind: string; toolCallId?: string }[];
+  const window = rows.find((r) => r.kind === 'call-window' && r.toolCallId === 'c2');
   console.log('\ncall-window row:', JSON.stringify(window));
   check((window as { how?: string } | undefined)?.how === 'filled', 'the window filled');
-  const args = rows.filter((r) => r.kind === 'argument') as { source?: string }[];
+  const args = rows.filter((r) => r.kind === 'argument' && r.toolCallId === 'c2') as {
+    source?: string;
+  }[];
   check(
-    args.every((r) => r.source === 'said'),
-    "the arguments recorded as the person's",
+    args.length === 2 && args.every((r) => r.source === 'answered'),
+    "the arguments recorded as the person's answer",
   );
   return String(out);
 }

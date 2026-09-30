@@ -29,8 +29,8 @@
  *
  * Parts of the day (`yesterday morning`, `tonight`, `noon`), calendar spans
  * (`last week`, `this month`), week days and named months (`Friday`,
- * `Oct 9`), `N hours ago`, spans in words (`last two hours`), with a unit off
- * the allow-list (`last 30 seconds`, `last 3 months`) or said with `previous`
+ * `Oct 9`), `N hours ago`, spans in words (`last two hours`), in a unit it
+ * does not read (`last 30 seconds`, `last 3 months`) or said with `previous`
  * (`previous 7 days` — often relative to another window), a look-ahead (`next 2 hours`), an
  * ordinal day (`the 9th`), `8 o'clock`, and any v1 phrase a modifier changes
  * (`since 8 AM`, `before yesterday`, `around 8:40`, `earlier today`,
@@ -39,61 +39,20 @@
  * with `problem: 'unreadable'`, quoting the whole phrase: reading `yesterday`
  * out of `yesterday morning` would silently widen what the person said.
  *
- * ## The leftover rule — the person's words only when nothing time-like is left
+ * ## It only PROPOSES — the person confirms (the owner's decision "Always confirm")
  *
- * ONE scan over the WHOLE message (`leftoverOf`), no clauses and no connector
- * lists: after every phrase the reader parsed is removed, is any token of a
- * broad time-or-range set left (`LEFTOVER_WORDS` — any digit in any script,
- * number and hour words, ordinals, day, relative, week day and month words,
- * units, parts of the day, range words such as `to`, `until`, `from`,
- * `between`, zone words (`time`, `utc`, the IANA areas such as `europe`, `asia`);
- * anchors, open ends, exclusions and filters (`preceding`, `prior`, `post`, `onward`,
- * `henceforth`, `excluding`, `except`, `weekdays`, `business`); `..`, and ANY symbol or punctuation mark but
- * sentence punctuation, quotes and brackets — by rule, not by list — unless
- * it stands alone between two letters (`check-in`); `and`/`plus` right after
- * a time; `AM` and the zone abbreviations in capitals)? Nothing left: every reading is COMPLETE — the
- * person's words. Something left: every reading names those tokens
- * (`TimeMention.leftover`) and is CONFIRMED through the time ask, never filed
- * as said. So `8:40 AM til 9.30`, `8 AM until the deploy` and
- * `Start: 8:40 AM\nEnd: 9.30` read `8:40 AM` / `8 AM` only as a reading to
- * confirm. The price, owner-approved: a time beside an unrelated number or a
- * common word of the set (`9 AM and 3 retries`, `I want to see yesterday`,
- * `errors in the last 2 hours to date`) is confirmed, not read — an extra
- * confirmation is honest; a partial reading recorded as said is not.
- *
- * ## The allow-list — the only forms filed as the person's words
- *
- * Five review rounds showed English has an endless tail (a zone named in
- * words — `London time`, `server time`, `in Asia/Kolkata` — an event anchor,
- * an open end), so the reader TRUSTS only an allow-list and grows it from
- * evidence (`isAllowListed`): (1) a RELATIVE SPAN from now — `last|past N
- * minutes|hours|days|weeks`, `the last|past hour|day|week` (no zone needed);
- * (2) an EXPLICIT ISO-8601 instant or range whose every bound carries an
- * offset or an IANA zone (`2026-10-09T08:00-07:00`,
- * `2026-10-09T08:00Z/2026-10-09T09:00Z`). Everything else it reads — a
- * calendar word, a date or clock time without a zone, a range in words — is
- * marked `confirm` (`TimeMention.confirm`) and offered through the time ask
- * WITH ITS ZONE ("I read “yesterday” as Thu, Oct 8, 2026, PDT in
- * America/Los_Angeles — is that right?"), so a person who meant London time
- * corrects it in one answer. The LIBRARY still confirms a point time that is
- * no explicit instant and a message with two mentions (`rows.ts` ·
- * `confirmNeededOf`).
- *
- * ## The position rule — an allow-listed span is said only where it ends its clause
- *
- * What stands AROUND an allow-listed span is judged by position, not by a list
- * of words (`endsItsClause`): after the span, nothing but spaces and closing
- * marks up to the clause end (end of message, a line break, `.` `?` `!` `;` —
- * a comma is no clause end), the next clause not opening with a bending word;
- * before it, no bending word in its clause (`BEND_WORDS` — prepositions,
- * negators and anchor participles, a CLOSED class) but the plain lead-in
- * (`in|over|for [the]`) or a range's opener. So `last 2 hours ending at the
- * outage`, `the last 3 days in London`, `newer than 2026-10-09T08:00Z` and
- * `2026-10-09T08:00Z give or take` confirm. The price: `errors in the last 2
- * hours on node 11` confirms too. The leftover scan still runs over the whole
- * message — it names what was not read and guards the other clauses. The
- * known limit: a later sentence that bends the look-back without opening with
- * a bending word (`Show the last 2 hours. Only the outage window.`).
+ * Nothing this reader reads is ever filed as the person's words. Seven review
+ * rounds each found the next English spelling a word list, an allow-list or a
+ * position rule missed (a zone named in words, a look-back tied to an event,
+ * an open end, a half-read range), so the owner decided (2026-09-30, time
+ * design TQ29): every reading of a chat message is a PROPOSAL, offered
+ * through the time ask pre-filled and editable, with its window AND its zone
+ * ("I read “last 2 hours” as … in America/Los_Angeles — is that right?").
+ * Only what the person picks or types in that form is theirs. The library
+ * owns the law (`../rows.ts` · `timeReadingRows`), so this reader returns
+ * parts and quotes only — no confirm flag, no leftover list, no allow-list.
+ * A form may later skip the click only when a registered benchmark shows it
+ * is always read right (TQ29's growth rule).
  *
  * A numeric date the tokens could split two ways stays ONE parse — `10/09/26`
  * is three numbers; which is the month is the policy's or the person's.
@@ -104,23 +63,16 @@
  * reader.read('errors on 10/09/26 8 AM to 8:40 AM PST', { locale: 'en-US' });
  * // { mentions: [{ quote: '10/09/26 8 AM to 8:40 AM PST', parses: [{
  * //   date: { kind: 'numeric', fields: [10, 9, 26], yearDigits: 2 }, zoneToken: 'PST',
- * //   rangeOf: [{ wall: { h: 8, meridiem: 'am' } }, { wall: { h: 8, m: 40, meridiem: 'am' } }] }],
- * //   confirm: true }] } — off the allow-list: confirmed with its zone
+ * //   rangeOf: [{ wall: { h: 8, meridiem: 'am' } }, { wall: { h: 8, m: 40, meridiem: 'am' } }] }] }] }
  * reader.read('errors in the last 2 hours', { locale: 'en-US' });
  * // { mentions: [{ quote: 'last 2 hours', parses: [{ relative: { unit: 'hour', count: 2 } }] }] }
- * reader.read('last 2 hours ending at the outage', { locale: 'en-US' });
- * // { mentions: [{ quote: 'last 2 hours', parses: [...], confirm: true }] } — not the clause's end
  * reader.read('what failed yesterday morning?', { locale: 'en-US' });
  * // { mentions: [{ quote: 'yesterday morning', parses: [], problem: 'unreadable' }] }
- * reader.read('8:40 AM til 9.30', { locale: 'en-US' });
- * // { mentions: [{ quote: '8:40 AM', parses: [{ wall: { h: 8, m: 40, meridiem: 'am' } }],
- * //   leftover: ['til', '9.30'], confirm: true }] } — confirmed, never said
  * ```
  */
 
 import {
   isTimeParts,
-  MAX_LEFTOVER,
   MAX_MENTIONS,
   type TimeDate,
   type TimeMention,
@@ -140,7 +92,7 @@ export const ENGLISH_TIME_READER_VERSION = '1.0.0';
 
 const DAY_WORDS: Readonly<Record<string, number>> = { today: 0, yesterday: -1, tomorrow: 1 };
 
-/** The units a look-back is read in — the allow-listed spans (`rows.ts` · `isSaidForm`). */
+/** The units a look-back is read in: minutes, hours, days, weeks. */
 const SPAN_UNITS: Readonly<Record<string, 'minute' | 'hour' | 'day' | 'week'>> = {
   minute: 'minute',
   min: 'minute',
@@ -201,10 +153,11 @@ const NOT_READ: readonly RegExp[] = [
 
 // ─── The range grammar (one owner) ──────────────────────────────────────
 //
-// The connectors a v1 range is READ with — an allow-list, the grammar's own:
-// the joins (`joins`), the bare hour's lookahead (`BARE_HOUR`) and `… to now`
-// (`MODIFIER_AFTER`) all build from it. It never decides what is left
-// unread: that is the leftover rule below, which needs no connector list.
+// The connectors a v1 range is READ with — the grammar's own list: the joins
+// (`joins`), the bare hour's lookahead (`BARE_HOUR`) and `… to now`
+// (`MODIFIER_AFTER`) all build from it. What the reader did not read is not
+// its question any more: every reading is a proposal the person confirms
+// (the owner's decision "Always confirm", time design TQ29).
 
 const RANGE_WORDS = 'to|until|till|through|thru';
 /** A range connector the grammar reads: a word, or a hyphen, en dash or em dash. */
@@ -225,85 +178,6 @@ const MODIFIER_AFTER = new RegExp(
     `at\\s+the\\s+(?:latest|earliest)\\b|${RANGE_CONNECTOR}\\s*now\\b))`,
   'i',
 );
-
-// ─── The leftover rule ───────────────────────────────────────────────────
-//
-// ONE rule over the WHOLE message, no clauses and no connector lists: after
-// every span the reader parsed is removed (read or unreadable), is anything
-// time-like left? Nothing left: each reading is COMPLETE — the person's words.
-// Something left: each reading names those tokens (`TimeMention.leftover`) and
-// is confirmed through the time ask, never filed as said. Three rounds of a
-// grammar that tried to prove it read a whole range each leaked the next
-// spelling (a clause mark before a capital, a range to an event, a pasted
-// `Start: … End: …`); a broad scan cannot be exact, so it only has to be
-// CONSERVATIVE — a word that is sometimes not time-like (`to`, `may`, `second`)
-// costs a confirmation, never a partial reading recorded as said.
-
-/** Time-or-range words, case-insensitive, `-ish` allowed — data, one list. */
-const LEFTOVER_WORDS = [
-  // numbers and hours in words, and the ordinals a day is said with
-  'zero|one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve|thirteen|fourteen|fifteen',
-  'sixteen|seventeen|eighteen|nineteen|twenty|thirty|forty|fifty|sixty|noon|midday|midnight|half',
-  'quarter|first|second|third|fourth|fifth|sixth|seventh|eighth|ninth|tenth|eleventh|twelfth',
-  'thirteenth|fourteenth|fifteenth|sixteenth|seventeenth|eighteenth|nineteenth|twentieth|thirtieth',
-  // days, relative words and spans
-  'today|tomorrow|yesterday|tonight|tonite|tmrw|tmr|tmw|yday|yest|days?|daily|weekends?|weeks?',
-  'fortnights?|months?|years?|decades?|quarters?|seconds?|secs?|minutes?|mins?|hours?|hrs?',
-  'last|next|previous|past|ago|since|before|after|then|earlier|later|early|late|now|present',
-  'current|recent|recently|during|within|about|around|approx|approximately|roughly|circa|ish',
-  // anchors, open ends and exclusions a reading does not carry
-  'preceding|following|prior|pre|post|onwards?|forwards?|hence|henceforth|thereafter|thenceforth',
-  'excluding|except|excl|outside|weekdays?|workdays?|weeknights?|business|working',
-  // week days and months, whole and short
-  '(?:mon|tues|wednes|thurs|fri|satur|sun)days?|mon|tue|tues|wed|weds|thu|thur|thurs|fri|sat|sun',
-  'january|february|march|april|may|june|july|august|september|october|november|december',
-  'jan|feb|mar|apr|jun|jul|aug|sep|sept|oct|nov|dec',
-  // parts of the day, and the ends of one
-  'eod|eob|cob|eow|eom|mornings?|afternoons?|evenings?|nights?|overnight|lunch|lunchtime|breakfast',
-  'dinner|sunrise|sunset|dawn|dusk|daybreak|nightfall|close|closing|shift|pm',
-  // range words
-  'to|until|till|til|through|thru|between|from|onto|unto|upto',
-  // zone words — a zone said in words (`London time`, `server time`) or an IANA area
-  'pacific|eastern|central|mountain|zone|zones|timezone|time|utc|gmt|local',
-  'africa|america|antarctica|arctic|asia|atlantic|australia|europe|indian',
-].join('|');
-/**
- * The marks the scan does NOT count: sentence punctuation, quotes and
- * brackets. Every other symbol or punctuation mark (`\p{S}`, `\p{P}`) counts
- * — by RULE, not by list: a dash, an arrow of any block, `>`, `<`, `≥`, `=`,
- * `|`, `»`, `~`, `…`, `+`, `/`, `&`, `_` alike. `:` is not counted (`Start:`);
- * a message it joins holds two mentions, which confirms on its own
- * (`rows.ts` · `confirmNeededOf`).
- */
-const NEUTRAL_MARKS = '.,;:!?\'"()\\[\\]’‘“”';
-/** One counted mark: a symbol or punctuation mark outside {@link NEUTRAL_MARKS}. */
-const COUNTED_MARK = `(?![${NEUTRAL_MARKS}])[\\p{S}\\p{P}]`;
-/**
- * What the scan counts: a digit run in any script (`9.30` is one token), a
- * word of {@link LEFTOVER_WORDS}, a dotted meridiem, `o'clock`, `..`, and any run
- * of {@link COUNTED_MARK} (`->` is one token). Lower-case `am` is not counted: it is English, and a
- * meridiem is only ever said with a number, which the scan counts already.
- */
-const LEFTOVER = new RegExp(
-  '\\p{Nd}+(?:[.:,]\\p{Nd}+)*' +
-    `|\\b(?:${LEFTOVER_WORDS})(?:-?ish)?\\b` +
-    "|\\b[ap]\\.m\\b\\.?|\\bo['’]?\\s?clock\\b" +
-    `|\\.\\.+|(?:${COUNTED_MARK})+`,
-  'giu',
-);
-/** Time-like only in capitals: `AM` (`am` is English) and the zone abbreviations. */
-const LEFTOVER_CASED = new RegExp(`\\b(?:AM|${ZONE_ABBREVIATIONS.join('|')})\\b`, 'gu');
-/** A word that joins a range or a sum — counted only right after a time (`8 AM and the deploy`). */
-const JOINER = /\b(?:and|plus|minus)\b/giu;
-/** A lone mark between two letters is part of a word (`check-in`, `and/or`, `request_id`), not a range. */
-const MARK = new RegExp(`^${COUNTED_MARK}$`, 'u');
-const LETTER = /\p{L}/u;
-/** What may stand between a time and the joiner after it. */
-const BETWEEN_JOIN = /[\s,;:()"'[\]]/u;
-/** The range's opener the grammar reads before its first side — consumed with the range. */
-const RANGE_OPENER = /(?:^|[^\w])((?:from|between)\s+)$/i;
-/** Longest leftover token recorded — the port's token bound. */
-const MAX_LEFTOVER_TOKEN = 64;
 
 // ─── The v1 phrases ──────────────────────────────────────────────────────
 
@@ -634,68 +508,6 @@ function groupsOf(text: string, atoms: readonly Atom[], notRead: readonly Span[]
   );
 }
 
-/**
- * The leftover rule: the time-like tokens the message holds OUTSIDE every
- * phrase the reader parsed (`LEFTOVER`, `LEFTOVER_CASED`, a joiner right after
- * a time), in the order written — at most `MAX_LEFTOVER`, each a verbatim
- * substring. A READ group is parsed whole, its connector and its opener
- * (`from`, `between`) included; an unreadable group only in its phrases — the
- * modifier or mark that made it unreadable (`~ 9:30 PM`, `since 8 AM`) is
- * still said beside every other reading.
- */
-function leftoverOf(text: string, groups: readonly Group[]): string[] {
-  const inSpan = new Uint8Array(text.length);
-  for (const g of groups) {
-    if (g.unreadable) {
-      for (const item of g.items) inSpan.fill(1, item.start, item.end);
-      continue;
-    }
-    const opener = g.rangeAt !== undefined ? RANGE_OPENER.exec(text.slice(0, g.start)) : null;
-    inSpan.fill(1, g.start - (opener === null ? 0 : (opener[1] as string).length), g.end);
-  }
-  const masked = Array.from(text, (ch, i) => (inSpan[i] === 1 ? ' ' : ch)).join('');
-  const found: Span[] = [];
-  for (const re of [LEFTOVER, LEFTOVER_CASED]) {
-    for (const m of matches(re, masked)) {
-      const at = m.index;
-      if (MARK.test(m[0]) && isLetterAt(masked, at - 1) && isLetterAt(masked, at + 1)) continue;
-      found.push({ start: at, end: at + m[0].length });
-    }
-  }
-  const timeEnds = new Set([...found.map((s) => s.end - 1), ...spanEnds(inSpan)]);
-  for (const m of matches(JOINER, masked)) {
-    let j = m.index - 1;
-    while (j >= 0 && inSpan[j] !== 1 && BETWEEN_JOIN.test(text[j] as string)) j--;
-    if (j >= 0 && timeEnds.has(j)) found.push({ start: m.index, end: m.index + m[0].length });
-  }
-  return distinctSpans(found)
-    .slice(0, MAX_LEFTOVER)
-    .map((s) => text.slice(s.start, Math.min(s.end, s.start + MAX_LEFTOVER_TOKEN)));
-}
-
-const isLetterAt = (text: string, at: number): boolean =>
-  at >= 0 && at < text.length && LETTER.test(text[at] as string);
-
-/** The last index of every run of spanned characters. */
-function spanEnds(inSpan: Uint8Array): number[] {
-  const out: number[] = [];
-  for (let i = 0; i < inSpan.length; i++) {
-    if (inSpan[i] === 1 && inSpan[i + 1] !== 1) out.push(i);
-  }
-  return out;
-}
-
-/** Spans in text order, an overlapped one dropped (the earlier, then the longer, wins). */
-function distinctSpans(spans: readonly Span[]): Span[] {
-  const sorted = [...spans].sort((a, b) => a.start - b.start || b.end - a.end);
-  const out: Span[] = [];
-  for (const s of sorted) {
-    const last = out[out.length - 1];
-    if (last === undefined || s.start >= last.end) out.push(s);
-  }
-  return out;
-}
-
 /** Groups a widening made overlap are one phrase (`8 and 9 AM` held the bare `8` on its own). */
 function mergeOverlaps(groups: readonly Group[]): Group[] {
   const out: Group[] = [];
@@ -815,141 +627,10 @@ function partsOf(group: Group): TimeParts | undefined {
   return isTimeParts(parts) ? parts : undefined;
 }
 
-// ─── The allow-list: the forms this reader files as said ─────────────────
-//
-// Five review rounds showed English has an endless tail: a zone named in words
-// (`London time`, `server time`, `in Asia/Kolkata`), an event anchor, an open
-// end. So the reader TRUSTS only what it has evidence it reads right, and
-// grows the list from a benchmark — never shrinks a deny-list forever. Every
-// other phrase it reads is marked `confirm` and offered with its zone.
-
-/** A zone token that fixes the offset by itself: `Z`, a numeric offset, `UTC`, an IANA `Area/Location`. */
-const EXPLICIT_ZONE = new RegExp(`^(?:Z|UTC|[+-]\\d{1,2}(?::?\\d{2})?|(?:${IANA_AREAS})/.+)$`);
-
-/** One bound of an explicit ISO reading: a year-dated date, a clock time, an explicit zone (each maybe said once for a range). */
-function isZonedBound(side: TimeParts, outer: TimeParts): boolean {
-  const date = side.date ?? outer.date;
-  const zone = side.zoneToken ?? outer.zoneToken;
-  return (
-    date?.kind === 'fixed' &&
-    date.year !== undefined &&
-    side.wall !== undefined &&
-    side.relative === undefined &&
-    zone !== undefined &&
-    EXPLICIT_ZONE.test(zone)
-  );
-}
-
-/**
- * Whether a reading is on the allow-list — the ONLY forms this reader files as
- * the person's words: (1) a RELATIVE SPAN from now (`last|past N
- * minutes|hours|days|weeks`, `the last|past hour|day|week` — no zone, no
- * date order, nothing supplied); (2) an EXPLICIT ISO-8601 instant or range
- * whose every bound carries an offset or an IANA zone
- * (`2026-10-09T08:00-07:00`, `2026-10-09T08:00Z/2026-10-09T09:00Z`). The
- * reader's named dates are ISO only (a named month is unreadable), so a
- * year-dated `fixed` date here IS an ISO one.
- */
-function isAllowListed(parts: TimeParts): boolean {
-  const r = parts.relative;
-  if (r !== undefined) return Object.keys(parts).length === 1 && 'count' in r;
-  if (parts.rangeOf === undefined) return isZonedBound(parts, {});
-  return (
-    parts.wall === undefined &&
-    isZonedBound(parts.rangeOf[0], parts) &&
-    isZonedBound(parts.rangeOf[1], parts)
-  );
-}
-
-// ─── The position rule: an allow-listed span is said only where it ends its clause ───
-//
-// Six review rounds judged the words AROUND an allow-listed span with a word
-// list (`LEFTOVER_WORDS`), and each found the next word it missed (`ending at
-// the outage`, `in London`, `without the outage`, `newer than …`). Place names,
-// event names and open ends are an endless tail; POSITION is not. So an
-// allow-listed span is said only when (1) nothing but spaces and closing marks
-// follow it up to the end of its clause — the end of the message, a line
-// break, or `.` `?` `!` `;` (a comma does NOT end a clause: `last 2 hours, on
-// node 11` confirms) — and the next clause does not open with a word of
-// {@link BEND_WORDS} (`last 2 hours. Excluding the outage`); and (2) nothing
-// before it in its clause is a word of {@link BEND_WORDS}, except the plain
-// lead-in a look-back is said with (`in|over|for [the]`, right before
-// it) and a range's own opener (`from`, `between`). Everything else confirms
-// with the reading and its zone shown. The list on the BEFORE side is closed —
-// English prepositions, negators and a few anchor participles — which is why
-// it can be complete where a list of what may FOLLOW could not.
-
-/**
- * Words that bend a look-back or an instant said after them (`since`, `ending`,
- * `newer than`, `excluding`, `not in`, `the end of`): English prepositions and
- * negators — a closed class — plus the anchor participles a window is tied
- * with. `and`/`or` are not in it (`and/or last 2 hours` is said); the
- * determiner `no` is not (`no errors in the last 2 hours?` is said).
- */
-const BEND_WORDS: ReadonlySet<string> = new Set(
-  (
-    'aboard about above across after against ago ahead along alongside amid amidst among amongst ' +
-    'around as at atop barring before behind below beneath beside besides between beyond but by ' +
-    'circa despite during except excepting excl excluding for from ignoring in including inside ' +
-    'into less like minus near nearby notwithstanding of on onto opposite outside over past pending ' +
-    'per plus post pre prior since than through throughout thru till til to toward towards under ' +
-    'underneath unlike until unto upon versus via vs with within without not other sans save ' +
-    'preceding following surrounding spanning ending ended ends starting started starts beginning ' +
-    'began begins leading'
-  ).split(' '),
-);
-/** A clause end before a said span: `.` `?` `!` `;` followed by a space, a closing mark or the end — or a line break. */
-const CLAUSE_END = /[.?!;]+(?=[\s)\]"'’”]|$)|\n/g;
-/** What may follow a said span inside its clause: spaces and closing marks, nothing else. */
-const CLOSING = /^[^\S\n]*(?:[)\]"'’”][^\S\n]*)*/;
-/**
- * The lead-in a look-back is plainly said with, right before it (`errors in the
- * last 2 hours`). Not `within` or `during`: the leftover scan counts both
- * (`within 2 hours of the deploy`), so they confirm wherever they stand.
- */
-const LEAD_IN = /(?<![\p{L}\p{N}'’_-])(?:in|over|for)(?:\s+the)?\s+$/iu;
-/** One word, hyphen and apostrophe kept inside it (`check-in` is not `in`). */
-const WORD = /[\p{L}\p{N}'’_-]+/gu;
-
-const bends = (text: string): boolean =>
-  (text.toLowerCase().match(WORD) ?? []).some((w) => BEND_WORDS.has(w));
-
-/**
- * The position rule — the one owner of what may stand AROUND a said span:
- * the group ends its clause (only spaces and closing marks after it, then a
- * clause end whose next clause does not open with a bending word), and its
- * clause holds no bending word before it but the plain lead-in or the range's
- * own opener.
- */
-function endsItsClause(text: string, group: Group): boolean {
-  let at = group.end + (CLOSING.exec(text.slice(group.end)) as RegExpExecArray)[0].length;
-  if (at < text.length) {
-    const end = /^(?:[.?!;]+(?=[\s)\]"'’”]|$)|\r?\n)/.exec(text.slice(at));
-    if (end === null) return false;
-    at += end[0].length;
-    const next = /^[\s)\]"'’”]*([\p{L}\p{N}'’_-]+)/u.exec(text.slice(at));
-    if (next !== null && bends(next[1] as string)) return false;
-  }
-  let from = 0;
-  for (const m of matches(CLAUSE_END, text)) {
-    if (m.index + m[0].length > group.start) break;
-    from = m.index + m[0].length;
-  }
-  const head = text.slice(from, group.start);
-  const lead =
-    group.items[0]?.atom?.kind === 'span'
-      ? LEAD_IN.exec(head)?.[0]
-      : group.rangeAt !== undefined
-      ? RANGE_OPENER.exec(head)?.[1]
-      : undefined;
-  return !bends(head.slice(0, head.length - (lead?.length ?? 0)));
-}
-
 /** The text's mentions, in the order written — at most `MAX_MENTIONS`, the port's bound. */
 function mentionsOf(text: string): TimeMention[] {
   const atoms = atomsOf(text);
   const groups = groupsOf(text, atoms, notReadSpans(text, atoms));
-  const leftover = leftoverOf(text, groups);
   const mentions: TimeMention[] = [];
   for (const group of groups) {
     const quote = text.slice(group.start, group.end);
@@ -958,14 +639,7 @@ function mentionsOf(text: string): TimeMention[] {
     mentions.push(
       parts === undefined
         ? { quote, parses: [], problem: 'unreadable' }
-        : {
-            quote,
-            parses: [parts],
-            ...(leftover.length > 0 && { leftover: [...leftover] }),
-            ...(!(isAllowListed(parts) && endsItsClause(text, group)) && {
-              confirm: true as const,
-            }),
-          },
+        : { quote, parses: [parts] },
     );
   }
   return mentions.slice(0, MAX_MENTIONS);

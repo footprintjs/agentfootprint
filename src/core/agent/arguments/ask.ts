@@ -80,7 +80,7 @@ import {
   type TimePolicy,
 } from '../../time/resolve.js';
 import { timeAskOf, type TimeAskMessages } from '../../time/ask.js';
-import { needsConfirm, type TimeReadingRow } from '../../time/rows.js';
+import { timeAnswerRow, type TimeAnswerRow, type TimeReadingRow } from '../../time/rows.js';
 import type { ZoneName } from '../../time/zone.js';
 import { shownArgsOf } from '../../toolShownArgs.js';
 import { validatePropertyValue } from '../toolArgsValidation.js';
@@ -884,8 +884,12 @@ export function factExpectation(problem: PeriodFactProblem, facts: PeriodFacts):
 /** What binding one answer did: the new state and the rows it files. */
 export interface BoundAnswer {
   readonly state: ArgumentAskState;
-  /** `answered` rows for bound fields; `asked: 'invalid-answer'` rows for fields asked again or exhausted. */
-  readonly rows: readonly ArgumentRow[];
+  /**
+   * `answered` rows for bound fields; `asked: 'invalid-answer'` rows for fields
+   * asked again or exhausted; and, for a bound WINDOW field, the `time-answer`
+   * row that settles its mention for the rest of the turn (`core/time/rows.ts`).
+   */
+  readonly rows: readonly (ArgumentRow | TimeAnswerRow)[];
 }
 
 /**
@@ -908,7 +912,7 @@ export function bindAnswer(
   if (waiting === undefined) return { state, rows: [] };
   const byId = new Map(calls.map((c) => [c.id, c]));
   const progress = [...state.progress];
-  const rows: ArgumentRow[] = [];
+  const rows: (ArgumentRow | TimeAnswerRow)[] = [];
   const fields = [...state.fields];
   waiting.fieldIndexes.forEach((index, k) => {
     const field = state.fields[index];
@@ -924,6 +928,8 @@ export function bindAnswer(
       if ('fills' in bound) {
         progress[index] = { rounds: was.rounds, answer, fills: bound.fills };
         rows.push(...windowAnsweredRows(field, bound.fills, byId, toolOf, stamp));
+        // The person's window for the mention — the only door a window of words becomes theirs.
+        rows.push(timeAnswerRow({ mention: field.window.mention, ...bound.answered }, stamp));
         return;
       }
       if ('outside' in bound) {
@@ -962,7 +968,15 @@ export function bindAnswer(
 
 /** What an answer to a window field did: bound (the values per call), a follow-up question, or a misfit. */
 type WindowBinding =
-  | { readonly fills: Readonly<Record<string, WindowFill>> }
+  | {
+      readonly fills: Readonly<Record<string, WindowFill>>;
+      /** The window the person settled: the range, its zone, and whether it was the offered reading. */
+      readonly answered: {
+        readonly range: TimeRange;
+        readonly zone: ZoneName;
+        readonly how: TimeAnswerRow['how'];
+      };
+    }
   | { readonly followUp: AskField }
   | { readonly expected: string }
   /** The zone answer left readings none of which a member tool's facts allow: its calls are refused. */
@@ -978,10 +992,13 @@ export const WINDOW_ZONE_EXPECTATION = 'a time zone in which the time the person
 
 /**
  * Bind one answer to a window field: a `zone` answer re-reads the mention in
- * that zone — one window binds it, several become the follow-up question with
- * the readings as choices; a `time-range` answer (a choice, or free entry the
- * door already judged) is converted into every member call's forms — exactly,
- * else wider (the fill's own rule) — after each tool's declared facts.
+ * that zone and asks the follow-up question with the readings as choices —
+ * each still a PROPOSAL to confirm (the owner's decision "Always confirm");
+ * a `time-range` answer (a choice, or free entry the door already judged) is
+ * converted into every member call's forms — exactly, else wider (the fill's
+ * own rule) — after each tool's declared facts. A choice the ask offered is
+ * `confirmed` (the person's click on the pre-filled reading); any other window
+ * is `edited` — both are the person's answer.
  */
 function bindWindowAnswer(
   field: AskField,
@@ -998,20 +1015,14 @@ function bindWindowAnswer(
       return { expected: WINDOW_ZONE_EXPECTATION };
     }
     const row = reading.row;
-    // An incomplete reading stays one to CONFIRM after its zone is answered (step T6b).
-    const confirm = needsConfirm(row);
+    // The re-read stays a PROPOSAL: the zone was the person's, the window is still words.
     const resolution = resolveMention(
       withZoneAnswered(row.parses ?? [], answer),
       { now: time.now, zone: time.zone },
       row.reader,
-      confirm,
+      true,
     );
-    const choice = chooseReading(resolution, reading.policy, row.reader.kind, undefined, confirm);
-    if (choice.by === 'only' || choice.by === 'policy') {
-      const candidate = resolution.candidates[choice.candidate];
-      if (candidate === undefined) return { expected: WINDOW_ZONE_EXPECTATION };
-      return windowFills(field, candidate.range, candidate.zone, byId, toolOf, time);
-    }
+    const choice = chooseReading(resolution, reading.policy, row.reader.kind, undefined, true);
     if (choice.by === 'open') {
       const ask = timeAskOf(
         { ...row, candidates: resolution.candidates, choice },
@@ -1050,7 +1061,9 @@ function bindWindowAnswer(
   const at = field.choices?.indexOf(answer) ?? -1;
   const zone = (at >= 0 ? window.zones?.[at] : undefined) ?? time.zone;
   if (zone === undefined) return { expected: WINDOW_FORM_EXPECTATION };
-  return windowFills(field, range, zone, byId, toolOf, time);
+  const bound = windowFills(field, range, zone, byId, toolOf, time);
+  if (!('fills' in bound)) return bound;
+  return { fills: bound.fills, answered: { range, zone, how: at >= 0 ? 'confirmed' : 'edited' } };
 }
 
 /** What the first reading breaks, when EVERY reading breaks one member tool's facts — the refusal's words. */
@@ -1084,7 +1097,7 @@ function windowFills(
   byId: ReadonlyMap<string, BatchCall>,
   toolOf: ToolOf,
   time: AskTime,
-): WindowBinding {
+): { readonly fills: Readonly<Record<string, WindowFill>> } | { readonly expected: string } {
   const fills: Record<string, WindowFill> = {};
   for (const member of field.members) {
     const rules = rulesOf(toolOf(member.toolName));

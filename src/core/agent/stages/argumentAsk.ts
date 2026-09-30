@@ -62,7 +62,7 @@ import { unansweredRefusal } from '../arguments/serve.js';
 import { recordFindings } from '../findings/ledger.js';
 import type { FindingsLedger } from '../findings/types.js';
 import type { AgentState } from '../types.js';
-import { clockOf, readingsOf, type TimeReadingRow } from '../../time/rows.js';
+import { answersOf, clockOf, readingsOf, type TimeReadingRow } from '../../time/rows.js';
 import type { ZoneName } from '../../time/zone.js';
 import { timeAskOf, type TimeAskMessages } from '../../time/ask.js';
 import { spellRange } from '../../time/range.js';
@@ -70,11 +70,21 @@ import type { TimePolicy } from '../../time/resolve.js';
 import { defaultTimeAskMessages } from '../../../locales/timeAsk.js';
 import type { AskTime } from '../arguments/ask.js';
 
-/** Under `.time({ reader })`: this turn's ONE open mention — the row the lazy ask is about. */
+/**
+ * Under `.time({ reader })`: this turn's ONE open mention — the row the lazy
+ * ask is about. A mention the person already settled in the time ask (its
+ * `time-answer` row) is not open: it is asked once per turn.
+ */
 function openReadingOf(scope: TypedScope<AgentState>): TimeReadingRow | undefined {
   const ledger = scope.findingsLedger as FindingsLedger | undefined;
-  const open = readingsOf(ledger, scope.turnNumber as number).filter(
-    (row) => row.quote !== undefined && row.refused === undefined && row.choice?.by === 'open',
+  const turn = scope.turnNumber as number;
+  const answered = new Set(answersOf(ledger, turn).map((a) => a.mention));
+  const open = readingsOf(ledger, turn).filter(
+    (row) =>
+      row.quote !== undefined &&
+      row.refused === undefined &&
+      row.choice?.by === 'open' &&
+      !answered.has(row.mention ?? 0),
   );
   return open.length === 1 ? (structuredClone(open[0]) as TimeReadingRow) : undefined;
 }

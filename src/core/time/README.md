@@ -24,12 +24,12 @@ It is a leaf: it imports nothing outside itself, and `readers/` imports only the
 | `clock.ts` | the run clock (§ 4): `TimeClock { now, nowSource, zone, zoneSource }`; the two inputs read or refused by name — the run's `time: { now, zone, window }` (`readRunTime`) and the builder's `.time({ zone })` (`readTimeOptions`); `draftClock` (the run's zone wins, the builder's is a fallback, neither is `'no-zone'`), `completeClock` (`now` is the app's, else the turn's start: `nowSource: 'default'`), `clockChange` (what a resume passed that differs from the kept clock) |
 | `reader.ts` | the `TimeReader` port (`id`, `version`, `locale`, `kind: 'rule' \| 'model'`, `read`) and its result, `TimeParts` — zone-less parts, never instants; `readerIssue` (the builder's check) and `checkReading` (a quote must be a verbatim substring of the text; parts well formed; a `leftover` only beside parses, each token in the text; `confirm: true` only beside parses — the reader does not vouch the form; a refused mention keeps no text) |
 | `resolve.ts` | parts + clock + policy → every candidate window (`resolveMention`: date orders, am/pm, the year, both instants of a DST overlap or gap, a day word, a look-back, a range read to the end of its grain, a said IANA zone or offset — an abbreviation is asked, never mapped), and `chooseReading` (`only` · `policy` · `open` with its questions · `none`); the v1 `TimePolicy` (`dateOrder`, `year`, both `'ask'` by default); the checks for a recorded candidate and choice |
-| `readers/english.ts` | the library's careful English reader, `englishTimeReader()` (§ 5.3, step T6b): a `kind: 'rule'` TOKENIZER over the v1 phrases — ISO dates and instants, numeric dates (`10/09/26`, the order undecided), clock times (a bare hour only as a range's first side), a range of two, a zone written after them (IANA, `UTC-07:00`, a closed list of abbreviations — as written), today / yesterday / tomorrow, "last 40 minutes" — and ONE `unreadable` mention, quoting the whole phrase, for every other time phrase it recognises (parts of a day, night words, calendar spans, week days and named months, "ago", spans in words, a look-ahead, an ordinal day, and any v1 phrase a modifier such as "since" or "around" changes). A reading is the person's words only when nothing time-like is left in the whole message outside every phrase it parsed — otherwise it names its `leftover` tokens and is CONFIRMED through the time ask, never filed as said (the leftover rule; the trade-off — `9 AM and 3 retries` confirms — is in [`readers/README.md`](readers/README.md)). And it files as said ONLY its allow-list — a look-back from now (`last 2 hours`, `the past day`) and an explicit ISO instant or range with an offset or IANA zone, each only where it ENDS its clause (the position rule, `english.ts` · `endsItsClause`: `last 2 hours ending at the outage` confirms); every other form it reads (`yesterday`, a zone-less date or clock time) is marked `confirm` and offered with its zone ("I read “yesterday” as … in America/Los_Angeles — is that right?"; `readers/README.md`). Whatever the scan finds, a POINT time that is no explicit instant and a message with more than one mention are confirmed by the library (`rows.ts` · `confirmNeededOf`). Its word table is data inside the file; it imports only the port |
+| `readers/english.ts` | the library's careful English reader, `englishTimeReader()` (§ 5.3, step T6b): a `kind: 'rule'` TOKENIZER over the v1 phrases — ISO dates and instants, numeric dates (`10/09/26`, the order undecided), clock times (a bare hour only as a range's first side), a range of two, a zone written after them (IANA, `UTC-07:00`, a closed list of abbreviations — as written), today / yesterday / tomorrow, "last 40 minutes" — and ONE `unreadable` mention, quoting the whole phrase, for every other time phrase it recognises (parts of a day, night words, calendar spans, week days and named months, "ago", spans in words, a look-ahead, an ordinal day, and any v1 phrase a modifier such as "since" or "around" changes). It only PROPOSES: nothing it reads is ever filed as the person's words (the owner's decision "Always confirm", TQ29 — the law is the library's, `rows.ts` · `timeReadingRows`); every reading is offered through the time ask pre-filled with its window and zone, and only the person's answer settles it ([`readers/README.md`](readers/README.md)). Its word table is data inside the file; it imports only the port |
 | `convert.ts` | a tool's period FORMS (§ 7.1: `bounds` · `joined` · `object` · `day` · `lookback`, each bound `iso` · `epoch-ms` · `epoch-s` · `date` · `wall`) and the facts about its source (`PeriodFacts`); the sugar (`sugarForms` — today's `{ argument, spelling }`, `accepts`, `wall-range` + `zoneArgument`); one form's own rules (`formIssue`, `formArguments`, `parsesUnderForm`); the EXACT rows of § 7.2 (`convertExact`) and the inverse a binding reads (`readBack`, `sameRange`); the INEXACT rows (`convertWidened` — a range inside one day → that `day`, a range ending before now → the covering look-back; each with the range it reads and what it adds) and the refusal tests (`spansDaysForDayOnly`, `wallGapArgument`); a range against the facts (`periodFactProblem`, `partlyBeyondRetention`, `TimeRefusal`) |
-| `bind.ts` | which window a call carries (§ 5.6, § 7.3): the turn's windows read from the record (`turnWindowsOf` — a settled `time-reading` mention, the clock's `control` window) and one call's decision (`callWindowOf`: `filled` — exactly, or widened · `bound` by quote or value · `model-chosen` · `model` · `unread` · `not-filled` · `refused` before dispatch on a fact, a multi-day range to a `day`-only tool, or a skipped wall time) |
+| `bind.ts` | which window a call carries (§ 5.6, § 7.3): the turn's windows read from the record (`turnWindowsOf` — a mention the person settled in the time ask, `answered`; a `model` reader's reading waiting for confirmation; the clock's `control` window — a `rule` reading the person has not answered settles nothing) and one call's decision (`callWindowOf`: `filled` — exactly, or widened · `bound` by quote or value · `model-chosen` · `model` · `unread` · `not-filled` · `refused` before dispatch on a fact, a multi-day range to a `day`-only tool, or a skipped wall time) |
 | `drift.ts` | the clock at dispatch (§ 7.4): `driftAtDispatch` — a call that sent a look-back, dispatched more than the tool's step after the turn's `now`, is `redrawn` (the library's own fill, re-sent as the asked range in the tool's first absolute form) or `shifted` (the model's look-back, or no absolute form — runs as sent) |
 | `wire.ts` | the JSON that crosses a transport (§ 7.5): `TimeContext` — `ctx.time` in process, the `tools/call` request's `_meta.agentfootprint.time` over MCP — versioned (`timeContextOf`, `readTimeContext`) |
-| `rows.ts` | the layer's five ledger rows and the checkpoint door's test for each (`timeRowIsWellFormed`): `clock` (one per turn, filed by seed), `clock-on-resume` (a resume's differing `time`, recorded not applied), `call` (one per dispatched call, `dispatchedAt`, and `drift` when a look-back drifted), `time-reading` (one per mention the armed reader found, or one `mentions: 0` row; `timeReadingRows` builds them, `readingsOf` reads a turn's back), `call-window` (one per call to a tool whose period declares forms, filed by the inputs layer — `callWindowRow`, read back by `callWindowOfCall`); `clockOf` reads the latest turn's clock |
+| `rows.ts` | the layer's six ledger rows and the checkpoint door's test for each (`timeRowIsWellFormed`): `clock` (one per turn, filed by seed), `clock-on-resume` (a resume's differing `time`, recorded not applied), `call` (one per dispatched call, `dispatchedAt`, and `drift` when a look-back drifted), `time-reading` (one per mention the armed reader found, or one `mentions: 0` row; `timeReadingRows` builds them, `readingsOf` reads a turn's back), `call-window` (one per call to a tool whose period declares forms, filed by the inputs layer — `callWindowRow`, read back by `callWindowOfCall`), `time-answer` (one per mention the person settled in the time ask — the window, its zone, `how: 'confirmed' | 'edited'`; filed by the batch ask — `timeAnswerRow`, read back by `answersOf`); `clockOf` reads the latest turn's clock |
 | `present.ts` | time for a PERSON: `presentInstant`, `presentSpan` (two inclusive ends, as declared), `presentRange` (a half-open range with the end AS SAID — `[08:00, 08:41)` at minute grain shows `08:40`); locale-neutral with no locale, the zone always named, each end's offset when a span crosses a DST change; with a `locale` (the reader's) through `Intl` in that language, the zone's short name |
 | `ask.ts` | the one time ask (§ 6): `TimeFormat` (`instant` · `time-range` · `zone`), `checkTimeAnswer` — the ONE judge of a time field's answer (strict instants with an offset, `from` before `to`, an IANA zone, under a known zone no wall time the clocks skip, and — handed a tool's facts and the clock — inside its `direction`, `retention` and `maxRange`) — refusals as codes with facts; the catalog's keys (`TIME_ASK_MESSAGE_KEYS`), `readTimeAskMessages` (the app's overrides), `refusalReason` (the re-ask's reason); `timeAskOf` — the field an `open` reading needs (the candidates as labelled choices, a zone asked as `format: 'zone'`, a `model` reading offered to confirm) |
 
@@ -61,8 +61,8 @@ the resolver's (`TimeCandidate`, `ResolvedWindow`, `ReadingChoice`, `TimePolicy`
 `agentfootprint/observe`, beside the other catalogs); since the English reader (step T6b)
 `englishTimeReader` and `EnglishTimeReaderOptions`; the doors are `AgentBuilder.time`,
 `run({ time })` and `InputField.format`. The grammar functions stay internal.
-Since step T6b the reader's settled windows are also SERVED: the Tools mount reads them off the
-ledger (`bind.ts` · `readerWindowsOf`) and the slot's one decoration site appends the sentence
+Since step T6b the windows the person CONFIRMED (and a `model` reader's readings) are also
+SERVED, with their source: the Tools mount reads them off the ledger (`bind.ts` · `readerWindowsOf`) and the slot's one decoration site appends the sentence
 (`arguments/serve.ts` · `timeWindowsSentence`); and a mention still open is ASKED through the batch
 ask (`arguments/ask.ts` · `planAskFields`'s window field, `stages/argumentAsk.ts` · `windowPlanOf`),
 re-read after a zone answer with `resolve.ts` · `withZoneAnswered`.
@@ -89,9 +89,12 @@ read them; the policy (`dateOrder`, `year`) only removes readings, and a removal
 (`choice.by: 'policy'`); a DST overlap or gap, a missing meridiem and a zone abbreviation are never
 settled by the library (`open`). The reader runs ONCE per message: seed files the rows, and a
 resume or a `resumeOnError` retry of the same turn finds them and does not call it again — a
-message with no mention files one `mentions: 0` row for exactly that reason. A `kind: 'model'`
-reader's candidates are never `said`, and even a single window stays `open` until the person
-confirms it (`confirm`). Each row records the reader's id, version, kind and locale and the tz
+message with no mention files one `mentions: 0` row for exactly that reason. **No reading is ever
+the person's words** (the owner's decision "Always confirm", TQ29): whatever the reader's kind,
+its candidates are never `said`, and even a single window stays `open` with `confirm` until the
+person answers in the time ask — the answer files a `time-answer` row (`confirmed` when they
+picked the offered reading, `edited` when they wrote their own), the ONE door by which a window of
+words becomes theirs. Each row records the reader's id, version, kind and locale and the tz
 database version (`zone.ts` · `tzdataVersion`), because either can change between releases.
 
 **The ask law: the library checks a time answer before the app sees it, and says why in words
@@ -101,21 +104,21 @@ A refused answer is not taken: the ask comes back with `refused: { answer, reaso
 `repeat: { count }`, the field `missing` again, and nothing runs (no model call, no row: the run never
 restarted). The reason is a catalog sentence, and only a check the app armed can produce one (a
 `format`, or the DST check under `.time()`, which knows the person's zone). A reading's choices are
-offered as labelled `enum` values in the reader's locale, free entry open unless `strict`; a
-`model` reader's window is offered as the library's reading to confirm, never as the person's words.
+offered as labelled `enum` values in the reader's locale, free entry open unless `strict`; every
+reading is offered as the library's reading to confirm, with its zone, never as the person's words.
 
 **The period law: the library writes the person's window into a tool's own arguments only
 exactly, and never over the model's.** A tool DECLARES every shape its period takes (`forms`, today's
 `{ argument, spelling }` its shorthand) and facts about its source — never policy. Under `.time()`
 the inputs layer (`arguments/resolve.ts` · `timeDecisionsOf`) asks `bind.ts` once per call: the
 model left every period argument out and the turn holds exactly ONE window of the person's (a
-settled mention, or the UI's `time.window` — two mentions fill nothing) → the window goes into the
+mention they settled in the time ask, or the UI's `time.window` — two mentions fill nothing) → the window goes into the
 first form that holds it exactly (`convertExact`: an epoch-seconds bound or a look-back's length
 rounds OUTWARD, recorded `rounded`; a form that would widen, shift or drop part of it is never
-chosen) and the arguments are filed as the person's (`said` + `matched: 'mention'`; a `model`
-reader's window as a reading, `reading: true`; a UI window as `app`, `appSource: 'time.window'`).
-A window the model sent runs as sent: bound to the person's window by the quote it declared (then
-filed `said` + `matched: 'mention'`) or by value, else recorded `model-chosen` beside the person's
+chosen) and the arguments are filed as the person's (`answered` + `matched: 'mention'`; a `model`
+reader's window as a reading, `said` + `reading: true`; a UI window as `app`, `appSource:
+'time.window'`). A window the model sent runs as sent: bound to the person's window by the quote it
+declared (then filed `answered` + `matched: 'mention'`) or by value, else recorded `model-chosen` beside the person's
 — a drill-down and a comparison are normal work, and the standing reads "not sure". One
 `call-window` row per call says which; `ctx.time` (`wire.ts`) hands the tool the range the call asks
 for, read off that row, with the zone, the frozen `now` and the dispatch moment.
@@ -146,23 +149,31 @@ future date. A phrase outside its v1 set is ONE `unreadable` mention quoting the
 reading `yesterday` out of `yesterday morning` would silently widen what the person said, and
 an unreadable mention still counts as a mention, so it fills nothing beside another.
 
-**The served-window law: the model is told what the library read, in each tool's own form, as a
-reading (TQ13).** Under `.time({ reader })`, each tool that declares a period carries ONE sentence
-after its description naming every window the reader SETTLED this turn in that tool's form — the
-exact conversion, else the wider one the fill would use, said so ("“yesterday” → start_time …,
-end_time …"). An open or unreadable mention is not named; a turn with no settled window serves the
-bytes it always did. The values are library text, never the person's words (the lineage is T7's).
+**The served-window law: the model is told each settled window of the person's words, in each
+tool's own form, with its SOURCE (TQ13).** Under `.time({ reader })`, each tool that declares a
+period carries ONE sentence after its description naming every window SETTLED this turn in that
+tool's form — the exact conversion, else the wider one the fill would use, said so — and whose it
+is: "(the window the person confirmed when asked what their words meant)", "(… gave when asked …)",
+or, for a `model` reader, "(a reading of the person's words they have not confirmed, not their
+words)". A proposal still open or an unreadable mention is not named; a turn with nothing settled
+serves the bytes it always did. The known limit: `reactMode: 'classic'` caches its tools after the
+first iteration, so a window confirmed mid-turn is not served there (the later call is still filled
+from it — the fill reads the record).
 
 **The lazy-ask law: ask about the person's words only when a tool needs them.** A call that
-leaves its period out while the turn's ONE mention is still open, to a tool whose own rule asks
-for a period argument, is not asked argument by argument: the batch ask carries one window field
+leaves its period out while the turn's ONE mention is still open — every reading is, until the
+person answers — is not asked argument by argument, whatever the tool's own rule (a tool whose rule
+ASSUMES its period is asked too: its default never stands in for words the person wrote,
+`arguments/resolve.ts` · `verifyPlan`): the batch ask carries one window field
 for every such call — the zone first when the person wrote an abbreviation (`format: 'zone'`),
 then the readings as labelled `time-range` choices (a zone answer re-reads the mention in that zone;
 one window binds it). Only readings every member tool's facts allow are offered; when EVERY reading
 breaks a tool's facts nothing is asked and the call is refused (`bind.ts` · `fillWindow`, § 6.3).
-The chosen window goes into each call's forms (exactly, else wider), filed `answered`, and the
-note says the value came from the window the person chose. A tool whose rule assumes its period
-keeps its default; a turn with no reader asks as it always did.
+The chosen window goes into each call's forms (exactly, else wider), filed `answered` with a
+`time-answer` row (`confirmed` — the click on the pre-filled reading — or `edited`), and the note
+says the value came from the window the person chose; later calls of the turn are filled from it and
+the mention is not asked again. An unreadable mention offers no pre-fill: the tool's own rule asks.
+A turn with no reader asks as it always did.
 
 **The presentation law: a label is never data.** `present.ts` renders for a person — the typed
 record keeps the instants. With no reader armed (a later step) the form is locale-neutral:
@@ -262,7 +273,8 @@ Agent.create({ provider, model })
   .time({ zone: 'America/Los_Angeles', reader: myReader, policy: { dateOrder: 'MDY' } })
   .build();
 // agent.findings() → … { kind: 'time-reading', quote: '10/09/26 8 AM to 8:40 AM', candidates: [...],
-//   choice: { by: 'policy', candidate: 0, policy: { dateOrder: 'MDY' } }, reader: {...}, tzdata: '2025b' }
+//   choice: { by: 'open', remaining: [0], open: ['confirm'], policy: { dateOrder: 'MDY' } },
+//   reader: {...}, tzdata: '2025b' } — the policy narrowed it; the person still confirms it
 ```
 
 The English reader through an agent (`examples/features/86-english-time-reader.ts`):
@@ -273,14 +285,19 @@ Agent.create({ provider, model }).tool(clientActivity)
   .build();
 englishTimeReader().read('what failed yesterday morning?', { locale: 'en-US' });
 // { mentions: [{ quote: 'yesterday morning', parses: [], problem: 'unreadable' }] }
-// "Any client activity yesterday?" → client_activity's served description ends:
-//   'The library read time words in the person's message as: “yesterday” → start_time
-//    1791442800000, end_time 1791529200000 — a reading of their words, not their words; …'
+// "Any client activity yesterday?", the model leaves the period out → nothing served yet; paused:
+//   'Is this the time you meant by “yesterday”?' — one pre-filled choice labelled
+//   'I read “yesterday” as Thu, Oct 8, 2026, PDT in America/Los_Angeles — is that right?'
+//   resume with it → { kind: 'time-answer', mention: 0, from, to, zone, how: 'confirmed' }; the
+//   next request's client_activity description ends: 'Time words in the person's message, as the
+//   library holds them: “yesterday” → start_time 1791442800000, end_time 1791529200000 (the window
+//   the person confirmed when asked what their words meant); a call may pass these values as written.'
 // "Show client activity 10/09/26 8 AM to 8:40 AM PST", the model leaves the period out →
 //   paused: 'Which time zone did you mean by “PST” in “10/09/26 8 AM to 8:40 AM PST”?' (format: 'zone')
-//   resume { f1: 'America/Los_Angeles' } → paused: 'Which time did you mean by …?' — three
-//   labelled choices ('Fri, Oct 9, 2026, 8:00 – 8:40 AM PDT', …); resume with the first →
-//   the tool runs with { start_time: 1791558000000, end_time: 1791560460000 }, rows `answered`
+//   resume { f1: 'America/Los_Angeles' } → paused: 'Is this the time you meant by …?' — three
+//   labelled readings ('I read “…” as Fri, Oct 9, 2026, 8:00 – 8:40 AM PDT in America/Los_Angeles
+//   — is that right?', …); resume with the first → the tool runs with
+//   { start_time: 1791558000000, end_time: 1791560460000 }, rows `answered`
 ```
 
 The time ask through an agent (`examples/features/83-time-ask.ts`):
@@ -310,10 +327,10 @@ defineTool({
   },
   execute: (args, ctx) => query(args, ctx.time?.asked), // ctx.time = { version, asked, zone, now, dispatchedAt }
 });
-// "10/09/26 8 AM to 8:40 AM", the model leaves the period out →
-//   the tool runs with { start_time: 1791558000000, end_time: 1791560460000 };
-//   agent.findings() → … { kind: 'argument', argument: 'start_time', source: 'said', matched: 'mention' },
-//                       { kind: 'call-window', how: 'filled', form: 0, asked: {…}, person: { …, source: 'said', mention: 0 } }
+// "10/09/26 8 AM to 8:40 AM": the person confirms the reading in the time ask; a later call of the
+//   turn leaves the period out → the tool runs with { start_time: 1791558000000, end_time: 1791560460000 };
+//   agent.findings() → … { kind: 'argument', argument: 'start_time', source: 'answered', matched: 'mention' },
+//                       { kind: 'call-window', how: 'filled', form: 0, asked: {…}, person: { …, source: 'answered', mention: 0 } }
 convertExact({ range: asked }, sugarForms({ argument: 'w', spelling: 'iso-range' }), clock);
 // { form: 0, values: { w: '2026-10-09T08:00:00-07:00..2026-10-09T08:40:59-07:00' } } — inclusive end, to the second
 ```

@@ -44,11 +44,13 @@
  * removed a reading — a choice nobody said, recorded), several (`open`, with
  * the questions an ask must settle), or none. A `kind: 'model'` reader's
  * window is never settled by the library: it stays `open` until the person
- * confirms it (§ 5.5), and its candidates carry `said: []`. Neither is a
- * `rule` reader's reading that is not the person's window — `leftover`
- * tokens (`reader.ts` · `TimeMention.leftover`), a point time, or one of
- * several mentions (`rows.ts` · `confirmNeededOf`): the callers pass
- * `confirm: true` for it (`rows.ts` · `needsConfirm`).
+ * confirms it (§ 5.5), and its candidates carry `said: []`. Since the
+ * owner's decision "Always confirm" (time design TQ29) neither is ANY
+ * reading the record files: `rows.ts` · `timeReadingRows` passes
+ * `confirm: true` for every reader's reading, so only the person's answer
+ * in the time ask settles a window. The `confirm` parameter's default
+ * (`kind === 'model'`) is the unit's, for a caller that resolves parts
+ * outside the record.
  *
  * @example
  * ```ts
@@ -805,8 +807,8 @@ function builtOf(parts: TimeParts, clock: ResolveClock, nowMs: number): Built[] 
 
 /**
  * Every candidate window of one mention's parses, resolved against the
- * clock. A reading the person must confirm — a `model` reader's (§ 5.5), or
- * an incomplete one (`confirm: true`) — carries `said: []`.
+ * clock. A reading the person must confirm (`confirm: true` — every reading
+ * the record files, TQ29; a `model` reader's by default) carries `said: []`.
  */
 export function resolveMention(
   parses: readonly TimeParts[],
@@ -884,9 +886,9 @@ function policyDecided(
 /**
  * How one mention settles under the app's policy (§ 5.1, § 11). The policy
  * only removes readings; it never adds one. A DST choice, a meridiem, a
- * zone the person named that is no zone, a `model` reader's window and an
- * incomplete reading (`confirm`) are never settled here — they stay `open`
- * for the person.
+ * zone the person named that is no zone, and a reading to confirm
+ * (`confirm` — every reading the record files, TQ29) are never settled here
+ * — they stay `open` for the person.
  */
 export function chooseReading(
   resolution: MentionResolution,

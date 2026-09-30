@@ -36,7 +36,7 @@
 import type { TypedScope } from 'footprintjs';
 
 import { turnWindowsOf } from '../../time/bind.js';
-import type { CallWindowRow, ClockRow, TimeReadingRow } from '../../time/rows.js';
+import type { CallWindowRow, ClockRow, TimeAnswerRow, TimeReadingRow } from '../../time/rows.js';
 import type { ZoneName } from '../../time/zone.js';
 import type { SourceCorpus } from './checks.js';
 import type { KeptAnswer } from './kept.js';
@@ -82,13 +82,16 @@ export interface SourceInputs {
 
 /**
  * Under `.time()`: the rows of THIS turn the time layer reads — the turn's
- * `clock` row and its `time-reading` rows (`core/time/bind.ts` ·
+ * `clock` row, its `time-reading` rows and its `time-answer` rows (the
+ * windows the person settled in the time ask — `core/time/bind.ts` ·
  * `turnWindowsOf`). Handed by the mount only under the arm, for a batch with
  * calls, and only once the turn has a clock.
  */
 export interface TimeInputs {
   readonly clock: ClockRow;
   readonly readings: readonly TimeReadingRow[];
+  /** Absent on a checkpoint an earlier version paused: no answer was filed then. */
+  readonly answers?: readonly TimeAnswerRow[];
 }
 
 /** The subflow's own state — inputs frozen by the mount, then one key per stage. */
@@ -212,10 +215,14 @@ function timeArmOf(
   // The rows are plain JSON (checked at the checkpoint door); a frozen input read is a live
   // proxy view, which `structuredClone` refuses — so the copy is a JSON round-trip.
   const plain = JSON.parse(
-    JSON.stringify({ clock: inputs.clock, readings: [...inputs.readings] }),
+    JSON.stringify({
+      clock: inputs.clock,
+      readings: [...inputs.readings],
+      answers: [...(inputs.answers ?? [])],
+    }),
   ) as TimeInputs;
   return {
-    turn: turnWindowsOf(plain.readings, plain.clock),
+    turn: turnWindowsOf(plain.readings, plain.clock, plain.answers),
     now: plain.clock.now,
     zone: plain.clock.zone,
     ...(deps.time.appZone !== undefined && { appZone: deps.time.appZone }),
@@ -228,7 +235,7 @@ const leavesAskOut = (plan: readonly PlannedCall[]): boolean =>
 
 /** Whether the checked batch fills a kept answer anywhere. */
 const fillsKept = (checked: readonly CheckedArgument[]): boolean =>
-  checked.some((c) => c.filled === true && c.source === 'answered');
+  checked.some((c) => c.filled === true && c.source === 'answered' && c.window === undefined);
 
 /** The batch as plain data — a frozen input read is a live view, spread it once. */
 function callsOf(scope: TypedScope<InputsLayerState>): readonly BatchCall[] {

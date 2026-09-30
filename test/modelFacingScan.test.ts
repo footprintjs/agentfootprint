@@ -557,8 +557,8 @@ const LEDGER: Readonly<Record<string, readonly Entry[]>> = {
   'src/core/time/readers/english.ts': [
     {
       kind: 'not-model-facing',
-      count: 2,
-      why: 'regular-expression sources of the English time reader — the words it RECOGNISES in a person’s message (`… to now`, the leftover rule’s time-or-range words); matched against text, never sent to a model or shown to anyone',
+      count: 1,
+      why: 'a regular-expression source of the English time reader — the words it RECOGNISES in a person’s message (`… to now`); matched against text, never sent to a model or shown to anyone',
     },
   ],
   'src/core/runbook/recording.ts': [
@@ -1119,16 +1119,17 @@ describe('every model-facing-shaped literal in src/ is accounted for', () => {
         // new file) and the checkpoint door's ledger refusal, which now names
         // the time rows (runCheckpoint.ts 1 → 2). Thrown to the caller before
         // the turn starts, or at the door; no model reads them.
-        // Unreleased (time layer, step T6b): two regular-expression SOURCES in
+        // Unreleased (time layer, step T6b): one regular-expression SOURCE in
         // the English time reader (core/time/readers/english.ts, one new file)
-        // hold the word `now` — words it recognises in a person's message, never
-        // text anyone reads. not-model-facing (2).
+        // holds the word `now` — words it recognises in a person's message, never
+        // text anyone reads. not-model-facing (1) — the leftover rule's word
+        // list went with the owner's decision "Always confirm".
         files: 98,
-        total: 194,
+        total: 193,
         registry: 8,
         ephemeral: 20,
         unrepaired: 33,
-        notModelFacing: 133,
+        notModelFacing: 132,
         unrepairedEntries: 13,
       });
       // And the ledger's own total is the number of literals the scan flagged —

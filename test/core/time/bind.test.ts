@@ -7,9 +7,11 @@
  * value, or recorded `model-chosen` and run as sent.
  *
  * Test types:
- *   unit     — the turn's windows from recorded rows (a `rule` reading is `said`, a `model`
- *              reading waiting only for confirmation is `derived-from-reading`, an open or refused
- *              mention fills nothing, the `control` window counts as a mention); every decision;
+ *   unit     — the turn's windows from recorded rows (a `rule` reading is a PROPOSAL and fills
+ *              nothing until the person answers it — then it is `answered`, a look-back kept a
+ *              look-back; a `model` reading waiting only for confirmation is
+ *              `derived-from-reading`; an open or refused mention fills nothing; the `control`
+ *              window counts as a mention); every decision;
  *   security — a forged `call-window` row is refused at the checkpoint door (one test per field law);
  *   boundary — a partial period (one bound of two) is `unread`, never filled over.
  */
@@ -22,6 +24,7 @@ import {
   callWindowRow,
   timeRowIsWellFormed,
   type ClockRow,
+  type TimeAnswerRow,
   type TimeReadingRow,
 } from '../../../src/core/time/rows.js';
 
@@ -65,7 +68,8 @@ function reading(
         range,
         zone: LA,
         grain: 'minute',
-        said: kind === 'rule' ? ['hour', 'minute'] : [],
+        // Every reading is a proposal (the owner's decision "Always confirm"): nothing said.
+        said: [],
         implied: [],
         anchor: 'message',
         reader: { id: `fixture/${kind}`, kind },
@@ -74,12 +78,34 @@ function reading(
         parse: 0,
       },
     ],
-    choice:
-      kind === 'rule'
-        ? { by: 'only', candidate: 0 }
-        : { by: 'open', remaining: [0], open: ['confirm'] },
+    choice: { by: 'open', remaining: [0], open: ['confirm'] },
   };
 }
+
+/** The person's answer in the time ask for one mention — the only door a `rule` reading becomes a window. */
+const answer = (
+  mention: number,
+  range: { from: string; to: string },
+  how: 'confirmed' | 'edited' = 'confirmed',
+): TimeAnswerRow => ({
+  kind: 'time-answer',
+  turn: 1,
+  iteration: 1,
+  mention,
+  ...range,
+  zone: LA,
+  how,
+});
+
+/** The turn's windows once the person CONFIRMED the offer of every `rule` reading. */
+const confirmed = (readings: readonly TimeReadingRow[], c: ClockRow) =>
+  turnWindowsOf(
+    readings,
+    c,
+    readings
+      .filter((r) => r.reader.kind === 'rule' && r.choice?.by === 'open')
+      .map((r) => answer(r.mention as number, r.candidates![0]!.range)),
+  );
 
 const EPOCH: PeriodForm[] = [
   {
@@ -96,20 +122,39 @@ const call = (args: Record<string, unknown>, quotes?: string[]) => ({
 });
 
 describe("the turn's windows, read from the record", () => {
-  it('a rule reading is said; a model reading waiting only for confirmation is derived; control counts', () => {
-    const turn = turnWindowsOf(
-      [
-        reading(0, 2, 'this morning', MORNING),
-        reading(1, 2, 'yesterday morning', YESTERDAY, 'model'),
-      ],
-      clock({ from: '2026-10-09T01:00:00Z', to: '2026-10-09T02:00:00Z' }),
-    );
-    expect(turn.mentions).toBe(3);
-    expect(turn.windows.map((w) => [w.source, w.mention, w.quote])).toEqual([
-      ['said', 0, 'this morning'],
+  it('a rule reading is a proposal until answered; a model reading waiting only for confirmation is derived; control counts', () => {
+    const readings = [
+      reading(0, 2, 'this morning', MORNING),
+      reading(1, 2, 'yesterday morning', YESTERDAY, 'model'),
+    ];
+    const control = clock({ from: '2026-10-09T01:00:00Z', to: '2026-10-09T02:00:00Z' });
+    // Not answered: the rule reading fills nothing — it is OPEN, its offer riding along.
+    const unanswered = turnWindowsOf(readings, control);
+    expect(unanswered.mentions).toBe(3);
+    expect(unanswered.windows.map((w) => [w.source, w.mention, w.quote])).toEqual([
       ['derived-from-reading', 1, 'yesterday morning'],
       ['control', undefined, undefined],
     ]);
+    expect(unanswered.open).toEqual([[MORNING]]);
+    // Answered in the time ask: the person's window, with whether they confirmed or edited it.
+    const turn = turnWindowsOf(readings, control, [answer(0, MORNING)]);
+    expect(turn.mentions).toBe(3);
+    expect(turn.windows.map((w) => [w.source, w.mention, w.quote, w.answer])).toEqual([
+      ['answered', 0, 'this morning', 'confirmed'],
+      ['derived-from-reading', 1, 'yesterday morning', undefined],
+      ['control', undefined, undefined, undefined],
+    ]);
+    const edited = turnWindowsOf(readings, control, [answer(0, YESTERDAY, 'edited')]);
+    expect(edited.windows[0]).toMatchObject({
+      source: 'answered',
+      range: YESTERDAY,
+      answer: 'edited',
+    });
+    // An answer for another turn's mention is not this row's: the caller hands this turn's only.
+    expect(turnWindowsOf(readings, control, [answer(1, MORNING)]).windows[0]).toMatchObject({
+      source: 'answered',
+      mention: 1,
+    });
   });
 
   it('an open mention counts and fills nothing; a refused one and the `mentions: 0` row do not count', () => {
@@ -165,8 +210,8 @@ describe("the turn's windows, read from the record", () => {
 });
 
 describe('one call', () => {
-  const one = turnWindowsOf([reading(0, 1, '8 AM to 8:40', MORNING)], clock());
-  const two = turnWindowsOf(
+  const one = confirmed([reading(0, 1, '8 AM to 8:40', MORNING)], clock());
+  const two = confirmed(
     [reading(0, 2, 'this morning', MORNING), reading(1, 2, 'yesterday morning', YESTERDAY)],
     clock(),
   );
@@ -176,7 +221,7 @@ describe('one call', () => {
     const decision = callWindowOf(call({}), one, CTX);
     expect(decision).toMatchObject({
       how: 'filled',
-      window: { source: 'said', mention: 0 },
+      window: { source: 'answered', mention: 0, answer: 'confirmed' },
       conversion: {
         form: 0,
         values: { start_time: Date.parse(MORNING.from), end_time: Date.parse(MORNING.to) },
@@ -195,7 +240,7 @@ describe('one call', () => {
       forms: [{ kind: 'lookback', argument: 'w', signed: false } as PeriodForm],
     };
     // A window still to come: no look-back reaches it, exactly or widened (step T5b widens a past one).
-    const tomorrow = turnWindowsOf(
+    const tomorrow = confirmed(
       [
         reading(0, 1, 'tomorrow 8 to 8:40', {
           from: '2026-10-10T08:00:00-07:00',
@@ -253,7 +298,7 @@ describe('one call', () => {
   });
 
   it('a look-back window sent to a bounds form as `[now − L, now)` is still the person’s', () => {
-    const lookback = turnWindowsOf(
+    const lookback = confirmed(
       [
         {
           ...reading(0, 1, 'last 40 minutes', {
@@ -286,10 +331,29 @@ describe('one call', () => {
   });
 });
 
+describe('the time-answer row and the checkpoint door', () => {
+  it('the person’s answer crosses the door; a forged one is refused', () => {
+    const row = answer(0, MORNING);
+    expect(timeRowIsWellFormed(row as never)).toBe(true);
+    expect(timeRowIsWellFormed(answer(0, MORNING, 'edited') as never)).toBe(true);
+    for (const forged of [
+      { ...row, how: 'said' },
+      { ...row, how: undefined },
+      { ...row, zone: 'Not/AZone' },
+      { ...row, mention: -1 },
+      { ...row, mention: undefined },
+      { ...row, from: 'yesterday' },
+      { ...row, extra: 1 },
+    ]) {
+      expect(timeRowIsWellFormed(forged as never), JSON.stringify(forged)).toBe(false);
+    }
+  });
+});
+
 describe('the call-window row and the checkpoint door', () => {
   const at = { turn: 1, iteration: 1 };
   const who = { toolCallId: 'c1', toolName: 'client_activity' };
-  const one = turnWindowsOf([reading(0, 1, '8 AM to 8:40', MORNING)], clock());
+  const one = confirmed([reading(0, 1, '8 AM to 8:40', MORNING)], clock());
 
   it('files each decision as a well-formed row', () => {
     const rows = [
@@ -307,9 +371,16 @@ describe('the call-window row and the checkpoint door', () => {
       how: 'filled',
       form: 0,
       asked: MORNING,
-      person: { ...MORNING, source: 'said', mention: 0 },
+      person: { ...MORNING, source: 'answered', mention: 0 },
     });
     for (const row of rows) expect(timeRowIsWellFormed(row as never)).toBe(true);
+    // A record an earlier version filed (`said`) still crosses the door.
+    expect(
+      timeRowIsWellFormed({
+        ...rows[0],
+        person: { ...MORNING, source: 'said', mention: 0 },
+      } as never),
+    ).toBe(true);
   });
 
   it.each([

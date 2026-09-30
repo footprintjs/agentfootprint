@@ -86,7 +86,7 @@ function reading(range: { from: string; to: string }, quote = 'the window'): Tim
         range,
         zone: LA,
         grain: 'minute',
-        said: ['hour', 'minute'],
+        said: [],
         implied: [],
         anchor: 'message',
         reader: { id: 'fixture/rule', kind: 'rule' },
@@ -95,7 +95,7 @@ function reading(range: { from: string; to: string }, quote = 'the window'): Tim
         parse: 0,
       },
     ],
-    choice: { by: 'only', candidate: 0 },
+    choice: { by: 'open', remaining: [0], open: ['confirm'] },
   };
 }
 
@@ -108,7 +108,19 @@ const clock: ClockRow = {
   zone: LA,
   zoneSource: 'run',
 };
-const turnOf = (range: { from: string; to: string }) => turnWindowsOf([reading(range)], clock);
+/** The turn's one window: a reading the person CONFIRMED in the time ask (the owner's decision "Always confirm"). */
+const turnOf = (range: { from: string; to: string }) =>
+  turnWindowsOf([reading(range)], clock, [
+    {
+      kind: 'time-answer',
+      turn: 1,
+      iteration: 1,
+      mention: 0,
+      ...range,
+      zone: LA,
+      how: 'confirmed',
+    },
+  ]);
 const noWindow = turnWindowsOf([], clock);
 
 function call(
@@ -267,7 +279,7 @@ describe('one call — refused before dispatch, or dispatched and marked', () =>
       how: 'refused',
       refused: 'time-future',
       asked: TOMORROW,
-      person: expect.objectContaining({ source: 'said', mention: 0 }),
+      person: expect.objectContaining({ source: 'answered', mention: 0 }),
     });
     const sent = { start: ms(TOMORROW.from), end: ms(TOMORROW.to) };
     expect(callWindowOf(call(sent, [EPOCH], { direction: 'past' }), noWindow, CTX)).toMatchObject({

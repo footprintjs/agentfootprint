@@ -4,30 +4,34 @@
  * tool that declares a period, and the lazy word-driven ask. A scripted
  * provider and the wall clock pinned with fake `Date` — no model is called.
  *
- * Law: the library reads the person's words only through the armed reader; a
- * window it read is served to the model in each tool's own form, as a reading;
- * a window it could not settle is asked of the person only when a tool that
- * declares a period is about to be called — the zone first when they wrote an
- * abbreviation, then the readings as labelled choices.
+ * Law: the library reads the person's words only through the armed reader,
+ * and a reading only PROPOSES (the owner's decision "Always confirm", time
+ * design TQ29): every window read from chat is offered through the time ask,
+ * pre-filled and editable, with its window AND its zone — the zone first when
+ * they wrote an abbreviation. Only what the person picks or types in that
+ * form is theirs (a `time-answer` row, `confirmed` or `edited`); from then on
+ * the turn's later calls are filled from it and the served sentence names it
+ * with its source.
  *
  * Test types:
  *   functional  — the field sentence "10/09/26 8 AM to 8:40 AM PST": a zone ask naming `PST`,
- *                 then the three date orders as labelled choices, then the tool runs with the
- *                 chosen window in its own form (`answered` rows, the note says whose window);
- *                 under `dateOrder: 'MDY'` the zone answer leaves ONE reading, confirmed with its
- *                 zone (it is off the reader's allow-list — never said); "last 2 hours" →
- *                 the sentence names the window in the tool's form (a look-back, said wider);
- *                 "yesterday morning" and "last week" → one `unreadable` row each, no window ask
- *                 (the tool's own rule asks); a range read only in half ("… 8:40 PM till 9.30")
- *                 → the half is CONFIRMED (`confirmNeeded`, the question names the leftover),
- *                 never filed as said, and the tool runs only on the person's answer; a future
- *                 date to a `past` tool is refused before dispatch;
+ *                 then the three date orders as labelled confirmations, then the tool runs with
+ *                 the chosen window in its own form (`answered` rows, the note says whose
+ *                 window); a row from each of the seven review rounds and every form the earlier
+ *                 allow-list filed as said ("last 2 hours", an explicit ISO instant) pauses on a
+ *                 confirmation — never said; a confirmed pre-fill is filed `answered` with the
+ *                 click recorded (`time-answer`, `how: 'confirmed'`), an edited one as the
+ *                 person's window (`how: 'edited'`); a tool whose rule ASSUMES its period is asked,
+ *                 its default never standing in for the words; "yesterday morning" and "last
+ *                 week" → one `unreadable` row each, no pre-fill (the tool's own rule asks); a
+ *                 future date to a `past` tool is refused before dispatch;
  *   integration — the ask's checkpoint crosses a JSON round trip onto a FRESH agent and binds;
- *                 every react mode (classic, dynamic, grouped) serves the same sentence;
+ *                 after the confirmation the next request serves the window with its source in
+ *                 both dynamic modes; classic mode caches its tools (the known limit) and still
+ *                 fills the later call;
  *   security    — an answered window outside the tool's `direction` is asked again, never run;
- *                 the sentence names a reading as a reading ("not their words");
  *   byte identity — without a reader nothing is served or asked: the request's tool list equals
- *                 the reader-less twin's; a turn whose reader settled nothing serves the bytes it
+ *                 the reader-less twin's; a turn with nothing confirmed serves the bytes it
  *                 always did.
  * Unit, property, boundary, performance: english-reader.test.ts.
  */
@@ -373,25 +377,26 @@ describe('phrases v1 does not read — one unreadable row, no window ask', () =>
   }
 });
 
-describe('a range the reader reads only half of — confirmed, never a silent narrower window', () => {
-  // The leftover rule: the v1 half is read, names what it left, and is CONFIRMED through the
-  // time ask — the reading offered, free entry open — never filed as the person's words.
-  const EDITED = '2026-10-08T20:40:00-07:00/2026-10-08T21:30:00-07:00';
-  for (const [message, quote, leftover] of [
-    ['Show client activity yesterday 8:40 PM to 9', 'yesterday 8:40 PM', ['to', '9']],
-    ['Show client activity yesterday 14:00 to 16', 'yesterday 14:00', ['to', '16']],
-    ['Show client activity yesterday 8:40 PM till 9.30', 'yesterday 8:40 PM', ['till', '9.30']],
-    ['Show client activity yesterday 14:00 to 1600', 'yesterday 14:00', ['to', '1600']],
-    ['Show client activity yesterday 8:40 PM until the deploy', 'yesterday 8:40 PM', ['until']],
-    [
-      'Start: yesterday 8:40 PM\nEnd: 9.30 — show client activity',
-      'yesterday 8:40 PM',
-      ['9.30', '—'],
-    ],
+describe('every chat reading is a confirmation — never filed as said (the owner’s decision “Always confirm”)', () => {
+  // A row from each of the seven review rounds, and the forms the earlier allow-list filed as
+  // said: each pauses on a pre-filled, editable confirmation naming its window AND its zone.
+  for (const [message, quote] of [
+    ['Show client activity yesterday 8:40 PM to 9', 'yesterday 8:40 PM'],
+    ['Show client activity yesterday 8:40 PM till 9.30', 'yesterday 8:40 PM'],
+    ['Show client activity yesterday 8:40 PM until the deploy', 'yesterday 8:40 PM'],
+    ['Start: yesterday 8:40 PM\nEnd: 9.30 — show client activity', 'yesterday 8:40 PM'],
+    ['Show client activity 8 AM forward', '8 AM'],
+    ['Show client activity yesterday London time', 'yesterday'],
+    ['client activity for the last 2 hours of the outage', 'last 2 hours'],
+    ['client activity last 2 hours ending at the outage', 'last 2 hours'],
+    ['client activity newer than 2026-10-09T08:00Z', '2026-10-09T08:00Z'],
+    ['any client activity in the last 2 hours?', 'last 2 hours'],
+    ['client activity 2026-10-09T08:00-07:00', '2026-10-09T08:00-07:00'],
+    ['client activity yesterday?', 'yesterday'],
   ] as const) {
     it(`${JSON.stringify(
       message,
-    )} → confirm “${quote}”; the tool runs only on the answer`, async () => {
+    )} → a confirmation of “${quote}”, never said; the tool waits`, async () => {
       const seen: Record<string, unknown>[] = [];
       const { agent, requests } = build(
         [call('c1', 'client_activity', {}), answer('ok')],
@@ -401,11 +406,8 @@ describe('a range the reader reads only half of — confirmed, never a silent na
       const first = paused(await agent.run({ message, time: { now: NOW } }));
       expect(seen).toEqual([]);
       const [row] = ofKind(agent, 'time-reading');
-      expect(row).toMatchObject({
-        quote,
-        confirmNeeded: { leftover },
-        choice: { by: 'open', open: ['confirm'] },
-      });
+      expect(row).toMatchObject({ quote, choice: { by: 'open' } });
+      expect((row!.choice as { open: string[] }).open).toContain('confirm');
       expect((row!.candidates as { said: unknown[] }[]).every((c) => c.said.length === 0)).toBe(
         true,
       );
@@ -413,41 +415,68 @@ describe('a range the reader reads only half of — confirmed, never a silent na
         how: 'not-filled',
         why: 'open-reading',
       });
-      // Nothing settled, so nothing is served as a reading.
+      // Nothing settled, so nothing is served as a window.
       const activity = (requests[0]!.tools ?? []).find((t) => t.name === 'client_activity')!;
       expect(activity.description).toBe('Client operations over a window.');
-
-      const field = first.awaitingInput.fields[0]!;
+      // One field, pre-filled with the reading and its zone, free entry open.
       expect(first.awaitingInput.fields).toHaveLength(1);
+      const field = first.awaitingInput.fields[0]!;
       expect(field.format).toBe('time-range');
-      expect(field.description).toBe(
-        `I read only “${quote}” as a time, not “${leftover.join(
-          ' ',
-        )}”. Is this the window you mean?`,
+      expect(field.description).toBe(`Is this the time you meant by “${quote}”?`);
+      expect(field.enum!.length).toBeGreaterThan(0);
+      expect(field.labels![0]!.replace(/\s/g, ' ')).toMatch(
+        new RegExp(
+          `^I read “${quote.replace(
+            /[.*+?^${}()|[\]\\]/g,
+            '\\$&',
+          )}” as .+ in America/Los_Angeles — is that right\\?$`,
+        ),
       );
-      expect(field.enum).toHaveLength(1);
-      expect(field.labels![0]).toMatch(/^I read .+ — is that the window you mean\?$/);
-
-      // The person corrects it: the tool runs on THEIR window, filed as their answer.
-      const done = await agent.resume(first.checkpoint as never, {
-        requestId: first.awaitingInput.requestId,
-        values: { f1: EDITED },
-      });
-      expect(isInputPause(done)).toBe(false);
-      expect(seen[0]).toMatchObject({
-        start_time: Date.parse('2026-10-08T20:40:00-07:00'),
-        end_time: Date.parse('2026-10-08T21:30:00-07:00'),
-      });
-      expect(ofKind(agent, 'argument')).toEqual(
-        expect.arrayContaining([
-          expect.objectContaining({ argument: 'start_time', source: 'answered' }),
-          expect.objectContaining({ argument: 'end_time', source: 'answered' }),
-        ]),
-      );
+      expect(ofKind(agent, 'time-answer')).toEqual([]);
     });
   }
 
-  it('confirmed as offered: the tool runs on the reading, filed as the person’s answer', async () => {
+  it('a confirmed pre-fill is the person’s answer — their click recorded', async () => {
+    const seen: Record<string, unknown>[] = [];
+    const { agent } = build(
+      [call('c1', 'client_activity', {}), answer('ok')],
+      [epochTool(seen)],
+      (b) => b.time({ zone: LA, reader }),
+    );
+    const first = paused(
+      await agent.run({ message: 'any client activity in the last 2 hours?', time: { now: NOW } }),
+    );
+    const offered = first.awaitingInput.fields[0]!.enum![0]!;
+    const done = await agent.resume(first.checkpoint as never, {
+      requestId: first.awaitingInput.requestId,
+      values: { f1: offered },
+    });
+    expect(isInputPause(done)).toBe(false);
+    expect(seen[0]).toMatchObject({ start_time: NOW_MS - 2 * 3_600_000 });
+    expect(ofKind(agent, 'time-answer')).toEqual([
+      {
+        kind: 'time-answer',
+        turn: 1,
+        iteration: 1,
+        mention: 0,
+        from: '2026-10-09T13:40:00Z',
+        to: '2026-10-09T15:40:00.001Z',
+        zone: LA,
+        how: 'confirmed',
+      },
+    ]);
+    expect(ofKind(agent, 'argument')).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ argument: 'start_time', source: 'answered' }),
+        expect.objectContaining({ argument: 'end_time', source: 'answered' }),
+      ]),
+    );
+    // Never `said`: no argument row and no window of this turn claims the person's words.
+    expect(ofKind(agent, 'argument').some((r) => r.source === 'said')).toBe(false);
+  });
+
+  it('an edited pre-fill is the person’s answer — the window they wrote, recorded as edited', async () => {
+    const EDITED = '2026-10-08T20:40:00-07:00/2026-10-08T21:30:00-07:00';
     const seen: Record<string, unknown>[] = [];
     const { agent } = build(
       [call('c1', 'client_activity', {}), answer('ok')],
@@ -460,18 +489,48 @@ describe('a range the reader reads only half of — confirmed, never a silent na
         time: { now: NOW },
       }),
     );
-    const offered = first.awaitingInput.fields[0]!.enum![0]!;
-    expect(offered).toBe('2026-10-08T20:40:00-07:00/2026-10-08T20:41:00-07:00');
     const done = await agent.resume(first.checkpoint as never, {
       requestId: first.awaitingInput.requestId,
-      values: { f1: offered },
+      values: { f1: EDITED },
     });
     expect(isInputPause(done)).toBe(false);
+    expect(seen[0]).toMatchObject({
+      start_time: Date.parse('2026-10-08T20:40:00-07:00'),
+      end_time: Date.parse('2026-10-08T21:30:00-07:00'),
+    });
+    expect(ofKind(agent, 'time-answer')).toMatchObject([
+      {
+        mention: 0,
+        from: '2026-10-08T20:40:00-07:00',
+        to: '2026-10-08T21:30:00-07:00',
+        how: 'edited',
+      },
+    ]);
     expect(ofKind(agent, 'argument')).toEqual(
       expect.arrayContaining([
         expect.objectContaining({ argument: 'start_time', source: 'answered' }),
       ]),
     );
+  });
+
+  it('a tool whose rule ASSUMES its period is asked, not assumed: its default never stands in for the words', async () => {
+    const seen: Record<string, unknown>[] = [];
+    const { agent } = build(
+      [call('c1', 'search_logs', {}), answer('none')],
+      [lookbackTool(seen)],
+      (b) => b.time({ zone: LA, reader }),
+    );
+    const first = paused(
+      await agent.run({ message: 'any errors in the last 2 hours?', time: { now: NOW } }),
+    );
+    expect(seen).toEqual([]);
+    const done = await agent.resume(first.checkpoint as never, {
+      requestId: first.awaitingInput.requestId,
+      values: { f1: first.awaitingInput.fields[0]!.enum![0]! },
+    });
+    expect(isInputPause(done)).toBe(false);
+    // The confirmed look-back, in the tool's own form — not the rule's `1h`.
+    expect(seen).toEqual([{ window: '2h' }]);
   });
 });
 
@@ -496,50 +555,83 @@ describe('a future date to a `past` tool — refused before dispatch', () => {
 
 // ─── the served sentence (TQ13) ───────────────────────────────────────
 
-describe('the one served time sentence — on each tool that declares a period', () => {
-  for (const mode of ['dynamic', 'dynamic-grouped', 'classic'] as const) {
-    it(`"last 2 hours" is served in each tool's own form (${mode})`, async () => {
+describe('the one served time sentence — the confirmed window and its source', () => {
+  for (const mode of ['dynamic', 'dynamic-grouped'] as const) {
+    it(`"last 2 hours": nothing served before the confirmation; after it, the next request names the window in each tool's own form, as the person's confirmation (${mode})`, async () => {
       const { agent, requests } = build(
-        [answer('none')],
+        [call('c0', 'search_logs', {}), answer('none')],
         [lookbackTool(), epochTool()],
         (b) => b.time({ zone: LA, reader }),
         mode,
       );
-      await agent.run({ message: 'any errors in the last 2 hours?', time: { now: NOW } });
-      const tools = requests[0]!.tools ?? [];
+      const first = paused(
+        await agent.run({ message: 'any errors in the last 2 hours?', time: { now: NOW } }),
+      );
+      // Before the confirmation: a proposal is never served as a window.
+      for (const t of requests[0]!.tools ?? []) {
+        expect(t.description).not.toContain('Time words in the person');
+      }
+      await agent.resume(first.checkpoint as never, {
+        requestId: first.awaitingInput.requestId,
+        values: { f1: first.awaitingInput.fields[0]!.enum![0]! },
+      });
+      const tools = requests[1]!.tools ?? [];
       const search = tools.find((t) => t.name === 'search_logs')!;
       const activity = tools.find((t) => t.name === 'client_activity')!;
       expect(search.description).toBe(
-        "Error lines over a look-back window. The library read time words in the person's " +
-          'message as: “last 2 hours” → window "2h" — a ' +
-          'reading of their words, not their words; a call may pass these values as written.',
+        "Error lines over a look-back window. Time words in the person's message, as the library " +
+          'holds them: “last 2 hours” → window "2h" (the window the person confirmed when asked ' +
+          'what their words meant); a call may pass these values as written.',
       );
       expect(activity.description).toBe(
-        "Client operations over a window. The library read time words in the person's message " +
-          `as: “last 2 hours” → start_time ${
-            NOW_MS - 2 * 3_600_000
-          }, end_time ${NOW_MS} — a reading of ` +
-          'their words, not their words; a call may pass these values as written.',
+        "Client operations over a window. Time words in the person's message, as the library " +
+          `holds them: “last 2 hours” → start_time ${NOW_MS - 2 * 3_600_000}, end_time ${NOW_MS} ` +
+          '(the window the person confirmed when asked what their words meant); a call may pass ' +
+          'these values as written.',
       );
       expect(ofKind(agent, 'time-reading')).toHaveLength(1);
     });
   }
 
-  it('"yesterday" is off the allow-list: nothing is served until the person confirms it', async () => {
-    const plain = build([answer('none')], [lookbackTool(), epochTool()], (b) =>
-      b.time({ zone: LA }),
+  it('classic mode caches its tools after the first iteration: the confirmed window is not served there (the known limit) — a later call is still filled from it', async () => {
+    const seen: Record<string, unknown>[] = [];
+    const { agent, requests } = build(
+      [call('c0', 'search_logs', {}), call('c1', 'search_logs', {}), answer('none')],
+      [lookbackTool(seen), epochTool()],
+      (b) => b.time({ zone: LA, reader }),
+      'classic',
     );
-    await plain.agent.run({ message: 'any errors yesterday?', time: { now: NOW } });
-    const armed = build([answer('none')], [lookbackTool(), epochTool()], (b) =>
-      b.time({ zone: LA, reader }),
+    const first = paused(
+      await agent.run({ message: 'any errors in the last 2 hours?', time: { now: NOW } }),
     );
-    await armed.agent.run({ message: 'any errors yesterday?', time: { now: NOW } });
-    expect(JSON.stringify(armed.requests[0]!.tools)).toBe(JSON.stringify(plain.requests[0]!.tools));
-    expect(ofKind(armed.agent, 'time-reading')[0]).toMatchObject({
-      quote: 'yesterday',
-      confirmNeeded: { form: true },
-      choice: { by: 'open', open: ['confirm'] },
+    await agent.resume(first.checkpoint as never, {
+      requestId: first.awaitingInput.requestId,
+      values: { f1: first.awaitingInput.fields[0]!.enum![0]! },
     });
+    expect(JSON.stringify(requests[1]!.tools)).toBe(JSON.stringify(requests[0]!.tools));
+    expect(seen).toEqual([{ window: '2h' }, { window: '2h' }]);
+    expect(ofKind(agent, 'call-window').filter((r) => r.toolCallId === 'c1')).toMatchObject([
+      { how: 'filled', person: { source: 'answered', mention: 0 } },
+    ]);
+  });
+
+  it('an edited window is served as the window the person gave', async () => {
+    const { agent, requests } = build(
+      [call('c0', 'client_activity', {}), answer('none')],
+      [epochTool()],
+      (b) => b.time({ zone: LA, reader }),
+    );
+    const first = paused(await agent.run({ message: 'any errors yesterday?', time: { now: NOW } }));
+    await agent.resume(first.checkpoint as never, {
+      requestId: first.awaitingInput.requestId,
+      values: { f1: '2026-10-08T20:00:00-07:00/2026-10-08T21:00:00-07:00' },
+    });
+    const activity = requests[1]!.tools!.find((t) => t.name === 'client_activity')!;
+    expect(activity.description).toContain(
+      `“yesterday” → start_time ${Date.parse('2026-10-08T20:00:00-07:00')}, end_time ` +
+        `${Date.parse('2026-10-08T21:00:00-07:00')} (the window the person gave when asked what ` +
+        'their words meant)',
+    );
   });
 
   it('byte identity — no reader: the tool list equals the unarmed twin’s; a turn with nothing settled too', async () => {

@@ -707,7 +707,11 @@ const RULED_PROPERTY_DESCRIPTION: Surface = {
   lifetime: 'persistent-history',
 };
 
-/** The one served time sentence (time step T6b): "yesterday" in a look-back tool's and an epoch tool's form. */
+/**
+ * The one served time sentence (time step T6b): "yesterday" in a look-back
+ * tool's and an epoch tool's form — as the window the person CONFIRMED in the
+ * time ask, as one they EDITED, and as a `model` reader's unconfirmed reading.
+ */
 function timeWindowSentences(): string[] {
   const lookback = defineTool({
     name: 'search_logs',
@@ -741,22 +745,23 @@ function timeWindowSentences(): string[] {
     [SHOWN_ARGS]: (args: Record<string, unknown>) =>
       'start_time' in args ? { ...args, start_time: 'REDACTED' } : args,
   };
-  const windows = {
-    now: '2026-10-09T15:40:00Z',
-    windows: [
-      {
-        source: 'said' as const,
-        mention: 0,
-        quote: 'yesterday',
-        range: { from: '2026-10-08T00:00:00-07:00', to: '2026-10-09T00:00:00-07:00' },
-        zone: 'America/Los_Angeles',
-      },
-    ],
+  const window = {
+    mention: 0,
+    quote: 'yesterday',
+    range: { from: '2026-10-08T00:00:00-07:00', to: '2026-10-09T00:00:00-07:00' },
+    zone: 'America/Los_Angeles',
   };
-  return [lookback, epoch, hiding].flatMap((t) => {
-    const sentence = timeWindowsSentence(t as never, windows);
-    return sentence === undefined ? [] : [sentence];
-  });
+  const sets = [
+    { source: 'answered' as const, answer: 'confirmed' as const },
+    { source: 'answered' as const, answer: 'edited' as const },
+    { source: 'derived-from-reading' as const },
+  ].map((who) => ({ now: '2026-10-09T15:40:00Z', windows: [{ ...window, ...who }] }));
+  return sets.flatMap((windows) =>
+    [lookback, epoch, hiding].flatMap((t) => {
+      const sentence = timeWindowsSentence(t as never, windows);
+      return sentence === undefined ? [] : [sentence];
+    }),
+  );
 }
 
 /** A ruled tool, and the same tool with an argument view that hides the ruled value. */
@@ -1568,14 +1573,18 @@ const PRODUCERS: readonly ModelFacingProducer[] = [
     surface: RULED_PROPERTY_DESCRIPTION,
     lifetimeBecause:
       "appended to the tool's description on the served copy of the schema, rebuilt per request " +
-      'at the one decoration site from the turn’s recorded readings; judged at the strictest ' +
-      'lifetime because it says, in the past tense, what the library READ and names it a reading, ' +
-      'and a permission, never an outcome — a later re-read in the same turn cannot falsify it',
+      'at the one decoration site from the turn’s recorded readings and the person’s answers in ' +
+      'the time ask; judged at the strictest lifetime because it names, in the past tense, each ' +
+      'window’s SOURCE (the person confirmed it, gave it, or it is a reading they have not ' +
+      'confirmed), and a permission, never an outcome — a later re-read in the same turn cannot ' +
+      'falsify it',
     drivenBy: ['test/core/time/english-run.test.ts'],
     reaches: [
-      /^The library read time words in the person's message as: “yesterday” → window "1960m" \(a wider read than the words named\) — a reading of their words, not their words; a call may pass these values as written\.$/m,
-      /“yesterday” → start_time 1791442800000, end_time 1791529200000 — a reading of their words/,
+      /^Time words in the person's message, as the library holds them: “yesterday” → window "1960m" \(the window the person confirmed when asked what their words meant, a wider read than the words named\); a call may pass these values as written\.$/m,
+      /“yesterday” → start_time 1791442800000, end_time 1791529200000 \(the window the person confirmed when asked what their words meant\)/,
       /start_time \(hidden by the tool's view\), end_time 1791529200000/,
+      /\(the window the person gave when asked what their words meant\)/,
+      /\(a reading of the person's words they have not confirmed, not their words\)/,
     ],
     compose: async () => timeWindowSentences(),
   },

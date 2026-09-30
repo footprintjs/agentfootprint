@@ -15,7 +15,7 @@
  *          precedent: no event field ships without a reader in the same
  *          release). The lens reads the rows.
  *
- * Five kinds, each filed only while `.time()` is armed:
+ * Six kinds, each filed only while `.time()` is armed:
  *
  * | Kind | Filed | Carries |
  * |------|-------|---------|
@@ -23,7 +23,8 @@
  * | `clock-on-resume` | first thing in the resumed leg's ToolCalls stage — either pause shape: the pausable resume door, or the stage re-run an `interrupt()` pause makes — when a resume passed a `time` that differs from the kept clock | what was passed and what was kept — the kept clock still rules |
  * | `call` | once per dispatched call, just before the tool runs | `dispatchedAt`: the wall clock at dispatch (a look-back is evaluated by the TOOL at dispatch, which after a pause is later than `now`); `drift` when a look-back was sent more than the tool's step after `now` — `redrawn` into an absolute form, or `shifted` (§ 7.4, `drift.ts`) |
  * | `call-window` | by the inputs layer, once per call to a tool that declares period forms, before it dispatches | which window the call carries: filled from the turn's one window (exactly, or wider — with what the read adds), bound to one (by quote or value), the model's own (beside the person's when it differs), unread, not filled and why, or refused before dispatch and why |
- * | `time-reading` | by seed, once per MENTION the armed reader (`.time({ reader })`) found in the person's message — or ONE row with `mentions: 0` when it found none, so a retry knows the message was read | the quote, the parts, every candidate `resolve.ts` made of them, how the reading settled (`choice`), `confirmNeeded` when a `rule` reading is not the person's window (`leftover` tokens it did not read, a `point` time, `several` mentions, a `form` off the reader's allow-list or not ending its clause — {@link confirmNeededOf}), the reader's id, version, kind and locale, and the tz database version; a refused mention keeps only why |
+ * | `time-reading` | by seed, once per MENTION the armed reader (`.time({ reader })`) found in the person's message — or ONE row with `mentions: 0` when it found none, so a retry knows the message was read | the quote, the parts, every candidate `resolve.ts` made of them, how the reading settled (`choice` — never settled by the library: every reading is a PROPOSAL, `open` with `confirm`, its candidates `said: []`), the reader's id, version, kind and locale, and the tz database version; a refused mention keeps only why |
+ * | `time-answer` | by the batch ask, once per mention the person settled in the time ask — the only door by which a window of words becomes the person's | the mention, the window and its zone, and `how`: `confirmed` (they picked a reading the library offered — the click) or `edited` (they wrote their own) |
  *
  * Readers that switch over every row kind must skip one they do not know.
  */
@@ -32,13 +33,7 @@ import { instantOf, type InstantText } from './instant.js';
 import { isTimeRange, type TimeRange } from './range.js';
 import { isZoneName, type ZoneName } from './zone.js';
 import { clockChange, type ClockChange, type ReadRunTime, type TimeClock } from './clock.js';
-import {
-  isTimeParts,
-  MAX_LEFTOVER,
-  type CheckedMention,
-  type MentionRefusal,
-  type TimeParts,
-} from './reader.js';
+import { isTimeParts, type CheckedMention, type MentionRefusal, type TimeParts } from './reader.js';
 import type { CallWindow, TurnWindow, WindowSource } from './bind.js';
 import { TIME_REFUSALS, type TimeRefusal } from './convert.js';
 import {
@@ -139,120 +134,30 @@ export interface TimeReadingRow {
   readonly candidates?: readonly TimeCandidate[];
   /** How the reading settled under the policy — `open` waits for the person. */
   readonly choice?: ReadingChoice;
+}
+
+/**
+ * The window the person settled for one mention in the time ask — the ONLY
+ * door by which a window of words becomes the person's (the owner's decision
+ * "Always confirm", time design TQ29). Filed by the batch ask when a window
+ * answer binds (`arguments/ask.ts` · `bindAnswer`); read back by
+ * `bind.ts` · `turnWindowsOf`, so the rest of the turn uses it as an
+ * `answered` window and the served sentence names it with its source.
+ */
+export interface TimeAnswerRow extends TimeRange {
+  readonly kind: 'time-answer';
+  readonly turn: number;
+  readonly iteration: number;
+  /** The `time-reading` row's mention the answer settles. */
+  readonly mention: number;
+  /** The zone the window was answered in — the reading's, or the turn's clock for free entry. */
+  readonly zone: ZoneName;
   /**
-   * The reading is not the person's WINDOW as said — why, at least one of
-   * ({@link confirmNeededOf}). It is never their words: its candidates carry
-   * `said: []` and its choice stays `open` with `confirm` until the person
-   * confirms it through the time ask (step T6b).
+   * `confirmed`: the person picked a reading the library offered (the
+   * pre-filled choice — their click); `edited`: they wrote a window of their
+   * own. Both are the person's answer.
    */
-  readonly confirmNeeded?: ConfirmNeeded;
-}
-
-/** Why a reading waits for the person's confirmation — at least one key. */
-export interface ConfirmNeeded {
-  /** Time-like tokens the reader found outside every span it read (`reader.ts` · `TimeMention.leftover`). */
-  readonly leftover?: readonly string[];
-  /** A `rule` reading names ONE time (`8 AM`, `2026-10-09T08:00`), not a window: its hour is the library's guess. */
-  readonly point?: true;
-  /** The message held more than one mention, not read as one range: which is the window is not said. */
-  readonly several?: true;
-  /**
-   * The reader does not vouch the reading's FORM (`reader.ts` ·
-   * `TimeMention.confirm`): it is off the reader's allow-list of forms it
-   * files as said — the English reader's are a look-back from now and an
-   * explicit ISO instant or range, each only where it ends its clause;
-   * `yesterday`, `2026-09-26`, `8 AM to 9 AM` lean on the run's zone — and it
-   * is offered with its zone to confirm.
-   */
-  readonly form?: true;
-}
-
-/**
- * Whether one parse names a WINDOW by itself: a range whose two bounds were
- * read in one span (`rangeOf`), or a whole calendar unit or relative span with
- * no clock time (`yesterday`, `2026-09-26`, `last 2 hours`). A clock time
- * with no second bound (`8 AM`, `yesterday 8:40 PM`, a zone-less ISO instant)
- * is a POINT — the window around it (`08:00–09:00`, `resolve.ts`' end of
- * grain) is the library's reading, never the person's words; only an
- * explicit instant ({@link isExplicitInstant}) is exempt.
- */
-export const isWindowComplete = (parts: TimeParts): boolean =>
-  parts.rangeOf !== undefined || parts.wall === undefined;
-
-/**
- * A zone token that fixes the offset by itself: `Z`, a numeric offset
- * (`-07:00`, `+0530`), `UTC`, or an IANA `Area/Location` name the runtime
- * knows. An abbreviation (`PST`, `IST`, `GMT`) is not one — it is asked.
- */
-function isExplicitZone(token: string | undefined): boolean {
-  if (token === undefined) return false;
-  if (token === 'Z' || token === 'UTC' || /^[+-]\d{1,2}(?::?\d{2})?$/.test(token)) return true;
-  return token.includes('/') && isZoneName(token);
-}
-
-/**
- * Whether one parse is an EXPLICIT INSTANT: a year-dated date, a clock time and
- * a zone that fixes the offset (`2026-10-09T08:00-07:00`), nothing relative.
- * The person wrote the instant whole, so it is no point the library widened
- * (step T6b, sixth review round): its window is the instant at the grain it
- * was written.
- */
-export function isExplicitInstant(parts: TimeParts): boolean {
-  return (
-    parts.date?.kind === 'fixed' &&
-    parts.date.year !== undefined &&
-    parts.wall !== undefined &&
-    parts.relative === undefined &&
-    parts.partOfDay === undefined &&
-    parts.anchor === undefined &&
-    parts.rangeOf === undefined &&
-    isExplicitZone(parts.zoneToken)
-  );
-}
-
-/**
- * Why a checked mention is not the person's window — the one owner of the law
- * (step T6b). A word list can never prove a reading is whole, so beside any
- * reader's own word — `leftover` it did not read, `confirm` on a form off its
- * allow-list (`form`) — the reading's SHAPE decides, for a `rule` reader (a
- * `model` reading is confirmed whatever its shape): a POINT time — whatever
- * words stood beside it (`8 AM forward`, `>8 AM`, `post 8 AM`) — unless it is
- * an explicit instant ({@link isExplicitInstant}), and a message with more
- * than one mention (`start 8:40 AM, end 9:30 PM`), which only a range read in
- * one span may join. `undefined`: the reading is window-complete, vouched and
- * alone — the person's words.
- */
-export function confirmNeededOf(
-  mention: {
-    readonly parses: readonly TimeParts[];
-    readonly leftover?: readonly string[];
-    readonly confirm?: true;
-  },
-  mentions: number,
-  kind: 'rule' | 'model',
-): ConfirmNeeded | undefined {
-  const rule = kind === 'rule' && mention.parses.length > 0;
-  const form = mention.confirm === true && mention.parses.length > 0;
-  const point = rule && mention.parses.some((p) => !isWindowComplete(p) && !isExplicitInstant(p));
-  const several = rule && mentions > 1;
-  if (mention.leftover === undefined && !point && !several && !form) return undefined;
-  return {
-    ...(mention.leftover !== undefined && { leftover: [...mention.leftover] }),
-    ...(point && { point: true as const }),
-    ...(several && { several: true as const }),
-    ...(form && { form: true as const }),
-  };
-}
-
-/**
- * Whether a reading waits for the person's confirmation before it is theirs:
- * a `model` reader's (§ 5.5), or an incomplete one (`confirmNeeded`).
- */
-export function needsConfirm(row: {
-  readonly reader: { readonly kind: 'rule' | 'model' };
-  readonly confirmNeeded?: unknown;
-}): boolean {
-  return row.reader.kind === 'model' || row.confirmNeeded !== undefined;
+  readonly how: 'confirmed' | 'edited';
 }
 
 /** The person's window a `call-window` row names — its range, who gave it, and its mention. */
@@ -313,7 +218,13 @@ export interface CallWindowRow {
 }
 
 /** Every time-layer row kind. */
-export type TimeRow = ClockRow | ClockOnResumeRow | CallRow | TimeReadingRow | CallWindowRow;
+export type TimeRow =
+  | ClockRow
+  | ClockOnResumeRow
+  | CallRow
+  | TimeReadingRow
+  | CallWindowRow
+  | TimeAnswerRow;
 
 // ─── Building ────────────────────────────────────────────────────────────
 
@@ -385,8 +296,14 @@ export function clockOnResumeRow(
 
 /**
  * The `time-reading` rows for one checked reading (`reader.ts` ·
- * `checkReading`): one per mention, resolved against the turn's clock and
- * settled under the policy — or one `mentions: 0` row.
+ * `checkReading`): one per mention, resolved against the turn's clock — or
+ * one `mentions: 0` row. The one owner of the law "a reading only PROPOSES"
+ * (the owner's decision "Always confirm", time design TQ29): whatever the
+ * reader's kind, no reading is settled by the library and none is the
+ * person's words — its candidates carry `said: []` and its choice stays
+ * `open` with `confirm` (the policy may still remove readings), so the time
+ * ask offers it, pre-filled with its window and zone, and only the person's
+ * answer settles it ({@link TimeAnswerRow}).
  */
 export function timeReadingRows(input: {
   readonly mentions: readonly CheckedMention[];
@@ -408,14 +325,7 @@ export function timeReadingRows(input: {
   if (mentions.length === 0) return [base];
   return mentions.map((m, mention) => {
     if ('refused' in m) return { ...base, mention, refused: m.refused };
-    const confirmNeeded = confirmNeededOf(m, mentions.length, reader.kind);
-    const confirm = needsConfirm({ reader, confirmNeeded });
-    const resolution = resolveMention(
-      m.parses,
-      clock,
-      { id: reader.id, kind: reader.kind },
-      confirm,
-    );
+    const resolution = resolveMention(m.parses, clock, { id: reader.id, kind: reader.kind }, true);
     return {
       ...base,
       mention,
@@ -423,8 +333,7 @@ export function timeReadingRows(input: {
       parses: m.parses,
       ...(m.problem !== undefined && { problem: m.problem }),
       candidates: resolution.candidates,
-      choice: chooseReading(resolution, policy, reader.kind, m.problem, confirm),
-      ...(confirmNeeded !== undefined && { confirmNeeded }),
+      choice: chooseReading(resolution, policy, reader.kind, m.problem, true),
     };
   });
 }
@@ -543,6 +452,40 @@ export function readingsOf(
   });
 }
 
+/** The `time-answer` row for one window the person settled in the time ask. */
+export function timeAnswerRow(
+  answer: {
+    readonly mention: number;
+    readonly range: TimeRange;
+    readonly zone: ZoneName;
+    readonly how: 'confirmed' | 'edited';
+  },
+  at: { readonly turn: number; readonly iteration: number },
+): TimeAnswerRow {
+  return {
+    kind: 'time-answer',
+    turn: at.turn,
+    iteration: at.iteration,
+    mention: answer.mention,
+    from: answer.range.from,
+    to: answer.range.to,
+    zone: answer.zone,
+    how: answer.how,
+  };
+}
+
+/** The `time-answer` rows filed for `turn`, in the order filed. */
+export function answersOf(
+  ledger: readonly unknown[] | undefined,
+  turn: number,
+): readonly TimeAnswerRow[] {
+  if (ledger === undefined) return [];
+  return ledger.filter((row): row is TimeAnswerRow => {
+    const r = row as { readonly kind?: unknown; readonly turn?: unknown } | null;
+    return r !== null && typeof r === 'object' && r.kind === 'time-answer' && r.turn === turn;
+  });
+}
+
 /**
  * The clock of the LATEST turn on the ledger — the last `clock` row — or
  * `undefined` when none was filed (an agent without `.time()`, or a turn
@@ -606,42 +549,7 @@ function isReaderStamp(value: unknown): boolean {
   );
 }
 
-const MENTION_FIELDS = [
-  'mention',
-  'quote',
-  'parses',
-  'problem',
-  'refused',
-  'candidates',
-  'choice',
-  'confirmNeeded',
-];
-
-/**
- * {@link ConfirmNeeded}: only beside parses, at least one key of `leftover`
- * (1 to 16 non-empty tokens — `reader.ts` · `MAX_LEFTOVER`), `point: true`,
- * `several: true`, `form: true`, and no other key.
- */
-function isConfirmNeeded(value: unknown, parses: readonly unknown[]): boolean {
-  if (value === undefined) return true;
-  if (value === null || typeof value !== 'object' || Array.isArray(value)) return false;
-  const v = value as Record<string, unknown>;
-  const keys = Object.keys(v);
-  const leftover = v.leftover;
-  return (
-    parses.length > 0 &&
-    keys.length >= 1 &&
-    keys.every((k) => k === 'leftover' || k === 'point' || k === 'several' || k === 'form') &&
-    (v.point === undefined || v.point === true) &&
-    (v.several === undefined || v.several === true) &&
-    (v.form === undefined || v.form === true) &&
-    (leftover === undefined ||
-      (Array.isArray(leftover) &&
-        leftover.length >= 1 &&
-        leftover.length <= MAX_LEFTOVER &&
-        leftover.every((t) => nonEmpty(t) && (t as string).length <= 64)))
-  );
-}
+const MENTION_FIELDS = ['mention', 'quote', 'parses', 'problem', 'refused', 'candidates', 'choice'];
 
 function isReadingRow(row: Readonly<Record<string, unknown>>): boolean {
   if (!isReaderStamp(row.reader) || !nonEmpty(row.tzdata) || !isCount(row.mentions)) return false;
@@ -651,9 +559,7 @@ function isReadingRow(row: Readonly<Record<string, unknown>>): boolean {
   if (row.refused !== undefined) {
     return (
       (row.refused === 'quote-not-in-text' || row.refused === 'malformed') &&
-      ['quote', 'parses', 'problem', 'candidates', 'choice', 'confirmNeeded'].every(
-        (k) => row[k] === undefined,
-      )
+      ['quote', 'parses', 'problem', 'candidates', 'choice'].every((k) => row[k] === undefined)
     );
   }
   const parses = row.parses;
@@ -663,7 +569,6 @@ function isReadingRow(row: Readonly<Record<string, unknown>>): boolean {
     Array.isArray(parses) &&
     parses.every((p) => isTimeParts(p)) &&
     (row.problem === undefined || (row.problem === 'unreadable' && parses.length === 0)) &&
-    isConfirmNeeded(row.confirmNeeded, parses as unknown[]) &&
     Array.isArray(candidates) &&
     candidates.every(candidateIsWellFormed) &&
     choiceIsWellFormed(row.choice, candidates.length)
@@ -677,7 +582,10 @@ function isPersonWindow(value: unknown): boolean {
   if (value === null || typeof value !== 'object' || Array.isArray(value)) return false;
   const { source, mention, ...range } = value as Record<string, unknown>;
   return (
-    (source === 'said' || source === 'derived-from-reading' || source === 'control') &&
+    (source === 'said' ||
+      source === 'derived-from-reading' ||
+      source === 'answered' ||
+      source === 'control') &&
     (mention === undefined || isCount(mention)) &&
     (source === 'control') === (mention === undefined) &&
     isTimeRange(range)
@@ -788,9 +696,23 @@ function isCallDrift(value: unknown): boolean {
   return d.outcome === 'shifted' && Object.keys(d).length === 2;
 }
 
+/** A `time-answer` row: its mention, a range, a zone, `how` — and no other key. */
+function isAnswerRow(row: Readonly<Record<string, unknown>>): boolean {
+  const { kind: _k, turn: _t, iteration: _i, mention, zone, how, ...range } = row;
+  void _k;
+  void _t;
+  void _i;
+  return (
+    isCount(mention) &&
+    isZoneName(zone) &&
+    (how === 'confirmed' || how === 'edited') &&
+    isTimeRange(range)
+  );
+}
+
 /**
  * The checkpoint door's test for a time-layer row — `true` only for a row of
- * one of the five kinds with every field this module files, well formed.
+ * one of the six kinds with every field this module files, well formed.
  * Any other kind answers `false` (the caller routes by kind first).
  */
 export function timeRowIsWellFormed(row: Readonly<Record<string, unknown>>): boolean {
@@ -817,6 +739,8 @@ export function timeRowIsWellFormed(row: Readonly<Record<string, unknown>>): boo
       return isReadingRow(row);
     case 'call-window':
       return isCallWindowRow(row);
+    case 'time-answer':
+      return isAnswerRow(row);
     default:
       return false;
   }
@@ -829,7 +753,8 @@ export function isTimeRowKind(kind: unknown): kind is TimeRow['kind'] {
     kind === 'clock-on-resume' ||
     kind === 'call' ||
     kind === 'time-reading' ||
-    kind === 'call-window'
+    kind === 'call-window' ||
+    kind === 'time-answer'
   );
 }
 
