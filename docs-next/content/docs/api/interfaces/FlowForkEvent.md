@@ -4,7 +4,7 @@ title: FlowForkEvent
 
 # Interface: FlowForkEvent
 
-Defined in: ../../../../../../../../Users/sanjay/github/footprintjs/agentfootprint/node\_modules/footprintjs/dist/types/lib/engine/narrative/types.d.ts:203
+Defined in: node\_modules/footprintjs/dist/types/lib/engine/narrative/types.d.ts:203
 
 Event passed to FlowRecorder.onFork.
 
@@ -14,7 +14,7 @@ Event passed to FlowRecorder.onFork.
 
 > **children**: `string`[]
 
-Defined in: ../../../../../../../../Users/sanjay/github/footprintjs/agentfootprint/node\_modules/footprintjs/dist/types/lib/engine/narrative/types.d.ts:205
+Defined in: node\_modules/footprintjs/dist/types/lib/engine/narrative/types.d.ts:205
 
 ***
 
@@ -22,7 +22,7 @@ Defined in: ../../../../../../../../Users/sanjay/github/footprintjs/agentfootpri
 
 > **parent**: `string`
 
-Defined in: ../../../../../../../../Users/sanjay/github/footprintjs/agentfootprint/node\_modules/footprintjs/dist/types/lib/engine/narrative/types.d.ts:204
+Defined in: node\_modules/footprintjs/dist/types/lib/engine/narrative/types.d.ts:204
 
 ***
 
@@ -30,4 +30,4 @@ Defined in: ../../../../../../../../Users/sanjay/github/footprintjs/agentfootpri
 
 > `optional` **traversalContext?**: [`TraversalContext`](/docs/api/interfaces/TraversalContext)
 
-Defined in: ../../../../../../../../Users/sanjay/github/footprintjs/agentfootprint/node\_modules/footprintjs/dist/types/lib/engine/narrative/types.d.ts:206
+Defined in: node\_modules/footprintjs/dist/types/lib/engine/narrative/types.d.ts:206

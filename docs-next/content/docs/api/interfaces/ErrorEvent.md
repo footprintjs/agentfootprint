@@ -4,7 +4,7 @@ title: ErrorEvent
 
 # Interface: ErrorEvent
 
-Defined in: ../../../../../../../../Users/sanjay/github/footprintjs/agentfootprint/node\_modules/footprintjs/dist/types/lib/scope/types.d.ts:37
+Defined in: node\_modules/footprintjs/dist/types/lib/scope/types.d.ts:37
 
 ## Extends
 
@@ -16,7 +16,7 @@ Defined in: ../../../../../../../../Users/sanjay/github/footprintjs/agentfootpri
 
 > `optional` **channel?**: `"scope"`
 
-Defined in: ../../../../../../../../Users/sanjay/github/footprintjs/agentfootprint/node\_modules/footprintjs/dist/types/lib/scope/types.d.ts:47
+Defined in: node\_modules/footprintjs/dist/types/lib/scope/types.d.ts:47
 
 Explicit channel discriminant — `'scope'` on every engine-dispatched
 event. `isFlowEvent()` checks it first (backlog B3); optional so
@@ -29,7 +29,7 @@ back to the legacy pipelineId-presence heuristic.
 
 > **error**: `Error`
 
-Defined in: ../../../../../../../../Users/sanjay/github/footprintjs/agentfootprint/node\_modules/footprintjs/dist/types/lib/scope/types.d.ts:38
+Defined in: node\_modules/footprintjs/dist/types/lib/scope/types.d.ts:38
 
 ***
 
@@ -37,7 +37,7 @@ Defined in: ../../../../../../../../Users/sanjay/github/footprintjs/agentfootpri
 
 > `optional` **key?**: `string`
 
-Defined in: ../../../../../../../../Users/sanjay/github/footprintjs/agentfootprint/node\_modules/footprintjs/dist/types/lib/scope/types.d.ts:40
+Defined in: node\_modules/footprintjs/dist/types/lib/scope/types.d.ts:40
 
 ***
 
@@ -45,7 +45,7 @@ Defined in: ../../../../../../../../Users/sanjay/github/footprintjs/agentfootpri
 
 > **operation**: `"read"` \| `"write"` \| `"commit"`
 
-Defined in: ../../../../../../../../Users/sanjay/github/footprintjs/agentfootprint/node\_modules/footprintjs/dist/types/lib/scope/types.d.ts:39
+Defined in: node\_modules/footprintjs/dist/types/lib/scope/types.d.ts:39
 
 ***
 
@@ -53,7 +53,7 @@ Defined in: ../../../../../../../../Users/sanjay/github/footprintjs/agentfootpri
 
 > **pipelineId**: `string`
 
-Defined in: ../../../../../../../../Users/sanjay/github/footprintjs/agentfootprint/node\_modules/footprintjs/dist/types/lib/scope/types.d.ts:14
+Defined in: node\_modules/footprintjs/dist/types/lib/scope/types.d.ts:14
 
 #### Inherited from
 
@@ -65,7 +65,7 @@ Defined in: ../../../../../../../../Users/sanjay/github/footprintjs/agentfootpri
 
 > **runtimeStageId**: `string`
 
-Defined in: ../../../../../../../../Users/sanjay/github/footprintjs/agentfootprint/node\_modules/footprintjs/dist/types/lib/scope/types.d.ts:13
+Defined in: node\_modules/footprintjs/dist/types/lib/scope/types.d.ts:13
 
 Unique per-execution-step identifier. Format: [subflowPath/]stageId#executionIndex
 
@@ -79,7 +79,7 @@ Unique per-execution-step identifier. Format: [subflowPath/]stageId#executionInd
 
 > **stageId**: `string`
 
-Defined in: ../../../../../../../../Users/sanjay/github/footprintjs/agentfootprint/node\_modules/footprintjs/dist/types/lib/scope/types.d.ts:11
+Defined in: node\_modules/footprintjs/dist/types/lib/scope/types.d.ts:11
 
 Stable stage identifier (matches spec node id).
 
@@ -93,7 +93,7 @@ Stable stage identifier (matches spec node id).
 
 > **stageName**: `string`
 
-Defined in: ../../../../../../../../Users/sanjay/github/footprintjs/agentfootprint/node\_modules/footprintjs/dist/types/lib/scope/types.d.ts:9
+Defined in: node\_modules/footprintjs/dist/types/lib/scope/types.d.ts:9
 
 #### Inherited from
 
@@ -105,7 +105,7 @@ Defined in: ../../../../../../../../Users/sanjay/github/footprintjs/agentfootpri
 
 > **timestamp**: `number`
 
-Defined in: ../../../../../../../../Users/sanjay/github/footprintjs/agentfootprint/node\_modules/footprintjs/dist/types/lib/scope/types.d.ts:15
+Defined in: node\_modules/footprintjs/dist/types/lib/scope/types.d.ts:15
 
 #### Inherited from
 
