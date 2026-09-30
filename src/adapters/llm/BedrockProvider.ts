@@ -449,10 +449,11 @@ function toBedrockMessages(messages: readonly LLMMessage[]): BedrockMessage[] {
           });
         }
       }
-      result.push({
-        role: 'assistant',
-        content: blocks.length > 0 ? blocks : [{ text: '' }],
-      });
+      // An assistant turn with no text and no tool calls carries nothing, and
+      // Converse refuses a blank text block — drop it, the same rule the
+      // Anthropic wire keeps (`anthropicMessagesWire.ts` · `toAnthropicMessages`).
+      if (blocks.length === 0) continue;
+      result.push({ role: 'assistant', content: blocks });
       continue;
     }
     if (m.role === 'tool') {
