@@ -4,7 +4,7 @@ title: CheckInEvidence
 
 # Interface: CheckInEvidence
 
-Defined in: [src/core/checkin.ts:74](https://github.com/footprintjs/agentfootprint/blob/main/src/core/checkin.ts#L74)
+Defined in: src/core/checkin.ts:74
 
 The evidence pack — the "receipts". The `'minimal'` assembler fills only
 [willDo](/docs/api/interfaces/CheckInEvidence#willdo) (zero cost); the `'standard'` assembler fills all four.
@@ -15,7 +15,7 @@ The evidence pack — the "receipts". The `'minimal'` assembler fills only
 
 > `readonly` `optional` **drivers?**: readonly [`CheckInDriver`](/docs/api/interfaces/CheckInDriver)[]
 
-Defined in: [src/core/checkin.ts:85](https://github.com/footprintjs/agentfootprint/blob/main/src/core/checkin.ts#L85)
+Defined in: src/core/checkin.ts:85
 
 Which context drove THIS choice, ranked most-to-least. Produced by the
  configured [CheckInScorer](/docs/api/type-aliases/CheckInScorer) (default: a zero-LLM lexical scorer).
@@ -27,7 +27,7 @@ Which context drove THIS choice, ranked most-to-least. Produced by the
 
 > `readonly` `optional` **read?**: readonly [`CheckInContextFrame`](/docs/api/interfaces/CheckInContextFrame)[]
 
-Defined in: [src/core/checkin.ts:81](https://github.com/footprintjs/agentfootprint/blob/main/src/core/checkin.ts#L81)
+Defined in: src/core/checkin.ts:81
 
 What context this run consumed so far — one frame per context piece
  (system rules, the user task, prior tool results). Absent under the
@@ -39,7 +39,7 @@ What context this run consumed so far — one frame per context piece
 
 > `readonly` `optional` **trail?**: [`CheckInTrail`](/docs/api/interfaces/CheckInTrail)
 
-Defined in: [src/core/checkin.ts:87](https://github.com/footprintjs/agentfootprint/blob/main/src/core/checkin.ts#L87)
+Defined in: src/core/checkin.ts:87
 
 A compact grouped summary of the run so far. Absent under `'minimal'`.
 
@@ -49,7 +49,7 @@ A compact grouped summary of the run so far. Absent under `'minimal'`.
 
 > `readonly` **willDo**: `string`
 
-Defined in: [src/core/checkin.ts:77](https://github.com/footprintjs/agentfootprint/blob/main/src/core/checkin.ts#L77)
+Defined in: src/core/checkin.ts:77
 
 Plain-words claim of what will happen: the tool description + the
  rendered arguments. Always present.

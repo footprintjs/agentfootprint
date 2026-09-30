@@ -1024,6 +1024,15 @@ export {
   type DatasetPublication,
   type DatasetResultAdapter,
   type DatasetResultPlan,
+  describeTimeAxis,
+  readTimeAxis,
+  timeAxisIssues,
+  TIME_AXIS_AGGREGATES,
+  TIME_AXIS_UNITS,
+  type DatasetTimeAxis,
+  type TimeAxisAggregate,
+  type TimeAxisReading,
+  type TimeAxisUnit,
 } from './artifacts/index.js';
 // Artifacts, the optional streaming leg (9.25.0) — `putStream`/`getStream` are
 // FEATURE-DETECTED members of the port, so a store that cannot move bytes

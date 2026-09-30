@@ -4,7 +4,7 @@ title: DatasetArtifactInput
 
 # Interface: DatasetArtifactInput
 
-Defined in: [src/artifacts/datasetResult.ts:11](https://github.com/footprintjs/agentfootprint/blob/main/src/artifacts/datasetResult.ts#L11)
+Defined in: src/artifacts/datasetResult.ts:12
 
 Producer-owned payloads. A source is an optional artifact, not an inferred fact.
 
@@ -14,7 +14,7 @@ Producer-owned payloads. A source is an optional artifact, not an inferred fact.
 
 > `readonly` **artifact**: [`ToolArtifactPutInput`](/docs/api/type-aliases/ToolArtifactPutInput)
 
-Defined in: [src/artifacts/datasetResult.ts:13](https://github.com/footprintjs/agentfootprint/blob/main/src/artifacts/datasetResult.ts#L13)
+Defined in: src/artifacts/datasetResult.ts:14
 
 ***
 
@@ -22,7 +22,7 @@ Defined in: [src/artifacts/datasetResult.ts:13](https://github.com/footprintjs/a
 
 > `readonly` **key**: `string`
 
-Defined in: [src/artifacts/datasetResult.ts:12](https://github.com/footprintjs/agentfootprint/blob/main/src/artifacts/datasetResult.ts#L12)
+Defined in: src/artifacts/datasetResult.ts:13
 
 ***
 
@@ -30,4 +30,4 @@ Defined in: [src/artifacts/datasetResult.ts:12](https://github.com/footprintjs/a
 
 > `readonly` `optional` **source?**: [`ToolArtifactPutInput`](/docs/api/type-aliases/ToolArtifactPutInput)
 
-Defined in: [src/artifacts/datasetResult.ts:14](https://github.com/footprintjs/agentfootprint/blob/main/src/artifacts/datasetResult.ts#L14)
+Defined in: src/artifacts/datasetResult.ts:15

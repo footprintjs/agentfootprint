@@ -6,7 +6,7 @@ title: DEFAULT_RECORDING_MAX_BYTES
 
 > `const` **DEFAULT\_RECORDING\_MAX\_BYTES**: `5000000` = `5_000_000`
 
-Defined in: [src/core/runbook/recording.ts:69](https://github.com/footprintjs/agentfootprint/blob/main/src/core/runbook/recording.ts#L69)
+Defined in: src/core/runbook/recording.ts:69
 
 The default size ceiling for a filed chart recording — 5,000,000 bytes.
 

@@ -6,7 +6,7 @@ title: foldedMessages
 
 > **foldedMessages**(`conversation`): readonly [`LLMMessage`](/docs/api/interfaces/LLMMessage)[]
 
-Defined in: [src/core/agent/window/folded.ts:124](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/window/folded.ts#L124)
+Defined in: src/core/agent/window/folded.ts:124
 
 Every message this conversation ever folded, oldest fold first, flattened.
 

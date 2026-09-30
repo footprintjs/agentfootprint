@@ -4,7 +4,7 @@ title: DatasetPublication
 
 # Interface: DatasetPublication
 
-Defined in: [src/artifacts/datasetResult.ts:22](https://github.com/footprintjs/agentfootprint/blob/main/src/artifacts/datasetResult.ts#L22)
+Defined in: src/artifacts/datasetResult.ts:23
 
 ## Properties
 
@@ -12,7 +12,7 @@ Defined in: [src/artifacts/datasetResult.ts:22](https://github.com/footprintjs/a
 
 > `readonly` **artifact**: [`DatasetArtifactReceipt`](/docs/api/type-aliases/DatasetArtifactReceipt)
 
-Defined in: [src/artifacts/datasetResult.ts:24](https://github.com/footprintjs/agentfootprint/blob/main/src/artifacts/datasetResult.ts#L24)
+Defined in: src/artifacts/datasetResult.ts:25
 
 ***
 
@@ -20,7 +20,7 @@ Defined in: [src/artifacts/datasetResult.ts:24](https://github.com/footprintjs/a
 
 > `readonly` **key**: `string`
 
-Defined in: [src/artifacts/datasetResult.ts:23](https://github.com/footprintjs/agentfootprint/blob/main/src/artifacts/datasetResult.ts#L23)
+Defined in: src/artifacts/datasetResult.ts:24
 
 ***
 
@@ -28,4 +28,4 @@ Defined in: [src/artifacts/datasetResult.ts:23](https://github.com/footprintjs/a
 
 > `readonly` `optional` **source?**: [`DatasetArtifactReceipt`](/docs/api/type-aliases/DatasetArtifactReceipt)
 
-Defined in: [src/artifacts/datasetResult.ts:25](https://github.com/footprintjs/agentfootprint/blob/main/src/artifacts/datasetResult.ts#L25)
+Defined in: src/artifacts/datasetResult.ts:26

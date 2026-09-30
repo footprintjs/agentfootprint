@@ -6,7 +6,7 @@ title: CombinedRecorder
 
 > **CombinedRecorder** = `Partial`\<`Omit`\<[`ScopeRecorder`](/docs/api/interfaces/ScopeRecorder), `SharedLifecycleOverlap` \| `SharedLifecycle`\>\> & `Partial`\<`Omit`\<[`FlowRecorder`](/docs/api/interfaces/FlowRecorder), `SharedLifecycleOverlap` \| `SharedLifecycle`\>\> & `Partial`\<`Omit`\<[`EmitRecorder`](/docs/api/interfaces/EmitRecorder), `SharedLifecycle`\>\> & `object`
 
-Defined in: node\_modules/footprintjs/dist/types/lib/recorder/CombinedRecorder.d.ts:94
+Defined in: ../../../../../../../../Users/sanjay/github/footprintjs/agentfootprint/node\_modules/footprintjs/dist/types/lib/recorder/CombinedRecorder.d.ts:94
 
 A recorder that MAY observe any combination of supported event streams.
 

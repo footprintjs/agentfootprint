@@ -132,3 +132,15 @@ export {
   type DatasetResultAdapter,
   type DatasetResultPlan,
 } from './datasetResult.js';
+// A dataset's declared TIME AXIS — judged at mint, read by consumers.
+export {
+  describeTimeAxis,
+  readTimeAxis,
+  timeAxisIssues,
+  TIME_AXIS_AGGREGATES,
+  TIME_AXIS_UNITS,
+  type DatasetTimeAxis,
+  type TimeAxisAggregate,
+  type TimeAxisReading,
+  type TimeAxisUnit,
+} from './timeAxis.js';

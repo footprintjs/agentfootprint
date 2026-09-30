@@ -6,6 +6,6 @@ title: COVERAGE_MARKER
 
 > `const` **COVERAGE\_MARKER**: `"af_coverage"` = `'af_coverage'`
 
-Defined in: [src/core/agent/coverage/recognize.ts:41](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/coverage/recognize.ts#L41)
+Defined in: src/core/agent/coverage/recognize.ts:41
 
 The reserved key that makes a ledger recognizable.

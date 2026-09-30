@@ -2,7 +2,7 @@
 title: Variables
 ---
 
-66 exported from `agentfootprint`.
+68 exported from `agentfootprint`.
 
 - [`ABSENCE_MARKER`](/docs/api/variables/ABSENCE_MARKER)
 - [`ABSENCE_NOTE`](/docs/api/variables/ABSENCE_NOTE)
@@ -64,6 +64,8 @@ title: Variables
 - [`SERVED_GAPS`](/docs/api/variables/SERVED_GAPS)
 - [`STAGED_INPUTS_ENV`](/docs/api/variables/STAGED_INPUTS_ENV)
 - [`standardEvidenceAssembler`](/docs/api/variables/standardEvidenceAssembler)
+- [`TIME_AXIS_AGGREGATES`](/docs/api/variables/TIME_AXIS_AGGREGATES)
+- [`TIME_AXIS_UNITS`](/docs/api/variables/TIME_AXIS_UNITS)
 - [`TOOL_CHOICE_QUESTION`](/docs/api/variables/TOOL_CHOICE_QUESTION)
 - [`TOOL_RESULT_STATUSES`](/docs/api/variables/TOOL_RESULT_STATUSES)
 - [`TOOL_SESSIONS`](/docs/api/variables/TOOL_SESSIONS)

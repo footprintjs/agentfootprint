@@ -6,7 +6,7 @@ title: codeShape
 
 > **codeShape**(`code`): `string`
 
-Defined in: [src/core/codeRunnerTool.ts:198](https://github.com/footprintjs/agentfootprint/blob/main/src/core/codeRunnerTool.ts#L198)
+Defined in: src/core/codeRunnerTool.ts:198
 
 A program reduced to its CALL SHAPE: which operations, in what order.
 

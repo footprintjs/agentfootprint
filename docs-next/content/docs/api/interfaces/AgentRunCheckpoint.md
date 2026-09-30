@@ -4,7 +4,7 @@ title: AgentRunCheckpoint
 
 # Interface: AgentRunCheckpoint
 
-Defined in: [src/core/runCheckpoint.ts:93](https://github.com/footprintjs/agentfootprint/blob/main/src/core/runCheckpoint.ts#L93)
+Defined in: src/core/runCheckpoint.ts:93
 
 JSON-serializable checkpoint of an in-progress agent run. Persist
 to ANY durable store (Redis / Postgres / S3 / disk / queue) and
@@ -19,7 +19,7 @@ resume hours / days / deploys later via `agent.resumeOnError(...)`.
 
 > `readonly` `optional` **agent?**: `object`
 
-Defined in: [src/core/runCheckpoint.ts:242](https://github.com/footprintjs/agentfootprint/blob/main/src/core/runCheckpoint.ts#L242)
+Defined in: src/core/runCheckpoint.ts:242
 
 WHICH agent recorded this conversation — present only when that agent was
 given an explicit `Agent.create({ id })` (9.2.0).
@@ -49,7 +49,7 @@ Version 1 still, for the same reason as the two fields above.
 
 > `readonly` **checkpointedAt**: `number`
 
-Defined in: [src/core/runCheckpoint.ts:113](https://github.com/footprintjs/agentfootprint/blob/main/src/core/runCheckpoint.ts#L113)
+Defined in: src/core/runCheckpoint.ts:113
 
 Wall-clock when the checkpoint was captured. Diagnostic only.
 
@@ -59,7 +59,7 @@ Wall-clock when the checkpoint was captured. Diagnostic only.
 
 > `readonly` `optional` **evidenceRecovery?**: `EvidenceRecoveryCheckpoint`
 
-Defined in: [src/core/runCheckpoint.ts:120](https://github.com/footprintjs/agentfootprint/blob/main/src/core/runCheckpoint.ts#L120)
+Defined in: src/core/runCheckpoint.ts:120
 
 The same request's bounded evidence repair. `resumeOnError` restores this
 budget and any unsent feedback; `run({ continueFrom })` adds a new human
@@ -72,7 +72,7 @@ Absent for checkpoints written before request-scoped recovery.
 
 > `readonly` `optional` **failurePoint?**: `object`
 
-Defined in: [src/core/runCheckpoint.ts:246](https://github.com/footprintjs/agentfootprint/blob/main/src/core/runCheckpoint.ts#L246)
+Defined in: src/core/runCheckpoint.ts:246
 
 Where the failure happened. Diagnostic — surfaces in oncall
  triage so you can tell "LLM 500 mid-iteration" from "tool
@@ -108,7 +108,7 @@ whoever is on call; nothing that could carry a secret goes in it. Do not
 
 > `readonly` `optional` **findingsLedger?**: [`FindingsLedger`](/docs/api/type-aliases/FindingsLedger)
 
-Defined in: [src/core/runCheckpoint.ts:161](https://github.com/footprintjs/agentfootprint/blob/main/src/core/runCheckpoint.ts#L161)
+Defined in: src/core/runCheckpoint.ts:161
 
 The model's standings on its tool results (9.101.0) — the committed
 `AgentState.findingsLedger`, carried so a continued conversation keeps
@@ -132,7 +132,7 @@ they round-trip through JSON and `structuredClone` unchanged.
 
 > `readonly` `optional` **folded?**: readonly [`FoldedSpan`](/docs/api/interfaces/FoldedSpan)[]
 
-Defined in: [src/core/runCheckpoint.ts:143](https://github.com/footprintjs/agentfootprint/blob/main/src/core/runCheckpoint.ts#L143)
+Defined in: src/core/runCheckpoint.ts:143
 
 Every span this conversation folded into a summary, oldest first — what
 makes a compacted conversation still a provable one after the process
@@ -161,7 +161,7 @@ the opposite of what the version field is for.
 
 > `readonly` **history**: readonly [`LLMMessage`](/docs/api/interfaces/LLMMessage)[]
 
-Defined in: [src/core/runCheckpoint.ts:103](https://github.com/footprintjs/agentfootprint/blob/main/src/core/runCheckpoint.ts#L103)
+Defined in: src/core/runCheckpoint.ts:103
 
 Conversation history at the LAST completed iteration boundary
  (LLM messages). The next iteration retries from here.
@@ -172,7 +172,7 @@ Conversation history at the LAST completed iteration boundary
 
 > `readonly` `optional` **identity?**: `MemoryIdentity`
 
-Defined in: [src/core/runCheckpoint.ts:203](https://github.com/footprintjs/agentfootprint/blob/main/src/core/runCheckpoint.ts#L203)
+Defined in: src/core/runCheckpoint.ts:203
 
 WHO this conversation belongs to — the `identity` the stored run was
 given, carried so that continuing it lands in the same namespace it
@@ -200,7 +200,7 @@ continues the conversation correctly.
 
 > `readonly` **lastCompletedIteration**: `number`
 
-Defined in: [src/core/runCheckpoint.ts:108](https://github.com/footprintjs/agentfootprint/blob/main/src/core/runCheckpoint.ts#L108)
+Defined in: src/core/runCheckpoint.ts:108
 
 Index of the last completed iteration in the FAILING run
  (diagnostic — not consumed on resume). The resumed run restores
@@ -213,7 +213,7 @@ Index of the last completed iteration in the FAILING run
 
 > `readonly` **originalInput**: `object`
 
-Defined in: [src/core/runCheckpoint.ts:111](https://github.com/footprintjs/agentfootprint/blob/main/src/core/runCheckpoint.ts#L111)
+Defined in: src/core/runCheckpoint.ts:111
 
 Original input message. Surfaces in observability + lets the
  consumer correlate checkpoint to the user's request.
@@ -228,7 +228,7 @@ Original input message. Surfaces in observability + lets the
 
 > `readonly` **runId**: `string`
 
-Defined in: [src/core/runCheckpoint.ts:100](https://github.com/footprintjs/agentfootprint/blob/main/src/core/runCheckpoint.ts#L100)
+Defined in: src/core/runCheckpoint.ts:100
 
 `runId` of the FAILING run — lets the consumer correlate a
  persisted checkpoint back to the original run's observability.
@@ -241,7 +241,7 @@ Defined in: [src/core/runCheckpoint.ts:100](https://github.com/footprintjs/agent
 
 > `readonly` `optional` **skillCursor?**: `string`
 
-Defined in: [src/core/runCheckpoint.ts:222](https://github.com/footprintjs/agentfootprint/blob/main/src/core/runCheckpoint.ts#L222)
+Defined in: src/core/runCheckpoint.ts:222
 
 WHERE the conversation's skill graph stood when the stored turn ended —
 the graph cursor, carried so a continued conversation can default its
@@ -266,7 +266,7 @@ change — an older runtime ignores it and continues correctly.
 
 > `readonly` `optional` **turnNumber?**: `number`
 
-Defined in: [src/core/runCheckpoint.ts:181](https://github.com/footprintjs/agentfootprint/blob/main/src/core/runCheckpoint.ts#L181)
+Defined in: src/core/runCheckpoint.ts:181
 
 The conversation TURN the stored history ends on — the stored run's
 `AgentState.turnNumber` — carried while an honesty layer is armed.
@@ -292,6 +292,6 @@ runtime that has never heard of it continues the conversation correctly.
 
 > `readonly` **version**: `1`
 
-Defined in: [src/core/runCheckpoint.ts:95](https://github.com/footprintjs/agentfootprint/blob/main/src/core/runCheckpoint.ts#L95)
+Defined in: src/core/runCheckpoint.ts:95
 
 Schema version. v1 = conversation-history-based.

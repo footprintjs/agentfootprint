@@ -4,7 +4,7 @@ title: AnswerInProgress
 
 # Interface: AnswerInProgress
 
-Defined in: [src/core/agent/coverage/answer.ts:71](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/coverage/answer.ts#L71)
+Defined in: src/core/agent/coverage/answer.ts:71
 
 One declaring call's in-progress items, as the answer's limits carry them —
 the tool, the call, and what its read found still running, as declared: the
@@ -16,7 +16,7 @@ data twin of that call's lines under "In progress (outcome not known yet)".
 
 > `readonly` **items**: readonly [`InProgressItem`](/docs/api/interfaces/InProgressItem)[]
 
-Defined in: [src/core/agent/coverage/answer.ts:74](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/coverage/answer.ts#L74)
+Defined in: src/core/agent/coverage/answer.ts:74
 
 ***
 
@@ -24,7 +24,7 @@ Defined in: [src/core/agent/coverage/answer.ts:74](https://github.com/footprintj
 
 > `readonly` `optional` **toolCallId?**: `string`
 
-Defined in: [src/core/agent/coverage/answer.ts:73](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/coverage/answer.ts#L73)
+Defined in: src/core/agent/coverage/answer.ts:73
 
 ***
 
@@ -32,4 +32,4 @@ Defined in: [src/core/agent/coverage/answer.ts:73](https://github.com/footprintj
 
 > `readonly` **toolName**: `string`
 
-Defined in: [src/core/agent/coverage/answer.ts:72](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/coverage/answer.ts#L72)
+Defined in: src/core/agent/coverage/answer.ts:72

@@ -6,7 +6,7 @@ title: readAskComponent
 
 > **readAskComponent**(`pauseData`): [`AskComponent`](/docs/api/interfaces/AskComponent) \| `undefined`
 
-Defined in: [src/core/askComponent.ts:174](https://github.com/footprintjs/agentfootprint/blob/main/src/core/askComponent.ts#L174)
+Defined in: src/core/askComponent.ts:174
 
 The ONE reader of `component` on a pause payload — wherever the pause kind
 happens to keep it.

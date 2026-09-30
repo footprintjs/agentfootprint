@@ -6,7 +6,7 @@ title: readAbsence
 
 > **readAbsence**(`value`): [`ToolAbsence`](/docs/api/interfaces/ToolAbsence) \| `undefined`
 
-Defined in: [src/core/agent/coverage/recognize.ts:32](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/coverage/recognize.ts#L32)
+Defined in: src/core/agent/coverage/recognize.ts:32
 
 Recognize (or decline to recognize) a value as an absence — STRICT, and the
 strictness is the zero-cost guarantee. Only a plain object whose

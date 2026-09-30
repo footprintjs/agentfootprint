@@ -40,6 +40,7 @@
  */
 
 import type { MemoryIdentity } from '../memory/identity/types.js';
+import type { DatasetTimeAxis } from './timeAxis.js';
 
 /**
  * The isolation tuple every artifact call presents — the SAME tuple memory
@@ -105,6 +106,11 @@ export interface ArtifactMeta {
    * `head()`, and causation stays the trace's job.
    */
   readonly parentRefs?: readonly ArtifactRef[];
+  /** The rows' TIME AXIS as the producer declared it — which column is time,
+   *  how its values are written, and how each row summarises its interval.
+   *  Validated at mint (a malformed one is refused, never repaired); absent =
+   *  undeclared, and a consumer keeps its own heuristic. See `timeAxis.ts`. */
+  readonly timeAxis?: DatasetTimeAxis;
   /** Unix ms when the artifact was stored. */
   readonly createdAt: number;
 }
@@ -128,6 +134,8 @@ export interface PutArtifactInput {
   readonly expiresAt?: number;
   readonly origin?: ArtifactOrigin;
   readonly parentRefs?: readonly ArtifactRef[];
+  /** Declare the rows' time axis (see {@link ArtifactMeta.timeAxis}). */
+  readonly timeAxis?: DatasetTimeAxis;
 }
 
 /** Why an artifact left the store without its owner asking. */

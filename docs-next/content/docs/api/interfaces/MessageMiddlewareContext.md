@@ -4,7 +4,7 @@ title: MessageMiddlewareContext
 
 # Interface: MessageMiddlewareContext
 
-Defined in: [src/core/agent/middleware/types.ts:230](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/middleware/types.ts#L230)
+Defined in: src/core/agent/middleware/types.ts:230
 
 The message a message middleware is deciding about.
 
@@ -14,7 +14,7 @@ The message a message middleware is deciding about.
 
 > `readonly` **content**: `string`
 
-Defined in: [src/core/agent/middleware/types.ts:240](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/middleware/types.ts#L240)
+Defined in: src/core/agent/middleware/types.ts:240
 
 The content as THIS middleware sees it — earlier transforms applied.
 
@@ -24,7 +24,7 @@ The content as THIS middleware sees it — earlier transforms applied.
 
 > `readonly` **history**: readonly [`LLMMessage`](/docs/api/interfaces/LLMMessage)[]
 
-Defined in: [src/core/agent/middleware/types.ts:242](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/middleware/types.ts#L242)
+Defined in: src/core/agent/middleware/types.ts:242
 
 Conversation so far. Empty at `'input'`.
 
@@ -34,7 +34,7 @@ Conversation so far. Empty at `'input'`.
 
 > `readonly` `optional` **identity?**: `MemoryIdentity`
 
-Defined in: [src/core/agent/middleware/types.ts:243](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/middleware/types.ts#L243)
+Defined in: src/core/agent/middleware/types.ts:243
 
 ***
 
@@ -42,7 +42,7 @@ Defined in: [src/core/agent/middleware/types.ts:243](https://github.com/footprin
 
 > `readonly` **phase**: `"input"` \| `"output"`
 
-Defined in: [src/core/agent/middleware/types.ts:238](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/middleware/types.ts#L238)
+Defined in: src/core/agent/middleware/types.ts:238
 
 `'input'` runs at the very top of the run, BEFORE the user's message is
 committed — so the window strategies, the injections, the slots, the
@@ -56,4 +56,4 @@ captured, so the record and the caller receive the same string.
 
 > `readonly` `optional` **signal?**: `AbortSignal`
 
-Defined in: [src/core/agent/middleware/types.ts:244](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/middleware/types.ts#L244)
+Defined in: src/core/agent/middleware/types.ts:244
