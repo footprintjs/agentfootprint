@@ -20,6 +20,7 @@
  * | the reading: `{ mentions: [] }`, at most {@link MAX_MENTIONS} | the reader broke its port — the run fails, naming it |
  * | each mention's `quote`: a non-empty VERBATIM substring of the text read | the mention is refused (`quote-not-in-text`) and keeps no text |
  * | each mention's parts: the {@link TimeParts} shape, every field in range, no unknown key, at most {@link MAX_PARSES} | the mention is refused (`malformed`) |
+ * | each mention's `leftover`: only beside parses, 1 to {@link MAX_LEFTOVER} tokens, each a verbatim substring of the text | the mention is refused (`malformed`) |
  *
  * None of these checks what a word MEANS: a model that reads "yesterday" as
  * the wrong day passes every one of them. That is why a `kind: 'model'`
@@ -83,6 +84,15 @@ export interface TimeMention {
   readonly parses: readonly TimeParts[];
   /** The reader saw a time here and could not read it. */
   readonly problem?: 'unreadable';
+  /**
+   * The time-like tokens the reader found OUTSIDE every span it read, in the
+   * order written — present only on a mention with parses. Present, the
+   * reading may not be the whole of what the person said (`8:40 AM` out of
+   * `8:40 AM til 9.30`), so it is never their words: it is confirmed through
+   * the time ask (time design § 5.5, step T6b). Absent, the reader vouches it
+   * read every time-like token of the message.
+   */
+  readonly leftover?: readonly string[];
 }
 
 /** A date as the text wrote it. */
@@ -136,6 +146,8 @@ export interface TimeParts {
 export const MAX_MENTIONS = 16;
 /** The most parses one mention may hold. */
 export const MAX_PARSES = 4;
+/** The most leftover tokens one mention may name — a bound on the record. */
+export const MAX_LEFTOVER = 16;
 const MAX_TOKEN = 64;
 const MAX_OFFSET = 1000;
 const MAX_COUNT = 100_000;
@@ -185,6 +197,7 @@ export type CheckedMention =
       readonly quote: string;
       readonly parses: readonly TimeParts[];
       readonly problem?: 'unreadable';
+      readonly leftover?: readonly string[];
     }
   | { readonly refused: MentionRefusal };
 
@@ -282,16 +295,30 @@ function nonEmptyToken(value: unknown): boolean {
   return typeof value === 'string' && value.trim().length > 0 && value.length <= MAX_TOKEN;
 }
 
+/** A leftover list: 1 to {@link MAX_LEFTOVER} tokens, each a verbatim substring of the text. */
+function isLeftover(text: string, value: unknown): boolean {
+  return (
+    Array.isArray(value) &&
+    value.length >= 1 &&
+    value.length <= MAX_LEFTOVER &&
+    value.every((t) => nonEmptyToken(t) && text.includes(t as string))
+  );
+}
+
 function checkMention(text: string, value: unknown): CheckedMention {
-  if (!isRecord(value) || !onlyKeys(value, ['quote', 'parses', 'problem'])) {
+  if (!isRecord(value) || !onlyKeys(value, ['quote', 'parses', 'problem', 'leftover'])) {
     return { refused: 'malformed' };
   }
-  const { quote, parses, problem } = value;
+  const { quote, parses, problem, leftover } = value;
   if (!Array.isArray(parses) || parses.length > MAX_PARSES) return { refused: 'malformed' };
   if (problem !== undefined && problem !== 'unreadable') return { refused: 'malformed' };
   // An unreadable mention carries no parses; a readable one carries at least one.
   if ((problem === 'unreadable') !== (parses.length === 0)) return { refused: 'malformed' };
   if (!parses.every((p) => isTimeParts(p))) return { refused: 'malformed' };
+  // A leftover names what a READING left out — an unreadable mention has no reading.
+  if (leftover !== undefined && (problem !== undefined || !isLeftover(text, leftover))) {
+    return { refused: 'malformed' };
+  }
   if (typeof quote !== 'string' || quote.length === 0 || !text.includes(quote)) {
     return { refused: 'quote-not-in-text' };
   }
@@ -299,6 +326,7 @@ function checkMention(text: string, value: unknown): CheckedMention {
     quote,
     parses: parses as TimeParts[],
     ...(problem === 'unreadable' && { problem: 'unreadable' as const }),
+    ...(leftover !== undefined && { leftover: [...(leftover as string[])] }),
   };
 }
 

@@ -558,7 +558,7 @@ const LEDGER: Readonly<Record<string, readonly Entry[]>> = {
     {
       kind: 'not-model-facing',
       count: 2,
-      why: 'regular-expression sources of the English time reader — the words it RECOGNISES in a person’s message (`… to now`, the clause rule’s time-like words); matched against text, never sent to a model or shown to anyone',
+      why: 'regular-expression sources of the English time reader — the words it RECOGNISES in a person’s message (`… to now`, the leftover rule’s time-or-range words); matched against text, never sent to a model or shown to anyone',
     },
   ],
   'src/core/runbook/recording.ts': [

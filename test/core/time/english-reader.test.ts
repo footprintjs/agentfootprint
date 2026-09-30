@@ -6,16 +6,19 @@
  *
  * Law: the reader TOKENIZES — parts and a verbatim quote, never an instant, a
  * date order, a zone mapping or a refusal of the future; a phrase v1 does not
- * read is one `unreadable` mention quoting the whole phrase, never a partial
- * reading.
+ * read is one `unreadable` mention quoting the whole phrase; a reading is the
+ * person's words only when nothing time-like is left outside every mention —
+ * otherwise it names its `leftover` and is confirmed, never said.
  *
  * Test types:
  *   functional  — every v1 row of § 5.3 → its parts; every non-v1 row → "unreadable"; the field
  *                 sentences end to end through resolve, choose and the ask ("10/09/26 8 AM to
  *                 8:40 AM PST" → a zone ask for `PST`, then three date orders, `MDY` → PDT;
  *                 "yesterday"; a future date refused by a `past` tool's facts);
- *   clause rule — every spelling a recheck found, and a generated matrix (v1 phrase × separator ×
- *                 opener × time-like tail, reversed, `between`, seeded fillers): read whole or not at all;
+ *   leftover rule — every row the recheck rounds cited is confirmed or unreadable, never said; a
+ *                 generated matrix (v1 phrase × separator × opener × time-like tail, reversed,
+ *                 seeded fillers) proves a reading is said only when an independent oracle finds
+ *                 nothing time-like outside every mention; plain exact phrases stay said;
  *   boundary    — impossible clock times and dates are not read (or resolve to nothing), a
  *                 bare hour is a time only as a range's first side, a modifier taints, 16
  *                 mentions at most;
@@ -40,7 +43,7 @@ import {
   withZoneAnswered,
 } from '../../../src/core/time/resolve.js';
 import { timeAskOf } from '../../../src/core/time/ask.js';
-import { timeReadingRows } from '../../../src/core/time/rows.js';
+import { timeReadingRows, timeRowIsWellFormed } from '../../../src/core/time/rows.js';
 import { periodFactProblem } from '../../../src/core/time/convert.js';
 import { defaultTimeAskMessages } from '../../../src/locales/timeAsk.js';
 import { int, pick, prng } from './fixtures/generate.js';
@@ -48,7 +51,7 @@ import { int, pick, prng } from './fixtures/generate.js';
 const reader = englishTimeReader();
 const read = (text: string) =>
   reader.read(text, { locale: 'en-US' }) as ReturnType<typeof reader.read> & {
-    mentions: { quote: string; parses: TimeParts[]; problem?: 'unreadable' }[];
+    mentions: { quote: string; parses: TimeParts[]; problem?: 'unreadable'; leftover?: string[] }[];
   };
 
 const LA = 'America/Los_Angeles';
@@ -184,34 +187,8 @@ describe('every non-v1 phrase reads "unreadable" — the whole phrase, never a p
     ['from 8 AM to now', 'from 8 AM to now'],
     ['at noon', 'noon'],
     ["at 8 o'clock", "8 o'clock"],
-    // A range whose other side is no v1 time — the v1 side alone would narrow the window.
-    ['8:40 AM till 9', '8:40 AM till 9'],
-    ['yesterday 8:40 PM to 9', 'yesterday 8:40 PM to 9'],
-    ['8 to 9:30', '8 to 9:30'],
-    ['between 8 and 9:30', 'between 8 and 9:30'],
-    ['between 8:30 and 9', 'between 8:30 and 9'],
-    ['8-9:30', '8-9:30'],
-    ['14:00 to 16', '14:00 to 16'],
-    ['8 and 9 AM', '8 and 9 AM'],
-    ['10/9-12', '10/9-12'],
-    // …whatever the far side's spelling: dotted, 4-digit, run together, a unit, words.
-    ['8:40 AM till 9.30', '8:40 AM till 9.30'],
-    ['8:40 till 9.30', '8:40 till 9.30'],
-    ['14:00 to 1600', '14:00 to 1600'],
-    ['14:00-1600', '14:00-1600'],
-    ['8:40 AM to 930', '8:40 AM to 930'],
-    ['8:40 AM until 9h', '8:40 AM until 9h'],
-    ['8:40 AM till nine', '8:40 AM till nine'],
-    ['8:40 AM to about 9 AM', '8:40 AM to about 9 AM'],
-    ['1600 to 17:00', '1600 to 17:00'],
-    ['nine till 8:40 AM', 'nine till 8:40 AM'],
-    ['8:30 and 9 yesterday', '8:30 and 9 yesterday'], // `and` + a time word after: a range
-    // A clause with a second time-like token is ONE unreadable mention quoting the clause.
-    [
-      'yesterday 8:40 PM till 9.30 for checkout. Thanks',
-      'yesterday 8:40 PM till 9.30 for checkout',
-    ],
-    ['(8:40 AM till 9.30) please', '(8:40 AM till 9.30) please'],
+    // A range whose other side is no v1 time is not here: its v1 side is read and CONFIRMED
+    // (the leftover rule, below) — never filed as said.
     // More modifiers that change a v1 phrase.
     ['from 3 PM yesterday', 'from 3 PM yesterday'], // `from` with no `to`: a start, not an hour
     ['past 8 PM', 'past 8 PM'],
@@ -240,58 +217,160 @@ describe('every non-v1 phrase reads "unreadable" — the whole phrase, never a p
   });
 });
 
-// ─── the clause rule: read whole or not at all ───────────────────────
+// ─── the leftover rule: the person's words only when nothing time-like is left ───
 
-describe('the clause rule — a clause with a second time-like token is read whole or not at all', () => {
-  // Every spelling a recheck found leaking a partial reading through a list of connectors.
+/** The mentions filed as the person's words: read, and no leftover. */
+const saidOf = (text: string) =>
+  read(text).mentions.filter((m) => m.problem === undefined && m.leftover === undefined);
+
+/** Where each mention stands in the text — quotes are in order and never overlap. */
+function spansOf(text: string): { start: number; end: number }[] {
+  const out: { start: number; end: number }[] = [];
+  let from = 0;
+  for (const m of read(text).mentions) {
+    const start = text.indexOf(m.quote, from);
+    out.push({ start, end: start + m.quote.length });
+    from = start + m.quote.length;
+  }
+  return out;
+}
+
+/**
+ * The ORACLE — the task's broad time-or-range set, written here independently
+ * of the reader's list: any digit; one … twelve, noon, midnight, half,
+ * quarter; day and relative words; week day and month names; am/pm; range
+ * words; `and` after a time; a dash, arrow, tilde, `..` or `/` between tokens.
+ */
+const ORACLE = new RegExp(
+  '\\p{Nd}' +
+    '|\\b(?:one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve|noon|midnight|half|quarter' +
+    '|today|tomorrow|yesterday|tonight|last|next|ago|since|before|after|then|eod' +
+    '|mornings?|afternoons?|evenings?|nights?|am|pm|to|until|till|til|through|thru|between|from' +
+    '|(?:mon|tues|wednes|thurs|fri|satur|sun)days?|mon|tue|wed|thu|fri|sat|sun' +
+    '|jan(?:uary)?|feb(?:ruary)?|mar(?:ch)?|apr(?:il)?|may|june?|july?|aug(?:ust)?' +
+    '|sep(?:t(?:ember)?)?|oct(?:ober)?|nov(?:ember)?|dec(?:ember)?)\\b' +
+    '|(?<!\\p{L})(?:[-‐‑‒–—―−~～→/]|->|\\.\\.)|(?:[-‐‑‒–—―−~～→/]|->|\\.\\.)(?!\\p{L})',
+  'iu',
+);
+
+/** What is left of the text once every mention's quote (and a read range's opener) is blanked. */
+function outsideMentions(text: string): string {
+  let rest = text;
+  for (const s of spansOf(text)) {
+    rest = rest.slice(0, s.start) + ' '.repeat(s.end - s.start) + rest.slice(s.end);
+  }
+  return rest.replace(/\b(?:from|between)(\s+)(?=\s)/gi, (m) => ' '.repeat(m.length));
+}
+
+describe('the leftover rule — a reading is the person’s only when nothing time-like is left', () => {
+  // Every row the three recheck rounds cited: none may come back as the person's words.
   const CITED = [
-    // `between` with a day or a date on the near side
+    // round 1–2: connectors, openers and far sides no list held
     'between yesterday and 1600', 'between today and nine', 'between 10/01/26 and 10.09.26',
-    'between 2026-10-01 and 10.09.26',
-    // connectors no list held
-    '8:40 AM til 9.30', "8:40 AM 'til 9.30", '8:40 AM ’til 9.30', '8:40 AM through to 9.30',
-    '8:40 AM up to 9.30', '8:40 AM up until 9.30', '8:40 AM -> 9.30', '8:40 AM → 9.30',
-    '8:40 AM ~ 9.30', '8:40 AM ～ 9.30', '8:40 AM .. 9.30', '8:40 AM ... 9.30', '8:40 AM ‐ 9.30',
-    '8:40 AM ‒ 9.30', '8:40 AM ― 9.30', '8:40 AM − 9.30', '8:40 AM onto 9.30',
-    // words and marks between the connector and the number
+    'between 2026-10-01 and 10.09.26', '8:40 AM til 9.30', "8:40 AM 'til 9.30", '8:40 AM ’til 9.30',
+    '8:40 AM through to 9.30', '8:40 AM up to 9.30', '8:40 AM up until 9.30', '8:40 AM -> 9.30',
+    '8:40 AM → 9.30', '8:40 AM ~ 9.30', '8:40 AM ～ 9.30', '8:40 AM .. 9.30', '8:40 AM ... 9.30',
+    '8:40 AM ‐ 9.30', '8:40 AM ‒ 9.30', '8:40 AM ― 9.30', '8:40 AM − 9.30', '8:40 AM onto 9.30',
     '8:40 AM to a quarter past nine', '8:40 AM to a quarter to ten', '8:40 AM to approx. 9.30',
     '8:40 AM to ca. 9.30', '8:40 AM to c. 9.30', '8:40 AM to like 9.30', '8:40 AM to probably 9.30',
     '8:40 AM to just before 9.30', '8:40 AM to sometime around 9.30', '8:40 AM to (9.30)',
     '8:40 AM to "9.30"', '8:40 AM to [9.30]', '8:40 AM to: 9.30', '8:40 AM to (9:30 AM)',
-    // a far side that begins with a word and still names a time
     '8:40 AM to right now', '8:40 AM to just now', '8:40 AM till nowish', '8:40 AM until the present',
     '8:40 AM to present', '8:40 AM to EOD', '8:40 AM to end of day', '8:40 AM to close of business',
-    '8:40 AM to lunch', '8:40 AM to sunset', '8:40 AM to noonish',
-    // an unreadable first side ending in a meridiem or a unit
-    '9.30 AM to 10:15', '9.30 a.m. to 10:15', 'nine AM to 10:15', '1600 hrs to 17:00',
-    'T09:30 to 10:15 PM',
-    // the next day, a decimal tail, other scripts and spellings
+    '8:40 AM to lunch', '8:40 AM to sunset', '8:40 AM to noonish', '9.30 AM to 10:15',
+    '9.30 a.m. to 10:15', 'nine AM to 10:15', '1600 hrs to 17:00', 'T09:30 to 10:15 PM',
     '8:40 PM to 2:00 AM the day after', '8:40 AM to 9:30 the day after', '8:40 PM to 2:00 AM (+1)',
     '8:40 AM to 9:30.5', '8:40 AM to ９:３０', '8:40 AM to +1h', '8:40 AM to T09:30',
-    '8:30 and half nine', '8:30 and 9.30 in the logs',
-    // a comma or a line break before a lower-case word continues the clause
-    '8:40 AM, to 9.30', 'yesterday, between 8 and 9', '8:40 AM\nto 9.30', '8 a.m. to 9',
-    // the owner-approved price: a time beside an unrelated number is asked, not read
+    '8:30 and half nine', '8:30 and 9.30 in the logs', '8:40 AM, to 9.30',
+    'yesterday, between 8 and 9', '8:40 AM\nto 9.30', '8 a.m. to 9', '8:40 AM till 9',
+    'yesterday 8:40 PM to 9', '8 to 9:30', 'between 8 and 9:30', 'between 8:30 and 9', '8-9:30',
+    '14:00 to 16', '8 and 9 AM', '10/9-12', '8:40 AM till 9.30', '8:40 till 9.30', '14:00 to 1600',
+    '14:00-1600', '8:40 AM to 930', '8:40 AM until 9h', '8:40 AM till nine', '8:40 AM to about 9 AM',
+    '1600 to 17:00', 'nine till 8:40 AM', '8:30 and 9 yesterday',
+    'yesterday 8:40 PM till 9.30 for checkout. Thanks', '(8:40 AM till 9.30) please',
+    // round 3: the clause rule's own leaks
+    '8:40 AM → EOD', '8:40 AM / 9.30', '8:40 AM + 50m', '8:40 AM plus fifty', '8:40 AM to Nine',
+    '8:40 AM (Till 9.30)', '(Till 9.30) 8:40 AM', 'today, Tuesday', 'yesterday & today', 'yesterday … today',
+    // round 4: a clause mark before a capital
+    '8:40 AM, Till 9.30', '8:40 AM, Until 9.30', '8:40 AM\nTill 9.30', 'Start: 8:40 AM\nEnd: 9.30',
+    '8:40 AM. Until 9.30 please', 'errors yesterday, Then 9.30 too', 'between 8 AM, And 9.30',
+    // round 4: a range to an event, or left open
+    '8 AM until the deploy', '8 AM to close', '8 AM till late', '8 AM until then',
+    'yesterday until the outage', 'between 8 AM and the deploy', 'errors between 8 AM and',
+    'errors 8 AM to', 'errors 8 AM -',
+    // round 4: word-list gaps and letter case
+    'today until april', 'yesterday through june', 'yesterday through august',
+    'YESTERDAY THRU SAT', 'TODAY TO MAY', 'today thru sat', 'yesterday to wed', 'today through sun',
+    'today until the tenth', 'yesterday to the ninth', '9 AM for an hr', '9 AM plus a min',
+    '9 AM plus a sec', 'yesterday to tonite',
+    // the trade-off: a time beside an unrelated number or word is confirmed
     '9 AM and 3 retries', '8 AM and 9 AM', 'the 5 slowest calls yesterday',
-    'which one failed yesterday',
+    'which one failed yesterday', 'errors 500-503 yesterday', 'errors in the last 2 hours to date',
+    'I want to see yesterday', 'logs from yesterday', '8:40 AM ~ 9:30 PM', 'since 8 AM, and today',
   ] as const; // prettier-ignore
   for (const text of CITED) {
-    it(`${JSON.stringify(text)} → one unreadable mention quoting the clause`, () => {
-      expect(read(text).mentions).toEqual([{ quote: text, parses: [], problem: 'unreadable' }]);
+    it(`${JSON.stringify(text)} → confirmed or unreadable, never said`, () => {
+      const mentions = read(text).mentions;
+      expect(mentions.length).toBeGreaterThan(0);
+      expect(saidOf(text)).toEqual([]);
     });
   }
+
+  it('an incomplete reading keeps its parts and names what it left, in order, verbatim', () => {
+    expect(read('8:40 AM til 9.30').mentions).toEqual([
+      {
+        quote: '8:40 AM',
+        parses: [{ wall: { h: 8, m: 40, meridiem: 'am' } }],
+        leftover: ['til', '9.30'],
+      },
+    ]);
+    expect(read('Start: 8:40 AM\nEnd: 9.30').mentions[0]!.leftover).toEqual(['9.30']);
+    expect(read('YESTERDAY THRU SAT').mentions[0]!.leftover).toEqual(['THRU', 'SAT']);
+    // Every reading of the message carries the message's leftover.
+    expect(read('yesterday & today').mentions.map((m) => m.leftover)).toEqual([['&'], ['&']]);
+  });
+
+  it('controls — a plain, exact phrase is the person’s words', () => {
+    const CONTROLS: readonly [string, string][] = [
+      ['from 8 AM to 9 AM yesterday', '8 AM to 9 AM yesterday'],
+      ['2026-09-26 08:00..08:40', '2026-09-26 08:00..08:40'],
+      ['2026-10-01..2026-10-09', '2026-10-01..2026-10-09'],
+      ['errors yesterday?', 'yesterday'],
+      ['Show client activity 10/09/26 8 AM to 8:40 AM PST', '10/09/26 8 AM to 8:40 AM PST'],
+      ['between yesterday and 9:30 PM', 'yesterday and 9:30 PM'],
+      ['Show client activity for the last 40 minutes', 'last 40 minutes'],
+      ['check-in errors yesterday', 'yesterday'],
+      ['I am checking yesterday’s errors, what failed?', 'yesterday'],
+      ['8 to 9 AM', '8 to 9 AM'],
+      ['Show client activity 8:40 AM – 9:30 PM', '8:40 AM – 9:30 PM'],
+    ];
+    for (const [text, quote] of CONTROLS) {
+      const mentions = read(text).mentions;
+      expect(mentions, text).toHaveLength(1);
+      expect(mentions[0], text).toMatchObject({ quote });
+      expect(mentions[0]!.problem, text).toBeUndefined();
+      expect(mentions[0]!.leftover, text).toBeUndefined();
+    }
+  });
+
+  it('a lone mark inside a word is no range; between two readings it is', () => {
+    expect(saidOf('check-in errors yesterday')).toHaveLength(1);
+    expect(saidOf('and/or yesterday')).toHaveLength(1);
+    expect(saidOf('yesterday/today')).toEqual([]);
+  });
 
   // The generator's dimensions: a v1 phrase, a separator, an opener, a time-like tail.
   const NEAR = [
     '8:40 AM', '8:40AM', '8:40', '20:40', '14:00', 'yesterday 8:40 PM', 'yesterday 20:40',
     '10/09/26 8 AM', '8 AM PST', '2026-10-09T08:00', 'yesterday', 'today', '10/01/26',
-    '2026-10-01', 'last 40 minutes',
+    '2026-10-01', 'last 40 minutes', 'YESTERDAY', 'Today',
   ] as const; // prettier-ignore
   const SEPARATORS = [
     ' to ', ' until ', ' till ', ' through ', ' thru ', '-', ' - ', '–', ' – ', '—', ' — ',
     ' til ', " 'til ", ' ’til ', ' through to ', ' up to ', ' up until ', ' onto ', ' -> ', ' → ',
-    ' ~ ', ' ～ ', ' .. ', ' ... ', '‐', '‒', '―', '−', ' ‐ ', ' − ', ' and ', ', ', ', to ',
-    ' or ', ' ', '\n', ' + ', ' then ',
+    ' ~ ', ' ～ ', ' .. ', ' ... ', ' … ', '‐', '‒', '―', '−', ' ‐ ', ' − ', ' and ', ', ',
+    ', to ', ' or ', ' ', '\n', ' + ', ' then ', ', Till ', '. Until ', '\nTill ', ', Then ',
+    ' & ', ' / ', ' plus ', '\nEnd: ', ', And ', ' TO ', ' THRU ',
   ] as const; // prettier-ignore
   const OPENERS = [
     '', 'a ', 'an ', 'about ', 'approx. ', 'ca. ', 'c. ', 'like ', 'probably ', 'just before ',
@@ -300,122 +379,89 @@ describe('the clause rule — a clause with a second time-like token is read who
   /** Tails no v1 row reads on their own — every one carries a time-like token. */
   const TAILS = [
     '9', '21', '09', '9.30', '21.30', '930', '0930', '1600', '21h30', '9h', '9hrs', '9 hours',
-    'nine', 'nine thirty', 'half past nine', 'quarter to ten', 'quarter past nine', 'the 9th',
-    '9ish', '9:30.5', '９:３０', '+1h', 'T09:30', '3 retries', 'now', 'nowish', 'present', 'EOD',
-    'end of day', 'close of business', 'lunch', 'sunset', 'noonish', 'the day after',
-    'tomorrow morning', 'Friday', 'noon', 'midnight', 'one', 'twelve', 'May 3', '10.09.26',
+    'nine', 'Nine', 'nine thirty', 'half past nine', 'quarter to ten', 'quarter past nine',
+    'the 9th', 'the tenth', 'the ninth', '9ish', '9:30.5', '９:３０', '+1h', 'T09:30', '3 retries',
+    'now', 'nowish', 'present', 'EOD', 'end of day', 'close of business', 'close', 'lunch',
+    'sunset', 'noonish', 'the day after', 'tomorrow morning', 'Friday', 'noon', 'midnight', 'one',
+    'twelve', 'May 3', '10.09.26', 'april', 'june', 'august', 'sat', 'wed', 'sun', 'SAT', 'MAY',
+    'tonite', 'an hr', 'a min', 'a sec', 'fifty', 'late', 'then',
   ] as const; // prettier-ignore
-  /** [the text after the clause, what of it the quote keeps] */
-  const ENDS: readonly [string, string][] = [
-    ['', ''],
-    ['.', ''],
-    ['?', ''],
-    [', thanks', ', thanks'],
-    [' for checkout. Then stop', ' for checkout'],
-  ];
+  const ENDS = ['', '.', '?', ', thanks', ' for checkout. Then stop', ' please'] as const;
   /** A bare hyphen run into an ISO phrase is part of its token (`…T08:00-09` is an offset), not a separator. */
   const offsetRun = (near: string, sep: string, opener: string) =>
-    /^\d{4}-\d{2}-\d{2}/.test(near) && sep === '-' && opener === '';
+    /^\d{4}-\d{2}-\d{2}/.test(near) && /^[-‐‒―−–—]$/.test(sep) && opener === '';
 
   /**
-   * Read whole or not at all: ONE mention holding the whole phrase — unreadable
-   * (quoting the clause, or the phrase itself when a modifier or a phrase v1 does
-   * not read already made it one: `8:40 AM to now`), or read as a range of both
-   * sides quoting exactly the phrase (`9 to 8:40 AM`, a bare first side). Never
-   * a mention that holds one side only.
+   * The property: a mention filed as said only when (1) the tail — time-like
+   * by construction — lies inside some mention (a range read whole, or an
+   * unreadable mention of its own), and (2) the ORACLE finds nothing
+   * time-like outside every mention.
    */
-  const wrongOf = (
-    phrase: string,
-    end: string,
-    kept: string,
-    sides: readonly string[],
-  ): string | undefined => {
-    const text = `Show client activity ${phrase}${end}`;
-    const mentions = read(text).mentions;
-    const [m] = mentions;
-    const clause = `Show client activity ${phrase}${kept}`;
-    const holdsBoth = m !== undefined && sides.every((side) => m.quote.includes(side));
-    const whole =
-      mentions.length === 1 &&
-      m !== undefined &&
-      holdsBoth &&
-      clause.includes(m.quote) &&
-      (m.problem === 'unreadable'
-        ? m.parses.length === 0
-        : m.parses.length === 1 && m.parses[0]!.rangeOf?.length === 2);
-    return whole ? undefined : `${JSON.stringify(text)} → ${JSON.stringify(mentions)}`;
+  const wrongOf = (text: string, tail: string): string | undefined => {
+    if (saidOf(text).length === 0) return undefined;
+    const at = text.lastIndexOf(tail);
+    const covered = spansOf(text).some((s) => s.start <= at && at + tail.length <= s.end);
+    const rest = outsideMentions(text);
+    if (covered && !ORACLE.test(rest)) return undefined;
+    return `${JSON.stringify(text)} → ${JSON.stringify(read(text).mentions)}`;
   };
 
-  it('every v1 phrase × separator × time-like tail (and reversed): read whole or not at all', () => {
+  it('every v1 phrase × separator × time-like tail (and reversed): said only when nothing is left', () => {
     const wrong: string[] = [];
     let n = 0;
     for (const near of NEAR) {
       for (const sep of SEPARATORS) {
         for (const tail of TAILS) {
           if (offsetRun(near, sep, '')) continue;
-          for (const [end, kept] of ENDS) {
+          for (const end of ENDS) {
             n++;
-            const w1 = wrongOf(`${near}${sep}${tail}`, end, kept, [near, tail]);
+            const w1 = wrongOf(`Show client activity ${near}${sep}${tail}${end}`, tail);
             if (w1 !== undefined) wrong.push(w1);
-            const w2 = wrongOf(`${tail}${sep}${near}`, end, kept, [near, tail]);
+            const w2 = wrongOf(`Show client activity ${tail}${sep}${near}${end}`, tail);
             if (w2 !== undefined) wrong.push(w2);
           }
         }
       }
     }
-    expect(n).toBeGreaterThan(30_000);
-    expect(wrong).toEqual([]);
+    expect(n).toBeGreaterThan(40_000);
+    expect(wrong.slice(0, 20)).toEqual([]);
   });
 
-  it('every opener between the separator and the tail: read whole or not at all', () => {
+  it('every opener between the separator and the tail: said only when nothing is left', () => {
     const wrong: string[] = [];
     for (const near of ['8:40 AM', '14:00', 'yesterday 8:40 PM', '10/09/26 8 AM', 'yesterday']) {
       for (const sep of SEPARATORS) {
         for (const opener of OPENERS) {
           for (const tail of TAILS) {
             if (offsetRun(near, sep, opener)) continue;
-            const w = wrongOf(`${near}${sep}${opener}${tail}`, '', '', [near, tail]);
+            const w = wrongOf(`${near}${sep}${opener}${tail}`, tail);
             if (w !== undefined) wrong.push(w);
           }
         }
       }
     }
-    expect(wrong).toEqual([]);
+    expect(wrong.slice(0, 20)).toEqual([]);
   });
 
-  it('`between` with a day or a date on the near side, any tail: read whole or not at all', () => {
-    const wrong: string[] = [];
-    for (const near of ['yesterday', 'today', '10/01/26', '2026-10-01', '8:30', '8 AM']) {
-      for (const opener of OPENERS) {
-        for (const tail of TAILS) {
-          const w = wrongOf(`between ${near} and ${opener}${tail}`, '', '', [near, tail]);
-          if (w !== undefined) wrong.push(w);
-        }
-      }
-    }
-    expect(wrong).toEqual([]);
-  });
-
-  it('seeded clauses with filler words: no mention ever reads one side alone', () => {
+  it('seeded messages with filler words: said only when nothing is left', () => {
     const r = prng(0x7c1a);
-    const FILLER = ['please', 'the', 'logs', 'for', 'just', 'like', 'maybe', 'errors', 'then'];
+    const FILLER = ['please', 'the', 'logs', 'for', 'just', 'like', 'maybe', 'errors', 'deploy'];
     const wrong: string[] = [];
-    for (let i = 0; i < 3000; i++) {
+    for (let i = 0; i < 4000; i++) {
       const words = Array.from({ length: int(r, 0, 2) }, () => pick(r, FILLER));
       const near = pick(r, NEAR);
       const sep = pick(r, SEPARATORS);
       if (offsetRun(near, sep, '')) continue;
       const tail = pick(r, TAILS);
       const far = [...words, pick(r, OPENERS) + tail].join(' ');
-      const clause = r() < 0.5 ? `${near}${sep}${far}` : `${far}${sep}${near}`;
-      const [end, kept] = pick(r, ENDS);
-      const w = wrongOf(clause, end, kept, [near, tail]);
+      const text = (r() < 0.5 ? `${near}${sep}${far}` : `${far}${sep}${near}`) + pick(r, ENDS);
+      const w = wrongOf(text, tail);
       if (w !== undefined) wrong.push(w);
     }
-    expect(wrong).toEqual([]);
+    expect(wrong.slice(0, 20)).toEqual([]);
   });
 
-  it('a v1 far side over the grammar’s connectors reads the whole range — the rule never taints it', () => {
+  it('two v1 phrases over the grammar’s connectors read as ONE range, the person’s words', () => {
     for (const near of ['8:40 AM', '14:00', 'yesterday 8:40 PM']) {
       for (const c of [
         ' to ',
@@ -427,50 +473,23 @@ describe('the clause rule — a clause with a second time-like token is read who
         ' - ',
         '–',
         ' – ',
-        '—',
-        ' — ',
       ]) {
-        const [m, ...rest] = read(`Show client activity ${near}${c}9:30 PM`).mentions;
-        expect(rest, `${near}${c}9:30 PM`).toEqual([]);
-        expect(m!.problem, `${near}${c}9:30 PM`).toBeUndefined();
-        expect(m!.parses[0]!.rangeOf).toHaveLength(2);
+        const text = `Show client activity ${near}${c}9:30 PM`;
+        const [m, ...rest] = read(text).mentions;
+        expect(rest, text).toEqual([]);
+        expect(m!.problem, text).toBeUndefined();
+        expect(m!.leftover, text).toBeUndefined();
+        expect(m!.parses[0]!.rangeOf, text).toHaveLength(2);
       }
     }
   });
 
-  it('…and over any other separator, the two v1 phrases are one unreadable clause — never one side', () => {
-    for (const sep of [' til ', ' → ', ' ~ ', '‐', ' − ', ' .. ', ' and ', ', ', ' ']) {
+  it('…over any other separator, each is confirmed — never said', () => {
+    for (const sep of [' til ', ' → ', ' ~ ', '‐', ' − ', ' and ', ' & ', ' / ', ' … ']) {
       const text = `8:40 AM${sep}9:30 PM`;
-      expect(read(text).mentions, text).toEqual([
-        { quote: text, parses: [], problem: 'unreadable' },
-      ]);
+      expect(read(text).mentions.length, text).toBeGreaterThan(0);
+      expect(saidOf(text), text).toEqual([]);
     }
-  });
-
-  it('a clause with no second time-like token still reads; a capitalised non-time word ends a clause', () => {
-    expect(read('yesterday to compare').mentions).toEqual([
-      { quote: 'yesterday', parses: [{ relative: { unit: 'day', offset: -1 } }] },
-    ]);
-    expect(read('I am checking yesterday’s errors, what failed?').mentions).toEqual([
-      { quote: 'yesterday', parses: [{ relative: { unit: 'day', offset: -1 } }] },
-    ]);
-    expect(read('Errors at 8 AM. Then at 9 AM.').mentions.map((m) => m.quote)).toEqual([
-      '8 AM',
-      '9 AM',
-    ]);
-    expect(read('between yesterday and 9:30 PM').mentions).toEqual([
-      {
-        quote: 'yesterday and 9:30 PM',
-        parses: [
-          {
-            rangeOf: [
-              { relative: { unit: 'day', offset: -1 } },
-              { wall: { h: 9, m: 30, meridiem: 'pm' } },
-            ],
-          },
-        ],
-      },
-    ]);
   });
 });
 
@@ -563,18 +582,77 @@ describe('boundary', () => {
     ]);
   });
 
-  it('`from … to` and `from <day>` still read; a number beside a time is asked (the clause rule)', () => {
+  it('`from … to` and `from <day>` still read; a number beside a time is confirmed (the leftover rule)', () => {
     expect(read('9 AM and 3 retries').mentions).toEqual([
-      { quote: '9 AM and 3 retries', parses: [], problem: 'unreadable' },
+      { quote: '9 AM', parses: [{ wall: { h: 9, meridiem: 'am' } }], leftover: ['and', '3'] },
     ]);
     expect(read('from 8 AM to 9 AM').mentions[0]).toMatchObject({ quote: '8 AM to 9 AM' });
     expect(read('from 8 AM to 9 AM').mentions[0]!.problem).toBeUndefined();
+    // `from` with no `to` may open a window (`from yesterday` on): confirmed, never said.
     expect(read('logs from yesterday').mentions).toEqual([
-      { quote: 'yesterday', parses: [{ relative: { unit: 'day', offset: -1 } }] },
+      {
+        quote: 'yesterday',
+        parses: [{ relative: { unit: 'day', offset: -1 } }],
+        leftover: ['from'],
+      },
     ]);
     expect(read('errors 500-503 yesterday').mentions).toEqual([
-      { quote: 'errors 500-503 yesterday', parses: [], problem: 'unreadable' },
+      {
+        quote: 'yesterday',
+        parses: [{ relative: { unit: 'day', offset: -1 } }],
+        leftover: ['500', '-', '503'],
+      },
     ]);
+  });
+
+  it('the port checks a leftover: only beside parses, each token verbatim in the text', () => {
+    const parses = [{ relative: { unit: 'day', offset: -1 } }];
+    const check = (mention: object) =>
+      checkReading('yesterday til 9', { mentions: [mention] }, 'fixture')[0];
+    expect(check({ quote: 'yesterday', parses, leftover: ['til', '9'] })).toEqual({
+      quote: 'yesterday',
+      parses,
+      leftover: ['til', '9'],
+    });
+    expect(check({ quote: 'yesterday', parses, leftover: ['until'] })).toEqual({
+      refused: 'malformed',
+    });
+    expect(check({ quote: 'yesterday', parses, leftover: [] })).toEqual({ refused: 'malformed' });
+    expect(
+      check({ quote: 'yesterday', parses: [], problem: 'unreadable', leftover: ['9'] }),
+    ).toEqual({ refused: 'malformed' });
+  });
+
+  it('an incomplete reading’s row: `confirmNeeded`, `said: []`, and a choice left open to confirm', () => {
+    const text = '8:40 AM til 9.30';
+    const [row] = timeReadingRows({
+      mentions: checkReading(text, read(text), reader.id),
+      clock: { now: CLOCK.now, nowSource: 'app', zone: LA, zoneSource: 'app' } as never,
+      policy: DEFAULT_TIME_POLICY,
+      reader: { id: reader.id, version: reader.version, kind: 'rule', locale: 'en-US' },
+      tzdata: 'test',
+      at: { turn: 1, iteration: 1 },
+    });
+    expect(row).toMatchObject({
+      quote: '8:40 AM',
+      confirmNeeded: { leftover: ['til', '9.30'] },
+      choice: { by: 'open', open: ['confirm'] },
+    });
+    expect(row!.candidates!.every((c) => c.said.length === 0)).toBe(true);
+    expect(timeRowIsWellFormed(row as never)).toBe(true);
+    // The record's check refuses an empty or unknown-keyed `confirmNeeded`.
+    for (const confirmNeeded of [
+      { leftover: [] },
+      { leftover: ['til'], extra: 1 },
+      { leftover: [''] },
+    ]) {
+      expect(timeRowIsWellFormed({ ...row, confirmNeeded } as never)).toBe(false);
+    }
+    const ask = timeAskOf(row!, defaultTimeAskMessages);
+    expect(ask?.question).toBe(
+      'I read only “8:40 AM” as a time, not “til 9.30”. Is this the window you mean?',
+    );
+    expect(ask?.field.labels?.[0]).toMatch(/^I read .+ — is that the window you mean\?$/);
   });
 
   it('an abbreviation outside the closed list is not a zone', () => {

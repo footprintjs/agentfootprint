@@ -80,7 +80,7 @@ import {
   type TimePolicy,
 } from '../../time/resolve.js';
 import { timeAskOf, type TimeAskMessages } from '../../time/ask.js';
-import type { TimeReadingRow } from '../../time/rows.js';
+import { needsConfirm, type TimeReadingRow } from '../../time/rows.js';
 import type { ZoneName } from '../../time/zone.js';
 import { shownArgsOf } from '../../toolShownArgs.js';
 import { validatePropertyValue } from '../toolArgsValidation.js';
@@ -998,12 +998,15 @@ function bindWindowAnswer(
       return { expected: WINDOW_ZONE_EXPECTATION };
     }
     const row = reading.row;
+    // An incomplete reading stays one to CONFIRM after its zone is answered (step T6b).
+    const confirm = needsConfirm(row);
     const resolution = resolveMention(
       withZoneAnswered(row.parses ?? [], answer),
       { now: time.now, zone: time.zone },
       row.reader,
+      confirm,
     );
-    const choice = chooseReading(resolution, reading.policy, row.reader.kind);
+    const choice = chooseReading(resolution, reading.policy, row.reader.kind, undefined, confirm);
     if (choice.by === 'only' || choice.by === 'policy') {
       const candidate = resolution.candidates[choice.candidate];
       if (candidate === undefined) return { expected: WINDOW_ZONE_EXPECTATION };

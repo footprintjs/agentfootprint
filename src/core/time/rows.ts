@@ -23,7 +23,7 @@
  * | `clock-on-resume` | first thing in the resumed leg's ToolCalls stage — either pause shape: the pausable resume door, or the stage re-run an `interrupt()` pause makes — when a resume passed a `time` that differs from the kept clock | what was passed and what was kept — the kept clock still rules |
  * | `call` | once per dispatched call, just before the tool runs | `dispatchedAt`: the wall clock at dispatch (a look-back is evaluated by the TOOL at dispatch, which after a pause is later than `now`); `drift` when a look-back was sent more than the tool's step after `now` — `redrawn` into an absolute form, or `shifted` (§ 7.4, `drift.ts`) |
  * | `call-window` | by the inputs layer, once per call to a tool that declares period forms, before it dispatches | which window the call carries: filled from the turn's one window (exactly, or wider — with what the read adds), bound to one (by quote or value), the model's own (beside the person's when it differs), unread, not filled and why, or refused before dispatch and why |
- * | `time-reading` | by seed, once per MENTION the armed reader (`.time({ reader })`) found in the person's message — or ONE row with `mentions: 0` when it found none, so a retry knows the message was read | the quote, the parts, every candidate `resolve.ts` made of them, how the reading settled (`choice`), the reader's id, version, kind and locale, and the tz database version; a refused mention keeps only why |
+ * | `time-reading` | by seed, once per MENTION the armed reader (`.time({ reader })`) found in the person's message — or ONE row with `mentions: 0` when it found none, so a retry knows the message was read | the quote, the parts, every candidate `resolve.ts` made of them, how the reading settled (`choice`), `confirmNeeded` with the leftover tokens when the reading is incomplete, the reader's id, version, kind and locale, and the tz database version; a refused mention keeps only why |
  *
  * Readers that switch over every row kind must skip one they do not know.
  */
@@ -32,7 +32,13 @@ import { instantOf, type InstantText } from './instant.js';
 import { isTimeRange, type TimeRange } from './range.js';
 import { isZoneName, type ZoneName } from './zone.js';
 import { clockChange, type ClockChange, type ReadRunTime, type TimeClock } from './clock.js';
-import { isTimeParts, type CheckedMention, type MentionRefusal, type TimeParts } from './reader.js';
+import {
+  isTimeParts,
+  MAX_LEFTOVER,
+  type CheckedMention,
+  type MentionRefusal,
+  type TimeParts,
+} from './reader.js';
 import type { CallWindow, TurnWindow, WindowSource } from './bind.js';
 import { TIME_REFUSALS, type TimeRefusal } from './convert.js';
 import {
@@ -133,6 +139,25 @@ export interface TimeReadingRow {
   readonly candidates?: readonly TimeCandidate[];
   /** How the reading settled under the policy — `open` waits for the person. */
   readonly choice?: ReadingChoice;
+  /**
+   * The reading is INCOMPLETE: the reader found these time-like tokens
+   * outside every span it read (`reader.ts` · `TimeMention.leftover`). It is
+   * never the person's words — its candidates carry `said: []` and its
+   * choice stays `open` with `confirm` until the person confirms it through
+   * the time ask (step T6b).
+   */
+  readonly confirmNeeded?: { readonly leftover: readonly string[] };
+}
+
+/**
+ * Whether a reading waits for the person's confirmation before it is theirs:
+ * a `model` reader's (§ 5.5), or an incomplete one (`confirmNeeded`).
+ */
+export function needsConfirm(row: {
+  readonly reader: { readonly kind: 'rule' | 'model' };
+  readonly confirmNeeded?: unknown;
+}): boolean {
+  return row.reader.kind === 'model' || row.confirmNeeded !== undefined;
 }
 
 /** The person's window a `call-window` row names — its range, who gave it, and its mention. */
@@ -288,7 +313,14 @@ export function timeReadingRows(input: {
   if (mentions.length === 0) return [base];
   return mentions.map((m, mention) => {
     if ('refused' in m) return { ...base, mention, refused: m.refused };
-    const resolution = resolveMention(m.parses, clock, { id: reader.id, kind: reader.kind });
+    const confirmNeeded = m.leftover === undefined ? undefined : { leftover: [...m.leftover] };
+    const confirm = needsConfirm({ reader, confirmNeeded });
+    const resolution = resolveMention(
+      m.parses,
+      clock,
+      { id: reader.id, kind: reader.kind },
+      confirm,
+    );
     return {
       ...base,
       mention,
@@ -296,7 +328,8 @@ export function timeReadingRows(input: {
       parses: m.parses,
       ...(m.problem !== undefined && { problem: m.problem }),
       candidates: resolution.candidates,
-      choice: chooseReading(resolution, policy, reader.kind, m.problem),
+      choice: chooseReading(resolution, policy, reader.kind, m.problem, confirm),
+      ...(confirmNeeded !== undefined && { confirmNeeded }),
     };
   });
 }
@@ -478,7 +511,32 @@ function isReaderStamp(value: unknown): boolean {
   );
 }
 
-const MENTION_FIELDS = ['mention', 'quote', 'parses', 'problem', 'refused', 'candidates', 'choice'];
+const MENTION_FIELDS = [
+  'mention',
+  'quote',
+  'parses',
+  'problem',
+  'refused',
+  'candidates',
+  'choice',
+  'confirmNeeded',
+];
+
+/** `{ leftover }`: 1 to 16 non-empty tokens (`reader.ts` · `MAX_LEFTOVER`), only beside parses. */
+function isConfirmNeeded(value: unknown, parses: readonly unknown[]): boolean {
+  if (value === undefined) return true;
+  if (value === null || typeof value !== 'object' || Array.isArray(value)) return false;
+  const v = value as Record<string, unknown>;
+  const leftover = v.leftover;
+  return (
+    Object.keys(v).length === 1 &&
+    parses.length > 0 &&
+    Array.isArray(leftover) &&
+    leftover.length >= 1 &&
+    leftover.length <= MAX_LEFTOVER &&
+    leftover.every((t) => nonEmpty(t) && (t as string).length <= 64)
+  );
+}
 
 function isReadingRow(row: Readonly<Record<string, unknown>>): boolean {
   if (!isReaderStamp(row.reader) || !nonEmpty(row.tzdata) || !isCount(row.mentions)) return false;
@@ -488,7 +546,9 @@ function isReadingRow(row: Readonly<Record<string, unknown>>): boolean {
   if (row.refused !== undefined) {
     return (
       (row.refused === 'quote-not-in-text' || row.refused === 'malformed') &&
-      ['quote', 'parses', 'problem', 'candidates', 'choice'].every((k) => row[k] === undefined)
+      ['quote', 'parses', 'problem', 'candidates', 'choice', 'confirmNeeded'].every(
+        (k) => row[k] === undefined,
+      )
     );
   }
   const parses = row.parses;
@@ -498,6 +558,7 @@ function isReadingRow(row: Readonly<Record<string, unknown>>): boolean {
     Array.isArray(parses) &&
     parses.every((p) => isTimeParts(p)) &&
     (row.problem === undefined || (row.problem === 'unreadable' && parses.length === 0)) &&
+    isConfirmNeeded(row.confirmNeeded, parses as unknown[]) &&
     Array.isArray(candidates) &&
     candidates.every(candidateIsWellFormed) &&
     choiceIsWellFormed(row.choice, candidates.length)

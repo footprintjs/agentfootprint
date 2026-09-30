@@ -101,11 +101,16 @@ export interface TurnWindows {
   readonly open?: readonly (readonly TimeRange[])[];
 }
 
-/** The one window a reading settled on, if it settled on one (a `model` reading waits only for confirmation). */
+/**
+ * The one window a reading settled on, if it settled on one (a `model`
+ * reading waits only for confirmation). An INCOMPLETE reading
+ * (`confirmNeeded`) settles on nothing: it is never filed until the person
+ * confirms it through the time ask (step T6b).
+ */
 function settledCandidate(row: TimeReadingRow): TimeCandidate | undefined {
   const choice = row.choice;
   const candidates = row.candidates ?? [];
-  if (choice === undefined) return undefined;
+  if (choice === undefined || row.confirmNeeded !== undefined) return undefined;
   if (choice.by === 'only' || choice.by === 'policy') return candidates[choice.candidate];
   if (choice.by === 'open' && choice.open.length === 1 && choice.open[0] === 'confirm') {
     return candidates[choice.remaining[0] as number];

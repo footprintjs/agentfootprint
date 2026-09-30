@@ -47,7 +47,10 @@
  * the reader's locale, the zone named, with the end the person said. A
  * `kind: 'model'` reader's window is offered as the LIBRARY'S reading to
  * confirm ("I read “yesterday” as … — is that right?"), never as the person's
- * words (§ 5.5). Free entry stays open: a field is `strict` only when the app
+ * words (§ 5.5). So is a `rule` reader's INCOMPLETE reading (`confirmNeeded`,
+ * step T6b): the question names what the reader did not read ("I read only
+ * “8:40 AM” as a time, not “til 9.30”…") and the one choice is the reading,
+ * offered to confirm or replace. Free entry stays open: a field is `strict` only when the app
  * says so.
  *
  * @example
@@ -212,7 +215,8 @@ export function checkTimeAnswer(
  * Every sentence the time ask can put before a person — the keys of the
  * catalog (`src/locales/timeAsk.ts`). `answer.*` is a refusal's reason, one
  * per {@link TimeAnswerProblem}; `ask.*` a question; `choice.confirm` the
- * label on a `model` reader's window. Placeholders are `{{name}}`.
+ * label on a `model` reader's window; `*.confirm-part` the question and label
+ * on an incomplete reading. Placeholders are `{{name}}`.
  */
 export const TIME_ASK_MESSAGE_KEYS = Object.freeze([
   'answer.not-an-instant',
@@ -227,8 +231,10 @@ export const TIME_ASK_MESSAGE_KEYS = Object.freeze([
   'answer.over-max-range',
   'ask.which',
   'ask.confirm',
+  'ask.confirm-part',
   'ask.zone',
   'choice.confirm',
+  'choice.confirm-part',
 ] as const);
 
 export type TimeAskMessageKey = (typeof TIME_ASK_MESSAGE_KEYS)[number];
@@ -351,19 +357,30 @@ export function timeAskOf(
     offered.push({ value, candidate });
   }
   if (offered.length === 0) return undefined;
-  // The resolver owns "a model reading needs confirming" (`resolve.ts` puts
-  // 'confirm' on every open choice a model reader made); this only reads it.
+  // The resolver owns "a reading needs confirming" (`resolve.ts` puts 'confirm'
+  // on every open choice a model reader or an incomplete reading made); this only reads it.
   const confirm = choice.open.includes('confirm');
+  const part = row.confirmNeeded !== undefined;
   const labels = offered.map(({ candidate }) => {
     const window = presentRange(
       candidate.range,
       { zone: candidate.zone, locale: row.reader.locale },
       candidate.grain,
     );
-    return confirm ? fillMessage(messages['choice.confirm'], { quote, window }) : window;
+    if (!confirm) return window;
+    return fillMessage(messages[part ? 'choice.confirm-part' : 'choice.confirm'], {
+      quote,
+      window,
+    });
   });
+  const leftover = quoted(row.confirmNeeded?.leftover.join(' ') ?? '');
+  const question = !confirm
+    ? fillMessage(messages['ask.which'], { quote })
+    : part
+    ? fillMessage(messages['ask.confirm-part'], { quote, leftover })
+    : fillMessage(messages['ask.confirm'], { quote });
   return {
-    question: fillMessage(messages[confirm ? 'ask.confirm' : 'ask.which'], { quote }),
+    question,
     field: {
       id,
       type: 'string',

@@ -44,7 +44,10 @@
  * removed a reading — a choice nobody said, recorded), several (`open`, with
  * the questions an ask must settle), or none. A `kind: 'model'` reader's
  * window is never settled by the library: it stays `open` until the person
- * confirms it (§ 5.5), and its candidates carry `said: []`.
+ * confirms it (§ 5.5), and its candidates carry `said: []`. Neither is a
+ * `rule` reader's INCOMPLETE reading — one whose mention names `leftover`
+ * tokens (`reader.ts` · `TimeMention.leftover`): the callers pass
+ * `confirm: true` for it (`rows.ts` · `needsConfirm`).
  *
  * @example
  * ```ts
@@ -801,12 +804,14 @@ function builtOf(parts: TimeParts, clock: ResolveClock, nowMs: number): Built[] 
 
 /**
  * Every candidate window of one mention's parses, resolved against the
- * clock. A `model` reader's candidates carry `said: []` (§ 5.5).
+ * clock. A reading the person must confirm — a `model` reader's (§ 5.5), or
+ * an incomplete one (`confirm: true`) — carries `said: []`.
  */
 export function resolveMention(
   parses: readonly TimeParts[],
   clock: ResolveClock,
   reader: { readonly id: string; readonly kind: 'rule' | 'model' },
+  confirm: boolean = reader.kind === 'model',
 ): MentionResolution {
   const now = instantOf(clock.now, 'strict');
   if (now === undefined || !isZoneName(clock.zone)) {
@@ -828,7 +833,7 @@ export function resolveMention(
       if (!isTimeRange(b.candidate.range)) continue;
       candidates.push({
         ...b.candidate,
-        said: reader.kind === 'model' ? [] : partsIn(b.said),
+        said: confirm ? [] : partsIn(b.said),
         reader: { id: reader.id, kind: reader.kind },
         parse,
       });
@@ -842,10 +847,7 @@ export function resolveMention(
 const windowKey = (c: TimeCandidate): string =>
   c.window.kind === 'lookback' ? `lookback:${c.window.duration}` : `${c.range.from}/${c.range.to}`;
 
-function openQuestions(
-  candidates: readonly TimeCandidate[],
-  kind: 'rule' | 'model',
-): OpenQuestion[] {
+function openQuestions(candidates: readonly TimeCandidate[], confirm: boolean): OpenQuestion[] {
   const differs = (read: (c: TimeCandidate) => unknown): boolean =>
     new Set(candidates.map((c) => JSON.stringify(read(c) ?? null))).size > 1;
   const open: OpenQuestion[] = [];
@@ -856,7 +858,7 @@ function openQuestions(
   if (differs((c) => c.notes.filter((n) => n.kind === 'dst-overlap' || n.kind === 'dst-gap'))) {
     open.push('dst');
   }
-  if (kind === 'model') open.push('confirm');
+  if (confirm) open.push('confirm');
   return open;
 }
 
@@ -881,14 +883,16 @@ function policyDecided(
 /**
  * How one mention settles under the app's policy (§ 5.1, § 11). The policy
  * only removes readings; it never adds one. A DST choice, a meridiem, a
- * zone the person named that is no zone, and a `model` reader's window are
- * never settled here — they stay `open` for the person.
+ * zone the person named that is no zone, a `model` reader's window and an
+ * incomplete reading (`confirm`) are never settled here — they stay `open`
+ * for the person.
  */
 export function chooseReading(
   resolution: MentionResolution,
   policy: TimePolicy,
   kind: 'rule' | 'model',
   problem?: 'unreadable',
+  confirm: boolean = kind === 'model',
 ): ReadingChoice {
   if (problem === 'unreadable') return { by: 'none', why: 'unreadable' };
   if (resolution.needsZone && resolution.candidates.length === 0) {
@@ -920,12 +924,12 @@ export function chooseReading(
   const zoneOpen: OpenQuestion[] = resolution.needsZone ? ['zone'] : [];
   if (windows.size === 1 && zoneOpen.length === 0) {
     const candidate = remaining[0] as number;
-    if (kind === 'model') {
+    if (confirm) {
       return { by: 'open', remaining, open: ['confirm'], ...(usedPolicy && { policy: applied }) };
     }
     return usedPolicy ? { by: 'policy', candidate, policy: applied } : { by: 'only', candidate };
   }
-  const open = [...zoneOpen, ...openQuestions(left, kind)];
+  const open = [...zoneOpen, ...openQuestions(left, confirm)];
   return { by: 'open', remaining, open, ...(usedPolicy && { policy: applied }) };
 }
 

@@ -9,43 +9,61 @@ folder imports only the port (pinned by `test/core/time/english-reader.test.ts`)
 |------|--------|
 | `english.ts` | `englishTimeReader()` — a `kind: 'rule'` tokenizer over the v1 phrases of the time design's § 5.3; ONE `unreadable` mention for every other time phrase it recognises |
 
-## The clause rule — read whole or not at all
+## The leftover rule — the person's words only when nothing time-like is left
 
 A partial reading is the one wrong answer a reader must never give: reading
-`8:40 AM` out of `8:40 AM til 9.30` records a narrower window as *said*. Three
-rounds of lists of connectors (`to`, `till`, `-`, …) and openers (`about`, `the`)
-each leaked the next spelling — `til`, `→`, `~`, `up to`, `to approx. 9.30`,
-`to EOD`, `between yesterday and 1600`. A deny-list cannot win, so the English
-reader is an ALLOW rule instead (`english.ts` · `settleClauses`):
+`8:40 AM` out of `8:40 AM til 9.30` and filing it as *said* records a narrower
+window than the person meant. Three review rounds showed a deterministic English
+grammar cannot PROVE it read a whole range: lists of connectors leaked `til`,
+`→`, `~`; a clause rule then leaked a clause mark before a capital
+(`8:40 AM, Till 9.30`, `Start: 8:40 AM\nEnd: 9.30`), ranges to an event
+(`8 AM until the deploy`) and word-list gaps (`today until april`). So the
+contract changed: the reader no longer tries to be exact about what it did NOT
+read — it only has to notice that something is left.
 
-> A v1 phrase is read only when the rest of its **clause** says nothing else
-> time-like. Otherwise the whole clause is ONE unreadable mention quoting it.
+> After removing every phrase it parsed, if the WHOLE message still holds a
+> time-or-range token, every reading of it is INCOMPLETE: it names the tokens
+> (`TimeMention.leftover`) and is CONFIRMED through the time ask — never filed as
+> the person's words. With nothing left, a reading is COMPLETE and is theirs.
 
-- **Time-like** (`TIME_LIKE`, `TIME_LIKE_CASED`): a digit in any script; an hour
-  or number word (`one` … `twelve`, `noon`, `midnight`, `half`, `quarter`); a day,
-  week day or month word; a meridiem; a unit (`hours`, `days`); a time-of-day
-  word (`now`, `EOD`, `lunch`, `sunset`); `o'clock`. Capitalised only: `AM`,
-  `May`, `March`, `Sun` … (`am` and `may` are English).
-- **Clause** (`CLAUSE_MARK`): it ends at `.` `!` `?` `;` `,` or a newline only
-  when the text ends there or the next token is a CAPITALISED word that is not
-  time-like (`… for checkout. Thanks`). A lower-case word continues the clause —
-  so `8:40 AM, to 9.30` and `yesterday, between 8 and 9` are one clause each.
-- **Whole**: a clause whose time-like tokens all sit inside ONE phrase the
-  grammar reads (`10/09/26 8 AM to 8:40 AM PST`, `between 8 and 9 AM`) is read.
-  The grammar's range connectors (`RANGE_CONNECTOR`: `to until till through thru`
-  and the three dashes) are an allow-list of what is READ — never of what is not.
+- **The set** (`english.ts` · `LEFTOVER_WORDS`, `LEFTOVER`, `LEFTOVER_CASED`,
+  `JOINER`) — broad and conservative, case-insensitive: any digit in any script;
+  number and hour words (`one` … `sixty`, `noon`, `midnight`, `half`,
+  `quarter`), ordinals (`first` … `thirtieth`); day and relative words (`today`,
+  `tonight`, `tonite`, `last`, `next`, `ago`, `since`, `before`, `after`, `then`,
+  `now`, `about`, `around` …); week day and month names, whole and short; units
+  (`hr`, `min`, `sec`, `hours` …); parts of the day (`morning`, `EOD`, `lunch`,
+  `close` …); range words (`to`, `until`, `till`, `til`, `through`, `thru`,
+  `between`, `from`); zone words (`pacific`, `utc` …); a dash, arrow, tilde, `..`,
+  `…`, `/`, `&` or `+` between tokens (not inside a word: `check-in`, `and/or`);
+  `and`, `plus`, `minus` right after a time. In capitals only: `AM` and the zone
+  abbreviations — lower-case `am` is English, and a meridiem is only ever said
+  with a number, which the scan counts already.
+- **What is removed**: a READ phrase whole — its connector and its range opener
+  (`from`, `between`) included; an unreadable phrase only in its words, so the
+  modifier or mark that made it unreadable (`~ 9:30 PM`, `since 8 AM`) still
+  counts beside every other reading.
+- **Where it lands**: the `time-reading` row records `confirmNeeded: { leftover }`
+  and the choice stays `open` with `confirm` (its candidates carry `said: []`);
+  the window is never a turn window until the person answers the time ask —
+  *"I read only “8:40 AM” as a time, not “til 9.30”. Is this the window you
+  mean?"*, the reading offered as the one choice, free entry open. The answer is
+  filed `answered`.
 
 ```ts
-reader.read('errors yesterday?', ctx);        // read: yesterday
-reader.read('8:40 AM til 9.30', ctx);         // one unreadable mention: "8:40 AM til 9.30"
-reader.read('8:40 AM → EOD', ctx);            // one unreadable mention: "8:40 AM → EOD"
-reader.read('9 AM and 3 retries', ctx);       // one unreadable mention: the price below
+reader.read('errors yesterday?', ctx);              // COMPLETE: yesterday
+reader.read('from 8 AM to 9 AM yesterday', ctx);    // COMPLETE: 8 AM to 9 AM yesterday
+reader.read('2026-09-26 08:00..08:40', ctx);        // COMPLETE: the whole range
+reader.read('8:40 AM til 9.30', ctx);               // 8:40 AM, leftover ['til', '9.30'] → confirm
+reader.read('8 AM until the deploy', ctx);          // 8 AM, leftover ['until'] → confirm
+reader.read('9 AM and 3 retries', ctx);             // 9 AM, leftover ['and', '3'] → confirm (the price)
 ```
 
-**The trade-off (owner-approved).** A clause that mixes a time with an unrelated
-number or time word is asked, not read: `9 AM and 3 retries`, `8 AM and 9 AM`,
-`the 5 slowest calls yesterday`, `which one failed yesterday`, `May I see
-yesterday's errors`. An extra ask is honest; a partial reading recorded as said
-is not. Known gaps the rule cannot see (no digit, no listed word): Roman numerals
-(`to IX`) and time words outside the list (`till closing`) — each reads the v1
-side alone, and each is a word to add to the list, never a connector.
+**The trade-off (owner-approved).** More confirmations: any message that holds a
+time-or-range word the reading did not cover confirms — `9 AM and 3 retries`,
+`the 5 slowest calls yesterday`, `I want to see yesterday` (`to`), `logs from
+yesterday` (`from`), `errors in the last 2 hours to date`, `May I see yesterday's
+errors`. An extra confirmation is honest; a partial reading recorded as said is
+not. What the scan still cannot see is a time said with NO word or mark of the
+set (`8 AM for the whole sprint`) — a word to add to the one list, never a
+connector or a clause rule.

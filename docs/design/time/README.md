@@ -1309,23 +1309,36 @@ deterministic and are measured over retained recorded runs or unit tables, with 
   `open-reading` — so `ctx.time.asked` is absent on such a call; no new row kind, no new byte
   reference (every existing one unchanged). Three sentences registered: the served time sentence,
   the answered-window clause, and two expectations of an exhausted window field
-  (`WINDOW_FORM_EXPECTATION`, `WINDOW_ZONE_EXPECTATION`). (6) **The clause rule** (third
-  review round). Two rounds of connector and opener lists each leaked the next spelling into a
-  PARTIAL reading (`til`, `→`, `~`, `up to`, `to approx. 9.30`, `to EOD`, `between yesterday and
-  1600`, `9.30 AM to 10:15`); a deny-list cannot win, so the reader is an allow rule
-  (`readers/english.ts` · `settleClauses`): a v1 phrase is read only when the rest of its clause
-  holds no other time-like token (any digit in any script, an hour or number word, a day, week
-  day or month word, a meridiem, a unit, a time-of-day word such as `now` or `EOD`); otherwise
-  the whole clause is ONE unreadable mention quoting it. A clause ends at `.` `!` `?` `;` `,` or a
-  newline only before the text's end or a capitalised non-time word — a first draft's "`, ` + a
-  non-time word" leaked `8:40 AM, to 9.30` and `yesterday, between 8 and 9`. The dangling-range
-  lists are gone; the grammar keeps ONE allow-list of the connectors it READS
-  (`RANGE_CONNECTOR`). **The trade-off, owner-approved:** a time beside an unrelated number or
-  time word is asked, not read (`9 AM and 3 retries`, `8 AM and 9 AM`, `which one failed
-  yesterday`) — an extra ask is honest, a partial reading recorded as said is not. Known gaps:
-  Roman numerals and time words outside the list (`till closing`) — a word to add, never a
-  connector. Pinned by `english-reader.test.ts` (every recheck row, and a generated matrix of
-  v1 phrase × separator × opener × time-like tail, reversed, with `between`, and seeded fillers).
+  (`WINDOW_FORM_EXPECTATION`, `WINDOW_ZONE_EXPECTATION`). (6) **The leftover rule** (fourth review round — the contract changed). Three rounds showed a
+  deterministic English grammar cannot PROVE it read a whole range: connector lists leaked `til`,
+  `→`, `~`; the clause rule that replaced them leaked a clause mark before a capital
+  (`8:40 AM, Till 9.30`, `Start: 8:40 AM\nEnd: 9.30`), ranges to an event (`8 AM until the
+  deploy`) and word-list gaps (`today until april`). So, in the spirit of § 5.5 (ask when unsure,
+  never guess), a reading is the person's words only when it is COMPLETE: after removing every
+  phrase the reader parsed, the WHOLE message holds no token of a broad, conservative
+  time-or-range set (`readers/english.ts` · `leftoverOf`: any digit; number, hour and ordinal
+  words; day, relative, week day and month words; units; parts of the day; range words `to`,
+  `until`, `till`, `til`, `through`, `thru`, `between`, `from`; `and`/`plus` after a time; a dash,
+  arrow, tilde, `..`, `…`, `/`, `&`, `+` between tokens). An INCOMPLETE reading names its tokens
+  on the port (`TimeMention.leftover`, checked verbatim) and is never filed as `said`: its row
+  records `confirmNeeded: { leftover }`, its candidates carry `said: []`, its choice stays
+  `open` with `confirm` (`rows.ts` · `needsConfirm` — one owner, also asked after a zone answer),
+  `bind.ts` · `settledCandidate` settles nothing from it, and the lazy time ask (T4) offers the
+  reading to confirm or replace — "I read only “8:40 AM” as a time, not “til 9.30”. Is this the
+  window you mean?" with the label "I read <window> — is that the window you mean?" (catalog
+  keys `ask.confirm-part`, `choice.confirm-part`); the answer is filed `answered`. The clause
+  machinery (`settleClauses`, `CLAUSE_MARK`, `TIME_LIKE`) is deleted; the grammar keeps its one
+  allow-list of the connectors it READS, and `..` joins a range (`2026-09-26 08:00..08:40`).
+  **The trade-off, owner-approved:** more confirmations — `9 AM and 3 retries`, `I want to see
+  yesterday` (`to`), `logs from yesterday` (`from`), `errors in the last 2 hours to date` all
+  confirm; an extra confirmation is honest, a partial reading recorded as said is not. A time
+  said with no word or mark of the set (`8 AM for the whole sprint`) is the remaining gap — a
+  word to add to the one list. Pinned by `english-reader.test.ts` (every row the three reviews
+  cited is confirmed or unreadable, never said; a generated matrix of v1 phrase × separator ×
+  opener × time-like tail, reversed and with seeded fillers, where a reading is said only when
+  the tail lies inside a mention and an independent oracle finds nothing time-like outside every
+  mention; exact controls stay said) and `english-run.test.ts` (a half-read range pauses on the
+  confirmation, and the tool runs only on the person's answer).
 
 **Why this order.** T1 settles the grammar every other step leans on and is free. T2 is already
 written and only needs rebasing and the value check. T3 gives the first visible win (the limits

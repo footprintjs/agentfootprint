@@ -17,8 +17,10 @@
  *                 under `dateOrder: 'MDY'` the zone answer settles it (one ask); "yesterday" →
  *                 the sentence names the window in the tool's form (a look-back, said wider);
  *                 "yesterday morning" and "last week" → one `unreadable` row each, no window ask
- *                 (the tool's own rule asks); a future date to a `past` tool is refused before
- *                 dispatch;
+ *                 (the tool's own rule asks); a range read only in half ("… 8:40 PM till 9.30")
+ *                 → the half is CONFIRMED (`confirmNeeded`, the question names the leftover),
+ *                 never filed as said, and the tool runs only on the person's answer; a future
+ *                 date to a `past` tool is refused before dispatch;
  *   integration — the ask's checkpoint crosses a JSON round trip onto a FRESH agent and binds;
  *                 every react mode (classic, dynamic, grouped) serves the same sentence;
  *   security    — an answered window outside the tool's `direction` is asked again, never run;
@@ -348,15 +350,25 @@ describe('phrases v1 does not read — one unreadable row, no window ask', () =>
   }
 });
 
-describe('a range the reader reads only half of — never a silent narrower window', () => {
-  // The clause rule: the quote is the whole clause — here, the whole message.
-  for (const [message, quote] of [
-    'Show client activity yesterday 8:40 PM to 9',
-    'Show client activity yesterday 14:00 to 16',
-    'Show client activity yesterday 8:40 PM till 9.30',
-    'Show client activity yesterday 14:00 to 1600',
-  ].map((m) => [m, m] as const)) {
-    it(`"${quote}" → one unreadable row; the tool never runs on a one-minute window`, async () => {
+describe('a range the reader reads only half of — confirmed, never a silent narrower window', () => {
+  // The leftover rule: the v1 half is read, names what it left, and is CONFIRMED through the
+  // time ask — the reading offered, free entry open — never filed as the person's words.
+  const EDITED = '2026-10-08T20:40:00-07:00/2026-10-08T21:30:00-07:00';
+  for (const [message, quote, leftover] of [
+    ['Show client activity yesterday 8:40 PM to 9', 'yesterday 8:40 PM', ['to', '9']],
+    ['Show client activity yesterday 14:00 to 16', 'yesterday 14:00', ['to', '16']],
+    ['Show client activity yesterday 8:40 PM till 9.30', 'yesterday 8:40 PM', ['till', '9.30']],
+    ['Show client activity yesterday 14:00 to 1600', 'yesterday 14:00', ['to', '1600']],
+    ['Show client activity yesterday 8:40 PM until the deploy', 'yesterday 8:40 PM', ['until']],
+    [
+      'Start: yesterday 8:40 PM\nEnd: 9.30 — show client activity',
+      'yesterday 8:40 PM',
+      ['9.30', '—'],
+    ],
+  ] as const) {
+    it(`${JSON.stringify(
+      message,
+    )} → confirm “${quote}”; the tool runs only on the answer`, async () => {
       const seen: Record<string, unknown>[] = [];
       const { agent, requests } = build(
         [call('c1', 'client_activity', {}), answer('ok')],
@@ -365,18 +377,79 @@ describe('a range the reader reads only half of — never a silent narrower wind
       );
       const first = paused(await agent.run({ message, time: { now: NOW } }));
       expect(seen).toEqual([]);
-      expect(ofKind(agent, 'time-reading')).toMatchObject([
-        { quote, problem: 'unreadable', choice: { by: 'none', why: 'unreadable' } },
-      ]);
-      expect(first.awaitingInput.fields.map((f) => f.description)).toEqual([
-        'From when?',
-        'Until when?',
-      ]);
+      const [row] = ofKind(agent, 'time-reading');
+      expect(row).toMatchObject({
+        quote,
+        confirmNeeded: { leftover },
+        choice: { by: 'open', open: ['confirm'] },
+      });
+      expect((row!.candidates as { said: unknown[] }[]).every((c) => c.said.length === 0)).toBe(
+        true,
+      );
+      expect(ofKind(agent, 'call-window')[0]).toMatchObject({
+        how: 'not-filled',
+        why: 'open-reading',
+      });
       // Nothing settled, so nothing is served as a reading.
       const activity = (requests[0]!.tools ?? []).find((t) => t.name === 'client_activity')!;
       expect(activity.description).toBe('Client operations over a window.');
+
+      const field = first.awaitingInput.fields[0]!;
+      expect(first.awaitingInput.fields).toHaveLength(1);
+      expect(field.format).toBe('time-range');
+      expect(field.description).toBe(
+        `I read only “${quote}” as a time, not “${leftover.join(
+          ' ',
+        )}”. Is this the window you mean?`,
+      );
+      expect(field.enum).toHaveLength(1);
+      expect(field.labels![0]).toMatch(/^I read .+ — is that the window you mean\?$/);
+
+      // The person corrects it: the tool runs on THEIR window, filed as their answer.
+      const done = await agent.resume(first.checkpoint as never, {
+        requestId: first.awaitingInput.requestId,
+        values: { f1: EDITED },
+      });
+      expect(isInputPause(done)).toBe(false);
+      expect(seen[0]).toMatchObject({
+        start_time: Date.parse('2026-10-08T20:40:00-07:00'),
+        end_time: Date.parse('2026-10-08T21:30:00-07:00'),
+      });
+      expect(ofKind(agent, 'argument')).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({ argument: 'start_time', source: 'answered' }),
+          expect.objectContaining({ argument: 'end_time', source: 'answered' }),
+        ]),
+      );
     });
   }
+
+  it('confirmed as offered: the tool runs on the reading, filed as the person’s answer', async () => {
+    const seen: Record<string, unknown>[] = [];
+    const { agent } = build(
+      [call('c1', 'client_activity', {}), answer('ok')],
+      [epochTool(seen)],
+      (b) => b.time({ zone: LA, reader }),
+    );
+    const first = paused(
+      await agent.run({
+        message: 'Show client activity yesterday 8:40 PM till 9.30',
+        time: { now: NOW },
+      }),
+    );
+    const offered = first.awaitingInput.fields[0]!.enum![0]!;
+    expect(offered).toBe('2026-10-08T20:40:00-07:00/2026-10-08T20:41:00-07:00');
+    const done = await agent.resume(first.checkpoint as never, {
+      requestId: first.awaitingInput.requestId,
+      values: { f1: offered },
+    });
+    expect(isInputPause(done)).toBe(false);
+    expect(ofKind(agent, 'argument')).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ argument: 'start_time', source: 'answered' }),
+      ]),
+    );
+  });
 });
 
 describe('a future date to a `past` tool — refused before dispatch', () => {
