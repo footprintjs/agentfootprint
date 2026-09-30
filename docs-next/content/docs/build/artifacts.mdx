@@ -156,9 +156,26 @@ written by a foreign store. `timeAxisIssues(value)` is the judge the store itsel
 uses. It returns every problem in words, and an empty list means the declaration
 is well-formed.
 
+To compare times, ask for the view. `normaliseInstants(rows, axis)` turns the
+declared column into UTC instants at one precision, sorted, each with the row it came
+from, so comparing two spellings as text compares them in time. It only reads the
+rows; the stored bytes never change.
+
+<CodeFile path="examples/artifacts/dataset-time-axis.ts" region="normalise" title="examples/artifacts/dataset-time-axis.ts (region: normalise)" />
+
+A string with no offset under an axis with no `zone` could be any of 24 hours, so the
+view never reads it as UTC. It counts it and returns `status: 'naive-values'` (or,
+with `{ naive: 'refuse' }`, `'refused'` and no points). Under a declared `zone` the
+values are wall times. In the hour the clocks go back, one wall time names two
+instants, so the view places them by the rows' order and notes each one
+(`{ kind: 'dst-overlap', resolvedBy: 'row-order' }`). A lone `01:30`, or rows not in
+time order, cannot be placed that way and is counted as `dstAmbiguous`. A wall time
+the spring change skips is counted as `dstGap`.
+
 **Gotchas.** A malformed declaration is refused at mint, never repaired. That covers
-an unknown key, a zone on an epoch, a summary with no `interval`, or an `interval`
-with no `aggregate` (`'raw'` says nothing was reduced). `stageDatasetArtifacts`
+an unknown key, a zone that is not an IANA name (an abbreviation such as `PST` or a
+bare offset is refused), a zone on an epoch, a summary with no `interval`, or an
+`interval` with no `aggregate` (`'raw'` says nothing was reduced). `stageDatasetArtifacts`
 judges it before its first write. The store never scans rows, so a declared column
 missing from the rows is for the viewer to report as an error, not to hide. An
 undeclared dataset is unchanged, and the viewer keeps whatever heuristic it had.

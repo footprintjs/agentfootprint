@@ -366,6 +366,12 @@ export interface McpConnection {
     params: {
       readonly name: string;
       readonly arguments?: Readonly<Record<string, unknown>>;
+      /**
+       * The request's metadata bag (MCP's `_meta` on request params). The
+       * client sends `{ agentfootprint: { time } }` only on a call handed
+       * `ctx.time` (the time layer); every other call sends no `_meta` key.
+       */
+      readonly _meta?: Readonly<Record<string, unknown>>;
     },
     /** The SDK's result schema. We always want its default, so we pass `undefined`. */
     resultSchema?: undefined,
@@ -670,5 +676,7 @@ export interface McpCallToolRequest {
   readonly params?: {
     readonly name?: string;
     readonly arguments?: unknown;
+    /** The request's own metadata bag — `agentfootprint.time` carries the call's time (`ctx.time`). */
+    readonly _meta?: unknown;
   };
 }

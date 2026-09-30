@@ -2,7 +2,7 @@
 import type { Tool, ToolExecutionContext } from '../core/tools.js';
 import type { ToolArtifactPutInput, ToolArtifacts } from './capability.js';
 import { InvalidArtifactError, type ArtifactMeta } from './types.js';
-import { timeAxisIssues } from './timeAxis.js';
+import { timeAxisIssues } from '../core/time/axis.js';
 import {
   projectionSemanticsIssues,
   snapshotProjectionSemantics,

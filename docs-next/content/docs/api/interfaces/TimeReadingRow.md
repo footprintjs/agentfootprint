@@ -1,0 +1,130 @@
+---
+title: TimeReadingRow
+---
+
+# Interface: TimeReadingRow
+
+Defined in: [src/core/time/rows.ts:116](https://github.com/footprintjs/agentfootprint/blob/main/src/core/time/rows.ts#L116)
+
+One mention the armed reader found in the person's message (time design
+§ 5.2) — or, with `mentions: 0` and no mention fields, the record that the
+message was read and held none. Read back, never re-read: a resume and a
+retry of the same turn find these rows and do not call the reader.
+
+## Properties
+
+### candidates?
+
+> `readonly` `optional` **candidates?**: readonly [`TimeCandidate`](/docs/api/interfaces/TimeCandidate)[]
+
+Defined in: [src/core/time/rows.ts:134](https://github.com/footprintjs/agentfootprint/blob/main/src/core/time/rows.ts#L134)
+
+Every window `resolve.ts` made of the parts.
+
+***
+
+### choice?
+
+> `readonly` `optional` **choice?**: [`ReadingChoice`](/docs/api/type-aliases/ReadingChoice)
+
+Defined in: [src/core/time/rows.ts:136](https://github.com/footprintjs/agentfootprint/blob/main/src/core/time/rows.ts#L136)
+
+How the reading settled under the policy — `open` waits for the person.
+
+***
+
+### iteration
+
+> `readonly` **iteration**: `number`
+
+Defined in: [src/core/time/rows.ts:119](https://github.com/footprintjs/agentfootprint/blob/main/src/core/time/rows.ts#L119)
+
+***
+
+### kind
+
+> `readonly` **kind**: `"time-reading"`
+
+Defined in: [src/core/time/rows.ts:117](https://github.com/footprintjs/agentfootprint/blob/main/src/core/time/rows.ts#L117)
+
+***
+
+### mention?
+
+> `readonly` `optional` **mention?**: `number`
+
+Defined in: [src/core/time/rows.ts:126](https://github.com/footprintjs/agentfootprint/blob/main/src/core/time/rows.ts#L126)
+
+This row's mention, 0-based — absent on the `mentions: 0` row.
+
+***
+
+### mentions
+
+> `readonly` **mentions**: `number`
+
+Defined in: [src/core/time/rows.ts:124](https://github.com/footprintjs/agentfootprint/blob/main/src/core/time/rows.ts#L124)
+
+How many mentions the reading held.
+
+***
+
+### parses?
+
+> `readonly` `optional` **parses?**: readonly [`TimeParts`](/docs/api/interfaces/TimeParts)[]
+
+Defined in: [src/core/time/rows.ts:129](https://github.com/footprintjs/agentfootprint/blob/main/src/core/time/rows.ts#L129)
+
+***
+
+### problem?
+
+> `readonly` `optional` **problem?**: `"unreadable"`
+
+Defined in: [src/core/time/rows.ts:130](https://github.com/footprintjs/agentfootprint/blob/main/src/core/time/rows.ts#L130)
+
+***
+
+### quote?
+
+> `readonly` `optional` **quote?**: `string`
+
+Defined in: [src/core/time/rows.ts:128](https://github.com/footprintjs/agentfootprint/blob/main/src/core/time/rows.ts#L128)
+
+A verbatim substring of the person's message.
+
+***
+
+### reader
+
+> `readonly` **reader**: [`TimeReaderStamp`](/docs/api/interfaces/TimeReaderStamp)
+
+Defined in: [src/core/time/rows.ts:120](https://github.com/footprintjs/agentfootprint/blob/main/src/core/time/rows.ts#L120)
+
+***
+
+### refused?
+
+> `readonly` `optional` **refused?**: `MentionRefusal`
+
+Defined in: [src/core/time/rows.ts:132](https://github.com/footprintjs/agentfootprint/blob/main/src/core/time/rows.ts#L132)
+
+Why the mention was refused — its quote was not in the message, or its parts were malformed. It keeps no text.
+
+***
+
+### turn
+
+> `readonly` **turn**: `number`
+
+Defined in: [src/core/time/rows.ts:118](https://github.com/footprintjs/agentfootprint/blob/main/src/core/time/rows.ts#L118)
+
+***
+
+### tzdata
+
+> `readonly` **tzdata**: `string`
+
+Defined in: [src/core/time/rows.ts:122](https://github.com/footprintjs/agentfootprint/blob/main/src/core/time/rows.ts#L122)
+
+The tz database the candidates were resolved with (`process.versions.tz`), else `'unknown'`.

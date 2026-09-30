@@ -119,7 +119,10 @@ export function keepAnswers(
   toolName: string,
   resolution: ArgumentResolution | undefined,
 ): readonly string[] {
-  const answered = (resolution?.fills ?? []).filter((f) => f.source === 'answered');
+  const answered = (resolution?.fills ?? []).filter(
+    (f): f is ArgumentFill & { readonly source: 'answered'; readonly value: InputValue } =>
+      f.source === 'answered',
+  );
   if (answered.length === 0) return [];
   scope.argumentAnswersKept = withKept(
     scope.$getValue('argumentAnswersKept') as unknown,
@@ -196,6 +199,16 @@ export function noteFor(
   return filledNote(
     toolName,
     ran.map((f) => {
+      if (f.source === 'window') {
+        return {
+          argument: f.argument,
+          value: f.value,
+          hidden: hidesArgument(tool, f.argument, f.value as InputValue),
+          source: 'window' as const,
+          from: f.from,
+          ...(f.wider !== undefined && { wider: f.wider }),
+        };
+      }
       const carried = f.source === 'answered' ? carriedValue(proposed, f.argument) : undefined;
       return {
         argument: f.argument,

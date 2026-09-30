@@ -197,6 +197,70 @@ quote is shown as the model wrote it (clipped, `rows.ts` · `QUOTE_CHARS`) — e
 whose name nothing answers, which has no view to ask. The checks still read every quote in
 memory; only what the record SHOWS changes.
 
+## Under `.time()` — the person's window, into a period's own arguments (time layer, step T5a)
+
+A `ToolPeriod` names every shape the period takes (`forms`; `{ argument, spelling }` is
+shorthand — `core/time/convert.ts` · `sugarForms`) and facts about the source; each argument a
+form names carries a rule, as the single argument always did (an `object` form's argument
+excepted: a ruled argument is flat). With `.time()` armed, the mount hands the layer this turn's
+`clock` and `time-reading` rows (`honesty/mounts.ts` · `timeInputsOf`), and each stage asks ONE
+pure decision per call (`resolve.ts` · `timeDecisionsOf` over `core/time/bind.ts` ·
+`callWindowOf`) — the table's rows for the period's arguments become:
+
+| The call's period arguments | Row | Runs with |
+|---|---|---|
+| all left out, the turn holds ONE window of the person's, a form holds it exactly | `said` + `matched: 'mention'` (a `model` reader's window: + `reading`; a UI `time.window`: `app`, `appSource: 'time.window'`) | the window in the form's spelling — a FILL, noted past tense on the result (`serve.ts` · `filledNote`'s window clause); another form's arguments are left alone |
+| all left out, no window / two mentions / an open reading / no exact form | as the table above (the rule assumes or asks) | as the table above |
+| sent, and the declared `user` quote names a mention whose window it IS | `said` + `matched: 'mention'` (a reading stays a reading) | as sent — never asked |
+| sent, equal to a window by value, or different from the person's | the check's own verdict (`model`, a reading, …) | as sent — a differing window is NOT asked about (the v1 law: record and run) |
+
+One `call-window` row per such call says which (`core/time/rows.ts` · `CallWindowRow`),
+merged in the same ONE write as the argument rows; the tool is handed `ctx.time`, read off that
+row at dispatch (`stages/timeLayer.ts` · `callTimeContext`). The batch ask's answer for a period
+argument is also judged against the tool's `direction`, `retention` and `maxRange` at the turn's
+clock (`ask.ts` · `checkAnswer`, `factExpectation`): outside them it is `invalid-answer`, asked
+again.
+
+```ts
+defineTool({
+  name: 'client_activity',
+  inputSchema: { type: 'object', properties: { start_time: { type: 'integer' }, end_time: { type: 'integer' } } },
+  askOrAssume: { start_time: { ask: 'From when?' }, end_time: { ask: 'Until when?' } },
+  period: { forms: [{ kind: 'bounds', from: { argument: 'start_time', as: 'epoch-ms' },
+                      to: { argument: 'end_time', as: 'epoch-ms', edge: 'exclusive' } }] },
+  execute: (args, ctx) => query(args, ctx.time?.asked),
+});
+// agent.time({ zone, reader }) — "10/09/26 8 AM to 8:40 AM", the model sends {} →
+//   [{ argument: 'start_time', source: 'said', matched: 'mention', value: '1791558000000' }, …,
+//    { kind: 'call-window', how: 'filled', form: 0, … }]
+```
+
+**Wider, refused, drifted (step T5b).** When no form holds the window exactly, the fill takes
+the first form that holds MORE (`core/time/convert.ts` · `convertWidened`: a range inside one
+day → that `day`; a range ending before now → the covering look-back from now, never wider
+than the tool's `maxRange`) — the argument rows are the same, the `call-window` row adds `sent`
+and `differs.extra` (or `trimmedByTool` under `filtersToAsked`), and the note's window clause
+says the value reads a wider one (`ArgumentFill.wider`). A call whose window breaks one of the
+tool's facts (`direction`; wholly beyond `retention`; over `maxRange`), spans days for a
+`day`-only tool, or sends a wall time the zone skips is REFUSED before dispatch — the one
+`ArgumentResolution.refused` door the unreadable-rules refusal already uses, with the sentence
+`serve.ts` · `timeRefusal` — and files no argument row (its `call-window` row, `how: 'refused'`,
+is the record); a window only partly beyond `retention` runs, marked `partlyBeyondRetention`.
+A window the model sent in one form leaves another form's missing arguments alone — never
+filled or asked (`resolve.ts` · `untakenFormArgumentsOf`). At dispatch, a look-back the clock
+drifted past (§ 7.4) is redrawn only when the library wrote it (`stages/toolCalls.ts` ·
+`timeAtDispatch` over `core/time/drift.ts`); the `call` row records `drift`.
+
+```ts
+// period: { argument: 'window', spelling: 'lookback', direction: 'past' }, "yesterday", {} sent →
+//   the tool runs with { window: '1960m' };
+//   { kind: 'call-window', how: 'filled', sent: {…}, differs: { extra: [{ from: '…T07:00:00Z', to: now }] } }
+// the model sends a window still to come → the tool does not run; the model reads
+//   "search_logs was not run on that call: the window it asked for had not happened yet, …"
+```
+
+Without `.time()` nothing here runs: a period is judged and read as the sections above say.
+
 ## The batch ask — once, before anything runs
 
 The layer names, per call, the `ask` arguments the call left out — and, under declared
@@ -337,6 +401,12 @@ layer says WHO chose the period, the results layer says WHAT the read covered,
 and neither parses the other's words. The answer's standing names both rows as
 the witnesses of a `period-*` reason. This layer's rows, served bytes and refusals
 are unchanged.
+
+**The spellings are the time layer's grammar** (`src/core/time/README.md`). A look-back is
+`duration.ts` under today's units (`mhdw`, any number of digits; `30s` is not a look-back), and an
+`iso-range` is `range.ts` · `splitRange` under `..` in the STRICT instant profile: upper-case
+`T`/`Z`, no leap second, and a day that exists — `2026-02-30T08:00Z..…` and hour `24` are refused
+at definition, where `Date.parse` used to roll them forward. This file keeps no regex of its own.
 
 ## Refused, and what the model reads
 

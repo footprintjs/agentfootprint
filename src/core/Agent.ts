@@ -231,9 +231,24 @@ import {
   ResumeIdentityConflictError,
   RunInFlightError,
 } from './conversation.js';
-import { applyInputResponse, readAwaitingInput, type AnsweredAsk } from './inputRequest.js';
+import {
+  applyInputResponse,
+  readAwaitingInput,
+  type AnsweredAsk,
+  type TimeAnswerContext,
+} from './inputRequest.js';
 import { applyOutputSchema, OutputSchemaError, type OutputSchemaParser } from './outputSchema.js';
 import { InvalidRunInputError, normalizeRunInput } from './runInput.js';
+import { clockOf } from './time/rows.js';
+import {
+  draftClock,
+  readRunTime,
+  readTimeOptions,
+  type ClockDraft,
+  type ReadRunTime,
+  type ReadTimeOptions,
+  type RunTime,
+} from './time/clock.js';
 import type { ResolvedOutputEnforcement } from './agent/outputEnforcement.js';
 import { buildOutputRetryStage } from './agent/stages/outputRetry.js';
 import { RunnerBase, makeRunId } from './RunnerBase.js';
@@ -369,6 +384,16 @@ export interface AgentRunOptions extends RunOptions {
    * the one on the input wins, since that is where the caller looked first.
    */
   identity?: MemoryIdentity;
+  /**
+   * THIS TURN'S CLOCK, on the doors whose input is not a message bag —
+   * `followUp(message, { time })`, `resumeOnError(checkpoint, { time })` and
+   * `resume(checkpoint, answer, { time })` — read only by an agent with
+   * `.time()`, refused on one without. On `run()` it is a second spelling of
+   * `run({ time })`, and the one on the input wins. On `resume()` the paused
+   * turn's clock is KEPT (its words were resolved against it): a `time` that
+   * differs is recorded as a `clock-on-resume` row, never applied.
+   */
+  time?: RunTime;
 }
 
 // Public types (AgentOptions, AgentInput, AgentOutput) extracted to
@@ -570,6 +595,20 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
    *  ask, and that undefined is the whole zero-cost guarantee: no stage, no
    *  witness row, no stamp, no event, no bridge. */
   private readonly answerLayerOption?: { readonly standingLine?: true };
+  /** `.time()` (the time layer, `core/time/`): the fallback zone, as read.
+   *  Undefined on every agent that did not ask — then no clock is read, no
+   *  time row is filed and `time` on a run is refused. */
+  private readonly timeOptions?: ReadTimeOptions;
+  /** The clock the CURRENT `run()`'s seed stamps — set by `run()` (refusing a
+   *  run with no zone), read by seed through `SeedStageDeps.timeClock`, and
+   *  cleared when `run()` ends, so a later turn this agent did not start (its
+   *  chart mounted in a composition) never stamps a clock nobody declared for
+   *  it (`seedClockDraft`). */
+  private runClockDraft: ClockDraft | undefined;
+  /** The `time` the CURRENT resume passed, as read — TAKEN once by the first
+   *  ToolCalls pass of the resumed leg (`ToolCallsHandlerDeps.time`), and
+   *  cleared when `run()` or `resume()` ends. */
+  private resumePassedTime: ReadRunTime | undefined;
   /** Tool choice by classifier (9.105.0, `.toolChoice()`): the classifier,
    *  the serve dial and the app's own doors. Threaded to the tools slot (the
    *  pick and the narrowing), to call-llm (`toolChoice: true`, the outcome
@@ -1081,6 +1120,16 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
     if (opts.answerLayer === true) this.answerLayerOption = {};
     else if (typeof opts.answerLayer === 'object' && opts.answerLayer !== null) {
       this.answerLayerOption = opts.answerLayer.standingLine === true ? { standingLine: true } : {};
+    }
+    // The time layer's door (`.time()` / `AgentOptions.time`): `true` or the
+    // options, read once; a malformed zone is refused here, at build.
+    if (opts.time !== undefined) {
+      const read = readTimeOptions(opts.time === true ? undefined : opts.time);
+      if ('problem' in read) throw new Error(`Agent: time ${read.problem}.`);
+      this.timeOptions = read.value;
+      // The reader reads only a person's message — a composition hands the
+      // `messageFrom: 'composed'` marker only to a runner that reads it.
+      if (read.value.reader !== undefined) readsMessageFrom(this);
     }
     if (opts.findings?.argumentSources === true || inputsLayer?.argumentSources === true) {
       this.argumentSourcesArmed = true;
@@ -1817,6 +1866,10 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
     // not at the resume of a pause it would have made impossible to resume.
     assertIdentityShape(runInput.identity, 'Agent.run');
     assertIdentityShape(options?.identity, 'Agent.run');
+    // The run's clock (the time layer): read or refused HERE, before the turn
+    // starts — a run with no zone anywhere never runs on the server's zone.
+    const clockDraft = this.clockDraftFor(runInput.time ?? options?.time, 'Agent.run');
+    const engineOptions = withoutTime(options);
     // Timing next, and before the executor exists: both of these refuse a call
     // that would have SUCCEEDED into corrupted per-instance state or an
     // orphaned human question. See ./conversation.ts for why they are throws.
@@ -1848,7 +1901,8 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
     // (helper used in the catch block below — module-private function
     // declared at file end via hoisting)
     this.answeredAsk = undefined;
-    const executor = this.createExecutor(options);
+    this.resumePassedTime = undefined;
+    const executor = this.createExecutor(engineOptions);
     this.inFlightRunId = this.currentRunContext.runId;
     // One disposition ledger per run (9.60.0) — registration mirrors what
     // this agent's configuration makes applicable; dev posture runs the
@@ -1874,6 +1928,9 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
     this.lastRunAnswer = undefined;
     // One run can never raise on another run's consent block.
     this.consentOutstanding.clear();
+    // Set here, beside the `try` whose `finally` clears it, so no exit path
+    // can leave it behind for a turn this `run()` did not start.
+    this.runClockDraft = clockDraft;
 
     try {
       const result = await executor.run({
@@ -1881,16 +1938,19 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
           message: runInput.message,
           ...(this.lastRunIdentity !== undefined && { identity: this.lastRunIdentity }),
           // A composed message reaches seed only on an agent that reads it
-          // (declared sources) — every other run's input is the bytes it was.
+          // (declared sources, or the time layer's reader) — every other run's
+          // input is the bytes it was.
           ...(messageFrom === 'composed' &&
-            this.argumentSourcesArmed === true && { messageFrom: 'composed' }),
+            (this.argumentSourcesArmed === true || this.timeOptions?.reader !== undefined) && {
+              messageFrom: 'composed',
+            }),
         },
         // Co-engineered boundary (#16): the engine's loop-iteration limit
         // (footprintjs 9 default 1000) must never fire BELOW the agent's own
         // budget — give it headroom (×2 + 10 covers double-hop loop shapes).
         // Consumer-provided options win.
         maxIterations: this.maxIterations * 2 + 10,
-        ...(options ?? {}),
+        ...(engineOptions ?? {}),
       });
       const finalized = this.finalizeResult(executor, result);
       if (typeof finalized === 'string') this.lastRunAnswer = finalized;
@@ -1986,6 +2046,11 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
       }
       throw cause;
     } finally {
+      // The time layer's per-run inputs end with the run: a stale draft would
+      // be stamped by the next seed this agent did not start (a composition
+      // mounting its chart) as if the app had declared it.
+      this.runClockDraft = undefined;
+      this.resumePassedTime = undefined;
       // The run's disposition rows, on EVERY path — success, failure, pause —
       // and BEFORE the recording stops, so a recording carries its run's
       // checker accounting (9.60.0).
@@ -2190,6 +2255,81 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
   }
 
   /**
+   * A run's `time`, read into the turn's clock draft (the time layer) — or
+   * refused, before the turn starts: `time` on an agent without `.time()`, a
+   * malformed value, or no zone anywhere (the run's, else the builder's).
+   * `undefined` on an agent without the layer.
+   *
+   * @internal
+   */
+  private clockDraftFor(time: unknown, runner: string): ClockDraft | undefined {
+    const passed = this.passedTimeFor(time, runner);
+    if (this.timeOptions === undefined) return undefined;
+    const draft = draftClock(passed, this.timeOptions);
+    if (draft === 'no-zone') {
+      throw new InvalidRunInputError({
+        runner,
+        received: 'a run with no time zone',
+        hint:
+          "this agent's time layer needs the person's zone — pass run({ message, time: { zone: " +
+          "'America/Los_Angeles' } }) or declare a fallback with .time({ zone }); the server's " +
+          'zone is never used',
+      });
+    }
+    return draft;
+  }
+
+  /**
+   * The clock draft seed stamps (the time layer): the one `run()` read — or,
+   * for a turn this agent's `run()` did not start (its chart mounted in a
+   * composition, which passes no `time`), the builder's fallback zone with
+   * the turn's start as `now` (`zoneSource: 'builder'`, `nowSource:
+   * 'default'` — the same record a `run()` with no `time` files). With no
+   * fallback zone that turn is refused, as `run()` refuses it: the server's
+   * zone is never used.
+   *
+   * @internal
+   */
+  private seedClockDraft(): ClockDraft {
+    if (this.runClockDraft !== undefined) return this.runClockDraft;
+    const draft = draftClock(undefined, this.timeOptions ?? {});
+    if (draft === 'no-zone') {
+      throw new InvalidRunInputError({
+        runner: 'Agent (mounted in a composition)',
+        received: 'a turn with no time zone',
+        hint:
+          "this agent's time layer needs the person's zone, and a composition passes no time to " +
+          "the agents it mounts — declare a fallback with .time({ zone: 'America/Los_Angeles' }); " +
+          "the server's zone is never used",
+      });
+    }
+    return draft;
+  }
+
+  /**
+   * A `time` passed to a run or a resume, read — or refused by name: passed to
+   * an agent without `.time()` (a door that ignored it would look configured
+   * and do nothing), or malformed.
+   *
+   * @internal
+   */
+  private passedTimeFor(time: unknown, runner: string): ReadRunTime | undefined {
+    if (time === undefined) return undefined;
+    if (this.timeOptions === undefined) {
+      throw new InvalidRunInputError({
+        runner,
+        received: 'time',
+        hint: 'this agent reads no clock — arm the time layer with .time() to pass time',
+      });
+    }
+    const read = readRunTime(time);
+    if ('problem' in read) {
+      throw new InvalidRunInputError({ runner, received: 'a malformed time', hint: read.problem });
+    }
+    return read.value;
+  }
+
+  /**
    * Install a per-run checkpoint tracker. Listens for the agent's
    * own iteration_end events on `this.dispatcher` and snapshots the
    * conversation history into the tracker. Returns a stop function.
@@ -2303,6 +2443,11 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
     // answer is a value (often a string) and must stay accepted, so the only
     // sound question is "what was asked?".
     assertIdentityShape(options?.identity, 'Agent.resume');
+    // A resume's `time` (the time layer) is read or refused before anything
+    // moves; it is never applied — the paused turn's clock is kept, and a
+    // differing value is recorded by the ToolCalls resume door.
+    const passedTime = this.passedTimeFor(options?.time, 'Agent.resume');
+    options = withoutTime(options);
     const gate = pauseDemandsDecision(checkpoint.pauseData);
     if (gate && !isCheckInDecision(input)) throw new DecisionRequiredError(gate, input);
     // One run, one identity — refused before anything moves. The paused run's
@@ -2335,7 +2480,11 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
     let answeredAsk: AnsweredAsk | undefined;
     if (awaitingInput !== undefined) {
       this.assertNotRunning('Agent.resume');
-      const answered = applyInputResponse(awaitingInput, input);
+      const answered = applyInputResponse(
+        awaitingInput,
+        input,
+        this.timeAnswerContextOf(checkpoint.sharedState),
+      );
       if ('cancel' in answered) {
         throw new TypeError(
           '[input request] Cancel a hosted request through its host, or abandonPause() before starting another run.',
@@ -2419,6 +2568,8 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
     this.lastRunAnswer = undefined;
     // One run can never raise on another run's consent block.
     this.consentOutstanding.clear();
+    // Beside the `try` whose `finally` clears it (the fresh-run path's terms).
+    this.resumePassedTime = passedTime;
     try {
       const result = await executor.resume(checkpoint, input, resumeOptions);
       const finalized = this.finalizeResult(executor, result);
@@ -2435,6 +2586,8 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
       await this.endRunToolSessions(cause);
       throw cause;
     } finally {
+      // A resume's passed `time` ends with the resume (the fresh-run path's terms).
+      this.resumePassedTime = undefined;
       // Same terms as the fresh-run path: rows on every exit, before the
       // recording stops (9.60.0).
       this.fileIntegrityDisposition();
@@ -2606,6 +2759,26 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
     const spans = state?.foldedSpans;
     if (spans === undefined || spans.length === 0) return undefined;
     return structuredClone(spans) as readonly FoldedSpan[];
+  }
+
+  /**
+   * What the resume door checks a time field's answer with (the time design
+   * § 6.2, step T4): the paused turn's clock zone — the kept `clock` row, so
+   * a resume that passes another `time` changes nothing — and the app's
+   * catalog overrides. `undefined` without `.time()`: a `format` field is
+   * then judged for shape, order and offset only, in the default words.
+   *
+   * @internal
+   */
+  private timeAnswerContextOf(state: unknown): TimeAnswerContext | undefined {
+    if (this.timeOptions === undefined) return undefined;
+    const ledger = (state as Partial<AgentState> | undefined)?.findingsLedger;
+    const zone = clockOf(Array.isArray(ledger) ? ledger : undefined)?.zone;
+    const messages = this.timeOptions.messages;
+    return {
+      ...(zone !== undefined && { zone }),
+      ...(messages !== undefined && { messages }),
+    };
   }
 
   /**
@@ -4149,6 +4322,16 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
       get honestyLayers() {
         return seededHonestyLayers;
       },
+      // The time layer's clock: the draft `run()` read (refusing a run with no
+      // zone), stamped by seed as the turn's one `clock` row. Absent → the
+      // deps object seed always had.
+      ...(this.timeOptions !== undefined && { timeClock: () => this.seedClockDraft() }),
+      // The time layer's reader: seed reads the person's words once per turn,
+      // after the clock. Absent → nothing is read.
+      ...(this.timeOptions?.reader !== undefined &&
+        this.timeOptions.policy !== undefined && {
+          timeReader: { reader: this.timeOptions.reader, policy: this.timeOptions.policy },
+        }),
       // Declared sources (honesty layer 2): the seed twin plants `_findings.from`
       // on ruled tools, and the run's `messageFrom` constant is written — only
       // under the arm (refused at build without the inputs layer).
@@ -4423,6 +4606,9 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
       });
       ledgerRestoreArmed = true;
     }
+    // The time layer's rows ride the same ledger: a continued conversation
+    // keeps its earlier turns' clocks (each turn files its own).
+    if (this.timeOptions !== undefined) ledgerRestoreArmed = true;
 
     // The gate's admissible set, for the record (9.50.0): declared hops from
     // the cursor plus the open skills — the SAME two resolvers the read_skill
@@ -5078,6 +5264,18 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
       // never allocates it.
       currentRun: () => this.toolRunFacts(),
       answeredAsk: () => this.answeredAsk,
+      // The time layer: each dispatched call files its `call` row, and the
+      // resume door compares a resume's passed `time` with the kept clock.
+      ...(this.timeOptions !== undefined && {
+        time: {
+          takePassedOnResume: () => {
+            const passed = this.resumePassedTime;
+            this.resumePassedTime = undefined;
+            return passed;
+          },
+          ...(this.timeOptions.zone !== undefined && { appZone: this.timeOptions.zone }),
+        },
+      }),
       emitForRun: (type, payload, runContext) => this.emitLateFact(type, payload, runContext),
       toolSessions: () => this.toolSessions(),
       // 8.6.0 — what a run does when a declared credential needs 3LO consent.
@@ -5173,6 +5371,13 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
         inputsLayer: {
           toolOf: (toolName: string) => resolveForLayer(toolName).tool,
           ...(this.toolMiddleware.length > 0 && { rewrites: true as const }),
+          // The time layer (step T5a): a tool whose period declares forms is filled from the
+          // turn's one window, bound to the person's window, or recorded as the model's.
+          ...(this.timeOptions !== undefined && {
+            time: {
+              ...(this.timeOptions.zone !== undefined && { appZone: this.timeOptions.zone }),
+            },
+          }),
           // Declared sources: the layer reads `_findings.from` and checks it against
           // the corpora the mount hands in — the app's `externalGrounds` among them.
           ...(argumentSources && {
@@ -5233,6 +5438,9 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
       // gets the stage that appends nothing and carries the limits as data.
       ...(this.limitsTravelWithTheAnswerValue && !limitsAsData && { attachCoverageLimits: true }),
       ...(limitsAsData && { coverageLimitsAsData: true }),
+      // The time layer: the prose limits block renders its `Period:` lines in
+      // the run's clock zone. Absent → the final stage it always mounted.
+      ...(this.timeOptions !== undefined && { timeLayer: true as const }),
       ...(this.answerValidationConfig !== undefined && { hasAnswerValidation: true }),
       // The out-of-budget wrap-up branch (9.56.0) — the conditional-mount law
       // above, decided once beside the Route decider that routes to it so the
@@ -5298,4 +5506,16 @@ function boundInsertionOrder(held: Set<string>, max: number): void {
     if (oldest.done === true) return;
     held.delete(oldest.value);
   }
+}
+
+/**
+ * The run options without the time layer's `time` — what the engine is handed.
+ * The SAME object when it carries no `time` key, so a run that passed none
+ * hands the executor exactly the options it always did.
+ */
+function withoutTime<T extends { time?: unknown }>(options: T | undefined): T | undefined {
+  if (options === undefined || !('time' in options)) return options;
+  const { time: _time, ...rest } = options;
+  void _time;
+  return rest as T;
 }

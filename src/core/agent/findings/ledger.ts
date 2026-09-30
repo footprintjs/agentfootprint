@@ -52,6 +52,7 @@ import { conflictsOf, type Conflict } from '../../../integrity/assertion/conflic
 import { assertionKey, type Assertion } from '../../../integrity/assertion/types.js';
 import { typedEmit } from '../../../recorders/core/typedEmit.js';
 import { HIDDEN_VALUE, type ArgumentRow } from '../arguments/rows.js';
+import { isTimeRowKind } from '../../time/rows.js';
 import {
   PROPOSITION_CHARS,
   type BasisRow,
@@ -346,6 +347,10 @@ export function emitRow(
   // own either: the verdict each one commits fired its event beside it, from
   // the same stage (`agent.evidence_checked`, `skill.steps_unfinished`).
   if (row.kind === 'grounded' || row.kind === 'steps-unfinished') return;
+  // The time layer's rows (`core/time/rows.ts`) emit nothing either: the
+  // clock, a resume's passed time and a call's dispatch moment are VALUES,
+  // which live in the rows; no event field ships without a reader.
+  if (isTimeRowKind(row.kind)) return;
   if (row.kind === 'argument') {
     emitArgumentRow(scope, row);
     return;

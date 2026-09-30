@@ -51,7 +51,7 @@ import type {
   McpSdkClient,
   McpTransport,
 } from './types.js';
-import { readToolExtras } from './toolExtras.js';
+import { callMetaOf, readToolExtras } from './toolExtras.js';
 import { readToolResult, resultModeOf } from './toolResult.js';
 import { createVendingFetch } from './gatewayTransport.js';
 import { retryingFetch, type RetryOnThrottle } from './throttleRetry.js';
@@ -322,7 +322,7 @@ function wrapMcpTool(
       tool: mcp.name,
       inputSchema: mcp.inputSchema,
     }),
-    execute: async (args) => {
+    execute: async (args, ctx) => {
       // The agent passes args as `unknown` per Tool contract. MCP
       // expects a JSON object — non-object inputs become `{}` rather
       // than failing the SDK call.
@@ -335,7 +335,13 @@ function wrapMcpTool(
       // it gets serialized onto the wire as an empty `{}` and the call is
       // uncancellable: a silent no-op that only a real transport reveals.
       // `resultSchema` (2nd arg) is left to the SDK's own default.
-      const params = { name: mcp.name, arguments: argsObj };
+      // The call's time (`ctx.time`, the time layer) crosses in the request's own
+      // `_meta` bag, under the one namespaced key; a call without it sends no `_meta`.
+      const params = {
+        name: mcp.name,
+        arguments: argsObj,
+        ...(ctx?.time !== undefined && { _meta: callMetaOf(ctx.time) }),
+      };
       const result = signal
         ? await connection.callTool(params, undefined, { signal })
         : await connection.callTool(params);

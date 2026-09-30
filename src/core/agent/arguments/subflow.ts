@@ -35,19 +35,25 @@
 
 import type { TypedScope } from 'footprintjs';
 
+import { turnWindowsOf } from '../../time/bind.js';
+import type { CallWindowRow, ClockRow, TimeReadingRow } from '../../time/rows.js';
+import type { ZoneName } from '../../time/zone.js';
 import type { SourceCorpus } from './checks.js';
 import type { KeptAnswer } from './kept.js';
 import type { ArgumentRow } from './rows.js';
 import {
+  callWindowRowsOf,
   declareBatch,
   resolutionsOf,
   rowsOf,
+  timeDecisionsOf,
   verifyPlan,
   type ArgumentResolution,
   type BatchCall,
   type CheckedArgument,
   type PlannedCall,
   type SourcesArm,
+  type TimeArm,
   type ToolOf,
 } from './resolve.js';
 import type { CallSources } from './sources.js';
@@ -74,6 +80,17 @@ export interface SourceInputs {
   readonly composed?: true;
 }
 
+/**
+ * Under `.time()`: the rows of THIS turn the time layer reads — the turn's
+ * `clock` row and its `time-reading` rows (`core/time/bind.ts` ·
+ * `turnWindowsOf`). Handed by the mount only under the arm, for a batch with
+ * calls, and only once the turn has a clock.
+ */
+export interface TimeInputs {
+  readonly clock: ClockRow;
+  readonly readings: readonly TimeReadingRow[];
+}
+
 /** The subflow's own state — inputs frozen by the mount, then one key per stage. */
 export interface InputsLayerState {
   // ── inputs (the mount's inputMapper; frozen inside the subflow) ──
@@ -91,10 +108,14 @@ export interface InputsLayerState {
   readonly argumentAnswersKept?: readonly KeptAnswer[];
   /** Under declared sources only: the raw pieces the corpora are built from. */
   readonly sourceInputs?: SourceInputs;
+  /** Under `.time()` only: this turn's clock and readings. */
+  readonly timeInputs?: TimeInputs;
   // ── staged by the four stages ──
   argumentPlan?: readonly PlannedCall[];
   argumentChecks?: readonly CheckedArgument[];
   argumentRows?: readonly ArgumentRow[];
+  /** Under `.time()` only: one `call-window` row per call to a tool whose period declares forms. */
+  argumentWindowRows?: readonly CallWindowRow[];
   argumentResolutions?: readonly ArgumentResolution[];
 }
 
@@ -112,6 +133,15 @@ export interface InputsLayerDeps {
   }) => boolean;
   /** The ledger's emit half — one `findings.argument` event per row. */
   readonly emitRows: (scope: TypedScope<InputsLayerState>, rows: readonly ArgumentRow[]) => void;
+  /**
+   * Present exactly under `.time()`: the stages read `timeInputs` and a tool
+   * whose period declares forms is filled, bound or recorded against the
+   * turn's windows (`resolve.ts` · `timeDecisionsOf`).
+   */
+  readonly time?: {
+    /** The app's `.time({ zone })` — the zone of a form declaring `wallZone: 'app'`. */
+    readonly appZone?: ZoneName;
+  };
   /** Present exactly under declared sources (either door: `.inputsLayer({ argumentSources: true })`
    *  or `.findings({ argumentSources: true })`). */
   readonly sources?: {
@@ -165,6 +195,31 @@ function armOf(
 function keptOf(scope: TypedScope<InputsLayerState>): readonly KeptAnswer[] | undefined {
   const kept = scope.argumentAnswersKept as readonly KeptAnswer[] | undefined;
   return kept === undefined ? undefined : [...kept].map((a) => ({ ...a }));
+}
+
+/**
+ * The time arm as the pure steps take it — `undefined` when `.time()` is off,
+ * or the mount handed no inputs (no call, or a turn with no clock). Read only
+ * under the arm: a tracked read of a key a run never writes is a phantom source.
+ */
+function timeArmOf(
+  scope: TypedScope<InputsLayerState>,
+  deps: InputsLayerDeps,
+): TimeArm | undefined {
+  if (deps.time === undefined) return undefined;
+  const inputs = scope.timeInputs as TimeInputs | undefined;
+  if (inputs === undefined) return undefined;
+  // The rows are plain JSON (checked at the checkpoint door); a frozen input read is a live
+  // proxy view, which `structuredClone` refuses — so the copy is a JSON round-trip.
+  const plain = JSON.parse(
+    JSON.stringify({ clock: inputs.clock, readings: [...inputs.readings] }),
+  ) as TimeInputs;
+  return {
+    turn: turnWindowsOf(plain.readings, plain.clock),
+    now: plain.clock.now,
+    zone: plain.clock.zone,
+    ...(deps.time.appZone !== undefined && { appZone: deps.time.appZone }),
+  };
 }
 
 /** Whether a planned batch left an `ask`-ruled argument out — the one case a kept answer can fill. */
@@ -243,6 +298,7 @@ export async function verifyArgumentsStage(
     deps.toolOf,
     leavesAskOut(plan) ? keptOf(scope) : undefined,
     armOf(declared, corpus, deps.sources?.argumentViews),
+    timeArmOf(scope, deps),
   );
 }
 
@@ -270,7 +326,15 @@ export function recordArgumentsStage(
   deps: InputsLayerDeps,
 ): void {
   const checked = [...((scope.argumentChecks as readonly CheckedArgument[] | undefined) ?? [])];
-  const calls = checked.length === 0 ? [] : callsOf(scope);
+  const stamp = { turn: scope.turnNumber as number, iteration: scope.iteration as number };
+  // Under `.time()`: the windows decide fills, so the decisions are read before the rows.
+  const time = timeArmOf(scope, deps);
+  const plan =
+    time === undefined
+      ? []
+      : [...((scope.argumentPlan as readonly PlannedCall[] | undefined) ?? [])];
+  const calls = checked.length === 0 && plan.length === 0 ? [] : callsOf(scope);
+  const decisions = timeDecisionsOf(plan, calls, deps.toolOf, time, armOf(declaredOf(deps, calls)));
   const rows =
     checked.length === 0
       ? []
@@ -278,12 +342,14 @@ export function recordArgumentsStage(
           checked,
           calls,
           deps.toolOf,
-          { turn: scope.turnNumber as number, iteration: scope.iteration as number },
+          stamp,
           fillsKept(checked) ? keptOf(scope) : undefined,
           armOf(declaredOf(deps, calls)),
+          decisions,
         );
   scope.argumentRows = rows;
   if (rows.length > 0) deps.emitRows(scope, rows);
+  if (time !== undefined) scope.argumentWindowRows = callWindowRowsOf(decisions, calls, stamp);
 }
 
 /**
@@ -301,14 +367,19 @@ export function resolveArgumentsStage(
     scope.argumentResolutions = [];
     return;
   }
-  // The calls are read only under the arm — a reading's quote rides the ask.
-  const calls = deps.sources !== undefined ? callsOf(scope) : undefined;
+  // The calls are read only under an arm — a reading's quote rides the ask; a window fills.
+  const time = timeArmOf(scope, deps);
+  const calls = deps.sources !== undefined || time !== undefined ? callsOf(scope) : undefined;
+  const sources = calls !== undefined ? armOf(declaredOf(deps, calls)) : undefined;
   scope.argumentResolutions = resolutionsOf(
     plan,
     checked,
     deps.toolOf,
     scope.iteration as number,
     fillsKept(checked) ? keptOf(scope) : undefined,
-    calls !== undefined ? armOf(declaredOf(deps, calls)) : undefined,
+    sources,
+    time !== undefined && calls !== undefined
+      ? timeDecisionsOf(plan, calls, deps.toolOf, time, sources)
+      : undefined,
   );
 }

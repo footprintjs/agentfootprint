@@ -25,12 +25,28 @@ await mcpServe(tools, {
 });
 ```
 
+A call's own time crosses the same way (the time layer, step T5a): a call handed
+`ctx.time` sends it in the `tools/call` request's `_meta.agentfootprint.time`
+(`toolExtras.ts` · `callMetaOf`), the mock client hands that `_meta` to a
+handler's second argument, and `mcpServe` hands a served tool the context the
+client sent (`toolExtras.ts` · `callTimeOf` — read, never repaired; one it cannot
+read is not handed on). A tool's `period` forms and facts travel in the listing's
+`_meta.agentfootprint.period`, judged like every other field.
+
+```ts
+mockMcpClient({ tools: [{ name: 'client_activity', inputSchema, _meta: { agentfootprint: { askOrAssume, period } },
+  handler: async (args, request) => query(args, request._meta?.agentfootprint) }] });
+```
+
 ## Files
 - `mcpClient.ts`, `mockMcpClient.ts` — inbound.
 - `mcpServe.ts` — outbound.
 - `gatewayTransport.ts`, `transportUrl.ts`, `throttleRetry.ts` — transport.
 - `toolExtras.ts` — our own declarations, carried over MCP.
 - `toolResult.ts` — text and explicitly opted-in structured result decoding.
+- `elicitation.ts` — a typed ask (`AwaitingInput`) as an MCP elicitation and the
+  client's content back as an `InputResponse` (`elicitationOf`,
+  `answerFromElicitation`); a time range travels as two `date-time` properties.
 - `connectionRefusals.ts`, `sdkLoadFailure.ts` — the two refusals, authored once.
 - `types.ts`, `index.ts`.
 

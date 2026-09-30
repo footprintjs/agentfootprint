@@ -59,7 +59,19 @@ import {
 import type { ArgumentResolution, BatchCall, ToolOf } from '../arguments/resolve.js';
 import { unansweredRefusal } from '../arguments/serve.js';
 import { recordFindings } from '../findings/ledger.js';
+import type { FindingsLedger } from '../findings/types.js';
 import type { AgentState } from '../types.js';
+import { clockOf } from '../../time/rows.js';
+import type { ZoneName } from '../../time/zone.js';
+import type { AskTime } from '../arguments/ask.js';
+
+/** Under `.time()`: the paused turn's clock — the facts check reads it; `undefined` with no clock. */
+function askTimeOf(scope: TypedScope<AgentState>, deps: ArgumentAskDeps): AskTime | undefined {
+  if (deps.time === undefined) return undefined;
+  const clock = clockOf(scope.findingsLedger as FindingsLedger | undefined);
+  if (clock === undefined) return undefined;
+  return { now: clock.now, ...(deps.time.appZone !== undefined && { appZone: deps.time.appZone }) };
+}
 
 /** What the dispatch stage hands the ask — closures, never scope. */
 export interface ArgumentAskDeps {
@@ -69,6 +81,12 @@ export interface ArgumentAskDeps {
   readonly runId?: () => string | undefined;
   /** The host's own context for the ask (`AgentOptions.argumentAskContext`). */
   readonly hostContext?: () => unknown;
+  /**
+   * Present exactly under `.time()`: an answer for a period argument is also
+   * judged against the tool's declared facts at the turn's clock
+   * (`arguments/ask.ts` · `checkAnswer`) — `appZone` is the app's `.time({ zone })`.
+   */
+  readonly time?: { readonly appZone?: ZoneName };
 }
 
 /** What the ask hands the batch back. */
@@ -205,10 +223,14 @@ export function askBeforeDispatch(
   if (state.waiting !== undefined) {
     // The re-run a resume makes: the answer comes back out of the one-shot interrupt.
     const input = interrupt(scope, pauseDataOf(state.waiting));
-    const bound = bindAnswer(state, readAskAnswer(state.waiting, input), calls, deps.toolOf, {
-      turn: scope.turnNumber as number,
-      iteration,
-    });
+    const bound = bindAnswer(
+      state,
+      readAskAnswer(state.waiting, input),
+      calls,
+      deps.toolOf,
+      { turn: scope.turnNumber as number, iteration },
+      askTimeOf(scope, deps),
+    );
     recordFindings(scope, bound.rows, { turn: scope.turnNumber as number });
     state = bound.state;
     answered = true;

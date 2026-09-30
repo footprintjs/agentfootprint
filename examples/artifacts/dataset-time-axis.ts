@@ -1,6 +1,7 @@
 /** A producer declares its rows' time axis; a viewer draws a series without guessing. */
 import {
-  Agent, defineTool, describeTimeAxis, inMemoryArtifacts, readTimeAxis, withDatasetArtifacts,
+  Agent, defineTool, describeTimeAxis, inMemoryArtifacts, normaliseInstants, readTimeAxis,
+  withDatasetArtifacts,
   type DatasetResultAdapter, type DatasetTimeAxis, type LLMProvider,
 } from '../../src/index.js';
 import { mock } from '../../src/llm-providers.js';
@@ -10,7 +11,7 @@ export const meta: ExampleMeta = {
   id: 'artifacts/dataset-time-axis',
   title: 'Declare which column is time',
   group: 'artifacts',
-  description: 'A tool declares the time column, its unit and how each row summarises its interval; a viewer reads the ticket instead of guessing.',
+  description: 'A tool declares the time column, its unit and how each row summarises its interval; a viewer reads the ticket instead of guessing and compares times as UTC instants.',
   defaultInput: 'Show the hourly IO profile.',
   providerSlots: ['default'],
   tags: ['artifacts', 'datasets', 'time-series', 'charts'],
@@ -76,6 +77,22 @@ export async function run(input: string, provider?: LLMProvider): Promise<string
     : 'IO profile (table)';
   // #endregion read
 
+  // #region normalise
+  // Comparing needs instants, not spellings: the view turns the declared column into
+  // UTC at one precision, sorted, and leaves the stored rows exactly as they were.
+  const record = ticket === undefined ? null : await store.get(scope, ticket.ref);
+  const view = reading.status === 'declared' && record !== null
+    ? normaliseInstants(record.data as unknown[], reading.axis)
+    : undefined;
+  const first = view?.status === 'instants' ? view.points[0] : undefined;
+
+  // A wall-clock string with no offset and no declared zone is never read as UTC.
+  const unzoned = normaliseInstants(
+    [{ t: '2026-09-14T10:00:00Z' }, { t: '2026-09-14T11:00:00' }],
+    { column: 't', unit: 'iso' },
+  );
+  // #endregion normalise
+
   // #region refuse
   const refused = await store
     .put(scope, { kind: 'dataset/rows', mediaType: 'application/json', data: [],
@@ -86,6 +103,8 @@ export async function run(input: string, provider?: LLMProvider): Promise<string
   return [
     `Chart title: ${title}.`,
     `Time column: ${reading.status === 'declared' ? `${reading.axis.column} (${reading.axis.unit})` : 'none'}.`,
+    `First point: ${first ? `${first.at} (row ${first.row})` : 'none'}.`,
+    `A string with no offset and no zone: ${unzoned.status === 'refused' ? 'refused' : `${unzoned.status}, ${unzoned.counts.naive} value not read as UTC`}.`,
     `A summary with no interval: ${refused}.`,
   ].join('\n');
 }

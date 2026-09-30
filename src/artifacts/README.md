@@ -69,12 +69,12 @@ For MCP, opt into `resultMode: 'structured'` or the explicitly declared JSON-tex
 fallback before wrapping the tools. The default MCP text result cannot recover
 discarded structured data. See `src/lib/mcp/README.md`.
 
-### A declared time axis (`timeAxis.ts`)
+### A declared time axis (owned by `core/time/axis.ts`, re-exported here)
 
 **Law: declared, never guessed; judged at mint, never repaired.** A producer puts
 `timeAxis` beside its rows and the ticket carries it (`ArtifactMeta.timeAxis`): the
-time `column`, its `unit` (`'iso' | 'epoch-s' | 'epoch-ms'`), an IANA `zone` for
-wall-clock ISO values only, and how each row summarises its `interval`
+time `column`, its `unit` (`'iso' | 'epoch-s' | 'epoch-ms'`), an IANA `zone` name
+(never an abbreviation such as `PST`) for wall-clock ISO values only, and how each row summarises its `interval`
 (`aggregate`: `'raw'`, one of `avg min max sum count last`, or a record of measure
 column to one of them). `timeAxisIssues` is the one judge. `prepareArtifact` refuses
 a malformed declaration for every store, and `stageDatasetArtifacts` refuses it
@@ -85,6 +85,13 @@ use `readTimeAxis(meta)`, which returns absent, declared or malformed, and
 The store never scans rows. A declared column the rows lack is the consumer's to
 report, visibly. `sqliteArtifacts` adds the `time_axis` column in place on an older
 file, and the JSON-envelope stores carry it unchanged.
+
+The declaration and its judge live in the time layer (`src/core/time/axis.ts`), so
+`interval` and `zone` use the one duration and zone grammar. A consumer that COMPARES
+times asks for the read-side view, `normaliseInstants(rows, axis)`: UTC instants at
+one precision, sorted, with every value it could not place counted. An offset-less
+ISO value under an axis with no `zone` is `naive-values`, never read as UTC. The view
+never writes to the rows. The time layer's README has the rules.
 
 ```ts
 await ctx.artifacts.put({

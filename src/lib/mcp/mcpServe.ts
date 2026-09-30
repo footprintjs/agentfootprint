@@ -81,7 +81,7 @@ import type {
 import { doorGuard, warnAllowedHostsUnset } from '../../hosting/doorGuard.js';
 import { lazyRequire } from '../lazyRequire.js';
 import { sdkLoadFailure } from './sdkLoadFailure.js';
-import { MCP_TOOL_EXTRAS_KEY, toolExtrasOf } from './toolExtras.js';
+import { callTimeOf, MCP_TOOL_EXTRAS_KEY, toolExtrasOf } from './toolExtras.js';
 import { runToolChain, runToolAfterChain } from '../../core/agent/middleware/runChain.js';
 
 const DEFAULT_SERVER_NAME = 'agentfootprint';
@@ -206,6 +206,10 @@ export async function mcpServe(
         ...(extra?.signal && { signal: extra.signal }),
       });
       if ('blocked' in ctx) return toolError(ctx.blocked);
+      // The call's time, when the client sent one (`_meta.agentfootprint.time`, the
+      // time layer) — read, never repaired; one this runtime cannot read is not handed on.
+      const time = callTimeOf(request?.params?._meta);
+      const context = time !== undefined ? { ...ctx.context, time } : ctx.context;
 
       // `'call'` is the ONLY scope this door can honour, and it honours it for
       // real: the cleanups a served call registers run when that call settles,
@@ -215,7 +219,7 @@ export async function mcpServe(
       // rather than accepted and quietly never fired.
       let result: unknown;
       try {
-        result = await tool.execute(args as never, ctx.context);
+        result = await tool.execute(args as never, context);
       } finally {
         await ctx.endCall();
       }

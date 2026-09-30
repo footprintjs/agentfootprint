@@ -64,6 +64,7 @@ import type { FoldedSpan } from './agent/window/types.js';
 import { argumentRowIsWellFormed } from './agent/arguments/rows.js';
 import { periodRowIsWellFormed } from './agent/coverage/period.js';
 import { witnessRowIsWellFormed } from './agent/assessment/witness.js';
+import { isTimeRowKind, timeRowIsWellFormed } from './time/rows.js';
 import {
   BASIS_VALUES,
   EXPECT_VALUES,
@@ -627,6 +628,12 @@ function ledgerRowIsWellFormed(row: unknown): boolean {
   // each row it files while a layer is armed); readers compare it as a number,
   // so a stamp of any other type would quietly drop its row from its own turn.
   if (r.turn !== undefined && typeof r.turn !== 'number') return false;
+  // The time layer's rows (`.time()`): the turn's clock stamp, a resume's
+  // differing `time`, each call's dispatch moment, and each time mention the
+  // armed reader found (`time-reading`). The arm ships in the
+  // SAME change as the kinds; one owner of their kinds and shape
+  // (`core/time/rows.ts`). An older runtime refuses a checkpoint carrying one.
+  if (isTimeRowKind(r.kind)) return timeRowIsWellFormed(r);
   switch (r.kind) {
     case 'basis':
       return (
@@ -833,8 +840,14 @@ export function validateCheckpoint(value: unknown): AgentRunCheckpoint {
           'partly-held, not-held, unknown or undeclared) or ' +
           "'grounded' (with turn, iteration, posture, candidates, lookedUp) or " +
           "'steps-unfinished' (with turn, iteration, skillId, remaining[] of { index, tool }, " +
-          'total, action: accepted | cut-short); a row of any kind may carry a numeric turn. ' +
-          'It is written by an agent with `.findings()` or with an honesty layer armed, and ' +
+          'total, action: accepted | cut-short) or ' +
+          "'clock' (with turn, iteration, now, nowSource, zone, zoneSource) or " +
+          "'clock-on-resume' (with turn, iteration, passed, kept) or " +
+          "'call' (with turn, iteration, toolCallId, toolName, dispatchedAt) or " +
+          "'time-reading' (with turn, iteration, reader, tzdata, mentions and, per mention, " +
+          'mention with quote, parses, candidates and choice, or refused); ' +
+          'a row of any kind may carry a numeric turn. ' +
+          'It is written by an agent with `.findings()`, an honesty layer or `.time()` armed, and ' +
           're-seeded verbatim on continuation.',
       );
     }

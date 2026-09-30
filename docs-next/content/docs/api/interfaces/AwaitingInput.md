@@ -4,7 +4,7 @@ title: AwaitingInput
 
 # Interface: AwaitingInput
 
-Defined in: [src/core/inputRequest.ts:74](https://github.com/footprintjs/agentfootprint/blob/main/src/core/inputRequest.ts#L74)
+Defined in: [src/core/inputRequest.ts:111](https://github.com/footprintjs/agentfootprint/blob/main/src/core/inputRequest.ts#L111)
 
 The stamped request as the person, the model and the durable pause read it — never the `absence`.
 
@@ -18,7 +18,7 @@ The stamped request as the person, the model and the durable pause read it — n
 
 > `readonly` `optional` **context?**: `Readonly`\<`Record`\<`string`, `unknown`\>\>
 
-Defined in: [src/core/inputRequest.ts:20](https://github.com/footprintjs/agentfootprint/blob/main/src/core/inputRequest.ts#L20)
+Defined in: [src/core/inputRequest.ts:54](https://github.com/footprintjs/agentfootprint/blob/main/src/core/inputRequest.ts#L54)
 
 Opaque JSON authored by the collecting tool, never editable by the reply.
 
@@ -32,7 +32,7 @@ Opaque JSON authored by the collecting tool, never editable by the reply.
 
 > `readonly` **fields**: readonly [`InputField`](/docs/api/interfaces/InputField)[]
 
-Defined in: [src/core/inputRequest.ts:16](https://github.com/footprintjs/agentfootprint/blob/main/src/core/inputRequest.ts#L16)
+Defined in: [src/core/inputRequest.ts:50](https://github.com/footprintjs/agentfootprint/blob/main/src/core/inputRequest.ts#L50)
 
 #### Inherited from
 
@@ -44,7 +44,7 @@ Defined in: [src/core/inputRequest.ts:16](https://github.com/footprintjs/agentfo
 
 > `readonly` **id**: `string`
 
-Defined in: [src/core/inputRequest.ts:14](https://github.com/footprintjs/agentfootprint/blob/main/src/core/inputRequest.ts#L14)
+Defined in: [src/core/inputRequest.ts:48](https://github.com/footprintjs/agentfootprint/blob/main/src/core/inputRequest.ts#L48)
 
 #### Inherited from
 
@@ -56,7 +56,7 @@ Defined in: [src/core/inputRequest.ts:14](https://github.com/footprintjs/agentfo
 
 > `readonly` **missing**: readonly `string`[]
 
-Defined in: [src/core/inputRequest.ts:80](https://github.com/footprintjs/agentfootprint/blob/main/src/core/inputRequest.ts#L80)
+Defined in: [src/core/inputRequest.ts:117](https://github.com/footprintjs/agentfootprint/blob/main/src/core/inputRequest.ts#L117)
 
 ***
 
@@ -64,7 +64,7 @@ Defined in: [src/core/inputRequest.ts:80](https://github.com/footprintjs/agentfo
 
 > `readonly` **origin**: `object`
 
-Defined in: [src/core/inputRequest.ts:83](https://github.com/footprintjs/agentfootprint/blob/main/src/core/inputRequest.ts#L83)
+Defined in: [src/core/inputRequest.ts:120](https://github.com/footprintjs/agentfootprint/blob/main/src/core/inputRequest.ts#L120)
 
 #### offeredSkillIds?
 
@@ -94,7 +94,7 @@ lists every call each field is for.
 
 > `readonly` **origins**: `Readonly`\<`Record`\<`string`, `"declaration"` \| `"response"`\>\>
 
-Defined in: [src/core/inputRequest.ts:79](https://github.com/footprintjs/agentfootprint/blob/main/src/core/inputRequest.ts#L79)
+Defined in: [src/core/inputRequest.ts:116](https://github.com/footprintjs/agentfootprint/blob/main/src/core/inputRequest.ts#L116)
 
 ***
 
@@ -102,7 +102,7 @@ Defined in: [src/core/inputRequest.ts:79](https://github.com/footprintjs/agentfo
 
 > `readonly` **question**: `string`
 
-Defined in: [src/core/inputRequest.ts:15](https://github.com/footprintjs/agentfootprint/blob/main/src/core/inputRequest.ts#L15)
+Defined in: [src/core/inputRequest.ts:49](https://github.com/footprintjs/agentfootprint/blob/main/src/core/inputRequest.ts#L49)
 
 #### Inherited from
 
@@ -114,16 +114,19 @@ Defined in: [src/core/inputRequest.ts:15](https://github.com/footprintjs/agentfo
 
 > `readonly` `optional` **refused?**: [`InputRefusal`](/docs/api/interfaces/InputRefusal)
 
-Defined in: [src/core/inputRequest.ts:48](https://github.com/footprintjs/agentfootprint/blob/main/src/core/inputRequest.ts#L48)
+Defined in: [src/core/inputRequest.ts:85](https://github.com/footprintjs/agentfootprint/blob/main/src/core/inputRequest.ts#L85)
 
 The previous answer to this ask was REFUSED, and why: the app
 validated what the person gave, turned it down, and asks again. Carried
 on the awaiting-input shape the person receives — the checkpoint's
 `pauseData`, the pause outcome, the `pause.request` event — so a UI can
 say "Your answer '…' was not accepted: <reason>" instead of repeating
-the same question in silence. The reason is the APP'S words; the library
-never writes one. `answer` is optional and judged against `fields` like
-any answer; `null` is the field omitted.
+the same question in silence. The reason is the APP'S words — with one
+exception the app arms itself: a time field's answer the library's check
+refused (`InputField.format`), whose reason is a catalog sentence the app
+can override (`defaultTimeAskMessages`, `.time({ messages })`). `answer`
+is optional and judged against `fields` like any answer; `null` is the
+field omitted.
 
 #### Inherited from
 
@@ -135,7 +138,7 @@ any answer; `null` is the field omitted.
 
 > `readonly` `optional` **repeat?**: [`InputRepeat`](/docs/api/interfaces/InputRepeat)
 
-Defined in: [src/core/inputRequest.ts:82](https://github.com/footprintjs/agentfootprint/blob/main/src/core/inputRequest.ts#L82)
+Defined in: [src/core/inputRequest.ts:119](https://github.com/footprintjs/agentfootprint/blob/main/src/core/inputRequest.ts#L119)
 
 Present only on a re-ask — see `InputRepeat`.
 
@@ -145,7 +148,7 @@ Present only on a re-ask — see `InputRepeat`.
 
 > `readonly` **requestId**: `string`
 
-Defined in: [src/core/inputRequest.ts:77](https://github.com/footprintjs/agentfootprint/blob/main/src/core/inputRequest.ts#L77)
+Defined in: [src/core/inputRequest.ts:114](https://github.com/footprintjs/agentfootprint/blob/main/src/core/inputRequest.ts#L114)
 
 Runtime-stamped token, distinct from the author's reusable declaration id.
 
@@ -155,7 +158,7 @@ Runtime-stamped token, distinct from the author's reusable declaration id.
 
 > `readonly` **status**: `"awaiting_input"`
 
-Defined in: [src/core/inputRequest.ts:75](https://github.com/footprintjs/agentfootprint/blob/main/src/core/inputRequest.ts#L75)
+Defined in: [src/core/inputRequest.ts:112](https://github.com/footprintjs/agentfootprint/blob/main/src/core/inputRequest.ts#L112)
 
 ***
 
@@ -163,7 +166,7 @@ Defined in: [src/core/inputRequest.ts:75](https://github.com/footprintjs/agentfo
 
 > `readonly` **supplied**: `Readonly`\<`Record`\<`string`, [`InputValue`](/docs/api/type-aliases/InputValue)\>\>
 
-Defined in: [src/core/inputRequest.ts:78](https://github.com/footprintjs/agentfootprint/blob/main/src/core/inputRequest.ts#L78)
+Defined in: [src/core/inputRequest.ts:115](https://github.com/footprintjs/agentfootprint/blob/main/src/core/inputRequest.ts#L115)
 
 Values the collection tool already knows; never labelled as a person's answer.
 

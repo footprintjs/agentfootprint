@@ -30,7 +30,7 @@
  */
 
 import type { Tool } from '../../core/tools.js';
-import { readToolExtras } from './toolExtras.js';
+import { callMetaOf, readToolExtras } from './toolExtras.js';
 import type { McpClient, McpClientOptions, McpCallToolResult } from './types.js';
 import { readToolResult, resultModeOf } from './toolResult.js';
 
@@ -80,7 +80,15 @@ export interface MockMcpTool {
    * Defaults to `async () => '[mock result]'` when omitted — useful
    * when the consumer cares about wiring not behavior.
    */
-  readonly handler?: (args: Record<string, unknown>) => Promise<string | McpCallToolResult>;
+  readonly handler?: (
+    args: Record<string, unknown>,
+    /**
+     * The request's `_meta` bag, exactly as the real client would send it —
+     * `{ agentfootprint: { time } }` on a call handed `ctx.time` (the time
+     * layer), absent otherwise. A handler that ignores it behaves as before.
+     */
+    request: { readonly _meta?: Readonly<Record<string, unknown>> },
+  ) => Promise<string | McpCallToolResult>;
 }
 
 export interface MockMcpClientOptions {
@@ -162,17 +170,20 @@ function wrapMockTool(
       tool: mcp.name,
       inputSchema: mcp.inputSchema,
     }),
-    execute: async (args) => {
+    execute: async (args, ctx) => {
       const argsObj =
         args !== null && typeof args === 'object' && !Array.isArray(args)
           ? (args as Record<string, unknown>)
           : {};
+      // The same request `_meta` the real client sends (the time layer's `ctx.time`), as data.
+      const request =
+        ctx?.time !== undefined ? { _meta: structuredClone(callMetaOf(ctx.time)) } : {};
       // Look up by name at call time so mid-test handler swaps via a
       // mutable Map could be supported later. For now `toolMap` is
       // built once at factory time.
       const handler = toolMap.get(mcp.name)?.handler;
       try {
-        const result = handler ? await handler(argsObj) : '[mock result]';
+        const result = handler ? await handler(argsObj, request) : '[mock result]';
         return readToolResult(
           typeof result === 'string' ? { content: [{ type: 'text', text: result }] } : result,
           mcp.name,

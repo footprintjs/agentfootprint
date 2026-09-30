@@ -229,6 +229,40 @@ describe.skipIf(!built)('the default browser graph of the root entry', () => {
     }
   });
 
+  it('LAW: the time layer’s run-time half is off the root sync closure — only the synchronous doors stay', async () => {
+    // Only an agent with `.time()` runs the clock stamp, the reading of the
+    // person's words and the dispatch moment; seed and ToolCalls load them
+    // through `import()` (`agent/stages/timeLayer.ts`), and with them the
+    // resolver, the conversions, the drift check and the row builders; the
+    // limits line's renderer loads in prepareFinal the same way. What stays
+    // static is what a SYNCHRONOUS door needs first: `.time()`'s options
+    // (`clock.ts`), `defineTool({ period })` (`periodForm.ts`), a time
+    // answer's check at the resume door (`ask.ts`) and the checkpoint door's
+    // row checks (`rows.ts`, `resolveRecord.ts`).
+    const graph = await splitGraph(resolve(DIST, 'index.js'));
+    for (const stays of [
+      'core/time/clock.js',
+      'core/time/periodForm.js',
+      'core/time/ask.js',
+      'core/time/rows.js',
+      'core/time/resolveRecord.js',
+    ]) {
+      expect(graph.syncInputs.has(`dist/esm/${stays}`), stays).toBe(true);
+    }
+    for (const lazy of [
+      'core/agent/stages/timeLayer.js',
+      'core/time/resolve.js',
+      'core/time/convert.js',
+      'core/time/drift.js',
+      'core/time/wire.js',
+      'core/time/rowsBuild.js',
+      'core/time/present.js',
+    ]) {
+      expect(graph.syncInputs.has(`dist/esm/${lazy}`), lazy).toBe(false);
+      expect(graph.dynamicInputs.has(`dist/esm/${lazy}`), lazy).toBe(true);
+    }
+  });
+
   it('contrast: the /observe door carries the pack statically, by design', async () => {
     const graph = await splitGraph(resolve(DIST, 'observe.js'));
     expect(graph.syncInputs.has(PACK)).toBe(true);

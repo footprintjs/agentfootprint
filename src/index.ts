@@ -1025,15 +1025,93 @@ export {
   type DatasetResultAdapter,
   type DatasetResultPlan,
   describeTimeAxis,
+  normaliseInstants,
   readTimeAxis,
   timeAxisIssues,
   TIME_AXIS_AGGREGATES,
   TIME_AXIS_UNITS,
+  type AxisCounts,
+  type AxisOverlapNote,
+  type AxisPoint,
+  type AxisPrecision,
   type DatasetTimeAxis,
+  type NaiveValues,
+  type NormalisedAxis,
+  type NormaliseOptions,
   type TimeAxisAggregate,
   type TimeAxisReading,
   type TimeAxisUnit,
 } from './artifacts/index.js';
+// The time layer's run clock (time design § 4, step T3) — `.time()` and the
+// run's `time` input, and the rows the clock files on the ledger. Types only:
+// the doors are `AgentBuilder.time` and `run({ time })`.
+export type { RunTime, TimeClock, TimeOptions } from './core/time/clock.js';
+export type { TimeRange } from './core/time/range.js';
+export type {
+  CallRow,
+  CallWindowRow,
+  ClockOnResumeRow,
+  ClockRow,
+  ControlWindow,
+  PersonWindow,
+  TimeReaderStamp,
+  TimeReadingRow,
+} from './core/time/rows.js';
+// A tool's period forms and facts (step T5a) — `Tool.period`'s general form:
+// every shape the tool's period takes and the facts about its source; and the
+// call's time a tool is handed (`ctx.time`, over MCP `_meta.agentfootprint.time`).
+// Types only: the door is `defineTool({ period })`.
+export type {
+  Bound,
+  BoundAs,
+  PeriodDirection,
+  PeriodFacts,
+  PeriodForm,
+  PeriodSpelling,
+  ZoneArgument,
+} from './core/time/convert.js';
+export type { TimeContext } from './core/time/wire.js';
+// The time layer's reader port (step T6a) — `.time({ reader, policy })`: a
+// strategy returns zone-less PARTS, the library resolves them. Types only.
+export type {
+  TimeDate,
+  TimeMention,
+  TimeParts,
+  TimeReadContext,
+  TimeReader,
+  TimeReading,
+  TimeRelative,
+  TimeWall,
+} from './core/time/reader.js';
+export type {
+  OpenQuestion,
+  ReadingChoice,
+  ReadingTags,
+  ResolvedWindow,
+  TimeCandidate,
+  TimeNote,
+  TimePart,
+  TimePolicy,
+  TimeWindow,
+} from './core/time/resolve.js';
+// The time ask (step T4) — a `requestInput` field with a `format`
+// (`'instant' | 'time-range' | 'zone'`) is checked at the resume door; a
+// refused answer is asked again with a catalog reason. The catalog is data an
+// app can override (`.time({ messages })`), and an MCP host carries the ask as
+// an elicitation (`elicitationOf` / `answerFromElicitation`).
+export type {
+  TimeAnswerProblem,
+  TimeAskMessageKey,
+  TimeAskMessages,
+  TimeFormat,
+} from './core/time/ask.js';
+export { defaultTimeAskMessages } from './locales/timeAsk.js';
+export {
+  answerFromElicitation,
+  elicitationOf,
+  type ElicitationProperty,
+  type ElicitationRequest,
+} from './lib/mcp/elicitation.js';
 // Artifacts, the optional streaming leg (9.25.0) — `putStream`/`getStream` are
 // FEATURE-DETECTED members of the port, so a store that cannot move bytes
 // without holding them whole leaves them absent rather than faking one. The

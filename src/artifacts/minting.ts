@@ -13,7 +13,7 @@
 import { isArtifactRef, mintArtifactRef } from './naming.js';
 import { computeArtifactDigest, measureArtifactBytes } from './payload.js';
 import { resolveExpiresAt, type ArtifactRetention } from './retention.js';
-import { timeAxisIssues, type DatasetTimeAxis } from './timeAxis.js';
+import { timeAxisIssues, type DatasetTimeAxis } from '../core/time/axis.js';
 import {
   InvalidArtifactError,
   UnknownParentRefError,

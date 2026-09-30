@@ -34,6 +34,7 @@ import { ASSUMED_BLOCK_HEADING } from '../coverage/answer.js';
 import { argumentRewritesOf, type ArgumentRewrite } from '../middleware/rewrites.js';
 import { isRefused, rulesOf, type RuledToolLike } from './declare.js';
 import { HIDDEN_VALUE, type ArgumentRow } from './rows.js';
+import type { PeriodFacts, TimeRefusal } from '../../time/convert.js';
 
 type PlainObject = Record<string, unknown>;
 
@@ -223,10 +224,23 @@ export function rulesOnWire(
 /** One filled argument, as the note names it. */
 export interface FilledArgument {
   readonly argument: string;
-  readonly value: InputValue;
+  /** A window fill of an `object` form is an object (printed as JSON). */
+  readonly value: InputValue | Readonly<Record<string, InputValue>>;
   readonly hidden: boolean;
-  /** `answered`: the person's answer to the batch ask filled it. Absent: the tool's rule assumed it. */
-  readonly source?: 'answered';
+  /**
+   * `answered`: the person's answer to the batch ask filled it. `window`: the
+   * turn's one window of the person's did (the time layer), `from` saying
+   * whose. Absent: the tool's rule assumed it.
+   */
+  readonly source?: 'answered' | 'window';
+  /** On a `window` fill: the person's words, a `model` reader's unconfirmed reading of them, or a UI control. */
+  readonly from?: 'said' | 'derived-from-reading' | 'control';
+  /**
+   * On a `window` fill: no form held the window exactly, so the value reads a
+   * WIDER one (the time layer, step T5b) — `reads-more`, or `tool-trims` when
+   * the tool declares that it drops the rows outside the asked window.
+   */
+  readonly wider?: 'reads-more' | 'tool-trims';
   /**
    * The value the call had CARRIED, which the person's answer replaced
    * (declared sources: an untraced value is asked about). Absent: the call
@@ -269,9 +283,46 @@ export function filledNote(
     .map((f) =>
       f.source === 'answered'
         ? answeredClause(toolName, f, options?.sources === true)
+        : f.source === 'window'
+        ? windowClause(toolName, f)
         : assumedClause(toolName, f),
     )
     .join('');
+}
+
+/** A filled value as a note prints it — an object form's value as JSON. */
+function printedFill(value: FilledArgument['value']): string {
+  return typeof value === 'object' ? JSON.stringify(value) : printedValue(value);
+}
+
+// LENS · tool-result · persistent-history
+// reads: the call's window fill (`argumentResolutions`: the turn's ONE window of the person's, converted
+//        into the tool's form — `core/time/bind.ts`), kept only where the call RAN with it, and whose window
+//        it was (the person's words, a model reader's unconfirmed reading of them, a UI control)
+// law: may omit, never deny; past tense, naming the call this result answers; a reading of the person's
+//      words is never called their words.
+/** The clause for a value the turn's one window of the person's filled (the time layer, step T5a). */
+function windowClause(toolName: string, f: FilledArgument): string {
+  const whose =
+    f.from === 'control'
+      ? 'from the window the person set in the app — recorded as set in the app'
+      : f.from === 'derived-from-reading'
+      ? "from a reading of the person's words they have not confirmed — recorded as a reading, " +
+        "not as the person's"
+      : "from the window the person's own words gave — recorded as the person's";
+  const wider =
+    f.wider === 'reads-more'
+      ? "; the tool's form could not hold that window exactly, so the value reads a wider one — " +
+        'recorded as wider than asked'
+      : f.wider === 'tool-trims'
+      ? "; the tool's form could not hold that window exactly, so the value reads a wider one, " +
+        'and the tool declares that it drops the rows outside the asked window'
+      : '';
+  return f.hidden
+    ? `\n\n[${f.argument} was not in the ${toolName} call this result answers; the call ran with ` +
+        `a value ${whose} (the value is hidden by the tool's view)${wider}.]`
+    : `\n\n[${f.argument} was not in the ${toolName} call this result answers; the call ran with ` +
+        `${printedFill(f.value)}, ${whose}${wider}.]`;
 }
 
 function assumedClause(toolName: string, f: FilledArgument): string {
@@ -280,7 +331,7 @@ function assumedClause(toolName: string, f: FilledArgument): string {
         "with the value the tool's rule assumes (the value is hidden by the tool's view) — " +
         "recorded as assumed, not as the person's.]"
     : `\n\n[${f.argument} was not in the ${toolName} call this result answers; the call ran ` +
-        `with ${printedValue(f.value)}, the value the tool's rule assumes — recorded as ` +
+        `with ${printedFill(f.value)}, the value the tool's rule assumes — recorded as ` +
         "assumed, not as the person's.]";
 }
 
@@ -314,7 +365,7 @@ function answeredClause(toolName: string, f: FilledArgument, sources: boolean): 
   return f.hidden
     ? `\n\n[${f.argument} in the ${toolName} call this result answers was chosen by the person ` +
         `when asked (the value is hidden by the tool's view; ${before}).]`
-    : `\n\n[${f.argument} = ${printedValue(f.value)} in the ${toolName} call this result answers ` +
+    : `\n\n[${f.argument} = ${printedFill(f.value)} in the ${toolName} call this result answers ` +
         `was chosen by the person when asked (${before})${sources ? ANSWERED_SOURCE_CLAUSE : ''}.]`;
 }
 
@@ -385,6 +436,75 @@ export function secondPauseRefusal(toolName: string, why: 'check-in' | 'tool-pau
     'paused once — to ask the person for argument values — so there was no second pause to ' +
     'ask with.'
   );
+}
+
+// LENS · tool-result · persistent-history
+// reads: the call's `call-window` decision (`core/time/bind.ts` · `callWindowOf`: the window it asked
+//        for against the tool's DECLARED facts — `direction`, `retention`, `maxRange`, a `day`-only form,
+//        a sent wall time the zone skips) and those facts' own spellings
+// law: may omit, never deny; past tense, anchored to the call; prints no window value (it may be the
+//      person's) — only the tool's declared facts and an argument name; says what the model may do and
+//      promises no outcome.
+/**
+ * The result a call reads when it was refused BEFORE DISPATCH on its window
+ * (the time layer, step T5b — time design § 7.2): the window breaks one of the
+ * tool's declared facts, spans days for a tool that reads one day per call, or
+ * a sent wall time is one the zone's clocks skip. Splitting a window into
+ * several calls is the model's choice, never the library's.
+ *
+ * @example
+ * ```ts
+ * timeRefusal('search_logs', 'time-future', { direction: 'past' });
+ * // 'search_logs was not run on that call: the window it asked for had not happened yet, and the
+ * //  tool declares that its source holds only the past.'
+ * ```
+ */
+export function timeRefusal(
+  toolName: string,
+  refusal: TimeRefusal,
+  facts: PeriodFacts,
+  argument?: string,
+): string {
+  const head = `${toolName} was not run on that call: `;
+  switch (refusal) {
+    case 'time-future':
+      return (
+        head +
+        'the window it asked for had not happened yet, and the tool declares that its source ' +
+        'holds only the past.'
+      );
+    case 'time-past':
+      return (
+        head +
+        'the window it asked for had already ended, and the tool declares that its source ' +
+        'holds only the future.'
+      );
+    case 'beyond-retention':
+      return (
+        head +
+        'the window it asked for was wholly older than the oldest data the tool declares its ' +
+        `source keeps (${facts.retention ?? 'its retention'}).`
+      );
+    case 'over-max-range':
+      return (
+        head +
+        'the window it asked for was wider than the tool declares it reads at once ' +
+        `(maxRange ${facts.maxRange ?? 'undeclared'}); narrower windows, one call each, may be ` +
+        'proposed instead.'
+      );
+    case 'multi-day':
+      return (
+        head +
+        'the window it asked for spanned more than one calendar day, and the tool reads one day ' +
+        'per call; one call per day may be proposed instead.'
+      );
+    case 'dst-gap':
+      return (
+        head +
+        `the wall time sent for ${argument ?? 'its period'} does not exist in the tool's zone — ` +
+        'the clocks skip it at a daylight-saving change.'
+      );
+  }
 }
 
 // LENS · tool-result · persistent-history

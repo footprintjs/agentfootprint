@@ -1,5 +1,15 @@
 import { readAbsence } from './agent/coverage/absent.js';
 import type { ToolAbsence } from './agent/coverage/types.js';
+import {
+  checkTimeAnswer,
+  isTimeFormat,
+  refusalReason,
+  type TimeAnswerRefusal,
+  type TimeAskMessages,
+  type TimeFormat,
+} from './time/ask.js';
+import type { ZoneName } from './time/zone.js';
+import { defaultTimeAskMessages } from '../locales/timeAsk.js';
 
 /** Typed missing-input values. Collection is distinct from permission or consent. */
 export type InputValue = string | number | boolean;
@@ -9,6 +19,30 @@ export interface InputField {
   readonly required?: boolean;
   readonly description?: string;
   readonly enum?: readonly InputValue[];
+  /**
+   * A TIME field (time design § 6.1): the library checks the answer before the
+   * app sees it. `'instant'` — an ISO 8601 date-time with its offset
+   * (`2026-10-09T08:00-07:00`); `'time-range'` — an ISO 8601 interval
+   * `from/to` of two such instants, `from` before `to`; `'zone'` — an IANA
+   * zone name. The value stays a string on the wire, so refused unless
+   * `type: 'string'`. An answer that fails the check is not taken: the resume
+   * door asks again with `refused: { answer, reason }` (the reason a catalog
+   * sentence, `defaultTimeAskMessages`) and `repeat: { count }`, and nothing
+   * runs. A choice or a supplied value that fails it is refused at definition.
+   */
+  readonly format?: TimeFormat;
+  /**
+   * One label per `enum` choice, in its order — what a person reads beside
+   * the value (`'Fri, Oct 9, 2026, 8:00 – 8:40 AM PDT'`); the value is what the
+   * answer carries. Needs `enum`.
+   */
+  readonly labels?: readonly string[];
+  /**
+   * A time field's choices are the only answers. Without it a `format` field
+   * with `enum` keeps free entry open: any answer the format check takes is
+   * taken. Needs `format` and `enum`.
+   */
+  readonly strict?: boolean;
 }
 export interface InputRequestDeclaration {
   readonly id: string;
@@ -41,9 +75,12 @@ export interface InputRequestDeclaration {
    * on the awaiting-input shape the person receives — the checkpoint's
    * `pauseData`, the pause outcome, the `pause.request` event — so a UI can
    * say "Your answer '…' was not accepted: <reason>" instead of repeating
-   * the same question in silence. The reason is the APP'S words; the library
-   * never writes one. `answer` is optional and judged against `fields` like
-   * any answer; `null` is the field omitted.
+   * the same question in silence. The reason is the APP'S words — with one
+   * exception the app arms itself: a time field's answer the library's check
+   * refused (`InputField.format`), whose reason is a catalog sentence the app
+   * can override (`defaultTimeAskMessages`, `.time({ messages })`). `answer`
+   * is optional and judged against `fields` like any answer; `null` is the
+   * field omitted.
    */
   readonly refused?: InputRefusal;
 }
@@ -51,7 +88,7 @@ export interface InputRequestDeclaration {
 export interface InputRefusal {
   /** The refused values, field id → value, as the person gave them. */
   readonly answer?: Readonly<Record<string, InputValue>>;
-  /** Why it was refused, in the app's own words (non-blank, at most 4096 characters). */
+  /** Why it was refused, in the app's own words — or, for a time field the library checked, its catalog's (non-blank, at most 4096 characters). */
   readonly reason: string;
 }
 /**
@@ -159,6 +196,10 @@ export function isInputFieldValue(value: unknown): value is InputValue {
   return typeof value === 'boolean';
 }
 
+/** Whether a field's `enum` is the only answers — always, except a `format` field that is not `strict`. */
+const choicesOnly = (field: InputField): boolean =>
+  field.format === undefined || field.strict === true;
+
 function validateValues(fields: readonly InputField[], raw: unknown): Record<string, InputValue> {
   if (!object(raw)) fail('values must be an object');
   const values: Record<string, InputValue> = {};
@@ -168,7 +209,7 @@ function validateValues(fields: readonly InputField[], raw: unknown): Record<str
     if (
       typeof value !== field.type ||
       !isInputFieldValue(value) ||
-      (field.enum !== undefined && !field.enum.includes(value))
+      (field.enum !== undefined && choicesOnly(field) && !field.enum.includes(value))
     ) {
       fail('a value does not satisfy its declared field type or choices');
     }
@@ -180,6 +221,50 @@ function validateValues(fields: readonly InputField[], raw: unknown): Record<str
     });
   }
   return values;
+}
+
+const FIELD_KEYS: readonly string[] = [
+  'id',
+  'type',
+  'required',
+  'enum',
+  'description',
+  'format',
+  'labels',
+  'strict',
+];
+
+/**
+ * A time field's own rules (time design § 6.1), refused at definition and
+ * never repaired: `format` only on a string field; each choice a well-formed
+ * value of its format; `labels` one non-blank label per choice; `strict` only
+ * where it would change something (a `format` field with choices).
+ */
+function validateTimeField(field: InputField): void {
+  if (field.format !== undefined) {
+    if (!isTimeFormat(field.format)) fail("format must be 'instant', 'time-range' or 'zone'");
+    if (field.type !== 'string') fail("a format field must be type: 'string'");
+    for (const value of field.enum ?? []) {
+      if (checkTimeAnswer(field.format, value as string) !== undefined)
+        fail(`a choice is not a well-formed ${field.format}`);
+    }
+  }
+  if (field.labels !== undefined) {
+    if (
+      field.enum === undefined ||
+      !Array.isArray(field.labels) ||
+      field.labels.length !== field.enum.length ||
+      !field.labels.every(nonempty)
+    )
+      fail('labels must give one non-blank label per enum choice, in its order');
+  }
+  if (field.strict !== undefined) {
+    if (typeof field.strict !== 'boolean') fail('strict must be a boolean');
+    if (field.format === undefined || field.enum === undefined)
+      fail(
+        'strict needs a format field with choices — elsewhere the choices are the only answers already',
+      );
+  }
 }
 
 /** One validation owner, shared by the declaration and durable-pause readers. */
@@ -210,7 +295,7 @@ export function validateInputDeclaration(raw: unknown): InputRequestDeclaration 
       !['string', 'number', 'boolean'].includes(String(field.type)) ||
       (field.required !== undefined && typeof field.required !== 'boolean') ||
       (field.description !== undefined && !nonempty(field.description)) ||
-      Object.keys(field).some((k) => !['id', 'type', 'required', 'enum', 'description'].includes(k))
+      Object.keys(field).some((k) => !FIELD_KEYS.includes(k))
     )
       fail('invalid or duplicate input field');
     ids.add(field.id);
@@ -221,15 +306,24 @@ export function validateInputDeclaration(raw: unknown): InputRequestDeclaration 
       for (const value of field.enum)
         validateValues([{ ...copy, enum: undefined }], { [field.id]: value });
     }
+    validateTimeField(copy);
     return {
       id: copy.id,
       type: copy.type,
       ...(copy.required !== undefined && { required: copy.required }),
       ...(copy.description !== undefined && { description: copy.description }),
       ...(copy.enum !== undefined && { enum: [...copy.enum] }),
+      ...(copy.format !== undefined && { format: copy.format }),
+      ...(copy.labels !== undefined && { labels: [...copy.labels] }),
+      ...(copy.strict !== undefined && { strict: copy.strict }),
     };
   });
   const supplied = validateValues(fields, raw.supplied ?? {});
+  for (const [id, value] of Object.entries(supplied)) {
+    const field = fields.find((f) => f.id === id) as InputField;
+    if (field.format !== undefined && checkTimeAnswer(field.format, value as string) !== undefined)
+      fail(`a supplied value is not a well-formed ${field.format}`);
+  }
   let context: Readonly<Record<string, unknown>> | undefined;
   if (raw.context !== undefined) {
     if (!object(raw.context) || !jsonValue(raw.context)) fail('context must be a JSON object');
@@ -438,10 +532,104 @@ export function readAwaitingInput(pauseData: unknown): AwaitingInput | undefined
   return JSON.parse(JSON.stringify({ ...value, ...clean })) as AwaitingInput;
 }
 
-/** Accept typed fields, or explicit cancellation, without coercing free text. */
+/**
+ * What the resume door knows when it checks a time field's answer: the
+ * person's zone (the run clock's, under `.time()` — it arms the DST-gap check)
+ * and the app's catalog overrides (`.time({ messages })`).
+ */
+export interface TimeAnswerContext {
+  readonly zone?: ZoneName;
+  readonly messages?: Partial<TimeAskMessages>;
+}
+
+/**
+ * The time fields' answers the check refuses, field id → why — in field
+ * order. Only a field with a `format` is judged: only a check the app armed
+ * can refuse (time design § 6.2, TQ7).
+ */
+function refusedTimeAnswers(
+  fields: readonly InputField[],
+  values: Readonly<Record<string, InputValue>>,
+  zone: ZoneName | undefined,
+): [string, TimeAnswerRefusal][] {
+  const refused: [string, TimeAnswerRefusal][] = [];
+  for (const field of fields) {
+    if (field.format === undefined || !own(values, field.id)) continue;
+    const refusal = checkTimeAnswer(field.format, values[field.id] as string, zone);
+    if (refusal !== undefined) refused.push([field.id, refusal]);
+  }
+  return refused;
+}
+
+/**
+ * The same ask, asked again: the refused time answers are not taken (the
+ * fields are `missing` again, whether or not they are required — the person
+ * tried to answer them), the rest of the reply is kept, and the re-ask
+ * carries the 9.127.0 shapes — `refused: { answer, reason }` with the
+ * catalog's reason, and the runtime's `repeat: { count }` (the refused
+ * answer never reached the record, so there is no `previousAnswer`).
+ */
+function reaskRefused(
+  waiting: AwaitingInput,
+  values: Readonly<Record<string, InputValue>>,
+  refused: readonly [string, TimeAnswerRefusal][],
+  time: TimeAnswerContext | undefined,
+): AwaitingInput {
+  const ids = new Set(refused.map(([id]) => id));
+  const accepted = Object.fromEntries(Object.entries(values).filter(([k]) => !ids.has(k)));
+  const drop = <T>(record: Readonly<Record<string, T>>): Record<string, T> =>
+    Object.fromEntries(Object.entries(record).filter(([k]) => !ids.has(k)));
+  const supplied = { ...drop(waiting.supplied), ...accepted };
+  const messages: TimeAskMessages = { ...defaultTimeAskMessages, ...time?.messages };
+  return {
+    ...waiting,
+    supplied,
+    origins: {
+      ...drop(waiting.origins),
+      ...Object.fromEntries(Object.keys(accepted).map((k) => [k, 'response' as const])),
+    },
+    missing: waiting.fields
+      .filter((f) => ids.has(f.id) || (f.required !== false && !own(supplied, f.id)))
+      .map((f) => f.id),
+    refused: {
+      answer: Object.fromEntries(refused.map(([id]) => [id, values[id] as InputValue])),
+      reason: refusalReason(
+        refused.map(([, refusal]) => refusal),
+        messages,
+      ),
+    },
+    repeat: { count: (waiting.repeat?.count ?? 0) + 1 },
+  };
+}
+
+/**
+ * The refusal an ACCEPTED reply leaves standing. A refusal names the answer
+ * it turned down (`InputRefusal.answer`); once the person has answered every
+ * one of those fields again — and this reply was accepted — the refusal is
+ * about an answer that no longer stands, so it is dropped: a UI must not say
+ * "your answer was not accepted" beside a field it just took. A refusal that
+ * names no answer, or one this reply did not answer again in full, stays.
+ */
+function refusalStillStanding(
+  refusal: InputRefusal | undefined,
+  values: Readonly<Record<string, InputValue>>,
+): InputRefusal | undefined {
+  if (refusal?.answer === undefined) return refusal;
+  const named = Object.keys(refusal.answer);
+  return named.length > 0 && named.every((id) => own(values, id)) ? undefined : refusal;
+}
+
+/**
+ * Accept typed fields, or explicit cancellation, without coercing free text.
+ * A time field's answer (`InputField.format`) is checked here too; one the
+ * check refuses comes back as the same ask with `refused` and `repeat`, its
+ * field `missing` again — the door that keeps a partial answer asks again
+ * without running anything.
+ */
 export function applyInputResponse(
   waiting: AwaitingInput,
   raw: unknown,
+  time?: TimeAnswerContext,
 ): AwaitingInput | InputCancellation {
   if (!object(raw) || raw.requestId !== waiting.requestId)
     fail('response names a different input request');
@@ -454,9 +642,14 @@ export function applyInputResponse(
     fail('unknown response field');
   const values = validateValues(waiting.fields, raw.values);
   if (Object.keys(values).length === 0) fail('supply at least one field or cancel explicitly');
+  const refused = refusedTimeAnswers(waiting.fields, values, time?.zone);
+  if (refused.length > 0) return reaskRefused(waiting, values, refused, time);
   const supplied = { ...waiting.supplied, ...values };
+  const { refused: previous, ...kept } = waiting;
+  const standing = refusalStillStanding(previous, values);
   return {
-    ...waiting,
+    ...kept,
+    ...(standing !== undefined && { refused: standing }),
     supplied,
     origins: {
       ...waiting.origins,

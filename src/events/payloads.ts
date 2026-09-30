@@ -22,7 +22,7 @@ import type { LLMMessage, PermissionCapability } from '../adapters/types.js';
 import type { MemoryFlavor, MemoryStrategyKind, MemoryType } from '../memory/define.types.js';
 import type { ArtifactOp, ArtifactRefusalReason } from '../artifacts/capability.js';
 import type { ArtifactOrigin, ArtifactSweepReason } from '../artifacts/types.js';
-import type { DatasetTimeAxis } from '../artifacts/timeAxis.js';
+import type { DatasetTimeAxis } from '../core/time/axis.js';
 import type { ThinkingBlock } from '../thinking/types.js';
 import type { LoopMoment } from '../core/agent/moments.js';
 import type { InstructionDeliveryLease, ToolResultStatus } from '../core/agent/toolEffects.js';
@@ -1068,7 +1068,7 @@ export interface FindingsArgumentPayload {
   readonly source?: ArgumentSource;
   readonly asked?: ArgumentAsked;
   readonly claimed?: ArgumentClaim;
-  readonly matched?: 'quote' | 'phrase' | 'spelling';
+  readonly matched?: 'quote' | 'phrase' | 'spelling' | 'mention';
   readonly reading?: true;
   readonly earlier?: true;
   readonly setAside?: 'open' | 'noise' | 'ruled-out';

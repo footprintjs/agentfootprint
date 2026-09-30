@@ -151,6 +151,8 @@ import {
 } from '../findings/contingent.js';
 import { withUnsettledRows } from '../findings/unsettled.js';
 import type { FindingsLedger, StandingRow } from '../findings/types.js';
+import type { ReadRunTime } from '../../time/clock.js';
+import type { ZoneName } from '../../time/zone.js';
 import {
   evidenceFromHistory,
   exemptFromRun,
@@ -655,6 +657,25 @@ export interface ToolCallsHandlerDeps {
    * @internal
    */
   readonly answeredAsk?: () => AnsweredAsk | undefined;
+  /**
+   * THE TIME LAYER (`.time()`) — present only then. Each dispatched call files
+   * one `call` row with `dispatchedAt` (the wall clock, just before the tool
+   * runs: a tool evaluates a look-back against its own clock at dispatch,
+   * which after a pause is later than the turn's `now`). `takePassedOnResume`
+   * hands over the `time` the current resume passed, as read, ONCE (a second
+   * call answers `undefined`) — the first ToolCalls pass of the resumed leg
+   * compares it with the turn's kept clock and files `clock-on-resume` when
+   * they differ; the kept clock is never replaced. A call whose tool's period
+   * declares forms is handed `ctx.time` (read off its `call-window` row), and
+   * the batch ask judges a period answer against the tool's facts at the
+   * turn's clock (`appZone`: the app's `.time({ zone })`).
+   *
+   * @internal
+   */
+  readonly time?: {
+    readonly takePassedOnResume: () => ReadRunTime | undefined;
+    readonly appZone?: ZoneName;
+  };
   /**
    * Put one artifact fact on the record for the run it BELONGS to — the door
    * a `ctx.artifacts` fact takes when it lands after that run ended (a tool's
@@ -1485,6 +1506,11 @@ function towersFor(
 
 /** The inputs layer's half of dispatch, once loaded. */
 type InputsDispatch = typeof import('../arguments/dispatch.js');
+
+// The time layer's half of dispatch — the `call` row, the drift redraw,
+// `ctx.time` and the `clock-on-resume` row — lives in `./timeLayer.ts`,
+// loaded through `import()` only when `.time()` armed the agent (`deps.time`),
+// under the same optional-family law.
 
 export function buildToolCallsHandler(
   deps: ToolCallsHandlerDeps,
@@ -3605,11 +3631,27 @@ export function buildToolCallsHandler(
       }
     }
     try {
+      // The time layer's dispatch moment — a resumed call is dispatched NOW,
+      // so its `dispatchedAt` is the resume's, not the pause's.
+      const dispatched =
+        deps.time !== undefined
+          ? (await import('./timeLayer.js')).timeAtDispatch(
+              scope,
+              { toolCallId, toolName },
+              iteration,
+              tool,
+              args,
+              deps.time.appZone,
+            )
+          : undefined;
+      const callTime = dispatched?.context;
+      if (dispatched !== undefined) args = dispatched.args;
       // `let`, not `const`: the semantic projection below replaces the value
       // on the non-envelope path exactly as the batch loop does.
       let result = await tool.execute(args, {
         toolCallId,
         iteration,
+        ...(callTime !== undefined && { time: callTime }),
         ...(env.signal && { signal: env.signal }),
         credentials: reportingCredentials(credentials, scope, toolName),
         hasCredentials,
@@ -3782,6 +3824,13 @@ export function buildToolCallsHandler(
       // microtask, no behaviour change whatsoever.
       const durable = deps.awaitDurable?.();
       if (durable) await durable;
+      // The time layer: a resume whose pause was the inputs layer's argument
+      // ask re-runs THIS function from its top — the kept clock is recorded
+      // against the resume's `time` here, first, exactly as the resume door
+      // does (TQ21). A fresh run passed no resume `time`: nothing is filed.
+      if (deps.time !== undefined) {
+        (await import('./timeLayer.js')).recordClockOnResume(scope, deps.time);
+      }
 
       // Materialize ONCE — `scope.llmLatestToolCalls` is a live TypedScope
       // deep-Proxy view; spreading yields the raw (plain, structured-clone-
@@ -3833,6 +3882,9 @@ export function buildToolCallsHandler(
           toolOf: (toolName) => resolveTool(toolName).tool,
           runId: () => deps.currentRun?.().runId,
           ...(deps.argumentAskContext !== undefined && { hostContext: deps.argumentAskContext }),
+          ...(deps.time !== undefined && {
+            time: { ...(deps.time.appZone !== undefined && { appZone: deps.time.appZone }) },
+          }),
         });
         resolutions = asked.resolutions;
         if (asked.answered) askedLayer = inputs;
@@ -4706,6 +4758,22 @@ export function buildToolCallsHandler(
                 );
               }
               noteOffWire(scope, resolved, { toolName: tc.name, toolCallId: tc.id, iteration });
+              // The time layer's dispatch moment — just before the tool runs.
+              // A look-back the clock drifted past is redrawn here (§ 7.4) — `callArgs`
+              // carries what the tool ran with, so the note and the results layer read it.
+              const dispatched =
+                deps.time !== undefined
+                  ? (await import('./timeLayer.js')).timeAtDispatch(
+                      scope,
+                      { toolCallId: tc.id, toolName: tc.name },
+                      iteration,
+                      tool,
+                      callArgs,
+                      deps.time.appZone,
+                    )
+                  : undefined;
+              const callTime = dispatched?.context;
+              if (dispatched !== undefined) callArgs = dispatched.args as ToolArgs;
               // Set BEFORE the await: a tool that throws has still run, and a
               // tool that does not exist has not. This flag is the entire
               // precondition of the after-tool moment below.
@@ -4713,6 +4781,7 @@ export function buildToolCallsHandler(
               result = await tool.execute(callArgs, {
                 toolCallId: tc.id,
                 iteration,
+                ...(callTime !== undefined && { time: callTime }),
                 ...(env.signal && { signal: env.signal }),
                 credentials: reportingCredentials(credentials, scope, tc.name),
                 hasCredentials,
@@ -5586,6 +5655,12 @@ export function buildToolCallsHandler(
       // the state the last write is still carrying.
       const durable = deps.awaitDurable?.();
       if (durable) await durable;
+      // The time layer: the paused turn's clock is KEPT — its words were
+      // resolved against it. A resume that passed a different `time` is
+      // recorded here, first, and never applied (TQ21).
+      if (deps.time !== undefined) {
+        (await import('./timeLayer.js')).recordClockOnResume(scope, deps.time);
+      }
 
       // Consumer-supplied resume input becomes the paused tool's result.
       // The subflow's pre-pause scope is restored automatically by

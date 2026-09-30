@@ -99,6 +99,7 @@ import {
   findingsInstructionFor,
 } from './findings/reserved.js';
 import { readInputsLayerOption } from './honesty/armed.js';
+import { readTimeOptions, type TimeOptions } from '../time/clock.js';
 import { ONTOLOGY_INSTRUCTION, ONTOLOGY_INSTRUCTION_ID } from '../../ontology/instruction.js';
 import type { CompactionOptions } from './window/types.js';
 import type { WindowStrategy } from './window/strategy.js';
@@ -356,6 +357,9 @@ export class AgentBuilder {
    *  not ask for it — the chart, the rows, the events and the answer are then
    *  byte-identical; `standingLine` is the prose line's own opt-in. */
   private answerLayerValue?: { readonly standingLine?: true };
+  /** `.time()` (the time layer). Undefined for every agent that did not ask —
+   *  then no clock is read, no time row is filed and `time` on a run is refused. */
+  private timeValue?: TimeOptions;
 
   private outputSchemaRetries = 0;
   private outputSchemaStrategy: OutputSchemaStrategy = 'instruct';
@@ -2116,6 +2120,74 @@ export class AgentBuilder {
   }
 
   /**
+   * Arm the TIME LAYER's clock: every run declares when "now" is and which
+   * zone the person is in, and the run records it.
+   *
+   * - **The zone is per run.** `run({ message, time: { zone } })` names the
+   *   person's zone; `zone` here is an optional FALLBACK for a run that names
+   *   none. With neither, `run()` is refused before the turn starts — the
+   *   server's zone is never used. A zone is an IANA name
+   *   (`'America/Los_Angeles'`, `'UTC'`); an abbreviation (`PST`) or a bare
+   *   offset names no zone and is refused.
+   * - **`now` is the app's** (`time: { now }` — the message's time), else the
+   *   turn's start, recorded as a default (`nowSource: 'default'`).
+   * - **Recorded once per turn.** Seed files one `clock` row on the ledger
+   *   (`agent.findings()`): `now`, `nowSource`, `zone`, `zoneSource`, and a
+   *   window set in a UI (`time: { window }`, recorded `source: 'control'`).
+   *   Each dispatched call files a `call` row with `dispatchedAt`.
+   * - **Frozen across a pause.** `resume(checkpoint, answer, { time })` keeps
+   *   the paused turn's clock; a `time` that differs is recorded as a
+   *   `clock-on-resume` row, never applied.
+   * - **The limits in the person's zone.** Under `.limitsTravelWithTheAnswer()`,
+   *   every `Period:` line is rendered in the clock's zone with the zone named
+   *   (`2026-10-09 08:00–08:40 America/Los_Angeles (UTC-07:00)`); the typed
+   *   record keeps the instants as declared.
+   * - **The person's words, read by YOUR reader** (`reader`, no default). A
+   *   `TimeReader` returns zone-less parts (`'10/09/26'` → three numbers, the
+   *   order undecided); the library resolves them against the clock into
+   *   every candidate window and files one `time-reading` row per mention —
+   *   once per turn, only on a message a person wrote, never re-read on a
+   *   resume or a retry. `policy` picks among the candidates: `dateOrder`
+   *   (`'ask'` default, or `'MDY'` / `'DMY'` / `'YMD'`) and `year` (`'ask'`
+   *   default, or `'current'`); a pick is recorded as assumed. A
+   *   `kind: 'model'` reader's window is never taken as the person's words:
+   *   it waits for the person to confirm it.
+   * - **The time ask checks the answer** (a `requestInput` field with a
+   *   `format`: `'instant'`, `'time-range'` or `'zone'`). A resume whose answer
+   *   has no offset, ends before it starts, names no zone, or — under
+   *   `.time()`, which knows the person's zone — writes a wall time the clocks
+   *   skip is not taken: the ask comes back with `refused: { answer, reason }`
+   *   and `repeat: { count }`, and nothing runs. The reason is a catalog
+   *   sentence (`defaultTimeAskMessages`); `messages` overrides any key.
+   *
+   * Off → nothing is filed, read or rendered differently, and `time` on a run
+   * is refused (a door that ignored it would look configured and do nothing).
+   *
+   * @example
+   *   const agent = Agent.create({ provider, model })
+   *     .tool(searchLogs)
+   *     .time({ zone: 'America/Los_Angeles' }) // the fallback; each run's own zone wins
+   *     .limitsTravelWithTheAnswer()
+   *     .build();
+   *   await agent.run({ message, time: { now: sentAt, zone: session.zone } });
+   *
+   *   // With a reader: the words are read once per turn, and recorded.
+   *   Agent.create({ provider, model }).time({ reader: myReader, policy: { dateOrder: 'MDY' } });
+   */
+  time(options?: TimeOptions): this {
+    if (this.timeValue !== undefined) {
+      throw new Error(
+        'AgentBuilder.time: already set. One agent has one clock configuration — pass the ' +
+          'fallback zone, the reader and its policy once.',
+      );
+    }
+    const read = readTimeOptions(options);
+    if ('problem' in read) throw new Error(`AgentBuilder.time: ${read.problem}.`);
+    this.timeValue = read.value;
+    return this;
+  }
+
+  /**
    * Offer a skill's tools **only while that skill is active** (9.36.0). One
    * line, for every skill on the agent.
    *
@@ -3319,7 +3391,8 @@ export class AgentBuilder {
       this.ontologyValue !== undefined ||
       this.inputsLayerValue ||
       this.resultsLayerValue ||
-      answerLayer !== undefined
+      answerLayer !== undefined ||
+      this.timeValue !== undefined
         ? {
             ...this.opts,
             ...(this.maxIterationsOverride !== undefined && {
@@ -3349,6 +3422,9 @@ export class AgentBuilder {
             ...(answerLayer !== undefined && {
               answerLayer: answerLayer.standingLine === true ? { standingLine: true } : true,
             }),
+            // The time layer, the same door grammar — the builder's value wins
+            // over an `AgentOptions.time` given to `Agent.create`.
+            ...(this.timeValue !== undefined && { time: this.timeValue }),
           }
         : this.opts;
     // .selfExplain(): a fresh binding per build() — two built agents never

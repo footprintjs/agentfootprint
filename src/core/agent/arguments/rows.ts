@@ -106,7 +106,14 @@ export interface ArgumentRow {
    */
   readonly proposed?: string;
   readonly claimed?: ArgumentClaim;
-  readonly matched?: 'quote' | 'phrase' | 'spelling';
+  /**
+   * How the value was traced to its source: the quote holds it, a declared
+   * phrase names it, an earlier answer in another spelling — or, under
+   * `.time()`, it IS the window of a mention the reader recorded (`mention`:
+   * the library filled it from that window, or the model's quote named that
+   * mention and its value equals the window).
+   */
+  readonly matched?: ArgumentMatched;
   /**
    * The model's `quote`, clipped (`QUOTE_CHARS`) — `'REDACTED'` on an agent
    * where ANY tool in reach can hide arguments (it registers a tool that
@@ -126,7 +133,16 @@ export interface ArgumentRow {
   readonly failed?: ArgumentCheckFailed;
 }
 
+/** How a traced value was matched — see {@link ArgumentRow.matched}. */
+export type ArgumentMatched = 'quote' | 'phrase' | 'spelling' | 'mention';
+
 /** The closed vocabularies, for the checkpoint door and the event. */
+export const ARGUMENT_MATCHED: readonly ArgumentMatched[] = Object.freeze([
+  'quote',
+  'phrase',
+  'spelling',
+  'mention',
+]);
 export const ARGUMENT_SOURCES: readonly ArgumentSource[] = Object.freeze([
   'said',
   'answered',
@@ -286,6 +302,37 @@ export function argumentRowOf(
   };
 }
 
+/**
+ * The row for a value the library filled from the turn's ONE window of the
+ * person's (the time layer, `core/time/bind.ts`): from the person's words
+ * (`said`, `matched: 'mention'`), from a `model` reader's unconfirmed reading
+ * of them (the same, and `reading` — it can support "not sure", never
+ * "known"), or from a window set in a UI (`app`, `appSource: 'time.window'`).
+ * The call's `call-window` row names the window and the form.
+ */
+export function windowRowOf(
+  who: ArgumentIdentity & {
+    readonly shownValue: unknown;
+    readonly window: 'said' | 'derived-from-reading' | 'control';
+  },
+  stamp: { readonly turn: number; readonly iteration: number },
+): ArgumentRow {
+  const value = shownValue(who.shownValue);
+  if (who.window === 'control') {
+    return { ...identityOf(who, stamp), source: 'app', value, appSource: TIME_WINDOW_SOURCE };
+  }
+  return {
+    ...identityOf(who, stamp),
+    source: 'said',
+    value,
+    matched: 'mention',
+    ...(who.window === 'derived-from-reading' && { reading: true as const }),
+  };
+}
+
+/** The `appSource` of a value filled from the run's `time.window` (a UI control). */
+export const TIME_WINDOW_SOURCE = 'time.window';
+
 // ─── The declared sources' rows ─────────────────────────────────────────
 
 /**
@@ -325,7 +372,7 @@ export interface SourcedVerdict {
   /** The model's own value, in the shown view — on a `default` row (V1) and an asked row. */
   readonly shownProposed?: unknown;
   readonly claimed: ArgumentClaim;
-  readonly matched?: 'quote' | 'phrase' | 'spelling';
+  readonly matched?: ArgumentMatched;
   /** The model's quote — `'REDACTED'` while any tool in reach can hide arguments (`resolve.ts` · `quotesMayShow`). */
   readonly shownQuoteText?: string;
   readonly reading?: true;
@@ -409,7 +456,7 @@ export function argumentRowIsWellFormed(r: Readonly<Record<string, unknown>>): b
     optionalIn(r.asked, ARGUMENT_ASKED) &&
     optionalIn(r.rule, ['ask', 'assume']) &&
     optionalIn(r.claimed, ARGUMENT_CLAIMS) &&
-    optionalIn(r.matched, ['quote', 'phrase', 'spelling']) &&
+    optionalIn(r.matched, ARGUMENT_MATCHED) &&
     optionalIn(r.setAside, ['open', 'noise', 'ruled-out']) &&
     optionalIn(r.argumentsFrom, ['listed', 'unlisted']) &&
     optionalIn(r.coincides, ['person', 'result', 'app']) &&

@@ -427,6 +427,18 @@
  * `callRuntimeStageId` among them). The `argument` rows, the served schemas,
  * messages and every other key did not move.
  *
+ * The time layer's step T3 (the run clock): one new reference,
+ * `agent-time-clock` — `periodDeclaringBackupRuns` under `.time({ zone:
+ * 'America/Los_Angeles' })` and `.limitsTravelWithTheAnswer()`, run with
+ * `time: { now }`. None of the earlier references moved (the arm is off in
+ * each: no row, no read, no changed line). What it holds: seed's commit gains
+ * the `findingsLedger` key with ONE `clock` row (`nowSource: 'app'`,
+ * `zoneSource: 'builder'`, `turn: 1`); each dispatching `tool-calls` bundle
+ * appends one `call` row (`dispatchedAt` normalised as a clock by its key);
+ * the served views are the unarmed twin's (the layer serves the model
+ * nothing); and the final answer's `Period:` lines render in Los Angeles time
+ * with the zone named.
+ *
  * Every scenario is a real run — the receipt-conformance shapes, each in the
  * configuration that has no name collision — and what is compared is the
  * whole `commitLog` plus `servedAt(k)` for every located epoch, after ONE
@@ -716,7 +728,7 @@ async function agentRun(
   reactMode: 'dynamic' | 'dynamic-grouped',
   script: readonly Reply[],
   build: Build,
-  options: { maxIterations?: number } = {},
+  options: { maxIterations?: number; input?: Record<string, unknown> } = {},
 ): Promise<Snapshot> {
   const agent = build(
     Agent.create({
@@ -726,7 +738,7 @@ async function agentRun(
       reactMode,
     }),
   ).build();
-  const result: AgentRunResult = await agent.run({ message: 'go' });
+  const result: AgentRunResult = await agent.run({ message: 'go', ...options.input });
   void result;
   return agent.getSnapshot()!;
 }
@@ -1330,6 +1342,21 @@ const SCENARIOS: Record<string, () => Promise<Snapshot>> = {
           }),
         )
         .answerLayer(),
+    ),
+  // The time layer's clock (step T3): the results-layer scenario's tool under
+  // `.time()` and `.limitsTravelWithTheAnswer()`, with the run's `now` passed
+  // (a default `now` is a clock nothing can normalise by key). See the header.
+  'agent-time-clock': () =>
+    agentRun(
+      'dynamic',
+      PERIOD_THEN_DONE,
+      (a) =>
+        a
+          .system('bot')
+          .tool(periodDeclaringBackupRuns())
+          .time({ zone: 'America/Los_Angeles' })
+          .limitsTravelWithTheAnswer(),
+      { input: { time: { now: '2026-09-26T10:05:00Z' } } },
     ),
 };
 

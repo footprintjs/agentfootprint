@@ -18,6 +18,7 @@ import {
   describeTimeAxis,
   inMemoryArtifacts,
   InvalidArtifactError,
+  normaliseInstants,
   readTimeAxis,
   sqliteArtifacts,
   stageDatasetArtifacts,
@@ -25,6 +26,7 @@ import {
   type DatasetTimeAxis,
 } from '../../src/index.js';
 import type { ArtifactEventFact } from '../../src/artifacts/capability.js';
+import * as owner from '../../src/core/time/axis.js';
 
 const SCOPE = { conversationId: 'conv-time' };
 const HOURLY: DatasetTimeAxis = {
@@ -194,6 +196,70 @@ describe('stageDatasetArtifacts — refused before the first write', () => {
     expect(publication?.artifact.status === 'stored' && publication.artifact.meta.timeAxis).toEqual(
       HOURLY,
     );
+  });
+});
+
+describe('the axis on the time layer (T2) — integration', () => {
+  it("the package re-exports the time layer's one owner, not a copy", () => {
+    expect(timeAxisIssues).toBe(owner.timeAxisIssues);
+    expect(readTimeAxis).toBe(owner.readTimeAxis);
+    expect(normaliseInstants).toBe(owner.normaliseInstants);
+  });
+
+  it('the mint takes a long interval (no digit cap) and refuses an abbreviation as a zone', async () => {
+    const store = inMemoryArtifacts();
+    const long = { column: 't', unit: 'iso', interval: '1000000m', aggregate: 'raw' } as const;
+    const { meta } = await store.put(SCOPE, {
+      kind: 'dataset/rows',
+      mediaType: 'application/json',
+      data: [],
+      timeAxis: long,
+    });
+    expect(meta.timeAxis).toEqual(long);
+    await expect(
+      store.put(SCOPE, {
+        kind: 'dataset/rows',
+        mediaType: 'application/json',
+        data: [],
+        timeAxis: { column: 't', unit: 'iso', zone: 'PST' },
+      }),
+    ).rejects.toThrow(/IANA zone/);
+  });
+
+  it('a ticket minted before T2 with an abbreviation reads malformed — shown, never repaired', () => {
+    expect(readTimeAxis({ timeAxis: { column: 't', unit: 'iso', zone: 'PST' } }).status).toBe(
+      'malformed',
+    );
+  });
+
+  it('a stored dataset read back and viewed: UTC points, the stored bytes unchanged', async () => {
+    const store = inMemoryArtifacts();
+    const rows = [
+      { hour: '2026-09-14T11:00:00+02:00', read_iops: 380 },
+      { hour: '2026-09-14T08:00:00Z', read_iops: 410 },
+      { hour: '2026-09-14T10:00:00', read_iops: 455 },
+    ];
+    const { meta } = await store.put(SCOPE, {
+      kind: 'dataset/rows',
+      mediaType: 'application/json',
+      data: rows,
+      timeAxis: HOURLY,
+    });
+    const record = await store.get(SCOPE, meta.ref);
+    const reading = readTimeAxis(record?.meta);
+    if (reading.status !== 'declared') throw new Error('expected a declared axis');
+    const stored = JSON.stringify(record?.data);
+    const view = normaliseInstants(record?.data as unknown[], reading.axis);
+    expect(view).toMatchObject({
+      status: 'naive-values',
+      count: 1,
+      points: [
+        { row: 1, at: '2026-09-14T08:00:00Z' },
+        { row: 0, at: '2026-09-14T09:00:00Z' },
+      ],
+    });
+    expect(JSON.stringify(record?.data)).toBe(stored);
+    expect(JSON.stringify((await store.get(SCOPE, meta.ref))?.data)).toBe(JSON.stringify(rows));
   });
 });
 

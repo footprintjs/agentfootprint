@@ -6,7 +6,7 @@ title: PERIOD_WIRE
 
 > `const` **PERIOD\_WIRE**: `Readonly`\<\{ `from`: `"from"`; `held`: `"held"`; `heldUnknown`: `"unknown"`; `key`: `"period"`; `queried`: `"queried"`; `readAt`: `"read_at"`; `to`: `"to"`; \}\>
 
-Defined in: [src/core/agent/coverage/period.ts:107](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/coverage/period.ts#L107)
+Defined in: [src/core/agent/coverage/period.ts:112](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/coverage/period.ts#L112)
 
 The period's wire spelling as DATA — every reserved key and the one literal
 (`'unknown'`) — so a tool written in another language mints it byte for

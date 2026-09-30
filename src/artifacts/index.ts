@@ -132,15 +132,24 @@ export {
   type DatasetResultAdapter,
   type DatasetResultPlan,
 } from './datasetResult.js';
-// A dataset's declared TIME AXIS — judged at mint, read by consumers.
+// A dataset's declared TIME AXIS — judged at mint, read by consumers. Owned by
+// the time layer (`core/time/axis.ts`); re-exported here, where datasets live.
 export {
   describeTimeAxis,
+  normaliseInstants,
   readTimeAxis,
   timeAxisIssues,
   TIME_AXIS_AGGREGATES,
   TIME_AXIS_UNITS,
+  type AxisCounts,
+  type AxisOverlapNote,
+  type AxisPoint,
+  type AxisPrecision,
   type DatasetTimeAxis,
+  type NaiveValues,
+  type NormalisedAxis,
+  type NormaliseOptions,
   type TimeAxisAggregate,
   type TimeAxisReading,
   type TimeAxisUnit,
-} from './timeAxis.js';
+} from '../core/time/axis.js';

@@ -1,0 +1,195 @@
+---
+title: Time
+description: One declared clock per run, the person's words read by a strategy you arm, tool periods written exactly or refused with a reason — every step recorded.
+---
+
+"Errors since 8" means nothing without a clock: which day, which zone, which
+eight. An agent that guesses writes a window nobody asked for into a tool call,
+and the answer looks right. The time layer makes every one of those steps a
+declared input or a recorded row, so a reader of the run can see what was
+asked, what the tool was sent, and why.
+
+It has five parts, each opt-in: the **run clock**, the **reader** that reads
+the person's words, the **time ask** that checks a person's answer, a tool's
+**period forms** (how its arguments spell a window), and a dataset's **time
+axis**. Runnable examples: `examples/features/81-run-clock.ts` through
+`85-time-widen-and-refuse.ts`.
+
+## The run clock
+
+`.time()` on the builder arms the layer. The zone is per run —
+`run({ time: { now, zone, window } })`, typed `RunTime` — and the builder's
+`TimeOptions` supply a fallback `zone` (plus the `reader`, its `policy` and
+your `messages`, below). With no zone anywhere the run is refused before the
+turn starts; the server's zone is never used.
+
+The clock is recorded, never read in secret. Each turn files one `ClockRow` —
+a `TimeClock` (`now`, `nowSource`, `zone`, `zoneSource`) plus, when a UI set
+one, a `ControlWindow` (the UI's `time.window`, a `TimeRange` with
+`source: 'control'`). `TimeRange` is half-open: `from` included, `to` not. A
+resume that passes a different `time` keeps the frozen clock and files a
+`ClockOnResumeRow` (what was passed, what was kept). Each dispatched call files
+a `CallRow` with its `dispatchedAt` moment and, when a look-back drifted, the
+drift.
+
+```ts
+import { Agent } from 'agentfootprint';
+
+const agent = Agent.create({ provider, model })
+  .tool(backupFailures)
+  .time({ zone: 'America/Los_Angeles' }) // the fallback; each run's own zone wins
+  .build();
+
+await agent.run({ message, time: { now: message.sentAt, zone: session.zone } });
+agent.findings();
+// [{ kind: 'clock', now, nowSource: 'app', zone, zoneSource: 'run', … },
+//  { kind: 'call', dispatchedAt, … }]
+```
+
+## Reading the person's words
+
+The library reads a person's message only through a `TimeReader` you arm with
+`.time({ reader })` — there is no default. A reader is a strategy: it is handed
+the text and a `TimeReadContext` (a tokenizer hint — no clock, no zone) and
+returns a `TimeReading`, a list of `TimeMention` values. Each mention carries a
+verbatim quote (checked against the text) and zone-less parts, `TimeParts`: a
+`TimeDate` as written (`10/09/26` is three numbers, the order undecided), a
+`TimeWall` clock time with an optional meridiem, or a `TimeRelative` phrase
+("yesterday", "the last 40 minutes").
+
+The library, not the reader, resolves the parts against the clock. Every
+reading the parts allow becomes a `TimeCandidate` — a `ResolvedWindow` (its
+`TimeWindow`, the range, and `TimeNote` entries saying how it was read) tagged
+with `ReadingTags` (which date order, which year). A `TimePart` names one piece
+a person can say (a date, a wall time, a zone, a duration). Your `TimePolicy`
+(`dateOrder`, `year`, both `'ask'` by default) may only remove candidates, and
+the removal is recorded. The outcome is a `ReadingChoice`: the only candidate,
+the policy's pick, or `open` with an `OpenQuestion` for each thing only the
+person can settle — a date order, a missing am/pm, a DST overlap, a zone
+abbreviation.
+
+Each message read files one `TimeReadingRow` per mention (or one row with
+`mentions: 0`), stamped with a `TimeReaderStamp` — the reader's id, version,
+kind and locale — and the tz database version. A resume never calls the reader
+again; it reads the rows back.
+
+```ts
+Agent.create({ provider, model })
+  .time({ zone: 'America/Los_Angeles', reader: myReader, policy: { dateOrder: 'MDY' } })
+  .build();
+// agent.findings() → … { kind: 'time-reading', quote: '10/09/26 8 AM to 8:40 AM',
+//   candidates: [...], choice: { by: 'policy', candidate: 0, policy: { dateOrder: 'MDY' } }, … }
+```
+
+## The time ask
+
+A `requestInput` field with a `format` is a time field. `TimeFormat` is one of
+`'instant'`, `'time-range'` or `'zone'`. The answer is judged at the resume
+door before your app sees it: an instant needs an offset, a range needs `from`
+before `to`, a zone must be an IANA name, and under a known zone no wall time
+the clocks skip. A refused answer is not taken — the ask comes back with
+`refused: { answer, reason }` and `repeat: { count }`, and nothing runs. The
+refusal is a `TimeAnswerProblem` code; the sentence comes from the catalog.
+
+The catalog is data. `defaultTimeAskMessages` holds one sentence per
+`TimeAskMessageKey`; a `TimeAskMessages` value is a whole catalog, and
+`.time({ messages })` overrides any keys you choose.
+
+Over MCP the ask travels as an elicitation: `elicitationOf` turns the paused
+ask into an `ElicitationRequest` (one `ElicitationProperty` per way to answer
+each open field — MCP has no range, so a range is two `date-time` properties),
+and `answerFromElicitation` turns the host's reply back into an input response
+that `agent.resume` judges like any other answer.
+
+```ts
+execute: () => requestInput({
+  id: 'window',
+  question: 'Which window should the search cover?',
+  fields: [{ id: 'window', type: 'string', format: 'time-range' }],
+}),
+// agent.resume(cp, { requestId, values: { window: '…T08:40-07:00/…T08:00-07:00' } })
+// → paused again: awaitingInput.refused = { answer, reason: 'The start … is not before the end ….' }
+```
+
+## A tool's period
+
+A tool declares every shape its period takes with `defineTool({ period })`. A
+`PeriodForm` is one shape: two arguments (`bounds`), one joined argument, an
+object argument, a single `day`, or a look-back. Each `Bound` names its
+argument and a `BoundAs` spelling — `'iso'`, `'epoch-ms'`, `'epoch-s'`,
+`'date'` or `'wall'` — and a `to` bound says whether its edge is inclusive or
+exclusive. A wall or date form reads its zone from a `ZoneArgument`. The
+shorthand `{ argument, spelling }` takes a `PeriodSpelling`
+(`'lookback'`, `'signed-lookback'`, `'iso-range'`, `'wall-range'`).
+
+Beside the forms a tool declares `PeriodFacts` about its source — facts, never
+policy: `direction` (a `PeriodDirection`: `'past'`, `'future'` or `'any'`),
+`retention`, `maxRange`, `granularity` and `filtersToAsked`.
+
+What the library then does, under `.time()`:
+
+- **Fill exactly.** The model left every period argument out and the turn
+  holds exactly one window of the person's (a `PersonWindow`): the window is
+  written into the first form that holds it exactly, and the arguments are filed
+  as the person's.
+- **Widen, and say so.** No form holds it exactly: the first form that reads
+  more (a `day`, or the covering look-back) is used, and the row records what
+  it adds.
+- **Record the model's window.** A window the model wrote runs as sent — bound
+  to the person's by quote or value, or recorded `model-chosen`.
+- **Refuse before dispatch.** A window outside the tool's `direction`, wholly
+  older than its `retention`, wider than its `maxRange`, spanning days for a
+  `day` tool, or a wall time the zone skips: the tool never runs, and the model
+  reads why.
+
+One `CallWindowRow` per call says which. The tool is handed the call's time as
+`ctx.time`, a `TimeContext` (the asked range, the zone, the frozen `now` and
+the dispatch moment) — over MCP it rides the `tools/call` request's
+`_meta.agentfootprint.time`.
+
+```ts
+import { defineTool } from 'agentfootprint';
+
+defineTool({
+  name: 'client_activity',
+  inputSchema: {
+    type: 'object',
+    properties: { start_time: { type: 'integer' }, end_time: { type: 'integer' } },
+  },
+  period: {
+    forms: [{
+      kind: 'bounds',
+      from: { argument: 'start_time', as: 'epoch-ms' },
+      to: { argument: 'end_time', as: 'epoch-ms', edge: 'exclusive' },
+    }],
+    direction: 'past',
+    retention: '30d',
+  },
+  execute: (args, ctx) => query(args, ctx.time?.asked),
+});
+```
+
+## A dataset's time axis
+
+A dataset declares which column is time with a `DatasetTimeAxis`.
+`normaliseInstants` is the read-side view over its rows: it never writes them
+and returns a `NormalisedAxis` — `AxisPoint` values (row and UTC instant),
+sorted, spelled at one `AxisPrecision`, with `AxisCounts` for every value it
+could not place (naive, DST-ambiguous, in a DST gap, unreadable, missing). A
+value with no offset under an axis with no zone is never read as UTC: it is
+counted, or — with `NormaliseOptions` `{ naive: 'refuse' }` (a `NaiveValues`
+choice) — the whole view is refused. In the hour the clocks go back, a doubled
+wall time is placed by row order and noted with an `AxisOverlapNote`.
+
+```ts
+import { normaliseInstants } from 'agentfootprint';
+
+normaliseInstants([{ t: '2026-09-14T10:00:00' }], { column: 't', unit: 'iso' });
+// { status: 'naive-values', count: 1, points: [] } — never read as UTC
+```
+
+## What is not here yet
+
+The English default reader, the lineage of a derived window, and result checks
+that compare a result's period with the asked one are later steps. Until then
+an `open` reading fills nothing and the tool's own `askOrAssume` rule applies.

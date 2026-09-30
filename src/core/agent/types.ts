@@ -43,6 +43,7 @@ import type { OutputAttempt } from './outputEnforcement.js';
 import type { PendingEvidenceRecovery, UnsupportedValue } from './evidence/types.js';
 import type { AgentRunCheckpoint } from '../runCheckpoint.js';
 import type { FindingsLedger } from './findings/types.js';
+import type { RunTime, TimeOptions } from '../time/clock.js';
 import type { ToolChoiceLedger } from './toolChoice/types.js';
 import type { Classifier } from '../../classify/types.js';
 import type { Ontology, OntologyAsk, OntologyRecord } from '../../ontology/types.js';
@@ -294,6 +295,18 @@ export interface AgentOptions {
    * `.answerLayer()`. Absent → the chart is byte-identical.
    */
   readonly answerLayer?: boolean | { readonly standingLine?: boolean };
+  /**
+   * THE TIME LAYER'S CLOCK (`core/time/`) — every run declares its clock: a
+   * zone (the run's `time.zone`, else this fallback; with neither the run is
+   * refused, never the server's zone) and a `now` (the run's, else the turn's
+   * start, recorded as a default). Seed files one `clock` row per turn; each
+   * dispatched call files a `call` row with `dispatchedAt`; a resume passing a
+   * different `time` keeps the frozen clock and files `clock-on-resume`; under
+   * `.limitsTravelWithTheAnswer()` the `Period:` lines render in the clock's
+   * zone. `true` arms it with no fallback zone. Prefer the builder's
+   * `.time()`. Absent → nothing is filed, read or rendered differently.
+   */
+  readonly time?: true | TimeOptions;
   /**
    * THE INPUTS LAYER'S ASK (honesty layer 2) — the host's own context for the
    * one typed ask the library raises per batch when a call leaves an `ask`
@@ -1315,6 +1328,19 @@ export interface AgentInput {
    * it". Every other agent ignores it and records nothing.
    */
   readonly messageFrom?: 'person' | 'composed';
+
+  /**
+   * THIS TURN'S CLOCK — the message's time (`now`), the person's zone
+   * (`zone`) and a window set in a UI (`window`), read only by an agent with
+   * `.time()`; passing it to one without is refused. See {@link RunTime}. A
+   * second spelling of `run(input, { time })`; this one wins.
+   *
+   * @example
+   * ```ts
+   * await agent.run({ message, time: { now: message.sentAt, zone: session.zone } });
+   * ```
+   */
+  readonly time?: RunTime;
 }
 
 export type AgentOutput = string;

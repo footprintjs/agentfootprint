@@ -129,4 +129,4 @@ Defined in: [src/artifacts/types.ts:113](https://github.com/footprintjs/agentfoo
 The rows' TIME AXIS as the producer declared it — which column is time,
  how its values are written, and how each row summarises its interval.
  Validated at mint (a malformed one is refused, never repaired); absent =
- undeclared, and a consumer keeps its own heuristic. See `timeAxis.ts`.
+ undeclared, and a consumer keeps its own heuristic. See `core/time/axis.ts`.

@@ -34,6 +34,9 @@ import {
   type AnswerCoverage,
 } from '../coverage/index.js';
 import type { AgentState } from '../types.js';
+import type { FindingsLedger } from '../findings/types.js';
+import { presentationZoneOf } from '../../time/rows.js';
+import type { BoundPresentation } from '../../time/present.js';
 
 /**
  * The stage body, with the answer passed IN.
@@ -223,6 +226,46 @@ export const prepareFinalWithLimitsStage = (scope: TypedScope<AgentState>): void
 };
 
 /**
+ * The run's presentation zone (the time layer) — the zone of the turn's
+ * `clock` row (`core/time/rows.ts` · `presentationZoneOf`). Read ONLY by the
+ * variants mounted under `.time()`, so an agent without the layer never reads
+ * the ledger here. `undefined` when no clock was filed (a paused turn from a
+ * runtime without the layer): the lines are then the declared instants.
+ */
+async function presentationOf(
+  scope: TypedScope<AgentState>,
+): Promise<BoundPresentation | undefined> {
+  const zone = presentationZoneOf(scope.findingsLedger as FindingsLedger | undefined);
+  if (zone === undefined) return undefined;
+  // The renderer loads only here, under `.time()` — the optional-family law.
+  const { bindPresentation } = await import('../../time/present.js');
+  return bindPresentation({ zone });
+}
+
+/**
+ * `prepareFinalWithLimitsStage` under `.time()` (the time layer): the same
+ * block, each `Period:` line rendered in the run's clock zone with the zone
+ * named (`coverage/period.ts` · `periodLine`). The typed record keeps the
+ * declared instants; only the person's line changes.
+ */
+export const prepareFinalWithLimitsInZoneStage = async (
+  scope: TypedScope<AgentState>,
+): Promise<void> => {
+  const declared = scope.coverageDeclared;
+  const answer =
+    declared !== undefined && declared.length > 0
+      ? composeAnswerWithCoverage(
+          scope.llmLatestContent,
+          declared,
+          '',
+          '',
+          await presentationOf(scope),
+        )
+      : scope.llmLatestContent;
+  captureTurnPayload(scope, answer);
+};
+
+/**
  * `.limitsTravelWithTheAnswer()` on an agent whose inputs layer is armed
  * (honesty layer 2) — the limits stage above, plus the values a tool's
  * `assume` rule filled THIS turn: "Assumed (a tool's rule, not your words)",
@@ -249,6 +292,7 @@ export const prepareFinalWithLimitsStage = (scope: TypedScope<AgentState>): void
  */
 export function prepareFinalWithLimitsAndAssumedStage(
   readsRewrites: boolean,
+  inZone = false,
 ): (scope: TypedScope<AgentState>) => Promise<void> {
   return async (scope) => {
     const { assumedBlockOf } = await import('../arguments/serve.js');
@@ -264,7 +308,13 @@ export function prepareFinalWithLimitsAndAssumedStage(
     );
     const answer =
       declared.length > 0 || assumed !== ''
-        ? composeAnswerWithCoverage(scope.llmLatestContent, declared, assumed)
+        ? composeAnswerWithCoverage(
+            scope.llmLatestContent,
+            declared,
+            assumed,
+            '',
+            inZone ? await presentationOf(scope) : undefined,
+          )
         : scope.llmLatestContent;
     captureTurnPayload(scope, answer);
   };
@@ -281,6 +331,8 @@ export interface FinalStageArms {
   readonly inputsLayer?: { readonly rewrites?: true };
   /** The answer layer is armed; `standingLine` — its one line travels with a prose answer. */
   readonly answerLayer?: { readonly standingLine?: true };
+  /** The time layer is armed — the limits block's `Period:` lines render in the clock's zone. */
+  readonly timeLayer?: true;
 }
 
 /**
@@ -302,15 +354,19 @@ export function prepareFinalFor(
         assumed: { readsRewrites: arms.inputsLayer.rewrites === true },
       }),
       standingLine: arms.answerLayer.standingLine === true,
+      ...(arms.timeLayer === true && { inZone: true }),
     });
   }
+  const inZone = arms.timeLayer === true;
   return arms.hasAnswerValidation === true
     ? prepareFinalWithValidationStage
     : arms.coverageLimitsAsData === true
     ? prepareFinalWithLimitsAsDataStage
     : arms.attachCoverageLimits === true
     ? arms.inputsLayer !== undefined
-      ? prepareFinalWithLimitsAndAssumedStage(arms.inputsLayer.rewrites === true)
+      ? prepareFinalWithLimitsAndAssumedStage(arms.inputsLayer.rewrites === true, inZone)
+      : inZone
+      ? prepareFinalWithLimitsInZoneStage
       : prepareFinalWithLimitsStage
     : prepareFinalStage;
 }
@@ -349,6 +405,8 @@ export function prepareFinalWithAnswerLayerStage(o: {
   /** The inputs layer is armed beside the prose limits block. */
   readonly assumed?: { readonly readsRewrites: boolean };
   readonly standingLine: boolean;
+  /** The time layer is armed — `Period:` lines render in the clock's zone. */
+  readonly inZone?: true;
 }): (scope: TypedScope<AgentState>) => Promise<void> {
   return async (scope) => {
     const filed = scope.$getValue('answerAssessment') as AnswerAssessmentData | undefined;
@@ -385,7 +443,13 @@ export function prepareFinalWithAnswerLayerStage(o: {
     }
     const answer =
       declared.length > 0 || assumed !== '' || line !== ''
-        ? composeAnswerWithCoverage(scope.llmLatestContent, declared, assumed, line)
+        ? composeAnswerWithCoverage(
+            scope.llmLatestContent,
+            declared,
+            assumed,
+            line,
+            o.inZone === true && declared.length > 0 ? await presentationOf(scope) : undefined,
+          )
         : scope.llmLatestContent;
     captureTurnPayload(scope, answer, false, undefined, assessed);
   };

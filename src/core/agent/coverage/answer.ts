@@ -47,6 +47,7 @@
 import { copyInProgressItem, IN_PROGRESS_SECTION_LABEL, inProgressLine } from './inProgress.js';
 import { mergeItems } from './items.js';
 import { copyPeriod, periodLine, type DeclaredPeriod } from './period.js';
+import type { BoundPresentation } from '../../time/present.js';
 import type { Coverage, CoverageItem, DeclaredCoverage, InProgressItem } from './types.js';
 
 /**
@@ -356,12 +357,18 @@ function copyItem(item: CoverageItem): CoverageItem {
  * (`arguments/serve.ts` · `assumedBlock`) — appended after the coverage block
  * under the same separator. With neither declarations nor an assumed block the
  * answer is unchanged, byte for byte.
+ *
+ * `presentation` (the time layer, only under `.time()`) is the run's clock
+ * zone: each `Period:` line renders its instants there, the zone named
+ * (`period.ts` · `periodLine`). Absent → the lines are the declared instants
+ * verbatim, as they always were.
  */
 export function composeAnswerWithCoverage(
   answer: string,
   declared: readonly DeclaredCoverage[],
   assumed = '',
   standing = '',
+  presentation?: BoundPresentation,
 ): string {
   const blocks: string[] = [];
   // The answer layer's standing line (honesty layer 4, its own opt-in arm)
@@ -369,7 +376,7 @@ export function composeAnswerWithCoverage(
   // on, the caller passes no "Assumed" block — the line owns that sentence
   // (one composer for one fact).
   if (standing !== '') blocks.push(standing);
-  const coverage = coverageBlock(declared);
+  const coverage = coverageBlock(declared, presentation);
   if (coverage !== '') blocks.push(coverage);
   if (assumed !== '') blocks.push(assumed);
   if (blocks.length === 0) return answer;
@@ -379,7 +386,10 @@ export function composeAnswerWithCoverage(
 }
 
 /** The coverage block alone — `''` when the declarations say nothing. */
-function coverageBlock(declared: readonly DeclaredCoverage[]): string {
+function coverageBlock(
+  declared: readonly DeclaredCoverage[],
+  presentation: BoundPresentation | undefined,
+): string {
   if (declared.length === 0) return '';
   const folded = foldSections(declared);
   const sections: string[] = [];
@@ -395,7 +405,7 @@ function coverageBlock(declared: readonly DeclaredCoverage[]): string {
     sections.push(
       renderLines(
         PERIOD_SECTION_LABEL,
-        periods.map((p) => periodLine(p.toolName, p)),
+        periods.map((p) => periodLine(p.toolName, p, presentation)),
       ),
     );
   }

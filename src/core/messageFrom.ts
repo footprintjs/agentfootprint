@@ -11,7 +11,9 @@
  *          `messageFrom: 'composed'` ONLY to a runner that reads it — an
  *          `Agent` whose declared sources are armed
  *          (`.findings({ argumentSources: true })` or
- *          `.inputsLayer({ argumentSources: true })`) — so every other
+ *          `.inputsLayer({ argumentSources: true })`), or one armed with a
+ *          time reader (`.time({ reader })`, which reads only a person's
+ *          words — `core/agent/stages/seed.ts`) — so every other
  *          composition hands its steps the input it always did, byte for byte.
  * Emits:   N/A.
  *
@@ -30,7 +32,8 @@ const readers = new WeakSet<object>();
 
 /**
  * Register a runner that reads `AgentInput.messageFrom` — `Agent` calls this
- * for itself when its declared sources are armed. Nothing else needs to.
+ * for itself when its declared sources are armed or a time reader is armed.
+ * Nothing else needs to.
  */
 export function readsMessageFrom(runner: object): void {
   readers.add(runner);
