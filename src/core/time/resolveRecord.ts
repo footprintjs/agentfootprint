@@ -307,6 +307,28 @@ export function widenedGrain(candidate: Pick<TimeCandidate, 'notes' | 'grain'>):
   return candidate.notes.some((n) => n.kind === 'end-of-grain') ? candidate.grain : undefined;
 }
 
+/**
+ * The grain a candidate's LABEL shows its end at (`readingAsk.ts` ·
+ * `timeAskOf`), or `undefined` to show the range as it is. A widened end is
+ * shown as said ({@link widenedGrain}). A look-back is the other kept-inside
+ * end: `[now − L, now + 1 ms)` holds the clock's now, so its label ends AT now,
+ * at the grain the person counted in — "last 40 minutes" is `8:00 – 8:40 AM`,
+ * never `8:40:00.001`. Only the label asks this: a look-back's end was not
+ * widened to a grain, so the said end (`forms.ts` · `saidEndMs`) keeps asking
+ * {@link widenedGrain}.
+ *
+ * @example
+ * ```ts
+ * shownGrain({ window: { kind: 'lookback', duration: '40m' }, grain: 'minute', notes: [] }); // 'minute'
+ * shownGrain({ window: { kind: 'range', range }, grain: 'hour', notes: [] });               // undefined — "8 AM to 9 AM"
+ * ```
+ */
+export function shownGrain(
+  candidate: Pick<TimeCandidate, 'notes' | 'grain' | 'window'>,
+): Grain | undefined {
+  return candidate.window.kind === 'lookback' ? candidate.grain : widenedGrain(candidate);
+}
+
 // ─── The record's checks ─────────────────────────────────────────────────
 
 /** The parts a candidate can name, in the order a record lists them. */

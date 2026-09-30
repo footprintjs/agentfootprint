@@ -215,8 +215,10 @@ boundary on the clock face, not a grain to fill — "8 AM to 9 AM" is `[08:00, 0
 no `end-of-grain` note (`resolve.ts` · `endOf`). The bench record showed the old reading proposing
 `08:00–10:00` for "8 AM to 9 AM" on every run (the truth, and the person, want 09:00), and the
 minute law was only ever worked at minute grain. Whether an end was widened has ONE answer,
-`resolveRecord.ts` · `widenedGrain` (the note, never `grain`): the label renders `to − 1 grain`
-only then, and `forms.ts` spells the said end the same way. In v1 this is otherwise a fixed law,
+`resolveRecord.ts` · `widenedGrain` (the note, never `grain`): `forms.ts` spells the said end
+`to − 1 grain` only then. The label asks `resolveRecord.ts` · `shownGrain` — the widened grain,
+or a look-back's own grain, whose `[now − L, now + 1 ms)` ends AT now ("last 40 minutes" is
+shown `8:00 – 8:40 AM`, never `8:40:00.001`). In v1 this is otherwise a fixed law,
 not a switch; an `exact` reading waits for a bench that shows the need (§ 11, TQ9). A tool's declared `granularity` rounds a range outward, never inward,
 and records the rounding.
 

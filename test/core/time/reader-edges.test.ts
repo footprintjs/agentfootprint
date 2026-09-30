@@ -10,7 +10,8 @@
  *     ends AT that instant ("8 AM to 9 AM" is `[08:00, 09:00)`, no
  *     `end-of-grain`); a minute, second or day end, and a lone point, keep
  *     end-of-grain. "Was the end widened?" has ONE answer,
- *     `resolveRecord.ts` · `widenedGrain` — the label and the said end ask it.
+ *     `resolveRecord.ts` · `widenedGrain` — the said end asks it; the label asks
+ *     `shownGrain` (that, or a look-back's grain: it ends AT now, never +1 ms).
  *   - the reader returns zone-less parts: a zone after a day word or named
  *     by place (`London time`) is a TOKEN as written; `resolve.ts` ·
  *     `zoneReadsOf` maps it, to the one zone the tz database names, else asks.
@@ -25,7 +26,8 @@
  *                 every zone the runtime lists by a unique last segment is found by its place;
  *   boundary    — `8 AM to 8 AM` is no window; `11 to 1 PM` falls back to 11 AM; an abbreviation
  *                 whose zone agrees with its letters (PST in January) is one reading;
- *   security    — hostile policy maps and place tokens are refused, never thrown on;
+ *   security    — hostile policy maps, place tokens and built-in-name zone tokens
+ *                 (`constructor`, `__proto__`) are refused or asked, never thrown on;
  *   byte identity — a policy without `abbreviations` reads to the v1 bytes; with no map `PST` is
  *                 still asked (no map ships).
  *   integration / functional through real agents: english-run.test.ts ("reader edges").
@@ -146,6 +148,20 @@ describe('the end edge — an o’clock end is a boundary, owned by resolve.ts',
     expect(
       timeAskOf(minute!, defaultTimeAskMessages)!.field.labels![0]!.replace(/\s/g, ' '),
     ).toContain('8:00 – 8:40 AM');
+  });
+
+  it('a look-back’s confirmation ends at the clock’s now, at its grain — never the +1 ms edge', () => {
+    // A look-back is [now − L, now + 1 ms): its end is not widened to a grain, but the
+    // label still shows the last instant inside it — now — at the grain the person counted in.
+    const label = (text: string) =>
+      timeAskOf(rowsOf(text)[0]!, defaultTimeAskMessages)!.field.labels![0]!.replace(/\s/g, ' ');
+    expect(label('errors in the last 40 minutes')).toBe(
+      'I read “last 40 minutes” as Fri, Oct 9, 2026, 8:00 – 8:40 AM PDT in America/Los_Angeles — is that right?',
+    );
+    const week = label('errors in the past week');
+    expect(week).toContain('Oct 2');
+    expect(week).toContain('Oct 9');
+    expect(week).not.toMatch(/\.00\d|:00:00/);
   });
 
   it('the said end of a confirmed o’clock range is 9 AM (forms.ts asks widenedGrain)', () => {
@@ -508,6 +524,26 @@ describe('an abbreviation names a zone only through the APP’s map — both rea
       expect(typeof readPolicy({ abbreviations: bad }), JSON.stringify(bad)).toBe('string');
     }
     expect(typeof readPolicy({ abbreviationMismatch: 'ask' })).toBe('string');
+  });
+
+  it('SECURITY: a zone token that is a built-in property name is asked, never thrown on', () => {
+    // A `model` or custom reader passes any non-empty token; the map is looked up by OWN key only.
+    const withMap = readPolicy({ abbreviations: { PST: { zone: LA, offset: '-08:00' } } });
+    expect(typeof withMap).not.toBe('string');
+    for (const token of ['constructor', 'toString', '__proto__', 'hasOwnProperty', 'valueOf']) {
+      for (const policy of [PST_MAP, withMap as TimePolicy]) {
+        const parts: TimeParts = {
+          wall: am(8),
+          relative: { unit: 'day', offset: -1 },
+          zoneToken: token,
+        };
+        expect(resolve(parts, CLOCK, policy), token).toEqual({
+          candidates: [],
+          needsZone: true,
+          unsupported: [],
+        });
+      }
+    }
   });
 });
 

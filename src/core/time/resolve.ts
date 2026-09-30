@@ -105,6 +105,7 @@ import {
   type TimeNote,
   type TimePart,
   type TimePolicy,
+  type ZoneAbbreviation,
 } from './resolveRecord.js';
 
 export {
@@ -112,6 +113,7 @@ export {
   choiceIsWellFormed,
   DEFAULT_TIME_POLICY,
   readPolicy,
+  shownGrain,
   widenedGrain,
 } from './resolveRecord.js';
 export type {
@@ -160,6 +162,23 @@ const PLACE_TIME = /^(.+?)\s+time$/i;
 type ZonePolicy = Pick<TimePolicy, 'abbreviations'>;
 
 /**
+ * The app's entry for an abbreviation token — looked up by OWN key only. A
+ * token is whatever a reader returned (a `model` or custom reader may pass
+ * `constructor` or `__proto__` straight from the message), and the map is a
+ * plain object, so an inherited member must read as "not in the map" — the
+ * zone is then asked, never thrown on.
+ */
+function abbreviationOf(
+  policy: ZonePolicy | undefined,
+  token: string,
+): ZoneAbbreviation | undefined {
+  const map = policy?.abbreviations;
+  return map !== undefined && Object.prototype.hasOwnProperty.call(map, token)
+    ? map[token]
+    : undefined;
+}
+
+/**
  * Every zone reading of a token — one, or TWO for an abbreviation in the
  * app's map (its zone, then its literal offset) — or `undefined` when the
  * token names no zone this layer can read, so the zone is ASKED. The one
@@ -178,7 +197,7 @@ function zoneReadsOf(
   if (token === 'Z') return [{ kind: 'offset', minutes: 0, spelled: 'Z' }];
   const offset = offsetOfToken(token);
   if (offset !== undefined) return [{ kind: 'offset', ...offset }];
-  const mapped = policy?.abbreviations?.[token];
+  const mapped = abbreviationOf(policy, token);
   if (mapped !== undefined) {
     const literal = offsetOfToken(mapped.offset);
     const reads: ZoneRead[] = [
