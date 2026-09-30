@@ -4,7 +4,7 @@ title: ResilienceReport
 
 # Type Alias: ResilienceReport
 
-> **ResilienceReport** = \{ `fallback`: `string`; `kind`: `"fell-back"`; `primary`: `string`; `reason`: `string`; \} \| \{ `attempt`: `number`; `backoffMs`: `number`; `kind`: `"retried"`; `lastError`: `string`; `maxAttempts`: `number`; `reason`: `string`; \} \| \{ `attempt`: `number`; `kind`: `"recovered"`; `totalDurationMs`: `number`; \} \| \{ `kind`: `"circuit-changed"`; `providerName`: `string`; `reason`: `string`; `state`: `"closed"` \| `"open"` \| `"half-open"`; \}
+> **ResilienceReport** = \{ `fallback`: `string`; `kind`: `"fell-back"`; `primary`: `string`; `reason`: `string`; \} \| \{ `attempt`: `number`; `backoffMs`: `number`; `kind`: `"retried"`; `lastError`: `string`; `maxAttempts`: `number`; `reason`: `string`; `statedWaitMs?`: `number`; \} \| \{ `attempt`: `number`; `kind`: `"recovered"`; `totalDurationMs`: `number`; \} \| \{ `kind`: `"circuit-changed"`; `providerName`: `string`; `reason`: `string`; `state`: `"closed"` \| `"open"` \| `"half-open"`; \}
 
 Defined in: [src/adapters/types.ts:461](https://github.com/footprintjs/agentfootprint/blob/main/src/adapters/types.ts#L461)
 
@@ -54,7 +54,7 @@ Message of the error that triggered the fallback.
 
 ### Type Literal
 
-\{ `attempt`: `number`; `backoffMs`: `number`; `kind`: `"retried"`; `lastError`: `string`; `maxAttempts`: `number`; `reason`: `string`; \}
+\{ `attempt`: `number`; `backoffMs`: `number`; `kind`: `"retried"`; `lastError`: `string`; `maxAttempts`: `number`; `reason`: `string`; `statedWaitMs?`: `number`; \}
 
 #### attempt
 
@@ -65,6 +65,8 @@ Message of the error that triggered the fallback.
 #### backoffMs
 
 > `readonly` **backoffMs**: `number`
+
+How long the decorator waits before the attempt — the stated wait when one won.
 
 #### kind
 
@@ -91,6 +93,16 @@ this field reports what the error looked like instead, derived
 from the same `status`/`statusCode` fields `defaultShouldRetry`
 inspects. One of: `'http-429'` | `'http-5xx'` | `'http-4xx'` |
 `` `http-${code}` `` | `'no-status'`.
+
+#### statedWaitMs?
+
+> `readonly` `optional` **statedWaitMs?**: `number`
+
+The wait the failure itself STATED (a `Retry-After` header, a
+gateway's "try again in N seconds"), in ms, as the adapter declared
+it on `retryAfterMs`. Absent when it stated none. `backoffMs` is
+max(the schedule, this), capped by the policy's `maxDelayMs` — so a
+reader sees both what was asked and what was done.
 
 ***
 

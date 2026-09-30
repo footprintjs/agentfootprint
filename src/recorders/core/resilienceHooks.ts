@@ -59,6 +59,7 @@ export function resilienceHooks(scope: EmitableScope): LLMCallHooks {
               lastError: report.lastError,
               backoffMs: report.backoffMs,
               reason: report.reason,
+              ...(report.statedWaitMs !== undefined && { statedWaitMs: report.statedWaitMs }),
             });
             return;
           case 'recovered':

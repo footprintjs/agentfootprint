@@ -39,6 +39,7 @@ import type {
 } from '../types.js';
 import { lazyRequire } from '../../lib/lazyRequire.js';
 import { asContextWindowExceeded } from './contextWindow.js';
+import { retryAfterMsFromError } from './retryAfter.js';
 
 // ─── Bedrock Converse SDK shape (duck-typed) ───────────────────────
 
@@ -606,12 +607,16 @@ function wrapError(err: unknown): Error {
   const tooBig = asContextWindowExceeded(err, { provider: 'bedrock' });
   if (tooBig) return tooBig;
   if (err instanceof Error) {
+    // A Retry-After on the raw response (`$response.headers`), declared for
+    // withRetry — absent when none, so the error shape is unchanged.
+    const retryAfterMs = retryAfterMsFromError(err);
     return Object.assign(new Error(`[bedrock] ${err.message}`), {
       name: 'BedrockProviderError',
       cause: err,
       status:
         (err as { $metadata?: { httpStatusCode?: number } }).$metadata?.httpStatusCode ??
         (err as { status?: number }).status,
+      ...(retryAfterMs !== undefined && { retryAfterMs }),
     });
   }
   return new Error(`[bedrock] ${String(err)}`);

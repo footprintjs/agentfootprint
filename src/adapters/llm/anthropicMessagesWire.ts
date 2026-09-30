@@ -143,7 +143,12 @@ export function buildMessagesBody(
  * top-level field (`LLMRequest.systemPrompt`). That is why every adapter on it
  * carries only `['user', 'assistant']` in messages. A `role: 'tool'` result
  * becomes a `tool_result` block on a user turn, coalesced with the results of
- * the same batch.
+ * the same batch. An `assistant` turn with no thinking blocks, no text and no
+ * tool calls is DROPPED too — the API refuses empty content anywhere but a
+ * final prefill.
+ *
+ * ONE owner: `anthropic()`, `browserAnthropic()` and `invokeModelGateway()`
+ * all build their messages here.
  */
 export function toAnthropicMessages(
   messages: readonly LLMMessage[],
@@ -187,12 +192,21 @@ export function toAnthropicMessages(
           blocks.push({ type: 'tool_use', id: tc.id, name: tc.name, input: { ...tc.args } });
         }
       }
-      const hasThinking = m.thinkingBlocks !== undefined && m.thinkingBlocks.length > 0;
+      // A turn with no thinking, no text and no tool calls has nothing to
+      // say, and the wire refuses it: `content: ''` is accepted only on a
+      // FINAL assistant message (a prefill), so one mid-history fails the
+      // whole request with a 400 that no retry can mend. Dropped like a
+      // system message (`-1` — a cache marker cannot land on it). The turns
+      // either side may now share a role; the Messages API combines
+      // consecutive same-role turns, and a dropped system message has always
+      // left the same adjacency. The library sends no prefill, and an empty
+      // one would prefill nothing.
+      if (blocks.length === 0) {
+        indexMap?.push(-1);
+        continue;
+      }
       indexMap?.push(result.length);
-      result.push({
-        role: 'assistant',
-        content: blocks.length > 0 ? blocks : hasThinking ? blocks : m.content || '',
-      });
+      result.push({ role: 'assistant', content: blocks });
       continue;
     }
     if (m.role === 'tool') {

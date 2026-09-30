@@ -18,6 +18,12 @@
  * Default policy:
  *   • maxAttempts: 3 (initial + 2 retries)
  *   • backoff:     exponential — 200ms, 400ms, 800ms
+ *   • stated wait: when the failure says how long to wait (`retryAfterMs`,
+ *                  or `retryAfterSeconds` — see statedWait.ts), the wait is
+ *                  max(the schedule's delay, the stated wait), capped at
+ *                  `maxDelayMs` so a hostile header cannot stall a run. The
+ *                  adapter that knows its wire reads the header or the
+ *                  gateway's wording; this decorator never parses prose.
  *   • shouldRetry: rejects 4xx-class errors (client mistakes don't
  *                  benefit from retry), AbortError, and any error that
  *                  declares `retryable: false`; retries 5xx, network
@@ -44,6 +50,7 @@ import type {
   LLMRequest,
   LLMResponse,
 } from '../adapters/types.js';
+import { statedRetryAfterMs } from './statedWait.js';
 
 export interface WithRetryOptions {
   /** Total attempts including the first. Default 3. Must be >= 1. */
@@ -52,13 +59,18 @@ export interface WithRetryOptions {
   readonly initialDelayMs?: number;
   /** Multiplier between attempts. Default 2 (200ms → 400ms → 800ms). */
   readonly backoffFactor?: number;
-  /** Maximum delay cap in ms. Default 10_000. */
+  /**
+   * Maximum delay cap in ms. Default 10_000. Caps a STATED wait too: a failure
+   * that says "retry after 60 s" waits `maxDelayMs` at most. Raise it to honour
+   * longer stated waits.
+   */
   readonly maxDelayMs?: number;
   /**
    * Predicate to decide whether an error is worth retrying. Default
    * skips AbortError, HTTP 4xx (except 429) and an error that declares
    * `retryable: false`; retries everything else. Override
-   * to add provider-specific signals (e.g., 429 with Retry-After).
+   * to add provider-specific signals. (A stated wait — Retry-After — needs no
+   * predicate: it sets how long to wait, see the policy notes above.)
    */
   readonly shouldRetry?: (error: unknown, attempt: number) => boolean;
   /**
@@ -142,7 +154,13 @@ export function withRetry(provider: LLMProvider, options: WithRetryOptions = {})
     hooks: LLMCallHooks | undefined,
   ): Promise<void> {
     if (attempt >= maxAttempts || !shouldRetry(err, attempt)) throw err;
-    const delay = Math.min(maxDelayMs, initialDelayMs * Math.pow(backoffFactor, attempt - 1));
+    const scheduled = Math.min(maxDelayMs, initialDelayMs * Math.pow(backoffFactor, attempt - 1));
+    // The server's word beats our guess — waiting less than it asked only
+    // spends an attempt on a refusal already announced. Capped by the same
+    // policy maximum, so a hostile or garbled wait cannot stall the run.
+    const stated = statedRetryAfterMs(err);
+    const delay =
+      stated === undefined ? scheduled : Math.min(maxDelayMs, Math.max(scheduled, stated));
     onRetry?.(err, attempt + 1, delay);
     hooks?.onResilience?.({
       kind: 'retried',
@@ -151,6 +169,9 @@ export function withRetry(provider: LLMProvider, options: WithRetryOptions = {})
       lastError: err instanceof Error ? err.message : String(err),
       backoffMs: delay,
       reason: classifyRetryReason(err),
+      // Absent when nothing was stated — the event is byte-identical to the
+      // schedule-only one.
+      ...(stated !== undefined && { statedWaitMs: stated }),
     });
     await sleep(delay, req.signal);
   }

@@ -81,6 +81,18 @@ withRetry(provider, {
 
 `shouldFallback(err)` works the same way for `withFallback` — its default falls back on every error except `AbortError`.
 
+### When the failure says how long to wait
+
+A throttled API often says how long to wait: a `Retry-After` header, or a gateway's "Try again in 4 seconds". Retrying sooner spends an attempt on a refusal that was already announced. So when an error declares `retryAfterMs` (or `retryAfterSeconds`), `withRetry` waits the longer of its own backoff and that stated wait. The stated wait is capped by `maxDelayMs` (default 10 s), so a hostile or garbled header cannot stall a run. Raise `maxDelayMs` to honour longer waits.
+
+`withRetry` never parses headers or message text. The adapter that knows its wire declares the field: `anthropic()`, `openai()` and `bedrock()` read `retry-after-ms` / `Retry-After` off the response, and `invokeModelGateway()` also reads its gateway's "try again in N seconds" wording. A provider of your own declares it the same way:
+
+```ts
+throw Object.assign(new Error('rate limited'), { status: 429, retryAfterMs: 4000 });
+```
+
+`error.retried` then carries `statedWaitMs` (what was asked) beside `backoffMs` (what was waited). With no stated wait, the event is exactly what it was before.
+
 ## Streaming: retried before the first chunk, never after
 
 A stream that fails before it has produced anything — a `429` at connect, a bare `500`, a connection reset during the handshake — is exactly as safe to re-open as a `complete()` is to re-send: the caller has seen nothing yet. So `withRetry` re-opens `stream()` under the same policy (`maxAttempts`, `shouldRetry`, backoff, `req.signal`), and reports it the same way — `error.retried` for each retry, `error.recovered` once the stream's first chunk arrives.
@@ -98,7 +110,7 @@ A healthy stream is delivered chunk for chunk as the inner provider yields it, a
 | Event | Fired by | Payload |
 | --- | --- | --- |
 | `agentfootprint.fallback.triggered` | `withFallback` — and `fallbackProvider`, once per pairwise hop | `{ kind: 'provider', primary, fallback, reason }` |
-| `agentfootprint.error.retried` | `withRetry` | `{ attempt, maxAttempts, lastError, backoffMs, reason }` |
+| `agentfootprint.error.retried` | `withRetry` | `{ attempt, maxAttempts, lastError, backoffMs, reason, statedWaitMs? }` — `statedWaitMs` only when the failure stated a wait |
 | `agentfootprint.error.recovered` | `withRetry` | `{ attempt, totalDurationMs }` |
 | `agentfootprint.error.circuit_changed` | `withCircuitBreaker` (9.32.0) | `{ state, reason, providerName }` |
 

@@ -11,6 +11,11 @@
  * choice, thinking budget bump, cache usage, and a malformed tool-argument
  * block (which this adapter has always turned into `{}`).
  *
+ * ONE deliberate change since the capture: the empty assistant turn is now
+ * DROPPED from the body (it was sent as `content: ''`, which the API refuses
+ * anywhere but a final prefill) — the reference was edited by removing exactly
+ * that element and nothing else. See anthropicMessagesWire · toAnthropicMessages.
+ *
  * Test type (Convention 3): byte identity.
  */
 import { describe, it, expect } from 'vitest';
