@@ -1,4 +1,0 @@
----
-type: fixed
----
-**`withRetry` waits as long as the failure asked.** It used to back off on its own schedule (200 ms, 400 ms, …) even when the server said how long to wait, so a gateway answering "Try again in 4 seconds" could see every attempt spent inside those 4 seconds. Now, when an error declares `retryAfterMs` (or `retryAfterSeconds`), the wait is the longer of the schedule and the stated wait, capped by `maxDelayMs` so a hostile header cannot stall a run. `req.signal` still ends the wait early. `anthropic()`, `openai()` and `bedrock()` declare the wait from the `retry-after-ms` / `Retry-After` headers. `invokeModelGateway()` also reads its gateway's "Try again in N seconds" body and exposes it as `InvokeModelGatewayError.retryAfterMs`. The `error.retried` event carries the stated wait as `statedWaitMs`, next to the `backoffMs` actually waited. With no stated wait, retries and events are unchanged.

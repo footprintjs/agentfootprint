@@ -5,6 +5,20 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [9.130.0] - 2026-09-30
+
+### Added
+
+- **`invokeModelGateway({ timeoutMs })`: a deadline for each request.** Before this, a gateway that never answered held the run until the caller's own signal fired, if one was set. `timeoutMs` bounds the response headers, a `complete()` body, and each stream read: the first chunk, then every gap between chunks. A stream that keeps sending is never cut off. A missed deadline aborts the request and raises `InvokeModelGatewayError` with `reason: 'timeout'` and `retryable: true`, so `withRetry` asks again as long as no chunk has reached the caller. The caller's `req.signal` still wins. With no `timeoutMs` there is no deadline and the request is sent exactly as before.
+
+### Fixed
+
+- **An empty assistant turn no longer fails the request with a 400.** An assistant message with no text and no tool calls was sent to the Anthropic Messages API as `content: ''`. The API accepts empty content only on a final assistant message, so a history carrying one mid-conversation failed the whole request with a 400 that no retry could mend. The turn is now left out of the body, the same way a system message is. This fixes `anthropic()`, `browserAnthropic()` and `invokeModelGateway()`, which now all build their messages through one shared mapping (`anthropic()` used to keep a private copy of it).
+
+  `bedrock()` had the same bug on its own wire: an empty assistant turn went to Converse as a blank text block, which Converse refuses. It is now left out too.
+
+- **`withRetry` waits as long as the failure asked.** It used to back off on its own schedule (200 ms, 400 ms, …) even when the server said how long to wait, so a gateway answering "Try again in 4 seconds" could see every attempt spent inside those 4 seconds. Now, when an error declares `retryAfterMs` (or `retryAfterSeconds`), the wait is the longer of the schedule and the stated wait, capped by `maxDelayMs` so a hostile header cannot stall a run. `req.signal` still ends the wait early. `anthropic()`, `openai()` and `bedrock()` declare the wait from the `retry-after-ms` / `Retry-After` headers. `invokeModelGateway()` also reads its gateway's "Try again in N seconds" body and exposes it as `InvokeModelGatewayError.retryAfterMs`. The `error.retried` event carries the stated wait as `statedWaitMs`, next to the `backoffMs` actually waited. With no stated wait, retries and events are unchanged.
+
 ## [9.129.0] - 2026-09-30
 
 ### Added
