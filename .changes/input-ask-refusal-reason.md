@@ -1,4 +1,0 @@
----
-type: added
----
-**A typed ask asked again can tell the person why their answer was refused.** When your app validates an answer to `requestInput`, refuses it and asks again, the person used to see the identical question with no word about their answer — the reason reached only the model. The declaration now takes `refused: { answer?, reason }` — the refused values and your app's reason in its own words (the library never writes one) — and it rides `awaitingInput.refused` wherever the question already travels: the pause outcome, the checkpoint and the `pause.request` event. With no declaration, a re-ask of the same `id` in the same turn is still never silent: `awaitingInput.repeat` carries how many times the person already answered it and, when the record still holds it, their previous answer as the record holds it (after the result rules, redaction first). A first ask is byte-identical to before; checkpoints stay compatible both ways.
