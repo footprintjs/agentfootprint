@@ -1394,6 +1394,33 @@ deterministic and are measured over retained recorded runs or unit tables, with 
   unreadable, never said; each allow-listed form is said; a seeded property — a message whose
   time content is off the allow-list never yields said, and every said quote matches an oracle of
   the two forms written apart from the reader.
+  (9) **Position, not a word list, around an allow-listed span** (seventh review round; TQ28).
+  Round 6 made the reading's FORM an allow-list, but what stood around it was still judged by
+  `LEFTOVER_WORDS`, and round 7 found the same leak in new words: a look-back tied to an event
+  (`last 2 hours ending at the outage`, `as of the deploy`, `ahead of the release`, `in the
+  incident`), excluding a period (`without the outage`, `but not the outage`), beside a place
+  (`the last 3 days in London`, `last 2 hours Berlin`), and an explicit instant with an open end
+  or an approximation (`newer than 2026-10-09T08:00Z` — which means from then until now — `at
+  least …`, `… give or take`) or a place (`2026-10-09T08:00Z in Tokyo`). The rule is now
+  structural (`readers/english.ts` · `endsItsClause`, the one owner of what may stand around a
+  said span): an allow-listed span is said only when nothing but spaces and closing marks follow
+  it up to its clause end (end of message, a line break, `.` `?` `!` `;` — a comma is NOT a clause
+  end), the next clause does not open with a bending word, and nothing before it in its clause is
+  a bending word (`BEND_WORDS` — English prepositions, negators and anchor participles, a CLOSED
+  class, so it can be complete) other than the plain lead-in `in|over|for [the]` right before a
+  look-back or a range's own opener (`from`, `between`). Anything else carries `confirm` and is
+  offered with the reading and its zone. `LEFTOVER_WORDS` stays — it names what was not read in
+  the question and guards the message's OTHER clauses — but `of` right after a look-back
+  (`SPAN_OF`) is deleted: the position rule owns it. **The trade-off:** more confirmations —
+  `errors in the last 2 hours on node 11`, `last 2 hours, on node 11`, `… please` all confirm now.
+  **How the allow-list grows:** a new form, lead-in or safe tail joins only when the paid bench
+  shows it read right; the position rule is never relaxed by listing words that may follow.
+  **The known limit now:** a later sentence that bends the look-back without opening with a
+  bending word (`Show the last 2 hours. Only the outage window.`). Pinned: every row the seven
+  reviews cited is confirmed or unreadable; the terminal controls (`any errors in the last 2
+  hours?`, `show the past week.`, `2026-09-26T08:00-07:00/2026-09-26T08:40-07:00`) stay said; a
+  seeded property — any allow-listed span followed by any non-empty tail in its clause — is never
+  said.
 
 **Why this order.** T1 settles the grammar every other step leans on and is free. T2 is already
 written and only needs rebasing and the value check. T3 gives the first visible win (the limits
@@ -1447,6 +1474,7 @@ probe, the future check, and its private time vocabulary in the metrics adapters
 | TQ25 | The gate's person-values fix: wait for T7, or land now? | **Land `fix/person-values-normalized` now** for the field bug; T7 retires its private table and keeps its cases. | The field bug is live today; T7 is several steps away. |
 | TQ26 | A window set in a UI (a brush, a range picker)? | **A run input, `time.window`, recorded with `source: 'control'`**; it counts as the person's, like an answer, and as one mention for the fill rule. | It was not given in reply to a library ask, so filing it as `answered` would bend that word; one input serves panel, dashboard and chat. |
 | TQ27 | The English reader: which readings are the person's words — a deny-list shrunk each review, or an allow-list grown from evidence? (added 2026-09-30, T6b sixth review round — decided for the library under the standing rule, not among the questions the owner answered above) | **An allow-list, in the reader**: a look-back from now and an explicit ISO instant or range with an offset or IANA zone are said; every other form it reads is confirmed with its zone (`TimeMention.confirm` → `confirmNeeded.form`). A form joins the list only when the paid bench shows it is read right. | Six review rounds each found the next spelling a deny-list missed (zones named in words, event anchors, open ends); an allow-list fails toward a confirmation, a deny-list toward a wrong window recorded as said. The price — a confirmation on every calendar word — is one answer; the zone is shown so the correction is one click. |
+| TQ28 | The English reader: what may stand AROUND an allow-listed span — a list of banned words, or a position? (added 2026-09-30, T6b seventh review round — decided for the library under the standing rule) | **A position**: said only when the span ends its clause (only spaces and closing marks after it up to `.` `?` `!` `;`, a line break or the end — a comma is no clause end) and no bending word (a closed class: prepositions, negators, anchor participles) stands before it in its clause but the plain lead-in `in\|over\|for [the]` or a range's opener. `SPAN_OF` deleted; `LEFTOVER_WORDS` kept for naming and the other clauses. | Round 7 found fourteen event anchors, four exclusions, eight places and thirteen open ends a word list missed; what may FOLLOW a span has no end, its position does. The price — `errors in the last 2 hours on node 11` confirms — is one answer. |
 | TQ16 | The names: `.time()`, `TimeReader`, `TimeParts`, `TimeClock`, `ResolvedWindow`, `PeriodForm`, `wall-range`, `period-differs-from-asked`, `derived-from-reading` | **Keep the drafts** for T1–T3; rename freely before T5a ships. | Nothing is public until T3. |
 
 ---

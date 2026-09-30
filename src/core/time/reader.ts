@@ -100,8 +100,10 @@ export interface TimeMention {
    * is confirmed through the time ask with its zone (`rows.ts` ·
    * `ConfirmNeeded.form`, step T6b). The English reader sets it on everything
    * but a look-back from now and an explicit ISO instant or range — a
-   * calendar word or a zone-less date leans on the run's zone. Absent, the
-   * reader vouches the form.
+   * calendar word or a zone-less date leans on the run's zone — and on those
+   * two as well when they do not END their clause (`last 2 hours ending at the
+   * outage`: `readers/english.ts` · `endsItsClause`). Absent, the reader
+   * vouches the form.
    */
   readonly confirm?: true;
 }

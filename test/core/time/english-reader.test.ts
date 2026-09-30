@@ -21,6 +21,9 @@
  *                 generated matrix (v1 phrase × separator × opener × time-like tail, reversed,
  *                 seeded fillers) proves a reading is said only when an independent oracle finds
  *                 nothing time-like outside every mention; plain exact phrases stay said;
+ *   position rule — an allow-listed span is said only when it ends its clause: the terminal
+ *                 controls stay said, and a seeded property — any allow-listed span followed by
+ *                 any non-empty tail in its clause — is never said;
  *   boundary    — impossible clock times and dates are not read (or resolve to nothing), a
  *                 bare hour is a time only as a range's first side, a modifier taints, 16
  *                 mentions at most;
@@ -374,6 +377,36 @@ describe('the leftover rule — a reading is the person’s only when nothing ti
     'errors today', 'errors tomorrow', 'errors on 10/09/26', '2026-09-26', 'from 8 AM to 9 AM yesterday',
     '8 to 9 AM', '2026-09-26 08:00..08:40', '2026-10-01..2026-10-09', '2026-10-09T08:00 PST',
     '2026-10-09T08:00', 'errors 8:40 AM – 9:30 PM', 'previous 7 days', 'last 30 seconds', 'last week',
+    // round 7: a look-back tied to an event — any word after the span in its clause confirms
+    'last 2 hours ending at the outage', 'last 2 hours ending with the outage',
+    'last 2 hours ended at the incident', 'last 2 hours as of the deploy',
+    'last 7 days leading into the release', 'last 2 hours leading into the outage',
+    'last 7 days ahead of the release', 'last 2 hours ahead of the outage', 'last 2 hours near the outage',
+    'last 7 days surrounding the release', 'logs last 2 hours surrounding the outage',
+    'last 2 hours in the incident', 'last 2 hours at the incident',
+    'last 2 hours in the maintenance window', 'last 7 days prerelease',
+    // round 7: a look-back that excludes a period
+    'last 2 hours ignoring the outage', 'last 2 hours without the outage',
+    'last 2 hours but not the outage', 'last 2 hours sans outage',
+    // round 7: a look-back beside a place
+    'the last 3 days in London', 'last 24 hours in Kolkata', 'last 24 hours in India',
+    'last 2 hours in Tokyo', 'last 2 hours Berlin', 'last 3 hours on the east coast',
+    'last 3 hours West Coast', 'last 3 days per server clock',
+    // round 7: an explicit instant with an open end or an approximation
+    'newer than 2026-10-09T08:00Z', 'logs newer than 2026-10-09T08:00Z', 'older than 2026-10-09T08:00Z',
+    'at least 2026-10-09T08:00Z', 'at most 2026-10-09T08:00Z', 'ending 2026-10-09T08:00Z',
+    'ending at 2026-10-09T08:00Z', 'ended 2026-10-09T08:00Z', '2026-10-09T08:00Z give or take',
+    '2026-10-09T08:00Z surrounding', '2026-10-09T08:00Z nearby', '2026-10-09T08:00Z vicinity',
+    '2026-10-09T08:00Z window',
+    // round 7: an explicit instant beside a place
+    '2026-10-09T08:00-07:00 London', '2026-10-09T08:00-07:00 in Berlin', '2026-10-09T08:00Z in Tokyo',
+    // round 7: what the position rule itself must hold — a comma is no clause end; a bending word
+    // before the span, or opening the next clause, confirms
+    'last 2 hours, on node 11', 'errors in the last 2 hours on node 11', 'errors (last 2 hours) on node 11',
+    'excluding the last 2 hours', 'not in the last 2 hours', 'errors other than the last 2 hours',
+    'errors during the last 2 hours', 'the end of the last 2 hours', 'since the past week',
+    'last 2 hours. Excluding the outage', 'last 2 hours; ending at the outage',
+    'last 2 hours\nwithout the outage', 'errors at 2026-10-09T08:00-07:00',
   ] as const; // prettier-ignore
   for (const text of CITED) {
     it(`${JSON.stringify(text)} → confirmed or unreadable, never said`, () => {
@@ -481,9 +514,10 @@ describe('the leftover rule — a reading is the person’s only when nothing ti
       { several: true, form: true },
       { several: true, form: true },
     ]);
+    // …and neither ends its clause bare: `vs` follows the first and bends the second.
     expect(rowsOf('last 2 hours vs the last hour').map((r) => r.confirmNeeded)).toEqual([
-      { several: true },
-      { several: true },
+      { several: true, form: true },
+      { several: true, form: true },
     ]);
     expect(saidOf('2026-10-09T08:40Z to 2026-10-09T21:30Z')).toHaveLength(1);
   });
@@ -589,12 +623,59 @@ describe('the leftover rule — a reading is the person’s only when nothing ti
     expect(wrong.slice(0, 20)).toEqual([]);
   });
 
-  it('the known limit: a look-back beside an unlisted anchoring word is read as the look-back', () => {
-    // A calendar word always confirms now (it leans on the zone): the old limit is closed.
-    expect(saidOf('errors yesterday henceforth')).toEqual([]);
-    // What the scan still cannot see: a look-back from now beside an anchor word it does not
-    // list. Recorded, not hidden — the paid bench measures how often a person writes it.
-    expect(saidOf('logs last 2 hours surrounding the outage').map((r) => r.quote)).toEqual([
+  it('the position rule: an allow-listed span is said only when it ends its clause', () => {
+    // Terminal controls — nothing but spaces and closing marks after the span, then a clause end.
+    const TERMINAL = [
+      'any errors in the last 2 hours?', 'show the past week.',
+      '2026-09-26T08:00-07:00/2026-09-26T08:40-07:00', 'errors (last 2 hours)?', '“last 2 hours.”',
+      'no errors in the last 2 hours?', 'Show the last 2 hours. Chart it by host',
+      'errors from 2026-10-09T08:00Z to 2026-10-09T09:00Z', 'errors over the last 40 minutes',
+    ] as const; // prettier-ignore
+    for (const text of TERMINAL) expect(saidOf(text), text).toHaveLength(1);
+    // `within` is no lead-in: the leftover scan counts it (`within 2 hours of the deploy`).
+    expect(saidOf('errors within the last 40 minutes')).toEqual([]);
+    // The trade-off: anything after the span in its clause confirms, the reading and zone shown.
+    const [row] = rowsOf('errors in the last 2 hours on node 11');
+    expect(row).toMatchObject({
+      quote: 'last 2 hours',
+      confirmNeeded: { form: true },
+      choice: { by: 'open', open: ['confirm'] },
+    });
+    expect(timeAskOf(row!, defaultTimeAskMessages)?.question).toMatch(/“last 2 hours”/);
+  });
+
+  it('property: an allow-listed span followed by any non-empty tail in its clause is never said', () => {
+    const SPANS = [
+      'last 2 hours', 'the past week', 'past 30 minutes', 'the last day', 'LAST 24 HOURS',
+      '2026-10-09T08:00Z', '2026-10-09T08:00-07:00', '2026-10-09T08:00 America/Los_Angeles',
+      '2026-10-09T08:00Z/2026-10-09T09:00Z',
+    ] as const; // prettier-ignore
+    const LEADS = ['', 'errors ', 'any errors in ', 'logs for ', 'show '] as const;
+    // No clause end in the tail (`.` `?` `!` `;` newline) — it stays in the span's clause.
+    const ALPHABET = 'abcdefghijklmnopqrstuvwxyz ABCZ,:()"\'-/&*#+=<>~0123456789_…»→é京'.split('');
+    const r = prng(0x7a11);
+    const wrong: string[] = [];
+    for (let i = 0; i < 4000; i++) {
+      const span = pick(r, SPANS);
+      const body = Array.from({ length: int(r, 1, 14) }, () => pick(r, ALPHABET)).join('');
+      // Non-empty: at least one character that is no space or closing mark.
+      if (!/[^\s)\]"'’”]/.test(body)) continue;
+      const tail = (r() < 0.5 ? ' ' : '') + body;
+      const text = `${pick(r, LEADS)}${span}${tail}${pick(r, ['', '.', '?', '\nthanks'])}`;
+      // The span's own mention — a tail that extends it (`/2026-…`) is a different quote.
+      const at = text.indexOf(span);
+      const own = spansOf(text).findIndex((s) => s.start === at && s.end === at + span.length);
+      if (own === -1) continue;
+      const quote = read(text).mentions[own]!.quote;
+      if (saidOf(text).some((m) => m.quote === quote)) wrong.push(JSON.stringify(text));
+    }
+    expect(wrong.slice(0, 20)).toEqual([]);
+  });
+
+  it('the known limit: a following sentence that bends the look-back without a bending word', () => {
+    // A clause end closes the span's clause; the next one is checked only for its FIRST word.
+    // Recorded, not hidden — the paid bench measures how often a person writes it.
+    expect(saidOf('Show the last 2 hours. Only the outage window.').map((r) => r.quote)).toEqual([
       'last 2 hours',
     ]);
   });

@@ -34,9 +34,9 @@ with the reading AND its zone:
 > *I read “yesterday” as Thu, Oct 8, 2026, PDT in America/Los_Angeles — is that right?*
 
 A person who meant London time corrects it in one answer. An allow-listed
-reading is the person's words only when the leftover scan below also finds
-nothing, it is alone, and it is no bare point time (`../rows.ts` ·
-`confirmNeededOf`). `previous 7 days` (often relative to another window),
+reading is the person's words only when it ENDS ITS CLAUSE (the position rule
+below), the leftover scan finds nothing, it is alone, and it is no bare point
+time (`../rows.ts` · `confirmNeededOf`). `previous 7 days` (often relative to another window),
 `last 30 seconds` and `last week` (a calendar week) are not read at all.
 
 ```ts
@@ -44,7 +44,7 @@ reader.read('errors in the last 2 hours', ctx);     // said: a look-back from no
 reader.read('errors 2026-10-09T08:00-07:00', ctx);  // said: an explicit instant
 reader.read('errors yesterday', ctx);               // confirm: yesterday, in the run's zone
 reader.read('errors yesterday London time', ctx);   // confirm: form + leftover ['time']
-reader.read('the last 2 hours of the outage', ctx); // confirm: leftover ['of'] — anchored to an event
+reader.read('the last 2 hours of the outage', ctx); // confirm: not the clause's end — anchored to an event
 ```
 
 **The trade-off.** More confirmations: every calendar word now pauses once for a
@@ -53,6 +53,43 @@ direction: a day read in the wrong zone is 8 to 17 hours off, and the record wou
 call it the person's words. **How the list grows:** a form joins it only when a
 benchmark shows the reader reads it right (the paid bench, time design § 13
 T6b); it is never widened by argument.
+
+## The position rule — an allow-listed span is said only where it ends its clause
+
+Six rounds judged the words AROUND an allow-listed span with a word list, and each
+found the next one it missed: `last 2 hours ending at the outage`, `in London`,
+`without the outage`, `newer than 2026-10-09T08:00Z`, `2026-10-09T08:00Z give or
+take`. Place names, event names and open ends have no end; position does. So
+(`english.ts` · `endsItsClause`, the one owner of what may stand around a said span):
+
+1. **After the span** — nothing but spaces and closing marks (`)`, `]`, quotes) up to
+   the end of its clause: the end of the message, a line break, or `.` `?` `!` `;`.
+   A comma is NOT a clause end: `last 2 hours, on node 11` confirms. The next clause
+   must not open with a bending word (`last 2 hours. Excluding the outage`).
+2. **Before the span, in its clause** — no bending word (`english.ts` · `BEND_WORDS`:
+   English prepositions, negators and anchor participles — a CLOSED class, so the list
+   can be complete where a list of what may follow could not), except the plain
+   lead-in right before a look-back (`in|over|for [the]`) and a range's own opener
+   (`from`, `between`). `within` and `during` are no lead-ins: the leftover scan
+   counts them.
+
+```ts
+reader.read('any errors in the last 2 hours?', ctx);          // said: ends its clause
+reader.read('show the past week.', ctx);                      // said
+reader.read('last 2 hours ending at the outage', ctx);        // confirm: a tail in its clause
+reader.read('errors in the last 2 hours on node 11', ctx);    // confirm: the price
+reader.read('newer than 2026-10-09T08:00Z', ctx);             // confirm: `than` before it
+```
+
+**The trade-off.** More confirmations: any word after an allow-listed span in its
+clause confirms, harmless ones included (`… on node 11`, `… please`). An extra
+confirmation is one answer; a look-back tied to an event, filed as running back from
+now, is a wrong window recorded as said. **How the allow-list grows under this rule:**
+a new FORM (or a new safe lead-in or tail) joins only when the paid bench shows it
+read right; the position rule is never relaxed by adding words that may follow a span.
+**The known limit:** a later sentence that bends the look-back without opening with a
+bending word (`Show the last 2 hours. Only the outage window.`) — the next clause is
+checked only for its first word; pinned in `english-reader.test.ts`.
 
 ## The leftover rule — the person's words only when nothing time-like is left
 
@@ -83,7 +120,7 @@ read — it only has to notice that something is left.
   `between`, `from`); zone words (`pacific`, `utc`, `time`, the IANA areas
   `europe`, `asia` …); anchors, open ends, exclusions and filters (`preceding`,
   `prior`, `post`, `onward`, `henceforth`, `excluding`, `except`, `weekdays`,
-  `business`); `of` right after a look-back; `..`; and ANY symbol or
+  `business`); `..`; and ANY symbol or
   punctuation mark except sentence punctuation (`. , ; : ! ?`), quotes and brackets —
   by rule, not by list, so `>`, `<`, `≥`, `=`, `|`, `»`, `_` and every arrow block
   count (`english.ts` · `COUNTED_MARK`) — unless it stands alone between two letters
@@ -138,17 +175,17 @@ reader.read('8 AM into 9 PM', ctx);      // two points, two mentions → both co
 reader.read('last 2 hours', ctx);        // window-complete, alone → the person's words
 ```
 
-**The known limit.** Calendar words always confirm now, so `errors yesterday
-henceforth` no longer reads as said. What only the scan still guards is a
-look-back from now beside an anchor word it does not list: `logs last 2 hours
-surrounding the outage` reads as the look-back, filed as said. Pinned as the limit
-by `english-reader.test.ts`; the paid bench measures how often a person writes it.
+**The scan's job now.** Calendar words always confirm, and what stands around an
+allow-listed span in its clause is the position rule's (above), so `logs last 2
+hours surrounding the outage` confirms. The scan still names what was not read in
+the question (`leftover`) and guards the OTHER clauses of the message
+(`Show the last 2 hours. Weekdays only.`).
 
 **The trade-off (owner-approved).** More confirmations: any message that holds a
 time-or-range word the reading did not cover confirms — `9 AM and 3 retries`,
 `the 5 slowest calls yesterday`, `I want to see yesterday` (`to`), `logs from
 yesterday` (`from`), `errors in the last 2 hours to date`, `May I see yesterday's
 errors`. An extra confirmation is honest; a partial reading recorded as said is
-not. Since a point time and every form off the allow-list always confirm, what
-the scan still cannot see is a look-back beside a word outside the set (above) —
-a word to add to the one list, never a connector or a clause rule.
+not. Since a point time and every form off the allow-list always confirm, and the
+position rule owns the span's own clause, a word joins the set only for what it
+must catch in another clause.

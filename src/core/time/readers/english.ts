@@ -48,8 +48,7 @@
  * units, parts of the day, range words such as `to`, `until`, `from`,
  * `between`, zone words (`time`, `utc`, the IANA areas such as `europe`, `asia`);
  * anchors, open ends, exclusions and filters (`preceding`, `prior`, `post`, `onward`,
- * `henceforth`, `excluding`, `except`, `weekdays`, `business`); `of` right after a
- * look-back (`the last 2 hours of the outage`); `..`, and ANY symbol or punctuation mark but
+ * `henceforth`, `excluding`, `except`, `weekdays`, `business`); `..`, and ANY symbol or punctuation mark but
  * sentence punctuation, quotes and brackets — by rule, not by list — unless
  * it stands alone between two letters (`check-in`); `and`/`plus` right after
  * a time; `AM` and the zone abbreviations in capitals)? Nothing left: every reading is COMPLETE — the
@@ -76,12 +75,25 @@
  * marked `confirm` (`TimeMention.confirm`) and offered through the time ask
  * WITH ITS ZONE ("I read “yesterday” as Thu, Oct 8, 2026, PDT in
  * America/Los_Angeles — is that right?"), so a person who meant London time
- * corrects it in one answer. An allow-listed reading is said only when the
- * leftover scan finds nothing either, and the LIBRARY still confirms a point
- * time that is no explicit instant and a message with two mentions (`rows.ts`
- * · `confirmNeededOf`). What only the scan guards now is a look-back beside
- * an anchor word it does not list (`last 2 hours surrounding the outage`) —
- * the known limit, measured by the bench.
+ * corrects it in one answer. The LIBRARY still confirms a point time that is
+ * no explicit instant and a message with two mentions (`rows.ts` ·
+ * `confirmNeededOf`).
+ *
+ * ## The position rule — an allow-listed span is said only where it ends its clause
+ *
+ * What stands AROUND an allow-listed span is judged by position, not by a list
+ * of words (`endsItsClause`): after the span, nothing but spaces and closing
+ * marks up to the clause end (end of message, a line break, `.` `?` `!` `;` —
+ * a comma is no clause end), the next clause not opening with a bending word;
+ * before it, no bending word in its clause (`BEND_WORDS` — prepositions,
+ * negators and anchor participles, a CLOSED class) but the plain lead-in
+ * (`in|over|for [the]`) or a range's opener. So `last 2 hours ending at the
+ * outage`, `the last 3 days in London`, `newer than 2026-10-09T08:00Z` and
+ * `2026-10-09T08:00Z give or take` confirm. The price: `errors in the last 2
+ * hours on node 11` confirms too. The leftover scan still runs over the whole
+ * message — it names what was not read and guards the other clauses. The
+ * known limit: a later sentence that bends the look-back without opening with
+ * a bending word (`Show the last 2 hours. Only the outage window.`).
  *
  * A numeric date the tokens could split two ways stays ONE parse — `10/09/26`
  * is three numbers; which is the month is the policy's or the person's.
@@ -96,6 +108,8 @@
  * //   confirm: true }] } — off the allow-list: confirmed with its zone
  * reader.read('errors in the last 2 hours', { locale: 'en-US' });
  * // { mentions: [{ quote: 'last 2 hours', parses: [{ relative: { unit: 'hour', count: 2 } }] }] }
+ * reader.read('last 2 hours ending at the outage', { locale: 'en-US' });
+ * // { mentions: [{ quote: 'last 2 hours', parses: [...], confirm: true }] } — not the clause's end
  * reader.read('what failed yesterday morning?', { locale: 'en-US' });
  * // { mentions: [{ quote: 'yesterday morning', parses: [], problem: 'unreadable' }] }
  * reader.read('8:40 AM til 9.30', { locale: 'en-US' });
@@ -281,11 +295,6 @@ const LEFTOVER = new RegExp(
 const LEFTOVER_CASED = new RegExp(`\\b(?:AM|${ZONE_ABBREVIATIONS.join('|')})\\b`, 'gu');
 /** A word that joins a range or a sum — counted only right after a time (`8 AM and the deploy`). */
 const JOINER = /\b(?:and|plus|minus)\b/giu;
-/**
- * `of` right after a look-back anchors it to an event (`the last 2 hours of the
- * outage`), not to now — counted only there (`last 7 days of data` confirms).
- */
-const SPAN_OF = /^\s+(of)\b/i;
 /** A lone mark between two letters is part of a word (`check-in`, `and/or`, `request_id`), not a range. */
 const MARK = new RegExp(`^${COUNTED_MARK}$`, 'u');
 const LETTER = /\p{L}/u;
@@ -653,13 +662,6 @@ function leftoverOf(text: string, groups: readonly Group[]): string[] {
       found.push({ start: at, end: at + m[0].length });
     }
   }
-  for (const g of groups) {
-    const after = g.unreadable ? null : SPAN_OF.exec(text.slice(g.end));
-    if (after !== null && g.items[g.items.length - 1]?.atom?.kind === 'span') {
-      const at = g.end + after[0].length - (after[1] as string).length;
-      found.push({ start: at, end: at + (after[1] as string).length });
-    }
-  }
   const timeEnds = new Set([...found.map((s) => s.end - 1), ...spanEnds(inSpan)]);
   for (const m of matches(JOINER, masked)) {
     let j = m.index - 1;
@@ -859,6 +861,90 @@ function isAllowListed(parts: TimeParts): boolean {
   );
 }
 
+// ─── The position rule: an allow-listed span is said only where it ends its clause ───
+//
+// Six review rounds judged the words AROUND an allow-listed span with a word
+// list (`LEFTOVER_WORDS`), and each found the next word it missed (`ending at
+// the outage`, `in London`, `without the outage`, `newer than …`). Place names,
+// event names and open ends are an endless tail; POSITION is not. So an
+// allow-listed span is said only when (1) nothing but spaces and closing marks
+// follow it up to the end of its clause — the end of the message, a line
+// break, or `.` `?` `!` `;` (a comma does NOT end a clause: `last 2 hours, on
+// node 11` confirms) — and the next clause does not open with a word of
+// {@link BEND_WORDS} (`last 2 hours. Excluding the outage`); and (2) nothing
+// before it in its clause is a word of {@link BEND_WORDS}, except the plain
+// lead-in a look-back is said with (`in|over|for [the]`, right before
+// it) and a range's own opener (`from`, `between`). Everything else confirms
+// with the reading and its zone shown. The list on the BEFORE side is closed —
+// English prepositions, negators and a few anchor participles — which is why
+// it can be complete where a list of what may FOLLOW could not.
+
+/**
+ * Words that bend a look-back or an instant said after them (`since`, `ending`,
+ * `newer than`, `excluding`, `not in`, `the end of`): English prepositions and
+ * negators — a closed class — plus the anchor participles a window is tied
+ * with. `and`/`or` are not in it (`and/or last 2 hours` is said); the
+ * determiner `no` is not (`no errors in the last 2 hours?` is said).
+ */
+const BEND_WORDS: ReadonlySet<string> = new Set(
+  (
+    'aboard about above across after against ago ahead along alongside amid amidst among amongst ' +
+    'around as at atop barring before behind below beneath beside besides between beyond but by ' +
+    'circa despite during except excepting excl excluding for from ignoring in including inside ' +
+    'into less like minus near nearby notwithstanding of on onto opposite outside over past pending ' +
+    'per plus post pre prior since than through throughout thru till til to toward towards under ' +
+    'underneath unlike until unto upon versus via vs with within without not other sans save ' +
+    'preceding following surrounding spanning ending ended ends starting started starts beginning ' +
+    'began begins leading'
+  ).split(' '),
+);
+/** A clause end before a said span: `.` `?` `!` `;` followed by a space, a closing mark or the end — or a line break. */
+const CLAUSE_END = /[.?!;]+(?=[\s)\]"'’”]|$)|\n/g;
+/** What may follow a said span inside its clause: spaces and closing marks, nothing else. */
+const CLOSING = /^[^\S\n]*(?:[)\]"'’”][^\S\n]*)*/;
+/**
+ * The lead-in a look-back is plainly said with, right before it (`errors in the
+ * last 2 hours`). Not `within` or `during`: the leftover scan counts both
+ * (`within 2 hours of the deploy`), so they confirm wherever they stand.
+ */
+const LEAD_IN = /(?<![\p{L}\p{N}'’_-])(?:in|over|for)(?:\s+the)?\s+$/iu;
+/** One word, hyphen and apostrophe kept inside it (`check-in` is not `in`). */
+const WORD = /[\p{L}\p{N}'’_-]+/gu;
+
+const bends = (text: string): boolean =>
+  (text.toLowerCase().match(WORD) ?? []).some((w) => BEND_WORDS.has(w));
+
+/**
+ * The position rule — the one owner of what may stand AROUND a said span:
+ * the group ends its clause (only spaces and closing marks after it, then a
+ * clause end whose next clause does not open with a bending word), and its
+ * clause holds no bending word before it but the plain lead-in or the range's
+ * own opener.
+ */
+function endsItsClause(text: string, group: Group): boolean {
+  let at = group.end + (CLOSING.exec(text.slice(group.end)) as RegExpExecArray)[0].length;
+  if (at < text.length) {
+    const end = /^(?:[.?!;]+(?=[\s)\]"'’”]|$)|\r?\n)/.exec(text.slice(at));
+    if (end === null) return false;
+    at += end[0].length;
+    const next = /^[\s)\]"'’”]*([\p{L}\p{N}'’_-]+)/u.exec(text.slice(at));
+    if (next !== null && bends(next[1] as string)) return false;
+  }
+  let from = 0;
+  for (const m of matches(CLAUSE_END, text)) {
+    if (m.index + m[0].length > group.start) break;
+    from = m.index + m[0].length;
+  }
+  const head = text.slice(from, group.start);
+  const lead =
+    group.items[0]?.atom?.kind === 'span'
+      ? LEAD_IN.exec(head)?.[0]
+      : group.rangeAt !== undefined
+      ? RANGE_OPENER.exec(head)?.[1]
+      : undefined;
+  return !bends(head.slice(0, head.length - (lead?.length ?? 0)));
+}
+
 /** The text's mentions, in the order written — at most `MAX_MENTIONS`, the port's bound. */
 function mentionsOf(text: string): TimeMention[] {
   const atoms = atomsOf(text);
@@ -876,7 +962,9 @@ function mentionsOf(text: string): TimeMention[] {
             quote,
             parses: [parts],
             ...(leftover.length > 0 && { leftover: [...leftover] }),
-            ...(!isAllowListed(parts) && { confirm: true as const }),
+            ...(!(isAllowListed(parts) && endsItsClause(text, group)) && {
+              confirm: true as const,
+            }),
           },
     );
   }

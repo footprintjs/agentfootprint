@@ -23,7 +23,7 @@
  * | `clock-on-resume` | first thing in the resumed leg's ToolCalls stage — either pause shape: the pausable resume door, or the stage re-run an `interrupt()` pause makes — when a resume passed a `time` that differs from the kept clock | what was passed and what was kept — the kept clock still rules |
  * | `call` | once per dispatched call, just before the tool runs | `dispatchedAt`: the wall clock at dispatch (a look-back is evaluated by the TOOL at dispatch, which after a pause is later than `now`); `drift` when a look-back was sent more than the tool's step after `now` — `redrawn` into an absolute form, or `shifted` (§ 7.4, `drift.ts`) |
  * | `call-window` | by the inputs layer, once per call to a tool that declares period forms, before it dispatches | which window the call carries: filled from the turn's one window (exactly, or wider — with what the read adds), bound to one (by quote or value), the model's own (beside the person's when it differs), unread, not filled and why, or refused before dispatch and why |
- * | `time-reading` | by seed, once per MENTION the armed reader (`.time({ reader })`) found in the person's message — or ONE row with `mentions: 0` when it found none, so a retry knows the message was read | the quote, the parts, every candidate `resolve.ts` made of them, how the reading settled (`choice`), `confirmNeeded` when a `rule` reading is not the person's window (`leftover` tokens it did not read, a `point` time, `several` mentions, a `form` off the reader's allow-list — {@link confirmNeededOf}), the reader's id, version, kind and locale, and the tz database version; a refused mention keeps only why |
+ * | `time-reading` | by seed, once per MENTION the armed reader (`.time({ reader })`) found in the person's message — or ONE row with `mentions: 0` when it found none, so a retry knows the message was read | the quote, the parts, every candidate `resolve.ts` made of them, how the reading settled (`choice`), `confirmNeeded` when a `rule` reading is not the person's window (`leftover` tokens it did not read, a `point` time, `several` mentions, a `form` off the reader's allow-list or not ending its clause — {@link confirmNeededOf}), the reader's id, version, kind and locale, and the tz database version; a refused mention keeps only why |
  *
  * Readers that switch over every row kind must skip one they do not know.
  */
@@ -160,8 +160,9 @@ export interface ConfirmNeeded {
    * The reader does not vouch the reading's FORM (`reader.ts` ·
    * `TimeMention.confirm`): it is off the reader's allow-list of forms it
    * files as said — the English reader's are a look-back from now and an
-   * explicit ISO instant or range; `yesterday`, `2026-09-26`, `8 AM to 9 AM`
-   * lean on the run's zone — and it is offered with its zone to confirm.
+   * explicit ISO instant or range, each only where it ends its clause;
+   * `yesterday`, `2026-09-26`, `8 AM to 9 AM` lean on the run's zone — and it
+   * is offered with its zone to confirm.
    */
   readonly form?: true;
 }
