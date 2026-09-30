@@ -141,7 +141,9 @@ export interface InvokeModelGatewayOptions {
    * cut off). A miss aborts the request and raises an
    * {@link InvokeModelGatewayError} with `reason: 'timeout'`, `retryable:
    * true` — `withRetry` asks again only while no chunk has reached the caller.
-   * The caller's `req.signal` still wins. Omitted: no deadline (the default).
+   * A wrapper of your own that re-sends on `retryable` alone must make the
+   * same check: a timeout BETWEEN chunks is also `retryable`, and re-sending
+   * then would deliver the start of the answer twice. The caller's `req.signal` still wins. Omitted: no deadline (the default).
    */
   readonly timeoutMs?: number;
 }
@@ -741,8 +743,11 @@ function deadlineFor(
             }),
           );
         }, timeoutMs);
-        if (controller.signal.aborted) return onAbort();
-        controller.signal.addEventListener('abort', onAbort, { once: true });
+        // Handlers go on `pending` FIRST, before any early return: the wait
+        // was already started (fetch, body or stream read), and a promise
+        // left without a handler rejects later as an unhandled rejection —
+        // which kills a Node process on default settings. Once the race is
+        // decided the later settle is a no-op on this promise.
         pending.then(
           (value) => {
             settle();
@@ -755,6 +760,8 @@ function deadlineFor(
             reject(controller.signal.aborted ? controller.signal.reason : err);
           },
         );
+        if (controller.signal.aborted) return onAbort();
+        controller.signal.addEventListener('abort', onAbort, { once: true });
       });
     },
     dispose(): void {

@@ -67,6 +67,21 @@ async function drain(stream: AsyncIterable<LLMChunk>): Promise<LLMChunk[]> {
 
 const never = <T>(): Promise<T> => new Promise<T>(() => undefined);
 
+/** Collects every `unhandledRejection` until `stop()`. */
+function captureUnhandled(): { stop(): unknown[] } {
+  const seen: unknown[] = [];
+  const onRejection = (reason: unknown): void => {
+    seen.push(reason);
+  };
+  process.on('unhandledRejection', onRejection);
+  return {
+    stop() {
+      process.off('unhandledRejection', onRejection);
+      return seen;
+    },
+  };
+}
+
 /** A stream reply: the given SSE pieces, then silence (never closes) when `stall`. */
 function sseReply(pieces: string[], stall: boolean): Response {
   const encoder = new TextEncoder();
@@ -251,6 +266,60 @@ describe('timeoutMs — a per-request deadline', () => {
       .complete({ ...REQ, signal: controller.signal })
       .catch((e) => e)) as Error;
     expect(err.name).toBe('AbortError');
+  });
+
+  // The wait `within` races was ALREADY started when the caller's abort is
+  // seen — a real fetch rejects it a moment later. It must still carry a
+  // handler, or Node reports an unhandled rejection (fatal on default settings).
+  it('a caller signal already aborted leaves no unhandled rejection behind (complete)', async () => {
+    const unhandled = captureUnhandled();
+    const controller = new AbortController();
+    controller.abort();
+    const provider = gateway(
+      (_u, init) =>
+        new Promise<Response>((_resolve, reject) => {
+          setTimeout(() => reject(init?.signal?.reason ?? new Error('aborted')), 5);
+        }),
+      { timeoutMs: 1000 },
+    );
+    const err = (await provider
+      .complete({ ...REQ, signal: controller.signal })
+      .catch((e) => e)) as Error;
+    await new Promise((r) => setTimeout(r, 30));
+    expect(err.name).toBe('AbortError');
+    expect(unhandled.stop()).toEqual([]);
+  });
+
+  it('a caller abort while the consumer holds a chunk leaves no unhandled rejection (stream)', async () => {
+    const unhandled = captureUnhandled();
+    const controller = new AbortController();
+    const encoder = new TextEncoder();
+    const provider = gateway(
+      async (_u, init) =>
+        new Response(
+          new ReadableStream<Uint8Array>({
+            start(body) {
+              body.enqueue(encoder.encode(START + TEXT));
+              // What a real fetch does: the abort errors the body stream, so
+              // the NEXT read is already rejected when it is asked for.
+              init?.signal?.addEventListener('abort', () => body.error(init.signal!.reason));
+            },
+          }),
+          { status: 200 },
+        ),
+      { timeoutMs: 1000 },
+    );
+    const got: string[] = [];
+    const err = (await (async () => {
+      for await (const c of provider.stream!({ ...REQ, signal: controller.signal })) {
+        got.push(c.content);
+        controller.abort(); // while holding the chunk
+      }
+    })().catch((e) => e)) as Error;
+    await new Promise((r) => setTimeout(r, 30));
+    expect(got).toEqual(['Hel']);
+    expect(err.name).toBe('AbortError');
+    expect(unhandled.stop()).toEqual([]);
   });
 
   it('withRetry re-opens a stream that timed out before its first chunk', async () => {
