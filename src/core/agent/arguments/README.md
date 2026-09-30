@@ -246,8 +246,12 @@ tool's facts (`direction`; wholly beyond `retention`; over `maxRange`), spans da
 `ArgumentResolution.refused` door the unreadable-rules refusal already uses, with the sentence
 `serve.ts` · `timeRefusal` — and files no argument row (its `call-window` row, `how: 'refused'`,
 is the record); a window only partly beyond `retention` runs, marked `partlyBeyondRetention`.
-A window the model sent in one form leaves another form's missing arguments alone — never
-filled or asked (`resolve.ts` · `untakenFormArgumentsOf`). At dispatch, a look-back the clock
+A window of the person's that NO form can read, not even wider — a window still running to a
+look-back-only tool, a covering look-back longer than `maxRange` — is refused the same way
+(`no-form-holds`), never left to the tool's rule: an assumed `1h` would read a time nobody asked
+about. The fill, the time ask and the served line all ask ONE owner, `core/time/convert.ts` ·
+`convertForTool`. A window the model sent in one form leaves another form's missing arguments
+alone — never filled or asked (`resolve.ts` · `untakenFormArgumentsOf`). At dispatch, a look-back the clock
 drifted past (§ 7.4) is redrawn only when the library wrote it (`stages/toolCalls.ts` ·
 `timeAtDispatch` over `core/time/drift.ts`); the `call` row records `drift`.
 
@@ -257,6 +261,11 @@ drifted past (§ 7.4) is redrawn only when the library wrote it (`stages/toolCal
 //   { kind: 'call-window', how: 'filled', sent: {…}, differs: { extra: [{ from: '…T07:00:00Z', to: now }] } }
 // the model sends a window still to come → the tool does not run; the model reads
 //   "search_logs was not run on that call: the window it asked for had not happened yet, …"
+// the same "yesterday" to period: { …, maxRange: '24h' } → refused, its `assume: '1h'` never runs:
+//   { kind: 'call-window', how: 'refused', refused: 'no-form-holds', … } and the model reads
+//   "search_logs was not run on that call: no period form the tool declares can read the window it
+//    asked for, exactly or by reading a wider one, within the most the tool declares it reads at
+//    once (maxRange 24h)."
 ```
 
 **Proposed, asked lazily, then served (step T6b, `.time({ reader })`).** A reading of the
@@ -273,8 +282,10 @@ zone, free entry open. The answer is converted into each call's forms (`bindAnsw
 wider), filed `answered` per argument, filled with `ArgumentFill.window` (the note's window clause:
 "from the window the person chose when asked what their words meant"), and settles the mention
 with a `time-answer` row (`how: 'confirmed'` for the click on a pre-filled reading, `'edited'` for a
-window the person wrote) — so later calls of the turn are filled from it (`answered` +
-`matched: 'mention'`) and it is not asked again. SERVED — LATE, at the decision point, never on a
+window the person wrote) and one more `call-window` row per call it filled (`filled`,
+`person.source: 'answered'`, `sent` + `differs.extra` when wider — the call's latest row is its
+window, so `ctx.time`, the clock at dispatch and the result checks read it) — so later calls of
+the turn are filled from it (`answered` + `matched: 'mention'`) and it is not asked again. SERVED — LATE, at the decision point, never on a
 tool description: ONE request-only `user` line appended last to each request (`serve.ts` ·
 `timeWindowsLine`, composed at the slot's one decoration site from the tools really served, carried
 on `timeLine` = `{ iteration, text }`, appended by `callLLM`, rebuilt by `servedView`; the mount
@@ -286,7 +297,11 @@ arguments left out — not a question in the reply, which the first paid T6b run
 model reaching for, and not a written window, which runs unconfirmed); once a call already ran on
 a written window, the limit the answer states instead. Why late: the step-7b bench
 measured raw facts served early wrong 73/80 and the conclusion served at the decision point 20/80.
-When every reading breaks a tool's facts nothing is asked and the call is refused (`timeRefusal`).
+When a tool can read NO reading (each breaks a fact, or no form holds it) nothing is asked and the
+call is refused (`timeRefusal`); the next request's line then CONCLUDES it — "client_activity was
+not run for “10/20/26”: <the same reason>. So the answer tells the person that client_activity
+could not read that time, and claims nothing about it from client_activity." — and no longer names
+that call as the next step (the T6b bench's future case asked it again until its budget ran out).
 
 ```ts
 // "client activity yesterday?" under the reader's arm, first request — its LAST message:
@@ -347,7 +362,19 @@ once, before anything in the batch is written or run (`stages/argumentAsk.ts` ·
   breaks its `pattern`. One that does not fit files `asked: 'invalid-answer'` and is asked
   again with a second fixed question (`ask.ts` · `ARGUMENT_REASK_QUESTION`), at most
   `ask.ts` · `MAX_ASK_ROUNDS` (three) times; then the calls that needed it are refused by
-  name (`serve.ts` · `unansweredRefusal`). More than 32 fields go in rounds of 32.
+  name (`serve.ts` · `unansweredRefusal`). More than 32 fields go in rounds of 32. Under
+  `.time()` a period answer is also judged against the tool's `direction`, `retention` and
+  `maxRange` — and a START and END asked as two fields are judged TOGETHER (`ask.ts` ·
+  `pairsBroken`: the call's bounds read back with both answers), because one bound of two is no
+  window: a future `start_time` / `end_time` pair to a tool whose source holds only the past is
+  asked again naming the fact, then refused, with the reader armed or not.
+
+  ```ts
+  // period: { forms: [{ kind: 'bounds', from: start_time, to: end_time }], direction: 'past' },
+  // "Show client activity", the model leaves both out → f1 'From when?', f2 'Until when?';
+  // the person answers tomorrow's start and end → asked again ("a window that has already
+  // happened (the source holds only the past)"), three times, then the call is refused unrun.
+  ```
 - **The resume adds no model call.** The answered values are filled like a declared default
   (`ArgumentFill.source: 'answered'`), each call runs on its ordinary path — permission,
   middleware, validation, check-in, credentials — and its result carries a past-tense note

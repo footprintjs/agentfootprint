@@ -348,9 +348,17 @@ function settledSentence(tools: readonly PeriodTool[], windows: ServedWindows): 
  * the next step, with the two moves that do not (a question in the reply, a written window).
  * After one did, the limit the answer states instead.
  */
-function pendingSentence(tools: readonly PeriodTool[], windows: ServedWindows): string | undefined {
-  const pending = windows.pending;
-  if (pending === undefined || pending.length === 0) return undefined;
+function pendingSentence(
+  allTools: readonly PeriodTool[],
+  windows: ServedWindows,
+): string | undefined {
+  // A tool that refused a quote cannot confirm it: the quote is pending only for the tools that
+  // did not, and one every served period tool refused is the refused half's alone.
+  const pending = (windows.pending ?? []).filter((q) =>
+    allTools.some((t) => !refusedFor(windows, q, t.name)),
+  );
+  if (pending.length === 0) return undefined;
+  const tools = allTools.filter((t) => pending.some((q) => !refusedFor(windows, q, t.name)));
   const quotes = pending.map((q) => `“${q}”`).join(', ');
   if (windows.ranUnconfirmed === true) {
     return (
@@ -374,6 +382,48 @@ function pendingSentence(tools: readonly PeriodTool[], windows: ServedWindows): 
 }
 
 // LENS · late-line · request-ephemeral
+// reads: the person's windows a SERVED period tool refused this turn before dispatch (`windows.ts` ·
+//        `readerWindowsOf`, `refused`: the quote, the tool and the reason code) and that tool's
+//        declared facts
+// law: the library's CONCLUSION about a call that did not run: past tense for the refusal, the
+//      reason in the tool's declared facts only (the one text `timeRefusal` also serves — never the
+//      window's value), then what an answer states; it names no next move for that window.
+/**
+ * The refused half of the served time line: each window of the person's a
+ * served period tool refused before dispatch — the call's reason in the same
+ * words its result read ({@link timeRefusal}), then the conclusion an answer
+ * states. A refused window is not a pending one to ask about again: the T6b
+ * bench's future case asked the same refused call five times and ran out of
+ * budget while the pending half kept naming that call as the next step.
+ * `undefined` when nothing was refused.
+ */
+function refusedSentence(tools: readonly PeriodTool[], windows: ServedWindows): string | undefined {
+  const byName = new Map(tools.map((t) => [t.name, t]));
+  const refused = (windows.refused ?? []).filter((r) => byName.has(r.toolName));
+  if (refused.length === 0) return undefined;
+  const clauses = refused.map((r) => {
+    const facts = (byName.get(r.toolName) as PeriodTool).facts;
+    return `${r.toolName} was not run for “${r.quote}”: ${refusalReason(
+      r.refused,
+      facts,
+      r.argument,
+    )}.`;
+  });
+  const names = [...new Set(refused.map((r) => r.toolName))];
+  const conclusion =
+    refused.length === 1
+      ? `So the answer tells the person that ${names[0]} could not read that time, and claims ` +
+        `nothing about it from ${names[0]}.`
+      : 'So the answer tells the person which of those times each tool could not read, and ' +
+        'claims nothing about them from that tool.';
+  return `${clauses.join(' ')} ${conclusion}`;
+}
+
+/** Whether `tool` refused the person's window for `quote` this turn. */
+const refusedFor = (windows: ServedWindows, quote: string, tool: string): boolean =>
+  (windows.refused ?? []).some((r) => r.quote === quote && r.toolName === tool);
+
+// LENS · late-line · request-ephemeral
 // reads: the turn's settled windows of the person's words (each mention's quote, its one window and
 //        WHOSE it is — the person's answer in the time ask, or a model reader's reading), the
 //        quotes still pending (a rule reading the person has not answered — `bind.ts` ·
@@ -390,7 +440,7 @@ function pendingSentence(tools: readonly PeriodTool[], windows: ServedWindows): 
  * point — composed at the tools slot's one decoration site
  * (`core/slots/buildToolsSlot.ts` · `commitWire`) from the tools it really
  * serves, carried to `callLLM` on `timeLine`, and rebuilt by
- * `lib/time-travel/servedView.ts` from the same committed key. Two halves:
+ * `lib/time-travel/servedView.ts` from the same committed key. Three parts:
  *
  * - SETTLED — each window the person confirmed or gave in the time ask (or a
  *   `model` reader's reading), in the person's zone, WHOSE it is, and each
@@ -398,6 +448,9 @@ function pendingSentence(tools: readonly PeriodTool[], windows: ServedWindows): 
  *   one the fill would use (said so); a value the tool's view hides is named
  *   hidden. So the model never re-derives a window from words, and the answer
  *   states the window it was built on.
+ * - REFUSED — a window of the person's a served period tool refused before
+ *   dispatch this turn: the refusal's reason in the result's own words, then
+ *   what an answer states. That quote is no longer pending for that tool.
  * - PENDING — a proposal the person has not answered is no window yet, and a
  *   call that writes its own window runs as sent, unconfirmed (§ 7.3). The
  *   line names the next step — the call with the period arguments left out,
@@ -406,7 +459,7 @@ function pendingSentence(tools: readonly PeriodTool[], windows: ServedWindows): 
  *   written window). Once a call of the turn already ran on a written window
  *   (`ranUnconfirmed`), it names the limit an answer states instead.
  *
- * `undefined` when no served tool declares a period or neither half has
+ * `undefined` when no served tool declares a period or no part has
  * anything to say — a turn with no time words serves no line at all.
  *
  * @example
@@ -426,10 +479,12 @@ export function timeWindowsLine(
 ): string | undefined {
   const tools = periodToolsOf(served, winningTools);
   if (tools.length === 0) return undefined;
-  const settled = settledSentence(tools, windows);
-  const pending = pendingSentence(tools, windows);
-  if (settled === undefined) return pending;
-  return pending === undefined ? settled : `${settled} ${pending}`;
+  const halves = [
+    settledSentence(tools, windows),
+    refusedSentence(tools, windows),
+    pendingSentence(tools, windows),
+  ].filter((h): h is string => h !== undefined);
+  return halves.length === 0 ? undefined : halves.join(' ');
 }
 
 /**
@@ -737,16 +792,19 @@ export function secondPauseRefusal(toolName: string, why: 'check-in' | 'tool-pau
 // LENS · tool-result · persistent-history
 // reads: the call's `call-window` decision (`core/time/bind.ts` · `callWindowOf`: the window it asked
 //        for against the tool's DECLARED facts — `direction`, `retention`, `maxRange`, a `day`-only form,
-//        a sent wall time the zone skips) and those facts' own spellings
+//        a sent wall time the zone skips, a person's window no declared form can read) and those facts'
+//        own spellings
 // law: may omit, never deny; past tense, anchored to the call; prints no window value (it may be the
 //      person's) — only the tool's declared facts and an argument name; says what the model may do and
 //      promises no outcome.
 /**
  * The result a call reads when it was refused BEFORE DISPATCH on its window
  * (the time layer, step T5b — time design § 7.2): the window breaks one of the
- * tool's declared facts, spans days for a tool that reads one day per call, or
- * a sent wall time is one the zone's clocks skip. Splitting a window into
- * several calls is the model's choice, never the library's.
+ * tool's declared facts, spans days for a tool that reads one day per call, a
+ * sent wall time is one the zone's clocks skip, or no form the tool declares
+ * can read the person's window, exactly or wider (`no-form-holds` — the tool's
+ * own default never stands in for it). Splitting a window into several calls
+ * is the model's choice, never the library's.
  *
  * @example
  * ```ts
@@ -761,44 +819,55 @@ export function timeRefusal(
   facts: PeriodFacts,
   argument?: string,
 ): string {
-  const head = `${toolName} was not run on that call: `;
+  return `${toolName} was not run on that call: ${refusalReason(refusal, facts, argument)}.`;
+}
+
+/**
+ * Why a window was refused before dispatch, in the tool's declared facts and
+ * an argument name only — never the window's value. ONE text per code: the
+ * refused call's result ({@link timeRefusal}) and the served line's
+ * conclusion (`refusedSentence`) both say it.
+ */
+function refusalReason(refusal: TimeRefusal, facts: PeriodFacts, argument?: string): string {
   switch (refusal) {
     case 'time-future':
       return (
-        head +
         'the window it asked for had not happened yet, and the tool declares that its source ' +
-        'holds only the past.'
+        'holds only the past'
       );
     case 'time-past':
       return (
-        head +
         'the window it asked for had already ended, and the tool declares that its source ' +
-        'holds only the future.'
+        'holds only the future'
       );
     case 'beyond-retention':
       return (
-        head +
         'the window it asked for was wholly older than the oldest data the tool declares its ' +
-        `source keeps (${facts.retention ?? 'its retention'}).`
+        `source keeps (${facts.retention ?? 'its retention'})`
       );
     case 'over-max-range':
       return (
-        head +
         'the window it asked for was wider than the tool declares it reads at once ' +
         `(maxRange ${facts.maxRange ?? 'undeclared'}); narrower windows, one call each, may be ` +
-        'proposed instead.'
+        'proposed instead'
       );
     case 'multi-day':
       return (
-        head +
         'the window it asked for spanned more than one calendar day, and the tool reads one day ' +
-        'per call; one call per day may be proposed instead.'
+        'per call; one call per day may be proposed instead'
       );
     case 'dst-gap':
       return (
-        head +
         `the wall time sent for ${argument ?? 'its period'} does not exist in the tool's zone — ` +
-        'the clocks skip it at a daylight-saving change.'
+        'the clocks skip it at a daylight-saving change'
+      );
+    case 'no-form-holds':
+      return (
+        'no period form the tool declares can read the window it asked for, exactly or by ' +
+        'reading a wider one' +
+        (facts.maxRange !== undefined
+          ? `, within the most the tool declares it reads at once (maxRange ${facts.maxRange})`
+          : '')
       );
   }
 }

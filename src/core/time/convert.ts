@@ -100,10 +100,12 @@ import {
   FACT_UNITS,
   isPlain,
   needsZone,
+  periodFactProblem,
   wallOf,
   type BoundAs,
   type PeriodFacts,
   type PeriodForm,
+  type TimeRefusal,
 } from './periodForm.js';
 
 export {
@@ -513,7 +515,10 @@ export function convertWidened(
     if (done === undefined || done.extra.length === 0) continue;
     const sentFrom = msOf(done.sent.from) as Ms;
     const sentTo = msOf(done.sent.to) as Ms;
-    if (widestMs !== undefined && sentTo.ms - sentFrom.ms > widestMs) continue;
+    // A look-back's read holds both ends (`[now − L, now]`, one millisecond past `L` half-open):
+    // its length is `L`, so a look-back exactly `maxRange` long is one the tool reads at once.
+    const readMs = sentTo.ms - sentFrom.ms - (form.kind === 'lookback' ? 1 : 0);
+    if (widestMs !== undefined && readMs > widestMs) continue;
     return { form: i, ...done };
   }
   return undefined;
@@ -537,6 +542,61 @@ export function spansDaysForDayOnly(
     if (zone === undefined) return false;
     return spellDate(dateAt(zone, span[0].ms)) !== spellDate(dateAt(zone, span[1].ms - 1));
   });
+}
+
+// ─── One window, one tool: the conversion or the reason (the one owner) ──
+
+/** A window a tool can read — the conversion to send — or the reason it cannot, before dispatch. */
+export type ToolConversion =
+  | {
+      /** Exact, or — when no form holds the window exactly — WIDENED (it carries `sent` and `extra`). */
+      readonly conversion: Conversion | WidenedConversion;
+      /** The window starts before the source's oldest data and ends after it: it dispatches, marked. */
+      readonly partlyBeyondRetention?: true;
+    }
+  | { readonly refused: TimeRefusal };
+
+/**
+ * Whether one tool can read one window, and how — the ONE answer every door
+ * that puts a person's window into a tool asks (the fill, the time ask's
+ * answer and its choices, the served line): the tool's facts first
+ * ({@link periodFactProblem}), then the first form that holds it exactly
+ * ({@link convertExact}), then the first that holds it by reading MORE
+ * ({@link convertWidened} — `maxRange` skips a read too wide), then `multi-day`
+ * for a `day`-only tool ({@link spansDaysForDayOnly}), and otherwise
+ * `no-form-holds`: no declared form can read it at all (a look-back ends at
+ * now, so it cannot reach a window still running; a covering look-back wider
+ * than `maxRange` is not read). Never the tool's own default in its place.
+ *
+ * @example
+ * ```ts
+ * const lookbackOnly = [{ kind: 'lookback', argument: 'window', signed: false }] as const;
+ * const ctx = { now: '2026-10-09T15:40:00Z', zone: 'America/Los_Angeles', granularityMs: 60_000 };
+ * const yesterday = { from: '2026-10-08T00:00:00-07:00', to: '2026-10-09T00:00:00-07:00' };
+ * convertForTool({ range: yesterday }, lookbackOnly, {}, ctx);
+ * // { conversion: { form: 0, values: { window: '1960m' }, sent: …, extra: [ …the gap after it… ] } }
+ * convertForTool({ range: yesterday }, lookbackOnly, { maxRange: '24h' }, ctx);
+ * // { refused: 'no-form-holds' } — reaching 8 Oct from now takes a look-back wider than 24h
+ * ```
+ */
+export function convertForTool(
+  window: WindowToConvert,
+  forms: readonly PeriodForm[],
+  facts: PeriodFacts | undefined,
+  ctx: ConvertContext,
+): ToolConversion {
+  const problem = facts === undefined ? undefined : periodFactProblem(window.range, facts, ctx.now);
+  if (problem !== undefined) return { refused: problem };
+  const partly =
+    facts !== undefined && partlyBeyondRetention(window.range, facts, ctx.now)
+      ? { partlyBeyondRetention: true as const }
+      : {};
+  const exact = convertExact(window, forms, ctx);
+  if (exact !== undefined) return { conversion: exact, ...partly };
+  const widened = convertWidened(window, forms, ctx, widestMsOf(facts));
+  if (widened !== undefined) return { conversion: widened, ...partly };
+  if (spansDaysForDayOnly(window, forms, ctx)) return { refused: 'multi-day' };
+  return { refused: 'no-form-holds' };
 }
 
 /**

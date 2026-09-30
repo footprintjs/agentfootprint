@@ -766,6 +766,22 @@ function timeWindowLines(): string[] {
     { ...sets[0]!, pending: ['10/09/26 8 AM to 8:40 AM PST', 'last 2 hours'] },
     // …and after a call already ran on a window the model wrote: the limit, not the move.
     { now: '2026-10-09T15:40:00Z', windows: [], pending: ['yesterday'], ranUnconfirmed: true },
+    // A window of the person's a tool refused before dispatch: the conclusion, one and two of them.
+    {
+      now: '2026-10-09T15:40:00Z',
+      windows: [],
+      pending: ['yesterday'],
+      refused: [{ quote: 'yesterday', toolName: 'search_logs', refused: 'no-form-holds' }],
+    },
+    {
+      now: '2026-10-09T15:40:00Z',
+      windows: [],
+      pending: ['10/20/26'],
+      refused: [
+        { quote: '10/20/26', toolName: 'search_logs', refused: 'no-form-holds' },
+        { quote: '10/20/26', toolName: 'client_activity', refused: 'time-future' },
+      ],
+    },
   ];
   const wires = [
     new Map<string, unknown>([
@@ -1673,6 +1689,9 @@ const PRODUCERS: readonly ModelFacingProducer[] = [
       /^The window for “yesterday” is not settled yet: the person confirms it in the library's own form, which shows its reading of those words with the zone and opens when search_logs is called with window left out, or client_activity is called with start_time, end_time left out \(or the call is refused with the reason\)\. So the next step is that call — not a question about the time in the reply, and not a window written into the call, which would run unconfirmed\.$/m,
       / that window\. The window for “10\/09\/26 8 AM to 8:40 AM PST”, “last 2 hours” is not settled yet: /,
       /^The window for “yesterday” is not settled: the person has not confirmed it, and the call that ran used a window written into it, unconfirmed\. An answer built on that call says its window was not confirmed by the person\.$/m,
+      // A refused window (packet "lookback"): the refusal's own reason, then what the answer states.
+      /^search_logs was not run for “yesterday”: no period form the tool declares can read the window it asked for, exactly or by reading a wider one\. So the answer tells the person that search_logs could not read that time, and claims nothing about it from search_logs\. The window for “yesterday” is not settled yet: .* opens when client_activity is called with start_time, end_time left out \(/m,
+      /^search_logs was not run for “10\/20\/26”: .* client_activity was not run for “10\/20\/26”: the window it asked for had not happened yet, and the tool declares that its source holds only the past\. So the answer tells the person which of those times each tool could not read, and claims nothing about them from that tool\.$/m,
     ],
     compose: async () => timeWindowLines(),
   },
@@ -1890,11 +1909,21 @@ const PRODUCERS: readonly ModelFacingProducer[] = [
       /was wider than the tool declares it reads at once \(maxRange 24h\); narrower windows, one call each, may be proposed instead\./,
       /spanned more than one calendar day, and the tool reads one day per call; one call per day may be proposed instead\./,
       /the wall time sent for start does not exist in the tool's zone — the clocks skip it at a daylight-saving change\./,
+      /no period form the tool declares can read the window it asked for, exactly or by reading a wider one, within the most the tool declares it reads at once \(maxRange 24h\)\./,
+      /search_logs was not run on that call: no period form the tool declares can read the window it asked for, exactly or by reading a wider one\.$/m,
     ],
     compose: async () => [
       ...(
-        ['time-future', 'time-past', 'beyond-retention', 'over-max-range', 'multi-day'] as const
+        [
+          'time-future',
+          'time-past',
+          'beyond-retention',
+          'over-max-range',
+          'multi-day',
+          'no-form-holds',
+        ] as const
       ).map((r) => timeRefusal('search_logs', r, { retention: '30d', maxRange: '24h' })),
+      timeRefusal('search_logs', 'no-form-holds', {}),
       timeRefusal('badge_swipes', 'dst-gap', {}, 'start'),
     ],
   },

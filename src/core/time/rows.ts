@@ -172,7 +172,7 @@ export interface PersonWindow extends TimeRange {
 
 /**
  * Which window one call to a tool that declares period forms carries (time
- * design § 7.3) — one row per such call, filed by the inputs layer beside the
+ * design § 7.3) — one row per such call (two when the time ask filled it, below), filed by the inputs layer beside the
  * call's `argument` rows, before the call dispatches.
  *
  * | `how` | Means |
@@ -182,8 +182,8 @@ export interface PersonWindow extends TimeRange {
  * | `model-chosen` | the sent window (`asked`) differs from the person's (`person`, when one window is theirs): it ran as sent (the v1 law) |
  * | `model` | the sent window, and no window of the person's this turn |
  * | `unread` | a period argument was sent and no form reads the call back as a range |
- * | `not-filled` | the period was left out and nothing was filled (`why`) — the tool's own rule applied |
- * | `refused` | refused before dispatch (`refused`: a fact the window breaks, `multi-day`, `dst-gap` with its `argument`) — the call did not run |
+ * | `not-filled` | the period was left out and nothing was filled (`why`) — the tool's own rule applied (`no-exact-form` is no longer filed: a window no form holds is refused, `no-form-holds`; the word is kept so an older record reads) |
+ * | `refused` | refused before dispatch (`refused`: a fact the window breaks, `multi-day`, `no-form-holds`, `dst-gap` with its `argument`; no range at all when an open reading was refused in every reading) — the call did not run |
  *
  * `asked` is the half-open range the call asks for: the person's on a fill,
  * the sent value read back otherwise — what `ctx.time.asked` hands the tool.
@@ -192,6 +192,12 @@ export interface PersonWindow extends TimeRange {
  * not asked — `period-differs-from-asked`) or `trimmedByTool` (the tool
  * declares `filtersToAsked`). `partlyBeyondRetention` marks a window that
  * starts before the source's oldest data and ends after it: it dispatched.
+ *
+ * A call the time ask filled (the person confirmed or gave the window when
+ * asked what their words meant) has TWO rows: `not-filled` / `open-reading`
+ * before the ask, then `filled` with `person.source: 'answered'` when the
+ * answer is bound (`arguments/ask.ts` · `bindAnswer`). The LATEST row of a
+ * call is the window it runs with (`callWindowOfCall`).
  */
 export interface CallWindowRow {
   readonly kind: 'call-window';
@@ -597,10 +603,15 @@ function isCallWindowRow(row: Readonly<Record<string, unknown>>): boolean {
         (row.form === undefined || formOk) &&
         (row.asked === undefined || askedOk) &&
         (row.person === undefined || isPersonWindow(row.person)) &&
-        // A skipped wall time names its argument and has no range; every other refusal has a range.
+        // A skipped wall time names its argument and has no range. Every other refusal has a
+        // range — except an OPEN reading the tool can read in no reading (`bind.ts` ·
+        // `openReadingWindow`): no window was chosen, so it carries none, and no form or person.
         (row.refused === 'dst-gap'
           ? typeof row.argument === 'string' && formOk && row.asked === undefined
-          : row.argument === undefined && askedOk)
+          : row.argument === undefined &&
+            (row.asked === undefined
+              ? row.form === undefined && row.person === undefined
+              : askedOk))
       );
     default:
       return only('why') && WHYS.includes(row.why as string);
