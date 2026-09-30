@@ -1,7 +1,7 @@
 # Time as one library layer
 
-**Design and implementation plan, 2026-09-29, revised the same day after one review (§ 15).
-Nothing in it is built. Every question in § 14 is open and carries a recommended answer; the owner
+**Design and implementation plan, 2026-09-29, revised twice the same day to apply one review in
+full (§ 15). Nothing in it is built. Every question in § 14 is open and carries a recommended answer; the owner
 decides.**
 
 | Page | What it holds |
@@ -21,36 +21,29 @@ decides.**
 
 ## For the owner
 
-1. **One layer, one owner.** Every time shape and every time grammar moves into one folder,
-   `src/core/time/`. Today the library already has three grammars that disagree with each other
-   (§ 1.3), and the host has four more.
-2. **The clock is an input.** The app declares "now" and its zone once per turn; the library
-   records it, freezes it across a pause, and never resolves the person's words against the wall
-   clock. It reads the wall clock at exactly one other point, when a call dispatches, and records
-   that reading (`dispatchedAt`, § 7.4), because a tool evaluates a look-back against its own clock.
-3. **The person's words are read by a strategy the app arms; the library resolves them.** A
-   strategy is a tokenizer: it returns the zone-less **parts** it sees ("10/09/26", "8 AM", "PST"),
-   never an instant and never a pick. One library module turns parts into candidate windows
-   against the clock and the declared policy (date order, year, DST, zone abbreviations, edges),
-   the same for every language. What the policy cannot settle becomes an ask.
-4. **One range per mention, many argument shapes.** Each time mention the person makes resolves to
-   one range; an ambiguous or future one becomes one typed ask. A tool declares how one range maps
-   onto its arguments (one argument or two, ISO, epoch, date-only, a look-back); the library fills
-   only when one mention applies, checks the model's value when it binds a call to a mention, and
-   records every conversion that is not exact.
-5. **The model's own window is recorded, not refused.** When the model sends a window that differs
-   from the person's, the call runs as sent — the shipped `askOrAssume` law — and the row says so;
-   claims about the person's window then read "not sure". Refusing is opt-in.
-6. **Results and datasets use the same instants.** A result's period (step 7b) and a dataset's
-   time axis (in flight) share one instant rule and one duration grammar. The side panel, the
-   answer's limits block, the metrics dashboard and vizfootprint read the same declaration, so
-   nothing guesses which column is time.
-7. **Off means byte-identical.** Nothing changes unless the app arms `.time()` or a tool declares a
-   capability. The one exception is step T1's grammar merge: two new refusals of malformed
-   instants a tool is sent, named in § 12.1 beside three changes the design avoids.
-8. **One ruling is needed first: Q39.** "The library never parses '2h'" becomes two laws: the
-   library never reads the **person's** words except through an armed strategy, and it reads and
-   writes **author-declared machine spellings** through one grammar (§ 5.4, TQ1).
+1. **What is broken.** Time is read in several places today, by the library and by the app, and
+   they disagree: one part accepts a date another refuses, a date in the future got through, a tool
+   was sent a window it cannot read, and charts guess which column is the time.
+2. **What changes.** All of it moves into one place in the library. The app says what "now" is and
+   which time zone the person is in; the library reads the person's time words, asks when they can
+   mean two things, turns the window into the form each tool needs, and writes down every step.
+3. **What stays the same.** An app that does not switch this on sees no change, except that two
+   impossible dates (30 February, hour 24) are no longer passed to a tool.
+4. **Decision 1 — may the library read people's time words? (TQ1)** Recommended: **yes**, but only
+   through a reader the app switches on, and when the words can mean two things it asks the person
+   instead of picking.
+5. **Decision 2 — how small is the first version? (TQ23)** Recommended: **small**. The app sets the
+   time zone, the reader, and two rules (the order of day and month, and a missing year); every
+   other behaviour is a fixed careful rule until a test shows it needs a switch.
+6. **Decision 3 — the model uses a different window from the person's. (TQ6)** Recommended: **let
+   the call run and record it**; the answer then says "not sure" about the person's window. Blocking
+   the call stays optional, because comparing with yesterday or zooming in is normal work.
+7. **Decision 4 — where does the time zone come from? (TQ10)** Recommended: **from each run**, so
+   every person keeps their own zone, with an app-wide fallback; never the server's zone, and a run
+   with neither is stopped.
+8. **Decision 5 — dates in the future. (TQ24)** Recommended: **each tool says whether it can read
+   the past, the future or both**; a log store says "past", so a future window is refused with a
+   plain reason instead of quietly returning nothing.
 
 ---
 
@@ -58,10 +51,8 @@ decides.**
 
 ### 1.1 In the owner's words
 
-> Time keeps breaking in pieces in a real app. We are building a library for everyone, not only
-> for my friend.
-
-The owner asked for **one** universal solution in the library, driven by configuration, with a
+Time keeps breaking, piece by piece, in a real app, and the library is meant for every app, not
+the one that found the breaks. The owner asked for **one** universal solution in the library, driven by configuration, with a
 pluggable strategy where language or locale matters, and asked how it serves tool arguments,
 reports, the side panel, vizfootprint and the metrics dashboard.
 
@@ -151,7 +142,7 @@ grammar.
 | `instant.ts` | the one instant parser, moved from `coverage/period.ts` · `instantOf` (exact, no `Date.parse`), with **two profiles** (§ 12.1): `lenient` — today's `instantOf` unchanged, for a period a result declares; `strict` — canonical upper-case `T`/`Z`, no leap second, day-checked, for a value the library sends to a tool. Plus `compareInstants`, `toUtc` |
 | `duration.ts` | the one duration grammar `^[1-9][0-9]*[smhdw]$` with a **unit set per use** (look-back default `mhdw`, today's; axis interval `smhdw`), `durationMs`, `spellDuration` (the smallest exact spelling) — merging `declare.ts` · `LOOKBACK` and the in-flight `timeAxis.ts` · `INTERVAL` (§ 12.1) |
 | `zone.ts` | IANA validation and offset arithmetic through `Intl` (no dependency); wall time → instant with Temporal's four DST words |
-| `range.ts` | `TimeRange`, the per-boundary edge conversions of § 3.3, `covers`, `overlaps`, `roundOutward` |
+| `range.ts` | `TimeRange`, the per-boundary edge conversions of § 3.3, `covers`, `overlaps`, `roundOutward`, and the two range spellings, `parseRange` / `spellRange`: the ISO 8601 interval `from/to` (ask answers, § 6.1) and the joined `from..to` (a tool argument, § 7.1). No other file splits or joins a range |
 | `clock.ts` | `TimeClock` (§ 4) |
 | `axis.ts` | `DatasetTimeAxis` (§ 8), moved from the in-flight `artifacts/timeAxis.ts` |
 | `reader.ts` | the `TimeReader` port and its result shape, `TimeParts` (§ 5.1) |
@@ -196,7 +187,7 @@ interface ResolvedWindow {
   readonly said: readonly TimePart[];   // 'year' | 'month' | 'day' | 'hour' | 'minute' | 'meridiem' | 'zone' — present in the parts of a 'rule' reader; empty for a 'model' reader (§ 5.5)
   readonly implied: readonly TimePart[]; // filled by resolve.ts: the clock, the policy, a correction
   readonly anchor: 'message' | 'previous-window' | 'none';
-  readonly reader: { readonly id: string; readonly kind: 'rule' | 'model' } | 'answered';
+  readonly reader: { readonly id: string; readonly kind: 'rule' | 'model' } | 'answered' | 'control'; // 'control': a typed window set in a UI (§ 4)
   readonly notes: readonly TimeNote[];  // library-written, e.g. { kind: 'abbreviation-corrected', said: 'PST', zone: 'America/Los_Angeles', offset: '-07:00' }, { kind: 'dst-overlap', which: 'earlier' }, { kind: 'end-of-grain' }
 }
 ```
@@ -215,8 +206,8 @@ Rules:
 
 Inside the library a range is half-open `[from, to)`. When a person says an end at a grain ("to
 8:40"), the default reading runs to the end of that grain — `[08:00, 08:41)` — and records
-`{ kind: 'end-of-grain' }` (Elasticsearch's `lte` rounding). The alternative, `exact`, is
-configuration (§ 11, TQ9). A tool's declared `granularity` rounds a range outward, never inward,
+`{ kind: 'end-of-grain' }` (Elasticsearch's `lte` rounding). In v1 this is a fixed law, not a
+switch; an `exact` reading waits for a bench that shows the need (§ 11, TQ9). A tool's declared `granularity` rounds a range outward, never inward,
 and records the rounding.
 
 The places a range crosses do **not** share that edge. Each boundary converts, and each
@@ -227,7 +218,7 @@ conversion is a function in `range.ts`, never inline:
 | a result's `DeclaredPeriod.queried` / `held` (`coverage/period.ts` · `periodVerdict`) | **inclusive at both ends** ("bounds are inclusive": `queried.to < held.from` is `not-held`, so `to == held.from` is `partly-held`) | not converted — the tool declares its own inclusive range | `[q.from, q.to + step)`, where `step` is the tool's `granularity`, else 1 ms. **`periodVerdict` stays inclusive and byte-identical**; a time-layer check (§ 9.2) compares after this conversion and records the `step` it used |
 | a tool argument (§ 7.1) | whatever the tool declares: `to.edge: 'inclusive' \| 'exclusive'` per bound, default `'inclusive'` | exclusive: `to` as is; inclusive: the last instant inside the range at the argument's precision (`to − 1 s` for an ISO value with seconds, `to − 1 min` for a minute wall time, the previous day for a `date`) | inverse of the same rule |
 | a look-back argument | `[dispatchedAt − L, dispatchedAt]` as the **tool's** clock evaluates it | § 7.2, with the drift of § 7.4 | the same, recorded |
-| an ask answer (`format: 'time-range'`, § 6.1) | the wire value is an ISO 8601 interval `from/to`, half-open, the library's own form | identity | identity |
+| an ask answer (`format: 'time-range'`, § 6.1) | the wire value is an ISO 8601 interval `from/to`, half-open, the library's own form (`range.ts` · `parseRange` / `spellRange`) | identity | identity |
 | a label shown to the person (`present.ts`) | the **said** end: "to 8:40" displays as "08:00–08:40" | under `end-of-grain`, render `to − 1 grain`; under `exact`, render `to` | never parsed back; a label is not data |
 | vizfootprint `IntervalClause` (`viz:src/data/types.ts`) | **inclusive at both ends** (SQL `BETWEEN`); its "half-open" `IntervalBounds` means one side is `null` (unbounded), not an excluded end | `[from, last instant before to at the column's precision]` | a brushed `[lo, hi]` → `[lo, hi + 1 step)`; a `null` side stays unbounded, never becomes "now" |
 
@@ -243,30 +234,49 @@ becomes an **input**, never a hidden read.
 
 ```ts
 interface TimeClock {
-  readonly now: InstantText;            // the anchor for this turn
-  readonly zone: ZoneName;              // the app's zone
-  readonly source: 'app' | 'default';   // the app passed `now`, or the library took the turn's start
+  readonly now: InstantText;                    // the anchor for this turn
+  readonly nowSource: 'app' | 'default';        // the app passed `now`, or the library took the turn's start
+  readonly zone: ZoneName;                      // the person's zone for this run
+  readonly zoneSource: 'run' | 'builder';       // the run's `time.zone`, else the `.time({ zone })` fallback
 }
 ```
 
 - **Declared per turn.** `agent.run({ message, time: { now, zone } })`. `now` should be the
   **message's** time (Rasa's rule), so a replay or a late resume reads "yesterday" the same way.
-  When the app passes none, the library takes the turn's start once and records `source: 'default'`
-  — a default nobody chose, admitted like `askOrAssume`'s (TQ5).
+  When the app passes none, the library takes the turn's start once and records
+  `nowSource: 'default'` — a default nobody chose, admitted like `askOrAssume`'s (TQ5).
+- **The zone is per run, the builder's is a fallback.** A multi-user app serves people in many
+  zones, so a zone fixed at build time would be the silent default in another form. The run's
+  `time.zone` wins; `.time({ zone })` is an optional, declared fallback; with neither, `run()` is
+  refused before the turn starts — never the server's zone (TQ10). `resolve.ts` uses the stamp's
+  `zone` for every part the person left zone-less; a zone the person said (`zoneToken`) overrides it
+  for that mention only.
 - **Frozen across a pause.** The clock is a run constant written once at the turn's seed. A
   `requestInput` pause and its resume read the same clock; the host's
   `host:be-server/timeContext.ts` · `applicationClock` already does this by hand
-  (`host:docs/TEMPORAL_INPUT_WORKFLOW.md`).
-- **Recorded once.** One `clock` stamp per turn on the ledger: `{ now, zone, source }`. Every time
-  row cites it. A reader of the record can re-derive every resolution from the stamp and the
-  message.
-- **The zone is required when armed.** `.time({ zone })` has no default; a server's local zone is
-  exactly the silent default the research warns against (TQ10).
-- **One recorded wall-clock read, at dispatch.** The frozen clock resolves the person's words. A
-  tool, though, evaluates a look-back against its own clock when it runs, which after a 30-minute
-  `requestInput` pause is 30 minutes later than `now`. So each call row records `dispatchedAt` —
-  the one wall-clock read the layer makes, recorded, never used to resolve words — and § 7.4 says
-  what the drift does.
+  (`host:docs/TEMPORAL_INPUT_WORKFLOW.md`). When `resume()` is passed a different `time`, the frozen
+  clock is kept — the paused turn's words were already resolved against it — and the passed value
+  is recorded on the resume row as `clock-on-resume { passed, kept }`; it is not refused, because an
+  app that passes the current time on every call is doing nothing wrong (TQ21).
+- **Recorded once.** One `clock` stamp per turn on the ledger: `{ now, nowSource, zone, zoneSource }`.
+  Every time row cites it. A reading is re-derivable only from its own row, not from the stamp and
+  the message alone: the reader and the zone data can change between releases, so each
+  `time-reading` row also records the reader's id **and** version and the tzdata version where the
+  runtime names it (`process.versions.tz` on Node), else `'unknown'`.
+- **A window set in a UI is a run input, not an answer.** `agent.run({ …, time: { window } })`
+  takes a typed `TimeRange` — a brushed chart range, the dashboard's range picker — recorded with
+  `source: 'control'`. It is the person's own typed value, so it counts like an answer (§ 9.5), but
+  it was not given in reply to a library ask, so it is never filed as `answered`. For the fill rule
+  of § 5.6 it counts as one more mention, with no quote (TQ26).
+- **Two recorded wall-clock reads, never used on words.** The frozen clock resolves the person's
+  words. The layer reads the wall clock at exactly two points, and records both: the turn's start
+  when the app passes no `now` (`nowSource: 'default'`), and `dispatchedAt` on each call row,
+  because a tool evaluates a look-back against its own clock when it runs, which after a 30-minute
+  `requestInput` pause is 30 minutes later than `now`; § 7.4 says what that drift does.
+- **Out of scope:** the operational clocks the library already has, which decide no time a person
+  asked about: `memory/stages/filterByDecay.ts` · `now` (memory decay), `core/agent/window/strategy.ts`
+  · `now` (the context window), and the artifact stores' `_now` (`artifacts/inMemoryArtifacts.ts`,
+  `artifacts/gcsArtifacts.ts`).
 
 ---
 
@@ -281,8 +291,11 @@ strategy.
 
 ```ts
 interface TimeReader {
-  /** Recorded on every reading, e.g. 'agentfootprint/english@1'. */
+  /** Recorded on every reading with the version, e.g. 'agentfootprint/english' + '1.0.0'. */
   readonly id: string;
+  readonly version: string;
+  /** The language it reads, e.g. 'en-US'; the default presentation locale (§ 11). */
+  readonly locale: string;
   /** 'rule': deterministic over the text. 'model': an LLM or other learned reader (§ 5.5). */
   readonly kind: 'rule' | 'model';
   read(text: string, context: TimeReadContext): TimeReading | Promise<TimeReading>;
@@ -337,16 +350,22 @@ The split is the design:
   candidate (three date orders for a numeric date, am and pm for a bare `8:40`, both instants of a
   DST overlap with a `dst-overlap` note), each checked with `core/time/` (instants with offsets,
   IANA zones, `from < to`).
-- **The policy decides** (§ 11): date order, year, future, DST, abbreviation mismatch. What the
-  policy cannot settle becomes one typed ask (§ 6).
+- **The policy decides** (§ 11): in v1, date order and year; DST, the end edge and the rest are
+  fixed laws until a bench shows they need a switch. What the policy cannot settle becomes one typed
+  ask (§ 6). Whether a future (or past) reading can be read at all is not policy: it is a fact about
+  the tool, its declared `direction` (§ 7.1), checked when a call is about to use the window.
 
 This keeps configuration uniform: an app that swaps the English strategy for a Spanish one keeps
-the same `dateOrder: 'ask'`, the same `future: 'refuse'`, the same record.
+the same `dateOrder: 'ask'`, the same tool facts, the same record.
 
 ### 5.2 When it runs
 
-Once per turn, at the seed, over the person's message only — never over tool results or model text
-(the honesty law: library-authored and model-authored text never ground a value). The reading is a
+Once per turn, at the seed, and only when the app armed a reader (`.time({ reader })`; there is no
+default reader, so without one there are no `time-reading` rows and no word-driven asks, § 11). It
+reads only the messages `lib/saidByPerson.ts` · `saidByPerson` accepts — the one gate for which
+`role: 'user'` turn a person wrote, because the library itself writes seven kinds of `role: 'user'`
+message nobody said. Never tool results or model text (the honesty law: library-authored and
+model-authored text never ground a value). The reading is a
 run constant beside the clock, recorded as one `time-reading` row per mention. A resume and a
 replay read that row; the reader never runs twice for one message, so a model-backed reader cannot
 answer differently the second time. It is **used lazily**: nothing is asked until a tool that declares a
@@ -357,18 +376,22 @@ period is about to be called, so a turn that never reads time never asks (the ne
 
 `readers/english.ts` ships in the library, with no dependency, `kind: 'rule'`. It tokenizes a
 small, closed set and says "unreadable" for the rest, rather than guessing. The right-hand column
-is what `resolve.ts` then makes of those parts, not the strategy:
+is what `resolve.ts` then makes of those parts, not the strategy. v1 reads only the rows marked v1;
+the others wait until a bench shows people need them:
 
-| Reads | Example | Parts it returns | What `resolve.ts` makes of them |
-|---|---|---|---|
-| ISO dates and instants | `2026-10-09`, `2026-10-09T08:00-07:00` | `date: fixed`, `wall`, `zoneToken` | one candidate |
-| numeric dates | `10/09/26` | `date: numeric [10, 9, 26]` | up to three (MDY, DMY, YMD), each tagged |
-| clock times, with or without a meridiem | `8 AM`, `8:40`, `20:40` | `wall` | `8:40` alone → am and pm when no other part settles it |
-| a range between two of the above | `8 AM to 8:40 AM`, `08:00–08:40` | `rangeOf` | one per combination of the sides' candidates |
-| a zone | IANA (`America/Los_Angeles`), a numeric offset, an abbreviation | `zoneToken`, as written | IANA and offsets directly; an abbreviation **only through the policy's map**; one whose DST state disagrees with the date is corrected and noted, per policy |
-| day words | today, yesterday, tomorrow, tonight, overnight | `relative: { day, offset }` | anchored on the clock, in the person's zone |
-| parts of a day | morning, afternoon, evening | `partOfDay: 'morning'` | the policy's table (`morning` = `[06:00, 12:00)` by default), noted as `{ kind: 'part-of-day', table: 'default' }` |
-| relative spans | last 40 minutes, past 2 hours, last week | `relative: { unit, count }` | a look-back (§ 3.2) or a calendar range for "last week" |
+| Reads | Example | Parts it returns | What `resolve.ts` makes of them | v1 |
+|---|---|---|---|---|
+| ISO dates and instants | `2026-10-09`, `2026-10-09T08:00-07:00` | `date: fixed`, `wall`, `zoneToken` | one candidate | v1 |
+| numeric dates | `10/09/26` | `date: numeric [10, 9, 26]` | up to three (MDY, DMY, YMD), each tagged | v1 |
+| clock times, with or without a meridiem | `8 AM`, `8:40`, `20:40` | `wall` | `8:40` alone → am and pm when no other part settles it | v1 |
+| a range between two of the above | `8 AM to 8:40 AM`, `08:00–08:40` | `rangeOf` | one per combination of the sides' candidates | v1 |
+| a zone | IANA (`America/Los_Angeles`), a numeric offset | `zoneToken`, as written | directly | v1 |
+| a zone abbreviation | `PST` | `zoneToken: 'PST'` | v1 has no abbreviation map, so the zone is asked (`format: 'zone'`); later, **only through the policy's map**, and one whose DST state disagrees with the date is asked with both readings as choices (`abbreviationMismatch: 'ask'`, § 11) | tokenized; resolved by the ask |
+| day words | today, yesterday, tomorrow | `relative: { day, offset }` | anchored on the clock, in the person's zone | v1 |
+| relative spans | last 40 minutes, past 2 hours | `relative: { unit, count }` | a look-back (§ 3.2) | v1 |
+| night words | tonight, overnight | `relative` + `partOfDay` | a span that crosses midnight | later |
+| parts of a day | morning, afternoon, evening | `partOfDay: 'morning'` | the policy's table (`morning` = `[06:00, 12:00)`), noted as `{ kind: 'part-of-day', table: 'default' }` | later |
+| calendar spans | last week | `relative: { week, offset: -1 }` | a calendar range, which needs a week-start rule | later |
 
 Words for the person's language live as data beside `src/locales/` (a catalog of words, no code),
 so a second language is a table plus, at most, a strategy for its grammar.
@@ -405,7 +428,7 @@ are well formed, the resolved instants are valid — check shape, not meaning: a
   about the window fold to "not sure" (§ 9.5).
 - Resume and replay use the recorded reading (§ 5.2); the reader never runs again.
 - A `kind: 'rule'` reader's parts are `said`, because the same text always yields the same parts
-  and the table test (T6) pins which.
+  and the table test (T6b) pins which.
 
 ### 5.6 Several mentions, and turns with none
 
@@ -413,7 +436,7 @@ A message can hold several mentions ("compare this morning with yesterday mornin
 need several windows. There is no "the" window of a turn:
 
 - **Fill only when exactly one mention resolves.** Then the library fills a period the model left
-  out (§ 7.3).
+  out (§ 7.3). A window set in a UI (`time.window`, § 4) counts as one mention with no quote.
 - **Otherwise the model binds a call to a mention** through the declared-source quote that already
   exists (`arguments/sources.ts` · `readSources`, `_findings.from`: `{ argument, source: 'user',
   quote }`). The library matches the quote to a recorded mention's quote and checks that the
@@ -422,9 +445,10 @@ need several windows. There is no "the" window of a turn:
   sources, the library still compares the value with every mention's range and records which one
   it equals, if any.
 - **A turn with no time words** inherits the previous turn's window only through a recorded row:
-  under `policy.carry: 'record'` the library fills from the last recorded resolved window and writes
-  a `time-carried { fromTurn }` row, which the limits line names ("window carried from the previous
-  question"). Under `'off'` the tool's own `askOrAssume` rule applies. Never silently (TQ17).
+  the library fills from the last recorded resolved window and writes a `time-carried { fromTurn }`
+  row, which the limits line names ("window carried from the previous question"). In v1 this is a
+  fixed law; a `carry: 'off'` switch, falling back to the tool's own `askOrAssume` rule, waits for a
+  need (§ 11). Never silently (TQ17).
 
 ---
 
@@ -438,7 +462,8 @@ Today's ask cannot hold a window: `core/inputRequest.ts` · `InputField.type` is
 ```ts
 interface InputField {
   // …unchanged…
-  /** New. A time field: the library validates the answer before the app sees it. */
+  /** New. A time field: the library validates the answer before the app sees it.
+   *  Refused at definition unless `type: 'string'`. */
   readonly format?: 'instant' | 'time-range' | 'zone';
 }
 ```
@@ -458,8 +483,10 @@ interface InputField {
 
 ### 6.2 Re-validation, refusal and repeat
 
-An answer goes through the same checks as a reading: instants with offsets, `from < to`, the future
-policy, the chosen tool's retention and `maxRange`. A failing answer is re-asked with the 9.127.0
+An answer goes through the same checks as a reading: instants with offsets, `from < to`, and the
+chosen tool's facts — its `direction`, its `retention` (refused only when the whole range is older)
+and its `maxRange` (§ 7.1). The tool facts join this re-validation in step T5a, when they land; T4
+checks shape, order and zone. A failing answer is re-asked with the 9.127.0
 shapes — `refused: { answer, reason }` and the runtime's `repeat: { count }`.
 
 One refinement to 9.127.0: `InputRefusal.reason` is "the app's words; the library never writes
@@ -473,11 +500,12 @@ app may override every key, and only checks the app armed can produce one.
 |---|---|
 | `10/09/26` under `dateOrder: 'ask'` | "Which date did you mean?" — the readings as choices |
 | a date without a year under `year: 'ask'` | the year's readings as choices |
-| every reading in the future under `future: 'refuse'` | nothing is asked; the call is refused with the reason ("that window has not happened yet") |
-| some readings future, some past | the past ones as choices |
-| a wall time in a DST gap or overlap under `dst: 'reject'` | the two instants as choices |
-| an abbreviation not in the map | the zone, `format: 'zone'` |
-| a tool needs a period and the person said none | `policy.carry` first (§ 5.6); else the tool's own `askOrAssume` rule, unchanged; its choices may now be ranges |
+| every reading outside the tool's `direction` (a future window for a `past` tool) | nothing is asked; the call is refused with the reason ("that window has not happened yet") |
+| some readings inside the tool's `direction`, some outside | the ones inside as choices |
+| a wall time in a DST gap or overlap (a fixed v1 law: Temporal's `reject`) | the two instants as choices (Temporal's `earlier` and `later`) |
+| a zone abbreviation (v1 has no map), or one not in the map | the zone, `format: 'zone'` |
+| an abbreviation in the map whose DST state disagrees with the date (`PST` on 9 Oct) | both readings as choices — literal `−08:00`, or the zone's `−07:00` (`abbreviationMismatch: 'ask'`) |
+| a tool needs a period and the person said none | the carried window first (§ 5.6); else the tool's own `askOrAssume` rule, unchanged; its choices may now be ranges |
 | the only reading came from a `kind: 'model'` reader and a tool needs it | the reading as one choice to confirm (§ 5.5) |
 
 One ask per batch, before anything dispatches — the inputs layer's rule
@@ -506,11 +534,12 @@ interface ToolPeriod {
   // ── the general form ──
   readonly forms?: readonly PeriodForm[];           // new: every shape the tool accepts, in preference order
   readonly wallZone?: 'app';                        // new: a 'wall'/'day' form with no zone argument reads in the app's .time() zone
-  // ── facts about the source ──
+  // ── facts about the source — never policy ──
+  readonly direction?: 'past' | 'future' | 'any';   // which side of now the source can hold; absent: not checked
   readonly retention?: DurationText;                // the oldest data the source keeps
   readonly maxRange?: DurationText;                 // the widest window the tool accepts
   readonly granularity?: DurationText;              // the source's smallest step
-  readonly widen?: 'record' | 'refuse';             // range → look-back when the tool takes no range
+  readonly filtersToAsked?: boolean;                // the tool reads `ctx.time.asked` and drops rows outside it
 }
 type PeriodSpelling = 'lookback' | 'signed-lookback' | 'iso-range' | 'wall-range'; // 'wall-range' new
 
@@ -576,14 +605,16 @@ that is exact, else the first that is not, at the inputs layer, before dispatch.
 | a range inside one day | `day` | that day | **no — wider** unless the range is the whole day | `period-differs-from-asked { extra }` |
 | a range across days | `day` only | nothing | — | refused before dispatch: one call per day is the model's choice, not the library's |
 | a range ending at now (within `granularity`) | `lookback` | the smallest exact spelling that covers `from`, in the declared `units` | rounding only | `converted`, `rounded` |
-| a range ending before now | `lookback`, `widen: 'record'` | the covering look-back from now | **no — wider** | `period-differs-from-asked { extra }`, with both ranges |
-| a range ending before now | `lookback`, `widen: 'refuse'` | nothing | — | refused before dispatch |
-| a range older than `retention` | any | nothing | — | refused before dispatch: `period-beyond-retention` |
-| a range wider than `maxRange` | any | nothing | — | the ask, to narrow it; or refused |
+| a range ending before now | `lookback` | the covering look-back from now (the v1 law; an app `widen: 'refuse'` waits for a need, § 11) | **no — wider** | `period-differs-from-asked { extra }`, with both ranges; with `filtersToAsked: true`, `converted, trimmed by the tool` — the result's declared `queried` still decides (TQ8) |
+| a range outside the tool's `direction` | any | nothing | — | refused before dispatch: `time-future` (or `time-past`) |
+| a range **wholly** older than `retention` | any | nothing | — | refused before dispatch: `period-beyond-retention` |
+| a range **partly** older than `retention` | any | the range, as asked | yes | `converted`, `partly-beyond-retention`; the result's `held` decides `partly-held` |
+| a range wider than `maxRange` | any | nothing | — | refused before dispatch, the reason naming `maxRange`; splitting it into several calls is the model's choice, as for a `day`-only tool (TQ22) |
 
 The wider row is the honest version of the host's `coveringLookback`: the read covers more than
 was asked, the record says so, and the answer's limits block says so in words (§ 10.2). Whether the
-standing reads "not sure" is TQ8.
+standing reads "not sure" is TQ8. Whether to widen at all is the app's choice, not the tool's: a
+tool declares only facts — here, whether it trims its rows to the asked range.
 
 ### 7.3 Who writes the argument
 
@@ -593,15 +624,14 @@ sent, filed as the model's own."
 
 - The model **left the period out** and exactly one mention resolved (§ 5.6) → the library fills
   it from that window, converted to the tool's form, as the `assume` precedent fills a default. The
-  row's source is `said` (a `rule` reader), `answered` (the ask), `carried` (§ 5.6) or
-  `derived-from-reading` (an unconfirmed `model` reader, § 5.5).
+  row's source is `said` (a `rule` reader), `answered` (the ask), `control` (a window set in a UI,
+  § 4), `carried` (§ 5.6) or `derived-from-reading` (an unconfirmed `model` reader, § 5.5).
 - The model **gave a window equal to a mention's** in any accepted form, after the § 3.3
   conversion → the row cites that mention, with the same source.
-- The model **gave a different window** → under the default `policy.mismatch: 'record'`, **the
-  call runs as sent**. The row says `model-chosen, differs from the person's window` and carries
+- The model **gave a different window** → under the v1 law (record), **the call runs as sent**. The row says `model-chosen, differs from the person's window` and carries
   both ranges; claims about the person's window fold to "not sure" through
   `period-differs-from-asked`. A drill-down ("now just 9–10"), a comparison ("vs yesterday
-  morning") and a baseline call are normal agent work and pass untouched. Under the opt-in
+  morning") and a baseline call are normal agent work and pass untouched. Under a later opt-in,
   `mismatch: 'refuse'`, the call is refused before dispatch with a past-tense correction naming the
   form the person's window takes for this tool ("The person asked for 08:00–08:40 PDT on 9 Oct;
   for this tool that is `window: '2026-10-09T08:00..2026-10-09T08:40', timezone:
@@ -643,23 +673,33 @@ Two declarations answer two questions, and share every rule in `core/time/`:
 - **One grammar.** `interval` uses `core/time/duration.ts`; `zone` uses `core/time/zone.ts`. The
   in-flight branch's private `INTERVAL` regex goes away.
 - **They travel together.** A dataset minted from a call carries both: `ArtifactMeta.timeAxis` (in
-  flight) and the call's period. A chart's time domain is then `period.queried` — what was asked —
-  not the rows' min and max, so a stretch the store does not hold shows as a gap instead of a
-  squeezed axis.
+  flight) and the call's period. For a dataset minted from **exactly one** call, a chart's time
+  domain is that call's `period.queried` — what was asked — not the rows' min and max, so a stretch
+  the store does not hold shows as a gap instead of a squeezed axis. A derived or multi-call dataset
+  has no one asked period: its domain is the rows' extent, labelled "range of the rows".
 - **The axis is normalised before anyone compares.** `core/time/axis.ts` · `normaliseInstants`
   turns a dataset's time column into UTC `Z` instants at one precision (epoch seconds and
   milliseconds included), so a lexicographic compare downstream is chronological. This is the
-  guarantee vizfootprint's date law assumes and nothing supplies today (§ 10.4).
-- **A naive column never joins — enforced on the values, not the declaration.** The in-flight rule
-  does **not** refuse a naive axis: `artifacts/timeAxis.ts` · `timeAxisIssues` refuses only a `zone`
-  on an epoch unit, and `DatasetTimeAxis.zone`'s own comment reads an `iso` axis with no `zone` as
-  "the ISO strings carry their own offset (or are UTC)". A declaration never sees the rows, so it
-  cannot refuse what it cannot see, and "(or are UTC)" is the silent default the research warns
-  against. So: `normaliseInstants` reads each value; under an `iso` axis with no `zone`, a value
-  without an offset is **not** taken as UTC — it is counted, and the axis reads
-  `{ status: 'naive-values', count }`. The panel then draws the series labelled "clock unknown"
-  (or nothing, under the app's choice), and no check compares or joins it with another source
-  (§ 9.6). T2 changes the in-flight comment and rule before that branch lands.
+  guarantee vizfootprint's date law assumes and nothing supplies today (§ 10.4). It is a
+  **read-side view**: the stored rows and their bytes are unchanged, and every reader that compares
+  asks for the view.
+- **A naive value is never read as UTC — checked on the values, in T2.** The in-flight declaration
+  check cannot catch it: `artifacts/timeAxis.ts` · `timeAxisIssues` judges the declaration's shape
+  (keys, a valid IANA zone, no zone on an epoch unit) and never looks at a value, and
+  `DatasetTimeAxis.zone`'s own comment reads an `iso` axis with no `zone` as "the ISO strings carry
+  their own offset (or are UTC)" — the silent-UTC default the research warns against. So T2 adds a
+  value check to `normaliseInstants`: under an `iso` axis with no declared `zone`, a value without an
+  offset is **flagged** — counted, and the axis reads `{ status: 'naive-values', count }` — or, under
+  the app's choice, **refused**; it is never read as UTC. The panel draws a flagged series labelled
+  "clock unknown", and no check compares or joins it with another source (§ 9.6). T2 changes the
+  in-flight comment and rule before that branch lands.
+- **Wall-clock values need a fall-back rule.** Under a declared `zone`, values are wall times, and
+  in the hour the clocks go back one wall time names two instants (two `01:30` rows). Read in the
+  rows' order, the values before the wall clock steps back inside the overlap take the earlier
+  offset and those after it the later, noted `{ kind: 'dst-overlap', resolvedBy: 'row-order' }`.
+  When the order cannot tell (a single `01:30`, or rows not in time order), the value is counted as
+  `dst-ambiguous` and handled like a naive value, never picked silently. A wall time inside the
+  spring-forward gap names no instant and is counted as `dst-gap`.
 - **Optional later:** `temporality: 'delta' | 'cumulative' | 'gauge'` (OpenTelemetry), so no chart
   sums a running total (TQ15).
 
@@ -671,21 +711,24 @@ Each check reads declarations and the clock stamp; none reads words.
 
 | # | Check | Reads | Resolve | Row / reason |
 |---|---|---|---|---|
-| 9.1 | **Future window** | resolved range, clock | refuse, or ask with the past readings (§ 6.3); a range ending after now is read to now and noted | `time-future`; `partly-future` |
+| 9.1 | **Outside the tool's direction** | resolved range, clock, the tool's declared `direction` | refuse, or ask with the readings inside it (§ 6.3); for a `past` tool, a range ending after now is read to now and noted. A tool with no `direction` is not checked | `time-future` / `time-past`; `partly-future` |
 | 9.2 | **Differs from asked** — one check for narrower, wider and shifted | the asked range vs what was read: the conversion row (§ 7.2), the dispatch drift (§ 7.4), the result's `period.queried` converted per § 3.3 | flag | `period-differs-from-asked { missing, extra }`: `missing` = asked but not read (narrower, or the front of a shifted window), `extra` = read but not asked (wider, or its tail). `missing` non-empty → "not sure" (reopens Q39, TQ1); `extra` alone → TQ8 |
 | 9.3 | **Model-chosen window** | the argument row (§ 7.3) | flag | `model-chosen, differs from the person's window` → claims about the person's window "not sure" |
-| 9.4 | **Retention** | the tool's `retention`, the clock | refuse before dispatch; the result's `held` still decides after | `period-beyond-retention` |
+| 9.4 | **Retention** | the tool's `retention`, the clock | refuse before dispatch only when the whole range is older; a partial overlap dispatches, and the result's `held` decides `partly-held` | `period-beyond-retention`; `partly-beyond-retention` |
 | 9.5 | **Evidence lineage for the person's time values** | the resolved window, `core/time/forms.ts` | two lineages | `said` parts at grain (`8:00`, `08:40`, `10/09` when said) trace to the person; implied, corrected and policy parts (`2026` implied, `PDT` for a said `PST`, `-07:00`, `08:41`) trace as `derived-from-reading` → at most "not sure" |
-| 9.6 | **Clocks differ across sources** | periods and axes in one answer | flag; every comparison is done on UTC instants | `clocks-differ { tools, zones }`; the limits block names each source's clock |
-| 9.7 | **Clock skew** | a result's `readAt` vs the clock, with a declared tolerance | flag | `clock-skew { tool, by }` |
-| 9.8 | **Correlation claims** (later) | claim rows ("A happened before B") | flag | waits for committed claim rows (the Q46 precedent) |
+| 9.6 | **Clocks differ across sources** | the declared `DatasetTimeAxis.zone` of wall-clock sources in one answer — not period offsets, where `Z` and `-07:00` are two correct spellings of one instant | a label only; every comparison is done on UTC instants | `clocks-differ { tools, zones }`; the limits block names each wall-clock source's zone |
+
+Two checks from the first draft are gone. **Clock skew** compared a result's `readAt` with the
+frozen message-time `now`, so it measured latency or the length of a pause, not a skew; it is cut.
+**Correlation claims** ("A happened before B") wait for committed claim rows (the Q46 precedent)
+and are not in the plan.
 
 **9.5 in detail.** The in-flight gate fix keeps a table of clock spellings private to `evidence/`.
 Here the gate asks one function, `forms.ts` · `timeFormsOf(window)`, which returns two lists from
 a **recorded** reading:
 
 - **`said`** — spellings of the parts the person said, at the grain they said them, from a
-  `rule` reader or an ask answer. "8 AM" said at grain hour matches `8:00` and `08:00` because both
+  `rule` reader, an ask answer or a `control` window (§ 4). "8 AM" said at grain hour matches `8:00` and `08:00` because both
   are the same instant at that grain — equality, not a new fact (Duckling's grain). These count as
   the person's words.
 - **`derived`** — everything the library itself produced: an implied year, a corrected abbreviation
@@ -718,7 +761,7 @@ raw instants kept in the typed `answerCoverage`:
 ```
 Period (client_activity): Fri 9 Oct 2026, 08:00–08:40 PDT (UTC−7) — read 05:20–08:40, wider than asked
 Period (packet_records):  Fri 9 Oct 2026, 08:00–08:40 PDT (UTC−7) — covered
-Clocks: client_activity reports in UTC; packet_records in America/Los_Angeles — compared as instants
+Clocks: packet_records' rows are wall times in America/Los_Angeles (declared) — compared as instants
 ```
 
 Every end shown is the end as said (§ 3.3); the typed `answerCoverage` keeps `08:41` exclusive.
@@ -731,10 +774,10 @@ uses the same renderer.
 | Rule | Replaces |
 |---|---|
 | A dataset with a declared axis is **always** drawn as a time series; a malformed declaration draws nothing and says why | `autoSpec.ts` · `TIMESTAMP_FIELD` / `DATE_SHAPED` guesses (kept only as a fallback that labels itself "time column guessed") |
-| The x domain is the call's `period.queried`; unheld stretches are gaps | min/max of the rows |
+| For a dataset from exactly one call, the x domain is that call's `period.queried` and unheld stretches are gaps; for a derived or multi-call dataset, the rows' extent, labelled so (§ 8) | min/max of the rows, unlabelled |
 | Panels from one turn share one time axis, keyed by the turn's resolved window | one axis per chart |
 | Brush bounds render in the presentation zone | `chartSelection.ts` · `formatBound` (UTC only) |
-| **Time range as a control**: a brushed range is sent back as a typed `time-range` value for the next turn, recorded as `answered`, never as words the reader must re-parse | re-typing the window in the chat |
+| **Time range as a control**: a brushed range is sent with the next turn as the run input `time.window` (§ 4), recorded with `source: 'control'` — not `answered`, because nothing asked for it — and never as words the reader must re-parse. The metrics dashboard's range picker and the chat use the same input: one piece serves panel, dashboard and chat | re-typing the window in the chat |
 
 The in-flight host branch (`feat/declared-time-axis`) already honours `readTimeAxis(meta)`; the
 remaining rows are host work after steps T2 and T3.
@@ -747,9 +790,10 @@ contract is what vizfootprint would read, and it maps onto shapes vizfootprint a
 | Library declaration | vizfootprint shape it would fill |
 |---|---|
 | `DatasetTimeAxis.column` | a declared `ColumnType 'date'` (`viz:src/data/types.ts`; `viz:src/def/builtinAnalyses.ts` · `DECLARABLE_TYPES`) |
-| `interval` + `aggregate` | `SeriesGrain { bucket, reducer }` (`viz:src/def/types.ts`) — computed-on, not only a caption |
+| `interval` + `aggregate` | today only a caption: vizfootprint's `SeriesGrain { bucket, reducer }` (`viz:src/def/types.ts`) is "never parsed (R12)". Whether vizfootprint ever computes on a declared grain is **a future vizfootprint decision**, not part of this contract |
+| the bucketing zone | a gap to name: `viz:src/data/bins.ts` puts day edges at UTC midnight, which is wrong for a person's day in UTC−7. A calendar bucket needs a named zone (Elasticsearch's `calendar_interval` + `time_zone`); the contract carries the presentation zone for it, and using it is the same future vizfootprint decision |
 | `normaliseInstants` output (UTC `Z`, one precision) | the precondition of `SeriesPoint.t`'s lexicographic order and `IntervalClause`'s string bounds |
-| `period.queried` (inclusive) | the series' x domain |
+| `period.queried` (inclusive), for a dataset from exactly one call | the series' x domain; otherwise the rows' extent, labelled (§ 8) |
 | a `TimeRange` `[from, to)` | an `IntervalClause` `[from, last instant before to]`, **inclusive at both ends** (SQL `BETWEEN`), converted per § 3.3; a brush `[lo, hi]` comes back as `[lo, hi + 1 step)`. vizfootprint's "half-open" `IntervalBounds` (one side `null`) is an unbounded side, not an excluded end, and is never used for a closed window |
 | the presentation zone | the caller's `formatDate` |
 
@@ -759,20 +803,22 @@ The adapter from one to the other would live in the host or a bridge package, no
 
 The host's metrics dashboard has the richest declared time model in the codebase, in a private
 vocabulary (`host:be-server/metrics/server/source-adapters.mjs` · `windowTime`, `table(…,
-temporalKind)`). Each field maps onto a library declaration, so the dashboard reads tool
-declarations instead of keeping its own table:
+temporalKind)`). Its capability fields — absolute range, maximum range, readable direction — map onto the tool's
+declared `period`, so the dashboard reads those from the tool instead of keeping its own table; its
+presets stay its own:
 
 | Dashboard field | Library source |
 |---|---|
-| `windowTime.windows` (`1h`, `6h`, `24h`) | the tool's `askOrAssume` choices for its period argument |
+| `windowTime.windows` (`1h`, `6h`, `24h`) | **stays app configuration**: these are the dashboard's presets, not asks — a tool's `askOrAssume` choices exist only on an `ask` rule, so a tool with `assume` would have none |
 | `windowTime.absoluteRange` | the tool's `forms` include a `bounds`, `joined` or `object` form |
-| `windowTime.maxRangeHours` | `maxRange` |
+| `windowTime.maxRangeHours` | `maxRange`; the default `windowTime` sets none, so absent means no cap on either side |
+| (none today) — which side of now the source can show | `direction` |
 | `temporalKind: 'time-series'` | a dataset axis with `aggregate: 'raw'` or an interval |
 | `temporalKind: 'window-rollup'` | a period, no axis (one summary over the whole window) |
 | `temporalKind: 'latest-sample'` | `readAt` only |
 | `temporalKind: 'inventory-snapshot'` | no period, no axis |
 | the history adapter's `bucket_seconds` from the range length | the derived interval (Grafana's rule), with the clamp recorded |
-| the dashboard's time range | the same `TimeRange` the chat resolves — one range object across panel, chat and dashboard |
+| the dashboard's time range | the run input `time.window` (§ 4), the same `TimeRange` the chat resolves — one range object across panel, chat and dashboard |
 
 ### 10.6 The lens
 
@@ -787,10 +833,12 @@ lens learns each row before any tool mints it ([../honesty/results.md](../honest
 
 ## 11. The configuration
 
-One builder option, one run option, and the tool's declaration.
+One builder option, one run option, and the tool's declaration. v1 keeps the switches to the few
+that have two careful answers (TQ23); every other behaviour is a fixed law until a bench shows it
+needs a switch.
 
 ```ts
-import { Agent, defineTool, englishTimeReader, US_ZONE_ABBREVIATIONS } from 'agentfootprint';
+import { Agent, defineTool, englishTimeReader } from 'agentfootprint';
 
 const clientActivity = defineTool({
   name: 'client_activity',
@@ -801,11 +849,11 @@ const clientActivity = defineTool({
     properties: { window: { type: 'string', pattern: '^-?[0-9]+[smhdw]$' } },
   },
   askOrAssume: { window: { assume: '-1h' } },
-  period: {
+  period: {                            // facts about the tool, never policy
     forms: [{ kind: 'lookback', argument: 'window', signed: true, units: 'smhdw' }], // seconds opted into
+    direction: 'past',                 // a log store holds no tomorrow
     retention: '30d',
     granularity: '1m',
-    widen: 'record',                   // an absolute window is read as a covering look-back, and recorded
   },
   execute: async (args, ctx) => { /* ctx.time.asked = { from, to, edge: 'exclusive' } as instants */ },
 });
@@ -817,6 +865,7 @@ const packetRecords = defineTool({
     argument: 'window',
     accepts: ['signed-lookback', 'iso-range', 'wall-range'],   // sugar over `forms` (§ 7.1)
     zoneArgument: 'timezone',
+    direction: 'past',
     maxRange: '24h',
   },
   // …
@@ -826,56 +875,49 @@ const agent = Agent.create({ provider, model })
   .tool(clientActivity)
   .tool(packetRecords)
   .time({
-    zone: 'America/Los_Angeles',               // required: the app's zone, never the server's
-    present: { zone: 'asked', locale: 'en-US' }, // 'asked' = the zone the person meant, else the app's
-    reader: englishTimeReader(),               // a tokenizer; kind 'rule'
+    zone: 'America/Los_Angeles',   // optional fallback; each run's own zone wins (§ 4)
+    reader: englishTimeReader(),   // no default: without a reader, the person's words are not read
     policy: {
-      partsOfDay: { morning: ['06:00', '12:00'] }, // applied by resolve.ts, for every reader
-      dateOrder: 'ask',                        // '10/09/26' → the readings as choices
-      year: 'ask',                             // a date said without a year
-      future: 'refuse',                        // an analysis agent reads the past
-      abbreviations: US_ZONE_ABBREVIATIONS,    // accepted only through this map, and recorded
-      abbreviationMismatch: 'correct',         // 'PST' on 9 Oct → America/Los_Angeles, −07:00, noted
-      dst: 'reject',                           // a wall time that does not exist or happens twice → ask
-      endEdge: 'end-of-grain',                 // 'to 8:40' reads through 08:40:59
-      mismatch: 'record',                      // the model's window differs → runs as sent, recorded, "not sure"
-      carry: 'record',                         // a turn with no time words reuses the last window, recorded
+      dateOrder: 'ask',            // '10/09/26' → the readings as choices
+      year: 'ask',                 // a date said without a year
     },
-    checks: { retention: 'refuse', clocks: 'flag', skew: '5m' },
   })
   .limitsTravelWithTheAnswer()
   .build();
 
 await agent.run({
   message: 'Show client activity 10/09/26 8 AM to 8:40 AM PST',
-  time: { now: message.sentAt, zone: session.zone },  // the message's time; the person's zone if known
+  time: { now: message.sentAt, zone: session.zone },  // the message's time and the person's zone
 });
 ```
 
+**v1 switches:**
+
 | Option | Default | Why that default |
 |---|---|---|
-| `zone` | **none — required** | a silent server zone is the most-cited failure in the research |
-| `present.zone` | `'asked'` | the person reads the clock they spoke in |
-| `present.locale` | `'en-US'` | matches the default reader; overridable |
-| `reader` | `englishTimeReader()` | ships, no dependency |
+| run `time.zone` / `.time({ zone })` | the run's zone, else the builder's fallback; with neither, `run()` is refused | a zone per person; a silent server zone is the most-cited failure in the research (TQ10) |
+| run `time.now` | the turn's start, recorded `nowSource: 'default'` | admitted like any default (TQ5) |
+| run `time.window` | none | a window set in a UI, recorded as `control` (§ 4, TQ26) |
+| `reader` | **none** | reading the person's words is armed separately; no reader means no `time-reading` rows and no word-driven asks (T-words, § 5.4) |
 | `policy.dateOrder` | `'ask'` | no silent MDY (dateparser's documented trap) |
-| `policy.year` | `'ask'` | the host's own field policy |
-| `policy.future` | `'refuse'` | break 3; forecasting apps set `'allow'` |
-| `policy.abbreviations` | `{}` (none accepted → ask the zone) | IANA: abbreviations are ambiguous |
-| `policy.abbreviationMismatch` | `'correct'` | the person meant "Pacific"; the note records it |
-| `policy.dst` | `'reject'` | Temporal's word for "ask" |
-| a reader's `kind: 'model'` | confirm through the ask | shape checks cannot verify meaning (§ 5.5) |
-| `policy.endEdge` | `'end-of-grain'` | how people mean "to 8:40" |
-| `policy.partsOfDay` | morning `[06:00, 12:00)`, afternoon `[12:00, 18:00)`, evening `[18:00, 24:00)` | data, applied once in `resolve.ts`; noted on every reading that used it |
-| `policy.mismatch` | `'record'` | the shipped law: "a present value runs as sent, filed as the model's own" (`core/tools.ts` · `Tool.askOrAssume`); drill-downs and comparisons are normal work. `'refuse'` is opt-in |
-| `policy.carry` | `'record'` (TQ17) | a follow-up question rarely repeats its window; the row and the limits line say it was carried |
-| `checks.retention` | `'refuse'` when a tool declares `retention` | the read cannot hold it |
-| `checks.clocks` | `'flag'` | break 6 |
-| `checks.skew` | off | needs a tolerance the app chooses |
-| run `time.now` | the turn's start, recorded `source: 'default'` | admitted like any default |
+| `policy.year` | `'ask'` | a year the person did not say is a guess, and near New Year the current and previous years are both plausible (dateparser's `PREFER_DATES_FROM` exists for exactly this) |
+| tool `period` facts | absent: nothing checked | `direction`, `retention`, `maxRange`, `granularity`, `filtersToAsked` are facts about the tool (§ 7.1); a tool never sets policy |
 
-Per tool, `period.widen`, `retention`, `maxRange` and `granularity` override nothing global: they
-are facts about the tool. A tool never sets policy.
+**Fixed laws in v1**, each a switch later only if a bench shows the need:
+
+| Behaviour | v1 law | A later switch would add |
+|---|---|---|
+| presentation | the zone the person meant, else the run's; the reader's `locale`, or a locale-neutral ISO form with the zone named when no reader is armed | `present: { zone, locale }` |
+| the end of "to 8:40" | end of grain, recorded (§ 3.3, TQ9) | `endEdge: 'exact'` |
+| a wall time in a DST gap or overlap | ask, with both instants (Temporal's `reject`) | `dst` |
+| a zone abbreviation | asked as a zone (`format: 'zone'`); no map ships | `abbreviations` (a map, e.g. US zones, as data), with `abbreviationMismatch: 'ask'` as its default — a literal `PST` is −08:00, so correcting it to −07:00 is a guess, and the host itself refuses a mismatch (`host:be-server/timeContext.ts` · `zoneMismatch`) |
+| parts of a day, night words, calendar spans | not read (§ 5.3) | `partsOfDay` (a table applied in `resolve.ts`) |
+| the model's window differs from the person's | record and run (§ 7.3, TQ6) | `mismatch: 'refuse'` |
+| a turn with no time words | carry the last window through a recorded row (§ 5.6, TQ17) | `carry: 'off'` |
+| a range to a look-back-only tool | the covering look-back, recorded as wider (§ 7.2, TQ8) | app policy `widen: 'refuse'` |
+| a retention check | from the tool's `retention` alone | nothing: a second `checks.retention` would duplicate the tool's fact |
+| clocks across sources | a label, for declared wall-clock zones only (§ 9.6) | nothing |
+| a reader of `kind: 'model'` | confirmed through the ask, else "not sure" (§ 5.5) | nothing |
 
 ---
 
@@ -884,7 +926,7 @@ are facts about the tool. A tool never sets policy.
 ### 12.1 Off means byte-identical
 
 - **Step T1 is a refactor with named behaviour changes, not a pure one.** Moving three grammars
-  into `core/time/` must keep the 21 byte references in `test/core/tools/reference/` unchanged.
+  into `core/time/` must keep every byte reference in `test/core/tools/reference/` unchanged.
   Merging them could change five behaviours; two are taken and three are avoided by design. Each
   row is a changelog line (the taken ones) or a pinned test that it did not happen (the avoided
   ones):
@@ -905,21 +947,21 @@ are facts about the tool. A tool never sets policy.
 
 | Clause | The time layer |
 |---|---|
-| **Declare** | The app: `.time()` (zone, policy, reader and its `kind`, checks) and the run's clock. The tool: `period` capabilities (`forms`, with today's single-argument spellings as sugar), over MCP in `_meta.agentfootprint.period`; `period` and `timeAxis` on results and datasets. The person: only through the time ask. A strategy's reading is a reading, never evidence by itself. A malformed declaration is refused at definition, at dispatch and at MCP ingest, and never repaired. |
-| **Verify** | Instants with offsets (the strict profile for anything sent); IANA zones; `from < to`; the quote is a substring of the message; a bound call's value equals its mention's range; the future, retention, `maxRange` checks against the clock; the conversion's exactness; the dispatch drift. All deterministic — and none of them verifies a `model` reader's meaning, which is why its readings are confirmed, not trusted. |
-| **Record** | One `clock` stamp per turn; `dispatchedAt` on each call row; one `time-reading` row per mention (quote, parts, candidates, reader id and kind, how chosen), read back on resume and replay; `time-carried`; the argument row gains `window`, `converted`, the mention it is bound to, and `model-chosen` when it differs; period rows gain `period-differs-from-asked { missing, extra }` and `period-shifted`; `clocks-differ`, `clock-skew`; the axis's `naive-values`. Events carry names, enums and counts; values live in the rows. |
-| **Resolve** | **Ask**: an ambiguity the policy cannot settle, a DST gap, an unknown zone, a `model` reading to confirm. **Assume**: a policy choice, recorded (`dateOrder: 'DMY'` says so on the row); a carried window. **Refuse**: all readings future, beyond retention, a `widen: 'refuse'` tool, a multi-day range to a `day`-only tool, and a mismatching model window **only** under the opt-in `mismatch: 'refuse'`. **Record and run**: a model-chosen window (the default). **Flag**: differs-from-asked, shifted, clocks, skew. |
-| **Fold** | New reasons: `time-assumed` (a policy picked among readings), `period-differs-from-asked` (`missing` → "not sure"; `extra` alone → TQ8), `model-chosen` against the person's window, `period-beyond-retention`, `clocks-differ` (label only). New lineage kind `derived-from-reading`, folded like `argument-assumed`. Nothing here can support "known"; only `said` parts at grain and `answered` values count as the person's. |
+| **Declare** | The app: `.time()` (a fallback zone, the reader and its `kind`, the v1 policy) and the run's clock, zone and optional `window`. The tool: `period` capabilities (`forms`, with today's single-argument spellings as sugar) and facts (`direction`, `retention`, `maxRange`, `granularity`, `filtersToAsked`), over MCP in `_meta.agentfootprint.period`; `period` and `timeAxis` on results and datasets. The person: through the time ask, or a window set in a UI (`control`). A strategy's reading is a reading, never evidence by itself. A malformed declaration is refused at definition, at dispatch and at MCP ingest, and never repaired. |
+| **Verify** | Instants with offsets (the strict profile for anything sent); IANA zones; `from < to`; the quote is a substring of the message; a bound call's value equals its mention's range; the tool's `direction`, `retention` and `maxRange` against the clock; the conversion's exactness; the dispatch drift. All deterministic — and none of them verifies a `model` reader's meaning, which is why its readings are confirmed, not trusted. |
+| **Record** | One `clock` stamp per turn (`nowSource`, `zoneSource`); `clock-on-resume` when a resume passes a different `time`; `dispatchedAt` on each call row; one `time-reading` row per mention (quote, parts, candidates, reader id, version and kind, the tzdata version, how chosen), read back on resume and replay; a `control` window; `time-carried`; the argument row gains `window`, `converted`, the mention it is bound to, and `model-chosen` when it differs; period rows gain `period-differs-from-asked { missing, extra }`, `period-shifted` and `partly-beyond-retention`; `clocks-differ`; the axis's `naive-values`, `dst-ambiguous` and `dst-gap` counts. Events carry names, enums and counts; values live in the rows. |
+| **Resolve** | **Ask**: an ambiguity the policy cannot settle, a DST gap, an unknown zone, a `model` reading to confirm. **Assume**: a policy choice, recorded (`dateOrder: 'DMY'` says so on the row); a carried window. **Refuse**: every reading outside the tool's `direction`, a range wholly beyond `retention`, a range wider than `maxRange`, a multi-day range to a `day`-only tool, a run with no zone, and — only under later opt-ins — a widening (`widen: 'refuse'`) or a mismatching model window (`mismatch: 'refuse'`). **Record and run**: a model-chosen window (the v1 law); a covering look-back. **Flag**: differs-from-asked, shifted, partly beyond retention, clocks (a label). |
+| **Fold** | New reasons: `time-assumed` (a policy picked among readings), `period-differs-from-asked` (`missing` → "not sure"; `extra` alone → TQ8), `model-chosen` against the person's window, `period-beyond-retention`, `clocks-differ` (label only). New lineage kind `derived-from-reading`, folded like `argument-assumed`. Nothing here can support "known"; only `said` parts at grain, `answered` values and a `control` window count as the person's. |
 | **Serve** | The model: one registered sentence naming the person's resolved window(s) in each tool's form, on the tools that declare a period — library text, so its spellings are `derived-from-reading`, never evidence; the refusal corrections. The tool: `ctx.time`, over MCP in the call's `_meta.agentfootprint.time`. The person: the time ask; the limits lines in the presentation zone. The lens: the rows. |
-| **Arm + measure** | `.time()` arms the clock, reader, ask and checks; a tool's `period` fields arm conversion for that tool. Each paid step has a bench (§ 13). |
+| **Arm + measure** | `.time()` arms the clock, the ask and the checks; the reader is armed on its own (`reader`, no default); a tool's `period` fields arm conversion for that tool. Each paid step has a bench (§ 13). |
 
 ---
 
 ## 13. Implementation plan
 
 Every step follows the honesty design's checklist
-([../honesty/README.md](../honesty/README.md) § 7): tests of all seven types, the 21 byte
-references, served sentences registered in `test/modelFacingSurfaces.test.ts`, a
+([../honesty/README.md](../honesty/README.md) § 7): tests of all seven types, every byte
+reference, served sentences registered in `test/modelFacingSurfaces.test.ts`, a
 `ledgerRowIsWellFormed` arm per new row kind, the folder README, a CAPABILITIES row, a `.changes`
 fragment, a feature example, the docs site budget measured after the last code change, and
 delivery only when the host re-pins and the behaviour is counted by hand.
@@ -930,23 +972,33 @@ deterministic and are measured over retained recorded runs or unit tables, with 
 | # | Step | Ships | Arm (off ⇒ byte-identical) | Needs | Tests (beyond the checklist) | Bench |
 |---|---|---|---|---|---|---|
 | T0 | **This page** | `docs/design/time/` | — | — | — | — |
-| T1 | **One owner** | `src/core/time/` `instant.ts` (two profiles), `duration.ts` (per-use units), `zone.ts`, `range.ts` (the § 3.3 edge conversions); `period.ts`, `declare.ts` import from it; the § 12.1 rows settled and pinned | none (refactor + the two named refusals) | TQ1, TQ11 | property: every instant the lenient profile accepted before is accepted after (`periodVerdict` byte-identical, inclusive); every `iso-range` argument accepted before is accepted after except rows a–b; `1000000m` still accepted; `30s` still refused for a default look-back; round-trip `durationMs` ↔ `spellDuration`; every § 3.3 boundary round-trips; DST table for 20 zones through `Intl` | $0 |
-| T2 | **The declared time axis, on T1** | the in-flight `feat/dataset-time-axis` rebased: `core/time/axis.ts`, `normaliseInstants`, the `naive-values` status (§ 8) replacing "(or are UTC)"; `artifacts/` re-exports | a dataset declares `timeAxis` | T1 | epoch-s / epoch-ms / mixed offsets normalise to sorted UTC; offset-less values under a zone-less `iso` axis are counted, never read as UTC | $0; host panel hand count |
-| T3 | **The clock and the presentation** | `.time({ zone, present })`, run option `time`, the `clock` stamp, `dispatchedAt` on call rows, the checkpoint arm, `present.ts` (the said end), `periodLine` in the presentation zone | `.time()` | T1 | the clock survives pause/resume unchanged; `dispatchedAt` after a resume is the resume's; `source: 'default'` recorded; limits line golden files per zone, "to 8:40" shown as 08:40 | $0 |
-| T4 | **The time ask** | `InputField.format`, library re-validation, labelled choices, catalog reasons (TQ7), MCP `date-time` mapping | a `format` field or `.time()` | T3 | answers out of order, zone-less, future, DST gap → re-ask with `refused` and `repeat` | $0; host hand count |
-| T5 | **Tool capabilities and conversion** | `ToolPeriod.forms` (bounds, joined, object, day, lookback with `units`) and the sugar (`accepts`, `wall-range`, `zoneArgument`); `retention`, `maxRange`, `granularity`, `widen`, `wallZone`; `_meta.agentfootprint.period` read by `readToolExtras`; conversion § 7.2; the dispatch drift § 7.4; `ctx.time` in process and in `_meta.agentfootprint.time`; `mismatch: 'record'` (default) and `'refuse'` (opt-in); pre-dispatch refusals | a tool's new `period` fields | T3, TQ1 | every row of § 7.2 and § 7.4; a two-argument epoch-ms Python tool over the mock MCP client; a model window that differs → runs, row `model-chosen`, fold "not sure"; under `'refuse'` → refused with the corrected form; a drill-down and a comparison call run untouched | **paid**: absolute windows asked of a look-back-only tool — wrong-window answers, armed vs unarmed |
-| T6 | **The reader port, the resolver and the English default** | `TimeReader` (`kind`), `TimeParts`, `resolve.ts`, `englishTimeReader` (a tokenizer), the policy (`partsOfDay`, `carry`), the `time-reading` row read back on resume, mention binding through `_findings.from`, `time-carried`, the served sentence, the lazy ask, the `model`-reading confirmation, `US_ZONE_ABBREVIATIONS` as data | `.time({ reader })` | T4, T5 | the host's field sentences as the table ("10/09/26 8 AM to 8:40 AM PST", "yesterday morning", a future date, PST in October); "this morning vs yesterday morning" → two mentions, no fill, each call bound by quote; a strategy returning an out-of-text quote is refused; a `model` reader's window is asked before it is `said`, and a replay never calls the reader | **paid**: provoking set — calls with the right window; needless-ask rate on controls |
-| T7 | **Evidence lineage at grain** | `forms.ts` · `timeFormsOf` with its `said` and `derived` lists; the lineage kind `derived-from-reading`; the gate asks it; the private table from `fix/person-values-normalized` retires | `.time()` | T6 (and that branch landed or superseded) | "8 AM" vs `8:00`/`08:00` → `said`; `PDT` for a said `PST`, an implied year, `-07:00`, `08:41`, the served sentence echoed → `derived-from-reading`, never "known"; a time no reading produced still fails | $0 over retained recordings: false "not traced" on time values |
-| T8 | **Result checks** | `period-differs-from-asked { missing, extra }`, `period-shifted`, `period-beyond-retention`, `clocks-differ`, `clock-skew`; fold reasons; limits lines | the results layer + `.time()` | T5, T3 | a tool clamping 30d to 7d (`missing`); a covering look-back (`extra`); a look-back after a 30-minute pause (both); an inclusive `queried.to == asked.to − 1 step` reads as covered; two sources in UTC and UTC−7 | **paid**: false "not sure" rate on correct answers (Q33's cell R3 method) |
-| T9 | **Consumers** | lens rows (lens repo); the host's panel rules § 10.3; the metrics mapping § 10.5; the vizfootprint adapter contract (owner's go) | each consumer's own | T2, T3, T8 | lens fixtures per row kind | $0 |
-| T10 | **Host migration** | the host shrinks to `.time()` configuration plus, optionally, its reader strategy; `queryWindowFlow.ts`'s provider wrapper, `windowCapability.ts`'s probing and the zone tables go; the tools mint `period` and declare capabilities | host | T6, T8 | the host's gate, with dummy keys | Haiku re-run of the host's field cases, before vs after |
-| T11 | **Correlation claims** (later) | "A before B" over claim rows | — | committed claim rows | — | later |
+| T1 | **One owner** | `src/core/time/` `instant.ts` (two profiles), `duration.ts` (per-use units), `zone.ts`, `range.ts` (the § 3.3 edge conversions, `parseRange` / `spellRange`); `period.ts`, `declare.ts` import from it; the § 12.1 rows settled and pinned | none (refactor + the two named refusals) | TQ1, TQ11 | property: every instant the lenient profile accepted before is accepted after (`periodVerdict` byte-identical, inclusive); every `iso-range` argument accepted before is accepted after except rows a–b; `1000000m` still accepted; `30s` still refused for a default look-back; round-trip `durationMs` ↔ `spellDuration` and `parseRange` ↔ `spellRange`; every § 3.3 boundary round-trips; DST table for 20 zones through `Intl` | $0 |
+| T2 | **The declared time axis, on T1** | the in-flight `feat/dataset-time-axis` rebased: `core/time/axis.ts`, `normaliseInstants` as a read-side view with the value check, the `naive-values` status replacing "(or are UTC)", the fall-back overlap rule (§ 8); `artifacts/` re-exports | a dataset declares `timeAxis` | T1 | epoch-s / epoch-ms / mixed offsets normalise to sorted UTC; offset-less values under a zone-less `iso` axis are counted (or refused, by choice), never read as UTC; two `01:30` rows across a fall-back resolve by row order, a lone one is `dst-ambiguous`; stored bytes unchanged | $0; host panel hand count |
+| T3 | **The clock and the presentation** | run option `time` (`now`, `zone`, `window`), `.time({ zone })` as the fallback, the `clock` stamp with `nowSource` / `zoneSource`, `clock-on-resume`, `dispatchedAt` on call rows, the checkpoint arm, `present.ts` (the said end; locale-neutral with no reader), `periodLine` in the presentation zone | `.time()` | T1 | the clock survives pause/resume unchanged, and a resume passing a new `time` is recorded, not applied; no zone anywhere → the run is refused; `dispatchedAt` after a resume is the resume's; `nowSource: 'default'` recorded; limits line golden files per zone, "to 8:40" shown as 08:40 | $0 |
+| T6a | **The reader port and the resolver** | `TimeReader` (`kind`, `version`, `locale`), `TimeParts`, `resolve.ts` over parts + clock + the v1 policy (`dateOrder`, `year`) and the fixed laws (DST, end edge), the `time-reading` row (reader version, tzdata version) read back on resume, the `saidByPerson` gate, the `model`-reading rule | `.time({ reader })` | T3 | against a **fixture reader** that returns fixed parts: every candidate for `10/09/26`, a bare `8:40`, a DST overlap; an out-of-text quote is refused; a replay never calls the reader; a library-written `role: 'user'` turn is never read | $0 |
+| T4 | **The time ask** | `InputField.format` (refused unless `type: 'string'`), re-validation of shape, order and zone, labelled choices, catalog reasons (TQ7), MCP `date-time` mapping | a `format` field or `.time()` | T3, T6a | answers out of order, zone-less, in a DST gap → re-ask with `refused` and `repeat`; a `model` reading offered to confirm | $0; host hand count |
+| T5a | **Declared mapping and exact conversions** | `ToolPeriod.forms` (bounds, joined, object, day, lookback with `units`) and the sugar (`accepts`, `wall-range`, `zoneArgument`); the facts `direction`, `retention`, `maxRange`, `granularity`, `filtersToAsked`, `wallZone`; `_meta.agentfootprint.period` read by `readToolExtras`; the exact rows of § 7.2; `ctx.time` in process and in `_meta.agentfootprint.time`; fill from one mention (a `control` window included), binding by quote, the record-and-run law for a differing model window; the tool facts join T4's re-validation | a tool's new `period` fields | T4, TQ1 | every exact row of § 7.2; a two-argument epoch-ms Python tool over the mock MCP client; a model window that differs → runs, row `model-chosen`, fold "not sure"; a drill-down and a comparison call run untouched; "this morning vs yesterday morning" from the fixture reader → two mentions, no fill, each call bound by quote | $0 |
+| T5b | **Widening and pre-dispatch refusals** | the inexact rows of § 7.2 (the covering look-back, `day` wider, `filtersToAsked`), the dispatch drift § 7.4, the refusals (outside `direction`, wholly beyond `retention`, over `maxRange`, a multi-day range to a `day` tool, a `wall` DST gap), `partly-beyond-retention` | a tool's new `period` fields | T5a | every inexact row of § 7.2 and every row of § 7.4; a range half inside `retention` dispatches; a future window to a `past` tool is refused with the reason | $0 |
+| T6b | **The English default and the paid bench** | `englishTimeReader` (a tokenizer; the v1 rows of § 5.3), the served sentence (TQ13), the lazy ask wired to real words | `.time({ reader: englishTimeReader() })` | T5b | the host's field sentences as the table ("10/09/26 8 AM to 8:40 AM PST" → a zone ask for `PST`, "yesterday", a future date); every non-v1 row of § 5.3 reads "unreadable" | **paid**: the provoking set — calls with the right window, and absolute windows asked of a look-back-only tool (wrong-window answers, armed vs unarmed); needless-ask rate on controls |
+| T7 | **Evidence lineage at grain** | `forms.ts` · `timeFormsOf` with its `said` and `derived` lists; the lineage kind `derived-from-reading`; the gate asks it; the private table from `fix/person-values-normalized` retires | `.time()` | T6b; `fix/person-values-normalized` landed first (TQ25) | "8 AM" vs `8:00`/`08:00` → `said`; a corrected abbreviation, an implied year, `-07:00`, `08:41`, the served sentence echoed → `derived-from-reading`, never "known"; a time no reading produced still fails; the landed fix's cases still pass after it retires | $0 over retained recordings: false "not traced" on time values |
+| T8 | **Result checks** | `period-differs-from-asked { missing, extra }`, `period-shifted`, `period-beyond-retention`, `clocks-differ` (declared wall-clock zones, a label); fold reasons; limits lines | the results layer + `.time()` | T5b, T3 | a tool clamping 30d to 7d (`missing`); a covering look-back (`extra`); a look-back after a 30-minute pause (both); an inclusive `queried.to == asked.to − 1 step` reads as covered; `Z` vs `-07:00` periods raise no `clocks-differ` | **paid**: false "not sure" rate on correct answers (Q33's cell R3 method) |
+| T9a | **Lens** (lens repo) | the rows of § 10.6 | the lens's own | T8; floor = the af release that ships T8 | lens fixtures per row kind | $0 |
+| T9b | **Host panel** (host repo) | the rules of § 10.3, `time.window` from a brush | the host's own | T2, T3, T5a; floor = the af release that ships T5a | the panel's hand count | $0 |
+| T9c | **Metrics dashboard** (host repo) | the mapping of § 10.5 | the host's own | T5b; floor = the af release that ships T5b | the dashboard reads a tool's `period` instead of its table | $0 |
+| T9d | **vizfootprint adapter** (host or a bridge package) | the contract of § 10.4 | the adapter's own | T2; floor = the af release that ships T2; the owner's go | an adapter table test | $0 |
+| T10 | **Host migration** | the host shrinks to `.time()` configuration plus, optionally, its reader strategy; `queryWindowFlow.ts`'s provider wrapper, `windowCapability.ts`'s probing and the zone tables go; the tools mint `period` and declare capabilities | host | T6b, T8 | the host's gate, with dummy keys | Haiku re-run of the host's field cases, before vs after |
 
 **Why this order.** T1 settles the grammar every other step leans on and is free. T2 is already
-written and only needs rebasing. T3 gives the first visible win (the limits line in words) and is
-the clock every later check needs. T4 before T6: the ask must exist before a reader can hand it
-ambiguities. T5 needs the clock (and `dispatchedAt`) and the Q39 ruling. T7 needs recorded readings. T8 needs the
-conversion rows. The host migrates last, one piece at a time, each piece deleting app code.
+written and only needs rebasing and the value check. T3 gives the first visible win (the limits
+line in words) and is the clock every later check needs. T6a comes before the ask because the ask
+offers the resolver's candidates, and it is tested with a fixture reader, so no English words and
+no model call are needed yet. T4 then asks; it checks shape, order and zone, and the tool facts
+join its checks in T5a, when they land. T5 is split so each half is small: exact conversions
+first, then everything that widens, shifts or refuses. The paid bench waits for T6b, the first
+step that reads real words, because every bench question starts from a person's words. T7 needs
+recorded readings and retires the gate fix that lands now (TQ25). T8 needs the conversion rows.
+Each consumer is its own packet in its own repo, pinned to the af release it reads. The host
+migrates last, one piece at a time, each piece deleting app code.
 
 **The host after T10.** The host keeps: its zone and policy values in `.time()`, its reader (if it
 wants its own), the tools' declarations in `host:py-tools/server.py` (a `period` on each result and
@@ -962,24 +1014,30 @@ probe, the future check, and its private time vocabulary in the metrics adapters
 |---|---|---|---|
 | TQ1 | Split Q39's "never parses '2h'" into T-words and T-spellings (§ 5.4)? | **Yes.** It also reopens a narrower read for T8, as `period-differs-from-asked`'s `missing`. | The law protected the person's words; a tool author's `-40m` is a machine format, and converting it is what break 4 needs. |
 | TQ2 | Supersede the honesty design's "an absolute compound window stays app code" (§ 1.4)? | **Yes**, with a pointer from that section to this page. | The owner's brief: a library for everyone. |
-| TQ3 | Ship our own English reader, or wrap chrono-node? | **Our own, small, no dependency.** A chrono-node adapter can come later as an optional peer (`lib/lazyRequire.ts`) if a bench shows a gain. | chrono-node's default picks the first parse and reads PST as −08:00 in October; wrapping it means re-exposing every ambiguity anyway. |
+| TQ3 | Ship our own English reader, or wrap chrono-node? | **Our own, small, no dependency.** A chrono-node adapter can come later as an optional peer (`lib/lazyRequire.ts`) if a bench shows a gain; because a reader returns parts (§ 5.1), such an adapter is cheap. | chrono-node's default takes the first parse and hides the other readings — the ambiguity this layer must keep as data. (Its reading of PST as −08:00 in October is arguably the correct literal one, so it is not the reason.) |
 | TQ4 | May a reader be async (an LLM-backed reader)? | **Yes, as `kind: 'model'`**: same parts shape, same checks, recorded with its id — but its readings are never `said`: they are confirmed through the ask or fold to "not sure", and resume/replay use the recorded reading, never a re-run (§ 5.5). | The checks verify shape, not meaning: a model reading "yesterday" as the wrong day passes every one of them. |
-| TQ5 | When the app passes no `now`? | **The turn's start, recorded `source: 'default'`.** | Admitted like any default; refusing would make every run option mandatory. |
-| TQ6 | The model writes a window that differs from the person's: record, refuse, or replace? | **Record by default** (`mismatch: 'record'`): the call runs as sent, the row says `model-chosen, differs from the person's window`, claims about the person's window fold to "not sure". `'refuse'` with the corrected form is opt-in. Never replace. | The shipped law (`core/tools.ts` · `Tool.askOrAssume`: "a present value runs as sent, filed as the model's own"); refusing would also block drill-downs, comparisons and baselines. "Never overwrite" argues for recording, not refusing. |
+| TQ5 | When the app passes no `now`? | **The turn's start, recorded `nowSource: 'default'`.** | Admitted like any default; refusing would make every run option mandatory. |
+| TQ6 | The model writes a window that differs from the person's: record, refuse, or replace? | **Record by default** (`mismatch: 'record'`): the call runs as sent, the row says `model-chosen, differs from the person's window`, claims about the person's window fold to "not sure". `'refuse'` with the corrected form is a later opt-in (TQ23). Never replace. | The shipped law (`core/tools.ts` · `Tool.askOrAssume`: "a present value runs as sent, filed as the model's own"); refusing would also block drill-downs, comparisons and baselines. "Never overwrite" argues for recording, not refusing. |
 | TQ7 | Who writes a refusal reason for a time answer (§ 6.2)? | **A `src/locales/` catalog sentence the app can override**, only for checks the app armed. | Refines 9.127.0's "the library never writes one"; the app still owns the words. |
-| TQ8 | Does a read with `extra` and no `missing` (wider than asked) make the answer "not sure"? | **Yes by default**, and the T8 bench's false-"not sure" rate decides. A result that declares `queried` equal to the asked range (it filtered its own rows) clears it. | A count over a wider read answers a different question. |
-| TQ9 | The end of a person's range: end of grain, or exact? | **End of grain** by default, recorded; `exact` configurable. | People mean "through 8:40"; Elasticsearch's `lte` rounding does the same. |
-| TQ10 | Make `.time({ zone })` required? | **Yes.** | The silent server zone is the most-cited failure in the research. |
+| TQ8 | Does a read with `extra` and no `missing` (wider than asked) make the answer "not sure"? | **Yes by default**, and the T8 bench's false-"not sure" rate decides. A result that declares `queried` equal to the asked range (it filtered its own rows; a tool may say it will, with `filtersToAsked`) clears it. Whether to widen at all is app policy (a later `widen: 'refuse'`), never a tool's. | A count over a wider read answers a different question. |
+| TQ9 | The end of a person's range: end of grain, or exact? | **End of grain**, recorded — a fixed law in v1; an `exact` switch only if a bench shows the need. | People mean "through 8:40"; Elasticsearch's `lte` rounding does the same. |
+| TQ10 | Where does the zone come from? | **Per run** (`time.zone`), with `.time({ zone })` as an optional declared fallback; with neither, `run()` is refused. The stamp records `zoneSource: 'run' \| 'builder'`, and `resolve.ts` uses that zone for every part the person left zone-less. | A zone fixed at build time is wrong for a multi-user app, and the silent server zone is the most-cited failure in the research. |
 | TQ11 | Add `s` to the look-back units? | **Only by opt-in.** One grammar, units per use: a look-back's default stays today's `mhdw`; a tool that takes seconds declares `units: 'smhdw'` (§ 7.1); an axis interval takes `smhdw`. No digit cap. | Adding `s` to the default widens `lookback` for every existing declarer whose backend may not take seconds — a behaviour change without opt-in (§ 12.1 row e). |
 | TQ12 | Where does it export from? | **The main barrel**; no new subpath. | A subpath adds API reference routes to the site budget; the reader is small. |
 | TQ13 | Is the resolved window served to the model? | **Yes, one registered sentence, on tools that declare a period**, naming each mention's window; its spellings are `derived-from-reading`, never evidence (§ 9.5). | Otherwise the model re-derives the window from words — the clock-tool anti-pattern; the lineage stops its echo passing the gate. |
 | TQ14 | vizfootprint: where does the adapter live? | **In the host or a bridge package; no vizfootprint change until the owner says its refactor is done.** | vizfootprint is read-only for this work. |
 | TQ15 | Add `temporality` to the axis now? | **Later**, when a tool mints a cumulative series. | `aggregate` covers today's tools. |
-| TQ17 | Does a turn with no time words reuse the previous window? | **Yes, only through a recorded row** (`policy.carry: 'record'` default, `time-carried { fromTurn }`, named in the limits line); `'off'` falls back to the tool's `askOrAssume` rule. | Follow-ups rarely repeat the window, and re-asking is a needless ask; a silent carry would be a hidden default. |
-| TQ18 | A tool bound's edge when the tool does not declare one? | **`inclusive`**, and T5 requires the declaration on every new `bounds`/`object` form (only the sugar defaults). | Matches `periodVerdict`'s inclusive reading of what a tool covers and SQL `BETWEEN`; an exclusive backend given an inclusive bound loses at most one step, which § 9.2 would report as `missing`. |
+| TQ17 | Does a turn with no time words reuse the previous window? | **Yes, only through a recorded row** (`time-carried { fromTurn }`, named in the limits line) — a fixed law in v1; a `carry: 'off'` switch, falling back to the tool's `askOrAssume` rule, only if a need shows. | Follow-ups rarely repeat the window, and re-asking is a needless ask; a silent carry would be a hidden default. |
+| TQ18 | A tool bound's edge when the tool does not declare one? | **`inclusive`**, and T5a requires the declaration on every new `bounds`/`object` form (only the sugar defaults). | Matches `periodVerdict`'s inclusive reading of what a tool covers and SQL `BETWEEN`; an exclusive backend given an inclusive bound loses at most one step, which § 9.2 would report as `missing`. |
 | TQ19 | The drift threshold before a look-back is converted or recorded as shifted (§ 7.4)? | **The tool's `granularity`, else 1 minute.** | Below one step the tool cannot see the difference; a fixed minute keeps an undeclared tool honest after any real pause. |
 | TQ20 | Several mentions and declared sources off: fill anything? | **No.** Record which mention each model value equals, if any. | Filling would be the library picking among the person's own windows. |
-| TQ16 | The names: `.time()`, `TimeReader`, `TimeParts`, `TimeClock`, `ResolvedWindow`, `PeriodForm`, `wall-range`, `period-differs-from-asked`, `derived-from-reading` | **Keep the drafts** for T1–T3; rename freely before T5 ships. | Nothing is public until T3. |
+| TQ21 | `resume()` is passed a different `time`? | **Keep the frozen clock and record the passed value** (`clock-on-resume { passed, kept }`). | The paused turn's words were resolved against the frozen clock; refusing would punish an app that passes the current time on every call. |
+| TQ22 | A range wider than a tool's `maxRange`: ask or refuse? | **Refuse** before dispatch, the reason naming `maxRange`. | Deterministic, and the same rule as a multi-day range to a `day`-only tool: splitting into several calls is the model's choice, not the library's. |
+| TQ23 | How large is the v1 configuration? | **`.time({ zone?, reader?, policy?: { dateOrder, year } })` plus the tools' facts and the run's `time`.** Presentation, DST, the end edge, abbreviations, parts of day, mismatch, carry and widening are fixed laws (§ 11) until a bench shows one needs a switch. | About twenty switches were drafted; most had one careful value, and every switch is a place for a silent default. |
+| TQ24 | Where does "the future is not readable" live? | **On the tool**: `period.direction: 'past' \| 'future' \| 'any'`, beside `retention`; absent, not checked. No global `future` policy. | Readability is a fact about the source (a log store holds no tomorrow); a global default fits an analysis agent and is wrong for a scheduling agent. |
+| TQ25 | The gate's person-values fix: wait for T7, or land now? | **Land `fix/person-values-normalized` now** for the field bug; T7 retires its private table and keeps its cases. | The field bug is live today; T7 is several steps away. |
+| TQ26 | A window set in a UI (a brush, a range picker)? | **A run input, `time.window`, recorded with `source: 'control'`**; it counts as the person's, like an answer, and as one mention for the fill rule. | It was not given in reply to a library ask, so filing it as `answered` would bend that word; one input serves panel, dashboard and chat. |
+| TQ16 | The names: `.time()`, `TimeReader`, `TimeParts`, `TimeClock`, `ResolvedWindow`, `PeriodForm`, `wall-range`, `period-differs-from-asked`, `derived-from-reading` | **Keep the drafts** for T1–T3; rename freely before T5a ships. | Nothing is public until T3. |
 
 ---
 
@@ -987,23 +1045,39 @@ probe, the future check, and its private time vocabulary in the metrics adapters
 
 One review, 2026-09-29, against af 9.127.0 (`c05834a1`), the host at `ef53e31`, the in-flight
 `feat/dataset-time-axis` and read-only reads of vizfootprint. Verdict: right direction, not yet
-universal or safe to build. Every finding received is applied; none is rejected.
+universal or safe to build. It was applied in two revisions: the first applied M1–M9 and
+reconstructed M10 from a copy cut off partway through it; the second read the **full review** and
+applied M10 as written, M11, every SHOULD-FIX (S12–S23) and every NICE item (N24–N29). None is
+rejected.
 
 | # | Finding | Applied in |
 |---|---|---|
 | M1 | The edge law contradicted `periodVerdict` (inclusive) and vizfootprint's `IntervalClause` (inclusive, SQL `BETWEEN`; its "half-open" is a `null` side); the display showed `08:41` for "to 8:40" | § 3.2 (`TimeRange` no longer claims to equal `queried`), § 3.3 (a table, one row per boundary; `periodVerdict` stays inclusive and byte-identical), § 6.1, § 10.2, § 10.4 |
-| M2 | The strategy seam was one layer too low: every language strategy would redo zone, DST, abbreviation and edge arithmetic | § 5.1 (`TimeParts`; a strategy is a tokenizer), § 3.1 (`resolve.ts`), § 5.3, § 5.4, § 11 (`partsOfDay` moved to the policy); `abbreviations` removed from `TimeReadContext`, `dst` from `TimeCandidate.reading` (now a `dst-overlap` note) |
+| M2 | The strategy seam was one layer too low: every language strategy would redo zone, DST, abbreviation and edge arithmetic | § 5.1 (`TimeParts`; a strategy is a tokenizer), § 3.1 (`resolve.ts`), § 5.3, § 5.4, § 11 (`partsOfDay` moved to the policy — since S14 a later switch); `abbreviations` removed from `TimeReadContext`, `dst` from `TimeCandidate.reading` (now a `dst-overlap` note) |
 | M3 | `mismatch: 'refuse'` contradicted `Tool.askOrAssume`'s shipped law and blocked drill-downs and comparisons | § 7.3, § 9.3, § 11 (default `'record'`), § 12.2, TQ6 |
 | M4 | One window per turn was assumed; binding a call to a mention was missing; carry-over unstated | § 5.6, § 7.3, TQ17, TQ20 |
-| M5 | A frozen clock broke look-back exactness after a pause | § 4 (`dispatchedAt`), For the owner item 2, § 7.4, § 9.2 (one `period-differs-from-asked { missing, extra }` replaces narrower/wider), TQ19 |
+| M5 | A frozen clock broke look-back exactness after a pause | § 4 (`dispatchedAt`), For the owner (since rewritten), § 7.4, § 9.2 (one `period-differs-from-asked { missing, extra }` replaces narrower/wider), TQ19 |
 | M6 | The tool vocabulary modelled only the host's two families; `ctx.time.asked` had no wire form | § 7.1 (`PeriodForm`: bounds, joined, object, day, lookback; today's spellings as sugar; `_meta.agentfootprint.period`), § 7.5 (`_meta.agentfootprint.time`), § 3.1 (`wire.ts`) |
 | M7 | T1 was not byte-identical and its exceptions were incomplete | § 12.1 (rows a–e; one more found while applying this: `T24:00` accepted by `Date.parse` today), § 3.1 (two instant profiles, per-use units, no digit cap), TQ11 (`s` is opt-in) |
 | M8 | Library-derived time spellings leaked into "the person's words" | § 9.5 (`said` vs `derived-from-reading`, folded like `argument-assumed`), § 12.2 Fold and Serve, TQ13 |
 | M9 | An LLM-backed reader laundered a model claim | § 5.5 (`kind: 'rule' \| 'model'`; a model reading is confirmed or "not sure"; replay never re-runs a reader), § 5.2, § 6.1, TQ4 |
-| M10 | § 8's naive-axis claim was wrong | § 8: the in-flight `timeAxisIssues` refuses only a zone on an epoch unit and reads a zone-less `iso` axis as "(or are UTC)"; the rule moves onto the values (`naive-values`), T2 |
-
-**What the review text did not carry.** The review arrived cut off partway through M10 ("It says
-an `iso` axis without offsets or zone 'is refused a…"), and no SHOULD-FIX section reached this
-revision. M10 was therefore applied from the in-flight code, read directly, not from the review's
-wording; any SHOULD-FIX items are not applied or rejected here and need the full text.
-
+| M10 | § 8's naive-axis claim was wrong: the in-flight `DatasetTimeAxis.zone` reads a zone-less `iso` axis as "(or are UTC)", and `timeAxisIssues` never looks at values | § 8: T2 adds a value check in `normaliseInstants` (flagged as `naive-values`, or refused by the app's choice; never read as UTC); the fall-back overlap rule (row order, else `dst-ambiguous`; `dst-gap`); `normaliseInstants` is a read-side view, stored bytes unchanged; T2's tests. **Corrected from the reconstruction**, which said `timeAxisIssues` "refuses only a `zone` on an epoch unit" (it also judges keys and the zone's validity — the point is that it never sees a value) and lacked the overlap rule and the read-side clause |
+| M11 | The default reader silently armed word reading | § 5.2, § 11 (`reader` has no default; no reader → no `time-reading` rows, no word-driven asks), § 12.2 Arm |
+| S12 | `future` and `abbreviationMismatch` defaults fit one app | § 7.1 (`direction` is a tool fact beside `retention`), § 5.1, § 6.2, § 6.3, § 9.1, § 11 (no global `future`; `abbreviationMismatch: 'ask'` with both readings, citing `host:be-server/timeContext.ts` · `zoneMismatch`; the `year` reason made universal; the locale from the reader, locale-neutral with none), TQ24; research.md lesson 4 |
+| S13 | Two zones with unclear precedence; one required in the wrong place; resume with a new `time` unstated | § 4 (`TimeClock { now, nowSource, zone, zoneSource }`; per-run zone, builder fallback, refused with neither; `resolve.ts` uses the stamp's zone — `TimeReadContext` has held no zone since M2; `clock-on-resume`), TQ10, TQ21 |
+| S14 | About twenty switches for v1 | § 11 (v1: `.time({ zone?, reader?, policy?: { dateOrder, year } })` + tool facts; the rest are fixed laws with the switch each would add; `checks.retention` dropped as a duplicate; `widen` moved to app policy and the tool declares `filtersToAsked`), § 3.3, § 5.6, § 7.2, § 7.3, TQ6, TQ8, TQ9, TQ17, TQ23 |
+| S15 | `clock-skew` measured latency; `clocks-differ` flagged spellings | § 9 (skew cut; `clocks-differ` limited to declared wall-clock zones, a label only), § 10.2, § 12.2, T8 |
+| S16 | Retention and `maxRange` unspecified at the edges | § 7.2 and § 9.4 (partial overlap dispatches, `held` decides; only a wholly older range is refused), § 6.2; `maxRange` → refuse (TQ22) |
+| S17 | The steps were not small and the order had gaps | § 13 (T1 → T2 → T3 → T6a → T4 → T5a → T5b → T6b → T7 → T8; T9 split per consumer repo with a floor each; the paid benches at T6b), TQ25 (the gate fix lands now, T7 retires it) |
+| S18 | The panel's "time range as a control" bent the word `answered` | § 4 (run input `time.window`, `source: 'control'`), § 3.2, § 5.6, § 7.3, § 9.5, § 10.3, § 10.5, TQ26 |
+| S19 | The metrics mapping conflated presets with ask choices | § 10.5 (presets stay app configuration; only absolute range, max range and direction come from the tool; the default `windowTime` has no `maxRangeHours`) |
+| S20 | The vizfootprint contract overreached | § 10.4 (`SeriesGrain` stays a caption, "never parsed (R12)" — computing on it is a future vizfootprint decision; the bucketing-zone gap in `viz:src/data/bins.ts` named) |
+| S21 | Two range spellings had no owner | § 3.1 and § 3.3 (`range.ts` · `parseRange` / `spellRange`), T1 |
+| S22 | The reader's input set was not tied to its owner | § 5.2 (`lib/saidByPerson.ts` · `saidByPerson`), T6a |
+| S23 | Stale counts; the owner summary's wall-clock claim | § 12.1, § 13 ("every byte reference"); § 4 (two recorded wall-clock reads; the existing operational clocks named out of scope); For the owner rewritten |
+| N24 | An owner quote pointed at one partner app | § 1.1 paraphrased |
+| N25 | chrono-node's stated flaw was arguably correct behaviour | TQ3; research.md (first parse wins, ambiguity hidden) |
+| N26 | The English reader's v1 set was too wide | § 5.3 (a v1 column; parts of day, night words and "last week" later), T6b |
+| N27 | "Re-derive from the stamp" fails across reader or tzdata updates | § 4, § 5.1 (`TimeReader.version`), § 12.2 Record, T6a |
+| N28 | `InputField.format` on a non-string; T11 in the plan | § 6.1, T4; T11 dropped (§ 9 says why) |
+| N29 | "The x domain is `period.queried`" held only for one-call datasets | § 8, § 10.3, § 10.4 |

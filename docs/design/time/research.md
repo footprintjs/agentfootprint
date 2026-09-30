@@ -87,7 +87,8 @@ Consumers routinely take `values[0]`.
 **chrono-node.** Pure JavaScript; reference `{ instant, timezone }`, `forwardDate`, a configurable
 abbreviation map, locale variants (`en.GB` reads `6/10` as 6 October), and `isCertain(component)`
 separating said from implied ([repo](https://github.com/wanasit/chrono)). Its default returns the
-first parse, and its default table reads PST as −08:00 even in October.
+first parse and hides the other readings. (Its table reads PST as −08:00 even in October, which is
+arguably the correct literal reading, not a failure.)
 - **Borrow** the said/implied split and configuration-as-data. **Avoid** making it the library's
   identity; at most one adapter behind the port.
 
@@ -141,7 +142,7 @@ SUTime anchors on the document's creation time; HeidelTime chooses the anchor by
 | Datadog | range | view | none | auto rollup | silent clamp | recorded clamp |
 | Duckling | explicit reftime + tz | offset | `values[]` | `grain` | offset not zone | result shape, grain |
 | Recognizers-Text | reference date | offset | every resolution | TIMEX | `values[0]` | ambiguity as data |
-| chrono-node | `{instant, timezone}` | configurable map | first parse | components | PST in October | said/implied |
+| chrono-node | `{instant, timezone}` | configurable map | first parse | components | first parse wins, ambiguity hidden | said/implied |
 | dateparser | `RELATIVE_BASE` | settings | order, prefer, strict | period | silent MDY | the settings vocabulary |
 | TimeML | anchor id | ISO | function flag | DATE/TIME/DURATION/SET | heavy | recorded anchor |
 | RFC 3339 / 9557 | — | offset + `[zone]` | inconsistency flag | — | — | wire spelling |
@@ -162,7 +163,8 @@ SUTime anchors on the document's creation time; HeidelTime chooses the anchor by
    message's time, so resume and replay reproduce it (Duckling, Rasa, TimeML).
 3. Ambiguity is data; collapse it only by a declared policy, and "ask" is a policy
    (Recognizers-Text, Temporal `reject`, dateparser `STRICT_PARSING`).
-4. Direction is configuration and a violation is a refusal (`PREFER_DATES_FROM`, `forwardDate`).
+4. Direction is declared and a violation is a refusal (`PREFER_DATES_FROM`, `forwardDate`); for
+   an agent it is a fact about each tool's source, not one global setting.
 5. Grain and said/implied are part of the value (Duckling, chrono-node).
 6. One canonical range, many declared spellings; the library converts, and an inexact conversion is
    recorded or refused (Grafana; LangChain's failure).
