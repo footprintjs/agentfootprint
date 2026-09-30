@@ -1040,6 +1040,18 @@ clock.
 
 <CodeFile path="examples/features/81-run-clock.ts" region="run-clock" title="examples/features/81-run-clock.ts (region: run-clock)" />
 
+**The person's words, read by your reader.** `.time({ reader, policy })` arms a
+`TimeReader` that returns zone-less parts (`10/09/26` is three numbers, the order
+undecided) and a verbatim quote. The library resolves them against the clock into
+every candidate window — each date order, am and pm, both instants of a DST
+overlap — and the policy (`dateOrder`, `year`, both `'ask'` by default) picks or
+leaves the choice open for the person. One `time-reading` row per mention records
+the quote, the candidates, how it settled and the reader's id and version; the
+reader runs once per message, only on a message a person wrote, and a resume
+reads the row instead.
+
+<CodeFile path="examples/features/82-time-reader.ts" region="time-reader" title="examples/features/82-time-reader.ts (region: time-reader)" />
+
 A typed answer (`.outputSchema()`) carries the same as data:
 `agent.answerCoverage().periods` — `{ toolName, toolCallId, queried, held, readAt? }`
 per declaring call — and `turn_end.answerCoverage.periods`.

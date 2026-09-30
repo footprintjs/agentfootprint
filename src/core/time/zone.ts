@@ -222,3 +222,16 @@ export function wallToInstant(
     return disambiguation === 'later' ? reading.later : reading.earlier;
   return disambiguation === 'earlier' ? reading.earlier : reading.later;
 }
+
+/**
+ * The tz database version this runtime's `Intl` carries — Node names it
+ * (`process.versions.tz`, e.g. `'2025b'`); any other runtime answers
+ * `'unknown'`. Recorded on every `time-reading` row: zone data changes
+ * between releases, so a reading is re-derivable only with it.
+ */
+export function tzdataVersion(): string {
+  const versions = (globalThis as { process?: { versions?: Record<string, unknown> } }).process
+    ?.versions;
+  const tz = versions?.tz;
+  return typeof tz === 'string' && tz.length > 0 && tz.length <= 32 ? tz : 'unknown';
+}

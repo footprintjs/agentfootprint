@@ -1121,6 +1121,9 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
       const read = readTimeOptions(opts.time === true ? undefined : opts.time);
       if ('problem' in read) throw new Error(`Agent: time ${read.problem}.`);
       this.timeOptions = read.value;
+      // The reader reads only a person's message — a composition hands the
+      // `messageFrom: 'composed'` marker only to a runner that reads it.
+      if (read.value.reader !== undefined) readsMessageFrom(this);
     }
     if (opts.findings?.argumentSources === true || inputsLayer?.argumentSources === true) {
       this.argumentSourcesArmed = true;
@@ -1929,9 +1932,12 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
           message: runInput.message,
           ...(this.lastRunIdentity !== undefined && { identity: this.lastRunIdentity }),
           // A composed message reaches seed only on an agent that reads it
-          // (declared sources) — every other run's input is the bytes it was.
+          // (declared sources, or the time layer's reader) — every other run's
+          // input is the bytes it was.
           ...(messageFrom === 'composed' &&
-            this.argumentSourcesArmed === true && { messageFrom: 'composed' }),
+            (this.argumentSourcesArmed === true || this.timeOptions?.reader !== undefined) && {
+              messageFrom: 'composed',
+            }),
         },
         // Co-engineered boundary (#16): the engine's loop-iteration limit
         // (footprintjs 9 default 1000) must never fire BELOW the agent's own
@@ -4290,6 +4296,12 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
       // zone), stamped by seed as the turn's one `clock` row. Absent → the
       // deps object seed always had.
       ...(this.timeOptions !== undefined && { timeClock: () => this.seedClockDraft() }),
+      // The time layer's reader: seed reads the person's words once per turn,
+      // after the clock. Absent → nothing is read.
+      ...(this.timeOptions?.reader !== undefined &&
+        this.timeOptions.policy !== undefined && {
+          timeReader: { reader: this.timeOptions.reader, policy: this.timeOptions.policy },
+        }),
       // Declared sources (honesty layer 2): the seed twin plants `_findings.from`
       // on ruled tools, and the run's `messageFrom` constant is written — only
       // under the arm (refused at build without the inputs layer).

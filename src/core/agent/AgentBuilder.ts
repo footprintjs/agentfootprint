@@ -2142,6 +2142,16 @@ export class AgentBuilder {
    *   every `Period:` line is rendered in the clock's zone with the zone named
    *   (`2026-10-09 08:00–08:40 America/Los_Angeles (UTC-07:00)`); the typed
    *   record keeps the instants as declared.
+   * - **The person's words, read by YOUR reader** (`reader`, no default). A
+   *   `TimeReader` returns zone-less parts (`'10/09/26'` → three numbers, the
+   *   order undecided); the library resolves them against the clock into
+   *   every candidate window and files one `time-reading` row per mention —
+   *   once per turn, only on a message a person wrote, never re-read on a
+   *   resume or a retry. `policy` picks among the candidates: `dateOrder`
+   *   (`'ask'` default, or `'MDY'` / `'DMY'` / `'YMD'`) and `year` (`'ask'`
+   *   default, or `'current'`); a pick is recorded as assumed. A
+   *   `kind: 'model'` reader's window is never taken as the person's words:
+   *   it waits for the person to confirm it.
    *
    * Off → nothing is filed, read or rendered differently, and `time` on a run
    * is refused (a door that ignored it would look configured and do nothing).
@@ -2153,12 +2163,15 @@ export class AgentBuilder {
    *     .limitsTravelWithTheAnswer()
    *     .build();
    *   await agent.run({ message, time: { now: sentAt, zone: session.zone } });
+   *
+   *   // With a reader: the words are read once per turn, and recorded.
+   *   Agent.create({ provider, model }).time({ reader: myReader, policy: { dateOrder: 'MDY' } });
    */
   time(options?: TimeOptions): this {
     if (this.timeValue !== undefined) {
       throw new Error(
         'AgentBuilder.time: already set. One agent has one clock configuration — pass the ' +
-          'fallback zone once.',
+          'fallback zone, the reader and its policy once.',
       );
     }
     const read = readTimeOptions(options);

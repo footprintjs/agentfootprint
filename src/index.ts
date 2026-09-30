@@ -1047,7 +1047,37 @@ export {
 // the doors are `AgentBuilder.time` and `run({ time })`.
 export type { RunTime, TimeClock, TimeOptions } from './core/time/clock.js';
 export type { TimeRange } from './core/time/range.js';
-export type { CallRow, ClockOnResumeRow, ClockRow, ControlWindow } from './core/time/rows.js';
+export type {
+  CallRow,
+  ClockOnResumeRow,
+  ClockRow,
+  ControlWindow,
+  TimeReaderStamp,
+  TimeReadingRow,
+} from './core/time/rows.js';
+// The time layer's reader port (step T6a) — `.time({ reader, policy })`: a
+// strategy returns zone-less PARTS, the library resolves them. Types only.
+export type {
+  TimeDate,
+  TimeMention,
+  TimeParts,
+  TimeReadContext,
+  TimeReader,
+  TimeReading,
+  TimeRelative,
+  TimeWall,
+} from './core/time/reader.js';
+export type {
+  OpenQuestion,
+  ReadingChoice,
+  ReadingTags,
+  ResolvedWindow,
+  TimeCandidate,
+  TimeNote,
+  TimePart,
+  TimePolicy,
+  TimeWindow,
+} from './core/time/resolve.js';
 // Artifacts, the optional streaming leg (9.25.0) — `putStream`/`getStream` are
 // FEATURE-DETECTED members of the port, so a store that cannot move bytes
 // without holding them whole leaves them absent rather than faking one. The

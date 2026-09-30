@@ -119,8 +119,11 @@ describe('readTimeOptions — the builder fallback', () => {
     expect(problemOf(readTimeOptions({ zone: 'utc' }))).toMatch(/IANA zone name/);
   });
 
-  it('refuses the later steps’ keys until they ship, and a malformed zone', () => {
-    expect(problemOf(readTimeOptions({ reader: {} }))).toMatch(/unknown key 'reader'/);
+  it('refuses an unknown key, a malformed reader, a policy without a reader, and a malformed zone', () => {
+    // The reader and its policy shipped with step T6a (resolve.test.ts pins them).
+    expect(problemOf(readTimeOptions({ reader: {} }))).toMatch(/reader\.id/);
+    expect(problemOf(readTimeOptions({ policy: { year: 'ask' } }))).toMatch(/arm a reader/);
+    expect(problemOf(readTimeOptions({ presentation: {} }))).toMatch(/unknown key 'presentation'/);
     expect(problemOf(readTimeOptions({ zone: 'PDT' }))).toMatch(/IANA zone name/);
     expect(problemOf(readTimeOptions('America/Los_Angeles'))).toMatch(/object/);
   });

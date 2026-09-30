@@ -629,7 +629,8 @@ function ledgerRowIsWellFormed(row: unknown): boolean {
   // so a stamp of any other type would quietly drop its row from its own turn.
   if (r.turn !== undefined && typeof r.turn !== 'number') return false;
   // The time layer's rows (`.time()`): the turn's clock stamp, a resume's
-  // differing `time`, and each call's dispatch moment. The arm ships in the
+  // differing `time`, each call's dispatch moment, and each time mention the
+  // armed reader found (`time-reading`). The arm ships in the
   // SAME change as the kinds; one owner of their kinds and shape
   // (`core/time/rows.ts`). An older runtime refuses a checkpoint carrying one.
   if (isTimeRowKind(r.kind)) return timeRowIsWellFormed(r);
@@ -842,7 +843,9 @@ export function validateCheckpoint(value: unknown): AgentRunCheckpoint {
           'total, action: accepted | cut-short) or ' +
           "'clock' (with turn, iteration, now, nowSource, zone, zoneSource) or " +
           "'clock-on-resume' (with turn, iteration, passed, kept) or " +
-          "'call' (with turn, iteration, toolCallId, toolName, dispatchedAt); " +
+          "'call' (with turn, iteration, toolCallId, toolName, dispatchedAt) or " +
+          "'time-reading' (with turn, iteration, reader, tzdata, mentions and, per mention, " +
+          'mention with quote, parses, candidates and choice, or refused); ' +
           'a row of any kind may carry a numeric turn. ' +
           'It is written by an agent with `.findings()`, an honesty layer or `.time()` armed, and ' +
           're-seeded verbatim on continuation.',

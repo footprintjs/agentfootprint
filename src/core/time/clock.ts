@@ -5,7 +5,8 @@
  *          app's `.time({ zone })` and the run's `time: { now, zone, window }`
  *          are read here into one {@link TimeClock}, or refused by name.
  * Role:    core/ leaf (the time layer's one owner). Imports `instant.ts`,
- *          `zone.ts` and `range.ts` only. The Agent reads the two inputs
+ *          `zone.ts`, `range.ts`, `reader.ts` (the reader's check) and
+ *          `resolve.ts` (the policy's) only. The Agent reads the two inputs
  *          (`Agent.run`, `Agent.resume`); seed stamps the clock once per turn
  *          (`rows.ts` · `ClockRow`); the ToolCalls resume door compares a
  *          resume's `time` with the kept clock ({@link clockChange}).
@@ -40,6 +41,8 @@
 import { instantOf, type InstantText } from './instant.js';
 import { isTimeRange, type TimeRange } from './range.js';
 import { isZoneName, type ZoneName } from './zone.js';
+import { readerIssue, type TimeReader } from './reader.js';
+import { readPolicy, type TimePolicy } from './resolve.js';
 
 // ─── The shapes ─────────────────────────────────────────────────────────
 
@@ -82,10 +85,27 @@ export interface RunTime {
   readonly window?: TimeRange;
 }
 
-/** The builder's `.time(options)` — T3's one switch; the reader and its policy arrive with later steps. */
+/** The builder's `.time(options)` — the fallback zone, the reader and its policy (time design § 11). */
 export interface TimeOptions {
   /** The fallback zone for a run that names none. Omitted: every run must name its own. */
   readonly zone?: string;
+  /**
+   * The strategy that reads the person's words into time parts (`TimeReader`).
+   * No default: without one, the person's words are not read — no
+   * `time-reading` row is filed.
+   */
+  readonly reader?: TimeReader;
+  /**
+   * How the library picks among a reading's candidates (needs `reader`).
+   * `dateOrder` (default `'ask'`): a numeric date's orders become choices,
+   * or the one order your people write (`'MDY'`, `'DMY'`, `'YMD'`), recorded
+   * as assumed. `year` (default `'ask'`): a date said without a year is
+   * asked, or `'current'` — the clock's year, recorded as assumed.
+   */
+  readonly policy?: {
+    readonly dateOrder?: TimePolicy['dateOrder'];
+    readonly year?: TimePolicy['year'];
+  };
 }
 
 /** {@link RunTime} as read: every value checked and kept as written, a `Date` spelled in UTC. */
@@ -95,9 +115,11 @@ export interface ReadRunTime {
   readonly window?: TimeRange;
 }
 
-/** {@link TimeOptions} as read. */
+/** {@link TimeOptions} as read — the policy's defaults filled in when a reader is armed. */
 export interface ReadTimeOptions {
   readonly zone?: ZoneName;
+  readonly reader?: TimeReader;
+  readonly policy?: TimePolicy;
 }
 
 /** What a turn's clock is before seed knows the turn's start. */
@@ -114,7 +136,7 @@ export type Read<T> = { readonly value: T } | { readonly problem: string };
 // ─── Reading the two inputs ──────────────────────────────────────────────
 
 const RUN_KEYS: readonly string[] = ['now', 'zone', 'window'];
-const OPTION_KEYS: readonly string[] = ['zone'];
+const OPTION_KEYS: readonly string[] = ['zone', 'reader', 'policy'];
 
 function isPlainObject(value: unknown): value is Record<string, unknown> {
   if (value === null || typeof value !== 'object' || Array.isArray(value)) return false;
@@ -210,18 +232,42 @@ export function readRunTime(value: unknown): Read<ReadRunTime | undefined> {
  */
 export function readTimeOptions(value: unknown): Read<ReadTimeOptions> {
   if (value === undefined) return { value: {} };
-  if (!isPlainObject(value)) return { problem: 'options must be an object — { zone? }' };
+  if (!isPlainObject(value)) {
+    return { problem: 'options must be an object — { zone?, reader?, policy? }' };
+  }
   const extra = unknownKeys(value, OPTION_KEYS);
   if (extra.length > 0) {
     return {
-      problem: `options take { zone? } only in this release — unknown key ${extra
+      problem: `options take { zone?, reader?, policy? } — unknown key ${extra
         .map((k) => `'${k}'`)
         .join(', ')}`,
     };
   }
-  if (value.zone === undefined) return { value: {} };
-  const read = readZone(value.zone);
-  return 'problem' in read ? read : { value: { zone: read.value } };
+  let zone: ZoneName | undefined;
+  if (value.zone !== undefined) {
+    const read = readZone(value.zone);
+    if ('problem' in read) return read;
+    zone = read.value;
+  }
+  if (value.reader === undefined) {
+    // A policy with no reader has nothing to choose among — it would look
+    // configured and do nothing.
+    if (value.policy !== undefined) {
+      return { problem: "policy chooses among a reader's readings — arm a reader with it" };
+    }
+    return { value: zone !== undefined ? { zone } : {} };
+  }
+  const issue = readerIssue(value.reader);
+  if (issue !== undefined) return { problem: issue };
+  const policy = readPolicy(value.policy);
+  if (typeof policy === 'string') return { problem: policy };
+  return {
+    value: {
+      ...(zone !== undefined && { zone }),
+      reader: value.reader as TimeReader,
+      policy,
+    },
+  };
 }
 
 // ─── The clock ───────────────────────────────────────────────────────────

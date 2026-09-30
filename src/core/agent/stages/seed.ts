@@ -36,7 +36,11 @@ import type { FindingsLedger } from '../findings/types.js';
 import type { Ontology } from '../../../ontology/types.js';
 import type { Tool } from '../../tools.js';
 import { completeClock, type ClockDraft } from '../../time/clock.js';
-import { clockRow } from '../../time/rows.js';
+import { clockOf, clockRow, readingsOf, timeReadingRows } from '../../time/rows.js';
+import { checkReading, type TimeReader, type TimeReading } from '../../time/reader.js';
+import type { TimePolicy } from '../../time/resolve.js';
+import { tzdataVersion } from '../../time/zone.js';
+import { isSaidByPerson } from '../../../lib/saidByPerson.js';
 import { recordFindings } from '../findings/ledger.js';
 
 /**
@@ -148,6 +152,15 @@ export interface SeedStageDeps {
    * so nothing is read or written.
    */
   readonly timeClock?: () => ClockDraft | undefined;
+  /**
+   * THE TIME LAYER'S READER (`.time({ reader, policy })`) — seed reads the
+   * turn's message through it ONCE, after the clock is stamped, and files
+   * one `time-reading` row per mention (`core/time/rows.ts` ·
+   * `timeReadingRows`). Only a message a person wrote (`lib/saidByPerson.ts`
+   * · `isSaidByPerson`, and never a composed run's message); never again for
+   * a turn that already has its rows (a retry). Absent → nothing is read.
+   */
+  readonly timeReader?: { readonly reader: TimeReader; readonly policy: TimePolicy };
   /**
    * DECLARED SOURCES ARE ARMED (honesty layer 2, `.findings({
    * argumentSources: true })` or `.inputsLayer({ argumentSources: true })`) —
@@ -435,11 +448,12 @@ export function buildSeedStage(
       if (loading === undefined) {
         seedFrom(scope, scope.$getArgs<AgentInput>().message, deps, undefined);
         stampClock(scope, deps);
-        return;
+        return readTimeWords(scope, deps);
       }
       return loading.then((decorate) => {
         seedFrom(scope, scope.$getArgs<AgentInput>().message, deps, decorate);
         stampClock(scope, deps);
+        return readTimeWords(scope, deps);
       });
     };
   }
@@ -450,6 +464,7 @@ export function buildSeedStage(
       seedFrom(scope, scope.$getArgs<AgentInput>().message, deps, decorate);
       await anchorTurnNumber(scope, stores);
       stampClock(scope, deps);
+      await readTimeWords(scope, deps);
     };
   }
   return async (scope) => {
@@ -487,6 +502,7 @@ export function buildSeedStage(
     seedFrom(scope, verdict.content, deps, decorate);
     if (stores.length > 0) await anchorTurnNumber(scope, stores);
     stampClock(scope, deps);
+    await readTimeWords(scope, deps);
   };
 }
 
@@ -509,6 +525,51 @@ function stampClock(scope: TypedScope<AgentState>, deps: SeedStageDeps): void {
       draft.window,
     ),
   ]);
+}
+
+/**
+ * The person's words, read for time (the time layer's reader) — right after
+ * the turn's clock, which the reading resolves against. Reads ONLY this
+ * turn's entry, and only when a person wrote it: a message this library
+ * authored in a person's voice, a delivered injection and a composed run's
+ * message (another runner's output) are never read. A turn that already
+ * has its rows (a `resumeOnError` retry re-seeds the same turn) is read
+ * back, never re-read: a model-backed reader must not answer differently
+ * the second time. A sync reader keeps seed's shape; an async one makes it
+ * wait. A reader that throws fails the run.
+ */
+function readTimeWords(scope: TypedScope<AgentState>, deps: SeedStageDeps): void | Promise<void> {
+  const armed = deps.timeReader;
+  if (armed === undefined) return;
+  if (scope.$getArgs<AgentInput>().messageFrom === 'composed') return;
+  const ledger = scope.findingsLedger as FindingsLedger | undefined;
+  const turn = scope.turnNumber as number;
+  if (readingsOf(ledger, turn).length > 0) return;
+  const clock = clockOf(ledger);
+  const history = scope.history as readonly LLMMessage[];
+  const entry = history[history.length - 1];
+  if (clock === undefined || entry === undefined || !isSaidByPerson(entry)) return;
+  const text = entry.content;
+  const { reader, policy } = armed;
+  const file = (reading: TimeReading): void => {
+    const mentions = checkReading(text, reading, reader.id);
+    recordFindings(
+      scope,
+      timeReadingRows({
+        mentions,
+        clock,
+        policy,
+        reader,
+        tzdata: tzdataVersion(),
+        at: { turn, iteration: scope.iteration as number },
+      }),
+    );
+  };
+  const reading = reader.read(text, { locale: reader.locale });
+  if (reading !== null && typeof (reading as { then?: unknown }).then === 'function') {
+    return Promise.resolve(reading).then(file);
+  }
+  file(reading as TimeReading);
 }
 
 /**
