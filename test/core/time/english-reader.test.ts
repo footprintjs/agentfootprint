@@ -187,11 +187,29 @@ describe('every non-v1 phrase reads "unreadable" — the whole phrase, never a p
     ['yesterday 8:40 PM to 9', 'yesterday 8:40 PM to 9'],
     ['8 to 9:30', '8 to 9:30'],
     ['between 8 and 9:30', 'between 8 and 9:30'],
-    ['between 8:30 and 9', '8:30 and 9'],
+    ['between 8:30 and 9', 'between 8:30 and 9'],
     ['8-9:30', '8-9:30'],
     ['14:00 to 16', '14:00 to 16'],
     ['8 and 9 AM', '8 and 9 AM'],
     ['10/9-12', '10/9-12'],
+    // …whatever the far side's spelling: dotted, 4-digit, run together, a unit, words.
+    ['8:40 AM till 9.30', '8:40 AM till 9.30'],
+    ['8:40 till 9.30', '8:40 till 9.30'],
+    ['14:00 to 1600', '14:00 to 1600'],
+    ['14:00-1600', '14:00-1600'],
+    ['8:40 AM to 930', '8:40 AM to 930'],
+    ['8:40 AM until 9h', '8:40 AM until 9h'],
+    ['8:40 AM till nine', '8:40 AM till nine'],
+    ['8:40 AM to about 9 AM', '8:40 AM to about 9 AM'],
+    ['1600 to 17:00', '1600 to 17:00'],
+    ['nine till 8:40 AM', 'nine till 8:40 AM'],
+    ['8:30 and 9 yesterday', '8:30 and 9 yesterday'], // `and` + a time word after: a range
+    // The far side is read to its clause's end — never cut inside it.
+    [
+      'yesterday 8:40 PM till 9.30 for checkout. Thanks',
+      'yesterday 8:40 PM till 9.30 for checkout',
+    ],
+    ['(8:40 AM till 9.30) please', '8:40 AM till 9.30'],
     // More modifiers that change a v1 phrase.
     ['from 3 PM yesterday', 'from 3 PM yesterday'], // `from` with no `to`: a start, not an hour
     ['past 8 PM', 'past 8 PM'],
@@ -217,6 +235,82 @@ describe('every non-v1 phrase reads "unreadable" — the whole phrase, never a p
       by: 'none',
       why: 'unreadable',
     });
+  });
+});
+
+// ─── property: a dangling range is unreadable whole ──────────────────
+
+describe('a dangling range is unreadable whole — every connector × every far-side spelling', () => {
+  // The far sides no v1 row reads: bare, dotted, 4-digit, run together, units, words, hedged.
+  const FAR = [
+    '9', '21', '09', '9.30', '21.30', '930', '0930', '1600', '21h30', '9h', '9hrs', '9 hours',
+    'nine', 'nine thirty', 'half past nine', 'quarter to ten', 'about 9', 'the 9th', '9ish',
+  ] as const; // prettier-ignore
+  const NEAR = [
+    '8:40 AM', '8:40AM', '8:40', '20:40', '14:00', 'yesterday 8:40 PM', 'yesterday 20:40',
+    '10/09/26 8 AM', '8 AM PST', '2026-10-09T08:00',
+  ] as const; // prettier-ignore
+  const CONNECTORS = [
+    ' to ', ' until ', ' till ', ' through ', ' thru ', '-', ' - ', '–', ' – ', '—', ' — ',
+  ] as const; // prettier-ignore
+  const ENDS: readonly [string, string][] = [
+    ['', ''],
+    ['.', ''],
+    ['?', ''],
+    [', thanks', ''],
+    [' for checkout. Then stop', ' for checkout'],
+  ];
+  // [phrase, whether the far side is the dangling one — then the quote reaches the clause's end]
+  const cases: [string, boolean][] = [];
+  for (const near of NEAR) {
+    for (const far of FAR) {
+      for (const c of CONNECTORS) {
+        // A hyphen run into an ISO instant is its offset (`…T08:00-09`), not a connector.
+        if (near.includes('T') && c === '-') continue;
+        cases.push([`${near}${c}${far}`, true]);
+      }
+      cases.push([`between ${near} and ${far}`, true]);
+    }
+  }
+  // The first side is the one no v1 row reads (`9.30 to 8:40 AM`).
+  for (const far of FAR.filter((f) => !/^(?:\d{1,2}|about 9|the 9th|9 hours|quarter to ten)$/.test(f))) {
+    for (const near of ['8:40 AM', '14:00', '20:40']) {
+      for (const c of CONNECTORS) cases.push([`${far}${c}${near}`, false]);
+    }
+  }
+
+  it(`${
+    cases.length * ENDS.length
+  } phrases: one unreadable mention quoting the whole range`, () => {
+    const wrong: string[] = [];
+    for (const [phrase, reachesEnd] of cases) {
+      for (const [end, kept] of ENDS) {
+        const text = `Show client activity ${phrase}${end}`;
+        const mentions = read(text).mentions;
+        const quote = `${phrase}${reachesEnd ? kept : ''}`;
+        const whole = [{ quote, parses: [], problem: 'unreadable' }];
+        if (JSON.stringify(mentions) !== JSON.stringify(whole)) {
+          wrong.push(`${text} → ${JSON.stringify(mentions)}`);
+        }
+      }
+    }
+    expect(wrong).toEqual([]);
+  });
+
+  it('no partial reading: no mention of any case is recorded as said', () => {
+    for (const [phrase] of cases) {
+      expect(read(phrase).mentions.every((m) => m.problem === 'unreadable')).toBe(true);
+    }
+  });
+
+  it('the same sides with a v1 far side still read — the rule never taints a whole range', () => {
+    for (const near of ['8:40 AM', '14:00', 'yesterday 8:40 PM']) {
+      for (const c of CONNECTORS) {
+        const [m] = read(`${near}${c}9:30 PM`).mentions;
+        expect(m!.problem, `${near}${c}9:30 PM`).toBeUndefined();
+        expect(m!.parses[0]!.rangeOf).toHaveLength(2);
+      }
+    }
   });
 });
 
@@ -320,6 +414,10 @@ describe('boundary', () => {
     expect(read('from 8 AM to 9 AM').mentions[0]).toMatchObject({ quote: '8 AM to 9 AM' });
     expect(read('from 8 AM to 9 AM').mentions[0]!.problem).toBeUndefined();
     expect(read('logs from yesterday').mentions).toEqual([
+      { quote: 'yesterday', parses: [{ relative: { unit: 'day', offset: -1 } }] },
+    ]);
+    // A connector whose far side does not begin like a time is English, not a range.
+    expect(read('yesterday to compare').mentions).toEqual([
       { quote: 'yesterday', parses: [{ relative: { unit: 'day', offset: -1 } }] },
     ]);
     expect(read('errors 500-503 yesterday').mentions).toEqual([

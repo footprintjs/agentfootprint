@@ -34,12 +34,21 @@
  * ordinal day (`the 9th`), `8 o'clock`, and any v1 phrase a modifier changes
  * (`since 8 AM`, `before yesterday`, `around 8:40`, `earlier today`,
  * `8 AM to now`, `past 8 PM`, `8 AM-ish`, `from 3 PM yesterday` with no `to`), a
- * range whose other side is no v1 time (`8 to 9:30`, `8:40 AM till 9`,
- * `8 and 9 AM`), and a meridiem the number contradicts (`13:00 PM`). Such a
- * phrase is ONE mention with `problem: 'unreadable'`, quoting the whole
- * phrase: reading `yesterday` out of `yesterday morning` would silently widen
- * what the person said, and reading `8:40 AM` out of `8:40 AM till 9` would
- * silently narrow it.
+ * range whose other side is no v1 time, and a meridiem the number contradicts
+ * (`13:00 PM`). Such a phrase is ONE mention with `problem: 'unreadable'`,
+ * quoting the whole phrase: reading `yesterday` out of `yesterday morning`
+ * would silently widen what the person said, and reading `8:40 AM` out of
+ * `8:40 AM till 9.30` would silently narrow it.
+ *
+ * The range rule is structural, not a list of spellings (`widenForDangling`):
+ * a connector (`to`, `until`, `till`, `through`, `thru`, `-`, `–`, `—`, and
+ * `and` after `between` or beside a clock time) next to a phrase says RANGE.
+ * A far side that is a v1 time has already been joined; a connector still
+ * left over whose far side BEGINS like a time — a digit-led token in any
+ * spelling (`9`, `9.30`, `930`, `1600`, `9h`) or an hour in words (`nine`) —
+ * makes the whole range unreadable, read to the end of its clause (`,` `;`
+ * `.` `?` `!` or the text's end). A far side that does not begin like a time
+ * leaves the connector as English (`yesterday to compare`).
  *
  * A numeric date the tokens could split two ways stays ONE parse — `10/09/26`
  * is three numbers; which is the month is the policy's or the person's.
@@ -150,21 +159,59 @@ const FROM_BEFORE = /(?:^|[^\w])(from)\s*$/i;
 const MODIFIER_AFTER =
   /^(?:\s*-?\s*ish\b|\s*(?:ago\b|onwards?\b|or\s+so\b|(?:or|and)\s+(?:later|earlier|after|before)\b|at\s+the\s+(?:latest|earliest)\b|(?:to|until|till|through|thru|-|–|—)\s*now\b))/i;
 
+// ─── A range left dangling ───────────────────────────────────────────────
+//
+// ONE structural rule: a range connector next to a phrase says RANGE. When
+// the far side is a time (`8:40 AM to 9 AM`) the grouping has already joined
+// it; when a connector is still left over, its far side is no v1 time, and
+// the whole range is one unreadable phrase — never the v1 side alone. The
+// far side is recognised by how a time BEGINS (a numeral in any spelling, or
+// an hour in words), never by what it must look like after that, so no
+// spelling the reader does not know can slip past: `9`, `9.30`, `930`,
+// `1600`, `9h`, `nine`, `half past nine` all count.
+
+/** An hour said in words — how a spelled-out range side begins. */
+const HOUR_WORDS =
+  'zero|oh|one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve|thirteen|fourteen|' +
+  'fifteen|sixteen|seventeen|eighteen|nineteen|twenty|thirty|forty|fifty|noon|midday|midnight|' +
+  'half|quarter';
 /**
- * A range connector with a number on its far side, next to a phrase — a range
- * whose other side is no v1 time (`8 to 9:30`, `8:40 AM till 9`, `14:00 to 16`).
- * Reading the v1 side alone would narrow what the person said, so the whole
- * phrase is one unreadable mention.
+ * How a range side begins: a token that starts with a digit, whatever runs
+ * on after it (`9`, `9.30`, `930`, `9:30:00`, `9h`, `21h30`) — it never ends
+ * on a sentence's `.` — or an hour in words.
  */
-const DANGLING_BEFORE =
-  /(?:\bbetween\s+)?(?<![\w:./])\d{1,2}(?::\d{2})?\s*(?:(?:to|until|till|through|thru)\s*|[-–—]\s*)$/i;
-const DANGLING_AFTER =
-  /^\s*(?:(?:to|until|till|through|thru)\b|[-–—])\s*\d{1,2}(?::\d{2})?(?![\w:]|\.\d)/i;
-/** …`and` says "range" only beside a clock time: `8 and 9 AM`, `between 8:30 and 9`. */
-const DANGLING_AND_BEFORE = /(?:\bbetween\s+)?(?<![\w:./])\d{1,2}(?::\d{2})?\s+and\s+$/i;
-/** Without `between`, `9 AM and 3 retries` is two things — a word after the number says so. */
-const DANGLING_AND_AFTER = /^\s+and\s+\d{1,2}(?::\d{2})?(?![\w:]|\.\d)(?!\s*[a-z])/i;
-const DANGLING_AND_AFTER_BETWEEN = /^\s+and\s+\d{1,2}(?::\d{2})?(?![\w:]|\.\d)/i;
+const SIDE_START = `(?:\\d(?:[\\w:.]{0,24}\\w)?|(?:${HOUR_WORDS})(?![a-z]))`;
+
+/** At a phrase's end: the connector, then words a side may open with (`to about 9`, `till the 9th`). */
+const CONNECTOR_AT = /\s*(?:(to|until|till|through|thru|and)(?![a-z])|[-–—])\s*/iy;
+const SIDE_OPENER =
+  /(?:(?:at|about|around|approx(?:imately)?|roughly|circa|nearly|almost|maybe|say|the)(?![a-z])\s*|~\s*)*/iy;
+const SIDE_AT = new RegExp(SIDE_START, 'iy');
+/**
+ * Without `between`, `and` joins two things as often as two ends (`9 AM and
+ * 3 retries`): it says "range" only when what follows the far side's number
+ * is the clause's end or a time word (`8:30 and 9`, `8:30 and 9 yesterday`).
+ */
+const TIME_WORDS =
+  'am|pm|a\\.m\\.|p\\.m\\.|today|yesterday|tomorrow|tonight|morning|afternoon|evening|night|noon|' +
+  `midnight|o['’]?\\s?clock|utc|gmt|${IANA_AREAS}|${ZONE_ABBREVIATIONS.join('|')}`;
+const AND_CLOSES = new RegExp(
+  `\\s*(?:$|[;,\\n)]|[.!?:](?=\\s|$)|(?:${TIME_WORDS})(?![a-z]))`,
+  'iy',
+);
+/**
+ * Before a phrase: `8 to 9:30`, `1600-17:00`, `nine thirty till 14:00`,
+ * `half past nine to 14:00`, `between 8 and 9:30` — the side is the whole run
+ * of time words before the connector, so the quote never starts inside it.
+ */
+const SIDE_RUN = `(?:(?:${SIDE_START}|past)\\s+)*${SIDE_START}`;
+const DANGLING_BEFORE = new RegExp(
+  `(?:\\bbetween\\s+)?(?<![\\w:./])${SIDE_RUN}` +
+    '\\s*(?:(?:to|until|till|through|thru)(?![a-z])\\s*|[-–—]\\s*|\\s(and)\\s+)$',
+  'i',
+);
+/** Where a clause ends: the far side of a dangling range reaches that far (`a.m.` is no end). */
+const CLAUSE_END = /[;,\n)]|(?<![ap]\.m)[.!?:](?=\s|$)/gi;
 
 // ─── The v1 phrases ──────────────────────────────────────────────────────
 
@@ -475,7 +522,9 @@ function groupsOf(text: string, atoms: readonly Atom[], notRead: readonly Span[]
       unreadable: item.atom === undefined,
     });
   }
-  for (const group of groups) widenForDangling(text, group);
+  const ends = clauseEndsOf(text);
+  const atomStarts = new Set(atoms.map((a) => a.start));
+  for (const group of groups) widenForDangling(text, group, ends, atomStarts);
   for (const group of groups) widenForModifiers(text, group);
   return mergeOverlaps(groups).filter(
     (g) => g.unreadable || g.items.some((i) => i.atom?.kind !== 'bare'),
@@ -484,25 +533,84 @@ function groupsOf(text: string, atoms: readonly Atom[], notRead: readonly Span[]
 
 const DANGLING_REACH = 64;
 
-/** A range connector left dangling beside a phrase, a number past it: the whole phrase is not read. */
-function widenForDangling(text: string, group: Group): void {
-  // A dangling side is a few characters long: look only that far, so a long text stays linear.
+/** A range connector left dangling beside a phrase: the whole range is one unreadable phrase. */
+function widenForDangling(
+  text: string,
+  group: Group,
+  ends: ClauseEnds,
+  atomStarts: ReadonlySet<number>,
+): void {
+  // A dangling first side is a few characters long: look only that far, so a long text stays linear.
   const from = Math.max(0, group.start - DANGLING_REACH);
   const head = text.slice(from, group.start);
-  const tail = text.slice(group.end, group.end + DANGLING_REACH);
   const clock = group.items.some((i) => i.atom?.wall !== undefined);
-  const between = /\bbetween\s+$/i.test(head);
-  const before = DANGLING_BEFORE.exec(head) ?? (clock ? DANGLING_AND_BEFORE.exec(head) : null);
-  if (before !== null) {
+  const between = /\bbetween\s+$/i.exec(head);
+  const before = DANGLING_BEFORE.exec(head);
+  if (before !== null && (before[1] === undefined || clock)) {
     group.start = from + before.index;
     group.unreadable = true;
   }
-  const andAfter = between ? DANGLING_AND_AFTER_BETWEEN : DANGLING_AND_AFTER;
-  const after = DANGLING_AFTER.exec(tail) ?? (clock ? andAfter.exec(tail) : null);
-  if (after !== null) {
-    group.end += after[0].length;
-    group.unreadable = true;
+  const farSide = danglingFarSide(text, group.end, clock, between !== null, atomStarts);
+  if (farSide === undefined) return;
+  // The far side is no v1 time: the range is read to its clause's end, all of it.
+  group.end = Math.max(group.end, ends.after(farSide));
+  if (between !== null) group.start = Math.min(group.start, from + between.index);
+  group.unreadable = true;
+}
+
+/**
+ * The rule, in three steps over the text after a phrase: a connector (else
+ * no range), then a side that begins like a time (else the connector was
+ * English, not a range: `yesterday to compare`), then — for `and` without
+ * `between` only — whether it is a range at all or a list (`8 AM and 9 AM`,
+ * `9 AM and 3 retries`). Returns where the far side's first token ends.
+ */
+function danglingFarSide(
+  text: string,
+  at: number,
+  clock: boolean,
+  between: boolean,
+  atomStarts: ReadonlySet<number>,
+): number | undefined {
+  CONNECTOR_AT.lastIndex = at;
+  const connector = CONNECTOR_AT.exec(text);
+  if (connector === null) return undefined;
+  const and = connector[1]?.toLowerCase() === 'and';
+  if (and && !clock) return undefined;
+  SIDE_OPENER.lastIndex = CONNECTOR_AT.lastIndex;
+  SIDE_OPENER.exec(text);
+  const sideAt = SIDE_OPENER.lastIndex;
+  SIDE_AT.lastIndex = sideAt;
+  if (SIDE_AT.exec(text) === null) return undefined;
+  if (and && !between) {
+    if (atomStarts.has(sideAt)) return undefined;
+    AND_CLOSES.lastIndex = SIDE_AT.lastIndex;
+    if (AND_CLOSES.exec(text) === null) return undefined;
   }
+  return SIDE_AT.lastIndex;
+}
+
+/** The text's clause ends, found once — each dangling range asks where its clause ends. */
+interface ClauseEnds {
+  after(at: number): number;
+}
+
+function clauseEndsOf(text: string): ClauseEnds {
+  const ends = [...text.matchAll(CLAUSE_END)].map((m) => m.index);
+  return {
+    after(at: number): number {
+      let lo = 0;
+      let hi = ends.length;
+      while (lo < hi) {
+        const mid = (lo + hi) >> 1;
+        if ((ends[mid] as number) < at) lo = mid + 1;
+        else hi = mid;
+      }
+      let end = ends[lo] ?? text.length;
+      while (end > at && /\s/.test(text[end - 1] as string)) end--;
+      return end;
+    },
+  };
 }
 
 /** Groups a widening made overlap are one phrase (`8 and 9 AM` held the bare `8` on its own). */
