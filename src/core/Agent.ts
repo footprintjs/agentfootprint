@@ -231,7 +231,7 @@ import {
   ResumeIdentityConflictError,
   RunInFlightError,
 } from './conversation.js';
-import { applyInputResponse, readAwaitingInput } from './inputRequest.js';
+import { applyInputResponse, readAwaitingInput, type AnsweredAsk } from './inputRequest.js';
 import { applyOutputSchema, OutputSchemaError, type OutputSchemaParser } from './outputSchema.js';
 import { InvalidRunInputError, normalizeRunInput } from './runInput.js';
 import type { ResolvedOutputEnforcement } from './agent/outputEnforcement.js';
@@ -740,6 +740,16 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
     runId: 'pending',
     compositionPath: [],
   };
+
+  /**
+   * The typed ask the CURRENT run's resume answered — set by
+   * `resume()` when a person's answer completed an `awaitingInput`, cleared
+   * by every other run start, so a pooled agent never marks one session's
+   * ask as another's re-ask. Read by the dispatch door through
+   * `ToolCallsHandlerDeps.answeredAsk`. The count crosses checkpoints on the
+   * awaiting-input shape itself (`repeat.count`), not here.
+   */
+  private answeredAsk: AnsweredAsk | undefined;
 
   // `lastExecutor` is now inherited as a protected field from RunnerBase
   // (single canonical source for footprintjs snapshot access across all
@@ -1837,6 +1847,7 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
     const recording = this.startRunRecording();
     // (helper used in the catch block below — module-private function
     // declared at file end via hoisting)
+    this.answeredAsk = undefined;
     const executor = this.createExecutor(options);
     this.inFlightRunId = this.currentRunContext.runId;
     // One disposition ledger per run (9.60.0) — registration mirrors what
@@ -2321,6 +2332,7 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
     }
     // Typed data collection is not consent. Validate before changing any run state.
     const awaitingInput = gate === undefined ? readAwaitingInput(checkpoint.pauseData) : undefined;
+    let answeredAsk: AnsweredAsk | undefined;
     if (awaitingInput !== undefined) {
       this.assertNotRunning('Agent.resume');
       const answered = applyInputResponse(awaitingInput, input);
@@ -2344,6 +2356,11 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
         this.recordPendingQuestion(outcome);
         return outcome;
       }
+      answeredAsk = {
+        id: answered.id,
+        requestId: answered.requestId,
+        count: (awaitingInput.repeat?.count ?? 0) + 1,
+      };
       input = {
         status: 'input_received',
         requestId: answered.requestId,
@@ -2393,6 +2410,7 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
     // paused and resumed is two runs, and each mints its own recording when
     // (and only when) it completes.
     const recording = this.startRunRecording();
+    this.answeredAsk = answeredAsk;
     const executor = this.createExecutor(resumeOptions);
     this.inFlightRunId = this.currentRunContext.runId;
     // A resumed turn is two runs, and each keeps its own ledger — exactly
@@ -5059,6 +5077,7 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
       // tier one is lazy on top of that — an agent whose tools hold no sessions
       // never allocates it.
       currentRun: () => this.toolRunFacts(),
+      answeredAsk: () => this.answeredAsk,
       emitForRun: (type, payload, runContext) => this.emitLateFact(type, payload, runContext),
       toolSessions: () => this.toolSessions(),
       // 8.6.0 — what a run does when a declared credential needs 3LO consent.

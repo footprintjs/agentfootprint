@@ -106,6 +106,52 @@ Invalid or stale replies leave the checkpoint available for correction.
 `describedResult({ clarify: ... })` remains an informational result and does not
 automatically pause a run.
 
+## When your app refuses an answer — `refused` and `repeat`
+
+Field types are the library's check; whether a year is in range or a window
+ends after it starts is your app's. When your app refuses an answer and the
+collecting tool asks again, tell the person why: pass the refused values and
+your reason, in your own words, as `refused`. The library never writes a
+reason for you. Its type is `InputRefusal`; the runtime's re-ask mark below is
+`InputRepeat`.
+
+```ts
+execute: () => requestInput({
+  id: 'query-window',
+  question: 'Complete the query time window: year and timezone.',
+  fields: [
+    { id: 'year', type: 'number' },
+    { id: 'timezone', type: 'string' },
+  ],
+  // Set by your validation when it turned the last answer down.
+  ...(lastRefusal && { refused: lastRefusal }),
+  // e.g. { answer: { year: 2019, timezone: 'UTC' },
+  //        reason: 'The year 2019 is before the retained data (2020 onwards).' }
+}),
+```
+
+`refused` rides `awaitingInput.refused` wherever the question already travels
+— the pause outcome, the checkpoint and the `pause.request` event — so a UI can
+render "Your answer was not accepted: …". Its `answer` is judged against
+`fields` like any answer, its `reason` must be non-blank, and `null` is the
+field omitted.
+
+Even without a declaration a re-ask is never silent. When the ask a resume
+answered is raised again with the same `id` in the same turn, the pending value
+carries `repeat`:
+
+```ts
+{ count: 1, previousAnswer: { year: 2019, timezone: 'UTC' } }
+```
+
+`count` is how many times the person already answered this ask this turn and
+survives checkpoints. `previousAnswer` is read from the record — the result
+that landed after your result middleware and redaction ran — and holds only the
+fields the person supplied; when your middleware replaced that result, only
+`count` is carried. `repeat` states facts, never a reason: say "your previous
+answer was not accepted" at most. A new turn starts from nothing, and a first
+ask carries neither key.
+
 ## When the library asks — a tool's `ask` rule
 
 A collection tool is the shape for a question only your app can frame (a

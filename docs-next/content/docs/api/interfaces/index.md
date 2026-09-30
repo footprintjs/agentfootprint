@@ -2,7 +2,7 @@
 title: Interfaces
 ---
 
-322 exported from `agentfootprint`.
+324 exported from `agentfootprint`.
 
 - [`AbsenceDeclaration`](/docs/api/interfaces/AbsenceDeclaration)
 - [`ActOptions`](/docs/api/interfaces/ActOptions)
@@ -149,6 +149,8 @@ title: Interfaces
 - [`InProgressItem`](/docs/api/interfaces/InProgressItem)
 - [`InputCancellation`](/docs/api/interfaces/InputCancellation)
 - [`InputField`](/docs/api/interfaces/InputField)
+- [`InputRefusal`](/docs/api/interfaces/InputRefusal)
+- [`InputRepeat`](/docs/api/interfaces/InputRepeat)
 - [`InputRequestDeclaration`](/docs/api/interfaces/InputRequestDeclaration)
 - [`InputResponse`](/docs/api/interfaces/InputResponse)
 - [`InputResponseResult`](/docs/api/interfaces/InputResponseResult)

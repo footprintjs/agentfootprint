@@ -96,7 +96,12 @@ import {
 import type { AuthorizationRequiredMode } from '../../../identity/consent.js';
 import { CONSENT_PAUSE_KEY, consentQuestion, modelRefusal } from '../../../identity/consent.js';
 import { isPauseRequest, PauseAnswerRequiredError } from '../../pause.js';
-import { stampInputRequest, validateInputDeclaration } from '../../inputRequest.js';
+import {
+  repeatOf,
+  stampInputRequest,
+  validateInputDeclaration,
+  type AnsweredAsk,
+} from '../../inputRequest.js';
 import {
   assertAskComponent,
   InvalidAskComponentError,
@@ -640,6 +645,16 @@ export interface ToolCallsHandlerDeps {
     readonly sessionId?: string;
     readonly identity?: MemoryIdentity;
   };
+  /**
+   * The typed ask this run's resume answered, or `undefined` — for
+   * a fresh run, and for a resume of any other pause kind. An accessor for
+   * the reason `currentRun` is one. Read at a `requestInput` raise: the same
+   * declaration `id` raised again is a RE-ASK, stamped `repeat` on the
+   * awaiting-input shape (`inputRequest.ts` · `repeatOf`).
+   *
+   * @internal
+   */
+  readonly answeredAsk?: () => AnsweredAsk | undefined;
   /**
    * Put one artifact fact on the record for the run it BELONGS to — the door
    * a `ctx.artifacts` fact takes when it lands after that run ended (a tool's
@@ -4900,11 +4915,15 @@ export function buildToolCallsHandler(
                   // person, and the resources it opened are what the resume
                   // needs. No `'call'` teardown here, deliberately.
                   writePause();
-                  const awaitingInput =
+                  const stamped =
                     declaration === undefined
                       ? undefined
+                      : declared ?? validateInputDeclaration(declaration);
+                  const awaitingInput =
+                    stamped === undefined
+                      ? undefined
                       : stampInputRequest(
-                          declared ?? validateInputDeclaration(declaration),
+                          stamped,
                           `${deps.currentRun?.().runId ?? scope.turnStartMs}:${tc.id}`,
                           {
                             originalRequest: scope.userMessage,
@@ -4916,6 +4935,10 @@ export function buildToolCallsHandler(
                               offeredSkillIds: [...scope.turnRoute.offered],
                             }),
                           },
+                          // A re-ask of the ask this run's resume answered is
+                          // never silent: the count, and the previous
+                          // answer as the record holds it — facts, no reason.
+                          repeatOf(stamped, deps.answeredAsk?.(), newHistory),
                         );
                   // Returning a defined value triggers footprintjs pause —
                   // the returned object becomes the checkpoint's pauseData.

@@ -37,6 +37,62 @@ A lookup that pauses still declares what it looked at (9.114.0): the
 declaration's `absence` — the envelope `absent()` returns — is filed at the
 raise and never rides `awaitingInput` (`agent/coverage/README.md` § 4).
 
+## A re-ask is never silent (refused · repeat)
+
+**When the same typed ask is raised again after the person answered it, the
+person is told — in the app's words when the app gives them, and by the facts
+on the record when it does not. The library never writes a reason.**
+
+**Why.** An app that validates an answer and refuses it (a year before the
+retained data, a window that ends before it starts) typically hands the reason
+to the model and asks again. The model re-calls the collecting tool, the tool
+raises the same question, and the person sees the identical prompt with no word
+about the answer they gave — a silent loop any app can fall into.
+
+**How.** Two halves, one owner (`inputRequest.ts`):
+
+- `refused: { answer?, reason }` on the declaration — the refused values
+  (judged against `fields` like any answer) and the app's own reason
+  (non-blank, at most 4096 characters). It rides `awaitingInput.refused`: the
+  pause outcome, the checkpoint's `pauseData` and the `pause.request` event —
+  where the question already travels. `null` is the field omitted.
+- `awaitingInput.repeat: { count, previousAnswer? }` — stamped by the runtime
+  (`inputRequest.ts` · `repeatOf`, called at the raise in
+  `agent/stages/toolCalls.ts`) when the ask this run's resume answered is raised
+  again with the same `id`. `count` is how many times the person already
+  answered it this turn; it crosses checkpoints on the awaiting-input shape
+  itself (`Agent.resume` reads `repeat.count` and adds one). `previousAnswer` is
+  READ FROM THE RECORD — the `input_received` result that landed, after the
+  tool-result rules (redaction first) ran — and keeps only the fields the
+  person supplied; when a rule replaced that result, only the count travels.
+  A new `run()` starts from nothing, so a pooled agent never marks one
+  session's ask as another's re-ask.
+
+A first ask carries neither key — byte-identical to before.
+
+```ts
+let refusal: InputRefusal | undefined; // set by the app's validation
+const collect = defineTool({
+  name: 'collect_window',
+  description: 'Collect the query time window.',
+  inputSchema: { type: 'object', properties: {} },
+  execute: () =>
+    requestInput({
+      id: 'query-window',
+      question: 'Complete the query time window: year and timezone.',
+      fields: [
+        { id: 'year', type: 'number' },
+        { id: 'timezone', type: 'string' },
+      ],
+      ...(refusal && { refused: refusal }), // { answer: { year: 2019, … }, reason: 'The year 2019 is before the retained data.' }
+    }),
+});
+// UI: if (out.awaitingInput.refused) show `Your answer was not accepted: ${out.awaitingInput.refused.reason}`
+//     else if (out.awaitingInput.repeat) show 'Your previous answer was not accepted.'
+```
+
+Pinned by `test/core/scenario/input-request-refusal.test.ts`.
+
 ## A batch that pauses settles its un-dispatched siblings (9.113.0)
 
 **A batch that pauses settles its un-dispatched siblings: each gets a
