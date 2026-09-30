@@ -5,6 +5,16 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [9.128.1] - 2026-09-30
+
+### Fixed
+
+- **The previous tag reached no one.** Its publish run stopped at the docs-site search budget
+  (2.16 MB gzip against a 2.155 MB ceiling), so the package was tagged but never published to
+  npm. The ceiling is raised about 2% over the measurement, and this release carries the same
+  changes: a dataset's declared time axis, and a person's typed answers, date parts and
+  clock spellings counted as their own words by the evidence gate.
+
 ## [9.128.0] - 2026-09-30
 
 ### Added
