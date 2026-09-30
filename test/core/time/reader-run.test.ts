@@ -350,6 +350,19 @@ describe('the saidByPerson gate', () => {
     expect(calls).toHaveLength(0);
   });
 
+  it('a direct composed run() — the app says another runner wrote it — is never read', async () => {
+    // Not through a Sequence: a composition mounts the chart and hands the
+    // marker to seed directly, so it never passes `Agent.run`'s forwarding.
+    // This pins that door — an agent with a reader and no declared sources
+    // must still forward `messageFrom: 'composed'` to seed.
+    const { reader, calls } = rangeReader();
+    const { agent } = agentWith([answer('ok')], (b) => b.time({ zone: LA, reader }));
+    await agent.run({ message: MESSAGE, messageFrom: 'composed', time: { now: NOW } });
+    expect(calls).toHaveLength(0);
+    expect(readings(agent)).toEqual([]);
+    expect(rows(agent).map((r) => r.kind)).toEqual(['clock']);
+  });
+
   it('the first step of a composition is the person’s own message, and is read', async () => {
     const { reader, calls } = rangeReader();
     const readerAgent = agentWith([answer('ok')], (b) => b.time({ zone: LA, reader }));

@@ -41,7 +41,7 @@ import {
   type TimePolicy,
 } from '../../../src/core/time/resolve.js';
 import { timeReadingRows, timeRowIsWellFormed } from '../../../src/core/time/rows.js';
-import { wallAt } from '../../../src/core/time/zone.js';
+import { tzdataVersion, wallAt } from '../../../src/core/time/zone.js';
 import { int, pick, prng } from './fixtures/generate.js';
 
 const LA = 'America/Los_Angeles';
@@ -106,6 +106,12 @@ describe('resolveMention — every candidate of the parts', () => {
     const same = resolve({ date: { kind: 'numeric', fields: [12, 12, 2026], yearDigits: 4 } });
     expect(same.candidates).toHaveLength(2);
     expect(chooseReading(same, DEFAULT_TIME_POLICY, 'rule')).toEqual({ by: 'only', candidate: 0 });
+    // A policy that removes only same-window readings decided nothing, so it
+    // is not recorded as assumed: DMY keeps the DMY reading, same day.
+    expect(chooseReading(same, { dateOrder: 'DMY', year: 'ask' }, 'rule')).toEqual({
+      by: 'only',
+      candidate: 1,
+    });
     // 30 February under every order.
     const none = resolve({ date: { kind: 'fixed', year: 2026, month: 2, day: 30 } });
     expect(none.candidates).toEqual([]);
@@ -242,6 +248,21 @@ describe('resolveMention — every candidate of the parts', () => {
     ]);
     expect(offset.candidates[0]?.notes).toContainEqual({ kind: 'offset-said', offset: '-07:00' });
     expect(offset.candidates[0]?.zone).toBe(LA);
+    // The three offset spellings are said; a colon with no minutes is not one of them.
+    for (const token of ['-07', '-0700', '-07:00']) {
+      expect(
+        resolve({
+          date: { kind: 'fixed', year: 2026, month: 10, day: 9 },
+          wall: { h: 20 },
+          zoneToken: token,
+        }).candidates[0]?.notes,
+      ).toContainEqual({ kind: 'offset-said', offset: '-07:00' });
+    }
+    expect(resolve({ wall: { h: 20 }, zoneToken: '-07:' })).toEqual({
+      candidates: [],
+      needsZone: true,
+      unsupported: [],
+    });
     // PST: no abbreviation map ships in v1 — never guessed to a zone.
     const pst = resolve({ wall: { h: 20 }, zoneToken: 'PST' });
     expect(pst).toEqual({ candidates: [], needsZone: true, unsupported: [] });
@@ -587,6 +608,13 @@ describe('timeReadingRows + the checkpoint door', () => {
 });
 
 // ─── Property ────────────────────────────────────────────────────────────
+
+describe('tzdataVersion — the runtime\u2019s own zone data, never a constant', () => {
+  it('on Node it is process.versions.tz', () => {
+    expect(process.versions.tz).toEqual(expect.any(String));
+    expect(tzdataVersion()).toBe(process.versions.tz);
+  });
+});
 
 describe('property — a fixed date and a 24-hour time resolve to their own wall time', () => {
   it('2 000 cases in five zones', () => {

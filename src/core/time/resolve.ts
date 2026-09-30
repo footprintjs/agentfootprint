@@ -245,7 +245,8 @@ type ZoneRead =
   | { readonly kind: 'offset'; readonly minutes: number; readonly spelled: string }
   | { readonly kind: 'unknown' };
 
-const OFFSET_TOKEN = /^([+-])(\d{2}):?(\d{2})?$/;
+/** `±HH`, `±HHMM`, `±HH:MM` — a colon only between hours and minutes, never trailing. */
+const OFFSET_TOKEN = /^([+-])(\d{2})(?::?(\d{2}))?$/;
 
 function zoneOf(token: string | undefined, clockZone: ZoneName): ZoneRead {
   if (token === undefined) return { kind: 'iana', zone: clockZone, said: false };
@@ -836,6 +837,24 @@ function openQuestions(
 }
 
 /**
+ * Whether a policy step DECIDED something: it removed a reading whose window
+ * none of the kept readings names. A step that removed only same-window
+ * readings (`12/12/12` under `DMY` — every order names one day) changed
+ * nothing the person would see, so the choice is not recorded as assumed.
+ */
+function policyDecided(
+  all: readonly TimeCandidate[],
+  before: readonly number[],
+  kept: readonly number[],
+): boolean {
+  if (kept.length === before.length) return false;
+  const keptWindows = new Set(kept.map((i) => windowKey(all[i] as TimeCandidate)));
+  return before.some(
+    (i) => !kept.includes(i) && !keptWindows.has(windowKey(all[i] as TimeCandidate)),
+  );
+}
+
+/**
  * How one mention settles under the app's policy (§ 5.1, § 11). The policy
  * only removes readings; it never adds one. A DST choice, a meridiem, a
  * zone the person named that is no zone, and a `model` reader's window are
@@ -862,12 +881,12 @@ export function chooseReading(
       const order = all[i]?.reading.dateOrder;
       return order === undefined || order === policy.dateOrder;
     });
-    if (kept.length < remaining.length) applied.dateOrder = policy.dateOrder;
+    if (policyDecided(all, remaining, kept)) applied.dateOrder = policy.dateOrder;
     remaining = kept;
   }
   if (policy.year !== 'ask') {
     const kept = remaining.filter((i) => all[i]?.reading.year !== 'previous');
-    if (kept.length < remaining.length) applied.year = policy.year;
+    if (policyDecided(all, remaining, kept)) applied.year = policy.year;
     remaining = kept;
   }
   if (remaining.length === 0) return { by: 'none', why: 'excluded-by-policy' };

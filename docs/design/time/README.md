@@ -1106,7 +1106,7 @@ deterministic and are measured over retained recorded runs or unit tables, with 
   (never a guess at what it meant). Bounds on the record: 16 mentions, 4 parses. (6) **What v1
   resolves.** A day word (`relative: { day, offset }`) and a look-back; a part of the day, a
   calendar week / month / year, a window anchored on the previous one and a look-back inside a
-  range are named `unsupported`. A said zone is an IANA name or a numeric offset (`Z`, `±HH:MM`,
+  range are named `unsupported`; a range whose `to` wall time is earlier than its `from` with no date said ("11 PM to 1 AM") is not rolled into the next day — it resolves to no candidate (`none / no-candidate`), honest and asked, never guessed. A said zone is an IANA name or a numeric offset (`Z`, `±HH:MM`,
   `±HHMM`, `±HH`; noted `offset-said`, the window's `zone` stays the clock's); any other token is
   asked (`needsZone`). A two-digit year takes the clock's century (noted `century-implied`). A day
   starts at its first instant (Temporal's `startOfDay`, `wallToInstant(…, 'compatible')`). A range
