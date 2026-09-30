@@ -452,9 +452,10 @@ export function timeWindowsLine(
  * @example
  * ```ts
  * timeLimitsSentence({ period: ['client_activity read less than was asked — asked: …; read: …'], clocks: [] });
- * // 'The time the tools read is not the time asked about, and an answer says so: client_activity
- * //  read less than was asked — asked: …; read: …. An answer states the time each result read
- * //  and claims nothing about time no result read.'
+ * // "A note from the library's check of the tool results, not a message from the person: the time
+ * //  the tools read is not the time asked about — client_activity read less than was asked —
+ * //  asked: …; read: …. So the answer to the person states the time each result read and claims
+ * //  nothing about time no result read."
  * ```
  */
 export function timeLimitsSentence(lines: TimeLimitLines | undefined): string | undefined {
@@ -462,16 +463,26 @@ export function timeLimitsSentence(lines: TimeLimitLines | undefined): string | 
   const parts: string[] = [];
   if (lines.period.length > 0) {
     parts.push(
-      `The time the tools read is not the time asked about, and an answer says so: ` +
-        `${lines.period.join('; ')}. An answer states the time each result read and claims ` +
-        `nothing about time no result read.`,
+      `the time the tools read is not the time asked about — ${lines.period.join('; ')}. So ` +
+        `the answer to the person states the time each result read and claims nothing about ` +
+        `time no result read.`,
     );
   }
   if (lines.clocks.length > 0) {
     parts.push(`Clocks: ${lines.clocks.join('; ')}.`);
   }
-  return parts.length === 0 ? undefined : parts.join(' ');
+  return parts.length === 0 ? undefined : `${TIME_LIMITS_SOURCE} ${parts.join(' ')}`;
 }
+
+/**
+ * The line's opening: WHO says it. The line is a request-only `user`
+ * message, and the T8 bench's first paid round (stopped at 41 runs) showed
+ * the model reading an unmarked one as the person correcting it — 15 of 15
+ * served answers opened "You're right" / "I apologize". Naming the library
+ * as the source keeps the conclusion and drops the false correction.
+ */
+export const TIME_LIMITS_SOURCE =
+  "A note from the library's check of the tool results, not a message from the person:";
 
 // ─── The note on a result ───────────────────────────────────────────────
 

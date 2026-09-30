@@ -21,6 +21,8 @@ export const T8_REASONS = Object.freeze(['period-differs-from-asked', 'period-be
 
 /** The served line's lead (`arguments/serve.ts` · `timeLimitsSentence`). */
 export const LIMITS_LEAD = 'The time the tools read is not the time asked about';
+/** Its opening since round 1 (`arguments/serve.ts` · `TIME_LIMITS_SOURCE`) — either marks the line. */
+export const LIMITS_SOURCE = "A note from the library's check of the tool results";
 
 const byId = new Map(CASES.map((c) => [c.id, c]));
 
@@ -96,7 +98,9 @@ export function readRun(raw) {
   const served = (raw.requests ?? []).filter(
     (q) =>
       typeof q.timeLine === 'string' &&
-      (q.timeLine.includes(LIMITS_LEAD) || q.timeLine.includes('Clocks:')),
+      (q.timeLine.includes(LIMITS_LEAD) ||
+        q.timeLine.includes(LIMITS_SOURCE) ||
+        q.timeLine.includes('Clocks:')),
   ).length;
   const answered = raw.answer !== undefined;
   const retentionsMs = c.tools.includes('client_activity') ? [ACTIVITY_RETENTION] : [];

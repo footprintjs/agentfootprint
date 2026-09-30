@@ -31,7 +31,8 @@ const NOW_MS = Date.parse(NOW);
 const DAY = 86_400_000;
 const iso = (ms: number) => new Date(ms).toISOString();
 const LA = 'America/Los_Angeles';
-const LEAD = 'The time the tools read is not the time asked about';
+const LEAD =
+  "A note from the library's check of the tool results, not a message from the person: the time the tools read is not the time asked about";
 
 function scripted(script: readonly Reply[], requests: LLMRequest[]) {
   let i = 0;
@@ -142,11 +143,11 @@ describe('the time limits line — served late, after the read', () => {
     const line = lastLine(requests[1]!);
     expect(line).toMatch(
       new RegExp(
-        `^${LEAD}, and an answer says so: client_activity read less than was asked — asked: 2026-09-09 08:40:00`,
+        `^${LEAD} — client_activity read less than was asked — asked: 2026-09-09 08:40:00`,
       ),
     );
     expect(line).toMatch(
-      /; read: 2026-10-02 08:40:00 – 2026-10-09 08:39:59 America\/Los_Angeles \(UTC-07:00\)\. An answer states the time each result read and claims nothing about time no result read\.$/,
+      /; read: 2026-10-02 08:40:00 – 2026-10-09 08:39:59 America\/Los_Angeles \(UTC-07:00\)\. So the answer to the person states the time each result read and claims nothing about time no result read\.$/,
     );
   });
 
@@ -201,6 +202,8 @@ describe('timeLimitsSentence — the composition', () => {
         period: [],
         clocks: ["the sources' clocks differ (UTC, America/New_York) — compared as instants"],
       }),
-    ).toBe("Clocks: the sources' clocks differ (UTC, America/New_York) — compared as instants.");
+    ).toBe(
+      "A note from the library's check of the tool results, not a message from the person: Clocks: the sources' clocks differ (UTC, America/New_York) — compared as instants.",
+    );
   });
 });
