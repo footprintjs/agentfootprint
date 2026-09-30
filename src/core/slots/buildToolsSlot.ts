@@ -45,6 +45,9 @@ import {
 import { carriesRules } from '../agent/arguments/declare.js';
 import type { Classifier } from '../../classify/types.js';
 import type { ToolChoiceEntry } from '../agent/toolChoice/types.js';
+import type { ReaderWindows } from '../time/bind.js';
+import type { ZoneName } from '../time/zone.js';
+import type { TimeLimitFacts } from '../agent/coverage/timeLimitFacts.js';
 
 /**
  * Mutable cache shared between `buildToolsSlot` (writer) and
@@ -195,8 +198,14 @@ export function mergeWire(candidates: readonly WireCandidate[]): {
   return { merged, winners, losers, winningTools };
 }
 
-/** The inputs layer's wire decoration (`agent/arguments/serve.ts` · `rulesOnWire`). */
-type RulesOnWire = typeof import('../agent/arguments/serve.js').rulesOnWire;
+/**
+ * The inputs layer's wire decoration (`agent/arguments/serve.ts` · `rulesOnWire`) and the time
+ * layer's late line (`timeWindowsLine`), from the one module loaded under the arm.
+ */
+type RulesOnWire = Pick<
+  typeof import('../agent/arguments/serve.js'),
+  'rulesOnWire' | 'timeWindowsLine' | 'timeLimitsLine'
+>;
 
 /**
  * The rules' serve options for a schema that will CARRY `_findings.from`
@@ -401,6 +410,32 @@ export interface ToolsSlotConfig {
    * ledger's base by reference, or none. Absent → the decoration it always was.
    */
   readonly argumentSources?: true;
+  /**
+   * THE TIME LAYER'S READER IS ARMED (`.time({ reader })`, step T6b) —
+   * present ONLY then, and only beside `inputsLayer`. At the same decoration
+   * site the slot composes the ONE served time line (`agent/arguments/serve.ts`
+   * · `timeWindowsLine`) from the tools it really serves — each window the
+   * reader SETTLED this turn in each period tool's own form, and each quote
+   * still pending — and writes it to `timeLine` as `{ iteration, text }` (`''`
+   * when there is nothing to say); the mount carries it to `callLLM`, which
+   * appends it LAST to the request, never to history. The tool schemas are not
+   * touched. Reads one mount arg under this gate only, `timeWindows`
+   * (`core/time/windows.ts` · `readerWindowsOf` — absent on a turn with none).
+   * `appZone` is
+   * the app's `.time({ zone })`.
+   */
+  readonly timeWindows?: { readonly appZone?: ZoneName };
+  /**
+   * THE TIME LAYER IS ARMED (`.time()`, step T8) — present ONLY then, and only
+   * beside `inputsLayer`. The same site appends the turn's time limits
+   * (`agent/arguments/serve.ts` · `timeLimitsLine`, which renders them) to the
+   * ONE served time line, from one mount arg, `timeLimits` — unrendered facts
+   * (`coverage/timeLimitFacts.ts` · `timeLimitFactsOf` — absent on a turn
+   * whose reads match what was asked).
+   * Without the reader the line is written only when it says something; the
+   * iteration stamp keeps an older one from being served.
+   */
+  readonly timeLimits?: true;
   /**
    * TOOL CHOICE BY CLASSIFIER IS ARMED (9.105.0, `.toolChoice()`) — present
    * ONLY then. Compose then asks `classifier` which of the merged wire's
@@ -612,6 +647,8 @@ export function buildToolsSlot(config: ToolsSlotConfig): FlowChart {
       turnRoute?: TurnRoute;
       stepPointer?: StepPointerCarrier;
       findingsOffer?: readonly string[];
+      timeWindows?: ReaderWindows;
+      timeLimits?: TimeLimitFacts;
       userMessage?: string;
       priorToolChoices?: readonly ToolChoiceEntry[];
       wrapUpAsked?: boolean;
@@ -983,7 +1020,34 @@ export function buildToolsSlot(config: ToolsSlotConfig): FlowChart {
       // `assertReservedArgument`), so this is a ToolProvider's tool.
       const sourcesOf = (s: LLMToolSchema): typeof SOURCES_SERVED | undefined =>
         config.argumentSources === true && !ownsReservedArgument(s) ? SOURCES_SERVED : undefined;
-      const ruled = rules !== undefined ? rules(served, winningTools, sourcesOf) : served;
+      const ruled =
+        rules !== undefined ? rules.rulesOnWire(served, winningTools, sourcesOf) : served;
+      // THE TIME LINE (step T6b) is composed HERE, from the tools really served, and served LATE —
+      // `callLLM` appends it last to the request, never to history — because a sentence on a tool
+      // description sits far from the decision it is about (the step-7b finding: a conclusion
+      // served at the decision point is followed, raw facts early are not). Under the reader's arm
+      // only, written EVERY composition — the line, or '' — stamped with the iteration that
+      // composed it, so a slot that does not re-run (classic mode) never serves a stale line.
+      // THE TIME LIMITS (step T8) join the same line, after the windows: what the calls that ran
+      // READ against what they ASKED, the conclusion an answer states — composed from the record
+      // by the one owner the limits block also asks, so the model and the person read one text.
+      if ((config.timeWindows !== undefined || config.timeLimits === true) && rules !== undefined) {
+        const windows =
+          config.timeWindows === undefined || args.timeWindows === undefined
+            ? undefined
+            : rules.timeWindowsLine(ruled, winningTools, {
+                ...args.timeWindows,
+                ...(config.timeWindows.appZone !== undefined && {
+                  appZone: config.timeWindows.appZone,
+                }),
+              });
+        const limits =
+          config.timeLimits === true ? rules.timeLimitsLine(args.timeLimits) : undefined;
+        const text = [windows, limits].filter((t) => t !== undefined).join(' ');
+        if (config.timeWindows !== undefined || text.length > 0) {
+          scope.timeLine = { iteration, text };
+        }
+      }
       // Declared sources (honesty layer 2): `_findings.from` on a RULED tool only —
       // inside the ledger's decoration under `.findings()`, or as the reserved
       // argument's only property without it (`withSourcesArgument`).
@@ -1117,7 +1181,11 @@ export function buildToolsSlot(config: ToolsSlotConfig): FlowChart {
     // synchronously, exactly as it always did.
     const loadingRules: Promise<RulesOnWire> | undefined =
       config.inputsLayer === true
-        ? import('../agent/arguments/serve.js').then((m) => m.rulesOnWire)
+        ? import('../agent/arguments/serve.js').then((m) => ({
+            rulesOnWire: m.rulesOnWire,
+            timeWindowsLine: m.timeWindowsLine,
+            timeLimitsLine: m.timeLimitsLine,
+          }))
         : undefined;
     if (toolChoice === undefined) {
       if (loadingRules === undefined) {

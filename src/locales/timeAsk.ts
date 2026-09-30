@@ -19,7 +19,7 @@
  * | `answer.over-max-range` | `from`, `to`, `maxRange` (the source's, as declared) |
  * | `ask.which`, `ask.confirm` | `quote` — the person's words the reading came from |
  * | `ask.zone` | `quote`, `token` — the zone they wrote |
- * | `choice.confirm` | `quote`, `window` — the label of the library's reading |
+ * | `choice.confirm` | `quote`, `window` — the label of a reading to confirm (every reading the armed reader made — the pre-filled choice); `zone` — the zone it was read in |
  *
  * Only a check the app armed can produce one of these: a field with a
  * `format`, or the choices of a reading under `.time()`.
@@ -50,5 +50,5 @@ export const defaultTimeAskMessages: TimeAskMessages = Object.freeze({
   'ask.which': 'Which time did you mean by “{{quote}}”?',
   'ask.confirm': 'Is this the time you meant by “{{quote}}”?',
   'ask.zone': 'Which time zone did you mean by “{{token}}” in “{{quote}}”?',
-  'choice.confirm': 'I read “{{quote}}” as {{window}} — is that right?',
+  'choice.confirm': 'I read “{{quote}}” as {{window}} in {{zone}} — is that right?',
 });

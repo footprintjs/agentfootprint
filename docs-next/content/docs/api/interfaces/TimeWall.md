@@ -4,7 +4,7 @@ title: TimeWall
 
 # Interface: TimeWall
 
-Defined in: [src/core/time/reader.ts:101](https://github.com/footprintjs/agentfootprint/blob/main/src/core/time/reader.ts#L101)
+Defined in: [src/core/time/reader.ts:110](https://github.com/footprintjs/agentfootprint/blob/main/src/core/time/reader.ts#L110)
 
 A wall-clock time as the text wrote it — no zone.
 
@@ -14,7 +14,7 @@ A wall-clock time as the text wrote it — no zone.
 
 > `readonly` **h**: `number`
 
-Defined in: [src/core/time/reader.ts:102](https://github.com/footprintjs/agentfootprint/blob/main/src/core/time/reader.ts#L102)
+Defined in: [src/core/time/reader.ts:111](https://github.com/footprintjs/agentfootprint/blob/main/src/core/time/reader.ts#L111)
 
 ***
 
@@ -22,7 +22,7 @@ Defined in: [src/core/time/reader.ts:102](https://github.com/footprintjs/agentfo
 
 > `readonly` `optional` **m?**: `number`
 
-Defined in: [src/core/time/reader.ts:103](https://github.com/footprintjs/agentfootprint/blob/main/src/core/time/reader.ts#L103)
+Defined in: [src/core/time/reader.ts:112](https://github.com/footprintjs/agentfootprint/blob/main/src/core/time/reader.ts#L112)
 
 ***
 
@@ -30,7 +30,7 @@ Defined in: [src/core/time/reader.ts:103](https://github.com/footprintjs/agentfo
 
 > `readonly` `optional` **meridiem?**: `"am"` \| `"pm"`
 
-Defined in: [src/core/time/reader.ts:105](https://github.com/footprintjs/agentfootprint/blob/main/src/core/time/reader.ts#L105)
+Defined in: [src/core/time/reader.ts:114](https://github.com/footprintjs/agentfootprint/blob/main/src/core/time/reader.ts#L114)
 
 ***
 
@@ -38,4 +38,4 @@ Defined in: [src/core/time/reader.ts:105](https://github.com/footprintjs/agentfo
 
 > `readonly` `optional` **s?**: `number`
 
-Defined in: [src/core/time/reader.ts:104](https://github.com/footprintjs/agentfootprint/blob/main/src/core/time/reader.ts#L104)
+Defined in: [src/core/time/reader.ts:113](https://github.com/footprintjs/agentfootprint/blob/main/src/core/time/reader.ts#L113)

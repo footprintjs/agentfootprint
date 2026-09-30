@@ -86,8 +86,8 @@ export function timeAskOf(
     offered.push({ value, candidate });
   }
   if (offered.length === 0) return undefined;
-  // The resolver owns "a model reading needs confirming" (`resolve.ts` puts
-  // 'confirm' on every open choice a model reader made); this only reads it.
+  // The row owns "a reading needs confirming" (`rowsBuild.ts` · `timeReadingRows` puts 'confirm'
+  // on every reading's open choice); this only reads it.
   const confirm = choice.open.includes('confirm');
   const labels = offered.map(({ candidate }) => {
     const window = presentRange(
@@ -95,10 +95,13 @@ export function timeAskOf(
       { zone: candidate.zone, locale: row.reader.locale },
       candidate.grain,
     );
-    return confirm ? fillMessage(messages['choice.confirm'], { quote, window }) : window;
+    if (!confirm) return window;
+    // The zone is named: the reading leaned on it, and the person may have meant another.
+    return fillMessage(messages['choice.confirm'], { quote, window, zone: candidate.zone });
   });
+  const question = fillMessage(messages[confirm ? 'ask.confirm' : 'ask.which'], { quote });
   return {
-    question: fillMessage(messages[confirm ? 'ask.confirm' : 'ask.which'], { quote }),
+    question,
     field: {
       id,
       type: 'string',

@@ -32,7 +32,7 @@ import { contingentRowsOf, hasSetAsideStanding } from '../findings/contingent.js
 import { withUnsettledRows } from '../findings/unsettled.js';
 import type { DeclaredCoverage } from '../coverage/types.js';
 import type { FindingsLedger } from '../findings/types.js';
-import { HIDDEN_VALUE } from '../arguments/rows.js';
+import { HIDDEN_VALUE, TIME_WINDOW_SOURCE } from '../arguments/rows.js';
 import {
   judgeAnswer,
   recordOutputAttempt,
@@ -45,8 +45,9 @@ import {
   type StepPlanFor,
 } from '../../../lib/injection-engine/skillSteps.js';
 import { checkAnswer, evidenceRefusalSentence, MAX_REPORTED_VALUES } from '../evidence/gate.js';
-import { evidenceFromHistory, exemptFromRun } from '../evidence/evidenceIndex.js';
-import type { ResolvedEvidenceGate } from '../evidence/types.js';
+import { derivedFormsOf, evidenceFromHistory, exemptFromRun } from '../evidence/evidenceIndex.js';
+import { timeDerivedRow } from '../../time/rows.js';
+import type { EvidenceVerdict, ResolvedEvidenceGate } from '../evidence/types.js';
 import { priorTurnEvidenceOf } from '../../../integrity/prior-turn-evidence/check.js';
 import { fileIntegrityFindings } from '../integrityFindings.js';
 import { unsupportedClaimsOf } from '../../../integrity/unsupported-claim/check.js';
@@ -124,6 +125,33 @@ export interface InputsRouteArm {
   readonly declaredDefaults?: DeclaredDefaults;
   /** This turn's answered values (the batch ask, step 4) — the person's own words. */
   readonly answeredValues?: AnsweredValues;
+  /**
+   * Under `.time()` (step T7): this turn's time spellings, split by lineage
+   * (`./timeLineage.ts` · `timeLineageOf`) — the `said` ones join the exempt
+   * corpus, the `derived` ones file a `time-derived` row instead of a flag.
+   * The reader loads through `import()` when the gate judges (`loadTimeLineage`
+   * — it re-resolves recorded readings, so the resolver stays off a plain
+   * agent's graph: the optional-family law). Absent → the gate as it was.
+   */
+  readonly timeLineage?: true;
+}
+
+/** This turn's time spellings by lineage — see `./timeLineage.ts` · `timeLineageOf`. */
+export type TimeLineage = (scope: TypedScope<AgentState>) => {
+  readonly said: readonly string[];
+  readonly derived: readonly string[];
+};
+
+/**
+ * The lineage reader for an armed gate (`InputsRouteArm.timeLineage`), loaded
+ * through `import()` — `undefined` when `.time()` is not armed. Reads no scope,
+ * so loading it before the judges moves no read in the trace.
+ */
+async function loadTimeLineage(
+  inputs: InputsRouteArm | undefined,
+): Promise<TimeLineage | undefined> {
+  if (inputs?.timeLineage !== true) return undefined;
+  return (await import('./timeLineage.js')).timeLineageOf;
 }
 
 /**
@@ -138,18 +166,41 @@ export interface InputsRouteArm {
  */
 export type AnsweredValues = (scope: TypedScope<AgentState>) => readonly string[];
 
-/** The one reader of this turn's answered values, off the ledger's `answered` rows. */
+/**
+ * The one reader of this turn's answered values, off the ledger's `answered`
+ * rows. A value the LIBRARY converted from a window the person settled in the
+ * time ask (`isWindowFillRow`) is not in it: the window is theirs, its spelling
+ * in a tool's form is the library's — `timeLineageOf` files it as derived.
+ */
 export const answeredValuesOf: AnsweredValues = (scope) => {
   const turn = scope.turnNumber as number;
   const values: string[] = [];
-  for (const row of [...((scope.findingsLedger as FindingsLedger | undefined) ?? [])]) {
+  const ledger = [...((scope.findingsLedger as FindingsLedger | undefined) ?? [])];
+  for (const row of ledger) {
     if (row.kind !== 'argument' || row.turn !== turn || row.source !== 'answered') continue;
+    if (isWindowFillRow(row, ledger)) continue;
     if (row.value === undefined || row.value === HIDDEN_VALUE || values.includes(row.value))
       continue;
     values.push(row.value);
   }
   return values;
 };
+
+/**
+ * Whether an `argument` row holds a value the library filled from a window of
+ * the person's (the time layer): converted from a window the person settled
+ * in the time ask (an `answered` period row filed beside a `time-answer` row
+ * of the same moment, or `matched: 'mention'`), from a `model` reading
+ * (`reading`), or from the run's `time.window` (`appSource`).
+ */
+export function isWindowFillRow(row: FindingsLedger[number], ledger: FindingsLedger): boolean {
+  if (row.kind !== 'argument') return false;
+  if (row.matched === 'mention' || row.appSource === TIME_WINDOW_SOURCE) return true;
+  if (row.source !== 'answered' || row.period !== true) return false;
+  return ledger.some(
+    (r) => r.kind === 'time-answer' && r.turn === row.turn && r.iteration === row.iteration,
+  );
+}
 
 /**
  * THE ANSWER LAYER IS ARMED (honesty layer 4) — what Route is handed then:
@@ -672,6 +723,8 @@ function judgeEvidence(
    *  files its committed witness row, and the contingent rows carry the turn
    *  stamp. Absent → the `grounded` event alone, as always. */
   answerLayer?: AnswerRouteArm,
+  /** Under `.time()`: the loaded lineage reader (`loadTimeLineage`). Absent → the gate as it was. */
+  timeLineage?: TimeLineage,
 ): 'evidence-recheck' | undefined {
   if (gate === undefined) return undefined;
   const answer = (scope.llmLatestContent as string | undefined) ?? '';
@@ -688,9 +741,12 @@ function judgeEvidence(
 
   const history = scope.history as readonly LLMMessage[];
   const evidence = evidenceFromHistory(history);
+  // Under `.time()` (step T7): the turn's time spellings by lineage.
+  const time = timeLineage?.(scope);
   const verdict = checkAnswer(answer, {
     gate,
     evidence,
+    ...(time !== undefined && { derived: derivedFormsOf(time.derived) }),
     exempt: exemptFromRun({
       userMessage: scope.userMessage as string | undefined,
       history,
@@ -703,6 +759,7 @@ function judgeEvidence(
       ...(inputs?.answeredValues !== undefined && {
         answeredValues: inputs.answeredValues(scope),
       }),
+      ...(time !== undefined && { timeSaid: time.said }),
     }),
   });
 
@@ -755,6 +812,7 @@ function judgeEvidence(
   }
 
   if (verdict.unsupported.length === 0) {
+    fileTimeDerived(scope, verdict.derived, iteration);
     typedEmit(scope, 'agentfootprint.agent.evidence_checked', {
       iteration,
       posture: gate.posture,
@@ -804,6 +862,7 @@ function judgeEvidence(
   }
 
   const refused = gate.posture === 'rails' && !verdict.evidenceTruncated;
+  fileTimeDerived(scope, verdict.derived, iteration);
   scope.unsupportedValues = {
     values: verdict.unsupported.slice(0, MAX_REPORTED_VALUES),
     candidates: verdict.candidates,
@@ -834,6 +893,22 @@ function judgeEvidence(
     );
   }
   return undefined;
+}
+
+/**
+ * File the answer's `time-derived` row (step T7) — once per judged answer that
+ * STANDS (a draft sent back for revision files nothing: the revision is judged
+ * again), and only when the gate found a value the library itself spelled from
+ * a time reading. `derived` is absent without `.time()`: nothing is filed.
+ */
+function fileTimeDerived(
+  scope: TypedScope<AgentState>,
+  derived: EvidenceVerdict['derived'],
+  iteration: number,
+): void {
+  if (derived === undefined || derived.length === 0) return;
+  const values = derived.map((v) => v.value);
+  recordFindings(scope, [timeDerivedRow(values, { turn: scope.turnNumber as number, iteration })]);
 }
 
 /**
@@ -1289,6 +1364,7 @@ function buildJudgingDecider(
     // before every judge below — the enforcing decider's order. The two
     // re-ask exits put the emission back (`restoreEmission`).
     const emission = await peelAnswerStandings(scope, findings, inputs, answer);
+    const timeLineage = await loadTimeLineage(inputs);
     // A withheld answer is judged by nothing below, so the recency row says so
     // here rather than sitting untouched (see `noteRecency`).
     if (denied) noteRecency(noticePriorTurnEvidence, integrityLedger, 'not-applicable');
@@ -1311,6 +1387,7 @@ function buildJudgingDecider(
         findings,
         inputs,
         answer,
+        timeLineage,
       ) === 'evidence-recheck'
     ) {
       restoreEmission(scope, emission);
@@ -1394,6 +1471,7 @@ function buildEnforcingDecider(
     // the one peel every decider runs). The string it held before the key
     // came off is what every RE-ASK exit puts back (`reAsk`).
     const emission = await peelAnswerStandings(scope, findings, inputs, answer);
+    const timeLineage = await loadTimeLineage(inputs);
     const reAsk = (
       branch: 'output-retry' | 'step-nudge' | 'evidence-recheck',
       rationale: string,
@@ -1448,6 +1526,7 @@ function buildEnforcingDecider(
           findings,
           inputs,
           answer,
+          timeLineage,
         ) === 'evidence-recheck'
       ) {
         return reAsk('evidence-recheck', evidenceRecheckRationale(scope));

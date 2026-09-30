@@ -48,8 +48,12 @@
  * the reader's locale, the zone named, with the end the person said. A
  * `kind: 'model'` reader's window is offered as the LIBRARY'S reading to
  * confirm ("I read “yesterday” as … — is that right?"), never as the person's
- * words (§ 5.5). Free entry stays open: a field is `strict` only when the app
- * says so.
+ * words (§ 5.5). So is EVERY `rule` reading (the owner's decision "Always
+ * confirm", time design TQ29 — `rowsBuild.ts` · `timeReadingRows`): the choice is
+ * the reading pre-filled WITH ITS ZONE ("I read “yesterday” as Thu, Oct 8,
+ * 2026, PDT in America/Los_Angeles — is that right?"), so a person who meant
+ * another zone's day corrects it in one answer. Free entry stays open: a
+ * field is `strict` only when the app says so.
  *
  * @example
  * ```ts
@@ -209,7 +213,8 @@ export function checkTimeAnswer(
  * Every sentence the time ask can put before a person — the keys of the
  * catalog (`src/locales/timeAsk.ts`). `answer.*` is a refusal's reason, one
  * per {@link TimeAnswerProblem}; `ask.*` a question; `choice.confirm` the
- * label on a `model` reader's window. Placeholders are `{{name}}`.
+ * label on a reading to confirm — every reading the armed reader made.
+ * Placeholders are `{{name}}`; the label also takes `zone`.
  */
 export const TIME_ASK_MESSAGE_KEYS = Object.freeze([
   'answer.not-an-instant',

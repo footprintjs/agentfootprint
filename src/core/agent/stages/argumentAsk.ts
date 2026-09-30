@@ -55,22 +55,99 @@ import {
   type ArgumentAskState,
   type AskWaiting,
   type CallAsk,
+  type WindowAskPlan,
 } from '../arguments/ask.js';
 import type { ArgumentResolution, BatchCall, ToolOf } from '../arguments/resolve.js';
 import { unansweredRefusal } from '../arguments/serve.js';
 import { recordFindings } from '../findings/ledger.js';
 import type { FindingsLedger } from '../findings/types.js';
 import type { AgentState } from '../types.js';
-import { clockOf } from '../../time/rows.js';
+import { answersOf, clockOf, readingsOf, type TimeReadingRow } from '../../time/rows.js';
 import type { ZoneName } from '../../time/zone.js';
+import type { TimeAskMessages } from '../../time/ask.js';
+import { timeAskOf } from '../../time/readingAsk.js';
+import { spellRange } from '../../time/range.js';
+import type { TimePolicy } from '../../time/resolve.js';
+import { defaultTimeAskMessages } from '../../../locales/timeAsk.js';
 import type { AskTime } from '../arguments/ask.js';
+
+/**
+ * Under `.time({ reader })`: this turn's ONE open mention — the row the lazy
+ * ask is about. A mention the person already settled in the time ask (its
+ * `time-answer` row) is not open: it is asked once per turn.
+ */
+function openReadingOf(scope: TypedScope<AgentState>): TimeReadingRow | undefined {
+  const ledger = scope.findingsLedger as FindingsLedger | undefined;
+  const turn = scope.turnNumber as number;
+  const answered = new Set(answersOf(ledger, turn).map((a) => a.mention));
+  const open = readingsOf(ledger, turn).filter(
+    (row) =>
+      row.quote !== undefined &&
+      row.refused === undefined &&
+      row.choice?.by === 'open' &&
+      !answered.has(row.mention ?? 0),
+  );
+  return open.length === 1 ? (structuredClone(open[0]) as TimeReadingRow) : undefined;
+}
+
+/** The whole catalog: the app's overrides (`.time({ messages })`) over the defaults. */
+const catalogOf = (reader: NonNullable<ArgumentAskDeps['time']>['reader']): TimeAskMessages => ({
+  ...defaultTimeAskMessages,
+  ...(reader?.messages ?? {}),
+});
 
 /** Under `.time()`: the paused turn's clock — the facts check reads it; `undefined` with no clock. */
 function askTimeOf(scope: TypedScope<AgentState>, deps: ArgumentAskDeps): AskTime | undefined {
   if (deps.time === undefined) return undefined;
   const clock = clockOf(scope.findingsLedger as FindingsLedger | undefined);
   if (clock === undefined) return undefined;
-  return { now: clock.now, ...(deps.time.appZone !== undefined && { appZone: deps.time.appZone }) };
+  const reader = deps.time.reader;
+  const row = reader !== undefined ? openReadingOf(scope) : undefined;
+  return {
+    now: clock.now,
+    zone: clock.zone,
+    ...(deps.time.appZone !== undefined && { appZone: deps.time.appZone }),
+    ...(reader !== undefined &&
+      row !== undefined && {
+        reading: { row, policy: reader.policy, messages: catalogOf(reader) },
+      }),
+  };
+}
+
+/**
+ * The lazy word-driven ask's plan (time design § 5.2): the question the
+ * turn's one OPEN mention needs, built by the one owner (`core/time/readingAsk.ts` ·
+ * `timeAskOf`) — only under the reader's arm, only when a call of the batch
+ * left its period out while that mention was open (`ArgumentResolution.window`).
+ */
+function windowPlanOf(
+  scope: TypedScope<AgentState>,
+  deps: ArgumentAskDeps,
+  asks: readonly CallAsk[],
+): WindowAskPlan | undefined {
+  const reader = deps.time?.reader;
+  if (reader === undefined || !asks.some((a) => a.window === true)) return undefined;
+  const clock = clockOf(scope.findingsLedger as FindingsLedger | undefined);
+  const row = openReadingOf(scope);
+  if (row === undefined || clock === undefined) return undefined;
+  const ask = timeAskOf(row, catalogOf(reader));
+  if (ask === undefined) return undefined;
+  const format = ask.field.format;
+  if (format !== 'time-range' && format !== 'zone') return undefined;
+  const candidates = row.candidates ?? [];
+  const zones = (ask.field.enum ?? []).map(
+    (value) => candidates.find((c) => spellRange(c.range) === value)?.zone,
+  );
+  return {
+    question: ask.question,
+    format,
+    ...(ask.field.enum !== undefined && { choices: ask.field.enum }),
+    ...(ask.field.enum !== undefined &&
+      zones.every((z) => z !== undefined) && { zones: zones as ZoneName[] }),
+    ...(ask.field.labels !== undefined && { labels: ask.field.labels }),
+    mention: row.mention ?? 0,
+    now: clock.now,
+  };
 }
 
 /** What the dispatch stage hands the ask — closures, never scope. */
@@ -85,8 +162,18 @@ export interface ArgumentAskDeps {
    * Present exactly under `.time()`: an answer for a period argument is also
    * judged against the tool's declared facts at the turn's clock
    * (`arguments/ask.ts` · `checkAnswer`) — `appZone` is the app's `.time({ zone })`.
+   * `reader` is present exactly under `.time({ reader })`: a call that left
+   * its period out while the turn's one mention was open is asked THAT
+   * mention's window (the lazy word-driven ask) — `policy` re-reads the
+   * mention after a zone answer, `messages` are the app's catalog overrides.
    */
-  readonly time?: { readonly appZone?: ZoneName };
+  readonly time?: {
+    readonly appZone?: ZoneName;
+    readonly reader?: {
+      readonly policy: TimePolicy;
+      readonly messages?: Partial<TimeAskMessages>;
+    };
+  };
 }
 
 /** What the ask hands the batch back. */
@@ -179,7 +266,10 @@ function withSettled(
       });
       continue;
     }
-    const fills = [...(entry.fills ?? []), ...s.fills];
+    // An answered value replaces any earlier fill of the same argument (a window answered for
+    // a form whose other argument the tool's rule had assumed).
+    const answered = new Set(s.fills.map((f) => f.argument));
+    const fills = [...(entry.fills ?? []).filter((f) => !answered.has(f.argument)), ...s.fills];
     merged.set(id, {
       toolCallId: id,
       iteration: entry.iteration,
@@ -210,6 +300,8 @@ export function askBeforeDispatch(
             ask: r.ask,
             // Declared sources: the person's words a reading was made of, for the field.
             ...(r.quoted !== undefined && { quoted: r.quoted }),
+            // The lazy word-driven ask: the period is asked as the open mention's window.
+            ...(r.window === true && { window: true as const }),
           },
         ]
       : [],
@@ -218,7 +310,12 @@ export function askBeforeDispatch(
   const iteration = scope.iteration as number;
   const calls = batchOf(scope);
   const stored = stateFor(scope, iteration);
-  let state = stored ?? initialAskState(iteration, planAskFields(asks, calls, deps.toolOf));
+  let state =
+    stored ??
+    initialAskState(
+      iteration,
+      planAskFields(asks, calls, deps.toolOf, windowPlanOf(scope, deps, asks)),
+    );
   let answered = false;
   if (state.waiting !== undefined) {
     // The re-run a resume makes: the answer comes back out of the one-shot interrupt.

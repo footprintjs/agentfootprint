@@ -7,6 +7,9 @@
  *
  *   period: { argument: 'window', spelling: 'lookback', direction: 'past', retention: '30d' }
  *
+ *   - "yesterday" is only a PROPOSAL until the person confirms it (the owner's
+ *     decision "Always confirm") — the look-back tool's `assume: '1h'` never
+ *     stands in for it; the first call pauses on a one-click confirmation;
  *   - under `.time()`, when no form holds the person's window exactly, the
  *     library sends the first form that holds MORE — the covering look-back
  *     from now (`1960m` for all of yesterday), or the whole day for a `day`
@@ -25,7 +28,7 @@
  * Run:  npm run example examples/features/85-time-widen-and-refuse.ts
  */
 
-import { Agent, defineTool, type TimeReader } from '../../src/index.js';
+import { Agent, defineTool, isInputPause, type TimeReader } from '../../src/index.js';
 import { mock } from '../../src/doors/providers.js';
 import { isCliEntry, printResult, type ExampleMeta } from '../helpers/cli.js';
 
@@ -100,7 +103,9 @@ const toolCall = (id: string, name: string, args: Record<string, unknown>) => ({
 const desk = Agent.create({
   provider: mock({
     replies: [
-      // The model leaves the period out: the library fills "yesterday" — wider than asked.
+      // The model leaves the period out: the person is asked to confirm "yesterday" first.
+      toolCall('c0', 'backup_errors', {}),
+      // Again, later in the turn: the library fills the confirmed day — wider than asked.
       toolCall('c1', 'backup_errors', {}),
       // The model sends a window still to come to a tool whose source holds only the past.
       toolCall('c2', 'backup_runs', { window: `${tomorrow.from}..${tomorrow.to}` }),
@@ -116,14 +121,20 @@ const desk = Agent.create({
 // #endregion widen-and-refuse
 
 export async function run(input: string): Promise<string> {
-  const out = await desk.run({ message: input, time: { now: now.toISOString() } });
+  const asked = await desk.run({ message: input, time: { now: now.toISOString() } });
+  check(isInputPause(asked), '"yesterday" offered to confirm');
+  if (!isInputPause(asked)) return String(asked);
+  const out = await desk.resume(asked.checkpoint, {
+    requestId: asked.awaitingInput.requestId,
+    values: { f1: asked.awaitingInput.fields[0]?.enum?.[0] as string },
+  });
   console.log('the tool was handed:', JSON.stringify(handed));
   const rows = (desk.findings() ?? []) as readonly { kind: string; how?: string }[];
   const windows = rows.filter((r) => r.kind === 'call-window');
   console.log('\ncall-window rows:', JSON.stringify(windows, null, 2));
-  check(windows[0]?.how === 'filled' && 'differs' in windows[0], 'the fill recorded wider');
-  check(windows[1]?.how === 'refused', 'the future window refused before it ran');
-  check(handed.length === 1, 'only the widened call ran');
+  check(windows[1]?.how === 'filled' && 'differs' in windows[1], 'the fill recorded wider');
+  check(windows[2]?.how === 'refused', 'the future window refused before it ran');
+  check(handed.length === 2, 'only the confirmed and the widened call ran');
   return String(out);
 }
 

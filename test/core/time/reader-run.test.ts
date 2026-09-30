@@ -164,8 +164,10 @@ describe('one reading per turn, one row per mention', () => {
         mention: 0,
         quote: '10/09/26 8 AM to 8:40 AM',
         parses: [RANGE_PARTS],
-        choice: { by: 'open', remaining: [0, 1, 2], open: ['date-order'] },
+        // A reading only proposes (the owner's decision "Always confirm"): `confirm` is open too.
+        choice: { by: 'open', remaining: [0, 1, 2], open: ['date-order', 'confirm'] },
       });
+      expect(row?.candidates?.every((c) => c.said.length === 0)).toBe(true);
       expect(typeof row?.tzdata).toBe('string');
       expect(row?.candidates?.[0]?.range).toEqual({
         from: '2026-10-09T08:00:00-07:00',
@@ -174,15 +176,16 @@ describe('one reading per turn, one row per mention', () => {
     });
   }
 
-  it('a declared date order is assumed and recorded', async () => {
+  it('a declared date order is applied and recorded — the one reading left is still a proposal', async () => {
     const { reader } = rangeReader();
     const { agent } = agentWith([answer('hi')], (b) =>
       b.time({ zone: LA, reader, policy: { dateOrder: 'MDY' } }),
     );
     await agent.run({ message: MESSAGE, time: { now: NOW } });
     expect(readings(agent)[0]?.choice).toEqual({
-      by: 'policy',
-      candidate: 0,
+      by: 'open',
+      remaining: [0],
+      open: ['confirm'],
       policy: { dateOrder: 'MDY' },
     });
   });

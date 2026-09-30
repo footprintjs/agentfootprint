@@ -50,9 +50,44 @@ period argument but whose result says nothing reads `period-undeclared`.
 | 2 | VERIFY | `coverage/period.ts` · `periodVerdict` — one pure rule over the instants the tool declared, bounds inclusive: `covered`, `partly-held`, `not-held`, `unknown` (`held: 'unknown'`); the least held when one call declared two (`coverage/period.ts` · `leastHeld`); `undeclared` when the tool declares a `ToolPeriod` and the result declared no period. No clock is read and no duration is parsed |
 | 3 | RECORD | one `period` row per judged call (`coverage/period.ts` · `PeriodRow`: `turn`, `toolCallId`, `toolName`, `iteration`, `verdict`, the `ToolPeriod`'s `argument`), merged into `findingsLedger` by the mount's output mapping in ONE write; one `agentfootprint.findings.period` per row, fired inside the subflow — the tool, the call, the stamps and the verdict word, never an instant. The declared period itself rides the coverage channel (`coverageDeclared` rows, `tools.absent` / `tools.coverage_declared`), whatever the agent armed; the row never copies it |
 | 4 | RESOLVE | flag — the only verb a result that already ran admits (`subflow.ts` · `resolveResultsStage`): the rows are the flags |
-| 5 | FOLD | `assessment/assess.ts` · `assessAnswer`: `period-not-held`, `period-partly-held`, `period-unknown` (adopted Q33: on a non-empty result too) and `period-undeclared`, all "not sure"; `covered` fires none; `result-period` on `checked`; no period row can support "known". A period reason's witnesses are the `period` row AND the inputs layer's `argument` row for the same call — who chose the period beside what the read covered |
+| 5 | FOLD | `assessment/assess.ts` · `assessAnswer`: `period-not-held`, `period-partly-held`, `period-unknown` (adopted Q33: on a non-empty result too) and `period-undeclared`, all "not sure"; under `.time()` (step T8) also `period-differs-from-asked` and `period-beyond-retention`, both "not sure" (below); `covered` fires none; `result-period` on `checked`; no period row can support "known". A period reason's witnesses are the `period` row AND the inputs layer's `argument` row for the same call — who chose the period beside what the read covered |
 | 6 | SERVE | the model: the period in the result it read, as declared (`lib/semantics/envelope.ts` · `semanticsForModel` passes a described result's through; `absent()` and `coverage()` serve theirs in the envelope) — plus, since bench round 1, when the store did not hold all of the time asked, the verdict word inside it (`period.verdict`: `not-held`, `partly-held`, `unknown`) and that word's ONE static note clause (`coverage/period.ts` · `PERIOD_VERDICT_CLAUSES`), added by the SERVE door (`coverage/read.ts` · `servedToModel`, `semanticsForModel`), never by this layer and never minted into the tool's output; an absence then reads `coverage/absent.ts` · `ABSENCE_NOTE_HELD_ONLY` in place of the note that claims a complete answer. A `covered` period gains nothing. The word and clause never ground (`coverage/evidence.ts` · `absenceEvidenceProjection` reads through `coverage/read.ts` · `withoutServedPeriod`). The person, under the existing `.limitsTravelWithTheAnswer()` only: one `Period:` line per declaring call (`coverage/period.ts` · `periodLine`, composed by `coverage/answer.ts` · `composeAnswerWithCoverage`), and `periods` in a typed answer's limits (`coverage/answer.ts` · `coverageOfAnswer`). The lens: the rows and the events |
 | 7 | ARM + MEASURE | a REGISTERED tool that declares a `ToolPeriod` arms the mount (`core/Agent.ts`, "The results layer (honesty layer 3, step 7b) — armed ONCE, here"); `AgentBuilder.resultsLayer()` arms it for tools a ToolProvider serves and for tools that declare a period only on their results. A period declared with no layer mounted is still recorded, and one dev warning per tool says no verdict is filed; a `ToolPeriod` a ToolProvider served (which the build cannot see) on an agent without the layer is dev-warned the same way, once per tool, at dispatch (`stages/toolCalls.ts` · `warnToolPeriodUnjudged`). Nothing declared → nothing mounted, read or written: every run is byte-identical. The bench: cells R1–R3 of `docs/design/honesty/results.md` § 8 |
+
+## Under `.time()`: what was read against what was asked (step T8)
+
+**The law.** A read that is not the window asked about answers a different question: asked but
+not read is `missing`, read but not asked is `extra`, and either makes the answer "not sure"
+(TQ8: a wider read too — unless the result declares that it read exactly what was asked).
+
+With `.time()` armed, the mount also hands the layer each call's time rows (`honesty/mounts.ts` ·
+`timeOfBatch`: its `call-window` row and its `call` row's `drift`) and the clock's `now`; Verify
+asks `core/time/check.ts` · `periodTimeCheck` and Record files what holds on the call's `period`
+row — `differs { against, asked, read, source, stepMs?, missing, extra }`, `shifted { byMs }`,
+`beyondRetention`, `partlyBeyondRetention` — and names them (never a range) on the
+`findings.period` event's `timeChecks`. What was read: the result's declared `queried` (inclusive,
+read back as `[from, to + step)`, `step` the tool's `granularity`, else 1 ms), else a widened fill's
+`sent`, else a look-back shifted by its drift, else the asked range. A window the model chose is
+judged against the person's window.
+
+```ts
+const clientActivity = defineTool({
+  name: 'client_activity',
+  /* …inputSchema, askOrAssume… */
+  period: { forms: [{ kind: 'bounds', from: { argument: 'start_time', as: 'epoch-ms' },
+                      to: { argument: 'end_time', as: 'epoch-ms', edge: 'exclusive' } }] },
+  // The store clamps any read to the last 7 days — and says so:
+  execute: (args) => describedResult({ facts, provenance, period: { queried: lastSevenDays, held } }),
+});
+const agent = Agent.create({ provider, model }).tool(clientActivity)
+  .time({ zone: 'America/Los_Angeles' }).limitsTravelWithTheAnswer().build();
+await agent.run({ message: 'activity this month', time: { window: lastThirtyDays } });
+agent.findings();  // … { kind: 'period', verdict: 'covered', differs: { missing: [<the first 23 days>], extra: [] } }
+(await agent.assessment())?.reasons; // [{ reason: 'period-differs-from-asked', layer: 3, … }]
+```
+
+Without `.time()` the layer is handed none of this, and every row, event and line is the bytes it
+was. The runnable example is `examples/features/88-time-result-checks.ts`.
 
 ## Where it runs
 

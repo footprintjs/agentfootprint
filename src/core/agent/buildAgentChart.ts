@@ -59,6 +59,9 @@ import { unwrapMemoryFlowChart } from '../../memory/define.js';
 import { mountMemoryRead, mountMemoryWrite } from '../../memory/wire/mountMemoryPipeline.js';
 import { withMemoryRecall } from './memoryRecallInjections.js';
 import { offeredResultIds } from './findings/offer.js';
+import { readerWindowsOf } from '../time/windows.js';
+import { clockOf } from '../time/rows.js';
+import { timeLimitFactsOf, type TimeLimitFacts } from './coverage/timeLimitFacts.js';
 import type { FindingsLedger } from './findings/types.js';
 import { breakFinalStage, breakFinalWithValidationStage } from './stages/breakFinal.js';
 import { prepareFinalFor } from './stages/prepareFinal.js';
@@ -297,6 +300,28 @@ export interface AgentChartDeps {
   readonly timeLayer?: true;
 
   /**
+   * The time layer's READER is armed (`.time({ reader })`, step T6b). Gates
+   * ONE mount arg on the Tools branch's `inputMapper`: `timeWindows`, the
+   * windows the reader settled this turn with the turn's clock
+   * (`core/time/windows.ts` · `readerWindowsOf`, off `parent.findingsLedger`) —
+   * value-conditional, so a turn with none crosses no key. The slot serves
+   * them on each tool that declares a period (`ToolsSlotConfig.timeWindows`).
+   */
+  readonly timeReader?: true;
+
+  /**
+   * The time layer is armed with the inputs layer (`.time()` over a tool that
+   * declares a period, step T8). Gates ONE mount arg on the Tools branch's
+   * `inputMapper`: `timeLimits`, the turn's result-check facts for the model
+   * (`coverage/timeLimitFacts.ts` · `timeLimitFactsOf`, audience `model`, off
+   * `parent.findingsLedger`) — value-conditional, so a turn whose reads match
+   * what was asked crosses no key. The slot renders and serves them in the
+   * one time line (`ToolsSlotConfig.timeLimits`); the renderer loads there,
+   * never on a plain agent's graph.
+   */
+  readonly timeLimits?: true;
+
+  /**
    * An escalation brain is declared (9.19.0). In the GROUPED chart this
    * gates threading `skillEscalated` across the `sf-llm-call` boundary —
    * the flip is written by tool-calls on the OUTER scope and read by
@@ -398,6 +423,25 @@ export interface AgentChartDeps {
 /**
  * Build the agent's complete FlowChart from the supplied deps.
  */
+/** The Tools mount's `timeWindows` arg — the reader's settled windows, or no key at all. */
+export function timeWindowsArg(ledger: unknown): {
+  timeWindows?: ReturnType<typeof readerWindowsOf>;
+} {
+  const windows = readerWindowsOf(ledger as readonly unknown[] | undefined);
+  return windows === undefined ? {} : { timeWindows: windows };
+}
+
+/**
+ * The Tools mount's `timeLimits` arg — the turn's result-check FACTS for the
+ * model (unrendered: the slot's served line renders them, under the arm), or
+ * no key.
+ */
+export function timeLimitsArg(ledger: unknown): { timeLimits?: TimeLimitFacts } {
+  const rows = ledger as readonly unknown[] | undefined;
+  const facts = timeLimitFactsOf(rows, clockOf(rows)?.turn, 'model');
+  return facts === undefined ? {} : { timeLimits: facts };
+}
+
 export function buildAgentChart(deps: AgentChartDeps): FlowChart {
   // ReAct loop semantics. 'classic' caches the static slots (engineer
   // system-prompt + tools only on the first turn); 'dynamic' (default)
@@ -811,6 +855,13 @@ export function buildAgentChart(deps: AgentChartDeps): FlowChart {
             parent.findingsLedger as FindingsLedger | undefined,
           ),
         }),
+        // The reader's settled windows (step T6b), under the arm only and
+        // value-conditional: a turn with none crosses no key. See
+        // `AgentChartDeps.timeReader`.
+        ...(deps.timeReader === true && timeWindowsArg(parent.findingsLedger)),
+        // The turn's result-check lines (step T8), under `.time()` only and
+        // value-conditional. See `AgentChartDeps.timeLimits`.
+        ...(deps.timeLimits === true && timeLimitsArg(parent.findingsLedger)),
         // Tool choice by classifier (9.105.0), under the arm only: the
         // message the classifier reads, the rows so far (aliased — a mount
         // input is frozen inside; the slot writes `toolChoices` fresh) and
@@ -867,6 +918,9 @@ export function buildAgentChart(deps: AgentChartDeps): FlowChart {
         // The classifier's pick (9.105.0), back onto the parent key the
         // call-llm stage appends the outcome row to. Value-conditional.
         ...(sf.toolChoices !== undefined && { toolChoices: sf.toolChoices }),
+        // The time layer's late line (step T6b), onto the key `callLLM` appends last to the
+        // request — under the reader's arm only (the slot writes it every composition then).
+        ...(sf.timeLine !== undefined && { timeLine: sf.timeLine }),
       }),
       // Same array-concat hazard as InjectionEngine — replace, don't
       // concatenate. Without Replace the deduped tool list re-acquires

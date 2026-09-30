@@ -219,9 +219,10 @@ describe('timeAskOf — unit', () => {
     ],
   };
 
-  it('`10/09/26` under dateOrder: ask → the readings as labelled choices', () => {
+  it('`10/09/26` under dateOrder: ask → the readings as labelled choices, each a proposal', () => {
     const ask = timeAskOf(rowFor(text, '10/09/26 8 AM to 8:40 AM', range), defaultTimeAskMessages);
-    expect(ask?.question).toBe('Which time did you mean by “10/09/26 8 AM to 8:40 AM”?');
+    // Every reading is a proposal (the owner's decision "Always confirm"): the question confirms.
+    expect(ask?.question).toBe('Is this the time you meant by “10/09/26 8 AM to 8:40 AM”?');
     expect(ask?.field).toMatchObject({
       id: 'time',
       type: 'string',
@@ -233,10 +234,11 @@ describe('timeAskOf — unit', () => {
       '2026-09-10T08:00:00-07:00/2026-09-10T08:41:00-07:00', // DMY
       '2010-09-26T08:00:00-07:00/2010-09-26T08:41:00-07:00', // YMD
     ]);
+    const q = '“10/09/26 8 AM to 8:40 AM”';
     expect(ask?.field.labels?.map(plain)).toEqual([
-      'Fri, Oct 9, 2026, 8:00 – 8:40 AM PDT',
-      'Thu, Sep 10, 2026, 8:00 – 8:40 AM PDT',
-      'Sun, Sep 26, 2010, 8:00 – 8:40 AM PDT',
+      `I read ${q} as Fri, Oct 9, 2026, 8:00 – 8:40 AM PDT in America/Los_Angeles — is that right?`,
+      `I read ${q} as Thu, Sep 10, 2026, 8:00 – 8:40 AM PDT in America/Los_Angeles — is that right?`,
+      `I read ${q} as Sun, Sep 26, 2010, 8:00 – 8:40 AM PDT in America/Los_Angeles — is that right?`,
     ]);
   });
 
@@ -245,27 +247,44 @@ describe('timeAskOf — unit', () => {
       rowFor(text, '10/09/26 8 AM to 8:40 AM', range, { locale: 'en-GB' }),
       defaultTimeAskMessages,
     );
-    expect(plain(ask?.field.labels?.[0] ?? '')).toBe('Fri, 9 Oct 2026, 08:00–08:40 GMT-7');
+    expect(plain(ask?.field.labels?.[0] ?? '')).toBe(
+      'I read “10/09/26 8 AM to 8:40 AM” as Fri, 9 Oct 2026, 08:00–08:40 GMT-7 in America/Los_Angeles — is that right?',
+    );
   });
 
-  it('a settled reading asks nothing (`only`, `policy`)', () => {
-    expect(
-      timeAskOf(
-        rowFor(text, '10/09/26 8 AM to 8:40 AM', range, {
-          policy: { dateOrder: 'MDY', year: 'ask' },
-        }),
-        defaultTimeAskMessages,
-      ),
-    ).toBeUndefined();
-    expect(
-      timeAskOf(
-        rowFor('at 2026-10-09 20:40', '2026-10-09 20:40', {
-          date: { kind: 'fixed', year: 2026, month: 10, day: 9 },
-          wall: { h: 20, m: 40 },
-        }),
-        defaultTimeAskMessages,
-      ),
-    ).toBeUndefined();
+  it('a reading the policy narrows to one, or that has one window, is still offered to confirm', () => {
+    const narrowed = timeAskOf(
+      rowFor(text, '10/09/26 8 AM to 8:40 AM', range, {
+        policy: { dateOrder: 'MDY', year: 'ask' },
+      }),
+      defaultTimeAskMessages,
+    );
+    expect(narrowed?.question).toBe('Is this the time you meant by “10/09/26 8 AM to 8:40 AM”?');
+    expect(narrowed?.field.enum).toEqual(['2026-10-09T08:00:00-07:00/2026-10-09T08:41:00-07:00']);
+    const day = timeAskOf(
+      rowFor('on 2026-10-09', '2026-10-09', {
+        date: { kind: 'fixed', year: 2026, month: 10, day: 9 },
+      }),
+      defaultTimeAskMessages,
+    );
+    expect(day?.field.enum).toEqual(['2026-10-09T00:00:00-07:00/2026-10-10T00:00:00-07:00']);
+    expect(plain(day?.field.labels?.[0] ?? '')).toContain(
+      'in America/Los_Angeles — is that right?',
+    );
+  });
+
+  it('a point time: its one reading is offered to confirm, with its zone', () => {
+    const row = rowFor('at 2026-10-09 20:40', '2026-10-09 20:40', {
+      date: { kind: 'fixed', year: 2026, month: 10, day: 9 },
+      wall: { h: 20, m: 40 },
+    });
+    expect(row.choice).toMatchObject({ by: 'open', open: ['confirm'] });
+    const ask = timeAskOf(row, defaultTimeAskMessages);
+    expect(ask?.question).toBe('Is this the time you meant by “2026-10-09 20:40”?');
+    expect(ask?.field.enum).toEqual(['2026-10-09T20:40:00-07:00/2026-10-09T20:41:00-07:00']);
+    expect(plain(ask?.field.labels?.[0] ?? '')).toBe(
+      'I read “2026-10-09 20:40” as Fri, Oct 9, 2026, 8:40 PM PDT in America/Los_Angeles — is that right?',
+    );
   });
 
   it('a wall time the clocks go back through → both instants as choices', () => {
@@ -280,9 +299,10 @@ describe('timeAskOf — unit', () => {
       '2026-11-01T01:30:00-07:00/2026-11-01T01:31:00-07:00',
       '2026-11-01T01:30:00-08:00/2026-11-01T01:31:00-08:00',
     ]);
+    // A point time: each instant is offered to confirm, with its zone — never as the person's window.
     expect(ask?.field.labels?.map(plain)).toEqual([
-      'Sun, Nov 1, 2026, 1:30 AM PDT',
-      'Sun, Nov 1, 2026, 1:30 AM PST',
+      'I read “2026-11-01 01:30” as Sun, Nov 1, 2026, 1:30 AM PDT in America/Los_Angeles — is that right?',
+      'I read “2026-11-01 01:30” as Sun, Nov 1, 2026, 1:30 AM PST in America/Los_Angeles — is that right?',
     ]);
   });
 
@@ -311,7 +331,7 @@ describe('timeAskOf — unit', () => {
     expect(ask?.question).toBe('Is this the time you meant by “yesterday”?');
     expect(ask?.field.enum).toEqual(['2026-10-08T00:00:00-07:00/2026-10-09T00:00:00-07:00']);
     expect(ask?.field.labels?.map(plain)).toEqual([
-      'I read “yesterday” as Thu, Oct 8, 2026, PDT — is that right?',
+      'I read “yesterday” as Thu, Oct 8, 2026, PDT in America/Los_Angeles — is that right?',
     ]);
   });
 

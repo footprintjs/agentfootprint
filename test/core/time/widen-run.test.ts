@@ -11,7 +11,8 @@
  * look-back runs as sent and is recorded shifted.
  *
  * Test types:
- *   functional  — "yesterday" to a look-back-only tool → the covering look-back, `differs.extra`,
+ *   functional  — "yesterday" to a look-back-only tool (whose rule ASSUMES `1h`) is asked, not
+ *                 assumed; once confirmed, a later call → the covering look-back, `differs.extra`,
  *                 the note says wider; `filtersToAsked` → `trimmedByTool`; a UI window inside one
  *                 day to a `day` tool → that day; a future window to a `past` tool is refused with
  *                 the reason (filled or sent); wholly beyond retention, over maxRange, a two-day
@@ -32,6 +33,7 @@ import {
   Agent,
   checkInApproved,
   defineTool,
+  isInputPause,
   isPaused,
   type TimeReader,
   type Tool,
@@ -110,6 +112,30 @@ async function build(
 /** The `role: 'tool'` message the model read on its second request. */
 const toolMessage = (requests: readonly LLMRequest[]) =>
   requests[1]!.messages.find((m) => m.role === 'tool')!.content as string;
+
+/**
+ * The person CONFIRMS the reading the time ask offers (its first choice) — a
+ * reading only proposes (the owner's decision "Always confirm"); the call AFTER
+ * it in the same turn is filled from the confirmed window.
+ */
+async function confirmOffer(agent: { resume(c: never, i: never): Promise<unknown> }, out: unknown) {
+  if (!isInputPause(out)) throw new Error('expected the time ask');
+  const p = out as never as {
+    checkpoint: unknown;
+    awaitingInput: { requestId: string; fields: readonly { enum?: readonly string[] }[] };
+  };
+  return agent.resume(
+    p.checkpoint as never,
+    {
+      requestId: p.awaitingInput.requestId,
+      values: { f1: p.awaitingInput.fields[0]!.enum![0]! },
+    } as never,
+  );
+}
+const ofCall = (rows: Row[], id: string) => rows.filter((r) => r.toolCallId === id);
+/** The tool message of the LAST request — the later call's result. */
+const lastToolMessage = (requests: readonly LLMRequest[]) =>
+  requests[requests.length - 1]!.messages.filter((m) => m.role === 'tool').pop()!.content as string;
 
 /** A look-back-only search, as today's `{ argument, spelling }` sugar declares it. */
 function lookbackTool(facts: Record<string, unknown> = {}, seen: Record<string, unknown>[] = []) {
@@ -201,41 +227,47 @@ describe('wider than asked — the covering look-back and the day', () => {
   it('"yesterday" to a look-back-only tool → the covering look-back from now, recorded wider', async () => {
     const seen: Record<string, unknown>[] = [];
     const { agent, requests } = await build(
-      [call('c1', 'search_logs', {}), answer('none')],
+      [call('c0', 'search_logs', {}), call('c1', 'search_logs', {}), answer('none')],
       [lookbackTool({}, seen)],
       (b) => b.time({ zone: LA, reader: yesterdayReader }),
     );
-    await agent.run({ message: 'any errors yesterday?', time: { now: NOW } });
+    // "yesterday" only proposes: the tool's `assume: '1h'` does NOT stand in for it — asked.
+    const first = await agent.run({ message: 'any errors yesterday?', time: { now: NOW } });
+    expect(seen).toEqual([]);
+    await confirmOffer(agent as never, first);
     // 8 Oct 00:00 PDT (07:00Z) to now is 32h40m — the smallest covering length in minutes.
-    expect(seen[0]).toEqual({ window: '1960m' });
-    expect(ofKind(agent, 'call-window')[0]).toMatchObject({
+    expect(seen).toEqual([{ window: '1960m' }, { window: '1960m' }]);
+    expect(ofCall(ofKind(agent, 'call-window'), 'c1')[0]).toMatchObject({
       how: 'filled',
       form: 0,
       asked: { from: '2026-10-08T00:00:00-07:00', to: '2026-10-09T00:00:00-07:00' },
       sent: { from: '2026-10-08T07:00:00Z', to: '2026-10-09T15:40:00.001Z' },
       differs: { extra: [{ from: '2026-10-09T07:00:00Z', to: '2026-10-09T15:40:00.001Z' }] },
     });
-    expect(ofKind(agent, 'argument')).toMatchObject([
-      { argument: 'window', source: 'said', matched: 'mention', value: '1960m' },
+    expect(ofCall(ofKind(agent, 'argument'), 'c1')).toMatchObject([
+      { argument: 'window', source: 'answered', matched: 'mention', value: '1960m' },
     ]);
-    expect(toolMessage(requests)).toContain(
-      "[window was not in the search_logs call this result answers; the call ran with \"1960m\", from the window the person's own words gave — recorded as the person's; the tool's form could not hold that window exactly, so the value reads a wider one — recorded as wider than asked.]",
+    expect(lastToolMessage(requests)).toContain(
+      '[window was not in the search_logs call this result answers; the call ran with "1960m", from the window the person chose when asked what their words meant — recorded as the person\'s answer; the tool\'s form could not hold that window exactly, so the value reads a wider one — recorded as wider than asked.]',
     );
     // Within the tool's step of now: no drift on the call row.
-    expect(ofKind(agent, 'call')[0]).not.toHaveProperty('drift');
+    expect(ofCall(ofKind(agent, 'call'), 'c1')[0]).not.toHaveProperty('drift');
   });
 
   it('a tool that trims its rows to the asked window (`filtersToAsked`) — converted, trimmed by the tool', async () => {
     const { agent, requests } = await build(
-      [call('c1', 'search_logs', {}), answer('none')],
+      [call('c0', 'search_logs', {}), call('c1', 'search_logs', {}), answer('none')],
       [lookbackTool({ filtersToAsked: true })],
       (b) => b.time({ zone: LA, reader: yesterdayReader }),
     );
-    await agent.run({ message: 'any errors yesterday?', time: { now: NOW } });
-    const row = ofKind(agent, 'call-window')[0]!;
+    await confirmOffer(
+      agent as never,
+      await agent.run({ message: 'any errors yesterday?', time: { now: NOW } }),
+    );
+    const row = ofCall(ofKind(agent, 'call-window'), 'c1')[0]!;
     expect(row).toMatchObject({ how: 'filled', trimmedByTool: true });
     expect(row).not.toHaveProperty('differs');
-    expect(toolMessage(requests)).toContain(
+    expect(lastToolMessage(requests)).toContain(
       'and the tool declares that it drops the rows outside the asked window.]',
     );
   });

@@ -2164,6 +2164,16 @@ export interface AgentState {
    */
   toolChoices?: ToolChoiceLedger;
 
+  /**
+   * The time layer's late line (step T6b, `.time({ reader })` only): the one
+   * served time line the tools slot composed (`agent/arguments/serve.ts` ·
+   * `timeWindowsLine`) and the iteration that composed it; `text` is `''` when
+   * there was nothing to say. `callLLM` appends a non-empty line LAST to the
+   * request of that same iteration — request-only, never history — and
+   * `servedView` rebuilds it from this key. ABSENT on every other agent.
+   */
+  timeLine?: { readonly iteration: number; readonly text: string };
+
   // ── The declared ontology (`.ontology()`) ──────────────────────
   /**
    * The declared map, on the record (9.106.0) — a RUN CONSTANT written

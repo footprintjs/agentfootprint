@@ -259,6 +259,62 @@ drifted past (§ 7.4) is redrawn only when the library wrote it (`stages/toolCal
 //   "search_logs was not run on that call: the window it asked for had not happened yet, …"
 ```
 
+**Proposed, asked lazily, then served (step T6b, `.time({ reader })`).** A reading of the
+person's chat words is never their words (the owner's decision "Always confirm", time design
+TQ29): every mention stays OPEN until the person answers in the time ask. ASKED: a call that left
+its period out while the turn's one mention is open (`not-filled` / `open-reading`) carries
+`ArgumentResolution.window` — whatever the tool's own rule, because a tool whose rule ASSUMES its
+period is asked too (`resolve.ts` · `verifyPlan`: its default never stands in for words the person
+wrote); the batch ask then asks ONE window field for every such call instead of one field per
+argument (`ask.ts` · `planAskFields` with the plan `stages/argumentAsk.ts` · `windowPlanOf` builds
+from `core/time/readingAsk.ts` · `timeAskOf`): the zone first for an abbreviation, then the readings
+every member tool's facts allow as labelled, pre-filled `time-range` choices naming each window's
+zone, free entry open. The answer is converted into each call's forms (`bindAnswer` → exactly, else
+wider), filed `answered` per argument, filled with `ArgumentFill.window` (the note's window clause:
+"from the window the person chose when asked what their words meant"), and settles the mention
+with a `time-answer` row (`how: 'confirmed'` for the click on a pre-filled reading, `'edited'` for a
+window the person wrote) — so later calls of the turn are filled from it (`answered` +
+`matched: 'mention'`) and it is not asked again. SERVED — LATE, at the decision point, never on a
+tool description: ONE request-only `user` line appended last to each request (`serve.ts` ·
+`timeWindowsLine`, composed at the slot's one decoration site from the tools really served, carried
+on `timeLine` = `{ iteration, text }`, appended by `callLLM`, rebuilt by `servedView`; the mount
+reads the windows with `core/time/windows.ts` · `readerWindowsOf`). It is the library's CONCLUSION,
+never raw facts: a settled window in the person's zone WITH ITS SOURCE and each period tool's own
+values ("may pass"), and the answer is told to state it; a quote still PENDING names no window —
+only that it is not settled and the NEXT STEP that asks the person (the call with the period
+arguments left out — not a question in the reply, which the first paid T6b run showed the
+model reaching for, and not a written window, which runs unconfirmed); once a call already ran on
+a written window, the limit the answer states instead. Why late: the step-7b bench
+measured raw facts served early wrong 73/80 and the conclusion served at the decision point 20/80.
+When every reading breaks a tool's facts nothing is asked and the call is refused (`timeRefusal`).
+
+```ts
+// "client activity yesterday?" under the reader's arm, first request — its LAST message:
+//   { role: 'user', content: 'The window for “yesterday” is not settled yet: the person confirms it
+//     in the library's own form, which shows its reading of those words with the zone and opens
+//     when client_activity is called with start_time, end_time left out (or the call is refused
+//     with the reason). So the next step is that call — not a question about the time in the
+//     reply, and not a window written into the call, which would run unconfirmed.' }
+// once a call of the turn already ran on a window the model wrote, the line names the limit:
+//   'The window for “yesterday” is not settled: the person has not confirmed it, and the call that
+//    ran used a window written into it, unconfirmed. An answer built on that call says its window
+//    was not confirmed by the person.'
+// after the person confirms, the next request's last message:
+//   'The person's time words, as the library holds them: “yesterday” is 2026-10-08 00:00–23:59
+//    America/Los_Angeles (UTC-07:00), the window the person confirmed when asked what their words
+//    meant — client_activity start_time 1791442800000, end_time 1791529200000. A call may pass
+//    these values as written; an answer built on them states that window.'
+```
+
+```ts
+// .time({ zone: LA, reader: englishTimeReader() }), "10/09/26 8 AM to 8:40 AM PST", {} sent →
+//   awaitingInput.fields: [{ id: 'f1', format: 'zone', description: 'Which time zone did you mean by “PST” in …?' }]
+//   resume { f1: 'America/Los_Angeles' } → [{ id: 'f1', format: 'time-range', enum: [3 windows], labels: [...] }]
+//   resume { f1: enum[0] } → the tool runs with { start_time: 1791558000000, end_time: 1791560460000 };
+//   rows: { argument: 'start_time', source: 'answered' }, { argument: 'end_time', source: 'answered' },
+//         { kind: 'time-answer', mention: 0, from, to, zone: 'America/Los_Angeles', how: 'confirmed' }
+```
+
 Without `.time()` nothing here runs: a period is judged and read as the sections above say.
 
 ## The batch ask — once, before anything runs
@@ -454,8 +510,9 @@ the PERFORMANCE block), and the resume adds no model call.
   week" quoted as "the last 24 hours" passes), another sentence, or a one-token quote taken from
   another sense ("the 24h dashboard" quoted as "24h"). That is why no membership pass ever
   supports "known" — it only keeps a reason from firing — and why the bench counts one-token
-  quotes. The library never parses a time phrase: only phrases an author declared (`said` on a
-  choice) are matched, as whole tokens, inside a quote the model declared.
+  quotes. This check never parses a time phrase: only phrases an author declared (`said` on a
+  choice) are matched, as whole tokens, inside a quote the model declared (the person's words are
+  read as time only through a reader the app arms — `src/core/time/`).
 - **Unicode folding.** A character outside the token alphabet (full-width `２４ｈ`) vanishes on
   both sides; a value or quote left with no token is `uncheckable`. Folding, if wanted, belongs
   in `evidence/normalize.ts` for the evidence gate and this layer together.

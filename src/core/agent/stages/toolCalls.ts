@@ -152,7 +152,10 @@ import {
 import { withUnsettledRows } from '../findings/unsettled.js';
 import type { FindingsLedger, StandingRow } from '../findings/types.js';
 import type { ReadRunTime } from '../../time/clock.js';
+import { sourceClockRow, sourceClocksOf } from '../../time/rows.js';
 import type { ZoneName } from '../../time/zone.js';
+import type { TimePolicy } from '../../time/resolveRecord.js';
+import type { TimeAskMessages } from '../../time/ask.js';
 import {
   evidenceFromHistory,
   exemptFromRun,
@@ -675,6 +678,15 @@ export interface ToolCallsHandlerDeps {
   readonly time?: {
     readonly takePassedOnResume: () => ReadRunTime | undefined;
     readonly appZone?: ZoneName;
+    /**
+     * Present exactly under `.time({ reader })` (step T6b): the batch ask asks
+     * a period left out while the turn's one mention is open as THAT
+     * mention's window — the lazy word-driven ask (`./argumentAsk.ts` · `windowPlanOf`).
+     */
+    readonly reader?: {
+      readonly policy: TimePolicy;
+      readonly messages?: Partial<TimeAskMessages>;
+    };
   };
   /**
    * Put one artifact fact on the record for the run it BELONGS to — the door
@@ -1506,6 +1518,31 @@ function towersFor(
 
 /** The inputs layer's half of dispatch, once loaded. */
 type InputsDispatch = typeof import('../arguments/dispatch.js');
+
+/**
+ * File the `source-clock` row for one call's dataset whose declared time axis
+ * names `zone` (step T8) — once per call and zone this turn, through the one
+ * writer; no event (the row is the record).
+ */
+function recordSourceClock(
+  scope: TypedScope<AgentState>,
+  call: { readonly toolCallId: string; readonly toolName: string },
+  zone: string,
+): void {
+  const ledger = scope.findingsLedger as FindingsLedger | undefined;
+  const turn = scope.turnNumber as number;
+  const filed = sourceClocksOf(ledger, turn).some(
+    (r) => r.toolCallId === call.toolCallId && r.zone === zone,
+  );
+  if (filed) return;
+  recordFindings(scope, [
+    sourceClockRow(call, { turn, iteration: scope.iteration as number }, zone),
+  ]);
+}
+
+/** The run a capability binding was made in — `undefined` when there is no binding. */
+const madeInRun = (bindRun: { readonly runContext?: { readonly runId: string } } | undefined) =>
+  bindRun?.runContext?.runId;
 
 // The time layer's half of dispatch — the `call` row, the drift redraw,
 // `ctx.time` and the `clock-on-resume` row — lives in `./timeLayer.ts`,
@@ -2674,6 +2711,18 @@ export function buildToolCallsHandler(
             ...(meta.timeAxis !== undefined && { timeAxis: meta.timeAxis }),
             tool: toolName,
           });
+          // Under `.time()` (step T8): a dataset whose declared axis names a
+          // zone is a wall-clock source — one `source-clock` row per call and
+          // zone, for the limits block's `Clocks` lines. Only in the run the
+          // binding was made in (a late mint's run has ended).
+          const zone = meta.timeAxis?.zone;
+          if (
+            deps.time !== undefined &&
+            zone !== undefined &&
+            (madeInRun(bindRun) === undefined || madeInRun(bindRun) === deps.currentRun?.().runId)
+          ) {
+            recordSourceClock(scope, { toolCallId, toolName }, zone);
+          }
           return;
         }
         case 'resolved':
@@ -3883,7 +3932,10 @@ export function buildToolCallsHandler(
           runId: () => deps.currentRun?.().runId,
           ...(deps.argumentAskContext !== undefined && { hostContext: deps.argumentAskContext }),
           ...(deps.time !== undefined && {
-            time: { ...(deps.time.appZone !== undefined && { appZone: deps.time.appZone }) },
+            time: {
+              ...(deps.time.appZone !== undefined && { appZone: deps.time.appZone }),
+              ...(deps.time.reader !== undefined && { reader: deps.time.reader }),
+            },
           }),
         });
         resolutions = asked.resolutions;

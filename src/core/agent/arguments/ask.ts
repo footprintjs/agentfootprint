@@ -61,12 +61,27 @@ import {
   type InputValue,
 } from '../../inputRequest.js';
 import {
+  convertExact,
+  convertWidened,
+  formArguments,
+  granularityMsOf,
   periodFactProblem,
   readBack,
+  widestMsOf,
   type PeriodFactProblem,
   type PeriodFacts,
 } from '../../time/convert.js';
 import type { InstantText } from '../../time/instant.js';
+import { parseRange, spellRange, type TimeRange } from '../../time/range.js';
+import {
+  chooseReading,
+  resolveMention,
+  withZoneAnswered,
+  type TimePolicy,
+} from '../../time/resolve.js';
+import type { TimeAskMessages } from '../../time/ask.js';
+import { timeAskOf } from '../../time/readingAsk.js';
+import { timeAnswerRow, type TimeAnswerRow, type TimeReadingRow } from '../../time/rows.js';
 import type { ZoneName } from '../../time/zone.js';
 import { shownArgsOf } from '../../toolShownArgs.js';
 import { validatePropertyValue } from '../toolArgsValidation.js';
@@ -145,6 +160,31 @@ export interface AskField {
   readonly spelling?: PeriodSpelling;
   /** The (tool, argument) pairs the answer binds to; more than one only for a shared period. */
   readonly members: readonly AskMember[];
+  /**
+   * Set on the ONE field that asks which window the person's own words meant
+   * (the lazy word-driven ask, time design § 5.2, § 6.3): its members are the
+   * period arguments of every call that left its period out while the turn's
+   * one mention was still open; the answer is a window (or, first, the zone
+   * the person meant by an abbreviation), converted into each call's form.
+   */
+  readonly window?: WindowAskField;
+}
+
+/** One call's values from a bound window — and whether they read a WIDER window (no form held it exactly). */
+export interface WindowFill {
+  readonly values: Readonly<Record<string, unknown>>;
+  readonly wider?: 'reads-more' | 'tool-trims';
+}
+
+/** The time half of a window field — the typed ask's `format`, its labels, and the mention asked about. */
+export interface WindowAskField {
+  readonly format: 'time-range' | 'zone';
+  /** One label per choice (`time-range` with choices only), in the reader's locale. */
+  readonly labels?: readonly string[];
+  /** Per choice, the zone the candidate was read in — a wall or date form is written in it. */
+  readonly zones?: readonly ZoneName[];
+  /** The mention's index on its `time-reading` row. */
+  readonly mention: number;
 }
 
 /** Per field (same positions as the fields): how often asked, and how it settled. */
@@ -159,6 +199,13 @@ export interface AskProgress {
   readonly exhausted?: true;
   /** What the last answer that did not fit failed — the property schema's own expectation, never the answer. */
   readonly expected?: string;
+  /**
+   * A window field only: the bound window converted into each call's form, by
+   * call id — the values the call runs with (raw working state, never a row).
+   */
+  readonly fills?: Readonly<Record<string, WindowFill>>;
+  /** A window field only: the zone was answered and a follow-up question about the same words is to be asked. */
+  readonly next?: true;
 }
 
 /** The ask now out, waiting for the person's answer. */
@@ -191,6 +238,76 @@ export interface CallAsk {
   readonly ask: readonly string[];
   /** Under declared sources: the person's words a reading was made of, per argument. */
   readonly quoted?: readonly { readonly argument: string; readonly quote: string }[];
+  /** Under `.time({ reader })`: the call left its period out while the turn's one mention was open. */
+  readonly window?: true;
+}
+
+/**
+ * The lazy word-driven ask's plan (time design § 5.2): the question the open
+ * mention needs (`core/time/readingAsk.ts` · `timeAskOf`) and its mention index.
+ * Handed by the stage glue only when the turn's one mention is open.
+ */
+export interface WindowAskPlan {
+  readonly question: string;
+  readonly format: 'time-range' | 'zone';
+  readonly choices?: readonly string[];
+  readonly labels?: readonly string[];
+  readonly zones?: readonly ZoneName[];
+  readonly mention: number;
+  /** The turn's clock — a choice outside a member tool's declared facts is not offered (§ 6.3). */
+  readonly now: InstantText;
+}
+
+/**
+ * The indexes of the choices EVERY member tool's declared facts allow (§ 6.3:
+ * "some readings inside the tool's `direction` → the ones inside as choices")
+ * — `undefined` when none is left (several tools that disagree: every choice
+ * is offered, and the answer is judged against each tool's facts).
+ */
+function allowedChoices(
+  choices: readonly string[],
+  members: readonly { readonly toolName: string }[],
+  toolOf: ToolOf,
+  now: InstantText,
+): number[] | undefined {
+  const factsOf = [...new Set(members.map((m) => m.toolName))].map((name) => {
+    const rules = rulesOf(toolOf(name));
+    return rules === undefined || isRefused(rules) ? {} : periodFactsOf(rules.period);
+  });
+  const kept = choices.flatMap((value, i) => {
+    const range = parseRange(value);
+    if (range === undefined) return [];
+    return factsOf.every((facts) => periodFactProblem(range, facts, now) === undefined) ? [i] : [];
+  });
+  return kept.length > 0 ? kept : undefined;
+}
+
+/** A window field's choices narrowed to `kept` (its labels and zones with them). */
+function narrowed(field: AskField, kept: readonly number[] | undefined): AskField {
+  const window = field.window;
+  if (kept === undefined || field.choices === undefined || window === undefined) return field;
+  const pick = <T>(list: readonly T[] | undefined) =>
+    list === undefined ? undefined : kept.map((i) => list[i] as T);
+  const labels = pick(window.labels);
+  const zones = pick(window.zones);
+  return {
+    ...field,
+    choices: pick(field.choices) as readonly InputValue[],
+    window: {
+      ...window,
+      ...(labels !== undefined && { labels }),
+      ...(zones !== undefined && { zones }),
+    },
+  };
+}
+
+/** The arguments of every period form a tool declares — what a window fills. */
+function formArgumentsOfTool(toolOf: ToolOf, toolName: string): ReadonlySet<string> {
+  const rules = rulesOf(toolOf(toolName));
+  if (rules === undefined || isRefused(rules)) return new Set();
+  return new Set(
+    periodFormsOf(rules.period).flatMap((f) => formArguments(f).map((a) => a.argument)),
+  );
 }
 
 const RULED_ASK_TYPES: Readonly<Record<RuledArgument['type'], InputField['type']>> = {
@@ -298,17 +415,32 @@ export function planAskFields(
   asks: readonly CallAsk[],
   calls: readonly BatchCall[],
   toolOf: ToolOf,
+  windowPlan?: WindowAskPlan,
 ): AskField[] {
   const nameOf = new Map(calls.map((c) => [c.id, c.name]));
   // Keyed by tool, then argument — a map of maps, never a joined key.
   const byTool = new Map<string, Map<string, PendingField>>();
   const order: PendingField[] = [];
+  // The lazy word-driven ask: a call's PERIOD arguments join the one window field.
+  const windowMembers = new Map<string, Map<string, string[]>>();
   for (const entry of asks) {
     const toolName = nameOf.get(entry.toolCallId);
     if (toolName === undefined) continue;
     const forTool = byTool.get(toolName) ?? new Map<string, PendingField>();
     byTool.set(toolName, forTool);
+    const periodArguments =
+      windowPlan !== undefined && entry.window === true
+        ? formArgumentsOfTool(toolOf, toolName)
+        : new Set<string>();
     for (const argument of entry.ask) {
+      if (periodArguments.has(argument)) {
+        const forWindow = windowMembers.get(toolName) ?? new Map<string, string[]>();
+        windowMembers.set(toolName, forWindow);
+        const ids = forWindow.get(argument) ?? [];
+        if (!ids.includes(entry.toolCallId)) ids.push(entry.toolCallId);
+        forWindow.set(argument, ids);
+        continue;
+      }
       const quote = entry.quoted?.find((q) => q.argument === argument)?.quote;
       const seen = forTool.get(argument);
       if (seen !== undefined) {
@@ -324,7 +456,7 @@ export function planAskFields(
       order.push(pending);
     }
   }
-  return mergeSharedPeriods(
+  const fields = mergeSharedPeriods(
     order.map((p) => ({
       ...p.field,
       members: [
@@ -336,6 +468,39 @@ export function planAskFields(
       ],
     })),
   );
+  if (windowPlan === undefined || windowMembers.size === 0) return fields;
+  const window = windowFieldOf(windowPlan, windowMembers);
+  const kept =
+    window.choices === undefined
+      ? undefined
+      : allowedChoices(window.choices as readonly string[], window.members, toolOf, windowPlan.now);
+  return [narrowed(window, kept), ...fields];
+}
+
+/** The ONE window field: the open mention's question, bound to every call's period arguments. */
+function windowFieldOf(
+  plan: WindowAskPlan,
+  members: ReadonlyMap<string, ReadonlyMap<string, readonly string[]>>,
+): AskField {
+  return {
+    type: 'string',
+    question: plan.question,
+    ...(plan.choices !== undefined && { choices: plan.choices }),
+    members: [...members].flatMap(([toolName, byArgument]) =>
+      [...byArgument].map(([argument, ids]) => ({
+        toolName,
+        argument,
+        period: true as const,
+        toolCallIds: [...ids],
+      })),
+    ),
+    window: {
+      format: plan.format,
+      ...(plan.labels !== undefined && { labels: plan.labels }),
+      ...(plan.zones !== undefined && { zones: plan.zones }),
+      mention: plan.mention,
+    },
+  };
 }
 
 // ─── The rounds ─────────────────────────────────────────────────────────
@@ -356,7 +521,7 @@ export function nextAskRound(
 ): { readonly fieldIndexes: readonly number[]; readonly reask: boolean } | undefined {
   const again = state.progress.flatMap((p, i) => (p.invalid === true ? [i] : []));
   if (again.length > 0) return { fieldIndexes: again.slice(0, MAX_ASK_FIELDS), reask: true };
-  const fresh = state.progress.flatMap((p, i) => (p.rounds === 0 ? [i] : []));
+  const fresh = state.progress.flatMap((p, i) => (p.rounds === 0 || p.next === true ? [i] : []));
   if (fresh.length > 0) return { fieldIndexes: fresh.slice(0, MAX_ASK_FIELDS), reask: false };
   return undefined;
 }
@@ -513,6 +678,9 @@ export function argumentAskDeclaration(
       required: true,
       description: field.question,
       ...(field.choices !== undefined && { enum: [...field.choices] }),
+      // A window field is a TIME field: the door judges its answer (`core/time/ask.ts`).
+      ...(field.window !== undefined && { format: field.window.format }),
+      ...(field.window?.labels !== undefined && { labels: [...field.window.labels] }),
     };
   });
   return {
@@ -644,6 +812,17 @@ export function checkAnswer(
 export interface AskTime {
   readonly now: InstantText;
   readonly appZone?: ZoneName;
+  /** The turn's clock zone — a window answered with no zone of its own is written in it. */
+  readonly zone?: ZoneName;
+  /**
+   * Under `.time({ reader })`: the open mention's row, the policy and the
+   * whole catalog — what a zone answer re-reads the mention with.
+   */
+  readonly reading?: {
+    readonly row: TimeReadingRow;
+    readonly policy: TimePolicy;
+    readonly messages: TimeAskMessages;
+  };
 }
 
 /**
@@ -706,8 +885,12 @@ export function factExpectation(problem: PeriodFactProblem, facts: PeriodFacts):
 /** What binding one answer did: the new state and the rows it files. */
 export interface BoundAnswer {
   readonly state: ArgumentAskState;
-  /** `answered` rows for bound fields; `asked: 'invalid-answer'` rows for fields asked again or exhausted. */
-  readonly rows: readonly ArgumentRow[];
+  /**
+   * `answered` rows for bound fields; `asked: 'invalid-answer'` rows for fields
+   * asked again or exhausted; and, for a bound WINDOW field, the `time-answer`
+   * row that settles its mention for the rest of the turn (`core/time/rows.ts`).
+   */
+  readonly rows: readonly (ArgumentRow | TimeAnswerRow)[];
 }
 
 /**
@@ -730,11 +913,38 @@ export function bindAnswer(
   if (waiting === undefined) return { state, rows: [] };
   const byId = new Map(calls.map((c) => [c.id, c]));
   const progress = [...state.progress];
-  const rows: ArgumentRow[] = [];
+  const rows: (ArgumentRow | TimeAnswerRow)[] = [];
+  const fields = [...state.fields];
   waiting.fieldIndexes.forEach((index, k) => {
     const field = state.fields[index];
     const answer = values[`f${k + 1}`];
     const was = progress[index];
+    if (field.window !== undefined && answer !== undefined) {
+      const bound = bindWindowAnswer(field, answer, byId, toolOf, time);
+      if ('followUp' in bound) {
+        fields[index] = bound.followUp;
+        progress[index] = { rounds: was.rounds, next: true };
+        return;
+      }
+      if ('fills' in bound) {
+        progress[index] = { rounds: was.rounds, answer, fills: bound.fills };
+        rows.push(...windowAnsweredRows(field, bound.fills, byId, toolOf, stamp));
+        // The person's window for the mention — the only door a window of words becomes theirs.
+        rows.push(timeAnswerRow({ mention: field.window.mention, ...bound.answered }, stamp));
+        return;
+      }
+      if ('outside' in bound) {
+        progress[index] = { rounds: was.rounds, exhausted: true, expected: bound.outside };
+        rows.push(...memberCalls(field).map((who) => askedRowOf(who, stamp, 'invalid-answer')));
+        return;
+      }
+      progress[index] =
+        was.rounds >= MAX_ASK_ROUNDS
+          ? { rounds: was.rounds, exhausted: true, expected: bound.expected }
+          : { rounds: was.rounds, invalid: true, expected: bound.expected };
+      rows.push(...memberCalls(field).map((who) => askedRowOf(who, stamp, 'invalid-answer')));
+      return;
+    }
     const check =
       answer === undefined ? { fits: false as const } : checkAnswer(field, answer, toolOf, time);
     if (answer !== undefined && check.fits) {
@@ -752,7 +962,213 @@ export function bindAnswer(
   });
   const { waiting: _settled, ...rest } = state;
   void _settled;
-  return { state: { ...rest, progress }, rows };
+  return { state: { ...rest, fields, progress }, rows };
+}
+
+// ─── The window answer (the lazy word-driven ask, time design § 5.2) ────────
+
+/** What an answer to a window field did: bound (the values per call), a follow-up question, or a misfit. */
+type WindowBinding =
+  | {
+      readonly fills: Readonly<Record<string, WindowFill>>;
+      /** The window the person settled: the range, its zone, and whether it was the offered reading. */
+      readonly answered: {
+        readonly range: TimeRange;
+        readonly zone: ZoneName;
+        readonly how: TimeAnswerRow['how'];
+      };
+    }
+  | { readonly followUp: AskField }
+  | { readonly expected: string }
+  /** The zone answer left readings none of which a member tool's facts allow: its calls are refused. */
+  | { readonly outside: string };
+
+// LENS · tool-result · persistent-history (through `serve.ts` · `unansweredRefusal`)
+// reads: nothing — fixed expectations for a window answer a tool's period forms cannot take
+// law: names the rule, never the answer.
+/** What a window answer must be when no period form of a tool holds it. */
+export const WINDOW_FORM_EXPECTATION = "a window one of the tool's declared period forms can hold";
+/** What a zone answer must be when the person's words name no time in it. */
+export const WINDOW_ZONE_EXPECTATION = 'a time zone in which the time the person wrote exists';
+
+/**
+ * Bind one answer to a window field: a `zone` answer re-reads the mention in
+ * that zone and asks the follow-up question with the readings as choices —
+ * each still a PROPOSAL to confirm (the owner's decision "Always confirm");
+ * a `time-range` answer (a choice, or free entry the door already judged) is
+ * converted into every member call's forms — exactly, else wider (the fill's
+ * own rule) — after each tool's declared facts. A choice the ask offered is
+ * `confirmed` (the person's click on the pre-filled reading); any other window
+ * is `edited` — both are the person's answer.
+ */
+function bindWindowAnswer(
+  field: AskField,
+  answer: InputValue,
+  byId: ReadonlyMap<string, BatchCall>,
+  toolOf: ToolOf,
+  time: AskTime | undefined,
+): WindowBinding {
+  const window = field.window as WindowAskField;
+  if (time === undefined) return { expected: WINDOW_FORM_EXPECTATION };
+  if (window.format === 'zone') {
+    const reading = time.reading;
+    if (reading === undefined || typeof answer !== 'string' || time.zone === undefined) {
+      return { expected: WINDOW_ZONE_EXPECTATION };
+    }
+    const row = reading.row;
+    // The re-read stays a PROPOSAL: the zone was the person's, the window is still words.
+    const resolution = resolveMention(
+      withZoneAnswered(row.parses ?? [], answer),
+      { now: time.now, zone: time.zone },
+      row.reader,
+      true,
+    );
+    const choice = chooseReading(resolution, reading.policy, row.reader.kind, undefined, true);
+    if (choice.by === 'open') {
+      const ask = timeAskOf(
+        { ...row, candidates: resolution.candidates, choice },
+        reading.messages,
+      );
+      if (ask === undefined || ask.field.format !== 'time-range') {
+        return { expected: WINDOW_ZONE_EXPECTATION };
+      }
+      const zones = (ask.field.enum ?? []).map(
+        (value) => resolution.candidates.find((c) => spellRange(c.range) === value)?.zone ?? answer,
+      );
+      const followUp: AskField = {
+        ...field,
+        question: ask.question,
+        ...(ask.field.enum !== undefined && { choices: ask.field.enum }),
+        window: {
+          format: 'time-range',
+          ...(ask.field.labels !== undefined && { labels: ask.field.labels }),
+          zones,
+          mention: window.mention,
+        },
+      };
+      const choices = (ask.field.enum ?? []) as readonly string[];
+      const kept = allowedChoices(choices, field.members, toolOf, time.now);
+      if (kept === undefined && field.members.length > 0) {
+        // Every reading breaks a member tool's facts: nothing is asked (§ 6.3) — the reason.
+        const outside = factOutside(choices, field.members, toolOf, time.now);
+        if (outside !== undefined) return { outside };
+      }
+      return { followUp: narrowed(followUp, kept) };
+    }
+    return { expected: WINDOW_ZONE_EXPECTATION };
+  }
+  const range = typeof answer === 'string' ? parseRange(answer) : undefined;
+  if (range === undefined) return { expected: WINDOW_FORM_EXPECTATION };
+  const at = field.choices?.indexOf(answer) ?? -1;
+  const zone = (at >= 0 ? window.zones?.[at] : undefined) ?? time.zone;
+  if (zone === undefined) return { expected: WINDOW_FORM_EXPECTATION };
+  const bound = windowFills(field, range, zone, byId, toolOf, time);
+  if (!('fills' in bound)) return bound;
+  return { fills: bound.fills, answered: { range, zone, how: at >= 0 ? 'confirmed' : 'edited' } };
+}
+
+/** What the first reading breaks, when EVERY reading breaks one member tool's facts — the refusal's words. */
+function factOutside(
+  choices: readonly string[],
+  members: readonly { readonly toolName: string }[],
+  toolOf: ToolOf,
+  now: InstantText,
+): string | undefined {
+  for (const name of new Set(members.map((m) => m.toolName))) {
+    const rules = rulesOf(toolOf(name));
+    if (rules === undefined || isRefused(rules)) continue;
+    const facts = periodFactsOf(rules.period);
+    const problems = choices.map((value) => {
+      const range = parseRange(value);
+      return range === undefined ? undefined : periodFactProblem(range, facts, now);
+    });
+    const first = problems[0];
+    if (first !== undefined && problems.every((p) => p !== undefined)) {
+      return factExpectation(first, facts);
+    }
+  }
+  return undefined;
+}
+
+/** The window written into every member call's forms, after each tool's facts — or what it failed. */
+function windowFills(
+  field: AskField,
+  range: TimeRange,
+  zone: ZoneName,
+  byId: ReadonlyMap<string, BatchCall>,
+  toolOf: ToolOf,
+  time: AskTime,
+): { readonly fills: Readonly<Record<string, WindowFill>> } | { readonly expected: string } {
+  const fills: Record<string, WindowFill> = {};
+  for (const member of field.members) {
+    const rules = rulesOf(toolOf(member.toolName));
+    if (rules === undefined || isRefused(rules)) return { expected: WINDOW_FORM_EXPECTATION };
+    const forms = periodFormsOf(rules.period);
+    const facts = periodFactsOf(rules.period);
+    const problem = periodFactProblem(range, facts, time.now);
+    if (problem !== undefined) return { expected: factExpectation(problem, facts) };
+    for (const id of member.toolCallIds) {
+      if (fills[id] !== undefined || !byId.has(id)) continue;
+      const ctx = {
+        now: time.now,
+        zone,
+        ...(time.appZone !== undefined && { appZone: time.appZone }),
+        granularityMs: granularityMsOf(facts),
+      };
+      const exact = convertExact({ range }, forms, ctx);
+      const conversion = exact ?? convertWidened({ range }, forms, ctx, widestMsOf(facts));
+      if (conversion === undefined) return { expected: WINDOW_FORM_EXPECTATION };
+      for (const [argument, value] of Object.entries(conversion.values)) {
+        if (typeof value === 'object') continue;
+        const verdict = validatePropertyValue(
+          value as InputValue,
+          propertyOf(toolOf, { ...member, argument }),
+        );
+        if (!verdict.ok) {
+          const expected = verdict.issues[0]?.expected;
+          return { expected: expected ?? WINDOW_FORM_EXPECTATION };
+        }
+      }
+      fills[id] = {
+        values: conversion.values,
+        ...(exact === undefined && {
+          wider: facts.filtersToAsked === true ? ('tool-trims' as const) : ('reads-more' as const),
+        }),
+      };
+    }
+  }
+  return { fills };
+}
+
+/** The `answered` rows of a bound window: one per (call, argument) the window filled, in the tool's own view. */
+function windowAnsweredRows(
+  field: AskField,
+  fills: Readonly<Record<string, WindowFill>>,
+  byId: ReadonlyMap<string, BatchCall>,
+  toolOf: ToolOf,
+  stamp: { readonly turn: number; readonly iteration: number },
+): ArgumentRow[] {
+  const nameOf = new Map(field.members.flatMap((m) => m.toolCallIds.map((id) => [id, m.toolName])));
+  return Object.entries(fills).flatMap(([toolCallId, { values }]) => {
+    const call = byId.get(toolCallId);
+    const toolName = nameOf.get(toolCallId);
+    if (call === undefined || toolName === undefined) return [];
+    const tool = toolOf(toolName);
+    const shown = tool === undefined ? undefined : shownArgsOf(tool, { ...call.args, ...values });
+    return Object.keys(values).map((argument) =>
+      answeredRowOf(
+        {
+          toolCallId,
+          toolName,
+          argument,
+          rule: 'ask',
+          period: true as const,
+          shownValue: shown === undefined ? HIDDEN_VALUE : shown[argument],
+        },
+        stamp,
+      ),
+    );
+  });
 }
 
 /** Every (call, argument) a field binds to, as a row identity. */
@@ -843,6 +1259,20 @@ export function settledCalls(state: ArgumentAskState): ReadonlyMap<string, Settl
   };
   state.fields.forEach((field, i) => {
     const p = state.progress[i];
+    if (field.window !== undefined && p.fills !== undefined) {
+      for (const [id, fill] of Object.entries(p.fills)) {
+        for (const [argument, value] of Object.entries(fill.values)) {
+          entry(id).fills.push({
+            argument,
+            value: value as InputValue | Readonly<Record<string, InputValue>>,
+            source: 'answered',
+            window: true,
+            ...(fill.wider !== undefined && { wider: fill.wider }),
+          });
+        }
+      }
+      return;
+    }
     for (const m of field.members) {
       for (const id of m.toolCallIds) {
         if (p.answer !== undefined) {

@@ -33,6 +33,7 @@ import {
   copyAnswerCoverage,
   type AnswerCoverage,
 } from '../coverage/index.js';
+import type { TimeLimitLines } from '../coverage/timeLimits.js';
 import type { AgentState } from '../types.js';
 import type { FindingsLedger } from '../findings/types.js';
 import { presentationZoneOf } from '../../time/rows.js';
@@ -243,23 +244,43 @@ async function presentationOf(
 }
 
 /**
+ * The time layer's limits lines for THIS turn (step T8), composed from the
+ * record: one line per `period` row whose result checks hold
+ * (`coverage/period.ts` · `periodCheckLine`) and the wall-clock sources'
+ * `Clocks` lines (`source-clock` rows; `core/time/check.ts` · `clocksDiffer`).
+ * `undefined` when there is no clock (nothing to render in) or nothing to say.
+ */
+async function timeLinesOf(scope: TypedScope<AgentState>): Promise<TimeLimitLines | undefined> {
+  // The composer (and the renderer it binds) loads only here, under `.time()` — the
+  // optional-family law, as `presentationOf`.
+  const { timeLimitLinesOf } = await import('../coverage/timeLimits.js');
+  return timeLimitLinesOf(
+    scope.findingsLedger as FindingsLedger | undefined,
+    scope.turnNumber as number | undefined,
+  );
+}
+
+/**
  * `prepareFinalWithLimitsStage` under `.time()` (the time layer): the same
  * block, each `Period:` line rendered in the run's clock zone with the zone
- * named (`coverage/period.ts` · `periodLine`). The typed record keeps the
- * declared instants; only the person's line changes.
+ * named (`coverage/period.ts` · `periodLine`), and — step T8 — the result
+ * checks' lines and the wall-clock sources (`timeLinesOf`). The typed record
+ * keeps the declared instants; only the person's line changes.
  */
 export const prepareFinalWithLimitsInZoneStage = async (
   scope: TypedScope<AgentState>,
 ): Promise<void> => {
-  const declared = scope.coverageDeclared;
+  const declared = scope.coverageDeclared ?? [];
+  const time = await timeLinesOf(scope);
   const answer =
-    declared !== undefined && declared.length > 0
+    declared.length > 0 || time !== undefined
       ? composeAnswerWithCoverage(
           scope.llmLatestContent,
           declared,
           '',
           '',
           await presentationOf(scope),
+          time,
         )
       : scope.llmLatestContent;
   captureTurnPayload(scope, answer);
@@ -306,14 +327,16 @@ export function prepareFinalWithLimitsAndAssumedStage(
         ? () => [...((scope.middlewareDecisions as readonly unknown[] | undefined) ?? [])]
         : undefined,
     );
+    const time = inZone ? await timeLinesOf(scope) : undefined;
     const answer =
-      declared.length > 0 || assumed !== ''
+      declared.length > 0 || assumed !== '' || time !== undefined
         ? composeAnswerWithCoverage(
             scope.llmLatestContent,
             declared,
             assumed,
             '',
             inZone ? await presentationOf(scope) : undefined,
+            time,
           )
         : scope.llmLatestContent;
     captureTurnPayload(scope, answer);
@@ -441,14 +464,18 @@ export function prepareFinalWithAnswerLayerStage(o: {
           : undefined,
       );
     }
+    const time = o.limits && o.inZone === true ? await timeLinesOf(scope) : undefined;
     const answer =
-      declared.length > 0 || assumed !== '' || line !== ''
+      declared.length > 0 || assumed !== '' || line !== '' || time !== undefined
         ? composeAnswerWithCoverage(
             scope.llmLatestContent,
             declared,
             assumed,
             line,
-            o.inZone === true && declared.length > 0 ? await presentationOf(scope) : undefined,
+            o.inZone === true && (declared.length > 0 || time !== undefined)
+              ? await presentationOf(scope)
+              : undefined,
+            time,
           )
         : scope.llmLatestContent;
     captureTurnPayload(scope, answer, false, undefined, assessed);

@@ -106,8 +106,14 @@ export function clockOnResumeRow(
 
 /**
  * The `time-reading` rows for one checked reading (`reader.ts` ·
- * `checkReading`): one per mention, resolved against the turn's clock and
- * settled under the policy — or one `mentions: 0` row.
+ * `checkReading`): one per mention, resolved against the turn's clock — or
+ * one `mentions: 0` row. The one owner of the law "a reading only PROPOSES"
+ * (the owner's decision "Always confirm", time design TQ29): whatever the
+ * reader's kind, no reading is settled by the library and none is the
+ * person's words — its candidates carry `said: []` and its choice stays
+ * `open` with `confirm` (the policy may still remove readings), so the time
+ * ask offers it, pre-filled with its window and zone, and only the person's
+ * answer settles it (`rows.ts` · `TimeAnswerRow`).
  */
 export function timeReadingRows(input: {
   readonly mentions: readonly CheckedMention[];
@@ -129,7 +135,7 @@ export function timeReadingRows(input: {
   if (mentions.length === 0) return [base];
   return mentions.map((m, mention) => {
     if ('refused' in m) return { ...base, mention, refused: m.refused };
-    const resolution = resolveMention(m.parses, clock, { id: reader.id, kind: reader.kind });
+    const resolution = resolveMention(m.parses, clock, { id: reader.id, kind: reader.kind }, true);
     return {
       ...base,
       mention,
@@ -137,7 +143,7 @@ export function timeReadingRows(input: {
       parses: m.parses,
       ...(m.problem !== undefined && { problem: m.problem }),
       candidates: resolution.candidates,
-      choice: chooseReading(resolution, policy, reader.kind, m.problem),
+      choice: chooseReading(resolution, policy, reader.kind, m.problem, true),
     };
   });
 }

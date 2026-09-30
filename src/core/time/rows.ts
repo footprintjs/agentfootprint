@@ -19,7 +19,7 @@
  *          precedent: no event field ships without a reader in the same
  *          release). The lens reads the rows.
  *
- * Five kinds, each filed only while `.time()` is armed:
+ * Eight kinds, each filed only while `.time()` is armed:
  *
  * | Kind | Filed | Carries |
  * |------|-------|---------|
@@ -27,7 +27,10 @@
  * | `clock-on-resume` | first thing in the resumed leg's ToolCalls stage — either pause shape: the pausable resume door, or the stage re-run an `interrupt()` pause makes — when a resume passed a `time` that differs from the kept clock | what was passed and what was kept — the kept clock still rules |
  * | `call` | once per dispatched call, just before the tool runs | `dispatchedAt`: the wall clock at dispatch (a look-back is evaluated by the TOOL at dispatch, which after a pause is later than `now`); `drift` when a look-back was sent more than the tool's step after `now` — `redrawn` into an absolute form, or `shifted` (§ 7.4, `drift.ts`) |
  * | `call-window` | by the inputs layer, once per call to a tool that declares period forms, before it dispatches | which window the call carries: filled from the turn's one window (exactly, or wider — with what the read adds), bound to one (by quote or value), the model's own (beside the person's when it differs), unread, not filled and why, or refused before dispatch and why |
- * | `time-reading` | by seed, once per MENTION the armed reader (`.time({ reader })`) found in the person's message — or ONE row with `mentions: 0` when it found none, so a retry knows the message was read | the quote, the parts, every candidate `resolve.ts` made of them, how the reading settled (`choice`), the reader's id, version, kind and locale, and the tz database version; a refused mention keeps only why |
+ * | `time-reading` | by seed, once per MENTION the armed reader (`.time({ reader })`) found in the person's message — or ONE row with `mentions: 0` when it found none, so a retry knows the message was read | the quote, the parts, every candidate `resolve.ts` made of them, how the reading settled (`choice` — never settled by the library: every reading is a PROPOSAL, `open` with `confirm`, its candidates `said: []`), the reader's id, version, kind and locale, and the tz database version; a refused mention keeps only why |
+ * | `time-answer` | by the batch ask, once per mention the person settled in the time ask — the only door by which a window of words becomes the person's | the mention, the window and its zone, and `how`: `confirmed` (they picked a reading the library offered — the click) or `edited` (they wrote their own) |
+ * | `time-derived` | by the Route decider, once per judged answer that stands, when the evidence gate found values no tool result carried that the library itself spelled from this turn's time readings (§ 9.5, step T7 — `forms.ts` · `timeFormsOf`'s `derived` list) | the values, normalized and clipped as the gate reports them — the lineage `derived-from-reading`: never invented, never the person's |
+ * | `source-clock` | by ToolCalls, once per call and zone, when the call minted a dataset whose declared time axis names a `zone` (§ 9.6, step T8) | the tool, the call and the zone its rows' wall times are in — read by the limits block's `Clocks` lines and `check.ts` · `clocksDiffer` |
  *
  * Readers that switch over every row kind must skip one they do not know.
  */
@@ -136,6 +139,30 @@ export interface TimeReadingRow {
   readonly choice?: ReadingChoice;
 }
 
+/**
+ * The window the person settled for one mention in the time ask — the ONLY
+ * door by which a window of words becomes the person's (the owner's decision
+ * "Always confirm", time design TQ29). Filed by the batch ask when a window
+ * answer binds (`arguments/ask.ts` · `bindAnswer`); read back by
+ * `bind.ts` · `turnWindowsOf`, so the rest of the turn uses it as an
+ * `answered` window and the served sentence names it with its source.
+ */
+export interface TimeAnswerRow extends TimeRange {
+  readonly kind: 'time-answer';
+  readonly turn: number;
+  readonly iteration: number;
+  /** The `time-reading` row's mention the answer settles. */
+  readonly mention: number;
+  /** The zone the window was answered in — the reading's, or the turn's clock for free entry. */
+  readonly zone: ZoneName;
+  /**
+   * `confirmed`: the person picked a reading the library offered (the
+   * pre-filled choice — their click); `edited`: they wrote a window of their
+   * own. Both are the person's answer.
+   */
+  readonly how: 'confirmed' | 'edited';
+}
+
 /** The person's window a `call-window` row names — its range, who gave it, and its mention. */
 export interface PersonWindow extends TimeRange {
   readonly source: WindowSource;
@@ -193,8 +220,52 @@ export interface CallWindowRow {
   readonly argument?: string;
 }
 
+/**
+ * The answer's values the library itself spelled from a time reading of this
+ * turn (§ 9.5, step T7) — an implied year, an offset, the end-of-grain
+ * minute, a value of the served time line. The lineage `derived-from-reading`:
+ * the answer's standing reads it as "not sure" at most, never "known", and the
+ * gate never calls these invented.
+ */
+export interface TimeDerivedRow {
+  readonly kind: 'time-derived';
+  readonly turn: number;
+  readonly iteration: number;
+  /** The values as the gate reports them — normalized, clipped, at most `MAX_DERIVED_VALUES`. */
+  readonly values: readonly string[];
+}
+
+/** The most values one `time-derived` row carries (the gate's report bound). */
+export const MAX_DERIVED_VALUES = 12;
+
+/** The longest value a `time-derived` row carries (the gate's clip). */
+export const MAX_DERIVED_VALUE_CHARS = 64;
+
+/**
+ * A wall-clock source (§ 9.6, step T8): the call minted a dataset whose
+ * declared time axis (`axis.ts` · `DatasetTimeAxis`, its `zone`) says its rows are
+ * wall times in `zone`. One row per call and zone. A period's offset is never
+ * read as a clock — only a declared axis zone files this row.
+ */
+export interface SourceClockRow {
+  readonly kind: 'source-clock';
+  readonly turn: number;
+  readonly iteration: number;
+  readonly toolCallId: string;
+  readonly toolName: string;
+  readonly zone: ZoneName;
+}
+
 /** Every time-layer row kind. */
-export type TimeRow = ClockRow | ClockOnResumeRow | CallRow | TimeReadingRow | CallWindowRow;
+export type TimeRow =
+  | ClockRow
+  | ClockOnResumeRow
+  | CallRow
+  | TimeReadingRow
+  | CallWindowRow
+  | TimeAnswerRow
+  | TimeDerivedRow
+  | SourceClockRow;
 
 // ─── Reading ─────────────────────────────────────────────────────────────
 
@@ -229,6 +300,108 @@ export function readingsOf(
   return ledger.filter((row): row is TimeReadingRow => {
     const r = row as { readonly kind?: unknown; readonly turn?: unknown } | null;
     return r !== null && typeof r === 'object' && r.kind === 'time-reading' && r.turn === turn;
+  });
+}
+
+/** The `time-answer` row for one window the person settled in the time ask. */
+export function timeAnswerRow(
+  answer: {
+    readonly mention: number;
+    readonly range: TimeRange;
+    readonly zone: ZoneName;
+    readonly how: 'confirmed' | 'edited';
+  },
+  at: { readonly turn: number; readonly iteration: number },
+): TimeAnswerRow {
+  return {
+    kind: 'time-answer',
+    turn: at.turn,
+    iteration: at.iteration,
+    mention: answer.mention,
+    from: answer.range.from,
+    to: answer.range.to,
+    zone: answer.zone,
+    how: answer.how,
+  };
+}
+
+/** The `time-derived` row for one judged answer — `values` cut to {@link MAX_DERIVED_VALUES}. */
+export function timeDerivedRow(
+  values: readonly string[],
+  at: { readonly turn: number; readonly iteration: number },
+): TimeDerivedRow {
+  return {
+    kind: 'time-derived',
+    turn: at.turn,
+    iteration: at.iteration,
+    values: values.slice(0, MAX_DERIVED_VALUES),
+  };
+}
+
+/** The `source-clock` row for one call's dataset whose declared axis names `zone`. */
+export function sourceClockRow(
+  call: { readonly toolCallId: string; readonly toolName: string },
+  at: { readonly turn: number; readonly iteration: number },
+  zone: ZoneName,
+): SourceClockRow {
+  return {
+    kind: 'source-clock',
+    turn: at.turn,
+    iteration: at.iteration,
+    toolCallId: call.toolCallId,
+    toolName: call.toolName,
+    zone,
+  };
+}
+
+/** This turn's `call` row for one call — the last filed (a resumed leg files its own). */
+export function callRowOfCall(
+  ledger: readonly unknown[] | undefined,
+  toolCallId: string,
+  turn: number,
+): CallRow | undefined {
+  if (ledger === undefined) return undefined;
+  for (let i = ledger.length - 1; i >= 0; i--) {
+    const r = ledger[i] as Partial<CallRow> | null;
+    if (
+      r !== null &&
+      typeof r === 'object' &&
+      r.kind === 'call' &&
+      r.toolCallId === toolCallId &&
+      r.turn === turn
+    ) {
+      return r as CallRow;
+    }
+  }
+  return undefined;
+}
+
+/** The `source-clock` rows filed for `turn`, in the order filed. */
+export function sourceClocksOf(
+  ledger: readonly unknown[] | undefined,
+  turn: number | undefined,
+): readonly SourceClockRow[] {
+  if (ledger === undefined) return [];
+  return ledger.filter((row): row is SourceClockRow => {
+    const r = row as { readonly kind?: unknown; readonly turn?: unknown } | null;
+    return (
+      r !== null &&
+      typeof r === 'object' &&
+      r.kind === 'source-clock' &&
+      (turn === undefined || r.turn === turn)
+    );
+  });
+}
+
+/** The `time-answer` rows filed for `turn`, in the order filed. */
+export function answersOf(
+  ledger: readonly unknown[] | undefined,
+  turn: number,
+): readonly TimeAnswerRow[] {
+  if (ledger === undefined) return [];
+  return ledger.filter((row): row is TimeAnswerRow => {
+    const r = row as { readonly kind?: unknown; readonly turn?: unknown } | null;
+    return r !== null && typeof r === 'object' && r.kind === 'time-answer' && r.turn === turn;
   });
 }
 
@@ -328,7 +501,10 @@ function isPersonWindow(value: unknown): boolean {
   if (value === null || typeof value !== 'object' || Array.isArray(value)) return false;
   const { source, mention, ...range } = value as Record<string, unknown>;
   return (
-    (source === 'said' || source === 'derived-from-reading' || source === 'control') &&
+    (source === 'said' ||
+      source === 'derived-from-reading' ||
+      source === 'answered' ||
+      source === 'control') &&
     (mention === undefined || isCount(mention)) &&
     (source === 'control') === (mention === undefined) &&
     isTimeRange(range)
@@ -439,9 +615,35 @@ function isCallDrift(value: unknown): boolean {
   return d.outcome === 'shifted' && Object.keys(d).length === 2;
 }
 
+/** A `time-answer` row: its mention, a range, a zone, `how` — and no other key. */
+function isAnswerRow(row: Readonly<Record<string, unknown>>): boolean {
+  const { kind: _k, turn: _t, iteration: _i, mention, zone, how, ...range } = row;
+  void _k;
+  void _t;
+  void _i;
+  return (
+    isCount(mention) &&
+    isZoneName(zone) &&
+    (how === 'confirmed' || how === 'edited') &&
+    isTimeRange(range)
+  );
+}
+
+/** A `time-derived` row: one to `MAX_DERIVED_VALUES` non-empty values — and no other key. */
+function isDerivedRow(row: Readonly<Record<string, unknown>>): boolean {
+  const values = row.values;
+  return (
+    Object.keys(row).length === 4 &&
+    Array.isArray(values) &&
+    values.length >= 1 &&
+    values.length <= MAX_DERIVED_VALUES &&
+    values.every((v) => nonEmpty(v) && (v as string).length <= MAX_DERIVED_VALUE_CHARS)
+  );
+}
+
 /**
  * The checkpoint door's test for a time-layer row — `true` only for a row of
- * one of the five kinds with every field this module files, well formed.
+ * one of the eight kinds with every field this module files, well formed.
  * Any other kind answers `false` (the caller routes by kind first).
  */
 export function timeRowIsWellFormed(row: Readonly<Record<string, unknown>>): boolean {
@@ -468,6 +670,16 @@ export function timeRowIsWellFormed(row: Readonly<Record<string, unknown>>): boo
       return isReadingRow(row);
     case 'call-window':
       return isCallWindowRow(row);
+    case 'time-answer':
+      return isAnswerRow(row);
+    case 'time-derived':
+      return isDerivedRow(row);
+    case 'source-clock':
+      return (
+        typeof row.toolCallId === 'string' &&
+        typeof row.toolName === 'string' &&
+        isZoneName(row.zone)
+      );
     default:
       return false;
   }
@@ -480,7 +692,10 @@ export function isTimeRowKind(kind: unknown): kind is TimeRow['kind'] {
     kind === 'clock-on-resume' ||
     kind === 'call' ||
     kind === 'time-reading' ||
-    kind === 'call-window'
+    kind === 'call-window' ||
+    kind === 'time-answer' ||
+    kind === 'time-derived' ||
+    kind === 'source-clock'
   );
 }
 

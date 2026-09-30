@@ -39,6 +39,9 @@ import type {
   CallWindowRow,
   ClockOnResumeRow,
   ClockRow,
+  TimeAnswerRow,
+  SourceClockRow,
+  TimeDerivedRow,
   TimeReadingRow,
 } from '../../time/rows.js';
 import type { CoverageItem } from '../coverage/types.js';
@@ -469,12 +472,19 @@ export type FindingsRow =
   // applied), each dispatched call's wall-clock moment, and — under a
   // reader (`.time({ reader })`) — each time mention in the person's message;
   // and, from the inputs layer, which window each call to a tool whose period
-  // declares forms carries (`call-window`).
+  // declares forms carries (`call-window`); and, from the batch ask, the window
+  // the person settled for a mention in the time ask (`time-answer`); and,
+  // from the Route decider, the answer's values the library itself spelled
+  // from a time reading (`time-derived`, step T7); and, from ToolCalls, each
+  // dataset whose declared time axis names a zone (`source-clock`, step T8).
   | ClockRow
   | ClockOnResumeRow
   | CallRow
   | TimeReadingRow
-  | CallWindowRow;
+  | CallWindowRow
+  | TimeAnswerRow
+  | TimeDerivedRow
+  | SourceClockRow;
 
 /** The committed key: flat, append-only, a fresh array on every write. */
 export type FindingsLedger = readonly FindingsRow[];

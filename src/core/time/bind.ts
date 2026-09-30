@@ -4,9 +4,12 @@
  * differing model window and run it.
  *
  * Pattern: Walker over recorded rows. The turn's WINDOWS are read from what
- *          the record already holds — the `time-reading` rows of this turn
- *          (a mention that resolved to one window) and the `clock` row's
- *          `control` window — never from words. One call's decision
+ *          the record already holds — this turn's `time-answer` rows (a
+ *          mention the person settled in the time ask), a `model` reader's
+ *          `time-reading` rows (a reading, never the person's) and the
+ *          `clock` row's `control` window — never from words. A `rule`
+ *          reading settles nothing: it is a proposal the person confirms
+ *          (the owner's decision "Always confirm", time design TQ29). One call's decision
  *          ({@link callWindowOf}) is a pure function of its arguments, the
  *          tool's forms and those windows.
  * Role:    core/ leaf (the time layer). Imports `convert.ts`, `range.ts`,
@@ -61,87 +64,24 @@ import {
   type TimeRefusal,
   type WidenedConversion,
 } from './convert.js';
-import type { DurationText } from './duration.js';
 import type { InstantText } from './instant.js';
 import type { TimeRange } from './range.js';
-import type { TimeCandidate } from './resolve.js';
-import type { ClockRow, TimeReadingRow } from './rows.js';
 import type { ZoneName } from './zone.js';
 
-// ─── The turn's windows ──────────────────────────────────────────────────
+// ─── The turn's windows (`windows.ts`) ───────────────────────────────────
 
-/** Who a window is: the person's words (a `rule` reader), a `model` reader's unconfirmed reading, or a UI control. */
-export type WindowSource = 'said' | 'derived-from-reading' | 'control';
-
-/** One window of the turn — a mention that resolved to one window, or the `control` window. */
-export interface TurnWindow {
-  readonly source: WindowSource;
-  /** The `time-reading` row's mention index — absent on the `control` window. */
-  readonly mention?: number;
-  /** The person's words it was read from — absent on the `control` window. */
-  readonly quote?: string;
-  readonly range: TimeRange;
-  /** The look-back it was said as, when it was one. */
-  readonly lookback?: DurationText;
-  /** The zone the person meant, else the clock's. */
-  readonly zone: ZoneName;
-}
-
-/** The turn's windows, and how many mentions the turn holds in all (resolved or not). */
-export interface TurnWindows {
-  readonly windows: readonly TurnWindow[];
-  /** Every mention with a quote, plus the `control` window — the "exactly one" count. */
-  readonly mentions: number;
-}
-
-/** The one window a reading settled on, if it settled on one (a `model` reading waits only for confirmation). */
-function settledCandidate(row: TimeReadingRow): TimeCandidate | undefined {
-  const choice = row.choice;
-  const candidates = row.candidates ?? [];
-  if (choice === undefined) return undefined;
-  if (choice.by === 'only' || choice.by === 'policy') return candidates[choice.candidate];
-  if (choice.by === 'open' && choice.open.length === 1 && choice.open[0] === 'confirm') {
-    return candidates[choice.remaining[0] as number];
-  }
-  return undefined;
-}
-
-/**
- * This turn's windows, read from the record: each `time-reading` row whose
- * mention settled on one window (a `rule` reader's is `said`; a `model`
- * reader's, which waits only for the person's confirmation, is
- * `derived-from-reading`) and the clock's `control` window.
- */
-export function turnWindowsOf(
-  readings: readonly TimeReadingRow[],
-  clock: ClockRow | undefined,
-): TurnWindows {
-  const windows: TurnWindow[] = [];
-  let mentions = 0;
-  for (const row of readings) {
-    if (row.mentions === 0 || row.refused !== undefined || row.quote === undefined) continue;
-    mentions++;
-    const candidate = settledCandidate(row);
-    if (candidate === undefined) continue;
-    windows.push({
-      source: row.reader.kind === 'model' ? 'derived-from-reading' : 'said',
-      ...(row.mention !== undefined && { mention: row.mention }),
-      quote: row.quote,
-      range: candidate.range,
-      ...(candidate.window.kind === 'lookback' && { lookback: candidate.window.duration }),
-      zone: candidate.zone,
-    });
-  }
-  if (clock?.window !== undefined) {
-    mentions++;
-    windows.push({
-      source: 'control',
-      range: { from: clock.window.from, to: clock.window.to },
-      zone: clock.zone,
-    });
-  }
-  return { windows, mentions };
-}
+// The record half lives in `windows.ts` (split by FILE so the synchronous doors
+// never load this module's conversions); every public name is re-exported here.
+export {
+  pendingQuotesOf,
+  readerWindowsOf,
+  turnWindowsOf,
+  type ReaderWindows,
+  type TurnWindow,
+  type TurnWindows,
+  type WindowSource,
+} from './windows.js';
+import type { TurnWindow, TurnWindows } from './windows.js';
 
 // ─── One call ────────────────────────────────────────────────────────────
 
@@ -291,8 +231,19 @@ function fillWindow(call: CallToBind, turn: TurnWindows, ctx: BindContext): Call
   if (turn.mentions === 0) return { how: 'not-filled', why: 'no-window' };
   if (turn.mentions > 1) return { how: 'not-filled', why: 'several-mentions' };
   const window = turn.windows[0];
-  if (window === undefined) return { how: 'not-filled', why: 'open-reading' };
   const facts = call.facts;
+  if (window === undefined) {
+    // An open reading: when the tool's facts rule out EVERY reading left, nothing is asked —
+    // the call is refused with the first reading's reason (§ 6.3).
+    const left = turn.open?.[0] ?? [];
+    const problems =
+      facts === undefined ? [] : left.map((range) => periodFactProblem(range, facts, ctx.now));
+    const first = problems[0];
+    if (left.length > 0 && first !== undefined && problems.every((p) => p !== undefined)) {
+      return { how: 'refused', refused: first };
+    }
+    return { how: 'not-filled', why: 'open-reading' };
+  }
   const problem = facts === undefined ? undefined : periodFactProblem(window.range, facts, ctx.now);
   if (problem !== undefined) {
     return { how: 'refused', refused: problem, asked: window.range, person: window };

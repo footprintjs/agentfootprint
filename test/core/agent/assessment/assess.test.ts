@@ -496,9 +496,14 @@ describe('UNIT — the reason table', () => {
       'period-partly-held',
       'period-unknown',
       'period-undeclared',
+      // The time layer's result checks (step T8).
+      'period-differs-from-asked',
+      'period-beyond-retention',
       'sources-conflict',
       'value-unsupported',
       'value-survived-revision',
+      // The time layer (step T7): a time value the library spelled from a reading.
+      'derived-from-reading',
       'stopped-early',
       // Honesty layer 4 (the answer layer's witness row, step 6).
       'steps-unfinished',

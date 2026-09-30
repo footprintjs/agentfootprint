@@ -86,14 +86,12 @@ import {
   spellDuration,
   type DurationText,
 } from './duration.js';
-import {
-  compareInstants,
-  instantOf,
-  spellInstant,
-  utcWallMs,
-  type InstantText,
-} from './instant.js';
-import { lookbackRange, type Edge, type TimeRange } from './range.js';
+import { instantOf, spellInstant, utcWallMs, type InstantText } from './instant.js';
+import { lookbackRange, sameRange, type Edge, type TimeRange } from './range.js';
+
+// `sameRange` moved to `range.ts` (the range owner) so the turn's windows
+// (`windows.ts`) read it without this module; re-exported for its callers.
+export { sameRange };
 import { isZoneName, readWall, wallAt, type WallTime, type ZoneName } from './zone.js';
 import {
   dateOf,
@@ -697,16 +695,6 @@ export function readBack(
   const from = readBound(fromValue, 'from', fromAs, 'inclusive', zone);
   const to = readBound(toValue, 'to', toAs, edge, zone);
   return from === undefined || to === undefined ? undefined : spanRange(from, to);
-}
-
-/** Whether two ranges hold the same instants (their spellings and offsets aside). */
-export function sameRange(a: TimeRange, b: TimeRange): boolean {
-  const af = instantOf(a.from, 'strict');
-  const at = instantOf(a.to, 'strict');
-  const bf = instantOf(b.from, 'strict');
-  const bt = instantOf(b.to, 'strict');
-  if (af === undefined || at === undefined || bf === undefined || bt === undefined) return false;
-  return compareInstants(af, bf) === 0 && compareInstants(at, bt) === 0;
 }
 
 /**

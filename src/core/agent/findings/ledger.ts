@@ -358,12 +358,20 @@ export function emitRow(
   // The results layer's period verdict (honesty layer 3, step 7b): the tool,
   // the call, the stamps and the verdict word — never an instant.
   if (row.kind === 'period') {
+    // The time layer's checks (step T8): their NAMES, never a range.
+    const timeChecks = [
+      ...(row.differs !== undefined ? (['period-differs-from-asked'] as const) : []),
+      ...(row.shifted !== undefined ? (['period-shifted'] as const) : []),
+      ...(row.beyondRetention === true ? (['period-beyond-retention'] as const) : []),
+      ...(row.partlyBeyondRetention === true ? (['partly-beyond-retention'] as const) : []),
+    ];
     typedEmit(scope, 'agentfootprint.findings.period', {
       toolCallId: row.toolCallId,
       toolName: row.toolName,
       iteration: row.iteration,
       turn: row.turn,
       verdict: row.verdict,
+      ...(timeChecks.length > 0 && { timeChecks }),
     });
     return;
   }

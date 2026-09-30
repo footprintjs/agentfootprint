@@ -105,6 +105,20 @@ export type AssessmentPointer =
  * - `period-undeclared` — the tool declares a period argument (a
  *   `ToolPeriod`) and this result said nothing about what its read covered:
  *   declared silence, recorded as silence (`undeclared`).
+ * - `period-differs-from-asked` — what a call read is not the range it
+ *   asked for: narrower (`missing`), wider (`extra` — "not sure" by default,
+ *   TQ8), or shifted (both); or, for a window the model chose, not the
+ *   person's window (a `period` row of this turn with `differs`; the time
+ *   layer, step T8);
+ * - `period-beyond-retention` — the window a call asked for was wholly older
+ *   than the tool declares its source keeps (a `period` row of this turn
+ *   with `beyondRetention`; the time layer, step T8);
+ * - `derived-from-reading` — the answer states a time value no tool result
+ *   carried that the library itself spelled from a reading of the person's
+ *   words this turn — an implied year, an offset, the end-of-grain minute, a
+ *   value of the served time line (a `time-derived` row of this turn; the
+ *   time layer, step T7). Not invented and not the person's: folded like
+ *   `argument-assumed`;
  * - `steps-unfinished` — the answer came before the active skill's declared
  *   steps finished: the one teaching nudge was already spent, or a limit
  *   forced the answer (a `steps-unfinished` witness row of this turn, filed
@@ -124,9 +138,12 @@ export type AssessmentReason =
   | 'period-partly-held'
   | 'period-unknown'
   | 'period-undeclared'
+  | 'period-differs-from-asked'
+  | 'period-beyond-retention'
   | 'sources-conflict'
   | 'value-unsupported'
   | 'value-survived-revision'
+  | 'derived-from-reading'
   | 'stopped-early'
   | 'steps-unfinished'
   | 'answer-check-failed'

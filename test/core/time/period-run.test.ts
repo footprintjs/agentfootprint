@@ -12,9 +12,13 @@
  * runs as sent and is recorded beside the person's.
  *
  * Test types:
- *   functional  — a two-argument epoch-ms tool over the mock MCP client is filled from
- *                 "10/09/26 8 AM to 8:40 AM" (argument rows `said`/`mention`, a `call-window`
- *                 row, the served note, `_meta.agentfootprint.time`); a model window that
+ *   functional  — "10/09/26 8 AM to 8:40 AM" is only PROPOSED (the owner's decision "Always
+ *                 confirm"): the first call pauses on the time ask; once the person confirms
+ *                 the offer (a `time-answer` row, `how: 'confirmed'`), the served line names
+ *                 the confirmed window and its source, and a later call of the turn — a
+ *                 two-argument epoch-ms tool over the mock MCP client — is filled from it
+ *                 (argument rows `answered`/`mention`, a `call-window` row, the served note,
+ *                 `_meta.agentfootprint.time`); a model window that
  *                 differs runs, is recorded `model-chosen`, and the standing reads "not sure";
  *                 a UI window (`time.window`) fills as `app`; a `model` reader's window fills as
  *                 a reading (not sure); "today vs yesterday" → two mentions, no fill, each call
@@ -173,22 +177,67 @@ async function build(
   return { agent, requests: s.requests };
 }
 
+/**
+ * The person CONFIRMS the reading the time ask offers — its first choice. A
+ * reading only proposes (the owner's decision "Always confirm"), so this is
+ * the one door by which a window of words becomes the person's; the T5a
+ * behaviours below are exercised on the call AFTER it, in the same turn.
+ */
+async function confirmOffer(agent: { resume(c: never, i: never): Promise<unknown> }, out: unknown) {
+  if (!isInputPause(out)) throw new Error('expected the time ask');
+  const p = out as never as {
+    checkpoint: unknown;
+    awaitingInput: { requestId: string; fields: readonly { enum?: readonly string[] }[] };
+  };
+  const offered = p.awaitingInput.fields[0]!.enum![0]!;
+  return agent.resume(
+    p.checkpoint as never,
+    { requestId: p.awaitingInput.requestId, values: { f1: offered } } as never,
+  );
+}
+
+const of = (rowsOf: Row[], id: string) => rowsOf.filter((r) => r.toolCallId === id);
+
 // ─── the fill ────────────────────────────────────────────────────────
 
 describe('the fill — the turn’s one window, into the tool’s form, exactly', () => {
-  it('a two-argument epoch-ms tool over the mock MCP client is filled from the person’s words', async () => {
+  it('a two-argument epoch-ms tool over the mock MCP client is filled from the window the person confirmed', async () => {
     const { client, seen } = epochServer();
     const { agent, requests } = await build(
-      [call('c1', 'client_activity', {}), answer('42 operations.')],
+      [call('c0', 'client_activity', {}), call('c1', 'client_activity', {}), answer('42 ops.')],
       await client.tools(),
       (b) => b.time({ zone: LA, reader: rangeReader(), policy: { dateOrder: 'MDY' } }),
     );
-    await agent.run({ message: MESSAGE, time: { now: NOW } });
+    // The reading only PROPOSES: the first call pauses on its confirmation, nothing ran.
+    const first = await agent.run({ message: MESSAGE, time: { now: NOW } });
+    expect(seen).toEqual([]);
+    await confirmOffer(agent as never, first);
+    expect(ofKind(agent, 'time-answer')).toEqual([
+      {
+        kind: 'time-answer',
+        turn: 1,
+        iteration: 1,
+        mention: 0,
+        from: '2026-10-09T08:00:00-07:00',
+        to: '2026-10-09T08:41:00-07:00',
+        zone: LA,
+        how: 'confirmed',
+      },
+    ]);
+    // The served line before the next call — the request's LAST line, late at the decision
+    // point (step T6b) — names the confirmed window, its source and the tool's own values.
+    const lines = requests[1]!.messages;
+    expect(lines[lines.length - 1]).toMatchObject({ role: 'user' });
+    expect(lines[lines.length - 1]!.content as string).toContain(
+      '“10/09/26 8 AM to 8:40 AM” is 2026-10-09 08:00–08:40 America/Los_Angeles (UTC-07:00), the ' +
+        'window the person confirmed when asked what their words meant — client_activity ' +
+        `start_time ${FROM_MS}, end_time ${TO_MS}.`,
+    );
 
-    // The tool ran with the window in its own form, the end exclusive.
-    expect(seen[0]?.args).toEqual({ start_time: FROM_MS, end_time: TO_MS });
+    // The later call ran with the window in its own form, the end exclusive…
+    expect(seen[1]?.args).toEqual({ start_time: FROM_MS, end_time: TO_MS });
     // …and received the call's time in the request's own `_meta`.
-    const time = (seen[0]?.meta?.agentfootprint as { time: Record<string, unknown> }).time;
+    const time = (seen[1]?.meta?.agentfootprint as { time: Record<string, unknown> }).time;
     expect(time).toMatchObject({
       version: 1,
       asked: {
@@ -199,21 +248,21 @@ describe('the fill — the turn’s one window, into the tool’s form, exactly'
       zone: LA,
       now: NOW,
     });
-    const callRow = ofKind(agent, 'call')[0]!;
+    const callRow = of(ofKind(agent, 'call'), 'c1')[0]!;
     expect(time.dispatchedAt).toBe(callRow.dispatchedAt);
 
-    // The record: one row per argument (the person's, matched to the mention), one call-window row.
+    // The record: one row per argument (the person's answer, matched to the mention), one call-window row.
     expect(
-      ofKind(agent, 'argument').map((r) => [r.argument, r.source, r.matched, r.value]),
+      of(ofKind(agent, 'argument'), 'c1').map((r) => [r.argument, r.source, r.matched, r.value]),
     ).toEqual([
-      ['start_time', 'said', 'mention', String(FROM_MS)],
-      ['end_time', 'said', 'mention', String(TO_MS)],
+      ['start_time', 'answered', 'mention', String(FROM_MS)],
+      ['end_time', 'answered', 'mention', String(TO_MS)],
     ]);
-    expect(ofKind(agent, 'call-window')).toEqual([
+    expect(of(ofKind(agent, 'call-window'), 'c1')).toEqual([
       {
         kind: 'call-window',
         turn: 1,
-        iteration: 1,
+        iteration: 2,
         toolCallId: 'c1',
         toolName: 'client_activity',
         how: 'filled',
@@ -222,17 +271,17 @@ describe('the fill — the turn’s one window, into the tool’s form, exactly'
         person: {
           from: '2026-10-09T08:00:00-07:00',
           to: '2026-10-09T08:41:00-07:00',
-          source: 'said',
+          source: 'answered',
           mention: 0,
         },
       },
     ]);
 
     // The model read, past tense, what the call ran with.
-    const tool = requests[1]!.messages.find((m) => m.role === 'tool')!;
+    const tool = requests[2]!.messages.filter((m) => m.role === 'tool').pop()!;
     expect(tool.content).toContain(
       `[start_time was not in the client_activity call this result answers; the call ran with ${FROM_MS}, ` +
-        "from the window the person's own words gave — recorded as the person's.]",
+        "from the window the person chose when asked what their words meant — recorded as the person's answer.]",
     );
     // Nothing about the window was assumed or unverified.
     const standing = (await agent.assessment())!;
@@ -308,29 +357,29 @@ describe('a window the model chose — record and run', () => {
       end_time: Date.parse('2026-10-09T10:00:00-07:00'),
     };
     const { agent } = await build(
-      [call('c1', 'client_activity', drill), answer('done')],
+      [call('c0', 'client_activity', {}), call('c1', 'client_activity', drill), answer('done')],
       await client.tools(),
       (b) => b.time({ zone: LA, reader: rangeReader(), policy: { dateOrder: 'MDY' } }),
     );
-    await agent.run({ message: MESSAGE, time: { now: NOW } });
-    expect(seen[0]?.args).toEqual(drill); // never written over
-    expect(ofKind(agent, 'call-window')[0]).toMatchObject({
+    await confirmOffer(agent as never, await agent.run({ message: MESSAGE, time: { now: NOW } }));
+    expect(seen[1]?.args).toEqual(drill); // never written over
+    expect(of(ofKind(agent, 'call-window'), 'c1')[0]).toMatchObject({
       how: 'model-chosen',
       asked: { from: '2026-10-09T16:00:00Z', to: '2026-10-09T17:00:00Z' },
       person: {
         from: '2026-10-09T08:00:00-07:00',
         to: '2026-10-09T08:41:00-07:00',
-        source: 'said',
+        source: 'answered',
         mention: 0,
       },
     });
-    expect(ofKind(agent, 'argument').map((r) => r.source)).toEqual(['model', 'model']);
+    expect(of(ofKind(agent, 'argument'), 'c1').map((r) => r.source)).toEqual(['model', 'model']);
     const standing = (await agent.assessment())!;
     expect(standing.standing).toBe('not-sure');
     expect(standing.reasons.map((r) => r.reason)).toContain('argument-unverified');
   });
 
-  it('"today vs yesterday": two mentions, no fill, each call bound by its quote', async () => {
+  it('"today vs yesterday": two mentions are confirmed — no quote binds either, the run asks', async () => {
     const reader = fixtureReader(() => ({
       mentions: [
         { quote: 'today', parses: [{ relative: { unit: 'day', offset: 0 } }] },
@@ -376,37 +425,25 @@ describe('a window the model chose — record and run', () => {
       message: 'compare client activity today vs yesterday',
       time: { now: NOW },
     });
-    expect(isInputPause(out)).toBe(false); // nothing asked
-    expect(seen.map((s) => s.args)).toEqual([
-      day('2026-10-09', '2026-10-10'),
-      day('2026-10-08', '2026-10-09'),
+    // Every reading only proposes (the owner's decision "Always confirm") — no quote binds a
+    // proposal; the run asks first.
+    expect(isInputPause(out)).toBe(true);
+    expect(seen).toEqual([]);
+    expect(ofKind(agent, 'time-reading').map((r) => [r.quote, r.choice])).toEqual([
+      ['today', { by: 'open', remaining: [0], open: ['confirm'] }],
+      ['yesterday', { by: 'open', remaining: [0], open: ['confirm'] }],
     ]);
-    expect(
-      ofKind(agent, 'call-window').map((r) => [
-        r.toolCallId,
-        r.how,
-        r.by,
-        (r.person as { mention: number }).mention,
-      ]),
-    ).toEqual([
-      ['c1', 'bound', 'quote', 0],
-      ['c2', 'bound', 'quote', 1],
-    ]);
-    expect(
-      ofKind(agent, 'argument').map((r) => [r.toolCallId, r.source, r.matched, r.reading]),
-    ).toEqual([
-      ['c1', 'said', 'mention', undefined],
-      ['c1', 'said', 'mention', undefined],
-      ['c2', 'said', 'mention', undefined],
-      ['c2', 'said', 'mention', undefined],
+    expect(ofKind(agent, 'call-window').map((r) => [r.toolCallId, r.how])).toEqual([
+      ['c1', 'model'],
+      ['c2', 'model'],
     ]);
   });
 
   it('a made-up quote that wraps the mention is a failed claim — never raised to the person’s words', async () => {
     const reader = fixtureReader(() => ({
       mentions: [
+        // One mention, confirmed first: a quote binds only a window the person settled.
         { quote: 'today', parses: [{ relative: { unit: 'day', offset: 0 } }] },
-        { quote: 'yesterday', parses: [{ relative: { unit: 'day', offset: -1 } }] },
       ],
     }));
     const today = {
@@ -417,6 +454,7 @@ describe('a window the model chose — record and run', () => {
     const { client, seen } = epochServer();
     const { agent } = await build(
       [
+        call('c0', 'client_activity', {}),
         call('c1', 'client_activity', {
           ...today,
           _findings: {
@@ -431,17 +469,19 @@ describe('a window the model chose — record and run', () => {
       await client.tools(),
       (b) => b.time({ zone: LA, reader }).inputsLayer({ argumentSources: true }),
     );
-    const out = await agent.run({
-      message: 'compare client activity today vs yesterday',
-      time: { now: NOW },
-    });
+    const out = await confirmOffer(
+      agent as never,
+      await agent.run({ message: 'compare client activity today', time: { now: NOW } }),
+    );
     expect(isInputPause(out)).toBe(false); // runs as sent, like a value binding
-    expect(seen.map((s) => s.args)).toEqual([today]);
-    expect(ofKind(agent, 'call-window')[0]).toMatchObject({ how: 'bound', by: 'quote' });
-    expect(ofKind(agent, 'argument').map((r) => [r.source, r.matched, r.failed])).toEqual([
-      ['model', undefined, 'quote-not-found'],
-      ['model', undefined, 'quote-not-found'],
-    ]);
+    expect(seen.map((s) => s.args)).toEqual([today, today]);
+    expect(of(ofKind(agent, 'call-window'), 'c1')[0]).toMatchObject({ how: 'bound', by: 'quote' });
+    expect(of(ofKind(agent, 'argument'), 'c1').map((r) => [r.source, r.matched, r.failed])).toEqual(
+      [
+        ['model', undefined, 'quote-not-found'],
+        ['model', undefined, 'quote-not-found'],
+      ],
+    );
     const standing = (await agent.assessment())!;
     expect(standing.standing).toBe('not-sure');
     expect(standing.reasons.map((r) => r.reason)).toContain('argument-unverified');
@@ -459,23 +499,59 @@ describe('a window the model chose — record and run', () => {
     ] as const) {
       const { client, seen } = epochServer();
       const { agent } = await build(
-        [call('c1', 'client_activity', args), answer('done')],
+        [call('c0', 'client_activity', {}), call('c1', 'client_activity', args), answer('done')],
         await client.tools(),
         (b) =>
           b
             .time({ zone: LA, reader: rangeReader(), policy: { dateOrder: 'MDY' } })
             .inputsLayer({ argumentSources: true }),
       );
-      const out = await agent.run({ message: MESSAGE, time: { now: NOW } });
+      const out = await confirmOffer(
+        agent as never,
+        await agent.run({ message: MESSAGE, time: { now: NOW } }),
+      );
       expect(isInputPause(out)).toBe(false);
-      expect(seen.map((s) => s.args)).toEqual([args]);
-      expect(ofKind(agent, 'call-window')[0]).toMatchObject({ how, ...(by && { by }) });
-      const argumentRows = ofKind(agent, 'argument');
+      expect(seen.map((s) => s.args)).toEqual([persons, args]);
+      expect(of(ofKind(agent, 'call-window'), 'c1')[0]).toMatchObject({ how, ...(by && { by }) });
+      const argumentRows = of(ofKind(agent, 'argument'), 'c1');
       expect(argumentRows.map((r) => [r.source, r.asked])).toEqual([
         ['model', undefined],
         ['model', undefined],
       ]);
     }
+  });
+
+  it('a sent window bound by quote to the window the person confirmed is filed as their answer, never `said`', async () => {
+    const persons = { start_time: FROM_MS, end_time: TO_MS };
+    const quote = '10/09/26 8 AM to 8:40 AM';
+    const { client, seen } = epochServer();
+    const { agent } = await build(
+      [
+        call('c0', 'client_activity', {}),
+        call('c1', 'client_activity', {
+          ...persons,
+          _findings: {
+            from: [
+              { argument: 'start_time', source: 'user', quote },
+              { argument: 'end_time', source: 'user', quote },
+            ],
+          },
+        }),
+        answer('done'),
+      ],
+      await client.tools(),
+      (b) =>
+        b
+          .time({ zone: LA, reader: rangeReader(), policy: { dateOrder: 'MDY' } })
+          .inputsLayer({ argumentSources: true }),
+    );
+    await confirmOffer(agent as never, await agent.run({ message: MESSAGE, time: { now: NOW } }));
+    expect(seen.map((x) => x.args)).toEqual([persons, persons]);
+    expect(of(ofKind(agent, 'call-window'), 'c1')[0]).toMatchObject({ how: 'bound', by: 'quote' });
+    expect(of(ofKind(agent, 'argument'), 'c1').map((r) => [r.source, r.matched])).toEqual([
+      ['answered', 'mention'],
+      ['answered', 'mention'],
+    ]);
   });
 
   it('a filled call’s other forms are left alone — no row, no default, no ask', async () => {
@@ -512,14 +588,23 @@ describe('a window the model chose — record and run', () => {
       },
     });
     const { agent } = await build(
-      [call('c1', 'client_activity', {}), answer('done')],
+      [call('c0', 'client_activity', {}), call('c1', 'client_activity', {}), answer('done')],
       [tool],
       (b) => b.time({ zone: LA, reader: rangeReader(), policy: { dateOrder: 'MDY' } }),
     );
-    const out = await agent.run({ message: MESSAGE, time: { now: NOW } });
+    const out = await confirmOffer(
+      agent as never,
+      await agent.run({ message: MESSAGE, time: { now: NOW } }),
+    );
     expect(isInputPause(out)).toBe(false); // the look-back form's `ask` is never raised
-    expect(seen).toEqual([{ start_time: FROM_MS, end_time: TO_MS }]);
-    expect(ofKind(agent, 'argument').map((r) => r.argument)).toEqual(['start_time', 'end_time']);
+    expect(seen).toEqual([
+      { start_time: FROM_MS, end_time: TO_MS },
+      { start_time: FROM_MS, end_time: TO_MS },
+    ]);
+    expect(of(ofKind(agent, 'argument'), 'c1').map((r) => r.argument)).toEqual([
+      'start_time',
+      'end_time',
+    ]);
   });
 
   it('two mentions and the period left out: nothing is filled, the tool’s own rule asks', async () => {

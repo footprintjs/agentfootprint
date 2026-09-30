@@ -2,7 +2,7 @@
 title: Functions
 ---
 
-146 exported from `agentfootprint`.
+147 exported from `agentfootprint`.
 
 - [`absenceSignalOf`](/docs/api/functions/absenceSignalOf)
 - [`absent`](/docs/api/functions/absent)
@@ -45,6 +45,7 @@ title: Functions
 - [`describedResult`](/docs/api/functions/describedResult)
 - [`describeTimeAxis`](/docs/api/functions/describeTimeAxis)
 - [`elicitationOf`](/docs/api/functions/elicitationOf)
+- [`englishTimeReader`](/docs/api/functions/englishTimeReader)
 - [`epochAt`](/docs/api/functions/epochAt)
 - [`epochLocations`](/docs/api/functions/epochLocations)
 - [`explainSemantics`](/docs/api/functions/explainSemantics)

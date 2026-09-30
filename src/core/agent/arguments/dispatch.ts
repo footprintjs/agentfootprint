@@ -121,7 +121,8 @@ export function keepAnswers(
 ): readonly string[] {
   const answered = (resolution?.fills ?? []).filter(
     (f): f is ArgumentFill & { readonly source: 'answered'; readonly value: InputValue } =>
-      f.source === 'answered',
+      // An `object` form's window is not kept: a kept answer is one flat value (`kept.ts`).
+      f.source === 'answered' && (typeof f.value !== 'object' || f.value === null),
   );
   if (answered.length === 0) return [];
   scope.argumentAnswersKept = withKept(
@@ -199,6 +200,18 @@ export function noteFor(
   return filledNote(
     toolName,
     ran.map((f) => {
+      // A value the library wrote from the window the person CHOSE when asked (the lazy
+      // word-driven ask) is a window fill: its clause says whose window, and whether it reads wider.
+      if (f.source === 'answered' && f.window === true) {
+        return {
+          argument: f.argument,
+          value: f.value,
+          hidden: hidesArgument(tool, f.argument, f.value as InputValue),
+          source: 'window' as const,
+          from: 'answered' as const,
+          ...(f.wider !== undefined && { wider: f.wider }),
+        };
+      }
       if (f.source === 'window') {
         return {
           argument: f.argument,
@@ -213,7 +226,7 @@ export function noteFor(
       return {
         argument: f.argument,
         value: f.value,
-        hidden: hidesArgument(tool, f.argument, f.value),
+        hidden: hidesArgument(tool, f.argument, f.value as InputValue),
         ...(f.source === 'answered' && { source: 'answered' as const }),
         ...(carried !== undefined && { carried }),
       };

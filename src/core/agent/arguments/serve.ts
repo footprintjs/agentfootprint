@@ -30,11 +30,24 @@
 import type { LLMToolSchema } from '../../../adapters/types.js';
 import { shownArgsOf } from '../../toolShownArgs.js';
 import type { InputValue } from '../../inputRequest.js';
-import { ASSUMED_BLOCK_HEADING } from '../coverage/answer.js';
+import { ASSUMED_BLOCK_HEADING, type TimeLimitLines } from '../coverage/answer.js';
+import type { TimeLimitFacts } from '../coverage/timeLimitFacts.js';
+import { renderTimeLimits } from '../coverage/timeLimits.js';
 import { argumentRewritesOf, type ArgumentRewrite } from '../middleware/rewrites.js';
-import { isRefused, rulesOf, type RuledToolLike } from './declare.js';
+import { isRefused, periodFactsOf, periodFormsOf, rulesOf, type RuledToolLike } from './declare.js';
 import { HIDDEN_VALUE, type ArgumentRow } from './rows.js';
-import type { PeriodFacts, TimeRefusal } from '../../time/convert.js';
+import {
+  convertExact,
+  convertWidened,
+  formArguments,
+  granularityMsOf,
+  widestMsOf,
+  type PeriodFacts,
+  type TimeRefusal,
+} from '../../time/convert.js';
+import type { ReaderWindows } from '../../time/bind.js';
+import type { ZoneName } from '../../time/zone.js';
+import { presentRange } from '../../time/present.js';
 
 type PlainObject = Record<string, unknown>;
 
@@ -219,6 +232,282 @@ export function rulesOnWire(
   return changed ? decorated : served;
 }
 
+// ─── The person's windows, served LATE at the decision point (time design TQ13) ───
+
+/**
+ * What the served line reads: the turn's SETTLED windows of the person's
+ * words (`core/time/windows.ts` · `readerWindowsOf` — each mention's quote and
+ * its one window: the one the person confirmed or gave in the time ask, or a
+ * `model` reader's reading), the quotes still PENDING (a proposal the person
+ * has not answered), the turn's clock, and the app's `.time({ zone })`. An
+ * unreadable mention is in neither list.
+ */
+export interface ServedWindows extends ReaderWindows {
+  readonly appZone?: ZoneName;
+}
+
+/** A converted value as the line prints it — an object form's as JSON. */
+function printedArgument(value: unknown): string {
+  return typeof value === 'object' && value !== null
+    ? JSON.stringify(value)
+    : printedValue(value as InputValue);
+}
+
+/** A served tool that declares a period — the only tools the line speaks about. */
+interface PeriodTool {
+  readonly name: string;
+  readonly tool: RuledToolLike;
+  readonly forms: ReturnType<typeof periodFormsOf>;
+  readonly facts: ReturnType<typeof periodFactsOf>;
+}
+
+/** The served tools (in served order) whose winning implementation declares period forms. */
+function periodToolsOf(
+  served: readonly LLMToolSchema[],
+  winningTools: ReadonlyMap<string, RuledToolLike>,
+): readonly PeriodTool[] {
+  const out: PeriodTool[] = [];
+  for (const schema of served) {
+    const tool = winningTools.get(schema.name);
+    const rules = rulesOf(tool);
+    if (tool === undefined || rules === undefined || isRefused(rules)) continue;
+    const forms = periodFormsOf(rules.period);
+    if (forms.length === 0) continue;
+    out.push({ name: schema.name, tool, forms, facts: periodFactsOf(rules.period) });
+  }
+  return out;
+}
+
+/** Whose one window of the person's words is — the line's source clause. */
+function whoseWindow(w: ServedWindows['windows'][number]): string {
+  if (w.source === 'answered') {
+    return w.answer === 'edited'
+      ? 'the window the person gave when asked what their words meant'
+      : 'the window the person confirmed when asked what their words meant';
+  }
+  return "a reading of the person's words they have not confirmed, not their words";
+}
+
+/**
+ * A window for a person, in its zone, to the minute with its end AS SAID — the last minute inside
+ * the half-open range (`time/present.ts` · `presentRange`); the ISO interval if it cannot be.
+ */
+function presentedWindow(w: ServedWindows['windows'][number]): string {
+  try {
+    return presentRange(w.range, { zone: w.zone }, 'minute');
+  } catch {
+    return `${w.range.from}/${w.range.to}`;
+  }
+}
+
+/** One tool's values for one settled window — exact, else the wider read the fill would use, said so. */
+function toolValues(
+  pt: PeriodTool,
+  w: ServedWindows['windows'][number],
+  windows: ServedWindows,
+): string | undefined {
+  const ctx = {
+    now: windows.now,
+    zone: w.zone,
+    ...(windows.appZone !== undefined && { appZone: windows.appZone }),
+    granularityMs: granularityMsOf(pt.facts),
+  };
+  const window = { range: w.range, ...(w.lookback !== undefined && { lookback: w.lookback }) };
+  const exact = convertExact(window, pt.forms, ctx);
+  const conversion = exact ?? convertWidened(window, pt.forms, ctx, widestMsOf(pt.facts));
+  if (conversion === undefined) return undefined;
+  const values = Object.entries(conversion.values).map(([argument, value]) =>
+    hidesArgument(pt.tool, argument, value as InputValue)
+      ? `${argument} (hidden by the tool's view)`
+      : `${argument} ${printedArgument(value)}`,
+  );
+  const wider = exact === undefined ? ' (a wider read than the words named)' : '';
+  return `${pt.name} ${values.join(', ')}${wider}`;
+}
+
+/** The settled half: each window, whose it is, and each tool's values for it. */
+function settledSentence(tools: readonly PeriodTool[], windows: ServedWindows): string | undefined {
+  const clauses: string[] = [];
+  for (const w of windows.windows) {
+    if (w.quote === undefined) continue;
+    const values = tools.flatMap((pt) => toolValues(pt, w, windows) ?? []);
+    if (values.length === 0) continue;
+    clauses.push(`“${w.quote}” is ${presentedWindow(w)}, ${whoseWindow(w)} — ${values.join('; ')}`);
+  }
+  if (clauses.length === 0) return undefined;
+  const these = clauses.length === 1 ? 'that window' : 'those windows';
+  return (
+    `The person's time words, as the library holds them: ${clauses.join('. ')}. ` +
+    `A call may pass these values as written; an answer built on them states ${these}.`
+  );
+}
+
+/**
+ * The pending half: the quotes no one has confirmed. Before any call ran on a window of the
+ * model's own, the one move that asks the person — the call with the period left out — named as
+ * the next step, with the two moves that do not (a question in the reply, a written window).
+ * After one did, the limit the answer states instead.
+ */
+function pendingSentence(tools: readonly PeriodTool[], windows: ServedWindows): string | undefined {
+  const pending = windows.pending;
+  if (pending === undefined || pending.length === 0) return undefined;
+  const quotes = pending.map((q) => `“${q}”`).join(', ');
+  if (windows.ranUnconfirmed === true) {
+    return (
+      `The window for ${quotes} is not settled: the person has not confirmed it, and the call ` +
+      'that ran used a window written into it, unconfirmed. An answer built on that call says ' +
+      'its window was not confirmed by the person.'
+    );
+  }
+  const calls = tools.flatMap((pt) => {
+    const args = [...new Set(pt.forms.flatMap((f) => formArguments(f).map((a) => a.argument)))];
+    return args.length === 0 ? [] : [`${pt.name} is called with ${args.join(', ')} left out`];
+  });
+  if (calls.length === 0) return undefined;
+  return (
+    `The window for ${quotes} is not settled yet: the person confirms it in the library's own ` +
+    `form, which shows its reading of those words with the zone and opens when ` +
+    `${calls.join(', or ')} (or the call is refused with the reason). So the next step is that ` +
+    'call — not a question about the time in the reply, and not a window written into the call, ' +
+    'which would run unconfirmed.'
+  );
+}
+
+// LENS · late-line · request-ephemeral
+// reads: the turn's settled windows of the person's words (each mention's quote, its one window and
+//        WHOSE it is — the person's answer in the time ask, or a model reader's reading), the
+//        quotes still pending (a rule reading the person has not answered — `bind.ts` ·
+//        `pendingQuotesOf`), the turn's clock, and the SERVED tools' declared period forms and
+//        facts — converted by the one owner (`core/time/convert.ts`)
+// law: the library's CONCLUSION, never raw facts: a settled window is named with its source (a
+//      reading is never called the person's words) and the values each tool takes, as a
+//      permission ("may pass"); a pending quote names no window and no reading (a proposal is not
+//      a fact the model may pass) — only that it is not confirmed and the one move that asks the
+//      person. Whether a call is filled, bound or refused is decided at dispatch and recorded there.
+/**
+ * The ONE served time line (TQ13; step T6b's serving placement): one
+ * request-only `user` line appended LAST to the request, at the decision
+ * point — composed at the tools slot's one decoration site
+ * (`core/slots/buildToolsSlot.ts` · `commitWire`) from the tools it really
+ * serves, carried to `callLLM` on `timeLine`, and rebuilt by
+ * `lib/time-travel/servedView.ts` from the same committed key. Two halves:
+ *
+ * - SETTLED — each window the person confirmed or gave in the time ask (or a
+ *   `model` reader's reading), in the person's zone, WHOSE it is, and each
+ *   served period tool's values for it — the exact conversion, else the wider
+ *   one the fill would use (said so); a value the tool's view hides is named
+ *   hidden. So the model never re-derives a window from words, and the answer
+ *   states the window it was built on.
+ * - PENDING — a proposal the person has not answered is no window yet, and a
+ *   call that writes its own window runs as sent, unconfirmed (§ 7.3). The
+ *   line names the next step — the call with the period arguments left out,
+ *   so the library's own form confirms the window with the person — and the
+ *   two moves that are not it (a question about the time in the reply, a
+ *   written window). Once a call of the turn already ran on a written window
+ *   (`ranUnconfirmed`), it names the limit an answer states instead.
+ *
+ * `undefined` when no served tool declares a period or neither half has
+ * anything to say — a turn with no time words serves no line at all.
+ *
+ * @example
+ * ```ts
+ * timeWindowsLine(served, winningTools, { now, windows: [], pending: ['yesterday'] });
+ * // 'The window for “yesterday” is not settled yet: the person confirms it in the library's own
+ * //  form, which shows its reading of those words with the zone and opens when client_activity
+ * //  is called with start_time, end_time left out (or the call is refused with the reason). So
+ * //  the next step is that call — not a question about the time in the reply, and not a window
+ * //  written into the call, which would run unconfirmed.'
+ * ```
+ */
+export function timeWindowsLine(
+  served: readonly LLMToolSchema[],
+  winningTools: ReadonlyMap<string, RuledToolLike>,
+  windows: ServedWindows,
+): string | undefined {
+  const tools = periodToolsOf(served, winningTools);
+  if (tools.length === 0) return undefined;
+  const settled = settledSentence(tools, windows);
+  const pending = pendingSentence(tools, windows);
+  if (settled === undefined) return pending;
+  return pending === undefined ? settled : `${settled} ${pending}`;
+}
+
+/**
+ * The served time limits from the Tools mount's `timeLimits` FACTS
+ * (`coverage/timeLimitFacts.ts` · `TimeLimitFacts`): rendered for the MODEL
+ * (`coverage/timeLimits.ts` · `renderTimeLimits` — the one composer the
+ * limits block asks too), then {@link timeLimitsSentence}. The facts cross
+ * the mount unrendered so the renderer loads here, under the arm, and never
+ * on the graph a plain agent loads.
+ *
+ * @example
+ * ```ts
+ * timeLimitsLine(undefined); // undefined — the turn's reads match what was asked
+ * ```
+ */
+export function timeLimitsLine(facts: TimeLimitFacts | undefined): string | undefined {
+  return timeLimitsSentence(renderTimeLimits(facts, 'model'));
+}
+
+// LENS · late-line · request-ephemeral
+// reads: the turn's `period` rows whose result checks hold and its `source-clock` rows, composed by
+//        the ONE owner of the limits lines (`coverage/timeLimits.ts` · `timeLimitLinesOf`,
+//        audience `model`) — the same lines the limits block prints for the person after the answer
+// law: the library's CONCLUSION about what each call READ against what it ASKED (step T8), both
+//      ranges in the person's zone, and what an answer built on it states; it names what the record
+//      holds for calls that already ran and promises nothing a later call can break.
+/**
+ * The time limits an answer states (time step T8's serving placement): the
+ * result checks that hold this turn — a read narrower, wider or shifted from
+ * what was asked, a window older than the source keeps, sources on different
+ * clocks — served to the MODEL as the library's conclusion, LATE, at the
+ * decision point, in the ONE served time line (TQ13) after the windows'
+ * halves. The step-7b bench showed why: raw facts on a result are not
+ * compared by the model, a conclusion served at the decision point is.
+ *
+ * `undefined` when nothing holds — a turn whose reads match what was asked
+ * serves no sentence at all.
+ *
+ * @example
+ * ```ts
+ * timeLimitsSentence({ period: ['client_activity read less than was asked — asked: …; read: …'], clocks: [] });
+ * // "[A note from the library that ran the tools, not from the person: answer the person directly,
+ * //  as you would from the tool results alone.] The time the tools read is not the time asked about — client_activity read less than was asked —
+ * //  asked: …; read: …. So the answer to the person states the time each result read and claims
+ * //  nothing about time no result read."
+ * ```
+ */
+export function timeLimitsSentence(lines: TimeLimitLines | undefined): string | undefined {
+  if (lines === undefined) return undefined;
+  const parts: string[] = [];
+  if (lines.period.length > 0) {
+    parts.push(
+      `the time the tools read is not the time asked about — ${lines.period.join('; ')}. So ` +
+        `the answer to the person states the time each result read and claims nothing about ` +
+        `time no result read.`,
+    );
+  }
+  if (lines.clocks.length > 0) {
+    parts.push(`Clocks: ${lines.clocks.join('; ')}.`);
+  }
+  if (parts.length === 0) return undefined;
+  const [first, ...rest] = parts;
+  const lead = first!.charAt(0).toUpperCase() + first!.slice(1);
+  return [TIME_LIMITS_SOURCE, lead, ...rest].join(' ');
+}
+
+/**
+ * The line's opening: WHO says it. The line is a request-only `user`
+ * message, and the T8 bench's first paid round (stopped at 41 runs) showed
+ * the model reading an unmarked one as the person correcting it — 15 of 15
+ * served answers opened "You're right" / "I apologize"; naming the library
+ * alone (round 1, stopped at 46) still drew "Thank you for the
+ * clarification". The opening now also says how to use it: answer the person
+ * directly, as from the tool results alone.
+ */
+export const TIME_LIMITS_SOURCE =
+  '[A note from the library that ran the tools, not from the person: answer the person directly, as you would from the tool results alone.]';
+
 // ─── The note on a result ───────────────────────────────────────────────
 
 /** One filled argument, as the note names it. */
@@ -233,8 +522,12 @@ export interface FilledArgument {
    * whose. Absent: the tool's rule assumed it.
    */
   readonly source?: 'answered' | 'window';
-  /** On a `window` fill: the person's words, a `model` reader's unconfirmed reading of them, or a UI control. */
-  readonly from?: 'said' | 'derived-from-reading' | 'control';
+  /**
+   * On a `window` fill: the person's words, a `model` reader's unconfirmed
+   * reading of them, a UI control — or the window the person CHOSE when the
+   * library asked about their words (`answered`, the lazy word-driven ask).
+   */
+  readonly from?: 'said' | 'derived-from-reading' | 'control' | 'answered';
   /**
    * On a `window` fill: no form held the window exactly, so the value reads a
    * WIDER one (the time layer, step T5b) — `reads-more`, or `tool-trims` when
@@ -306,6 +599,9 @@ function windowClause(toolName: string, f: FilledArgument): string {
   const whose =
     f.from === 'control'
       ? 'from the window the person set in the app — recorded as set in the app'
+      : f.from === 'answered'
+      ? 'from the window the person chose when asked what their words meant — recorded as ' +
+        "the person's answer"
       : f.from === 'derived-from-reading'
       ? "from a reading of the person's words they have not confirmed — recorded as a reading, " +
         "not as the person's"

@@ -390,7 +390,7 @@ the others wait until a bench shows people need them:
 | a zone | IANA (`America/Los_Angeles`), a numeric offset | `zoneToken`, as written | directly | v1 |
 | a zone abbreviation | `PST` | `zoneToken: 'PST'` | v1 has no abbreviation map, so the zone is asked (`format: 'zone'`); later, **only through the policy's map**, and one whose DST state disagrees with the date is asked with both readings as choices (`abbreviationMismatch: 'ask'`, § 11) | tokenized; resolved by the ask |
 | day words | today, yesterday, tomorrow | `relative: { day, offset }` | anchored on the clock, in the person's zone | v1 |
-| relative spans | last 40 minutes, past 2 hours | `relative: { unit, count }` | a look-back (§ 3.2) | v1 |
+| relative spans | last 40 minutes, past 2 hours, the last hour | `relative: { unit, count }` | a look-back (§ 3.2) | v1 — proposed and confirmed like every reading (TQ29) |
 | night words | tonight, overnight | `relative` + `partOfDay` | a span that crosses midnight | later |
 | parts of a day | morning, afternoon, evening | `partOfDay: 'morning'` | the policy's table (`morning` = `[06:00, 12:00)`), noted as `{ kind: 'part-of-day', table: 'default' }` | later |
 | calendar spans | last week | `relative: { week, offset: -1 }` | a calendar range, which needs a week-start rule | later |
@@ -983,9 +983,9 @@ deterministic and are measured over retained recorded runs or unit tables, with 
 | T4 | **The time ask** — *landed; implementation note T4 below* | `InputField.format` (refused unless `type: 'string'`), re-validation of shape, order and zone, labelled choices, catalog reasons (TQ7), MCP `date-time` mapping | a `format` field or `.time()` | T3, T6a | answers out of order, zone-less, in a DST gap → re-ask with `refused` and `repeat`; a `model` reading offered to confirm | $0; host hand count |
 | T5a | **Declared mapping and exact conversions** — *landed; implementation note T5a below* | `ToolPeriod.forms` (bounds, joined, object, day, lookback with `units`) and the sugar (`accepts`, `wall-range`, `zoneArgument`); the facts `direction`, `retention`, `maxRange`, `granularity`, `filtersToAsked`, `wallZone`; `_meta.agentfootprint.period` read by `readToolExtras`; the exact rows of § 7.2; `ctx.time` in process and in `_meta.agentfootprint.time`; fill from one mention (a `control` window included), binding by quote, the record-and-run law for a differing model window; the tool facts join T4's re-validation | a tool's new `period` fields | T4, TQ1 | every exact row of § 7.2; a two-argument epoch-ms Python tool over the mock MCP client; a model window that differs → runs, row `model-chosen`, fold "not sure"; a drill-down and a comparison call run untouched; "this morning vs yesterday morning" from the fixture reader → two mentions, no fill, each call bound by quote | $0 |
 | T5b | **Widening and pre-dispatch refusals** — *landed; implementation note T5b below* | the inexact rows of § 7.2 (the covering look-back, `day` wider, `filtersToAsked`), the dispatch drift § 7.4, the refusals (outside `direction`, wholly beyond `retention`, over `maxRange`, a multi-day range to a `day` tool, a `wall` DST gap), `partly-beyond-retention` | a tool's new `period` fields | T5a | every inexact row of § 7.2 and every row of § 7.4; a range half inside `retention` dispatches; a future window to a `past` tool is refused with the reason | $0 |
-| T6b | **The English default and the paid bench** | `englishTimeReader` (a tokenizer; the v1 rows of § 5.3), the served sentence (TQ13), the lazy ask wired to real words | `.time({ reader: englishTimeReader() })` | T5b | the host's field sentences as the table ("10/09/26 8 AM to 8:40 AM PST" → a zone ask for `PST`, "yesterday", a future date); every non-v1 row of § 5.3 reads "unreadable" | **paid**: the provoking set — calls with the right window, and absolute windows asked of a look-back-only tool (wrong-window answers, armed vs unarmed); needless-ask rate on controls |
-| T7 | **Evidence lineage at grain** | `forms.ts` · `timeFormsOf` with its `said` and `derived` lists; the lineage kind `derived-from-reading`; the gate asks it; the private table from `fix/person-values-normalized` retires | `.time()` | T6b; `fix/person-values-normalized` landed first (TQ25) | "8 AM" vs `8:00`/`08:00` → `said`; a corrected abbreviation, an implied year, `-07:00`, `08:41`, the served sentence echoed → `derived-from-reading`, never "known"; a time no reading produced still fails; the landed fix's cases still pass after it retires | $0 over retained recordings: false "not traced" on time values |
-| T8 | **Result checks** | `period-differs-from-asked { missing, extra }`, `period-shifted`, `period-beyond-retention`, `clocks-differ` (declared wall-clock zones, a label); fold reasons; limits lines | the results layer + `.time()` | T5b, T3 | a tool clamping 30d to 7d (`missing`); a covering look-back (`extra`); a look-back after a 30-minute pause (both); an inclusive `queried.to == asked.to − 1 step` reads as covered; `Z` vs `-07:00` periods raise no `clocks-differ` | **paid**: false "not sure" rate on correct answers (Q33's cell R3 method) |
+| T6b | **The English default and the paid bench** — *landed (the bench not yet run); implementation note T6b below — owner decision "Always confirm" (TQ29): every chat reading is proposed and confirmed, never said* | `englishTimeReader` (a tokenizer; the v1 rows of § 5.3), the served sentence (TQ13), the lazy ask wired to real words | `.time({ reader: englishTimeReader() })` | T5b | the host's field sentences as the table ("10/09/26 8 AM to 8:40 AM PST" → a zone ask for `PST`, "yesterday", a future date); every non-v1 row of § 5.3 reads "unreadable" | **paid**: the provoking set — calls with the right window, and absolute windows asked of a look-back-only tool (wrong-window answers, armed vs unarmed); needless-ask rate on controls |
+| T7 | **Evidence lineage at grain** — *landed; implementation note T7 below* | `forms.ts` · `timeFormsOf` with its `said` and `derived` lists; the lineage kind `derived-from-reading`; the gate asks it; the private table from `fix/person-values-normalized` retires | `.time()` | T6b; `fix/person-values-normalized` landed first (TQ25) | "8 AM" vs `8:00`/`08:00` → `said`; a corrected abbreviation, an implied year, `-07:00`, `08:41`, the served sentence echoed → `derived-from-reading`, never "known"; a time no reading produced still fails; the landed fix's cases still pass after it retires | $0 over retained recordings: false "not traced" on time values |
+| T8 | **Result checks** — *landed; the bench ran (NOT-MEASURABLE, implementation note T8 (8))* | `period-differs-from-asked { missing, extra }`, `period-shifted`, `period-beyond-retention`, `clocks-differ` (declared wall-clock zones, a label); fold reasons; limits lines | the results layer + `.time()` | T5b, T3 | a tool clamping 30d to 7d (`missing`); a covering look-back (`extra`); a look-back after a 30-minute pause (both); an inclusive `queried.to == asked.to − 1 step` reads as covered; `Z` vs `-07:00` periods raise no `clocks-differ` | **paid**: false "not sure" rate on correct answers (Q33's cell R3 method) |
 | T9a | **Lens** (lens repo) | the rows of § 10.6 | the lens's own | T8; floor = the af release that ships T8 | lens fixtures per row kind | $0 |
 | T9b | **Host panel** (host repo) | the rules of § 10.3, `time.window` from a brush | the host's own | T2, T3, T5a; floor = the af release that ships T5a | the panel's hand count | $0 |
 | T9c | **Metrics dashboard** (host repo) | the mapping of § 10.5 | the host's own | T5b; floor = the af release that ships T5b | the dashboard reads a tool's `period` instead of its table | $0 |
@@ -1272,6 +1272,326 @@ deterministic and are measured over retained recorded runs or unit tables, with 
   unmarked), and nothing new is exported — `CallRow['drift']` and `CallWindowRow['refused']` name
   the new shapes without adding API-reference routes.
 
+- **T6b.** Landed with these smallest faithful choices; the paid bench is its own stage and has
+  not run. (1) **The files.** `core/time/readers/english.ts` · `englishTimeReader` (a tokenizer;
+  its word table is data inside the file, because `core/time/` is a leaf — a second language moves
+  it beside `src/locales/`; `readers/` imports only the port, pinned); `resolve.ts` ·
+  `withZoneAnswered`; `windows.ts` · `readerWindowsOf` and `TurnWindows.open`; the sentence in
+  `arguments/serve.ts` · `timeWindowsSentence` / `withTimeWindows` (through `rulesOnWire`'s
+  `windows`); the window field in `arguments/ask.ts` (`AskField.window`, `planAskFields`'s plan,
+  `bindAnswer`); the plan in `stages/argumentAsk.ts` · `windowPlanOf`. Exported: `englishTimeReader`
+  and `EnglishTimeReaderOptions` (TQ12). (2) **What "unreadable" covers.** Every phrase of the
+  "later" rows, and more it recognises as time — week days, named months, "ago", spans in words
+  or in units a look-back cannot take, a look-ahead, an ordinal day, `8 o'clock`, and a v1 phrase a
+  modifier changes (`since`, `before`, `after`, `around`, `until`, `earlier`, `…to now`) — is ONE
+  mention quoting the WHOLE phrase: reading `yesterday` out of `yesterday morning` would widen what
+  was said. An unreadable mention still counts as a mention (the T5a fill rule), so "yesterday
+  morning" beside "today" fills nothing. A bare hour (`8`) is a time only as a range's first side
+  whose second carries a meridiem; an abbreviation is tokenized only from a closed list, and only
+  right after a date or time (so `8 AM NAS` is not a zone). A leading-zero `08:00` stays am/pm-open
+  — the tokenizer says what was written, and the resolver asks. (3) **The sentence** (TQ13) names
+  only SETTLED windows, in each tool's form — exact, else the wider read the fill would use, said
+  so; a value the tool's view hides is named hidden. **Placement (the T6b bench's pre-run check,
+  the step-7b serving strategy):** it is ONE request-only `user` line appended LAST to the request
+  — the conclusion at the decision point, never a tool description — composed at the slot's one
+  decoration site from the tools really served (`arguments/serve.ts` · `timeWindowsLine`), carried
+  on `timeLine` (`{ iteration, text }`, served only on the iteration that composed it, so classic
+  mode's cached slot never serves a stale line) and appended by `callLLM`; `servedView` rebuilds it
+  (reason `time-window-line`). A settled window is named in the person's zone with its source and
+  each period tool's values, and the answer is told to state it; a quote still PENDING (a proposal
+  the person has not answered, `bind.ts` · `pendingQuotesOf`) names no window — only that it is not
+  settled and the NEXT STEP that asks the person: the call with the period arguments left out, not a
+  question about the time in the reply and not a written window (which runs unconfirmed). The first
+  paid run (`bench/time/runs/haiku45-t6b`, stopped at 78 of 390) showed why the move must be named
+  as the next step: the line phrased as "the person has not confirmed…" sent Haiku to ask the person
+  in prose on 15 of 18 readable runs, so no confirmation opened. Once a call of the turn already ran
+  on a written window (`ReaderWindows.ranUnconfirmed`), the line names the limit an answer states
+  instead of the move. The mount hands the windows in (`AgentChartDeps.timeReader`, both
+  chart shapes); the seed's static twin carries none (no reading exists at seed — the findings-offer
+  precedent). The `control` window is not named (the arm is the reader's). (4) **The lazy ask
+  replaces a tool's OWN ask** for its period arguments: a tool whose rule assumes the period keeps
+  its default under an open reading (unchanged from T5a). One window field serves every call of
+  the batch left open. A zone answer re-reads the mention with the answered zone in place of each
+  token the layer cannot read (`withZoneAnswered`); one window binds, several become the follow-up
+  question in the same ask (`AskProgress.next`). § 6.3's facts rows landed with it: only the
+  readings every member tool's facts allow are offered, and when EVERY reading of the open mention
+  breaks a tool's facts, `bind.ts` · `fillWindow` refuses the call before any ask (`how:
+  'refused'`, no `asked`); after a zone answer, the same case refuses the calls through the batch
+  ask's exhausted refusal. (5) **The record.** The answered window is filed `answered` per argument
+  it filled and filled with `ArgumentFill.window` (+ `wider`); the note's window clause gains
+  `from: 'answered'`. The call's `call-window` row, filed before the ask, stays `not-filled` /
+  `open-reading` — so `ctx.time.asked` is absent on such a call; no new row kind, no new byte
+  reference (every existing one unchanged). Three sentences registered: the served time sentence,
+  the answered-window clause, and two expectations of an exhausted window field
+  (`WINDOW_FORM_EXPECTATION`, `WINDOW_ZONE_EXPECTATION`). (6) **The leftover rule** (fourth review round — the contract changed). Three rounds showed a
+  deterministic English grammar cannot PROVE it read a whole range: connector lists leaked `til`,
+  `→`, `~`; the clause rule that replaced them leaked a clause mark before a capital
+  (`8:40 AM, Till 9.30`, `Start: 8:40 AM\nEnd: 9.30`), ranges to an event (`8 AM until the
+  deploy`) and word-list gaps (`today until april`). So, in the spirit of § 5.5 (ask when unsure,
+  never guess), a reading is the person's words only when it is COMPLETE: after removing every
+  phrase the reader parsed, the WHOLE message holds no token of a broad, conservative
+  time-or-range set (`readers/english.ts` · `leftoverOf`: any digit; number, hour and ordinal
+  words; day, relative, week day and month words; units; parts of the day; range words `to`,
+  `until`, `till`, `til`, `through`, `thru`, `between`, `from`; `and`/`plus` after a time; a dash,
+  arrow, tilde, `..`, `…`, `/`, `&`, `+` between tokens). An INCOMPLETE reading names its tokens
+  on the port (`TimeMention.leftover`, checked verbatim) and is never filed as `said`: its row
+  records `confirmNeeded: { leftover }`, its candidates carry `said: []`, its choice stays
+  `open` with `confirm` (`rows.ts` · `needsConfirm` — one owner, also asked after a zone answer),
+  `bind.ts` · `settledCandidate` settles nothing from it, and the lazy time ask (T4) offers the
+  reading to confirm or replace — "I read only “8:40 AM” as a time, not “til 9.30”. Is this the
+  window you mean?" with the label "I read <window> — is that the window you mean?" (catalog
+  keys `ask.confirm-part`, `choice.confirm-part`); the answer is filed `answered`. The clause
+  machinery (`settleClauses`, `CLAUSE_MARK`, `TIME_LIKE`) is deleted; the grammar keeps its one
+  allow-list of the connectors it READS, and `..` joins a range (`2026-09-26 08:00..08:40`).
+  **The trade-off, owner-approved:** more confirmations — `9 AM and 3 retries`, `I want to see
+  yesterday` (`to`), `logs from yesterday` (`from`), `errors in the last 2 hours to date` all
+  confirm; an extra confirmation is honest, a partial reading recorded as said is not. A time
+  said with no word or mark of the set (`8 AM for the whole sprint`) was the remaining gap — (7)
+  closes it for a point time. Pinned by `english-reader.test.ts` (every row the three reviews
+  cited is confirmed or unreadable, never said; a generated matrix of v1 phrase × separator ×
+  opener × time-like tail, reversed and with seeded fillers, where a reading is said only when
+  the tail lies inside a mention and an independent oracle finds nothing time-like outside every
+  mention; exact controls stay said) and `english-run.test.ts` (a half-read range pauses on the
+  confirmation, and the tool runs only on the person's answer).
+  (7) **A point is not a window** (fifth review round — the class closed by SHAPE, not by
+  words). Every round leaked the next word or mark (`8 AM forward`, `post 8 AM`, `>8 AM`, `start
+  8:40 AM, end 9:30 PM`, `8 AM into 9 PM`, `8 AM ⇨ 9 PM`), so the library, not the reader,
+  decides when a `rule` reading may be the person's window (`rows.ts` · `confirmNeededOf`, one
+  owner, with `isWindowComplete`): a reading that names ONE clock time or instant with no second
+  bound is never filed as said — its row records `confirmNeeded: { point: true }` and the ask
+  offers it ("I read 08:00–09:00 — is that the window you mean?"); a message with more than one
+  mention confirms every reading (`confirmNeeded: { several: true }`) unless the two were read as
+  one range. Only a WINDOW-COMPLETE reading, alone, may be said: a range whose bounds were read
+  in one span, a relative span (`last 2 hours`), a whole calendar unit (`yesterday`,
+  `2026-09-26`). The reader's scan counts marks by RULE (`readers/english.ts` · `COUNTED_MARK`:
+  any `\p{S}`/`\p{P}` but sentence punctuation, quotes and brackets, unless alone between two
+  letters). `confirmNeeded` gains `point` and `several` beside `leftover` (at least one key; the
+  checkpoint door checks it); a `model` reading is unchanged (it always confirms). The price, in
+  the direction of (6): a point time (`at 8 AM`) and two separate days (`today vs yesterday`) now
+  pause for a confirmation where they were filed as said. **The known limit:** a window-complete
+  reading beside an open-range word the scan does not list (`errors yesterday henceforth`) is
+  still read as the day and filed as said — pinned as the limit in `english-reader.test.ts`; the
+  paid bench measures how often it occurs.
+  (8) **An allow-list, not a deny-list** (sixth review round — the contract flipped; TQ27). Five
+  rounds each found the next spelling the scan missed, and the sixth found two classes that are
+  no open-range word: a zone named in words or as an IANA name beside a calendar word
+  (`yesterday London time`, `server time`, `in Asia/Kolkata` — the day filed in the run's zone,
+  8 to 17 hours off) and a look-back anchored to an event (`the last 2 hours of the outage`,
+  filed as a look-back from now). English has an endless tail, so the English reader stops
+  listing what to distrust and TRUSTS a short allow-list, grown only from evidence
+  (`readers/english.ts` · `isAllowListed`): (i) a RELATIVE SPAN from now — `last|past N
+  minutes|hours|days|weeks`, `the last|past hour|day|week` — which needs no zone; (ii) an
+  EXPLICIT ISO-8601 instant or range whose every bound carries an offset or an IANA zone. Every
+  other form it reads — calendar words, a date or clock time with no zone, a range in words, an
+  abbreviation — carries `confirm: true` on the port (`reader.ts` · `TimeMention.confirm`,
+  checked: only `true`, only beside parses), recorded as `confirmNeeded: { form: true }` beside
+  `leftover`/`point`/`several` (`rows.ts` · `confirmNeededOf`, the one owner; the checkpoint door
+  checks the key), and is offered through the time ask pre-filled with the reading AND its zone
+  (`choice.confirm`: "I read “yesterday” as Thu, Oct 8, 2026, PDT in America/Los_Angeles — is
+  that right?"; both confirm labels take `{{zone}}`), so a person who meant London time corrects
+  it in one answer. The allow-list lives in the READER, not the library: it is a claim about
+  what one reader reads right, which a bench measures per reader; a fixture or app `rule` reader
+  keeps vouching its own forms. The library's shape law stays the floor, with one exemption: an
+  explicit instant (`rows.ts` · `isExplicitInstant` — a year-dated date, a clock time, `Z`, a
+  numeric offset, `UTC` or an IANA name) is no point the library widened; its window is the
+  instant at the grain written. The scan grows too, conservatively: `time`, the IANA area words
+  (so `Asia/Kolkata` counts although its `/` sits between letters), anchors and open ends
+  (`preceding`, `prior`, `pre`, `post`, `onward`, `forward`, `hence`, `henceforth`,
+  `thereafter`), exclusions and filters (`excluding`, `except`, `outside`, `weekdays`,
+  `business`, `working`), and `of` right after a look-back. `previous N …`, `last N seconds` and
+  a bare `last week` are no longer read (unreadable). **The trade-off:** every calendar word now
+  pauses once for a one-answer confirmation where it was filed as said (`yesterday` to a
+  look-back-only tool included); a day read in the wrong zone, recorded as the person's words,
+  was the worse failure. **The known limit now:** a look-back from now beside an anchor word the
+  scan does not list (`logs last 2 hours surrounding the outage`) — pinned in
+  `english-reader.test.ts`. Pinned also: every row the six reviews cited is confirmed or
+  unreadable, never said; each allow-listed form is said; a seeded property — a message whose
+  time content is off the allow-list never yields said, and every said quote matches an oracle of
+  the two forms written apart from the reader.
+  (9) **Position, not a word list, around an allow-listed span** (seventh review round; TQ28).
+  Round 6 made the reading's FORM an allow-list, but what stood around it was still judged by
+  `LEFTOVER_WORDS`, and round 7 found the same leak in new words: a look-back tied to an event
+  (`last 2 hours ending at the outage`, `as of the deploy`, `ahead of the release`, `in the
+  incident`), excluding a period (`without the outage`, `but not the outage`), beside a place
+  (`the last 3 days in London`, `last 2 hours Berlin`), and an explicit instant with an open end
+  or an approximation (`newer than 2026-10-09T08:00Z` — which means from then until now — `at
+  least …`, `… give or take`) or a place (`2026-10-09T08:00Z in Tokyo`). The rule is now
+  structural (`readers/english.ts` · `endsItsClause`, the one owner of what may stand around a
+  said span): an allow-listed span is said only when nothing but spaces and closing marks follow
+  it up to its clause end (end of message, a line break, `.` `?` `!` `;` — a comma is NOT a clause
+  end), the next clause does not open with a bending word, and nothing before it in its clause is
+  a bending word (`BEND_WORDS` — English prepositions, negators and anchor participles, a CLOSED
+  class, so it can be complete) other than the plain lead-in `in|over|for [the]` right before a
+  look-back or a range's own opener (`from`, `between`). Anything else carries `confirm` and is
+  offered with the reading and its zone. `LEFTOVER_WORDS` stays — it names what was not read in
+  the question and guards the message's OTHER clauses — but `of` right after a look-back
+  (`SPAN_OF`) is deleted: the position rule owns it. **The trade-off:** more confirmations —
+  `errors in the last 2 hours on node 11`, `last 2 hours, on node 11`, `… please` all confirm now.
+  **How the allow-list grows:** a new form, lead-in or safe tail joins only when the paid bench
+  shows it read right; the position rule is never relaxed by listing words that may follow.
+  **The known limit now:** a later sentence that bends the look-back without opening with a
+  bending word (`Show the last 2 hours. Only the outage window.`). Pinned: every row the seven
+  reviews cited is confirmed or unreadable; the terminal controls (`any errors in the last 2
+  hours?`, `show the past week.`, `2026-09-26T08:00-07:00/2026-09-26T08:40-07:00`) stay said; a
+  seeded property — any allow-listed span followed by any non-empty tail in its clause — is never
+  said.
+  (10) **Always confirm — the OWNER'S DECISION (2026-09-30; TQ29), superseding (6)–(9).** Seven
+  review rounds each found the next spelling that a word list (6), a shape rule (7), an allow-list
+  (8) and a position rule (9) misread and filed as said. The owner decided: a time phrase typed in
+  CHAT is NEVER filed as the person's words; the reader only PROPOSES. The law moved into the
+  LIBRARY, for every reader of either kind (`rowsBuild.ts` · `timeReadingRows` passes `confirm: true`
+  for every reading: candidates `said: []`, choice `open` with `confirm` — the policy may still
+  narrow the readings). Deleted: the English reader's allow-list (`isAllowListed`), position rule
+  (`endsItsClause`, `BEND_WORDS`) and leftover scan (`leftoverOf`, `LEFTOVER_WORDS`, `COUNTED_MARK`);
+  the port's `TimeMention.leftover` / `confirm` (a mention carrying either is now `malformed`);
+  `rows.ts` · `confirmNeededOf` / `ConfirmNeeded` / `needsConfirm` / `isWindowComplete` /
+  `isExplicitInstant`; the catalog's `ask.confirm-part` / `choice.confirm-part`. The reader keeps its
+  parsing as the pre-fill proposer (unreadable → no pre-fill; the tool's own rule asks). Every
+  reading is offered through the time ask pre-filled and editable, naming its window AND zone
+  (`choice.confirm`: "I read “yesterday” as Thu, Oct 8, 2026, PDT in America/Los_Angeles — is that
+  right?"); the form's answer is checked by the T4 re-validation. The answer is the ONE door by
+  which a window of words becomes the person's: a new row, `time-answer` (`rows.ts` ·
+  `TimeAnswerRow`: mention, window, zone, `how: 'confirmed'` — the click on a pre-filled reading —
+  or `'edited'`), filed by `arguments/ask.ts` · `bindAnswer` beside the `answered` argument rows.
+  `bind.ts` · `turnWindowsOf` reads it: the mention becomes an `answered` window (a picked look-back
+  keeps its look-back), so later calls of the turn are filled from it (argument rows `answered` +
+  `matched: 'mention'`; bound by quote → `answered` too), `stages/argumentAsk.ts` · `openReadingOf`
+  does not ask it again, and the served sentence (TQ13) names it WITH ITS SOURCE ("Time words in the
+  person's message, as the library holds them: “last 2 hours” → window "2h" (the window the person
+  confirmed when asked what their words meant); …" — `edited` → "gave", a `model` reading → "a
+  reading of the person's words they have not confirmed"). `WindowSource` gains `answered`; `said`
+  stays in the union and at the checkpoint door only so a record an earlier version filed still
+  reads. A tool whose rule ASSUMES its period is now asked too under an open reading
+  (`arguments/resolve.ts` · `verifyPlan`): with every reading open, its default would otherwise
+  silently stand in for "last 2 hours". A `model` reading is unchanged (it fills as
+  `derived-from-reading`). **The trade-off:** one click before the first call that needs every time
+  phrase, "last 2 hours" included. **Known limits:** `reactMode: 'classic'` caches its tools after
+  the first iteration, so a window confirmed mid-turn is not served there (the later call is still
+  filled from it); the call the ask answered keeps its `call-window` row `not-filled` /
+  `open-reading`, so `ctx.time.asked` is absent on THAT call (the later calls carry it). **How it
+  grows:** a form may skip the click only when a registered, committed benchmark shows the reader
+  always reads it right. Pinned: `english-reader.test.ts` (every row the seven reviews cited, and
+  every form the earlier allow-list filed as said, is a confirmation or unreadable as the RECORD
+  files it; a seeded property finds no row said), `english-run.test.ts` (each is a paused
+  confirmation naming window and zone; a confirmed pre-fill → `answered` + `time-answer` `confirmed`;
+  an edited one → `edited`; an assumed period is asked; the served line after the confirmation names
+  the window and its source), `period-run.test.ts` (the T5a fills now run on the call AFTER the
+  confirmation; the served line before it names the confirmed window and its source).
+- **T7.** Landed with these smallest faithful choices. (1) **The owner.** `core/time/forms.ts` ·
+  `timeFormsOf` takes a `text` (the person's message, a typed answer, the app's prompt — only
+  `said` spellings: the retired `evidence/normalize.ts` · `dateAndClockForms` rules, moved as they
+  were; its cases pass unchanged, and a seeded property pins the new code equal to the old table)
+  or a recorded `window` (`said` + `derived`). The 24-hour pass restates the gate tokenizer's
+  boundary inside the leaf (the leaf imports nothing outside `core/time/`); the property pins them
+  equal. (2) **What is said under "Always confirm" (TQ29).** Every chat reading is filed with
+  `said: []`, so the parts the person WROTE are recovered by resolving the recorded parses again
+  (`withZoneAnswered` with the answered zone, the turn's recorded clock, `confirm: false` — never
+  the reader) and taking the candidate whose range IS the confirmed window (`forms.ts` ·
+  `writtenReadingOf`). Its `said` parts at its grain are the person's (`8:00`, `08:40`,
+  `2026-10-09` for `10/09/26`, the two-digit year counted as said); the end-of-grain minute, the
+  implied year, the abbreviation in effect, offsets, UTC and epoch spellings are derived. A window
+  typed in the ask (`edited`) or set in a UI (`control`) is the person's in every part; a `model`
+  reading, a confirmed window whose reading cannot be named, and a record the resolver cannot read
+  name nothing as said (the safe direction). A bare month or day number and a UTC clock's 12-hour
+  spellings are never derived — too common to be a lineage. (3) **The gate.** Order: exempt → the
+  tools' results → derived. `EvidenceVerdict.derived` (present only when the gate was handed the
+  list) holds the values found only in the library's spellings; `lookedUp` counts them. The turn's
+  lineage has ONE reader, `stages/timeLineage.ts` · `timeLineageOf`: the windows' said spellings join the
+  exempt corpus (`exemptFromRun`'s `timeSaid`), and the derived ones gain the values the library
+  filled from a window into a call (`isWindowFillRow`) and the served time line's text. Because a
+  window's converted values are the library's, `answeredValuesOf` stops exempting an `answered`
+  period row filed beside a `time-answer` row of the same moment — with no `time-answer` row the
+  answered values are unchanged. Armed through the inputs layer's Route arm
+  (`InputsRouteArm.timeLineage`) when `.time()` is set beside the gate — the only configuration
+  where readings, answers and fills exist. (4) **The record.** A new row kind, `time-derived`
+  (`rows.ts` · `TimeDerivedRow`: `values`, at most 12, each at most 64 characters; the checkpoint
+  door's arm in `timeRowIsWellFormed`), filed once per judged answer that STANDS — the clean path
+  and the flagged or refused path, never a draft sent back for revision. (5) **The fold.** A new
+  reason, `derived-from-reading` (layer 4, `not-sure`, `assess.ts` · `readTimeDerived` over this
+  turn's rows), with its standing words (`compose.ts`) and its account line
+  (`howSure.reason.derivedFromReading`) registered. **Known limits:** a turn with a revision or an
+  answer-validation re-ask files a row per judged answer that stood, so an earlier draft's row can
+  keep "not sure" on a later clean answer of the same turn (the safe direction); a value in the
+  served time line is derived even where it is a tool name or argument word, which only matters if
+  such a word is also an answer candidate. Pinned by `test/core/time/forms.test.ts` and
+  `test/core/time/lineage-run.test.ts`; the landed fix's cases by
+  `test/core/agent/evidence/person-values-normalized.test.ts`.
+
+- **T8.** Landed with these smallest faithful choices; the paid bench is its own stage and has
+  not run. (1) **The owner.** `core/time/check.ts` · `periodTimeCheck` — one pure check per judged
+  call over what the record holds: the `call-window` row, the `call` row's `drift`, the declared
+  periods and the tool's facts. What was READ, first found wins: the result's declared `queried`
+  (§ 3.3's `[from, to + step)`, `step` the `granularity`, else 1 ms; several declared periods are
+  several reads), else a widened fill's `sent` (unless `trimmedByTool`), else the asked range
+  moved by a `shifted` drift, else the asked range (a fill, a binding, a redrawn look-back). What
+  it is compared WITH: the call's `asked` — for `how: 'model-chosen'`, the person's window (§ 9.3
+  folds through this one reason, as the T5a note foresaw; `against: 'person'` on the row). A
+  refused, not-filled or unread call is compared with nothing. (2) **Two differences are not
+  differences.** A piece no longer than 1 ms (a closed end read as open: a look-back's
+  `[now − L, now]` against `[now − L, now)`, or a result that copied `ctx.time.asked.to` into an
+  inclusive `queried.to` with no `granularity`), and § 7.4's first row ALONE: a call that sent a
+  look-back (`drift.ts` · `sentLookback`, over the `call-window` row's `form` and the tool's
+  forms), with no drift recorded, whose one declared read has the asked length and moved LATER by
+  no more than the tool's step (one minute when none) — the tool's clock ran a little past `now`;
+  that read is then the asked range. Dispatch drift only ever moves a read later, so a read moved
+  EARLIER, a window sent as bounds, or a look-back with a recorded drift (`redrawn` ran as bounds;
+  `shifted` is § 7.4's third row) is compared as read, and its `missing` stands — a day rounded
+  back to midnight, an hour read 59 minutes early, a minute moved back with no step: each is "not
+  sure" (§ 9.2), never a false "known". With a declared `granularity`, `queried.to == asked.to` is
+  one step wider, as § 3.3 reads it. (3) **The record.** No new row
+  for the checks: the call's `period` row gains `differs { against, asked, read, source, stepMs?,
+  missing, extra }`, `shifted { byMs }`, `beyondRetention`, `partlyBeyondRetention` (§ 12.2's
+  "period rows gain"), each only when it holds and only under `.time()` — the mount hands the
+  layer the time rows only when the turn has a clock (`honesty/mounts.ts` · `timeOfBatch`), so an
+  unarmed row is byte-identical; the arm is `periodRowIsWellFormed`. The event gains `timeChecks`
+  (names, never a range). `period-beyond-retention` is a refusal the call-window row already
+  carries (`refused: 'beyond-retention'`), or a read wholly before `now − retention`;
+  `partlyBeyondRetention` folds nothing — the result's `held` decides (§ 9.4). (4) **The fold.**
+  Two reasons, layer 3, "not sure": `period-differs-from-asked` (`missing` or `extra` — TQ8's
+  default; a result declaring exactly the asked range clears it) and `period-beyond-retention`;
+  each joins the call's `argument` row as a witness, like the verdict reasons. `period-shifted`
+  and `clocks-differ` are not reasons: a shift folds through `differs`, and clocks are a label.
+  (5) **Clocks.** A declared axis zone was an event only (`artifacts.minted`), and a reason or a
+  line reads committed rows, so ToolCalls files ONE new row kind under `.time()`, `source-clock`
+  (`rows.ts` · `SourceClockRow`, one per call and zone, the checkpoint arm in
+  `timeRowIsWellFormed`); `clocks-differ` is READ from those rows (`check.ts` · `clocksDiffer`),
+  never filed twice. A period's offset is never read. (6) **The lines.** Under
+  `.limitsTravelWithTheAnswer()` with `.time()`, one line per call whose row carries a check,
+  under `Period` after the declared periods (`coverage/period.ts` · `periodCheckLine`: "read
+  less / more than was asked", "a shifted window", "a different window", with both ranges rendered
+  to the second in the presentation zone), and a `Clocks` section (`clockLines`); the block now
+  also prints when only these lines exist. The § 10.2 one-line-per-tool layout ("Period
+  (client_activity): … — read …, wider than asked") is not adopted: the declared `Period:` line
+  keeps its T3 bytes and the check's line follows it. **Known limits:** a typed answer carries the
+  checks on the rows (`agent.findings()`), not in `answerCoverage`; a refused call's `period`
+  row still reads `undeclared` beside `period-beyond-retention` (the T5b precedent: a refusal
+  result declares no period); § 9.1's `partly-future` stays unchecked. Pinned by
+  `test/core/time/check.test.ts` and `test/core/time/result-checks-run.test.ts`. (7) **Served to the model** (added before the paid bench, the owner's
+  serving strategy: the library's conclusion, late, at the decision point). The same lines,
+  composed by ONE owner for both readers (`coverage/timeLimits.ts` · `timeLimitLinesOf`; the
+  limits block asks it for the person, the served line for the model with "the person's window"
+  for "your window" and, of the clocks, only the label that two differ), join the ONE served time
+  line (TQ13) after the windows' halves: `arguments/serve.ts` · `timeLimitsSentence`, composed at
+  the tools slot's decoration site from the mount arg `timeLimits` and appended LAST to every
+  later request of the turn by `callLLM` — never to history, so `servedView` rebuilds it from the
+  same `timeLine` key. The gate widens from `.time({ reader })` to `.time()`: without a reader the
+  line is written only when it says something. A turn whose reads match serves nothing. The line
+  opens by naming its source (`TIME_LIMITS_SOURCE`: a note from the library, not from the person —
+  answer the person directly): the channel is a `user` message, and the bench's first paid rounds
+  showed an unmarked line answered as the person's correction ("You're right"). Pinned by
+  `test/core/time/limits-served.test.ts` and its row in `test/modelFacingSurfaces.test.ts`. (8) **The bench** (`bench/time-checks/`, rule `time-rule-t8`,
+  Haiku 4.5, arm off = the build before T8): round 2 (`bench/time/runs/t8`, 360 runs, $1.19) is
+  NOT-MEASURABLE — every gated clause passed but A1 (claims past what was read), whose baseline
+  claimed past on 13/79 answered provoking runs, under the registered 0.20 provocation floor. The
+  fold agreed with the truth on 179/180 `on` runs (0/180 `off`), no T8 "not sure" on 75 covered
+  reads, clocks labelled 17/17 and never on offsets (0/20), the line served on 104/104 checked
+  runs, ×1.05 input tokens per call. Two things the rule does not gate: the baseline standing was
+  already "not sure" on 105/106 missing-truth runs (the model writes its own bounds, so
+  `argument-unverified` fires) — T8 adds the REASON, not the word; and after a pause the served
+  "shifted window" line did not stop claims ("1 error in the last 30 minutes": 11/20 on vs 6/20
+  off). TQ8's F rests on one run (1/1) — no decision. Rounds 0 and 1 were stopped at 41 and 46
+  runs for the line's voice (answered as the person's correction) and a harness store bug.
+
 **Why this order.** T1 settles the grammar every other step leans on and is free. T2 is already
 written and only needs rebasing and the value check. T3 gives the first visible win (the limits
 line in words) and is the clock every later check needs. T6a comes before the ask because the ask
@@ -1323,6 +1643,9 @@ probe, the future check, and its private time vocabulary in the metrics adapters
 | TQ24 | Where does "the future is not readable" live? | **On the tool**: `period.direction: 'past' \| 'future' \| 'any'`, beside `retention`; absent, not checked. No global `future` policy. | Readability is a fact about the source (a log store holds no tomorrow); a global default fits an analysis agent and is wrong for a scheduling agent. |
 | TQ25 | The gate's person-values fix: wait for T7, or land now? | **Land `fix/person-values-normalized` now** for the field bug; T7 retires its private table and keeps its cases. | The field bug is live today; T7 is several steps away. |
 | TQ26 | A window set in a UI (a brush, a range picker)? | **A run input, `time.window`, recorded with `source: 'control'`**; it counts as the person's, like an answer, and as one mention for the fill rule. | It was not given in reply to a library ask, so filing it as `answered` would bend that word; one input serves panel, dashboard and chat. |
+| TQ27 | **Superseded by TQ29 (owner decision, 2026-09-30).** The English reader: which readings are the person's words — a deny-list shrunk each review, or an allow-list grown from evidence? (added 2026-09-30, T6b sixth review round — decided for the library under the standing rule, not among the questions the owner answered above) | **An allow-list, in the reader**: a look-back from now and an explicit ISO instant or range with an offset or IANA zone are said; every other form it reads is confirmed with its zone (`TimeMention.confirm` → `confirmNeeded.form`). A form joins the list only when the paid bench shows it is read right. | Six review rounds each found the next spelling a deny-list missed (zones named in words, event anchors, open ends); an allow-list fails toward a confirmation, a deny-list toward a wrong window recorded as said. The price — a confirmation on every calendar word — is one answer; the zone is shown so the correction is one click. |
+| TQ28 | **Superseded by TQ29 (owner decision, 2026-09-30).** The English reader: what may stand AROUND an allow-listed span — a list of banned words, or a position? (added 2026-09-30, T6b seventh review round — decided for the library under the standing rule) | **A position**: said only when the span ends its clause (only spaces and closing marks after it up to `.` `?` `!` `;`, a line break or the end — a comma is no clause end) and no bending word (a closed class: prepositions, negators, anchor participles) stands before it in its clause but the plain lead-in `in\|over\|for [the]` or a range's opener. `SPAN_OF` deleted; `LEFTOVER_WORDS` kept for naming and the other clauses. | Round 7 found fourteen event anchors, four exclusions, eight places and thirteen open ends a word list missed; what may FOLLOW a span has no end, its position does. The price — `errors in the last 2 hours on node 11` confirms — is one answer. |
+| TQ29 | A time phrase typed in chat — may the library ever file its reading as the person's words? (added 2026-09-30, T6b eighth round — **the OWNER'S decision, "Always confirm"**; supersedes TQ27 and TQ28) | **Never.** The reader only PROPOSES: every reading of a chat message is offered through the time ask as a pre-filled, editable one-click confirmation naming its window AND its zone; only what the person picks or types in that form is theirs (`answered`, with a `time-answer` row: `confirmed` or `edited`). The law is the library's, for every reader (`rowsBuild.ts` · `timeReadingRows`). **Growth rule:** a form may later skip the click only when a registered, committed benchmark shows the reader always reads it right. | Seven review rounds each found the next English spelling a word list, an allow-list or a position rule misread and filed as said (half-read ranges, open ends, zones named in words, look-backs tied to an event, instants with an open end). A wrong window recorded as the person's words is the failure that matters; a click is the price. |
 | TQ16 | The names: `.time()`, `TimeReader`, `TimeParts`, `TimeClock`, `ResolvedWindow`, `PeriodForm`, `wall-range`, `period-differs-from-asked`, `derived-from-reading` | **Keep the drafts** for T1–T3; rename freely before T5a ships. | Nothing is public until T3. |
 
 ---

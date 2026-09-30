@@ -2,7 +2,7 @@
 title: Interfaces
 ---
 
-356 exported from `agentfootprint`.
+357 exported from `agentfootprint`.
 
 - [`AbsenceDeclaration`](/docs/api/interfaces/AbsenceDeclaration)
 - [`ActOptions`](/docs/api/interfaces/ActOptions)
@@ -116,6 +116,7 @@ title: Interfaces
 - [`EmitEvent`](/docs/api/interfaces/EmitEvent)
 - [`EmitRecorder`](/docs/api/interfaces/EmitRecorder)
 - [`EnableNamespace`](/docs/api/interfaces/EnableNamespace)
+- [`EnglishTimeReaderOptions`](/docs/api/interfaces/EnglishTimeReaderOptions)
 - [`EpochLocation`](/docs/api/interfaces/EpochLocation)
 - [`ErrorEvent`](/docs/api/interfaces/ErrorEvent)
 - [`EscalationPolicy`](/docs/api/interfaces/EscalationPolicy)

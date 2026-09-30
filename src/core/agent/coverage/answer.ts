@@ -171,6 +171,21 @@ function renderLines(label: string, texts: readonly string[]): string {
 /** The section heading the periods print under (honesty step 7b). Stable — readers match on it. */
 export const PERIOD_SECTION_LABEL = 'Period';
 
+/** The section heading the wall-clock sources print under (the time layer, step T8). Stable. */
+export const CLOCKS_SECTION_LABEL = 'Clocks';
+
+/**
+ * The time layer's limits lines (step T8), already composed from the record
+ * (`coverage/period.ts` · `periodCheckLine`, `clockLines`): `period` — one per
+ * call whose read differs from what was asked, shifted, or was older than the
+ * source keeps, printed under `Period` after the declared periods; `clocks` —
+ * the wall-clock sources, under `Clocks`. Passed only under `.time()`.
+ */
+export interface TimeLimitLines {
+  readonly period: readonly string[];
+  readonly clocks: readonly string[];
+}
+
 /**
  * The periods the run's declarations carried, one per DECLARING call and
  * distinct period, in declaration order — a call whose `coverage()` and inner
@@ -369,6 +384,7 @@ export function composeAnswerWithCoverage(
   assumed = '',
   standing = '',
   presentation?: BoundPresentation,
+  time?: TimeLimitLines,
 ): string {
   const blocks: string[] = [];
   // The answer layer's standing line (honesty layer 4, its own opt-in arm)
@@ -376,7 +392,7 @@ export function composeAnswerWithCoverage(
   // on, the caller passes no "Assumed" block — the line owns that sentence
   // (one composer for one fact).
   if (standing !== '') blocks.push(standing);
-  const coverage = coverageBlock(declared, presentation);
+  const coverage = coverageBlock(declared, presentation, time);
   if (coverage !== '') blocks.push(coverage);
   if (assumed !== '') blocks.push(assumed);
   if (blocks.length === 0) return answer;
@@ -389,8 +405,10 @@ export function composeAnswerWithCoverage(
 function coverageBlock(
   declared: readonly DeclaredCoverage[],
   presentation: BoundPresentation | undefined,
+  time?: TimeLimitLines,
 ): string {
-  if (declared.length === 0) return '';
+  const timeLines = (time?.period.length ?? 0) + (time?.clocks.length ?? 0);
+  if (declared.length === 0 && timeLines === 0) return '';
   const folded = foldSections(declared);
   const sections: string[] = [];
   for (const [key, label] of SECTIONS) {
@@ -400,14 +418,17 @@ function coverageBlock(
   // One `Period:` line per declaring call (honesty step 7b) — the period AS
   // THE TOOL DECLARED IT (`period.ts` · `periodLine`). No period declared →
   // no section, and the block is the bytes it always was.
+  // Under `.time()` (step T8), the time layer's result checks follow the
+  // declared periods in the same section, and the wall-clock sources get
+  // their own. Not armed → nothing is added, byte for byte.
   const periods = periodsOf(declared);
-  if (periods.length > 0) {
-    sections.push(
-      renderLines(
-        PERIOD_SECTION_LABEL,
-        periods.map((p) => periodLine(p.toolName, p, presentation)),
-      ),
-    );
+  const periodLines = [
+    ...periods.map((p) => periodLine(p.toolName, p, presentation)),
+    ...(time?.period ?? []),
+  ];
+  if (periodLines.length > 0) sections.push(renderLines(PERIOD_SECTION_LABEL, periodLines));
+  if (time !== undefined && time.clocks.length > 0) {
+    sections.push(renderLines(CLOCKS_SECTION_LABEL, time.clocks));
   }
   // What the calls found still running — one line per item, tool first, as
   // declared (`inProgress.ts` · `inProgressLine`). None declared → no section,

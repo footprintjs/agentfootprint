@@ -193,7 +193,7 @@ export interface ServedPiece {
 export interface ServedRequestOnly {
   readonly role: ContextRole;
   readonly text: string;
-  /** Which library mechanism composed it — `'staged-refs-nudge'` today. */
+  /** Which library mechanism composed it — `'staged-refs-nudge'` or `'time-window-line'` (step T6b). */
   readonly reason: string;
 }
 
@@ -1183,6 +1183,19 @@ function viewOf(location: EpochLocation): ServedView {
         reason: 'staged-refs-nudge',
       });
     }
+  }
+  // The time line (step T6b) — the tools slot's committed composition, served only on the
+  // iteration that composed it and never on the wrap-up call (`callLLM` · the same three tests).
+  const timeLine = readAtCall(location, 'timeLine') as
+    | { readonly iteration?: unknown; readonly text?: unknown }
+    | undefined;
+  if (
+    !withheld &&
+    typeof timeLine?.text === 'string' &&
+    timeLine.text.length > 0 &&
+    timeLine.iteration === readAtCall(location, 'iteration')
+  ) {
+    requestOnly.push({ role: 'user', text: timeLine.text, reason: 'time-window-line' });
   }
 
   // ── what this view cannot prove ────────────────────────────────────────

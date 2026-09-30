@@ -4836,6 +4836,16 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
       // The inputs layer (honesty layer 2): the same site decorates a ruled
       // tool's schema first — value-conditional, the same grammar.
       ...(inputsArmed && { inputsLayer: true as const }),
+      // …and, under `.time({ reader })` (step T6b), the ONE served time sentence on each tool
+      // that declares a period: the windows the reader settled this turn, in that tool's form.
+      ...(inputsArmed &&
+        this.timeOptions?.reader !== undefined && {
+          timeWindows: {
+            ...(this.timeOptions.zone !== undefined && { appZone: this.timeOptions.zone }),
+          },
+        }),
+      // …and, under `.time()` (step T8), the turn's time limits in the same line.
+      ...(inputsArmed && this.timeOptions !== undefined && { timeLimits: true as const }),
       // …and, under declared sources, plants `_findings.from` on ruled tools only.
       ...(argumentSources && { argumentSources: true as const }),
       // Tool choice by classifier (9.105.0): the pick and the narrowing live
@@ -4888,6 +4898,10 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
       // constant on every call, under the one gate — an unarmed agent reads
       // no new key.
       ...(this.ontology !== undefined && { ontology: true as const }),
+      // The time layer's served line (step T6b): read only where the Tools
+      // mount can compose it — the `timeReader` arm of the chart deps.
+      // Step T8 widens it to `.time()`: the same line then carries the turn's time limits.
+      ...(inputsArmed && this.timeOptions !== undefined && { timeLine: true as const }),
       // The receipt's salt (9.88.0) — read per call, like seed's own accessor.
       getRunId: () => this.currentRunContext?.runId,
       // …and its off switch. Value-conditional, so an agent on the default
@@ -5064,6 +5078,9 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
                   return rules.ruled.find((r) => r.argument === argument)?.assume;
                 }),
                 answeredValues: answeredValuesOf,
+                // Under `.time()` (step T7): the turn's time spellings by
+                // lineage — said ones exempt, derived ones filed, not flagged.
+                ...(this.timeOptions !== undefined && { timeLineage: true as const }),
               }),
           }
         : undefined,
@@ -5274,6 +5291,16 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
             return passed;
           },
           ...(this.timeOptions.zone !== undefined && { appZone: this.timeOptions.zone }),
+          // The reader (step T6b): the batch ask asks an open mention's window.
+          ...(this.timeOptions.reader !== undefined &&
+            this.timeOptions.policy !== undefined && {
+              reader: {
+                policy: this.timeOptions.policy,
+                ...(this.timeOptions.messages !== undefined && {
+                  messages: this.timeOptions.messages,
+                }),
+              },
+            }),
         },
       }),
       emitForRun: (type, payload, runContext) => this.emitLateFact(type, payload, runContext),
@@ -5441,6 +5468,9 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
       // The time layer: the prose limits block renders its `Period:` lines in
       // the run's clock zone. Absent → the final stage it always mounted.
       ...(this.timeOptions !== undefined && { timeLayer: true as const }),
+      // The reader (step T6b): the Tools mount hands the slot the turn's settled windows.
+      ...(inputsArmed && this.timeOptions?.reader !== undefined && { timeReader: true as const }),
+      ...(inputsArmed && this.timeOptions !== undefined && { timeLimits: true as const }),
       ...(this.answerValidationConfig !== undefined && { hasAnswerValidation: true }),
       // The out-of-budget wrap-up branch (9.56.0) — the conditional-mount law
       // above, decided once beside the Route decider that routes to it so the

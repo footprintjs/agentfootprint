@@ -12,7 +12,13 @@ the answer account and the answer's standing), `period.ts` · `periodVerdict`
 `coverageOfAnswer` — the answer's limits as data, which a typed answer carries
 instead of the block.
 Lens: `answer.ts` · `composeAnswerWithCoverage`, the coverage block appended to
-a prose answer so the model cannot drop it.
+a prose answer so the model cannot drop it, and `timeLimits.ts` ·
+`timeLimitLinesOf` — the time layer's limits lines of one turn (step T8), the
+ONE composition both the block (for the person) and the served time line (for
+the model, `../arguments/serve.ts` · `timeLimitsLine`) read. It renders through
+the time layer's renderer, so it loads through `import()` only; what the lines
+SAY is read by `timeLimitFacts.ts` · `timeLimitFactsOf` (unrendered, safe on the
+synchronous graph — the Tools mount's `inputMapper` hands it across).
 
 # `coverage/` — an absence that names itself, and a limit that travels
 

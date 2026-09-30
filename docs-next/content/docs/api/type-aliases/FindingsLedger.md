@@ -6,6 +6,6 @@ title: FindingsLedger
 
 > **FindingsLedger** = readonly [`FindingsRow`](/docs/api/type-aliases/FindingsRow)[]
 
-Defined in: [src/core/agent/findings/types.ts:480](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/findings/types.ts#L480)
+Defined in: [src/core/agent/findings/types.ts:490](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/findings/types.ts#L490)
 
 The committed key: flat, append-only, a fresh array on every write.

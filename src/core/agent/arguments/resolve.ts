@@ -223,7 +223,17 @@ export type ArgumentFill =
   | {
       readonly argument: string;
       readonly value: InputValue;
-      readonly source: 'default' | 'answered';
+      readonly source: 'default';
+    }
+  | {
+      readonly argument: string;
+      /** A window answered for an `object` form is an object (the lazy word-driven ask). */
+      readonly value: InputValue | Readonly<Record<string, InputValue>>;
+      readonly source: 'answered';
+      /** The value was written by the library from the WINDOW the person chose (the lazy word-driven ask). */
+      readonly window?: true;
+      /** …and no form held that window exactly, so it reads a wider one (as a `window` fill's `wider`). */
+      readonly wider?: 'reads-more' | 'tool-trims';
     }
   | {
       readonly argument: string;
@@ -268,6 +278,14 @@ export interface ArgumentResolution {
    * while a tool in reach may hide arguments (`quotesMayShow`).
    */
   readonly quoted?: readonly { readonly argument: string; readonly quote: string }[];
+  /**
+   * Under `.time({ reader })`: the call left its period out while the turn's
+   * one mention was still OPEN (`core/time/bind.ts` · `not-filled` /
+   * `open-reading`) — its period arguments in `ask` are asked as that
+   * mention's window, in one field for the batch (`ask.ts` · `planAskFields`,
+   * the lazy word-driven ask of time design § 5.2), not one by one.
+   */
+  readonly window?: true;
 }
 
 // ─── DECLARE ────────────────────────────────────────────────────────────
@@ -563,14 +581,15 @@ function untakenFormArgumentsOf(
   );
 }
 
-/** The argument-row source a window fills with: the person's words, a reading of them, or the app's control. */
-const sourceOfWindow = (window: WindowSource): 'said' | 'app' =>
-  window === 'control' ? 'app' : 'said';
+/** The argument-row source a window fills with: the person's answer, a reading of their words, or the app's control. */
+const sourceOfWindow = (window: WindowSource): 'said' | 'answered' | 'app' =>
+  window === 'control' ? 'app' : window === 'answered' ? 'answered' : 'said';
 
 /**
  * A present period value's check under a time decision: BOUND to the person's
- * window by the model's quote → the person's words (`said`, `matched:
- * 'mention'`; a `model` reader's window stays a reading); a window that
+ * window by the model's quote → the person's (`matched: 'mention'`: `answered`
+ * for a window they settled in the time ask; `said` + `reading` for a `model`
+ * reader's window); a window that
  * DIFFERS from the person's runs as sent (the v1 law, § 7.3) — never asked.
  * The binding raises the row ONLY when the quote itself checked out — found in
  * the person's words (`source: 'said'`, nothing `failed`). A quote the check
@@ -594,7 +613,8 @@ function checkUnderWindow(
     return {
       check: {
         ...kept,
-        source: 'said',
+        // A window the person settled in the time ask is their ANSWER, not their chat words.
+        source: decision.window.source === 'answered' ? 'answered' : 'said',
         matched: 'mention',
         ...(decision.window.source === 'derived-from-reading' && { reading: true as const }),
       },
@@ -651,6 +671,15 @@ export function verifyPlan(
     // it did not take — never filled or asked (step T5b: a look-back sent to a tool that also
     // takes bounds must run, so the clock at dispatch can record it).
     const untaken = untakenFormArgumentsOf(toolOf, planned.toolName, decision);
+    // The person named a time the library could only PROPOSE (the owner's decision "Always
+    // confirm"): a period left out is asked as that mention's window even where the tool's
+    // rule assumes one — its default would silently stand in for what the person said.
+    const proposed =
+      decision?.how === 'not-filled' &&
+      decision.why === 'open-reading' &&
+      (time?.turn.open?.length ?? 0) > 0
+        ? formArgumentsOf(toolOf, planned.toolName)
+        : undefined;
     for (const p of planned.ruled) {
       const base = {
         toolCallId: planned.toolCallId,
@@ -696,6 +725,10 @@ export function verifyPlan(
         } else {
           checked.push({ ...base, asked: 'missing' });
         }
+        continue;
+      }
+      if (p.missing && proposed?.has(p.argument) === true) {
+        checked.push({ ...base, asked: 'missing' });
         continue;
       }
       const assumed = declaredDefault(toolOf, planned.toolName, p.argument);
@@ -1002,6 +1035,13 @@ export function resolutionsOf(
         });
       }
     }
+    // The lazy word-driven ask: a period left out while the turn's one mention is open is asked
+    // as that mention's window — only where the tool's own rule asks for a period argument.
+    const forms = formArgumentsOf(toolOf, planned.toolName);
+    const window =
+      decision?.how === 'not-filled' &&
+      decision.why === 'open-reading' &&
+      ask.some((a) => forms.has(a));
     if (fills.length > 0 || ask.length > 0) {
       resolutions.push({
         toolCallId: planned.toolCallId,
@@ -1009,6 +1049,7 @@ export function resolutionsOf(
         ...(fills.length > 0 && { fills }),
         ...(ask.length > 0 && { ask }),
         ...(quoted.length > 0 && { quoted }),
+        ...(window && { window: true as const }),
       });
     }
   }

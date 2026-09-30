@@ -472,6 +472,9 @@ interface PeriodRowRead {
   readonly verdict: string;
   /** The argument the tool's `ToolPeriod` names — the join key to the call's argument row. */
   readonly argument?: string;
+  /** The time layer's checks on the row (step T8) — filed only under `.time()`. */
+  readonly differs: boolean;
+  readonly beyondRetention: boolean;
 }
 
 /**
@@ -498,7 +501,14 @@ function periodRows(state: Readonly<Record<string, unknown>>): readonly PeriodRo
     const verdict = str(row.verdict);
     if (toolCallId === undefined || verdict === undefined) return;
     const argument = str(row.argument);
-    rows.push({ index, toolCallId, verdict, ...(argument !== undefined && { argument }) });
+    rows.push({
+      index,
+      toolCallId,
+      verdict,
+      ...(argument !== undefined && { argument }),
+      differs: isRecord(row.differs),
+      beyondRetention: row.beyondRetention === true,
+    });
   });
   return rows;
 }
@@ -538,15 +548,30 @@ function readPeriodVerdicts(
   for (const row of rows) {
     const at = statePointer('findingsLedger', row.index, 'verdict');
     witness.push(at);
-    const reason = PERIOD_REASONS[row.verdict];
-    if (reason === undefined) continue;
-    fire(g, reason, at);
     const chosenBy = argumentVerdicts.find(
       (a) => a.toolCallId === row.toolCallId && a.argument === row.argument,
     );
-    if (row.argument !== undefined && chosenBy !== undefined) {
-      fire(g, reason, statePointer('findingsLedger', chosenBy.index, 'argument'));
+    const fireJoined = (reason: AssessmentReason, pointer: AssessmentPointer): void => {
+      fire(g, reason, pointer);
+      if (row.argument !== undefined && chosenBy !== undefined) {
+        fire(g, reason, statePointer('findingsLedger', chosenBy.index, 'argument'));
+      }
+    };
+    // The time layer's result checks (step T8), under `.time()` only: the
+    // read is not what was asked (TQ8 — `extra` alone too), or the window was
+    // older than the source keeps.
+    if (row.differs) {
+      fireJoined('period-differs-from-asked', statePointer('findingsLedger', row.index, 'differs'));
     }
+    if (row.beyondRetention) {
+      fireJoined(
+        'period-beyond-retention',
+        statePointer('findingsLedger', row.index, 'beyondRetention'),
+      );
+    }
+    const reason = PERIOD_REASONS[row.verdict];
+    if (reason === undefined) continue;
+    fireJoined(reason, at);
   }
   g.checked.push({ layer: 3, check: 'result-period', ran: rows.length, of: rows.length, witness });
 }
@@ -779,6 +804,7 @@ function readAnswerRows(state: Readonly<Record<string, unknown>>, g: Gathered): 
       fire(g, 'steps-unfinished', statePointer('findingsLedger', w.index, 'kind'));
     }
   }
+  readTimeDerived(state, g);
   const report = state.answerValidation;
   if (!isRecord(report) || typeof report.status !== 'string') return;
   const at = statePointer('answerValidation', 'status');
@@ -790,6 +816,24 @@ function readAnswerRows(state: Readonly<Record<string, unknown>>, g: Gathered): 
   if (report.status === 'passed' && report.mode === 'enforce' && digest !== undefined) {
     g.support = { kind: 'answer-validation', reportDigest: digest };
   }
+}
+
+/**
+ * The answer's time values the library itself spelled from a reading of this
+ * turn (time design § 9.5, step T7): a `time-derived` row of this turn fires
+ * `derived-from-reading` — folded like `argument-assumed`, "not sure" at most,
+ * never "known". Filed only under `.time()` beside the evidence gate, so an
+ * unarmed record holds none and this reads nothing. A record with no
+ * `turnNumber` reads every such row (it may over-report; it never hides).
+ */
+function readTimeDerived(state: Readonly<Record<string, unknown>>, g: Gathered): void {
+  const ledger = Array.isArray(state.findingsLedger) ? state.findingsLedger : [];
+  const turn = typeof state.turnNumber === 'number' ? state.turnNumber : undefined;
+  ledger.forEach((row: unknown, index) => {
+    if (!isRecord(row) || row.kind !== 'time-derived') return;
+    if (turn !== undefined && row.turn !== turn) return;
+    fire(g, 'derived-from-reading', statePointer('findingsLedger', index, 'values'));
+  });
 }
 
 /** The reasons in `REASONS` order, and the value by precedence: a reason > support > a check ran > nothing. */

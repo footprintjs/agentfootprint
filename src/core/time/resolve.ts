@@ -47,7 +47,13 @@
  * removed a reading — a choice nobody said, recorded), several (`open`, with
  * the questions an ask must settle), or none. A `kind: 'model'` reader's
  * window is never settled by the library: it stays `open` until the person
- * confirms it (§ 5.5), and its candidates carry `said: []`.
+ * confirms it (§ 5.5), and its candidates carry `said: []`. Since the
+ * owner's decision "Always confirm" (time design TQ29) neither is ANY
+ * reading the record files: `rowsBuild.ts` · `timeReadingRows` passes
+ * `confirm: true` for every reader's reading, so only the person's answer
+ * in the time ask settles a window. The `confirm` parameter's default
+ * (`kind === 'model'`) is the unit's, for a caller that resolves parts
+ * outside the record.
  *
  * @example
  * ```ts
@@ -134,6 +140,30 @@ function zoneOf(token: string | undefined, clockZone: ZoneName): ZoneRead {
     }
   }
   return { kind: 'unknown' };
+}
+
+/**
+ * The parts with every zone token this layer cannot read (an abbreviation such
+ * as `PST`) replaced by the zone the PERSON named when asked (§ 6.3) — the
+ * whole mention's and each range side's. A token it can read is kept.
+ *
+ * @example
+ * ```ts
+ * withZoneAnswered([{ wall: { h: 8, meridiem: 'am' }, zoneToken: 'PST' }], 'America/Los_Angeles');
+ * // [{ wall: { h: 8, meridiem: 'am' }, zoneToken: 'America/Los_Angeles' }]
+ * ```
+ */
+export function withZoneAnswered(parses: readonly TimeParts[], zone: ZoneName): TimeParts[] {
+  const fix = (parts: TimeParts): TimeParts =>
+    parts.zoneToken !== undefined && zoneOf(parts.zoneToken, zone).kind === 'unknown'
+      ? { ...parts, zoneToken: zone }
+      : parts;
+  return parses.map((parts) => {
+    const outer = fix(parts);
+    return outer.rangeOf === undefined
+      ? outer
+      : { ...outer, rangeOf: [fix(outer.rangeOf[0]), fix(outer.rangeOf[1])] as const };
+  });
 }
 
 /** The wall time an instant shows under a zone read. */
@@ -637,12 +667,14 @@ function builtOf(parts: TimeParts, clock: ResolveClock, nowMs: number): Built[] 
 
 /**
  * Every candidate window of one mention's parses, resolved against the
- * clock. A `model` reader's candidates carry `said: []` (§ 5.5).
+ * clock. A reading the person must confirm (`confirm: true` — every reading
+ * the record files, TQ29; a `model` reader's by default) carries `said: []`.
  */
 export function resolveMention(
   parses: readonly TimeParts[],
   clock: ResolveClock,
   reader: { readonly id: string; readonly kind: 'rule' | 'model' },
+  confirm: boolean = reader.kind === 'model',
 ): MentionResolution {
   const now = instantOf(clock.now, 'strict');
   if (now === undefined || !isZoneName(clock.zone)) {
@@ -664,7 +696,7 @@ export function resolveMention(
       if (!isTimeRange(b.candidate.range)) continue;
       candidates.push({
         ...b.candidate,
-        said: reader.kind === 'model' ? [] : partsIn(b.said),
+        said: confirm ? [] : partsIn(b.said),
         reader: { id: reader.id, kind: reader.kind },
         parse,
       });
@@ -678,10 +710,7 @@ export function resolveMention(
 const windowKey = (c: TimeCandidate): string =>
   c.window.kind === 'lookback' ? `lookback:${c.window.duration}` : `${c.range.from}/${c.range.to}`;
 
-function openQuestions(
-  candidates: readonly TimeCandidate[],
-  kind: 'rule' | 'model',
-): OpenQuestion[] {
+function openQuestions(candidates: readonly TimeCandidate[], confirm: boolean): OpenQuestion[] {
   const differs = (read: (c: TimeCandidate) => unknown): boolean =>
     new Set(candidates.map((c) => JSON.stringify(read(c) ?? null))).size > 1;
   const open: OpenQuestion[] = [];
@@ -692,7 +721,7 @@ function openQuestions(
   if (differs((c) => c.notes.filter((n) => n.kind === 'dst-overlap' || n.kind === 'dst-gap'))) {
     open.push('dst');
   }
-  if (kind === 'model') open.push('confirm');
+  if (confirm) open.push('confirm');
   return open;
 }
 
@@ -717,14 +746,16 @@ function policyDecided(
 /**
  * How one mention settles under the app's policy (§ 5.1, § 11). The policy
  * only removes readings; it never adds one. A DST choice, a meridiem, a
- * zone the person named that is no zone, and a `model` reader's window are
- * never settled here — they stay `open` for the person.
+ * zone the person named that is no zone, and a reading to confirm
+ * (`confirm` — every reading the record files, TQ29) are never settled here
+ * — they stay `open` for the person.
  */
 export function chooseReading(
   resolution: MentionResolution,
   policy: TimePolicy,
   kind: 'rule' | 'model',
   problem?: 'unreadable',
+  confirm: boolean = kind === 'model',
 ): ReadingChoice {
   if (problem === 'unreadable') return { by: 'none', why: 'unreadable' };
   if (resolution.needsZone && resolution.candidates.length === 0) {
@@ -756,11 +787,11 @@ export function chooseReading(
   const zoneOpen: OpenQuestion[] = resolution.needsZone ? ['zone'] : [];
   if (windows.size === 1 && zoneOpen.length === 0) {
     const candidate = remaining[0] as number;
-    if (kind === 'model') {
+    if (confirm) {
       return { by: 'open', remaining, open: ['confirm'], ...(usedPolicy && { policy: applied }) };
     }
     return usedPolicy ? { by: 'policy', candidate, policy: applied } : { by: 'only', candidate };
   }
-  const open = [...zoneOpen, ...openQuestions(left, kind)];
+  const open = [...zoneOpen, ...openQuestions(left, confirm)];
   return { by: 'open', remaining, open, ...(usedPolicy && { policy: applied }) };
 }

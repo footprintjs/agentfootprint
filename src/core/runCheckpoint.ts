@@ -845,7 +845,8 @@ export function validateCheckpoint(value: unknown): AgentRunCheckpoint {
           "'clock-on-resume' (with turn, iteration, passed, kept) or " +
           "'call' (with turn, iteration, toolCallId, toolName, dispatchedAt) or " +
           "'time-reading' (with turn, iteration, reader, tzdata, mentions and, per mention, " +
-          'mention with quote, parses, candidates and choice, or refused); ' +
+          'mention with quote, parses, candidates and choice, or refused) or ' +
+          "'time-answer' (with turn, iteration, mention, from, to, zone, how: confirmed | edited); " +
           'a row of any kind may carry a numeric turn. ' +
           'It is written by an agent with `.findings()`, an honesty layer or `.time()` armed, and ' +
           're-seeded verbatim on continuation.',

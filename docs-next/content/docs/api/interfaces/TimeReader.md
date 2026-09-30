@@ -4,7 +4,7 @@ title: TimeReader
 
 # Interface: TimeReader
 
-Defined in: [src/core/time/reader.ts:62](https://github.com/footprintjs/agentfootprint/blob/main/src/core/time/reader.ts#L62)
+Defined in: [src/core/time/reader.ts:66](https://github.com/footprintjs/agentfootprint/blob/main/src/core/time/reader.ts#L66)
 
 A strategy that reads a person's words into zone-less PARTS (time design
 § 5.1). Armed with `.time({ reader })`; there is no default. It runs once
@@ -27,7 +27,7 @@ Agent.create({ provider, model }).time({ zone: 'UTC', reader }).build();
 
 > `readonly` **id**: `string`
 
-Defined in: [src/core/time/reader.ts:64](https://github.com/footprintjs/agentfootprint/blob/main/src/core/time/reader.ts#L64)
+Defined in: [src/core/time/reader.ts:68](https://github.com/footprintjs/agentfootprint/blob/main/src/core/time/reader.ts#L68)
 
 Recorded on every reading with the version, e.g. `'agentfootprint/english'`.
 
@@ -37,9 +37,12 @@ Recorded on every reading with the version, e.g. `'agentfootprint/english'`.
 
 > `readonly` **kind**: `"model"` \| `"rule"`
 
-Defined in: [src/core/time/reader.ts:69](https://github.com/footprintjs/agentfootprint/blob/main/src/core/time/reader.ts#L69)
+Defined in: [src/core/time/reader.ts:78](https://github.com/footprintjs/agentfootprint/blob/main/src/core/time/reader.ts#L78)
 
-`'rule'`: deterministic over the text. `'model'`: an LLM or other learned reader — its readings are never the person's words.
+`'rule'`: deterministic over the text. `'model'`: an LLM or other learned
+reader. Neither kind's reading is ever the person's words: a `rule`
+reading is offered through the time ask to confirm; a `model` reading
+fills as a reading (`derived-from-reading`) until the person confirms it.
 
 ***
 
@@ -47,7 +50,7 @@ Defined in: [src/core/time/reader.ts:69](https://github.com/footprintjs/agentfoo
 
 > `readonly` **locale**: `string`
 
-Defined in: [src/core/time/reader.ts:67](https://github.com/footprintjs/agentfootprint/blob/main/src/core/time/reader.ts#L67)
+Defined in: [src/core/time/reader.ts:71](https://github.com/footprintjs/agentfootprint/blob/main/src/core/time/reader.ts#L71)
 
 The language it reads, e.g. `'en-US'`.
 
@@ -57,7 +60,7 @@ The language it reads, e.g. `'en-US'`.
 
 > `readonly` **version**: `string`
 
-Defined in: [src/core/time/reader.ts:65](https://github.com/footprintjs/agentfootprint/blob/main/src/core/time/reader.ts#L65)
+Defined in: [src/core/time/reader.ts:69](https://github.com/footprintjs/agentfootprint/blob/main/src/core/time/reader.ts#L69)
 
 ## Methods
 
@@ -65,7 +68,7 @@ Defined in: [src/core/time/reader.ts:65](https://github.com/footprintjs/agentfoo
 
 > **read**(`text`, `context`): [`TimeReading`](/docs/api/interfaces/TimeReading) \| `Promise`\<[`TimeReading`](/docs/api/interfaces/TimeReading)\>
 
-Defined in: [src/core/time/reader.ts:70](https://github.com/footprintjs/agentfootprint/blob/main/src/core/time/reader.ts#L70)
+Defined in: [src/core/time/reader.ts:79](https://github.com/footprintjs/agentfootprint/blob/main/src/core/time/reader.ts#L79)
 
 #### Parameters
 

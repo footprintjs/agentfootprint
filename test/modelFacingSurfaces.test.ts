@@ -89,13 +89,21 @@ import {
   keptAnswersNote,
   secondPauseRefusal,
   timeRefusal,
+  timeLimitsSentence,
+  timeWindowsLine,
   unansweredRefusal,
   unmountedRulesRefusal,
   unreadableRulesRefusal,
   withArgumentRules,
 } from '../src/core/agent/arguments/serve.js';
 import { rulesOf } from '../src/core/agent/arguments/declare.js';
-import { factExpectation } from '../src/core/agent/arguments/ask.js';
+import { periodCheckLine } from '../src/core/agent/coverage/period.js';
+import { bindPresentation } from '../src/core/time/present.js';
+import {
+  factExpectation,
+  WINDOW_FORM_EXPECTATION,
+  WINDOW_ZONE_EXPECTATION,
+} from '../src/core/agent/arguments/ask.js';
 import { SHOWN_ARGS } from '../src/core/toolShownArgs.js';
 import { defineOntology, ONTOLOGY_INSTRUCTION, ontologyPiece } from '../src/ontology/index.js';
 import type { FindingsLedger } from '../src/core/agent/findings/types.js';
@@ -701,6 +709,147 @@ const RULED_PROPERTY_DESCRIPTION: Surface = {
   channel: 'tool-description',
   lifetime: 'persistent-history',
 };
+
+/**
+ * The one served time line (time step T6b), served LATE: "yesterday" in a
+ * look-back tool's and an epoch tool's form — as the window the person
+ * CONFIRMED in the time ask, as one they EDITED, as a `model` reader's
+ * unconfirmed reading, and PENDING (a proposal the person has not answered),
+ * alone and beside a settled window; once more with a view that hides a value.
+ */
+function timeWindowLines(): string[] {
+  const lookback = defineTool({
+    name: 'search_logs',
+    description: 'Error lines over a look-back window.',
+    inputSchema: { type: 'object', properties: { window: { type: 'string' } } },
+    askOrAssume: { window: { assume: '1h' } },
+    period: { argument: 'window', spelling: 'lookback' } as never,
+    execute: () => 'ok',
+  });
+  const epoch = defineTool({
+    name: 'client_activity',
+    description: 'Client operations over a window.',
+    inputSchema: {
+      type: 'object',
+      properties: { start_time: { type: 'integer' }, end_time: { type: 'integer' } },
+    },
+    askOrAssume: { start_time: { ask: 'From when?' }, end_time: { ask: 'Until when?' } },
+    period: {
+      forms: [
+        {
+          kind: 'bounds',
+          from: { argument: 'start_time', as: 'epoch-ms' },
+          to: { argument: 'end_time', as: 'epoch-ms', edge: 'exclusive' },
+        },
+      ],
+    } as never,
+    execute: () => 'ok',
+  });
+  const hiding = {
+    ...epoch,
+    [SHOWN_ARGS]: (args: Record<string, unknown>) =>
+      'start_time' in args ? { ...args, start_time: 'REDACTED' } : args,
+  };
+  const window = {
+    mention: 0,
+    quote: 'yesterday',
+    range: { from: '2026-10-08T00:00:00-07:00', to: '2026-10-09T00:00:00-07:00' },
+    zone: 'America/Los_Angeles',
+  };
+  const sets = [
+    { source: 'answered' as const, answer: 'confirmed' as const },
+    { source: 'answered' as const, answer: 'edited' as const },
+    { source: 'derived-from-reading' as const },
+  ].map((who) => ({ now: '2026-10-09T15:40:00Z', windows: [{ ...window, ...who }] }));
+  const pendingSets = [
+    { now: '2026-10-09T15:40:00Z', windows: [], pending: ['yesterday'] },
+    { ...sets[0]!, pending: ['10/09/26 8 AM to 8:40 AM PST', 'last 2 hours'] },
+    // …and after a call already ran on a window the model wrote: the limit, not the move.
+    { now: '2026-10-09T15:40:00Z', windows: [], pending: ['yesterday'], ranUnconfirmed: true },
+  ];
+  const wires = [
+    new Map<string, unknown>([
+      ['search_logs', lookback],
+      ['client_activity', epoch],
+    ]),
+    new Map<string, unknown>([['client_activity', hiding]]),
+  ];
+  return [...sets, ...pendingSets].flatMap((windows) =>
+    wires.flatMap((winning) => {
+      const served = [...winning.values()].map((t) => (t as { schema: unknown }).schema);
+      const line = timeWindowsLine(served as never, winning as never, windows);
+      return line === undefined ? [] : [line];
+    }),
+  );
+}
+
+/**
+ * The time limits an answer states (time step T8), served late: a clamp (less
+ * than was asked), a model-chosen look-back wider than the person's window, a
+ * refusal older than the source keeps, and two wall-clock sources on
+ * different zones — each alone, and together.
+ */
+function timeLimitLines(): string[] {
+  const zone = bindPresentation({ zone: 'America/Los_Angeles' });
+  const range = (from: string, to: string) => ({ from, to });
+  const base = { kind: 'period', turn: 1, iteration: 1, verdict: 'covered' } as const;
+  const clamp = periodCheckLine(
+    {
+      ...base,
+      toolCallId: 'c1',
+      toolName: 'client_activity',
+      differs: {
+        against: 'asked',
+        asked: range('2026-09-09T15:40:00Z', '2026-10-09T15:40:00Z'),
+        read: [range('2026-10-02T15:40:00Z', '2026-10-09T15:40:00Z')],
+        source: 'queried',
+        missing: [range('2026-09-09T15:40:00Z', '2026-10-02T15:40:00Z')],
+        extra: [],
+      },
+    } as never,
+    zone,
+    'model',
+  )!;
+  const wider = periodCheckLine(
+    {
+      ...base,
+      toolCallId: 'c2',
+      toolName: 'search_logs',
+      differs: {
+        against: 'person',
+        asked: range('2026-10-08T15:00:00Z', '2026-10-08T16:00:00Z'),
+        read: [range('2026-10-08T15:00:00Z', '2026-10-09T15:40:00Z')],
+        source: 'asked',
+        missing: [],
+        extra: [range('2026-10-08T16:00:00Z', '2026-10-09T15:40:00Z')],
+      },
+    } as never,
+    zone,
+    'model',
+  )!;
+  const old = periodCheckLine(
+    {
+      ...base,
+      toolCallId: 'c3',
+      toolName: 'client_activity',
+      verdict: 'undeclared',
+      beyondRetention: true,
+    } as never,
+    zone,
+    'model',
+  )!;
+  const clocks = ["the sources' clocks differ (UTC, America/New_York) — compared as instants"];
+  return [
+    { period: [clamp], clocks: [] },
+    { period: [wider], clocks: [] },
+    { period: [old], clocks: [] },
+    { period: [], clocks },
+    { period: [clamp, wider, old], clocks },
+  ].flatMap((lines) => {
+    const line = timeLimitsSentence(lines);
+    return line === undefined ? [] : [line];
+  });
+}
 
 /** A ruled tool, and the same tool with an argument view that hides the ruled value. */
 function ruledSchemaDescriptions(): string[] {
@@ -1506,6 +1655,46 @@ const PRODUCERS: readonly ModelFacingProducer[] = [
     compose: async () => ruledSchemaDescriptions(),
   },
   {
+    id: 'time layer — the person’s windows, served late at the decision point (TQ13, step T6b)',
+    module: 'src/core/agent/arguments/serve.ts',
+    surface: { channel: 'injected-turn', lifetime: 'request-ephemeral' },
+    lifetimeBecause:
+      'composed at the tools slot’s one decoration site from the turn’s recorded readings, the ' +
+      'person’s answers in the time ask and the tools really served, stamped with its iteration, ' +
+      'and appended by `callLLM` as the LAST `role: "user"` line of that one request — never ' +
+      'written to history, so every later call re-reads a fresh composition (a pending quote the ' +
+      'person then confirms is never re-read as pending)',
+    drivenBy: ['test/core/time/english-run.test.ts'],
+    reaches: [
+      /^The person's time words, as the library holds them: “yesterday” is 2026-10-08 00:00–23:59 America\/Los_Angeles \(UTC-07:00\), the window the person confirmed when asked what their words meant — search_logs window "1960m" \(a wider read than the words named\); client_activity start_time 1791442800000, end_time 1791529200000\. A call may pass these values as written; an answer built on them states that window\.$/m,
+      /client_activity start_time \(hidden by the tool's view\), end_time 1791529200000/,
+      /, the window the person gave when asked what their words meant — /,
+      /, a reading of the person's words they have not confirmed, not their words — /,
+      /^The window for “yesterday” is not settled yet: the person confirms it in the library's own form, which shows its reading of those words with the zone and opens when search_logs is called with window left out, or client_activity is called with start_time, end_time left out \(or the call is refused with the reason\)\. So the next step is that call — not a question about the time in the reply, and not a window written into the call, which would run unconfirmed\.$/m,
+      / that window\. The window for “10\/09\/26 8 AM to 8:40 AM PST”, “last 2 hours” is not settled yet: /,
+      /^The window for “yesterday” is not settled: the person has not confirmed it, and the call that ran used a window written into it, unconfirmed\. An answer built on that call says its window was not confirmed by the person\.$/m,
+    ],
+    compose: async () => timeWindowLines(),
+  },
+  {
+    id: 'time layer — the time limits an answer states, served late at the decision point (step T8)',
+    module: 'src/core/agent/arguments/serve.ts',
+    surface: { channel: 'injected-turn', lifetime: 'request-ephemeral' },
+    lifetimeBecause:
+      'composed at the tools slot’s one decoration site from the turn’s `period` rows whose result ' +
+      'checks hold and its `source-clock` rows (`coverage/timeLimits.ts` · `timeLimitLinesOf`, the ' +
+      'owner the limits block also asks), appended to the ONE served time line, which `callLLM` ' +
+      'serves as the LAST `role: "user"` line of that one request — never written to history',
+    drivenBy: ['test/core/time/limits-served.test.ts'],
+    reaches: [
+      /^\[A note from the library that ran the tools, not from the person: answer the person directly, as you would from the tool results alone\.\] The time the tools read is not the time asked about — client_activity read less than was asked — asked: .+; read: .+\. So the answer to the person states the time each result read and claims nothing about time no result read\.$/m,
+      /search_logs read more than the person's window — the person's window: /,
+      /client_activity: the time asked about is older than the oldest data the tool declares its source keeps/,
+      /^\[A note from the library that ran the tools, not from the person: answer the person directly, as you would from the tool results alone\.\] Clocks: the sources' clocks differ \(UTC, America\/New_York\) — compared as instants\.$/m,
+    ],
+    compose: async () => timeLimitLines(),
+  },
+  {
     id: 'inputs layer — the note on a result whose call ran on a filled value (honesty layer 2)',
     module: 'src/core/agent/arguments/serve.ts',
     surface: TOOL_RESULT,
@@ -1535,6 +1724,9 @@ const PRODUCERS: readonly ModelFacingProducer[] = [
       /the call ran with "1960m", from the window the person's own words gave — recorded as the person's; the tool's form could not hold that window exactly, so the value reads a wider one — recorded as wider than asked\.\]/,
       /so the value reads a wider one, and the tool declares that it drops the rows outside the asked window\.\]/,
       /\(the value is hidden by the tool's view\); the tool's form could not hold that window exactly/,
+      // Time layer step T6b: the window the person CHOSE when the library asked about their words.
+      /the call ran with 1791558000000, from the window the person chose when asked what their words meant — recorded as the person's answer\.\]/,
+      /recorded as the person's answer; the tool's form could not hold that window exactly, so the value reads a wider one — recorded as wider than asked\.\]/,
     ],
     compose: async () => [
       filledNote('search_logs', [{ argument: 'window', value: '2h', hidden: false }]),
@@ -1647,6 +1839,25 @@ const PRODUCERS: readonly ModelFacingProducer[] = [
           from: 'said',
         },
       ]),
+      filledNote('client_activity', [
+        {
+          argument: 'start_time',
+          value: 1791558000000,
+          hidden: false,
+          source: 'window',
+          from: 'answered',
+        },
+      ]),
+      filledNote('search_logs', [
+        {
+          argument: 'window',
+          value: '1960m',
+          hidden: false,
+          source: 'window',
+          from: 'answered',
+          wider: 'reads-more',
+        },
+      ]),
     ],
   },
   {
@@ -1704,6 +1915,9 @@ const PRODUCERS: readonly ModelFacingProducer[] = [
       /\(window: a window still to come \(the source holds only the future\)\)/,
       /\(window: a window inside what the source keeps \(30d\)\)/,
       /\(window: a window no wider than 24h\)/,
+      // Time layer step T6b: the window asked of the person fits no form, or no time exists in the zone.
+      /did not fit what the tool accepts \(start_time: a window one of the tool's declared period forms can hold\)/,
+      /\(start_time: a time zone in which the time the person wrote exists\)/,
       /its check-in consent gate needed a person’s approval for those arguments/,
       /the tool asked to pause for a person, and this batch had already paused once/,
       // The review of step 4: a refused call's answers are KEPT, and the model is told so.
@@ -1720,6 +1934,12 @@ const PRODUCERS: readonly ModelFacingProducer[] = [
           },
         ]),
       ),
+      unansweredRefusal('client_activity', [
+        { argument: 'start_time', expected: WINDOW_FORM_EXPECTATION },
+      ]),
+      unansweredRefusal('client_activity', [
+        { argument: 'start_time', expected: WINDOW_ZONE_EXPECTATION },
+      ]),
       secondPauseRefusal('purge_logs', 'check-in'),
       secondPauseRefusal('collect_window', 'tool-pause'),
       secondPauseRefusal('purge_logs', 'check-in') + keptAnswersNote('purge_logs', ['window']),
@@ -1831,6 +2051,9 @@ const PRODUCERS: readonly ModelFacingProducer[] = [
       /a before-tool rule set a value a call ran with and did not say where it came from/,
       /a value a call ran with was read into your words: the quoted words are on the record, the value is not in them/,
       /a value a call ran with was taken from a result the model itself had set aside/,
+      /a time in the answer is the library's own spelling of your words, not something you said or a tool returned/,
+      /a tool read a different stretch of time than the one asked about/,
+      /the time asked about is older than a tool declares its source keeps/,
       /^Consistent with the run's record — 2 checks ran and none fired/m,
       /^Consistent with the run's record — 1 check ran and did not fire: argument rules\./m,
       /^Known — the app's answer checks passed this exact answer\.$/m,
@@ -1863,6 +2086,7 @@ const PRODUCERS: readonly ModelFacingProducer[] = [
               'sources-conflict',
               'value-unsupported',
               'value-survived-revision',
+              'derived-from-reading',
               'stopped-early',
               'steps-unfinished',
               'answer-check-failed',
@@ -1905,6 +2129,9 @@ const PRODUCERS: readonly ModelFacingProducer[] = [
               'period-partly-held',
               'period-unknown',
               'period-undeclared',
+              // The time layer's result checks (step T8).
+              'period-differs-from-asked',
+              'period-beyond-retention',
             ],
           },
           [],

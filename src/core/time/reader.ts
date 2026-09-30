@@ -22,8 +22,12 @@
  * | each mention's parts: the {@link TimeParts} shape, every field in range, no unknown key, at most {@link MAX_PARSES} | the mention is refused (`malformed`) |
  *
  * None of these checks what a word MEANS: a model that reads "yesterday" as
- * the wrong day passes every one of them. That is why a `kind: 'model'`
- * reading is never the person's words (`resolve.ts` · `chooseReading`).
+ * the wrong day passes every one of them. That is why NO reading is ever the
+ * person's words — a `rule` reading as much as a `model` one (the owner's
+ * decision "Always confirm", time design TQ29): a reading only PROPOSES a
+ * window, offered through the time ask with its zone, and only what the
+ * person picks or types in that form is theirs (`rowsBuild.ts` ·
+ * `timeReadingRows`).
  *
  * @example
  * ```ts
@@ -65,7 +69,12 @@ export interface TimeReader {
   readonly version: string;
   /** The language it reads, e.g. `'en-US'`. */
   readonly locale: string;
-  /** `'rule'`: deterministic over the text. `'model'`: an LLM or other learned reader — its readings are never the person's words. */
+  /**
+   * `'rule'`: deterministic over the text. `'model'`: an LLM or other learned
+   * reader. Neither kind's reading is ever the person's words: a `rule`
+   * reading is offered through the time ask to confirm; a `model` reading
+   * fills as a reading (`derived-from-reading`) until the person confirms it.
+   */
   readonly kind: 'rule' | 'model';
   read(text: string, context: TimeReadContext): TimeReading | Promise<TimeReading>;
 }

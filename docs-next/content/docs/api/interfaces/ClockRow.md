@@ -4,7 +4,7 @@ title: ClockRow
 
 # Interface: ClockRow
 
-Defined in: [src/core/time/rows.ts:55](https://github.com/footprintjs/agentfootprint/blob/main/src/core/time/rows.ts#L55)
+Defined in: [src/core/time/rows.ts:58](https://github.com/footprintjs/agentfootprint/blob/main/src/core/time/rows.ts#L58)
 
 The turn's clock stamp — one per turn (time design § 4).
 
@@ -18,7 +18,7 @@ The turn's clock stamp — one per turn (time design § 4).
 
 > `readonly` **iteration**: `number`
 
-Defined in: [src/core/time/rows.ts:60](https://github.com/footprintjs/agentfootprint/blob/main/src/core/time/rows.ts#L60)
+Defined in: [src/core/time/rows.ts:63](https://github.com/footprintjs/agentfootprint/blob/main/src/core/time/rows.ts#L63)
 
 The iteration seed filed it at (1).
 
@@ -28,7 +28,7 @@ The iteration seed filed it at (1).
 
 > `readonly` **kind**: `"clock"`
 
-Defined in: [src/core/time/rows.ts:56](https://github.com/footprintjs/agentfootprint/blob/main/src/core/time/rows.ts#L56)
+Defined in: [src/core/time/rows.ts:59](https://github.com/footprintjs/agentfootprint/blob/main/src/core/time/rows.ts#L59)
 
 ***
 
@@ -64,7 +64,7 @@ The app passed `now`, or the library took the turn's start.
 
 > `readonly` **turn**: `number`
 
-Defined in: [src/core/time/rows.ts:58](https://github.com/footprintjs/agentfootprint/blob/main/src/core/time/rows.ts#L58)
+Defined in: [src/core/time/rows.ts:61](https://github.com/footprintjs/agentfootprint/blob/main/src/core/time/rows.ts#L61)
 
 `AgentState.turnNumber` when the row was filed — the conversation turn.
 
@@ -74,7 +74,7 @@ Defined in: [src/core/time/rows.ts:58](https://github.com/footprintjs/agentfootp
 
 > `readonly` `optional` **window?**: [`ControlWindow`](/docs/api/interfaces/ControlWindow)
 
-Defined in: [src/core/time/rows.ts:62](https://github.com/footprintjs/agentfootprint/blob/main/src/core/time/rows.ts#L62)
+Defined in: [src/core/time/rows.ts:65](https://github.com/footprintjs/agentfootprint/blob/main/src/core/time/rows.ts#L65)
 
 The run's `time.window`, when it passed one.
 

@@ -16,7 +16,7 @@ A line that was on the request and in no history.
 
 Defined in: [src/lib/time-travel/servedView.ts:197](https://github.com/footprintjs/agentfootprint/blob/main/src/lib/time-travel/servedView.ts#L197)
 
-Which library mechanism composed it — `'staged-refs-nudge'` today.
+Which library mechanism composed it — `'staged-refs-nudge'` or `'time-window-line'` (step T6b).
 
 ***
 

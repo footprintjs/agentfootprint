@@ -238,7 +238,14 @@ describe.skipIf(!built)('the default browser graph of the root entry', () => {
     // static is what a SYNCHRONOUS door needs first: `.time()`'s options
     // (`clock.ts`), `defineTool({ period })` (`periodForm.ts`), a time
     // answer's check at the resume door (`ask.ts`) and the checkpoint door's
-    // row checks (`rows.ts`, `resolveRecord.ts`).
+    // row checks (`rows.ts`, `resolveRecord.ts`, `checkRecord.ts`). The later
+    // steps keep the law by FILE too: the Tools mount's `inputMapper` reads
+    // the turn's windows (`windows.ts`, not `bind.ts`) and the limits FACTS
+    // (`coverage/timeLimitFacts.ts` — rendered in the slot, under the arm);
+    // the evidence gate's corpus reads the text rule (`textForms.ts`, not
+    // `forms.ts`); Route loads the lineage reader (`stages/timeLineage.ts`)
+    // and prepareFinal the limits composer (`coverage/timeLimits.ts`) through
+    // `import()`.
     const graph = await splitGraph(resolve(DIST, 'index.js'));
     for (const stays of [
       'core/time/clock.js',
@@ -246,6 +253,10 @@ describe.skipIf(!built)('the default browser graph of the root entry', () => {
       'core/time/ask.js',
       'core/time/rows.js',
       'core/time/resolveRecord.js',
+      'core/time/checkRecord.js',
+      'core/time/windows.js',
+      'core/time/textForms.js',
+      'core/agent/coverage/timeLimitFacts.js',
     ]) {
       expect(graph.syncInputs.has(`dist/esm/${stays}`), stays).toBe(true);
     }
@@ -257,6 +268,12 @@ describe.skipIf(!built)('the default browser graph of the root entry', () => {
       'core/time/wire.js',
       'core/time/rowsBuild.js',
       'core/time/present.js',
+      'core/time/readingAsk.js',
+      'core/time/bind.js',
+      'core/time/check.js',
+      'core/time/forms.js',
+      'core/agent/coverage/timeLimits.js',
+      'core/agent/stages/timeLineage.js',
     ]) {
       expect(graph.syncInputs.has(`dist/esm/${lazy}`), lazy).toBe(false);
       expect(graph.dynamicInputs.has(`dist/esm/${lazy}`), lazy).toBe(true);

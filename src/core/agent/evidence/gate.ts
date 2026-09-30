@@ -216,10 +216,18 @@ export function checkAnswer(
     readonly gate: ResolvedEvidenceGate;
     readonly evidence: EvidenceCorpus;
     readonly exempt: ReadonlySet<string>;
+    /**
+     * Under `.time()` (step T7): the lookup forms of the time spellings the
+     * library DERIVED from this turn's readings (`evidenceIndex.ts` ·
+     * `derivedFormsOf`). A value no tool result carried that is found here
+     * lands in `derived`, not `unsupported`. Absent → the verdict it always was.
+     */
+    readonly derived?: ReadonlySet<string>;
   },
 ): EvidenceVerdict {
   const candidates = extractCandidates(answer, args.gate);
   const unsupported: UnsupportedValue[] = [];
+  const derived: UnsupportedValue[] = [];
   const grounded: GroundedValue[] = [];
   let fromThisTurn = 0;
   let fromPriorTurns = 0;
@@ -241,7 +249,10 @@ export function checkAnswer(
       if (seen !== undefined && (turn === undefined || seen > turn)) turn = seen;
     }
     if (turn === undefined) {
-      unsupported.push({ value: clip(candidate.value), shape: candidate.shape });
+      // A time spelling the library derived from a reading (time design
+      // § 9.5): not invented, and not the person's — its own lineage.
+      const list = forms.some((f) => args.derived?.has(f) === true) ? derived : unsupported;
+      list.push({ value: clip(candidate.value), shape: candidate.shape });
       continue;
     }
     // Unclipped, with the forms as looked up: the contingent check asks the
@@ -257,10 +268,11 @@ export function checkAnswer(
   return {
     unsupported,
     candidates: candidates.length,
-    // Every candidate not skipped as exempt landed in exactly one of the two
-    // lists above — the count the gate really looked up.
-    lookedUp: grounded.length + unsupported.length,
+    // Every candidate not skipped as exempt landed in exactly one of the
+    // lists above (two, or three under `.time()`) — the count the gate really looked up.
+    lookedUp: grounded.length + unsupported.length + derived.length,
     grounded,
+    ...(args.derived !== undefined && { derived }),
     evidenceTruncated: args.evidence.truncated,
     grounding: {
       fromThisTurn,

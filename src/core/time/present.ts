@@ -321,8 +321,9 @@ export function presentSpan(
 }
 
 /**
- * A presentation bound into the two renderers a coverage `Period:` line uses
- * (`agent/coverage/period.ts` · `periodLine`). The coverage module is on every
+ * A presentation bound into the three renderers the coverage limits lines use
+ * (`agent/coverage/period.ts` · `periodLine` for a `Period:` line, and
+ * `periodCheckLine` for a result check's ranges). The coverage module is on every
  * agent's graph and this one loads only under `.time()`, so it is HANDED the
  * renderers (`agent/stages/prepareFinal.ts` loads this module through
  * `import()`) and never imports them — the optional-family law of docs-next's
@@ -331,13 +332,15 @@ export function presentSpan(
 export interface BoundPresentation {
   readonly span: (from: InstantText, to: InstantText) => string;
   readonly instant: (value: InstantText) => string;
+  readonly range: (range: TimeRange, grain?: Grain) => string;
 }
 
-/** {@link presentSpan} and {@link presentInstant}, bound to one presentation. */
+/** {@link presentSpan}, {@link presentInstant} and {@link presentRange}, bound to one presentation. */
 export function bindPresentation(presentation: Presentation): BoundPresentation {
   return {
     span: (from, to) => presentSpan(from, to, presentation),
     instant: (value) => presentInstant(value, presentation),
+    range: (range, grain) => presentRange(range, presentation, grain),
   };
 }
 

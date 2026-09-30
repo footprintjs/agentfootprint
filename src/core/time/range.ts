@@ -270,6 +270,16 @@ export function covers(outer: TimeRange, inner: TimeRange): boolean {
   return compareInstants(of, inf) <= 0 && compareInstants(int, ot) <= 0;
 }
 
+/** Whether two ranges hold the same instants (their spellings and offsets aside). */
+export function sameRange(a: TimeRange, b: TimeRange): boolean {
+  const af = instantOf(a.from, 'strict');
+  const at = instantOf(a.to, 'strict');
+  const bf = instantOf(b.from, 'strict');
+  const bt = instantOf(b.to, 'strict');
+  if (af === undefined || at === undefined || bf === undefined || bt === undefined) return false;
+  return compareInstants(af, bf) === 0 && compareInstants(at, bt) === 0;
+}
+
 /** Whether `a` and `b` share at least one instant (half-open: touching ends do not overlap). */
 export function overlaps(a: TimeRange, b: TimeRange): boolean {
   const [af, at] = assertRange(a, 'overlaps');

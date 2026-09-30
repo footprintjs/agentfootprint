@@ -14,15 +14,16 @@
  *     window (three date orders, am and pm for a bare `8:40`, both instants of a
  *     wall time the clocks go back through), each read to the end of its grain
  *     ("to 8:40" is `[08:00, 08:41)`);
- *   - the POLICY picks among them (`dateOrder: 'MDY'` → assumed, recorded); what
- *     it cannot settle stays open for the person;
+ *   - the POLICY narrows them (`dateOrder: 'MDY'` → recorded); and whatever is
+ *     left is only a PROPOSAL (the owner's decision "Always confirm"): no
+ *     reading is filed as the person's words — the time ask offers it,
+ *     pre-filled with its window and zone, and only the person's answer is theirs;
  *   - seed files one `time-reading` row per mention, once per turn, only on a
  *     message a person wrote — a resume or a retry reads the row, never the reader;
- *   - a `kind: 'model'` reader's window is never the person's words: it waits for
- *     the person to confirm it.
+ *   - a `kind: 'model'` reader's window is never the person's words either.
  *
  * This example's reader is a FIXTURE that returns fixed parts; the library's
- * English reader is a later step.
+ * English reader is example 86.
  *
  * Run:  npm run example examples/features/82-time-reader.ts
  */
@@ -102,14 +103,23 @@ export async function run(input: string): Promise<string> {
   check(open?.candidates?.length === 3, 'three candidate windows');
   check(open?.choice?.by === 'open', 'the order left open for the person');
 
-  // 2. An app whose people write MDY declares it — the pick is recorded as assumed.
+  // 2. An app whose people write MDY declares it — the policy narrows to one reading,
+  //    recorded; it is still a PROPOSAL the person confirms, never filed as their words.
   const mdy = desk({ dateOrder: 'MDY' });
   await mdy.run({ message: input, time });
   const assumed = readingOf(mdy);
   console.log('\nwith dateOrder MDY:', JSON.stringify(assumed?.choice));
   const choice = assumed?.choice;
-  check(choice?.by === 'policy', 'the policy picked, recorded');
-  const window = choice?.by === 'policy' ? assumed?.candidates?.[choice.candidate] : undefined;
+  check(
+    choice?.by === 'open' &&
+      choice.remaining.length === 1 &&
+      choice.open.includes('confirm') &&
+      choice.policy?.dateOrder === 'MDY',
+    'the policy narrowed to one reading, recorded — offered to confirm',
+  );
+  const window =
+    choice?.by === 'open' ? assumed?.candidates?.[choice.remaining[0] as number] : undefined;
+  check(window?.said.length === 0, 'the reading is not filed as the person’s words');
   check(
     window?.range.from === '2026-10-09T08:00:00-07:00' &&
       window.range.to === '2026-10-09T08:41:00-07:00',

@@ -48,6 +48,12 @@ import { isDevMode } from 'footprintjs';
 
 import { compareInstants, instantOf, type Instant } from '../../time/instant.js';
 import type { BoundPresentation } from '../../time/present.js';
+import {
+  isPeriodDiffers,
+  isShifted,
+  type PeriodDiffers,
+  type SourceClock,
+} from '../../time/checkRecord.js';
 
 import { refusal, spellingMeant } from './refusal.js';
 
@@ -651,6 +657,17 @@ export interface PeriodRow {
   readonly verdict: PeriodVerdict | 'undeclared';
   /** The argument the tool's `ToolPeriod` names — present only when it declares one. */
   readonly argument?: string;
+  // ── The time layer's result checks (step T8 — `core/time/check.ts` ·
+  //    `periodTimeCheck`), filed only under `.time()` and only when they hold;
+  //    an unarmed run's rows never carry them (byte-identical). ──
+  /** `period-differs-from-asked { missing, extra }` — the read differs from the asked range (or, for a window the model chose, from the person's). */
+  readonly differs?: PeriodDiffers;
+  /** `period-shifted` — the call's look-back ran as sent, `byMs` after the turn's `now`. */
+  readonly shifted?: { readonly byMs: number };
+  /** `period-beyond-retention` — refused as, or read as, wholly older than the tool's source keeps. */
+  readonly beyondRetention?: true;
+  /** `partly-beyond-retention` — the read crosses the edge of what the source keeps; `verdict` decides. */
+  readonly partlyBeyondRetention?: true;
 }
 
 /** Every verdict a period row may carry, in the order the fold reports them. */
@@ -676,6 +693,84 @@ export function periodRowIsWellFormed(row: Readonly<Record<string, unknown>>): b
     typeof row.iteration === 'number' &&
     typeof row.verdict === 'string' &&
     (PERIOD_ROW_VERDICTS as readonly string[]).includes(row.verdict) &&
-    (row.argument === undefined || (typeof row.argument === 'string' && row.argument !== ''))
+    (row.argument === undefined || (typeof row.argument === 'string' && row.argument !== '')) &&
+    (row.differs === undefined || isPeriodDiffers(row.differs)) &&
+    (row.shifted === undefined || isShifted(row.shifted)) &&
+    (row.beyondRetention === undefined || row.beyondRetention === true) &&
+    (row.partlyBeyondRetention === undefined || row.partlyBeyondRetention === true)
   );
+}
+
+// ─── The time layer's limits lines (step T8) ─────────────────────────────
+
+/**
+ * The one limits line for a call whose `period` row carries a time check
+ * (time design § 10.2, step T8) — `undefined` when it carries none. Static
+ * words around the two ranges, rendered in the presentation zone by the time
+ * layer's one renderer, HANDED in bound (`core/time/present.ts` ·
+ * `bindPresentation` → `range`, to the second, the zone named — coverage never
+ * imports the renderer); the raw instants stay on the row.
+ *
+ * @example
+ * ```ts
+ * periodCheckLine(row, bindPresentation({ zone: 'America/Los_Angeles' })); // core/time/present.ts
+ * // 'search_logs read more than was asked — asked: 2026-10-08 00:00:00–23:59:59 America/Los_Angeles
+ * //  (UTC-07:00); read: 2026-10-08 00:00:00–2026-10-09 08:40:00 America/Los_Angeles (UTC-07:00)'
+ * ```
+ *
+ * `audience` names who reads the line: the PERSON (the limits block, the
+ * default — their window is "your window") or the MODEL (the served time line,
+ * `agent/arguments/serve.ts` · `timeLimitsSentence` — the same window is "the
+ * person's window"). Only that reference differs.
+ */
+export function periodCheckLine(
+  row: PeriodRow,
+  presentation: BoundPresentation,
+  audience: 'person' | 'model' = 'person',
+): string | undefined {
+  const parts: string[] = [];
+  const d = row.differs;
+  if (d !== undefined) {
+    const person = d.against === 'person';
+    const theirs = audience === 'model' ? "the person's window" : 'your window';
+    const reference = person ? theirs : 'was asked';
+    const what =
+      d.missing.length > 0 && d.extra.length > 0
+        ? row.shifted !== undefined
+          ? 'a shifted window'
+          : 'a different window'
+        : `${d.missing.length > 0 ? 'less' : 'more'} than ${reference}`;
+    const reads = d.read.map((r) => presentation.range(r, 'second')).join('; ');
+    parts.push(
+      `${row.toolName} read ${what} — ${person ? theirs : 'asked'}: ` +
+        `${presentation.range(d.asked, 'second')}; read: ${reads}`,
+    );
+  } else if (row.shifted !== undefined) {
+    parts.push(`${row.toolName}'s look-back ran after the clock moved on`);
+  }
+  if (row.beyondRetention === true) {
+    parts.push(
+      `${row.toolName}: the time asked about is older than the oldest data the tool declares its source keeps`,
+    );
+  }
+  return parts.length === 0 ? undefined : parts.join('. ');
+}
+
+/**
+ * The `Clocks` lines (time design § 9.6, § 10.2, step T8): one per wall-clock
+ * source — a dataset whose declared axis names a zone — and, when two sources
+ * declare different zones, the label that they differ. Every comparison is
+ * made on instants; the lines only name the clocks.
+ */
+export function clockLines(
+  sources: readonly SourceClock[],
+  differ: { readonly zones: readonly string[] } | undefined,
+): string[] {
+  const lines = sources.map(
+    (s) => `${s.toolName}'s rows are wall times in ${s.zone} (declared) — compared as instants`,
+  );
+  if (differ !== undefined) {
+    lines.push(`the sources' clocks differ (${differ.zones.join(', ')}) — compared as instants`);
+  }
+  return lines;
 }
