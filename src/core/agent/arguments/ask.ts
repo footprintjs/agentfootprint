@@ -1349,7 +1349,11 @@ function windowFills(
       ...(time.appZone !== undefined && { appZone: time.appZone }),
       granularityMs: granularityMsOf(facts),
     });
-    if ('refused' in read) return { expected: refusalExpectation(read.refused, facts) };
+    // Refused before any form was chosen: the reason names the TOOL's facts (`toolFacts` — the
+    // widest any form reads), as every other door that judges a window before a form does.
+    if ('refused' in read) {
+      return { expected: refusalExpectation(read.refused, toolFacts(forms, facts)) };
+    }
     const conversion = read.conversion;
     const wider =
       'sent' in conversion

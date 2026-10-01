@@ -359,3 +359,74 @@ describe('G9 — the window set in the app’s time control is served by the lib
     expect(s.requests.every((r) => timeLineOf(r) === undefined)).toBe(true);
   });
 });
+
+describe('review of packet "gaps" — what G2 must not ask, and what its refusal names', () => {
+  it('a greeting names no time: "Good morning, …" asks nothing, serves no line, the default runs', async () => {
+    const seen: Record<string, unknown>[] = [];
+    const { agent, requests } = build(
+      [call('c1', 'smb_records', { server: '10.0.0.1' }), answer('done')],
+      [rangeTool(seen)],
+    );
+    const out = await agent.run({
+      message: 'Good morning, any SMB on 10.0.0.1?',
+      time: { now: NOW },
+    });
+    expect(isInputPause(out)).toBe(false);
+    expect(seen).toEqual([{ server: '10.0.0.1', window: '-30m' }]);
+    expect(requests.every((r) => timeLineOf(r) === undefined)).toBe(true);
+    expect(ofKind(agent, 'time-reading').some((r) => r.quote !== undefined)).toBe(false);
+  });
+
+  it('a free answer no form can read is refused naming the WIDEST form cap, not the period’s', async () => {
+    // period maxRange 7d; the bounds form reads up to 30d on its own; the look-back keeps 7d. The
+    // tool reads at most 30d (`toolFacts`), so a 40-day answer is refused "no wider than 30d".
+    const seen: Record<string, unknown>[] = [];
+    const tool = defineTool({
+      name: 'flows',
+      description: 'Network flows.',
+      inputSchema: {
+        type: 'object',
+        properties: {
+          from: { type: 'string' },
+          to: { type: 'string' },
+          window: { type: 'string' },
+        },
+      },
+      askOrAssume: { from: { ask: 'From?' }, to: { ask: 'To?' }, window: { assume: '1h' } },
+      period: {
+        forms: [
+          {
+            kind: 'bounds',
+            from: { argument: 'from', as: 'iso' },
+            to: { argument: 'to', as: 'iso', edge: 'exclusive' },
+            maxRange: '30d',
+          },
+          { kind: 'lookback', argument: 'window', signed: false },
+        ],
+        direction: 'past',
+        maxRange: '7d',
+      },
+      execute: (a) => {
+        seen.push({ ...a });
+        return 'ok';
+      },
+    });
+    const { agent, requests } = build([call('c1', 'flows', {}), answer('done')], [tool]);
+    let out = await agent.run({ message: 'any flows yesterday morning?', time: { now: NOW } });
+    const forty = '2026-08-01T00:00:00-07:00/2026-09-10T00:00:00-07:00';
+    for (let i = 0; i < 5 && isInputPause(out); i++) {
+      const p = paused(out);
+      out = await agent.resume(p.checkpoint as never, {
+        requestId: p.awaitingInput.requestId,
+        values: { f1: forty },
+      });
+    }
+    expect(isInputPause(out)).toBe(false);
+    expect(seen).toEqual([]);
+    const result = requests
+      .flatMap((r) => r.messages)
+      .find((m) => m.role === 'tool' && typeof m.content === 'string')?.content as string;
+    expect(result).toContain('no wider than 30d');
+    expect(result).not.toContain('no wider than 7d');
+  });
+});

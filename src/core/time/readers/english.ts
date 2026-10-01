@@ -29,7 +29,8 @@
  *
  * ## What it says "unreadable" for — never a partial reading
  *
- * Parts of the day (`yesterday morning`, `tonight`, `noon`), calendar spans
+ * Parts of the day (`yesterday morning`, `tonight`, `noon` — a greeting, `Good morning`, is
+ * no time and reads no mention), calendar spans
  * (`last week`, `this month`), week days and a month named alone (`Friday`,
  * `in September`), `N hours ago`, spans in words (`last two hours`), in a unit it
  * does not read (`last 30 seconds`, `last 30s`, `last 3 months`) or said with `previous`
@@ -140,7 +141,10 @@ const MONTHS =
  * phrase it touches.
  */
 const NOT_READ: readonly RegExp[] = [
-  /\b(?:(?:this|last|early|late|mid)\s+)?(?:morning|afternoon|evening|night|tonight|overnight|noon|midday|midnight|lunchtime|dawn|dusk)s?\b/gi,
+  // A part of the day — never after `good` (`Good morning`, `good night`): a greeting names no
+  // time, and an unreadable mention is ASKED, so a greeting read here would ask the person which
+  // time they meant by words that meant none.
+  /\b(?<!\bgood\s+)(?:(?:this|last|early|late|mid)\s+)?(?:morning|afternoon|evening|night|tonight|overnight|noon|midday|midnight|lunchtime|dawn|dusk)s?\b/gi,
   /\b(?:last|this|next|past|previous|coming|current)\s+(?:week|month|year|quarter|weekend|hour|minute|second|day|night|decade|fortnight|shift)\b/gi,
   /\bweekends?\b/gi,
   /\b(?:monday|tuesday|wednesday|thursday|friday|saturday|sunday)s?\b/gi,

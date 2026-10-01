@@ -181,3 +181,37 @@ describe('G3 — a date with a named month', () => {
     }
   });
 });
+
+describe('a greeting is no time — G2 asks every unread mention, so a greeting must read none', () => {
+  // Since G2 an unreadable mention is ASKED ("Which time did you mean by “morning”?") where a
+  // tool's rule assumes its period — a greeting read as a part of the day would ask the person a
+  // question about words that name no time (review of packet "gaps": "Good morning, any SMB on
+  // 10.0.0.1?" paused on "Which time did you mean by “morning”?").
+  for (const text of [
+    'Good morning, any SMB on 10.0.0.1?',
+    'good afternoon team — errors on the backup service?',
+    'Good evening! Which clients were busiest on node 11?',
+    'good night, find error lines mentioning 504',
+    'Good  morning all',
+  ]) {
+    it(`“${text}” → no mention`, () => {
+      expect(read(text).mentions).toEqual([]);
+    });
+  }
+
+  it('boundary: a part of the day after the greeting is still a time (unreadable, asked)', () => {
+    expect(read('Good morning, any errors this morning?').mentions).toEqual([
+      { quote: 'this morning', parses: [], problem: 'unreadable' },
+    ]);
+    expect(read('any errors in the morning?').mentions).toEqual([
+      { quote: 'morning', parses: [], problem: 'unreadable' },
+    ]);
+  });
+
+  it('boundary: a greeting next to a v1 phrase does not taint it', () => {
+    const [m] = read('Good morning, show client activity yesterday').mentions;
+    expect(read('Good morning, show client activity yesterday').mentions).toHaveLength(1);
+    expect(m).toMatchObject({ quote: 'yesterday' });
+    expect(m!.problem).toBeUndefined();
+  });
+});

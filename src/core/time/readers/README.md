@@ -48,7 +48,9 @@ source ("the window the person confirmed when asked what their words meant").
 An unreadable phrase proposes nothing — and is still ASKED: "Which time did you mean by
 “yesterday morning”?", free entry, nothing pre-filled, whatever the tool's own rule says (the
 person wrote a time, so a default never stands in for it — time follow-ups, packet "gaps"). The
-answer is filed `edited` and converted into the tool's form like any other.
+answer is filed `edited` and converted into the tool's form like any other. Because an
+unreadable phrase is asked, a phrase that names no time must read NO mention: a greeting
+(`Good morning, any errors?`) is not a part of the day.
 
 **A zone the person named is part of the reading** — after a clock time, a date
 or a day word, as written: `yesterday London time` → `{ relative: day −1,
@@ -64,6 +66,7 @@ reader.read('8 to 9:30', ctx);                  // unreadable — `8` is no time
 reader.read('errors in the last 2 hours', ctx); // { quote: 'last 2 hours', parses: [...] } — a proposal
 reader.read('8:40 AM til 9.30', ctx);           // { quote: '8:40 AM', parses: [...] } — a proposal; the person corrects it
 reader.read('yesterday morning', ctx);          // unreadable — asked which time, nothing pre-filled
+reader.read('Good morning, any errors?', ctx);  // no mention — a greeting names no time, so nothing is asked
 reader.read('today between 1 pm and 2 pm', ctx); // ONE mention — a day word may come before `between`
 reader.read('between 14:15 and 14:40 on 11 September', ctx); // a named month: date fixed, the year the policy's
 reader.read('in the last 24h', ctx);            // { quote: 'last 24h', … } — a compact look-back
