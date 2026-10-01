@@ -105,6 +105,7 @@ function askTimeOf(scope: TypedScope<AgentState>, deps: ArgumentAskDeps): AskTim
   return {
     now: clock.now,
     zone: clock.zone,
+    ...(clock.zoneSource === 'unknown' && { zoneUnknown: true as const }),
     ...(deps.time.appZone !== undefined && { appZone: deps.time.appZone }),
     ...(reader !== undefined &&
       row !== undefined && {

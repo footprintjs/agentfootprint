@@ -278,6 +278,12 @@ export interface ReaderWindows {
    * when none was refused.
    */
   readonly refused?: readonly RefusedWindow[];
+  /**
+   * The turn's clock zone is UNKNOWN (`zoneSource: 'unknown'`, G15): the
+   * control window is spelled in UTC and the served line names the person's
+   * zone as not known. Absent otherwise.
+   */
+  readonly zoneUnknown?: true;
 }
 
 /** One window of the person's a tool refused before dispatch — what the served line concludes. */
@@ -440,5 +446,6 @@ export function readerWindowsOf(ledger: readonly unknown[] | undefined): ReaderW
     ...(unread.length > 0 && { pendingUnread: unread }),
     ...(pending.length > 0 && ranOnSentWindow(ledger, turn) && { ranUnconfirmed: true as const }),
     ...(refused.length > 0 && { refused }),
+    ...(clock.zoneSource === 'unknown' && { zoneUnknown: true as const }),
   };
 }

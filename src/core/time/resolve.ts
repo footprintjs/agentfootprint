@@ -32,6 +32,7 @@
  * | a span (`{ minute, count: 40 }`) | a look-back until the clock's `now` |
  * | a range | one per combination of its sides that agree on date order, year and abbreviation reading, `from` before `to`; a first side with no meridiem takes the second's (`8 to 9 PM` → 8 PM) unless that runs backwards (`11 to 1 PM` → 11 AM); two sides with none share one (`8:45 to 8:55` → AM–AM and PM–PM, never 8:45 AM – 8:55 PM) unless neither runs forward (`11 to 1` → 11 AM – 1 PM, and 11 PM – 1 AM the next day) |
  * | a place named with `time` (`London time`) | the ONE zone the tz database has for it (`zone.ts` · `zoneOfPlace`), noted `zone-read`; none or several → the zone is asked |
+ * | any mention that names no zone, while the clock's zone is unknown (`zoneSource: 'unknown'`, G15) | none — the person's zone is asked first (`needsZone`) |
  * | an abbreviation in the app's map (`PST`) | its zone's reading AND its literal offset's, when they name different windows — tagged `abbreviation`, noted `zone-read` |
  *
  * The fixed laws: a time is read to the END OF ITS GRAIN ("to 8:40" is
@@ -869,12 +870,21 @@ function inheritedMeridiem(l: TimeParts, r: TimeParts): 'am' | 'pm' | undefined 
 const hasOwnDay = (side: TimeParts): boolean =>
   side.date !== undefined || side.relative !== undefined;
 
+/** Whether a mention names a zone anywhere — its own or a range side's. */
+const namesZone = (parts: TimeParts): boolean =>
+  parts.zoneToken !== undefined ||
+  parts.rangeOf?.[0].zoneToken !== undefined ||
+  parts.rangeOf?.[1].zoneToken !== undefined;
+
 function builtOf(
   parts: TimeParts,
   clock: ResolveClock,
   nowMs: number,
   policy: ZonePolicy | undefined,
 ): Built[] | Unresolved {
+  // The person's zone is unknown (G15): a mention that names none waits on it — even a
+  // look-back, whose window would be shown, confirmed and converted in a zone nobody said.
+  if (clock.zoneSource === 'unknown' && !namesZone(parts)) return { needsZone: true };
   const built = builtOfAll(parts, clock, nowMs, policy);
   return Array.isArray(built) ? withoutAgreeingLiterals(built) : built;
 }

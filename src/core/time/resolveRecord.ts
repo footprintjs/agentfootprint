@@ -157,6 +157,12 @@ export const DEFAULT_TIME_POLICY: TimePolicy = Object.freeze({ dateOrder: 'ask',
 export interface ResolveClock {
   readonly now: InstantText;
   readonly zone: ZoneName;
+  /**
+   * The clock's `zoneSource` (`clock.ts` · `TimeClock`). `'unknown'` (G15):
+   * `zone` is only the UTC spelling, so a mention that names no zone of its
+   * own is not resolved — the person's zone is asked first.
+   */
+  readonly zoneSource?: string;
 }
 
 /** Every candidate of one mention, and what kept a parse from any. */

@@ -29,7 +29,7 @@ import { completeClock } from '../../time/clock.js';
 import { granularityMsOf } from '../../time/convert.js';
 import { driftAtDispatch } from '../../time/drift.js';
 import { checkReading, type TimeReading } from '../../time/reader.js';
-import { callWindowOfCall, clockOf, readingsOf } from '../../time/rows.js';
+import { answeredZoneOf, callWindowOfCall, clockOf, readingsOf } from '../../time/rows.js';
 import { callRow, clockOnResumeRow, clockRow, timeReadingRows } from '../../time/rowsBuild.js';
 import { timeContextOf, type TimeContext } from '../../time/wire.js';
 import { tzdataVersion, type ZoneName } from '../../time/zone.js';
@@ -54,12 +54,19 @@ import type { ToolCallsHandlerDeps } from './toolCalls.js';
  * the turn every later row of this turn names. One row per run; the clock is
  * a run constant from here on and is never written again this turn (a
  * resume keeps it — `stages/toolCalls.ts` records a differing `time` as
- * `clock-on-resume`). No accessor, or no draft → nothing is written.
+ * `clock-on-resume`). No accessor, or no draft → nothing is written. A draft
+ * whose zone is unknown (G15) takes the zone the person answered in an earlier
+ * turn (`core/time/rows.ts` · `answeredZoneOf`, `zoneSource: 'answered'`), else stays
+ * unknown — never the server's.
  */
 export function stampClock(scope: TypedScope<AgentState>, deps: SeedStageDeps): void {
   const draft = deps.timeClock?.();
   if (draft === undefined) return;
-  const clock = completeClock(draft, scope.turnStartMs as number);
+  const answered =
+    draft.zoneSource === 'unknown'
+      ? answeredZoneOf(scope.findingsLedger as FindingsLedger | undefined)
+      : undefined;
+  const clock = completeClock(draft, scope.turnStartMs as number, answered);
   recordFindings(scope, [
     clockRow(
       clock,

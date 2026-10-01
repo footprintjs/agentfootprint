@@ -599,8 +599,8 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
    *  Undefined on every agent that did not ask — then no clock is read, no
    *  time row is filed and `time` on a run is refused. */
   private readonly timeOptions?: ReadTimeOptions;
-  /** The clock the CURRENT `run()`'s seed stamps — set by `run()` (refusing a
-   *  run with no zone), read by seed through `SeedStageDeps.timeClock`, and
+  /** The clock the CURRENT `run()`'s seed stamps — set by `run()` (a run with
+   *  no zone gets an unknown one, never the server's), read by seed through `SeedStageDeps.timeClock`, and
    *  cleared when `run()` ends, so a later turn this agent did not start (its
    *  chart mounted in a composition) never stamps a clock nobody declared for
    *  it (`seedClockDraft`). */
@@ -1867,7 +1867,8 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
     assertIdentityShape(runInput.identity, 'Agent.run');
     assertIdentityShape(options?.identity, 'Agent.run');
     // The run's clock (the time layer): read or refused HERE, before the turn
-    // starts — a run with no zone anywhere never runs on the server's zone.
+    // starts — a run with no zone anywhere runs with its zone UNKNOWN (G15),
+    // never on the server's zone.
     const clockDraft = this.clockDraftFor(runInput.time ?? options?.time, 'Agent.run');
     const engineOptions = withoutTime(options);
     // Timing next, and before the executor exists: both of these refuse a call
@@ -2256,27 +2257,18 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
 
   /**
    * A run's `time`, read into the turn's clock draft (the time layer) — or
-   * refused, before the turn starts: `time` on an agent without `.time()`, a
-   * malformed value, or no zone anywhere (the run's, else the builder's).
-   * `undefined` on an agent without the layer.
+   * refused, before the turn starts: `time` on an agent without `.time()` or
+   * a malformed value. No zone anywhere (the run's, else the builder's) is no
+   * refusal: the zone is UNKNOWN (`zoneSource: 'unknown'`, G15) — never the
+   * server's, never guessed; the person is asked it before any time they
+   * wrote is read. `undefined` on an agent without the layer.
    *
    * @internal
    */
   private clockDraftFor(time: unknown, runner: string): ClockDraft | undefined {
     const passed = this.passedTimeFor(time, runner);
     if (this.timeOptions === undefined) return undefined;
-    const draft = draftClock(passed, this.timeOptions);
-    if (draft === 'no-zone') {
-      throw new InvalidRunInputError({
-        runner,
-        received: 'a run with no time zone',
-        hint:
-          "this agent's time layer needs the person's zone — pass run({ message, time: { zone: " +
-          "'America/Los_Angeles' } }) or declare a fallback with .time({ zone }); the server's " +
-          'zone is never used',
-      });
-    }
-    return draft;
+    return draftClock(passed, this.timeOptions);
   }
 
   /**
@@ -2285,25 +2277,14 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
    * composition, which passes no `time`), the builder's fallback zone with
    * the turn's start as `now` (`zoneSource: 'builder'`, `nowSource:
    * 'default'` — the same record a `run()` with no `time` files). With no
-   * fallback zone that turn is refused, as `run()` refuses it: the server's
-   * zone is never used.
+   * fallback zone that turn's zone is unknown, as a `run()`'s is (G15): the
+   * server's zone is never used.
    *
    * @internal
    */
   private seedClockDraft(): ClockDraft {
     if (this.runClockDraft !== undefined) return this.runClockDraft;
-    const draft = draftClock(undefined, this.timeOptions ?? {});
-    if (draft === 'no-zone') {
-      throw new InvalidRunInputError({
-        runner: 'Agent (mounted in a composition)',
-        received: 'a turn with no time zone',
-        hint:
-          "this agent's time layer needs the person's zone, and a composition passes no time to " +
-          "the agents it mounts — declare a fallback with .time({ zone: 'America/Los_Angeles' }); " +
-          "the server's zone is never used",
-      });
-    }
-    return draft;
+    return draftClock(undefined, this.timeOptions ?? {});
   }
 
   /**
@@ -2776,7 +2757,9 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
   private timeAnswerContextOf(state: unknown): TimeAnswerContext | undefined {
     if (this.timeOptions === undefined) return undefined;
     const ledger = (state as Partial<AgentState> | undefined)?.findingsLedger;
-    const zone = clockOf(Array.isArray(ledger) ? ledger : undefined)?.zone;
+    const clock = clockOf(Array.isArray(ledger) ? ledger : undefined);
+    // An unknown zone (G15) judges no wall time: `zone` is then only the UTC spelling.
+    const zone = clock?.zoneSource === 'unknown' ? undefined : clock?.zone;
     const messages = this.timeOptions.messages;
     return {
       ...(zone !== undefined && { zone }),

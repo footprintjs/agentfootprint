@@ -4,7 +4,7 @@ title: TimeClock
 
 # Interface: TimeClock
 
-Defined in: [src/core/time/clock.ts:51](https://github.com/footprintjs/agentfootprint/blob/main/src/core/time/clock.ts#L51)
+Defined in: [src/core/time/clock.ts:54](https://github.com/footprintjs/agentfootprint/blob/main/src/core/time/clock.ts#L54)
 
 The run's clock, stamped once per turn (time design § 4).
 
@@ -18,7 +18,7 @@ The run's clock, stamped once per turn (time design § 4).
 
 > `readonly` **now**: `string`
 
-Defined in: [src/core/time/clock.ts:53](https://github.com/footprintjs/agentfootprint/blob/main/src/core/time/clock.ts#L53)
+Defined in: [src/core/time/clock.ts:56](https://github.com/footprintjs/agentfootprint/blob/main/src/core/time/clock.ts#L56)
 
 The anchor for this turn — the app's `now`, else the turn's start.
 
@@ -28,7 +28,7 @@ The anchor for this turn — the app's `now`, else the turn's start.
 
 > `readonly` **nowSource**: `"default"` \| `"app"`
 
-Defined in: [src/core/time/clock.ts:55](https://github.com/footprintjs/agentfootprint/blob/main/src/core/time/clock.ts#L55)
+Defined in: [src/core/time/clock.ts:58](https://github.com/footprintjs/agentfootprint/blob/main/src/core/time/clock.ts#L58)
 
 The app passed `now`, or the library took the turn's start.
 
@@ -38,16 +38,20 @@ The app passed `now`, or the library took the turn's start.
 
 > `readonly` **zone**: `string`
 
-Defined in: [src/core/time/clock.ts:57](https://github.com/footprintjs/agentfootprint/blob/main/src/core/time/clock.ts#L57)
+Defined in: [src/core/time/clock.ts:64](https://github.com/footprintjs/agentfootprint/blob/main/src/core/time/clock.ts#L64)
 
-The person's zone for this run — an IANA name.
+The person's zone for this run — an IANA name. Under `zoneSource:
+'unknown'` it is `'UTC'`: the zone instants are SPELLED in, never the
+person's.
 
 ***
 
 ### zoneSource
 
-> `readonly` **zoneSource**: `"run"` \| `"builder"`
+> `readonly` **zoneSource**: `"unknown"` \| `"run"` \| `"answered"` \| `"builder"`
 
-Defined in: [src/core/time/clock.ts:59](https://github.com/footprintjs/agentfootprint/blob/main/src/core/time/clock.ts#L59)
+Defined in: [src/core/time/clock.ts:70](https://github.com/footprintjs/agentfootprint/blob/main/src/core/time/clock.ts#L70)
 
-The run's `time.zone`, else the `.time({ zone })` fallback.
+The run's `time.zone`, else the `.time({ zone })` fallback; with neither,
+the zone the person answered in an earlier turn of this conversation
+(`'answered'`), else `'unknown'` (G15).

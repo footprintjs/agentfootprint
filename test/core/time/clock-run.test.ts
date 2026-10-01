@@ -49,6 +49,7 @@ import {
 } from '../../../src/index.js';
 import type { LLMRequest, LLMResponse } from '../../../src/adapters/types.js';
 import { validateCheckpoint } from '../../../src/core/runCheckpoint.js';
+import { TIME_LINE_SOURCE } from '../../../src/core/agent/arguments/serve.js';
 import { expectWithinTimes } from '../../helpers/perf.js';
 
 // ─── the harness ─────────────────────────────────────────────────────
@@ -209,14 +210,24 @@ describe('one clock row per turn', () => {
 // ─── refusals ────────────────────────────────────────────────────────
 
 describe('refused before the turn starts', () => {
-  it('no zone anywhere — never the server’s zone', async () => {
+  it('no zone anywhere — the zone is UNKNOWN, never the server’s and never guessed (G15)', async () => {
     const { agent, requests } = agentWith([answer('hi')], (b) => b.time());
-    await expect(agent.run({ message: 'hello', time: { now: NOW } })).rejects.toThrow(
-      /needs the person's zone/,
+    await expect(agent.run({ message: 'hello', time: { now: NOW } })).resolves.toBe('hi');
+    expect(agent.findings()).toEqual([
+      {
+        kind: 'clock',
+        turn: 1,
+        iteration: 1,
+        now: NOW,
+        nowSource: 'app',
+        zone: 'UTC',
+        zoneSource: 'unknown',
+      },
+    ]);
+    // The model is told the instant in UTC and that the person's zone is not known.
+    expect(requests[0]!.messages[requests[0]!.messages.length - 1]!.content).toBe(
+      `${TIME_LINE_SOURCE} This turn's time: Friday 2026-10-09 15:40 UTC (the person's time zone is not known).`,
     );
-    await expect(agent.run('hello')).rejects.toBeInstanceOf(InvalidRunInputError);
-    expect(requests).toHaveLength(0);
-    expect(agent.findings()).toBeUndefined();
   });
 
   it('time on an agent without .time()', async () => {
@@ -447,18 +458,25 @@ describe('the rows cross the checkpoint door', () => {
 
 // ─── security + byte identity ───────────────────────────────────────
 
-describe('the model is served nothing new', () => {
-  it('an armed and an unarmed run send the same request bytes', async () => {
+describe('the model is served nothing new but the run clock (G16)', () => {
+  it('an armed run sends the unarmed request bytes plus ONE late line — the run clock', async () => {
     const script = [call('c1', 'backup_runs'), answer('done')];
     const armed = agentWith(script, (b) => b.system('bot').tool(backupRuns()).time({ zone: LA }));
     const plain = agentWith(script, (b) => b.system('bot').tool(backupRuns()));
     await armed.agent.run({ message: 'go', time: { now: NOW } });
     await plain.agent.run({ message: 'go' });
     const strip = (reqs: LLMRequest[]) =>
-      JSON.stringify(
-        reqs.map((r) => ({ system: r.systemPrompt, messages: r.messages, tools: r.tools })),
-      );
+      JSON.stringify(reqs.map((r) => ({ system: r.systemPrompt, tools: r.tools })));
     expect(strip(armed.requests)).toBe(strip(plain.requests));
+    // Each armed request ends with the one line; the rest is the unarmed conversation (the last
+    // request — the harness keeps requests by reference, and an unarmed run reuses one array).
+    const CLOCK_LINE = `${TIME_LINE_SOURCE} This turn's time: Friday 2026-10-09 08:40 America/Los_Angeles (UTC-07:00).`;
+    for (const r of armed.requests)
+      expect(r.messages[r.messages.length - 1]!.content).toBe(CLOCK_LINE);
+    const last = (rs: LLMRequest[]) => rs[rs.length - 1]!.messages;
+    expect(JSON.stringify(last(armed.requests).slice(0, -1))).toBe(
+      JSON.stringify(last(plain.requests)),
+    );
   });
 
   it('no row carries the message', async () => {

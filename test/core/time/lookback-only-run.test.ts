@@ -82,6 +82,8 @@ const answer = (content: string): Reply => ({ content });
 const LA = 'America/Los_Angeles';
 const NOW = '2026-10-09T15:40:00Z';
 const NOW_MS = Date.parse(NOW);
+/** The run clock that opens the served line on every request under `.time()` (G16). */
+const CLOCK = "This turn's time: Friday 2026-10-09 08:40 America/Los_Angeles (UTC-07:00).";
 const YESTERDAY = { from: '2026-10-08T07:00:00Z', to: '2026-10-09T07:00:00Z' };
 const TODAY = { from: '2026-10-09T07:00:00Z', to: '2026-10-10T07:00:00Z' };
 
@@ -287,7 +289,7 @@ describe('no form can read the window, even wider — refused, never run on the 
     );
     // The late line: the refusal as a conclusion — not the pending ask naming that call again.
     expect(timeLineOf(requests[1], message)).toBe(
-      `${TIME_LINE_SOURCE} ` +
+      `${TIME_LINE_SOURCE} ${CLOCK} ` +
         'search_logs was not run for “yesterday”: no period form the tool declares can read the ' +
         'window it asked for, exactly or by reading a wider one, within the most the tool ' +
         'declares it reads at once (maxRange 24h). So the answer tells the person that ' +
@@ -438,7 +440,7 @@ describe('the served line — a refused reading is a conclusion, not the next ca
     expect(windowOf(agent, 'c1')).toMatchObject({ how: 'refused', refused: 'time-future' });
     expect(timeLineOf(requests[0], message)).toContain('is not settled yet');
     expect(timeLineOf(requests[1], message)).toBe(
-      `${TIME_LINE_SOURCE} ` +
+      `${TIME_LINE_SOURCE} ${CLOCK} ` +
         'client_activity was not run for “10/20/26”: the window it asked for had not happened yet, ' +
         'and the tool declares that its source holds only the past. So the answer tells the ' +
         'person that client_activity could not read that time, and claims nothing about it from ' +

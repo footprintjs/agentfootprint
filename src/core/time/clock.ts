@@ -16,8 +16,11 @@
  *
  * - **The zone is per run; the builder's is a fallback.** The run's
  *   `time.zone` wins, `.time({ zone })` is used when the run names none, and
- *   with neither the run is REFUSED before the turn starts — never the
- *   server's zone ({@link draftClock} answers `'no-zone'`).
+ *   with neither the zone is UNKNOWN (G15) — never the server's zone, never a
+ *   guess: the clock records `zoneSource: 'unknown'` and spells instants in
+ *   {@link UNKNOWN_ZONE_SPELLING} (UTC), every reading of the person's words
+ *   waits on their zone (it is asked first), and the zone they answer holds
+ *   for the turns after it (`zoneSource: 'answered'`).
  * - **`now` is the app's, else the turn's start** — admitted as
  *   `nowSource: 'default'`, like any default nobody chose.
  * - **Frozen across a pause.** The clock is written once per turn. A resume
@@ -53,11 +56,25 @@ export interface TimeClock {
   readonly now: InstantText;
   /** The app passed `now`, or the library took the turn's start. */
   readonly nowSource: 'app' | 'default';
-  /** The person's zone for this run — an IANA name. */
+  /**
+   * The person's zone for this run — an IANA name. Under `zoneSource:
+   * 'unknown'` it is `'UTC'`: the zone instants are SPELLED in, never the
+   * person's.
+   */
   readonly zone: ZoneName;
-  /** The run's `time.zone`, else the `.time({ zone })` fallback. */
-  readonly zoneSource: 'run' | 'builder';
+  /**
+   * The run's `time.zone`, else the `.time({ zone })` fallback; with neither,
+   * the zone the person answered in an earlier turn of this conversation
+   * (`'answered'`), else `'unknown'` (G15).
+   */
+  readonly zoneSource: 'run' | 'builder' | 'answered' | 'unknown';
 }
+
+/**
+ * The zone a clock with no known zone spells its instants in (G15) — named
+ * as unknown wherever it is shown, never read as the person's.
+ */
+export const UNKNOWN_ZONE_SPELLING = 'UTC' as ZoneName;
 
 /**
  * The run's time input — `agent.run({ message, time })`, or the options bag of
@@ -88,7 +105,11 @@ export interface RunTime {
 
 /** The builder's `.time(options)` — the fallback zone, the reader and its policy (time design § 11). */
 export interface TimeOptions {
-  /** The fallback zone for a run that names none. Omitted: every run must name its own. */
+  /**
+   * The fallback zone for a run that names none. Omitted with no run zone
+   * either: the zone is unknown — never the server's — and the person is
+   * asked it before any time they wrote is read (G15).
+   */
   readonly zone?: string;
   /**
    * The strategy that reads the person's words into time parts (`TimeReader`).
@@ -135,7 +156,8 @@ export interface ReadTimeOptions {
 export interface ClockDraft {
   readonly now?: InstantText;
   readonly zone: ZoneName;
-  readonly zoneSource: 'run' | 'builder';
+  /** `'unknown'`: neither the run nor the builder named a zone — `zone` is the UTC spelling. */
+  readonly zoneSource: 'run' | 'builder' | 'unknown';
   readonly window?: TimeRange;
 }
 
@@ -291,35 +313,43 @@ export function readTimeOptions(value: unknown): Read<ReadTimeOptions> {
 // ─── The clock ───────────────────────────────────────────────────────────
 
 /**
- * The turn's clock as far as the run's inputs decide it — or `'no-zone'`
- * when neither the run nor the builder names a zone (the run is then refused;
- * never the server's zone).
+ * The turn's clock as far as the run's inputs decide it. With no zone from
+ * the run or the builder the zone is UNKNOWN (G15): `zoneSource: 'unknown'`,
+ * instants spelled in {@link UNKNOWN_ZONE_SPELLING} — never the server's
+ * zone, never a guess (seed reads a zone the person answered in an earlier
+ * turn, `stages/timeLayer.ts` · `stampClock`).
  */
-export function draftClock(
-  run: ReadRunTime | undefined,
-  options: ReadTimeOptions,
-): ClockDraft | 'no-zone' {
+export function draftClock(run: ReadRunTime | undefined, options: ReadTimeOptions): ClockDraft {
   const zone = run?.zone ?? options.zone;
-  if (zone === undefined) return 'no-zone';
   return {
     ...(run?.now !== undefined && { now: run.now }),
-    zone,
-    zoneSource: run?.zone !== undefined ? 'run' : 'builder',
+    zone: zone ?? UNKNOWN_ZONE_SPELLING,
+    zoneSource: run?.zone !== undefined ? 'run' : zone !== undefined ? 'builder' : 'unknown',
     ...(run?.window !== undefined && { window: run.window }),
   };
 }
 
-/** The clock, once the turn's start is known: `now` is the app's, else that start. */
-export function completeClock(draft: ClockDraft, turnStartMs: number): TimeClock {
+/**
+ * The clock, once the turn's start is known: `now` is the app's, else that
+ * start. `answeredZone` — the zone the person answered in an earlier turn —
+ * is read only when the draft's zone is unknown, and is then the turn's zone
+ * (`zoneSource: 'answered'`).
+ */
+export function completeClock(
+  draft: ClockDraft,
+  turnStartMs: number,
+  answeredZone?: ZoneName,
+): TimeClock {
   // Fixed width (`toISOString`, milliseconds always written) — the spelling
   // `rowsBuild.ts` · `callRow` gives `dispatchedAt`, so the two wall-clock reads
   // compare as text too.
   const now = draft.now ?? new Date(turnStartMs).toISOString();
+  const answered = draft.zoneSource === 'unknown' ? answeredZone : undefined;
   return {
     now,
     nowSource: draft.now !== undefined ? 'app' : 'default',
-    zone: draft.zone,
-    zoneSource: draft.zoneSource,
+    zone: answered ?? draft.zone,
+    zoneSource: answered !== undefined ? 'answered' : draft.zoneSource,
   };
 }
 

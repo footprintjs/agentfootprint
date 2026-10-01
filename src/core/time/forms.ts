@@ -146,7 +146,11 @@ function writtenReadingOf(
   const to = instantMs(window.range.to);
   try {
     const parses = withZoneAnswered(row.parses, window.zone);
-    const { candidates } = resolveMention(parses, clock, row.reader, false);
+    // Under an unknown clock zone (G15) the words were read in the zone the person answered —
+    // the window's — exactly as the time ask re-read them.
+    const read: ResolveClock =
+      clock.zoneSource === 'unknown' ? { now: clock.now, zone: window.zone } : clock;
+    const { candidates } = resolveMention(parses, read, row.reader, false);
     return candidates.find((c) => instantMs(c.range.from) === from && instantMs(c.range.to) === to);
   } catch {
     // A record the resolver cannot read names no parts: nothing is the person's.

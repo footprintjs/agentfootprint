@@ -21,7 +21,7 @@ It is a leaf: it imports nothing outside itself, and `readers/` imports only the
 | `zone.ts` | IANA zone names through `Intl` (an abbreviation such as `PST` and a bare offset are refused, although `Intl` takes them), `offsetAt`, `wallAt`, and wall time → instant under Temporal's four DST words (`readWall`, `wallToInstant`); the tz database's own answer to "which ONE zone does this place name" (`zoneOfPlace`: `London` → `Europe/London`, `India` → none) and the `Etc` zone of a whole-hour offset (`fixedOffsetZone`); one `Intl` reading per (zone, instant), memoised and bounded — the cost is pinned as a count, not a duration, by the performance case of `test/core/time/resolve.test.ts` |
 | `axis.ts` | a dataset's declared time axis (`DatasetTimeAxis`, moved from `artifacts/timeAxis.ts`; `artifacts/index.ts` re-exports it): the one judge `timeAxisIssues` (the interval is a duration under `AXIS_UNITS`, the zone a zone name), `readTimeAxis`, `describeTimeAxis`, and the read-side view `normaliseInstants` — UTC instants at one precision, sorted, with every unplaced value counted (`naive`, `dstAmbiguous`, `dstGap`, `unreadable`, `missing`) |
 | `range.ts` | `TimeRange` (half-open `[from, to)`), its two spellings (`parseRange` / `spellRange` — the ISO 8601 interval `from/to` and the joined `from..to`; `splitRange` is the format check), one conversion per boundary a range crosses (`fromInclusive` / `toInclusive`, `boundInto` / `boundFrom`, `lookbackRange` / `lookbackOf`), `reachMs` (first instant to last — the length `maxRange` is held against), `covers`, `overlaps`, `roundOutward` |
-| `clock.ts` | the run clock (§ 4): `TimeClock { now, nowSource, zone, zoneSource }`; the two inputs read or refused by name — the run's `time: { now, zone, window }` (`readRunTime`) and the builder's `.time({ zone })` (`readTimeOptions`); `draftClock` (the run's zone wins, the builder's is a fallback, neither is `'no-zone'`), `completeClock` (`now` is the app's, else the turn's start: `nowSource: 'default'`), `clockChange` (what a resume passed that differs from the kept clock) |
+| `clock.ts` | the run clock (§ 4): `TimeClock { now, nowSource, zone, zoneSource }`; the two inputs read or refused by name — the run's `time: { now, zone, window }` (`readRunTime`) and the builder's `.time({ zone })` (`readTimeOptions`); `draftClock` (the run's zone wins, the builder's is a fallback, with neither the zone is unknown: `zoneSource: 'unknown'`, spelled in `UNKNOWN_ZONE_SPELLING`), `completeClock` (`now` is the app's, else the turn's start: `nowSource: 'default'`; an unknown zone takes one the person answered earlier: `'answered'`), `clockChange` (what a resume passed that differs from the kept clock) |
 | `reader.ts` | the `TimeReader` port (`id`, `version`, `locale`, `kind: 'rule' \| 'model'`, `read`) and its result, `TimeParts` — zone-less parts, never instants; `readerIssue` (the builder's check) and `checkReading` (a quote must be a verbatim substring of the text; parts well formed; a `leftover` only beside parses, each token in the text; `confirm: true` only beside parses — the reader does not vouch the form; a refused mention keeps no text) |
 | `resolveRecord.ts` | what the resolver writes down, split out for the synchronous doors: the candidate and choice shapes, `DEFAULT_TIME_POLICY` and `readPolicy` (read at `.time()`, with the optional `abbreviations` map), `widenedGrain` (the one answer to "was this window's END widened?") and `shownGrain` (the grain a confirmation label shows the end at), and the checkpoint door's checks for a recorded candidate and choice (`candidateIsWellFormed`, `choiceIsWellFormed`) — `resolve.ts` re-exports them |
 | `resolve.ts` | parts + clock + policy → every candidate window (`resolveMention`: date orders, am/pm, the year, both instants of a DST overlap or gap, a day word, a look-back, a range read to the end of its grain except an o'clock end, a bare first side taking the second's meridiem, two bare sides sharing one, a said IANA zone or offset, a place named with `time` the tz database names once, an abbreviation only through the app's map and then read both as its zone and as its letters — any other zone token is asked), and `chooseReading` (`only` · `policy` · `open` with its questions · `none`); the v1 `TimePolicy` (`dateOrder`, `year`, both `'ask'` by default; `abbreviations`, absent by default — no map ships); the checks for a recorded candidate and choice |
@@ -125,15 +125,54 @@ said.includes('08:40') && derived.includes('08:41') && derived.includes('PDT'); 
 
 **The clock law: a declared, recorded input, never a hidden read.** `.time()` arms it. The zone is
 per run (`run({ time: { zone } })`), the builder's `.time({ zone })` a fallback, and with neither
-the run is refused — never the server's zone. `now` is the app's, else the turn's start, recorded
+the zone is UNKNOWN — never the server's zone, never a guess (G15; the unknown-zone law below).
+`now` is the app's, else the turn's start, recorded
 `nowSource: 'default'`. Seed files one `clock` row per turn, after the turn number is final; it is
 never written again that turn. A resume that passes a different `time` keeps the frozen clock and
 files `clock-on-resume { passed, kept }`. A turn `run()` did not start (the agent's chart mounted
-in a composition, which passes no `time`) stamps the builder's fallback as a default, or is refused
-without one — the draft a `run()` read ends with that `run()`. The layer reads the wall clock at exactly two points, both
+in a composition, which passes no `time`) stamps the builder's fallback as a default, or an unknown
+zone without one — the draft a `run()` read ends with that `run()`. The layer reads the wall clock at exactly two points, both
 recorded: a default `now`, and each call's `dispatchedAt`. A zone is recorded as the app wrote it —
 `Intl`'s canonical form can be an older link (`Asia/Kolkata` → `Asia/Calcutta`). The rows fire no
-event (the record is the reader's); nothing is served to the model.
+event (the record is the reader's).
+
+**The unknown-zone law (G15): a zone nobody named is asked, never guessed.** An app deployed
+without its zone setting can still arm `.time()`: with no run zone and no fallback the `clock` row
+records `zoneSource: 'unknown'` and spells instants in UTC (`clock.ts` · `UNKNOWN_ZONE_SPELLING`).
+Before, such a run was refused, so the app could not arm the layer at all and "Always confirm"
+silently became "never confirm" — tools ran on their defaults. Now every reading of the person's
+words that names no zone of its own waits on their zone (`resolve.ts` · `builtOf` → `needsZone`, a
+look-back too): the time ask asks it FIRST ("Which time zone are you in? It decides which time
+“yesterday” is.", catalog key `ask.zone-unknown`), the words are then read in the zone they
+answer (`arguments/ask.ts` · `bindWindowAnswer`), and that zone holds for the turns after it — seed
+stamps it with `zoneSource: 'answered'` (`rows.ts` · `answeredZoneOf`: a `time-answer` filed under
+an unknown clock for a mention that named no zone). The turn the answer was given in keeps its
+frozen clock. Wherever a time is shown while the zone is unknown it is in UTC and says why: the
+run clock and the control window in the served line ("… UTC (the person's time zone is not
+known)"), the limits lines (`coverage/timeLimits.ts` · `UNKNOWN_ZONE_LINE`), and the tool's
+`ctx.time` (`wire.ts` · `TimeContext`, `zoneUnknown` — the zone is a spelling, never the person's).
+No wall time is judged under it (`Agent` · `timeAnswerContextOf`). An app that passes a zone is
+byte-identical.
+
+```ts
+const agent = Agent.create({ provider, model }).tools([clientActivity]).time({ reader: englishTimeReader() }).build();
+await agent.run({ message: 'any client activity yesterday?' });
+// paused: one field, format 'zone' — 'Which time zone are you in? It decides which time “yesterday” is.'
+// resume { f1: 'America/Los_Angeles' } → paused: yesterday offered as 2026-10-08 in Los Angeles → confirm → runs
+await agent.followUp('and the day before?'); // clock row: zone America/Los_Angeles, zoneSource 'answered'
+```
+
+**The clock-line law (G16): the model reads the date from the library.** Under `.time()` the turn's
+clock is the FIRST sentence of the one served time line, on every request
+(`arguments/serve.ts` · `clockSentence`): "This turn's time: Friday 2026-10-09 08:40
+America/Los_Angeles (UTC-07:00)." — the frozen clock to the minute, the weekday in the person's
+zone (a model re-derives a weekday wrong), the zone named. Not "now": the clock is the turn's and
+a resumed request is read later (the deictic-present rule of the model-facing checker). Apps used
+to serve their own "application clock" block; with the layer armed the model had no date on any
+turn. Cost, measured (chars ÷ 4, `test/core/time/clock-served.test.ts`): the sentence 19 tokens;
+a request whose line says nothing else gains 73 (the opening that says who speaks is most of it).
+Never without `.time()`; `reactMode: 'classic'` serves the line on its first request only (its
+cached tools slot does not re-compose — the known limit).
 
 **The reading law: a strategy tokenizes, the library resolves, the policy or the person
 chooses.** The library reads a person's words only through a reader the app armed
@@ -378,10 +417,10 @@ normaliseInstants(
 normaliseInstants([{ t: '2026-09-14T10:00:00' }], { column: 't', unit: 'iso' });
 // { status: 'naive-values', count: 1, points: [] } — never read as UTC
 
-// The run clock: the run's zone wins, the builder's is a fallback, neither is refused.
+// The run clock: the run's zone wins, the builder's is a fallback, with neither it is unknown.
 draftClock({ now: '2026-10-09T15:40:00Z' }, { zone: 'America/Los_Angeles' });
 // { now: '2026-10-09T15:40:00Z', zone: 'America/Los_Angeles', zoneSource: 'builder' }
-draftClock({}, {}); // 'no-zone' — the Agent refuses the run
+draftClock({}, {}); // { zone: 'UTC', zoneSource: 'unknown' } — asked, never guessed (G15)
 
 // "to 8:40", read to the end of its minute, shown to the person as 08:40.
 presentRange(asked, { zone: 'America/Los_Angeles' }, 'minute');

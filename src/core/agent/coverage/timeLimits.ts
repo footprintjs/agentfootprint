@@ -33,6 +33,12 @@ import {
 
 export type { TimeLimitLines };
 
+// LENS · late-line · request-ephemeral (and the person's limits block)
+// reads: nothing — a fixed clause, added when the turn's clock zone is unknown (G15)
+// law: names WHY the ranges are in UTC, so no reader takes UTC for the person's zone.
+/** The clocks line under an unknown zone (G15): the ranges are in UTC because the person's zone is not known. */
+export const UNKNOWN_ZONE_LINE = "times are shown in UTC — the person's time zone is not known";
+
 /**
  * The turn's time limits lines, from the ledger — {@link renderTimeLimits}
  * over `timeLimitFacts.ts` · `timeLimitFactsOf`. `turn` undefined reads every
@@ -72,11 +78,14 @@ export function renderTimeLimits(
   }
   // The person reads every wall-clock source; the model only the label that two differ — one
   // declared clock is compared as instants and changes nothing the answer states.
-  const clocks =
-    audience === 'person'
+  const clocks = [
+    ...(audience === 'person'
       ? clockLines(facts.sources, facts.differ)
       : facts.differ === undefined
       ? []
-      : clockLines([], facts.differ);
+      : clockLines([], facts.differ)),
+    // The ranges above are spelled in UTC only because the person's zone is unknown (G15).
+    ...(facts.zoneUnknown === true && period.length > 0 ? [UNKNOWN_ZONE_LINE] : []),
+  ];
   return period.length + clocks.length === 0 ? undefined : { period, clocks };
 }

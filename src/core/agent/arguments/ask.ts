@@ -93,7 +93,7 @@ import {
   type TimeAnswerRow,
   type TimeReadingRow,
 } from '../../time/rows.js';
-import { fixedOffsetZone, offsetAt, type ZoneName } from '../../time/zone.js';
+import { fixedOffsetZone, isZoneName, offsetAt, type ZoneName } from '../../time/zone.js';
 import { shownArgsOf } from '../../toolShownArgs.js';
 import { validatePropertyValue } from '../toolArgsValidation.js';
 import {
@@ -872,6 +872,12 @@ export interface AskTime {
   /** The turn's clock zone — a window answered with no zone of its own is written in it. */
   readonly zone?: ZoneName;
   /**
+   * The turn's clock zone is UNKNOWN (`zoneSource: 'unknown'`, G15): `zone` is
+   * only the UTC spelling, and a zone answer is the person's own zone — the
+   * mention is re-read in it.
+   */
+  readonly zoneUnknown?: true;
+  /**
    * Under `.time({ reader })`: the open mention's row, the policy and the
    * whole catalog — what a zone answer re-reads the mention with.
    */
@@ -1185,10 +1191,11 @@ function bindWindowAnswer(
       return { expected: WINDOW_ZONE_EXPECTATION };
     }
     const row = reading.row;
-    // The re-read stays a PROPOSAL: the zone was the person's, the window is still words.
+    // The re-read stays a PROPOSAL: the zone was the person's, the window is still words. Under
+    // an unknown clock zone (G15) the answer is the person's own zone: the words are read in it.
     const resolution = resolveMention(
       withZoneAnswered(row.parses ?? [], answer, reading.policy),
-      { now: time.now, zone: time.zone },
+      { now: time.now, zone: time.zoneUnknown === true && isZoneName(answer) ? answer : time.zone },
       row.reader,
       true,
       reading.policy,

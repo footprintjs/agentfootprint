@@ -290,7 +290,10 @@ the turn are filled from it (`answered` + `matched: 'mention'`) and it is not as
 tool description: ONE request-only `user` line appended last to each request (`serve.ts` ·
 `timeWindowsLine`, composed at the slot's one decoration site from the tools really served, carried
 on `timeLine` = `{ iteration, text }`, appended by `callLLM`, rebuilt by `servedView`; the mount
-reads the windows with `core/time/windows.ts` · `readerWindowsOf`). It is the library's CONCLUSION,
+reads the windows with `core/time/windows.ts` · `readerWindowsOf`). Under `.time()` it opens, after
+who says it, with the turn's clock on EVERY request (`serve.ts` · `clockSentence`, G16: "This turn's
+time: Friday 2026-10-09 08:40 America/Los_Angeles (UTC-07:00)." — under an unknown zone, G15, the UTC
+spelling "(the person's time zone is not known)"). It is the library's CONCLUSION,
 never raw facts: a settled window in the person's zone WITH ITS SOURCE and each period tool's own
 values ("may pass"), and the answer is told to state it; a quote still PENDING names no window —
 only that it is not settled and the NEXT STEP that asks the person (the call with the period

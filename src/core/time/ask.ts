@@ -230,6 +230,7 @@ export const TIME_ASK_MESSAGE_KEYS = Object.freeze([
   'ask.which',
   'ask.confirm',
   'ask.zone',
+  'ask.zone-unknown',
   'choice.confirm',
 ] as const);
 

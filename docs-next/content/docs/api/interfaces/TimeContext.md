@@ -32,7 +32,7 @@ Defined in: [src/core/time/wire.ts:45](https://github.com/footprintjs/agentfootp
 
 > `readonly` **dispatchedAt**: `string`
 
-Defined in: [src/core/time/wire.ts:51](https://github.com/footprintjs/agentfootprint/blob/main/src/core/time/wire.ts#L51)
+Defined in: [src/core/time/wire.ts:57](https://github.com/footprintjs/agentfootprint/blob/main/src/core/time/wire.ts#L57)
 
 The wall clock when the library handed the call to the tool — the `call` row's.
 
@@ -42,7 +42,7 @@ The wall clock when the library handed the call to the tool — the `call` row's
 
 > `readonly` **now**: `string`
 
-Defined in: [src/core/time/wire.ts:49](https://github.com/footprintjs/agentfootprint/blob/main/src/core/time/wire.ts#L49)
+Defined in: [src/core/time/wire.ts:55](https://github.com/footprintjs/agentfootprint/blob/main/src/core/time/wire.ts#L55)
 
 The turn's frozen clock (§ 4).
 
@@ -63,3 +63,15 @@ Defined in: [src/core/time/wire.ts:44](https://github.com/footprintjs/agentfootp
 Defined in: [src/core/time/wire.ts:47](https://github.com/footprintjs/agentfootprint/blob/main/src/core/time/wire.ts#L47)
 
 The person's zone for this run (the clock's).
+
+***
+
+### zoneUnknown?
+
+> `readonly` `optional` **zoneUnknown?**: `true`
+
+Defined in: [src/core/time/wire.ts:53](https://github.com/footprintjs/agentfootprint/blob/main/src/core/time/wire.ts#L53)
+
+The person's zone is NOT known (the clock's `zoneSource: 'unknown'`, G15):
+`zone` is only the UTC spelling of the instants, never the person's — a
+tool must not read a wall time in it as theirs. Absent when the zone is known.

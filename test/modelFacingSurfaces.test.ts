@@ -87,6 +87,7 @@ import { findingsLedgerPiece } from '../src/core/agent/findings/serve.js';
 import {
   filledNote,
   keptAnswersNote,
+  clockSentence,
   secondPauseRefusal,
   timeRefusal,
   timeLimitsSentence,
@@ -1793,6 +1794,45 @@ const PRODUCERS: readonly ModelFacingProducer[] = [
       /^\[A note from the library[^\]]*\] The window for “yesterday” is not settled yet\. The time the tools read is not the time asked about — (?!.*A note from the library)/m,
     ],
     compose: async () => timeLimitLines(),
+  },
+  {
+    id: 'time layer — the run clock, the first sentence of the served time line on every request (G16)',
+    module: 'src/core/agent/arguments/serve.ts',
+    surface: { channel: 'injected-turn', lifetime: 'request-ephemeral' },
+    lifetimeBecause:
+      'composed at the tools slot’s one decoration site from the turn’s `clock` row (mount arg ' +
+      '`timeClock`), the first part of the ONE served time line, which `callLLM` serves as the ' +
+      'LAST `role: "user"` line of that one request — never written to history, so every request ' +
+      'reads the turn’s frozen clock again',
+    drivenBy: ['test/core/time/clock-served.test.ts', 'test/core/time/zone-unknown-run.test.ts'],
+    reaches: [
+      /^\[A note from the library that runs the tools — not from the person, and not a correction from them: when you answer, answer the person directly, as you would from the tool results alone\.\] This turn's time: Friday 2026-10-09 08:40 America\/Los_Angeles \(UTC-07:00\)\.$/m,
+      // The unknown zone (G15): UTC, named as not known — never a guessed zone.
+      /^\[A note from the library[^\]]*\] This turn's time: Friday 2026-10-09 15:40 UTC \(the person's time zone is not known\)\.$/m,
+      // …and the control window under it, spelled in UTC and saying why.
+      /The window the person set in the app's time control is 2026-10-09 08:00–08:40 UTC, in UTC \(the person's time zone is not known\)\. An answer built on it states that window\.$/m,
+    ],
+    compose: async () => {
+      const now = '2026-10-09T15:40:00Z';
+      const control = {
+        now,
+        windows: [],
+        zoneUnknown: true as const,
+        control: {
+          source: 'control' as const,
+          range: { from: '2026-10-09T08:00:00Z', to: '2026-10-09T08:41:00Z' },
+          zone: 'UTC',
+        },
+      };
+      return [
+        timeLine([clockSentence({ now, zone: 'America/Los_Angeles' })])!,
+        timeLine([clockSentence({ now, zone: 'UTC', zoneUnknown: true })])!,
+        timeLine([
+          clockSentence({ now, zone: 'UTC', zoneUnknown: true }),
+          timeWindowsLine([], new Map(), control as never),
+        ])!,
+      ];
+    },
   },
   {
     id: 'inputs layer — the note on a result whose call ran on a filled value (honesty layer 2)',

@@ -27,7 +27,7 @@
  */
 
 import type { PeriodRow } from './period.js';
-import { presentationZoneOf, sourceClocksOf } from '../../time/rows.js';
+import { clockOf, presentationZoneOf, sourceClocksOf } from '../../time/rows.js';
 import {
   clocksDiffer,
   distinctSources,
@@ -49,6 +49,8 @@ export interface TimeLimitFacts {
   readonly sources: readonly SourceClock[];
   /** The label that two sources declare different zones (`checkRecord.ts` · `clocksDiffer`). */
   readonly differ?: ClocksDiffer;
+  /** The clock's zone is unknown (G15): `zone` is only the UTC spelling, and the lines say so. */
+  readonly zoneUnknown?: true;
 }
 
 /**
@@ -73,6 +75,7 @@ export function timeLimitFactsOf(
 ): TimeLimitFacts | undefined {
   const zone = presentationZoneOf(ledger);
   if (zone === undefined || ledger === undefined) return undefined;
+  const zoneUnknown = clockOf(ledger)?.zoneSource === 'unknown';
   const period: PeriodRow[] = [];
   for (const row of ledger) {
     const r = row as { readonly kind?: unknown; readonly turn?: unknown } | null;
@@ -84,5 +87,11 @@ export function timeLimitFactsOf(
   const differ = clocksDiffer(sources);
   const clocks = audience === 'person' ? sources.length > 0 : differ !== undefined;
   if (period.length === 0 && !clocks) return undefined;
-  return { zone, period, sources, ...(differ !== undefined && { differ }) };
+  return {
+    zone,
+    period,
+    sources,
+    ...(differ !== undefined && { differ }),
+    ...(zoneUnknown && { zoneUnknown: true as const }),
+  };
 }

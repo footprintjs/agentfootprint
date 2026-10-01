@@ -2125,12 +2125,17 @@ export class AgentBuilder {
    *
    * - **The zone is per run.** `run({ message, time: { zone } })` names the
    *   person's zone; `zone` here is an optional FALLBACK for a run that names
-   *   none. With neither, `run()` is refused before the turn starts — the
-   *   server's zone is never used. A zone is an IANA name
+   *   none. With neither, the zone is UNKNOWN — the server's zone is never
+   *   used and none is guessed: instants are spelled in UTC and said to be,
+   *   the person is asked their zone before any time they wrote is read, and
+   *   the zone they answer holds for the next turns. A zone is an IANA name
    *   (`'America/Los_Angeles'`, `'UTC'`); an abbreviation (`PST`) or a bare
    *   offset names no zone and is refused.
    * - **`now` is the app's** (`time: { now }` — the message's time), else the
    *   turn's start, recorded as a default (`nowSource: 'default'`).
+   * - **The model is told the date.** Every request ends with the library's
+   *   one time line, opening with the turn's clock ("This turn's time: Friday
+   *   2026-10-09 08:40 America/Los_Angeles (UTC-07:00).").
    * - **Recorded once per turn.** Seed files one `clock` row on the ledger
    *   (`agent.findings()`): `now`, `nowSource`, `zone`, `zoneSource`, and a
    *   window set in a UI (`time: { window }`, recorded `source: 'control'`).

@@ -75,6 +75,8 @@ const answer = (content: string): Reply => ({ content });
 const LA = 'America/Los_Angeles';
 const NOW = '2026-10-09T16:00:00Z'; // 09:00 PDT
 const NOW_MS = Date.parse(NOW);
+/** The run clock that opens the served line on every request under `.time()` (G16) — `NOW` in Los Angeles. */
+const CLOCK = "This turn's time: Friday 2026-10-09 09:00 America/Los_Angeles (UTC-07:00).";
 
 type Row = { kind: string } & Record<string, unknown>;
 const ofKind = (agent: { findings(): unknown }, kind: string): Row[] =>
@@ -347,7 +349,7 @@ describe('G9 — the window set in the app’s time control is served by the lib
       });
       expect(isInputPause(out)).toBe(false);
       expect(timeLineOf(s.requests[0])).toBe(
-        `${TIME_LINE_SOURCE} ${CONTROL_LINE.replace('’', "'")}`,
+        `${TIME_LINE_SOURCE} ${CLOCK} ${CONTROL_LINE.replace('’', "'")}`,
       );
       expect(seen).toEqual([
         { server: '10.0.0.1', window: '2026-10-09T08:00:00-07:00..2026-10-09T08:39:59-07:00' },
@@ -355,14 +357,14 @@ describe('G9 — the window set in the app’s time control is served by the lib
     });
   }
 
-  it('byte identity — `.time()` with no reader and no control window serves no line', async () => {
+  it('`.time()` with no reader and no control window serves the run clock alone (G16)', async () => {
     const s = scripted([call('c1', 'smb_records', { server: '10.0.0.1' }), answer('done')]);
     const agent = Agent.create({ provider: s.provider as never, model: 'mock', maxIterations: 6 })
       .tools([rangeTool([])])
       .time({ zone: LA })
       .build();
     await agent.run({ message: 'any SMB on 10.0.0.1?', time: { now: NOW } });
-    expect(s.requests.every((r) => timeLineOf(r) === undefined)).toBe(true);
+    expect(s.requests.every((r) => timeLineOf(r) === `${TIME_LINE_SOURCE} ${CLOCK}`)).toBe(true);
   });
 });
 
@@ -370,7 +372,7 @@ describe('G14 — the control window is a fact about the person’s turn: served
   const WINDOW = { from: '2026-10-09T08:00:00-07:00', to: '2026-10-09T08:40:00-07:00' };
   /** The control half with no tool values — the window alone (`serve.ts` · `controlSentence`). */
   const BARE_LINE =
-    `${TIME_LINE_SOURCE} The window the person set in the app's time control is 2026-10-09 ` +
+    `${TIME_LINE_SOURCE} ${CLOCK} The window the person set in the app's time control is 2026-10-09 ` +
     '08:00–08:39 America/Los_Angeles (UTC-07:00). An answer built on it states that window.';
 
   /** A tool that declares no period — with an `askOrAssume` rule (arms the inputs layer) or none. */
@@ -444,26 +446,31 @@ describe('G14 — the control window is a fact about the person’s turn: served
     const { agent, requests } = run([rangeTool([])]);
     await agent.run({ message: 'any SMB?', time: { now: NOW, window: future } });
     expect(timeLineOf(requests[0])).toBe(
-      `${TIME_LINE_SOURCE} The window the person set in the app's time control is 2026-10-10 ` +
+      `${TIME_LINE_SOURCE} ${CLOCK} The window the person set in the app's time control is 2026-10-10 ` +
         '08:00–08:59 America/Los_Angeles (UTC-07:00). An answer built on it states that window.',
     );
   });
 
-  it('byte identity — `.time()` with no control window serves no line; without `.time()` the requests are the same bytes', async () => {
+  it('byte identity — `.time()` with no control window serves only the run clock; without `.time()` the requests carry no line at all', async () => {
     const timed = run([noPeriodTool(false)]);
     await timed.agent.run({ message: 'any open SMB sessions?', time: { now: NOW } });
-    expect(timed.requests.every((r) => timeLineOf(r) === undefined)).toBe(true);
+    expect(timed.requests.every((r) => timeLineOf(r) === `${TIME_LINE_SOURCE} ${CLOCK}`)).toBe(
+      true,
+    );
     const plain = run([noPeriodTool(false)], { time: false });
     await plain.agent.run({ message: 'any open SMB sessions?' });
     expect(plain.requests.every((r) => timeLineOf(r) === undefined)).toBe(true);
-    expect(JSON.stringify(timed.requests.map((r) => r.messages))).toBe(
-      JSON.stringify(plain.requests.map((r) => r.messages)),
+    // The armed request is the unarmed one plus the one late line, last (the last request: the
+    // harness keeps each request by reference, and an unarmed run reuses one history array).
+    const last = (rs: readonly LLMRequest[]) => rs[rs.length - 1]!.messages;
+    expect(JSON.stringify(last(timed.requests).slice(0, -1))).toBe(
+      JSON.stringify(last(plain.requests)),
     );
   });
 });
 
 describe('review of packet "gaps" — what G2 must not ask, and what its refusal names', () => {
-  it('a greeting names no time: "Good morning, …" asks nothing, serves no line, the default runs', async () => {
+  it('a greeting names no time: "Good morning, …" asks nothing, serves only the run clock, the default runs', async () => {
     const seen: Record<string, unknown>[] = [];
     const { agent, requests } = build(
       [call('c1', 'smb_records', { server: '10.0.0.1' }), answer('done')],
@@ -475,7 +482,7 @@ describe('review of packet "gaps" — what G2 must not ask, and what its refusal
     });
     expect(isInputPause(out)).toBe(false);
     expect(seen).toEqual([{ server: '10.0.0.1', window: '-30m' }]);
-    expect(requests.every((r) => timeLineOf(r) === undefined)).toBe(true);
+    expect(requests.every((r) => timeLineOf(r) === `${TIME_LINE_SOURCE} ${CLOCK}`)).toBe(true);
     expect(ofKind(agent, 'time-reading').some((r) => r.quote !== undefined)).toBe(false);
   });
 

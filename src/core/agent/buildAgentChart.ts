@@ -433,6 +433,26 @@ export function timeWindowsArg(ledger: unknown): {
 }
 
 /**
+ * The Tools mount's `timeClock` arg — the turn's run clock for the served
+ * line's first sentence (G16, `agent/arguments/serve.ts` · `clockSentence`),
+ * or no key when the turn has no clock. Under an unknown zone (G15) the zone
+ * is the UTC spelling, marked `zoneUnknown`.
+ */
+export function timeClockArg(ledger: unknown): {
+  timeClock?: { now: string; zone: string; zoneUnknown?: true };
+} {
+  const clock = clockOf(ledger as readonly unknown[] | undefined);
+  if (clock === undefined) return {};
+  return {
+    timeClock: {
+      now: clock.now,
+      zone: clock.zone,
+      ...(clock.zoneSource === 'unknown' && { zoneUnknown: true as const }),
+    },
+  };
+}
+
+/**
  * The Tools mount's `timeLimits` arg — the turn's result-check FACTS for the
  * model (unrendered: the slot's served line renders them, under the arm), or
  * no key.
@@ -860,6 +880,7 @@ export function buildAgentChart(deps: AgentChartDeps): FlowChart {
         // under `.time()` only and value-conditional: a turn with none crosses no
         // key. See `AgentChartDeps.timeWindows`.
         ...(deps.timeWindows === true && timeWindowsArg(parent.findingsLedger)),
+        ...(deps.timeWindows === true && timeClockArg(parent.findingsLedger)),
         // The turn's result-check lines (step T8), under `.time()` only and
         // value-conditional. See `AgentChartDeps.timeLimits`.
         ...(deps.timeLimits === true && timeLimitsArg(parent.findingsLedger)),
