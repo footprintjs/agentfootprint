@@ -32,7 +32,7 @@ import {
   type DurationText,
 } from './duration.js';
 import { compareInstants, daysInMonth, instantOf, type InstantText } from './instant.js';
-import type { Edge, TimeRange } from './range.js';
+import { reachMs, type Edge, type TimeRange } from './range.js';
 import { isZoneName, type WallTime } from './zone.js';
 
 // ─── The declaration's shapes ────────────────────────────────────────────
@@ -482,8 +482,9 @@ export type PeriodFactProblem = 'time-future' | 'time-past' | 'beyond-retention'
  * turn's clock — or `undefined`. `past`: a range that starts after now;
  * `future`: one that ends before now; `retention`: only a range WHOLLY older
  * than `now − retention` (a partial overlap is the result's to judge);
- * `maxRange`: a range longer than it. A fact the tool does not declare is not
- * checked.
+ * `maxRange`: a range that REACHES further than it (`range.ts` · `reachMs`:
+ * first instant to last, so a look-back exactly `maxRange` long fits — an
+ * inclusive ceiling). A fact the tool does not declare is not checked.
  */
 export function periodFactProblem(
   range: TimeRange,
@@ -500,7 +501,7 @@ export function periodFactProblem(
     facts.retention === undefined ? undefined : durationMs(facts.retention, FACT_UNITS);
   if (retention !== undefined && to.ms <= at.ms - retention) return 'beyond-retention';
   const widest = facts.maxRange === undefined ? undefined : durationMs(facts.maxRange, FACT_UNITS);
-  if (widest !== undefined && to.ms - from.ms > widest) return 'over-max-range';
+  if (widest !== undefined && reachMs(from.ms, to.ms) > widest) return 'over-max-range';
   return undefined;
 }
 

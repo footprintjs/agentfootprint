@@ -1270,7 +1270,12 @@ deterministic and are measured over retained recorded runs or unit tables, with 
   not reach it, and on a window still running. Such a window is now REFUSED, `no-form-holds`, and
   `no-exact-form` is no longer filed (kept in the row vocabulary so an older record reads). The
   one answer every door asks is `convert.ts` · `convertForTool`; a covering look-back exactly
-  `maxRange` long is read (its inclusive end no longer counts one millisecond against it). A
+  `maxRange` long is read (its inclusive end no longer counts one millisecond against it).
+  **Amended (maxRange edge, 2026-09-30):** that rule lived in the widening alone, so the
+  person's own look-back and the model's sent one (`window: '24h'` to `maxRange: '24h'`) were
+  still refused `over-max-range` by `periodFactProblem`. `maxRange` is an inclusive ceiling on a
+  window's reach, first instant to last, with ONE owner, `range.ts` · `reachMs`, asked by the fact
+  check and the widening alike — the verdict reads the instants, never the spelling. A
   range already ending at now
   (within the step) stays the exact row. (4) **No fold reason yet.** TQ8's "not sure" for a read
   with `extra` is T8's (`period-differs-from-asked` is its fold reason); until T8 a widened fill's
