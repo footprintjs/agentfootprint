@@ -69,7 +69,13 @@ function resolvesWithNothing(callback: ts.Node, resolvers: readonly string[]): b
 }
 
 /** Every sleep-shaped timer in one file, as `file:line — what`. */
+/** Every shape this guard refuses names one of these, so a file without any
+ *  holds no sleep and is not parsed — parsing all of `src/` under coverage
+ *  instrumentation cost more than vitest's 5 s default by itself. */
+const TIMER_TOKENS = /setTimeout|timers\/promises|promisify/;
+
 function sleepsIn(fileName: string, source: string): string[] {
+  if (!TIMER_TOKENS.test(source)) return [];
   const file = ts.createSourceFile(fileName, source, ts.ScriptTarget.ES2022, true);
   const found: string[] = [];
   const at = (node: ts.Node, what: string): void => {
