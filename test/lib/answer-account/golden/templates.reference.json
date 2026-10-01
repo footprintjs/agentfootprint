@@ -2241,6 +2241,36 @@
   ],
   "source": "library"
  },
+ "unreachable.empty.noList@1": {
+  "text": "It cannot be told whether the result of lookup_volumes was empty: what the model read holds no list at the key the app declared for its rows.",
+  "parts": [
+   {
+    "text": "It cannot be told whether the result of "
+   },
+   {
+    "code": "lookup_volumes"
+   },
+   {
+    "text": " was empty: what the model read holds no list at the key the app declared for its rows."
+   }
+  ],
+  "source": "library"
+ },
+ "unreachable.empty.uncountedTicket@1": {
+  "text": "It cannot be told whether the result of lookup_volumes was empty: it reached the model as a ticket to the artifact store, and the ticket does not say how many rows it holds.",
+  "parts": [
+   {
+    "text": "It cannot be told whether the result of "
+   },
+   {
+    "code": "lookup_volumes"
+   },
+   {
+    "text": " was empty: it reached the model as a ticket to the artifact store, and the ticket does not say how many rows it holds."
+   }
+  ],
+  "source": "library"
+ },
  "wrong.errors@1": {
   "text": "2 tool calls did not run cleanly: 1 failed, 1 refused by a rule, 1 declined by a person, 1 not run.",
   "parts": [

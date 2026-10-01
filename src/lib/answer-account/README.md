@@ -69,6 +69,26 @@ envelope a tool returned as JSON text that the run never recognized is "returned
 a result" there, while the standing — which holds a door only where a committed
 coverage row is — reads the envelope (it may over-report; it never hides).
 
+**Rows that travel by reference are counted from their ticket.** When the app's
+projection moves a declared rowset into the artifact store and leaves the
+dataset ticket in its place (`{ ref, kind, rows, sourceField }` under
+`datasets[<key>]` / `dataset` — `core/agent/coverage/README.md` § 6), the reader
+counts the ticket's `rows` for the key the app declared. Take 4 of the demo video:
+`pscale_client_health` with `rowsAt: 'rows'`, its 2 rows ticketed —
+
+```ts
+// test/lib/answer-account/ticketed-rows.test.ts
+rowText(account, 'found');      // [..., 'pscale_client_health returned 2 items.', ...]
+account.facts.calls[0].countedAt; // '/result/datasets/rows/rows' — "show me" points there
+account.summary.tone;           // 'ok' (it was 'unknown': "its shape is not declared")
+```
+
+What cannot be counted is said for what it is, never "not declared" of a
+declared key: a ticket with no count, or the library's own placement ticket
+(`unreachable.empty.uncountedTicket` — "it reached the model as a ticket to the
+artifact store, and the ticket does not say how many rows it holds"), and a
+declared key that holds no list and no ticket (`unreachable.empty.noList`).
+
 ## The laws
 
 1. **Every sentence carries its template `id@version` and the voucher of its
@@ -143,7 +163,8 @@ coverage row is — reads the envelope (it may over-report; it never hides).
 9. **Show me = allow-listed leaves** (`shown.ts` · `SHOW_ME_ALLOW_LIST`); the
    deny list (injection bodies, tool args and results, a decision's `why`,
    `resumeInput`, the live heap, history content) wins. An emptiness leaf is a
-   derived `{ rows, at }`, never the rows. Past 64 KB no pointer adds a key;
+   derived `{ rows, at }`, never the rows — `at` is where the reader took the
+   count (the fact's `countedAt`: the rowset, or the ticket's `rows`). Past 64 KB no pointer adds a key;
    one `#more` entry says the rest is withheld.
 10. **A tool's own words are printed as the tool wrote them** — `lookedFor`,
     `what`, `short`. An author who interpolates the caller's arguments into

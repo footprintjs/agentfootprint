@@ -270,14 +270,17 @@ function emptinessLeaf(
       : account.facts.inView.find((c) => c.toolCallId === toolCallId) ??
         account.facts.beforePause.find((c) => c.toolCallId === toolCallId);
   if (call === undefined || call.rows === undefined) return { withheld: 'not-shown-here' };
-  const rowsAt =
-    call.emptinessSource === 'app' ? declarations.tools?.[call.toolName]?.rowsAt : undefined;
   const base =
     where === 'history'
       ? '/content'
       : 'view' in call && call.view !== undefined && call.view !== 'result'
       ? '/modelResult'
       : '/result';
+  // Where the reader took the count (`countedAt`): the rowset, or the dataset ticket's `rows`
+  // left in its place. An account made before the reader said so: the declared key, as then.
+  if (call.countedAt !== undefined) return { rows: call.rows, at: `${base}${call.countedAt}` };
+  const rowsAt =
+    call.emptinessSource === 'app' ? declarations.tools?.[call.toolName]?.rowsAt : undefined;
   return { rows: call.rows, at: rowsAt !== undefined ? `${base}/${rowsAt}` : base };
 }
 

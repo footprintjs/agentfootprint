@@ -31,6 +31,7 @@ import type { RecordPointer, SentenceVar, ToolCallFact } from '../types.js';
 import { isRecord, str, type ViewEvent } from '../view.js';
 import {
   at,
+  countedFields,
   derived,
   historyAt,
   historyOf,
@@ -412,8 +413,7 @@ function readOne(ctx: ReadContext, byCall: CallIndex, id: string): CallRead {
     ...(outcome.refusedBy !== undefined && { refusedBy: outcome.refusedBy }),
     ...(outcome.withheldBy !== undefined && { withheldBy: outcome.withheldBy }),
     emptiness: emptiness.emptiness,
-    ...(emptiness.rows !== undefined && { rows: emptiness.rows }),
-    ...(emptiness.source !== undefined && { emptinessSource: emptiness.source }),
+    ...countedFields(emptiness),
     ...(emptiness.described !== undefined && { described: emptiness.described }),
     ...(emptiness.bounded === true && { bounded: true as const }),
     ...(judged && { view: viewOf(end) }),

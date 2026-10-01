@@ -874,7 +874,7 @@ each other; support decides.
 | all | **ask** · `asked` | a tool's own `requestInput` pending at the end of the turn — read from the paused run's checkpoint (its pause data carries `awaitingInput`), never from an event | 1 |
 | 3 | `declared-absent` | a `coverageDeclared` absence on a call this turn, or a `coverage()` whose wrapped rowset is empty (the one emptiness reader, `coverage/emptiness.ts` · `readEmptiness`, [results.md](results.md) § 5.2) | 1 |
 | 3 | `coverage-gap` | a `notChecked` or `cannotCover` item on a call this turn | 1 |
-| 3 | `empty-undeclared` | the one emptiness reader over every result: an empty rowset (a top-level array, or a key the app declared in `rowsAt`) with no coverage row for that call fires it; a non-empty rowset passes; any other shape is not applicable | 1 |
+| 3 | `empty-undeclared` | the one emptiness reader over every result: an empty rowset (a top-level array, a key the app declared in `rowsAt`, or the dataset ticket left where those rows were, counting 0) with no coverage row for that call fires it; a non-empty rowset passes; any other shape is not applicable | 1 |
 | 3 | `coverage-undeclared` (proposed, [results.md](results.md) Q5; adopted 2026-09-27) | a result from a tool that declares `resultClass: 'triage'` or `'inventory'` and filed no coverage row | 8 |
 | 3 | `period-partly-held`, `period-not-held`, `period-unknown`, `period-undeclared` | the period verdict row | 7 |
 | 3 | `tool-refused`, `result-truncated` | the outcome row | 8 |

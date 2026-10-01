@@ -28,6 +28,7 @@ import { FACT_TEXT_CHARS } from './calls.js';
 import { isRecord, num, str, type RecordingView, type ViewEvent } from '../view.js';
 import {
   at,
+  countedFields,
   historyAt,
   historyOf,
   isPersonEntry,
@@ -118,8 +119,7 @@ export function readInView(ctx: ReadContext, callIds: ReadonlySet<string>): InVi
         distance,
         windowed,
         emptiness: reading.emptiness,
-        ...(reading.rows !== undefined && { rows: reading.rows }),
-        ...(reading.source !== undefined && { emptinessSource: reading.source }),
+        ...countedFields(reading),
         pointers: [at(witness, 'sourceId'), historyAt(historyIndex, '/toolName', id)],
       },
       witness,
