@@ -53,6 +53,7 @@
 import {
   convertForTool,
   formArguments,
+  formFacts,
   lookbackAsBounds,
   partlyBeyondRetention,
   periodFactProblem,
@@ -74,16 +75,19 @@ import type { ZoneName } from './zone.js';
 // The record half lives in `windows.ts` (split by FILE so the synchronous doors
 // never load this module's conversions); every public name is re-exported here.
 export {
+  isOpenForPerson,
+  offeredLookback,
   pendingQuotesOf,
   readerWindowsOf,
   turnWindowsOf,
+  windowToConvert,
   type ReaderWindows,
   type RefusedWindow,
   type TurnWindow,
   type TurnWindows,
   type WindowSource,
 } from './windows.js';
-import type { TurnWindow, TurnWindows } from './windows.js';
+import { windowToConvert, type TurnWindow, type TurnWindows } from './windows.js';
 
 // ─── One call ────────────────────────────────────────────────────────────
 
@@ -200,12 +204,18 @@ export function callWindowOf(call: CallToBind, turn: TurnWindows, ctx: BindConte
   return anyPresent ? presentWindow(call, turn, ctx) : fillWindow(call, turn, ctx);
 }
 
-/** A present window's facts: refused when it breaks one, else marked when partly beyond retention. */
+/**
+ * A present window's facts: refused when it breaks one, else marked when partly beyond retention.
+ * The window was SENT in one form, so it is held to that form's own `maxRange` (`formFacts`).
+ */
 function judged(
   decision: Extract<CallWindow, { how: 'bound' | 'model-chosen' | 'model' }>,
-  facts: PeriodFacts | undefined,
+  call: CallToBind,
   now: InstantText,
 ): CallWindow {
+  const sentIn = call.forms[decision.form];
+  const facts =
+    call.facts === undefined || sentIn === undefined ? call.facts : formFacts(sentIn, call.facts);
   if (facts === undefined) return decision;
   const problem = periodFactProblem(decision.asked, facts, now);
   if (problem !== undefined) {
@@ -234,11 +244,7 @@ function fillWindow(call: CallToBind, turn: TurnWindows, ctx: BindContext): Call
   if (turn.mentions > 1) return { how: 'not-filled', why: 'several-mentions' };
   const window = turn.windows[0];
   if (window === undefined) return openReadingWindow(call, turn, ctx);
-  const toConvert = {
-    range: window.range,
-    ...(window.lookback !== undefined && { lookback: window.lookback }),
-  };
-  const read = convertForTool(toConvert, call.forms, call.facts, {
+  const read = convertForTool(windowToConvert(window), call.forms, call.facts, {
     now: ctx.now,
     zone: window.zone,
     appZone: ctx.appZone,
@@ -293,7 +299,7 @@ function presentWindow(call: CallToBind, turn: TurnWindows, ctx: BindContext): C
     if (asked !== undefined) form = i;
   }
   if (asked === undefined) return unreadWindow(call, ctx);
-  if (turn.windows.length === 0) return judged({ how: 'model', form, asked }, call.facts, ctx.now);
+  if (turn.windows.length === 0) return judged({ how: 'model', form, asked }, call, ctx.now);
   // The windows the declared quote names; when it names several, the one the value matches wins.
   const named =
     call.quotes === undefined
@@ -308,13 +314,13 @@ function presentWindow(call: CallToBind, turn: TurnWindows, ctx: BindContext): C
       isWindow(asked, quoted, ctx.now)
         ? { how: 'bound', form, asked, window: quoted, by: 'quote' }
         : { how: 'model-chosen', form, asked, person: quoted },
-      call.facts,
+      call,
       ctx.now,
     );
   }
   const equal = turn.windows.find((w) => isWindow(asked as TimeRange, w, ctx.now));
   if (equal !== undefined) {
-    return judged({ how: 'bound', form, asked, window: equal, by: 'value' }, call.facts, ctx.now);
+    return judged({ how: 'bound', form, asked, window: equal, by: 'value' }, call, ctx.now);
   }
   return judged(
     {
@@ -323,7 +329,7 @@ function presentWindow(call: CallToBind, turn: TurnWindows, ctx: BindContext): C
       asked,
       ...(turn.windows.length === 1 && { person: turn.windows[0] as TurnWindow }),
     },
-    call.facts,
+    call,
     ctx.now,
   );
 }

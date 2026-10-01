@@ -311,7 +311,9 @@ export interface AgentChartDeps {
 
   /**
    * The time layer is armed with the inputs layer (`.time()` over a tool that
-   * declares a period, step T8). Gates ONE mount arg on the Tools branch's
+   * declares a period, step T8). Gates the `timeWindows` mount arg too (with
+   * no reader it can carry only the app's control window, `time.window`), and
+   * ONE more on the Tools branch's
    * `inputMapper`: `timeLimits`, the turn's result-check facts for the model
    * (`coverage/timeLimitFacts.ts` · `timeLimitFactsOf`, audience `model`, off
    * `parent.findingsLedger`) — value-conditional, so a turn whose reads match
@@ -855,10 +857,11 @@ export function buildAgentChart(deps: AgentChartDeps): FlowChart {
             parent.findingsLedger as FindingsLedger | undefined,
           ),
         }),
-        // The reader's settled windows (step T6b), under the arm only and
-        // value-conditional: a turn with none crosses no key. See
-        // `AgentChartDeps.timeReader`.
-        ...(deps.timeReader === true && timeWindowsArg(parent.findingsLedger)),
+        // The reader's settled windows (step T6b) and the app's control window,
+        // under `.time()` only and value-conditional: a turn with none crosses no
+        // key. See `AgentChartDeps.timeReader` / `timeLimits`.
+        ...((deps.timeReader === true || deps.timeLimits === true) &&
+          timeWindowsArg(parent.findingsLedger)),
         // The turn's result-check lines (step T8), under `.time()` only and
         // value-conditional. See `AgentChartDeps.timeLimits`.
         ...(deps.timeLimits === true && timeLimitsArg(parent.findingsLedger)),

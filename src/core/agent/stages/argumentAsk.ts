@@ -66,6 +66,7 @@ import { answersOf, clockOf, readingsOf, type TimeReadingRow } from '../../time/
 import type { ZoneName } from '../../time/zone.js';
 import type { TimeAskMessages } from '../../time/ask.js';
 import { timeAskOf } from '../../time/readingAsk.js';
+import { isOpenForPerson } from '../../time/windows.js';
 import { spellRange } from '../../time/range.js';
 import type { TimePolicy } from '../../time/resolve.js';
 import { defaultTimeAskMessages } from '../../../locales/timeAsk.js';
@@ -73,19 +74,17 @@ import type { AskTime } from '../arguments/ask.js';
 
 /**
  * Under `.time({ reader })`: this turn's ONE open mention — the row the lazy
- * ask is about. A mention the person already settled in the time ask (its
- * `time-answer` row) is not open: it is asked once per turn.
+ * ask is about: a reading to confirm, a zone to name, or words the library
+ * could not read (`windows.ts` · `isOpenForPerson`, the one owner). A mention
+ * the person already settled in the time ask (its `time-answer` row) is not
+ * open: it is asked once per turn.
  */
 function openReadingOf(scope: TypedScope<AgentState>): TimeReadingRow | undefined {
   const ledger = scope.findingsLedger as FindingsLedger | undefined;
   const turn = scope.turnNumber as number;
   const answered = new Set(answersOf(ledger, turn).map((a) => a.mention));
   const open = readingsOf(ledger, turn).filter(
-    (row) =>
-      row.quote !== undefined &&
-      row.refused === undefined &&
-      row.choice?.by === 'open' &&
-      !answered.has(row.mention ?? 0),
+    (row) => isOpenForPerson(row) && !answered.has(row.mention ?? 0),
   );
   return open.length === 1 ? (structuredClone(open[0]) as TimeReadingRow) : undefined;
 }

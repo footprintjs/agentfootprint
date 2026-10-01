@@ -23,7 +23,7 @@
  *                 click recorded (`time-answer`, `how: 'confirmed'`), an edited one as the
  *                 person's window (`how: 'edited'`); a tool whose rule ASSUMES its period is asked,
  *                 its default never standing in for the words; "yesterday morning" and "last
- *                 week" → one `unreadable` row each, no pre-fill (the tool's own rule asks); a
+ *                 week" → one `unreadable` row each, asked as ONE window, nothing pre-filled; a
  *                 future date to a `past` tool is refused before dispatch; the reader edges
  *                 (packet "reader"): "yesterday 8 AM to 9 AM" is offered and run as one hour,
  *                 "yesterday London time" as the London day (an edit recorded in London, an
@@ -227,7 +227,7 @@ describe('the field sentence — the zone, then the date order, then the tool ru
     });
     expect(ofKind(agent, 'time-reading')[0]).toMatchObject({
       quote: '10/09/26 8 AM to 8:40 AM PST',
-      reader: { id: 'agentfootprint/english', version: '1.1.0', kind: 'rule', locale: 'en-US' },
+      reader: { id: 'agentfootprint/english', version: '1.2.0', kind: 'rule', locale: 'en-US' },
       choice: { by: 'open', remaining: [], open: ['zone'] },
     });
     expect(ofKind(agent, 'call-window')[0]).toMatchObject({
@@ -391,12 +391,15 @@ describe('the field sentence — the zone, then the date order, then the tool ru
 
 // ─── what v1 does not read ────────────────────────────────────────────
 
-describe('phrases v1 does not read — one unreadable row, no window ask', () => {
+describe('phrases v1 does not read — one unreadable row, asked as ONE window with nothing pre-filled', () => {
+  // Time follow-ups, packet "gaps": the person wrote a time, so the words are asked as the window
+  // they meant — one `time-range` field, free entry — never argument by argument with no format
+  // (a raw `a/b` answer used to reach a tool that reads `a..b`), and never the tool's default.
   for (const [message, quote] of [
     ['what failed yesterday morning?', 'yesterday morning'],
     ['client activity last week', 'last week'],
   ] as const) {
-    it(`"${quote}" → unreadable, and the tool's own rule asks`, async () => {
+    it(`"${quote}" → unreadable, asked which time it meant`, async () => {
       const { agent } = build(
         [call('c1', 'client_activity', {}), answer('ok')],
         [epochTool()],
@@ -406,12 +409,13 @@ describe('phrases v1 does not read — one unreadable row, no window ask', () =>
       expect(ofKind(agent, 'time-reading')).toMatchObject([
         { quote, problem: 'unreadable', choice: { by: 'none', why: 'unreadable' } },
       ]);
-      // The tool's own `ask` rule: one field per argument, no `format`.
-      expect(first.awaitingInput.fields.map((f) => f.description)).toEqual([
-        'From when?',
-        'Until when?',
+      expect(first.awaitingInput.fields).toEqual([
+        expect.objectContaining({
+          format: 'time-range',
+          description: `Which time did you mean by “${quote}”?`,
+        }),
       ]);
-      expect(first.awaitingInput.fields.every((f) => f.format === undefined)).toBe(true);
+      expect(first.awaitingInput.fields[0]!.enum).toBeUndefined();
     });
   }
 });

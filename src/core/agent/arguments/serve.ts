@@ -37,15 +37,15 @@ import { argumentRewritesOf, type ArgumentRewrite } from '../middleware/rewrites
 import { isRefused, periodFactsOf, periodFormsOf, rulesOf, type RuledToolLike } from './declare.js';
 import { HIDDEN_VALUE, type ArgumentRow } from './rows.js';
 import {
-  convertExact,
-  convertWidened,
+  convertForTool,
   formArguments,
   granularityMsOf,
-  widestMsOf,
+  toolFacts,
   type PeriodFacts,
   type TimeRefusal,
 } from '../../time/convert.js';
 import type { ReaderWindows } from '../../time/bind.js';
+import { windowToConvert } from '../../time/windows.js';
 import type { ZoneName } from '../../time/zone.js';
 import { presentRange } from '../../time/present.js';
 
@@ -239,8 +239,8 @@ export function rulesOnWire(
  * words (`core/time/windows.ts` · `readerWindowsOf` — each mention's quote and
  * its one window: the one the person confirmed or gave in the time ask, or a
  * `model` reader's reading), the quotes still PENDING (a proposal the person
- * has not answered), the turn's clock, and the app's `.time({ zone })`. An
- * unreadable mention is in neither list.
+ * has not answered, a zone to name, or words the library could not read —
+ * `pendingUnread`), the turn's clock, and the app's `.time({ zone })`.
  */
 export interface ServedWindows extends ReaderWindows {
   readonly appZone?: ZoneName;
@@ -312,16 +312,18 @@ function toolValues(
     ...(windows.appZone !== undefined && { appZone: windows.appZone }),
     granularityMs: granularityMsOf(pt.facts),
   };
-  const window = { range: w.range, ...(w.lookback !== undefined && { lookback: w.lookback }) };
-  const exact = convertExact(window, pt.forms, ctx);
-  const conversion = exact ?? convertWidened(window, pt.forms, ctx, widestMsOf(pt.facts));
-  if (conversion === undefined) return undefined;
+  // The one answer (`convertForTool`) over the one input (`windowToConvert`) the fill and the time
+  // ask's answer also use: the values named here are the values the call is handed, and a window
+  // the tool would refuse is named for no tool.
+  const read = convertForTool(windowToConvert(w), pt.forms, pt.facts, ctx);
+  if ('refused' in read) return undefined;
+  const conversion = read.conversion;
   const values = Object.entries(conversion.values).map(([argument, value]) =>
     hidesArgument(pt.tool, argument, value as InputValue)
       ? `${argument} (hidden by the tool's view)`
       : `${argument} ${printedArgument(value)}`,
   );
-  const wider = exact === undefined ? ' (a wider read than the words named)' : '';
+  const wider = 'sent' in conversion ? ' (a wider read than the words named)' : '';
   return `${pt.name} ${values.join(', ')}${wider}`;
 }
 
@@ -339,6 +341,24 @@ function settledSentence(tools: readonly PeriodTool[], windows: ServedWindows): 
   return (
     `The person's time words, as the library holds them: ${clauses.join('. ')}. ` +
     `A call may pass these values as written; an answer built on them states ${these}.`
+  );
+}
+
+/**
+ * The control half: the window the person set in the app's time control (the run's `time.window`,
+ * `source: 'control'`, TQ26) — the person's own, like an answer — in their zone, with each served
+ * period tool's values for it, the same conversion the fill uses. So an app never writes its own
+ * prompt text for a window it set from a UI.
+ */
+function controlSentence(tools: readonly PeriodTool[], windows: ServedWindows): string | undefined {
+  const w = windows.control;
+  if (w === undefined) return undefined;
+  const values = tools.flatMap((pt) => toolValues(pt, w, windows) ?? []);
+  if (values.length === 0) return undefined;
+  return (
+    `The window the person set in the app's time control is ${presentedWindow(w)} — ` +
+    `${values.join('; ')}. A call may pass these values as written; an answer built on them ` +
+    'states that window.'
   );
 }
 
@@ -379,7 +399,11 @@ function pendingSentence(
   });
   if (calls.length === 0) return undefined;
   return (
-    `The window for ${quotes} is not settled yet: ${formClause(pending, windows.pendingZones)} ` +
+    `The window for ${quotes} is not settled yet: ${formClause(
+      pending,
+      windows.pendingZones,
+      windows.pendingUnread,
+    )} ` +
     `${calls.join(', or ')} (or the call is refused with the reason). So the next step is that ` +
     'call — not a question about the time in the reply, and not a window written into the call, ' +
     'which would run unconfirmed.'
@@ -389,9 +413,16 @@ function pendingSentence(
 /**
  * What the library's own form does for the pending quotes, up to "opens when": it shows its
  * reading to confirm — or, for a quote it holds no reading of (`ReaderWindows.pendingZones`: a
- * zone it cannot resolve), it asks which time zone the words name and shows no reading.
+ * zone it cannot resolve), it asks which time zone the words name and shows no reading; or, for
+ * words it could not read at all (`ReaderWindows.pendingUnread`), it asks which time they meant
+ * with nothing filled in.
  */
-function formClause(pending: readonly string[], zones: readonly string[] = []): string {
+function formClause(
+  pending: readonly string[],
+  zones: readonly string[] = [],
+  unread: readonly string[] = [],
+): string {
+  if (unread.some((q) => pending.includes(q))) return unreadClause(pending, zones, unread);
   const zoned = pending.filter((q) => zones.includes(q));
   const read = pending.filter((q) => !zones.includes(q));
   if (zoned.length === 0) {
@@ -415,6 +446,41 @@ function formClause(pending: readonly string[], zones: readonly string[] = []): 
   );
 }
 
+/**
+ * {@link formClause} when some pending words were not read at all: each group of quotes with what
+ * the form does for it, joined; the words-not-read part alone when it is the only one.
+ */
+function unreadClause(
+  pending: readonly string[],
+  zones: readonly string[],
+  unread: readonly string[],
+): string {
+  const listed = (qs: readonly string[]): string => qs.map((q) => `“${q}”`).join(', ');
+  const blank = pending.filter((q) => unread.includes(q));
+  const zoned = pending.filter((q) => zones.includes(q) && !unread.includes(q));
+  const read = pending.filter((q) => !zones.includes(q) && !unread.includes(q));
+  if (zoned.length === 0 && read.length === 0) {
+    return (
+      'the library could not read those words, so its own form asks the person which time they ' +
+      'meant, with nothing filled in, and it opens when'
+    );
+  }
+  const parts = [
+    ...(read.length > 0
+      ? [`shows its reading of ${listed(read)} with the zone for the person to confirm`]
+      : []),
+    ...(zoned.length > 0
+      ? [
+          `asks the time zone of ${listed(
+            zoned,
+          )}, which the library holds no reading of until it knows it`,
+        ]
+      : []),
+    `asks which time ${listed(blank)} meant, words the library could not read`,
+  ];
+  return `the library's own form ${parts.join(', and ')}; the form opens when`;
+}
+
 // LENS · late-line · request-ephemeral
 // reads: the person's windows a SERVED period tool refused this turn before dispatch (`windows.ts` ·
 //        `readerWindowsOf`, `refused`: the quote, the tool and the reason code) and that tool's
@@ -436,7 +502,9 @@ function refusedSentence(tools: readonly PeriodTool[], windows: ServedWindows): 
   const refused = (windows.refused ?? []).filter((r) => byName.has(r.toolName));
   if (refused.length === 0) return undefined;
   const clauses = refused.map((r) => {
-    const facts = (byName.get(r.toolName) as PeriodTool).facts;
+    // The person's window was refused before a form was chosen: the tool's facts (`toolFacts`).
+    const pt = byName.get(r.toolName) as PeriodTool;
+    const facts = toolFacts(pt.forms, pt.facts);
     return `${r.toolName} was not run for “${r.quote}”: ${refusalReason(
       r.refused,
       facts,
@@ -517,6 +585,7 @@ export function timeWindowsLine(
   if (tools.length === 0) return undefined;
   const halves = [
     settledSentence(tools, windows),
+    controlSentence(tools, windows),
     refusedSentence(tools, windows),
     pendingSentence(tools, windows),
   ].filter((h): h is string => h !== undefined);

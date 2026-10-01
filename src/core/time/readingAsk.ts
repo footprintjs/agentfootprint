@@ -57,9 +57,13 @@ function saidZoneToken(row: TimeReadingRow): string {
 
 /**
  * The ask a `time-reading` row needs, or `undefined` when its reading is
- * settled (`only`, `policy`) or cannot be asked about (`none`, a refused
- * mention). `messages` is the whole catalog (the caller composes the app's
- * overrides over `defaultTimeAskMessages`); `id` names the field.
+ * settled (`only`, `policy`) or is no person's words (a refused mention).
+ * Words the library holds NO reading of (`none`: unreadable, no candidate)
+ * are asked too — which time the person meant, free entry, nothing
+ * pre-filled (`ask.which`, `format: 'time-range'`): the person wrote a time,
+ * and a tool's default never stands in for it. `messages` is the whole
+ * catalog (the caller composes the app's overrides over
+ * `defaultTimeAskMessages`); `id` names the field.
  */
 export function timeAskOf(
   row: TimeReadingRow,
@@ -67,7 +71,14 @@ export function timeAskOf(
   id = 'time',
 ): TimeAsk | undefined {
   const choice = row.choice;
-  if (choice?.by !== 'open' || row.quote === undefined) return undefined;
+  if (row.quote === undefined || row.refused !== undefined) return undefined;
+  if (choice?.by === 'none') {
+    return {
+      question: fillMessage(messages['ask.which'], { quote: quoted(row.quote) }),
+      field: { id, type: 'string', required: true, format: 'time-range' },
+    };
+  }
+  if (choice?.by !== 'open') return undefined;
   const quote = quoted(row.quote);
   if (choice.open.includes('zone')) {
     return {

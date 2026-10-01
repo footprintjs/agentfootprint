@@ -98,9 +98,11 @@ import {
   DEFAULT_GRANULARITY_MS,
   epochFromText,
   FACT_UNITS,
+  formMaxRange,
   isPlain,
   needsZone,
   periodFactProblem,
+  toolFacts,
   wallOf,
   type BoundAs,
   type PeriodFacts,
@@ -114,7 +116,9 @@ export {
   FACT_UNITS,
   FORM_KINDS,
   formArguments,
+  formFacts,
   formIssue,
+  formMaxRange,
   isBoundValue,
   needsZone,
   parsesUnderForm,
@@ -124,6 +128,7 @@ export {
   sugarForm,
   sugarForms,
   TIME_REFUSALS,
+  toolFacts,
 } from './periodForm.js';
 export type {
   Bound,
@@ -587,18 +592,58 @@ export function convertForTool(
   facts: PeriodFacts | undefined,
   ctx: ConvertContext,
 ): ToolConversion {
-  const problem = facts === undefined ? undefined : periodFactProblem(window.range, facts, ctx.now);
+  // The tool's facts before a form is chosen: `maxRange` is the widest any form reads, so a window
+  // is over it only when NO form can read it (`periodForm.ts` · `toolFacts`; the period's own
+  // facts when no form declares its own `maxRange`).
+  const judged = facts === undefined ? undefined : toolFacts(forms, facts);
+  const problem =
+    judged === undefined ? undefined : periodFactProblem(window.range, judged, ctx.now);
   if (problem !== undefined) return { refused: problem };
   const partly =
     facts !== undefined && partlyBeyondRetention(window.range, facts, ctx.now)
       ? { partlyBeyondRetention: true as const }
       : {};
-  const exact = convertExact(window, forms, ctx);
-  if (exact !== undefined) return { conversion: exact, ...partly };
-  const widened = convertWidened(window, forms, ctx, widestMsOf(facts));
-  if (widened !== undefined) return { conversion: widened, ...partly };
+  const read = forms.some((f) => f.maxRange !== undefined)
+    ? convertWithinFormCaps(window, forms, facts, ctx)
+    : convertExact(window, forms, ctx) ?? convertWidened(window, forms, ctx, widestMsOf(facts));
+  if (read !== undefined) return { conversion: read, ...partly };
   if (spansDaysForDayOnly(window, forms, ctx)) return { refused: 'multi-day' };
   return { refused: 'no-form-holds' };
+}
+
+/**
+ * {@link convertForTool}'s exact-then-wider search when a form declares its
+ * own `maxRange`: the same order (the first form that holds the window
+ * exactly, then the first that holds it by reading more), each form held to
+ * ITS cap ({@link formMaxRange}) — an exact form the window reaches past, or a
+ * wider read past it, is skipped, and the next form is asked.
+ */
+function convertWithinFormCaps(
+  window: WindowToConvert,
+  forms: readonly PeriodForm[],
+  facts: PeriodFacts | undefined,
+  ctx: ConvertContext,
+): Conversion | WidenedConversion | undefined {
+  const capMs = (form: PeriodForm): number | undefined => {
+    const text = formMaxRange(form, facts);
+    return text === undefined ? undefined : durationMs(text, FACT_UNITS);
+  };
+  const from = msOf(window.range.from);
+  const to = msOf(window.range.to);
+  const reach = from === undefined || to === undefined ? undefined : reachMs(from.ms, to.ms);
+  for (let i = 0; i < forms.length; i++) {
+    const form = forms[i] as PeriodForm;
+    const cap = capMs(form);
+    if (cap !== undefined && (reach === undefined || reach > cap)) continue;
+    const exact = convertExact(window, [form], ctx);
+    if (exact !== undefined) return { ...exact, form: i };
+  }
+  for (let i = 0; i < forms.length; i++) {
+    const form = forms[i] as PeriodForm;
+    const widened = convertWidened(window, [form], ctx, capMs(form));
+    if (widened !== undefined) return { ...widened, form: i };
+  }
+  return undefined;
 }
 
 /**

@@ -781,6 +781,31 @@ function timeWindowLines(): string[] {
       pending: ['10/09/26 8 AM to 8:40 AM PST', 'yesterday'],
       pendingZones: ['10/09/26 8 AM to 8:40 AM PST'],
     },
+    // Words the library could not read (packet "gaps"): the form asks which time, nothing filled
+    // in — alone, and beside a reading to confirm and a zone to name.
+    {
+      now: '2026-10-09T15:40:00Z',
+      windows: [],
+      pending: ['yesterday morning'],
+      pendingUnread: ['yesterday morning'],
+    },
+    {
+      now: '2026-10-09T15:40:00Z',
+      windows: [],
+      pending: ['yesterday morning', '10/09/26 8 AM to 8:40 AM PST', 'last 2 hours'],
+      pendingZones: ['10/09/26 8 AM to 8:40 AM PST'],
+      pendingUnread: ['yesterday morning'],
+    },
+    // The window the person set in the app's time control (packet "gaps", G9).
+    {
+      now: '2026-10-09T15:40:00Z',
+      windows: [],
+      control: {
+        source: 'control' as const,
+        range: { from: '2026-10-09T08:00:00-07:00', to: '2026-10-09T08:41:00-07:00' },
+        zone: 'America/Los_Angeles',
+      },
+    },
     // A window of the person's a tool refused before dispatch: the conclusion, one and two of them.
     {
       now: '2026-10-09T15:40:00Z',

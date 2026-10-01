@@ -77,6 +77,8 @@ import * as classify from '../../src/classify/index.js';
 import * as ontology from '../../src/ontology/index.js';
 import * as timeConvert from '../../src/core/time/convert.js';
 import * as timePeriodForm from '../../src/core/time/periodForm.js';
+import * as timePresent from '../../src/core/time/present.js';
+import * as timeZone from '../../src/core/time/zone.js';
 
 // ─── The two lists ─────────────────────────────────────────────────
 
@@ -381,6 +383,9 @@ describe('a door added after 9.0.0 is a re-export of its implementation barrel',
       convertExact: convert,
       convertWidened: convert,
       periodFactProblem: periodForm,
+      // Time for a person, and the zone check, as the run writes and judges them.
+      presentRange: timePresent as unknown as Record<string, unknown>,
+      isZoneName: timeZone as unknown as Record<string, unknown>,
     };
     for (const [sample, impl] of Object.entries(owners)) {
       expect(impl[sample], `src/core/time lost ${sample}`).toBeDefined();
