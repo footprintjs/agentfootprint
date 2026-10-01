@@ -153,6 +153,13 @@ const LEDGER: Readonly<Record<string, readonly Entry[]>> = {
       why: 'the default menu hint is a system-prompt injection, rebuilt for the current request and active only at iteration 1 with a turn menu; it is not appended to conversation history',
     },
   ],
+  'src/core/agent/arguments/serve.ts': [
+    {
+      kind: 'ephemeral',
+      count: 1,
+      why: "the unread-words half of the served time line (`unreadSentence`): its 'Do not ask about the time in the reply' is the measured wording (bench/time/RULE-unread.md — the conclusion line before it drew 15/15 prose asks), appended by callLLM as the LAST user line of one request and never written to history; its composed output is also read by the registry row",
+    },
+  ],
   'src/core/agent/presentTool.ts': [
     {
       kind: 'ephemeral',
@@ -1134,10 +1141,14 @@ describe('every model-facing-shaped literal in src/ is accounted for', () => {
         // Unreleased (evidence figures dial): the conclusion line in
         // evidence/figures.ts (one new file) — one request only, served last on the revision
         // request and never in history. ephemeral 20 → 21.
-        files: 99,
-        total: 194,
+        // Unreleased (time, the unread-words line): the measured next-step
+        // sentence in arguments/serve.ts (one new file) — the served time line
+        // is one request only, the LAST user line, never in history. ephemeral
+        // 21 → 22.
+        files: 100,
+        total: 195,
         registry: 8,
-        ephemeral: 21,
+        ephemeral: 22,
         unrepaired: 33,
         notModelFacing: 132,
         unrepairedEntries: 13,
