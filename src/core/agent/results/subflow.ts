@@ -62,6 +62,7 @@ import {
   leastHeld,
   periodVerdict,
   type DeclaredPeriod,
+  type HeldSpan,
   type PeriodRow,
 } from '../coverage/period.js';
 import { periodTimeCheck, type PeriodCheckInput, type PeriodTimeCheck } from '../../time/check.js';
@@ -98,6 +99,8 @@ export interface CheckedPeriod {
   readonly verdict: PeriodRow['verdict'];
   readonly argument?: string;
   readonly time?: PeriodTimeCheck;
+  /** Under `.time()`: the source's held span, when it holds none or only part of the asked time. */
+  readonly held?: HeldSpan;
 }
 
 /**
@@ -209,6 +212,35 @@ export function planPeriods(
 }
 
 /**
+ * Under `.time()` (take 3): the held span of the declared period a `not-held` / `partly-held` verdict
+ * came from — the first declared period whose own verdict is the call's —
+ * or `undefined` for any other verdict. Fresh plain data.
+ *
+ * Here, in the results layer that files it, and not in `coverage/period.ts`:
+ * this file loads through `import()` under the arm, so a plain agent never
+ * carries it (the docs site's demo budget).
+ *
+ * @example
+ * ```ts
+ * heldSpanOf([{ queried: { from: '2026-09-30T13:00:00Z', to: '2026-09-30T18:59:50Z' },
+ *               held: { from: '2026-10-01T16:22:44Z', to: '2026-10-01T17:02:44Z' } }], 'not-held');
+ * // { queried: { from: '2026-09-30T13:00:00Z', … }, held: { from: '2026-10-01T16:22:44Z', … } }
+ * ```
+ */
+export function heldSpanOf(
+  declared: readonly DeclaredPeriod[],
+  verdict: PeriodRow['verdict'],
+): HeldSpan | undefined {
+  if (verdict !== 'not-held' && verdict !== 'partly-held') return undefined;
+  const period = declared.find((d) => periodVerdict(d) === verdict);
+  if (period === undefined || period.held === 'unknown') return undefined;
+  return {
+    queried: { from: period.queried.from, to: period.queried.to },
+    held: { from: period.held.from, to: period.held.to },
+  };
+}
+
+/**
  * VERIFY, pure: one verdict per planned call — the least held of its declared
  * periods, or `undeclared` when it declared none (its tool declares a
  * `ToolPeriod`, or it would not be planned).
@@ -221,16 +253,21 @@ export function checkPeriods(plan: readonly PlannedPeriod[]): CheckedPeriod[] {
       p.time === undefined
         ? undefined
         : periodTimeCheck({ ...p.time, declared: p.declared.map((d) => d.queried) });
+    const verdict: PeriodRow['verdict'] =
+      p.declared.length === 0
+        ? 'undeclared'
+        : // Non-empty, so `leastHeld` answers.
+          (leastHeld(p.declared.map(periodVerdict)) as PeriodRow['verdict']);
+    // Under `.time()`: the span the source holds when it holds none or only part of the asked
+    // time — the served time line names it in the person's zone (`coverage/timeLimits.ts` · `heldLine`).
+    const held = p.time === undefined ? undefined : heldSpanOf(p.declared, verdict);
     return {
       toolCallId: p.toolCallId,
       toolName: p.toolName,
-      verdict:
-        p.declared.length === 0
-          ? 'undeclared'
-          : // Non-empty, so `leastHeld` answers.
-            (leastHeld(p.declared.map(periodVerdict)) as PeriodRow['verdict']),
+      verdict,
       ...(p.argument !== undefined && { argument: p.argument }),
       ...(time !== undefined && { time }),
+      ...(held !== undefined && { held }),
     };
   });
 }
@@ -249,6 +286,7 @@ export function periodRowsOf(
     verdict: c.verdict,
     ...(c.argument !== undefined && { argument: c.argument }),
     ...c.time,
+    ...(c.held !== undefined && { held: c.held }),
   }));
 }
 

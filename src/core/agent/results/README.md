@@ -86,6 +86,18 @@ agent.findings();  // … { kind: 'period', verdict: 'covered', differs: { missi
 (await agent.assessment())?.reasons; // [{ reason: 'period-differs-from-asked', layer: 3, … }]
 ```
 
+**A source that holds none or only part of the asked time** (verdict `not-held` / `partly-held`)
+gets one more field under `.time()`: `held { queried, held }` — the declared period that verdict
+came from (`results/subflow.ts` · `heldSpanOf`). The served time line hands the model that
+conclusion in the person's zone (`coverage/timeLimits.ts` · `heldLine`: "pscale_client_health asked
+about 2026-09-30 06:00:00–11:59:50 America/Los_Angeles (UTC-07:00); its source holds 2026-10-01
+09:22:44.300–10:02:44.300 America/Los_Angeles (UTC-07:00), which covers none of that time"), and the evidence
+gate spells it as the library's (`core/time/forms.ts` · `timeFormsOf`, its `held` source). Take 3 of the
+demo video is why: served only the UTC instants, the model converted the start and not the end
+("9:22 AM–5:02 PM Pacific" for 16:22–17:02 UTC). The person's limits block gets no second line —
+its `Period:` line already prints both spans in their zone. The `findings.period` event is
+unchanged (it never carries a range).
+
 Without `.time()` the layer is handed none of this, and every row, event and line is the bytes it
 was. The runnable example is `examples/features/88-time-result-checks.ts`.
 

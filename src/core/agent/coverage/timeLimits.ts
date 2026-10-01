@@ -22,8 +22,8 @@
  * `core/time/present.ts`, which a plain agent never loads.
  */
 
-import { clockLines, periodCheckLine } from './period.js';
-import { bindPresentation } from '../../time/present.js';
+import { clockLines, periodCheckLine, type PeriodRow } from './period.js';
+import { bindPresentation, type BoundPresentation } from '../../time/present.js';
 import type { TimeLimitLines } from './answer.js';
 import {
   timeLimitFactsOf,
@@ -38,6 +38,41 @@ export type { TimeLimitLines };
 // law: names WHY the ranges are in UTC, so no reader takes UTC for the person's zone.
 /** The clocks line under an unknown zone (G15): the ranges are in UTC because the person's zone is not known. */
 export const UNKNOWN_ZONE_LINE = "times are shown in UTC — the person's time zone is not known";
+
+// LENS · late-line · request-ephemeral
+// reads: one `period` row's `held` (the declared `queried` and `held` spans its `not-held` /
+//        `partly-held` verdict came from), rendered in the person's zone by the bound renderer
+// law: the library's CONCLUSION for the MODEL: the time the source holds, already in the person's
+//      zone, beside the time the call asked about — so no model converts a source's UTC instants
+//      (take 3: "9:22 AM–5:02 PM Pacific" for a 16:22–17:02 UTC span).
+/**
+ * The model's line for a call whose source holds none or only part of the
+ * time it asked about (`PeriodRow.held`): what the call asked about and what
+ * its source holds, each AS DECLARED (inclusive ends, no end moved) and
+ * rendered in the presentation zone by the time layer's one renderer — the
+ * same spans the person's `Period:` line prints (`period.ts` · `periodLine`) — then
+ * how much of the asked time that is. `undefined` when the row carries none.
+ *
+ * @example
+ * ```ts
+ * heldLine(row, bindPresentation({ zone: 'America/Los_Angeles' }));
+ * // 'pscale_client_health asked about 2026-09-30 06:00:00–11:59:50 America/Los_Angeles (UTC-07:00);
+ * //  its source holds 2026-10-01 09:22:44.300–10:02:44.300 America/Los_Angeles (UTC-07:00), which
+ * //  covers none of that time'
+ * ```
+ */
+export function heldLine(row: PeriodRow, presentation: BoundPresentation): string | undefined {
+  const h = row.held;
+  if (h === undefined) return undefined;
+  const share =
+    row.verdict === 'partly-held'
+      ? 'which covers only part of that time'
+      : 'which covers none of that time';
+  return (
+    `${row.toolName} asked about ${presentation.span(h.queried.from, h.queried.to)}; ` +
+    `its source holds ${presentation.span(h.held.from, h.held.to)}, ${share}`
+  );
+}
 
 /**
  * The turn's time limits lines, from the ledger — {@link renderTimeLimits}
@@ -72,9 +107,13 @@ export function renderTimeLimits(
   if (facts === undefined) return undefined;
   const presentation = bindPresentation({ zone: facts.zone });
   const period: string[] = [];
+  const held: string[] = [];
   for (const row of facts.period) {
     const line = periodCheckLine(row, presentation, audience);
     if (line !== undefined) period.push(line);
+    // The source's held span, for the model (the person's `Period:` line already prints it).
+    const holds = audience === 'model' ? heldLine(row, presentation) : undefined;
+    if (holds !== undefined) held.push(holds);
   }
   // The person reads every wall-clock source; the model only the label that two differ — one
   // declared clock is compared as instants and changes nothing the answer states.
@@ -85,7 +124,8 @@ export function renderTimeLimits(
       ? []
       : clockLines([], facts.differ)),
     // The ranges above are spelled in UTC only because the person's zone is unknown (G15).
-    ...(facts.zoneUnknown === true && period.length > 0 ? [UNKNOWN_ZONE_LINE] : []),
+    ...(facts.zoneUnknown === true && period.length + held.length > 0 ? [UNKNOWN_ZONE_LINE] : []),
   ];
-  return period.length + clocks.length === 0 ? undefined : { period, clocks };
+  if (period.length + clocks.length + held.length === 0) return undefined;
+  return { period, clocks, ...(held.length > 0 && { held }) };
 }

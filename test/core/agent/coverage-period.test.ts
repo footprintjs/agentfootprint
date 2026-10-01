@@ -37,6 +37,7 @@ import {
   type DeclaredPeriod,
 } from '../../../src/core/agent/coverage/period.js';
 import { REFUSED_PREFIX } from '../../../src/core/agent/coverage/refusal.js';
+import { heldSpanOf } from '../../../src/core/agent/results/subflow.js';
 import * as barrel from '../../../src/index.js';
 
 const span = (from: string, to: string) => ({ from, to });
@@ -332,6 +333,32 @@ describe('unit: the row’s door — the checkpoint refuses what the layer never
     const { toolName: _toolName, ...noName } = row;
     void _toolName;
     expect(periodRowIsWellFormed(noName)).toBe(false);
+  });
+
+  // Take 3: under `.time()` a not-held / partly-held row carries the source's held span — the
+  // checkpoint door accepts exactly that shape (a pause later in the turn carries the row).
+  it('accepts a `held` span; refuses one that is not two well-formed spans', () => {
+    const held = { queried: Q, held: HELD };
+    expect(periodRowIsWellFormed({ ...row, verdict: 'not-held', held })).toBe(true);
+    expect(periodRowIsWellFormed({ ...row, verdict: 'not-held', held: { queried: Q } })).toBe(
+      false,
+    );
+    expect(
+      periodRowIsWellFormed({ ...row, held: { queried: Q, held: span('yesterday', HELD.to) } }),
+    ).toBe(false);
+    expect(periodRowIsWellFormed({ ...row, held: { ...held, extra: 1 } })).toBe(false);
+  });
+});
+
+describe('unit: heldSpanOf — the declared period a not-held / partly-held verdict came from', () => {
+  it('names the span for those two verdicts, and nothing for any other', () => {
+    const notHeld = { queried: Q, held: HELD }; // the store ends before the hour asked about
+    expect(heldSpanOf([notHeld], 'not-held')).toEqual({ queried: Q, held: HELD });
+    expect(heldSpanOf([notHeld], 'covered')).toBeUndefined();
+    expect(heldSpanOf([{ queried: Q, held: 'unknown' }], 'unknown')).toBeUndefined();
+    // Two declarations (a coverage() around an absent()): the one the call's verdict came from.
+    const covered = { queried: Q, held: span('2026-09-01T00:00:00Z', '2026-09-27T00:00:00Z') };
+    expect(heldSpanOf([covered, notHeld], 'not-held')).toEqual({ queried: Q, held: HELD });
   });
 });
 

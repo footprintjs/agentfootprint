@@ -42,7 +42,7 @@ export interface AccountTemplate {
 }
 
 /** Bumped whenever any template's words change (a pinned digest enforces it). */
-export const ANSWER_ACCOUNT_TEMPLATE_SET_VERSION = 8;
+export const ANSWER_ACCOUNT_TEMPLATE_SET_VERSION = 9;
 
 const t = (text: string, voucher: TemplateVoucher = 'library', version = 1): AccountTemplate =>
   Object.freeze({ version, text, voucher });
@@ -496,6 +496,11 @@ export const ANSWER_ACCOUNT_TEMPLATES = Object.freeze({
   ),
   'wrong.beforePause.held': t(
     "The part before the pause is read from the state this record holds. That part's events are not in this record, so how it was routed, what was in front of the model then, and whether a call then failed or was refused by a rule cannot be told here.",
+  ),
+  // The same, when the routing verdict IS read from that state (or the app routes nothing): the
+  // routing is not named as lost.
+  'wrong.beforePause.held.events': t(
+    "The part before the pause is read from the state this record holds. That part's events are not in this record, so what was in front of the model then, and whether a call then failed or was refused by a rule, cannot be told here.",
   ),
   'scope.noOwnEvents': t(
     "None of this record's events belong to the run asked for, so nothing about that run can be told from it.",

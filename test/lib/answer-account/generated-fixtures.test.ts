@@ -553,8 +553,10 @@ describe('F — a resumed leg (a tool paused for a person, who answered)', () =>
       'Before the pause, the model read what came back from lookup.',
     );
     expect(rowIds(a, 'understood')).toEqual(['understood.notConfigured']);
-    // What it does NOT hold of that part — its events — is said, and only that.
-    expect(rowIds(a, 'anything-wrong')).toContain('wrong.beforePause.held');
+    // What it does NOT hold of that part — its events — is said, and only that. This app routes
+    // nothing, so no routing is named as lost (take 3).
+    expect(rowIds(a, 'anything-wrong')).toContain('wrong.beforePause.held.events');
+    expect(rowIds(a, 'anything-wrong')).not.toContain('wrong.beforePause.held');
     expect(all).not.toContain('found.beforePause');
     expect(a.summary.sentence.template.id).not.toBe('summary.resumed');
     expect(a.summary.sentence.text).toMatch(/not that part's events\.$/);

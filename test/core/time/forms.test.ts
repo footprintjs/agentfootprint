@@ -226,6 +226,35 @@ describe('one recorded window — said at grain, the rest derived', () => {
     expect(utc).not.toContain('7:08');
   });
 
+  it('a source’s held span is derived at its two declared ends, in the person’s zone and in UTC (take 3)', () => {
+    // The served line: "its source holds 2026-10-01 09:22:44.300–10:02:44.300 America/Los_Angeles (UTC-07:00)".
+    const { said, derived } = timeFormsOf({
+      held: {
+        from: '2026-10-01T16:22:44.300882944Z',
+        to: '2026-10-01T17:02:44.300882944Z',
+        zone: LA,
+      },
+    });
+    expect(said).toEqual([]);
+    for (const form of [
+      '9:22',
+      '09:22',
+      '9:22am',
+      '09:22:44',
+      '10:02',
+      '10:02am',
+      '16:22',
+      '17:02',
+    ]) {
+      expect(derived, form).toContain(form);
+    }
+    for (const form of ['PDT', '-07:00', '2026-10-01']) expect(derived, form).toContain(form);
+    // Never a time the line does not name: the unconverted end, another minute, a 12-hour UTC clock.
+    for (const form of ['5:02', '05:02', '9:23', '4:22', '4:22pm']) {
+      expect(derived, form).not.toContain(form);
+    }
+  });
+
   it('BOUNDARY: across a DST end, each instant is spelled in its own offset', () => {
     const { derived } = timeFormsOf({
       window: {

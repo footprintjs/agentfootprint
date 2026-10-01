@@ -184,6 +184,13 @@ export const CLOCKS_SECTION_LABEL = 'Clocks';
 export interface TimeLimitLines {
   readonly period: readonly string[];
   readonly clocks: readonly string[];
+  /**
+   * The MODEL's audience only (`coverage/timeLimits.ts` · `heldLine`): per call
+   * whose source holds none or only part of the asked time, what it asked
+   * about and what the source holds, in the person's zone. The person's block
+   * never reads it — its `Period:` line already prints both spans.
+   */
+  readonly held?: readonly string[];
 }
 
 /**

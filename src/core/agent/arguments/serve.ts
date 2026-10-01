@@ -648,7 +648,9 @@ export function timeLimitsLine(facts: TimeLimitFacts | undefined): string | unde
 //        audience `model`) — the same lines the limits block prints for the person after the answer
 // law: the library's CONCLUSION about what each call READ against what it ASKED (step T8), both
 //      ranges in the person's zone, and what an answer built on it states; it names what the record
-//      holds for calls that already ran and promises nothing a later call can break.
+//      holds for calls that already ran and promises nothing a later call can break. A source that
+//      holds none or part of the asked time is named with ITS span in the person's zone (`held`):
+//      the zone conversion is the library's, never the model's.
 /**
  * The time limits an answer states (time step T8's serving placement): the
  * result checks that hold this turn — a read narrower, wider or shifted from
@@ -680,13 +682,21 @@ export function timeLimitsSentence(lines: TimeLimitLines | undefined): string | 
         `time no result read.`,
     );
   }
+  // A source that holds none or only part of the asked time (take 3): the spans in the person's
+  // zone, so the answer names what the source holds without converting a UTC instant itself.
+  if (lines.held !== undefined && lines.held.length > 0) {
+    parts.push(
+      `what the sources hold is not all of the time asked about — ${lines.held.join('; ')}. So ` +
+        `the answer to the person states what each source holds and claims nothing about the ` +
+        `time it does not hold.`,
+    );
+  }
   if (lines.clocks.length > 0) {
     parts.push(`Clocks: ${lines.clocks.join('; ')}.`);
   }
   if (parts.length === 0) return undefined;
-  const [first, ...rest] = parts;
-  const lead = first!.charAt(0).toUpperCase() + first!.slice(1);
-  return [lead, ...rest].join(' ');
+  const capital = (part: string): string => part.charAt(0).toUpperCase() + part.slice(1);
+  return parts.map(capital).join(' ');
 }
 
 /** What a line says when the run's clock zone is unknown (G15) — the zone is never guessed. */

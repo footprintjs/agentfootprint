@@ -668,6 +668,33 @@ export interface PeriodRow {
   readonly beyondRetention?: true;
   /** `partly-beyond-retention` — the read crosses the edge of what the source keeps; `verdict` decides. */
   readonly partlyBeyondRetention?: true;
+  /**
+   * The time the source holds, when it holds none or only part of what the
+   * call asked about (`verdict` `not-held` / `partly-held`) — the `queried` and
+   * `held` spans of the declared period that verdict came from, as the tool
+   * declared them. Filed only under `.time()`, where the served time line
+   * hands the model this conclusion in the person's zone (`timeLimits.ts` ·
+   * `heldLine`) and the evidence gate spells it (`core/time/forms.ts` ·
+   * `timeFormsOf`, its `held` source): the model never converts a source's
+   * UTC instants itself.
+   */
+  readonly held?: {
+    readonly queried: { readonly from: string; readonly to: string };
+    readonly held: { readonly from: string; readonly to: string };
+  };
+}
+
+/** A source's held span beside what the call asked about — {@link PeriodRow}'s `held`. */
+export type HeldSpan = NonNullable<PeriodRow['held']>;
+
+/** Whether a value is a {@link HeldSpan} the rule set accepts — the checkpoint door's test. */
+function isHeldSpan(value: unknown): boolean {
+  if (!isPlainObject(value)) return false;
+  return (
+    spanProblem(value.queried, 'held.queried') === undefined &&
+    spanProblem(value.held, 'held.held') === undefined &&
+    Object.keys(value).every((k) => k === 'queried' || k === 'held')
+  );
 }
 
 /** Every verdict a period row may carry, in the order the fold reports them. */
@@ -697,7 +724,8 @@ export function periodRowIsWellFormed(row: Readonly<Record<string, unknown>>): b
     (row.differs === undefined || isPeriodDiffers(row.differs)) &&
     (row.shifted === undefined || isShifted(row.shifted)) &&
     (row.beyondRetention === undefined || row.beyondRetention === true) &&
-    (row.partlyBeyondRetention === undefined || row.partlyBeyondRetention === true)
+    (row.partlyBeyondRetention === undefined || row.partlyBeyondRetention === true) &&
+    (row.held === undefined || isHeldSpan(row.held))
   );
 }
 

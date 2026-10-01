@@ -18,7 +18,11 @@ ONE composition both the block (for the person) and the served time line (for
 the model, `../arguments/serve.ts` · `timeLimitsLine`) read. It renders through
 the time layer's renderer, so it loads through `import()` only; what the lines
 SAY is read by `timeLimitFacts.ts` · `timeLimitFactsOf` (unrendered, safe on the
-synchronous graph — the Tools mount's `inputMapper` hands it across). While the
+synchronous graph — the Tools mount's `inputMapper` hands it across). For the
+model only, a call whose source holds none or only part of the asked time adds
+`timeLimits.ts` · `heldLine` — what it asked about and what the source holds, in the
+person's zone — so the model never converts a source's UTC instants itself; the
+person's block already prints both spans on the call's `Period:` line. While the
 run's zone is unknown (time G15) the ranges are spelled in UTC and the lines say
 why — one more clocks line, `timeLimits.ts` · `UNKNOWN_ZONE_LINE` ("times are
 shown in UTC — the person's time zone is not known"), for the person and the

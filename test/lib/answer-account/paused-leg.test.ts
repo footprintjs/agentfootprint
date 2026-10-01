@@ -218,7 +218,8 @@ describe('a resumed `.time()` run — the part before the pause is read from the
     ]) {
       expect(allIds(a), id).not.toContain(id);
     }
-    expect(allIds(a)).toContain('wrong.beforePause.held');
+    // This agent routes nothing, so no routing is named as lost (take 3).
+    expect(allIds(a)).toContain('wrong.beforePause.held.events');
     expect(a.summary.sentence.text).toMatch(
       /This answer continued after a pause; this record holds the state the run kept from before it, not that part's events\.$/,
     );

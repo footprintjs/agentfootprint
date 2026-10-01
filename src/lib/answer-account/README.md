@@ -87,11 +87,17 @@ coverage row is — reads the envelope (it may over-report; it never hides).
    answered before the pause is listed with what came back (its message in
    `history`, by the one emptiness reader) and what its tool declared (its
    `coverageDeclared` rows), and the checks judge them like this leg's calls.
-   What is NOT recoverable is said, and only that: that part's events — the
-   routing verdict, what was in front of the model then, whether a call then
-   failed or was refused (`wrong.beforePause.held`, `summary.resumed.held`).
-   "What happened before the pause is not in this record" is printed only when
-   the record holds no paused state (an older or trimmed recording).
+   The ROUTING verdict is read the same way (`facts/understood.ts` ·
+   `routingVerdictOf`, the one reader): RouteTurn commits `turnRoute` and the
+   scorer's `entryScores` before the loop, so "It understood" names it from
+   the paused state, with the "before the pause — read from the state" chip,
+   and check 1 runs. What is NOT recoverable is said, and only that: that
+   part's other events — what was in front of the model then, whether a call
+   then failed or was refused (`wrong.beforePause.held.events`,
+   `summary.resumed.held`). "The routing happened before the pause and is not
+   in this record" is printed only when the state holds no verdict either, and
+   "what happened before the pause is not in this record" only when the record
+   holds no paused state (an older or trimmed recording).
 
    ```ts
    // a resumed `.time()` leg: the person confirmed "6:25 to 6:45 AM" (test/lib/answer-account/paused-leg.test.ts)
@@ -117,7 +123,9 @@ coverage row is — reads the envelope (it may over-report; it never hides).
    answers' results — distance ≥ 1, never a call of this run.
 6. **Signals, not causes.** Three checks (decided-delivered, existence,
    empty-results); a check that could not run is listed as unreachable, and one
-   that does not apply is left out of the count.
+   that does not apply is left out of the count. A call the record shows
+   PRESENTING an artifact (`artifacts.presented`) returned a receipt for the
+   screen, not data: the empty-results check does not ask it.
 7. **Judge everything; cap only what is listed.** The checks, the error and
    withheld counts read EVERY call and EVERY declared item
    (`facts/calls.ts` · `CallsRead.all`); the caps below bound only what is

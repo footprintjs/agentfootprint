@@ -2331,6 +2331,15 @@
   ],
   "source": "library"
  },
+ "wrong.beforePause.held.events@1": {
+  "text": "The part before the pause is read from the state this record holds. That part's events are not in this record, so what was in front of the model then, and whether a call then failed or was refused by a rule, cannot be told here.",
+  "parts": [
+   {
+    "text": "The part before the pause is read from the state this record holds. That part's events are not in this record, so what was in front of the model then, and whether a call then failed or was refused by a rule, cannot be told here."
+   }
+  ],
+  "source": "library"
+ },
  "scope.noOwnEvents@1": {
   "text": "None of this record's events belong to the run asked for, so nothing about that run can be told from it.",
   "parts": [

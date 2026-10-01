@@ -55,6 +55,47 @@ Defined in: [src/core/agent/coverage/period.ts:664](https://github.com/footprint
 
 ***
 
+### held?
+
+> `readonly` `optional` **held?**: `object`
+
+Defined in: [src/core/agent/coverage/period.ts:681](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/coverage/period.ts#L681)
+
+The time the source holds, when it holds none or only part of what the
+call asked about (`verdict` `not-held` / `partly-held`) — the `queried` and
+`held` spans of the declared period that verdict came from, as the tool
+declared them. Filed only under `.time()`, where the served time line
+hands the model this conclusion in the person's zone (`timeLimits.ts` ·
+`heldLine`) and the evidence gate spells it (`core/time/forms.ts` ·
+`timeFormsOf`, its `held` source): the model never converts a source's
+UTC instants itself.
+
+#### held
+
+> `readonly` **held**: `object`
+
+##### held.from
+
+> `readonly` **from**: `string`
+
+##### held.to
+
+> `readonly` **to**: `string`
+
+#### queried
+
+> `readonly` **queried**: `object`
+
+##### queried.from
+
+> `readonly` **from**: `string`
+
+##### queried.to
+
+> `readonly` **to**: `string`
+
+***
+
 ### iteration
 
 > `readonly` **iteration**: `number`

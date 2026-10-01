@@ -84,7 +84,7 @@ import {
   findingsInstructionFor,
 } from '../src/core/agent/findings/reserved.js';
 import { findingsLedgerPiece } from '../src/core/agent/findings/serve.js';
-import { UNKNOWN_ZONE_LINE } from '../src/core/agent/coverage/timeLimits.js';
+import { heldLine, UNKNOWN_ZONE_LINE } from '../src/core/agent/coverage/timeLimits.js';
 import {
   filledNote,
   keptAnswersNote,
@@ -920,6 +920,24 @@ function timeLimitLines(): string[] {
     zone,
     'model',
   )!;
+  // A source that holds none (or only part) of the asked time (take 3): the call's asked span and
+  // the source's held span, both in the person's zone — the conversion is the library's.
+  const heldRow = (verdict: 'not-held' | 'partly-held', heldFrom: string) =>
+    heldLine(
+      {
+        ...base,
+        toolCallId: 'c5',
+        toolName: 'pscale_client_health',
+        verdict,
+        held: {
+          queried: range('2026-09-30T13:00:00Z', '2026-09-30T18:59:50Z'),
+          held: range(heldFrom, '2026-10-01T17:02:44.300882944Z'),
+        },
+      } as never,
+      zone,
+    )!;
+  const notHeld = heldRow('not-held', '2026-10-01T16:22:44.300882944Z');
+  const partlyHeld = heldRow('partly-held', '2026-09-30T16:00:00Z');
   const clocks = ["the sources' clocks differ (UTC, America/New_York) — compared as instants"];
   const lines = [
     { period: [clamp], clocks: [] },
@@ -927,7 +945,9 @@ function timeLimitLines(): string[] {
     { period: [old], clocks: [] },
     { period: [shifted], clocks: [] },
     { period: [], clocks },
-    { period: [clamp, wider, old, shifted], clocks },
+    { period: [], clocks: [], held: [notHeld] },
+    { period: [], clocks: [], held: [partlyHeld] },
+    { period: [clamp, wider, old, shifted], clocks, held: [notHeld, partlyHeld] },
     // The person's zone is unknown (time G15): the ranges are spelled in UTC, and the line says why.
     { period: [clamp], clocks: [UNKNOWN_ZONE_LINE] },
   ].flatMap((l) => {
