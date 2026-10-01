@@ -13,8 +13,9 @@
  *   `slot: 'messages'` and `iteration: N`.
  * The content is parsed from the matching `history` message (by `toolCallId`).
  *
- * Only EARLIER answers' results: `distance` (user messages after the result, up
- * to and including the current one) must be at least 1, and a call of this run
+ * Only EARLIER answers' results: `distance` (messages a PERSON wrote after the
+ * result, up to and including the current one — `common.ts` · `isPersonEntry`,
+ * never a frame the library wrote in the user role) must be at least 1, and a call of this run
  * is never "in view" — on the flagship recording the answering compose also
  * witnesses this run's own `get_array_inventory` result (`events[68]`), which
  * must never become an in-view line.
@@ -29,6 +30,7 @@ import {
   at,
   historyAt,
   historyOf,
+  isPersonEntry,
   readEmptiness,
   rowsAtOf,
   type EmptinessReading,
@@ -98,9 +100,7 @@ export function readInView(ctx: ReadContext, callIds: ReadonlySet<string>): InVi
     const message = history[historyIndex] as Record<string, unknown>;
     const toolName = str(message.toolName);
     if (toolName === undefined) continue;
-    const distance = history
-      .slice(historyIndex + 1)
-      .filter((m) => isRecord(m) && m.role === 'user').length;
+    const distance = history.slice(historyIndex + 1).filter((m) => isPersonEntry(m)).length;
     if (distance < 1) continue;
     // An EARLIER answer's result: its run's door is not in this record, so the one reader's strict
     // recognizers read the history text itself — the only evidence of the door that is left. The

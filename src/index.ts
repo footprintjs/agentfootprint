@@ -499,11 +499,16 @@ export {
 // nudge (the last two registered in 9.86.0), and a message an Injection
 // delivered. This is the one test that tells them apart; the window's refusal
 // engine and `saidByPerson(ctx)` on `agentfootprint/context` both call it, so
-// no reader can hold a different rule.
+// no reader can hold a different rule. Since G17 the registry also holds
+// the openings of the lines served on a REQUEST only — `LIBRARY_NOTE_OPENING`
+// (the time layer's late line, on every request under `.time()`, and the
+// figures dial's conclusion) and the staged-refs nudge — so a host finding
+// "this turn" in what the model was sent never anchors on the library's line.
 export {
   isLibraryAuthoredFrame,
   isSaidByPerson,
   LIBRARY_AUTHORED_PREFIXES,
+  LIBRARY_NOTE_OPENING,
   type AuthoredMessage,
 } from './lib/saidByPerson.js';
 // `.selfExplain()` — the in-conversation door over the agent's own trace.

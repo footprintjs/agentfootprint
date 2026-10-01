@@ -818,14 +818,30 @@ The same rule for a single message is `isSaidByPerson(msg)`.
 `isLibraryAuthoredFrame(msg)` is the PREFIX half of it only — true for the six
 frames this library opens with a registered marker (the compaction frame, the
 drop notice, the schema-check and evidence-check corrections, the out-of-budget
-wrap-up instruction and the stepped-skill nudge), and false for a delivered
+wrap-up instruction and the stepped-skill nudge) and for the request-only late
+lines below, and false for a delivered
 injection, which `isSaidByPerson` excludes by its `injectedBy` marker instead.
 So the two are not complements: a message can be the library's and still not be
 a frame. `LIBRARY_AUTHORED_PREFIXES` is the prefix list itself, exported so a
 consumer reading a stored transcript can apply the same test outside a run.
 `AuthoredMessage` is the minimum shape all three accept —
-`{ role, content, injectedBy? }` — so they work on `ctx.history` and on a saved
+`{ role, content, injectedBy?, ephemeral? }` — so they work on `ctx.history` and on a saved
 transcript alike.
+
+The registry also holds the openings of the lines the library serves on a
+REQUEST and never writes to the conversation — `LIBRARY_NOTE_OPENING` (the
+time layer's late line, which under `.time()` is the LAST user-role message of
+every request, and the figures dial's conclusion) and the staged-refs nudge —
+and a message marked `ephemeral` (a retry's feedback) is never a person's. So a
+reader of what the model was SENT finds the person's words with the same rule:
+
+```ts
+import { isSaidByPerson } from 'agentfootprint';
+
+// request.messages under .time(): [..., { role: 'user', content: 'any errors today?' },
+//   { role: 'user', content: '[A note from the library that runs the tools — …] This turn's time: …' }]
+const turn = [...request.messages].reverse().find((m) => isSaidByPerson(m)); // 'any errors today?'
+```
 
 There is one implementation, and the window's own refusal engine calls it too,
 so routing and compaction cannot come to different conclusions about who said

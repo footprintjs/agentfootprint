@@ -124,6 +124,7 @@ describe('IMPORT-GRAPH FENCE', () => {
       'core/agent/coverage/read.ts', // strip — the ONE owner of what the record-only strip serves
       'core/agent/evidence/limits.ts', // MAX_REPORTED_VALUES — the event's cap, a leaf
       'lib/plainLine.ts', // plainLineProblem — the one "plain visible line" rule for labels
+      'lib/saidByPerson.ts', // isSaidByPerson — the ONE rule for which history entry a person wrote (G17)
       'lib/toolBytes.ts', // toolBytesOf — the ONE owner of where a tool's own words end in a result
     ]);
   });

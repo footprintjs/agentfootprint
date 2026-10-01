@@ -13,6 +13,7 @@ import {
   readEmptiness,
   type EmptinessReading,
 } from '../../../core/agent/coverage/emptiness.js';
+import { isSaidByPerson, type AuthoredMessage } from '../../saidByPerson.js';
 import { sentence, v, type SentenceSpec } from '../render.js';
 import type { TemplateId } from '../templates.js';
 import type {
@@ -235,4 +236,21 @@ export const emptinessSource = (reading: { readonly source?: 'library' | 'app' }
 export function historyOf(view: RecordingView): readonly unknown[] {
   const history = view.state?.history;
   return Array.isArray(history) ? history : [];
+}
+
+/**
+ * True when this recorded history entry is a message a PERSON wrote — the
+ * one rule (`lib/saidByPerson.ts` · `isSaidByPerson`), read off a record. A
+ * `role: 'user'` entry is not enough: the library writes frames in that role
+ * (an evidence correction, a budget wrap-up, a drop notice), and one that
+ * lands after a turn's results would move "the current request" past them.
+ */
+export function isPersonEntry(entry: unknown): boolean {
+  // The cheap test first: this runs once per history entry per witness (`inView.ts`).
+  return (
+    isRecord(entry) &&
+    entry.role === 'user' &&
+    typeof entry.content === 'string' &&
+    isSaidByPerson(entry as unknown as AuthoredMessage)
+  );
 }

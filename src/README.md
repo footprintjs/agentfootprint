@@ -1,8 +1,9 @@
 **Mixed** — the facade over the typed sublayers, and the one file that publishes
 shared owners by name.
-Fold: `index.ts` re-exports `isSaidByPerson`, `isLibraryAuthoredFrame` and
-`LIBRARY_AUTHORED_PREFIXES` from `lib/saidByPerson.js`, so a consumer's predicate and the library's own
-window cannot answer "did a person write this turn?" differently.
+Fold: `index.ts` re-exports `isSaidByPerson`, `isLibraryAuthoredFrame`,
+`LIBRARY_AUTHORED_PREFIXES` and `LIBRARY_NOTE_OPENING` from `lib/saidByPerson.js`, so a consumer's predicate and the library's own
+window cannot answer "did a person write this turn?" differently — not even
+over a request, whose last user-role line under `.time()` is the library's note.
 Support: the sibling barrels (`observe.ts`, `providers.ts`, `debug.ts`,
 `injection-engine.ts`, …) re-export the doors and hold no logic.
 Roles for the whole tree: [docs/design/map-walker-trace-fold-lens.md](../docs/design/map-walker-trace-fold-lens.md).

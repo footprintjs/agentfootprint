@@ -11,13 +11,16 @@
  *          `window/summarize.ts`, `outputEnforcement.ts`, `evidence/gate.ts`,
  *          `stages/wrapUp.ts`, and `skillSteps.ts` for the nudge
  *          `stages/stepNudge.ts` appends — they own the sentences and take
- *          the markers from here), and — since 9.84.0 — a rule author reading
- *          `InjectionContext.history` (`saidByPerson(ctx)`).
+ *          the markers from here), the three writers of request-only late
+ *          lines (`arguments/serve.ts`, `evidence/figures.ts`,
+ *          `stagedRefs.ts` — since G17), and — since 9.84.0 — a rule
+ *          author reading `InjectionContext.history` (`saidByPerson(ctx)`).
  * Emits:   N/A.
  *
  * ## Why this is a leaf and not a private helper
  *
- * This library writes SEVEN kinds of `role: 'user'` message that nobody said:
+ * This library writes SEVEN kinds of `role: 'user'` message into `history`
+ * that nobody said (and serves three more on a request only — below):
  * a compaction frame, a drop notice, a schema-check correction, an
  * evidence-check correction, a budget wrap-up instruction, a stepped-skill
  * nudge, and a message an Injection delivered. Six of the seven are read off
@@ -46,6 +49,20 @@
  * person, a `saidByPerson(ctx).some(m => m.content.includes(…))` rule matched
  * on them, and the window could anchor its refusal on the wrap-up frame.
  *
+ * G17 found the same bug a third time, on a channel the walk had filed as
+ * safe. Three more `role: 'user'` lines are served on a REQUEST and never
+ * written to `history`: the time layer's late line (`arguments/serve.ts` ·
+ * `timeLine`, on EVERY request under `.time()` since 9.134.1), the figures
+ * dial's conclusion (`evidence/figures.ts` · `figuresConclusionLine`) and the
+ * staged-refs nudge (`stagedRefs.ts` · `stagedRefsNudgeLine`). "Never in
+ * history" was read as "no reader can mistake it", but a reader of the
+ * REQUEST — a provider, a mock's echo, a host finding "this turn" as the last
+ * user-role message the model was sent — sees the library's line LAST and
+ * calls it the person's. So their openings are registered here too
+ * ({@link LIBRARY_NOTE_OPENING}, {@link STAGED_DATA_FRAME_PREFIX}), and an
+ * `ephemeral` message (a reliability retry's feedback, on one attempt's
+ * request) is never a person's either.
+ *
  * The markers live here, as a LIST rather than one constant per writing file.
  * A prefix is what the recognizer matches AND what the writer emits;
  * separating those is how a prefix silently stops being recognized, and an
@@ -72,6 +89,8 @@ export interface AuthoredMessage {
   readonly role: string;
   readonly content: string;
   readonly injectedBy?: unknown;
+  /** `true` on a line composed for ONE request (`LLMMessage.ephemeral`) — never a person's turn. */
+  readonly ephemeral?: unknown;
 }
 
 /** Opening of the authored notice a DROP leaves behind. Stable — tests and
@@ -101,6 +120,23 @@ export const WRAP_UP_FRAME_PREFIX = '[budget exhausted';
 export const STEP_NUDGE_FRAME_PREFIX = '[steps unrun';
 
 /**
+ * Opening of the LIBRARY NOTE — the late line this library serves LAST on a
+ * request and never writes to `history`: the time layer's ONE served time line
+ * (`arguments/serve.ts` · `timeLine`, which opens with it as `TIME_LINE_SOURCE`)
+ * and the figures dial's conclusion (`evidence/figures.ts` ·
+ * `figuresConclusionLine`). It says WHO speaks because an unmarked request-only
+ * `user` line reads as the person talking — measured: 37 of 37 answers opened
+ * "You're right… I apologize" after one (the T6b paid run). Stable — tests and
+ * readers match on it, and it is the one copy both writers emit.
+ */
+export const LIBRARY_NOTE_OPENING =
+  '[A note from the library that runs the tools — not from the person, and not a correction from them: when you answer, answer the person directly, as you would from the tool results alone.]';
+
+/** Opening of the request-only STAGED-REFS nudge. Stable — tests and readers
+ *  match on it. Written by `stagedRefsNudgeLine`, appended by `callLLM`. */
+export const STAGED_DATA_FRAME_PREFIX = '[staged data';
+
+/**
  * Every opening this library puts on a `role: 'user'` message it wrote itself.
  *
  * The registry, not a convenience: this is the list a reader has to have ALL
@@ -126,6 +162,8 @@ export const LIBRARY_AUTHORED_PREFIXES: readonly string[] = Object.freeze([
   EVIDENCE_CHECK_FRAME_PREFIX,
   WRAP_UP_FRAME_PREFIX,
   STEP_NUDGE_FRAME_PREFIX,
+  LIBRARY_NOTE_OPENING,
+  STAGED_DATA_FRAME_PREFIX,
 ]);
 
 /** True when this user-role message opens with a frame this library authored. */
@@ -156,8 +194,10 @@ export function isCompactedSummary(msg: AuthoredMessage | undefined): boolean {
  *
  * Deliberately narrow, and narrow in one direction: a message we are not sure
  * about is not credited to a person. The exclusions are the ways this library
- * authors a user turn — a delivery marker its own stage stamps, and the frames
- * in {@link LIBRARY_AUTHORED_PREFIXES} — never a guess at prose.
+ * authors a user turn — a delivery marker its own stage stamps, the
+ * `ephemeral` flag on a line composed for one request, and the openings in
+ * {@link LIBRARY_AUTHORED_PREFIXES} (the request-only late lines included) —
+ * never a guess at prose.
  *
  * A message from a restored conversation, a hand-built window, or a person
  * typing passes every exclusion and is theirs.
@@ -167,6 +207,7 @@ export function isSaidByPerson(msg: AuthoredMessage | undefined): boolean {
     msg !== undefined &&
     msg.role === 'user' &&
     msg.injectedBy === undefined &&
+    msg.ephemeral !== true &&
     !isLibraryAuthoredFrame(msg)
   );
 }

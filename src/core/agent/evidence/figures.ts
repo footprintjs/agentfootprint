@@ -67,6 +67,7 @@
  */
 
 import type { LLMMessage } from '../../../adapters/types.js';
+import { LIBRARY_NOTE_OPENING } from '../../../lib/saidByPerson.js';
 import { toolBytesOf } from '../../../lib/toolBytes.js';
 import { readResult } from './evidenceIndex.js';
 import { normalizeToken, tokenize } from './normalize.js';
@@ -422,11 +423,12 @@ export function explainFigure(
  * WHO says the late line — the library, not the person — in the exact words
  * the time line measured (`arguments/serve.ts` · `TIME_LINE_SOURCE`: an
  * unmarked request-only `user` line drew "You're right… I apologize" on 37 of
- * 37 answers). Kept equal to it by test, not by import: the time layer's
- * module graph is not this folder's to load.
+ * 37 answers). Both are the ONE copy in the authorship registry
+ * (`lib/saidByPerson.ts`, a zero-import leaf — so this folder still never
+ * loads the time layer's module graph), which is what makes `isSaidByPerson`
+ * false for this line (G17).
  */
-export const LIBRARY_NOTE_OPENING =
-  '[A note from the library that runs the tools — not from the person, and not a correction from them: when you answer, answer the person directly, as you would from the tool results alone.]';
+export { LIBRARY_NOTE_OPENING };
 
 /** How many flagged numbers the late line names. */
 const MAX_CONCLUSION_VALUES = 8;

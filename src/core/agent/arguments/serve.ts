@@ -36,6 +36,7 @@ import { renderTimeLimits } from '../coverage/timeLimits.js';
 import { argumentRewritesOf, type ArgumentRewrite } from '../middleware/rewrites.js';
 import { isRefused, periodFactsOf, periodFormsOf, rulesOf, type RuledToolLike } from './declare.js';
 import { HIDDEN_VALUE, type ArgumentRow } from './rows.js';
+import { LIBRARY_NOTE_OPENING } from '../../../lib/saidByPerson.js';
 import {
   convertForTool,
   formArguments,
@@ -730,9 +731,14 @@ export function clockSentence(clock: ServedClock | undefined): string | undefine
  * says the note is no correction, and how an answer uses it. It says nothing
  * about WHEN to answer: the pending half names a call as the next step.
  * Applied once, by {@link timeLine}, whichever halves the line holds.
+ *
+ * The bytes are the authorship registry's (`lib/saidByPerson.ts` ·
+ * `LIBRARY_NOTE_OPENING`, one of `LIBRARY_AUTHORED_PREFIXES`), so the line
+ * that is served LAST on every request under `.time()` is never read as the
+ * person's words by `isSaidByPerson` — the last `role: 'user'` message of a
+ * request is the library's, and "this turn" is not (G17).
  */
-export const TIME_LINE_SOURCE =
-  '[A note from the library that runs the tools — not from the person, and not a correction from them: when you answer, answer the person directly, as you would from the tool results alone.]';
+export const TIME_LINE_SOURCE: string = LIBRARY_NOTE_OPENING;
 
 // LENS · late-line · request-ephemeral
 // reads: the composed halves of the turn's ONE served time line — the person's windows
