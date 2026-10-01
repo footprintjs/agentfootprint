@@ -126,3 +126,34 @@ These are the numbers `rule.mjs` · `MARGINS` carries.
 | `falseFlagCeiling` | 0.1 |
 | `inputTokensRatio` | 1.6 |
 | `inputTokensCeiling` | 15000 |
+
+## The registered run, 2026-10-01 (recorded after the run; nothing above was changed)
+
+`bench/figures/runs/haiku45-20261001T0537/` used Haiku 4.5 for 120 runs (3 cases × 2 arms ×
+N = 20, arms interleaved), with fresh seed 1726065114. It cost $0.4579 of the $1.80 cap. It did
+not stop, and every run answered.
+
+**Verdict: PASS.**
+
+| Clause | Measured | |
+|---|---|---|
+| P1 | invented, provoking: `before` 24/40 = 0.60, `after` 0/40 = 0.00 | PASS |
+| P2 | no `after` answer invented, so nothing to catch | NOT-MEASURABLE (not gating) |
+| G1 | control correct: `before` 20/20, `after` 20/20 | PASS |
+| G2 | control hedges: `before` 0/20, `after` 0/20 | PASS |
+| G3 | `after` answers the labeller clears that the gate flagged: 0/60 | PASS |
+| G4 | mean input tokens per run 3,172 → 2,994; model calls per run 2.2 → 2.0 | PASS |
+
+What the numbers say. With no cluster figure in front of it, Haiku 4.5 invented one in 60% of
+answers. One `before` answer reproduced the field figure word for word: "a combined usable free
+space of approximately 6.3 TB". main's gate flagged 3 of those 24 answers. With the cluster
+figures served and the dial on, no answer invented a figure, and none was flagged falsely.
+
+The gain cannot be split between the two fixes from this run: the served figures left nothing to
+invent. The dial's share is measured separately at $0 (`node <replay>` over the saved `before`
+answers, judged again by the gate with `figures: true`, `assist`, over the same `before` view).
+The dial flags **24 of the 24** answers the labeller marks invented, compared with 3 of 24 for
+main's gate. It flags 2 more answers that the labeller clears ("approximately 5.4 TB" usable).
+Both are labeller misses, not false accusations: the labeller is unit-agnostic, and 5.4 matches
+the cluster total in PB (5.4029). That makes the `before` invented rate an undercount
+(26/40 = 0.65). The verdict is unchanged.
