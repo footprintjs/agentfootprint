@@ -35,6 +35,7 @@ import {
 } from '../../src/identity.js';
 import {
   call,
+  doorWaits,
   login,
   mountDoor,
   TEST_COST,
@@ -374,10 +375,13 @@ describe('the sign-in door — scenarios', () => {
 
   it('ONE ANSWER for every wrong credential — unknown name, wrong password — after the minimum time', async () => {
     const m = await mounted({ minimumResponseMs: 120 });
-    const started = Date.now();
+    // The minimum is a duration on the monotonic clock (the door's, and this
+    // process's), so it is read here on that clock too: each login's span
+    // contains the door's own, and the bound holds with no tolerance.
+    const started = performance.now();
     const unknown = await login(m.url, 'mallory', 'alice-pw');
     const wrong = await login(m.url, 'alice', 'not-it');
-    expect(Date.now() - started).toBeGreaterThanOrEqual(240);
+    expect(performance.now() - started).toBeGreaterThanOrEqual(240);
     expect(unknown.status).toBe(401);
     expect(unknown.body).toEqual(wrong.body);
     expect(unknown.body).toEqual({ error: WRONG_CREDENTIAL_SENTENCE });
@@ -501,26 +505,25 @@ describe('the sign-in door — integration', () => {
 
   it('trusted proxies (a CIDR range): the address follows X-Forwarded-For only behind a listed proxy', async () => {
     const warnings: string[] = [];
+    const waits = doorWaits();
     const m = await mounted({
       limits: { perName: 100, perAddress: 2, backoffMs: 60 },
       trustedProxies: ['127.0.0.0/8'],
       warn: (w) => warnings.push(w),
+      _sleep: waits.sleep,
     });
-    // Rightmost untrusted hop: 10.9.9.9 each time — one client, a growing delay.
-    // Past its budget the address waits the capped 8 × backoffMs = 480 ms. The
-    // bounds sit halfway, well clear of a loaded CI runner's own login latency
-    // (~60 ms seen), so they measure the limiter, not the machine.
-    const timed = async (name: string, xff: string) => {
-      const t = Date.now();
-      await login(m.url, name, 'p', { 'x-forwarded-for': xff });
-      return Date.now() - t;
-    };
-    await timed('x1', '1.1.1.1, 10.9.9.9');
-    await timed('x2', '2.2.2.2, 10.9.9.9');
-    await timed('x3', '3.3.3.3, 10.9.9.9');
-    expect(await timed('x4', '4.4.4.4, 10.9.9.9')).toBeGreaterThanOrEqual(450);
+    // The limiter's decision is ASSERTED, not timed: a login's wall time is the
+    // scrypt check (22–50 ms) plus the delay, and timing it measured the check.
+    const waitsOf = (name: string, xff: string) =>
+      waits.of(() => login(m.url, name, 'p', { 'x-forwarded-for': xff }));
+    // Rightmost untrusted hop: 10.9.9.9 each time — one client, so from its
+    // second attempt on it waits the capped 8 × backoffMs = 480 ms.
+    expect(await waitsOf('x1', '1.1.1.1, 10.9.9.9')).toEqual([]);
+    expect(await waitsOf('x2', '2.2.2.2, 10.9.9.9')).toEqual([480]);
+    expect(await waitsOf('x3', '3.3.3.3, 10.9.9.9')).toEqual([480]);
+    expect(await waitsOf('x4', '4.4.4.4, 10.9.9.9')).toEqual([480]);
     // Another client behind the same proxy is not slowed by the first.
-    expect(await timed('x5', '10.8.8.8')).toBeLessThan(240);
+    expect(await waitsOf('x5', '10.8.8.8')).toEqual([]);
     expect(warnings).toEqual([]);
   });
 

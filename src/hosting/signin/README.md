@@ -43,6 +43,34 @@ const scoped = await handle.artifactsForRequest({ sessionId, headers, signInKey:
   message would quote the password); an empty password is refused before any
   check; every wrong credential gets one answer after a minimum time — a
   store that fails included; a sign-in already present is ended.
+- **The minimum answer time is a duration: measured on the monotonic clock,
+  waited in full.** The deadline is one `performance.now()` reading taken as
+  the login starts, and the wait is `lib/sleep`'s, which never ends before
+  that clock has passed it. Never the door's `now` (epoch ms — it dates
+  sign-ins and attempt windows): it counts whole milliseconds, so a deadline
+  taken late in one millisecond and read early in the next comes up to 1 ms
+  short, and it jumps when the system time is set — an hour ahead answered at
+  once. Tests follow the same split: the minimum is timed on the monotonic
+  clock, and a limiter DECISION is read off the door (`_sleep` records the
+  door's waits instead of sleeping them), never off a login's wall time, which
+  is mostly the password check.
+  ```ts
+  const deadline = performance.now() + minimumMs; // door.ts · login
+  const answer = async (status, body) => {
+    await wait(deadline - performance.now()); // lib/sleep: never early
+    reply(res, status, body);
+  };
+  // A limiter decision, read off the door (test/hosting/signInDoorHarness.ts · doorWaits):
+  const waits = doorWaits();
+  const door = signInDoor({
+    ...options,
+    minimumResponseMs: 0, // so the only wait that asks for time is the limiter's
+    limits: { perName: 100, perAddress: 2, backoffMs: 60 },
+    _sleep: waits.sleep, // recorded, never slept
+  });
+  await login(url, 'x1', 'p'); // one address's first wrong attempt: no delay
+  expect(await waits.of(() => login(url, 'x2', 'p'))).toEqual([480]); // capped at 8 × backoffMs
+  ```
 - **Attempt limits hold under concurrency (`limits.ts`):** an attempt is
   counted when it STARTS, under the key the CHECKER names
   (`PasswordChecker.budgetKey` — the account the typed name reaches, so
