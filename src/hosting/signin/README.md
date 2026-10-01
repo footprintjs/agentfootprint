@@ -71,6 +71,25 @@ const scoped = await handle.artifactsForRequest({ sessionId, headers, signInKey:
   await login(url, 'x1', 'p'); // one address's first wrong attempt: no delay
   expect(await waits.of(() => login(url, 'x2', 'p'))).toEqual([480]); // capped at 8 × backoffMs
   ```
+- **The attempt delay is waited BEFORE the password is checked.** A decision
+  the door does not apply slows nobody: `void wait(verdict.delayMs)` keeps
+  every decision exactly right and lets every guess reach the checker at full
+  speed. `doorWaits` cannot see that, because its waits end at once whether
+  the door awaits them or not. So the order is its own law
+  (`test/hosting/sign-in-door-delay.test.ts`): the test's `_sleep` HOLDS each
+  wait for one turn of the event loop, and a delayed login must go `wait`,
+  `waited`, `check`, `answer`. A door that does not await reaches the check
+  first, every run: its path from the wait to the check is promise
+  continuations only, and they all run before the loop's next turn.
+  ```ts
+  await wait(verdict.delayMs); // door.ts · login — the check runs in this wait's continuation
+  // test/hosting/sign-in-door-delay.test.ts — the wait HELD one turn, every step recorded:
+  _sleep: (ms) => {
+    order.push(`wait ${ms}`);
+    return new Promise((resolve) => setImmediate(() => (order.push(`waited ${ms}`), resolve())));
+  },
+  expect(order).toEqual(['wait 480', 'waited 480', 'check', 'answer']);
+  ```
 - **Attempt limits hold under concurrency (`limits.ts`):** an attempt is
   counted when it STARTS, under the key the CHECKER names
   (`PasswordChecker.budgetKey` — the account the typed name reaches, so

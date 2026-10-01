@@ -39,6 +39,11 @@ export async function testUsers(): Promise<string> {
  * with no minimum answer time (the harness's `minimumResponseMs: 0`) what is
  * recorded is exactly the attempt limiter's delay — its decision, read off the
  * door, with none of the login's own time (the scrypt check) in it.
+ *
+ * Every wait here ends at once, so it ends the same whether the door awaits it
+ * or not: what this reads is the DECISION, never that the door applied it.
+ * That the door waits the delay before it checks the password is its own law,
+ * with each wait held one turn of the event loop (sign-in-door-delay.test.ts).
  */
 export function doorWaits(): {
   readonly sleep: (ms: number) => Promise<void>;
