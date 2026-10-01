@@ -6,15 +6,15 @@ _Recorded 2026-09-25._
 
 ## In plain words
 
-The package publishes **18 import paths** carrying **2453 distinct named exports**, plus **124 typed events**. For each one this report asks three separate questions: is it really *exported* (declared), is it *described in prose on the published docs site* (documented), and does a *real run actually use it* (exercised).
+The package publishes **18 import paths** carrying **2460 distinct named exports**, plus **124 typed events**. For each one this report asks three separate questions: is it really *exported* (declared), is it *described in prose on the published docs site* (documented), and does a *real run actually use it* (exercised).
 
-**1722 of 2453 exports (70%) are described in prose on the site.** The rest split into five different problems, which is the whole point of keeping the columns apart:
+**1729 of 2460 exports (70%) are described in prose on the site.** The rest split into five different problems, which is the whole point of keeping the columns apart:
 
 - **31 exist, provably work, and are undocumented.** A reference run exercises them and no page on the site describes them. This is the honest headline number for "features that work and nobody has written about". It is the list to work through.
 - **92 are already written up, just not published.** Prose about them exists inside the repo (`docs/`, `README.md`) but never made it onto the site. These are cheap wins: the writing is done, it needs moving.
 - **18 appear only inside a code sample** and nowhere in the surrounding text. A reader scanning the page never learns they exist, and site search does not find them.
 - **590 are undocumented and no reference run touches them.** This report will not guess whether they work. They are reported as UNKNOWN, which is the honest answer, and they need a human pass.
-- **1489 are documented but no reference run exercises them.** For a function or a class that is the shape a dead or unimplemented feature has. For a type or an interface it is mostly noise, because a type is used, not called — so read that class by kind, and the tables below split it.
+- **1496 are documented but no reference run exercises them.** For a function or a class that is the shape a dead or unimplemented feature has. For a type or an interface it is mostly noise, because a type is used, not called — so read that class by kind, and the tables below split it.
 
 On events: **70** of the 124 typed events are both described on the site and were seen firing in a real run. **23** are described but were never observed firing — that is exactly the shape the resilience events had for months (fully declared, with payload types, and zero emitters), so this number is worth a look every time it moves. **31** are not described in prose on the site at all.
 
@@ -155,7 +155,7 @@ The site describes it and it really is exported, but no reference run touches it
 | `agentfootprint.integrity.context_error` | `docs-next/content/docs/monitor/arming-context-integrity.mdx`, `docs-next/content/docs/monitor/column-types.mdx` |
 | `agentfootprint.integrity.external_ground_used` | `docs-next/content/docs/monitor/arming-context-integrity.mdx` |
 
-**Functions and classes described on the site but not touched by any reference run (452).** The other 1037 in this class are types, interfaces and constants, which a run cannot "call" — they are named in `docs/docs-truth/baseline.json` rather than here.
+**Functions and classes described on the site but not touched by any reference run (456).** The other 1040 in this class are types, interfaces and constants, which a run cannot "call" — they are named in `docs/docs-truth/baseline.json` rather than here.
 
 | Symbol | Kind | Exported from |
 |---|---|---|
@@ -347,6 +347,7 @@ The site describes it and it really is exported, but no reference run touches it
 | `contextContractForModel` | function | `agentfootprint/context` |
 | `contextEvaluatedRecorder` | function | `agentfootprint/observe` |
 | `convertExact` | function | `agentfootprint/time` |
+| `convertForTool` | function | `agentfootprint/time` |
 | `convertWidened` | function | `agentfootprint/time` |
 | `costRecorder` | function | `agentfootprint/observe` |
 | `createProvider` | function | `agentfootprint/providers` |
@@ -387,6 +388,7 @@ The site describes it and it really is exported, but no reference run touches it
 | `geminiEmbedder` | function | `agentfootprint/providers` |
 | `githubDeviceSignIn` | function | `agentfootprint/observe` |
 | `googleIdentity` | function | `agentfootprint/security` |
+| `granularityMsOf` | function | `agentfootprint/time` |
 | `hasGatewaySearch` | function | `agentfootprint/providers` |
 | `hashPassword` | function | `agentfootprint/security` |
 | `headers` | function | `agentfootprint/security` |
@@ -513,6 +515,7 @@ The site describes it and it really is exported, but no reference run touches it
 | `strengthOfMove` | function | `agentfootprint/maps` |
 | `stripTags` | function | `agentfootprint/rag` |
 | `strongestOf` | function | `agentfootprint/maps` |
+| `sugarForms` | function | `agentfootprint/time` |
 | `summarize` | function | `agentfootprint/memory` |
 | `summarizeAbsence` | function | `agentfootprint/ontology` |
 | `summarizeEmbeddings` | function | `agentfootprint/observe` |
@@ -532,6 +535,7 @@ The site describes it and it really is exported, but no reference run touches it
 | `verdictForArm` | function | `agentfootprint/observe` |
 | `verifyRequestIdentity` | function | `agentfootprint/hosting` |
 | `wholeDocument` | function | `agentfootprint/rag` |
+| `widestMsOf` | function | `agentfootprint/time` |
 | `withoutCredentials` | function | `agentfootprint/hosting` |
 | `xrayObservability` | function | `agentfootprint/observe` |
 | `AdmissionRefusedError` | class | `agentfootprint/hosting` |
@@ -906,7 +910,7 @@ Whether a symbol comes from the root barrel or only from a subpath is a document
 | `agentfootprint/recipes` | 6 | 6 | 100% |
 | `agentfootprint/classify` | 17 | 17 | 100% |
 | `agentfootprint/ontology` | 38 | 38 | 100% |
-| `agentfootprint/time` | 8 | 8 | 100% |
+| `agentfootprint/time` | 15 | 15 | 100% |
 
 ## Honest limits of this report
 

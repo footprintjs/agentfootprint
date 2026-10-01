@@ -82,17 +82,23 @@ the resolver's (`TimeCandidate`, `ResolvedWindow`, `ReadingChoice`, `TimePolicy`
 `agentfootprint/observe`, beside the other catalogs); since the English reader (step T6b)
 `englishTimeReader` and `EnglishTimeReaderOptions`; the doors are `AgentBuilder.time`,
 `run({ time })` and `InputField.format`. The grammar functions stay internal. One exception, by
-the same law that keeps the run-time half off the default graph: the three conversions an app
-needs OUTSIDE a run — `convertExact`, `convertWidened` and `periodFactProblem`, with
-`ConvertContext`, `WindowToConvert`, `Conversion`, `WidenedConversion` and `PeriodFactProblem` —
-ship through their own door, `agentfootprint/time` (`src/doors/time.ts`), never the main barrel:
-on the main barrel they would put `convert.ts` on every consumer's synchronous graph. **The
-one-answer law: an app that previews what a tool would read, or builds a call itself, asks the
-library's own conversion — never a copy of it.** A copy drifts the first time the fill's rules
-change (an o'clock end, a look-back's `maxRange`), and the preview then shows a read the run will
-not send; the door is the same function objects the fill calls (pinned by identity in
-`test/api-conformance/subpath-exports.test.ts`, and by value against a run in
-`examples/features/85-time-widen-and-refuse.ts`).
+the same law that keeps the run-time half off the default graph: the conversion an app needs
+OUTSIDE a run ships through its own door, `agentfootprint/time` (`src/doors/time.ts`), never the
+main barrel — on the main barrel it would put `convert.ts` on every consumer's synchronous graph.
+The door leads with THE answer, `convertForTool` (with `ToolConversion` and `TimeRefusal`), and
+the tool's declaration read the run's way: `sugarForms` (a `period`'s forms, `PeriodShapes`),
+`granularityMsOf` (the clock's `granularityMs`) and `widestMsOf` (its `maxRange` in ms); then the
+steps alone — `convertExact`, `convertWidened` (asked only after `convertExact` finds nothing),
+`periodFactProblem` — with `ConvertContext`, `WindowToConvert`, `Conversion`, `WidenedConversion`
+and `PeriodFactProblem`. **The one-answer law: an app that previews what a tool would read, or
+builds a call itself, asks `convertForTool` over the tool's own `period` — never a copy of the
+conversion, nor of its order, nor of the duration grammar.** The steps alone do not see the
+tool's facts: composed by hand they miss `maxRange` (a 1960m look-back the run refuses
+`no-form-holds`), `multi-day` and `partlyBeyondRetention`. A copy drifts the first time the fill's
+rules change, and the preview then shows a read the run will not send; the door is the same
+function objects the run calls (pinned by identity in
+`test/api-conformance/subpath-exports.test.ts`, and by value against a run — the read AND the
+refusal — in `examples/features/85-time-widen-and-refuse.ts`).
 Since step T6b the windows the person CONFIRMED (and a `model` reader's readings) are also
 SERVED, with their source, and a mention still pending is served as NOT confirmed: the Tools mount
 reads them off the ledger (`windows.ts` · `readerWindowsOf`, `pendingQuotesOf`), the slot's one
@@ -422,7 +428,15 @@ convertExact({ range: asked }, sugarForms({ argument: 'w', spelling: 'iso-range'
 Wider than asked, refused, drifted (`examples/features/85-time-widen-and-refuse.ts`):
 
 ```ts
-import { convertExact, convertWidened, periodFactProblem } from 'agentfootprint/time';
+import {
+  convertExact, convertForTool, convertWidened, granularityMsOf, periodFactProblem, sugarForms,
+} from 'agentfootprint/time';
+
+// An app's preview: the run's own question over the tool's own `period` (sugar, facts, step):
+const period = { argument: 'w', spelling: 'lookback', direction: 'past', maxRange: '24h' } as const;
+convertForTool({ range: yesterday }, sugarForms(period), period,
+  { now, zone, granularityMs: granularityMsOf(period) });
+// { refused: 'no-form-holds' } — what the run files for this tool (below)
 
 // "yesterday" to a look-back-only tool (now 2026-10-09T15:40Z, Los Angeles):
 convertExact({ range: yesterday }, [{ kind: 'lookback', argument: 'w', signed: false }], clock);

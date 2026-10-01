@@ -471,9 +471,12 @@ function lookbackWidened(
 ): Omit<WidenedConversion, 'form'> | undefined {
   if (window.lookback !== undefined) return undefined;
   const now = msOf(ctx.now);
-  const from = msOf(window.range.from);
-  const to = msOf(window.range.to);
-  if (now === undefined || from === undefined || to === undefined) return undefined;
+  // `absoluteOf` refuses an empty or inverted range, as every other form's reading does — a
+  // look-back from now "covering" a range that ends before it starts would read a confident
+  // wrong window (its `extra` outside its own `sent`).
+  const span = absoluteOf(window, ctx.now);
+  if (now === undefined || span === undefined) return undefined;
+  const [from, to] = span;
   if (to.ms >= now.ms - ctx.granularityMs) return undefined;
   const units = form.units ?? LOOKBACK_UNITS;
   const finest = finestUnitMs(units);

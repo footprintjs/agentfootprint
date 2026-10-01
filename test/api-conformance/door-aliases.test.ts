@@ -112,8 +112,8 @@ const DOORS = [
   // always-on ask — pure data and pure functions, mounted via `.ontology()`.
   './ontology',
   // The SIXTEENTH, same argument: `./time` carries no run entry point. It
-  // publishes the conversions the time layer asks at run time —
-  // `convertExact`, `convertWidened`, `periodFactProblem` — pure functions
+  // publishes the conversion the time layer asks at run time —
+  // `convertForTool` and its steps — pure functions
   // over a clock the caller passes, kept off the main barrel because they
   // are the layer's run-time half (the default-graph law).
   './time',

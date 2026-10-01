@@ -9,8 +9,8 @@ which carries the declarations, the folds, the per-iteration walk AND the
 `read_skill` composers (`readSkillDescriptor`, `buildReadSkillTool`).
 Trace + Fold: `observe.ts` (recorders, `recordRun`, ledger, bisect, toolpack).
 Fold: `maps.ts` (the mount kernel's vocabulary) and `time.ts` (the time layer's
-conversions — `convertExact`, `convertWidened`, `periodFactProblem` — for an app
-that needs the library's answer outside a run; a door of its own because they
+conversions — `convertForTool` over a tool's own `period`, and its steps — for
+an app that needs the library's answer outside a run; a door of its own because they
 are the layer's run-time half, which the main barrel keeps off the default
 graph).
 Map + Lens: `ontology.ts` (the declared map — `defineOntology` and the shapes

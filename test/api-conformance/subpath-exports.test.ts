@@ -259,10 +259,10 @@ const SURVIVING_SUBPATHS = [
   // functions, no run entry point; mounted via `.ontology()`.
   './ontology',
   // Also added, also never one of the sixteen. `./time` publishes the
-  // conversions the time layer asks at run time (`convertExact`,
-  // `convertWidened`, `periodFactProblem`) for an app that needs the same
-  // answer outside a run — pure functions, no run entry point; off the main
-  // barrel because they are the layer's run-time half.
+  // question the time layer asks at run time (`convertForTool`, with the
+  // tool's declaration read the run's way and the parts) for an app that
+  // needs the same answer outside a run — pure functions, no run entry
+  // point; off the main barrel because they are the layer's run-time half.
   './time',
 ] as const;
 
@@ -367,18 +367,26 @@ describe('a door added after 9.0.0 is a re-export of its implementation barrel',
     }
   });
 
-  it('./time serves the SAME convertExact / convertWidened / periodFactProblem as src/core/time', () => {
+  it('./time serves the SAME conversion functions the run asks, from src/core/time', () => {
     const onDoor = timeDoor as unknown as Record<string, unknown>;
+    const convert = timeConvert as unknown as Record<string, unknown>;
+    const periodForm = timePeriodForm as unknown as Record<string, unknown>;
     const owners: Record<string, Record<string, unknown>> = {
-      convertExact: timeConvert as unknown as Record<string, unknown>,
-      convertWidened: timeConvert as unknown as Record<string, unknown>,
-      periodFactProblem: timePeriodForm as unknown as Record<string, unknown>,
+      // THE answer the time ask and the bind ask, and the declaration read the run's way.
+      convertForTool: convert,
+      granularityMsOf: convert,
+      widestMsOf: convert,
+      sugarForms: periodForm,
+      // The parts.
+      convertExact: convert,
+      convertWidened: convert,
+      periodFactProblem: periodForm,
     };
     for (const [sample, impl] of Object.entries(owners)) {
       expect(impl[sample], `src/core/time lost ${sample}`).toBeDefined();
       expect(onDoor[sample], `./time's ${sample} is a different object`).toBe(impl[sample]);
     }
-    // The door is exactly these three: the rest of the layer stays internal.
+    // The door is exactly these: the rest of the layer stays internal.
     expect(Object.keys(onDoor).sort()).toEqual(Object.keys(owners).sort());
   });
 });
