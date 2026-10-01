@@ -963,6 +963,64 @@ export function periodFormsOf(period: ToolPeriod | undefined): readonly PeriodFo
   return period === undefined ? [] : sugarForms(period);
 }
 
+/** A form's window arguments: every argument it names but the zone. */
+const windowArgumentsOf = (form: PeriodForm) =>
+  formArguments(form).filter((a) => a.role !== 'zone');
+
+/**
+ * The form a call's window is in, read off what the call GIVES — the first form given whole
+ * (every argument but the zone), else the first form given in part; `undefined` when every
+ * form is left out. A period's forms are alternatives, so this is the one reading of "which
+ * form did the call take", asked by the inputs layer (`resolve.ts` · `windowUntakenOf`) and
+ * inner dispatch (`toolDispatch.ts` · `refuseUnaccountedRuledArguments`).
+ */
+export function sentFormOf(
+  forms: readonly PeriodForm[],
+  args: Readonly<Record<string, unknown>>,
+): number | undefined {
+  const given = (form: PeriodForm) =>
+    windowArgumentsOf(form).map((a) => !isMissing(args, a.argument));
+  const whole = forms.findIndex((form) => given(form).every(Boolean));
+  if (whole >= 0) return whole;
+  const part = forms.findIndex((form) => given(form).some(Boolean));
+  return part >= 0 ? part : undefined;
+}
+
+/**
+ * The arguments of every form but `forms[taken]` that it does not also name — an
+ * alternative the call did not take. Empty for a single form: one form is one window.
+ */
+export function untakenBesides(forms: readonly PeriodForm[], taken: number): ReadonlySet<string> {
+  const chosen = forms[taken];
+  if (chosen === undefined) return new Set();
+  const mine = new Set(formArguments(chosen).map((a) => a.argument));
+  return new Set(
+    forms.flatMap((form) => formArguments(form).map((a) => a.argument)).filter((a) => !mine.has(a)),
+  );
+}
+
+/**
+ * The form a call that leaves EVERY form out owes, by the rules: a form this turn's kept
+ * answers fill whole (`answered`), else the first form the rules ASSUME whole — its default IS
+ * the window — else the first form, asked by its own asks. Never every form at once: that
+ * would ask the person for two windows, which the tool refuses.
+ */
+export function owedFormOf(
+  forms: readonly PeriodForm[],
+  rules: ToolRules,
+  answered: (argument: string) => boolean,
+): number {
+  const ruleOf = (argument: string) => rules.ruled.find((r) => r.argument === argument)?.rule;
+  const all = (form: PeriodForm, test: (argument: string) => boolean) => {
+    const named = windowArgumentsOf(form);
+    return named.length > 0 && named.every((a) => test(a.argument));
+  };
+  const kept = forms.findIndex((form) => all(form, answered));
+  if (kept >= 0) return kept;
+  const assumed = forms.findIndex((form) => all(form, (a) => ruleOf(a) === 'assume'));
+  return assumed >= 0 ? assumed : 0;
+}
+
 /**
  * Every argument a period names — the single argument, or each form's bound,
  * object and zone arguments. What a row's `period: true` marks.
