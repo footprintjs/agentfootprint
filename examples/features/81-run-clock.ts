@@ -8,8 +8,12 @@
  *   Agent.create(...).time({ zone: 'America/Los_Angeles' })   // a fallback, optional
  *   agent.run({ message, time: { now: sentAt, zone: session.zone } })
  *
- *   - the zone is per run; the builder's is a fallback; with neither the run is
- *     REFUSED before the turn starts — never the server's zone;
+ *   - the zone is per run; the builder's is a fallback; with neither the zone is
+ *     UNKNOWN — never the server's, never guessed: the clock row says
+ *     `zoneSource: 'unknown'`, instants are spelled in UTC and say so, and the
+ *     person is asked their zone before any time they wrote is read;
+ *   - every request ends with the library's one time line, opening with the
+ *     turn's clock ("This turn's time: Friday 2026-10-09 08:40 …");
  *   - `now` is the app's (the message's time), else the turn's start, recorded as
  *     a default nobody chose (`nowSource: 'default'`);
  *   - seed files ONE `clock` row per turn on the ledger; each dispatched call files
@@ -42,7 +46,7 @@ export const meta: ExampleMeta = {
   group: 'features',
   description:
     'Each run declares its clock: time: { now, zone } (the zone per run, .time({ zone }) a fallback, ' +
-    'neither → refused). Seed files one clock row per turn, each call a call row with dispatchedAt; a ' +
+    'neither → the zone is unknown, asked, never guessed). Seed files one clock row per turn, each call a call row with dispatchedAt; a ' +
     'resume passing a new time keeps the frozen clock and files clock-on-resume; the limits block ' +
     'shows each Period line in the person’s zone.',
   defaultInput: 'Any failed backups on host-103 since 8?',
@@ -114,18 +118,17 @@ export async function run(input: string): Promise<string> {
     'the Period line in the person’s zone, "to 8:40" shown as 08:40',
   );
 
-  // 2. No zone anywhere — refused before the turn starts, never the server's zone.
+  // 2. No zone anywhere — the zone is UNKNOWN, never the server's and never guessed.
   const zoneless = Agent.create({ provider: mock({ replies: [{ content: 'hi' }] }), model: 'm' })
     .time()
     .build();
-  let refused = '';
-  try {
-    await zoneless.run({ message: input });
-  } catch (error) {
-    refused = (error as Error).message;
-  }
-  console.log('no zone anywhere →', refused);
-  check(refused.includes("needs the person's zone"), 'a run with no zone refused');
+  await zoneless.run({ message: input, time: { now: '2026-10-09T15:40:00Z' } });
+  const [unknown] = rowsOf<ClockRow>(zoneless, 'clock');
+  console.log('no zone anywhere →', JSON.stringify(unknown));
+  check(
+    unknown?.zoneSource === 'unknown' && unknown.zone === 'UTC',
+    'a run with no zone records it as unknown (UTC is only the spelling)',
+  );
 
   // 3. A pause, and a resume half an hour later that passes the current time:
   //    recorded, not applied — the paused turn keeps its clock.

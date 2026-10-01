@@ -373,6 +373,10 @@
     {
       "idx": 10,
       "overwrite": {
+        "timeLine": {
+          "iteration": 1,
+          "text": "[A note from the library that runs the tools — not from the person, and not a correction from them: when you answer, answer the person directly, as you would from the tool results alone.] This turn's time: Saturday 2026-09-26 03:05 America/Los_Angeles (UTC-07:00)."
+        },
         "toolsInjections": [
           {
             "contentHash": "a18b8042",
@@ -394,6 +398,14 @@
         {
           "path": "toolsInjections",
           "verb": "append"
+        },
+        {
+          "path": "timeLine\u001fiteration",
+          "verb": "set"
+        },
+        {
+          "path": "timeLine\u001ftext",
+          "verb": "set"
         }
       ],
       "updates": {}
@@ -482,14 +494,20 @@
             "transformHash": null
           },
           "messages": {
-            "count": 1,
+            "count": 2,
             "entries": [
               {
                 "hash": "<digest>",
                 "role": "user"
               }
             ],
-            "requestOnly": []
+            "requestOnly": [
+              {
+                "hash": "<digest>",
+                "reason": "time-window-line",
+                "role": "user"
+              }
+            ]
           },
           "params": {},
           "requestMeasurement": {
@@ -497,8 +515,8 @@
             "format": "json-utf8-v1",
             "slots": {
               "messages": {
-                "jsonBytes": 32,
-                "jsonChars": 32
+                "jsonBytes": 327,
+                "jsonChars": 325
               },
               "systemPrompt": {
                 "jsonBytes": 5,
@@ -511,8 +529,8 @@
             },
             "status": "measured",
             "total": {
-              "jsonBytes": 319,
-              "jsonChars": 319
+              "jsonBytes": 614,
+              "jsonChars": 612
             }
           },
           "system": {
@@ -822,12 +840,21 @@
     },
     {
       "idx": 27,
-      "overwrite": {},
+      "overwrite": {
+        "timeLine": {
+          "iteration": 2
+        }
+      },
       "redactedPaths": [],
       "runtimeStageId": "context#26",
       "stage": "Context",
       "stageId": "context",
-      "trace": [],
+      "trace": [
+        {
+          "path": "timeLine\u001fiteration",
+          "verb": "set"
+        }
+      ],
       "updates": {}
     },
     {
@@ -900,7 +927,7 @@
             "transformHash": null
           },
           "messages": {
-            "count": 3,
+            "count": 4,
             "entries": [
               {
                 "hash": "<digest>",
@@ -916,7 +943,13 @@
                 "role": "tool"
               }
             ],
-            "requestOnly": []
+            "requestOnly": [
+              {
+                "hash": "<digest>",
+                "reason": "time-window-line",
+                "role": "user"
+              }
+            ]
           },
           "params": {},
           "requestMeasurement": {
@@ -924,8 +957,8 @@
             "format": "json-utf8-v1",
             "slots": {
               "messages": {
-                "jsonBytes": 874,
-                "jsonChars": 872
+                "jsonBytes": 1169,
+                "jsonChars": 1165
               },
               "systemPrompt": {
                 "jsonBytes": 5,
@@ -938,8 +971,8 @@
             },
             "status": "measured",
             "total": {
-              "jsonBytes": 1161,
-              "jsonChars": 1159
+              "jsonBytes": 1456,
+              "jsonChars": 1452
             }
           },
           "system": {
@@ -1280,12 +1313,21 @@
     },
     {
       "idx": 44,
-      "overwrite": {},
+      "overwrite": {
+        "timeLine": {
+          "iteration": 3
+        }
+      },
       "redactedPaths": [],
       "runtimeStageId": "context#46",
       "stage": "Context",
       "stageId": "context",
-      "trace": [],
+      "trace": [
+        {
+          "path": "timeLine\u001fiteration",
+          "verb": "set"
+        }
+      ],
       "updates": {}
     },
     {
@@ -1351,7 +1393,7 @@
             "transformHash": null
           },
           "messages": {
-            "count": 5,
+            "count": 6,
             "entries": [
               {
                 "hash": "<digest>",
@@ -1376,7 +1418,13 @@
                 "role": "tool"
               }
             ],
-            "requestOnly": []
+            "requestOnly": [
+              {
+                "hash": "<digest>",
+                "reason": "time-window-line",
+                "role": "user"
+              }
+            ]
           },
           "params": {},
           "requestMeasurement": {
@@ -1384,8 +1432,8 @@
             "format": "json-utf8-v1",
             "slots": {
               "messages": {
-                "jsonBytes": 2188,
-                "jsonChars": 2182
+                "jsonBytes": 2483,
+                "jsonChars": 2475
               },
               "systemPrompt": {
                 "jsonBytes": 5,
@@ -1398,8 +1446,8 @@
             },
             "status": "measured",
             "total": {
-              "jsonBytes": 2475,
-              "jsonChars": 2469
+              "jsonBytes": 2770,
+              "jsonChars": 2762
             }
           },
           "system": {
@@ -1547,7 +1595,13 @@
               "role": "user"
             }
           ],
-          "requestOnly": []
+          "requestOnly": [
+            {
+              "reason": "time-window-line",
+              "role": "user",
+              "text": "[A note from the library that runs the tools — not from the person, and not a correction from them: when you answer, answer the person directly, as you would from the tool results alone.] This turn's time: Saturday 2026-09-26 03:05 America/Los_Angeles (UTC-07:00)."
+            }
+          ]
         },
         "system": {
           "pieces": [
@@ -1649,7 +1703,13 @@
               "toolName": "backup_runs"
             }
           ],
-          "requestOnly": []
+          "requestOnly": [
+            {
+              "reason": "time-window-line",
+              "role": "user",
+              "text": "[A note from the library that runs the tools — not from the person, and not a correction from them: when you answer, answer the person directly, as you would from the tool results alone.] This turn's time: Saturday 2026-09-26 03:05 America/Los_Angeles (UTC-07:00)."
+            }
+          ]
         },
         "system": {
           "pieces": [
@@ -1770,7 +1830,13 @@
               "toolName": "backup_runs"
             }
           ],
-          "requestOnly": []
+          "requestOnly": [
+            {
+              "reason": "time-window-line",
+              "role": "user",
+              "text": "[A note from the library that runs the tools — not from the person, and not a correction from them: when you answer, answer the person directly, as you would from the tool results alone.] This turn's time: Saturday 2026-09-26 03:05 America/Los_Angeles (UTC-07:00)."
+            }
+          ]
         },
         "system": {
           "pieces": [

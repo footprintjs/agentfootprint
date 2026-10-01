@@ -217,10 +217,15 @@ describe('an agent mounted in a composition', () => {
     }
   });
 
-  it('with no fallback zone the mounted turn is refused, never run on the server’s zone', async () => {
+  it('with no fallback zone the mounted turn runs with its zone UNKNOWN — never the server’s (G15)', async () => {
     const agent = agentWith([answer('hi')], (b) => b.time());
     const seq = Sequence.create().step('a', agent).build();
-    await expect(seq.run({ message: 'composed' })).rejects.toThrow(/composition passes no time/);
+    await expect(seq.run({ message: 'composed' })).resolves.toBeDefined();
+    const clocks = rowsIn<ClockRow>(seq.getLastSnapshot(), 'clock');
+    expect(clocks.length).toBeGreaterThan(0);
+    for (const clock of clocks) {
+      expect(clock).toMatchObject({ zone: 'UTC', zoneSource: 'unknown', nowSource: 'default' });
+    }
   });
 });
 

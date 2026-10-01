@@ -40,10 +40,12 @@ type Reply = { content: string; toolCalls?: { id: string; name: string; args: ob
 
 const NOW = '2026-10-09T15:40:00Z';
 const NOW_MS = Date.parse(NOW);
+/** The run clock that opens the served line on every request under `.time()` (G16). */
+const CLOCK = "This turn's time: Friday 2026-10-09 08:40 America/Los_Angeles (UTC-07:00).";
 const DAY = 86_400_000;
 const iso = (ms: number) => new Date(ms).toISOString();
 const LA = 'America/Los_Angeles';
-const LEAD = `${TIME_LINE_SOURCE} The time the tools read is not the time asked about`;
+const LEAD = `${TIME_LINE_SOURCE} ${CLOCK} The time the tools read is not the time asked about`;
 
 function scripted(script: readonly Reply[], requests: LLMRequest[]) {
   let i = 0;
@@ -165,11 +167,11 @@ describe('the time limits line — served late, after the read', () => {
       { from: iso(NOW_MS - 30 * DAY), to: NOW },
     );
     expect(requests).toHaveLength(2);
-    expect(lastLine(requests[0]!)).toBe(`${TIME_LINE_SOURCE} ${CONTROL_30D}`);
+    expect(lastLine(requests[0]!)).toBe(`${TIME_LINE_SOURCE} ${CLOCK} ${CONTROL_30D}`);
     const line = lastLine(requests[1]!);
     expect(line).toMatch(
       new RegExp(
-        `^${`${TIME_LINE_SOURCE} ${CONTROL_30D} The time the tools read is not the time asked about`.replace(
+        `^${`${TIME_LINE_SOURCE} ${CLOCK} ${CONTROL_30D} The time the tools read is not the time asked about`.replace(
           /[[\]().]/g,
           '\\$&',
         )} — client_activity read less than was asked — asked: 2026-09-09 08:40:00`,
@@ -186,7 +188,7 @@ describe('the time limits line — served late, after the read', () => {
       [call('c1', 'client_activity'), { content: '42 operations.' }],
       { from: iso(NOW_MS - 7 * DAY), to: NOW },
     );
-    const only = `${TIME_LINE_SOURCE} ${CONTROL_7D}`;
+    const only = `${TIME_LINE_SOURCE} ${CLOCK} ${CONTROL_7D}`;
     expect(requests.map(lastLine)).toEqual([only, only]);
   });
 

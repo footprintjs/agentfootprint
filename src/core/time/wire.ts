@@ -45,6 +45,12 @@ export interface TimeContext {
   readonly asked?: TimeRange & { readonly edge: 'exclusive' };
   /** The person's zone for this run (the clock's). */
   readonly zone: ZoneName;
+  /**
+   * The person's zone is NOT known (the clock's `zoneSource: 'unknown'`, G15):
+   * `zone` is only the UTC spelling of the instants, never the person's — a
+   * tool must not read a wall time in it as theirs. Absent when the zone is known.
+   */
+  readonly zoneUnknown?: true;
   /** The turn's frozen clock (§ 4). */
   readonly now: InstantText;
   /** The wall clock when the library handed the call to the tool — the `call` row's. */
@@ -54,7 +60,7 @@ export interface TimeContext {
 /** The context for one call, from its `call-window` row's `asked`, the turn's clock and the dispatch moment. */
 export function timeContextOf(
   window: { readonly asked?: TimeRange } | undefined,
-  clock: { readonly now: InstantText; readonly zone: ZoneName },
+  clock: { readonly now: InstantText; readonly zone: ZoneName; readonly zoneSource?: string },
   dispatchedAt: InstantText,
 ): TimeContext {
   const asked = window?.asked;
@@ -64,6 +70,7 @@ export function timeContextOf(
       asked: { from: asked.from, to: asked.to, edge: 'exclusive' as const },
     }),
     zone: clock.zone,
+    ...(clock.zoneSource === 'unknown' && { zoneUnknown: true as const }),
     now: clock.now,
     dispatchedAt,
   };
@@ -78,10 +85,15 @@ export function readTimeContext(value: unknown): TimeContext | undefined {
   if (value === null || typeof value !== 'object' || Array.isArray(value)) return undefined;
   const v = value as Record<string, unknown>;
   const keys = Object.keys(v);
-  if (!keys.every((k) => ['version', 'asked', 'zone', 'now', 'dispatchedAt'].includes(k))) {
+  if (
+    !keys.every((k) =>
+      ['version', 'asked', 'zone', 'zoneUnknown', 'now', 'dispatchedAt'].includes(k),
+    )
+  ) {
     return undefined;
   }
   if (v.version !== TIME_CONTEXT_VERSION || !isZoneName(v.zone)) return undefined;
+  if (v.zoneUnknown !== undefined && v.zoneUnknown !== true) return undefined;
   if (
     instantOf(v.now, 'strict') === undefined ||
     instantOf(v.dispatchedAt, 'strict') === undefined
@@ -99,6 +111,7 @@ export function readTimeContext(value: unknown): TimeContext | undefined {
     version: TIME_CONTEXT_VERSION,
     ...(asked !== undefined && { asked }),
     zone: v.zone,
+    ...(v.zoneUnknown === true && { zoneUnknown: true as const }),
     now: v.now as InstantText,
     dispatchedAt: v.dispatchedAt as InstantText,
   };

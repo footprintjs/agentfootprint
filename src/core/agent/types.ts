@@ -297,8 +297,9 @@ export interface AgentOptions {
   readonly answerLayer?: boolean | { readonly standingLine?: boolean };
   /**
    * THE TIME LAYER'S CLOCK (`core/time/`) — every run declares its clock: a
-   * zone (the run's `time.zone`, else this fallback; with neither the run is
-   * refused, never the server's zone) and a `now` (the run's, else the turn's
+   * zone (the run's `time.zone`, else this fallback; with neither the zone is
+   * unknown — never the server's, never guessed: the person is asked it first)
+   * and a `now` (the run's, else the turn's
    * start, recorded as a default). Seed files one `clock` row per turn; each
    * dispatched call files a `call` row with `dispatchedAt`; a resume passing a
    * different `time` keeps the frozen clock and files `clock-on-resume`; under

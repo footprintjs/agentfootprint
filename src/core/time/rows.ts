@@ -427,6 +427,53 @@ export function clockOf(ledger: readonly unknown[] | undefined): ClockRow | unde
   return undefined;
 }
 
+/** Whether a mention's parses name no zone anywhere — the whole mention's or a range side's. */
+const namesNoZone = (parses: readonly TimeParts[] | undefined): boolean =>
+  (parses ?? []).every(
+    (p) =>
+      p.zoneToken === undefined &&
+      p.rangeOf?.[0].zoneToken === undefined &&
+      p.rangeOf?.[1].zoneToken === undefined,
+  );
+
+/**
+ * The zone the person ANSWERED for themselves while the run's zone was
+ * unknown (G15), latest first — or `undefined`. It is a `time-answer` filed in
+ * a turn whose clock was `zoneSource: 'unknown'`, for a mention that named no
+ * zone of its own (so the zone asked was the person's, not a token's
+ * meaning), or a later turn's clock that already carries it
+ * (`zoneSource: 'answered'`). Seed stamps it as the next turn's zone
+ * (`stages/timeLayer.ts` · `stampClock`); the turn the answer was given in
+ * keeps its clock, frozen, as every clock is.
+ *
+ * @example
+ * ```ts
+ * answeredZoneOf([clockUnknownTurn1, readingOfYesterday, answerInLosAngeles]); // 'America/Los_Angeles'
+ * ```
+ */
+export function answeredZoneOf(ledger: readonly unknown[] | undefined): ZoneName | undefined {
+  if (ledger === undefined) return undefined;
+  const rows = ledger as readonly ({ readonly kind?: unknown } | null)[];
+  const clockOfTurn = (turn: number): ClockRow | undefined =>
+    rows.find(
+      (r): r is ClockRow =>
+        r !== null && typeof r === 'object' && r.kind === 'clock' && (r as ClockRow).turn === turn,
+    );
+  for (let i = rows.length - 1; i >= 0; i--) {
+    const row = rows[i];
+    if (row === null || typeof row !== 'object') continue;
+    if (row.kind === 'clock' && (row as ClockRow).zoneSource === 'answered') {
+      return (row as ClockRow).zone;
+    }
+    if (row.kind !== 'time-answer') continue;
+    const answer = row as TimeAnswerRow;
+    if (clockOfTurn(answer.turn)?.zoneSource !== 'unknown') continue;
+    const reading = readingsOf(ledger, answer.turn).find((r) => r.mention === answer.mention);
+    if (reading !== undefined && namesNoZone(reading.parses)) return answer.zone;
+  }
+  return undefined;
+}
+
 // ─── The checkpoint door ─────────────────────────────────────────────────
 
 const isInstant = (value: unknown): boolean => instantOf(value, 'strict') !== undefined;
@@ -665,7 +712,10 @@ export function timeRowIsWellFormed(row: Readonly<Record<string, unknown>>): boo
         isInstant(row.now) &&
         (row.nowSource === 'app' || row.nowSource === 'default') &&
         isZoneName(row.zone) &&
-        (row.zoneSource === 'run' || row.zoneSource === 'builder') &&
+        (row.zoneSource === 'run' ||
+          row.zoneSource === 'builder' ||
+          row.zoneSource === 'answered' ||
+          row.zoneSource === 'unknown') &&
         (row.window === undefined || isControlWindow(row.window))
       );
     case 'clock-on-resume':

@@ -439,6 +439,17 @@
  * nothing); and the final answer's `Period:` lines render in Los Angeles time
  * with the zone named.
  *
+ * The time follow-ups G15/G16 (the run clock served): `agent-time-clock` ONLY
+ * was regenerated (`-t agent-time-clock` under `AF_TOOLS_REFERENCE=update`);
+ * every unarmed reference is untouched. The delta, path by path: the Tools
+ * slot's commit gains `timeLine` (`{ iteration: 1, text }` — the one line's
+ * opening and "This turn's time: Saturday 2026-09-26 03:05
+ * America/Los_Angeles (UTC-07:00).") and each later composition re-stamps
+ * `timeLine.iteration`; each served view gains ONE `requestOnly` entry
+ * (`reason: 'time-window-line'`), its `messages.count` +1 and the measured
+ * message bytes +295. Nothing else moved — the history, the tools, the
+ * system prompt and the answer's `Period:` lines are the 9.134.0 bytes.
+ *
  * Every scenario is a real run — the receipt-conformance shapes, each in the
  * configuration that has no name collision — and what is compared is the
  * whole `commitLog` plus `servedAt(k)` for every located epoch, after ONE

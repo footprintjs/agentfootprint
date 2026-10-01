@@ -81,8 +81,13 @@ export function timeAskOf(
   if (choice?.by !== 'open') return undefined;
   const quote = quoted(row.quote);
   if (choice.open.includes('zone')) {
+    // A mention that names no zone waits on the PERSON's zone (the clock's is unknown, G15).
+    const token = saidZoneToken(row);
     return {
-      question: fillMessage(messages['ask.zone'], { quote, token: quoted(saidZoneToken(row)) }),
+      question:
+        token === ''
+          ? fillMessage(messages['ask.zone-unknown'], { quote })
+          : fillMessage(messages['ask.zone'], { quote, token: quoted(token) }),
       field: { id, type: 'string', required: true, format: 'zone' },
     };
   }

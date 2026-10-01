@@ -290,7 +290,10 @@ the turn are filled from it (`answered` + `matched: 'mention'`) and it is not as
 tool description: ONE request-only `user` line appended last to each request (`serve.ts` ·
 `timeWindowsLine`, composed at the slot's one decoration site from the tools really served, carried
 on `timeLine` = `{ iteration, text }`, appended by `callLLM`, rebuilt by `servedView`; the mount
-reads the windows with `core/time/windows.ts` · `readerWindowsOf`). It is the library's CONCLUSION,
+reads the windows with `core/time/windows.ts` · `readerWindowsOf`). Under `.time()` it opens, after
+who says it, with the turn's clock on EVERY request (`serve.ts` · `clockSentence`, G16: "This turn's
+time: Friday 2026-10-09 08:40 America/Los_Angeles (UTC-07:00)." — under an unknown zone, G15, the UTC
+spelling "(the person's time zone is not known)"). It is the library's CONCLUSION,
 never raw facts: a settled window in the person's zone WITH ITS SOURCE and each period tool's own
 values ("may pass"), and the answer is told to state it; a quote still PENDING names no window —
 only that it is not settled and the NEXT STEP that asks the person (the call with the period
@@ -322,7 +325,10 @@ never defaulted. The unread words are asked as ONE window field with nothing pre
 like any answer; the pending half says "the library could not read those words, so its own form
 asks the person which time they meant, with nothing filled in". The window the person set in the
 app's time control (`time.window`) is served on its own sentence under `.time()`, with or without
-a reader, and every value the line names is the one answer (`convertForTool` over
+a reader — on every request of the turn, whether or not a served tool declares a period (G14: the
+window is a fact about the person's turn; with no tool that can take values it is named alone,
+"… is 2026-10-09 08:00–08:39 America/Los_Angeles (UTC-07:00). An answer built on it states that
+window.") — and every value the line names is the one answer (`convertForTool` over
 `windows.ts` · `windowToConvert`) the call is handed.
 
 ```ts

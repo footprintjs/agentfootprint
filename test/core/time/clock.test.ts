@@ -129,15 +129,25 @@ describe('readTimeOptions — the builder fallback', () => {
 });
 
 describe('draftClock / completeClock — the zone per run, the builder a fallback', () => {
-  it('the run zone wins; the builder fills in; neither is refused', () => {
+  it('the run zone wins; the builder fills in; with neither the zone is UNKNOWN (G15)', () => {
     expect(draftClock({ zone: 'Asia/Kolkata' }, { zone: LA })).toEqual({
       zone: 'Asia/Kolkata',
       zoneSource: 'run',
     });
     expect(draftClock({}, { zone: LA })).toEqual({ zone: LA, zoneSource: 'builder' });
     expect(draftClock(undefined, { zone: LA })).toEqual({ zone: LA, zoneSource: 'builder' });
-    expect(draftClock({ now: NOW }, {})).toBe('no-zone');
-    expect(draftClock(undefined, {})).toBe('no-zone');
+    expect(draftClock({ now: NOW }, {})).toEqual({ now: NOW, zone: 'UTC', zoneSource: 'unknown' });
+    expect(draftClock(undefined, {})).toEqual({ zone: 'UTC', zoneSource: 'unknown' });
+  });
+
+  it('an unknown zone takes the zone the person answered earlier — and only an unknown one (G15)', () => {
+    const start = Date.UTC(2026, 9, 9, 15, 40, 2, 5);
+    const unknown = { now: NOW, zone: 'UTC', zoneSource: 'unknown' } as const;
+    expect(completeClock(unknown, start, LA)).toMatchObject({ zone: LA, zoneSource: 'answered' });
+    expect(completeClock(unknown, start)).toMatchObject({ zone: 'UTC', zoneSource: 'unknown' });
+    expect(
+      completeClock({ now: NOW, zone: LA, zoneSource: 'run' }, start, 'Europe/London'),
+    ).toMatchObject({ zone: LA, zoneSource: 'run' });
   });
 
   it('now is the app’s, else the turn’s start — admitted as a default', () => {

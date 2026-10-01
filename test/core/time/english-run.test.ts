@@ -162,12 +162,17 @@ function lookbackTool(seen: Record<string, unknown>[] = []) {
 
 const reader = englishTimeReader();
 
+/** The run clock the served line opens with on every request under `.time()` (G16) — `NOW` in Los Angeles. */
+const CLOCK = "This turn's time: Friday 2026-10-09 08:40 America/Los_Angeles (UTC-07:00).";
+/** The line's opening — who says it, then the run clock; a line with nothing else to say is this. */
+const OPEN = `${TIME_LINE_SOURCE} ${CLOCK}`;
+
 /**
  * The served time line holding only the pending half (`arguments/serve.ts` · `timeWindowsLine`),
  * opened once with who says it (`timeLine` · `TIME_LINE_SOURCE`).
  */
 const pendingLine = (quote: string, calls: string): string =>
-  `${TIME_LINE_SOURCE} ` +
+  `${OPEN} ` +
   `The window for “${quote}” is not settled yet: the person confirms it in the library's own ` +
   `form, which shows its reading of those words with the zone and opens when ${calls} (or the ` +
   'call is refused with the reason). So the next step is that call — not a question about the ' +
@@ -237,7 +242,7 @@ describe('the field sentence — the zone, then the date order, then the tool ru
     // The served line before the zone ask: the library holds NO reading of these words yet, so it
     // never promises a form that shows one (the T6b paid run's `field-pst` rows: no candidates).
     expect(timeLineOf(requests[0])).toBe(
-      `${TIME_LINE_SOURCE} The window for “10/09/26 8 AM to 8:40 AM PST” is not settled yet: the ` +
+      `${OPEN} The window for “10/09/26 8 AM to 8:40 AM PST” is not settled yet: the ` +
         'library holds no reading of those words until it knows which time zone they name, so ' +
         'its own form asks the person for that zone, and it opens when client_activity is called ' +
         'with start_time, end_time left out (or the call is refused with the reason). So the next ' +
@@ -640,7 +645,7 @@ describe('the one served time sentence — the confirmed window and its source',
         'Client operations over a window.',
       ]);
       expect(timeLineOf(requests[1])).toBe(
-        `${TIME_LINE_SOURCE} The person's time words, as the library holds them: “last 2 hours” is ` +
+        `${OPEN} The person's time words, as the library holds them: “last 2 hours” is ` +
           `${WINDOW_2H}, the window the person confirmed when asked what their words meant — ` +
           `search_logs window "2h"; client_activity start_time ${NOW_MS - 2 * 3_600_000}, ` +
           `end_time ${NOW_MS}. A call may pass these values as written; an answer built on them ` +
@@ -666,7 +671,8 @@ describe('the one served time sentence — the confirmed window and its source',
       values: { f1: first.awaitingInput.fields[0]!.enum![0]! },
     });
     expect(JSON.stringify(requests[1]!.tools)).toBe(JSON.stringify(requests[0]!.tools));
-    // The slot did not re-run, so its iteration-1 line (pending) is stale and is NOT served.
+    // The slot did not re-run, so its iteration-1 line (pending) is stale and is NOT served — the
+    // run clock with it (G16): classic mode serves the whole line on its first request only.
     expect(timeLineOf(requests[0])).toContain('is not settled yet');
     expect(timeLineOf(requests[1])).toBeUndefined();
     expect(seen).toEqual([{ window: '2h' }, { window: '2h' }]);
@@ -690,7 +696,7 @@ describe('the one served time sentence — the confirmed window and its source',
     // A conclusion about the results in hand — never an account of the call that ran (paid runs:
     // 37/37, then 7/10 answers after such an account opened "You're right… I apologize").
     expect(timeLineOf(requests[1])).toBe(
-      `${TIME_LINE_SOURCE} The results for “last 2 hours” cover the window written into the ` +
+      `${OPEN} The results for “last 2 hours” cover the window written into the ` +
         "call — the assistant's own reading of those words. So the answer gives those results " +
         "and names that window as the assistant's reading of “last 2 hours”.",
     );
@@ -725,9 +731,10 @@ describe('the one served time sentence — the confirmed window and its source',
     );
     await armed.agent.run({ message: 'any errors at all?', time: { now: NOW } });
     expect(JSON.stringify(armed.requests[0]!.tools)).toBe(JSON.stringify(plain.requests[0]!.tools));
-    // …and no late line: a message with no time words serves nothing new.
+    // …and no late line beyond the run clock (G16): a message with no time words serves nothing new.
     expect(armed.requests[0]!.messages).toHaveLength(plain.requests[0]!.messages.length);
-    expect(timeLineOf(armed.requests[0])).toBeUndefined();
+    expect(timeLineOf(armed.requests[0])).toBe(OPEN);
+    expect(timeLineOf(plain.requests[0])).toBe(OPEN);
     expect(plain.requests[0]!.tools!.every((t) => !t.description.includes('library read'))).toBe(
       true,
     );
@@ -837,5 +844,38 @@ describe('reader edges — the end edge, a named zone, the app’s abbreviation 
     expect(isInputPause(done)).toBe(false);
     expect(seen[0]).toMatchObject({ start_time: 1791558000000, end_time: 1791560460000 });
     expect(ofKind(agent, 'time-answer')).toMatchObject([{ zone: LA, how: 'confirmed' }]);
+  });
+});
+
+// ─── G13: a range with no meridiem on either side shares one ─────────────────
+
+describe('G13 — “September 29 8:45 to 8:55” through a real agent', () => {
+  it('offers 8:45–8:55 AM and PM (the policy settles the year) — never 8:45 AM to 8:55 PM — and runs the pick', async () => {
+    const seen: Record<string, unknown>[] = [];
+    const { agent } = build(
+      [call('c1', 'client_activity', {}), answer('ok')],
+      [epochTool(seen)],
+      (b) => b.time({ zone: LA, reader, policy: { year: 'current' } }),
+    );
+    const first = paused(
+      await agent.run({
+        message: 'Show client activity September 29 8:45 to 8:55',
+        time: { now: NOW },
+      }),
+    );
+    const field = first.awaitingInput.fields[0]!;
+    expect(field.enum).toEqual([
+      '2026-09-29T08:45:00-07:00/2026-09-29T08:56:00-07:00',
+      '2026-09-29T20:45:00-07:00/2026-09-29T20:56:00-07:00',
+    ]);
+    const done = await agent.resume(first.checkpoint as never, {
+      requestId: first.awaitingInput.requestId,
+      values: { f1: field.enum![1]! },
+    });
+    expect(isInputPause(done)).toBe(false);
+    expect(seen[0]).toMatchObject({
+      start_time: Date.parse('2026-09-30T03:45:00Z'),
+      end_time: Date.parse('2026-09-30T03:56:00Z'),
+    });
   });
 });

@@ -47,7 +47,8 @@ import {
 import type { ReaderWindows } from '../../time/bind.js';
 import { windowToConvert } from '../../time/windows.js';
 import type { ZoneName } from '../../time/zone.js';
-import { presentRange } from '../../time/present.js';
+import { presentInstant, presentRange } from '../../time/present.js';
+import type { InstantText } from '../../time/instant.js';
 
 type PlainObject = Record<string, unknown>;
 
@@ -348,17 +349,24 @@ function settledSentence(tools: readonly PeriodTool[], windows: ServedWindows): 
  * The control half: the window the person set in the app's time control (the run's `time.window`,
  * `source: 'control'`, TQ26) — the person's own, like an answer — in their zone, with each served
  * period tool's values for it, the same conversion the fill uses. So an app never writes its own
- * prompt text for a window it set from a UI.
+ * prompt text for a window it set from a UI. The window is a fact about the person's TURN, not
+ * about a tool (G14): with no served period tool that can read it, the sentence still names it —
+ * without values, and without a permission to pass any.
  */
 function controlSentence(tools: readonly PeriodTool[], windows: ServedWindows): string | undefined {
   const w = windows.control;
   if (w === undefined) return undefined;
   const values = tools.flatMap((pt) => toolValues(pt, w, windows) ?? []);
-  if (values.length === 0) return undefined;
+  // Under an unknown zone (G15) the window is spelled in UTC — the zone the presented window
+  // already names — and the line says why, once.
+  const unknown = windows.zoneUnknown === true ? ` (${UNKNOWN_ZONE_CLAUSE})` : '';
+  const named = `The window the person set in the app's time control is ${presentedWindow(
+    w,
+  )}${unknown}`;
+  if (values.length === 0) return `${named}. An answer built on it states that window.`;
   return (
-    `The window the person set in the app's time control is ${presentedWindow(w)} — ` +
-    `${values.join('; ')}. A call may pass these values as written; an answer built on them ` +
-    'states that window.'
+    `${named} — ${values.join('; ')}. A call may pass these values as written; an answer built ` +
+    'on them states that window.'
   );
 }
 
@@ -542,7 +550,7 @@ const refusedFor = (windows: ServedWindows, quote: string, tool: string): boolea
  * point — composed at the tools slot's one decoration site
  * (`core/slots/buildToolsSlot.ts` · `commitWire`) from the tools it really
  * serves, carried to `callLLM` on `timeLine`, and rebuilt by
- * `lib/time-travel/servedView.ts` from the same committed key. Three parts:
+ * `lib/time-travel/servedView.ts` from the same committed key. Four parts:
  *
  * - SETTLED — each window the person confirmed or gave in the time ask (or a
  *   `model` reader's reading), in the person's zone, WHOSE it is, and each
@@ -550,6 +558,9 @@ const refusedFor = (windows: ServedWindows, quote: string, tool: string): boolea
  *   one the fill would use (said so); a value the tool's view hides is named
  *   hidden. So the model never re-derives a window from words, and the answer
  *   states the window it was built on.
+ * - CONTROL — the window the person set in the app's time control, in
+ *   their zone, with each served period tool's values for it; with none
+ *   (no period tool served, or none can read it) the window alone (G14).
  * - REFUSED — a window of the person's a served period tool refused before
  *   dispatch this turn: the refusal's reason in the result's own words, then
  *   what an answer states. That quote is no longer pending for that tool.
@@ -561,9 +572,9 @@ const refusedFor = (windows: ServedWindows, quote: string, tool: string): boolea
  *   written window). Once a call of the turn already ran on a written window
  *   (`ranUnconfirmed`), it names the limit an answer states instead.
  *
- * `undefined` when no served tool declares a period or no part has
- * anything to say — a turn with no time words serves no line at all. The
- * halves carry no opening: {@link timeLine} composes the served line and
+ * `undefined` when no part has anything to say — a turn with no time words
+ * and no control window serves no line at all; with no served period tool
+ * only the control half can speak. The halves carry no opening: {@link timeLine} composes the served line and
  * opens it, once, with {@link TIME_LINE_SOURCE}.
  *
  * @example
@@ -582,7 +593,9 @@ export function timeWindowsLine(
   windows: ServedWindows,
 ): string | undefined {
   const tools = periodToolsOf(served, winningTools);
-  if (tools.length === 0) return undefined;
+  // The control window is the person's turn's, served whether or not a period tool is (G14); the
+  // other halves speak about period tools only.
+  if (tools.length === 0) return controlSentence(tools, windows);
   const halves = [
     settledSentence(tools, windows),
     controlSentence(tools, windows),
@@ -654,6 +667,55 @@ export function timeLimitsSentence(lines: TimeLimitLines | undefined): string | 
   const [first, ...rest] = parts;
   const lead = first!.charAt(0).toUpperCase() + first!.slice(1);
   return [lead, ...rest].join(' ');
+}
+
+/** What a line says when the run's clock zone is unknown (G15) — the zone is never guessed. */
+export const UNKNOWN_ZONE_CLAUSE = "the person's time zone is not known";
+
+/** The run clock the served line names (`agent/buildAgentChart.ts` · `timeClockArg`, off the turn's `clock` row). */
+export interface ServedClock {
+  readonly now: InstantText;
+  /** The person's zone — or, with `zoneUnknown`, only the UTC spelling (G15). */
+  readonly zone: ZoneName;
+  readonly zoneUnknown?: true;
+}
+
+// LENS · late-line · request-ephemeral
+// reads: the turn's `clock` row — its `now` and zone (`zoneSource: 'unknown'` → the UTC spelling)
+// law: the library's clock as a CONCLUSION, one short sentence, to the minute, the weekday named
+//      (a model re-derives a weekday wrong), the zone always named — and named as not known when
+//      it is, never guessed (G15).
+/**
+ * The run clock, for the model (G16): the turn's `now` to the minute, its
+ * weekday and date in the person's zone, the zone named — so the model never
+ * answers "today" or "this morning" from its training date. Under `.time()`
+ * it is the first part of the ONE served time line on every request; never
+ * without it. `undefined` when there is no clock (or it cannot be spelled).
+ *
+ * @example
+ * ```ts
+ * clockSentence({ now: '2026-10-09T15:40:00Z', zone: 'America/Los_Angeles' });
+ * // "This turn's time: Friday 2026-10-09 08:40 America/Los_Angeles (UTC-07:00)."
+ * clockSentence({ now: '2026-10-09T15:40:00Z', zone: 'UTC', zoneUnknown: true });
+ * // "This turn's time: Friday 2026-10-09 15:40 UTC (the person's time zone is not known)."
+ * ```
+ */
+export function clockSentence(clock: ServedClock | undefined): string | undefined {
+  if (clock === undefined) return undefined;
+  const ms = Date.parse(clock.now);
+  if (!Number.isFinite(ms)) return undefined;
+  try {
+    const minute = new Date(Math.floor(ms / 60_000) * 60_000).toISOString() as InstantText;
+    const at = presentInstant(minute, { zone: clock.zone });
+    const weekday = new Intl.DateTimeFormat('en-US', {
+      weekday: 'long',
+      timeZone: clock.zone,
+    }).format(ms);
+    const unknown = clock.zoneUnknown === true ? ` (${UNKNOWN_ZONE_CLAUSE})` : '';
+    return `This turn's time: ${weekday} ${at}${unknown}.`;
+  } catch {
+    return undefined;
+  }
 }
 
 /**

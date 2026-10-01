@@ -84,9 +84,11 @@ import {
   findingsInstructionFor,
 } from '../src/core/agent/findings/reserved.js';
 import { findingsLedgerPiece } from '../src/core/agent/findings/serve.js';
+import { UNKNOWN_ZONE_LINE } from '../src/core/agent/coverage/timeLimits.js';
 import {
   filledNote,
   keptAnswersNote,
+  clockSentence,
   secondPauseRefusal,
   timeRefusal,
   timeLimitsSentence,
@@ -716,7 +718,8 @@ const RULED_PROPERTY_DESCRIPTION: Surface = {
  * look-back tool's and an epoch tool's form — as the window the person
  * CONFIRMED in the time ask, as one they EDITED, as a `model` reader's
  * unconfirmed reading, and PENDING (a proposal the person has not answered),
- * alone and beside a settled window; once more with a view that hides a value.
+ * alone and beside a settled window; once more with a view that hides a value;
+ * and the app's control window with no served period tool (G14).
  */
 function timeWindowLines(): string[] {
   const lookback = defineTool({
@@ -829,6 +832,8 @@ function timeWindowLines(): string[] {
       ['client_activity', epoch],
     ]),
     new Map<string, unknown>([['client_activity', hiding]]),
+    // No served tool declares a period: only the control half speaks — the window alone (G14).
+    new Map<string, unknown>(),
   ];
   return [...sets, ...pendingSets].flatMap((windows) =>
     wires.flatMap((winning) => {
@@ -923,6 +928,8 @@ function timeLimitLines(): string[] {
     { period: [shifted], clocks: [] },
     { period: [], clocks },
     { period: [clamp, wider, old, shifted], clocks },
+    // The person's zone is unknown (time G15): the ranges are spelled in UTC, and the line says why.
+    { period: [clamp], clocks: [UNKNOWN_ZONE_LINE] },
   ].flatMap((l) => {
     // The served bytes: the ONE line's composer opens it (`serve.ts` · `timeLine`).
     const line = timeLine([undefined, timeLimitsSentence(l)]);
@@ -1749,7 +1756,7 @@ const PRODUCERS: readonly ModelFacingProducer[] = [
       'and appended by `callLLM` as the LAST `role: "user"` line of that one request — never ' +
       'written to history, so every later call re-reads a fresh composition (a pending quote the ' +
       'person then confirms is never re-read as pending)',
-    drivenBy: ['test/core/time/english-run.test.ts'],
+    drivenBy: ['test/core/time/english-run.test.ts', 'test/core/time/gaps-run.test.ts'],
     reaches: [
       /^\[A note from the library that runs the tools — not from the person, and not a correction from them: when you answer, answer the person directly, as you would from the tool results alone\.\] The person's time words, as the library holds them: “yesterday” is 2026-10-08 00:00–23:59 America\/Los_Angeles \(UTC-07:00\), the window the person confirmed when asked what their words meant — search_logs window "1960m" \(a wider read than the words named\); client_activity start_time 1791442800000, end_time 1791529200000\. A call may pass these values as written; an answer built on them states that window\.$/m,
       /client_activity start_time \(hidden by the tool's view\), end_time 1791529200000/,
@@ -1764,6 +1771,8 @@ const PRODUCERS: readonly ModelFacingProducer[] = [
       // A refused window (packet "lookback"): the refusal's own reason, then what the answer states.
       /^\[A note from the library that runs the tools — not from the person, and not a correction from them: when you answer, answer the person directly, as you would from the tool results alone\.\] search_logs was not run for “yesterday”: no period form the tool declares can read the window it asked for, exactly or by reading a wider one\. So the answer tells the person that search_logs could not read that time, and claims nothing about it from search_logs\. The window for “yesterday” is not settled yet: .* opens when client_activity is called with start_time, end_time left out \(/m,
       /^\[A note from the library that runs the tools — not from the person, and not a correction from them: when you answer, answer the person directly, as you would from the tool results alone\.\] search_logs was not run for “10\/20\/26”: .* client_activity was not run for “10\/20\/26”: the window it asked for had not happened yet, and the tool declares that its source holds only the past\. So the answer tells the person which of those times each tool could not read, and claims nothing about them from that tool\.$/m,
+      // The control window with no served period tool (G14): the window alone, no values, no permission.
+      /^\[A note from the library that runs the tools — not from the person, and not a correction from them: when you answer, answer the person directly, as you would from the tool results alone\.\] The window the person set in the app's time control is 2026-10-09 08:00–08:40 America\/Los_Angeles \(UTC-07:00\)\. An answer built on it states that window\.$/m,
     ],
     compose: async () => timeWindowLines(),
   },
@@ -1786,8 +1795,49 @@ const PRODUCERS: readonly ModelFacingProducer[] = [
       /search_logs's look-back ran after the clock moved on, so its result does not cover 2026-10-09 07:40:00–08:09:59 America\/Los_Angeles \(UTC-07:00\) of the window asked \(.+\), and covers .+, outside it\. So the answer says that search_logs's result does not cover 2026-10-09 07:40:00–08:09:59 America\/Los_Angeles \(UTC-07:00\), and claims nothing about that time from it/,
       // Both halves in one line: one opening, first — never a second inside.
       /^\[A note from the library[^\]]*\] The window for “yesterday” is not settled yet\. The time the tools read is not the time asked about — (?!.*A note from the library)/m,
+      // An unknown zone (G15): why the ranges are in UTC — never read as the person's zone.
+      /Clocks: times are shown in UTC — the person's time zone is not known\.$/m,
     ],
     compose: async () => timeLimitLines(),
+  },
+  {
+    id: 'time layer — the run clock, the first sentence of the served time line on every request (G16)',
+    module: 'src/core/agent/arguments/serve.ts',
+    surface: { channel: 'injected-turn', lifetime: 'request-ephemeral' },
+    lifetimeBecause:
+      'composed at the tools slot’s one decoration site from the turn’s `clock` row (mount arg ' +
+      '`timeClock`), the first part of the ONE served time line, which `callLLM` serves as the ' +
+      'LAST `role: "user"` line of that one request — never written to history, so every request ' +
+      'reads the turn’s frozen clock again',
+    drivenBy: ['test/core/time/clock-served.test.ts', 'test/core/time/zone-unknown-run.test.ts'],
+    reaches: [
+      /^\[A note from the library that runs the tools — not from the person, and not a correction from them: when you answer, answer the person directly, as you would from the tool results alone\.\] This turn's time: Friday 2026-10-09 08:40 America\/Los_Angeles \(UTC-07:00\)\.$/m,
+      // The unknown zone (G15): UTC, named as not known — never a guessed zone.
+      /^\[A note from the library[^\]]*\] This turn's time: Friday 2026-10-09 15:40 UTC \(the person's time zone is not known\)\.$/m,
+      // …and the control window under it, spelled in UTC and saying why.
+      /The window the person set in the app's time control is 2026-10-09 08:00–08:40 UTC \(the person's time zone is not known\)\. An answer built on it states that window\.$/m,
+    ],
+    compose: async () => {
+      const now = '2026-10-09T15:40:00Z';
+      const control = {
+        now,
+        windows: [],
+        zoneUnknown: true as const,
+        control: {
+          source: 'control' as const,
+          range: { from: '2026-10-09T08:00:00Z', to: '2026-10-09T08:41:00Z' },
+          zone: 'UTC',
+        },
+      };
+      return [
+        timeLine([clockSentence({ now, zone: 'America/Los_Angeles' })])!,
+        timeLine([clockSentence({ now, zone: 'UTC', zoneUnknown: true })])!,
+        timeLine([
+          clockSentence({ now, zone: 'UTC', zoneUnknown: true }),
+          timeWindowsLine([], new Map(), control as never),
+        ])!,
+      ];
+    },
   },
   {
     id: 'inputs layer — the note on a result whose call ran on a filled value (honesty layer 2)',

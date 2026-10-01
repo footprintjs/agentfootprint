@@ -46,6 +46,7 @@ import { carriesRules } from '../agent/arguments/declare.js';
 import type { Classifier } from '../../classify/types.js';
 import type { ToolChoiceEntry } from '../agent/toolChoice/types.js';
 import type { ReaderWindows } from '../time/bind.js';
+import type { ServedClock } from '../agent/arguments/serve.js';
 import type { ZoneName } from '../time/zone.js';
 import type { TimeLimitFacts } from '../agent/coverage/timeLimitFacts.js';
 
@@ -205,7 +206,7 @@ export function mergeWire(candidates: readonly WireCandidate[]): {
  */
 type RulesOnWire = Pick<
   typeof import('../agent/arguments/serve.js'),
-  'rulesOnWire' | 'timeWindowsLine' | 'timeLimitsLine' | 'timeLine'
+  'rulesOnWire' | 'timeWindowsLine' | 'timeLimitsLine' | 'timeLine' | 'clockSentence'
 >;
 
 /**
@@ -412,18 +413,22 @@ export interface ToolsSlotConfig {
    */
   readonly argumentSources?: true;
   /**
-   * THE TIME LAYER IS ARMED (`.time()`) — present ONLY then, and only beside
-   * `inputsLayer`. At the same decoration site the slot composes the ONE
-   * served time line (`agent/arguments/serve.ts` · `timeWindowsLine`) from
-   * the tools it really serves — each window the reader SETTLED this turn in
+   * THE TIME LAYER IS ARMED (`.time()`) — present ONLY then. At the same
+   * decoration site the slot composes the ONE
+   * served time line from the tools it really serves — first the run clock
+   * (`agent/arguments/serve.ts` · `clockSentence`, every request, G16; mount
+   * arg `timeClock`), then (`timeWindowsLine`) each window the reader SETTLED this turn in
    * each period tool's own form, each quote still pending, and the window the
-   * person set in the app's time control (`time.window`) — and writes it to
+   * person set in the app's time control (`time.window`; on every request,
+   * with or without a period tool served, and with or without `inputsLayer`
+   * — a fact about the person's turn, G14) — and writes it to
    * `timeLine` as `{ iteration, text }`; the mount carries it to `callLLM`,
    * which appends it LAST to the request, never to history. The tool schemas
-   * are not touched. Reads one mount arg under this gate only, `timeWindows`
+   * are not touched. Reads two mount args under this gate only, `timeClock`
+   * (`agent/buildAgentChart.ts` · `timeClockArg`) and `timeWindows`
    * (`core/time/windows.ts` · `readerWindowsOf` — absent on a turn with none).
    * `appZone` is the app's `.time({ zone })`. `reader` — the reader is armed
-   * (`.time({ reader })`, step T6b): the line is written EVERY composition
+   * (`.time({ reader })`, step T6b) beside `inputsLayer`: the line is written EVERY composition
    * (`''` when there is nothing to say), so a slot that does not re-run never
    * serves a stale one; without it only a line with something to say is
    * written (the control window alone).
@@ -652,6 +657,7 @@ export function buildToolsSlot(config: ToolsSlotConfig): FlowChart {
       stepPointer?: StepPointerCarrier;
       findingsOffer?: readonly string[];
       timeWindows?: ReaderWindows;
+      timeClock?: ServedClock;
       timeLimits?: TimeLimitFacts;
       userMessage?: string;
       priorToolChoices?: readonly ToolChoiceEntry[];
@@ -1025,7 +1031,9 @@ export function buildToolsSlot(config: ToolsSlotConfig): FlowChart {
       const sourcesOf = (s: LLMToolSchema): typeof SOURCES_SERVED | undefined =>
         config.argumentSources === true && !ownsReservedArgument(s) ? SOURCES_SERVED : undefined;
       const ruled =
-        rules !== undefined ? rules.rulesOnWire(served, winningTools, sourcesOf) : served;
+        rules !== undefined && config.inputsLayer === true
+          ? rules.rulesOnWire(served, winningTools, sourcesOf)
+          : served;
       // THE TIME LINE (step T6b) is composed HERE, from the tools really served, and served LATE —
       // `callLLM` appends it last to the request, never to history — because a sentence on a tool
       // description sits far from the decision it is about (the step-7b finding: a conclusion
@@ -1047,8 +1055,12 @@ export function buildToolsSlot(config: ToolsSlotConfig): FlowChart {
               });
         const limits =
           config.timeLimits === true ? rules.timeLimitsLine(args.timeLimits) : undefined;
+        // THE RUN CLOCK (G16) opens the line on every request under `.time()`: the model reads
+        // the current date and time from the library, never from its training date.
+        const clock =
+          config.timeWindows !== undefined ? rules.clockSentence(args.timeClock) : undefined;
         // ONE line, opened ONCE with who says it (`agent/arguments/serve.ts` · `timeLine`), never per half.
-        const text = rules.timeLine([windows, limits]) ?? '';
+        const text = rules.timeLine([clock, windows, limits]) ?? '';
         if (config.timeWindows?.reader === true || text.length > 0) {
           scope.timeLine = { iteration, text };
         }
@@ -1183,14 +1195,20 @@ export function buildToolsSlot(config: ToolsSlotConfig): FlowChart {
     // ── THE INPUTS LAYER'S DECORATION (honesty layer 2) — loaded through
     // `import()` only when the layer is armed (the optional-family law, the
     // tool-choice tail's own precedent below); an unarmed slot commits
-    // synchronously, exactly as it always did.
+    // synchronously, exactly as it always did. The same module composes the
+    // time line, so under `.time()` without the inputs layer it loads only on
+    // a turn that crosses windows to serve (the app's control window, G14).
+    const servesTime =
+      config.timeWindows !== undefined &&
+      (args.timeWindows !== undefined || args.timeClock !== undefined);
     const loadingRules: Promise<RulesOnWire> | undefined =
-      config.inputsLayer === true
+      config.inputsLayer === true || servesTime
         ? import('../agent/arguments/serve.js').then((m) => ({
             rulesOnWire: m.rulesOnWire,
             timeWindowsLine: m.timeWindowsLine,
             timeLimitsLine: m.timeLimitsLine,
             timeLine: m.timeLine,
+            clockSentence: m.clockSentence,
           }))
         : undefined;
     if (toolChoice === undefined) {

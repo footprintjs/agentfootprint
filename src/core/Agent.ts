@@ -599,8 +599,8 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
    *  Undefined on every agent that did not ask — then no clock is read, no
    *  time row is filed and `time` on a run is refused. */
   private readonly timeOptions?: ReadTimeOptions;
-  /** The clock the CURRENT `run()`'s seed stamps — set by `run()` (refusing a
-   *  run with no zone), read by seed through `SeedStageDeps.timeClock`, and
+  /** The clock the CURRENT `run()`'s seed stamps — set by `run()` (a run with
+   *  no zone gets an unknown one, never the server's), read by seed through `SeedStageDeps.timeClock`, and
    *  cleared when `run()` ends, so a later turn this agent did not start (its
    *  chart mounted in a composition) never stamps a clock nobody declared for
    *  it (`seedClockDraft`). */
@@ -1867,7 +1867,8 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
     assertIdentityShape(runInput.identity, 'Agent.run');
     assertIdentityShape(options?.identity, 'Agent.run');
     // The run's clock (the time layer): read or refused HERE, before the turn
-    // starts — a run with no zone anywhere never runs on the server's zone.
+    // starts — a run with no zone anywhere runs with its zone UNKNOWN (G15),
+    // never on the server's zone.
     const clockDraft = this.clockDraftFor(runInput.time ?? options?.time, 'Agent.run');
     const engineOptions = withoutTime(options);
     // Timing next, and before the executor exists: both of these refuse a call
@@ -2256,27 +2257,18 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
 
   /**
    * A run's `time`, read into the turn's clock draft (the time layer) — or
-   * refused, before the turn starts: `time` on an agent without `.time()`, a
-   * malformed value, or no zone anywhere (the run's, else the builder's).
-   * `undefined` on an agent without the layer.
+   * refused, before the turn starts: `time` on an agent without `.time()` or
+   * a malformed value. No zone anywhere (the run's, else the builder's) is no
+   * refusal: the zone is UNKNOWN (`zoneSource: 'unknown'`, G15) — never the
+   * server's, never guessed; the person is asked it before any time they
+   * wrote is read. `undefined` on an agent without the layer.
    *
    * @internal
    */
   private clockDraftFor(time: unknown, runner: string): ClockDraft | undefined {
     const passed = this.passedTimeFor(time, runner);
     if (this.timeOptions === undefined) return undefined;
-    const draft = draftClock(passed, this.timeOptions);
-    if (draft === 'no-zone') {
-      throw new InvalidRunInputError({
-        runner,
-        received: 'a run with no time zone',
-        hint:
-          "this agent's time layer needs the person's zone — pass run({ message, time: { zone: " +
-          "'America/Los_Angeles' } }) or declare a fallback with .time({ zone }); the server's " +
-          'zone is never used',
-      });
-    }
-    return draft;
+    return draftClock(passed, this.timeOptions);
   }
 
   /**
@@ -2285,25 +2277,14 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
    * composition, which passes no `time`), the builder's fallback zone with
    * the turn's start as `now` (`zoneSource: 'builder'`, `nowSource:
    * 'default'` — the same record a `run()` with no `time` files). With no
-   * fallback zone that turn is refused, as `run()` refuses it: the server's
-   * zone is never used.
+   * fallback zone that turn's zone is unknown, as a `run()`'s is (G15): the
+   * server's zone is never used.
    *
    * @internal
    */
   private seedClockDraft(): ClockDraft {
     if (this.runClockDraft !== undefined) return this.runClockDraft;
-    const draft = draftClock(undefined, this.timeOptions ?? {});
-    if (draft === 'no-zone') {
-      throw new InvalidRunInputError({
-        runner: 'Agent (mounted in a composition)',
-        received: 'a turn with no time zone',
-        hint:
-          "this agent's time layer needs the person's zone, and a composition passes no time to " +
-          "the agents it mounts — declare a fallback with .time({ zone: 'America/Los_Angeles' }); " +
-          "the server's zone is never used",
-      });
-    }
-    return draft;
+    return draftClock(undefined, this.timeOptions ?? {});
   }
 
   /**
@@ -2776,7 +2757,9 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
   private timeAnswerContextOf(state: unknown): TimeAnswerContext | undefined {
     if (this.timeOptions === undefined) return undefined;
     const ledger = (state as Partial<AgentState> | undefined)?.findingsLedger;
-    const zone = clockOf(Array.isArray(ledger) ? ledger : undefined)?.zone;
+    const clock = clockOf(Array.isArray(ledger) ? ledger : undefined);
+    // An unknown zone (G15) judges no wall time: `zone` is then only the UTC spelling.
+    const zone = clock?.zoneSource === 'unknown' ? undefined : clock?.zone;
     const messages = this.timeOptions.messages;
     return {
       ...(zone !== undefined && { zone }),
@@ -4839,16 +4822,18 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
       // The inputs layer (honesty layer 2): the same site decorates a ruled
       // tool's schema first — value-conditional, the same grammar.
       ...(inputsArmed && { inputsLayer: true as const }),
-      // …and, under `.time()`, the ONE served time line on each tool that declares a period: the
-      // windows the reader settled this turn (`.time({ reader })`, step T6b) and the window the
-      // person set in the app's time control (`time.window`), in that tool's form.
-      ...(inputsArmed &&
-        this.timeOptions !== undefined && {
-          timeWindows: {
-            ...(this.timeOptions.zone !== undefined && { appZone: this.timeOptions.zone }),
-            ...(this.timeOptions.reader !== undefined && { reader: true as const }),
-          },
-        }),
+      // …and, under `.time()`, the ONE served time line: the windows the reader settled this turn
+      // (`.time({ reader })`, step T6b) in each served period tool's form — and the window the
+      // person set in the app's time control (`time.window`), a fact about the person's turn,
+      // served on every request whether or not a served tool declares a period (G14), so it
+      // needs no inputs layer. `reader` (write the line every composition) only beside the
+      // inputs layer, the one place a reading is asked and served.
+      ...(this.timeOptions !== undefined && {
+        timeWindows: {
+          ...(this.timeOptions.zone !== undefined && { appZone: this.timeOptions.zone }),
+          ...(inputsArmed && this.timeOptions.reader !== undefined && { reader: true as const }),
+        },
+      }),
       // …and, under `.time()` (step T8), the turn's time limits in the same line.
       ...(inputsArmed && this.timeOptions !== undefined && { timeLimits: true as const }),
       // …and, under declared sources, plants `_findings.from` on ruled tools only.
@@ -4903,10 +4888,10 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
       // constant on every call, under the one gate — an unarmed agent reads
       // no new key.
       ...(this.ontology !== undefined && { ontology: true as const }),
-      // The time layer's served line (step T6b): read only where the Tools
-      // mount can compose it — the `timeReader` arm of the chart deps.
-      // Step T8 widens it to `.time()`: the same line then carries the turn's time limits.
-      ...(inputsArmed && this.timeOptions !== undefined && { timeLine: true as const }),
+      // The time layer's served line (step T6b): read wherever the Tools mount
+      // composes it — under `.time()` (G14: the control window needs no inputs
+      // layer). Step T8: the same line carries the turn's time limits.
+      ...(this.timeOptions !== undefined && { timeLine: true as const }),
       // The receipt's salt (9.88.0) — read per call, like seed's own accessor.
       getRunId: () => this.currentRunContext?.runId,
       // …and its off switch. Value-conditional, so an agent on the default
@@ -5473,8 +5458,9 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
       // The time layer: the prose limits block renders its `Period:` lines in
       // the run's clock zone. Absent → the final stage it always mounted.
       ...(this.timeOptions !== undefined && { timeLayer: true as const }),
-      // The reader (step T6b): the Tools mount hands the slot the turn's settled windows.
-      ...(inputsArmed && this.timeOptions?.reader !== undefined && { timeReader: true as const }),
+      // The Tools mount hands the slot the turn's windows — the reader's (step T6b) and the
+      // app's control window (G14) — under `.time()`.
+      ...(this.timeOptions !== undefined && { timeWindows: true as const }),
       ...(inputsArmed && this.timeOptions !== undefined && { timeLimits: true as const }),
       ...(this.answerValidationConfig !== undefined && { hasAnswerValidation: true }),
       // The out-of-budget wrap-up branch (9.56.0) — the conditional-mount law

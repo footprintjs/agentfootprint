@@ -1753,6 +1753,50 @@ deterministic and are measured over retained recorded runs or unit tables, with 
   from writing its own window. Pinned by `test/core/time/gaps-run.test.ts`, `reader-gaps.test.ts`,
   `form-max-range.test.ts` and `time-door.test.ts`.
 
+- **Time follow-ups, G13 and G14 (2026-10-01).** Found switching the same app onto 9.134.0.
+  (G13) **Two bare sides share a meridiem.** `resolve.ts` combined every am/pm reading of a
+  range's sides that ran forward, so "September 29 8:45 to 8:55" was also offered as 8:45 AM –
+  8:55 PM. Now (`builtOfAll` → `sharedMeridiemPairs`) two sides that say no meridiem share one —
+  AM–AM and PM–PM — and cross the half-day only when no shared reading runs forward ("11 to 1" →
+  11 AM – 1 PM and 11 PM – 1 AM overnight, the right side on the next day unless it has a day of
+  its own). The 9.132 law stands: a bare first side takes the second side's SAID meridiem. Not
+  done, named: a range whose two sides SAY a backwards meridiem ("11 PM to 1 AM") still names no
+  window. (G14) **The control window is the turn's.** G9 served it only beside a served tool that
+  declares a period, and only with the inputs layer armed, so an app that relied on it lost the
+  range on a turn whose tools declare none. It is now served on every request under `.time()`
+  (the slot loads `serve.ts` for it on a turn that carries a window, `servesTime`), with each
+  period tool's values when there are any and the window alone otherwise; never without `.time()`.
+  Pinned by `test/core/time/reader-edges.test.ts` ("G13"), `english-run.test.ts` ("G13") and
+  `gaps-run.test.ts` ("G14"); the sentence variant is registered in
+  `test/modelFacingSurfaces.test.ts`.
+  (G15) **`.time()` with no zone known — asked, never guessed.** The app review found apps
+  deployed without their zone setting could not arm the layer at all (a run with no zone was
+  refused), so "Always confirm" silently became "never confirm". Decision: the clock records
+  `zoneSource: 'unknown'` and spells instants in UTC; every reading that names no zone of its own
+  is zone-pending (`needsZone`, a look-back too — its window would be shown, confirmed and converted
+  in a zone nobody said), so the G1 path asks the zone FIRST (`ask.zone-unknown`); the answer
+  re-reads the words in that zone, and holds for later turns (`zoneSource: 'answered'`,
+  `rows.ts` · `answeredZoneOf` — a `time-answer` under an unknown clock for a mention with no zone
+  token; a token's meaning is not the person's zone). Reasons: the instant is known without a
+  zone, the person's words are not; refusing the run hid the gap instead of asking. The turn the
+  answer is given in keeps its frozen clock (one clock per turn, and the control window's values
+  and the fill must stay one spelling). Every shown time says why it is UTC (served clock, control
+  line, limits `UNKNOWN_ZONE_LINE`), the tool's `ctx.time` carries `zoneUnknown`, and no wall time
+  is judged under UTC. A zone passed by the app is byte-identical. Not done, named: a pending
+  zone-unknown quote still reads "until it knows which time zone they name" in the served pending
+  half; an edited answer's zone is the one its typed offsets match (the offered zone first).
+  (G16) **The run clock is served.** Apps used to send their own "application clock" block; with
+  the layer armed the model had no date on any turn. Decision: the turn's clock is the FIRST
+  sentence of the one served time line on every request under `.time()` (`serve.ts` ·
+  `clockSentence`, mount arg `timeClock`), to the minute, with the weekday in the person's zone and
+  the zone named — "This turn's time: …", not "It is now": the model-facing checker refuses a
+  deictic present, and a resumed request is read after the frozen clock. One opening for the whole
+  line (the measured law), so a request with nothing else to say gains 73 tokens (chars ÷ 4; the
+  sentence alone 19) — pinned as a ceiling in `test/core/time/clock-served.test.ts`. Never without
+  `.time()`; classic mode serves it on its first request only. Pinned by
+  `test/core/time/zone-unknown-run.test.ts`, `clock-served.test.ts`, and the updated byte tests
+  (`clock-run.test.ts`: an armed request is the unarmed one plus the one line).
+
 **Why this order.** T1 settles the grammar every other step leans on and is free. T2 is already
 written and only needs rebasing and the value check. T3 gives the first visible win (the limits
 line in words) and is the clock every later check needs. T6a comes before the ask because the ask

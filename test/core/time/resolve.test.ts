@@ -226,9 +226,15 @@ describe('resolveMention — every candidate of the parts', () => {
       by: 'open',
       open: ['meridiem'],
     });
-    // A range that runs backwards is no candidate.
+    // A range that runs backwards on its day ends the next one when that night is at most the
+    // half-day it crosses (G13: "21 to 8 AM" is the night shift) — and is no candidate past it.
     expect(
-      resolve({ rangeOf: [{ wall: { h: 21 } }, { wall: { h: 8, meridiem: 'am' } }] }).candidates,
+      ranges(
+        resolve({ rangeOf: [{ wall: { h: 21 } }, { wall: { h: 8, meridiem: 'am' } }] }).candidates,
+      ),
+    ).toEqual(['2026-10-09T21:00:00-07:00/2026-10-10T08:00:00-07:00']);
+    expect(
+      resolve({ rangeOf: [{ wall: { h: 21 } }, { wall: { h: 8, meridiem: 'pm' } }] }).candidates,
     ).toEqual([]);
   });
 
